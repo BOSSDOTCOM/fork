@@ -1,10 +1,10 @@
 {
-  "_comment": "Current TCEC conditions. Only test scripts read this file; the engine receives these values as UCI options. Fields with null are unverified and block the Phase 8 scripts until filled in.",
+  "_comment": "Current TCEC conditions. Only test scripts read this file; the engine receives these values as UCI options. Nothing here is verified yet: the adjudication thresholds come from an older season's rules. Research the current season's full rules before Phase 5. Fields that are null block the Phase 8 scripts.",
   "season": null,
   "verified": false,
   "sources": [
     "https://tcec-chess.com/archive (partial adjudication rules, season unstated)",
-    "owner brief 2026-10-23 (adjudication thresholds)"
+    "owner brief 2026-10-23 (adjudication thresholds, from an older season)"
   ],
   "hardware": {
     "threads": null,
@@ -16,7 +16,8 @@
   "tablebases": {
     "type": "syzygy",
     "engine_access_pieces": null,
-    "adjudication_pieces": 6
+    "adjudication_pieces": 6,
+    "verified": false
   },
   "openings": {
     "paired": true
@@ -29,6 +30,8 @@
     { "name": "Superfinal", "time_control": { "base_s": null, "increment_s": null } }
   ],
   "adjudication": {
+    "verified": false,
+    "source": "older season's rules via owner brief; not confirmed for the current season",
     "draw": {
       "from_move": 35,
       "max_abs_eval_cp": 8,

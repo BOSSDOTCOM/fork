@@ -1,0 +1,37 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}"
+    },
+    { "name": "clang", "hidden": true, "inherits": "base",
+      "cacheVariables": { "CMAKE_CXX_COMPILER": "$env{FORK_CLANG_CXX}" } },
+    { "name": "gcc", "hidden": true, "inherits": "base",
+      "cacheVariables": { "CMAKE_CXX_COMPILER": "$env{FORK_GCC_CXX}" } },
+    { "name": "debug", "hidden": true,
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "FORK_SANITIZE": "ON" } },
+    { "name": "release", "hidden": true,
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
+    { "name": "v3", "hidden": true, "inherits": "release",
+      "cacheVariables": { "FORK_ARCH": "x86-64-v3" } },
+    { "name": "avx512", "hidden": true, "inherits": "release",
+      "cacheVariables": { "FORK_ARCH": "x86-64-v4" } },
+    { "name": "nopext", "hidden": true, "inherits": "release",
+      "cacheVariables": { "FORK_ARCH": "x86-64-v3", "FORK_NO_PEXT": "ON" } },
+
+    { "name": "clang-debug",   "inherits": ["clang", "debug"] },
+    { "name": "clang-release", "inherits": ["clang", "release"] },
+    { "name": "clang-v3",      "inherits": ["clang", "v3"] },
+    { "name": "clang-avx512",  "inherits": ["clang", "avx512"] },
+    { "name": "clang-nopext",  "inherits": ["clang", "nopext"] },
+    { "name": "gcc-debug",     "inherits": ["gcc", "debug"] },
+    { "name": "gcc-release",   "inherits": ["gcc", "release"] },
+    { "name": "gcc-v3",        "inherits": ["gcc", "v3"] },
+    { "name": "gcc-avx512",    "inherits": ["gcc", "avx512"] },
+    { "name": "gcc-nopext",    "inherits": ["gcc", "nopext"] }
+  ]
+}

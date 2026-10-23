@@ -1,0 +1,62 @@
+#include <chrono>
+#include <string_view>
+
+#include "core/movegen.hpp"
+#include "core/perft.hpp"
+
+namespace fork {
+
+namespace {
+
+struct BenchPosition {
+  std::string_view fen;
+  int depth;
+};
+
+// The CPW perft suite at depths that keep the run around a second.
+constexpr BenchPosition BenchPositions[] = {
+    {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 5},
+    {"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4},
+    {"8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 6},
+    {"r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 4},
+    {"rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8", 4},
+    {"r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", 4},
+};
+
+std::uint64_t mix(std::uint64_t signature, Key key) {
+  signature ^= key;
+  signature *= 0x9E3779B97F4A7C15ULL;
+  return signature ^ (signature >> 29);
+}
+
+std::uint64_t walk(Position& pos, int depth, std::uint64_t& signature) {
+  signature = mix(signature, pos.key());
+  MoveList list;
+  generate<GenType::Legal>(pos, list);
+  if (depth == 1) return list.size();
+  std::uint64_t nodes = 0;
+  for (Move m : list) {
+    pos.make(m);
+    nodes += walk(pos, depth - 1, signature);
+    pos.unmake(m);
+  }
+  return nodes;
+}
+
+}  // namespace
+
+BenchResult bench() {
+  BenchResult r{0, 0, 0.0};
+  auto start = std::chrono::steady_clock::now();
+  for (const BenchPosition& bp : BenchPositions) {
+    Position pos;
+    bool ok = pos.set_fen(bp.fen);
+    assert(ok);
+    (void)ok;
+    r.nodes += walk(pos, bp.depth, r.signature);
+  }
+  r.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+  return r;
+}
+
+}  // namespace fork

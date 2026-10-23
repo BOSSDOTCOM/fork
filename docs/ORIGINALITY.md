@@ -26,6 +26,8 @@ the date and the part of Fork it informed.
 | 2026-10-23 | Chess Programming Wiki: Perft Results (startpos, Kiwipete, positions 3-6) | Expected node counts for the Phase 1 perft tests. |
 | 2026-10-23 | Chess Programming Wiki: Encoding Moves, Magic Bitboards, Zobrist Hashing, Square Mapping Considerations | General techniques for Phase 1 data structures (design in docs/DESIGN.md §4). |
 | 2026-10-23 | TCEC archive page, tcec-chess.com/archive | Partial description of adjudication rules for config/tcec.json (marked unverified). |
+| 2026-10-23 | Chess Programming Wiki: Perft Results, re-read to check every suite FEN and count character by character | Test oracles in tests/suite.hpp. The page is the source of record; position 6 was first entered from memory without the black bishop on g4 and corrected from the page. |
+| 2026-10-23 | Chess Programming Wiki: Chess960 Perft Results (960 positions, credited to Andrew Grant / Ethereal) | Read only, for the deferred Chess960 decision (DESIGN.md section 6); no data used. |
 
 ## Third-party libraries
 
