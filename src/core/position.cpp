@@ -36,7 +36,7 @@ constexpr std::array<int, 64> CastlingMask = [] {
 }();
 
 std::string square_name(Square s) {
-  return {char('a' + file_of(s)), char('1' + rank_of(s))};
+  return {static_cast<char>('a' + file_of(s)), static_cast<char>('1' + rank_of(s))};
 }
 
 }  // namespace
@@ -59,9 +59,9 @@ Position::Position() {
 }
 
 void Position::clear() {
-  std::fill(std::begin(board_), std::end(board_), NoPiece);
-  std::fill(std::begin(by_type_), std::end(by_type_), 0);
-  std::fill(std::begin(by_color_), std::end(by_color_), 0);
+  std::ranges::fill(board_, NoPiece);
+  std::ranges::fill(by_type_, 0);
+  std::ranges::fill(by_color_, 0);
   side_ = White;
   fullmove_ = 1;
   states_.clear();
@@ -205,7 +205,7 @@ bool Position::set_fen(std::string_view fen, std::string* error) {
       std::size_t idx = PieceChars.find(c);
       if (idx == std::string_view::npos || c == '?') return fail(std::string("bad piece character '") + c + "'");
       if (file >= 8) return fail("rank too long in placement");
-      p.put(Piece(idx), make_square(file, rank));
+      p.put(static_cast<Piece>(idx), make_square(file, rank));
       ++file;
     }
   }
@@ -280,11 +280,11 @@ std::string Position::fen() const {
         ++empty;
         continue;
       }
-      if (empty) s += char('0' + empty);
+      if (empty) s += static_cast<char>('0' + empty);
       empty = 0;
       s += PieceChars[p];
     }
-    if (empty) s += char('0' + empty);
+    if (empty) s += static_cast<char>('0' + empty);
     if (r) s += '/';
   }
   s += side_ == White ? " w " : " b ";

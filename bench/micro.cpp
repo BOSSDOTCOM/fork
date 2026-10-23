@@ -5,6 +5,8 @@
 //   fork_micro [--core N] [--reps N] [--save FILE] [--compare FILE] [--filter NAME]
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <exception>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -75,10 +77,12 @@ Result measure(const std::string& name, const std::function<std::uint64_t()>& pa
       ops += pass();
       elapsed = std::chrono::duration<double>(Clock::now() - start).count();
     } while (elapsed < target);
-    samples.push_back(elapsed * 1e9 / double(ops));
+    samples.push_back(elapsed * 1e9 / static_cast<double>(ops));
   }
-  std::sort(samples.begin(), samples.end());
-  auto at = [&](double q) { return samples[std::size_t(q * double(samples.size() - 1) + 0.5)]; };
+  std::ranges::sort(samples);
+  auto at = [&](double q) {
+    return samples[static_cast<std::size_t>(std::lround(q * static_cast<double>(samples.size() - 1)))];
+  };
   return {name, at(0.5), at(0.1), at(0.9)};
 }
 
@@ -145,7 +149,7 @@ std::string build_info() {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int run(int argc, char** argv) {
   int core = 2, reps = 15;
   double target = 0.15;
   std::string save, compare, filter;
@@ -159,7 +163,7 @@ int main(int argc, char** argv) {
     else if (a == "--compare") compare = value();
     else if (a == "--filter") filter = value();
     else {
-      std::fprintf(stderr, "unknown argument %s\n", a.c_str());
+      (void)std::fprintf(stderr, "unknown argument %s\n", a.c_str());
       return 2;
     }
   }
@@ -195,15 +199,15 @@ int main(int argc, char** argv) {
       {"perft_bench", [] { return bench().nodes; }},
       {"movegen_legal", [&] {
          for (const Position& p : positions) { MoveList l; generate<GenType::Legal>(p, l); sink = sink + l.size(); }
-         return std::uint64_t(positions.size());
+         return static_cast<std::uint64_t>(positions.size());
        }},
       {"movegen_captures", [&] {
          for (const Position& p : positions) { MoveList l; generate<GenType::Captures>(p, l); sink = sink + l.size(); }
-         return std::uint64_t(positions.size());
+         return static_cast<std::uint64_t>(positions.size());
        }},
       {"movegen_quiets", [&] {
          for (const Position& p : positions) { MoveList l; generate<GenType::Quiets>(p, l); sink = sink + l.size(); }
-         return std::uint64_t(positions.size());
+         return static_cast<std::uint64_t>(positions.size());
        }},
       {"make_unmake", [&] {
          for (std::size_t i = 0; i < positions.size(); ++i)
@@ -213,7 +217,7 @@ int main(int argc, char** argv) {
       {"attackers_to", [&] {
          for (const Position& p : positions)
            for (Square s = 0; s < 64; ++s) sink = sink + p.attackers_to(s, p.pieces());
-         return std::uint64_t(positions.size() * 64);
+         return static_cast<std::uint64_t>(positions.size() * 64);
        }},
       {"is_pseudo_legal", [&] {
          for (std::size_t i = 0; i < positions.size(); ++i)
@@ -256,4 +260,13 @@ int main(int argc, char** argv) {
     std::printf("\nsaved %s\n", save.c_str());
   }
   return 0;
+}
+
+int main(int argc, char** argv) {
+  try {
+    return run(argc, argv);
+  } catch (const std::exception& e) {
+    (void)std::fprintf(stderr, "fatal: %s\n", e.what());
+    return 1;
+  }
 }

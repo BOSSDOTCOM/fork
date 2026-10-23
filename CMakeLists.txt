@@ -11,6 +11,7 @@ option(FORK_NO_PEXT "Use magic multiplication even when BMI2 PEXT is available" 
 option(FORK_SANITIZE "Build with ASan + UBSan (where the toolchain supports it)" OFF)
 option(FORK_LTO "Link-time optimization for optimized builds" ON)
 option(FORK_BUILD_TESTS "Build the test executable and CTest tests" ON)
+option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
 set(FORK_PGO "OFF" CACHE STRING "Profile-guided optimization stage: OFF, GEN, USE")
 set(FORK_PGO_DATA "" CACHE PATH "Profile directory (GEN) or merged profile file / directory (USE)")
 
@@ -90,6 +91,31 @@ target_link_libraries(fork PRIVATE forkcore fork_pgo)
 add_executable(fork_micro bench/micro.cpp)
 target_link_libraries(fork_micro PRIVATE forkcore)
 
+if(FORK_FUZZ)
+  # Coverage instrumentation for everything (engine code included), libFuzzer
+  # driver only in the fuzz executables. The clang driver rejects
+  # -fsanitize=fuzzer for MinGW targets, so there the same instrumentation and
+  # the shipped libFuzzer runtime are wired up by hand.
+  if(MINGW)
+    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -print-resource-dir
+                    OUTPUT_VARIABLE resource_dir OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(fuzz_runtime ${resource_dir}/lib/windows/libclang_rt.fuzzer-x86_64.a)
+    target_compile_options(fork_flags INTERFACE
+      -fsanitize-coverage=inline-8bit-counters,pc-table,trace-cmp)
+  else()
+    target_compile_options(fork_flags INTERFACE -fsanitize=fuzzer-no-link)
+  endif()
+  foreach(target fuzz_fen fuzz_moves)
+    add_executable(${target} fuzz/${target}.cpp)
+    target_link_libraries(${target} PRIVATE forkcore)
+    if(MINGW)
+      target_link_libraries(${target} PRIVATE ${fuzz_runtime})
+    else()
+      target_link_options(${target} PRIVATE -fsanitize=fuzzer)
+    endif()
+  endforeach()
+endif()
+
 # `pgo` target: two-stage profile-guided build driven by `fork bench`.
 add_custom_target(pgo
   COMMAND ${CMAKE_COMMAND}
@@ -157,6 +183,10 @@ if(FORK_BUILD_TESTS)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES LABELS slow)
   endforeach()
+
+  add_executable(fork_alloc_test tests/alloc_test.cpp)
+  target_link_libraries(fork_alloc_test PRIVATE forkcore)
+  add_test(NAME no_alloc COMMAND fork_alloc_test)
 
   add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}
     -DFORK=$<TARGET_FILE:fork>

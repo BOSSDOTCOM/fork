@@ -41,8 +41,8 @@ void check_blockers(const Position& pos, Color c, const std::string& fen) {
       if (pos.pieces(c) & bb(sq)) pinners |= exposed;
     }
   }
-  CHECK_MSG(pos.blockers(c) == blockers, "blockers, " << fen << " color " << c);
-  CHECK_MSG(pos.pinners(c) == pinners, "pinners, " << fen << " color " << c);
+  CHECK_MSG(pos.blockers(c) == blockers, "blockers, " << fen << " color " << int(c));
+  CHECK_MSG(pos.pinners(c) == pinners, "pinners, " << fen << " color " << int(c));
 }
 
 void check_state(const Position& pos, const std::string& fen) {
@@ -69,7 +69,7 @@ void check_state(const Position& pos, const std::string& fen) {
     CHECK_MSG(bool(pos.check_squares(Pawn) & bb(sq)) == bool(pawn_attacks(us, sq) & eking), "pawn check squares, " << fen);
     for (PieceType t : {Knight, Bishop, Rook, Queen})
       CHECK_MSG(bool(pos.check_squares(t) & bb(sq)) == bool(attacks(t, sq, pos.pieces()) & eking),
-                "check squares, " << fen << " type " << t);
+                "check squares, " << fen << " type " << int(t));
   }
   CHECK(pos.check_squares(King) == 0);
 }
@@ -182,7 +182,7 @@ void exhaustive(Position& pos) {
       CHECK_MSG(legal.contains(m), "accepted but not generated, " << pos.fen() << " raw " << raw);
     }
   }
-  CHECK_MSG(accepted == static_cast<int>(legal.size()), "accepted count, " << pos.fen());
+  CHECK_MSG(static_cast<std::size_t>(accepted) == legal.size(), "accepted count, " << pos.fen());
 }
 
 void exhaustive_tree(Position& pos, int depth) {

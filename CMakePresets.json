@@ -28,6 +28,8 @@
     { "name": "clang-v3",      "inherits": ["clang", "v3"] },
     { "name": "clang-avx512",  "inherits": ["clang", "avx512"] },
     { "name": "clang-nopext",  "inherits": ["clang", "nopext"] },
+    { "name": "clang-fuzz",    "inherits": ["clang", "debug"],
+      "cacheVariables": { "FORK_FUZZ": "ON", "FORK_BUILD_TESTS": "OFF" } },
     { "name": "gcc-debug",     "inherits": ["gcc", "debug"] },
     { "name": "gcc-release",   "inherits": ["gcc", "release"] },
     { "name": "gcc-v3",        "inherits": ["gcc", "v3"] },

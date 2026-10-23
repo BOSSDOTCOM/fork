@@ -48,9 +48,9 @@ std::vector<EpdEntry> load_perft_random() {
   std::ifstream in(data_path("perft-random.epd"));
   std::string line;
   while (std::getline(in, line)) {
-    if (line.rfind("epd ", 0) == 0) {
+    if (line.starts_with("epd ")) {
       out.push_back({line.substr(4), {}});
-    } else if (line.rfind("perft ", 0) == 0 && !out.empty()) {
+    } else if (line.starts_with("perft ") && !out.empty()) {
       std::istringstream ss(line.substr(6));
       std::size_t d;
       std::uint64_t n;
@@ -77,7 +77,7 @@ void run(const std::vector<EpdEntry>& entries, std::size_t expected_entries, int
       Position pos;
       std::string error;
       if (!pos.set_fen(e.fen, &error)) {
-        std::lock_guard lock(mutex);
+        std::scoped_lock lock(mutex);
         failures.push_back(e.fen + ": " + error);
         continue;
       }
@@ -85,16 +85,17 @@ void run(const std::vector<EpdEntry>& entries, std::size_t expected_entries, int
       std::uint64_t nodes = perft(pos, depth);
       local += nodes;
       if (nodes != e.counts[depth - 1]) {
-        std::lock_guard lock(mutex);
+        std::scoped_lock lock(mutex);
         failures.push_back(e.fen + " depth " + std::to_string(depth) + ": got " + std::to_string(nodes) +
                            ", expected " + std::to_string(e.counts[depth - 1]));
       }
     }
-    std::lock_guard lock(mutex);
+    std::scoped_lock lock(mutex);
     total += local;
   };
   std::vector<std::thread> threads;
   unsigned n = std::max(1u, std::thread::hardware_concurrency());
+  threads.reserve(n);
   for (unsigned t = 0; t < n; ++t) threads.emplace_back(worker);
   for (std::thread& t : threads) t.join();
   for (const std::string& f : failures) CHECK_MSG(false, name << ": " << f);

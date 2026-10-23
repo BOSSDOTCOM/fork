@@ -5,7 +5,7 @@
 
 namespace fork {
 
-enum class GenType {
+enum class GenType : std::uint8_t {
   Legal,     // every legal move
   Captures,  // legal captures (incl. en passant) and all promotions
   Quiets,    // every other legal move, including castling

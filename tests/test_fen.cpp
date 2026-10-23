@@ -19,10 +19,10 @@ Key key_of(std::string_view fen) {
 TEST_CASE("fen", "round trip") {
   std::vector<std::string_view> fens;
   for (const PerftPosition& pp : perft_suite()) fens.push_back(pp.fen);
-  fens.push_back("rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3");
-  fens.push_back("4k3/8/8/8/8/8/8/4K2R w K - 37 90");
-  fens.push_back("r3k3/8/8/8/8/8/8/4K3 b q - 0 1");
-  fens.push_back("4k3/8/8/4pP2/8/8/8/4K3 w - e6 0 1");
+  fens.emplace_back("rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3");
+  fens.emplace_back("4k3/8/8/8/8/8/8/4K2R w K - 37 90");
+  fens.emplace_back("r3k3/8/8/8/8/8/8/4K3 b q - 0 1");
+  fens.emplace_back("4k3/8/8/4pP2/8/8/8/4K3 w - e6 0 1");
   for (std::string_view fen : fens) {
     Position p;
     std::string error;

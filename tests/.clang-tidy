@@ -1,0 +1,8 @@
+# Tests inherit the strict root config, minus two checks that the test
+# infrastructure trips by design:
+#   throwing-static-initialization: TEST_CASE registers cases through static
+#     registrar objects (allocation at static init is intended).
+#   inconsistent-declaration-parameter-name: alloc_test.cpp replaces global
+#     operator new, whose standard-library declaration uses reserved names.
+InheritParentConfig: true
+Checks: '-bugprone-throwing-static-initialization,-readability-inconsistent-declaration-parameter-name'

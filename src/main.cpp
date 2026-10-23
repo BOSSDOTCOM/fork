@@ -2,17 +2,21 @@
 // The UCI loop arrives in Phase 2.
 #include <algorithm>
 #include <chrono>
-#include <cstdio>
+#include <exception>
+#include <format>
 #include <iostream>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "core/bitboard.hpp"
+#include "core/movegen.hpp"
 #include "core/perft.hpp"
 #include "core/position.hpp"
 
 namespace {
 
-std::string compiler_name() {
+std::string_view compiler_name() {
 #if defined(__clang__)
   return "clang " __clang_version__;
 #elif defined(__GNUC__)
@@ -30,10 +34,62 @@ void print_version() {
             << "sliders " << (FORK_USE_PEXT ? "pext" : "magic") << '\n';
 }
 
+// One line per ply for differential testing against an independent
+// generator (tools/difftest): fen | sorted legal moves, '+' marking checks |
+// in check | insufficient material | fifty-move clock reached | repetitions (max 3).
+void print_ply(const fork::Position& pos) {
+  fork::MoveList list;
+  fork::generate<fork::GenType::Legal>(pos, list);
+  std::vector<std::string> moves;
+  for (fork::Move m : list) moves.push_back(pos.move_to_uci(m) + (pos.gives_check(m) ? "+" : ""));
+  std::ranges::sort(moves);
+  std::string line = pos.fen() + '|';
+  for (std::size_t i = 0; i < moves.size(); ++i) line += (i ? " " : "") + moves[i];
+  line += '|' + std::to_string(pos.in_check()) + '|' + std::to_string(pos.insufficient_material()) + '|' +
+          std::to_string(pos.fifty_move_reached()) + '|' + std::to_string(std::min(3, pos.repetition_count()));
+  std::cout << line << '\n';
+}
+
+// Reads "fen|move move ..." lines; prints every ply, then "end".
+int difftest() {
+  std::ios::sync_with_stdio(false);
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    std::size_t bar = line.find('|');
+    fork::Position pos;
+    std::string error;
+    if (bar == std::string::npos || !pos.set_fen(line.substr(0, bar), &error)) {
+      std::cout << "error bad input: " << line << ' ' << error << "\nend\n" << std::flush;
+      continue;
+    }
+    print_ply(pos);
+    std::string rest = line.substr(bar + 1), uci;
+    for (std::size_t i = 0; i <= rest.size(); ++i) {
+      if (i < rest.size() && rest[i] != ' ') {
+        uci += rest[i];
+        continue;
+      }
+      if (uci.empty()) continue;
+      fork::Move m = pos.parse_uci(uci);
+      if (m.is_none()) {
+        std::cout << "error illegal move " << uci << '\n';
+        break;
+      }
+      pos.make(m);
+      print_ply(pos);
+      uci.clear();
+    }
+    std::cout << "end\n" << std::flush;  // the driver waits for this line
+  }
+  return 0;
+}
+
 int usage() {
   std::cerr << "usage: fork perft <depth> [fen]\n"
                "       fork divide <depth> [fen]\n"
                "       fork bench\n"
+               "       fork difftest   (stdin: fen|moves, see tools/difftest)\n"
                "       fork version\n";
   return 2;
 }
@@ -61,7 +117,7 @@ bool read_depth_and_position(int argc, char** argv, int& depth, fork::Position& 
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int run(int argc, char** argv) {
   fork::init();
   if (argc < 2) return usage();
   std::string cmd = argv[1];
@@ -70,13 +126,13 @@ int main(int argc, char** argv) {
     print_version();
     return 0;
   }
+  if (cmd == "difftest") return difftest();
   if (cmd == "bench") {
     fork::BenchResult r = fork::bench();
-    char sig[17];
-    std::snprintf(sig, sizeof sig, "%016llx", static_cast<unsigned long long>(r.signature));
     std::cout << "nodes " << r.nodes << '\n'
-              << "signature " << sig << '\n'
-              << "nps " << static_cast<std::uint64_t>(r.nodes / std::max(r.seconds, 1e-9)) << '\n';
+              << "signature " << std::format("{:016x}", r.signature) << '\n'
+              << "nps " << static_cast<std::uint64_t>(static_cast<double>(r.nodes) / std::max(r.seconds, 1e-9))
+              << '\n';
     return 0;
   }
   if (cmd == "perft" || cmd == "divide") {
@@ -88,8 +144,17 @@ int main(int argc, char** argv) {
     double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     if (cmd == "perft") std::cout << "nodes " << nodes << '\n';
     std::cout << "time " << secs << " s\n"
-              << "nps " << static_cast<std::uint64_t>(nodes / std::max(secs, 1e-9)) << '\n';
+              << "nps " << static_cast<std::uint64_t>(static_cast<double>(nodes) / std::max(secs, 1e-9)) << '\n';
     return 0;
   }
   return usage();
+}
+
+int main(int argc, char** argv) {
+  try {
+    return run(argc, argv);
+  } catch (const std::exception& e) {
+    std::cerr << "fatal: " << e.what() << '\n';
+    return 1;
+  }
 }

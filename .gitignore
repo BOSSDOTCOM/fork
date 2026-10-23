@@ -7,3 +7,7 @@ out/
 /.vscode/
 .venv/
 .cache/
+fuzz/artifacts/
+fuzz/corpus/*/*
+!fuzz/corpus/*/seed-*
+__pycache__/
