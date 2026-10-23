@@ -72,6 +72,17 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
 7. **Performance claims** need the A/B harness (`bench/ab.py`), with bench
    unchanged (DESIGN.md section 7). Report any optimization that makes the code
    meaningfully harder to maintain before adopting it.
+8. **The repo will be public, and TCEC builds Fork from source** (Category 4
+   entry via the Cat 3+4 playoff; docs/kb/competition.md on branch kb). The
+   whole history becomes public before the application, so:
+   - never commit secrets, credentials, tokens, personal data or private
+     files (HANDOFF.md and other session notes stay untracked);
+   - keep the Linux build working from a clean clone: everything the build
+     needs is committed or fetched by CMake with a pinned SHA-256, with no
+     dependence on untracked files or local paths. `scripts/check.sh full`
+     builds a copy of the working tree, untracked files included, so phase
+     sign-offs also build a fresh `git clone` on Linux (`~/fork`, via
+     `scripts/linux-setup.sh`).
 
 ## Workflow
 

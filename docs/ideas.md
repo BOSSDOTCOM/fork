@@ -215,4 +215,24 @@ name of their config flag.
   limit: the share converted when played out against a TB-perfect defender.
 - **note:** matters more now that games are played to mate (no TB
   adjudication).
-- **status:** untested
+- **requirement (owner, 2026-10-23): probe 7-piece Syzygy correctly.**
+  TCEC gives engines 7-man Syzygy (`SyzygyPath=/home/syzygy7`, every
+  division; docs/kb/competition.md on branch kb). Design for 7 pieces from
+  the start of Phase 3, and test with what is available locally:
+  - piece limit taken from the tables actually found on `SyzygyPath`
+    (3-7), never a hard-coded 5 or 6; a missing file is "no result", never
+    an error or a wrong score;
+  - large memory-mapped files, accessed with `madvise(MADV_RANDOM)` on Linux
+    (TCEC asks this of 7-man users); probing must be thread-safe at 512
+    threads, with initialization done once;
+  - check whether the planned Fathom integration (DESIGN.md Phase 3)
+    supports 7-piece tables, and how: **UNVERIFIED**, settle it before
+    Phase 3 coding starts;
+  - local tests use 3-4-5 (tools/install.sh), optionally 6; 7-piece paths
+    are exercised with a few individual 7-man files if a small one can be
+    downloaded (sizes **UNVERIFIED**), plus comparisons against the
+    lichess tablebase API answers for 7-piece positions;
+  - the DTZ, cursed-win and 50-move logic above is the same for 7 pieces;
+    the suite of won positions near the 50-move limit includes 7-piece
+    positions checked against that API.
+- **status:** untested (7-piece requirement set)
