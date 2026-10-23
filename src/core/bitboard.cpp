@@ -113,10 +113,11 @@ Bitboard rook_attacks_slow(Square s, Bitboard occ) { return ray_walk(s, occ, Roo
 Bitboard bishop_attacks_slow(Square s, Bitboard occ) { return ray_walk(s, occ, BishopDirs); }
 
 void init_bitboards() {
-  static bool done = false;
-  if (done) return;
-  done = true;
+  static const bool once = (build_bitboard_tables(), true);
+  (void)once;
+}
 
+void build_bitboard_tables() {
   for (Square s = 0; s < 64; ++s) {
     Bitboard b = bb(s);
     tables::pawn_attacks[White][s] = shift_north(shift_east(b) | shift_west(b));

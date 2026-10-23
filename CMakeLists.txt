@@ -87,6 +87,9 @@ target_link_libraries(forkcore PUBLIC fork_flags PRIVATE fork_pgo)
 add_executable(fork src/main.cpp)
 target_link_libraries(fork PRIVATE forkcore fork_pgo)
 
+add_executable(fork_micro bench/micro.cpp)
+target_link_libraries(fork_micro PRIVATE forkcore)
+
 # `pgo` target: two-stage profile-guided build driven by `fork bench`.
 add_custom_target(pgo
   COMMAND ${CMAKE_COMMAND}

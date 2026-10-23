@@ -56,8 +56,11 @@ extern SliderEntry rook[64];
 extern SliderEntry bishop[64];
 }  // namespace tables
 
-// Builds every table. Idempotent; call once at startup (main, tests).
+// Builds every table once (thread-safe); call at startup (main, tests).
 void init_bitboards();
+// Rebuilds the tables unconditionally. Only for timing startup cost: never
+// call while another thread may be reading the tables.
+void build_bitboard_tables();
 
 // Reference slider attacks by ray-walking (used for table building and tests).
 Bitboard rook_attacks_slow(Square s, Bitboard occ);
