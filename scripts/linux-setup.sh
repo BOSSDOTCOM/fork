@@ -9,7 +9,8 @@ set -euo pipefail
 src="${FORK_WINDOWS_REPO:-/mnt/c/Users/<user>/fork}"
 dst="${FORK_LINUX_REPO:-$HOME/fork}"
 
-packages=(build-essential g++ clang llvm lld cmake ninja-build git)
+packages=(build-essential g++ clang llvm lld cmake ninja-build git
+          clang-tidy cppcheck valgrind)
 # Sanitizer runtimes for clang ship separately on newer Ubuntu releases.
 if apt-cache show libclang-rt-dev >/dev/null 2>&1; then packages+=(libclang-rt-dev); fi
 
