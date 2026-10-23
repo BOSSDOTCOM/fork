@@ -88,6 +88,9 @@ target_link_libraries(forkcore PUBLIC fork_flags PRIVATE fork_pgo)
 add_executable(fork src/main.cpp)
 target_link_libraries(fork PRIVATE forkcore fork_pgo)
 
+add_executable(fork_magic_seeds tools/magic_seeds.cpp)
+target_link_libraries(fork_magic_seeds PRIVATE forkcore)
+
 add_executable(fork_micro bench/micro.cpp)
 target_link_libraries(fork_micro PRIVATE forkcore)
 

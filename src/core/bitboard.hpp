@@ -62,6 +62,10 @@ void init_bitboards();
 // call while another thread may be reading the tables.
 void build_bitboard_tables();
 
+// Number of magic candidates tried from `seed` before one works for square
+// `s` (-1 if more than `limit`). Used by tools/magic_seeds.cpp to pick seeds.
+int magic_search_attempts(bool rook, Square s, std::uint64_t seed, int limit);
+
 // Reference slider attacks by ray-walking (used for table building and tests).
 Bitboard rook_attacks_slow(Square s, Bitboard occ);
 Bitboard bishop_attacks_slow(Square s, Bitboard occ);
