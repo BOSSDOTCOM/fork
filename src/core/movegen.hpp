@@ -11,7 +11,7 @@
 
 #include "core/position.hpp"
 
-namespace fork {
+namespace forkeng {
 
 enum class GenMode : std::uint8_t {
   Legal,     // every legal move
@@ -22,4 +22,4 @@ enum class GenMode : std::uint8_t {
 template <GenMode T>
 void generate(const Position& pos, MoveList& list);
 
-}  // namespace fork
+}  // namespace forkeng

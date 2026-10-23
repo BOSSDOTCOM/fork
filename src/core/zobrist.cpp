@@ -1,7 +1,7 @@
 // zobrist: key generation (see zobrist.hpp).
 #include "core/zobrist.hpp"
 
-namespace fork::zobrist {
+namespace forkeng::zobrist {
 
 Key piece_square[16][64];
 Key side;
@@ -34,4 +34,4 @@ void init() {
     for (Key& k : row) k = next();
 }
 
-}  // namespace fork::zobrist
+}  // namespace forkeng::zobrist

@@ -6,7 +6,7 @@
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
 
-namespace fork {
+namespace forkeng {
 
 namespace {
 
@@ -61,4 +61,4 @@ BenchResult bench() {
   return r;
 }
 
-}  // namespace fork
+}  // namespace forkeng

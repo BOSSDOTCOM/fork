@@ -7,7 +7,7 @@
 #include "core/position.hpp"
 #include "harness.hpp"
 
-namespace fork::test {
+namespace forkeng::test {
 
 namespace {
 int failures = 0;
@@ -24,7 +24,7 @@ void record_failure(const char* file, int line, const std::string& what) {
   if (failures == MaxReported) std::cerr << "(further failures not shown)\n";
 }
 
-}  // namespace fork::test
+}  // namespace forkeng::test
 
 namespace {
 // Suites run only when named explicitly (CTest label "slow").
@@ -36,8 +36,8 @@ bool is_slow(const char* suite) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  using namespace fork::test;
-  fork::init();
+  using namespace forkeng::test;
+  forkeng::init();
   const char* only = argc > 1 ? argv[1] : nullptr;
   int ran = 0;
   for (const Case& c : registry()) {

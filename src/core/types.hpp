@@ -17,7 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace fork {
+namespace forkeng {
 
 using Bitboard = std::uint64_t;
 using Key = std::uint64_t;
@@ -119,4 +119,4 @@ struct MoveList {
   }
 };
 
-}  // namespace fork
+}  // namespace forkeng

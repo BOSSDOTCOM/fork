@@ -13,11 +13,11 @@ int main(int argc, char** argv) {
   for (bool rook : {true, false}) {
     std::printf("constexpr std::uint64_t %sSeeds[64] = {\n", rook ? "Rook" : "Bishop");
     long total = 0;
-    for (fork::Square s = 0; s < 64; ++s) {
+    for (forkeng::Square s = 0; s < 64; ++s) {
       std::uint64_t best_seed = 1;
-      int best = fork::magic_search_attempts(rook, s, 1, 1 << 22);
+      int best = forkeng::magic_search_attempts(rook, s, 1, 1 << 22);
       for (std::uint64_t seed = 2; seed <= max_seed && best > 1; ++seed) {
-        int attempts = fork::magic_search_attempts(rook, s, seed, best - 1);
+        int attempts = forkeng::magic_search_attempts(rook, s, seed, best - 1);
         if (attempts > 0) {
           best = attempts;
           best_seed = seed;

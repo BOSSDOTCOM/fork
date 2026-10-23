@@ -26,12 +26,12 @@ constexpr std::string_view Starts[] = {
     "n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1",
 };
 
-void check_move(fork::Position& pos, const fork::MoveList& legal, fork::Move m) {
+void check_move(forkeng::Position& pos, const forkeng::MoveList& legal, forkeng::Move m) {
   bool accepted = pos.is_pseudo_legal(m) && pos.is_legal(m);
   require(accepted == legal.contains(m));
   if (!accepted) return;
   bool check = pos.gives_check(m);
-  fork::Key k = pos.predicted_key(m);
+  forkeng::Key k = pos.predicted_key(m);
   pos.make(m);
   require(pos.in_check() == check && pos.key() == k);
   pos.unmake(m);
@@ -40,11 +40,11 @@ void check_move(fork::Position& pos, const fork::MoveList& legal, fork::Move m) 
 }  // namespace
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
-  static const bool initialized = (fork::init(), true);
+  static const bool initialized = (forkeng::init(), true);
   (void)initialized;
   if (size < 1 || size > 4096) return 0;
 
-  fork::Position pos;
+  forkeng::Position pos;
   require(pos.set_fen(Starts[data[0] % std::size(Starts)]));
   std::string_view rest(reinterpret_cast<const char*>(data + 1), size - 1);
 
@@ -55,11 +55,11 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     if (j == std::string_view::npos) j = rest.size();
     std::string_view token = rest.substr(i, j - i);
     i = j + 1;
-    fork::MoveList legal;
-    fork::generate<fork::GenMode::Legal>(pos, legal);
-    fork::Move m = pos.parse_uci(token);
+    forkeng::MoveList legal;
+    forkeng::generate<forkeng::GenMode::Legal>(pos, legal);
+    forkeng::Move m = pos.parse_uci(token);
     if (m.is_none()) {
-      for (fork::Move x : legal) require(pos.move_to_uci(x) != token);
+      for (forkeng::Move x : legal) require(pos.move_to_uci(x) != token);
       continue;
     }
     require(legal.contains(m));
@@ -68,9 +68,9 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   }
 
   // Raw encodings, two bytes at a time, against the reached position.
-  fork::MoveList legal;
-  fork::generate<fork::GenMode::Legal>(pos, legal);
+  forkeng::MoveList legal;
+  forkeng::generate<forkeng::GenMode::Legal>(pos, legal);
   for (std::size_t i = 1; i + 1 < size; i += 2)
-    check_move(pos, legal, fork::Move::from_raw(static_cast<std::uint16_t>(data[i] | (data[i + 1] << 8))));
+    check_move(pos, legal, forkeng::Move::from_raw(static_cast<std::uint16_t>(data[i] | (data[i + 1] << 8))));
   return 0;
 }

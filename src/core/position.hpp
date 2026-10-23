@@ -20,7 +20,7 @@
 #include "core/bitboard.hpp"
 #include "core/types.hpp"
 
-namespace fork {
+namespace forkeng {
 
 // Builds attack tables and Zobrist keys once (thread-safe). Call before any
 // search thread starts; Position() also calls it.
@@ -142,4 +142,4 @@ class Position {
   std::vector<State> states_;  // states_.back() is the current ply
 };
 
-}  // namespace fork
+}  // namespace forkeng

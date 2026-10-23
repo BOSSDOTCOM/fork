@@ -1,7 +1,7 @@
 // movegen: implementation (see movegen.hpp).
 #include "core/movegen.hpp"
 
-namespace fork {
+namespace forkeng {
 
 namespace {
 
@@ -140,4 +140,4 @@ void generate<GenMode::Quiets>(const Position& pos, MoveList& list) {
   generate_moves<false, true>(pos, list);
 }
 
-}  // namespace fork
+}  // namespace forkeng

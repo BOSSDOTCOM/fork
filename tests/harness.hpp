@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace fork::test {
+namespace forkeng::test {
 
 struct Case {
   const char* suite;
@@ -29,19 +29,19 @@ constexpr bool Optimized =
     false;
 #endif
 
-}  // namespace fork::test
+}  // namespace forkeng::test
 
 #define FORK_CAT2(a, b) a##b
 #define FORK_CAT(a, b) FORK_CAT2(a, b)
 
 #define TEST_CASE(suite, name)                                                                              \
   static void FORK_CAT(test_fn_, __LINE__)();                                                               \
-  static ::fork::test::Registrar FORK_CAT(test_reg_, __LINE__)(suite, name, &FORK_CAT(test_fn_, __LINE__)); \
+  static ::forkeng::test::Registrar FORK_CAT(test_reg_, __LINE__)(suite, name, &FORK_CAT(test_fn_, __LINE__)); \
   static void FORK_CAT(test_fn_, __LINE__)()
 
 #define CHECK(cond)                                                       \
   do {                                                                    \
-    if (!(cond)) ::fork::test::record_failure(__FILE__, __LINE__, #cond); \
+    if (!(cond)) ::forkeng::test::record_failure(__FILE__, __LINE__, #cond); \
   } while (0)
 
 #define CHECK_EQ(a, b)                                                         \
@@ -51,7 +51,7 @@ constexpr bool Optimized =
     if (!(check_a_ == check_b_)) {                                             \
       std::ostringstream check_os_;                                            \
       check_os_ << #a " == " #b " (" << check_a_ << " vs " << check_b_ << ")"; \
-      ::fork::test::record_failure(__FILE__, __LINE__, check_os_.str());       \
+      ::forkeng::test::record_failure(__FILE__, __LINE__, check_os_.str());       \
     }                                                                          \
   } while (0)
 
@@ -61,6 +61,6 @@ constexpr bool Optimized =
     if (!(cond)) {                                                       \
       std::ostringstream check_os_;                                      \
       check_os_ << #cond << " [" << msg << "]";                          \
-      ::fork::test::record_failure(__FILE__, __LINE__, check_os_.str()); \
+      ::forkeng::test::record_failure(__FILE__, __LINE__, check_os_.str()); \
     }                                                                    \
   } while (0)

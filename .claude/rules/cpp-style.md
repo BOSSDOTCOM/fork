@@ -15,7 +15,7 @@ paths:
   - private members end in `_`;
   - constants and enumerators `PascalCase`;
   - macros `FORK_UPPER_CASE`;
-  - everything lives in `namespace fork` (tests in `fork::test`).
+  - everything lives in `namespace forkeng` (tests in `forkeng::test`).
 - Every module header starts with a comment giving its purpose and its
   invariants. Keep it true when you change behaviour.
 - Hot paths (movegen, make/unmake, search, eval):

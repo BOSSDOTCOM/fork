@@ -34,7 +34,7 @@
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
 
-using namespace fork;
+using namespace forkeng;
 
 namespace {
 

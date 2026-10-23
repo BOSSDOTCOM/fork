@@ -3,7 +3,7 @@
 
 #include <vector>
 
-namespace fork {
+namespace forkeng {
 
 namespace tables {
 Bitboard pawn_attacks[2][64];
@@ -212,4 +212,4 @@ void build_bitboard_tables() {
   }
 }
 
-}  // namespace fork
+}  // namespace forkeng

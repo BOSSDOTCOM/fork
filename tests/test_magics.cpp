@@ -1,7 +1,7 @@
 #include "core/bitboard.hpp"
 #include "harness.hpp"
 
-using namespace fork;
+using namespace forkeng;
 
 namespace {
 

@@ -10,7 +10,7 @@
 
 #include "core/types.hpp"
 
-namespace fork::zobrist {
+namespace forkeng::zobrist {
 
 extern Key piece_square[16][64];  // indexed by Piece (NoPiece row unused)
 extern Key side;                  // xored in when Black is to move
@@ -22,4 +22,4 @@ extern Key material[16][16];
 
 void init();
 
-}  // namespace fork::zobrist
+}  // namespace forkeng::zobrist

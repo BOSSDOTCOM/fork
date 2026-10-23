@@ -13,7 +13,7 @@
 
 #include "core/position.hpp"
 
-namespace fork {
+namespace forkeng {
 
 std::uint64_t perft(Position& pos, int depth);
 
@@ -30,4 +30,4 @@ struct BenchResult {
 // are identical on every build.
 BenchResult bench();
 
-}  // namespace fork
+}  // namespace forkeng

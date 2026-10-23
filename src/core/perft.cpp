@@ -3,7 +3,7 @@
 
 #include "core/movegen.hpp"
 
-namespace fork {
+namespace forkeng {
 
 std::uint64_t perft(Position& pos, int depth) {
   if (depth == 0) return 1;
@@ -34,4 +34,4 @@ std::uint64_t divide(Position& pos, int depth, std::ostream& out) {
   return total;
 }
 
-}  // namespace fork
+}  // namespace forkeng

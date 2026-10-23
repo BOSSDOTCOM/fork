@@ -8,7 +8,7 @@
 #include "core/movegen.hpp"
 #include "core/zobrist.hpp"
 
-namespace fork {
+namespace forkeng {
 
 namespace {
 
@@ -630,4 +630,4 @@ bool Position::same_state(const Position& o) const {
          state() == o.state();
 }
 
-}  // namespace fork
+}  // namespace forkeng

@@ -12,8 +12,8 @@
 #include "core/perft.hpp"
 #include "harness.hpp"
 
-using namespace fork;
-using namespace fork::test;
+using namespace forkeng;
+using namespace forkeng::test;
 
 namespace {
 

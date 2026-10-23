@@ -26,13 +26,13 @@ void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 
 namespace {
 
-std::uint64_t walk(fork::Position& pos, int depth) {
-  fork::MoveList legal, captures, quiets;
-  fork::generate<fork::GenMode::Legal>(pos, legal);
-  fork::generate<fork::GenMode::Captures>(pos, captures);
-  fork::generate<fork::GenMode::Quiets>(pos, quiets);
+std::uint64_t walk(forkeng::Position& pos, int depth) {
+  forkeng::MoveList legal, captures, quiets;
+  forkeng::generate<forkeng::GenMode::Legal>(pos, legal);
+  forkeng::generate<forkeng::GenMode::Captures>(pos, captures);
+  forkeng::generate<forkeng::GenMode::Quiets>(pos, quiets);
   std::uint64_t n = legal.size();
-  for (fork::Move m : legal) {
+  for (forkeng::Move m : legal) {
     n += pos.is_pseudo_legal(m) + pos.is_legal(m) + pos.gives_check(m) + (pos.predicted_key(m) & 1);
     if (depth > 1) {
       pos.make(m);
@@ -51,7 +51,7 @@ std::uint64_t walk(fork::Position& pos, int depth) {
 }  // namespace
 
 int main() {
-  fork::init();
+  forkeng::init();
   {
     // The counter must see allocations, or a zero below would mean nothing.
     long before = allocations.load();
@@ -71,7 +71,7 @@ int main() {
   };
   int failures = 0;
   for (const char* fen : fens) {
-    fork::Position pos;  // setup may allocate (FEN parsing, state stack reserve)
+    forkeng::Position pos;  // setup may allocate (FEN parsing, state stack reserve)
     if (!pos.set_fen(fen)) return 2;
     long before = allocations.load();
     std::uint64_t n = walk(pos, 4);

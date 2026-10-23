@@ -273,6 +273,7 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
 | 2026-10-23 | **Chess960 / Double FRC: deferred, out of scope.** No X-FEN/Shredder-FEN parsing, no `UCI_Chess960` option, no 960 perft suite. Standard KQkq castling only. The internal "king takes own rook" castling encoding stays (it costs nothing), but no 960-specific logic is written. If FRC is taken up later, the CPW "Chess960 Perft Results" page (960 positions with depth 1-6 counts) is the planned test oracle; no published Double FRC perft suite was found on 2026-10-23. |
 | 2026-10-23 | **tcec.json**: every value, including the adjudication thresholds (from an older season's rules), is marked unverified. Full current-season rules are researched before Phase 5. |
 | 2026-10-23 | **Release targets**: `-march=native`, x86-64-v3, x86-64-v4 (AVX-512), and a no-PEXT magics build, for each compiler; bench must match across all of them (automated `bench_parity`). |
+| 2026-10-23 | **Namespace `fork` renamed to `forkeng`** (owner): `fork` collided with POSIX `fork()` on Linux (section 8, naming conventions). Checked first: no match in Stockfish (shallow clone at effdc3f, 2026-10-17), the MinGW toolchains, glibc/libstdc++/clang headers, or exported libc/libstdc++/libm symbols. **`scripts/check.sh full` covers both platforms**: on Windows it also runs the Linux check in WSL on a copy of the working tree. |
 
 ## 7. Performance doctrine (governs every phase)
 
@@ -342,8 +343,20 @@ invariants.
 - private data members end in `_` (`states_`);
 - constants and enumerators: `PascalCase` (`NoSquare`, `WhiteOO`);
 - macros: `FORK_UPPER_CASE`;
-- everything lives in `namespace fork` (tests: `fork::test`);
+- everything lives in `namespace forkeng` (tests: `forkeng::test`);
 - headers `.hpp`, sources `.cpp`, one module per header/source pair.
+- **No collisions with POSIX or C library names.** No identifier at
+  namespace scope (namespaces included), and no macro, may reuse a name that
+  the C library, POSIX, Windows/MinGW headers or the C++ standard library
+  declare. Standard headers include system headers transitively and differ
+  by platform, so a clash can be invisible on one platform and fatal on the
+  other. Before introducing such a name, grep the system headers of both
+  toolchains (MinGW on Windows; glibc, libstdc++ and clang on Linux).
+  Example: the namespace was first called `fork`, which collides with POSIX
+  `fork()` from `<unistd.h>`; libstdc++ 15 includes that header from
+  `<atomic>`, so the tests failed to compile on Linux only. Renamed to
+  `forkeng` on 2026-10-23. `scripts/check.sh full` builds on both platforms
+  to catch this class of bug.
 
 **Names and Stockfish (owner decision, 2026-10-23).**
 - **Kept:** names that are common across engines and the Chess Programming

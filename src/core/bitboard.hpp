@@ -22,7 +22,7 @@
 #define FORK_USE_PEXT 0
 #endif
 
-namespace fork {
+namespace forkeng {
 
 constexpr Bitboard FileA = 0x0101010101010101ULL;
 constexpr Bitboard FileH = FileA << 7;
@@ -124,4 +124,4 @@ inline Bitboard attacks(PieceType t, Square s, Bitboard occ) {
   }
 }
 
-}  // namespace fork
+}  // namespace forkeng

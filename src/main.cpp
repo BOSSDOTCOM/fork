@@ -37,11 +37,11 @@ void print_version() {
 // One line per ply for differential testing against an independent
 // generator (tools/difftest): fen | sorted legal moves, '+' marking checks |
 // in check | insufficient material | fifty-move clock reached | repetitions (max 3).
-void print_ply(const fork::Position& pos) {
-  fork::MoveList list;
-  fork::generate<fork::GenMode::Legal>(pos, list);
+void print_ply(const forkeng::Position& pos) {
+  forkeng::MoveList list;
+  forkeng::generate<forkeng::GenMode::Legal>(pos, list);
   std::vector<std::string> moves;
-  for (fork::Move m : list) moves.push_back(pos.move_to_uci(m) + (pos.gives_check(m) ? "+" : ""));
+  for (forkeng::Move m : list) moves.push_back(pos.move_to_uci(m) + (pos.gives_check(m) ? "+" : ""));
   std::ranges::sort(moves);
   std::string line = pos.fen() + '|';
   for (std::size_t i = 0; i < moves.size(); ++i) line += (i ? " " : "") + moves[i];
@@ -58,7 +58,7 @@ int difftest() {
   while (std::getline(std::cin, line)) {
     if (!line.empty() && line.back() == '\r') line.pop_back();
     std::size_t bar = line.find('|');
-    fork::Position pos;
+    forkeng::Position pos;
     std::string error;
     if (bar == std::string::npos || !pos.set_fen(line.substr(0, bar), &error)) {
       std::cout << "error bad input: " << line << ' ' << error << "\nend\n" << std::flush;
@@ -72,7 +72,7 @@ int difftest() {
         continue;
       }
       if (uci.empty()) continue;
-      fork::Move m = pos.parse_uci(uci);
+      forkeng::Move m = pos.parse_uci(uci);
       if (m.is_none()) {
         std::cout << "error illegal move " << uci << '\n';
         break;
@@ -96,7 +96,7 @@ int usage() {
 }
 
 // Reads "<depth> [fen...]" from argv starting at index 2.
-bool read_depth_and_position(int argc, char** argv, int& depth, fork::Position& pos) {
+bool read_depth_and_position(int argc, char** argv, int& depth, forkeng::Position& pos) {
   if (argc < 3) return false;
   try {
     depth = std::stoi(argv[2]);
@@ -119,7 +119,7 @@ bool read_depth_and_position(int argc, char** argv, int& depth, fork::Position& 
 }  // namespace
 
 static int run(int argc, char** argv) {
-  fork::init();
+  forkeng::init();
   if (argc < 2) return usage();
   std::string cmd = argv[1];
 
@@ -129,7 +129,7 @@ static int run(int argc, char** argv) {
   }
   if (cmd == "difftest") return difftest();
   if (cmd == "bench") {
-    fork::BenchResult r = fork::bench();
+    forkeng::BenchResult r = forkeng::bench();
     std::cout << "nodes " << r.nodes << '\n'
               << "signature " << std::format("{:016x}", r.signature) << '\n'
               << "nps "
@@ -138,10 +138,10 @@ static int run(int argc, char** argv) {
   }
   if (cmd == "perft" || cmd == "divide") {
     int depth = 0;
-    fork::Position pos;
+    forkeng::Position pos;
     if (!read_depth_and_position(argc, argv, depth, pos)) return usage();
     auto start = std::chrono::steady_clock::now();
-    std::uint64_t nodes = cmd == "perft" ? fork::perft(pos, depth) : fork::divide(pos, depth, std::cout);
+    std::uint64_t nodes = cmd == "perft" ? forkeng::perft(pos, depth) : forkeng::divide(pos, depth, std::cout);
     double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     if (cmd == "perft") std::cout << "nodes " << nodes << '\n';
     std::cout << "time " << secs << " s\n"

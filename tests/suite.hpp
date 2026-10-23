@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-namespace fork::test {
+namespace forkeng::test {
 
 struct PerftPosition {
   const char* name;
@@ -83,4 +83,4 @@ inline const std::vector<EdgePosition>& edge_positions() {
   return edges;
 }
 
-}  // namespace fork::test
+}  // namespace forkeng::test
