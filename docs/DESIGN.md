@@ -273,3 +273,47 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
 | 2026-10-23 | **Chess960 / Double FRC: deferred, out of scope.** No X-FEN/Shredder-FEN parsing, no `UCI_Chess960` option, no 960 perft suite. Standard KQkq castling only. The internal "king takes own rook" castling encoding stays (it costs nothing), but no 960-specific logic is written. If FRC is taken up later, the CPW "Chess960 Perft Results" page (960 positions with depth 1-6 counts) is the planned test oracle; no published Double FRC perft suite was found on 2026-10-23. |
 | 2026-10-23 | **tcec.json**: every value, including the adjudication thresholds (from an older season's rules), is marked unverified. Full current-season rules are researched before Phase 5. |
 | 2026-10-23 | **Release targets**: `-march=native`, x86-64-v3, x86-64-v4 (AVX-512), and a no-PEXT magics build, for each compiler; bench must match across all of them (automated `bench_parity`). |
+
+## 7. Performance doctrine (governs every phase)
+
+Added 2026-10-23 at the owner's request. These rules apply to all phases,
+and later specs must cite them where relevant.
+
+**SIMD**
+- Use compiler intrinsics (`<immintrin.h>`), never hand-written assembly.
+- Every SIMD path has a scalar reference implementation, and a test proves
+  the two give identical results. For integer kernels the results must be
+  bit-identical, over randomized and edge-case inputs.
+- Targets are AVX2, AVX-512 (VNNI where available) and a scalar fallback,
+  each selected by build preset. Phase 1 has the AVX2 (x86-64-v3) and
+  AVX-512 (x86-64-v4) presets. Phase 4 adds an AVX-512 VNNI preset and a
+  scalar preset (baseline x86-64, no SIMD paths), each with bench parity.
+
+**NNUE (Phase 4)**
+- The accumulator is updated incrementally.
+- Weights are quantized to int8/int16.
+- Buffers are cache-line aligned (64 bytes).
+- Every layer has a SIMD implementation alongside its scalar reference.
+
+**Memory**
+- Hot structures are cache-line aligned and sized with the cache in mind.
+- The TT entry is prefetched using `Position::key_after(move)` before
+  `make`.
+- No heap allocation in the search path, enforced by the counting-allocator
+  test (`no_alloc`), which is extended to cover search in Phase 3.
+
+**Measurement**
+- Every optimization is profiled before and after.
+- It must keep bench identical (`bench_parity`).
+- It's accepted only with a measured gain, using the interleaved A/B harness
+  (`bench/ab.py`, `bench/experiment.sh`) and the noise rules in
+  `bench/micro.cpp`.
+- Speed claims are recorded per function in the decisions log, with the
+  harness output that supports them.
+- An optimization that makes the code meaningfully harder to maintain is
+  reported to the owner before it's adopted.
+
+**Layout review (Phase 1 Part C)**
+Position, move lists and the per-ply state are reviewed for cache efficiency
+and SIMD-friendly access now, so that Phases 3 and 4 don't need a
+restructure. The results are recorded in the decisions log.
