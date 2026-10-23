@@ -163,3 +163,56 @@ name of their config flag.
   with search nps whether eager check info pays off, and test a lazy variant
   that computes the check info only when it is first requested in a ply.
 - **status:** deferred to Phase 3
+
+## 10. Steer into TB-drawn 6-piece endings
+
+- **type:** ELO
+- **flag:** part of the Phase 7 TB-aware evaluation option (name set in
+  Phase 7).
+- **idea:** When worse, prefer lines that reach 6-piece endings the
+  tablebases show as drawn, so that tablebase adjudication would end the
+  game as a draw. Source: the brief (Phase 7 "TB-aware eval") and the plan.
+- **phase:** Phase 7.
+- **metric:** SPRT under TCEC conditions (`config/tcec.json`).
+- **note:** the premise is TB adjudication at 6 pieces. The current TCEC
+  rules have no tablebase adjudication (Leagues rules revision 6876,
+  4 May 2025, removed it; Swiss 10 decisive games were played to mate). See
+  docs/kb/competition.md on branch kb. A drawn TB ending is still a draw
+  when played out, so a weaker form of the idea may survive; that is what
+  the re-evaluation decides.
+- **status:** re-evaluate (TB adjudication removed from the current rules)
+
+## 11. TB boundary training data
+
+- **type:** ELO
+- **flag:** none for the data; any net trained with it is a separate
+  evaluator candidate behind the Phase 4 evaluator selection.
+- **idea:** Training positions just above the tablebase boundary (7 pieces
+  and up, converting into TB positions), labeled from Fork's own self-play
+  with tablebase results, so the evaluation is accurate where games enter
+  adjudication range. Source: the brief (Phase 7 TB-aware eval) and the plan.
+- **phase:** Phase 4 (data) and Phase 7.
+- **metric:** SPRT against the net trained without the extra data.
+- **note:** the value of the boundary was tied to 6-piece TB adjudication,
+  which the current rules no longer use (see idea 10). Engines now get
+  7-man Syzygy in play (docs/kb/competition.md), so the relevant boundary
+  may be 7-8 pieces instead. Tablebase-derived labels are not
+  engine-generated data, but log the tablebase source in ORIGINALITY.md
+  before use.
+- **status:** re-evaluate (TB adjudication removed from the current rules)
+
+## 12. Endgame conversion
+
+- **type:** ELO
+- **flag:** a UCI option for the conversion logic (name set in Phase 3).
+- **idea:** Win won endgames reliably under the 50-move rule: DTZ-correct
+  root probing (pick moves that keep the win while resetting the 50-move
+  counter in time), WDL in search with correct handling of cursed wins and
+  blessed losses, and halfmove-clock-aware scores so the search doesn't
+  shuffle a won position into a 50-move draw.
+- **phase:** Phase 3 (Syzygy integration) and Phase 7.
+- **metric:** SPRT, plus a suite of won TB positions near the 50-move
+  limit: the share converted when played out against a TB-perfect defender.
+- **note:** matters more now that games are played to mate (no TB
+  adjudication).
+- **status:** untested
