@@ -46,7 +46,7 @@ constexpr double NoiseFloor = 0.02;
 
 struct Result {
   std::string name;
-  double median, p10, p90;  // ns per op
+  double median, p10, p90, min;  // ns per op
   double spread() const { return (p90 - p10) / median; }
 };
 
@@ -83,7 +83,7 @@ Result measure(const std::string& name, const std::function<std::uint64_t()>& pa
   auto at = [&](double q) {
     return samples[static_cast<std::size_t>(std::lround(q * static_cast<double>(samples.size() - 1)))];
   };
-  return {name, at(0.5), at(0.1), at(0.9)};
+  return {name, at(0.5), at(0.1), at(0.9), samples.front()};
 }
 
 // Deterministic workload: positions from random playouts of the suite
@@ -131,7 +131,10 @@ std::map<std::string, Result> load(const std::string& path) {
     if (line.empty() || line[0] == '#') continue;
     std::istringstream ss(line);
     Result r;
-    if (ss >> r.name >> r.median >> r.p10 >> r.p90) m[r.name] = r;
+    if (ss >> r.name >> r.median >> r.p10 >> r.p90) {
+      if (!(ss >> r.min)) r.min = r.p10;
+      m[r.name] = r;
+    }
   }
   return m;
 }
@@ -214,6 +217,22 @@ static int run(int argc, char** argv) {
            for (Move m : legal[i]) { positions[i].make(m); sink = sink + positions[i].key(); positions[i].unmake(m); }
          return total_moves;
        }},
+      {"null_move", [&] {  // state copy + check-info update, without piece moves
+         std::uint64_t n = 0;
+         for (Position& p : positions)
+           if (!p.in_check()) { p.make_null(); sink = sink + p.key(); p.unmake_null(); ++n; }
+         return n;
+       }},
+      {"gives_check", [&] {
+         for (std::size_t i = 0; i < positions.size(); ++i)
+           for (Move m : legal[i]) sink = sink + positions[i].gives_check(m);
+         return total_moves;
+       }},
+      {"key_after", [&] {
+         for (std::size_t i = 0; i < positions.size(); ++i)
+           for (Move m : legal[i]) sink = sink + positions[i].key_after(m);
+         return total_moves;
+       }},
       {"attackers_to", [&] {
          for (const Position& p : positions)
            for (Square s = 0; s < 64; ++s) sink = sink + p.attackers_to(s, p.pieces());
@@ -255,8 +274,9 @@ static int run(int argc, char** argv) {
 
   if (!save.empty()) {
     std::ofstream out(save);
-    out << "# " << build_info() << "\n# name median_ns p10_ns p90_ns\n";
-    for (const Result& r : results) out << r.name << ' ' << r.median << ' ' << r.p10 << ' ' << r.p90 << '\n';
+    out << "# " << build_info() << "\n# name median_ns p10_ns p90_ns min_ns\n";
+    for (const Result& r : results)
+      out << r.name << ' ' << r.median << ' ' << r.p10 << ' ' << r.p90 << ' ' << r.min << '\n';
     std::printf("\nsaved %s\n", save.c_str());
   }
   return 0;

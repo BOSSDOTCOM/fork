@@ -26,6 +26,11 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O1 -g -fno-omit-frame-pointer -DFORK_DEBUG")
 add_library(fork_flags INTERFACE)
 target_compile_options(fork_flags INTERFACE
   -Wall -Wextra -Wpedantic -Wshadow -Werror -march=${FORK_ARCH})
+# A/B experiments (Part C): -DFORK_EXPERIMENT=NAME defines FORK_EXP_NAME.
+set(FORK_EXPERIMENT "" CACHE STRING "Optimization experiment to enable (A/B builds only)")
+if(FORK_EXPERIMENT)
+  target_compile_definitions(fork_flags INTERFACE FORK_EXP_${FORK_EXPERIMENT})
+endif()
 if(FORK_NO_PEXT)
   target_compile_definitions(fork_flags INTERFACE FORK_NO_PEXT)
 endif()

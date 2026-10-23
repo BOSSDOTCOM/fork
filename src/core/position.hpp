@@ -47,7 +47,7 @@ class Position {
   std::string fen() const;
 
   Color side_to_move() const { return side_; }
-  Piece piece_on(Square s) const { return board_[s]; }
+  Piece piece_on(Square s) const { return static_cast<Piece>(board_[s]); }
   Bitboard pieces() const { return by_color_[White] | by_color_[Black]; }
   Bitboard pieces(Color c) const { return by_color_[c]; }
   Bitboard pieces(PieceType t) const { return by_type_[t]; }

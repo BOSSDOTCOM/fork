@@ -85,3 +85,45 @@ name of their config flag.
 - **metric:** not specified by the owner. Proposed: each tool diagnoses at
   least one real issue in its phase.
 - **status:** untested
+
+## 7. TCEC-opening specialization
+
+- **type:** ELO
+- **flag:** none needed for the testing use. For training, the data mix is
+  selected by the training-pipeline config (Phase 4), with a net trained with
+  and without the TCEC-opening positions.
+- **idea:** Collect the openings TCEC used in past seasons from its
+  published archives, and use them in two ways:
+  1. as the opening set for all long-time-control confirmation testing;
+  2. as a source of starting positions for NNUE training data, so that Fork's
+     evaluation is strongest in the unbalanced structures it will actually be
+     assigned.
+- **phase:** Phase 4 (training data) and Phase 8 (testing).
+- **metric:** SPRT on held-out TCEC openings that weren't used in training.
+- **note:**
+  - TCEC books are built with engine evaluations. Only the *positions* may be
+    used for training, as starting points that Fork's own self-play then
+    plays out and scores. No book or archive evaluations may be used as
+    labels (docs/kb/originality.md).
+  - Record which seasons' openings went into training and which were held
+    out.
+- **status:** untested
+
+## 8. Swiss-specific contempt
+
+- **type:** ELO
+- **flag:** a UCI style/contempt option (Phase 7), set per event and per
+  opponent.
+- **idea:** Win-seeking against lower-rated opponents; accepting draws
+  against much stronger ones. It's driven by opponent rating when the
+  tournament provides one (for example, the UCI `UCI_Opponent` option where
+  the GUI sends it, or event configuration), and it's part of Fork's
+  genuine evaluation and search preferences. It must never alter reported
+  scores to trigger or avoid adjudication (the Phase 7 rule).
+- **phase:** Phase 7.
+- **metric:** SPRT in Swiss-like gauntlets: against weaker pinned opponents
+  (score gain), and against stronger ones (no loss in score).
+- **note:** whether TCEC's Swiss passes opponent identity or rating to
+  engines is unverified. The current TCEC Swiss research (docs/kb, kb
+  branch) should answer it.
+- **status:** untested
