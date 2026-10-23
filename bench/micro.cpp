@@ -16,6 +16,8 @@
 #include <string>
 #include <vector>
 
+#include "build_id.hpp"
+
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -138,12 +140,14 @@ std::map<std::string, Result> load(const std::string& path) {
   return m;
 }
 
+// Starts with "variant <name> | commit <hash>[-dirty]": bench/ab.py parses
+// these two fields to check that it runs the binaries it was asked to compare.
 std::string build_info() {
-  std::string s;
+  std::string s = "variant " FORK_BUILD_VARIANT " | commit " FORK_BUILD_COMMIT " | ";
 #if defined(__clang__)
-  s = "clang " __clang_version__;
+  s += "clang " __clang_version__;
 #elif defined(__GNUC__)
-  s = "gcc " __VERSION__;
+  s += "gcc " __VERSION__;
 #endif
   s += std::string(" | arch ") + FORK_ARCH_NAME + " | " + (FORK_USE_PEXT ? "pext" : "magic");
   return s;

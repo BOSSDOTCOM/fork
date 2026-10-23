@@ -156,4 +156,10 @@ name of their config flag.
   keeps its layout plus the uint8 mailbox (harmless, 192 fewer bytes per
   Position). v5 is kept on branch `layout-exp` (9fc2cb8) for Phase 3
   re-testing with search nps.
+- **per-ply check info (separate from the layout question):** Part A item 8
+  made the State compute checkers, blockers/pinners and checking squares on
+  every make(), and make/unmake became about 60% slower (before/after on
+  2026-10-23, bench/ab.py min: +58% clang, +68% gcc). In Phase 3, measure
+  with search nps whether eager check info pays off, and test a lazy variant
+  that computes the check info only when it is first requested in a ply.
 - **status:** deferred to Phase 3

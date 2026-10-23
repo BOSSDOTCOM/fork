@@ -98,6 +98,24 @@ target_link_libraries(fork_magic_seeds PRIVATE forkcore)
 
 add_executable(fork_micro bench/micro.cpp)
 target_link_libraries(fork_micro PRIVATE forkcore)
+# fork_micro reports its variant and commit so bench/ab.py can verify that it
+# compares the binaries it was told to (see cmake/build_id.cmake).
+set(FORK_BUILD_LABEL "" CACHE STRING "Variant name embedded in fork_micro (default: FORK_EXPERIMENT, else 'baseline')")
+if(FORK_BUILD_LABEL)
+  set(fork_variant ${FORK_BUILD_LABEL})
+elseif(FORK_EXPERIMENT)
+  set(fork_variant ${FORK_EXPERIMENT})
+else()
+  set(fork_variant baseline)
+endif()
+add_custom_target(fork_build_id
+  COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+    -DOUTPUT=${CMAKE_BINARY_DIR}/generated/build_id.hpp -DVARIANT=${fork_variant}
+    -P ${CMAKE_SOURCE_DIR}/cmake/build_id.cmake
+  BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/build_id.hpp
+  VERBATIM)
+add_dependencies(fork_micro fork_build_id)
+target_include_directories(fork_micro PRIVATE ${CMAKE_BINARY_DIR}/generated)
 
 if(FORK_FUZZ)
   # Coverage instrumentation for everything (engine code included), libFuzzer

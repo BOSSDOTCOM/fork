@@ -36,7 +36,8 @@ ctest --test-dir build/clang-release -L slow  # deep perft suites (minutes)
 build/clang-release/fork bench                # prints nodes, signature, nps
 build/clang-release/fork perft 5 [fen]        # also: divide, version, difftest
 build/clang-release/fork_micro --compare bench/baselines/<file>
-python -I bench/ab.py A/fork_micro B/fork_micro    # interleaved A/B (use .venv python)
+python -I bench/ab.py A/fork_micro B/fork_micro --a-variant baseline --a-commit <hash> \
+  --b-variant NAME --b-commit <hash>[-dirty]  # interleaved A/B (use .venv python); identity-checked
 bash bench/experiment.sh clang NAME           # build FORK_EXPERIMENT=NAME and compare
 python -I tools/difftest/difftest.py --fork build/clang-release/fork   # vs python-chess
 python -I tools/fuzz/run_fuzz.py --target build/clang-fuzz/fuzz_fen --corpus fuzz/corpus/fen
