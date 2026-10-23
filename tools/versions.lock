@@ -1,0 +1,37 @@
+# Fork tool pins. Verified 2026-10-23 against the upstream pages listed in docs/kb/_sources-tools.md.
+# Format (whitespace separated, one tool per line, '#' starts a comment):
+#   name  version  source-url  sha256:<hex> | commit:<sha1> | UNVERIFIED
+# tools/install.sh reads this file. Fields must not contain spaces.
+# "commit:" = the commit the tag points to (peeled), so a re-tagged upstream is detected.
+#
+# --- installed by tools/install.sh ---
+fastchess              v1.8.2-alpha   https://github.com/Disservin/fastchess.git                                                 commit:f618e34540f94f4719ad3817950618dabe441318
+fastchess-linux-bin    v1.8.2-alpha   https://github.com/Disservin/fastchess/releases/download/v1.8.2-alpha/fastchess-linux-x86-64.tar   sha256:1003f920bebe841acdab5e6d7871e93171a4586857b3ec91c21ef5777f26ff96
+cutechess              v1.5.1         https://github.com/cutechess/cutechess.git                                                 commit:45e923949e43570886c0ad3392f514e743839c6b
+cutechess-appimage     v1.5.1         https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage    sha256:d9448693e45bd57f1aeb32c46e94466894cd7cc5b6937effd285a02e871387b5
+ordo                   v1.2.6         https://github.com/michiguel/Ordo.git                                                      commit:17eec774f2e4b9fdd2b1b38739f55ea221fb851a
+syzygy-sha256-list     2024-06-23     https://tablebase.lichess.ovh/tables/standard/sha256                                       sha256:6dc75697fd9af1e171f45b48ceed5910a913054bf9f48b8c83163232d784a783
+syzygy-345-wdl         145-files      https://tablebase.lichess.ovh/tables/standard/3-4-5-wdl/                                   per-file-sha256-from:syzygy-sha256-list
+syzygy-345-dtz         145-files      https://tablebase.lichess.ovh/tables/standard/3-4-5-dtz/                                   per-file-sha256-from:syzygy-sha256-list
+syzygy-6-wdl           365-files      https://tablebase.lichess.ovh/tables/standard/6-wdl/                                       per-file-sha256-from:syzygy-sha256-list
+syzygy-6-dtz           365-files      https://tablebase.lichess.ovh/tables/standard/6-dtz/                                       per-file-sha256-from:syzygy-sha256-list
+hotspot-appimage       v1.6.0         https://github.com/KDAB/hotspot/releases/download/v1.6.0/hotspot-v1.6.0-x86_64.AppImage   sha256:1535aa962c8863fed0af171c6b45900a0423c6a6fd95574f8747b99370b6b088
+# perf and valgrind come from the Ubuntu archive (apt); the distro decides the version.
+perf                   apt            linux-tools-generic(ubuntu-archive)                                                        UNVERIFIED
+valgrind               apt            valgrind(ubuntu-archive)                                                                   UNVERIFIED
+#
+# --- pinned for reference / manual install (not installed by install.sh) ---
+valgrind-upstream      3.27.1         https://sourceware.org/pub/valgrind/valgrind-3.27.1.tar.bz2                               UNVERIFIED
+fathom                 master@2025-12 https://github.com/jdart1/Fathom.git                                                       commit:c9c6fef0dddc05d2e242c183acf5833149ab676d
+python-chess           1.11.2         https://pypi.org/project/chess/1.11.2/                                                    sha256:a8b43e5678fdb3000695bdaa573117ad683761e5ca38e591c4826eba6d25bb39
+pgn-extract            26-04          https://www.cs.kent.ac.uk/people/staff/djb/pgn-extract/pgn-extract-26-04.tgz              UNVERIFIED
+openbench              master         https://github.com/AndyGrant/OpenBench.git                                                 commit:dd03aaff9e855e8b922f5d365ad5b74a670560f6
+chess-tuning-tools     v0.9.5         https://github.com/kiudee/chess-tuning-tools.git                                           commit:9e27d2e3dd7df99588127f7f3e6217021c2ec95b
+weather-factory        main           https://github.com/jnlt3/weather-factory.git                                               commit:19b4805c9a2372955c29666118070269f34aa2eb
+bullet                 main           https://github.com/jw1912/bullet.git                                                       commit:579b78b37a694cacd6e9ede4706386c15c34837c
+bulletformat           main           https://github.com/jw1912/bulletformat.git                                                 commit:eddd9a2d77dbc1391d68f23ba524657e91bd9a73
+viriformat             3.0.0          https://github.com/cosmobobak/viriformat.git                                               commit:0238b315ea620acbf3b4d0fd8b61261efa59b0ae
+sf-books               master         https://github.com/official-stockfish/books.git                                            commit:a804a97e709f40aa75a00f9d19e84915b7a3a45c
+bayeselo               2010.03.31     https://www.remi-coulom.fr/Bayesian-Elo/                                                   UNVERIFIED
+vtune                  2026.4.0.23    https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler-download.html UNVERIFIED
+amd-uprof              5.3            https://www.amd.com/en/developer/uprof.html                                                UNVERIFIED

@@ -1,48 +1,90 @@
 {
-  "_comment": "Current TCEC conditions. Only test scripts read this file; the engine receives these values as UCI options. Fields with null are unverified and block the Phase 8 scripts until filled in.",
-  "season": null,
-  "verified": false,
+  "_comment": "Current TCEC conditions. Only test scripts read this file; the engine receives these values as UCI options. Fields with null are unverified and block the Phase 8 scripts until filled in. Sub-objects carry their own 'verified' flag; see docs/kb/competition.md.",
+  "season": "TCEC Season 30 (current event 2026-10-23: Swiss 10; still to come: Cup 17, Leagues S30, FRD 6)",
+  "verified": true,
+  "verified_date": "2026-10-23",
   "sources": [
-    "https://tcec-chess.com/archive (partial adjudication rules, season unstated)",
-    "owner brief 2026-10-23 (adjudication thresholds)"
+    { "url": "https://tcec-chess.com/tournament.json", "date": "2026-10-23", "used_for": "current season (season30, div sw)" },
+    { "url": "https://tcec-chess.com/live.json", "date": "2026-10-23", "used_for": "live Swiss 10 game: TimeControl 1800+3, Threads 512, Hash 262144, SyzygyPath /home/syzygy7" },
+    { "url": "https://wiki.chessdom.org/TCEC_Season_Further_information", "date": "2026-10-23", "used_for": "hardware, threads, hash caps, large pages, pondering, tablebases" },
+    { "url": "https://wiki.chessdom.org/TCEC_Leagues_Season_Rules", "date": "2026-10-23", "used_for": "league time controls, draw rule, outage rules" },
+    { "url": "https://wiki.chessdom.org/TCEC_Swiss_rules", "date": "2026-10-23", "used_for": "Swiss time control, paired openings, draw rule" },
+    { "url": "https://wiki.chessdom.org/Rules", "date": "2026-10-23", "used_for": "Cup time control and all-event rules" },
+    { "url": "https://wiki.chessdom.org/Openings_FAQ", "date": "2026-10-23", "used_for": "each opening played with both colours" },
+    { "url": "https://wiki.chessdom.org/TCEC_Swiss_10", "date": "2026-10-23", "used_for": "S30 categories, Category 4 (AI-assisted) rules" },
+    { "url": "https://www.chessdom.com/tcec-announces-ai-integration-plans-as-a-new-generation-of-engines-enters-the-arena/", "date": "2026-10-23", "used_for": "S30 AI-engine policy" }
   ],
   "hardware": {
-    "threads": null,
-    "hash_mb": null,
-    "large_pages": false,
+    "verified": true,
+    "cpu": "2x AMD EPYC 9754 (256 cores / 512 threads), 768 GiB DDR5 (CPU server, S28 onward)",
+    "gpu_server": "2x AMD EPYC 9175F + 8x RTX 5090, 768 GiB DDR5; from S30 engines may use both servers on their turn",
+    "threads": 512,
+    "hash_mb": 262144,
+    "hash_note": "256 GiB cap only if hash init is multithreaded; otherwise 32 or 64 GiB. All engine RAM capped at 320 GiB.",
+    "large_pages": true,
     "numa_nodes": null
   },
   "pondering": false,
   "tablebases": {
+    "verified": true,
     "type": "syzygy",
-    "engine_access_pieces": null,
-    "adjudication_pieces": 6
+    "engine_access_pieces": 7,
+    "syzygy_path_example": "/home/syzygy7",
+    "madvise_random_requested": true,
+    "adjudication_pieces": null,
+    "adjudication_note": "UNVERIFIED: current rules do not mention TB adjudication; S20 used 6-man Syzygy."
   },
   "openings": {
-    "paired": true
+    "verified": true,
+    "paired": true,
+    "engine_books": "removed or disabled; hidden books mean disqualification"
   },
   "divisions": [
-    { "name": "League 3",   "time_control": { "base_s": null, "increment_s": null } },
-    { "name": "League 2",   "time_control": { "base_s": null, "increment_s": null } },
-    { "name": "League 1",   "time_control": { "base_s": null, "increment_s": null } },
-    { "name": "Premier",    "time_control": { "base_s": null, "increment_s": null } },
-    { "name": "Superfinal", "time_control": { "base_s": null, "increment_s": null } }
+    { "name": "Swiss",            "verified": true, "time_control": { "base_s": 1800, "increment_s": 3 } },
+    { "name": "Cup",              "verified": true, "time_control": { "base_s": 1800, "increment_s": 3 } },
+    { "name": "Entrance League",  "verified": true, "time_control": { "base_s": 1800, "increment_s": 3 } },
+    { "name": "League 2",         "verified": true, "time_control": { "base_s": 1800, "increment_s": 3 } },
+    { "name": "League 1",         "verified": true, "time_control": { "base_s": 1800, "increment_s": 3 } },
+    { "name": "Premier",          "verified": true, "time_control": { "base_s": 3600, "increment_s": 6 } },
+    { "name": "Superfinal",       "verified": true, "time_control": { "base_s": 7200, "increment_s": 12 } }
   ],
   "adjudication": {
     "draw": {
-      "from_move": 35,
-      "max_abs_eval_cp": 8,
-      "plies": 10,
-      "both_engines": true,
-      "reset_on_capture_or_pawn_move": true
+      "verified": true,
+      "from_move": null,
+      "from_move_note": "no minimum move number in the current rule",
+      "max_pieces_incl_kings_excl_pawns": 6,
+      "max_abs_eval_cp": 25,
+      "plies": 8,
+      "both_engines": null,
+      "both_engines_note": "UNVERIFIED: rule refers to the eval of the move leading to the position",
+      "reset_on_capture_or_pawn_move": false,
+      "reset_on": ["eval outside band", "missing eval", "promotion creating a 7th piece"]
     },
     "win": {
-      "min_abs_eval_cp": 1000,
-      "plies": 10,
-      "both_engines": true
+      "verified": true,
+      "present_in_rules": false,
+      "min_abs_eval_cp": null,
+      "plies": null,
+      "note": "Current rules list wins only by mate, illegal move, resignation. How resignation is triggered is UNVERIFIED."
     },
     "tablebase": {
-      "pieces": 6
+      "verified": false,
+      "pieces": null
+    },
+    "outage_only": {
+      "verified": true,
+      "win_both_abs_eval_cp": 1000,
+      "draw_both_abs_eval_cp": 15,
+      "draw_min_moves_each": 35
     }
+  },
+  "entry": {
+    "verified": true,
+    "questionnaire_version": "2.4",
+    "leagues_min_tcec_elo": 3000,
+    "ai_assisted_category": 4,
+    "ai_assisted_requirements": "public open-source repo for the whole participation; TCEC admins build the binary from it",
+    "ai_engines_in_leagues_s30": false
   }
 }
