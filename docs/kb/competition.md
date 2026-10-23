@@ -147,6 +147,25 @@ the TD statement and the chessdom TCEC tag feed. Full category definitions:
    an S31 application window might fall around mid-2027; that is an
    extrapolation, not a published date.
 
+**Decision (owner, 2026-10-23): Fork's entry path is Category 4 via the
+Cat 3+4 playoff** (steps 1-6 above). Consequences for the repository: it
+must be public before the application, and TCEC builds Fork from source.
+
+### Open questions to ask in TCEC's Discord
+
+None of these is answered on any page opened on 2026-10-23.
+
+1. **Questionnaire address:** which email address takes the completed
+   questionnaire (v2.4)? No address is printed on the wiki Main Page or the
+   Questionnaire page.
+2. **Minimum strength:** is there a minimum strength or rating for a Swiss
+   or Cat 3+4 playoff entry? None is published (the 3000+ TCEC Elo bar
+   applies to the Leagues).
+3. **License requirement:** does Category 4 require an OSI-approved
+   open-source license, or is a source-available license enough? The
+   published rule only asks for public, buildable source; the CatGPT
+   precedent was accepted with PolyForm Noncommercial.
+
 ### Swiss categories in full (S30 / Swiss 10)
 
 Sources: TCEC_Swiss_10 regulations; categorisation flowchart
