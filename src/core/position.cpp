@@ -258,7 +258,9 @@ bool Position::set_fen(std::string_view fen, std::string* error) {
       auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), out);
       return ec == std::errc() && ptr == str.data() + str.size() && out >= 0;
     };
-    if (!parse(fields[4], s.halfmove)) return fail("bad halfmove clock");
+    int halfmove = 0;
+    if (!parse(fields[4], halfmove) || halfmove > 0xFFFF) return fail("bad halfmove clock");
+    s.halfmove = static_cast<std::uint16_t>(halfmove);
     if (!parse(fields[5], p.fullmove_)) return fail("bad fullmove number");
     p.fullmove_ = std::max(p.fullmove_, 1);
   }
@@ -561,7 +563,7 @@ int Position::repetition_count() const {
   // Only positions since the last irreversible move can repeat; a position
   // repeats only with the same side to move, so step back two plies at a time.
   const int n = static_cast<int>(states_.size());
-  const int window = std::min(state().halfmove, n - 1);
+  const int window = std::min<int>(state().halfmove, n - 1);
   const Key k = key();
   int count = 1;
   for (int back = 2; back <= window; back += 2)

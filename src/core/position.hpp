@@ -28,7 +28,7 @@ void init();
 
 // Everything about a position that make() computes once per ply and unmake()
 // restores by popping. Kept in a stack so earlier keys stay available for
-// repetition detection.
+// repetition detection. Two cache lines: make() copies it once per move.
 struct State {
   Key key;
   Key pawn_key;
@@ -37,16 +37,17 @@ struct State {
   Bitboard checkers;     // enemy pieces giving check to the side to move
   Bitboard blockers[2];  // pieces (either color) whose removal alone would expose c's king to an enemy slider
   Bitboard pinners[2];   // enemy sliders whose only obstacle to c's king is one of c's pieces
-  Bitboard checking_squares[6];  // squares from which the side to move would give check, per piece type
-  int castling;
-  Square ep;  // NoSquare unless an ep capture is legal
-  int halfmove;
-  Piece captured;  // piece captured by the move that led here
+  Bitboard checking_squares[6];  // per piece type: squares from which the side to move would give check (King: 0)
+  std::uint16_t halfmove;
+  std::uint8_t castling;
+  std::uint8_t ep;        // NoSquare unless an ep capture is legal
+  std::uint8_t captured;  // piece captured by the move that led here (NoPiece if none)
 
   bool operator==(const State&) const = default;
 };
 
-class Position {
+// The eight bitboards come first so they share one cache line.
+class alignas(64) Position {
  public:
   static constexpr std::string_view StartFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -134,9 +135,9 @@ class Position {
   bool has_insufficient_material(Color c) const;
   void finish_setup();  // state from scratch after board setup
 
-  Piece board_[64];
   Bitboard by_type_[6];
   Bitboard by_color_[2];
+  std::uint8_t board_[64];  // Piece per square
   Color side_ = White;
   int fullmove_ = 1;
   std::vector<State> states_;  // states_.back() is the current ply
