@@ -29,7 +29,7 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
 scripts/build.sh                              # all presets + PGO, summary table
 scripts/build.sh clang-release gcc-debug      # chosen presets
 scripts/check.sh quick                        # clang-release build + fast tests
-scripts/check.sh full                         # clang-release, clang-debug (ASan/UBSan), gcc-release
+scripts/check.sh full                         # Windows presets, then the same + gcc-debug on Linux (WSL)
 cmake --preset clang-release && cmake --build build/clang-release
 ctest --test-dir build/clang-release -LE slow --output-on-failure
 ctest --test-dir build/clang-release -L slow  # deep perft suites (minutes)

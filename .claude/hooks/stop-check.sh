@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Stop hook: before Claude finishes, run the full check (clang-release,
+# Stop hook: before Claude finishes, run the full check on Windows and Linux
+# (WSL) (clang-release,
 # clang-debug with sanitizers, gcc-release; every non-slow test including
 # bench parity). It is instant when no code changed since the last pass.
 # On failure, exit 2 blocks completion and feeds the failure back to Claude.
