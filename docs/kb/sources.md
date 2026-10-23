@@ -411,3 +411,38 @@ All opened on 2026-10-23 with curl (browser User-Agent) or the GitHub REST API; 
 | https://api.github.com/search/issues?q=repo:codedeliveryservice/Reckless+{leela,lc0,training+data,datagen} | GitHub issue search | 2026-10-23 | Looking for data provenance |
 | https://api.github.com/repos/codedeliveryservice/Reckless/issues/74, /987, /881 | PR #74, issues #987, #881 | 2026-10-23 | PR #74: dataset regenerated with Reckless itself (Oct 2024); others not relevant |
 | https://recklesschess.space/ and /users/ | Reckless OpenBench instance | 2026-10-23 | Confirms it is an OpenBench instance |
+
+## Competition update 2: tablebase access and Swiss categories 3/4 (competition.md, config/tcec.json)
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://wiki.chessdom.org/index.php?title=TCEC_Season_Further_information&action=raw | Further information page (rev 8475) | 2026-10-23 | TB wording (6-man Scorpio, 7-man Syzygy, madvise), storage (NVMe Syzygy3-7, HDD Syzygy7 DTZ), compilers |
+| https://wiki.chessdom.org/api.php?action=query&prop=revisions&titles=TCEC_Season_Further_information | Revision list | 2026-10-23 | Dating the TB wording (rev 6470/6471, Mar 2025) |
+| https://wiki.chessdom.org/index.php?oldid={2470,3788,6470,6471}&action=raw | Old revisions of the Further information page | 2026-10-23 | TB wording history (5-man Scorpio/6-man Syzygy before Mar 2025) |
+| https://tcec-chess.com/live.json | Live game | 2026-10-23 | Engine options (Pawnocchio vs PlentyChess, Swiss 10 round 9.43): SyzygyPath=/home/syzygy7, no other TB option |
+| https://tcec-chess.com/tournament.json | Current event | 2026-10-23 | season30, div sw |
+| https://tcec-chess.com/crosstable.json, https://tcec-chess.com/schedule.json | Swiss 10 crosstable and schedule | 2026-10-23 | Swiss 10 entrants (no Scorpio engine) |
+| https://tcec-chess.com/gamelist.json | Event index | 2026-10-23 | S29/S30 event names |
+| https://tcec-chess.com/ | GUI HTML/JS | 2026-10-23 | Archive game URL pattern `archive/json/<event>_<game>.pgn` |
+| https://tcec-chess.com/archive/json/<event>_Crosstable.cjson for 98 S29/S30/Cup 16 events | Archive crosstables | 2026-10-23 | 79 loaded, 8 FAILED (HTML 404 page) + testing events; no ScorpioNN entrant |
+| https://tcec-chess.com/archive/json/<event>_1.pgn for non-testing S29/S30/Cup 16 events | Archived games (PGN with engine options) | 2026-10-23 | 57 parsed: SyzygyPath values (/home/syzygy7, /home/syzygy6, /home/syzygy7_no_dtz); no Scorpio/egbb option |
+| https://tcec-chess.com/archive/json/TCEC_Season_30_-_Category_3+4_Playoff_{2,3,4}.pgn | Cat 3+4 playoff games | 2026-10-23 | CatGPT/Cinder/Serendipity options |
+| https://tcec-chess.com/archive/json/TCEC_Season_28_-_Swiss_8_Schedule.sjson and TCEC_Season_28_-_Swiss_8_7.pgn | Swiss 8 schedule, ScorpioNN game | 2026-10-23 | ScorpioNN options (Protocol only) |
+| https://wiki.chessdom.org/index.php?title=TCEC_Swiss_10&action=raw | Swiss 10 page | 2026-10-23 | Regulations, Cat 3/4 rules, deadline, appeal, categorisation final date |
+| https://wiki.chessdom.org/api.php?action=query&prop=revisions&titles=TCEC_Swiss_10 | Swiss 10 revision list (233 revisions) | 2026-10-23 | Dates: Cat 4 added (9185, 21 Jun 2026), invites sent, definitions added (9411) |
+| https://wiki.chessdom.org/index.php?oldid={9159,9185,9410,9411}&action=raw | Swiss 10 revisions | 2026-10-23 | Cat 4 pre-playoff wording ("at least 1 DRR as needed"), x/y/z changes |
+| https://wiki.chessdom.org/images/f/f8/TCEC_playoff_categorizing.png (+ api imageinfo) | Categorisation flowchart (8 Apr 2025) | 2026-10-23 | Category 1-3 definitions |
+| https://wiki.chessdom.org/images/2/22/TCEC_S30%2B_cats_flowchart.png | S30 season flowchart v1 (18 Jun 2026) | 2026-10-23 | Category labels, category promotion via Leagues |
+| https://wiki.chessdom.org/index.php?title=TCEC_Swiss_9&action=raw | Swiss 9 page | 2026-10-23 | S29 category scheme (1a/1b/2/3, Cat 4 = cannot feature) |
+| https://wiki.chessdom.org/index.php?title={TCEC_Swiss_rules,Rules,TCEC_Leagues_Season_Rules}&action=raw | Rule pages | 2026-10-23 | No category or TB-access text |
+| https://wiki.chessdom.org/index.php?title=Main_Page&action=raw | Wiki main page | 2026-10-23 | Application by questionnaire; S31 events listed as upcoming |
+| https://wiki.chessdom.org/index.php?title=Current_Engine_Status&action=raw | Engine status page | 2026-10-23 | Per-engine categories (e.g. Quanticade cat 3) |
+| https://wiki.chessdom.org/index.php?title=TCEC_Questionnaire&action=raw | Questionnaire v2.4 | 2026-10-23 | Submission by email |
+| https://wiki.chessdom.org/index.php?title=CatGPT_questionnaire_20260525&action=raw | CatGPT questionnaire | 2026-10-23 | Cat 4 precedent (AI-generated code, PolyForm NC license, Leela data) |
+| https://wiki.chessdom.org/index.php?title=Cinder_questionnaire_20260619&action=raw | Cinder questionnaire | 2026-10-23 | Cat 3 precedent (Stockfish/Lc0 data) |
+| https://wiki.chessdom.org/index.php?title={TCEC_Swiss_11,TCEC_Season_31,TCEC_Leagues_Season_30,TCEC_Leagues_Season_31,TCEC_Cup_17,TCEC_AI_Gauntlet}&action=raw | — | 2026-10-23 | FAILED (404, pages not created): S31 and AI gauntlet unpublished |
+| https://wiki.chessdom.org/index.php?title={TCEC_Cup_8_rules,TCEC_Swiss_8,TCEC_Season_20_Further_information,TCEC_Cup_10,TCEC_Season_16_Rules}&action=raw | Older pages found by wiki search "Scorpio" | 2026-10-23 | Scorpio history only |
+| https://wiki.chessdom.org/api.php?action=query&list=search (Scorpio, DTZ, no_dtz, syzygy7, bitbases) and index.php?search=... | Wiki search | 2026-10-23 | API search returned 0 hits (index unreliable); HTML full-text search for "Scorpio" gave the page list above |
+| https://www.chessdom.com/tcec-announces-ai-integration-plans-as-a-new-generation-of-engines-enters-the-arena/ | TD statement (31 Aug 2026) | 2026-10-23 | AI engines: Swiss via Cat 3+4 playoff, no Leagues, extra gauntlet |
+| https://www.chessdom.com/?s={AI+gauntlet,TCEC+Season+31,CatGPT,TCEC+AI} | Chessdom search | 2026-10-23 | No results parsed |
+| https://www.chessdom.com/tag/tcec/feed/ | Chessdom TCEC tag feed | 2026-10-23 | Latest TCEC article is the 31 Aug 2026 statement; no gauntlet/S31 news |

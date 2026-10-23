@@ -20,7 +20,10 @@
     { "url": "https://wiki.chessdom.org/TCEC_Swiss_Tournament_System", "date": "2026-10-23", "used_for": "Swiss pairing algorithm, seeding, colours (edited 15 Jun 2023)" },
     { "url": "https://wiki.chessdom.org/TCEC_Season_20_Rules", "date": "2026-10-23", "used_for": "S20 states the win rule is dropped from S20 onward" },
     { "url": "https://wiki.chessdom.org/TCEC_Season_19_Rules", "date": "2026-10-23", "used_for": "S19 still had the +/-10.00 win rule (10 plies)" },
-    { "url": "https://wiki.chessdom.org/index.php?title=TCEC_Leagues_Season_Rules&action=history", "date": "2026-10-23", "used_for": "revisions 6018 (13 Oct 2024) vs 6876 (4 May 2025): TB adjudication removed" }
+    { "url": "https://wiki.chessdom.org/index.php?title=TCEC_Leagues_Season_Rules&action=history", "date": "2026-10-23", "used_for": "revisions 6018 (13 Oct 2024) vs 6876 (4 May 2025): TB adjudication removed" },
+    { "url": "https://tcec-chess.com/archive/json/<event>_1.pgn (57 S29/S30/Cup 16 events)", "date": "2026-10-23", "used_for": "engine options per event: SyzygyPath values, no Scorpio option" },
+    { "url": "https://wiki.chessdom.org/File:TCEC_playoff_categorizing.png", "date": "2026-10-23", "used_for": "category 1-3 definitions" },
+    { "url": "https://wiki.chessdom.org/index.php?title=TCEC_Swiss_10&action=history (revisions 9159, 9185, 9410, 9411)", "date": "2026-10-23", "used_for": "Cat 4 introduction and Cat 4 pre-playoff wording" }
   ],
   "hardware": {
     "verified": true,
@@ -35,12 +38,32 @@
   "pondering": false,
   "tablebases": {
     "verified": true,
+    "verified_date": "2026-10-23",
+    "sources": [
+      "https://wiki.chessdom.org/TCEC_Season_Further_information (revision 8475; TB wording since revision 6470/6471, Mar 2025)",
+      "https://tcec-chess.com/live.json",
+      "https://tcec-chess.com/archive/json/<event>_1.pgn for 57 S29/S30/Cup 16 events, plus TCEC_Season_30_-_Category_3+4_Playoff_{2,3,4}.pgn and TCEC_Season_28_-_Swiss_8_7.pgn"
+    ],
     "type": "syzygy",
     "engine_access_pieces": 7,
+    "uci_option": "SyzygyPath",
     "syzygy_path_example": "/home/syzygy7",
+    "other_paths_seen": {
+      "/home/syzygy6": "Ginkgo in Swiss 9 and an S29 FRD tiebreak (reason UNVERIFIED, presumably author request)",
+      "/home/syzygy7_no_dtz": "Stockfish in four S29 bonus events"
+    },
+    "wdl": true,
+    "dtz": true,
+    "dtz_note": "Servers hold 7-man DTZ (HDD 'Syzygy7 DTZ', Further information page). That /home/syzygy7 itself includes DTZ is inferred from the separate /home/syzygy7_no_dtz directory, not stated: UNVERIFIED.",
+    "same_in_leagues_and_swiss": true,
+    "same_note": "SyzygyPath=/home/syzygy7 in Swiss 9/10, Cat 1/2/3+4 playoffs, Cup 16, EL, L2, L1, Premier, Superfinal and FRD games checked",
+    "scorpio_bitbases_on_server": true,
+    "scorpio_bitbases_pieces": 6,
+    "scorpio_exposed_to_engines": null,
+    "scorpio_note": "UNVERIFIED: no UCI option for Scorpio/egbb seen in any sampled game; the only ScorpioNN game checked (Swiss 8 game 7) shows no options beyond Protocol, so any use would be via the engine's own config file. No ScorpioNN in any S29/S30 event. Irrelevant to Fork.",
     "madvise_random_requested": true,
     "adjudication_enabled": false,
-    "adjudication_note": "No TB adjudication in the current rules (see adjudication.tablebase). S20 used 6-man Syzygy adjudication."
+    "adjudication_note": "No TB adjudication in the current rules: removed from TCEC_Leagues_Season_Rules in revision 6876 (4 May 2025); revision 6018 (13 Oct 2024) still had 6-man Syzygy adjudication by cutechess. See adjudication.tablebase."
   },
   "openings": {
     "verified": true,
@@ -113,18 +136,25 @@
     "updates": "testing is run for all invited engines before the Swiss; no updates or fixes once the Swiss has started; a crash is a loss",
     "entry": {
       "verified": true,
-      "invitation": "organisers invite; questionnaire mandatory; Swiss 10 submission deadline was 1 Jul 2026 12:00 UTC",
+      "invitation": "developers apply on their own initiative by emailing a completed TCEC Questionnaire (v2.4) (Main Page; Questionnaire page; email address not printed: UNVERIFIED); organisers categorise and invite. Swiss 10: first categorisation 18 Jun 2026, invites sent 24 Jun 2026, submission deadline 1 Jul 2026 12:00 UTC, categorisation final 8 Sep 2026 00:28 CEST",
+      "min_strength": null,
+      "min_strength_note": "UNVERIFIED: no minimum rating for the Swiss or playoffs is published; the 3000+ TCEC Elo bar is a Leagues rule",
+      "categorisation_flowchart": "https://wiki.chessdom.org/File:TCEC_playoff_categorizing.png (uploaded 2025-04-08): HCE -> Cat 1; NNUE with original data: many/important inventions -> 1, some -> 1 or 2 (TD), none -> 2; hybrid data: many -> 1, some -> 2, none -> 2 or 3 (TD); other data: many -> 1, some -> 1, 2 or 3 (TD), none -> 3. Cat 4 (AI) sits outside this flowchart.",
       "categories": {
-        "0": "placed automatically (engines with a Leagues place not relegated from the lowest league; organisers' discretion); 32 in Swiss 10",
-        "1": "additional and new engines: playoff 1 DRR at 30+3 for 10 spots (the lighter group, meant for HCE engines per the Potential decision)",
-        "2": "playoff 2 DRR at 30+3 for 5 spots",
-        "3": "joint Cat 3+4 playoff, 12 DRR at 30+3, for 1 Swiss spot",
-        "4": "engines made with major AI help: one place in the Cat 3+4 playoff; code public and open source during participation; TCEC admins build the binary",
-        "5": "cannot be featured by TCEC"
+        "0": "engines with a Leagues place not relegated from the lowest league (organisers' discretion, 'unless outdated'): placed directly; 32 in Swiss 10",
+        "1": "HCE engines and highly original NN engines ('highest originality'): 1 DRR playoff at 30+3 for 10 spots",
+        "2": "NN engines with own data but few inventions, or hybrid data with some: 2 DRR playoff at 30+3 for 5 spots",
+        "3": "NN engines on other engines' data with no notable inventions ('lowest priority'; e.g. Cinder, Stockfish/Lc0 data): joint Cat 3+4 playoff, 12 DRR at 30+3, for 1 Swiss spot",
+        "4": "created with major help from AI technology ('vibe coded', added 21 Jun 2026, revision 9185): one place in the Cat 3+4 playoff, decided among Cat 4 engines first; code open source and publicly viewable at submission and throughout participation; TCEC admins build the binary from the repository; not eligible for the Leagues in S30",
+        "5": "cannot be featured by TCEC (was numbered Cat 4 before 21 Jun 2026)"
       },
-      "categorisation_appeal": "24 h after TCEC announces final categories; TD decision final; no mid-season architecture change into a higher category",
-      "cat4_route_s30": "Cat 4 -> Cat 3+4 playoff (12 DRR at 30+3) -> 1 Swiss spot -> Swiss. Not eligible for the Leagues however it scores; a separate 'extra gauntlet' is promised (format UNVERIFIED).",
-      "cat4_preplayoff_if_several": "UNVERIFIED: the page does not say how several Cat 4 engines would compete for the single playoff place",
+      "spot_counts_note": "x, y, z (spots for Cat 1, 2, 3+4) are set per event by the organisers depending on applicants; Swiss 10 final: 10, 5, 1",
+      "categorisation_appeal": "24 h after TCEC announces final categories (chat/Discord), by email to TD, Kan and Aloril; TD decision final; no mid-season architecture change into a higher-numbered category; questionnaire must be kept current (Potential decision)",
+      "cat4_route_s30": "Cat 4 pre-stage (if several Cat 4 engines) -> Cat 3+4 playoff (12 DRR at 30+3) -> 1 Swiss spot -> Swiss. Not eligible for the Leagues however it scores; a separate 'extra gauntlet' is promised (format UNVERIFIED: no page or announcement as of 2026-10-23).",
+      "cat4_preplayoff_if_several": "Partly verified: revisions 9185-9410 (21 Jun - 6 Sep 2026) said 'at least 1 DRR at 30+3 as needed'; final text (revision 9411) keeps the single place but gives no format. Not played in S30 (one Cat 4 entrant). Future format UNVERIFIED.",
+      "cat4_license_precedent": "CatGPT (Cat 4, S30) uses PolyForm Noncommercial (source-available) and was accepted with 'open repository present'; whether an OSI license is required is UNVERIFIED",
+      "season31": null,
+      "season31_note": "UNVERIFIED: Swiss 11 / Leagues S31 pages do not exist yet (404 on 2026-10-23); S31 categories, AI policy and deadlines not published",
       "s30_cat34_result": "3 engines, 72 games, 9-12 Sep 2026: Cinder 31.5/48 (qualified), CatGPT (Cat 4) 27/48, Serendipity 13.5/48",
       "promotion_from_swiss_10": "top 32 -> Cup 17; the 17 engines without a Leagues place compete for 7 Entrance League spots (top 5 direct, middle 10 tiebreak for 2, bottom 2 out). Not open to Cat 4 in S30."
     }
@@ -162,6 +192,11 @@
     "tablebase": {
       "verified": true,
       "adjudication_enabled": false,
+      "source": "https://wiki.chessdom.org/index.php?title=TCEC_Leagues_Season_Rules&action=history",
+      "last_revision_with_tb_adjudication": { "revid": 6018, "date": "2024-10-13", "rule": "cutechess adjudicates positions with 6 or fewer pieces via Syzygy" },
+      "removed_in_revision": { "revid": 6876, "date": "2025-05-04" },
+      "removed_from_season": null,
+      "removed_from_season_note": "UNVERIFIED: no page names the season; by date after the S27 Superfinal and before S28",
       "note": "TB adjudication (6-man Syzygy via cutechess) was removed from the Leagues rules between the revisions of 13 Oct 2024 and 4 May 2025 and is absent from the current Swiss, Leagues and Rules pages. Swiss 10: 129 of 212 decisive games ended in mate with 6 or fewer men on the board. Engines still get 7-man Syzygy for their own probing."
     },
     "outage_only": {

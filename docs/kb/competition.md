@@ -34,11 +34,18 @@ any form: code, nets, data, binaries inside Fork).
      "TCEC Swiss (primary target)" below.
    Source: chessdom.com statement (31 Aug 2026); wiki TCEC_Swiss_10; wiki
    TCEC_Questionnaire.
-2. **Engines get 7-man Syzygy.** Live game headers on 2026-10-23 show
-   `SyzygyPath=/home/syzygy7`, and the hardware page says 3-7 man Syzygy is on
-   NVMe for all divisions. Fork must probe 7-man tables (Fathom handles 7-man)
-   and should `madvise(MADV_RANDOM)` the mapped files, which TCEC asks of
-   7-man users.
+2. **Engines get 7-man Syzygy through the UCI `SyzygyPath` option**
+   (`/home/syzygy7`), identically in the Swiss, its playoffs, the Cup and the
+   Leagues (archived game headers, see §2 "Tablebases available to
+   engines"). The servers hold WDL and DTZ; a separate
+   `/home/syzygy7_no_dtz` directory exists and was used for one engine in
+   S29 bonus events, which implies the default path carries DTZ (strong
+   inference, not stated: **UNVERIFIED**). The 6-man Scorpio bitbases on the
+   server are not passed to engines through any UCI option seen in archived
+   games; Fork has no use for them. Fork must probe 7-man tables (Fathom
+   handles 7-man) and should `madvise(MADV_RANDOM)` the mapped files, which
+   TCEC asks of 7-man users. Tablebases are never used for adjudication now
+   (§2).
 3. **Threads 512, Hash 262144 MB (256 GiB)** in the live Swiss 10 game. Fork's
    TT, thread pool and NUMA handling must scale to that. Hash initialisation
    must be multithreaded, or TCEC caps hash at 32 or 64 GiB.
@@ -81,35 +88,131 @@ competitions"; S31 rules not published: **UNVERIFIED**).
 
 ### Route in for Fork (S30 scheme)
 
-1. Apply by email with the questionnaire before the Swiss deadline (Swiss 10:
-   1 Jul 2026, 12:00 UTC). Organisers invite; nothing on the pages says
-   what minimum strength gets an invitation (**UNVERIFIED**).
-2. TCEC sorts applicants into categories and announces them; authors have
-   24 h to appeal to the TD, whose decision is final. An engine may not
-   change architecture during the season into a higher-numbered category.
-3. Categories for Swiss 10 (wiki TCEC_Swiss_10, edited 22 Oct 2026):
-   - Cat 0: placed automatically (engines holding a Leagues place and not
-     relegated from the lowest league, at the organisers' discretion); 32.
-   - Cat 1: newer/additional engines; 1 DRR playoff at 30'+3" for 10 Swiss
-     spots. The Potential decision describes this as the lighter group for
-     HCE engines.
-   - Cat 2: 2 DRR playoff at 30'+3" for 5 spots.
-   - Cat 3: joint **Cat 3+4 playoff, 12 DRR at 30'+3", for 1 Swiss spot**.
-   - Cat 4 (major help from AI): gets **one** place in that Cat 3+4 playoff;
-     code must be public open source at submission and throughout, and
-     TCEC admins must be allowed to build the binary from the repository.
-     How several Cat 4 engines would contest that single place is not
-     stated (**UNVERIFIED**).
-   - Cat 5: cannot be featured.
-   Playoff qualification is decided on points only; ties for a qualifying
-   place go to extra game pairs (two engines) or extra DRRs (three or more).
-4. S30 precedent: the Cat 3+4 playoff had 3 engines (Cinder, Serendipity,
-   CatGPT as the only Cat 4 engine), 72 games, 9-12 Sep 2026. Final: Cinder
-   31.5/48 (qualified), CatGPT 27/48, Serendipity 13.5/48 (TCEC archive
-   crosstable JSON). So the Cat 4 entrant has to beat the Cat 3 engines over
-   24 games each; Cinder is a top-10 CCRL engine (§4), so the bar is high.
-5. AI engines get a separate "extra gauntlet" instead of the Leagues; its
-   format is not published on any page opened (**UNVERIFIED**).
+Re-checked 2026-10-23 against the wiki TCEC_Swiss_10 page (current text and
+revisions 9159, 9185, 9410, 9411), the categorisation flowchart image, the
+S30 season flowchart image, the Main Page, the Questionnaire page, the
+Current_Engine_Status page, the Cat 3 and Cat 4 entrants' questionnaires,
+the TD statement and the chessdom TCEC tag feed. Full category definitions:
+"Swiss categories in full" below.
+
+1. **Apply.** The wiki Main Page says developers must take the initiative
+   and apply by sending a fully completed TCEC Questionnaire (v2.4); the
+   Questionnaire page says it is sent by email. No address is printed on
+   either page (**UNVERIFIED** address; the Swiss 10 page names the TD, Kan
+   and Aloril as appeal recipients, reply-all on the invitation email).
+   Swiss 10 deadline: 1 Jul 2026, 12:00 UTC. The first categorisation was
+   posted 18 Jun 2026 and invitations went out on 24 Jun 2026 (revision
+   comments). No minimum strength or rating for the Swiss is published
+   (**UNVERIFIED**; the 3000+ TCEC Elo bar is a Leagues rule).
+2. **Be categorised.** TCEC assigns the category and announces it in chat
+   and Discord; authors then have 24 h to appeal by email with substantial
+   arguments; the TD's decision is final. Swiss 10 categorisation became
+   final on 8 Sep 2026, 00:28 CEST, with no appeal. An engine that qualifies
+   under one category may not change architecture mid-season so that it
+   would fall into a higher-numbered category; the Potential decision
+   (Swiss 10) adds that authors must keep the questionnaire current and
+   notify TCEC promptly of architecture changes.
+3. **Fork will be Category 4.** Any engine "created with major help from AI
+   technology" is Cat 4, whatever the originality flowchart would say.
+   Requirements: source open and publicly viewable (e.g. GitHub) at
+   submission and throughout participation; TCEC admins must be allowed to
+   build the binary from that repository.
+4. **Cat 4 pre-stage.** Cat 4 engines compete for **one** place in the Cat 3
+   playoff. From 21 Jun to 6 Sep 2026 (revisions 9185-9410) the page said
+   this Cat 4 playoff would be "at least 1 DRR at 30+3 as needed"; the final
+   text (revision 9411, 6 Sep 2026) keeps the single place but drops the
+   format. With only one Cat 4 entrant in S30 (CatGPT) no pre-stage was
+   played. Format with several Cat 4 entrants: **UNVERIFIED**.
+5. **Cat 3+4 playoff:** 12 DRR at 30'+3" for 1 Swiss spot (Swiss 10 values;
+   the organisers fix the spot counts x, y, z per event depending on
+   applicants; an intermediate revision had 9 DRR). Qualification on points
+   only, extra game pairs (2 tied) or extra DRRs (3+) as needed. S30: 3
+   engines (Cinder, Serendipity, CatGPT as the only Cat 4), 72 games,
+   9-12 Sep 2026; Cinder 31.5/48 qualified, CatGPT 27/48, Serendipity
+   13.5/48 (TCEC archive crosstable JSON). Cinder is a top-10 CCRL engine
+   (§4), so the bar is high.
+6. **Swiss.** The qualifier joins the 48-engine Swiss. In S30 an AI engine
+   is not eligible for the Leagues whatever its Swiss result (TD statement,
+   31 Aug 2026); for other engines, the 17 Swiss entrants without a Leagues
+   place play for 7 Entrance League spots.
+7. **Extra gauntlet.** The TD statement promises a dedicated extra gauntlet
+   as a separate path for AI engines. As of 2026-10-23 there is no wiki
+   page (TCEC_AI_Gauntlet 404), no archive event and no later chessdom
+   article (TCEC tag feed: nothing after 31 Aug 2026). Format, date and
+   entry: **UNVERIFIED**.
+8. **Season 31.** The Main Page lists Swiss 11 and Leagues S31 as upcoming,
+   but TCEC_Swiss_11, TCEC_Leagues_Season_31 and TCEC_Season_31 do not exist
+   yet (404). S31 categories, Cat 4 policy and deadlines: **UNVERIFIED**
+   (not published). By the S30 timeline (deadline 1 Jul, Swiss in October)
+   an S31 application window might fall around mid-2027; that is an
+   extrapolation, not a published date.
+
+### Swiss categories in full (S30 / Swiss 10)
+
+Sources: TCEC_Swiss_10 regulations; categorisation flowchart
+(File:TCEC_playoff_categorizing.png, uploaded 8 Apr 2025, embedded unchanged
+on the Swiss 9 and Swiss 10 pages); S30 season flowchart
+(File:TCEC_S30+_cats_flowchart.png, "v1", uploaded 18 Jun 2026). Checked
+2026-10-23. Tag: REFERENCE ONLY.
+
+How categories 1-3 are decided (flowchart; my reading of the image, rows
+are the evaluation and data-origin branches, columns the "original
+inventions" answer):
+
+| Evaluation / data origin | Inventions: many or important | some | none |
+|---|---|---|---|
+| HCE | Cat 1 (every HCE engine goes to Cat 1) | Cat 1 | Cat 1 |
+| NNUE, original data | Cat 1 | Cat 1 or 2 (TD decides) | Cat 2 |
+| NNUE, hybrid data | Cat 1 | Cat 2 | Cat 2 or 3 (TD decides) |
+| NNUE, other data | Cat 1 | Cat 1, 2 or 3 (TD decides) | Cat 3 |
+
+The S30 season flowchart labels Cat 1 "highest originality", Cat 2 "second
+highest priority" and Cat 3 "lowest priority". Precedent: Cinder (Cat 3)
+declares NNUE data generated by Stockfish and Lc0 (Cinder questionnaire,
+19 Jun 2026), i.e. "other" data. The same flowchart says an engine promoted
+into League 2, League 1 or the Premier Division moves up one category
+(3 → 2 → 1 → 0) and later relegation does not undo it; in S30 that path is
+closed to Cat 4. Note the S30 flowchart "v1" shows older numbers (44 Swiss
+places, 11 double rounds, 9 DRR Cat 3 playoff, no Cat 4); the event page's
+48 / 13 / 12 DRR govern.
+
+| Cat | Who | Route to the Swiss (Swiss 10) | Leagues (S30) |
+|---|---|---|---|
+| 0 | Engines with a Leagues place, not relegated from the lowest league (organisers' discretion; the flowchart says "unless outdated") | placed directly (32 in Swiss 10) | holds its place |
+| 1 | HCE engines and highly original NN engines; new entrants are categorised by the flowchart | 1 DRR playoff at 30'+3" for 10 spots | via Swiss result (7 EL spots among non-Leagues entrants) |
+| 2 | NN engines with own data but few inventions, or hybrid data with some | 2 DRR playoff at 30'+3" for 5 spots | same |
+| 3 | NN engines trained on other engines' data with no notable inventions | joint Cat 3+4 playoff, 12 DRR at 30'+3", 1 spot | same |
+| 4 | "Created with major help from AI technology" (revision 9185 heading: "Vibe coded engines") | one place in the Cat 3+4 playoff, decided among Cat 4 engines first | **not eligible**; separate extra gauntlet promised |
+| 5 | Engines TCEC cannot feature (numbered Cat 4 until 21 Jun 2026, and in Swiss 9) | none | none |
+
+What each may and may not do, as written:
+
+- All playoff categories: playoffs decided on points only, with extra game
+  pairs or DRRs between tied qualifiers; 24 h appeal after final
+  categorisation; no mid-season architecture change into a higher-numbered
+  category; questionnaire kept current.
+- Cat 3: same rights as Cat 1-2, with a smaller quota and a longer playoff;
+  a Cat 3 engine that reaches the Swiss can earn an Entrance League place
+  (the Current_Engine_Status page lists Quanticade, a Leagues engine, as
+  category 3). No source or binary rule beyond the general submission
+  rules (update.sh or binary, §2).
+- Cat 4: public open-source repository at submission and throughout
+  participation; TCEC admins build the binary from it; one playoff place
+  only; no Leagues in S30. Precedent: CatGPT (questionnaire 25 May 2026)
+  declared virtually all code AI-generated with an AI IDE, licensed its code
+  under PolyForm Noncommercial (source-available, not an OSI open-source
+  license) and trained on Leela data; TCEC listed it as Cat 4 with "open
+  repository present". Whether TCEC requires an OSI license is
+  **UNVERIFIED**; Fork should use an OSI license anyway.
+- Cat 5: cannot play.
+
+What this means for Fork: plan for Cat 4. That means a public repo with a
+clean source build on the TCEC servers' toolchains (Ubuntu 22.04; gcc 11.4,
+g++-12, clang 16/19, §2), an `update.sh` that clones and builds, an honest
+questionnaire (AI use, own-data provenance), and enough strength to beat
+Cat 3 engines over a 12 DRR. A non-AI engine with Fork's originality (own
+code, own data) would land in Cat 1 or 2, but under S30 rules the AI
+criterion overrides that.
 
 ### Swiss format (Swiss 10, S30)
 
@@ -197,16 +300,17 @@ changes UNVERIFIED**.
 
 ### Swiss 10 engine categories (S30)
 
-The Swiss 10 page sorts entrants into categories (definitions are partly
-inferred; the page has no formal definitions):
+Full definitions (from the categorisation flowchart) and rights: see
+"Swiss categories in full" in the Swiss section above. Entrants per
+category in Swiss 10:
 
 - Cat 0: placed automatically (32 engines: Stockfish, Reckless, LCZero,
   PlentyChess, Torch, Integral, Obsidian, Berserk, Ceres, Pawnocchio, Halogen,
   KomodoDragon, RubiChess, Viridithas, Caissa, Stormphrax, Clover, Ethereal,
   Quanticade, Ginkgo, Tarnished, Uralochka, rofChade, Seer, Stoofvlees, Horsie,
   Velvet, Heimdall, Renegade, Igel, Winter, c4ke).
-- Cat 1: 1 DRR playoff for 10 spots (14 engines; the page implies this is the
-  lighter HCE path).
+- Cat 1: 1 DRR playoff for 10 spots (14 engines; HCE engines and highly
+  original NN engines per the flowchart).
 - Cat 2: 2 DRR playoff for 5 spots (11 engines).
 - Cat 3: 12 DRR playoff with Cat 4 for 1 spot (Cinder, Serendipity).
 - Cat 4: AI-assisted engines (CatGPT); must be public open source buildable by
@@ -229,8 +333,9 @@ described anywhere I opened (**UNVERIFIED**). Tag: REFERENCE ONLY.
 - CPU server: 2x AMD EPYC 9754 (256 cores / 512 threads), 768 GiB DDR5.
 - GPU server: 2x AMD EPYC 9175F (32 cores / 64 threads), 8x RTX 5090
   (32 GiB each), 768 GiB DDR5.
-- Storage on both: 1 TiB NVMe system, 14 TiB NVMe for Syzygy 3-7 (WDL+DTZ
-  layout as stated), 14 TiB HDD for 7-man DTZ.
+- Storage on both: 1 TiB NVMe system, 14 TiB NVMe for Syzygy 3-7, 14 TiB
+  HDD for 7-man DTZ (how WDL/DTZ files split across the two drives beyond
+  that is not stated).
 - From S30, an engine may use both the CPU and the GPU machine during its own
   turn.
 - Verified 2026-10-23. Why it matters: Fork's search must scale to 512
@@ -245,11 +350,52 @@ described anywhere I opened (**UNVERIFIED**). Tag: REFERENCE ONLY.
 | Total engine RAM | 320 GiB cap (excluding OS-cached TB files) | Further info | verified |
 | Large pages | enabled automatically | Further info | verified |
 | Pondering | off (one machine) | Further info | verified |
-| Tablebases | 7-man Syzygy (plus 6-man Scorpio bitbases) for all divisions; `SyzygyPath=/home/syzygy7` | Further info; live.json | verified |
+| Tablebases | 7-man Syzygy via UCI `SyzygyPath=/home/syzygy7` in all divisions; 6-man Scorpio bitbases on the server but no engine option for them seen; see "Tablebases available to engines" | Further info; live.json; archived game headers | verified (DTZ in the default path: inferred) |
 | Opening books | engine books removed/disabled; hidden book use = disqualification | Further info | verified |
 | Other UCI options | left at default unless the author asks (e.g. Reckless runs with `MoveOverhead=1000`) | Further info; live.json | verified |
 | Protocol | UCI or XBoard | Further info | verified |
 | Contempt | default unless author asks | Further info | verified |
+
+### Tablebases available to engines (checked 2026-10-23)
+
+Tag: REFERENCE ONLY (facts). Why it matters: Fork's tablebase probing
+(Syzygy via Fathom) and the UCI option name it must expose (`SyzygyPath`).
+
+- **Rule text.** Further information page (current revision 8475,
+  24 Feb 2026): for all divisions, 6-man Scorpio and 7-man Syzygy are
+  available on NVMe and some RAM is reserved to cache them; 7-man Syzygy
+  users should `madvise(MADV_RANDOM)`. That wording dates from revision
+  6470 (11 Mar 2025, new S28 hardware) and the madvise sentence from 6471;
+  before that the page said 5-man Nalimov/Gaviota/Scorpio and 6-man Syzygy.
+- **WDL and DTZ.** Both servers: 14 TiB NVMe "Syzygy3-7" plus a 14 TiB HDD
+  for "Syzygy7 DTZ". So 7-man DTZ exists on the machines (on HDD, which the
+  tablebase paragraph's "on NVMe" does not mention). Verified for storage.
+- **How engines get them: UCI `SyzygyPath`.** I parsed the engine options
+  stored in game 1 of each of 57 S29/S30/Cup 16 archived events (TCEC
+  archive `archive/json/<event>_1.pgn`), the live Swiss 10 game and Cat 3+4
+  playoff games 2-4. Every engine that receives a TB setting gets it as
+  `SyzygyPath`; values seen: `/home/syzygy7` (standard, all of Swiss,
+  Cat 1/2/3+4 playoffs, Cup, EL, L2, L1, Premier, Superfinal, FRD),
+  `/home/syzygy6` (Ginkgo in Swiss 9 and an FRD tiebreak, presumably at the
+  author's request: **UNVERIFIED** why), and `/home/syzygy7_no_dtz`
+  (Stockfish in four S29 bonus events). Author-chosen probe options also
+  appear (`SyzygyProbeDepth`, `SyzygyProbeRootOnly`, `SyzygyProbeDepth6`,
+  KomodoDragon's `Syzygy Probe Limit=7`). Engines without TB support get
+  no path.
+- **DTZ in `/home/syzygy7`.** Not stated anywhere; the existence of a
+  separate `_no_dtz` directory strongly implies the default directory
+  includes DTZ: **UNVERIFIED** (inference). Fork should handle both
+  (WDL-only search probing, DTZ at the root when present).
+- **Scorpio bitbases.** No option naming Scorpio, egbb or bitbases appears
+  in any sampled game. The only ScorpioNN game checked (Swiss 8 game 7,
+  16 May 2025) lists no options except the protocol, so if ScorpioNN used
+  the bitbases it read their location from its own config file. Whether
+  any engine actually uses them now: **UNVERIFIED**. No ScorpioNN entry in
+  any S29/S30 crosstable (79 event crosstables checked). Fork: irrelevant.
+- **Leagues vs Swiss.** No difference: same path in the Leagues, the Swiss,
+  its playoffs and the Cup.
+- **Adjudication.** No TB adjudication in the current rules (see
+  "Adjudication re-verification").
 
 ### Builds and submission
 
