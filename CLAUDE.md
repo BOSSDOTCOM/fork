@@ -20,6 +20,10 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
   techniques, research, TCEC rules, originality precedents, sources.
 - `config/tcec.json`: tournament conditions. Only test scripts read it; the
   engine never does.
+- `config/local-test.json`: local test environment from the kb branch's
+  `tools/install.sh` (WSL): Syzygy 3-4-5 at
+  `~/fork-tools/syzygy/3-4-5`, runners in `~/fork-tools/bin`
+  (fastchess, cutechess-cli, tcec-cutechess-cli, ordo). Test scripts only.
 - `.claude/rules/`: area rules (C++ style, testing, SIMD).
 
 ## Commands (Git Bash; source the env in every shell)
