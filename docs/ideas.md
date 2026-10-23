@@ -127,3 +127,33 @@ name of their config flag.
   engines is unverified. The current TCEC Swiss research (docs/kb, kb
   branch) should answer it.
 - **status:** untested
+
+## 9. Cache layout of Position and State (re-test with search nps)
+
+- **type:** TOOLING (performance). Metric: search nps at a fixed bench, with
+  bench unchanged. Microbenchmarks alone were inconclusive.
+- **idea:** a smaller, cache-aligned per-ply State and Position, so make() copies
+  fewer cache lines and Lazy SMP threads (Phase 6) each carry less.
+- **measured 2026-10-23** (bench/ab.py, interleaved rounds, Ryzen 7600X3D;
+  "min" = fastest sample, the most noise-robust estimate):
+  - **v2** (State 128 B: narrowed fields, 5 check-square entries with King
+    masked; Position alignas(64), bitboards first, uint8 mailbox):
+    make/unmake -3..-6%, null move -6..-11%, gives_check +4..+8.5% slower,
+    gcc is_pseudo_legal +6% slower.
+  - **v3** (v2 with an int mailbox): gives_check still +9..+11% slower, so the
+    mailbox is not the cause. gcc is_pseudo_legal back to neutral.
+  - **v4** (v3 with a branchless King mask): gives_check worse (3.66 ns vs
+    3.43 for v2). The v4 "uint8" binaries were mislabeled (actually v2); see
+    HANDOFF.md, harness fix.
+  - **v5** (6 check-square entries, State 136 B, no State alignment, uint8
+    mailbox): the gives_check regression is gone. make/unmake min -4..-5%,
+    null move -5..-8%, gcc is_pseudo_legal min +5%. All verdicts "no
+    significant difference" under the noise threshold.
+  - Assembly (position.cpp at -O3 -march=native, both compilers): the uint8
+    mailbox adds no conversion instructions (`movzx BYTE PTR` replaces
+    `mov DWORD PTR`; instruction counts slightly lower).
+- **decision (owner's rule):** not clearly better on both compilers, so main
+  keeps its layout plus the uint8 mailbox (harmless, 192 fewer bytes per
+  Position). v5 is kept on branch `layout-exp` (9fc2cb8) for Phase 3
+  re-testing with search nps.
+- **status:** deferred to Phase 3

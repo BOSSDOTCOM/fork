@@ -134,7 +134,7 @@ class Position {
   bool has_insufficient_material(Color c) const;
   void finish_setup();  // state from scratch after board setup
 
-  Piece board_[64];
+  std::uint8_t board_[64];  // Piece per square, stored narrow (64 bytes instead of 256)
   Bitboard by_type_[6];
   Bitboard by_color_[2];
   Color side_ = White;
