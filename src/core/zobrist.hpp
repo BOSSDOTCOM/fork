@@ -9,6 +9,9 @@ extern Key piece_square[16][64];  // indexed by Piece (NoPiece row unused)
 extern Key side;                  // xored in when Black is to move
 extern Key castling[16];
 extern Key ep_file[8];
+// material[piece][n] is xored in for the n-th piece of that kind (0-based),
+// so a material key depends only on the piece counts.
+extern Key material[16][16];
 
 void init();
 

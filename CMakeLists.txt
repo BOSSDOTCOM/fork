@@ -109,16 +109,54 @@ if(FORK_BUILD_TESTS)
     tests/test_magics.cpp
     tests/test_fen.cpp
     tests/test_perft.cpp
-    tests/test_consistency.cpp)
+    tests/test_consistency.cpp
+    tests/test_epd.cpp)
   target_link_libraries(fork_tests PRIVATE forkcore)
 
-  foreach(suite magics fen zobrist_ep perft_suite perft_mirror consistency)
+  # Public perft suites: downloaded once into .cache/ (not committed, see
+  # docs/ORIGINALITY.md) and pinned by SHA-256. A failed download leaves the
+  # perft_epd tests failing loudly rather than skipped.
+  set(FORK_EPD_DIR ${CMAKE_SOURCE_DIR}/.cache/epd)
+  foreach(spec
+      "perftsuite.epd|http://web.archive.org/web/20071202022713id_/http://hem.passagen.se/maragor/perftsuite.epd|363e5205dfff3205fc50b376fb1770f9156464456282372c8c0a0e5b45a0bf07"
+      "perft-random.epd|https://web.archive.org/web/20201107005611id_/https://marcelk.net/rookie/nostalgia/v3/perft-random.epd|8f7aee8acaa2a988cc117befceb7c0d8d3304fa5749861d561ba95fceb1fecdd")
+    string(REPLACE "|" ";" parts "${spec}")
+    list(GET parts 0 epd_name)
+    list(GET parts 1 epd_url)
+    list(GET parts 2 epd_hash)
+    set(epd_file ${FORK_EPD_DIR}/${epd_name})
+    if(EXISTS ${epd_file})
+      file(SHA256 ${epd_file} have)
+      if(NOT have STREQUAL epd_hash)
+        file(REMOVE ${epd_file})
+      endif()
+    endif()
+    if(NOT EXISTS ${epd_file})
+      file(DOWNLOAD ${epd_url} ${epd_file} STATUS st)
+      list(GET st 0 code)
+      set(have "")
+      if(code EQUAL 0)
+        file(SHA256 ${epd_file} have)
+      endif()
+      if(NOT have STREQUAL epd_hash)
+        file(REMOVE ${epd_file})
+        message(WARNING "could not download ${epd_name} with the pinned SHA-256 (${st}); perft_epd tests will fail")
+      endif()
+    endif()
+  endforeach()
+  target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
+
+  foreach(suite magics fen zobrist_ep perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_test(NAME perft_full COMMAND fork_tests perft_full)
     set_tests_properties(perft_full PROPERTIES LABELS slow)
   endif()
+  foreach(suite perft_epd_deep perft_epd_full)
+    add_test(NAME ${suite} COMMAND fork_tests ${suite})
+    set_tests_properties(${suite} PROPERTIES LABELS slow)
+  endforeach()
 
   add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}
     -DFORK=$<TARGET_FILE:fork>

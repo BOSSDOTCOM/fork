@@ -26,13 +26,22 @@ void record_failure(const char* file, int line, const std::string& what) {
 
 }  // namespace fork::test
 
+namespace {
+// Suites run only when named explicitly (CTest label "slow").
+bool is_slow(const char* suite) {
+  for (const char* s : {"perft_full", "perft_epd_deep", "perft_epd_full"})
+    if (std::strcmp(suite, s) == 0) return true;
+  return false;
+}
+}  // namespace
+
 int main(int argc, char** argv) {
   using namespace fork::test;
   fork::init();
   const char* only = argc > 1 ? argv[1] : nullptr;
   int ran = 0;
   for (const Case& c : registry()) {
-    if (only ? std::strcmp(c.suite, only) != 0 : std::strcmp(c.suite, "perft_full") == 0) continue;
+    if (only ? std::strcmp(c.suite, only) != 0 : is_slow(c.suite)) continue;
     int before = failures;
     auto start = std::chrono::steady_clock::now();
     c.fn();

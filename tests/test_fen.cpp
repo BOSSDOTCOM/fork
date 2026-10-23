@@ -28,7 +28,7 @@ TEST_CASE("fen", "round trip") {
     std::string error;
     CHECK_MSG(p.set_fen(fen, &error), fen << ": " << error);
     CHECK_MSG(p.fen() == fen, fen << " -> " << p.fen());
-    CHECK_EQ(p.key(), p.compute_key());
+    CHECK_EQ(p.key(), p.compute_state().key);
   }
 }
 
@@ -115,5 +115,5 @@ TEST_CASE("zobrist_ep", "make sets the ep square under the same rule") {
   for (const char* mv : {"a7a6", "e4e5", "d7d5"}) p.make(p.parse_uci(mv));
   CHECK_EQ(p.ep_square(), 43);  // d6
   CHECK_EQ(p.fen(), std::string("rnbqkbnr/1pp1pppp/p7/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3"));
-  CHECK_EQ(p.key(), p.compute_key());
+  CHECK_EQ(p.key(), p.compute_state().key);
 }

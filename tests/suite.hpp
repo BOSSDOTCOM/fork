@@ -34,4 +34,52 @@ inline const std::vector<PerftPosition>& perft_suite() {
   return suite;
 }
 
+struct EdgePosition {
+  std::string_view fen;
+  std::vector<std::uint64_t> counts;  // perft(1..3), from python-chess 1.11.2 (independent generator)
+  const char* what;
+};
+
+// Positions where special rules interact. Counts were produced by
+// python-chess, an independent move generator, and match Fork.
+inline const std::vector<EdgePosition>& edge_positions() {
+  static const std::vector<EdgePosition> edges = {
+      {"8/8/8/2k5/3Pp3/8/8/4K3 b - d3 0 1",
+       {9, 50, 379}, "ep captures the checking pawn"},
+      {"8/8/8/KPp4r/8/8/8/7k w - c6 0 1",
+       {4, 56, 259}, "ep would expose a rank pin"},
+      {"1b5k/8/8/3pP3/8/8/7K/8 w - d6 0 1",
+       {6, 46, 282}, "ep along a diagonal pin"},
+      {"k6b/8/8/3pP3/8/8/8/K7 w - d6 0 1",
+       {3, 21, 135}, "ep off a diagonal pin"},
+      {"r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+       {26, 568, 13744}, "all castling"},
+      {"r3k2r/8/8/8/8/8/5q2/R3K2R w KQkq - 0 1",
+       {2, 75, 1446}, "castling out of check"},
+      {"1r2k2r/8/8/8/8/8/8/R3K1R1 b Qk - 0 1",
+       {24, 560, 13937}, "castling through attack"},
+      {"r3k2r/8/8/8/8/8/8/R3K1r1 w Qkq - 0 1",
+       {3, 120, 1774}, "castling into attack"},
+      {"4k3/8/8/8/8/8/1p4p1/R3K2R b KQ - 0 1",
+       {21, 282, 4716}, "capture-promotions on rook squares"},
+      {"4k3/8/8/8/1b6/8/8/r3K2R w K - 0 1",
+       {2, 56, 905}, "double check"},
+      {"4k3/8/5n2/8/8/8/4r3/4K3 w - - 0 1",
+       {3, 62, 205}, "single check"},
+      {"n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1",
+       {24, 496, 9483}, "promotions and underpromotions"},
+      {"R6R/3Q4/1Q4Q1/4Q3/2Q4Q/Q4Q2/pp1Q4/kBNN1KB1 w - - 0 1",
+       {218, 99, 19073}, "218 legal moves"},
+      {"3Q4/1Q4Q1/4Q3/2Q4R/Q4Q2/3Q4/1Q4Rp/1K1BBNNk w - - 0 1",
+       {218, 20, 4072}, "many promoted pieces"},
+      {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+       {20, 400, 8902}, ""},
+      {"4k3/8/8/2KPp2q/8/8/8/8 w - e6 0 1",
+       {7, 143, 974}, "ep with king on the rank, queen behind"},
+      {"8/8/3k4/8/1B1pP3/8/8/4K3 b - e3 0 1",
+       {5, 69, 446}, "ep capture that leaves check by bishop"},
+  };
+  return edges;
+}
+
 }  // namespace fork::test

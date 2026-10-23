@@ -5,3 +5,5 @@ out/
 *.gcda
 /.vs/
 /.vscode/
+.venv/
+.cache/

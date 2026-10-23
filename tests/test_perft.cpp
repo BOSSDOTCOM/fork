@@ -47,3 +47,18 @@ TEST_CASE("perft_mirror", "mirror is an involution") {
     CHECK_MSG(back.fen() == pos.fen() && back.key() == pos.key(), pp.name);
   }
 }
+
+TEST_CASE("perft_edge", "special-rule positions match the independent generator") {
+  for (const EdgePosition& ep : edge_positions()) {
+    for (bool mirror : {false, true}) {
+      Position pos;
+      CHECK_MSG(pos.set_fen(ep.fen), ep.what);
+      if (mirror) pos = pos.mirrored();
+      for (std::size_t d = 1; d <= ep.counts.size(); ++d) {
+        std::uint64_t nodes = perft(pos, static_cast<int>(d));
+        CHECK_MSG(nodes == ep.counts[d - 1], ep.fen << (mirror ? " (mirrored)" : "") << " depth " << d
+                                                 << ": got " << nodes << ", expected " << ep.counts[d - 1]);
+      }
+    }
+  }
+}
