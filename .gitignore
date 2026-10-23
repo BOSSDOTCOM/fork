@@ -1,0 +1,7 @@
+build/
+out/
+*.profraw
+*.profdata
+*.gcda
+/.vs/
+/.vscode/
