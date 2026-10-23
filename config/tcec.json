@@ -12,7 +12,15 @@
     { "url": "https://wiki.chessdom.org/Rules", "date": "2026-10-23", "used_for": "Cup time control and all-event rules" },
     { "url": "https://wiki.chessdom.org/Openings_FAQ", "date": "2026-10-23", "used_for": "each opening played with both colours" },
     { "url": "https://wiki.chessdom.org/TCEC_Swiss_10", "date": "2026-10-23", "used_for": "S30 categories, Category 4 (AI-assisted) rules" },
-    { "url": "https://www.chessdom.com/tcec-announces-ai-integration-plans-as-a-new-generation-of-engines-enters-the-arena/", "date": "2026-10-23", "used_for": "S30 AI-engine policy" }
+    { "url": "https://www.chessdom.com/tcec-announces-ai-integration-plans-as-a-new-generation-of-engines-enters-the-arena/", "date": "2026-10-23", "used_for": "S30 AI-engine policy" },
+    { "url": "https://tcec-chess.com/schedule.json", "date": "2026-10-23", "used_for": "Swiss 10: 624 games (13 double rounds x 24 pairs), back-to-back game pairs with same opening and colours reversed, terminations (decisive games end in mate)" },
+    { "url": "https://tcec-chess.com/crosstable.json", "date": "2026-10-23", "used_for": "Swiss 10 standings, 48 engines" },
+    { "url": "https://tcec-chess.com/gamelist.json", "date": "2026-10-23", "used_for": "S30 event list incl. Category 3+4 Playoff division" },
+    { "url": "https://tcec-chess.com/archive/json/TCEC_Season_30_-_Category_3%2B4_Playoff_Crosstable.cjson", "date": "2026-10-23", "used_for": "Cat 3+4 playoff result" },
+    { "url": "https://wiki.chessdom.org/TCEC_Swiss_Tournament_System", "date": "2026-10-23", "used_for": "Swiss pairing algorithm, seeding, colours (edited 15 Jun 2023)" },
+    { "url": "https://wiki.chessdom.org/TCEC_Season_20_Rules", "date": "2026-10-23", "used_for": "S20 states the win rule is dropped from S20 onward" },
+    { "url": "https://wiki.chessdom.org/TCEC_Season_19_Rules", "date": "2026-10-23", "used_for": "S19 still had the +/-10.00 win rule (10 plies)" },
+    { "url": "https://wiki.chessdom.org/index.php?title=TCEC_Leagues_Season_Rules&action=history", "date": "2026-10-23", "used_for": "revisions 6018 (13 Oct 2024) vs 6876 (4 May 2025): TB adjudication removed" }
   ],
   "hardware": {
     "verified": true,
@@ -31,8 +39,8 @@
     "engine_access_pieces": 7,
     "syzygy_path_example": "/home/syzygy7",
     "madvise_random_requested": true,
-    "adjudication_pieces": null,
-    "adjudication_note": "UNVERIFIED: current rules do not mention TB adjudication; S20 used 6-man Syzygy."
+    "adjudication_enabled": false,
+    "adjudication_note": "No TB adjudication in the current rules (see adjudication.tablebase). S20 used 6-man Syzygy adjudication."
   },
   "openings": {
     "verified": true,
@@ -48,7 +56,88 @@
     { "name": "Premier",          "verified": true, "time_control": { "base_s": 3600, "increment_s": 6 } },
     { "name": "Superfinal",       "verified": true, "time_control": { "base_s": 7200, "increment_s": 12 } }
   ],
+  "swiss": {
+    "_comment": "TCEC Swiss is Fork's PRIMARY target event (S30: AI-assisted engines enter only via the Swiss). Values are for Swiss 10 (S30). See docs/kb/competition.md, section 'TCEC Swiss (primary target)'.",
+    "verified": true,
+    "verified_date": "2026-10-23",
+    "event": "TCEC Season 30 - Swiss 10",
+    "sources": [
+      "https://wiki.chessdom.org/TCEC_Swiss_10",
+      "https://wiki.chessdom.org/TCEC_Swiss_rules",
+      "https://wiki.chessdom.org/TCEC_Swiss_Tournament_System",
+      "https://www.chessdom.com/tcec-announces-ai-integration-plans-as-a-new-generation-of-engines-enters-the-arena/",
+      "https://tcec-chess.com/schedule.json",
+      "https://tcec-chess.com/live.json",
+      "https://tcec-chess.com/archive/json/TCEC_Season_30_-_Category_3%2B4_Playoff_Crosstable.cjson"
+    ],
+    "format": {
+      "verified": true,
+      "engines": 48,
+      "double_rounds": 13,
+      "double_rounds_note": "Swiss 10 page: 13 double rounds; schedule.json: 624 games = 13 x 24 pairs x 2. The generic TCEC_Swiss_rules page says 11 (changed from 12 on 21 Nov 2025); the event page governs.",
+      "game_pairs": true,
+      "game_pair_note": "each pairing plays two games with the same opening and colours reversed, back to back in schedule.json",
+      "pairing_system": "TCEC Swiss Tournament System (deterministic, Monrad-like). Pairing order = score desc, then seed asc. The top unpaired engine meets the highest-ranked engine it has not met, subject to colour balance and to a full pairing still being possible (Blossom check); if none exists, the oldest rounds are dropped from the encounter history.",
+      "colours": "double rounds: first-of-pair (higher in pairing order) has Black in game 1 and White in game 2",
+      "seeding": "group seeding by strength: Swiss 10 used 10 groups (A-J), seed order A1,B1,...,J1,A2,...; round 1 pairs A1-B1, C1-D1, ...; previous Swiss winner is A1",
+      "rating_input": "only through seeding: last Leagues standings and/or Elo after testing (TCEC bayeselo list, Elo snapshot), at the organisers' discretion. From round 2 pairings use score and seed only.",
+      "byes": "odd field only: one bye per round, scored as a win, given to the lowest-ranked engine with the fewest byes"
+    },
+    "time_control": {
+      "verified": true,
+      "base_s": 1800,
+      "increment_s": 3,
+      "time_loss": "counts as a loss, not replayed",
+      "margin_note": "UNVERIFIED meaning: Swiss 10 page notes a one-second margin in the actual event (written next to a time-loss report)"
+    },
+    "openings": {
+      "verified": true,
+      "source": "random book exit per pairing from a book by the TCEC book team (Swiss 10 book assembled by Bastiaan, kbg519v1a)",
+      "reversed_in_second_game": true
+    },
+    "tiebreaks": {
+      "verified": true,
+      "decisive_places": "winner, promotions and any placement affecting later events: points only; ties resolved by extra game pairs (2 engines, until one pair is decisive) or extra DRRs (3+ engines)",
+      "other_places_order": ["Sonneborn-Berger", "r-mobility", "most wins", "direct encounter", "shared"],
+      "note": "TD amendment of 22 Dec 2025 extended the points-only rule to the winner"
+    },
+    "adjudication": "same as top-level 'adjudication' (Swiss rules sections 6-7 carry the identical draw rule and outage rules)",
+    "hardware_and_settings": {
+      "verified": true,
+      "threads": 512,
+      "hash_mb": 262144,
+      "syzygy_path": "/home/syzygy7",
+      "move_overhead": "engine default unless the author asks (Reckless runs MoveOverhead=1000 in Swiss 10)",
+      "note": "same machines and caps as top-level 'hardware'; values read from live.json engine options on 2026-10-23"
+    },
+    "updates": "testing is run for all invited engines before the Swiss; no updates or fixes once the Swiss has started; a crash is a loss",
+    "entry": {
+      "verified": true,
+      "invitation": "organisers invite; questionnaire mandatory; Swiss 10 submission deadline was 1 Jul 2026 12:00 UTC",
+      "categories": {
+        "0": "placed automatically (engines with a Leagues place not relegated from the lowest league; organisers' discretion); 32 in Swiss 10",
+        "1": "additional and new engines: playoff 1 DRR at 30+3 for 10 spots (the lighter group, meant for HCE engines per the Potential decision)",
+        "2": "playoff 2 DRR at 30+3 for 5 spots",
+        "3": "joint Cat 3+4 playoff, 12 DRR at 30+3, for 1 Swiss spot",
+        "4": "engines made with major AI help: one place in the Cat 3+4 playoff; code public and open source during participation; TCEC admins build the binary",
+        "5": "cannot be featured by TCEC"
+      },
+      "categorisation_appeal": "24 h after TCEC announces final categories; TD decision final; no mid-season architecture change into a higher category",
+      "cat4_route_s30": "Cat 4 -> Cat 3+4 playoff (12 DRR at 30+3) -> 1 Swiss spot -> Swiss. Not eligible for the Leagues however it scores; a separate 'extra gauntlet' is promised (format UNVERIFIED).",
+      "cat4_preplayoff_if_several": "UNVERIFIED: the page does not say how several Cat 4 engines would compete for the single playoff place",
+      "s30_cat34_result": "3 engines, 72 games, 9-12 Sep 2026: Cinder 31.5/48 (qualified), CatGPT (Cat 4) 27/48, Serendipity 13.5/48",
+      "promotion_from_swiss_10": "top 32 -> Cup 17; the 17 engines without a Leagues place compete for 7 Entrance League spots (top 5 direct, middle 10 tiebreak for 2, bottom 2 out). Not open to Cat 4 in S30."
+    }
+  },
   "adjudication": {
+    "verified": true,
+    "verified_date": "2026-10-23",
+    "sources": [
+      "https://wiki.chessdom.org/TCEC_Swiss_rules",
+      "https://wiki.chessdom.org/TCEC_Leagues_Season_Rules",
+      "https://wiki.chessdom.org/Rules",
+      "https://tcec-chess.com/schedule.json"
+    ],
     "draw": {
       "verified": true,
       "from_move": null,
@@ -61,22 +150,28 @@
       "reset_on_capture_or_pawn_move": false,
       "reset_on": ["eval outside band", "missing eval", "promotion creating a 7th piece"]
     },
-    "win": {
+    "game_end": {
       "verified": true,
-      "present_in_rules": false,
-      "min_abs_eval_cp": null,
-      "plies": null,
-      "note": "Current rules list wins only by mate, illegal move, resignation. How resignation is triggered is UNVERIFIED."
+      "draws": ["threefold repetition", "50-move rule", "stalemate", "TCEC draw rule"],
+      "wins": ["mate", "opponent's illegal move", "opponent's resignation", "opponent's time loss"],
+      "win_adjudication_during_play": false,
+      "win_rule_history": "The +/-10.00 for 10 plies 'TCEC win rule' is in the S17-S19 rules; TCEC_Season_20_Rules states it is dropped from S20 onward; no later rule page restores it.",
+      "resignation_trigger": "UNVERIFIED: the rules do not say how resignation happens; all 212 decisive Swiss 10 games so far are recorded as ending in mate",
+      "crash": "counts as a loss"
     },
     "tablebase": {
-      "verified": false,
-      "pieces": null
+      "verified": true,
+      "adjudication_enabled": false,
+      "note": "TB adjudication (6-man Syzygy via cutechess) was removed from the Leagues rules between the revisions of 13 Oct 2024 and 4 May 2025 and is absent from the current Swiss, Leagues and Rules pages. Swiss 10: 129 of 212 decisive games ended in mate with 6 or fewer men on the board. Engines still get 7-man Syzygy for their own probing."
     },
     "outage_only": {
+      "_note": "Applies ONLY when the game server is interrupted (disconnect, lag time loss, other non-engine interruption). This is NOT adjudication during normal play.",
       "verified": true,
       "win_both_abs_eval_cp": 1000,
+      "win_note": "Swiss/Leagues numbered rules say both evals at least |10|; the prose copies on the Rules page say more than +10 / less than -10",
       "draw_both_abs_eval_cp": 15,
-      "draw_min_moves_each": 35
+      "draw_min_moves_each": 35,
+      "otherwise": "restart from the reached position with time compensation"
     }
   },
   "entry": {

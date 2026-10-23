@@ -29,6 +29,9 @@ any form: code, nets, data, binaries inside Fork).
      S31 rules are not yet published (**UNVERIFIED** for S31).
    - Hiding AI involvement is not an option: the Potential case (Swiss 10) shows
      TCEC penalizes architecture misdeclaration found after the fact.
+   - **The TCEC Swiss is therefore Fork's primary target event; the Leagues
+     are secondary** (closed to AI engines in S30, maybe open later). See
+     "TCEC Swiss (primary target)" below.
    Source: chessdom.com statement (31 Aug 2026); wiki TCEC_Swiss_10; wiki
    TCEC_Questionnaire.
 2. **Engines get 7-man Syzygy.** Live game headers on 2026-10-23 show
@@ -49,14 +52,100 @@ any form: code, nets, data, binaries inside Fork).
    captures and pawn moves do not reset it. No eval-based win adjudication
    appears in the written rules (wins: mate, illegal move, resignation). The
    ±10 win and ±0.15/35-move draw values only apply after a server outage.
-   Whether TB adjudication is still on, and with how many pieces, is not
-   stated: **UNVERIFIED**. Historical note: S20 used move 35, ±0.15, 10 plies,
-   no win rule, 6-man TB auto-adjudication. The brief's ±0.08 matches no TCEC
-   page opened.
+   Re-verified 2026-10-23 (see §2 "Adjudication re-verification"): there is
+   no tablebase adjudication either (removed from the Leagues rules between
+   Oct 2024 and May 2025), and the ±10.00 win rule was indeed dropped in
+   Season 20 (confirmed on the S19 and S20 rule pages). Historical note: S20
+   used move 35, ±0.15, 10 plies, no win rule, 6-man TB auto-adjudication.
+   The brief's ±0.08 draw band and ±10.00 win rule match the S17 rules page
+   (2020), i.e. the brief describes rules that are six-plus years old.
 5. **Time controls are 30'+3" (EL, L2, L1, Swiss, Cup), 60'+6" (Premier),
    120'+12" (Superfinal)**, not the S20 values.
 6. **Pondering is off**, books are removed or disabled, and engines found
    using hidden books are disqualified.
+
+---
+
+## TCEC Swiss (primary target)
+
+Checked 2026-10-23. Status: verified unless marked. Tag: REFERENCE ONLY
+(facts). Machine-readable copy: `config/tcec.json` → `swiss`.
+
+**Why primary.** In S30 an AI-coded engine (Category 4) can only play the
+Swiss, reached through the Category 3+4 playoff, and is barred from the
+Leagues whatever it scores (TD statement, chessdom.com, 31 Aug 2026). The
+Leagues (EL → L2 → L1 → Premier → Superfinal) are therefore Fork's
+**secondary** target: relevant only if TCEC opens them to AI engines in a
+later season (the statement mentions future "separate and/or joint
+competitions"; S31 rules not published: **UNVERIFIED**).
+
+### Route in for Fork (S30 scheme)
+
+1. Apply by email with the questionnaire before the Swiss deadline (Swiss 10:
+   1 Jul 2026, 12:00 UTC). Organisers invite; nothing on the pages says
+   what minimum strength gets an invitation (**UNVERIFIED**).
+2. TCEC sorts applicants into categories and announces them; authors have
+   24 h to appeal to the TD, whose decision is final. An engine may not
+   change architecture during the season into a higher-numbered category.
+3. Categories for Swiss 10 (wiki TCEC_Swiss_10, edited 22 Oct 2026):
+   - Cat 0: placed automatically (engines holding a Leagues place and not
+     relegated from the lowest league, at the organisers' discretion); 32.
+   - Cat 1: newer/additional engines; 1 DRR playoff at 30'+3" for 10 Swiss
+     spots. The Potential decision describes this as the lighter group for
+     HCE engines.
+   - Cat 2: 2 DRR playoff at 30'+3" for 5 spots.
+   - Cat 3: joint **Cat 3+4 playoff, 12 DRR at 30'+3", for 1 Swiss spot**.
+   - Cat 4 (major help from AI): gets **one** place in that Cat 3+4 playoff;
+     code must be public open source at submission and throughout, and
+     TCEC admins must be allowed to build the binary from the repository.
+     How several Cat 4 engines would contest that single place is not
+     stated (**UNVERIFIED**).
+   - Cat 5: cannot be featured.
+   Playoff qualification is decided on points only; ties for a qualifying
+   place go to extra game pairs (two engines) or extra DRRs (three or more).
+4. S30 precedent: the Cat 3+4 playoff had 3 engines (Cinder, Serendipity,
+   CatGPT as the only Cat 4 engine), 72 games, 9-12 Sep 2026. Final: Cinder
+   31.5/48 (qualified), CatGPT 27/48, Serendipity 13.5/48 (TCEC archive
+   crosstable JSON). So the Cat 4 entrant has to beat the Cat 3 engines over
+   24 games each; Cinder is a top-10 CCRL engine (§4), so the bar is high.
+5. AI engines get a separate "extra gauntlet" instead of the Leagues; its
+   format is not published on any page opened (**UNVERIFIED**).
+
+### Swiss format (Swiss 10, S30)
+
+| Item | Value | Source | Status |
+|---|---|---|---|
+| Field | 48 engines | Swiss 10 page; crosstable.json | verified |
+| Rounds | 13 double rounds (26 games per engine). The generic Swiss rules page says 11 (edited from 12 on 21 Nov 2025); the event page and the 624-game schedule.json (13 × 24 pairs × 2) agree on 13 | Swiss 10 page; schedule.json; TCEC_Swiss_rules | verified (13 for Swiss 10) |
+| Game pairs | yes: each pairing plays twice, same opening, colours reversed, back to back | Swiss rules 2.b; schedule.json (every completed pair has colours swapped; opening labels match except where the post-book line was named differently) | verified |
+| Pairing system | TCEC Swiss Tournament System: deterministic, Monrad-like. Engines are ranked by score, then seed. The top unpaired engine is matched with the highest-ranked engine it has not yet met, provided colour balance holds and a full pairing of the rest stays possible (checked with a Blossom matching); if no full pairing exists, the oldest round is dropped from the "already met" history | wiki TCEC_Swiss_Tournament_System (edited 15 Jun 2023) | verified |
+| Colours | double rounds: the first engine of a pair (higher in the pairing order) has Black in game 1, White in game 2; every engine's colour count is level after each round | Tournament System page | verified |
+| Seeding | group seeding by strength into an even number of groups (Swiss 10: 10 groups A-J); seeds A1, B1, …, J1, A2, …; round 1 pairs A1-B1, C1-D1, …; previous Swiss winner is A1 | Swiss rules 1.c-d, 2.a; Swiss 10 page | verified |
+| Rating input | only through seeding: organisers order engines by last Leagues standings and/or Elo after testing (Swiss 10 combined the list with TCEC's Elo; the page links a seeding script and an Elo snapshot in a tcecgames fork). After round 1 pairings use score and seed only | Swiss 10 page; Tournament System page | verified |
+| Byes | only with an odd field: one per round, scored as a win | Tournament System page | verified |
+| Openings | a random book exit for each pairing, from a book made by the TCEC book team (Swiss 10 book by Bastiaan, kbg519v1a) | Swiss rules 2.c, 4; Swiss 10 page | verified |
+| Time control | 30'+3"; a time loss is a loss and is not replayed | Swiss rules 5; live.json `TimeControl 1800+3` | verified |
+| Time margin | Swiss 10 page notes "a one second margin" in the actual event next to a time-loss report; what it applies to is not explained | Swiss 10 page | **UNVERIFIED** meaning |
+| Tiebreaks | winner, promotions and anything that affects later events: points only, then extra game pairs (2 tied) or extra DRRs (3+ tied). Other places: Sonneborn-Berger, then r-mobility, then most wins, then direct encounter, else shared. (TD amendment of 22 Dec 2025 added "the winner" to the points-only rule) | Swiss rules 3; revision diff 7923→8076 | verified |
+| Hardware / settings | same servers as all S30 events (§2). Live Swiss 10 game: `Threads=512`, `Hash=262144`, `SyzygyPath=/home/syzygy7`; other options default unless the author asks (Reckless: `MoveOverhead=1000`) | live.json; Further information page | verified |
+| Draw rule / adjudication | identical to the Leagues text: see §2 "Adjudication re-verification" | Swiss rules 6-7 | verified |
+| Crashes, updates | crash = loss; testing for all invited engines before the event; no updates or fixes once it starts | Swiss rules 7-8 | verified |
+| Promotion out of Swiss 10 | top 32 → Cup 17. The 17 engines without a Leagues place compete for 7 Entrance League places (top 5 direct, next 10 play a tiebreak match for 2, bottom 2 out). Category 4 engines cannot take League places in S30 | Swiss 10 page; TD statement | verified |
+
+Observed in Swiss 10 games so far (schedule.json, 2026-10-23, 425 games
+finished): no win adjudication occurs; all 212 decisive games are recorded as
+mates, 129 of them with 6 or fewer men left (so no tablebase adjudication
+either). 169 draws came from the TCEC draw rule, the earliest after 28 moves.
+Bug list on the Swiss 10 page shows typical failure modes in testing: time
+losses fixed by raising MoveOverhead, crashes, an under-promotion blunder.
+
+**What this means for Fork:** with game pairs and a random biased exit,
+every pairing is a mini-match on one opening; losing both sides of a book
+exit is the costly case. Only score and seed drive pairings, so a strong
+early score quickly brings top opponents. Fork must survive 26 games at
+30'+3" on 512 threads with no crash or time loss and no chance to patch.
+Points in the Swiss decide nothing for a Cat 4 engine beyond the event
+itself in S30.
 
 ---
 
@@ -69,8 +158,11 @@ any form: code, nets, data, binaries inside Fork).
   S30: Cup 17, Leagues Season 30 (EL, L2, L1, Premier, Superfinal), FRD 6.
   Completed in S30: 4kVII, HCE Competition 1. Season 31 is listed as
   upcoming (4kVIII, HCE 2, Swiss 11, Cup 18, Leagues S31, FRD 7).
-- S29 is the last completed Leagues season (S29 Superfinal result: not shown
-  on the page opened; **UNVERIFIED**).
+- S29 is the last completed Leagues season. S29 Superfinal (28 Mar-15 Apr
+  2026, 100 games): Stockfish dev-20260318 beat Reckless 0.10.0-dev-b5462f11
+  59-41 (+41 =36 -23 from Stockfish's side). Sources: TCEC archive JSON
+  `TCEC_Season_29_-_Superfinal_Crosstable.cjson` and `_Schedule.sjson`;
+  chessdom.com report of 21 Apr 2026. Verified 2026-10-23.
 
 Status: verified 2026-10-23. Tag: REFERENCE ONLY (facts).
 
@@ -198,6 +290,53 @@ described anywhere I opened (**UNVERIFIED**). Tag: REFERENCE ONLY.
 - In the Superfinal the Premier winner takes Black first in each pair; in the
   Cup the lower seed has White first.
 
+### Adjudication re-verification (2026-10-23)
+
+Re-checked against the current rule pages: wiki TCEC_Swiss_rules (edited
+22 Dec 2025), TCEC_Leagues_Season_Rules (edited 21 Jul 2025) and the
+all-events Rules page (edited 8 Jul 2026); plus the history pages
+TCEC_Season_17/18/19/20_Rules and the revision history of the Leagues rules
+page. Results:
+
+- **Draw rule** (Swiss, Cup, Leagues, HCE and FRD sections, identical text):
+  unchanged from what is recorded below (≤6 pieces counting kings but not
+  pawns, eval of the move into the position within ±0.25, 8 consecutive
+  plies, resets on an out-of-band or missing eval or a promotion that makes
+  a 7th piece, no reset on captures or pawn moves, no minimum move). The 4k
+  event has no TCEC draw rule at all.
+- **Win adjudication during play: none.** Wins come only from mate, the
+  opponent's illegal move, the opponent's resignation or (stated in the 4k
+  and Swiss sections) loss on time. Removed from `config/tcec.json`.
+- **Season 20 claim confirmed.** The S17, S18 and S19 rule pages all contain
+  a win rule (both engines at ±10.00 or beyond for 10 plies, active from
+  move 1). The S20 rule page (last edited 18 Jan 2021) says outright that the
+  win rule of former seasons is dropped from that season onward. No later
+  rule page brings it back. S20 ran Dec 2020-Feb 2021 (chessdom's table of
+  Superfinals).
+- **Tablebase adjudication: none now.** The S20 page and Leagues rules up to
+  revision 6018 (13 Oct 2024) had cutechess adjudicate positions with 6
+  pieces via Syzygy; revision 6876 (4 May 2025) deleted that, along with a
+  clause adjudicating outage positions with 7 men by EGTB. By date this
+  falls after the S27 Superfinal (ended Jan 2025) and before S28 (Jun 2025),
+  so probably from S28 on; the season number is not stated anywhere
+  (**UNVERIFIED**). Swiss 10 practice agrees (decisive games are played to
+  mate, see "TCEC Swiss (primary target)").
+- **Draw rule history** from the same revision history: S19-S20 and the
+  Leagues page until at least 28 Mar 2022: from move 35, both evals within
+  ±0.15 for 10 plies, reset by pawn move or capture (S17 used ±0.08). From at
+  least 15 Aug 2022: ≤8 pawns and ≤8 pieces, both evals within ±0.20 for 10
+  plies. From at least 5 Jan 2023: the current 6-piece ±0.25 8-ply rule.
+- **Resignation**: listed as a way to win, but no page says what triggers it
+  (engine or GUI rule): **UNVERIFIED**. In Swiss 10 none of 212 decisive
+  games ended other than by mate.
+- **Server outage only** (not adjudication during normal play): both evals
+  at ±10 or beyond → win; both within ±0.15 and both engines past 35 moves →
+  draw; otherwise restart from the reached position with time compensation.
+  Wording differs slightly: the numbered Swiss/Cup/Leagues copies say "equal
+  to or more than ABS(10)", the prose copies on the Rules and Leagues pages
+  say "more than +10 / less than -10"; they also say "five" or "four"
+  scenarios while listing four. Kept in `tcec.json` as `outage_only`.
+
 ### Adjudication and game end (current written rules)
 
 - Draw: threefold, 50-move rule, stalemate, TCEC draw rule.
@@ -207,14 +346,16 @@ described anywhere I opened (**UNVERIFIED**). Tag: REFERENCE ONLY.
   that makes a 7th piece; not reset by captures or pawn moves; no minimum
   move number. (The rule is worded per move; whether both engines' evals
   must satisfy it is not spelled out: **UNVERIFIED** "both engines".)
-- Win: mate, illegal move by the opponent, resignation. No eval-threshold win
-  adjudication appears in the current rules; who/what triggers
-  "resignation" (engine or GUI rule) is **UNVERIFIED**.
-- Server outage only: both evals ≥ +10 or ≤ -10 → win; both within ±0.15 and
-  both engines past move 35 → draw; otherwise restart with time
-  compensation.
-- Tablebase adjudication: not mentioned in the current rules
-  (**UNVERIFIED**). S20 rules said cutechess adjudicated with 6-man Syzygy.
+- Win: mate, illegal move by the opponent, resignation, loss on time. No
+  eval-threshold win adjudication in the current rules (re-verified
+  2026-10-23); who/what triggers "resignation" (engine or GUI rule) is
+  **UNVERIFIED**.
+- Server outage only (not normal-play adjudication): both evals ≥ +10 or
+  ≤ -10 → win; both within ±0.15 and both engines past move 35 → draw;
+  otherwise restart with time compensation.
+- Tablebase adjudication: none in the current rules (removed between
+  Oct 2024 and May 2025, see re-verification above). S20 rules had cutechess
+  adjudicate with 6-man Syzygy.
 - Why it matters for Fork: Fork must report honest evals (DESIGN rule). The
   draw rule only fires in sparse endings, so Fork's endgame eval near 0 for
   ≤6 pieces decides how quickly dead draws end; it should not affect search
@@ -238,8 +379,8 @@ described anywhere I opened (**UNVERIFIED**). Tag: REFERENCE ONLY.
 | Structure | QL, L4, L3, L2, L1, Premier, SuFi | Swiss, Cup, EL, L2, L1, Premier, SuFi, plus 4k, HCE, FRD |
 | TC | 30'+5" (QL-L2), 45'+5" (L1), 60'+7" (Prem), 120'+10" (SuFi) | 30'+3", 60'+6" (Prem), 120'+12" (SuFi) |
 | Draw rule | from move 35, both evals within ±0.15 for 5 moves (10 plies), reset by pawn move/capture | ≤6 pieces, ±0.25, 8 plies, no minimum move |
-| Win rule | dropped in S20 | none |
-| TB | 6-man Syzygy adjudication | 7-man Syzygy for engines |
+| Win rule | dropped in S20 (S19 had ±10.00 for 10 plies; confirmed on the S19 and S20 rule pages) | none |
+| TB | 6-man Syzygy adjudication | no TB adjudication (removed Oct 2024-May 2025); 7-man Syzygy for engines |
 | CPU | 4x Xeon E5-4669v4, 176 threads (to S21) | 2x EPYC 9754, 512 threads |
 | Entry | invitation | invitation + mandatory questionnaire (S29+), categories, AI policy (S30) |
 
@@ -368,7 +509,7 @@ for implementation, and never use their nets or data in Fork.
 |---|---|---|---|---|---|---|
 | Stockfish | GPL-3.0 | sf_19 (5 Sep 2026) | github.com/official-stockfish/Stockfish | NNUE; nets trained on Lc0 data (ODbL) per README | tag `sf_19`, `make build ARCH=x86-64-avx2`, nets fetched by makefile (record hash) | OFF-LIMITS for code/nets; opponent binary USE |
 | Lc0 | GPL-3.0 | v0.32.1 (23 Nov 2025) | github.com/LeelaChessZero/lc0 | large NN (GPU) | tag `v0.32.1` + a named network file (e.g. BT4 as on CCRL) | OFF-LIMITS (code/nets/data); opponent USE if GPU available |
-| Reckless | AGPL-3.0 | v0.9.0 (1 Mar 2026); TCEC runs 0.10.0-dev | github.com/codedeliveryservice/Reckless | NNUE (bullet trainer); data source not stated in README | tag `v0.9.0` | OFF-LIMITS code; opponent USE |
+| Reckless | AGPL-3.0 (from v0.9.0; v0.7.0 was MIT) | v0.9.0 (1 Mar 2026) latest stable; dev pre-releases up to v0.10.0-dev-7300f044 (1 May 2026); TCEC runs 0.10.0-dev | github.com/codedeliveryservice/Reckless | NNUE (bullet trainer); current data source not stated (see §7) | tag `v0.9.0` | OFF-LIMITS code; opponent USE |
 | PlentyChess | GPL-3.0 | b-v8.0.0 (27 Jun 2026) | github.com/Yoshie2000/PlentyChess | NNUE, self-generated data (15B+ positions) | tag `b-v8.0.0`, `make` embeds net | OFF-LIMITS code; opponent USE |
 | Integral | no license file detected (all rights reserved by default) | v8 (11 Sep 2026) | github.com/aronpetko/integral | NNUE, self-play data (bullet) | tag `v8` binary/build for testing only | OFF-LIMITS; opponent USE (license **UNVERIFIED**, ask before redistributing) |
 | Obsidian | GPL-3.0 | v16.0 (21 May 2025) | github.com/gab8192/Obsidian | NNUE trained on Lc0 data (README) | tag `v16.0` | OFF-LIMITS; opponent USE |
@@ -400,3 +541,125 @@ gauntlet log. Add weaker anchors (e.g. Ethereal v14.00) for early phases.
   testing (forum link points to kirill-kryukov.com board).
 - CEGT: no procedure on the pages opened. **UNVERIFIED**.
 - TCEC: email the questionnaire; organisers invite. See §2.
+
+---
+
+## 7. Reference case: Reckless (new engine → S29 Superfinal)
+
+Tag: **REFERENCE ONLY** (history and practices as ideas; Reckless code,
+nets and data are OFF-LIMITS to Fork, see §5). Checked 2026-10-23.
+
+**Claim checked: confirmed.** Reckless played the TCEC Season 29 Superfinal
+and lost 41-59 to Stockfish (TCEC archive crosstable JSON; chessdom.com,
+21 Apr 2026). It qualified as runner-up of the S29 Premier Division (34/56,
+one point behind Stockfish, ahead of Lc0, PlentyChess, Torch, Integral,
+Obsidian, Berserk). Chessdom called it the first Superfinal in many seasons
+without Lc0. The match was restarted from game 1 after observers noticed
+Reckless running at about half its Premier speed; TCEC's admin traced it to
+a newer compiler, and all three parties agreed to rebuild the same version
+with another Rust toolchain (chessdom.com, 27 Mar 2026).
+
+### Repository facts (GitHub API and releases, 2026-10-23)
+
+- Repo `codedeliveryservice/Reckless`, Rust. First commit 3 Dec 2022
+  ("Initial commit", author Arseny); repo created 31 Dec 2022; about 1,800
+  commits; still active (push on 23 Oct 2026).
+- Authors: Arseniy Surkov (lead, GitHub `codedeliveryservice`, ~1,350
+  commits); co-authors Shahin M. Shahin (`peregrineshahin`, Stockfish /
+  Fishtest contributor, ~160 commits) and Styx (`styxdoto`, NNUE, testing
+  infrastructure and hardware). Other contributors named by the author:
+  CJ (Alexandria), Lily, Protonspring (Torch), Viren (Monty) (chessdom
+  interview, 27 Mar 2026; GitHub contributors list).
+- License: MIT at v0.7.0; no LICENSE file in the v0.8.0 tag; AGPL-3.0 from
+  v0.9.0 (stated in the v0.9.0 notes).
+
+| Release | Date | Highlights (release notes) | CCRL Blitz (README table) |
+|---|---|---|---|
+| v0.1.0 | 16 May 2023 | basic PVS, aspiration, NMP, LMR, killers/history; HCE from the "simplified evaluation" recipe | 2005 |
+| v0.2.0 | 6 Oct 2023 | tapered eval with tuning, RFP, fail-soft, copy-make | 2349 |
+| v0.3.0 | 5 Nov 2023 | king-relative PST, gradient-descent tuning, time management, LMP | 2616 |
+| v0.4.0 | 13 Dec 2023 | IIR, futility, "improving", history-adjusted LMR, persistent history | 2934 |
+| v0.5.0 | 4 Feb 2024 | NNUE replaces HCE; data from self-play starting from a random net, retrained iteratively; own trainer | 3240 |
+| v0.6.0 | 21 Mar 2024 | Lazy SMP, SCReLU, continuation histories, SPSA session, AVX2 SIMD; thanks Andrew Grant for OpenBench and CPU time | 3386 |
+| v0.7.0 | 23 Aug 2024 | (768→384)x2→1x4 net, time management by score/best-move stability, SEE, multithreaded TT init | 3500 |
+| v0.8.0 | 30 Aug 2025 | search rebuilt after the FIDE & Google Kaggle efficient-chess challenge (team 2nd place, with Shahin); bullet trainer, 30+ nets, multi-layer net on "billions of positions"; 7-man Syzygy via Fathom; Chess960/DFRC. +335 Elo STC vs v0.7.0 | 3765 |
+| v0.9.0 | 1 Mar 2026 | threat-input NNUE on top of king-bucketed PSQ inputs; NUMA-aware threads; MultiPV; AGPL. +62 Elo LTC, +71 SMP vs v0.8.0 | 3767 |
+| v0.10.0-dev builds | Apr-May 2026 | +12 Elo STC/LTC vs v0.9.0 | n/a |
+
+### TCEC history (TCEC archive crosstable JSON per event; wiki Swiss pages)
+
+| Season | Event | Version | Result |
+|---|---|---|---|
+| — | first TCEC application | — | Aug 2024 (chessdom, 23 Mar 2026) |
+| S27 | Cat 0+2 playoff (1 DRR, 4 Swiss spots) | 0.7.0 | 8th of 9 (6/16), did not reach Swiss 7. Swiss 7 page made entry conditional on multithreaded hash init (98 GB) |
+| S28 | Cat 2 playoff | 0.8.0-dev | 1st of 13 (17/24) |
+| S28 | Swiss 8 | 0.8.0-dev | 22nd of 44 (11/22) |
+| S28 | League 2 | 0.8.0-dev | 1st of 12 (29/44), promoted |
+| S28 | League 1 | 0.8.0-dev | 3rd of 12 (25.5/44), missed promotion by one place |
+| S28 | FRD 4 | 0.9.0-dev | won Semileague 2 and League C; 3rd of 6 in Final League |
+| S29 | Swiss 9 | 0.9.0-dev | 8th of 44 (12.5/22), won tiebreak for seeds 6-8 |
+| S29 | League 1 | 0.9.0-dev | 1st of 12 (28.5/44) |
+| S29 | Premier Division | 0.9.0-dev | 2nd of 8 (34/56) → Superfinal |
+| S29 | Superfinal | 0.10.0-dev | lost 41-59 to Stockfish |
+| S29 | FRD 5 | 0.10.0-dev | 2nd in Semileague 2, won League C, 4th of 6 in Final League |
+| S30 | Swiss 10 (Cat 0, placed directly) | 0.10.0-dev | 8th of 48 after 17 games (in progress) |
+
+How Reckless went from Swiss 8 into League 2 rather than the Entrance League
+in S28 is not explained on the pages opened (**UNVERIFIED**). Cup results
+(the Cup bracket JSON was not found) are **UNVERIFIED**.
+
+### Training data provenance
+
+- v0.5.0 (Feb 2024): data from Reckless's own self-play, starting from a
+  random net and regenerated each iteration (release notes). PR #74
+  (Oct 2024): whole dataset regenerated with Reckless itself after an SPSA
+  session. Both are own-engine data, consistent with the TCEC NNUE
+  Guideline.
+- v0.8.0 onward: bullet trainer, "billions of positions"; neither the
+  README, the release notes nor the `RecklessNetworks` repo states where the
+  current data comes from, and the S29 questionnaire (v2.3, 24 Oct 2025) is
+  confidential on the TCEC wiki. Current provenance: **UNVERIFIED**.
+- For Fork: the early Reckless pipeline (own self-play from a random net,
+  own trainer, regenerate and retrain) is a pattern Fork may copy as an
+  *idea*. Reckless's nets or data themselves are not acceptable for Fork in
+  any case (another engine's output, AGPL project), and nothing about the
+  current nets can be cited as a clean-data model until provenance is
+  confirmed.
+
+### What got it there (timeline and practices)
+
+- Timeline: first commit to first release ~5.5 months; HCE to NNUE in 14
+  months; first TCEC application ~20 months after the first commit;
+  application to Superfinal ~19 months; first commit to Superfinal ~3 years
+  4 months. The big jump (CCRL Blitz 3500 → 3765, +335 Elo self-play) came in
+  one year after a team formed around strong search specialists.
+- Testing: OpenBench from early on (Andrew Grant's instance, then its own at
+  recklesschess.space, test IDs past 14,000 by May 2026) with fastchess;
+  every release reports STC 8+0.08 and LTC 40+0.4 results with pentanomial
+  stats; SMP and DFRC tests before release; SPSA tuning; donated hardware.
+- Engineering: GitHub Actions workflow files named for architectures, bench
+  check, games, PGO and release; AVX2/AVX-512 builds, multithreaded TT init, NUMA
+  binding, 7-man Syzygy, Chess960 — the TCEC-specific items (big hash, 512
+  threads, NUMA, TBs) were in place before its Superfinal run.
+- Cautions: Reckless lost two Swiss 8 testing games on time (Swiss 8 page),
+  and its Superfinal
+  build lost half its speed to a toolchain change. The author says search was
+  rebuilt after a deep study of Stockfish search; Fork's originality rules
+  rule out that route (ideas only from papers/CPW, never another engine's
+  code).
+
+### What Fork can adopt (ideas only)
+
+1. SPRT on an OpenBench-style setup from day one, STC + LTC + SMP gates,
+   published pentanomial results per release.
+2. Own-data NNUE bootstrapped from self-play, regenerated as the engine
+   improves (the v0.5.0 recipe), with written provenance for the
+   questionnaire.
+3. Ship TCEC must-haves early: multithreaded hash init, NUMA-aware threads,
+   7-man Syzygy, MoveOverhead option, speed check of the exact TCEC build
+   (`bench` NPS against the release binary).
+4. Release notes with Elo evidence per version; a public repo (mandatory for
+   Category 4 anyway).
+5. Expect a multi-season climb: Reckless needed S27 (failed playoff) to S29.
+   For Fork as Cat 4 in S30 rules, the reachable steps are the Cat 3+4
+   playoff, the Swiss, and the AI gauntlet.

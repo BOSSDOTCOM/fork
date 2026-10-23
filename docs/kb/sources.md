@@ -276,3 +276,138 @@ Opened by the coordinating session on 2026-10-23 to write best-practices.md and 
 | https://www.chessdom.com/tcec-announces-ai-integration-plans-as-a-new-generation-of-engines-enters-the-arena/ | TD statement 2026-08-31 | 2026-10-23 | Re-checked: AI engines only via the Swiss, not eligible for the regular Leagues |
 | https://tcec-chess.com/live.json | TCEC live game data | 2026-10-23 | Re-checked: S30 Swiss 10, TimeControl 1800+3 |
 | https://api.github.com/repos/{Disservin/fastchess,cutechess/cutechess,jdart1/Fathom,jw1912/bullet} | GitHub API | 2026-10-23 | Re-checked: fastchess v1.8.2-alpha MIT, cutechess v1.5.1 GPL-3.0, Fathom MIT, bullet MIT |
+
+## Research library
+
+Opened on 2026-10-23 for the "Research library (classic and foundational papers)" section of research.md. "Crossref" means the REST API record at https://api.crossref.org/works/<DOI>, or a Crossref bibliographic search limited to *ICGA Journal*, fetched with curl. Searches were used only to find records. Every citation was read from the record itself.
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://api.crossref.org/works/10.1080/14786445008521796 | Crossref: Shannon 1950 | 2026-10-23 | Shannon citation (41(314):256-275, March 1950) |
+| https://api.crossref.org/works/10.1016/0004-3702(75)90019-3 | Crossref: Knuth & Moore 1975 | 2026-10-23 | Citation (AI 6(4):293-326) |
+| https://api.crossref.org/works/10.1016/S0004-3702(01)00129-1 | Crossref: Deep Blue 2002 | 2026-10-23 | Citation (AI 134(1-2):57-83) |
+| https://api.crossref.org/works/10.1109/34.42858 | Crossref: Schaeffer 1989 | 2026-10-23 | Citation (IEEE PAMI 11(11):1203-1212) |
+| https://api.crossref.org/works/10.1016/0004-3702(90)90073-9 | Crossref: Singular extensions 1990 | 2026-10-23 | Citation (AI 43(1):99-109) |
+| https://api.crossref.org/works/10.1023/A:1007634325138 | Crossref: Baxter et al., Machine Learning 2000 | 2026-10-23 | Vol/pages/year; record has no title (title UNVERIFIED) |
+| https://api.crossref.org/works/10.1126/science.aar6404 | Crossref: AlphaZero, Science 2018 | 2026-10-23 | Citation (362(6419):1140-1144) |
+| https://api.crossref.org/works/10.1038/s41586-020-03051-4 | Crossref: MuZero, Nature 2020 | 2026-10-23 | Citation (588(7839):604-609) |
+| https://api.crossref.org/works/10.1214/aoms/1177731118 | Crossref: Wald 1945 | 2026-10-23 | Citation (16(2):117-186) |
+| https://api.crossref.org/works/10.1109/9.119632 | Crossref: Spall 1992 | 2026-10-23 | Citation (IEEE TAC 37(3):332-341) |
+| https://api.crossref.org/works/10.1007/978-3-642-31866-5_13 | Crossref: CLOP | 2026-10-23 | Citation (Advances in Computer Games, LNCS, 2012, pp 146-157) |
+| https://api.crossref.org/works/10.3233/icg-1995-18202 | Crossref: Buro ProbCut | 2026-10-23 | Citation (ICCA J 18(2):71-76) |
+| https://api.crossref.org/works?query.bibliographic=...&query.container-title=ICGA+Journal | Crossref searches limited to ICGA Journal | 2026-10-23 | Records for Reinefeld 1983 (6(4):4-14), Donninger 1993 (16(3):137-143), Heinz 1998 (21(2):75-83), Heinz 1999 (22(3):123-132), Nalimov et al. 2000 (23(3):148-162), Thompson 1986 (9(3):131-139), Zobrist reprint 1990 (13(2):69-73), Hyatt DTS 1997 (20(1):3-19) |
+| https://api.crossref.org/works?query.bibliographic=CHESS+4.5+Northwestern+... | Crossref search | 2026-10-23 | Slate & Atkin chapter records (1977 pp 82-118; 1988 reprint pp 80-103) |
+| https://api.crossref.org/works?...&filter=prefix:10.3233 | Crossref searches with a wrong filter | 2026-10-23 | FAILED (irrelevant hits or empty responses); redone as above |
+| https://export.arxiv.org/api/query?id_list=1509.01549,1712.01815,1911.08265,cs/9901001,cs/9901002 | arXiv API records | 2026-10-23 | Giraffe, AlphaZero preprint, MuZero preprint, TDLeaf and KnightCap (titles, authors, dates, journal refs) |
+| http://export.arxiv.org/api/query?... | arXiv API over HTTP | 2026-10-23 | FAILED (empty); retried over HTTPS |
+| https://www.sciencedirect.com/science/article/pii/0004370275900193 | ScienceDirect, Knuth & Moore | 2026-10-23 | FAILED (HTTP 403); Crossref used |
+| https://www.sciencedirect.com/science/article/pii/S0004370201001291 | ScienceDirect, Deep Blue | 2026-10-23 | FAILED (HTTP 403); Crossref used |
+| https://link.springer.com/article/10.1023/A:1007634325138 | Springer, Baxter et al. 2000 | 2026-10-23 | FAILED (redirect to login) |
+| https://www.science.org/doi/10.1126/science.aar6404 | Science, AlphaZero | 2026-10-23 | FAILED (HTTP 403) |
+| https://doi.org/10.1038/s41586-020-03051-4 | Nature, MuZero | 2026-10-23 | Reachability only (HTTP 200) |
+| https://projecteuclid.org/journals/annals-of-mathematical-statistics/volume-16/issue-2/Sequential-Tests-of-Statistical-Hypotheses/10.1214/aoms/1177731118.full | Project Euclid, Wald 1945 | 2026-10-23 | FAILED (empty page) |
+| https://dblp.org/search/publ/api?... | dblp search API | 2026-10-23 | FAILED (HTTP 429 rate limit) |
+| https://api.semanticscholar.org/graph/v1/paper/search?... | Semantic Scholar API | 2026-10-23 | FAILED (HTTP 429) |
+| https://www.chessprogramming.org/Claude_Shannon | CPW | 2026-10-23 | CHM scan link; no journal details on page |
+| https://www.computerhistory.org/chess/doc-431614f453dde/ | Computer History Museum record | 2026-10-23 | Shannon scan; Philosophical Magazine, March 1950 |
+| https://www.chessprogramming.org/Albert_Zobrist | CPW | 2026-10-23 | TR88 and ICCA 1990 reprint |
+| https://minds.wisc.edu/items/992e8337-5597-4a51-89d3-3fbe3559201a | UW-Madison MINDS record (reached via minds.wisconsin.edu/handle/1793/57624) | 2026-10-23 | Zobrist TR88 title, year, abstract |
+| https://research.cs.wisc.edu/techreports/1970/TR88.pdf | Zobrist TR88 PDF | 2026-10-23 | Exists (image-only scan, not readable) |
+| https://www.chessprogramming.org/David_Slate | CPW | 2026-10-23 | Slate & Atkin listing (no pages); Crossref used |
+| https://www.chessprogramming.org/NegaScout | CPW | 2026-10-23 | Reinefeld citation, Breuker note on errors |
+| http://www.top-5000.nl/ps/An%20improvement%20to%20the%20scout%20tree%20search%20algorithm.pdf | Reinefeld PDF link from CPW | 2026-10-23 | FAILED (returned HTML, not the PDF) |
+| https://www.chessprogramming.org/Chrilly_Donninger | CPW | 2026-10-23 | Donninger full title |
+| https://www.chessprogramming.org/Ernst_A._Heinz | CPW | 2026-10-23 | Heinz 1998/1999 and Nalimov et al. listings and links |
+| https://people.csail.mit.edu/heinz/dt/node18.html | Heinz web preprint, Extended Futility Pruning | 2026-10-23 | Confirms ICCA J 21(2):75-83, June 1998; section structure |
+| https://centaur.reading.ac.uk/4562/ | Univ. of Reading repository, Nalimov et al. | 2026-10-23 | FAILED (Anubis bot wall) |
+| https://www.chessprogramming.org/ProbCut | CPW | 2026-10-23 | Buro listing, author PDF link |
+| https://skatgame.net/mburo/ps/probcut.pdf | Buro's PDF | 2026-10-23 | Exists (HTTP 200 PDF); text not extractable |
+| https://www.chessprogramming.org/Dynamic_Tree_Splitting | CPW | 2026-10-23 | Hyatt 1994 (no venue) and 1997 ICCA listings |
+| http://www.craftychess.com/hyatt/search.html | Hyatt's DTS page | 2026-10-23 | FAILED (expired TLS certificate) |
+| https://www.chessprogramming.org/Lazy_SMP | CPW | 2026-10-23 | Lazy SMP history, forum post list, thesis listing, no peer-reviewed paper |
+| https://talkchess.com/viewtopic.php?t=46858 | TalkChess, Daniel Homan "Lazy SMP, part 2" (2013-01-12) | 2026-10-23 | Primary forum source; Elo and time-to-depth figures |
+| https://www.duo.uio.no/handle/10852/53769 (also hdl.handle.net/10852/53769 and the bitstream PDF link) | Ostensen 2016 thesis | 2026-10-23 | FAILED (redirects to nva.sikt.no, not read) |
+| https://www.chessprogramming.org/Ken_Thompson | CPW | 2026-10-23 | Thompson 1986 listing, PDF link |
+| https://pdos.csail.mit.edu/~rsc/thompson86endgame.pdf | Thompson 1986 PDF | 2026-10-23 | Reachability (HTTP 200 PDF) |
+| https://swtch.com/~rsc/thompson86endgame.pdf | alternate URL tried | 2026-10-23 | FAILED (404) |
+| https://www.chessprogramming.org/NNUE | CPW | 2026-10-23 | Nasu 2018 listing, PDF and translation links |
+| https://www.apply.computer-shogi.org/wcsc28/appeal/the_end_of_genesis_T.N.K.evolution_turbo_type_D/nnue.pdf | Nasu 2018 original PDF (read locally with pdftotext) | 2026-10-23 | English title, author, affiliation, date 2018-04-28, abstract, WCSC28 appeal context |
+| https://github.com/ynasu87/nnue | Nasu's repo | 2026-10-23 | GPLv3 (YaneuraOu fork); README wording of the Japanese title |
+| https://github.com/asdfjkl/nnue | English translation repo | 2026-10-23 | Translation exists; translator and license not stated |
+| https://github.com/asdfjkl/nnue/raw/main/nnue_en.pdf | translation PDF | 2026-10-23 | Reachability only |
+| https://api.github.com/repos/syzygy1/tb (+ /contents); https://raw.githubusercontent.com/syzygy1/tb/master/README.md | Syzygy generator repo | 2026-10-23 | GPL-2.0; rtbw/rtbz roles; sizes; -p DTZ note |
+| https://api.github.com/repos/syzygy1/probetool (+ /contents); https://raw.githubusercontent.com/syzygy1/probetool/master/README.md | Syzygy probing code repo | 2026-10-23 | Permissive "do whatever you want" license statement |
+| https://www.remi-coulom.fr/CLOP/ | CLOP page | 2026-10-23 | Paper/software links, version 0.0.9, no license stated |
+| https://www.remi-coulom.fr/CLOP/CLOP.pdf | CLOP paper PDF | 2026-10-23 | Title, author, abstract |
+| https://www.remi-coulom.fr/Bayesian-Elo/ | BayesElo page | 2026-10-23 | MM method, draw/advantage model, GPL, 2010.03.31, Hunter citation |
+| https://www.jhuapl.edu/spsa/ | Spall's SPSA site | 2026-10-23 | Maintainer, link to Spall_TAC92.pdf, gain-tuning note |
+| https://www.jhuapl.edu/spsa/PDF-SPSA/Spall_TAC92.pdf | Spall 1992 PDF | 2026-10-23 | Reachability (HTTP 200 PDF) |
+| https://github.com/official-stockfish/fishtest/wiki | Fishtest wiki index | 2026-10-23 | Locating the mathematics page |
+| https://github.com/official-stockfish/fishtest/wiki/Fishtest-Mathematics | Fishtest Mathematics | 2026-10-23 | GSPRT, pentanomial, normalized Elo, PDF links |
+| https://www.cantate.be/Fishtest/normalized_elo_practical.pdf | Van den Bergh, "Comments on Normalized Elo" | 2026-10-23 | Author; definition of normalized Elo |
+| https://github.com/AndyGrant/OpenBench/wiki | OpenBench wiki index | 2026-10-23 | Locating the SPRT page |
+| https://github.com/AndyGrant/OpenBench/wiki/SPRT-and-Fixed%E2%80%90Game-Workloads | OpenBench SPRT page | 2026-10-23 | Bounds, Confidence, game pairs |
+| https://api.github.com/repos/AndyGrant/OpenBench/git/trees/master?recursive=1; https://raw.githubusercontent.com/AndyGrant/OpenBench/master/OpenBench/stats.py | OpenBench tree and stats.py | 2026-10-23 | Pentanomial SPRT taken from Fishtest; GPL-3.0 header |
+
+## Competition update: TCEC Swiss, adjudication re-verification, Reckless (competition.md, config/tcec.json)
+
+All opened on 2026-10-23 with curl (browser User-Agent) or the GitHub REST API; HTML stripped locally. "Archive JSON" means files under https://tcec-chess.com/archive/json/ (path found in the site's own script).
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://wiki.chessdom.org/TCEC_Swiss_rules | Swiss rules (edited 22 Dec 2025) | 2026-10-23 | Swiss format, game pairs, tiebreaks, TC, draw rule, outage rules, updates |
+| https://wiki.chessdom.org/index.php?title=TCEC_Swiss_rules&type=revision&diff=8076&oldid=7923 | Revision diff (TD amendment) | 2026-10-23 | 12→11 rounds change (21 Nov 2025); "winner" added to points-only tiebreak rule (22 Dec 2025) |
+| https://wiki.chessdom.org/TCEC_Swiss_10 | S30 Swiss 10 page (edited 22 Oct 2026) | 2026-10-23 | 13 double rounds, 48 engines, categories, Cat 3+4 playoff format, seeding groups, promotion, time margin note |
+| https://wiki.chessdom.org/TCEC_Swiss_Tournament_System | Swiss pairing system (edited 15 Jun 2023) | 2026-10-23 | Pairing order, Blossom viability check, colours, seeding, byes |
+| https://wiki.chessdom.org/Rules | All-events rules (edited 8 Jul 2026) | 2026-10-23 | Draw rule and win conditions in every section; 4k has no draw rule; outage wording |
+| https://wiki.chessdom.org/TCEC_Leagues_Season_Rules | Leagues rules (edited 21 Jul 2025) | 2026-10-23 | Draw rule, win conditions, outage rules |
+| https://wiki.chessdom.org/TCEC_Season_Further_information | Hardware/settings (edited 24 Feb 2026) | 2026-10-23 | Re-check: 7-men Syzygy for all divisions, no TB adjudication text |
+| https://wiki.chessdom.org/TCEC_Season_20_Rules | S20 rules (edited 18 Jan 2021) | 2026-10-23 | Win rule dropped from S20 onward; 6-man TB adjudication; move-35 ±0.15 draw rule |
+| https://wiki.chessdom.org/TCEC_Season_19_Rules | S19 rules (edited 3 Sep 2020) | 2026-10-23 | ±10.00 / 10-ply win rule still present |
+| https://wiki.chessdom.org/TCEC_Season_18_Rules | S18 rules (edited 29 May 2020) | 2026-10-23 | ±10.00 win rule, ±0.15 draw rule |
+| https://wiki.chessdom.org/TCEC_Season_17_Rules | S17 rules (edited 17 Mar 2020) | 2026-10-23 | ±10.00 win rule, ±0.08 draw rule (matches the brief) |
+| https://wiki.chessdom.org/TCEC_Season_21_Rules | — | 2026-10-23 | FAILED (404; no per-season rule pages after S20) |
+| https://wiki.chessdom.org/Category:Rules | Wiki category | 2026-10-23 | List of rule pages (season pages stop at S20) |
+| https://wiki.chessdom.org/index.php?search=win+rule&fulltext=1&limit=50 and ?search=%22win+adjudication%22... | Wiki searches | 2026-10-23 | Locating win-rule pages only |
+| https://wiki.chessdom.org/index.php?title=TCEC_Leagues_Season_Rules&action=history&limit=500 | Revision history | 2026-10-23 | Revision dates |
+| https://wiki.chessdom.org/index.php?title=TCEC_Leagues_Season_Rules&oldid=N&action=raw for N = 1970, 3268, 3614, 3615, 3663, 3693, 3712, 3713, 3759, 3860, 4383, 4701, 5306, 5381, 6018, 6876 | Old revisions (wikitext) | 2026-10-23 | Draw-rule history; TB adjudication removed between 6018 (13 Oct 2024) and 6876 (4 May 2025) |
+| https://wiki.chessdom.org/TCEC_Leagues_Season_29 | S29 Leagues overview | 2026-10-23 | Questionnaire mandatory from S29 (no Superfinal result on page) |
+| https://wiki.chessdom.org/TCEC_Leagues_Season_28 | S28 Leagues overview | 2026-10-23 | Nothing on Reckless's League 2 placement |
+| https://wiki.chessdom.org/TCEC_Swiss_8 | S28 Swiss 8 page | 2026-10-23 | Reckless as Cat 2 entrant, testing time losses |
+| https://wiki.chessdom.org/TCEC_Swiss_7 | S27 Swiss 7 page | 2026-10-23 | Reckless 0.7.0 conditional entry, Cat 0+2 playoff format |
+| https://wiki.chessdom.org/Reckless | — | 2026-10-23 | FAILED (404) |
+| https://wiki.chessdom.org/index.php?search=Reckless+questionnaire&fulltext=1&limit=50; ?search=Reckless+%22League+2%22+%22Season+28%22... | Wiki searches | 2026-10-23 | Finding the questionnaire page; S28 placement (not found) |
+| https://wiki.chessdom.org/Reckless_questionnaire_20251024 | Reckless questionnaire (v2.3) | 2026-10-23 | Confidential, no content |
+| https://tcec-chess.com/ | TCEC site HTML/JS | 2026-10-23 | Archive JSON path (`archive/json`) only |
+| https://tcec-chess.com/tournament.json | Current event | 2026-10-23 | season30, div sw |
+| https://tcec-chess.com/live.json | Live game | 2026-10-23 | Swiss 10 round 9.42, 1800+3, engine options (Threads 512, Hash 262144, SyzygyPath, MoveOverhead) |
+| https://tcec-chess.com/crosstable.json | Swiss 10 crosstable | 2026-10-23 | 48 engines, Reckless 8th after 17 games |
+| https://tcec-chess.com/schedule.json | Swiss 10 schedule | 2026-10-23 | 624 games, game pairs, terminations (212 decisive all by mate, 129 with ≤6 men; 169 TCEC draw rule) |
+| https://tcec-chess.com/gamelist.json | Event index for all seasons | 2026-10-23 | S30 divisions incl. Cat 3+4 playoff; S22-S30 division names |
+| https://tcec-chess.com/bayeselo.txt | TCEC rating list | 2026-10-23 | Fetched only; not used |
+| https://tcec-chess.com/archive.json | — | 2026-10-23 | FAILED (404) |
+| https://tcec-chess.com/json/TCEC_Season_30_-_Category_3+4_Playoff_Crosstable.cjson (and %2B and _Schedule variants) | — | 2026-10-23 | FAILED (404; wrong path) |
+| https://tcec-chess.com/archive/json/TCEC_Season_30_-_Category_3%2B4_Playoff_Crosstable.cjson and _Schedule.sjson | Archive JSON | 2026-10-23 | Cat 3+4 result (Cinder 31.5, CatGPT 27, Serendipity 13.5 of 48), 72 games, 9-12 Sep 2026 |
+| https://tcec-chess.com/archive/json/TCEC_Season_29_-_Superfinal_Crosstable.cjson and _Schedule.sjson | Archive JSON | 2026-10-23 | S29 Superfinal Stockfish 59 - Reckless 41, dates |
+| https://tcec-chess.com/archive/json/TCEC_Season_29_-_Swiss_9_Crosstable.cjson | Archive JSON | 2026-10-23 | Reckless 8th of 44 |
+| https://tcec-chess.com/archive/json/{event}_Crosstable.cjson for the 247 non-testing S22-S30 and Cup 10-16 events listed in gamelist.json | Archive JSON | 2026-10-23 | Reckless results per event (S27-S30). All Cup files FAILED (404; Cup brackets use another format) |
+| https://tcec-chess.com/archive/json/TCEC_Cup_16_event.json, TCEC_Cup_15/16_Eventcrosstable.cjson | — | 2026-10-23 | FAILED (404); Cup results UNVERIFIED |
+| https://www.chessdom.com/tcec-announces-ai-integration-plans-as-a-new-generation-of-engines-enters-the-arena/ | TD statement (31 Aug 2026) | 2026-10-23 | AI engines: Swiss only via Cat 3+4 playoff, not Leagues, extra gauntlet |
+| https://www.chessdom.com/?s=Reckless | Chessdom search | 2026-10-23 | Finding articles only |
+| https://www.chessdom.com/reckless-breaks-a-duopoly-in-a-historic-computer-chess-shake-up/ | Chessdom (23 Mar 2026) | 2026-10-23 | S29 Premier final standings, first TCEC application Aug 2024, Swiss 8 22nd, Swiss 9 8th |
+| https://www.chessdom.com/stockfish-claims-its-19th-tcec-title-defeating-reckless-in-the-superfinal/ | Chessdom (21 Apr 2026) | 2026-10-23 | S29 Superfinal 59-41; S20 dates (Dec 2020-Feb 2021), S27/S28 dates |
+| https://www.chessdom.com/when-code-meets-class-stockfish-and-reckless-agree-to-restart-tcec-superfinal-in-spirit-of-fair-play/ | Chessdom (27 Mar 2026) | 2026-10-23 | Superfinal restart, compiler speed issue |
+| https://www.chessdom.com/interview-with-arseniy-surkov-author-of-reckless/ | Chessdom interview (27 Mar 2026) | 2026-10-23 | Team, contributors, Kaggle origin, Stockfish-search study |
+| https://api.github.com/repos/codedeliveryservice/Reckless | GitHub API repo | 2026-10-23 | Created 31 Dec 2022, AGPL-3.0, Rust, last push |
+| https://api.github.com/repos/codedeliveryservice/Reckless/releases?per_page=100 | GitHub API releases | 2026-10-23 | Release dates and notes (v0.1.0-v0.10.0-dev) |
+| https://api.github.com/repos/codedeliveryservice/Reckless/commits?per_page=1 (and repositories/583888641/commits?page=1809) | GitHub API commits | 2026-10-23 | ~1,809 commits; first commit 3 Dec 2022 |
+| https://api.github.com/repos/codedeliveryservice/Reckless/contributors | GitHub API contributors | 2026-10-23 | Commit counts per author |
+| https://raw.githubusercontent.com/codedeliveryservice/Reckless/main/README.md | README | 2026-10-23 | CCRL rating table per release, OpenBench/bullet acknowledgements, UCI options |
+| https://raw.githubusercontent.com/codedeliveryservice/Reckless/v0.7.0/LICENSE | Licence at v0.7.0 | 2026-10-23 | MIT |
+| https://raw.githubusercontent.com/codedeliveryservice/Reckless/v0.8.0/LICENSE | — | 2026-10-23 | FAILED (404); tree confirms no LICENSE in v0.8.0 |
+| https://api.github.com/repos/codedeliveryservice/Reckless/git/trees/v0.8.0 and /git/trees/main?recursive=1 | GitHub API trees | 2026-10-23 | File lists (licence, workflows); no source read |
+| https://raw.githubusercontent.com/codedeliveryservice/Reckless/main/Makefile and /build/build.rs | Build files (grep for URLs only) | 2026-10-23 | Net download location (RecklessNetworks) |
+| https://api.github.com/repos/codedeliveryservice/RecklessNetworks (+ /releases); raw .../main/README.md | Network storage repo | 2026-10-23 | No licence, no data provenance stated |
+| https://api.github.com/search/issues?q=repo:codedeliveryservice/Reckless+{leela,lc0,training+data,datagen} | GitHub issue search | 2026-10-23 | Looking for data provenance |
+| https://api.github.com/repos/codedeliveryservice/Reckless/issues/74, /987, /881 | PR #74, issues #987, #881 | 2026-10-23 | PR #74: dataset regenerated with Reckless itself (Oct 2024); others not relevant |
+| https://recklesschess.space/ and /users/ | Reckless OpenBench instance | 2026-10-23 | Confirms it is an OpenBench instance |
