@@ -30,7 +30,10 @@ def run(exe, core, reps, flt):
         for line in open(out):
             if line.startswith("#"):
                 continue
-            name, median, p10, p90, mn = line.split()
+            fields = line.split()
+            # Older fork_micro builds save 4 columns (no min): use p10 instead.
+            name, median, p10 = fields[0], fields[1], fields[2]
+            mn = fields[4] if len(fields) > 4 else p10
             res[name] = (float(median), float(mn))
         return res
 
