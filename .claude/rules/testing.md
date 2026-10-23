@@ -32,5 +32,18 @@ paths:
   - slow suites (`ctest -L slow`) at sign-off.
 - **Sanitizers:** clang-debug runs ASan+UBSan on Windows. GCC sanitizers,
   TSan, MSan and valgrind run on Linux.
+- **no_alloc runs everywhere except TSan, MSan and valgrind.** The
+  counting-allocator test (`fork_alloc_test`) replaces global operator
+  new/delete. That collides with those tools' own replacements: a link
+  error under TSan and MSan, and under valgrind the test's self-check fails
+  ("counting operator new is not in effect") with a new/free mismatch
+  report. Those runs exclude it (`-E no_alloc`, built without the
+  `fork_alloc_test` target, or not run under valgrind), and those are its
+  only sanctioned exclusions. Every other build runs it, the ASan/UBSan
+  presets included, and
+  `scripts/check.sh` fails if its Passed line is missing. (The PGO builds run
+  bench parity only, no ctest.)
+- **Valgrind needs a non-AVX-512 build** (`FORK_ARCH=x86-64-v3`): it cannot
+  decode AVX-512, which `-march=native` emits on the Ryzen 7600X3D.
 - **Long jobs** (perft_epd_full, difftest, fuzzing) run one at a time, with
   their command and result recorded.

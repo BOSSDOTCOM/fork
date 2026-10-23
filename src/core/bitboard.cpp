@@ -107,7 +107,7 @@ int search_magic(const SliderSquare& sq, std::uint64_t seed, Bitboard* out, Bitb
   thread_local unsigned epoch = 0;
   used_epoch.assign(std::size_t{1} << sq.bits, 0);
   epoch = 0;
-  const unsigned shift = static_cast<unsigned>(64 - sq.bits);
+  const auto shift = static_cast<unsigned>(64 - sq.bits);
   Rng rng{seed};
   for (int attempt = 1; attempt <= limit; ++attempt) {
     Bitboard candidate;

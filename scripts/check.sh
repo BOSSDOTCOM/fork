@@ -47,14 +47,26 @@ fingerprint() {
   } | sha1sum | cut -d' ' -f1
 }
 
+# no_alloc (the counting-allocator test, fork_alloc_test) must run and pass in
+# every preset checked here; build_and_test fails if its "Passed" line is
+# missing, so it can never be skipped silently. Its only sanctioned exclusions
+# are TSan, MSan and valgrind runs (Linux sign-off, not part of this script):
+# its replacement global operator new/delete collides with those tools' own
+# (a link error under TSan/MSan; under valgrind the test's self-check reports
+# that the counter is not in effect). ASan/UBSan builds run it. See
+# .claude/rules/testing.md.
 build_and_test() {  # preset, ctest filter args...
-  local preset=$1
+  local preset=$1 out
   shift
   if [ ! -f "build/$preset/build.ninja" ]; then
     cmake --preset "$preset" >>"$log" 2>&1 || fail "configure $preset"
   fi
   cmake --build "build/$preset" >>"$log" 2>&1 || fail "build $preset"
-  ctest --test-dir "build/$preset" --output-on-failure "$@" >>"$log" 2>&1 || fail "tests $preset"
+  out=$(ctest --test-dir "build/$preset" --output-on-failure "$@" 2>&1)
+  local status=$?
+  echo "$out" >>"$log"
+  [ $status -eq 0 ] || fail "tests $preset"
+  echo "$out" | grep -qE 'Test +#[0-9]+: no_alloc \.+ +Passed' || fail "no_alloc did not run in $preset"
 }
 
 native_full() {
