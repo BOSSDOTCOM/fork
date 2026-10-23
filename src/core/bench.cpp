@@ -1,3 +1,5 @@
+// bench: the fixed bench workload (see perft.hpp). Changing the positions or
+// depths changes the bench reference (tests/bench.ref).
 #include <chrono>
 #include <string_view>
 
@@ -32,7 +34,7 @@ std::uint64_t mix(std::uint64_t signature, Key key) {
 std::uint64_t walk(Position& pos, int depth, std::uint64_t& signature) {
   signature = mix(signature, pos.key());
   MoveList list;
-  generate<GenType::Legal>(pos, list);
+  generate<GenMode::Legal>(pos, list);
   if (depth == 1) return list.size();
   std::uint64_t nodes = 0;
   for (Move m : list) {

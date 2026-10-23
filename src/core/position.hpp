@@ -1,4 +1,16 @@
-// Board state, FEN, make/unmake.
+// position: board state, FEN, make/unmake, legality and check queries.
+//
+// Purpose: the board (bitboards and mailbox), the per-ply State stack, FEN
+// input/output, and move validation for moves from any source.
+// Invariants:
+// - by_type_/by_color_/board_ always describe the same placement.
+// - states_.back() is the current ply; every State field equals what
+//   compute_state() derives from the board (checked at every perft node).
+// - The ep square is stored, hashed and printed only when an ep capture is
+//   legal (DESIGN.md 4.4).
+// - make()/unmake() never allocate while the State stack is within its reserve,
+//   and unmake() restores an identical position (same_state).
+// - A Position is owned by one thread; search threads each get a copy.
 #pragma once
 
 #include <string>
@@ -21,23 +33,22 @@ struct State {
   Key key;
   Key pawn_key;
   Key material_key;
-  Key non_pawn_key[2];  // per color, kings included
-  Bitboard checkers;    // enemy pieces giving check to the side to move
+  Key non_pawn_key[2];   // per color, kings included
+  Bitboard checkers;     // enemy pieces giving check to the side to move
   Bitboard blockers[2];  // pieces (either color) whose removal alone would expose c's king to an enemy slider
   Bitboard pinners[2];   // enemy sliders whose only obstacle to c's king is one of c's pieces
-  Bitboard check_squares[6];  // squares from which the side to move would give check, per piece type
+  Bitboard checking_squares[6];  // squares from which the side to move would give check, per piece type
   int castling;
-  Square ep;         // NoSquare unless an ep capture is legal
+  Square ep;  // NoSquare unless an ep capture is legal
   int halfmove;
-  Piece captured;    // piece captured by the move that led here
+  Piece captured;  // piece captured by the move that led here
 
   bool operator==(const State&) const = default;
 };
 
 class Position {
  public:
-  static constexpr std::string_view StartFen =
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  static constexpr std::string_view StartFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
   Position();  // the start position
 
@@ -74,7 +85,7 @@ class Position {
   Bitboard blockers(Color c) const { return state().blockers[c]; }
   Bitboard pinners(Color c) const { return state().pinners[c]; }
   Bitboard pinned(Color c) const { return state().blockers[c] & pieces(c); }
-  Bitboard check_squares(PieceType t) const { return state().check_squares[t]; }
+  Bitboard checking_squares(PieceType t) const { return state().checking_squares[t]; }
 
   Bitboard attackers_to(Square s, Bitboard occ) const;  // both colors
   bool attacked_by(Color by, Square s, Bitboard occ) const;
@@ -82,7 +93,7 @@ class Position {
   bool is_pseudo_legal(Move m) const;  // any 16-bit pattern is safe to pass
   bool is_legal(Move m) const;         // requires is_pseudo_legal(m)
   bool gives_check(Move m) const;      // requires is_pseudo_legal(m) && is_legal(m)
-  Key key_after(Move m) const;         // exact key after make(m), for TT prefetch
+  Key predicted_key(Move m) const;     // exact key after make(m), for TT prefetch
 
   void make(Move m);
   void unmake(Move m);
@@ -90,7 +101,8 @@ class Position {
   void unmake_null();
 
   // Draw and repetition queries (the rules are documented in DESIGN.md 4.5).
-  int repetition_count() const;  // occurrences of this position since the last irreversible move, this one included
+  int repetition_count()
+      const;  // occurrences of this position since the last irreversible move, this one included
   bool insufficient_material() const;
   bool fifty_move_reached() const { return state().halfmove >= 100; }
 
@@ -120,7 +132,7 @@ class Position {
   void update_check_info(State& s) const;  // checkers, blockers, pinners, check squares
   bool ep_capture_legal(Square ep) const;  // for the side to move
   bool has_insufficient_material(Color c) const;
-  void finish_setup();                     // state from scratch after board setup
+  void finish_setup();  // state from scratch after board setup
 
   Piece board_[64];
   Bitboard by_type_[6];

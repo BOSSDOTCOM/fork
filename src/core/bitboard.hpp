@@ -1,4 +1,14 @@
-// Bitboard helpers, precomputed attack tables and slider lookups.
+// bitboard: bit helpers, attack tables and slider lookups.
+//
+// Purpose: precomputed leaper attacks, between/line tables, and rook/bishop
+// attacks through fancy magics or BMI2 PEXT (selected at compile time).
+// Invariants:
+// - Tables are built once by init_bitboards() (thread-safe) before any lookup;
+//   build_bitboard_tables() exists only for timing startup.
+// - Magic and PEXT lookups return exactly the ray-walk reference for every
+//   occupancy (tests/test_magics.cpp); magics come from Fork's own seeded search.
+// - between(a, b) excludes both ends and is 0 unless a and b are aligned;
+//   line(a, b) includes both ends and is 0 unless aligned.
 #pragma once
 
 #include <bit>
@@ -20,9 +30,16 @@ constexpr Bitboard Rank1 = 0xFFULL;
 constexpr Bitboard Rank8 = Rank1 << 56;
 
 inline int popcount(Bitboard b) { return std::popcount(b); }
-inline Square lsb(Bitboard b) { assert(b); return std::countr_zero(b); }
-inline Square pop_lsb(Bitboard& b) { Square s = lsb(b); b &= b - 1; return s; }
-inline bool more_than_one(Bitboard b) { return b & (b - 1); }
+inline Square lsb(Bitboard b) {
+  assert(b);
+  return std::countr_zero(b);
+}
+inline Square pop_lsb(Bitboard& b) {
+  Square s = lsb(b);
+  b &= b - 1;
+  return s;
+}
+inline bool has_multiple(Bitboard b) { return b & (b - 1); }
 
 // One-step shifts that drop squares falling off the a/h files.
 constexpr Bitboard shift_north(Bitboard b) { return b << 8; }
@@ -91,12 +108,19 @@ inline Bitboard queen_attacks(Square s, Bitboard occ) {
 // Attacks of a non-pawn piece type from `s`.
 inline Bitboard attacks(PieceType t, Square s, Bitboard occ) {
   switch (t) {
-    case Knight: return knight_attacks(s);
-    case Bishop: return bishop_attacks(s, occ);
-    case Rook: return rook_attacks(s, occ);
-    case Queen: return queen_attacks(s, occ);
-    case King: return king_attacks(s);
-    default: assert(false); return 0;
+    case Knight:
+      return knight_attacks(s);
+    case Bishop:
+      return bishop_attacks(s, occ);
+    case Rook:
+      return rook_attacks(s, occ);
+    case Queen:
+      return queen_attacks(s, occ);
+    case King:
+      return king_attacks(s);
+    default:
+      assert(false);
+      return 0;
   }
 }
 

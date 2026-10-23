@@ -43,30 +43,30 @@ TEST_CASE("fen", "optional move counters") {
 TEST_CASE("fen", "malformed input is rejected without changing the position") {
   const char* bad[] = {
       "",
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",                     // too few fields
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0",          // 5 fields
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP w KQkq - 0 1",                 // 7 ranks
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/8 w KQkq - 0 1",      // 9 ranks
-      "rnbqkbnr/pppppppp/9/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",        // bad digit
-      "rnbqkbnr/ppppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",       // rank too long
-      "rnbqkbnr/ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",         // rank too short
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNX w KQkq - 0 1",        // bad piece
-      "rnbq1bnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1",          // no black king
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBKKBNR w kq - 0 1",          // two white kings
-      "rnbqkbnr/pppppppp/8/8/8/P7/PPPPPPPP/RNBQKBNR w KQkq - 0 1",       // 9 pawns
-      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNP w Qkq - 0 1",         // pawn on rank 1
-      "4k3/8/8/8/8/8/8/4K2R x K - 0 1",                                  // bad side
-      "4k3/8/8/8/8/8/8/4K2R w KK - 0 1",                                 // repeated right
-      "4k3/8/8/8/8/8/8/4K2R w Q - 0 1",                                  // right without rook
-      "4k3/8/8/8/8/8/8/3K3R w K - 0 1",                                  // right without king
-      "4k3/8/8/8/8/8/8/4K2R w KX - 0 1",                                 // bad castling char
-      "4k3/8/8/8/8/8/8/4K2R w K e9 0 1",                                 // bad ep square
-      "4k3/8/8/8/8/8/8/4K2R w K e3 0 1",                                 // ep on wrong rank
-      "4k3/8/8/8/8/8/8/4K2R w K e6 0 1",                                 // ep without pushed pawn
-      "4k3/4p3/8/4pP2/8/8/8/4K3 w - e6 0 1",                             // ep with occupied origin
-      "4k3/8/8/8/8/8/8/4K2R w K - -1 1",                                // negative clock
-      "4k3/8/8/8/8/8/8/4K2R w K - x 1",                                  // non-numeric clock
-      "4k2R/8/8/8/8/8/8/4K3 w - - 0 1",                                  // side not to move in check
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",                 // too few fields
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0",      // 5 fields
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP w KQkq - 0 1",             // 7 ranks
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/8 w KQkq - 0 1",  // 9 ranks
+      "rnbqkbnr/pppppppp/9/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",    // bad digit
+      "rnbqkbnr/ppppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",   // rank too long
+      "rnbqkbnr/ppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",     // rank too short
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNX w KQkq - 0 1",    // bad piece
+      "rnbq1bnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1",      // no black king
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBKKBNR w kq - 0 1",      // two white kings
+      "rnbqkbnr/pppppppp/8/8/8/P7/PPPPPPPP/RNBQKBNR w KQkq - 0 1",   // 9 pawns
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNP w Qkq - 0 1",     // pawn on rank 1
+      "4k3/8/8/8/8/8/8/4K2R x K - 0 1",                              // bad side
+      "4k3/8/8/8/8/8/8/4K2R w KK - 0 1",                             // repeated right
+      "4k3/8/8/8/8/8/8/4K2R w Q - 0 1",                              // right without rook
+      "4k3/8/8/8/8/8/8/3K3R w K - 0 1",                              // right without king
+      "4k3/8/8/8/8/8/8/4K2R w KX - 0 1",                             // bad castling char
+      "4k3/8/8/8/8/8/8/4K2R w K e9 0 1",                             // bad ep square
+      "4k3/8/8/8/8/8/8/4K2R w K e3 0 1",                             // ep on wrong rank
+      "4k3/8/8/8/8/8/8/4K2R w K e6 0 1",                             // ep without pushed pawn
+      "4k3/4p3/8/4pP2/8/8/8/4K3 w - e6 0 1",                         // ep with occupied origin
+      "4k3/8/8/8/8/8/8/4K2R w K - -1 1",                             // negative clock
+      "4k3/8/8/8/8/8/8/4K2R w K - x 1",                              // non-numeric clock
+      "4k2R/8/8/8/8/8/8/4K3 w - - 0 1",                              // side not to move in check
   };
   Position p;
   const std::string before = p.fen();

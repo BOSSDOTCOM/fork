@@ -6,9 +6,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <exception>
 #include <cstdio>
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <functional>
 #include <map>
@@ -65,8 +65,7 @@ bool pin_to_core(int core) {
 
 // Runs `pass` (one pass over the workload, returns ops done) repeatedly for
 // at least `target` seconds per sample, `reps` samples after one warm-up.
-Result measure(const std::string& name, const std::function<std::uint64_t()>& pass, int reps,
-               double target) {
+Result measure(const std::string& name, const std::function<std::uint64_t()>& pass, int reps, double target) {
   pass();
   std::vector<double> samples;
   for (int r = 0; r < reps; ++r) {
@@ -111,7 +110,7 @@ std::vector<Position> make_positions() {
       pos.set_fen(fen);
       for (int ply = 0; ply < 120; ++ply) {
         MoveList list;
-        generate<GenType::Legal>(pos, list);
+        generate<GenMode::Legal>(pos, list);
         if (!list.size() || pos.halfmove_clock() >= 100) break;
         Position snapshot;
         snapshot.set_fen(pos.fen());  // keep stored positions free of history
@@ -159,12 +158,18 @@ static int run(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
     auto value = [&] { return i + 1 < argc ? std::string(argv[++i]) : std::string(); };
-    if (a == "--core") core = std::stoi(value());
-    else if (a == "--reps") reps = std::stoi(value());
-    else if (a == "--target") target = std::stod(value());
-    else if (a == "--save") save = value();
-    else if (a == "--compare") compare = value();
-    else if (a == "--filter") filter = value();
+    if (a == "--core")
+      core = std::stoi(value());
+    else if (a == "--reps")
+      reps = std::stoi(value());
+    else if (a == "--target")
+      target = std::stod(value());
+    else if (a == "--save")
+      save = value();
+    else if (a == "--compare")
+      compare = value();
+    else if (a == "--filter")
+      filter = value();
     else {
       (void)std::fprintf(stderr, "unknown argument %s\n", a.c_str());
       return 2;
@@ -177,7 +182,7 @@ static int run(int argc, char** argv) {
   std::vector<MoveList> legal(positions.size());
   std::uint64_t total_moves = 0;
   for (std::size_t i = 0; i < positions.size(); ++i) {
-    generate<GenType::Legal>(positions[i], legal[i]);
+    generate<GenMode::Legal>(positions[i], legal[i]);
     total_moves += legal[i].size();
   }
   // Probe moves for validation: every legal move plus 16 random encodings.
@@ -198,52 +203,87 @@ static int run(int argc, char** argv) {
 
   using Bench = std::pair<std::string, std::function<std::uint64_t()>>;
   std::vector<Bench> benches = {
-      {"init_tables", [] { build_bitboard_tables(); return std::uint64_t{1}; }},
+      {"init_tables",
+       [] {
+         build_bitboard_tables();
+         return std::uint64_t{1};
+       }},
       {"perft_bench", [] { return bench().nodes; }},
-      {"movegen_legal", [&] {
-         for (const Position& p : positions) { MoveList l; generate<GenType::Legal>(p, l); sink = sink + l.size(); }
+      {"movegen_legal",
+       [&] {
+         for (const Position& p : positions) {
+           MoveList l;
+           generate<GenMode::Legal>(p, l);
+           sink = sink + l.size();
+         }
          return static_cast<std::uint64_t>(positions.size());
        }},
-      {"movegen_captures", [&] {
-         for (const Position& p : positions) { MoveList l; generate<GenType::Captures>(p, l); sink = sink + l.size(); }
+      {"movegen_captures",
+       [&] {
+         for (const Position& p : positions) {
+           MoveList l;
+           generate<GenMode::Captures>(p, l);
+           sink = sink + l.size();
+         }
          return static_cast<std::uint64_t>(positions.size());
        }},
-      {"movegen_quiets", [&] {
-         for (const Position& p : positions) { MoveList l; generate<GenType::Quiets>(p, l); sink = sink + l.size(); }
+      {"movegen_quiets",
+       [&] {
+         for (const Position& p : positions) {
+           MoveList l;
+           generate<GenMode::Quiets>(p, l);
+           sink = sink + l.size();
+         }
          return static_cast<std::uint64_t>(positions.size());
        }},
-      {"make_unmake", [&] {
+      {"make_unmake",
+       [&] {
          for (std::size_t i = 0; i < positions.size(); ++i)
-           for (Move m : legal[i]) { positions[i].make(m); sink = sink + positions[i].key(); positions[i].unmake(m); }
+           for (Move m : legal[i]) {
+             positions[i].make(m);
+             sink = sink + positions[i].key();
+             positions[i].unmake(m);
+           }
          return total_moves;
        }},
-      {"null_move", [&] {  // state copy + check-info update, without piece moves
+      {"null_move",
+       [&] {  // state copy + check-info update, without piece moves
          std::uint64_t n = 0;
          for (Position& p : positions)
-           if (!p.in_check()) { p.make_null(); sink = sink + p.key(); p.unmake_null(); ++n; }
+           if (!p.in_check()) {
+             p.make_null();
+             sink = sink + p.key();
+             p.unmake_null();
+             ++n;
+           }
          return n;
        }},
-      {"gives_check", [&] {
+      {"gives_check",
+       [&] {
          for (std::size_t i = 0; i < positions.size(); ++i)
            for (Move m : legal[i]) sink = sink + positions[i].gives_check(m);
          return total_moves;
        }},
-      {"key_after", [&] {
+      {"predicted_key",
+       [&] {
          for (std::size_t i = 0; i < positions.size(); ++i)
-           for (Move m : legal[i]) sink = sink + positions[i].key_after(m);
+           for (Move m : legal[i]) sink = sink + positions[i].predicted_key(m);
          return total_moves;
        }},
-      {"attackers_to", [&] {
+      {"attackers_to",
+       [&] {
          for (const Position& p : positions)
            for (Square s = 0; s < 64; ++s) sink = sink + p.attackers_to(s, p.pieces());
          return static_cast<std::uint64_t>(positions.size() * 64);
        }},
-      {"is_pseudo_legal", [&] {
+      {"is_pseudo_legal",
+       [&] {
          for (std::size_t i = 0; i < positions.size(); ++i)
            for (Move m : probes[i]) sink = sink + positions[i].is_pseudo_legal(m);
          return total_probes;
        }},
-      {"is_legal", [&] {
+      {"is_legal",
+       [&] {
          for (std::size_t i = 0; i < positions.size(); ++i)
            for (Move m : legal[i]) sink = sink + positions[i].is_legal(m);
          return total_moves;

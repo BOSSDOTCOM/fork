@@ -34,10 +34,9 @@ constexpr bool Optimized =
 #define FORK_CAT2(a, b) a##b
 #define FORK_CAT(a, b) FORK_CAT2(a, b)
 
-#define TEST_CASE(suite, name)                                                         \
-  static void FORK_CAT(test_fn_, __LINE__)();                                          \
-  static ::fork::test::Registrar FORK_CAT(test_reg_, __LINE__)(suite, name,            \
-                                                               &FORK_CAT(test_fn_, __LINE__)); \
+#define TEST_CASE(suite, name)                                                                              \
+  static void FORK_CAT(test_fn_, __LINE__)();                                                               \
+  static ::fork::test::Registrar FORK_CAT(test_reg_, __LINE__)(suite, name, &FORK_CAT(test_fn_, __LINE__)); \
   static void FORK_CAT(test_fn_, __LINE__)()
 
 #define CHECK(cond)                                                       \
@@ -45,23 +44,23 @@ constexpr bool Optimized =
     if (!(cond)) ::fork::test::record_failure(__FILE__, __LINE__, #cond); \
   } while (0)
 
-#define CHECK_EQ(a, b)                                                           \
-  do {                                                                           \
-    auto&& check_a_ = (a);                                                       \
-    auto&& check_b_ = (b);                                                       \
-    if (!(check_a_ == check_b_)) {                                               \
-      std::ostringstream check_os_;                                              \
-      check_os_ << #a " == " #b " (" << check_a_ << " vs " << check_b_ << ")";   \
-      ::fork::test::record_failure(__FILE__, __LINE__, check_os_.str());         \
-    }                                                                            \
+#define CHECK_EQ(a, b)                                                         \
+  do {                                                                         \
+    auto&& check_a_ = (a);                                                     \
+    auto&& check_b_ = (b);                                                     \
+    if (!(check_a_ == check_b_)) {                                             \
+      std::ostringstream check_os_;                                            \
+      check_os_ << #a " == " #b " (" << check_a_ << " vs " << check_b_ << ")"; \
+      ::fork::test::record_failure(__FILE__, __LINE__, check_os_.str());       \
+    }                                                                          \
   } while (0)
 
 // Like CHECK, but adds context (e.g. a FEN) to the failure message.
-#define CHECK_MSG(cond, msg)                                                                \
-  do {                                                                                      \
-    if (!(cond)) {                                                                          \
-      std::ostringstream check_os_;                                                         \
-      check_os_ << #cond << " [" << msg << "]";                                             \
-      ::fork::test::record_failure(__FILE__, __LINE__, check_os_.str());                    \
-    }                                                                                       \
+#define CHECK_MSG(cond, msg)                                             \
+  do {                                                                   \
+    if (!(cond)) {                                                       \
+      std::ostringstream check_os_;                                      \
+      check_os_ << #cond << " [" << msg << "]";                          \
+      ::fork::test::record_failure(__FILE__, __LINE__, check_os_.str()); \
+    }                                                                    \
   } while (0)

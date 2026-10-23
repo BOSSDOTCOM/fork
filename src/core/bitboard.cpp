@@ -1,3 +1,4 @@
+// bitboard: table construction and the magic search (see bitboard.hpp).
 #include "core/bitboard.hpp"
 
 #include <vector>
@@ -145,11 +146,11 @@ std::size_t init_slider(SliderEntry* entries, const int (&dirs)[4][2], std::size
     e.shift = static_cast<unsigned>(64 - sq.bits);
     e.magic = 0;
 #if FORK_USE_PEXT
-    for (std::size_t i = 0; i < sq.occupancies.size(); ++i) out[e.index(sq.occupancies[i])] = sq.references[i];
+    for (std::size_t i = 0; i < sq.occupancies.size(); ++i)
+      out[e.index(sq.occupancies[i])] = sq.references[i];
 #else
     // A stale seed table only costs time: keep searching until a magic is found.
-    while (search_magic(sq, seeds[s], out, e.magic, 1 << 20) < 0) {
-    }
+    while (search_magic(sq, seeds[s], out, e.magic, 1 << 20) < 0) {}
 #endif
     table_offset += std::size_t{1} << sq.bits;
   }

@@ -1,3 +1,4 @@
+// movegen: implementation (see movegen.hpp).
 #include "core/movegen.hpp"
 
 namespace fork {
@@ -7,15 +8,19 @@ namespace {
 // One loop per piece type, so each slider lookup is resolved at compile time
 // (measured: legal generation 8-9% faster on clang and gcc, DESIGN.md 6).
 template <PieceType Pt, bool Captures, bool Quiets>
-void add_piece_moves(const Position& pos, MoveList& list, Color us, Square ksq, Bitboard occ,
-                     Bitboard pinned, Bitboard capture_target, Bitboard quiet_target) {
+void add_piece_moves(const Position& pos, MoveList& list, Color us, Square ksq, Bitboard occ, Bitboard pinned,
+                     Bitboard capture_target, Bitboard quiet_target) {
   for (Bitboard pcs = pos.pieces(us, Pt); pcs;) {
     Square from = pop_lsb(pcs);
     Bitboard a;
-    if constexpr (Pt == Knight) a = knight_attacks(from);
-    else if constexpr (Pt == Bishop) a = bishop_attacks(from, occ);
-    else if constexpr (Pt == Rook) a = rook_attacks(from, occ);
-    else a = queen_attacks(from, occ);
+    if constexpr (Pt == Knight)
+      a = knight_attacks(from);
+    else if constexpr (Pt == Bishop)
+      a = bishop_attacks(from, occ);
+    else if constexpr (Pt == Rook)
+      a = rook_attacks(from, occ);
+    else
+      a = queen_attacks(from, occ);
     if (pinned & bb(from)) {
       if constexpr (Pt == Knight) continue;
       a &= line(ksq, from);
@@ -50,7 +55,7 @@ void generate_moves(const Position& pos, MoveList& list) {
     if ((capture ? Captures : Quiets) && !pos.attacked_by(them, to, occ_no_king))
       list.add(Move(ksq, to, capture ? Capture : Quiet));
   }
-  if (more_than_one(checkers)) return;
+  if (has_multiple(checkers)) return;
 
   const Bitboard target = checkers ? between(ksq, lsb(checkers)) | checkers : ~Bitboard{0};
   const Bitboard capture_target = theirs & target;
@@ -88,16 +93,17 @@ void generate_moves(const Position& pos, MoveList& list) {
     if constexpr (Captures) {
       for (Bitboard b = pawn_attacks(us, from) & capture_target & allowed; b;) {
         Square to = pop_lsb(b);
-        if (promotes) add_promotions(list, from, to, true);
-        else list.add(Move(from, to, Capture));
+        if (promotes)
+          add_promotions(list, from, to, true);
+        else
+          list.add(Move(from, to, Capture));
       }
       // En passant: simulate the occupancy change and look for any attacker
       // other than the captured pawn. Covers checks, pins and rank discovery.
       if (ep != NoSquare && (pawn_attacks(us, from) & bb(ep))) {
         Square capsq = ep - up;
         Bitboard after = (occ ^ bb(from) ^ bb(capsq)) | bb(ep);
-        if (!(pos.attackers_to(ksq, after) & theirs & ~bb(capsq)))
-          list.add(Move(from, ep, EnPassant));
+        if (!(pos.attackers_to(ksq, after) & theirs & ~bb(capsq))) list.add(Move(from, ep, EnPassant));
       }
     }
   }
@@ -122,15 +128,15 @@ void generate_moves(const Position& pos, MoveList& list) {
 }  // namespace
 
 template <>
-void generate<GenType::Legal>(const Position& pos, MoveList& list) {
+void generate<GenMode::Legal>(const Position& pos, MoveList& list) {
   generate_moves<true, true>(pos, list);
 }
 template <>
-void generate<GenType::Captures>(const Position& pos, MoveList& list) {
+void generate<GenMode::Captures>(const Position& pos, MoveList& list) {
   generate_moves<true, false>(pos, list);
 }
 template <>
-void generate<GenType::Quiets>(const Position& pos, MoveList& list) {
+void generate<GenMode::Quiets>(const Position& pos, MoveList& list) {
   generate_moves<false, true>(pos, list);
 }
 

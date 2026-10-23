@@ -28,12 +28,12 @@ namespace {
 
 std::uint64_t walk(fork::Position& pos, int depth) {
   fork::MoveList legal, captures, quiets;
-  fork::generate<fork::GenType::Legal>(pos, legal);
-  fork::generate<fork::GenType::Captures>(pos, captures);
-  fork::generate<fork::GenType::Quiets>(pos, quiets);
+  fork::generate<fork::GenMode::Legal>(pos, legal);
+  fork::generate<fork::GenMode::Captures>(pos, captures);
+  fork::generate<fork::GenMode::Quiets>(pos, quiets);
   std::uint64_t n = legal.size();
   for (fork::Move m : legal) {
-    n += pos.is_pseudo_legal(m) + pos.is_legal(m) + pos.gives_check(m) + (pos.key_after(m) & 1);
+    n += pos.is_pseudo_legal(m) + pos.is_legal(m) + pos.gives_check(m) + (pos.predicted_key(m) & 1);
     if (depth > 1) {
       pos.make(m);
       n += walk(pos, depth - 1);

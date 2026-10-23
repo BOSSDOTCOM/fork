@@ -62,10 +62,11 @@ std::vector<EpdEntry> load_perft_random() {
 }
 
 // Runs every entry to min(max_depth, deepest count) on all cores.
-void run(const std::vector<EpdEntry>& entries, std::size_t expected_entries, int max_depth, const char* name) {
-  CHECK_MSG(entries.size() == expected_entries,
-            name << ": loaded " << entries.size() << " positions, expected " << expected_entries
-                 << " (missing download? see CMake configure output)");
+void run(const std::vector<EpdEntry>& entries, std::size_t expected_entries, int max_depth,
+         const char* name) {
+  CHECK_MSG(entries.size() == expected_entries, name << ": loaded " << entries.size()
+                                                     << " positions, expected " << expected_entries
+                                                     << " (missing download? see CMake configure output)");
   std::atomic<std::size_t> next{0};
   std::mutex mutex;
   std::vector<std::string> failures;

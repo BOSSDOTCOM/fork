@@ -66,12 +66,13 @@ void check_state(const Position& pos, const std::string& fen) {
   // the enemy king.
   const Bitboard eking = bb(pos.king_square(them));
   for (Square sq = 0; sq < 64; ++sq) {
-    CHECK_MSG(bool(pos.check_squares(Pawn) & bb(sq)) == bool(pawn_attacks(us, sq) & eking), "pawn check squares, " << fen);
+    CHECK_MSG(bool(pos.checking_squares(Pawn) & bb(sq)) == bool(pawn_attacks(us, sq) & eking),
+              "pawn check squares, " << fen);
     for (PieceType t : {Knight, Bishop, Rook, Queen})
-      CHECK_MSG(bool(pos.check_squares(t) & bb(sq)) == bool(attacks(t, sq, pos.pieces()) & eking),
+      CHECK_MSG(bool(pos.checking_squares(t) & bb(sq)) == bool(attacks(t, sq, pos.pieces()) & eking),
                 "check squares, " << fen << " type " << int(t));
   }
-  CHECK(pos.check_squares(King) == 0);
+  CHECK(pos.checking_squares(King) == 0);
 }
 
 void check_node(Position& pos, const MoveList& legal, const MoveList* parent) {
@@ -84,8 +85,8 @@ void check_node(Position& pos, const MoveList& legal, const MoveList* parent) {
   CHECK_MSG(copy.fen() == fen && copy.key() == pos.key(), "fen round trip, " << fen);
 
   MoveList captures, quiets;
-  generate<GenType::Captures>(pos, captures);
-  generate<GenType::Quiets>(pos, quiets);
+  generate<GenMode::Captures>(pos, captures);
+  generate<GenMode::Quiets>(pos, quiets);
   CHECK_MSG(captures.size() + quiets.size() == legal.size(), "partition size, " << fen);
   for (Move m : captures)
     CHECK_MSG((m.is_capture() || m.is_promotion()) && legal.contains(m) && !quiets.contains(m),
@@ -98,10 +99,10 @@ void check_node(Position& pos, const MoveList& legal, const MoveList* parent) {
     CHECK_MSG(accepts(pos, m), "generated move rejected, " << fen << " " << pos.move_to_uci(m));
     CHECK_MSG(pos.parse_uci(pos.move_to_uci(m)) == m, "uci round trip, " << fen);
     const bool predicted_check = pos.gives_check(m);
-    const Key predicted_key = pos.key_after(m);
+    const Key predicted_key = pos.predicted_key(m);
     pos.make(m);
     CHECK_MSG(predicted_check == pos.in_check(), "gives_check, " << fen << " " << m.raw());
-    CHECK_MSG(predicted_key == pos.key(), "key_after, " << fen << " " << m.raw());
+    CHECK_MSG(predicted_key == pos.key(), "predicted_key, " << fen << " " << m.raw());
     pos.unmake(m);
   }
   if (parent)
@@ -115,7 +116,7 @@ void check_node(Position& pos, const MoveList& legal, const MoveList* parent) {
 
 void walk(Position& pos, int depth, const MoveList* parent) {
   MoveList legal;
-  generate<GenType::Legal>(pos, legal);
+  generate<GenMode::Legal>(pos, legal);
   check_node(pos, legal, parent);
   if (depth == 0) return;
 
@@ -137,7 +138,6 @@ void walk(Position& pos, int depth, const MoveList* parent) {
     CHECK_MSG(pos.same_state(snapshot), "unmake_null, " << snapshot.fen());
   }
 }
-
 
 }  // namespace
 
@@ -173,7 +173,7 @@ namespace {
 // pseudo-legal + legal agrees exactly with the generator.
 void exhaustive(Position& pos) {
   MoveList legal;
-  generate<GenType::Legal>(pos, legal);
+  generate<GenMode::Legal>(pos, legal);
   int accepted = 0;
   for (std::uint32_t raw = 0; raw < 65536; ++raw) {
     Move m = Move::from_raw(static_cast<std::uint16_t>(raw));
@@ -189,7 +189,7 @@ void exhaustive_tree(Position& pos, int depth) {
   exhaustive(pos);
   if (depth == 0) return;
   MoveList legal;
-  generate<GenType::Legal>(pos, legal);
+  generate<GenMode::Legal>(pos, legal);
   for (std::size_t i = 0; i < legal.size(); i += Optimized ? 3 : 4) {
     pos.make(legal[i]);
     exhaustive_tree(pos, depth - 1);

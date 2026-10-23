@@ -35,12 +35,12 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   require(pos.state() == pos.compute_state());
 
   fork::MoveList list;
-  fork::generate<fork::GenType::Legal>(pos, list);
+  fork::generate<fork::GenMode::Legal>(pos, list);
   const fork::Position snapshot = pos;
   for (fork::Move m : list) {
     require(pos.is_pseudo_legal(m) && pos.is_legal(m));
     bool check = pos.gives_check(m);
-    fork::Key k = pos.key_after(m);
+    fork::Key k = pos.predicted_key(m);
     pos.make(m);
     require(pos.in_check() == check && pos.key() == k);
     require(pos.state() == pos.compute_state());

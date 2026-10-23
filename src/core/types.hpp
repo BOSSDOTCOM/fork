@@ -1,4 +1,15 @@
-// Basic chess types: squares, colors, pieces, moves, move lists.
+// types: basic chess value types shared by every module.
+//
+// Purpose: squares, colors, piece types and pieces, castling-right bits, the
+// 16-bit Move encoding and the fixed-capacity MoveList.
+// Invariants:
+// - Square a1 = 0 ... h8 = 63; NoSquare = 64 is never used as a table index.
+// - Piece = color * 8 + type; NoPiece = 15. color_of/type_of are only valid
+//   for real pieces.
+// - Move: from (bits 0-5), to (6-11), flag (12-15); raw 0 is NoMove. Castling
+//   is king origin -> castling rook square. Flags 3, 6 and 7 are never
+//   produced (is_pseudo_legal rejects them).
+// - MoveList holds at most 256 moves (the legal maximum is 218).
 #pragma once
 
 #include <array>
@@ -38,18 +49,24 @@ constexpr Color color_of(Piece p) { return Color(p >> 3); }
 constexpr PieceType type_of(Piece p) { return PieceType(p & 7); }
 
 // Castling rights bits.
-enum : std::uint8_t {
-  WhiteOO = 1, WhiteOOO = 2, BlackOO = 4, BlackOOO = 8,
-  AllCastling = 15
-};
+enum : std::uint8_t { WhiteOO = 1, WhiteOOO = 2, BlackOO = 4, BlackOOO = 8, AllCastling = 15 };
 
 // Move: from (bits 0-5) | to (bits 6-11) | flag (bits 12-15).
 // Castling is encoded as king origin -> castling rook square.
 enum MoveFlag : std::uint8_t {
-  Quiet = 0, DoublePush = 1, Castle = 2,
-  Capture = 4, EnPassant = 5,
-  PromoKnight = 8, PromoBishop = 9, PromoRook = 10, PromoQueen = 11,
-  PromoCaptureKnight = 12, PromoCaptureBishop = 13, PromoCaptureRook = 14, PromoCaptureQueen = 15
+  Quiet = 0,
+  DoublePush = 1,
+  Castle = 2,
+  Capture = 4,
+  EnPassant = 5,
+  PromoKnight = 8,
+  PromoBishop = 9,
+  PromoRook = 10,
+  PromoQueen = 11,
+  PromoCaptureKnight = 12,
+  PromoCaptureBishop = 13,
+  PromoCaptureRook = 14,
+  PromoCaptureQueen = 15
 };
 
 class Move {
@@ -57,7 +74,11 @@ class Move {
   constexpr Move() = default;
   constexpr Move(Square from, Square to, int flag)
       : data_(static_cast<std::uint16_t>(from | (to << 6) | (flag << 12))) {}
-  static constexpr Move from_raw(std::uint16_t raw) { Move m; m.data_ = raw; return m; }
+  static constexpr Move from_raw(std::uint16_t raw) {
+    Move m;
+    m.data_ = raw;
+    return m;
+  }
 
   constexpr Square from() const { return data_ & 63; }
   constexpr Square to() const { return (data_ >> 6) & 63; }
@@ -83,7 +104,10 @@ struct MoveList {
   std::array<Move, 256> moves;
   std::size_t count = 0;
 
-  void add(Move m) { assert(count < moves.size()); moves[count++] = m; }
+  void add(Move m) {
+    assert(count < moves.size());
+    moves[count++] = m;
+  }
   std::size_t size() const { return count; }
   const Move* begin() const { return moves.data(); }
   const Move* end() const { return moves.data() + count; }

@@ -24,7 +24,8 @@ int main(int argc, char** argv) {
         }
       }
       total += best;
-      std::printf("%s%llu", s % 8 ? ", " : (s ? ",\n    " : "    "), static_cast<unsigned long long>(best_seed));
+      std::printf("%s%llu", s % 8 ? ", " : (s ? ",\n    " : "    "),
+                  static_cast<unsigned long long>(best_seed));
     }
     std::printf("\n};  // %ld candidates in total\n", total);
   }

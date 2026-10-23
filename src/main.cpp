@@ -39,14 +39,15 @@ void print_version() {
 // in check | insufficient material | fifty-move clock reached | repetitions (max 3).
 void print_ply(const fork::Position& pos) {
   fork::MoveList list;
-  fork::generate<fork::GenType::Legal>(pos, list);
+  fork::generate<fork::GenMode::Legal>(pos, list);
   std::vector<std::string> moves;
   for (fork::Move m : list) moves.push_back(pos.move_to_uci(m) + (pos.gives_check(m) ? "+" : ""));
   std::ranges::sort(moves);
   std::string line = pos.fen() + '|';
   for (std::size_t i = 0; i < moves.size(); ++i) line += (i ? " " : "") + moves[i];
   line += '|' + std::to_string(pos.in_check()) + '|' + std::to_string(pos.insufficient_material()) + '|' +
-          std::to_string(pos.fifty_move_reached()) + '|' + std::to_string(std::min(3, pos.repetition_count()));
+          std::to_string(pos.fifty_move_reached()) + '|' +
+          std::to_string(std::min(3, pos.repetition_count()));
   std::cout << line << '\n';
 }
 
@@ -131,8 +132,8 @@ static int run(int argc, char** argv) {
     fork::BenchResult r = fork::bench();
     std::cout << "nodes " << r.nodes << '\n'
               << "signature " << std::format("{:016x}", r.signature) << '\n'
-              << "nps " << static_cast<std::uint64_t>(static_cast<double>(r.nodes) / std::max(r.seconds, 1e-9))
-              << '\n';
+              << "nps "
+              << static_cast<std::uint64_t>(static_cast<double>(r.nodes) / std::max(r.seconds, 1e-9)) << '\n';
     return 0;
   }
   if (cmd == "perft" || cmd == "divide") {
@@ -144,7 +145,8 @@ static int run(int argc, char** argv) {
     double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     if (cmd == "perft") std::cout << "nodes " << nodes << '\n';
     std::cout << "time " << secs << " s\n"
-              << "nps " << static_cast<std::uint64_t>(static_cast<double>(nodes) / std::max(secs, 1e-9)) << '\n';
+              << "nps " << static_cast<std::uint64_t>(static_cast<double>(nodes) / std::max(secs, 1e-9))
+              << '\n';
     return 0;
   }
   return usage();

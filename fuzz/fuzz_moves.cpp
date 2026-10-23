@@ -1,6 +1,6 @@
 // libFuzzer target: move parsing and validation. The first byte picks a
 // position; the rest is split into UCI-like tokens (parse_uci) and read as
-// raw 16-bit encodings (is_pseudo_legal / is_legal / gives_check / key_after),
+// raw 16-bit encodings (is_pseudo_legal / is_legal / gives_check / predicted_key),
 // each checked against the generator and against make().
 #include <cstdint>
 #include <cstdlib>
@@ -31,7 +31,7 @@ void check_move(fork::Position& pos, const fork::MoveList& legal, fork::Move m) 
   require(accepted == legal.contains(m));
   if (!accepted) return;
   bool check = pos.gives_check(m);
-  fork::Key k = pos.key_after(m);
+  fork::Key k = pos.predicted_key(m);
   pos.make(m);
   require(pos.in_check() == check && pos.key() == k);
   pos.unmake(m);
@@ -56,7 +56,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     std::string_view token = rest.substr(i, j - i);
     i = j + 1;
     fork::MoveList legal;
-    fork::generate<fork::GenType::Legal>(pos, legal);
+    fork::generate<fork::GenMode::Legal>(pos, legal);
     fork::Move m = pos.parse_uci(token);
     if (m.is_none()) {
       for (fork::Move x : legal) require(pos.move_to_uci(x) != token);
@@ -69,7 +69,7 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
 
   // Raw encodings, two bytes at a time, against the reached position.
   fork::MoveList legal;
-  fork::generate<fork::GenType::Legal>(pos, legal);
+  fork::generate<fork::GenMode::Legal>(pos, legal);
   for (std::size_t i = 1; i + 1 < size; i += 2)
     check_move(pos, legal, fork::Move::from_raw(static_cast<std::uint16_t>(data[i] | (data[i + 1] << 8))));
   return 0;

@@ -30,8 +30,25 @@ the date and the part of Fork it informed.
 | 2026-10-23 | perftsuite.epd (126 positions; the Roce suite by Roman Hartmann, published on Jonatan Pettersson's Mediocre perft guide, mediocrechess.sourceforge.net/guides/perft.html; file from the 2007-12-02 Internet Archive capture of hem.passagen.se/maragor/perftsuite.epd) | Test oracle (perft_epd). Downloaded at configure time into .cache/ with a pinned SHA-256, **not committed**. |
 | 2026-10-23 | perft-random.epd (6838 positions, Marcel van Kervinck / Rookie, "All rights reserved"; Internet Archive capture of marcelk.net linked from CPW Perft Results) | Test oracle (perft_epd, perft_epd_deep, perft_epd_full). Downloaded at configure time, pinned SHA-256, **not committed** because of the copyright notice. |
 | 2026-10-23 | python-chess 1.11.2 source (`has_insufficient_material`, `is_repetition`, `is_irreversible`, `_transposition_key`, `fen`) | Read to match the oracle's rule definitions in tools/difftest. Fork's `insufficient_material()` and `repetition_count()` are written independently in C++ to the same rules. |
-| 2026-10-23 | Stockfish design (recalled from prior study, source not opened this session): per-ply state record holding checkers, blockers/pinners per king and check squares; `gives_check` via check squares plus discovered-check blockers; `key_after` for TT prefetch | Ideas only, for Position::State, gives_check and key_after. Fork's code is written from DESIGN.md; its blocker definition differs deliberately (removal semantics, no sniper exclusion). |
+| 2026-10-23 | Stockfish design (recalled from prior study, source not opened this session): per-ply state record holding checkers, blockers/pinners per king and check squares; `gives_check` via check squares plus discovered-check blockers; a key-after-move helper (Stockfish: `key_after`) for TT prefetch | Ideas only, for Position::State, gives_check and predicted_key (renamed from key_after on 2026-10-23, see below). Fork's code is written from DESIGN.md; its blocker definition differs deliberately (removal semantics, no sniper exclusion). |
 | 2026-10-23 | Chess Programming Wiki: Chess960 Perft Results (960 positions, credited to Andrew Grant / Ethereal) | Read only, for the deferred Chess960 decision (DESIGN.md section 6); no data used. |
+
+## Identifier renames (distance from Stockfish naming)
+
+On 2026-10-23 the owner kept generic names (types, bitboard, position,
+movegen, Position, pop_lsb, attackers_to, blockers) and had the
+Stockfish-distinctive ones renamed. Names were checked against a shallow
+clone of official-stockfish/Stockfish at commit effdc3fd (2026-10-17), with
+`grep -rw` over `src/`, used only to check names (no code read for
+implementation). That check also showed `key_after` no longer exists in
+current Stockfish; it was renamed anyway, at the owner's request.
+
+| Old name | Fork name | Found in Stockfish src (files) |
+|---|---|---|
+| `GenType` | `GenMode` | old: 4, new: 0 |
+| `more_than_one` | `has_multiple` | old: 3, new: 0 |
+| `check_squares` | `checking_squares` | old: 3, new: 0 |
+| `key_after` | `predicted_key` | old: 0, new: 0 |
 
 ## Third-party libraries
 

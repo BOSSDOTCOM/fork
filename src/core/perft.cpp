@@ -1,3 +1,4 @@
+// perft: perft and divide (see perft.hpp).
 #include "core/perft.hpp"
 
 #include "core/movegen.hpp"
@@ -7,7 +8,7 @@ namespace fork {
 std::uint64_t perft(Position& pos, int depth) {
   if (depth == 0) return 1;
   MoveList list;
-  generate<GenType::Legal>(pos, list);
+  generate<GenMode::Legal>(pos, list);
   if (depth == 1) return list.size();
   std::uint64_t nodes = 0;
   for (Move m : list) {
@@ -20,7 +21,7 @@ std::uint64_t perft(Position& pos, int depth) {
 
 std::uint64_t divide(Position& pos, int depth, std::ostream& out) {
   MoveList list;
-  generate<GenType::Legal>(pos, list);
+  generate<GenMode::Legal>(pos, list);
   std::uint64_t total = 0;
   for (Move m : list) {
     pos.make(m);

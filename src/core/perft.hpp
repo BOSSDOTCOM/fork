@@ -1,4 +1,11 @@
-// Perft (move path enumeration) and the fixed bench workload.
+// perft: move path enumeration and the fixed bench workload.
+//
+// Purpose: perft/divide for move generator verification, and bench(), the
+// deterministic workload whose node count and signature fingerprint a build.
+// Invariants:
+// - bench() output is identical on every build preset, compiler and OS
+//   (tests/bench.ref, checked by the bench_parity test). It changes only in a
+//   commit that intends to change it.
 #pragma once
 
 #include <cstdint>

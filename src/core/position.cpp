@@ -1,3 +1,4 @@
+// position: implementation (see position.hpp for the invariants).
 #include "core/position.hpp"
 
 #include <algorithm>
@@ -88,24 +89,22 @@ void Position::remove(Square s) {
 void Position::toggle_keys(State& s, Piece p, Square sq) const {
   Key z = zobrist::piece_square[p][sq];
   s.key ^= z;
-  if (type_of(p) == Pawn) s.pawn_key ^= z;
-  else s.non_pawn_key[color_of(p)] ^= z;
+  if (type_of(p) == Pawn)
+    s.pawn_key ^= z;
+  else
+    s.non_pawn_key[color_of(p)] ^= z;
 }
 
 Bitboard Position::attackers_to(Square s, Bitboard occ) const {
-  return (pawn_attacks(Black, s) & pieces(White, Pawn)) |
-         (pawn_attacks(White, s) & pieces(Black, Pawn)) |
-         (knight_attacks(s) & pieces(Knight)) |
-         (king_attacks(s) & pieces(King)) |
+  return (pawn_attacks(Black, s) & pieces(White, Pawn)) | (pawn_attacks(White, s) & pieces(Black, Pawn)) |
+         (knight_attacks(s) & pieces(Knight)) | (king_attacks(s) & pieces(King)) |
          (bishop_attacks(s, occ) & (pieces(Bishop) | pieces(Queen))) |
          (rook_attacks(s, occ) & (pieces(Rook) | pieces(Queen)));
 }
 
 bool Position::attacked_by(Color by, Square s, Bitboard occ) const {
-  return (pawn_attacks(~by, s) & pieces(by, Pawn)) ||
-         (knight_attacks(s) & pieces(by, Knight)) ||
-         (king_attacks(s) & pieces(by, King)) ||
-         (bishop_attacks(s, occ) & pieces(by, Bishop, Queen)) ||
+  return (pawn_attacks(~by, s) & pieces(by, Pawn)) || (knight_attacks(s) & pieces(by, Knight)) ||
+         (king_attacks(s) & pieces(by, King)) || (bishop_attacks(s, occ) & pieces(by, Bishop, Queen)) ||
          (rook_attacks(s, occ) & pieces(by, Rook, Queen));
 }
 
@@ -120,7 +119,7 @@ void Position::update_check_info(State& s) const {
     while (snipers) {
       Square sniper = pop_lsb(snipers);
       Bitboard b = between(ksq, sniper) & occ;
-      if (b && !more_than_one(b)) {
+      if (b && !has_multiple(b)) {
         s.blockers[c] |= b;
         if (b & pieces(c)) s.pinners[c] |= bb(sniper);
       }
@@ -130,12 +129,12 @@ void Position::update_check_info(State& s) const {
   s.checkers = attackers_to(king_square(side_), occ) & pieces(~side_);
 
   const Square eksq = king_square(~side_);
-  s.check_squares[Pawn] = pawn_attacks(~side_, eksq);
-  s.check_squares[Knight] = knight_attacks(eksq);
-  s.check_squares[Bishop] = bishop_attacks(eksq, occ);
-  s.check_squares[Rook] = rook_attacks(eksq, occ);
-  s.check_squares[Queen] = s.check_squares[Bishop] | s.check_squares[Rook];
-  s.check_squares[King] = 0;
+  s.checking_squares[Pawn] = pawn_attacks(~side_, eksq);
+  s.checking_squares[Knight] = knight_attacks(eksq);
+  s.checking_squares[Bishop] = bishop_attacks(eksq, occ);
+  s.checking_squares[Rook] = rook_attacks(eksq, occ);
+  s.checking_squares[Queen] = s.checking_squares[Bishop] | s.checking_squares[Rook];
+  s.checking_squares[King] = 0;
 }
 
 bool Position::ep_capture_legal(Square ep) const {
@@ -203,7 +202,8 @@ bool Position::set_fen(std::string_view fen, std::string* error) {
       if (file > 8) return fail("rank too long in placement");
     } else {
       std::size_t idx = PieceChars.find(c);
-      if (idx == std::string_view::npos || c == '?') return fail(std::string("bad piece character '") + c + "'");
+      if (idx == std::string_view::npos || c == '?')
+        return fail(std::string("bad piece character '") + c + "'");
       if (file >= 8) return fail("rank too long in placement");
       p.put(static_cast<Piece>(idx), make_square(file, rank));
       ++file;
@@ -218,9 +218,12 @@ bool Position::set_fen(std::string_view fen, std::string* error) {
   }
   if (p.pieces(Pawn) & (Rank1 | Rank8)) return fail("pawn on the first or last rank");
 
-  if (fields[1] == "w") p.side_ = White;
-  else if (fields[1] == "b") p.side_ = Black;
-  else return fail("side to move must be 'w' or 'b'");
+  if (fields[1] == "w")
+    p.side_ = White;
+  else if (fields[1] == "b")
+    p.side_ = Black;
+  else
+    return fail("side to move must be 'w' or 'b'");
 
   if (fields[2] != "-") {
     for (char c : fields[2]) {
@@ -245,8 +248,7 @@ bool Position::set_fen(std::string_view fen, std::string* error) {
       return fail("bad en passant square");
     ep = make_square(f[0] - 'a', f[1] - '1');
     Color us = p.side_;
-    if (relative_rank(us, ep) != 5 || p.board_[ep] != NoPiece ||
-        p.board_[ep + forward(us)] != NoPiece ||
+    if (relative_rank(us, ep) != 5 || p.board_[ep] != NoPiece || p.board_[ep + forward(us)] != NoPiece ||
         p.board_[ep - forward(us)] != make_piece(~us, Pawn))
       return fail("en passant square is not consistent with a double pawn push");
   }
@@ -432,8 +434,7 @@ bool Position::is_pseudo_legal(Move m) const {
     return false;
   }
 
-  if (flag == EnPassant)
-    return pt == Pawn && to == ep_square() && (pawn_attacks(us, from) & bb(to));
+  if (flag == EnPassant) return pt == Pawn && to == ep_square() && (pawn_attacks(us, from) & bb(to));
 
   const Piece target = board_[to];
   if (m.is_capture()) {
@@ -467,7 +468,7 @@ bool Position::is_legal(Move m) const {
     return true;
   }
   if (from == ksq) return !attacked_by(them, to, pieces() ^ bb(from));
-  if (more_than_one(checkers())) return false;
+  if (has_multiple(checkers())) return false;
 
   if (m.is_en_passant()) {
     Square capsq = to - forward(us);
@@ -495,10 +496,9 @@ bool Position::gives_check(Move m) const {
   // Discovered check: the moving piece was the only blocker of one of our sliders.
   if ((blockers(them) & bb(from)) && !(line(eksq, from) & bb(to))) return true;
 
-  if (m.is_promotion())
-    return attacks(m.promotion_type(), to, pieces() ^ bb(from)) & bb(eksq);
+  if (m.is_promotion()) return attacks(m.promotion_type(), to, pieces() ^ bb(from)) & bb(eksq);
 
-  if (check_squares(type_of(board_[from])) & bb(to)) return true;
+  if (checking_squares(type_of(board_[from])) & bb(to)) return true;
 
   if (m.is_en_passant()) {
     // Removing the captured pawn can uncover a slider.
@@ -510,7 +510,7 @@ bool Position::gives_check(Move m) const {
   return false;
 }
 
-Key Position::key_after(Move m) const {
+Key Position::predicted_key(Move m) const {
   const Color us = side_, them = ~us;
   const Square from = m.from(), to = m.to();
   const State& s = state();
@@ -601,7 +601,7 @@ std::string Position::move_to_uci(Move m) const {
 
 Move Position::parse_uci(std::string_view uci) const {
   MoveList list;
-  generate<GenType::Legal>(*this, list);
+  generate<GenMode::Legal>(*this, list);
   for (Move m : list)
     if (move_to_uci(m) == uci) return m;
   return NoMove;

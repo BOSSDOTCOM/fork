@@ -1,0 +1,14 @@
+# Fork C++ formatting. Applied automatically after every edit to src/ or
+# tests/ (Claude Code hook) and checked in review.
+BasedOnStyle: Google
+ColumnLimit: 110
+IndentWidth: 2
+AccessModifierOffset: -1
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Empty
+DerivePointerAlignment: false
+PointerAlignment: Left
+IncludeBlocks: Preserve
+SortIncludes: CaseSensitive

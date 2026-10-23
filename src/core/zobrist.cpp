@@ -1,3 +1,4 @@
+// zobrist: key generation (see zobrist.hpp).
 #include "core/zobrist.hpp"
 
 namespace fork::zobrist {

@@ -23,11 +23,41 @@
     "paired": true
   },
   "divisions": [
-    { "name": "League 3",   "time_control": { "base_s": null, "increment_s": null } },
-    { "name": "League 2",   "time_control": { "base_s": null, "increment_s": null } },
-    { "name": "League 1",   "time_control": { "base_s": null, "increment_s": null } },
-    { "name": "Premier",    "time_control": { "base_s": null, "increment_s": null } },
-    { "name": "Superfinal", "time_control": { "base_s": null, "increment_s": null } }
+    {
+      "name": "League 3",
+      "time_control": {
+        "base_s": null,
+        "increment_s": null
+      }
+    },
+    {
+      "name": "League 2",
+      "time_control": {
+        "base_s": null,
+        "increment_s": null
+      }
+    },
+    {
+      "name": "League 1",
+      "time_control": {
+        "base_s": null,
+        "increment_s": null
+      }
+    },
+    {
+      "name": "Premier",
+      "time_control": {
+        "base_s": null,
+        "increment_s": null
+      }
+    },
+    {
+      "name": "Superfinal",
+      "time_control": {
+        "base_s": null,
+        "increment_s": null
+      }
+    }
   ],
   "adjudication": {
     "verified": false,
@@ -39,13 +69,9 @@
       "both_engines": true,
       "reset_on_capture_or_pawn_move": true
     },
-    "win": {
-      "min_abs_eval_cp": 1000,
-      "plies": 10,
-      "both_engines": true
-    },
     "tablebase": {
       "pieces": 6
-    }
+    },
+    "_note": "No eval-based win adjudication during play (owner, 2026-10-23: abolished in Season 20). Current rules are being re-verified on the kb branch, whose tcec.json supersedes this copy at merge."
   }
 }

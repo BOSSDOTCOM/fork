@@ -297,7 +297,7 @@ and later specs must cite them where relevant.
 
 **Memory**
 - Hot structures are cache-line aligned and sized with the cache in mind.
-- The TT entry is prefetched using `Position::key_after(move)` before
+- The TT entry is prefetched using `Position::predicted_key(move)` before
   `make`.
 - No heap allocation in the search path, enforced by the counting-allocator
   test (`no_alloc`), which is extended to cover search in Phase 3.
@@ -317,3 +317,51 @@ and later specs must cite them where relevant.
 Position, move lists and the per-ply state are reviewed for cache efficiency
 and SIMD-friendly access now, so that Phases 3 and 4 don't need a
 restructure. The results are recorded in the decisions log.
+
+## 8. Module layout and naming conventions
+
+**Layout.** Fork follows the module split common to strong open-source
+engines (rules core, search, evaluation, tablebases, protocol, tuning), with
+its own names. Each module has a header comment giving its purpose and its
+invariants.
+
+| Directory | Responsibility | Phase |
+|---|---|---|
+| `src/core/` | chess rules: value types, bitboards and attack tables, hashing keys, board state, move generation, perft/bench | 1 |
+| `src/uci/` | protocol loop, option registry, info output | 2 |
+| `src/search/` | searcher, transposition table, move ordering, time control, thread pool | 3, 5, 6 |
+| `src/eval/` | evaluator interface, tapered PST, NNUE (`eval/nnue/`) | 4 |
+| `src/tb/` | Syzygy bridge (wraps Fathom) | 3 |
+| `src/tune/` | the single tunable-parameter table | 3 |
+| `tests/`, `bench/`, `fuzz/`, `tools/` | tests, microbenchmarks, fuzz targets, offline tools | all |
+
+**Naming conventions** (enforced in review; `.clang-format` handles layout):
+- types, classes and enums: `PascalCase` (`MoveList`, `GenMode`);
+- functions, variables and files: `snake_case` (`make_null`, `predicted_key`,
+  `test_epd.cpp`);
+- private data members end in `_` (`states_`);
+- constants and enumerators: `PascalCase` (`NoSquare`, `WhiteOO`);
+- macros: `FORK_UPPER_CASE`;
+- everything lives in `namespace fork` (tests: `fork::test`);
+- headers `.hpp`, sources `.cpp`, one module per header/source pair.
+
+**Names and Stockfish (owner decision, 2026-10-23).**
+- **Kept:** names that are common across engines and the Chess Programming
+  Wiki: the files `types`, `bitboard`, `position`, `movegen`; the class
+  `Position`; `pop_lsb`, `attackers_to`, `blockers`/`pinners`; and generic
+  vocabulary (`perft`, `bench`, `make`/`unmake`, `MoveList`, `gives_check`,
+  `is_pseudo_legal`).
+- **Renamed** (Stockfish-distinctive), with the mapping kept in
+  docs/ORIGINALITY.md:
+
+| Old | Fork name | Meaning |
+|---|---|---|
+| `GenType` | `GenMode` | which moves `generate<>` produces (Legal, Captures, Quiets) |
+| `more_than_one` | `has_multiple` | bitboard has two or more bits set |
+| `check_squares` | `checking_squares` | squares from which a piece type would give check |
+| `key_after` | `predicted_key` | exact Zobrist key after a move, without making it (TT prefetch) |
+
+- **Rule:** before introducing a new type, function, file or member name,
+  check it against Stockfish's current source (a shallow clone,
+  `grep -rw`). If it matches and isn't generic CPW vocabulary, flag it to the
+  owner before using it.
