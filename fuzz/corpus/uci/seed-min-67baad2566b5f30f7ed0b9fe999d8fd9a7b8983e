@@ -1,0 +1,9 @@
+position fen r3k2r/p1ppqpb1#bn2pnp1/3Pe1c1 8ec8
+go infinite searchmoves ;[1a3 be2e5
+gonp1/3Pe1c1 8ec
+go infinite searchmoves [1a3 be2e5
+gonp1/3Pe1c1 8ec8
+go infinite searchmoves [1a3 be2e5
+go searchmoves 0000
+bench
+go perft#3 w Kw KQkq - 0  m1veos`e1g1 e8c fen 

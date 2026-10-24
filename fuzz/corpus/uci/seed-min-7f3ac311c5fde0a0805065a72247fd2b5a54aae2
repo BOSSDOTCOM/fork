@@ -1,0 +1,11 @@
+position fen r3k2r/p1pb1/bnnfinite searchmoves a2a3 b2b3
+isreperf2
+go infinite searchmoves a2a3 b2b3
+isreperftg1 e8c8
+go infig1 e8c8infinite searchmoves a2a3 b2
+go infinite searchmoves a2a3 b2b3
+isreperf2
+go infinite searchmoves a2a3 b2b3
+isreperftg1 e8c8
+go infinite searchmoves a2a3 b1b3
+imoves e2edo

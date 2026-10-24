@@ -1,0 +1,14 @@
+uci
+setoption naady
+ucinewgame
+isready
+position startpos moves e2e4 b7b5 tion name Hash g1f3
+ongo wtime 1000 b@time 1000 winc 10 bincseto/tion na2
+setoptioready
+ucinewgame
+isready
+position startpos moves e2e4 e7e5 tiy
+position startpos 1
+
+isready
+quit

@@ -1,0 +1,10 @@
+u
+setoptifon name Hash value 2
+setoption 1f3
+go wtime 1000 b@time 1000 winc 10 bincshci
+setoptifon name Hash value 2
+setoption 1f3
+go wtime 1000 b@time 1000 winc 10 bincsh value 2
+setoption 10
+isready
+quit

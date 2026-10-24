@@ -1,0 +1,13 @@
+isready
+position0000rtpos ready
+position fen 7k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q2/6K moves e2e5
+Øob1c3rchmove2e5
+go searchmoves 00 m/ves e2e5
+go searchmoves 0000s e2e5
+go searchmoves 00 m/ves e2e5
+go searchmoves 000s e2e5
+go searchmoves 00 m/ves e2e5
+go searchmoves 0000
+r

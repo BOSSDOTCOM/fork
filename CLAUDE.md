@@ -130,12 +130,17 @@ next phase begins. Report each item's result.
    DESIGN.md §5.1). Plus the **full gcc-debug suite on Windows**
    (`scripts/build.sh gcc-debug`, every non-slow test; owner, 2026-10-24:
    `check.sh full` only smoke-starts the Windows GCC engines, and a Windows
-   gcc-debug crash once went unseen for a whole phase). Plus **fuzzing until coverage plateaus** (owner,
-   2026-10-24): every fuzz target (`fuzz_fen`, `fuzz_moves`, `fuzz_uci`) for up to 1
-   hour each, one after the other, stopping early once coverage has not
-   grown for 20 minutes (`tools/fuzz/run_fuzz.py --max-seconds 3600
-   --plateau-seconds 1200`), on a fresh `clang-fuzz` build. Report runs, coverage and whether each plateaued; then minimize
-   the corpora and promote them to `seed-*` files (see "Fuzz corpus"
+   gcc-debug crash once went unseen for a whole phase). Plus **fuzz each
+   target whose exercised code changed since its last clean run, with the
+   coverage-plateau rule** (owner, 2026-10-24; check with `git diff` from
+   that run's commit over the target's source and the code it calls, e.g.
+   `src/core` for `fuzz_fen` and `fuzz_moves`, `src/uci` and `src/search`
+   too for `fuzz_uci`): up to 1 hour each, one after the other, stopping
+   early once coverage has not grown for 20 minutes
+   (`tools/fuzz/run_fuzz.py --max-seconds 3600 --plateau-seconds 1200`), on
+   a fresh `clang-fuzz` build. Report which targets ran or were skipped and
+   why, with runs, coverage and whether each plateaued. Then minimize
+   **all** corpora and promote them to `seed-*` files (see "Fuzz corpus"
    below). Add a fuzz target for any new parser under the same rule.
 2. **Tag the release** as a known-good baseline: `git tag -a phase-N` on
    `main`, with the bench node count and signature in the tag message.

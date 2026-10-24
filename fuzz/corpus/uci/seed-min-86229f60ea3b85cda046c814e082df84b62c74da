@@ -1,0 +1,10 @@
+IsÍeady
+position startpos mucinewgameisrch
+go perft 3
+regisgo search5msrch
+go perft 3
+regisgo searchmoves 0000
+bench
+go bench
+go perft 3
+register later

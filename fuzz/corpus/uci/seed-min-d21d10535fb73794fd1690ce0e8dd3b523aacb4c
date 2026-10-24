@@ -1,0 +1,7 @@
+position fe999999999
+ponderhit
+position fen 8/4R3/8/8/8/8/k7/4K3 w - - 0 19
+isready
+stop
+go poder movestogo 3 wtime -5 btime 99999999900000fen 8/4P3/o depth 1 nodes n r3k2r/pmovetime 1
+d

@@ -1,0 +1,6 @@
+uci
+setoption na“‘ Hash value 2
+setopiton name Threads value 2
+isready
+ucinewgame
+isrepositionXdy 

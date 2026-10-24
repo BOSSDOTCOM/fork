@@ -1,0 +1,7 @@
+uci
+setoption name PPBBPPP/R1K2R w KQkq - 0 1 moves e1g1 e8c8
+go infinite searchmovås a2a3 b2b3
+is startpos moves e2e4 e7e5 g1f3
+go wtime c 10
+isready
+quit

@@ -1,0 +1,11 @@
+uci>ò`ÃB--------------------------------------------------------------------------¾¾n name Hash valuee
+isready
+position startpos moves e2e4 b7b5 tion name Hash g1f3
+go wtime 1000 b@ KQkq - 0 1 moves E1g1 e8c8
+go infinnte searchmoves a2p1/stime 1000 wis 1
+
+isready
+qwis 1
+
+isready
+quit

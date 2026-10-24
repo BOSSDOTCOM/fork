@@ -1,0 +1,11 @@
+position fen r3k2 a2a3 b2b3
+isready
+stop
+go ponder movestogo 3 wtime -5i9m e9999999999e 1
+d
+n2pnp1/3uci
+setoption name Hash value 28
+go infinite searchmoves a2a3 b2b3
+isr
+ucinewgam- 0 1 moves e7e8Q
+go 

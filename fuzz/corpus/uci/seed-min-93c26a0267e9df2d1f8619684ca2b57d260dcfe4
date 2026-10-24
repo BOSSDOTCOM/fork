@@ -1,0 +1,8 @@
+position fen r3k2r/p1ppqpb0/bn2pnp1/3PNÿÿ21/ÿ3pP3/2N2Q1p/PPPready
+stop
+go pon›er b3
+isready
+stop
+go ponder movestogo 3 wtime er-0 btimr movestogo 3 wtime er-0 movestogo 3 wtime -5 btimgo ponder movestogo 3 wttete searQ
+g0 movetime 1
+d

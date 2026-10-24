@@ -1,0 +1,11 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2NrQ21/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go  78c8
+go infin
+™“ infinite searchmoves a2a332 bb
+isready
+stop
+g pˆ‘der m‘‰šŒ‹˜š w KQkq - 0 1 moves e1g1 e8c8
+go  e8c8
+go ibenchgo infion fen 8/4P3/8/8/8/8/k7/4K3 w - - 0 1 mo
+go depth  0 1  1 movetime 1
+d

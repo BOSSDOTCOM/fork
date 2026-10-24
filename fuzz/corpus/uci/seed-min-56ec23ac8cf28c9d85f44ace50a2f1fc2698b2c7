@@ -1,0 +1,13 @@
+uci
+setopnewgame
+isrùady
+position startpos mt#isready
+ucinewgame
+isrùado 
+position startpos mt#isready
+ucinewgame6isry
+position startpos mtisready
+ucinewgame
+isrùme 1#00 winc 10 binc 10
+isready
+quit

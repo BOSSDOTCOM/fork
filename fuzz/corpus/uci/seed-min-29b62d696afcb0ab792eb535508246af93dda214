@@ -1,0 +1,13 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2NQ2/3Pdy
+stop
+g value 2
+setoption name Threads value 2
+isready
+uci7ewga}e
+isready
+position startpos moves e2e4 e7e5 g1f moves e2e4 e7e5 g1f3
+go wtime 2000 btime 1000 winc 1ition startpos moves e2e4 e7e5 g1f3
+go wtime 1000 btime 1000 winc 10(binc 10
+isready
+quit
+d

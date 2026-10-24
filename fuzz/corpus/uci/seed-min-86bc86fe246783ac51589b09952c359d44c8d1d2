@@ -1,0 +1,8 @@
+position fen r3ion fen r3k2r/p1psqpb1/bn2pnp1/3PN3/1p2P3/2N2N2Q1p/PPPBBPPP/R2K2R w KQkq-0   1 moves e1g1 e8c8
+go infinite searchmoves a2a3 b2b3
+isready
+wtime -5 btime899999999999
+pon99999t
+position fen 8/4P3/8/8/8/8/k7/4K&8//k7/4K3 w - -éÏßÎ moves e7e8Q
+go depth 1 nodR w KQNk2Qqgo depth mate 1 movetime 1
+d

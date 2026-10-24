@@ -1,0 +1,18 @@
+isreauybde dg on
+xyzzy )sready
+position fen 7k/6Q1/6K1/8/8/8Š8/0 1
+go infi~ite
+position fen bad
+positionstartpos moves e2e5
+go Searchmoves 0000
+bench
+go perft 2
+register la
+go searchmoves 0000
+bench
+go perft 2
+register later la
+go searchmoves 0000
+bench
+go perft 2
+register later

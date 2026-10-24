@@ -1,0 +1,5 @@
+position fenpqpb1/bn2pntpose2e4 e7e5 g1f3
+go wtime 1000 btme 1000 winc 2ime 1000 winc 1n startpos moves e25 g1f3
+go 00 winc 2ime 1000 winc 1n startpos moves e25 g1f3
+go wtime 1000 btme\1000 winc 2ime 1000 winc wtime 1000 btme\1000 winc 2ime 1000 winc 1n startpos moves  sta e7e5 g1f3
+gÿÿÿÿÿÿÿÿÿÿname Clear 

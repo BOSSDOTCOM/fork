@@ -1,0 +1,15 @@
+isready
+position startpition fen 7k/6Q1/6K1.8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q2/6K1/8/8/8/8/8 b - - 0 1
+s moves e2e5
+go searchmoves 0000
+bench
+go p›ŒÖmoves e2e5
+go searchmoves 00searchmoves 0000
+bench
+go p›ŒÖmoves e2e5
+go searchmoves 0000
+bench
+go perft 3
+register later

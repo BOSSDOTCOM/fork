@@ -1,0 +1,12 @@
+5 btime 99999999999999999999
+ponderhit
+position fen 8/4P3/8/8/8/8/k7/4K3 w - 3
+isready
+stop
+go ponder ovestogo 3 wtime -5 btimgo ponder movestogo 3 wtime -5 bt99999
+ponderhit
+position fen 8/4P3/8/8/8/8/k7/4K3 w - 3
+isready
+stop
+go ponder movestogo 3 wtime -55 btimo 3 wtime -55 btimgo po mate 1 movetime 2
+d

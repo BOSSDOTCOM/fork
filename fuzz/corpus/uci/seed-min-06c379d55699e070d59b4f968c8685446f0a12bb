@@ -1,0 +1,10 @@
+position fen r3k2r/p1ppqpb1 bti- 0 1 moves e7e8Q
+go depth 1 noo 3 wtime -5 btime 99999999999999999999
+ponderhit
+position fen 8/4P3/8/8/ wtime 1000 bti- 0 1 moves e7e8Q
+go depth 1 nodes 5 mate 1 movetime 1
+d
+erhit
+position fen 8/4P3/8/8/ wtime 1000 bti- 0 1 moves e7e8Q
+go depth 1 nodes 5 mate 1 movetime 1
+d

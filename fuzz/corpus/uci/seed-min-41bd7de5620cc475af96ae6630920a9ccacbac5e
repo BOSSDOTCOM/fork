@@ -1,0 +1,13 @@
+is/8/8 b - - 0 1
+go
+position fen 7- - 0 1
+go
+position fen 7k/5Q28/8 b - - 0 1
+gore€€€€€€ady
+position startpug on
+xyzzy isready
+position fÿÿÿÿÿÿÿen 7k/6Q1/7K1/8/8/8en 7k/6Q1/6K1k/5Q28/8 b - - 0 1
+gore€€€€€€ady
+position startpugn fÿÿÿÿÿÿÿen 7k/6Q1/7K
+go perft 3
+register later

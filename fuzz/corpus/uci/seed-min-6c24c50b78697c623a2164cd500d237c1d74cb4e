@@ -1,0 +1,19 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 1 1 moves e1c1 e:c8
+go infinite searchmoves [1a3 s 0000
+bench
+go perft#3 w KQkq - 0  m1veos e1g1 e8c8
+go in2e44isready
+go
+
+  	 d u™›‘š‰šsg e2
+go
+
+  e2e4isreadyposition
+go
+
+ e2e u™›‘š‰šsg e2
+go
+
+  esreadyh
+go per
+d

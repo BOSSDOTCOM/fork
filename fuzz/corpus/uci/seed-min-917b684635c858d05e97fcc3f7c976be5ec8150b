@@ -1,0 +1,8 @@
+uci
+setoptisready
+ucinewgame
+isrùady
+position startpos moves e2e4 e7e5 g1f3
+go wtime 1000 btime 1#00 winc 10 binc 10
+isready
+quit

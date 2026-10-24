@@ -1,0 +1,6 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves E1g1 e8c8
+go infinnte searchmoves a2p1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW move7ime 1
+d
+w KQkq - 0 1 der movestogo 3 wtime -5 btime 99999999999999999999
+pondetime 1
+d

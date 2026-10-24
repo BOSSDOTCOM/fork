@@ -1,0 +1,8 @@
+posit3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R k KqQ w- 0 1 moves e1g1 e8c8
+go infinite searchmoves a2ion fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R k KqQ w- 0 1 m‘‰šˆ e1g1 e8c8
+go infinite searchmoves ?a2a3 b2@b3
+isready
+stop
+go ponder movestogo 3 wtime 7e8Q
+go depth 1 nodes 5 mate 1 movetime 1
+d

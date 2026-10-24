@@ -1,0 +1,7 @@
+position fen fen 8/4P3/8/8/8/8/k7/4K3 w - - 0 1 moves e7e8 -5 btime 99999999999999999999
+ponderhit
+position fen 8/4P3/8/8/8/8/k7/4K3 w - - 0 1 moves e7e8Q
+wo depth 1 nodes 5 mate 1 mov e7e2Q1
+d
+h 1 nodes 5 mate 1 mov e7e2Q1
+d

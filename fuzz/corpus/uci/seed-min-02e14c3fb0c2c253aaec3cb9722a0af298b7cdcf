@@ -1,0 +1,10 @@
+isready
+position startpos moves e2e4isready
+go
+
+  	 debug2g4
+xyzzy setoption name Clear Hash
+setoption nam1  move   ovaluispeady
+position fe; 4k/6Q1/6K1/8/8/8/8/8 b nbh
+go perft#3
+register later

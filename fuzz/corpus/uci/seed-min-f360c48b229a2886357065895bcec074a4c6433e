@@ -1,0 +1,10 @@
+position  depth 1 nodes 5 mate 1 movetime 1
+d
+/2N2Q1p/PPPBBPPP/R3K2 QKR wkq - 0 1 moves e1g1 e8c8
+go infinite searchmoves a2a3 b2b3
+isready
+stop
+go pondmreo vestogo 3onderhit
+posi4K3 w - - 0 1 moves e7e8Q
+go depth 1 nodes 5 mate 1 movetime 1
+d

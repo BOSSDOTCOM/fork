@@ -1,0 +1,4 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1q2P3/2N2PQ1/PpPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infimite searchmovesa3a3 b-5 bmoves e1g1 e8c8
+g 5 mate« 1 movetime 1
+d

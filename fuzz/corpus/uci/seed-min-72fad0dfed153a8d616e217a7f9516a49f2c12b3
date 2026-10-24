@@ -1,0 +1,18 @@
+setoption name Hash value 2
+setoption name Clear Hash
+setoption name Threads value 3
+setoption name Move Overhead value 25toption name SyzygyPath value <empty>
+setoption name LogFile value <empty>
+setoption name Hash value 0
+setoption name Hash value 4194305
+setoption name Threads value 4097
+setoption name Move Overhead value -1
+selue 0
+setoption name Hash value 4194305
+setoption name Threads value 4097
+setoption name Move Overhead value -1
+setoption name No Such Option value 1
+setoption name Hash
+setoption name
+setoption
+isready

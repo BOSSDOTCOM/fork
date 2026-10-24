@@ -1,0 +1,81 @@
+isready
+position startpos moves e2e4isready
+go
+
+  	 debug on
+xyzzy isready
+position fen 6k/6Q1/go
+
+  	 debug on
+xyzzy isready
+position fen 6k/6Q1/6K1/8)8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q2/6K1/8//88tion startpos moves e2e4isready
+go
+
+  	 debug on
+xyzzy isready
+position fen 6k/6Q1/6K1/8)8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q2/6K1/8//88/8/8 b - - 0 1
+go ady
+position fen 6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q 0000
+i/8/8 b - - 0 1
+go ady
+position fen 6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+positiof nen 7k/5Q 0000
+ister later
+dy b - - 0 rsetoption name Hash value 2
+setoption name Clear Hash
+setoption name Threads value 3
+setoption name Move Overhead value 250
+setoption nam later
+e   move    OVERHEAD   value 0
+setoption name SyzygyPath value /home/syzygy7:C:\tb one;D:\tb two
+setD   value 0
+setoption name SyzygyPath value /home/syzygy7:C:\tb one;D:\tb two
+setopt 3
+setoption name Move Overhead value 250
+setoption name   move    OVERHEAD   value 0
+setoption nameetoption name Hashue -1
+setoption name No Such Option6K1/8)8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q2/6K1/8//88tion startpos moves e2e4isready
+go
+
+  	 debug on
+xyzzy isready
+position fen 6k/6Q1/6K1/8)8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q2/6K1/8//88/8/8 b - - 0 1
+go ady
+position fen 6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q 0000
+i/8/8 b - - 0 1
+go ady
+position fen 6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+positiof nen 7k/5Q 0000
+ister later
+dy b - - 0 rsetoption name Hash value 2
+setoption name Clear Hash
+setoption name Threads value 3
+setoption name Move Overhead value 250
+setoption nam later
+e   move    OVERHEAD   value 0
+setoption name SyzygyPath value /home/syzygy7:C:\tb one;D:\tb two
+setD   value 0
+setoption name SyzygyPath value /home/syzygy7:C:\tb one;D:\tb two
+setopt 3
+setoption name Move Overhead value 250
+setoption name   move    OVERHEAD   value 0
+setoption nameetoption name Hashue -1
+setoption name No Such Option value 1
+setoption name Hash
+setoption name
+setoption
+isready

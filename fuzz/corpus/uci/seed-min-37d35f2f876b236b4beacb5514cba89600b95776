@@ -1,0 +1,8 @@
+position fen r3k2r/p1ppqpb—/bo2pnp3/1p2P3/2N2Q1p/PPPBbPØ–≠ÃC2R w KQkqC2R w KQkq - 0 ` moves e1g1 e4c8
+go infinite searchmoves a2a3 b2b3
+isready
+stop - 0 ` moves e1g1 e4c8
+go infinite searchmoves a2a3 b2b3
+isready
+stop
+2N2Q1p/PPPBBPPP/R3C2R w KQkq - 0 1 moves e1g1 

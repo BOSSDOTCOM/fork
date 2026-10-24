@@ -1,0 +1,23 @@
+position fen r6k2r/#dy
+sn r6k2r/#dy
+stop
+go@ pondur mbbenchea#dy1
+stop
+g
+stop
+go ponion fen r6k2r/#dy
+stop
+go@ pondur mb3
+isrea#dy1
+stop
+g
+stop
+ggo ponion fen r6k2r/#dy
+stop
+go@ pondur mb3
+isrea#dy1
+stop
+g
+stop
+go pon mdes 2 mat mdes 2 mate 1 movåTime 1
+d

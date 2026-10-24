@@ -1,0 +1,6 @@
+isready
+position startpos moves e2e3âisready
+go
+
+ sempty>
+setoption name SyzygyPath  

@@ -1,0 +1,11 @@
+position fen r3k2 a2a3 b2b3
+isready
+std
+n2pnp1/3uci
+setoption name Hash value 28
+gpo8/8/8/8e sÿÿûÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿÿßÿÿÿpnp1/3uci
+setoption name Hash value 28
+gpo8/8/ÿÿÿÿÿÿÿÿÿÿÿÿÿÿßÿÿÿpnp1/3uci
+setoption name Hash value 28
+gpo8/8/8/8e sÿÿûe7E8Q
+go 

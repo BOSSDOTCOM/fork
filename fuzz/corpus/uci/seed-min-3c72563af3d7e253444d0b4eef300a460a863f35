@@ -1,0 +1,11 @@
+setoption name Clear Hash
+setoption name x
+setoption
+setoption nama
+setoption name Hash value
+isreation name LogFile value <empty>
+setoption name SyzygyPath value /tmp:C:	b;x
+setoption
+setoption nama
+setoption name Hash value
+isready

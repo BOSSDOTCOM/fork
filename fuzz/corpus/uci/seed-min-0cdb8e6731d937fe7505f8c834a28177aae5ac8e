@@ -1,0 +1,14 @@
+isready
+position svartpos moves e2e4isreaÿÿ^ ‘É
+  	 debug on
+xyzzy isreon fen 6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q2/6K1/8/8/8/8/8 b - - 0 1
+s moves e2e5
+go searchmoves 0000
+bench
+go peos moves e2e5
+go searchmoves 0000
+bench
+go perft 3
+register later

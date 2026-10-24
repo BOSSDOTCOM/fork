@@ -1,0 +1,6 @@
+uci
+setoptifon name Hash value 2
+setoption 1f3
+go wtime winc 10 binc 10
+isready
+quit
