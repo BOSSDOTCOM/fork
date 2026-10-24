@@ -4,9 +4,13 @@
 # (scripts/hooks/pre-commit).
 #
 #   scripts/check.sh quick   clang-release build + fast tests (post-edit hook)
+#   scripts/check.sh stop    clang-release build + every non-slow test,
+#                            including bench parity and no_alloc; this
+#                            platform only (Stop hook). Skipped when the code
+#                            is unchanged since a passing stop or full run.
 #   scripts/check.sh full    clang-release, clang-debug (ASan+UBSan) and
 #                            gcc-release: build + every non-slow test,
-#                            including bench parity (Stop hook, pre-commit).
+#                            including bench parity (pre-commit, sign-offs).
 #                            On Linux also gcc-debug (GCC ASan+UBSan). On
 #                            Windows it then runs the Linux check too (below).
 #
@@ -17,16 +21,19 @@
 # A Linux failure, or WSL being unavailable, fails the whole check.
 # FORK_SKIP_LINUX=1 skips the Linux part with a warning and records no pass.
 #
-# A passing `full` run is remembered by a fingerprint of all code (tracked
-# changes and untracked files under the code directories), so repeating it on
-# an unchanged tree is instant. Exit status is non-zero on any failure; the
-# failure output goes to stderr.
+# Passing `stop` and `full` runs are remembered by a fingerprint of the
+# content of every source, test and build file plus the check scripts
+# (tracked and untracked, non-ignored), not of the commit: docs-only commits
+# and doc edits never trigger a rerun, and a long background job (MSan,
+# perft, fuzzing) is never competed with unless code actually changed.
+# Exit status is non-zero on any failure; the failure output goes to stderr.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 . scripts/env.sh
 
 mode=${1:-quick}
-code_paths=(src tests bench fuzz tools/magic_seeds.cpp cmake CMakeLists.txt CMakePresets.json)
+code_paths=(src tests bench fuzz tools/magic_seeds.cpp cmake CMakeLists.txt CMakePresets.json
+            scripts/check.sh scripts/env.sh)
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 
@@ -38,13 +45,23 @@ fail() {
   exit 1
 }
 
+# Content hash of the code: path and blob hash of every existing file under
+# code_paths (a deleted file drops out of the list, which changes the hash).
 fingerprint() {
-  {
-    git rev-parse HEAD 2>/dev/null
-    git diff HEAD -- "${code_paths[@]}" 2>/dev/null
-    git ls-files --others --exclude-standard -- "${code_paths[@]}" 2>/dev/null |
-      while read -r f; do echo "$f"; cat "$f"; done
-  } | sha1sum | cut -d' ' -f1
+  git ls-files -co --exclude-standard -- "${code_paths[@]}" | sort -u |
+    while read -r f; do [ -f "$f" ] && echo "$f"; done >"$log.paths"
+  git hash-object --stdin-paths <"$log.paths" >"$log.blobs"
+  paste "$log.paths" "$log.blobs" | sha1sum | cut -d' ' -f1
+  rm -f "$log.paths" "$log.blobs"
+}
+
+stamp_matches() {  # fingerprint, stamp files...
+  local fp=$1 s
+  shift
+  for s in "$@"; do
+    [ -f "$s" ] && [ "$(cat "$s")" = "$fp" ] && return 0
+  done
+  return 1
 }
 
 # no_alloc (the counting-allocator test, fork_alloc_test) must run and pass in
@@ -110,11 +127,22 @@ case "$mode" in
     build_and_test clang-release -R '^(magics|fen|zobrist_ep|perft_edge|pseudo_legal|no_alloc|bench_parity)$'
     echo "fork check quick: ok"
     ;;
+  stop)
+    mkdir -p build
+    fp=$(fingerprint)
+    if stamp_matches "$fp" build/.check-stop-pass build/.check-full-pass; then
+      echo "fork check stop: skipped (code unchanged since last pass)"
+      exit 0
+    fi
+    build_and_test clang-release -LE slow
+    echo "$fp" >build/.check-stop-pass
+    echo "fork check stop: ok (clang-release, all non-slow tests, bench parity, no_alloc)"
+    ;;
   full)
     mkdir -p build
     stamp=build/.check-full-pass
     fp=$(fingerprint)
-    if [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$fp" ]; then
+    if stamp_matches "$fp" "$stamp"; then
       echo "fork check full: ok (unchanged since last pass)"
       exit 0
     fi
@@ -133,7 +161,7 @@ case "$mode" in
     echo "fork check full: ok ($platforms; bench parity included)"
     ;;
   *)
-    echo "usage: scripts/check.sh quick|full" >&2
+    echo "usage: scripts/check.sh quick|stop|full" >&2
     exit 2
     ;;
 esac
