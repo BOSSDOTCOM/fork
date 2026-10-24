@@ -5,3 +5,17 @@ out/
 *.gcda
 /.vs/
 /.vscode/
+.cache/
+.venv/
+*.bundle
+# Large data that never belongs in the repository (tools/install.sh puts
+# tablebases and runners in ~/fork-tools, outside the repo).
+*.rtbw
+*.rtbz
+*.nnue
+*.binpack
+*.pgn
+*.pgn.gz
+*.epd
+*.zst
+*.7z
