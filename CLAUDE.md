@@ -99,6 +99,40 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
 - Git: work on `main`; the KB lives on `kb`. Commit messages end with the
   attribution lines the session provides.
 
+### Phase-end checklist
+
+Run at the end of every phase, after the owner's sign-off and before the
+next phase begins. Report each item's result.
+
+1. **All checks pass on both platforms and the TCEC toolchain:**
+   `scripts/check.sh full`, `scripts/build.sh` (all presets + PGO) on
+   Windows and in `~/fork` (a clean clone), the slow suites, and the Ubuntu
+   22.04 build with TCEC's compilers (gcc 11.4, g++-12, clang 16/19; see
+   DESIGN.md §5.1).
+2. **Tag the release** as a known-good baseline: `git tag -a phase-N` on
+   `main`, with the bench node count and signature in the tag message.
+3. **Untracked reports** (`REVIEW-*.md`, `HANDOFF.md`, `MORNING.md` and
+   the like): move anything worth keeping into `docs/history/phase-N/`
+   (committed, so it becomes public: no personal data or secrets), and
+   delete the rest.
+4. **Branches and worktrees:** delete merged or abandoned ones
+   (`git branch`, `git worktree list`); archive experiments worth keeping
+   as tags first (e.g. `git tag archive/layout-exp layout-exp`).
+5. **Stale build directories and caches:** remove experiment and one-off
+   build dirs (`build/ab-*`, `build/overnight/`, sanitizer trial dirs, the
+   same under `~/fork` and `~/fork-check` in WSL); keep `.cache/` test
+   downloads and `~/fork-tools`.
+6. **Docs:** update DESIGN.md (decisions log, phase status), ideas.md
+   statuses, ORIGINALITY.md and the KB (branch `kb`); re-check every item
+   marked UNVERIFIED and resolve or keep it with a reason.
+7. **Memory notes:** review the saved memory files
+   (`~/.claude/projects/C--Users-<user>-fork/memory/`) and update or delete
+   anything outdated.
+8. **Phase summary:** one page in `docs/history/phase-N/summary.md`: what
+   was built, what was learned, what carries forward.
+9. **Start the next phase in a fresh Claude Code session**, beginning from
+   the summary and DESIGN.md.
+
 ## Gotchas
 
 - LLVM-MinGW ships its own `g++.exe` (really clang): never pick compilers by
