@@ -26,53 +26,32 @@ Bitboard slider_attackers(const Position& pos, Color by, Square s, Bitboard occ)
          (rook_attacks(s, occ) & pos.pieces(by, Rook, Queen));
 }
 
-// Oracle for blockers/pinners: remove each piece in turn and see which enemy
-// sliders start attacking the king.
-void check_blockers(const Position& pos, Color c, const std::string& fen) {
-  const Square ksq = pos.king_square(c);
+// Oracle for pinned pieces and discovered-check candidates: lift each piece
+// of `shield_side` in turn and see whether a slider of the side opposite the
+// king starts attacking the king of `king_side`.
+Bitboard shields_by_removal(const Position& pos, Color king_side, Color shield_side) {
+  const Square ksq = pos.king_square(king_side);
   const Bitboard occ = pos.pieces();
-  const Bitboard before = slider_attackers(pos, ~c, ksq, occ);
-  Bitboard blockers = 0, pinners = 0;
-  for (Bitboard b = occ & ~bb(ksq); b;) {
+  const Bitboard before = slider_attackers(pos, ~king_side, ksq, occ);
+  Bitboard shields = 0;
+  for (Bitboard b = pos.pieces(shield_side) & ~bb(ksq); b;) {
     Square sq = pop_lsb(b);
-    Bitboard exposed = slider_attackers(pos, ~c, ksq, occ ^ bb(sq)) & ~before & ~bb(sq);
-    if (exposed) {
-      blockers |= bb(sq);
-      if (pos.pieces(c) & bb(sq)) pinners |= exposed;
-    }
+    if (slider_attackers(pos, ~king_side, ksq, occ ^ bb(sq)) & ~before & ~bb(sq)) shields |= bb(sq);
   }
-  CHECK_MSG(pos.blockers(c) == blockers, "blockers, " << fen << " color " << int(c));
-  CHECK_MSG(pos.pinners(c) == pinners, "pinners, " << fen << " color " << int(c));
+  return shields;
 }
 
 void check_state(const Position& pos, const std::string& fen) {
   const State& s = pos.state();
   const State fresh = pos.compute_state();
   CHECK_MSG(s.key == fresh.key, "key, " << fen);
-  CHECK_MSG(s.pawn_key == fresh.pawn_key, "pawn key, " << fen);
-  CHECK_MSG(s.material_key == fresh.material_key, "material key, " << fen);
-  CHECK_MSG(s.non_pawn_key[White] == fresh.non_pawn_key[White] &&
-                s.non_pawn_key[Black] == fresh.non_pawn_key[Black],
-            "non-pawn keys, " << fen);
   CHECK_MSG(s == fresh, "full state, " << fen);
 
   const Color us = pos.side_to_move(), them = ~us;
   CHECK_MSG(pos.checkers() == (pos.attackers_to(pos.king_square(us), pos.pieces()) & pos.pieces(them)),
             "checkers, " << fen);
-  check_blockers(pos, White, fen);
-  check_blockers(pos, Black, fen);
-
-  // Check squares: a piece of ours of that type on the square would attack
-  // the enemy king.
-  const Bitboard eking = bb(pos.king_square(them));
-  for (Square sq = 0; sq < 64; ++sq) {
-    CHECK_MSG(bool(pos.checking_squares(Pawn) & bb(sq)) == bool(pawn_attacks(us, sq) & eking),
-              "pawn check squares, " << fen);
-    for (PieceType t : {Knight, Bishop, Rook, Queen})
-      CHECK_MSG(bool(pos.checking_squares(t) & bb(sq)) == bool(attacks(t, sq, pos.pieces()) & eking),
-                "check squares, " << fen << " type " << int(t));
-  }
-  CHECK(pos.checking_squares(King) == 0);
+  CHECK_MSG(pos.pinned() == shields_by_removal(pos, us, us), "pinned, " << fen);
+  CHECK_MSG(pos.discoverers() == shields_by_removal(pos, them, us), "discoverers, " << fen);
 }
 
 void check_node(Position& pos, const MoveList& legal, const MoveList* parent) {

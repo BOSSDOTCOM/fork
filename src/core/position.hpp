@@ -26,22 +26,23 @@ namespace forkeng {
 // search thread starts; Position() also calls it.
 void init();
 
-// Everything about a position that make() computes once per ply and unmake()
-// restores by popping. Kept in a stack so earlier keys stay available for
-// repetition detection.
+// The per-ply record: what make() pushes and unmake() pops. Kept in a stack so
+// earlier keys stay available for repetition detection. Only what Fork's code
+// reads is stored. Field order follows make(): first what it copies from the
+// previous ply and updates in place, then what it recomputes from the board
+// after every move, then what describes the move itself.
 struct State {
+  // Carried forward and updated incrementally.
   Key key;
-  Key pawn_key;
-  Key material_key;
-  Key non_pawn_key[2];   // per color, kings included
-  Bitboard checkers;     // enemy pieces giving check to the side to move
-  Bitboard blockers[2];  // pieces (either color) whose removal alone would expose c's king to an enemy slider
-  Bitboard pinners[2];   // enemy sliders whose only obstacle to c's king is one of c's pieces
-  Bitboard checking_squares[6];  // squares from which the side to move would give check, per piece type
   int castling;
   Square ep;  // NoSquare unless an ep capture is legal
   int halfmove;
-  Piece captured;  // piece captured by the move that led here
+  // Recomputed after every move, all for the side to move.
+  Bitboard checkers;     // enemy pieces attacking our king
+  Bitboard pinned;       // our pieces that are the only piece between our king and an enemy slider
+  Bitboard discoverers;  // our pieces that are the only piece between the enemy king and one of our sliders
+  // The move that led here.
+  Piece captured;
 
   bool operator==(const State&) const = default;
 };
@@ -75,17 +76,14 @@ class Position {
   int halfmove_clock() const { return state().halfmove; }
   int fullmove_number() const { return fullmove_; }
   Key key() const { return state().key; }
-  Key pawn_key() const { return state().pawn_key; }
-  Key material_key() const { return state().material_key; }
-  Key non_pawn_key(Color c) const { return state().non_pawn_key[c]; }
   std::size_t ply_count() const { return states_.size() - 1; }  // moves made since set_fen
 
   Bitboard checkers() const { return state().checkers; }
   bool in_check() const { return state().checkers != 0; }
-  Bitboard blockers(Color c) const { return state().blockers[c]; }
-  Bitboard pinners(Color c) const { return state().pinners[c]; }
-  Bitboard pinned(Color c) const { return state().blockers[c] & pieces(c); }
-  Bitboard checking_squares(PieceType t) const { return state().checking_squares[t]; }
+  // Pieces of the side to move that may only move along the line to their king.
+  Bitboard pinned() const { return state().pinned; }
+  // Pieces of the side to move that give discovered check by leaving their line.
+  Bitboard discoverers() const { return state().discoverers; }
 
   Bitboard attackers_to(Square s, Bitboard occ) const;  // both colors
   bool attacked_by(Color by, Square s, Bitboard occ) const;
@@ -129,7 +127,8 @@ class Position {
   void put(Piece p, Square s);
   void remove(Square s);
   void toggle_keys(State& s, Piece p, Square sq) const;
-  void update_check_info(State& s) const;  // checkers, blockers, pinners, check squares
+  void refresh_check_info(State& s) const;  // checkers, pinned, discoverers
+  Bitboard lone_shields(Square king, Bitboard shields, Bitboard rook_sliders, Bitboard bishop_sliders) const;
   bool ep_capture_legal(Square ep) const;  // for the side to move
   bool has_insufficient_material(Color c) const;
   void finish_setup();  // state from scratch after board setup

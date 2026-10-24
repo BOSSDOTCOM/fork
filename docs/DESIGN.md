@@ -175,14 +175,25 @@ key(p)`.
 
 ### 4.5 Position
 
-- State: `byType[6]`, `byColor[2]` bitboards, `board[64]` mailbox, side to
-  move, castling rights (4 bits), ep square, halfmove clock, fullmove number,
-  Zobrist key, and the checkers bitboard (computed in make).
-- **Make/unmake.** An undo stack (`std::vector<Undo>`, reserved up front)
-  holds the key, checkers, captured piece, castling rights, ep square and
-  halfmove clock. `unmake` restores the state exactly; tests compare full
-  snapshots.
-- A null move (make/unmake) shares the undo path.
+- Board: `by_type_[6]` and `by_color_[2]` bitboards, a `board_[64]` mailbox
+  (one byte per square), side to move and fullmove number.
+- **Per-ply State stack** (`std::vector<State>`, reserved up front): `make`
+  pushes a copy of the current State and updates it, `unmake` pops it, so
+  restoring is exact and earlier keys stay available for repetition
+  detection. A State holds only what Fork's code reads (56 bytes), ordered
+  by how `make` treats it: carried forward and updated in place (Zobrist
+  key, castling rights, ep square, halfmove clock), recomputed from the
+  board after every move (checkers, pinned pieces and discovered-check
+  candidates of the side to move), and the captured piece.
+- **Check information** (CPW "Checks and Pinned Pieces (Bitboards)",
+  "X-ray Attacks (Bitboards)", "Discovered Check"): one x-ray computation,
+  seen from each king, finds the pieces of the side to move that are the
+  only piece between a king and a slider: towards its own king they are
+  pinned, towards the enemy king they can discover check. Direct checks are
+  answered on demand in `gives_check`. The review fix of 2026-10-24 (H3)
+  replaced eager per-type check squares and unused pawn, material and
+  non-pawn keys.
+- A null move (make/unmake) shares the State path.
 - **FEN** parse and serialize. Parsing validates the input and returns an
   error string instead of asserting, because FENs come from untrusted GUI
   input. It rejects: bad syntax or rank lengths, a count other than one king
@@ -463,6 +474,7 @@ deferred tests and suspicions, and ORIGINALITY.md.
 | 2026-10-23 | **Namespace `fork` renamed to `forkeng`** (owner): `fork` collided with POSIX `fork()` on Linux (section 8, naming conventions). Checked first: no match in Stockfish (shallow clone at effdc3f, 2026-10-17), the MinGW toolchains, glibc/libstdc++/clang headers, or exported libc/libstdc++/libm symbols. **`scripts/check.sh full` covers both platforms**: on Windows it also runs the Linux check in WSL on a copy of the working tree. |
 | 2026-10-24 | **Phase 2 spec approved** with the answers in §5.1; the Phase 1 review fixes come before Phase 2. **History rewritten** (owner): every commit's author and committer email replaced with the GitHub noreply address before the repo goes public (review L4); trees unchanged, all hashes changed. |
 | 2026-10-24 | **TCEC toolchain (review C1).** CMake floor 3.22, `std::format` replaced by `snprintf` (libstdc++ has `<format>` only from GCC 13), LTO probed with `CheckIPOSupported`, download timeouts (review M7), `update.sh`, and a required Ubuntu 22.04 leg in `scripts/check.sh full` (gcc 11.4, g++-12, clang 16, clang 19; bench parity with each). Before the fix the 22.04 build failed on the CMake floor and then on `<format>` with all four compilers; after it all four build with LTO and match bench. **`-g` in release builds** (owner): disassembly with and without `-g` is identical for clang (Windows, LTO) and identical in every shared function for gcc (MinGW static links three extra libgcc unwind helpers), so no speed effect is possible and no A/B was needed. `update.sh` defaults to `-march=x86-64-v3` until Phase 4 has SIMD code that benefits from x86-64-v4 (both TCEC servers are AVX-512 capable per the KB; revisit then). |
+| 2026-10-24 | **Clean-room rewrites (review H2, M3, H3).** Magic search, masks, leaper and between/line tables rewritten by walking rays (no slider attack sets for between/line); candidates from the shared splitmix64 stream. State reduced to the fields Fork reads (key, castling, ep, halfmove, checkers, pinned, discoverers, captured: 56 bytes, was about 144); pins and discovered-check candidates by one x-ray computation per king; direct checks computed on demand in `gives_check`; pawn, material and non-pawn keys, `pinners` and the per-type check squares removed (no consumer; Phase 3 adds what search needs, designed then). bench/ab.py, 6 rounds, clang / gcc: make/unmake -16% / -16%, perft bench -7% / -5%, gives_check +76% / +76% (2.96 -> 5.21 ns clang); no-PEXT startup 1.02 -> 1.37 ms. Bench unchanged. Details: docs/ORIGINALITY.md. |
 
 ## 7. Performance doctrine (governs every phase)
 
@@ -550,7 +562,7 @@ invariants.
 **Names and Stockfish (owner decision, 2026-10-23).**
 - **Kept:** names that are common across engines and the Chess Programming
   Wiki: the files `types`, `bitboard`, `position`, `movegen`; the class
-  `Position`; `pop_lsb`, `attackers_to`, `blockers`/`pinners`; and generic
+  `Position`; `pop_lsb`, `attackers_to`; and generic
   vocabulary (`perft`, `bench`, `make`/`unmake`, `MoveList`, `gives_check`,
   `is_pseudo_legal`).
 - **Renamed** (Stockfish-distinctive), with the mapping kept in

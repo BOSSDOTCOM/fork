@@ -9,7 +9,6 @@ Key piece_square[16][64];
 Key side;
 Key castling[16];
 Key ep_file[8];
-Key material[16][16];
 
 void init() {
   // splitmix64 with a fixed seed: keys (and bench signatures) are reproducible.
@@ -27,8 +26,6 @@ void init() {
       if (s & (1 << r)) castling[s] ^= right[r];
   }
   for (Key& k : ep_file) k = next();
-  for (auto& row : material)
-    for (Key& k : row) k = next();
 }
 
 }  // namespace forkeng::zobrist

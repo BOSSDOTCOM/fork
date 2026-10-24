@@ -162,6 +162,12 @@ name of their config flag.
   2026-10-23, bench/ab.py min: +58% clang, +68% gcc). In Phase 3, measure
   with search nps whether eager check info pays off, and test a lazy variant
   that computes the check info only when it is first requested in a ply.
+- **2026-10-24 (review H3 clean-room rewrite):** the per-type check squares
+  are gone; direct checks are computed in `gives_check`, and the State keeps
+  checkers, pinned and discovered-check candidates only (56 bytes). bench/ab.py:
+  make/unmake -16% (clang and gcc), gives_check +76%. The lazy variant for
+  pins (compute on first request in a ply) is still untested. layout-exp's v5
+  no longer applies to the new State; re-derive any layout change from it.
 - **status:** deferred to Phase 3
 
 ## 10. Steer into TB-drawn 6-piece endings

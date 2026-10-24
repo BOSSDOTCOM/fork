@@ -60,7 +60,7 @@ void generate_moves(const Position& pos, MoveList& list) {
   const Bitboard target = checkers ? between(ksq, lsb(checkers)) | checkers : ~Bitboard{0};
   const Bitboard capture_target = theirs & target;
   const Bitboard quiet_target = ~occ & target;
-  const Bitboard pinned = pos.pinned(us);
+  const Bitboard pinned = pos.pinned();
 
   add_piece_moves<Knight, Captures, Quiets>(pos, list, us, ksq, occ, pinned, capture_target, quiet_target);
   add_piece_moves<Bishop, Captures, Quiets>(pos, list, us, ksq, occ, pinned, capture_target, quiet_target);

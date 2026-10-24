@@ -86,14 +86,7 @@ void Position::remove(Square s) {
   board_[s] = NoPiece;
 }
 
-void Position::toggle_keys(State& s, Piece p, Square sq) const {
-  Key z = zobrist::piece_square[p][sq];
-  s.key ^= z;
-  if (type_of(p) == Pawn)
-    s.pawn_key ^= z;
-  else
-    s.non_pawn_key[color_of(p)] ^= z;
-}
+void Position::toggle_keys(State& s, Piece p, Square sq) const { s.key ^= zobrist::piece_square[p][sq]; }
 
 Bitboard Position::attackers_to(Square s, Bitboard occ) const {
   return (pawn_attacks(Black, s) & pieces(White, Pawn)) | (pawn_attacks(White, s) & pieces(Black, Pawn)) |
@@ -108,33 +101,35 @@ bool Position::attacked_by(Color by, Square s, Bitboard occ) const {
          (rook_attacks(s, occ) & pieces(by, Rook, Queen));
 }
 
-void Position::update_check_info(State& s) const {
+// The pieces in `shields` that are the only piece between `king` and a slider
+// of `rook_sliders` (on a rank or file) or `bishop_sliders` (on a diagonal),
+// so that lifting one opens that slider's line to the king. Found with x-ray
+// attacks (CPW "X-ray Attacks (Bitboards)", "Checks and Pinned Pieces
+// (Bitboards)"): look out from the king, lift the shields seen first, look
+// again, and every slider that comes into view marks a line whose shield is
+// the one piece between it and the king.
+Bitboard Position::lone_shields(Square king, Bitboard shields, Bitboard rook_sliders,
+                                Bitboard bishop_sliders) const {
   const Bitboard occ = pieces();
-  for (Color c : {White, Black}) {
-    Square ksq = king_square(c);
-    Bitboard snipers = (rook_attacks(ksq, 0) & pieces(~c, Rook, Queen)) |
-                       (bishop_attacks(ksq, 0) & pieces(~c, Bishop, Queen));
-    // A blocker is a piece whose removal alone would expose the king.
-    s.blockers[c] = s.pinners[c] = 0;
-    while (snipers) {
-      Square sniper = pop_lsb(snipers);
-      Bitboard b = between(ksq, sniper) & occ;
-      if (b && !has_multiple(b)) {
-        s.blockers[c] |= b;
-        if (b & pieces(c)) s.pinners[c] |= bb(sniper);
-      }
-    }
-  }
+  const Bitboard straight = rook_attacks(king, occ), diagonal = bishop_attacks(king, occ);
+  Bitboard revealed = rook_attacks(king, occ & ~(straight & shields)) & ~straight & rook_sliders;
+  revealed |= bishop_attacks(king, occ & ~(diagonal & shields)) & ~diagonal & bishop_sliders;
+  Bitboard found = 0;
+  while (revealed) found |= between(king, pop_lsb(revealed)) & shields;
+  return found;
+}
 
-  s.checkers = attackers_to(king_square(side_), occ) & pieces(~side_);
-
-  const Square eksq = king_square(~side_);
-  s.checking_squares[Pawn] = pawn_attacks(~side_, eksq);
-  s.checking_squares[Knight] = knight_attacks(eksq);
-  s.checking_squares[Bishop] = bishop_attacks(eksq, occ);
-  s.checking_squares[Rook] = rook_attacks(eksq, occ);
-  s.checking_squares[Queen] = s.checking_squares[Bishop] | s.checking_squares[Rook];
-  s.checking_squares[King] = 0;
+// Check information for the side to move, from the board alone. Pins and
+// discovered-check candidates are one computation seen from each king (CPW
+// "Discovered Check"): our pieces shielding our king from enemy sliders are
+// pinned; our pieces shielding the enemy king from our sliders can discover
+// check by moving off the line.
+void Position::refresh_check_info(State& s) const {
+  const Color us = side_, them = ~us;
+  const Square ksq = king_square(us), eksq = king_square(them);
+  s.checkers = attackers_to(ksq, pieces()) & pieces(them);
+  s.pinned = lone_shields(ksq, pieces(us), pieces(them, Rook, Queen), pieces(them, Bishop, Queen));
+  s.discoverers = lone_shields(eksq, pieces(us), pieces(us, Rook, Queen), pieces(us, Bishop, Queen));
 }
 
 bool Position::ep_capture_legal(Square ep) const {
@@ -152,18 +147,13 @@ bool Position::ep_capture_legal(Square ep) const {
 
 State Position::compute_state() const {
   State s = state();
-  s.key = s.pawn_key = s.material_key = 0;
-  s.non_pawn_key[White] = s.non_pawn_key[Black] = 0;
+  s.key = 0;
   for (Square sq = 0; sq < 64; ++sq)
     if (board_[sq] != NoPiece) toggle_keys(s, board_[sq], sq);
-  for (Piece p = 0; p < 16; ++p) {
-    if (p == NoPiece || type_of(p) >= NoPieceType) continue;
-    for (int n = 0; n < count(color_of(p), type_of(p)); ++n) s.material_key ^= zobrist::material[p][n];
-  }
   if (side_ == Black) s.key ^= zobrist::side;
   s.key ^= zobrist::castling[s.castling];
   if (s.ep != NoSquare) s.key ^= zobrist::ep_file[file_of(s.ep)];
-  update_check_info(s);
+  refresh_check_info(s);
   return s;
 }
 
@@ -334,7 +324,6 @@ void Position::make(Move m) {
       s.captured = cap;
       remove(capsq);
       toggle_keys(s, cap, capsq);
-      s.material_key ^= zobrist::material[cap][count(them, type_of(cap))];
       s.halfmove = 0;
     }
     remove(from);
@@ -342,8 +331,6 @@ void Position::make(Move m) {
     Piece placed = p;
     if (m.is_promotion()) {
       placed = make_piece(us, m.promotion_type());
-      s.material_key ^= zobrist::material[p][count(us, Pawn)];
-      s.material_key ^= zobrist::material[placed][count(us, m.promotion_type())];
     }
     put(placed, to);
     toggle_keys(s, placed, to);
@@ -362,7 +349,7 @@ void Position::make(Move m) {
   side_ = them;
   s.key ^= zobrist::side;
   if (us == Black) ++fullmove_;
-  update_check_info(s);
+  refresh_check_info(s);
 
   if (new_ep != NoSquare && ep_capture_legal(new_ep)) {
     s.ep = new_ep;
@@ -407,7 +394,7 @@ void Position::make_null() {
   if (side_ == Black) ++fullmove_;
   side_ = ~side_;
   s.key ^= zobrist::side;
-  update_check_info(s);
+  refresh_check_info(s);
 }
 
 void Position::unmake_null() {
@@ -476,7 +463,7 @@ bool Position::is_legal(Move m) const {
     return !(attackers_to(ksq, occ) & pieces(them) & ~bb(capsq));
   }
   if (checkers() && !((between(ksq, lsb(checkers())) | checkers()) & bb(to))) return false;
-  if ((pinned(us) & bb(from)) && !(line(ksq, from) & bb(to))) return false;
+  if ((pinned() & bb(from)) && !(line(ksq, from) & bb(to))) return false;
   return true;
 }
 
@@ -493,12 +480,20 @@ bool Position::gives_check(Move m) const {
     return (rook_attacks(eksq, occ) & rooks) || (bishop_attacks(eksq, occ) & pieces(us, Bishop, Queen));
   }
 
-  // Discovered check: the moving piece was the only blocker of one of our sliders.
-  if ((blockers(them) & bb(from)) && !(line(eksq, from) & bb(to))) return true;
+  // Discovered check: the moving piece was the only piece between one of our
+  // sliders and the enemy king, and it leaves that line.
+  if ((discoverers() & bb(from)) && !(line(eksq, from) & bb(to))) return true;
 
   if (m.is_promotion()) return attacks(m.promotion_type(), to, pieces() ^ bb(from)) & bb(eksq);
 
-  if (checking_squares(type_of(board_[from])) & bb(to)) return true;
+  // Direct check by the moving piece from its new square, using the occupancy
+  // before the move. That is safe: if the origin were the only piece between
+  // the new square and the enemy king, the piece would already be giving
+  // check from there.
+  const PieceType moved = type_of(board_[from]);
+  if (moved == Pawn ? bool(pawn_attacks(us, to) & bb(eksq))
+                    : moved != King && bool(attacks(moved, to, pieces()) & bb(eksq)))
+    return true;
 
   if (m.is_en_passant()) {
     // Removing the captured pawn can uncover a slider.
