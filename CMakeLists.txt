@@ -56,6 +56,19 @@ if(MINGW AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(fork_is_gcc_mingw TRUE)
 endif()
 
+# MinGW GCC emits aligned 32-byte AVX moves (vmovdqa ymm) to stack slots that
+# Windows x64 only aligns to 16 bytes, so they fault at random: seen
+# 2026-10-24 as a crash in about half of all gcc-debug engine starts (fault
+# at `vmovdqa %ymm0,-0x40(%rbp)` copying SessionConfig in uci_main), 0 of 50
+# with this flag. The GNU as option "encode[s] aligned vector move as
+# unaligned vector move" (binutils docs, i386 options; the local binutils is
+# 2.47). UNVERIFIED: that this is GCC bug 54412, and which binutils release
+# added the option (both sites refused automated fetches on 2026-10-24).
+# Windows test builds only: TCEC builds on Linux.
+if(fork_is_gcc_mingw)
+  target_compile_options(fork_flags INTERFACE -Wa,-muse-unaligned-vector-move)
+endif()
+
 set(fork_sanitizing FALSE)
 if(FORK_SANITIZE)
   if(fork_is_gcc_mingw)

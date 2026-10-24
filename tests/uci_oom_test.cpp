@@ -47,6 +47,11 @@ bool should_fail() {
 
 }  // namespace
 
+// GCC's -Wmismatched-new-delete (gcc-debug, -O1) takes these replacement
+// operators' std::free for a mismatch; it pairs with the std::malloc below.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
 void* operator new(std::size_t n) {
   if (should_fail()) throw std::bad_alloc();
   if (void* p = std::malloc(n ? n : 1)) return p;
