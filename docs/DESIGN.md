@@ -339,7 +339,7 @@ Its only job is to make the protocol testable; it is deleted in Phase 3.
 
 | Option | Type, default, range | TCEC relevance |
 |---|---|---|
-| `Hash` | spin, MB, default 16, min 1, max 33554432 (32 TiB) | TCEC sets `Hash=262144` (256 GiB) and caps hash at 32 or 64 GiB unless initialization is multithreaded. Size math in `std::size_t` bytes, no 32-bit overflow; allocated as one aligned block (or in chunks if allocation fails), first-touch cleared **in parallel** using `Threads` worker threads, before `readyok`. Allocation failure keeps the old table and reports `info string`, never aborts. `madvise(MADV_HUGEPAGE)` where available, but no dependence on large pages (TCEC enables them automatically). Phase 2 allocates and clears the table; Phase 3 uses it. |
+| `Hash` | spin, MB, default 16, min 1, max 33554432 (32 TiB) | TCEC sets `Hash=262144` (256 GiB) and caps hash at 32 or 64 GiB unless initialization is multithreaded. Size math in `std::size_t` bytes, no 32-bit overflow. `setoption` only records the size; the table is allocated and cleared at the next `isready`, `ucinewgame` or `go`, after every option has been applied, because a GUI may send `Hash` before `Threads` and a clear started on `setoption Hash` would run on one thread (review M5, 2026-10-23). Allocated as one aligned block (or in chunks if allocation fails), first-touch cleared **in parallel** with `max(Threads, hardware threads)` workers, before `readyok`. Allocation failure keeps the old table and reports `info string`, never aborts. `madvise(MADV_HUGEPAGE)` where available, but no dependence on large pages (TCEC enables them automatically). Phase 2 allocates and clears the table; Phase 3 uses it. |
 | `Clear Hash` | button | Clears the table (also in parallel). |
 | `Threads` | spin, default 1, min 1, max 1024 | TCEC sets 512 (two sockets). Phase 2 stores it and uses it for hash clearing; Phase 6 uses it for search, NUMA-aware. |
 | `MoveOverhead` | spin, ms, default 100 (proposed), min 0, max 5000 | Time reserved per move for GUI and system latency; TCEC leaves options at default unless the author asks, so the default must already be safe at 30'+3". Name without a space: TCEC's own example is Reckless's `MoveOverhead=1000`. Used by Phase 5. |
@@ -364,8 +364,8 @@ de-facto standard names TCEC sets and must stay).
 | Pondering off, engine books forbidden | No `Ponder`, no `OwnBook`, no book code. |
 | Options default unless the author asks | Defaults are tournament-safe (`MoveOverhead`, `Hash` sized by TCEC anyway). |
 | A crash is a loss, no fixes once an event starts, time losses stand | Robust input handling, no exception escapes, stop and isready answered during search, fuzzed parser, sanitizer and TSan runs of the UCI tests. |
-| Category 4: public source, TCEC builds the binary from the repository | Builds from a clean clone on Linux with the documented commands; `id name` carries the version (from `git describe` at configure time, with a fallback when built from a tarball). |
-| TCEC recommends keeping debug info in the optimized binary | Proposed: release presets add `-g` (no speed effect; verify bench nps with `bench/ab.py`). |
+| Category 4: public source, TCEC builds the binary from the repository | Builds from a clean clone on **TCEC's toolchain**, not only on current compilers: Ubuntu 22.04 with gcc 11.4, g++-12, clang 16 and 19 (competition.md "What this means for Fork"; wiki Further information page per the 2026-10-23 review). That means CMake 3.22 or a documented way around it, no C++20 library features missing from libstdc++ 11/12 (`<format>` today, review C1), and a minimum-toolchain build in the sign-off checks. An `update.sh` that clones and builds the TCEC binary (the Further information page allows one) with an explicit `-march` instead of `native` (the CPU and GPU servers are different Zen generations), tests off, no configure-time downloads, debug info kept. `id name` carries the version (from `git describe` at configure time, with a fallback when built from a tarball). |
+| TCEC recommends keeping debug info in the optimized binary | `update.sh` builds with `-g`; proposed for the release presets too (no speed effect expected; verify bench nps with `bench/ab.py`). |
 
 #### Tests and acceptance checks
 
@@ -385,20 +385,25 @@ de-facto standard names TCEC sets and must stay).
    checks, only no crash, no hang, no sanitizer report).
 4. **Sanitizers:** the `uci` suite under ASan/UBSan (both platforms) and
    TSan (Linux); no_alloc keeps covering the core.
-5. **`fastchess --compliance ./fork`** passes on Linux (release and the
+5. **TCEC-toolchain build:** `update.sh` builds and `fork bench` matches
+   `tests/bench.ref` in an Ubuntu 22.04 environment with gcc 11.4,
+   g++-12, clang 16 and clang 19.
+6. **`fastchess --compliance ./fork`** passes on Linux (release and the
    ASan debug build). Note that it does not check `setoption`, `go
    depth/nodes/movetime/infinite`, `stop`, ponder, `quit` or MultiPV
    (docs/kb/tools.md, fastchess), which is why test 1 exists.
-6. **Clean games under standard cutechess-cli** (and the same under
+7. **Clean games under standard cutechess-cli** (and the same under
    fastchess): Fork against itself, at least 200 games at a fast increment
    time control plus 50 games each with `movetime` and `depth` limits, with
    concurrency: zero crashes, disconnects, illegal moves or time forfeits,
    and every game ending by the rules.
-7. All presets on Windows and Linux, `scripts/check.sh full`, bench
+8. All presets on Windows and Linux, `scripts/check.sh full`, bench
    unchanged (bench stays the perft workload until Phase 3).
 
 #### Deliverables (one commit each)
 
+0. TCEC-toolchain build: `update.sh` and the Ubuntu 22.04 compiler check
+   (unless already done as a Phase 1 review fix).
 1. `src/uci/`: input loop, output function, threads of control, commands.
 2. Option registry and options, including hash allocation and parallel
    clearing.
