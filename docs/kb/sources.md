@@ -499,3 +499,38 @@ All opened on 2026-10-23 with curl (browser User-Agent) or the GitHub REST API; 
 | https://www.chessprogramming.org/Transposition_Table, /Zobrist_Hashing, /Static_Exchange_Evaluation, /Aspiration_Windows, /Repetitions, /Tapered_Eval, /Checkmate | CPW | 2026-10-24 | re-checking techniques.md items; none settled (reasons sharpened) |
 | https://api.github.com/repos/{official-stockfish/nnue-pytorch,CSSLab/maia3,waterhorse1/ChessGPT,CSSLab/maia2} | GitHub API licence detection | 2026-10-24 | research.md: GPL-3.0, AGPL-3.0, Apache-2.0, MIT |
 | http://rebel13.nl/download/programmer-c-ode-of-honor.html (and https) | Code of Honor page | 2026-10-24 | FAILED (302 to https, then 526) |
+
+## Training data (training-data.md, data-policy.md)
+
+All opened 2026-10-24. Samples were inspected in a scratch directory outside the repo with read-only scripts; nothing was executed from them.
+
+| URL | What | Date | Used for |
+|---|---|---|---|
+| https://wiki.chessdom.org/TCEC_Swiss_10, TCEC_Swiss_9, TCEC_Swiss_8, TCEC_Swiss_7, TCEC_Swiss_rules (action=raw + revision API) | TCEC wiki | 2026-10-24 | categories, mid-season rule, Cat 4 definition |
+| https://wiki.chessdom.org/images/f/f8/TCEC_playoff_categorizing.png, /images/2/22/TCEC_S30%2B_cats_flowchart.png | categorisation flowcharts | 2026-10-24 | data-origin branch (Original/Hybrid/Other), Cat 3 promotion path |
+| https://wiki.chessdom.org/TCEC_NNUE_Guideline, TCEC_Questionnaire, Rules, Main_Page, TCEC_Leagues_Season_Rules, TCEC_HCE_rules, TCEC_Cup_rules, TCEC_Season_20_Rules, TCEC_Leagues_Season_29 | TCEC wiki | 2026-10-24 | guideline rule 3 history, questionnaire Q5-Q10 |
+| https://wiki.chessdom.org/TCEC_GPU_rules, TCEC_GPU_Competition_1 | TCEC wiki (pages created 2026-10-24) | 2026-10-24 | new GPU competition |
+| https://wiki.chessdom.org/CatGPT_questionnaire_20260525, Cinder_questionnaire_20260619 | questionnaires | 2026-10-24 | precedents: AI plus Lc0 data in Cat 4; SF plus Lc0 data in Cat 3 |
+| wiki.chessdom.org TCEC_Rules, TCEC_Leagues_rules, TCEC_Season_30, TCEC_Season_29, TCEC_Leagues_Season_30, Further_information, TCEC_GPU_Competition_2, TCEC_Swiss_11, TCEC_Leagues_Season_31 | TCEC wiki | 2026-10-24 | FAILED (404) |
+| https://www.chessdom.com/tcec-announces-ai-integration-plans-as-a-new-generation-of-engines-enters-the-arena/, https://www.chessdom.com/tag/tcec/feed/ | chessdom | 2026-10-24 | no training-data statement |
+| GitHub API repos/TCEC-Chess/tcecgames (meta, readme, tree, releases; license endpoint 404); raw master-archive/TCEC_Cup_16_Final.pgn; https://tcec-chess.com/ | TCEC archive | 2026-10-24 | size, CC BY-SA 3.0, comment format |
+| https://storage.lczero.org/files/training_data/ and each run subdirectory; LICENSE.txt; README.txt of cleanvisits-bt4tf13g-v7op1 and k2hybrid-bt4tf13g-v7op1 | Lc0 data storage | 2026-10-24 | layout, sizes, ODbL/DbCL, Kovax sets |
+| storage.lczero.org .../test91/training-run2-test91-20261021-1617.tar, .../cleanvisits-bt4tf13g-v7op1/training-cleanvisits-20260724-0223.tar | sample chunks (47 MB) | 2026-10-24 | measured record size, positions per GB |
+| https://raw.githubusercontent.com/LeelaChessZero/lc0/master/src/trainingdata/{trainingdata_v6.h,trainingdata_v7.h,trainingdata.cc,writer.cc,rescorer.cc}; lczero-common proto/net.proto | Lc0 source (read for format facts only) | 2026-10-24 | V6/V7 record layout, rescorer options |
+| https://training.lczero.org/, /training_runs; /training_data | Lc0 training site | 2026-10-24 | run settings (test80 10,000 visits, test91 800); /training_data FAILED (504) |
+| https://lczero.org/blog/2021/06/the-importance-of-open-data/ | Lc0 blog | 2026-10-24 | license statement |
+| https://opendatacommons.org/licenses/odbl/odbl-10.txt | ODbL 1.0 text | 2026-10-24 | §4.3-4.6 Produced Work / Derivative Database |
+| raw Stockfish README.md and AUTHORS; https://stockfishchess.org/blog/2026/stockfish-18/, /2024/stockfish-17/; raw wiki nnue-pytorch Training-datasets.md; Stockfish tools docs/binpack.md, docs/convert.md | Stockfish | 2026-10-24 | Lc0 attribution, 100B+ positions, Lc0-only caveat, binpack size |
+| READMEs of gab8192/Obsidian, PGG106/Alexandria | engine READMEs | 2026-10-24 | Lc0-data attribution |
+| https://github.com/jw1912/bullet README, docs/0-contents.md, docs/2-getting-started.md, docs/3-data.md | bullet | 2026-10-24 | CUDA/ROCm/Metal backends only, data formats; docs/2-data-formats.md FAILED (404) |
+| https://database.lichess.org/ (+ HEAD on eval, puzzle, 2013-01, 2026-09 files) | Lichess DB | 2026-10-24 | sizes, counts, CC0, eval and puzzle provenance |
+| raw lichess-org/fishnet README; GitHub API fishnet and Stockfish submodule commit edb0d9db | fishnet | 2026-10-24 | `[%eval]` comes from Stockfish (currently SF 19) |
+| https://database.nikonoel.fr/, https://www.ficsgames.org/ (home, download, about), https://caissabase.co.uk/, https://www.chess.com/news/view/published-data-api | human-game DBs | 2026-10-24 | sizes; licenses not stated |
+| https://www.kingbase-chess.net/ | KingBase | 2026-10-24 | FAILED (JavaScript challenge) |
+| https://computerchess.org.uk/ccrl/4040/ and about.html (+ HEAD on archives); per-engine PGN sample | CCRL | 2026-10-24 | archive sizes, comment format |
+| http://www.cegt.net/downloads.htm, /downloads/40_20/downloads.htm | CEGT | 2026-10-24 | archive sizes |
+| raw official-stockfish/fishtest server/fishtest/api.py; AndyGrant/OpenBench urls.py; official-stockfish/books README | engine-test archives | 2026-10-24 | PGN endpoints, UHO selection |
+| syzygy1/tb README and API (COPYING.txt GPL-2.0); raw niklasf/syzygy-tables.info master checksums/bytes.tsv; https://tablebase.lichess.ovh/tables/standard/ | Syzygy | 2026-10-24 | sizes per piece count, generator license |
+| Hugging Face API and dataset cards: Lichess/standard-chess-games, Lichess/chess-position-evaluations, Lichess/tournament-chess-games, laion/strategic_game_chess, chessdb/snapshots, angeluriot/chess_games, mitermix/chess-selfplay; vondele/cdbdirect README | HF datasets | 2026-10-24 | labellers and licenses |
+| https://www.chessprogramming.org/ChessDB, /KingBase; chessdb.cn info page | CPW, chessdb | 2026-10-24 | FAILED (404 / no usable content) |
+| sample files: Lichess 2013-01 (full), first 20 MB of 2026-09 and of lichess_db_eval, first 5 MB of puzzles | Lichess samples (106 MB with CCRL) | 2026-10-24 | measured formats, eval share, piece-count share |

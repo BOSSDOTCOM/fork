@@ -418,8 +418,11 @@ OFF-LIMITS as training data even when its license would allow it.
 | HF linrock_relabel_* | rescored with an Lc0 net (some sets mixed with SF self-play) | not stated | **OFF-LIMITS** |
 | Lc0 training data (storage.lczero.org) | Lc0 self-play | ODbL 1.0 / DbCL 1.0 | Legally reusable, but **OFF-LIMITS** under Fork's own-data rule |
 | Lichess evaluations database | Stockfish in users' browsers | CC0 | **OFF-LIMITS** for training |
-| Lichess standard game exports (moves only) | humans | CC0 | **USE** for opening/start positions and test books; strip `[%eval]` comments (their engine source UNVERIFIED) |
-| Lichess puzzles | generation engine UNVERIFIED | CC0 | test only, after provenance check |
+| Lichess standard game exports (moves only) | humans | CC0 | **USE** for opening/start positions and test books; strip `[%eval]` comments (Stockfish via fishnet, verified 2026-10-24) and BOT-account games |
+| Lichess puzzles | Stockfish NNUE at 40 meganodes (verified 2026-10-24) | CC0 | **OFF-LIMITS** for training; test-suite use is an owner decision |
+
+Full per-source evaluation (2026-10-24): [training-data.md](training-data.md);
+statuses: [data-policy.md](data-policy.md).
 
 Sources: searchless_chess README, nnue-pytorch wiki "Training datasets",
 lczero.org open-data blog (2021-06-14), TalkChess announcement

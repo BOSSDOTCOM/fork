@@ -25,6 +25,8 @@ Fork, where the information came from, and when it was verified.
 | [best-practices.md](best-practices.md) | Testing discipline, determinism, SPRT, TCEC-condition testing, originality hygiene |
 | [competition.md](competition.md) | TCEC Season 30 rules, CCC, CCRL/CEGT, the engines Fork will face, with pinned builds |
 | [originality.md](originality.md) | What TCEC allows and bans, precedents, how Fork documents provenance |
+| [training-data.md](training-data.md) | External NNUE training-data sources (Lc0, Lichess, engine archives, Syzygy, datasets) evaluated, own vs external vs hybrid strategies, recommendation |
+| [data-policy.md](data-policy.md) | Fork's data rules and the status of every external source (ALLOWED / ALLOWED WITH CATEGORY CHANGE / OFF-LIMITS / UNVERIFIED) |
 | [sources.md](sources.md) | Every page consulted, with the date checked |
 | [../../tools/install.sh](../../tools/install.sh) | Installs and smoke-tests the toolbase in WSL Ubuntu |
 | [../../tools/versions.lock](../../tools/versions.lock) | Pinned versions of every tool |
@@ -56,6 +58,12 @@ Fork, where the information came from, and when it was verified.
      engine-labelled, so they're OFF-LIMITS.
    - Top engines now train on Lc0 data, so Fork's self-play-only route needs
      an early bootstrapping plan.
+   - *2026-10-24:* full source evaluation in
+     [training-data.md](training-data.md), statuses in
+     [data-policy.md](data-policy.md). The CatGPT precedent (AI code plus
+     Lc0 data, still Category 4) means Lc0 data would not change Fork's
+     category today. The recommendation is still own labels (strategy A+),
+     pending the owner's decision.
 7. **Techniques now considered standard:** correction history (Phase 3) and
    threat inputs in NNUE (Phase 4). See [techniques.md](techniques.md).
 

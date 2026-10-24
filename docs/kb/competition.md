@@ -180,6 +180,30 @@ None of these is answered on any page opened on 2026-10-23.
    TCEC's own example sets Reckless's `MoveOverhead=1000`. (Added
    2026-10-24.)
 
+Training-data questions (added 2026-10-24, background in
+[training-data.md](training-data.md) §5):
+
+6. **One category per engine?** Does the Category 4 (AI) trait override
+   the flowchart's data-origin branch? Would data origin matter for a
+   Cat 4 engine now, or if AI engines later join the Leagues or a joint
+   event? (CatGPT, with over 99 % Lc0 data, was placed in Cat 4.)
+7. **NNUE Guideline:** is rule 3 (own search/eval data only) still
+   applied, given that it has not been in the formal rules since S20 and
+   Cup 7/8? Does it apply to Category 4 engines?
+8. **"Hybrid" and "Other" data:** how does the flowchart classify
+   human-game (Lichess CC0) positions rescored by the engine itself,
+   Syzygy WDL/DTZ used as labels, and own self-play started from
+   human-game openings?
+9. **Bootstrapped chains:** if a net chain started on Lc0 data and was
+   later trained only on the engine's own self-play, is that "own data"?
+10. **Mid-season rule:** does "architecture" in the no-higher-category
+    rule include a change of training-data source?
+11. **GPU Competition:** is the new TCEC GPU Competition (wiki pages
+    created 2026-10-24) the AI gauntlet promised on 31 Aug 2026? Will
+    CPU-only Category 4 engines get a path?
+12. **Archive terms:** are there terms of use for tcec-chess.com data
+    beyond the tcecgames README's CC BY-SA 3.0 note?
+
 ### Swiss categories in full (S30 / Swiss 10)
 
 Sources: TCEC_Swiss_10 regulations; categorisation flowchart
