@@ -86,9 +86,13 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
 6. **Originality:** other engines' code, nets and engine-generated data are
    off-limits. Study ideas only, write Fork's own code, and log every
    reference in ORIGINALITY.md. Don't mirror Stockfish's file, class or
-   function names: before introducing a new name, grep a shallow clone of
+   function names: before introducing a new name, have it checked against
    Stockfish's source and flag any non-generic match to the owner first
-   (DESIGN.md section 8).
+   (DESIGN.md section 8). The implementing session never runs that check
+   itself: a separate research subagent shallow-clones Stockfish into a
+   temporary folder, reports only "match / no match" per name (never code
+   lines), and deletes the clone immediately. No engine source, copied
+   file or identifier dump is kept on this machine.
 7. **Performance claims** need the A/B harness (`bench/ab.py`), with bench
    unchanged (DESIGN.md section 7). Report any optimization that makes the code
    meaningfully harder to maintain before adopting it.

@@ -34,7 +34,9 @@ paths:
   -Werror`). clang-tidy runs with the repo's `.clang-tidy` and must stay
   clean. A disabled check needs a written reason in that file.
 - Don't copy or closely paraphrase code from other engines.
-- Before introducing any new type, function, member or file name, grep
-  Stockfish's current source (a shallow clone). If it matches and isn't
-  generic CPW vocabulary, flag it to the owner before using it (DESIGN.md
-  section 8).
+- Before introducing any new type, function, member or file name, have a
+  separate research subagent check it against Stockfish's current source:
+  it clones to a temporary folder, reports only match / no match per name,
+  and deletes the clone at once. Never clone or open engine source in the
+  implementing session. If a name matches and isn't generic CPW
+  vocabulary, flag it to the owner before using it (DESIGN.md section 8).
