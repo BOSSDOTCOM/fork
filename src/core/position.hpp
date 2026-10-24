@@ -29,11 +29,9 @@ void init();
 
 // The per-ply record: what make() pushes and unmake() pops. Kept in a stack so
 // earlier keys stay available for repetition detection. Only what Fork's code
-// reads is stored. Field order follows make(): first what it copies from the
-// previous ply and updates in place, then what it recomputes from the board
-// after every move, then what describes the move itself.
+// reads is stored.
 struct State {
-  // Carried forward and updated incrementally.
+  // Hash and rule state.
   Key key;
   int castling;
   Square ep;  // NoSquare unless an ep capture is legal
@@ -43,12 +41,12 @@ struct State {
   // null move (that position exists only because a side passed). Bounds the
   // repetition window (review M2).
   int game_span;
-  // Recomputed after every move, all for the side to move.
+  // Check information for the side to move.
   Bitboard checkers;     // enemy pieces attacking our king
   Bitboard pinned;       // our pieces that are the only piece between our king and an enemy slider
   Bitboard discoverers;  // our pieces that are the only piece between the enemy king and one of our sliders
-  // The move that led here.
-  Piece captured;
+  // For unmake().
+  Piece captured;  // the piece the move that led here captured, or NoPiece
 
   bool operator==(const State&) const = default;
 };
@@ -136,6 +134,7 @@ class Position {
   void refresh_check_info(State& s) const;  // checkers, pinned, discoverers
   Bitboard lone_shields(Square king, Bitboard shields, Bitboard rook_sliders, Bitboard bishop_sliders) const;
   bool ep_capture_legal(Square ep) const;  // for the side to move
+  Bitboard occupancy_after_ep(Square from, Square to) const;  // for the side to move
   bool has_insufficient_material(Color c) const;
   void finish_setup();  // state from scratch after board setup
 

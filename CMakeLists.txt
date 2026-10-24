@@ -110,6 +110,9 @@ target_link_libraries(fork PRIVATE forkcore fork_pgo)
 add_executable(fork_magic_seeds tools/magic_seeds.cpp)
 target_link_libraries(fork_magic_seeds PRIVATE forkcore)
 
+add_executable(fork_dump_tables tools/dump_tables.cpp)
+target_link_libraries(fork_dump_tables PRIVATE forkcore)
+
 add_executable(fork_micro bench/micro.cpp)
 target_link_libraries(fork_micro PRIVATE forkcore)
 # fork_micro reports its variant and commit so bench/ab.py can verify that it

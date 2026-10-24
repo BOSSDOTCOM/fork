@@ -34,7 +34,7 @@ the date and the part of Fork it informed.
 | 2026-10-24 | Chess Programming Wiki: Looking for Magics, Magic Bitboards (fancy layout), Traversing Subsets of a Set, On an empty Board, Square Mapping Considerations, Square Attacked By ("In Between") | Ideas for the clean-room rewrite of the magic search, masks and between/line tables (`src/core/bitboard.cpp`). Pages opened by the research agent on 2026-10-24; the wiki was in a "temporary, read-only recovery" state. |
 | 2026-10-24 | Sebastiano Vigna, splitmix64.c (public domain), https://prng.di.unimi.it/splitmix64.c | The generator in `src/core/splitmix.hpp`, used for the Zobrist keys (since 2026-10-23) and the magic candidates (since 2026-10-24). Constants checked against the file on 2026-10-24. |
 | 2026-10-24 | Chess Programming Wiki: Checks and Pinned Pieces (Bitboards), X-ray Attacks (Bitboards), Pin, Discovered Check, Square Attacked By | Ideas for the clean-room rewrite of the check information (`Position::refresh_check_info`, `lone_shields`, `gives_check`). |
-| 2026-10-24 | Clean-room specification by the research agent (`build/cleanroom/spec.md`, untracked), derived from Fork's and Stockfish's source without code | The H2/M3/H3 rewrites (section "Resemblance to Stockfish" above). |
+| 2026-10-24 | Clean-room specification by the research agent (`build/cleanroom/spec.md`, untracked), derived from Fork's and Stockfish's source without code | The H2/M3/H3 rewrites (section "Resemblance to Stockfish" below). |
 | 2026-10-23 | Chess Programming Wiki: Chess960 Perft Results (960 positions, credited to Andrew Grant / Ethereal) | Read only, for the deferred Chess960 decision (DESIGN.md section 6); no data used. |
 
 ## Resemblance to Stockfish found in review, and the clean-room fix
@@ -61,12 +61,38 @@ The fix was a clean-room rewrite on 2026-10-24:
   wrote the replacements from that specification and the CPW and Vigna
   sources below. Stockfish was consulted only through file counts of
   `grep -rlw` for the DESIGN.md §8 name checks, which print no code.
-- Results are identical: the same tables (all five SHA-256 fingerprints
-  reproduced in PEXT and magic builds), the same bench node count and
-  signature (26401709 / f298a22041a6270a), and all tests passing.
+- Results are identical: the same tables, the same bench node count and
+  signature (26401709 / f298a22041a6270a), and all tests passing. The
+  tables' SHA-256 fingerprints, taken from the old code by the research
+  agent, are reproduced by the new code in PEXT and magic builds with both
+  compilers (`fork_dump_tables <dir>`, `tools/dump_tables.cpp`, then
+  `sha256sum *.bin`):
+
+  | File | SHA-256 |
+  |---|---|
+  | between.bin | b3072c4a83038e89aabb3f1c7a25d29239f098ed60734c79e7ddd0205cf5e690 |
+  | line.bin | 59a183d3cab802369b846baffcf8c4574cfde79fac3e79f4a7c1fd7015b21ecf |
+  | masks.bin | c2c42e2a05ffab2e9f8fbe3e984ce8dd0b1a4640f253393647c4bc5d85e90111 |
+  | rook_attacks.bin | 8d14bf4b71c683ad5ec04290b41b46ec32b6265a11b9c49502f2db928b4ec70d |
+  | bishop_attacks.bin | 8d47a340cbb61d8e6c3c4b159d4667549bfe5c4de134a5c42a8f6abe33485ed6 |
 
 The earlier versions remain visible in the public git history (commits
 before 2026-10-24).
+
+**Independent check of the result** (2026-10-24, originality-checker agent,
+which compared the new code with Stockfish effdc3fd and spot-checked
+Ethereal and Berserk): no high-severity resemblance. Its medium and low
+findings were applied: the king-square local `ksq` (a Stockfish
+abbreviation) became `own_king` / `their_king`; the State comments were
+regrouped by meaning; the three copies of the en passant occupancy
+expression became one helper, `occupancy_after_ep`; and the magic search
+function, which had the name of CPW's example function (`find_magic`),
+became `pick_magic`. Fork's magic search follows the method of that CPW
+page (sparse candidates as the AND of three random words; index-to-subset
+by bit deposit) without its code; the licence of CPW's code snippets is
+UNVERIFIED, which is one more reason no snippet was transcribed. Kept as
+textbook: the reference ray walk (CPW's on-the-fly method) and the table
+sizes 102400 / 5248, which follow from the mask definition.
 
 | Part | What changed |
 |---|---|
@@ -77,7 +103,8 @@ before 2026-10-24).
 ## Identifier renames (distance from Stockfish naming)
 
 On 2026-10-23 the owner kept generic names (types, bitboard, position,
-movegen, Position, pop_lsb, attackers_to, blockers) and had the
+movegen, Position, pop_lsb, attackers_to, blockers; `blockers` was removed
+with the H3 rewrite on 2026-10-24) and had the
 Stockfish-distinctive ones renamed. Names were checked against a shallow
 clone of official-stockfish/Stockfish at commit effdc3fd (2026-10-17), with
 `grep -rw` over `src/`, used only to check names (no code read for
@@ -88,7 +115,7 @@ current Stockfish; it was renamed anyway, at the owner's request.
 |---|---|---|
 | `GenType` | `GenMode` | old: 4, new: 0 |
 | `more_than_one` | `has_multiple` | old: 3, new: 0 |
-| `check_squares` | `checking_squares` | old: 3, new: 0 |
+| `check_squares` | `checking_squares` (removed 2026-10-24 with the H3 rewrite) | old: 3, new: 0 |
 | `key_after` | `predicted_key` | old: 0, new: 0 |
 | `SliderEntry::attacks`, `::index` | `::table`, `::table_index` | old: 9 / 11 (generic words, but the same members of the magic record), new: 0 (2026-10-24, review H2) |
 | `piece_on` | `piece_at` | old: 7, new: 0 |
@@ -101,6 +128,8 @@ current Stockfish; it was renamed anyway, at the owner's request.
 | `generate_moves` (internal) | `fill_moves` | old: 1, new: 0 |
 | `st()` (private) | `ply_state()` | old: 8, new: 0 |
 | locals `capsq`, `kto`, `rto` | `cap_sq`, `king_to`, `rook_to` | old: 1 / 1 / 2, new: 0 |
+| locals `ksq`, `eksq`, `tksq` | `own_king`, `their_king` | old: 9 / 0 / 0, new: 0 (originality-checker finding) |
+| `find_magic` (CPW example name, not Stockfish) | `pick_magic` | Stockfish: 0 / 0 |
 
 **Second pass (2026-10-24, review M4).** The research agent listed every
 identifier Fork declares in `src/` that also occurs in Stockfish's `src/`
@@ -111,7 +140,9 @@ collisions). Kept, as generic vocabulary used by CPW and across engines:
 `side_to_move` (CPW page "Side to move"; 9 Stockfish files), `file_of`,
 `rank_of`, `make_square` (square-index helpers, CPW "Square Mapping
 Considerations"), `pieces()` and its overloads (piece bitboards),
-`checkers`, `pinned` (CPW "Pin"), `generate<GenMode>` (CPW "Move
+`checkers`, `pinned` (CPW "Pin"), `gives_check` (plain chess English for
+"does this move give check"; 3 Stockfish files; Fork's function body is its
+own since the H3 rewrite), `generate<GenMode>` (CPW "Move
 Generation"), `Move::raw`, `key`, `fen`, `count`, the type names `Bitboard`,
 `Square`, `Color`, `Piece`, `PieceType`, `Move`, `Key`, `MoveList`, and the
 names kept on 2026-10-23. Removed with the H3 rewrite: `pawn_key`,

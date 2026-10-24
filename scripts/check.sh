@@ -41,7 +41,7 @@ cd "$(dirname "$0")/.."
 . scripts/env.sh
 
 mode=${1:-quick}
-code_paths=(src tests bench fuzz tools/magic_seeds.cpp cmake CMakeLists.txt CMakePresets.json
+code_paths=(src tests bench fuzz tools/magic_seeds.cpp tools/dump_tables.cpp cmake CMakeLists.txt CMakePresets.json
             scripts/check.sh scripts/env.sh update.sh)
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT

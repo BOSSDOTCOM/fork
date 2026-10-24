@@ -30,13 +30,13 @@ Bitboard slider_attackers(const Position& pos, Color by, Square s, Bitboard occ)
 // of `shield_side` in turn and see whether a slider of the side opposite the
 // king starts attacking the king of `king_side`.
 Bitboard shields_by_removal(const Position& pos, Color king_side, Color shield_side) {
-  const Square ksq = pos.king_square(king_side);
+  const Square own_king = pos.king_square(king_side);
   const Bitboard occ = pos.pieces();
-  const Bitboard before = slider_attackers(pos, ~king_side, ksq, occ);
+  const Bitboard before = slider_attackers(pos, ~king_side, own_king, occ);
   Bitboard shields = 0;
-  for (Bitboard b = pos.pieces(shield_side) & ~bb(ksq); b;) {
+  for (Bitboard b = pos.pieces(shield_side) & ~bb(own_king); b;) {
     Square sq = pop_lsb(b);
-    if (slider_attackers(pos, ~king_side, ksq, occ ^ bb(sq)) & ~before & ~bb(sq)) shields |= bb(sq);
+    if (slider_attackers(pos, ~king_side, own_king, occ ^ bb(sq)) & ~before & ~bb(sq)) shields |= bb(sq);
   }
   return shields;
 }

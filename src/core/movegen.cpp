@@ -8,7 +8,7 @@ namespace {
 // One loop per piece type, so each slider lookup is resolved at compile time
 // (measured: legal generation 8-9% faster on clang and gcc, DESIGN.md 6).
 template <PieceType Pt, bool Captures, bool Quiets>
-void add_piece_moves(const Position& pos, MoveList& list, Color us, Square ksq, Bitboard occ, Bitboard pinned,
+void add_piece_moves(const Position& pos, MoveList& list, Color us, Square own_king, Bitboard occ, Bitboard pinned,
                      Bitboard capture_target, Bitboard quiet_target) {
   for (Bitboard pcs = pos.pieces(us, Pt); pcs;) {
     Square from = pop_lsb(pcs);
@@ -23,7 +23,7 @@ void add_piece_moves(const Position& pos, MoveList& list, Color us, Square ksq, 
       a = queen_attacks(from, occ);
     if (pinned & bb(from)) {
       if constexpr (Pt == Knight) continue;
-      a &= line(ksq, from);
+      a &= line(own_king, from);
     }
     if constexpr (Captures)
       for (Bitboard b = a & capture_target; b;) list.add(Move(from, pop_lsb(b), Capture));
@@ -42,36 +42,36 @@ void add_promotions(MoveList& list, Square from, Square to, bool capture) {
 template <bool Captures, bool Quiets>
 void fill_moves(const Position& pos, MoveList& list) {
   const Color us = pos.side_to_move(), them = ~us;
-  const Square ksq = pos.king_square(us);
+  const Square own_king = pos.king_square(us);
   const Bitboard occ = pos.pieces(), ours = pos.pieces(us), theirs = pos.pieces(them);
   const Bitboard checkers = pos.checkers();
 
   // King moves, tested with the king lifted off the board so it cannot hide
   // behind itself on a checking ray.
-  const Bitboard occ_no_king = occ ^ bb(ksq);
-  for (Bitboard b = king_attacks(ksq) & ~ours; b;) {
+  const Bitboard occ_no_king = occ ^ bb(own_king);
+  for (Bitboard b = king_attacks(own_king) & ~ours; b;) {
     Square to = pop_lsb(b);
     bool capture = theirs & bb(to);
     if ((capture ? Captures : Quiets) && !pos.attacked_by(them, to, occ_no_king))
-      list.add(Move(ksq, to, capture ? Capture : Quiet));
+      list.add(Move(own_king, to, capture ? Capture : Quiet));
   }
   if (has_multiple(checkers)) return;
 
-  const Bitboard target = checkers ? between(ksq, lsb(checkers)) | checkers : ~Bitboard{0};
+  const Bitboard target = checkers ? between(own_king, lsb(checkers)) | checkers : ~Bitboard{0};
   const Bitboard capture_target = theirs & target;
   const Bitboard quiet_target = ~occ & target;
   const Bitboard pinned = pos.pinned();
 
-  add_piece_moves<Knight, Captures, Quiets>(pos, list, us, ksq, occ, pinned, capture_target, quiet_target);
-  add_piece_moves<Bishop, Captures, Quiets>(pos, list, us, ksq, occ, pinned, capture_target, quiet_target);
-  add_piece_moves<Rook, Captures, Quiets>(pos, list, us, ksq, occ, pinned, capture_target, quiet_target);
-  add_piece_moves<Queen, Captures, Quiets>(pos, list, us, ksq, occ, pinned, capture_target, quiet_target);
+  add_piece_moves<Knight, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target, quiet_target);
+  add_piece_moves<Bishop, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target, quiet_target);
+  add_piece_moves<Rook, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target, quiet_target);
+  add_piece_moves<Queen, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target, quiet_target);
 
   const int up = forward(us);
   const Square ep = pos.ep_target();
   for (Bitboard pawns = pos.pieces(us, Pawn); pawns;) {
     Square from = pop_lsb(pawns);
-    Bitboard allowed = (pinned & bb(from)) ? line(ksq, from) : ~Bitboard{0};
+    Bitboard allowed = (pinned & bb(from)) ? line(own_king, from) : ~Bitboard{0};
     bool promotes = rank_from(us, from) == 6;
 
     Square one = from + up;
@@ -103,7 +103,7 @@ void fill_moves(const Position& pos, MoveList& list) {
       if (ep != NoSquare && (pawn_attacks(us, from) & bb(ep))) {
         Square cap_sq = ep - up;
         Bitboard after = (occ ^ bb(from) ^ bb(cap_sq)) | bb(ep);
-        if (!(pos.attackers_to(ksq, after) & theirs & ~bb(cap_sq))) list.add(Move(from, ep, EnPassant));
+        if (!(pos.attackers_to(own_king, after) & theirs & ~bb(cap_sq))) list.add(Move(from, ep, EnPassant));
       }
     }
   }
@@ -115,12 +115,12 @@ void fill_moves(const Position& pos, MoveList& list) {
       int right = (us == White ? WhiteOO : BlackOO) << side;
       if (!(rights & right)) continue;
       Square rook = relative(us, side == 0 ? 7 : 0);
-      if (between(ksq, rook) & occ) continue;
-      Square king_to = Position::castle_king_to(ksq, rook);
+      if (between(own_king, rook) & occ) continue;
+      Square king_to = Position::castle_king_to(own_king, rook);
       bool safe = true;
-      for (Bitboard path = between(ksq, king_to) | bb(king_to); path && safe;)
+      for (Bitboard path = between(own_king, king_to) | bb(king_to); path && safe;)
         safe = !pos.attacked_by(them, pop_lsb(path), occ);
-      if (safe) list.add(Move(ksq, rook, Castle));
+      if (safe) list.add(Move(own_king, rook, Castle));
     }
   }
 }

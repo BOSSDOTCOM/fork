@@ -182,7 +182,7 @@ std::vector<Occupancy> all_occupancies(Square s, Bitboard mask, int dirs_begin) 
 // in a scratch table, and only a winner's table is copied to `out`
 // (1 << bits entries; slots no occupancy reaches are 0). Returns the number
 // of candidates tried, or -1 if `limit` were tried without success.
-int find_magic(const std::vector<Occupancy>& occupancies, int bits, std::uint64_t seed, int limit,
+int pick_magic(const std::vector<Occupancy>& occupancies, int bits, std::uint64_t seed, int limit,
                Bitboard& magic, Bitboard* out) {
   const std::size_t size = std::size_t{1} << bits;
   const unsigned shift = 64 - bits;
@@ -232,7 +232,7 @@ std::size_t build_slider(SliderEntry* entries, int dirs_begin, const std::uint64
     for (std::uint64_t i = 0; i < (std::uint64_t{1} << bits); ++i)
       slider_table[offset + i] = walk_ray_attacks(s, deposit_bits(i, e.mask), dirs_begin);
 #else
-    find_magic(all_occupancies(s, e.mask, dirs_begin), bits, seeds[s], INT_MAX, e.magic,
+    pick_magic(all_occupancies(s, e.mask, dirs_begin), bits, seeds[s], INT_MAX, e.magic,
                slider_table + offset);
 #endif
     offset += std::size_t{1} << bits;
@@ -248,7 +248,7 @@ int magic_search_attempts(bool rook, Square s, std::uint64_t seed, int limit) {
   const int bits = popcount(mask);
   std::vector<Bitboard> out(std::size_t{1} << bits);
   Bitboard magic = 0;
-  return find_magic(all_occupancies(s, mask, dirs_begin), bits, seed, limit, magic, out.data());
+  return pick_magic(all_occupancies(s, mask, dirs_begin), bits, seed, limit, magic, out.data());
 }
 
 Bitboard rook_attacks_slow(Square s, Bitboard occ) { return walk_ray_attacks(s, occ, RookDirsBegin); }

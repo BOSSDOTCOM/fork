@@ -127,21 +127,29 @@ Bitboard Position::lone_shields(Square king, Bitboard shields, Bitboard rook_sli
 // check by moving off the line.
 void Position::refresh_check_info(State& s) const {
   const Color us = side_, them = ~us;
-  const Square ksq = king_square(us), eksq = king_square(them);
-  s.checkers = attackers_to(ksq, pieces()) & pieces(them);
-  s.pinned = lone_shields(ksq, pieces(us), pieces(them, Rook, Queen), pieces(them, Bishop, Queen));
-  s.discoverers = lone_shields(eksq, pieces(us), pieces(us, Rook, Queen), pieces(us, Bishop, Queen));
+  const Square own_king = king_square(us), their_king = king_square(them);
+  s.checkers = attackers_to(own_king, pieces()) & pieces(them);
+  s.pinned = lone_shields(own_king, pieces(us), pieces(them, Rook, Queen), pieces(them, Bishop, Queen));
+  s.discoverers = lone_shields(their_king, pieces(us), pieces(us, Rook, Queen), pieces(us, Bishop, Queen));
+}
+
+// Occupancy once the side to move has captured en passant from `from` to
+// `to`: the capturing pawn has moved and the pawn it took, which stood beside
+// it, is gone.
+Bitboard Position::occupancy_after_ep(Square from, Square to) const {
+  const Square taken = to - forward(side_);
+  return (pieces() & ~bb(from) & ~bb(taken)) | bb(to);
 }
 
 bool Position::ep_capture_legal(Square ep) const {
   Color us = side_;
   Square cap_sq = ep - forward(us);
-  Square ksq = king_square(us);
+  Square own_king = king_square(us);
   Bitboard candidates = pawn_attacks(~us, ep) & pieces(us, Pawn);
   while (candidates) {
     Square from = pop_lsb(candidates);
-    Bitboard occ = (pieces() ^ bb(from) ^ bb(cap_sq)) | bb(ep);
-    if (!(attackers_to(ksq, occ) & pieces(~us) & ~bb(cap_sq))) return true;
+    Bitboard occ = occupancy_after_ep(from, ep);
+    if (!(attackers_to(own_king, occ) & pieces(~us) & ~bb(cap_sq))) return true;
   }
   return false;
 }
@@ -451,7 +459,7 @@ bool Position::is_pseudo_legal(Move m) const {
 bool Position::is_legal(Move m) const {
   const Color us = side_, them = ~us;
   const Square from = m.from(), to = m.to();
-  const Square ksq = king_square(us);
+  const Square own_king = king_square(us);
 
   if (m.is_castle()) {
     Square king_to = castle_king_to(from, to);
@@ -459,53 +467,52 @@ bool Position::is_legal(Move m) const {
       if (attacked_by(them, pop_lsb(path), pieces())) return false;
     return true;
   }
-  if (from == ksq) return !attacked_by(them, to, pieces() ^ bb(from));
+  if (from == own_king) return !attacked_by(them, to, pieces() ^ bb(from));
   if (has_multiple(checkers())) return false;
 
   if (m.is_en_passant()) {
     Square cap_sq = to - forward(us);
-    Bitboard occ = (pieces() ^ bb(from) ^ bb(cap_sq)) | bb(to);
-    return !(attackers_to(ksq, occ) & pieces(them) & ~bb(cap_sq));
+    Bitboard occ = occupancy_after_ep(from, to);
+    return !(attackers_to(own_king, occ) & pieces(them) & ~bb(cap_sq));
   }
-  if (checkers() && !((between(ksq, lsb(checkers())) | checkers()) & bb(to))) return false;
-  if ((pinned() & bb(from)) && !(line(ksq, from) & bb(to))) return false;
+  if (checkers() && !((between(own_king, lsb(checkers())) | checkers()) & bb(to))) return false;
+  if ((pinned() & bb(from)) && !(line(own_king, from) & bb(to))) return false;
   return true;
 }
 
 bool Position::gives_check(Move m) const {
   const Color us = side_, them = ~us;
   const Square from = m.from(), to = m.to();
-  const Square eksq = king_square(them);
+  const Square their_king = king_square(them);
 
   if (m.is_castle()) {
     // The rook (or, in principle, a slider uncovered by the king) may check.
     Square king_to = castle_king_to(from, to), rook_to = castle_rook_to(from, to);
     Bitboard occ = (pieces() ^ bb(from) ^ bb(to)) | bb(king_to) | bb(rook_to);
     Bitboard rooks = (pieces(us, Rook, Queen) ^ bb(to)) | bb(rook_to);
-    return (rook_attacks(eksq, occ) & rooks) || (bishop_attacks(eksq, occ) & pieces(us, Bishop, Queen));
+    return (rook_attacks(their_king, occ) & rooks) || (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen));
   }
 
   // Discovered check: the moving piece was the only piece between one of our
   // sliders and the enemy king, and it leaves that line.
-  if ((discoverers() & bb(from)) && !(line(eksq, from) & bb(to))) return true;
+  if ((discoverers() & bb(from)) && !(line(their_king, from) & bb(to))) return true;
 
-  if (m.is_promotion()) return attacks(m.promo_type(), to, pieces() ^ bb(from)) & bb(eksq);
+  if (m.is_promotion()) return attacks(m.promo_type(), to, pieces() ^ bb(from)) & bb(their_king);
 
   // Direct check by the moving piece from its new square, using the occupancy
   // before the move. That is safe: if the origin were the only piece between
   // the new square and the enemy king, the piece would already be giving
   // check from there.
   const PieceType moved = kind_of(board_[from]);
-  if (moved == Pawn ? bool(pawn_attacks(us, to) & bb(eksq))
-                    : moved != King && bool(attacks(moved, to, pieces()) & bb(eksq)))
+  if (moved == Pawn ? bool(pawn_attacks(us, to) & bb(their_king))
+                    : moved != King && bool(attacks(moved, to, pieces()) & bb(their_king)))
     return true;
 
   if (m.is_en_passant()) {
     // Removing the captured pawn can uncover a slider.
-    Square cap_sq = to - forward(us);
-    Bitboard occ = (pieces() ^ bb(from) ^ bb(cap_sq)) | bb(to);
-    return (rook_attacks(eksq, occ) & pieces(us, Rook, Queen)) ||
-           (bishop_attacks(eksq, occ) & pieces(us, Bishop, Queen));
+    Bitboard occ = occupancy_after_ep(from, to);
+    return (rook_attacks(their_king, occ) & pieces(us, Rook, Queen)) ||
+           (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen));
   }
   return false;
 }
@@ -534,17 +541,17 @@ Key Position::predicted_key(Move m) const {
     if (m.flag() == DoublePush) {
       // The ep square counts only if the opponent could legally capture.
       Square ep = from + forward(us);
-      Square tksq = king_square(them);
+      Square their_king = king_square(them);
       Bitboard occ_after_push = (pieces() ^ bb(from)) | bb(to);
       Bitboard our_pawns = pieces(us, Pawn) ^ bb(from);  // the pushed pawn is the one captured
       for (Bitboard c = pawn_attacks(us, ep) & pieces(them, Pawn); c;) {
         Square cap_from = pop_lsb(c);
         Bitboard occ = (occ_after_push ^ bb(cap_from) ^ bb(to)) | bb(ep);
-        bool exposed = (pawn_attacks(them, tksq) & our_pawns) ||
-                       (knight_attacks(tksq) & pieces(us, Knight)) ||
-                       (king_attacks(tksq) & pieces(us, King)) ||
-                       (bishop_attacks(tksq, occ) & pieces(us, Bishop, Queen)) ||
-                       (rook_attacks(tksq, occ) & pieces(us, Rook, Queen));
+        bool exposed = (pawn_attacks(them, their_king) & our_pawns) ||
+                       (knight_attacks(their_king) & pieces(us, Knight)) ||
+                       (king_attacks(their_king) & pieces(us, King)) ||
+                       (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen)) ||
+                       (rook_attacks(their_king, occ) & pieces(us, Rook, Queen));
         if (!exposed) {
           k ^= zobrist::ep_file[file_of(ep)];
           break;
