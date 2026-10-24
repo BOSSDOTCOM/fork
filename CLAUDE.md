@@ -113,10 +113,15 @@ next phase begins. Report each item's result.
    `scripts/check.sh full`, `scripts/build.sh` (all presets + PGO) on
    Windows and in `~/fork` (a clean clone), the slow suites, and the Ubuntu
    22.04 build with TCEC's compilers (gcc 11.4, g++-12, clang 16/19; see
-   DESIGN.md §5.1). Plus a **4-hour `fuzz_fen` run** (`tools/fuzz/run_fuzz.py
-   --max-seconds 14400 --plateau-seconds 999999`; its coverage was still
-   growing at 84 minutes on 2026-10-23), then minimize the corpus and
-   promote it to `seed-*` files (see "Fuzz corpus" below).
+   DESIGN.md §5.1). Plus **fuzzing until coverage plateaus** (owner,
+   2026-10-24): `fuzz_fen` for up to 1 hour, stopping early once coverage
+   has not grown for 20 minutes (`tools/fuzz/run_fuzz.py --max-seconds 3600
+   --plateau-seconds 1200`), and `fuzz_moves` for 15 minutes
+   (`--max-seconds 900 --plateau-seconds 999999`), on a fresh `clang-fuzz`
+   build. Report runs, coverage and whether each plateaued; then minimize
+   the corpora and promote them to `seed-*` files (see "Fuzz corpus"
+   below). Add a fuzz target for any new parser (e.g. `fuzz_uci`, Phase 2)
+   under the same rule.
 2. **Tag the release** as a known-good baseline: `git tag -a phase-N` on
    `main`, with the bench node count and signature in the tag message.
 3. **Untracked reports** (`REVIEW-*.md`, `HANDOFF.md`, `MORNING.md` and
