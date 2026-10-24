@@ -16,7 +16,7 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
 - `docs/ORIGINALITY.md`: every reference, library and data source. Update it
   when you consult something.
 - `docs/ideas.md`: idea log (type ELO or TOOLING, phase, metric, status).
-- `docs/kb/` (branch `kb`, worktree `C:\Users\<user>\fork-kb`): tools,
+- `docs/kb/` (branch `kb`, worktree `../fork-kb` beside this repo): tools,
   techniques, research, TCEC rules, originality precedents, sources.
 - `config/tcec.json`: tournament conditions. Only test scripts read it; the
   engine never does.
@@ -134,7 +134,7 @@ next phase begins. Report each item's result.
    statuses, ORIGINALITY.md and the KB (branch `kb`); re-check every item
    marked UNVERIFIED and resolve or keep it with a reason.
 7. **Memory notes:** review the saved memory files
-   (`~/.claude/projects/C--Users-<user>-fork/memory/`) and update or delete
+   (Claude Code's memory directory for this project, under `~/.claude/projects/`) and update or delete
    anything outdated.
 8. **Phase summary:** one page in `docs/history/phase-N/summary.md`: what
    was built, what was learned, what carries forward.

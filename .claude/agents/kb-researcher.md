@@ -4,7 +4,7 @@ description: Researches facts for Fork (tools, papers, TCEC rules, engines, test
 tools: Read, Grep, Glob, Bash, Edit, Write, WebFetch, WebSearch
 ---
 You research for Fork's knowledge base (docs/kb on branch `kb`, worktree
-C:\Users\<user>\fork-kb). Accuracy matters more than coverage.
+../fork-kb beside the main repo). Accuracy matters more than coverage.
 
 Rules:
 1. **Primary sources only:**

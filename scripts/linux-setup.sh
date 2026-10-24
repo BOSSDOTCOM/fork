@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # One-time setup of the Linux working copy in WSL2 Ubuntu (DESIGN.md 2).
-# Run inside Ubuntu:  bash /mnt/c/Users/<user>/fork/scripts/linux-setup.sh
+# Run inside Ubuntu:  bash /mnt/c/<path to the Windows repo>/scripts/linux-setup.sh
 # Installs the build toolchain (asks for your sudo password), then clones the
 # Windows repo into ~/fork (the Linux copy lives in the WSL filesystem, never
 # under /mnt/c) or fast-forwards it if it already exists. Re-runnable.
 set -euo pipefail
 
-src="${FORK_WINDOWS_REPO:-/mnt/c/Users/<user>/fork}"
+src="${FORK_WINDOWS_REPO:-$(cd "$(dirname "$0")/.." && pwd)}"
 dst="${FORK_LINUX_REPO:-$HOME/fork}"
 
 packages=(build-essential g++ clang llvm lld cmake ninja-build git

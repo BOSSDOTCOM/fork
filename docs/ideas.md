@@ -89,24 +89,21 @@ name of their config flag.
 ## 7. TCEC-opening specialization
 
 - **type:** ELO
-- **flag:** none needed for the testing use. For training, the data mix is
-  selected by the training-pipeline config (Phase 4), with a net trained with
-  and without the TCEC-opening positions.
+- **flag:** none needed: testing use only (see the note).
 - **idea:** Collect the openings TCEC used in past seasons from its
-  published archives, and use them in two ways:
-  1. as the opening set for all long-time-control confirmation testing;
-  2. as a source of starting positions for NNUE training data, so that Fork's
-     evaluation is strongest in the unbalanced structures it will actually be
-     assigned.
-- **phase:** Phase 4 (training data) and Phase 8 (testing).
-- **metric:** SPRT on held-out TCEC openings that weren't used in training.
+  published archives and use them as the opening set for all
+  long-time-control confirmation testing, so that tests resemble the
+  unbalanced positions Fork will actually be assigned.
+- **phase:** Phase 8 (testing).
+- **metric:** SPRT on TCEC openings.
 - **note:**
-  - TCEC books are built with engine evaluations. Only the *positions* may be
-    used for training, as starting points that Fork's own self-play then
-    plays out and scores. No book or archive evaluations may be used as
-    labels (docs/kb/originality.md).
-  - Record which seasons' openings went into training and which were held
-    out.
+  - **Testing only (review M6, 2026-10-24).** TCEC books are built with
+    engine evaluations, and docs/kb/originality.md §3 lists books built from
+    other engines' evaluations as off-limits for training. Using the book
+    positions as NNUE training starts was the original second use of this
+    idea; it is dropped unless the owner decides otherwise, in writing,
+    before Phase 4.
+  - Record which seasons' openings each test used.
 - **status:** untested
 
 ## 8. Swiss-specific contempt

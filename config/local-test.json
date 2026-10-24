@@ -1,5 +1,5 @@
 {
-  "_comment": "Local test environment (WSL2 Ubuntu on the owner's machine), installed by tools/install.sh on branch kb. Only test scripts read this file; the engine never does (it gets SyzygyPath as a UCI option). Machine-specific paths: override per machine. TCEC's own conditions are in tcec.json.",
+  "_comment": "Local test environment (WSL2 Ubuntu on the owner's machine), installed by tools/install.sh on branch kb. Only test scripts read this file; the engine never does (it gets SyzygyPath as a UCI option). Machine-specific paths: override per machine; a leading ~ means the WSL user's home directory. TCEC's own conditions are in tcec.json.",
   "recorded": "2026-10-23",
   "platform": "linux-wsl2",
   "tools_bin": "~/fork-tools/bin",

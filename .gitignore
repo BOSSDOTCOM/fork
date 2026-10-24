@@ -11,3 +11,8 @@ fuzz/artifacts/
 fuzz/corpus/*/*
 !fuzz/corpus/*/seed-*
 __pycache__/
+# Session notes and local backups stay out of the public history (CLAUDE.md).
+/HANDOFF.md
+/MORNING.md
+/REVIEW-*.md
+*.bundle

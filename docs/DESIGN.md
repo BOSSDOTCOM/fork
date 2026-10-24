@@ -533,7 +533,7 @@ and later specs must cite them where relevant.
 **Layout review (Phase 1 Part C)**
 Position, move lists and the per-ply state are reviewed for cache efficiency
 and SIMD-friendly access now, so that Phases 3 and 4 don't need a
-restructure. The results are recorded in the decisions log.
+restructure. The results are recorded in docs/ideas.md (idea 9).
 
 ## 8. Module layout and naming conventions
 
