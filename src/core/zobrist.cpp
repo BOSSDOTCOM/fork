@@ -1,6 +1,8 @@
 // zobrist: key generation (see zobrist.hpp).
 #include "core/zobrist.hpp"
 
+#include "core/splitmix.hpp"
+
 namespace forkeng::zobrist {
 
 Key piece_square[16][64];
@@ -12,12 +14,7 @@ Key material[16][16];
 void init() {
   // splitmix64 with a fixed seed: keys (and bench signatures) are reproducible.
   std::uint64_t state = 0xF0E1'D2C3'B4A5'9687ULL;
-  auto next = [&state] {
-    std::uint64_t z = (state += 0x9E3779B97F4A7C15ULL);
-    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
-    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
-    return z ^ (z >> 31);
-  };
+  auto next = [&state] { return splitmix_next(state); };
   for (auto& row : piece_square)
     for (Key& k : row) k = next();
   side = next();

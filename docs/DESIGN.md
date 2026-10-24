@@ -138,16 +138,21 @@ tools/                    training pipeline, match scripts (Phases 4, 8)
 `POPCNT`/`TZCNT`. Shift helpers handle the a/h-file masks. Precomputed tables
 are built at startup:
 `between(a, b)` holds the squares strictly between two aligned squares, and
-`line(a, b)` holds the full line through them. Both are used for pins and
+`line(a, b)` holds the full line through them. Both are filled by walking
+the eight directions from every square. Both are used for pins and
 check blocking. There are also pawn, knight and king attack tables.
 
 ### 4.3 Slider attacks: magic bitboards
 
-- Rook and bishop masks, relevant occupancy subsets, and attack sets are
-  computed by ray-walking.
+- Rook and bishop masks (each ray stopping one square before the edge),
+  relevant occupancy subsets (an index's bits deposited into the mask) and
+  attack sets are computed by walking rays on (file, rank) coordinates.
 - **Magic numbers are found at startup by Fork's own search**, using
-  sparse random candidates from a fixed-seed xorshift generator. No published
-  magic tables are copied. The search is deterministic and takes milliseconds.
+  sparse candidates (the AND of three words) from the fixed-seed splitmix64
+  stream (`splitmix.hpp`), each checked in a scratch table. Per-square seeds
+  from `tools/magic_seeds.cpp` make the first or second candidate succeed.
+  No published magic tables are copied. The search is deterministic and
+  takes about 1.4 ms (no-PEXT builds only).
 - **Fancy magics.** Each square gets its own shift and its own offset into
   one shared attack table, about 800 KB for rooks and bishops together.
 - **PEXT variant.** In builds with BMI2 (unless `FORK_NO_PEXT`), the index is

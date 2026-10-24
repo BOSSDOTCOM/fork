@@ -31,7 +31,46 @@ the date and the part of Fork it informed.
 | 2026-10-23 | perft-random.epd (6838 positions, Marcel van Kervinck / Rookie, "All rights reserved"; Internet Archive capture of marcelk.net linked from CPW Perft Results) | Test oracle (perft_epd, perft_epd_deep, perft_epd_full). Downloaded at configure time, pinned SHA-256, **not committed** because of the copyright notice. |
 | 2026-10-23 | python-chess 1.11.2 source (`has_insufficient_material`, `is_repetition`, `is_irreversible`, `_transposition_key`, `fen`) | Read to match the oracle's rule definitions in tools/difftest. Fork's `insufficient_material()` and `repetition_count()` are written independently in C++ to the same rules. |
 | 2026-10-23 | Stockfish design (recalled from prior study, source not opened this session): per-ply state record holding checkers, blockers/pinners per king and check squares; `gives_check` via check squares plus discovered-check blockers; a key-after-move helper (Stockfish: `key_after`) for TT prefetch | Ideas only, for Position::State, gives_check and predicted_key (renamed from key_after on 2026-10-23, see below). Fork's code is written from DESIGN.md; its blocker definition differs deliberately (removal semantics, no sniper exclusion). |
+| 2026-10-24 | Chess Programming Wiki: Looking for Magics, Magic Bitboards (fancy layout), Traversing Subsets of a Set, On an empty Board, Square Mapping Considerations, Square Attacked By ("In Between") | Ideas for the clean-room rewrite of the magic search, masks and between/line tables (`src/core/bitboard.cpp`). Pages opened by the research agent on 2026-10-24; the wiki was in a "temporary, read-only recovery" state. |
+| 2026-10-24 | Sebastiano Vigna, splitmix64.c (public domain), https://prng.di.unimi.it/splitmix64.c | The generator in `src/core/splitmix.hpp`, used for the Zobrist keys (since 2026-10-23) and the magic candidates (since 2026-10-24). Constants checked against the file on 2026-10-24. |
+| 2026-10-24 | Clean-room specification by the research agent (`build/cleanroom/spec.md`, untracked), derived from Fork's and Stockfish's source without code | The H2/M3/H3 rewrites (section "Resemblance to Stockfish" above). |
 | 2026-10-23 | Chess Programming Wiki: Chess960 Perft Results (960 positions, credited to Andrew Grant / Ethereal) | Read only, for the deferred Chess960 decision (DESIGN.md section 6); no data used. |
+
+## Resemblance to Stockfish found in review, and the clean-room fix
+
+The Phase 1 review (2026-10-23/24, an adversarial "TCEC judge" pass) compared
+Fork's source side by side with Stockfish (official-stockfish/Stockfish at
+commit effdc3fd, 2026-10-17) and found three parts of Fork that followed
+Stockfish too closely in structure and expression, although no file was
+copied: the magic-number search and slider table setup (`bitboard.cpp`), the
+`between`/`line` table construction (`bitboard.cpp`), and the check/pin
+computation with the per-ply `State` layout (`position.{hpp,cpp}`). The
+Phase 1 session that wrote them had studied Stockfish's design before (see
+the 2026-10-23 entry above), and the review session read the Stockfish source
+to compare.
+
+The fix was a clean-room rewrite on 2026-10-24:
+- A separate research agent read both codebases and wrote a specification
+  with no code: what each part must compute (its observable contract and
+  SHA-256 fingerprints of every table), which features of Fork's code
+  matched Stockfish (named at the level of ideas, so they would not be
+  reproduced), and non-engine sources to build from.
+- The implementing session never opened Stockfish's source, the bodies of
+  the flagged Fork routines, or the review's side-by-side evidence. It
+  wrote the replacements from that specification and the CPW and Vigna
+  sources below. Stockfish was consulted only through file counts of
+  `grep -rlw` for the DESIGN.md §8 name checks, which print no code.
+- Results are identical: the same tables (all five SHA-256 fingerprints
+  reproduced in PEXT and magic builds), the same bench node count and
+  signature (26401709 / f298a22041a6270a), and all tests passing.
+
+The earlier versions remain visible in the public git history (commits
+before 2026-10-24).
+
+| Part | What changed |
+|---|---|
+| Magic search and slider tables (review H2) | Rewritten: masks by walking rays to one square before the edge; occupancies indexed by depositing an index's bits into the mask; candidates from Fork's splitmix64 stream (the AND of three words, the sparse-candidate idea of CPW "Looking for Magics") checked in a scratch table that is copied out only for a winner; no pre-filter, no stamp table. Per-square seeds regenerated with `tools/magic_seeds.cpp`. Lookup record members renamed (`attacks` → `table`, `index` → `table_index`). |
+| `between`/`line` tables (review M3) | Rewritten by walking each of the eight directions from every square: the squares passed so far are `between`, and the ray pair through the square is `line`. No slider attack sets are used. A new exhaustive test checks both against plane geometry on (file, rank) coordinates. |
 
 ## Identifier renames (distance from Stockfish naming)
 

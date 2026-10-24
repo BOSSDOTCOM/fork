@@ -6,7 +6,8 @@
 // - Tables are built once by init_bitboards() (thread-safe) before any lookup;
 //   build_bitboard_tables() exists only for timing startup.
 // - Magic and PEXT lookups return exactly the ray-walk reference for every
-//   occupancy (tests/test_magics.cpp); magics come from Fork's own seeded search.
+//   occupancy (tests/test_magics.cpp); magics come from Fork's own seeded
+//   search (splitmix64 stream, sparse candidates; see bitboard.cpp).
 // - between(a, b) excludes both ends and is 0 unless a and b are aligned;
 //   line(a, b) includes both ends and is 0 unless aligned.
 #pragma once
@@ -47,14 +48,16 @@ constexpr Bitboard shift_south(Bitboard b) { return b >> 8; }
 constexpr Bitboard shift_east(Bitboard b) { return (b & ~FileH) << 1; }
 constexpr Bitboard shift_west(Bitboard b) { return (b & ~FileA) >> 1; }
 
-// Slider lookup entry for one square. With PEXT the magic and shift are unused.
+// Slider lookup entry for one square (CPW "Magic Bitboards", fancy layout):
+// `table` is this square's slice of the shared attack table. With PEXT the
+// magic and shift are unused.
 struct SliderEntry {
   Bitboard mask;
   Bitboard magic;
-  const Bitboard* attacks;
+  const Bitboard* table;
   unsigned shift;
 
-  std::size_t index(Bitboard occ) const {
+  std::size_t table_index(Bitboard occ) const {
 #if FORK_USE_PEXT
     return _pext_u64(occ, mask);
 #else
@@ -95,11 +98,11 @@ inline Bitboard line(Square a, Square b) { return tables::line[a][b]; }
 
 inline Bitboard rook_attacks(Square s, Bitboard occ) {
   const SliderEntry& e = tables::rook[s];
-  return e.attacks[e.index(occ)];
+  return e.table[e.table_index(occ)];
 }
 inline Bitboard bishop_attacks(Square s, Bitboard occ) {
   const SliderEntry& e = tables::bishop[s];
-  return e.attacks[e.index(occ)];
+  return e.table[e.table_index(occ)];
 }
 inline Bitboard queen_attacks(Square s, Bitboard occ) {
   return rook_attacks(s, occ) | bishop_attacks(s, occ);

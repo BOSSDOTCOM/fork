@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "core/bitboard.hpp"
 #include "harness.hpp"
 
@@ -35,6 +37,42 @@ TEST_CASE("magics", "rook lookups match ray walk for every subset") {
 
 TEST_CASE("magics", "bishop lookups match ray walk for every subset") {
   check_slider(tables::bishop, bishop_attacks, bishop_attacks_slow, "bishop");
+}
+
+// Independent oracle for between/line: plane geometry on (file, rank)
+// coordinates, not ray walking. a and b are aligned when they differ and share
+// a file, a rank or a diagonal; c is on their line when the three points are
+// collinear, and strictly between them when it is also inside their bounding
+// box and is neither end.
+TEST_CASE("magics", "between and line match coordinate geometry for every pair") {
+  for (Square a = 0; a < 64; ++a)
+    for (Square b = 0; b < 64; ++b) {
+      int fa = file_of(a), ra = rank_of(a), fb = file_of(b), rb = rank_of(b);
+      bool aligned = a != b && (fa == fb || ra == rb || fa - fb == ra - rb || fa - fb == rb - ra);
+      Bitboard want_between = 0, want_line = 0;
+      for (Square c = 0; aligned && c < 64; ++c) {
+        int fc = file_of(c), rc = rank_of(c);
+        if ((fc - fa) * (rb - ra) != (rc - ra) * (fb - fa)) continue;
+        want_line |= bb(c);
+        bool inside = std::min(fa, fb) <= fc && fc <= std::max(fa, fb) && std::min(ra, rb) <= rc &&
+                      rc <= std::max(ra, rb);
+        if (inside && c != a && c != b) want_between |= bb(c);
+      }
+      CHECK_MSG(between(a, b) == want_between, "between " << a << ' ' << b);
+      CHECK_MSG(line(a, b) == want_line, "line " << a << ' ' << b);
+    }
+}
+
+// Masks: empty-board attacks without the board edges, except the edges along
+// which a rook on that edge itself slides.
+TEST_CASE("magics", "relevant-occupancy masks") {
+  for (Square s = 0; s < 64; ++s) {
+    Bitboard own_rank = Rank1 << (8 * rank_of(s)), own_file = FileA << file_of(s);
+    Bitboard rook_edges = ((Rank1 | Rank8) & ~own_rank) | ((FileA | FileH) & ~own_file);
+    CHECK_MSG(tables::rook[s].mask == (rook_attacks_slow(s, 0) & ~rook_edges), "rook mask " << s);
+    CHECK_MSG(tables::bishop[s].mask == (bishop_attacks_slow(s, 0) & ~(Rank1 | Rank8 | FileA | FileH)),
+              "bishop mask " << s);
+  }
 }
 
 TEST_CASE("magics", "leaper tables and lines") {

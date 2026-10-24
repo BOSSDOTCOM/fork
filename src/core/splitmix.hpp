@@ -1,0 +1,25 @@
+// splitmix: Fork's one pseudo-random stream, for table generation only.
+//
+// Purpose: a fixed-seed generator for the Zobrist keys (zobrist.cpp) and the
+// magic-number candidates (bitboard.cpp).
+// Invariants:
+// - splitmix64 exactly as in Sebastiano Vigna's public-domain reference,
+//   https://prng.di.unimi.it/splitmix64.c (constants checked against it on
+//   2026-10-24). Changing it changes every Zobrist key and so the bench
+//   signature.
+// - Deterministic: the same seed always gives the same stream.
+#pragma once
+
+#include <cstdint>
+
+namespace forkeng {
+
+// Advances `state` and returns the next 64-bit output.
+inline std::uint64_t splitmix_next(std::uint64_t& state) {
+  std::uint64_t z = (state += 0x9E3779B97F4A7C15ULL);
+  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+  z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+  return z ^ (z >> 31);
+}
+
+}  // namespace forkeng
