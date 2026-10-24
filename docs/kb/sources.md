@@ -446,3 +446,21 @@ All opened on 2026-10-23 with curl (browser User-Agent) or the GitHub REST API; 
 | https://www.chessdom.com/tcec-announces-ai-integration-plans-as-a-new-generation-of-engines-enters-the-arena/ | TD statement (31 Aug 2026) | 2026-10-23 | AI engines: Swiss via Cat 3+4 playoff, no Leagues, extra gauntlet |
 | https://www.chessdom.com/?s={AI+gauntlet,TCEC+Season+31,CatGPT,TCEC+AI} | Chessdom search | 2026-10-23 | No results parsed |
 | https://www.chessdom.com/tag/tcec/feed/ | Chessdom TCEC tag feed | 2026-10-23 | Latest TCEC article is the 31 Aug 2026 statement; no gauntlet/S31 news |
+
+## UCI protocol (uci.md)
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://www.shredderchess.com/download/div/uci.zip | Official UCI spec download (Shredder). uci.zip 8553 bytes, sha256 966de351d34302ad1c0ab7c148bd365b26c5ece7eed7a75a7ca08b5925e6343e; contains engine-interface.txt ("April 2006", 26211 bytes, zip time 2006-04-22 16:10, sha256 cda40659c9f047743ebfe8328f8554d7fa2e3587b7f511f102390b6bdcc21e02) | 2026-10-23 | Every protocol rule in uci.md sections 1-6 (full text read) |
+| https://www.shredderchess.com/chess-features/uci-universal-chess-interface.html | Shredder UCI page | 2026-10-23 | Authors (Huber, Meyer-Kahlen, 2000), "open, no licence fees", "current specification" link |
+| https://www.shredderchess.com/download.html | Shredder download page | 2026-10-23 | Confirms uci.zip is the "Download UCI Chess Engine Protocol" link |
+| https://www.chessprogramming.org/UCI | CPW UCI page | 2026-10-23 | Release date November 2000; links the Shredder page as "The UCI Specification" |
+| https://raw.githubusercontent.com/Disservin/fastchess/v1.8.2-alpha/app/src/engine/uci_engine.cpp | fastchess source at pinned tag | 2026-10-23 | go/position/setoption/ucinewgame output, bestmove and info-line parsing |
+| https://raw.githubusercontent.com/Disservin/fastchess/v1.8.2-alpha/app/src/engine/uci_engine.hpp | fastchess header | 2026-10-23 | isBound (lowerbound/upperbound detection) |
+| https://raw.githubusercontent.com/Disservin/fastchess/v1.8.2-alpha/app/src/matchmaking/match/match.cpp | fastchess match loop | 2026-10-23 | isready per move, game-end check before go, illegal-move/timeout handling, PV and mate-PV checks |
+| https://raw.githubusercontent.com/Disservin/fastchess/v1.8.2-alpha/app/src/engine/option/{options,option_factory,string_option,spin_option}.hpp | fastchess option parsing | 2026-10-23 | Case-sensitive option names, combo/string parsing, spin range check |
+| https://raw.githubusercontent.com/Disservin/fastchess/v1.8.2-alpha/app/src/engine/compliance.hpp | fastchess compliance checker | 2026-10-23 | Cross-check of tools.md summary (last info line must carry a score) |
+| https://api.github.com/repos/Disservin/fastchess/git/trees/v1.8.2-alpha?recursive=1 | API tree | 2026-10-23 | Locating the files above |
+| https://raw.githubusercontent.com/cutechess/cutechess/v1.5.1/projects/lib/src/uciengine.cpp | cutechess UCI engine source at pinned tag | 2026-10-23 | go line, new-game sequence, mate/bound score handling, bestmove/ponder handling, UCI_ option handling |
+| https://api.github.com/repos/cutechess/cutechess/git/trees/v1.5.1?recursive=1 | API tree | 2026-10-23 | Locating uciengine.cpp |
+| https://raw.githubusercontent.com/niklasf/python-chess/v1.11.2/chess/engine.py | python-chess engine module at pinned version | 2026-10-23 | bestmove "(none)"/"NULL", wdl/ebf info fields, searchmoves 0000 workaround, go clamping |

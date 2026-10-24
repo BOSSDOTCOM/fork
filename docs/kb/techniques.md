@@ -14,6 +14,8 @@ Phases (docs/DESIGN.md): 1 board/movegen, 2 UCI, 3 search + Syzygy,
 4 evaluation + training, 5 time management, 6 SMP, 7 tournament play,
 8 TCEC-conditions testing.
 
+Phase 2 (UCI protocol) has its own file: [uci.md](uci.md).
+
 A useful ordering for Phase 3 is CPW's "Search Progression" page (the
 "Connorpasta" and "Improved Connorpasta" lists): TT + move ordering, PVS,
 qsearch, aspiration; then NMP, LMR, RFP, history, LMP, futility, continuation
