@@ -442,8 +442,16 @@ spin option are accepted, one past either end is rejected with an
 2. **Timing checks:** `uci` to `uciok` and `isready` to `readyok` under
    50 ms at default settings; `stop` to `bestmove` under 10 ms; hash clear
    time at 1, 4 and 16 GiB recorded per thread count.
-3. **fuzz_uci**: a libFuzzer target over the command parser (no output
-   checks, only no crash, no hang, no sanitizer report).
+3. **fuzz_uci**: a libFuzzer target over the command parser. Refined by the
+   owner (2026-10-24): the parsers in isolation, with no search threads
+   (`SessionConfig::use_threads` off: go is answered on the calling thread,
+   the Hash cleared there); every command covered, including position with
+   long move lists, setoption with multi-word names, all go arguments and
+   unknown or malformed input; hand-written seeds, one per command
+   (`fuzz/corpus/uci/seed-cmd-*`); the coverage-plateau rule. Besides no
+   crash, hang or sanitizer report, it checks that every printed line is a
+   valid UCI engine message and that a line without a command prints
+   nothing (debug builds: only `info string unknown command: ...`).
 4. **Sanitizers:** the `uci` suite under ASan/UBSan (both platforms) and
    TSan (Linux); no_alloc keeps covering the core.
 5. **TCEC-toolchain build:** `update.sh` builds and `fork bench` matches
