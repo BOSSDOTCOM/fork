@@ -62,6 +62,7 @@ current Stockfish; it was renamed anyway, at the owner's request.
 |---|---|---|---|
 | python-chess | 1.11.2 | GPL-3.0 | Independent move generator for differential testing (tools/difftest), run in a local venv |
 | libFuzzer | bundled with LLVM-MinGW clang 23.1.3 | Apache-2.0 with LLVM exception | Fuzzing the FEN parser and move parsing (fuzz/) |
+| libc++ / libc++abi (MSan-instrumented) | llvm-project llvmorg-21.1.8 (commit 2078da43) | Apache-2.0 with LLVM exception | Linked only into the Linux MemorySanitizer test build (scripts/msan.sh); every shipped and other test build uses the toolchain's libstdc++. Built from source in ~/fork-tools, not committed. |
 
 ## Build tools (not linked into Fork)
 
