@@ -20,6 +20,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(FORK_ARCH "native" CACHE STRING "Target CPU: native, x86-64-v3, x86-64-v4")
 option(FORK_NO_PEXT "Use magic multiplication even when BMI2 PEXT is available" OFF)
 option(FORK_SANITIZE "Build with ASan + UBSan (where the toolchain supports it)" OFF)
+option(FORK_TSAN "Build with ThreadSanitizer (Linux; not with FORK_SANITIZE)" OFF)
 option(FORK_LTO "Link-time optimization for optimized builds" ON)
 option(FORK_BUILD_TESTS "Build the test executable and CTest tests" ON)
 option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
@@ -65,6 +66,18 @@ if(FORK_SANITIZE)
       -fsanitize=address,undefined -fno-sanitize-recover=undefined)
     target_link_options(fork_flags INTERFACE -fsanitize=address,undefined)
   endif()
+endif()
+
+# ThreadSanitizer for the UCI threads (DESIGN.md §5.1, test 4). Linux only:
+# MinGW ships no TSan runtime. The no_alloc test is not built: its global
+# operator new collides with TSan's (.claude/rules/testing.md).
+if(FORK_TSAN)
+  if(FORK_SANITIZE OR MINGW)
+    message(FATAL_ERROR "FORK_TSAN needs Linux and cannot be combined with FORK_SANITIZE")
+  endif()
+  set(fork_sanitizing TRUE)
+  target_compile_options(fork_flags INTERFACE -fsanitize=thread)
+  target_link_options(fork_flags INTERFACE -fsanitize=thread)
 endif()
 
 # Self-contained Windows binaries (sanitizer runtimes need the DLL build).
@@ -187,9 +200,9 @@ if(FORK_FUZZ)
   else()
     target_compile_options(fork_flags INTERFACE -fsanitize=fuzzer-no-link)
   endif()
-  foreach(target fuzz_fen fuzz_moves)
+  foreach(target fuzz_fen fuzz_moves fuzz_uci)
     add_executable(${target} fuzz/${target}.cpp)
-    target_link_libraries(${target} PRIVATE forkcore)
+    target_link_libraries(${target} PRIVATE forkuci)
     if(MINGW)
       target_link_libraries(${target} PRIVATE ${fuzz_runtime})
     else()
@@ -263,7 +276,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
   foreach(suite magics fen zobrist_ep draws perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                uci_protocol uci_options uci_placeholder)
+                uci_protocol uci_options uci_placeholder uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -275,9 +288,11 @@ if(FORK_BUILD_TESTS)
     set_tests_properties(${suite} PROPERTIES LABELS slow)
   endforeach()
 
-  add_executable(fork_alloc_test tests/alloc_test.cpp)
-  target_link_libraries(fork_alloc_test PRIVATE forkcore)
-  add_test(NAME no_alloc COMMAND fork_alloc_test)
+  if(NOT FORK_TSAN)
+    add_executable(fork_alloc_test tests/alloc_test.cpp)
+    target_link_libraries(fork_alloc_test PRIVATE forkcore)
+    add_test(NAME no_alloc COMMAND fork_alloc_test)
+  endif()
 
   add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}
     -DFORK=$<TARGET_FILE:fork>

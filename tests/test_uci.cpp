@@ -14,6 +14,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -642,6 +643,65 @@ TEST_CASE("uci_placeholder", "mate in one, else MVV-LVA, else the first legal mo
   CHECK_EQ(checked, 6);
   g.check_transcript();
   g.quit();
+}
+
+// Timing checks (DESIGN.md §5.1, test 2): uci to uciok and isready to
+// readyok under 50 ms at default settings, stop to bestmove under 10 ms.
+// Times run from writing the command to the reader thread receiving the
+// answer. uci is written right after the process is created, so its time
+// includes start-up; the first isready allocates and clears the default
+// 16 MB Hash. Each check takes the best of three fresh engines, so one
+// scheduler hiccup on this shared machine does not fail it; all three are
+// printed. Debug (sanitizer) builds are timed against ten times the limits.
+namespace {
+
+constexpr double Slack = Optimized ? 1.0 : 10.0;
+
+double ms_between(Clock::time_point a, Clock::time_point b) {
+  return std::chrono::duration<double, std::milli>(b - a).count();
+}
+
+struct Timing {
+  std::vector<double> runs;
+  double best() const { return *std::min_element(runs.begin(), runs.end()); }
+  std::string text() const {
+    std::string s;
+    for (double r : runs) s += (s.empty() ? "" : ", ") + std::to_string(r).substr(0, 6) + " ms";
+    return s;
+  }
+};
+
+// Sends `command` and returns the ms until a line
+// starting with `answer` arrives (negative if it never does).
+double time_reply(Gui& g, std::string_view command, std::string_view answer) {
+  const std::size_t from = g.engine.line_count();
+  const Clock::time_point sent = Clock::now();
+  g.send(command);
+  const std::optional<std::size_t> i = g.engine.wait_prefix(answer, from, Patience);
+  if (!i) return -1;
+  return ms_between(sent, g.engine.lines()[*i].at);
+}
+
+}  // namespace
+
+TEST_CASE("uci_timing", "uci to uciok, first isready to readyok, stop to bestmove") {
+  Timing uci, ready, stop;
+  for (int run = 0; run < 3; ++run) {
+    Gui g;
+    uci.runs.push_back(time_reply(g, "uci", "uciok"));
+    ready.runs.push_back(time_reply(g, "isready", "readyok"));
+    g.send("go infinite");
+    CHECK(g.sync());
+    stop.runs.push_back(time_reply(g, "stop", "bestmove"));
+    g.check_transcript();
+    g.quit();
+  }
+  std::cout << "  uci -> uciok:         " << uci.text() << "\n"
+            << "  isready -> readyok:   " << ready.text() << "\n"
+            << "  stop -> bestmove:     " << stop.text() << "\n";
+  CHECK_MSG(uci.best() >= 0 && uci.best() < 50 * Slack, uci.text());
+  CHECK_MSG(ready.best() >= 0 && ready.best() < 50 * Slack, ready.text());
+  CHECK_MSG(stop.best() >= 0 && stop.best() < 10 * Slack, stop.text());
 }
 
 }  // namespace forkeng::test

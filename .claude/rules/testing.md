@@ -31,7 +31,11 @@ paths:
   - `scripts/build.sh` (all presets) before a phase sign-off;
   - slow suites (`ctest -L slow`) at sign-off.
 - **Sanitizers:** clang-debug runs ASan+UBSan on Windows. GCC sanitizers,
-  TSan, MSan and valgrind run on Linux.
+  TSan, MSan and valgrind run on Linux. TSan has its own presets,
+  `clang-tsan` and `gcc-tsan` (Linux only; `FORK_TSAN=ON`, no
+  `fork_alloc_test`), and must be clean on the UCI suites, which drive a
+  TSan-built engine: run them with `TSAN_OPTIONS=halt_on_error=1` so a
+  report kills the engine and fails the test.
 - **no_alloc runs everywhere except TSan, MSan and valgrind.** The
   counting-allocator test (`fork_alloc_test`) replaces global operator
   new/delete. That collides with those tools' own replacements: a link

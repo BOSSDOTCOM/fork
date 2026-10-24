@@ -1,0 +1,9 @@
+setoption name Clear Hash
+setoption name  move   overhead value 0
+setoption name Hash value 0
+setoption name LogFile value <empty>
+setoption name SyzygyPath value /tmp:C:	b;x
+setoption
+setoption name
+setoption name Hash value
+isready

@@ -60,7 +60,8 @@ python -I tools/difftest/difftest.py --fork build/clang-release/fork   # vs pyth
 python -I tools/fuzz/run_fuzz.py --target build/clang-fuzz/fuzz_fen --corpus fuzz/corpus/fen
 ```
 
-Presets: `{clang,gcc}-{debug,release,v3,avx512,nopext}`, `clang-fuzz`; PGO
+Presets: `{clang,gcc}-{debug,release,v3,avx512,nopext}`, `clang-fuzz`,
+`{clang,gcc}-tsan` (Linux only); PGO
 runs via `scripts/build.sh clang-pgo gcc-pgo`. Primary platform is x86-64
 Linux (WSL2 working copy `~/fork`); Windows is the second platform.
 
