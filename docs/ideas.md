@@ -165,6 +165,19 @@ name of their config flag.
   make/unmake -16% (clang and gcc), gives_check +76%. The lazy variant for
   pins (compute on first request in a ply) is still untested. layout-exp's v5
   no longer applies to the new State; re-derive any layout change from it.
+- **pre-review vs after the clean-room rewrite** (2026-10-24, bench/ab.py,
+  3090058 vs 9a5031b, release -march=native, 2 runs x 6 rounds per compiler):
+  make/unmake is 16-19% faster (clang 25.2 -> 20.5 ns, gcc 26.9 -> 22.5 ns)
+  and gives_check 70-80% slower (clang 3.09 -> 5.53 ns, gcc 2.04 -> 3.47 ns).
+  Movegen, is_legal, is_pseudo_legal and attackers_to are within noise or
+  faster. Each make saves about 4.5 ns and each gives_check call costs about
+  1.4-2.4 ns more, so the trade pays only while search makes few gives_check
+  calls per make.
+- **Phase 3 task:** count gives_check calls per make() in real search
+  (pruning and extension decisions may call it for moves that are never
+  made). If the ratio approaches 2 or more, test the lazy per-ply
+  check-squares variant: compute the direct-check squares on the first
+  gives_check call in a ply and reuse them for that ply's remaining calls.
 - **status:** deferred to Phase 3
 
 ## 10. Steer into TB-drawn 6-piece endings
