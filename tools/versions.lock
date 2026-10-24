@@ -1,6 +1,9 @@
 # Fork tool pins. Verified 2026-10-23 against the upstream pages listed in docs/kb/_sources-tools.md.
 # Format (whitespace separated, one tool per line, '#' starts a comment):
 #   name  version  source-url  sha256:<hex> | commit:<sha1> | UNVERIFIED
+#   UNVERIFIED in the last field means no pin is possible: upstream publishes no sha256 or commit
+#   (valgrind-upstream: md5/sha1 only; pgn-extract, bayeselo: no checksum; vtune, amd-uprof: EULA
+#   downloads), or the package comes from apt, whose signed archive is the integrity check.
 # tools/install.sh reads this file. Fields must not contain spaces.
 # "commit:" = the commit the tag points to (peeled), so a re-tagged upstream is detected.
 #

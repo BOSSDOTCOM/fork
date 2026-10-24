@@ -24,7 +24,7 @@ Every page or file opened for this research. Format: URL | what it is | date che
 - https://raw.githubusercontent.com/cutechess/cutechess/v1.5.1/CMakeLists.txt | build file at tag | 2026-10-23 | no CLI-only option; WITH_TESTS; cli target
 - https://raw.githubusercontent.com/cutechess/cutechess/master/docs/cutechess-cli.6 and .../v1.5.1/docs/cutechess-cli.6 | man page | 2026-10-23 | CLI options (repeat, draw/resign/tb, sprt, openings)
 - https://github.com/cutechess/cutechess/wiki/Building-from-source | wiki | 2026-10-23 | Ubuntu apt package list
-- https://packages.ubuntu.com/search?keywords=qt6-base-dev... | Ubuntu package search | 2026-10-23 | attempted, connection reset (so the Qt version per Ubuntu release is UNVERIFIED)
+- https://packages.ubuntu.com/search?keywords=qt6-base-dev... | Ubuntu package search | 2026-10-23 | attempted, connection reset (Qt version per Ubuntu release resolved 2026-10-24 via the Launchpad API, see the re-check log at the end)
 - https://api.launchpad.net/1.0/ubuntu/+archive/primary?ws.op=getPublishedSources&source_name=qt6-base... | Launchpad API | 2026-10-23 | attempted, no response
 
 ## Testing frameworks, SPRT, SPSA
@@ -464,3 +464,38 @@ All opened on 2026-10-23 with curl (browser User-Agent) or the GitHub REST API; 
 | https://raw.githubusercontent.com/cutechess/cutechess/v1.5.1/projects/lib/src/uciengine.cpp | cutechess UCI engine source at pinned tag | 2026-10-23 | go line, new-game sequence, mate/bound score handling, bestmove/ponder handling, UCI_ option handling |
 | https://api.github.com/repos/cutechess/cutechess/git/trees/v1.5.1?recursive=1 | API tree | 2026-10-23 | Locating uciengine.cpp |
 | https://raw.githubusercontent.com/niklasf/python-chess/v1.11.2/chess/engine.py | python-chess engine module at pinned version | 2026-10-23 | bestmove "(none)"/"NULL", wdl/ebf info fields, searchmoves 0000 workaround, go clamping |
+
+## UNVERIFIED re-check pass (phase-end checklist item 6)
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://raw.githubusercontent.com/cutechess/cutechess/v1.5.1/projects/lib/src/chessgame.cpp | cutechess game loop at pinned tag | 2026-10-24 | uci.md: result check before `go` (onMoveMade, startGame, startTurn) |
+| https://raw.githubusercontent.com/cutechess/cutechess/v1.5.1/projects/lib/src/gameadjudicator.cpp | cutechess adjudicator at pinned tag | 2026-10-24 | tools.md: draw/resign `movecount` semantics, reset rules, `movenumber > 0` condition |
+| https://api.github.com/repos/Disservin/fastchess/git/trees/f618e34540f94f4719ad3817950618dabe441318?recursive=1 | fastchess tree at pinned commit | 2026-10-24 | locating adjudication code |
+| https://raw.githubusercontent.com/Disservin/fastchess/f618e34540f94f4719ad3817950618dabe441318/app/src/types/draw_adjudication.hpp and .../resign_adjudication.hpp | fastchess adjudication config structs | 2026-10-24 | defaults of move_count/score |
+| https://raw.githubusercontent.com/Disservin/fastchess/f618e34540f94f4719ad3817950618dabe441318/app/src/matchmaking/match/match.hpp and .../match.cpp | fastchess DrawTracker/ResignTracker and match loop | 2026-10-24 | tools.md: `movecount` semantics, halfmove-clock reset, fullmove-number comparison |
+| https://raw.githubusercontent.com/jdart1/Fathom/c9c6fef0dddc05d2e242c183acf5833149ab676d/src/tbprobe.h | Fathom API header at pinned commit | 2026-10-24 | techniques.md: WDL probe needs castling 0 and rule50 0; root probe needs castling 0, not thread-safe |
+| https://wiki.chessdom.org/TCEC_Season_Further_information (curl, browser UA) | TCEC hardware page | 2026-10-24 | techniques.md and research.md: EPYC 9754 CPU server, EPYC 9175F GPU server, `bmi2` in both flag lists, 256 cores/512 threads; no NUMA node count |
+| https://www.amd.com/en/products/processors/server/epyc/4th-generation-9004-and-8004-series/amd-epyc-9754.html | AMD product page | 2026-10-24 | HTTP 200 but spec table script-rendered; no architecture field in static HTML (Zen generation left UNVERIFIED) |
+| https://www.amd.com/en/products/processors/server/epyc/4th-generation-9004-and-8004-series/amd-epyc-9175f.html | AMD product page (wrong series path) | 2026-10-24 | FAILED (404) |
+| https://www.amd.com/en/products/processors/server/epyc/9005-series/amd-epyc-9175f.html | AMD product page | 2026-10-24 | HTTP 200, same script-rendered problem; nothing used |
+| https://wiki.chessdom.org/TCEC_Swiss_11, /TCEC_Leagues_Season_31, /TCEC_Season_31, /TCEC_AI_Gauntlet, /TCEC_Leagues_Season_30, /TCEC_Season_30 | TCEC wiki pages | 2026-10-24 | all 404; S31, gauntlet and S30-Leagues items kept UNVERIFIED |
+| https://www.chessdom.com/tag/tcec/feed/ | Chessdom TCEC tag feed | 2026-10-24 | latest item still the 31 Aug 2026 statement |
+| https://opensource.org/license/gpl-3-0 | OSI license page for GPL-3.0 | 2026-10-24 | competition.md and tcec.json: GPL-3.0 OSI-approved 5 Sep 2007, SPDX GPL-3.0 |
+| https://api.github.com/repos/aronpetko/integral (+ /contents) | GitHub API | 2026-10-24 | competition.md: `license: null`, no LICENSE file in root |
+| https://komodochess.com/ | Komodo site | 2026-10-24 | FAILED (TLS certificate expired) |
+| https://api.github.com/repos/official-stockfish/fishtest (+ /contents, /contents/server, /contents/worker) | GitHub API | 2026-10-24 | tools.md: no license declared |
+| https://raw.githubusercontent.com/official-stockfish/fishtest/master/{pyproject.toml,server/pyproject.toml,worker/pyproject.toml,worker/worker.py}; .../server/setup.py, .../worker/LICENSE, .../server/LICENSE.txt | fishtest files | 2026-10-24 | no license field or header; the last three FAILED (404) |
+| https://api.launchpad.net/1.0/ubuntu/+archive/primary?ws.op=getPublishedSources&source_name=qt6-base&exact_match=true&status=Published (and source_name=qtbase-opensource-src) | Launchpad API, Ubuntu primary archive | 2026-10-24 | tools.md: qt6-base version per Ubuntu series |
+| https://api.launchpad.net/1.0/ubuntu/{jammy,noble,plucky,questing,resolute} | Launchpad series records | 2026-10-24 | series name to version number (22.04, 24.04, 25.04, 25.10, 26.04) |
+| https://packages.ubuntu.com/search?keywords=qt6-base-dev&searchon=names&exact=1&suite=all&section=all | Ubuntu package search | 2026-10-24 | FAILED (HTTP 500) |
+| https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage | cutechess AppImage (downloaded in WSL to a temp dir, sha256 matched versions.lock, then deleted) | 2026-10-24 | tools.md and install.sh: `unsquashfs -l` lists `usr/bin/cutechess-cli` |
+| https://raw.githubusercontent.com/torvalds/linux/master/COPYING, .../tools/perf/perf.c, .../tools/perf/builtin-stat.c | Linux kernel licence file and perf sources | 2026-10-24 | tools.md: perf licence (GPL-2.0 WITH Linux-syscall-note; builtin-stat.c GPL-2.0-only; perf.c has no SPDX line) |
+| local runs in WSL (Ubuntu 26.04.1): `perf stat`, `perf record/report`, `dpkg -l`, `cutechess-cli --version` | observations, not web pages | 2026-10-24 | tools.md: perf works under WSL2; apt versions; local Qt 6.10.2 |
+| https://raw.githubusercontent.com/wiki/AndyGrant/OpenBench/Data-Generation-Workloads.md | OpenBench wiki page (raw) | 2026-10-24 | tools.md: genfens interface for datagen workloads |
+| https://www.chessprogramming.org/Shared_Hash_Table | CPW | 2026-10-24 | techniques.md: Hyatt/Mann XOR lock-less TT |
+| https://www.chessprogramming.org/Score | CPW | 2026-10-24 | techniques.md: TT mate-score ply adjustment |
+| https://www.chessprogramming.org/Mate_Scores | CPW | 2026-10-24 | FAILED (404) |
+| https://www.chessprogramming.org/Transposition_Table, /Zobrist_Hashing, /Static_Exchange_Evaluation, /Aspiration_Windows, /Repetitions, /Tapered_Eval, /Checkmate | CPW | 2026-10-24 | re-checking techniques.md items; none settled (reasons sharpened) |
+| https://api.github.com/repos/{official-stockfish/nnue-pytorch,CSSLab/maia3,waterhorse1/ChessGPT,CSSLab/maia2} | GitHub API licence detection | 2026-10-24 | research.md: GPL-3.0, AGPL-3.0, Apache-2.0, MIT |
+| http://rebel13.nl/download/programmer-c-ode-of-honor.html (and https) | Code of Honor page | 2026-10-24 | FAILED (302 to https, then 526) |

@@ -55,7 +55,13 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
   about 840 KB.
 - Pitfall: PEXT/PDEP were slow on AMD Zen 1/Zen 2 (fixed in Zen 3, Nov
   2020). Ship a magic build and a PEXT build, or detect at runtime (CPUID
-  leaf 7, EBX bit 8). TCEC hardware's CPU model is UNVERIFIED, so keep both.
+  leaf 7, EBX bit 8). TCEC's CPU model, re-checked 2026-10-24 on
+  https://wiki.chessdom.org/TCEC_Season_Further_information: the CPU server
+  (S28 onward) is 2x AMD EPYC 9754 and the GPU server 2x AMD EPYC 9175F;
+  both CPU-flag lists printed there include `bmi2`. Whether PEXT is fast on
+  those parts (their Zen generation) is UNVERIFIED: AMD's product pages
+  load the spec table by script and the static HTML had no architecture
+  field. Keep both builds and measure PEXT vs magics on the target.
 - Source: https://www.chessprogramming.org/BMI2
 
 ### Zobrist hashing
@@ -64,8 +70,10 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
 - Pitfalls: 64-bit keys still collide in huge searches (verify TT moves
   are pseudo-legal); seed matters (generate with a good PRNG); keys should
   be linearly independent. Hash the en-passant file only when an ep capture
-  is actually possible (UNVERIFIED: page does not state this rule; it is
-  needed so equal positions get equal keys for repetition detection).
+  is actually possible (UNVERIFIED: the page, re-checked 2026-10-24, only
+  says the key includes "the file of a valid en passant square" without
+  defining "valid"; the stricter rule is needed so equal positions get
+  equal keys for repetition detection).
 - Source: https://www.chessprogramming.org/Zobrist_Hashing
 
 ---
@@ -112,7 +120,8 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
 - Search the root with a small window around the previous score; on fail
   high/low widen only the failing side, exponentially.
 - Pitfall: instability (a re-search can fail the other way); mate scores
-  need the window fully opened (UNVERIFIED, not on page).
+  need the window fully opened (UNVERIFIED: the CPW Aspiration Windows page
+  does not mention mate scores, re-checked 2026-10-24).
 - Source: https://www.chessprogramming.org/Aspiration_Windows
 
 ### Quiescence search + SEE
@@ -124,7 +133,9 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
   move. Uses: ordering (good vs bad captures), qsearch and main-search
   pruning (linear margin for captures, quadratic for quiets).
 - Pitfalls: qsearch explosion without ordering; stand-pat in check; SEE
-  ignores pins and x-ray subtleties unless coded (UNVERIFIED detail).
+  ignores pins and x-ray subtleties unless coded (UNVERIFIED: the CPW SEE
+  page mentions pin-aware SEE only through forum thread titles, re-checked
+  2026-10-24).
 - Sources: https://www.chessprogramming.org/Quiescence_Search,
   https://www.chessprogramming.org/Static_Exchange_Evaluation
 
@@ -139,9 +150,15 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
   `is_pseudo_legal`/`is_legal`, already in Phase 1 design); mate scores must
   be stored relative to the node and converted by ply on store/probe; with
   lockless access, a torn entry must be detected (XOR-key or key-check
-  scheme). The last two points are UNVERIFIED on the page opened (only
-  mentioned in passing) but are standard practice.
-- Source: https://www.chessprogramming.org/Transposition_Table
+  scheme). Both points verified 2026-10-24 on CPW: the Score page says
+  ply-relative mate scores need adjusting when stored in the TT and
+  re-adjusting when read back; the Shared Hash Table page describes the
+  Hyatt/Mann lock-less scheme (store key XOR data next to data, accept a
+  probe only if the stored key XOR the stored data equals the probing key),
+  with a checksum as the alternative for bigger entries.
+- Source: https://www.chessprogramming.org/Transposition_Table,
+  https://www.chessprogramming.org/Score,
+  https://www.chessprogramming.org/Shared_Hash_Table
 
 ### Move ordering
 - Typical order: TT move; winning captures/promotions (MVV-LVA or SEE,
@@ -165,7 +182,8 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
 - Capture history: [moved piece][to][captured type]; replaces the LVA part
   of MVV-LVA.
 - Pitfalls: saturation without gravity; history tables shared or per thread
-  is a Phase 6 decision (UNVERIFIED which is better).
+  is a Phase 6 decision (UNVERIFIED which is better: no opened source
+  compares them; settle it by measurement in Phase 6).
 - Source: https://www.chessprogramming.org/History_Heuristic
 
 ### Countermove
@@ -255,7 +273,8 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
 - Introduced in Caissa (Oct 2023), now in SF18's release notes. Gains grow
   with longer TC: important for TCEC.
 - Pitfalls: never let a corrected eval reach mate/TB score range; keep the
-  raw eval for NNUE-training labels (UNVERIFIED design advice).
+  raw eval for NNUE-training labels (UNVERIFIED: our own design advice, not
+  from the CPW page).
 - Source: https://www.chessprogramming.org/Static_Evaluation_Correction_History
 
 ### Repetitions and the 50-move rule
@@ -278,9 +297,16 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
   16.7 TiB.
 - Fathom (MIT, standalone probing code) is Fork's planned library:
   **USE** (log it in ORIGINALITY.md). Pyrrhic is a cleaned-up variant.
-- Pitfalls: probe only with no castling rights and a fresh 50-move counter
-  where required (UNVERIFIED, not on page); DTZ50 lines can look odd; TB
-  scores must stay below mate scores.
+- Pitfalls: probe conditions, verified 2026-10-24 in Fathom's
+  `src/tbprobe.h` at the pinned commit c9c6fef0
+  (https://raw.githubusercontent.com/jdart1/Fathom/c9c6fef0dddc05d2e242c183acf5833149ab676d/src/tbprobe.h):
+  the search-time WDL probe returns failure unless castling rights are zero
+  **and** the halfmove clock is zero (so probe right after a capture or
+  pawn move); the root DTZ probe requires zero castling rights but takes the
+  halfmove clock as input; the root probe is documented as not thread-safe
+  and meant for one call per search. DTZ50 lines can look odd (the header
+  also warns DTZ may suggest unnatural moves); TB scores must stay below
+  mate scores.
 - Source: https://www.chessprogramming.org/Syzygy_Bases
 
 ---
@@ -291,8 +317,9 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
 - Separate middlegame and endgame scores, blended by game phase from
   remaining material (weights N=1, B=1, R=2, Q=4; full board 24).
 - Pitfall: clamp phase when promotions push material above the start.
-  Packed mg/eg scores in one integer are a common trick (UNVERIFIED, not on
-  page).
+  Packed mg/eg scores in one integer are a common trick (UNVERIFIED: the
+  CPW Tapered Eval page only lists a forum thread titled "two values in one
+  integer", re-checked 2026-10-24; no description on the page).
 - Tuning: Texel's method (logistic regression of qsearch score vs game
   result; fit K first). Fork tunes on its own games only.
 - Sources: https://www.chessprogramming.org/Tapered_Eval,

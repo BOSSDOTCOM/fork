@@ -112,7 +112,9 @@ OFF-LIMITS as training data even when its license would allow it.
 - Source: https://huggingface.co/UofTCSSLab/Maia3-79M
 - Verified 2026-10-23 (model card). The Lichess announcement post
   returned HTTP 403; the code repo github.com/CSSLab/maia3 was not opened,
-  so the **code license is UNVERIFIED**. Tag: **REFERENCE ONLY**.
+  so the code license was open; re-checked 2026-10-24: GitHub API reports
+  **AGPL-3.0** for CSSLab/maia3 (code only; weights are covered by the
+  model card). Tag: **REFERENCE ONLY**.
 
 ---
 
@@ -198,7 +200,9 @@ OFF-LIMITS as training data even when its license would allow it.
 ### ChessGPT: Bridging Policy Learning and Language Modeling (arXiv 2306.09200, 2023-06-15, NeurIPS 2023)
 - Feng et al. GPT-style model mixing game data and chess text; releases
   code, model, dataset at github.com/waterhorse1/ChessGPT. Dataset and code
-  licenses not on the abstract page (**UNVERIFIED**; repo not opened).
+  licenses not on the abstract page. Re-checked 2026-10-24: GitHub API
+  reports **Apache-2.0** for the waterhorse1/ChessGPT repo; the dataset's
+  own terms were not checked (**UNVERIFIED**, not opened).
 - **For Fork:** none. Source: https://arxiv.org/abs/2306.09200. Verified
   2026-10-23. Tag: **REFERENCE ONLY**.
 
@@ -336,8 +340,8 @@ OFF-LIMITS as training data even when its license would allow it.
   read it for ideas, write Fork's own trainer or use bullet (MIT).
 - Source: https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md
   (read via raw.githubusercontent.com). Repo license not seen on the
-  fetched page (**UNVERIFIED**, presumed GPL like Stockfish; do not copy
-  code either way). Verified 2026-10-23. Tag: **REFERENCE ONLY**.
+  fetched page; re-checked 2026-10-24: GitHub API reports **GPL-3.0** for
+  official-stockfish/nnue-pytorch (do not copy code either way). Verified 2026-10-23. Tag: **REFERENCE ONLY**.
 
 ### Chess Programming Wiki: NNUE page
 - History (Nasu 2018 for Shogi, Stockfish NNUE 2020 / SF12), perspective
@@ -437,7 +441,12 @@ lczero.org open-data blog (2021-06-14), TalkChess announcement
   training data (e.g. "two of three parts unique", "no Stockfish data")
   appear only in forum posts; the official rules page opened does not
   address them. Ask TCEC organisers directly before Phase 4.
-- **UNVERIFIED:** current season hardware (core count, sockets, NUMA nodes).
+- Current hardware, resolved 2026-10-24 from
+  https://wiki.chessdom.org/TCEC_Season_Further_information: CPU server
+  (S28 onward) 2x AMD EPYC 9754, 256 cores / 512 threads (two sockets),
+  768 GiB DDR5, Ubuntu 22.04; GPU server 2x EPYC 9175F + 8x RTX 5090. The
+  page does not give the NUMA node count or NPS-per-socket settings:
+  **UNVERIFIED** (NUMA topology not published).
 
 ---
 

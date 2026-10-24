@@ -328,8 +328,15 @@ here (they remain USE as tools, never linked into Fork).
   `UCI_Elo`; `UCI_Chess960` (and other `UCI_<variant>` names) are taken
   as variant support; `Ponder` marks ponder support. `registration error`
   is answered with `register later`.
-- Whether cutechess checks for game end before sending `go` was not
-  confirmed in the file read (**UNVERIFIED**).
+- **Game end before `go`** (resolved 2026-10-24 from
+  `projects/lib/src/chessgame.cpp` at tag v1.5.1): after every move,
+  `ChessGame::onMoveMade` asks the board for a result (and then the
+  adjudicator) and only calls `startTurn`, which sends `go`, when there is
+  no result; forced opening moves are checked the same way in `startGame`.
+  One gap: if the game *starts* from a FEN that is already mate or
+  stalemate and no opening moves are played, `startGame` calls `startTurn`
+  without a check, so the engine would get `go` in a finished position.
+  Source: https://raw.githubusercontent.com/cutechess/cutechess/v1.5.1/projects/lib/src/chessgame.cpp
 
 **python-chess v1.11.2** (`chess/engine.py`; Fork's difftest and scripts
 use it):
@@ -354,7 +361,8 @@ DESIGN.md):
 - For a root with no legal move, the spec defines nothing. `0000` is the
   only token the spec defines; python-chess also accepts `(none)`. Pick
   one, document it, and test it, but note that neither runner should ask
-  for one in a normal game (fastchess confirmed; cutechess UNVERIFIED).
+  for one in a normal game (fastchess confirmed; cutechess confirmed
+  2026-10-24 except for a start FEN that is already finished, see above).
 - Declare option names exactly as TCEC will type them; don't rely on case
   folding by the runner, but still fold case when parsing `setoption`, as
   the spec asks.
@@ -368,7 +376,9 @@ DESIGN.md):
   uppercase rejection beyond python-chess lowercasing).
 - What a bare `go` (no sub-arguments) should do; "unlimited" is inferred
   from L135.
-- Whether cutechess v1.5.1 avoids sending `go` in a finished position.
+- ~~Whether cutechess v1.5.1 avoids sending `go` in a finished position.~~
+  Resolved 2026-10-24 (section 7, cutechess): it does, except when the
+  start FEN itself is finished.
 - Which match runner and version TCEC's servers use (open question in
   competition.md); runner behaviour above is for fastchess and stock
   cutechess only.

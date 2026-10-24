@@ -74,7 +74,8 @@ licensed *engine* code is not copied. The only exception is a documented library
   - There is **no CLI-only build option**. `CMakeLists.txt` asks for all the Qt components (Core, Gui, Widgets, Concurrent, Svg, PrintSupport, Core5Compat) and only offers `WITH_TESTS`.
   - You can still build only the CLI target: `cmake -S . -B build -DWITH_TESTS=OFF && cmake --build build --target cli`. The CLI links only Qt Core and Core5Compat, but configuring still needs the Qt development packages.
   - The wiki's apt list is `build-essential cmake qt6-base-dev qt6-svg-dev qt6-base-dev-tools qt6-5compat-dev`.
-  - **UNVERIFIED:** which Ubuntu release ships Qt ≥ 6.8 (packages.ubuntu.com and Launchpad were unreachable). install.sh checks the Qt version at runtime. If Qt is too old, it falls back to extracting the AppImage. **UNVERIFIED** whether the AppImage contains `cutechess-cli`; the script searches for it and fails cleanly if it is missing.
+  - **Qt ≥ 6.8 by Ubuntu release** (resolved 2026-10-24 from the Launchpad API, published `qt6-base` sources in the primary archive): 22.04 jammy 6.2.4, 24.04 noble 6.4.2, 25.04 plucky 6.8.3, 25.10 questing 6.9.2, 26.04 resolute 6.10.2. So 26.04 is the first **LTS** that can build cutechess v1.5.1 from source; 22.04 (TCEC's toolchain release) and 24.04 cannot. The local WSL (Ubuntu 26.04.1) has `qt6-base-dev` 6.10.2 and its source-built `cutechess-cli` reports "cutechess-cli 1.5.1, Using Qt version 6.10.2" (run 2026-10-24). install.sh checks the Qt version at runtime; if Qt is too old, it falls back to extracting the AppImage.
+  - **The AppImage does contain `cutechess-cli`** (resolved 2026-10-24): the v1.5.1 AppImage downloaded fresh matched the pinned sha256 `d9448693…`, and `unsquashfs -l` on its embedded squashfs lists `usr/bin/cutechess-cli` (plus `usr/bin/cutechess` and the `cutechess-cli.6` man page). Running that extracted binary on 22.04 was not tested.
 - **TCEC-relevant features** (man page `docs/cutechess-cli.6` at the tag):
   - Paired openings: `-repeat [n]` plus `-games`/`-rounds`, with `-noswap` and `-reverse`.
   - Books: `-openings file= format=epd|pgn order= plies= start= policy=default|encounter|round`, and Polyglot books via `-bookmode`.
@@ -99,7 +100,11 @@ licensed *engine* code is not copied. The only exception is a documented library
 - The prepared install step (Qt5 build, pinned commit, notes) is on branch
   `tcec-cutechess`, not merged.
 
-**Mapping TCEC adjudication to runner flags (Phase 8).** `config/tcec.json` has draw from move 35, |eval| ≤ 8 cp for 10 plies by both engines, and a win at ≥ 1000 cp for 10 plies. Both runners count `movecount` in "consecutive moves". **UNVERIFIED** whether that means plies or full moves, and whether both engines' scores are tested in the way TCEC does it. Read the runner source before trusting a mapping such as `-draw movenumber=35 movecount=? score=8` and `-resign movecount=? score=1000 twosided=true`.
+**Mapping TCEC adjudication to runner flags (Phase 8).** Re-checked 2026-10-24. The premise above this paragraph used to be out of date: `config/tcec.json` now records TCEC's current rule, a draw once the position has ≤ 6 pieces (kings counted, pawns not) and the eval stays within ±25 cp for 8 consecutive plies, with no minimum move number, no reset on captures or pawn moves, and **no** win adjudication. How the runners count, read from the source at the pinned versions:
+  - **cutechess v1.5.1** (`projects/lib/src/gameadjudicator.cpp`, `chessgame.cpp`): every engine move's eval is checked in turn, so both engines' scores alternate in one counter. Draw fires when `plyCount/2 >= movenumber` and the counter of consecutive in-band evals reaches `2 × movecount`; the counter resets on any capture or pawn move and on book or forced moves. Resign keeps one counter per side (that side's own consecutive moves at or below `-score`); with `twosided=true` the opponent's count at or above `+score` must also reach `movecount`.
+  - **fastchess v1.8.2-alpha** (`app/src/matchmaking/match/match.hpp` and `match.cpp`): the same model. One draw counter over both engines' evals, reset when the halfmove clock is 0 or a score is missing, with mate scores not counting; it fires when `fullmove number − 1 >= movenumber` and the counter reaches `2 × movecount`. A source comment says fastchess uses the board's fullmove counter where cutechess uses `plyCount/2`, which differs for EPD starts. Resign with `twosided` counts consecutive plies in which |score| ≥ `score` (or mate) and needs `2 × movecount`; without it, it is per side, `movecount` of that side's moves.
+  - **Consequence:** `movecount` means full moves (2 plies). Neither runner can express TCEC's piece-count condition or its "not reset by captures/pawn moves" rule. The closest approximation is `-draw movenumber=1 movecount=4 score=25` (8 plies; not `movenumber=0`, because cutechess only enables draw adjudication when `movenumber > 0`), which will adjudicate more often than TCEC because it ignores material; use no `-resign` to match TCEC. Whether TCEC requires *both* engines' evals in band is still UNVERIFIED (competition.md); both runners do test both engines' evals.
+  - Sources: https://raw.githubusercontent.com/cutechess/cutechess/v1.5.1/projects/lib/src/gameadjudicator.cpp, https://raw.githubusercontent.com/Disservin/fastchess/f618e34540f94f4719ad3817950618dabe441318/app/src/matchmaking/match/match.hpp and `.../match.cpp`.
 
 ---
 
@@ -121,7 +126,7 @@ licensed *engine* code is not copied. The only exception is a documented library
 
 ### Fishtest
 - **Tag:** REFERENCE ONLY. It is Stockfish's infrastructure, built around Stockfish. Studying its statistics is fine; Fork does not need to run it.
-- **License:** the repo has no LICENSE file at its root and GitHub reports none. **UNVERIFIED.**
+- **License:** none declared (re-checked 2026-10-24: no LICENSE file in the root, GitHub API `license: null`, no license field in the root, `server/` or `worker/` `pyproject.toml`). With no grant, treat it as all rights reserved; Fork only studies its statistics and does not reuse its code.
 - **Version:** no releases. master at commit `5a8a229a`.
 - **What:** a distributed task queue. Workers download fastchess, the book and the engine sources, play batches, and upload the results.
 - **Source:** https://github.com/official-stockfish/fishtest. Verified 2026-10-23.
@@ -254,8 +259,8 @@ CPW's Opening Book page lists older suites (Nunn, Noomen 2-move, HERT, SALC and 
 - **For Fork:**
   - The engine needs a `SyzygyPath` option.
   - The 3-4-5 set is enough for development.
-  - TCEC adjudicates at 6 pieces (`config/tcec.json`). For faithful Phase-8 adjudication, get at least **6-piece WDL (72.8 GB)**. DTZ is optional.
-  - **UNVERIFIED:** which piece count TCEC gives engines during play (`engine_access_pieces` is still null in tcec.json).
+  - Correction 2026-10-24: TCEC no longer adjudicates with tablebases (removed between 13 Oct 2024 and 4 May 2025, `config/tcec.json` `tablebase`); its current draw rule only *counts* pieces (≤ 6 including kings, excluding pawns). The 6-piece WDL set (72.8 GB) is still useful to mimic TB-assisted play in Phase 8; DTZ is optional.
+  - **Engines get 7-man Syzygy** during play: `engine_access_pieces` is 7 in `config/tcec.json`, from the `SyzygyPath=/home/syzygy7` option in archived TCEC games and the live Swiss 10 game (competition.md §2 "Tablebases available to engines", verified 2026-10-23). This replaces the earlier open note, which predated that check.
 - **Sources:** https://www.chessprogramming.org/Syzygy_Bases, https://github.com/niklasf/syzygy-tables.info and https://tablebase.lichess.ovh/tables/standard/. Verified 2026-10-23.
 
 ## 6. Fathom (Syzygy probing library)
@@ -307,7 +312,7 @@ Rule for Fork: train **only on data Fork generated itself**. A trainer is a tool
 | **Stockfish `generate_training_data`** (Stockfish `tools` branch, head `9a4c7cf4`) | **OFF-LIMITS** | GPL-3.0 | Stockfish code (self-play at fixed depth with random moves). Any data it produces is Stockfish-generated, which TCEC bans for Fork. The same applies to every published Stockfish or Leela dataset and binpack. |
 | bullet-utils | USE | MIT | Converts, shuffles, interleaves and validates bullet data. |
 | marlinflow-utils | REFERENCE ONLY | GPL-3.0 | txt-to-data, shuffle and interleave. Rewrite the same ideas rather than use them. |
-| OpenBench "Data Generation Workloads" | USE | GPL-3.0 | The wiki has a page for distributed datagen with Fork's own engine. Its details were not read: **UNVERIFIED**. |
+| OpenBench "Data Generation Workloads" | USE | GPL-3.0 | Read 2026-10-24 (wiki page Data-Generation-Workloads): a datagen workload runs the dev engine as `./engine "genfens N seed S book <None\|file> <extra>" "quit"`; the engine must print N lines `info string genfens <fen>` (opening positions it generates itself), seeding its RNG from all 64 bits of S (upper 32 = workload id, lower 32 = book offset); a worker is aborted if 15 s pass without a new line. Extra "Genfens Args" are passed through; "Play Reverses" defaults to No for fixed-node/depth self-play. Fork would need a `genfens` command to use it (a Phase 7+ tooling item). |
 
 Fork's datagen should be Fork's own code. Self-play with random-move openings, positions written in viriformat (or a Fork-defined format), and provenance logged as DESIGN.md requires.
 
@@ -317,7 +322,7 @@ Fork's datagen should be Fork's own code. Self-play with random-move openings, p
 
 | Tool | Tag | License | Version | Notes |
 |---|---|---|---|---|
-| **perf** | USE | **UNVERIFIED** (the perf wiki states none; it ships in the Linux kernel tree at `tools/perf`) | distro package (`linux-tools-generic`) | Commands: `perf stat`, `record`, `report`, `annotate`, `top`. **UNVERIFIED in WSL2:** Ubuntu ships no perf build for the WSL kernel, so the `/usr/bin/perf` wrapper may refuse. install.sh links `/usr/lib/linux-tools/*/perf` directly. Hardware counters inside WSL2 are also unverified. Check `perf stat -e cycles`. |
+| **perf** | USE | GPL-2.0 (resolved 2026-10-24: it lives in the kernel tree at `tools/perf`; the kernel's `COPYING` declares `GPL-2.0 WITH Linux-syscall-note` and perf sources such as `tools/perf/builtin-stat.c` carry `SPDX-License-Identifier: GPL-2.0-only`). A standalone tool, not linked into Fork. | distro package (`linux-tools-generic`; on the local Ubuntu 26.04.1 WSL `/usr/bin/perf` belongs to `linux-perf` 7.0.0-38.38 and reports perf version 6.18.54.1) | Commands: `perf stat`, `record`, `report`, `annotate`, `top`. **WSL2 works on this machine** (run 2026-10-24, kernel 6.18.54.1-microsoft-standard-WSL2): `perf stat -e task-clock,cycles,instructions true` returned real cycle and instruction counts (user mode, `:u`), and `perf record -e cycles` captured 908 samples that `perf report` resolved. Kernel-mode counting was not tried. |
 | **valgrind / callgrind** | USE | GPL (the COPYING file at git HEAD holds the GPLv3 text; the download page states none) | 3.27.1, 2026-05-20 (upstream); apt gives the distro version | Upstream publishes md5 `9b819b1a…` and sha1 `0b113f5c…` for `valgrind-3.27.1.tar.bz2`, but no sha256. Use `valgrind --tool=callgrind ./fork bench`. |
 | **hotspot** (KDAB) | USE | GPL v2+ (README and LICENSE.GPL.txt) | v1.6.0, 2026-02-27 (plus a `continuous` pre-release, 2026-10-14) | A Qt GUI for perf.data with flame graphs. The AppImage sha256 is in versions.lock. install.sh fetches it only with `FORK_TOOLS_HOTSPOT=1`. It needs WSLg to display. |
 | **Intel VTune Profiler** | USE (manual install) | Proprietary EULA (download page) | 2026.4.0.23 per the installer filenames; **release date UNVERIFIED** (the version table was "Service Currently Unavailable") | Available through the oneAPI apt repo (`intel-oneapi-vtune`), a .sh installer, a Windows .exe or Docker. **UNVERIFIED:** hardware-event support on AMD CPUs and under WSL2. |
@@ -339,16 +344,16 @@ install.sh installs perf and valgrind and prints instructions for VTune and uPro
 
 ## UNVERIFIED items (summary)
 
-1. Which Ubuntu release ships Qt ≥ 6.8, which cutechess v1.5.1 needs. Also whether the cutechess AppImage contains `cutechess-cli`.
-2. Whether fastchess and cutechess `movecount` counts plies or moves, and how that maps to TCEC's "10 plies, both engines" rules.
-3. Fishtest's licence, and the inputs of the Fishtest SPRT calculator (bot wall).
-4. BayesElo: no version number, no checksum, no maintained repo.
-5. Where TCEC publishes its opening books. Also which piece count TCEC gives engines during play.
-6. Whether TCEC has ruled on Fathom's Cfish-derived `tbprobe.c` lineage.
-7. How each Stockfish-repo book was built (which engine evaluated it).
-8. perf's licence statement, perf and hardware counters under WSL2, and VTune's release date and AMD/WSL support.
-9. A standalone marlinformat repo, the "carbon" trainer, OpenBench's datagen details, and Scid.
-10. pgn-extract checksum, and the apt versions of perf and valgrind.
+1. ~~Which Ubuntu release ships Qt ≥ 6.8; whether the AppImage contains `cutechess-cli`.~~ Resolved 2026-10-24 (§ cutechess: 25.04 first, 26.04 first LTS; AppImage has `usr/bin/cutechess-cli`).
+2. ~~Whether `movecount` counts plies or moves.~~ Resolved 2026-10-24: full moves, both engines' evals in one counter (§ mapping paragraph). Still open: whether TCEC's draw rule needs both engines' evals (TCEC rule text is silent).
+3. ~~Fishtest's licence~~ (resolved 2026-10-24: none declared). Still open: the inputs of the Fishtest SPRT calculator (bot wall; not re-checked this pass).
+4. BayesElo: no version number, no checksum, no maintained repo (kept: the author's page publishes none; not re-checked this pass).
+5. Where TCEC publishes its opening books (FAQ silent; kept). ~~Which piece count TCEC gives engines~~ resolved: 7-man (`config/tcec.json`).
+6. Whether TCEC has ruled on Fathom's Cfish-derived `tbprobe.c` lineage (kept: no TCEC page mentions Fathom; a question for TCEC's Discord before applying).
+7. How each Stockfish-repo book was built (which engine evaluated it) (kept: the books README does not say; provenance rule makes them test-only anyway).
+8. ~~perf's licence and perf/hardware counters under WSL2~~ resolved 2026-10-24 (GPL-2.0; counters and sampling work locally). Still open: VTune's release date and AMD/WSL support (not re-checked this pass).
+9. A standalone marlinformat repo, the "carbon" trainer and Scid (not re-checked this pass). ~~OpenBench's datagen details~~ resolved 2026-10-24.
+10. pgn-extract checksum (upstream publishes none; kept). Apt versions are distro-decided; on the local Ubuntu 26.04.1 WSL (2026-10-24): `linux-perf` 7.0.0-38.38, `valgrind` 1:3.26.0-0ubuntu1.
 
 ## OFF-LIMITS (summary)
 

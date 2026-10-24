@@ -50,7 +50,8 @@ Originality-relevant questions (paraphrased):
 - What makes the engine unique.
 
 The page also points to the "Chess Programmer Code of Honor" (rebel13.nl);
-that page returned HTTP 526 on 2026-10-23, so its contents are
+that page returned HTTP 526 on 2026-10-23 and again on 2026-10-24 (the
+http URL redirects to https, which fails with 526), so its contents are
 **UNVERIFIED**.
 
 ### 1.3 Categories and the S30 AI policy

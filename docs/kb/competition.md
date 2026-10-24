@@ -139,11 +139,12 @@ the TD statement and the chessdom TCEC tag feed. Full category definitions:
    as a separate path for AI engines. As of 2026-10-23 there is no wiki
    page (TCEC_AI_Gauntlet 404), no archive event and no later chessdom
    article (TCEC tag feed: nothing after 31 Aug 2026). Format, date and
-   entry: **UNVERIFIED**.
+   entry: **UNVERIFIED** (re-checked 2026-10-24: TCEC_AI_Gauntlet still 404,
+   tag feed still ends at 31 Aug 2026).
 8. **Season 31.** The Main Page lists Swiss 11 and Leagues S31 as upcoming,
    but TCEC_Swiss_11, TCEC_Leagues_Season_31 and TCEC_Season_31 do not exist
    yet (404). S31 categories, Cat 4 policy and deadlines: **UNVERIFIED**
-   (not published). By the S30 timeline (deadline 1 Jul, Swiss in October)
+   (not published; all three pages still 404 on 2026-10-24). By the S30 timeline (deadline 1 Jul, Swiss in October)
    an S31 application window might fall around mid-2027; that is an
    extrapolation, not a published date.
 
@@ -164,7 +165,11 @@ None of these is answered on any page opened on 2026-10-23.
 3. **License requirement:** does Category 4 require an OSI-approved
    open-source license, or is a source-available license enough? The
    published rule only asks for public, buildable source; the CatGPT
-   precedent was accepted with PolyForm Noncommercial.
+   precedent was accepted with PolyForm Noncommercial. *Note (2026-10-24):*
+   Fork is licensed GPL-3.0 (owner's choice, 2026-10-24), an OSI-approved
+   license (https://opensource.org/license/gpl-3-0), so it meets the
+   stricter reading either way; the question stays open only as general
+   information and is no longer blocking for Fork.
 4. **Match runner:** what match runner and version do TCEC servers
    currently use? TCEC's cutechess fork (TCEC-Chess/tceccutechess) has had
    no pushes since 2023-04-09, so it may no longer be what runs. Until
@@ -231,7 +236,10 @@ What each may and may not do, as written:
   under PolyForm Noncommercial (source-available, not an OSI open-source
   license) and trained on Leela data; TCEC listed it as Cat 4 with "open
   repository present". Whether TCEC requires an OSI license is
-  **UNVERIFIED**; Fork should use an OSI license anyway.
+  **UNVERIFIED** (no rule page says; Discord question 3). Moot for Fork:
+  the owner chose GPL-3.0 on 2026-10-24 (main-branch `LICENSE`, commit
+  2e1e445), which OSI lists as approved (opensource.org/license/gpl-3-0:
+  approved 5 Sep 2007, SPDX `GPL-3.0`; checked 2026-10-24).
 - Cat 5: cannot play.
 
 What this means for Fork: plan for Cat 4. That means a public repo with a
@@ -324,7 +332,8 @@ TCEC_Swiss_10 (22 Oct 2026). Verified 2026-10-23.
 Note: the Leagues rules page carries no season number. It is the rules page
 linked from the current wiki and the S29 Leagues page; I treat it as current
 for S30. Leagues S30 page itself does not exist yet: **S30-specific Leagues
-changes UNVERIFIED**.
+changes UNVERIFIED** (TCEC_Leagues_Season_30 and TCEC_Season_30 still 404 on
+2026-10-24).
 
 ### Swiss 10 engine categories (S30)
 
@@ -685,7 +694,7 @@ for implementation, and never use their nets or data in Fork.
 | Lc0 | GPL-3.0 | v0.32.1 (23 Nov 2025) | github.com/LeelaChessZero/lc0 | large NN (GPU) | tag `v0.32.1` + a named network file (e.g. BT4 as on CCRL) | OFF-LIMITS (code/nets/data); opponent USE if GPU available |
 | Reckless | AGPL-3.0 (from v0.9.0; v0.7.0 was MIT) | v0.9.0 (1 Mar 2026) latest stable; dev pre-releases up to v0.10.0-dev-7300f044 (1 May 2026); TCEC runs 0.10.0-dev | github.com/codedeliveryservice/Reckless | NNUE (bullet trainer); current data source not stated (see §7) | tag `v0.9.0` | OFF-LIMITS code; opponent USE |
 | PlentyChess | GPL-3.0 | b-v8.0.0 (27 Jun 2026) | github.com/Yoshie2000/PlentyChess | NNUE, self-generated data (15B+ positions) | tag `b-v8.0.0`, `make` embeds net | OFF-LIMITS code; opponent USE |
-| Integral | no license file detected (all rights reserved by default) | v8 (11 Sep 2026) | github.com/aronpetko/integral | NNUE, self-play data (bullet) | tag `v8` binary/build for testing only | OFF-LIMITS; opponent USE (license **UNVERIFIED**, ask before redistributing) |
+| Integral | no license file detected (all rights reserved by default) | v8 (11 Sep 2026) | github.com/aronpetko/integral | NNUE, self-play data (bullet) | tag `v8` binary/build for testing only | OFF-LIMITS; opponent USE (re-checked 2026-10-24: GitHub API `license: null`, no LICENSE file in the root listing, so no license is granted; ask before redistributing) |
 | Obsidian | GPL-3.0 | v16.0 (21 May 2025) | github.com/gab8192/Obsidian | NNUE trained on Lc0 data (README) | tag `v16.0` | OFF-LIMITS; opponent USE |
 | Berserk | GPL-3.0 | 14 (24 May 2026) | github.com/jhonnold/berserk | NNUE; data source not stated in README excerpt | tag `14` | OFF-LIMITS; opponent USE |
 | Caissa | MIT | 2.0 (19 Sep 2026) | github.com/Witek902/Caissa | NNUE, self-play data (20.5B+ positions) | tag `2.0` | OFF-LIMITS code (MIT allows reuse, but Fork's policy is no copying); opponent USE |
@@ -695,7 +704,7 @@ for implementation, and never use their nets or data in Fork.
 | pawnocchio | GPL-3.0 (assets CC-BY-ND) | v2.0.1 (29 Jun 2026) | github.com/JonathanHallstrom/pawnocchio | NNUE, own self-play + Vine games | tag `v2.0.1` + submodule net | OFF-LIMITS; opponent USE |
 | Ethereal | GPL-3.0 (repo) | v14.00 (8 Feb 2023); NNUE versions sold commercially | github.com/AndyGrant/Ethereal | HCE in public repo; NNUE commercial | tag `v14.00` | OFF-LIMITS; opponent USE |
 | Torch | closed (chess.com) | v4 / v4d on CCRL | none public | NN (chess.com: original code; some versions partly trained on Lc0 data per search snippet, not confirmed) | not obtainable | OFF-LIMITS; cannot pin |
-| Dragon (Komodo) | commercial | 3.3 on CCRL/CEGT | none public | NNUE | komodochess.com (TLS certificate expired on 2026-10-23, not opened): **UNVERIFIED** | OFF-LIMITS; buy only if needed |
+| Dragon (Komodo) | commercial | 3.3 on CCRL/CEGT | none public | NNUE | komodochess.com (TLS certificate expired on 2026-10-23 and again on 2026-10-24, not opened): **UNVERIFIED** | OFF-LIMITS; buy only if needed |
 
 Not checked (named in brief or lists, not opened): Coda, Cinder, Hobbes,
 Triumviratus, Ceres, Halogen. **UNVERIFIED**.

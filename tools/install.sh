@@ -172,7 +172,8 @@ cutechess_from_appimage() {
   rm -rf "$opt"; mkdir -p "$opt"
   # --appimage-extract needs no FUSE (WSL often lacks it)
   ( cd "$opt" && "$img" --appimage-extract >/dev/null )
-  # UNVERIFIED that the AppImage ships cutechess-cli; look for it.
+  # The v1.5.1 AppImage ships usr/bin/cutechess-cli (checked 2026-10-24 with unsquashfs -l);
+  # still search for it so a different AppImage fails cleanly.
   cli="$(find "${opt}/squashfs-root" -type f -name 'cutechess-cli' -perm -u+x | head -n1 || true)"
   if [[ -z "$cli" ]]; then
     err "the cutechess AppImage does not contain cutechess-cli. Install Qt >= 6.8 (newer Ubuntu) and rerun with CUTECHESS_MODE=source."
@@ -363,7 +364,8 @@ Manual installs (licence acceptance required, not automated):
       https://www.intel.com/content/www/us/en/developer/tools/oneapi/vtune-profiler-download.html
     Options listed there: oneAPI apt repo (`sudo apt install intel-oneapi-vtune` after adding
     Intel's repo and key), offline/online .sh installer, Windows .exe, Docker image.
-    Hardware event sampling inside WSL2 is UNVERIFIED; the Windows build may be the practical route.
+    VTune hardware event sampling inside WSL2 is UNVERIFIED (VTune not installed or tested here;
+    perf counters do work in this WSL2, checked 2026-10-24); the Windows build may be the practical route.
   * AMD uProf 5.3 (EULA click-through on download): https://www.amd.com/en/developer/uprof.html
     Linux .deb/.rpm/.tar and Windows builds are offered there.
 EOF
