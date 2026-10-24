@@ -130,7 +130,9 @@ tools/                    training pipeline, match scripts (Phases 4, 8)
   the standard `e1g1` form. Only standard castling (KQkq, king on e1/e8,
   rooks in the corners) is supported; see §6 for the deferred Chess960
   decision.
-- `MoveList` is a fixed array of 256 moves with a size, stack allocated.
+- `MoveList` is a fixed array of 323 moves with a size, stack allocated: the
+  most pseudo-legal moves any position can have once `set_fen` rejects
+  promoted material without missing pawns (derivation in `types.hpp`).
 
 ### 4.2 Bitboard utilities
 
@@ -197,7 +199,8 @@ key(p)`.
 - **FEN** parse and serialize. Parsing validates the input and returns an
   error string instead of asserting, because FENs come from untrusted GUI
   input. It rejects: bad syntax or rank lengths, a count other than one king
-  per side, more than 8 pawns or 16 pieces per side, pawns on the first or
+  per side, more than 8 pawns or 16 pieces per side, more pieces beyond the
+  starting set than missing pawns (promotions), pawns on the first or
   last rank, the side not to move being in check, castling rights without the
   king and rook on their home squares, and implausible ep squares (wrong
   rank, occupied, or no pawn that could have just double-pushed). The

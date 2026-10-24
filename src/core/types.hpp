@@ -9,7 +9,8 @@
 // - Move: from (bits 0-5), to (6-11), flag (12-15); raw 0 is NoMove. Castling
 //   is king origin -> castling rook square. Flags 3, 6 and 7 are never
 //   produced (is_pseudo_legal rejects them).
-// - MoveList holds at most 256 moves (the legal maximum is 218).
+// - MoveList holds MaxMoves = 323 moves, the most any position set_fen accepts
+//   (or any position reached from one) can have; see MoveList.
 #pragma once
 
 #include <array>
@@ -100,8 +101,16 @@ class Move {
 
 constexpr Move NoMove{};
 
+// An upper bound on the moves in any position whose material passes set_fen's
+// promotion rule (extra pieces need missing pawns): with all eight pawns
+// promoted to queens, 9 queens x 27 + 2 rooks x 14 + 2 bishops x 13 +
+// 2 knights x 8 + 8 king steps + 2 castlings = 323 pseudo-legal moves, and a
+// promoting pawn (at most 12 moves) never beats the queen it becomes
+// (review suspicion 1, 2026-10-24).
+constexpr std::size_t MaxMoves = 323;
+
 struct MoveList {
-  std::array<Move, 256> moves;
+  std::array<Move, MaxMoves> moves;
   std::size_t count = 0;
 
   void add(Move m) {

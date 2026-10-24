@@ -214,6 +214,12 @@ bool Position::set_fen(std::string_view fen, std::string* error) {
     if (p.count(c, King) != 1) return fail("each side needs exactly one king");
     if (p.count(c, Pawn) > 8) return fail("more than 8 pawns for one side");
     if (popcount(p.pieces(c)) > 16) return fail("more than 16 pieces for one side");
+    // Pieces beyond the starting set can only come from promotions, one per
+    // missing pawn. Every position reachable from here keeps this property,
+    // which bounds its move count (MoveList, types.hpp).
+    int promoted = std::max(0, p.count(c, Queen) - 1) + std::max(0, p.count(c, Rook) - 2) +
+                   std::max(0, p.count(c, Bishop) - 2) + std::max(0, p.count(c, Knight) - 2);
+    if (promoted > 8 - p.count(c, Pawn)) return fail("more promoted pieces than missing pawns");
   }
   if (p.pieces(Pawn) & (Rank1 | Rank8)) return fail("pawn on the first or last rank");
 

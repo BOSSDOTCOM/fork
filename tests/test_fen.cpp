@@ -57,6 +57,23 @@ TEST_CASE("fen", "move counters are capped") {
   CHECK_EQ(p.fullmove_number(), 100001);
 }
 
+// Review suspicion 1 (2026-10-23): set_fen accepted material no game can
+// reach, such as the judge's 15-queen position with 240 legal moves
+// (REVIEW-phase1.md, found by a python-chess search). Pieces beyond the
+// starting set need one missing pawn each; that rule also bounds the move
+// count of every reachable position below MoveList's capacity (types.hpp).
+TEST_CASE("fen", "promoted material needs missing pawns") {
+  Position p;
+  CHECK(!p.set_fen("Q4Qbk/3Q2pp/1Q4Q1/4Q3/2Q4Q/Q6Q/3Q1Q2/KQ1Q3Q w - - 0 1"));
+  std::string error;
+  CHECK_MSG(p.set_fen("7k/8/8/8/8/8/QQQQQ3/QQQQK3 b - - 0 1", &error), error);   // 9 queens, no pawns
+  CHECK(!p.set_fen("7k/8/8/8/8/8/QQQQQQ2/QQQQK3 b - - 0 1"));                    // 10 queens
+  CHECK_MSG(p.set_fen("7k/8/8/8/8/P7/1QQQQ3/QQQQK3 b - - 0 1", &error), error);  // 8 queens, 1 pawn
+  CHECK(!p.set_fen("7k/8/8/8/8/P7/1QQQQQ2/QQQQK3 b - - 0 1"));                   // 9 queens, 1 pawn
+  CHECK_MSG(p.set_fen("7k/8/8/8/8/8/NNN5/4K3 b - - 0 1", &error), error);  // 3 knights, no pawns
+  CHECK(!p.set_fen("7k/8/8/8/8/8/PPPPPPPP/NNN1K3 b - - 0 1"));                   // 3 knights, 8 pawns
+}
+
 TEST_CASE("fen", "malformed input is rejected without changing the position") {
   const char* bad[] = {
       "",

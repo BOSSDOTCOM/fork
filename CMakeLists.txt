@@ -2,6 +2,13 @@
 # CMakePresets.json needs 3.25 and is a developer convenience only; the TCEC
 # build (update.sh) configures without presets.
 cmake_minimum_required(VERSION 3.22)
+# The presets pass $env{FORK_CLANG_CXX} / $env{FORK_GCC_CXX}, which are empty
+# unless scripts/env.sh (or env.ps1) was sourced; say so instead of CMake's
+# generic "no compiler found".
+if(DEFINED CMAKE_CXX_COMPILER AND CMAKE_CXX_COMPILER STREQUAL "")
+  message(FATAL_ERROR "CMAKE_CXX_COMPILER is empty: source scripts/env.sh (or scripts/env.ps1) "
+                      "before using the presets, or pass -DCMAKE_CXX_COMPILER=<compiler>")
+endif()
 project(fork LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
