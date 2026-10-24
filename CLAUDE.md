@@ -25,6 +25,11 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
   `~/fork-tools/syzygy/3-4-5`, runners in `~/fork-tools/bin`
   (fastchess, cutechess-cli, ordo). Test scripts only.
 - `.claude/rules/`: area rules (C++ style, testing, SIMD).
+- GitHub: private repo https://github.com/BOSSDOTCOM/fork (remote `origin`;
+  push main, kb, tcec-cutechess and tags). CI in `.github/workflows/ci.yml`:
+  TCEC toolchain (ubuntu:22.04 container, update.sh with 4 compilers, bench
+  parity, gcc 11.4 fast tests) and current Ubuntu presets. Never push the
+  local backup bundles (`*.bundle`).
 - TCEC toolchain: WSL distro `Ubuntu-22.04` (gcc 11.4, g++-12, clang 16/19,
   CMake 3.22), set up by `scripts/tcec-toolchain-setup.sh`; runs as root.
   CMake must stay at a 3.22 floor and the code within libstdc++ 11's C++20.

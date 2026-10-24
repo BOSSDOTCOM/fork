@@ -26,8 +26,9 @@ if [ "$VERSION_ID" != 22.04 ]; then
   exit 1
 fi
 
-# Never stop at the first-launch user prompt: the check runs as root.
-if ! grep -q '^default=root' /etc/wsl.conf 2>/dev/null; then
+# Under WSL, never stop at the first-launch user prompt: the check runs as
+# root. (The same script provisions the ubuntu:22.04 container in CI.)
+if grep -qi microsoft /proc/version && ! grep -q '^default=root' /etc/wsl.conf 2>/dev/null; then
   printf '[user]\ndefault=root\n' >>/etc/wsl.conf
 fi
 

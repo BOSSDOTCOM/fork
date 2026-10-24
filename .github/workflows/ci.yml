@@ -1,0 +1,96 @@
+# Fork CI: on every push, build from a clean clone on TCEC's toolchain
+# (Ubuntu 22.04: gcc 11.4, g++-12, clang 16, clang 19, CMake 3.22) and on
+# current Ubuntu, run the fast tests and check bench parity.
+# The local equivalent is scripts/check.sh full (CLAUDE.md).
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tcec-toolchain:
+    name: TCEC toolchain (Ubuntu 22.04)
+    runs-on: ubuntu-latest
+    # A real Ubuntu 22.04 userland, so the build sees CMake 3.22 and the
+    # 22.04 compilers rather than the newer tools preinstalled on runners.
+    container: ubuntu:22.04
+    timeout-minutes: 45
+    steps:
+      - name: Install git for the checkout
+        run: apt-get update -q && apt-get install -y -q git ca-certificates
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Provision TCEC's compilers
+        run: bash scripts/tcec-toolchain-setup.sh
+      - name: update.sh and bench parity with each compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global --add safe.directory "$PWD"
+          for pair in "g++:gcc 11.4." "g++-12:gcc 12." "clang++-16:clang 16." "clang++-19:clang 19."; do
+            cxx=${pair%%:*} want=${pair#*:}
+            echo "::group::update.sh with $cxx"
+            out=$(CXX=$cxx bash ./update.sh 2>&1) || { echo "$out"; exit 1; }
+            echo "$out" | tail -n 8
+            echo "$out" | grep -q "^compiler $want" || { echo "$cxx is not the expected $want"; exit 1; }
+            "$(echo "$out" | tail -n 1)" bench | head -n 2 > bench.out
+            diff bench.out tests/bench.ref
+            echo "bench parity ok with $cxx"
+            echo "::endgroup::"
+          done
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: Fast tests with gcc 11.4 (no presets on CMake 3.22)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build/gcc11 -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release -DFORK_ARCH=x86-64-v3
+          cmake --build build/gcc11
+          ctest --test-dir build/gcc11 -LE slow --output-on-failure
+
+  current-ubuntu:
+    name: Current Ubuntu (${{ matrix.preset }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [clang-release, gcc-release, clang-debug]
+    env:
+      FORK_CLANG_CXX: clang++
+      FORK_GCC_CXX: g++
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          pkgs="ninja-build"
+          if apt-cache show libclang-rt-dev >/dev/null 2>&1; then pkgs="$pkgs libclang-rt-dev"; fi
+          sudo apt-get install -y -q $pkgs
+          cmake --version | head -n 1; clang++ --version | head -n 1; g++ --version | head -n 1
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: Build
+        run: |
+          cmake --preset ${{ matrix.preset }}
+          cmake --build build/${{ matrix.preset }}
+      - name: Fast tests (includes bench parity and no_alloc)
+        run: ctest --test-dir build/${{ matrix.preset }} -LE slow --output-on-failure

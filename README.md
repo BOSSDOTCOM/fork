@@ -25,7 +25,7 @@ Requirements: Linux x86-64, CMake 3.22 or newer, Ninja or make, and
 gcc 11+ or clang 16+ (C++20).
 
 ```bash
-git clone <repository URL> fork
+git clone https://github.com/BOSSDOTCOM/fork.git fork
 cd fork
 ./update.sh                       # builds build/tcec/fork and prints its path
 build/tcec/fork bench             # nodes 26401709, signature f298a22041a6270a
@@ -43,6 +43,11 @@ sourcing the toolchain environment:
 cmake --preset clang-release && cmake --build build/clang-release
 ctest --test-dir build/clang-release -LE slow --output-on-failure
 ```
+
+Continuous integration (`.github/workflows/ci.yml`) builds every push from a
+clean clone on TCEC's toolchain (an Ubuntu 22.04 container: gcc 11.4,
+g++-12, clang 16 and 19, CMake 3.22) and on current Ubuntu, and runs the
+fast tests and bench parity.
 
 Other commands: `fork perft <depth> [fen]`, `fork divide <depth> [fen]`,
 `fork version`. See CLAUDE.md and docs/DESIGN.md for the full workflow.

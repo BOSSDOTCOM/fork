@@ -207,6 +207,8 @@ to rook square (DESIGN.md §4.1), and the CPW move-flag nibble.
 | WinLibs GCC (MinGW-w64, UCRT) | GCC 16.2.0 | GPL-3.0 with GCC Runtime Library Exception |
 | CMake | 4.4.4 | BSD-3-Clause |
 | Ninja | 1.13.2 | Apache-2.0 |
+| GitHub Actions (CI): `actions/checkout@v4`, `actions/cache@v4`, runner `ubuntu-latest`, container `ubuntu:22.04` | as pinned in .github/workflows/ci.yml | MIT (the two actions) |
+| GitHub CLI (`gh`) | 2.103.2 | MIT |
 | Linux (WSL2 Ubuntu): clang / gcc | 21.1.8 / 15.2.0 | Apache-2.0 with LLVM exception / GPL-3.0 with GCC Runtime Library Exception |
 | Linux: CMake, Ninja | 4.2.3, 1.13.2 | BSD-3-Clause, Apache-2.0 |
 | Linux analysis: clang-tidy, cppcheck, valgrind, ASan/UBSan/TSan/MSan | LLVM 21.1.8, 2.19.0, 3.26.0, the compilers' runtimes | Apache-2.0 with LLVM exception, GPL-3.0, GPL-2.0, as the compilers |
