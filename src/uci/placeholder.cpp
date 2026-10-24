@@ -16,8 +16,7 @@ PlaceholderPick pick_placeholder_move(Position& pos, const std::vector<Move>& re
   generate<GenMode::Legal>(pos, all);
   MoveList candidates;
   for (Move m : all)
-    if (restrict_to.empty() || std::find(restrict_to.begin(), restrict_to.end(), m) != restrict_to.end())
-      candidates.add(m);
+    if (restrict_to.empty() || std::ranges::find(restrict_to, m) != restrict_to.end()) candidates.add(m);
   if (candidates.size() == 0) candidates = all;  // restrict_to held no legal move
   std::uint64_t nodes = 1;
   if (candidates.size() == 0) return {NoMove, nodes};

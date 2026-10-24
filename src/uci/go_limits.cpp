@@ -9,9 +9,7 @@ namespace {
 constexpr std::string_view Keywords[] = {"searchmoves", "ponder", "wtime", "btime", "winc",     "binc",
                                          "movestogo",   "depth",  "nodes", "mate",  "movetime", "infinite"};
 
-bool is_keyword(std::string_view t) {
-  return std::find(std::begin(Keywords), std::end(Keywords), t) != std::end(Keywords);
-}
+bool is_keyword(std::string_view t) { return std::ranges::find(Keywords, t) != std::end(Keywords); }
 
 }  // namespace
 
@@ -49,7 +47,7 @@ GoLimits parse_go(const std::vector<LineToken>& tokens, std::size_t first, const
         Move m = parse_uci_move(pos, tokens[i].text);
         if (m.is_none())
           warnings.push_back("go: searchmoves: not a legal move: " + std::string(tokens[i].text));
-        else if (std::find(g.restrict_to.begin(), g.restrict_to.end(), m) == g.restrict_to.end())
+        else if (std::ranges::find(g.restrict_to, m) == g.restrict_to.end())
           g.restrict_to.push_back(m);
       }
     } else if (t == "ponder") {
@@ -57,13 +55,13 @@ GoLimits parse_go(const std::vector<LineToken>& tokens, std::size_t first, const
     } else if (t == "infinite") {
       g.infinite = true;
     } else if (t == "wtime") {
-      number(g.time[White], t);
+      number(g.remaining_ms[White], t);
     } else if (t == "btime") {
-      number(g.time[Black], t);
+      number(g.remaining_ms[Black], t);
     } else if (t == "winc") {
-      number(g.inc[White], t);
+      number(g.increment_ms[White], t);
     } else if (t == "binc") {
-      number(g.inc[Black], t);
+      number(g.increment_ms[Black], t);
     } else if (t == "movestogo") {
       number(g.movestogo, t);
     } else if (t == "depth") {

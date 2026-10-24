@@ -99,7 +99,7 @@ int difftest() {
 // GCC 13, and TCEC builds with gcc 11.4 and g++-12 (DESIGN.md §5.1).
 std::string hex16(std::uint64_t v) {
   char buf[17];
-  std::snprintf(buf, sizeof buf, "%016llx", static_cast<unsigned long long>(v));
+  (void)std::snprintf(buf, sizeof buf, "%016llx", static_cast<unsigned long long>(v));
   return buf;
 }
 
@@ -139,9 +139,9 @@ bool read_depth_and_position(int argc, char** argv, int& depth, forkeng::Positio
 // endings reach the reader as sent (it accepts LF, CRLF and CR) and a stray
 // Ctrl-Z byte is not taken for end of input; stdout stays in the platform's
 // text mode.
-int uci_main() {
+static int uci_main() {
 #ifdef _WIN32
-  _setmode(_fileno(stdin), _O_BINARY);
+  (void)_setmode(_fileno(stdin), _O_BINARY);
 #endif
   forkeng::OutputChannel out(stdout);
   forkeng::UciSession session(out);

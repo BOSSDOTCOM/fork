@@ -47,5 +47,11 @@ Checks: >
 #     are caught at runtime by UBSan in every debug run.
 #   misc-no-recursion: perft and (later) search are recursive by design.
 #   portability-avoid-pragma-once: supported by every compiler Fork targets.
+# Options:
+#   bugprone-empty-catch: a catch whose comment starts 'ignored:' is deliberate
+#     (destructors and last-resort output paths, which must not throw), and the
+#     comment says why.
+CheckOptions:
+  bugprone-empty-catch.IgnoreCatchWithKeywords: '@TODO;@FIXME;ignored:'
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*/src/.*'

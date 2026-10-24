@@ -4,7 +4,9 @@ This file supports Fork's TCEC application. It lists every reference
 consulted, every third-party library used, and the provenance of all
 training data. Fork's source code is original: no source code, network
 file, or engine-generated training data from any other engine is included.
-That has been checked against Stockfish and six other engines (2026-10-24).
+That has been checked against Stockfish and six other engines (2026-10-24,
+the Phase 1 code) and, for the Phase 2 UCI code, against Stockfish and
+eight other engines (2026-10-24; see "Phase 2 originality check" below).
 Earlier commits were not all at that standard: the Phase 1 review found parts
 too close to Stockfish, and a later check found one function derived from
 python-chess. All were rewritten clean-room on 2026-10-24, as described in
@@ -47,7 +49,9 @@ the date and the part of Fork it informed.
 | 2026-10-24 | apt.llvm.org (LLVM project's apt repository; signing key llvm-snapshot.gpg.key) | clang 16 and 19 for the Ubuntu 22.04 TCEC-toolchain check (scripts/tcec-toolchain-setup.sh). |
 | 2026-10-24 | David J. Wu, "Accelerating Self-Play Learning in Go" (KataGo), arXiv:1902.10565; abstract only | Ideas 13 and 14 in docs/ideas.md (self-play data mixing, auxiliary targets). Not used yet. |
 | 2026-10-24 | Tony T. Wang, Adam Gleave, Tom Tseng et al., "Adversarial Policies Beat Superhuman Go AIs", arXiv:2211.00241; abstract only | Idea 15 in docs/ideas.md (adversarial robustness testing). Not used yet. |
-| 2026-10-24 | Fork KB `docs/kb/uci.md` (branch kb, verified 2026-10-23): a cited summary of the UCI specification ("Description of the universal chess interface (UCI)", April 2006, Stefan Meyer-Kahlen; `engine-interface.txt` from shredderchess.com's `uci.zip`, sha256 cda40659...e02) and of how fastchess v1.8.2-alpha, cutechess v1.5.1 and python-chess v1.11.2 fill the spec's gaps | The whole Phase 2 front end (`src/uci/`): commands, `go` arguments, option syntax, `info` fields, boot sequence, line endings, the no-legal-move `bestmove (none)` choice. The specification is the only protocol source; no engine's UCI code was opened in Phase 2. Stockfish was used only for count-only name checks (`grep -rlw ... \| wc -l` over a shallow clone at effdc3f; DESIGN.md §8). |
+| 2026-10-24 | Fork KB `docs/kb/uci.md` (branch kb, verified 2026-10-23): a cited summary of the UCI specification ("Description of the universal chess interface (UCI)", April 2006, Stefan Meyer-Kahlen; `engine-interface.txt` from shredderchess.com's `uci.zip`, sha256 cda40659...e02) and of how fastchess v1.8.2-alpha, cutechess v1.5.1 and python-chess v1.11.2 fill the spec's gaps | The whole Phase 2 front end (`src/uci/`): commands, `go` arguments, option syntax, `info` fields, boot sequence, line endings, the no-legal-move `bestmove (none)` choice. The specification is the only protocol source; no engine's UCI code was opened by the implementer in Phase 2. Not in the specification, and adopted as cross-engine conventions for TCEC and runner compatibility (KB uci.md §5): the option names `Hash`, `Clear Hash`, `Threads`, `Move Overhead` and `SyzygyPath`, which started with Stockfish and other engines and are what TCEC and the runners type, and the extension commands `d`, `go perft` and `bench`, common across engines (Stockfish, Obsidian, Reckless, Viridithas, Smallbrain, Berserk, Caissa); their output formats are Fork's own. Stockfish was used only for count-only name checks (`grep -rlw ... \| wc -l` over a shallow clone at effdc3f; DESIGN.md §8). |
+| 2026-10-24 | Fork KB `docs/kb/competition.md` (branch kb): TCEC engine settings (Threads=512, Hash=262144, SyzygyPath=/home/syzygy7, ponder off, options at default unless the author asks), verified 2026-10-23 | The Phase 2 option set and limits (DESIGN.md §5.1, "TCEC requirements"). |
+| 2026-10-24 | Fork KB `docs/kb/os-memory.md` (branch kb, verified 2026-10-24 by the research agent): proc_meminfo(5) and proc.rst (`MemAvailable`, Linux 3.14+), vm.rst, overcommit-accounting.rst, proc_sys_vm(5) and mm/util.c (`__vm_enough_memory`: mode 0 checks each request alone, against RAM + swap since Linux 5.2), madvise(2), transhuge.rst, mmap(2), Microsoft Learn on VirtualAlloc, VirtualFree, MEMORYSTATUSEX, the page file and commit limit, _setmode, fopen and _read (CR-LF and Ctrl-Z in text mode) | The Hash memory code (`src/search/hash_memory.*`) and the binary-mode stdin in `src/main.cpp`; the facts were first written from memory, then checked, and two comments corrected (the overcommit check before Linux 5.2; huge pages need aligned 2 MiB blocks inside the mapping, not an aligned range). |
 | 2026-10-23 | Chess Programming Wiki: Chess960 Perft Results (960 positions, credited to Andrew Grant / Ethereal) | Read only, for the deferred Chess960 decision (DESIGN.md section 6); no data used. |
 
 ## Resemblances found in review, and the clean-room fixes
@@ -180,6 +184,25 @@ Design-level matches that stay: the piece code colour * 8 + type (DESIGN.md
 §4.1; Fork's numbering differs), castling encoded internally as king origin
 to rook square (DESIGN.md §4.1), and the CPW move-flag nibble.
 
+## Phase 2 originality check (2026-10-24)
+
+An independent originality agent compared the Phase 2 code (src/uci/,
+src/search/hash_memory.*, the tests, fuzz target and tools) with the UCI
+front ends of Stockfish (dbe600b), Ethereal (0e47e9b), Berserk (3262851),
+Obsidian (720614a), Caissa (324f1f9), Viridithas (b407e3e), Reckless
+(69aea90), Smallbrain (68574c2) and Monty (0950aff). It reported findings
+in terms of Fork's own code only, so the implementer stayed clean. No high
+finding; no copied bodies, comments or tables; about 60 new identifiers
+with zero distinctive name matches.
+
+| Finding | Severity | Resolution |
+|---|---|---|
+| Option limits equal to Stockfish's (Hash max 33554432, Threads max 1024, Move Overhead max 5000, as first specified) | medium | Owner chose Fork's own: 4194304 / 4096 / 10000 (DESIGN.md §5.1), with boundary tests. Hash default 16 and min 1 are kept as the conventional values. |
+| setoption name and FEN rebuilt by joining tokens, as a common one-liner does | low | Both now sliced from the input line by token offsets. |
+| `go` limits record with colour-indexed `time[2]` / `inc[2]` | low | Renamed `remaining_ms[2]` / `increment_ms[2]`. |
+| SyzygyPath report worded like a common tablebase init message | low | Reworded: "K of L directories found, N .rtbw and M .rtbz files". |
+| Extensions `d`, `go perft`, `bench`; aligned mmap + MADV_HUGEPAGE; slice-per-worker clear; case-insensitive option table; `bestmove (none)` with a depth 0 info line; `>`/`<` log markers | low | Kept: common idioms or conventions, with Fork's own code and formats; recorded here and in the references above. |
+
 ## Third-party libraries
 
 | Library | License | Used for | Status |
@@ -190,13 +213,13 @@ to rook square (DESIGN.md §4.1), and the CPW move-flag nibble.
 
 | Tool | Version | License | Used for |
 |---|---|---|---|
-| python-chess | 1.11.2 | GPL-3.0 | Independent move generator for differential testing (tools/difftest), run in a local venv; since Phase 2 also the oracle for the placeholder chooser (tools/placeholder_check.py) and for the constructed FENs in tests/test_uci.cpp |
-| libFuzzer | bundled with LLVM-MinGW clang 23.1.3 | Apache-2.0 with LLVM exception | Fuzzing the FEN parser and move parsing (fuzz/) |
+| python-chess | 1.11.2 | GPL-3.0 | Independent move generator for differential testing (tools/difftest), run in a local venv; since Phase 2 also the oracle for the placeholder chooser (tools/placeholder_check.py) and for the constructed FENs in tests/test_uci.cpp; generates the random-move opening EPDs for the Phase 2 game runs (tools/make_openings.py; no engine chose a move, and the files are not committed) |
+| libFuzzer | bundled with LLVM-MinGW clang 23.1.3 | Apache-2.0 with LLVM exception | Fuzzing the FEN parser, move parsing and, since Phase 2, the UCI command handler (fuzz/fuzz_uci.cpp) |
 | Syzygy 3-4-5 tablebases | 145 WDL + 145 DTZ files, SHA-256 checked by the kb branch's tools/install.sh | free to use (published by the Syzygy author; served by lichess) | From https://tablebase.lichess.ovh/tables/standard/ into ~/fork-tools (not committed). Oracle for `tools/syzygy_insufficient.py`; Phase 3 probing tests. |
 | fastchess | alpha 1.8.2 (20260726-f618e34) | MIT (GitHub API, 2026-10-24) | UCI compliance checks and engine matches (Phase 2+), installed in ~/fork-tools |
 | cutechess-cli | 1.5.1 | GPL-3.0 (GitHub API, 2026-10-24) | Engine matches (Phase 2+), ~/fork-tools |
 | Ordo | 1.2.6 | GPL-3.0 (GitHub API, 2026-10-24) | Rating calculation from match PGNs, ~/fork-tools |
-| Python | 3.12.10 (Windows venv `.venv`) | PSF | Runs tools/difftest, tools/fuzz, tools/syzygy_insufficient.py and bench/ab.py |
+| Python | 3.12.10 (Windows venv `.venv`) | PSF | Runs tools/difftest, tools/fuzz, tools/syzygy_insufficient.py, bench/ab.py, tools/placeholder_check.py and tools/make_openings.py; tools/pgn_summary.py runs under the WSL distro's `python3` (standard library only) |
 | Marsaglia xorshift (13, 7, 17) | Marsaglia, "Xorshift RNGs", J. Stat. Softw. 8(14), 2003 | algorithm | Fixed-seed noise in tests/test_magics.cpp and random 16-bit moves in tests/test_consistency.cpp (test code only; the triple's attribution to the paper is UNVERIFIED: jstatsoft.org did not respond on 2026-10-24) |
 | libc++ / libc++abi (MSan-instrumented) | llvm-project llvmorg-21.1.8 (commit 2078da43) | Apache-2.0 with LLVM exception | Linked only into the Linux MemorySanitizer test build (scripts/msan.sh); every shipped and other test build uses the toolchain's libstdc++. Built from source in ~/fork-tools, not committed. |
 

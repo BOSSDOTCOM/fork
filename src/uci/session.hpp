@@ -46,8 +46,8 @@ struct SessionConfig {
   bool allow_heavy_commands = true;  // `bench` and `go perft`
   bool allow_files = true;           // LogFile and the SyzygyPath scan
   std::int64_t default_hash_mb = 16;
-  std::int64_t max_hash_mb = 33554432;  // 32 TiB
-  std::int64_t max_threads = 1024;
+  std::int64_t max_hash_mb = 4194304;  // 4 TiB (DESIGN.md §5.1)
+  std::int64_t max_threads = 4096;
 };
 
 class UciSession {
@@ -77,7 +77,7 @@ class UciSession {
   void dispatch(const std::vector<LineToken>& tokens, std::size_t first, std::string_view line);
   void cmd_uci();
   void cmd_isready();
-  void cmd_position(const std::vector<LineToken>& tokens, std::size_t first);
+  void cmd_position(const std::vector<LineToken>& tokens, std::size_t first, std::string_view line);
   void cmd_go(const std::vector<LineToken>& tokens, std::size_t first);
   void cmd_perft(const std::vector<LineToken>& tokens, std::size_t first);
   void cmd_bench();
@@ -97,6 +97,9 @@ class UciSession {
   bool search_running();
   void search_main(Position pos, GoLimits limits);  // the search thread
   void report_search(const Position& pos, Move best, std::uint64_t nodes, std::int64_t elapsed_ms);
+  // Answers a go when memory has run out (review 2026-10-24): fixed buffers,
+  // `best` or, if not `known`, the first legal move.
+  void answer_without_memory(const Position& pos, Move best, bool known) noexcept;
 
   OutputChannel& out_;
   SessionConfig config_;
@@ -105,6 +108,7 @@ class UciSession {
   bool hash_pending_ = true;  // the table is allocated at the first isready, ucinewgame or go
   bool clear_pending_ = false;
   Position root_;
+  bool go_answered_ = false;  // the go being handled has started its search or answered
   SearchSignals signals_;
   std::thread search_thread_;
 };

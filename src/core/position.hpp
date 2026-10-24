@@ -153,6 +153,9 @@ class Position {
   // and does not move the States under a caller's reference (review M1).
   struct StateStack : std::vector<State> {
     StateStack() = default;
+    // Not the base copy constructor on purpose: copy_from reserves first.
+    // GCC -Wextra wants the base named, which clang-tidy calls redundant.
+    // NOLINTNEXTLINE(bugprone-copy-constructor-init,readability-redundant-member-init)
     StateStack(const StateStack& o) : std::vector<State>() { copy_from(o); }
     StateStack& operator=(const StateStack& o) {
       if (this != &o) copy_from(o);

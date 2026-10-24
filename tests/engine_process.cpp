@@ -8,11 +8,11 @@
 #include <windows.h>
 #else
 #include <fcntl.h>
-#include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include <cerrno>
+#include <csignal>
 #endif
 
 namespace forkeng::test {
@@ -109,7 +109,7 @@ std::optional<int> EngineProcess::wait_exit(std::chrono::milliseconds timeout) {
 #else
 
 EngineProcess::EngineProcess(const std::string& exe) {
-  signal(SIGPIPE, SIG_IGN);  // a dead engine must fail a write, not kill the test
+  (void)std::signal(SIGPIPE, SIG_IGN);  // a dead engine must fail a write, not kill the test
   int in[2], out[2];
   if (pipe2(in, O_CLOEXEC) != 0) return;
   if (pipe2(out, O_CLOEXEC) != 0) {
@@ -200,7 +200,7 @@ std::optional<int> EngineProcess::wait_exit(std::chrono::milliseconds timeout) {
 // data == nullptr marks the end of output.
 void EngineProcess::add_bytes(const char* data, std::size_t n) {
   const auto now = Clock::now();
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   if (!data) {
     if (!partial_.empty()) lines_.push_back({partial_, now});
     partial_.clear();
@@ -237,17 +237,17 @@ std::optional<std::size_t> EngineProcess::wait_for(const std::function<bool(cons
 
 std::optional<std::size_t> EngineProcess::wait_prefix(std::string_view prefix, std::size_t from,
                                                       std::chrono::milliseconds timeout) {
-  return wait_for([prefix](const std::string& s) { return s.compare(0, prefix.size(), prefix) == 0; }, from,
+  return wait_for([prefix](const std::string& s) { return std::string_view(s).starts_with(prefix); }, from,
                   timeout);
 }
 
 std::vector<OutputLine> EngineProcess::lines() const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   return lines_;
 }
 
 std::size_t EngineProcess::line_count() const {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::scoped_lock lock(mutex_);
   return lines_.size();
 }
 

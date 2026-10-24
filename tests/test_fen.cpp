@@ -70,7 +70,7 @@ TEST_CASE("fen", "promoted material needs missing pawns") {
   CHECK(!p.set_fen("7k/8/8/8/8/8/QQQQQQ2/QQQQK3 b - - 0 1"));                    // 10 queens
   CHECK_MSG(p.set_fen("7k/8/8/8/8/P7/1QQQQ3/QQQQK3 b - - 0 1", &error), error);  // 8 queens, 1 pawn
   CHECK(!p.set_fen("7k/8/8/8/8/P7/1QQQQQ2/QQQQK3 b - - 0 1"));                   // 9 queens, 1 pawn
-  CHECK_MSG(p.set_fen("7k/8/8/8/8/8/NNN5/4K3 b - - 0 1", &error), error);  // 3 knights, no pawns
+  CHECK_MSG(p.set_fen("7k/8/8/8/8/8/NNN5/4K3 b - - 0 1", &error), error);        // 3 knights, no pawns
   CHECK(!p.set_fen("7k/8/8/8/8/8/PPPPPPPP/NNN1K3 b - - 0 1"));                   // 3 knights, 8 pawns
 }
 

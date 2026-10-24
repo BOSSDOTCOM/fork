@@ -25,8 +25,8 @@
 namespace forkeng {
 
 struct GoLimits {
-  std::optional<std::int64_t> time[2];  // wtime, btime: ms left on each clock
-  std::optional<std::int64_t> inc[2];   // winc, binc: ms added per move
+  std::optional<std::int64_t> remaining_ms[2];  // wtime, btime: each side's clock
+  std::optional<std::int64_t> increment_ms[2];  // winc, binc: added per move
   std::optional<std::int64_t> movestogo, depth, nodes, mate, movetime;
   bool infinite = false;
   bool ponder = false;

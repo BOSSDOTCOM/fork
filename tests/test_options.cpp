@@ -19,7 +19,7 @@ namespace {
 
 OptionTable sample_table(int& presses) {
   OptionTable t;
-  t.add_spin("Hash", 16, 1, 33554432);
+  t.add_spin("Hash", 16, 1, 4194304);
   t.add_check("Use Thing", false);
   t.add_button("Clear Hash", [&presses](const OptionEntry&, std::string&) { return ++presses > 0; });
   t.add_string("SyzygyPath", "");
@@ -38,15 +38,15 @@ OptionTable sample_table(int& presses) {
 TEST_CASE("uci_options", "hash sizes are 64-bit byte counts") {
   static_assert(sizeof(std::size_t) == 8, "Fork targets 64-bit platforms");
   CHECK_EQ(hash_bytes_for_mb(1), std::size_t{1048576});
-  CHECK_EQ(hash_bytes_for_mb(262144), std::size_t{274877906944});      // TCEC's Hash, 256 GiB
-  CHECK_EQ(hash_bytes_for_mb(33554432), std::size_t{35184372088832});  // the maximum, 2^45
+  CHECK_EQ(hash_bytes_for_mb(262144), std::size_t{274877906944});    // TCEC's Hash, 256 GiB
+  CHECK_EQ(hash_bytes_for_mb(4194304), std::size_t{4398046511104});  // the maximum, 4 TiB = 2^42
 }
 
 TEST_CASE("uci_options", "option lines in declaration order") {
   int presses = 0;
   const std::vector<std::string> lines = sample_table(presses).option_lines();
   const std::vector<std::string> want = {
-      "option name Hash type spin default 16 min 1 max 33554432",
+      "option name Hash type spin default 16 min 1 max 4194304",
       "option name Use Thing type check default false", "option name Clear Hash type button",
       "option name SyzygyPath type string default <empty>", "option name Picky type string default keep"};
   CHECK(lines == want);
@@ -112,9 +112,10 @@ TEST_CASE("uci_options", "parse_int64 and the go parser") {
   const GoLimits g = parse_go(tokens, 1, start, warnings);
   CHECK_EQ(warnings.size(), std::size_t{1});  // zz
   CHECK_EQ(g.restrict_to.size(), std::size_t{2});
-  CHECK(g.time[White] == std::optional<std::int64_t>(1000) &&
-        g.time[Black] == std::optional<std::int64_t>(-20));
-  CHECK(g.inc[White] == std::optional<std::int64_t>(5) && g.inc[Black] == std::optional<std::int64_t>(6));
+  CHECK(g.remaining_ms[White] == std::optional<std::int64_t>(1000) &&
+        g.remaining_ms[Black] == std::optional<std::int64_t>(-20));
+  CHECK(g.increment_ms[White] == std::optional<std::int64_t>(5) &&
+        g.increment_ms[Black] == std::optional<std::int64_t>(6));
   CHECK(g.movestogo == std::optional<std::int64_t>(40) && g.depth == std::optional<std::int64_t>(7));
   CHECK(g.nodes == std::optional<std::int64_t>(1000000) && g.mate == std::optional<std::int64_t>(3));
   CHECK(g.movetime == std::optional<std::int64_t>(250));
@@ -122,7 +123,8 @@ TEST_CASE("uci_options", "parse_int64 and the go parser") {
 
   warnings.clear();
   const GoLimits bare = parse_go(split_tokens("go"), 1, start, warnings);
-  CHECK(warnings.empty() && !bare.time[White] && !bare.depth && !bare.infinite && !bare.restrict_sent);
+  CHECK(warnings.empty() && !bare.remaining_ms[White] && !bare.depth && !bare.infinite &&
+        !bare.restrict_sent);
   // A keyword missing its number does not swallow the next keyword.
   const GoLimits gap = parse_go(split_tokens("go depth movetime 5"), 1, start, warnings);
   CHECK(!gap.depth && gap.movetime == std::optional<std::int64_t>(5));
@@ -139,20 +141,33 @@ TEST_CASE("uci_options", "clear_workers") {
 TEST_CASE("uci_options", "HashMemory: resize, clear, refused sizes keep a table") {
   HashMemory h;
   std::string report;
-  CHECK(h.resize(4 * BytesPerMB, 3, report));
+  CHECK(h.resize(4 * BytesPerMB, report));
   CHECK_EQ(h.bytes(), 4 * BytesPerMB);
   CHECK(h.data() != nullptr);
   std::fill(h.data(), h.data() + h.bytes(), std::byte{0xA5});
   h.clear(3);
   CHECK(std::all_of(h.data(), h.data() + h.bytes(), [](std::byte b) { return b == std::byte{0}; }));
-  CHECK(h.resize(2 * BytesPerMB, 8, report));
+  CHECK(h.resize(2 * BytesPerMB, report));
   CHECK_EQ(h.bytes(), 2 * BytesPerMB);
   // 1 TiB: more than this machine has, so the previous size stays.
   report.clear();
-  CHECK(!h.resize(hash_bytes_for_mb(1048576), 4, report));
+  CHECK(!h.resize(hash_bytes_for_mb(1048576), report));
   CHECK_EQ(h.bytes(), 2 * BytesPerMB);
   CHECK_MSG(report.find("using 2 MB") != std::string::npos, report);
   CHECK(std::all_of(h.data(), h.data() + h.bytes(), [](std::byte b) { return b == std::byte{0}; }));
+}
+
+// The Threads maximum (owner, 2026-10-24): nothing is sized for a fixed
+// thread count, so a clear with 4096 workers (more than the engine would
+// ever start for this size) works and zeroes every byte.
+TEST_CASE("uci_options", "HashMemory: a clear with 4096 workers") {
+  HashMemory h;
+  std::string report;
+  CHECK(h.resize(16 * BytesPerMB, report));
+  std::fill(h.data(), h.data() + h.bytes(), std::byte{0x5A});
+  h.clear(4096);
+  CHECK(std::all_of(h.data(), h.data() + h.bytes(), [](std::byte b) { return b == std::byte{0}; }));
+  CHECK_EQ(clear_workers(hash_bytes_for_mb(4194304), 4096), 4096u);  // 4 TiB at Threads 4096
 }
 
 }  // namespace forkeng::test

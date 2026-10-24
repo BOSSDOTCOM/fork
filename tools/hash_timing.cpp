@@ -39,10 +39,11 @@ int main(int argc, char** argv) {
       HashMemory h;  // fresh each time, so every first touch faults pages in
       std::string report;
       auto t = std::chrono::steady_clock::now();
-      if (!h.resize(hash_bytes_for_mb(mb), w, report)) {
+      if (!h.resize(hash_bytes_for_mb(mb), report)) {
         std::printf("%10zu %8u  refused: %s\n", mb, w, report.c_str());
         break;
       }
+      h.clear(w);
       const double first = ms_since(t);
       t = std::chrono::steady_clock::now();
       h.clear(w);

@@ -38,7 +38,7 @@ using namespace std::chrono_literals;
 // (uci_timing) holds the real limits.
 constexpr auto Patience = 10000ms;
 
-bool starts_with(std::string_view s, std::string_view prefix) { return s.substr(0, prefix.size()) == prefix; }
+bool starts_with(std::string_view s, std::string_view prefix) { return s.starts_with(prefix); }
 
 bool is_move_text(std::string_view m) {
   auto square = [](std::string_view s) { return s[0] >= 'a' && s[0] <= 'h' && s[1] >= '1' && s[1] <= '8'; };
@@ -149,10 +149,10 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
   CHECK(g.next("uciok").has_value());
   const std::vector<std::string> out = g.texts();
   const std::vector<std::string> options = {
-      "option name Hash type spin default 16 min 1 max 33554432",
+      "option name Hash type spin default 16 min 1 max 4194304",
       "option name Clear Hash type button",
-      "option name Threads type spin default 1 min 1 max 1024",
-      "option name Move Overhead type spin default 100 min 0 max 5000",
+      "option name Threads type spin default 1 min 1 max 4096",
+      "option name Move Overhead type spin default 100 min 0 max 10000",
       "option name SyzygyPath type string default <empty>",
       "option name LogFile type string default <empty>",
   };
@@ -457,14 +457,14 @@ TEST_CASE("uci_options", "setoption: case, spaces, unknown names, bad values") {
   mark = g.cursor;
   const std::vector<std::string> bad = {"setoption name Ponder value true",
                                         "setoption name Hash value 0",
-                                        "setoption name Hash value 33554433",
-                                        "setoption name Threads value 1025",
+                                        "setoption name Hash value 4194305",
+                                        "setoption name Threads value 4097",
                                         "setoption name Move Overhead value -1",
                                         "setoption name Move Overhead value abc",
                                         "setoption name Threads",
                                         "setoption Threads value 2",
                                         "setoption name Hash value 16 MB",
-                                        "setoption name Move Overhead value 5001"};
+                                        "setoption name Move Overhead value 10001"};
   for (const std::string& b : bad) g.send(b);
   CHECK(g.sync());
   CHECK_EQ(g.count("info string", mark), static_cast<int>(bad.size()));
@@ -542,9 +542,10 @@ TEST_CASE("uci_options", "SyzygyPath counts table files; a missing directory is 
   Gui g;
   g.send("setoption name SyzygyPath value " + dir.string() + separator + missing.string());
   CHECK(g.sync());
-  CHECK_EQ(g.count("info string SyzygyPath: 2 WDL and 1 DTZ table files in 1 directories; not found: " +
-                   missing.string()),
-           1);
+  CHECK_EQ(
+      g.count("info string SyzygyPath: 1 of 2 directories found, 2 .rtbw and 1 .rtbz files; not found: " +
+              missing.string()),
+      1);
   g.check_transcript();
   g.quit();
   fs::remove_all(dir);
@@ -586,8 +587,8 @@ TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
   };
   for (const std::string& line : lines) CHECK_MSG(stamped(line), line);
   auto has = [&](std::string_view tail) {
-    return std::any_of(lines.begin(), lines.end(), [&](const std::string& l) {
-      return l.size() >= tail.size() && l.compare(l.size() - tail.size(), tail.size(), tail) == 0;
+    return std::ranges::any_of(lines, [&](const std::string& l) {
+      return std::string_view(l).ends_with(tail);
     });
   };
   CHECK(has("Z > isready"));
@@ -663,7 +664,7 @@ double ms_between(Clock::time_point a, Clock::time_point b) {
 
 struct Timing {
   std::vector<double> runs;
-  double best() const { return *std::min_element(runs.begin(), runs.end()); }
+  double best() const { return *std::ranges::min_element(runs); }
   std::string text() const {
     std::string s;
     for (double r : runs) s += (s.empty() ? "" : ", ") + std::to_string(r).substr(0, 6) + " ms";
@@ -702,6 +703,73 @@ TEST_CASE("uci_timing", "uci to uciok, first isready to readyok, stop to bestmov
   CHECK_MSG(uci.best() >= 0 && uci.best() < 50 * Slack, uci.text());
   CHECK_MSG(ready.best() >= 0 && ready.best() < 50 * Slack, ready.text());
   CHECK_MSG(stop.best() >= 0 && stop.best() < 10 * Slack, stop.text());
+}
+
+// Option boundaries (owner, 2026-10-24): the minimum and maximum of every
+// spin option are accepted, one past either end is rejected with an info
+// string and changes nothing, and nothing crashes. The Hash maximum (4 TiB)
+// is accepted as a value but cannot be allocated on a test machine: it falls
+// back with an info string, like any refused size.
+TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
+  Gui g;
+  CHECK(g.sync());
+  struct Bound {
+    const char* name;
+    std::int64_t min, max;
+  };
+  for (const Bound& b :
+       {Bound{"Threads", 1, 4096}, Bound{"Move Overhead", 0, 10000}, Bound{"Hash", 1, 4194304}}) {
+    const std::string set = std::string("setoption name ") + b.name + " value ";
+    for (std::int64_t v : {b.min, b.max}) {
+      const std::size_t mark = g.cursor;
+      g.send(set + std::to_string(v));
+      CHECK(g.sync());
+      // Accepted: no complaint about the value (Hash reports its allocation).
+      for (const std::string& line : g.texts(mark))
+        CHECK_MSG(line == "readyok" || starts_with(line, "info string Hash "),
+                  b.name << ' ' << v << ": " << line);
+    }
+    for (std::int64_t v : {b.min - 1, b.max + 1}) {
+      const std::size_t mark = g.cursor;
+      g.send(set + std::to_string(v));
+      CHECK(g.sync());
+      CHECK_MSG(g.count(std::string("info string ") + b.name + ": expected an integer from", mark) == 1,
+                b.name << ' ' << v);
+    }
+  }
+  // The last accepted Hash was the 4 TiB maximum: refused at allocation, with
+  // a fallback, and the engine still plays.
+  CHECK_EQ(g.count("info string Hash 4194304 MB is more than"), 1);
+  g.send("setoption name Threads value 4096");
+  g.send("go depth 1");
+  CHECK(g.next("bestmove").has_value());
+  // A long string option value is fine.
+  const std::size_t mark = g.cursor;
+  g.send("setoption name SyzygyPath value " + std::string(10000, 'x'));
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string SyzygyPath: 0 of 1 directories found", mark), 1);
+  g.check_transcript();
+  g.quit();
+}
+
+// Review test (2026-10-24): when a Hash size is refused and the table falls
+// back to a small one, the clear's worker count follows the size actually
+// allocated, at least 2 MiB per thread (it was the size asked for).
+TEST_CASE("uci_options", "review: a refused Hash clears its fallback table with at most 1 thread per 2 MiB") {
+  Gui g;
+  CHECK(g.sync());  // the default 16 MB table
+  g.send("setoption name Threads value 1024");
+  const std::size_t mark = g.cursor;
+  g.send("setoption name Hash value 1048576");  // 1 TB: refused, falls back to 16 MB
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string Hash 16 MB allocated", mark), 1);
+  for (const std::string& line : g.texts(mark))
+    if (starts_with(line, "info string Hash 16 MB allocated and cleared in")) {
+      const std::size_t by = line.find(" by ");
+      const int threads = by == std::string::npos ? -1 : std::stoi(line.substr(by + 4));
+      CHECK_MSG(threads >= 1 && threads <= 8, "16 MB cleared by " << threads << " threads: " << line);
+    }
+  g.quit();
 }
 
 }  // namespace forkeng::test

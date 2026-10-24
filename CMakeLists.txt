@@ -296,6 +296,11 @@ if(FORK_BUILD_TESTS)
     add_executable(fork_alloc_test tests/alloc_test.cpp)
     target_link_libraries(fork_alloc_test PRIVATE forkcore)
     add_test(NAME no_alloc COMMAND fork_alloc_test)
+    # One failed allocation during go still gives exactly one real bestmove
+    # (review, 2026-10-24). Replaces operator new too, so the same exclusions.
+    add_executable(fork_uci_oom_test tests/uci_oom_test.cpp)
+    target_link_libraries(fork_uci_oom_test PRIVATE forkuci)
+    add_test(NAME uci_oom COMMAND fork_uci_oom_test)
   endif()
 
   add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}

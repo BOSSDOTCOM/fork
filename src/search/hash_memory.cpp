@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -35,16 +37,17 @@ std::byte* os_allocate(std::size_t bytes) {
   const std::size_t padded = bytes + PageAlign;
   void* p = mmap(nullptr, padded, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (p == MAP_FAILED) return nullptr;
-  const auto start = reinterpret_cast<std::uintptr_t>(p);
-  const std::uintptr_t aligned = (start + PageAlign - 1) & ~std::uintptr_t{PageAlign - 1};
-  const std::size_t head = aligned - start;
+  auto* const start = static_cast<std::byte*>(p);
+  const std::size_t misalign = reinterpret_cast<std::uintptr_t>(p) % PageAlign;
+  const std::size_t head = misalign ? PageAlign - misalign : 0;
   const std::size_t tail = padded - head - bytes;
-  if (head) munmap(p, head);
-  if (tail) munmap(reinterpret_cast<void*>(aligned + bytes), tail);
+  std::byte* const aligned = start + head;
+  if (head) munmap(start, head);
+  if (tail) munmap(aligned + bytes, tail);
 #ifdef MADV_HUGEPAGE
-  madvise(reinterpret_cast<void*>(aligned), bytes, MADV_HUGEPAGE);  // a hint; failure is fine
+  (void)madvise(aligned, bytes, MADV_HUGEPAGE);  // a hint; failure is fine
 #endif
-  return reinterpret_cast<std::byte*>(aligned);
+  return aligned;
 #endif
 }
 
@@ -66,17 +69,23 @@ std::size_t available_memory() {
   if (!GlobalMemoryStatusEx(&status)) return std::numeric_limits<std::size_t>::max();
   return static_cast<std::size_t>(status.ullAvailPhys);
 #else
-  // "MemAvailable:   12345678 kB" (Linux 3.14+): free memory plus what the
-  // kernel can reclaim without swapping.
+  // "MemAvailable:   12345678 kB" (Linux 3.14+): the kernel's estimate of
+  // the memory available for new applications without swapping
+  // (proc_meminfo(5); sources in docs/kb/os-memory.md on branch kb).
   std::FILE* f = std::fopen("/proc/meminfo", "r");
   if (!f) return std::numeric_limits<std::size_t>::max();
+  constexpr std::string_view Key = "MemAvailable:";
   char line[256];
-  unsigned long long kb = 0;
-  bool found = false;
-  while (!found && std::fgets(line, sizeof line, f))
-    found = std::sscanf(line, "MemAvailable: %llu kB", &kb) == 1;
-  std::fclose(f);
-  return found ? static_cast<std::size_t>(kb) * 1024 : std::numeric_limits<std::size_t>::max();
+  std::size_t bytes = std::numeric_limits<std::size_t>::max();
+  while (std::fgets(line, sizeof line, f)) {
+    if (!std::string_view(line).starts_with(Key)) continue;
+    char* end = nullptr;
+    const unsigned long long kb = std::strtoull(line + Key.size(), &end, 10);
+    if (end != line + Key.size()) bytes = static_cast<std::size_t>(kb) * 1024;
+    break;
+  }
+  (void)std::fclose(f);
+  return bytes;
 #endif
 }
 
@@ -105,11 +114,8 @@ void HashMemory::release() {
   bytes_ = 0;
 }
 
-bool HashMemory::resize(std::size_t bytes, unsigned workers, std::string& report) {
-  if (bytes == bytes_) {
-    clear(workers);
-    return true;
-  }
+bool HashMemory::resize(std::size_t bytes, std::string& report) {
+  if (bytes == bytes_) return true;
   const std::size_t old_bytes = bytes_;
   const bool room = fits(bytes);
   if (room) {
@@ -119,10 +125,7 @@ bool HashMemory::resize(std::size_t bytes, unsigned workers, std::string& report
     bytes_ = 0;
     const bool beside = allocate(bytes);
     if (old_base) os_free(old_base, old_bytes);
-    if (beside || allocate(bytes)) {
-      clear(workers);
-      return true;
-    }
+    if (beside || allocate(bytes)) return true;
   } else {
     release();
   }
@@ -131,7 +134,6 @@ bool HashMemory::resize(std::size_t bytes, unsigned workers, std::string& report
                       std::to_string(available_memory() / BytesPerMB) + " MB of memory available";
   for (std::size_t fallback : {old_bytes, BytesPerMB}) {
     if (fallback && fallback < bytes && fits(fallback) && allocate(fallback)) {
-      clear(workers);
       report += "; using " + std::to_string(fallback / BytesPerMB) + " MB";
       return false;
     }
@@ -152,7 +154,8 @@ void HashMemory::clear(unsigned workers) {
   std::vector<std::thread> helpers;
   try {
     helpers.reserve(workers - 1);
-  } catch (...) {  // no room for the list: every slice on this thread
+  } catch (...) {
+    // ignored: no room for the list, so every slice runs on this thread
   }
   for (unsigned w = 1; w < workers; ++w) {
     try {
