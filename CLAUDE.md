@@ -110,6 +110,10 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
   machine is shared.
 - Git: work on `main`; the KB lives on `kb`. Commit messages end with the
   attribution lines the session provides.
+- Push policy (owner, 2026-10-24): commit locally as often as needed, but
+  push to GitHub only at milestones, meaning each completed deliverable or
+  when the owner asks, so CI (and its limited minutes) runs on meaningful
+  checkpoints. Push `kb` with the same milestones; it never triggers CI.
 
 ### Phase-end checklist
 
