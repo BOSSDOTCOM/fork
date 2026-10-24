@@ -362,7 +362,99 @@ needed.
 | GPU | **Radeon RX 580** (4 GB, Polaris/gfx803), no NVIDIA | bullet trains on CUDA, ROCm or Metal only; there is no CPU backend. Whether ROCm/HIP supports gfx803 is **UNVERIFIED**; current ROCm releases are widely reported not to support it. So training needs one of: a rented or other CUDA GPU, a working HIP setup, or Fork's own CPU trainer (techniques.md already lists that option). |
 
 The GPU question is independent of the data strategy, but it decides the
-timeline more than the data does. It is listed first in section 5.
+timeline more than the data does. The owner's answer is in section 2.1.
+
+### 2.1 Training compute: Kaggle, Colab, ROCm (checked 2026-10-24)
+
+The owner's plan (2026-10-24): datagen on the local CPU, training on
+Kaggle first, Colab as backup, rented CUDA last. The Kaggle pages block
+plain fetching, so they were rendered in a headless browser; the official
+pages themselves were read, not mirrors.
+
+**Kaggle Notebooks** (kaggle.com/docs/notebooks, /docs/efficient-gpu-usage;
+Kaggle CLI docs kernels.md, 2026-10-22)
+
+| Limit | Value | Status |
+|---|---|---|
+| Weekly GPU quota | 30 h, "sometimes more" depending on demand; resets weekly | VERIFIED |
+| Session length | 12 h, including "Save & Run All" batch (commit) runs | VERIFIED |
+| GPU session hardware | T4 x2 (default) or P100, each with 4 CPU cores and 29 GB RAM | VERIFIED |
+| Newer GPU types | The CLI lists A100, L4, H100 and RTX Pro 6000, some only for competitions or admins | Which ones a free user gets: **UNVERIFIED** |
+| Persistent output | `/kaggle/working`, 20 GB, saved | VERIFIED |
+| Scratch disk | Exists, lost at session end; size not stated | **UNVERIFIED** |
+| Idle timeout (interactive) | 20 min on one official page, 60 min on another | **conflicting**; commit runs are unaffected |
+| Internet | A per-notebook setting, on by default | GPU plus internet together (needed for `cargo` to build bullet) **UNVERIFIED**. Fallback: build bullet once and attach the binary as a dataset |
+| Phone verification for GPU or internet | Stated only on forums | **UNVERIFIED** |
+
+**Kaggle Datasets** (kaggle.com/docs/datasets; Kaggle CLI docs datasets.md)
+
+| Limit | Value | Status |
+|---|---|---|
+| Size per dataset | 200 GB | VERIFIED |
+| Private datasets per account | 200 GB total (make some public or delete them beyond that) | VERIFIED |
+| Files | at most 50 top-level files; use subfolders for more | VERIFIED |
+| Archives | ZIP/7z are unpacked on Kaggle's side | VERIFIED; so upload the shards as plain files |
+| Upload | web, remote URL, GitHub, notebook output, kagglehub, CLI | VERIFIED |
+| CLI commands | `kaggle datasets create -p DIR` (private by default), `kaggle datasets version -p DIR -m MSG [-d]` (`-d` deletes old versions) | VERIFIED |
+| Data sources per notebook | several allowed | VERIFIED |
+| Max file size, per-method upload limit, resumable uploads, read speed | not stated | **UNVERIFIED** |
+
+**Kaggle terms** (kaggle.com/terms and /aup, both effective 2025-06-22)
+- Use must be personal and non-commercial. A GPL hobby engine looks
+  compatible; that is a reading, not legal advice.
+- The AUP bans "activity unrelated to ML data science", along with mining
+  and server farming. NNUE training is ML. Self-play datagen on Kaggle
+  could be read as unrelated, which is one more reason datagen stays
+  local.
+- Kaggle takes a licence to operate the service with user content, but
+  ownership is not affected. No claim on trained outputs was found, so
+  publishing nets under GPL-3.0 is not blocked.
+
+**Google Colab** (research.google.com/colaboratory/faq.html, made binding
+by the Colab Additional Terms tos_v5, 2024-05-14)
+- **"Chess training" is on the list of activities not allowed on free
+  runtimes** without a positive compute-unit balance. Such runtimes may
+  be ended without warning. VERIFIED.
+- So **the free Colab tier cannot be the backup**. Only paid Colab with
+  compute units (where the restriction does not apply) or rented CUDA
+  can.
+- Other limits:
+  - Free sessions last at most 12 h.
+  - Usage limits are dynamic and not published.
+  - Which GPU the free tier gets is not stated (**UNVERIFIED**).
+  - Disk size is not stated (**UNVERIFIED**).
+  - Google Drive gives 15 GB shared with Gmail and Photos.
+  - Using several accounts to dodge limits is banned.
+
+**ROCm and the RX 580 (gfx803)**
+- Not supported:
+  - The current Linux ROCm compatibility matrix lists gfx908 and newer
+    only.
+  - The Windows HIP SDK 7.2.0 starts at the RX 6600.
+  - ROCm 7.0.0 deprecated gfx8 on Windows.
+  - All VERIFIED. The release in which gfx803 first left official
+    support is **UNVERIFIED**.
+- The RX 580 cannot be used for training.
+
+**Practical constraints for Phase 4**
+- About 30 GPU hours a week, in runs of at most 12 h each. Training must
+  checkpoint to `/kaggle/working` and resume across runs.
+- bullet uses one T4 unless multi-GPU is set up.
+- Training data:
+  - Keep each dataset at about 50-100 GB, so that versions fit under the
+    200 GB private quota, or delete old versions with `-d`.
+  - Shard it into at most 50 top-level files or subfolders, uploaded
+    unarchived.
+  - With 29 GB of RAM, anything larger has to be streamed from the input
+    mount, not loaded whole.
+- The upload goes over the owner's home connection: a 30 GB dataset at
+  50 Mbit/s up is about 1.5 h (*estimate*).
+- Before relying on Kaggle, check with one test session:
+  - phone verification;
+  - whether internet works in GPU sessions;
+  - scratch disk size;
+  - which idle timeout applies;
+  - the maximum file size.
 
 ---
 
@@ -443,15 +535,21 @@ Effect:
 - Time to a strong first net is still **about 3-6 weeks of machine
   time**.
 
-**Review gate**: if after 4 generations, or 2 billion own positions, the
-net plateaus clearly below the target, revisit B or C with measured
-numbers. The trigger is a target the owner sets in the Phase 4 spec.
-Revisiting is cheap if the datagen pipeline already exists. Leaving Lc0
-data is not.
+**Review gate** (owner, 2026-10-24): revisit Lc0 data, whichever comes
+first:
+- two consecutive net generations each gain less than about 10 Elo
+  (SPRT against the previous generation), or
+- 4 generations, or 2 billion own positions.
+
+Revisiting means an owner decision on measured numbers. Revisiting is
+cheap if the datagen pipeline already exists. Leaving Lc0 data is not.
 
 ---
 
 ## 4. Recommendation
+
+**Decision (owner, 2026-10-24): A+ adopted.** The decisions are recorded in
+[data-policy.md](data-policy.md) "Owner decisions", for the Phase 4 spec.
 
 **Adopt A+ (own self-play labels; Lichess CC0 positions only as openings;
 Syzygy WDL labels; no Lc0 data).** This is DESIGN.md's current Phase 4
@@ -491,14 +589,16 @@ data set that takes months of CPU on this machine alone.
 
 ## 5. Open questions
 
-### For the owner (decisions, before the Phase 4 spec)
+### For the owner (answered 2026-10-24)
 
-1. **Training GPU:** rent a CUDA GPU when needed, try ROCm/HIP on the RX
-   580, or write Fork's own CPU trainer?
-2. **Disk:** free or add space for data (and for 6-man WDL, 73 GB)?
-3. **Lichess puzzles as a test-only tactics suite** (Stockfish-generated,
-   never in a net): allowed or not?
-4. **Review-gate target** for revisiting Lc0 data (section 3.4).
+1. **Training GPU:** Kaggle first, Colab as backup, rented CUDA last.
+   Datagen stays on the local CPU. The RX 580 is not supported
+   (section 2.1). **Still open:** free Colab bans chess training, so the
+   backup has to be paid Colab or rented CUDA.
+2. **Disk:** 45 GB constraint recorded. An external SSD will be added
+   before Phase 4, and a compact data format is planned regardless.
+3. **Lichess puzzles:** diagnostic report only (data-policy.md).
+4. **Review gate:** section 3.4.
 
 ### For TCEC's Discord
 

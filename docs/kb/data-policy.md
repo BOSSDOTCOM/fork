@@ -41,10 +41,11 @@ is in [training-data.md](training-data.md).
 | Lichess game results as training labels | labels | **UNVERIFIED** | Human results are not engine data but not own data either; the TCEC view is not stated |
 | Lichess `[%eval]` comments | anything | **OFF-LIMITS** | Stockfish via fishnet |
 | Lichess Broadcasts (HF, CC-BY-SA 4.0), moves only | start positions | **ALLOWED** | Human games; attribution required; strip `[%eval]` |
-| Lc0 training data, raw runs (storage.lczero.org, ODbL/DbCL) | labels, positions | **ALLOWED WITH CATEGORY CHANGE** | Lc0 labels; breaks NNUE Guideline rule 3; a non-AI engine would be Cat 3; ODbL notice and share-alike. **Not adopted** (recommendation A+, training-data.md §4) |
+| Lc0 training data, raw runs (storage.lczero.org, ODbL/DbCL) | labels, positions | **ALLOWED WITH CATEGORY CHANGE** | Lc0 labels; breaks NNUE Guideline rule 3; a non-AI engine would be Cat 3; ODbL notice and share-alike. **Not adopted** (A+, owner 2026-10-24); revisited only through the review gate below |
 | Lc0 Kovax V7 sets (cleanvisits, k2hybrid) | any | **UNVERIFIED** | As raw Lc0, plus UHO openings whose selecting engine is unknown (likely Stockfish) |
 | Lichess evaluations DB | any | **OFF-LIMITS** | Stockfish in browsers |
-| Lichess puzzles | training | **OFF-LIMITS** | Stockfish NNUE at 40 meganodes; test-suite use is an owner decision |
+| Lichess puzzles | training, tuning, acceptance gates | **OFF-LIMITS** | Stockfish NNUE at 40 meganodes |
+| Lichess puzzles | diagnostic report only | **ALLOWED** (owner, 2026-10-24) | A solve-rate report to look at, never a tuning target, an acceptance or SPRT gate, or a training input |
 | CCRL, CEGT game archives | any | **OFF-LIMITS** | Many engines' moves and evals, including Stockfish and derivatives |
 | TCEC game archives (tcecgames, CC BY-SA 3.0) | any | **OFF-LIMITS** | Stockfish and Lc0 moves and evals; REFERENCE ONLY for statistics |
 | Fishtest games | any | **OFF-LIMITS** | Stockfish vs Stockfish |
@@ -58,6 +59,45 @@ is in [training-data.md](training-data.md).
 | official-stockfish/books (UHO, 8moves, popularpos) | openings | **OFF-LIMITS** | Stockfish project; UHO selected by an engine-eval window (engine **UNVERIFIED**, likely Stockfish) |
 | mitermix/chess-selfplay, Kaggle sets | any | **UNVERIFIED** | Not reviewed, or the producing engine is unknown |
 | Opponent games from Fork's own gauntlets (Phase 8) | any | **OFF-LIMITS** | Opponents' moves; stored apart from training data (originality.md §4) |
+
+## Owner decisions (2026-10-24): Phase 4 spec input
+
+The Phase 4 spec in DESIGN.md on main must carry these decisions. main was
+not changed here; the Phase 4 spec session copies them over.
+
+1. **Strategy A+.**
+   - Labels come from Fork's own self-play only.
+   - Datagen openings are Lichess CC0 game positions (with `[%eval]`
+     stripped and BOT games dropped).
+   - Positions with 7 pieces or fewer are labelled and adjudicated with
+     Syzygy WDL.
+   - Fork rescores old data with newer Fork nets.
+   - No Lc0 data. Details: training-data.md §3.4.
+2. **Compute split.**
+   - Self-play datagen runs on the owner's CPU (12 threads).
+   - Training runs on **Kaggle** (free CUDA) first, **Colab** as backup,
+     and **rented CUDA** only if both fall short.
+   - The local Radeon RX 580 is **not supported** for training.
+   - Kaggle and Colab limits are in training-data.md §2.1.
+   - **Open (found after the decision):** Colab's FAQ bans "chess
+     training" on free runtimes. Only paid Colab (with compute units) can
+     serve as the backup. The owner to confirm or replace the backup.
+3. **Disk.**
+   - 45 GB free on C: (2026-10-24). The owner adds an external SSD before
+     Phase 4.
+   - Phase 4 plans around a **compact data format** (a few bytes per
+     position, binpack-like) regardless.
+4. **Lichess puzzles** are allowed as a **diagnostic report only**:
+   - never a tuning target;
+   - never an acceptance or SPRT gate;
+   - never a training input.
+5. **Review gate for Lc0 data.** Revisit, whichever comes first:
+   - two consecutive net generations each gain less than about 10 Elo
+     (SPRT-measured against the previous generation), or
+   - 4 generations, or 2 billion own positions.
+
+   Revisiting means a new owner decision on measured numbers, not an
+   automatic switch.
 
 ## Changing a status
 

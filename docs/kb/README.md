@@ -72,6 +72,11 @@ Fork, where the information came from, and when it was verified.
 - **Before each phase:** re-check the entries that phase depends on (for
   example tools and Syzygy before Phase 3, TCEC rules before Phases 5 and 8),
   update the "verified" dates, and log new pages in sources.md.
+- **At every phase-end checklist (owner, 2026-10-24):** merge `main`
+  into `kb` so the branches stay in sync. `docs/DESIGN.md` on kb is only
+  a pointer to main's copy, so on a conflict take main's version. The
+  step belongs in the phase-end checklist in main's `CLAUDE.md` (add it
+  there at the next phase end).
 - **Each TCEC season:**
   - Re-read the official rule pages listed in competition.md.
   - Update `config/tcec.json`. Set `verified` only for values confirmed on
