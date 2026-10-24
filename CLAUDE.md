@@ -138,9 +138,12 @@ next phase begins. Report each item's result.
 
 **Fuzz corpus.** Only `fuzz/corpus/<target>/seed-*` files are committed; a
 fuzz run's new inputs are git-ignored. After a long run, minimize with
-libFuzzer (`<target> -merge=1 <empty dir> <corpus dir>`) and commit the
-minimized set as `seed-*` files, replacing the old seeds, so the
-committed seeds keep the coverage the run reached.
+libFuzzer into a directory that already holds the committed seeds
+(`<target> -merge=1 <dir with seeds> <corpus dir>`): the hand-written seeds
+(start position, ep and promotion cases, Kiwipete, a castling line) are
+kept, and only inputs that add coverage are added. Commit those as
+`seed-min-<hash>` files, so the committed seeds keep the coverage the run
+reached.
 
 ## Gotchas
 
