@@ -56,7 +56,8 @@ is in [training-data.md](training-data.md).
 | ChessBench, laion/strategic_game_chess | any | **OFF-LIMITS** | Stockfish labels or Stockfish self-play |
 | nnue-pytorch datasets, HF linrock_relabel_* | any | **OFF-LIMITS** | Stockfish data, and/or Lc0 relabels mixed with Stockfish data |
 | chessdb/snapshots (chessdb.cn) | any | **OFF-LIMITS** (UNVERIFIED scorer) | The scoring engine is not stated |
-| official-stockfish/books (UHO, 8moves, popularpos) | openings | **OFF-LIMITS** | Stockfish project; UHO selected by an engine-eval window (engine **UNVERIFIED**, likely Stockfish) |
+| official-stockfish/books (UHO, 8moves, popularpos) | training, datagen openings, tuning | **OFF-LIMITS** | Stockfish project; UHO selected by an engine-eval window (engine **UNVERIFIED**, likely Stockfish) |
+| `UHO_Lichess_4852_v1.epd` (official-stockfish/books) | opening positions for SPRT and other test matches only | **ALLOWED, test openings only** (owner, 2026-10-24; decision 6 below) | Test matches measure Fork against Fork; nothing from them trains or tunes a net. Never training data |
 | mitermix/chess-selfplay, Kaggle sets | any | **UNVERIFIED** | Not reviewed, or the producing engine is unknown |
 | Opponent games from Fork's own gauntlets (Phase 8) | any | **OFF-LIMITS** | Opponents' moves; stored apart from training data (originality.md §4) |
 
@@ -105,6 +106,15 @@ not changed here; the Phase 4 spec session copies them over.
 
    Revisiting means a new owner decision on measured numbers, not an
    automatic switch.
+6. **UHO_Lichess: test openings only** (owner, 2026-10-24, approving the
+   Phase 3 spec). `UHO_Lichess_4852_v1.epd` is the opening book for SPRT and
+   other test matches. It is **never training data**: not datagen
+   openings, not labelled positions, not a tuning set, and positions from
+   test-match games are not kept for training either. The book is selected
+   by engine evaluations, which rule 2 keeps out of training (the same
+   reasoning as ideas.md idea 7 for TCEC books). This narrows the earlier
+   OFF-LIMITS row for official-stockfish/books to training, datagen and
+   tuning use.
 
 ## Changing a status
 
