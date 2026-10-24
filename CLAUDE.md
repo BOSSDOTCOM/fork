@@ -114,11 +114,10 @@ next phase begins. Report each item's result.
    Windows and in `~/fork` (a clean clone), the slow suites, and the Ubuntu
    22.04 build with TCEC's compilers (gcc 11.4, g++-12, clang 16/19; see
    DESIGN.md §5.1). Plus **fuzzing until coverage plateaus** (owner,
-   2026-10-24): `fuzz_fen` for up to 1 hour, stopping early once coverage
-   has not grown for 20 minutes (`tools/fuzz/run_fuzz.py --max-seconds 3600
-   --plateau-seconds 1200`), and `fuzz_moves` for 15 minutes
-   (`--max-seconds 900 --plateau-seconds 999999`), on a fresh `clang-fuzz`
-   build. Report runs, coverage and whether each plateaued; then minimize
+   2026-10-24): every fuzz target (`fuzz_fen`, `fuzz_moves`) for up to 1
+   hour each, one after the other, stopping early once coverage has not
+   grown for 20 minutes (`tools/fuzz/run_fuzz.py --max-seconds 3600
+   --plateau-seconds 1200`), on a fresh `clang-fuzz` build. Report runs, coverage and whether each plateaued; then minimize
    the corpora and promote them to `seed-*` files (see "Fuzz corpus"
    below). Add a fuzz target for any new parser (e.g. `fuzz_uci`, Phase 2)
    under the same rule.
