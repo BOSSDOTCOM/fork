@@ -150,11 +150,11 @@
       },
       "spot_counts_note": "x, y, z (spots for Cat 1, 2, 3+4) are set per event by the organisers depending on applicants; Swiss 10 final: 10, 5, 1",
       "categorisation_appeal": "24 h after TCEC announces final categories (chat/Discord), by email to TD, Kan and Aloril; TD decision final; no mid-season architecture change into a higher-numbered category; questionnaire must be kept current (Potential decision)",
-      "cat4_route_s30": "Cat 4 pre-stage (if several Cat 4 engines) -> Cat 3+4 playoff (12 DRR at 30+3) -> 1 Swiss spot -> Swiss. Not eligible for the Leagues however it scores; a separate 'extra gauntlet' is promised (format UNVERIFIED: no page or announcement as of 2026-10-23).",
+      "cat4_route_s30": "Cat 4 pre-stage (if several Cat 4 engines) -> Cat 3+4 playoff (12 DRR at 30+3) -> 1 Swiss spot -> Swiss. Not eligible for the Leagues however it scores; a separate 'extra gauntlet' is promised (format UNVERIFIED: no page or announcement as of 2026-10-23; TCEC_AI_Gauntlet still 404 and chessdom TCEC feed unchanged on 2026-10-24).",
       "cat4_preplayoff_if_several": "Partly verified: revisions 9185-9410 (21 Jun - 6 Sep 2026) said 'at least 1 DRR at 30+3 as needed'; final text (revision 9411) keeps the single place but gives no format. Not played in S30 (one Cat 4 entrant). Future format UNVERIFIED.",
-      "cat4_license_precedent": "CatGPT (Cat 4, S30) uses PolyForm Noncommercial (source-available) and was accepted with 'open repository present'; whether an OSI license is required is UNVERIFIED",
+      "cat4_license_precedent": "CatGPT (Cat 4, S30) uses PolyForm Noncommercial (source-available) and was accepted with 'open repository present'; whether an OSI license is required is UNVERIFIED (no rule text; TCEC Discord question). Moot for Fork: GPL-3.0 chosen 2026-10-24, OSI-approved per opensource.org/license/gpl-3-0",
       "season31": null,
-      "season31_note": "UNVERIFIED: Swiss 11 / Leagues S31 pages do not exist yet (404 on 2026-10-23); S31 categories, AI policy and deadlines not published",
+      "season31_note": "UNVERIFIED: Swiss 11 / Leagues S31 pages do not exist yet (404 on 2026-10-23); S31 categories, AI policy and deadlines not published; still 404 on 2026-10-24",
       "s30_cat34_result": "3 engines, 72 games, 9-12 Sep 2026: Cinder 31.5/48 (qualified), CatGPT (Cat 4) 27/48, Serendipity 13.5/48",
       "promotion_from_swiss_10": "top 32 -> Cup 17; the 17 engines without a Leagues place compete for 7 Entrance League spots (top 5 direct, middle 10 tiebreak for 2, bottom 2 out). Not open to Cat 4 in S30."
     }
