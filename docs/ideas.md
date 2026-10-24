@@ -154,7 +154,7 @@ name of their config flag.
     `mov DWORD PTR`; instruction counts slightly lower).
 - **decision (owner's rule):** not clearly better on both compilers, so main
   keeps its layout plus the uint8 mailbox (harmless, 192 fewer bytes per
-  Position). v5 is kept on branch `layout-exp` (9fc2cb8) for Phase 3
+  Position). v5 is kept on branch `layout-exp` (97ab028) for Phase 3
   re-testing with search nps.
 - **per-ply check info (separate from the layout question):** Part A item 8
   made the State compute checkers, blockers/pinners and checking squares on
