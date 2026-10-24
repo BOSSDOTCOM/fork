@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Fork testing-tool installer for WSL2 Ubuntu.
 #
-# STATUS: UNTESTED. Written 2026-10-23 on a machine without WSL; only `bash -n` was run.
-# Treat the first real run as a test run and fix what breaks.
+# STATUS: first real run 2026-10-23 on Ubuntu 26.04 (WSL2): all steps PASS or SKIP
+# (6-piece Syzygy declined, hotspot skipped).
 #
 # What it does (each step is skipped if already done, then re-verified):
 #   1. apt build deps + profilers (needs sudo: you will be asked for your password once)

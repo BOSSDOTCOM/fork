@@ -165,6 +165,11 @@ None of these is answered on any page opened on 2026-10-23.
    open-source license, or is a source-available license enough? The
    published rule only asks for public, buildable source; the CatGPT
    precedent was accepted with PolyForm Noncommercial.
+4. **Match runner:** what match runner and version do TCEC servers
+   currently use? TCEC's cutechess fork (TCEC-Chess/tceccutechess) has had
+   no pushes since 2023-04-09, so it may no longer be what runs. Until
+   answered, Fork's compliance testing uses `fastchess --compliance` plus
+   standard cutechess-cli (tools.md).
 
 ### Swiss categories in full (S30 / Swiss 10)
 

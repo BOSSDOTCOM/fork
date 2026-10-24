@@ -87,6 +87,17 @@ licensed *engine* code is not copied. The only exception is a documented library
   - Tournament types: round-robin, gauntlet, knockout and pyramid.
   - `-version` prints the version.
 - **Source:** https://github.com/cutechess/cutechess. Verified 2026-10-23.
+- **Installed 2026-10-23:** built from source at v1.5.1 against Qt 6.10.2,
+  at `~/fork-tools/bin/cutechess-cli`.
+
+### TCEC's cutechess fork (deferred)
+- **Status (owner, 2026-10-23): deferred.** https://github.com/TCEC-Chess/tceccutechess
+  has had no pushes since 2023-04-09 (`master`, commit `a324a3e6`), and whether
+  TCEC's servers still run it is unconfirmed; the question is on the Discord
+  list in competition.md. Phase 2 acceptance uses `fastchess --compliance` plus
+  standard cutechess-cli. If TCEC confirms the fork, it is added then.
+- The prepared install step (Qt5 build, pinned commit, notes) is on branch
+  `tcec-cutechess`, not merged.
 
 **Mapping TCEC adjudication to runner flags (Phase 8).** `config/tcec.json` has draw from move 35, |eval| ≤ 8 cp for 10 plies by both engines, and a win at ≥ 1000 cp for 10 plies. Both runners count `movecount` in "consecutive moves". **UNVERIFIED** whether that means plies or full moves, and whether both engines' scores are tested in the way TCEC does it. Read the runner source before trusting a mapping such as `-draw movenumber=35 movecount=? score=8` and `-resign movecount=? score=1000 twosided=true`.
 
@@ -236,6 +247,10 @@ CPW's Opening Book page lists older suites (Nunn, Noomen 2-move, HERT, SALC and 
   - They are published both in the repo (`checksums/`) and on the lichess mirror. The two sha256 lists are byte-identical: sha256 `6dc75697…a783`, pinned in versions.lock.
   - The list covers 3-7 pieces: 10, 60, 220, 730 and 2002 files.
   - install.sh downloads 3-4-5 and checks all 290 files against it.
+  - **Installed 2026-10-23** (first install.sh run, WSL2 Ubuntu 26.04):
+    `~/fork-tools/syzygy/3-4-5`, 145 .rtbw + 145 .rtbz, sha256 OK,
+    939 MiB on disk. 6-piece declined. Recorded for test scripts in
+    `config/local-test.json` on main.
 - **For Fork:**
   - The engine needs a `SyzygyPath` option.
   - The 3-4-5 set is enough for development.
