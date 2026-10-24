@@ -1,5 +1,6 @@
-// Fork command line. Phase 1: perft, divide, bench, version.
-// The UCI loop arrives in Phase 2.
+// Fork's entry point. Without arguments it speaks UCI on stdin/stdout
+// (src/uci/session.hpp); with a subcommand it runs that tool: perft, divide,
+// bench, version, difftest.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -14,6 +15,13 @@
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
 #include "core/position.hpp"
+#include "uci/output.hpp"
+#include "uci/session.hpp"
+
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 namespace {
 
@@ -28,7 +36,7 @@ std::string_view compiler_name() {
 }
 
 void print_version() {
-  std::cout << "Fork (Phase 1)\n"
+  std::cout << "Fork " << forkeng::engine_version() << '\n'
             << "compiler " << compiler_name() << '\n'
             << "arch " << FORK_ARCH_NAME << '\n'
             << "build " << FORK_BUILD_TYPE << '\n'
@@ -127,9 +135,22 @@ bool read_depth_and_position(int argc, char** argv, int& depth, forkeng::Positio
 
 }  // namespace
 
+// The UCI loop. stdin is switched to binary mode on Windows so that line
+// endings reach the reader as sent (it accepts LF, CRLF and CR) and a stray
+// Ctrl-Z byte is not taken for end of input; stdout stays in the platform's
+// text mode.
+int uci_main() {
+#ifdef _WIN32
+  _setmode(_fileno(stdin), _O_BINARY);
+#endif
+  forkeng::OutputChannel out(stdout);
+  forkeng::UciSession session(out);
+  return session.run(stdin);
+}
+
 static int run(int argc, char** argv) {
   forkeng::init();
-  if (argc < 2) return usage();
+  if (argc < 2) return uci_main();
   std::string cmd = argv[1];
 
   if (cmd == "version") {

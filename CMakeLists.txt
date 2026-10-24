@@ -9,7 +9,8 @@ if(DEFINED CMAKE_CXX_COMPILER AND CMAKE_CXX_COMPILER STREQUAL "")
   message(FATAL_ERROR "CMAKE_CXX_COMPILER is empty: source scripts/env.sh (or scripts/env.ps1) "
                       "before using the presets, or pass -DCMAKE_CXX_COMPILER=<compiler>")
 endif()
-project(fork LANGUAGES CXX)
+# The semver in `id name` (DESIGN.md §5.1): 0.<phase>.0 until the first release.
+project(fork VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -111,8 +112,37 @@ add_library(forkcore STATIC
 target_include_directories(forkcore PUBLIC src)
 target_link_libraries(forkcore PUBLIC fork_flags PRIVATE fork_pgo)
 
+find_package(Threads REQUIRED)
+
+# The UCI front end (src/uci/): protocol loop, options, placeholder search.
+add_library(forkuci STATIC
+  src/uci/go_limits.cpp
+  src/uci/output.cpp
+  src/uci/placeholder.cpp
+  src/uci/session.cpp
+  src/uci/version.cpp)
+target_link_libraries(forkuci PUBLIC forkcore Threads::Threads PRIVATE fork_pgo)
+
+# Version string `<semver>-dev+<short commit>`, read from git at configure
+# time (owner, 2026-10-24); without git, or outside a checkout (a tarball),
+# just `<semver>-dev`. Only version.cpp sees it, so a new commit hash
+# recompiles one file.
+set(fork_version "${PROJECT_VERSION}-dev")
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS ${CMAKE_SOURCE_DIR}/.git)
+  execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse --short=7 HEAD
+                  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                  OUTPUT_VARIABLE fork_commit OUTPUT_STRIP_TRAILING_WHITESPACE
+                  RESULT_VARIABLE fork_commit_failed ERROR_QUIET)
+  if(NOT fork_commit_failed AND fork_commit MATCHES "^[0-9a-f]+$")
+    string(APPEND fork_version "+${fork_commit}")
+  endif()
+endif()
+message(STATUS "Fork version ${fork_version}")
+set_source_files_properties(src/uci/version.cpp PROPERTIES COMPILE_DEFINITIONS "FORK_VERSION=\"${fork_version}\"")
+
 add_executable(fork src/main.cpp)
-target_link_libraries(fork PRIVATE forkcore fork_pgo)
+target_link_libraries(fork PRIVATE forkuci fork_pgo)
 
 add_executable(fork_magic_seeds tools/magic_seeds.cpp)
 target_link_libraries(fork_magic_seeds PRIVATE forkcore)
@@ -187,8 +217,13 @@ if(FORK_BUILD_TESTS)
     tests/test_perft.cpp
     tests/test_consistency.cpp
     tests/test_epd.cpp
-    tests/test_draws.cpp)
-  target_link_libraries(fork_tests PRIVATE forkcore)
+    tests/test_draws.cpp
+    tests/engine_process.cpp
+    tests/test_uci.cpp)
+  target_link_libraries(fork_tests PRIVATE forkuci)
+  # The UCI suites drive the real engine binary over pipes.
+  add_dependencies(fork_tests fork)
+  target_compile_definitions(fork_tests PRIVATE FORK_EXE_PATH="$<TARGET_FILE:fork>")
 
   # Public perft suites: downloaded once into .cache/ (not committed, see
   # docs/ORIGINALITY.md) and pinned by SHA-256. A failed download leaves the
@@ -224,7 +259,8 @@ if(FORK_BUILD_TESTS)
   endforeach()
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
-  foreach(suite magics fen zobrist_ep draws perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd)
+  foreach(suite magics fen zobrist_ep draws perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
+                uci_protocol)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
