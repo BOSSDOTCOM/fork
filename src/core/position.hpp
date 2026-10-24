@@ -96,6 +96,10 @@ class Position {
   bool is_legal(Move m) const;         // requires is_pseudo_legal(m)
   bool gives_check(Move m) const;      // requires is_pseudo_legal(m) && is_legal(m)
   Key predicted_key(Move m) const;     // exact key after make(m), for TT prefetch
+  // Occupancy after the side to move captures en passant from `from` to `to`.
+  Bitboard occupancy_after_ep(Square from, Square to) const;
+  // The square of the piece a capture by the side to move removes.
+  Square capture_square(Move m) const { return m.is_en_passant() ? m.to() - forward(side_) : m.to(); }
 
   void make(Move m);
   void unmake(Move m);
@@ -117,12 +121,15 @@ class Position {
   // Recomputes every key and the per-ply state from the board, for tests.
   State compute_state() const;
 
-  // Castling geometry for a castle move encoded as king -> rook square.
-  static Square castle_king_to(Square king_from, Square rook_from) {
-    return rook_from > king_from ? king_from + 2 : king_from - 2;
-  }
-  static Square castle_rook_to(Square king_from, Square rook_from) {
-    return rook_from > king_from ? king_from + 1 : king_from - 1;
+  // Where king and rook land for a castle move encoded as king -> rook square:
+  // the king goes two files towards the rook, and the rook to the square the
+  // king passed over.
+  struct CastleLanding {
+    Square king, rook;
+  };
+  static CastleLanding castle_landing(Square king_from, Square rook_from) {
+    const int towards_rook = rook_from > king_from ? 1 : -1;
+    return {king_from + 2 * towards_rook, king_from + towards_rook};
   }
 
  private:
@@ -134,7 +141,6 @@ class Position {
   void refresh_check_info(State& s) const;  // checkers, pinned, discoverers
   Bitboard lone_shields(Square king, Bitboard shields, Bitboard rook_sliders, Bitboard bishop_sliders) const;
   bool ep_capture_legal(Square ep) const;  // for the side to move
-  Bitboard occupancy_after_ep(Square from, Square to) const;  // for the side to move
   bool has_insufficient_material(Color c) const;
   void finish_setup();  // state from scratch after board setup
 

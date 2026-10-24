@@ -32,11 +32,11 @@ void check_slider(const SliderEntry* entries, Bitboard (*fast)(Square, Bitboard)
 }  // namespace
 
 TEST_CASE("magics", "rook lookups match ray walk for every subset") {
-  check_slider(tables::rook, rook_attacks, rook_attacks_slow, "rook");
+  check_slider(tables::rook, rook_attacks, rook_attacks_by_walk, "rook");
 }
 
 TEST_CASE("magics", "bishop lookups match ray walk for every subset") {
-  check_slider(tables::bishop, bishop_attacks, bishop_attacks_slow, "bishop");
+  check_slider(tables::bishop, bishop_attacks, bishop_attacks_by_walk, "bishop");
 }
 
 // Independent oracle for between/line: plane geometry on (file, rank)
@@ -69,8 +69,8 @@ TEST_CASE("magics", "relevant-occupancy masks") {
   for (Square s = 0; s < 64; ++s) {
     Bitboard own_rank = Rank1 << (8 * rank_of(s)), own_file = FileA << file_of(s);
     Bitboard rook_edges = ((Rank1 | Rank8) & ~own_rank) | ((FileA | FileH) & ~own_file);
-    CHECK_MSG(tables::rook[s].mask == (rook_attacks_slow(s, 0) & ~rook_edges), "rook mask " << s);
-    CHECK_MSG(tables::bishop[s].mask == (bishop_attacks_slow(s, 0) & ~(Rank1 | Rank8 | FileA | FileH)),
+    CHECK_MSG(tables::rook[s].mask == (rook_attacks_by_walk(s, 0) & ~rook_edges), "rook mask " << s);
+    CHECK_MSG(tables::bishop[s].mask == (bishop_attacks_by_walk(s, 0) & ~(Rank1 | Rank8 | FileA | FileH)),
               "bishop mask " << s);
   }
 }

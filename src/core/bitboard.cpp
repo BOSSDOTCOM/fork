@@ -251,8 +251,8 @@ int magic_search_attempts(bool rook, Square s, std::uint64_t seed, int limit) {
   return pick_magic(all_occupancies(s, mask, dirs_begin), bits, seed, limit, magic, out.data());
 }
 
-Bitboard rook_attacks_slow(Square s, Bitboard occ) { return walk_ray_attacks(s, occ, RookDirsBegin); }
-Bitboard bishop_attacks_slow(Square s, Bitboard occ) { return walk_ray_attacks(s, occ, BishopDirsBegin); }
+Bitboard rook_attacks_by_walk(Square s, Bitboard occ) { return walk_ray_attacks(s, occ, RookDirsBegin); }
+Bitboard bishop_attacks_by_walk(Square s, Bitboard occ) { return walk_ray_attacks(s, occ, BishopDirsBegin); }
 
 void init_bitboards() {
   // A function-local static is initialized exactly once, even with threads.

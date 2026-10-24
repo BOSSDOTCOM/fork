@@ -102,7 +102,7 @@ void fill_moves(const Position& pos, MoveList& list) {
       // other than the captured pawn. Covers checks, pins and rank discovery.
       if (ep != NoSquare && (pawn_attacks(us, from) & bb(ep))) {
         Square cap_sq = ep - up;
-        Bitboard after = (occ ^ bb(from) ^ bb(cap_sq)) | bb(ep);
+        Bitboard after = pos.occupancy_after_ep(from, ep);
         if (!(pos.attackers_to(own_king, after) & theirs & ~bb(cap_sq))) list.add(Move(from, ep, EnPassant));
       }
     }
@@ -116,7 +116,7 @@ void fill_moves(const Position& pos, MoveList& list) {
       if (!(rights & right)) continue;
       Square rook = relative(us, side == 0 ? 7 : 0);
       if (between(own_king, rook) & occ) continue;
-      Square king_to = Position::castle_king_to(own_king, rook);
+      Square king_to = Position::castle_landing(own_king, rook).king;
       bool safe = true;
       for (Bitboard path = between(own_king, king_to) | bb(king_to); path && safe;)
         safe = !pos.attacked_by(them, pop_lsb(path), occ);

@@ -16,3 +16,5 @@ __pycache__/
 /MORNING.md
 /REVIEW-*.md
 *.bundle
+# Claude Code agent worktrees (nested git checkouts; never part of the tree).
+/.claude/worktrees/

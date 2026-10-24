@@ -87,8 +87,8 @@ void build_bitboard_tables();
 int magic_search_attempts(bool rook, Square s, std::uint64_t seed, int limit);
 
 // Reference slider attacks by ray-walking (used for table building and tests).
-Bitboard rook_attacks_slow(Square s, Bitboard occ);
-Bitboard bishop_attacks_slow(Square s, Bitboard occ);
+Bitboard rook_attacks_by_walk(Square s, Bitboard occ);
+Bitboard bishop_attacks_by_walk(Square s, Bitboard occ);
 
 inline Bitboard pawn_attacks(Color c, Square s) { return tables::pawn_attacks[c][s]; }
 inline Bitboard knight_attacks(Square s) { return tables::knight_attacks[s]; }

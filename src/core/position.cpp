@@ -324,7 +324,7 @@ void Position::make(Move m) {
   Square new_ep = NoSquare;
 
   if (m.is_castle()) {
-    Square king_to = castle_king_to(from, to), rook_to = castle_rook_to(from, to);
+    const auto [king_to, rook_to] = castle_landing(from, to);
     Piece king = board_[from], rook = board_[to];
     remove(from);
     remove(to);
@@ -337,7 +337,7 @@ void Position::make(Move m) {
   } else {
     Piece p = board_[from];
     if (m.is_capture()) {
-      Square cap_sq = m.is_en_passant() ? to - forward(us) : to;
+      Square cap_sq = capture_square(m);
       Piece cap = board_[cap_sq];
       s.captured = cap;
       remove(cap_sq);
@@ -383,7 +383,7 @@ void Position::unmake(Move m) {
   const Square from = m.from(), to = m.to();
 
   if (m.is_castle()) {
-    Square king_to = castle_king_to(from, to), rook_to = castle_rook_to(from, to);
+    const auto [king_to, rook_to] = castle_landing(from, to);
     Piece king = board_[king_to], rook = board_[rook_to];
     remove(king_to);
     remove(rook_to);
@@ -393,7 +393,7 @@ void Position::unmake(Move m) {
     Piece placed = board_[to];
     remove(to);
     put(m.is_promotion() ? piece_of(us, Pawn) : placed, from);
-    if (m.is_capture()) put(captured, m.is_en_passant() ? to - forward(us) : to);
+    if (m.is_capture()) put(captured, capture_square(m));
   }
   if (us == Black) --fullmove_;
 }
@@ -468,7 +468,7 @@ bool Position::is_legal(Move m) const {
   const Square own_king = king_square(us);
 
   if (m.is_castle()) {
-    Square king_to = castle_king_to(from, to);
+    Square king_to = castle_landing(from, to).king;
     for (Bitboard path = between(from, king_to) | bb(king_to); path;)
       if (attacked_by(them, pop_lsb(path), pieces())) return false;
     return true;
@@ -493,7 +493,7 @@ bool Position::gives_check(Move m) const {
 
   if (m.is_castle()) {
     // The rook (or, in principle, a slider uncovered by the king) may check.
-    Square king_to = castle_king_to(from, to), rook_to = castle_rook_to(from, to);
+    const auto [king_to, rook_to] = castle_landing(from, to);
     Bitboard occ = (pieces() ^ bb(from) ^ bb(to)) | bb(king_to) | bb(rook_to);
     Bitboard rooks = (pieces(us, Rook, Queen) ^ bb(to)) | bb(rook_to);
     return (rook_attacks(their_king, occ) & rooks) || (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen));
@@ -531,14 +531,14 @@ Key Position::predicted_key(Move m) const {
   if (s.ep != NoSquare) k ^= zobrist::ep_file[file_of(s.ep)];
 
   if (m.is_castle()) {
-    Square king_to = castle_king_to(from, to), rook_to = castle_rook_to(from, to);
+    const auto [king_to, rook_to] = castle_landing(from, to);
     Piece king = board_[from], rook = board_[to];
     k ^= zobrist::piece_square[king][from] ^ zobrist::piece_square[king][king_to] ^
          zobrist::piece_square[rook][to] ^ zobrist::piece_square[rook][rook_to];
   } else {
     Piece p = board_[from];
     if (m.is_capture()) {
-      Square cap_sq = m.is_en_passant() ? to - forward(us) : to;
+      Square cap_sq = capture_square(m);
       k ^= zobrist::piece_square[board_[cap_sq]][cap_sq];
     }
     Piece placed = m.is_promotion() ? piece_of(us, m.promo_type()) : p;
@@ -608,7 +608,7 @@ bool Position::insufficient_material() const {
 
 std::string Position::move_to_uci(Move m) const {
   if (m.is_none()) return "0000";
-  Square to = m.is_castle() ? castle_king_to(m.from(), m.to()) : m.to();
+  Square to = m.is_castle() ? castle_landing(m.from(), m.to()).king : m.to();
   std::string s = square_name(m.from()) + square_name(to);
   if (m.is_promotion()) s += "nbrq"[m.promo_type() - Knight];
   return s;
