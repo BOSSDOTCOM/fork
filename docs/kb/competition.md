@@ -179,6 +179,14 @@ None of these is answered on any page opened on 2026-10-23.
    its servers and GUI? Fork defaults to 100 ms (owner, 2026-10-24);
    TCEC's own example sets Reckless's `MoveOverhead=1000`. (Added
    2026-10-24.)
+6. **Kernel and overcommit:** what Linux kernel version and overcommit
+   setting (`vm.overcommit_memory`, and `vm.overcommit_ratio` if mode 2)
+   do the TCEC servers use? Fork checks each Hash request against
+   `MemAvailable` before allocating, and in the default mode 0 the kernel
+   tests each request alone: against RAM + swap since Linux 5.2, against
+   free memory + swap before ([os-memory.md](os-memory.md) §2). Knowing
+   the setting confirms how a too-large Hash is refused on the servers.
+   (Added 2026-10-24, owner.)
 
 Training-data questions (added 2026-10-24, background in
 [training-data.md](training-data.md) §5):
