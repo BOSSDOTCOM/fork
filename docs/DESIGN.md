@@ -271,7 +271,7 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
 - **Phase 8: TCEC-conditions testing** from `tcec.json`: paired openings,
   adjudication, gauntlet against pinned engines, SPRT, stress testing.
 
-### 5.1 Phase 2 spec: UCI (proposed 2026-10-23, awaiting owner approval)
+### 5.1 Phase 2 spec: UCI (approved by the owner 2026-10-24)
 
 **Goal.** A UCI engine that TCEC can run for a whole event without a crash,
 a hang, an illegal move or a protocol error, with every option TCEC sets.
@@ -304,7 +304,7 @@ arguments; the existing CLI subcommands (`perft`, `divide`, `bench`,
 
 | Command | Behaviour |
 |---|---|
-| `uci` | `id name Fork <version>`, `id author <owner>`, one `option` line per option, `uciok`. |
+| `uci` | `id name Fork <version>` (version format below), `id author BOSSDOTCOM`, one `option` line per option, `uciok`. |
 | `isready` | `readyok` at once, even during a search and without interrupting it; outside a search, only after pending work (Hash allocation and clearing) has finished. |
 | `setoption name <N> [value <V>]` | Names may contain spaces and match case-insensitively (the spec says names should not be case-sensitive), but Fork declares each name in exactly the case TCEC types it, because fastchess matches names exactly and does not send unknown names or out-of-range spin values (docs/kb/uci.md §7). An unknown name or bad value prints `info string` and changes nothing. |
 | `ucinewgame` | Clears search state (the TT from Phase 3). |
@@ -326,8 +326,10 @@ either case on input (lower case is the convention; the spec shows only
 
 #### Placeholder move chooser (Phase 2 only)
 
-Picks a legal move deterministically (proposed: the first capture by
-victim value, else the first quiet move, in generation order), prints one
+Picks a legal move deterministically (owner, 2026-10-24): a move that
+mates in one if there is one, else the best capture by MVV-LVA (most
+valuable victim first, then least valuable attacker), else the first legal
+move; ties go to the first in generation order. It prints one
 `info depth 1 seldepth 1 score cp 0 nodes <n> nps <n> time <ms> pv <move>`
 line and `bestmove <move>`. With no legal move (mate or stalemate) it
 prints `bestmove (none)`: the spec says nothing about this case and defines
@@ -342,7 +344,7 @@ Its only job is to make the protocol testable; it is deleted in Phase 3.
 | `Hash` | spin, MB, default 16, min 1, max 33554432 (32 TiB) | TCEC sets `Hash=262144` (256 GiB) and caps hash at 32 or 64 GiB unless initialization is multithreaded. Size math in `std::size_t` bytes, no 32-bit overflow. `setoption` only records the size; the table is allocated and cleared at the next `isready`, `ucinewgame` or `go`, after every option has been applied, because a GUI may send `Hash` before `Threads` and a clear started on `setoption Hash` would run on one thread (review M5, 2026-10-23). Allocated as one aligned block (or in chunks if allocation fails), first-touch cleared **in parallel** with `max(Threads, hardware threads)` workers, before `readyok`. Allocation failure keeps the old table and reports `info string`, never aborts. `madvise(MADV_HUGEPAGE)` where available, but no dependence on large pages (TCEC enables them automatically). Phase 2 allocates and clears the table; Phase 3 uses it. |
 | `Clear Hash` | button | Clears the table (also in parallel). |
 | `Threads` | spin, default 1, min 1, max 1024 | TCEC sets 512 (two sockets). Phase 2 stores it and uses it for hash clearing; Phase 6 uses it for search, NUMA-aware. |
-| `MoveOverhead` | spin, ms, default 100 (proposed), min 0, max 5000 | Time reserved per move for GUI and system latency; TCEC leaves options at default unless the author asks, so the default must already be safe at 30'+3". Name without a space: TCEC's own example is Reckless's `MoveOverhead=1000`. Used by Phase 5. |
+| `Move Overhead` | spin, ms, default 100, min 0, max 5000 | Time reserved per move for GUI and system latency; TCEC leaves options at default unless the author asks, so the default must already be safe at 30'+3". Name with a space (owner, 2026-10-24: the conventional spelling across engines); TCEC's recommended value is a Discord question (docs/kb/competition.md). Used by Phase 5. |
 | `SyzygyPath` | string, default `<empty>` | TCEC sets `SyzygyPath=/home/syzygy7` in every division. Paths separated by `:` on Linux and `;` on Windows. Phase 2 stores it and reports how many table files it finds (`info string`); a missing directory is not an error. Probing (7-piece, ideas.md idea 12) is Phase 3. |
 | `LogFile` | string, default `<empty>` | Optional log of all UCI input and output with timestamps, for diagnosing a TCEC game afterwards. Off by default. |
 
@@ -362,10 +364,10 @@ de-facto standard names TCEC sets and must stay).
 | Threads up to 512, Hash up to 256 GiB with multithreaded init, 320 GiB RAM cap | `Threads` max 1024; parallel hash clearing; no other large allocations. Tested locally at the largest size this machine allows, and the size arithmetic tested at 262144 MB without allocating. |
 | 7-man Syzygy through `SyzygyPath=/home/syzygy7` | Option accepted and stored; probing in Phase 3. |
 | Pondering off, engine books forbidden | No `Ponder`, no `OwnBook`, no book code. |
-| Options default unless the author asks | Defaults are tournament-safe (`MoveOverhead`, `Hash` sized by TCEC anyway). |
+| Options default unless the author asks | Defaults are tournament-safe (`Move Overhead`, `Hash` sized by TCEC anyway). |
 | A crash is a loss, no fixes once an event starts, time losses stand | Robust input handling, no exception escapes, stop and isready answered during search, fuzzed parser, sanitizer and TSan runs of the UCI tests. |
 | Category 4: public source, TCEC builds the binary from the repository | Builds from a clean clone on **TCEC's toolchain**, not only on current compilers: Ubuntu 22.04 with gcc 11.4, g++-12, clang 16 and 19 (competition.md "What this means for Fork"; wiki Further information page per the 2026-10-23 review). That means CMake 3.22 or a documented way around it, no C++20 library features missing from libstdc++ 11/12 (`<format>` today, review C1), and a minimum-toolchain build in the sign-off checks. An `update.sh` that clones and builds the TCEC binary (the Further information page allows one) with an explicit `-march` instead of `native` (the CPU and GPU servers are different Zen generations), tests off, no configure-time downloads, debug info kept. `id name` carries the version (from `git describe` at configure time, with a fallback when built from a tarball). |
-| TCEC recommends keeping debug info in the optimized binary | `update.sh` builds with `-g`; proposed for the release presets too (no speed effect expected; verify bench nps with `bench/ab.py`). |
+| TCEC recommends keeping debug info in the optimized binary | `update.sh` builds with `-g`, and so do the release presets (owner, 2026-10-24; debug info only, no other flag change; bench nps checked with `bench/ab.py`). |
 
 #### Tests and acceptance checks
 
@@ -413,16 +415,24 @@ de-facto standard names TCEC sets and must stay).
    (results recorded), sanitizers, all presets on both platforms, summary,
    stop.
 
-#### Open questions for the owner
+#### Owner's answers (2026-10-24)
 
-1. Option names: `MoveOverhead` (no space, as above) and `LogFile`?
-2. `MoveOverhead` default: 100 ms proposed; TCEC's Reckless example used
-   1000 ms.
-3. Placeholder rule: first capture by victim value, else first move?
-4. Version string: `Fork <git describe>` (e.g. `Fork 0.2.0-3-gabc1234`)?
-5. Add `-g` to release presets now (TCEC recommendation)?
-6. The name for `id author` (it is public, and the TCEC questionnaire asks
-   for a credit name).
+1. Option names: `Move Overhead` (with a space, conventional across
+   engines) and `LogFile`.
+2. `Move Overhead` default 100 ms; TCEC's recommended value is added to
+   the Discord questions.
+3. Placeholder: mate in one, else best MVV-LVA capture, else the first
+   legal move (deterministic).
+4. Version string: `Fork <semver>-dev+<short commit>` (e.g.
+   `Fork 0.2.0-dev+abc1234`), from git at configure time, with a fallback
+   when built without git.
+5. `-g` in release builds: yes (debug info only).
+6. `id author BOSSDOTCOM`.
+
+Before Phase 2 starts, the Phase 1 review fixes come first (owner,
+2026-10-24): the TCEC toolchain build (deliverable 0 above), the
+clean-room originality rewrites, the medium and low findings, the
+deferred tests and suspicions, and ORIGINALITY.md.
 
 ## 6. Decisions log
 
@@ -433,6 +443,7 @@ de-facto standard names TCEC sets and must stay).
 | 2026-10-23 | **tcec.json**: every value, including the adjudication thresholds (from an older season's rules), is marked unverified. Full current-season rules are researched before Phase 5. |
 | 2026-10-23 | **Release targets**: `-march=native`, x86-64-v3, x86-64-v4 (AVX-512), and a no-PEXT magics build, for each compiler; bench must match across all of them (automated `bench_parity`). |
 | 2026-10-23 | **Namespace `fork` renamed to `forkeng`** (owner): `fork` collided with POSIX `fork()` on Linux (section 8, naming conventions). Checked first: no match in Stockfish (shallow clone at effdc3f, 2026-10-17), the MinGW toolchains, glibc/libstdc++/clang headers, or exported libc/libstdc++/libm symbols. **`scripts/check.sh full` covers both platforms**: on Windows it also runs the Linux check in WSL on a copy of the working tree. |
+| 2026-10-24 | **Phase 2 spec approved** with the answers in §5.1; the Phase 1 review fixes come before Phase 2. **History rewritten** (owner): every commit's author and committer email replaced with the GitHub noreply address before the repo goes public (review L4); trees unchanged, all hashes changed. |
 
 ## 7. Performance doctrine (governs every phase)
 
