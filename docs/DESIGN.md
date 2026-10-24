@@ -253,6 +253,7 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   own cutechess fork is deferred until TCEC confirms which runner its
   servers use (Discord question, docs/kb/competition.md); its install step
   waits on branch `tcec-cutechess`.
+  Detailed spec: §5.1.
 - **Phase 3: Search.** PVS + ID + aspiration, qsearch with SEE, TT,
   ordering, pruning and extensions as listed in the brief, Syzygy
   (Fathom), deterministic `bench` (fixed positions, fixed depth, 1 thread).
@@ -269,6 +270,154 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   eval, keeping tension. Each item is documented here as genuine evaluation.
 - **Phase 8: TCEC-conditions testing** from `tcec.json`: paired openings,
   adjudication, gauntlet against pinned engines, SPRT, stress testing.
+
+### 5.1 Phase 2 spec: UCI (proposed 2026-10-23, awaiting owner approval)
+
+**Goal.** A UCI engine that TCEC can run for a whole event without a crash,
+a hang, an illegal move or a protocol error, with every option TCEC sets.
+There is still no search: `go` uses a placeholder move chooser (below) that
+Phase 3 replaces. Protocol facts are from the UCI specification as
+summarized in the KB (`docs/kb/uci.md` on branch kb); TCEC facts from
+`docs/kb/competition.md` (sections "Engine settings", "Tablebases
+available to engines", "Builds and submission", Swiss rules table).
+
+**Module.** `src/uci/` (§8): the protocol loop, the option registry and
+info output. `src/main.cpp` enters the UCI loop when started without
+arguments; the existing CLI subcommands (`perft`, `divide`, `bench`,
+`version`, `difftest`) stay.
+
+#### Threads of control
+
+- The **input thread** reads stdin line by line and is never blocked by a
+  search: `isready`, `stop`, `quit` and `ponderhit` are handled while a
+  search runs.
+- `go` starts the search on a separate **search thread** (Phase 2: the
+  placeholder; Phase 3: the search and, in Phase 6, its helper threads).
+  Exactly one `bestmove` is printed per `go`, after the search has ended.
+- **Output** goes through one function that writes a whole line, a
+  newline and a flush under a mutex, so lines from the two threads never
+  interleave and nothing sits in a pipe buffer.
+- `quit` (or EOF on stdin) stops any search, joins all threads and exits
+  with status 0.
+
+#### Commands
+
+| Command | Behaviour |
+|---|---|
+| `uci` | `id name Fork <version>`, `id author <owner>`, one `option` line per option, `uciok`. |
+| `isready` | `readyok` at once, even during a search and without interrupting it; outside a search, only after pending work (Hash allocation and clearing) has finished. |
+| `setoption name <N> [value <V>]` | Names may contain spaces and match case-insensitively (the spec says names should not be case-sensitive), but Fork declares each name in exactly the case TCEC types it, because fastchess matches names exactly and does not send unknown names or out-of-range spin values (docs/kb/uci.md §7). An unknown name or bad value prints `info string` and changes nothing. |
+| `ucinewgame` | Clears search state (the TT from Phase 3). |
+| `position startpos\|fen <FEN> [moves ...]` | Builds the position and the repetition history from the move list. An invalid FEN or an illegal move keeps the position reached so far and prints `info string`; it never crashes. Move lists of several thousand plies are fine (no fixed-size history). |
+| `go [...]` | Parses every argument: `searchmoves`, `ponder`, `wtime`, `btime`, `winc`, `binc`, `movestogo`, `depth`, `nodes`, `mate`, `movetime`, `infinite`. Times are 64-bit and may be zero or negative (a GUI can send a negative remaining time). Limits combine (both runners can send `depth` or `nodes` together with clock arguments); the first one reached ends the search. `wtime`/`btime` without `movestogo` means sudden death. `go infinite` and `go ponder` never end by themselves: `bestmove` comes only after `stop` (or, for ponder, after `ponderhit` and the normal limits). A bare `go` is treated as "no limit" (an inference from the spec, UNVERIFIED in the KB); the Phase 2 placeholder answers it at once. |
+| `stop` | Ends the search; `bestmove` follows promptly. Harmless when nothing runs. |
+| `ponderhit` | Turns a ponder search into a normal one. Fork declares no `Ponder` option (TCEC plays with pondering off), so this only has to be harmless. |
+| `quit` | As above. |
+| `debug`, `register` | Accepted and ignored. |
+| unknown or empty lines | Ignored (with `info string` in debug builds). |
+| Fork extensions | `go perft <depth>` (§4.7), `bench`, `d` (print the board and FEN). |
+
+Input handling: tokens are split on any whitespace; `\r` is stripped
+(Windows GUIs send CRLF); a line may be very long (no fixed buffer).
+Moves are long algebraic (`e2e4`, castling as the king move `e1g1`,
+promotion `e7e8q`); Fork prints promotion letters in lower case and accepts
+either case on input (lower case is the convention; the spec shows only
+`q`).
+
+#### Placeholder move chooser (Phase 2 only)
+
+Picks a legal move deterministically (proposed: the first capture by
+victim value, else the first quiet move, in generation order), prints one
+`info depth 1 seldepth 1 score cp 0 nodes <n> nps <n> time <ms> pv <move>`
+line and `bestmove <move>`. With no legal move (mate or stalemate) it
+prints `bestmove (none)`: the spec says nothing about this case and defines
+`0000` only as a null move, fastchess never sends `go` in a finished
+position, and python-chess reads `(none)` as "no move" (docs/kb/uci.md §7).
+Its only job is to make the protocol testable; it is deleted in Phase 3.
+
+#### Options
+
+| Option | Type, default, range | TCEC relevance |
+|---|---|---|
+| `Hash` | spin, MB, default 16, min 1, max 33554432 (32 TiB) | TCEC sets `Hash=262144` (256 GiB) and caps hash at 32 or 64 GiB unless initialization is multithreaded. Size math in `std::size_t` bytes, no 32-bit overflow; allocated as one aligned block (or in chunks if allocation fails), first-touch cleared **in parallel** using `Threads` worker threads, before `readyok`. Allocation failure keeps the old table and reports `info string`, never aborts. `madvise(MADV_HUGEPAGE)` where available, but no dependence on large pages (TCEC enables them automatically). Phase 2 allocates and clears the table; Phase 3 uses it. |
+| `Clear Hash` | button | Clears the table (also in parallel). |
+| `Threads` | spin, default 1, min 1, max 1024 | TCEC sets 512 (two sockets). Phase 2 stores it and uses it for hash clearing; Phase 6 uses it for search, NUMA-aware. |
+| `MoveOverhead` | spin, ms, default 100 (proposed), min 0, max 5000 | Time reserved per move for GUI and system latency; TCEC leaves options at default unless the author asks, so the default must already be safe at 30'+3". Name without a space: TCEC's own example is Reckless's `MoveOverhead=1000`. Used by Phase 5. |
+| `SyzygyPath` | string, default `<empty>` | TCEC sets `SyzygyPath=/home/syzygy7` in every division. Paths separated by `:` on Linux and `;` on Windows. Phase 2 stores it and reports how many table files it finds (`info string`); a missing directory is not an error. Probing (7-piece, ideas.md idea 12) is Phase 3. |
+| `LogFile` | string, default `<empty>` | Optional log of all UCI input and output with timestamps, for diagnosing a TCEC game afterwards. Off by default. |
+
+Not declared in Phase 2: `Ponder` (TCEC ponder off), `OwnBook` (engine
+books are forbidden at TCEC; Fork has none), `MultiPV` (Phase 3),
+`UCI_Chess960` (out of scope, §6), `UCI_Opponent` (Phase 7, idea 8).
+
+Option names were grepped against Stockfish's source as required by §8
+before use: **to do at implementation** (`SyzygyPath` and `Hash` are the
+de-facto standard names TCEC sets and must stay).
+
+#### TCEC requirements and how Phase 2 meets them
+
+| Requirement (KB) | Phase 2 answer |
+|---|---|
+| UCI or XBoard protocol | UCI, tested with fastchess and cutechess-cli. |
+| Threads up to 512, Hash up to 256 GiB with multithreaded init, 320 GiB RAM cap | `Threads` max 1024; parallel hash clearing; no other large allocations. Tested locally at the largest size this machine allows, and the size arithmetic tested at 262144 MB without allocating. |
+| 7-man Syzygy through `SyzygyPath=/home/syzygy7` | Option accepted and stored; probing in Phase 3. |
+| Pondering off, engine books forbidden | No `Ponder`, no `OwnBook`, no book code. |
+| Options default unless the author asks | Defaults are tournament-safe (`MoveOverhead`, `Hash` sized by TCEC anyway). |
+| A crash is a loss, no fixes once an event starts, time losses stand | Robust input handling, no exception escapes, stop and isready answered during search, fuzzed parser, sanitizer and TSan runs of the UCI tests. |
+| Category 4: public source, TCEC builds the binary from the repository | Builds from a clean clone on Linux with the documented commands; `id name` carries the version (from `git describe` at configure time, with a fallback when built from a tarball). |
+| TCEC recommends keeping debug info in the optimized binary | Proposed: release presets add `-g` (no speed effect; verify bench nps with `bench/ab.py`). |
+
+#### Tests and acceptance checks
+
+1. **`uci` test suite (ctest)** that drives `fork` through pipes: each
+   command and argument above; `setoption` with spaces, odd case, unknown
+   names and bad values; `isready` during `go infinite`, then `stop`; `stop`
+   and `ponderhit` with no search; `go` twice in a row; `quit` during a
+   search; EOF on stdin; CRLF input; a `position` with a several-thousand-ply
+   move list; an illegal move and a malformed FEN; `Hash` 1 MB and large;
+   `Threads` 1024; exactly one `bestmove` per `go`; `bestmove (none)` on
+   mate and stalemate positions; a final `info` line before every
+   `bestmove`.
+2. **Timing checks:** `uci` to `uciok` and `isready` to `readyok` under
+   50 ms at default settings; `stop` to `bestmove` under 10 ms; hash clear
+   time at 1, 4 and 16 GiB recorded per thread count.
+3. **fuzz_uci**: a libFuzzer target over the command parser (no output
+   checks, only no crash, no hang, no sanitizer report).
+4. **Sanitizers:** the `uci` suite under ASan/UBSan (both platforms) and
+   TSan (Linux); no_alloc keeps covering the core.
+5. **`fastchess --compliance ./fork`** passes on Linux (release and the
+   ASan debug build). Note that it does not check `setoption`, `go
+   depth/nodes/movetime/infinite`, `stop`, ponder, `quit` or MultiPV
+   (docs/kb/tools.md, fastchess), which is why test 1 exists.
+6. **Clean games under standard cutechess-cli** (and the same under
+   fastchess): Fork against itself, at least 200 games at a fast increment
+   time control plus 50 games each with `movetime` and `depth` limits, with
+   concurrency: zero crashes, disconnects, illegal moves or time forfeits,
+   and every game ending by the rules.
+7. All presets on Windows and Linux, `scripts/check.sh full`, bench
+   unchanged (bench stays the perft workload until Phase 3).
+
+#### Deliverables (one commit each)
+
+1. `src/uci/`: input loop, output function, threads of control, commands.
+2. Option registry and options, including hash allocation and parallel
+   clearing.
+3. Placeholder move chooser and `info` output.
+4. `uci` ctest suite, timing checks, `fuzz_uci`.
+5. fastchess compliance and the cutechess-cli/fastchess game runs
+   (results recorded), sanitizers, all presets on both platforms, summary,
+   stop.
+
+#### Open questions for the owner
+
+1. Option names: `MoveOverhead` (no space, as above) and `LogFile`?
+2. `MoveOverhead` default: 100 ms proposed; TCEC's Reckless example used
+   1000 ms.
+3. Placeholder rule: first capture by victim value, else first move?
+4. Version string: `Fork <git describe>` (e.g. `Fork 0.2.0-3-gabc1234`)?
+5. Add `-g` to release presets now (TCEC recommendation)?
+6. The name for `id author` (it is public, and the TCEC questionnaire asks
+   for a credit name).
 
 ## 6. Decisions log
 
