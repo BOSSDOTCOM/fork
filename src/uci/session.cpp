@@ -135,7 +135,9 @@ void UciSession::declare_options() {
 
 // From the size actually allocated, which a refused Hash makes smaller than
 // the option (review 2026-10-24: 16 MB was cleared by 1024 threads).
-unsigned UciSession::hash_workers() const { return clear_workers(hash_.bytes(), options_.number("Threads")); }
+unsigned UciSession::hash_workers() const {
+  return config_.use_threads ? clear_workers(hash_.bytes(), options_.number("Threads")) : 1;
+}
 
 bool UciSession::apply_pending() {
   if (hash_pending_) {
@@ -355,9 +357,14 @@ void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first)
   apply_pending();
   {
     std::scoped_lock lock(signals_.mutex);
-    signals_.stop = false;
-    signals_.ponder = limits.ponder;
+    signals_.stop = !config_.use_threads;  // no thread: nothing could stop it later
+    signals_.ponder = limits.ponder && config_.use_threads;
     signals_.finished = false;
+  }
+  if (!config_.use_threads) {
+    search_main(root_, limits);
+    go_answered_ = true;
+    return;
   }
   try {
     search_thread_ = std::thread(&UciSession::search_main, this, root_, limits);

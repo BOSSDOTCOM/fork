@@ -1,0 +1,12 @@
+xyzzy
+xyzzy isready
+hello world
+   
+	
+UCI
+Go depth 1
+isready?
+readyok
+bestmove e2e4
+info string hi
+0000

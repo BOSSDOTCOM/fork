@@ -207,6 +207,7 @@ if(FORK_FUZZ)
   foreach(target fuzz_fen fuzz_moves fuzz_uci)
     add_executable(${target} fuzz/${target}.cpp)
     target_link_libraries(${target} PRIVATE forkuci)
+    target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/tests)  # uci_message.hpp
     if(MINGW)
       target_link_libraries(${target} PRIVATE ${fuzz_runtime})
     else()

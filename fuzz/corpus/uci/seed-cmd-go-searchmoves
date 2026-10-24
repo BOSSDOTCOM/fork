@@ -1,0 +1,4 @@
+position startpos
+go searchmoves e2e4 d2d4 depth 1
+go searchmoves 0000
+go infinite searchmoves a2a3

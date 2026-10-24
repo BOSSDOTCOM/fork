@@ -18,7 +18,14 @@ void OutputChannel::send_line(std::string_view line) {
     (void)std::fputc('\n', out_);
     (void)std::fflush(out_);
   }
+  if (capture_) capture_->emplace_back(line);
   write_log('<', line);
+}
+
+void OutputChannel::send_info_string(std::string_view text) {
+  std::string line = "info string ";
+  for (char c : text) line += (static_cast<unsigned char>(c) < 0x20 && c != '\t') || c == 0x7f ? '?' : c;
+  send_line(line);
 }
 
 void OutputChannel::log_input(std::string_view line) {

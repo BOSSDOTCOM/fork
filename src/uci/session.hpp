@@ -48,6 +48,11 @@ struct SessionConfig {
   std::int64_t default_hash_mb = 16;
   std::int64_t max_hash_mb = 4194304;  // 4 TiB (DESIGN.md §5.1)
   std::int64_t max_threads = 4096;
+  // false: no thread is ever started. go is answered on the calling thread
+  // at once (go infinite and go ponder too, as nothing could stop them) and
+  // the Hash is cleared by the calling thread. For the fuzz target, which
+  // exercises the command parsers in isolation.
+  bool use_threads = true;
 };
 
 class UciSession {

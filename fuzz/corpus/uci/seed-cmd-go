@@ -1,0 +1,13 @@
+position startpos
+go
+go wtime 1000
+go btime 1000
+go wtime 1000 btime 900 winc 10 binc 20 movestogo 40
+go depth 5
+go nodes 1000
+go mate 3
+go movetime 100
+go infinite
+go ponder wtime 1000 btime 1000
+go wtime -100 btime 99999999999999999999999
+go depth movetime 5 frobnicate

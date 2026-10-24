@@ -27,6 +27,7 @@
 #include "harness.hpp"
 #include "search/hash_memory.hpp"
 #include "uci/tokens.hpp"
+#include "uci_message.hpp"
 
 namespace forkeng::test {
 
@@ -39,38 +40,6 @@ using namespace std::chrono_literals;
 constexpr auto Patience = 10000ms;
 
 bool starts_with(std::string_view s, std::string_view prefix) { return s.starts_with(prefix); }
-
-bool is_move_text(std::string_view m) {
-  auto square = [](std::string_view s) { return s[0] >= 'a' && s[0] <= 'h' && s[1] >= '1' && s[1] <= '8'; };
-  if (m.size() != 4 && m.size() != 5) return false;
-  if (!square(m.substr(0, 2)) || !square(m.substr(2, 2))) return false;
-  return m.size() == 4 || std::string_view("nbrq").find(m[4]) != std::string_view::npos;
-}
-
-// Is `line` a well-formed engine-to-GUI message (UCI spec, "Engine to GUI")?
-bool valid_engine_line(const std::string& line) {
-  const std::vector<LineToken> t = split_tokens(line);
-  if (t.empty()) return false;
-  const std::string_view cmd = t[0].text;
-  if (cmd == "uciok" || cmd == "readyok") return t.size() == 1;
-  if (cmd == "id") return t.size() >= 3 && (t[1].text == "name" || t[1].text == "author");
-  if (cmd == "bestmove") {
-    if (t.size() != 2 && t.size() != 4) return false;
-    if (t[1].text != "(none)" && !is_move_text(t[1].text)) return false;
-    return t.size() == 2 || (t[2].text == "ponder" && is_move_text(t[3].text));
-  }
-  if (cmd == "option") {
-    if (t.size() < 5 || t[1].text != "name") return false;
-    for (std::size_t i = 2; i + 1 < t.size(); ++i)
-      if (t[i].text == "type") {
-        const std::string_view type = t[i + 1].text;
-        return type == "check" || type == "spin" || type == "combo" || type == "button" || type == "string";
-      }
-    return false;
-  }
-  if (cmd == "info") return t.size() >= 2;
-  return false;
-}
 
 // One engine, plus a read cursor over its output.
 struct Gui {
@@ -287,13 +256,20 @@ TEST_CASE("uci_protocol", "line endings: LF, CRLF and lone CR; whitespace; empty
   g.send("xyzzy");
   g.send("xyzzy isready");  // the spec: unknown tokens before a command are skipped
   CHECK(g.next("readyok").has_value());
+  // Control bytes echoed in an error message are printed as '?'.
+  std::size_t echo = g.cursor;
+  const char raw[] = "position startpos moves e2e4 a\x01\x7f\0b\n";  // the bad move is echoed; a NUL inside
+  g.engine.send_raw(std::string_view(raw, sizeof raw - 1));
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string illegal move a???b;", echo), 1);
+  for (const std::string& s : g.texts(echo)) CHECK_MSG(valid_engine_line(s), s);
   g.send("debug on");
   g.send("debug off");
   g.send("register later");
   CHECK(g.sync());
   for (const std::string& s : g.texts())
     CHECK_MSG(s == "readyok" || starts_with(s, "info string"), "unexpected: " << s);
-  CHECK_EQ(g.count("readyok"), 6);  // exactly one per isready
+  CHECK_EQ(g.count("readyok"), 7);  // exactly one per isready
   g.check_transcript();
   g.quit();
 }
@@ -587,9 +563,8 @@ TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
   };
   for (const std::string& line : lines) CHECK_MSG(stamped(line), line);
   auto has = [&](std::string_view tail) {
-    return std::ranges::any_of(lines, [&](const std::string& l) {
-      return std::string_view(l).ends_with(tail);
-    });
+    return std::ranges::any_of(lines,
+                               [&](const std::string& l) { return std::string_view(l).ends_with(tail); });
   };
   CHECK(has("Z > isready"));
   CHECK(has("Z < readyok"));
