@@ -15,7 +15,7 @@
   "runners": {
     "fastchess": "~/fork-tools/bin/fastchess",
     "cutechess_cli": "~/fork-tools/bin/cutechess-cli",
-    "tcec_cutechess_cli": "~/fork-tools/bin/tcec-cutechess-cli",
     "ordo": "~/fork-tools/bin/ordo"
-  }
+  },
+  "runners_note": "TCEC's cutechess fork is deferred (owner, 2026-10-23); its install step is on branch tcec-cutechess."
 }

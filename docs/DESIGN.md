@@ -247,7 +247,12 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   32-bit overflow (64 GB+), allocated in chunks and first-touch
   initialized in parallel. Threads up to 1024 (Windows processor groups are
   handled for local testing). `Move Overhead`, `SyzygyPath`. Stability is
-  tested under cutechess-cli and fastchess.
+  tested under cutechess-cli and fastchess. **Acceptance (owner,
+  2026-10-23):** `fastchess --compliance` passes, and games run cleanly
+  under standard cutechess-cli (paths in `config/local-test.json`). TCEC's
+  own cutechess fork is deferred until TCEC confirms which runner its
+  servers use (Discord question, docs/kb/competition.md); its install step
+  waits on branch `tcec-cutechess`.
 - **Phase 3: Search.** PVS + ID + aspiration, qsearch with SEE, TT,
   ordering, pruning and extensions as listed in the brief, Syzygy
   (Fathom), deterministic `bench` (fixed positions, fixed depth, 1 thread).
