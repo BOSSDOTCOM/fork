@@ -36,3 +36,10 @@ Report each finding with the file and line, what it resembles (with a link),
 its severity (must fix / should fix / acceptable with a note), and a
 suggested original alternative. Don't edit files. Never paste large blocks
 of another engine's code into the report: cite the line ranges instead.
+
+**No engine source left behind (owner, 2026-10-24).** Put any clone or
+downloaded engine file in a temporary folder outside the repo. Delete
+every clone and extracted source file before reporting, and confirm the
+deletion in your report: list the paths you removed and the check you ran
+showing nothing is left (no `.git` directory and no engine file under
+your temp folder).
