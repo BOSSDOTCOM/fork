@@ -151,7 +151,7 @@ name of their config flag.
     `mov DWORD PTR`; instruction counts slightly lower).
 - **decision (owner's rule):** not clearly better on both compilers, so main
   keeps its layout plus the uint8 mailbox (harmless, 192 fewer bytes per
-  Position). v5 is kept on branch `layout-exp` (97ab028) for Phase 3
+  Position). v5 is kept on branch `layout-exp` (c4531bd) for Phase 3
   re-testing with search nps.
 - **per-ply check info (separate from the layout question):** Part A item 8
   made the State compute checkers, blockers/pinners and checking squares on
@@ -166,7 +166,7 @@ name of their config flag.
   pins (compute on first request in a ply) is still untested. layout-exp's v5
   no longer applies to the new State; re-derive any layout change from it.
 - **pre-review vs after the clean-room rewrite** (2026-10-24, bench/ab.py,
-  3090058 vs 9a5031b, release -march=native, 2 runs x 6 rounds per compiler):
+  55f73c4 vs 4831f5a, release -march=native, 2 runs x 6 rounds per compiler):
   make/unmake is 16-19% faster (clang 25.2 -> 20.5 ns, gcc 26.9 -> 22.5 ns)
   and gives_check 70-80% slower (clang 3.09 -> 5.53 ns, gcc 2.04 -> 3.47 ns).
   Movegen, is_legal, is_pseudo_legal and attackers_to are within noise or
