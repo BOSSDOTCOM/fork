@@ -79,6 +79,24 @@ int main() {
     std::printf("%-75s %llu checks, %ld heap allocations\n", fen, static_cast<unsigned long long>(n), during);
     if (during != 0) ++failures;
   }
+  {
+    // Review M1 (2026-10-23): a search thread works on a copy of the root
+    // position, so a copy must keep the State stack's reserve too.
+    forkeng::Position root;
+    if (!root.set_fen(fens[1])) return 2;
+    forkeng::Position copy = root;
+    forkeng::Position assigned;
+    assigned = root;
+    for (forkeng::Position* pos : {&copy, &assigned}) {
+      long before = allocations.load();
+      std::uint64_t n = walk(*pos, 4);
+      long during = allocations.load() - before;
+      std::printf("%-75s %llu checks, %ld heap allocations\n",
+                  pos == &copy ? "copy-constructed Position" : "copy-assigned Position",
+                  static_cast<unsigned long long>(n), during);
+      if (during != 0) ++failures;
+    }
+  }
   std::printf("%s\n", failures ? "FAIL: hot path allocated" : "ok: no heap allocation in the hot path");
   return failures ? 1 : 0;
 }

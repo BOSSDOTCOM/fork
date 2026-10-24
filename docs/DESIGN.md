@@ -201,7 +201,22 @@ key(p)`.
   last rank, the side not to move being in check, castling rights without the
   king and rook on their home squares, and implausible ep squares (wrong
   rank, occupied, or no pawn that could have just double-pushed). The
-  halfmove and fullmove fields may be omitted (they default to `0 1`).
+  halfmove and fullmove fields may be omitted (they default to `0 1`);
+  when present they are capped at 10000 and 100000, so `make` can never
+  overflow them (review L1).
+- **Draw rules** (the same definitions as python-chess, which difftest
+  compares against): `fifty_move_reached()` is a halfmove clock of 100 or
+  more (search must check mate first); `insufficient_material()` holds
+  when neither side can ever deliver mate on material alone (a lone knight
+  against only king and queens, or bishops all on one square colour with no
+  pawns or knights on the board; python-chess's per-side rule applied to
+  both sides); `repetition_count()` counts earlier occurrences of the
+  current key with the same side to move, looking back no further than the
+  halfmove clock and the last null move: positions before a null move, and
+  the position the null move creates, are not part of the game (review M2).
+- **Copies.** A copied Position reserves room for 1024 more plies, so
+  `make` on a search thread's copy never allocates or moves the State stack
+  (review M1; `no_alloc` covers copy construction and assignment).
 
 ### 4.6 Legal move generation
 

@@ -10,7 +10,8 @@
 //   legal (DESIGN.md 4.4).
 // - make()/unmake() never allocate while the State stack is within its reserve,
 //   and unmake() restores an identical position (same_state).
-// - A Position is owned by one thread; search threads each get a copy.
+// - A Position is owned by one thread; search threads each get a copy, which
+//   keeps a full State reserve (no allocation in make() on the copy).
 #pragma once
 
 #include <string>
@@ -37,6 +38,11 @@ struct State {
   int castling;
   Square ep;  // NoSquare unless an ep capture is legal
   int halfmove;
+  // Positions on the stack, ending with this one, that belong to the game since
+  // set_fen or the last null move: 1 at the FEN, +1 per move, 0 right after a
+  // null move (that position exists only because a side passed). Bounds the
+  // repetition window (review M2).
+  int game_span;
   // Recomputed after every move, all for the side to move.
   Bitboard checkers;     // enemy pieces attacking our king
   Bitboard pinned;       // our pieces that are the only piece between our king and an enemy slider
@@ -133,12 +139,33 @@ class Position {
   bool has_insufficient_material(Color c) const;
   void finish_setup();  // state from scratch after board setup
 
+  // States reserved up front; make() grows the stack only beyond this.
+  static constexpr std::size_t StateReserve = 1024;
+
+  // The State stack. A copy reserves room for StateReserve more plies, so
+  // make() on a copied Position (a search thread's board) does not allocate
+  // and does not move the States under a caller's reference (review M1).
+  struct StateStack : std::vector<State> {
+    StateStack() = default;
+    StateStack(const StateStack& o) : std::vector<State>() { copy_from(o); }
+    StateStack& operator=(const StateStack& o) {
+      if (this != &o) copy_from(o);
+      return *this;
+    }
+    StateStack(StateStack&&) noexcept = default;
+    StateStack& operator=(StateStack&&) noexcept = default;
+    void copy_from(const StateStack& o) {
+      reserve(o.size() + StateReserve);
+      assign(o.begin(), o.end());
+    }
+  };
+
   std::uint8_t board_[64];  // Piece per square, stored narrow (64 bytes instead of 256)
   Bitboard by_type_[6];
   Bitboard by_color_[2];
   Color side_ = White;
   int fullmove_ = 1;
-  std::vector<State> states_;  // states_.back() is the current ply
+  StateStack states_;  // states_.back() is the current ply
 };
 
 }  // namespace forkeng

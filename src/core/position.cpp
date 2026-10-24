@@ -14,7 +14,7 @@ namespace {
 
 constexpr std::string_view PieceChars = "PNBRQK??pnbrqk";
 constexpr Bitboard DarkSquares = 0xAA55AA55AA55AA55ULL;  // a1 is dark
-constexpr std::size_t StateReserve = 1024;
+constexpr int MaxHalfmoveClock = 10000, MaxFullmoveNumber = 100000;  // accepted in a FEN
 
 struct CastleInfo {
   int right;
@@ -69,6 +69,7 @@ void Position::clear() {
   states_.reserve(StateReserve);
   State s{};
   s.ep = NoSquare;
+  s.game_span = 1;
   s.captured = NoPiece;
   states_.push_back(s);
 }
@@ -244,12 +245,14 @@ bool Position::set_fen(std::string_view fen, std::string* error) {
   }
 
   if (fields.size() == 6) {
-    auto parse = [](std::string_view str, int& out) {
+    // Capped far below INT_MAX so that make() can never overflow them (review
+    // L1); real games stay in the hundreds.
+    auto parse = [](std::string_view str, int& out, int cap) {
       auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), out);
-      return ec == std::errc() && ptr == str.data() + str.size() && out >= 0;
+      return ec == std::errc() && ptr == str.data() + str.size() && out >= 0 && out <= cap;
     };
-    if (!parse(fields[4], s.halfmove)) return fail("bad halfmove clock");
-    if (!parse(fields[5], p.fullmove_)) return fail("bad fullmove number");
+    if (!parse(fields[4], s.halfmove, MaxHalfmoveClock)) return fail("bad halfmove clock");
+    if (!parse(fields[5], p.fullmove_, MaxFullmoveNumber)) return fail("bad fullmove number");
     p.fullmove_ = std::max(p.fullmove_, 1);
   }
 
@@ -299,6 +302,7 @@ void Position::make(Move m) {
 
   s.captured = NoPiece;
   ++s.halfmove;
+  ++s.game_span;
   if (s.ep != NoSquare) {
     s.key ^= zobrist::ep_file[file_of(s.ep)];
     s.ep = NoSquare;
@@ -387,6 +391,7 @@ void Position::make_null() {
   State& s = ply_state();
   s.captured = NoPiece;
   ++s.halfmove;
+  s.game_span = 0;
   if (s.ep != NoSquare) {
     s.key ^= zobrist::ep_file[file_of(s.ep)];
     s.ep = NoSquare;
@@ -553,10 +558,12 @@ Key Position::predicted_key(Move m) const {
 }
 
 int Position::repetition_count() const {
-  // Only positions since the last irreversible move can repeat; a position
-  // repeats only with the same side to move, so step back two plies at a time.
+  // Only positions since the last irreversible move can repeat, and none from
+  // before a null move: a position reached only because one side passed is
+  // not part of the game (review M2). A position repeats only with the same
+  // side to move, so step back two plies at a time.
   const int n = static_cast<int>(states_.size());
-  const int window = std::min(state().halfmove, n - 1);
+  const int window = std::min({state().halfmove, state().game_span - 1, n - 1});
   const Key k = key();
   int count = 1;
   for (int back = 2; back <= window; back += 2)

@@ -40,6 +40,23 @@ TEST_CASE("fen", "optional move counters") {
   CHECK_EQ(p.fen(), std::string(Position::StartFen));
 }
 
+// Review L1 (2026-10-23): counters up to INT_MAX were accepted, and the next
+// make() overflowed a signed int. The caps keep every reachable value far
+// from overflow; a move at the cap must still be well defined.
+TEST_CASE("fen", "move counters are capped") {
+  Position p;
+  CHECK(!p.set_fen("4k3/8/8/8/8/8/8/4K3 w - - 2147483647 1"));
+  CHECK(!p.set_fen("4k3/8/8/8/8/8/8/4K3 b - - 0 2147483647"));
+  CHECK(!p.set_fen("4k3/8/8/8/8/8/8/4K3 w - - 10001 1"));
+  CHECK(!p.set_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 100001"));
+
+  std::string error;
+  CHECK_MSG(p.set_fen("4k3/8/8/8/8/8/8/4K3 b - - 10000 100000", &error), error);
+  p.make(p.parse_uci("e8e7"));  // UBSan (debug builds) would abort on overflow
+  CHECK_EQ(p.halfmove_clock(), 10001);
+  CHECK_EQ(p.fullmove_number(), 100001);
+}
+
 TEST_CASE("fen", "malformed input is rejected without changing the position") {
   const char* bad[] = {
       "",

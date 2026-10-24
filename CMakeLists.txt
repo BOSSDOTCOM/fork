@@ -176,7 +176,8 @@ if(FORK_BUILD_TESTS)
     tests/test_fen.cpp
     tests/test_perft.cpp
     tests/test_consistency.cpp
-    tests/test_epd.cpp)
+    tests/test_epd.cpp
+    tests/test_draws.cpp)
   target_link_libraries(fork_tests PRIVATE forkcore)
 
   # Public perft suites: downloaded once into .cache/ (not committed, see
@@ -213,7 +214,7 @@ if(FORK_BUILD_TESTS)
   endforeach()
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
-  foreach(suite magics fen zobrist_ep perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd)
+  foreach(suite magics fen zobrist_ep draws perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
