@@ -34,3 +34,11 @@ Rules:
    allows reuse.
 8. Work only in the kb worktree, and don't commit. Report the files changed,
    the key findings and every UNVERIFIED item.
+9. **No engine source left behind (owner, 2026-10-24).** If you clone or
+   download any engine's source (or copy files, diffs, code excerpts or
+   identifier lists out of it), keep it in a temporary folder outside the
+   repo. Delete every clone and extracted source file before reporting.
+   Then confirm the deletion in your report: list the paths you removed
+   and the check you ran showing nothing is left (for example no `.git`
+   directory and no engine file under your temp folder). Your notes and
+   report hold prose, results and citations only, never code lines.
