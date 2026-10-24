@@ -108,7 +108,10 @@ next phase begins. Report each item's result.
    `scripts/check.sh full`, `scripts/build.sh` (all presets + PGO) on
    Windows and in `~/fork` (a clean clone), the slow suites, and the Ubuntu
    22.04 build with TCEC's compilers (gcc 11.4, g++-12, clang 16/19; see
-   DESIGN.md §5.1).
+   DESIGN.md §5.1). Plus a **4-hour `fuzz_fen` run** (`tools/fuzz/run_fuzz.py
+   --max-seconds 14400 --plateau-seconds 999999`; its coverage was still
+   growing at 84 minutes on 2026-10-23), then minimize the corpus and
+   promote it to `seed-*` files (see "Fuzz corpus" below).
 2. **Tag the release** as a known-good baseline: `git tag -a phase-N` on
    `main`, with the bench node count and signature in the tag message.
 3. **Untracked reports** (`REVIEW-*.md`, `HANDOFF.md`, `MORNING.md` and
@@ -132,6 +135,12 @@ next phase begins. Report each item's result.
    was built, what was learned, what carries forward.
 9. **Start the next phase in a fresh Claude Code session**, beginning from
    the summary and DESIGN.md.
+
+**Fuzz corpus.** Only `fuzz/corpus/<target>/seed-*` files are committed; a
+fuzz run's new inputs are git-ignored. After a long run, minimize with
+libFuzzer (`<target> -merge=1 <empty dir> <corpus dir>`) and commit the
+minimized set as `seed-*` files, replacing the old seeds, so the
+committed seeds keep the coverage the run reached.
 
 ## Gotchas
 
