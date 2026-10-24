@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Fork testing-tool installer for WSL2 Ubuntu.
 #
-# STATUS: first real run 2026-10-23 on Ubuntu 26.04 (WSL2): all steps PASS or SKIP
-# (6-piece Syzygy declined, hotspot skipped).
+# STATUS: first real run 2026-10-23 on Ubuntu 26.04 (WSL2): all steps PASS or SKIP.
+# Step 3b (tcec-cutechess) was added afterwards.
 #
 # What it does (each step is skipped if already done, then re-verified):
 #   1. apt build deps + profilers (needs sudo: you will be asked for your password once)
 #   2. fastchess      built from the pinned tag in tools/versions.lock
 #   3. cutechess-cli  built from the pinned tag (needs Qt >= 6.8); falls back to the
 #                     pinned AppImage if the distro Qt is too old (see CUTECHESS_MODE)
+#   3b. tcec-cutechess-cli  TCEC's cutechess fork (TCEC-Chess/tceccutechess) at the pinned
+#                     commit, built against Qt5; for compliance testing
 #   4. Ordo           built from the pinned tag
 #   5. Syzygy 3-4-5   290 files (~0.98 GB) from tablebase.lichess.ovh, every file sha256-checked
 #   6. Syzygy 6-piece OPTIONAL, interactive y/N only (WDL 72.8 GB, DTZ 87.4 GB); skipped when
@@ -115,6 +117,7 @@ step_apt() {
   CURRENT_STEP=apt-deps
   local pkgs=(build-essential git cmake pkg-config curl ca-certificates coreutils
               qt6-base-dev qt6-base-dev-tools qt6-svg-dev qt6-5compat-dev
+              qtbase5-dev qtbase5-dev-tools
               valgrind linux-tools-common linux-tools-generic)
   local missing=() p
   for p in "${pkgs[@]}"; do
@@ -207,6 +210,40 @@ step_cutechess() {
     stamp_set cutechess "$commit"
   fi
   "${BIN}/cutechess-cli" -version
+}
+
+# TCEC's own cutechess fork (TCEC-Chess/tceccutechess), for compliance testing
+# under the GUI TCEC runs. No tags: pinned by commit (versions.lock). It needs
+# Qt5 (fails to compile against Qt 6.10) and only QtCore for the CLI.
+# Installed as tcec-cutechess-cli, a wrapper (libcutechess is a shared library
+# in the source tree), next to the standard cutechess-cli.
+step_tceccutechess() {
+  CURRENT_STEP=tcec-cutechess
+  local url commit dir="${SRC}/tceccutechess" got qmake5=/usr/lib/qt5/bin/qmake
+  url="$(lock_get tceccutechess 3)"; commit="$(lock_hash tceccutechess)"
+  if stamp_ok tceccutechess "${commit}" && [[ -x "${BIN}/tcec-cutechess-cli" ]]; then
+    note "already installed ${commit:0:7}"
+  else
+    [[ -x "$qmake5" ]] || { err "Qt5 qmake not found at ${qmake5} (apt: qtbase5-dev-tools)"; return 1; }
+    [[ -d "$dir/.git" ]] || git clone --quiet "$url" "$dir"
+    git -C "$dir" fetch --quiet origin
+    git -C "$dir" -c advice.detachedHead=false checkout --quiet "$commit"
+    got="$(git -C "$dir" rev-parse HEAD)"
+    [[ "$got" == "$commit" ]] || { err "checked out ${got}, versions.lock expects ${commit}"; return 1; }
+    (cd "$dir" && "$qmake5" -r cutechess.pro >/dev/null)
+    make -C "$dir/projects/lib" -j"$JOBS" >/dev/null
+    make -C "$dir/projects/cli" -j"$JOBS" >/dev/null
+    cat >"${BIN}/tcec-cutechess-cli" <<EOF
+#!/usr/bin/env bash
+# TCEC's cutechess fork at ${commit} (tools/install.sh, step tcec-cutechess).
+export LD_LIBRARY_PATH="${dir}/projects/lib\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}"
+exec "${dir}/projects/cli/cutechess-cli" "\$@"
+EOF
+    chmod 0755 "${BIN}/tcec-cutechess-cli"
+    stamp_set tceccutechess "$commit"
+    note "built ${commit:0:7} from source (Qt $("$qmake5" -query QT_VERSION))"
+  fi
+  "${BIN}/tcec-cutechess-cli" -version
 }
 
 step_ordo() {
@@ -382,6 +419,7 @@ main() {
   run_step apt-deps      step_apt
   run_step fastchess     step_fastchess
   run_step cutechess-cli step_cutechess
+  run_step tcec-cutechess step_tceccutechess
   run_step ordo          step_ordo
   run_step syzygy-3-4-5  step_syzygy345
   run_step syzygy-6      step_syzygy6

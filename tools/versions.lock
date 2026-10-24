@@ -9,6 +9,7 @@ fastchess              v1.8.2-alpha   https://github.com/Disservin/fastchess.git
 fastchess-linux-bin    v1.8.2-alpha   https://github.com/Disservin/fastchess/releases/download/v1.8.2-alpha/fastchess-linux-x86-64.tar   sha256:1003f920bebe841acdab5e6d7871e93171a4586857b3ec91c21ef5777f26ff96
 cutechess              v1.5.1         https://github.com/cutechess/cutechess.git                                                 commit:45e923949e43570886c0ad3392f514e743839c6b
 cutechess-appimage     v1.5.1         https://github.com/cutechess/cutechess/releases/download/v1.5.1/Cute_Chess-1.5.1-x86_64.AppImage    sha256:d9448693e45bd57f1aeb32c46e94466894cd7cc5b6937effd285a02e871387b5
+tceccutechess          master@2023-04-09 https://github.com/TCEC-Chess/tceccutechess.git                                            commit:a324a3e68559b57d69efba998a709748d4ba306d
 ordo                   v1.2.6         https://github.com/michiguel/Ordo.git                                                      commit:17eec774f2e4b9fdd2b1b38739f55ea221fb851a
 syzygy-sha256-list     2024-06-23     https://tablebase.lichess.ovh/tables/standard/sha256                                       sha256:6dc75697fd9af1e171f45b48ceed5910a913054bf9f48b8c83163232d784a783
 syzygy-345-wdl         145-files      https://tablebase.lichess.ovh/tables/standard/3-4-5-wdl/                                   per-file-sha256-from:syzygy-sha256-list

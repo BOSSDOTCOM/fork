@@ -90,14 +90,28 @@ licensed *engine* code is not copied. The only exception is a documented library
 - **Installed 2026-10-23:** built from source at v1.5.1 against Qt 6.10.2,
   at `~/fork-tools/bin/cutechess-cli`.
 
-### TCEC's cutechess fork (deferred)
-- **Status (owner, 2026-10-23): deferred.** https://github.com/TCEC-Chess/tceccutechess
-  has had no pushes since 2023-04-09 (`master`, commit `a324a3e6`), and whether
-  TCEC's servers still run it is unconfirmed; the question is on the Discord
-  list in competition.md. Phase 2 acceptance uses `fastchess --compliance` plus
-  standard cutechess-cli. If TCEC confirms the fork, it is added then.
-- The prepared install step (Qt5 build, pinned commit, notes) is on branch
-  `tcec-cutechess`, not merged.
+### tcec-cutechess-cli (TCEC's cutechess fork)
+- **Tag:** USE (compliance testing under the GUI TCEC runs)
+- **Source:** https://github.com/TCEC-Chess/tceccutechess (GPLv3+, inherited
+  from cutechess). Checked 2026-10-23 with `git ls-remote` and a clone.
+- **Version:** no tags. 24 branches; the default branch `master` is the most
+  recent (commit `a324a3e6`, 2023-04-09, "Update chessgame.cpp"). Other
+  branches are older (`allow_uci_options` 2020-07, `Cup5` 2020-05,
+  `nTCEC` 2018-09). Pinned by commit in versions.lock. **UNVERIFIED** that
+  TCEC's servers run exactly this commit; the repository has had no pushes
+  since April 2023.
+- **Building:** qmake (`cutechess.pro`), rejects Qt < 5.7. It **fails against
+  Qt 6.10** (QStringList forward declaration, QString += int, enum
+  conversions), so install.sh builds it against Qt5 (`qtbase5-dev`, 5.15 on
+  Ubuntu 26.04). The library and CLI need only QtCore. The library is shared
+  (`libcutechess.so` in the source tree), so install.sh installs a wrapper,
+  `tcec-cutechess-cli`, that sets `LD_LIBRARY_PATH`.
+- **Why it matters:** it is TCEC's GUI code and differs from upstream
+  cutechess; for example it bundles its own Fathom copy (`lib.pro` includes
+  `3rdparty/fathom/src/tb.pri`). Fork's UCI behaviour should be checked under
+  it, not only under upstream cutechess and fastchess. Which TCEC-specific
+  changes `master` contains (branch names suggest JSON output, UCI option
+  passing, Berger schedules): **UNVERIFIED**, not yet read.
 
 **Mapping TCEC adjudication to runner flags (Phase 8).** `config/tcec.json` has draw from move 35, |eval| ≤ 8 cp for 10 plies by both engines, and a win at ≥ 1000 cp for 10 plies. Both runners count `movecount` in "consecutive moves". **UNVERIFIED** whether that means plies or full moves, and whether both engines' scores are tested in the way TCEC does it. Read the runner source before trusting a mapping such as `-draw movenumber=35 movecount=? score=8` and `-resign movecount=? score=1000 twosided=true`.
 
