@@ -170,6 +170,10 @@ None of these is answered on any page opened on 2026-10-23.
    no pushes since 2023-04-09, so it may no longer be what runs. Until
    answered, Fork's compliance testing uses `fastchess --compliance` plus
    standard cutechess-cli (tools.md).
+5. **Move Overhead:** what `Move Overhead` value does TCEC recommend for
+   its servers and GUI? Fork defaults to 100 ms (owner, 2026-10-24);
+   TCEC's own example sets Reckless's `MoveOverhead=1000`. (Added
+   2026-10-24.)
 
 ### Swiss categories in full (S30 / Swiss 10)
 
