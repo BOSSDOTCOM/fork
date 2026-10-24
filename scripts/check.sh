@@ -12,7 +12,9 @@
 #                            gcc-release: build + every non-slow test,
 #                            including bench parity (pre-commit, sign-offs).
 #                            On Linux also gcc-debug (GCC ASan+UBSan). On
-#                            Windows it then runs the Linux check too (below).
+#                            Windows also a UCI start-up smoke loop (50 runs)
+#                            of every MinGW GCC preset's engine, then the
+#                            Linux check (below).
 #
 # Both platforms on every full check: on Windows, `full` copies the working
 # tree exactly as it is (tracked and untracked, non-ignored files) into
@@ -42,7 +44,7 @@ cd "$(dirname "$0")/.."
 
 mode=${1:-quick}
 code_paths=(src tests bench fuzz tools/magic_seeds.cpp tools/dump_tables.cpp tools/hash_timing.cpp cmake CMakeLists.txt CMakePresets.json
-            scripts/check.sh scripts/env.sh update.sh)
+            scripts/check.sh scripts/env.sh scripts/uci-smoke.sh update.sh)
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 
@@ -101,7 +103,22 @@ native_full() {
   for preset in "${presets[@]}"; do
     build_and_test "$preset" -LE slow
   done
+  [ "$(uname -s)" = Linux ] || windows_gcc_smoke
   echo "${presets[*]}"
+}
+
+# Windows only (owner, 2026-10-24): every MinGW GCC preset's engine must
+# start cleanly in UCI mode, 50 times (scripts/uci-smoke.sh). Builds only the
+# fork target of each; the full gcc-debug suite runs at each phase end.
+windows_gcc_smoke() {
+  local preset
+  for preset in gcc-debug gcc-release gcc-v3 gcc-avx512 gcc-nopext; do
+    if [ ! -f "build/$preset/build.ninja" ]; then
+      cmake --preset "$preset" >>"$log" 2>&1 || fail "configure $preset"
+    fi
+    cmake --build "build/$preset" --target fork >>"$log" 2>&1 || fail "build $preset (fork)"
+    scripts/uci-smoke.sh "build/$preset/fork.exe" 50 >>"$log" 2>&1 || fail "UCI start-up smoke loop, $preset"
+  done
 }
 
 # Windows side: copy the working tree into WSL and run the Linux check there.
@@ -189,6 +206,7 @@ case "$mode" in
     fi
     presets=$(native_full) || exit 1
     platforms="$(uname -s): $presets"
+    [ "$(uname -s)" = Linux ] || platforms="$platforms, UCI smoke x50 for gcc-{debug,release,v3,avx512,nopext}"
     if [ "$(uname -s)" != Linux ]; then
       if [ "${FORK_SKIP_LINUX:-0}" = 1 ]; then
         echo "fork check full: WARNING: Linux check SKIPPED (FORK_SKIP_LINUX=1); no pass recorded" >&2

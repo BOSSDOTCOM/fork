@@ -44,8 +44,10 @@ scripts/build.sh                              # all presets + PGO, summary table
 scripts/build.sh clang-release gcc-debug      # chosen presets
 scripts/check.sh quick                        # clang-release build + fast tests
 scripts/check.sh stop                         # Stop hook: clang-release, all non-slow tests; skipped if code unchanged
-scripts/check.sh full                         # Windows presets, then the same + gcc-debug on Linux (WSL),
+scripts/check.sh full                         # Windows presets + UCI smoke loop of every MinGW GCC preset,
+                                              # then the same + gcc-debug on Linux (WSL),
                                               # then update.sh + bench with TCEC's 4 compilers (WSL Ubuntu-22.04)
+scripts/uci-smoke.sh build/gcc-debug/fork.exe 50   # 50 starts of uci/isready/quit, all must exit 0
 ./update.sh                                   # TCEC build: build/tcec/fork (CXX, FORK_ARCH; never native)
 cmake --preset clang-release && cmake --build build/clang-release
 ctest --test-dir build/clang-release -LE slow --output-on-failure
@@ -125,14 +127,16 @@ next phase begins. Report each item's result.
    `scripts/check.sh full`, `scripts/build.sh` (all presets + PGO) on
    Windows and in `~/fork` (a clean clone), the slow suites, and the Ubuntu
    22.04 build with TCEC's compilers (gcc 11.4, g++-12, clang 16/19; see
-   DESIGN.md §5.1). Plus **fuzzing until coverage plateaus** (owner,
-   2026-10-24): every fuzz target (`fuzz_fen`, `fuzz_moves`) for up to 1
+   DESIGN.md §5.1). Plus the **full gcc-debug suite on Windows**
+   (`scripts/build.sh gcc-debug`, every non-slow test; owner, 2026-10-24:
+   `check.sh full` only smoke-starts the Windows GCC engines, and a Windows
+   gcc-debug crash once went unseen for a whole phase). Plus **fuzzing until coverage plateaus** (owner,
+   2026-10-24): every fuzz target (`fuzz_fen`, `fuzz_moves`, `fuzz_uci`) for up to 1
    hour each, one after the other, stopping early once coverage has not
    grown for 20 minutes (`tools/fuzz/run_fuzz.py --max-seconds 3600
    --plateau-seconds 1200`), on a fresh `clang-fuzz` build. Report runs, coverage and whether each plateaued; then minimize
    the corpora and promote them to `seed-*` files (see "Fuzz corpus"
-   below). Add a fuzz target for any new parser (e.g. `fuzz_uci`, Phase 2)
-   under the same rule.
+   below). Add a fuzz target for any new parser under the same rule.
 2. **Tag the release** as a known-good baseline: `git tag -a phase-N` on
    `main`, with the bench node count and signature in the tag message.
 3. **Untracked reports** (`REVIEW-*.md`, `HANDOFF.md`, `MORNING.md` and
@@ -148,7 +152,10 @@ next phase begins. Report each item's result.
    downloads and `~/fork-tools`.
 6. **Docs:** update DESIGN.md (decisions log, phase status), ideas.md
    statuses, ORIGINALITY.md and the KB (branch `kb`); re-check every item
-   marked UNVERIFIED and resolve or keep it with a reason.
+   marked UNVERIFIED and resolve or keep it with a reason. Then **merge
+   `main` into `kb`** (in `../fork-kb`; on a conflict in `docs/DESIGN.md`
+   take main's, as kb's copy is only a pointer) and push both branches, so
+   the KB never drifts from the code it describes.
 7. **Memory notes:** review the saved memory files
    (Claude Code's memory directory for this project, under `~/.claude/projects/`) and update or delete
    anything outdated.
