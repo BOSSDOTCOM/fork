@@ -1,0 +1,9 @@
+uci
+setoption ue 2
+isready
+ucinewgame
+isready
+position startpos moves e2e4 e7e5 g1f3
+go wtime 0500 b:time'1000 winc 10 binc ÏÏõ
+go wtime 0500 b:time'1000 winc 10 binc ÏÏõsre;dy
+qui~

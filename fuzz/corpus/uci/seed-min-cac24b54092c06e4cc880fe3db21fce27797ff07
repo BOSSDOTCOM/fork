@@ -1,0 +1,8 @@
+positqon fen r3k2r/p1ppqpbQ0p/XPPBBPPP/RR3K2R w KQkq - 0 1 move@ e1g1 e8c8
+go infina3 b2b3
+isready
+stop
+go ponder movestogo 3 wtime -5 ÿ?imgo ponder movestogo 3 wtime -5 btime 99999999999999999999999999
+ponde 8/4P3/8/8/8/8/k7/4K3 w - - 0 1 moves e7e8Q
+go detph 1 nodes 5 mate 1 movetime 1
+d

@@ -1,0 +1,17 @@
+setoption name Hash value 2
+setoption name Clear Hash
+setoption name Threads value 3
+setoption name Move Overhead value 250
+setoption name   move    OVERHEAD   value 0
+setoption name SyzygyPath value /home/syzygy7:C:\tb one;D:\tb two
+setD   value 0
+setoption name SyzygyPath value /home/syzygy7:C:\tb one;D:\tb two
+setoption name SyzygyPath value <empty>
+setoption name LogFile value <empty>
+setoption name Hash value 0
+setoption name Hashue -1
+setoption name No Such Option value 1
+setoption name Hash
+setoption name
+setoption
+isready

@@ -1,0 +1,57 @@
+# Strict static analysis for Fork. Disabled checks are listed with the reason.
+Checks: >
+  bugprone-*,
+  cert-*,
+  clang-analyzer-*,
+  concurrency-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-container-size-empty,
+  readability-duplicate-include,
+  readability-implicit-bool-conversion,
+  readability-inconsistent-declaration-parameter-name,
+  readability-misleading-indentation,
+  readability-redundant-*,
+  -bugprone-easily-swappable-parameters,
+  -misc-non-private-member-variables-in-classes,
+  -misc-include-cleaner,
+  -misc-use-anonymous-namespace,
+  -modernize-use-trailing-return-type,
+  -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
+  -modernize-use-designated-initializers,
+  -readability-implicit-bool-conversion,
+  -cert-err58-cpp,
+  -cert-msc32-c,
+  -cert-msc51-cpp,
+  -misc-const-correctness,
+  -bugprone-signed-bitwise,
+  -hicpp-signed-bitwise,
+  -misc-no-recursion,
+  -portability-avoid-pragma-once
+# Disabled:
+#   easily-swappable-parameters: (Square, Square) and (Color, Square) pairs are the domain.
+#   non-private-member-variables: State and SliderEntry are plain data on purpose.
+#   include-cleaner / use-anonymous-namespace: style only.
+#   trailing-return-type, avoid-c-arrays, nodiscard, designated-initializers: style only;
+#     fixed-size C arrays are the board representation.
+#   implicit-bool-conversion: bitboard-as-bool is idiomatic throughout (`if (b & mask)`).
+#   cert-err58-cpp: static tables are built at startup by design.
+#   cert-msc32-c / msc51-cpp: fixed seeds are required for determinism (DESIGN.md 2).
+#   misc-const-correctness: style; const is used where it carries meaning
+#     (references, members, parameters), not on every local.
+#   signed-bitwise: squares, pieces and rights are non-negative ints by
+#     construction; the check also fires on uint64 shifts. Out-of-range shifts
+#     are caught at runtime by UBSan in every debug run.
+#   misc-no-recursion: perft and (later) search are recursive by design.
+#   portability-avoid-pragma-once: supported by every compiler Fork targets.
+# Options:
+#   bugprone-empty-catch: a catch whose comment starts 'ignored:' is deliberate
+#     (destructors and last-resort output paths, which must not throw), and the
+#     comment says why.
+CheckOptions:
+  bugprone-empty-catch.IgnoreCatchWithKeywords: '@TODO;@FIXME;ignored:'
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*/src/.*'

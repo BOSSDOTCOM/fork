@@ -1,0 +1,11 @@
+position fenpqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w
+position startpos moves e2e4 e7e5 !g1f3
+go wtime 1000/PPPBBPPP/R3K2R wime 1000 btime PP/R3K2R w
+position startpos moves e2e4 e7e5 g1f3
+g
+position startpos moves e2e4 e7e5 g1f3
+go wtime 1000 btime PP/R3K2R w
+position startpos moves e2e4 e7e5 g1f3
+go wtime 1000 btime 1000 winc 10(binc 10
+istpos mquit
+d

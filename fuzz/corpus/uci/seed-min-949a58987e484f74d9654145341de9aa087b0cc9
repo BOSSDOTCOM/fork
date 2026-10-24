@@ -1,0 +1,9 @@
+position fen r3k2r/p1ppqpb1/bn2rnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infinite secr^hmoves a1a3b3
+isready
+stop
+go ponder movestogo 3 wtime -5 btime 99999999999999999999
+ponderhit
+posi4K3 w - - 0 1 moves e7e8Q
+go derth  nodes 5 mate 1 movetime 1
+d

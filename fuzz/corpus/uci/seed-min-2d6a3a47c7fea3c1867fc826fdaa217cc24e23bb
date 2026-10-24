@@ -1,0 +1,10 @@
+position fen r3k2r/1pppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+ço infi w KQkq -a3 b2b3
+isržždy
+stop
+go perfop
+go perftr movesPPP/R3K2R w KQkq -a3 b2b3
+isržždy
+stop
+go perftò movestogo 3 wtime -5  1 nodes n r3k2r/pmovetime 1
+d

@@ -1,0 +1,10 @@
+position fen /1p2P3/2N2Q1p/PPPBBPPP/R1K2R w KQkq - 0 1 moves e1g1 e8c8
+go infinite e -5 btime 99999999999999999999
+ponderhit
+position fen 8/4P3/8/8/8/8/k7/4K3 w - - 0 1 moves e7e8
+gQo9t
+pos mo e8c8
+go infinite oves e1g1 e8c8
+go infinite e -5 btime 99999999999999999999
+ponderhit
+positio# fen 8/4P3/8

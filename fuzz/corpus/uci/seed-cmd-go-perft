@@ -1,0 +1,3 @@
+go perft 2
+go perft 0
+go perft

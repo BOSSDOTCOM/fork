@@ -1,0 +1,7 @@
+position fen r3k2p/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - ¡ 1 moves e1g1 e8c8
+go h 1inite searchmoves a2a3 b2b3
+isready
+stop
+go 0 1 moves e7e8Q
+go depth 1 nodes 5 mate 1 movetime 1
+d

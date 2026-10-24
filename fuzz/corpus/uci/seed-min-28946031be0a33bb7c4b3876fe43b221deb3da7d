@@ -1,0 +1,7 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1q2P3/2N2Q1r/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infimite searchmovperftes a2a3 b2b3
+isready
+stop
+go ponder movestogo 3 wtime -5 btr/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infimite searime 9999999999999999991
+d

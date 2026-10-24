@@ -1,0 +1,4 @@
+position fen r3k2r/p1ppqpb1/bn2p -/kepth 1 nodes 5; manp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w K/kq - 0 1 moves e
+stop
+go ponder movte movetime -/kepth 1 nodes 5; mate 1 movetime depth 1 nodes  1 movetime -/kepth 1 nodes 5; mate 1 movetime depth 1 nodes 5 mate 1 movetime 1
+d

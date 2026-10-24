@@ -1,0 +1,19 @@
+isready
+position startpos moves e2e2isready
+go
+
+  	; debu ogn
+xyzzy isready
+position fen 7k/6Q1/6K1/8/8/8/8/8 b - -y
+go
+
+  	 debug on
+xyzzk/2tion startpos moves e2e2isready
+go
+
+  	; debu ogn
+xyzzy isready
+position fen 7k/6Q1/6K1/8/8/8/8/8 b - -y
+go
+
+  	 deQ2/681/tion f/8K

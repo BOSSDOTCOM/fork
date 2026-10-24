@@ -1,0 +1,6 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PNÿÿ21/ÿ3pP3/2N2Q1p/PKQkq - 0 1 -oves e1g1 e8c8
+go infinimatete searchmoves aquitb 0&1e moves e7e8Q
+go  w1 ºKQkq -es 5 mate 0 searchmoves aquitb 0&1e moves e7e8Q
+go  w1 ºKQkq -es 5 mate 0 searchmoves aquitb 0&1e moves e7e8Q
+go  w1 ºKQkq -es 5 mate 0 movellllllltime 1
+d

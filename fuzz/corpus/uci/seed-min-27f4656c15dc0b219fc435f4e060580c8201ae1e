@@ -1,0 +1,15 @@
+p!sition fen r3ık2r/psition fen r3ık2r/p1p1/bn2pnp1/3uci
+setoption namhreads value 2
+isready
+ucinewgame
+ivalue 2
+isready
+ucinewgame
+isrùadmovsrùadmovetime 0
+d
+1p1/bn2pnp1/3uci
+setoption namhreads value 2
+isready
+ucinewgame
+isrùadmovetime 0
+d

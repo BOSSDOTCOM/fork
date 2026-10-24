@@ -1,0 +1,31 @@
+// zobrist: key generation (see zobrist.hpp).
+#include "core/zobrist.hpp"
+
+#include "core/splitmix.hpp"
+
+namespace forkeng::zobrist {
+
+Key piece_square[16][64];
+Key side;
+Key castling[16];
+Key ep_file[8];
+
+void init() {
+  // splitmix64 with a fixed seed: keys (and bench signatures) are reproducible.
+  std::uint64_t state = 0xF0E1'D2C3'B4A5'9687ULL;
+  auto next = [&state] { return splitmix_next(state); };
+  for (auto& row : piece_square)
+    for (Key& k : row) k = next();
+  side = next();
+  // Each right gets a key; a rights state is the xor of its rights' keys,
+  // so a change of rights costs a single table lookup.
+  Key right[4] = {next(), next(), next(), next()};
+  for (int s = 0; s < 16; ++s) {
+    castling[s] = 0;
+    for (int r = 0; r < 4; ++r)
+      if (s & (1 << r)) castling[s] ^= right[r];
+  }
+  for (Key& k : ep_file) k = next();
+}
+
+}  // namespace forkeng::zobrist

@@ -1,0 +1,6 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/N33P/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g‹ e8c8
+go infinite sR w KQkq - 0 1 moves e1g1 e8c8
+go infinite searchmoves a2a3position fen r3k2 b2b3
+ir/p1ppqpb1/bn2pnp1/3PNsready
+stxp
+go3

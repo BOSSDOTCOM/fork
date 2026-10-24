@@ -1,0 +1,6 @@
+po\it
+ion fen r3k2r/p1ppqpb1/bn3pnp1/3PN3/1p2P3/2N2Q1p/P1 e8c8
+go2a3 b2b3
+ite searchmoves a2a3 b2b3
+isrep1/3PN3/1p8P3/2N2QPP/R3K2R w Kÿ,q -sready]stop
+go ponder moves

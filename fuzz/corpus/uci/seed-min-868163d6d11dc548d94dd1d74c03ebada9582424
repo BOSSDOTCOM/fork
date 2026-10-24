@@ -1,0 +1,8 @@
+positogo 3 wtime -5 btime 99999999999999999999
+ponderhit
+position fen 8/4P3/8/8/8/8/k7/4K3 w - 3
+isreedy
+stop
+go pon 0 1 mves a2a3 b2/4K3 w - - 0 1 moves e7e8/
+go depth 1 nodes 5- 0 1 mves a2a3 b2/4K3 w - - 0 1 moves e7e8/
+go depth 1 nodes 5 mate 1 movetimete 1 movetime 1d

@@ -1,0 +1,10 @@
+uci
+setoption name Hash value 2
+setoption name Threads value 2
+isready
+ucinewgame
+isready
+position startpos moves e2e4 e7e5 g1f3
+go wtime 1000 btime 1000 winc 10 binc 10
+isready
+quit

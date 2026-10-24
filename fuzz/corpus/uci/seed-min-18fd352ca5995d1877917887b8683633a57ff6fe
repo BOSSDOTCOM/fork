@@ -1,0 +1,7 @@
+position fen r3k2r/p1p/R3K2R w KQkq-0   1 moves e1g1 e8c8
+go in$inite searchmoves  2a3b2ab3
+isready
+stop
+go ponder movestogo Íßwtime -5 btime999999999998
+pon99999t
+position fen 

@@ -1,0 +1,14 @@
+isready
+yt
+spioion fen 7k/6Q1/6K1.8/8/8/8/8 b ch
+go perft 3
+r on
+xyzzy isready
+position fen 7k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q2/6K1/8/8/8/8/8 b - - 0 1
+go infinite
+position fen bad
+position startpossready
+position fen 7k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+gister later

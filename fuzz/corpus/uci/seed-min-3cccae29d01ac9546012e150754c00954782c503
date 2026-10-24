@@ -1,0 +1,11 @@
+positiondepth 1ds e7e8Q
+go nomoves e7e8Q
+go depth 0ds e7e81
+8Q
+go depth 2deth 1ds e7e8Q
+go nomoves e7e8Q
+go depth 0ds e7e8Q
+go depth 2des 5  go depth 2deth 1ds e7e8Q
+go nomoves o depth 0ds e7e8Q
+go depth 2des 5  go depth 2deth 1ds e7e8Q
+god

@@ -1,0 +1,6 @@
+position fen r3k2r/p1ppqpb1/bn2pnp 0 1 mves a2a3 b2b3
+isready
+stop
+go ponder movestogo 3 wtime- 0 1 moves e7e8Q
+go depth 1 nodes 5 mate 1 movetime 1
+d

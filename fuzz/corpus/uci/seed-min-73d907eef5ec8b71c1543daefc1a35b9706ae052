@@ -1,0 +1,10 @@
+isreadyady
+position fen 7k/6Q1/6K1/8/8/8/8/8 b - - 0 777777777777777777777777777777777777771
+g
+position0000rtpos ready
+position fen 7k/6Q1/6K1/8/8/8/8/8 b - - 0 777777777777777777777777777777777777771
+go
+position fen 7k/2/6K52e5
+go searchmoves 000s e2e5
+go searchmoves 00à’Ð„es startpossearchmoves 1615
+r

@@ -1,0 +1,10 @@
+isÍeady
+position startpos mucinewgamo
+
+  	 debug on
+xyzzy isready
+position fen 7k/6Q1/6K1/8/8overhead value 0
+setoptio000
+bench
+go perft 3
+register later

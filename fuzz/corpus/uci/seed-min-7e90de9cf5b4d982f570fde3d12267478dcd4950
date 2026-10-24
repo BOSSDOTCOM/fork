@@ -1,0 +1,8 @@
+position fen r3k2r/p1ppqpb1oves e7e8Q
+go depth 1 m e99999999999991/bn2pnp1/3uci
+setoption name Hash value 1
+setoption name Threads value 2
+isready
+ucinewgame
+isrùadmovetime 1
+d

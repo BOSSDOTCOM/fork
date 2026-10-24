@@ -1,0 +1,33 @@
+position startpos
+go
+go wtime 1000
+go btime 1000
+ion startpos
+go
+go wtime 1000
+go btime 1000
+go wtime 1000 btime 900 winc 10 binc 20 movestogo 4btime 900 winc 10 binc 20 movestogo 40
+go depth 5
+go nodes 1000
+go mate 3
+go movetime 100
+go infinite
+go ponder wtime 1000 btime 1000
+go wtime -1000
+go de 1000
+go wtime 1000 btime 900 winc 10 binc 20 movestogo 4btime 900 winc 10 binc 20 movestogo 40
+go depth 5
+goﬂÕ0000932356024711512063
+go depth movetime 5 frobnicatego wtime 1000 btime 900 winc 10 binc 20 movestogo 4btime 900 winc 10 binc 20 movestogo 40
+go depth 5
+go nodes 1000
+go mate 3
+go movetime 100
+go infinite
+go ponder wtime 1000 btime 1000
+go wtime -1000
+go de 1000
+go wtime 1000 btime 900 winc 10 binc 20 movestogo 4btime 900 winc 10 binc 20 movestogo 40
+go depth 5
+goﬂÕ0000932356024711512063
+go depth movetime 5 frobnicate

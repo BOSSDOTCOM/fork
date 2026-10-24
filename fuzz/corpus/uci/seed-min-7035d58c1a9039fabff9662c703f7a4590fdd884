@@ -1,0 +1,6 @@
+pocitio7/4K3 w m - 5 1 moves e7e8Q
+go depth1 moves e7e8Q
+go depth  ponder movestowo 3 wtime -5 btime 99999999999999 po999
+ponderhit- - 5 1 moves e7e8Q
+go depth 1 nodes 5 mate 1 movetime 1
+d

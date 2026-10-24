@@ -1,0 +1,10 @@
+uci
+setope2e4 e7e5 g1f34 e7e5 g1f3
+go wtime c 10
+is
+go wtime c 10
+isreadysearchmovås a2a3 b2b3
+is startpos moves e2e4 e7e5 g1f3
+go wtime c 10
+isready
+quit

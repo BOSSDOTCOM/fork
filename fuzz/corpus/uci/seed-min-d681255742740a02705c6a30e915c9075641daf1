@@ -1,0 +1,14 @@
+uci
+setoptifon namesetoption 1f3
+go wtime winc 10 binc 10
+isready
+qsh value 2
+setoption 1f3
+go wtkkkkkkkkkkkkkkime winc 10 binc 10
+iQkq - 0 1 moves e1g1 e8c8
+go infinite sR w KQkq - 0 1 mo0
+isready
+qsh value 2
+setoption 1f3
+go wtkkkkkkkkkkkkkkime winc 10 binc 10
+iuit

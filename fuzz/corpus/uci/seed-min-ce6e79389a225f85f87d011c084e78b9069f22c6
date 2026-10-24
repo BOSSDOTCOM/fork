@@ -1,0 +1,66 @@
+position fen r3k2r/p1pqqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e
+stop
+go ponder movestogo 3 wtim - e5btime 999999999999hreads value 3
+setoption name Move Overhead value 250
+setoption name   move    OVERHEAD   value 0
+setoption name SyzygyPath value /home/syzygy7:C:\/5Q 0000
+ister later
+dy /3PN3/1p2P3infinisrea`y
+stop
+go ponder moveütogo e8c8
+go infi/2N2Q1pØPPBBPPP/R3K2b -  6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+ b - - 0 1
+go
+position fen 7k/5Q2/6K1/8//88/8/8 b - - 0 1
+go ady
+position fen 6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q 0000
+i/8/8 b - - 0 1
+go ady
+:n fen 6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q 0000
+i/8/8 b - - 0 1
+go ady
+:\tb one;D:\tb two
+setoption name SyzygyPath value <empty>
+se99999999
+pofen r3k2r/p1ppqpb1/bn2pnposition fen 6k/6Q1/6K1/8/8/p18/8/8 b - - 0 1
+go
+position fen 7k/5Q 0000
+ister later
+dy /3PN3/1p2P3infinisrea`y
+stop
+go ponder moveütogo e8c8
+go infi/2N2Q11
+go
+ b - - 0 1
+go
+position fen 7k/5Q2/6K1/8//88/8/8 b - - 0 1
+go ady
+position fen 6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q 0000
+i/8/8 b - - 0 1
+go ady
+:n fen 6k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/5Q 0000
+i/8/8 b - - 0 1
+go ady
+:\tb one;D:\tb two
+setoption name SyzygyPath value <empty>
+se99999999
+pofen r3k2r/p1ppqpb1/bn2pnposition fen 6k/6Q1/6K1/8/8/p18/8/8 b - - 0 1
+go
+position fen 7k/5Q 0000
+ister later
+dy /3PN3/1p2P3infinisrea`y
+stop
+go ponder moveütogo e8c8
+go infi/2N2Q1pØPPBBPPP/R3K2b - - 0 rR w KQk moves e1g1 e8c8
+go inf laterinisrea`me 
+1
+d

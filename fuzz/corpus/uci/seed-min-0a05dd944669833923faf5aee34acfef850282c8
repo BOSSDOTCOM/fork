@@ -1,0 +1,8 @@
+position fen r3k2r/p1ppqpb1/bn2pnpq/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e
+stop
+go ponder movestogo 3 wtim - e5btime 99999999999999999999
+ponderhit
+posie7e8Q
+go depth 1 no8/k7/4K3 w - - 5 1 moves e7e8Q
+go °öèãóth 1 nodes 5 searc1 movetime 1
+d

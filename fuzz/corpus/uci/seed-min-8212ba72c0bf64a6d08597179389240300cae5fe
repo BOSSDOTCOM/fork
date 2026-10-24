@@ -1,0 +1,11 @@
+positio7/4epth isready
+stop
+go p- - 0 1
+go
+position fen 7k/5Q2/6K1/8/8/8/8/4K3 w - - 0 1 moves e7e8Q
+go dept 0 1
+go
+position fen 7k/5Q2/6K1/8/8/8/8/4K3 w - - 0 1 moves e7e8Q
+go depth 1e7e8emtae 5s  1 mogo dep@h 1ender8Q
+go depth ovetime 1
+d

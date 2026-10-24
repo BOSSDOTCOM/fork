@@ -1,0 +1,21 @@
+{
+  "_comment": "Local test environment (WSL2 Ubuntu on the owner's machine), installed by tools/install.sh on branch kb. Only test scripts read this file; the engine never does (it gets SyzygyPath as a UCI option). Machine-specific paths: override per machine; a leading ~ means the WSL user's home directory. TCEC's own conditions are in tcec.json.",
+  "recorded": "2026-10-23",
+  "platform": "linux-wsl2",
+  "tools_bin": "~/fork-tools/bin",
+  "syzygy": {
+    "path": "~/fork-tools/syzygy/3-4-5",
+    "pieces": [3, 4, 5],
+    "files": "145 .rtbw + 145 .rtbz, sha256-checked by tools/install.sh against tablebase.lichess.ovh",
+    "six_piece": null,
+    "six_piece_note": "declined at install (2026-10-23); tools/install.sh offers it interactively",
+    "seven_piece": null,
+    "seven_piece_note": "not installed; TCEC engines get 7-man (tcec.json). See docs/ideas.md idea 12 for how 7-piece probing is tested."
+  },
+  "runners": {
+    "fastchess": "~/fork-tools/bin/fastchess",
+    "cutechess_cli": "~/fork-tools/bin/cutechess-cli",
+    "ordo": "~/fork-tools/bin/ordo"
+  },
+  "runners_note": "TCEC's cutechess fork is deferred (owner, 2026-10-23); its install step is on branch tcec-cutechess."
+}

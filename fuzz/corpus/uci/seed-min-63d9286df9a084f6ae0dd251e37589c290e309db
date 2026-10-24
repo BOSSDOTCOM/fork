@@ -1,0 +1,9 @@
+position fen r3k2r/p1PPPBBPPP/R3K2R w KQkq - 0 1 evmos e1g1 ÿ?c8
+go infinite searchmoves a2a3@b2ÿÿÿsreadÿ?c8
+go infinite searchmovo infinite searchmoves a2a3@bc8
+go?c8
+go infinite searchmoves a2a3@b2b3
+isreadÿ?c8
+go infinite searchmovo infinite se a2a3@b2b3
+isreadÿ?c8
+go infinite searchmovo infinite seead

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Git pre-commit hook (installed with: git config core.hooksPath scripts/hooks).
+# Runs the same full check as the Claude Code Stop hook when the commit
+# touches code, so nothing broken can be committed from any tool.
+#
+# The check runs on the working tree. Stashing unstaged changes keeps it
+# honest: what is tested is exactly what is being committed.
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+code='^(src/|tests/|bench/|fuzz/|cmake/|tools/magic_seeds\.cpp|tools/hash_timing\.cpp|CMakeLists\.txt|CMakePresets\.json|scripts/(check|env|uci-smoke)\.sh)'
+if ! git diff --cached --name-only | grep -qE "$code"; then
+  exit 0  # docs/config-only commit
+fi
+
+stashed=0
+if ! git diff --quiet; then
+  git stash push --keep-index --quiet -m "pre-commit: unstaged changes" && stashed=1
+fi
+scripts/check.sh full
+status=$?
+if [ "$stashed" = 1 ]; then
+  git stash pop --quiet
+fi
+if [ $status -ne 0 ]; then
+  echo "pre-commit: checks failed, commit blocked (scripts/check.sh full)" >&2
+fi
+exit $status

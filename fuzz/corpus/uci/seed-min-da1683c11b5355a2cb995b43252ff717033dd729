@@ -1,0 +1,14 @@
+uci
+setoption name Hasıııııh e 2
+position fensetoptioready
+ucinewgame
+isready
+position startpos moves e2e4 b7b5 tion naready
+ucinewgame
+isready
+position startpos moves e2e4 b7b5 tion name Ha2h g1me Ha2h g1f3
+go wtime 1000 b@time 1000 winc 10 b moves e2e4 e7e5 tiy
+„–‹–‘ startpos 1
+
+isready
+quit

@@ -1,0 +1,11 @@
+position fen r3ion fen ines5e g1 e8c8
+go infinite searchmoves a2a3 b2b3
+isready
+wtime -5 oio7 fen ines5e g1 e8c8
+go infinite searchmoves a2a3 b2b3
+isready
+wtime -5 oio7tiovEs e1g-1 e8c8
+go infinite searchmoves a2a3 b2btiovEs e1g-1 e8c8
+go infinite searchmoves a2a3 b2b3
+isready
+wtlpnme -5 oios

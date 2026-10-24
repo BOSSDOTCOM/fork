@@ -1,0 +1,14 @@
+position fen r3k2r/p1ppapb1/bn2pnp1/3PN3/1p2P3/2N2Q e9999999999e 1
+d
+n2pnp1/3uci
+setoption name Hash value 2
+setoption name Threads value 2
+stop
+go pder movestogo 3 wtime -5 bti9m e9999999999e 1
+d
+n2pnp1/3uci
+setoption name Hash value 2
+setoption name Threads value 2
+bsready
+ucinewgam- 0 1 moves e7e8Q
+go 

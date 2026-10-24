@@ -1,0 +1,14 @@
+isready
+position starwpos moves e99999999i movestogô 3 wtim2e4isready
+g
+o
+  	 debug on
+xyzzy isready
+position fen 7k/6Q1/6K1/8/8/8/8/8 b  0  1--
+go
+position fyzzy isready
+position fen 7k/6Q1/6K1/8/8/8/8/8 b  0  1--
+go
+position fen 7k/5Qprsitiofen 7k/6Q1 on
+xyzzy isready
+position fen 7k/6Q1/6K1/8/8/8/8/

@@ -1,0 +1,8 @@
+se Clear Hash
+setoption nam2  move   ove<empty>
+ponderhit value 0
+n Q
+go depth 1 nodes 5 mate 0 moname Clear Hash
+set opte0
+setoption name LogFile value <empt			ucinewgame							x
+ion startpos

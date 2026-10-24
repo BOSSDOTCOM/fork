@@ -1,0 +1,6 @@
+position fen r3k2r/p1ppqpb1/pn2bnp1/3PN3/1q2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go in99999999
+ponderhit
+position fen 8/4P3/8/8/87e4Q
+go depth 1 noîes 5 mate 1 movetime 1
+d

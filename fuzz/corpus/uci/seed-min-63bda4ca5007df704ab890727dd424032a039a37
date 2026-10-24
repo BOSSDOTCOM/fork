@@ -1,0 +1,8 @@
+™sready
+position startpos moves e2e3isready
+go
+
+  	 debug on
+xyzzy isready
+position fen 7k/6Q1/6K1/8/8/8/8/8 b - - 0perft 3
+register later

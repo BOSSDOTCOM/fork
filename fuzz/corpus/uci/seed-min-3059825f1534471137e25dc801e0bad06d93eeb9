@@ -1,0 +1,14 @@
+position fen r3k2r/stop
+go ponder eütogoQ
+go depth 1 nodes 5 o depth 1 nodes 5 mate 1 movetime 2
+D
+etop
+go ponder moveütogo e8ate 1 movetime 2
+d
+eütogo 5 mate 1 movetime 2
+d
+etop
+go ponder moveütogo e6ate 1 movetime 2
+d
+etime 1
+d

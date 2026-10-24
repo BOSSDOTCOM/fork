@@ -1,0 +1,4 @@
+setoption* npponterhittiome Clear Hash
+setoption name  mgve   overheampty
+setoption name SyzygyPath value
+isready

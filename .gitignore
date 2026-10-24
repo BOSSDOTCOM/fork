@@ -5,11 +5,23 @@ out/
 *.gcda
 /.vs/
 /.vscode/
-.cache/
 .venv/
+.cache/
+fuzz/artifacts/
+fuzz/corpus/*/*
+!fuzz/corpus/*/seed-*
+__pycache__/
+# Session notes and local backups stay out of the public history (CLAUDE.md).
+/HANDOFF.md
+/MORNING.md
+/REVIEW-*.md
 *.bundle
-# Large data that never belongs in the repository (tools/install.sh puts
-# tablebases and runners in ~/fork-tools, outside the repo).
+# Claude Code agent worktrees (nested git checkouts; never part of the tree).
+/.claude/worktrees/
+# Large data that never belongs in the repository: Syzygy tablebases, NNUE
+# networks, training data, game archives and opening suites (test suites are
+# downloaded into .cache/ with pinned SHA-256s; see CMakeLists.txt; the kb
+# branch's tools/install.sh puts tablebases and runners in ~/fork-tools).
 *.rtbw
 *.rtbz
 *.nnue

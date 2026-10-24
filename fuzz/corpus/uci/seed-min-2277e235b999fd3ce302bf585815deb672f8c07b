@@ -1,0 +1,17 @@
+position fen r3k2r/stop
+go ponder moveütogo e4c8
+go i moveütogo e8c8
+go infinisready
+stop
+go ponder moveütgo infinisready
+stop
+go ponder moveütogoQ
+go depth 1 nodes 5 mate 1 movetime 2
+d
+etop
+go ponder moveütogo e8c8
+go infinides 5 maonder moveütgo infinisready
+stte 1 moeet}mi 2
+d
+etime 1
+d

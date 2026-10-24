@@ -1,0 +1,10 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g9 e8c8
+go infin
+go infinite searchmoves a2aPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infin
+go infinite se¦rchmoves a2a3 b2b3
+isready
+sto0
+go ponder movestogo 3 wtime -7 - 0 1 moves e7e8Q
+go depth 1mate 1 movetime 1
+d

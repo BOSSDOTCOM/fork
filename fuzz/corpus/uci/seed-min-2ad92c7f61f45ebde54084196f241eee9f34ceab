@@ -1,0 +1,10 @@
+positio7/4K3 w - - 5 1 moves e7e8Q
+go deh t1p no8/k7/4K3 w - -e7e8Q
+go de - 5 1 moves e7e8Q
+go depth 1 no8/k7/4K3 w - - 5 1 moves e7e8Q
+go depth isready
+stop
+go ponder movestowo 3 wtiem -4 btime 9999997e8Q
+go depth 1 no8/k7/4K3 w#- - 5 1 moves e7e8Q
+go depth isrea1 nn8/k7/4K3 w - - 5 1 move1 1
+d

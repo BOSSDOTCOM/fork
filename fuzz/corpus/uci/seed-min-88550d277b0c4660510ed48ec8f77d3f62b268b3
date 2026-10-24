@@ -1,0 +1,10 @@
+position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPBPBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c6
+go infin
+go infiniteartpos moves e1g# e8c8
+go infin
+go infineartpos moves e0e4adrseiy2a332 bb
+isready
+stoes e0e4adrseiy2a332 bb
+isready
+stop
+g

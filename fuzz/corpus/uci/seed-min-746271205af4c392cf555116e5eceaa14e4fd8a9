@@ -1,0 +1,20 @@
+isreaä}
+position szartQpos movesg e2e4isready
+go
+
+  	 d uebgon
+xyfinite
+position fen bad
+position startpos
+b,ench
+
+position fen 4k/6Q1/6K1/8/8/8/8/8 b - - 0 1
+go
+position fen 7k/56Q2/1K/8/8/8/8/8 § - - 0 1
+go infinite
+position fen bad
+position startpos
+b,ench
+go perft 3
+regis8
+go iner

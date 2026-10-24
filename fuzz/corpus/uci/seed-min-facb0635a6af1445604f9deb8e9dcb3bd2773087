@@ -1,0 +1,12 @@
+position fen r3ion 1p/P
+ponderhit
+position fen 8/4P3/8/8/8/8/k7/4K3 w - - 0 19
+isreaÿdy
+stop
+go poder movestogo 1 wtime -5 btime 999999999ate 0 searchmoves aquitb 0&vm[o 1e7s ee8Q
+go  w17/4K3 w - y
+stop
+go poder moe-7s ee8QPPBBPPP/c
+go infinite searchmoves a2a3 b2b3
+isready
+wtiovpositioes

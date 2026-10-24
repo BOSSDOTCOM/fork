@@ -1,3 +1,6 @@
 * text=auto eol=lf
 *.ps1 text eol=crlf
 *.cmd text eol=crlf
+# Fuzz inputs are exact bytes (CR, CRLF and NUL cases included): never
+# convert their line endings.
+fuzz/corpus/** -text

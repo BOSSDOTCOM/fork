@@ -1,0 +1,10 @@
+isready
+position startpos mowes e2e4isready
+go
+
+  	 debug on
+xyzzy isready
+positisition fen 7k/5Q2/6K1/8/8/8/8/8 b - - 0 1
+s8 b es e2e5
+go searchmoves 0000
+benchion fen 7kr

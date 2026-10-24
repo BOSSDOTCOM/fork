@@ -1,0 +1,13 @@
+uci
+setoptifon namesetoption 1f3
+go wtime winc 10 binc 10
+isreo 3 wtime -5 btoption 1f3
+go wtkkkkkkkkkkkkkkime winc 10 binc 10
+iuci
+setoptifon namesetoption 1f3
+go wtime winc 10 binc 10
+isready
+qsh value 2
+setoption 1f3
+go wtkkkkkkkkkkkkkkime winc 10 binc 10
+iuit
