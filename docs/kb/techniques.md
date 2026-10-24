@@ -106,6 +106,10 @@ SPRT test. https://www.chessprogramming.org/Search_Progression
 
 ## 3. Search (Phase 3 unless noted)
 
+The Phase 3 idea mining (tiers, dependencies, Elo evidence, clean-room
+descriptions) is in [search-techniques.md](search-techniques.md), which
+takes precedence over the short entries below for Phase 3 planning.
+
 ### Iterative deepening + PVS
 - Search depth 1, 2, 3... reusing TT/ordering; the previous best move and
   score drive ordering, aspiration and time management.

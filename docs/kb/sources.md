@@ -581,3 +581,127 @@ All opened 2026-10-24. Samples were inspected in a scratch directory outside the
 | https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/fopen-wfopen | Microsoft Learn (2023-04-27) | 2026-10-24 | text mode: CR-LF to LF, CTRL+Z is EOF on input |
 | https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/read | Microsoft Learn (2020-04-02) | 2026-10-24 | _read stops at CTRL+Z in text mode |
 | https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/fileno | Microsoft Learn (2020-04-02) | 2026-10-24 | _fileno, stdin descriptor 0 |
+
+## Search techniques (search-techniques.md), 2026-10-24
+
+Opened by three research agents on 2026-10-24 for the Phase 3 idea mining.
+Commit and PR data were read from blob-less clones (`git clone --filter=blob:none`)
+and the GitHub API; engine source was read only to describe conditions in prose.
+Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| https://github.com/official-stockfish/Stockfish.git (blob:none clone, HEAD dbe600b7) | Official SF repo: commit messages, search.cpp at bb751d6c (Glaurung 2.1 import), e408fd7b, 114ddb78, 88f17a81, a96b0d46 and HEAD; history.h at HEAD; Copying.txt at HEAD | 2026-10-24 | Stockfish mining: All commit data, Elo-annotation snapshots, HEAD conditions (comments only), GPL-3.0 check |
+| git show / bisection over src/search.cpp blobs from 924a8435 to HEAD | SF history | 2026-10-24 | Stockfish mining: Finding where the recapture extension was removed (67573218) |
+| https://tests.stockfishchess.org/api/get_run/5c34da5d0ebc596a450c53d3 | Fishtest run JSON (TT-PV STC) | 2026-10-24 | Stockfish mining: TC confirmation (10+0.1) |
+| https://tests.stockfishchess.org/api/get_run/65b683b8c865510db0274074 | Fishtest run JSON (triple extension STC) | 2026-10-24 | Stockfish mining: TC confirmation (10+0.1, 1 thread) |
+| https://tests.stockfishchess.org/api/get_run/65bae6d4c865510db0278eb5 | Fishtest run JSON (triple extension LTC) | 2026-10-24 | Stockfish mining: TC confirmation (60+0.6, 1 thread) |
+| https://tests.stockfishchess.org/api/get_run/5abcbb4b0ebc5902926cf1ca | Fishtest run JSON (2018 razoring-off Elo estimate) | 2026-10-24 | Stockfish mining: TC confirmation (10+0.1, 60k games) |
+| https://tests.stockfishchess.org/api/get_run/65c3f69dc865510db0283eef | Fishtest run JSON (2024 recapture-extension simplification) | 2026-10-24 | Stockfish mining: TC confirmation (10+0.1) |
+| https://tests.stockfishchess.org/api/get_run/6584d7e379aa8af82b95abd2 | FAILED: a run ID not taken from any commit; empty result | 2026-10-24 | Stockfish mining: Nothing (logged for completeness) |
+| https://github.com/AndyGrant/Ethereal (clone, HEAD 0e47e9b) | engine repo | 2026-10-24 | engine mining: commit messages, history.c history (not copied), license |
+| https://github.com/jhonnold/berserk (HEAD 3262851) | engine repo | 2026-10-24 | engine mining: commits, README, license |
+| https://github.com/TerjeKir/weiss (HEAD c735b8f) | engine repo | 2026-10-24 | engine mining: commits, license |
+| https://github.com/Luecx/Koivisto (HEAD 6de225a) | engine repo | 2026-10-24 | engine mining: commits, license |
+| https://github.com/Ciekce/Stormphrax (HEAD d1468d9) | engine repo | 2026-10-24 | engine mining: commits, license |
+| https://github.com/cosmobobak/viridithas (HEAD b407e3e) | engine repo | 2026-10-24 | engine mining: commits, one diff read for a qualitative description (#352), README, license |
+| https://github.com/gab8192/Obsidian (HEAD 720614a) | engine repo | 2026-10-24 | engine mining: commits, license |
+| https://github.com/Witek902/Caissa (HEAD 324f1f9) | engine repo | 2026-10-24 | engine mining: commits, diff file list, README, license |
+| https://github.com/codedeliveryservice/Reckless (HEAD 69aea90) | engine repo | 2026-10-24 | engine mining: commits, diffs #112/#277 read for a qualitative description, license |
+| https://github.com/PGG106/Alexandria (HEAD 54d4c20) | engine repo | 2026-10-24 | engine mining: commits, license |
+| https://github.com/aronpetko/integral (HEAD bed1786) | engine repo | 2026-10-24 | engine mining: commits, license check (none) |
+| https://github.com/Yoshie2000/PlentyChess (HEAD 94aff00) | engine repo | 2026-10-24 | engine mining: commits, README, license |
+| https://github.com/KierenP/Halogen (HEAD f1df842) | engine repo | 2026-10-24 | engine mining: commits, README, license |
+| https://github.com/connormcmonigle/seer-nnue (HEAD cf18bf0) | engine repo | 2026-10-24 | engine mining: commits, diff of #174/#182 read for indexing, README, license |
+| https://github.com/Adam-Kulju/Patricia (HEAD 67d83d7) | engine repo (extra) | 2026-10-24 | engine mining: commits, license |
+| api.github.com/repos/{each of the 15}/pulls/{n}, about 150 PRs, called automatically for squash commits without result lines | PR bodies | 2026-10-24 | engine mining: SPRT results and descriptions |
+| api.github.com/repos/{each of the 15} | repo metadata | 2026-10-24 | engine mining: license spdx_id |
+| api.github.com/repos/Witek902/Caissa/commits/6dd0552 | commit | 2026-10-24 | engine mining: checking the CPW citation |
+| api.github.com/repos/cosmobobak/viridithas/pulls/{1,3,4} | PR | 2026-10-24 | engine mining: **failed: 404** (the "#n" was in a commit subject, not a PR) |
+| https://www.chessprogramming.org/Static_Evaluation_Correction_History | CPW page (read-only recovery mirror) | 2026-10-24 | engine mining: corrhist origin, variant credits |
+| https://chess.grantnet.us/test/34866/ | OpenBench test page | 2026-10-24 | engine mining: reachability; error-bar difference |
+| https://chess.swehosting.se/test/7041/ | OpenBench test page | 2026-10-24 | engine mining: reachability |
+| https://recklesschess.space/test/14502/ | OpenBench test page | 2026-10-24 | engine mining: reachability |
+| https://furybench.com/test/7811/ | OpenBench test page | 2026-10-24 | engine mining: reachability (rendered via JS; title only) |
+| https://www.chessprogramming.org/Search_Progression | CPW Connorpasta lists | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Getting_Started | CPW beginner guidance | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Engine_Programming_Discord | FAILED 404 | 2026-10-24 | CPW/papers mining: sought "what first" list |
+| https://www.chessprogramming.org/Fail-Soft | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Negamax | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Principal_Variation_Search | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Iterative_Deepening | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Aspiration_Windows | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Search_Instability | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Transposition_Table | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Hash_Move | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Score | CPW (mate scores) | 2026-10-24 | CPW/papers mining: background only |
+| https://www.chessprogramming.org/Static_Exchange_Evaluation | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Null_Move_Pruning | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Null_Move_Pruning_Test_Results | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Null_Move_Observation | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Verified_Null_Move_Pruning | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.chessprogramming.org/Adaptive_Null-Move_Pruning | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.chessprogramming.org/Late_Move_Reductions | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Late_Move_Reduction_Test_Results | CPW (tables missing) | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Late_Move_Pruning | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.chessprogramming.org/Move_Count_Based_Pruning | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.chessprogramming.org/History_Leaf_Pruning | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Futility_Pruning | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Extended_Futility_Pruning | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.chessprogramming.org/Reverse_Futility_Pruning | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Razoring | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Deep_Razoring | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.chessprogramming.org/ProbCut | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Singular_Extensions | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Multi-Cut | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Enhanced_Forward_Pruning | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Move_Ordering | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Killer_Heuristic | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/History_Heuristic | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Countermove_Heuristic | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Followup_Move | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.chessprogramming.org/Continuation_History | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.chessprogramming.org/Capture_History | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.chessprogramming.org/Static_Evaluation_Correction_History | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Internal_Iterative_Deepening | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Internal_Iterative_Reductions | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Improving | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Mate_Distance_Pruning | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Check_Extensions | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Extensions | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Recapture_Extensions | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Delta_Pruning | CPW | 2026-10-24 | CPW/papers mining: notes |
+| https://www.chessprogramming.org/Node_Types | CPW | 2026-10-24 | CPW/papers mining: fetched; not used beyond the dependency map |
+| https://arxiv.org/abs/0808.1125 | arXiv abstract, Verified Null-Move Pruning | 2026-10-24 | CPW/papers mining: citation |
+| https://arxiv.org/pdf/0808.1125 | paper PDF | 2026-10-24 | CPW/papers mining: measurements |
+| http://people.csail.mit.edu/heinz/ps/adpt_null.ps.gz | Heinz 1999 author PostScript | 2026-10-24 | CPW/papers mining: measurement |
+| http://people.csail.mit.edu/heinz/dt/node18.html | Heinz 1998 preprint index | 2026-10-24 | CPW/papers mining: notes |
+| http://people.csail.mit.edu/heinz/dt/node28.html | limited razoring intro | 2026-10-24 | CPW/papers mining: notes |
+| https://people.csail.mit.edu/heinz/dt/node29.html | limited razoring theory (http redirects to https) | 2026-10-24 | CPW/papers mining: notes |
+| https://people.csail.mit.edu/heinz/dt/node30.html | limited razoring practice (tables) | 2026-10-24 | CPW/papers mining: notes |
+| https://people.csail.mit.edu/heinz/dt/node31.html | conclusion | 2026-10-24 | CPW/papers mining: notes |
+| https://web.archive.org/web/20150212051846/http://www.glaurungchess.com/lmr.html | Romstad LMR article | 2026-10-24 | CPW/papers mining: notes |
+| http://cs.ubc.ca/~jiang/papers/mpc_main.pdf | Jiang & Buro 2003 | 2026-10-24 | CPW/papers mining: notes |
+| http://erikvanderwerf.tengen.nl/pubdown/relhis.pdf | Winands et al. 2004, relative history | 2026-10-24 | CPW/papers mining: notes |
+| http://erikvanderwerf.tengen.nl/pubdown/Enhanced%20forward%20pruning.pdf | Winands et al. EFP preprint | 2026-10-24 | CPW/papers mining: notes |
+| https://api.github.com/repos/official-stockfish/Stockfish/pulls/4950 | SF PR #4950 metadata and body | 2026-10-24 | CPW/papers mining: notes |
+| http://www.craftychess.com/hyatt/collisions.html | FAILED (301 to https; the https fetch failed, curl status 000) | 2026-10-24 | CPW/papers mining: none |
+| https://craftychess.com/hyatt/collisions.html | FAILED (no response) | 2026-10-24 | CPW/papers mining: none |
+| http://web.archive.org/web/2010/http://www.cis.uab.edu/hyatt/collisions.html | Hyatt & Cozzie 2005, author HTML via Wayback | 2026-10-24 | CPW/papers mining: notes |
+| http://www.open-chess.org/viewtopic.php?f=3&t=435 | Hyatt OpenChess post, LMR/NMP Elo | 2026-10-24 | CPW/papers mining: notes |
+| https://www.madchess.net/2020/02/08/madchess-3-0-beta-4478cb8-late-move-pruning/ | Madsen author post | 2026-10-24 | CPW/papers mining: notes |
+| http://www.ru.is/faculty/yngvi/pdf/BjornssonM01a.pdf | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://www.ru.is/faculty/yngvi/pdf/BjornssonM01a.pdf | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| http://www.ru.is/faculty/yngvi/pdf/BjornssonM00.pdf | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| http://web.archive.org/web/2015/http://www.ru.is/faculty/yngvi/pdf/BjornssonM01a.pdf | FAILED 429 | 2026-10-24 | CPW/papers mining: none |
+| http://skemman.is/en/stream/get/1946/9180/22971/1/research-report.pdf | FAILED 403 | 2026-10-24 | CPW/papers mining: none |
+| http://www.oedavid.com/pubs/nmr.pdf | FAILED 404 | 2026-10-24 | CPW/papers mining: none |
+| https://api.crossref.org/works/10.1007/3-540-48957-6_2 | Crossref, Bjornsson & Marsland CG98 | 2026-10-24 | CPW/papers mining: notes |
+| https://api.crossref.org/works/10.1016/s0304-3975(00)00081-5 | Crossref, Bjornsson & Marsland TCS 2001 | 2026-10-24 | CPW/papers mining: notes |
+| https://api.crossref.org/works?query.bibliographic=Verified+null-move+pruning+David-Tabibi&rows=3 | Crossref search (VNMP, ENMR, Hoki) | 2026-10-24 | CPW/papers mining: notes |
+| https://api.crossref.org/works?query.bibliographic=Countermove+heuristic+Uiterwijk&rows=3 | Crossref search | 2026-10-24 | CPW/papers mining: notes |
+| https://api.crossref.org/works?query.bibliographic=Fishburn+Another+optimization+alpha-beta+SIGART&rows=3 | Crossref search | 2026-10-24 | CPW/papers mining: notes |
+| https://api.crossref.org/works?query.bibliographic=Hyatt+Cozzie+effect+of+hash+signature+collisions&rows=2 | Crossref search | 2026-10-24 | CPW/papers mining: notes |
+| https://api.crossref.org/works?query.bibliographic=Multi-cut+alpha-beta-pruning+in+game-tree+search+Bjornsson&rows=3 | Crossref search (printing failed on encoding; DOI then fetched directly) | 2026-10-24 | CPW/papers mining: notes |
+| https://api.crossref.org/works?query.bibliographic=Schaeffer+history+heuristic+1983+ICCA&rows=3 | FAILED (non-JSON reply) | 2026-10-24 | CPW/papers mining: none |
+| https://api.crossref.org/works?query.bibliographic=Birmingham+Kent+... | FAILED, then no relevant hit | 2026-10-24 | CPW/papers mining: none (Birmingham & Kent marked UNVERIFIED) |

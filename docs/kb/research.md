@@ -672,9 +672,11 @@ copy is linked.
 #### Anantharaman, Campbell & Hsu (1990): Singular Extensions
 - **Citation:** Thomas Anantharaman, Murray S. Campbell, Feng-hsiung Hsu,
   "Singular extensions", *Artificial Intelligence*, Vol. 43, No. 1,
-  pp. 99-109, April 1990. DOI 10.1016/0004-3702(90)90073-9. (The longer
-  title with the subtitle "Adding selectivity to brute-force searching" was
-  not shown on any opened page; see Unverified.)
+  pp. 99-109, April 1990. DOI 10.1016/0004-3702(90)90073-9. The subtitle
+  "Adding Selectivity to Brute-Force Searching" belongs to the earlier
+  version (AAAI Spring Symposium 1988; ICCA Journal 11(4), 1988, pp. 135-143
+  per Winands et al.'s reference list), shown on CPW's Singular Extensions
+  page (resolved 2026-10-24, search-techniques.md).
 - **Link:** https://doi.org/10.1016/0004-3702(90)90073-9 (publisher; access
   not checked).
 - **Summary:** A move is "singular" when it is clearly better than every
@@ -1026,8 +1028,8 @@ copy is linked.
   on the repo page (CPW separately lists a 2021 forum post "Translation of Yu
   Nasu's NNUE paper" by Dominik Klein, without linking it to that repo);
   license not stated.
-- **Anantharaman et al. subtitle** ("Adding selectivity to brute-force
-  searching") and **Slate & Atkin's book editor** (P. W. Frey): from common
-  usage, not shown on any opened page.
+- **Slate & Atkin's book editor** (P. W. Frey): from common usage, not
+  shown on any opened page. (The Anantharaman et al. subtitle was resolved
+  on 2026-10-24: it belongs to the 1988 version; see the entry above.)
 - **Licenses:** CLOP software license and Fishtest repository license were
   not found.
