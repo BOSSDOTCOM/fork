@@ -36,7 +36,7 @@ Status: **Phase 1 built; all presets green on Windows; Linux (WSL2) run pending.
 | Primary target | x86-64 Linux (TCEC's platform). The Linux working copy lives in the WSL2 filesystem at `~/fork`, never under `/mnt/c`. |
 | Second platform | Windows 11 (development host): LLVM-MinGW (UCRT) clang and WinLibs GCC, via winget. |
 | Compilers | Clang (primary) and GCC (secondary). Both must build with zero warnings under `-Wall -Wextra -Wpedantic -Wshadow -Werror`. |
-| Build | CMake (≥ 3.25) + Ninja, driven by `CMakePresets.json`. |
+| Build | CMake + Ninja. The floor is CMake 3.22 (Ubuntu 22.04, TCEC's servers); `CMakePresets.json` (needs 3.25) is a developer convenience. The TCEC build is `update.sh` (plain `cmake -B`, no presets). |
 | Language | C++20, standard library only, plus documented permissive libraries (e.g. Fathom in Phase 3). |
 | Line endings | LF everywhere (`.gitattributes`). |
 
@@ -52,10 +52,23 @@ any list of presets (`all` by default).
 | Preset | Arch flags | Slider lookup | Notes |
 |---|---|---|---|
 | `clang-debug`, `gcc-debug` | `-march=native` | PEXT if BMI2 | `-O1 -g`, asserts, ASan + UBSan. MinGW GCC has no sanitizer runtimes, so on Windows `gcc-debug` builds without them; on Linux both compilers sanitize. |
-| `clang-release`, `gcc-release` | `-march=native` | PEXT if BMI2 | `-O3`, LTO. |
+| `clang-release`, `gcc-release` | `-march=native` | PEXT if BMI2 | `-O3 -g`, LTO (where the toolchain can link it; probed with `CheckIPOSupported`). |
 | `clang-v3`, `gcc-v3` | `-march=x86-64-v3` (AVX2, BMI2) | PEXT | Portable modern build. |
 | `clang-avx512`, `gcc-avx512` | `-march=x86-64-v4` (AVX-512 F/BW/CD/DQ/VL) | PEXT | |
 | `clang-nopext`, `gcc-nopext` | `-march=x86-64-v3` | magics (`FORK_NO_PEXT`) | For CPUs with slow PEXT (AMD Zen 1/2). |
+
+**TCEC build (`update.sh`).** Builds the engine only (no tests, so no
+configure-time downloads), Release `-O3 -g`, with an explicit
+`FORK_ARCH` (default `x86-64-v3`; `native` is refused, because TCEC may
+build on one server and run on another CPU generation) and the first
+compiler found of `clang++-19`, `clang++-16`, `clang++`, `g++-12`, `g++`
+(or `CXX`). Inside a checkout it builds that tree; elsewhere it clones
+`FORK_REPO`. `scripts/check.sh full` builds it on TCEC's toolchain on every
+full check: a WSL distro with Ubuntu 22.04, gcc 11.4, g++-12, clang 16.0.6
+and 19.1.7 (from apt.llvm.org) and CMake 3.22.1, provisioned by
+`scripts/tcec-toolchain-setup.sh`; each compiler's binary must match
+`tests/bench.ref`. The repository URL for `FORK_REPO` is not decided yet
+(the GitHub repository does not exist): UNVERIFIED until it does.
 
 **PGO.** `cmake --build <dir> --target pgo` (or `scripts/pgo.sh` / `.ps1`) builds
 an instrumented release binary in `build/<compiler>-pgo`, runs `fork bench`,
@@ -404,8 +417,8 @@ de-facto standard names TCEC sets and must stay).
 
 #### Deliverables (one commit each)
 
-0. TCEC-toolchain build: `update.sh` and the Ubuntu 22.04 compiler check
-   (unless already done as a Phase 1 review fix).
+0. TCEC-toolchain build: `update.sh` and the Ubuntu 22.04 compiler check.
+   Done as Phase 1 review fix C1 (2026-10-24, §2 "TCEC build").
 1. `src/uci/`: input loop, output function, threads of control, commands.
 2. Option registry and options, including hash allocation and parallel
    clearing.
@@ -444,6 +457,7 @@ deferred tests and suspicions, and ORIGINALITY.md.
 | 2026-10-23 | **Release targets**: `-march=native`, x86-64-v3, x86-64-v4 (AVX-512), and a no-PEXT magics build, for each compiler; bench must match across all of them (automated `bench_parity`). |
 | 2026-10-23 | **Namespace `fork` renamed to `forkeng`** (owner): `fork` collided with POSIX `fork()` on Linux (section 8, naming conventions). Checked first: no match in Stockfish (shallow clone at effdc3f, 2026-10-17), the MinGW toolchains, glibc/libstdc++/clang headers, or exported libc/libstdc++/libm symbols. **`scripts/check.sh full` covers both platforms**: on Windows it also runs the Linux check in WSL on a copy of the working tree. |
 | 2026-10-24 | **Phase 2 spec approved** with the answers in §5.1; the Phase 1 review fixes come before Phase 2. **History rewritten** (owner): every commit's author and committer email replaced with the GitHub noreply address before the repo goes public (review L4); trees unchanged, all hashes changed. |
+| 2026-10-24 | **TCEC toolchain (review C1).** CMake floor 3.22, `std::format` replaced by `snprintf` (libstdc++ has `<format>` only from GCC 13), LTO probed with `CheckIPOSupported`, download timeouts (review M7), `update.sh`, and a required Ubuntu 22.04 leg in `scripts/check.sh full` (gcc 11.4, g++-12, clang 16, clang 19; bench parity with each). Before the fix the 22.04 build failed on the CMake floor and then on `<format>` with all four compilers; after it all four build with LTO and match bench. **`-g` in release builds** (owner): disassembly with and without `-g` is identical for clang (Windows, LTO) and identical in every shared function for gcc (MinGW static links three extra libgcc unwind helpers), so no speed effect is possible and no A/B was needed. `update.sh` defaults to `-march=x86-64-v3` until Phase 4 has SIMD code that benefits from x86-64-v4 (both TCEC servers are AVX-512 capable per the KB; revisit then). |
 
 ## 7. Performance doctrine (governs every phase)
 

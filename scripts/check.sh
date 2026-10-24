@@ -21,6 +21,15 @@
 # A Linux failure, or WSL being unavailable, fails the whole check.
 # FORK_SKIP_LINUX=1 skips the Linux part with a warning and records no pass.
 #
+# TCEC toolchain leg (also part of every full check on Windows): the same
+# tree is copied into a second WSL distro running Ubuntu 22.04 with TCEC's
+# compilers (FORK_TCEC_DISTRO, default Ubuntu-22.04; set up once with
+# scripts/tcec-toolchain-setup.sh), built there with update.sh using gcc 11.4,
+# g++-12, clang 16 and clang 19 in turn, and each binary's `fork bench` must
+# match tests/bench.ref. FORK_SKIP_TCEC=1 skips it with a warning and records
+# no pass. Run directly on Linux, `full` cannot reach the TCEC distro and
+# records no pass either.
+#
 # Passing `stop` and `full` runs are remembered by a fingerprint of the
 # content of every source, test and build file plus the check scripts
 # (tracked and untracked, non-ignored), not of the commit: docs-only commits
@@ -33,7 +42,7 @@ cd "$(dirname "$0")/.."
 
 mode=${1:-quick}
 code_paths=(src tests bench fuzz tools/magic_seeds.cpp cmake CMakeLists.txt CMakePresets.json
-            scripts/check.sh scripts/env.sh)
+            scripts/check.sh scripts/env.sh update.sh)
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 
@@ -107,7 +116,39 @@ linux_leg() {
     fail "Linux check in WSL ($distro, ~/fork-check)"
 }
 
+# Windows side: copy the working tree into the Ubuntu 22.04 distro and build
+# it there with TCEC's compilers.
+tcec_leg() {
+  local distro=${FORK_TCEC_DISTRO:-Ubuntu-22.04} list=build/.linux-check-files src
+  git ls-files -co --exclude-standard >"$list" || fail "listing the working tree for the TCEC build"
+  src=$(MSYS_NO_PATHCONV=1 wsl.exe -d "$distro" -u root -e wslpath -a "$(pwd -W)" 2>>"$log" | tr -d '\r') ||
+    fail "WSL distro $distro unavailable (see scripts/tcec-toolchain-setup.sh; FORK_SKIP_TCEC=1 to skip)"
+  [ -n "$src" ] || fail "WSL distro $distro unavailable (see scripts/tcec-toolchain-setup.sh; FORK_SKIP_TCEC=1 to skip)"
+  MSYS_NO_PATHCONV=1 wsl.exe -d "$distro" -u root -e bash "$src/scripts/check.sh" tcec-sync "$src" >>"$log" 2>&1 ||
+    fail "TCEC toolchain build in WSL ($distro, ~/fork-tcec)"
+}
+
 case "$mode" in
+  tcec-sync)  # internal, run inside the Ubuntu 22.04 distro by tcec_leg: $2 = Windows tree as a /mnt path
+    src=$2 dst=$HOME/fork-tcec
+    rm -rf "$dst" && mkdir -p "$dst"
+    (cd "$src" && tar -cf - -T build/.linux-check-files) | (cd "$dst" && tar -xf -) ||
+      { echo "copying the tree to $dst failed" >&2; exit 1; }
+    cd "$dst"
+    # compiler, and the version its `fork version` line must report
+    for pair in "g++:gcc 11.4." "g++-12:gcc 12." "clang++-16:clang 16." "clang++-19:clang 19."; do
+      cxx=${pair%%:*} want=${pair#*:}
+      echo "== TCEC build with $cxx"
+      out=$(CXX=$cxx bash ./update.sh 2>&1) || { echo "$out"; echo "update.sh failed with $cxx" >&2; exit 1; }
+      bin=$(echo "$out" | tail -n 1)
+      echo "$out" | grep -q "^compiler $want" ||
+        { echo "$out"; echo "$cxx is not the expected $want" >&2; exit 1; }
+      echo "$out" | grep -q -i 'LTO not supported' && echo "note: $cxx built without LTO"
+      "$bin" bench | head -n 2 >bench.out
+      diff bench.out tests/bench.ref || { echo "bench parity failed with $cxx" >&2; exit 1; }
+      echo "bench parity ok with $cxx"
+    done
+    ;;
   linux-sync)  # internal, run inside WSL by linux_leg: $2 = Windows tree as a /mnt path
     src=$2 dst=$HOME/fork-check
     mkdir -p "$dst"
@@ -156,6 +197,17 @@ case "$mode" in
       fi
       linux_leg
       platforms="$platforms; Linux (WSL): clang-release clang-debug gcc-release gcc-debug"
+      if [ "${FORK_SKIP_TCEC:-0}" = 1 ]; then
+        echo "fork check full: WARNING: TCEC toolchain build SKIPPED (FORK_SKIP_TCEC=1); no pass recorded" >&2
+        echo "fork check full: ok on $platforms; TCEC toolchain SKIPPED"
+        exit 0
+      fi
+      tcec_leg
+      platforms="$platforms; TCEC toolchain (Ubuntu 22.04): gcc 11.4, g++-12, clang 16, clang 19"
+    else
+      echo "fork check full: WARNING: TCEC toolchain build runs from Windows only; no pass recorded" >&2
+      echo "fork check full: ok on $platforms; TCEC toolchain not run"
+      exit 0
     fi
     echo "$fp" >"$stamp"
     echo "fork check full: ok ($platforms; bench parity included)"

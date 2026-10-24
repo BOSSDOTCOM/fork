@@ -2,8 +2,9 @@
 // The UCI loop arrives in Phase 2.
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
+#include <cstdio>
 #include <exception>
-#include <format>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -86,6 +87,14 @@ int difftest() {
   return 0;
 }
 
+// Zero-padded 16-digit hex. Not std::format: libstdc++ has <format> only from
+// GCC 13, and TCEC builds with gcc 11.4 and g++-12 (DESIGN.md §5.1).
+std::string hex16(std::uint64_t v) {
+  char buf[17];
+  std::snprintf(buf, sizeof buf, "%016llx", static_cast<unsigned long long>(v));
+  return buf;
+}
+
 int usage() {
   std::cerr << "usage: fork perft <depth> [fen]\n"
                "       fork divide <depth> [fen]\n"
@@ -131,7 +140,7 @@ static int run(int argc, char** argv) {
   if (cmd == "bench") {
     forkeng::BenchResult r = forkeng::bench();
     std::cout << "nodes " << r.nodes << '\n'
-              << "signature " << std::format("{:016x}", r.signature) << '\n'
+              << "signature " << hex16(r.signature) << '\n'
               << "nps "
               << static_cast<std::uint64_t>(static_cast<double>(r.nodes) / std::max(r.seconds, 1e-9)) << '\n';
     return 0;
@@ -141,7 +150,8 @@ static int run(int argc, char** argv) {
     forkeng::Position pos;
     if (!read_depth_and_position(argc, argv, depth, pos)) return usage();
     auto start = std::chrono::steady_clock::now();
-    std::uint64_t nodes = cmd == "perft" ? forkeng::perft(pos, depth) : forkeng::divide(pos, depth, std::cout);
+    std::uint64_t nodes =
+        cmd == "perft" ? forkeng::perft(pos, depth) : forkeng::divide(pos, depth, std::cout);
     double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     if (cmd == "perft") std::cout << "nodes " << nodes << '\n';
     std::cout << "time " << secs << " s\n"

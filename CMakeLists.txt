@@ -1,4 +1,7 @@
-cmake_minimum_required(VERSION 3.25)
+# 3.22 is Ubuntu 22.04's CMake, which TCEC's servers run (DESIGN.md §5.1).
+# CMakePresets.json needs 3.25 and is a developer convenience only; the TCEC
+# build (update.sh) configures without presets.
+cmake_minimum_required(VERSION 3.22)
 project(fork LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -19,7 +22,9 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+# -g: debug info in the optimized binary, as TCEC recommends (owner,
+# 2026-10-24); it does not change the generated code.
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "-O1 -g -fno-omit-frame-pointer -DFORK_DEBUG")
 
 # Flags shared by every Fork target.
@@ -59,8 +64,17 @@ if(MINGW AND NOT fork_sanitizing)
   target_link_options(fork_flags INTERFACE -static)
 endif()
 
+# LTO only where the toolchain can link it: clang without lld or the LLVMgold
+# plugin (a plain `apt install clang-16` on Ubuntu 22.04) cannot. Bench is
+# identical either way.
 if(FORK_LTO AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+  include(CheckIPOSupported)
+  check_ipo_supported(RESULT fork_ipo_ok OUTPUT fork_ipo_log LANGUAGES CXX)
+  if(fork_ipo_ok)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+  else()
+    message(WARNING "LTO not supported by this toolchain, building without it")
+  endif()
 endif()
 
 # PGO flags apply only to the engine (core + main), never to tests.
@@ -184,7 +198,8 @@ if(FORK_BUILD_TESTS)
       endif()
     endif()
     if(NOT EXISTS ${epd_file})
-      file(DOWNLOAD ${epd_url} ${epd_file} STATUS st)
+      # Timeouts so a stalled server cannot hang a plain configure.
+      file(DOWNLOAD ${epd_url} ${epd_file} STATUS st TIMEOUT 600 INACTIVITY_TIMEOUT 60)
       list(GET st 0 code)
       set(have "")
       if(code EQUAL 0)

@@ -25,6 +25,9 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
   `~/fork-tools/syzygy/3-4-5`, runners in `~/fork-tools/bin`
   (fastchess, cutechess-cli, ordo). Test scripts only.
 - `.claude/rules/`: area rules (C++ style, testing, SIMD).
+- TCEC toolchain: WSL distro `Ubuntu-22.04` (gcc 11.4, g++-12, clang 16/19,
+  CMake 3.22), set up by `scripts/tcec-toolchain-setup.sh`; runs as root.
+  CMake must stay at a 3.22 floor and the code within libstdc++ 11's C++20.
 
 ## Commands (Git Bash; source the env in every shell)
 
@@ -34,7 +37,9 @@ scripts/build.sh                              # all presets + PGO, summary table
 scripts/build.sh clang-release gcc-debug      # chosen presets
 scripts/check.sh quick                        # clang-release build + fast tests
 scripts/check.sh stop                         # Stop hook: clang-release, all non-slow tests; skipped if code unchanged
-scripts/check.sh full                         # Windows presets, then the same + gcc-debug on Linux (WSL)
+scripts/check.sh full                         # Windows presets, then the same + gcc-debug on Linux (WSL),
+                                              # then update.sh + bench with TCEC's 4 compilers (WSL Ubuntu-22.04)
+./update.sh                                   # TCEC build: build/tcec/fork (CXX, FORK_ARCH; never native)
 cmake --preset clang-release && cmake --build build/clang-release
 ctest --test-dir build/clang-release -LE slow --output-on-failure
 ctest --test-dir build/clang-release -L slow  # deep perft suites (minutes)
