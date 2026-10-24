@@ -11,6 +11,8 @@ python-chess. All were rewritten clean-room on 2026-10-24, as described in
 "Resemblances found in review, and the clean-room fixes" below. The earlier
 versions remain in the git history.
 
+Fork is licensed under GPL-3.0 (LICENSE, README.md).
+
 Entries are added when the reference or library is first used, with
 the date and the part of Fork it informed.
 
@@ -40,7 +42,7 @@ the date and the part of Fork it informed.
 | 2026-10-24 | Chess Programming Wiki: Looking for Magics, Magic Bitboards (fancy layout), Traversing Subsets of a Set, On an empty Board, Square Mapping Considerations, Square Attacked By ("In Between") | Ideas for the clean-room rewrite of the magic search, masks and between/line tables (`src/core/bitboard.cpp`). Pages opened by the research agent on 2026-10-24; the wiki was in a "temporary, read-only recovery" state. |
 | 2026-10-24 | Sebastiano Vigna, splitmix64.c (public domain), https://prng.di.unimi.it/splitmix64.c | The generator in `src/core/splitmix.hpp`, used for the Zobrist keys (since 2026-10-23) and the magic candidates (since 2026-10-24). Constants checked against the file on 2026-10-24. |
 | 2026-10-24 | Chess Programming Wiki: Checks and Pinned Pieces (Bitboards), X-ray Attacks (Bitboards), Pin, Discovered Check, Square Attacked By | Ideas for the clean-room rewrite of the check information (`Position::refresh_check_info`, `lone_shields`, `gives_check`). |
-| 2026-10-24 | Clean-room specification by the research agent (`build/cleanroom/spec.md`, untracked), derived from Fork's and Stockfish's source without code | The H2/M3/H3 rewrites (section "Resemblances found in review" below). |
+| 2026-10-24 | Clean-room specification by the research agent (`docs/history/phase-1/cleanroom-spec.md`), derived from Fork's and Stockfish's source without code | The H2/M3/H3 rewrites (section "Resemblances found in review" below). |
 | 2026-10-24 | Chess Programming Wiki: Encoding Moves, section "Two Positions with 218 Moves each" | The two 218-move FENs in tests/suite.hpp and tools/difftest/difftest.py (compared byte for byte on 2026-10-24). The other non-CPW FENs there were constructed for Fork; their perft counts come from python-chess. |
 | 2026-10-24 | apt.llvm.org (LLVM project's apt repository; signing key llvm-snapshot.gpg.key) | clang 16 and 19 for the Ubuntu 22.04 TCEC-toolchain check (scripts/tcec-toolchain-setup.sh). |
 | 2026-10-23 | Chess Programming Wiki: Chess960 Perft Results (960 positions, credited to Andrew Grant / Ethereal) | Read only, for the deferred Chess960 decision (DESIGN.md section 6); no data used. |
