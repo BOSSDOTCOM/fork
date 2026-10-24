@@ -90,6 +90,36 @@ current Stockfish; it was renamed anyway, at the owner's request.
 | `more_than_one` | `has_multiple` | old: 3, new: 0 |
 | `check_squares` | `checking_squares` | old: 3, new: 0 |
 | `key_after` | `predicted_key` | old: 0, new: 0 |
+| `SliderEntry::attacks`, `::index` | `::table`, `::table_index` | old: 9 / 11 (generic words, but the same members of the magic record), new: 0 (2026-10-24, review H2) |
+| `piece_on` | `piece_at` | old: 7, new: 0 |
+| `ep_square` | `ep_target` | old: 3, new: 0 |
+| `relative_rank` | `rank_from` | old: 3, new: 0 |
+| `make_piece` | `piece_of` | old: 6, new: 0 |
+| `color_of` | `side_of` | old: 6, new: 0 |
+| `type_of` | `kind_of` | old: 9, new: 0 |
+| `promotion_type` | `promo_type` | old: 4, new: 0 |
+| `generate_moves` (internal) | `fill_moves` | old: 1, new: 0 |
+| `st()` (private) | `ply_state()` | old: 8, new: 0 |
+| locals `capsq`, `kto`, `rto` | `cap_sq`, `king_to`, `rook_to` | old: 1 / 1 / 2, new: 0 |
+
+**Second pass (2026-10-24, review M4).** The research agent listed every
+identifier Fork declares in `src/` that also occurs in Stockfish's `src/`
+(effdc3fd), classified as generic or distinctive. The distinctive ones were
+renamed (the rows from `piece_on` down; new names checked with `grep -rlw`
+file counts only, and against the system headers of both toolchains for
+collisions). Kept, as generic vocabulary used by CPW and across engines:
+`side_to_move` (CPW page "Side to move"; 9 Stockfish files), `file_of`,
+`rank_of`, `make_square` (square-index helpers, CPW "Square Mapping
+Considerations"), `pieces()` and its overloads (piece bitboards),
+`checkers`, `pinned` (CPW "Pin"), `generate<GenMode>` (CPW "Move
+Generation"), `Move::raw`, `key`, `fen`, `count`, the type names `Bitboard`,
+`Square`, `Color`, `Piece`, `PieceType`, `Move`, `Key`, `MoveList`, and the
+names kept on 2026-10-23. Removed with the H3 rewrite: `pawn_key`,
+`material_key`, `non_pawn_key`, `blockers`, `pinners`, `checking_squares`.
+Gone with the H2/H3 rewrites: the locals `epoch`, `used_epoch`, `snipers`.
+Design-level matches that stay: the piece code colour * 8 + type (DESIGN.md
+§4.1; Fork's numbering differs), castling encoded internally as king origin
+to rook square (DESIGN.md §4.1), and the CPW move-flag nibble.
 
 ## Third-party libraries
 

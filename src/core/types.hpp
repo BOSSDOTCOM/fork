@@ -4,7 +4,7 @@
 // 16-bit Move encoding and the fixed-capacity MoveList.
 // Invariants:
 // - Square a1 = 0 ... h8 = 63; NoSquare = 64 is never used as a table index.
-// - Piece = color * 8 + type; NoPiece = 15. color_of/type_of are only valid
+// - Piece = color * 8 + type; NoPiece = 15. side_of/kind_of are only valid
 //   for real pieces.
 // - Move: from (bits 0-5), to (6-11), flag (12-15); raw 0 is NoMove. Castling
 //   is king origin -> castling rook square. Flags 3, 6 and 7 are never
@@ -36,7 +36,7 @@ constexpr Color operator~(Color c) { return static_cast<Color>(c ^ 1); }
 
 // Square seen from `c`'s side of the board (a1 <-> a8 for Black).
 constexpr Square relative(Color c, Square s) { return c == White ? s : s ^ 56; }
-constexpr int relative_rank(Color c, Square s) { return c == White ? rank_of(s) : 7 - rank_of(s); }
+constexpr int rank_from(Color c, Square s) { return c == White ? rank_of(s) : 7 - rank_of(s); }
 constexpr int forward(Color c) { return c == White ? 8 : -8; }
 
 enum PieceType : std::uint8_t { Pawn, Knight, Bishop, Rook, Queen, King, NoPieceType };
@@ -44,9 +44,9 @@ enum PieceType : std::uint8_t { Pawn, Knight, Bishop, Rook, Queen, King, NoPiece
 // Piece = color * 8 + type.
 using Piece = int;
 constexpr Piece NoPiece = 15;
-constexpr Piece make_piece(Color c, PieceType t) { return c * 8 + t; }
-constexpr Color color_of(Piece p) { return Color(p >> 3); }
-constexpr PieceType type_of(Piece p) { return PieceType(p & 7); }
+constexpr Piece piece_of(Color c, PieceType t) { return c * 8 + t; }
+constexpr Color side_of(Piece p) { return Color(p >> 3); }
+constexpr PieceType kind_of(Piece p) { return PieceType(p & 7); }
 
 // Castling rights bits.
 enum : std::uint8_t { WhiteOO = 1, WhiteOOO = 2, BlackOO = 4, BlackOOO = 8, AllCastling = 15 };
@@ -90,7 +90,7 @@ class Move {
   constexpr bool is_promotion() const { return flag() & 8; }
   constexpr bool is_castle() const { return flag() == Castle; }
   constexpr bool is_en_passant() const { return flag() == EnPassant; }
-  constexpr PieceType promotion_type() const { return PieceType(Knight + (flag() & 3)); }
+  constexpr PieceType promo_type() const { return PieceType(Knight + (flag() & 3)); }
 
   constexpr bool operator==(const Move&) const = default;
 

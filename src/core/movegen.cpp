@@ -40,7 +40,7 @@ void add_promotions(MoveList& list, Square from, Square to, bool capture) {
 // Fully legal generation (see DESIGN.md 4.6): check and pin masks instead of
 // make-and-test.
 template <bool Captures, bool Quiets>
-void generate_moves(const Position& pos, MoveList& list) {
+void fill_moves(const Position& pos, MoveList& list) {
   const Color us = pos.side_to_move(), them = ~us;
   const Square ksq = pos.king_square(us);
   const Bitboard occ = pos.pieces(), ours = pos.pieces(us), theirs = pos.pieces(them);
@@ -68,11 +68,11 @@ void generate_moves(const Position& pos, MoveList& list) {
   add_piece_moves<Queen, Captures, Quiets>(pos, list, us, ksq, occ, pinned, capture_target, quiet_target);
 
   const int up = forward(us);
-  const Square ep = pos.ep_square();
+  const Square ep = pos.ep_target();
   for (Bitboard pawns = pos.pieces(us, Pawn); pawns;) {
     Square from = pop_lsb(pawns);
     Bitboard allowed = (pinned & bb(from)) ? line(ksq, from) : ~Bitboard{0};
-    bool promotes = relative_rank(us, from) == 6;
+    bool promotes = rank_from(us, from) == 6;
 
     Square one = from + up;
     if (!(occ & bb(one))) {
@@ -85,7 +85,7 @@ void generate_moves(const Position& pos, MoveList& list) {
       }
       if constexpr (Quiets) {
         Square two = one + up;
-        if (relative_rank(us, from) == 1 && !(occ & bb(two)) && (allowed & target & bb(two)))
+        if (rank_from(us, from) == 1 && !(occ & bb(two)) && (allowed & target & bb(two)))
           list.add(Move(from, two, DoublePush));
       }
     }
@@ -101,9 +101,9 @@ void generate_moves(const Position& pos, MoveList& list) {
       // En passant: simulate the occupancy change and look for any attacker
       // other than the captured pawn. Covers checks, pins and rank discovery.
       if (ep != NoSquare && (pawn_attacks(us, from) & bb(ep))) {
-        Square capsq = ep - up;
-        Bitboard after = (occ ^ bb(from) ^ bb(capsq)) | bb(ep);
-        if (!(pos.attackers_to(ksq, after) & theirs & ~bb(capsq))) list.add(Move(from, ep, EnPassant));
+        Square cap_sq = ep - up;
+        Bitboard after = (occ ^ bb(from) ^ bb(cap_sq)) | bb(ep);
+        if (!(pos.attackers_to(ksq, after) & theirs & ~bb(cap_sq))) list.add(Move(from, ep, EnPassant));
       }
     }
   }
@@ -116,9 +116,9 @@ void generate_moves(const Position& pos, MoveList& list) {
       if (!(rights & right)) continue;
       Square rook = relative(us, side == 0 ? 7 : 0);
       if (between(ksq, rook) & occ) continue;
-      Square kto = Position::castle_king_to(ksq, rook);
+      Square king_to = Position::castle_king_to(ksq, rook);
       bool safe = true;
-      for (Bitboard path = between(ksq, kto) | bb(kto); path && safe;)
+      for (Bitboard path = between(ksq, king_to) | bb(king_to); path && safe;)
         safe = !pos.attacked_by(them, pop_lsb(path), occ);
       if (safe) list.add(Move(ksq, rook, Castle));
     }
@@ -129,15 +129,15 @@ void generate_moves(const Position& pos, MoveList& list) {
 
 template <>
 void generate<GenMode::Legal>(const Position& pos, MoveList& list) {
-  generate_moves<true, true>(pos, list);
+  fill_moves<true, true>(pos, list);
 }
 template <>
 void generate<GenMode::Captures>(const Position& pos, MoveList& list) {
-  generate_moves<true, false>(pos, list);
+  fill_moves<true, false>(pos, list);
 }
 template <>
 void generate<GenMode::Quiets>(const Position& pos, MoveList& list) {
-  generate_moves<false, true>(pos, list);
+  fill_moves<false, true>(pos, list);
 }
 
 }  // namespace forkeng

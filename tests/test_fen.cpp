@@ -82,38 +82,38 @@ TEST_CASE("zobrist_ep", "ep square counts only when a legal ep capture exists") 
   const char* no_capturer = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
   Position p;
   CHECK(p.set_fen(no_capturer));
-  CHECK_EQ(p.ep_square(), NoSquare);
+  CHECK_EQ(p.ep_target(), NoSquare);
   CHECK_EQ(p.key(), key_of("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"));
 
   // e5xf6 is legal: the ep square is kept and changes the key.
   const char* usable = "rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3";
   CHECK(p.set_fen(usable));
-  CHECK_EQ(p.ep_square(), 45);
+  CHECK_EQ(p.ep_target(), 45);
   CHECK(p.key() != key_of("rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 3"));
 
   // b5xc6 would expose the king on a5 to the rook on h5: unusable.
   const char* pinned = "8/8/8/KPp4r/8/8/8/7k w - c6 0 1";
   CHECK(p.set_fen(pinned));
-  CHECK_EQ(p.ep_square(), NoSquare);
+  CHECK_EQ(p.ep_target(), NoSquare);
   CHECK_EQ(p.key(), key_of("8/8/8/KPp4r/8/8/8/7k w - - 0 1"));
 
   // e5 is pinned on the b8-h2 diagonal, but e5xd6 stays on it: usable.
   CHECK(p.set_fen("1b5k/8/8/3pP3/8/8/7K/8 w - d6 0 1"));
-  CHECK_EQ(p.ep_square(), 43);
+  CHECK_EQ(p.ep_target(), 43);
 
   // e5 is pinned on the a1-h8 diagonal and e5xd6 leaves it: unusable.
   CHECK(p.set_fen("k6b/8/8/3pP3/8/8/8/K7 w - d6 0 1"));
-  CHECK_EQ(p.ep_square(), NoSquare);
+  CHECK_EQ(p.ep_target(), NoSquare);
   CHECK_EQ(p.key(), key_of("k6b/8/8/3pP3/8/8/8/K7 w - - 0 1"));
 }
 
 TEST_CASE("zobrist_ep", "make sets the ep square under the same rule") {
   Position p;
   p.make(p.parse_uci("e2e4"));
-  CHECK_EQ(p.ep_square(), NoSquare);
+  CHECK_EQ(p.ep_target(), NoSquare);
   CHECK_EQ(p.key(), key_of("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"));
   for (const char* mv : {"a7a6", "e4e5", "d7d5"}) p.make(p.parse_uci(mv));
-  CHECK_EQ(p.ep_square(), 43);  // d6
+  CHECK_EQ(p.ep_target(), 43);  // d6
   CHECK_EQ(p.fen(), std::string("rnbqkbnr/1pp1pppp/p7/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3"));
   CHECK_EQ(p.key(), p.compute_state().key);
 }

@@ -59,7 +59,7 @@ class Position {
   std::string fen() const;
 
   Color side_to_move() const { return side_; }
-  Piece piece_on(Square s) const { return static_cast<Piece>(board_[s]); }
+  Piece piece_at(Square s) const { return static_cast<Piece>(board_[s]); }
   Bitboard pieces() const { return by_color_[White] | by_color_[Black]; }
   Bitboard pieces(Color c) const { return by_color_[c]; }
   Bitboard pieces(PieceType t) const { return by_type_[t]; }
@@ -72,7 +72,7 @@ class Position {
 
   const State& state() const { return states_.back(); }
   int castling_rights() const { return state().castling; }
-  Square ep_square() const { return state().ep; }
+  Square ep_target() const { return state().ep; }
   int halfmove_clock() const { return state().halfmove; }
   int fullmove_number() const { return fullmove_; }
   Key key() const { return state().key; }
@@ -122,7 +122,7 @@ class Position {
   }
 
  private:
-  State& st() { return states_.back(); }
+  State& ply_state() { return states_.back(); }
   void clear();
   void put(Piece p, Square s);
   void remove(Square s);
