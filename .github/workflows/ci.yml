@@ -1,12 +1,28 @@
-# Fork CI: on every push, build from a clean clone on TCEC's toolchain
+# Fork CI: build from a clean clone on TCEC's toolchain
 # (Ubuntu 22.04: gcc 11.4, g++-12, clang 16, clang 19, CMake 3.22) and on
 # current Ubuntu, run the fast tests and check bench parity.
 # The local equivalent is scripts/check.sh full (CLAUDE.md).
+#
+# Actions minutes are limited for private repos, so (owner, 2026-10-24):
+# only pushes to main and pull requests run it (never kb, which holds docs
+# and tools only); docs-only changes are skipped; a newer push cancels the
+# run it supersedes; apt downloads in the TCEC container are cached.
 name: ci
 
 on:
   push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '*.md'
+      - 'LICENSE'
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - '*.md'
+      - 'LICENSE'
   workflow_dispatch:
 
 permissions:
@@ -30,6 +46,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Keep downloaded packages for the cache
+        # The ubuntu image deletes .deb files after every install.
+        run: rm -f /etc/apt/apt.conf.d/docker-clean
+      - name: Cache apt downloads (clang 16/19, g++-12, cmake)
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: apt-jammy-${{ hashFiles('scripts/tcec-toolchain-setup.sh') }}
       - name: Provision TCEC's compilers
         run: bash scripts/tcec-toolchain-setup.sh
       - name: update.sh and bench parity with each compiler
