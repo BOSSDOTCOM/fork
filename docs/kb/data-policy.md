@@ -87,6 +87,13 @@ not changed here; the Phase 4 spec session copies them over.
      Phase 4.
    - Phase 4 plans around a **compact data format** (a few bytes per
      position, binpack-like) regardless.
+   - **Storage** (owner, later on 2026-10-24):
+     - Kaggle Datasets holds the only copy of the training data, with no
+       archive copies.
+     - Local shards are deleted after the Kaggle hash check passes.
+     - Each net and its data manifests go to GitHub Releases.
+     - Accepted risk: lost data means regeneration.
+     - Details: training-data.md §2.2.
 4. **Lichess puzzles** are allowed as a **diagnostic report only**:
    - never a tuning target;
    - never an acceptance or SPRT gate;

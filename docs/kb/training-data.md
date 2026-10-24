@@ -506,6 +506,7 @@ Other facts that shape the design:
      with the local manifest.
    - Only a full match deletes the local shards. On a mismatch the batch
      is re-uploaded as a new dataset.
+   - After deletion Kaggle holds the only copy (owner decision below).
 5. **Quota.**
    - 200 GB of private datasets is about 60-70 billion positions at about
      3 B each (*estimate*). That is far beyond the review gate's 2
@@ -520,20 +521,29 @@ Other facts that shape the design:
    - Finished nets are downloaded with the CLI, and their hashes go into
      the training-data log.
 
-**Two consequences to decide on (owner)**
+**Decision (owner, 2026-10-24): no archive copies.**
 
-- **Deleting local shards leaves Kaggle holding the only copy.** Rescoring
-  old data with a newer Fork net (A+) runs locally, so it needs a
-  re-download first. Downloads are usually faster than uploads, but Kaggle
-  could delete the data or lock the account. Options:
-  - keep an archive copy on the external SSD (compact data is small:
-    2 billion positions is about 6 GB);
-  - add an off-site copy on B2 (cheapest; about $0.70/month per 100 GB,
-    with caps);
-  - accept a single copy.
+- Kaggle Datasets holds the **only** copy of the training data.
+- Local shards are deleted as soon as the Kaggle hash check (step 4)
+  passes.
+- No SSD archive and no B2, R2 or Hugging Face copy.
+- **Nets and manifests go to GitHub Releases.** Each trained net, with
+  the data manifests of every batch it was trained on (shard SHA-256s,
+  position counts, generator commit, net hash, settings), is attached to
+  a GitHub Release of Fork's repository.
+  - These are small files, so the nets and their full provenance survive
+    even if the data does not.
+  - Manifests must follow the public-identity rules: no user-name paths
+    or personal data, because the repository becomes public for TCEC.
+- **Accepted risk:** if Kaggle deletes the data or the account is
+  locked, the data is lost and must be **regenerated** by self-play. The
+  nets and their provenance stay in GitHub Releases.
+- **Consequence for rescoring:** rescoring old data with a newer Fork net
+  (part of A+) runs locally, so it starts with a download from Kaggle and
+  ends with a new upload of the rescored batch as a new dataset.
 
-  Recommendation: keep the archive on the SSD and add no paid store,
-  since the compact data volume is small.
+**Other stores are not needed for training.**
+
 - **Hugging Face, B2 and R2 are not needed for training.** Kaggle's
   mounted datasets beat any download-into-session store. Keep them in
   reserve:
