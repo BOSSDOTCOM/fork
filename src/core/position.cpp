@@ -584,26 +584,52 @@ int Position::repetition_count() const {
   return count;
 }
 
-bool Position::has_insufficient_material(Color c) const {
-  // Material-only test (piece placement ignored): c can never deliver mate.
-  if (pieces(c) & (pieces(Pawn) | pieces(Rook) | pieces(Queen))) return false;
-  if (pieces(c, Knight)) {
-    // A lone knight, and the opponent has nothing but king and queens (any
-    // other enemy piece could block its own king into a mate).
-    return popcount(pieces(c)) <= 2 && !(pieces(~c) & ~pieces(King) & ~pieces(Queen));
+bool Position::cannot_mate(Color c) const {
+  // Sort this side's army (king aside) into one of four kinds, then decide
+  // from that kind and what else stands on the board.
+  enum class Army { KingAlone, OneKnight, BishopsOnly, Mating };
+
+  const Bitboard kings = by_type_[King];
+  const Bitboard army = by_color_[c] & ~kings;
+  const Bitboard knights = army & by_type_[Knight];
+  const Bitboard bishops = army & by_type_[Bishop];
+
+  Army kind = Army::Mating;
+  if (army == 0)
+    kind = Army::KingAlone;
+  else if (army == knights && !has_multiple(knights))
+    kind = Army::OneKnight;
+  else if (army == bishops)
+    kind = Army::BishopsOnly;
+
+  switch (kind) {
+    case Army::KingAlone:
+      return true;
+    case Army::OneKnight: {
+      // A lone knight counts as unable to mate unless the defender owns a
+      // pawn, knight, bishop or rook besides its king; a defender with only
+      // queens (or nothing at all) does not change that (DESIGN.md 4.5).
+      const Bitboard helpers = by_color_[~c] & ~kings & ~by_type_[Queen];
+      return helpers == 0;
+    }
+    case Army::BishopsOnly: {
+      // Bishops that all share one square colour, with no pawn or knight
+      // anywhere that could block a flight square of the other colour.
+      if (by_type_[Pawn] | by_type_[Knight]) return false;
+      const Bitboard all_bishops = by_type_[Bishop];
+      const bool on_dark = (all_bishops & DarkSquares) != 0;
+      const bool on_light = (all_bishops & ~DarkSquares) != 0;
+      return !(on_dark && on_light);
+    }
+    case Army::Mating:
+      break;
   }
-  if (pieces(c, Bishop)) {
-    // Bishops only, all bishops on the board on one square color, and no
-    // pawns or knights anywhere.
-    Bitboard bishops = pieces(Bishop);
-    bool one_color = !(bishops & DarkSquares) || !(bishops & ~DarkSquares);
-    return one_color && !pieces(Pawn) && !pieces(Knight);
-  }
-  return true;  // bare king
+  return false;
 }
 
 bool Position::insufficient_material() const {
-  return has_insufficient_material(White) && has_insufficient_material(Black);
+  // A draw by material only when neither side has material that could mate.
+  return cannot_mate(White) && cannot_mate(Black);
 }
 
 std::string Position::move_to_uci(Move m) const {

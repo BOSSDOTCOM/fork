@@ -29,7 +29,7 @@ the date and the part of Fork it informed.
 | 2026-10-23 | Chess Programming Wiki: Perft Results, re-read to check every suite FEN and count character by character | Test oracles in tests/suite.hpp. The page is the source of record; position 6 was first entered from memory without the black bishop on g4 and corrected from the page. |
 | 2026-10-23 | perftsuite.epd (126 positions; the Roce suite by Roman Hartmann, published on Jonatan Pettersson's Mediocre perft guide, mediocrechess.sourceforge.net/guides/perft.html; file from the 2007-12-02 Internet Archive capture of hem.passagen.se/maragor/perftsuite.epd) | Test oracle (perft_epd). Downloaded at configure time into .cache/ with a pinned SHA-256, **not committed**. |
 | 2026-10-23 | perft-random.epd (6838 positions, Marcel van Kervinck / Rookie, "All rights reserved"; Internet Archive capture of marcelk.net linked from CPW Perft Results) | Test oracle (perft_epd, perft_epd_deep, perft_epd_full). Downloaded at configure time, pinned SHA-256, **not committed** because of the copyright notice. |
-| 2026-10-23 | python-chess 1.11.2 source (`has_insufficient_material`, `is_repetition`, `is_irreversible`, `_transposition_key`, `fen`) | Read to match the oracle's rule definitions in tools/difftest. Fork's `insufficient_material()` and `repetition_count()` are written independently in C++ to the same rules. |
+| 2026-10-23 | python-chess 1.11.2 source (`has_insufficient_material`, `is_repetition`, `is_irreversible`, `_transposition_key`, `fen`) | Read to match the oracle's rule definitions in tools/difftest. This entry first said Fork's `insufficient_material()` and `repetition_count()` were written independently to the same rules. For `insufficient_material` that was not true: the 2026-10-24 six-engine originality check found Fork's version to be a near-translation of python-chess's (GPL-3.0) function, in structure and conditions. It was replaced on 2026-10-24 by a clean-room rewrite (section "Resemblance to Stockfish" below). |
 | 2026-10-23 | Stockfish design (recalled from prior study, source not opened in that session): per-ply state record holding checkers, blockers/pinners per king and check squares; `gives_check` via check squares plus discovered-check blockers; a key-after-move helper (Stockfish: `key_after`) for TT prefetch | Used for Position::State, gives_check and predicted_key on 2026-10-23. The review found the resulting State and check computation too close to Stockfish; both were replaced on 2026-10-24 (section "Resemblance to Stockfish" below). `predicted_key` (renamed from `key_after`) remains: computing the key after a move without making it is a generic idea, and Fork's function was not flagged. |
 | 2026-10-24 | Chess Programming Wiki: Looking for Magics, Magic Bitboards (fancy layout), Traversing Subsets of a Set, On an empty Board, Square Mapping Considerations, Square Attacked By ("In Between") | Ideas for the clean-room rewrite of the magic search, masks and between/line tables (`src/core/bitboard.cpp`). Pages opened by the research agent on 2026-10-24; the wiki was in a "temporary, read-only recovery" state. |
 | 2026-10-24 | Sebastiano Vigna, splitmix64.c (public domain), https://prng.di.unimi.it/splitmix64.c | The generator in `src/core/splitmix.hpp`, used for the Zobrist keys (since 2026-10-23) and the magic candidates (since 2026-10-24). Constants checked against the file on 2026-10-24. |
@@ -79,6 +79,20 @@ The fix was a clean-room rewrite on 2026-10-24:
 The earlier versions remain visible in the public git history (commits
 before 2026-10-24).
 
+**Comparison with six more engines** (2026-10-24, originality-checker, all
+of `src/` plus the tools, review suspicion 8): Ethereal 0e47e9b6, Berserk
+32628515, Obsidian 720614a6, Caissa 324f1f90, Reckless 69aea908, Viridithas
+b407e3eb. One high finding (insufficient material, from python-chess; see
+the table) and low ones, all applied: `castle_king_to`/`castle_rook_to`
+(Ethereal's helper pair) became one `castle_landing`; movegen uses the
+shared `occupancy_after_ep`; an ep-aware `capture_square` replaced three
+copies of the same ternary; `*_attacks_slow` became `*_attacks_by_walk`.
+Judged textbook or rules-forced: the legal-movegen outline (king moves,
+double-check exit, evasion target; CPW), `attackers_to`, the carry-rippler
+in `tools/dump_tables.cpp`, castling keys as the XOR of per-right keys, FEN
+layout, perft bulk counting. Fork's Zobrist keys share no value with
+Reckless's splitmix-derived table.
+
 **Independent check of the result** (2026-10-24, originality-checker agent,
 which compared the new code with Stockfish effdc3fd and spot-checked
 Ethereal and Berserk): no high-severity resemblance. Its medium and low
@@ -98,6 +112,7 @@ sizes 102400 / 5248, which follow from the mask definition.
 |---|---|
 | Magic search and slider tables (review H2) | Rewritten: masks by walking rays to one square before the edge; occupancies indexed by depositing an index's bits into the mask; candidates from Fork's splitmix64 stream (the AND of three words, the sparse-candidate idea of CPW "Looking for Magics") checked in a scratch table that is copied out only for a winner; no pre-filter, no stamp table. Per-square seeds regenerated with `tools/magic_seeds.cpp`. Lookup record members renamed (`attacks` → `table`, `index` → `table_index`). |
 | Check information and the per-ply State (review H3) | Rewritten from CPW's x-ray formulation: one helper finds the pieces that are the only piece between a king and a slider, used once per king (own king: pinned pieces; enemy king: discovered-check candidates). Direct checks are computed on demand in `gives_check` instead of an eager per-type table. The State holds only what Fork's code reads, ordered by how `make` treats each field; the unused pawn, material and non-pawn keys, `pinners` and the material-key Zobrist table were removed. Bench unchanged (the material table was the last one generated, so no other key moved). One lapse: a grep for the fields' consumers printed six lines of the old routine body (its pinners update and check-squares assignments) before the output was filtered; the replacement does neither. |
+| Insufficient material (six-engine check, 2026-10-24) | Not a Stockfish finding: the function was derived from python-chess 1.11.2 (GPL-3.0), which Viridithas also follows. Rewritten clean-room by a separate agent that did not open python-chess, any engine source, or the old function bodies, from a prose rule statement now in DESIGN.md §4.5: the side's non-king material is classified (king alone, one knight, bishops only, mating material) and the verdict follows from that class and board-wide facts. One lapse: the agent's first grep printed two lines of the old bodies (the bishop square-colour test and the both-sides wrapper); its bishop test is written differently. Checks: a new sweep over 784 small material signatures, difftest against python-chess (211,273 positions, 0 mismatches) and the Syzygy WDL tool (173,851 positions, 0 failures). The earlier version is in the git history before 2026-10-24. |
 | `between`/`line` tables (review M3) | Rewritten by walking each of the eight directions from every square: the squares passed so far are `between`, and the ray pair through the square is `line`. No slider attack sets are used. A new exhaustive test checks both against plane geometry on (file, rank) coordinates. |
 
 ## Identifier renames (distance from Stockfish naming)

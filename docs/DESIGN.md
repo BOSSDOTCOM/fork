@@ -210,10 +210,14 @@ key(p)`.
 - **Draw rules** (the same definitions as python-chess, which difftest
   compares against): `fifty_move_reached()` is a halfmove clock of 100 or
   more (search must check mate first); `insufficient_material()` holds
-  when neither side can ever deliver mate on material alone (a lone knight
-  against only king and queens, or bishops all on one square colour with no
-  pawns or knights on the board; python-chess's per-side rule applied to
-  both sides); `repetition_count()` counts earlier occurrences of the
+  when neither side can mate on material alone. A side cannot mate when it
+  has only its king; or only its king and one knight while the enemy has
+  nothing but its king and queens; or only bishops besides its king, with
+  every bishop on the board on one square colour and no pawn or knight on
+  the board. This gives the same verdicts as python-chess (difftest), and
+  Syzygy WDL confirms a side the rule rejects never wins
+  (`tools/syzygy_insufficient.py`). Implemented as `cannot_mate(Color)`,
+  written clean-room from this statement on 2026-10-24; `repetition_count()` counts earlier occurrences of the
   current key with the same side to move, looking back no further than the
   halfmove clock and the last null move: positions before a null move, and
   the position the null move creates, are not part of the game (review M2).

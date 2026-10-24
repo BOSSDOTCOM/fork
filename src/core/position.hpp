@@ -141,7 +141,8 @@ class Position {
   void refresh_check_info(State& s) const;  // checkers, pinned, discoverers
   Bitboard lone_shields(Square king, Bitboard shields, Bitboard rook_sliders, Bitboard bishop_sliders) const;
   bool ep_capture_legal(Square ep) const;  // for the side to move
-  bool has_insufficient_material(Color c) const;
+  // True when material alone rules out a mate by side c (DESIGN.md 4.5).
+  bool cannot_mate(Color c) const;
   void finish_setup();  // state from scratch after board setup
 
   // States reserved up front; make() grows the stack only beyond this.
