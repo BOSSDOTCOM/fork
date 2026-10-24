@@ -9,7 +9,7 @@ if(DEFINED CMAKE_CXX_COMPILER AND CMAKE_CXX_COMPILER STREQUAL "")
   message(FATAL_ERROR "CMAKE_CXX_COMPILER is empty: source scripts/env.sh (or scripts/env.ps1) "
                       "before using the presets, or pass -DCMAKE_CXX_COMPILER=<compiler>")
 endif()
-# The semver in `id name` (DESIGN.md ง5.1): 0.<phase>.0 until the first release.
+# The semver in `id name` (DESIGN.md ยง5.1): 0.<phase>.0 until the first release.
 project(fork VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -116,7 +116,9 @@ find_package(Threads REQUIRED)
 
 # The UCI front end (src/uci/): protocol loop, options, placeholder search.
 add_library(forkuci STATIC
+  src/search/hash_memory.cpp
   src/uci/go_limits.cpp
+  src/uci/options.cpp
   src/uci/output.cpp
   src/uci/placeholder.cpp
   src/uci/session.cpp
@@ -219,7 +221,8 @@ if(FORK_BUILD_TESTS)
     tests/test_epd.cpp
     tests/test_draws.cpp
     tests/engine_process.cpp
-    tests/test_uci.cpp)
+    tests/test_uci.cpp
+    tests/test_options.cpp)
   target_link_libraries(fork_tests PRIVATE forkuci)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
@@ -260,7 +263,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
   foreach(suite magics fen zobrist_ep draws perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                uci_protocol)
+                uci_protocol uci_options)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")

@@ -392,7 +392,7 @@ Its only job is to make the protocol testable; it is deleted in Phase 3.
 
 | Option | Type, default, range | TCEC relevance |
 |---|---|---|
-| `Hash` | spin, MB, default 16, min 1, max 33554432 (32 TiB) | TCEC sets `Hash=262144` (256 GiB) and caps hash at 32 or 64 GiB unless initialization is multithreaded. Size math in `std::size_t` bytes, no 32-bit overflow. `setoption` only records the size; the table is allocated and cleared at the next `isready`, `ucinewgame` or `go`, after every option has been applied, because a GUI may send `Hash` before `Threads` and a clear started on `setoption Hash` would run on one thread (review M5, 2026-10-23). Allocated as one aligned block (or in chunks if allocation fails), first-touch cleared **in parallel** with `max(Threads, hardware threads)` workers, before `readyok`. Allocation failure keeps the old table and reports `info string`, never aborts. `madvise(MADV_HUGEPAGE)` where available, but no dependence on large pages (TCEC enables them automatically). Phase 2 allocates and clears the table; Phase 3 uses it. |
+| `Hash` | spin, MB, default 16, min 1, max 33554432 (32 TiB) | TCEC sets `Hash=262144` (256 GiB) and caps hash at 32 or 64 GiB unless initialization is multithreaded. Size math in `std::size_t` bytes, no 32-bit overflow. `setoption` only records the size; the table is allocated and cleared at the next `isready`, `ucinewgame` or `go`, after every option has been applied, because a GUI may send `Hash` before `Threads` and a clear started on `setoption Hash` would run on one thread (review M5, 2026-10-23). Allocated as **one block straight from the OS** (`mmap`, 2 MiB aligned, on Linux; `VirtualAlloc` on Windows), first-touch cleared **in parallel** with `max(Threads, hardware threads)` workers (but at least 2 MiB per worker), before `readyok`. **No chunked fallback** (owner, 2026-10-24, amending the approved spec): Linux's default overcommit checks each `mmap` against RAM + swap on its own, so chunks would slip past that check and the clear would then bring in the OOM killer; Windows' commit limit is cumulative, so chunks gain nothing there either. **Before allocating, the request is compared with the physical memory available now** (`MemAvailable` from `/proc/meminfo`; `ullAvailPhys` from `GlobalMemoryStatusEx`) plus the current table, which is freed first when both do not fit; a request that does not fit is never tried. If the size cannot be had, the table falls back to its previous size (else 1 MB) and `info string` says so; never an abort. `madvise(MADV_HUGEPAGE)` on Linux, but no dependence on large pages (TCEC enables them automatically). Tests: a 1 TB request and one just above available memory both fall back cleanly on Windows and Linux. Phase 2 allocates and clears the table; Phase 3 uses it. |
 | `Clear Hash` | button | Clears the table (also in parallel). |
 | `Threads` | spin, default 1, min 1, max 1024 | TCEC sets 512 (two sockets). Phase 2 stores it and uses it for hash clearing; Phase 6 uses it for search, NUMA-aware. |
 | `Move Overhead` | spin, ms, default 100, min 0, max 5000 | Time reserved per move for GUI and system latency; TCEC leaves options at default unless the author asks, so the default must already be safe at 30'+3". Name with a space (owner, 2026-10-24: the conventional spelling across engines); TCEC's recommended value is a Discord question (docs/kb/competition.md). Used by Phase 5. |
@@ -466,6 +466,37 @@ de-facto standard names TCEC sets and must stay).
    (results recorded), sanitizers, all presets on both platforms, summary,
    stop.
 
+#### Implementation notes (2026-10-24)
+
+Choices made while building, where the spec leaves a gap:
+
+- **Files.** `src/uci/session.*` (loop, commands, search thread),
+  `options.*` (option table), `go_limits.*` (`go` parser), `output.*`
+  (the one output path and the LogFile), `tokens.hpp`, `placeholder.*`
+  (deleted in Phase 3), `version.cpp`; `src/search/hash_memory.*` holds the
+  table memory that Phase 3's TT will use.
+- **A command that arrives during a search** and changes what the search
+  depends on (`position`, `ucinewgame`, `setoption`, `go`, `bench`,
+  `go perft`) first stops and joins the search, as if `stop` had come
+  first; its `bestmove` is printed before the command takes effect. GUIs
+  never do this (the spec says `setoption` only comes while idle), but it
+  keeps "one `bestmove` per `go`" and stops the state from changing under
+  a search. `isready`, `stop`, `ponderhit`, `quit` and `d` do not stop it.
+- **`isready` while idle** first joins a finished search thread and does
+  the pending Hash work, so `readyok` means that work is done.
+- **Fork extensions print only `info string` lines**, so every line on
+  stdout in UCI mode is a valid engine-to-GUI message (the tests check
+  each line).
+- **`searchmoves` with no legal move in it** (python-chess sends
+  `searchmoves 0000` for an empty list) searches every move, with an
+  `info string`, rather than returning no move.
+- **The Hash allocation is reported** as `info string Hash <N> MB
+  allocated and cleared in <ms> ms by <W> threads` when it happens (first
+  `isready`/`ucinewgame`/`go`, and after a Hash change); clears report
+  nothing.
+- **Unknown leading tokens are skipped** (`xyzzy isready` answers
+  `readyok`), as the spec's `debug on` example describes.
+
 #### Owner's answers (2026-10-24)
 
 1. Option names: `Move Overhead` (with a space, conventional across
@@ -499,6 +530,7 @@ deferred tests and suspicions, and ORIGINALITY.md.
 | 2026-10-24 | **Clean-room rewrites (review H2, M3, H3).** Magic search, masks, leaper and between/line tables rewritten by walking rays (no slider attack sets for between/line); candidates from the shared splitmix64 stream. State reduced to the fields Fork reads (key, castling, ep, halfmove, checkers, pinned, discoverers, captured: 56 bytes, was about 144); pins and discovered-check candidates by one x-ray computation per king; direct checks computed on demand in `gives_check`; pawn, material and non-pawn keys, `pinners` and the per-type check squares removed (no consumer; Phase 3 adds what search needs, designed then). bench/ab.py, 6 rounds, clang / gcc: make/unmake -16% / -16%, perft bench -7% / -5%, gives_check +76% / +76% (2.96 -> 5.21 ns clang); no-PEXT startup 1.02 -> 1.37 ms. Bench unchanged. Details: docs/ORIGINALITY.md. |
 | 2026-10-24 | **Phase 1 review: deferred tests and suspicions resolved.** Deferred tests 1-2 (counter overflow, null-move repetition, copy allocation) were added with their fixes, each shown failing first (L1, M2, M1); test 3 (INT_MAX FEN from the CLI) is now rejected in clang-debug; test 4 (Ubuntu 22.04 build) failed as predicted, then passes (C1); test 5 (presets without env.sh) failed loudly with a generic message, now with a clear one; test 6 (MoveList bound) is replaced by a proof: promoted material needs missing pawns, so no position exceeds 323 pseudo-legal moves, and MoveList holds 323; test 7 (after the rewrites): check.sh full on every commit, slow suites and all presets at the end. Suspicions: 1 fixed as test 6; 2 as test 5; 3 resolved, gcc 11.4, g++-12, clang 16 and 19 all build with LTO and -Werror; 4 resolved, update.sh refuses -march=native; 5 resolved by M1 (copies reserve 1024 plies); 6 resolved, Syzygy WDL agrees on 434,763 positions (WDL cannot judge helpmates); 7 resolved against change, a fixed array instead of the vector measured make/unmake +2% (n.s.) and null move +11% slower (bench/ab.py, clang), and made Position about 128 KB, which overflowed the stack in a test; 8 resolved, six more engines compared (docs/ORIGINALITY.md), one high finding (insufficient material, from python-chess) rewritten clean-room. |
 | 2026-10-24 | **Licence: GPL-3.0 (owner)**, stated in README.md as GPL-3.0-or-later (owner, 2026-10-24; first written as GPL-3.0-only), with the full text from gnu.org in LICENSE (review H1). The full history is kept, so the earlier Stockfish-like code and the python-chess-derived function (both from GPL-3.0 sources) stay licence-compatible. **History rewritten a second time** (owner): user-name paths in file contents and messages became `C:\Users\<user>\`, `/mnt/c/Users/<user>/` and `~/`; the tip trees of main and kb were unchanged, every hash changed. README.md covers the clean-clone build and the AI-assistance disclosure. `update.sh` also builds with make when Ninja is missing (tested in the Ubuntu 22.04 distro). |
+| 2026-10-24 | **Hash memory: one block, checked against available memory (owner, amending §5.1).** The chunked fallback was dropped: Linux overcommit checks each mmap alone, so chunks would pass where the whole table is refused and the parallel clear would then trigger the OOM killer. Requests are compared with the physical memory available (plus the current table) before allocating; a refusal falls back to the previous size, else 1 MB, with `info string`. Transparent huge pages requested with `madvise`. Tested with a 1 TB request and one just above available memory, on Windows and Linux. |
 
 ## 7. Performance doctrine (governs every phase)
 

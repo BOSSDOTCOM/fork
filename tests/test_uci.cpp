@@ -12,6 +12,8 @@
 //   start placement: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4000 2001
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -21,6 +23,7 @@
 #include "core/position.hpp"
 #include "engine_process.hpp"
 #include "harness.hpp"
+#include "search/hash_memory.hpp"
 #include "uci/tokens.hpp"
 
 namespace forkeng::test {
@@ -143,10 +146,19 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
   g.send("uci");
   CHECK(g.next("uciok").has_value());
   const std::vector<std::string> out = g.texts();
-  CHECK(out.size() >= 3);
-  if (out.size() >= 3) {
+  const std::vector<std::string> options = {
+      "option name Hash type spin default 16 min 1 max 33554432",
+      "option name Clear Hash type button",
+      "option name Threads type spin default 1 min 1 max 1024",
+      "option name Move Overhead type spin default 100 min 0 max 5000",
+      "option name SyzygyPath type string default <empty>",
+      "option name LogFile type string default <empty>",
+  };
+  CHECK_EQ(out.size(), options.size() + 3);
+  if (out.size() == options.size() + 3) {
     CHECK_MSG(starts_with(out[0], "id name Fork 0."), out[0]);
     CHECK_EQ(out[1], std::string("id author BOSSDOTCOM"));
+    for (std::size_t i = 0; i < options.size(); ++i) CHECK_EQ(out[2 + i], options[i]);
     CHECK_EQ(out.back(), std::string("uciok"));
   }
   g.check_transcript();
@@ -171,11 +183,13 @@ TEST_CASE("uci_protocol", "isready while idle and during go infinite; stop ends 
 
 TEST_CASE("uci_protocol", "stop and ponderhit with no search print nothing") {
   Gui g;
+  CHECK(g.sync());  // the hash is allocated here
+  const std::size_t mark = g.cursor;
   g.send("stop");
   g.send("ponderhit");
   g.send("stop");
   CHECK(g.sync());
-  const std::vector<std::string> out = g.texts();
+  const std::vector<std::string> out = g.texts(mark);
   CHECK_EQ(out.size(), std::size_t{1});  // just readyok
   g.check_transcript();
   g.quit();
@@ -351,6 +365,7 @@ TEST_CASE("uci_protocol", "bestmove (none) on checkmate and stalemate, after a s
 TEST_CASE("uci_protocol", "go arguments: every argument, combined, negative and huge numbers, junk") {
   Gui g;
   g.send("position startpos");
+  CHECK(g.sync());
   std::size_t mark = g.cursor;
   g.send("go wtime -100 btime 0 winc 0 binc 0 movestogo 1 depth 3 nodes 100 mate 2 movetime 50");
   CHECK(g.next("bestmove").has_value());
@@ -423,6 +438,162 @@ TEST_CASE("uci_protocol", "Fork extensions: d, go perft, bench print only info l
   CHECK_EQ(g.count("info string e2e4: 600"), 1);
   g.check_transcript();
   g.quit();
+}
+
+TEST_CASE("uci_options", "setoption: case, spaces, unknown names, bad values") {
+  Gui g;
+  CHECK(g.sync());
+  std::size_t mark = g.cursor;
+  for (const char* good : {"setoption name Threads value 4", "setoption name move overhead value 250",
+                           "setoption name   Move \t Overhead   value   0  ",
+                           "setoption name THREADS value 1", "setoption name Clear Hash",
+                           "setoption name SyzygyPath value <empty>", "setoption name Hash value 1"})
+    g.send(good);
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string", mark), 1);  // only the allocation report
+  CHECK_EQ(g.count("info string Hash 1 MB allocated", mark), 1);
+  mark = g.cursor;
+  const std::vector<std::string> bad = {"setoption name Ponder value true",
+                                        "setoption name Hash value 0",
+                                        "setoption name Hash value 33554433",
+                                        "setoption name Threads value 1025",
+                                        "setoption name Move Overhead value -1",
+                                        "setoption name Move Overhead value abc",
+                                        "setoption name Threads",
+                                        "setoption Threads value 2",
+                                        "setoption name Hash value 16 MB",
+                                        "setoption name Move Overhead value 5001"};
+  for (const std::string& b : bad) g.send(b);
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string", mark), static_cast<int>(bad.size()));
+  CHECK_EQ(g.count("info string Hash", mark), 3);  // the three rejected Hash values; no reallocation
+  g.check_transcript();
+  g.quit();
+}
+
+TEST_CASE("uci_options", "Hash is allocated after all options are set (Threads sent after Hash)") {
+  Gui g;
+  g.send("setoption name Hash value 256");
+  g.send("setoption name Threads value 64");
+  CHECK(g.sync());
+  // 256 MB in 2 MiB slices allows 128 workers; Threads 64 means 64. Had the
+  // table been cleared at setoption Hash, Threads would still have been 1.
+  int reports = 0;
+  for (const std::string& line : g.texts())
+    if (starts_with(line, "info string Hash 256 MB allocated and cleared in")) {
+      ++reports;
+      CHECK_MSG(line.find(" by 64 threads") != std::string::npos, line);
+    }
+  CHECK_EQ(reports, 1);
+  // Threads 1024: still fine (16 MB allows 8 workers).
+  g.send("setoption name Threads value 1024");
+  g.send("setoption name Hash value 16");
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string Hash 16 MB allocated"), 1);
+  g.send("ucinewgame");
+  g.send("setoption name Clear Hash");
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string Hash"), 2);  // clearing reports nothing
+  g.send("go depth 1");
+  CHECK(g.next("bestmove").has_value());
+  g.check_transcript();
+  g.quit();
+}
+
+TEST_CASE("uci_options", "Hash too large: 1 TB, and just above available memory, fall back cleanly") {
+  Gui g;
+  CHECK(g.sync());  // 16 MB
+  std::size_t mark = g.cursor;
+  g.send("setoption name Hash value 1048576");  // 1 TB
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string Hash 1048576 MB is more than", mark), 1);
+  CHECK_EQ(g.count("info string Hash 16 MB allocated", mark), 1);
+  // Just above what is available now (with a margin, as other processes
+  // come and go): refused before any page is touched.
+  const std::size_t available_mb = available_memory() / BytesPerMB;
+  const std::size_t ask = available_mb + std::max<std::size_t>(1024, available_mb / 10);
+  mark = g.cursor;
+  g.send("setoption name Hash value " + std::to_string(ask));
+  CHECK(g.sync());
+  CHECK_MSG(g.count("info string Hash " + std::to_string(ask) + " MB is more than", mark) == 1,
+            "asked " << ask << " MB with " << available_mb << " MB available");
+  CHECK_EQ(g.count("info string Hash 16 MB allocated", mark), 1);
+  g.send("go depth 1");  // still plays
+  CHECK(g.next("bestmove").has_value());
+  g.check_transcript();
+  g.quit();
+}
+
+TEST_CASE("uci_options", "SyzygyPath counts table files; a missing directory is reported") {
+  namespace fs = std::filesystem;
+  const fs::path dir = fs::temp_directory_path() / "fork-uci-test-syzygy";
+  const fs::path missing = fs::temp_directory_path() / "fork-uci-test-no-such-dir";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  for (const char* name : {"KQvK.rtbw", "KQvK.rtbz", "KRvK.rtbw", "notes.txt"})
+    std::ofstream(dir / name) << "x";
+#ifdef _WIN32
+  const char separator = ';';
+#else
+  const char separator = ':';
+#endif
+  Gui g;
+  g.send("setoption name SyzygyPath value " + dir.string() + separator + missing.string());
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string SyzygyPath: 2 WDL and 1 DTZ table files in 1 directories; not found: " +
+                   missing.string()),
+           1);
+  g.check_transcript();
+  g.quit();
+  fs::remove_all(dir);
+}
+
+TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
+  namespace fs = std::filesystem;
+  const fs::path log = fs::temp_directory_path() / "fork-uci-test-log.txt";
+  fs::remove(log);
+  Gui g;
+  g.send("setoption name LogFile value " + log.string());
+  g.send("isready");
+  CHECK(g.next("readyok").has_value());
+  g.send("setoption name LogFile value <empty>");  // closes it
+  const std::size_t mark = g.cursor;
+  g.send("setoption name LogFile value " + (fs::temp_directory_path() / "no-such-dir" / "log.txt").string());
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string LogFile: cannot open", mark), 1);
+  g.quit();
+  std::ifstream in(log);
+  std::vector<std::string> lines;
+  for (std::string line; std::getline(in, line);) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    lines.push_back(line);
+  }
+  CHECK(!lines.empty());
+  // "2026-10-24T12:34:56.789Z > text": digits where the pattern has 9.
+  auto stamped = [](const std::string& line) {
+    const std::string_view shape = "9999-99-99T99:99:99.999Z ? ";
+    if (line.size() < shape.size()) return false;
+    for (std::size_t i = 0; i < shape.size(); ++i) {
+      const char c = line[i];
+      if (shape[i] == '9'   ? !(c >= '0' && c <= '9')
+          : shape[i] == '?' ? (c != '<' && c != '>')
+                            : c != shape[i])
+        return false;
+    }
+    return true;
+  };
+  for (const std::string& line : lines) CHECK_MSG(stamped(line), line);
+  auto has = [&](std::string_view tail) {
+    return std::any_of(lines.begin(), lines.end(), [&](const std::string& l) {
+      return l.size() >= tail.size() && l.compare(l.size() - tail.size(), tail.size(), tail) == 0;
+    });
+  };
+  CHECK(has("Z > isready"));
+  CHECK(has("Z < readyok"));
+  CHECK(has("Z > setoption name LogFile value <empty>"));
+  CHECK(!has("Z < info string LogFile: cannot open"));  // sent after the log was closed
+  in.close();
+  fs::remove(log);
 }
 
 }  // namespace forkeng::test

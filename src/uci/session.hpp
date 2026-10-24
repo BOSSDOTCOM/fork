@@ -29,7 +29,9 @@
 #include <vector>
 
 #include "core/position.hpp"
+#include "search/hash_memory.hpp"
 #include "uci/go_limits.hpp"
+#include "uci/options.hpp"
 #include "uci/output.hpp"
 #include "uci/tokens.hpp"
 
@@ -42,6 +44,10 @@ const char* engine_version();
 // real engine's.
 struct SessionConfig {
   bool allow_heavy_commands = true;  // `bench` and `go perft`
+  bool allow_files = true;           // LogFile and the SyzygyPath scan
+  std::int64_t default_hash_mb = 16;
+  std::int64_t max_hash_mb = 33554432;  // 32 TiB
+  std::int64_t max_threads = 1024;
 };
 
 class UciSession {
@@ -77,6 +83,15 @@ class UciSession {
   void cmd_bench();
   void cmd_board();
   void cmd_ponderhit();
+  void cmd_setoption(const std::vector<LineToken>& tokens, std::size_t first, std::string_view line);
+  void cmd_ucinewgame();
+
+  void declare_options();
+  // Allocates or clears the hash as the options last asked. Runs only at
+  // isready, ucinewgame and go, so every option sent before is in effect
+  // (a GUI may send Hash before Threads). Returns true if it cleared the table.
+  bool apply_pending();
+  unsigned hash_workers() const;
 
   void stop_search();  // stops and joins the running search, if any
   bool search_running();
@@ -85,6 +100,10 @@ class UciSession {
 
   OutputChannel& out_;
   SessionConfig config_;
+  OptionTable options_;
+  HashMemory hash_;
+  bool hash_pending_ = true;  // the table is allocated at the first isready, ucinewgame or go
+  bool clear_pending_ = false;
   Position root_;
   SearchSignals signals_;
   std::thread search_thread_;

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <exception>
+#include <filesystem>
 #include <sstream>
 #include <system_error>
 #include <utility>
@@ -34,9 +35,100 @@ std::int64_t ms_since(std::chrono::steady_clock::time_point start) {
       .count();
 }
 
+// Counts Syzygy table files in a SyzygyPath value: directories separated by
+// ':' on Linux and ';' on Windows; a missing directory is reported, not an error.
+std::string describe_syzygy_path(const std::string& paths) {
+#ifdef _WIN32
+  constexpr char Separator = ';';
+#else
+  constexpr char Separator = ':';
+#endif
+  int wdl = 0, dtz = 0, dirs = 0;
+  std::string missing;
+  std::size_t begin = 0;
+  while (begin <= paths.size()) {
+    std::size_t end = paths.find(Separator, begin);
+    if (end == std::string::npos) end = paths.size();
+    const std::string dir = paths.substr(begin, end - begin);
+    begin = end + 1;
+    if (dir.empty()) continue;
+    std::error_code ec;
+    std::filesystem::directory_iterator it(std::filesystem::path(dir), ec);
+    if (ec) {
+      missing += (missing.empty() ? "" : ", ") + dir;
+      continue;
+    }
+    ++dirs;
+    for (; !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
+      const std::filesystem::path ext = it->path().extension();
+      wdl += ext == ".rtbw";
+      dtz += ext == ".rtbz";
+    }
+  }
+  std::string report = "SyzygyPath: " + std::to_string(wdl) + " WDL and " + std::to_string(dtz) +
+                       " DTZ table files in " + std::to_string(dirs) + " directories";
+  if (!missing.empty()) report += "; not found: " + missing;
+  return report;
+}
+
 }  // namespace
 
-UciSession::UciSession(OutputChannel& out, SessionConfig config) : out_(out), config_(config) {}
+UciSession::UciSession(OutputChannel& out, SessionConfig config) : out_(out), config_(config) {
+  declare_options();
+}
+
+// The options and what setting each one does (DESIGN.md §5.1, "Options").
+void UciSession::declare_options() {
+  options_.add_spin("Hash", config_.default_hash_mb, 1, config_.max_hash_mb,
+                    [this](const OptionEntry&, std::string&) { return hash_pending_ = true; });
+  options_.add_button("Clear Hash",
+                      [this](const OptionEntry&, std::string&) { return clear_pending_ = true; });
+  options_.add_spin("Threads", 1, 1, config_.max_threads);
+  options_.add_spin("Move Overhead", 100, 0, 5000);
+  options_.add_string("SyzygyPath", "", [this](const OptionEntry& e, std::string& message) {
+    if (e.text.empty()) return true;
+    message = config_.allow_files ? describe_syzygy_path(e.text) : "SyzygyPath: file access disabled";
+    return true;
+  });
+  options_.add_string("LogFile", "", [this](const OptionEntry& e, std::string& message) {
+    if (!config_.allow_files) {
+      message = "LogFile: file access disabled";
+      return false;
+    }
+    std::string error;
+    if (out_.open_log(e.text, &error)) return true;
+    message = "LogFile: cannot open " + e.text + ": " + error;
+    return false;
+  });
+}
+
+unsigned UciSession::hash_workers() const {
+  return clear_workers(hash_bytes_for_mb(static_cast<std::uint64_t>(options_.number("Hash"))),
+                       options_.number("Threads"));
+}
+
+bool UciSession::apply_pending() {
+  if (hash_pending_) {
+    hash_pending_ = clear_pending_ = false;
+    const std::size_t bytes = hash_bytes_for_mb(static_cast<std::uint64_t>(options_.number("Hash")));
+    const unsigned workers = hash_workers();
+    const auto start = std::chrono::steady_clock::now();
+    std::string report;
+    const bool ok = hash_.resize(bytes, workers, report);
+    const std::int64_t ms = ms_since(start);
+    if (!ok) out_.send_info_string(report);
+    out_.send_info_string("Hash " + std::to_string(hash_.bytes() / BytesPerMB) +
+                          " MB allocated and cleared in " + std::to_string(ms) + " ms by " +
+                          std::to_string(workers) + " threads");
+    return true;
+  }
+  if (clear_pending_) {
+    clear_pending_ = false;
+    hash_.clear(hash_workers());
+    return true;
+  }
+  return false;
+}
 
 UciSession::~UciSession() {
   try {
@@ -89,7 +181,6 @@ bool UciSession::handle_line(std::string_view line) {
 }
 
 void UciSession::dispatch(const std::vector<LineToken>& tokens, std::size_t first, std::string_view line) {
-  (void)line;
   const std::string_view cmd = tokens[first].text;
   if (cmd == "uci") {
     cmd_uci();
@@ -113,9 +204,9 @@ void UciSession::dispatch(const std::vector<LineToken>& tokens, std::size_t firs
     } else if (cmd == "bench") {
       cmd_bench();
     } else if (cmd == "setoption") {
-      out_.send_info_string("no options yet");
+      cmd_setoption(tokens, first + 1, line);
     } else if (cmd == "ucinewgame") {
-      // Nothing to clear yet.
+      cmd_ucinewgame();
     }
   }
 }
@@ -123,12 +214,41 @@ void UciSession::dispatch(const std::vector<LineToken>& tokens, std::size_t firs
 void UciSession::cmd_uci() {
   out_.send_line(std::string("id name Fork ") + engine_version());
   out_.send_line("id author BOSSDOTCOM");
+  for (const std::string& line : options_.option_lines()) out_.send_line(line);
   out_.send_line("uciok");
 }
 
 void UciSession::cmd_isready() {
-  if (!search_running()) stop_search();  // joins a search that already printed bestmove
+  if (!search_running()) {
+    stop_search();  // joins a search that already printed bestmove
+    apply_pending();
+  }
   out_.send_line("readyok");
+}
+
+// setoption name <id> [value <x>]: the name is every token up to `value`,
+// the value is the rest of the line as sent.
+void UciSession::cmd_setoption(const std::vector<LineToken>& tokens, std::size_t first,
+                               std::string_view line) {
+  std::size_t i = first;
+  while (i < tokens.size() && !iequals(tokens[i].text, "name")) ++i;
+  if (i == tokens.size()) {
+    out_.send_info_string("setoption: expected 'name'");
+    return;
+  }
+  std::string name;
+  for (++i; i < tokens.size() && !iequals(tokens[i].text, "value"); ++i)
+    (name += name.empty() ? "" : " ") += tokens[i].text;
+  std::optional<std::string_view> value;
+  if (i < tokens.size())
+    value = rest_of_line(line, i + 1 < tokens.size() ? tokens[i + 1].offset : line.size());
+  std::string message;
+  options_.set(name, value, message);
+  if (!message.empty()) out_.send_info_string(message);
+}
+
+void UciSession::cmd_ucinewgame() {
+  if (!apply_pending()) hash_.clear(hash_workers());
 }
 
 void UciSession::cmd_ponderhit() {
@@ -178,6 +298,7 @@ void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first)
   for (const std::string& w : warnings) out_.send_info_string(w);
   if (limits.restrict_sent && limits.restrict_to.empty())
     out_.send_info_string("go: no legal move in searchmoves; searching every move");
+  apply_pending();
   {
     std::lock_guard<std::mutex> lock(signals_.mutex);
     signals_.stop = false;

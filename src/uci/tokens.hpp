@@ -1,7 +1,7 @@
-// tokens: splitting a UCI input line into words.
+// tokens: splitting a UCI input line into words, and reading numbers.
 //
-// Purpose: the one tokenizer every command parser uses, so whitespace rules
-// are the same everywhere.
+// Purpose: the one tokenizer and number parser every command parser uses,
+// so whitespace and number rules are the same everywhere.
 // Invariants:
 // - Tokens are maximal runs of non-whitespace bytes; whitespace is space, tab,
 //   CR, LF, VT and FF (UCI allows any amount of spaces and tabs between
