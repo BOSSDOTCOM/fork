@@ -138,6 +138,20 @@ add_library(forkcore STATIC
 target_include_directories(forkcore PUBLIC src)
 target_link_libraries(forkcore PUBLIC fork_flags PRIVATE fork_pgo)
 
+# The evaluator is chosen at build time (owner, 2026-10-24; DESIGN.md §5.2):
+# no runtime interface and no indirect call in the search.
+set(FORK_EVALUATOR "bootstrap" CACHE STRING "Static evaluation built into Fork: bootstrap")
+set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap)
+if(NOT FORK_EVALUATOR STREQUAL "bootstrap")
+  message(FATAL_ERROR "FORK_EVALUATOR must be bootstrap (Phase 3)")
+endif()
+
+# Evaluation and search (src/eval/, src/search/ except the hash memory).
+add_library(forksearch STATIC
+  src/eval/bootstrap_eval.cpp)
+target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
+target_link_libraries(forksearch PUBLIC forkcore PRIVATE fork_pgo)
+
 find_package(Threads REQUIRED)
 
 # The UCI front end (src/uci/): protocol loop, options, placeholder search.
@@ -149,7 +163,7 @@ add_library(forkuci STATIC
   src/uci/placeholder.cpp
   src/uci/session.cpp
   src/uci/version.cpp)
-target_link_libraries(forkuci PUBLIC forkcore Threads::Threads PRIVATE fork_pgo)
+target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pgo)
 
 # Version string `<semver>-dev+<short commit>`, read from git at configure
 # time (owner, 2026-10-24); without git, or outside a checkout (a tarball),
@@ -251,6 +265,7 @@ if(FORK_BUILD_TESTS)
     tests/test_consistency.cpp
     tests/test_epd.cpp
     tests/test_draws.cpp
+    tests/test_eval.cpp
     tests/engine_process.cpp
     tests/test_uci.cpp
     tests/test_options.cpp)
@@ -293,7 +308,7 @@ if(FORK_BUILD_TESTS)
   endforeach()
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
-  foreach(suite magics fen zobrist_ep draws perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
+  foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
                 uci_protocol uci_options uci_placeholder uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
