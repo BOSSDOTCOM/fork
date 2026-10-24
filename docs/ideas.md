@@ -104,7 +104,7 @@ name of their config flag.
     idea; it is dropped unless the owner decides otherwise, in writing,
     before Phase 4.
   - Record which seasons' openings each test used.
-- **status:** untested
+- **status:** untested (testing use only)
 
 ## 8. Swiss-specific contempt
 
@@ -151,7 +151,7 @@ name of their config flag.
     `mov DWORD PTR`; instruction counts slightly lower).
 - **decision (owner's rule):** not clearly better on both compilers, so main
   keeps its layout plus the uint8 mailbox (harmless, 192 fewer bytes per
-  Position). v5 is kept on branch `layout-exp` (c4531bd) for Phase 3
+  Position). v5 is kept as tag `archive/layout-exp` (c4531bd) for Phase 3
   re-testing with search nps.
 - **per-ply check info (separate from the layout question):** Part A item 8
   made the State compute checkers, blockers/pinners and checking squares on

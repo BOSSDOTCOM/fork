@@ -6,7 +6,7 @@ correctness first, then speed. This file records the architecture and every
 decision that affects play. Phase 7 evaluation adjustments must be documented
 here; no logic may alter reported scores to trigger or avoid adjudication.
 
-Status: **Phase 1 built; all presets green on Windows; Linux (WSL2) run pending.**
+Status: **Phase 1 complete, with the review fixes of 2026-10-24; every preset green on Windows, Linux and the TCEC toolchain. Phase-end checklist in progress (4-hour fuzz run and `phase-1` tag pending). Next: Phase 2 (UCI), spec approved (§5.1).**
 
 ---
 
