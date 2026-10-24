@@ -15,7 +15,10 @@
   magic and between/line checks, FEN edge cases, draws, a counting-allocator
   `no_alloc` test, bench parity on every build. Differential testing against
   python-chess, Syzygy WDL checks of the material-draw rule, two libFuzzer
-  targets with committed minimized corpora.
+  targets with committed minimized corpora. Phase-end fuzzing (coverage-
+  plateau rule): `fuzz_fen` plateaued at cov 645 after 1300 s (138 million
+  execs), `fuzz_moves` reached cov 515 in its 15 minutes (8.8 million
+  execs, still growing), no crashes.
 - **Builds**: 10 presets (clang/gcc x debug/release/v3/avx512/nopext) plus
   PGO on Windows and Linux, ASan/UBSan, TSan, MSan with an instrumented
   libc++, valgrind. `update.sh` builds the TCEC binary on TCEC's own
