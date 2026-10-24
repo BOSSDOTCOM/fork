@@ -75,13 +75,13 @@ not changed here; the Phase 4 spec session copies them over.
    - No Lc0 data. Details: training-data.md §3.4.
 2. **Compute split.**
    - Self-play datagen runs on the owner's CPU (12 threads).
-   - Training runs on **Kaggle** (free CUDA) first, **Colab** as backup,
-     and **rented CUDA** only if both fall short.
+   - Training runs on **Kaggle** (free CUDA) first, and on **rented CUDA**
+     only if Kaggle falls short. Colab was the original backup and has
+     been dropped (see below).
    - The local Radeon RX 580 is **not supported** for training.
    - Kaggle and Colab limits are in training-data.md §2.1.
-   - **Open (found after the decision):** Colab's FAQ bans "chess
-     training" on free runtimes. Only paid Colab (with compute units) can
-     serve as the backup. The owner to confirm or replace the backup.
+   - **Colab dropped** (owner, 2026-10-24). Its FAQ bans "chess training"
+     on free runtimes. The order is now Kaggle, then rented CUDA.
 3. **Disk.**
    - 45 GB free on C: (2026-10-24). The owner adds an external SSD before
      Phase 4.

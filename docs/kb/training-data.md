@@ -367,7 +367,8 @@ timeline more than the data does. The owner's answer is in section 2.1.
 ### 2.1 Training compute: Kaggle, Colab, ROCm (checked 2026-10-24)
 
 The owner's plan (2026-10-24): datagen on the local CPU, training on
-Kaggle first, Colab as backup, rented CUDA last. The Kaggle pages block
+Kaggle first, rented CUDA last. Colab was the planned backup and was
+dropped after the finding below. The Kaggle pages block
 plain fetching, so they were rendered in a headless browser; the official
 pages themselves were read, not mirrors.
 
@@ -425,6 +426,120 @@ by the Colab Additional Terms tos_v5, 2024-05-14)
   - Disk size is not stated (**UNVERIFIED**).
   - Google Drive gives 15 GB shared with Gmail and Photos.
   - Using several accounts to dodge limits is banned.
+
+### 2.2 Training-data storage and upload (Phase 4 spec input, 2026-10-24)
+
+The owner asked for this design: generate locally in batches, upload in
+the background, delete after a confirmed upload, train on Kaggle. Colab is
+dropped (section 5), so only Kaggle access matters. The owner's upload
+speed is **10-50 Mbit/s**.
+
+**Storage options** (official pages, opened 2026-10-24; "V" = verified)
+
+| | Free storage | Max file | Egress | Read from Kaggle | Resumable upload | Beyond free |
+|---|---|---|---|---|---|---|
+| Kaggle Datasets | 200 GB per dataset, 200 GB of private datasets in total, 50 top-level files (V) | not stated | n/a | **mounted read-only**: no copy, no `/kaggle/working` use | kaggle CLI 2.2.5 resumes on re-run (V, source code) | no paid tier found |
+| Hugging Face Hub | 100 GB private; public is "best-effort" and meant for reusable datasets (V) | 500 GB hard, under 200 GB advised (V) | included (V) | `hf_hub_download` / `snapshot_download` into the session | re-run resumes (hf_xet) (V) | PRO $9/month for 1 TB private, then $18/TB (V) |
+| Backblaze B2 | 10 GB (V) | 10 TB as a "large file" (V) | free up to 3× stored, then $0.01/GB (V) | S3 API (boto3/rclone) into the session | b2sdk/CLI resumes large files (V) | $6.95/TB-month, about $0.70/month per 100 GB; spending caps available (V) |
+| Cloudflare R2 | 10 GB-month (V) | about 5 TiB (V) | free (V) | S3 API into the session | rclone multipart with `--s3-leave-parts-on-error` (V) | $0.015/GB-month, about $1.50/month per 100 GB (V) |
+| Google Drive | 15 GB, shared with Gmail (V) | 5 TB (V) | API: 1 TB/day per project (V) | gdown/API; gdown warns of throttling (V) | rclone chunked; resume across runs **UNVERIFIED** | $1.99/month for 100 GB (V) |
+
+Other facts that shape the design:
+
+- **Uploads:** Kaggle's remote-URL import fetches public URLs on Kaggle's
+  side, using no home bandwidth (V). Whether signed (private) B2 or R2
+  URLs work is **UNVERIFIED**.
+- **Downloads into a session:** any store other than Kaggle Datasets
+  needs Internet on and a download into the temporary disk, whose size is
+  **UNVERIFIED**.
+- **Credentials:** Kaggle Secrets (`UserSecretsClient`) exist in the
+  official image (V, source code); they are not described in the docs
+  pages opened.
+- **Still UNVERIFIED:** whether `kaggle datasets version` re-uploads
+  unchanged files; whether B2 and R2 sign-up needs a card; Google's 750 GB
+  per day upload cap for personal accounts; full ToS for Google, Backblaze
+  and Cloudflare. HF Storage Buckets pricing was not opened.
+
+**Upload time at 10-50 Mbit/s** (*estimate*: 1 GB = 8 Gbit, plus about
+10 % protocol overhead)
+
+| Amount | 10 Mbit/s | 25 Mbit/s | 50 Mbit/s |
+|---|---|---|---|
+| 100 GB | about 24 h | about 10 h | about 5 h |
+| One day of datagen, compact format (130-260 M positions × about 3 B ≈ 0.4-0.8 GB) | about 6-11 min | about 2-5 min | about 1-2 min |
+| One day of datagen, 32 B/position (≈ 4-8 GB) | about 1-2 h | about 25-50 min | about 12-25 min |
+
+- With a compact format, uploading keeps up with datagen many times over.
+  Even 32 bytes per position fits in a few hours a day.
+- The 100 GB case only matters for a one-off bulk upload, such as
+  re-uploading after rescoring.
+
+**Design**
+
+1. **Batches.**
+   - Datagen writes immutable shards of about 1-2 GB in the compact format
+     to the local staging directory: the external SSD once it is added,
+     otherwise the 45 GB free on C:.
+   - Each shard gets an entry in a manifest file kept in the repo's
+     training-data log: SHA-256, position count, generator commit, net
+     hash and settings.
+2. **One Kaggle dataset per batch, immutable** (for example
+   `fork-data-g03-b07`, about 10-50 GB).
+   - Use `kaggle datasets create` once and never version it, so nothing
+     is ever re-uploaded (whether `version` re-sends unchanged files is
+     **UNVERIFIED**).
+   - Shards go in a subfolder, uploaded unarchived.
+   - The training notebook attaches the batches it needs as inputs. They
+     are mounted read-only, with no copy time and no use of the 20 GB
+     working space.
+3. **Background upload.**
+   - A small script runs the kaggle CLI on finished batches, one at a
+     time, and re-runs it after an interruption (the CLI resumes).
+   - It is network-bound with little CPU, so it can run alongside
+     datagen. It does not count as a second "heavy job"; check that it
+     does not disturb benchmarks.
+4. **Confirmed upload, then delete.**
+   - First, the dataset status is ready and the file list shows every
+     shard at the right size (`kaggle datasets files`).
+   - Then a short Kaggle **CPU** session (no GPU quota) hashes the mounted
+     shards and writes the SHA-256 list as output. The script compares it
+     with the local manifest.
+   - Only a full match deletes the local shards. On a mismatch the batch
+     is re-uploaded as a new dataset.
+5. **Quota.**
+   - 200 GB of private datasets is about 60-70 billion positions at about
+     3 B each (*estimate*). That is far beyond the review gate's 2
+     billion, so quota is not a constraint with a compact format.
+   - If it becomes one, old generations can be deleted (Fork rescores
+     them anyway) or made public. Public GPL self-play data would also
+     document provenance for TCEC; that is an owner decision.
+6. **Training.**
+   - Each Kaggle GPU run (at most 12 h) streams from the mounted inputs
+     and checkpoints to `/kaggle/working`. The next run attaches the
+     previous run's output as an input.
+   - Finished nets are downloaded with the CLI, and their hashes go into
+     the training-data log.
+
+**Two consequences to decide on (owner)**
+
+- **Deleting local shards leaves Kaggle holding the only copy.** Rescoring
+  old data with a newer Fork net (A+) runs locally, so it needs a
+  re-download first. Downloads are usually faster than uploads, but Kaggle
+  could delete the data or lock the account. Options:
+  - keep an archive copy on the external SSD (compact data is small:
+    2 billion positions is about 6 GB);
+  - add an off-site copy on B2 (cheapest; about $0.70/month per 100 GB,
+    with caps);
+  - accept a single copy.
+
+  Recommendation: keep the archive on the SSD and add no paid store,
+  since the compact data volume is small.
+- **Hugging Face, B2 and R2 are not needed for training.** Kaggle's
+  mounted datasets beat any download-into-session store. Keep them in
+  reserve:
+  - HF private (100 GB free) or B2 if an off-site archive is wanted;
+  - R2 if data must be pulled into many rented-GPU sessions (free
+    egress).
 
 **ROCm and the RX 580 (gfx803)**
 - Not supported:
@@ -593,8 +708,8 @@ data set that takes months of CPU on this machine alone.
 
 1. **Training GPU:** Kaggle first, Colab as backup, rented CUDA last.
    Datagen stays on the local CPU. The RX 580 is not supported
-   (section 2.1). **Still open:** free Colab bans chess training, so the
-   backup has to be paid Colab or rented CUDA.
+   (section 2.1). Free Colab bans chess training, so **Colab is dropped**
+   (owner, 2026-10-24). The order is Kaggle, then rented CUDA.
 2. **Disk:** 45 GB constraint recorded. An external SSD will be added
    before Phase 4, and a compact data format is planned regardless.
 3. **Lichess puzzles:** diagnostic report only (data-policy.md).
