@@ -11,10 +11,18 @@ Candidate improvements, each with the evidence needed to adopt it.
 | **metric** | What decides success (SPRT result for ELO; the stated metric for TOOLING). |
 | **status** | untested, in progress, accepted, rejected (with the evidence). |
 | **sources** | References consulted. Every outside source is also logged in docs/ORIGINALITY.md. Ideas only, never code. |
+| **runtime cost** | **none**: the shipped engine does no extra work (training- or test-side only). **possible**: the idea may cost speed in the engine itself. |
+| **earliest phase** | The first phase whose infrastructure the idea needs. |
 
 There were no entries before 2026-10-23, so no existing entries needed
 marking as ELO. New ELO ideas use the same fields, with type ELO and the
 name of their config flag.
+
+**Rule (owner, 2026-10-24): any idea with "runtime cost: possible" must
+report the nps change alongside its SPRT result** (bench nps from
+`bench/ab.py`, bench node count unchanged or the change explained), so a
+strength gain is never read without its speed price. The two fields were
+added on 2026-10-24; ideas 1-12 predate them.
 
 ---
 
@@ -252,3 +260,82 @@ name of their config flag.
     the suite of won positions near the 50-move limit includes 7-piece
     positions checked against that API.
 - **status:** untested (7-piece requirement set)
+
+## 13. Cheap/expensive self-play data mixing
+
+- **type:** ELO (via the resulting net)
+- **flag:** none in the engine; selected in the training-pipeline config
+  (Phase 4), with a net trained with and without it.
+- **idea:** Vary the search effort per position in self-play data
+  generation: most positions get a cheap search that only moves the game
+  along, a minority get a deep search, and only the deep searches are
+  written as training targets. More games per CPU-hour, without diluting
+  the labels with shallow evaluations. From KataGo's "playout cap
+  randomization".
+- **phase:** Phase 4.
+- **metric:** SPRT of a net trained with the mixing against one trained
+  without it, on the same self-play compute budget.
+- **runtime cost:** none.
+- **earliest phase:** Phase 4.
+- **sources:** David J. Wu, "Accelerating Self-Play Learning in Go"
+  (KataGo), arXiv:1902.10565 (title, author and abstract checked on
+  2026-10-24; that its full text describes playout cap randomization is
+  UNVERIFIED: the PDF could not be read here and ar5iv did not respond).
+- **status:** untested
+
+## 14. Auxiliary training targets
+
+- **type:** ELO (via the resulting net)
+- **flag:** none in the engine; a training-pipeline config switch (Phase 4).
+- **idea:** Train the net to also predict extra quantities, for example
+  game length or the material change over the next moves, through output
+  heads used only during training and dropped from the inference net. The
+  extra targets can shape the shared layers; the shipped net keeps only
+  the evaluation output.
+- **phase:** Phase 4.
+- **metric:** SPRT of a net trained with the auxiliary heads against one
+  trained without, same data. Also verify the shipped net is identical in
+  size and speed (file size, layer shapes, bench nps with `bench/ab.py`).
+- **runtime cost:** none (verify: the shipped net must be identical in
+  size and speed).
+- **earliest phase:** Phase 4.
+- **sources:** KataGo (arXiv:1902.10565, as idea 13) is the motivating
+  example; which auxiliary targets it uses is UNVERIFIED for the same
+  reason.
+- **status:** untested
+
+## 15. Adversarial robustness testing
+
+- **type:** TOOLING
+- **idea:** Search adversarially for Fork's own blind spots, not just
+  opponents': for example, play a search-guided or learned adversary
+  against Fork and collect the positions where Fork's evaluation or move
+  choice fails against tablebases, deep-search consensus or the game
+  result. Each confirmed blind spot becomes a regression position and a
+  candidate training or tuning target.
+- **phase:** Phase 7.
+- **metric:** confirmed blind spots found per CPU-hour, and the share that
+  stay fixed in later versions (regression suite).
+- **runtime cost:** none.
+- **earliest phase:** Phase 7.
+- **sources:** Tony T. Wang, Adam Gleave, Tom Tseng et al., "Adversarial
+  Policies Beat Superhuman Go AIs", arXiv:2211.00241 (abstract checked on
+  2026-10-24): adversaries trained against KataGo won by inducing blunders
+  rather than by playing well.
+- **status:** untested
+
+## 16. Tiny policy network for move ordering
+
+- **type:** ELO
+- **flag:** a UCI option enabling policy-based ordering (name set when it
+  is built).
+- **idea:** A very small policy net scores the moves at a node to improve
+  move ordering (searching likely best moves first), alongside or instead
+  of history heuristics.
+- **phase:** parked until after Phase 8.
+- **metric:** SPRT, reported together with the nps change (rule above):
+  the ordering gain must outweigh the cost of evaluating the policy net.
+- **runtime cost:** POSSIBLE: the net runs inside search, so it must beat
+  its nps loss to pass SPRT.
+- **earliest phase:** after Phase 8 (parked).
+- **status:** parked until after Phase 8
