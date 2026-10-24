@@ -545,3 +545,39 @@ All opened 2026-10-24. Samples were inspected in a scratch directory outside the
 | https://support.google.com/drive/answer/37603, https://developers.google.com/workspace/drive/api/guides/limits, https://one.google.com/about/plans, github.com/wkentaro/gdown README | Google Drive | 2026-10-24 | file size, API limits, plans, download throttling note |
 | https://rclone.org/drive/, /s3/, /b2/ | rclone docs | 2026-10-24 | chunked and resumable uploads |
 | github.com/Kaggle/kaggle-api (README, docs/datasets.md, source), github.com/Kaggle/docker-python patches/kaggle_secrets.py | Kaggle CLI and image source | 2026-10-24 | resumable uploads, Secrets |
+
+## OS memory facts (os-memory.md)
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://man7.org/linux/man-pages/man5/proc_meminfo.5.html | proc_meminfo(5), man-pages 6.19 (2026-02-08) | 2026-10-24 | MemAvailable meaning, "since Linux 3.14", line format |
+| https://raw.githubusercontent.com/torvalds/linux/master/Documentation/filesystems/proc.rst | kernel doc, master | 2026-10-24 | MemAvailable computation, sample `MemAvailable:   27214312 kB` line |
+| https://api.github.com/repos/torvalds/linux/commits/master | API: master head (5b0764a53235) | 2026-10-24 | pinning the master snapshot read |
+| https://api.github.com/repos/torvalds/linux/commits/34e431b0ae398fc54ea69ff85ec700722c9da773 | API: MemAvailable commit (2014-01-22) | 2026-10-24 | when MemAvailable was added |
+| https://api.github.com/repos/torvalds/linux/compare/v3.13...34e431b0ae398fc54ea69ff85ec700722c9da773 and /compare/v3.14...(same) | API compare | 2026-10-24 | commit absent from v3.13, present in v3.14 |
+| https://raw.githubusercontent.com/torvalds/linux/master/Documentation/mm/overcommit-accounting.rst | kernel doc, master | 2026-10-24 | overcommit modes 0/1/2, per-mapping accounting rules |
+| https://raw.githubusercontent.com/torvalds/linux/master/Documentation/admin-guide/sysctl/vm.rst | kernel doc, master | 2026-10-24 | overcommit_memory: mode 0 compares request with total memory + swap, default 0 |
+| https://raw.githubusercontent.com/torvalds/linux/master/mm/util.c | kernel source, master | 2026-10-24 | __vm_enough_memory: mode 0 tests pages > totalram + total_swap per request |
+| https://raw.githubusercontent.com/torvalds/linux/v4.0/mm/mmap.c; .../v4.19/mm/util.c; .../v4.20/mm/util.c; .../v5.0/mm/util.c; .../v5.1/mm/util.c; .../v5.2/mm/util.c; .../v5.3/mm/util.c | kernel source at tags (v4.19-v5.0 mmap.c also fetched, no match) | 2026-10-24 | mode-0 heuristic history: free-memory estimate up to v5.1, totalram + swap from v5.2 |
+| https://man7.org/linux/man-pages/man5/proc_sys_vm.5.html | proc_sys_vm(5), man-pages 6.19 | 2026-10-24 | mode 0 "very weak" check, OOM-kill risk, MAP_NORESERVE unchecked |
+| https://man7.org/linux/man-pages/man2/mmap.2.html | mmap(2), man-pages 6.19 (2026-03-19) | 2026-10-24 | MAP_ANONYMOUS zero-fill, MAP_FAILED, munmap sub-range rules, OOM note in BUGS |
+| https://man7.org/linux/man-pages/man2/madvise.2.html | madvise(2), man-pages 6.19 (2026-02-08) | 2026-10-24 | MADV_HUGEPAGE semantics, CONFIG_TRANSPARENT_HUGEPAGE, alignment, errors |
+| https://raw.githubusercontent.com/torvalds/linux/master/mm/madvise.c | kernel source, master | 2026-10-24 | MADV_HUGEPAGE invalid (EINVAL, nothing changed) without CONFIG_TRANSPARENT_HUGEPAGE |
+| https://raw.githubusercontent.com/torvalds/linux/master/include/linux/huge_mm.h | kernel source, master | 2026-10-24 | thp_vma_suitable_order: aligned huge page must lie inside the VMA |
+| https://raw.githubusercontent.com/torvalds/linux/master/Documentation/admin-guide/mm/transhuge.rst | kernel doc, master | 2026-10-24 | THP modes, defrag default madvise, 2M example size, hpage_pmd_size, mTHP |
+| https://raw.githubusercontent.com/torvalds/linux/master/Documentation/admin-guide/mm/hugetlbpage.rst | kernel doc, master | 2026-10-24 | x86 page sizes 4K/2M/1G |
+| https://raw.githubusercontent.com/torvalds/linux/master/arch/x86/include/asm/pgtable_64_types.h | kernel source, master | 2026-10-24 | x86-64 PMD_SHIFT 21 (2 MiB) |
+| https://raw.githubusercontent.com/torvalds/linux/master/Documentation/arch/x86/x86_64/mm.rst and .../mm/Kconfig | kernel doc and Kconfig, master | 2026-10-24 | Kconfig: TRANSPARENT_HUGEPAGE option text; mm.rst fetched, not needed |
+| https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc | Microsoft Learn (ms.date 2024-02-05) | 2026-10-24 | zero-initialised, MEM_COMMIT charges RAM + page files, NULL on failure |
+| https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfree | Microsoft Learn (2024-02-05) | 2026-10-24 | MEM_RELEASE with size 0 and base address |
+| https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/ns-sysinfoapi-memorystatusex | Microsoft Learn (2018-12-05) | 2026-10-24 | ullAvailPhys, ullAvailPageFile, dwLength |
+| https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-globalmemorystatusex | Microsoft Learn (2018-12-05) | 2026-10-24 | return value, volatility, NUMA note |
+| https://learn.microsoft.com/en-us/windows/win32/memory/memory-limits-for-windows-releases | Microsoft Learn (2025-06-11) | 2026-10-24 | 128 TB x64 user address space |
+| https://learn.microsoft.com/en-us/windows/win32/memory/page-state | Microsoft Learn (2018-05-31) | 2026-10-24 | committed pages charged to RAM + page files, loaded on first access |
+| https://learn.microsoft.com/en-us/windows/win32/memory/reserving-and-committing-memory | Microsoft Learn (2018-05-31) | 2026-10-24 | large pre-commit can exhaust committable pages |
+| https://learn.microsoft.com/en-us/troubleshoot/windows-client/performance/introduction-to-the-page-file | Microsoft Learn (2026-02-12) | 2026-10-24 | commit limit = RAM + page files, system-wide charge, page file growth at 90% |
+| https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/setmode | Microsoft Learn (2020-04-02) | 2026-10-24 | _setmode semantics, CR-LF translation, call before I/O, stdin example |
+| https://learn.microsoft.com/en-us/cpp/c-runtime-library/text-and-binary-mode-file-i-o | Microsoft Learn (2018-04-11) | 2026-10-24 | std streams open in text mode |
+| https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/fopen-wfopen | Microsoft Learn (2023-04-27) | 2026-10-24 | text mode: CR-LF to LF, CTRL+Z is EOF on input |
+| https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/read | Microsoft Learn (2020-04-02) | 2026-10-24 | _read stops at CTRL+Z in text mode |
+| https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/fileno | Microsoft Learn (2020-04-02) | 2026-10-24 | _fileno, stdin descriptor 0 |

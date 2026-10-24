@@ -20,6 +20,7 @@ Fork, where the information came from, and when it was verified.
 |---|---|
 | [tools.md](tools.md) | Match runners (fastchess, cutechess-cli), OpenBench, SPRT/SPSA, Ordo/BayesElo, opening books, Syzygy and Fathom, NNUE trainers, data tools, profilers, PGN utilities |
 | [uci.md](uci.md) | UCI protocol (April 2006 spec) summarised for Phase 2, standard options, timing rules, and how fastchess, cutechess and python-chess handle the gaps |
+| [os-memory.md](os-memory.md) | OS facts behind the Hash memory code, checked against man pages, kernel docs/source and Microsoft Learn: MemAvailable, overcommit mode 0, MADV_HUGEPAGE/THP, VirtualAlloc commit, CRT text mode, mmap/munmap |
 | [techniques.md](techniques.md) | Board, movegen, search, evaluation/NNUE, training, time management, SMP, each mapped to a Fork phase |
 | [research.md](research.md) | Papers and results from 2023 on, newest first |
 | [best-practices.md](best-practices.md) | Testing discipline, determinism, SPRT, TCEC-condition testing, originality hygiene |
