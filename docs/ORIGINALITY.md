@@ -2,8 +2,14 @@
 
 This file supports Fork's TCEC application. It lists every reference
 consulted, every third-party library used, and the provenance of all
-training data. All Fork source code is original. No source code, network
+training data. Fork's source code is original: no source code, network
 file, or engine-generated training data from any other engine is included.
+That has been checked against Stockfish and six other engines (2026-10-24).
+Earlier commits were not all at that standard: the Phase 1 review found parts
+too close to Stockfish, and a later check found one function derived from
+python-chess. All were rewritten clean-room on 2026-10-24, as described in
+"Resemblances found in review, and the clean-room fixes" below. The earlier
+versions remain in the git history.
 
 Entries are added when the reference or library is first used, with
 the date and the part of Fork it informed.
@@ -29,15 +35,17 @@ the date and the part of Fork it informed.
 | 2026-10-23 | Chess Programming Wiki: Perft Results, re-read to check every suite FEN and count character by character | Test oracles in tests/suite.hpp. The page is the source of record; position 6 was first entered from memory without the black bishop on g4 and corrected from the page. |
 | 2026-10-23 | perftsuite.epd (126 positions; the Roce suite by Roman Hartmann, published on Jonatan Pettersson's Mediocre perft guide, mediocrechess.sourceforge.net/guides/perft.html; file from the 2007-12-02 Internet Archive capture of hem.passagen.se/maragor/perftsuite.epd) | Test oracle (perft_epd). Downloaded at configure time into .cache/ with a pinned SHA-256, **not committed**. |
 | 2026-10-23 | perft-random.epd (6838 positions, Marcel van Kervinck / Rookie, "All rights reserved"; Internet Archive capture of marcelk.net linked from CPW Perft Results) | Test oracle (perft_epd, perft_epd_deep, perft_epd_full). Downloaded at configure time, pinned SHA-256, **not committed** because of the copyright notice. |
-| 2026-10-23 | python-chess 1.11.2 source (`has_insufficient_material`, `is_repetition`, `is_irreversible`, `_transposition_key`, `fen`) | Read to match the oracle's rule definitions in tools/difftest. This entry first said Fork's `insufficient_material()` and `repetition_count()` were written independently to the same rules. For `insufficient_material` that was not true: the 2026-10-24 six-engine originality check found Fork's version to be a near-translation of python-chess's (GPL-3.0) function, in structure and conditions. It was replaced on 2026-10-24 by a clean-room rewrite (section "Resemblance to Stockfish" below). |
-| 2026-10-23 | Stockfish design (recalled from prior study, source not opened in that session): per-ply state record holding checkers, blockers/pinners per king and check squares; `gives_check` via check squares plus discovered-check blockers; a key-after-move helper (Stockfish: `key_after`) for TT prefetch | Used for Position::State, gives_check and predicted_key on 2026-10-23. The review found the resulting State and check computation too close to Stockfish; both were replaced on 2026-10-24 (section "Resemblance to Stockfish" below). `predicted_key` (renamed from `key_after`) remains: computing the key after a move without making it is a generic idea, and Fork's function was not flagged. |
+| 2026-10-23 | python-chess 1.11.2 source (`has_insufficient_material`, `is_repetition`, `is_irreversible`, `_transposition_key`, `fen`) | Read to match the oracle's rule definitions in tools/difftest. This entry first said Fork's `insufficient_material()` and `repetition_count()` were written independently to the same rules. For `insufficient_material` that was not true: the 2026-10-24 six-engine originality check found Fork's version to be a near-translation of python-chess's (GPL-3.0) function, in structure and conditions. It was replaced on 2026-10-24 by a clean-room rewrite (section "Resemblances found in review" below). |
+| 2026-10-23 | Stockfish design (recalled from prior study, source not opened in that session): per-ply state record holding checkers, blockers/pinners per king and check squares; `gives_check` via check squares plus discovered-check blockers; a key-after-move helper (Stockfish: `key_after`) for TT prefetch | Used for Position::State, gives_check and predicted_key on 2026-10-23. The review found the resulting State and check computation too close to Stockfish; both were replaced on 2026-10-24 (section "Resemblances found in review" below). `predicted_key` (renamed from `key_after`) remains: computing the key after a move without making it is a generic idea, and Fork's function was not flagged. |
 | 2026-10-24 | Chess Programming Wiki: Looking for Magics, Magic Bitboards (fancy layout), Traversing Subsets of a Set, On an empty Board, Square Mapping Considerations, Square Attacked By ("In Between") | Ideas for the clean-room rewrite of the magic search, masks and between/line tables (`src/core/bitboard.cpp`). Pages opened by the research agent on 2026-10-24; the wiki was in a "temporary, read-only recovery" state. |
 | 2026-10-24 | Sebastiano Vigna, splitmix64.c (public domain), https://prng.di.unimi.it/splitmix64.c | The generator in `src/core/splitmix.hpp`, used for the Zobrist keys (since 2026-10-23) and the magic candidates (since 2026-10-24). Constants checked against the file on 2026-10-24. |
 | 2026-10-24 | Chess Programming Wiki: Checks and Pinned Pieces (Bitboards), X-ray Attacks (Bitboards), Pin, Discovered Check, Square Attacked By | Ideas for the clean-room rewrite of the check information (`Position::refresh_check_info`, `lone_shields`, `gives_check`). |
-| 2026-10-24 | Clean-room specification by the research agent (`build/cleanroom/spec.md`, untracked), derived from Fork's and Stockfish's source without code | The H2/M3/H3 rewrites (section "Resemblance to Stockfish" below). |
+| 2026-10-24 | Clean-room specification by the research agent (`build/cleanroom/spec.md`, untracked), derived from Fork's and Stockfish's source without code | The H2/M3/H3 rewrites (section "Resemblances found in review" below). |
+| 2026-10-24 | Chess Programming Wiki: Encoding Moves, section "Two Positions with 218 Moves each" | The two 218-move FENs in tests/suite.hpp and tools/difftest/difftest.py (compared byte for byte on 2026-10-24). The other non-CPW FENs there were constructed for Fork; their perft counts come from python-chess. |
+| 2026-10-24 | apt.llvm.org (LLVM project's apt repository; signing key llvm-snapshot.gpg.key) | clang 16 and 19 for the Ubuntu 22.04 TCEC-toolchain check (scripts/tcec-toolchain-setup.sh). |
 | 2026-10-23 | Chess Programming Wiki: Chess960 Perft Results (960 positions, credited to Andrew Grant / Ethereal) | Read only, for the deferred Chess960 decision (DESIGN.md section 6); no data used. |
 
-## Resemblance to Stockfish found in review, and the clean-room fix
+## Resemblances found in review, and the clean-room fixes
 
 The Phase 1 review (2026-10-23/24, an adversarial "TCEC judge" pass) compared
 Fork's source side by side with Stockfish (official-stockfish/Stockfish at
@@ -64,8 +72,8 @@ The fix was a clean-room rewrite on 2026-10-24:
 - Results are identical: the same tables, the same bench node count and
   signature (26401709 / f298a22041a6270a), and all tests passing. The
   tables' SHA-256 fingerprints, taken from the old code by the research
-  agent, are reproduced by the new code in PEXT and magic builds with both
-  compilers (`fork_dump_tables <dir>`, `tools/dump_tables.cpp`, then
+  agent, are reproduced by the new code in the clang PEXT and magic builds
+  and the gcc PEXT build (`fork_dump_tables <dir>`, `tools/dump_tables.cpp`, then
   `sha256sum *.bin`):
 
   | File | SHA-256 |
@@ -179,6 +187,12 @@ to rook square (DESIGN.md §4.1), and the CPW move-flag nibble.
 |---|---|---|---|
 | python-chess | 1.11.2 | GPL-3.0 | Independent move generator for differential testing (tools/difftest), run in a local venv |
 | libFuzzer | bundled with LLVM-MinGW clang 23.1.3 | Apache-2.0 with LLVM exception | Fuzzing the FEN parser and move parsing (fuzz/) |
+| Syzygy 3-4-5 tablebases | 145 WDL + 145 DTZ files, SHA-256 checked by the kb branch's tools/install.sh | free to use (published by the Syzygy author; served by lichess) | From https://tablebase.lichess.ovh/tables/standard/ into ~/fork-tools (not committed). Oracle for `tools/syzygy_insufficient.py`; Phase 3 probing tests. |
+| fastchess | alpha 1.8.2 (20260726-f618e34) | MIT (GitHub API, 2026-10-24) | UCI compliance checks and engine matches (Phase 2+), installed in ~/fork-tools |
+| cutechess-cli | 1.5.1 | GPL-3.0 (GitHub API, 2026-10-24) | Engine matches (Phase 2+), ~/fork-tools |
+| Ordo | 1.2.6 | GPL-3.0 (GitHub API, 2026-10-24) | Rating calculation from match PGNs, ~/fork-tools |
+| Python | 3.12.10 (Windows venv `.venv`) | PSF | Runs tools/difftest, tools/fuzz, tools/syzygy_insufficient.py and bench/ab.py |
+| Marsaglia xorshift (13, 7, 17) | Marsaglia, "Xorshift RNGs", J. Stat. Softw. 8(14), 2003 | algorithm | Fixed-seed noise in tests/test_magics.cpp and random 16-bit moves in tests/test_consistency.cpp (test code only; the triple's attribution to the paper is UNVERIFIED: jstatsoft.org did not respond on 2026-10-24) |
 | libc++ / libc++abi (MSan-instrumented) | llvm-project llvmorg-21.1.8 (commit 2078da43) | Apache-2.0 with LLVM exception | Linked only into the Linux MemorySanitizer test build (scripts/msan.sh); every shipped and other test build uses the toolchain's libstdc++. Built from source in ~/fork-tools, not committed. |
 
 ## Build tools (not linked into Fork)
@@ -189,6 +203,10 @@ to rook square (DESIGN.md §4.1), and the CPW move-flag nibble.
 | WinLibs GCC (MinGW-w64, UCRT) | GCC 16.2.0 | GPL-3.0 with GCC Runtime Library Exception |
 | CMake | 4.4.4 | BSD-3-Clause |
 | Ninja | 1.13.2 | Apache-2.0 |
+| Linux (WSL2 Ubuntu): clang / gcc | 21.1.8 / 15.2.0 | Apache-2.0 with LLVM exception / GPL-3.0 with GCC Runtime Library Exception |
+| Linux: CMake, Ninja | 4.2.3, 1.13.2 | BSD-3-Clause, Apache-2.0 |
+| Linux analysis: clang-tidy, cppcheck, valgrind, ASan/UBSan/TSan/MSan | LLVM 21.1.8, 2.19.0, 3.26.0, the compilers' runtimes | Apache-2.0 with LLVM exception, GPL-3.0, GPL-2.0, as the compilers |
+| TCEC toolchain check (WSL Ubuntu 22.04.5): gcc / g++-12 / clang-16 / clang-19, CMake | 11.4.0, 12.3.0, 16.0.6 and 19.1.7 (apt.llvm.org jammy suites), 3.22.1 | as the compilers above; CMake BSD-3-Clause. Set up by scripts/tcec-toolchain-setup.sh. |
 
 ## Training data provenance
 

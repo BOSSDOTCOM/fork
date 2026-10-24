@@ -59,7 +59,10 @@ struct EdgePosition {
 };
 
 // Positions where special rules interact. Counts were produced by
-// python-chess, an independent move generator, and match Fork.
+// python-chess, an independent move generator, and match Fork. The FENs were
+// constructed for Fork, except the two 218-move positions, which are from
+// CPW "Encoding Moves" ("Two Positions with 218 Moves each"), compared byte
+// for byte on 2026-10-24.
 inline const std::vector<EdgePosition>& edge_positions() {
   static const std::vector<EdgePosition> edges = {
       {"8/8/8/2k5/3Pp3/8/8/4K3 b - d3 0 1", {9, 50, 379}, "ep captures the checking pawn"},

@@ -27,6 +27,10 @@ import time
 
 import chess
 
+# Start positions: the CPW "Perft Results" positions (start, Kiwipete,
+# positions 3-6), positions constructed for Fork's special-rule tests
+# (tests/suite.hpp), the 218-move position from CPW "Encoding Moves"
+# (checked byte for byte on 2026-10-24), and a constructed fifty-move case.
 STARTS = [
     chess.STARTING_FEN,
     "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
