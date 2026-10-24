@@ -675,6 +675,21 @@ invariants.
 | `key_after` | `predicted_key` | exact Zobrist key after a move, without making it (TT prefetch) |
 
 - **Rule:** before introducing a new type, function, file or member name,
-  check it against Stockfish's current source (a shallow clone,
-  `grep -rw`). If it matches and isn't generic CPW vocabulary, flag it to the
-  owner before using it.
+  check it against Stockfish's current source. If it matches and isn't
+  generic CPW vocabulary, flag it to the owner before using it.
+- **Name-check procedure (owner, 2026-10-24).** The implementing session
+  never runs the check itself and never has engine source on disk:
+  1. The implementing session lists its candidate names and hands them to a
+     separate research subagent.
+  2. The subagent shallow-clones Stockfish into a fresh temporary folder,
+     checks each name with a whole-word search (`grep -rlw`, file counts
+     only), and records the commit it checked.
+  3. It reports only **match / no match** per name (with the file count and
+     the commit), never code lines, surrounding context or other
+     identifiers.
+  4. It deletes the clone immediately, before reporting, and confirms the
+     deletion.
+
+  No engine clone, copied file or identifier dump stays on the machine
+  between checks (on 2026-10-24 all earlier clones in session scratchpads
+  were deleted for this reason). Matches are flagged to the owner as above.
