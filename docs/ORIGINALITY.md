@@ -190,7 +190,7 @@ to rook square (DESIGN.md §4.1), and the CPW move-flag nibble.
 
 | Tool | Version | License | Used for |
 |---|---|---|---|
-| python-chess | 1.11.2 | GPL-3.0 | Independent move generator for differential testing (tools/difftest), run in a local venv |
+| python-chess | 1.11.2 | GPL-3.0 | Independent move generator for differential testing (tools/difftest), run in a local venv; since Phase 2 also the oracle for the placeholder chooser (tools/placeholder_check.py) and for the constructed FENs in tests/test_uci.cpp |
 | libFuzzer | bundled with LLVM-MinGW clang 23.1.3 | Apache-2.0 with LLVM exception | Fuzzing the FEN parser and move parsing (fuzz/) |
 | Syzygy 3-4-5 tablebases | 145 WDL + 145 DTZ files, SHA-256 checked by the kb branch's tools/install.sh | free to use (published by the Syzygy author; served by lichess) | From https://tablebase.lichess.ovh/tables/standard/ into ~/fork-tools (not committed). Oracle for `tools/syzygy_insufficient.py`; Phase 3 probing tests. |
 | fastchess | alpha 1.8.2 (20260726-f618e34) | MIT (GitHub API, 2026-10-24) | UCI compliance checks and engine matches (Phase 2+), installed in ~/fork-tools |

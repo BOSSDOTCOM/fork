@@ -20,6 +20,7 @@
 #include <thread>
 #include <vector>
 
+#include "core/movegen.hpp"
 #include "core/position.hpp"
 #include "engine_process.hpp"
 #include "harness.hpp"
@@ -594,6 +595,53 @@ TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
   CHECK(!has("Z < info string LogFile: cannot open"));  // sent after the log was closed
   in.close();
   fs::remove(log);
+}
+
+// The placeholder chooser (DESIGN.md §5.1). Positions constructed for Fork
+// and checked with python-chess 1.11.2 on 2026-10-24:
+//   7k/6pp/8/q7/8/1N6/8/4R1K1 w - - 0 1   only mate in one e1e8; Nxa5 wins the queen
+//   7k/8/8/4q3/3P4/8/8/4R2K w - - 0 1     no mate; the queen can be taken by d4e5 (pawn) or e1e5 (rook)
+//   4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1     no mate; the only capture is e5d6 en passant
+// tools/placeholder_check.py checks the rule against python-chess on
+// thousands of random positions.
+TEST_CASE("uci_placeholder", "mate in one, else MVV-LVA, else the first legal move; the info line") {
+  Gui g;
+  auto choice = [&](const std::string& position, const std::string& go = "go depth 1") {
+    g.send(position);
+    g.send(go);
+    return bestmove_of(g.next("bestmove").value_or("bestmove ?"));
+  };
+  CHECK_EQ(choice("position fen 7k/6pp/8/q7/8/1N6/8/4R1K1 w - - 0 1"), std::string("e1e8"));
+  CHECK_EQ(choice("position fen 7k/8/8/4q3/3P4/8/8/4R2K w - - 0 1"), std::string("d4e5"));
+  CHECK_EQ(choice("position fen 7k/8/8/4q3/3P4/8/8/4R2K w - - 0 1", "go searchmoves e1e5 h1g1"),
+           std::string("e1e5"));
+  CHECK_EQ(choice("position fen 7k/8/8/4q3/3P4/8/8/4R2K w - - 0 1", "go searchmoves h1g1 h1h2"),
+           std::string("h1g1"));
+  CHECK_EQ(choice("position fen 4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"), std::string("e5d6"));
+  // No mate and no capture: the first move in Fork's generation order.
+  Position start;
+  MoveList legal;
+  generate<GenMode::Legal>(start, legal);
+  CHECK_EQ(choice("position startpos"), start.move_to_uci(legal[0]));
+  // The info line before each bestmove has the spec's fields, in order.
+  const std::vector<std::string> out = g.texts();
+  int checked = 0;
+  for (std::size_t i = 1; i < out.size(); ++i) {
+    if (!starts_with(out[i], "bestmove")) continue;
+    const std::vector<LineToken> t = split_tokens(out[i - 1]);
+    const bool fields = t.size() == 16 && t[0].text == "info" && t[1].text == "depth" && t[2].text == "1" &&
+                        t[3].text == "seldepth" && t[4].text == "1" && t[5].text == "score" &&
+                        t[6].text == "cp" && t[7].text == "0" && t[8].text == "nodes" &&
+                        parse_int64(t[9].text).value_or(0) >= 1 && t[10].text == "nps" &&
+                        parse_int64(t[11].text).value_or(-1) >= 0 && t[12].text == "time" &&
+                        parse_int64(t[13].text).value_or(-1) >= 0 && t[14].text == "pv" &&
+                        "bestmove " + std::string(t[15].text) == out[i];
+    CHECK_MSG(fields, out[i - 1] << " / " << out[i]);
+    ++checked;
+  }
+  CHECK_EQ(checked, 6);
+  g.check_transcript();
+  g.quit();
 }
 
 }  // namespace forkeng::test
