@@ -339,3 +339,24 @@ added on 2026-10-24; ideas 1-12 predate them.
   its nps loss to pass SPRT.
 - **earliest phase:** after Phase 8 (parked).
 - **status:** parked until after Phase 8
+
+## 17. Correction history shared across threads
+
+- **type:** ELO
+- **flag:** a build or tuning flag selecting shared or per-thread
+  correction tables (name set in Phase 6).
+- **idea:** Phase 3 keeps the static-eval correction tables (KB
+  search-techniques.md T32) per thread. Share them between all search
+  threads instead, with lockless access, so every thread learns from the
+  whole tree. Published results show it neutral at 1 thread but gaining at
+  high thread counts (Caissa 24fde49, 2024-12: +44 at 32 threads; Halogen
+  #842, 2026-01: about +19 at 8 threads; KB §1 lesson 4). TCEC runs 512
+  threads.
+- **phase:** Phase 6.
+- **metric:** SPRT at a high thread count (shared vs per-thread), at a long
+  time control, reported with the nps change.
+- **runtime cost:** possible (cache-line contention between threads).
+- **earliest phase:** Phase 6 (needs T32 from Phase 3 and Lazy SMP).
+- **sources:** docs/kb/search-techniques.md (branch kb), §1 and §3.23;
+  engine references logged in ORIGINALITY.md (2026-10-24 rows).
+- **status:** untested

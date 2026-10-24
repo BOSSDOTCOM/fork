@@ -6,7 +6,7 @@ correctness first, then speed. This file records the architecture and every
 decision that affects play. Phase 7 evaluation adjustments must be documented
 here; no logic may alter reported scores to trigger or avoid adjudication.
 
-Status: **Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`). Every preset green on Windows, Linux and the TCEC toolchain. Next: Phase 3 (search), in a fresh session, after the idea mining and the clean-room descriptions.**
+Status: **Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`). Every preset green on Windows, Linux and the TCEC toolchain. Phase 3 (search) spec approved 2026-10-24 (§5.2); building towards Milestone A.**
 
 ---
 
@@ -311,6 +311,7 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
 - **Phase 3: Search.** PVS + ID + aspiration, qsearch with SEE, TT,
   ordering, pruning and extensions as listed in the brief, Syzygy
   (Fathom), deterministic `bench` (fixed positions, fixed depth, 1 thread).
+  Detailed spec: §5.2.
 - **Phase 4: Evaluation.** A swappable `Evaluator` interface; tapered
   PST first, then NNUE (HalfKA-style, incremental accumulator, AVX2/AVX-512 plus
   scalar) trained only on Fork self-play data, with provenance logged.
@@ -556,6 +557,473 @@ Before Phase 2 starts, the Phase 1 review fixes come first (owner,
 clean-room originality rewrites, the medium and low findings, the
 deferred tests and suspicions, and ORIGINALITY.md.
 
+### 5.2 Phase 3 spec: search (approved by the owner 2026-10-24)
+
+**Goal.** Replace the Phase 2 placeholder with a real alpha-beta search:
+the tier 1 core first, then the tier 2 refinements one at a time. Every
+technique stays only if it passes SPRT. **Phase 3 settles structure, not
+final tuning**: each technique gets its shape, gating, flag, tests and a
+reasonable default chosen by Fork, and the tuning campaigns come after
+Phase 4. Phase 4 replaces the evaluation and changes its scale, so every
+eval-tied margin (RFP, futility, NMP gate, ProbCut, SEE thresholds) will
+need retuning then anyway.
+
+**Sources.** Technique descriptions come only from the clean-room file
+`docs/kb/search-techniques.md` (branch kb, 2026-10-24; IDs T1-T49 below are
+its IDs) and the primary papers it cites. **No engine's source code is
+opened in Phase 3**, by the implementing session or any helper, except the
+throwaway name-check clone of §8. The identifiers that file lists as
+off-limits are never used, in any case or spelling: `statScore`, `ttPv`,
+`cutNode`, `Stack` (as the search stack type), `nmpMinPly`,
+`singularBeta`, `opponentWorsening`, `hindsight`, `doDeeperSearch`,
+`doShallowerSearch`, `BadNoisy`. Every new reference consulted goes into
+ORIGINALITY.md when it is first used.
+
+**Out of scope.** Tier 3 techniques (T34-T49), except mate distance pruning
+(T33), which the KB says to add with the core because it is cheap. Killers
+(T45) and countermoves (T46) are not built; they come back only if the
+histories turn out weak, as their own SPRT. SMP is Phase 6: Phase 3 searches
+on one thread and ignores `Threads` (Phase 2 uses it only for Hash
+clearing), but it keeps all search state in a per-thread object, so Phase 6
+adds threads without restructuring. Full time management is Phase 5:
+Phase 3 builds only the basic budget (deliverable 8). Final parameter
+tuning comes after Phase 4.
+
+#### Module layout and names
+
+| File | Contents |
+|---|---|
+| `src/eval/bootstrap_eval.*` | the bootstrap evaluation (deliverable 1) |
+| `src/search/searcher.*` | `Searcher` (per-thread search state and the recursion), `SearchLimits`, `SearchResult`, `PlyFrame` (one search-stack entry per ply), `NodeKind`, `RootEntry` |
+| `src/search/trans_table.*` | `TransTable`, `TtEntry`, `TtBucket`, `TtBound`, `score_to_tt` / `score_from_tt` |
+| `src/search/see.*` | `see_at_least(pos, move, threshold)` |
+| `src/search/move_selector.*` | `MoveSelector`, `SelectorStage` (the staged picker) |
+| `src/search/` history tables | `QuietHistory`, `CaptureHistory`, `ContHistory`; the file basename, and the gravity update's function name, are still to be checked |
+| `src/search/time_budget.*` | `TimeBudget` (soft and hard limits) |
+| `src/tb/tb_bridge.*` | `TbBridge`, the only code that calls Fathom |
+| `src/tune/params.*` | `ParamTable`, `TuneParam` (DESIGN.md §1) |
+| `third_party/fathom/` | Fathom, vendored at a pinned commit with its LICENSE (deliverable 7) |
+
+The names above were checked against Stockfish dbe600b on 2026-10-24 by a
+throwaway research subagent (§8 procedure; clone deleted before it
+reported). All of them had no match. These candidates matched and are
+**not used**: `RootMove`, `MovePicker`, `see_ge`, `ContinuationHistory`,
+`CorrectionHistory`, `probe_wdl`, `Reductions`, `value_to_tt`,
+`value_from_tt`, `mate_in`, `mated_in`, `evaluate`, `improving` (as an
+identifier; the concept is fine), and the file basenames `search`, `tt`,
+`history`, `timeman`. Any name added while building goes through the same
+check first.
+
+#### Deliverables in build order
+
+Each deliverable is one or more commits, behind flags where it adds a
+technique, with its tests, its SPRT results and its performance gate
+(Quality control below). Milestones A, B and C are the only planned stops
+for the owner's review.
+
+**1. Bootstrap evaluation.** A deliberately simple, deterministic
+evaluation, from the side to move's view, good enough to make the search's
+results meaningful until Phase 4:
+- material on a 100/300/300/500/900 centipawn scale (Fork's choice; the
+  conventional 1/3/3/5/9 ratios, to be cited from a primary source when
+  written, non-negotiable 1);
+- a small centralization term for knights, bishops and the king in the
+  endgame, computed from a distance formula, not from tables;
+- with no pawns on the board and a clear material lead, a term that drives
+  the losing king to the edge and the winning king toward it, so the
+  search can play out mates such as KRK without tablebases;
+- insufficient material scores as a draw (`cannot_mate`, Phase 1).
+
+It is called directly, a plain function with no virtual dispatch (hot-path
+rule 3). **The evaluator is selected at build time, with no indirect call**
+(owner, 2026-10-24): Phase 4's "swappable Evaluator" is a build option, not
+a runtime interface. Test: symmetry, the
+colour-flipped position gives the negated score on every perft-suite node.
+
+**2. Core search** (T1, T2, T5, T6, T33).
+- **Negamax, fail-soft** alpha-beta, an explicit PV/non-PV flag passed down
+  (T5 conditions), **PVS**, **iterative deepening** and **aspiration
+  windows** (narrow window around the previous score; only the failing side
+  widens, geometrically; decisive scores open the window fully).
+- **Scores** in a 16-bit-safe range of Fork's own choosing: a mate at ply n
+  scores `MateScore - n`, tablebase wins sit in a band below the mate band,
+  and draws score 0. Mate distance pruning (T33) clamps the window to the
+  mate bounds at each ply.
+- **Draws in the tree**: insufficient material; the 50-move rule (mate is
+  checked first, as Phase 1 requires); and a repetition, meaning any
+  earlier occurrence of the position within `repetition_count()`'s range,
+  scores as a draw at non-root nodes. Fork's choice: one repetition is
+  enough inside the search, and the game itself still needs three.
+- **Search stack**: a fixed array of `PlyFrame`, one per ply up to a fixed
+  maximum ply that the max-ply stress test checks. Each frame holds the
+  static eval (absent in check), the move played, the moved piece and its
+  destination (for continuation history later), the excluded move (T27
+  later) and node flags. The PV is collected from exact results only.
+- **Root**: the root move list honours `searchmoves`. The best move from
+  an unfinished iteration is used only if it came with an exact score
+  above the previous iteration's best; otherwise the last finished
+  iteration's best move stands. The flow of `go depth/nodes/mate/movetime/
+  infinite` and `stop` is Phase 2's, now driving the real search.
+- **UCI output**: one `info` line per finished iteration (`depth seldepth
+  score cp|mate [lowerbound|upperbound] nodes nps time hashfull tbhits
+  pv`), with aspiration fails printed only once the search has run for a
+  while (Fork's choice: 1 s), then `bestmove`. MultiPV is deferred to
+  Phase 7 (owner, 2026-10-24).
+- **Search bench** (replaces the perft bench; Testing setup below).
+- **Tooling**: `fork` reports its build identity (variant, commit) the way
+  `fork_micro` does, so `bench/ab.py` (or a sibling script with the same
+  identity checks) can compare search nps from interleaved `fork bench`
+  runs.
+- Deletes `src/uci/placeholder.*`, its test and `tools/placeholder_check.py`.
+
+**3. Transposition table** (T4), on Phase 2's `HashMemory`.
+- **Layout (Fork's own)**: one 64-byte bucket per cache line, holding 5
+  entries of 12 bytes plus 4 spare bytes. Each entry holds 32 key-check bits,
+  a 16-bit move, a 16-bit score, a 16-bit static eval (unused until a later
+  deliverable needs it; it is there so Phase 4 does not need a new layout),
+  an 8-bit depth, and 8 bits for the bound (2), the TT-PV flag (1, T19) and
+  the age (5). This is compact (rule 3) and differs from other engines'
+  published layouts. The entry size is an A/B experiment, not a fixed
+  belief.
+- **Index**: the bucket comes from the 64-bit key by a multiply-high range
+  reduction (Lemire's method, to be cited from its primary source), in
+  64-bit arithmetic, so the 4 TiB maximum (more than 2^32 buckets) works.
+  This is tested arithmetically at the maximum bucket count, without
+  allocating (§5.1 note).
+- **Probe and store**: a cutoff only at non-PV nodes, with sufficient
+  depth and a bound that points the right way; mate and TB scores
+  converted by ply on store and on probe; the TT move validated with
+  `is_pseudo_legal` and `is_legal` before use. Replacement prefers the
+  same key, then the entry with the lowest depth minus age penalty.
+  Qsearch entries are stored with the lowest depth. An entry is always
+  written whole, which Phase 6 needs for lockless access.
+- **Prefetch** of the child's bucket via `predicted_key(move)` before
+  `make` (§7 Memory).
+- `ucinewgame` and `Clear Hash` keep clearing it in parallel (Phase 2);
+  each `go` advances the age.
+
+**4. Quiescence search and SEE** (T3, T7, and qsearch SEE pruning from T23).
+- **SEE**, threshold form `see_at_least`, written by Fork from the T7
+  description: least valuable attacker first, x-rays rejoin, the king
+  captures only onto undefended squares, and either side may stop. Fork's
+  documented promotion rule: the move being judged counts its promotion
+  gain, and later recaptures do not promote. Pin-awareness is an
+  experiment (KB §6 item 10): built off first, then measured.
+- **Qsearch**: stand-pat (off in check), captures and queen promotions
+  ordered by MVV-LVA, all evasions in check (mate detected when there are
+  none), TT probe and cutoffs at non-PV nodes, captures that lose by SEE
+  skipped. No checks in qsearch (the KB notes they were removed elsewhere
+  at no cost; an experiment flag only).
+- Tests: SEE on constructed positions with hand-derived results, and
+  randomized differential testing against a slow reference (a full
+  capture-only minimax on one square, written by Fork with the same rules);
+  the threshold property (the sign agrees at every threshold); qsearch
+  values on constructed exchange positions checked with python-chess.
+
+> **Milestone A** (stop for the owner's review): deliverables 1-4 done;
+> Fork plays real chess. Report: SPRT of the search against the placeholder
+> (a sanity check, expected to be a huge gain), each deliverable's
+> performance gate, the correctness suite, and games under fastchess and
+> cutechess-cli with no crashes or time losses.
+
+**5. Move ordering** (T8, T9). No killers, no countermoves.
+- **Staged `MoveSelector`**: the TT move, then good captures (SEE at or
+  above zero, by MVV-LVA; capture history replaces the LVA part in tier 2,
+  T11), then quiets by butterfly history, then bad captures and
+  under-promotions. In check: evasions, captures first, then quiets by
+  history. Picking is a partial selection sort, and the TT move is never
+  produced twice. Generation reuses Phase 1's `Captures` and `Quiets`
+  modes, so only the stages that are reached get generated.
+- **Butterfly history** (T9) by side, from-square and to-square: a bonus
+  for the quiet move that cuts, growing with depth and capped; a malus for
+  the quiets tried before it; a self-limiting gravity update, so values
+  stay bounded. Integer widths are chosen so that summed tables cannot
+  overflow. Whether histories are kept, aged or cleared between moves is
+  Fork's choice, tested.
+- Tests: an exhaustive picker test over the perft suites, where the picker
+  yields exactly the legal moves, each once, in every stage combination,
+  with a valid, an illegal and a bogus TT move. Update-rule unit tests
+  (bounded for any sequence, monotone). Counters: the share of cutoffs on
+  the first move, and the average index of the cutoff move.
+
+**6. Tier 1 pruning and reductions**, one SPRT per technique, in this
+order (KB build-order steps 4-6, minus the tier 2 items):
+- **RFP** (T20): non-PV, not in check, shallow depth, a margin that grows
+  with depth; never returns a mate score.
+- **Null move pruning** (T13): non-PV, not in check, not after a null
+  move, not in an excluded search, non-pawn material for the side to move,
+  static eval at or above beta, beta not a mate score, a reduction that
+  grows with depth and with the eval surplus, unproven mates not returned.
+  The high-depth verification (T14) follows in tier 2.
+- **LMR, base form** (T15): reduction from a precomputed table shaped as
+  the product of two logarithms of depth and move number, clamped to at
+  least one ply and below the full depth; re-search at full depth with the
+  zero window, then at PV nodes with the full window.
+  **Determinism rule:** the table must come out identical on every
+  compiler, libm and architecture, or bench parity breaks. So it is built
+  either with integer arithmetic only, or from `std::log` with a test that
+  pins its checksum on every preset. No floating point anywhere else in a
+  search decision.
+- **Late move pruning** (T21): shallow depth, quiets only, a count that
+  grows with depth. The legal-move count is kept apart from the
+  searched-move count, so pruning never fakes a stalemate.
+- **Futility pruning** (T22): shallow depth, quiet, non-checking moves,
+  eval plus a margin at or below alpha, the best score raised to the
+  futility value when pruning.
+- **SEE pruning in the main search** (T23): shallow depth, separate
+  thresholds for quiets and captures, growing with depth, after at least
+  one move has been searched.
+- Tests: the false-stalemate unit test (a position with only quiet legal
+  moves at low depth); the tactical and mate suites at fixed nodes after
+  each technique (Testing setup); prune and re-search counters.
+
+> **Milestone B** (stop): deliverables 5-6 done. Report: each technique's
+> SPRT (STC and LTC where the rule below applies), node counts and nps,
+> tactical solve rates, and the queued experiments, run here because the
+> hot path is now representative.
+
+**7. Syzygy probing, designed for 7 pieces** (ideas.md idea 12).
+- **Library**: Fathom, jdart1/Fathom at commit c9c6fef0 (KB tools.md §6,
+  MIT), **vendored** in `third_party/fathom/`, because `update.sh` allows no
+  configure-time downloads. It is built as a separate target, with its
+  warnings handled there, so Fork's own `-Werror` stays. Its lineage
+  (probing code from Ronald de Man's `tbprobe.c` via Cfish, a Stockfish
+  derivative; board code from Basil's original Fathom) goes into
+  ORIGINALITY.md under Third-party libraries (owner, 2026-10-24).
+- **To settle before coding** (kb-researcher, primary sources only): that
+  this Fathom commit probes 7-piece tables, and how its largest piece count
+  is reported; whether its file mapping can take `madvise(MADV_RANDOM)` on
+  Linux (TCEC asks this of 7-man users) and what change, if any, that needs
+  in the vendored code, recorded as a diff; and its Windows mapping path,
+  for the second platform.
+- **Init** once per `SyzygyPath` change, outside any search. The piece
+  limit comes from the tables actually found (3-7), never hard-coded, and a
+  missing file is "no result", never an error.
+- **In search**: WDL probes at non-root nodes within the piece limit, with
+  zero castling rights and a zero halfmove clock (Fathom's conditions, KB
+  techniques.md), above a minimum depth (a tunable parameter, not a UCI
+  option). Wins and losses map to the TB band, cursed wins and blessed
+  losses to scores just off zero, and the TT stores the result as a bound.
+  `tbhits` is counted.
+- **At the root**: when the root is in the tables, the DTZ root probe
+  (once per search, on the search thread; it is not thread-safe) keeps
+  only the moves that preserve the best WDL result under the 50-move rule
+  and ranks them, then the search runs on those moves. The fallback when
+  DTZ is missing is a WDL ranking. TCEC plays the 50-move rule, so the rule
+  is always on; no Syzygy UCI options beyond `SyzygyPath` (owner,
+  2026-10-24).
+- **Thread safety for 512 threads** is a Phase 6 test, but nothing here
+  may assume one thread: no shared mutable state outside Fathom's
+  thread-safe WDL path.
+- Tests: Fork's probes against the `fathom` command-line tool on the
+  locally installed 3-4-5 tables, over many positions; 7-piece positions
+  against the lichess tablebase API, with answers fetched once, cited and
+  cached; one small 7-man table file if one can be downloaded (its size
+  is UNVERIFIED, so the researcher checks); a missing file, an empty path
+  and a path with only some files; the won-ending conversion suite (TB-won
+  positions near the 50-move limit, played out against a TB-perfect
+  defender, share converted); all presets on both platforms.
+
+**8. Basic time management.** `TimeBudget` turns `wtime/btime/winc/binc/
+movestogo/movetime` and `Move Overhead` into a soft limit (checked between
+iterations: don't start an iteration that probably won't finish) and a hard
+limit (polled in the search every fixed number of nodes). These are
+conservative fixed formulas; nothing is tuned (that is Phase 5). Tests:
+games at very short time controls and under full CPU load (Phase 2's
+2+0.02 setup) with zero time losses; `movetime` overrun stays within a
+stated bound; `stop` to `bestmove` latency under 10 ms with the real search
+(the Phase 2 timing test).
+
+> **Milestone C** (stop): deliverables 7-8 done; the core of Phase 3 is
+> complete. Report as for Milestone B, plus the TB tests, the conversion
+> suite and time-loss counts.
+
+**9. Tier 2 refinements**, built one at a time, each behind a flag and
+SPRT-tested on its own, **reported in batches at the end of Phase 3**, not
+individually. The order follows the KB's build order (steps 5 and 7-10):
+1. T18 improving (per use: RFP, LMP, LMR, NMP gate), T26 IIR.
+2. T10 continuation history (1-ply, then 2-ply, then deeper, each its own
+   SPRT, watching nps), T11 capture history, T24 quiet history pruning.
+3. T17 node-type tracking, T19 TT-PV flag, then the T16 LMR adjustments
+   one at a time (history, improving, expected cut node, PV/TT-PV, TT move
+   is a capture, captures, gives check, deeper/shallower re-search).
+4. T27 singular extensions (with the excluded-move search, which neither
+   probes as nor overwrites the real entry), then T28 multi-cut, T29 double
+   and triple extensions with a per-line cap, T30 negative extensions.
+5. T31 ProbCut, T32 correction history (one table at a time: pawn,
+   non-pawn per side, minor, continuation), T25 qsearch futility, T14 NMP
+   verification at high depth (zugzwang insurance for TCEC endgames, on
+   non-regression bounds, tested on cited zugzwang positions).
+6. T12 pawn-structure history, last, because it needs a pawn key.
+
+**The pawn key** (for T12 and T32) and the non-pawn keys (for T32) are a
+`src/core` change: Phase 1's H3 rewrite removed them because nothing used
+them. They are re-added only with a consumer, designed by Fork from
+Fork's own Zobrist keys, measured for make/unmake cost with `bench/ab.py`,
+and they trigger the fuzz rule for `fuzz_fen` and `fuzz_moves`. A
+correction-table bound and clamp keep the corrected eval out of the mate
+and TB ranges; the raw eval is kept for anything that might later feed
+training (Phase 4 data policy).
+
+#### Testing setup
+
+**SPRT.** fastchess (`~/fork-tools/bin`, config/local-test.json) on Linux
+(WSL), game pairs with colours reversed, pentanomial statistics
+(`-report penta=true`), normalized Elo (fastchess's default model),
+alpha = beta = 0.05. Bounds (owner, 2026-10-24), in normalized Elo:
+- gainers until Milestone B: [0, 5], since gains are large early;
+- tier 2 gainers: [0, 3];
+- simplifications and safety features (T14, removals): non-regression
+  [-3, 0].
+
+Conditions: **STC** 8+0.08 s, Hash 16 MB; **LTC** 40+0.4 s,
+Hash 64 MB; one thread per engine, 3-4-5 Syzygy for both sides once
+deliverable 7 is in; concurrency 5 (the 7600X3D's 6 physical cores minus
+one, since the machine is shared). Openings: UHO_Lichess_4852_v1.epd (KB
+tools.md), **test openings only, never training data** (owner,
+2026-10-24; KB data-policy.md decision 6), with its SHA-256 and source in ORIGINALITY.md
+under Test-only tools, like idea 7's rule for engine-evaluated books.
+`tools/make_openings.py` is the fallback. A script (`tools/sprt.sh`,
+name to be checked) builds both commits with the TCEC build, checks the
+identities, runs fastchess from a JSON config and appends one line per
+test to `docs/history/phase-3/sprt-log.md` (change, commits, bounds, TC,
+games, pentanomial counts, Elo with error, LLR, verdict). Throughput is
+measured on the first SPRT; until then the game rates are UNVERIFIED. An
+LTC SPRT can take a day or more, and only one heavy job runs at a time.
+
+**Long time controls.** No search change is rejected on short time
+control results alone.
+- **Straight to LTC** (the research flags these as long-time-control
+  sensitive, KB §1 lesson 3 and the entries): correction history (T32),
+  all extensions (T27-T30, and T38-T41 if ever tried), IIR (T26), TT-PV
+  uses in pruning and reductions (T19, T16's TT-PV adjustment), and capture
+  history (T11; Weiss #428 failed STC and passed LTC).
+- **Everything else**: STC first. An STC pass is accepted for changes that
+  don't alter tree shape (ordering scores, speed, eval); a change to
+  pruning, reductions or extensions is also confirmed at LTC (KB tests
+  rule). **An STC failure gets an LTC retest before it is rejected**, and
+  the LTC result decides.
+- Every result, including rejections, goes in the SPRT log.
+
+**Search bench** (replaces the perft bench as `fork bench` and in
+`tests/bench.ref`). It searches a fixed set of positions to a fixed depth,
+on one thread, with 16 MB of Hash, and clears the TT and histories before
+each position. It prints `nodes`, `nps` and a 64-bit `signature`, a fold
+over each position's node count, best move, score and depth, and runs in a
+few seconds in release builds. The positions are the six perft-suite
+positions plus about 40 positions from the Lichess CC0 game database
+(moves only: `[%eval]` comments ignored, no BOT games; KB data-policy.md), sampled by a committed script with a fixed seed and
+checked with python-chess (owner, 2026-10-24). **The set must cover
+openings, middlegames, endgames and positions with the side to move in
+check**; the sampling script selects by phase and check status and prints
+the coverage. The perft workload stays as
+its own parity test (`fork perftbench` or similar, name to be checked), so
+move-generation parity across architectures stays guarded. Every search
+change updates `bench.ref` in the same commit, and the commit message
+states nodes and signature (non-negotiable 3). Bench parity across all
+presets, both compilers, both platforms and the 4 TCEC compilers still
+holds, which is why search decisions use no floating point (deliverable 6).
+
+**Correctness tests** (ctest, beside the existing ones):
+- at small depths with pruning off, alpha-beta, PVS, aspiration and
+  TT-on all give the same root score as a plain minimax reference, on
+  random positions;
+- mate-in-N positions and draw detection (repetition, the 50-move rule
+  with mate first, insufficient material);
+- the max-ply stress test on forcing positions (no overflow, ply bounded);
+- a tiny-hash stress test (replacement and collisions);
+- `go depth/nodes/mate/movetime` honoured; the existing UCI suites with
+  the real search; `uci_oom` still yields a real `bestmove`;
+- **tactical and mate suites** at fixed nodes, as a regression guard after
+  every pruning change (they never replace SPRT). The suite is chosen and
+  fetched by the kb-researcher from a primary source, cited and
+  SHA-pinned, and downloaded at configure time if its licence forbids
+  committing it (candidates such as Win at Chess; UNVERIFIED until
+  checked);
+- debug-build search counters (`FORK_SEARCH_STATS`, compiled out of
+  release builds): cutoff rates, prune, re-search and extension counts,
+  and the TT hit rate;
+- `fuzz_uci` now reaches the search (with small node limits); the
+  phase-end fuzz rule applies to it, and to `fuzz_fen` and `fuzz_moves` if
+  `src/core` changes.
+
+#### Queued experiments (run at Milestone B; results in ideas.md)
+
+1. **Legal vs pseudo-legal generation in search.** Fork generates fully
+   legal moves. The alternative is pseudo-legal generation with
+   `is_legal` before `make`, for the stages that are reached. With the
+   same move order, bench nodes are identical, so this is an nps-only A/B.
+2. **Idea 9, the gives_check ratio.** Count `gives_check` calls per
+   `make` in real search. If the ratio approaches 2 or more, test the lazy
+   per-ply check squares (computed on the first call in a ply and reused).
+3. **Layout variants (idea 9).** Re-derive Position and State layout
+   candidates for the 56-byte State (`archive/layout-exp` v5 no longer
+   applies), plus TT entry and bucket sizes and history table widths, all
+   measured by search nps with the A/B harness, bench unchanged.
+
+#### Quality control
+
+1. **Pace.** One deliverable at a time, but stops for the owner's review
+   only at the three milestones:
+   - **Milestone A**: bootstrap eval, core search, TT and quiescence search
+     done (Fork plays real chess).
+   - **Milestone B**: move ordering and all tier 1 pruning and reductions
+     done.
+   - **Milestone C**: Syzygy probing and basic time management done (the
+     core of Phase 3 complete).
+
+   Tier 2 refinements are reported in batches at the end of Phase 3, not
+   individually. The performance gate still runs after every deliverable,
+   automatically: its results are recorded in
+   `docs/history/phase-3/perf-log.md`, and work stops early only for an
+   unexplained slowdown beyond the noise floor or a reviewer finding that
+   needs the owner's decision.
+2. **Performance gate per deliverable.**
+   - Search nps and the search-bench node count, compared with the
+     previous deliverable using the A/B harness. The noise floor is
+     measured once by an A/A run of the search bench at deliverable 2 and
+     recorded, then rechecked if the machine's load changes.
+   - One `perf record` profile (WSL; perf 6.18 is installed) of `fork
+     bench`, listing the top functions by self time, with any hotspot that
+     doesn't belong flagged.
+   - A slowdown beyond the noise floor needs a stated reason (a deliberate
+     trade for better search, shown by its SPRT) or a fix.
+3. **Hot-path rules for all search code.**
+   - No heap allocation: the `no_alloc` test is extended to run full
+     searches (bench positions, after setup) under the counting allocator
+     and require zero allocations. Per-thread tables are allocated when
+     the search object is created, never during a `go`, and `info` lines
+     are formatted into a fixed buffer.
+   - No exceptions, virtual calls or `std::function` in the search loop.
+   - No unnecessary Position copies (one per search thread per `go`; the
+     search itself uses make/unmake).
+   - Compact TT entries (deliverable 3).
+
+   The reviewer subagent checks these once per deliverable, not per
+   commit. The originality-checker also runs at each milestone and at phase
+   end, since search code is where resemblance risk is highest; it also
+   compares Fork's constants (score range, margins) with other engines',
+   as it did for the option limits.
+4. **No premature micro-optimization.** Tweaks smaller than the noise floor
+   aren't worth code complexity. Structure and correctness first; a speed
+   change must show a measured gain (§7).
+5. **Strength.** Every technique and refinement must pass SPRT before it
+   stays. One that fails (after its LTC retest where the rule applies)
+   stays off behind its flag or is removed, and the result is logged.
+
+#### Owner's answers (2026-10-24)
+
+1. SPRT bounds [0, 5] until Milestone B, [0, 3] for tier 2, [-3, 0] for
+   non-regression; concurrency 5; UHO_Lichess for test openings only, never
+   as training data (recorded in KB data-policy.md).
+2. Fathom: vendor jdart1/Fathom c9c6fef0, lineage documented in
+   ORIGINALITY.md; no Syzygy options beyond `SyzygyPath`.
+3. Bench: the six perft-suite positions plus about 40 Lichess CC0 positions
+   with a fixed seed, covering openings, middlegames, endgames and positions
+   with checks.
+4. MultiPV deferred to Phase 7.
+5. The evaluator is selected at build time, with no indirect call.
+
 ## 6. Decisions log
 
 | Date | Decision |
@@ -574,6 +1042,7 @@ deferred tests and suspicions, and ORIGINALITY.md.
 | 2026-10-24 | **MinGW GCC: aligned AVX stack moves fault on Windows.** The sign-off run of all presets found the Windows gcc-debug engine crashing in about half of all starts (access violation at a `vmovdqa ymm` store to a 16-byte-aligned stack slot in `uci_main`; Windows x64 promises only 16-byte stack alignment). Every MinGW GCC build now assembles with `-Wa,-muse-unaligned-vector-move`: 0 aligned vector moves left, 0 of 50 starts crash, all 12 Windows builds pass, bench unchanged. Windows gcc-debug is not in `check.sh full`, which is why no commit check saw it (gcc-release has the same moves, 205 of them, without a crash seen). Linux and the TCEC builds are unaffected. GCC bug number and option history UNVERIFIED (CMakeLists.txt). |
 | 2026-10-24 | **Option limits are Fork's own (owner, after the Phase 2 originality check found the specified limits equal to Stockfish's):** Hash max 4194304 MB (4 TiB), Threads max 4096, Move Overhead max 10000 ms; defaults unchanged. Boundary tests for every spin option. **Review fixes:** out-of-memory answers with a real bestmove from fixed buffers; Hash clear workers counted from the size allocated. |
 | 2026-10-24 | **Hash memory: one block, checked against available memory (owner, amending §5.1).** The chunked fallback was dropped: Linux overcommit checks each mmap alone, so chunks would pass where the whole table is refused and the parallel clear would then trigger the OOM killer. Requests are compared with the physical memory available (plus the current table) before allocating; a refusal falls back to the previous size, else 1 MB, with `info string`. Transparent huge pages requested with `madvise`. Tested with a 1 TB request and one just above available memory, on Windows and Linux. |
+| 2026-10-24 | **Phase 3 spec approved** (§5.2) with the owner's answers listed there: SPRT bounds and conditions, Fathom vendored, the search bench positions, MultiPV deferred to Phase 7, the evaluator chosen at build time. UHO_Lichess is a test-opening book only (KB data-policy.md decision 6). Build order: deliverables 1-8 with stops at Milestones A, B and C. |
 
 ## 7. Performance doctrine (governs every phase)
 
