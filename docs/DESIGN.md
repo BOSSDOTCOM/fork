@@ -924,6 +924,11 @@ SPRT at STC, 1,478 games per hour (about 790 at concurrency 5) with 0 time
 losses and no illegal moves, crashes or disconnects; still 0 time losses
 over all 943 concurrency-10 games by 2026-10-25 (634 PVS, 309 aspiration;
 checked in both the fastchess logs and the PGN terminations).
+**Queued after the Milestone A chain** (owner, 2026-10-25): game
+adjudication in `tools/sprt.sh` (fastchess `-resign` and `-draw`, with
+conservative thresholds, the same for both engines). Measure the games per
+hour gained, and re-run one known SPRT with it to confirm the result stays
+consistent before adopting it.
 
 **Long time controls.** No search change is rejected on short time
 control results alone.

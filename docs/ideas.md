@@ -379,3 +379,64 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **sources:** Fork's own idea, logged by the owner's request; no source
   consulted yet.
 - **status:** untested
+
+## 19. Explicit huge pages for the TT
+
+- **type:** TOOLING (performance)
+- **idea:** Fork's Hash is one 2 MiB-aligned block with
+  `madvise(MADV_HUGEPAGE)` (transparent huge pages, a hint; DESIGN.md §5.1).
+  Try explicit huge pages: `MAP_HUGETLB` with 2 MiB or 1 GiB pages on Linux
+  (needs a reserved hugetlbfs pool), and large pages on Windows
+  (`MEM_LARGE_PAGES`, needs the "Lock pages in memory" privilege), always
+  with a silent fallback to the current path. With a 256 GiB TT, fewer TLB
+  misses per probe could matter.
+- **TCEC:** "Large pages: enabled automatically" (KB competition.md,
+  verified 2026-10-23), which reads as transparent huge pages. Whether the
+  servers reserve a hugetlbfs pool, and whether an engine may use
+  `MAP_HUGETLB` or 1 GiB pages, is **UNVERIFIED**: add it to the TCEC
+  Discord questions (KB competition.md) before relying on it.
+- **phase:** Phase 6 (with the 256 GiB / NUMA work), measured earlier if
+  cheap.
+- **metric:** search nps with the A/B harness at a large Hash (bench
+  unchanged), and `perf stat` dTLB misses.
+- **runtime cost:** none in the search (allocation only); possible risk in
+  allocation failure paths, which must keep the fallback.
+- **earliest phase:** Phase 3 (the TT exists).
+- **status:** untested
+
+## 20. AVX-512 VNNI for Phase 4 inference
+
+- **type:** TOOLING (performance)
+- **idea:** Use AVX-512 VNNI (`vpdpbusd`, int8 dot products) in the NNUE
+  layers where the network's quantization allows, with the scalar reference
+  and equivalence tests the SIMD rules require (.claude/rules/simd.md);
+  DESIGN.md §7 already plans an AVX-512 VNNI preset for Phase 4.
+- **TCEC:** both servers are AVX-512 capable (KB); that their EPYC 9754 and
+  9175F support AVX-512 VNNI is **UNVERIFIED** (check the CPU documentation
+  in Phase 4). `update.sh` would then need a `FORK_ARCH` with VNNI, which
+  TCEC's build must be told to use.
+- **phase:** Phase 4.
+- **metric:** inference speed (bench nps, A/B harness), bench identical
+  across VNNI, AVX-512, AVX2 and scalar builds.
+- **runtime cost:** none beyond the speed gain (inference only).
+- **earliest phase:** Phase 4.
+- **status:** untested
+
+## 21. BOLT post-link optimization (optional, later)
+
+- **type:** TOOLING (performance)
+- **idea:** LLVM BOLT reorders a linked binary's code layout from a
+  profile, on top of PGO and LTO. Optional, after the search and evaluation
+  stabilize.
+- **constraints (UNVERIFIED until checked):** TCEC builds Fork from source
+  with `update.sh`, so BOLT would have to run inside that script on TCEC's
+  machine (is `llvm-bolt` available there, and may the build run a profiling
+  pass?); BOLT profiles normally come from hardware branch sampling (`perf`
+  with LBR or AMD's equivalent), whose availability in WSL and on Zen 4 is
+  to be checked; bench parity must hold, as BOLT changes layout only.
+- **phase:** after Phase 8 (optional), or earlier only if TCEC's build
+  allows it.
+- **metric:** search nps (A/B harness), bench identical.
+- **runtime cost:** none (layout only).
+- **earliest phase:** Phase 3 (any time a stable binary exists).
+- **status:** untested
