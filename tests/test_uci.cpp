@@ -348,10 +348,14 @@ TEST_CASE("uci_protocol", "go arguments: every argument, combined, negative and 
   g.send("go wtime -100 btime 0 winc 0 binc 0 movestogo 1 depth 3 nodes 100 mate 2 movetime 50");
   CHECK(g.next("bestmove").has_value());
   g.send("go wtime 99999999999999999999999 btime -99999999999999999999999");
+  CHECK(g.sync());  // a clock of 2^63 ms is planned as almost unlimited time
+  g.send("stop");
   CHECK(g.next("bestmove").has_value());
   g.send("go wtime 100");  // fastchess --compliance sends wtime alone
   CHECK(g.next("bestmove").has_value());
-  g.send("go");  // a bare go
+  g.send("go");  // a bare go: no limit, so it searches until stop (DESIGN.md §5.1)
+  CHECK(g.sync());
+  g.send("stop");
   CHECK(g.next("bestmove").has_value());
   CHECK(g.sync());
   CHECK_EQ(g.count("info string", mark), 0);  // all of that was valid
@@ -370,7 +374,9 @@ TEST_CASE("uci_protocol", "go arguments: every argument, combined, negative and 
   CHECK_EQ(g.next("bestmove").value_or(""), std::string("bestmove h2h4"));
   // No legal move in searchmoves (python-chess sends 0000 for an empty list).
   mark = g.cursor;
-  g.send("go searchmoves 0000");
+  g.send("go searchmoves 0000");  // no limit either
+  CHECK(g.sync());
+  g.send("stop");
   CHECK(g.next("bestmove").has_value());
   CHECK_EQ(g.count("info string go: no legal move in searchmoves", mark), 1);
   g.check_transcript();
@@ -395,7 +401,7 @@ TEST_CASE("uci_protocol", "exactly one bestmove per go over a mixed session") {
     if (i % 5 == 0) g.send("stop");
     g.send("position startpos moves e2e4");
   }
-  g.send("go ponder");
+  g.send("go ponder wtime 1000 btime 1000");  // ponderhit then leaves a clock limit
   ++gos;
   g.send("ponderhit");
   CHECK(g.next("uciok").has_value());
@@ -574,53 +580,6 @@ TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
   fs::remove(log);
 }
 
-// The placeholder chooser (DESIGN.md §5.1). Positions constructed for Fork
-// and checked with python-chess 1.11.2 on 2026-10-24:
-//   7k/6pp/8/q7/8/1N6/8/4R1K1 w - - 0 1   only mate in one e1e8; Nxa5 wins the queen
-//   7k/8/8/4q3/3P4/8/8/4R2K w - - 0 1     no mate; the queen can be taken by d4e5 (pawn) or e1e5 (rook)
-//   4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1     no mate; the only capture is e5d6 en passant
-// tools/placeholder_check.py checks the rule against python-chess on
-// thousands of random positions.
-TEST_CASE("uci_placeholder", "mate in one, else MVV-LVA, else the first legal move; the info line") {
-  Gui g;
-  auto choice = [&](const std::string& position, const std::string& go = "go depth 1") {
-    g.send(position);
-    g.send(go);
-    return bestmove_of(g.next("bestmove").value_or("bestmove ?"));
-  };
-  CHECK_EQ(choice("position fen 7k/6pp/8/q7/8/1N6/8/4R1K1 w - - 0 1"), std::string("e1e8"));
-  CHECK_EQ(choice("position fen 7k/8/8/4q3/3P4/8/8/4R2K w - - 0 1"), std::string("d4e5"));
-  CHECK_EQ(choice("position fen 7k/8/8/4q3/3P4/8/8/4R2K w - - 0 1", "go searchmoves e1e5 h1g1"),
-           std::string("e1e5"));
-  CHECK_EQ(choice("position fen 7k/8/8/4q3/3P4/8/8/4R2K w - - 0 1", "go searchmoves h1g1 h1h2"),
-           std::string("h1g1"));
-  CHECK_EQ(choice("position fen 4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1"), std::string("e5d6"));
-  // No mate and no capture: the first move in Fork's generation order.
-  Position start;
-  MoveList legal;
-  generate<GenMode::Legal>(start, legal);
-  CHECK_EQ(choice("position startpos"), start.move_to_uci(legal[0]));
-  // The info line before each bestmove has the spec's fields, in order.
-  const std::vector<std::string> out = g.texts();
-  int checked = 0;
-  for (std::size_t i = 1; i < out.size(); ++i) {
-    if (!starts_with(out[i], "bestmove")) continue;
-    const std::vector<LineToken> t = split_tokens(out[i - 1]);
-    const bool fields = t.size() == 16 && t[0].text == "info" && t[1].text == "depth" && t[2].text == "1" &&
-                        t[3].text == "seldepth" && t[4].text == "1" && t[5].text == "score" &&
-                        t[6].text == "cp" && t[7].text == "0" && t[8].text == "nodes" &&
-                        parse_int64(t[9].text).value_or(0) >= 1 && t[10].text == "nps" &&
-                        parse_int64(t[11].text).value_or(-1) >= 0 && t[12].text == "time" &&
-                        parse_int64(t[13].text).value_or(-1) >= 0 && t[14].text == "pv" &&
-                        "bestmove " + std::string(t[15].text) == out[i];
-    CHECK_MSG(fields, out[i - 1] << " / " << out[i]);
-    ++checked;
-  }
-  CHECK_EQ(checked, 6);
-  g.check_transcript();
-  g.quit();
-}
-
 // Timing checks (DESIGN.md §5.1, test 2): uci to uciok and isready to
 // readyok under 50 ms at default settings, stop to bestmove under 10 ms.
 // Times run from writing the command to the reader thread receiving the
@@ -744,6 +703,41 @@ TEST_CASE("uci_options", "review: a refused Hash clears its fallback table with 
       const int threads = by == std::string::npos ? -1 : std::stoi(line.substr(by + 4));
       CHECK_MSG(threads >= 1 && threads <= 8, "16 MB cleared by " << threads << " threads: " << line);
     }
+  g.quit();
+}
+
+}  // namespace forkeng::test
+
+// ---- Adversarial review of deliverable 2 (uncommitted; failing test) ----
+namespace forkeng::test {
+
+// time_budget.hpp: "Limits are milliseconds from the moment go was
+// received". A Hash change (or Clear Hash) not followed by isready is applied
+// inside cmd_go, before the search thread starts its clock, so that time is
+// not counted against movetime.
+TEST_CASE("uci_timing", "review: go movetime counts the Hash work done at go") {
+  Gui g;
+  CHECK(g.sync());
+  g.send("setoption name Move Overhead value 0");  // the whole 50 ms is the budget
+  CHECK(g.sync());
+  g.send("setoption name Hash value 4096");
+  g.send("position startpos");
+  const std::size_t mark = g.cursor;
+  const double ms = time_reply(g, "go movetime 50", "bestmove");
+  // The Hash work itself cannot be undone (4 GB takes far longer than 50 ms
+  // here), but the search must not add its 50 ms on top: bestmove comes at
+  // max(Hash work, 50 ms) plus a small margin, not at their sum.
+  double hash_ms = -1;
+  for (const std::string& line : g.texts(mark))
+    if (starts_with(line, "info string Hash 4096 MB allocated and cleared in ")) {
+      hash_ms = std::stod(
+          line.substr(std::string_view("info string Hash 4096 MB allocated and cleared in ").size()));
+    }
+  std::cout << "  go movetime 50 after a Hash change -> bestmove: " << ms << " ms (Hash work " << hash_ms
+            << " ms)\n";
+  CHECK(hash_ms >= 0);
+  CHECK_MSG(ms >= 0 && ms < std::max(hash_ms, 50.0) + 30 * Slack, ms << " ms for go movetime 50");
+  g.check_transcript();
   g.quit();
 }
 

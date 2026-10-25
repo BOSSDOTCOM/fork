@@ -10,7 +10,7 @@ if(DEFINED CMAKE_CXX_COMPILER AND CMAKE_CXX_COMPILER STREQUAL "")
                       "before using the presets, or pass -DCMAKE_CXX_COMPILER=<compiler>")
 endif()
 # The semver in `id name` (DESIGN.md §5.1): 0.<phase>.0 until the first release.
-project(fork VERSION 0.2.0 LANGUAGES CXX)
+project(fork VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -138,7 +138,7 @@ add_library(forkcore STATIC
 target_include_directories(forkcore PUBLIC src)
 target_link_libraries(forkcore PUBLIC fork_flags PRIVATE fork_pgo)
 
-# The evaluator is chosen at build time (owner, 2026-10-24; DESIGN.md �5.2):
+# The evaluator is chosen at build time (owner, 2026-10-24; DESIGN.md §5.2):
 # no runtime interface and no indirect call in the search.
 set(FORK_EVALUATOR "bootstrap" CACHE STRING "Static evaluation built into Fork: bootstrap")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap)
@@ -148,19 +148,21 @@ endif()
 
 # Evaluation and search (src/eval/, src/search/ except the hash memory).
 add_library(forksearch STATIC
-  src/eval/bootstrap_eval.cpp)
+  src/eval/bootstrap_eval.cpp
+  src/search/search_bench.cpp
+  src/search/searcher.cpp
+  src/search/time_budget.cpp)
 target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
 target_link_libraries(forksearch PUBLIC forkcore PRIVATE fork_pgo)
 
 find_package(Threads REQUIRED)
 
-# The UCI front end (src/uci/): protocol loop, options, placeholder search.
+# The UCI front end (src/uci/): protocol loop, options, info output.
 add_library(forkuci STATIC
   src/search/hash_memory.cpp
   src/uci/go_limits.cpp
   src/uci/options.cpp
   src/uci/output.cpp
-  src/uci/placeholder.cpp
   src/uci/session.cpp
   src/uci/version.cpp)
 target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pgo)
@@ -216,6 +218,9 @@ add_custom_target(fork_build_id
   VERBATIM)
 add_dependencies(fork_micro fork_build_id)
 target_include_directories(fork_micro PRIVATE ${CMAKE_BINARY_DIR}/generated)
+# `fork version` reports the same identity, for bench/ab_search.py.
+add_dependencies(fork fork_build_id)
+target_include_directories(fork PRIVATE ${CMAKE_BINARY_DIR}/generated)
 
 if(FORK_FUZZ)
   # Coverage instrumentation for everything (engine code included), libFuzzer
@@ -266,6 +271,7 @@ if(FORK_BUILD_TESTS)
     tests/test_epd.cpp
     tests/test_draws.cpp
     tests/test_eval.cpp
+    tests/test_search.cpp
     tests/engine_process.cpp
     tests/test_uci.cpp
     tests/test_options.cpp)
@@ -309,7 +315,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                uci_protocol uci_options uci_placeholder uci_timing)
+                search time_budget uci_protocol uci_options uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -323,7 +329,7 @@ if(FORK_BUILD_TESTS)
 
   if(NOT FORK_TSAN)
     add_executable(fork_alloc_test tests/alloc_test.cpp)
-    target_link_libraries(fork_alloc_test PRIVATE forkcore)
+    target_link_libraries(fork_alloc_test PRIVATE forksearch)
     add_test(NAME no_alloc COMMAND fork_alloc_test)
     # One failed allocation during go still gives exactly one real bestmove
     # (review, 2026-10-24). Replaces operator new too, so the same exclusions.
@@ -332,8 +338,14 @@ if(FORK_BUILD_TESTS)
     add_test(NAME uci_oom COMMAND fork_uci_oom_test)
   endif()
 
+  # The search bench (`fork bench`) and, so move generation stays tied across
+  # builds too, the Phase 1 perft workload (`fork perftbench`).
   add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}
-    -DFORK=$<TARGET_FILE:fork>
+    -DFORK=$<TARGET_FILE:fork> -DCMD=bench
     -DREF=${CMAKE_SOURCE_DIR}/tests/bench.ref
+    -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+  add_test(NAME perft_bench_parity COMMAND ${CMAKE_COMMAND}
+    -DFORK=$<TARGET_FILE:fork> -DCMD=perftbench
+    -DREF=${CMAKE_SOURCE_DIR}/tests/perft_bench.ref
     -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
 endif()

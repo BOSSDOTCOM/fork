@@ -1,13 +1,16 @@
 // Separate executable: replaces global operator new/delete with counting
 // versions and asserts that the hot paths (move generation, make/unmake,
-// null moves, legality and check queries) never touch the heap.
+// null moves, legality and check queries, the search) never touch the heap.
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <new>
 
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
+#include "search/search_bench.hpp"
+#include "search/searcher.hpp"
 
 namespace {
 std::atomic<long> allocations{0};
@@ -96,6 +99,27 @@ int main() {
                   static_cast<unsigned long long>(n), during);
       if (during != 0) ++failures;
     }
+  }
+  {
+    // The search (DESIGN.md §5.2, hot-path rule 3): after setup (the
+    // Searcher is created once, outside any search), explore() never allocates,
+    // on any of the search-bench positions.
+    auto searcher = std::make_unique<forkeng::Searcher>();
+    const std::atomic<bool> stop{false};
+    forkeng::SearchLimits limits;
+    limits.depth = 4;
+    long during = 0;
+    std::uint64_t nodes = 0;
+    for (const std::string_view fen : forkeng::search_bench_fens()) {
+      forkeng::Position pos;
+      if (!pos.set_fen(fen)) return 2;
+      long before = allocations.load();
+      nodes += searcher->explore(pos, limits, stop, nullptr, nullptr).nodes;
+      during += allocations.load() - before;
+    }
+    std::printf("search depth 4 on the %zu bench positions: %llu nodes, %ld heap allocations\n",
+                forkeng::search_bench_fens().size(), static_cast<unsigned long long>(nodes), during);
+    if (during != 0) ++failures;
   }
   std::printf("%s\n", failures ? "FAIL: hot path allocated" : "ok: no heap allocation in the hot path");
   return failures ? 1 : 0;

@@ -1011,6 +1011,48 @@ holds, which is why search decisions use no floating point (deliverable 6).
    stays. One that fails (after its LTC retest where the rule applies)
    stays off behind its flag or is removed, and the result is logged.
 
+#### Implementation notes (2026-10-24)
+
+Choices made while building, where the spec leaves a gap:
+
+- **Deliverable 1.** `static_eval()` (`src/eval/eval.hpp`) is selected by the
+  `FORK_EVALUATOR` CMake option (only `bootstrap` in Phase 3). Material uses
+  Shannon's 9/5/3/3/1 scale (ORIGINALITY.md); the other terms and weights
+  are Fork's own.
+- **Deliverable 2, search.** The ply limit is `MaxPly` = 250; the score
+  scale is in `src/search/score_bounds.hpp` (mates from 30000 down,
+  tablebase wins from 29500 down, evaluations within 20000, infinity
+  31000). Until deliverable 4 a leaf returns the static evaluation, so a
+  mate is recognized one ply later than it will be with the quiescence
+  search. Root moves are ordered once by the capture order, then by each
+  iteration's scores (a stable insertion sort, as `std::stable_sort` may
+  allocate). When an unfinished iteration supplies the move played, its PV
+  is reported in a last `info` line, so the GUI's final line names that
+  move (review finding).
+- **Time.** All limits count from the moment `go` arrived, so Hash work
+  done at `go` uses the move's own time (review finding). `go movetime N`
+  plans N minus Move Overhead (at least 1 ms). Deliverable 2 already has a
+  first `TimeBudget`: a share of the clock (remaining / moves to go, or
+  /30 in sudden death, plus 3/4 of the increment), a hard limit of four
+  shares, never more than 90% of the clock after the overhead; every input
+  is clamped to ±2^40 ms first, so INT64_MIN and INT64_MAX clocks cannot
+  overflow (review finding). Deliverable 8 refines and tests it.
+- **Bare `go`** and a `go ponder` without clock arguments that gets a
+  `ponderhit` have no limit, so they search until `stop` (the Phase 2
+  placeholder answered at once; the UCI tests now send `stop`).
+- **Output.** Info lines are formatted in a fixed buffer. `send_line`
+  returns each line's sequence number; if any other line (`readyok`, say)
+  followed the last `info` line, that line is sent again right before
+  `bestmove`, so a scored `info` line always precedes it.
+- **Bench.** `fork bench` is the search bench: 46 positions at depth 6
+  (24,919,232 nodes, about 2.5 s on the 7600X3D in deliverable 2); the
+  depth may change as the search changes, always with `bench.ref`. The
+  Phase 1 perft workload is `fork perftbench`, guarded by
+  `perft_bench_parity` against `tests/perft_bench.ref`. `fork version`
+  prints the build identity (`variant ... | commit ... |`) for
+  `bench/ab_search.py`, the interleaved A/B harness for search nps.
+- **Version** 0.3.0 for Phase 3 (the 0.<phase>.0 scheme).
+
 #### Owner's answers (2026-10-24)
 
 1. SPRT bounds [0, 5] until Milestone B, [0, 3] for tier 2, [-3, 0] for

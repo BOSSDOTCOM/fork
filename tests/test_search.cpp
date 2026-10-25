@@ -1,0 +1,308 @@
+// The search (DESIGN.md §5.2, deliverables 2-4). Positions other than the
+// perft suite are constructed for Fork; the facts each test relies on (mate
+// in N, no mate in 1, legal FEN) are checked with python-chess by
+// tools/check_search_positions.py.
+#include <atomic>
+#include <iostream>
+#include <limits>
+#include <memory>
+
+#include "core/movegen.hpp"
+#include "core/splitmix.hpp"
+#include "eval/eval.hpp"
+#include "harness.hpp"
+#include "search/searcher.hpp"
+#include "search/time_budget.hpp"
+#include "suite.hpp"
+
+namespace forkeng::test {
+
+namespace {
+
+// A plain minimax with the search's own rules (draws, 50-move rule with mate
+// first, ply limit, static evaluation at the horizon), and nothing else: the
+// oracle for the root score (tests must not compare the search with itself).
+int reference_minimax(Position& pos, int depth, int ply) {
+  const bool in_check = pos.in_check();
+  if (ply > 0) {
+    if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
+    if (pos.fifty_move_reached()) {
+      if (!in_check) return 0;
+      MoveList list;
+      generate<GenMode::Legal>(pos, list);
+      return list.size() ? 0 : mated_score(ply);
+    }
+    if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
+    if (depth <= 0) return static_eval(pos);
+  }
+  MoveList list;
+  generate<GenMode::Legal>(pos, list);
+  if (list.size() == 0) return in_check ? mated_score(ply) : 0;
+  int best = -ScoreInfinite;
+  for (Move m : list) {
+    pos.make(m);
+    best = std::max(best, -reference_minimax(pos, depth - 1, ply + 1));
+    pos.unmake(m);
+  }
+  return best;
+}
+
+struct Fixture {
+  std::unique_ptr<Searcher> searcher = std::make_unique<Searcher>();
+  std::atomic<bool> stop{false};
+
+  SearchResult search(Position& pos, const SearchLimits& limits) {
+    return searcher->explore(pos, limits, stop, nullptr, nullptr);
+  }
+  SearchResult search(std::string_view fen, int depth) {
+    Position pos;
+    const bool ok = pos.set_fen(fen);
+    CHECK_MSG(ok, fen);
+    SearchLimits limits;
+    limits.depth = depth;
+    return search(pos, limits);
+  }
+};
+
+// Positions for the oracle test: the perft suite and the ends of random
+// games from the start position (fixed seed).
+std::vector<Position> oracle_positions() {
+  std::vector<Position> out;
+  for (const PerftPosition& p : perft_suite()) {
+    Position pos;
+    CHECK(pos.set_fen(p.fen));
+    out.push_back(pos);
+  }
+  std::uint64_t seed = 20261024;
+  while (out.size() < 18) {
+    Position pos;
+    const int plies = 6 + static_cast<int>(splitmix_next(seed) % 40);
+    for (int i = 0; i < plies; ++i) {
+      MoveList list;
+      generate<GenMode::Legal>(pos, list);
+      if (list.size() == 0) break;
+      pos.make(list[splitmix_next(seed) % list.size()]);
+    }
+    MoveList list;
+    generate<GenMode::Legal>(pos, list);
+    if (list.size() > 0) out.push_back(Position(pos));
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("search", "root score equals plain minimax: PVS, aspiration, mate distance pruning on and off") {
+  Fixture fx;
+  const int depth = Optimized ? 4 : 3;
+  int compared = 0;
+  for (Position& pos : oracle_positions()) {
+    const int expected = reference_minimax(pos, depth, 0);
+    for (int variant = 0; variant < 4; ++variant) {
+      fx.searcher->switches = SearchSwitches{};
+      fx.searcher->switches.use_pvs = variant != 1;
+      fx.searcher->switches.use_aspiration = variant != 2;
+      fx.searcher->switches.use_mate_distance = variant != 3;
+      SearchLimits limits;
+      limits.depth = depth;
+      const SearchResult r = fx.search(pos, limits);
+      CHECK_MSG(r.score == expected, pos.fen()
+                                         << " variant " << variant << ": " << r.score << " vs " << expected);
+      CHECK_EQ(r.depth, depth);
+      ++compared;
+    }
+  }
+  CHECK(compared >= 72);
+}
+
+TEST_CASE("search", "finds mate in 1 and mate in 2, and stops early on go mate") {
+  Fixture fx;
+  // Back-rank mate in 1: Ra8#.
+  SearchResult r = fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 3);
+  CHECK_EQ(r.score, mate_score(1));
+  Position pos;
+  CHECK(pos.set_fen("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1"));
+  CHECK_EQ(pos.move_to_uci(r.best), std::string("a1a8"));
+  // K+R v K, mate in 2 (and not in 1).
+  r = fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 4);
+  CHECK_EQ(r.score, mate_score(3));
+  // go mate 2 stops once the mate is found, well before depth 20 (at depth 4:
+  // without a quiescence search the mated leaf at ply 3 is not recognized).
+  CHECK(pos.set_fen("k7/8/2K5/8/8/8/8/7R w - - 0 1"));
+  SearchLimits limits;
+  limits.depth = 20;
+  limits.mate_moves = 2;
+  r = fx.search(pos, limits);
+  CHECK_EQ(r.score, mate_score(3));
+  CHECK_EQ(r.depth, 4);
+}
+
+TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
+  Fixture fx;
+  // Halfmove clock 99: Ra8# still mates on the 100th half-move...
+  CHECK_EQ(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 99 80", 3).score, mate_score(1));
+  // ...but with no mate in 1 every move ends in a draw by the 50-move rule.
+  CHECK_EQ(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 99 80", 3).score, 0);
+  CHECK(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 0 80", 3).score > 300);
+  // 1. e4 Nf6 2. Nf3 Ng8 3. Ng1: ...Nf6 repeats the position after 1...Nf6.
+  Position pos;
+  for (const char* uci : {"e2e4", "g8f6", "g1f3", "f6g8", "f3g1"}) pos.make(pos.parse_uci(uci));
+  SearchLimits limits;
+  limits.depth = 1;
+  limits.restrict_to.add(pos.parse_uci("g8f6"));
+  const SearchResult r = fx.search(pos, limits);
+  CHECK_EQ(pos.move_to_uci(r.best), std::string("g8f6"));
+  CHECK_EQ(r.score, 0);
+  CHECK(static_eval(pos) != 0);  // so the 0 is the draw, not the evaluation
+}
+
+TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still returns a legal move") {
+  Fixture fx;
+  Position pos;
+  SearchLimits limits;
+  limits.nodes = 5000;
+  SearchResult r = fx.search(pos, limits);
+  CHECK(r.nodes >= 5000 && r.nodes <= 5001);
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(r.best));
+
+  limits = SearchLimits{};
+  limits.depth = 2;
+  limits.restrict_to.add(pos.parse_uci("a2a3"));
+  limits.restrict_to.add(pos.parse_uci("h2h3"));
+  r = fx.search(pos, limits);
+  CHECK(r.best == pos.parse_uci("a2a3") || r.best == pos.parse_uci("h2h3"));
+  CHECK_EQ(r.depth, 2);
+
+  fx.stop = true;
+  limits = SearchLimits{};
+  r = fx.search(pos, limits);
+  CHECK(legal.contains(r.best));
+  fx.stop = false;
+}
+
+TEST_CASE("search", "no legal move: mate and stalemate") {
+  Fixture fx;
+  // Fool's mate: White is mated.
+  SearchResult r = fx.search("rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3", 5);
+  CHECK(r.best.is_none());
+  CHECK_EQ(r.score, mated_score(0));
+  // Black to move, stalemated.
+  r = fx.search("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1", 5);
+  CHECK(r.best.is_none());
+  CHECK_EQ(r.score, 0);
+}
+
+TEST_CASE("search", "the same search twice gives the same nodes, move and score") {
+  Fixture fx;
+  const SearchResult a = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
+  const SearchResult b = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
+  CHECK_EQ(a.nodes, b.nodes);
+  CHECK(a.best == b.best);
+  CHECK_EQ(a.score, b.score);
+}
+
+TEST_CASE("time_budget", "movetime, sudden death, increment, movestogo, extreme values") {
+  ClockInput c;
+  c.movetime = 1000;
+  c.overhead_ms = 100;
+  TimeBudget t = plan_time(c);
+  CHECK_EQ(t.soft_ms, 900);
+  CHECK_EQ(t.hard_ms, 900);
+
+  c = ClockInput{};
+  CHECK_EQ(plan_time(c).soft_ms, -1);  // no clock: no time limit
+  CHECK_EQ(plan_time(c).hard_ms, -1);
+
+  for (std::int64_t remaining :
+       {std::int64_t{-5000}, std::int64_t{0}, std::int64_t{1}, std::int64_t{50}, std::int64_t{1000},
+        std::int64_t{60000}, std::int64_t{1800000}, std::int64_t{9223372036854775807}}) {
+    for (std::int64_t inc : {std::int64_t{0}, std::int64_t{100}, std::int64_t{3000}, std::int64_t{-10},
+                             std::int64_t{9223372036854775807}}) {
+      for (std::int64_t mtg : {std::int64_t{0}, std::int64_t{1}, std::int64_t{40}, std::int64_t{1000}}) {
+        c = ClockInput{};
+        c.remaining_ms = remaining;
+        c.increment_ms = inc;
+        if (mtg) c.movestogo = mtg;
+        c.overhead_ms = 100;
+        t = plan_time(c);
+        CHECK_MSG(t.soft_ms >= 1 && t.soft_ms <= t.hard_ms, remaining << " " << inc << " " << mtg);
+        // The hard limit never reaches into the overhead or the last tenth.
+        const std::int64_t available =
+            std::max<std::int64_t>(1, std::min(remaining, std::int64_t{1} << 40) - 100);
+        CHECK_MSG(t.hard_ms <= std::max<std::int64_t>(1, available - available / 10),
+                  remaining << " " << inc);
+      }
+    }
+  }
+  // 30 minutes + 3 s (TCEC Swiss): a sane share, well under a tenth.
+  c = ClockInput{};
+  c.remaining_ms = 1800000;
+  c.increment_ms = 3000;
+  c.overhead_ms = 100;
+  t = plan_time(c);
+  CHECK(t.soft_ms > 30000 && t.soft_ms < 180000);
+}
+
+}  // namespace forkeng::test
+
+// ---- Adversarial review of deliverable 2 (uncommitted; failing tests) ----
+namespace forkeng::test {
+
+// The most negative clock a GUI can send: go_limits.hpp clamps values beyond
+// the 64-bit range to it ("go movetime -99999999999999999999").
+TEST_CASE("time_budget", "review: INT64_MIN movetime or clock gives the minimum budget, not none") {
+  constexpr std::int64_t Min = std::numeric_limits<std::int64_t>::min();
+  ClockInput c;
+  c.movetime = Min;
+  c.overhead_ms = 100;
+  TimeBudget t = plan_time(c);
+  CHECK_MSG(t.hard_ms == 1 && t.soft_ms == 1, "movetime INT64_MIN: soft " << t.soft_ms << " hard " << t.hard_ms);
+  c = ClockInput{};
+  c.remaining_ms = Min;
+  c.overhead_ms = 100;
+  t = plan_time(c);
+  CHECK_MSG(t.hard_ms == 1 && t.soft_ms == 1, "wtime INT64_MIN: soft " << t.soft_ms << " hard " << t.hard_ms);
+}
+
+namespace {
+struct LastReport final : SearchListener {
+  Move first = NoMove;
+  int score = 0;
+  int count = 0;
+  void on_iteration(const Position&, const IterationReport& r) override {
+    first = r.pv->length ? r.pv->moves[0] : NoMove;
+    score = r.score;
+    ++count;
+  }
+};
+}  // namespace
+
+// The last info line the GUI sees before bestmove (session.cpp prints no
+// other line when an iteration finished) should name the move played.
+TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV starts with the best move") {
+  auto searcher = std::make_unique<Searcher>();
+  const std::atomic<bool> stop{false};
+  int mismatches = 0, tried = 0;
+  for (const PerftPosition& p : perft_suite()) {
+    for (std::uint64_t nodes = 2000; nodes <= 200000 && mismatches == 0; nodes += 997) {
+      Position pos;
+      CHECK(pos.set_fen(p.fen));
+      SearchLimits limits;
+      limits.nodes = nodes;
+      LastReport rep;
+      const SearchResult r = searcher->explore(pos, limits, stop, nullptr, &rep);
+      ++tried;
+      if (r.depth > 0 && !(rep.first == r.best)) {
+        ++mismatches;
+        CHECK_MSG(false, p.fen << " nodes " << nodes << ": last info pv " << pos.move_to_uci(rep.first)
+                                << " score " << rep.score << ", bestmove " << pos.move_to_uci(r.best)
+                                << " score " << r.score);
+      }
+    }
+  }
+  CHECK(tried > 0);
+}
+
+}  // namespace forkeng::test

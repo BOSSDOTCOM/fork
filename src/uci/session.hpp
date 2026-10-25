@@ -6,7 +6,8 @@
 // - Commands are handled one at a time on the input thread (the caller of
 //   run() or handle_line()), which a search never blocks: isready, stop,
 //   ponderhit and quit are answered while a search runs.
-// - A search runs on its own thread, on its own copy of the position. Every
+// - A search runs on its own thread, on its own copy of the position, with
+//   the session's one Searcher (src/search/searcher.hpp). Every
 //   `go` produces exactly one `bestmove`, printed by that thread after its
 //   final `info` line.
 // - At most one search exists. A command that changes what a search depends
@@ -19,9 +20,11 @@
 //   thread outlives the session. No exception escapes handle_line().
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -30,6 +33,7 @@
 
 #include "core/position.hpp"
 #include "search/hash_memory.hpp"
+#include "search/searcher.hpp"
 #include "uci/go_limits.hpp"
 #include "uci/options.hpp"
 #include "uci/output.hpp"
@@ -100,8 +104,11 @@ class UciSession {
 
   void stop_search();  // stops and joins the running search, if any
   bool search_running();
-  void search_main(Position pos, GoLimits limits);  // the search thread
-  void report_search(const Position& pos, Move best, std::uint64_t nodes, std::int64_t elapsed_ms);
+  SearchLimits search_limits(const GoLimits& go) const;
+  void search_main(Position pos, SearchLimits limits, bool waits);  // the search thread
+  // The last info line when no iteration was reported (none finished, or
+  // no legal move), in a fixed buffer.
+  void report_unfinished(const Position& pos, const SearchResult& r, std::int64_t elapsed_ms);
   // Answers a go when memory has run out (review 2026-10-24): fixed buffers,
   // `best` or, if not `known`, the first legal move.
   void answer_without_memory(const Position& pos, Move best, bool known) noexcept;
@@ -115,6 +122,11 @@ class UciSession {
   Position root_;
   bool go_answered_ = false;  // the go being handled has started its search or answered
   SearchSignals signals_;
+  // The search reads these without the mutex: stop is set with signals_.stop
+  // (stop_search), pondering is cleared by ponderhit.
+  std::atomic<bool> stop_flag_{false};
+  std::atomic<bool> pondering_{false};
+  std::unique_ptr<Searcher> searcher_;  // created once, used by one search at a time
   std::thread search_thread_;
 };
 

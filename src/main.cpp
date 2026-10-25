@@ -1,6 +1,6 @@
 // Fork's entry point. Without arguments it speaks UCI on stdin/stdout
 // (src/uci/session.hpp); with a subcommand it runs that tool: perft, divide,
-// bench, version, difftest.
+// bench (the search bench), perftbench, version, difftest.
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -15,8 +15,12 @@
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
 #include "core/position.hpp"
+#include "search/search_bench.hpp"
 #include "uci/output.hpp"
 #include "uci/session.hpp"
+
+// Generated at build time: the variant label and git commit of this build.
+#include "build_id.hpp"
 
 #ifdef _WIN32
 #include <fcntl.h>
@@ -40,7 +44,10 @@ void print_version() {
             << "compiler " << compiler_name() << '\n'
             << "arch " << FORK_ARCH_NAME << '\n'
             << "build " << FORK_BUILD_TYPE << '\n'
-            << "sliders " << (FORK_USE_PEXT ? "pext" : "magic") << '\n';
+            << "sliders " << (FORK_USE_PEXT ? "pext" : "magic")
+            << '\n'
+            // For bench/ab_search.py's identity check (cmake/build_id.cmake).
+            << "variant " FORK_BUILD_VARIANT " | commit " FORK_BUILD_COMMIT " |\n";
 }
 
 // One line per ply for differential testing against an independent
@@ -106,7 +113,8 @@ std::string hex16(std::uint64_t v) {
 int usage() {
   std::cerr << "usage: fork perft <depth> [fen]\n"
                "       fork divide <depth> [fen]\n"
-               "       fork bench\n"
+               "       fork bench        (the search bench)\n"
+               "       fork perftbench   (the Phase 1 perft workload)\n"
                "       fork difftest   (stdin: fen|moves, see tools/difftest)\n"
                "       fork version\n";
   return 2;
@@ -159,6 +167,14 @@ static int run(int argc, char** argv) {
   }
   if (cmd == "difftest") return difftest();
   if (cmd == "bench") {
+    const forkeng::SearchBenchResult r = forkeng::run_search_bench();
+    std::cout << "nodes " << r.nodes << '\n'
+              << "signature " << hex16(r.signature) << '\n'
+              << "nps "
+              << static_cast<std::uint64_t>(static_cast<double>(r.nodes) / std::max(r.seconds, 1e-9)) << '\n';
+    return 0;
+  }
+  if (cmd == "perftbench") {
     forkeng::BenchResult r = forkeng::bench();
     std::cout << "nodes " << r.nodes << '\n'
               << "signature " << hex16(r.signature) << '\n'

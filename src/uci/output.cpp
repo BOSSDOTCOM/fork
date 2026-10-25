@@ -11,8 +11,9 @@ OutputChannel::~OutputChannel() {
   if (log_) (void)std::fclose(log_);
 }
 
-void OutputChannel::send_line(std::string_view line) {
+std::uint64_t OutputChannel::send_line(std::string_view line) {
   std::scoped_lock lock(mutex_);
+  const std::uint64_t line_number = ++sent_;
   if (out_) {
     (void)std::fwrite(line.data(), 1, line.size(), out_);
     (void)std::fputc('\n', out_);
@@ -20,6 +21,7 @@ void OutputChannel::send_line(std::string_view line) {
   }
   if (capture_) capture_->emplace_back(line);
   write_log('<', line);
+  return line_number;
 }
 
 void OutputChannel::send_info_string(std::string_view text) {

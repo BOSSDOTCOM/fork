@@ -12,6 +12,7 @@
 //   handled, each line with a UTC timestamp. A failed write never throws.
 #pragma once
 
+#include <cstdint>
 #include <cstdio>
 #include <mutex>
 #include <string>
@@ -28,7 +29,14 @@ class OutputChannel {
   OutputChannel(const OutputChannel&) = delete;
   OutputChannel& operator=(const OutputChannel&) = delete;
 
-  void send_line(std::string_view line);
+  // Returns the line's sequence number (1, 2, ...), taken under the same lock
+  // as the write, so a caller can tell later whether another line followed.
+  std::uint64_t send_line(std::string_view line);
+  // Lines sent so far (any thread).
+  std::uint64_t lines_sent() {
+    std::scoped_lock lock(mutex_);
+    return sent_;
+  }
   // "info string <text>". Control bytes in `text` (it may echo input) become
   // '?', so every line stays one printable line.
   void send_info_string(std::string_view text);
@@ -54,6 +62,7 @@ class OutputChannel {
   std::FILE* out_;
   std::FILE* log_ = nullptr;
   std::vector<std::string>* capture_ = nullptr;
+  std::uint64_t sent_ = 0;
 };
 
 }  // namespace forkeng

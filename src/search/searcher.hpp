@@ -1,0 +1,136 @@
+// searcher: the alpha-beta search (DESIGN.md §5.2, deliverables 2-6).
+//
+// Purpose: iterative deepening with aspiration windows over a fail-soft
+// principal variation search (negamax), with draw detection and mate
+// distance pruning; at the horizon it returns the static evaluation.
+// Invariants:
+// - One Searcher per search thread; it owns all per-thread state (the search
+//   stack, PVs, root moves) and is created once, outside any search: explore()
+//   never allocates (tests/alloc_test.cpp).
+// - Scores follow score_bounds.hpp: fail-soft, from the side to move's view,
+//   mates by distance from the root.
+// - explore() is deterministic for a given position, limits, switches and TT
+//   contents when no time limit applies (bench parity).
+// - No exceptions, virtual calls or std::function inside the recursion; the
+//   listener is called once per finished iteration only.
+// - Every technique has a switch in SearchSwitches, so one binary can test
+//   it on and off; release defaults are the techniques adopted by SPRT.
+#pragma once
+
+#include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <optional>
+
+#include "core/position.hpp"
+#include "search/score_bounds.hpp"
+
+namespace forkeng {
+
+struct SearchLimits {
+  int depth = MaxPly - 1;     // iterations to finish at most
+  std::uint64_t nodes = 0;    // 0: no node limit
+  int mate_moves = 0;         // > 0: stop once a mate in at most this many moves is found
+  std::int64_t soft_ms = -1;  // -1: none; checked between iterations
+  std::int64_t hard_ms = -1;  // -1: none; polled during the search
+  MoveList restrict_to;       // searchmoves; empty: every legal move
+  // When `go` arrived: the time limits count from here, so work done before
+  // the search starts (a Hash change applied at go) uses the move's time.
+  // Default: when explore() starts.
+  std::optional<std::chrono::steady_clock::time_point> go_received;
+};
+
+// Technique switches (DESIGN.md §5.2: every technique sits behind a flag).
+struct SearchSwitches {
+  bool use_pvs = true;
+  bool use_aspiration = true;
+  bool use_mate_distance = true;
+};
+
+struct SearchResult {
+  Move best = NoMove;
+  int score = 0;
+  int depth = 0;  // last finished iteration (0 if none finished)
+  std::uint64_t nodes = 0;
+};
+
+struct PrincipalLine {
+  Move moves[MaxPly];
+  int length = 0;
+};
+
+struct IterationReport {
+  int depth;
+  int max_ply_reached;
+  int score;
+  int bound;  // 0 exact, +1 lower bound (aspiration fail high), -1 upper bound (fail low)
+  std::uint64_t nodes;
+  std::int64_t elapsed_ms;
+  const PrincipalLine* pv;
+};
+
+// Receives one report per finished iteration (and per reported aspiration
+// fail); called from the search thread, outside the recursion.
+class SearchListener {
+ public:
+  virtual void on_iteration(const Position& root, const IterationReport& report) = 0;
+
+ protected:
+  ~SearchListener() = default;
+};
+
+// One ply of the search stack.
+struct PlyFrame {
+  MoveList moves;
+  int move_scores[MaxMoves];
+  int static_eval;  // ScoreNone in check
+};
+
+struct RootEntry {
+  Move move;
+  int score;  // this iteration's score if it raised alpha (or was first), else -ScoreInfinite
+};
+
+class Searcher {
+ public:
+  // Searches `pos` (restored on return) until a limit is reached or `stop`
+  // becomes true. While `pondering` is true, time limits do not apply.
+  SearchResult explore(Position& pos, const SearchLimits& limits, const std::atomic<bool>& stop,
+                     const std::atomic<bool>* pondering, SearchListener* listener);
+
+  SearchSwitches switches;
+
+ private:
+  template <bool PvNode>
+  int negamax(int alpha, int beta, int depth, int ply);
+  int search_root(int alpha, int beta, int depth);
+
+  bool poll_limits();  // true once the search must stop
+  std::int64_t elapsed_ms() const;
+  void order_moves(PlyFrame& f) const;
+  static void pick_next(PlyFrame& f, std::size_t i);
+  void update_pv(int ply, Move m);
+  void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
+
+  Position* pos_ = nullptr;
+  const SearchLimits* limits_ = nullptr;
+  const std::atomic<bool>* stop_ = nullptr;
+  const std::atomic<bool>* pondering_ = nullptr;
+  SearchListener* listener_ = nullptr;
+  std::chrono::steady_clock::time_point start_;
+  std::uint64_t nodes_ = 0;
+  int max_ply_reached_ = 0;
+  bool stopped_ = false;
+
+  PlyFrame frames_[MaxPly + 1];
+  PrincipalLine pv_[MaxPly + 1];
+  RootEntry root_moves_[MaxMoves];
+  std::size_t root_count_ = 0;
+  // The best root move found in the running iteration with an exact score,
+  // and its PV (reported if a stop makes it the move played).
+  Move iteration_best_ = NoMove;
+  int iteration_best_score_ = -ScoreInfinite;
+  PrincipalLine iteration_pv_;
+};
+
+}  // namespace forkeng
