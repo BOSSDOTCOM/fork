@@ -759,3 +759,46 @@ Format: URL / ref | what | date | used for.
 | https://raw.githubusercontent.com/Disservin/Smallbrain/1.1.0/README.md, /LICENSE | raw at tag | 2026-10-25 | Smallbrain fallback licence and build note |
 | https://api.github.com/repos/jhonnold/berserk/contents?ref=1.2.2 | API listing (no licence file) | 2026-10-25 | Berserk 1.2.2 rejected |
 | https://api.github.com/repos/ArjunBasandrai/shuffle-chess-engine/contents?ref=v1.2.1; raw README.md, LICENSE, Makefile at v1.2.1 | API listing, raw | 2026-10-25 | Shuffle rejected (README: not Unix-compatible) |
+
+## Tactical and mate suites (tools.md section 4, DESIGN.md section 5.2), 2026-10-25
+
+All downloads went to a fresh temporary folder outside the repo, were hashed there and deleted afterwards.
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| http://www.bergbomconsulting.se/chess/epdfiles/wac.epd | WAC EPD file (HTTP headers + download) | 2026-10-25 | size 22,995 B, 300 lines, SHA-256 e1eab24c...a09e8 confirmed; op census |
+| http://www.bergbomconsulting.se/chess/epdfiles/ | Apache directory index | 2026-10-25 | file dates, list of hosted suites |
+| http://www.bergbomconsulting.se/chess/epdfiles/index.html | FAILED (404) | 2026-10-25 | none |
+| http://www.bergbomconsulting.se/chess/ and http://www.bergbomconsulting.se/ | Bergbom home/chess pages ("moved to GitHub" notice) | 2026-10-25 | host identity only (Amundsen repo not opened) |
+| http://www.bergbomconsulting.se/chess/testsuites.html | Amundsen test-suite page | 2026-10-25 | suites "collected", no EPD authorship or licence |
+| https://www.chessprogramming.org/Win_at_Chess (301 to chessprogramming.org) | CPW WAC page, HTML fetched with curl | 2026-10-25 | book provenance, forum-post list, EPD Wacnew block (diffed against Bergbom), dead wacnew.epd link |
+| https://chessprogramming.org/Alexander_Szabo | CPW | 2026-10-25 | WAC.230 dispute summary |
+| https://chessprogramming.org/Test-Positions | CPW | 2026-10-25 | suite list, mate-suite leads, Lang and Smith paper link |
+| https://chessprogramming.org/Extended_Position_Description | CPW | 2026-10-25 | `dm` opcode meaning |
+| https://chessprogramming.org/Steven_Edwards, https://chessprogramming.org/Checkmate | CPW | 2026-10-25 | EPD/mate-suite leads (nothing used beyond leads) |
+| https://tropo.googlecode.com/svn-history/r33/trunk/Chess/Engines/Tests/wacnew.epd | FAILED (404) | 2026-10-25 | none (CPW's cited source for wacnew) |
+| https://www.stmintz.com/ccc/index.php?id=163035 and id=163177 | FAILED (redirects to an unrelated LinkedIn page) | 2026-10-25 | none (Szabo corrections UNVERIFIED) |
+| https://talkchess.com/viewtopic.php?t=67469 | Albert Silver, WAC cleaned and revised (201), 2018 | 2026-10-25 | method (Komodo 11 multi-PV), count |
+| https://talkchess.com/viewtopic.php?t=28900 | Dann Corbit, WAC.230 revisited, 2009 | 2026-10-25 | WAC.230 dispute |
+| https://talkchess.com/viewtopic.php?t=35669 | Dann Corbit, Stockfish 1.8 and WAC.230, 2010 | 2026-10-25 | WAC.230 dispute |
+| https://talkchess.com/viewtopic.php?t=72733 | Robert Hyatt, WAC #223, 2020 (quotes Lang and Smith) | 2026-10-25 | WAC.223 doubt |
+| https://talkchess.com/viewtopic.php?t=17824 | Dann Corbit, two new WAC solutions, 2007 | 2026-10-25 | WAC.264, WAC.287 |
+| https://talkchess.com/viewtopic.php?t=68100 | Uri Blass, mate test positions (ICCF games), 2018 | 2026-10-25 | rejected mate-suite candidate |
+| https://talkchess.com/viewtopic.php?t=68146 | FAILED (connection timeout) | 2026-10-25 | none |
+| https://talkchess.com/viewtopic.php?t=77834 | Uri Blass, mate suite for chess engines, 2021 | 2026-10-25 | rejected mate-suite candidate |
+| http://scorevoting.net/WarrenSmithPages/homepage/testpos.ps | Lang and Smith 1993, "A Test Suite for Chess Programs" (PostScript; text strings extracted locally) | 2026-10-25 | WAC from Berliner/HITECH, 10 cooks and 8 wrong answers, Edwards conversion, 1945 citation |
+| https://books.google.com/books/about/Win_at_Chess.html?id=sNP8-dt9nkEC | Google Books record (via WebFetch) | 2026-10-25 | 2001 Dover edition revised by Fred Wilson, ISBN, 105 pages |
+| https://exhibits.stanford.edu/copyrightrenewals/catalog?q=reinfeld | FAILED (JavaScript wall) | 2026-10-25 | none (copyright UNVERIFIED) |
+| https://api.github.com/repos/ChrisWhittington/Chess-EPDs (+ git tree) and raw README.md | API, raw | 2026-10-25 | no WAC or usable mate suite |
+| https://api.github.com/repos/fsmosca/chess-tests (+ git tree) and raw README.md | API, raw | 2026-10-25 | no usable mate suite |
+| https://api.github.com/repos/TerjeKir/EngineTests (+ git tree), raw README.md, raw testfiles/mate_in_3.epd and wac-revised.epd (first lines only) | API, raw | 2026-10-25 | rejected (no licence, no provenance); binary in the repo not downloaded |
+| https://api.github.com/repos/niklasf/python-chess (+ git tree) | API | 2026-10-25 | endgame-dm files too small |
+| https://api.github.com/repos/robertnurnberg/matetools and raw README.md | API (GPL-3.0); README FAILED (404 at master) | 2026-10-25 | classic280 origin lead only |
+| https://api.github.com/repos/vondele/matetrack (+ /commits/master, git tree) | API: GPL-3.0, commit 8085413b, file list | 2026-10-25 | mate-suite pin |
+| https://raw.githubusercontent.com/vondele/matetrack/master/README.md | README | 2026-10-25 | suite descriptions, provenance (ChestUCI) |
+| https://raw.githubusercontent.com/vondele/matetrack/8085413b46d6d4f1bb9612353a6385dec784dae7/{matetrack,mates2000,classic280,KRvK1000}.epd | raw at commit | 2026-10-25 | sizes, line counts, SHA-256, syntax, #1-#5 subset census and checks |
+| https://groups.google.com/g/fishcooking/c/lh1jTS4U9LU/m/zrvoYQZUCQAJ | FAILED (permission wall; curl and WebFetch) | 2026-10-25 | none (ChestUCI provenance UNVERIFIED) |
+| https://database.lichess.org/ | Lichess open database page | 2026-10-25 | puzzle CSV format, CC0, Stockfish 40 Mnodes generation |
+| https://www.yacpdb.org/ | YACPDB (JavaScript app, no text) | 2026-10-25 | none (licence/dump UNVERIFIED) |
+| http://www.jakob.at/steffen/hossa/index.html | Hossa test-suite page | 2026-10-25 | no mate suite |
+| WebSearch: mate-suite EPD queries (3) and "1001 Brilliant Ways to Checkmate" EPD | search results, leads only | 2026-10-25 | leads (EngineTests, python-chess files); nothing cited from snippets |
