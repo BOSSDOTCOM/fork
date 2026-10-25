@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <memory>
 #include <new>
+#include <vector>
 
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
@@ -104,7 +105,10 @@ int main() {
     // The search (DESIGN.md §5.2, hot-path rule 3): after setup (the
     // Searcher is created once, outside any search), explore() never allocates,
     // on any of the search-bench positions.
-    auto searcher = std::make_unique<forkeng::Searcher>();
+    std::vector<forkeng::TtBucket> memory(16384);  // a 1 MB table, allocated before counting
+    forkeng::TransTable tt;
+    tt.bind_memory(reinterpret_cast<std::byte*>(memory.data()), memory.size() * sizeof(forkeng::TtBucket));
+    auto searcher = std::make_unique<forkeng::Searcher>(tt);
     const std::atomic<bool> stop{false};
     forkeng::SearchLimits limits;
     limits.depth = 4;

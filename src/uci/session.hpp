@@ -117,6 +117,7 @@ class UciSession {
   SessionConfig config_;
   OptionTable options_;
   HashMemory hash_;
+  TransTable tt_;             // a view over hash_, rebound whenever hash_ is resized
   bool hash_pending_ = true;  // the table is allocated at the first isready, ucinewgame or go
   bool clear_pending_ = false;
   Position root_;

@@ -14,6 +14,7 @@
 // - Values are Fork's own choice, not taken from any engine.
 #pragma once
 
+#include <algorithm>
 #include <cstdlib>
 
 #include "eval/eval.hpp"
@@ -45,9 +46,13 @@ constexpr int score_to_tt(int s, int ply) {
   if (s <= -(TbWinScore - MaxPly)) return s - ply;
   return s;
 }
+// A result too far below this node to count from the root within MaxPly
+// stays at the bottom of its band (review, 2026-10-24: it fell out of it).
 constexpr int score_from_tt(int s, int ply) {
-  if (s >= TbWinScore - MaxPly) return s - ply;
-  if (s <= -(TbWinScore - MaxPly)) return s + ply;
+  if (s >= MateScore - MaxPly) return std::max(s - ply, MateScore - MaxPly);
+  if (s <= -(MateScore - MaxPly)) return std::min(s + ply, -(MateScore - MaxPly));
+  if (s >= TbWinScore - MaxPly) return std::max(s - ply, TbWinScore - MaxPly);
+  if (s <= -(TbWinScore - MaxPly)) return std::min(s + ply, -(TbWinScore - MaxPly));
   return s;
 }
 

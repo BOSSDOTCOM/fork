@@ -150,16 +150,16 @@ endif()
 add_library(forksearch STATIC
   src/eval/bootstrap_eval.cpp
   src/search/search_bench.cpp
+  src/search/hash_memory.cpp
   src/search/searcher.cpp
-  src/search/time_budget.cpp)
+  src/search/time_budget.cpp
+  src/search/trans_table.cpp)
 target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
-target_link_libraries(forksearch PUBLIC forkcore PRIVATE fork_pgo)
-
 find_package(Threads REQUIRED)
+target_link_libraries(forksearch PUBLIC forkcore Threads::Threads PRIVATE fork_pgo)
 
 # The UCI front end (src/uci/): protocol loop, options, info output.
 add_library(forkuci STATIC
-  src/search/hash_memory.cpp
   src/uci/go_limits.cpp
   src/uci/options.cpp
   src/uci/output.cpp
@@ -272,6 +272,7 @@ if(FORK_BUILD_TESTS)
     tests/test_draws.cpp
     tests/test_eval.cpp
     tests/test_search.cpp
+    tests/test_tt.cpp
     tests/engine_process.cpp
     tests/test_uci.cpp
     tests/test_options.cpp)
@@ -315,7 +316,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search time_budget uci_protocol uci_options uci_timing)
+                search time_budget tt uci_protocol uci_options uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -336,6 +337,10 @@ if(FORK_BUILD_TESTS)
     add_executable(fork_uci_oom_test tests/uci_oom_test.cpp)
     target_link_libraries(fork_uci_oom_test PRIVATE forkuci)
     add_test(NAME uci_oom COMMAND fork_uci_oom_test)
+    # Review test (Phase 3 deliverable 3): TT dangling after a throwing Hash resize.
+    add_executable(fork_uci_hash_oom_test tests/uci_hash_oom_test.cpp)
+    target_link_libraries(fork_uci_hash_oom_test PRIVATE forkuci)
+    add_test(NAME uci_hash_oom COMMAND fork_uci_hash_oom_test)
   endif()
 
   # The search bench (`fork bench`) and, so move generation stays tied across

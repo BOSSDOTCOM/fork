@@ -20,6 +20,7 @@ constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are repor
 // move first, then captures and promotions by most valuable victim and
 // least valuable attacker, then quiet moves in generation order.
 constexpr int OrderCapture = 1 << 20;
+constexpr int OrderTtMove = 1 << 30;
 
 }  // namespace
 
@@ -38,11 +39,13 @@ bool Searcher::poll_limits() {
   return false;
 }
 
-void Searcher::order_moves(PlyFrame& f) const {
+void Searcher::order_moves(PlyFrame& f, Move tt_move) const {
   for (std::size_t i = 0; i < f.moves.size(); ++i) {
     const Move m = f.moves[i];
     int s = 0;
-    if (m.is_capture() || m.is_promotion()) {
+    if (m == tt_move) {
+      s = OrderTtMove;
+    } else if (m.is_capture() || m.is_promotion()) {
       const int victim = m.is_capture() ? (m.is_en_passant() ? Pawn : kind_of(pos_->piece_at(m.to()))) : 0;
       const int promo = m.is_promotion() ? piece_value(m.promo_type()) : 0;
       s = OrderCapture + (piece_value(PieceType(victim)) + promo) * 8 - kind_of(pos_->piece_at(m.from()));
@@ -99,16 +102,37 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     if (alpha >= beta) return alpha;
   }
 
+  // The TT: a cutoff at non-PV nodes when the entry is deep enough and its
+  // bound points the right way; otherwise its move is tried first. Moves come
+  // from the legal generator, so a colliding entry's move is never played
+  // unless it is legal here.
+  const Key key = pos.key();
+  TtHit hit{};
+  const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
+  if (tt_hit && !PvNode) {
+    const int s = score_from_tt(hit.score, ply);
+    const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
+    if (deep_enough && (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s >= beta) ||
+                        (hit.bound == TtBound::Upper && s <= alpha)))
+      return s;
+  }
+
   f.static_eval = in_check ? ScoreNone : static_eval(pos);
   f.moves.count = 0;
   generate<GenMode::Legal>(pos, f.moves);
   if (f.moves.size() == 0) return in_check ? mated_score(ply) : 0;
-  order_moves(f);
+  // A colliding entry's move may not be legal here: checked as the spec asks,
+  // though only moves from the legal generator are searched today.
+  const Move tt_move = tt_hit && pos.is_pseudo_legal(hit.move) && pos.is_legal(hit.move) ? hit.move : NoMove;
+  order_moves(f, tt_move);
 
+  const int alpha_start = alpha;
   int best = -ScoreInfinite;
+  Move best_move = NoMove;
   for (std::size_t i = 0; i < f.moves.size(); ++i) {
     pick_next(f, i);
     const Move m = f.moves[i];
+    if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     pos.make(m);
     int score;
     if (i == 0 || !switches.use_pvs) {
@@ -122,11 +146,18 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     if (score > best) {
       best = score;
       if (score > alpha) {
+        best_move = m;
         if (PvNode) update_pv(ply, m);
         if (score >= beta) break;
         alpha = score;
       }
     }
+  }
+  if (switches.use_tt) {
+    const TtBound bound = best >= beta                   ? TtBound::Lower
+                          : PvNode && best > alpha_start ? TtBound::Exact
+                                                         : TtBound::Upper;
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, PvNode);
   }
   return best;
 }
@@ -175,12 +206,13 @@ int Searcher::search_root(int alpha, int beta, int depth) {
 
 void Searcher::report_iteration(int depth, int score, int bound, const PrincipalLine& pv) {
   if (!listener_) return;
-  const IterationReport r{depth, max_ply_reached_, score, bound, nodes_, elapsed_ms(), &pv};
+  const IterationReport r{depth,        max_ply_reached_,    score, bound, nodes_,
+                          elapsed_ms(), tt_.fill_permille(), &pv};
   listener_->on_iteration(*pos_, r);
 }
 
 SearchResult Searcher::explore(Position& pos, const SearchLimits& limits, const std::atomic<bool>& stop,
-                             const std::atomic<bool>* pondering, SearchListener* listener) {
+                               const std::atomic<bool>* pondering, SearchListener* listener) {
   start_ = limits.go_received.value_or(std::chrono::steady_clock::now());
   pos_ = &pos;
   limits_ = &limits;
@@ -191,13 +223,14 @@ SearchResult Searcher::explore(Position& pos, const SearchLimits& limits, const 
   max_ply_reached_ = 0;
   stopped_ = false;
 
+  tt_.advance_age();
   SearchResult result;
   PlyFrame& root = frames_[0];
   root.moves.count = 0;
   generate<GenMode::Legal>(pos, root.moves);
   root_count_ = 0;
   if (root.moves.size()) {
-    order_moves(root);
+    order_moves(root, NoMove);
     for (std::size_t i = 0; i < root.moves.size(); ++i) {
       pick_next(root, i);
       const Move m = root.moves[i];

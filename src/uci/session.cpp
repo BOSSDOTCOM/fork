@@ -66,14 +66,15 @@ class InfoWriter final : public SearchListener {
     const std::uint64_t ms = static_cast<std::uint64_t>(std::max<std::int64_t>(r.elapsed_ms, 0));
     const std::uint64_t nps = r.nodes * 1000 / std::max<std::uint64_t>(ms, 1);
     const bool mate = is_mate_score(r.score);
-    int n = std::snprintf(
-        line, sizeof line_, "info depth %d seldepth %d score %s %d%s nodes %llu nps %llu time %llu", r.depth,
-        std::max(r.max_ply_reached, 1), mate ? "mate" : "cp", mate ? mate_in_moves(r.score) : r.score,
-        r.bound > 0   ? " lowerbound"
-        : r.bound < 0 ? " upperbound"
-                      : "",
-        static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(nps),
-        static_cast<unsigned long long>(ms));
+    int n = std::snprintf(line, sizeof line_,
+                          "info depth %d seldepth %d score %s %d%s nodes %llu nps %llu hashfull %d time %llu",
+                          r.depth, std::max(r.max_ply_reached, 1), mate ? "mate" : "cp",
+                          mate ? mate_in_moves(r.score) : r.score,
+                          r.bound > 0   ? " lowerbound"
+                          : r.bound < 0 ? " upperbound"
+                                        : "",
+                          static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(nps),
+                          r.fill_permille, static_cast<unsigned long long>(ms));
     if (r.pv->length > 0) n += std::snprintf(line + n, sizeof line_ - static_cast<std::size_t>(n), " pv");
     for (int i = 0; i < r.pv->length; ++i) {
       char move[8];
@@ -148,7 +149,7 @@ std::string describe_syzygy_path(const std::string& paths) {
 }  // namespace
 
 UciSession::UciSession(OutputChannel& out, SessionConfig config)
-    : out_(out), config_(config), searcher_(std::make_unique<Searcher>()) {
+    : out_(out), config_(config), searcher_(std::make_unique<Searcher>(tt_)) {
   declare_options();
 }
 
@@ -185,11 +186,22 @@ unsigned UciSession::hash_workers() const {
 
 bool UciSession::apply_pending() {
   if (hash_pending_) {
-    hash_pending_ = clear_pending_ = false;
     const std::size_t bytes = hash_bytes_for_mb(static_cast<std::uint64_t>(options_.number("Hash")));
     const auto start = std::chrono::steady_clock::now();
     std::string report;
+    // resize() frees the old table and may then throw (its report string), so
+    // the TT is unbound first and rebound from whatever the memory holds on
+    // every way out (review, 2026-10-24: it was left on freed memory). If it
+    // throws, the Hash stays pending and the next isready or go tries again.
+    struct Rebind {
+      TransTable& tt;
+      const HashMemory& memory;
+      ~Rebind() { tt.bind_memory(memory.data(), memory.bytes()); }
+    } rebind{tt_, hash_};
+    tt_.bind_memory(nullptr, 0);
     const bool ok = hash_.resize(bytes, report);
+    hash_pending_ = clear_pending_ = false;
+    tt_.bind_memory(hash_.data(), hash_.bytes());
     const unsigned workers = hash_workers();
     hash_.clear(workers);
     const std::int64_t ms = ms_since(start);

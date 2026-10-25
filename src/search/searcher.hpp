@@ -1,8 +1,9 @@
 // searcher: the alpha-beta search (DESIGN.md §5.2, deliverables 2-6).
 //
 // Purpose: iterative deepening with aspiration windows over a fail-soft
-// principal variation search (negamax), with draw detection and mate
-// distance pruning; at the horizon it returns the static evaluation.
+// principal variation search (negamax), with draw detection, mate distance
+// pruning and a transposition table; at the horizon it returns the static
+// evaluation.
 // Invariants:
 // - One Searcher per search thread; it owns all per-thread state (the search
 //   stack, PVs, root moves) and is created once, outside any search: explore()
@@ -24,6 +25,7 @@
 
 #include "core/position.hpp"
 #include "search/score_bounds.hpp"
+#include "search/trans_table.hpp"
 
 namespace forkeng {
 
@@ -42,9 +44,13 @@ struct SearchLimits {
 
 // Technique switches (DESIGN.md §5.2: every technique sits behind a flag).
 struct SearchSwitches {
+  bool use_tt = true;
   bool use_pvs = true;
   bool use_aspiration = true;
   bool use_mate_distance = true;
+  // Tests only: a TT entry cuts only at exactly the depth it was searched
+  // to, so a search equals plain minimax (tests/test_search.cpp).
+  bool tt_exact_depth = false;
 };
 
 struct SearchResult {
@@ -66,6 +72,7 @@ struct IterationReport {
   int bound;  // 0 exact, +1 lower bound (aspiration fail high), -1 upper bound (fail low)
   std::uint64_t nodes;
   std::int64_t elapsed_ms;
+  int fill_permille;
   const PrincipalLine* pv;
 };
 
@@ -93,10 +100,12 @@ struct RootEntry {
 
 class Searcher {
  public:
+  explicit Searcher(TransTable& tt) : tt_(tt) {}
+
   // Searches `pos` (restored on return) until a limit is reached or `stop`
   // becomes true. While `pondering` is true, time limits do not apply.
   SearchResult explore(Position& pos, const SearchLimits& limits, const std::atomic<bool>& stop,
-                     const std::atomic<bool>* pondering, SearchListener* listener);
+                       const std::atomic<bool>* pondering, SearchListener* listener);
 
   SearchSwitches switches;
 
@@ -107,11 +116,12 @@ class Searcher {
 
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
-  void order_moves(PlyFrame& f) const;
+  void order_moves(PlyFrame& f, Move tt_move) const;
   static void pick_next(PlyFrame& f, std::size_t i);
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
 
+  TransTable& tt_;
   Position* pos_ = nullptr;
   const SearchLimits* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;

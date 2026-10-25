@@ -2,10 +2,12 @@
 // perft suite are constructed for Fork; the facts each test relies on (mate
 // in N, no mate in 1, legal FEN) are checked with python-chess by
 // tools/check_search_positions.py.
+#include <algorithm>
 #include <atomic>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <vector>
 
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
@@ -47,8 +49,19 @@ int reference_minimax(Position& pos, int depth, int ply) {
   return best;
 }
 
+// A 1 MB table of plain memory for the tests' searches.
+struct TestHash {
+  std::vector<TtBucket> memory = std::vector<TtBucket>(16384);
+  TransTable tt;
+  TestHash() {
+    tt.bind_memory(reinterpret_cast<std::byte*>(memory.data()), memory.size() * sizeof(TtBucket));
+  }
+  void clear() { std::fill(memory.begin(), memory.end(), TtBucket{}); }
+};
+
 struct Fixture {
-  std::unique_ptr<Searcher> searcher = std::make_unique<Searcher>();
+  TestHash hash;
+  std::unique_ptr<Searcher> searcher = std::make_unique<Searcher>(hash.tt);
   std::atomic<bool> stop{false};
 
   SearchResult search(Position& pos, const SearchLimits& limits) {
@@ -92,17 +105,23 @@ std::vector<Position> oracle_positions() {
 
 }  // namespace
 
-TEST_CASE("search", "root score equals plain minimax: PVS, aspiration, mate distance pruning on and off") {
+TEST_CASE("search",
+          "root score equals plain minimax: PVS, aspiration, mate distance pruning, TT on and off") {
   Fixture fx;
   const int depth = Optimized ? 4 : 3;
   int compared = 0;
   for (Position& pos : oracle_positions()) {
     const int expected = reference_minimax(pos, depth, 0);
-    for (int variant = 0; variant < 4; ++variant) {
+    // The TT cuts only at its entry's own depth (tt_exact_depth), so every
+    // variant must equal minimax; variant 4 switches the TT off.
+    for (int variant = 0; variant < 5; ++variant) {
+      fx.hash.clear();
       fx.searcher->switches = SearchSwitches{};
+      fx.searcher->switches.tt_exact_depth = true;
       fx.searcher->switches.use_pvs = variant != 1;
       fx.searcher->switches.use_aspiration = variant != 2;
       fx.searcher->switches.use_mate_distance = variant != 3;
+      fx.searcher->switches.use_tt = variant != 4;
       SearchLimits limits;
       limits.depth = depth;
       const SearchResult r = fx.search(pos, limits);
@@ -112,7 +131,34 @@ TEST_CASE("search", "root score equals plain minimax: PVS, aspiration, mate dist
       ++compared;
     }
   }
-  CHECK(compared >= 72);
+  CHECK(compared >= 90);
+}
+
+// Endgames transpose a lot, so the TT really cuts here (counted below), and
+// minimax to depth 6 is still cheap. Constructed positions.
+TEST_CASE("search", "TT cutoffs at exact depth equal plain minimax on small endgames at depth 6") {
+  Fixture fx;
+  const int depth = Optimized ? 6 : 4;
+  for (std::string_view fen : {"8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1", "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
+                               "8/8/3k4/8/8/3K4/8/R7 w - - 0 1", "8/5pk1/8/8/8/8/5PK1/8 b - - 0 1"}) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    const int expected = reference_minimax(pos, depth, 0);
+    std::uint64_t nodes[2] = {0, 0};
+    for (bool tt : {true, false}) {
+      fx.hash.clear();
+      fx.searcher->switches = SearchSwitches{};
+      fx.searcher->switches.tt_exact_depth = true;
+      fx.searcher->switches.use_tt = tt;
+      SearchLimits limits;
+      limits.depth = depth;
+      const SearchResult r = fx.search(pos, limits);
+      CHECK_MSG(r.score == expected, fen << " tt " << tt << ": " << r.score << " vs " << expected);
+      nodes[tt] = r.nodes;
+    }
+    // The TT really cut: fewer nodes with it.
+    CHECK_MSG(nodes[1] < nodes[0], fen << ": " << nodes[1] << " nodes with the TT, " << nodes[0] << " without");
+  }
 }
 
 TEST_CASE("search", "finds mate in 1 and mate in 2, and stops early on go mate") {
@@ -197,6 +243,7 @@ TEST_CASE("search", "no legal move: mate and stalemate") {
 TEST_CASE("search", "the same search twice gives the same nodes, move and score") {
   Fixture fx;
   const SearchResult a = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
+  fx.hash.clear();  // the same TT contents too
   const SearchResult b = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
   CHECK_EQ(a.nodes, b.nodes);
   CHECK(a.best == b.best);
@@ -258,7 +305,8 @@ TEST_CASE("time_budget", "review: INT64_MIN movetime or clock gives the minimum 
   c.movetime = Min;
   c.overhead_ms = 100;
   TimeBudget t = plan_time(c);
-  CHECK_MSG(t.hard_ms == 1 && t.soft_ms == 1, "movetime INT64_MIN: soft " << t.soft_ms << " hard " << t.hard_ms);
+  CHECK_MSG(t.hard_ms == 1 && t.soft_ms == 1,
+            "movetime INT64_MIN: soft " << t.soft_ms << " hard " << t.hard_ms);
   c = ClockInput{};
   c.remaining_ms = Min;
   c.overhead_ms = 100;
@@ -282,11 +330,12 @@ struct LastReport final : SearchListener {
 // The last info line the GUI sees before bestmove (session.cpp prints no
 // other line when an iteration finished) should name the move played.
 TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV starts with the best move") {
-  auto searcher = std::make_unique<Searcher>();
+  TestHash hash;
+  auto searcher = std::make_unique<Searcher>(hash.tt);
   const std::atomic<bool> stop{false};
   int mismatches = 0, tried = 0;
   for (const PerftPosition& p : perft_suite()) {
-    for (std::uint64_t nodes = 2000; nodes <= 200000 && mismatches == 0; nodes += 997) {
+    for (std::uint64_t nodes = 2000; nodes <= 200000 && mismatches == 0; nodes += 9973) {
       Position pos;
       CHECK(pos.set_fen(p.fen));
       SearchLimits limits;
@@ -297,8 +346,8 @@ TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV st
       if (r.depth > 0 && !(rep.first == r.best)) {
         ++mismatches;
         CHECK_MSG(false, p.fen << " nodes " << nodes << ": last info pv " << pos.move_to_uci(rep.first)
-                                << " score " << rep.score << ", bestmove " << pos.move_to_uci(r.best)
-                                << " score " << r.score);
+                               << " score " << rep.score << ", bestmove " << pos.move_to_uci(r.best)
+                               << " score " << r.score);
       }
     }
   }

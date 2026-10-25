@@ -44,7 +44,9 @@ paths:
   report. Those runs exclude it (`-E no_alloc`, built without the
   `fork_alloc_test` target, or not run under valgrind), and those are its
   only sanctioned exclusions. The same applies to `uci_oom`
-  (`fork_uci_oom_test`, which fails each allocation of a `go` in turn). Every other build runs it, the ASan/UBSan
+  (`fork_uci_oom_test`, which fails each allocation of a `go` in turn) and
+  `uci_hash_oom` (`fork_uci_hash_oom_test`, which fails each allocation of a
+  Hash resize in turn). Every other build runs it, the ASan/UBSan
   presets included, and
   `scripts/check.sh` fails if its Passed line is missing. (The PGO builds run
   bench parity only, no ctest.)
