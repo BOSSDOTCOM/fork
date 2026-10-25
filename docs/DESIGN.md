@@ -909,6 +909,9 @@ test to `docs/history/phase-3/sprt-log.md` (change, commits, bounds, TC,
 games, pentanomial counts, Elo with error, LLR, verdict). Throughput is
 measured on the first SPRT; until then the game rates are UNVERIFIED. An
 LTC SPRT can take a day or more, and only one heavy job runs at a time.
+**Cap** (owner, 2026-10-25): an SPRT that has not decided after 20,000
+games at STC (10,000 at any other time control; `MAX_GAMES` overrides)
+stops and is logged as **inconclusive**, for the owner to decide on.
 
 **Long time controls.** No search change is rejected on short time
 control results alone.

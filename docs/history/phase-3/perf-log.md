@@ -69,3 +69,16 @@ estimators needs a stated reason or a fix.
   measured a twelve-queen position at 19 M nodes for depth 1 with full
   windows, 4.2 M with null windows; random-game positions stay under 80 k);
   `piece_value` as an inline constant table.
+
+## Milestone A originality fixes (bea68ed, against 2beb9e3)
+
+- Bench 7,533,640 nodes, signature 2711c23a13969520 (TT replacement and root
+  order changed; the self-verifying check and the `OnPv` rename did not
+  change it).
+- nps: median 9,731,198 -> 9,602,978 (-1.3%), best 9,813,713 -> 9,710,365
+  (-1.1%): no significant difference (3% floor).
+- Profile: `TransTable::deposit` 5.8% (was 2.9%: the data digest of the
+  self-verifying check and the two-pass slot choice), `fetch` 3.8% (was
+  3.5%); the rest as before (`negamax<false>` 12.0%, eval 13.3%,
+  `generate<Legal>` 10.2%, `refresh_check_info` 10.1%, `quiesce<false>`
+  9.4%, `generate<Captures>` 7.3%, `see_value` 7.0%).
