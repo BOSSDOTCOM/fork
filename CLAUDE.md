@@ -168,10 +168,20 @@ next phase begins. Report each item's result.
 7. **Memory notes:** review the saved memory files
    (Claude Code's memory directory for this project, under `~/.claude/projects/`) and update or delete
    anything outdated.
-8. **Phase summary:** one page in `docs/history/phase-N/summary.md`: what
+8. **Re-validation** (owner, 2026-10-25; DESIGN.md §5.2, Quality
+   control 6), at the phase ends that call for it, before the summary:
+   - **end of Phase 3:** one removal round: each search feature switched
+     off in turn and SPRTed on non-regression bounds [-3, 0]; a feature
+     whose removal costs nothing is simplified away; every result goes in
+     the SPRT log;
+   - **end of Phase 4 (after the network):** the full re-validation of
+     every search feature, plus a retune of every eval-dependent margin;
+   - search features keep their switches in the code until the Phase 4
+     re-validation is done. No removal tests at individual milestones.
+9. **Phase summary:** one page in `docs/history/phase-N/summary.md`: what
    was built, what was learned, what carries forward.
-9. **Start the next phase in a fresh Claude Code session**, beginning from
-   the summary and DESIGN.md.
+10. **Start the next phase in a fresh Claude Code session**, beginning from
+    the summary and DESIGN.md.
 
 **Fuzz corpus.** Only `fuzz/corpus/<target>/seed-*` files are committed; a
 fuzz run's new inputs are git-ignored. After a long run, minimize with

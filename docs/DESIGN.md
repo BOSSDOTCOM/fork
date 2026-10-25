@@ -321,7 +321,10 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   self-play labels only, Lichess CC0 positions as openings, Syzygy WDL
   labels, no Lc0 data, Kaggle storage and training, the Lc0 review gate).
   They were made in a KB session while main was off-limits and are not yet
-  in this file.
+  in this file. **After the network arrives**: the full re-validation of
+  every search feature and the retune of eval-dependent margins (§5.2,
+  Quality control 6, owner 2026-10-25); search switches stay in the code
+  until it is done.
 - **Phase 5: Time management.** Soft and hard limits tuned for long
   increment games without ponder, and a stress test under artificial system
   load. Before this phase starts: research the current TCEC season's full
@@ -911,7 +914,10 @@ measured on the first SPRT; until then the game rates are UNVERIFIED. An
 LTC SPRT can take a day or more, and only one heavy job runs at a time.
 **Cap** (owner, 2026-10-25): an SPRT that has not decided after 20,000
 games at STC (10,000 at any other time control; `MAX_GAMES` overrides)
-stops and is logged as **inconclusive**, for the owner to decide on.
+stops and is logged as **inconclusive**, for the owner to decide on. For
+techniques expected to be near zero in Elo (mate distance pruning,
+possibly aspiration windows), an inconclusive result at the cap is
+acceptable for Milestone A (owner, 2026-10-25).
 
 **Long time controls.** No search change is rejected on short time
 control results alone.
@@ -1032,6 +1038,25 @@ holds, which is why search decisions use no floating point (deliverable 6).
 5. **Strength.** Every technique and refinement must pass SPRT before it
    stays. One that fails (after its LTC retest where the rule applies)
    stays off behind its flag or is removed, and the result is logged.
+6. **Re-validation** (owner, 2026-10-25). Features interact: one that
+   passed early can become redundant once later ones are in. So:
+   - **No removal tests at the individual milestones** A, B and C.
+   - **One removal round at the end of Phase 3**, after the tier 2
+     refinements: every search feature is switched off in turn (a tuning
+     build, `TUNE=1`) and SPRTed against the full search on
+     non-regression bounds [-3, 0], with the feature off as the test side.
+     If removing it costs nothing (H1 accepted), the feature is simplified
+     away; every result, kept or removed, goes in the SPRT log. The rules
+     above apply: a feature the research flags as long-time-control
+     sensitive is removal-tested at LTC.
+   - **Full re-validation after Phase 4's network arrives**: the same
+     removal round over every search feature, and a retune of every
+     eval-dependent margin (RFP, futility, the NMP gate, razoring,
+     ProbCut, SEE thresholds, aspiration window and the like), since the
+     evaluation they were set against will have changed.
+   - **Every feature keeps its `SearchSwitches` flag in the code until
+     that Phase 4 re-validation is done**; only then may switches of kept
+     features be folded into plain code.
 
 #### Implementation notes (2026-10-24)
 
@@ -1140,6 +1165,7 @@ Choices made while building, where the spec leaves a gap:
 | 2026-10-24 | **Hash memory: one block, checked against available memory (owner, amending §5.1).** The chunked fallback was dropped: Linux overcommit checks each mmap alone, so chunks would pass where the whole table is refused and the parallel clear would then trigger the OOM killer. Requests are compared with the physical memory available (plus the current table) before allocating; a refusal falls back to the previous size, else 1 MB, with `info string`. Transparent huge pages requested with `madvise`. Tested with a 1 TB request and one just above available memory, on Windows and Linux. |
 | 2026-10-24 | **Phase 3 spec approved** (§5.2) with the owner's answers listed there: SPRT bounds and conditions, Fathom vendored, the search bench positions, MultiPV deferred to Phase 7, the evaluator chosen at build time. UHO_Lichess is a test-opening book only (KB data-policy.md decision 6). Build order: deliverables 1-8 with stops at Milestones A, B and C. |
 | 2026-10-24 | **Milestone A originality fixes (owner).** `PvNode` renamed `OnPv` (bench identical). TT store redesigned from the KB description (stale entries below current ones, then shallower below deeper; a whole age byte with a 24-bit check) and made self-verifying for Phase 6 (the check XORs a digest of the entry's data, so torn writes read as misses); root moves ordered by move-to-front. Both change behaviour: bench 7533640 / 2711c23a13969520, the Milestone A SPRTs rerun on the new commit. SEE kept as the standard CPW swap algorithm, cited in ORIGINALITY.md. Root ordering by node counts logged as ideas.md idea 18. |
+| 2026-10-25 | **Re-validation plan (owner).** No removal tests at Phase 3's milestones; one removal round (each feature off, SPRT [-3, 0], simplified away if removal costs nothing) at the end of Phase 3; the full re-validation of every search feature and a retune of eval-dependent margins after Phase 4's network; every search switch stays in the code until then. Added to §5.2 Quality control 6, the Phase 4 outline and CLAUDE.md's phase-end checklist (item 8). Also: SPRT cap of 20,000 games at STC (inconclusive acceptable at Milestone A for near-zero features) and concurrency raised from 5 to 10 for the remaining Milestone A SPRTs, pending a time-loss check. |
 
 ## 7. Performance doctrine (governs every phase)
 
