@@ -65,3 +65,33 @@ Games: 5798, Wins: 2294, Losses: 2136, Draws: 1368, Points: 2978.0 (51.36 %)
 Ptnml(0-2): [315, 508, 1169, 518, 389], WL/DD Ratio: 5.84
 LLR: 2.19 (74.5%) (-2.94, 2.94) [0.00, 5.00]
 ```
+
+### 20261025T120632Z ma-UsePvs
+
+- base `bea68ed` (bea68ed), test `bea68ed` (bea68ed), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, tuning builds, base opts option.UsePvs=false
+- Verdict: **H1 was accepted**; cap 20000 games.
+```
+Elo: 109.83 +/- 23.96, nElo: 132.64 +/- 27.04
+Games: 634, Wins: 353, Losses: 159, Draws: 122, Points: 414.0 (65.30 %)
+Ptnml(0-2): [17, 24, 115, 70, 91], WL/DD Ratio: 7.21
+LLR: 2.96 (100.5%) (-2.94, 2.94) [0.00, 5.00]
+SPRT ([0.00, 5.00]) completed - H1 was accepted
+```
+
+### 20261025T123220Z ma-UseAspiration
+
+- base `bea68ed` (bea68ed, option.UseAspiration=false), test `bea68ed` (default), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, tuning builds, cap 20000 games.
+- Verdict: **INCONCLUSIVE (stopped by the owner, 2026-10-25)** after 3,306 finished games. The last report (3,200 games) shows +3.91 ± 7.60 Elo, nElo +6.19 ± 12.04, LLR 0.49 of 2.94: the 95% interval includes zero. **Kept on.** Added to the end-of-Phase-3 removal round (DESIGN.md §5.2, Quality control 6). Entry written by hand: stopping the test chain also ended this test's script before it could log.
+```
+Elo: 3.91 +/- 7.60, nElo: 6.19 +/- 12.04
+Games: 3200, Wins: 1252, Losses: 1216, Draws: 732, Points: 1618.0 (50.56 %)
+Ptnml(0-2): [103, 195, 981, 205, 116], WL/DD Ratio: 4.91
+LLR: 0.49 (16.6%) (-2.94, 2.94) [0.00, 5.00]
+```
+
+### Mate distance pruning (ma-UseMateDistance): not run
+
+- Planned on non-regression bounds [-3, 0]; **not run at Milestone A**
+  (owner, 2026-10-25). Kept on (it is exact: it changes only how fast mates
+  are found, which the mate tests check). Added to the end-of-Phase-3
+  removal round.

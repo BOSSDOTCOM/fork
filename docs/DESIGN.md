@@ -1068,10 +1068,13 @@ holds, which is why search decisions use no floating point (deliverable 6).
    - **Every feature keeps its `SearchSwitches` flag in the code until
      that Phase 4 re-validation is done**; only then may switches of kept
      features be folded into plain code.
-   - **Flagged for the end-of-Phase-3 removal round:** SEE pruning in the
-     quiescence search (`UseSeeQuiesce`), whose Milestone A SPRT was stopped
-     by the owner as inconclusive at +9.5 ± 7.3 Elo after about 5,800 games
-     (95% interval above zero; kept on).
+   - **Flagged for the end-of-Phase-3 removal round** (owner, 2026-10-25):
+     SEE pruning in the quiescence search (`UseSeeQuiesce`), whose
+     Milestone A SPRT was stopped as inconclusive at +9.5 ± 7.3 Elo after
+     about 5,800 games (95% interval above zero); aspiration windows
+     (`UseAspiration`), stopped as inconclusive at +3.9 ± 7.6 Elo after
+     about 3,200 games (interval includes zero); and mate distance pruning
+     (`UseMateDistance`), not SPRTed at Milestone A. All three kept on.
 
 #### Implementation notes (2026-10-24)
 
