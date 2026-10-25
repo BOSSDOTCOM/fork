@@ -5,6 +5,7 @@
 #include "core/movegen.hpp"
 #include "eval/bootstrap_eval.hpp"
 #include "eval/eval.hpp"
+#include "search/see.hpp"
 
 namespace forkeng {
 
@@ -75,6 +76,7 @@ void Searcher::update_pv(int ply, Move m) {
 
 template <bool PvNode>
 int Searcher::negamax(int alpha, int beta, int depth, int ply) {
+  if (depth <= 0 && switches.use_quiesce) return quiesce<PvNode>(alpha, beta, ply);
   pv_[ply].length = 0;
   ++nodes_;
   if (poll_limits()) return 0;
@@ -92,9 +94,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     generate<GenMode::Legal>(pos, f.moves);
     return f.moves.size() ? 0 : mated_score(ply);
   }
-  // The horizon (deliverable 4 puts the quiescence search here).
   if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
-  if (depth <= 0) return static_eval(pos);
+  if (depth <= 0) return static_eval(pos);  // only with the quiescence search switched off
 
   if (switches.use_mate_distance) {
     alpha = std::max(alpha, mated_score(ply));
@@ -158,6 +159,97 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                           : PvNode && best > alpha_start ? TtBound::Exact
                                                          : TtBound::Upper;
     tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, PvNode);
+  }
+  return best;
+}
+
+// The quiescence search: at the horizon, only captures and queen promotions
+// are searched (all evasions in check), and the side to move may stand pat
+// on the static evaluation unless it is in check. Captures that lose
+// material by SEE are skipped.
+template <bool PvNode>
+int Searcher::quiesce(int alpha, int beta, int ply) {
+  pv_[ply].length = 0;
+  ++nodes_;
+  if (poll_limits()) return 0;
+  max_ply_reached_ = std::max(max_ply_reached_, ply);
+  Position& pos = *pos_;
+  PlyFrame& f = frames_[ply];
+  const bool in_check = pos.in_check();
+
+  if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
+  if (pos.fifty_move_reached()) {
+    if (!in_check) return 0;
+    f.moves.count = 0;
+    generate<GenMode::Legal>(pos, f.moves);
+    return f.moves.size() ? 0 : mated_score(ply);
+  }
+  if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
+
+  const Key key = pos.key();
+  TtHit hit{};
+  const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
+  if (tt_hit && !PvNode && (!switches.tt_exact_depth || hit.depth == 0)) {
+    const int s = score_from_tt(hit.score, ply);
+    if (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s >= beta) ||
+        (hit.bound == TtBound::Upper && s <= alpha))
+      return s;
+  }
+
+  const int alpha_start = alpha;
+  int best = -ScoreInfinite;
+  f.moves.count = 0;
+  if (in_check) {
+    f.static_eval = ScoreNone;
+    generate<GenMode::Legal>(pos, f.moves);
+    if (f.moves.size() == 0) return mated_score(ply);
+  } else {
+    f.static_eval = static_eval(pos);
+    best = f.static_eval;
+    if (best >= beta) {
+      if (switches.use_tt)
+        tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, PvNode);
+      return best;
+    }
+    alpha = std::max(alpha, best);
+    generate<GenMode::Captures>(pos, f.moves);
+    // Keep captures and queen promotions; drop under-promotions and, by SEE,
+    // captures that lose material.
+    std::size_t survivors = 0;
+    for (std::size_t i = 0; i < f.moves.size(); ++i) {
+      const Move m = f.moves[i];
+      if (m.is_promotion() && m.promo_type() != Queen) continue;
+      if (switches.use_see_quiesce && m.is_capture() && !see_at_least(pos, m, 0)) continue;
+      f.moves.moves[survivors++] = m;
+    }
+    f.moves.count = survivors;
+  }
+  order_moves(f, tt_hit ? hit.move : NoMove);
+
+  Move best_move = NoMove;
+  for (std::size_t i = 0; i < f.moves.size(); ++i) {
+    pick_next(f, i);
+    const Move m = f.moves[i];
+    if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
+    pos.make(m);
+    const int score = -quiesce<PvNode>(-beta, -alpha, ply + 1);
+    pos.unmake(m);
+    if (stopped_) return 0;
+    if (score > best) {
+      best = score;
+      if (score > alpha) {
+        best_move = m;
+        if (PvNode) update_pv(ply, m);
+        if (score >= beta) break;
+        alpha = score;
+      }
+    }
+  }
+  if (switches.use_tt) {
+    const TtBound bound = best >= beta                   ? TtBound::Lower
+                          : PvNode && best > alpha_start ? TtBound::Exact
+                                                         : TtBound::Upper;
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, PvNode);
   }
   return best;
 }

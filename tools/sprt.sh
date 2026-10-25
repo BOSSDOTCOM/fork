@@ -11,12 +11,15 @@
 #   HASH_MB   default 16 (STC); use 64 for LTC
 #
 # Environment: BASE_OPTS / TEST_OPTS extra -engine options (e.g.
-# "option.SomeSwitch=false"), CONCURRENCY (default 5: the 7600X3D's 6 cores
-# minus one, the machine is shared), FORK_SPRT_DIR (default ~/fork-sprt).
+# "option.UsePvs=false"), CONCURRENCY (default 5: the 7600X3D's 6 cores
+# minus one, the machine is shared), FORK_SPRT_DIR (default ~/fork-sprt),
+# TUNE=1 to build tuning binaries (FORK_TUNE: every search switch is a UCI
+# check option, so one commit can be tested with a technique on and off).
 #
 # Each commit is exported with `git archive` from this repository and built
-# with update.sh (the TCEC build, x86-64-v3) into $FORK_SPRT_DIR/build-<sha>;
-# builds are reused. Openings: UHO_Lichess_4852_v1.epd, test openings only
+# with update.sh (the TCEC build, x86-64-v3), or with the same flags plus
+# -DFORK_TUNE=ON when TUNE=1, into $FORK_SPRT_DIR/build-<sha>[-tune]; builds
+# are reused. Openings: UHO_Lichess_4852_v1.epd, test openings only
 # (KB data-policy.md decision 6), checked against its SHA-256 before every
 # run. Game pairs with colours reversed, pentanomial report, alpha = beta =
 # 0.05. The full fastchess output goes to $FORK_SPRT_DIR/logs/; the summary
@@ -40,12 +43,17 @@ mkdir -p "$dir/logs"
 build() {  # commit -> path of its engine
   local sha out src
   sha=$(git -C "$repo" rev-parse --verify "$1^{commit}")
-  out=$dir/build-$sha
+  out=$dir/build-$sha${TUNE:+-tune}
   if [ ! -x "$out/fork" ]; then
     src=$out/src
     rm -rf "$out" && mkdir -p "$src"
     git -C "$repo" archive "$sha" | tar -x -C "$src"
-    (cd "$src" && ./update.sh >"$out/build.log" 2>&1) || { echo "sprt.sh: build of $1 failed, see $out/build.log" >&2; exit 1; }
+    if [ -n "${TUNE:-}" ]; then
+      (cmake -S "$src" -B "$src/build/tcec" -DCMAKE_BUILD_TYPE=Release -DFORK_BUILD_TESTS=OFF \
+        -DFORK_ARCH=x86-64-v3 -DFORK_TUNE=ON && cmake --build "$src/build/tcec" --target fork) >"$out/build.log" 2>&1
+    else
+      (cd "$src" && ./update.sh >"$out/build.log" 2>&1)
+    fi || { echo "sprt.sh: build of $1 failed, see $out/build.log" >&2; exit 1; }
     cp "$src/build/tcec/fork" "$out/fork"
     rm -rf "$src"
   fi
@@ -56,7 +64,7 @@ base_exe=$(build "$base")
 test_exe=$(build "$test")
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 out=$dir/logs/$stamp-$name.txt
-echo "sprt.sh: $name: $base vs $test, [$elo0, $elo1], $tc, Hash $hash, concurrency ${CONCURRENCY:-5}; log $out"
+echo "sprt.sh: $name: $base vs $test${TUNE:+ (tuning builds)}, [$elo0, $elo1], $tc, Hash $hash, concurrency ${CONCURRENCY:-5}; log $out"
 
 # shellcheck disable=SC2086
 "$fastchess" \
@@ -74,7 +82,7 @@ summary=$(grep -E "^(Elo|LLR|Games|Ptnml|SPRT|H[01] was)" "$out" | tail -n 8 || 
   echo
   echo "### $stamp $name"
   echo
-  echo "- base \`$(git -C "$repo" rev-parse --short "$base")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-5}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
+  echo "- base \`$(git -C "$repo" rev-parse --short "$base")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-5}${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
   echo '```'
   echo "$summary"
   echo '```'

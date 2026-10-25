@@ -194,9 +194,9 @@ bool UciSession::apply_pending() {
     // every way out (review, 2026-10-24: it was left on freed memory). If it
     // throws, the Hash stays pending and the next isready or go tries again.
     struct Rebind {
-      TransTable& tt;
-      const HashMemory& memory;
-      ~Rebind() { tt.bind_memory(memory.data(), memory.bytes()); }
+      TransTable& table;
+      const HashMemory& source;
+      ~Rebind() { table.bind_memory(source.data(), source.bytes()); }
     } rebind{tt_, hash_};
     tt_.bind_memory(nullptr, 0);
     const bool ok = hash_.resize(bytes, report);

@@ -100,23 +100,23 @@ std::span<const std::string_view> search_bench_fens() { return BenchFens; }
 SearchBenchResult run_search_bench() {
   SearchBenchResult r{0, 0, 0.0};
   // 16 MB of Hash, cleared before each position (a cleared search state).
-  HashMemory hash;
+  HashMemory table_memory;
   std::string report;
   // A smaller fallback table would change the bench silently: refuse it.
-  if (!hash.resize(BenchHashBytes, report) || hash.bytes() != BenchHashBytes) {
+  if (!table_memory.resize(BenchHashBytes, report) || table_memory.bytes() != BenchHashBytes) {
     std::fprintf(stderr, "bench: cannot allocate its 16 MB hash table: %s\n", report.c_str());
     std::abort();
   }
-  TransTable tt;
-  tt.bind_memory(hash.data(), hash.bytes());
-  auto searcher = std::make_unique<Searcher>(tt);
+  TransTable table;
+  table.bind_memory(table_memory.data(), table_memory.bytes());
+  auto searcher = std::make_unique<Searcher>(table);
   const std::atomic<bool> stop{false};
   SearchLimits limits;
   limits.depth = BenchDepth;
   double seconds = 0;  // the searches only, not the Hash clears
   for (const std::string_view fen : BenchFens) {
     Position pos;
-    hash.clear(1);
+    table_memory.clear(1);
     const bool ok = pos.set_fen(fen);
     assert(ok);
     (void)ok;

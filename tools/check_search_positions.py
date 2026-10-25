@@ -83,5 +83,78 @@ for fen in ['4k3/pppppppp/8/8/8/8/PPPPPPPP/R3K3 w - - 0 1', '4k3/pppppppp/8/8/8/
             'k7/8/1K6/8/8/8/8/7R w - - 0 1', 'k7/8/8/8/8/8/8/6KR w - - 0 1']:
     board_of(fen)
 
+# tests/test_see.cpp: legal positions, and the move each one judges is legal.
+for fen, uci in [('4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1', 'e4d5'), ('4k3/8/2p5/3p4/4P3/8/8/4K3 w - - 0 1', 'e4d5'),
+                 ('4k3/8/2p5/3p4/8/4N3/8/4K3 w - - 0 1', 'e3d5'), ('3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1', 'd2d5'),
+                 ('8/8/8/3k4/3p4/8/8/3QK3 w - - 0 1', 'd1d4'), ('8/8/8/3k4/3p4/8/3R4/3QK3 w - - 0 1', 'd2d4'),
+                 ('4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1', 'e5d6'), ('4k3/1P6/8/8/8/8/8/4K3 w - - 0 1', 'b7b8q'),
+                 ('r3k3/1P6/8/8/8/8/8/4K3 w - - 0 1', 'b7b8q'), ('4k3/8/2p5/8/8/4N3/8/4K3 w - - 0 1', 'e3d5'),
+                 ('4k3/8/8/8/8/8/8/4K2R w K - 0 1', 'e1g1')]:
+    b = board_of(fen)
+    check(chess.Move.from_uci(uci) in b.legal_moves, f'legal: {uci} in {fen}')
+# tests/test_search.cpp, the TT endgames.
+for fen in ['8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1', '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1',
+            '8/8/3k4/8/8/3K4/8/R7 w - - 0 1', '8/5pk1/8/8/8/8/5PK1/8 b - - 0 1']:
+    board_of(fen)
+
+# tests/test_search.cpp, "quiescence values on constructed exchanges": the
+# material-only value (pawn 100, knight and bishop 300, rook 500, queen 900)
+# of a depth-1 search ending in a capture search (captures and queen
+# promotions, stand pat; every evasion in check), and the moves reaching it.
+# python-chess generates the moves; nothing here uses Fork's SEE or search.
+VALUE = {chess.PAWN: 100, chess.KNIGHT: 300, chess.BISHOP: 300, chess.ROOK: 500, chess.QUEEN: 900, chess.KING: 0}
+
+
+def material(b):
+    s = sum(VALUE[p.piece_type] * (1 if p.color == b.turn else -1) for p in b.piece_map().values())
+    return s
+
+
+def capture_search(b, alpha, beta):
+    if b.is_checkmate():
+        return -100000
+    in_check = b.is_check()
+    if not in_check:
+        stand = material(b)
+        if stand >= beta:
+            return beta
+        alpha = max(alpha, stand)
+    for m in b.legal_moves:
+        if not in_check and not (b.is_capture(m) or m.promotion == chess.QUEEN):
+            continue
+        if m.promotion and m.promotion != chess.QUEEN:
+            continue
+        b.push(m)
+        score = -capture_search(b, -beta, -alpha)
+        b.pop()
+        if score >= beta:
+            return beta
+        alpha = max(alpha, score)
+    return alpha
+
+
+def depth_one(fen):
+    b = chess.Board(fen)
+    results = {}
+    for m in b.legal_moves:
+        b.push(m)
+        results[m.uci()] = -capture_search(b, -10**6, 10**6)
+        b.pop()
+    best = max(results.values())
+    return best, sorted(u for u, v in results.items() if v == best)
+
+
+for fen, value, moves in [
+    ('4k3/8/8/3q4/4P3/8/8/4K3 w - - 0 1', 100, ['e4d5']),
+    ('4k3/8/3p4/4r3/8/5N2/8/4K3 w - - 0 1', -100, ['f3e5']),
+    ('4k3/8/2p5/3p4/8/8/3Q4/4K3 w - - 0 1', 700, None),  # every quiet move; never d2d5
+    ('4k3/1P6/8/8/8/8/8/4K3 w - - 0 1', 900, ['b7b8q']),
+    ('3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1', 500, ['d2d5']),
+]:
+    board_of(fen)
+    got_value, got_moves = depth_one(fen)
+    ok = got_value == value and (moves is None or got_moves == moves) and (moves is not None or 'd2d5' not in got_moves)
+    check(ok, f'capture search {fen}: value {got_value}, best {got_moves[:6]}')
+
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)

@@ -2,8 +2,8 @@
 //
 // Purpose: iterative deepening with aspiration windows over a fail-soft
 // principal variation search (negamax), with draw detection, mate distance
-// pruning and a transposition table; at the horizon it returns the static
-// evaluation.
+// pruning and a transposition table, ending in a quiescence search over
+// captures and queen promotions (all evasions in check).
 // Invariants:
 // - One Searcher per search thread; it owns all per-thread state (the search
 //   stack, PVs, root moves) and is created once, outside any search: explore()
@@ -48,6 +48,8 @@ struct SearchSwitches {
   bool use_pvs = true;
   bool use_aspiration = true;
   bool use_mate_distance = true;
+  bool use_quiesce = true;
+  bool use_see_quiesce = true;  // qsearch skips captures that lose material by SEE
   // Tests only: a TT entry cuts only at exactly the depth it was searched
   // to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
@@ -112,6 +114,8 @@ class Searcher {
  private:
   template <bool PvNode>
   int negamax(int alpha, int beta, int depth, int ply);
+  template <bool PvNode>
+  int quiesce(int alpha, int beta, int ply);
   int search_root(int alpha, int beta, int depth);
 
   bool poll_limits();  // true once the search must stop

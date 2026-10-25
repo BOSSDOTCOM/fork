@@ -28,3 +28,22 @@ estimators needs a stated reason or a fix.
   every leaf. Note: interior nodes also compute a static evaluation that
   nothing reads until deliverable 6's pruning uses it; it is kept because
   the pruning needs it there.
+
+## Deliverable 3: transposition table (0d32d51, against ad4b848)
+
+- Bench 7,773,794 nodes (was 24,919,232 at the same depth 6), signature
+  e86cc3c139e88831.
+- nps: median 11,786,980 -> 11,036,343 (-6.4%), best 11,983,227 ->
+  11,199,725 (-6.5%): **slower, beyond the 3% floor. Reason: a deliberate
+  trade.** The TT costs work at every node (fetch, deposit, the child's
+  bucket prefetch through `predicted_key`), and its cutoffs remove whole
+  subtrees, so the nodes that remain are the more expensive ones. Bench
+  time to the same depth: 24.9 M / 12.0 M nps = 2.08 s before, 7.77 M /
+  11.0 M nps = 0.70 s now, about 3 times faster.
+- Profile: `negamax<false>` 29.3%, `generate<Legal>` 14.8%, eval 17.1%
+  (`side_score` 12.1, `bootstrap_eval` 5.0), `refresh_check_info` 11.9%,
+  `order_moves` 6.6%, `make` 5.4%, `predicted_key` 4.2% (the prefetch),
+  `insufficient_material` 3.3%, `unmake` 3.2%, `TransTable::deposit` 1.1%,
+  `fetch` 1.0%.
+- To measure later, not now (no premature micro-optimization): whether the
+  prefetch pays for its `predicted_key` call, with the A/B harness.

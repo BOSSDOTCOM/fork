@@ -152,6 +152,7 @@ add_library(forksearch STATIC
   src/search/search_bench.cpp
   src/search/hash_memory.cpp
   src/search/searcher.cpp
+  src/search/see.cpp
   src/search/time_budget.cpp
   src/search/trans_table.cpp)
 target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
@@ -272,6 +273,7 @@ if(FORK_BUILD_TESTS)
     tests/test_draws.cpp
     tests/test_eval.cpp
     tests/test_search.cpp
+    tests/test_see.cpp
     tests/test_tt.cpp
     tests/engine_process.cpp
     tests/test_uci.cpp
@@ -316,7 +318,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search time_budget tt uci_protocol uci_options uci_timing)
+                search see time_budget tt uci_protocol uci_options uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")

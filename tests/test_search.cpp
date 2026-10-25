@@ -14,6 +14,7 @@
 #include "eval/eval.hpp"
 #include "harness.hpp"
 #include "search/searcher.hpp"
+#include "search/see.hpp"
 #include "search/time_budget.hpp"
 #include "suite.hpp"
 
@@ -21,47 +22,93 @@ namespace forkeng::test {
 
 namespace {
 
-// A plain minimax with the search's own rules (draws, 50-move rule with mate
-// first, ply limit, static evaluation at the horizon), and nothing else: the
-// oracle for the root score (tests must not compare the search with itself).
-int reference_minimax(Position& pos, int depth, int ply) {
+// The draw rules both references apply before anything else: 0 for a draw,
+// mated_score for mate on the 100th half-move, ScoreNone otherwise.
+int reference_draw(Position& pos, int ply) {
+  if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
+  if (pos.fifty_move_reached()) {
+    if (!pos.in_check()) return 0;
+    MoveList list;
+    generate<GenMode::Legal>(pos, list);
+    return list.size() ? 0 : mated_score(ply);
+  }
+  return ScoreNone;
+}
+
+// A textbook fail-hard alpha-beta quiescence search with the search's move
+// set: every evasion in check (mated if none), else stand pat or any capture
+// or queen promotion, skipping (with `see_filter`) captures that lose by SEE.
+// Called with the full window it returns the exact minimax value; plain
+// minimax over every capture sequence is far too slow to use.
+int reference_quiesce(Position& pos, int ply, int alpha, int beta, bool see_filter) {
+  if (const int d = reference_draw(pos, ply); d != ScoreNone) return d;
+  const bool in_check = pos.in_check();
+  if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
+  MoveList list;
+  generate<GenMode::Legal>(pos, list);
+  if (in_check && list.size() == 0) return mated_score(ply);
+  if (!in_check) {
+    const int stand = static_eval(pos);
+    if (stand >= beta) return beta;
+    alpha = std::max(alpha, stand);
+  }
+  for (Move m : list) {
+    if (!in_check) {
+      if (!m.is_capture() && !m.is_promotion()) continue;
+      if (m.is_promotion() && m.promo_type() != Queen) continue;
+      if (see_filter && m.is_capture() && see_value(pos, m) < 0) continue;
+    }
+    pos.make(m);
+    const int score = -reference_quiesce(pos, ply + 1, -beta, -alpha, see_filter);
+    pos.unmake(m);
+    if (score >= beta) return beta;
+    alpha = std::max(alpha, score);
+  }
+  return alpha;
+}
+
+// A textbook fail-hard alpha-beta with the search's own rules (draws,
+// 50-move rule with mate first, ply limit, the quiescence search above at the
+// horizon) and nothing else: no PVS, no aspiration, no TT, no move ordering.
+// The oracle for the root score, called with the full window (tests must not
+// compare the search with itself).
+int reference_alphabeta(Position& pos, int depth, int ply, int alpha, int beta, bool see_filter) {
   const bool in_check = pos.in_check();
   if (ply > 0) {
-    if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
-    if (pos.fifty_move_reached()) {
-      if (!in_check) return 0;
-      MoveList list;
-      generate<GenMode::Legal>(pos, list);
-      return list.size() ? 0 : mated_score(ply);
-    }
+    if (depth <= 0) return reference_quiesce(pos, ply, alpha, beta, see_filter);
+    if (const int d = reference_draw(pos, ply); d != ScoreNone) return d;
     if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
-    if (depth <= 0) return static_eval(pos);
   }
   MoveList list;
   generate<GenMode::Legal>(pos, list);
   if (list.size() == 0) return in_check ? mated_score(ply) : 0;
-  int best = -ScoreInfinite;
   for (Move m : list) {
     pos.make(m);
-    best = std::max(best, -reference_minimax(pos, depth - 1, ply + 1));
+    const int score = -reference_alphabeta(pos, depth - 1, ply + 1, -beta, -alpha, see_filter);
     pos.unmake(m);
+    if (score >= beta) return beta;
+    alpha = std::max(alpha, score);
   }
-  return best;
+  return alpha;
+}
+
+int reference_minimax(Position& pos, int depth, int ply, bool see_filter = true) {
+  return reference_alphabeta(pos, depth, ply, -ScoreInfinite, ScoreInfinite, see_filter);
 }
 
 // A 1 MB table of plain memory for the tests' searches.
 struct TestHash {
-  std::vector<TtBucket> memory = std::vector<TtBucket>(16384);
-  TransTable tt;
+  std::vector<TtBucket> buckets = std::vector<TtBucket>(16384);
+  TransTable table;
   TestHash() {
-    tt.bind_memory(reinterpret_cast<std::byte*>(memory.data()), memory.size() * sizeof(TtBucket));
+    table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
   }
-  void clear() { std::fill(memory.begin(), memory.end(), TtBucket{}); }
+  void clear() { std::fill(buckets.begin(), buckets.end(), TtBucket{}); }
 };
 
 struct Fixture {
-  TestHash hash;
-  std::unique_ptr<Searcher> searcher = std::make_unique<Searcher>(hash.tt);
+  TestHash store;
+  std::unique_ptr<Searcher> searcher = std::make_unique<Searcher>(store.table);
   std::atomic<bool> stop{false};
 
   SearchResult search(Position& pos, const SearchLimits& limits) {
@@ -108,30 +155,37 @@ std::vector<Position> oracle_positions() {
 TEST_CASE("search",
           "root score equals plain minimax: PVS, aspiration, mate distance pruning, TT on and off") {
   Fixture fx;
-  const int depth = Optimized ? 4 : 3;
+  // With the quiescence search the reference grows fast: depth 3 (2 in debug
+  // builds), and depth 1 for the variant without the SEE filter, whose
+  // reference searches every capture sequence. Aspiration windows start at
+  // depth 4, so the endgame test below (depth 6) is the one that checks them.
+  const int depth = Optimized ? 3 : 2;
   int compared = 0;
   for (Position& pos : oracle_positions()) {
     const int expected = reference_minimax(pos, depth, 0);
+    const int expected_without_see = reference_minimax(pos, 1, 0, false);
     // The TT cuts only at its entry's own depth (tt_exact_depth), so every
-    // variant must equal minimax; variant 4 switches the TT off.
-    for (int variant = 0; variant < 5; ++variant) {
-      fx.hash.clear();
+    // variant must equal minimax; variant 4 switches the TT off, variant 5
+    // the quiescence search's SEE filter.
+    for (int variant = 0; variant < 6; ++variant) {
+      fx.store.clear();
       fx.searcher->switches = SearchSwitches{};
       fx.searcher->switches.tt_exact_depth = true;
       fx.searcher->switches.use_pvs = variant != 1;
       fx.searcher->switches.use_aspiration = variant != 2;
       fx.searcher->switches.use_mate_distance = variant != 3;
       fx.searcher->switches.use_tt = variant != 4;
+      fx.searcher->switches.use_see_quiesce = variant != 5;
       SearchLimits limits;
-      limits.depth = depth;
+      limits.depth = variant == 5 ? 1 : depth;
       const SearchResult r = fx.search(pos, limits);
-      CHECK_MSG(r.score == expected, pos.fen()
-                                         << " variant " << variant << ": " << r.score << " vs " << expected);
-      CHECK_EQ(r.depth, depth);
+      const int want = variant == 5 ? expected_without_see : expected;
+      CHECK_MSG(r.score == want, pos.fen() << " variant " << variant << ": " << r.score << " vs " << want);
+      CHECK_EQ(r.depth, variant == 5 ? 1 : depth);
       ++compared;
     }
   }
-  CHECK(compared >= 90);
+  CHECK(compared >= 108);
 }
 
 // Endgames transpose a lot, so the TT really cuts here (counted below), and
@@ -146,7 +200,7 @@ TEST_CASE("search", "TT cutoffs at exact depth equal plain minimax on small endg
     const int expected = reference_minimax(pos, depth, 0);
     std::uint64_t nodes[2] = {0, 0};
     for (bool tt : {true, false}) {
-      fx.hash.clear();
+      fx.store.clear();
       fx.searcher->switches = SearchSwitches{};
       fx.searcher->switches.tt_exact_depth = true;
       fx.searcher->switches.use_tt = tt;
@@ -157,7 +211,40 @@ TEST_CASE("search", "TT cutoffs at exact depth equal plain minimax on small endg
       nodes[tt] = r.nodes;
     }
     // The TT really cut: fewer nodes with it.
-    CHECK_MSG(nodes[1] < nodes[0], fen << ": " << nodes[1] << " nodes with the TT, " << nodes[0] << " without");
+    CHECK_MSG(nodes[1] < nodes[0],
+              fen << ": " << nodes[1] << " nodes with the TT, " << nodes[0] << " without");
+  }
+}
+
+// DESIGN.md §5.2 deliverable 4: quiescence values on constructed exchanges,
+// against python-chess. tools/check_search_positions.py computes each
+// position's material-only value of a depth-1 search ending in a capture
+// search, and the moves reaching it (python-chess generates the moves; no
+// Fork code is involved). Fork must play one of those moves (or, where every
+// quiet move ties, avoid the losing capture) and score within 100 cp of the
+// material value: the bootstrap evaluation's placement terms make the rest.
+TEST_CASE("search", "quiescence values on constructed exchanges match python-chess") {
+  Fixture fx;
+  struct Exchange {
+    std::string_view fen;
+    int material;           // python-chess value, centipawns for the side to move
+    std::string_view best;  // the only best move, or "" if many quiet moves tie
+    std::string_view avoid;
+  };
+  for (const Exchange& x : {Exchange{"4k3/8/8/3q4/4P3/8/8/4K3 w - - 0 1", 100, "e4d5", ""},
+                            Exchange{"4k3/8/3p4/4r3/8/5N2/8/4K3 w - - 0 1", -100, "f3e5", ""},
+                            Exchange{"4k3/8/2p5/3p4/8/8/3Q4/4K3 w - - 0 1", 700, "", "d2d5"},
+                            Exchange{"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1", 900, "b7b8q", ""},
+                            Exchange{"3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1", 500, "d2d5", ""}}) {
+    fx.store.clear();
+    Position pos;
+    CHECK(pos.set_fen(x.fen));
+    const SearchResult r = fx.search(x.fen, 1);
+    const std::string played = pos.move_to_uci(r.best);
+    if (!x.best.empty()) CHECK_MSG(played == x.best, x.fen << ": played " << played);
+    if (!x.avoid.empty()) CHECK_MSG(played != x.avoid, x.fen << ": played " << played);
+    CHECK_MSG(std::abs(r.score - x.material) <= 100,
+              x.fen << ": score " << r.score << ", material " << x.material);
   }
 }
 
@@ -172,15 +259,15 @@ TEST_CASE("search", "finds mate in 1 and mate in 2, and stops early on go mate")
   // K+R v K, mate in 2 (and not in 1).
   r = fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 4);
   CHECK_EQ(r.score, mate_score(3));
-  // go mate 2 stops once the mate is found, well before depth 20 (at depth 4:
-  // without a quiescence search the mated leaf at ply 3 is not recognized).
+  // go mate 2 stops once the mate is found (depth 3: the quiescence search
+  // sees that the king has no evasion), well before depth 20.
   CHECK(pos.set_fen("k7/8/2K5/8/8/8/8/7R w - - 0 1"));
   SearchLimits limits;
   limits.depth = 20;
   limits.mate_moves = 2;
   r = fx.search(pos, limits);
   CHECK_EQ(r.score, mate_score(3));
-  CHECK_EQ(r.depth, 4);
+  CHECK_EQ(r.depth, 3);
 }
 
 TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
@@ -243,7 +330,7 @@ TEST_CASE("search", "no legal move: mate and stalemate") {
 TEST_CASE("search", "the same search twice gives the same nodes, move and score") {
   Fixture fx;
   const SearchResult a = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
-  fx.hash.clear();  // the same TT contents too
+  fx.store.clear();  // the same TT contents too
   const SearchResult b = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
   CHECK_EQ(a.nodes, b.nodes);
   CHECK(a.best == b.best);
@@ -330,8 +417,8 @@ struct LastReport final : SearchListener {
 // The last info line the GUI sees before bestmove (session.cpp prints no
 // other line when an iteration finished) should name the move played.
 TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV starts with the best move") {
-  TestHash hash;
-  auto searcher = std::make_unique<Searcher>(hash.tt);
+  TestHash store;
+  auto searcher = std::make_unique<Searcher>(store.table);
   const std::atomic<bool> stop{false};
   int mismatches = 0, tried = 0;
   for (const PerftPosition& p : perft_suite()) {
