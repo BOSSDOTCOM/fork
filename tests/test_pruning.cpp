@@ -30,9 +30,9 @@ struct PruningFixture {
     searcher->clear_history();
     Position pos;
     CHECK_MSG(pos.set_fen(fen), fen);
-    SearchLimits limits;
+    SearchQuota limits;
     limits.depth = depth;
-    return searcher->explore(pos, limits, stop, nullptr, nullptr);
+    return searcher->deliberate(pos, limits, stop, nullptr, nullptr);
   }
 };
 
@@ -175,9 +175,9 @@ TEST_CASE("pruning", "searches to the maximum depth and to a node budget stay in
     fx.searcher->clear_history();
     Position pos;
     CHECK_MSG(pos.set_fen(fen), fen);
-    SearchLimits limits;  // depth MaxPly - 1
+    SearchQuota limits;  // depth MaxPly - 1
     limits.nodes = Optimized ? 3'000'000 : 200'000;
-    const SearchResult r = fx.searcher->explore(pos, limits, fx.stop, nullptr, nullptr);
+    const SearchResult r = fx.searcher->deliberate(pos, limits, fx.stop, nullptr, nullptr);
     MoveList legal;
     generate<GenMode::Legal>(pos, legal);
     CHECK_MSG(legal.contains(r.best), fen);

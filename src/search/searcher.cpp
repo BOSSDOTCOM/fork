@@ -17,7 +17,7 @@ namespace {
 // Aspiration (measured on the bench, DESIGN.md §5.2 "Search constants"): from
 // depth 5, nine in ten iterations move the score by at most 12 cp.
 constexpr int AspirationMinDepth = 5;              // iterations before this use the full window
-constexpr int AspirationWindow = 12;               // first half-width, in centipawns
+constexpr int AspirationHalfWidth = 12;            // first half-width, in centipawns
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
 constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are reported only after this
 
@@ -410,7 +410,7 @@ void Searcher::report_iteration(int depth, int score, int bound, const Principal
 }
 
 int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop) {
-  static const SearchLimits no_limits;
+  static const SearchQuota no_limits;
   start_ = std::chrono::steady_clock::now();
   pos_ = &pos;
   limits_ = &no_limits;
@@ -424,8 +424,8 @@ int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::a
   return negamax<false>(beta - 1, beta, depth, 0);
 }
 
-SearchResult Searcher::explore(Position& pos, const SearchLimits& limits, const std::atomic<bool>& stop,
-                               const std::atomic<bool>* pondering, SearchListener* listener) {
+SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, const std::atomic<bool>& stop,
+                                  const std::atomic<bool>* pondering, SearchListener* listener) {
   start_ = limits.go_received.value_or(std::chrono::steady_clock::now());
   pos_ = &pos;
   limits_ = &limits;
@@ -458,7 +458,7 @@ SearchResult Searcher::explore(Position& pos, const SearchLimits& limits, const 
   for (int depth = 1; depth <= std::min(limits.depth, MaxPly - 1); ++depth) {
     iteration_best_ = NoMove;
     iteration_best_score_ = -ScoreInfinite;
-    int delta = AspirationWindow;
+    int delta = AspirationHalfWidth;
     int alpha = -ScoreInfinite, beta = ScoreInfinite;
     if (switches.use_aspiration && depth >= AspirationMinDepth && !is_tb_or_mate(previous)) {
       alpha = std::max(previous - delta, -ScoreInfinite);

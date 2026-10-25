@@ -34,10 +34,10 @@ struct ReviewFixture {
     clear();
     Position pos;
     CHECK_MSG(pos.set_fen(fen), fen);
-    SearchLimits limits;
+    SearchQuota limits;
     limits.depth = depth;
     limits.nodes = nodes;
-    return searcher->explore(pos, limits, stop, nullptr, nullptr);
+    return searcher->deliberate(pos, limits, stop, nullptr, nullptr);
   }
 };
 
@@ -123,7 +123,7 @@ TEST_CASE("pruning", "stopped searches and probes leave no state behind") {
   }
 }
 
-// A probe right after construction and a probe after an explore must agree
+// A probe right after construction and a probe after an deliberate must agree
 // (same TT and history state).
 TEST_CASE("pruning", "probe_zero_window is reproducible") {
   const std::string_view fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";

@@ -28,22 +28,22 @@ struct ReviewHash {
 }  // namespace
 
 // Review of deliverable 5: the butterfly history is state that survives
-// between explore() calls, so the invariant now names it: a search is a
+// between deliberate() calls, so the invariant now names it: a search is a
 // function of position, limits, switches, TT contents and history.
-TEST_CASE("ordering", "review: explore() is a function of position, limits, switches, TT and history") {
+TEST_CASE("ordering", "review: deliberate() is a function of position, limits, switches, TT and history") {
   ReviewHash store;
   auto searcher = std::make_unique<Searcher>(store.table);
   const std::atomic<bool> stop{false};
-  SearchLimits limits;
+  SearchQuota limits;
   limits.depth = 7;
   Position pos;
   CHECK(pos.set_fen(perft_suite()[1].fen));  // the perft suite's second position (sourced there)
   store.clear();
   searcher->clear_history();
-  const SearchResult a = searcher->explore(pos, limits, stop, nullptr, nullptr);
+  const SearchResult a = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
   store.clear();
   searcher->clear_history();  // same TT and history as the first search
-  const SearchResult b = searcher->explore(pos, limits, stop, nullptr, nullptr);
+  const SearchResult b = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
   CHECK_MSG(a.nodes == b.nodes,
             "nodes " << a.nodes << " then " << b.nodes << " with the same empty TT and history");
 }

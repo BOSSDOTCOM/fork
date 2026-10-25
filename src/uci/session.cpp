@@ -442,7 +442,7 @@ void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first)
   if (go.restrict_sent && go.restrict_to.empty())
     out_.send_info_string("go: no legal move in searchmoves; searching every move");
   apply_pending();
-  SearchLimits limits = search_limits(go);
+  SearchQuota limits = search_limits(go);
   limits.go_received = go_time;
   const bool infinite = go.infinite;
   {
@@ -490,8 +490,8 @@ void UciSession::stop_search() {
 // The search limits of a go: depth, nodes, mate and searchmoves as sent, and
 // the time budget from the clock arguments and Move Overhead. go infinite has
 // no time limit; a ponder search ignores time until ponderhit.
-SearchLimits UciSession::search_limits(const GoLimits& go) const {
-  SearchLimits l;
+SearchQuota UciSession::search_limits(const GoLimits& go) const {
+  SearchQuota l;
   if (go.depth) l.depth = static_cast<int>(std::clamp<std::int64_t>(*go.depth, 1, MaxPly - 1));
   if (go.nodes) l.nodes = static_cast<std::uint64_t>(std::max<std::int64_t>(*go.nodes, 1));
   if (go.mate && *go.mate > 0) l.mate_moves = static_cast<int>(std::min<std::int64_t>(*go.mate, MaxPly));
@@ -511,13 +511,13 @@ SearchLimits UciSession::search_limits(const GoLimits& go) const {
   return l;
 }
 
-void UciSession::search_main(Position pos, SearchLimits limits, bool infinite) {
+void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
   const auto start = std::chrono::steady_clock::now();
   Move best = NoMove;
   bool picked = false;
   try {
     InfoWriter writer(out_);
-    const SearchResult r = searcher_->explore(pos, limits, stop_flag_, &pondering_, &writer);
+    const SearchResult r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer);
     best = r.best;
     picked = true;
     {

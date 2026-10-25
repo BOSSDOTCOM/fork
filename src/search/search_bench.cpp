@@ -111,7 +111,7 @@ SearchBenchResult run_search_bench() {
   table.bind_memory(table_memory.data(), table_memory.bytes());
   auto searcher = std::make_unique<Searcher>(table);
   const std::atomic<bool> stop{false};
-  SearchLimits limits;
+  SearchQuota limits;
   limits.depth = BenchDepth;
   double seconds = 0;  // the searches only, not the Hash clears
   for (const std::string_view fen : BenchFens) {
@@ -122,7 +122,7 @@ SearchBenchResult run_search_bench() {
     assert(ok);
     (void)ok;
     const auto start = std::chrono::steady_clock::now();
-    const SearchResult s = searcher->explore(pos, limits, stop, nullptr, nullptr);
+    const SearchResult s = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
     seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
     r.nodes += s.nodes;
     r.signature = signature_mix(r.signature, s.nodes);

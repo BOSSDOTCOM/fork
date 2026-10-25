@@ -124,3 +124,39 @@ SPRT ([0.00, 5.00]) completed - H1 was accepted
 
 - base `4fac691` (4fac691), test `4fac691` (4fac691), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, base opts option.UseHistory=false
 - Verdict: **STOPPED, superseded** (owner, 2026-10-25): halted after about 79 games, before any report, when the owner paused the queue to replace the history, LMP and null-move constants found by the originality check. Re-run on the new values (below).
+
+### 20261025T212942Z mb-UseHistory
+
+- base `69e830a` (69e830a), test `69e830a` (69e830a), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, base opts option.UseHistory=false
+- Verdict: **H1 was accepted**; cap 20000 games.
+```
+Elo: 418.92 +/- 60.19, nElo: 624.51 +/- 37.95
+Games: 322, Wins: 283, Losses: 14, Draws: 25, Points: 295.5 (91.77 %)
+Ptnml(0-2): [0, 1, 14, 22, 124], WL/DD Ratio: 13.00
+LLR: 2.96 (100.6%) (-2.94, 2.94) [0.00, 5.00]
+SPRT ([0.00, 5.00]) completed - H1 was accepted
+```
+
+### 20261025T214112Z mb-tier1
+
+- base `69e830a` (69e830a), test `69e830a` (69e830a), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, base opts option.UseRfp=false option.UseNmp=false option.UseLmr=false option.UseLmp=false option.UseFutility=false option.UseSeePrune=false
+- Verdict: **H1 was accepted**; cap 20000 games.
+```
+Elo: 439.21 +/- 61.04, nElo: 698.69 +/- 38.19
+Games: 318, Wins: 279, Losses: 8, Draws: 31, Points: 294.5 (92.61 %)
+Ptnml(0-2): [0, 1, 9, 26, 123], WL/DD Ratio: 3.50
+LLR: 2.96 (100.4%) (-2.94, 2.94) [0.00, 5.00]
+SPRT ([0.00, 5.00]) completed - H1 was accepted
+```
+
+### 20261025T215305Z mb-UseSeePrune
+
+- base `69e830a` (69e830a), test `69e830a` (69e830a), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, base opts option.UseSeePrune=false
+- Verdict: **H1 was accepted**; cap 20000 games.
+```
+Elo: 21.16 +/- 10.08, nElo: 25.99 +/- 12.35
+Games: 3042, Wins: 1166, Losses: 981, Draws: 895, Points: 1613.5 (53.04 %)
+Ptnml(0-2): [142, 284, 556, 325, 214], WL/DD Ratio: 2.89
+LLR: 2.95 (100.1%) (-2.94, 2.94) [0.00, 5.00]
+SPRT ([0.00, 5.00]) completed - H1 was accepted
+```

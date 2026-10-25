@@ -603,7 +603,7 @@ tuning comes after Phase 4.
 | File | Contents |
 |---|---|
 | `src/eval/bootstrap_eval.*` | the bootstrap evaluation (deliverable 1) |
-| `src/search/searcher.*` | `Searcher` (per-thread search state and the recursion), `SearchLimits`, `SearchResult`, `PlyFrame` (one search-stack entry per ply), `NodeKind`, `RootEntry` |
+| `src/search/searcher.*` | `Searcher` (per-thread search state and the recursion), `SearchQuota`, `SearchResult`, `PlyFrame` (one search-stack entry per ply), `NodeKind`, `RootEntry` |
 | `src/search/trans_table.*` | `TransTable`, `TtEntry`, `TtBucket`, `TtBound`, `score_to_tt` / `score_from_tt` |
 | `src/search/see.*` | `see_at_least(pos, move, threshold)` |
 | `src/search/move_selector.*` | `MoveSelector`, `SelectorStage` (the staged picker) |
@@ -1248,7 +1248,7 @@ and Weiss (results in ORIGINALITY.md).
 | Constant | Value | Justification |
 |---|---|---|
 | `AspirationMinDepth` | 5 | **Measured** on the bench (46 positions to depth 14, aspiration off): the iteration-to-iteration score change has p90 16 cp at depths 2-4 and settles at 9-13 cp from depth 5; earlier iterations are cheap, so they keep the full window. |
-| `AspirationWindow` | 12 cp | **Measured**, as above: 90% of the score changes from depth 5 on are at most 12 cp, so nine iterations in ten need no re-search. Replaced the first scheme (25 cp from depth 4, doubling), which the constant screen found identical to Berserk 1.0.0's. |
+| `AspirationHalfWidth` | 12 cp | **Measured**, as above: 90% of the score changes from depth 5 on are at most 12 cp, so nine iterations in ten need no re-search. Replaced the first scheme (25 cp from depth 4, doubling), which the constant screen found identical to Berserk 1.0.0's. |
 | Aspiration widening | delta += abs(score − previous) | Fork's rule: on a fail, the half-width grows by how far the fail-soft score already is from the previous iteration's score. That is at least the old half-width (the score fell outside the window), so the window at least doubles, and more after a big jump; only the failing bound moves. |
 | `StopCheckInterval` | 1024 nodes | At about 10M nps that is a poll every 0.1 ms: far finer than the 1 ms clock, at a negligible cost per node. |
 | `FailReportMs` | 1000 ms | UCI GUIs need no fail-high/low lines for searches shorter than a second; it keeps fast games' output small. |
@@ -1410,6 +1410,19 @@ invariants.
 | `check_squares` | `checking_squares` | squares from which a piece type would give check |
 | `key_after` | `predicted_key` | exact Zobrist key after a move, without making it (TT prefetch) |
 
+- **Domain vocabulary is kept deliberately (owner, 2026-10-25).** Standard
+  chess-programming and textbook terms are the field's shared language, as
+  CPW uses them, and stay even when another engine uses the same word
+  (name check 13 found these matching Stockfish, Ethereal, Berserk or
+  Weiss, mostly after case and underscores are ignored): `negamax`,
+  `quiesce`, `gives_check`, `static_eval`, `mate_score`, `update_pv`,
+  `see_value`, `score_to_tt` / `score_from_tt`, the TT names `TtHit`,
+  `TtBound` and `TtBucket`, `LmrTable`, `moves_seen`, `quiets_searched`,
+  `futility_value`, and the file name `see`. Exact matches of compound
+  names that are not such terms are renamed: `SearchLimits` became
+  `SearchQuota`, `AspirationWindow` became `AspirationHalfWidth`, and
+  `Searcher::explore` became `Searcher::deliberate` (name check 14: no
+  match in the four engines).
 - **Rule:** before introducing a new type, function, file or member name,
   check it against Stockfish's current source. If it matches and isn't
   generic CPW vocabulary, flag it to the owner before using it.

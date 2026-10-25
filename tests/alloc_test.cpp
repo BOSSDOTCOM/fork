@@ -103,14 +103,15 @@ int main() {
   }
   {
     // The search (DESIGN.md §5.2, hot-path rule 3): after setup (the
-    // Searcher is created once, outside any search), explore() never allocates,
+    // Searcher is created once, outside any search), deliberate() never allocates,
     // on any of the search-bench positions.
     std::vector<forkeng::TtBucket> buckets(16384);  // a 1 MB table, allocated before counting
     forkeng::TransTable table;
-    table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(forkeng::TtBucket));
+    table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()),
+                      buckets.size() * sizeof(forkeng::TtBucket));
     auto searcher = std::make_unique<forkeng::Searcher>(table);
     const std::atomic<bool> stop{false};
-    forkeng::SearchLimits limits;
+    forkeng::SearchQuota limits;
     limits.depth = 4;
     long during = 0;
     std::uint64_t nodes = 0;
@@ -118,7 +119,7 @@ int main() {
       forkeng::Position pos;
       if (!pos.set_fen(fen)) return 2;
       long before = allocations.load();
-      nodes += searcher->explore(pos, limits, stop, nullptr, nullptr).nodes;
+      nodes += searcher->deliberate(pos, limits, stop, nullptr, nullptr).nodes;
       during += allocations.load() - before;
     }
     std::printf("search depth 4 on the %zu bench positions: %llu nodes, %ld heap allocations\n",

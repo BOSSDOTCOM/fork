@@ -104,8 +104,8 @@ class UciSession {
 
   void stop_search();  // stops and joins the running search, if any
   bool search_running();
-  SearchLimits search_limits(const GoLimits& go) const;
-  void search_main(Position pos, SearchLimits limits, bool waits);  // the search thread
+  SearchQuota search_limits(const GoLimits& go) const;
+  void search_main(Position pos, SearchQuota limits, bool waits);  // the search thread
   // The last info line when no iteration was reported (none finished, or
   // no legal move), in a fixed buffer.
   void report_unfinished(const Position& pos, const SearchResult& r, std::int64_t elapsed_ms);

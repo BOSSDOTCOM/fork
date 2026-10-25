@@ -6,11 +6,11 @@
 // captures and queen promotions (all evasions in check).
 // Invariants:
 // - One Searcher per search thread; it owns all per-thread state (the search
-//   stack, PVs, root moves) and is created once, outside any search: explore()
+//   stack, PVs, root moves) and is created once, outside any search: deliberate()
 //   never allocates (tests/alloc_test.cpp).
 // - Scores follow score_bounds.hpp: fail-soft, from the side to move's view,
 //   mates by distance from the root.
-// - explore() is deterministic for a given position, limits, switches, TT
+// - deliberate() is deterministic for a given position, limits, switches, TT
 //   contents and move-ordering history when no time limit applies (bench
 //   parity); the history persists between searches until clear_history()
 //   (ucinewgame, Clear Hash, each bench position).
@@ -33,7 +33,7 @@
 
 namespace forkeng {
 
-struct SearchLimits {
+struct SearchQuota {
   int depth = MaxPly - 1;     // iterations to finish at most
   std::uint64_t nodes = 0;    // 0: no node limit
   int mate_moves = 0;         // > 0: stop once a mate in at most this many moves is found
@@ -42,7 +42,7 @@ struct SearchLimits {
   MoveList restrict_to;       // searchmoves; empty: every legal move
   // When `go` arrived: the time limits count from here, so work done before
   // the search starts (a Hash change applied at go) uses the move's time.
-  // Default: when explore() starts.
+  // Default: when deliberate() starts.
   std::optional<std::chrono::steady_clock::time_point> go_received;
 };
 
@@ -149,8 +149,8 @@ class Searcher {
 
   // Searches `pos` (restored on return) until a limit is reached or `stop`
   // becomes true. While `pondering` is true, time limits do not apply.
-  SearchResult explore(Position& pos, const SearchLimits& limits, const std::atomic<bool>& stop,
-                       const std::atomic<bool>* pondering, SearchListener* listener);
+  SearchResult deliberate(Position& pos, const SearchQuota& limits, const std::atomic<bool>& stop,
+                          const std::atomic<bool>* pondering, SearchListener* listener);
 
   SearchSwitches switches;
 #ifdef FORK_SEARCH_STATS
@@ -180,7 +180,7 @@ class Searcher {
   TransTable& tt_;
   QuietHistory history_;
   Position* pos_ = nullptr;
-  const SearchLimits* limits_ = nullptr;
+  const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;
   const std::atomic<bool>* pondering_ = nullptr;
   SearchListener* listener_ = nullptr;

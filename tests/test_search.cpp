@@ -120,14 +120,14 @@ struct Fixture {
   std::unique_ptr<Searcher> searcher = std::make_unique<Searcher>(store.table);
   std::atomic<bool> stop{false};
 
-  SearchResult search(Position& pos, const SearchLimits& limits) {
-    return searcher->explore(pos, limits, stop, nullptr, nullptr);
+  SearchResult search(Position& pos, const SearchQuota& limits) {
+    return searcher->deliberate(pos, limits, stop, nullptr, nullptr);
   }
   SearchResult search(std::string_view fen, int depth) {
     Position pos;
     const bool ok = pos.set_fen(fen);
     CHECK_MSG(ok, fen);
-    SearchLimits limits;
+    SearchQuota limits;
     limits.depth = depth;
     return search(pos, limits);
   }
@@ -184,7 +184,7 @@ TEST_CASE("search",
       fx.searcher->switches.use_mate_distance = variant != 3;
       fx.searcher->switches.use_tt = variant != 4;
       fx.searcher->switches.use_see_quiesce = variant != 5;
-      SearchLimits limits;
+      SearchQuota limits;
       limits.depth = variant == 5 ? 1 : depth;
       const SearchResult r = fx.search(pos, limits);
       const int want = variant == 5 ? expected_without_see : expected;
@@ -211,7 +211,7 @@ TEST_CASE("search", "TT cutoffs at exact depth equal plain minimax on small endg
       fx.store.clear();
       fx.searcher->switches = exact_switches();
       fx.searcher->switches.use_tt = tt;
-      SearchLimits limits;
+      SearchQuota limits;
       limits.depth = depth;
       const SearchResult r = fx.search(pos, limits);
       CHECK_MSG(r.score == expected, fen << " tt " << tt << ": " << r.score << " vs " << expected);
@@ -269,7 +269,7 @@ TEST_CASE("search", "finds mate in 1 and mate in 2, and stops early on go mate")
   // go mate 2 stops once the mate is found (depth 3: the quiescence search
   // sees that the king has no evasion), well before depth 20.
   CHECK(pos.set_fen("k7/8/2K5/8/8/8/8/7R w - - 0 1"));
-  SearchLimits limits;
+  SearchQuota limits;
   limits.depth = 20;
   limits.mate_moves = 2;
   r = fx.search(pos, limits);
@@ -287,7 +287,7 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
   // 1. e4 Nf6 2. Nf3 Ng8 3. Ng1: ...Nf6 repeats the position after 1...Nf6.
   Position pos;
   for (const char* uci : {"e2e4", "g8f6", "g1f3", "f6g8", "f3g1"}) pos.make(pos.parse_uci(uci));
-  SearchLimits limits;
+  SearchQuota limits;
   limits.depth = 1;
   limits.restrict_to.add(pos.parse_uci("g8f6"));
   const SearchResult r = fx.search(pos, limits);
@@ -299,7 +299,7 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
 TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still returns a legal move") {
   Fixture fx;
   Position pos;
-  SearchLimits limits;
+  SearchQuota limits;
   limits.nodes = 5000;
   SearchResult r = fx.search(pos, limits);
   CHECK(r.nodes >= 5000 && r.nodes <= 5001);
@@ -307,7 +307,7 @@ TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still retu
   generate<GenMode::Legal>(pos, legal);
   CHECK(legal.contains(r.best));
 
-  limits = SearchLimits{};
+  limits = SearchQuota{};
   limits.depth = 2;
   limits.restrict_to.add(pos.parse_uci("a2a3"));
   limits.restrict_to.add(pos.parse_uci("h2h3"));
@@ -316,7 +316,7 @@ TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still retu
   CHECK_EQ(r.depth, 2);
 
   fx.stop = true;
-  limits = SearchLimits{};
+  limits = SearchQuota{};
   r = fx.search(pos, limits);
   CHECK(legal.contains(r.best));
   fx.stop = false;
@@ -450,10 +450,10 @@ TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV st
     for (std::uint64_t nodes = 2000; nodes <= 200000 && mismatches == 0; nodes += 9973) {
       Position pos;
       CHECK(pos.set_fen(p.fen));
-      SearchLimits limits;
+      SearchQuota limits;
       limits.nodes = nodes;
       LastReport rep;
-      const SearchResult r = searcher->explore(pos, limits, stop, nullptr, &rep);
+      const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &rep);
       ++tried;
       if (r.depth > 0 && !(rep.first == r.best)) {
         ++mismatches;
