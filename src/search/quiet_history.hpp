@@ -5,10 +5,11 @@
 // the tree, indexed by side to move, from-square and to-square.
 // Invariants:
 // - Every value stays within [-HistoryMax, HistoryMax] for any sequence of
-//   updates (tests/test_ordering.cpp): the update is self-limiting ("gravity"),
-//   moving a value by bonus * (1 - |value| / HistoryMax) towards the bonus's
-//   sign, so a result against a large stored value moves it more than one
-//   that confirms it.
+//   updates (tests/test_ordering.cpp). The update is the standard published
+//   self-limiting ("gravity") form, cited in docs/ORIGINALITY.md: with the
+//   amount b clamped to [-HistoryMax, HistoryMax], v becomes
+//   v + b - v * |b| / HistoryMax, so it moves by less the closer it already
+//   is to the limit on b's side, and by more when b goes against it.
 // - A cutoff by a quiet move gives it a bonus that grows with depth, capped;
 //   the quiet moves tried before it at that node get the same amount as a
 //   malus.
@@ -24,12 +25,14 @@
 
 namespace forkeng {
 
-constexpr int HistoryMax = 16384;
-constexpr int HistoryBonusCap = 1600;
+// Fork's scale and bonus (justified in DESIGN.md §5.2, "Search constants").
+constexpr int HistoryMax = 10000;
+constexpr int HistoryBonusCap = HistoryMax / 8;  // reached at depth 10
 
-// The bonus for a cutoff at `depth` (Fork's own shape: quadratic, capped).
+// The bonus for a cutoff at `depth`: 12.5 * depth^2, capped.
 constexpr int bonus_for_depth(int depth) {
-  return depth * depth * 16 > HistoryBonusCap ? HistoryBonusCap : depth * depth * 16;
+  const int quadratic = depth * depth * 25 / 2;
+  return quadratic > HistoryBonusCap ? HistoryBonusCap : quadratic;
 }
 
 class QuietHistory {

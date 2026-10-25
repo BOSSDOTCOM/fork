@@ -18,7 +18,7 @@
 //   and with the SEE filter so are captures that lose by SEE.
 // - Every move is yielded at most once (the TT move is skipped in its
 //   stage), every yielded move is legal, and in the main search every legal
-//   move is yielded unless skip_quiets() was called (tests/test_ordering.cpp).
+//   move is yielded unless stop_quiets() was called (tests/test_ordering.cpp).
 // - No allocation; the selector lives in the search stack (PlyFrame).
 #pragma once
 
@@ -55,7 +55,7 @@ class MoveSelector {
   Move take_next();
 
   // From now on yields no more quiet moves (late move pruning, deliverable 6).
-  void skip_quiets() { skip_quiets_ = true; }
+  void stop_quiets() { quiets_stopped_ = true; }
 
  private:
   void score_captures();
@@ -69,7 +69,7 @@ class MoveSelector {
   SelectorStage stage_ = SelectorStage::Done;
   bool quiesce_ = false;
   bool see_filter_ = false;
-  bool skip_quiets_ = false;
+  bool quiets_stopped_ = false;
 
   MoveList list_;  // the stage's moves
   int scores_[MaxMoves];

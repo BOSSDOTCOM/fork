@@ -107,3 +107,20 @@ Ptnml(0-2): [17, 21, 116, 86, 80], WL/DD Ratio: 6.73
 LLR: 2.96 (100.7%) (-2.94, 2.94) [0.00, 5.00]
 SPRT ([0.00, 5.00]) completed - H1 was accepted
 ```
+
+### 20261025T200719Z mb-d5-ordering
+
+- base `52ac1b1` (52ac1b1), test `4fac691` (4fac691), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40
+- Verdict: **H1 was accepted**; cap 20000 games.
+```
+Elo: 150.00 +/- 27.07, nElo: 196.65 +/- 31.34
+Games: 472, Wins: 283, Losses: 91, Draws: 98, Points: 332.0 (70.34 %)
+Ptnml(0-2): [2, 19, 79, 57, 79], WL/DD Ratio: 6.18
+LLR: 2.95 (100.1%) (-2.94, 2.94) [0.00, 5.00]
+SPRT ([0.00, 5.00]) completed - H1 was accepted
+```
+
+### 20261025T202717Z mb-UseHistory
+
+- base `4fac691` (4fac691), test `4fac691` (4fac691), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, base opts option.UseHistory=false
+- Verdict: **STOPPED, superseded** (owner, 2026-10-25): halted after about 79 games, before any report, when the owner paused the queue to replace the history, LMP and null-move constants found by the originality check. Re-run on the new values (below).

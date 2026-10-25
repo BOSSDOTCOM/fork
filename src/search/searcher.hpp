@@ -105,7 +105,7 @@ class SearchListener {
 struct PlyFrame {
   MoveSelector selector;
   MoveList moves;           // scratch: root moves, the 50-move mate check
-  MoveList quiets_tried;    // quiet moves searched here without a cutoff (the malus)
+  MoveList failed_quiets;   // quiet moves searched here without a cutoff (the malus)
   int static_eval;          // ScoreNone in check
   bool after_null = false;  // this node was reached by a null move (no second one in a row)
 };
@@ -135,6 +135,12 @@ struct SearchCounters {
   std::uint64_t see_prunes = 0;
   std::uint64_t lmr_searches = 0;
   std::uint64_t lmr_researches = 0;
+  // Quiet cutoffs at non-PV nodes out of check, by remaining depth (1-6) and
+  // the cutting move's index among the quiets searched there (the late move
+  // pruning measurement, DESIGN.md §5.2 deliverable 6).
+  static constexpr int CutoffDepths = 7;
+  static constexpr int CutoffIndices = 48;
+  std::uint64_t quiet_cutoff_index[CutoffDepths][CutoffIndices] = {};
 };
 
 class Searcher {

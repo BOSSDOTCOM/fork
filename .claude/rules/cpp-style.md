@@ -35,8 +35,13 @@ paths:
   clean. A disabled check needs a written reason in that file.
 - Don't copy or closely paraphrase code from other engines.
 - Before introducing any new type, function, member or file name, have a
-  separate research subagent check it against Stockfish's current source:
-  it clones to a temporary folder, reports only match / no match per name,
-  and deletes the clone at once. Never clone or open engine source in the
-  implementing session. If a name matches and isn't generic CPW
-  vocabulary, flag it to the owner before using it (DESIGN.md section 8).
+  separate research subagent check it against the current source of
+  Stockfish, Ethereal, Berserk and Weiss, exactly and case- and
+  separator-insensitively: it clones to a temporary folder, reports only
+  match / no match per name, and deletes the clones at once. Never clone or
+  open engine source in the implementing session. If a name matches and
+  isn't generic CPW vocabulary, flag it to the owner before using it
+  (DESIGN.md section 8).
+- Every search constant gets a recorded justification (DESIGN.md §8,
+  "Search constants") and an originality-checker screen against known
+  engines before it is committed.

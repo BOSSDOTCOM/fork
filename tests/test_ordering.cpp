@@ -80,11 +80,11 @@ void check_node(Position& pos, const QuietHistory& history, std::uint64_t& seed,
       }
     }
   }
-  // skip_quiets: no quiet move after the call, and every capture and
+  // stop_quiets: no quiet move after the call, and every capture and
   // promotion still comes (every evasion, in check).
   MoveSelector s;
   s.start_main(pos, NoMove, &history);
-  s.skip_quiets();
+  s.stop_quiets();
   const std::vector<Move> kept = drain(s);
   for (Move m : kept) CHECK_MSG(m.is_capture() || m.is_promotion() || pos.in_check(), pos.fen());
   std::size_t noisy = 0;

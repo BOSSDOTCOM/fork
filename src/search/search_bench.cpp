@@ -152,6 +152,12 @@ SearchBenchResult run_search_bench() {
       static_cast<unsigned long long>(c.lmr_searches), static_cast<unsigned long long>(c.lmr_researches),
       c.lmr_searches ? 100.0 * static_cast<double>(c.lmr_researches) / static_cast<double>(c.lmr_searches)
                      : 0.0);
+  for (int d = 1; d < SearchCounters::CutoffDepths; ++d) {
+    std::fprintf(stderr, "stats: quiet cutoffs at depth %d by quiet index:", d);
+    for (int i = 0; i < SearchCounters::CutoffIndices; ++i)
+      std::fprintf(stderr, " %llu", static_cast<unsigned long long>(c.quiet_cutoff_index[d][i]));
+    std::fprintf(stderr, "\n");
+  }
 #endif
   return r;
 }

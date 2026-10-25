@@ -1,6 +1,7 @@
 #include "search/searcher.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 
 #include "core/movegen.hpp"
 #include "eval/bootstrap_eval.hpp"
@@ -13,29 +14,37 @@ namespace forkeng {
 namespace {
 
 // Fork's own starting values (Phase 3 settles structure, not tuning).
-constexpr int AspirationMinDepth = 4;              // iterations before this use the full window
-constexpr int AspirationWindow = 25;               // first half-width, in centipawns
+// Aspiration (measured on the bench, DESIGN.md §5.2 "Search constants"): from
+// depth 5, nine in ten iterations move the score by at most 12 cp.
+constexpr int AspirationMinDepth = 5;              // iterations before this use the full window
+constexpr int AspirationWindow = 12;               // first half-width, in centipawns
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
 constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are reported only after this
 
-// Tier 1 pruning and reductions (deliverable 6): Fork's own starting values,
-// moved into the parameter table by deliverable 8b and tuned after Phase 4
-// (they depend on the evaluation's scale).
+// Tier 1 pruning and reductions (deliverable 6). Every value has its
+// justification in DESIGN.md §5.2 ("Search constants"); all move into the
+// parameter table in deliverable 8b and are retuned after Phase 4 (they
+// depend on the evaluation's scale).
 constexpr int RfpMaxDepth = 6;
 constexpr int RfpMargin = 80;  // centipawns per ply of remaining depth
 constexpr int NullMinDepth = 3;
-constexpr int NullBaseReduction = 3;  // plus depth / 4, plus one per NullEvalStep of surplus (at most 3)
-constexpr int NullEvalStep = 200;
+// The null search gets half the remaining depth, less one ply, and one ply
+// less again per NullSurplusPerPly of static eval above beta (at most
+// NullSurplusPliesMax).
+constexpr int NullSurplusPerPly = 300;  // the bootstrap evaluation's knight value (bootstrap_eval.cpp)
+constexpr int NullSurplusPliesMax = 2;
 constexpr int LmrMinDepth = 3;
 constexpr int LmrMinMove = 4;  // the first three moves searched are never reduced
 constexpr int LmpMaxDepth = 4;
-constexpr int LmpBase = 3;  // quiet moves searched at depth d before the rest are skipped: LmpBase + d * d
+// Quiet moves searched at depth d before the rest are pruned:
+// LmpQuietAllowance + d (measured, DESIGN.md §5.2).
+constexpr int LmpQuietAllowance = 12;
 constexpr int FutilityMaxDepth = 6;
-constexpr int FutilityBase = 100;
-constexpr int FutilityPerDepth = 70;
+constexpr int FutilityOffset = 100;  // the futility margin is FutilityOffset + FutilityGrowth * depth
+constexpr int FutilityGrowth = 70;
 constexpr int SeePruneMaxDepth = 6;
-constexpr int SeeQuietMargin = 60;     // a quiet may lose at most this much by SEE, per ply of depth
-constexpr int SeeCaptureMargin = 100;  // a capture likewise
+constexpr int QuietSeeFloor = 60;     // a quiet may lose at most this much by SEE, per ply of depth
+constexpr int CaptureSeeFloor = 100;  // a capture likewise
 
 // The side has a piece other than pawns and its king (the null move's main
 // zugzwang guard: pawn endings are where passing is most often best).
@@ -68,7 +77,7 @@ void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
   const int bonus = bonus_for_depth(depth);
   history_.apply(us, m, bonus);
   if (switches.use_history_malus)
-    for (Move q : f.quiets_tried) history_.apply(us, q, -bonus);
+    for (Move q : f.failed_quiets) history_.apply(us, q, -bonus);
 }
 
 void Searcher::update_pv(int ply, Move m) {
@@ -140,10 +149,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // search, the node is taken to fail high.
   if (switches.use_nmp && can_prune && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
       f.static_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
-    const int r = NullBaseReduction + depth / 4 + std::min((f.static_eval - beta) / NullEvalStep, 3);
+    const int surplus_plies = std::min((f.static_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
+    const int null_depth = depth / 2 - 1 - surplus_plies;  // 0 or less: the quiescence search
     pos.make_null();
     frames_[ply + 1].after_null = true;
-    const int score = -negamax<false>(-beta, -beta + 1, depth - 1 - r, ply + 1);
+    const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
     frames_[ply + 1].after_null = false;
     pos.unmake_null();
     if (stopped_) return 0;
@@ -151,14 +161,14 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #ifdef FORK_SEARCH_STATS
       ++counters.null_cuts;
 #endif
-      return is_tb_or_mate(score) ? beta : score;  // an unproven mate is not returned
+      return is_tb_or_mate(score) ? beta : score;  // a mate found after passing is not trusted
     }
   }
 
   // The selector checks the TT move (a colliding entry's move may not be
   // legal here) before it is tried first.
   f.selector.start_main(pos, tt_hit ? hit.move : NoMove, switches.use_history ? &history_ : nullptr);
-  f.quiets_tried.count = 0;
+  f.failed_quiets.count = 0;
 
   const int alpha_start = alpha;
   int best = -ScoreInfinite;
@@ -167,7 +177,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   int moves_seen = 0;  // legal moves the selector yielded, searched or pruned
   int quiets_searched = 0;
   const bool lmp_node = switches.use_lmp && can_prune && depth <= LmpMaxDepth;
-  const int futility_value = in_check ? 0 : f.static_eval + FutilityBase + FutilityPerDepth * depth;
+  const int futility_value = in_check ? 0 : f.static_eval + FutilityOffset + FutilityGrowth * depth;
   const bool futile_node = switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
                            !is_tb_or_mate(alpha) && futility_value <= alpha;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
@@ -176,8 +186,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     // Pruning: only once a move has been searched (so no node is pruned into
     // a false stalemate or mate) and while not already losing to a mate.
     if (moves_searched > 0 && best > -(MateScore - MaxPly)) {
-      if (lmp_node && quiet && quiets_searched >= LmpBase + depth * depth) {
-        f.selector.skip_quiets();  // late move pruning (T21)
+      if (lmp_node && quiet && quiets_searched >= LmpQuietAllowance + depth) {
+        f.selector.stop_quiets();  // late move pruning (T21)
 #ifdef FORK_SEARCH_STATS
         ++counters.lmp_prunes;
 #endif
@@ -196,7 +206,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         }
       }
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth &&
-          !see_at_least(pos, m, -(quiet ? SeeQuietMargin : SeeCaptureMargin) * depth)) {
+          !see_at_least(pos, m, -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth)) {
 #ifdef FORK_SEARCH_STATS
         ++counters.see_prunes;
 #endif
@@ -239,6 +249,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         if (score >= beta) {
           if (quiet) record_cutoff(f, m, depth);
 #ifdef FORK_SEARCH_STATS
+          if (quiet && !OnPv && !in_check && depth < SearchCounters::CutoffDepths)
+            ++counters.quiet_cutoff_index[depth]
+                                         [std::min(quiets_searched - 1, SearchCounters::CutoffIndices - 1)];
+#endif
+#ifdef FORK_SEARCH_STATS
           ++counters.beta_cutoffs;
           counters.first_move_cutoffs += moves_searched == 1;
           counters.cutoff_index_sum += static_cast<std::uint64_t>(moves_searched - 1);
@@ -248,7 +263,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         alpha = score;
       }
     }
-    if (quiet) f.quiets_tried.add(m);
+    if (quiet) f.failed_quiets.add(m);
   }
   // No legal move is mate or stalemate; legal moves that were all pruned are
   // not (the guard above prevents it; this keeps the result right regardless).
@@ -455,14 +470,16 @@ SearchResult Searcher::explore(Position& pos, const SearchLimits& limits, const 
       if (stopped_) break;
       if (score > alpha && score < beta) break;
       if (elapsed_ms() >= FailReportMs) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
-      // Only the failing side moves, by a doubling step; a decisive score
-      // opens that side fully.
+      // Only the failing side moves. The half-width grows by how far the
+      // fail-soft score already is from the previous iteration's: at least
+      // the old half-width (the score fell outside the window), more after a
+      // big jump. A decisive score opens that side fully.
+      delta = std::min(delta + std::abs(score - previous), ScoreInfinite);
       if (score <= alpha) {
         alpha = is_tb_or_mate(score) ? -ScoreInfinite : std::max(score - delta, -ScoreInfinite);
       } else {
         beta = is_tb_or_mate(score) ? ScoreInfinite : std::min(score + delta, ScoreInfinite);
       }
-      delta += delta;
     }
     if (stopped_) {
       // An unfinished iteration counts only through a move that came back

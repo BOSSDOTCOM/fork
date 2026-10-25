@@ -1177,46 +1177,103 @@ Choices made while building, where the spec leaves a gap:
   index wins ties, but the swaps mean equal scores do not keep generation
   order (review: the first comment claimed they did). `QuietHistory`
   (`quiet_history.hpp`) is int16 by side, from and to; the bonus is
-  min(16·d², 1600) with gravity toward ±16384, and the malus applies to the
-  quiets tried before a cutoff. The history persists between searches and
+  min(12.5·d², 1250) with the standard gravity update toward ±10000
+  (values replaced by the owner's decision of 2026-10-25, see "Search
+  constants"), and the malus applies to the quiets searched before a
+  cutoff (`failed_quiets`). The history persists between searches and
   is cleared by `ucinewgame`, Clear Hash (review finding: before that,
   Clear Hash did not reproduce a search) and each bench position, so a
   search is a function of position, limits, switches, TT and history.
 - **Deliverable 6, tier 1 pruning** (2026-10-25). In `negamax`, non-PV and
   not in check: RFP (depth ≤ 6, eval − 80·d ≥ beta, returns the eval); the
   null move (depth ≥ 3, eval ≥ beta, the side has a piece besides pawns,
-  not straight after a null move, R = 3 + d/4 + min((eval − beta)/200, 3),
-  a mate score returned as beta); in the move loop, only once a move has
-  been searched and while the best score is not a forced loss: LMP (depth
-  ≤ 4, after 3 + d² quiets, via `skip_quiets`), futility (depth ≤ 6, eval +
-  100 + 70·d ≤ alpha, quiet non-checking moves; the best score is raised
-  to the futility value) and SEE pruning (depth ≤ 6, thresholds −60·d for
-  quiets and −100·d for captures). LMR applies to quiet moves from the
-  fourth on at depth ≥ 3 and not in check, reduced by
-  `reduction_for(d, m)` ≈ round(log2 d · log2 m / 4.5), using integer
+  not straight after a null move; null-search depth d/2 − 1 − min((eval −
+  beta)/300, 2), 0 or less meaning the quiescence search; a mate score
+  returned as beta); in the move loop, only once a move has been searched
+  and while the best score is not a forced loss: LMP (depth ≤ 4, after 12
+  + d quiets, via `stop_quiets`), futility (depth ≤ 6, eval + 100 + 70·d ≤
+  alpha, quiet non-checking moves; the best score is raised to the
+  futility value, the usual fail-soft convention) and SEE pruning (depth
+  ≤ 6, thresholds −60·d for quiets and −100·d for captures). LMR applies
+  to quiet moves from the fourth on at depth ≥ 3 and not in check, reduced
+  by `reduction_for(d, m)` ≈ round(log2 d · log2 m / 4.5), using integer
   fixed-point logarithms (`lmr_table.hpp`, a compile-time table whose
   checksum is pinned; the truncating logarithms leave 18 of the 3,969
-  entries one ply below the rounded value, review), clamped to [1, d − 1]; then a full-depth zero-window
-  re-search, then the full window at PV nodes. `moves_seen` (legal moves
-  yielded) decides mate or stalemate; a node with moves but none searched
-  returns its bound. All values are Fork's own starting points, moved into
-  the parameter table by 8b and tuned after Phase 4. Bench depth is 13.
+  entries one ply below the rounded value, review), clamped to [1, d − 1];
+  then a full-depth zero-window re-search, then the full window at PV
+  nodes. `moves_seen` (legal moves yielded) decides mate or stalemate; a
+  node with moves but none searched returns its bound. Bench depth is 13.
   The minimax oracle tests switch the pruning off (it is not exact).
   `Searcher::probe_zero_window` is a tests-only seam that searches one
-  non-PV node. Tactical guard (`tools/solve_suite.py`, WAC at 200,000
-  nodes; the pinned file verified by the kb-researcher, KB tools.md §4,
-  kb eed2e32; download-only, licence UNVERIFIED): 250/300
-  with all six on, 209 with all off; one at a time off: RFP 249, NMP 246,
-  LMR 236, LMP 245, futility 245, SEE pruning 254. The mate suite is
-  open: no human-made suite fits, and the one candidate (matetrack,
-  solver-made and corrected with Stockfish) awaits the owner's decision
-  under the data policy. Review (deliverable 6): no correctness defect;
-  the pruning can delay a mate (ideas.md idea 22). FORK_SEARCH_STATS
-  bench: RFP 1.43M and null-move 0.43M cuts; LMP 0.32M, futility 8.14M and
-  SEE 1.37M prunes; 2.03M reduced searches, 0.7% re-searched.
+  non-PV node.
+  - **Owner's decisions on the originality check (2026-10-25).** The first
+    LMP count (3 + d²) was Stockfish's move-count formula and the first
+    null-move reduction (3 + d/4 + min((eval − beta)/200, 3)) the Stockfish
+    5/6 form; both were replaced by Fork's own (below), as were the history
+    scale and bonus. The names `skip_quiets`, `quiets_tried`,
+    `SeeQuietMargin`, `FutilityBase` and `FutilityPerDepth` (matching
+    Ethereal or Stockfish in another case style) became `stop_quiets`,
+    `failed_quiets`, `QuietSeeFloor`, `FutilityOffset` and
+    `FutilityGrowth`.
+  - **Guards.** `tools/solve_suite.py` at 200,000 nodes per position. WAC
+    (verified by the kb-researcher, KB tools.md §4; download-only, licence
+    UNVERIFIED), first values: 250/300 with all six on, 209 with all off;
+    one at a time off: RFP 249, NMP 246, LMR 236, LMP 245, futility 245,
+    SEE pruning 254. With Fork's own pruning values: 253/300; with the
+    measured aspiration window as well: 247 (aspiration off: 245). These
+    counts move by 3-6 under small trajectory changes alone (the same
+    build: 245 at 150,000 nodes, 248 at 250,000), so they guard against
+    collapses, not small differences. Mate suite (matetrack mates in 1-5,
+    297 positions; a diagnostic only, owner 2026-10-25, KB data-policy.md
+    decision 7): 136/297 with all six on and 126 with all off (first
+    aspiration values); 132 with the measured window (aspiration off: 128). Review: no correctness defect; the pruning can delay a
+    mate (ideas.md idea 22).
+  - **Counters** (FORK_SEARCH_STATS bench, Fork's own values): RFP 2.09M
+    and null-move 0.44M cuts; LMP 0.41M, futility 10.63M and SEE 2.90M
+    prunes; 2.38M reduced searches, 0.5% re-searched at full depth.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
+
+#### Search constants (owner's rule, 2026-10-25)
+
+Every search constant has a recorded justification (DESIGN.md §8). They
+are starting points: deliverable 8b moves the tunable ones into the
+parameter table, and the margins are retuned after Phase 4's network,
+because they are in the bootstrap evaluation's centipawns (pawn 100, knight
+and bishop 300, rook 500, queen 900: Shannon's scale, `bootstrap_eval.cpp`).
+Screened by the originality-checker against Stockfish, Ethereal, Berserk
+and Weiss (results in ORIGINALITY.md).
+
+| Constant | Value | Justification |
+|---|---|---|
+| `AspirationMinDepth` | 5 | **Measured** on the bench (46 positions to depth 14, aspiration off): the iteration-to-iteration score change has p90 16 cp at depths 2-4 and settles at 9-13 cp from depth 5; earlier iterations are cheap, so they keep the full window. |
+| `AspirationWindow` | 12 cp | **Measured**, as above: 90% of the score changes from depth 5 on are at most 12 cp, so nine iterations in ten need no re-search. Replaced the first scheme (25 cp from depth 4, doubling), which the constant screen found identical to Berserk 1.0.0's. |
+| Aspiration widening | delta += abs(score − previous) | Fork's rule: on a fail, the half-width grows by how far the fail-soft score already is from the previous iteration's score. That is at least the old half-width (the score fell outside the window), so the window at least doubles, and more after a big jump; only the failing bound moves. |
+| `StopCheckInterval` | 1024 nodes | At about 10M nps that is a poll every 0.1 ms: far finer than the 1 ms clock, at a negligible cost per node. |
+| `FailReportMs` | 1000 ms | UCI GUIs need no fail-high/low lines for searches shorter than a second; it keeps fast games' output small. |
+| `RfpMaxDepth` | 6 | At depth 6 the margin reaches 480 cp, a knight plus nearly two pawns; beyond that a static eval no longer bounds what the search can find (reasoning). |
+| `RfpMargin` | 80 cp per ply | About what the bootstrap eval can change per ply in a quiet position: four fifths of a pawn (reasoning). |
+| `NullMinDepth` | 3 | Below depth 3 the null search would be at least as costly as the node it replaces. |
+| Null-search depth | d/2 − 1 − surplus plies | Fork's form: the null search only has to show that passing still fails high, so it gets half the remaining depth, one ply less for the pass; at depth 3 that is the quiescence search. |
+| `NullSurplusPerPly` | 300 cp | One extra ply of reduction per knight of static surplus over beta (the bootstrap knight value): with a whole piece in hand, a shallower search still finds any refutation that matters. |
+| `NullSurplusPliesMax` | 2 | Two pieces of surplus is already decisive; more reduction would leave too little depth to see threats. |
+| `LmrMinDepth` | 3 | From depth 3 a reduced search still has at least one ply left (reductions are clamped to [1, d − 1]). |
+| `LmrMinMove` | 4 | The first three moves (the TT move and the best captures, usually) take almost all cutoffs: 87.8% on the first move, mean cutoff index 0.27 (bench, FORK_SEARCH_STATS). |
+| LMR divisor | 4.5 (log2 · log2) | Fork's choice of anchors: one ply at depth 3 from the third move, 2 plies at (8, 10), 3 at (12, 20), 5 at (20, 30), 8 at (63, 63); the reductions grow slowly enough to stay below a third of the depth. |
+| `LmpMaxDepth` | 4 | The cutoff-index measurement (next row) has the same shape to depth 6, but from depth 5 on LMR already reduces late quiets by 2 plies or more (`reduction_for(5, 13)` = 2), so LMP adds little there. |
+| `LmpQuietAllowance` | 12 (count 12 + d) | **Measured** on the bench (LMP off, FORK_SEARCH_STATS histogram of the cutting quiet's index): fewer than 1% of quiet cutoffs come after the 13th, 13th, 14th and 11th quiet at depths 1-4. 12 + d keeps that 1% bound at depths 1-3 and prunes later at depth 4, where a missed cutoff costs a bigger subtree. |
+| `FutilityMaxDepth` | 6 | As for RFP: at depth 6 the margin is 520 cp, past which a static eval says little. |
+| `FutilityOffset`, `FutilityGrowth` | 100 + 70·d cp | A quiet move rarely gains a pawn of static eval by itself (the offset), and each further ply allows 70 cp more swing, a little less than RFP's 80 because a futile node is already below alpha (reasoning). |
+| `SeePruneMaxDepth` | 6 | The same horizon as the other shallow-depth pruning. |
+| `QuietSeeFloor` | 60 cp per ply | A quiet move may hang a pawn's worth by depth 2 and a minor piece by depth 5: deeper searches can justify bigger sacrifices. |
+| `CaptureSeeFloor` | 100 cp per ply | Captures that lose material are more often tactical (they open lines), so they get a pawn per ply. |
+| `HistoryMax` | 10000 | The scale is free (ordering compares values within one table); 10000 is a round value well inside int16, so up to three tables summed in tier 2 (T10, T11) still fit in an int16 range. |
+| `HistoryBonusCap` | HistoryMax / 8 = 1250 | No single cutoff moves a value by more than an eighth of the range, so about eight agreeing cutoffs are needed to approach the limit. |
+| History bonus | 12.5·d², capped | Grows with depth because deeper cutoffs refute bigger subtrees; quadratic so the rarer deep cutoffs outweigh the many shallow ones; reaches the cap at depth 10. |
+| `EvasionCaptureBase` | 2^20 | Above any history value (|h| ≤ 10000), so evasion captures always come before quiet evasions. |
+| MVV-LVA score | (victim value + promotion value)·8 − attacker type | The victim's value dominates (distinct values differ by at least 100, so ·8 leaves room far above the attacker's type index, at most 5), and the attacker breaks ties: standard MVV-LVA ordering (CPW). |
+| Time budget (`time_budget.cpp`) | 30, 40, 4, 1/10, 1/2 | Deliverable 2's first budget, justified in its notes above; deliverable 8 re-derives them from measurements. |
 
 #### Owner's answers (2026-10-24)
 
@@ -1360,9 +1417,13 @@ invariants.
   never runs the check itself and never has engine source on disk:
   1. The implementing session lists its candidate names and hands them to a
      separate research subagent.
-  2. The subagent shallow-clones Stockfish into a fresh temporary folder,
+  2. The subagent shallow-clones Stockfish, Ethereal, Berserk and Weiss
+     (owner, 2026-10-25: the Stockfish-only check missed names matching
+     Ethereal in another case style) into one fresh temporary folder,
      checks each name with a whole-word search (`grep -rlw`, file counts
-     only), and records the commit it checked.
+     only) and also case- and separator-insensitively (identifiers
+     lowercased with underscores removed, the comparison set kept only in
+     the temporary folder), and records the commits it checked.
   3. It reports only **match / no match** per name (with the file count and
      the commit), never code lines, surrounding context or other
      identifiers.
@@ -1372,3 +1433,12 @@ invariants.
   No engine clone, copied file or identifier dump stays on the machine
   between checks (on 2026-10-24 all earlier clones in session scratchpads
   were deleted for this reason). Matches are flagged to the owner as above.
+- **Search constants (owner, 2026-10-25).** Every search constant (margins,
+  depth limits, reductions, counts, history scales, time-management
+  factors) has a recorded justification in its phase spec's "Search
+  constants" table: a reasoning, a quick sweep or a measurement on Fork's
+  own data. The originality-checker screens every new or changed constant
+  against known engines (Stockfish current and historical, Ethereal,
+  Berserk, Weiss) before the commit, because model memory can reproduce a
+  famous value without any source being opened. A match is replaced, or
+  kept only with the owner's approval and a citation in ORIGINALITY.md.

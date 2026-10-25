@@ -31,7 +31,7 @@ void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHist
   history_ = history;
   quiesce_ = false;
   see_filter_ = false;
-  skip_quiets_ = false;
+  quiets_stopped_ = false;
   deferred_.count = 0;
   deferred_next_ = 0;
   tt_move_ = !tt_move.is_none() && pos.is_pseudo_legal(tt_move) && pos.is_legal(tt_move) ? tt_move : NoMove;
@@ -118,7 +118,7 @@ Move MoveSelector::take_next() {
 
       case SelectorStage::MakeQuiets:
         stage_ = SelectorStage::BadCaptures;
-        if (skip_quiets_) break;
+        if (quiets_stopped_) break;
         list_.count = 0;
         generate<GenMode::Quiets>(*pos_, list_);
         score_quiets();
@@ -127,7 +127,7 @@ Move MoveSelector::take_next() {
         break;
 
       case SelectorStage::Quiets:
-        while (!skip_quiets_ && next_ < list_.size()) {
+        while (!quiets_stopped_ && next_ < list_.size()) {
           const Move m = list_[select_best()];
           if (m != tt_move_) return m;
         }

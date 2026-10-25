@@ -102,3 +102,22 @@ estimators needs a stated reason or a fix.
   are generated only when reached).
 - Ordering counters (FORK_SEARCH_STATS): 96.7% of cutoffs on the first
   move, mean cutoff index 0.08.
+
+## Deliverable 6: tier 1 pruning and reductions (40fdf8f, against 4fac691)
+
+- Bench depth 6 -> 13: 10,351,634 nodes, signature 96fed387a8512132.
+- nps: median 9,775,786 -> 5,702,060 (-41.7%), best -41.7%, noise
+  threshold 3.0% (a quiet run). A trade, not a regression: a pruned move
+  costs its selection, SEE and gives_check but is not a node (nodes count
+  negamax and quiescence entries). FORK_SEARCH_STATS bench: 8.14M
+  futility prunes, 1.37M SEE prunes and 0.32M LMP skips against 9.78M
+  makes. Strength is the SPRTs' to judge.
+- Profile: `take_next` 26.5% (was 16.2%), `see_value` 10.6% (6.5%), eval
+  10.8%, `negamax<false>` 7.9%, `generate<Captures>` 7.8%,
+  `refresh_check_info` 6.8%, `quiesce<false>` 4.4%, `generate<Quiets>`
+  3.5%, TT 5.6%, `gives_check` 2.8%, make/unmake 5.2%.
+- Candidate optimizations (measure later, only after the SPRTs, with the
+  A/B harness): in a futile node, skip the history scoring and the
+  selection sort for quiets (only checking quiets survive); test futility
+  before the SEE prune; a cheaper pre-filter for gives_check (direct-check
+  squares only, then discovered checks). Each must keep bench identical.
