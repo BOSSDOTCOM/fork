@@ -344,6 +344,24 @@ TEST_CASE("time_budget", "movetime, sudden death, increment, movestogo, extreme 
   TimeBudget t = plan_time(c);
   CHECK_EQ(t.soft_ms, 900);
   CHECK_EQ(t.hard_ms, 900);
+  // Owner, 2026-10-25: the overhead never takes more than half of a movetime
+  // (it used to leave 1 ms for any movetime of 100 ms or less).
+  for (const auto& [movetime, expected] : {std::pair<std::int64_t, std::int64_t>{50, 25},
+                                           {100, 50},
+                                           {150, 75},
+                                           {200, 100},
+                                           {201, 101},
+                                           {1, 1},
+                                           {0, 1},
+                                           {-20, 1}}) {
+    c.movetime = movetime;
+    t = plan_time(c);
+    CHECK_MSG(t.soft_ms == expected && t.hard_ms == expected, "movetime " << movetime << ": " << t.soft_ms);
+  }
+  c.movetime = 50;
+  c.overhead_ms = 0;
+  CHECK_EQ(plan_time(c).hard_ms, 50);  // no overhead: the whole movetime
+  c.overhead_ms = 100;
 
   c = ClockInput{};
   CHECK_EQ(plan_time(c).soft_ms, -1);  // no clock: no time limit

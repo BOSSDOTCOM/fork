@@ -7,10 +7,11 @@ namespace forkeng {
 namespace {
 
 // Fork's own conservative choices (Phase 5 tunes time management).
-constexpr std::int64_t AssumedMovesLeft = 30;  // sudden death: plan as if this many moves remain
-constexpr std::int64_t MaxMovesToGo = 40;      // a larger movestogo is treated as this
-constexpr std::int64_t HardOverSoft = 4;       // the hard limit allows this many soft budgets
-constexpr std::int64_t ReserveDivisor = 10;    // never plan into the last 1/10 of the clock
+constexpr std::int64_t AssumedMovesLeft = 30;     // sudden death: plan as if this many moves remain
+constexpr std::int64_t MaxMovesToGo = 40;         // a larger movestogo is treated as this
+constexpr std::int64_t HardOverSoft = 4;          // the hard limit allows this many soft budgets
+constexpr std::int64_t ReserveDivisor = 10;       // never plan into the last 1/10 of the clock
+constexpr std::int64_t MovetimeFloorDivisor = 2;  // go movetime keeps at least 1/2 of its time
 
 // Every input is clamped to [-2^40, 2^40] ms (about 35 years either way)
 // first, so no difference or sum below can overflow, even for the INT64_MIN
@@ -24,7 +25,12 @@ TimeBudget plan_time(const ClockInput& in) {
   TimeBudget t;
   const std::int64_t overhead = std::clamp<std::int64_t>(in.overhead_ms, 0, ClockCap);
   if (in.movetime) {
-    t.soft_ms = t.hard_ms = std::max<std::int64_t>(1, bounded(*in.movetime) - overhead);
+    // The Move Overhead comes off, but never more than half of the time
+    // asked for (owner, 2026-10-25): with the full 100 ms default taken off,
+    // every movetime of 100 ms or less played at 1 ms, silently weakening
+    // short-movetime tests. A clock game keeps its full overhead below.
+    const std::int64_t asked = bounded(*in.movetime);
+    t.soft_ms = t.hard_ms = std::max<std::int64_t>({1, asked - overhead, asked / MovetimeFloorDivisor});
     return t;
   }
   if (!in.remaining_ms) return t;  // no clock: depth, nodes, mate or infinite decide

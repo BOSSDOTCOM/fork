@@ -1099,7 +1099,10 @@ Choices made while building, where the spec leaves a gap:
   move (review finding).
 - **Time.** All limits count from the moment `go` arrived, so Hash work
   done at `go` uses the move's own time (review finding). `go movetime N`
-  plans N minus Move Overhead (at least 1 ms). Deliverable 2 already has a
+  plans N minus Move Overhead, but never less than N/2 and at least 1 ms
+  (owner, 2026-10-25: subtracting the full 100 ms default made every
+  movetime of 100 ms or less play at 1 ms, which silently weakened the
+  short-movetime test games; clocked play keeps its full overhead). Deliverable 2 already has a
   first `TimeBudget`: a share of the clock (remaining / moves to go, or
   /30 in sudden death, plus 3/4 of the increment), a hard limit of four
   shares, never more than 90% of the clock after the overhead; every input
@@ -1184,6 +1187,7 @@ Choices made while building, where the spec leaves a gap:
 | 2026-10-24 | **Phase 3 spec approved** (§5.2) with the owner's answers listed there: SPRT bounds and conditions, Fathom vendored, the search bench positions, MultiPV deferred to Phase 7, the evaluator chosen at build time. UHO_Lichess is a test-opening book only (KB data-policy.md decision 6). Build order: deliverables 1-8 with stops at Milestones A, B and C. |
 | 2026-10-24 | **Milestone A originality fixes (owner).** `PvNode` renamed `OnPv` (bench identical). TT store redesigned from the KB description (stale entries below current ones, then shallower below deeper; a whole age byte with a 24-bit check) and made self-verifying for Phase 6 (the check XORs a digest of the entry's data, so torn writes read as misses); root moves ordered by move-to-front. Both change behaviour: bench 7533640 / 2711c23a13969520, the Milestone A SPRTs rerun on the new commit. SEE kept as the standard CPW swap algorithm, cited in ORIGINALITY.md. Root ordering by node counts logged as ideas.md idea 18. |
 | 2026-10-25 | **Re-validation plan (owner).** No removal tests at Phase 3's milestones; one removal round (each feature off, SPRT [-3, 0], simplified away if removal costs nothing) at the end of Phase 3; the full re-validation of every search feature and a retune of eval-dependent margins after Phase 4's network; every search switch stays in the code until then. Added to §5.2 Quality control 6, the Phase 4 outline and CLAUDE.md's phase-end checklist (item 8). Also: SPRT cap of 20,000 games at STC (inconclusive acceptable at Milestone A for near-zero features) and concurrency raised from 5 to 10 for the remaining Milestone A SPRTs, pending a time-loss check. |
+| 2026-10-25 | **`go movetime` keeps at least half its time (owner).** The budget is max(movetime - Move Overhead, movetime / 2, 1 ms); before, any movetime of 100 ms or less played at 1 ms with the default overhead. Clock games unchanged. Bench unchanged (no time limit in it). The Milestone A 50 ms/move games are re-run with the fix. |
 
 ## 7. Performance doctrine (governs every phase)
 

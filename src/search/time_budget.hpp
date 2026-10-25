@@ -6,8 +6,10 @@
 // and a hard limit (polled during the search). Phase 5 replaces the formulas.
 // Invariants:
 // - Limits are milliseconds from the moment `go` was received; -1 means none.
-// - When both are set, 1 <= soft_ms <= hard_ms, and hard_ms leaves the Move
-//   Overhead and a further reserve of the remaining time unused.
+// - When both are set, 1 <= soft_ms <= hard_ms. With a clock, hard_ms leaves
+//   the Move Overhead and a further reserve of the remaining time unused.
+// - go movetime N plans max(N - Move Overhead, N / 2), and at least 1 ms
+//   (owner, 2026-10-25): a short movetime is not eaten by the overhead.
 // - Plain integer arithmetic on 64-bit values; never negative.
 #pragma once
 
