@@ -738,3 +738,24 @@ Format: URL / ref | what | date | used for.
 | https://raw.githubusercontent.com/mvanthoor/rustic/master/README.md | raw: FAILED 404 | 2026-10-25 | none |
 | https://api.github.com/repos/TerjeKir/weiss (+ /tags, /releases, /readme?ref=v1.0, /contents and /contents/src at v1.0) | API | 2026-10-25 | Weiss anchor |
 | https://raw.githubusercontent.com/TerjeKir/weiss/v1.0/COPYING.txt and /v1.0/src/makefile | raw | 2026-10-25 | licence, build command |
+
+## Milestone B anchor set (competition.md section 5), 2026-10-25
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://computerchess.org.uk/ccrl/404/rating_list_all.html | CCRL Blitz complete list, computed 24 Oct 2026 (re-opened) | 2026-10-25 | all open-source entries 2000-2650; exact strings and ratings for Belette 2.0.0, Chal 1.3.0, WyldChess 1.51, Smallbrain 1.1, Stash 15.3/19.0 |
+| https://computerchess.org.uk/ccrl/4040/rating_list_all.html | CCRL 40/15 complete list, computed 23 Oct 2026 (re-opened) | 2026-10-25 | 40/15 figures (WyldChess 1.51 listed; Chal 1.3.0, Belette 2.0.0 not listed) |
+| https://computerchess.org.uk/ccrl/404/cgi/engine_details.cgi?print=Details&each_game=1&eng=... (WyldChess 1.51, Cinnamon 2.4, Sungorus 1.4, Chal 1.3.0, CT800 1.40, Berserk 1.2.2, Zagreus 4.1, Shuffle 1.2.1, Cosette 3.0, Amundsen 0.80, Tcheran 2.3, Pedantic 0.1, Smallbrain 1.1, Halogen 4, Maelstrom 2.0.0, SjaakII 1.3.0, Trinket 3.0.0, Camel 1.4.0, Horowitz 2.1.0, ZCT 0.3.2500, Belette 2.0.0, Infrared 2.0.1, Crabby 2.0.0, Ratsu 1.1.0, Kojiro 0.1.3, Hedgehog 1.9; "64-bit" names) | CCRL engine details pages | 2026-10-25 | home-page/repo link per engine (Hedgehog: no link) |
+| https://github.com/{Mk-Chan/WyldChess, jhonnold/berserk, namanthanki/chal, Dannyj1/Zagreus, ArjunBasandrai/shuffle-chess-engine, Disservin/Smallbrain, vincentbab/Belette, KierenP/Halogen} (ls-remote) | tag lists and SHAs | 2026-10-25 | tag = commit pins |
+| https://api.github.com/repos/{Mk-Chan/WyldChess, jhonnold/berserk, namanthanki/chal, Dannyj1/Zagreus, ArjunBasandrai/shuffle-chess-engine, Disservin/Smallbrain, KierenP/Halogen, saisree27/Maelstrom, vincentbab/Belette, bdmendes/camel, DkeRee/Trinket, Babak-SSH/Kojiro, ranzuh/ratsu} | API: licence, language | 2026-10-25 | licence and language screen |
+| https://api.github.com/repos/OliveriQ/Horowitz | API: "Moved Permanently", not followed | 2026-10-25 | none |
+| https://api.github.com/repos/Mk-Chan/WyldChess/contents?ref=v1.51 (+ /contents/src?ref=v1.51, /releases, /commits/322b028c...) | API: root and src listing, releases, tag commit | 2026-10-25 | WyldChess pin, makefile location |
+| https://raw.githubusercontent.com/Mk-Chan/WyldChess/v1.51/README.md, /LICENSE, /build.sh, /src/makefile | raw at tag | 2026-10-25 | WyldChess licence, build, eval type |
+| https://api.github.com/repos/namanthanki/chal/contents?ref=1.3.0 (+ /releases, /commits/3e4ee1a1...) | API | 2026-10-25 | Chal pin |
+| https://raw.githubusercontent.com/namanthanki/chal/1.3.0/README.md, /LICENSE, /Makefile | raw at tag | 2026-10-25 | Chal licence, build, eval type, TT size |
+| https://api.github.com/repos/vincentbab/Belette/contents?ref=v2.0.0 (+ /releases, /commits/93b88300...) | API | 2026-10-25 | Belette pin |
+| https://raw.githubusercontent.com/vincentbab/Belette/v2.0.0/README.md, /LICENCE, /Makefile, /build.mk | raw at tag | 2026-10-25 | Belette licence, build, CPU needs, eval type |
+| https://api.github.com/repos/Disservin/Smallbrain/contents?ref=1.1.0 (+ /contents/src?ref=1.1.0) | API listing | 2026-10-25 | Smallbrain fallback |
+| https://raw.githubusercontent.com/Disservin/Smallbrain/1.1.0/README.md, /LICENSE | raw at tag | 2026-10-25 | Smallbrain fallback licence and build note |
+| https://api.github.com/repos/jhonnold/berserk/contents?ref=1.2.2 | API listing (no licence file) | 2026-10-25 | Berserk 1.2.2 rejected |
+| https://api.github.com/repos/ArjunBasandrai/shuffle-chess-engine/contents?ref=v1.2.1; raw README.md, LICENSE, Makefile at v1.2.1 | API listing, raw | 2026-10-25 | Shuffle rejected (README: not Unix-compatible) |

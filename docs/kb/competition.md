@@ -822,6 +822,93 @@ Notes:
   tag builds cleanly with today's gcc/Go on Ubuntu 22.04 is **UNVERIFIED**
   until the first build.
 
+### Milestone B anchor set
+
+Verified 2026-10-25. Owner's brief: keep Stash 15.3 and 19.0, add two or
+three anchors rated about 2000-2600 on CCRL Blitz from code bases unrelated
+to Stash and to each other, one of them replacing BBC 1.1 (its makefile at
+`1.1` = eaca662 did not find its source, and the tag has no licence file).
+Same rules as above: opponent binaries only, **REFERENCE ONLY** for code
+(never read for implementation), **USE** as local test opponents. Only the
+README, licence file and build files were opened for each engine; nothing
+was downloaded, cloned or built.
+
+Ratings: CCRL Blitz 2'+1" complete list (all versions), "Computed on
+October 24, 2026", re-opened 2026-10-25; 40/15 complete list "Computed on
+October 23, 2026" for the second column. The engine name is exactly as CCRL
+prints it. Tags were resolved with `git ls-remote` (all three new tags are
+lightweight, so the SHA is the commit) and the commit confirmed with the
+GitHub commits API; licences from the GitHub repository API and the licence
+file at the tag.
+
+| Name (CCRL string) | CCRL Blitz | 40/15 | Repo | Tag = commit | Licence | Build directory and make arguments | Net |
+|---|---|---|---|---|---|---|---|
+| Belette 2.0.0 64-bit (replaces BBC 1.1) | 2115 +/-19 (938 games) | n/l | github.com/vincentbab/Belette (CCRL details link) | `v2.0.0` = 93b88300f8fdf0126f79326fbfce5b5911275935 (commit 2024-03-13; release "Belette 2.0.0" the same day, Linux and Windows AVX2-BMI2 binaries attached) | GPL-3.0 (API; file named `LICENCE` at the tag, GPL v3 text) | repo root, `make release` (README); binary at `build/Release/bin/belette`. C++20 with g++; flags hard-code `-mavx2 -mbmi2 -mpopcnt` and the release link is `-static` | none: README lists a tapered material + PeSTO PSQT eval |
+| Stash 15.3 64-bit (kept) | 2173 +/-19 (982) | n/l | gitlab.com/mhouppin/stash-bot (mirror github.com/mhouppin/stash-bot) | `v15.3` = 7d17ff80eb53b9d4808fd285c7439e641f1c5a3b | GPL-3.0 | `src/`, `make` (optional `ARCH=x86-64`, `x86-64-modern`, `x86-64-bmi2`) | none in tag listing |
+| Chal 1.3.0 64-bit | 2285 +/-17 (1078) | n/l | github.com/namanthanki/chal (CCRL details link) | `1.3.0` = 3e4ee1a135fceb41e2e8bf69eacf8a7a093d8fe7 (commit 2026-03-08; release "Chal 1.3.0" the same day, Linux and Windows zips) | MIT (API and `LICENSE` at the tag) | repo root, `make` (README; Makefile sets `VERSION = 1.3.0`, gcc `-O2 -std=gnu99`); binary at `bin/chal`. One C99 file | none: README describes a hand-written tapered eval (PeSTO tables plus a few terms) |
+| Stash 19.0 64-bit (kept) | 2473 +/-18 (1052) | n/l | as Stash 15.3 | `v19.0` = de408a3e8d8ffbd41f4b1608b19f18c69eac2512 | GPL-3.0 | `src/`, `make` (same ARCH options) | none in tag listing |
+| WyldChess 1.51 64-bit | 2603 +/-12 (2339) | 2679 +/-12 (1569) | github.com/Mk-Chan/WyldChess (CCRL details link) | `v1.51` = 322b028cb5e8ba4d8596ca71071d4a9428782f31 (commit 2017-07-03; release "WyldChess 1.51" the same day, from branch `v1.5patch`, Linux/Windows/Android binaries attached) | GPL-3.0 (API and `LICENSE` at the tag) | `src/`, `make` (README says the makefile is in `src`; makefile default target builds `wyldchess` with gcc `-std=c11 -O3 -flto`; `make popcnt` or `make bmi` add `-mpopcnt` / `-mbmi -mbmi2 -mpopcnt`). Do not pass `RELEASE=` (that path needs `TARGET` and writes to `../binaries/`) | none: hand-written eval per README; optional Syzygy probing (Fathom) |
+
+Spacing: 2115, 2173, 2285, 2473, 2603 (gaps 58-188 Elo). Four unrelated
+code bases (Stash, Belette, Chal, WyldChess).
+
+Toolchain notes (from the README and build files only; nothing compiled):
+- Belette: README says "Tested on Windows and Linux with GCC >= 12" (2024
+  code, C++20), so a modern gcc is its intended toolchain. Needs an AVX2 +
+  BMI2 CPU (README: other architectures unsupported). The `-static` link
+  needs the static libstdc++/libc archives, which Ubuntu's normal g++ and
+  libc6-dev packages provide (**UNVERIFIED** until the first build).
+- Chal: written in 2026 for any C99 compiler (README); no old-toolchain
+  signs.
+- WyldChess: 2017 C11 code built then with gcc and MinGW (build.sh). gcc 10
+  and later default to `-fno-common`, which breaks some older C code that
+  defines globals in headers; whether WyldChess hits this is **UNVERIFIED**
+  (it would need the source, which Fork does not read). If the build fails
+  with "multiple definition" link errors, adding `-fcommon` through
+  `CC_FLAGS` is the usual workaround, also **UNVERIFIED** here.
+
+Engine options to set in the gauntlet:
+- Chal: README states a fixed 16 MB TT (1,048,576 entries); whether it
+  exposes a `Hash` UCI option is **UNVERIFIED**. Record the hash
+  mismatch in the gauntlet log if so.
+- WyldChess speaks both UCI and CECP (README); run it as UCI. No book is
+  mentioned in the README.
+- Belette exposes `Hash` and a debug log file option (README).
+
+Why not the others (all checked 2026-10-25):
+- Smallbrain 1.1 64-bit (Blitz 2114 +/-19): good fallback for Belette's
+  slot. C++, GPL-3.0 (API and LICENSE at tag `1.1.0` =
+  7e3caf5b6f088b6110b817a4aa14911ad7aed823), README says `make` in `src`;
+  README eval is material + PSQT. The makefile itself was not opened, and
+  CCRL's "1.1" vs the tag `1.1.0` is a naming match by inference
+  (**UNVERIFIED**).
+- Berserk 1.2.2 64-bit (2115 +/-26, 489 games): no licence file at tag
+  `1.2.2` (root listing), fewer games.
+- Shuffle 1.2.1 64-bit (2042): its README says it is not compatible with
+  Unix-based systems, and its Makefile builds `shuffle.exe`.
+- Language rule (Go, Rust, .NET avoided; language from the GitHub API):
+  Maelstrom 2.0.0 (Go), Camel 1.4.0, Trinket 3.0.0, Ratsu 1.1.0 (Rust),
+  MinimalChess 0.6 (C#, from the earlier check). Cosette, Pedantic and
+  Tcheran (CCRL links to github.com/Tearth/Cosette, JoAnnP38/PedanticRF,
+  jgilchrist/chess-engine) were not opened, so their languages are
+  **UNVERIFIED**. Rustic (moved to Codeberg) was not reopened.
+- Kojiro 0.1.3: GitHub API reports no licence. Horowitz: repo API answers
+  "Moved Permanently", not followed.
+- Halogen 4 and Zagreus 4.1 (C++, GPL-3.0 / AGPL-3.0 per API): tags exist
+  but README and build files were not opened; whether those versions use a
+  net is **UNVERIFIED**.
+- Napoleon 1.8, Vice, GreKo: unchanged from the list above (licence date,
+  qmake makefile, no tags, no repo).
+- Chal 1.3.2 (2470) sits on top of Stash 19.0, so 1.3.0 was chosen.
+
+Shared ideas, not shared code: Belette and Chal both cite PeSTO's
+published piece-square tables in their READMEs, so their evals start from
+the same public numbers; the code bases are separate repos by different
+authors.
+
+Not run: none of these was downloaded, built or played; every build line is
+from the README or build file at the tag.
+
 ---
 
 ## 6. Rating-list entry procedures
