@@ -115,6 +115,17 @@ not changed here; the Phase 4 spec session copies them over.
    reasoning as ideas.md idea 7 for TCEC books). This narrows the earlier
    OFF-LIMITS row for official-stockfish/books to training, datagen and
    tuning use.
+7. **matetrack: a test input only** (owner, 2026-10-25). The mate suite
+   `matetrack.epd` from vondele/matetrack (GPL-3.0; pinned at commit
+   8085413b46d6d4f1bb9612353a6385dec784dae7, SHA-256 8ba57122...eefd72;
+   tools.md §4) was made by the Chest mate solver and corrected with
+   Stockfish's help, so rule 2 would exclude it. The owner allows it as the
+   Phase 3 mate suite (DESIGN.md §5.2, Testing setup) under these limits:
+   - a **diagnostic** only: solve counts reported after pruning changes;
+   - **never a tuning target** (no parameter is chosen to raise its count);
+   - **never training data** (no position or label from it is kept);
+   - **download-only**: fetched with the SHA-256 pin into `.cache/`, never
+     committed, even though its licence would allow it.
 
 ## Changing a status
 
