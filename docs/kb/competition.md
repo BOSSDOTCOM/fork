@@ -187,6 +187,15 @@ None of these is answered on any page opened on 2026-10-23.
    free memory + swap before ([os-memory.md](os-memory.md) §2). Knowing
    the setting confirms how a too-large Hash is refused on the servers.
    (Added 2026-10-24, owner.)
+7. **Explicit huge pages:** "Large pages: enabled automatically" reads as
+   transparent huge pages. Do the servers also reserve a hugetlbfs pool, and
+   may an engine use `MAP_HUGETLB` (2 MiB or 1 GiB pages) for its hash?
+   Fork uses `madvise(MADV_HUGEPAGE)` today (main's ideas.md idea 19).
+   (Added 2026-10-25, owner.)
+8. **CPU features:** do both servers' CPUs (EPYC 9754, EPYC 9175F) support
+   AVX-512 VNNI, and which `-march` should TCEC's build use for them?
+   (Main's ideas.md idea 20; to check in the CPU documentation as well.)
+   (Added 2026-10-25.)
 
 Training-data questions (added 2026-10-24, background in
 [training-data.md](training-data.md) §5):
