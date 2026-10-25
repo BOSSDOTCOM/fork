@@ -82,3 +82,23 @@ estimators needs a stated reason or a fix.
   3.5%); the rest as before (`negamax<false>` 12.0%, eval 13.3%,
   `generate<Legal>` 10.2%, `refresh_check_info` 10.1%, `quiesce<false>`
   9.4%, `generate<Captures>` 7.3%, `see_value` 7.0%).
+
+## Deliverable 5: staged move selector and history (4fac691, against f736dc7)
+
+- Bench 4,962,467 nodes (was 7,533,640 at the same depth 6), signature
+  4c45aa80f71dfd99: better ordering searches a third fewer nodes.
+- nps: two A/B runs, both disturbed by load outside WSL (the owner's
+  browser; WSL idle): run 1 median -1.2%, best +3.4%, noise threshold
+  15.1%; run 2 median -36.8% (disturbed rounds), best -1.7%, threshold
+  69.1%. Both verdicts "no significant difference"; the best-run estimates,
+  the most load-robust, show no slowdown. To re-measure on a quiet machine
+  if a later gate needs this baseline.
+- Profile: `MoveSelector::take_next` 16.2% (move picking, now including
+  the selection sort that `order_moves`/`pick_next` did inside the
+  searcher), `refresh_check_info` 10.9%, `generate<Captures>` 10.4%,
+  eval 11.8% (`side_score` 9.7, `bootstrap_eval` 2.1), `quiesce<false>`
+  9.3%, `negamax<false>` 8.1%, `see_value` 6.5%, `make` 4.8%, `unmake`
+  4.2%, `predicted_key` 4.1%, TT 6.5%, `generate<Quiets>` 2.8% (quiets
+  are generated only when reached).
+- Ordering counters (FORK_SEARCH_STATS): 96.7% of cutoffs on the first
+  move, mean cutoff index 0.08.

@@ -84,7 +84,7 @@ constexpr std::string_view BenchFens[] = {
     "r2qkb1r/pQp2ppp/5n2/1Bn1p3/8/4P3/PPPB1PPP/RN2K2R b KQkq - 4 9",   // check, https://lichess.org/so617xo4
 };
 
-constexpr int BenchDepth = 6;
+constexpr int BenchDepth = 13;
 constexpr std::size_t BenchHashBytes = std::size_t{16} << 20;
 
 std::uint64_t signature_mix(std::uint64_t signature, std::uint64_t value) {
@@ -139,6 +139,19 @@ SearchBenchResult run_search_bench() {
       c.beta_cutoffs ? 100.0 * static_cast<double>(c.first_move_cutoffs) / static_cast<double>(c.beta_cutoffs)
                      : 0.0,
       c.beta_cutoffs ? static_cast<double>(c.cutoff_index_sum) / static_cast<double>(c.beta_cutoffs) : 0.0);
+  std::fprintf(stderr, "stats: %llu makes, %llu gives_check calls (%.3f per make; ideas.md idea 9)\n",
+               static_cast<unsigned long long>(c.makes), static_cast<unsigned long long>(c.gives_check_calls),
+               c.makes ? static_cast<double>(c.gives_check_calls) / static_cast<double>(c.makes) : 0.0);
+  std::fprintf(stderr, "stats: cuts rfp %llu null %llu; prunes lmp %llu futility %llu see %llu\n",
+               static_cast<unsigned long long>(c.rfp_cuts), static_cast<unsigned long long>(c.null_cuts),
+               static_cast<unsigned long long>(c.lmp_prunes),
+               static_cast<unsigned long long>(c.futility_prunes),
+               static_cast<unsigned long long>(c.see_prunes));
+  std::fprintf(
+      stderr, "stats: %llu reduced searches, %llu re-searched at full depth (%.1f%%)\n",
+      static_cast<unsigned long long>(c.lmr_searches), static_cast<unsigned long long>(c.lmr_researches),
+      c.lmr_searches ? 100.0 * static_cast<double>(c.lmr_researches) / static_cast<double>(c.lmr_searches)
+                     : 0.0);
 #endif
   return r;
 }

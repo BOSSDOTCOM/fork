@@ -285,6 +285,8 @@ if(FORK_BUILD_TESTS)
     tests/test_see.cpp
     tests/test_tt.cpp
     tests/test_ordering.cpp
+    tests/test_pruning.cpp
+    tests/test_pruning_review.cpp
     tests/test_ordering_review.cpp
     tests/engine_process.cpp
     tests/test_uci.cpp
@@ -329,7 +331,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering time_budget tt uci_protocol uci_options uci_timing)
+                search see ordering pruning time_budget tt uci_protocol uci_options uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")

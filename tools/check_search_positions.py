@@ -96,6 +96,15 @@ for fen, uci in [('4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1', 'e4d5'), ('4k3/8/2p5/3p4/
 b = board_of('4k3/8/2p5/3p3p/8/4N1Q1/8/4K3 w - - 0 1')
 check(chess.Move.from_uci('e3d5') in b.legal_moves and chess.Move.from_uci('e1f1') in b.legal_moves
       and [m.uci() for m in b.legal_moves if b.is_capture(m)] == ['e3d5'], 'ordering position: Nxd5 the only capture, Kf1 legal')
+# tests/test_pruning.cpp, the max-ply stress test: a locked pawn ending.
+b = board_of('4k3/8/8/1p1p1p2/1P1P1P2/8/8/4K3 w - - 0 1')
+check(all(b.piece_type_at(m.from_square) == chess.KING for m in b.legal_moves), 'locked pawn ending: only king moves')
+# tests/test_pruning.cpp: Black has only king moves, is far behind, and is
+# neither mated nor stalemated; White to move is legal too.
+b = board_of('7k/8/8/8/8/1Q6/8/1R4K1 b - - 0 1')
+check(all(b.piece_type_at(m.from_square) == chess.KING for m in b.legal_moves) and b.legal_moves.count() > 0
+      and not b.is_check(), 'pruning position: Black has only (quiet) king moves')
+board_of('7k/8/8/8/8/1Q6/8/1R4K1 w - - 0 1')
 # tests/test_search.cpp, the TT endgames.
 for fen in ['8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1', '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1',
             '8/8/3k4/8/8/3K4/8/R7 w - - 0 1', '8/5pk1/8/8/8/8/5PK1/8 b - - 0 1']:

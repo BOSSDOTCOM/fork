@@ -440,3 +440,23 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** none (layout only).
 - **earliest phase:** Phase 3 (any time a stable binary exists).
 - **status:** untested
+
+## 22. Mate-aware late move pruning and reductions
+
+- **type:** ELO
+- **idea:** The deliverable 6 review found the default pruning delaying a
+  mate in 3 in KQR v K (`8/8/5k2/8/8/8/5K2/RQ6 w - - 8 5`, from a random
+  test game; the exact search finds mate in 5 plies at depth 6) until
+  depth 11: at depth 10 it scores cp 1496 with every technique on, and
+  finds the mate with LMR or LMP alone off (RFP, the null move, futility or
+  SEE pruning off: still no mate). In K+Q+R v K every attacking move is
+  quiet, so LMR shortens the mating line and LMP then drops the late quiet
+  mating move. Candidates: no LMP or LMR when alpha or beta is already a
+  mate score, or when the defending king has few squares; checks exempt
+  from LMP. No wrong score is ever reported, only a later mate.
+- **phase:** Phase 3 tier 2 (deliverable 7) or the removal round; measure
+  with mate-suite solve counts (the kb-researcher's suite) and SPRT.
+- **metric:** SPRT; mate-suite solves at fixed nodes.
+- **runtime cost:** a score test per pruning decision.
+- **earliest phase:** Phase 3.
+- **status:** untested

@@ -181,7 +181,11 @@ void UciSession::declare_options() {
         SwitchOption{"UseQuiesce", &SearchSwitches::use_quiesce},
         SwitchOption{"UseSeeQuiesce", &SearchSwitches::use_see_quiesce},
         SwitchOption{"UseHistory", &SearchSwitches::use_history},
-        SwitchOption{"UseHistoryMalus", &SearchSwitches::use_history_malus}}) {
+        SwitchOption{"UseHistoryMalus", &SearchSwitches::use_history_malus},
+        SwitchOption{"UseRfp", &SearchSwitches::use_rfp}, SwitchOption{"UseNmp", &SearchSwitches::use_nmp},
+        SwitchOption{"UseLmr", &SearchSwitches::use_lmr}, SwitchOption{"UseLmp", &SearchSwitches::use_lmp},
+        SwitchOption{"UseFutility", &SearchSwitches::use_futility},
+        SwitchOption{"UseSeePrune", &SearchSwitches::use_see_prune}}) {
     options_.add_check(s.name, searcher_->switches.*s.field,
                        [this, field = s.field](const OptionEntry& e, std::string&) {
                          searcher_->switches.*field = e.number != 0;

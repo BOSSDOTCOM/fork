@@ -106,6 +106,15 @@ struct TestHash {
   void clear() { std::fill(buckets.begin(), buckets.end(), TtBucket{}); }
 };
 
+// Switches for a search that must equal minimax: TT cutoffs only at their
+// own depth, and no pruning or reductions (they are not exact).
+SearchSwitches exact_switches() {
+  SearchSwitches s;
+  s.tt_exact_depth = true;
+  s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  return s;
+}
+
 struct Fixture {
   TestHash store;
   std::unique_ptr<Searcher> searcher = std::make_unique<Searcher>(store.table);
@@ -169,8 +178,7 @@ TEST_CASE("search",
     // the quiescence search's SEE filter.
     for (int variant = 0; variant < 6; ++variant) {
       fx.store.clear();
-      fx.searcher->switches = SearchSwitches{};
-      fx.searcher->switches.tt_exact_depth = true;
+      fx.searcher->switches = exact_switches();
       fx.searcher->switches.use_pvs = variant != 1;
       fx.searcher->switches.use_aspiration = variant != 2;
       fx.searcher->switches.use_mate_distance = variant != 3;
@@ -201,8 +209,7 @@ TEST_CASE("search", "TT cutoffs at exact depth equal plain minimax on small endg
     std::uint64_t nodes[2] = {0, 0};
     for (bool tt : {true, false}) {
       fx.store.clear();
-      fx.searcher->switches = SearchSwitches{};
-      fx.searcher->switches.tt_exact_depth = true;
+      fx.searcher->switches = exact_switches();
       fx.searcher->switches.use_tt = tt;
       SearchLimits limits;
       limits.depth = depth;

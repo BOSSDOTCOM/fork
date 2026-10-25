@@ -5,6 +5,7 @@
 #include "core/movegen.hpp"
 #include "eval/bootstrap_eval.hpp"
 #include "eval/eval.hpp"
+#include "search/lmr_table.hpp"
 #include "search/see.hpp"
 
 namespace forkeng {
@@ -16,6 +17,31 @@ constexpr int AspirationMinDepth = 4;              // iterations before this use
 constexpr int AspirationWindow = 25;               // first half-width, in centipawns
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
 constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are reported only after this
+
+// Tier 1 pruning and reductions (deliverable 6): Fork's own starting values,
+// moved into the parameter table by deliverable 8b and tuned after Phase 4
+// (they depend on the evaluation's scale).
+constexpr int RfpMaxDepth = 6;
+constexpr int RfpMargin = 80;  // centipawns per ply of remaining depth
+constexpr int NullMinDepth = 3;
+constexpr int NullBaseReduction = 3;  // plus depth / 4, plus one per NullEvalStep of surplus (at most 3)
+constexpr int NullEvalStep = 200;
+constexpr int LmrMinDepth = 3;
+constexpr int LmrMinMove = 4;  // the first three moves searched are never reduced
+constexpr int LmpMaxDepth = 4;
+constexpr int LmpBase = 3;  // quiet moves searched at depth d before the rest are skipped: LmpBase + d * d
+constexpr int FutilityMaxDepth = 6;
+constexpr int FutilityBase = 100;
+constexpr int FutilityPerDepth = 70;
+constexpr int SeePruneMaxDepth = 6;
+constexpr int SeeQuietMargin = 60;     // a quiet may lose at most this much by SEE, per ply of depth
+constexpr int SeeCaptureMargin = 100;  // a capture likewise
+
+// The side has a piece other than pawns and its king (the null move's main
+// zugzwang guard: pawn endings are where passing is most often best).
+bool has_non_pawn_material(const Position& pos, Color c) {
+  return (pos.pieces(c) & ~pos.pieces(Pawn) & ~pos.pieces(King)) != 0;
+}
 
 }  // namespace
 
@@ -98,6 +124,37 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   }
 
   f.static_eval = in_check ? ScoreNone : static_eval(pos);
+  const bool can_prune = !OnPv && !in_check;
+
+  // Reverse futility pruning (T20): far enough above beta at shallow depth,
+  // the node fails high without a search.
+  if (switches.use_rfp && can_prune && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
+      f.static_eval - RfpMargin * depth >= beta) {
+#ifdef FORK_SEARCH_STATS
+    ++counters.rfp_cuts;
+#endif
+    return f.static_eval;
+  }
+
+  // Null move pruning (T13): if passing still fails high on a reduced
+  // search, the node is taken to fail high.
+  if (switches.use_nmp && can_prune && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
+      f.static_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
+    const int r = NullBaseReduction + depth / 4 + std::min((f.static_eval - beta) / NullEvalStep, 3);
+    pos.make_null();
+    frames_[ply + 1].after_null = true;
+    const int score = -negamax<false>(-beta, -beta + 1, depth - 1 - r, ply + 1);
+    frames_[ply + 1].after_null = false;
+    pos.unmake_null();
+    if (stopped_) return 0;
+    if (score >= beta) {
+#ifdef FORK_SEARCH_STATS
+      ++counters.null_cuts;
+#endif
+      return is_tb_or_mate(score) ? beta : score;  // an unproven mate is not returned
+    }
+  }
+
   // The selector checks the TT move (a colliding entry's move may not be
   // legal here) before it is tried first.
   f.selector.start_main(pos, tt_hit ? hit.move : NoMove, switches.use_history ? &history_ : nullptr);
@@ -107,20 +164,73 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   int best = -ScoreInfinite;
   Move best_move = NoMove;
   int moves_searched = 0;
+  int moves_seen = 0;  // legal moves the selector yielded, searched or pruned
+  int quiets_searched = 0;
+  const bool lmp_node = switches.use_lmp && can_prune && depth <= LmpMaxDepth;
+  const int futility_value = in_check ? 0 : f.static_eval + FutilityBase + FutilityPerDepth * depth;
+  const bool futile_node = switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
+                           !is_tb_or_mate(alpha) && futility_value <= alpha;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
+    ++moves_seen;
     const bool quiet = !m.is_capture() && !m.is_promotion();
+    // Pruning: only once a move has been searched (so no node is pruned into
+    // a false stalemate or mate) and while not already losing to a mate.
+    if (moves_searched > 0 && best > -(MateScore - MaxPly)) {
+      if (lmp_node && quiet && quiets_searched >= LmpBase + depth * depth) {
+        f.selector.skip_quiets();  // late move pruning (T21)
+#ifdef FORK_SEARCH_STATS
+        ++counters.lmp_prunes;
+#endif
+        continue;
+      }
+      if (futile_node && quiet) {
+#ifdef FORK_SEARCH_STATS
+        ++counters.gives_check_calls;
+#endif
+        if (!pos.gives_check(m)) {  // futility pruning (T22); the bound stays honest
+          best = std::max(best, futility_value);
+#ifdef FORK_SEARCH_STATS
+          ++counters.futility_prunes;
+#endif
+          continue;
+        }
+      }
+      if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth &&
+          !see_at_least(pos, m, -(quiet ? SeeQuietMargin : SeeCaptureMargin) * depth)) {
+#ifdef FORK_SEARCH_STATS
+        ++counters.see_prunes;
+#endif
+        continue;  // SEE pruning (T23)
+      }
+    }
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     pos.make(m);
+#ifdef FORK_SEARCH_STATS
+    ++counters.makes;
+#endif
     int score;
     if (moves_searched == 0 || !switches.use_pvs) {
       score = -negamax<OnPv>(-beta, -alpha, depth - 1, ply + 1);
     } else {
-      score = -negamax<false>(-alpha - 1, -alpha, depth - 1, ply + 1);
-      if (OnPv && score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, ply + 1);
+      // Late move reductions (T15): late quiet moves get a reduced
+      // zero-window search first, then the full depth if they beat alpha.
+      const int new_depth = depth - 1;
+      int reduced = new_depth;
+      if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet && !in_check)
+        reduced = std::clamp(new_depth - reduction_for(depth, moves_searched + 1), 1, new_depth);
+      score = -negamax<false>(-alpha - 1, -alpha, reduced, ply + 1);
+#ifdef FORK_SEARCH_STATS
+      counters.lmr_searches += reduced < new_depth;
+      counters.lmr_researches += reduced < new_depth && score > alpha;
+#endif
+      if (score > alpha && reduced < new_depth)
+        score = -negamax<false>(-alpha - 1, -alpha, new_depth, ply + 1);
+      if (OnPv && score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
     }
     pos.unmake(m);
     if (stopped_) return 0;
     ++moves_searched;
+    quiets_searched += quiet;
     if (score > best) {
       best = score;
       if (score > alpha) {
@@ -140,7 +250,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
     if (quiet) f.quiets_tried.add(m);
   }
-  if (moves_searched == 0) return in_check ? mated_score(ply) : 0;
+  // No legal move is mate or stalemate; legal moves that were all pruned are
+  // not (the guard above prevents it; this keeps the result right regardless).
+  if (moves_seen == 0) return in_check ? mated_score(ply) : 0;
+  if (moves_searched == 0) return best;
   if (switches.use_tt) {
     const TtBound bound = best >= beta                 ? TtBound::Lower
                           : OnPv && best > alpha_start ? TtBound::Exact
@@ -208,6 +321,9 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     ++moves_searched;
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     pos.make(m);
+#ifdef FORK_SEARCH_STATS
+    ++counters.makes;
+#endif
     const int score = -quiesce<OnPv>(-beta, -alpha, ply + 1);
     pos.unmake(m);
     if (stopped_) return 0;
@@ -276,6 +392,21 @@ void Searcher::report_iteration(int depth, int score, int bound, const Principal
   const IterationReport r{depth,        max_ply_reached_,    score, bound, nodes_,
                           elapsed_ms(), tt_.fill_permille(), &pv};
   listener_->on_iteration(*pos_, r);
+}
+
+int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop) {
+  static const SearchLimits no_limits;
+  start_ = std::chrono::steady_clock::now();
+  pos_ = &pos;
+  limits_ = &no_limits;
+  stop_ = &stop;
+  pondering_ = nullptr;
+  listener_ = nullptr;
+  nodes_ = 0;
+  max_ply_reached_ = 0;
+  stopped_ = false;
+  frames_[0].after_null = false;
+  return negamax<false>(beta - 1, beta, depth, 0);
 }
 
 SearchResult Searcher::explore(Position& pos, const SearchLimits& limits, const std::atomic<bool>& stop,

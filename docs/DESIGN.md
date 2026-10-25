@@ -1161,11 +1161,59 @@ Choices made while building, where the spec leaves a gap:
   returns the exact root value.
 - **Tuning builds.** `-DFORK_TUNE=ON` declares every `SearchSwitches` flag
   as a UCI check option (`UseTT`, `UsePvs`, `UseAspiration`,
-  `UseMateDistance`, `UseQuiesce`, `UseSeeQuiesce`), so an SPRT compares a
+  `UseMateDistance`, `UseQuiesce`, `UseSeeQuiesce`, `UseHistory`,
+  `UseHistoryMalus`, `UseRfp`, `UseNmp`, `UseLmr`, `UseLmp`,
+  `UseFutility`, `UseSeePrune`), so an SPRT compares a
   technique on and off in one binary (`tools/sprt.sh` with `TUNE=1`).
   Release and TCEC builds declare none. Numeric parameters stay constants
   in their files until deliverable 8b moves them into the parameter table,
   which must exist before any SPSA run.
+- **Deliverable 5, move ordering** (2026-10-25). `MoveSelector`
+  (`src/search/move_selector.*`) yields the TT move (validated), good
+  captures and queen promotions by MVV-LVA with SEE computed only for the
+  captures reached (losing ones deferred with the under-promotions), quiets
+  by history, then the deferred moves; in check every evasion, captures
+  first. `select_best` is a swap-based partial selection sort: the lowest
+  index wins ties, but the swaps mean equal scores do not keep generation
+  order (review: the first comment claimed they did). `QuietHistory`
+  (`quiet_history.hpp`) is int16 by side, from and to; the bonus is
+  min(16·d², 1600) with gravity toward ±16384, and the malus applies to the
+  quiets tried before a cutoff. The history persists between searches and
+  is cleared by `ucinewgame`, Clear Hash (review finding: before that,
+  Clear Hash did not reproduce a search) and each bench position, so a
+  search is a function of position, limits, switches, TT and history.
+- **Deliverable 6, tier 1 pruning** (2026-10-25). In `negamax`, non-PV and
+  not in check: RFP (depth ≤ 6, eval − 80·d ≥ beta, returns the eval); the
+  null move (depth ≥ 3, eval ≥ beta, the side has a piece besides pawns,
+  not straight after a null move, R = 3 + d/4 + min((eval − beta)/200, 3),
+  a mate score returned as beta); in the move loop, only once a move has
+  been searched and while the best score is not a forced loss: LMP (depth
+  ≤ 4, after 3 + d² quiets, via `skip_quiets`), futility (depth ≤ 6, eval +
+  100 + 70·d ≤ alpha, quiet non-checking moves; the best score is raised
+  to the futility value) and SEE pruning (depth ≤ 6, thresholds −60·d for
+  quiets and −100·d for captures). LMR applies to quiet moves from the
+  fourth on at depth ≥ 3 and not in check, reduced by
+  `reduction_for(d, m)` ≈ round(log2 d · log2 m / 4.5), using integer
+  fixed-point logarithms (`lmr_table.hpp`, a compile-time table whose
+  checksum is pinned; the truncating logarithms leave 18 of the 3,969
+  entries one ply below the rounded value, review), clamped to [1, d − 1]; then a full-depth zero-window
+  re-search, then the full window at PV nodes. `moves_seen` (legal moves
+  yielded) decides mate or stalemate; a node with moves but none searched
+  returns its bound. All values are Fork's own starting points, moved into
+  the parameter table by 8b and tuned after Phase 4. Bench depth is 13.
+  The minimax oracle tests switch the pruning off (it is not exact).
+  `Searcher::probe_zero_window` is a tests-only seam that searches one
+  non-PV node. Tactical guard (`tools/solve_suite.py`, WAC at 200,000
+  nodes; the pinned file verified by the kb-researcher, KB tools.md §4,
+  kb eed2e32; download-only, licence UNVERIFIED): 250/300
+  with all six on, 209 with all off; one at a time off: RFP 249, NMP 246,
+  LMR 236, LMP 245, futility 245, SEE pruning 254. The mate suite is
+  open: no human-made suite fits, and the one candidate (matetrack,
+  solver-made and corrected with Stockfish) awaits the owner's decision
+  under the data policy. Review (deliverable 6): no correctness defect;
+  the pruning can delay a mate (ideas.md idea 22). FORK_SEARCH_STATS
+  bench: RFP 1.43M and null-move 0.43M cuts; LMP 0.32M, futility 8.14M and
+  SEE 1.37M prunes; 2.03M reduced searches, 0.7% re-searched.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
