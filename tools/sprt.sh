@@ -13,7 +13,9 @@
 # Environment: BASE_OPTS / TEST_OPTS extra -engine options (e.g.
 # "option.UsePvs=false"), CONCURRENCY (default 10, owner 2026-10-25,
 # raised from 5: 1,478 games per hour at STC with 0 time losses over 505
-# games, against about 790 at 5; drop to 8 if time losses appear), FORK_SPRT_DIR (default ~/fork-sprt),
+# games, against about 790 at 5; drop to 8 if time losses appear),
+# ADJUDICATE (default 1: resign and draw adjudication, see below; 0 plays
+# every game out), FORK_SPRT_DIR (default ~/fork-sprt),
 # TUNE=1 to build tuning binaries (FORK_TUNE: every search switch is a UCI
 # check option, so one commit can be tested with a technique on and off),
 # MAX_GAMES to change the cap below.
@@ -71,9 +73,21 @@ test_exe=$(build "$test")
 if [ -z "${MAX_GAMES:-}" ]; then
   if [ "$tc" = 8+0.08 ]; then MAX_GAMES=20000; else MAX_GAMES=10000; fi
 fi
+# Adjudication (owner, 2026-10-25), the same for both engines: a game is
+# resigned once both engines have reported a score of at least 1000 cp for
+# one side for 5 consecutive moves, and drawn from move 40 on once both have
+# reported |score| <= 10 cp for 10 consecutive moves. ADJUDICATE=0 plays every
+# game to its end, as before.
+if [ "${ADJUDICATE:-1}" = 1 ]; then
+  adjudication="-resign movecount=5 score=1000 twosided=true -draw movenumber=40 movecount=10 score=10"
+  adjudication_note="adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40"
+else
+  adjudication=""
+  adjudication_note="no adjudication"
+fi
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 out=$dir/logs/$stamp-$name.txt
-echo "sprt.sh: $name: $base vs $test${TUNE:+ (tuning builds)}, [$elo0, $elo1], $tc, Hash $hash, concurrency ${CONCURRENCY:-10}, cap $MAX_GAMES games; log $out"
+echo "sprt.sh: $name: $base vs $test${TUNE:+ (tuning builds)}, [$elo0, $elo1], $tc, Hash $hash, concurrency ${CONCURRENCY:-10}, cap $MAX_GAMES games, $adjudication_note; log $out"
 
 # From the log directory: fastchess writes its config.json autosave into the
 # working directory, which must not be the repository.
@@ -86,6 +100,7 @@ cd "$dir/logs"
   -openings file="$book" format=epd order=random \
   -repeat -rounds $((MAX_GAMES / 2)) -concurrency "${CONCURRENCY:-10}" \
   -sprt elo0="$elo0" elo1="$elo1" alpha=0.05 beta=0.05 model=normalized \
+  ${adjudication} \
   -report penta=true -ratinginterval 100 -recover \
   -pgnout file="$dir/logs/$stamp-$name.pgn" | tee "$out" ||
   echo "sprt.sh: fastchess ended early (stopped?); logging what it reported"
@@ -102,7 +117,7 @@ fi
   echo
   echo "### $stamp $name"
   echo
-  echo "- base \`$(git -C "$repo" rev-parse --short "$base^{commit}")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test^{commit}")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-10}${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
+  echo "- base \`$(git -C "$repo" rev-parse --short "$base^{commit}")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test^{commit}")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-10}, $adjudication_note${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
   echo "- Verdict: **$verdict**; cap $MAX_GAMES games."
   echo '```'
   echo "$summary"

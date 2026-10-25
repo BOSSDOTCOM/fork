@@ -95,3 +95,15 @@ LLR: 0.49 (16.6%) (-2.94, 2.94) [0.00, 5.00]
   (owner, 2026-10-25). Kept on (it is exact: it changes only how fast mates
   are found, which the mate tests check). Added to the end-of-Phase-3
   removal round.
+
+### 20261025T173305Z adj-check-UsePvs
+
+- base `bea68ed` (bea68ed), test `bea68ed` (bea68ed), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, base opts option.UsePvs=false
+- Verdict: **H1 was accepted**; cap 20000 games.
+```
+Elo: 106.94 +/- 22.84, nElo: 134.39 +/- 26.92
+Games: 640, Wins: 347, Losses: 156, Draws: 137, Points: 415.5 (64.92 %)
+Ptnml(0-2): [17, 21, 116, 86, 80], WL/DD Ratio: 6.73
+LLR: 2.96 (100.7%) (-2.94, 2.94) [0.00, 5.00]
+SPRT ([0.00, 5.00]) completed - H1 was accepted
+```

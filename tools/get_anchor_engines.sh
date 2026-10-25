@@ -59,5 +59,10 @@ build stash-12.0 https://github.com/mhouppin/stash-bot c59e2739e3d33eef9b177f206
 build stash-15.3 https://github.com/mhouppin/stash-bot 7d17ff80eb53b9d4808fd285c7439e641f1c5a3b src
 build stash-19.0 https://github.com/mhouppin/stash-bot de408a3e8d8ffbd41f4b1608b19f18c69eac2512 src
 build weiss-1.0 https://github.com/TerjeKir/weiss f44a4c654c67139ecbd5f3afd9da1ebe41241464 src
+# Milestone B set (KB competition.md §5, "Milestone B anchor set"; owner,
+# 2026-10-25): Stash 15.3 and 19.0 above, plus three unrelated code bases.
+build belette-2.0.0 https://github.com/vincentbab/Belette 93b88300f8fdf0126f79326fbfce5b5911275935 . release
+build chal-1.3.0 https://github.com/namanthanki/chal 3e4ee1a135fceb41e2e8bf69eacf8a7a093d8fe7 .
+build wyldchess-1.51 https://github.com/Mk-Chan/WyldChess 322b028cb5e8ba4d8596ca71071d4a9428782f31 src
 cat "$dest/MANIFEST"
 [ "$failed" = 0 ] || { echo "$failed engine(s) failed to build" >&2; exit 1; }

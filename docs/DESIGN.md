@@ -860,6 +860,14 @@ stated bound; `stop` to `bestmove` latency under 10 ms with the real search
 > complete. Report as for Milestone B, plus the TB tests, the conversion
 > suite and time-loss counts.
 
+**8b. Parameter table** (owner, 2026-10-25), after Milestone C and before
+any tier 2 refinement or SPSA tuning: `src/tune/params.*` (DESIGN.md §1),
+one table of every numeric search parameter (name, default, min, max, SPSA
+step). Release and TCEC builds compile the defaults in as constants; tuning
+builds (`FORK_TUNE`) declare each as a UCI spin option, beside the switches.
+Moving a parameter into the table must not change bench. No SPSA run may
+start before the table exists.
+
 **9. Tier 2 refinements**, built one at a time, each behind a flag and
 SPRT-tested on its own, **reported in batches at the end of Phase 3**, not
 individually. The order follows the KB's build order (steps 5 and 7-10):
@@ -924,11 +932,19 @@ SPRT at STC, 1,478 games per hour (about 790 at concurrency 5) with 0 time
 losses and no illegal moves, crashes or disconnects; still 0 time losses
 over all 943 concurrency-10 games by 2026-10-25 (634 PVS, 309 aspiration;
 checked in both the fastchess logs and the PGN terminations).
-**Queued after the Milestone A chain** (owner, 2026-10-25): game
-adjudication in `tools/sprt.sh` (fastchess `-resign` and `-draw`, with
-conservative thresholds, the same for both engines). Measure the games per
-hour gained, and re-run one known SPRT with it to confirm the result stays
-consistent before adopting it.
+**Adjudication** (owner, 2026-10-25), in `tools/sprt.sh`, the same for
+both engines (`ADJUDICATE=0` turns it off): resign once both engines report
+at least 1000 cp for one side for 5 consecutive moves; draw from move 40 on
+once both report |score| <= 10 cp for 10 consecutive moves. Validated by
+re-running the PVS SPRT (bea68ed, STC): H1 again, +106.9 ± 22.8 Elo over
+640 games, against +109.8 ± 24.0 over 634 without adjudication. **The gain
+is nil at these thresholds**: 58% of games ended by adjudication, but those
+games still averaged 104 plies (107-109 otherwise), mean game time 23.6 s
+against 23.7 s, and throughput stayed at 1,478 games per hour. With the
+bootstrap evaluation a two-sided 1000 cp score usually means mate is a few
+moves away, and late moves use little more than the increment. Kept on (it
+costs nothing and will matter more with a stronger evaluation); looser
+thresholds would need their own validation.
 
 **Long time controls.** No search change is rejected on short time
 control results alone.
@@ -1148,7 +1164,8 @@ Choices made while building, where the spec leaves a gap:
   `UseMateDistance`, `UseQuiesce`, `UseSeeQuiesce`), so an SPRT compares a
   technique on and off in one binary (`tools/sprt.sh` with `TUNE=1`).
   Release and TCEC builds declare none. Numeric parameters stay constants
-  until the parameter table (`src/tune/params.*`) is needed.
+  in their files until deliverable 8b moves them into the parameter table,
+  which must exist before any SPSA run.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
