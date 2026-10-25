@@ -117,6 +117,7 @@ SearchBenchResult run_search_bench() {
   for (const std::string_view fen : BenchFens) {
     Position pos;
     table_memory.clear(1);
+    searcher->clear_history();
     const bool ok = pos.set_fen(fen);
     assert(ok);
     (void)ok;
@@ -130,6 +131,15 @@ SearchBenchResult run_search_bench() {
     r.signature = signature_mix(r.signature, static_cast<std::uint64_t>(s.depth));
   }
   r.seconds = seconds;
+#ifdef FORK_SEARCH_STATS
+  const SearchCounters& c = searcher->counters;
+  std::fprintf(
+      stderr, "stats: %llu beta cutoffs, %.1f%% on the first move, mean cutoff index %.2f\n",
+      static_cast<unsigned long long>(c.beta_cutoffs),
+      c.beta_cutoffs ? 100.0 * static_cast<double>(c.first_move_cutoffs) / static_cast<double>(c.beta_cutoffs)
+                     : 0.0,
+      c.beta_cutoffs ? static_cast<double>(c.cutoff_index_sum) / static_cast<double>(c.beta_cutoffs) : 0.0);
+#endif
   return r;
 }
 

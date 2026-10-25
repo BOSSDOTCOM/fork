@@ -26,6 +26,7 @@
 #include "engine_process.hpp"
 #include "harness.hpp"
 #include "search/hash_memory.hpp"
+#include "suite.hpp"
 #include "uci/tokens.hpp"
 #include "uci_message.hpp"
 
@@ -737,6 +738,31 @@ TEST_CASE("uci_timing", "review: go movetime counts the Hash work done at go") {
             << " ms)\n";
   CHECK(hash_ms >= 0);
   CHECK_MSG(ms >= 0 && ms < std::max(hash_ms, 50.0) + 30 * Slack, ms << " ms for go movetime 50");
+  g.check_transcript();
+  g.quit();
+}
+
+// Review of deliverable 5: Clear Hash forgets all search memory (the TT and
+// the move-ordering history), so the same search repeats node for node.
+TEST_CASE("uci_options", "Clear Hash also clears the move-ordering history: a repeated search reproduces") {
+  Gui g;
+  const std::string position = "position fen " + std::string(perft_suite()[1].fen);  // Kiwipete
+  auto nodes_of_depth_6 = [&]() {
+    g.send(position);
+    const std::size_t mark = g.cursor;
+    g.send("go depth 6");
+    CHECK(g.next("bestmove").has_value());
+    std::string last;
+    for (const std::string& line : g.texts(mark))
+      if (starts_with(line, "info depth 6 ")) last = line;
+    const std::size_t at = last.find(" nodes ");
+    return at == std::string::npos ? std::string("?") : last.substr(at + 7, last.find(' ', at + 7) - at - 7);
+  };
+  const std::string first = nodes_of_depth_6();
+  g.send("setoption name Clear Hash");
+  CHECK(g.sync());
+  const std::string second = nodes_of_depth_6();
+  CHECK_MSG(first == second && first != "?", "nodes " << first << " then " << second);
   g.check_transcript();
   g.quit();
 }

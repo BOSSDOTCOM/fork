@@ -24,6 +24,7 @@ option(FORK_TSAN "Build with ThreadSanitizer (Linux; not with FORK_SANITIZE)" OF
 option(FORK_LTO "Link-time optimization for optimized builds" ON)
 option(FORK_BUILD_TESTS "Build the test executable and CTest tests" ON)
 option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
+option(FORK_SEARCH_STATS "Debug counters in the search, printed by fork bench (never released)" OFF)
 option(FORK_TUNE "Tuning build: every search switch is a UCI option (SPRT and SPSA only, never released)" OFF)
 set(FORK_PGO "OFF" CACHE STRING "Profile-guided optimization stage: OFF, GEN, USE")
 set(FORK_PGO_DATA "" CACHE PATH "Profile directory (GEN) or merged profile file / directory (USE)")
@@ -152,6 +153,7 @@ add_library(forksearch STATIC
   src/eval/bootstrap_eval.cpp
   src/search/search_bench.cpp
   src/search/hash_memory.cpp
+  src/search/move_selector.cpp
   src/search/searcher.cpp
   src/search/see.cpp
   src/search/time_budget.cpp
@@ -159,6 +161,9 @@ add_library(forksearch STATIC
 target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
 find_package(Threads REQUIRED)
 target_link_libraries(forksearch PUBLIC forkcore Threads::Threads PRIVATE fork_pgo)
+if(FORK_SEARCH_STATS)
+  target_compile_definitions(forksearch PUBLIC FORK_SEARCH_STATS)
+endif()
 
 # The UCI front end (src/uci/): protocol loop, options, info output.
 add_library(forkuci STATIC
@@ -279,6 +284,8 @@ if(FORK_BUILD_TESTS)
     tests/test_search.cpp
     tests/test_see.cpp
     tests/test_tt.cpp
+    tests/test_ordering.cpp
+    tests/test_ordering_review.cpp
     tests/engine_process.cpp
     tests/test_uci.cpp
     tests/test_options.cpp)
@@ -322,7 +329,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see time_budget tt uci_protocol uci_options uci_timing)
+                search see ordering time_budget tt uci_protocol uci_options uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
   endforeach()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")

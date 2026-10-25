@@ -92,6 +92,10 @@ for fen, uci in [('4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1', 'e4d5'), ('4k3/8/2p5/3p4/
                  ('4k3/8/8/8/8/8/8/4K2R w K - 0 1', 'e1g1')]:
     b = board_of(fen)
     check(chess.Move.from_uci(uci) in b.legal_moves, f'legal: {uci} in {fen}')
+# tests/test_ordering.cpp: the ordering position and its two moves.
+b = board_of('4k3/8/2p5/3p3p/8/4N1Q1/8/4K3 w - - 0 1')
+check(chess.Move.from_uci('e3d5') in b.legal_moves and chess.Move.from_uci('e1f1') in b.legal_moves
+      and [m.uci() for m in b.legal_moves if b.is_capture(m)] == ['e3d5'], 'ordering position: Nxd5 the only capture, Kf1 legal')
 # tests/test_search.cpp, the TT endgames.
 for fen in ['8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1', '4k3/8/8/8/8/8/4P3/4K3 w - - 0 1',
             '8/8/3k4/8/8/3K4/8/R7 w - - 0 1', '8/5pk1/8/8/8/8/5PK1/8 b - - 0 1']:

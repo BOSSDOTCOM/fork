@@ -179,7 +179,9 @@ void UciSession::declare_options() {
         SwitchOption{"UseAspiration", &SearchSwitches::use_aspiration},
         SwitchOption{"UseMateDistance", &SearchSwitches::use_mate_distance},
         SwitchOption{"UseQuiesce", &SearchSwitches::use_quiesce},
-        SwitchOption{"UseSeeQuiesce", &SearchSwitches::use_see_quiesce}}) {
+        SwitchOption{"UseSeeQuiesce", &SearchSwitches::use_see_quiesce},
+        SwitchOption{"UseHistory", &SearchSwitches::use_history},
+        SwitchOption{"UseHistoryMalus", &SearchSwitches::use_history_malus}}) {
     options_.add_check(s.name, searcher_->switches.*s.field,
                        [this, field = s.field](const OptionEntry& e, std::string&) {
                          searcher_->switches.*field = e.number != 0;
@@ -235,6 +237,7 @@ bool UciSession::apply_pending() {
   if (clear_pending_) {
     clear_pending_ = false;
     hash_.clear(hash_workers());
+    searcher_->clear_history();  // Clear Hash forgets all search memory (review, deliverable 5)
     return true;
   }
   return false;
@@ -377,6 +380,7 @@ void UciSession::cmd_setoption(const std::vector<LineToken>& tokens, std::size_t
 
 void UciSession::cmd_ucinewgame() {
   if (!apply_pending()) hash_.clear(hash_workers());
+  searcher_->clear_history();
 }
 
 void UciSession::cmd_ponderhit() {

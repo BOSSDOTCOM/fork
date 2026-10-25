@@ -17,12 +17,6 @@ constexpr int AspirationWindow = 25;               // first half-width, in centi
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
 constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are reported only after this
 
-// Move ordering scores until the staged selector (deliverable 5): the TT
-// move first, then captures and promotions by most valuable victim and
-// least valuable attacker, then quiet moves in generation order.
-constexpr int OrderCapture = 1 << 20;
-constexpr int OrderTtMove = 1 << 30;
-
 }  // namespace
 
 std::int64_t Searcher::elapsed_ms() const {
@@ -40,30 +34,15 @@ bool Searcher::poll_limits() {
   return false;
 }
 
-void Searcher::order_moves(PlyFrame& f, Move tt_move) const {
-  for (std::size_t i = 0; i < f.moves.size(); ++i) {
-    const Move m = f.moves[i];
-    int s = 0;
-    if (m == tt_move) {
-      s = OrderTtMove;
-    } else if (m.is_capture() || m.is_promotion()) {
-      const int victim = m.is_capture() ? (m.is_en_passant() ? Pawn : kind_of(pos_->piece_at(m.to()))) : 0;
-      const int promo = m.is_promotion() ? piece_value(m.promo_type()) : 0;
-      s = OrderCapture + (piece_value(PieceType(victim)) + promo) * 8 - kind_of(pos_->piece_at(m.from()));
-    }
-    f.move_scores[i] = s;
-  }
-}
-
-// Brings the best-scored move among i.. to position i (first one on ties).
-void Searcher::pick_next(PlyFrame& f, std::size_t i) {
-  std::size_t best = i;
-  for (std::size_t j = i + 1; j < f.moves.size(); ++j)
-    if (f.move_scores[j] > f.move_scores[best]) best = j;
-  if (best != i) {
-    std::swap(f.moves.moves[i], f.moves.moves[best]);
-    std::swap(f.move_scores[i], f.move_scores[best]);
-  }
+// A quiet move cut off: it gains a bonus that grows with depth, and the
+// quiet moves tried before it here lose as much (the malus).
+void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
+  if (!switches.use_history) return;
+  const Color us = pos_->side_to_move();
+  const int bonus = bonus_for_depth(depth);
+  history_.apply(us, m, bonus);
+  if (switches.use_history_malus)
+    for (Move q : f.quiets_tried) history_.apply(us, q, -bonus);
 }
 
 void Searcher::update_pv(int ply, Move m) {
@@ -119,24 +98,21 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   }
 
   f.static_eval = in_check ? ScoreNone : static_eval(pos);
-  f.moves.count = 0;
-  generate<GenMode::Legal>(pos, f.moves);
-  if (f.moves.size() == 0) return in_check ? mated_score(ply) : 0;
-  // A colliding entry's move may not be legal here: checked as the spec asks,
-  // though only moves from the legal generator are searched today.
-  const Move tt_move = tt_hit && pos.is_pseudo_legal(hit.move) && pos.is_legal(hit.move) ? hit.move : NoMove;
-  order_moves(f, tt_move);
+  // The selector checks the TT move (a colliding entry's move may not be
+  // legal here) before it is tried first.
+  f.selector.start_main(pos, tt_hit ? hit.move : NoMove, switches.use_history ? &history_ : nullptr);
+  f.quiets_tried.count = 0;
 
   const int alpha_start = alpha;
   int best = -ScoreInfinite;
   Move best_move = NoMove;
-  for (std::size_t i = 0; i < f.moves.size(); ++i) {
-    pick_next(f, i);
-    const Move m = f.moves[i];
+  int moves_searched = 0;
+  for (Move m; !(m = f.selector.take_next()).is_none();) {
+    const bool quiet = !m.is_capture() && !m.is_promotion();
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     pos.make(m);
     int score;
-    if (i == 0 || !switches.use_pvs) {
+    if (moves_searched == 0 || !switches.use_pvs) {
       score = -negamax<OnPv>(-beta, -alpha, depth - 1, ply + 1);
     } else {
       score = -negamax<false>(-alpha - 1, -alpha, depth - 1, ply + 1);
@@ -144,16 +120,27 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
     pos.unmake(m);
     if (stopped_) return 0;
+    ++moves_searched;
     if (score > best) {
       best = score;
       if (score > alpha) {
         best_move = m;
         if (OnPv) update_pv(ply, m);
-        if (score >= beta) break;
+        if (score >= beta) {
+          if (quiet) record_cutoff(f, m, depth);
+#ifdef FORK_SEARCH_STATS
+          ++counters.beta_cutoffs;
+          counters.first_move_cutoffs += moves_searched == 1;
+          counters.cutoff_index_sum += static_cast<std::uint64_t>(moves_searched - 1);
+#endif
+          break;
+        }
         alpha = score;
       }
     }
+    if (quiet) f.quiets_tried.add(m);
   }
+  if (moves_searched == 0) return in_check ? mated_score(ply) : 0;
   if (switches.use_tt) {
     const TtBound bound = best >= beta                 ? TtBound::Lower
                           : OnPv && best > alpha_start ? TtBound::Exact
@@ -198,11 +185,8 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 
   const int alpha_start = alpha;
   int best = -ScoreInfinite;
-  f.moves.count = 0;
   if (in_check) {
     f.static_eval = ScoreNone;
-    generate<GenMode::Legal>(pos, f.moves);
-    if (f.moves.size() == 0) return mated_score(ply);
   } else {
     f.static_eval = static_eval(pos);
     best = f.static_eval;
@@ -212,24 +196,16 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
       return best;
     }
     alpha = std::max(alpha, best);
-    generate<GenMode::Captures>(pos, f.moves);
-    // Keep captures and queen promotions; drop under-promotions and, by SEE,
-    // captures that lose material.
-    std::size_t survivors = 0;
-    for (std::size_t i = 0; i < f.moves.size(); ++i) {
-      const Move m = f.moves[i];
-      if (m.is_promotion() && m.promo_type() != Queen) continue;
-      if (switches.use_see_quiesce && m.is_capture() && !see_at_least(pos, m, 0)) continue;
-      f.moves.moves[survivors++] = m;
-    }
-    f.moves.count = survivors;
   }
-  order_moves(f, tt_hit ? hit.move : NoMove);
+  // Captures and queen promotions (under-promotions dropped, and with the SEE
+  // filter captures that lose material), or every evasion in check.
+  f.selector.start_quiesce(pos, tt_hit ? hit.move : NoMove, switches.use_see_quiesce,
+                           switches.use_history ? &history_ : nullptr);
 
   Move best_move = NoMove;
-  for (std::size_t i = 0; i < f.moves.size(); ++i) {
-    pick_next(f, i);
-    const Move m = f.moves[i];
+  int moves_searched = 0;
+  for (Move m; !(m = f.selector.take_next()).is_none();) {
+    ++moves_searched;
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     pos.make(m);
     const int score = -quiesce<OnPv>(-beta, -alpha, ply + 1);
@@ -245,6 +221,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
       }
     }
   }
+  if (in_check && moves_searched == 0) return mated_score(ply);
   if (switches.use_tt) {
     const TtBound bound = best >= beta                 ? TtBound::Lower
                           : OnPv && best > alpha_start ? TtBound::Exact
@@ -315,20 +292,16 @@ SearchResult Searcher::explore(Position& pos, const SearchLimits& limits, const 
 
   tt_.advance_age();
   SearchResult result;
+  // The first iteration's root order is the selector's (no TT move).
   PlyFrame& root = frames_[0];
   root.moves.count = 0;
-  generate<GenMode::Legal>(pos, root.moves);
+  root.selector.start_main(pos, NoMove, switches.use_history ? &history_ : nullptr);
+  for (Move m; !(m = root.selector.take_next()).is_none();) root.moves.add(m);
   root_count_ = 0;
-  if (root.moves.size()) {
-    order_moves(root, NoMove);
-    for (std::size_t i = 0; i < root.moves.size(); ++i) {
-      pick_next(root, i);
-      const Move m = root.moves[i];
-      if (limits.restrict_to.size() == 0 || limits.restrict_to.contains(m)) root_moves_[root_count_++] = {m};
-    }
-    if (root_count_ == 0)  // no searchmoves move is legal: search every move
-      for (std::size_t i = 0; i < root.moves.size(); ++i) root_moves_[root_count_++] = {root.moves[i]};
-  }
+  for (Move m : root.moves)
+    if (limits.restrict_to.size() == 0 || limits.restrict_to.contains(m)) root_moves_[root_count_++] = {m};
+  if (root_count_ == 0)  // no searchmoves move is legal: search every move
+    for (Move m : root.moves) root_moves_[root_count_++] = {m};
   if (root_count_ == 0) {
     result.score = pos.in_check() ? mated_score(0) : 0;
     return result;

@@ -10,8 +10,10 @@
 //   never allocates (tests/alloc_test.cpp).
 // - Scores follow score_bounds.hpp: fail-soft, from the side to move's view,
 //   mates by distance from the root.
-// - explore() is deterministic for a given position, limits, switches and TT
-//   contents when no time limit applies (bench parity).
+// - explore() is deterministic for a given position, limits, switches, TT
+//   contents and move-ordering history when no time limit applies (bench
+//   parity); the history persists between searches until clear_history()
+//   (ucinewgame, Clear Hash, each bench position).
 // - No exceptions, virtual calls or std::function inside the recursion; the
 //   listener is called once per finished iteration only.
 // - Every technique has a switch in SearchSwitches, so one binary can test
@@ -24,6 +26,8 @@
 #include <optional>
 
 #include "core/position.hpp"
+#include "search/move_selector.hpp"
+#include "search/quiet_history.hpp"
 #include "search/score_bounds.hpp"
 #include "search/trans_table.hpp"
 
@@ -49,7 +53,9 @@ struct SearchSwitches {
   bool use_aspiration = true;
   bool use_mate_distance = true;
   bool use_quiesce = true;
-  bool use_see_quiesce = true;  // qsearch skips captures that lose material by SEE
+  bool use_see_quiesce = true;    // qsearch skips captures that lose material by SEE
+  bool use_history = true;        // quiet moves ordered by butterfly history (else generation order)
+  bool use_history_malus = true;  // quiets tried before a cutoff lose what the cutoff move gains
   // Tests only: a TT entry cuts only at exactly the depth it was searched
   // to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
@@ -90,9 +96,10 @@ class SearchListener {
 
 // One ply of the search stack.
 struct PlyFrame {
-  MoveList moves;
-  int move_scores[MaxMoves];
-  int static_eval;  // ScoreNone in check
+  MoveSelector selector;
+  MoveList moves;         // scratch: root moves, the 50-move mate check
+  MoveList quiets_tried;  // quiet moves searched here without a cutoff (the malus)
+  int static_eval;        // ScoreNone in check
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -100,6 +107,15 @@ struct PlyFrame {
 // the others keep their order (Fork's rule; the PV move is searched first).
 struct RootEntry {
   Move move;
+};
+
+// Debug counters (DESIGN.md §5.2), compiled in only with the CMake option
+// FORK_SEARCH_STATS: they show whether ordering and pruning behave as
+// intended, which an Elo test cannot. Normal builds have none.
+struct SearchCounters {
+  std::uint64_t beta_cutoffs = 0;        // main-search nodes that failed high
+  std::uint64_t first_move_cutoffs = 0;  // ... on the first move searched
+  std::uint64_t cutoff_index_sum = 0;    // sum of the cutoff move's index (0 = first)
 };
 
 class Searcher {
@@ -112,6 +128,12 @@ class Searcher {
                        const std::atomic<bool>* pondering, SearchListener* listener);
 
   SearchSwitches switches;
+#ifdef FORK_SEARCH_STATS
+  SearchCounters counters;
+#endif
+
+  // Forgets the move-ordering history (ucinewgame, and each bench position).
+  void clear_history() { history_.clear(); }
 
  private:
   template <bool OnPv>
@@ -122,12 +144,12 @@ class Searcher {
 
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
-  void order_moves(PlyFrame& f, Move tt_move) const;
-  static void pick_next(PlyFrame& f, std::size_t i);
+  void record_cutoff(const PlyFrame& f, Move m, int depth);
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
 
   TransTable& tt_;
+  QuietHistory history_;
   Position* pos_ = nullptr;
   const SearchLimits* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;

@@ -24,6 +24,7 @@ conc=${CONCURRENCY:-4}
 here=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$out"
 out=$(realpath "$out")
+cd "$out"  # fastchess writes a config.json autosave into the working directory
 
 cutechess() {  # name, -each options...
   local name=$1
