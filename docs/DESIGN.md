@@ -921,7 +921,9 @@ acceptable for Milestone A (owner, 2026-10-25). **Concurrency 10**
 (owner, 2026-10-25, raised from 5 for the remaining Milestone A SPRTs; 8
 if time losses ever appear): measured on the first 505 games of the PVS
 SPRT at STC, 1,478 games per hour (about 790 at concurrency 5) with 0 time
-losses and no illegal moves, crashes or disconnects.
+losses and no illegal moves, crashes or disconnects; still 0 time losses
+over all 943 concurrency-10 games by 2026-10-25 (634 PVS, 309 aspiration;
+checked in both the fastchess logs and the PGN terminations).
 
 **Long time controls.** No search change is rejected on short time
 control results alone.
