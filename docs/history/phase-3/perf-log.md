@@ -47,3 +47,25 @@ estimators needs a stated reason or a fix.
   `fetch` 1.0%.
 - To measure later, not now (no premature micro-optimization): whether the
   prefetch pays for its `predicted_key` call, with the A/B harness.
+
+## Deliverable 4: quiescence search and SEE (8d6b283, against 0d32d51)
+
+- Bench 7,541,768 nodes, signature 04b78e8a995bb470 (depth 6).
+- nps: median 11,668,129 -> 9,294,019 (-20.3%), best 11,908,261 ->
+  9,428,906 (-20.8%): **slower, beyond the 3% floor. Reason: a deliberate
+  trade.** The horizon now runs a capture search instead of one static
+  evaluation, and every capture there is judged by SEE before it is
+  ordered; the qsearch's strength is measured by its SPRT (Milestone A).
+- Profile: `negamax<false>` 13.1%, `quiesce<false>` 10.7%,
+  `refresh_check_info` 10.6%, eval 12.6% (`side_score` 10.0,
+  `bootstrap_eval` 2.6), `generate<Legal>` 9.1%, `see_value` 8.1%,
+  `generate<Captures>` 6.9%, `make` 5.3%, `order_moves` 5.1%, `unmake`
+  4.3%, `predicted_key` 4.1%, `TransTable::fetch` 3.5%, `deposit` 2.9%,
+  `insufficient_material` 1.5%.
+- No hotspot out of place. Candidates for later, each only with a measured
+  gain: SEE only for the captures the staged selector (deliverable 5)
+  actually reaches, instead of all of them before ordering; null windows
+  for later moves in PV quiescence nodes (the deliverable 4 reviewer
+  measured a twelve-queen position at 19 M nodes for depth 1 with full
+  windows, 4.2 M with null windows; random-game positions stay under 80 k);
+  `piece_value` as an inline constant table.

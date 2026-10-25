@@ -24,6 +24,7 @@ option(FORK_TSAN "Build with ThreadSanitizer (Linux; not with FORK_SANITIZE)" OF
 option(FORK_LTO "Link-time optimization for optimized builds" ON)
 option(FORK_BUILD_TESTS "Build the test executable and CTest tests" ON)
 option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
+option(FORK_TUNE "Tuning build: every search switch is a UCI option (SPRT and SPSA only, never released)" OFF)
 set(FORK_PGO "OFF" CACHE STRING "Profile-guided optimization stage: OFF, GEN, USE")
 set(FORK_PGO_DATA "" CACHE PATH "Profile directory (GEN) or merged profile file / directory (USE)")
 
@@ -167,6 +168,9 @@ add_library(forkuci STATIC
   src/uci/session.cpp
   src/uci/version.cpp)
 target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pgo)
+if(FORK_TUNE)
+  target_compile_definitions(forkuci PRIVATE FORK_TUNE)
+endif()
 
 # Version string `<semver>-dev+<short commit>`, read from git at configure
 # time (owner, 2026-10-24); without git, or outside a checkout (a tarball),

@@ -166,6 +166,27 @@ void UciSession::declare_options() {
     message = config_.allow_files ? describe_syzygy_path(e.text) : "SyzygyPath: file access disabled";
     return true;
   });
+#ifdef FORK_TUNE
+  // Tuning builds only (CMake FORK_TUNE; DESIGN.md §1 and §5.2): each search
+  // switch as a check option, so an SPRT can compare a technique on and off
+  // in one binary. Released and TCEC builds never declare these.
+  struct SwitchOption {
+    const char* name;
+    bool SearchSwitches::* field;
+  };
+  for (const SwitchOption s :
+       {SwitchOption{"UseTT", &SearchSwitches::use_tt}, SwitchOption{"UsePvs", &SearchSwitches::use_pvs},
+        SwitchOption{"UseAspiration", &SearchSwitches::use_aspiration},
+        SwitchOption{"UseMateDistance", &SearchSwitches::use_mate_distance},
+        SwitchOption{"UseQuiesce", &SearchSwitches::use_quiesce},
+        SwitchOption{"UseSeeQuiesce", &SearchSwitches::use_see_quiesce}}) {
+    options_.add_check(s.name, searcher_->switches.*s.field,
+                       [this, field = s.field](const OptionEntry& e, std::string&) {
+                         searcher_->switches.*field = e.number != 0;
+                         return true;
+                       });
+  }
+#endif
   options_.add_string("LogFile", "", [this](const OptionEntry& e, std::string& message) {
     if (!config_.allow_files) {
       message = "LogFile: file access disabled";
