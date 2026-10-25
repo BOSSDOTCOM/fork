@@ -705,3 +705,36 @@ Format: URL / ref | what | date | used for.
 | https://api.crossref.org/works?query.bibliographic=Multi-cut+alpha-beta-pruning+in+game-tree+search+Bjornsson&rows=3 | Crossref search (printing failed on encoding; DOI then fetched directly) | 2026-10-24 | CPW/papers mining: notes |
 | https://api.crossref.org/works?query.bibliographic=Schaeffer+history+heuristic+1983+ICCA&rows=3 | FAILED (non-JSON reply) | 2026-10-24 | CPW/papers mining: none |
 | https://api.crossref.org/works?query.bibliographic=Birmingham+Kent+... | FAILED, then no relevant hit | 2026-10-24 | CPW/papers mining: none (Birmingham & Kent marked UNVERIFIED) |
+
+## Elo-baseline anchors (competition.md section 5), 2026-10-25
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://computerchess.org.uk/ccrl/404/ | CCRL Blitz best-versions list, computed 24 Oct 2026 | 2026-10-25 | candidate open-source engines 1400-2900 |
+| https://computerchess.org.uk/ccrl/4040/ | CCRL 40/15 best-versions list, computed 23 Oct 2026 | 2026-10-25 | candidate engines, 40/15 ratings |
+| https://computerchess.org.uk/ccrl/404/rating_list_all.html | CCRL Blitz complete list (all versions), computed 24 Oct 2026 | 2026-10-25 | exact version strings and ratings (Stash, BBC, Weiss, Blunder, Shallow Blue, Napoleon) |
+| https://computerchess.org.uk/ccrl/4040/rating_list_all.html | CCRL 40/15 complete list, computed 23 Oct 2026 | 2026-10-25 | 40/15 ratings of the same versions |
+| https://computerchess.org.uk/ccrl/404/cgi/engine_details.cgi?print=Details&each_game=1&eng=... (Shallow Blue 2.0.0, Rustic Alpha 3.0.0, Vice 1.0, BBC 1.1, Stash 12.0/15.3/19.0/21.0, Sungorus 1.4, Napoleon 1.8, MinimalChess 0.6, WyldChess 1.51, Blunder 8.5.5, GreKo 2021.06, all "64-bit") | CCRL engine details pages | 2026-10-25 | author and home-page/repo link per engine |
+| https://api.github.com/repos/GunshipPenguin/shallow_blue | API: FAILED 404 (wrong name; real repo uses a hyphen) | 2026-10-25 | none |
+| https://api.github.com/search/repositories?q=shallow+blue+chess+in:name and ?q=shallowblue+chess | API search; no match for the engine | 2026-10-25 | none (repo found via CCRL details link) |
+| https://api.github.com/repos/GunshipPenguin/shallow-blue (+ /tags, /releases, /readme?ref=v2.0.0, /contents?ref=v2.0.0) | API: licence, tags, releases, README, root listing | 2026-10-25 | Shallow Blue anchor |
+| https://raw.githubusercontent.com/GunshipPenguin/shallow-blue/v2.0.0/LICENSE and /Makefile | raw: licence header, build file | 2026-10-25 | licence, build command |
+| https://api.github.com/repos/mhouppin/stash-bot (+ /tags, /releases, /readme and /contents at v12, v15.3, v19.0, v21.0, /contents/src?ref=v19.0, /contents/sources?ref=v12) | API: mirror metadata, tags, READMEs, listings | 2026-10-25 | Stash anchors |
+| https://gitlab.com/api/v4/projects/mhouppin%2Fstash-bot (+ /repository/tags) | GitLab API: primary repo, tag list | 2026-10-25 | Stash tag names match the mirror |
+| https://raw.githubusercontent.com/mhouppin/stash-bot/v15.3/README.md, /v12/LICENSE, /v19.0/LICENSE, /v12/Makefile, /v19.0/src/Makefile | raw: README, licences, build files | 2026-10-25 | Stash build and licence |
+| https://api.github.com/repos/maksimKorzh/bbc (+ /tags, /releases, /readme?ref=1.1, /contents at 1.1 and master, /contents/src and /bin at 1.1, /license, /commits?path=LICENCE) | API | 2026-10-25 | BBC anchor, licence date, NNUE releases |
+| https://raw.githubusercontent.com/maksimKorzh/bbc/master/LICENSE | raw: FAILED 404 (file is named LICENCE) | 2026-10-25 | none |
+| https://raw.githubusercontent.com/maksimKorzh/bbc/1.1/src/README.MD and /1.1/src/makefile | raw: version notes, build file | 2026-10-25 | BBC eval description, build command |
+| https://api.github.com/repos/bluefeversoft/vice (+ /tags, /releases) | API: MIT, no tags or releases | 2026-10-25 | Vice not pinned |
+| https://api.github.com/repos/crybot/Napoleon (+ /tags, /releases, /readme?ref=v1.8, /contents?ref=v1.8, /license, /commits?path=LICENSE) | API | 2026-10-25 | Napoleon alternate, licence date |
+| https://raw.githubusercontent.com/crybot/Napoleon/master/LICENSE and /v1.8/Makefile | raw | 2026-10-25 | licence, build-file caveat |
+| https://api.github.com/repos/lithander/MinimalChessEngine (+ /tags, /releases) | API: MIT, tag v0.6 | 2026-10-25 | alternate list |
+| https://api.github.com/repos/lithander/Leorik | API: MIT | 2026-10-25 | not used |
+| https://api.github.com/repos/Mk-Chan/WyldChess (+ /tags, /releases) | API: GPL-3.0, tag v1.51 | 2026-10-25 | alternate list |
+| https://api.github.com/repos/algerbrex/blunder | API: 301, redirects to deanmchris/blunder | 2026-10-25 | Blunder repo location |
+| https://api.github.com/repos/deanmchris/blunder (+ /tags, /releases, /readme?ref=v8.5.5, /contents?ref=v8.5.5) | API | 2026-10-25 | Blunder anchor |
+| https://raw.githubusercontent.com/deanmchris/blunder/v8.5.5/LICENSE and /makefile | raw | 2026-10-25 | licence, build targets |
+| https://api.github.com/repos/mvanthoor/rustic (+ /tags, /releases) | API: no licence, single tag "moved" (to Codeberg) | 2026-10-25 | Rustic not pinned |
+| https://raw.githubusercontent.com/mvanthoor/rustic/master/README.md | raw: FAILED 404 | 2026-10-25 | none |
+| https://api.github.com/repos/TerjeKir/weiss (+ /tags, /releases, /readme?ref=v1.0, /contents and /contents/src at v1.0) | API | 2026-10-25 | Weiss anchor |
+| https://raw.githubusercontent.com/TerjeKir/weiss/v1.0/COPYING.txt and /v1.0/src/makefile | raw | 2026-10-25 | licence, build command |

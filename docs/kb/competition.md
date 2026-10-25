@@ -756,6 +756,72 @@ Berserk 14, PlentyChess b-v8.0.0, Reckless v0.9.0, Stockfish sf_19 (with
 `Threads`/`Hash` matched). Record each binary's SHA-256 and net hash in the
 gauntlet log. Add weaker anchors (e.g. Ethereal v14.00) for early phases.
 
+### Elo-baseline anchors (weak engines)
+
+Verified 2026-10-25. Purpose: Phase 3 Milestone A needs a first strength
+estimate for Fork (alpha-beta + TT + quiescence, material-plus-placement
+eval, no pruning). Its rating is unknown; the 3400+ ladder above is
+useless at that level. These engines are opponent binaries only (tag:
+**REFERENCE ONLY** for their code, which must never be read for
+implementation; **USE** as opponent binaries in local testing). None of
+them needs a network file at the pinned tag, so nothing net-related is
+involved even as an opponent.
+
+Ratings are quoted from the CCRL complete lists (all versions), opened
+2026-10-25: **CCRL Blitz 2'+1"** "Computed on October 24, 2026" and
+**CCRL 40/15** "Computed on October 23, 2026". The version string is the
+exact name CCRL prints. "n/l" = that version is not on that list. Errors
+are the list's own +/- figure. Repo facts (licence, tags, commit SHAs)
+come from the GitHub REST API; build commands from each tag's README or,
+where the README has none, from the build file at the tag (marked).
+
+| Target | Engine (CCRL name) | Blitz 2'+1" | 40/15 | Repo | Tag and commit | Licence | Linux build | UCI | Net |
+|---|---|---|---|---|---|---|---|---|---|
+| ~1600 | Shallow Blue 2.0.0 64-bit | 1578 +/-19 (1119 games) | 1618 +/-21 (776) | github.com/GunshipPenguin/shallow-blue | `v2.0.0` = a04fbd9861770c897eb566d83b0d2e3b17aa9fc0 (release 2019-01-16) | MIT (API and LICENSE at tag) | `make` in repo root (README); C++11 | yes (README: "A UCI chess engine") | none; hand-written eval (PST, pawns, king safety, mobility per README) |
+| ~1900 | Stash 12.0 64-bit | 1883 +/-22 (750) | n/l | gitlab.com/mhouppin/stash-bot (CCRL's link); GitHub mirror github.com/mhouppin/stash-bot | `v12` = c59e2739e3d33eef9b177f2063187dbe2795233c (tag is named `v12`, CCRL says "12.0") | GPL-3.0 (LICENSE at tag) | `make` in repo root (README at v12 has no build text; root Makefile's default target builds `stash-bot`: from the Makefile, not the README) | yes (later READMEs; v12 README is one line) | none in tag listing |
+| ~2000 | BBC 1.1 64-bit | 2020 +/-17 (1243) | n/l | github.com/maksimKorzh/bbc | `1.1` = eaca662a6b89219d65506caccb75e9ba22c8ec99 (release 2020-09-29, Linux binary attached) | GPL-3.0 per API (LICENCE file added 2020-10-18, after the 1.1 tag; the tag itself has no licence file) | `make` in `src/` (makefile at tag; README gives no command); single C file | yes (README feature list) | none at 1.1. **Do not use 1.3/1.4**: those releases embed Stockfish NNUE (`nn-eba324f53044.nnue`) |
+| ~2200 | Stash 15.3 64-bit | 2173 +/-19 (982) | n/l | as Stash 12.0 | `v15.3` = 7d17ff80eb53b9d4808fd285c7439e641f1c5a3b | GPL-3.0 | `cd src && make` (README; optional `ARCH=x86-64`, `x86-64-modern`, `x86-64-bmi2`) | yes ("UCI-compliant", README) | none in tag listing |
+| ~2500 | Stash 19.0 64-bit | 2473 +/-18 (1052) | n/l | as Stash 12.0 | `v19.0` = de408a3e8d8ffbd41f4b1608b19f18c69eac2512 | GPL-3.0 | `cd src && make` (README, same ARCH options) | yes | none in tag listing |
+| ~2700 | Blunder 8.5.5 64-bit | 2662 +/-11 (2541) | 2693 +/-11 (2075) | github.com/deanmchris/blunder (CCRL links algerbrex/blunder, which now redirects) | `v8.5.5` = 89230a74a966b3400610271eca49c4be241e94cd (release 2022-07-20) | MIT (API and LICENSE at tag) | Go toolchain: `make build` in root, or `go build` in `blunder/blunder` (README) | yes (README) | none; Texel-tuned hand-written eval (README) |
+| ~2900 | Weiss 1.0 64-bit | 2896 +/-17 (895) | 2847 +/-20 (560) | github.com/TerjeKir/weiss | `v1.0` = f44a4c654c67139ecbd5f3afd9da1ebe41241464 (release 2020-06-02, Windows zip only) | GPL-3.0 (COPYING.txt at tag) | `cd src && make` (from the makefile: the first target builds `weiss` with gcc `-march=native`; README has no build text) | yes ("a UCI chess engine") | none; built-in Syzygy probing (Fathom) and an online-book option `NoobBook` |
+
+Alternates (also verified the same day): **Napoleon 1.8 64-bit** (Blitz
+2203 +/-15, 40/15 2300 +/-14; github.com/crybot/Napoleon, tag `v1.8` =
+83c3b2975cba6373e21b6ad9acf7f0f0b8cf7dc4, C++). Gives a non-Stash anchor
+near 2200, but its LICENSE (GPL-3.0) was committed 2017-07-06, after the
+v1.8 release (2017-06-28), and its root Makefile is qmake-generated with
+`-march=native -mbmi2` and a Qt mkspecs include path, so a plain `make`
+build is **UNVERIFIED**; the README gives no build command and still says
+"Current Version: 1.7.0". Others on the Blitz list in range but not
+checked further: Vice 1.0 (1978; source is a zip on bluefever.net, the
+GitHub repo bluefeversoft/vice has no tags), Rustic Alpha 3.0.0 (1793; the
+GitHub repo now only says it has moved to Codeberg), MinimalChess 0.6
+(2439, C#/.NET, MIT, tag `v0.6`), WyldChess 1.51 (2603, C, GPL-3.0, tag
+`v1.51`), GreKo 2021.06 (2767; home page greko.su, no repo opened).
+
+Notes:
+- Stash fills three slots from one code base. That keeps the build
+  identical across levels but correlates the anchors' styles; swap in BBC
+  1.1 or Napoleon 1.8 if diversity matters more than spacing.
+- Only Shallow Blue, Blunder and Weiss are on both lists; the rest are
+  Blitz-only. Use the Blitz figures as the common scale.
+- CCRL ratings are at CCRL's conditions (2'+1" on an i7-4770K equivalent,
+  12-move book, ponder off, up to 6-piece TBs); a local gauntlet at
+  another TC and hardware gives a rating relative to these anchors, not a
+  CCRL rating.
+- Disable engine books and online lookups: Shallow Blue's `OwnBook` is off
+  unless set (README); set Weiss `NoobBook` false explicitly (its default
+  is **UNVERIFIED**: the README does not state it).
+- Builds use `-march=native` in Weiss's and Shallow Blue's build files;
+  fine for local opponents, but record the binary's SHA-256 per run.
+- Stash's README ratings (about 2160 at v15.3, 2470 at v19.0) agree with
+  CCRL to within about 15 Elo; whether every Stash tag up to v21 is
+  hand-crafted-eval only is inferred from the absence of net files in the
+  tag listings: **UNVERIFIED** beyond that.
+- Not run: nothing here was downloaded, built or played. Whether each
+  tag builds cleanly with today's gcc/Go on Ubuntu 22.04 is **UNVERIFIED**
+  until the first build.
+
 ---
 
 ## 6. Rating-list entry procedures
