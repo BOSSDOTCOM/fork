@@ -327,7 +327,13 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   load. Before this phase starts: research the current TCEC season's full
   rules and fill in `config/tcec.json`.
 - **Phase 6: SMP.** Lazy SMP, NUMA-aware thread/memory placement, no large
-  page dependence, scaling benchmark.
+  page dependence, scaling benchmark. **Shared-TT test plan** (owner,
+  2026-10-24): TT entries are self-verifying (§5.2 deliverable 3), so a torn
+  write reads as a miss; Phase 6 makes the entry accesses relaxed atomics
+  (or equivalent) so concurrent access is not undefined behaviour, and adds
+  a stress test, run under TSan, where many threads write and read the same
+  buckets with random entries and every hit a reader accepts must be one
+  writer's complete entry.
 - **Phase 7: Tournament-aware play.** Contempt/style options, TB-aware
   eval, keeping tension. Each item is documented here as genuine evaluation.
 - **Phase 8: TCEC-conditions testing** from `tcec.json`: paired openings,
@@ -678,13 +684,20 @@ colour-flipped position gives the negated score on every perft-suite node.
 
 **3. Transposition table** (T4), on Phase 2's `HashMemory`.
 - **Layout (Fork's own)**: one 64-byte bucket per cache line, holding 5
-  entries of 12 bytes plus 4 spare bytes. Each entry holds 32 key-check bits,
-  a 16-bit move, a 16-bit score, a 16-bit static eval (unused until a later
+  entries of 12 bytes plus 4 spare bytes. Each entry holds a 32-bit word of
+  24 key-check bits and the 8-bit age of the search that wrote it, a 16-bit
+  move, a 16-bit score, a 16-bit static eval (unused until a later
   deliverable needs it; it is there so Phase 4 does not need a new layout),
-  an 8-bit depth, and 8 bits for the bound (2), the TT-PV flag (1, T19) and
-  the age (5). This is compact (rule 3) and differs from other engines'
-  published layouts. The entry size is an A/B experiment, not a fixed
-  belief.
+  an 8-bit depth, and 8 bits of flags: the bound (2) and the TT-PV flag (1,
+  T19). The entry size is an A/B experiment, not a fixed belief.
+  *Amended 2026-10-24 after the Milestone A originality check* (the first
+  layout's packed bound/PV/5-bit-age byte matched other engines'): 24
+  check bits instead of 32 and a whole age byte (wrapping at 256 searches,
+  not 32). **Self-verifying entries** (owner, 2026-10-24, for Phase 6): the
+  stored check is the key's 24 bits XORed with a 24-bit digest of the
+  entry's other fields, so a torn write (words from two writes) fails the
+  check and reads as a miss; a 12-byte entry cannot be stored atomically
+  on x86-64. Tested by splicing two writes at every 4-byte boundary.
 - **Index**: the bucket comes from the 64-bit key by a multiply-high range
   reduction (Lemire's method, to be cited from its primary source), in
   64-bit arithmetic, so the 4 TiB maximum (more than 2^32 buckets) works.
@@ -693,8 +706,14 @@ colour-flipped position gives the negated score on every perft-suite node.
 - **Probe and store**: a cutoff only at non-PV nodes, with sufficient
   depth and a bound that points the right way; mate and TB scores
   converted by ply on store and on probe; the TT move validated with
-  `is_pseudo_legal` and `is_legal` before use. Replacement prefers the
-  same key, then the entry with the lowest depth minus age penalty.
+  `is_pseudo_legal` and `is_legal` before use. Replacement (redesigned
+  2026-10-24 from the KB's description: "prefer deeper and current-age
+  entries, replace stale ones"): the position's own entry is overwritten
+  unless it is from this search, deeper, and the new result inexact (it
+  keeps its move if the new search found none); otherwise an empty slot,
+  else the least valuable slot, where every entry of an earlier search
+  ranks below every entry of this one and, within each group, shallower
+  ranks lower.
   Qsearch entries are stored with the lowest depth. An entry is always
   written whole, which Phase 6 needs for lockless access.
 - **Prefetch** of the child's bucket via `predicted_key(move)` before
@@ -1024,9 +1043,12 @@ Choices made while building, where the spec leaves a gap:
   tablebase wins from 29500 down, evaluations within 20000, infinity
   31000). Until deliverable 4 a leaf returns the static evaluation, so a
   mate is recognized one ply later than it will be with the quiescence
-  search. Root moves are ordered once by the capture order, then by each
-  iteration's scores (a stable insertion sort, as `std::stable_sort` may
-  allocate). When an unfinished iteration supplies the move played, its PV
+  search. Root moves are ordered once by the capture order, then after each
+  root search by move-to-front: the move that last raised alpha goes first
+  and the others keep their order (Fork's rule, adopted after the Milestone
+  A originality check found the first rule, scores with minus infinity for
+  moves that did not raise alpha plus a stable sort, equal to Stockfish's;
+  owner, 2026-10-24). When an unfinished iteration supplies the move played, its PV
   is reported in a last `info` line, so the GUI's final line names that
   move (review finding).
 - **Time.** All limits count from the moment `go` arrived, so Hash work
@@ -1052,6 +1074,35 @@ Choices made while building, where the spec leaves a gap:
   prints the build identity (`variant ... | commit ... |`) for
   `bench/ab_search.py`, the interleaved A/B harness for search nps.
 - **Version** 0.3.0 for Phase 3 (the 0.<phase>.0 scheme).
+- **Deliverable 3, TT.** 5 x 12-byte entries per 64-byte bucket, with the
+  layout, replacement and self-verifying check of the deliverable as
+  amended after the Milestone A originality check (above). The TT move is checked with `is_pseudo_legal` and
+  `is_legal` before it orders anything. Mate and tablebase scores read too
+  far below the node to fit within MaxPly stay at the bottom of their band
+  (review). The age wraps every 256 searches (accepted, documented in
+  `trans_table.hpp`). The session's `TransTable` is unbound before every
+  Hash resize and rebound on every way out, as a throwing resize once left
+  it on freed memory (review, test `uci_hash_oom`). The bench uses its own
+  16 MB table, cleared before each position, refuses a smaller fallback, and
+  times only the searches.
+- **Deliverable 4, quiescence and SEE.** SEE is the exact swap-list value
+  (CPW "SEE - The Swap Algorithm", via the KB's T7 description);
+  `see_at_least` compares it with a threshold. The quiescence search
+  searches captures and queen promotions (under-promotions are dropped), all
+  evasions in check, and stores its results at depth 0, which a real-depth
+  probe never accepts. The minimax oracle in `tests/test_search.cpp` is a
+  textbook fail-hard alpha-beta with its own quiescence search (plain
+  minimax over capture sequences was too slow); with the full window it
+  returns the exact root value.
+- **Tuning builds.** `-DFORK_TUNE=ON` declares every `SearchSwitches` flag
+  as a UCI check option (`UseTT`, `UsePvs`, `UseAspiration`,
+  `UseMateDistance`, `UseQuiesce`, `UseSeeQuiesce`), so an SPRT compares a
+  technique on and off in one binary (`tools/sprt.sh` with `TUNE=1`).
+  Release and TCEC builds declare none. Numeric parameters stay constants
+  until the parameter table (`src/tune/params.*`) is needed.
+- **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
+  and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
+  as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
 
 #### Owner's answers (2026-10-24)
 
@@ -1085,6 +1136,7 @@ Choices made while building, where the spec leaves a gap:
 | 2026-10-24 | **Option limits are Fork's own (owner, after the Phase 2 originality check found the specified limits equal to Stockfish's):** Hash max 4194304 MB (4 TiB), Threads max 4096, Move Overhead max 10000 ms; defaults unchanged. Boundary tests for every spin option. **Review fixes:** out-of-memory answers with a real bestmove from fixed buffers; Hash clear workers counted from the size allocated. |
 | 2026-10-24 | **Hash memory: one block, checked against available memory (owner, amending §5.1).** The chunked fallback was dropped: Linux overcommit checks each mmap alone, so chunks would pass where the whole table is refused and the parallel clear would then trigger the OOM killer. Requests are compared with the physical memory available (plus the current table) before allocating; a refusal falls back to the previous size, else 1 MB, with `info string`. Transparent huge pages requested with `madvise`. Tested with a 1 TB request and one just above available memory, on Windows and Linux. |
 | 2026-10-24 | **Phase 3 spec approved** (§5.2) with the owner's answers listed there: SPRT bounds and conditions, Fathom vendored, the search bench positions, MultiPV deferred to Phase 7, the evaluator chosen at build time. UHO_Lichess is a test-opening book only (KB data-policy.md decision 6). Build order: deliverables 1-8 with stops at Milestones A, B and C. |
+| 2026-10-24 | **Milestone A originality fixes (owner).** `PvNode` renamed `OnPv` (bench identical). TT store redesigned from the KB description (stale entries below current ones, then shallower below deeper; a whole age byte with a 24-bit check) and made self-verifying for Phase 6 (the check XORs a digest of the entry's data, so torn writes read as misses); root moves ordered by move-to-front. Both change behaviour: bench 7533640 / 2711c23a13969520, the Milestone A SPRTs rerun on the new commit. SEE kept as the standard CPW swap algorithm, cited in ORIGINALITY.md. Root ordering by node counts logged as ideas.md idea 18. |
 
 ## 7. Performance doctrine (governs every phase)
 

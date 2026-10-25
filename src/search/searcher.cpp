@@ -74,9 +74,9 @@ void Searcher::update_pv(int ply, Move m) {
   line.length = child.length + 1;
 }
 
-template <bool PvNode>
+template <bool OnPv>
 int Searcher::negamax(int alpha, int beta, int depth, int ply) {
-  if (depth <= 0 && switches.use_quiesce) return quiesce<PvNode>(alpha, beta, ply);
+  if (depth <= 0 && switches.use_quiesce) return quiesce<OnPv>(alpha, beta, ply);
   pv_[ply].length = 0;
   ++nodes_;
   if (poll_limits()) return 0;
@@ -110,7 +110,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   const Key key = pos.key();
   TtHit hit{};
   const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
-  if (tt_hit && !PvNode) {
+  if (tt_hit && !OnPv) {
     const int s = score_from_tt(hit.score, ply);
     const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
     if (deep_enough && (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s >= beta) ||
@@ -137,10 +137,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     pos.make(m);
     int score;
     if (i == 0 || !switches.use_pvs) {
-      score = -negamax<PvNode>(-beta, -alpha, depth - 1, ply + 1);
+      score = -negamax<OnPv>(-beta, -alpha, depth - 1, ply + 1);
     } else {
       score = -negamax<false>(-alpha - 1, -alpha, depth - 1, ply + 1);
-      if (PvNode && score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, ply + 1);
+      if (OnPv && score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, ply + 1);
     }
     pos.unmake(m);
     if (stopped_) return 0;
@@ -148,17 +148,17 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       best = score;
       if (score > alpha) {
         best_move = m;
-        if (PvNode) update_pv(ply, m);
+        if (OnPv) update_pv(ply, m);
         if (score >= beta) break;
         alpha = score;
       }
     }
   }
   if (switches.use_tt) {
-    const TtBound bound = best >= beta                   ? TtBound::Lower
-                          : PvNode && best > alpha_start ? TtBound::Exact
-                                                         : TtBound::Upper;
-    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, PvNode);
+    const TtBound bound = best >= beta                 ? TtBound::Lower
+                          : OnPv && best > alpha_start ? TtBound::Exact
+                                                       : TtBound::Upper;
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
   }
   return best;
 }
@@ -167,7 +167,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 // are searched (all evasions in check), and the side to move may stand pat
 // on the static evaluation unless it is in check. Captures that lose
 // material by SEE are skipped.
-template <bool PvNode>
+template <bool OnPv>
 int Searcher::quiesce(int alpha, int beta, int ply) {
   pv_[ply].length = 0;
   ++nodes_;
@@ -189,7 +189,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   const Key key = pos.key();
   TtHit hit{};
   const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
-  if (tt_hit && !PvNode && (!switches.tt_exact_depth || hit.depth == 0)) {
+  if (tt_hit && !OnPv && (!switches.tt_exact_depth || hit.depth == 0)) {
     const int s = score_from_tt(hit.score, ply);
     if (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s >= beta) ||
         (hit.bound == TtBound::Upper && s <= alpha))
@@ -208,7 +208,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     best = f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)
-        tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, PvNode);
+        tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);
       return best;
     }
     alpha = std::max(alpha, best);
@@ -232,24 +232,24 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     const Move m = f.moves[i];
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     pos.make(m);
-    const int score = -quiesce<PvNode>(-beta, -alpha, ply + 1);
+    const int score = -quiesce<OnPv>(-beta, -alpha, ply + 1);
     pos.unmake(m);
     if (stopped_) return 0;
     if (score > best) {
       best = score;
       if (score > alpha) {
         best_move = m;
-        if (PvNode) update_pv(ply, m);
+        if (OnPv) update_pv(ply, m);
         if (score >= beta) break;
         alpha = score;
       }
     }
   }
   if (switches.use_tt) {
-    const TtBound bound = best >= beta                   ? TtBound::Lower
-                          : PvNode && best > alpha_start ? TtBound::Exact
-                                                         : TtBound::Upper;
-    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, PvNode);
+    const TtBound bound = best >= beta                 ? TtBound::Lower
+                          : OnPv && best > alpha_start ? TtBound::Exact
+                                                       : TtBound::Upper;
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, OnPv);
   }
   return best;
 }
@@ -258,8 +258,8 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   Position& pos = *pos_;
   ++nodes_;
   pv_[0].length = 0;
-  for (std::size_t i = 0; i < root_count_; ++i) root_moves_[i].score = -ScoreInfinite;
   int best = -ScoreInfinite;
+  std::size_t best_index = 0;  // the move that last raised alpha
   for (std::size_t i = 0; i < root_count_; ++i) {
     const Move m = root_moves_[i].move;
     pos.make(m);
@@ -272,9 +272,9 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     }
     pos.unmake(m);
     if (stopped_) return best;
-    root_moves_[i].score = (i == 0 || score > alpha) ? score : -ScoreInfinite;
     if (score > best) best = score;
     if (score > alpha) {
+      best_index = i;
       update_pv(0, m);
       if (score < beta) {
         iteration_best_ = m;
@@ -286,13 +286,11 @@ int Searcher::search_root(int alpha, int beta, int depth) {
       }
     }
   }
-  // Stable insertion sort by score, best first (std::stable_sort may allocate).
-  for (std::size_t i = 1; i < root_count_; ++i) {
-    const RootEntry e = root_moves_[i];
-    std::size_t j = i;
-    for (; j > 0 && root_moves_[j - 1].score < e.score; --j) root_moves_[j] = root_moves_[j - 1];
-    root_moves_[j] = e;
-  }
+  // Move to front: the move that last raised alpha is searched first next
+  // time; the others keep their order.
+  const RootEntry front = root_moves_[best_index];
+  for (std::size_t i = best_index; i > 0; --i) root_moves_[i] = root_moves_[i - 1];
+  root_moves_[0] = front;
   return best;
 }
 
@@ -326,11 +324,10 @@ SearchResult Searcher::explore(Position& pos, const SearchLimits& limits, const 
     for (std::size_t i = 0; i < root.moves.size(); ++i) {
       pick_next(root, i);
       const Move m = root.moves[i];
-      if (limits.restrict_to.size() == 0 || limits.restrict_to.contains(m))
-        root_moves_[root_count_++] = {m, 0};
+      if (limits.restrict_to.size() == 0 || limits.restrict_to.contains(m)) root_moves_[root_count_++] = {m};
     }
     if (root_count_ == 0)  // no searchmoves move is legal: search every move
-      for (std::size_t i = 0; i < root.moves.size(); ++i) root_moves_[root_count_++] = {root.moves[i], 0};
+      for (std::size_t i = 0; i < root.moves.size(); ++i) root_moves_[root_count_++] = {root.moves[i]};
   }
   if (root_count_ == 0) {
     result.score = pos.in_check() ? mated_score(0) : 0;

@@ -360,3 +360,22 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **sources:** docs/kb/search-techniques.md (branch kb), §1 and §3.23;
   engine references logged in ORIGINALITY.md (2026-10-24 rows).
 - **status:** untested
+
+## 18. Root moves ordered by previous-iteration node counts
+
+- **type:** ELO
+- **flag:** a SearchSwitches flag (name set when it is built).
+- **idea:** Phase 3 orders root moves by move-to-front: after each root
+  search the move that last raised alpha goes first and the others keep
+  their order (DESIGN.md §5.2, implementation notes). Instead, order the
+  moves after the first by the number of nodes their subtrees took in the
+  previous iteration, largest first, on the reasoning that a move that was
+  hard to refute is more likely to become the best.
+- **phase:** Phase 3, tier 2 experiment (owner, 2026-10-24).
+- **metric:** SPRT [0, 3] at STC, with an LTC confirmation (it changes the
+  tree's shape), reported with the nps change.
+- **runtime cost:** possible (a node count per root move).
+- **earliest phase:** Phase 3 (after deliverable 2).
+- **sources:** Fork's own idea, logged by the owner's request; no source
+  consulted yet.
+- **status:** untested

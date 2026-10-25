@@ -95,9 +95,11 @@ struct PlyFrame {
   int static_eval;  // ScoreNone in check
 };
 
+// Root moves are kept in search order: the initial capture order, then after
+// every root search the move that last raised alpha moves to the front and
+// the others keep their order (Fork's rule; the PV move is searched first).
 struct RootEntry {
   Move move;
-  int score;  // this iteration's score if it raised alpha (or was first), else -ScoreInfinite
 };
 
 class Searcher {
@@ -112,9 +114,9 @@ class Searcher {
   SearchSwitches switches;
 
  private:
-  template <bool PvNode>
+  template <bool OnPv>
   int negamax(int alpha, int beta, int depth, int ply);
-  template <bool PvNode>
+  template <bool OnPv>
   int quiesce(int alpha, int beta, int ply);
   int search_root(int alpha, int beta, int depth);
 

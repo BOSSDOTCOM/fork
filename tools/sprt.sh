@@ -66,6 +66,9 @@ stamp=$(date -u +%Y%m%dT%H%M%SZ)
 out=$dir/logs/$stamp-$name.txt
 echo "sprt.sh: $name: $base vs $test${TUNE:+ (tuning builds)}, [$elo0, $elo1], $tc, Hash $hash, concurrency ${CONCURRENCY:-5}; log $out"
 
+# From the log directory: fastchess writes its config.json autosave into the
+# working directory, which must not be the repository.
+cd "$dir/logs"
 # shellcheck disable=SC2086
 "$fastchess" \
   -engine cmd="$test_exe" name=test ${TEST_OPTS:-} \
@@ -77,12 +80,13 @@ echo "sprt.sh: $name: $base vs $test${TUNE:+ (tuning builds)}, [$elo0, $elo1], $
   -report penta=true -ratinginterval 100 -recover \
   -pgnout file="$dir/logs/$stamp-$name.pgn" | tee "$out"
 
-summary=$(grep -E "^(Elo|LLR|Games|Ptnml|SPRT|H[01] was)" "$out" | tail -n 8 || true)
+# The last report block only: from the last "Elo:" line on.
+summary=$(awk '/^Elo:/ { block = "" } /^(Elo|LLR|Games|Ptnml|SPRT)/ { block = block $0 "\n" } END { printf "%s", block }' "$out")
 {
   echo
   echo "### $stamp $name"
   echo
-  echo "- base \`$(git -C "$repo" rev-parse --short "$base")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-5}${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
+  echo "- base \`$(git -C "$repo" rev-parse --short "$base^{commit}")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test^{commit}")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-5}${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
   echo '```'
   echo "$summary"
   echo '```'

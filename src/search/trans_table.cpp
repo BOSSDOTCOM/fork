@@ -6,14 +6,40 @@ namespace forkeng {
 
 namespace {
 
-// How much one search of age difference counts against an entry's depth when
-// choosing what to replace (Fork's own choice).
-constexpr int AgePenalty = 4;
 // Buckets sampled for fill_permille (200 x 5 = 1000 entries).
 constexpr std::size_t FillSampleBuckets = 200;
 
-constexpr std::uint8_t pack_meta(TtBound bound, bool pv, int age) {
-  return static_cast<std::uint8_t>(static_cast<int>(bound) | (pv ? 4 : 0) | (age << 3));
+constexpr std::uint32_t KeyCheckBits = 24;
+
+constexpr std::uint32_t KeyCheckMask = (1u << KeyCheckBits) - 1;
+
+std::uint32_t key_check_of(Key key) { return static_cast<std::uint32_t>(key) & KeyCheckMask; }
+
+// A 24-bit digest of everything an entry stores besides its check: the
+// stored check is the key's 24 bits XORed with it, so an entry whose words
+// come from two different writes (a torn write under Phase 6's shared
+// table) fails the check and reads as a miss, unless the 24-bit digests
+// collide (Fork's own design, DESIGN.md §5.2 deliverable 3).
+std::uint32_t data_digest(std::uint16_t move, std::int16_t score, std::int16_t eval, std::uint8_t depth,
+                          std::uint8_t flags, std::uint8_t age) {
+  std::uint64_t x = move | std::uint64_t{static_cast<std::uint16_t>(score)} << 16 |
+                    std::uint64_t{static_cast<std::uint16_t>(eval)} << 32 | std::uint64_t{depth} << 48 |
+                    std::uint64_t{flags} << 56;
+  x ^= std::uint64_t{age} * 0x9E3779B97F4A7C15ULL;
+  x *= 0xD6E8FEB86659FD93ULL;
+  return static_cast<std::uint32_t>(x >> 40) & KeyCheckMask;
+}
+
+// The check an entry would carry for `key` given its own data.
+std::uint32_t expected_check(const TtEntry& e, std::uint32_t key_bits) {
+  return key_bits ^
+         data_digest(e.move, e.score, e.eval, e.depth, e.flags, static_cast<std::uint8_t>(e.age()));
+}
+
+// How much a slot is worth keeping: every entry of the current search ranks
+// above every stale one; within each group, deeper ranks higher.
+int slot_rank(const TtEntry& e, std::uint8_t search_age) {
+  return (e.age() == search_age ? 256 : 0) + e.depth;
 }
 
 }  // namespace
@@ -33,10 +59,10 @@ std::size_t TransTable::bucket_index(Key key, std::size_t bucket_count) {
 bool TransTable::fetch(Key key, TtHit& hit) const {
   if (!count_) return false;
   const TtBucket& b = buckets_[bucket_index(key, count_)];
-  const auto check = static_cast<std::uint32_t>(key);
+  const std::uint32_t check = key_check_of(key);
   for (const TtEntry& slot : b.entries) {
     const TtEntry e = slot;  // one copy, then only the copy is read
-    if (e.key_check != check || e.bound() == TtBound::None) continue;
+    if (e.bound() == TtBound::None || e.key_check() != expected_check(e, check)) continue;
     hit = {Move::from_raw(e.move), e.score, e.eval, e.depth, e.bound(), e.was_pv()};
     return true;
   }
@@ -46,36 +72,41 @@ bool TransTable::fetch(Key key, TtHit& hit) const {
 void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv) {
   if (!count_) return;
   TtBucket& b = buckets_[bucket_index(key, count_)];
-  const auto check = static_cast<std::uint32_t>(key);
-  // The slot: this position's own entry, else an empty one, else the entry
-  // worth least (shallowest, older searches counting less).
-  TtEntry* target = nullptr;
-  int least = 1 << 30;
-  for (TtEntry& e : b.entries) {
-    if (e.bound() == TtBound::None || e.key_check == check) {
-      target = &e;
+  const std::uint32_t check = key_check_of(key);
+  const int stored_depth = std::clamp(depth, 0, 255);
+
+  // This position's own entry, if it has one.
+  TtEntry* own = nullptr;
+  for (TtEntry& e : b.entries)
+    if (e.bound() != TtBound::None && e.key_check() == expected_check(e, check)) {
+      own = &e;
       break;
     }
-    const int worth = e.depth - AgePenalty * ((age_ - e.age()) & 31);
-    if (worth < least) {
-      least = worth;
-      target = &e;
+  TtEntry* target = own;
+  if (own) {
+    // A deeper result of this same search is worth more than a shallower,
+    // inexact one; and the position keeps its best move if the new search
+    // found none.
+    if (own->age() == search_age_ && stored_depth < own->depth && bound != TtBound::Exact) return;
+    if (move.is_none()) move = Move::from_raw(own->move);
+  } else {
+    // An empty slot, else the slot least worth keeping (first on ties).
+    for (TtEntry& e : b.entries) {
+      if (e.bound() == TtBound::None) {
+        target = &e;
+        break;
+      }
+      if (!target || slot_rank(e, search_age_) < slot_rank(*target, search_age_)) target = &e;
     }
   }
-  const int stored_depth = std::clamp(depth, 0, 255);
-  TtEntry e = *target;
-  if (e.key_check == check && e.bound() != TtBound::None) {
-    // Same position: keep a deeper result from this search unless the new
-    // one is exact; keep the old move when the new search found none.
-    if (bound != TtBound::Exact && e.age() == age_ && stored_depth + 2 < e.depth) return;
-    if (move.is_none()) move = Move::from_raw(e.move);
-  }
-  e.key_check = check;
+  TtEntry e;
+  e.key_and_age = search_age_;
   e.move = move.raw();
   e.score = static_cast<std::int16_t>(score);
   e.eval = static_cast<std::int16_t>(eval);
   e.depth = static_cast<std::uint8_t>(stored_depth);
-  e.meta = pack_meta(bound, pv, age_);
+  e.flags = static_cast<std::uint8_t>(static_cast<int>(bound) | (pv ? 4 : 0));
+  e.key_and_age |= expected_check(e, check) << 8;
   *target = e;  // written whole
 }
 
@@ -84,7 +115,7 @@ int TransTable::fill_permille() const {
   if (!n) return 0;
   std::size_t used = 0;
   for (std::size_t i = 0; i < n; ++i)
-    for (const TtEntry& e : buckets_[i].entries) used += e.bound() != TtBound::None && e.age() == age_;
+    for (const TtEntry& e : buckets_[i].entries) used += e.bound() != TtBound::None && e.age() == search_age_;
   return static_cast<int>(used * 1000 / (n * EntriesPerBucket));
 }
 
