@@ -5,7 +5,9 @@ Every SPRT of Phase 3, in the order run, rejections included (DESIGN.md
 alpha 1.8.2, normalized Elo, pentanomial statistics, alpha = beta = 0.05,
 game pairs with colours reversed, UHO_Lichess_4852_v1.epd openings (test
 openings only), one thread per engine, run in WSL on the owner's Ryzen 7
-7600X3D (shared machine, concurrency 5). Bounds: [0, 5] until Milestone B,
+7600X3D (shared machine; concurrency 5 until the SEE test, 10 from the PVS
+test on: 1,478 games per hour with 0 time losses over its first 505 games,
+against about 790 at 5). Bounds: [0, 5] until Milestone B,
 [0, 3] for tier 2, [-3, 0] for non-regression (owner, 2026-10-24).
 STC 8+0.08 s with 16 MB Hash, LTC 40+0.4 s with 64 MB.
 
@@ -51,4 +53,15 @@ Games: 450, Wins: 283, Losses: 75, Draws: 92, Points: 329.0 (73.11 %)
 Ptnml(0-2): [4, 13, 61, 65, 82], WL/DD Ratio: 7.71
 LLR: 2.95 (100.2%) (-2.94, 2.94) [0.00, 5.00]
 SPRT ([0.00, 5.00]) completed - H1 was accepted
+```
+
+### 20261025T041437Z ma-UseSeeQuiesce
+
+- base `bea68ed` (bea68ed, option.UseSeeQuiesce=false), test `bea68ed` (default), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 5, tuning builds (started before the game cap existed).
+- Verdict: **INCONCLUSIVE (stopped by the owner, 2026-10-25)** after 5,836 finished games. The last report (5,798 games) shows +9.47 ± 7.28 Elo, nElo +11.64 ± 8.94, LLR 2.19 of 2.94 (the owner's figure, +9.3 ± 7.4 at about 5,800 games, is the 5,600-game report): the 95% interval lies above zero. **Kept on.** Flagged for the end-of-Phase-3 removal round (DESIGN.md §5.2, Quality control 6). The stop killed fastchess before its final report, and the script of the time then exited without logging; this entry is written by hand from the fastchess log, and tools/sprt.sh now logs a stopped test as inconclusive.
+```
+Elo: 9.47 +/- 7.28, nElo: 11.64 +/- 8.94
+Games: 5798, Wins: 2294, Losses: 2136, Draws: 1368, Points: 2978.0 (51.36 %)
+Ptnml(0-2): [315, 508, 1169, 518, 389], WL/DD Ratio: 5.84
+LLR: 2.19 (74.5%) (-2.94, 2.94) [0.00, 5.00]
 ```

@@ -11,8 +11,9 @@
 #   HASH_MB   default 16 (STC); use 64 for LTC
 #
 # Environment: BASE_OPTS / TEST_OPTS extra -engine options (e.g.
-# "option.UsePvs=false"), CONCURRENCY (default 5: the 7600X3D's 6 cores
-# minus one, the machine is shared), FORK_SPRT_DIR (default ~/fork-sprt),
+# "option.UsePvs=false"), CONCURRENCY (default 10, owner 2026-10-25,
+# raised from 5: 1,478 games per hour at STC with 0 time losses over 505
+# games, against about 790 at 5; drop to 8 if time losses appear), FORK_SPRT_DIR (default ~/fork-sprt),
 # TUNE=1 to build tuning binaries (FORK_TUNE: every search switch is a UCI
 # check option, so one commit can be tested with a technique on and off),
 # MAX_GAMES to change the cap below.
@@ -72,7 +73,7 @@ if [ -z "${MAX_GAMES:-}" ]; then
 fi
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 out=$dir/logs/$stamp-$name.txt
-echo "sprt.sh: $name: $base vs $test${TUNE:+ (tuning builds)}, [$elo0, $elo1], $tc, Hash $hash, concurrency ${CONCURRENCY:-5}, cap $MAX_GAMES games; log $out"
+echo "sprt.sh: $name: $base vs $test${TUNE:+ (tuning builds)}, [$elo0, $elo1], $tc, Hash $hash, concurrency ${CONCURRENCY:-10}, cap $MAX_GAMES games; log $out"
 
 # From the log directory: fastchess writes its config.json autosave into the
 # working directory, which must not be the repository.
@@ -83,12 +84,14 @@ cd "$dir/logs"
   -engine cmd="$base_exe" name=base ${BASE_OPTS:-} \
   -each tc="$tc" option.Hash="$hash" option.Threads=1 \
   -openings file="$book" format=epd order=random \
-  -repeat -rounds $((MAX_GAMES / 2)) -concurrency "${CONCURRENCY:-5}" \
+  -repeat -rounds $((MAX_GAMES / 2)) -concurrency "${CONCURRENCY:-10}" \
   -sprt elo0="$elo0" elo1="$elo1" alpha=0.05 beta=0.05 model=normalized \
   -report penta=true -ratinginterval 100 -recover \
-  -pgnout file="$dir/logs/$stamp-$name.pgn" | tee "$out"
+  -pgnout file="$dir/logs/$stamp-$name.pgn" | tee "$out" ||
+  echo "sprt.sh: fastchess ended early (stopped?); logging what it reported"
 
-# The last report block only: from the last "Elo:" line on.
+# The last report block only: from the last "Elo:" line on (a test stopped by
+# hand has no final report, so this is its last periodic one).
 summary=$(awk '/^Elo:/ { block = "" } /^(Elo|LLR|Games|Ptnml|SPRT)/ { block = block $0 "\n" } END { printf "%s", block }' "$out")
 if grep -q "H[01] was accepted" "$out"; then
   verdict=$(grep -o "H[01] was accepted" "$out" | tail -n 1)
@@ -99,7 +102,7 @@ fi
   echo
   echo "### $stamp $name"
   echo
-  echo "- base \`$(git -C "$repo" rev-parse --short "$base^{commit}")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test^{commit}")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-5}${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
+  echo "- base \`$(git -C "$repo" rev-parse --short "$base^{commit}")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test^{commit}")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-10}${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
   echo "- Verdict: **$verdict**; cap $MAX_GAMES games."
   echo '```'
   echo "$summary"

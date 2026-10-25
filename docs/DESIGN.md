@@ -917,7 +917,11 @@ games at STC (10,000 at any other time control; `MAX_GAMES` overrides)
 stops and is logged as **inconclusive**, for the owner to decide on. For
 techniques expected to be near zero in Elo (mate distance pruning,
 possibly aspiration windows), an inconclusive result at the cap is
-acceptable for Milestone A (owner, 2026-10-25).
+acceptable for Milestone A (owner, 2026-10-25). **Concurrency 10**
+(owner, 2026-10-25, raised from 5 for the remaining Milestone A SPRTs; 8
+if time losses ever appear): measured on the first 505 games of the PVS
+SPRT at STC, 1,478 games per hour (about 790 at concurrency 5) with 0 time
+losses and no illegal moves, crashes or disconnects.
 
 **Long time controls.** No search change is rejected on short time
 control results alone.
@@ -1057,6 +1061,10 @@ holds, which is why search decisions use no floating point (deliverable 6).
    - **Every feature keeps its `SearchSwitches` flag in the code until
      that Phase 4 re-validation is done**; only then may switches of kept
      features be folded into plain code.
+   - **Flagged for the end-of-Phase-3 removal round:** SEE pruning in the
+     quiescence search (`UseSeeQuiesce`), whose Milestone A SPRT was stopped
+     by the owner as inconclusive at +9.5 ± 7.3 Elo after about 5,800 games
+     (95% interval above zero; kept on).
 
 #### Implementation notes (2026-10-24)
 
