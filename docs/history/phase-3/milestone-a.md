@@ -52,6 +52,27 @@ the game. A time-management issue (keeping a larger reserve when the clock
 is low), for deliverable 8, which has this test. No crashes, illegal moves
 or disconnects in any game.
 
+## Elo baseline gauntlet (f736dc7)
+
+1,000 games at 10+0.1, 200 against each anchor from 200 random 8-ply
+openings (both colours), concurrency 10, fastchess; Ordo with the anchors
+fixed at their CCRL Blitz 2'+1" ratings (list of 2026-10-24):
+
+| Opponent | CCRL Blitz | Fork's score |
+|---|---|---|
+| Shallow Blue 2.0.0 | 1578 | 127.5 / 200 (64%) |
+| Stash 12.0 | 1883 | 69.5 / 200 (35%) |
+| Stash 15.3 | 2173 | 44.5 / 200 (22%) |
+| Stash 19.0 | 2473 | 18.5 / 200 (9%) |
+| Weiss 1.0 | 2896 | 1.5 / 200 (1%) |
+
+**Fork: 1773 ± 32** (Ordo, 1,000 simulations, 95%). A rough placement on
+the CCRL Blitz scale, not a CCRL rating: the games were 10+0.1 on this
+machine, not CCRL's 2'+1" on theirs, three anchors share Stash's code
+base, and the anchors keep their default hash. All 1,000 games ended by the
+rules (mates 939, draws 61); no time losses, crashes or illegal moves.
+BBC 1.1 (2020) was dropped: its build failed at the pinned commit.
+
 ## Performance gate (perf-log.md)
 
 Search nps (WSL, A/B harness, 3% noise floor): deliverable 2 about 12.0 M;
@@ -73,13 +94,8 @@ capture); the originality fixes -1.3% (noise). No hotspot out of place.
 
 ## Open
 
-1. **Elo baseline gauntlet: not run.** The anchors (KB competition.md §5:
-   Shallow Blue 2.0.0, Stash 12 / 15.3 / 19, BBC 1.1, Weiss 1.0) must be
-   built from their source; the session's permission classifier refused to
-   build external code. `tools/get_anchor_engines.sh` and
-   `tools/elo_gauntlet.sh` are ready.
-2. The time loss under load (deliverable 8).
-3. Spec deviations: TT entries have 24 check bits and an 8-bit age (instead
+1. The time loss under load (deliverable 8).
+2. Spec deviations: TT entries have 24 check bits and an 8-bit age (instead
    of 32 and 5); the parameter table `src/tune/params.*` is not created yet
    (only the on/off switches exist).
-4. Queued: SPRT adjudication (after this chain), ideas 18-21.
+3. Queued: SPRT adjudication (after this chain), ideas 18-21.
