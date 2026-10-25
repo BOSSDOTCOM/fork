@@ -14,7 +14,7 @@ set -euo pipefail
 dest=$HOME/fork-tools/engines
 mkdir -p "$dest"
 
-build() {  # name, repo URL, commit, subdirectory to build in, make arguments...
+build_one() {  # name, repo URL, commit, subdirectory to build in, make arguments...
   local name=$1 url=$2 commit=$3 sub=$4
   shift 4
   if [ -x "$dest/$name" ]; then
@@ -45,11 +45,19 @@ build() {  # name, repo URL, commit, subdirectory to build in, make arguments...
   echo "$name: built"
 }
 
-# Pinned tags and commits from the KB (CCRL Blitz ratings there).
-build shallowblue-2.0.0 https://github.com/GunshipPenguin/shallow-blue a04fbd9861770c897eb566d83b0d2e3b17aa9fc0 .
+# Pinned tags and commits from the KB (CCRL Blitz ratings there). A failed
+# build is reported and the others still run. Shallow Blue 2.0.0 predates
+# gcc versions that no longer include <string> indirectly, so its compiler
+# command forces that header in (a make override; its source is untouched).
+failed=0
+build() { build_one "$@" || failed=$((failed + 1)); }
+build shallowblue-2.0.0 https://github.com/GunshipPenguin/shallow-blue a04fbd9861770c897eb566d83b0d2e3b17aa9fc0 .   "CXX=g++ -include string"
 build stash-12.0 https://github.com/mhouppin/stash-bot c59e2739e3d33eef9b177f2063187dbe2795233c .
-build bbc-1.1 https://github.com/maksimKorzh/bbc eaca662a6b89219d65506caccb75e9ba22c8ec99 src
+# BBC 1.1 (KB) is left out: at its pinned commit the makefile in src/ does
+# not find its source file (2026-10-25), and its licence at that tag is
+# unclear (KB). Five anchors still span CCRL Blitz 1578 to 2896.
 build stash-15.3 https://github.com/mhouppin/stash-bot 7d17ff80eb53b9d4808fd285c7439e641f1c5a3b src
 build stash-19.0 https://github.com/mhouppin/stash-bot de408a3e8d8ffbd41f4b1608b19f18c69eac2512 src
 build weiss-1.0 https://github.com/TerjeKir/weiss f44a4c654c67139ecbd5f3afd9da1ebe41241464 src
 cat "$dest/MANIFEST"
+[ "$failed" = 0 ] || { echo "$failed engine(s) failed to build" >&2; exit 1; }

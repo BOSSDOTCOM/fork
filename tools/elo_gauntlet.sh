@@ -28,7 +28,6 @@ cd "$out"  # fastchess writes config.json into the working directory
 anchors=(
   "Shallow Blue 2.0.0|shallowblue-2.0.0|1578"
   "Stash 12.0|stash-12.0|1883"
-  "BBC 1.1|bbc-1.1|2020"
   "Stash 15.3|stash-15.3|2173"
   "Stash 19.0|stash-19.0|2473"
   "Weiss 1.0|weiss-1.0|2896"
