@@ -328,7 +328,7 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   pilot (deliverable 8c):** the first real campaigns of the
   heuristic-discovery loop (ideas.md idea 23), after the first strong
   network and that re-validation; afterwards a standing tool in the
-  improvement pass after Phase 8.
+  improvement pass (below).
 - **Phase 5: Time management.** Soft and hard limits tuned for long
   increment games without ponder, and a stress test under artificial system
   load. Before this phase starts: research the current TCEC season's full
@@ -345,6 +345,17 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   eval, keeping tension. Each item is documented here as genuine evaluation.
 - **Phase 8: TCEC-conditions testing** from `tcec.json`: paired openings,
   adjudication, gauntlet against pinned engines, SPRT, stress testing.
+- **Improvement pass** (after Phase 8; owner, 2026-10-26). The layers again,
+  in dependency order: network, search, time management, threads,
+  tournament behavior, TCEC-conditions validation. It repeats in rounds,
+  and each round targets the layer with the best expected Elo per unit of
+  effort, judged from the last round's measurements. Standing tools: SPSA
+  tuning (on the parameter table, deliverable 8b) and idea 23's
+  heuristic-discovery loop, if the Phase 3 pilot (deliverable 8c) was a go.
+  Every change follows the same rules as in the phases (SPRT, the LTC rule,
+  the originality screens, recorded justifications). **Bugs are never
+  deferred to the pass:** a bug found at any time is fixed immediately,
+  with its failing test first.
 
 ### 5.1 Phase 2 spec: UCI (approved by the owner 2026-10-24)
 
@@ -892,7 +903,7 @@ start before the table exists.
   (compute, games and session time).
 - **If go:** real campaigns in late Phase 4, after the first strong
   network and the search re-validation; then a standing tool in the
-  improvement pass after Phase 8. **If no-go:** the loop is archived, and
+  improvement pass after Phase 8 (roadmap, §5). **If no-go:** the loop is archived, and
   the pilot's log and findings go into ideas.md.
 
 **9. Tier 2 refinements**, built one at a time, each behind a flag and
