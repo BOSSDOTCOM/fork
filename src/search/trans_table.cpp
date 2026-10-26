@@ -36,9 +36,22 @@ std::uint32_t expected_check(const TtEntry& e, std::uint32_t key_bits) {
          data_digest(e.move, e.score, e.eval, e.depth, e.flags, static_cast<std::uint8_t>(e.age()));
 }
 
-// How much a slot is worth keeping: every entry of the current search ranks
-// above every stale one; within each group, deeper ranks higher.
-int slot_rank(const TtEntry& e, std::uint8_t search_age) {
+// Plies a stored depth loses per search of age under the blended policy:
+// between two of Fork's searches in a game two plies are played, so a stored
+// position is two plies nearer the new root, and the new search asks it for
+// two plies more depth than the one that wrote it (DESIGN.md §5.2, "Search
+// constants").
+constexpr int StaleDepthPerSearch = 2;
+
+// How much a slot is worth keeping. Lexicographic (the default): every entry
+// of the current search ranks above every stale one; within each group,
+// deeper ranks higher. Blended: depth minus StaleDepthPerSearch per search of
+// age (the age wraps at 256, so the gap is taken modulo 256).
+int slot_rank(const TtEntry& e, std::uint8_t search_age, bool age_blend) {
+  if (age_blend) {
+    const int age_gap = static_cast<std::uint8_t>(search_age - static_cast<std::uint8_t>(e.age()));
+    return e.depth - StaleDepthPerSearch * age_gap;
+  }
   return (e.age() == search_age ? 256 : 0) + e.depth;
 }
 
@@ -96,7 +109,8 @@ void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtB
         target = &e;
         break;
       }
-      if (!target || slot_rank(e, search_age_) < slot_rank(*target, search_age_)) target = &e;
+      if (!target || slot_rank(e, search_age_, age_blend_) < slot_rank(*target, search_age_, age_blend_))
+        target = &e;
     }
   }
   TtEntry e;

@@ -85,6 +85,11 @@ class TransTable {
 
   // Starts a new search: entries from earlier searches become stale.
   void advance_age() { ++search_age_; }
+  // The victim policy (owner's experiment, 2026-10-26): off, every entry of
+  // the current search outranks every stale one (then depth decides); on,
+  // a slot is worth its depth minus StaleDepthPerSearch plies per search of
+  // age, so a deep stale entry can outrank a shallow current one.
+  void set_age_blend(bool on) { age_blend_ = on; }
 
   static std::size_t bucket_index(Key key, std::size_t bucket_count);
 
@@ -105,6 +110,7 @@ class TransTable {
   TtBucket* buckets_ = nullptr;
   std::size_t count_ = 0;
   std::uint8_t search_age_ = 0;  // wraps at 256
+  bool age_blend_ = false;
 };
 
 }  // namespace forkeng

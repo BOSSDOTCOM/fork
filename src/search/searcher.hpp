@@ -63,6 +63,9 @@ struct SearchSwitches {
   bool use_lmp = true;        // late move pruning (T21)
   bool use_futility = true;   // futility pruning (T22)
   bool use_see_prune = true;  // SEE pruning in the main search (T23)
+  // TT victims ranked by depth minus two plies per search of age instead of
+  // current-search-first (owner's experiment, 2026-10-26; off by default).
+  bool tt_age_blend = false;
   // Tests only: a TT entry cuts only at exactly the depth it was searched
   // to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;

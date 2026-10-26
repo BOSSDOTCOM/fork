@@ -183,4 +183,28 @@ TEST_CASE("tt", "review: an entry from 1 to 255 searches ago is not from the cur
             "the stale depth-20 entry kept: depth " << hit.depth << " score " << hit.score);
 }
 
+// The blended victim policy (owner's experiment, 2026-10-26): a deep entry
+// from the previous search outranks a shallow one from the current search,
+// which the default (lexicographic) policy never allows.
+TEST_CASE("tt", "victim policy: lexicographic keeps current entries, blended keeps deep stale ones") {
+  for (const bool blend : {false, true}) {
+    TestTable t(1);  // every key maps to bucket 0
+    t.table.set_age_blend(blend);
+    for (int i = 0; i < 5; ++i) t.table.deposit(Key(i + 1), NoMove, 0, 0, 20 + i, TtBound::Exact, false);
+    t.table.advance_age();
+    // Stale depths 20-24; the new entry replaces the shallowest stale one under
+    // both policies (blended ranks 18-22).
+    t.table.deposit(Key(6), NoMove, 0, 0, 3, TtBound::Exact, false);
+    TtHit hit{};
+    CHECK(!t.table.fetch(Key(1), hit));
+    CHECK(t.table.fetch(Key(6), hit));
+    // Now the current depth-3 entry (blended rank 3) against stale depths
+    // 21-24 (blended ranks 19-22): which one goes depends on the policy.
+    t.table.deposit(Key(7), NoMove, 0, 0, 2, TtBound::Exact, false);
+    CHECK(t.table.fetch(Key(7), hit));
+    CHECK_MSG(t.table.fetch(Key(6), hit) == !blend, "blend " << blend << ": the current shallow entry");
+    CHECK_MSG(t.table.fetch(Key(2), hit) == blend, "blend " << blend << ": the stale depth-21 entry");
+  }
+}
+
 }  // namespace forkeng::test

@@ -160,3 +160,15 @@ Ptnml(0-2): [142, 284, 556, 325, 214], WL/DD Ratio: 2.89
 LLR: 2.95 (100.1%) (-2.94, 2.94) [0.00, 5.00]
 SPRT ([0.00, 5.00]) completed - H1 was accepted
 ```
+
+### 20261026T124341Z mb-tier1-ltc
+
+- base `69e830a` (69e830a), test `69e830a` (69e830a), bounds [0, 5] nElo, 40+0.4, Hash 64 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, base opts option.UseRfp=false option.UseNmp=false option.UseLmr=false option.UseLmp=false option.UseFutility=false option.UseSeePrune=false
+- Verdict: **H1 was accepted**; cap 10000 games.
+```
+Elo: 555.67 +/- 80.38, nElo: 1093.50 +/- 38.93
+Games: 306, Wins: 284, Losses: 2, Draws: 20, Points: 294.0 (96.08 %)
+Ptnml(0-2): [0, 0, 3, 18, 132], WL/DD Ratio: 2.00
+LLR: 2.96 (100.5%) (-2.94, 2.94) [0.00, 5.00]
+SPRT ([0.00, 5.00]) completed - H1 was accepted
+```
