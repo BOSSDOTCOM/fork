@@ -104,9 +104,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) {
     if (!in_check) return 0;
-    f.moves.count = 0;
-    generate<GenMode::Legal>(pos, f.moves);
-    return f.moves.size() ? 0 : mated_score(ply);
+    MoveList fifty_scratch;  // rare (50-move positions in check), so a local list
+    generate<GenMode::Legal>(pos, fifty_scratch);
+    return fifty_scratch.size() ? 0 : mated_score(ply);
   }
   if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
   if (depth <= 0) return static_eval(pos);  // only with the quiescence search switched off
@@ -223,7 +223,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                                               : counters.see_tests_other);
       }
 #endif
+      // A capture from the good-capture stage already has SEE >= 0, above
+      // every (negative) threshold here, so it is not tested again (review
+      // claim (c), 2026-10-26).
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth &&
+          f.selector.yielding_stage() != SelectorStage::GoodCaptures &&
           !see_at_least(pos, m, -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth)) {
 #ifdef FORK_SEARCH_STATS
         counters.bad_captures_after_stop_pruned += bad_after_stop;
@@ -320,9 +324,9 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) {
     if (!in_check) return 0;
-    f.moves.count = 0;
-    generate<GenMode::Legal>(pos, f.moves);
-    return f.moves.size() ? 0 : mated_score(ply);
+    MoveList fifty_scratch;  // rare (50-move positions in check), so a local list
+    generate<GenMode::Legal>(pos, fifty_scratch);
+    return fifty_scratch.size() ? 0 : mated_score(ply);
   }
   if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
 
@@ -473,14 +477,14 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   SearchResult result;
   // The first iteration's root order is the selector's (no TT move).
   PlyFrame& root = frames_[0];
-  root.moves.count = 0;
+  MoveList root_list;  // once per search, so a local list
   root.selector.start_main(pos, NoMove, switches.use_history ? &history_ : nullptr);
-  for (Move m; !(m = root.selector.take_next()).is_none();) root.moves.add(m);
+  for (Move m; !(m = root.selector.take_next()).is_none();) root_list.add(m);
   root_count_ = 0;
-  for (Move m : root.moves)
+  for (Move m : root_list)
     if (limits.restrict_to.size() == 0 || limits.restrict_to.contains(m)) root_moves_[root_count_++] = {m};
   if (root_count_ == 0)  // no searchmoves move is legal: search every move
-    for (Move m : root.moves) root_moves_[root_count_++] = {m};
+    for (Move m : root_list) root_moves_[root_count_++] = {m};
   if (root_count_ == 0) {
     result.score = pos.in_check() ? mated_score(0) : 0;
     return result;

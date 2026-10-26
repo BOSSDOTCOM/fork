@@ -153,7 +153,8 @@ SearchBenchResult run_search_bench() {
       c.lmr_searches ? 100.0 * static_cast<double>(c.lmr_researches) / static_cast<double>(c.lmr_searches)
                      : 0.0);
   std::fprintf(stderr,
-               "stats: SEE pruning tests: good captures %llu, bad captures %llu, quiets %llu, other %llu\n",
+               "stats: SEE pruning: good captures %llu (skipped), tested: bad captures %llu, quiets %llu, "
+               "other %llu\n",
                static_cast<unsigned long long>(c.see_tests_good_captures),
                static_cast<unsigned long long>(c.see_tests_bad_captures),
                static_cast<unsigned long long>(c.see_tests_quiets),

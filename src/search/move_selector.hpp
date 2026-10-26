@@ -76,8 +76,8 @@ class MoveSelector {
   bool see_filter_ = false;
   bool quiets_stopped_ = false;
 
-  MoveList list_;  // the stage's moves
-  int scores_[MaxMoves];
+  MoveList list_;                  // the stage's moves
+  std::int16_t scores_[MaxMoves];  // every score fits (move_selector.cpp)
   std::size_t next_ = 0;
   MoveList deferred_;  // bad captures and under-promotions, tried after the quiets
   std::size_t deferred_next_ = 0;

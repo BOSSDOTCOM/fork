@@ -107,7 +107,6 @@ class SearchListener {
 // One ply of the search stack.
 struct PlyFrame {
   MoveSelector selector;
-  MoveList moves;           // scratch: root moves, the 50-move mate check
   MoveList failed_quiets;   // quiet moves searched here without a cutoff (the malus)
   int static_eval;          // ScoreNone in check
   bool after_null = false;  // this node was reached by a null move (no second one in a row)
@@ -147,8 +146,9 @@ struct SearchCounters {
   // External review (2026-10-26). (c) SEE tests by the main-search SEE
   // pruning, by where the move came from; bad captures reached after late
   // move pruning stopped the quiets, and how many SEE pruning then drops.
-  std::uint64_t see_tests_good_captures = 0;  // SEE >= 0 already shown by the selector
-  std::uint64_t see_tests_bad_captures = 0;   // SEE < 0 already shown by the selector
+  std::uint64_t see_tests_good_captures =
+      0;  // SEE >= 0 already shown by the selector: skipped since claim (c)
+  std::uint64_t see_tests_bad_captures = 0;  // SEE < 0 already shown by the selector
   std::uint64_t see_tests_quiets = 0;
   std::uint64_t see_tests_other = 0;  // TT moves and in-check evasions
   std::uint64_t bad_captures_after_stop = 0;
