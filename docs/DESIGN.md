@@ -1315,6 +1315,38 @@ Choices made while building, where the spec leaves a gap:
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
 
+#### External reviews (2026-10-26)
+
+Two external reviews raised suspected issues. The owner's rule: each is a
+claim, reproduced with a failing test or a measurement before anything is
+fixed, then fixed from Fork's own reasoning; pure speed fixes keep bench
+identical, behaviour changes get SPRTs. Measurements are from the
+FORK_SEARCH_STATS bench unless stated.
+
+**First review.**
+
+| Claim | Outcome |
+|---|---|
+| (a) A root move failing high above the aspiration window is dropped when time expires during its re-search. | **Confirmed**: a sweep of node-limited searches (bench positions and WAC) found 626 of 34,254 playing another move (perft position 6 at 4,991 nodes: g5f6 failed high, c3d5 played). **Fixed** (f0a9caf): the pending fail high is played (its score is at least beta, above every exact score of that pass), reported as a lower bound; test fails before the fix. Bench unchanged (depth-limited); SPRT on non-regression bounds. |
+| (b) The increment scaling divides before it multiplies. | **Confirmed** by calling `plan_time`: 1-3 ms increments add nothing, 7 ms adds 3 (not 5.25). **Folded into deliverable 8** (owner). |
+| (c) SEE recomputed for proven-good captures; bad captures tested twice; bad captures searched after LMP stops quiets. | **Confirmed and fixed** for good captures (443,516 tests that always passed; skipped, 6ae4128, bench identical). Bad captures' second test (944,986) stays: it tests another threshold. Bad captures after LMP (502,947, 73% then SEE-pruned): **design, not a defect** (LMP is quiet-only by spec). |
+| (d) At futile nodes all quiets are generated, scored and sorted though only checking quiets can be searched. | **Confirmed**: 10.4M quiets handed out at 425,623 futile nodes, 200,876 searched. **Fixed** (3a8a1b6): once the futility conditions hold, the selector keeps only checking quiets (317,326 handed out); the same moves are searched (identical benches with a position-independent tie-break), only the order of tied checking quiets differs. Search nps +12.7%. SPRT on non-regression bounds. |
+| (e) PlyFrame about 4 KB per ply. | **Confirmed**: 3,968 bytes, Searcher 1.14 MB. **Shrunk** (6ae4128): 2,664 bytes, Searcher 816 KB (the per-frame scratch list went; int16 selector scores). Bench identical, speed within noise. |
+| (f) PV quiescence nodes may explode on tactical positions. | **Not confirmed**: 0.2% of quiescence nodes on the bench, 0.46% on WAC (300 positions, 200,000 nodes each); worst single position 2,983 PV quiescence nodes (23% of its quiescence work). |
+
+**Second review.**
+
+| Claim | Outcome |
+|---|---|
+| (a) `see_at_least` computes the full exchange. | **Confirmed** (it was `see_value >= threshold`). **Fixed** (1efade9): it stops once the answer is settled (the side to choose can always stop); tested equal to `see_value >= threshold` at 14 thresholds over the SEE trees. Bench identical. |
+| (b) The TT's stored static eval is recomputed on a hit. | **Confirmed. Fixed** (1efade9): reused in the main and quiescence searches. Bench identical. |
+| (c) No TT prefetch before the null move. | **Confirmed. Fixed** (1efade9): `Position::predicted_null_key()`, tested against `make_null`. Bench identical. The three together: nps +2.9% (just under the 3% noise rule). |
+| (d) Refine the static eval with the TT score before pruning. | Built behind `UseTtEvalRefine` (738daff, off by default) from KB T50: WAC 259/300 vs 248, mate suite 139/297 vs 132. SPRT [0, 3], LTC confirmation if it passes. |
+| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [0, 3]. |
+| (f) Tier 2 order, razoring, losing-capture futility. | Plan changed (deliverable 9). |
+| (g) Upcoming repetitions, fifty-move eval scaling, history malus balance. | ideas.md ideas 26-28. |
+| (h) Phase 6: thread agreement and diversity. | Added to the Phase 6 roadmap entry. |
+
 #### Search constants (owner's rule, 2026-10-25)
 
 Every search constant has a recorded justification (DESIGN.md §8). They
