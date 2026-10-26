@@ -484,3 +484,55 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** a score test per pruning decision.
 - **earliest phase:** Phase 3.
 - **status:** untested
+
+## 23. AI-driven discovery of search heuristics (evolutionary loop)
+
+- **type:** TOOLING, feeding ELO: the loop itself is tooling; every
+  heuristic it finds is an ELO change behind its own switch, measured by
+  SPRT like any other.
+- **idea:** an AlphaEvolve-style evolutionary loop (owner, 2026-10-26).
+  - **Mutator:** Claude proposes changes only inside delimited "evolvable"
+    functions (the LMR reduction formula, pruning margins, the history
+    update, move-ordering scores); everything else is frozen, and a
+    candidate that touches code outside the delimiters is rejected
+    unbuilt.
+  - **Evaluator funnel**, cheapest first, each stage only for survivors of
+    the one before:
+    1. **gate:** builds, perft, the minimax oracle tests with pruning off,
+       determinism (bench identical across compilers and runs), the
+       hot-path rules (no allocation, exceptions or virtual dispatch);
+    2. **proxies:** nodes to reach a fixed depth AND best-move agreement
+       with Fork's own deep search, on a held-out position set (Fork's own
+       labels, data policy rule 1; not WAC or matetrack, which are never
+       tuning targets);
+    3. a short fast-game match against the baseline;
+    4. the full SPRT, STC then LTC (the LTC rule for pruning, reductions
+       and extensions, DESIGN.md §5.2).
+  - **Population** kept diverse (island model or MAP-Elites style), so the
+    loop does not collapse onto one family of formulas.
+  - **Originality:** every survivor passes the originality-checker's
+    constant and structure screen before stage 4, since model memory can
+    rediscover known engines' formulas (the 2026-10-25 findings: an LMP
+    count, a null-move reduction and an aspiration scheme matched
+    Stockfish or Berserk). The loop's log is the constant's recorded
+    justification (DESIGN.md §8).
+  - **Logs:** every candidate, its diff, its scores at each stage and the
+    reason it stopped are kept, accepted or not.
+  - **Tuning:** a discovered form's constants are tuned afterwards by SPSA
+    (deliverable 8b's parameter table).
+- **phase:** pilot in Phase 3 tier 2 on one target (the LMR formula) to
+  validate the funnel; real campaigns after Phase 4's network is stable,
+  in the improvement pass.
+- **metric:** for the pilot, whether the proxies predict the SPRT (rank
+  agreement between stage 2 and stage 4 on the candidates that reach both)
+  and the cost per accepted change; for each discovered heuristic, its
+  SPRT.
+- **sources:** AlphaEvolve (Google DeepMind, 2025) and MAP-Elites (Mouret
+  and Clune) as the models for the loop; both from memory, UNVERIFIED: the
+  kb-researcher fetches and cites the primary papers before the pilot, and
+  they are then logged in ORIGINALITY.md.
+- **runtime cost:** possible: depends on the candidate (each reports its
+  nps change with its SPRT, per the rule above).
+- **earliest phase:** Phase 3 tier 2 (needs the switches, the minimax
+  oracle tests and the SPRT tooling, all in place).
+- **status:** untested
