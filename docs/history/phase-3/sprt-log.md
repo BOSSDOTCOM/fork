@@ -183,3 +183,20 @@ Games: 1400, Wins: 476, Losses: 453, Draws: 471, Points: 711.5 (50.82 %)
 Ptnml(0-2): [64, 144, 251, 187, 54], WL/DD Ratio: 2.59
 LLR: 0.21 (7.1%) (-2.94, 2.94) [0.00, 3.00]
 ```
+
+### 20261026T210311Z rv-failhigh
+
+- base `077db27` (077db27), test `f0a9caf` (f0a9caf), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40
+- Verdict: **REJECTED (stopped by the owner, 2026-10-26)** after 2,143 finished games. The last report (2,000 games): the root fail-high fix (first external review, claim (a)) at -14.6 ± 10.8 Elo (nElo -20.7 ± 15.2), its 95% interval entirely below zero; LLR -0.95 of -2.94. The behaviour is reverted: when the search stops with a root fail high still awaiting its re-search, the previous iteration's move is kept (the bookkeeping stays; ideas.md idea 29). No time losses, crashes or illegal moves.
+```
+Elo: -14.60 +/- 10.75, nElo: -20.71 +/- 15.23
+Games: 2000, Wins: 647, Losses: 731, Draws: 622, Points: 958.0 (47.90 %)
+Ptnml(0-2): [88, 217, 447, 187, 61], WL/DD Ratio: 3.10
+LLR: -0.95 (-32.3%) (-2.94, 2.94) [-3.00, 0.00]
+```
+
+### Note (owner, 2026-10-26): concurrency 8
+
+From the futile-node filter's SPRT on, the remaining tests of the external
+reviews' queue run at concurrency 8 (was 10), so development builds, tests
+and checks can run beside the games at low priority.

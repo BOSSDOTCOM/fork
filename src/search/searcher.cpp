@@ -550,15 +550,13 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     }
     if (stopped_) {
       unresolved_fail_high_ = root_fail_high_;
-      // An unfinished iteration counts only through a move shown to beat the
-      // last finished iteration's best. A fail high still awaiting its
-      // re-search comes first: its score is at least beta, above every exact
-      // score of the pass it failed high in (review claim (a), 2026-10-26).
-      if (!root_fail_high_.is_none() && result.depth > 0 && root_fail_high_score_ > previous) {
-        result.best = root_fail_high_;
-        result.score = root_fail_high_score_;
-        report_iteration(depth, root_fail_high_score_, 1, root_fail_high_pv_);  // a lower bound
-      } else if (!iteration_best_.is_none() && result.depth > 0 && iteration_best_score_ > previous) {
+      // An unfinished iteration counts only through a move that came back
+      // with an exact score above the last finished iteration's best. A root
+      // fail high still awaiting its re-search is not trusted: playing it
+      // lost -14.6 +/- 10.8 Elo at STC (owner, 2026-10-26; sprt-log.md
+      // rv-failhigh), so the previous iteration's move is kept. The fail
+      // high is still recorded (unresolved_fail_high, ideas.md idea 29).
+      if (!iteration_best_.is_none() && result.depth > 0 && iteration_best_score_ > previous) {
         result.best = iteration_best_;
         result.score = iteration_best_score_;
         report_iteration(depth, iteration_best_score_, 0,

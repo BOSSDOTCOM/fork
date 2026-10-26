@@ -618,3 +618,33 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** none (a multiply where the malus is applied).
 - **earliest phase:** Phase 3 (8b).
 - **status:** untested
+
+## 29. How often unconfirmed root fail highs hold
+
+- **type:** TOOLING (measurement), possibly feeding ELO
+- **idea:** the first external review's claim (a) proposed playing a root
+  move that failed high when the search stops before its re-search ends.
+  It was confirmed (626 of 34,254 node-limited searches over the bench
+  positions and WAC stopped with a distinct fail high pending) and built
+  (f0a9caf), but its SPRT rejected it: -14.6 +/- 10.8 Elo at STC after
+  2,000 games, the 95% interval entirely below zero (owner, 2026-10-26;
+  sprt-log.md rv-failhigh). The behaviour is reverted; the bookkeeping stays
+  (Searcher::unresolved_fail_high).
+  - **Measurement:** on the 626 sweep cases, re-search both moves (the
+    pending fail high and the previous iteration's best) deeper, e.g. with
+    `searchmoves` restricted to each, and count how often the fail high
+    holds, by depth and by how far its re-search had got.
+  - **Middle ground, if the data supports it:** play the fail high only
+    when it has held through part of its re-search (some of its subtree
+    searched with the wider window), or only by a margin.
+- **Connection to deliverable 8:** the cleaner answer may be a time
+  decision, not a move choice: when a stop would land during a root fail
+  high's re-search, allow a bounded extension to finish it. Deliverable 8's
+  stopping rules should consider that, measured by the same sweep.
+- **phase:** the measurement after the current SPRT queue (it is a CPU job);
+  any policy change is an SPRT on gainer bounds [0, 3].
+- **metric:** the share of pending fail highs that hold at a deeper search;
+  then SPRT.
+- **runtime cost:** none for the measurement; a time extension costs time.
+- **earliest phase:** Phase 3 (deliverable 8).
+- **status:** measurement queued

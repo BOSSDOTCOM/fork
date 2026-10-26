@@ -225,6 +225,8 @@ class Searcher {
   RootEntry root_moves_[MaxMoves];
   // The iteration's root move that failed high and is not yet resolved by a
   // re-search, with its lower bound and line (review claim (a), 2026-10-26).
+  // Recorded, not played: a stop keeps the previous iteration's move
+  // (ideas.md idea 29 measures how often such fail highs hold).
   Move root_fail_high_ = NoMove;
   int root_fail_high_score_ = 0;
   PrincipalLine root_fail_high_pv_;

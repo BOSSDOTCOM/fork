@@ -467,38 +467,50 @@ TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV st
   CHECK(tried > 0);
 }
 
-// External review claim (a), 2026-10-26: a root move that failed high above
-// the aspiration window was dropped when the search stopped during its
-// re-search, and the previous iteration's move was played instead. A fail
-// high proves the move scores at least beta, above every exact score of that
-// pass, so it must be the move played. Node-limited searches over the bench
-// positions (search_bench.cpp, sourced there) stop at many different points;
-// at least one must stop with a fail high unresolved, or the test proves
-// nothing.
-TEST_CASE("search", "a root move that failed high is played when the search stops during its re-search") {
+// The policy for a stop during a root fail high's re-search (owner,
+// 2026-10-26): the fail high is not trusted, and the previous iteration's
+// move is kept. External review claim (a) proposed playing it; that lost
+// -14.6 +/- 10.8 Elo at STC (sprt-log.md rv-failhigh) and was reverted.
+// Node-limited searches over the bench positions (search_bench.cpp, sourced
+// there) stop at many different points; wherever one stops with a fail high
+// unresolved whose move differs from the last finished iteration's best
+// (found by re-running the search to that depth, which repeats those
+// iterations exactly), that move must not be the one played. At least one
+// such stop must occur, or the test proves nothing.
+TEST_CASE("search", "a stop during a root fail high's re-search keeps the previous iteration's move") {
   Fixture fx;
-  int stopped_after_fail_high = 0;
+  auto fresh_search = [&](std::string_view fen, const SearchQuota& q) {
+    fx.store.clear();
+    fx.searcher->clear_history();
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    return fx.search(pos, q);
+  };
+  int distinct_fail_highs = 0;
   // The first bench positions are the perft suite (perft position 6 stopped
-  // at 4,991 nodes with g5f6 failed high and c3d5 played, before the fix).
+  // at 4,991 nodes with g5f6 failed high and c3d5 the previous best).
   const std::size_t positions = Optimized ? 10 : 6;
   for (std::size_t i = 0; i < positions; ++i) {
+    const std::string_view fen = search_bench_fens()[i];
     for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
-      fx.store.clear();
-      fx.searcher->clear_history();
-      Position pos;
-      CHECK(pos.set_fen(search_bench_fens()[i]));
       SearchQuota q;
       q.nodes = nodes;
-      const SearchResult r = fx.search(pos, q);
+      const SearchResult r = fresh_search(fen, q);
       const Move pending = fx.searcher->unresolved_fail_high();
       if (pending.is_none() || r.depth == 0) continue;
-      ++stopped_after_fail_high;
-      CHECK_MSG(r.best == pending, search_bench_fens()[i] << " at " << nodes << " nodes: played "
-                                                          << pos.move_to_uci(r.best) << ", fail high "
-                                                          << pos.move_to_uci(pending));
+      SearchQuota to_depth;
+      to_depth.depth = r.depth;
+      const Move previous_best = fresh_search(fen, to_depth).best;
+      if (pending == previous_best) continue;
+      ++distinct_fail_highs;
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      CHECK_MSG(r.best != pending, fen << " at " << nodes << " nodes: played the unconfirmed fail high "
+                                       << pos.move_to_uci(pending) << " (previous best "
+                                       << pos.move_to_uci(previous_best) << ")");
     }
   }
-  CHECK_MSG(stopped_after_fail_high > 0, "no search stopped with a fail high unresolved");
+  CHECK_MSG(distinct_fail_highs > 0, "no search stopped with a distinct fail high unresolved");
 }
 
 }  // namespace forkeng::test
