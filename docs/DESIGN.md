@@ -969,6 +969,15 @@ alpha = beta = 0.05. Bounds (owner, 2026-10-24), in normalized Elo:
 - simplifications and safety features (T14, removals): non-regression
   [-3, 0].
 
+**Bounds policy (owner, 2026-10-26):** the kind of change decides the
+bounds. **Bug fixes, speed-only changes, simplifications and safety
+guards** use non-regression bounds [-3, 0]: they must not lose, and need
+not prove a gain. **New features and techniques** use gainer bounds, [0, 3]
+(or [0, 5] where gains are large, as before Milestone B). Applied first to
+the external reviews' queue: the root fail-high fix and the futile-node
+filter [-3, 0], the TT-refined pruning eval [0, 3], keeping exact TT entries
+(a safety guard) [-3, 0].
+
 Conditions: **STC** 8+0.08 s, Hash 16 MB; **LTC** 40+0.4 s,
 Hash 64 MB; one thread per engine, 3-4-5 Syzygy for both sides once
 deliverable 7 is in; concurrency 5 (the 7600X3D's 6 physical cores minus
@@ -1342,7 +1351,7 @@ FORK_SEARCH_STATS bench unless stated.
 | (b) The TT's stored static eval is recomputed on a hit. | **Confirmed. Fixed** (1efade9): reused in the main and quiescence searches. Bench identical. |
 | (c) No TT prefetch before the null move. | **Confirmed. Fixed** (1efade9): `Position::predicted_null_key()`, tested against `make_null`. Bench identical. The three together: nps +2.9% (just under the 3% noise rule). |
 | (d) Refine the static eval with the TT score before pruning. | Built behind `UseTtEvalRefine` (738daff, off by default) from KB T50: WAC 259/300 vs 248, mate suite 139/297 vs 132. SPRT [0, 3], LTC confirmation if it passes. |
-| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [0, 3]. |
+| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [-3, 0] (a safety guard, the owner's bounds policy). |
 | (f) Tier 2 order, razoring, losing-capture futility. | Plan changed (deliverable 9). |
 | (g) Upcoming repetitions, fifty-move eval scaling, history malus balance. | ideas.md ideas 26-28. |
 | (h) Phase 6: thread agreement and diversity. | Added to the Phase 6 roadmap entry. |
