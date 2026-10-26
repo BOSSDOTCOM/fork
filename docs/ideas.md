@@ -186,7 +186,31 @@ added on 2026-10-24; ideas 1-12 predate them.
   made). If the ratio approaches 2 or more, test the lazy per-ply
   check-squares variant: compute the direct-check squares on the first
   gives_check call in a ply and reuse them for that ply's remaining calls.
-- **status:** deferred to Phase 3
+- **measured in Phase 3, Milestone B (2026-10-26)** with `bench/ab_search.py`
+  (search nps, `fork bench` at depth 13, 12 interleaved rounds, core 4, WSL,
+  clang 21; variants built from an experiment worktree off f919c01, none
+  committed):
+  - **gives_check ratio:** 0.646 calls per make (10.30M calls, 15.94M makes,
+    FORK_SEARCH_STATS bench; 0.849 with deliverable 6's first values),
+    almost all from futility pruning. Far below 2, so the lazy per-ply
+    check-squares variant is not warranted.
+  - **State 48 bytes** (bitboards first; castling, en passant square and
+    captured piece as bytes; halfmove clock and game span stay 32-bit,
+    since a FEN may carry a clock up to 10,000 that then grows): bench
+    identical, median +0.4%, best +1.3%, noise threshold 3.0%: no
+    significant difference.
+  - **State alignas(64)**: bench identical, median -2.5%, best -2.4%,
+    threshold 4.0%: no significant difference (leaning slower).
+  - **History table int32** (instead of int16): bench identical, median
+    -1.5%, best -0.5%, threshold 3.6%: no significant difference.
+  - **TT 16-byte entries, 4 per bucket** (instead of 12-byte entries, 5 per
+    bucket; padding only): bench 16,550,224 nodes (+0.06%, the capacity
+    changes the tree), median -0.3%, best -0.2%, threshold 3.0%: no
+    significant difference. Two TT tests assume 5 entries per bucket.
+- **decision:** main keeps its layout (no candidate clears the noise rule).
+  Revisit with Phase 6's threads (several State stacks per core) and Phase
+  4's network, which change what the cache holds.
+- **status:** tested in Phase 3, rejected for now
 
 ## 10. Steer into TB-drawn 6-piece endings
 

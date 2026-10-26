@@ -1016,6 +1016,23 @@ holds, which is why search decisions use no floating point (deliverable 6).
    applies), plus TT entry and bucket sizes and history table widths, all
    measured by search nps with the A/B harness, bench unchanged.
 
+**Results (2026-10-26; details in ideas.md idea 9).**
+1. **Legal generation stays.** Bench cannot stay identical as the spec
+   assumed, because the selection sort's swaps make the order of tied
+   moves depend on the list's contents. So both variants used a tie-break
+   by the move's encoding, which makes the order independent of extra
+   entries, and their benches matched each other (17,047,993 nodes,
+   signature add623af41d76213). Pseudo-legal captures and quiets out of
+   check, with `is_legal` only on yielded moves: median -2.3%, best -1.7%,
+   noise threshold 3.0%, no significant difference (one earlier run was
+   too noisy to count: threshold 21.7%). The selector tests pass on the
+   variant.
+2. **gives_check ratio 0.646 per make**: the lazy check-squares variant is
+   not warranted.
+3. **Layout: no change.** State at 48 bytes +0.4%, State aligned to 64
+   bytes -2.5%, int32 history -1.5%, 16-byte TT entries -0.3% (median nps;
+   all within noise).
+
 #### Quality control
 
 1. **Pace.** One deliverable at a time, but stops for the owner's review
