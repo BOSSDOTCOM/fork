@@ -121,3 +121,17 @@ estimators needs a stated reason or a fix.
   selection sort for quiets (only checking quiets survive); test futility
   before the SEE prune; a cheaper pre-filter for gives_check (direct-check
   squares only, then discovered checks). Each must keep bench identical.
+
+## Fork's own constants (69e830a, against 40fdf8f)
+
+- Bench 16,540,472 nodes, signature 779d36c67f079e12 (40fdf8f: 10,351,634
+  at the same depth 13: the milder late move pruning and null move search
+  more nodes).
+- nps: median 5,642,910 -> 5,916,238 (+4.8%), best +4.5%, noise threshold
+  3.0%: B faster. Fewer moves are pruned per node, so less selection and
+  SEE work is spent on moves that are never made.
+- Profile: `take_next` 25.9%, `side_score` 11.0%, `see_value` 10.8%,
+  `negamax<false>` 8.6%, `generate<Captures>` 7.6%, `refresh_check_info`
+  7.1%, `quiesce<false>` 5.1%, TT 6.1%, `generate<Quiets>` 3.3%,
+  make/unmake 5.8%, `gives_check` 2.5%, `predicted_key` 2.0%,
+  `bootstrap_eval` 1.9%.
