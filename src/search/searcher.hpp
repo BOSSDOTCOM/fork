@@ -66,6 +66,12 @@ struct SearchSwitches {
   // TT victims ranked by depth minus two plies per search of age instead of
   // current-search-first (owner's experiment, 2026-10-26; off by default).
   bool tt_age_blend = false;
+  // An exact TT entry is not replaced by a bound of the same depth from the
+  // same search (review 2, claim (e), 2026-10-26; off by default).
+  bool tt_keep_exact = false;
+  // Pruning decisions use the static eval corrected by the TT score's bound
+  // (review 2, claim (d); KB T50; off by default).
+  bool use_tt_eval_refine = false;
   // Tests only: a TT entry cuts only at exactly the depth it was searched
   // to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;

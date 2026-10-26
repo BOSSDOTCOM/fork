@@ -100,7 +100,10 @@ void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtB
     // A deeper result of this same search is worth more than a shallower,
     // inexact one; and the position keeps its best move if the new search
     // found none.
-    if (own->age() == search_age_ && stored_depth < own->depth && bound != TtBound::Exact) return;
+    if (own->age() == search_age_ && bound != TtBound::Exact &&
+        (stored_depth < own->depth ||
+         (keep_exact_ && stored_depth == own->depth && own->bound() == TtBound::Exact)))
+      return;
     if (move.is_none()) move = Move::from_raw(own->move);
   } else {
     // An empty slot, else the slot least worth keeping (first on ties).

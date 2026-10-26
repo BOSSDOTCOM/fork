@@ -207,4 +207,24 @@ TEST_CASE("tt", "victim policy: lexicographic keeps current entries, blended kee
   }
 }
 
+// Review 2, claim (e), 2026-10-26: within one search, a fail-low (upper
+// bound) at the same depth replaced the position's exact entry. With the
+// switch on, the exact entry stays.
+TEST_CASE("tt", "same depth, same search: a bound replaces an exact entry unless keep-exact is on") {
+  for (const bool keep : {false, true}) {
+    TestTable t(1024);
+    t.table.set_keep_exact(keep);
+    const Key key = 0x0123456789abcdefULL;
+    t.table.deposit(key, Move(12, 28, Quiet), 40, 0, 10, TtBound::Exact, false);
+    t.table.deposit(key, Move(12, 20, Quiet), -15, 0, 10, TtBound::Upper, false);
+    TtHit hit{};
+    CHECK(t.table.fetch(key, hit));
+    CHECK_MSG((hit.bound == TtBound::Exact) == keep,
+              "keep " << keep << ": bound " << static_cast<int>(hit.bound));
+    // A deeper bound still replaces it, and an exact result always does.
+    t.table.deposit(key, NoMove, 5, 0, 11, TtBound::Upper, false);
+    CHECK(t.table.fetch(key, hit) && hit.depth == 11);
+  }
+}
+
 }  // namespace forkeng::test

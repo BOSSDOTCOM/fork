@@ -135,23 +135,36 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // A TT entry stores the static evaluation of its position (review 2, claim
   // (b)): it is reused instead of evaluating again.
   f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : static_eval(pos);
+  // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
+  // score from a real search corrects the static estimate in the direction
+  // its bound proves (a lower bound above it raises it, an upper bound below
+  // it lowers it, an exact score replaces it). Mate and tablebase scores are
+  // left out; the TT keeps the raw static eval.
+  int prune_eval = f.static_eval;
+  if (switches.use_tt_eval_refine && tt_hit && !in_check) {
+    const int s = score_from_tt(hit.score, ply);
+    if (!is_tb_or_mate(s) &&
+        (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s > prune_eval) ||
+         (hit.bound == TtBound::Upper && s < prune_eval)))
+      prune_eval = s;
+  }
   const bool can_prune = !OnPv && !in_check;
 
   // Reverse futility pruning (T20): far enough above beta at shallow depth,
   // the node fails high without a search.
   if (switches.use_rfp && can_prune && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
-      f.static_eval - RfpMargin * depth >= beta) {
+      prune_eval - RfpMargin * depth >= beta) {
 #ifdef FORK_SEARCH_STATS
     ++counters.rfp_cuts;
 #endif
-    return f.static_eval;
+    return prune_eval;
   }
 
   // Null move pruning (T13): if passing still fails high on a reduced
   // search, the node is taken to fail high.
   if (switches.use_nmp && can_prune && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
-      f.static_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
-    const int surplus_plies = std::min((f.static_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
+      prune_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
+    const int surplus_plies = std::min((prune_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
     const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)
     pos.make_null();
@@ -180,7 +193,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   int moves_seen = 0;  // legal moves the selector yielded, searched or pruned
   int quiets_searched = 0;
   const bool lmp_node = switches.use_lmp && can_prune && depth <= LmpMaxDepth;
-  const int futility_value = in_check ? 0 : f.static_eval + FutilityOffset + FutilityGrowth * depth;
+  const int futility_value = in_check ? 0 : prune_eval + FutilityOffset + FutilityGrowth * depth;
   const bool futile_node = switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
                            !is_tb_or_mate(alpha) && futility_value <= alpha;
 #ifdef FORK_SEARCH_STATS
@@ -489,6 +502,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
 
   tt_.advance_age();
   tt_.set_age_blend(switches.tt_age_blend);
+  tt_.set_keep_exact(switches.tt_keep_exact);
   SearchResult result;
   // The first iteration's root order is the selector's (no TT move).
   PlyFrame& root = frames_[0];
