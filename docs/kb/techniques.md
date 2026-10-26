@@ -289,8 +289,8 @@ takes precedence over the short entries below for Phase 3 planning.
   mated (checkmate takes precedence).
 - Pitfalls: graph history interaction (TT scores that depend on path);
   root mate-in-one at clock 100. "Upcoming repetition" detection (cuckoo
-  tables) is not on the CPW page opened (UNVERIFIED; CPW links van
-  Kervinck's 2013 upcoming-cycle paper).
+  tables): resolved 2026-10-26 from van Kervinck's 2013 paper; see
+  search-techniques.md §3.29 (T51). Fifty-move eval scaling: §3.30 (T52).
 - Sources: https://www.chessprogramming.org/Repetitions,
   https://www.chessprogramming.org/Fifty-move_Rule
 
@@ -443,6 +443,8 @@ takes precedence over the short entries below for Phase 3 planning.
 - Pitfalls: thread-local histories/killers; shared counters cause cache
   contention (keep per-thread node counts); TT races must be tolerated.
 - Source: https://www.chessprogramming.org/Lazy_SMP
+- Clean-room descriptions of move selection (voting) and thread diversity:
+  search-techniques.md §3.31 (T53) and §3.32 (T54), 2026-10-26.
 
 ### NUMA
 - Local memory is faster; bind each thread to a node and allocate/first-touch

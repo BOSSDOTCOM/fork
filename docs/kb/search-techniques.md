@@ -8,6 +8,10 @@ Pre-Phase 3 research, 2026-10-24. Two parts:
 2. **Clean-room descriptions** of every tier 1 and tier 2 technique: what it
    does, why it gains Elo, conditions and pitfalls, and how to test it.
 
+**Update 2026-10-26:** §3A adds clean-room descriptions of T50-T55 (new
+IDs) and full descriptions of T25, T34, T36/T37 and T41 (with T16's check
+terms), researched without cloning any engine.
+
 All of it is **REFERENCE ONLY**. No code, pseudocode, tuned constants or
 comment text from any engine appears in this file. Parameters are
 described by their shape only ("a margin that grows with depth"). Fork
@@ -206,7 +210,7 @@ expected values are as defined in §0.
 | T22 | Futility pruning (parent node, quiets) | 1 | 3 (retune in 4) | static eval, T9 | small to medium |
 | T23 | SEE pruning (main search: quiets and captures; qsearch: losing captures) | 1 | 3 | T7, T3 | medium to large |
 | T24 | Quiet history pruning | 2 | 3 | T9, T10 | small to medium |
-| T25 | Qsearch futility / delta pruning | 2 | 3 (retune in 4) | T3, T7 | small |
+| T25 | Qsearch futility / delta pruning (full description §3.27) | 2 | 3 (retune in 4) | T3, T7 | small |
 | T26 | Internal iterative reduction | 2 | 3 | T4, T17 | small to medium |
 | T27 | Singular extensions | 2 | 3 | T4 (deep, bounded entries), excluded-move search | large |
 | T28 | Multi-cut (from the singular search) | 2 | 3 | T27 | small |
@@ -215,14 +219,14 @@ expected values are as defined in §0.
 | T31 | ProbCut | 2 | 3 (retune in 4) | T3, T7, T4 | small to medium |
 | T32 | Static evaluation correction history (pawn, non-pawn per side, minor, continuation) | 2 | 3 (late), revisit in 4; sharing in 6 | static eval, T4 bounds, search results | medium (more at long TC and high thread count) |
 | T33 | Mate distance pruning | 3 | 3 | mate scores by ply | marginal (helps mate finding) |
-| T34 | Razoring | 3 | 3 (retune in 4) | T3, static eval, T17 | marginal to small |
+| T34 | Razoring (full description §3.25) | 3 | 3 (retune in 4) | T3, static eval, T17 | marginal to small |
 | T35 | TT lower-bound early cutoff ("small ProbCut" in Stockfish's comments) | 3 | 3 | T4 | marginal to small |
-| T36 | Losing-capture-stage futility ("bad noisy futility"; stop at losing captures when hopeless) | 3 | 3 | T8 staged picker, T7, static eval | small |
-| T37 | Capture futility (main search) | 3 | 3 | static eval, T11 | marginal |
+| T36 | Losing-capture-stage futility ("bad noisy futility"; stop at losing captures when hopeless; §3.26) | 3 | 3 | T8 staged picker, T7, static eval | small |
+| T37 | Capture futility (main search; §3.26) | 3 | 3 | static eval, T11 | marginal |
 | T38 | Low-depth singular extensions | 3 | 3 | T27 | marginal (LTC only, if at all) |
 | T39 | Quadruple / unbounded extra extensions | 3 | 3 | T29 | marginal; tried and removed three times in Stockfish |
 | T40 | Recapture extension | 3 | 3 | T4 | marginal; removed in Stockfish 2025 |
-| T41 | Check extension | 3 | 3 | T7 | marginal; removed in Stockfish 2024 |
+| T41 | Check extension (full description with T16's check terms, §3.28) | 3 | 3 | T7 | marginal; removed in Stockfish 2024 |
 | T42 | Refutation history bonus after a null move | 3 | 3 | T13, T9 | marginal (one engine, +2) |
 | T43 | Null-move threat use (reduce moves that ignore the refuting capture) | 3 | 3 | T13, fail-soft | small, in one engine |
 | T44 | Fail-firm / fail-medium return values (RFP, stand-pat, multi-cut, TT cutoff) | 3 | 3 | T1 | small, engine-specific |
@@ -231,6 +235,12 @@ expected values are as defined in §0.
 | T47 | Correction history: threat and material tables, uses in LMR/RFP/extension margins | 3 | 3-4 | T32 | marginal to small |
 | T48 | Post-hoc depth adjustment from the eval trend over the last two plies | 3 | 3 | T18 | small |
 | T49 | Multi-ProbCut (several depth pairs) | 3 | — | T31 | untested in modern engines; not planned |
+| T50 | Static eval refined by the TT score, by bound type (§3.24) | 2 | 3 | T4, static eval, T32 | small to medium |
+| T51 | Upcoming-repetition detection, cuckoo table of reversible moves (§3.29) | 3 | 3 | Zobrist keys, key history, halfmove clock | small |
+| T52 | Fifty-move eval scaling toward a draw (§3.30) | 2 | 3 (revisit in 4) | static eval, halfmove clock, T4 | small (more at LTC) |
+| T53 | Lazy SMP final move selection: voting by depth and score (§3.31) | 2 | 6 | Lazy SMP, per-thread root move lists | small to medium at high thread counts |
+| T54 | Lazy SMP thread diversity (§3.32) | 2-3 | 6 | Lazy SMP | small each |
+| T55 | History bonus versus malus balance (§3.33) | 2 | 3 | T9, T10, T11 | small |
 
 Not on the list, but used in this file: **staged move generation**
 (Phase 1 already has the pieces), **excluded-move search** (needed by T27),
@@ -1220,12 +1230,718 @@ the evidence in §1):
 
 ---
 
+## 3A. More clean-room descriptions (added 2026-10-26)
+
+Ten more descriptions, written before implementation at the owner's
+request. Three of them are new IDs. The others expand IDs that already
+existed as tier 3 or short tier 2 entries, so the table keeps one row per
+technique:
+
+| Topic | ID | Status before this section |
+|---|---|---|
+| Static eval refined by the TT score, by bound type | **T50** (new) | not in the KB |
+| Razoring | T34 | short tier 3 entry (§4) |
+| Futility for losing captures in the main search | T36, T37 | short tier 3 entries (§4) |
+| Delta pruning in qsearch | T25 | three lines in §3.19 |
+| Check extension and check-aware LMR | T41, plus the check terms of T16 | short tier 3 entry; one word in T16 |
+| Upcoming-repetition detection | **T51** (new) | one UNVERIFIED line in techniques.md |
+| Fifty-move eval scaling | **T52** (new) | not in the KB |
+| Lazy SMP: choosing the move to play | **T53** (new, Phase 6) | one line in techniques.md §7 |
+| Lazy SMP: keeping threads diverse | **T54** (new, Phase 6) | one line in techniques.md §7 |
+| History bonus versus malus balance | **T55** (new) | "history malus" named in §2 only |
+
+**How this round was researched.** No engine repository was cloned or
+downloaded, and no engine source file was opened. The sources were:
+- CPW pages (still the read-only recovery);
+- papers and author posts (van Kervinck 2013, Heinz 1998, Moreland, and
+  TalkChess threads by Lefler, Marcel and Homan);
+- Stockfish commit messages, read through the GitHub commit-search API
+  (message text only, no diffs);
+- pull-request bodies from the GitHub REST API (the description and the
+  posted SPRT result only).
+
+Every page and query is in [sources.md](sources.md), section "Search
+techniques, round 2". The CPW pages on razoring, delta pruning and Lazy
+SMP quote engine code (Stockfish, Crafty, Strelka, Berserk, PlentyChess,
+CPW-Engine). Two commit or PR texts also contained code lines (Stockfish
+91a76331, Halogen #853). None of that code was used, and none of it is
+reproduced or paraphrased line by line here. The rules of §3 apply
+unchanged:
+- condition lists are unions of ideas, not an order of checks;
+- parameters are described by shape only;
+- numbers quoted from a source are marked as **source examples, not
+  Fork's values**;
+- Elo figures are published results, not parameters.
+
+Every entry here is **REFERENCE ONLY**, verified 2026-10-26. The engines'
+licences are those in §5 (GPL-3.0 or AGPL-3.0 for the engines cited here,
+MIT for Caissa; Integral has none). The van Kervinck preprint carries
+"Copyright 2013, for preview" and no licence, so only its idea is used.
+CPW text is CC BY-SA 3.0, and its code quotes are OFF-LIMITS.
+
+### 3.24 T50 Static eval refined by the TT score
+
+- **What it does:** The TT may hold a searched score for the current
+  position. The bound type says which way that score is informative:
+  - a **lower bound** (the stored search failed high) proves the true value
+    is at least the score. If that is above the static eval, the estimate
+    is raised to it;
+  - an **upper bound** (failed low) proves the value is at most the score.
+    If that is below the static eval, the estimate is lowered;
+  - an **exact** score can replace the estimate outright;
+  - a bound that points the other way says nothing new, and the eval stays
+    as it is.
+
+  The refined value feeds the eval-gated decisions: RFP (T20), the
+  null-move gate (T13), razoring (T34), futility (T22, T36, T37), ProbCut
+  (T31) and the qsearch stand-pat (T3). The unrefined eval is still what
+  gets stored in the TT's eval slot.
+- **Why it gains:** A TT score comes from a real search, so it already
+  reflects tactics the static eval cannot see. Mark Lefler put the idea to
+  TalkChess in 2010. A stand-pat score that is too high hides the fact that
+  the side to move would lose material if it had to move, and an upper
+  bound from the TT corrects that. Eval-based pruning decisions likewise
+  become more accurate. Stockfish's first version (2010) used the refined
+  value for the null-move conditions and the reductions, and a 2013 commit
+  extended it to the qsearch stand-pat.
+- **Conditions (union of ideas across sources):**
+  - a TT hit with a stored score, and a bound that points the useful way;
+  - not in check (no static eval is used for pruning there);
+  - not inside an excluded-move (singular) search. Halogen gained from
+    skipping refinement there (#744);
+  - an unproven mate score must not become the qsearch stand-pat value
+    (Halogen #516). Clamp it out of the mate and TB range, or skip it.
+  - None of the sources opened sets a minimum TT depth for the entry. That
+    is a Fork test, not a known condition.
+- **Variants:**
+  - Main search first, then qsearch too (Stormphrax #50, then #56 and
+    #140).
+  - In qsearch at PV nodes only. Berserk #459 removed qsearch refinement,
+    and four days later #461 put it back for PV nodes. The PV condition is
+    taken from the titles only (UNVERIFIED).
+  - "Only when it is more informative" (Weiss #745; the exact rule is
+    UNVERIFIED, title wording).
+  - Using the refined value more directly in RFP (Viridithas #385: it
+    failed its STC gainer test, then passed an LTC non-regression test).
+- **Pitfalls:**
+  - **Search instability.** On the 2010 thread, Richard Vida (Critter)
+    reported that a null-window fail high which came from a TT entry may
+    not reproduce in the re-search if the entry has since been
+    overwritten. With fail-soft and aspiration windows the score can
+    overshoot.
+  - **Mate scores** (see Conditions).
+  - **Order of eval adjustments.** Correction history (T32), fifty-move
+    scaling (T52) and TT refinement all modify the eval. PlentyChess #384
+    applies fifty-move scaling after the static eval is read back from the
+    TT, and Stormphrax #178 stopped storing scaled evals in the TT. Fork
+    should fix one documented order in DESIGN.md (for example: raw eval,
+    then correction, then scaling, then TT refinement) and store only the
+    raw eval.
+  - **Path dependence near the fifty-move horizon.** Stockfish #2453 (2019)
+    stops using TT values once the clock is close to 100. The same concern
+    applies to refinement; this is Fork's inference, not a measured result.
+  - Whether "improving" (T18) should compare refined or unrefined evals is
+    open (§6 item 9).
+- **How to test:**
+  - Behind a flag, with main search and qsearch use switched separately.
+  - SPRT at STC and LTC, plus one SMP run: Weiss #336 gained most at 8
+    threads, where a shared TT makes hits more common.
+  - A debug counter for how often refinement changes the eval, split by
+    bound type.
+- **Evidence:**
+  - Stockfish 807844ea (2010-01-05, "Introduce refine_eval()": +14 in 908
+    games at 1+0) and 984ee9d0 (2013-10-08, refined value for stand-pat:
+    passed STC and LTC).
+  - Weiss #336 (2020): +10.8 at 10+0.1, +12.1 at 60+0.6, +21.4 at 8
+    threads 20+0.2.
+  - Stormphrax #56 (+3.7) and #140 (+3.6).
+  - Halogen #509 (+5.2 at 40+0.4, +11.0 at 8+0.08).
+  - Weiss #745 (+2.4 STC, +2.8 LTC).
+- **Fork:** `src/search` (searcher, trans_table), Phase 3, after T4, T20,
+  T13 and T32. Tier 2. Expected value: small to medium.
+
+### 3.25 T34 Razoring (full description)
+
+- **What it does:** At low remaining depth in a non-PV node, the static
+  eval may be so far below alpha that even a large margin, growing with
+  depth, can't close the gap. The node then runs a qsearch on a null
+  window at alpha instead of a full-depth search. If the qsearch confirms
+  that alpha can't be reached, the node returns that fail-low score.
+  Otherwise the normal search goes ahead.
+- **Historical forms** (CPW, Heinz):
+  - **Birmingham & Kent (1977):** at depth-2 expected all-nodes, every move
+    was made and statically evaluated, then the moves were sorted. Once a
+    move's static value no longer exceeded alpha, it and every move below
+    it were pruned. The paper was not opened (UNVERIFIED beyond CPW's
+    summary).
+  - **Heinz, limited razoring (1998):** at depth-3 nodes, if material plus
+    a margin of at least a queen is at or below alpha, the depth is cut by
+    one ply, and extended futility pruning then applies at the new depth.
+    The exceptions: few opposing pieces left, or an extension on the
+    previous move.
+  - **Amir Ban (Junior), as quoted on CPW:** razoring means searching to
+    reduced depth instead of skipping the subtree.
+  - **Dropping into qsearch:** Hyatt's form, from an idea by Romstad, was
+    used near the tips at null-window nodes with the eval several pawns
+    below beta. CPW says it was dropped from Crafty after cluster testing.
+- **Why it gains:** Near the horizon, a position far below alpha almost
+  always fails low. The qsearch is cheap, and it checks the one way out,
+  which is a capture that wins the material back. Heinz measured limited
+  razoring on top of extended futility pruning (DarkThought, 2,180
+  positions of ECM, WAC and WCS):
+  - 5-15% smaller trees at fixed depths above 10 plies;
+  - no measurable loss in solutions.
+- **Conditions:**
+  - non-PV;
+  - not in check;
+  - depth below a small limit;
+  - eval below alpha by a margin that grows with depth (CPW describes
+    Stockfish's 2022 margin as quadratic in depth: a shape, not a value);
+  - alpha not near a mate score;
+  - the returned score must not be a mate or TB score (CPW mentions later
+    precautions for mate finding).
+- **Variants:**
+  - Reduce instead of prune (Heinz, Ban).
+  - Return only on a fail low, which is the safe form. Alternatively, at
+    depth 1, also return when the qsearch fails high (Strelka, per CPW).
+    Koivisto removed that second form (#223).
+- **Pitfalls:**
+  - **Never fail high from razoring.** In a TCEC Season 23 game, Koivisto
+    saw a tablebase win 47 plies away but would not make progress. Its
+    depth-1 fail-high razoring was blamed, and removing it passed a
+    non-regression test (#223, +0.5).
+  - The margins are tied to the eval scale: retune them in Phase 4.
+  - Heinz: a score whose computation depends on alpha must not be stored
+    in the TT as exact. The node's result must also be initialised in case
+    every move is pruned.
+- **How to test:**
+  - SPRT.
+  - Mate and tactical suites at fixed nodes.
+  - A progress test in a long won tablebase ending. If the position from
+    Koivisto #223 is used, copy its FEN character by character from the PR
+    page and cite it (non-negotiable 1).
+- **Evidence:**
+  - Stockfish PR #3921 (2022-02, reintroduced: passed STC and LTC on
+    gainer bounds);
+  - Berserk #339 (+6.0 STC, +7.2 LTC);
+  - Reckless #127 (+8.9 STC);
+  - Koivisto #223;
+  - Heinz 1998;
+  - the 2020 removal (§4).
+- **Fork:** `src/search`, Phase 3 (retune in 4). Tier 3. Expected value:
+  marginal to small.
+
+### 3.26 T36 and T37 Futility for captures in the main search
+
+- **What they do:**
+  - **T37, per-move capture futility:** at a shallow non-PV node, a
+    capture is skipped when static eval plus the captured piece's value
+    plus a margin growing with depth still can't reach alpha. Some engines
+    add a capture-history term to the margin.
+  - **T36, losing-capture stage:** once the staged picker reaches the
+    captures that SEE calls losing, and eval plus a margin can't reach
+    alpha, the node stops searching its remaining moves.
+  - **A related form:** PlentyChess #439 lets the ordinary quiet-move
+    futility test (T22) also prune bad captures.
+- **Why they gain:** By CPW's account, captures are normally exempt from
+  futility for tactical safety, or only those that could lift the score
+  above alpha plus a margin are kept. In a node that is already hopeless,
+  a capture that loses material, or wins too little, almost never restores
+  the balance.
+- **Conditions:**
+  - not in check;
+  - non-PV (Stockfish's 2021 reintroduction excluded PV nodes and
+    promotions);
+  - the capture does not give check (Stockfish's 2020 introduction applied
+    it to late captures that don't give check);
+  - depth below a limit;
+  - alpha not near a mate score;
+  - a legal move already counted, so the node can't report a false
+    stalemate.
+- **Variants:**
+  - Leave more margin when a less valuable piece takes a more valuable one.
+    The recapture is forced, which can leave room for further gains
+    (Stockfish bbe98576).
+  - Exempt PV lines whose eval is a draw (Stockfish 616eb600).
+  - A large capture-history term (Stockfish fb7d3ab3).
+- **Pitfalls:**
+  - Stockfish has added and removed this idea repeatedly:
+    - 2008: bad captures were allowed to be pruned;
+    - January 2010: a capture futility was added and retired three days
+      later;
+    - 2020: introduced, tuned, simplified, then removed in October 2020;
+    - December 2021: reintroduced.
+  - Its value is small and depends on what else prunes the same moves:
+    SEE pruning (T23), LMP (T21) and T36. Tune them together.
+  - It can prune real sacrifices.
+- **How to test:** separate flags for T36 and T37, SPRT, and tactical
+  suites at fixed nodes.
+- **Evidence:**
+  - Reckless #277 ("bad noisy pruning", 2025-04: +5.3 STC);
+  - PlentyChess #439 (+1.4 STC, +2.3 LTC);
+  - Integral #259 (+2.1 STC);
+  - Stockfish a3477af2 (2008), 6247f27a and e84488ed (2010), 4776dc0e,
+    616eb600, bbe98576, e663bc53, 64a63464, 17fb3a8c (2020), fb7d3ab3
+    (2021).
+- **Fork:** `src/search` (searcher, move_selector), Phase 3 (retune in 4).
+  Tier 3. Expected value: small (T36), marginal (T37).
+
+### 3.27 T25 Delta pruning in qsearch (expanded)
+
+- **What it does:** Futility pruning used only in the quiescence search.
+  There are two forms:
+  - **Per move:** before a capture is tried, if stand-pat plus the
+    captured piece's value plus a safety margin can't reach alpha, the
+    capture is skipped.
+  - **Per node:** if stand-pat plus the largest possible material swing (a
+    queen, plus the promotion gain if a pawn can promote) still falls short
+    of alpha, the node returns without generating moves.
+- **Why it gains:** In a hopeless qsearch node, small captures can't change
+  the result. Skipping them saves the move generation, the SEE calls and
+  the child nodes. CPW's example: a side that is a rook down need not try
+  pawn captures, though a minor-piece capture plus positional compensation
+  might still be enough. CPW gives a typical margin of about two pawns,
+  depending on the piece values. That is a **source example, not Fork's
+  value**.
+- **Conditions:**
+  - Not in check: there is no stand-pat in check.
+  - Switched off in the late endgame. Otherwise the qsearch can't see
+    insufficient-material cases, or a winning transition bought with
+    material (CPW).
+  - Promotions: include the promotion gain, or exempt them.
+  - Some engines exempt recaptures (Viridithas #319) and checking captures
+    (Viridithas #418).
+- **Variants:**
+  - The margin based on the capture's SEE value instead of the captured
+    piece's value (Berserk #72, "QS and Delta Pruning around SEE Scoring";
+    the details are UNVERIFIED, title only).
+  - A margin adjusted by the correction value (Reckless #867, title only,
+    UNVERIFIED).
+  - Exempt only promotions rather than all advanced pawn pushes (Weiss
+    #748, non-regression).
+- **Pitfalls:**
+  - The margin depends on the eval scale: retune it in Phase 4.
+  - **The node-level form can become redundant.** Weiss removed it (#455):
+    it passed non-regression bounds at +1.9 STC and +6.7 LTC, and the PR
+    says the per-move futility tests do its job better. Its first version
+    (#31, 2019) used a very pessimistic margin, because a weak eval
+    misjudged promotion and capture potential.
+- **How to test:** separate flags for the per-node and per-move forms,
+  SPRT, an endgame suite, and qsearch node counts.
+- **Evidence:**
+  - Weiss #31, #455, #748 (and #188 in §3.19);
+  - Stormphrax #69 (§3.19) and #139 (+7.9 at 14+0.14);
+  - Reckless #169 (+2.2);
+  - Viridithas #319 (+0.9) and #418 (+1.7).
+- **Fork:** `src/search` (qsearch), Phase 3 (retune in 4). Tier 2.
+  Expected value: small.
+
+### 3.28 T41 Check extension, and check-aware reductions (T16's check terms)
+
+- **What the check extension does:** It searches a move one ply deeper
+  than usual because it gives check, or because the side to move is in
+  check (CPW names both forms).
+  - **Never dropping into qsearch while in check** is also a form of check
+    extension (CPW). It matters most when the qsearch doesn't generate
+    evasions.
+  - **Variants in sources:**
+    - extend only checks that SEE doesn't call losing. CPW reports Hyatt
+      claiming a clear gain in Crafty from not extending, or even reducing,
+      checks with negative SEE;
+    - limit the extension by move count, but always extend a checking first
+      move (Stockfish 7c5d7247, 2016);
+    - extend only at higher depth in decisive positions, judged by the
+      static eval (Stockfish e8418bb1, 2021);
+    - extend only below the singular-extension depth (Berserk #229, title
+      only);
+    - extend only just before qsearch (Berserk #328).
+- **Why it was used:** A check starts a forcing sequence, and the replies
+  are few, so the extension is cheap and limits horizon effects (CPW).
+  Moreland calls it probably the oldest extension in computer chess. He
+  also warns that losing programs are great "spite-checkers", which makes
+  it a neutral extension rather than a win-seeking one.
+- **Why modern engines dropped it:**
+  - Stockfish removed it in 2024 (96837bc4, passed non-regression at STC
+    and LTC).
+  - So did Stormphrax (#67, +5.5 when removed), PlentyChess (#268, the
+    removal passed gainer bounds at +2.7), Reckless (#254, non-regression)
+    and Halogen (#752, in-check extensions: +2.4 LTC, +8.3 STC).
+  - Singular extensions (T27) and smaller reductions for checks now cover
+    the same ground.
+  - Reckless added it in March 2025 (#175) and removed it a month later
+    (#254). Halogen's later attempts to re-add it were not merged (#824,
+    #835, #852).
+- **Check-aware reductions (T16):** instead of extending checks, reduce
+  them less.
+  - CPW lists "reduce less while in check" and "reduce less on moves which
+    give check" among common LMR adjustments. Older LMR schemes didn't
+    reduce such moves at all ("uncommon conditions" on CPW).
+  - Halogen #212 (2020) replaced that exemption with normal LMR for moves
+    made in check, moves that give check, and endgames: +2.9 at 60+0.6,
+    +5.0 at 10+0.1. A smaller, nonzero reduction beat exclusion there.
+  - Ethereal #162 ("Reduce LMR for move that gave check") has no result in
+    its body (UNVERIFIED size).
+- **Pitfalls:**
+  - Search explosion through long checking sequences (CPW forum list;
+    Moreland).
+  - It overlaps with singular extensions (a check is often singular) and
+    with the LMR check terms. Test them as a group.
+  - Pruning gates that exempt checking moves (futility, LMP) interact with
+    all of this.
+- **How to test:**
+  - Flags for the extension and for each LMR check term.
+  - SPRT, including a removal test once T27 exists.
+  - A mate suite at fixed nodes, because check handling affects mate
+    finding most.
+- **Fork:** `src/search`, Phase 3. The extension stays a tier 3 candidate
+  flag. The LMR check terms are part of T16 (tier 2). Fork's qsearch
+  already handles evasions in check (T3).
+
+### 3.29 T51 Upcoming-repetition detection (van Kervinck's cycle detection)
+
+- **What it does:** It detects, without generating any moves, that the
+  side to move has one reversible move back to a position already seen on
+  the current line (or in the game history). Such a node is worth at least
+  a draw to the side to move. If alpha is below the draw score, it can be
+  raised to draw, and if the draw score is already at least beta, the node
+  can return at once.
+- **The method** (van Kervinck, 2013 preprint; paraphrased):
+  1. **Precompute reversible moves.** For each piece of each colour,
+     list every pair of squares it could move between on an empty board
+     with a non-pawn, non-capturing move. Each pair gets a "move key": the
+     XOR of that piece's two square keys, combined with the side-to-move
+     key. XOR is symmetric, so a move and its reverse share one key.
+  2. **Store them in a cuckoo hash table** (Pagh & Rodler 2001). Each key
+     has exactly two possible slots, so a lookup always takes at most two
+     probes. Each slot also stores the two squares. The paper reports 7,336
+     such move keys for chess (half that once a move and its reverse are
+     merged) and a table of 8,192 slots indexed by two different bit fields
+     of the key. **These are the paper's figures, not Fork's values:** Fork
+     enumerates its own set and checks the count by an independent test.
+  3. **Walk back through the key history.** From the current position,
+     look at positions an odd number of plies back (3, 5, 7, ...), where
+     the other side was to move, and only as far back as the halfmove clock
+     allows. The current key XOR such an earlier key equals a single move
+     key exactly when the two positions differ by one piece standing on one
+     of two squares.
+  4. **Cheap filter first.** Before probing the table, check that the
+     opponent's pieces are back where they were. The paper shows that this
+     can be read from the key history alone: the XOR of the key differences
+     of the opponent's own moves along the path must cancel to zero, modulo
+     the side-to-move key. The running XOR is updated two plies at a time,
+     so most nodes never touch the table.
+  5. **Confirm legality.**
+     - The squares strictly between the two squares must be empty, since a
+       slider's path can be blocked.
+     - The mover's king can't be left in check, because the target
+       position already occurred legally.
+     - A false match from key collisions never appeared in the paper's
+       deep searches from 50,000 positions.
+- **How to use the result:**
+  - It gives only a lower bound: one drawing move exists, and nothing is
+    known about the others. So it helps only where a draw score would raise
+    alpha.
+  - At null-window nodes, test alpha against the draw score before calling
+    it.
+  - In fail-soft search, a node that would otherwise return a score below
+    the draw score returns the draw score. Otherwise the upper bound is too
+    low and a re-search can disagree (the paper's §3.7).
+- **Why it gains:** A heuristic search sees a repetition draw only once the
+  cycle actually closes. The paper's plot of short against long search
+  scores shows a cross along the axes caused by exactly these draws.
+  Detecting a cycle one ply early moves the draw into an earlier iteration
+  and can give a cheap cutoff. Results in Rookie 3.7:
+  - +9.0 Elo over 12,000 games at 40 s + 2 s;
+  - 5-6 CPU cycles per node;
+  - tree size changed by less than 0.4%.
+- **Conditions and corrections from Stockfish's commit history:**
+  - Stockfish adopted it in 91a76331 (2018-05, Tom Truscott; passed STC
+    and LTC on gainer bounds).
+  - **The first occurrence matters.** If the earlier position lies in the
+    game history before the root, it must already have occurred twice for
+    the cycle to mean a draw. Stockfish ad8b78ad (2019) fixed a case where
+    a single earlier repetition plus a move back to a repeated position was
+    wrongly scored as an upcoming threefold, and a winning move was missed.
+  - Stockfish 6b782211 (2024) dropped an extra "no progress" test and kept
+    only the paper's check. Per the message, every decisive PV then ended
+    in mate or a TB position.
+- **Fork dependencies:**
+  - XOR-based Zobrist keys with a side-to-move key (Phase 1 has Zobrist
+    hashing; check how its side key is applied);
+  - a key-history stack that reaches into the game history back to the
+    last irreversible move;
+  - the halfmove clock;
+  - a null move counts as irreversible (the paper).
+
+  The paper ignores castling and en passant for simplicity. A move that
+  changes castling rights also changes the key by the castling term, so
+  its difference shouldn't match any table entry. That is Fork's
+  inference, to be confirmed by a test, not a claim from the source.
+- **Pitfalls:**
+  - Building a cuckoo table can loop forever. The paper's remedy is to
+    re-seed the Zobrist keys or change the slot functions. Fork's build
+    must be deterministic and checked by a test.
+  - The game-history twofold rule (above).
+  - Draw scores are path-dependent, which brings the usual TT issues
+    (graph history interaction; techniques.md §3).
+- **How to test:**
+  - A unit test that the table's entry count equals an independent
+    brute-force enumeration.
+  - Positions with an upcoming repetition, built by Fork from move
+    sequences rather than typed FENs.
+  - A randomized check against a brute-force reference that generates
+    legal moves and compares them with the history (Fork's own tool).
+  - SPRT.
+- **Fork:** `src/core` (Zobrist, the move-key table) and `src/search`,
+  Phase 3. Tier 3: one paper and one engine measured here. Other engines
+  were not checked. Expected value: small.
+- **Sources:** van Kervinck, "A fast software-based method for upcoming
+  cycle detection in search trees", preview 2013-04-06 (author copy via
+  the Wayback Machine; the direct marcelk.net fetch failed). Pagh &
+  Rodler, "Cuckoo Hashing", ESA 2001, LNCS 2161, pp. 121-133, DOI
+  10.1007/3-540-44676-1_10 (Crossref record; the paper itself was not
+  opened).
+
+### 3.30 T52 Fifty-move eval scaling
+
+- **What it does:** The static eval shrinks toward the draw score as the
+  halfmove clock grows. In a long reversible sequence (a fortress, or
+  shuffling), the engine then sees its advantage fade. It prefers moves
+  that reset the clock, a pawn move or a capture, while the advantage is
+  still there.
+
+  The sources describe the shape only loosely: a factor that falls as the
+  clock rises, applied to the whole eval (Stockfish moved from scaling one
+  endgame term to scaling the eval directly, and from 2020 also the NNUE
+  eval). The curve is a Fork choice to test.
+- **Why it gains:** Stockfish's 2019 PR (#2306) reports two effects:
+  - in endgames where no progress is possible (fortresses, opposite
+    bishops), the eval falls toward a draw;
+  - in the middlegame, after several shuffling moves with an advantage,
+    the engine becomes slightly anxious and tries a pawn move or an
+    exchange to keep its edge. The search then reaches the follow-ups
+    earlier.
+
+  Halogen measured more at a longer TC: +5.4 at 40+0.4 against +1.4 at
+  8+0.08 (#554).
+- **Conditions and variants:**
+  - **What it applies to:** the static eval only, not search scores, mate
+    scores or TB scores.
+  - **When it is applied:** after the eval is read from the TT and
+    corrected (PlentyChess #384). Store only the unscaled eval in the TT
+    (Stormphrax #178, non-regression).
+  - **A cap on the adjustment** (Halogen #559, non-regression).
+  - **TT keys that include a bucketed clock:** positions identical except
+    for the clock then score differently. Results differ:
+    - PlentyChess #443 passed non-regression and gained +4.4 on a
+      fortress-like test;
+    - Halogen #617 failed its gainer test.
+  - **Related TT rules near the horizon:**
+    - Stockfish #2453 (2019) stops using TT scores as the clock nears 100;
+    - Stockfish #6271 (2025) skips TT cutoffs at high clock counts when
+      the TT move resets the clock;
+    - Stormphrax #338 and #339 (2026) downgrade decisive TT scores and
+      reject cutoffs near a fifty-move draw (titles only, UNVERIFIED
+      details).
+  - Correction history bucketed by the clock (Reckless #934, title only).
+- **A search-side alternative that was dropped:** Stockfish's 2019
+  "shuffle detection" scored long reversible stretches as draws and
+  extended in the PV (76f1807b). It was reverted at once: an extension at
+  the leaves made a fixed-depth search hang (5928cb2b). It came back in a
+  simpler form, and its extension was removed in November 2019 (ef38046e,
+  non-regression at STC, LTC and VLTC). Extensions triggered near the
+  leaves need a hard cap.
+- **Pitfalls:**
+  - Graph history interaction and the TT (above).
+  - Phase 4 training labels must not use scaled evals (data-policy.md).
+    Scaling is search state, like correction history.
+  - **TCEC adjudication:** the draw rule uses the engines' reported evals
+    (README). Scaling that pulls reported scores toward zero could matter
+    there. Whether it can trigger an early draw adjudication was not
+    checked (UNVERIFIED; check against competition.md in Phase 5).
+- **How to test:**
+  - SPRT at STC and LTC.
+  - A fortress test set from a cited primary source.
+  - Check that the reported score in a won but slow ending stays sensible.
+- **Evidence:**
+  - Stockfish 7b064752 (2019-09, "Scale down endgame factor when
+    shuffling": passed STC and LTC), 3af083a7 (2020-06, damp the eval
+    directly), e5f450cf (2020-08, also damp NNUE evals: passed STC and LTC)
+    and 180cab44 (2024, simplification);
+  - Stormphrax #15 (2023, no result in the PR body);
+  - PlentyChess #71 (+3.2 STC);
+  - Halogen #554 and #559.
+- **Fork:** `src/search` (where the eval is consumed); the eval module
+  stays scale-free. Phase 3, revisited in Phase 4. Tier 2. Expected value:
+  small (more at long TC).
+
+### 3.31 T53 Lazy SMP: choosing the move to play (Phase 6)
+
+- **What it is:** When the search stops, each thread has its own best
+  move, score and completed depth. The published ways to pick the move:
+  1. **Main thread only.** Homan's first EXchess version (2013) used only
+     the main thread's result.
+  2. **Best single thread.** Choose any thread that has a better mate
+     score, or both a better score and a greater depth (Berserk #472,
+     2023: +6.0 at 8 threads, 4+0.04).
+  3. **Voting.** Each thread votes for its best move. The weight grows
+     with the thread's score margin over the lowest score among all
+     threads, and with its completed depth (CPW's description, and
+     Stockfish d96c1c32). The move with the most weight wins, and a thread
+     that voted for it reports the PV.
+     - Stockfish's 2018 introduction (Stefano Cardanobile, joint work with
+       Stefan Geschwentner, from ideas by Michael Stembera) passed STC at 4 threads and LTC at 8. An LTC run at 4
+       threads failed, and a 31-thread LTC was stopped at +1.7.
+     - A later change made the weight quadratic (67ae53b0: +5.6 at 31
+       threads, 5+0.05).
+     - Other engines adopted voting: Berserk #533 (+3.5 at 8 threads),
+       Halogen #780 (+8.4 at 8 threads) and #781 (+2.3), PlentyChess #152
+       (+18.1 at 8 threads), and Stormphrax #60 and #273 (#273: a
+       non-regression pass at 7 threads).
+  4. **Voting over several moves per thread.** PlentyChess let each thread
+     vote for all of its scored root moves, weighted by depth and score
+     margin (CPW; PlentyChess #191, +6.8 with LLR 1.69, so the SPRT had not
+     passed when it was merged). It later partly dropped its custom scheme
+     (#304) and removed multi-move votes (#371, no result in the body).
+- **Special cases (Stockfish):**
+  - With mate scores, take the shortest mate, and when being mated, the
+    longest defence (9d3a2eca, 2019).
+  - No voting for TB losses or mates (84f3bf59, 2020).
+  - Among threads with the same move, report the PV of the largest voter
+    (d60f5de9; display only).
+- **Why it gains:** Helper threads that reached a greater depth or a better
+  score know something the main thread doesn't. Voting is also robust to a
+  single thread's outlier fail high.
+- **Pitfalls:**
+  - Compare only completed iterations. A partial iteration's score is only
+    a bound.
+  - Mate and TB scores need explicit rules (above).
+  - The effect depends on the thread count: Stockfish's 4-thread LTC
+    failed while the 8-thread one passed.
+  - Halogen #458 ("thread meritocracy", +29 at 8 threads) has no
+    description, so its method is UNVERIFIED.
+- **How to test:** SMP SPRTs at several thread counts at normal (not
+  ultra-short) TCs. Single-thread bench is unaffected by design.
+- **Fork:** the Phase 6 thread pool and root move list. Tier 2 for Phase
+  6. Expected value: small to medium at high thread counts.
+
+### 3.32 T54 Lazy SMP: keeping thread searches diverse (Phase 6)
+
+- **What it is:** Ways to stop helper threads from repeating the main
+  thread's work, so that what they write to the shared TT adds coverage.
+  The published approaches:
+  1. **Nondeterminism alone.**
+     - Every thread searches the same root, with the same window, and
+       shares only the TT. Timing noise and per-thread history and killer
+       tables make the trees drift apart (CPW "Shared Hash Table").
+     - Homan's EXchess also had half its threads search one ply deeper. He
+       reported about +70 Elo for 2 threads and +140 for 4 in a 6+0.1
+       gauntlet, against about +105 for one thread at double time (KB
+       research.md).
+  2. **Depth offsets and skip patterns.**
+     - In Cheng (CPW pseudo-code description), every second helper starts
+       one ply deeper.
+     - Stockfish added distinct iteration paths per thread in 2015
+       (38adb487: +8.9 at 20 threads LTC) and rotating skip patterns in
+       2016 (9a10313a).
+     - Stockfish **removed** the scheme in 2019 (66818f2e, PR #1972). The
+       removal failed its [-3, 1] test at 5+0.05 and at 20+0.2 with 8
+       threads, but passed at 60+0.6 with 8 and with 4 threads. The PR
+       thread argued that very short SMP tests reward skipping, and that
+       SMP changes should be tested at normal TCs.
+     - Halogen added depth skipping (#30: +55 at 8 threads, 5+0.05, early
+       in its development). Its simplification (#130) passed at 5+0.05 but
+       lost 4.4 at 20+0.2, which was accepted.
+  3. **Varied root move ordering** (CPW's general description). No
+     measured instance was opened (UNVERIFIED).
+  4. **Per-thread aspiration windows.** Halogen used them (#84, #87). It
+     removed them in #244 despite a loss of 9.4 at 8 threads, as
+     potentially unsound at very high core counts.
+  5. **Per-thread search-parameter bias.** Reckless #926 (2026) gives
+     helper threads a small fixed bias on their reductions, with the sign
+     alternating by thread ID, and leaves the main thread unchanged. It
+     gained +2.0, while a much larger bias came out at -1.4 (not
+     significant). The bias sizes are source examples, not Fork's values.
+  6. **Thread-count-aware parameters.**
+     - Stockfish reduces more as the thread count grows, "since Lazy SMP
+       naturally widens search" (135caee6, 2021: passed STC and LTC; an
+       earlier version had been simplified away).
+     - Tuning with SPSA at 4 threads (Halogen #778) cost 3 to 7 Elo single
+       threaded but gained +9.0 at 8 threads, 20+0.2. Tuning for SMP trades
+       away single-thread strength.
+  7. **ABDADA (Weill).** Rather than relying on diversity, TT entries
+     count the processors searching a node, so a thread can defer moves
+     another thread is already on (CPW). It is an alternative design, and
+     none of the engines read here use it.
+- **Why it matters:** Identical threads duplicate work. Diversity turns
+  shared TT hits into extra coverage. Homan's numbers show the Elo gain
+  outrunning the time-to-depth gain.
+- **Pitfalls:**
+  - Tests at ultra-short TCs mislead (the PR #1972 discussion).
+  - TCEC scale (up to 512 threads, README) can't be reproduced locally.
+    Test at Fork's own maximum, and keep the design simple enough to trust
+    beyond it.
+  - Keep the main thread unbiased, so single-thread bench and behaviour
+    stay deterministic (Reckless #926's design).
+- **How to test:** SMP SPRTs at 4, 8 and the machine's maximum thread
+  count, at STC and LTC, with an unchanged single-thread bench.
+- **Fork:** the Phase 6 thread pool. Tier 2-3. Expected value: small each,
+  except the base Lazy SMP itself (Stockfish ecc5ff66, 2015: +44.8 at 20
+  threads LTC against the previous YBWC search).
+
+### 3.33 T55 History bonus versus malus: a tunable balance
+
+- **What it is:** When a quiet move causes a cutoff, it gets a history
+  bonus, and every quiet move tried before it at that node gets a malus (a
+  penalty). CPW: the malus keeps values from saturating and gives
+  unpromising moves negative history. CPW also notes that stronger
+  programs use a separate formula for the malus.
+- **The balance as a parameter:**
+  - The malus need not be the negated bonus. It can have its own depth
+    slope, offset and cap.
+  - Several engines scale it by how many moves were searched before the
+    cutoff.
+  - Fork should tune the two shapes as independent SPSA parameters. Add
+    separate sets per table (quiet, capture, continuation) only if a tune
+    shows they differ.
+- **Evidence** (all shapes engine-specific):
+  - Weiss #296 (2020): the malus itself, +37.5 at 60+0.6, early in its
+    development.
+  - Separate bonus and malus formulas:
+    - Stockfish 442c294a (2023-11: passed STC and LTC on gainer bounds);
+    - Weiss #695 (+5.8 LTC; its STC test stopped at +0.6 without passing);
+    - Reckless #21 (+3.4).
+  - No negative score at depth 1: Stockfish d49b3738 (2024).
+  - A malus scaled by move count:
+    - Stockfish a016abd6 (2025);
+    - Berserk #577 (+2.3 STC, +2.0 LTC);
+    - Reckless #444 (+2.0) and #1038 (a decaying quiet malus, +4.7 STC,
+      +5.2 LTC).
+  - **The best balance keeps moving.**
+    - Stockfish split the quiet and capture parameters in August 2025
+      (b177b739), simplified them two weeks later (e2fdf6f0) and reverted
+      the split in November 2025 (a49b52cf).
+    - It simplified the malus again in 2026 (91c6ea82).
+- **Pitfalls:**
+  - History pruning thresholds (T24) and LMR's history term (T16) depend
+    on the history scale. Retune them when the update changes.
+  - The gravity update (T9) keeps values bounded whatever the balance.
+- **Fork:** `src/search` (quiet_history and the capture and continuation
+  tables), Phase 3, tuned with T9 to T11. Tier 2 (as part of T9).
+  Expected value: small.
+
+---
+
 **Names Fork's code must not use** (engine-specific identifiers or comment
 names the originality review found close to this file's vocabulary;
 DESIGN.md §8 grep rule applies to all new names): `statScore`, `ttPv`,
 `cutNode`, `Stack` (as the search stack type), `nmpMinPly`, `singularBeta`,
 `opponentWorsening`, `hindsight`, `doDeeperSearch`, `doShallowerSearch`,
-`BadNoisy`. The concepts are fine; the identifiers are not.
+`BadNoisy`. Added 2026-10-26 from the commit messages, PR texts and CPW
+quotes read for §3A: `refine_eval`, `ttValue`, `has_game_cycle`,
+`upcoming_repetition`, `progressKey`, `rule50_count`, `stat_bonus`,
+`stat_malus`, `get_best_thread`, `completedDepth`, `voteMap`, `ThreadValue`,
+`bestThread`. The concepts are fine; the identifiers are not.
 
 ## 4. Tier 3 entries (short)
 
@@ -1237,7 +1953,7 @@ description before it is implemented, if it is ever picked up.
   bounds, and return if it closes. Safe; helps mate finding, little Elo.
   CPW's Glass example shows trees up to half the size once a mate is
   found. Cheap: add it with T1.
-- **T34 Razoring.** At low depth at an expected all node, if the eval is
+- **T34 Razoring** (full description in §3.25). At low depth at an expected all node, if the eval is
   far below alpha (a margin growing with depth), run a qsearch, and trust
   it if it can't reach alpha. Stockfish removed it in 2020 (neutral) and
   reintroduced it in 2022 (+1.0 / +1.4), at about 1-2 Elo throughout.
@@ -1250,12 +1966,12 @@ description before it is implemented, if it is ever picked up.
   7c30091a (2021, in check only: +1.1 / +2.1), generalised in 2023-2024 by
   non-regression steps; about 4 Elo (2024). No other engine in the set
   names it. Halogen #745 is a relative (+2.3).
-- **T36 Losing-capture-stage futility.** Once the staged picker reaches the losing
+- **T36 Losing-capture-stage futility** (full description in §3.26). Once the staged picker reaches the losing
   captures at a low-depth non-PV node, if eval plus a margin can't reach
   alpha, stop searching the node's remaining moves. Reckless #277
   (2025-04, the first in the set: +5.3), PlentyChess #439 (+1.4), Integral
   #259 (+2.1). Depends on T8 staging.
-- **T37 Capture futility (main search).** Futility for captures, using the
+- **T37 Capture futility (main search)** (§3.26). Futility for captures, using the
   captured piece's value and capture history. Stockfish removed it in
   2010, then reintroduced (2020), removed (2020) and reintroduced it
   (2021, +1.5 / +3.6); about 2 Elo.
@@ -1271,7 +1987,7 @@ description before it is implemented, if it is ever picked up.
 - **T40 Recapture extension.** Extend a TT-move recapture at PV nodes.
   Stockfish 863a1f2b (2023, +1.6 / +1.2), measured at about 0 STC / 1 LTC
   (2024), removed in 67573218 (2025).
-- **T41 Check extension.** Extend checking moves by one ply, often only
+- **T41 Check extension** (full description in §3.28). Extend checking moves by one ply, often only
   when SEE is not negative. Stockfish removed it in 96837bc4 (2024-02):
   singular extensions and reduced LMR for checks cover it. Keep it as a
   candidate flag only.
@@ -1414,3 +2130,20 @@ engines under their own licences and are OFF-LIMITS.
 9. Whether "improving" should compare raw or corrected eval.
 10. Mate scores in aspiration windows (CPW silent); whether pin-aware SEE
     is worth its cost for Fork (to be measured).
+11. (§3A, 2026-10-26) Details known only from PR titles: Berserk #461's PV
+    condition for qsearch TT refinement; Weiss #745's "more informative"
+    rule; Berserk #72's SEE-based delta margin; Reckless #867 and #934;
+    Berserk #229; Stormphrax #338 and #339. Ethereal #162 and Stormphrax #15
+    have no result in their PR bodies, and Halogen #458 ("thread
+    meritocracy") has no description.
+12. Birmingham & Kent 1977 (razoring) is known only from CPW's summary; the
+    paper was not opened. Pagh & Rodler 2001 was checked on Crossref only.
+13. Whether fifty-move eval scaling (T52) can make TCEC's eval-based draw
+    adjudication trigger earlier: not checked against the rules.
+14. Whether Fork's Zobrist scheme gives move keys that match T51's
+    cuckoo-table assumptions for moves that change castling rights: Fork's
+    inference, to be settled by a test.
+15. Varied root move ordering as a Lazy SMP diversity method: described on
+    CPW, but no measured instance was opened.
+16. Emil Fredrik Ostensen's 2016 Lazy SMP thesis (University of Oslo): the
+    repository link redirected again on 2026-10-26, so it is still unread.

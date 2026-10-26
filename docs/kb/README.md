@@ -22,7 +22,7 @@ Fork, where the information came from, and when it was verified.
 | [uci.md](uci.md) | UCI protocol (April 2006 spec) summarised for Phase 2, standard options, timing rules, and how fastchess, cutechess and python-chess handle the gaps |
 | [os-memory.md](os-memory.md) | OS facts behind the Hash memory code, checked against man pages, kernel docs/source and Microsoft Learn: MemAvailable, overcommit mode 0, MADV_HUGEPAGE/THP, VirtualAlloc commit, CRT text mode, mmap/munmap |
 | [techniques.md](techniques.md) | Board, movegen, search, evaluation/NNUE, training, time management, SMP, each mapped to a Fork phase |
-| [search-techniques.md](search-techniques.md) | Phase 3 idea mining: every search technique with tier, phase, dependencies and expected value from published SPRT results (Stockfish, 15 OpenBench engines, CPW, papers), plus clean-room descriptions of the tier 1 and 2 techniques |
+| [search-techniques.md](search-techniques.md) | Phase 3 idea mining: every search technique with tier, phase, dependencies and expected value from published SPRT results (Stockfish, 15 OpenBench engines, CPW, papers), plus clean-room descriptions of the tier 1 and 2 techniques, and (§3A, 2026-10-26) TT-refined eval, razoring, capture futility, delta pruning, check extension, upcoming repetition, fifty-move scaling, SMP voting and diversity, history malus balance (T50-T55) |
 | [research.md](research.md) | Papers and results from 2023 on, newest first |
 | [best-practices.md](best-practices.md) | Testing discipline, determinism, SPRT, TCEC-condition testing, originality hygiene |
 | [competition.md](competition.md) | TCEC Season 30 rules, CCC, CCRL/CEGT, the engines Fork will face, with pinned builds |

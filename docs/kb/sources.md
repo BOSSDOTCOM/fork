@@ -802,3 +802,37 @@ All downloads went to a fresh temporary folder outside the repo, were hashed the
 | https://www.yacpdb.org/ | YACPDB (JavaScript app, no text) | 2026-10-25 | none (licence/dump UNVERIFIED) |
 | http://www.jakob.at/steffen/hossa/index.html | Hossa test-suite page | 2026-10-25 | no mate suite |
 | WebSearch: mate-suite EPD queries (3) and "1001 Brilliant Ways to Checkmate" EPD | search results, leads only | 2026-10-25 | leads (EngineTests, python-chess files); nothing cited from snippets |
+
+## Search techniques, round 2 (search-techniques.md §3A), 2026-10-26
+
+No engine repository was cloned or downloaded and no engine source file was opened. Stockfish commit messages came from the GitHub commit-search API (message text only; no diff or commit endpoint was called). PR data came from the GitHub REST API `pulls/{n}` endpoint (title, author, dates, body) and, for one PR, `issues/{n}/comments`. CPW pages quote engine code; those quotes were not used. Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| https://www.chessprogramming.org/{Razoring, Futility_Pruning, Delta_Pruning, Check_Extensions, Late_Move_Reductions, Repetitions, Fifty-move_Rule, Lazy_SMP, History_Heuristic, Transposition_Table, Quiescence_Search, Parallel_Search, Draw_Evaluation, ABDADA, Shared_Hash_Table, Evaluation} | CPW pages (308 redirect to chessprogramming.org; read-only recovery) | 2026-10-26 | T34, T36/T37, T25, T41/T16, T51 links, T52 (no scaling content found), T53/T54, T55, T50 (Lefler thread link) |
+| https://www.chessprogramming.org/Cuckoo_Hashing | FAILED 404 | 2026-10-26 | none |
+| https://www.chessprogramming.org/Static_Evaluation | FAILED 404 | 2026-10-26 | none |
+| http://marcelk.net/2013-04-06/paper/upcoming-rep-v2.pdf | FAILED (curl status 000, no response) | 2026-10-26 | none |
+| https://web.archive.org/web/20201107002606/https://marcelk.net/2013-04-06/paper/upcoming-rep-v2.pdf | van Kervinck 2013 upcoming-cycle preprint, 8 pages (Wayback copy) | 2026-10-26 | T51 method, results, licence status |
+| https://archive.org/wayback/available?url=marcelk.net/2013-04-06/paper/upcoming-rep-v2.pdf | Wayback availability API | 2026-10-26 | locating the capture |
+| https://api.crossref.org/works?query.bibliographic=Pagh+Rodler+Cuckoo+Hashing+ESA+2001&rows=3 | Crossref search | 2026-10-26 | T51 citation (DOI 10.1007/3-540-44676-1_10) |
+| https://talkchess.com/viewtopic.php?t=32396 | Mark Lefler, "Correcting Evaluation with the hash table", CCC 2010-02-05, page 1 | 2026-10-26 | T50 idea, Critter instability report |
+| https://talkchess.com/viewtopic.php?t=46597 | Julien Marcel, "Lazy SMP", CCC 2012-12-27 | 2026-10-26 | background (his original idea was splitting movegen/eval, not shared-TT search) |
+| https://talkchess.com/viewtopic.php?t=46858 | Daniel Homan, "Lazy SMP, part 2", CCC 2013-01 | 2026-10-26 | T53 (main-thread result), T54 (depth+1 helpers, Elo figures) |
+| http://www.talkchess.com/forum/viewtopic.php?t=27384 | FAILED (curl status 000) | 2026-10-26 | none |
+| http://web.archive.org/web/20070607151732/www.brucemo.com/compchess/programming/extensions.htm | Bruce Moreland, "Search Extensions" (Wayback) | 2026-10-26 | T41 |
+| https://people.csail.mit.edu/heinz/dt/node28.html, node29.html, node30.html | Heinz 1998 limited razoring (author HTML) | 2026-10-26 | T34 |
+| https://www.duo.uio.no/bitstream/handle/10852/53769/master.pdf?sequence=1 | FAILED (redirects to nva.sikt.no HTML, no PDF) | 2026-10-26 | none (Ostensen thesis still UNVERIFIED) |
+| api.github.com/search/commits?q=repo:official-stockfish/Stockfish+{dampen 50 move, shuffling, rule50 scale, 50 move rule eval, Detect fortresses..., Shuffle detection, Remove shuffle extension, futility pruning for captures, capture futility, voting, best thread, skip blocks, helper threads depth, lazy smp, ecc5ff66, skipping depths, skip depths, SkipSize, 135caee6, Simplify away completedDepth, skip threads, remove skipping, skipping, helper threads, Skip skipping thread scheme, Simplify skipping of plies..., Introduce voting system..., New voting formula..., Simplify Thread Voting Scheme, No voting for TB loss, Improve thread voting inefficiencies, Distinct iteration paths..., Tweak best thread selection logic, Increase reductions with thread count, Fix bestThread selection, Remove check extension, check extension, Tweak check extension condition, Check Extension with Static Evaluation, Simplify check extensions, malus, separate bonus and malus, history malus, Use stat_malus..., Tweak the stats bonus and malus, Decrease all stats malus..., Separate bonus/malus parameters..., Simplify separate malus formulas, Revert malus..., Simplify malus formula, refined eval, tt value as eval, ttValue eval, better position evaluation, Use TT value, Introduce refine_eval, Use TT refined value to stand pat, cuckoo, upcoming repetition, Use cycle detection to bound search value, razoring} | Stockfish commit messages (search API; message text only) | 2026-10-26 | T50-T55, T34, T36/T37, T41 evidence. Commit 91a76331's message contains code lines; not used |
+| api.github.com/search/issues?q=repo:{R}+is:pr+{terms}+in:title for R in Stockfish, Stormphrax, Viridithas, Halogen, Reckless, PlentyChess, Berserk, Weiss, Koivisto, Ethereal; terms rule50 / 50-move / shuffling / fifty / 50mr / halfmove / tt score eval / tt value eval / tt eval / vote / voting / thread / smp / helper / check reduction / check lmr / check extension / malus / delta pruning / qsearch futility / qs futility | PR title searches (leads only) | 2026-10-26 | finding PRs; nothing cited from titles except where marked UNVERIFIED |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/{3004, 5327, 2306, 2727, 2453, 6271, 3921, 1972} and /issues/1972/comments | Stockfish PR bodies; PR #1972 discussion | 2026-10-26 | T52, T50 (#2453), T34 (#3921), T54 (#1972) |
+| api.github.com/repos/Ciekce/Stormphrax/pulls/{15, 178, 50, 56, 140, 67, 139, 60, 273} | PR bodies | 2026-10-26 | T52, T50, T41, T25, T53 |
+| api.github.com/repos/KierenP/Halogen/pulls/{554, 559, 617, 509, 516, 744, 455, 458, 780, 781, 30, 130, 87, 244, 778, 212, 752, 853} | PR bodies (#853's body contains a code excerpt; not used) | 2026-10-26 | T52, T50, T53, T54, T41/T16 |
+| api.github.com/repos/Yoshie2000/PlentyChess/pulls/{71, 384, 443, 439, 152, 191, 304, 371, 268, 16} | PR bodies | 2026-10-26 | T52, T50, T36, T53, T41, T55 |
+| api.github.com/repos/TerjeKir/weiss/pulls/{336, 745, 31, 455, 748, 83, 695, 296} | PR bodies | 2026-10-26 | T50, T25, T41, T55 |
+| api.github.com/repos/jhonnold/berserk/pulls/{459, 461, 339, 72, 328, 472, 533, 577} | PR bodies | 2026-10-26 | T50, T34, T25, T41, T53, T55 |
+| api.github.com/repos/cosmobobak/viridithas/pulls/{385, 319, 418} | PR bodies | 2026-10-26 | T50, T25 |
+| api.github.com/repos/codedeliveryservice/Reckless/pulls/{277, 127, 169, 254, 926, 21, 1038, 444} | PR bodies | 2026-10-26 | T36, T34, T25, T41, T54, T55 |
+| api.github.com/repos/Luecx/Koivisto/pulls/223 | PR body | 2026-10-26 | T34 |
+| api.github.com/repos/AndyGrant/Ethereal/pulls/{162, 165} | PR bodies (both empty) | 2026-10-26 | T16 (no result) |
+| api.github.com/repos/aronpetko/integral/pulls/259 | PR body | 2026-10-26 | T36 |
