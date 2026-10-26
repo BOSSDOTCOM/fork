@@ -2,8 +2,9 @@
 
 Fork is a UCI chess engine in C++20, written to compete in TCEC (the Top
 Chess Engine Championship). Phase 1 (board representation, legal move
-generation, perft) is complete; the UCI protocol, search and evaluation are
-the next phases (docs/DESIGN.md).
+generation, perft) and Phase 2 (the UCI protocol) are complete; Phase 3
+(search) is in progress, with a deliberately simple bootstrap evaluation
+until Phase 4 replaces it (docs/DESIGN.md).
 
 ## AI-assisted development
 
@@ -28,7 +29,7 @@ gcc 11+ or clang 16+ (C++20).
 git clone https://github.com/BOSSDOTCOM/fork.git fork
 cd fork
 ./update.sh                       # builds build/tcec/fork and prints its path
-build/tcec/fork bench             # nodes 26401709, signature f298a22041a6270a
+build/tcec/fork bench             # search bench: nodes and a signature (tests/bench.ref)
 ```
 
 `update.sh` builds the engine only (Release, `-O3 -g`, no tests, no
@@ -44,12 +45,14 @@ cmake --preset clang-release && cmake --build build/clang-release
 ctest --test-dir build/clang-release -LE slow --output-on-failure
 ```
 
-Continuous integration (`.github/workflows/ci.yml`) builds every push from a
-clean clone on TCEC's toolchain (an Ubuntu 22.04 container: gcc 11.4,
+Continuous integration (`.github/workflows/ci.yml`) builds every push to
+main and every pull request (except docs-only changes) from a clean clone
+on TCEC's toolchain (an Ubuntu 22.04 container: gcc 11.4,
 g++-12, clang 16 and 19, CMake 3.22) and on current Ubuntu, and runs the
 fast tests and bench parity.
 
 Other commands: `fork perft <depth> [fen]`, `fork divide <depth> [fen]`,
+`fork perftbench` (the move-generation workload, tests/perft_bench.ref),
 `fork version`. See CLAUDE.md and docs/DESIGN.md for the full workflow.
 
 ## License
