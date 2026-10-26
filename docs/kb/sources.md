@@ -836,3 +836,39 @@ No engine repository was cloned or downloaded and no engine source file was open
 | api.github.com/repos/Luecx/Koivisto/pulls/223 | PR body | 2026-10-26 | T34 |
 | api.github.com/repos/AndyGrant/Ethereal/pulls/{162, 165} | PR bodies (both empty) | 2026-10-26 | T16 (no result) |
 | api.github.com/repos/aronpetko/integral/pulls/259 | PR body | 2026-10-26 | T36 |
+
+## Fathom and Syzygy probing, Phase 3 deliverable 7 (tools.md §6, techniques.md, competition.md), 2026-10-26
+
+- **Fathom's source was read; no chess engine's source was opened.** Fathom is the approved third-party library. It was cloned three times, always into fresh temporary folders outside both repositories: one Windows scratch folder and two WSL Ubuntu-22.04 `/tmp` folders. All three were deleted after use.
+- **Runs in this pass:** compile tests (Fork-style warning flags, gcc 11.4, g++-12, clang 16 and 19, llvm-mingw clang 23.1.3, WinLibs gcc 16.2.0, CMake 3.22.1); the `fathom` tool on six 3-piece tables copied from `~/fork-tools/syzygy/3-4-5` and on the downloaded 7-man pair; strace of mmap and madvise; and `/proc/self/smaps` VmFlags read by a throwaway driver.
+- Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| https://api.github.com/repos/jdart1/Fathom/commits/c9c6fef0 | API: commit | 2026-10-26 | full SHA, author/committer date, message, parent, files changed |
+| https://api.github.com/repos/jdart1/Fathom | API: repo metadata | 2026-10-26 | MIT licence field, fork of basil00/Fathom, last push |
+| `git ls-remote https://github.com/jdart1/Fathom` | refs | 2026-10-26 | master = pin; only tag v1.0 (70d0091f); PR refs |
+| `git clone https://github.com/jdart1/Fathom.git` at c9c6fef0 (temporary; deleted) | source at the pin: LICENSE, README.md, Makefiles, src/tbprobe.c, tbprobe.h, tbconfig.h, tbchess.c, stdendian.h, apps/fathom.c | 2026-10-26 | licence headers, lineage, TB_PIECES, TB_LARGEST, mapping code, locks, Windows path, file list, tool; ancestry of PR #11/#13/#16 merges |
+| https://raw.githubusercontent.com/jdart1/Fathom/c9c6fef0dddc05d2e242c183acf5833149ab676d/{LICENSE, README.md, Makefile, src/tbprobe.c, src/tbprobe.h, src/tbconfig.h, src/tbchess.c, src/stdendian.h, src/apps/fathom.c, src/apps/Makefile} | raw files at the pin | 2026-10-26 | SHA-256 cross-check against the clone's blobs (all equal) |
+| https://api.github.com/repos/jdart1/Fathom/issues?state=all | API: all 17 issues and PRs | 2026-10-26 | finding the thread-safety and init items |
+| https://api.github.com/repos/jdart1/Fathom/issues/{10, 11, 14, 16, 17} (+ /comments) and /pulls/{10, 11, 16} | PR and issue bodies, comments, merge status | 2026-10-26 | root-probe thread-safety note (PR #10, unmerged), init-failure race fix (PR #11), repeated tb_init crash (issue #14), C++20 crash fix (PR #16), 50-move option question (#17) |
+| https://raw.githubusercontent.com/niklasf/syzygy-tables.info/master/checksums/bytes.tsv; https://api.github.com/repos/niklasf/syzygy-tables.info/commits/master | file sizes; master commit 09a5a9cd | 2026-10-26 | smallest 7-man WDL and DTZ files; 1001 + 1001 seven-piece files |
+| https://tablebase.lichess.ovh/tables/standard/sha256 | mirror sha256 list | 2026-10-26 | KPPPPPvK hashes |
+| https://tablebase.lichess.ovh/tables/standard/7/ | mirror directory listing | 2026-10-26 | six 7-piece subdirectories |
+| https://tablebase.lichess.ovh/tables/standard/download.txt | URL list | 2026-10-26 | KPPPPPvK URLs (7/6v1_pawnful/) |
+| https://tablebase.lichess.ovh/tables/standard/7/6v1_pawnful/KPPPPPvK.rtbw and .rtbz | table files, downloaded (5.1 MiB; deleted after the tests) | 2026-10-26 | size, Content-Length, Last-Modified 2018-04-24, sha256 verified; 7-man probe tests |
+| https://api.github.com/repos/lichess-org/lila-tablebase (+ /commits/main); https://raw.githubusercontent.com/lichess-org/lila-tablebase/main/README.md | tablebase server repo (AGPL-3.0), README | 2026-10-26 | `/standard` and `/standard/mainline` endpoints, response example, shakmaty-syzygy basis |
+| https://api.github.com/repos/lichess-org/api (+ git tree, /commits/master fe249ff9); raw doc/specs/lichess-api.yaml, doc/specs/tags/tablebase/standard.yaml, doc/specs/schemas/TablebaseJson.yaml, doc/specs/schemas/TablebaseMove.yaml | lichess OpenAPI spec (v2.0.176) | 2026-10-26 | host tablebase.lichess.org, `fen` and `dtc` parameters, response fields, rate-limiting text |
+| https://tablebase.lichess.org/standard?fen=k7/8/8/8/8/8/PPPPP3/7K_w_-_-_0_1 and ..._b_-_-_0_1 | two API responses (sequential) | 2026-10-26 | cross-check of Fathom's 7-man results; response headers (Cache-Control 14 days) |
+| https://lichess.org/terms-of-service | lichess terms | 2026-10-26 | permitted use of services, API abuse clause, licences section (no API-response licence) |
+| https://sourceware.org/git/?p=glibc.git;a=blob_plain;f=sysdeps/unix/sysv/linux/posix_madvise.c;hb=refs/heads/release/2.35/master (and hb=HEAD) | FAILED (Anubis bot wall) | 2026-10-26 | none (man7 page and strace used instead) |
+| https://man7.org/linux/man-pages/man3/posix_madvise.3.html | posix_madvise(3), man-pages 6.19 | 2026-10-26 | glibc implements it with madvise(2); feature-test requirement |
+| https://man7.org/linux/man-pages/man2/madvise.2.html | madvise(2), man-pages 6.19 | 2026-10-26 | MADV_RANDOM meaning; POSIX_MADV_* names |
+| https://raw.githubusercontent.com/torvalds/linux/master/Documentation/filesystems/proc.rst (master d135ab45) | kernel proc documentation | 2026-10-26 | VmFlags `rr` = random read advice |
+| https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea | CreateFileA | 2026-10-26 | FILE_FLAG_RANDOM_ACCESS as a caching hint |
+| https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createfilemappinga | CreateFileMappingA | 2026-10-26 | PAGE_READONLY; zero size means file size |
+| https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile | MapViewOfFile | 2026-10-26 | FILE_MAP_READ; length 0 maps to the end |
+| https://wiki.chessdom.org/index.php?title=TCEC_Season_Further_information&action=raw and api.php?action=query&prop=revisions | TCEC Further information page (revision 8475, 2026-02-24) | 2026-10-26 | 7-man madvise(MADV_RANDOM) request unchanged |
+| https://raw.githubusercontent.com/syzygy1/tb/master/README.md (+ API commit 0bb8aeee) | Syzygy generator README (Ronald de Man) | 2026-10-26 | up to 7 pieces; WDL two-sided and used in search; DTZ single-sided, root only |
+| https://python-chess.readthedocs.io/en/latest/syzygy.html | python-chess 1.11.2 Syzygy docs | 2026-10-26 | independent test oracle: WDL/DTZ up to 7 pieces, thread-safety note |
+| https://api.github.com/repos/niklasf/shakmaty-syzygy; raw README.md at main FAILED (404); raw README.md at master | shakmaty-syzygy (GPL-3.0) | 2026-10-26 | lichess server's prober; repo merged into niklasf/shakmaty |

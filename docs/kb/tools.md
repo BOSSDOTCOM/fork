@@ -303,30 +303,240 @@ Checked 2026-10-25. DESIGN.md §5.2 asks for a tactical suite and a mate suite r
   - The 3-4-5 set is enough for development.
   - Correction 2026-10-24: TCEC no longer adjudicates with tablebases (removed between 13 Oct 2024 and 4 May 2025, `config/tcec.json` `tablebase`); its current draw rule only *counts* pieces (≤ 6 including kings, excluding pawns). The 6-piece WDL set (72.8 GB) is still useful to mimic TB-assisted play in Phase 8; DTZ is optional.
   - **Engines get 7-man Syzygy** during play: `engine_access_pieces` is 7 in `config/tcec.json`, from the `SyzygyPath=/home/syzygy7` option in archived TCEC games and the live Swiss 10 game (competition.md §2 "Tablebases available to engines", verified 2026-10-23). This replaces the earlier open note, which predated that check.
+  - The smallest downloadable 7-man pair, KPPPPPvK (3.55 MiB WDL + 1.58 MiB DTZ, sha256-checked), and how to test with it are in §6.9 (2026-10-26).
 - **Sources:** https://www.chessprogramming.org/Syzygy_Bases, https://github.com/niklasf/syzygy-tables.info and https://tablebase.lichess.ovh/tables/standard/. Verified 2026-10-23.
 
 ## 6. Fathom (Syzygy probing library)
 
-- **Tag:** USE. It is the one external library DESIGN.md plans to vendor (Phase 3). Record it in ORIGINALITY.md.
-- **Maintained repo:** **jdart1/Fathom**. Its README says basil00/Fathom "is no longer being maintained", and the CPW page lists the jdart1 fork as the one with bug fixes and 7-man support.
-  - jdart1/Fathom: no GitHub releases. Its only tag, v1.0, is old. master is at `c9c6fef0`, last pushed 2025-12-24; pin that commit.
-  - basil00/Fathom: v1.0 from 2015, MIT.
-- **License:** MIT (LICENSE: "Copyright (c) 2013-2018 Ronald de Man" plus the README).
-- **Provenance:** this matters for the TCEC originality record.
-  - The jdart1 README says the probing code now comes from `tbprobe.c` of **Cfish**, which is a Stockfish derivative.
-  - Ronald de Man wrote that code and released it for unrestricted use.
-  - The board and move-generation code was replaced with MIT code from Basil's original Fathom.
-  - Document this lineage explicitly in ORIGINALITY.md. **UNVERIFIED:** whether TCEC has ruled on Fathom. Check the current TCEC rules before submitting.
-- **API notes:**
-  - `tb_init(path)` and `tb_free()`.
-  - `tb_probe_wdl(...)` is for use during search. It is thread-safe unless `TB_NO_THREADS` is defined.
-  - `tb_probe_root(...)` gives a DTZ-based best move and per-move DTZ/WDL results.
-  - `tb_probe_root_dtz` and `tb_probe_root_wdl` score and rank every root move.
-  - Configure through `tbconfig.h`, which is included with angle brackets, so a project copy earlier in the include path overrides it. Through it, Fork can supply its own attack and popcount functions.
-  - It compiles as C99 or C++.
-  - It also builds a `fathom` command-line tool (`fathom --path=... "FEN"`), useful for checking Fork's TB results.
-- **Alternative:** Pyrrhic (AndyGrant/Pyrrhic) is a cleaned-up Fathom; its LICENSE is MIT with Basil's 2015 copyright. REFERENCE ONLY unless Fork chooses it instead.
-- **Sources:** https://github.com/jdart1/Fathom and https://github.com/basil00/Fathom. Verified 2026-10-23.
+- **Tag:** USE. The owner approved it on 2026-10-24 as the one vendored third-party library: `third_party/fathom/`, built as its own CMake target. It serves Phase 3 deliverable 7: WDL probes in the search and DTZ ranking of root moves (DESIGN.md "7. Syzygy probing, designed for 7 pieces"). Record it in ORIGINALITY.md under Third-party libraries.
+- **Licence:** MIT (details in 6.2).
+- **Maintained repo:** **jdart1/Fathom**, a GitHub fork of basil00/Fathom (API, 2026-10-26). The jdart1 README says basil00/Fathom is no longer maintained (re-read 2026-10-26). From the 2026-10-23 pass, not re-checked: CPW lists the jdart1 fork as the one with bug fixes and 7-man support, and basil00/Fathom is v1.0 from 2015, MIT.
+- **Alternative:** Pyrrhic (AndyGrant/Pyrrhic), a cleaned-up Fathom; its LICENSE is MIT with Basil's 2015 copyright (2026-10-23 pass, not re-checked). REFERENCE ONLY unless Fork chooses it instead.
+- **How this section was checked (2026-10-26).** I made a temporary clone outside both repositories, read every file at the pin, and ran build and probe tests: WSL Ubuntu 22.04 with gcc 11.4, g++-12, clang 16 and clang 19; Windows with llvm-mingw clang 23.1.3 and WinLibs gcc 16.2.0. The clone was deleted afterwards. All results below come from those runs unless marked "source reading". Sources: the GitHub API, raw files at the commit, and the PR and issue pages listed in sources.md.
+
+### 6.1 The pinned commit
+
+- **Full SHA:** `c9c6fef0dddc05d2e242c183acf5833149ab676d`. It exists on jdart1/Fathom and is still the `master` head (`git ls-remote`, 2026-10-26).
+  - Author and committer: Jon Dart, 2025-12-24 01:45:52 UTC.
+  - Message: "Fix possible integer alignment issues". It touches only `src/tbprobe.c`; its parent is `f08df228fcc62883a577ce66d4d72473f608aadd`.
+- **No releases.** The only tag, `v1.0`, is at `70d0091f`.
+- **SHA-256 of the files at the pin**, as committed (LF line endings). Two sources give identical values: the clone's git blobs and raw.githubusercontent.com at the commit.
+
+  | File | Bytes | SHA-256 |
+  |---|---|---|
+  | `LICENSE` | 1,149 | `c8038055839bd02f995cd7d1bba19657720097f5604411a7977ebcb5b4a37759` |
+  | `README.md` | 5,924 | `8a44c2a068f97fb237cea30f8039f4942950668c97b8f37092d1065b26cd074b` |
+  | `src/tbprobe.c` | 73,434 | `7ed0cc80626271342bfe413d6c421756b6851f977a064461f5f555e1b598df35` |
+  | `src/tbprobe.h` | 12,815 | `dc7808dc58c2a1af921a612f94041b917dfac94d3215a76a2b2b0c53c94ea561` |
+  | `src/tbconfig.h` | 5,648 | `69fe1821b471164bd759cf46c486d55b7fa727e348a5ee306b18d19537ac3a03` |
+  | `src/tbchess.c` | 31,292 | `119f19fa8714686798ca7be011e5b234f99c93aec751e9492f2664757d6c029d` |
+  | `src/stdendian.h` | 8,925 | `e5b8187eec89ef83e731ea92be8ca0df4b533d8d21075fc4e2c86b4b00d7b7c3` |
+  | `src/apps/fathom.c` | 21,767 | `3d466fae6e9c5cb3028df61634c638fa2f9b1aa553ce6288fcd618da396b03c8` |
+  | `src/apps/Makefile` | 797 | `bf2486c1c6c30f80d6f3baaabc83ff9ea578bc1085fe4ad702771d1aff35ecfb` |
+  | `Makefile` | 807 | `8c7a0f5c9ed34aa6d25212a954d044c62f294c7eef82b3ad4b33dae49e7a5a4d` |
+
+- **Line endings.** On this Windows machine (`core.autocrlf=true`) a clone checks the files out with CRLF, and their hashes then differ from the table (observed). Check vendored copies against the git blob, not the working file. A `.gitattributes` rule keeping `third_party/fathom/` LF-only would avoid the problem (a suggestion, not tested).
+
+### 6.2 Licence and lineage (for ORIGINALITY.md)
+
+- **`LICENSE`:** the MIT text with three copyright lines: Ronald de Man 2013-2018, basil00 2015, and Jon Dart 2016-2025.
+- **Per-file headers** (all MIT permission text unless noted):
+  - `tbprobe.c`: Ronald de Man 2013-2018, basil00 2015, and "Modifications" by Jon Dart 2016-2024.
+  - `tbchess.c`: basil00 2015, and modifications by Jon Dart 2016-2020.
+  - `tbprobe.h`: "(C) 2015 basil, all rights reserved", followed by the MIT grant.
+  - `tbconfig.h`: the same as `tbprobe.h`, plus modifications by Jon Dart 2016-2017.
+  - `apps/fathom.c`: basil 2015 and Jon Dart 2018-2019.
+  - **`stdendian.h` is different:** it says it comes from a public gist by GitHub user michaeljclark (gist `3b4fd912f6fa8bb598b3`), modified, and marks itself **Public Domain**. I did not open the gist.
+- **Lineage stated in the README:**
+  - Ronald de Man created the Syzygy tables.
+  - Basil Falcinelli's original Fathom combined de Man's probing code, first written for Stockfish, with Basil's own chess support code.
+  - The current probing code instead derives from `tbprobe.c` of **Cfish** (a Stockfish derivative). Ronald de Man wrote it, and it includes 7-man support; the README says he released it "for unrestricted distribution and use".
+  - Jon Dart replaced Cfish's board and move-generation code with Basil's MIT code and split the code into `tbchess.c` (chess) and `tbprobe.c` (probing).
+- **Lineage traces in the code** (source reading):
+  - a comment comparing the KvK key with Cfish's;
+  - a comment that Fathom's white and black values are the reverse of Stockfish's;
+  - two comments citing Stockfish PR #1829 as the reason for the random-access hints (6.4, 6.6).
+- **For the TCEC originality record:** Fork's binary will contain Cfish-derived probing code, under MIT and unrestricted-use terms. **UNVERIFIED (kept):** whether TCEC has ruled on this; ask before applying (UNVERIFIED summary item 6).
+
+### 6.3 Seven-piece support and the reported piece count
+
+- **The 7-piece limit is fixed in the code.** `tbprobe.c` defines `TB_PIECES` as 7 unconditionally; it is not a `tbconfig.h` option. Table capacity is sized for that limit: 650 piece-only and 861 pawn entries, and a 2^12-slot hash.
+  - The 6- and 7-piece names are only enumerated when `size_t` is 64-bit (source reading).
+  - A consistency check: with 3 tables present, strace counted 1,511 failed opens. That fits 1,508 absent WDL names plus the 3 absent DTM files of the tables found, so 1,511 names were tried. That is the number of Syzygy tables for 3 to 7 pieces (5 + 30 + 110 + 365 + 1,001). I did not check the failed names one by one.
+- **How the piece count is reported:** through the global `unsigned TB_LARGEST`, set by `tb_init` (declared in `tbprobe.h`).
+  - Value: the largest piece count among tables whose `.rtbw` file was found (or among DTM `.rtbm` tables, if those are larger). A DTZ file without its WDL file is ignored.
+  - With no tables, `TB_LARGEST` is 0. An empty path or the string `<empty>` unloads everything.
+  - Two internal globals hold the same information (`TB_MaxCardinality`, `TB_MaxCardinalityDTM`); they are not in the header.
+  - `tb_init` has no failing return at this commit: both of its return statements return true, and fatal problems call `exit()` (source reading).
+  - Observed: `TB_LARGEST` was 3 with three 3-piece tables loaded.
+- **7-man probing works (run 2026-10-26).** Only the smallest 7-man pair (KPPPPPvK `.rtbw` + `.rtbz`, 6.9) was in the directory. The `fathom` tool built from the pin then probed two positions, and the lichess tablebase API gave the same answers:
+  - `k7/8/8/8/8/8/PPPPP3/7K w - - 0 1`: Fathom says Win, DTZ 1, 13 winning moves. Lichess says `win`, `dtz` 1, all 13 moves winning.
+  - `k7/8/8/8/8/8/PPPPP3/7K b - - 0 1`: Fathom says Loss, DTZ 2, 3 losing moves. Lichess says `loss`, `dtz` -2, 3 moves.
+  - The same results came on Linux (gcc tool) and on Windows (MinGW gcc tool).
+  - The tool rejects positions with more pieces than `TB_LARGEST` (it refused a 6-piece FEN when only 3-piece tables were loaded), so `TB_LARGEST` was at least 7 here.
+
+### 6.4 Linux file mapping and `madvise(MADV_RANDOM)` (TCEC's request)
+
+- **TCEC's request** (Further information page, revision 8475, 2026-02-24, re-read 2026-10-26): engines using 7-man Syzygy should mark the memory-mapped tables for random access with `madvise(..., MADV_RANDOM)` (competition.md §2).
+- **Where Fathom maps tables.** `map_file()` in `tbprobe.c` (called from `map_tb()` and `init_table()`) maps each file whole, read-only and shared.
+  - Mapping is lazy: it happens at the first probe of each material and table type, under the global mutex.
+  - `tb_init` only opens each file, checks its size and closes it again. strace showed no mapping at init; the mmap and madvise calls came at probe time.
+- **The pinned code already gives the advice.** Right after `mmap`, `map_file()` calls `posix_madvise(..., POSIX_MADV_RANDOM)` on the whole mapping, guarded by `#ifdef POSIX_MADV_RANDOM`; the return value is ignored.
+  - glibc implements `posix_madvise` with `madvise(2)`; only the DONTNEED advice becomes a no-op (posix_madvise(3), man-pages 6.19). So on Linux this is `madvise(MADV_RANDOM)`.
+  - Observed under strace on Ubuntu 22.04 (glibc 2.35): one `madvise(addr, file size, MADV_RANDOM) = 0` per mapped table. That includes both 7-man files (3,721,360 and 1,652,304 bytes).
+  - `/proc/self/smaps` showed `rr` in VmFlags for each mapping. The kernel's proc.rst defines `rr` as "random read advise provided".
+- **The catch: the advice can silently disappear.** glibc only defines `POSIX_MADV_RANDOM` when its feature macros enable `__USE_XOPEN2K`. That guard is in Ubuntu 22.04's `bits/mman-linux.h` (read locally), and posix_madvise(3) lists the matching `_POSIX_C_SOURCE >= 200112L` requirement.
+  - Advice present: g++ and clang++ in C++ mode (they predefine `_GNU_SOURCE`) and C with `-std=gnu99` (glibc's default `_DEFAULT_SOURCE`). These gave the madvise calls and the `rr` flag (observed).
+  - Advice missing: strict `-std=c99` or `-std=c11`. These compiled without any warning, made no madvise calls, and left no `rr` flag (observed).
+- **Conclusion for Fork: no code change is needed**, provided `tbprobe.c` is compiled as C++. Fork's project is CXX-only. Set `LANGUAGE CXX` on the file; CMake 3.22 then passes `-x c++` to g++ and clang++ (observed). Keep the vendored copy byte-identical to the pin.
+- **Suggested Linux test:** after one probe, read `/proc/self/smaps` and require `rr` on every mapping of a `.rtbw`/`.rtbz` file. A throwaway driver did exactly this on 3-piece tables.
+- **Optional hardening patch, if the owner wants a build-time guarantee instead of a test.** It adds two lines inside `map_file()`: after the `posix_madvise` call and before its `#endif`, an `#elif defined(__linux__)` branch with an `#error` message saying the advice is not visible.
+  - Tested: `git apply --check` succeeds on the pin. Strict C99 now fails with the message. gcc gnu99 and all four TCEC C++ compilers still build, and the madvise calls are unchanged.
+  - The diff's SHA-256 is `ceb91a8c8d20c7826640242b47449d2e3f7d98b07e39fbf619ecd1958e7bf08b`. The exact text went to the main session in the 2026-10-26 research report; if adopted, store it beside the vendored copy and list it in ORIGINALITY.md.
+  - Its cost: the vendored `tbprobe.c` would no longer match the pinned hash.
+
+### 6.5 Thread safety
+
+- **How the code works** (source reading): a table and type is set up lazily inside `probe_table()` with double-checked locking.
+  - Each table has an atomic "ready" flag per type. One global mutex serves all types: `std::mutex` when built as C++11 or later, otherwise a pthread or Win32 mutex.
+  - WDL, DTZ and DTM all take this same path.
+  - An atomic error flag makes a failed setup safe when two threads race on it. That came from PR #11, merged 2024-12-08 into the history the pin contains.
+  - Defining `TB_NO_THREADS` turns the locks into no-ops. **Fork must not define it.** The `fathom` tool's own Makefile does define it, which is fine for a single-threaded tool.
+  - Two more fixes Fork depends on are in the pin's history (`git merge-base --is-ancestor`, checked). PR #13 (2025-09-07) fixed the crash when `tb_init` and `tb_free` are called repeatedly (issue #14); Fork re-runs `tb_init` on every `SyzygyPath` change. PR #16 (2025-09-27) fixed a crash in C++20 builds.
+- **The documentation conflicts:**
+  - `tbprobe.h` says `tb_probe_wdl` is thread-safe unless `TB_NO_THREADS` is set. It says `tb_probe_root` is **not** thread-safe and should be called once per search at the root.
+  - The README says the root-probe functions are thread-safe too.
+- **The maintainer's comments explain the conflict** (PR #10, "Remove note about tb_probe_root being thread unsafe", closed unmerged 2024-12-05):
+  - He said the not-thread-safe note dates from the original Fathom documentation, before he took over.
+  - He reported several days of testing the root-probe functions on 12 cores with no errors.
+  - So the old header note survives at the pin.
+- **For Fork:** DESIGN.md's plan, one DTZ root probe per search on the search thread plus WDL probes from every thread, is safe under either reading.
+  - What is never safe: calling `tb_init` or `tb_free` while any probe runs, because they unmap and free the tables (source reading). Change `SyzygyPath` only when no search is running (DESIGN.md already says this).
+  - Concurrent probing was not tested here; it is a Phase 6 test.
+
+### 6.6 Windows mapping path
+
+- **Opening:** `CreateFile` with read access, read sharing, open-existing and `FILE_FLAG_RANDOM_ACCESS`.
+  - The narrow-string (ANSI) variant is used unless `_UNICODE` is defined; then the path is converted with `mbstowcs_s`.
+  - Microsoft's CreateFileA page describes `FILE_FLAG_RANDOM_ACCESS` as a hint for optimising file caching. **UNVERIFIED:** whether it changes read-ahead for page faults in a mapped view. This does not matter for TCEC, which runs Linux.
+  - **Caution** (source reading, not tested): defining `UNICODE` without `_UNICODE` would select the wide `CreateFile` with a narrow string and fail to compile. Fork defines neither.
+- **Mapping:**
+  - `GetFileSize`, then `CreateFileMapping` with `PAGE_READONLY` and the full file size, then `MapViewOfFile` with `FILE_MAP_READ` and length 0. Microsoft's pages say length 0 maps to the end of the mapping, and that read-only views need `PAGE_READONLY` or wider protection.
+  - Unmapping: `UnmapViewOfFile` plus `CloseHandle`.
+  - There is no Windows counterpart of the madvise call.
+- **Paths:** separator `;` on Windows and `:` elsewhere. On Windows, directories are joined to file names with a backslash.
+- **POSIX-only code:** `fcntl.h`, `pthread.h`, `unistd.h`, `sys/mman.h` and `sys/stat.h`, and the calls `open`, `close`, `fstat`, `mmap`, `munmap`, `posix_madvise` and `perror`, all sit in the non-`_WIN32` branch.
+  - The Windows branch includes only `windows.h`, with `NOMINMAX`.
+  - In the WinLibs g++ build, `pthread.h` does show up, but it comes through libstdc++'s own `<atomic>` threading headers (that toolchain's winpthreads thread model), not from Fathom (observed with `-H`).
+- **MinGW builds, all observed:**
+  - `tbprobe.c` compiles with llvm-mingw clang 23.1.3 and WinLibs gcc 16.2.0, as C (gnu99 and c99) and as C++20.
+  - The `fathom` tool, built with either compiler (C, gnu99), probed the staged tables correctly: KQvK Win, DTZ 13, identical to Linux. A `;`-separated path list worked.
+  - A C++20 build of `tbprobe.c` linked into the tool also worked with both compilers.
+
+### 6.7 What to vendor, definitions, warnings
+
+- **Minimum file set:**
+  - `src/tbprobe.c`, the one translation unit to compile;
+  - `src/tbprobe.h`, the public API;
+  - `src/tbconfig.h`, which `tbprobe.h` includes with angle brackets, so the source directory must be on the `-I` path;
+  - `src/tbchess.c`, which `tbprobe.c` includes as text, so it must be present but **not** compiled on its own;
+  - `src/stdendian.h`, included by `tbprobe.c`;
+  - `LICENSE`, because MIT requires the notice to ship with the code;
+  - `README.md`, recommended because it holds the lineage credits.
+  - Optional, for tests only: `src/apps/fathom.c` (the tool, 6.8).
+- **Build:** compile only `tbprobe.c`, as C++ (6.4), with the Fathom source directory as an include directory.
+- **Compile definitions:** none are required.
+  - Never define `TB_NO_THREADS`.
+  - Optional `TB_NO_HELPER_API`: the header advises engines to set it. It compiled cleanly as C++ and removes nine exported helpers (`tb_pop_count`, `tb_lsb`, the attack functions and so on).
+  - Optional: a Fork copy of `tbconfig.h` earlier in the include path, for custom popcount, LSB or attack functions, or for the score constants. Those constants set the scale of `tbScore` in root results: pawn 100, mate 32000, maximum mate ply 255. So a TB win scores 31744 (observed in the tool's output). Fork can ignore `tbScore` and use `tbRank` instead.
+  - Release builds should define `NDEBUG`, because Fathom uses `assert`.
+- **Warnings** at `-O2 -Wall -Wextra -Wpedantic -Wshadow` (all observed):
+
+  | Build | Warnings |
+  |---|---|
+  | C++20, g++ 11.4 and g++-12 (Linux), WinLibs g++ 16.2 | none; with `-march=x86-64-v3`, one `-Wsign-compare` (`tbprobe.c` line 2511) |
+  | C++20, clang++ 16 and 19 (Linux, libstdc++) | one `-Wsign-compare` (line 2511) |
+  | C++20, llvm-mingw clang++ 23 (libc++) | three: `-Wsign-compare` (2511), `-Wunused-but-set-global` (510, a counter set but never read), `-Wdeprecated-declarations` (744: libc++ deprecates `atomic_init` in C++20) |
+  | C, gcc `-std=gnu99`/`c99` | one `-Wpedantic` (unnamed union, line 474) |
+  | C, clang `-std=gnu99`/`c99` | `-Wc11-extensions` (same union) plus `-Wsign-compare`; llvm-mingw clang 23 adds `-Wunused-but-set-global` |
+  | adding `-Wconversion` | many sign and narrowing conversions (at least a dozen distinct lines per compiler; output was truncated) |
+
+  - So the Fathom target must not use `-Werror`, or must suppress these warnings. Note that `-Wunused-but-set-global` is unknown to older compilers.
+  - The public header is clean: a C++20 file including `tbprobe.h`, built with Fork's flags plus `-Werror`, gave zero diagnostics on all six compilers, with and without `-march=x86-64-v3`.
+- **Exported symbols** (`nm`, C++ build): besides the `tb_*` API and `TB_LARGEST`, the object exports `TB_MaxCardinality` and `TB_MaxCardinalityDTM`, plus the C++ functions `num_tables`, `first_ei`, `leading_pawn` and `encode` in the global namespace.
+  - A clash needs an identical global-namespace C++ signature in Fork. Fork code inside its own namespace is safe.
+  - Built as C, those names would be unmangled C symbols.
+- **Behaviour Fork's spec relies on:**
+  - A missing table makes the probe fail (`TB_RESULT_FAILED`, or 0 from the root-move functions); it is not an error. Observed: a 7-man PV stopped at the first capture that needed a 6-man table.
+  - `tb_probe_wdl` refuses a nonzero halfmove clock (observed) and nonzero castling rights (source). It returns the failure value 0xFFFFFFFF.
+  - A file whose size is not 16 mod 64 is skipped at init. Fathom then prints a line on stderr and an `info string Incomplete tablebase file ...` line on **stdout**; the suffix gets a doubled dot (source reading, not run).
+  - A bad magic number prints "Corrupted table." on stderr and the probe fails (source reading).
+  - **A mapping failure after a successful open calls `exit(EXIT_FAILURE)`**, ending the engine; so does running out of memory at init. Fork cannot catch these without patching (source reading, not run).
+- **Root-probe results:**
+  - `tb_probe_root_dtz` and `tb_probe_root_wdl` never write the `pv` or `pvSize` fields of `struct TbRootMove`; only DTM helpers that the public API does not use touch them (source reading). Ignore those fields.
+  - `struct TbRootMoves` is 101,908 bytes (measured: gcc, x86-64 Linux), so keep it off small thread stacks.
+  - DTZ ranks (source reading; the tool's KQvK output showed 1000 for every winning move and 0 for the drawing ones):
+    - 1000 for a win whose DTZ plus the halfmove clock is at most 99, provided the caller's `hasRepeated` flag is false;
+    - 1000 − (DTZ + clock) for other wins;
+    - 0 for draws;
+    - for losses (DTZ taken as a magnitude), −1000 while 2 × DTZ + clock is below 100, otherwise −1000 + (DTZ + clock).
+  - WDL ranks: ±1000 for wins and losses, ±899 for cursed wins and blessed losses.
+- **Board encoding:**
+  - Squares are 8 × rank + file, so a1 = 0 and h8 = 63 (`fathom.c`'s FEN parser; consistent with every run above).
+  - The en-passant argument is a square index, with 0 meaning none.
+  - A root move (`TbMove`) packs the destination in bits 0-5, the origin in bits 6-11 and the promotion in bits 12-14 (1 queen, 2 rook, 3 bishop, 4 knight).
+
+### 6.8 The `fathom` command-line tool
+
+- **Build:** `make` in `src/apps` builds `fathom.linux` (the Makefile also has macOS and `x86_64-w64-mingw32-gcc` Windows targets).
+  - Flags: `-std=gnu99 -O2 -Wall -Wshadow -DTB_NO_THREADS`. It compiles `fathom.c` together with `../tbprobe.c`.
+  - Observed: it built with gcc 11.4 and with both MinGW compilers; the stripped Linux binary is 59,752 bytes.
+  - The top-level Makefile builds `libfathom.so` instead; Fork does not need it.
+- **Usage:** `fathom --path=DIR "FEN"`, or `TB_PATH` from the environment if `--path` is missing.
+  - `--test` prints only the result (`1-0`, `1/2-1/2` or `0-1`).
+  - Full output: PGN-style tags for Result, WDL (side to move) and DTZ (absolute value, in plies), then the winning, drawing and losing move lists, a pseudo-PV, and per-move rank and score lists from `tb_probe_root_dtz` and `tb_probe_root_wdl`.
+  - It exits 1 with a message when no tables are found, the position has too many pieces, or the probe fails.
+  - It needs the DTZ files, because it uses `tb_probe_root`.
+- **Caveats for Fork's tests:**
+  - The SAN strings in the move lists are sometimes malformed (observed "dd3" and "b2b3"). My reading is that the tool's disambiguation uses a file mask with file a at bit 7, while the board uses bit 0. Compare the WDL/DTZ tags or `--test` output, not SAN.
+  - The tool runs the same probing code Fork will vendor. It therefore checks Fork's integration (board conversion, probe conditions, score mapping), not Fathom's table decoding.
+  - Independent oracles on a different code base:
+    - python-chess `chess.syzygy` (GPL-3.0+, test scripts only, never linked into the engine). Its docs cover WDL and DTZ up to 7 pieces, and say probing is thread-safe across separate board objects. **UNVERIFIED:** whether it was ported from de Man's probing code; the docs are silent.
+    - The lichess API (6.9), served by shakmaty-syzygy (Rust, GPL-3.0).
+
+### 6.9 Seven-piece test data
+
+- **lichess tablebase API.**
+  - Endpoint: `GET https://tablebase.lichess.org/standard?fen=<FEN>`, with spaces or underscores in the FEN. The lichess OpenAPI spec says the host is `tablebase.lichess.org`, not `lichess.org`; the lila-tablebase README shows the same path on `tablebase.lichess.ovh`.
+  - Optional parameter `dtc` (`never`, `auxiliary` or `always`). A second endpoint, `/standard/mainline`, returns a DTZ main line, or 404 if the position is not in the tables.
+  - **Response fields:**
+    - Position: `category` (`win`, `unknown`, `syzygy-win`, `maybe-win`, `cursed-win`, `draw`, `blessed-loss`, `maybe-loss`, `syzygy-loss` or `loss`) plus `dtz`, `precise_dtz`, `dtc`, `dtm`, `dtw`, `checkmate`, `stalemate`, `variant_win`, `variant_loss` and `insufficient_material`.
+    - `moves` (best first), each with `uci`, `san`, `category`, the same distance fields, and `zeroing`, `conversion`, `checkmate`, `stalemate`, `insufficient_material` and the variant flags.
+    - Meanings: `dtz` is DTZ50'' with rounding, in plies, signed for the side to move and covering up to 7 pieces. `precise_dtz` is given only when it is known not to be rounded. `dtm` covers at most 6 pieces.
+  - **Rate limits:** the general API rule is to make only one request at a time. After an HTTP 429, a minute's pause is usually enough, though some limits need longer. **UNVERIFIED:** no numeric limit is published for the tablebase host.
+    - Observed: two sequential requests on 2026-10-26 got HTTP 200 with `Cache-Control: max-age=1209600` (14 days) and no rate-limit headers.
+  - **Terms:**
+    - The lichess terms let anyone use its services, the API included, for personal, commercial or research use, subject to limits set at Lichess's discretion. Abusing the API is prohibited.
+    - **UNVERIFIED:** no licence is stated for API responses.
+    - The server is lila-tablebase (AGPL-3.0, built on shakmaty-syzygy). Its answers are exact tablebase facts, not engine evaluations, which data-policy.md allows. Fork uses them only as cached test fixtures (DESIGN.md: fetched once, cited, cached).
+- **Smallest downloadable 7-man table: KPPPPPvK** (king and five pawns against king).
+  - WDL: https://tablebase.lichess.ovh/tables/standard/7/6v1_pawnful/KPPPPPvK.rtbw. 3,721,360 bytes (3.55 MiB), SHA-256 `f2e587b1acd940ef836ea80e0c64eb6093255b8273e1f8b049ab8f9f2631cc0b`.
+  - DTZ: https://tablebase.lichess.ovh/tables/standard/7/6v1_pawnful/KPPPPPvK.rtbz. 1,652,304 bytes (1.58 MiB), SHA-256 `397a03d6d11823b2ead174c14f0c9e0a9be54c5b4b30890715a36d5fd1c16519`.
+  - Sizes come from `checksums/bytes.tsv` (niklasf/syzygy-tables.info master `09a5a9cd`) and the hashes from the mirror's `sha256` list. Both files were downloaded on 2026-10-26: sizes matched Content-Length and hashes matched the list. Last-Modified was 2018-04-24.
+  - The next-smallest files are KNNNNNvK.rtbw (6,957,648 bytes) and KQQQQQvK.rtbz (6,513,424 bytes). The next-smallest WDL+DTZ pair is KNPPPPvK (35.44 MiB).
+  - Mirror layout: `7/` has six subdirectories (`4v3_`, `5v2_`, `6v1_` × `pawnful`/`pawnless`). The mirror's `download.txt` lists the URLs above.
+  - **Limit:** without the 6-man tables, a WDL probe only works where the side to move has no capture available, because Fathom resolves captures by probing the smaller tables before its own (source reading; observed in the PVs). A root DTZ probe also needs every line it explores to stay capture-free. Pick test positions accordingly, like the two in 6.3, whose root probes succeeded.
+
+- **Sources** (full list in sources.md, "Fathom and Syzygy probing, Phase 3 deliverable 7"):
+  - https://github.com/jdart1/Fathom at `c9c6fef0`, with PRs #10, #11 and #16 and issues #14 and #17; PR #13 was identified from issue #14's closing comment and the git history;
+  - https://github.com/basil00/Fathom (2026-10-23 pass only);
+  - man7 posix_madvise(3) and madvise(2);
+  - kernel `Documentation/filesystems/proc.rst`;
+  - Microsoft's CreateFileA, CreateFileMappingA and MapViewOfFile pages;
+  - lichess-org/api and lichess-org/lila-tablebase;
+  - https://lichess.org/terms-of-service;
+  - niklasf/syzygy-tables.info and https://tablebase.lichess.ovh/tables/standard/.
+  - Verified 2026-10-26 (the first pass was 2026-10-23).
 
 ---
 
@@ -391,12 +601,18 @@ install.sh installs perf and valgrind and prints instructions for VTune and uPro
 3. ~~Fishtest's licence~~ (resolved 2026-10-24: none declared). Still open: the inputs of the Fishtest SPRT calculator (bot wall; not re-checked this pass).
 4. BayesElo: no version number, no checksum, no maintained repo (kept: the author's page publishes none; not re-checked this pass).
 5. Where TCEC publishes its opening books (FAQ silent; kept). ~~Which piece count TCEC gives engines~~ resolved: 7-man (`config/tcec.json`).
-6. Whether TCEC has ruled on Fathom's Cfish-derived `tbprobe.c` lineage (kept: no TCEC page mentions Fathom; a question for TCEC's Discord before applying).
+6. Whether TCEC has ruled on Fathom's Cfish-derived `tbprobe.c` lineage (kept on 2026-10-26: no TCEC page mentions Fathom; a question for TCEC's Discord before applying).
 7. How each Stockfish-repo book was built (which engine evaluated it) (kept: the books README does not say; provenance rule makes them test-only anyway).
 8. ~~perf's licence and perf/hardware counters under WSL2~~ resolved 2026-10-24 (GPL-2.0; counters and sampling work locally). Still open: VTune's release date and AMD/WSL support (not re-checked this pass).
 9. A standalone marlinformat repo, the "carbon" trainer and Scid (not re-checked this pass). ~~OpenBench's datagen details~~ resolved 2026-10-24.
 10. pgn-extract checksum (upstream publishes none; kept). Apt versions are distro-decided; on the local Ubuntu 26.04.1 WSL (2026-10-24): `linux-perf` 7.0.0-38.38, `valgrind` 1:3.26.0-0ubuntu1.
 11. Test suites (2026-10-25, §4 "Tactical and mate suites"): who made the WAC EPD; whether WAC was first published in 1945 or 1958; WAC's copyright status; Szabo's 2001 correction list (archive dead); whether TerjeKir's `wac-revised.epd` is Silver's 201-position set; where ChestUCI/matetrack positions came from; whether YACPDB or other problem databases offer a licensed dump; mate lengths #3 to #5 in the matetrack subset (only #1 and #2 checked by brute force).
+12. Fathom, from the 2026-10-26 pass (§6):
+    - whether `FILE_FLAG_RANDOM_ACCESS` affects page-fault read-ahead on Windows mapped views (Microsoft documents it only as a file-caching hint);
+    - Fathom's behaviour under concurrent probing: not tested; it is a Phase 6 test, and the evidence so far is the source plus the maintainer's PR #10 report;
+    - the error paths, which I read but did not exercise: an incomplete file printing on stdout, the bad-magic message, and the `exit()` calls on mapping failure and out of memory.
+13. lichess tablebase API (§6.9): no numeric rate limit is published for `tablebase.lichess.org`; no licence is stated for API responses.
+14. Whether python-chess's `chess.syzygy` was ported from Ronald de Man's probing code or written independently (its docs are silent; either way it is a code base separate from Fathom).
 
 ## OFF-LIMITS (summary)
 

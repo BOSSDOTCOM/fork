@@ -44,8 +44,11 @@ any form: code, nets, data, binaries inside Fork).
    server are not passed to engines through any UCI option seen in archived
    games; Fork has no use for them. Fork must probe 7-man tables (Fathom
    handles 7-man) and should `madvise(MADV_RANDOM)` the mapped files, which
-   TCEC asks of 7-man users. Tablebases are never used for adjudication now
-   (§2).
+   TCEC asks of 7-man users. Re-read 2026-10-26 (revision 8475): the
+   wording is unchanged. Fathom at the pinned commit already makes that
+   call for every mapped table when compiled as C++ or GNU C; strace and
+   `/proc/self/smaps` confirmed it (tools.md §6.4). Tablebases are never
+   used for adjudication now (§2).
 3. **Threads 512, Hash 262144 MB (256 GiB)** in the live Swiss 10 game. Fork's
    TT, thread pool and NUMA handling must scale to that. Hash initialisation
    must be multithreaded, or TCEC caps hash at 32 or 64 GiB.

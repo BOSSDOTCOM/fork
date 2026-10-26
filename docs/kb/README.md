@@ -49,7 +49,8 @@ Fork, where the information came from, and when it was verified.
    - There is no eval-based win adjudication. The ±10.00 and ±0.15 after
      move 35 rules apply only after a server outage.
 3. **Engines get 7-man Syzygy**, not 6. TCEC asks engines to `madvise`
-   the mapped files `MADV_RANDOM`.
+   the mapped files `MADV_RANDOM`. The pinned Fathom already does this when
+   compiled as C++, but strict ISO C silently drops it (tools.md §6.4).
 4. **Scale target: up to 512 threads and 256 GiB of hash.** The 256 GiB
    applies only if the hash is initialized by multiple threads; otherwise
    the cap is 32 or 64 GiB.

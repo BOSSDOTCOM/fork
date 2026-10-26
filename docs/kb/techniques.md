@@ -307,10 +307,17 @@ takes precedence over the short entries below for Phase 3 planning.
   the search-time WDL probe returns failure unless castling rights are zero
   **and** the halfmove clock is zero (so probe right after a capture or
   pawn move); the root DTZ probe requires zero castling rights but takes the
-  halfmove clock as input; the root probe is documented as not thread-safe
-  and meant for one call per search. DTZ50 lines can look odd (the header
-  also warns DTZ may suggest unnatural moves); TB scores must stay below
-  mate scores.
+  halfmove clock as input; the header documents the root probe as not
+  thread-safe and meant for one call per search. The README and the
+  maintainer disagree (re-checked 2026-10-26, tools.md §6.5): the note
+  predates his maintenance, and he reported days of multi-core testing of
+  the root functions without errors. One root probe per search is safe under
+  either reading. DTZ50 lines can look odd (the header also warns that DTZ
+  may suggest unnatural moves); TB scores must stay below mate scores.
+- 7-man and `madvise`: the pinned Fathom handles 7-man tables. Its Linux
+  mapping already advises `MADV_RANDOM` when the code is compiled as C++ or
+  GNU C, but not in strict ISO C (tools.md §6.3-6.4, verified by running it
+  2026-10-26).
 - Source: https://www.chessprogramming.org/Syzygy_Bases
 
 ---
