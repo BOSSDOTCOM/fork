@@ -96,6 +96,7 @@ class Position {
   bool is_legal(Move m) const;         // requires is_pseudo_legal(m)
   bool gives_check(Move m) const;      // requires is_pseudo_legal(m) && is_legal(m)
   Key predicted_key(Move m) const;     // exact key after make(m), for TT prefetch
+  Key predicted_null_key() const;      // exact key after make_null(), for TT prefetch
   // Occupancy after the side to move captures en passant from `from` to `to`.
   Bitboard occupancy_after_ep(Square from, Square to) const;
   // The square of the piece a capture by the side to move removes.

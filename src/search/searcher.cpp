@@ -132,7 +132,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       return s;
   }
 
-  f.static_eval = in_check ? ScoreNone : static_eval(pos);
+  // A TT entry stores the static evaluation of its position (review 2, claim
+  // (b)): it is reused instead of evaluating again.
+  f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : static_eval(pos);
   const bool can_prune = !OnPv && !in_check;
 
   // Reverse futility pruning (T20): far enough above beta at shallow depth,
@@ -150,7 +152,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (switches.use_nmp && can_prune && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
       f.static_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
     const int surplus_plies = std::min((f.static_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
-    const int null_depth = depth / 2 - 1 - surplus_plies;  // 0 or less: the quiescence search
+    const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
+    if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)
     pos.make_null();
     frames_[ply + 1].after_null = true;
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
@@ -357,7 +360,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   if (in_check) {
     f.static_eval = ScoreNone;
   } else {
-    f.static_eval = static_eval(pos);
+    f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : static_eval(pos);  // as in negamax
     best = f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)

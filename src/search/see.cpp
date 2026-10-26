@@ -50,4 +50,42 @@ int see_value(const Position& pos, Move m) {
   return swing[0];
 }
 
+bool see_at_least(const Position& pos, Move m, int threshold) {
+  if (m.is_castle()) return 0 >= threshold;
+  const Square from = m.from(), to = m.to();
+  Bitboard occ = pos.pieces() ^ bb(from);
+  // The mover's net gain if the exchange stopped now, and the value of the
+  // piece standing on the square (what the next capture would win).
+  int net_gain;
+  if (m.is_en_passant()) {
+    net_gain = piece_value(Pawn);
+    occ ^= bb(pos.capture_square(m));
+  } else {
+    net_gain = m.is_capture() ? piece_value(kind_of(pos.piece_at(to))) : 0;
+  }
+  int standing = piece_value(kind_of(pos.piece_at(from)));
+  if (m.is_promotion()) {
+    net_gain += piece_value(m.promo_type()) - piece_value(Pawn);
+    standing = piece_value(m.promo_type());
+  }
+  Color decider = ~pos.side_to_move();  // the opponent chooses first
+  bool our_turn = false;
+  for (;;) {
+    if (our_turn ? net_gain >= threshold : net_gain < threshold) return net_gain >= threshold;
+    const Bitboard attackers = pos.attackers_to(to, occ) & occ & pos.pieces(decider);
+    if (!attackers) return net_gain >= threshold;
+    PieceType pt = Pawn;
+    while (!(attackers & pos.pieces(pt))) pt = PieceType(pt + 1);
+    const Square sq = lsb(attackers & pos.pieces(pt));
+    // The king may only capture onto a square the other side no longer attacks.
+    if (pt == King && (pos.attackers_to(to, occ ^ bb(sq)) & occ & pos.pieces(~decider)))
+      return net_gain >= threshold;
+    net_gain += our_turn ? standing : -standing;
+    standing = piece_value(pt);
+    occ ^= bb(sq);
+    decider = ~decider;
+    our_turn = !our_turn;
+  }
+}
+
 }  // namespace forkeng

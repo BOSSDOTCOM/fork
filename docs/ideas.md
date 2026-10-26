@@ -576,3 +576,45 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** none (test-side only).
 - **earliest phase:** Phase 3.
 - **status:** queued
+
+## 26. Upcoming repetition detection
+
+- **type:** ELO (behind a switch)
+- **idea:** detect that the side to move can force a repetition before it
+  happens (owner, 2026-10-26, second external review), so a draw score is
+  available one ply earlier, without searching the repeating moves. Built
+  from the kb-researcher's clean-room description of the published method.
+- **phase:** Phase 3 tier 2, or Phase 7 (tournament behaviour), whichever
+  comes first after the description exists.
+- **metric:** SPRT [0, 3].
+- **runtime cost:** possible (a lookup per node).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 27. Fifty-move-rule scaling of the evaluation in long endgames
+
+- **type:** ELO (behind a switch)
+- **idea:** scale the evaluation toward a draw as the fifty-move counter
+  grows (owner, 2026-10-26, second external review), so the search prefers
+  progress (captures, pawn moves) in long endgames instead of shuffling
+  into a fifty-move draw. Tied to idea 12 (Syzygy: the DTZ and 50-move
+  questions, and TCEC's long endgames): with tablebases the probe decides
+  in the covered endings, and the scaling matters for the rest.
+- **phase:** Phase 4 (the evaluation), after deliverable 7 (Syzygy).
+- **metric:** SPRT [0, 3], plus the conversion suite (deliverable 7's).
+- **runtime cost:** possible (one multiply per evaluation).
+- **earliest phase:** Phase 4.
+- **status:** untested
+
+## 28. History malus balance
+
+- **type:** ELO (a tunable parameter)
+- **idea:** the quiet history's malus for the quiets tried before a cutoff
+  is now the same size as the cutoff move's bonus. Make the ratio a
+  parameter (owner, 2026-10-26, second external review) and let SPSA find
+  it, with the removal round's UseHistoryMalus result as the reference.
+- **phase:** deliverable 8b (the parameter table) adds it; SPSA after Phase 4.
+- **metric:** SPSA, then SPRT [0, 3] of the tuned value.
+- **runtime cost:** none (a multiply where the malus is applied).
+- **earliest phase:** Phase 3 (8b).
+- **status:** untested

@@ -340,7 +340,12 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   (or equivalent) so concurrent access is not undefined behaviour, and adds
   a stress test, run under TSan, where many threads write and read the same
   buckets with random entries and every hit a reader accepts must be one
-  writer's complete entry.
+  writer's complete entry. **The spec must also settle** (owner, 2026-10-26,
+  second external review): how the threads agree on the move played (the
+  main thread's result, or a choice among threads by depth and score, or a
+  vote), and how the threads' searches are kept diverse (different depths,
+  move orders or other per-thread variation), each from the
+  kb-researcher's clean-room description and measured by a scaling test.
 - **Phase 7: Tournament-aware play.** Contempt/style options, TB-aware
   eval, keeping tension. Each item is documented here as genuine evaluation.
 - **Phase 8: TCEC-conditions testing** from `tcec.json`: paired openings,
@@ -870,6 +875,15 @@ games at very short time controls and under full CPU load (Phase 2's
 2+0.02 setup) with zero time losses; `movetime` overrun stays within a
 stated bound; `stop` to `bestmove` latency under 10 ms with the real search
 (the Phase 2 timing test).
+- **Confirmed defect to fix here** (external review claim (b), 2026-10-26,
+  reproduced by calling `plan_time`): the increment term divides before it
+  multiplies (`increment / 4 * 3`), so an increment of 1-3 ms adds nothing
+  to the soft budget and others lose up to 3 ms (7 ms adds 3, not 5.25;
+  10 ms adds 6, not 7.5). The fix comes with a test of exact small
+  increments.
+- **Baselines** (owner's queue, 2026-10-26): 2,000 games at 2+0.02 with
+  every CPU busy, 0 time losses (Milestone A: 1 in 200); LTC 40+0.4: 0 time
+  losses in 1,867 SPRT games.
 
 > **Milestone C** (stop): deliverables 7-8 done; the core of Phase 3 is
 > complete. Report as for Milestone B, plus the TB tests, the conversion
@@ -908,7 +922,16 @@ start before the table exists.
 
 **9. Tier 2 refinements**, built one at a time, each behind a flag and
 SPRT-tested on its own, **reported in batches at the end of Phase 3**, not
-individually. The order follows the KB's build order (steps 5 and 7-10):
+individually. The order follows the KB's build order (steps 5 and 7-10),
+with the owner's changes of 2026-10-26 (second external review): Fork has
+neither singular extensions nor check-aware reductions yet, so checks come
+first, and the quiescence delta pruning moves up. Every new technique gets
+the kb-researcher's clean-room description (KB search-techniques.md) before
+it is built.
+0. **Checks first:** check-aware late move reductions (checking moves and
+   in-check nodes reduced less) or a check extension, whichever the
+   description and a first SPRT favour, then the other on its own SPRT; then
+   quiescence delta pruning (moved up from step 5's qsearch futility).
 1. T18 improving (per use: RFP, LMP, LMR, NMP gate), T26 IIR.
 2. T10 continuation history (1-ply, then 2-ply, then deeper, each its own
    SPRT, watching nps), T11 capture history, T24 quiet history pruning.
@@ -921,7 +944,9 @@ individually. The order follows the KB's build order (steps 5 and 7-10):
 5. T31 ProbCut, T32 correction history (one table at a time: pawn,
    non-pawn per side, minor, continuation), T25 qsearch futility, T14 NMP
    verification at high depth (zugzwang insurance for TCEC endgames, on
-   non-regression bounds, tested on cited zugzwang positions).
+   non-regression bounds, tested on cited zugzwang positions). New
+   candidates (owner, 2026-10-26): razoring, and futility pruning of losing
+   captures in the main search.
 6. T12 pawn-structure history, last, because it needs a pawn key.
 
 **The pawn key** (for T12 and T32) and the non-pawn keys (for T32) are a

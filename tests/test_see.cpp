@@ -75,6 +75,11 @@ void compare_tree(Position& pos, int depth, int& compared) {
     const int got = see_value(pos, m), want = reference_see(pos, m);
     CHECK_MSG(got == want, pos.fen() << " " << pos.move_to_uci(m) << ": " << got << " vs " << want);
     ++compared;
+    // see_at_least decides early (review 2, claim (a)): it must agree with
+    // the full value at the value itself, either side of it, and a spread.
+    for (const int t : {got - 1, got, got + 1, -1000, -500, -300, -100, -1, 0, 1, 100, 300, 500, 1000})
+      CHECK_MSG(see_at_least(pos, m, t) == (got >= t),
+                pos.fen() << " " << pos.move_to_uci(m) << ": see " << got << ", threshold " << t);
   }
   if (depth == 0) return;
   for (Move m : list) {
