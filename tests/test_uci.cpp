@@ -12,6 +12,7 @@
 //   start placement: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4000 2001
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -593,6 +594,17 @@ namespace {
 
 constexpr double Slack = Optimized ? 1.0 : 10.0;
 
+// While test games run, development runs at low priority (scripts/env.sh sets
+// FORK_LOW_PRIORITY=1): timings taken then say nothing about Fork, so the
+// timing cases report SKIPPED instead of passing or failing (owner,
+// 2026-10-26).
+bool timing_not_measurable() {
+  const char* low = std::getenv("FORK_LOW_PRIORITY");
+  return low && std::string_view(low) == "1";
+}
+constexpr const char* LowPriorityReason =
+    "running at low priority beside test games (FORK_LOW_PRIORITY=1): timing cannot be measured";
+
 double ms_between(Clock::time_point a, Clock::time_point b) {
   return std::chrono::duration<double, std::milli>(b - a).count();
 }
@@ -621,6 +633,7 @@ double time_reply(Gui& g, std::string_view command, std::string_view answer) {
 }  // namespace
 
 TEST_CASE("uci_timing", "uci to uciok, first isready to readyok, stop to bestmove") {
+  if (timing_not_measurable()) SKIP(LowPriorityReason);
   Timing uci, ready, stop;
   for (int run = 0; run < 3; ++run) {
     Gui g;
@@ -717,27 +730,54 @@ namespace forkeng::test {
 // inside cmd_go, before the search thread starts its clock, so that time is
 // not counted against movetime.
 TEST_CASE("uci_timing", "review: go movetime counts the Hash work done at go") {
+  if (timing_not_measurable()) SKIP(LowPriorityReason);
   Gui g;
   CHECK(g.sync());
   g.send("setoption name Move Overhead value 0");  // the whole 50 ms is the budget
   CHECK(g.sync());
-  g.send("setoption name Hash value 4096");
-  g.send("position startpos");
-  const std::size_t mark = g.cursor;
-  const double ms = time_reply(g, "go movetime 50", "bestmove");
   // The Hash work itself cannot be undone (4 GB takes far longer than 50 ms
   // here), but the search must not add its 50 ms on top: bestmove comes at
-  // max(Hash work, 50 ms) plus a small margin, not at their sum.
-  double hash_ms = -1;
-  for (const std::string& line : g.texts(mark))
-    if (starts_with(line, "info string Hash 4096 MB allocated and cleared in ")) {
-      hash_ms = std::stod(
-          line.substr(std::string_view("info string Hash 4096 MB allocated and cleared in ").size()));
+  // max(Hash work, 50 ms) plus a small margin, not at their sum (owner,
+  // 2026-10-26, after it failed beside a full check):
+  // - the size actually allocated is read from the report; if the table fell
+  //   back below the size asked for (memory pressure), the Hash work cannot
+  //   be measured, and the case is SKIPPED with the reason, never passed;
+  // - the best of three attempts counts, each with a real resize (the size
+  //   alternates), as for the other timing tests here, and every failed
+  //   attempt is logged as a NOTE so intermittent slowdowns stay visible.
+  constexpr std::string_view Prefix = "info string Hash ";
+  constexpr std::string_view Middle = " MB allocated and cleared in ";
+  bool passed = false;
+  for (int attempt = 1; attempt <= 3 && !passed; ++attempt) {
+    const int asked = attempt % 2 ? 4096 : 4064;
+    g.send("setoption name Hash value " + std::to_string(asked));
+    g.send("position startpos");
+    const std::size_t mark = g.cursor;
+    const double ms = time_reply(g, "go movetime 50", "bestmove");
+    double hash_ms = -1;
+    int allocated = -1;
+    for (const std::string& line : g.texts(mark)) {
+      const std::size_t at = line.find(Middle);
+      if (starts_with(line, Prefix) && at != std::string::npos) {
+        allocated = std::stoi(line.substr(Prefix.size(), at - Prefix.size()));
+        hash_ms = std::stod(line.substr(at + Middle.size()));
+      }
     }
-  std::cout << "  go movetime 50 after a Hash change -> bestmove: " << ms << " ms (Hash work " << hash_ms
-            << " ms)\n";
-  CHECK(hash_ms >= 0);
-  CHECK_MSG(ms >= 0 && ms < std::max(hash_ms, 50.0) + 30 * Slack, ms << " ms for go movetime 50");
+    std::cout << "  go movetime 50 after a Hash change (" << allocated << " of " << asked
+              << " MB) -> bestmove: " << ms << " ms (Hash work " << hash_ms << " ms)\n";
+    if (allocated != asked) {
+      g.check_transcript();
+      g.quit();
+      SKIP("Hash " << asked << " MB fell back to " << allocated
+                   << " MB (memory pressure), so the Hash work at go cannot be timed");
+    }
+    const double limit = std::max(hash_ms, 50.0) + 30 * Slack;
+    passed = hash_ms >= 0 && ms >= 0 && ms < limit;
+    if (!passed)
+      NOTE("attempt " << attempt << " of 3 too slow: bestmove after " << ms << " ms, limit " << limit
+                      << " ms (Hash work " << hash_ms << " ms)");
+  }
+  CHECK_MSG(passed, "go movetime 50 after a Hash change: no attempt within max(Hash work, 50 ms) + margin");
   g.check_transcript();
   g.quit();
 }

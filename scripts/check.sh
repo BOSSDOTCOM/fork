@@ -46,7 +46,38 @@ mode=${1:-quick}
 code_paths=(src tests bench fuzz tools/magic_seeds.cpp tools/dump_tables.cpp tools/hash_timing.cpp cmake CMakeLists.txt CMakePresets.json
             scripts/check.sh scripts/env.sh scripts/uci-smoke.sh update.sh)
 log=$(mktemp)
-trap 'rm -f "$log"' EXIT
+
+# One check at a time (owner, 2026-10-26): a check run beside another one
+# (the Stop hook during a pre-commit full check, say) competes for CPU and
+# memory, and the timing and Hash tests then fail for the wrong reason. The
+# lock is a directory holding the owner's PID, cleared when that process is
+# gone. `full` waits for it; the hook modes wait within their hooks' time
+# limits (stop 10 min, quick 4 min), then skip with a warning and record no
+# pass.
+lock=build/.check.lock
+case "$mode" in
+  full) wait_s=-1 ;;
+  stop) wait_s=600 ;;
+  *) wait_s=240 ;;
+esac
+mkdir -p build
+waited=0
+until mkdir "$lock" 2>/dev/null; do
+  holder=$(cat "$lock/pid" 2>/dev/null)
+  if [ -n "$holder" ] && ! kill -0 "$holder" 2>/dev/null; then
+    rm -rf "$lock"  # the holder is gone: a stale lock
+    continue
+  fi
+  if [ "$wait_s" -ge 0 ] && [ "$waited" -ge "$wait_s" ]; then
+    echo "fork check $mode: skipped, another check (PID ${holder:-unknown}) still running after ${waited} s; no pass recorded" >&2
+    rm -f "$log"
+    exit 0
+  fi
+  sleep 5
+  waited=$((waited + 5))
+done
+echo $$ > "$lock/pid"
+trap 'rm -f "$log"; rm -rf "$lock"' EXIT
 
 fail() {
   {
@@ -94,6 +125,12 @@ build_and_test() {  # preset, ctest filter args...
   local status=$?
   echo "$out" >>"$log"
   [ $status -eq 0 ] || fail "tests $preset"
+  # Skipped cases and notes (retried timing attempts) are not failures, but
+  # they stay visible (owner, 2026-10-26): CTest hides a passing test's output.
+  local last="build/$preset/Testing/Temporary/LastTest.log"
+  if [ -f "$last" ] && grep -qE '^(SKIP|NOTE) ' "$last"; then
+    grep -E '^(SKIP|NOTE) ' "$last" | sed "s/^/fork check $mode ($preset): /" >&2
+  fi
   echo "$out" | grep -qE 'Test +#[0-9]+: no_alloc \.+ +Passed' || fail "no_alloc did not run in $preset"
 }
 

@@ -333,7 +333,10 @@ if(FORK_BUILD_TESTS)
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
                 search see ordering pruning time_budget tt uci_protocol uci_options uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
+    set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
+  # Timing tests run alone, never beside another test (owner, 2026-10-26).
+  set_tests_properties(uci_timing PROPERTIES RUN_SERIAL TRUE)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_test(NAME perft_full COMMAND fork_tests perft_full)
     set_tests_properties(perft_full PROPERTIES LABELS slow)
