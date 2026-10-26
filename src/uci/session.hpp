@@ -120,6 +120,10 @@ class UciSession {
   TransTable tt_;             // a view over hash_, rebound whenever hash_ is resized
   bool hash_pending_ = true;  // the table is allocated at the first isready, ucinewgame or go
   bool clear_pending_ = false;
+  // SyzygyPath: loaded at the next isready, ucinewgame or go, outside any
+  // search (deliverable 7).
+  std::string syzygy_path_;
+  bool tables_pending_ = false;
   Position root_;
   bool go_answered_ = false;  // the go being handled has started its search or answered
   SearchSignals signals_;

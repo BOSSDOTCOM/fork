@@ -72,6 +72,9 @@ struct SearchSwitches {
   // Pruning decisions use the static eval corrected by the TT score's bound
   // (review 2, claim (d); KB T50; off by default).
   bool use_tt_eval_refine = false;
+  // Syzygy endgame tables, when loaded (deliverable 7): win/draw/loss probes
+  // in the search and the ranking of root moves.
+  bool use_tables = true;
   // Tests only: a TT entry cuts only at exactly the depth it was searched
   // to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
@@ -98,6 +101,7 @@ struct IterationReport {
   std::int64_t elapsed_ms;
   int fill_permille;
   const PrincipalLine* pv;
+  std::uint64_t table_hits;  // successful endgame-table probes so far (UCI tbhits)
 };
 
 // Receives one report per finished iteration (and per reported aspiration
@@ -217,6 +221,7 @@ class Searcher {
   SearchListener* listener_ = nullptr;
   std::chrono::steady_clock::time_point start_;
   std::uint64_t nodes_ = 0;
+  std::uint64_t table_hits_ = 0;
   int max_ply_reached_ = 0;
   bool stopped_ = false;
 

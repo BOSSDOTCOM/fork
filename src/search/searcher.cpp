@@ -6,6 +6,7 @@
 #include "core/movegen.hpp"
 #include "eval/bootstrap_eval.hpp"
 #include "eval/eval.hpp"
+#include "search/endgame_tables.hpp"
 #include "search/lmr_table.hpp"
 #include "search/see.hpp"
 
@@ -28,6 +29,15 @@ constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are repor
 constexpr int RfpMaxDepth = 6;
 constexpr int RfpMargin = 80;  // centipawns per ply of remaining depth
 constexpr int NullMinDepth = 3;
+// Endgame tables (deliverable 7): probed from this remaining depth on in the
+// main search, never in the quiescence search (DESIGN.md §5.2, "Search
+// constants": a fifty-move-safe probe needs a zero halfmove clock, so probes
+// come only right after captures and pawn moves anyway; a higher minimum is
+// for slow table storage, tuned in Phase 8). Cursed wins and blessed losses
+// (the fifty-move rule turns them into draws) score just off zero, so a real
+// draw is never preferred to them and no real advantage is given up for them.
+constexpr int TableProbeMinDepth = 1;
+constexpr int TableNearDrawScore = 1;
 // The null search gets half the remaining depth, less one ply, and one ply
 // less again per NullSurplusPerPly of static eval above beta (at most
 // NullSurplusPliesMax).
@@ -134,6 +144,32 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 
   // A TT entry stores the static evaluation of its position (review 2, claim
   // (b)): it is reused instead of evaluating again.
+  // Endgame tables (deliverable 7): within the tables' piece count, with no
+  // castling rights and a zero halfmove clock, the result is known. A win is
+  // a lower bound (a faster mate may exist), a loss an upper bound, a draw
+  // exact; the node returns at once when the bound settles it, and otherwise
+  // the searched result is kept within it (a lost node is worth no more than
+  // its loss, a won node no less than its win).
+  int table_floor = -ScoreInfinite, table_ceiling = ScoreInfinite;
+  if (switches.use_tables && depth >= TableProbeMinDepth && ply > 0) {
+    if (const std::optional<TableWdl> wdl = probe_table_wdl(pos)) {
+      ++table_hits_;
+      const int s = *wdl == TableWdl::Win           ? TbWinScore - ply
+                    : *wdl == TableWdl::Loss        ? -(TbWinScore - ply)
+                    : *wdl == TableWdl::CursedWin   ? TableNearDrawScore
+                    : *wdl == TableWdl::BlessedLoss ? -TableNearDrawScore
+                                                    : 0;
+      const TtBound b = *wdl == TableWdl::Win    ? TtBound::Lower
+                        : *wdl == TableWdl::Loss ? TtBound::Upper
+                                                 : TtBound::Exact;
+      if (b == TtBound::Exact || (b == TtBound::Lower && s >= beta) || (b == TtBound::Upper && s <= alpha)) {
+        if (switches.use_tt) tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv);
+        return s;
+      }
+      (b == TtBound::Lower ? table_floor : table_ceiling) = s;
+    }
+  }
+
   f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : static_eval(pos);
   // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
   // score from a real search corrects the static estimate in the direction
@@ -323,6 +359,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // not (the guard above prevents it; this keeps the result right regardless).
   if (moves_seen == 0) return in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
+  best = std::clamp(best, table_floor, table_ceiling);
   if (switches.use_tt) {
     const TtBound bound = best >= beta                 ? TtBound::Lower
                           : OnPv && best > alpha_start ? TtBound::Exact
@@ -467,8 +504,8 @@ int Searcher::search_root(int alpha, int beta, int depth) {
 
 void Searcher::report_iteration(int depth, int score, int bound, const PrincipalLine& pv) {
   if (!listener_) return;
-  const IterationReport r{depth,        max_ply_reached_,    score, bound, nodes_,
-                          elapsed_ms(), tt_.fill_permille(), &pv};
+  const IterationReport r{depth,        max_ply_reached_,    score, bound,      nodes_,
+                          elapsed_ms(), tt_.fill_permille(), &pv,   table_hits_};
   listener_->on_iteration(*pos_, r);
 }
 
@@ -517,6 +554,28 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   if (root_count_ == 0) {
     result.score = pos.in_check() ? mated_score(0) : 0;
     return result;
+  }
+  // Endgame tables at the root (deliverable 7): only the moves that keep the
+  // best result under the fifty-move rule are searched, in the tables' order
+  // (within any searchmoves). A repetition since the last capture or pawn
+  // move makes the ranking avoid repeating again.
+  table_hits_ = 0;
+  if (switches.use_tables && endgame_table_pieces() > 0) {
+    MoveList kept;
+    if (rank_root_by_tables(pos, pos.repetition_count() >= 2, kept)) {
+      MoveList searched;  // the kept moves that are root moves, in the tables' order
+      for (Move m : kept)
+        for (std::size_t i = 0; i < root_count_; ++i)
+          if (root_moves_[i].move == m) {
+            searched.add(m);
+            break;
+          }
+      if (searched.size() > 0) {
+        root_count_ = 0;
+        for (Move m : searched) root_moves_[root_count_++] = {m};
+      }
+      ++table_hits_;
+    }
   }
   result.best = root_moves_[0].move;
 

@@ -140,6 +140,21 @@ add_library(forkcore STATIC
 target_include_directories(forkcore PUBLIC src)
 target_link_libraries(forkcore PUBLIC fork_flags PRIVATE fork_pgo)
 
+# Syzygy tablebase probing (DESIGN.md §5.2, deliverable 7): the vendored
+# Fathom library, jdart1/Fathom at c9c6fef0 (MIT; third_party/fathom, file
+# SHA-256s and lineage in docs/ORIGINALITY.md). tbprobe.c is compiled as
+# C++: <sys/mman.h> then provides POSIX_MADV_RANDOM and Fathom advises random
+# access on every mapped table (TCEC asks 7-man users for MADV_RANDOM; KB
+# tools.md §6), which a strict ISO C build silently skips. Fathom's own
+# warnings stay in this target (-w), so Fork's -Werror stays on Fork's code;
+# its header is clean under Fork's flags.
+add_library(fathom STATIC third_party/fathom/src/tbprobe.c)
+set_source_files_properties(third_party/fathom/src/tbprobe.c PROPERTIES LANGUAGE CXX)
+target_include_directories(fathom SYSTEM PUBLIC third_party/fathom/src)
+target_compile_definitions(fathom PUBLIC TB_NO_HELPER_API)
+target_link_libraries(fathom PRIVATE fork_flags)
+target_compile_options(fathom PRIVATE -w)
+
 # The evaluator is chosen at build time (owner, 2026-10-24; DESIGN.md §5.2):
 # no runtime interface and no indirect call in the search.
 set(FORK_EVALUATOR "bootstrap" CACHE STRING "Static evaluation built into Fork: bootstrap")
@@ -152,6 +167,7 @@ endif()
 add_library(forksearch STATIC
   src/eval/bootstrap_eval.cpp
   src/search/search_bench.cpp
+  src/search/endgame_tables.cpp
   src/search/hash_memory.cpp
   src/search/move_selector.cpp
   src/search/searcher.cpp
@@ -160,7 +176,7 @@ add_library(forksearch STATIC
   src/search/trans_table.cpp)
 target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
 find_package(Threads REQUIRED)
-target_link_libraries(forksearch PUBLIC forkcore Threads::Threads PRIVATE fork_pgo)
+target_link_libraries(forksearch PUBLIC forkcore fathom Threads::Threads PRIVATE fork_pgo)
 if(FORK_SEARCH_STATS)
   target_compile_definitions(forksearch PUBLIC FORK_SEARCH_STATS)
 endif()
@@ -286,6 +302,7 @@ if(FORK_BUILD_TESTS)
     tests/test_tt.cpp
     tests/test_ordering.cpp
     tests/test_pruning.cpp
+    tests/test_endgame_tables.cpp
     tests/test_pruning_review.cpp
     tests/test_ordering_review.cpp
     tests/engine_process.cpp
@@ -330,8 +347,41 @@ if(FORK_BUILD_TESTS)
   endforeach()
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
+  # The smallest 7-man Syzygy pair, KPPPPPvK (deliverable 7's 7-piece test;
+  # KB tools.md §6.9): downloaded once into .cache/ and pinned by SHA-256,
+  # never committed. A failed download makes those cases fail loudly.
+  set(FORK_SYZYGY7_DIR ${CMAKE_SOURCE_DIR}/.cache/syzygy7)
+  foreach(spec
+      "KPPPPPvK.rtbw|https://tablebase.lichess.ovh/tables/standard/7/6v1_pawnful/KPPPPPvK.rtbw|f2e587b1acd940ef836ea80e0c64eb6093255b8273e1f8b049ab8f9f2631cc0b"
+      "KPPPPPvK.rtbz|https://tablebase.lichess.ovh/tables/standard/7/6v1_pawnful/KPPPPPvK.rtbz|397a03d6d11823b2ead174c14f0c9e0a9be54c5b4b30890715a36d5fd1c16519")
+    string(REPLACE "|" ";" parts "${spec}")
+    list(GET parts 0 tb_name)
+    list(GET parts 1 tb_url)
+    list(GET parts 2 tb_hash)
+    set(tb_file ${FORK_SYZYGY7_DIR}/${tb_name})
+    if(EXISTS ${tb_file})
+      file(SHA256 ${tb_file} have)
+      if(NOT have STREQUAL tb_hash)
+        file(REMOVE ${tb_file})
+      endif()
+    endif()
+    if(NOT EXISTS ${tb_file})
+      file(DOWNLOAD ${tb_url} ${tb_file} STATUS st TIMEOUT 600 INACTIVITY_TIMEOUT 60)
+      list(GET st 0 code)
+      set(have "")
+      if(code EQUAL 0)
+        file(SHA256 ${tb_file} have)
+      endif()
+      if(NOT have STREQUAL tb_hash)
+        file(REMOVE ${tb_file})
+        message(WARNING "could not download ${tb_name} with the pinned SHA-256 (${st}); the 7-piece tests will fail")
+      endif()
+    endif()
+  endforeach()
+  target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY7_DIR="${FORK_SYZYGY7_DIR}")
+
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering pruning time_budget tt uci_protocol uci_options uci_timing)
+                search see ordering pruning tables time_budget tt uci_protocol uci_options uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()

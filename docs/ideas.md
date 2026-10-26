@@ -480,6 +480,13 @@ added on 2026-10-24; ideas 1-12 predate them.
   from LMP. No wrong score is ever reported, only a later mate.
 - **phase:** Phase 3 tier 2 (deliverable 7) or the removal round; measure
   with mate-suite solve counts (the kb-researcher's suite) and SPRT.
+- **re-checked with tablebases** (owner, 2026-10-26, after deliverable 7):
+  with today's search (Fork's own constants, the futile-node filter) the
+  first mate appears at depth 8 without tables (a mate in 4) and at depth 9
+  with the 3-4-5 tables, the mate in 3 by depth 14 in both. The tables do
+  not fix this: they give win/draw/loss, not distance to mate, and probes
+  need a zero halfmove clock (131 probes in that search). The case stays a
+  search question.
 - **metric:** SPRT; mate-suite solves at fixed nodes.
 - **runtime cost:** a score test per pruning decision.
 - **earliest phase:** Phase 3.

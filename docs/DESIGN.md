@@ -1320,6 +1320,37 @@ Choices made while building, where the spec leaves a gap:
   - **Counters** (FORK_SEARCH_STATS bench, Fork's own values): RFP 2.09M
     and null-move 0.44M cuts; LMP 0.41M, futility 10.63M and SEE 2.90M
     prunes; 2.38M reduced searches, 0.5% re-searched at full depth.
+- **Deliverable 7, Syzygy probing** (2026-10-26). Fathom at the pin is
+  vendored unchanged in `third_party/fathom` (its own CMake target,
+  `tbprobe.c` built as C++ so its `MADV_RANDOM` advice is compiled in, its
+  warnings kept to itself); `src/search/endgame_tables.*` wraps it.
+  `SyzygyPath` loads the tables at the next `isready`, `ucinewgame` or `go`,
+  never during a search, and reports their largest piece count (from the
+  files, 3-7). In `negamax`, at non-root nodes from depth 1 with no castling
+  rights and a zero halfmove clock, a win/draw/loss probe returns at once
+  when its bound settles the node (a win is a lower bound at the TB band, a
+  loss an upper bound, a draw exact, cursed wins and blessed losses ±1, stored
+  in the TT as that bound), and otherwise keeps the searched result within
+  the bound. At the root the distance-to-zero ranking (the win/draw/loss
+  ranking if the DTZ files are missing) keeps the moves of the best rank,
+  which are all moves preserving the best result under the fifty-move rule
+  (Fathom ranks every safe win equally), within any `searchmoves`. Info
+  lines carry `tbhits`; switch `UseTables`. Tests (`tables` suite): no
+  tables, a missing or empty directory, the 7-man pair (largest count 7,
+  win and loss, no answer with a running halfmove clock or too many
+  pieces), the root ranking (13 winning moves kept), a path with only the
+  WDL file, the search's TB scores and probe count, and on Linux the
+  `MADV_RANDOM` flag on the mapped table (`/proc/self/smaps`).
+  `tools/check_syzygy.py`: 3,000 random positions on the 3-4-5 tables
+  against python-chess's prober, 0 disagreements. Fathom's own output:
+  an incomplete table file is reported on stderr and as an `info string`
+  line on stdout (through C stdio, during loading only, so never beside
+  search output); a mapping failure or running out of memory makes it call
+  `exit()` (KB tools.md §6). Idea 22's KQR v K mate
+  (re-checked with the 3-4-5 tables): the first mate appears at depth 9
+  with tables and at depth 8 without, mate in 3 by depth 14 in both: the
+  tables give no distance to mate, and probes need a zero halfmove clock
+  (ideas.md idea 22).
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
@@ -1393,7 +1424,9 @@ and Weiss (results in ORIGINALITY.md).
 | `HistoryBonusCap` | HistoryMax / 8 = 1250 | No single cutoff moves a value by more than an eighth of the range, so about eight agreeing cutoffs are needed to approach the limit. |
 | History bonus | 12.5·d², capped | Grows with depth because deeper cutoffs refute bigger subtrees; quadratic so the rarer deep cutoffs outweigh the many shallow ones; reaches the cap at depth 10. |
 | `StaleDepthPerSearch` | 2 plies (TT victim policy, experimental switch `UseTtAgeBlend`, off by default) | Between two of Fork's searches in a game two plies are played, so a stored position is two plies nearer the new root, and the new search asks it for two plies more depth than the search that wrote it. The shape depth − k·age is the common one (Stockfish, Ethereal, Berserk and Weiss); their rates are 4-16 plies per search (constant screen, 2026-10-26). |
-| `EvasionCaptureBase` | 2^20 | Above any history value (|h| ≤ 10000), so evasion captures always come before quiet evasions. |
+| `EvasionCaptureBase` | HistoryMax + 1 | Above any history value (|h| ≤ 10000), so evasion captures always come before quiet evasions; with the largest victim-attacker score (14,400) every score fits the int16 score array (6ae4128; it was 2^20 with an int array). |
+| `TableProbeMinDepth` | 1 | Endgame tables are probed at every main-search node that meets the conditions: a fifty-move-safe probe needs a zero halfmove clock, so probes come only right after captures and pawn moves anyway. A higher minimum pays only with slow table storage (TCEC's 7-man set is on disk); tuned in Phase 8 on TCEC-like storage. |
+| `TableNearDrawScore` | 1 cp | Cursed wins and blessed losses (the fifty-move rule turns them into draws) score just off zero: a real draw is never preferred to a cursed win, and no real advantage is given up for one. |
 | MVV-LVA score | (victim value + promotion value)·8 − attacker type | The victim's value dominates (distinct values differ by at least 100, so ·8 leaves room far above the attacker's type index, at most 5), and the attacker breaks ties: standard MVV-LVA ordering (CPW). |
 | Time budget (`time_budget.cpp`) | 30, 40, 4, 1/10, 1/2 | Deliverable 2's first budget, justified in its notes above; deliverable 8 re-derives them from measurements. |
 
@@ -1540,7 +1573,8 @@ invariants.
   `quiesce`, `gives_check`, `static_eval`, `mate_score`, `update_pv`,
   `see_value`, `score_to_tt` / `score_from_tt`, the TT names `TtHit`,
   `TtBound` and `TtBucket`, `LmrTable`, `moves_seen`, `quiets_searched`,
-  `futility_value`, and the file name `see`. Exact matches of compound
+  `futility_value`, and the file name `see`; and the UCI option's own name,
+  `SyzygyPath` (as `syzygy_path_`, name check 22). Exact matches of compound
   names that are not such terms are renamed: `SearchLimits` became
   `SearchQuota`, `AspirationWindow` became `AspirationHalfWidth`, and
   `Searcher::explore` became `Searcher::deliberate` (name check 14: no
