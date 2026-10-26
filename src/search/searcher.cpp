@@ -183,6 +183,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #ifdef FORK_SEARCH_STATS
   counters.futile_nodes += futile_node;
 #endif
+  bool quiet_checks_only = false;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
     ++moves_seen;
     const bool quiet = !m.is_capture() && !m.is_promotion();
@@ -290,7 +291,18 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       }
     }
     if (quiet) f.failed_quiets.add(m);
+    // Once a move has been searched at a futile node not already lost to a
+    // mate, every later non-checking quiet is pruned (the conditions at the
+    // top of this loop), and both conditions only grow more true: the
+    // selector may drop those quiets unscored.
+    if (!quiet_checks_only && futile_node && best > -(MateScore - MaxPly)) {
+      f.selector.keep_quiet_checks();
+      quiet_checks_only = true;
+    }
   }
+  // Quiets the selector dropped at a futile node were pruned by futility, so
+  // the bound stays honest as if each had been seen.
+  if (f.selector.quiets_filtered() > 0) best = std::max(best, futility_value);
   // No legal move is mate or stalemate; legal moves that were all pruned are
   // not (the guard above prevents it; this keeps the result right regardless).
   if (moves_seen == 0) return in_check ? mated_score(ply) : 0;

@@ -38,6 +38,8 @@ void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHist
   quiesce_ = false;
   see_filter_ = false;
   quiets_stopped_ = false;
+  quiet_checks_only_ = false;
+  quiets_filtered_ = 0;
   deferred_.count = 0;
   deferred_next_ = 0;
   tt_move_ = !tt_move.is_none() && pos.is_pseudo_legal(tt_move) && pos.is_legal(tt_move) ? tt_move : NoMove;
@@ -78,6 +80,23 @@ void MoveSelector::score_evasions() {
                                            : history_ ? history_->value(us, m)
                                                       : 0);
   }
+}
+
+void MoveSelector::keep_quiet_checks() {
+  quiet_checks_only_ = true;
+  if (stage_ != SelectorStage::Quiets) return;  // later quiets are filtered when generated
+  // Quiets already generated and scored: keep the checking ones not yet
+  // yielded (with their scores), in their current order.
+  std::size_t kept = next_;
+  for (std::size_t i = next_; i < list_.size(); ++i) {
+    if (pos_->gives_check(list_[i])) {
+      list_.moves[kept] = list_[i];
+      scores_[kept++] = scores_[i];
+    } else if (list_[i] != tt_move_) {
+      ++quiets_filtered_;
+    }
+  }
+  list_.count = kept;
 }
 
 // Partial selection sort: the best remaining move (the lowest current index
@@ -130,6 +149,17 @@ Move MoveSelector::take_next() {
         if (quiets_stopped_) break;
         list_.count = 0;
         generate<GenMode::Quiets>(*pos_, list_);
+        if (quiet_checks_only_) {
+          // Keep the checking quiets, in generation order; the TT move stays
+          // out as before (it is skipped when yielded).
+          std::size_t kept = 0;
+          for (std::size_t i = 0; i < list_.size(); ++i)
+            if (pos_->gives_check(list_[i]))
+              list_.moves[kept++] = list_[i];
+            else if (list_[i] != tt_move_)
+              ++quiets_filtered_;
+          list_.count = kept;
+        }
         score_quiets();
         next_ = 0;
         stage_ = SelectorStage::Quiets;

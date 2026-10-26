@@ -56,6 +56,10 @@ class MoveSelector {
 
   // From now on yields no more quiet moves (late move pruning, deliverable 6).
   void stop_quiets() { quiets_stopped_ = true; }
+  // Quiet moves not yet generated will be only the checking ones (futility
+  // pruning, review claim (d)); quiets_filtered() counts the others dropped.
+  void keep_quiet_checks();
+  int quiets_filtered() const { return quiets_filtered_; }
 
   // The stage the last move came from (search statistics only): a stage
   // still being yielded from, or the Make* stage after the TT move.
@@ -75,6 +79,8 @@ class MoveSelector {
   bool quiesce_ = false;
   bool see_filter_ = false;
   bool quiets_stopped_ = false;
+  bool quiet_checks_only_ = false;
+  int quiets_filtered_ = 0;
 
   MoveList list_;                  // the stage's moves
   std::int16_t scores_[MaxMoves];  // every score fits (move_selector.cpp)
