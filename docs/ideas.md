@@ -520,9 +520,14 @@ added on 2026-10-24; ideas 1-12 predate them.
     reason it stopped are kept, accepted or not.
   - **Tuning:** a discovered form's constants are tuned afterwards by SPSA
     (deliverable 8b's parameter table).
-- **phase:** pilot in Phase 3 tier 2 on one target (the LMR formula) to
-  validate the funnel; real campaigns after Phase 4's network is stable,
-  in the improvement pass.
+- **phase:** scheduled in DESIGN.md §5.2 as deliverable 8c (owner,
+  2026-10-26): the pilot on the LMR formula after Milestone C and the
+  parameter table (8b), before the tier 2 refinements, once the
+  kb-researcher has verified the AlphaEvolve and MAP-Elites papers; it
+  ends with the owner's go/no-go on the pilot metric. If go: real
+  campaigns in late Phase 4 (after the first strong network and the search
+  re-validation), then a standing tool in the improvement pass after
+  Phase 8.
 - **metric:** for the pilot, whether the proxies predict the SPRT (rank
   agreement between stage 2 and stage 4 on the candidates that reach both)
   and the cost per accepted change; for each discovered heuristic, its

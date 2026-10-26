@@ -324,7 +324,11 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   in this file. **After the network arrives**: the full re-validation of
   every search feature and the retune of eval-dependent margins (§5.2,
   Quality control 6, owner 2026-10-25); search switches stay in the code
-  until it is done.
+  until it is done. **Late Phase 4, if the owner said go after the Phase 3
+  pilot (deliverable 8c):** the first real campaigns of the
+  heuristic-discovery loop (ideas.md idea 23), after the first strong
+  network and that re-validation; afterwards a standing tool in the
+  improvement pass after Phase 8.
 - **Phase 5: Time management.** Soft and hard limits tuned for long
   increment games without ponder, and a stress test under artificial system
   load. Before this phase starts: research the current TCEC season's full
@@ -867,6 +871,29 @@ step). Release and TCEC builds compile the defaults in as constants; tuning
 builds (`FORK_TUNE`) declare each as a UCI spin option, beside the switches.
 Moving a parameter into the table must not change bench. No SPSA run may
 start before the table exists.
+
+**8c. Pilot of the heuristic-discovery loop** (ideas.md idea 23; owner,
+2026-10-26), after 8b and before any tier 2 refinement.
+- **Target:** the LMR reduction formula only (`lmr_table.hpp` and its use
+  in `negamax`), marked as the one evolvable function; everything else
+  frozen.
+- **Prerequisites:** the parameter table (8b) is done, and the
+  kb-researcher has fetched and verified the AlphaEvolve and MAP-Elites
+  papers (primary sources, cited in the KB and ORIGINALITY.md) before the
+  loop is built.
+- **Method:** idea 23's funnel (gate; proxies, nodes to depth and
+  best-move agreement with Fork's own deep search on a held-out set;
+  a short match; SPRT at STC then LTC), a diverse population, the
+  originality-checker's screen on every survivor, and full logs of every
+  candidate.
+- **Ends with a go/no-go decision by the owner** (stop), on the pilot
+  metric: whether the proxies predict the SPRT results (rank agreement on
+  the candidates that reach both), and the cost per accepted change
+  (compute, games and session time).
+- **If go:** real campaigns in late Phase 4, after the first strong
+  network and the search re-validation; then a standing tool in the
+  improvement pass after Phase 8. **If no-go:** the loop is archived, and
+  the pilot's log and findings go into ideas.md.
 
 **9. Tier 2 refinements**, built one at a time, each behind a flag and
 SPRT-tested on its own, **reported in batches at the end of Phase 3**, not
