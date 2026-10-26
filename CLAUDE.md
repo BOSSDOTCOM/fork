@@ -25,7 +25,8 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
   `~/fork-tools/syzygy/3-4-5`, runners in `~/fork-tools/bin`
   (fastchess, cutechess-cli, ordo). Test scripts only.
 - `.claude/rules/`: area rules (C++ style, testing, SIMD).
-- GitHub: private repo https://github.com/BOSSDOTCOM/fork (remote `origin`;
+- GitHub: **public** repo https://github.com/BOSSDOTCOM/fork (made public by
+  the owner on 2026-10-26 after a history audit; remote `origin`;
   push main, kb, tcec-cutechess and tags). CI in `.github/workflows/ci.yml`:
   TCEC toolchain (ubuntu:22.04 container, update.sh with 4 compilers, bench
   parity, gcc 11.4 fast tests) and current Ubuntu presets. It runs only on
@@ -102,9 +103,9 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
 7. **Performance claims** need the A/B harness (`bench/ab.py`), with bench
    unchanged (DESIGN.md section 7). Report any optimization that makes the code
    meaningfully harder to maintain before adopting it.
-8. **The repo will be public, and TCEC builds Fork from source** (Category 4
-   entry via the Cat 3+4 playoff; docs/kb/competition.md on branch kb). The
-   whole history becomes public before the application, so:
+8. **The repo is public (since 2026-10-26), and TCEC builds Fork from
+   source** (Category 4 entry via the Cat 3+4 playoff; docs/kb/competition.md
+   on branch kb). Every push is published at once, history included, so:
    - never commit secrets, credentials, tokens, personal data or private
      files (HANDOFF.md and other session notes stay untracked);
    - keep the Linux build working from a clean clone: everything the build
