@@ -172,3 +172,14 @@ Ptnml(0-2): [0, 0, 3, 18, 132], WL/DD Ratio: 2.00
 LLR: 2.96 (100.5%) (-2.94, 2.94) [0.00, 5.00]
 SPRT ([0.00, 5.00]) completed - H1 was accepted
 ```
+
+### 20261026T135724Z ttblend-ltc
+
+- base `f140963` (f140963), test `f140963` (f140963), bounds [0, 3] nElo, 40+0.4, Hash 64 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, test opts option.UseTtAgeBlend=true
+- Verdict: **INCONCLUSIVE (stopped by the owner, 2026-10-26)** after 1,561 finished games; the last report (1,400 games): blended +5.7 ± 13.8 Elo (nElo +7.5 ± 18.2), LLR 0.21 of 2.94. The lexicographic policy stays the default; the blended one stays behind its switch (`UseTtAgeBlend`), to be re-tested after Phase 4's network and under Phase 6 conditions (ideas.md idea 24). No time losses, crashes or illegal moves.
+```
+Elo: 5.71 +/- 13.79, nElo: 7.54 +/- 18.20
+Games: 1400, Wins: 476, Losses: 453, Draws: 471, Points: 711.5 (50.82 %)
+Ptnml(0-2): [64, 144, 251, 187, 54], WL/DD Ratio: 2.59
+LLR: 0.21 (7.1%) (-2.94, 2.94) [0.00, 3.00]
+```

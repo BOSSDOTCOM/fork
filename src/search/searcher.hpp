@@ -144,6 +144,23 @@ struct SearchCounters {
   static constexpr int CutoffDepths = 7;
   static constexpr int CutoffIndices = 48;
   std::uint64_t quiet_cutoff_index[CutoffDepths][CutoffIndices] = {};
+  // External review (2026-10-26). (c) SEE tests by the main-search SEE
+  // pruning, by where the move came from; bad captures reached after late
+  // move pruning stopped the quiets, and how many SEE pruning then drops.
+  std::uint64_t see_tests_good_captures = 0;  // SEE >= 0 already shown by the selector
+  std::uint64_t see_tests_bad_captures = 0;   // SEE < 0 already shown by the selector
+  std::uint64_t see_tests_quiets = 0;
+  std::uint64_t see_tests_other = 0;  // TT moves and in-check evasions
+  std::uint64_t bad_captures_after_stop = 0;
+  std::uint64_t bad_captures_after_stop_pruned = 0;
+  // (d) Futile nodes: quiet moves taken from the selector there, and those
+  // searched (the checking ones and the first move).
+  std::uint64_t futile_nodes = 0;
+  std::uint64_t futile_quiets_taken = 0;
+  std::uint64_t futile_quiets_searched = 0;
+  // (f) Quiescence nodes at PV and non-PV nodes.
+  std::uint64_t quiesce_nodes_pv = 0;
+  std::uint64_t quiesce_nodes_non_pv = 0;
 };
 
 class Searcher {
@@ -162,6 +179,11 @@ class Searcher {
 
   // Forgets the move-ordering history (ucinewgame, and each bench position).
   void clear_history() { history_.clear(); }
+
+  // Tests only: the root move that failed high in the iteration the last
+  // deliberate() stopped in and was not yet re-searched to an exact score
+  // (NoMove if none).
+  Move unresolved_fail_high() const { return unresolved_fail_high_; }
 
   // Tests only: one zero-window search of `pos` as a non-PV node (window
   // [beta - 1, beta]), with no time limit; returns its fail-soft score.
@@ -195,6 +217,12 @@ class Searcher {
   PlyFrame frames_[MaxPly + 1];
   PrincipalLine pv_[MaxPly + 1];
   RootEntry root_moves_[MaxMoves];
+  // The iteration's root move that failed high and is not yet resolved by a
+  // re-search, with its lower bound and line (review claim (a), 2026-10-26).
+  Move root_fail_high_ = NoMove;
+  int root_fail_high_score_ = 0;
+  PrincipalLine root_fail_high_pv_;
+  Move unresolved_fail_high_ = NoMove;
   std::size_t root_count_ = 0;
   // The best root move found in the running iteration with an exact score,
   // and its PV (reported if a stop makes it the move played).

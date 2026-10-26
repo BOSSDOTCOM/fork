@@ -57,6 +57,11 @@ class MoveSelector {
   // From now on yields no more quiet moves (late move pruning, deliverable 6).
   void stop_quiets() { quiets_stopped_ = true; }
 
+  // The stage the last move came from (search statistics only): a stage
+  // still being yielded from, or the Make* stage after the TT move.
+  SelectorStage yielding_stage() const { return stage_; }
+  bool quiets_stopped() const { return quiets_stopped_; }
+
  private:
   void score_captures();
   void score_quiets();

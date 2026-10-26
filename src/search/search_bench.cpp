@@ -152,6 +152,22 @@ SearchBenchResult run_search_bench() {
       static_cast<unsigned long long>(c.lmr_searches), static_cast<unsigned long long>(c.lmr_researches),
       c.lmr_searches ? 100.0 * static_cast<double>(c.lmr_researches) / static_cast<double>(c.lmr_searches)
                      : 0.0);
+  std::fprintf(stderr,
+               "stats: SEE pruning tests: good captures %llu, bad captures %llu, quiets %llu, other %llu\n",
+               static_cast<unsigned long long>(c.see_tests_good_captures),
+               static_cast<unsigned long long>(c.see_tests_bad_captures),
+               static_cast<unsigned long long>(c.see_tests_quiets),
+               static_cast<unsigned long long>(c.see_tests_other));
+  std::fprintf(stderr, "stats: bad captures after LMP stopped quiets %llu, of them SEE-pruned %llu\n",
+               static_cast<unsigned long long>(c.bad_captures_after_stop),
+               static_cast<unsigned long long>(c.bad_captures_after_stop_pruned));
+  std::fprintf(stderr, "stats: futile nodes %llu, quiets taken there %llu, searched %llu\n",
+               static_cast<unsigned long long>(c.futile_nodes),
+               static_cast<unsigned long long>(c.futile_quiets_taken),
+               static_cast<unsigned long long>(c.futile_quiets_searched));
+  std::fprintf(stderr, "stats: quiescence nodes PV %llu, non-PV %llu\n",
+               static_cast<unsigned long long>(c.quiesce_nodes_pv),
+               static_cast<unsigned long long>(c.quiesce_nodes_non_pv));
   for (int d = 1; d < SearchCounters::CutoffDepths; ++d) {
     std::fprintf(stderr, "stats: quiet cutoffs at depth %d by quiet index:", d);
     for (int i = 0; i < SearchCounters::CutoffIndices; ++i)

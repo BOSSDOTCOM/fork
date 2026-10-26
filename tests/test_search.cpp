@@ -13,6 +13,7 @@
 #include "core/splitmix.hpp"
 #include "eval/eval.hpp"
 #include "harness.hpp"
+#include "search/search_bench.hpp"
 #include "search/searcher.hpp"
 #include "search/see.hpp"
 #include "search/time_budget.hpp"
@@ -464,6 +465,40 @@ TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV st
     }
   }
   CHECK(tried > 0);
+}
+
+// External review claim (a), 2026-10-26: a root move that failed high above
+// the aspiration window was dropped when the search stopped during its
+// re-search, and the previous iteration's move was played instead. A fail
+// high proves the move scores at least beta, above every exact score of that
+// pass, so it must be the move played. Node-limited searches over the bench
+// positions (search_bench.cpp, sourced there) stop at many different points;
+// at least one must stop with a fail high unresolved, or the test proves
+// nothing.
+TEST_CASE("search", "a root move that failed high is played when the search stops during its re-search") {
+  Fixture fx;
+  int stopped_after_fail_high = 0;
+  // The first bench positions are the perft suite (perft position 6 stopped
+  // at 4,991 nodes with g5f6 failed high and c3d5 played, before the fix).
+  const std::size_t positions = Optimized ? 10 : 6;
+  for (std::size_t i = 0; i < positions; ++i) {
+    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
+      fx.store.clear();
+      fx.searcher->clear_history();
+      Position pos;
+      CHECK(pos.set_fen(search_bench_fens()[i]));
+      SearchQuota q;
+      q.nodes = nodes;
+      const SearchResult r = fx.search(pos, q);
+      const Move pending = fx.searcher->unresolved_fail_high();
+      if (pending.is_none() || r.depth == 0) continue;
+      ++stopped_after_fail_high;
+      CHECK_MSG(r.best == pending, search_bench_fens()[i] << " at " << nodes << " nodes: played "
+                                                          << pos.move_to_uci(r.best) << ", fail high "
+                                                          << pos.move_to_uci(pending));
+    }
+  }
+  CHECK_MSG(stopped_after_fail_high > 0, "no search stopped with a fail high unresolved");
 }
 
 }  // namespace forkeng::test

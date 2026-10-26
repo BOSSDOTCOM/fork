@@ -180,9 +180,18 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   const int futility_value = in_check ? 0 : f.static_eval + FutilityOffset + FutilityGrowth * depth;
   const bool futile_node = switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
                            !is_tb_or_mate(alpha) && futility_value <= alpha;
+#ifdef FORK_SEARCH_STATS
+  counters.futile_nodes += futile_node;
+#endif
   for (Move m; !(m = f.selector.take_next()).is_none();) {
     ++moves_seen;
     const bool quiet = !m.is_capture() && !m.is_promotion();
+#ifdef FORK_SEARCH_STATS
+    counters.futile_quiets_taken += futile_node && quiet;
+    const bool bad_after_stop =
+        f.selector.yielding_stage() == SelectorStage::BadCaptures && f.selector.quiets_stopped();
+    counters.bad_captures_after_stop += bad_after_stop;
+#endif
     // Pruning: only once a move has been searched (so no node is pruned into
     // a false stalemate or mate) and while not already losing to a mate.
     if (moves_searched > 0 && best > -(MateScore - MaxPly)) {
@@ -205,8 +214,20 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           continue;
         }
       }
+#ifdef FORK_SEARCH_STATS
+      if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth) {
+        const SelectorStage st = f.selector.yielding_stage();
+        ++(st == SelectorStage::GoodCaptures  ? counters.see_tests_good_captures
+           : st == SelectorStage::BadCaptures ? counters.see_tests_bad_captures
+           : st == SelectorStage::Quiets      ? counters.see_tests_quiets
+                                              : counters.see_tests_other);
+      }
+#endif
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth &&
           !see_at_least(pos, m, -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth)) {
+#ifdef FORK_SEARCH_STATS
+        counters.bad_captures_after_stop_pruned += bad_after_stop;
+#endif
 #ifdef FORK_SEARCH_STATS
         ++counters.see_prunes;
 #endif
@@ -217,6 +238,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     pos.make(m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
+    counters.futile_quiets_searched += futile_node && quiet;
 #endif
     int score;
     if (moves_searched == 0 || !switches.use_pvs) {
@@ -286,6 +308,9 @@ template <bool OnPv>
 int Searcher::quiesce(int alpha, int beta, int ply) {
   pv_[ply].length = 0;
   ++nodes_;
+#ifdef FORK_SEARCH_STATS
+  ++(OnPv ? counters.quiesce_nodes_pv : counters.quiesce_nodes_non_pv);
+#endif
   if (poll_limits()) return 0;
   max_ply_reached_ = std::max(max_ply_reached_, ply);
   Position& pos = *pos_;
@@ -381,9 +406,15 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     pos.unmake(m);
     if (stopped_) return best;
     if (score > best) best = score;
+    if (m == root_fail_high_ && score < beta) root_fail_high_ = NoMove;  // resolved by its re-search
     if (score > alpha) {
       best_index = i;
       update_pv(0, m);
+      if (score >= beta) {
+        root_fail_high_ = m;
+        root_fail_high_score_ = score;
+        root_fail_high_pv_ = pv_[0];
+      }
       if (score < beta) {
         iteration_best_ = m;
         iteration_best_score_ = score;
@@ -435,6 +466,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   nodes_ = 0;
   max_ply_reached_ = 0;
   stopped_ = false;
+  unresolved_fail_high_ = NoMove;
 
   tt_.advance_age();
   tt_.set_age_blend(switches.tt_age_blend);
@@ -459,6 +491,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   for (int depth = 1; depth <= std::min(limits.depth, MaxPly - 1); ++depth) {
     iteration_best_ = NoMove;
     iteration_best_score_ = -ScoreInfinite;
+    root_fail_high_ = NoMove;
     int delta = AspirationHalfWidth;
     int alpha = -ScoreInfinite, beta = ScoreInfinite;
     if (switches.use_aspiration && depth >= AspirationMinDepth && !is_tb_or_mate(previous)) {
@@ -483,9 +516,16 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       }
     }
     if (stopped_) {
-      // An unfinished iteration counts only through a move that came back
-      // with an exact score above the last finished iteration's best.
-      if (!iteration_best_.is_none() && result.depth > 0 && iteration_best_score_ > previous) {
+      unresolved_fail_high_ = root_fail_high_;
+      // An unfinished iteration counts only through a move shown to beat the
+      // last finished iteration's best. A fail high still awaiting its
+      // re-search comes first: its score is at least beta, above every exact
+      // score of the pass it failed high in (review claim (a), 2026-10-26).
+      if (!root_fail_high_.is_none() && result.depth > 0 && root_fail_high_score_ > previous) {
+        result.best = root_fail_high_;
+        result.score = root_fail_high_score_;
+        report_iteration(depth, root_fail_high_score_, 1, root_fail_high_pv_);  // a lower bound
+      } else if (!iteration_best_.is_none() && result.depth > 0 && iteration_best_score_ > previous) {
         result.best = iteration_best_;
         result.score = iteration_best_score_;
         report_iteration(depth, iteration_best_score_, 0,

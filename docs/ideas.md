@@ -541,3 +541,38 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **earliest phase:** Phase 3 tier 2 (needs the switches, the minimax
   oracle tests and the SPRT tooling, all in place).
 - **status:** untested
+
+## 24. TT victim policy under real table pressure
+
+- **type:** ELO (switch `tt_age_blend`, UCI `UseTtAgeBlend` in tuning builds)
+- **idea:** the blended victim policy (rank = depth − 2 plies per search of
+  age, f140963) against the default lexicographic one (current search
+  first, then depth). Its first SPRT (LTC 40+0.4, Hash 64 MB, 1 thread,
+  [0, 3]) was stopped by the owner as inconclusive: +5.7 ± 13.8 Elo after
+  1,400 games (2026-10-26, sprt-log.md). At 64 MB and one thread the table
+  is rarely under pressure, so the victim choice seldom matters.
+- **phase:** re-test after Phase 4's network (a different tree shape) and
+  under Phase 6 conditions (large Hash, many threads), where table pressure
+  differs.
+- **metric:** SPRT [0, 3] at LTC, at Phase 6 Hash and thread counts.
+- **runtime cost:** none measurable (one rank formula per replacement).
+- **earliest phase:** Phase 6.
+- **status:** inconclusive (Phase 3); default stays lexicographic
+
+## 25. Queued tests: Hash size at LTC and time scaling
+
+- **type:** TOOLING (measurement)
+- **idea:** two tests queued by the owner (2026-10-26), skipped for now:
+  1. **Hash 256 MB vs 16 MB at LTC** (40+0.4): how much a larger table is
+     worth at Fork's current speed, which also informs idea 24.
+  2. **Time-scaling mini-gauntlet at 60+0.6** against Stash 19.0 and
+     WyldChess 1.51: whether Fork's score against fixed anchors holds,
+     grows or shrinks with more time per move (Milestone B's gauntlet ran
+     at 10+0.1).
+- **phase:** when the machine is free (after deliverable 8, whose time
+  management changes how longer games are played).
+- **metric:** Elo difference with error bars for (1); score per anchor
+  against the 10+0.1 gauntlet for (2).
+- **runtime cost:** none (test-side only).
+- **earliest phase:** Phase 3.
+- **status:** queued
