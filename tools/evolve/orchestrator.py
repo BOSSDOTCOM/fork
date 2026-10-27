@@ -31,6 +31,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import agents  # noqa: E402
+import dashboard  # noqa: E402
 import gate  # noqa: E402
 import match  # noqa: E402
 import population  # noqa: E402
@@ -59,6 +60,23 @@ class Loop:
         self.log_file.write(json.dumps({'t': round(time.time(), 1), 'gen': generation, 'kind': kind,
                                         'detail': detail}) + '\n')
         self.log_file.flush()
+        self.generation_now = max(getattr(self, 'generation_now', 0), generation)
+        self.refresh()
+
+    def refresh(self, status=None):
+        """The state file and the live dashboard (dashboard.py); never stops the run."""
+        if status:
+            self.status = status
+        state = {'run': self.run_dir.name, 'region': self.cfg['region'], 'status': getattr(self, 'status', 'running'),
+                 'generation': getattr(self, 'generation_now', 0), 'generations': self.cfg.get('generations'),
+                 'budget_used': self.budget.used, 'budget_limits': self.budget.limits,
+                 'elapsed_seconds': self.budget.clock() - self.budget.start, 'islands': self.cfg['islands'],
+                 'explorer_protected': self.cfg['explorer_protected']}
+        try:
+            (self.run_dir / 'state.json').write_text(json.dumps(state, indent=1))
+            dashboard.render(self.run_dir)
+        except Exception as e:  # noqa: BLE001 (the dashboard must never stop a run)
+            self.log_file.write(json.dumps({'kind': 'dashboard_error', 'detail': str(e)}) + '\n')
 
     # --- the funnel for one body -------------------------------------------------
     def evaluate(self, generation, cid, island, body, place=True):
@@ -270,6 +288,7 @@ class Loop:
                 reason = stop
                 break
         self.say(g, 'stopped', {'reason': reason, 'budget': self.budget.used})
+        self.refresh(status=f'stopped: {reason}')
         self.close()
         return reason
 

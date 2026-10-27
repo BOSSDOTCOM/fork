@@ -337,7 +337,30 @@ class OrchestratorTests(unittest.TestCase):
             self.assertEqual(len(pop.events('analyst')), 0)    # every 3 generations
             self.assertEqual(pop.best()[0], 2)                 # the fittest so far
             self.assertEqual(len(pop.events('promoted')), 1)   # the match is skipped (games = 0)
+            page = (Path(tmp) / 'run' / 'dashboard.html').read_text(encoding='utf-8')
+            for section in ('Islands', 'Top candidates', 'Promotions', 'Critic rejections (1)',
+                            'Gate failures and malformed replies', 'Analyst summaries', 'Tokens'):
+                self.assertIn(section, page)
+            self.assertIn('floating point breaks the hot-path rules', page)  # the critic's reason
             loop.close()
+
+
+class DashboardTests(unittest.TestCase):
+    def test_agent_text_is_escaped(self):
+        import dashboard
+        with tempfile.TemporaryDirectory() as tmp:
+            pop = population.Population(str(Path(tmp) / 'population.sqlite'))
+            cid = pop.add(1, 'explorer', 'explorer', None, 'full', '  return 0; // </pre><b>x</b>',
+                          '<script>alert(1)</script>')
+            pop.update(cid, status='scored', fitness=0.5, proxies=json.dumps({'agreement': 0.5}),
+                       descriptors=json.dumps([1.5, 0.01]))
+            pop.log(1, 'critic_rejected', {'id': cid, 'reasons': '<img src=x onerror=alert(1)>', 'audited': False})
+            pop.close()
+            page = dashboard.render(tmp).read_text(encoding='utf-8')
+        self.assertNotIn('<script>alert', page)
+        self.assertNotIn('<img src=x', page)
+        self.assertIn('&lt;script&gt;alert(1)&lt;/script&gt;', page)
+        self.assertIn('&lt;/pre&gt;&lt;b&gt;x&lt;/b&gt;', page)
 
 
 if __name__ == '__main__':

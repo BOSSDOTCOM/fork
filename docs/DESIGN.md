@@ -1541,10 +1541,12 @@ Choices made while building, where the spec leaves a gap:
     labels): 20,000 nodes 7, 6-9, 7-8, 46.5%; 100,000 10, 9-12, 9-11, 58.0%;
     **200,000 11, 10-14, 11-13, 61.5%**; 400,000 13, 11-16, 12-14, 66.0%;
     800,000 14, 12-18, 13-16, 72.5%. **Chosen: 200,000** (`config.json`).
-    Time per position at that budget 249 ms, measured while a stress test
-    kept every CPU busy (an upper bound; the idle figure is UNVERIFIED), so
-    the full 1,170 evolve positions take at most about 5 minutes per
-    candidate; the set is kept whole, since agreement near 60% over 1,170
+    Time per position at that budget, measured on a quiet machine
+    (2026-10-27; the depths equal the first, loaded measurement's, as a node
+    budget makes them): **31 ms** (100,000: 15 ms; 400,000: 61 ms; 800,000:
+    126 ms; the first measurement, 249 ms, was taken at nice 19 beside a
+    stress test that kept every CPU busy), so the full 1,170 evolve
+    positions take about 36 seconds per candidate; the set is kept whole, since agreement near 60% over 1,170
     positions has a standard error of about 1.4 points, the size of the
     differences worth detecting.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
