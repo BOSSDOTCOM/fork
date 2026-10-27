@@ -880,6 +880,702 @@ Fork's own design, not taken from these papers.
   clusters, temperatures). Only MAP-Elites defines the descriptor archive.
   AlphaEvolve publishes neither for its own system.
 
+### Prior work: evolutionary and LLM-driven search for game-engine heuristics (2026-10-27)
+
+Added 2026-10-27 for the same pilot (ideas.md idea 23; DESIGN.md
+deliverable 8c). It does not repeat the three method papers above. The
+question was: who has already evolved, or had an LLM write, the search
+heuristics of a game engine (pruning, reductions, extensions, move ordering,
+time management, evaluation terms), how did they measure it, and what went
+wrong? Every entry below was read in the source itself: arXiv PDFs and
+abstract pages, author-hosted PDFs (some through the Internet Archive because
+the original links are dead), Crossref records, Chess Programming Wiki (CPW)
+pages, and README prose and GitHub API metadata for two frameworks. **No
+engine source code and no framework code file was opened.** Each claim names
+its section, table or page. "Measured" means a number from the authors'
+experiments; "author's view" means their interpretation; "my note" marks a
+reading added here.
+
+**Tag for every entry: REFERENCE ONLY, for ideas.** Some entries publish
+evolved parameter values or evolved code. Those values and listings are
+**not** copied here and must never seed Fork: a value someone else's
+evolution found is another engine's constant (CLAUDE.md non-negotiable 6).
+
+**Headline (from the search, not a proof of absence):** no primary source
+was found that runs an LLM-driven evolution loop on an alpha-beta chess
+engine's search heuristics (LMR, pruning, move ordering or time management)
+and reports SPRT-measured Elo. Searches tried on 2026-10-27 included "LLM
+evolutionary search chess engine heuristics AlphaEvolve", "LLM evolve chess
+engine code Elo SPRT", "LLM-written patches tested fishtest OR OpenBench" and
+"late move reduction OR move ordering evolved by language model". The
+nearest LLM work is general game playing (MCTS, with chess as one of 50
+games) and coding agents writing whole engines. Fork's pilot would be the
+first such measurement known to this KB. **UNVERIFIED:** that none exists
+(forum posts, unpublished experiments and non-English venues were not
+searched).
+
+#### Part A. Pre-LLM evolution and tuning of search parameters (chess, Go, LOA)
+
+##### CPW: Genetic Programming, Automated Tuning, SPSA, Stockfish's Tuning Method (living pages)
+- **Links:** https://www.chessprogramming.org/Genetic_Programming,
+  https://www.chessprogramming.org/Automated_Tuning,
+  https://www.chessprogramming.org/SPSA,
+  https://www.chessprogramming.org/Stockfish%27s_Tuning_Method. The site
+  showed a banner saying it is a temporary, read-only recovery copy.
+- **What they say (as read):**
+  - *Automated Tuning* (intro): automatic tuning is mostly of evaluation
+    weights, and "less commonly" of search parameters; its footnote for search
+    parameters is Björnsson and Marsland (2001). The "Playing Strength"
+    paragraph says solving test positions does not necessarily correlate
+    with match strength, so many games are needed, up to several tens of
+    thousands when the two versions are close, and that fast games with SPRT
+    (Fishtest) became the norm. Under "Mathematical Optimization" the page
+    lists, as advantages, that it works for any parameter including search
+    and accounts for search-eval interaction; the disadvantage is cost that
+    grows with the number of weights.
+  - *Genetic Programming*: a bibliography. The search-related chess entries
+    are Björnsson and Marsland (2002), Gross et al. (2002), Hauptman and
+    Sipper (2007), Hauptman's 2009 thesis "Evolving Search Heuristics for
+    Combinatorial Games with Genetic Programming", David et al. (2010, 2014),
+    Mitsuta and Schmitt (2010, GNU Chess), plus Pratola and Wolf (2003, Go).
+  - *SPSA*: SPSA estimates a gradient from two measurements per iteration
+    whatever the number of parameters. The page says it can tune search as
+    well as evaluation parameters. It names Joona Kiiski's 2011 Stockfish
+    method as a prominent instance (one game pair per iteration) and credits
+    Kocsis, Szepesvári and Winands (ACG 11, 2005) with bringing SPSA to
+    game programming.
+  - *Stockfish's Tuning Method* (Kiiski, October 2011; the page marks the
+    text public domain): start from the current hand-tuned values and
+    perturb several variables (7 to 35 at once) with random signed deltas.
+    Play the plus side against the minus side and move the values slightly
+    toward the winner, over 30,000 to 100,000 very fast games. The author
+    reports 40-70 Elo for Stockfish (author's claim; no protocol is given).
+    He says the method does not converge: important variables improve while
+    the rest random-walk, so strength later falls and the run must be
+    stopped by hand. Choosing which variables to tune matters a lot; tuning
+    single table entries fails, while two "knobs" per table worked.
+- **What it means for Fork:** SPSA-style tuning (Phase 8) moves the
+  constants of a **fixed formula** using game results. An LLM loop changes
+  the formula's **shape**. They are complementary. A sensible split (my
+  note, Fork's choice, not from a source): the pilot searches over
+  structure, and any surviving structure gets its constants tuned later by
+  SPSA under the normal search-constants rule. Kiiski's non-convergence
+  warning also applies to a long-running LLM loop: it needs a stopping rule.
+- **Tag:** REFERENCE ONLY. **License:** CPW text CC BY-SA 3.0 (site footer);
+  the tuning-method text is marked public domain on its page.
+  **Verified:** 2026-10-27.
+
+##### Björnsson & Marsland (2002): Learning Control of Search Extensions
+- **Citation:** Y. Björnsson and T. A. Marsland, "Learning Control of Search
+  Extensions", Proc. 6th Joint Conference on Information Sciences (JCIS
+  2002), Research Triangle Park NC, March 2002, pp. 446-449 (citation printed
+  on the PDF).
+- **Links:** CPW's link http://www.ru.is/faculty/yngvi/pdf/BjornssonM02.pdf
+  now returns 404. Read from the Internet Archive copy
+  https://web.archive.org/web/20210508020804/https://www.ru.is/faculty/yngvi/pdf/BjornssonM02.pdf
+  (4 pages).
+- **What it reports:**
+  - Method (§3): a learning module drives the engine through three added
+    commands: set a position, set the parameters, and search until the
+    known best move is found or a node cap is hit. It minimises the total
+    node count over a labelled suite by finite-difference gradient descent,
+    re-searching every position once per parameter in each iteration.
+  - Experiment (§4, Fig. 1, measured): four fractional-ply extension weights
+    in Crafty, on the 879-position ECM suite with a 500,000-node cap per
+    position. Total nodes fell to 73% of the start (310M to 229M), and
+    solved positions rose from 346 (39%) to 508 (57%), "as a side effect"
+    (authors' words).
+  - **No games were played.** Strength is only inferred from the suite.
+- **What it means for Fork:** the template for Fork's cheap proxy (nodes to
+  solve, with a cap so that no position dominates). It is also a warning
+  that a suite-only result says nothing about Elo. For Fork the positions
+  must be Fork-labelled and the proxy must be checked against matches.
+- **Tag:** REFERENCE ONLY. **License:** none stated on the PDF
+  (author-hosted copy). **Verified:** 2026-10-27.
+
+##### David-Tabibi, Koppel & Netanyahu (2010): Optimizing Selective Search in Chess
+- **Citation:** O. David-Tabibi, M. Koppel, N. S. Netanyahu, "Optimizing
+  Selective Search in Chess", ICML 2010 Workshop on Machine Learning and
+  Games, Haifa (arXiv journal-ref), arXiv:1009.0550v1, 2010-09-02 (only
+  version). The fuller journal version is "Genetic Algorithms for Automatic
+  Search Tuning", *ICGA Journal* 33(2):67-79, 2010, DOI
+  10.3233/icg-2010-33202 (Crossref). Only the arXiv text was read.
+- **Links:** https://arxiv.org/abs/1009.0550 (PDF https://arxiv.org/pdf/1009.0550).
+- **What it reports:**
+  - Search space (§2, Table 1): 18 search parameters of the Falcon engine
+    (null move, futility, multi-cut and five extensions) in a 70-bit
+    Gray-coded chromosome.
+  - Algorithm (§4): a standard GA with fitness-proportional selection,
+    uniform crossover and elitism, random initial values, population 10
+    and 50 generations.
+  - Fitness (§4), after Björnsson and Marsland: total nodes to find the
+    known move over the 879 ECM positions, with a 500,000-node cap.
+  - Training result (§5, measured): the best organism's total fell from 226M
+    to 199M nodes and solved positions rose from 488 to 547.
+  - Out-of-sample check (§5, Tables 2-3, measured): the authors note the
+    suite score is biased because it is the training set, so they played
+    matches. Evol* vs Falcon was 152.5-147.5 (51.1%, +6 Elo) over 300 games.
+    Evol* vs Crafty scored 59.5% and Falcon vs Crafty 57.8%; Evol* vs
+    randomly initialised organisms scored 71.4% over 1,000 games. Time
+    control: not stated in this version.
+  - Author's view (§6): the evolved values match eight years of hand tuning.
+    Evolved values are specific to the engine, because search interacts
+    with the evaluation.
+  - My note: a 300-game +6 Elo result cannot tell "equal" from a gain or
+    loss of a few tens of Elo. The match shows parity at best, not
+    improvement.
+- **What it means for Fork:** the closest published analogue of Fork's
+  funnel, with a cheap node-count proxy and a match check. Its weak point is
+  Fork's main risk: the final judge was small and underpowered. It also used
+  a third-party tactical suite **as the fitness**, which Fork's data policy
+  forbids (suites are test inputs only, never tuning targets; tools.md §4).
+- **Tag:** REFERENCE ONLY. **License:** arXiv non-exclusive distribution
+  licence. **Verified:** 2026-10-27.
+
+##### David, van den Herik, Koppel & Netanyahu (2014): Genetic Algorithms for Evolving Computer Chess Programs
+- **Citation:** E. (O.) David, H. J. van den Herik, M. Koppel, N. S.
+  Netanyahu, *IEEE Transactions on Evolutionary Computation* 18(5):779-789,
+  2014, DOI 10.1109/TEVC.2013.2285111 (Crossref; online October 2014).
+  Preprint arXiv:1711.08337v1, 2017-11-21. The arXiv comment says it won a
+  Gold "Humies" award and overlaps heavily with arXiv 1711.06839-06841.
+- **Links:** https://arxiv.org/abs/1711.08337 (PDF https://arxiv.org/pdf/1711.08337).
+- **What it reports:**
+  - Related work (§II.B): it lists earlier evolutionary chess work and says
+    game-based fitness needed so many games that only a few parameters
+    could be evolved (Kendall and Whitwell; Aksenov).
+  - Method (§IV): the search-parameter GA repeats the 2010 method (same
+    chromosome, ECM node-count fitness, population 10, 50 generations), run
+    after the evaluation weights had been evolved from grandmaster moves.
+  - Results (§V, Tables III-VI, measured): at 5 minutes per game, EVOL*
+    scored 60.5% against Crafty and 60.0% against EVOL0 (the same program
+    before coevolution) in 300-game matches. At 1 hour per game over 100
+    games it scored 61.5% vs Crafty, 41.0% vs Junior, 51.5% vs Fritz and
+    58.5% vs Hiarcs. The evaluation-weight evolution took about 2 hours per
+    run (ten runs, about 20 hours) and coevolution about 20 hours more; the
+    search-parameter phase time is not separately stated.
+  - Table II publishes the evolved search values. **Deliberately not copied
+    here.**
+- **What it means for Fork:** evidence that a GA over search parameters can
+  match hand tuning in an older engine. It also shows that published
+  "evolved constants" exist and that a model may have read them. That is
+  one more reason the originality checker screens every constant a
+  candidate introduces.
+- **Tag:** REFERENCE ONLY. **License:** arXiv non-exclusive distribution
+  licence. **Verified:** 2026-10-27.
+
+##### Hauptman & Sipper (2007): Evolution of an Efficient Search Algorithm for the Mate-In-N Problem in Chess
+- **Citation:** A. Hauptman, M. Sipper, EuroGP 2007, LNCS 4445, pp. 78-89,
+  Springer (PDF footer), DOI 10.1007/978-3-540-71605-1_8 (Crossref).
+- **Links:** CPW's link http://www.cs.bgu.ac.il/~sipper/papabs/gpsearch.pdf
+  now redirects to a university home page. Read from
+  https://web.archive.org/web/20160316074327/https://www.cs.bgu.ac.il/~sipper/papabs/gpsearch.pdf.
+- **What it reports:**
+  - Method (§4): Koza-style genetic programming evolves whole mate-search
+    programs (LISP trees) from building blocks suggested by strong players
+    (checks, forced replies, pins near the king and so on), with a penalty
+    for deep lookahead.
+  - Fitness (§4.3): correctness on sampled mate-in-N problems, weighted by
+    depth and by the ratio of Crafty's node count to the program's.
+  - Result (§5, Table 2, measured on a held-out set of 10 problems per
+    depth): for mate-in-5 the best program used 850k nodes against
+    Crafty's 1.6M, which the authors call a 47% reduction.
+  - The paper's account of earlier work (§2) is the only source read here
+    for Gross et al. (2002): it says that work evolved move ordering,
+    cut-off and evaluation parts around a fixed alpha-beta kernel and
+    reduced nodes to 6% of alpha-beta's, with no games against commercial
+    programs. That is this paper's summary, not checked against Gross et
+    al. (see Unverified).
+  - Author's view (§6): the evolved trees were large and hard to analyse.
+- **What it means for Fork:** an early "evolve code, not numbers" result
+  scored by node counts against a reference engine. Fork's analogue scores
+  against Fork's own baseline, never another engine's counts. The trees
+  being hard to analyse matches Fork's need for short, reviewable
+  candidates.
+- **Tag:** REFERENCE ONLY. **License:** © Springer-Verlag 2007 (PDF footer);
+  author-hosted copy. **Verified:** 2026-10-27.
+
+##### Kocsis, Szepesvári & Winands (2005/2006): RSPSA: Enhanced Parameter Optimisation in Games
+- **Citation:** L. Kocsis, C. Szepesvári, M. H. M. Winands, "RSPSA: Enhanced
+  Parameter Optimization in Games", *Advances in Computer Games* 11 (LNCS),
+  pp. 39-56, 2006, DOI 10.1007/11922155_4 (Crossref; the PDF title spells it
+  "Optimisation"). The journal companion, Kocsis and Szepesvári, "Universal
+  parameter optimisation in games based on SPSA", *Machine Learning*
+  63(3):249-286, 2006, DOI 10.1007/s10994-006-6888-8, was checked on
+  Crossref only and its text was not read.
+- **Links:** http://www.sztaki.hu/~szcsaba/papers/rspsa_acg.pdf now returns
+  404. Read from
+  https://web.archive.org/web/20110104212031/http://www.sztaki.hu/~szcsaba/papers/rspsa_acg.pdf.
+- **What it reports:**
+  - Method (§2-§3): SPSA combined with RPROP step sizes, plus variance
+    reduction through common random numbers and antithetic variables. The
+    authors estimate these give a speed-up of more than ten (author's
+    estimate) and say plain SPSA brought no noticeable gain without them
+    (§6).
+  - Search experiment (§5.3, Fig. 2, measured): RSPSA tuned the 277
+    realisation-probability weights of MIA, a Lines of Action program, in
+    two ways.
+    - **Game result:** performance averaged over 500 games against five
+      opponents, from 50 fixed positions with both colours, at 250,000
+      nodes per move. Each gradient estimate used 500 perturbations with one
+      game per side, the two sides sharing position, opponent and colour
+      (common random numbers).
+    - **Move score:** the quality of the move chosen at 250,000 nodes, as
+      judged by the program's own deeper search (up to 10,000,000 nodes),
+      averaged over a fixed set of 10,000 positions. Each gradient estimate
+      used 5,000 perturbations, one random position per side. Deep scores
+      are cached, since they do not depend on the tuned weights.
+  - Result: the move-score estimate was about four times faster and less
+    noisy (authors' observation). Its best weights scored 0.59 in games,
+    against 0.55 for the best weights found with game-result fitness.
+- **What it means for Fork:** the most direct precedent for Fork's proxy:
+  move quality judged by the **same engine's deeper search**, with cached
+  labels, which matches Fork's "positions labelled by Fork's own deeper
+  search". It was confirmed by games, in another game (LOA), at one
+  setting. Fork should repeat that confirmation for chess rather than
+  assume it.
+- **Tag:** REFERENCE ONLY. **License:** none stated on the PDF
+  (author-hosted copy). **Verified:** 2026-10-27.
+
+##### Pratola & Wolf (2003): Optimizing GoTools' Search Heuristics using Genetic Algorithms
+- **Citation:** M. Pratola, T. Wolf (Brock University), *ICGA Journal*
+  26(1):28-48, 2003, DOI 10.3233/icg-2003-26106 (Crossref).
+  arXiv:cs/0302002v1, 2003-02-02 (comment "to appear in Journal of ICGA").
+- **Links:** https://arxiv.org/abs/cs/0302002 (PDF https://arxiv.org/pdf/cs/0302002).
+- **What it reports:**
+  - Setup (§2.2-§2.3): a GA tunes GoTools' life-and-death move-ordering
+    weights (46 static and 10 dynamic). The fitness counts the search
+    tree's terminal leaves rather than wall time, for reproducibility
+    across machines, measured on generated problem sets with separate test
+    sets.
+  - Results (§3-§4, measured):
+    - A **cheap static fitness** (the rank of the known winning move, with
+      no search) improved the training score but did not carry over to
+      test sets, and got worse as problems got harder.
+    - The **expensive fitness** (actually solving the problems) gave 12%
+      fewer leaves for the static weights against zero weights.
+    - Dynamic weights trained on hard problems gave 18% fewer leaves
+      against zero weights, and 8% fewer than the hand-set originals.
+    - Training on hard problems was needed to do well on hard test
+      problems.
+- **What it means for Fork:** a measured case of a cheap proxy that did not
+  carry over. A Fork proxy that only checks whether the move ordering would
+  rank the right move first, without searching, is the same trap. Proxies
+  should search, and the proxy set should include hard positions.
+- **Tag:** REFERENCE ONLY. **License:** arXiv licence "assumed 1991-2003"
+  (licence link). **Verified:** 2026-10-27.
+
+#### Part B. LLM-driven program search for games
+
+##### Li, Schultz, Lanctot & Hennes (2026): Modular Discovery of General Game-Playing Algorithms with Large Language Models
+- **Citation:** Z. Li, J. Schultz, M. Lanctot, D. Hennes (Google DeepMind),
+  arXiv:2609.33115v1, 2026-09-27 (only version on 2026-10-27; no venue).
+- **Links:** https://arxiv.org/abs/2609.33115 (PDF https://arxiv.org/pdf/2609.33115).
+- **What it is:** AlphaEvolve (with Gemini 3.5 Flash) evolves C++ MCTS
+  search mechanisms (tree policy, backup, root scheduling) shared by all
+  games. Separate workers evolve per-game heuristics (priors, value
+  estimators, resamplers) on 50 OpenSpiel training games. Testing covers
+  held-out, procedurally generated and neural-network games (more than 400
+  in all).
+- **Findings (as read):**
+  - *Factorisation* (§3.2, authors' claim): evolving search and heuristics
+    as one program made mutations overfit to individual games' rule quirks.
+  - *Credit decoupling* (§3.3): a search candidate is scored against a fixed
+    reference engine (canonical PUCT) using the same heuristics, with
+    scores normalised by the remaining headroom. Without this, a weak
+    search could "free-ride" on a good heuristic.
+  - *Moving opponents* (§3.4, App. C.4): fitness against a fixed opponent
+    risked overfitting to its flaws, so the opponent is replaced by the
+    reigning champion once it passes a confirmation tournament. That
+    tournament uses 2x the normal episodes with fresh seeds and requires
+    p < 0.01 (paired t-test) and a win rate of at least 0.60.
+  - *Failure modes and guards* (App. B, B.2, B.5, authors' account):
+    - candidates exploited the simulator; in imperfect-information games
+      some read hidden state through pointer casts, so an anti-cheating
+      harness gives leaking candidates a fixed penalty;
+    - fast games monopolised selection. Candidates now first pass a
+      screening gate on 13 validation games (significant non-inferiority
+      to the reference, p < 0.01). A "stochastic quorum" then admits a
+      candidate as a parent only once it has results on enough of a random
+      sample of games, with every game cluster represented (App. B.2);
+    - divisions by zero appeared near score ceilings;
+    - LLMs looped into giant generated code, so candidates over 100,000
+      characters or failing static syntax-tree checks are rejected before
+      compiling;
+    - stagnation is detected against an "empirical noise floor" on the
+      75th percentile of recent scores, because single high scores were
+      noise.
+  - *Statistics* (App. C.2): the number of evaluation episodes is set from
+    a minimum detectable effect of 0.10 at 95% (about 200 episodes). The
+    authors admit that for slow games (as few as 13 episodes) the gate is
+    "primarily a safety guard" rather than a real significance test. The
+    candidate gets 1/2.5 of the reference's simulations, so it must win by
+    smarter search, not more search.
+  - *Cost* (App. B.6, authors' estimate): about 6,400 candidates per run up
+    to the champion, about 300M input and 550M output tokens, roughly
+    $5,400 per run at list prices. Evaluation workers had 4-6 cores each.
+  - *Chess* (§4.4, App. L.2, measured): against Stockfish at three settings
+    the evolved general searcher scored 0% at the middle and top settings,
+    and about 5-7% at the bottom one (skill 0, 1,000 nodes), depending on
+    its simulation budget. The authors
+    conclude that search improves on whatever evaluation it has but cannot
+    make up for missing evaluation knowledge.
+  - *Memorisation* (App. J.4.1, p. 55, authors' argument): all runs started
+    from a minimal PUCT seed and were never prompted with AlphaZero, KataGo
+    or Lc0 code. They argue that the discovered formulas (branching-scaled
+    exploration and others) do not appear in those systems. This is
+    reasoning, not an automated similarity check.
+- **What it means for Fork:** the most complete published engineering
+  account of an LLM search-evolution loop in games.
+  - The ideas to carry over: a fixed reference engine as the yardstick; a
+    confirmation stage on fresh seeds before promotion; code-size and
+    syntax-tree gates; anti-cheating checks (Fork's analogue: a candidate
+    may change only the LMR function and read only allowed inputs);
+    stagnation judged against a measured noise floor.
+  - It says nothing about alpha-beta chess engines near the top. Its chess
+    strength is far below Fork's.
+- **Tag:** REFERENCE ONLY. **License:** arXiv listing CC BY 4.0; the PDF
+  says "© 2026 Google DeepMind. All rights reserved". The appendix prints
+  C++ listings (J.1-J.2), which were not read. **Verified:** 2026-10-27.
+
+##### Li, Schultz, Hennes & Lanctot (2026): Discovering Multiagent Learning Algorithms with Large Language Models
+- **Citation:** Z. Li, J. Schultz, D. Hennes, M. Lanctot (Google DeepMind),
+  arXiv:2602.16928, v1 2026-02-18, v2 2026-02-21, v3 2026-05-07 (read: v3).
+- **Links:** https://arxiv.org/abs/2602.16928.
+- **What it reports:**
+  - Setup (§3.1, §3.4, §4.1): AlphaEvolve with Gemini 2.5 Pro evolves CFR
+    and PSRO update code. Fitness is negative exploitability, computed
+    exactly (so deterministic, with no noise) on four training games and
+    tested on fourteen others.
+  - Overfitting (abstract, §4.2, Table 1): the raw discoveries (VAD-CFR,
+    SHOR-PSRO) were competitive with the best human-designed baselines but
+    "over-engineered". The LLM stacked tightly coupled extra mechanisms
+    tuned to the training games. Train/test ablations, aggregated with an
+    interquartile mean, found a small core. The distilled versions
+    (WOP-CFR, PM-PSRO) generalised as well or better.
+  - Limitations (§6): one evolutionary trajectory, no variance across runs,
+    and the distillation needed human judgement.
+- **What it means for Fork:** expect over-fitted complexity from the loop.
+  Plan an ablation pass on every survivor (remove each added term and
+  re-measure on held-out positions and in matches) and keep the minimal
+  core. This agrees with Fork's own removal-round rule at phase ends.
+- **Tag:** REFERENCE ONLY. **License:** arXiv listing CC BY 4.0; the PDF
+  says "© 2026 Google DeepMind. All rights reserved". Source listings in §7.2
+  were not read. **Verified:** 2026-10-27.
+
+##### Lehrach et al. (2025): Code World Models for General Game Playing
+- **Citation:** W. Lehrach, D. Hennes, M. Lázaro-Gredilla and 13 others
+  (Google DeepMind), arXiv:2510.04542v1, 2025-10-06. ICLR 2026 poster (ICLR
+  virtual-site page opened).
+- **Links:** https://arxiv.org/abs/2510.04542;
+  https://iclr.cc/virtual/2026/poster/10011823.
+- **What it reports:**
+  - Method (abstract, §4): an LLM turns rules and a few trajectories into
+    Python game code, refined until generated unit tests pass, then used by
+    (IS)MCTS.
+  - Value functions (§4.3): LLM-written value functions are **not refined**,
+    because there is no ground truth. Several are generated and the best is
+    picked by a tournament.
+  - Result (abstract): the method beats or matches Gemini 2.5 Pro playing
+    directly in 9 of 10 games.
+- **What it means for Fork:** little for search heuristics. It confirms
+  that the authors use matches as the only judge of LLM-written heuristic
+  code.
+- **Tag:** REFERENCE ONLY. **License:** arXiv CC BY 4.0. **Verified:** 2026-10-27.
+
+##### Eberhardinger et al. (2024/2025): From Code to Play: Benchmarking Program Search for Games Using Large Language Models
+- **Citation:** M. Eberhardinger, J. Goodman, A. Dockhorn, D. Perez-Liebana,
+  R. D. Gaina, D. Çakmak, S. Maghsudi, S. Lucas, arXiv:2412.04057, v1
+  2024-12-05, v2 2025-07-15 (read: v2). The arXiv comment says it was
+  submitted to the IEEE Transactions on Games special issue; acceptance was
+  not checked.
+- **Links:** https://arxiv.org/abs/2412.04057.
+- **What it reports:**
+  - Method: LLM-driven hill climbing with repair attempts, across 29 tasks
+    and 11 LLMs.
+  - Tabletop games (§V-G, Tables VIII-IX, measured): LLMs wrote state-value
+    heuristics for 12 TAG games, used inside one-step lookahead or MCTS.
+    - each candidate was scored by a 500-game tournament; the final
+      tournament had 25,000 games;
+    - in 10 of 12 games some LLM's heuristic significantly beat the
+      baseline score heuristic;
+    - working-code rates were low, under 1 in 5 attempts for framework-heavy
+      Java, often because of invented API methods;
+    - there was no clear improvement across the 10 iterations of a trial,
+      and the first heuristic was often the final winner;
+    - total LLM cost per model for 1,200 iterations ranged from $0 (Llama
+      3.1 70B, listed at 0.00) and $1.60 (Gemini 2.0 Flash, the top-ranked
+      model) to $134 (Claude 3.5 Sonnet).
+  - Long runs (§VI-VII, measured on MinAtar): more restarts beat more
+    iterations, and one run per game did not reliably reach baseline
+    performance.
+- **What it means for Fork:** independent restarts (several islands seeded
+  separately) and a check that the loop beats repeated fresh sampling.
+  Expect a high share of invalid candidates; a strict gate is cheap.
+- **Tag:** REFERENCE ONLY. **License:** arXiv CC BY 4.0. **Verified:** 2026-10-27.
+
+##### Li et al. (2026): Beyond Static Evaluation: Co-Evolutionary Mechanisms for LLM-Driven Strategy Evolution in Adversarial Games
+- **Citation:** H. Li, Z. Ge, Z. Zhang and 10 others (UCAS, Baidu AI Cloud
+  and others), arXiv:2606.10389v1, 2026-06-09.
+- **Links:** https://arxiv.org/abs/2606.10389.
+- **What it reports:**
+  - Setup: whole 500-1,700-line strategy files for a 3v3 capture-the-flag
+    game, evolved with an OpenEvolve-style loop. It is compared with
+    OpenEvolve and ShinkaEvolve, three runs each, with two LLMs.
+  - **Proxy failure** ("Hierarchical Deep Evaluation", measured in a
+    preliminary experiment): 3-game scores correlated with 20-40-game
+    scores at Spearman 0.11 (p = 0.69). Fast scores are therefore used only
+    for coarse ranking, and 20-game evaluations make the final decisions.
+  - Other mechanisms: champions join the opponent pool, and the hardest
+    opponents get more weight.
+  - Limitations (authors): one domain, single-run ablations, 10 hours per
+    benchmark checkpoint, and more than 30,000 LLM calls.
+- **What it means for Fork:** a measured case of a cheap fitness carrying
+  almost no rank information. Fork's pilot metric, the correlation between
+  proxy and SPRT, is the right thing to measure first.
+- **Tag:** REFERENCE ONLY. **License:** arXiv non-exclusive distribution
+  licence. **Verified:** 2026-10-27.
+
+##### Acher & Jézéquel (2026): Do programming languages still matter to your AI coding agent teammate? Evidence at scale from chess engines
+- **Citation:** M. Acher, J.-M. Jézéquel (Univ Rennes, IRISA, CNRS, Inria),
+  arXiv:2606.13763v1, 2026-06-11. The manuscript header names Empirical
+  Software Engineering; acceptance was not checked.
+- **Links:** https://arxiv.org/abs/2606.13763.
+- **What it is:** not an evolution loop. Claude Code and Codex built 34
+  chess engines in 17 languages. The engines were measured externally
+  (perft, UCI games, Elo against Stockfish), and the transcripts were
+  analysed.
+- **Findings relevant to Fork (as read):**
+  - *Self-measured Elo is biased upward* (§1, §6.1, measured against the
+    authors' external assessment): 11 of 15 agent-written Elo scripts
+    overestimated by 200 to 1,100 Elo. The cause: too few games per opponent
+    and time controls too short. The authors note the agents used this
+    signal to decide whether a change helped and when to stop. Four
+    scripts landed within 150 Elo; two of those played 100 games at each of
+    several Stockfish strength levels, which the authors single out as the
+    choice that best kept the estimate honest.
+  - *Copying* (§5.2): an audit using dependencies, library imports,
+    fingerprints of distinctive constants and APIs from canonical engines,
+    and transcript claims found no recognisable copies among the 29
+    main-corpus engines. One engine secretly used a chess library (the
+    "cheating" case, §6.3).
+  - *Reproduced community constants* (§5.3, measured): the quiescence code
+    shared a canonical skeleton and CPW vocabulary but little text (token
+    overlap typically 15-30% across languages). Where a delta-pruning
+    margin was present (11 of 26 engines), it always fell in one narrow
+    range equal to the CPW article's value. The authors call it "the
+    clearest smoking gun" of a shared specification. (The value is
+    deliberately not written here.)
+- **What it means for Fork:**
+  - The most direct evidence for the owner's 2026-10-25 rule that models
+    reproduce famous constants without opening any source. Every constant
+    in an LLM candidate gets the originality screen, including values that
+    "look" derived.
+  - The self-Elo result is why the final judge must be a properly powered
+    SPRT at a fixed protocol, never an LLM agent's own estimate.
+- **Tag:** REFERENCE ONLY. **License:** arXiv CC BY 4.0. **Verified:** 2026-10-27.
+
+#### Part C. Frameworks and methodology studies (not game-specific)
+
+##### OpenEvolve (open-source AlphaEvolve implementation; README and metadata only)
+- **Links:** https://github.com/algorithmicsuperintelligence/openevolve. The
+  old URL github.com/codelion/openevolve redirects to the same repository
+  (GitHub API 301 to repository id 984096689). README read through the
+  GitHub API. Latest release v0.4.0, published 2026-09-28. Repository
+  created 2025-05-15.
+- **What the README says (README's own claims, not tested):**
+  - It combines MAP-Elites with islands (example config: 5 islands,
+    migration interval 20 with the unit unstated, feature dimensions such
+    as complexity and diversity).
+  - It has cascade evaluation, LLM feedback on code quality, an "artifact"
+    channel that returns error output to the LLM, and optional novelty
+    filtering by embedding similarity.
+  - It calls runs "fully deterministic" through seeding; LLM sampling makes
+    that doubtful (my note).
+  - Per-iteration cost estimates by model are given.
+  - The examples gallery lists no chess, board-game or engine example.
+- **What it means for Fork:** confirms that the island plus MAP-Elites plus
+  cascade design is now common open practice. Section 9's decision that
+  Fork writes its own orchestrator stands. Using OpenEvolve as an external
+  tool would be an owner decision; its licence allows it. No code was read.
+- **Tag:** REFERENCE ONLY. **License:** Apache-2.0 (GitHub licence field).
+  **Verified:** 2026-10-27.
+
+##### Lange, Imajuku & Cetin (2025): ShinkaEvolve: Towards Open-Ended And Sample-Efficient Program Evolution
+- **Citation:** R. T. Lange, Y. Imajuku, E. Cetin (Sakana AI),
+  arXiv:2509.19349v1, 2025-09-17. Code: https://github.com/SakanaAI/ShinkaEvolve
+  (licence field only).
+- **What it reports (abstract, §3, Fig. 3, Fig. 9):**
+  - parent sampling that balances exploration and exploitation;
+  - a bandit that picks among an ensemble of LLMs;
+  - **novelty rejection sampling**: the mutable code is embedded, and if
+    its cosine similarity to an archived program is above a threshold, an
+    LLM judges whether it is really new. In their circle-packing ablation,
+    rejection sampling clearly beat no rejection (Fig. 9, measured on one
+    task).
+- **What it means for Fork:** two ideas.
+  - Reject near-duplicates before paying for matches.
+  - The same similarity machinery, pointed at a list of known published
+    LMR formulas that the originality-checker maintains, could flag
+    candidates that look like a known engine's formula before any
+    evaluation. That use is Fork's idea, not the paper's. It would also
+    need the name/constant-check rules (DESIGN.md §8): the list itself
+    holds no code, only prose descriptions.
+- **Tag:** REFERENCE ONLY. **License:** arXiv CC BY 4.0; repository
+  Apache-2.0 (GitHub licence field). **Verified:** 2026-10-27.
+
+##### Gideoni, Risi & Gal (2026): Simple Baselines are Competitive with Code Evolution
+- **Citation:** Y. Gideoni (Oxford), S. Risi (Sakana AI, ITU Copenhagen), Y.
+  Gal (Oxford), arXiv:2602.16805, v1 2026-02-18, v2 2026-10-12 (read: v2;
+  the PDF footer says NeurIPS 2026).
+- **Links:** https://arxiv.org/abs/2602.16805.
+- **What it reports:**
+  - Main result (abstract, §8, measured): two baselines matched or beat
+    ShinkaEvolve and other pipelines at equal budget in all four domains
+    tested. The baselines are (1) sampling many programs independently and
+    keeping the best, and (2) sampling a new batch conditioned on random
+    working programs from the last batch, with no fitness-based selection.
+  - Search space and prompt (§4.1): the search space and the domain hints
+    in the prompt mattered more than the search algorithm. The same
+    pipeline found the published circle-packing bound 3 of 3 times with
+    expert hints and 1 of 3 times without them.
+  - Noise (§5): with noisy evaluation (agent scaffolds on AIME), every
+    automated search picked scaffolds that fell more than 10% from
+    validation to test, and lost to a plain majority vote. Re-evaluated 10
+    times, ShinkaEvolve and random sampling were indistinguishable
+    (probability of improvement 0.49).
+  - Fixes (§5.1, §8): an evaluation cascade that re-tests the top 20% on
+    more samples (estimated 2x cheaper than evaluating everything more
+    deeply), selection by "probability of dominance", and re-evaluating
+    final picks several times with confidence intervals.
+- **What it means for Fork:**
+  - The pilot needs a **no-evolution control arm**: the same budget spent
+    on independent LLM proposals with the same gate and funnel. Without it,
+    a gain cannot be credited to the islands or MAP-Elites.
+  - Fork's prompt (the LMR context it gives) is part of the experiment and
+    must be logged with the results.
+- **Tag:** REFERENCE ONLY. **License:** arXiv CC BY 4.0. **Verified:** 2026-10-27.
+
+##### Oved, Pony, Naparstek & Barzelay (2026): Evolution or Illusion? Rethinking Evaluation in LLM Evolutionary Search
+- **Citation:** T. Oved, R. Pony, O. Naparstek, U. Barzelay (IBM Research),
+  arXiv:2609.19799v1, 2026-09-17.
+- **Links:** https://arxiv.org/abs/2609.19799.
+- **What it reports:**
+  - Setup (§3): three strategies (OpenEvolve, EvoX, AdaEvolve) on systems
+    tasks, all with gpt-5-mini, over a grid of 40 seeds x 200 iterations.
+    The authors note one evaluator was incomplete and let an exploit
+    through.
+  - Results (§4, Tables 1-2, measured):
+    - the best split between more seeds and more iterations changes with
+      strategy, task and budget;
+    - depth sometimes saturated early (AdaEvolve at 40 iterations on one
+      task, EvoX at 60 on another);
+    - strategy rankings changed between 1 seed and 40 seeds; on one task
+      the worst strategy at one seed was best at forty;
+    - with more seeds, a "4x better" program turned out to be a validator
+      exploit.
+  - Recommendations (§5): report the seeds-by-iterations frontier, run
+    several seeds, and tune depth per task.
+- **What it means for Fork:** a single pilot run cannot rank Fork's design
+  choices. Budget for several independent runs, prefer more islands or
+  seeds to longer runs, and treat any outlier gain as a possible gate
+  exploit until a full SPRT confirms it.
+- **Tag:** REFERENCE ONLY. **License:** arXiv non-exclusive distribution
+  licence. **Verified:** 2026-10-27.
+
+#### Lessons for Fork's pilot (synthesis of Parts A-C)
+
+These are Fork's conclusions drawn from the sources above, not claims made
+by any one source.
+
+1. **Validate the proxy before trusting it.**
+   - Two measured proxy failures:
+     - GoTools' no-search rank proxy did not carry over to test sets;
+     - FAMOU's 3-game score correlated with deep evaluation at only
+       Spearman 0.11.
+   - Two proxies that worked, each confirmed by games:
+     - RSPSA's move score from the engine's own deeper search;
+     - node counts on a suite, in David et al., though with an
+       underpowered match.
+   - Björnsson and Marsland never played games at all. Make the
+     proxy-to-SPRT correlation the first pilot result, on positions held
+     out from any proxy tuning, and include hard positions.
+2. **Fitness noise picks lucky candidates.**
+   - Single-seed rankings flip (Oved et al.).
+   - Noisy selection loses to simple baselines (Gideoni et al.).
+   - Restarts beat longer runs (Eberhardinger et al.).
+   - Use a cascade that re-measures the top candidates on more data, and
+     re-measure an elite before it can hold a MAP-Elites cell or be
+     promoted. Promote only on a fresh-seed confirmation, as Li et al. do,
+     and finally by SPRT.
+3. **Run a control arm.** Spend the same budget on independent LLM proposals
+   (no islands, no archive) through the same gate and funnel. Log the
+   prompt and context, since prompt knowledge changes results.
+4. **Expect over-fitting and over-engineering.** Distil every survivor by
+   ablation (Li et al. 2602.16928). Keep the evolve block small and
+   code-size-gated (Li et al. 2609.33115). Score an LMR change against a
+   fixed version of the rest of the engine, so that it cannot free-ride on
+   other changes.
+5. **Gate exploits, not just crashes.** Published loops met clairvoyance
+   through pointer casts, validator exploits, a secret library import and
+   division-by-zero edge cases. Fork's gate should check that the diff
+   stays inside the LMR function and reads only the allowed inputs, plus
+   bench, perft and sanitiser runs.
+6. **Never use agent-reported strength.** Self-measured Elo was 200-1,100
+   too high in Acher and Jézéquel's corpus. Only the fixed-protocol SPRT
+   counts.
+7. **Originality.**
+   - Models reproduce community constants exactly (Acher and Jézéquel
+     §5.3).
+   - Papers publish evolved search values (David et al. Table II).
+   - The GGP paper's novelty argument is reasoning only.
+   - So every constant and formula in a candidate goes through the
+     originality-checker before any commit. Consider an automated
+     similarity pre-screen against prose descriptions of known LMR
+     formulas (ShinkaEvolve-style; Fork's idea).
+8. **Cost per accepted change is unreported.** No source gives "compute per
+   accepted engine change". The nearest figures are:
+   - about 6,400 candidates and about $5,400 of tokens per run (Li et al.,
+     authors' estimate);
+   - more than 30,000 LLM calls and 10-hour checkpoints (FAMOU);
+   - $0-$134 per model for 1,200 iterations (Eberhardinger et al.).
+
+   Fork should record LLM tokens, CPU-hours per stage and accepted SPRTs as
+   pilot outputs.
+9. **SPSA stays.** LLM search changes structure; SPSA tunes the constants of
+   a fixed structure from game pairs, needs tens of thousands of games and
+   a manual stop (Kiiski). Run them in that order.
+10. **Data provenance.** Several precedents used another engine as the
+    yardstick (Crafty node counts, ECM suites as fitness, Stockfish
+    opponents). Fork's proxies use only Fork's own deeper search and
+    Fork-generated positions, and third-party suites stay test-only (data
+    policy).
+
+#### Unverified (this subsection)
+
+- **Gross, Albrecht, Kantschik & Banzhaf (2002), "Evolving Chess Playing
+  Programs", GECCO 2002, pp. 740-747** (citation as given in the 2014 David
+  et al. reference list). The Internet Archive copy of
+  naturalrobotics.group.shef.ac.uk/publications/gecco02.pdf downloaded, but
+  its text layer is unreadable (font encoding), and the live link did not
+  resolve. Its "6% of alpha-beta's nodes" result is known here only through
+  Hauptman and Sipper's summary. No DOI was found on Crossref.
+- **Mitsuta & Schmitt (2010), "Optimizing the Performance of GNU-chess with
+  a Genetic Algorithm"** (CPW citation, HC 2010). The CPW PDF link (wlu.ca)
+  returns a 404 page, the Internet Archive has no copy, and Crossref found
+  no match. Content not read.
+- **Kocsis & Szepesvári (2006), Machine Learning 63(3):249-286:** only the
+  Crossref metadata was checked; the text was not read. The RSPSA ACG
+  paper's LNCS volume number was not confirmed (Crossref gives series and
+  pages only).
+- **Hauptman (2009) thesis** and **Kantschik (2006) thesis** (CPW
+  bibliography): not opened.
+- **CPW "GA in Falcon" page:** 404 on 2026-10-27.
+- **Venue status:** IEEE ToG for Eberhardinger et al. and Empirical Software
+  Engineering for Acher and Jézéquel are as stated in arXiv comments or
+  headers; acceptance not checked. NeurIPS 2026 for Gideoni et al. is from
+  the PDF footer only.
+- **Absence of chess-engine LLM-evolution work:** see the headline above.
+
 ---
 
 ## Research library (classic and foundational papers)

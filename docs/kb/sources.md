@@ -973,3 +973,54 @@ No engine source was cloned, downloaded or opened. GitHub Docs pages were read t
 | https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/finding-an-ami-parameter-store.html | AWS public SSM parameters for AMIs | 2026-10-27 | resolve:ssm: form |
 | https://documentation.ubuntu.com/aws/aws-how-to/instances/find-ubuntu-images/ | Canonical: Find Ubuntu images on AWS | 2026-10-27 | SSM parameter template, ebs-gp2 for 22.04, resolve:ssm example |
 | web search "C8a instances generally available" | search results only, used to locate the What's New URL; no snippet was relied on | 2026-10-27 | locating the announcement |
+
+## Prior work: evolutionary and LLM-driven search for game-engine heuristics (research.md §9, "Prior work" subsection; ideas.md idea 23, DESIGN.md deliverable 8c), 2026-10-27
+
+- PDFs and pages were downloaded with curl into a scratch folder outside both repositories, read as text (pdftotext, or a local HTML-to-text script), and deleted after use. No engine source code was cloned, downloaded or opened. For OpenEvolve and ShinkaEvolve only the GitHub API metadata and the README prose were read, never a code file. Code listings printed inside papers (2609.33115 App. J.1-J.2, 2602.16928 §7.2, Hauptman and Sipper Fig. 1) were not copied.
+- Web searches were used only to find URLs. No snippet was used as evidence.
+- Internet Archive (web.archive.org) copies were used where an author-hosted PDF link from CPW is dead. They are archived copies of the authors' own files.
+- Format: URL | what | date | used for.
+
+| URL | What | Date | Used for |
+|---|---|---|---|
+| https://www.chessprogramming.org/Genetic_Programming | CPW page (read-only recovery copy) | 2026-10-27 | bibliography of evolutionary search/eval work, links to PDFs |
+| https://www.chessprogramming.org/Automated_Tuning | CPW page | 2026-10-27 | "less commonly search parameters", playing-strength paragraph, optimisation pros and cons, publication list |
+| https://www.chessprogramming.org/SPSA | CPW page | 2026-10-27 | SPSA description, Kiiski instance, RSPSA attribution (the page's pseudocode was not copied) |
+| https://www.chessprogramming.org/Stockfish%27s_Tuning_Method | CPW page (Kiiski 2011 text, marked public domain) | 2026-10-27 | method, 30k-100k games, 40-70 Elo claim, non-convergence, variable selection |
+| https://www.chessprogramming.org/Genetic_Algorithms | CPW page | 2026-10-27 | FAILED (404); none |
+| https://www.chessprogramming.org/GA_in_Falcon | CPW page | 2026-10-27 | FAILED (404); none |
+| http://www.ru.is/faculty/yngvi/pdf/BjornssonM02.pdf | Björnsson & Marsland 2002 (CPW link) | 2026-10-27 | FAILED (404) |
+| https://archive.org/wayback/available?url=... (five PDF URLs) | Internet Archive availability API | 2026-10-27 | locating archived copies (none for the wlu.ca GNU Chess PDF) |
+| https://web.archive.org/web/20210508020804/https://www.ru.is/faculty/yngvi/pdf/BjornssonM02.pdf | archived author PDF, JCIS 2002 pp. 446-449 | 2026-10-27 | method §3, results §4 and Fig. 1 |
+| https://arxiv.org/abs/1009.0550 and https://arxiv.org/pdf/1009.0550 | David-Tabibi, Koppel, Netanyahu 2010, abstract page and PDF v1 | 2026-10-27 | metadata (journal-ref ICML 2010 workshop, licence), §2-§6, Tables 1-3 |
+| https://api.crossref.org/works?query.bibliographic=Genetic+Algorithms+for+Automatic+Search+Tuning... | Crossref search | 2026-10-27 | ICGA J 33(2):67-79, DOI 10.3233/icg-2010-33202 |
+| https://arxiv.org/abs/1711.08337 and https://arxiv.org/pdf/1711.08337 | David, van den Herik, Koppel, Netanyahu 2014 preprint | 2026-10-27 | metadata (journal-ref, Humies comment), §II.B, §IV, §V, Tables II-VII (values in Table II deliberately not copied) |
+| https://api.crossref.org/works/10.1109/TEVC.2013.2285111 | Crossref record | 2026-10-27 | IEEE TEVC 18(5):779-789, 2014 |
+| http://www.cs.bgu.ac.il/~sipper/papabs/gpsearch.pdf | Hauptman & Sipper 2007 (CPW link) | 2026-10-27 | FAILED (redirects to a university home page) |
+| https://web.archive.org/web/20160316074327/https://www.cs.bgu.ac.il/~sipper/papabs/gpsearch.pdf | archived author PDF, EuroGP 2007 LNCS 4445 pp. 78-89 | 2026-10-27 | §2 (incl. summary of Gross et al.), §4.3 fitness, §5 Table 2, §6 |
+| https://api.crossref.org/works?query.bibliographic=Hauptman+Sipper+Mate-In-N... | Crossref search | 2026-10-27 | DOI 10.1007/978-3-540-71605-1_8 |
+| http://www.sztaki.hu/~szcsaba/papers/rspsa_acg.pdf | RSPSA (CPW link) | 2026-10-27 | FAILED (404 after redirect) |
+| https://web.archive.org/web/20110104212031/http://www.sztaki.hu/~szcsaba/papers/rspsa_acg.pdf | archived author PDF, RSPSA (ACG 11) | 2026-10-27 | §2-§3 method, §5.3 LOA experiment and Fig. 2, §6 conclusions |
+| https://api.crossref.org/works/10.1007/11922155_4 | Crossref record | 2026-10-27 | ACG 11 (LNCS), pp. 39-56, 2006 |
+| https://api.crossref.org/works/10.1007/s10994-006-6888-8 | Crossref record | 2026-10-27 | Machine Learning 63(3):249-286, 2006 (text not read) |
+| http://naturalrobotics.group.shef.ac.uk/publications/gecco02.pdf | Gross et al. 2002 (CPW link) | 2026-10-27 | FAILED (no response) |
+| https://web.archive.org/web/20180820082240/http://naturalrobotics.group.shef.ac.uk/publications/gecco02.pdf | archived PDF, Gross et al. GECCO 2002 | 2026-10-27 | FAILED for reading: text layer unreadable (font encoding); marked UNVERIFIED |
+| https://api.crossref.org/works?query.bibliographic=Evolving+chess+playing+programs+Gross... | Crossref search | 2026-10-27 | no match found |
+| http://www.wlu.ca/science/physcomp/kotsireas/468/RAP_DStu.pdf | Mitsuta & Schmitt 2010 (CPW link) | 2026-10-27 | FAILED (redirects to a 404 page; no archive copy) |
+| https://api.crossref.org/works?query.bibliographic=Optimizing+the+Performance+of+GNU-chess... | Crossref search | 2026-10-27 | no match found |
+| https://arxiv.org/abs/cs/0302002 and https://arxiv.org/pdf/cs/0302002 | Pratola & Wolf 2003, GoTools GA | 2026-10-27 | metadata and licence, §2.2-§2.3, §3, §4 |
+| https://api.crossref.org/works?query.bibliographic=Optimizing+GoTools... | Crossref search | 2026-10-27 | ICGA J 26(1):28-48, DOI 10.3233/icg-2003-26106 |
+| https://arxiv.org/abs/2609.33115 and https://arxiv.org/pdf/2609.33115 | Li, Schultz, Lanctot, Hennes 2026, general game-playing search discovery | 2026-10-27 | metadata (CC BY 4.0), §3.1-§3.4, §4.1, §4.4, §6, App. B.1, B.2, B.5, B.6, C.1, C.2, C.4, J.4.1 (p. 55), L.2 (listings J.1-J.2 not read) |
+| https://arxiv.org/abs/2602.16928 and https://arxiv.org/pdf/2602.16928 | Li, Schultz, Hennes, Lanctot 2026, CFR/PSRO discovery (v3) | 2026-10-27 | metadata (three versions, CC BY 4.0), abstract, §3.1, §3.4, §4.1-§4.2, Table 1, §5, §6 limitations (§7.2 source listings not read) |
+| https://arxiv.org/abs/2510.04542 and https://arxiv.org/pdf/2510.04542 | Lehrach et al. 2025, Code World Models | 2026-10-27 | metadata, abstract, §4 refinement, §4.3 value functions, §5 setup |
+| https://iclr.cc/virtual/2026/poster/10011823 | ICLR 2026 virtual poster page | 2026-10-27 | confirms ICLR 2026 poster listing for Code World Models |
+| https://arxiv.org/abs/2412.04057 and https://arxiv.org/pdf/2412.04057 | Eberhardinger et al., From Code to Play (v2) | 2026-10-27 | metadata, abstract, §V-G TAG and Tables VIII-IX, §VI, §VII, §VIII |
+| https://arxiv.org/abs/2606.10389 and https://arxiv.org/pdf/2606.10389 | Li et al. 2026, FAMOU co-evolution in adversarial games | 2026-10-27 | metadata, abstract, method incl. "Hierarchical Deep Evaluation" (Spearman 0.11), experiment setup, limitations |
+| https://arxiv.org/abs/2606.13763 and https://arxiv.org/pdf/2606.13763 | Acher & Jézéquel 2026, coding agents building chess engines | 2026-10-27 | metadata, abstract, §1 self-Elo bias, §5.2 copy audit, §5.3 quiescence and constant reuse, §6.1 self-estimation (the reproduced constant value deliberately not recorded) |
+| https://arxiv.org/abs/2609.19799 and https://arxiv.org/pdf/2609.19799 | Oved et al. 2026, Evolution or Illusion | 2026-10-27 | metadata, abstract, §1-§5, Tables 1-2, limitations |
+| https://arxiv.org/abs/2602.16805 and https://arxiv.org/pdf/2602.16805 | Gideoni, Risi, Gal 2026, Simple Baselines (v2) | 2026-10-27 | metadata, abstract, §1-§5.1, §8, NeurIPS 2026 footer |
+| https://arxiv.org/abs/2509.19349 and https://arxiv.org/pdf/2509.19349 | Lange, Imajuku, Cetin 2025, ShinkaEvolve | 2026-10-27 | metadata, abstract, §3 novelty rejection sampling, Fig. 3, Fig. 9 ablation |
+| https://api.github.com/repos/SakanaAI/ShinkaEvolve | API metadata | 2026-10-27 | Apache-2.0 licence field, created 2025-09-17 |
+| https://api.github.com/repos/algorithmicsuperintelligence/openevolve (+ /readme, /releases/latest) | API metadata, README (raw), latest release | 2026-10-27 | Apache-2.0, created 2025-05-15, v0.4.0 published 2026-09-28, README feature list, config example, cost notes, examples gallery |
+| https://api.github.com/repos/codelion/openevolve and https://api.github.com/repositories/984096689 | API redirect check | 2026-10-27 | codelion/openevolve redirects (301) to algorithmicsuperintelligence/openevolve |
+| web searches (14 queries, e.g. "LLM evolutionary search chess engine heuristics AlphaEvolve arXiv", "LLM evolve chess engine code Elo SPRT", "LLM-written patches tested fishtest OR OpenBench", "late move reduction OR move ordering evolved by language model", "chess engine written by Claude Code SPRT", "Pratola Wolf GoTools") | search results only | 2026-10-27 | locating the URLs above; also the basis of the "no chess-engine LLM-evolution work found" headline (a search result, not proof). Leads seen only in results and not opened: the Coda engine and talkchess threads, a Whittington Chess forensics page, MCTS-AHD (arXiv 2501.08603), CogMCTS (arXiv 2512.08609), MuEvo (arXiv 2608.03636), colehurwitz/chess-evolve (prompt evolution) |
