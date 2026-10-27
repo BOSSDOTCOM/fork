@@ -288,9 +288,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet &&
           !in_check) {
         // The table's reduction plus the evolvable correction (lmr_table.hpp;
-        // 0 as committed).
+        // 0 as committed). The move is already made here, so its mover is the
+        // side not to move: its history is the mover's.
         const int base = reduction_for(depth, moves_searched + 1);
-        const LmrContext context{depth, moves_searched + 1, base, history_.value(pos.side_to_move(), m),
+        const LmrContext context{depth, moves_searched + 1, base, history_.value(~pos.side_to_move(), m),
                                  OnPv};
         const int correction = lmr_correction(context) * LmrCorrectionStrength / 64;
         reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
