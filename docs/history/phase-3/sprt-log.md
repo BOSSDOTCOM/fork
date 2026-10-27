@@ -255,3 +255,14 @@ Games: 5000, Wins: 1846, Losses: 1595, Draws: 1559, Points: 2625.5 (52.51 %)
 Ptnml(0-2): [179, 464, 1053, 535, 269], WL/DD Ratio: 2.76
 LLR: 2.72 (92.3%) (-2.94, 2.94) [0.00, 3.00]
 ```
+
+### 20261027T083215Z mc-time
+
+- base `23f1b10` (23f1b10), test `4ec034d` (4ec034d), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40
+- Verdict: **INCONCLUSIVE at the 5,000-game cap**: deliverable 8 (23f1b10 -> 4ec034d: the increment fix, the two-overhead reserve floor, the iteration rule) at -4.9 +/- 7.1 Elo, LLR -0.65 of -2.94. It leaned to about -10 Elo midway (3,300 games), which led the owner to split deliverable 8 (2026-10-27): the floor binds near the clock where 8+0.08 games settle (about 0.4-0.6 s left), and the test side spent 3-7% less time per move from move 41 on (PGN analysis). The variants are measured separately below (d8-*). No time losses, crashes or illegal moves.
+```
+Elo: -4.93 +/- 7.09, nElo: -6.71 +/- 9.63
+Games: 5000, Wins: 1696, Losses: 1767, Draws: 1537, Points: 2464.5 (49.29 %)
+Ptnml(0-2): [227, 508, 1075, 489, 201], WL/DD Ratio: 2.98
+LLR: -0.65 (-22.0%) (-2.94, 2.94) [-3.00, 0.00]
+```

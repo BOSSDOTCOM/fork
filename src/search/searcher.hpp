@@ -186,6 +186,9 @@ class Searcher {
                           const std::atomic<bool>* pondering, SearchListener* listener);
 
   SearchSwitches switches;
+  // Aspiration fails are reported (as upperbound or lowerbound lines) only
+  // once a search has run this long; tests set 0 to see every fail.
+  std::int64_t fail_report_ms = 1000;
 #ifdef FORK_SEARCH_STATS
   SearchCounters counters;
 #endif
@@ -245,6 +248,11 @@ class Searcher {
   Move iteration_best_ = NoMove;
   int iteration_best_score_ = -ScoreInfinite;
   PrincipalLine iteration_pv_;
+  // The last finished iteration's PV, and the first move of the last line
+  // reported: a stop after a reported fail repeats the finished iteration,
+  // so the last line before bestmove names the move played.
+  PrincipalLine finished_pv_;
+  Move last_reported_ = NoMove;
 };
 
 }  // namespace forkeng
