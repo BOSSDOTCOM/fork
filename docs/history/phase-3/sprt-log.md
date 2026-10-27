@@ -286,3 +286,13 @@ the increment fix gives the same numbers at an 80 ms increment), 8+0.08,
 non-regression bounds [-3, 0], concurrency 10, capped at 5,000 games. If it
 passes, it is merged and the Milestone C gauntlet starts, with the 40+0.4
 check after; if it fails, B2 and (c) are tested separately.
+
+### 20261027T165757Z d8-final
+
+- base `d51462f` (d51462f: deliverable 8a, the increment fix, with the last-info-line fix), test `8b8e34c` (8b8e34c: + B2, the danger-zone reserve, + (c), the iteration rule), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40; cap 5,000 games
+- Verdict: **ACCEPTED (stopped by the owner, 2026-10-27: "I trust the changes")** after 2,303 finished games. The last report (2,200 games): +1.9 +/- 10.6 Elo, LLR 0.22 of 2.94 on non-regression bounds; it was not decided by the rule. With its stress results (B2 0 time losses in 2,000 games at 2+0.02 under full load, (a) alone 3, (c) alone 1), the combination is merged as deliverable 8. sprt.sh's own summary of this run was cut off when the run was stopped; the figures here are from its game log. No time losses, crashes or illegal moves.
+```
+Elo: 1.89 +/- 10.62, nElo: 2.59 +/- 14.51
+Games: 2202, Wins: 764, Losses: 752, Draws: 686, Points: 1107.0 (50.27 %)
+LLR: 0.22 (7.6%) (-2.94, 2.94) [-3.00, 0.00]
+```
