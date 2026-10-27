@@ -912,6 +912,163 @@ authors.
 Not run: none of these was downloaded, built or played; every build line is
 from the README or build file at the tag.
 
+### Milestone C anchor set
+
+Verified 2026-10-26. Owner's brief: one anchor (two if a good second exists)
+rated about 2650-2800 on CCRL Blitz, to fill the gap between WyldChess 1.51
+(2603) and Weiss 1.0 (2896, added as the top anchor). Same rules as the
+Milestone B set: a code base unrelated to Stash, Belette, Chal, WyldChess and
+Weiss; C or C++ built on Linux with a plain make or cmake command from the
+README or a build file; no net at the pinned tag; a licence file at the tag;
+UCI. Opponent binaries only: **REFERENCE ONLY** for code (never read for
+implementation), **USE** as local test opponents. Only READMEs, licence
+files, build files (Makefile, CMakeLists.txt, CI workflow), tag listings and
+GitHub API metadata (tags, releases, commit messages, issue and PR titles)
+were opened; nothing was downloaded, cloned or built.
+
+Ratings: CCRL Blitz 2'+1" complete list (all versions), "Computed on
+October 24, 2026", fetched again 2026-10-26; 40/15 complete list "Computed
+on October 23, 2026". Names exactly as CCRL prints them (K2's entry has no
+"64-bit" suffix). Repo links come from each engine's CCRL details page. Tags
+were resolved with `git ls-remote` (both tags are lightweight: no peeled
+`^{}` entry, and the GitHub refs API reports object type `commit`) and each
+commit confirmed with the GitHub commits API.
+
+| Name (CCRL string) | CCRL Blitz | 40/15 | Repo | Tag = commit | Licence | Build directory and make arguments | Net |
+|---|---|---|---|---|---|---|---|
+| Supernova 2.4 64-bit | 2679 +/-10 (3586 games) | 2678 +/-10 (2461) | github.com/MichaeltheCoder7/Supernova (CCRL details link; author Minkai Yang) | `v2.4` = e2de2259c717c7611b5f0db1aaef224257a8d3c6 (commit 2021-09-14, message "Update"; release "Supernova 2.4" the same day, Windows exe only) | MIT (API and `LICENSE` at the tag, copyright 2020-2021 Minkai Yang) | repo root, `make linux` (a Makefile target; the README gives the same gcc line). Binary: `bin/Supernova_2.4_linux`. Plain `make` runs the first target, `windows`, which writes `bin/Supernova_2.4.exe`, so name the target. gcc with `-std=c99 -static -flto -Ofast`, linking pthread and libm; C99, no `-march` | none: the README lists a hand-written eval (PSTs, mobility, trapped pieces, passed-pawn terms, king safety, eval and pawn hash tables). Syzygy probing through a bundled copy of Fathom (the same third-party library Fork, WyldChess and Weiss use; not engine code) |
+| K2 0.99 | 2750 +/-10 (3355) | 2714 +/-11 (2107) | github.com/serg-meus/k2 (CCRL details link; author Sergey Meus) | `099` = 028f32f62f0fa914755e9154122546d53a5ade45 (commit 2021-01-01, "Release of engine version 0.99"; release "K2 chess engine v0.99 (updated: fix for Xboard mode)" published 2021-01-01, one asset `k2_099.exe` uploaded 2021-01-03) | GPL. The GitHub API reports GPL-3.0 (today's default branch), but the `LICENSE` file at tag `099` is the GPL **version 2** text: record GPL-2.0 for this pin | repo root, `make` (the Makefile's only target, `all`, is one g++ line over the seven root `.cpp` files with `-DNDEBUG=1 -std=c++0x -O3 -pthread`, no `-march`). Binary: `k2_099` in the repo root. The flags are hard-coded (no `CXX`/`CXXFLAGS` variables), so any extra flag means running that g++ line by hand | none: the README describes a hand-written eval with separate middlegame and endgame terms (material, PSTs, pawn structure, king safety, mobility, rook files and ranks, some endgame cases) |
+
+Spacing with the existing set: 2115, 2173, 2285, 2473, 2603, **2679**,
+**2750**, 2896 (the two new gaps are 76 and 71 Elo; the K2-to-Weiss gap
+stays 146). Both new anchors have among the smallest error bars in the
+range (+/-10) and more than 3,000 Blitz games each. Six unrelated code bases (Stash,
+Belette, Chal, WyldChess, Supernova, K2) below Weiss.
+
+K2 release note (release `099`, GitHub releases API): the author asks users
+not to build from the tag's source archive, because a build from it plays
+without its hash table when installed as an Xboard/WinBoard engine. He
+points to commit 9797c31576beb51afae98a56e41ad275ffe56d83 (2021-01-03,
+"Fixed 'memory' command for Xboard protocol", the tag commit's direct child,
+changing only `main.cpp`) and says UCI use is the same in both. Fork runs
+K2 as UCI, so the tag stays the pin; 9797c31 is the author's own alternative
+if the gauntlet ever needs it. Which binary CCRL tested (the release exe
+uploaded 2021-01-03, or another build) is **UNVERIFIED**.
+
+Toolchain risks (from the README, build files and GitHub metadata only;
+nothing compiled):
+- K2: 2021 C++ built as `-std=c++0x`. Pull request #10 (merged 2022-08-07)
+  reports that a then-current g++ refused to compile an operator declared
+  without a return type in `hash.cpp`'s unit-test code, an error the
+  compiler marks as `-fpermissive`. `hash.cpp` was refactored after the tag
+  (commit 04b699e, 2021-02-21, "Refactoring of transposition table"), so
+  whether the `099` source has the same construct is **UNVERIFIED** (it
+  would need the source, which Fork does not read). If the build fails that
+  way, adding `-fpermissive` to the g++ line is the usual workaround, also
+  **UNVERIFIED**. Commit 7449be4 (2021-03-21, "Fixed compile errors on some
+  systems") also post-dates the tag. Do not move the pin to a later commit
+  to dodge a build error: later commits change the engine that CCRL rated.
+- K2's `Makefile` puts a blank line between `all:` and its recipe line.
+  Whether GNU make on Ubuntu accepts that layout is **UNVERIFIED** until the
+  first build; running the g++ line by hand is the fallback.
+- Supernova: `-static` with glibc needs the static libc and libpthread
+  archives (Ubuntu's libc6-dev provides them; **UNVERIFIED** until the first
+  build). The README says GCC 10 or later is preferable and that builds may
+  fail below GCC 5, so Ubuntu 22.04's gcc 11.4 is inside the author's range.
+  The README's Linux route builds from the release's source archive; the
+  git tag holds the same `src/` and `bin/` layout (the tag listing has
+  `bin/Supernova_2.4.exe`, so the output directory exists).
+
+Engine options to set in the gauntlet:
+- Supernova (README): `Hash` 1-4096 MB (default 32; set the gauntlet's
+  value), `Threads` (default 1; keep 1), `Clear Hash`, `Ponder` (the README
+  says it changes nothing; keep pondering off in the runner),
+  `SyzygyPath` (set it the same way as for the other anchors, or leave it
+  empty for all of them), `SyzygyProbeDepth` (default 1). The README says
+  Supernova has no opening book of its own and mentions no online feature.
+- K2: run it as UCI (the README says it speaks UCI and Xboard). The README
+  names no UCI options, so whether it offers `Hash`, or has a book to
+  disable, is **UNVERIFIED**: read its `uci` reply on the first run, set
+  `Hash` to the gauntlet value if offered, disable any book option, and
+  record what it lists. No online feature is mentioned.
+- Record each built binary's SHA-256 per run, as for the other anchors.
+
+Why not the others (checked 2026-10-26). Screened: every entry the Blitz
+complete list marks as open source from 2680 to 2806, plus some from 2650
+to 2680; languages and licences come from the GitHub repository API.
+- Same code base as an existing anchor: Belette 3.0.0 (2806), Chal 1.4.1
+  (2755), Stash 21.0 (2713), Weiss 0.8, 0.9 and 0.10 (2608, 2650, 2847).
+- Language rule: Go: Tofiks 1.6.0, Zahak 5.0, Donna 4.1, Mess 0.3.0. Rust:
+  Odonata 0.6.2-0.8.0, Simbelmyne 1.5.1/1.6.0, Inanis 1.0.1/1.1.0, Velvet
+  1.2.0, Princhess 0.12.0, Trinket 3.5.0, Ratsu 2.0.0, Javelin 3.0.0,
+  Fatalii 0.10.0, Dual 0.3.2, Tcheran 5.0 (repo now tcheran-chess/tcheran),
+  Reyna 1.0. C#: Boychesser 1.0, Pedantic 0.3, Leorik 2.2, Puffin 3.0. Java:
+  Eubos 4.4, Jacky Chess 23.12-24.06, Scoria 4.4.7. D: Dumb 1.9/2.0. Nim:
+  Nalwald 1.11, Annie 1.2 (also no licence). Zig: Lambergar 0.4.1. Pascal:
+  Yakka 1.1. MadChess 3.2/3.3 links only to madchess.net (not opened;
+  language **UNVERIFIED**); akimbo 0.4.0 has no link on CCRL.
+- Net at the tag: Eleanor 1.0 (`nnue.bin` in the tag root), Arcanum 2.1
+  (`arcanum-net-v2.fnnue`), Prelude 1.0 (`nnue.bin`), PZChessBot 1.0
+  (`nnue.bin`), Casanchess 0.9 (README at the tag describes an NNUE eval
+  loaded from a net file), Prune 1.0.1 (2670; an NNUE source file and
+  `model.bin` at the tag). Qapla 0.2.057 (2768, C++, AGPL-3.0) has an
+  `nnue768/` directory at the tag; its README was not opened, so its eval
+  type is **UNVERIFIED** and it was not chosen.
+- No licence (API reports none): Facon 1.6 Temple, Turbulence 0.0.4, Admete
+  1.6.0, Revolver 1.0, Apotheosis 4.0.1 (CCRL's link now resolves to
+  spamdrew128/Apotheosis), Cepimetheus 16.0.0, Rengar 1.3.0. Midnight 5
+  (2791): no licence file in the `v5` tag listing (the API reports MIT
+  for the repository today).
+- Nothing to pin on GitHub (CCRL's link not followed further): GreKo
+  2020.01-2021.12 (greko.su), CT800 1.45/1.46 (ct800.net), Octochess r5506
+  (octochess.org), Fridolin 4.00 (Google Sites), Pawny 1.2 (own site),
+  Bison 9.11 (sdchess.ru), Coiled 1.1/1.2 (author's site), RuyDos and
+  Vengeance (Bitbucket), RedQueen 1.1.4 (SourceForge). Zevra 2.6, Prophet
+  5.1/5.2 and Nawito 22.07 have no link on CCRL. Keele 1.0 (2648): the
+  linked repo returns 404.
+- Build or protocol problems: Renegade 0.11.0 (only a Visual Studio
+  solution at the tag root), Amira 1.82 (no build file at the tag; the
+  README gives only a g++ line), Solo 1.6.0 (README asks for C++23, a risk
+  with Ubuntu 22.04's gcc 11), Drosophila 1.6 (2653; CECP interface only at
+  the tag, ships `data/book.bin`), Clovis 2.0 (the tag is named `II`; its
+  Makefile builds with `-Werror`), Lux 4.2 (no build file in the tag root;
+  not checked further). Cwtch 1 (2700): CCRL's link now resolves to a
+  different owner's repo (Bastiball21/cwtch); not followed up.
+- Usable but not chosen (fallbacks, in order):
+  - Polaris 1.5.0 64-bit (Blitz 2715 +/-18, 986 games; 40/15 2677
+    +/-21): C++20 by Ciekce, GPL-3.0 (API and `LICENSE` at the tag), `v1.5.0`
+    = f4e661ffd3d10ead50781e65f0d4388c58723629 (commit 2023-04-17, "1.5.0").
+    README: Texel-tuned hand-written eval, CMake build
+    (`cmake -DCMAKE_BUILD_TYPE=Release -S . -B build/`, then
+    `cmake --build build/ --target polaris-<native|bmi2|modern|popcnt|compat>`),
+    tested with GCC 11 on Linux, `Hash` option (default 64), and no book
+    option in its options table. Not chosen because it sits 35 Elo below K2. The binary's path
+    inside `build/` is **UNVERIFIED**. First choice if K2 will not build.
+  - Lishex 1.1.1 64-bit (Blitz 2688 +/-12, 2100 games; 40/15 2668 +/-11):
+    C++20, GPL-3.0 (API, `LICENSE.md` at the tag), `v1.1.1` =
+    ad54b19952fa33025b61233068d3a44b992099cd (commit 2023-08-08). The README
+    says `make`, but the Makefile writes objects into `build/` without
+    creating it; the tag's CI workflow runs `mkdir build` first and then
+    `make lishex CXX=g++-12` on ubuntu-22.04. The flags hard-code
+    `-mbmi2 -mpopcnt`. The `src/` listing has a book source file and the
+    README says nothing about a book option (**UNVERIFIED**). Supernova
+    sits at almost the same level with more games and a README that rules
+    out a book.
+  - Peacekeeper 1.50 64-bit (Blitz 2789 +/-17, 949 games): C++17, GPL-3.0,
+    `v1.50` = 0dbc7ddf8857e9fd9923984dcb7f1713c022d477 (from ls-remote and
+    the refs API). The README describes a Texel-tuned PST eval, but
+    `src/eval.h` at the tag is 200,385 bytes, far more than PST tables need,
+    so a hand-written-only eval cannot be confirmed without the source
+    (**UNVERIFIED**). It would also sit only 39 Elo above K2.
+  - Not opened beyond the API (README and tag tree unchecked, so
+    **UNVERIFIED**): Bit-Genie 7 (2712; its README at the tag does not
+    describe the eval), 4ku 2.0 (2723; README does not describe the eval),
+    Illumina 1.0 (2740; git submodules), Aramis 1.4.0 (2758), Seawall
+    20230316 (2756), Bread 1.4.0 (2803).
+
+Not run: none of these was downloaded, built or played; every build line is
+from the README or build file at the tag.
+
 ---
 
 ## 6. Rating-list entry procedures
