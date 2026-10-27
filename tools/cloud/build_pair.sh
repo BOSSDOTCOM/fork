@@ -7,7 +7,10 @@
 #   tools/cloud/build_pair.sh REPO BASE TEST OUTDIR   -> OUTDIR/base/fork, OUTDIR/test/fork, OUTDIR/meta.env
 set -euo pipefail
 repo=$1 base=$2 test=$3 out=$4
+# Absolute paths: each build runs in its own export folder.
 mkdir -p "$out"
+out=$(cd "$out" && pwd)
+repo=$(cd "$repo" && pwd)
 for side in base test; do
   ref=${!side}
   sha=$(git -C "$repo" rev-parse --verify "$ref^{commit}")
