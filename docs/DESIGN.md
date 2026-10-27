@@ -1362,7 +1362,15 @@ Choices made while building, where the spec leaves a gap:
   (re-checked with the 3-4-5 tables): the first mate appears at depth 9
   with tables and at depth 8 without, mate in 3 by depth 14 in both: the
   tables give no distance to mate, and probes need a zero halfmove clock
-  (ideas.md idea 22).
+  (ideas.md idea 22). The won-ending conversion suite
+  (`tools/conversion_suite.py`, 2026-10-26): 100 random TB-won 4-5 piece
+  positions (seed 20261026), each with its halfmove clock set 4 plies
+  short of what the win allows, played out by Fork (`go nodes 50000` per
+  move, the tables loaded) against a defender that keeps its best table
+  result, longest from zeroing: **100 of 100 converted**. The suite sends
+  the whole game (`position fen ... moves ...`) and a `ucinewgame` before
+  each one: with a bare FEN Fork cannot see repetitions, and 5 of 100 were
+  drawn by repetition in the first runs, a harness fault, not Fork's.
 - **Deliverable 8, basic time management** (2026-10-26). `plan_time`: the
   increment adds three quarters of itself, multiplied before dividing (the
   first external review's claim (b): 1-3 ms increments added nothing); the
@@ -1378,13 +1386,13 @@ Choices made while building, where the spec leaves a gap:
   the current SPRT queue): the 2,000-game stress test at 2+0.02 with every
   CPU busy (baseline before deliverable 8: 0 time losses), the timing tests
   on an idle machine, and an SPRT on non-regression bounds.
-  **Open before Milestone C** (owner, 2026-10-26): the constant screen found
-  the budget formula's shape (from deliverable 2: the clock over 30 moves
-  plus an increment term, hard = min(4 × share, 0.9 × clock)) near Berserk
-  4.5.0-8's (ORIGINALITY.md). The owner decides whether to replace it with
-  values measured on Fork's own data (moves left from Fork's game records,
-  the hard/soft ratio from the iteration-growth distribution, the reserve
-  rule instead of the 0.9 cap) or keep it with the citation.
+  **The budget formula's credit** (owner, 2026-10-26): the constant screen
+  found its shape (from deliverable 2: the clock over 30 moves plus an
+  increment term, hard = min(4 × share, 0.9 × clock)) near Berserk
+  4.5.0-8's time allocation. The owner kept it, with an explanation and a
+  credit in `time_budget.cpp` and ORIGINALITY.md; Fork's own parts are the
+  three-quarter increment, the soft limit at one share and the reserve's
+  floor.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.

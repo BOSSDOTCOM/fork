@@ -6,7 +6,8 @@ namespace forkeng {
 
 namespace {
 
-// Fork's own conservative choices (Phase 5 tunes time management).
+// Conservative fixed values (Phase 5 tunes time management); the formula
+// they feed is credited at plan_time below.
 constexpr std::int64_t AssumedMovesLeft = 30;     // sudden death: plan as if this many moves remain
 constexpr std::int64_t MaxMovesToGo = 40;         // a larger movestogo is treated as this
 constexpr std::int64_t HardOverSoft = 4;          // the hard limit allows this many soft budgets
@@ -47,8 +48,21 @@ TimeBudget plan_time(const ClockInput& in) {
   // rebuilds the clock.
   const std::int64_t reserve = std::max(available / ReserveDivisor, ReserveOverheads * overhead);
   const std::int64_t cap = std::max<std::int64_t>(1, available - reserve);
-  // Three quarters of the increment, multiplied before dividing (first
-  // external review, claim (b): dividing first dropped 1-3 ms increments).
+  // The budget. Each move gets an even part of the clock, as if
+  // AssumedMovesLeft moves remained (or movestogo), plus three quarters of
+  // the increment, which comes back every move; the soft limit is that
+  // share, and the hard limit allows HardOverSoft shares for a search that
+  // needs more (a fail low, an unstable best move), never into the reserve.
+  // Credit (owner's decision, 2026-10-26): this shape, the clock less the
+  // overhead over 30 moves plus an increment term with a hard limit of four
+  // shares capped short of the clock, is the same as Berserk 4.5.0-8's time
+  // allocation (jhonnold/berserk, src/uci.c, GPL-3.0), found by the
+  // originality-checker's constant screen. Fork's deliverable 2 wrote it
+  // without opening Berserk's source, but model memory may have reproduced
+  // the known form, so it is credited and kept (docs/ORIGINALITY.md). Fork's
+  // own parts: three quarters of the increment (multiplied before dividing:
+  // the first external review's claim (b)), the soft limit at one share, and
+  // the reserve's floor of two Move Overheads.
   const std::int64_t share = available / moves + std::min(increment, cap) * 3 / 4;
   t.hard_ms = std::clamp<std::int64_t>(std::min(share, cap / HardOverSoft) * HardOverSoft, 1, cap);
   t.soft_ms = std::clamp<std::int64_t>(share, 1, t.hard_ms);
