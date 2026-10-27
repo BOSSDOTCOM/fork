@@ -9,7 +9,7 @@
 # built without libelf and prints raw addresses). Results go into
 # docs/history/phase-3/perf-log.md by hand.
 set -euo pipefail
-here=$(dirname "$0")
+here=$(cd "$(dirname "$0")" && pwd)  # absolute: the profile step changes directory
 repo=$(cd "$here/.." && pwd)
 new=$(bash "$here/perf_build.sh" "$1")
 newc=$(git -C "$repo" rev-parse --short=7 "$1")

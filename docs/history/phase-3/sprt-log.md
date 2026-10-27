@@ -296,3 +296,14 @@ Elo: 1.89 +/- 10.62, nElo: 2.59 +/- 14.51
 Games: 2202, Wins: 764, Losses: 752, Draws: 686, Points: 1107.0 (50.27 %)
 LLR: 0.22 (7.6%) (-2.94, 2.94) [-3.00, 0.00]
 ```
+
+### 20261027T194536Z d8-ltc
+
+- base `d51462f` (deliverable 8a with the last-info-line fix), test `91365e2` (deliverable 8's final form, merged), bounds [-3, 0] nElo, 40+0.4, Hash 64 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40; cap 1,000 games ("a short check")
+- Verdict: **INCONCLUSIVE (stopped by the owner, 2026-10-27)** after 592 finished games, no time losses, crashes or illegal moves. fastchess's last report (400 games): -14.8 +/- 20.9 Elo, LLR -0.23. All 590 games in complete pairs (counted by tools/cloud/sprt_merge.py from the game log): -4.7 +/- 18.0 Elo, nElo -7.3 +/- 28.0, LLR -0.09, Ptnml [18, 59, 144, 61, 13]. **Flagged for Phase 5**, which revisits time management at long time controls; **the iteration rule is the first thing to check there** (at 40+0.4 the danger-zone reserve should almost never bind, so a long-time-control effect, if any, is more likely the iteration rule's).
+```
+Elo: -14.77 +/- 20.88, nElo: -24.15 +/- 34.05
+Games: 400, Wins: 124, Losses: 141, Draws: 135, Points: 191.5 (47.88 %)
+Ptnml(0-2): [12, 43, 100, 40, 5], WL/DD Ratio: 2.85
+LLR: -0.23 (-7.7%) (-2.94, 2.94) [-3.00, 0.00]
+```

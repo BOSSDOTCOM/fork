@@ -135,3 +135,18 @@ estimators needs a stated reason or a fix.
   7.1%, `quiesce<false>` 5.1%, TT 6.1%, `generate<Quiets>` 3.3%,
   make/unmake 5.8%, `gives_check` 2.5%, `predicted_key` 2.0%,
   `bootstrap_eval` 1.9%.
+
+## Milestone C (91365e2, against the Milestone B build f919c01)
+
+- Bench 17,309,921 nodes, signature 372dc2e2d8a88e4b (f919c01: 16,540,472,
+  779d36c67f079e12: different trees, the TT-refined eval's default).
+- nps: median 5,953,901 -> 6,625,718 (+11.3%), best +12.6%, noise threshold
+  4.7%: B faster (6 interleaved rounds, identity checked on all 12 runs).
+- Profile: `take_next` 19.5% (25.9% at 69e830a), `see_at_least` 12.9%,
+  `side_score` 10.8%, `generate<Captures>` 9.5%, `refresh_check_info` 7.7%,
+  `negamax<false>` 7.7%, `quiesce<false>` 5.6%, `deposit` 4.3%, `fetch`
+  3.7%, `make` 3.9%, `unmake` 2.8%, `generate<Quiets>` 3.5%,
+  `predicted_key` 2.2%, `bootstrap_eval` 1.9%. The futile-node filter
+  (3a8a1b6) moved most of take_next's share.
+- The gate's profile step failed (`perf_symbols.py` resolved from a relative
+  path after a cd); `tools/perf_gate.sh` fixed; the profile taken by hand.

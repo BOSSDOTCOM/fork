@@ -332,7 +332,12 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
 - **Phase 5: Time management.** Soft and hard limits tuned for long
   increment games without ponder, and a stress test under artificial system
   load. Before this phase starts: research the current TCEC season's full
-  rules and fill in `config/tcec.json`.
+  rules and fill in `config/tcec.json`. **Carried over from Phase 3**
+  (owner, 2026-10-27): deliverable 8's final form was checked at 40+0.4
+  only briefly, stopped inconclusive (-14.8 ± 20.9 at fastchess's 400-game
+  report, -4.7 ± 18.0 over all 590 games; sprt-log.md d8-ltc). Phase 5
+  revisits it at long time controls, **the iteration rule first** (the
+  danger-zone reserve should almost never bind at 40+0.4).
 - **Phase 6: SMP.** Lazy SMP, NUMA-aware thread/memory placement, no large
   page dependence, scaling benchmark. **Shared-TT test plan** (owner,
   2026-10-24): TT entries are self-verifying (§5.2 deliverable 3), so a torn
