@@ -217,19 +217,19 @@ TEST_CASE("pruning", "TT-refined pruning eval: still correct, and it changes the
 // rook was attacked along the file through the square it moves to, so the
 // board before the move must be rebuilt, not read after it.
 TEST_CASE("pruning", "LMR move facts: piece, threatened before the move, attacks after it") {
-  struct Case {
+  struct FactsCase {
     const char* fen;
     const char* move;
     int piece;
     bool threatened;
     bool attacks;
   };
-  for (const Case& c : {Case{"4k3/8/8/3p4/4N3/8/8/4K3 w - - 0 1", "e4c3", 1, true, false},
-                        Case{"4k3/8/8/8/1r6/8/8/N3K3 w - - 0 1", "a1c2", 1, false, true},
-                        Case{"r3k3/8/8/8/8/8/8/R3K3 w - - 0 1", "a1a2", 3, true, true},
-                        Case{"4k3/8/8/8/8/8/8/4K3 w - - 0 1", "e1d1", 5, false, false},
-                        Case{"4k3/8/8/2n5/8/3P4/8/4K3 w - - 0 1", "d3d4", 0, true, true},
-                        Case{"4k3/8/8/8/3n4/4P3/8/4K3 b - - 0 1", "d4b5", 1, true, false}}) {
+  for (const FactsCase& c : {FactsCase{"4k3/8/8/3p4/4N3/8/8/4K3 w - - 0 1", "e4c3", 1, true, false},
+                             FactsCase{"4k3/8/8/8/1r6/8/8/N3K3 w - - 0 1", "a1c2", 1, false, true},
+                             FactsCase{"r3k3/8/8/8/8/8/8/R3K3 w - - 0 1", "a1a2", 3, true, true},
+                             FactsCase{"4k3/8/8/8/8/8/8/4K3 w - - 0 1", "e1d1", 5, false, false},
+                             FactsCase{"4k3/8/8/2n5/8/3P4/8/4K3 w - - 0 1", "d3d4", 0, true, true},
+                             FactsCase{"4k3/8/8/8/3n4/4P3/8/4K3 b - - 0 1", "d4b5", 1, true, false}}) {
     Position pos;
     CHECK(pos.set_fen(c.fen));
     const Move m = pos.parse_uci(c.move);
