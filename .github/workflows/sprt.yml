@@ -1,0 +1,135 @@
+# Sharded SPRT on GitHub-hosted runners (docs/kb/tools.md "Cloud SPRT",
+# branch kb). Manual only, for testing Fork's own changes: two commits of
+# this repository against each other. One build job, at most 16 shard jobs
+# (well below the Free plan's limit of concurrent jobs, so CI still runs
+# beside it), one merge job whose summary is the combined SPRT. A stage runs
+# a fixed number of games; if undecided, run the next stage (its openings
+# follow on) and merge all stages' results (tools/cloud/sprt_merge.py).
+# Inputs reach the shell only through environment variables.
+name: sprt
+
+on:
+  workflow_dispatch:
+    inputs:
+      base: {description: "Base commit (or branch, tag)", required: true}
+      test: {description: "Test commit (or branch, tag)", required: true}
+      bounds: {description: "nElo bounds 'elo0 elo1' (e.g. '-3 0' or '0 3')", required: true, default: "-3 0"}
+      tc: {description: "Time control", required: true, default: "8+0.08"}
+      hash: {description: "Hash MB", required: true, default: "16"}
+      games: {description: "Games in this stage (all shards)", required: true, default: "1600"}
+      shards: {description: "Shard jobs (1-16)", required: true, default: "16"}
+      stage: {description: "Stage number (0 first; later stages use new openings)", required: true, default: "0"}
+      test_opts: {description: "fastchess options for the test engine (e.g. option.UseTables=false)", required: false, default: ""}
+      base_opts: {description: "fastchess options for the base engine", required: false, default: ""}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sprt
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'BOSSDOTCOM/fork'
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    timeout-minutes: 30
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+      per_shard: ${{ steps.plan.outputs.per_shard }}
+      base_sha: ${{ steps.plan.outputs.base_sha }}
+      test_sha: ${{ steps.plan.outputs.test_sha }}
+    steps:
+      - name: "Toolchain (Ubuntu 22.04, gcc 11.4, CMake 3.22, as TCEC)"
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q build-essential cmake git ca-certificates python3
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Plan
+        id: plan
+        env:
+          SHARDS: ${{ inputs.shards }}
+          GAMES: ${{ inputs.games }}
+          STAGE: ${{ inputs.stage }}
+          BASE: ${{ inputs.base }}
+          TEST: ${{ inputs.test }}
+        run: |
+          git config --global --add safe.directory "$PWD"
+          case "$SHARDS$GAMES$STAGE" in *[!0-9]*) echo "shards, games and stage must be numbers"; exit 1 ;; esac
+          [ "$SHARDS" -ge 1 ] && [ "$SHARDS" -le 16 ] || { echo "shards must be 1-16"; exit 1; }
+          per=$(( (GAMES + 2 * SHARDS - 1) / (2 * SHARDS) * 2 ))
+          echo "shards=$(python3 -c "print(list(range($SHARDS)))")" >>"$GITHUB_OUTPUT"
+          echo "per_shard=$per" >>"$GITHUB_OUTPUT"
+          echo "base_sha=$(git rev-parse --verify "$BASE^{commit}")" >>"$GITHUB_OUTPUT"
+          echo "test_sha=$(git rev-parse --verify "$TEST^{commit}")" >>"$GITHUB_OUTPUT"
+      - name: Build both engines (update.sh, CXX=g++)
+        env:
+          BASE_SHA: ${{ steps.plan.outputs.base_sha }}
+          TEST_SHA: ${{ steps.plan.outputs.test_sha }}
+        run: CXX=g++ bash tools/cloud/build_pair.sh . "$BASE_SHA" "$TEST_SHA" engines
+      - uses: actions/upload-artifact@v4
+        with: {name: engines, path: engines, retention-days: 7}
+
+  shard:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 16
+      matrix:
+        shard: ${{ fromJSON(needs.build.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: engines, path: engines}
+      - name: Tools (pinned fastchess release and book)
+        run: bash tools/cloud/fetch_tools.sh "$RUNNER_TEMP/tools"
+      - name: Games
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ strategy.job-total }}
+          STAGE: ${{ inputs.stage }}
+          GAMES: ${{ needs.build.outputs.per_shard }}
+          TC: ${{ inputs.tc }}
+          HASH_MB: ${{ inputs.hash }}
+          BASE_OPTS: ${{ inputs.base_opts }}
+          TEST_OPTS: ${{ inputs.test_opts }}
+          BASE_SHA: ${{ needs.build.outputs.base_sha }}
+          TEST_SHA: ${{ needs.build.outputs.test_sha }}
+        run: |
+          chmod +x engines/base/fork engines/test/fork
+          bash tools/cloud/run_shard.sh --base engines/base/fork --test engines/test/fork \
+            --fastchess "$RUNNER_TEMP/tools/fastchess" --book "$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.epd" \
+            --shard "$SHARD" --shards "$SHARDS" --stage "$STAGE" --games "$GAMES" --tc "$TC" --hash "$HASH_MB" \
+            --base-opts "$BASE_OPTS" --test-opts "$TEST_OPTS" --out out \
+            --meta "base=$BASE_SHA" --meta "test=$TEST_SHA" --meta runner=github
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: "shard-${{ inputs.stage }}-${{ matrix.shard }}", path: out, retention-days: 30}
+
+  merge:
+    needs: [build, shard]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {pattern: "shard-*", path: shards}
+      - name: Combined SPRT
+        env:
+          BOUNDS: ${{ inputs.bounds }}
+          STAGE: ${{ inputs.stage }}
+          BASE: ${{ inputs.base }}
+          TEST: ${{ inputs.test }}
+          TC: ${{ inputs.tc }}
+        run: |
+          set -- $BOUNDS
+          python3 tools/cloud/sprt_merge.py merge shards/*/result.json --elo0 "$1" --elo1 "$2" \
+            --json merged.json | tee summary.txt
+          { echo "### SPRT stage $STAGE: $TEST vs $BASE, $TC"
+            echo; echo '```'; cat summary.txt; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with: {name: "merged-${{ inputs.stage }}", path: "merged.json", retention-days: 90}
