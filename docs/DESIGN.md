@@ -1207,6 +1207,10 @@ holds, which is why search decisions use no floating point (deliverable 6).
      +17.0 ± 19.9 Elo after 800 games; the last report, 1,000 games:
      +14.6 ± 17.8, LLR 0.40 of 2.94), so it was never accepted. The
      removal round tests it at STC and also at LTC 40+0.4.
+   - **Also flagged** (owner's cap, 2026-10-26): keeping exact TT entries
+     (`UseTtKeepExact`, the second review's claim (e)), off by default: its
+     SPRT on [-3, 0] ended INCONCLUSIVE at the cap, -0.6 ± 7.5 Elo after
+     4,800 games (LLR 0.09 of 2.94).
 
 #### Implementation notes (2026-10-24)
 
@@ -1542,7 +1546,7 @@ FORK_SEARCH_STATS bench unless stated.
 | (b) The TT's stored static eval is recomputed on a hit. | **Confirmed. Fixed** (1efade9): reused in the main and quiescence searches. Bench identical. |
 | (c) No TT prefetch before the null move. | **Confirmed. Fixed** (1efade9): `Position::predicted_null_key()`, tested against `make_null`. Bench identical. The three together: nps +2.9% (just under the 3% noise rule). |
 | (d) Refine the static eval with the TT score before pruning. | Built behind `UseTtEvalRefine` (738daff) from KB T50: WAC 259/300 vs 248, mate suite 139/297 vs 132. SPRT [0, 3] **stopped undecided by the owner** (+14.6 ± 17.8 Elo at 1,000 games): **PROVISIONAL, on by default** since 2026-10-26, NEEDS VERIFICATION in the end-of-Phase-3 removal round (STC and LTC 40+0.4). |
-| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [-3, 0] (a safety guard, the owner's bounds policy), on top of the TT-refined eval's new default. Cap (owner): about 5,000 games or 4 hours; if still undecided then, INCONCLUSIVE, off by default, and into the end-of-Phase-3 removal round. |
+| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [-3, 0] (a safety guard, the owner's bounds policy), on top of the TT-refined eval's new default. Cap (owner): about 5,000 games or 4 hours; if still undecided then, INCONCLUSIVE, off by default, and into the end-of-Phase-3 removal round. **Result: INCONCLUSIVE at the cap**, -0.6 ± 7.5 Elo at 4,800 games: off by default, in the removal round. |
 | (f) Tier 2 order, razoring, losing-capture futility. | Plan changed (deliverable 9). |
 | (g) Upcoming repetitions, fifty-move eval scaling, history malus balance. | ideas.md ideas 26-28. |
 | (h) Phase 6: thread agreement and diversity. | Added to the Phase 6 roadmap entry. |

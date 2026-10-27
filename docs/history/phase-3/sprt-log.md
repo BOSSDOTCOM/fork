@@ -233,3 +233,25 @@ cap, it is INCONCLUSIVE: keep-exact stays off by default and goes into the
 end-of-Phase-3 removal round. Development now runs at normal priority beside
 the games; after any time loss it drops back to low priority until the SPRT
 ends. Once the queue is empty, SPRTs return to concurrency 10.
+
+### 20261027T010855Z rv-keepexact
+
+- base `008b67f` (008b67f), test `008b67f` (008b67f), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 8, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, base opts option.UseTtEvalRefine=true, test opts option.UseTtEvalRefine=true option.UseTtKeepExact=true
+- Verdict: **INCONCLUSIVE at the owner's cap** (about 5,000 games or 4 hours; stopped by its guard at 05:09:33 UTC after 4,845 finished games): -0.6 +/- 7.5 Elo at the last report (4,800 games), LLR 0.09 of 2.94. Keeping exact TT entries (the second review's claim (e)) stays **off by default** and goes into the end-of-Phase-3 removal round (DESIGN.md §5.2, Quality control 6). No time losses, crashes or illegal moves.
+```
+Elo: -0.58 +/- 7.49, nElo: -0.76 +/- 9.83
+Games: 4800, Wins: 1670, Losses: 1678, Draws: 1452, Points: 2396.0 (49.92 %)
+Ptnml(0-2): [224, 502, 956, 494, 224], WL/DD Ratio: 3.19
+LLR: 0.09 (3.0%) (-2.94, 2.94) [-3.00, 0.00]
+```
+
+### 20261027T051243Z mc-tables
+
+- base `b7ab410` (b7ab41033be35bd5b098cd8af37d9a133fa8ad31), test `b7ab410` (b7ab41033be35bd5b098cd8af37d9a133fa8ad31), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, test opts option.SyzygyPath=~/fork-tools/syzygy/3-4-5
+- Verdict: **INCONCLUSIVE: no decision after the 5000-game cap (or stopped early)**; cap 5000 games.
+```
+Elo: 17.46 +/- 7.18, nElo: 23.45 +/- 9.63
+Games: 5000, Wins: 1846, Losses: 1595, Draws: 1559, Points: 2625.5 (52.51 %)
+Ptnml(0-2): [179, 464, 1053, 535, 269], WL/DD Ratio: 2.76
+LLR: 2.72 (92.3%) (-2.94, 2.94) [0.00, 3.00]
+```
