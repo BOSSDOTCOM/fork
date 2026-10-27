@@ -872,3 +872,27 @@ No engine repository was cloned or downloaded and no engine source file was open
 | https://raw.githubusercontent.com/syzygy1/tb/master/README.md (+ API commit 0bb8aeee) | Syzygy generator README (Ronald de Man) | 2026-10-26 | up to 7 pieces; WDL two-sided and used in search; DTZ single-sided, root only |
 | https://python-chess.readthedocs.io/en/latest/syzygy.html | python-chess 1.11.2 Syzygy docs | 2026-10-26 | independent test oracle: WDL/DTZ up to 7 pieces, thread-safety note |
 | https://api.github.com/repos/niklasf/shakmaty-syzygy; raw README.md at main FAILED (404); raw README.md at master | shakmaty-syzygy (GPL-3.0) | 2026-10-26 | lichess server's prober; repo merged into niklasf/shakmaty |
+
+## Heuristic-discovery method references: AlphaEvolve, FunSearch, MAP-Elites (research.md §9; ideas.md idea 23, DESIGN.md deliverable 8c), 2026-10-26
+
+- PDFs were downloaded with curl into a scratch folder outside both repositories, read as text with pdftotext, and deleted after use. No code file of any released repository was opened: only GitHub API licence metadata and README prose. No chess engine source was opened.
+- Web searches were used only to find the URLs below; no snippet was used as evidence.
+- Format: URL | what | date | used for.
+
+| URL | What | Date | Used for |
+|---|---|---|---|
+| https://arxiv.org/abs/2506.13131 | arXiv abstract page, AlphaEvolve | 2026-10-26 | title, 18 authors, v1 2025-06-16 only version, DOI 10.48550/arXiv.2506.13131, subjects, licence link CC BY-NC-ND 4.0, no journal reference |
+| https://arxiv.org/pdf/2506.13131 | AlphaEvolve white paper PDF (v1) | 2026-10-26 | every method detail (§2.1-2.6, §3.1-3.3.1, §4, §6, Table 1), page numbers, references [74] [83] [97], copyright line |
+| https://storage.googleapis.com/deepmind-media/DeepMind.com/Blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/AlphaEvolve.pdf | DeepMind-hosted white paper PDF | 2026-10-26 | Last-Modified 2025-06-18; text equals arXiv v1 apart from the arXiv stamp (word-level comparison) |
+| https://deepmind.google/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/ | DeepMind announcement post | 2026-10-26 | datePublished 2025-05-14; overview only (no method detail used from it) |
+| https://api.github.com/repos/google-deepmind/alphaevolve_results and /readme | API metadata and README | 2026-10-26 | Apache-2.0 licence field; README: results notebook only, no code to run AlphaEvolve; software Apache-2.0, other materials CC BY 4.0 |
+| https://api.github.com/repos/google-deepmind/alphaevolve_repository_of_problems and /readme | API metadata and README | 2026-10-26 | Apache-2.0; accompanies arXiv 2511.02864; no AlphaEvolve code |
+| https://api.github.com/search/repositories?q=alphaevolve+user:google-deepmind | API search | 2026-10-26 | finding the two repos above (no other alphaevolve repo under google-deepmind) |
+| https://www.nature.com/articles/s41586-023-06924-6 | Nature article page (FunSearch) | 2026-10-26 | citation meta tags: title, 12 authors, volume 625, issue 7995, pages 468-475, online 2023-12-14, issue 2024/01, links to the SI files |
+| https://www.nature.com/articles/s41586-023-06924-6.pdf | Nature article PDF | 2026-10-26 | received/accepted/online dates, affiliations, every method detail (main text p468-474, Methods, Extended Data Figs 1-3, Code availability) |
+| https://api.crossref.org/works/10.1038/s41586-023-06924-6 | Crossref record | 2026-10-26 | author list, 625(7995):468-475, published-online 2023-12-14, published-print 2024-01-18, licence CC BY 4.0 |
+| https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41586-023-06924-6/MediaObjects/41586_2023_6924_MOESM1_ESM.pdf | FunSearch Supplementary Information PDF (publisher) | 2026-10-26 | SI A.1 ablations, A.3 run variance, A.5 scale and cost, E.1 Table E.2 hyperparameters (Appendices C and F, which print code, not read) |
+| https://pmc.ncbi.nlm.nih.gov/articles/PMC10794145/ | PubMed Central copy | 2026-10-26 | title and DOI match (nothing else used) |
+| https://api.github.com/repos/google-deepmind/funsearch and /readme | API metadata and README | 2026-10-26 | Apache-2.0 licence field; README contents list, software Apache-2.0 and other materials CC BY 4.0 |
+| https://arxiv.org/abs/1504.04909 | arXiv abstract page, MAP-Elites | 2026-10-26 | title, authors, v1 2015-04-20 only version, comment "Early draft", subjects, DOI 10.48550/arXiv.1504.04909, licence link (arXiv non-exclusive distribution) |
+| https://arxiv.org/pdf/1504.04909 | MAP-Elites preprint PDF (v1) | 2026-10-26 | author's note, Fig. 2 pseudocode, §3-§9 method details, chess example (p3), page numbers, affiliations |

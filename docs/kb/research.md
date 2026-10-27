@@ -453,6 +453,435 @@ lczero.org open-data blog (2021-06-14), TalkChess announcement
 
 ---
 
+## 9. Heuristic-discovery tool: method references (idea 23, deliverable 8c)
+
+Added 2026-10-26 for the pilot of the heuristic-discovery loop (ideas.md
+idea 23; DESIGN.md §5.2, deliverable 8c). The owner named these three works
+as models for the loop. Every detail below was read in the source itself:
+the arXiv PDFs, the Nature PDF and its Supplementary Information, and the
+publisher and Crossref metadata. Each claim gives the section or page it
+came from. Pages are the numbers printed on the page (arXiv PDFs: the PDF
+page; Nature: the journal pages 468-475; the Nature Methods section sits on
+the online-only pages after p. 475; the Supplementary Information is cited
+by appendix).
+
+**Tag for all three: REFERENCE ONLY, for ideas.** They are method references
+for Fork's own orchestrator, program database and evaluator. Released code
+is never read for implementation. For this entry only the GitHub licence
+field and README prose were opened, never a code file. None of the three
+works deals with chess engines or with noisy, match-based fitness. Their
+evaluators score a candidate directly (a set size, a bin count, a
+simulator), so the statistics of Fork's funnel (proxies, then SPRT) are
+Fork's own design, not taken from these papers.
+
+### AlphaEvolve: A coding agent for scientific and algorithmic discovery (Google DeepMind white paper; arXiv 2506.13131v1, 2025-06-16)
+- **Citation:** A. Novikov, N. Vũ, M. Eisenberger, E. Dupont, P.-S. Huang,
+  A. Z. Wagner, S. Shirobokov, B. Kozlovskii, F. J. R. Ruiz, A. Mehrabian,
+  M. P. Kumar, A. See, S. Chaudhuri, G. Holland, A. Davies, S. Nowozin,
+  P. Kohli, M. Balog (18 authors, Google DeepMind), "AlphaEvolve: A coding
+  agent for scientific and algorithmic discovery", white paper,
+  arXiv:2506.13131 [cs.AI], v1 submitted 2025-06-16 (the only version
+  listed on 2026-10-26). DOI 10.48550/arXiv.2506.13131. Neither the arXiv
+  page nor the PDF names a journal or conference.
+- **Links:** https://arxiv.org/abs/2506.13131 (PDF
+  https://arxiv.org/pdf/2506.13131). Google DeepMind also hosts a copy:
+  https://storage.googleapis.com/deepmind-media/DeepMind.com/Blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/AlphaEvolve.pdf
+  (HTTP Last-Modified 2025-06-18). After whitespace normalisation, its
+  text matches arXiv v1 word for word, apart from the arXiv stamp. The
+  announcement post is dated 2025-05-14:
+  https://deepmind.google/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/.
+  **UNVERIFIED:** whether the white paper released with that post in May
+  2025 differed from v1. That earlier file was not available to compare.
+- **What it is:** an evolutionary coding agent. LLMs propose edits to marked
+  parts of a program, automatic evaluators score the results, and a program
+  database chooses which programs the LLMs see next. It was applied to
+  tensor decompositions for matrix multiplication, to over 50 mathematical
+  construction problems and to Google infrastructure: a data-centre
+  scheduling heuristic, kernels, a TPU circuit and attention code.
+- **Method components (as read):**
+  - *Loop* (§2, Fig. 2, p4): each step samples a parent program and some
+    "inspiration" programs from the database, builds a prompt and asks an
+    LLM for a diff. The diff is applied to make a child program, the child
+    is evaluated, and it is stored with its results. The system runs as an
+    asynchronous pipeline of a controller, LLM samplers and evaluation
+    nodes. It is tuned for throughput, to get the most ideas proposed and
+    evaluated within an overall compute budget (§2.6, p8).
+  - *Evolvable regions* (§2.1, p4-5): the user marks blocks with
+    EVOLVE-BLOCK start and end comment markers. Code inside a block is the
+    initial solution; the rest is a fixed skeleton that connects the
+    evolved parts to the evaluation function. The initial code must be
+    complete but may be trivial (e.g. functions returning constants). The
+    evaluation function maps a solution to a dictionary of scalar metrics,
+    which by convention are maximised (p3-4).
+  - *Prompting* (§2.2, p5): each prompt holds several earlier solutions
+    sampled from the database, plus instructions on how to change one of
+    them. The options are:
+    - explicit context: the problem text, equations, code or literature;
+    - stochastic formatting: alternative template wordings, picked by
+      configured probabilities, for diversity;
+    - rendered evaluation results: a program, its output and its scores;
+    - meta-prompt evolution: instructions written by the LLM itself and
+      co-evolved in a separate database.
+
+    The example prompt (Fig. 3, p6) lists prior programs with their scores,
+    then the current program to improve.
+  - *Output format* (§2.3, p7): edits come as SEARCH/REPLACE diff blocks
+    against the current program. When the code is very short, or a full
+    rewrite suits better, the system can instead ask for the whole block.
+    The paper gives no ratio of diffs to rewrites.
+  - *Models* (p7): an ensemble of Gemini 2.0 Flash and Gemini 2.0 Pro.
+    Flash is fast and supplies the volume of candidates; Pro adds occasional
+    higher-quality suggestions.
+  - *Evaluation* (§2.4, p7-8):
+    - an optional **evaluation cascade**, labelled "hypothesis testing":
+      user-defined test stages of rising difficulty, where a candidate
+      reaches the next stage only if its results on all earlier stages are
+      promising enough. Candidates first run at small scale, so faulty
+      programs drop out early.
+    - **LLM-generated feedback**: separate LLM calls grade properties that
+      are hard to code into the evaluator, such as simplicity. The grades
+      are added to the scores or used to discard candidates that fail a
+      criterion.
+    - **Parallelised evaluation**: the paper says spending on the order of
+      100 compute-hours per candidate is feasible, with the work spread
+      asynchronously over an evaluation cluster.
+  - *Multiple scores* (p8): several metrics can be optimised together. The
+    authors report that this often improves the one metric they care about,
+    and attribute it to more varied high scorers appearing in prompts.
+  - *Program database* (§2.5, p8): stores every solution with its scores
+    and outputs, aiming to bring earlier ideas back while balancing
+    improvement against diversity. The paper says the database algorithm is
+    inspired by a combination of MAP-Elites (citing Mouret & Clune,
+    arXiv:1504.04909) and island-based population models (citing FunSearch
+    and Tanese 1989). **Not described:** the feature dimensions, the cells,
+    the number of islands, any migration or reset rule, or how parents and
+    inspirations are chosen. The paper gives no database hyperparameters.
+  - *Seeding and staged heuristics* (§3.1, p10; §3.2, p12): most
+    matrix-multiplication results started from a simple initial program,
+    but for some targets seeding it with the authors' own ideas helped. For
+    the mathematics problems, each generation evolved a search heuristic
+    with a fixed time budget (e.g. 1000 s) that started from the best
+    construction found by the previous best heuristic. Final results often
+    came from a sequence of different heuristics.
+  - *Infrastructure heuristic* (§3.3.1, p13-14), the closest case to
+    Fork's: a machine-scoring function for the Borg scheduler. Evolution
+    started from the function then in production, with feedback from a
+    simulator run on historical workload snapshots. Generalisation was
+    checked on an unseen test set of recent workloads. After rollout,
+    fleet-wide measurements confirmed the simulator's results (on average
+    0.7% of fleet compute recovered). The authors chose the code heuristic
+    over a deep-RL approach for interpretability, debuggability,
+    predictability and ease of deployment.
+  - *Ablations* (§4, Fig. 8, p17-18; tensor decomposition and kissing
+    numbers): in the plotted curves, each variant did worse than the full
+    method:
+    - "no evolution": always prompting with the initial program;
+    - no context in the prompt;
+    - no meta-prompt evolution;
+    - no full-file evolution: only the loss function evolved;
+    - a single small LLM.
+  - *Budget and stopping:* no stopping rule is given beyond the compute
+    budget; the ablation curves are plotted against the fraction of the
+    budget used (p18). Table 1 (p2) compares typical scale with FunSearch:
+    thousands of LLM samples suffice against millions, and evaluations may
+    take hours in parallel on accelerators, against at most 20 minutes on
+    one CPU.
+  - *Limitation* (§6, p21): it needs an automated evaluator. LLM-provided
+    evaluation is possible, but the authors say it is not the setting they
+    optimised for.
+- **Released code:** none for the agent.
+  https://github.com/google-deepmind/alphaevolve_results holds a Colab
+  notebook with the mathematical results and code to verify them. Its
+  README states that it does not contain the code to run AlphaEvolve. A
+  companion repo, google-deepmind/alphaevolve_repository_of_problems,
+  accompanies arXiv 2511.02864 (Georgiev, Gómez-Serrano, Tao, Wagner); it
+  was not reviewed beyond its README. No code file in either repo was
+  opened.
+- **Not found in the source:** these features of the owner's spec do not
+  appear in AlphaEvolve.
+  - **Residual mode** (a correction added to a fixed base formula): not
+    found. The nearest ideas are the skeleton with evolve blocks and the
+    choice between diffs and full rewrites (p7).
+  - **Critic agent** reviewing proposals before they are built: not found.
+    The introduction (p2) says LLMs "generate, critique, and evolve"
+    programs, but the only mechanism described is LLM grading that sits
+    beside the evaluation (p7-8).
+  - **Analyst agent:** not found. The nearest is meta-prompt evolution (p5).
+  - **Proposers with distinct perspectives, each with its own island:** not
+    found. The two models differ in speed and quality, not in role.
+  - **Explorer with a protected island,** or a set share of exploratory or
+    full-replacement candidates: not found.
+  - **Noisy fitness and statistics:** no repeated measurement, statistical
+    test or proxy-against-final-metric study, apart from the
+    simulator-then-fleet confirmation in §3.3.1.
+  - **MAP-Elites details:** no descriptors, island counts or reset schedule.
+- **What it means for Fork:** Phase 3 deliverable 8c, the heuristic-discovery
+  tool.
+  - Take from the paper:
+    - make the LMR function the only evolve block;
+    - allow both diff and whole-function answers;
+    - run a cascade (gate, proxies, short match, SPRT) in the spirit of §2.4;
+    - show several prior programs, with their scores, in each prompt;
+    - check proxies on held-out data and confirm with the real metric, as
+      was done for the Borg heuristic.
+  - Fork's own additions: the critic, the analyst, the explorer, the
+    proposer perspectives and residual mode. Document them as Fork's
+    choices, never as AlphaEvolve's.
+- **Phase:** 3 (8c pilot); late 4 and the improvement pass if the owner says
+  go. **Tag:** REFERENCE ONLY. **License:** arXiv listing CC BY-NC-ND 4.0;
+  the PDF itself is marked "© 2025 Google DeepMind. All rights reserved".
+  alphaevolve_results: Apache-2.0 for software and CC BY 4.0 for other
+  materials (README; GitHub licence field Apache-2.0).
+  **Verified:** 2026-10-26.
+
+### Mathematical discoveries from program search with large language models (Nature 625(7995):468-475; DOI 10.1038/s41586-023-06924-6, online 2023-12-14, issue 2024-01-18)
+- **Citation:** B. Romera-Paredes, M. Barekatain, A. Novikov, M. Balog,
+  M. P. Kumar, E. Dupont, F. J. R. Ruiz, J. S. Ellenberg, P. Wang, O. Fawzi,
+  P. Kohli, A. Fawzi (12 authors; Google DeepMind, University of
+  Wisconsin-Madison, University of Lyon), "Mathematical discoveries from
+  program search with large language models", *Nature* 625(7995):468-475.
+  Received 2023-08-12, accepted 2023-11-30, published online 2023-12-14,
+  issue dated 2024-01-18 (PDF header and footer; Crossref gives the same
+  online and print dates). The method is named FunSearch, short for
+  "searching in the function space".
+- **Links:** https://doi.org/10.1038/s41586-023-06924-6 (article page
+  https://www.nature.com/articles/s41586-023-06924-6, PDF
+  https://www.nature.com/articles/s41586-023-06924-6.pdf, free).
+  Supplementary Information PDF (publisher):
+  https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fs41586-023-06924-6/MediaObjects/41586_2023_6924_MOESM1_ESM.pdf.
+  Also in PubMed Central as PMC10794145. Whether an arXiv version exists
+  was not checked.
+- **What it is:** an evolutionary loop that pairs a frozen, pretrained LLM
+  with an automatic evaluator to search for programs rather than direct
+  solutions. It found new large cap sets, including a new size-512 cap set
+  in dimension 8, and a better asymptotic lower bound. It also found online
+  bin-packing heuristics that beat first fit and best fit.
+- **Method components (as read):**
+  - *Specification and skeleton* (p469-470): the user supplies an evaluate
+    function, an initial program (possibly trivial) and optionally a
+    skeleton. Only the critical function evolves, e.g. the priority
+    function of a greedy algorithm (Fig. 2). The authors say a fixed
+    skeleton helps overall, because LLM effort goes only into the critical
+    part and less known structure has to be rewritten. In the
+    Supplementary Information ablation (SI A.1), removing the skeleton did
+    worse.
+  - *LLM* (p469): pretrained, not fine-tuned: Codey, from the PaLM 2
+    family. The authors chose fast inference over sample quality, and the
+    results used on the order of 10^6 samples. Results were not very
+    sensitive to the choice of LLM; StarCoder is compared in SI A.2.
+  - *Evaluation* (p469-470): each program runs on a set of inputs, and
+    the scores are combined, e.g. by their mean. Programs that exceed the
+    time or memory limit, or give invalid output, are discarded; only
+    correct programs enter the database. Defaults (SI E.1, Table E.2): a
+    30 s timeout and a 2 GB memory limit for cap sets; 300 s and 5 GB for
+    bin packing.
+  - *Best-shot prompting* (p470; Methods):
+    - sample k programs from one island and sort them by score, lowest
+      first;
+    - rename each with a version suffix (v0, v1, ...) and put them in the
+      prompt in the skeleton's layout;
+    - end the prompt with the bare header of the next version, for the LLM
+      to complete.
+
+    k = 2 worked better than 1, with diminishing returns beyond 2. In the
+    ablation (SI A.1), prompting with a single program did worse.
+  - *Islands* (p470; Methods):
+    - there are m islands, each seeded with the initial program and evolved
+      independently;
+    - for each prompt, an island is picked uniformly, k = 2 programs are
+      sampled from it, and the new programs go back to that island;
+    - every 4 hours, all programs on the half of the islands whose best
+      program scores lowest are discarded;
+    - each emptied island is reseeded with one program: the best program of
+      a surviving island chosen uniformly at random, ties going to the
+      older program.
+
+    The defaults (SI Table E.2) are 10 islands and a 4-hour reset. With
+    only one island, the ablation did worse (SI A.1).
+  - *Clusters inside islands* (Methods; Extended Data Fig. 3):
+    - programs with the same signature (the tuple of their scores on each
+      input) form a cluster;
+    - a cluster is picked by a softmax over cluster scores ("Boltzmann
+      selection"); the temperature falls linearly from T0 as the island
+      grows and restarts every N programs (T0 = 0.1, N = 30,000 in SI
+      Table E.2);
+    - inside the chosen cluster, shorter programs are preferred, through a
+      softmax over normalised negative length in characters
+      (Tprogram = 1.0).
+
+    The authors link this to diversity preservation, lexicase selection and
+    fitness-uniform optimisation.
+  - *Distributed system* (p470; SI A.5, E.1): a programs database,
+    samplers and evaluators run asynchronously. The main text says
+    typically 15 samplers and 150 CPU evaluators, but SI Table E.2 lists
+    140 evaluators as the default (a discrepancy within the source). Each
+    prompt yields 4 samples, at temperature 1.0 and nucleus 0.95.
+  - *Generalisation test* (p472-473): the bin-packing heuristic started
+    from best fit. It evolved on generated instances the size of the OR1
+    set, then was tested on the OR1-OR4 benchmarks and on Weibull
+    instances, and beat first fit and best fit on all of them.
+  - *Run-to-run variance* (Methods "Robustness"; SI A.3): results vary
+    between runs. Some problems beat the baseline in every run; others
+    need many runs, e.g. only 4 of 140 cap-set runs in dimension 8 reached
+    size 512.
+  - *Budget and stopping:* there is no fixed stopping rule. The user can
+    take the best programs at any time (Fig. 1 caption, p469), and the
+    reset cycle repeats "until termination" (Extended Data Fig. 2). Scale
+    (SI A.5): about 2 million programs for the symmetric admissible set
+    I(15, 10). Reproducing it was estimated at two days on 15 GPU LLM
+    instances and 5 CPU servers, costing roughly $800-1,400.
+  - *Scope* (p474): it works best with three things: an efficient
+    evaluator; rich scores rather than a binary signal; and a skeleton with
+    an isolated part to evolve.
+- **Released code:** https://github.com/google-deepmind/funsearch.
+  According to its README, the repo holds the discovered functions, a
+  bin-packing evaluation suite and a single-threaded implementation of the
+  evolutionary algorithm and pipeline. It has no LLM, sandbox or
+  distributed infrastructure. Not opened. The Supplementary Information
+  PDF also prints Python code for the sampler, evaluator and database
+  (Appendix F), and the discovered programs (Appendix C); neither appendix
+  was read. The supplementary zip (MOESM2) was not downloaded.
+- **Not found in the source:** these features of the owner's spec do not
+  appear in FunSearch.
+  - **Residual mode:** not found. The LLM writes the whole body of the next
+    function version each time.
+  - **Critic agent:** not found. The only filter is the evaluator rejecting
+    incorrect programs.
+  - **Analyst agent and proposer perspectives:** not found. There is one LLM
+    and one prompt scheme.
+  - **Explorer or protected island:** not found. All islands are treated
+    alike; reset islands restart from a copy of a strong program.
+  - **MAP-Elites:** FunSearch does not use it. For the cluster idea it cites
+    quality-diversity work (Mouret & Doncieux 2009; Pugh et al. 2016).
+  - **Noisy fitness and statistics:** no treatment of noisy scores or
+    statistical testing.
+- **What it means for Fork:** Phase 3 deliverable 8c.
+  - Concrete, simple mechanisms to adopt as ideas:
+    - islands with a periodic reset of the worst half;
+    - clusters keyed by a signature of per-input scores (for Fork, perhaps
+      scores per position subset);
+    - two-program prompts ordered by score;
+    - a preference for shorter programs, which suits the hot-path rules;
+    - invalid programs never reach the database (Fork's gate).
+  - The paper's scope note (an efficient evaluator, rich scores) is the
+    weak spot for Fork, whose final judge is slow and noisy. The cheap
+    proxies carry the loop, so whether the proxies predict SPRT results is
+    rightly a pilot metric.
+  - The 4-hour wall-clock reset is FunSearch's choice; Fork will need its
+    own reset rule (e.g. by generation count) with a recorded
+    justification.
+- **Phase:** 3 (8c pilot); late 4 and the improvement pass if go. **Tag:**
+  REFERENCE ONLY. **License:** article CC BY 4.0 (Crossref licence field;
+  Nature marks it open access). funsearch repo: Apache-2.0 for software and
+  CC BY 4.0 for other materials (README; GitHub licence field Apache-2.0).
+  **Verified:** 2026-10-26.
+
+### Illuminating search spaces by mapping elites (arXiv 1504.04909v1, 2015-04-20)
+- **Citation:** J.-B. Mouret (Université Pierre et Marie Curie-Paris 6,
+  CNRS UMR 7222) and J. Clune (University of Wyoming), "Illuminating search
+  spaces by mapping elites", arXiv:1504.04909 [cs.AI; also cs.NE, cs.RO,
+  q-bio.PE]. v1 was submitted 2015-04-20 and was the only version listed on
+  2026-10-26. DOI 10.48550/arXiv.1504.04909. The arXiv comment reads "Early
+  draft", and the PDF header reads "Preprint - April 21, 2015". An author's
+  note on p1 calls it a preliminary draft, posted so that others can cite
+  and implement the algorithm; its experiments were to be redone before a
+  final version, so its data may change. **UNVERIFIED:** whether a
+  peer-reviewed final version exists (not looked for).
+- **Links:** https://arxiv.org/abs/1504.04909 (PDF
+  https://arxiv.org/pdf/1504.04909).
+- **What it is:** MAP-Elites (Multi-dimensional Archive of Phenotypic
+  Elites), an "illumination" algorithm. It keeps the best solution found in
+  each cell of a low-dimensional feature space chosen by the user, instead
+  of one overall best. The paper says the algorithm had already been used,
+  and briefly described, in Cully et al. (arXiv 1407.3501); this paper is
+  the first to describe it in detail.
+- **Method components (as read):**
+  - *Setup* (§3, p3): the user picks a performance measure and N feature
+    dimensions, also called behaviour dimensions. A feature function maps
+    each candidate to an N-dimensional descriptor; some features are read
+    off the candidate, others need running it. Each dimension is
+    discretised as the user prefers or as compute allows, possibly coarse
+    at first and finer later.
+  - *Algorithm* (Fig. 2 pseudocode and §3, p3):
+    - start with G random candidates, placed in their cells (the best one
+      per cell is kept);
+    - then, until a termination criterion: pick an occupied cell uniformly
+      at random, and mutate and/or cross over its elite to make a child;
+    - compute the child's descriptor and performance;
+    - store the child if its cell is empty or it beats the occupant, which
+      it then replaces.
+  - *Archive* (p3-4): the archive is the population, so each member is
+    diverse by construction. Not every cell can be filled, and many
+    candidates can map to the same cell. Search must happen in the
+    candidate space; it cannot step directly through the feature space.
+  - *Selection* (§4, p4): parents are sampled uniformly from the archive.
+    The authors stress that this makes the selection pressure simple and
+    predictable compared with Novelty Search with Local Competition
+    (NS+LC) and MOLE, and that each cell lookup is O(1).
+  - *Chess example* (§3, p3): the paper itself suggests searching chess
+    programs, with win percentage as performance and dimensions such as
+    aggressiveness of play or speed of move choice. It was not run.
+  - *Termination* (p3): a time limit, a compute limit, or a property of
+    the archive, such as the share of cells filled, the mean fitness
+    reached, or n solutions found.
+  - *Quality measures* (§5, p5): global performance, global reliability,
+    precision ("opt-in reliability") and coverage. Formal definitions are
+    in §9.4 (p12).
+  - *Variants* (§8, p11), left for future work:
+    - several genomes per cell;
+    - biased choice of parent cells, which did not beat the default in
+      preliminary tests;
+    - crossover limited to nearby cells, which the authors compare to an
+      island model.
+  - *Hierarchical and parallel version* (§3, p3; §9.2-9.3, p11-12): cells
+    start large and are split after preset numbers of evaluations, and
+    evaluations go out in batches to cluster nodes; all experiments used
+    this version. In the retina experiment, for example, the map is refined
+    in steps up to 512 x 512 cells, with batches of 2,000.
+  - *Results* (§6, p5-10; preliminary): on the retina neural-network task
+    (20 runs per treatment), MAP-Elites beat a traditional EA, NS+LC and
+    random sampling on all four measures. Simulated soft robots and a real
+    soft arm were also tested. Elite lineages crossed many regions of the
+    map, which the authors read as "stepping stones" (p6).
+  - *Limitation* (§7, p11): the feature space is fixed in advance and new
+    kinds of cells cannot appear, so the algorithm is not open-ended.
+- **Released code:** none is linked in the paper.
+- **Not found in the source:**
+  - LLM-generated candidates: not found (the paper predates them).
+  - Islands as a population structure: not found; they appear only as an
+    analogy for restricted crossover (§8).
+  - Evaluation cascades and noisy fitness: not found. Nothing covers
+    re-testing elites whose score may be a lucky measurement.
+- **What it means for Fork:** Phase 3 deliverable 8c.
+  - The owner's axes (mean reduction, re-search rate) are behaviour
+    descriptors in exactly this sense: measured by running the candidate,
+    not read off its code.
+  - Start with a coarse grid and refine it only if many candidates land in
+    the same cell.
+  - Pick parents uniformly from occupied cells unless a measured bias does
+    better (the paper's own preliminary bias variants did not).
+  - Fork's fitness is noisy, so an elite can hold its cell on luck. The
+    paper is silent on this; Fork must decide its own rule, for example
+    re-measuring an elite before it may be replaced or promoted.
+- **Phase:** 3 (8c pilot). **Tag:** REFERENCE ONLY. **License:** arXiv
+  non-exclusive distribution licence (arXiv licence link); no code
+  released. **Verified:** 2026-10-26.
+
+### How the three relate (from the sources)
+
+- The AlphaEvolve paper calls itself a substantial extension of FunSearch
+  (p2, Table 1). Its program database combines MAP-Elites with the island
+  model it credits to FunSearch (§2.5, p8).
+- FunSearch evolves one function with a small, fast LLM over millions of
+  samples. AlphaEvolve evolves larger code with strong LLMs over thousands
+  of samples, with richer prompts and several metrics (AlphaEvolve
+  Table 1).
+- Only FunSearch publishes the database mechanics in full (islands, reset,
+  clusters, temperatures). Only MAP-Elites defines the descriptor archive.
+  AlphaEvolve publishes neither for its own system.
+
+---
+
 ## Research library (classic and foundational papers)
 
 Older papers that Fork's design rests on, grouped by topic. Added 2026-10-23.
