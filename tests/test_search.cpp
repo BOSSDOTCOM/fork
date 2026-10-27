@@ -4,9 +4,11 @@
 // tools/check_search_positions.py.
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "core/movegen.hpp"
@@ -583,4 +585,40 @@ TEST_CASE("search", "a stop during a root fail high's re-search keeps the previo
   CHECK_MSG(distinct_fail_highs > 0, "no search stopped with a distinct fail high unresolved");
 }
 
+}  // namespace forkeng::test
+
+namespace forkeng::test {
+namespace {
+// Pauses once, after the iteration of one depth, so the elapsed time jumps.
+struct PausingListener final : SearchListener {
+  int pause_after = 0;
+  std::chrono::milliseconds pause{0};
+  void on_iteration(const Position&, const IterationReport& r) override {
+    if (r.depth == pause_after) std::this_thread::sleep_for(pause);
+  }
+};
+}  // namespace
+
+// Deliverable 8, variant (c): no iteration starts that would probably not
+// finish before the hard limit (elapsed * 5/3 past it). With soft = hard =
+// 90 ms and a 60 ms pause after depth 3, the rule stops at depth 3
+// (60 * 5/3 > 90); without it, depth 4 from the start position starts, as
+// the soft limit is not reached, and finishes long before the hard limit
+// (fault-injected).
+TEST_CASE("search", "an iteration that would not finish before the hard limit is not started") {
+  TestHash store;
+  auto searcher = std::make_unique<Searcher>(store.table);
+  const std::atomic<bool> stop{false};
+  Position pos;
+  CHECK(pos.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+  SearchQuota limits;
+  limits.depth = 5;
+  limits.soft_ms = 90;
+  limits.hard_ms = 90;
+  PausingListener listener;
+  listener.pause_after = 3;
+  listener.pause = std::chrono::milliseconds{60};
+  const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &listener);
+  CHECK_EQ(r.depth, 3);
+}
 }  // namespace forkeng::test

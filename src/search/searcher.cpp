@@ -17,8 +17,10 @@ namespace {
 
 // Fork's own values, each justified in DESIGN.md §5.2 ("Search constants").
 // The tunable ones are in the parameter table (src/tune/params.hpp,
-// deliverable 8b): aspiration (AspirationMinDepth, AspirationHalfWidth);
-// reverse futility (RfpMaxDepth, RfpMargin cp per ply); the null
+// deliverable 8b): aspiration (AspirationMinDepth, AspirationHalfWidth); the
+// iteration rule (no new iteration when elapsed * IterationGrowthThirds / 3
+// passes the hard limit: the work grows by a measured median of 1.66 per
+// iteration); reverse futility (RfpMaxDepth, RfpMargin cp per ply); the null
 // move (NullMinDepth; half the remaining depth less one ply, and one ply less
 // again per NullSurplusPerPly of static eval above beta, at most
 // NullSurplusPliesMax); endgame tables from TableProbeMinDepth in the main
@@ -627,6 +629,11 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       break;
     const bool timed = !(pondering && pondering->load(std::memory_order_relaxed));
     if (timed && limits.soft_ms >= 0 && elapsed_ms() >= limits.soft_ms) break;
+    // An iteration that would probably not finish before the hard limit is
+    // not started (deliverable 8): its time would be spent for nothing. This
+    // binds where the hard limit is close to the soft one: `go movetime`,
+    // and a low clock whose reserve caps the hard limit.
+    if (timed && limits.hard_ms >= 0 && elapsed_ms() * IterationGrowthThirds / 3 > limits.hard_ms) break;
   }
   result.nodes = nodes_;
   return result;
