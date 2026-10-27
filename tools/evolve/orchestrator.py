@@ -74,7 +74,8 @@ class Loop:
                  'explorer_protected': self.cfg['explorer_protected']}
         try:
             (self.run_dir / 'state.json').write_text(json.dumps(state, indent=1))
-            dashboard.render(self.run_dir)
+            mirror = self.cfg.get('dashboard_mirror')
+            dashboard.render(self.run_dir, mirror and str(Path(mirror) / self.run_dir.name))
         except Exception as e:  # noqa: BLE001 (the dashboard must never stop a run)
             self.log_file.write(json.dumps({'kind': 'dashboard_error', 'detail': str(e)}) + '\n')
 

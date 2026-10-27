@@ -1,10 +1,12 @@
 """The heuristic-discovery run's live dashboard (ideas.md idea 23,
 deliverable 8c): one self-contained HTML page in the run folder, rewritten
-after every candidate and refreshing itself in the browser every 30
-seconds. It shows the run's state and budget, the islands and their grid
-cells, the top candidates, critic rejections with reasons, gate failures,
-analyst summaries and promotions. Everything an agent wrote is escaped: it
-is model output, shown as text.
+after every candidate and refreshing itself in the browser every 60
+seconds, so it can stay open during a run. With `mirror`, a copy is also
+written there (e.g. a Windows folder, which browsers open more reliably
+than a page on the WSL share). It shows the run's state and budget, the
+islands and their grid cells, the top candidates, critic rejections with
+reasons, gate failures, analyst summaries and promotions. Everything an
+agent wrote is escaped: it is model output, shown as text.
 
     python3 tools/evolve/dashboard.py RUN_DIR      (also called by the orchestrator)
 """
@@ -15,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-REFRESH_SECONDS = 30
+REFRESH_SECONDS = 60
 
 STYLE = """
 :root { --bg: #fbfbfa; --fg: #1d1d1b; --muted: #6b6b66; --line: #deded9; --card: #ffffff;
@@ -60,8 +62,9 @@ def _json(text):
         return {}
 
 
-def render(run_dir):
-    """Writes RUN_DIR/dashboard.html from the run's database and state file."""
+def render(run_dir, mirror=None):
+    """Writes RUN_DIR/dashboard.html (and MIRROR/dashboard.html) from the run's
+    database and state file."""
     run = Path(run_dir)
     db = sqlite3.connect(str(run / 'population.sqlite'))
     try:
@@ -71,6 +74,11 @@ def render(run_dir):
     tmp = run / 'dashboard.html.tmp'
     tmp.write_text(page, encoding='utf-8')
     tmp.replace(run / 'dashboard.html')
+    if mirror:
+        out = Path(mirror).expanduser()
+        out.mkdir(parents=True, exist_ok=True)
+        (out / 'dashboard.html.tmp').write_text(page, encoding='utf-8')
+        (out / 'dashboard.html.tmp').replace(out / 'dashboard.html')
     return run / 'dashboard.html'
 
 

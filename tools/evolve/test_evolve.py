@@ -325,7 +325,7 @@ class OrchestratorTests(unittest.TestCase):
             import re
             self.assertIsNone(re.search(r'/Users/(?!Public/)', json.dumps(cfg)))  # names no user
             self.assertNotIn('/home/', json.dumps(cfg))
-            cfg.update({'positions': str(labels), 'per_island': 1, 'critic_audit_share': 1.0,
+            cfg.update({'positions': str(labels), 'per_island': 1, 'critic_audit_share': 1.0, 'dashboard_mirror': None,
                         'islands': ['proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer'],
                         'match': dict(cfg['match'], games=0)})
             fitness = iter([0.30, 0.31, 0.29])
