@@ -83,6 +83,7 @@ class Loop:
     def evaluate(self, generation, cid, island, body, place=True):
         """Gate, proxies and (if `place`) the grid for candidate `cid`; returns its fitness or None."""
         cfg = self.cfg
+        self.refresh(status=f'generation {generation}: gating candidate {cid}')
         result = gate.run_gate(self.runner, cfg['baseline_commit'], cfg['region'], body, self.baseline_perft,
                                f'cand-{cid}')
         self.pop.update(cid, gate=json.dumps(result.__dict__))
@@ -91,6 +92,7 @@ class Loop:
             self.say(generation, 'gate_failed', {'id': cid, 'step': result.step, 'detail': result.detail[-400:]})
             return None
         engine = self.runner.work / f'cand-{cid}' / 'build' / 'fork'
+        self.refresh(status=f'generation {generation}: measuring candidate {cid}')
         proxy = proxies.run_proxies(engine, self.labels, cfg['proxy_nodes'])
         desc = self.descriptors(f'cand-{cid}')
         fitness = proxy.fitness()
@@ -143,10 +145,12 @@ class Loop:
         cfg = self.cfg
         rng = random.Random(cfg['seed'] * 7919 + g)
         gate_runs = gate_failures = 0
-        for index, (island, role, mode) in enumerate(self.requests(g)):
+        requests = self.requests(g)
+        for index, (island, role, mode) in enumerate(requests):
             stop = self.budget.exhausted()
             if stop:
                 return stop
+            self.refresh(status=f'generation {g}: asking the {role} ({index + 1} of {len(requests)})')
             parent, parents = self.parents_text(island, g, index)
             prompt = agents.prompt_for(role, mode=mode, parents=parents, statistics=self.statistics,
                                        history=self.history_text(), insights=self.insights,
@@ -158,6 +162,7 @@ class Loop:
                 self.say(g, 'malformed', {'island': island, 'reply': reply.text[:400]})
                 continue
             cid = self.pop.add(g, island, role, parent, proposal.mode, proposal.body, proposal.rationale)
+            self.refresh(status=f'generation {g}: the critic reviews candidate {cid}')
             review = self.agent.ask('critic', agents.prompt_for('critic', mode=proposal.mode,
                                                                 rationale=proposal.rationale, body=proposal.body))
             self.budget.spend(tokens=review.tokens)
@@ -256,6 +261,7 @@ class Loop:
     def start(self):
         """Generation 0: the baseline (the region as committed) gated, scored and seeded in every island."""
         cfg = self.cfg
+        self.refresh(status='baseline: building, gating and measuring the committed region')
         path = regions.REGIONS[cfg['region']]
         body = regions.body(self.runner.read(cfg['baseline_commit'], path), cfg['region'])
         tree = self.runner.tree(cfg['baseline_commit'], {}, 'baseline')
@@ -274,6 +280,7 @@ class Loop:
                                  timeout=900)
         self.statistics = '\n'.join(line for line in out.split('\n') if line.startswith('stats:')) or self.statistics
         self.best_fitness, self.best_generation = fitness, 0
+        self.status = 'running'
         self.say(0, 'baseline', {'id': cid, 'fitness': fitness, 'perft': self.baseline_perft})
 
     def close(self):
