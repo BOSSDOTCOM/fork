@@ -105,9 +105,21 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
    meaningfully harder to maintain before adopting it.
 8. **The repo is public (since 2026-10-26), and TCEC builds Fork from
    source** (Category 4 entry via the Cat 3+4 playoff; docs/kb/competition.md
-   on branch kb). Every push is published at once, history included, so:
+   on branch kb). Every push is published at once, history included, so
+   **nothing personal, nothing secret and no other engine's code may ever be
+   committed** (owner, 2026-10-27; a post-publication audit of every branch,
+   tag and commit found none):
    - never commit secrets, credentials, tokens, personal data or private
      files (HANDOFF.md and other session notes stay untracked);
+   - no user-name paths in files, logs or messages: write `~/`,
+     `/mnt/c/Users/<user>/` or paths relative to the repository (a tool
+     that copies an option or path into a committed file must write `~`
+     for the home folder, as `tools/sprt.sh` does);
+   - no other engine's source, snippets, nets or engine-generated data
+     (non-negotiable 6), except vendored libraries the owner approved
+     (Fathom), with their licence and lineage in ORIGINALITY.md;
+   - before the first push of a branch, scan what it adds for the user
+     name, home paths, the personal email and secrets;
    - keep the Linux build working from a clean clone: everything the build
      needs is committed or fetched by CMake with a pinned SHA-256, with no
      dependence on untracked files or local paths. `scripts/check.sh full`
