@@ -423,6 +423,49 @@ TEST_CASE("time_budget", "the increment adds exactly three quarters of itself, s
   }
 }
 
+// Deliverable 8, variant B2: one more Move Overhead of reserve inside the
+// danger zone (less than two overheads plus an increment left), and only a
+// tenth of the clock outside it.
+TEST_CASE("time_budget", "an extra overhead of reserve only in the danger zone") {
+  for (std::int64_t remaining : {150, 250, 300, 319, 320, 500, 1000, 2000}) {
+    for (std::int64_t inc : {0, 20, 80}) {
+      ClockInput c;
+      c.remaining_ms = remaining;
+      c.increment_ms = inc;
+      c.overhead_ms = 100;
+      const TimeBudget t = plan_time(c);
+      const std::int64_t available = remaining - 100;
+      const bool zone = available < 200 + inc;
+      const std::int64_t reserve = zone ? std::max<std::int64_t>(available / 10, 100) : available / 10;
+      CHECK_MSG(t.hard_ms <= std::max<std::int64_t>(1, available - reserve), remaining << " ms + " << inc);
+      if (zone && available <= 100) CHECK_MSG(t.hard_ms == 1, remaining << " ms + " << inc);
+    }
+  }
+}
+
+// Deliverable 8, Milestone A's time loss: at 2+0.02 under full load the
+// clock drained to about the Move Overhead, each move then cost about the
+// increment in latency (16-20 ms measured), and one longer stall flagged. A
+// simulated game where Fork always spends its whole hard limit (the worst
+// case) with 18 ms of latency per move: once the clock has settled, one
+// 150 ms stall must not run it out (fault-injected: with only a tenth of the
+// clock in reserve, deliverable 8a, the clock settles near one overhead and
+// the stall flags).
+TEST_CASE("time_budget", "a low clock keeps enough reserve to survive a stall") {
+  std::int64_t clock = 2000;
+  std::int64_t lowest = clock;
+  for (int move = 0; move < 300; ++move) {
+    ClockInput c;
+    c.remaining_ms = clock;
+    c.increment_ms = 20;
+    c.overhead_ms = 100;
+    const std::int64_t latency = move == 250 ? 150 : 18;
+    clock += 20 - plan_time(c).hard_ms - latency;
+    lowest = std::min(lowest, clock);
+  }
+  CHECK_MSG(lowest > 0, "the clock ran out (lowest " << lowest << " ms)");
+}
+
 }  // namespace forkeng::test
 
 // ---- Adversarial review of deliverable 2 (uncommitted; failing tests) ----
