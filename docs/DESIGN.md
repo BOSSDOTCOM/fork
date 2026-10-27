@@ -1515,6 +1515,18 @@ Choices made while building, where the spec leaves a gap:
     **Finding for the pilot:** at 20,000 nodes the proxies search to about
     depth 7.4, so a change that acts from depth 8 is invisible to them; the
     pilot's node budget must reach the depths a region acts at.
+  - **Proxy node budget** (owner, 2026-10-27: depth about 10-12 before the
+    pilot). Measured on 200 seeded evolve positions, each from a fresh
+    state (depth median, p10-p90, interquartile; agreement with the depth-18
+    labels): 20,000 nodes 7, 6-9, 7-8, 46.5%; 100,000 10, 9-12, 9-11, 58.0%;
+    **200,000 11, 10-14, 11-13, 61.5%**; 400,000 13, 11-16, 12-14, 66.0%;
+    800,000 14, 12-18, 13-16, 72.5%. **Chosen: 200,000** (`config.json`).
+    Time per position at that budget 249 ms, measured while a stress test
+    kept every CPU busy (an upper bound; the idle figure is UNVERIFIED), so
+    the full 1,170 evolve positions take at most about 5 minutes per
+    candidate; the set is kept whole, since agreement near 60% over 1,170
+    positions has a standard error of about 1.4 points, the size of the
+    differences worth detecting.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.

@@ -4,7 +4,7 @@
   "region": "lmr",
   "positions": "tools/evolve/positions.jsonl",
   "positions_limit": 0,
-  "proxy_nodes": 20000,
+  "proxy_nodes": 200000,
   "seed": 20261027,
   "islands": [
     "proposer_aggressive",
