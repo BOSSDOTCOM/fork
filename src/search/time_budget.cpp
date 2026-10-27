@@ -2,17 +2,19 @@
 
 #include <algorithm>
 
+#include "tune/params.hpp"
+
 namespace forkeng {
 
 namespace {
 
-// Conservative fixed values (Phase 5 tunes time management); the formula
-// they feed is credited at plan_time below.
-constexpr std::int64_t AssumedMovesLeft = 30;     // sudden death: plan as if this many moves remain
-constexpr std::int64_t MaxMovesToGo = 40;         // a larger movestogo is treated as this
-constexpr std::int64_t HardOverSoft = 4;          // the hard limit allows this many soft budgets
-constexpr std::int64_t ReserveDivisor = 10;       // never plan into the last 1/10 of the clock,
-constexpr std::int64_t ReserveOverheads = 2;      // nor into the last two Move Overheads (deliverable 8)
+// Conservative fixed values (Phase 5 tunes time management), in the
+// parameter table (src/tune/params.hpp): AssumedMovesLeft (sudden death: plan
+// as if this many moves remain), MaxMovesToGo (a larger movestogo is treated
+// as this), HardOverSoft (the hard limit allows this many soft budgets),
+// ReserveDivisor and ReserveOverheads (never plan into the last 1/10 of the
+// clock, nor into the last two Move Overheads: deliverable 8). The formula
+// they feed is credited at plan_time below. Not tuned (an owner's rule):
 constexpr std::int64_t MovetimeFloorDivisor = 2;  // go movetime keeps at least 1/2 of its time
 
 // Every input is clamped to [-2^40, 2^40] ms (about 35 years either way)
@@ -38,7 +40,7 @@ TimeBudget plan_time(const ClockInput& in) {
   if (!in.remaining_ms) return t;  // no clock: depth, nodes, mate or infinite decide
   const std::int64_t available = std::max<std::int64_t>(1, bounded(*in.remaining_ms) - overhead);
   const std::int64_t moves =
-      in.movestogo ? std::clamp<std::int64_t>(*in.movestogo, 1, MaxMovesToGo) : AssumedMovesLeft;
+      in.movestogo ? std::clamp<std::int64_t>(*in.movestogo, 1, MaxMovesToGo) : std::int64_t{AssumedMovesLeft};
   const std::int64_t increment = std::clamp<std::int64_t>(in.increment_ms.value_or(0), 0, ClockCap);
   // The reserve: a tenth of the clock, but never less than two Move
   // Overheads (deliverable 8, DESIGN.md §5.2 "Search constants"): the

@@ -173,7 +173,8 @@ add_library(forksearch STATIC
   src/search/searcher.cpp
   src/search/see.cpp
   src/search/time_budget.cpp
-  src/search/trans_table.cpp)
+  src/search/trans_table.cpp
+  src/tune/params.cpp)
 target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
 find_package(Threads REQUIRED)
 target_link_libraries(forksearch PUBLIC forkcore fathom Threads::Threads PRIVATE fork_pgo)
@@ -190,7 +191,9 @@ add_library(forkuci STATIC
   src/uci/version.cpp)
 target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pgo)
 if(FORK_TUNE)
-  target_compile_definitions(forkuci PRIVATE FORK_TUNE)
+  # Public on the search library, so the search, the UCI session and the tests
+  # all see the same parameter declarations (src/tune/params.hpp).
+  target_compile_definitions(forksearch PUBLIC FORK_TUNE)
 endif()
 
 # Version string `<semver>-dev+<short commit>`, read from git at configure
@@ -307,7 +310,8 @@ if(FORK_BUILD_TESTS)
     tests/test_ordering_review.cpp
     tests/engine_process.cpp
     tests/test_uci.cpp
-    tests/test_options.cpp)
+    tests/test_options.cpp
+    tests/test_params.cpp)
   target_link_libraries(fork_tests PRIVATE forkuci)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
@@ -381,7 +385,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY7_DIR="${FORK_SYZYGY7_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering pruning tables time_budget tt uci_protocol uci_options uci_timing)
+                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()

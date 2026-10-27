@@ -1281,9 +1281,9 @@ Choices made while building, where the spec leaves a gap:
   `UseHistoryMalus`, `UseRfp`, `UseNmp`, `UseLmr`, `UseLmp`,
   `UseFutility`, `UseSeePrune`), so an SPRT compares a
   technique on and off in one binary (`tools/sprt.sh` with `TUNE=1`).
-  Release and TCEC builds declare none. Numeric parameters stay constants
-  in their files until deliverable 8b moves them into the parameter table,
-  which must exist before any SPSA run.
+  Release and TCEC builds declare none. Since deliverable 8b, tuning builds
+  also declare every numeric search parameter as a spin option (the
+  parameter table, below).
 - **Deliverable 5, move ordering** (2026-10-25). `MoveSelector`
   (`src/search/move_selector.*`) yields the TT move (validated), good
   captures and queen promotions by MVV-LVA with SEE computed only for the
@@ -1408,6 +1408,38 @@ Choices made while building, where the spec leaves a gap:
   credit in `time_budget.cpp` and ORIGINALITY.md; Fork's own parts are the
   three-quarter increment, the soft limit at one share and the reserve's
   floor.
+- **Deliverable 8b, the parameter table** (2026-10-26). `src/tune/params.hpp`
+  lists every tunable numeric search parameter once, in an X-macro
+  (`FORK_SEARCH_PARAMS`: name, default, lowest, highest, SPSA step): 28
+  parameters (aspiration, the iteration rule, reverse futility, the null
+  move, the table probe depth, LMR, LMP, futility, SEE pruning, the history
+  bonus, the TT victim policy's stale depth, the time budget). Release and
+  TCEC builds declare each as `inline constexpr int`, the same code as the
+  constants they replace (bench unchanged: 17309921 / 372dc2e2d8a88e4b,
+  also from a tuning build at the defaults). Tuning builds (`FORK_TUNE`,
+  now public on `forksearch`) declare them as variables, offered as UCI
+  spin options beside the switches; `set_param` clamps to the range and
+  rebuilds the LMR table. Two formulas became integer parameters with
+  identical arithmetic: the LMR divisor 4.5 is `LmrDivisorTenths` = 45 (the
+  table is (10 L + 32768 t) / (65536 t), exactly the earlier
+  (L + 147456) / 294912 at t = 45, checked entry by entry), and the
+  iteration growth 5/3 is `IterationGrowthThirds` = 5; the history bonus
+  12.5 d² is `HistoryBonusFactor` = 25 (halves). Not in the table, each with
+  its reason: the stop-poll interval and fail-report delay (not strength
+  parameters), the near-draw table score (must stay just off zero), the
+  history scale (the int16 headroom depends on it), the move-ordering
+  scores (derived structure) and the movetime floor (an owner's rule).
+  **Ranges and steps** (Fork's rule, bounds for a tuner, never played as
+  such): about half to twice the default, depths in whole plies (at least
+  1, counts at least 0), and an SPSA step of a twentieth of the range,
+  rounded, at least 1. Tests (`params` suite): every default in its range,
+  steps fitting, unique names, the bonus cap's range within the history
+  scale; the LMR table equal to the earlier formula (fault-injected: a
+  rounding change and an out-of-range default each fail); in a tuning
+  build, `set_param` changes, clamps, rebuilds and restores. Checked by
+  hand on a tuning build: 31 spin options, and LmrDivisorTenths 30 changes
+  a depth-12 search from 168,013 to 159,853 nodes. Name check 25: no match
+  but the plain words `lowest`, `highest` and `default_value` (kept).
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.

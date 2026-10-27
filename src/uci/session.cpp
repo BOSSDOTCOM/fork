@@ -14,6 +14,7 @@
 #include "search/endgame_tables.hpp"
 #include "search/search_bench.hpp"
 #include "search/time_budget.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng {
 
@@ -198,6 +199,14 @@ void UciSession::declare_options() {
                          searcher_->switches.*field = e.number != 0;
                          return true;
                        });
+  }
+  // And every numeric search parameter as a spin option (deliverable 8b; the
+  // table and its ranges are src/tune/params.hpp), for SPSA.
+  for (const TuneParam& p : param_table()) {
+    options_.add_spin(std::string(p.name), p.default_value, p.lowest, p.highest,
+                      [name = p.name](const OptionEntry& e, std::string&) {
+                        return set_param(name, static_cast<int>(e.number));
+                      });
   }
 #endif
   options_.add_string("LogFile", "", [this](const OptionEntry& e, std::string& message) {

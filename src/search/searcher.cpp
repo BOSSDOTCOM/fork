@@ -9,57 +9,33 @@
 #include "search/endgame_tables.hpp"
 #include "search/lmr_table.hpp"
 #include "search/see.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng {
 
 namespace {
 
-// Fork's own starting values (Phase 3 settles structure, not tuning).
-// Aspiration (measured on the bench, DESIGN.md §5.2 "Search constants"): from
-// depth 5, nine in ten iterations move the score by at most 12 cp.
-constexpr int AspirationMinDepth = 5;              // iterations before this use the full window
-constexpr int AspirationHalfWidth = 12;            // first half-width, in centipawns
+// Fork's own values, each justified in DESIGN.md §5.2 ("Search constants").
+// The tunable ones are in the parameter table (src/tune/params.hpp,
+// deliverable 8b): aspiration (AspirationMinDepth, AspirationHalfWidth); the
+// iteration rule (no new iteration when elapsed * IterationGrowthThirds / 3
+// passes the hard limit: the work grows by a measured median of 1.66 per
+// iteration); reverse futility (RfpMaxDepth, RfpMargin cp per ply); the null
+// move (NullMinDepth; half the remaining depth less one ply, and one ply less
+// again per NullSurplusPerPly of static eval above beta, at most
+// NullSurplusPliesMax); endgame tables from TableProbeMinDepth in the main
+// search; LMR (LmrMinDepth, LmrMinMove; the table in lmr_table.hpp); late
+// move pruning (LmpMaxDepth; LmpQuietAllowance + d quiets); futility
+// (FutilityMaxDepth; FutilityOffset + FutilityGrowth * depth); SEE pruning
+// (SeePruneMaxDepth; QuietSeeFloor and CaptureSeeFloor cp per ply). The
+// margins are in the bootstrap evaluation's centipawns and are retuned after
+// Phase 4. These stay constants (not strength parameters):
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
 constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are reported only after this
-// The work of the next iteration, as a multiple of all the work so far
-// (deliverable 8, measured on the bench: the median ratio of cumulative nodes
-// between consecutive iterations at depths 8-14 is 1.66, so 5/3).
-constexpr std::int64_t IterationGrowthNum = 5;
-constexpr std::int64_t IterationGrowthDen = 3;
-
-// Tier 1 pruning and reductions (deliverable 6). Every value has its
-// justification in DESIGN.md §5.2 ("Search constants"); all move into the
-// parameter table in deliverable 8b and are retuned after Phase 4 (they
-// depend on the evaluation's scale).
-constexpr int RfpMaxDepth = 6;
-constexpr int RfpMargin = 80;  // centipawns per ply of remaining depth
-constexpr int NullMinDepth = 3;
-// Endgame tables (deliverable 7): probed from this remaining depth on in the
-// main search, never in the quiescence search (DESIGN.md §5.2, "Search
-// constants": a fifty-move-safe probe needs a zero halfmove clock, so probes
-// come only right after captures and pawn moves anyway; a higher minimum is
-// for slow table storage, tuned in Phase 8). Cursed wins and blessed losses
-// (the fifty-move rule turns them into draws) score just off zero, so a real
-// draw is never preferred to them and no real advantage is given up for them.
-constexpr int TableProbeMinDepth = 1;
+// Cursed wins and blessed losses (the fifty-move rule turns them into draws)
+// score just off zero, so a real draw is never preferred to them and no real
+// advantage is given up for them.
 constexpr int TableNearDrawScore = 1;
-// The null search gets half the remaining depth, less one ply, and one ply
-// less again per NullSurplusPerPly of static eval above beta (at most
-// NullSurplusPliesMax).
-constexpr int NullSurplusPerPly = 300;  // the bootstrap evaluation's knight value (bootstrap_eval.cpp)
-constexpr int NullSurplusPliesMax = 2;
-constexpr int LmrMinDepth = 3;
-constexpr int LmrMinMove = 4;  // the first three moves searched are never reduced
-constexpr int LmpMaxDepth = 4;
-// Quiet moves searched at depth d before the rest are pruned:
-// LmpQuietAllowance + d (measured, DESIGN.md §5.2).
-constexpr int LmpQuietAllowance = 12;
-constexpr int FutilityMaxDepth = 6;
-constexpr int FutilityOffset = 100;  // the futility margin is FutilityOffset + FutilityGrowth * depth
-constexpr int FutilityGrowth = 70;
-constexpr int SeePruneMaxDepth = 6;
-constexpr int QuietSeeFloor = 60;     // a quiet may lose at most this much by SEE, per ply of depth
-constexpr int CaptureSeeFloor = 100;  // a capture likewise
 
 // The side has a piece other than pawns and its king (the null move's main
 // zugzwang guard: pawn endings are where passing is most often best).
@@ -643,7 +619,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     // binds where the hard limit is close to the soft one: `go movetime`,
     // and a low clock whose reserve caps the hard limit.
     if (timed && limits.hard_ms >= 0 &&
-        elapsed_ms() * IterationGrowthNum / IterationGrowthDen > limits.hard_ms)
+        elapsed_ms() * IterationGrowthThirds / 3 > limits.hard_ms)
       break;
   }
   result.nodes = nodes_;

@@ -1,6 +1,7 @@
 #include "search/trans_table.hpp"
 
 #include <algorithm>
+#include "tune/params.hpp"
 
 namespace forkeng {
 
@@ -36,12 +37,11 @@ std::uint32_t expected_check(const TtEntry& e, std::uint32_t key_bits) {
          data_digest(e.move, e.score, e.eval, e.depth, e.flags, static_cast<std::uint8_t>(e.age()));
 }
 
-// Plies a stored depth loses per search of age under the blended policy:
-// between two of Fork's searches in a game two plies are played, so a stored
-// position is two plies nearer the new root, and the new search asks it for
-// two plies more depth than the one that wrote it (DESIGN.md §5.2, "Search
-// constants").
-constexpr int StaleDepthPerSearch = 2;
+// StaleDepthPerSearch (src/tune/params.hpp): plies a stored depth loses per
+// search of age under the blended policy. Between two of Fork's searches in a
+// game two plies are played, so a stored position is two plies nearer the new
+// root, and the new search asks it for two plies more depth than the one that
+// wrote it (DESIGN.md §5.2, "Search constants").
 
 // How much a slot is worth keeping. Lexicographic (the default): every entry
 // of the current search ranks above every stale one; within each group,
