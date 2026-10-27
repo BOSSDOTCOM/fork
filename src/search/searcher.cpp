@@ -31,7 +31,6 @@ namespace {
 // margins are in the bootstrap evaluation's centipawns and are retuned after
 // Phase 4. These stay constants (not strength parameters):
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
-constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are reported only after this
 // Cursed wins and blessed losses (the fifty-move rule turns them into draws)
 // score just off zero, so a real draw is never preferred to them and no real
 // advantage is given up for them.
@@ -286,11 +285,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       // zero-window search first, then the full depth if they beat alpha.
       const int new_depth = depth - 1;
       int reduced = new_depth;
-      if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet && !in_check) {
+      if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet &&
+          !in_check) {
         // The table's reduction plus the evolvable correction (lmr_table.hpp;
         // 0 as committed).
         const int base = reduction_for(depth, moves_searched + 1);
-        const LmrContext context{depth, moves_searched + 1, base, history_.value(pos.side_to_move(), m), OnPv};
+        const LmrContext context{depth, moves_searched + 1, base, history_.value(pos.side_to_move(), m),
+                                 OnPv};
         const int correction = lmr_correction(context) * LmrCorrectionStrength / 64;
         reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
       }
@@ -491,6 +492,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
 }
 
 void Searcher::report_iteration(int depth, int score, int bound, const PrincipalLine& pv) {
+  last_reported_ = pv.length ? pv.moves[0] : NoMove;
   if (!listener_) return;
   const IterationReport r{depth,        max_ply_reached_,    score, bound,      nodes_,
                           elapsed_ms(), tt_.fill_permille(), &pv,   table_hits_};
@@ -583,7 +585,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       score = search_root(alpha, beta, depth);
       if (stopped_) break;
       if (score > alpha && score < beta) break;
-      if (elapsed_ms() >= FailReportMs) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
+      if (elapsed_ms() >= fail_report_ms) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
       // Only the failing side moves. The half-width grows by how far the
       // fail-soft score already is from the previous iteration's: at least
       // the old half-width (the score fell outside the window), more after a
@@ -609,12 +611,18 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
         report_iteration(depth, iteration_best_score_, 0,
                          iteration_pv_);  // the last info names the move played
       }
+      // A reported fail (a fail low has no PV, a fail high names a move
+      // that is not played) must not be the last line: the finished
+      // iteration is reported again.
+      if (result.depth > 0 && !(last_reported_ == result.best))
+        report_iteration(result.depth, result.score, 0, finished_pv_);
       break;
     }
     previous = score;
     result.best = root_moves_[0].move;
     result.score = score;
     result.depth = depth;
+    finished_pv_ = pv_[0];
     report_iteration(depth, score, 0, pv_[0]);
     if (limits.mate_moves > 0 && is_mate_score(score) && score > 0 &&
         mate_in_moves(score) <= limits.mate_moves)
@@ -625,9 +633,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     // not started (deliverable 8): its time would be spent for nothing. This
     // binds where the hard limit is close to the soft one: `go movetime`,
     // and a low clock whose reserve caps the hard limit.
-    if (timed && limits.hard_ms >= 0 &&
-        elapsed_ms() * IterationGrowthThirds / 3 > limits.hard_ms)
-      break;
+    if (timed && limits.hard_ms >= 0 && elapsed_ms() * IterationGrowthThirds / 3 > limits.hard_ms) break;
   }
   result.nodes = nodes_;
   return result;

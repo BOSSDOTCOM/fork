@@ -498,30 +498,39 @@ struct LastReport final : SearchListener {
 }  // namespace
 
 // The last info line the GUI sees before bestmove (session.cpp prints no
-// other line when an iteration finished) should name the move played.
+// other line when an iteration finished) should name the move played. Run
+// twice: as the engine plays (fail lines only after a second), and with every
+// aspiration fail reported. The second found a gap (2026-10-27): a stop during
+// the re-search after a reported fail left that fail as the last line (a fail
+// low has no PV; a fail high names a move that is not played). It first showed
+// under heavy load, when a node-limited debug search took over a second.
 TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV starts with the best move") {
-  TestHash store;
-  auto searcher = std::make_unique<Searcher>(store.table);
-  const std::atomic<bool> stop{false};
-  int mismatches = 0, tried = 0;
-  for (const PerftPosition& p : perft_suite()) {
-    for (std::uint64_t nodes = 2000; nodes <= 200000 && mismatches == 0; nodes += 9973) {
-      Position pos;
-      CHECK(pos.set_fen(p.fen));
-      SearchQuota limits;
-      limits.nodes = nodes;
-      LastReport rep;
-      const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &rep);
-      ++tried;
-      if (r.depth > 0 && !(rep.first == r.best)) {
-        ++mismatches;
-        CHECK_MSG(false, p.fen << " nodes " << nodes << ": last info pv " << pos.move_to_uci(rep.first)
-                               << " score " << rep.score << ", bestmove " << pos.move_to_uci(r.best)
-                               << " score " << r.score);
+  for (const std::int64_t fail_report_ms : {std::int64_t{1000}, std::int64_t{0}}) {
+    TestHash store;
+    auto searcher = std::make_unique<Searcher>(store.table);
+    searcher->fail_report_ms = fail_report_ms;
+    const std::atomic<bool> stop{false};
+    int mismatches = 0, tried = 0;
+    for (const PerftPosition& p : perft_suite()) {
+      for (std::uint64_t nodes = 2000; nodes <= 200000 && mismatches == 0; nodes += 9973) {
+        Position pos;
+        CHECK(pos.set_fen(p.fen));
+        SearchQuota limits;
+        limits.nodes = nodes;
+        LastReport rep;
+        const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &rep);
+        ++tried;
+        if (r.depth > 0 && !(rep.first == r.best)) {
+          ++mismatches;
+          CHECK_MSG(false, p.fen << " nodes " << nodes << ": last info pv " << pos.move_to_uci(rep.first)
+                                 << " score " << rep.score << ", bestmove " << pos.move_to_uci(r.best)
+                                 << " score " << r.score << " (fail reports after " << fail_report_ms
+                                 << " ms)");
+        }
       }
     }
+    CHECK(tried > 0);
   }
-  CHECK(tried > 0);
 }
 
 // The policy for a stop during a root fail high's re-search (owner,

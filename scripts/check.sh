@@ -210,6 +210,16 @@ case "$mode" in
     # downloaded test data in .cache/ persist, and tar keeps the mtimes, so
     # only changed files recompile.
     find "$dst" -mindepth 1 -maxdepth 1 ! -name build ! -name .cache -exec rm -rf {} +
+    # The kept builds are only valid for the tree they were built from: two
+    # trees (a git worktree beside the main one) differ in file times, so a
+    # file older in the new tree would not be recompiled and the check would
+    # test a stale object (it did, 2026-10-27). A new source tree starts the
+    # builds afresh.
+    if [ "$(cat "$dst/build/.source-tree" 2>/dev/null)" != "$src" ]; then
+      rm -rf "$dst/build"
+      mkdir -p "$dst/build"
+      echo "$src" >"$dst/build/.source-tree"
+    fi
     (cd "$src" && tar -cf - -T build/.linux-check-files) | (cd "$dst" && tar -xf -) ||
       { echo "copying the tree to $dst failed" >&2; exit 1; }
     exec bash "$dst/scripts/check.sh" full-native
