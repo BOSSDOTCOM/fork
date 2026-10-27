@@ -1015,7 +1015,15 @@ if time losses ever appear): measured on the first 505 games of the PVS
 SPRT at STC, 1,478 games per hour (about 790 at concurrency 5) with 0 time
 losses and no illegal moves, crashes or disconnects; still 0 time losses
 over all 943 concurrency-10 games by 2026-10-25 (634 PVS, 309 aspiration;
-checked in both the fastchess logs and the PGN terminations).
+checked in both the fastchess logs and the PGN terminations). The external
+reviews' queue runs at concurrency 8 (owner, 2026-10-26), so development
+can run beside it; once that queue is empty, SPRTs return to 10
+(`tools/sprt.sh`'s default). **Development beside test games** (owner,
+2026-10-26): builds, tests and checks keep normal priority; the timing
+tests skip while games run (`build/.games-running`, `FORK_GAMES_RUNNING`);
+after any time loss, development drops to low priority
+(`build/.low-priority`, `scripts/env.sh`) until those games end. Speed
+measurements wait until no SPRT is running.
 **Adjudication** (owner, 2026-10-25), in `tools/sprt.sh`, the same for
 both engines (`ADJUDICATE=0` turns it off): resign once both engines report
 at least 1000 cp for one side for 5 consecutive moves; draw from move 40 on
@@ -1431,7 +1439,7 @@ FORK_SEARCH_STATS bench unless stated.
 | (b) The TT's stored static eval is recomputed on a hit. | **Confirmed. Fixed** (1efade9): reused in the main and quiescence searches. Bench identical. |
 | (c) No TT prefetch before the null move. | **Confirmed. Fixed** (1efade9): `Position::predicted_null_key()`, tested against `make_null`. Bench identical. The three together: nps +2.9% (just under the 3% noise rule). |
 | (d) Refine the static eval with the TT score before pruning. | Built behind `UseTtEvalRefine` (738daff) from KB T50: WAC 259/300 vs 248, mate suite 139/297 vs 132. SPRT [0, 3] **stopped undecided by the owner** (+14.6 ± 17.8 Elo at 1,000 games): **PROVISIONAL, on by default** since 2026-10-26, NEEDS VERIFICATION in the end-of-Phase-3 removal round (STC and LTC 40+0.4). |
-| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [-3, 0] (a safety guard, the owner's bounds policy), on top of the TT-refined eval's new default. |
+| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [-3, 0] (a safety guard, the owner's bounds policy), on top of the TT-refined eval's new default. Cap (owner): about 5,000 games or 4 hours; if still undecided then, INCONCLUSIVE, off by default, and into the end-of-Phase-3 removal round. |
 | (f) Tier 2 order, razoring, losing-capture futility. | Plan changed (deliverable 9). |
 | (g) Upcoming repetitions, fifty-move eval scaling, history malus balance. | ideas.md ideas 26-28. |
 | (h) Phase 6: thread agreement and diversity. | Added to the Phase 6 roadmap entry. |

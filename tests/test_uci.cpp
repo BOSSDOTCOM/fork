@@ -594,16 +594,20 @@ namespace {
 
 constexpr double Slack = Optimized ? 1.0 : 10.0;
 
-// While test games run, development runs at low priority (scripts/env.sh sets
-// FORK_LOW_PRIORITY=1): timings taken then say nothing about Fork, so the
-// timing cases report SKIPPED instead of passing or failing (owner,
-// 2026-10-26).
-bool timing_not_measurable() {
+// While test games run (scripts/env.sh sets FORK_GAMES_RUNNING=1) or
+// development runs at low priority (FORK_LOW_PRIORITY=1), timings say nothing
+// about Fork, so the timing cases report SKIPPED instead of passing or
+// failing (owner, 2026-10-26). Returns why, or nullptr when timing can be
+// measured.
+const char* timing_not_measurable() {
   const char* low = std::getenv("FORK_LOW_PRIORITY");
-  return low && std::string_view(low) == "1";
+  if (low && std::string_view(low) == "1")
+    return "running at low priority (FORK_LOW_PRIORITY=1): timing cannot be measured";
+  const char* games = std::getenv("FORK_GAMES_RUNNING");
+  if (games && std::string_view(games) == "1")
+    return "test games are running (FORK_GAMES_RUNNING=1): timing cannot be measured";
+  return nullptr;
 }
-constexpr const char* LowPriorityReason =
-    "running at low priority beside test games (FORK_LOW_PRIORITY=1): timing cannot be measured";
 
 double ms_between(Clock::time_point a, Clock::time_point b) {
   return std::chrono::duration<double, std::milli>(b - a).count();
@@ -633,7 +637,7 @@ double time_reply(Gui& g, std::string_view command, std::string_view answer) {
 }  // namespace
 
 TEST_CASE("uci_timing", "uci to uciok, first isready to readyok, stop to bestmove") {
-  if (timing_not_measurable()) SKIP(LowPriorityReason);
+  if (const char* why = timing_not_measurable()) SKIP(why);
   Timing uci, ready, stop;
   for (int run = 0; run < 3; ++run) {
     Gui g;
@@ -730,7 +734,7 @@ namespace forkeng::test {
 // inside cmd_go, before the search thread starts its clock, so that time is
 // not counted against movetime.
 TEST_CASE("uci_timing", "review: go movetime counts the Hash work done at go") {
-  if (timing_not_measurable()) SKIP(LowPriorityReason);
+  if (const char* why = timing_not_measurable()) SKIP(why);
   Gui g;
   CHECK(g.sync());
   g.send("setoption name Move Overhead value 0");  // the whole 50 ms is the budget

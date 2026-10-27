@@ -222,3 +222,14 @@ Games: 1000, Wins: 374, Losses: 332, Draws: 294, Points: 521.0 (52.10 %)
 Ptnml(0-2): [50, 102, 171, 110, 67], WL/DD Ratio: 3.17
 LLR: 0.40 (13.7%) (-2.94, 2.94) [0.00, 3.00]
 ```
+
+### Note (owner, 2026-10-26): keep-exact's cap and development priority
+
+The keep-exact SPRT (`rv-keepexact`, below) runs at concurrency 8 on top of
+the TT-refined eval's new default (008b67f with `UseTtEvalRefine=true` on
+both sides), capped at about 5,000 games or 4 hours from its start
+(01:08:55 UTC, so 05:08:55 UTC), whichever comes first. Undecided at the
+cap, it is INCONCLUSIVE: keep-exact stays off by default and goes into the
+end-of-Phase-3 removal round. Development now runs at normal priority beside
+the games; after any time loss it drops back to low priority until the SPRT
+ends. Once the queue is empty, SPRTs return to concurrency 10.
