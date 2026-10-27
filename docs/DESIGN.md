@@ -897,28 +897,40 @@ builds (`FORK_TUNE`) declare each as a UCI spin option, beside the switches.
 Moving a parameter into the table must not change bench. No SPSA run may
 start before the table exists.
 
-**8c. Pilot of the heuristic-discovery loop** (ideas.md idea 23; owner,
-2026-10-26), after 8b and before any tier 2 refinement.
-- **Target:** the LMR reduction formula only (`lmr_table.hpp` and its use
-  in `negamax`), marked as the one evolvable function; everything else
-  frozen.
-- **Prerequisites:** the parameter table (8b) is done, and the
-  kb-researcher has fetched and verified the AlphaEvolve and MAP-Elites
-  papers (primary sources, cited in the KB and ORIGINALITY.md) before the
-  loop is built.
-- **Method:** idea 23's funnel (gate; proxies, nodes to depth and
-  best-move agreement with Fork's own deep search on a held-out set;
-  a short match; SPRT at STC then LTC), a diverse population, the
-  originality-checker's screen on every survivor, and full logs of every
-  candidate.
-- **Ends with a go/no-go decision by the owner** (stop), on the pilot
-  metric: whether the proxies predict the SPRT results (rank agreement on
-  the candidates that reach both), and the cost per accepted change
-  (compute, games and session time).
-- **If go:** real campaigns in late Phase 4, after the first strong
-  network and the search re-validation; then a standing tool in the
-  improvement pass after Phase 8 (roadmap, §5). **If no-go:** the loop is archived, and
-  the pilot's log and findings go into ideas.md.
+**8c. Pilot of the heuristic-discovery loop** (ideas.md idea 23, the
+consolidated spec of 2026-10-26; owner).
+- **Slot:** after Milestone C and the parameter table (8b), before tier 2
+  (deliverable 9). Time box about two weeks. **Target:** the LMR formula
+  only, as the one evolvable region; a candidate touching code outside it
+  is rejected before building.
+- **Prerequisites:** 8b done; the kb-researcher has verified the
+  AlphaEvolve, FunSearch and MAP-Elites papers (primary sources, cited in
+  the KB and ORIGINALITY.md); run when weekly Claude capacity is fresh.
+- **Method** (idea 23): residual mode by default (final = base + correction,
+  with its own strength coefficient for SPSA; a zero correction reproduces
+  the baseline exactly), about 1 in 5 candidates full replacements; an
+  island/MAP-Elites population; two proposers with distinct perspectives
+  (optionally a third from Fork's search statistics), an explorer with its
+  own protected island, a critic before every build, an analyst every N
+  generations, the originality-checker on promoted survivors, and a
+  deterministic orchestrator script; all agents clean-room. The evaluator
+  funnel: the gate (build, perft, the minimax oracle with pruning off,
+  determinism, the hot-path rules); proxies (best-move agreement and score
+  error against Fork's much deeper search at equal node budgets, on a
+  held-out self-play set labeled by Fork's own search; nodes to depth only
+  as a secondary signal; WAC and matetrack excluded); a short fast-game
+  match; the full SPRT on gainer bounds, STC then LTC.
+- **Metrics:** whether proxy rankings predict SPRT outcomes; the cost per
+  accepted change (compute, games, tokens, session time); the gate-failure
+  rate with and without the critic; the improvement rate against a
+  single-proposer baseline; the explorer's survival rate and SPRT wins;
+  residual against full-replacement results.
+- **Ends with a go/no-go decision by the owner** (stop).
+- **If go:** real campaigns in late Phase 4, after the first strong network
+  and the search re-validation; then a standing tool in the improvement
+  pass (roadmap, §5), with candidate targets such as pruning margins,
+  history updates, move ordering and time management. **If no-go:** the
+  loop is archived, and its log and findings go into ideas.md.
 
 **9. Tier 2 refinements**, built one at a time, each behind a flag and
 SPRT-tested on its own, **reported in batches at the end of Phase 3**, not
@@ -1351,6 +1363,28 @@ Choices made while building, where the spec leaves a gap:
   with tables and at depth 8 without, mate in 3 by depth 14 in both: the
   tables give no distance to mate, and probes need a zero halfmove clock
   (ideas.md idea 22).
+- **Deliverable 8, basic time management** (2026-10-26). `plan_time`: the
+  increment adds three quarters of itself, multiplied before dividing (the
+  first external review's claim (b): 1-3 ms increments added nothing); the
+  reserve is a tenth of the clock but never less than two Move Overheads,
+  so a low clock is not planned down to the overhead (below the reserve
+  Fork moves at once and the increment rebuilds the clock). Between
+  iterations, besides the soft limit, no iteration starts that would
+  probably not finish before the hard limit (the measured growth, 5/3):
+  this binds for `go movetime` and for a low clock whose reserve caps the
+  hard limit. Tests: exact small increments; the hard limit never reaches
+  into the last two overheads; a simulated low-clock game survives a stall
+  (fault-injected: each test fails without its change). Acceptance (after
+  the current SPRT queue): the 2,000-game stress test at 2+0.02 with every
+  CPU busy (baseline before deliverable 8: 0 time losses), the timing tests
+  on an idle machine, and an SPRT on non-regression bounds.
+  **Open before Milestone C** (owner, 2026-10-26): the constant screen found
+  the budget formula's shape (from deliverable 2: the clock over 30 moves
+  plus an increment term, hard = min(4 × share, 0.9 × clock)) near Berserk
+  4.5.0-8's (ORIGINALITY.md). The owner decides whether to replace it with
+  values measured on Fork's own data (moves left from Fork's game records,
+  the hard/soft ratio from the iteration-growth distribution, the reserve
+  rule instead of the 0.9 cap) or keep it with the citation.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
@@ -1428,7 +1462,9 @@ and Weiss (results in ORIGINALITY.md).
 | `TableProbeMinDepth` | 1 | Endgame tables are probed at every main-search node that meets the conditions: a fifty-move-safe probe needs a zero halfmove clock, so probes come only right after captures and pawn moves anyway. A higher minimum pays only with slow table storage (TCEC's 7-man set is on disk); tuned in Phase 8 on TCEC-like storage. |
 | `TableNearDrawScore` | 1 cp | Cursed wins and blessed losses (the fifty-move rule turns them into draws) score just off zero: a real draw is never preferred to a cursed win, and no real advantage is given up for one. |
 | MVV-LVA score | (victim value + promotion value)·8 − attacker type | The victim's value dominates (distinct values differ by at least 100, so ·8 leaves room far above the attacker's type index, at most 5), and the attacker breaks ties: standard MVV-LVA ordering (CPW). |
-| Time budget (`time_budget.cpp`) | 30, 40, 4, 1/10, 1/2 | Deliverable 2's first budget, justified in its notes above; deliverable 8 re-derives them from measurements. |
+| Time budget (`time_budget.cpp`) | 30, 40, 4, 1/10, 1/2 | Deliverable 2's first budget, justified in its notes above; Phase 5 tunes them. |
+| `ReserveOverheads` | 2 | The planner never spends the last two Move Overheads (or the last tenth of the clock, whichever is more): the overhead is the per-move latency allowance, and Milestone A's time loss came from a clock planned down to about one overhead, where one slow move flagged. A simulated 2+0.02 game with 18 ms of latency per move (Milestone A's measurement under load) survives a 150 ms stall with it and flags without it (tests/test_search.cpp). |
+| Iteration growth | 5/3 | **Measured** on the bench (46 positions to depth 14, cumulative nodes): the work grows by a median factor of 1.66 per iteration at depths 8-14 (p75 1.96, p90 2.38). An iteration started at elapsed time t probably finishes near t · 5/3, so none starts when that passes the hard limit. |
 
 #### Owner's answers (2026-10-24)
 

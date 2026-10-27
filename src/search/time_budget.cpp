@@ -10,7 +10,8 @@ namespace {
 constexpr std::int64_t AssumedMovesLeft = 30;     // sudden death: plan as if this many moves remain
 constexpr std::int64_t MaxMovesToGo = 40;         // a larger movestogo is treated as this
 constexpr std::int64_t HardOverSoft = 4;          // the hard limit allows this many soft budgets
-constexpr std::int64_t ReserveDivisor = 10;       // never plan into the last 1/10 of the clock
+constexpr std::int64_t ReserveDivisor = 10;       // never plan into the last 1/10 of the clock,
+constexpr std::int64_t ReserveOverheads = 2;      // nor into the last two Move Overheads (deliverable 8)
 constexpr std::int64_t MovetimeFloorDivisor = 2;  // go movetime keeps at least 1/2 of its time
 
 // Every input is clamped to [-2^40, 2^40] ms (about 35 years either way)
@@ -38,8 +39,17 @@ TimeBudget plan_time(const ClockInput& in) {
   const std::int64_t moves =
       in.movestogo ? std::clamp<std::int64_t>(*in.movestogo, 1, MaxMovesToGo) : AssumedMovesLeft;
   const std::int64_t increment = std::clamp<std::int64_t>(in.increment_ms.value_or(0), 0, ClockCap);
-  const std::int64_t cap = std::max<std::int64_t>(1, available - available / ReserveDivisor);
-  const std::int64_t share = available / moves + std::min(increment, cap) / 4 * 3;
+  // The reserve: a tenth of the clock, but never less than two Move
+  // Overheads (deliverable 8, DESIGN.md §5.2 "Search constants"): the
+  // overhead is the per-move latency allowance, and Milestone A's time loss
+  // came from a clock planned down to about one overhead, where one slow
+  // move flagged. Below the reserve Fork moves at once and the increment
+  // rebuilds the clock.
+  const std::int64_t reserve = std::max(available / ReserveDivisor, ReserveOverheads * overhead);
+  const std::int64_t cap = std::max<std::int64_t>(1, available - reserve);
+  // Three quarters of the increment, multiplied before dividing (first
+  // external review, claim (b): dividing first dropped 1-3 ms increments).
+  const std::int64_t share = available / moves + std::min(increment, cap) * 3 / 4;
   t.hard_ms = std::clamp<std::int64_t>(std::min(share, cap / HardOverSoft) * HardOverSoft, 1, cap);
   t.soft_ms = std::clamp<std::int64_t>(share, 1, t.hard_ms);
   return t;

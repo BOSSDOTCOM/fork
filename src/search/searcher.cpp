@@ -21,6 +21,11 @@ constexpr int AspirationMinDepth = 5;              // iterations before this use
 constexpr int AspirationHalfWidth = 12;            // first half-width, in centipawns
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
 constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are reported only after this
+// The work of the next iteration, as a multiple of all the work so far
+// (deliverable 8, measured on the bench: the median ratio of cumulative nodes
+// between consecutive iterations at depths 8-14 is 1.66, so 5/3).
+constexpr std::int64_t IterationGrowthNum = 5;
+constexpr std::int64_t IterationGrowthDen = 3;
 
 // Tier 1 pruning and reductions (deliverable 6). Every value has its
 // justification in DESIGN.md §5.2 ("Search constants"); all move into the
@@ -633,6 +638,13 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       break;
     const bool timed = !(pondering && pondering->load(std::memory_order_relaxed));
     if (timed && limits.soft_ms >= 0 && elapsed_ms() >= limits.soft_ms) break;
+    // An iteration that would probably not finish before the hard limit is
+    // not started (deliverable 8): its time would be spent for nothing. This
+    // binds where the hard limit is close to the soft one: `go movetime`,
+    // and a low clock whose reserve caps the hard limit.
+    if (timed && limits.hard_ms >= 0 &&
+        elapsed_ms() * IterationGrowthNum / IterationGrowthDen > limits.hard_ms)
+      break;
   }
   result.nodes = nodes_;
   return result;

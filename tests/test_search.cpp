@@ -407,6 +407,63 @@ TEST_CASE("time_budget", "movetime, sudden death, increment, movestogo, extreme 
 
 }  // namespace forkeng::test
 
+namespace forkeng::test {
+
+// Deliverable 8 (first external review, claim (b)): three quarters of the
+// increment, multiplied before dividing, so small increments count exactly.
+TEST_CASE("time_budget", "the increment adds exactly three quarters of itself, small ones included") {
+  ClockInput base;
+  base.remaining_ms = 600000;  // ten minutes: the cap never binds
+  base.overhead_ms = 100;
+  const std::int64_t without = plan_time(base).soft_ms;
+  for (std::int64_t inc = 1; inc <= 40; ++inc) {
+    ClockInput c = base;
+    c.increment_ms = inc;
+    CHECK_MSG(plan_time(c).soft_ms - without == inc * 3 / 4, "increment " << inc << " ms");
+  }
+}
+
+// Deliverable 8: the reserve is a tenth of the clock, never less than two
+// Move Overheads; below it Fork plans the minimum.
+TEST_CASE("time_budget", "the hard limit never reaches into the last two Move Overheads") {
+  for (std::int64_t remaining : {150, 250, 300, 301, 500, 1000, 2000, 5000}) {
+    for (std::int64_t inc : {0, 20, 100}) {
+      ClockInput c;
+      c.remaining_ms = remaining;
+      c.increment_ms = inc;
+      c.overhead_ms = 100;
+      const TimeBudget t = plan_time(c);
+      const std::int64_t available = remaining - 100;
+      CHECK_MSG(t.hard_ms <= std::max<std::int64_t>(1, available - 200), remaining << " ms + " << inc);
+      if (available <= 200) CHECK_MSG(t.hard_ms == 1 && t.soft_ms == 1, remaining << " ms + " << inc);
+    }
+  }
+}
+
+// Deliverable 8, Milestone A's time loss: at 2+0.02 under full load the
+// clock drained to about the Move Overhead, each move then cost about the
+// increment in latency (16-20 ms measured), and one longer stall flagged. A
+// simulated game where Fork always spends its whole hard limit (the worst
+// case) with 18 ms of latency per move: once the clock has settled, one
+// 150 ms stall must not run it out (fault-injected: without the reserve's
+// floor the clock settles near one overhead and the stall flags).
+TEST_CASE("time_budget", "a low clock keeps enough reserve to survive a stall") {
+  std::int64_t clock = 2000;
+  std::int64_t lowest = clock;
+  for (int move = 0; move < 300; ++move) {
+    ClockInput c;
+    c.remaining_ms = clock;
+    c.increment_ms = 20;
+    c.overhead_ms = 100;
+    const std::int64_t latency = move == 250 ? 150 : 18;
+    clock += 20 - plan_time(c).hard_ms - latency;
+    lowest = std::min(lowest, clock);
+  }
+  CHECK_MSG(lowest > 0, "the clock ran out (lowest " << lowest << " ms)");
+}
+
+}  // namespace forkeng::test
+
 // ---- Adversarial review of deliverable 2 (uncommitted; failing tests) ----
 namespace forkeng::test {
 

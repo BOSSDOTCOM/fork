@@ -492,62 +492,93 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **earliest phase:** Phase 3.
 - **status:** untested
 
-## 23. AI-driven discovery of search heuristics (evolutionary loop)
+## 23. AI-driven discovery of search heuristics
 
-- **type:** TOOLING, feeding ELO: the loop itself is tooling; every
-  heuristic it finds is an ELO change behind its own switch, measured by
-  SPRT like any other.
-- **idea:** an AlphaEvolve-style evolutionary loop (owner, 2026-10-26).
-  - **Mutator:** Claude proposes changes only inside delimited "evolvable"
-    functions (the LMR reduction formula, pruning margins, the history
-    update, move-ordering scores); everything else is frozen, and a
-    candidate that touches code outside the delimiters is rejected
-    unbuilt.
-  - **Evaluator funnel**, cheapest first, each stage only for survivors of
-    the one before:
-    1. **gate:** builds, perft, the minimax oracle tests with pruning off,
-       determinism (bench identical across compilers and runs), the
-       hot-path rules (no allocation, exceptions or virtual dispatch);
-    2. **proxies:** nodes to reach a fixed depth AND best-move agreement
-       with Fork's own deep search, on a held-out position set (Fork's own
-       labels, data policy rule 1; not WAC or matetrack, which are never
-       tuning targets);
-    3. a short fast-game match against the baseline;
-    4. the full SPRT, STC then LTC (the LTC rule for pruning, reductions
-       and extensions, DESIGN.md §5.2).
-  - **Population** kept diverse (island model or MAP-Elites style), so the
-    loop does not collapse onto one family of formulas.
-  - **Originality:** every survivor passes the originality-checker's
-    constant and structure screen before stage 4, since model memory can
-    rediscover known engines' formulas (the 2026-10-25 findings: an LMP
-    count, a null-move reduction and an aspiration scheme matched
-    Stockfish or Berserk). The loop's log is the constant's recorded
-    justification (DESIGN.md §8).
-  - **Logs:** every candidate, its diff, its scores at each stage and the
-    reason it stopped are kept, accepted or not.
-  - **Tuning:** a discovered form's constants are tuned afterwards by SPSA
-    (deliverable 8b's parameter table).
-- **phase:** scheduled in DESIGN.md §5.2 as deliverable 8c (owner,
-  2026-10-26): the pilot on the LMR formula after Milestone C and the
-  parameter table (8b), before the tier 2 refinements, once the
-  kb-researcher has verified the AlphaEvolve and MAP-Elites papers; it
-  ends with the owner's go/no-go on the pilot metric. If go: real
-  campaigns in late Phase 4 (after the first strong network and the search
-  re-validation), then a standing tool in the improvement pass after
-  Phase 8.
-- **metric:** for the pilot, whether the proxies predict the SPRT (rank
-  agreement between stage 2 and stage 4 on the candidates that reach both)
-  and the cost per accepted change; for each discovered heuristic, its
-  SPRT.
-- **sources:** AlphaEvolve (Google DeepMind, 2025) and MAP-Elites (Mouret
-  and Clune) as the models for the loop; both from memory, UNVERIFIED: the
-  kb-researcher fetches and cites the primary papers before the pilot, and
-  they are then logged in ORIGINALITY.md.
-- **runtime cost:** possible: depends on the candidate (each reports its
-  nps change with its SPRT, per the rule above).
-- **earliest phase:** Phase 3 tier 2 (needs the switches, the minimax
-  oracle tests and the SPRT tooling, all in place).
-- **status:** untested
+Consolidated spec (owner, 2026-10-26; replaces the earlier fragments).
+
+- **type:** TOOLING feeding ELO. Each discovered heuristic is its own ELO
+  change behind its own switch; its runtime cost is reported with its SPRT
+  (the rule above).
+
+**Loop**
+- An evolutionary loop (AlphaEvolve/FunSearch style): AI agents propose
+  code changes, an automated evaluator scores them, and the best survive to
+  seed the next generation.
+- **Evolvable regions:** only delimited functions (pilot: the LMR formula
+  only). Any candidate touching code outside them is rejected before
+  building.
+- **Residual mode (default):** candidates evolve a correction added to the
+  current formula (final = base + correction), with its own strength
+  coefficient for later SPSA tuning; a zero correction reproduces the
+  baseline exactly. About 1 in 5 candidates may be full replacements, to
+  keep the search open.
+- **Diversity:** an island/MAP-Elites style population (e.g. axes: mean
+  reduction and re-search rate).
+
+**Agents**
+- **Proposers:** 2 for the pilot, each with a distinct perspective and its
+  own island (e.g. aggressive vs cautious); optionally a third reasoning
+  from Fork's search statistics.
+- **Explorer:** unconventional proposals that question standard
+  assumptions and borrow from other fields; it uses the full-replacement
+  share, and has its own protected island for a few generations before
+  competing with the main population.
+- **Critic:** reviews every proposal before building (determinism, the
+  hot-path rules, resemblance to known engine formulas, proxy gaming);
+  rejections are logged with reasons.
+- **Analyst:** every N generations, summarizes what wins and loses and
+  feeds the insights back to the proposers and the explorer.
+- **Originality screener:** the existing originality-checker, for promoted
+  survivors (constants and structure against known engines, since model
+  memory can reproduce famous formulas).
+- **Orchestrator:** a deterministic script, not an agent.
+- All agents follow the clean-room rules; none sees another engine's
+  source.
+
+**Evaluator funnel**
+1. **Gate:** build, perft, the minimax oracle with pruning off,
+   determinism, the hot-path rules.
+2. **Proxies:** best-move agreement and score error against Fork's own much
+   deeper search, at equal node budgets, on a held-out self-play position
+   set labeled by Fork's own search (data policy rule 1); nodes to depth
+   only as a secondary signal, never alone. WAC and matetrack are excluded.
+3. A short fast-game match against the baseline.
+4. The full SPRT with gainer bounds, short then long time control per the
+   LTC rule.
+
+Survivors' constants are justified by the loop's log (DESIGN.md §8), then
+tuned by SPSA.
+
+**Pilot** (DESIGN.md §5.2, deliverable 8c)
+- **Slot:** after Milestone C and the parameter table (8b), before tier 2
+  (deliverable 9). Time box about two weeks. Target: the LMR formula only.
+- **Prerequisites:** 8b done; the kb-researcher has verified the
+  AlphaEvolve, FunSearch and MAP-Elites papers (cited in the KB and
+  ORIGINALITY.md); run when weekly Claude capacity is fresh.
+- **Metrics:** whether proxy rankings predict SPRT outcomes; the cost per
+  accepted change (compute, games, tokens, session time); the gate-failure
+  rate with and without the critic; the improvement rate against a
+  single-proposer baseline; the explorer's survival rate and SPRT wins;
+  residual against full-replacement results.
+- **Ends with a stop for the owner's go/no-go decision.**
+- **If go:** real campaigns in late Phase 4 (after the first strong network
+  and the search re-validation), then a standing tool in the improvement
+  pass; candidate future targets include pruning margins, history updates,
+  move ordering and time management.
+- **If no-go:** the loop is archived; its log and findings go into this
+  file.
+
+- **phase:** pilot as deliverable 8c (Phase 3); campaigns in late Phase 4
+  and the improvement pass, if go.
+- **metric:** the pilot metrics above; then SPRT for each heuristic.
+- **sources:** AlphaEvolve, FunSearch and MAP-Elites as models for the loop;
+  from memory so far, UNVERIFIED until the kb-researcher fetches and cites
+  the primary papers (a prerequisite of the pilot), then logged in
+  ORIGINALITY.md.
+- **runtime cost:** possible: depends on the candidate (reported with each
+  SPRT).
+- **earliest phase:** Phase 3 (deliverable 8c).
+- **status:** untested; pilot scheduled
 
 ## 24. TT victim policy under real table pressure
 

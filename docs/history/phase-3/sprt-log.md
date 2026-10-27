@@ -200,3 +200,14 @@ LLR: -0.95 (-32.3%) (-2.94, 2.94) [-3.00, 0.00]
 From the futile-node filter's SPRT on, the remaining tests of the external
 reviews' queue run at concurrency 8 (was 10), so development builds, tests
 and checks can run beside the games at low priority.
+
+### 20261026T223103Z rv-futile
+
+- base `6ae4128` (6ae4128), test `3a8a1b6` (3a8a1b6), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 8, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40
+- Verdict: **ACCEPTED (stopped by the owner, 2026-10-26)** after 2,046 finished games. The last report (2,000 games): the futile-node quiet filter (first external review, claim (d)) at +11.5 ± 11.9 Elo, on non-regression bounds [-3, 0]: the 95% interval's lower bound (-0.4) is above -3. The change is kept. No time losses, crashes or illegal moves.
+```
+Elo: 11.47 +/- 11.90, nElo: 14.69 +/- 15.23
+Games: 2000, Wins: 734, Losses: 668, Draws: 598, Points: 1033.0 (51.65 %)
+Ptnml(0-2): [92, 186, 402, 204, 116], WL/DD Ratio: 2.87
+LLR: 0.80 (27.3%) (-2.94, 2.94) [-3.00, 0.00]
+```
