@@ -262,6 +262,26 @@ class AgentTests(unittest.TestCase):
         self.assertEqual((v.accept, v.reasons), (False, 'float'))
         self.assertFalse(agents.parse_verdict('hmm').accept)
 
+    def test_stream_parsing_refuses_tools(self):
+        def stream(tools, mcp, subtype='success'):
+            return '\n'.join([
+                json.dumps({'type': 'system', 'subtype': 'init', 'tools': tools, 'mcp_servers': mcp}),
+                json.dumps({'type': 'assistant', 'message': {'content': [{'type': 'text', 'text': 'x'}]}}),
+                json.dumps({'type': 'result', 'subtype': subtype, 'is_error': subtype != 'success', 'result': 'MODE: residual',
+                            'usage': {'input_tokens': 2, 'output_tokens': 5, 'cache_creation_input_tokens': 100,
+                                      'cache_read_input_tokens': 50}})])
+        r = agents.parse_stream(stream([], []))
+        self.assertEqual((r.text, r.tokens), ('MODE: residual', 157))
+        for bad in (stream(['WebFetch'], []), stream([], [{'name': 'x'}]), stream([], [], 'error_max_turns'), 'junk'):
+            with self.assertRaises(RuntimeError):
+                agents.parse_stream(bad)
+
+    def test_cli_command_has_no_tools(self):
+        cmd = agents.CliAgent().command()
+        self.assertEqual(cmd[cmd.index('--tools') + 1], '""')
+        for flag in ('--disallowedTools', '--strict-mcp-config', '--safe-mode', '--no-session-persistence'):
+            self.assertIn(flag, cmd)
+
     def test_budget(self):
         now = [0.0]
         b = agents.Budget(tokens=100, candidates=3, seconds=60, clock=lambda: now[0])
@@ -302,7 +322,8 @@ class OrchestratorTests(unittest.TestCase):
             labels = Path(tmp) / 'p.jsonl'
             labels.write_text(json.dumps({'id': 0, 'fen': 'x', 'bm': 'e2e4', 'ce': 0, 'split': 'evolve'}) + '\n')
             cfg = json.loads((Path(__file__).resolve().parent / 'config.json').read_text())
-            self.assertNotIn('/Users/', json.dumps(cfg))  # the committed config names no user
+            import re
+            self.assertIsNone(re.search(r'/Users/(?!Public/)', json.dumps(cfg)))  # names no user
             self.assertNotIn('/home/', json.dumps(cfg))
             cfg.update({'positions': str(labels), 'per_island': 1, 'critic_audit_share': 1.0,
                         'islands': ['proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer'],

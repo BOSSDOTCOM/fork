@@ -116,21 +116,69 @@ class StubAgent:
 
 
 class CliAgent:
-    """A live agent through the Claude Code CLI (not run in the pilot's preparation)."""
+    """A live agent through the Claude Code CLI, with no tools at all.
 
-    def __init__(self, model=None, timeout=900):
+    Each call is a fresh, non-interactive session (`claude -p`, no session
+    kept) in a folder of its own, with every built-in tool and every MCP
+    server off (`--tools ""`, `--disallowedTools "*"`, an empty strict MCP
+    config) and safe mode (no CLAUDE.md, memory, hooks or plugins), so an
+    agent can read nothing and fetch nothing: the clean-room rule enforced
+    by the CLI, not only asked in the prompt. The streamed output's init
+    event lists the session's tools; a reply from a session whose tool or
+    MCP list is not empty is refused. Checked by hand on 2026-10-27 (CLI
+    2.1.310): tools [] and mcp [] from WSL through cmd.exe.
+
+    `launcher` is the command that runs the CLI: from WSL, the Windows CLI
+    through `cmd.exe /c claude` (its sign-in is the Windows one; the CLI's
+    docs do not cover this path, which was tested instead).
+    """
+
+    def __init__(self, launcher=('cmd.exe', '/c', 'claude'), workdir='/mnt/c/Users/Public/fork-agent',
+                 model='sonnet', max_turns=2, timeout=900):
+        self.launcher = list(launcher)
+        self.workdir = workdir
         self.model = model
+        self.max_turns = max_turns
         self.timeout = timeout
 
+    def command(self):
+        return self.launcher + [
+            '-p', 'Follow the instructions on stdin.', '--output-format', 'stream-json', '--verbose',
+            '--tools', '""', '--disallowedTools', '*', '--strict-mcp-config', '--mcp-config', 'empty-mcp.json',
+            '--permission-mode', 'dontAsk', '--max-turns', str(self.max_turns), '--no-session-persistence',
+            '--safe-mode', '--disable-slash-commands', '--model', self.model]
+
     def ask(self, role, prompt):
-        cmd = ['claude', '-p', '--output-format', 'json']
-        if self.model:
-            cmd += ['--model', self.model]
-        p = subprocess.run(cmd, input=prompt, capture_output=True, text=True, timeout=self.timeout)
+        import os
+        os.makedirs(self.workdir, exist_ok=True)
+        with open(os.path.join(self.workdir, 'empty-mcp.json'), 'w', encoding='utf-8') as f:
+            f.write('{"mcpServers":{}}')
+        p = subprocess.run(self.command(), input=prompt, capture_output=True, text=True, encoding='utf-8',
+                           cwd=self.workdir, timeout=self.timeout)
         if p.returncode != 0:
             raise RuntimeError(f'claude -p failed for {role}: {p.stderr[-500:]}')
-        out = json.loads(p.stdout)
-        usage = out.get('usage', {})
-        tokens = sum(int(usage.get(k, 0)) for k in ('input_tokens', 'output_tokens',
+        return parse_stream(p.stdout, role)
+
+
+def parse_stream(text, role='agent'):
+    """The Reply from a stream-json session; refuses one that had any tool."""
+    init, result = None, None
+    for line in text.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get('type') == 'system' and event.get('subtype') == 'init':
+            init = event
+        elif event.get('type') == 'result':
+            result = event
+    if init is None or result is None:
+        raise RuntimeError(f'{role}: no init or result event in the CLI output')
+    if init.get('tools') or init.get('mcp_servers'):
+        raise RuntimeError(f'{role}: the session had tools ({init.get("tools")}) or MCP servers; reply refused')
+    if result.get('subtype') != 'success' or result.get('is_error'):
+        raise RuntimeError(f'{role}: the CLI reported {result.get("subtype")}')
+    usage = result.get('usage', {})
+    tokens = sum(int(usage.get(k, 0) or 0) for k in ('input_tokens', 'output_tokens',
                                                      'cache_creation_input_tokens', 'cache_read_input_tokens'))
-        return Reply(out.get('result', ''), tokens)
+    return Reply(result.get('result', ''), tokens)

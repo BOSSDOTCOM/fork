@@ -340,7 +340,7 @@ def main():
         cfg['match'][key] = str(Path(cfg['match'][key]).expanduser())
     run_dir = Path(a.run_dir).expanduser()
     if a.live:
-        agent = agents.CliAgent(cfg.get('model'))
+        agent = agents.CliAgent(**cfg.get('agent', {}))
         print('LIVE loop: real agents and tokens (owner approval required: deliverable 8c).', flush=True)
     else:
         agent = dry_run_agent()

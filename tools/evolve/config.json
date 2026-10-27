@@ -36,5 +36,15 @@
     "fastchess": "~/fork-tools/bin/fastchess",
     "book": "~/fork-games/ma_openings.epd"
   },
-  "model": null
+  "agent": {
+    "launcher": [
+      "cmd.exe",
+      "/c",
+      "claude"
+    ],
+    "workdir": "/mnt/c/Users/Public/fork-agent",
+    "model": "sonnet",
+    "max_turns": 2,
+    "timeout": 900
+  }
 }
