@@ -817,6 +817,105 @@ billing page does not state a minimum.
 
 ---
 
+### Cloud SPRT: the tools and how to run them (2026-10-27)
+
+Tag: **USE** (Fork's own tooling, in the main repository: `tools/cloud/`,
+`.github/workflows/sprt.yml`). Facts and prices: the section above.
+
+**How a sharded SPRT works.** One SPRT is split into shards. Every shard
+plays the same two Fork commits at the same conditions as `tools/sprt.sh`
+(Hash, one thread, the same adjudication, each opening with both colours)
+on its own slice of `UHO_Lichess_4852_v1.epd` (sequential order: shard *i*
+of stage *s* starts at opening 1 + (s·N + i)·G/2; the book has 2,632,036
+positions, so slices never overlap), for a fixed number of games, and
+records its pentanomial counts. Pairs are independent, so the counts add
+up and the combined SPRT is the SPRT on the sum. A stage is one batch of
+shards; if the merged LLR is still between the bounds, run the next stage
+(new openings) and merge every stage's results. Looking only at stage
+boundaries makes the test slightly conservative, never anti-conservative.
+
+**The pieces** (all tested locally, 2026-10-27):
+- `tools/cloud/sprt_merge.py`: `snapshot` (a shard's counts from its
+  fastchess log: pairs counted from the finished games themselves, games
+  2k-1 and 2k sharing an opening, so a shard stopped between fastchess's
+  periodic reports keeps every finished pair; on two complete 5,000-game
+  logs the counts equal fastchess's own, bin for bin) and `merge` (sums the
+  counts, refuses shards of different commits or conditions, or two shards
+  with the same openings, and prints Elo, nElo, LLR and the verdict). The
+  statistics are fastchess's normalized model; Elo, nElo and their error
+  bars match fastchess on 18 of Fork's logged SPRTs to its two decimals,
+  the LLR to within 0.01 (fastchess's own computation differs slightly, so
+  a verdict within 0.01 of a bound wants more games). Tests:
+  `tools/cloud/test_sprt_merge.py`.
+- `tools/cloud/run_shard.sh`: one shard; writes `result.json` every minute
+  and on exit, runs a checkpoint command (e.g. an S3 upload), and on SIGTERM
+  stops fastchess and records status `interrupted`. Tested: a complete
+  8-game shard, and a 40-game shard stopped by SIGTERM after 45 s that kept
+  its 3 finished pairs; their merge.
+- `tools/cloud/build_pair.sh`: both commits built as TCEC builds Fork
+  (`update.sh`, on Ubuntu 22.04 with `CXX=g++`, gcc 11.4, `x86-64-v3`).
+- `tools/cloud/fetch_tools.sh`: the pinned fastchess release
+  (v1.8.2-alpha, SHA-256 checked) and the book (official-stockfish/books at
+  a804a97e, the unpacked file's SHA-256 checked).
+- `.github/workflows/sprt.yml` (GitHub Actions): manual
+  (`workflow_dispatch`), only in BOSSDOTCOM/fork, one at a time (a
+  concurrency group). A build job in an `ubuntu:22.04` container, at most
+  **16 shard jobs** (`max-parallel: 16`, against the Free plan's 20
+  concurrent jobs, so CI can still run), a merge job writing the verdict
+  to the run summary. Inputs: base, test, bounds, tc, hash, games, shards,
+  stage, test and base options; they reach the shell only through
+  environment variables. **Not run yet** (the owner starts the first run;
+  the workflow must be on the default branch for `workflow_dispatch`, so it
+  works once milestone-c is merged into main).
+- `tools/cloud/aws_spot_sprt.sh` (AWS): run on the owner's machine with the
+  owner's AWS CLI configuration; launches one one-time spot instance per
+  shard (c7a or c8a), Ubuntu 22.04 from the Canonical SSM parameter, with an
+  instance profile the owner creates (only `s3:PutObject` on the result
+  prefix). The instance arms a shutdown after `--max-hours` (default 3:
+  the cost cap), builds, plays with every vCPU but two, uploads
+  `result.json` every minute, polls the interruption notice every 5 s
+  (IMDSv2) and on one stops the shard so its pairs are uploaded, then
+  uploads the log and games and shuts down, which terminates it.
+  `--dry-run` prints the instance's script without calling AWS (checked:
+  it parses). **Not run** (no AWS account here); the SSM parameter and the
+  launch options follow the section above. No credentials, account ids or
+  bucket names are in the repository.
+
+**Terms (GitHub).** The Actions terms allow GitHub-hosted runners only for
+"the production, testing, deployment, or publication of the software
+project associated with the repository" and forbid activity that "places a
+burden on our servers, where that burden is disproportionate to the
+benefits provided to users" (quotes and source above). Fork's use is
+testing its own changes: two of its own commits, at most 16 jobs, one SPRT
+at a time, manual starts only. Whether sustained engine matches stay within
+"disproportionate burden" is GitHub's judgement: **UNVERIFIED**; keep runs
+occasional and say so if GitHub asks.
+
+**Cost of one 5,000-game SPRT at 8+0.08** (estimates; the throughput is
+measured, the setup times are not). Throughput: games run on the clock, so
+a game slot plays about **148 games per hour** at 8+0.08 whatever the CPU
+(measured on the owner's machine: 1,478 games per hour at concurrency 10,
+DESIGN.md §5.2 testing conditions).
+
+| Option | Slots | Games per hour | Wall time | Cost |
+|---|---|---|---|---|
+| Local (7600X3D, concurrency 10) | 10 | about 1,480 | about 3.4 h | electricity only |
+| GitHub Actions, 16 jobs × 3 games (4-CPU runners) | 48 | about 7,100 | about 42 min of games + about 5 min setup per job (UNVERIFIED), about 50 min | **$0**: standard runners are free and unlimited in public repositories (about 760 runner-minutes, not billed) |
+| AWS c7a.16xlarge spot, 1 instance, 62 games | 62 | about 9,200 | about 33 min + about 8 min boot and build (UNVERIFIED), about 41 min | about **$0.63** at the 2026-10-27 snapshot of $0.9276/h (on-demand $3.28448/h: about $2.25) |
+| AWS c8a.16xlarge spot, 1 instance | 62 | about 9,200 (the faster CPU searches deeper, not faster) | about 41 min | about **$0.65** at $0.9533/h (on-demand $3.44864/h: about $2.36) |
+| AWS c7a.16xlarge spot, 2 instances | 124 | about 18,400 | about 17 + 8 = 25 min | about $0.78 (the fixed setup is paid twice) |
+
+Billing is per second (a 60-second minimum on-demand); a spot instance
+interrupted by AWS in its first hour is not charged; disk and S3 cost
+cents at most. Spot prices move all the time: check
+`aws ec2 describe-spot-price-history` before a run. The Spot Instance
+Advisor's interruption frequency (30-day): c7a.16xlarge 10-15%, c8a.16xlarge
+15-20%; an interrupted shard keeps its finished pairs, and the missing games
+are run as a further stage. Caveats: GitHub's 4 CPUs may be SMT threads
+(**UNVERIFIED**); if a shard shows time losses, run 2 games per job instead
+of 3 (32 slots, about 63 min). Time losses are counted per shard and in the
+merge.
+
 ## UNVERIFIED items (summary)
 
 1. ~~Which Ubuntu release ships Qt ≥ 6.8; whether the AppImage contains `cutechess-cli`.~~ Resolved 2026-10-24 (§ cutechess: 25.04 first, 26.04 first LTS; AppImage has `usr/bin/cutechess-cli`).
