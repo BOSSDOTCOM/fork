@@ -1393,18 +1393,33 @@ Choices made while building, where the spec leaves a gap:
 - **Deliverable 8, basic time management** (2026-10-26). `plan_time`: the
   increment adds three quarters of itself, multiplied before dividing (the
   first external review's claim (b): 1-3 ms increments added nothing); the
-  reserve is a tenth of the clock but never less than two Move Overheads,
-  so a low clock is not planned down to the overhead (below the reserve
-  Fork moves at once and the increment rebuilds the clock). Between
+  reserve is a tenth of the clock, and one more Move Overhead only in the
+  danger zone, when less than `DangerZoneOverheads` (2) overheads plus an
+  increment is available (the final form, B2, below; at first it was two
+  overheads at every clock). Between
   iterations, besides the soft limit, no iteration starts that would
   probably not finish before the hard limit (the measured growth, 5/3):
   this binds for `go movetime` and for a low clock whose reserve caps the
-  hard limit. Tests: exact small increments; the hard limit never reaches
-  into the last two overheads; a simulated low-clock game survives a stall
-  (fault-injected: each test fails without its change). Acceptance (after
-  the current SPRT queue): the 2,000-game stress test at 2+0.02 with every
-  CPU busy (baseline before deliverable 8: 0 time losses), the timing tests
-  on an idle machine, and an SPRT on non-regression bounds.
+  hard limit. Tests: exact small increments; the reserve inside and
+  outside the danger zone; a simulated low-clock game survives a stall;
+  the iteration rule stops a search whose listener pauses (fault-injected:
+  each test fails without its change).
+  **The owner's split (2026-10-27).** The first form's SPRT against its
+  parent leaned to about -10 Elo midway and ended at -4.9 ± 7.1 at the
+  5,000-game cap: the fixed two-overhead floor binds where 8+0.08 games
+  settle (about 0.4-0.6 s left). Split into (a) the increment fix, (b) the
+  reserve, redesigned adaptive as B1 (max(clock/10, overhead - increment))
+  or B2 (the danger zone above), and (c) the iteration rule. Stress tests
+  (2,000 games at 2+0.02, every CPU busy): (a) alone 3 time forfeits, (c)
+  alone 1, B1 0, B2 0, the first form 0. The owner chose B2 without a
+  separate SPRT (it acts only at a low clock; B1 reserves time on every
+  move whose increment is below the overhead). The combination (a) + B2 +
+  (c) against (a): +1.9 ± 10.6 Elo after 2,200 games on [-3, 0], accepted
+  by the owner (sprt-log.md d8-final). Timing tests on an idle machine:
+  pass on Windows and Linux (stop to bestmove 0.28-0.55 ms); `go movetime`
+  never overran (30 searches each at 50, 200 and 1,000 ms ended at most
+  25.2, 100.2 and 884.9 ms after go). The 40+0.4 check follows the
+  Milestone C gauntlet.
   **The budget formula's credit** (owner, 2026-10-26): the constant screen
   found its shape (from deliverable 2: the clock over 30 moves plus an
   increment term, hard = min(4 × share, 0.9 × clock)) near Berserk
@@ -1605,7 +1620,7 @@ and Weiss (results in ORIGINALITY.md).
 | `TableNearDrawScore` | 1 cp | Cursed wins and blessed losses (the fifty-move rule turns them into draws) score just off zero: a real draw is never preferred to a cursed win, and no real advantage is given up for one. |
 | MVV-LVA score | (victim value + promotion value)·8 − attacker type | The victim's value dominates (distinct values differ by at least 100, so ·8 leaves room far above the attacker's type index, at most 5), and the attacker breaks ties: standard MVV-LVA ordering (CPW). |
 | Time budget (`time_budget.cpp`) | 30, 40, 4, 1/10, 1/2 | Deliverable 2's first budget, justified in its notes above; Phase 5 tunes them. |
-| `ReserveOverheads` | 2 | The planner never spends the last two Move Overheads (or the last tenth of the clock, whichever is more): the overhead is the per-move latency allowance, and Milestone A's time loss came from a clock planned down to about one overhead, where one slow move flagged. A simulated 2+0.02 game with 18 ms of latency per move (Milestone A's measurement under load) survives a 150 ms stall with it and flags without it (tests/test_search.cpp). |
+| `DangerZoneOverheads` | 2 | Deliverable 8, variant B2 (the owner's choice, 2026-10-27): one more Move Overhead of reserve only when the time available (the clock less one overhead) is below two overheads plus an increment, i.e. a clock below three overheads plus an increment. Fork's reasoning: in that zone one slow move (Milestone A's flag came from a stall longer than the overhead) plus the next move's normal latency could use up what is left before the increment, which arrives only after the move: one overhead for each. Stress test 0 time forfeits in 2,000 games (the tenth alone: 3). It replaced `ReserveOverheads` (2 overheads at every clock), which cost about 5-10 Elo at 8+0.08. |
 | Iteration growth | 5/3 | **Measured** on the bench (46 positions to depth 14, cumulative nodes): the work grows by a median factor of 1.66 per iteration at depths 8-14 (p75 1.96, p90 2.38). An iteration started at elapsed time t probably finishes near t · 5/3, so none starts when that passes the hard limit. |
 
 #### Owner's answers (2026-10-24)

@@ -12,8 +12,7 @@ namespace {
 // parameter table (src/tune/params.hpp): AssumedMovesLeft (sudden death: plan
 // as if this many moves remain), MaxMovesToGo (a larger movestogo is treated
 // as this), HardOverSoft (the hard limit allows this many soft budgets),
-// ReserveDivisor and ReserveOverheads (never plan into the last 1/10 of the
-// clock, nor into the last two Move Overheads: deliverable 8). The formula
+// ReserveDivisor (never plan into the last 1/10 of the clock). The formula
 // they feed is credited at plan_time below. Not tuned (an owner's rule):
 constexpr std::int64_t MovetimeFloorDivisor = 2;  // go movetime keeps at least 1/2 of its time
 
@@ -39,16 +38,17 @@ TimeBudget plan_time(const ClockInput& in) {
   }
   if (!in.remaining_ms) return t;  // no clock: depth, nodes, mate or infinite decide
   const std::int64_t available = std::max<std::int64_t>(1, bounded(*in.remaining_ms) - overhead);
-  const std::int64_t moves =
-      in.movestogo ? std::clamp<std::int64_t>(*in.movestogo, 1, MaxMovesToGo) : std::int64_t{AssumedMovesLeft};
+  const std::int64_t moves = in.movestogo ? std::clamp<std::int64_t>(*in.movestogo, 1, MaxMovesToGo)
+                                          : std::int64_t{AssumedMovesLeft};
   const std::int64_t increment = std::clamp<std::int64_t>(in.increment_ms.value_or(0), 0, ClockCap);
-  // The reserve: a tenth of the clock, but never less than two Move
-  // Overheads (deliverable 8, DESIGN.md §5.2 "Search constants"): the
-  // overhead is the per-move latency allowance, and Milestone A's time loss
-  // came from a clock planned down to about one overhead, where one slow
-  // move flagged. Below the reserve Fork moves at once and the increment
-  // rebuilds the clock.
-  const std::int64_t reserve = std::max(available / ReserveDivisor, ReserveOverheads * overhead);
+  // The reserve (deliverable 8, variant B2, "danger zone"): a tenth of the
+  // clock, and one more Move Overhead only when the time left is within
+  // DangerZoneOverheads overheads plus one increment of running out. The
+  // overhead, already taken off, covers each move's normal latency; only so
+  // close to the end can one slow move flag, so only there is more kept.
+  const bool danger_zone = available < DangerZoneOverheads * overhead + increment;
+  const std::int64_t reserve =
+      danger_zone ? std::max(available / ReserveDivisor, overhead) : available / ReserveDivisor;
   const std::int64_t cap = std::max<std::int64_t>(1, available - reserve);
   // The budget. Each move gets an even part of the clock, as if
   // AssumedMovesLeft moves remained (or movestogo), plus three quarters of
@@ -64,7 +64,7 @@ TimeBudget plan_time(const ClockInput& in) {
   // the known form, so it is credited and kept (docs/ORIGINALITY.md). Fork's
   // own parts: three quarters of the increment (multiplied before dividing:
   // the first external review's claim (b)), the soft limit at one share, and
-  // the reserve's floor of two Move Overheads.
+  // the danger-zone reserve above.
   const std::int64_t share = available / moves + std::min(increment, cap) * 3 / 4;
   t.hard_ms = std::clamp<std::int64_t>(std::min(share, cap / HardOverSoft) * HardOverSoft, 1, cap);
   t.soft_ms = std::clamp<std::int64_t>(share, 1, t.hard_ms);

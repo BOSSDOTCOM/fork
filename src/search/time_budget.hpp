@@ -8,7 +8,7 @@
 // - Limits are milliseconds from the moment `go` was received; -1 means none.
 // - When both are set, 1 <= soft_ms <= hard_ms. With a clock, hard_ms leaves
 //   the Move Overhead and a further reserve unused: a tenth of the remaining
-//   time, never less than two Move Overheads (deliverable 8).
+//   time.
 // - go movetime N plans max(N - Move Overhead, N / 2), and at least 1 ms
 //   (owner, 2026-10-25): a short movetime is not eaten by the overhead.
 // - Plain integer arithmetic on 64-bit values; never negative.

@@ -4,9 +4,11 @@
 // tools/check_search_positions.py.
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "core/movegen.hpp"
@@ -423,19 +425,22 @@ TEST_CASE("time_budget", "the increment adds exactly three quarters of itself, s
   }
 }
 
-// Deliverable 8: the reserve is a tenth of the clock, never less than two
-// Move Overheads; below it Fork plans the minimum.
-TEST_CASE("time_budget", "the hard limit never reaches into the last two Move Overheads") {
-  for (std::int64_t remaining : {150, 250, 300, 301, 500, 1000, 2000, 5000}) {
-    for (std::int64_t inc : {0, 20, 100}) {
+// Deliverable 8, variant B2: one more Move Overhead of reserve inside the
+// danger zone (less than two overheads plus an increment left), and only a
+// tenth of the clock outside it.
+TEST_CASE("time_budget", "an extra overhead of reserve only in the danger zone") {
+  for (std::int64_t remaining : {150, 250, 300, 319, 320, 500, 1000, 2000}) {
+    for (std::int64_t inc : {0, 20, 80}) {
       ClockInput c;
       c.remaining_ms = remaining;
       c.increment_ms = inc;
       c.overhead_ms = 100;
       const TimeBudget t = plan_time(c);
       const std::int64_t available = remaining - 100;
-      CHECK_MSG(t.hard_ms <= std::max<std::int64_t>(1, available - 200), remaining << " ms + " << inc);
-      if (available <= 200) CHECK_MSG(t.hard_ms == 1 && t.soft_ms == 1, remaining << " ms + " << inc);
+      const bool zone = available < 200 + inc;
+      const std::int64_t reserve = zone ? std::max<std::int64_t>(available / 10, 100) : available / 10;
+      CHECK_MSG(t.hard_ms <= std::max<std::int64_t>(1, available - reserve), remaining << " ms + " << inc);
+      if (zone && available <= 100) CHECK_MSG(t.hard_ms == 1, remaining << " ms + " << inc);
     }
   }
 }
@@ -445,8 +450,9 @@ TEST_CASE("time_budget", "the hard limit never reaches into the last two Move Ov
 // increment in latency (16-20 ms measured), and one longer stall flagged. A
 // simulated game where Fork always spends its whole hard limit (the worst
 // case) with 18 ms of latency per move: once the clock has settled, one
-// 150 ms stall must not run it out (fault-injected: without the reserve's
-// floor the clock settles near one overhead and the stall flags).
+// 150 ms stall must not run it out (fault-injected: with only a tenth of the
+// clock in reserve, deliverable 8a, the clock settles near one overhead and
+// the stall flags).
 TEST_CASE("time_budget", "a low clock keeps enough reserve to survive a stall") {
   std::int64_t clock = 2000;
   std::int64_t lowest = clock;
@@ -579,4 +585,40 @@ TEST_CASE("search", "a stop during a root fail high's re-search keeps the previo
   CHECK_MSG(distinct_fail_highs > 0, "no search stopped with a distinct fail high unresolved");
 }
 
+}  // namespace forkeng::test
+
+namespace forkeng::test {
+namespace {
+// Pauses once, after the iteration of one depth, so the elapsed time jumps.
+struct PausingListener final : SearchListener {
+  int pause_after = 0;
+  std::chrono::milliseconds pause{0};
+  void on_iteration(const Position&, const IterationReport& r) override {
+    if (r.depth == pause_after) std::this_thread::sleep_for(pause);
+  }
+};
+}  // namespace
+
+// Deliverable 8, variant (c): no iteration starts that would probably not
+// finish before the hard limit (elapsed * 5/3 past it). With soft = hard =
+// 90 ms and a 60 ms pause after depth 3, the rule stops at depth 3
+// (60 * 5/3 > 90); without it, depth 4 from the start position starts, as
+// the soft limit is not reached, and finishes long before the hard limit
+// (fault-injected).
+TEST_CASE("search", "an iteration that would not finish before the hard limit is not started") {
+  TestHash store;
+  auto searcher = std::make_unique<Searcher>(store.table);
+  const std::atomic<bool> stop{false};
+  Position pos;
+  CHECK(pos.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+  SearchQuota limits;
+  limits.depth = 5;
+  limits.soft_ms = 90;
+  limits.hard_ms = 90;
+  PausingListener listener;
+  listener.pause_after = 3;
+  listener.pause = std::chrono::milliseconds{60};
+  const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &listener);
+  CHECK_EQ(r.depth, 3);
+}
 }  // namespace forkeng::test
