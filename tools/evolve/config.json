@@ -12,8 +12,8 @@
     "explorer"
   ],
   "per_island": 2,
-  "full_share": 0.2,
-  "explorer_protected": 3,
+  "full_share": 0.3333,
+  "explorer_protected": 6,
   "analyst_every": 3,
   "reset_every": 4,
   "critic_audit_share": 0.25,

@@ -6,6 +6,7 @@
 
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
+#include "eval/bootstrap_eval.hpp"
 #include "harness.hpp"
 #include "search/lmr_table.hpp"
 #include "search/searcher.hpp"
@@ -207,6 +208,50 @@ TEST_CASE("pruning", "TT-refined pruning eval: still correct, and it changes the
   generate<GenMode::Legal>(pos, legal);
   CHECK(legal.contains(refined.best));
   CHECK_MSG(refined.nodes != plain.nodes, "nodes " << refined.nodes << " with and without refinement");
+}
+
+// The LMR context's move facts (lmr_move_facts, the heuristic-discovery
+// region's inputs, 2026-10-27): constructed positions, the expected values
+// computed independently by python-chess (board.is_attacked_by before the
+// move, board.attacks after it; the positions checked legal there). Case 3's
+// rook was attacked along the file through the square it moves to, so the
+// board before the move must be rebuilt, not read after it.
+TEST_CASE("pruning", "LMR move facts: piece, threatened before the move, attacks after it") {
+  struct Case {
+    const char* fen;
+    const char* move;
+    int piece;
+    bool threatened;
+    bool attacks;
+  };
+  for (const Case& c : {Case{"4k3/8/8/3p4/4N3/8/8/4K3 w - - 0 1", "e4c3", 1, true, false},
+                        Case{"4k3/8/8/8/1r6/8/8/N3K3 w - - 0 1", "a1c2", 1, false, true},
+                        Case{"r3k3/8/8/8/8/8/8/R3K3 w - - 0 1", "a1a2", 3, true, true},
+                        Case{"4k3/8/8/8/8/8/8/4K3 w - - 0 1", "e1d1", 5, false, false},
+                        Case{"4k3/8/8/2n5/8/3P4/8/4K3 w - - 0 1", "d3d4", 0, true, true},
+                        Case{"4k3/8/8/8/3n4/4P3/8/4K3 b - - 0 1", "d4b5", 1, true, false}}) {
+    Position pos;
+    CHECK(pos.set_fen(c.fen));
+    const Move m = pos.parse_uci(c.move);
+    CHECK_MSG(!m.is_none(), c.fen);
+    pos.make(m);
+    const LmrMoveFacts f = lmr_move_facts(pos, m);
+    CHECK_MSG(f.piece == c.piece, c.fen << " " << c.move << ": piece " << f.piece);
+    CHECK_MSG(f.threatened == c.threatened, c.fen << " " << c.move << ": threatened " << f.threatened);
+    CHECK_MSG(f.attacks == c.attacks, c.fen << " " << c.move << ": attacks " << f.attacks);
+  }
+}
+
+// The game phase the LMR context reads (Fork's evaluation's own, moved inline
+// into bootstrap_eval.hpp unchanged): python-chess counts 24, 0 and 6 here.
+TEST_CASE("pruning", "game phase: all pieces 24, a pawn ending 0, rook and queen 6") {
+  Position pos;
+  CHECK(pos.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+  CHECK_EQ(game_phase(pos), 24);
+  CHECK(pos.set_fen("4k3/4p3/8/8/8/8/4P3/4K3 w - - 0 1"));
+  CHECK_EQ(game_phase(pos), 0);
+  CHECK(pos.set_fen("4k3/8/8/8/8/8/8/R3K2Q w - - 0 1"));
+  CHECK_EQ(game_phase(pos), 6);
 }
 
 }  // namespace forkeng::test

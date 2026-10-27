@@ -60,6 +60,9 @@ class MoveSelector {
   // pruning, review claim (d)); quiets_filtered() counts the others dropped.
   void keep_quiet_checks();
   int quiets_filtered() const { return quiets_filtered_; }
+  // The moves of the stage being yielded from (for a late quiet: the quiets
+  // generated at this node).
+  int stage_size() const { return static_cast<int>(list_.size()); }
 
   // The stage the last move came from (search statistics only): a stage
   // still being yielded from, or the Make* stage after the TT move.

@@ -231,6 +231,17 @@ class PopulationTests(unittest.TestCase):
         self.assertEqual(len(self.pop.elites('i')), 2)
         self.assertEqual(self.pop.best('i'), (c, 0.6))
 
+    def test_inputs_used_is_a_grid_axis(self):
+        self.assertEqual(population.inputs_used('  return c.depth > 8 ? c.base : 0;'), '-')
+        self.assertEqual(population.inputs_used('  if (c.threatened && c.history < 0) return 1;\n  return 0;'),
+                         'history+threatened')
+        self.assertEqual(population.inputs_used('  return c.historyx + c.phase;'), 'phase')
+        a = self.pop.add(1, 'i', 'r', None, 'residual', '  return c.history < 0;', '')
+        b = self.pop.add(1, 'i', 'r', None, 'residual', '  return c.phase < 8;', '')
+        self.assertTrue(self.pop.offer_elite('i', a, (1.0, 0.01), 0.5))
+        self.assertTrue(self.pop.offer_elite('i', b, (1.0, 0.01), 0.4))  # same behaviour, other inputs
+        self.assertEqual(sorted(cell for cell, _, _ in self.pop.elites('i')), ['4:0:history', '4:0:phase'])
+
     def test_parents_are_seeded(self):
         ids = [self.pop.add(1, 'i', 'r', None, 'residual', str(k), '') for k in range(6)]
         for k, cid in enumerate(ids):

@@ -13,11 +13,6 @@ namespace {
 // docs/ORIGINALITY.md, "Bootstrap evaluation").
 constexpr int MaterialCp[6] = {100, 300, 300, 500, 900, 0};
 
-// Game phase from the non-pawn material left: knights and bishops 1, rooks 2,
-// queens 4, so the starting position is 24 (capped there: promotions can add
-// more). 24 is the middlegame, 0 a pawn ending.
-constexpr int FullPhase = 24;
-constexpr int PhaseWeight[6] = {0, 1, 1, 2, 4, 0};
 
 // Rings around the four centre squares: 0 for d4/e4/d5/e5 up to 3 on the edge.
 int centre_distance(Square s) {
@@ -25,11 +20,6 @@ int centre_distance(Square s) {
   return std::max(f < 4 ? 3 - f : f - 4, r < 4 ? 3 - r : r - 4);
 }
 
-int game_phase(const Position& pos) {
-  int phase = 0;
-  for (PieceType t : {Knight, Bishop, Rook, Queen}) phase += PhaseWeight[t] * popcount(pos.pieces(t));
-  return std::min(phase, FullPhase);
-}
 
 // Fork's own term weights, in centipawns (Phase 3 settles structure, not
 // tuning; Phase 4 replaces this evaluation).

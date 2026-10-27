@@ -129,7 +129,35 @@ struct PlyFrame {
 // the others keep their order (Fork's rule; the PV move is searched first).
 struct RootEntry {
   Move move;
+  std::uint64_t nodes = 0;  // nodes under this move in the current iteration's last pass
+  int share = 0;            // its per mille of the last finished iteration's nodes
 };
+
+// The moved piece's facts for the LMR context, from the position after a
+// quiet move: its type, whether the opponent attacked its square before the
+// move (on the board as it stood then), and whether it now attacks an enemy
+// piece other than a pawn or the king. Inline and pure, so unused facts are
+// never computed. A castling move is read as its king's move.
+struct LmrMoveFacts {
+  int piece;
+  bool threatened;
+  bool attacks;
+};
+inline LmrMoveFacts lmr_move_facts(const Position& after, Move m) {
+  const Color them = after.side_to_move();
+  const Color mover = ~them;
+  const Square from = m.from(), to = m.to();
+  const PieceType type = static_cast<PieceType>(after.piece_at(to) & 7);
+  const Bitboard before = (after.pieces() & ~bb(to)) | bb(from);
+  const Bitboard diagonal = after.pieces(them, Bishop, Queen), straight = after.pieces(them, Rook, Queen);
+  const Bitboard attackers = (pawn_attacks(mover, from) & after.pieces(them, Pawn)) |
+                             (knight_attacks(from) & after.pieces(them, Knight)) |
+                             (bishop_attacks(from, before) & diagonal) | (rook_attacks(from, before) & straight) |
+                             (king_attacks(from) & after.pieces(them, King));
+  const Bitboard reach = type == Pawn ? pawn_attacks(mover, to) : attacks(type, to, after.pieces());
+  const Bitboard targets = after.pieces(them) & ~after.pieces(Pawn) & ~after.pieces(King);
+  return {static_cast<int>(type), attackers != 0, (reach & targets) != 0};
+}
 
 // Debug counters (DESIGN.md §5.2), compiled in only with the CMake option
 // FORK_SEARCH_STATS: they show whether ordering and pruning behave as
@@ -248,6 +276,10 @@ class Searcher {
   Move iteration_best_ = NoMove;
   int iteration_best_score_ = -ScoreInfinite;
   PrincipalLine iteration_pv_;
+  // LMR context inputs kept by the search (lmr_table.hpp): the root score's
+  // last change between iterations, and the share of the current root move.
+  int score_trend_ = 0;
+  int branch_share_ = 0;
   // The last finished iteration's PV, and the first move of the last line
   // reported: a stop after a reported fail repeats the finished iteration,
   // so the last line before bestmove names the move played.

@@ -20,6 +20,20 @@ original.
   preprocessor lines. It runs at every late quiet move of the search.
 - **Deterministic.** The same inputs must give the same output.
 
+## Late move reductions, in general terms
+
+An alpha-beta search orders the moves at a node so that the best ones are
+likely to come first. Moves late in that order rarely turn out best, so the
+search can look at them less deeply first: a reduced, zero-window search
+that only asks whether the move beats the best score so far. If it does,
+the move is searched again at full depth; if not, the saved effort goes to
+the moves that matter. Reducing too much misses good late moves (tactics
+found too late); reducing too little wastes time that a deeper search of
+the main line would use better. Which information predicts that a late move
+is safe to reduce, and by how much, is the open question you are working
+on. No particular engine's rule is the reference here: Fork's own table and
+the inputs below are all you build on.
+
 ## The region: `lmr_correction`
 
 ```cpp
@@ -27,8 +41,19 @@ struct LmrContext {
   int depth;        // remaining depth at the node, in plies (>= LmrMinDepth, 3)
   int move_number;  // the move's number in the order, 1 = first (>= LmrMinMove, 4)
   int base;         // the table's reduction for (depth, move_number), in plies
-  int history;      // the move's butterfly history score, in [-10000, 10000]
+  int history;      // the moving side's butterfly history score for the move, in [-10000, 10000]
   bool on_pv;       // the node is on the principal variation
+  int piece;        // the moved piece: 0 pawn, 1 knight, 2 bishop, 3 rook, 4 queen, 5 king
+  bool threatened;  // the opponent attacked the piece's square before the move (the move may escape a threat)
+  bool attacks;     // from its new square the piece attacks an enemy knight, bishop, rook or queen
+  int quiet_moves;  // the number of quiet moves generated at this node (how many alternatives there are)
+  int phase;        // game phase from the material left: 24 with all pieces, 0 with only kings and pawns
+  int entry_bound;  // this node's transposition-table entry: 0 none, 1 upper bound, 2 lower bound, 3 exact
+  int entry_depth;  // that entry's depth in plies, -1 without an entry
+  int score_trend;  // the root score's change between the last two finished iterations, in centipawns,
+                    // in [-1000, 1000] (negative: the engine's view of its position got worse)
+  int branch_share; // per mille of the last finished iteration's nodes spent under the root move this
+                    // line starts with, 0 to 1000 (0 in the first iteration)
 };
 
 int lmr_correction(const LmrContext& c) {

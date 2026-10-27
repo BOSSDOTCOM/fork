@@ -291,8 +291,21 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // 0 as committed). The move is already made here, so its mover is the
         // side not to move: its history is the mover's.
         const int base = reduction_for(depth, moves_searched + 1);
-        const LmrContext context{depth, moves_searched + 1, base, history_.value(~pos.side_to_move(), m),
-                                 OnPv};
+        const LmrMoveFacts facts = lmr_move_facts(pos, m);
+        const LmrContext context{depth,
+                                 moves_searched + 1,
+                                 base,
+                                 history_.value(~pos.side_to_move(), m),
+                                 OnPv,
+                                 facts.piece,
+                                 facts.threatened,
+                                 facts.attacks,
+                                 f.selector.stage_size(),
+                                 game_phase(pos),
+                                 tt_hit ? static_cast<int>(hit.bound) : 0,
+                                 tt_hit ? static_cast<int>(hit.depth) : -1,
+                                 score_trend_,
+                                 branch_share_};
         const int correction = lmr_correction(context) * LmrCorrectionStrength / 64;
         reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
       }
@@ -454,6 +467,8 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   std::size_t best_index = 0;  // the move that last raised alpha
   for (std::size_t i = 0; i < root_count_; ++i) {
     const Move m = root_moves_[i].move;
+    branch_share_ = root_moves_[i].share;
+    const std::uint64_t nodes_before = nodes_;
     pos.make(m);
     int score;
     if (i == 0 || !switches.use_pvs) {
@@ -463,6 +478,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
       if (score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, 1);
     }
     pos.unmake(m);
+    root_moves_[i].nodes = nodes_ - nodes_before;
     if (stopped_) return best;
     if (score > best) best = score;
     if (m == root_fail_high_ && score < beta) root_fail_high_ = NoMove;  // resolved by its re-search
@@ -619,6 +635,13 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
         report_iteration(result.depth, result.score, 0, finished_pv_);
       break;
     }
+    // The LMR context's iteration inputs: the root score's last change, and
+    // each root move's share of this iteration's nodes for the next one.
+    score_trend_ = depth > 1 ? std::clamp(score - previous, -1000, 1000) : 0;
+    std::uint64_t iteration_nodes = 0;
+    for (std::size_t i = 0; i < root_count_; ++i) iteration_nodes += root_moves_[i].nodes;
+    for (std::size_t i = 0; i < root_count_; ++i)
+      root_moves_[i].share = iteration_nodes ? static_cast<int>(root_moves_[i].nodes * 1000 / iteration_nodes) : 0;
     previous = score;
     result.best = root_moves_[0].move;
     result.score = score;

@@ -1549,6 +1549,44 @@ Choices made while building, where the spec leaves a gap:
     positions take about 36 seconds per candidate; the set is kept whole, since agreement near 60% over 1,170
     positions has a standard error of about 1.4 points, the size of the
     differences worth detecting.
+  - **History input fix** (2026-10-27, b89185f): `LmrContext::history`
+    was read after the move was made, so it held the opponent's score for
+    the move's squares. Found when the pilot's first history-based
+    candidate left bench unchanged. Now the mover's; with that candidate's
+    rule bench changes (16,945,722 nodes). The pilot was restarted.
+  - **Novelty push** (owner, 2026-10-27, for the validation restart):
+    - **New context inputs** (`LmrContext`, documented in the prompt):
+      the moved piece's type, whether its square was attacked before the
+      move (an escape), whether it now attacks an enemy knight, bishop,
+      rook or queen (`lmr_move_facts`, searcher.hpp), the node's quiet-move
+      count (the selector's stage size), the game phase (the evaluation's
+      own, moved inline into `bootstrap_eval.hpp` unchanged), the node's TT
+      bound and depth, the root score's change between the last two
+      finished iterations (clamped to ±1000 cp, a sanity bound on an input
+      only), and the per-mille share of the last finished iteration's
+      nodes spent under the line's root move. Per-move subtree counts exist
+      only at the root, so interior nodes see their root move's share. The
+      committed correction is 0: bench unchanged (17309921 /
+      372dc2e2d8a88e4b). The move facts are checked against python-chess
+      on six constructed positions, and the phase on three (`pruning`
+      suite). Cost, `bench/ab_search.py` in WSL, 8 rounds, same nodes:
+      −1.1% nps with the zero rule (noise threshold 3.3%) and −1.0% with a
+      rule that reads every new input but never fires (threshold 3.0%).
+      Neither is significant. No allocation (stack values; `no_alloc` in
+      the gate). Name checks 31-32: no match for the new names; `tt_bound`
+      and `tt_depth` matched other engines once normalized, so they became
+      `entry_bound` and `entry_depth`. `piece`, `attacks`, `phase` and
+      `threatened` are plain words (kept).
+    - **Inputs used as a grid axis** (`population.inputs_used`): a cell is
+      now mean reduction × re-search share × the set of information inputs
+      the body reads (everything but depth, move number and base). A rule
+      built on new information gets its own niche instead of competing
+      with refinements of the table.
+    - **Explorer**: a third of the candidates (`full_share` 0.3333, 2 of 6
+      per generation), protected for 6 generations (was 3).
+    - **Generic description only**: the shared context explains LMR in
+      general terms and names no engine's rule; the table it describes is
+      Fork's own.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.

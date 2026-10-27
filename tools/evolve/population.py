@@ -7,9 +7,11 @@ SQLite (standard library), one file per run, never committed. Tables:
   audited and resumed;
 - elites: the grid, MAP-Elites style (Mouret and Clune 2015, KB research.md
   §9): one elite per island and cell, a cell being the pair of behaviour
-  descriptors (mean LMR reduction, re-search share) binned; a candidate
-  enters an empty cell or replaces a fitter-proxied occupant only if it is
-  fitter;
+  descriptors (mean LMR reduction, re-search share) binned, plus the
+  context inputs the body reads (the owner, 2026-10-27: rules built on new
+  information get niches of their own instead of competing with the table's
+  refinements); a candidate enters an empty cell or replaces a
+  fitter-proxied occupant only if it is fitter;
 - events: an append-only log (critic rejections with reasons, gate
   failures, budget use, stops).
 Parent selection is seeded and depends only on the database's contents, so
@@ -17,6 +19,7 @@ a run is reproducible.
 """
 import json
 import random
+import re
 import sqlite3
 import time
 
@@ -37,9 +40,23 @@ ReductionBin = 0.25
 ResearchBin = 0.02
 
 
-def cell_of(descriptors):
-    mean_reduction, research_share = descriptors
-    return f'{int(mean_reduction / ReductionBin)}:{int(research_share / ResearchBin)}'
+# The LMR context's information inputs (lmr_table.hpp, LmrContext). depth,
+# move_number and base are left out: nearly every rule reads them, so they
+# would not separate one kind of rule from another.
+InformationInputs = ('history', 'on_pv', 'piece', 'threatened', 'attacks', 'quiet_moves', 'phase', 'entry_bound',
+                     'entry_depth', 'score_trend', 'branch_share')
+_FIELD = re.compile(r'\bc\.([A-Za-z_]\w*)')
+
+
+def inputs_used(body):
+    """The information inputs a region body reads, sorted, joined by '+' ('-' for none)."""
+    fields = set(_FIELD.findall(body))
+    return '+'.join(sorted(f for f in InformationInputs if f in fields)) or '-'
+
+
+def cell_of(descriptors, body=''):
+    mean_reduction, research_share = descriptors[:2]
+    return f'{int(mean_reduction / ReductionBin)}:{int(research_share / ResearchBin)}:{inputs_used(body)}'
 
 
 class Population:
@@ -80,7 +97,7 @@ class Population:
 
     def offer_elite(self, island, cid, descriptors, fitness):
         """Puts candidate `cid` in its cell if the cell is empty or it is fitter; True if it entered."""
-        cell = cell_of(descriptors)
+        cell = cell_of(descriptors, self.get(cid)['body'] or '')
         row = self.db.execute('SELECT fitness FROM elites WHERE island = ? AND cell = ?', (island, cell)).fetchone()
         if row is not None and row[0] >= fitness:
             return False
