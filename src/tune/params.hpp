@@ -30,7 +30,6 @@
 #define FORK_SEARCH_PARAMS(X)             \
   X(AspirationMinDepth, 5, 2, 10, 1)      \
   X(AspirationHalfWidth, 12, 6, 24, 1)    \
-  X(IterationGrowthThirds, 5, 3, 10, 1)   \
   X(RfpMaxDepth, 6, 3, 12, 1)             \
   X(RfpMargin, 80, 40, 160, 6)            \
   X(NullMinDepth, 3, 1, 6, 1)             \
@@ -55,8 +54,7 @@
   X(AssumedMovesLeft, 30, 15, 60, 2)      \
   X(MaxMovesToGo, 40, 20, 80, 3)          \
   X(HardOverSoft, 4, 2, 8, 1)             \
-  X(ReserveDivisor, 10, 5, 20, 1)         \
-  X(ReserveOverheads, 2, 1, 4, 1)
+  X(ReserveDivisor, 10, 5, 20, 1)
 
 // Functions that read a parameter are constexpr only where the parameter is
 // (inline either way: they are defined in headers).
