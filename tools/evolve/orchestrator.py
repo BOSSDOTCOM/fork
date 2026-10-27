@@ -96,13 +96,20 @@ class Loop:
         proxy = proxies.run_proxies(engine, self.labels, cfg['proxy_nodes'])
         desc = self.descriptors(f'cand-{cid}')
         fitness = proxy.fitness()
-        self.pop.update(cid, status='scored', proxies=json.dumps(proxy.__dict__), descriptors=json.dumps(desc),
+        record = dict(proxy.__dict__)
+        base = getattr(self, 'baseline_scores', None)
+        interval = proxies.paired_interval(proxy.per_position, base, self.cfg['seed'] + cid) if base else None
+        if interval:
+            record.update(gain=interval[0], gain_low=interval[1], gain_high=interval[2])
+        self.pop.update(cid, status='scored', proxies=json.dumps(record), descriptors=json.dumps(desc),
                         fitness=fitness)
         entered = self.pop.offer_elite(island, cid, desc, fitness) if place else False
         self.say(generation, 'scored', {'id': cid, 'island': island, 'fitness': round(fitness, 4),
                                         'agreement': round(proxy.agreement, 4),
                                         'score_error': round(proxy.score_error, 1), 'depth': round(proxy.depth, 2),
                                         'descriptors': [round(d, 4) for d in desc], 'elite': entered,
+                                        'gain_interval': [round(x, 4) for x in interval] if interval else None,
+                                        'trigger_rate': round(desc[2], 4) if len(desc) > 2 else None,
                                         'bench': result.bench})
         return fitness
 
@@ -196,9 +203,19 @@ class Loop:
         return None
 
     def promote(self, g, cid, fitness):
-        """Short match and SPRT hand-off for a candidate clearly above the baseline on the proxies."""
+        """Short match and SPRT hand-off for a candidate clearly above the baseline on the proxies:
+        past the margin, with its paired bootstrap interval's low end above zero (beyond the
+        position-sampling noise), and a rule that changes some reductions."""
         cfg = self.cfg
         if fitness < self.baseline_fitness + cfg['promote_margin']:
+            return
+        c = self.pop.get(cid)
+        record, desc = json.loads(c['proxies'] or '{}'), json.loads(c['descriptors'] or '[]')
+        low, trigger = record.get('gain_low'), desc[2] if len(desc) > 2 else None
+        if low is None or low <= 0 or not trigger:
+            self.pop.update(cid, status='within noise: not promoted' if trigger else 'no trigger: not promoted')
+            self.say(g, 'not_promoted', {'id': cid, 'gain': record.get('gain'), 'gain_low': low,
+                                         'gain_high': record.get('gain_high'), 'trigger_rate': trigger})
             return
         if cfg['match']['games'] <= 0:
             self.pop.update(cid, status='promoted (match skipped)')
@@ -276,6 +293,7 @@ class Loop:
         for island in cfg['islands'][1:]:
             self.pop.offer_elite(island, cid, json.loads(self.pop.get(cid)['descriptors']), fitness)
         self.baseline_fitness = fitness
+        self.baseline_scores = json.loads(self.pop.get(cid)['proxies']).get('per_position') or None
         _, out = self.runner.run([str(self.runner.work / f'cand-{cid}' / 'build-stats' / 'fork'), 'bench'],
                                  timeout=900)
         self.statistics = '\n'.join(line for line in out.split('\n') if line.startswith('stats:')) or self.statistics

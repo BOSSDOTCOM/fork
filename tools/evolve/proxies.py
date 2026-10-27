@@ -9,17 +9,23 @@ and is scored by:
   each capped at ErrorCap so one wild position cannot dominate;
 - depth (secondary only, never used alone): the mean depth reached in the
   budget.
+Fitness is the mean of a per-position score (agreement 1 or 0, less the
+capped error / 1000), kept per position so a candidate's gain over the
+baseline gets a paired bootstrap interval over the positions (the owner,
+2026-10-27: a gain counts only beyond that noise).
 Only the "evolve" split is used during evolution; "holdout" is for the final
 check of a survivor. WAC and matetrack are never proxies (owner's spec).
 
 The behaviour descriptors for the population's grid come from a
 FORK_SEARCH_STATS build's bench: the mean reduction of reduced searches and
-the share re-searched at full depth.
+the share re-searched at full depth; the same bench gives the rule's
+trigger rate (the share of LMR sites where it changed the reduction).
 """
 import json
+import random
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 ErrorCap = 400
 
@@ -43,6 +49,7 @@ class ProxyResult:
     agreement: float
     score_error: float
     depth: float
+    per_position: list = field(default_factory=list)  # each position's score; fitness is their mean
 
     def fitness(self):
         """One number for ranking: agreement, less a pawn of mean error per 0.1 of agreement."""
@@ -56,8 +63,23 @@ def measure(answers, labels):
     agree = sum(a.move == r['bm'] for a, r in zip(answers, labels))
     errors = [min(ErrorCap, abs(a.score - r['ce'])) if a.score is not None else ErrorCap
               for a, r in zip(answers, labels)]
+    scores = [round((a.move == r['bm']) - e / 1000.0, 4) for a, r, e in zip(answers, labels, errors)]
     return ProxyResult(len(labels), agree / len(labels), sum(errors) / len(errors),
-                       sum(a.depth for a in answers) / len(answers))
+                       sum(a.depth for a in answers) / len(answers), scores)
+
+
+def paired_interval(candidate, baseline, seed, rounds=2000, level=0.95):
+    """(mean gain, low, high): a percentile bootstrap over positions of the
+    candidate's per-position score less the baseline's on the same positions.
+    Seeded, so a run is reproducible; None without per-position scores."""
+    if not candidate or len(candidate) != len(baseline):
+        return None
+    diffs = [c - b for c, b in zip(candidate, baseline)]
+    n = len(diffs)
+    rng = random.Random(seed)
+    means = sorted(sum(diffs[rng.randrange(n)] for _ in range(n)) / n for _ in range(rounds))
+    tail = (1 - level) / 2
+    return sum(diffs) / n, means[int(tail * rounds)], means[min(rounds - 1, int((1 - tail) * rounds))]
 
 
 class Engine:
@@ -116,13 +138,17 @@ def run_proxies(engine_path, labels, nodes):
 
 _REDUCED = re.compile(r'stats: (\d+) reduced searches, (\d+) re-searched')
 _MEAN = re.compile(r'stats: mean reduction ([0-9.]+) plies')
+_RULE = re.compile(r'stats: LMR rule ran at (\d+) sites, fired at (\d+), changed the reduction at (\d+)')
 
 
 def descriptors(stats_output):
-    """(mean reduction in plies, re-search share) from a stats build's bench output."""
+    """(mean reduction in plies, re-search share, trigger rate) from a stats
+    build's bench output; the grid uses the first two."""
     reduced = _REDUCED.search(stats_output)
     mean = _MEAN.search(stats_output)
-    if not reduced or not mean:
+    rule = _RULE.search(stats_output)
+    if not reduced or not mean or not rule:
         raise ValueError('no LMR statistics in the bench output (not a FORK_SEARCH_STATS build?)')
     searches, researches = int(reduced.group(1)), int(reduced.group(2))
-    return float(mean.group(1)), researches / searches if searches else 0.0
+    sites, changes = int(rule.group(1)), int(rule.group(3))
+    return float(mean.group(1)), researches / searches if searches else 0.0, changes / sites if sites else 0.0

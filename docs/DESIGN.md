@@ -1587,6 +1587,32 @@ Choices made while building, where the spec leaves a gap:
     - **Generic description only**: the shared context explains LMR in
       general terms and names no engine's rule; the table it describes is
       Fork's own.
+  - **Noise estimate and trigger rate** (owner, 2026-10-27, before any
+    promotion): fitness is the mean of a per-position score, kept per
+    position. Each candidate's gain over the baseline gets a paired
+    percentile bootstrap interval over the positions (2,000 rounds, 95%,
+    seeded; `proxies.paired_interval`). The stats build counts the LMR
+    sites where the rule ran, fired (non-zero) and changed the reduction
+    after scaling and clamping (`lmr_rule_*`). The trigger rate is the
+    changed share. Promotion now needs the margin, the interval's low end
+    above zero and a non-zero trigger rate; otherwise the candidate is
+    logged `not_promoted`. Both values are shown on the dashboard.
+    **Measured on the first live candidate** (the stopped run's #2: no
+    extra reduction on PV nodes, threat escapes, attacking moves or
+    positive history; one more ply from move 8 with at least 10 quiets;
+    two with history below −4000 from depth 5): fitness 0.6085 against
+    0.5987, gain **+0.0098, interval [−0.0137, +0.0332]** (three seeds
+    agree to 0.0007). It changes the result at 738 of the 1,170 positions
+    (398 better, 340 worse). It fired at 53% of LMR sites and changed the
+    reduction at **30.0%**. So the gain is within noise: the position set
+    resolves gains of about ±0.023, and the 0.005 margin alone was far
+    below that.
+  - **Castling fix** (CI on be70f48, clang-debug): `lmr_move_facts`
+    read a castling move's target, the rook's square, which can be empty
+    afterwards (an assertion in debug, a junk piece in release). A castling
+    move now reports the king, not threatened (castling is legal only out
+    of check), attacking from its landing square. python-chess case added,
+    which failed first.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.

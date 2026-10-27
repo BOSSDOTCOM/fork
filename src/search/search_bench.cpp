@@ -154,6 +154,9 @@ SearchBenchResult run_search_bench() {
                      : 0.0);
   std::fprintf(stderr, "stats: mean reduction %.3f plies\n",
                c.lmr_searches ? static_cast<double>(c.lmr_plies_sum) / static_cast<double>(c.lmr_searches) : 0.0);
+  std::fprintf(stderr, "stats: LMR rule ran at %llu sites, fired at %llu, changed the reduction at %llu\n",
+               static_cast<unsigned long long>(c.lmr_rule_sites), static_cast<unsigned long long>(c.lmr_rule_fires),
+               static_cast<unsigned long long>(c.lmr_rule_changes));
   std::fprintf(stderr,
                "stats: SEE pruning: good captures %llu (skipped), tested: bad captures %llu, quiets %llu, "
                "other %llu\n",

@@ -135,7 +135,8 @@ class FakeRunner:
         return self.benches.pop(0)
 
     def run(self, cmd, cwd=None, timeout=None):
-        return 0, 'stats: 100 reduced searches, 5 re-searched at full depth (5.0%)\nstats: mean reduction 1.500 plies\n'
+        return 0, ('stats: 100 reduced searches, 5 re-searched at full depth (5.0%)\nstats: mean reduction 1.500 plies\n'
+                   'stats: LMR rule ran at 200 sites, fired at 30, changed the reduction at 20\n')
 
 
 class GateTests(unittest.TestCase):
@@ -196,10 +197,29 @@ class ProxyTests(unittest.TestCase):
         self.assertEqual(proxies.measure([], []).positions, 0)
 
     def test_descriptors(self):
-        out = 'x\nstats: 2000 reduced searches, 10 re-searched at full depth (0.5%)\nstats: mean reduction 1.250 plies\n'
-        self.assertEqual(proxies.descriptors(out), (1.25, 0.005))
+        out = ('x\nstats: 2000 reduced searches, 10 re-searched at full depth (0.5%)\nstats: mean reduction 1.250 plies\n'
+               'stats: LMR rule ran at 4000 sites, fired at 900, changed the reduction at 400\n')
+        self.assertEqual(proxies.descriptors(out), (1.25, 0.005, 0.1))
+        with self.assertRaises(ValueError):  # a build without the trigger counters
+            proxies.descriptors(out.split('stats: LMR rule')[0])
         with self.assertRaises(ValueError):
             proxies.descriptors('nodes 1\n')
+
+    def test_paired_interval(self):
+        base = [0.0, 1.0] * 50
+        same = proxies.paired_interval(base, base, 1)
+        self.assertEqual(same, (0.0, 0.0, 0.0))
+        better = proxies.paired_interval([1.0] * 100, base, 1)  # +1 on half the positions
+        self.assertAlmostEqual(better[0], 0.5)
+        self.assertTrue(0.35 < better[1] < 0.5 < better[2] < 0.65)
+        noisy = proxies.paired_interval([1.0, 0.0] * 50, [0.0, 1.0] * 50, 1)  # +1, -1 alternately: no gain
+        self.assertTrue(noisy[1] < 0 < noisy[2])
+        self.assertEqual(proxies.paired_interval([1.0], base, 1), None)  # different position sets
+        self.assertEqual(proxies.paired_interval(base, base[::-1], 5), proxies.paired_interval(base, base[::-1], 5))
+        r = proxies.measure([proxies.Answer('e2e4', 10, 5), proxies.Answer('d2d4', None, 5)],
+                            [{'bm': 'e2e4', 'ce': 30}, {'bm': 'e2e4', 'ce': 0}])
+        self.assertEqual(r.per_position, [0.98, -0.4])
+        self.assertAlmostEqual(r.fitness(), sum(r.per_position) / 2)
 
     def test_load_positions_splits(self):
         with tempfile.NamedTemporaryFile('w', suffix='.jsonl', delete=False) as f:
@@ -341,7 +361,8 @@ class OrchestratorTests(unittest.TestCase):
                         'match': dict(cfg['match'], games=0)})
             fitness = iter([0.30, 0.31, 0.29])
             real = proxies.run_proxies
-            proxies.run_proxies = lambda engine, labels, nodes: proxies.ProxyResult(1, next(fitness), 0.0, 9.0)
+            proxies.run_proxies = lambda engine, labels, nodes: (
+                lambda f: proxies.ProxyResult(1, f, 0.0, 9.0, [f]))(next(fitness))
             try:
                 runner = FakeRunner(Path(tmp) / 'work', benches=[{'nodes': '1', 'signature': 's'}] * 20)
                 loop = orchestrator.Loop(cfg, Path(tmp) / 'run', orchestrator.dry_run_agent(), runner)

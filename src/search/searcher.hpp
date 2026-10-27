@@ -137,7 +137,8 @@ struct RootEntry {
 // quiet move: its type, whether the opponent attacked its square before the
 // move (on the board as it stood then), and whether it now attacks an enemy
 // piece other than a pawn or the king. Inline and pure, so unused facts are
-// never computed. A castling move is read as its king's move.
+// never computed. A castling move is read as its king's move: it is encoded
+// king to rook square, so its target square may be empty afterwards.
 struct LmrMoveFacts {
   int piece;
   bool threatened;
@@ -146,16 +147,19 @@ struct LmrMoveFacts {
 inline LmrMoveFacts lmr_move_facts(const Position& after, Move m) {
   const Color them = after.side_to_move();
   const Color mover = ~them;
+  const Bitboard targets = after.pieces(them) & ~after.pieces(Pawn) & ~after.pieces(King);
+  // Castling is legal only out of check, so the king's square was not
+  // attacked; the king now stands on its landing square.
+  if (m.is_castle()) return {King, false, (king_attacks(after.king_square(mover)) & targets) != 0};
   const Square from = m.from(), to = m.to();
   const PieceType type = static_cast<PieceType>(after.piece_at(to) & 7);
   const Bitboard before = (after.pieces() & ~bb(to)) | bb(from);
   const Bitboard diagonal = after.pieces(them, Bishop, Queen), straight = after.pieces(them, Rook, Queen);
-  const Bitboard attackers = (pawn_attacks(mover, from) & after.pieces(them, Pawn)) |
-                             (knight_attacks(from) & after.pieces(them, Knight)) |
-                             (bishop_attacks(from, before) & diagonal) | (rook_attacks(from, before) & straight) |
-                             (king_attacks(from) & after.pieces(them, King));
+  const Bitboard attackers =
+      (pawn_attacks(mover, from) & after.pieces(them, Pawn)) |
+      (knight_attacks(from) & after.pieces(them, Knight)) | (bishop_attacks(from, before) & diagonal) |
+      (rook_attacks(from, before) & straight) | (king_attacks(from) & after.pieces(them, King));
   const Bitboard reach = type == Pawn ? pawn_attacks(mover, to) : attacks(type, to, after.pieces());
-  const Bitboard targets = after.pieces(them) & ~after.pieces(Pawn) & ~after.pieces(King);
   return {static_cast<int>(type), attackers != 0, (reach & targets) != 0};
 }
 
@@ -178,6 +182,12 @@ struct SearchCounters {
   std::uint64_t lmr_searches = 0;
   std::uint64_t lmr_researches = 0;
   std::uint64_t lmr_plies_sum = 0;  // plies taken off by reductions (the loop's mean-reduction descriptor)
+  // The heuristic-discovery rule (lmr_correction, idea 23): the LMR sites it
+  // ran at, those where it returned non-zero, and those where that changed
+  // the reduction after scaling and clamping (the loop's trigger rate).
+  std::uint64_t lmr_rule_sites = 0;
+  std::uint64_t lmr_rule_fires = 0;
+  std::uint64_t lmr_rule_changes = 0;
   // Quiet cutoffs at non-PV nodes out of check, by remaining depth (1-6) and
   // the cutting move's index among the quiets searched there (the late move
   // pruning measurement, DESIGN.md §5.2 deliverable 6).

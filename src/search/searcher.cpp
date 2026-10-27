@@ -306,8 +306,14 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                                  tt_hit ? static_cast<int>(hit.depth) : -1,
                                  score_trend_,
                                  branch_share_};
-        const int correction = lmr_correction(context) * LmrCorrectionStrength / 64;
+        const int rule = lmr_correction(context);
+        const int correction = rule * LmrCorrectionStrength / 64;
         reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
+#ifdef FORK_SEARCH_STATS
+        ++counters.lmr_rule_sites;
+        counters.lmr_rule_fires += rule != 0;
+        counters.lmr_rule_changes += reduced != std::clamp(new_depth - base, 1, new_depth);
+#endif
       }
       score = -negamax<false>(-alpha - 1, -alpha, reduced, ply + 1);
 #ifdef FORK_SEARCH_STATS

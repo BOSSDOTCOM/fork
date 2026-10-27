@@ -156,15 +156,18 @@ def _islands(elites, by_id, state, base_fit):
 def _top(cands, base_fit, limit=15):
     scored = sorted((c for c in cands if c['fitness'] is not None), key=lambda c: -c['fitness'])[:limit]
     out = [f'<h2>Top candidates</h2><div class="scroll"><table><tr><th>#</th><th>Gen</th><th>Island</th>'
-           f'<th>Mode</th><th>Fitness</th><th>Agreement</th><th>Score error</th><th>Depth</th>'
-           f'<th>Descriptors</th><th>Status</th><th>Rationale and code</th></tr>']
+           f'<th>Mode</th><th>Fitness</th><th>Gain (95% interval)</th><th>Trigger</th><th>Agreement</th>'
+           f'<th>Score error</th><th>Depth</th><th>Descriptors</th><th>Status</th><th>Rationale and code</th></tr>']
     for c in scored:
         p = _json(c['proxies'])
         desc = _json(c['descriptors'])
-        desc_txt = ', '.join(f'{d:.3f}' for d in desc) if isinstance(desc, list) else ''
+        desc_txt = ', '.join(f'{d:.3f}' for d in desc[:2]) if isinstance(desc, list) else ''
+        gain = (f'{p["gain"]:+.4f} [{p["gain_low"]:+.4f}, {p["gain_high"]:+.4f}]' if 'gain_low' in p else '')
+        trigger = f'{100 * desc[2]:.2f}%' if isinstance(desc, list) and len(desc) > 2 else ''
         cls = '' if base_fit is None else ('good' if c['fitness'] > base_fit else 'bad' if c['fitness'] < base_fit else '')
         out.append(f'<tr><td class="num">{c["id"]}</td><td class="num">{c["generation"]}</td><td>{esc(c["island"])}</td>'
                    f'<td>{esc(c["mode"])}</td><td class="num {cls}">{c["fitness"]:.4f}</td>'
+                   f'<td class="num">{gain}</td><td class="num">{trigger}</td>'
                    f'<td class="num">{p.get("agreement", 0):.3f}</td><td class="num">{p.get("score_error", 0):.1f}</td>'
                    f'<td class="num">{p.get("depth", 0):.2f}</td><td class="num">{desc_txt}</td><td>{esc(c["status"])}</td>'
                    f'<td>{esc((c["rationale"] or "")[:300])}<details><summary>code</summary><pre>{esc(c["body"])}</pre>'

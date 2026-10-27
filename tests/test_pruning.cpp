@@ -229,7 +229,8 @@ TEST_CASE("pruning", "LMR move facts: piece, threatened before the move, attacks
                              FactsCase{"r3k3/8/8/8/8/8/8/R3K3 w - - 0 1", "a1a2", 3, true, true},
                              FactsCase{"4k3/8/8/8/8/8/8/4K3 w - - 0 1", "e1d1", 5, false, false},
                              FactsCase{"4k3/8/8/2n5/8/3P4/8/4K3 w - - 0 1", "d3d4", 0, true, true},
-                             FactsCase{"4k3/8/8/8/3n4/4P3/8/4K3 b - - 0 1", "d4b5", 1, true, false}}) {
+                             FactsCase{"4k3/8/8/8/3n4/4P3/8/4K3 b - - 0 1", "d4b5", 1, true, false},
+                             FactsCase{"4k3/8/8/8/8/8/7r/4K2R w K - 0 1", "e1g1", 5, false, true}}) {
     Position pos;
     CHECK(pos.set_fen(c.fen));
     const Move m = pos.parse_uci(c.move);
