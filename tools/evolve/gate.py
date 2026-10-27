@@ -114,7 +114,7 @@ class Runner:
             code, out = self.run([str(engine), 'perft', '4', fen], timeout=300)
             if code != 0:
                 return None
-            lines.append(out.strip().split('\n')[-1])
+            lines.append(perft_count(out))
         return lines
 
     def suites(self, build):
@@ -128,6 +128,14 @@ class Runner:
             return None
         fields = dict(line.split(None, 1) for line in out.strip().split('\n') if ' ' in line)
         return {'nodes': fields.get('nodes', '').strip(), 'signature': fields.get('signature', '').strip()}
+
+
+def perft_count(output):
+    """The `nodes N` line of `fork perft` (its time and nps lines vary run to run)."""
+    for line in output.split('\n'):
+        if line.startswith('nodes '):
+            return line.strip()
+    return None
 
 
 # Standard perft positions: the start position and Kiwipete (as in

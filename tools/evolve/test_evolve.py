@@ -155,6 +155,14 @@ class GateTests(unittest.TestCase):
         self.assertEqual(result.step, 'done')
         self.assertEqual([c[0] for c in runner.calls], ['tree', 'build', 'perft', 'suites', 'bench', 'bench'])
 
+    def test_perft_count_ignores_timing(self):
+        # Found by the first dry run: the last line (nps) varies, the count does not.
+        out = 'nodes 197281\ntime 0.0011 s\nnps 175641915\n'
+        self.assertEqual(gate.perft_count(out), 'nodes 197281')
+        self.assertEqual(gate.perft_count(out.replace('0.0011', '0.0042').replace('175641915', '46971666')),
+                         'nodes 197281')
+        self.assertIsNone(gate.perft_count('error\n'))
+
     def test_static_stops_before_building(self):
         result, runner = self.gate(body='  return int(0.5);')
         self.assertEqual((result.passed, result.step), (False, 'static'))

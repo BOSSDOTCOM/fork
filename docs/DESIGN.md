@@ -1494,6 +1494,23 @@ Choices made while building, where the spec leaves a gap:
     everything and a gate without its determinism check each fail).
     Name check 26: no match, except the plain words `Loop`, `Population`,
     `Budget` and `Span` as Python class names (kept).
+  - **Dry run** (2026-10-26, one generation, stub agents, real builds,
+    gates and proxies on all 1,170 evolve positions, in WSL at nice 19
+    beside an SPRT; about 10 minutes): the baseline passed its gate with
+    bench equal to the committed one (the zero correction is exact), fitness
+    0.4462 (agreement 48.3%, score error 36.7 cp, depth 7.43), descriptors
+    1.726 plies mean reduction and 0.54% re-searched. The scripted
+    proposals each took their intended path: one ply more at depth 8 and
+    beyond passed the gate (bench 17100087) with proxies identical to the
+    baseline's; one ply less on PV nodes and strong-history moves passed
+    with fitness 0.4441 (not an elite: same cell, less fit); a body that
+    does not compile stopped at the build; a floating-point rule was
+    rejected by the critic and, audited, stopped at the static rules. The
+    first dry run had found a harness bug (the gate compared perft's
+    varying nps line instead of its count; fixed, with a test).
+    **Finding for the pilot:** at 20,000 nodes the proxies search to about
+    depth 7.4, so a change that acts from depth 8 is invisible to them; the
+    pilot's node budget must reach the depths a region acts at.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.

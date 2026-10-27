@@ -245,15 +245,11 @@ class Loop:
             raise RuntimeError('the baseline does not build: ' + log[-500:])
         self.baseline_perft = self.runner.perft(build / 'fork')
         cid = self.pop.add(0, 'baseline', 'baseline', None, 'residual', body, 'the committed region')
-        fitness = None
-        for island in cfg['islands']:
-            if fitness is None:
-                fitness = self.evaluate(0, cid, island, body)
-            else:
-                c = self.pop.get(cid)
-                self.pop.offer_elite(island, cid, json.loads(c['descriptors']), fitness)
+        fitness = self.evaluate(0, cid, cfg['islands'][0], body)
         if fitness is None:
             raise RuntimeError('the baseline fails its own gate')
+        for island in cfg['islands'][1:]:
+            self.pop.offer_elite(island, cid, json.loads(self.pop.get(cid)['descriptors']), fitness)
         self.baseline_fitness = fitness
         _, out = self.runner.run([str(self.runner.work / f'cand-{cid}' / 'build-stats' / 'fork'), 'bench'],
                                  timeout=900)
@@ -321,7 +317,10 @@ def main():
         print('LIVE loop: real agents and tokens (owner approval required: deliverable 8c).', flush=True)
     else:
         agent = dry_run_agent()
-        cfg['critic_audit_share'] = 1.0  # the dry run gates every rejected proposal too
+        # The stub's script: one proposal from each of four islands, each a
+        # different funnel outcome; every rejected proposal is gated too.
+        cfg.update(islands=['proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer'],
+                   per_island=1, critic_audit_share=1.0)
     runner = gate.Runner(cfg['repo'], run_dir / 'work', jobs=cfg.get('jobs', 4), test_cache=cfg.get('test_cache'))
     loop = Loop(cfg, run_dir, agent, runner)
     reason = loop.run(a.generations or cfg['generations'])
