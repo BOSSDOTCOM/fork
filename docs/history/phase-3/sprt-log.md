@@ -1,5 +1,7 @@
 # Phase 3 SPRT log
 
+Commit hashes from before the 2026-10-27 path rewrite (cited in some entries and commit messages) map to the current ones in [path-rewrite-2026-10-27.md](path-rewrite-2026-10-27.md).
+
 Every SPRT of Phase 3, in the order run, rejections included (DESIGN.md
 §5.2, "Testing setup"). Entries are appended by `tools/sprt.sh`: fastchess
 alpha 1.8.2, normalized Elo, pentanomial statistics, alpha = beta = 0.05,
