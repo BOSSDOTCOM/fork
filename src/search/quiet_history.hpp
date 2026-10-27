@@ -22,16 +22,24 @@
 #include <cstdlib>
 
 #include "core/types.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng {
 
 // Fork's scale and bonus (justified in DESIGN.md §5.2, "Search constants").
+// The scale stays a constant (the int16 headroom depends on it); the bonus's
+// factor and cap are in the parameter table: HistoryBonusFactor = 25 (half
+// the factor of depth^2) and HistoryBonusCap = HistoryMax / 8, reached at
+// depth 10.
 constexpr int HistoryMax = 10000;
-constexpr int HistoryBonusCap = HistoryMax / 8;  // reached at depth 10
+#ifndef FORK_TUNE
+static_assert(HistoryBonusCap <= HistoryMax);  // tuning builds: its range's top (tests/test_params.cpp)
+#endif
 
-// The bonus for a cutoff at `depth`: 12.5 * depth^2, capped.
-constexpr int bonus_for_depth(int depth) {
-  const int quadratic = depth * depth * 25 / 2;
+// The bonus for a cutoff at `depth`: HistoryBonusFactor / 2 * depth^2 (12.5),
+// capped.
+FORK_TUNABLE_CONSTEXPR int bonus_for_depth(int depth) {
+  const int quadratic = depth * depth * HistoryBonusFactor / 2;
   return quadratic > HistoryBonusCap ? HistoryBonusCap : quadratic;
 }
 

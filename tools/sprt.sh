@@ -117,6 +117,10 @@ fi
   echo
   echo "### $stamp $name"
   echo
+  # Options may hold paths under the home folder: the log is public, so it
+  # names them from ~ (no user name in the repository, 2026-10-24 rule).
+  BASE_OPTS=${BASE_OPTS//$HOME/\~}
+  TEST_OPTS=${TEST_OPTS//$HOME/\~}
   echo "- base \`$(git -C "$repo" rev-parse --short "$base^{commit}")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test^{commit}")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-10}, $adjudication_note${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
   echo "- Verdict: **$verdict**; cap $MAX_GAMES games."
   echo '```'

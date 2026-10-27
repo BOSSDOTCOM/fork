@@ -4,15 +4,18 @@
 // tools/check_search_positions.py.
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
 #include "eval/eval.hpp"
 #include "harness.hpp"
+#include "search/search_bench.hpp"
 #include "search/searcher.hpp"
 #include "search/see.hpp"
 #include "search/time_budget.hpp"
@@ -406,6 +409,67 @@ TEST_CASE("time_budget", "movetime, sudden death, increment, movestogo, extreme 
 
 }  // namespace forkeng::test
 
+namespace forkeng::test {
+
+// Deliverable 8 (first external review, claim (b)): three quarters of the
+// increment, multiplied before dividing, so small increments count exactly.
+TEST_CASE("time_budget", "the increment adds exactly three quarters of itself, small ones included") {
+  ClockInput base;
+  base.remaining_ms = 600000;  // ten minutes: the cap never binds
+  base.overhead_ms = 100;
+  const std::int64_t without = plan_time(base).soft_ms;
+  for (std::int64_t inc = 1; inc <= 40; ++inc) {
+    ClockInput c = base;
+    c.increment_ms = inc;
+    CHECK_MSG(plan_time(c).soft_ms - without == inc * 3 / 4, "increment " << inc << " ms");
+  }
+}
+
+// Deliverable 8, variant B2: one more Move Overhead of reserve inside the
+// danger zone (less than two overheads plus an increment left), and only a
+// tenth of the clock outside it.
+TEST_CASE("time_budget", "an extra overhead of reserve only in the danger zone") {
+  for (std::int64_t remaining : {150, 250, 300, 319, 320, 500, 1000, 2000}) {
+    for (std::int64_t inc : {0, 20, 80}) {
+      ClockInput c;
+      c.remaining_ms = remaining;
+      c.increment_ms = inc;
+      c.overhead_ms = 100;
+      const TimeBudget t = plan_time(c);
+      const std::int64_t available = remaining - 100;
+      const bool zone = available < 200 + inc;
+      const std::int64_t reserve = zone ? std::max<std::int64_t>(available / 10, 100) : available / 10;
+      CHECK_MSG(t.hard_ms <= std::max<std::int64_t>(1, available - reserve), remaining << " ms + " << inc);
+      if (zone && available <= 100) CHECK_MSG(t.hard_ms == 1, remaining << " ms + " << inc);
+    }
+  }
+}
+
+// Deliverable 8, Milestone A's time loss: at 2+0.02 under full load the
+// clock drained to about the Move Overhead, each move then cost about the
+// increment in latency (16-20 ms measured), and one longer stall flagged. A
+// simulated game where Fork always spends its whole hard limit (the worst
+// case) with 18 ms of latency per move: once the clock has settled, one
+// 150 ms stall must not run it out (fault-injected: with only a tenth of the
+// clock in reserve, deliverable 8a, the clock settles near one overhead and
+// the stall flags).
+TEST_CASE("time_budget", "a low clock keeps enough reserve to survive a stall") {
+  std::int64_t clock = 2000;
+  std::int64_t lowest = clock;
+  for (int move = 0; move < 300; ++move) {
+    ClockInput c;
+    c.remaining_ms = clock;
+    c.increment_ms = 20;
+    c.overhead_ms = 100;
+    const std::int64_t latency = move == 250 ? 150 : 18;
+    clock += 20 - plan_time(c).hard_ms - latency;
+    lowest = std::min(lowest, clock);
+  }
+  CHECK_MSG(lowest > 0, "the clock ran out (lowest " << lowest << " ms)");
+}
+
+}  // namespace forkeng::test
+
 // ---- Adversarial review of deliverable 2 (uncommitted; failing tests) ----
 namespace forkeng::test {
 
@@ -440,30 +504,121 @@ struct LastReport final : SearchListener {
 }  // namespace
 
 // The last info line the GUI sees before bestmove (session.cpp prints no
-// other line when an iteration finished) should name the move played.
+// other line when an iteration finished) should name the move played. Run
+// twice: as the engine plays (fail lines only after a second), and with every
+// aspiration fail reported. The second found a gap (2026-10-27): a stop during
+// the re-search after a reported fail left that fail as the last line (a fail
+// low has no PV; a fail high names a move that is not played). It first showed
+// under heavy load, when a node-limited debug search took over a second.
 TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV starts with the best move") {
+  for (const std::int64_t fail_report_ms : {std::int64_t{1000}, std::int64_t{0}}) {
+    TestHash store;
+    auto searcher = std::make_unique<Searcher>(store.table);
+    searcher->fail_report_ms = fail_report_ms;
+    const std::atomic<bool> stop{false};
+    int mismatches = 0, tried = 0;
+    for (const PerftPosition& p : perft_suite()) {
+      for (std::uint64_t nodes = 2000; nodes <= 200000 && mismatches == 0; nodes += 9973) {
+        Position pos;
+        CHECK(pos.set_fen(p.fen));
+        SearchQuota limits;
+        limits.nodes = nodes;
+        LastReport rep;
+        const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &rep);
+        ++tried;
+        if (r.depth > 0 && !(rep.first == r.best)) {
+          ++mismatches;
+          CHECK_MSG(false, p.fen << " nodes " << nodes << ": last info pv " << pos.move_to_uci(rep.first)
+                                 << " score " << rep.score << ", bestmove " << pos.move_to_uci(r.best)
+                                 << " score " << r.score << " (fail reports after " << fail_report_ms
+                                 << " ms)");
+        }
+      }
+    }
+    CHECK(tried > 0);
+  }
+}
+
+// The policy for a stop during a root fail high's re-search (owner,
+// 2026-10-26): the fail high is not trusted, and the previous iteration's
+// move is kept. External review claim (a) proposed playing it; that lost
+// -14.6 +/- 10.8 Elo at STC (sprt-log.md rv-failhigh) and was reverted.
+// Node-limited searches over the bench positions (search_bench.cpp, sourced
+// there) stop at many different points; wherever one stops with a fail high
+// unresolved whose move differs from the last finished iteration's best
+// (found by re-running the search to that depth, which repeats those
+// iterations exactly), that move must not be the one played. At least one
+// such stop must occur, or the test proves nothing.
+TEST_CASE("search", "a stop during a root fail high's re-search keeps the previous iteration's move") {
+  Fixture fx;
+  auto fresh_search = [&](std::string_view fen, const SearchQuota& q) {
+    fx.store.clear();
+    fx.searcher->clear_history();
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    return fx.search(pos, q);
+  };
+  int distinct_fail_highs = 0;
+  // The first bench positions are the perft suite (perft position 6 stopped
+  // at 4,991 nodes with g5f6 failed high and c3d5 the previous best).
+  const std::size_t positions = Optimized ? 10 : 6;
+  for (std::size_t i = 0; i < positions; ++i) {
+    const std::string_view fen = search_bench_fens()[i];
+    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
+      SearchQuota q;
+      q.nodes = nodes;
+      const SearchResult r = fresh_search(fen, q);
+      const Move pending = fx.searcher->unresolved_fail_high();
+      if (pending.is_none() || r.depth == 0) continue;
+      SearchQuota to_depth;
+      to_depth.depth = r.depth;
+      const Move previous_best = fresh_search(fen, to_depth).best;
+      if (pending == previous_best) continue;
+      ++distinct_fail_highs;
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      CHECK_MSG(r.best != pending, fen << " at " << nodes << " nodes: played the unconfirmed fail high "
+                                       << pos.move_to_uci(pending) << " (previous best "
+                                       << pos.move_to_uci(previous_best) << ")");
+    }
+  }
+  CHECK_MSG(distinct_fail_highs > 0, "no search stopped with a distinct fail high unresolved");
+}
+
+}  // namespace forkeng::test
+
+namespace forkeng::test {
+namespace {
+// Pauses once, after the iteration of one depth, so the elapsed time jumps.
+struct PausingListener final : SearchListener {
+  int pause_after = 0;
+  std::chrono::milliseconds pause{0};
+  void on_iteration(const Position&, const IterationReport& r) override {
+    if (r.depth == pause_after) std::this_thread::sleep_for(pause);
+  }
+};
+}  // namespace
+
+// Deliverable 8, variant (c): no iteration starts that would probably not
+// finish before the hard limit (elapsed * 5/3 past it). With soft = hard =
+// 90 ms and a 60 ms pause after depth 3, the rule stops at depth 3
+// (60 * 5/3 > 90); without it, depth 4 from the start position starts, as
+// the soft limit is not reached, and finishes long before the hard limit
+// (fault-injected).
+TEST_CASE("search", "an iteration that would not finish before the hard limit is not started") {
   TestHash store;
   auto searcher = std::make_unique<Searcher>(store.table);
   const std::atomic<bool> stop{false};
-  int mismatches = 0, tried = 0;
-  for (const PerftPosition& p : perft_suite()) {
-    for (std::uint64_t nodes = 2000; nodes <= 200000 && mismatches == 0; nodes += 9973) {
-      Position pos;
-      CHECK(pos.set_fen(p.fen));
-      SearchQuota limits;
-      limits.nodes = nodes;
-      LastReport rep;
-      const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &rep);
-      ++tried;
-      if (r.depth > 0 && !(rep.first == r.best)) {
-        ++mismatches;
-        CHECK_MSG(false, p.fen << " nodes " << nodes << ": last info pv " << pos.move_to_uci(rep.first)
-                               << " score " << rep.score << ", bestmove " << pos.move_to_uci(r.best)
-                               << " score " << r.score);
-      }
-    }
-  }
-  CHECK(tried > 0);
+  Position pos;
+  CHECK(pos.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+  SearchQuota limits;
+  limits.depth = 5;
+  limits.soft_ms = 90;
+  limits.hard_ms = 90;
+  PausingListener listener;
+  listener.pause_after = 3;
+  listener.pause = std::chrono::milliseconds{60};
+  const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &listener);
+  CHECK_EQ(r.depth, 3);
 }
-
 }  // namespace forkeng::test

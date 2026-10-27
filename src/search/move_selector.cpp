@@ -10,8 +10,14 @@ namespace forkeng {
 
 namespace {
 
-// Evasion order: captures and promotions above every quiet move.
-constexpr int EvasionCaptureBase = 1 << 20;
+// Evasion order: captures and promotions above every quiet move, whose
+// history value is at most HistoryMax. With the largest victim-attacker
+// score, (queen + queen promotion) * 8, every score fits the int16 score
+// array (review claim (e), 2026-10-26: the array was int, 1,292 bytes).
+constexpr int EvasionCaptureBase = HistoryMax + 1;
+constexpr int LargestVictimAttackerScore = (900 + 900) * 8;
+static_assert(EvasionCaptureBase + LargestVictimAttackerScore <= INT16_MAX);
+static_assert(-HistoryMax >= INT16_MIN);
 
 // Most valuable victim first, then least valuable attacker; a promotion
 // counts its gain as part of the victim.
@@ -32,6 +38,8 @@ void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHist
   quiesce_ = false;
   see_filter_ = false;
   quiets_stopped_ = false;
+  quiet_checks_only_ = false;
+  quiets_filtered_ = 0;
   deferred_.count = 0;
   deferred_next_ = 0;
   tt_move_ = !tt_move.is_none() && pos.is_pseudo_legal(tt_move) && pos.is_legal(tt_move) ? tt_move : NoMove;
@@ -53,22 +61,42 @@ void MoveSelector::start_quiesce(const Position& pos, Move tt_move, bool see_fil
 }
 
 void MoveSelector::score_captures() {
-  for (std::size_t i = 0; i < list_.size(); ++i) scores_[i] = victim_attacker_score(*pos_, list_[i]);
+  for (std::size_t i = 0; i < list_.size(); ++i)
+    scores_[i] = static_cast<std::int16_t>(victim_attacker_score(*pos_, list_[i]));
 }
 
 void MoveSelector::score_quiets() {
   const Color us = pos_->side_to_move();
-  for (std::size_t i = 0; i < list_.size(); ++i) scores_[i] = history_ ? history_->value(us, list_[i]) : 0;
+  for (std::size_t i = 0; i < list_.size(); ++i)
+    scores_[i] = static_cast<std::int16_t>(history_ ? history_->value(us, list_[i]) : 0);
 }
 
 void MoveSelector::score_evasions() {
   const Color us = pos_->side_to_move();
   for (std::size_t i = 0; i < list_.size(); ++i) {
     const Move m = list_[i];
-    scores_[i] = m.is_capture() || m.is_promotion() ? EvasionCaptureBase + victim_attacker_score(*pos_, m)
-                 : history_                         ? history_->value(us, m)
-                                                    : 0;
+    scores_[i] = static_cast<std::int16_t>(m.is_capture() || m.is_promotion()
+                                               ? EvasionCaptureBase + victim_attacker_score(*pos_, m)
+                                           : history_ ? history_->value(us, m)
+                                                      : 0);
   }
+}
+
+void MoveSelector::keep_quiet_checks() {
+  quiet_checks_only_ = true;
+  if (stage_ != SelectorStage::Quiets) return;  // later quiets are filtered when generated
+  // Quiets already generated and scored: keep the checking ones not yet
+  // yielded (with their scores), in their current order.
+  std::size_t kept = next_;
+  for (std::size_t i = next_; i < list_.size(); ++i) {
+    if (pos_->gives_check(list_[i])) {
+      list_.moves[kept] = list_[i];
+      scores_[kept++] = scores_[i];
+    } else if (list_[i] != tt_move_) {
+      ++quiets_filtered_;
+    }
+  }
+  list_.count = kept;
 }
 
 // Partial selection sort: the best remaining move (the lowest current index
@@ -121,6 +149,17 @@ Move MoveSelector::take_next() {
         if (quiets_stopped_) break;
         list_.count = 0;
         generate<GenMode::Quiets>(*pos_, list_);
+        if (quiet_checks_only_) {
+          // Keep the checking quiets, in generation order; the TT move stays
+          // out as before (it is skipped when yielded).
+          std::size_t kept = 0;
+          for (std::size_t i = 0; i < list_.size(); ++i)
+            if (pos_->gives_check(list_[i]))
+              list_.moves[kept++] = list_[i];
+            else if (list_[i] != tt_move_)
+              ++quiets_filtered_;
+          list_.count = kept;
+        }
         score_quiets();
         next_ = 0;
         stage_ = SelectorStage::Quiets;

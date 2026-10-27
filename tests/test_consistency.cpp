@@ -84,6 +84,12 @@ void check_node(Position& pos, const MoveList& legal, const MoveList* parent) {
     CHECK_MSG(predicted_key == pos.key(), "predicted_key, " << fen << " " << m.raw());
     pos.unmake(m);
   }
+  if (!pos.in_check()) {  // the null move's key, for its TT prefetch
+    const Key predicted_null = pos.predicted_null_key();
+    pos.make_null();
+    CHECK_MSG(predicted_null == pos.key(), "predicted_null_key, " << fen);
+    pos.unmake_null();
+  }
   if (parent)
     for (Move m : *parent)
       CHECK_MSG(accepts(pos, m) == legal.contains(m), "parent move, " << fen << " raw " << m.raw());

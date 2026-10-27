@@ -66,6 +66,17 @@ struct SearchSwitches {
   // TT victims ranked by depth minus two plies per search of age instead of
   // current-search-first (owner's experiment, 2026-10-26; off by default).
   bool tt_age_blend = false;
+  // An exact TT entry is not replaced by a bound of the same depth from the
+  // same search (review 2, claim (e), 2026-10-26; off by default).
+  bool tt_keep_exact = false;
+  // Pruning decisions use the static eval corrected by the TT score's bound
+  // (review 2, claim (d); KB T50). On by default since 2026-10-26, provisionally
+  // (owner): its SPRT was stopped undecided, so the end-of-Phase-3 removal round
+  // verifies it, at 40+0.4 too.
+  bool use_tt_eval_refine = true;
+  // Syzygy endgame tables, when loaded (deliverable 7): win/draw/loss probes
+  // in the search and the ranking of root moves.
+  bool use_tables = true;
   // Tests only: a TT entry cuts only at exactly the depth it was searched
   // to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
@@ -92,6 +103,7 @@ struct IterationReport {
   std::int64_t elapsed_ms;
   int fill_permille;
   const PrincipalLine* pv;
+  std::uint64_t table_hits;  // successful endgame-table probes so far (UCI tbhits)
 };
 
 // Receives one report per finished iteration (and per reported aspiration
@@ -107,7 +119,6 @@ class SearchListener {
 // One ply of the search stack.
 struct PlyFrame {
   MoveSelector selector;
-  MoveList moves;           // scratch: root moves, the 50-move mate check
   MoveList failed_quiets;   // quiet moves searched here without a cutoff (the malus)
   int static_eval;          // ScoreNone in check
   bool after_null = false;  // this node was reached by a null move (no second one in a row)
@@ -138,12 +149,31 @@ struct SearchCounters {
   std::uint64_t see_prunes = 0;
   std::uint64_t lmr_searches = 0;
   std::uint64_t lmr_researches = 0;
+  std::uint64_t lmr_plies_sum = 0;  // plies taken off by reductions (the loop's mean-reduction descriptor)
   // Quiet cutoffs at non-PV nodes out of check, by remaining depth (1-6) and
   // the cutting move's index among the quiets searched there (the late move
   // pruning measurement, DESIGN.md §5.2 deliverable 6).
   static constexpr int CutoffDepths = 7;
   static constexpr int CutoffIndices = 48;
   std::uint64_t quiet_cutoff_index[CutoffDepths][CutoffIndices] = {};
+  // External review (2026-10-26). (c) SEE tests by the main-search SEE
+  // pruning, by where the move came from; bad captures reached after late
+  // move pruning stopped the quiets, and how many SEE pruning then drops.
+  std::uint64_t see_tests_good_captures =
+      0;  // SEE >= 0 already shown by the selector: skipped since claim (c)
+  std::uint64_t see_tests_bad_captures = 0;  // SEE < 0 already shown by the selector
+  std::uint64_t see_tests_quiets = 0;
+  std::uint64_t see_tests_other = 0;  // TT moves and in-check evasions
+  std::uint64_t bad_captures_after_stop = 0;
+  std::uint64_t bad_captures_after_stop_pruned = 0;
+  // (d) Futile nodes: quiet moves taken from the selector there, and those
+  // searched (the checking ones and the first move).
+  std::uint64_t futile_nodes = 0;
+  std::uint64_t futile_quiets_taken = 0;
+  std::uint64_t futile_quiets_searched = 0;
+  // (f) Quiescence nodes at PV and non-PV nodes.
+  std::uint64_t quiesce_nodes_pv = 0;
+  std::uint64_t quiesce_nodes_non_pv = 0;
 };
 
 class Searcher {
@@ -156,12 +186,20 @@ class Searcher {
                           const std::atomic<bool>* pondering, SearchListener* listener);
 
   SearchSwitches switches;
+  // Aspiration fails are reported (as upperbound or lowerbound lines) only
+  // once a search has run this long; tests set 0 to see every fail.
+  std::int64_t fail_report_ms = 1000;
 #ifdef FORK_SEARCH_STATS
   SearchCounters counters;
 #endif
 
   // Forgets the move-ordering history (ucinewgame, and each bench position).
   void clear_history() { history_.clear(); }
+
+  // Tests only: the root move that failed high in the iteration the last
+  // deliberate() stopped in and was not yet re-searched to an exact score
+  // (NoMove if none).
+  Move unresolved_fail_high() const { return unresolved_fail_high_; }
 
   // Tests only: one zero-window search of `pos` as a non-PV node (window
   // [beta - 1, beta]), with no time limit; returns its fail-soft score.
@@ -189,18 +227,32 @@ class Searcher {
   SearchListener* listener_ = nullptr;
   std::chrono::steady_clock::time_point start_;
   std::uint64_t nodes_ = 0;
+  std::uint64_t table_hits_ = 0;
   int max_ply_reached_ = 0;
   bool stopped_ = false;
 
   PlyFrame frames_[MaxPly + 1];
   PrincipalLine pv_[MaxPly + 1];
   RootEntry root_moves_[MaxMoves];
+  // The iteration's root move that failed high and is not yet resolved by a
+  // re-search, with its lower bound and line (review claim (a), 2026-10-26).
+  // Recorded, not played: a stop keeps the previous iteration's move
+  // (ideas.md idea 29 measures how often such fail highs hold).
+  Move root_fail_high_ = NoMove;
+  int root_fail_high_score_ = 0;
+  PrincipalLine root_fail_high_pv_;
+  Move unresolved_fail_high_ = NoMove;
   std::size_t root_count_ = 0;
   // The best root move found in the running iteration with an exact score,
   // and its PV (reported if a stop makes it the move played).
   Move iteration_best_ = NoMove;
   int iteration_best_score_ = -ScoreInfinite;
   PrincipalLine iteration_pv_;
+  // The last finished iteration's PV, and the first move of the last line
+  // reported: a stop after a reported fail repeats the finished iteration,
+  // so the last line before bestmove names the move played.
+  PrincipalLine finished_pv_;
+  Move last_reported_ = NoMove;
 };
 
 }  // namespace forkeng

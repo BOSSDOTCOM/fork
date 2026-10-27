@@ -332,7 +332,12 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
 - **Phase 5: Time management.** Soft and hard limits tuned for long
   increment games without ponder, and a stress test under artificial system
   load. Before this phase starts: research the current TCEC season's full
-  rules and fill in `config/tcec.json`.
+  rules and fill in `config/tcec.json`. **Carried over from Phase 3**
+  (owner, 2026-10-27): deliverable 8's final form was checked at 40+0.4
+  only briefly, stopped inconclusive (-14.8 ± 20.9 at fastchess's 400-game
+  report, -4.7 ± 18.0 over all 590 games; sprt-log.md d8-ltc). Phase 5
+  revisits it at long time controls, **the iteration rule first** (the
+  danger-zone reserve should almost never bind at 40+0.4).
 - **Phase 6: SMP.** Lazy SMP, NUMA-aware thread/memory placement, no large
   page dependence, scaling benchmark. **Shared-TT test plan** (owner,
   2026-10-24): TT entries are self-verifying (§5.2 deliverable 3), so a torn
@@ -340,7 +345,12 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   (or equivalent) so concurrent access is not undefined behaviour, and adds
   a stress test, run under TSan, where many threads write and read the same
   buckets with random entries and every hit a reader accepts must be one
-  writer's complete entry.
+  writer's complete entry. **The spec must also settle** (owner, 2026-10-26,
+  second external review): how the threads agree on the move played (the
+  main thread's result, or a choice among threads by depth and score, or a
+  vote), and how the threads' searches are kept diverse (different depths,
+  move orders or other per-thread variation), each from the
+  kb-researcher's clean-room description and measured by a scaling test.
 - **Phase 7: Tournament-aware play.** Contempt/style options, TB-aware
   eval, keeping tension. Each item is documented here as genuine evaluation.
 - **Phase 8: TCEC-conditions testing** from `tcec.json`: paired openings,
@@ -870,6 +880,15 @@ games at very short time controls and under full CPU load (Phase 2's
 2+0.02 setup) with zero time losses; `movetime` overrun stays within a
 stated bound; `stop` to `bestmove` latency under 10 ms with the real search
 (the Phase 2 timing test).
+- **Confirmed defect to fix here** (external review claim (b), 2026-10-26,
+  reproduced by calling `plan_time`): the increment term divides before it
+  multiplies (`increment / 4 * 3`), so an increment of 1-3 ms adds nothing
+  to the soft budget and others lose up to 3 ms (7 ms adds 3, not 5.25;
+  10 ms adds 6, not 7.5). The fix comes with a test of exact small
+  increments.
+- **Baselines** (owner's queue, 2026-10-26): 2,000 games at 2+0.02 with
+  every CPU busy, 0 time losses (Milestone A: 1 in 200); LTC 40+0.4: 0 time
+  losses in 1,867 SPRT games.
 
 > **Milestone C** (stop): deliverables 7-8 done; the core of Phase 3 is
 > complete. Report as for Milestone B, plus the TB tests, the conversion
@@ -883,32 +902,53 @@ builds (`FORK_TUNE`) declare each as a UCI spin option, beside the switches.
 Moving a parameter into the table must not change bench. No SPSA run may
 start before the table exists.
 
-**8c. Pilot of the heuristic-discovery loop** (ideas.md idea 23; owner,
-2026-10-26), after 8b and before any tier 2 refinement.
-- **Target:** the LMR reduction formula only (`lmr_table.hpp` and its use
-  in `negamax`), marked as the one evolvable function; everything else
-  frozen.
-- **Prerequisites:** the parameter table (8b) is done, and the
-  kb-researcher has fetched and verified the AlphaEvolve and MAP-Elites
-  papers (primary sources, cited in the KB and ORIGINALITY.md) before the
-  loop is built.
-- **Method:** idea 23's funnel (gate; proxies, nodes to depth and
-  best-move agreement with Fork's own deep search on a held-out set;
-  a short match; SPRT at STC then LTC), a diverse population, the
-  originality-checker's screen on every survivor, and full logs of every
-  candidate.
-- **Ends with a go/no-go decision by the owner** (stop), on the pilot
-  metric: whether the proxies predict the SPRT results (rank agreement on
-  the candidates that reach both), and the cost per accepted change
-  (compute, games and session time).
-- **If go:** real campaigns in late Phase 4, after the first strong
-  network and the search re-validation; then a standing tool in the
-  improvement pass after Phase 8 (roadmap, §5). **If no-go:** the loop is archived, and
-  the pilot's log and findings go into ideas.md.
+**8c. Pilot of the heuristic-discovery loop** (ideas.md idea 23, the
+consolidated spec of 2026-10-26; owner).
+- **Slot:** after Milestone C and the parameter table (8b), before tier 2
+  (deliverable 9). Time box about two weeks. **Target:** the LMR formula
+  only, as the one evolvable region; a candidate touching code outside it
+  is rejected before building.
+- **Prerequisites:** 8b done; the kb-researcher has verified the
+  AlphaEvolve, FunSearch and MAP-Elites papers (primary sources, cited in
+  the KB and ORIGINALITY.md); run when weekly Claude capacity is fresh.
+- **Method** (idea 23): residual mode by default (final = base + correction,
+  with its own strength coefficient for SPSA; a zero correction reproduces
+  the baseline exactly), about 1 in 5 candidates full replacements; an
+  island/MAP-Elites population; two proposers with distinct perspectives
+  (optionally a third from Fork's search statistics), an explorer with its
+  own protected island, a critic before every build, an analyst every N
+  generations, the originality-checker on promoted survivors, and a
+  deterministic orchestrator script; all agents clean-room. The evaluator
+  funnel: the gate (build, perft, the minimax oracle with pruning off,
+  determinism, the hot-path rules); proxies (best-move agreement and score
+  error against Fork's much deeper search at equal node budgets, on a
+  held-out self-play set labeled by Fork's own search; nodes to depth only
+  as a secondary signal; WAC and matetrack excluded); a short fast-game
+  match; the full SPRT on gainer bounds, STC then LTC.
+- **Metrics:** whether proxy rankings predict SPRT outcomes; the cost per
+  accepted change (compute, games, tokens, session time); the gate-failure
+  rate with and without the critic; the improvement rate against a
+  single-proposer baseline; the explorer's survival rate and SPRT wins;
+  residual against full-replacement results.
+- **Ends with a go/no-go decision by the owner** (stop).
+- **If go:** real campaigns in late Phase 4, after the first strong network
+  and the search re-validation; then a standing tool in the improvement
+  pass (roadmap, §5), with candidate targets such as pruning margins,
+  history updates, move ordering and time management. **If no-go:** the
+  loop is archived, and its log and findings go into ideas.md.
 
 **9. Tier 2 refinements**, built one at a time, each behind a flag and
 SPRT-tested on its own, **reported in batches at the end of Phase 3**, not
-individually. The order follows the KB's build order (steps 5 and 7-10):
+individually. The order follows the KB's build order (steps 5 and 7-10),
+with the owner's changes of 2026-10-26 (second external review): Fork has
+neither singular extensions nor check-aware reductions yet, so checks come
+first, and the quiescence delta pruning moves up. Every new technique gets
+the kb-researcher's clean-room description (KB search-techniques.md) before
+it is built.
+0. **Checks first:** check-aware late move reductions (checking moves and
+   in-check nodes reduced less) or a check extension, whichever the
+   description and a first SPRT favour, then the other on its own SPRT; then
+   quiescence delta pruning (moved up from step 5's qsearch futility).
 1. T18 improving (per use: RFP, LMP, LMR, NMP gate), T26 IIR.
 2. T10 continuation history (1-ply, then 2-ply, then deeper, each its own
    SPRT, watching nps), T11 capture history, T24 quiet history pruning.
@@ -921,7 +961,9 @@ individually. The order follows the KB's build order (steps 5 and 7-10):
 5. T31 ProbCut, T32 correction history (one table at a time: pawn,
    non-pawn per side, minor, continuation), T25 qsearch futility, T14 NMP
    verification at high depth (zugzwang insurance for TCEC endgames, on
-   non-regression bounds, tested on cited zugzwang positions).
+   non-regression bounds, tested on cited zugzwang positions). New
+   candidates (owner, 2026-10-26): razoring, and futility pruning of losing
+   captures in the main search.
 6. T12 pawn-structure history, last, because it needs a pawn key.
 
 **The pawn key** (for T12 and T32) and the non-pawn keys (for T32) are a
@@ -943,6 +985,15 @@ alpha = beta = 0.05. Bounds (owner, 2026-10-24), in normalized Elo:
 - tier 2 gainers: [0, 3];
 - simplifications and safety features (T14, removals): non-regression
   [-3, 0].
+
+**Bounds policy (owner, 2026-10-26):** the kind of change decides the
+bounds. **Bug fixes, speed-only changes, simplifications and safety
+guards** use non-regression bounds [-3, 0]: they must not lose, and need
+not prove a gain. **New features and techniques** use gainer bounds, [0, 3]
+(or [0, 5] where gains are large, as before Milestone B). Applied first to
+the external reviews' queue: the root fail-high fix and the futile-node
+filter [-3, 0], the TT-refined pruning eval [0, 3], keeping exact TT entries
+(a safety guard) [-3, 0].
 
 Conditions: **STC** 8+0.08 s, Hash 16 MB; **LTC** 40+0.4 s,
 Hash 64 MB; one thread per engine, 3-4-5 Syzygy for both sides once
@@ -969,7 +1020,15 @@ if time losses ever appear): measured on the first 505 games of the PVS
 SPRT at STC, 1,478 games per hour (about 790 at concurrency 5) with 0 time
 losses and no illegal moves, crashes or disconnects; still 0 time losses
 over all 943 concurrency-10 games by 2026-10-25 (634 PVS, 309 aspiration;
-checked in both the fastchess logs and the PGN terminations).
+checked in both the fastchess logs and the PGN terminations). The external
+reviews' queue runs at concurrency 8 (owner, 2026-10-26), so development
+can run beside it; once that queue is empty, SPRTs return to 10
+(`tools/sprt.sh`'s default). **Development beside test games** (owner,
+2026-10-26): builds, tests and checks keep normal priority; the timing
+tests skip while games run (`build/.games-running`, `FORK_GAMES_RUNNING`);
+after any time loss, development drops to low priority
+(`build/.low-priority`, `scripts/env.sh`) until those games end. Speed
+measurements wait until no SPRT is running.
 **Adjudication** (owner, 2026-10-25), in `tools/sprt.sh`, the same for
 both engines (`ADJUDICATE=0` turns it off): resign once both engines report
 at least 1000 cp for one side for 5 consecutive moves; draw from move 40 on
@@ -1146,6 +1205,17 @@ holds, which is why search decisions use no floating point (deliverable 6).
      (`UseAspiration`), stopped as inconclusive at +3.9 ± 7.6 Elo after
      about 3,200 games (interval includes zero); and mate distance pruning
      (`UseMateDistance`), not SPRTed at Milestone A. All three kept on.
+   - **Flagged for the end-of-Phase-3 removal round, NEEDS VERIFICATION**
+     (owner, 2026-10-26): the TT-refined pruning eval (`UseTtEvalRefine`,
+     the second review's claim (d)), **on by default provisionally**. Its
+     SPRT on gainer bounds [0, 3] was stopped undecided by the owner (at
+     +17.0 ± 19.9 Elo after 800 games; the last report, 1,000 games:
+     +14.6 ± 17.8, LLR 0.40 of 2.94), so it was never accepted. The
+     removal round tests it at STC and also at LTC 40+0.4.
+   - **Also flagged** (owner's cap, 2026-10-26): keeping exact TT entries
+     (`UseTtKeepExact`, the second review's claim (e)), off by default: its
+     SPRT on [-3, 0] ended INCONCLUSIVE at the cap, -0.6 ± 7.5 Elo after
+     4,800 games (LLR 0.09 of 2.94).
 
 #### Implementation notes (2026-10-24)
 
@@ -1220,9 +1290,9 @@ Choices made while building, where the spec leaves a gap:
   `UseHistoryMalus`, `UseRfp`, `UseNmp`, `UseLmr`, `UseLmp`,
   `UseFutility`, `UseSeePrune`), so an SPRT compares a
   technique on and off in one binary (`tools/sprt.sh` with `TUNE=1`).
-  Release and TCEC builds declare none. Numeric parameters stay constants
-  in their files until deliverable 8b moves them into the parameter table,
-  which must exist before any SPSA run.
+  Release and TCEC builds declare none. Since deliverable 8b, tuning builds
+  also declare every numeric search parameter as a spin option (the
+  parameter table, below).
 - **Deliverable 5, move ordering** (2026-10-25). `MoveSelector`
   (`src/search/move_selector.*`) yields the TT move (validated), good
   captures and queen promotions by MVV-LVA with SEE computed only for the
@@ -1286,9 +1356,232 @@ Choices made while building, where the spec leaves a gap:
   - **Counters** (FORK_SEARCH_STATS bench, Fork's own values): RFP 2.09M
     and null-move 0.44M cuts; LMP 0.41M, futility 10.63M and SEE 2.90M
     prunes; 2.38M reduced searches, 0.5% re-searched at full depth.
+- **Deliverable 7, Syzygy probing** (2026-10-26). Fathom at the pin is
+  vendored unchanged in `third_party/fathom` (its own CMake target,
+  `tbprobe.c` built as C++ so its `MADV_RANDOM` advice is compiled in, its
+  warnings kept to itself); `src/search/endgame_tables.*` wraps it.
+  `SyzygyPath` loads the tables at the next `isready`, `ucinewgame` or `go`,
+  never during a search, and reports their largest piece count (from the
+  files, 3-7). In `negamax`, at non-root nodes from depth 1 with no castling
+  rights and a zero halfmove clock, a win/draw/loss probe returns at once
+  when its bound settles the node (a win is a lower bound at the TB band, a
+  loss an upper bound, a draw exact, cursed wins and blessed losses ±1, stored
+  in the TT as that bound), and otherwise keeps the searched result within
+  the bound. At the root the distance-to-zero ranking (the win/draw/loss
+  ranking if the DTZ files are missing) keeps the moves of the best rank,
+  which are all moves preserving the best result under the fifty-move rule
+  (Fathom ranks every safe win equally), within any `searchmoves`. Info
+  lines carry `tbhits`; switch `UseTables`. Tests (`tables` suite): no
+  tables, a missing or empty directory, the 7-man pair (largest count 7,
+  win and loss, no answer with a running halfmove clock or too many
+  pieces), the root ranking (13 winning moves kept), a path with only the
+  WDL file, the search's TB scores and probe count, and on Linux the
+  `MADV_RANDOM` flag on the mapped table (`/proc/self/smaps`).
+  `tools/check_syzygy.py`: 3,000 random positions on the 3-4-5 tables
+  against python-chess's prober, 0 disagreements. Fathom's own output:
+  an incomplete table file is reported on stderr and as an `info string`
+  line on stdout (through C stdio, during loading only, so never beside
+  search output); a mapping failure or running out of memory makes it call
+  `exit()` (KB tools.md §6). Idea 22's KQR v K mate
+  (re-checked with the 3-4-5 tables): the first mate appears at depth 9
+  with tables and at depth 8 without, mate in 3 by depth 14 in both: the
+  tables give no distance to mate, and probes need a zero halfmove clock
+  (ideas.md idea 22). The won-ending conversion suite
+  (`tools/conversion_suite.py`, 2026-10-26): 100 random TB-won 4-5 piece
+  positions (seed 20261026), each with its halfmove clock set 4 plies
+  short of what the win allows, played out by Fork (`go nodes 50000` per
+  move, the tables loaded) against a defender that keeps its best table
+  result, longest from zeroing: **100 of 100 converted**. The suite sends
+  the whole game (`position fen ... moves ...`) and a `ucinewgame` before
+  each one: with a bare FEN Fork cannot see repetitions, and 5 of 100 were
+  drawn by repetition in the first runs, a harness fault, not Fork's.
+- **Deliverable 8, basic time management** (2026-10-26). `plan_time`: the
+  increment adds three quarters of itself, multiplied before dividing (the
+  first external review's claim (b): 1-3 ms increments added nothing); the
+  reserve is a tenth of the clock, and one more Move Overhead only in the
+  danger zone, when less than `DangerZoneOverheads` (2) overheads plus an
+  increment is available (the final form, B2, below; at first it was two
+  overheads at every clock). Between
+  iterations, besides the soft limit, no iteration starts that would
+  probably not finish before the hard limit (the measured growth, 5/3):
+  this binds for `go movetime` and for a low clock whose reserve caps the
+  hard limit. Tests: exact small increments; the reserve inside and
+  outside the danger zone; a simulated low-clock game survives a stall;
+  the iteration rule stops a search whose listener pauses (fault-injected:
+  each test fails without its change).
+  **The owner's split (2026-10-27).** The first form's SPRT against its
+  parent leaned to about -10 Elo midway and ended at -4.9 ± 7.1 at the
+  5,000-game cap: the fixed two-overhead floor binds where 8+0.08 games
+  settle (about 0.4-0.6 s left). Split into (a) the increment fix, (b) the
+  reserve, redesigned adaptive as B1 (max(clock/10, overhead - increment))
+  or B2 (the danger zone above), and (c) the iteration rule. Stress tests
+  (2,000 games at 2+0.02, every CPU busy): (a) alone 3 time forfeits, (c)
+  alone 1, B1 0, B2 0, the first form 0. The owner chose B2 without a
+  separate SPRT (it acts only at a low clock; B1 reserves time on every
+  move whose increment is below the overhead). The combination (a) + B2 +
+  (c) against (a): +1.9 ± 10.6 Elo after 2,200 games on [-3, 0], accepted
+  by the owner (sprt-log.md d8-final). Timing tests on an idle machine:
+  pass on Windows and Linux (stop to bestmove 0.28-0.55 ms); `go movetime`
+  never overran (30 searches each at 50, 200 and 1,000 ms ended at most
+  25.2, 100.2 and 884.9 ms after go). The 40+0.4 check follows the
+  Milestone C gauntlet.
+  **The budget formula's credit** (owner, 2026-10-26): the constant screen
+  found its shape (from deliverable 2: the clock over 30 moves plus an
+  increment term, hard = min(4 × share, 0.9 × clock)) near Berserk
+  4.5.0-8's time allocation. The owner kept it, with an explanation and a
+  credit in `time_budget.cpp` and ORIGINALITY.md; Fork's own parts are the
+  three-quarter increment, the soft limit at one share and the reserve's
+  floor.
+- **Deliverable 8b, the parameter table** (2026-10-26). `src/tune/params.hpp`
+  lists every tunable numeric search parameter once, in an X-macro
+  (`FORK_SEARCH_PARAMS`: name, default, lowest, highest, SPSA step): 28
+  parameters (aspiration, the iteration rule, reverse futility, the null
+  move, the table probe depth, LMR, LMP, futility, SEE pruning, the history
+  bonus, the TT victim policy's stale depth, the time budget). Release and
+  TCEC builds declare each as `inline constexpr int`, the same code as the
+  constants they replace (bench unchanged: 17309921 / 372dc2e2d8a88e4b,
+  also from a tuning build at the defaults). Tuning builds (`FORK_TUNE`,
+  now public on `forksearch`) declare them as variables, offered as UCI
+  spin options beside the switches; `set_param` clamps to the range and
+  rebuilds the LMR table. Two formulas became integer parameters with
+  identical arithmetic: the LMR divisor 4.5 is `LmrDivisorTenths` = 45 (the
+  table is (10 L + 32768 t) / (65536 t), exactly the earlier
+  (L + 147456) / 294912 at t = 45, checked entry by entry), and the
+  iteration growth 5/3 is `IterationGrowthThirds` = 5; the history bonus
+  12.5 d² is `HistoryBonusFactor` = 25 (halves). Not in the table, each with
+  its reason: the stop-poll interval and fail-report delay (not strength
+  parameters), the near-draw table score (must stay just off zero), the
+  history scale (the int16 headroom depends on it), the move-ordering
+  scores (derived structure) and the movetime floor (an owner's rule).
+  **Ranges and steps** (Fork's rule, bounds for a tuner, never played as
+  such): about half to twice the default, depths in whole plies (at least
+  1, counts at least 0), and an SPSA step of a twentieth of the range,
+  rounded, at least 1. Tests (`params` suite): every default in its range,
+  steps fitting, unique names, the bonus cap's range within the history
+  scale; the LMR table equal to the earlier formula (fault-injected: a
+  rounding change and an out-of-range default each fail); in a tuning
+  build, `set_param` changes, clamps, rebuilds and restores. Checked by
+  hand on a tuning build: 31 spin options, and LmrDivisorTenths 30 changes
+  a depth-12 search from 168,013 to 159,853 nodes. Name check 25: no match
+  but the plain words `lowest`, `highest` and `default_value` (kept).
+- **Deliverable 8c preparation: the heuristic-discovery harness**
+  (2026-10-26; ideas.md idea 23; the loop itself not started, owner).
+  `tools/evolve/`, standard-library Python, run in WSL:
+  - **Region and guard** (`regions.py`): `// FORK-EVOLVE-BEGIN lmr` /
+    `END lmr` mark the body of `lmr_correction(const LmrContext&)` in
+    `src/search/lmr_table.hpp`. The search reduces by
+    `base + lmr_correction(c) * LmrCorrectionStrength / 64` (the strength a
+    new parameter-table entry, 64, for SPSA); the committed body returns 0,
+    so bench is unchanged. A full replacement returns `R - c.base`, so one
+    region serves both modes. The guard rejects a candidate that differs
+    from the baseline outside the body, moves a marker or touches another
+    file, before any build.
+  - **Gate** (`gate.py`): hot-path rules on the body (no allocation,
+    exceptions, dynamic dispatch, floating point, randomness, static state,
+    threads, preprocessor, assembly, I/O, containers, markers), the guard,
+    a Release build of the baseline commit with the body, perft equal to
+    the baseline's, the `search` (minimax oracle), `pruning`, `params`,
+    `tt`, `ordering` and `no_alloc` suites, and two identical benches.
+  - **Proxies** (`proxies.py`): best-move agreement and mean score error
+    (capped at 400 cp) against labels from Fork's much deeper search, at
+    the baseline's node budget (20,000), from a fresh state per position;
+    the mean depth reached is reported, never used alone. The position set
+    (`positions.py`, `positions.jsonl`): Fork's own self-play from random
+    8-ply openings, labeled at depth 18, one in six positions held out for
+    survivors' final check. Behaviour descriptors from a
+    `FORK_SEARCH_STATS` bench: the mean reduction (a new counter) and the
+    re-search share.
+  - **Population** (`population.py`): SQLite; islands, a MAP-Elites grid
+    per island (one elite per cell of mean reduction by 0.25 ply and
+    re-search share by 2 points), seeded parent choice, FunSearch-style
+    reseeding of the weakest island, an event log.
+  - **Agents** (`agents.py`, `prompts/`): two proposers (aggressive,
+    cautious) and an optional third from the statistics, the explorer (the
+    full-replacement share, about 1 in 5, on an island protected for 3
+    generations), the critic before every build (a quarter of its
+    rejections are still gated, to measure the critic), the analyst every
+    3 generations; all under the clean-room rules in the shared context.
+    `StubAgent` for tests and the dry run; `CliAgent` (`claude -p`) for a
+    live loop, whose JSON fields are UNVERIFIED until its first call.
+  - **Orchestrator** (`orchestrator.py`, `config.json`): deterministic and
+    seeded; stops at the generation limit, a budget (3M tokens, 150
+    candidates, 48 hours by default), 6 generations without improvement, or
+    a gate-failure rate above 80%; a live loop needs `--live`. Promotion: a
+    proxy fitness 0.005 above the baseline goes to a 400-game match at
+    4+0.04 against it, then to the SPRT hand-off (`match.py`: the patch
+    and the `tools/sprt.sh` commands, gainer bounds, STC then LTC, after
+    the originality-checker's screen).
+  - **Tests** (`test_evolve.py`, 23): regions and the guard, the static
+    rules, the gate's order with a fake runner, the proxy metrics, the
+    grid, parsing and budgets, the match parser, and one orchestrated
+    generation with stub agents; fault-injected (a guard that accepts
+    everything and a gate without its determinism check each fail).
+    Name check 26: no match, except the plain words `Loop`, `Population`,
+    `Budget` and `Span` as Python class names (kept).
+  - **Dry run** (2026-10-26, one generation, stub agents, real builds,
+    gates and proxies on all 1,170 evolve positions, in WSL at nice 19
+    beside an SPRT; about 10 minutes): the baseline passed its gate with
+    bench equal to the committed one (the zero correction is exact), fitness
+    0.4462 (agreement 48.3%, score error 36.7 cp, depth 7.43), descriptors
+    1.726 plies mean reduction and 0.54% re-searched. The scripted
+    proposals each took their intended path: one ply more at depth 8 and
+    beyond passed the gate (bench 17100087) with proxies identical to the
+    baseline's; one ply less on PV nodes and strong-history moves passed
+    with fitness 0.4441 (not an elite: same cell, less fit); a body that
+    does not compile stopped at the build; a floating-point rule was
+    rejected by the critic and, audited, stopped at the static rules. The
+    first dry run had found a harness bug (the gate compared perft's
+    varying nps line instead of its count; fixed, with a test).
+    **Finding for the pilot:** at 20,000 nodes the proxies search to about
+    depth 7.4, so a change that acts from depth 8 is invisible to them; the
+    pilot's node budget must reach the depths a region acts at.
+  - **Proxy node budget** (owner, 2026-10-27: depth about 10-12 before the
+    pilot). Measured on 200 seeded evolve positions, each from a fresh
+    state (depth median, p10-p90, interquartile; agreement with the depth-18
+    labels): 20,000 nodes 7, 6-9, 7-8, 46.5%; 100,000 10, 9-12, 9-11, 58.0%;
+    **200,000 11, 10-14, 11-13, 61.5%**; 400,000 13, 11-16, 12-14, 66.0%;
+    800,000 14, 12-18, 13-16, 72.5%. **Chosen: 200,000** (`config.json`).
+    Time per position at that budget 249 ms, measured while a stress test
+    kept every CPU busy (an upper bound; the idle figure is UNVERIFIED), so
+    the full 1,170 evolve positions take at most about 5 minutes per
+    candidate; the set is kept whole, since agreement near 60% over 1,170
+    positions has a standard error of about 1.4 points, the size of the
+    differences worth detecting.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
+
+#### External reviews (2026-10-26)
+
+Two external reviews raised suspected issues. The owner's rule: each is a
+claim, reproduced with a failing test or a measurement before anything is
+fixed, then fixed from Fork's own reasoning; pure speed fixes keep bench
+identical, behaviour changes get SPRTs. Measurements are from the
+FORK_SEARCH_STATS bench unless stated.
+
+**First review.**
+
+| Claim | Outcome |
+|---|---|
+| (a) A root move failing high above the aspiration window is dropped when time expires during its re-search. | **Confirmed**: a sweep of node-limited searches (bench positions and WAC) found 626 of 34,254 playing another move (perft position 6 at 4,991 nodes: g5f6 failed high, c3d5 played). **Fixed** (f0a9caf): the pending fail high is played (its score is at least beta, above every exact score of that pass), reported as a lower bound; test fails before the fix. Bench unchanged (depth-limited); SPRT on non-regression bounds. |
+| (b) The increment scaling divides before it multiplies. | **Confirmed** by calling `plan_time`: 1-3 ms increments add nothing, 7 ms adds 3 (not 5.25). **Folded into deliverable 8** (owner). |
+| (c) SEE recomputed for proven-good captures; bad captures tested twice; bad captures searched after LMP stops quiets. | **Confirmed and fixed** for good captures (443,516 tests that always passed; skipped, 6ae4128, bench identical). Bad captures' second test (944,986) stays: it tests another threshold. Bad captures after LMP (502,947, 73% then SEE-pruned): **design, not a defect** (LMP is quiet-only by spec). |
+| (d) At futile nodes all quiets are generated, scored and sorted though only checking quiets can be searched. | **Confirmed**: 10.4M quiets handed out at 425,623 futile nodes, 200,876 searched. **Fixed** (3a8a1b6): once the futility conditions hold, the selector keeps only checking quiets (317,326 handed out); the same moves are searched (identical benches with a position-independent tie-break), only the order of tied checking quiets differs. Search nps +12.7%. SPRT on non-regression bounds. |
+| (e) PlyFrame about 4 KB per ply. | **Confirmed**: 3,968 bytes, Searcher 1.14 MB. **Shrunk** (6ae4128): 2,664 bytes, Searcher 816 KB (the per-frame scratch list went; int16 selector scores). Bench identical, speed within noise. |
+| (f) PV quiescence nodes may explode on tactical positions. | **Not confirmed**: 0.2% of quiescence nodes on the bench, 0.46% on WAC (300 positions, 200,000 nodes each); worst single position 2,983 PV quiescence nodes (23% of its quiescence work). |
+
+**Second review.**
+
+| Claim | Outcome |
+|---|---|
+| (a) `see_at_least` computes the full exchange. | **Confirmed** (it was `see_value >= threshold`). **Fixed** (1efade9): it stops once the answer is settled (the side to choose can always stop); tested equal to `see_value >= threshold` at 14 thresholds over the SEE trees. Bench identical. |
+| (b) The TT's stored static eval is recomputed on a hit. | **Confirmed. Fixed** (1efade9): reused in the main and quiescence searches. Bench identical. |
+| (c) No TT prefetch before the null move. | **Confirmed. Fixed** (1efade9): `Position::predicted_null_key()`, tested against `make_null`. Bench identical. The three together: nps +2.9% (just under the 3% noise rule). |
+| (d) Refine the static eval with the TT score before pruning. | Built behind `UseTtEvalRefine` (738daff) from KB T50: WAC 259/300 vs 248, mate suite 139/297 vs 132. SPRT [0, 3] **stopped undecided by the owner** (+14.6 ± 17.8 Elo at 1,000 games): **PROVISIONAL, on by default** since 2026-10-26, NEEDS VERIFICATION in the end-of-Phase-3 removal round (STC and LTC 40+0.4). |
+| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [-3, 0] (a safety guard, the owner's bounds policy), on top of the TT-refined eval's new default. Cap (owner): about 5,000 games or 4 hours; if still undecided then, INCONCLUSIVE, off by default, and into the end-of-Phase-3 removal round. **Result: INCONCLUSIVE at the cap**, -0.6 ± 7.5 Elo at 4,800 games: off by default, in the removal round. |
+| (f) Tier 2 order, razoring, losing-capture futility. | Plan changed (deliverable 9). |
+| (g) Upcoming repetitions, fifty-move eval scaling, history malus balance. | ideas.md ideas 26-28. |
+| (h) Phase 6: thread agreement and diversity. | Added to the Phase 6 roadmap entry. |
 
 #### Search constants (owner's rule, 2026-10-25)
 
@@ -1306,7 +1599,7 @@ and Weiss (results in ORIGINALITY.md).
 | `AspirationHalfWidth` | 12 cp | **Measured**, as above: 90% of the score changes from depth 5 on are at most 12 cp, so nine iterations in ten need no re-search. Replaced the first scheme (25 cp from depth 4, doubling), which the constant screen found identical to Berserk 1.0.0's. |
 | Aspiration widening | delta += abs(score − previous) | Fork's rule: on a fail, the half-width grows by how far the fail-soft score already is from the previous iteration's score. That is at least the old half-width (the score fell outside the window), so the window at least doubles, and more after a big jump; only the failing bound moves. |
 | `StopCheckInterval` | 1024 nodes | At about 10M nps that is a poll every 0.1 ms: far finer than the 1 ms clock, at a negligible cost per node. |
-| `FailReportMs` | 1000 ms | UCI GUIs need no fail-high/low lines for searches shorter than a second; it keeps fast games' output small. |
+| `fail_report_ms` (a `Searcher` member, tests set 0) | 1000 ms | UCI GUIs need no fail-high/low lines for searches shorter than a second; it keeps fast games' output small. |
 | `RfpMaxDepth` | 6 | At depth 6 the margin reaches 480 cp, a knight plus nearly two pawns; beyond that a static eval no longer bounds what the search can find (reasoning). |
 | `RfpMargin` | 80 cp per ply | About what the bootstrap eval can change per ply in a quiet position: four fifths of a pawn (reasoning). |
 | `NullMinDepth` | 3 | Below depth 3 the null search would be at least as costly as the node it replaces. |
@@ -1327,9 +1620,13 @@ and Weiss (results in ORIGINALITY.md).
 | `HistoryBonusCap` | HistoryMax / 8 = 1250 | No single cutoff moves a value by more than an eighth of the range, so about eight agreeing cutoffs are needed to approach the limit. |
 | History bonus | 12.5·d², capped | Grows with depth because deeper cutoffs refute bigger subtrees; quadratic so the rarer deep cutoffs outweigh the many shallow ones; reaches the cap at depth 10. |
 | `StaleDepthPerSearch` | 2 plies (TT victim policy, experimental switch `UseTtAgeBlend`, off by default) | Between two of Fork's searches in a game two plies are played, so a stored position is two plies nearer the new root, and the new search asks it for two plies more depth than the search that wrote it. The shape depth − k·age is the common one (Stockfish, Ethereal, Berserk and Weiss); their rates are 4-16 plies per search (constant screen, 2026-10-26). |
-| `EvasionCaptureBase` | 2^20 | Above any history value (|h| ≤ 10000), so evasion captures always come before quiet evasions. |
+| `EvasionCaptureBase` | HistoryMax + 1 | Above any history value (|h| ≤ 10000), so evasion captures always come before quiet evasions; with the largest victim-attacker score (14,400) every score fits the int16 score array (6ae4128; it was 2^20 with an int array). |
+| `TableProbeMinDepth` | 1 | Endgame tables are probed at every main-search node that meets the conditions: a fifty-move-safe probe needs a zero halfmove clock, so probes come only right after captures and pawn moves anyway. A higher minimum pays only with slow table storage (TCEC's 7-man set is on disk); tuned in Phase 8 on TCEC-like storage. |
+| `TableNearDrawScore` | 1 cp | Cursed wins and blessed losses (the fifty-move rule turns them into draws) score just off zero: a real draw is never preferred to a cursed win, and no real advantage is given up for one. |
 | MVV-LVA score | (victim value + promotion value)·8 − attacker type | The victim's value dominates (distinct values differ by at least 100, so ·8 leaves room far above the attacker's type index, at most 5), and the attacker breaks ties: standard MVV-LVA ordering (CPW). |
-| Time budget (`time_budget.cpp`) | 30, 40, 4, 1/10, 1/2 | Deliverable 2's first budget, justified in its notes above; deliverable 8 re-derives them from measurements. |
+| Time budget (`time_budget.cpp`) | 30, 40, 4, 1/10, 1/2 | Deliverable 2's first budget, justified in its notes above; Phase 5 tunes them. |
+| `DangerZoneOverheads` | 2 | Deliverable 8, variant B2 (the owner's choice, 2026-10-27): one more Move Overhead of reserve only when the time available (the clock less one overhead) is below two overheads plus an increment, i.e. a clock below three overheads plus an increment. Fork's reasoning: in that zone one slow move (Milestone A's flag came from a stall longer than the overhead) plus the next move's normal latency could use up what is left before the increment, which arrives only after the move: one overhead for each. Stress test 0 time forfeits in 2,000 games (the tenth alone: 3). It replaced `ReserveOverheads` (2 overheads at every clock), which cost about 5-10 Elo at 8+0.08. |
+| Iteration growth | 5/3 | **Measured** on the bench (46 positions to depth 14, cumulative nodes): the work grows by a median factor of 1.66 per iteration at depths 8-14 (p75 1.96, p90 2.38). An iteration started at elapsed time t probably finishes near t · 5/3, so none starts when that passes the hard limit. |
 
 #### Owner's answers (2026-10-24)
 
@@ -1366,6 +1663,8 @@ and Weiss (results in ORIGINALITY.md).
 | 2026-10-24 | **Milestone A originality fixes (owner).** `PvNode` renamed `OnPv` (bench identical). TT store redesigned from the KB description (stale entries below current ones, then shallower below deeper; a whole age byte with a 24-bit check) and made self-verifying for Phase 6 (the check XORs a digest of the entry's data, so torn writes read as misses); root moves ordered by move-to-front. Both change behaviour: bench 7533640 / 2711c23a13969520, the Milestone A SPRTs rerun on the new commit. SEE kept as the standard CPW swap algorithm, cited in ORIGINALITY.md. Root ordering by node counts logged as ideas.md idea 18. |
 | 2026-10-25 | **Re-validation plan (owner).** No removal tests at Phase 3's milestones; one removal round (each feature off, SPRT [-3, 0], simplified away if removal costs nothing) at the end of Phase 3; the full re-validation of every search feature and a retune of eval-dependent margins after Phase 4's network; every search switch stays in the code until then. Added to §5.2 Quality control 6, the Phase 4 outline and CLAUDE.md's phase-end checklist (item 8). Also: SPRT cap of 20,000 games at STC (inconclusive acceptable at Milestone A for near-zero features) and concurrency raised from 5 to 10 for the remaining Milestone A SPRTs, pending a time-loss check. |
 | 2026-10-25 | **`go movetime` keeps at least half its time (owner).** The budget is max(movetime - Move Overhead, movetime / 2, 1 ms); before, any movetime of 100 ms or less played at 1 ms with the default overhead. Clock games unchanged. Bench unchanged (no time limit in it). The Milestone A 50 ms/move games are re-run with the fix. |
+| 2026-10-26 | **TT-refined pruning eval on by default, provisionally (owner).** Its SPRT ([0, 3], 8+0.08) was stopped undecided: +17.0 ± 19.9 Elo at 800 games when the owner decided (the last report, 1,000 games: +14.6 ± 17.8). `UseTtEvalRefine` keeps its switch and is flagged for the end-of-Phase-3 removal round at STC and LTC 40+0.4 (§5.2, Quality control 6); NEEDS VERIFICATION until then. Bench 17309921 / 372dc2e2d8a88e4b. The keep-exact SPRT runs on top of it. |
+| 2026-10-27 | **Syzygy probing accepted (owner).** Its SPRT (tables on vs off, gainer bounds [0, 3], 8+0.08) reached the 5,000-game cap at +17.5 ± 7.2 Elo, LLR 2.72 of 2.94, the 95% interval entirely above zero: logged as ACCEPTED by the owner's decision; probing stays on. |
 
 ## 7. Performance doctrine (governs every phase)
 
@@ -1474,7 +1773,8 @@ invariants.
   `quiesce`, `gives_check`, `static_eval`, `mate_score`, `update_pv`,
   `see_value`, `score_to_tt` / `score_from_tt`, the TT names `TtHit`,
   `TtBound` and `TtBucket`, `LmrTable`, `moves_seen`, `quiets_searched`,
-  `futility_value`, and the file name `see`. Exact matches of compound
+  `futility_value`, and the file name `see`; and the UCI option's own name,
+  `SyzygyPath` (as `syzygy_path_`, name check 22). Exact matches of compound
   names that are not such terms are renamed: `SearchLimits` became
   `SearchQuota`, `AspirationWindow` became `AspirationHalfWidth`, and
   `Searcher::explore` became `Searcher::deliberate` (name check 14: no

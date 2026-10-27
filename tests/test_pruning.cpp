@@ -185,4 +185,28 @@ TEST_CASE("pruning", "searches to the maximum depth and to a node budget stay in
   }
 }
 
+// Review 2, claim (d) (KB T50): with the TT-refined pruning eval on (the
+// default since 2026-10-26, provisionally), the search stays correct (mates
+// found, a legal move) and actually changes (fault check: a refinement that
+// never applies leaves the tree identical).
+TEST_CASE("pruning", "TT-refined pruning eval: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(SearchSwitches{}.use_tt_eval_refine);
+  fx.searcher->switches = SearchSwitches{};
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const SearchResult refined = fx.search(kiwipete, Optimized ? 10 : 7);
+  SearchSwitches off;
+  off.use_tt_eval_refine = false;
+  fx.searcher->switches = off;
+  const SearchResult plain = fx.search(kiwipete, Optimized ? 10 : 7);
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(refined.best));
+  CHECK_MSG(refined.nodes != plain.nodes, "nodes " << refined.nodes << " with and without refinement");
+}
+
 }  // namespace forkeng::test

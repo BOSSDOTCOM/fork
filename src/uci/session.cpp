@@ -11,8 +11,10 @@
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
 #include "eval/eval.hpp"
+#include "search/endgame_tables.hpp"
 #include "search/search_bench.hpp"
 #include "search/time_budget.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng {
 
@@ -66,15 +68,16 @@ class InfoWriter final : public SearchListener {
     const std::uint64_t ms = static_cast<std::uint64_t>(std::max<std::int64_t>(r.elapsed_ms, 0));
     const std::uint64_t nps = r.nodes * 1000 / std::max<std::uint64_t>(ms, 1);
     const bool mate = is_mate_score(r.score);
-    int n = std::snprintf(line, sizeof line_,
-                          "info depth %d seldepth %d score %s %d%s nodes %llu nps %llu hashfull %d time %llu",
-                          r.depth, std::max(r.max_ply_reached, 1), mate ? "mate" : "cp",
-                          mate ? mate_in_moves(r.score) : r.score,
-                          r.bound > 0   ? " lowerbound"
-                          : r.bound < 0 ? " upperbound"
-                                        : "",
-                          static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(nps),
-                          r.fill_permille, static_cast<unsigned long long>(ms));
+    int n = std::snprintf(
+        line, sizeof line_,
+        "info depth %d seldepth %d score %s %d%s nodes %llu nps %llu hashfull %d tbhits %llu time %llu",
+        r.depth, std::max(r.max_ply_reached, 1), mate ? "mate" : "cp",
+        mate ? mate_in_moves(r.score) : r.score,
+        r.bound > 0   ? " lowerbound"
+        : r.bound < 0 ? " upperbound"
+                      : "",
+        static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(nps), r.fill_permille,
+        static_cast<unsigned long long>(r.table_hits), static_cast<unsigned long long>(ms));
     if (r.pv->length > 0) n += std::snprintf(line + n, sizeof line_ - static_cast<std::size_t>(n), " pv");
     for (int i = 0; i < r.pv->length; ++i) {
       char move[8];
@@ -162,6 +165,8 @@ void UciSession::declare_options() {
   options_.add_spin("Threads", 1, 1, config_.max_threads);
   options_.add_spin("Move Overhead", 100, 0, 10000);
   options_.add_string("SyzygyPath", "", [this](const OptionEntry& e, std::string& message) {
+    syzygy_path_ = e.text;
+    tables_pending_ = config_.allow_files;
     if (e.text.empty()) return true;
     message = config_.allow_files ? describe_syzygy_path(e.text) : "SyzygyPath: file access disabled";
     return true;
@@ -186,12 +191,22 @@ void UciSession::declare_options() {
         SwitchOption{"UseLmr", &SearchSwitches::use_lmr}, SwitchOption{"UseLmp", &SearchSwitches::use_lmp},
         SwitchOption{"UseFutility", &SearchSwitches::use_futility},
         SwitchOption{"UseSeePrune", &SearchSwitches::use_see_prune},
-        SwitchOption{"UseTtAgeBlend", &SearchSwitches::tt_age_blend}}) {
+        SwitchOption{"UseTtAgeBlend", &SearchSwitches::tt_age_blend},
+        SwitchOption{"UseTtKeepExact", &SearchSwitches::tt_keep_exact},
+        SwitchOption{"UseTtEvalRefine", &SearchSwitches::use_tt_eval_refine}}) {
     options_.add_check(s.name, searcher_->switches.*s.field,
                        [this, field = s.field](const OptionEntry& e, std::string&) {
                          searcher_->switches.*field = e.number != 0;
                          return true;
                        });
+  }
+  // And every numeric search parameter as a spin option (deliverable 8b; the
+  // table and its ranges are src/tune/params.hpp), for SPSA.
+  for (const TuneParam& p : param_table()) {
+    options_.add_spin(std::string(p.name), p.default_value, p.lowest, p.highest,
+                      [name = p.name](const OptionEntry& e, std::string&) {
+                        return set_param(name, static_cast<int>(e.number));
+                      });
   }
 #endif
   options_.add_string("LogFile", "", [this](const OptionEntry& e, std::string& message) {
@@ -213,6 +228,14 @@ unsigned UciSession::hash_workers() const {
 }
 
 bool UciSession::apply_pending() {
+  if (tables_pending_) {
+    // Never during a search: this runs only where the Hash work runs. An
+    // empty path (or "<empty>", the GUIs' way to clear it) unloads quietly.
+    tables_pending_ = false;
+    const bool cleared = syzygy_path_.empty() || syzygy_path_ == "<empty>";
+    const std::string report = load_endgame_tables(cleared ? std::string() : syzygy_path_);
+    if (!cleared) out_.send_info_string(report);
+  }
   if (hash_pending_) {
     const std::size_t bytes = hash_bytes_for_mb(static_cast<std::uint64_t>(options_.number("Hash")));
     const auto start = std::chrono::steady_clock::now();

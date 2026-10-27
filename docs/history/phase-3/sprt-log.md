@@ -1,5 +1,7 @@
 # Phase 3 SPRT log
 
+Commit hashes from before the 2026-10-27 path rewrite (cited in some entries and commit messages) map to the current ones in [path-rewrite-2026-10-27.md](path-rewrite-2026-10-27.md).
+
 Every SPRT of Phase 3, in the order run, rejections included (DESIGN.md
 §5.2, "Testing setup"). Entries are appended by `tools/sprt.sh`: fastchess
 alpha 1.8.2, normalized Elo, pentanomial statistics, alpha = beta = 0.05,
@@ -171,4 +173,137 @@ Games: 306, Wins: 284, Losses: 2, Draws: 20, Points: 294.0 (96.08 %)
 Ptnml(0-2): [0, 0, 3, 18, 132], WL/DD Ratio: 2.00
 LLR: 2.96 (100.5%) (-2.94, 2.94) [0.00, 5.00]
 SPRT ([0.00, 5.00]) completed - H1 was accepted
+```
+
+### 20261026T135724Z ttblend-ltc
+
+- base `f140963` (f140963), test `f140963` (f140963), bounds [0, 3] nElo, 40+0.4, Hash 64 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, test opts option.UseTtAgeBlend=true
+- Verdict: **INCONCLUSIVE (stopped by the owner, 2026-10-26)** after 1,561 finished games; the last report (1,400 games): blended +5.7 ± 13.8 Elo (nElo +7.5 ± 18.2), LLR 0.21 of 2.94. The lexicographic policy stays the default; the blended one stays behind its switch (`UseTtAgeBlend`), to be re-tested after Phase 4's network and under Phase 6 conditions (ideas.md idea 24). No time losses, crashes or illegal moves.
+```
+Elo: 5.71 +/- 13.79, nElo: 7.54 +/- 18.20
+Games: 1400, Wins: 476, Losses: 453, Draws: 471, Points: 711.5 (50.82 %)
+Ptnml(0-2): [64, 144, 251, 187, 54], WL/DD Ratio: 2.59
+LLR: 0.21 (7.1%) (-2.94, 2.94) [0.00, 3.00]
+```
+
+### 20261026T210311Z rv-failhigh
+
+- base `077db27` (077db27), test `f0a9caf` (f0a9caf), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40
+- Verdict: **REJECTED (stopped by the owner, 2026-10-26)** after 2,143 finished games. The last report (2,000 games): the root fail-high fix (first external review, claim (a)) at -14.6 ± 10.8 Elo (nElo -20.7 ± 15.2), its 95% interval entirely below zero; LLR -0.95 of -2.94. The behaviour is reverted: when the search stops with a root fail high still awaiting its re-search, the previous iteration's move is kept (the bookkeeping stays; ideas.md idea 29). No time losses, crashes or illegal moves.
+```
+Elo: -14.60 +/- 10.75, nElo: -20.71 +/- 15.23
+Games: 2000, Wins: 647, Losses: 731, Draws: 622, Points: 958.0 (47.90 %)
+Ptnml(0-2): [88, 217, 447, 187, 61], WL/DD Ratio: 3.10
+LLR: -0.95 (-32.3%) (-2.94, 2.94) [-3.00, 0.00]
+```
+
+### Note (owner, 2026-10-26): concurrency 8
+
+From the futile-node filter's SPRT on, the remaining tests of the external
+reviews' queue run at concurrency 8 (was 10), so development builds, tests
+and checks can run beside the games at low priority.
+
+### 20261026T223103Z rv-futile
+
+- base `6ae4128` (6ae4128), test `3a8a1b6` (3a8a1b6), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 8, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40
+- Verdict: **ACCEPTED (stopped by the owner, 2026-10-26)** after 2,046 finished games. The last report (2,000 games): the futile-node quiet filter (first external review, claim (d)) at +11.5 ± 11.9 Elo, on non-regression bounds [-3, 0]: the 95% interval's lower bound (-0.4) is above -3. The change is kept. No time losses, crashes or illegal moves.
+```
+Elo: 11.47 +/- 11.90, nElo: 14.69 +/- 15.23
+Games: 2000, Wins: 734, Losses: 668, Draws: 598, Points: 1033.0 (51.65 %)
+Ptnml(0-2): [92, 186, 402, 204, 116], WL/DD Ratio: 2.87
+LLR: 0.80 (27.3%) (-2.94, 2.94) [-3.00, 0.00]
+```
+
+### 20261027T001443Z rv-ttrefine
+
+- base `738daff` (738daff), test `738daff` (738daff), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 8, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, test opts option.UseTtEvalRefine=true
+- Verdict: **PROVISIONAL (stopped by the owner, 2026-10-26), NEEDS VERIFICATION.** Gainer bounds [0, 3], not decided: +17.0 ± 19.9 Elo at 800 games when the owner stopped it; the last report before it ended (1,000 games, 1,027 finished) is below, +14.6 ± 17.8, LLR 0.40 of 2.94. The TT-refined pruning eval (second review, claim (d); KB T50) is turned on by default and keeps its switch `UseTtEvalRefine`; the end-of-Phase-3 removal round verifies it at STC and at LTC 40+0.4 (DESIGN.md §5.2, Quality control 6). No time losses, crashes or illegal moves.
+```
+Elo: 14.60 +/- 17.76, nElo: 17.74 +/- 21.53
+Games: 1000, Wins: 374, Losses: 332, Draws: 294, Points: 521.0 (52.10 %)
+Ptnml(0-2): [50, 102, 171, 110, 67], WL/DD Ratio: 3.17
+LLR: 0.40 (13.7%) (-2.94, 2.94) [0.00, 3.00]
+```
+
+### Note (owner, 2026-10-26): keep-exact's cap and development priority
+
+The keep-exact SPRT (`rv-keepexact`, below) runs at concurrency 8 on top of
+the TT-refined eval's new default (008b67f with `UseTtEvalRefine=true` on
+both sides), capped at about 5,000 games or 4 hours from its start
+(01:08:55 UTC, so 05:08:55 UTC), whichever comes first. Undecided at the
+cap, it is INCONCLUSIVE: keep-exact stays off by default and goes into the
+end-of-Phase-3 removal round. Development now runs at normal priority beside
+the games; after any time loss it drops back to low priority until the SPRT
+ends. Once the queue is empty, SPRTs return to concurrency 10.
+
+### 20261027T010855Z rv-keepexact
+
+- base `008b67f` (008b67f), test `008b67f` (008b67f), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 8, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, base opts option.UseTtEvalRefine=true, test opts option.UseTtEvalRefine=true option.UseTtKeepExact=true
+- Verdict: **INCONCLUSIVE at the owner's cap** (about 5,000 games or 4 hours; stopped by its guard at 05:09:33 UTC after 4,845 finished games): -0.6 +/- 7.5 Elo at the last report (4,800 games), LLR 0.09 of 2.94. Keeping exact TT entries (the second review's claim (e)) stays **off by default** and goes into the end-of-Phase-3 removal round (DESIGN.md §5.2, Quality control 6). No time losses, crashes or illegal moves.
+```
+Elo: -0.58 +/- 7.49, nElo: -0.76 +/- 9.83
+Games: 4800, Wins: 1670, Losses: 1678, Draws: 1452, Points: 2396.0 (49.92 %)
+Ptnml(0-2): [224, 502, 956, 494, 224], WL/DD Ratio: 3.19
+LLR: 0.09 (3.0%) (-2.94, 2.94) [-3.00, 0.00]
+```
+
+### 20261027T051243Z mc-tables
+
+- base `b7ab410` (b7ab41033be35bd5b098cd8af37d9a133fa8ad31), test `b7ab410` (b7ab41033be35bd5b098cd8af37d9a133fa8ad31), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, test opts option.SyzygyPath=~/fork-tools/syzygy/3-4-5
+- Verdict: **ACCEPTED (owner's decision, 2026-10-27)**: Syzygy probing (deliverable 7; the test side with the 3-4-5 tables, the base without) at **+17.5 +/- 7.2 Elo** at the 5,000-game cap, LLR 2.72 of 2.94, the 95% interval entirely above zero. Probing stays on. No time losses, crashes or illegal moves.
+```
+Elo: 17.46 +/- 7.18, nElo: 23.45 +/- 9.63
+Games: 5000, Wins: 1846, Losses: 1595, Draws: 1559, Points: 2625.5 (52.51 %)
+Ptnml(0-2): [179, 464, 1053, 535, 269], WL/DD Ratio: 2.76
+LLR: 2.72 (92.3%) (-2.94, 2.94) [0.00, 3.00]
+```
+
+### 20261027T083215Z mc-time
+
+- base `23f1b10` (23f1b10), test `4ec034d` (4ec034d), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40
+- Verdict: **INCONCLUSIVE at the 5,000-game cap**: deliverable 8 (23f1b10 -> 4ec034d: the increment fix, the two-overhead reserve floor, the iteration rule) at -4.9 +/- 7.1 Elo, LLR -0.65 of -2.94. It leaned to about -10 Elo midway (3,300 games), which led the owner to split deliverable 8 (2026-10-27): the floor binds near the clock where 8+0.08 games settle (about 0.4-0.6 s left), and the test side spent 3-7% less time per move from move 41 on (PGN analysis). The variants are measured separately below (d8-*). No time losses, crashes or illegal moves.
+```
+Elo: -4.93 +/- 7.09, nElo: -6.71 +/- 9.63
+Games: 5000, Wins: 1696, Losses: 1767, Draws: 1537, Points: 2464.5 (49.29 %)
+Ptnml(0-2): [227, 508, 1075, 489, 201], WL/DD Ratio: 2.98
+LLR: -0.65 (-22.0%) (-2.94, 2.94) [-3.00, 0.00]
+```
+
+### Note (owner, 2026-10-27): deliverable 8 split, variant chosen
+
+Deliverable 8 was split (owner): (a) the increment fix alone, (b) the
+low-clock reserve redesigned to be adaptive, as variant B1 "deficit"
+(reserve max(clock/10, overhead - increment)) or B2 "danger zone" (one more
+Move Overhead only when less than two overheads plus an increment is
+available), and (c) the iteration rule. Stress tests, 2,000 games at 2+0.02
+under full load each: (a) alone **3 time losses** (each with the clock down
+to about one overhead), B1 0, B2 0; the full original deliverable 8 0.
+**The owner chose B2 over B1 without a separate SPRT**: both have zero time
+losses, and B2 acts only at a low clock while B1 reserves time on every
+move whose increment is below the overhead. One SPRT follows: (a) + B2 +
+(c) against (a) (the pre-deliverable-8 time management on the current code:
+the increment fix gives the same numbers at an 80 ms increment), 8+0.08,
+non-regression bounds [-3, 0], concurrency 10, capped at 5,000 games. If it
+passes, it is merged and the Milestone C gauntlet starts, with the 40+0.4
+check after; if it fails, B2 and (c) are tested separately.
+
+### 20261027T165757Z d8-final
+
+- base `d51462f` (d51462f: deliverable 8a, the increment fix, with the last-info-line fix), test `8b8e34c` (8b8e34c: + B2, the danger-zone reserve, + (c), the iteration rule), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40; cap 5,000 games
+- Verdict: **ACCEPTED (stopped by the owner, 2026-10-27: "I trust the changes")** after 2,303 finished games. The last report (2,200 games): +1.9 +/- 10.6 Elo, LLR 0.22 of 2.94 on non-regression bounds; it was not decided by the rule. With its stress results (B2 0 time losses in 2,000 games at 2+0.02 under full load, (a) alone 3, (c) alone 1), the combination is merged as deliverable 8. sprt.sh's own summary of this run was cut off when the run was stopped; the figures here are from its game log. No time losses, crashes or illegal moves.
+```
+Elo: 1.89 +/- 10.62, nElo: 2.59 +/- 14.51
+Games: 2202, Wins: 764, Losses: 752, Draws: 686, Points: 1107.0 (50.27 %)
+LLR: 0.22 (7.6%) (-2.94, 2.94) [-3.00, 0.00]
+```
+
+### 20261027T194536Z d8-ltc
+
+- base `d51462f` (deliverable 8a with the last-info-line fix), test `91365e2` (deliverable 8's final form, merged), bounds [-3, 0] nElo, 40+0.4, Hash 64 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40; cap 1,000 games ("a short check")
+- Verdict: **INCONCLUSIVE (stopped by the owner, 2026-10-27)** after 592 finished games, no time losses, crashes or illegal moves. fastchess's last report (400 games): -14.8 +/- 20.9 Elo, LLR -0.23. All 590 games in complete pairs (counted by tools/cloud/sprt_merge.py from the game log): -4.7 +/- 18.0 Elo, nElo -7.3 +/- 28.0, LLR -0.09, Ptnml [18, 59, 144, 61, 13]. **Flagged for Phase 5**, which revisits time management at long time controls; **the iteration rule is the first thing to check there** (at 40+0.4 the danger-zone reserve should almost never bind, so a long-time-control effect, if any, is more likely the iteration rule's).
+```
+Elo: -14.77 +/- 20.88, nElo: -24.15 +/- 34.05
+Games: 400, Wins: 124, Losses: 141, Draws: 135, Points: 191.5 (47.88 %)
+Ptnml(0-2): [12, 43, 100, 40, 5], WL/DD Ratio: 2.85
+LLR: -0.23 (-7.7%) (-2.94, 2.94) [-3.00, 0.00]
 ```

@@ -6,45 +6,35 @@
 #include "core/movegen.hpp"
 #include "eval/bootstrap_eval.hpp"
 #include "eval/eval.hpp"
+#include "search/endgame_tables.hpp"
 #include "search/lmr_table.hpp"
 #include "search/see.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng {
 
 namespace {
 
-// Fork's own starting values (Phase 3 settles structure, not tuning).
-// Aspiration (measured on the bench, DESIGN.md §5.2 "Search constants"): from
-// depth 5, nine in ten iterations move the score by at most 12 cp.
-constexpr int AspirationMinDepth = 5;              // iterations before this use the full window
-constexpr int AspirationHalfWidth = 12;            // first half-width, in centipawns
+// Fork's own values, each justified in DESIGN.md §5.2 ("Search constants").
+// The tunable ones are in the parameter table (src/tune/params.hpp,
+// deliverable 8b): aspiration (AspirationMinDepth, AspirationHalfWidth); the
+// iteration rule (no new iteration when elapsed * IterationGrowthThirds / 3
+// passes the hard limit: the work grows by a measured median of 1.66 per
+// iteration); reverse futility (RfpMaxDepth, RfpMargin cp per ply); the null
+// move (NullMinDepth; half the remaining depth less one ply, and one ply less
+// again per NullSurplusPerPly of static eval above beta, at most
+// NullSurplusPliesMax); endgame tables from TableProbeMinDepth in the main
+// search; LMR (LmrMinDepth, LmrMinMove; the table in lmr_table.hpp); late
+// move pruning (LmpMaxDepth; LmpQuietAllowance + d quiets); futility
+// (FutilityMaxDepth; FutilityOffset + FutilityGrowth * depth); SEE pruning
+// (SeePruneMaxDepth; QuietSeeFloor and CaptureSeeFloor cp per ply). The
+// margins are in the bootstrap evaluation's centipawns and are retuned after
+// Phase 4. These stay constants (not strength parameters):
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
-constexpr std::int64_t FailReportMs = 1000;        // aspiration fails are reported only after this
-
-// Tier 1 pruning and reductions (deliverable 6). Every value has its
-// justification in DESIGN.md §5.2 ("Search constants"); all move into the
-// parameter table in deliverable 8b and are retuned after Phase 4 (they
-// depend on the evaluation's scale).
-constexpr int RfpMaxDepth = 6;
-constexpr int RfpMargin = 80;  // centipawns per ply of remaining depth
-constexpr int NullMinDepth = 3;
-// The null search gets half the remaining depth, less one ply, and one ply
-// less again per NullSurplusPerPly of static eval above beta (at most
-// NullSurplusPliesMax).
-constexpr int NullSurplusPerPly = 300;  // the bootstrap evaluation's knight value (bootstrap_eval.cpp)
-constexpr int NullSurplusPliesMax = 2;
-constexpr int LmrMinDepth = 3;
-constexpr int LmrMinMove = 4;  // the first three moves searched are never reduced
-constexpr int LmpMaxDepth = 4;
-// Quiet moves searched at depth d before the rest are pruned:
-// LmpQuietAllowance + d (measured, DESIGN.md §5.2).
-constexpr int LmpQuietAllowance = 12;
-constexpr int FutilityMaxDepth = 6;
-constexpr int FutilityOffset = 100;  // the futility margin is FutilityOffset + FutilityGrowth * depth
-constexpr int FutilityGrowth = 70;
-constexpr int SeePruneMaxDepth = 6;
-constexpr int QuietSeeFloor = 60;     // a quiet may lose at most this much by SEE, per ply of depth
-constexpr int CaptureSeeFloor = 100;  // a capture likewise
+// Cursed wins and blessed losses (the fifty-move rule turns them into draws)
+// score just off zero, so a real draw is never preferred to them and no real
+// advantage is given up for them.
+constexpr int TableNearDrawScore = 1;
 
 // The side has a piece other than pawns and its king (the null move's main
 // zugzwang guard: pawn endings are where passing is most often best).
@@ -104,9 +94,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) {
     if (!in_check) return 0;
-    f.moves.count = 0;
-    generate<GenMode::Legal>(pos, f.moves);
-    return f.moves.size() ? 0 : mated_score(ply);
+    MoveList fifty_scratch;  // rare (50-move positions in check), so a local list
+    generate<GenMode::Legal>(pos, fifty_scratch);
+    return fifty_scratch.size() ? 0 : mated_score(ply);
   }
   if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
   if (depth <= 0) return static_eval(pos);  // only with the quiescence search switched off
@@ -132,25 +122,67 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       return s;
   }
 
-  f.static_eval = in_check ? ScoreNone : static_eval(pos);
+  // A TT entry stores the static evaluation of its position (review 2, claim
+  // (b)): it is reused instead of evaluating again.
+  // Endgame tables (deliverable 7): within the tables' piece count, with no
+  // castling rights and a zero halfmove clock, the result is known. A win is
+  // a lower bound (a faster mate may exist), a loss an upper bound, a draw
+  // exact; the node returns at once when the bound settles it, and otherwise
+  // the searched result is kept within it (a lost node is worth no more than
+  // its loss, a won node no less than its win).
+  int table_floor = -ScoreInfinite, table_ceiling = ScoreInfinite;
+  if (switches.use_tables && depth >= TableProbeMinDepth && ply > 0) {
+    if (const std::optional<TableWdl> wdl = probe_table_wdl(pos)) {
+      ++table_hits_;
+      const int s = *wdl == TableWdl::Win           ? TbWinScore - ply
+                    : *wdl == TableWdl::Loss        ? -(TbWinScore - ply)
+                    : *wdl == TableWdl::CursedWin   ? TableNearDrawScore
+                    : *wdl == TableWdl::BlessedLoss ? -TableNearDrawScore
+                                                    : 0;
+      const TtBound b = *wdl == TableWdl::Win    ? TtBound::Lower
+                        : *wdl == TableWdl::Loss ? TtBound::Upper
+                                                 : TtBound::Exact;
+      if (b == TtBound::Exact || (b == TtBound::Lower && s >= beta) || (b == TtBound::Upper && s <= alpha)) {
+        if (switches.use_tt) tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv);
+        return s;
+      }
+      (b == TtBound::Lower ? table_floor : table_ceiling) = s;
+    }
+  }
+
+  f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : static_eval(pos);
+  // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
+  // score from a real search corrects the static estimate in the direction
+  // its bound proves (a lower bound above it raises it, an upper bound below
+  // it lowers it, an exact score replaces it). Mate and tablebase scores are
+  // left out; the TT keeps the raw static eval.
+  int prune_eval = f.static_eval;
+  if (switches.use_tt_eval_refine && tt_hit && !in_check) {
+    const int s = score_from_tt(hit.score, ply);
+    if (!is_tb_or_mate(s) &&
+        (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s > prune_eval) ||
+         (hit.bound == TtBound::Upper && s < prune_eval)))
+      prune_eval = s;
+  }
   const bool can_prune = !OnPv && !in_check;
 
   // Reverse futility pruning (T20): far enough above beta at shallow depth,
   // the node fails high without a search.
   if (switches.use_rfp && can_prune && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
-      f.static_eval - RfpMargin * depth >= beta) {
+      prune_eval - RfpMargin * depth >= beta) {
 #ifdef FORK_SEARCH_STATS
     ++counters.rfp_cuts;
 #endif
-    return f.static_eval;
+    return prune_eval;
   }
 
   // Null move pruning (T13): if passing still fails high on a reduced
   // search, the node is taken to fail high.
   if (switches.use_nmp && can_prune && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
-      f.static_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
-    const int surplus_plies = std::min((f.static_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
-    const int null_depth = depth / 2 - 1 - surplus_plies;  // 0 or less: the quiescence search
+      prune_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
+    const int surplus_plies = std::min((prune_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
+    const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
+    if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)
     pos.make_null();
     frames_[ply + 1].after_null = true;
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
@@ -177,12 +209,22 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   int moves_seen = 0;  // legal moves the selector yielded, searched or pruned
   int quiets_searched = 0;
   const bool lmp_node = switches.use_lmp && can_prune && depth <= LmpMaxDepth;
-  const int futility_value = in_check ? 0 : f.static_eval + FutilityOffset + FutilityGrowth * depth;
+  const int futility_value = in_check ? 0 : prune_eval + FutilityOffset + FutilityGrowth * depth;
   const bool futile_node = switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
                            !is_tb_or_mate(alpha) && futility_value <= alpha;
+#ifdef FORK_SEARCH_STATS
+  counters.futile_nodes += futile_node;
+#endif
+  bool quiet_checks_only = false;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
     ++moves_seen;
     const bool quiet = !m.is_capture() && !m.is_promotion();
+#ifdef FORK_SEARCH_STATS
+    counters.futile_quiets_taken += futile_node && quiet;
+    const bool bad_after_stop =
+        f.selector.yielding_stage() == SelectorStage::BadCaptures && f.selector.quiets_stopped();
+    counters.bad_captures_after_stop += bad_after_stop;
+#endif
     // Pruning: only once a move has been searched (so no node is pruned into
     // a false stalemate or mate) and while not already losing to a mate.
     if (moves_searched > 0 && best > -(MateScore - MaxPly)) {
@@ -205,8 +247,24 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           continue;
         }
       }
+#ifdef FORK_SEARCH_STATS
+      if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth) {
+        const SelectorStage st = f.selector.yielding_stage();
+        ++(st == SelectorStage::GoodCaptures  ? counters.see_tests_good_captures
+           : st == SelectorStage::BadCaptures ? counters.see_tests_bad_captures
+           : st == SelectorStage::Quiets      ? counters.see_tests_quiets
+                                              : counters.see_tests_other);
+      }
+#endif
+      // A capture from the good-capture stage already has SEE >= 0, above
+      // every (negative) threshold here, so it is not tested again (review
+      // claim (c), 2026-10-26).
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth &&
+          f.selector.yielding_stage() != SelectorStage::GoodCaptures &&
           !see_at_least(pos, m, -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth)) {
+#ifdef FORK_SEARCH_STATS
+        counters.bad_captures_after_stop_pruned += bad_after_stop;
+#endif
 #ifdef FORK_SEARCH_STATS
         ++counters.see_prunes;
 #endif
@@ -217,6 +275,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     pos.make(m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
+    counters.futile_quiets_searched += futile_node && quiet;
 #endif
     int score;
     if (moves_searched == 0 || !switches.use_pvs) {
@@ -226,11 +285,20 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       // zero-window search first, then the full depth if they beat alpha.
       const int new_depth = depth - 1;
       int reduced = new_depth;
-      if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet && !in_check)
-        reduced = std::clamp(new_depth - reduction_for(depth, moves_searched + 1), 1, new_depth);
+      if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet &&
+          !in_check) {
+        // The table's reduction plus the evolvable correction (lmr_table.hpp;
+        // 0 as committed).
+        const int base = reduction_for(depth, moves_searched + 1);
+        const LmrContext context{depth, moves_searched + 1, base, history_.value(pos.side_to_move(), m),
+                                 OnPv};
+        const int correction = lmr_correction(context) * LmrCorrectionStrength / 64;
+        reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
+      }
       score = -negamax<false>(-alpha - 1, -alpha, reduced, ply + 1);
 #ifdef FORK_SEARCH_STATS
       counters.lmr_searches += reduced < new_depth;
+      counters.lmr_plies_sum += static_cast<std::uint64_t>(new_depth - reduced);
       counters.lmr_researches += reduced < new_depth && score > alpha;
 #endif
       if (score > alpha && reduced < new_depth)
@@ -264,11 +332,23 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       }
     }
     if (quiet) f.failed_quiets.add(m);
+    // Once a move has been searched at a futile node not already lost to a
+    // mate, every later non-checking quiet is pruned (the conditions at the
+    // top of this loop), and both conditions only grow more true: the
+    // selector may drop those quiets unscored.
+    if (!quiet_checks_only && futile_node && best > -(MateScore - MaxPly)) {
+      f.selector.keep_quiet_checks();
+      quiet_checks_only = true;
+    }
   }
+  // Quiets the selector dropped at a futile node were pruned by futility, so
+  // the bound stays honest as if each had been seen.
+  if (f.selector.quiets_filtered() > 0) best = std::max(best, futility_value);
   // No legal move is mate or stalemate; legal moves that were all pruned are
   // not (the guard above prevents it; this keeps the result right regardless).
   if (moves_seen == 0) return in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
+  best = std::clamp(best, table_floor, table_ceiling);
   if (switches.use_tt) {
     const TtBound bound = best >= beta                 ? TtBound::Lower
                           : OnPv && best > alpha_start ? TtBound::Exact
@@ -286,6 +366,9 @@ template <bool OnPv>
 int Searcher::quiesce(int alpha, int beta, int ply) {
   pv_[ply].length = 0;
   ++nodes_;
+#ifdef FORK_SEARCH_STATS
+  ++(OnPv ? counters.quiesce_nodes_pv : counters.quiesce_nodes_non_pv);
+#endif
   if (poll_limits()) return 0;
   max_ply_reached_ = std::max(max_ply_reached_, ply);
   Position& pos = *pos_;
@@ -295,9 +378,9 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) {
     if (!in_check) return 0;
-    f.moves.count = 0;
-    generate<GenMode::Legal>(pos, f.moves);
-    return f.moves.size() ? 0 : mated_score(ply);
+    MoveList fifty_scratch;  // rare (50-move positions in check), so a local list
+    generate<GenMode::Legal>(pos, fifty_scratch);
+    return fifty_scratch.size() ? 0 : mated_score(ply);
   }
   if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
 
@@ -316,7 +399,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   if (in_check) {
     f.static_eval = ScoreNone;
   } else {
-    f.static_eval = static_eval(pos);
+    f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : static_eval(pos);  // as in negamax
     best = f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)
@@ -381,9 +464,15 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     pos.unmake(m);
     if (stopped_) return best;
     if (score > best) best = score;
+    if (m == root_fail_high_ && score < beta) root_fail_high_ = NoMove;  // resolved by its re-search
     if (score > alpha) {
       best_index = i;
       update_pv(0, m);
+      if (score >= beta) {
+        root_fail_high_ = m;
+        root_fail_high_score_ = score;
+        root_fail_high_pv_ = pv_[0];
+      }
       if (score < beta) {
         iteration_best_ = m;
         iteration_best_score_ = score;
@@ -403,9 +492,10 @@ int Searcher::search_root(int alpha, int beta, int depth) {
 }
 
 void Searcher::report_iteration(int depth, int score, int bound, const PrincipalLine& pv) {
+  last_reported_ = pv.length ? pv.moves[0] : NoMove;
   if (!listener_) return;
-  const IterationReport r{depth,        max_ply_reached_,    score, bound, nodes_,
-                          elapsed_ms(), tt_.fill_permille(), &pv};
+  const IterationReport r{depth,        max_ply_reached_,    score, bound,      nodes_,
+                          elapsed_ms(), tt_.fill_permille(), &pv,   table_hits_};
   listener_->on_iteration(*pos_, r);
 }
 
@@ -435,23 +525,47 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   nodes_ = 0;
   max_ply_reached_ = 0;
   stopped_ = false;
+  unresolved_fail_high_ = NoMove;
 
   tt_.advance_age();
   tt_.set_age_blend(switches.tt_age_blend);
+  tt_.set_keep_exact(switches.tt_keep_exact);
   SearchResult result;
   // The first iteration's root order is the selector's (no TT move).
   PlyFrame& root = frames_[0];
-  root.moves.count = 0;
+  MoveList root_list;  // once per search, so a local list
   root.selector.start_main(pos, NoMove, switches.use_history ? &history_ : nullptr);
-  for (Move m; !(m = root.selector.take_next()).is_none();) root.moves.add(m);
+  for (Move m; !(m = root.selector.take_next()).is_none();) root_list.add(m);
   root_count_ = 0;
-  for (Move m : root.moves)
+  for (Move m : root_list)
     if (limits.restrict_to.size() == 0 || limits.restrict_to.contains(m)) root_moves_[root_count_++] = {m};
   if (root_count_ == 0)  // no searchmoves move is legal: search every move
-    for (Move m : root.moves) root_moves_[root_count_++] = {m};
+    for (Move m : root_list) root_moves_[root_count_++] = {m};
   if (root_count_ == 0) {
     result.score = pos.in_check() ? mated_score(0) : 0;
     return result;
+  }
+  // Endgame tables at the root (deliverable 7): only the moves that keep the
+  // best result under the fifty-move rule are searched, in the tables' order
+  // (within any searchmoves). A repetition since the last capture or pawn
+  // move makes the ranking avoid repeating again.
+  table_hits_ = 0;
+  if (switches.use_tables && endgame_table_pieces() > 0) {
+    MoveList kept;
+    if (rank_root_by_tables(pos, pos.repetition_count() >= 2, kept)) {
+      MoveList searched;  // the kept moves that are root moves, in the tables' order
+      for (Move m : kept)
+        for (std::size_t i = 0; i < root_count_; ++i)
+          if (root_moves_[i].move == m) {
+            searched.add(m);
+            break;
+          }
+      if (searched.size() > 0) {
+        root_count_ = 0;
+        for (Move m : searched) root_moves_[root_count_++] = {m};
+      }
+      ++table_hits_;
+    }
   }
   result.best = root_moves_[0].move;
 
@@ -459,6 +573,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   for (int depth = 1; depth <= std::min(limits.depth, MaxPly - 1); ++depth) {
     iteration_best_ = NoMove;
     iteration_best_score_ = -ScoreInfinite;
+    root_fail_high_ = NoMove;
     int delta = AspirationHalfWidth;
     int alpha = -ScoreInfinite, beta = ScoreInfinite;
     if (switches.use_aspiration && depth >= AspirationMinDepth && !is_tb_or_mate(previous)) {
@@ -470,7 +585,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       score = search_root(alpha, beta, depth);
       if (stopped_) break;
       if (score > alpha && score < beta) break;
-      if (elapsed_ms() >= FailReportMs) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
+      if (elapsed_ms() >= fail_report_ms) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
       // Only the failing side moves. The half-width grows by how far the
       // fail-soft score already is from the previous iteration's: at least
       // the old half-width (the score fell outside the window), more after a
@@ -483,26 +598,42 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       }
     }
     if (stopped_) {
+      unresolved_fail_high_ = root_fail_high_;
       // An unfinished iteration counts only through a move that came back
-      // with an exact score above the last finished iteration's best.
+      // with an exact score above the last finished iteration's best. A root
+      // fail high still awaiting its re-search is not trusted: playing it
+      // lost -14.6 +/- 10.8 Elo at STC (owner, 2026-10-26; sprt-log.md
+      // rv-failhigh), so the previous iteration's move is kept. The fail
+      // high is still recorded (unresolved_fail_high, ideas.md idea 29).
       if (!iteration_best_.is_none() && result.depth > 0 && iteration_best_score_ > previous) {
         result.best = iteration_best_;
         result.score = iteration_best_score_;
         report_iteration(depth, iteration_best_score_, 0,
                          iteration_pv_);  // the last info names the move played
       }
+      // A reported fail (a fail low has no PV, a fail high names a move
+      // that is not played) must not be the last line: the finished
+      // iteration is reported again.
+      if (result.depth > 0 && !(last_reported_ == result.best))
+        report_iteration(result.depth, result.score, 0, finished_pv_);
       break;
     }
     previous = score;
     result.best = root_moves_[0].move;
     result.score = score;
     result.depth = depth;
+    finished_pv_ = pv_[0];
     report_iteration(depth, score, 0, pv_[0]);
     if (limits.mate_moves > 0 && is_mate_score(score) && score > 0 &&
         mate_in_moves(score) <= limits.mate_moves)
       break;
     const bool timed = !(pondering && pondering->load(std::memory_order_relaxed));
     if (timed && limits.soft_ms >= 0 && elapsed_ms() >= limits.soft_ms) break;
+    // An iteration that would probably not finish before the hard limit is
+    // not started (deliverable 8): its time would be spent for nothing. This
+    // binds where the hard limit is close to the soft one: `go movetime`,
+    // and a low clock whose reserve caps the hard limit.
+    if (timed && limits.hard_ms >= 0 && elapsed_ms() * IterationGrowthThirds / 3 > limits.hard_ms) break;
   }
   result.nodes = nodes_;
   return result;

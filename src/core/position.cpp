@@ -13,7 +13,7 @@ namespace forkeng {
 namespace {
 
 constexpr std::string_view PieceChars = "PNBRQK??pnbrqk";
-constexpr Bitboard DarkSquares = 0xAA55AA55AA55AA55ULL;  // a1 is dark
+constexpr Bitboard DarkSquares = 0xAA55AA55AA55AA55ULL;              // a1 is dark
 constexpr int MaxHalfmoveClock = 10000, MaxFullmoveNumber = 100000;  // accepted in a FEN
 
 struct CastleInfo {
@@ -496,7 +496,8 @@ bool Position::gives_check(Move m) const {
     const auto [king_to, rook_to] = castle_landing(from, to);
     Bitboard occ = (pieces() ^ bb(from) ^ bb(to)) | bb(king_to) | bb(rook_to);
     Bitboard rooks = (pieces(us, Rook, Queen) ^ bb(to)) | bb(rook_to);
-    return (rook_attacks(their_king, occ) & rooks) || (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen));
+    return (rook_attacks(their_king, occ) & rooks) ||
+           (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen));
   }
 
   // Discovered check: the moving piece was the only piece between one of our
@@ -521,6 +522,11 @@ bool Position::gives_check(Move m) const {
            (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen));
   }
   return false;
+}
+
+Key Position::predicted_null_key() const {
+  const State& s = state();
+  return s.key ^ zobrist::side ^ (s.ep != NoSquare ? zobrist::ep_file[file_of(s.ep)] : Key{0});
 }
 
 Key Position::predicted_key(Move m) const {

@@ -90,6 +90,10 @@ class TransTable {
   // a slot is worth its depth minus StaleDepthPerSearch plies per search of
   // age, so a deep stale entry can outrank a shallow current one.
   void set_age_blend(bool on) { age_blend_ = on; }
+  // Off: within one search, any result at least as deep replaces the
+  // position's entry. On (review 2, claim (e), 2026-10-26): an exact entry is
+  // not replaced by a bound of the same depth, which carries less.
+  void set_keep_exact(bool on) { keep_exact_ = on; }
 
   static std::size_t bucket_index(Key key, std::size_t bucket_count);
 
@@ -111,6 +115,7 @@ class TransTable {
   std::size_t count_ = 0;
   std::uint8_t search_age_ = 0;  // wraps at 256
   bool age_blend_ = false;
+  bool keep_exact_ = false;
 };
 
 }  // namespace forkeng

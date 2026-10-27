@@ -169,5 +169,18 @@ for fen, value, moves in [
     ok = got_value == value and (moves is None or got_moves == moves) and (moves is not None or 'd2d5' not in got_moves)
     check(ok, f'capture search {fen}: value {got_value}, best {got_moves[:6]}')
 
+# tests/test_endgame_tables.cpp (deliverable 7). The two KPPPPPvK positions
+# and their results are from the KB (tools.md §6.9, Fathom and the lichess API
+# agreeing); here only their legality and the claims the test relies on: no
+# capture is possible (so no smaller table is needed), and Black has 3 legal
+# moves. The other two are constructed: a running halfmove clock, and eight
+# pieces (more than any table covers).
+for fen in ('k7/8/8/8/8/8/PPPPP3/7K w - - 0 1', 'k7/8/8/8/8/8/PPPPP3/7K b - - 0 1'):
+    b = board_of(fen)
+    check(not any(b.is_capture(m) for m in b.legal_moves), f'tables: no capture in {fen}')
+check(board_of('k7/8/8/8/8/8/PPPPP3/7K b - - 0 1').legal_moves.count() == 3, 'tables: Black has 3 legal moves')
+board_of('k7/8/8/8/8/8/PPPPP3/7K w - - 3 1')
+check(len(board_of('k7/p7/8/8/8/8/PPPPP3/7K w - - 0 1').piece_map()) == 8, 'tables: eight pieces')
+
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)

@@ -4,3 +4,6 @@
 # Fuzz inputs are exact bytes (CR, CRLF and NUL cases included): never
 # convert their line endings.
 fuzz/corpus/** -text
+
+# Vendored Fathom: exact bytes as pinned (SHA-256s in docs/ORIGINALITY.md); never convert.
+third_party/fathom/** -text

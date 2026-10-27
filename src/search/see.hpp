@@ -24,9 +24,14 @@ namespace forkeng {
 // The exchange's material result for the side making `m`, in centipawns.
 int see_value(const Position& pos, Move m);
 
-// Whether `m` wins at least `threshold` centipawns by exchange.
-inline bool see_at_least(const Position& pos, Move m, int threshold) {
-  return see_value(pos, m) >= threshold;
-}
+// Whether see_value(pos, m) >= threshold, decided as soon as the answer is
+// settled (second external review, claim (a), 2026-10-26): the side about to
+// choose between stopping and capturing again can always stop, so when the
+// mover is to choose and the gain so far reaches the threshold the answer is
+// yes, and when the opponent is to choose and it falls short the answer is
+// no; otherwise the exchange goes on, and with no capture left the gain so
+// far decides. Equal to see_value(pos, m) >= threshold for every move and
+// threshold (tests/test_see.cpp).
+bool see_at_least(const Position& pos, Move m, int threshold);
 
 }  // namespace forkeng
