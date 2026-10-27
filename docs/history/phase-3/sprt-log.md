@@ -248,7 +248,7 @@ LLR: 0.09 (3.0%) (-2.94, 2.94) [-3.00, 0.00]
 ### 20261027T051243Z mc-tables
 
 - base `b7ab410` (b7ab41033be35bd5b098cd8af37d9a133fa8ad31), test `b7ab410` (b7ab41033be35bd5b098cd8af37d9a133fa8ad31), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, test opts option.SyzygyPath=~/fork-tools/syzygy/3-4-5
-- Verdict: **INCONCLUSIVE: no decision after the 5000-game cap (or stopped early)**; cap 5000 games.
+- Verdict: **ACCEPTED (owner's decision, 2026-10-27)**: Syzygy probing (deliverable 7; the test side with the 3-4-5 tables, the base without) at **+17.5 +/- 7.2 Elo** at the 5,000-game cap, LLR 2.72 of 2.94, the 95% interval entirely above zero. Probing stays on. No time losses, crashes or illegal moves.
 ```
 Elo: 17.46 +/- 7.18, nElo: 23.45 +/- 9.63
 Games: 5000, Wins: 1846, Losses: 1595, Draws: 1559, Points: 2625.5 (52.51 %)
