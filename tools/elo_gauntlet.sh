@@ -25,8 +25,10 @@ out=$(realpath "$out")
 cd "$out"  # fastchess writes config.json into the working directory
 
 # Name, binary, CCRL Blitz 2'+1" rating (list computed 2026-10-24).
-# ANCHORS=a (Milestone A, the default) or b (Milestone B: Stash 15.3 and
-# 19.0 plus three unrelated code bases; owner, 2026-10-25).
+# ANCHORS=a (Milestone A, the default), b (Milestone B: Stash 15.3 and
+# 19.0 plus three unrelated code bases; owner, 2026-10-25) or c (Milestone
+# C: the B set plus Weiss 1.0 above it; owner, 2026-10-26. The KB's
+# Milestone C anchors Supernova 2.4 and K2 0.99 are added once built).
 case "${ANCHORS:-a}" in
   a) anchors=(
        "Shallow Blue 2.0.0|shallowblue-2.0.0|1578"
@@ -42,7 +44,15 @@ case "${ANCHORS:-a}" in
        "Stash 19.0|stash-19.0|2473"
        "WyldChess 1.51|wyldchess-1.51|2603"
      ) ;;
-  *) echo "elo_gauntlet.sh: ANCHORS must be a or b" >&2; exit 2 ;;
+  c) anchors=(
+       "Belette 2.0.0|belette-2.0.0|2115"
+       "Stash 15.3|stash-15.3|2173"
+       "Chal 1.3.0|chal-1.3.0|2285"
+       "Stash 19.0|stash-19.0|2473"
+       "WyldChess 1.51|wyldchess-1.51|2603"
+       "Weiss 1.0|weiss-1.0|2896"
+     ) ;;
+  *) echo "elo_gauntlet.sh: ANCHORS must be a, b or c" >&2; exit 2 ;;
 esac
 args=(-engine cmd="$fork" name=Fork option.Hash=16)
 : >"$out/anchors.csv"

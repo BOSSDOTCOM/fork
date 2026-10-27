@@ -149,6 +149,7 @@ struct SearchCounters {
   std::uint64_t see_prunes = 0;
   std::uint64_t lmr_searches = 0;
   std::uint64_t lmr_researches = 0;
+  std::uint64_t lmr_plies_sum = 0;  // plies taken off by reductions (the loop's mean-reduction descriptor)
   // Quiet cutoffs at non-PV nodes out of check, by remaining depth (1-6) and
   // the cutting move's index among the quiets searched there (the late move
   // pruning measurement, DESIGN.md §5.2 deliverable 6).

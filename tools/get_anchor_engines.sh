@@ -64,5 +64,12 @@ build weiss-1.0 https://github.com/TerjeKir/weiss f44a4c654c67139ecbd5f3afd9da1e
 build belette-2.0.0 https://github.com/vincentbab/Belette 93b88300f8fdf0126f79326fbfce5b5911275935 . release
 build chal-1.3.0 https://github.com/namanthanki/chal 3e4ee1a135fceb41e2e8bf69eacf8a7a093d8fe7 .
 build wyldchess-1.51 https://github.com/Mk-Chan/WyldChess 322b028cb5e8ba4d8596ca71071d4a9428782f31 src
+# Milestone C additions (KB competition.md §5, "Milestone C anchor set";
+# 2026-10-26): Supernova 2.4 (CCRL Blitz 2679; `make linux`, as plain make
+# builds the Windows target) and K2 0.99 (2750). Not built yet: building
+# them was outside this session's permissions, so the owner runs this
+# script; whether either builds with today's compilers is UNVERIFIED (KB).
+build supernova-2.4 https://github.com/MichaeltheCoder7/Supernova e2de2259c717c7611b5f0db1aaef224257a8d3c6 . linux
+build k2-0.99 https://github.com/serg-meus/k2 028f32f62f0fa914755e9154122546d53a5ade45 .
 cat "$dest/MANIFEST"
 [ "$failed" = 0 ] || { echo "$failed engine(s) failed to build" >&2; exit 1; }

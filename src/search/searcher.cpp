@@ -286,11 +286,18 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       // zero-window search first, then the full depth if they beat alpha.
       const int new_depth = depth - 1;
       int reduced = new_depth;
-      if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet && !in_check)
-        reduced = std::clamp(new_depth - reduction_for(depth, moves_searched + 1), 1, new_depth);
+      if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet && !in_check) {
+        // The table's reduction plus the evolvable correction (lmr_table.hpp;
+        // 0 as committed).
+        const int base = reduction_for(depth, moves_searched + 1);
+        const LmrContext context{depth, moves_searched + 1, base, history_.value(pos.side_to_move(), m), OnPv};
+        const int correction = lmr_correction(context) * LmrCorrectionStrength / 64;
+        reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
+      }
       score = -negamax<false>(-alpha - 1, -alpha, reduced, ply + 1);
 #ifdef FORK_SEARCH_STATS
       counters.lmr_searches += reduced < new_depth;
+      counters.lmr_plies_sum += static_cast<std::uint64_t>(new_depth - reduced);
       counters.lmr_researches += reduced < new_depth && score > alpha;
 #endif
       if (score > alpha && reduced < new_depth)

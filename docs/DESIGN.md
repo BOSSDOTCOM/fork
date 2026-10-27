@@ -1440,6 +1440,60 @@ Choices made while building, where the spec leaves a gap:
   hand on a tuning build: 31 spin options, and LmrDivisorTenths 30 changes
   a depth-12 search from 168,013 to 159,853 nodes. Name check 25: no match
   but the plain words `lowest`, `highest` and `default_value` (kept).
+- **Deliverable 8c preparation: the heuristic-discovery harness**
+  (2026-10-26; ideas.md idea 23; the loop itself not started, owner).
+  `tools/evolve/`, standard-library Python, run in WSL:
+  - **Region and guard** (`regions.py`): `// FORK-EVOLVE-BEGIN lmr` /
+    `END lmr` mark the body of `lmr_correction(const LmrContext&)` in
+    `src/search/lmr_table.hpp`. The search reduces by
+    `base + lmr_correction(c) * LmrCorrectionStrength / 64` (the strength a
+    new parameter-table entry, 64, for SPSA); the committed body returns 0,
+    so bench is unchanged. A full replacement returns `R - c.base`, so one
+    region serves both modes. The guard rejects a candidate that differs
+    from the baseline outside the body, moves a marker or touches another
+    file, before any build.
+  - **Gate** (`gate.py`): hot-path rules on the body (no allocation,
+    exceptions, dynamic dispatch, floating point, randomness, static state,
+    threads, preprocessor, assembly, I/O, containers, markers), the guard,
+    a Release build of the baseline commit with the body, perft equal to
+    the baseline's, the `search` (minimax oracle), `pruning`, `params`,
+    `tt`, `ordering` and `no_alloc` suites, and two identical benches.
+  - **Proxies** (`proxies.py`): best-move agreement and mean score error
+    (capped at 400 cp) against labels from Fork's much deeper search, at
+    the baseline's node budget (20,000), from a fresh state per position;
+    the mean depth reached is reported, never used alone. The position set
+    (`positions.py`, `positions.jsonl`): Fork's own self-play from random
+    8-ply openings, labeled at depth 18, one in six positions held out for
+    survivors' final check. Behaviour descriptors from a
+    `FORK_SEARCH_STATS` bench: the mean reduction (a new counter) and the
+    re-search share.
+  - **Population** (`population.py`): SQLite; islands, a MAP-Elites grid
+    per island (one elite per cell of mean reduction by 0.25 ply and
+    re-search share by 2 points), seeded parent choice, FunSearch-style
+    reseeding of the weakest island, an event log.
+  - **Agents** (`agents.py`, `prompts/`): two proposers (aggressive,
+    cautious) and an optional third from the statistics, the explorer (the
+    full-replacement share, about 1 in 5, on an island protected for 3
+    generations), the critic before every build (a quarter of its
+    rejections are still gated, to measure the critic), the analyst every
+    3 generations; all under the clean-room rules in the shared context.
+    `StubAgent` for tests and the dry run; `CliAgent` (`claude -p`) for a
+    live loop, whose JSON fields are UNVERIFIED until its first call.
+  - **Orchestrator** (`orchestrator.py`, `config.json`): deterministic and
+    seeded; stops at the generation limit, a budget (3M tokens, 150
+    candidates, 48 hours by default), 6 generations without improvement, or
+    a gate-failure rate above 80%; a live loop needs `--live`. Promotion: a
+    proxy fitness 0.005 above the baseline goes to a 400-game match at
+    4+0.04 against it, then to the SPRT hand-off (`match.py`: the patch
+    and the `tools/sprt.sh` commands, gainer bounds, STC then LTC, after
+    the originality-checker's screen).
+  - **Tests** (`test_evolve.py`, 23): regions and the guard, the static
+    rules, the gate's order with a fake runner, the proxy metrics, the
+    grid, parsing and budgets, the match parser, and one orchestrated
+    generation with stub agents; fault-injected (a guard that accepts
+    everything and a gate without its determinism check each fail).
+    Name check 26: no match, except the plain words `Loop`, `Population`,
+    `Budget` and `Span` as Python class names (kept).
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.

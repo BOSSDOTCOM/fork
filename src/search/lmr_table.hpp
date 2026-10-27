@@ -77,4 +77,25 @@ FORK_TUNABLE_CONSTEXPR int reduction_for(int depth, int move) {
   return LmrPlies.plies[d][m];
 }
 
+// The heuristic-discovery loop's first evolvable region (ideas.md idea 23,
+// deliverable 8c; tools/evolve/): a correction in plies added to the table's
+// reduction, scaled by LmrCorrectionStrength / 64 (the parameter table). Only
+// the body between the markers may change, and tools/evolve/regions.py
+// rejects anything else. The committed body returns 0, which keeps the search
+// exactly as the table alone makes it (bench unchanged).
+struct LmrContext {
+  int depth;        // remaining depth at the node
+  int move_number;  // the move's number in the order, 1 = first
+  int base;         // the table's reduction, reduction_for(depth, move_number)
+  int history;      // the move's butterfly history score, [-HistoryMax, HistoryMax]
+  bool on_pv;       // a PV node
+};
+
+constexpr int lmr_correction(const LmrContext& c) {
+  // FORK-EVOLVE-BEGIN lmr
+  static_cast<void>(c);
+  return 0;
+  // FORK-EVOLVE-END lmr
+}
+
 }  // namespace forkeng

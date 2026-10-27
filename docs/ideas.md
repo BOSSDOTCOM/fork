@@ -571,14 +571,18 @@ tuned by SPSA.
 - **phase:** pilot as deliverable 8c (Phase 3); campaigns in late Phase 4
   and the improvement pass, if go.
 - **metric:** the pilot metrics above; then SPRT for each heuristic.
-- **sources:** AlphaEvolve, FunSearch and MAP-Elites as models for the loop;
-  from memory so far, UNVERIFIED until the kb-researcher fetches and cites
-  the primary papers (a prerequisite of the pilot), then logged in
-  ORIGINALITY.md.
+- **sources:** verified from the primary sources by the kb-researcher
+  (2026-10-26; KB research.md §9, ORIGINALITY.md): AlphaEvolve (Novikov et
+  al., arXiv:2506.13131), FunSearch (Romera-Paredes et al., Nature 625,
+  2024) and MAP-Elites (Mouret and Clune, arXiv:1504.04909). Not in any of
+  them: the residual mode, the critic, analyst and explorer roles, any
+  handling of noisy fitness (KB): those are this spec's own.
 - **runtime cost:** possible: depends on the candidate (reported with each
   SPRT).
 - **earliest phase:** Phase 3 (deliverable 8c).
-- **status:** untested; pilot scheduled
+- **status:** harness built (2026-10-26, `tools/evolve/`; DESIGN.md §5.2
+  implementation notes): unit-tested and dry-run with stub agents; the
+  evolution loop itself not started (owner). Pilot scheduled
 
 ## 24. TT victim policy under real table pressure
 
