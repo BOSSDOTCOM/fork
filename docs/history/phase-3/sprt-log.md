@@ -211,3 +211,14 @@ Games: 2000, Wins: 734, Losses: 668, Draws: 598, Points: 1033.0 (51.65 %)
 Ptnml(0-2): [92, 186, 402, 204, 116], WL/DD Ratio: 2.87
 LLR: 0.80 (27.3%) (-2.94, 2.94) [-3.00, 0.00]
 ```
+
+### 20261027T001443Z rv-ttrefine
+
+- base `738daff` (738daff), test `738daff` (738daff), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 8, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, tuning builds, test opts option.UseTtEvalRefine=true
+- Verdict: **PROVISIONAL (stopped by the owner, 2026-10-26), NEEDS VERIFICATION.** Gainer bounds [0, 3], not decided: +17.0 ± 19.9 Elo at 800 games when the owner stopped it; the last report before it ended (1,000 games, 1,027 finished) is below, +14.6 ± 17.8, LLR 0.40 of 2.94. The TT-refined pruning eval (second review, claim (d); KB T50) is turned on by default and keeps its switch `UseTtEvalRefine`; the end-of-Phase-3 removal round verifies it at STC and at LTC 40+0.4 (DESIGN.md §5.2, Quality control 6). No time losses, crashes or illegal moves.
+```
+Elo: 14.60 +/- 17.76, nElo: 17.74 +/- 21.53
+Games: 1000, Wins: 374, Losses: 332, Draws: 294, Points: 521.0 (52.10 %)
+Ptnml(0-2): [50, 102, 171, 110, 67], WL/DD Ratio: 3.17
+LLR: 0.40 (13.7%) (-2.94, 2.94) [0.00, 3.00]
+```

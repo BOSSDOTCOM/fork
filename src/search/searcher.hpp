@@ -70,8 +70,10 @@ struct SearchSwitches {
   // same search (review 2, claim (e), 2026-10-26; off by default).
   bool tt_keep_exact = false;
   // Pruning decisions use the static eval corrected by the TT score's bound
-  // (review 2, claim (d); KB T50; off by default).
-  bool use_tt_eval_refine = false;
+  // (review 2, claim (d); KB T50). On by default since 2026-10-26, provisionally
+  // (owner): its SPRT was stopped undecided, so the end-of-Phase-3 removal round
+  // verifies it, at 40+0.4 too.
+  bool use_tt_eval_refine = true;
   // Syzygy endgame tables, when loaded (deliverable 7): win/draw/loss probes
   // in the search and the ranking of root moves.
   bool use_tables = true;

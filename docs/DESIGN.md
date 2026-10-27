@@ -1192,6 +1192,13 @@ holds, which is why search decisions use no floating point (deliverable 6).
      (`UseAspiration`), stopped as inconclusive at +3.9 ± 7.6 Elo after
      about 3,200 games (interval includes zero); and mate distance pruning
      (`UseMateDistance`), not SPRTed at Milestone A. All three kept on.
+   - **Flagged for the end-of-Phase-3 removal round, NEEDS VERIFICATION**
+     (owner, 2026-10-26): the TT-refined pruning eval (`UseTtEvalRefine`,
+     the second review's claim (d)), **on by default provisionally**. Its
+     SPRT on gainer bounds [0, 3] was stopped undecided by the owner (at
+     +17.0 ± 19.9 Elo after 800 games; the last report, 1,000 games:
+     +14.6 ± 17.8, LLR 0.40 of 2.94), so it was never accepted. The
+     removal round tests it at STC and also at LTC 40+0.4.
 
 #### Implementation notes (2026-10-24)
 
@@ -1423,8 +1430,8 @@ FORK_SEARCH_STATS bench unless stated.
 | (a) `see_at_least` computes the full exchange. | **Confirmed** (it was `see_value >= threshold`). **Fixed** (1efade9): it stops once the answer is settled (the side to choose can always stop); tested equal to `see_value >= threshold` at 14 thresholds over the SEE trees. Bench identical. |
 | (b) The TT's stored static eval is recomputed on a hit. | **Confirmed. Fixed** (1efade9): reused in the main and quiescence searches. Bench identical. |
 | (c) No TT prefetch before the null move. | **Confirmed. Fixed** (1efade9): `Position::predicted_null_key()`, tested against `make_null`. Bench identical. The three together: nps +2.9% (just under the 3% noise rule). |
-| (d) Refine the static eval with the TT score before pruning. | Built behind `UseTtEvalRefine` (738daff, off by default) from KB T50: WAC 259/300 vs 248, mate suite 139/297 vs 132. SPRT [0, 3], LTC confirmation if it passes. |
-| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [-3, 0] (a safety guard, the owner's bounds policy). |
+| (d) Refine the static eval with the TT score before pruning. | Built behind `UseTtEvalRefine` (738daff) from KB T50: WAC 259/300 vs 248, mate suite 139/297 vs 132. SPRT [0, 3] **stopped undecided by the owner** (+14.6 ± 17.8 Elo at 1,000 games): **PROVISIONAL, on by default** since 2026-10-26, NEEDS VERIFICATION in the end-of-Phase-3 removal round (STC and LTC 40+0.4). |
+| (e) A same-depth fail-low replaces an exact entry of the same search. | **Confirmed** by a unit test. Switch `UseTtKeepExact` (738daff, off by default); rare in search (3 of 46 bench searches change). SPRT [-3, 0] (a safety guard, the owner's bounds policy), on top of the TT-refined eval's new default. |
 | (f) Tier 2 order, razoring, losing-capture futility. | Plan changed (deliverable 9). |
 | (g) Upcoming repetitions, fifty-move eval scaling, history malus balance. | ideas.md ideas 26-28. |
 | (h) Phase 6: thread agreement and diversity. | Added to the Phase 6 roadmap entry. |
@@ -1509,6 +1516,7 @@ and Weiss (results in ORIGINALITY.md).
 | 2026-10-24 | **Milestone A originality fixes (owner).** `PvNode` renamed `OnPv` (bench identical). TT store redesigned from the KB description (stale entries below current ones, then shallower below deeper; a whole age byte with a 24-bit check) and made self-verifying for Phase 6 (the check XORs a digest of the entry's data, so torn writes read as misses); root moves ordered by move-to-front. Both change behaviour: bench 7533640 / 2711c23a13969520, the Milestone A SPRTs rerun on the new commit. SEE kept as the standard CPW swap algorithm, cited in ORIGINALITY.md. Root ordering by node counts logged as ideas.md idea 18. |
 | 2026-10-25 | **Re-validation plan (owner).** No removal tests at Phase 3's milestones; one removal round (each feature off, SPRT [-3, 0], simplified away if removal costs nothing) at the end of Phase 3; the full re-validation of every search feature and a retune of eval-dependent margins after Phase 4's network; every search switch stays in the code until then. Added to §5.2 Quality control 6, the Phase 4 outline and CLAUDE.md's phase-end checklist (item 8). Also: SPRT cap of 20,000 games at STC (inconclusive acceptable at Milestone A for near-zero features) and concurrency raised from 5 to 10 for the remaining Milestone A SPRTs, pending a time-loss check. |
 | 2026-10-25 | **`go movetime` keeps at least half its time (owner).** The budget is max(movetime - Move Overhead, movetime / 2, 1 ms); before, any movetime of 100 ms or less played at 1 ms with the default overhead. Clock games unchanged. Bench unchanged (no time limit in it). The Milestone A 50 ms/move games are re-run with the fix. |
+| 2026-10-26 | **TT-refined pruning eval on by default, provisionally (owner).** Its SPRT ([0, 3], 8+0.08) was stopped undecided: +17.0 ± 19.9 Elo at 800 games when the owner decided (the last report, 1,000 games: +14.6 ± 17.8). `UseTtEvalRefine` keeps its switch and is flagged for the end-of-Phase-3 removal round at STC and LTC 40+0.4 (§5.2, Quality control 6); NEEDS VERIFICATION until then. Bench 17309921 / 372dc2e2d8a88e4b. The keep-exact SPRT runs on top of it. |
 
 ## 7. Performance doctrine (governs every phase)
 
