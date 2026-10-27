@@ -917,3 +917,59 @@ No engine repository was cloned or downloaded and no engine source file was open
 | https://raw.githubusercontent.com/{Sazgr/peacekeeper/v1.50, archishou/MidnightChessEngine/v5 (ReadMe.md), casanche/casanchess/v0.9, Ciekce/Polaris/v1.5.0, Aryan1508/Bit-Genie/v7, MKJM2/lishex/v1.1.1, jonathanmcdermid/Clovis/II, FauziAkram/amira/v1.82, yunusemreyldz07/Solo/v1.6.0, kz04px/4ku/v2.0}/README.md | READMEs at tags | 2026-10-26 | eval type, build commands, options (fallbacks and rejections) |
 | https://raw.githubusercontent.com/{Sazgr/peacekeeper/v1.50/Makefile and LICENSE, MKJM2/lishex/v1.1.1/Makefile, LICENSE.md and .github/workflows/c-cpp.yml, jonathanmcdermid/Clovis/II/Makefile, archishou/MidnightChessEngine/v5/Makefile, Ciekce/Polaris/v1.5.0/LICENSE and CMakeLists.txt (first 40 lines)} | build and licence files at tags | 2026-10-26 | fallback build facts |
 | https://api.github.com/repos/{Sazgr/peacekeeper, MKJM2/lishex}/releases; /git/refs/tags/{v1.50, v1.1.1}; commits/v1.1.1; Ciekce/Polaris git/refs/tags/v1.5.0 and commits/v1.5.0 | API | 2026-10-26 | fallback pins |
+
+## Cloud SPRT: GitHub Actions and AWS facts (tools.md section 11), 2026-10-27
+
+No engine source was cloned, downloaded or opened. GitHub Docs pages were read through the docs article endpoint `https://docs.github.com/api/article/body?pathname=/en/<path>` (markdown of the same article); the URLs below are the human-readable page paths. AWS and Canonical pages were fetched with curl and converted to text locally.
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://docs.github.com/en/site-policy/github-terms/github-terms-for-additional-products-and-features | GitHub Terms for Additional Products and Features, version effective August 27, 2026 | 2026-10-27 | Actions permitted-use passage and prohibitions (quoted) |
+| https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies | GitHub Acceptable Use Policies | 2026-10-27 | section 4 bulk-activity and cryptomining bullets (quoted); section 9 bandwidth |
+| https://docs.github.com/en/billing/concepts/product-billing/github-actions (also the old path /en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions, identical body) | GitHub Actions billing | 2026-10-27 | free use for public repos on standard runners; larger runners always charged; storage quota table |
+| https://docs.github.com/en/billing/reference/actions-runner-pricing | Actions runner pricing reference | 2026-10-27 | private-repo per-minute rates, minute rounding |
+| https://docs.github.com/en/actions/reference/runners/github-hosted-runners | GitHub-hosted runners reference | 2026-10-27 | public-repo runner table (4 CPU, 16 GB, 14 GB), ubuntu-slim, larger runners |
+| https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners | About GitHub-hosted runners | 2026-10-27 | Azure hosting; larger runners only on Team / Enterprise Cloud |
+| https://docs.github.com/en/actions/reference/limits | Actions limits | 2026-10-27 | concurrency (Free 20), 6 h job, 35-day run, 256 matrix, re-runs, queue limits, storage table, GITHUB_TOKEN rate |
+| https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax | Workflow syntax | 2026-10-27 | workflow_dispatch inputs (25, 65,535 characters, types), timeout-minutes (360), matrix 256 |
+| https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows | Events that trigger workflows | 2026-10-27 | searched for dispatch-input limits (none stated there) |
+| https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow | Manually running a workflow | 2026-10-27 | "up to 25" inputs confirmation |
+| https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts | Workflow artifacts concepts | 2026-10-27 | artifact behaviour (no numeric limits on the page) |
+| https://docs.github.com/en/actions/tutorials/store-and-share-data | Store and share data with workflow artifacts | 2026-10-27 | retention-days cannot exceed the repository limit |
+| https://docs.github.com/en/actions/how-tos/manage-workflow-runs/remove-workflow-artifacts | Removing workflow artifacts | 2026-10-27 | default 90-day retention |
+| https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository | Managing GitHub Actions settings for a repository | 2026-10-27 | retention 1-90 days public, 1-400 private; 2026-10-01 extension to checks and runs; cache retention |
+| https://docs.github.com/en/billing/concepts/product-billing/github-packages | GitHub Packages billing | 2026-10-27 | shared storage context (public packages free) |
+| https://docs.github.com/en/actions/how-tos/write-workflows/choose-what-workflows-do/store-and-share-data | FAILED (404) | 2026-10-27 | none (guessed path; the tutorial path above was used) |
+| https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-artifacts | FAILED (404) | 2026-10-27 | none (guessed path) |
+| https://raw.githubusercontent.com/actions/upload-artifact/main/README.md | raw README on main | 2026-10-27 | 500 artifacts per job, 1-90 day retention-days, immutability |
+| https://api.github.com/repos/actions/upload-artifact/releases/latest | API: latest release | 2026-10-27 | v7.0.2, published 2026-10-07 |
+| https://docs.aws.amazon.com/ec2/latest/instancetypes/co.html | EC2 compute optimized specifications | 2026-10-27 | c7a/c8a.16xlarge vCPU, cores, threads per core, memory, processor, Nitro version, network |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/cpu-options-supported-instances-values.html | CPU options supported values | 2026-10-27 | opened; not needed beyond the specifications table |
+| https://aws.amazon.com/ec2/instance-types/c7a/ | C7a product page | 2026-10-27 | 4th gen EPYC (Genoa), 3.7 GHz, vCPU = physical core, no SMT, AVX-512 |
+| https://aws.amazon.com/ec2/instance-types/c8a/ | C8a product page | 2026-10-27 | 5th gen EPYC (Turin), 4.5 GHz, vCPU = physical core, no SMT |
+| https://aws.amazon.com/about-aws/whats-new/2025/12/compute-optimized-amazon-ec2-c8a-instances/ | What's New, posted Dec 2, 2025 | 2026-10-27 | C8a general availability, launch Regions |
+| https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-regions.html | Instance types by Region | 2026-10-27 | Regions listing C8a and C7a today |
+| https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/us-east-1/index.csv | AWS Price List bulk CSV, Publication Date 2026-10-23T22:13:55Z (streamed; only the header and c7a/c8a.16xlarge rows kept) | 2026-10-27 | On-Demand Linux prices $3.28448 and $3.44864 per hour |
+| https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/us-east-1/index.json | Price List bulk JSON (HEAD only: 481,575,141 bytes) | 2026-10-27 | none (CSV used instead) |
+| https://aws.amazon.com/ec2/pricing/on-demand/ | On-Demand pricing page | 2026-10-27 | per-second billing, 60-second minimum; price table is JavaScript-rendered |
+| https://b0.p.awsstatic.com/pricing/2.0/meteredUnitMaps/ec2/USD/current/ec2-ondemand-without-sec-sel/US%20East%20(N.%20Virginia)/Linux/index.json | pricing-page data file (gzip) | 2026-10-27 | FAILED for this purpose: no c7a/c8a.16xlarge entries in it |
+| https://aws.amazon.com/ec2/spot/pricing/ | Spot pricing page | 2026-10-27 | "updated every 5 minutes", lowest price per type in the Region, "up to 90%" |
+| https://website.spot.ec2.aws.a2z.com/spot.json | Spot pricing page data file (referenced by the page) | 2026-10-27 (about 19:50 UTC) | snapshot Spot prices c7a.16xlarge $0.9276, c8a.16xlarge $0.9533 (us-east-1 Linux) |
+| https://aws.amazon.com/ec2/spot/instance-advisor/ | Spot Instance Advisor page | 2026-10-27 | 30-day averages wording; table JavaScript-rendered |
+| https://spot-bid-advisor.s3.amazonaws.com/spot-advisor-data.json | Spot Advisor data file | 2026-10-27 | s/r values and range labels for c7a/c8a.16xlarge us-east-1 Linux |
+| https://b0.p.awsstatic.com/client-side-script/static/js/main.bundle.js | AWS pricing site script | 2026-10-27 | searched for the advisor field meanings; not found |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-instance-termination-notices.html | Spot interruption notices | 2026-10-27 | two-minute notice, instance-action path and responses, IMDSv2 example, 5-second polling |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/rebalance-recommendations.html | Rebalance recommendations | 2026-10-27 | metadata path, noticeTime, EventBridge event, timing |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/interruption-behavior.html | Spot interruption behaviour | 2026-10-27 | terminate is the default; stop needs persistent requests |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-v2-how-it-works.html (redirects to configuring-instance-metadata-service.html) | Use the Instance Metadata Service | 2026-10-27 | token PUT, TTL 1 s to 6 h, header names |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-metadata-retrieval-examples.html | FAILED (redirect stub to the guide landing page) | 2026-10-27 | none |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/how-to-request-spot-instances.html | FAILED (redirect stub to the guide landing page) | 2026-10-27 | none |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-spot-instances-request.html | Manage your Spot Instances | 2026-10-27 | opened; lifecycle checks only |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-best-practices.html | Spot best practices | 2026-10-27 | two-minute notice context |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-spot-instances-history.html | Spot price history | 2026-10-27 | 90-day history, CLI example, price capped at On-Demand |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/billing-for-interrupted-spot-instances.html | Billing for interrupted Spot Instances | 2026-10-27 | per-second Spot charges; no charge if EC2 interrupts in the first hour |
+| https://docs.aws.amazon.com/cli/latest/reference/ec2/run-instances.html | AWS CLI 2.38.6 run-instances reference | 2026-10-27 | --instance-market-options JSON shape, --instance-initiated-shutdown-behavior, --metadata-options, instance-type list |
+| https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-spot-price-history.html | AWS CLI 2.38.6 describe-spot-price-history reference | 2026-10-27 | options, 90-day window, effective price at the start time |
+| https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/finding-an-ami-parameter-store.html | AWS public SSM parameters for AMIs | 2026-10-27 | resolve:ssm: form |
+| https://documentation.ubuntu.com/aws/aws-how-to/instances/find-ubuntu-images/ | Canonical: Find Ubuntu images on AWS | 2026-10-27 | SSM parameter template, ebs-gp2 for 22.04, resolve:ssm example |
+| web search "C8a instances generally available" | search results only, used to locate the What's New URL; no snippet was relied on | 2026-10-27 | locating the announcement |

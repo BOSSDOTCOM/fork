@@ -594,6 +594,229 @@ install.sh installs perf and valgrind and prints instructions for VTune and uPro
 
 ---
 
+## 11. Cloud compute for test matches
+
+### Cloud SPRT: GitHub Actions and AWS facts (2026-10-27)
+
+**What it is.** The facts needed before writing tooling that shards Fork-vs-Fork SPRT matches
+(fastchess, 8+0.08 s, thousands of games) across (A) GitHub-hosted runners on the public repo
+BOSSDOTCOM/fork and (B) one AWS EC2 Spot Instance (c7a.16xlarge or c8a.16xlarge).
+**Why it matters for Fork:** test infrastructure (match runner orchestration), Phase 3 onward
+(SPRT gating of search changes), later Phase 4 re-validation. **Date verified:** 2026-10-27 for
+every item below. **Tags:** GitHub Actions: USE, within the terms quoted in A1; AWS EC2 Spot: USE
+(paid service, owner's account). **Licence:** not applicable (service terms, not software
+licences). Source rows are in [sources.md](sources.md), section "Cloud SPRT".
+
+GitHub Docs pages were read as markdown through the docs site's article endpoint
+(`https://docs.github.com/api/article/body?pathname=/en/...`), which serves the same article body
+as the HTML page. AWS pages were fetched with curl and converted to text locally.
+
+#### A. GitHub Actions
+
+**A1. Permitted use (terms).** Source:
+[GitHub Terms for Additional Products and Features](https://docs.github.com/en/site-policy/github-terms/github-terms-for-additional-products-and-features),
+"Version Effective Date: August 27, 2026", section "Actions". Exact wording:
+
+> Actions and any elements of the Actions product or service may not be used in violation of the Agreement, the GitHub Acceptable Use Policies, or the GitHub Actions service limitations set forth in the Actions documentation. Additionally, regardless of whether an Action is using self-hosted runners, Actions should not be used for:
+>
+> * Cryptomining;
+> * Disrupting, gaining, or attempting to gain unauthorized access to, any service, device, data, account, or network (other than those authorized by the GitHub Bug Bounty program);
+> * The provision of a stand-alone or integrated application or service offering the Actions product or service, or any elements of the Actions product or service, for commercial purposes;
+> * Any activity that places a burden on our servers, where that burden is disproportionate to the benefits provided to users (for example, don't use Actions as a content delivery network or as part of a serverless application, but a low benefit Action could be ok if it’s also low burden); or
+> * If using GitHub-hosted runners, any other activity unrelated to the production, testing, deployment, or publication of the software project associated with the repository where GitHub Actions are used.
+
+and, from the same section:
+
+> In order to prevent violations of these limitations and abuse of GitHub Actions, GitHub may monitor your use of GitHub Actions. Misuse of GitHub Actions may result in termination of jobs, restrictions in your ability to use GitHub Actions, disabling of repositories created to run Actions in a way that violates these Terms, or in some cases, suspension or termination of your GitHub account.
+
+(Link targets inside the quoted bullets were dropped; the words are unchanged.)
+
+[GitHub Acceptable Use Policies](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies),
+section "4. Spam and Inauthentic Activity on GitHub", which opens "We do not allow content or activity on GitHub that is:", lists among others:
+
+> * automated excessive bulk activity and coordinated inauthentic activity, such as
+>   * spamming
+>   * cryptocurrency mining;
+
+> * using our servers for any form of excessive automated bulk activity, to place undue burden on our servers through automated means, or to relay any form of unsolicited advertising or solicitation through our servers, such as get-rich-quick schemes;
+
+Reading for Fork (my interpretation, not a GitHub ruling): SPRT matches of Fork's own builds
+are testing of the software project in the repository where the workflow runs, so they fall
+inside the GitHub-hosted-runner clause. The "burden ... disproportionate to the benefits" clause
+and the AUP's "excessive automated bulk activity" are judgement calls GitHub makes; no GitHub page
+defines a threshold. **UNVERIFIED:** whether GitHub considers sustained, all-runner engine-match
+workloads acceptable; no GitHub statement on this kind of workload was found. Running other
+people's engines, or using runners as general compute unrelated to Fork, would fall outside the
+clause.
+
+**A2. Billing for public repositories.** Source:
+[GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+(the older path `/en/billing/managing-billing-for-your-products/managing-billing-for-github-actions/about-billing-for-github-actions`
+returns the identical article).
+- Usage is free for self-hosted runners and for public repositories that use standard GitHub-hosted runners; the per-plan quota of minutes, artifact storage and cache storage is described as applying to private repositories.
+- "The use of standard GitHub-hosted runners is free" in public repositories (also for Pages and Dependabot).
+- Larger runners are always charged, even in public repositories, and are blocked until a payment method is set up. Larger runners exist only for organizations and enterprises on GitHub Team and Enterprise Cloud ([runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners), "Larger runners").
+- Which sizes are "standard": the labels in the table in A3 (the runners reference section "Standard GitHub-hosted runners for public repositories" says their use "is free and unlimited on public repositories"). For comparison, the [runner pricing reference](https://docs.github.com/en/billing/reference/actions-runner-pricing) lists private-repo rates (Linux 2-core x64 $0.006 per minute; minutes rounded up per job).
+
+**A3. Standard Linux runner hardware, public repositories.** Source:
+[GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners),
+"Standard GitHub-hosted runners for public repositories".
+
+| Label(s) | CPU | RAM | SSD | Arch |
+|---|---|---|---|---|
+| `ubuntu-latest`, `ubuntu-24.04`, `ubuntu-22.04`, `ubuntu-26.04` | 4 | 16 GB | 14 GB | x64 |
+| `ubuntu-24.04-arm`, `ubuntu-22.04-arm`, `ubuntu-26.04-arm` | 4 | 16 GB | 14 GB | arm64 |
+| `ubuntu-slim` (container on a shared VM) | 1 | 5 GB | 14 GB | x64 |
+
+Private repositories get 2 CPU / 8 GB / 14 GB on the same Ubuntu labels. `ubuntu-slim` jobs have
+a 15-minute job timeout and are described as unsuitable for heavy builds. Linux and Windows
+runners are VMs in Microsoft Azure
+([About GitHub-hosted runners](https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners)).
+**UNVERIFIED:** the CPU model and whether the 4 "Processor (CPU)" units are physical cores or SMT
+threads; the docs give neither. Measure on a runner (`lscpu`) before relying on per-core nps.
+
+**A4. Limits.** Source: [Actions limits](https://docs.github.com/en/actions/reference/limits)
+(the page says the limits "are subject to change"), plus the pages named per row.
+
+| Limit | Figure | Source |
+|---|---|---|
+| Concurrent jobs, standard runners, GitHub Free | 20 total (5 macOS); Pro 40, Team 60, Enterprise 500; Support can raise them | Actions limits, "Job concurrency limits" |
+| Job execution time, GitHub-hosted | 6 hours; the job is terminated and fails | Actions limits |
+| `timeout-minutes` | job default 360; step maximum 360 | [Workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax) |
+| Workflow run time | 35 days per run, including waiting and approval time | Actions limits |
+| Matrix | 256 jobs per workflow run (hosted and self-hosted) | Actions limits; Workflow syntax |
+| Re-runs | 50 per workflow run | Actions limits |
+| Queued runs | 500 workflow runs per 10 seconds; trigger events 1500 per 10 s per repository | Actions limits |
+| `workflow_dispatch` inputs | at most 25 top-level properties; payload at most 65,535 characters; types `boolean`, `choice`, `number`, `environment`, `string`; trigger only fires when the workflow file is on the default branch | Workflow syntax, `on.workflow_dispatch.inputs`; [Manually running a workflow](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) ("up to 25") |
+| Artifact retention, public repo | default 90 days, settable from 1 to 90 days (private: 1 to 400); per-artifact `retention-days` cannot exceed the repository limit. Since 2026-10-01 the same retention also covers checks, workflow runs and commit statuses | [Managing GitHub Actions settings for a repository](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository); [Store and share data](https://docs.github.com/en/actions/tutorials/store-and-share-data) |
+| Artifacts per job | 500 (`actions/upload-artifact` README on `main`; latest release v7.0.2, published 2026-10-07; artifacts from v4 on are immutable, replaceable only with `overwrite: true`) | [upload-artifact README](https://github.com/actions/upload-artifact) |
+| Artifact storage quota | GitHub Free 500 MB (shared with Packages), cache 10 GB per repository; usage updates every 6 to 12 hours | Actions limits, "Storage limits"; billing page |
+| Cache retention, public repo | default 7 days, up to 90 | repository settings page |
+| `GITHUB_TOKEN` API rate | 1,000 requests per hour per repository | Actions limits |
+
+**UNVERIFIED:** whether the 500 MB artifact storage quota is enforced for public repositories.
+The billing page ties the quota to private repositories and says public-repo usage on standard
+runners is free, but the storage table itself does not separate public from private. Keep match
+artifacts small (PGN and result files) and set short `retention-days` regardless.
+**UNVERIFIED:** which GitHub plan the BOSSDOTCOM account is on (the plan field is not public); the
+20-job figure applies if it is GitHub Free.
+
+#### B. AWS EC2 Spot
+
+**B5. Instance specs.** Source:
+[Specifications for Amazon EC2 compute optimized instances](https://docs.aws.amazon.com/ec2/latest/instancetypes/co.html),
+"Performance specifications"; [C7a product page](https://aws.amazon.com/ec2/instance-types/c7a/);
+[C8a product page](https://aws.amazon.com/ec2/instance-types/c8a/).
+
+| | c7a.16xlarge | c8a.16xlarge |
+|---|---|---|
+| vCPUs / cores / threads per core | 64 / 64 / 1 | 64 / 64 / 1 |
+| Memory | 128 GiB | 128 GiB |
+| Processor (docs table) | AMD EPYC 9R14 | AMD EPYC 9R45 |
+| Generation (product page) | 4th gen EPYC, code name Genoa, max 3.7 GHz | 5th gen EPYC, formerly code named Turin, max 4.5 GHz |
+| SMT | none: product page says every vCPU is a physical core | none: same statement |
+| Nitro | v4 | v6 |
+| Network (docs) | 25 Gigabit | 30 Gigabit |
+
+C7a also lists AVX-512, VNNI and bfloat16 support on its product page. **C8a availability:**
+general availability announced 2025-12-02 in
+[What's New](https://aws.amazon.com/about-aws/whats-new/2025/12/compute-optimized-amazon-ec2-c8a-instances/)
+(launch Regions US East (N. Virginia), US East (Ohio), US West (Oregon); Savings Plans, On-Demand
+and Spot). The current
+[instance types by Region](https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-regions.html)
+page lists C8a in us-east-1, us-east-2, us-west-2, ap-northeast-1, eu-central-1, eu-west-1 and
+eu-south-2; C7a is listed in us-east-1. The Region page lists families, not sizes or
+Availability Zones: **UNVERIFIED** which us-east-1 AZs offer c8a.16xlarge (check with
+`aws ec2 describe-instance-type-offerings --location-type availability-zone`, not run).
+
+**B6. Prices, us-east-1, Linux.**
+- On-Demand, from the AWS Price List bulk file
+  `https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/us-east-1/index.csv`
+  (Publication Date 2026-10-23T22:13:55Z, Version 20261023221355; rows filtered locally to
+  TermType OnDemand, Linux, Shared tenancy, no pre-installed software, CapacityStatus Used):
+  - c7a.16xlarge **$3.28448 per hour** (EffectiveDate 2026-10-01, SKU 4UQPTQNA6W2TZ4Q8);
+  - c8a.16xlarge **$3.44864 per hour** (EffectiveDate 2026-10-01, SKU 5PKRJNJJEJJQCWX9).
+  The [On-Demand pricing page](https://aws.amazon.com/ec2/pricing/on-demand/) renders its table
+  in JavaScript, so the figures above come from the Price List, not the rendered page.
+- Spot, live figure: the [Spot pricing page](https://aws.amazon.com/ec2/spot/pricing/) says its
+  table is updated every 5 minutes and shows the lowest price per instance type in the Region. Its
+  data file (`https://website.spot.ec2.aws.a2z.com/spot.json`, referenced by the page) read at
+  about 2026-10-27T19:50Z gave us-east-1 Linux **c7a.16xlarge $0.9276/h** and **c8a.16xlarge
+  $0.9533/h**. This is a snapshot, not a planning constant: Spot prices move, and the figure is
+  the Region's lowest AZ price.
+- How to get the current price: `aws ec2 describe-spot-price-history` with
+  `--instance-types`, `--product-descriptions "Linux/UNIX"`, optional `--availability-zone`, and
+  `--start-time`/`--end-time` (history goes back at most 90 days; with a time range the call also
+  returns the last price change before the start time, i.e. the price in effect at the start)
+  ([CLI reference, AWS CLI 2.38.6](https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-spot-price-history.html);
+  [Spot price history guide](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-spot-instances-history.html)).
+  At launch a Spot Instance pays the current Spot price, never more than the On-Demand price.
+- Typical savings: the Spot pricing page says "up to 90%" off On-Demand. The
+  [Spot Instance Advisor](https://aws.amazon.com/ec2/spot/instance-advisor/) shows 30-day
+  averages of savings and interruption frequency. Its data file
+  (`https://spot-bid-advisor.s3.amazonaws.com/spot-advisor-data.json`) for us-east-1 Linux gives
+  c7a.16xlarge `s: 55, r: 2` and c8a.16xlarge `s: 61, r: 3`, where the file's `ranges` table maps
+  index 2 to "10-15%" and 3 to "15-20%". Read as: c7a.16xlarge about 55% savings with a 10-15%
+  interruption frequency; c8a.16xlarge about 61% with 15-20%. **UNVERIFIED:** that `s` is savings
+  percent and `r` the interruption-range index; the JSON carries no field documentation and the
+  rendered advisor table was not visible (JavaScript). The live Spot price implies about 72%
+  below On-Demand for both, so the 30-day average and today's snapshot differ.
+
+**B7. Interruption signals.** Sources:
+[Spot Instance interruption notices](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/spot-instance-termination-notices.html),
+[Rebalance recommendations](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/rebalance-recommendations.html),
+[Instance Metadata Service](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html).
+- The interruption notice comes two minutes before EC2 stops or terminates the instance (no
+  two-minute warning when the behaviour is hibernate). It is best effort; AWS recommends polling
+  every 5 seconds. It also arrives as an EventBridge event "EC2 Spot Instance Interruption Warning".
+- Metadata item: `http://169.254.169.254/latest/meta-data/spot/instance-action`, returning JSON
+  with `action` (`stop`, `terminate` or `hibernate`) and `time` (UTC); HTTP 404 when no
+  interruption is pending. `spot/termination-time` is kept only for backward compatibility.
+- IMDSv2: first `PUT http://169.254.169.254/latest/api/token` with header
+  `X-aws-ec2-metadata-token-ttl-seconds` (TTL from 1 second to 6 hours; the docs use 21600), then
+  send `X-aws-ec2-metadata-token: <token>` on each GET; the token can be reused until it expires.
+  run-instances `--metadata-options HttpTokens=required` disables IMDSv1.
+- Rebalance recommendation: metadata item `latest/meta-data/events/recommendations/rebalance`,
+  returning `{"noticeTime": "<UTC>"}` when emitted; EventBridge event "EC2 Instance Rebalance
+  Recommendation". It signals elevated interruption risk, may come earlier than the two-minute
+  notice or together with it, is best effort, and AWS recommends checking every 5 seconds.
+  Supported for Spot Instances launched after 2020-11-05.
+
+**B8. Launch command.** Source:
+[aws ec2 run-instances, AWS CLI 2.38.6](https://docs.aws.amazon.com/cli/latest/reference/ec2/run-instances.html);
+[Spot interruption behaviour](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/interruption-behavior.html).
+- `--instance-market-options`, JSON form:
+  `{"MarketType": "spot", "SpotOptions": {"SpotInstanceType": "one-time", "InstanceInterruptionBehavior": "terminate"}}`.
+  Other `SpotOptions` keys: `MaxPrice` (AWS advises against it: it raises interruptions; omitted
+  means the current Spot price is paid), `ValidUntil` (persistent requests only),
+  `BlockDurationMinutes` (deprecated). With run-instances, persistent requests need stop or
+  hibernate, so a one-time request with terminate is the valid pairing. Terminate is also the
+  default interruption behaviour.
+- `--instance-initiated-shutdown-behavior terminate` (values `stop` | `terminate`, default
+  `stop`): an OS shutdown from inside the instance then terminates it.
+- c7a.16xlarge and c8a.16xlarge both appear in the CLI's `--instance-type` value list.
+- Ubuntu 22.04 AMI: Canonical's
+  [Find Ubuntu images on AWS](https://documentation.ubuntu.com/aws/aws-how-to/instances/find-ubuntu-images/)
+  gives the template `/aws/service/canonical/ubuntu/{product}/{release}/stable/{serial}/{arch}/hvm/{vol}/ami-id`
+  with volume type `ebs-gp2` for releases up to 23.04, which yields
+  `/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id`. It can be
+  passed directly as `--image-id resolve:ssm:<parameter>` (Canonical's page shows the form; AWS's
+  [public-parameter page](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/finding-an-ami-parameter-store.html)
+  documents `resolve:ssm:` for its own AMIs). **UNVERIFIED:** that this exact parameter resolves
+  today; it is built from the template, and `aws ssm get-parameters` was not run (no AWS
+  credentials on this machine).
+
+**B9. Per-second billing.** Source: [On-Demand pricing page](https://aws.amazon.com/ec2/pricing/on-demand/):
+On-Demand capacity is paid by the hour or second with a 60-second minimum, and partial hours are
+billed per second for Linux (SUSE is billed by the full hour).
+[Billing for interrupted Spot Instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/billing-for-interrupted-spot-instances.html):
+for Linux (not SUSE), if you stop or terminate the Spot Instance yourself you pay for the seconds
+used; if EC2 interrupts it in the first hour there is no charge, and after the first hour you pay
+for the seconds used. **UNVERIFIED:** that the 60-second minimum applies to Spot as well; the Spot
+billing page does not state a minimum.
+
+---
+
 ## UNVERIFIED items (summary)
 
 1. ~~Which Ubuntu release ships Qt ≥ 6.8; whether the AppImage contains `cutechess-cli`.~~ Resolved 2026-10-24 (§ cutechess: 25.04 first, 26.04 first LTS; AppImage has `usr/bin/cutechess-cli`).
@@ -613,6 +836,7 @@ install.sh installs perf and valgrind and prints instructions for VTune and uPro
     - the error paths, which I read but did not exercise: an incomplete file printing on stdout, the bad-magic message, and the `exit()` calls on mapping failure and out of memory.
 13. lichess tablebase API (§6.9): no numeric rate limit is published for `tablebase.lichess.org`; no licence is stated for API responses.
 14. Whether python-chess's `chess.syzygy` was ported from Ronald de Man's probing code or written independently (its docs are silent; either way it is a code base separate from Fathom).
+15. Cloud SPRT (§11, 2026-10-27): whether GitHub accepts sustained engine-match workloads under the "disproportionate burden" clause (no GitHub statement found); the CPU model and core/thread nature of the 4-CPU public runner; whether the 500 MB artifact quota applies to public repos; the owner's GitHub plan; which us-east-1 AZs offer c8a.16xlarge; the meaning of the Spot Advisor JSON fields `s` and `r`; whether the Ubuntu 22.04 SSM parameter built from Canonical's template resolves (not queried, no AWS credentials); whether the 60-second minimum applies to Spot.
 
 ## OFF-LIMITS (summary)
 
