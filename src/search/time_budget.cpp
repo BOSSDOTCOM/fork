@@ -41,10 +41,14 @@ TimeBudget plan_time(const ClockInput& in) {
   const std::int64_t moves =
       in.movestogo ? std::clamp<std::int64_t>(*in.movestogo, 1, MaxMovesToGo) : std::int64_t{AssumedMovesLeft};
   const std::int64_t increment = std::clamp<std::int64_t>(in.increment_ms.value_or(0), 0, ClockCap);
-  // The reserve: a tenth of the clock. The Move Overhead, already taken off,
-  // covers each move's latency (deliverable 8a, the owner's split of
-  // 2026-10-27; any extra low-clock reserve is a separate, tested change).
-  const std::int64_t reserve = available / ReserveDivisor;
+  // The reserve (deliverable 8, variant B1, "deficit"): a tenth of the clock,
+  // but at least the part of the Move Overhead the increment does not give
+  // back. The overhead, already taken off, covers each move's latency; where
+  // the increment is smaller, every move costs the clock the difference, so
+  // that much stays unplanned. It outweighs the tenth only below ten times
+  // the deficit, so higher clocks are planned exactly as with a tenth alone.
+  const std::int64_t deficit = std::max<std::int64_t>(0, overhead - increment);
+  const std::int64_t reserve = std::max(available / ReserveDivisor, deficit);
   const std::int64_t cap = std::max<std::int64_t>(1, available - reserve);
   // The budget. Each move gets an even part of the clock, as if
   // AssumedMovesLeft moves remained (or movestogo), plus three quarters of
