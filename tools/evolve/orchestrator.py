@@ -311,6 +311,14 @@ def main():
     mode.add_argument('--live', action='store_true', help='real agents through claude -p: the evolution loop')
     a = ap.parse_args()
     cfg = json.loads(Path(a.config).read_text())
+    # Paths: the repository is the one holding this script unless given;
+    # relative paths are from it, and ~ is the user's home (the config is
+    # committed, so it names no user).
+    repo = Path(cfg.get('repo') or HERE.parents[1]).expanduser()
+    cfg['repo'] = str(repo)
+    cfg['positions'] = str(repo / Path(cfg['positions']).expanduser())
+    for key in ('fastchess', 'book'):
+        cfg['match'][key] = str(Path(cfg['match'][key]).expanduser())
     run_dir = Path(a.run_dir).expanduser()
     if a.live:
         agent = agents.CliAgent(cfg.get('model'))

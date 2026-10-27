@@ -1,12 +1,16 @@
 {
-  "repo": "/mnt/c/Users/<user>/fork",
+  "repo": null,
   "baseline_commit": "HEAD",
   "region": "lmr",
-  "positions": "/mnt/c/Users/<user>/fork/tools/evolve/positions.jsonl",
+  "positions": "tools/evolve/positions.jsonl",
   "positions_limit": 0,
   "proxy_nodes": 20000,
   "seed": 20261027,
-  "islands": ["proposer_aggressive", "proposer_cautious", "explorer"],
+  "islands": [
+    "proposer_aggressive",
+    "proposer_cautious",
+    "explorer"
+  ],
   "per_island": 2,
   "full_share": 0.2,
   "explorer_protected": 3,
@@ -19,7 +23,11 @@
   "generations": 20,
   "jobs": 4,
   "test_cache": "~/fork-check/.cache",
-  "budget": {"tokens": 3000000, "candidates": 150, "hours": 48},
+  "budget": {
+    "tokens": 3000000,
+    "candidates": 150,
+    "hours": 48
+  },
   "match": {
     "games": 400,
     "tc": "4+0.04",

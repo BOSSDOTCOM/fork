@@ -302,6 +302,8 @@ class OrchestratorTests(unittest.TestCase):
             labels = Path(tmp) / 'p.jsonl'
             labels.write_text(json.dumps({'id': 0, 'fen': 'x', 'bm': 'e2e4', 'ce': 0, 'split': 'evolve'}) + '\n')
             cfg = json.loads((Path(__file__).resolve().parent / 'config.json').read_text())
+            self.assertNotIn('/Users/', json.dumps(cfg))  # the committed config names no user
+            self.assertNotIn('/home/', json.dumps(cfg))
             cfg.update({'positions': str(labels), 'per_island': 1, 'critic_audit_share': 1.0,
                         'islands': ['proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer'],
                         'match': dict(cfg['match'], games=0)})

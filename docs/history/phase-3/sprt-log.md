@@ -266,3 +266,21 @@ Games: 5000, Wins: 1696, Losses: 1767, Draws: 1537, Points: 2464.5 (49.29 %)
 Ptnml(0-2): [227, 508, 1075, 489, 201], WL/DD Ratio: 2.98
 LLR: -0.65 (-22.0%) (-2.94, 2.94) [-3.00, 0.00]
 ```
+
+### Note (owner, 2026-10-27): deliverable 8 split, variant chosen
+
+Deliverable 8 was split (owner): (a) the increment fix alone, (b) the
+low-clock reserve redesigned to be adaptive, as variant B1 "deficit"
+(reserve max(clock/10, overhead - increment)) or B2 "danger zone" (one more
+Move Overhead only when less than two overheads plus an increment is
+available), and (c) the iteration rule. Stress tests, 2,000 games at 2+0.02
+under full load each: (a) alone **3 time losses** (each with the clock down
+to about one overhead), B1 0, B2 0; the full original deliverable 8 0.
+**The owner chose B2 over B1 without a separate SPRT**: both have zero time
+losses, and B2 acts only at a low clock while B1 reserves time on every
+move whose increment is below the overhead. One SPRT follows: (a) + B2 +
+(c) against (a) (the pre-deliverable-8 time management on the current code:
+the increment fix gives the same numbers at an 80 ms increment), 8+0.08,
+non-regression bounds [-3, 0], concurrency 10, capped at 5,000 games. If it
+passes, it is merged and the Milestone C gauntlet starts, with the 40+0.4
+check after; if it fails, B2 and (c) are tested separately.
