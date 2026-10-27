@@ -188,6 +188,9 @@ def main(argv=None):
         with open(path, encoding='utf-8') as f:
             shards.append(json.load(f))
     merged = merge(shards)
+    if merged['pairs'] == 0:
+        print(f'no finished pairs in {len(shards)} shards: nothing to merge', file=sys.stderr)
+        return 1
     print(report(merged, a.elo0, a.elo1, a.alpha, a.beta))
     if a.json:
         value, decision = verdict(merged['ptnml'], a.elo0, a.elo1, a.alpha, a.beta)

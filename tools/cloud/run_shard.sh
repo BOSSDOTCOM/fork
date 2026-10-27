@@ -32,6 +32,11 @@ done
 for v in base test fastchess book shard shards games tc out; do
   [ -n "${!v:-}" ] || { echo "run_shard.sh: --$v is required" >&2; exit 2; }
 done
+# Absolute paths: fastchess runs inside the output folder.
+for v in base test fastchess book; do
+  [ -e "${!v}" ] || { echo "run_shard.sh: --$v ${!v} does not exist" >&2; exit 2; }
+  printf -v "$v" '%s' "$(cd "$(dirname "${!v}")" && pwd)/$(basename "${!v}")"
+done
 rounds=$(( (games + 1) / 2 ))
 start=$(( 1 + (stage * shards + shard) * rounds ))
 mkdir -p "$out"
@@ -66,3 +71,11 @@ done
 wait "$fc" 2>/dev/null
 if [ "$stopped" = 1 ]; then snap interrupted; else snap done; fi
 python3 -c "import json,sys; r=json.load(open(sys.argv[1])); print('shard', r['meta']['shard'], r['status'], 'ptnml', r['ptnml'], 'time losses', r['time_losses'])" "$out/result.json"
+# A shard that played nothing, or whose fastchess stopped on a fatal error,
+# fails (so its job is red, not a silent empty success).
+if grep -q '^Fatal' "$log"; then grep '^Fatal' "$log" >&2; exit 1; fi
+if [ "$stopped" = 0 ] && ! grep -q '^Finished game' "$log"; then
+  echo "run_shard.sh: no game finished" >&2
+  tail -n 5 "$log" >&2
+  exit 1
+fi
