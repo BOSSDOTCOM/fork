@@ -1613,6 +1613,50 @@ Choices made while building, where the spec leaves a gap:
     move now reports the king, not threatened (castling is legal only out
     of check), attacking from its landing square. python-chess case added,
     which failed first.
+  - **Validation run** (2026-10-27, 3dfbe91, 3 generations of 6, live
+    agents, 32 minutes, 315,167 tokens): 18 proposals, 0 malformed. 16 were
+    scored, the critic rejected 2 (both explorer proposals labelled full
+    that were residual corrections), 1 failed the gate and 0 were
+    promoted. Every gain interval spans zero: the best was #2,
+    +0.0114 [−0.0101, +0.0332]. Five candidates passed the old 0.005
+    margin and were blocked as within noise. Trigger rates ranged from 0.2%
+    to 44.9%. The exact-input-set axis gave 12 elites from 16 scored
+    candidates. The analyst's notes were sound; it read the grid's
+    unlabelled numbers as best it could.
+  - **Node limit after a stop** (found by that run's gate): an explorer
+    rule that reduces hard made a 5,000-node search report 5,002 nodes.
+    After a stop, a reduced search returns 0, which can beat alpha, and
+    the full-depth and PV re-searches were still entered, each counting a
+    node. Both re-searches now require `!stopped_`; the rule passes the
+    `search` suite with the fix. Bench unchanged (depth-limited, it never
+    stops).
+  - **Before the long run** (owner, 2026-10-27):
+    - Input groups as the third axis: move facts (history, piece,
+      threatened, attacks), node facts (quiet moves, phase, TT bound and
+      depth) and iteration facts (score trend, branch share).
+    - The stop rule counts an improvement only beyond the interval: a
+      candidate whose paired interval against the best so far lies above
+      zero becomes the new best. Six generations without one stop the run.
+    - Proxies are split across `proxy_jobs` engine processes (8). Checked
+      against a single process on the validation run's baseline, #2 and
+      #17: every per-position score is identical, and so is the fitness
+      (0.598715, 0.610082, 0.608664). 7 s against 34-36 s.
+    - Each agent gets only what it uses. The critic and the analyst get the
+      rules and the region, without the measurements, history or reply
+      format. Proposers get the last 8 candidates in compact form, parents
+      with their gain intervals, and only the LMR-related baseline
+      statistics. The analyst gets one summary line per candidate: no
+      per-position lists, which made its call 105,369 tokens. Every call's
+      tokens are logged (`agent_call`). Measured with real calls on the
+      validation run's state, before → after: proposer 7,436 → 6,913,
+      critic 5,120 → 5,015, so 12,556 → 11,928 per candidate (−5%; most
+      of what remains is the shared rules and region, plus about 1,500 of
+      the CLI's own); analyst 105,369 → 8,056.
+    - Limits: 40 generations, 3,000,000 tokens (binding; the candidate cap
+      is raised to 1,000 so it never binds), 9 hours. Projection: about
+      74,300 tokens per generation (6 × 11,928, plus the analyst's 8,056
+      every 3), so **about 40 generations at 3M**. The count includes cache
+      reads.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.

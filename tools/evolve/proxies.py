@@ -25,6 +25,7 @@ import json
 import random
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 ErrorCap = 400
@@ -127,12 +128,23 @@ class Engine:
         self.p.wait(timeout=10)
 
 
-def run_proxies(engine_path, labels, nodes):
-    engine = Engine(engine_path)
-    try:
-        answers = [engine.answer(r['fen'], nodes) for r in labels]
-    finally:
-        engine.close()
+def run_proxies(engine_path, labels, nodes, jobs=1):
+    """The proxies over `labels`, split across `jobs` engine processes. Each
+    position is searched from a fresh state at a node budget, so the answers
+    do not depend on the split; they are kept in the labels' order."""
+    def part(chunk):
+        engine = Engine(engine_path)
+        try:
+            return [engine.answer(r['fen'], nodes) for r in chunk]
+        finally:
+            engine.close()
+    jobs = max(1, min(jobs, len(labels)))
+    chunks = [labels[k::jobs] for k in range(jobs)]
+    with ThreadPoolExecutor(jobs) as pool:
+        results = list(pool.map(part, chunks))
+    answers = [None] * len(labels)
+    for k, chunk in enumerate(results):
+        answers[k::jobs] = chunk
     return measure(answers, labels)
 
 

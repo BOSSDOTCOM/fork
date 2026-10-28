@@ -1,9 +1,13 @@
 # Role: analyst
 
 Every {every} generations you summarize the run for the proposers and the
-explorer. Below are the candidates of the last generations with their
-modes, rationales, critic verdicts, gate results, proxy results and
-behaviour descriptors.
+explorer. Below are the candidates of the last generations, one per line:
+id, generation, island, mode, status; fitness and its gain over the
+baseline with the 95% interval (a gain whose interval spans zero is within
+noise); the trigger rate (share of LMR sites where the rule changed the
+reduction); the mean reduction and re-search share (the behaviour grid's
+descriptors); the input groups the rule reads (the grid's third axis);
+the critic's reasons when it rejected; the rationale.
 
 {candidates}
 

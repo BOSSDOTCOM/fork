@@ -20,13 +20,14 @@
   "promote_margin": 0.005,
   "patience": 6,
   "max_gate_failure_rate": 0.8,
-  "generations": 20,
+  "generations": 40,
   "jobs": 4,
+  "proxy_jobs": 8,
   "test_cache": "~/fork-check/.cache",
   "budget": {
     "tokens": 3000000,
-    "candidates": 150,
-    "hours": 48
+    "candidates": 1000,
+    "hours": 9
   },
   "match": {
     "games": 400,

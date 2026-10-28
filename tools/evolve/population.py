@@ -8,10 +8,12 @@ SQLite (standard library), one file per run, never committed. Tables:
 - elites: the grid, MAP-Elites style (Mouret and Clune 2015, KB research.md
   §9): one elite per island and cell, a cell being the pair of behaviour
   descriptors (mean LMR reduction, re-search share) binned, plus the
-  context inputs the body reads (the owner, 2026-10-27: rules built on new
-  information get niches of their own instead of competing with the table's
-  refinements); a candidate enters an empty cell or replaces a
-  fitter-proxied occupant only if it is fitter;
+  groups of context inputs the body reads (the owner, 2026-10-27: rules
+  built on new information get niches of their own instead of competing
+  with the table's refinements; groups, not exact input sets, which gave
+  nearly every candidate a cell of its own in the validation run); a
+  candidate enters an empty cell or replaces a fitter-proxied occupant only
+  if it is fitter;
 - events: an append-only log (critic rejections with reasons, gate
   failures, budget use, stops).
 Parent selection is seeded and depends only on the database's contents, so
@@ -40,18 +42,22 @@ ReductionBin = 0.25
 ResearchBin = 0.02
 
 
-# The LMR context's information inputs (lmr_table.hpp, LmrContext). depth,
-# move_number and base are left out: nearly every rule reads them, so they
-# would not separate one kind of rule from another.
-InformationInputs = ('history', 'on_pv', 'piece', 'threatened', 'attacks', 'quiet_moves', 'phase', 'entry_bound',
-                     'entry_depth', 'score_trend', 'branch_share')
+# The LMR context's information inputs (lmr_table.hpp, LmrContext) in the
+# owner's three groups (2026-10-27): move facts (its history, what the moved
+# piece is and does), node facts, and iteration facts (how the search as a
+# whole is going). depth, move_number, base and on_pv are left out: nearly
+# every rule reads them, so they would not separate one kind of rule from
+# another.
+InputGroups = (('move', ('history', 'piece', 'threatened', 'attacks')),
+               ('node', ('quiet_moves', 'phase', 'entry_bound', 'entry_depth')),
+               ('iteration', ('score_trend', 'branch_share')))
 _FIELD = re.compile(r'\bc\.([A-Za-z_]\w*)')
 
 
 def inputs_used(body):
-    """The information inputs a region body reads, sorted, joined by '+' ('-' for none)."""
+    """The input groups a region body reads, in InputGroups order, joined by '+' ('-' for none)."""
     fields = set(_FIELD.findall(body))
-    return '+'.join(sorted(f for f in InformationInputs if f in fields)) or '-'
+    return '+'.join(name for name, members in InputGroups if fields & set(members)) or '-'
 
 
 def cell_of(descriptors, body=''):

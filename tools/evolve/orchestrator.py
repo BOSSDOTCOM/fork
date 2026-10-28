@@ -39,6 +39,38 @@ import proxies  # noqa: E402
 import regions  # noqa: E402
 
 
+# The agents' context, trimmed to what they use (owner, 2026-10-27): the last
+# RecentScores candidates in compact form; parents and analyst rows with
+# their scores, never the per-position lists or full records.
+RecentScores = 8
+
+
+def score_text(fitness, proxies_json, descriptors_json):
+    """', fitness F, gain +G [L, H], trigger T%' (the parts known), for an agent."""
+    if fitness is None:
+        return ''
+    p = json.loads(proxies_json) if proxies_json else {}
+    d = json.loads(descriptors_json) if descriptors_json else []
+    out = f', fitness {fitness:.4f}'
+    if 'gain_low' in p:
+        out += f', gain {p["gain"]:+.4f} [{p["gain_low"]:+.4f}, {p["gain_high"]:+.4f}]'
+    if len(d) > 2:
+        out += f', trigger {100 * d[2]:.1f}%'
+    return out
+
+
+def summary_line(row):
+    """One analyst line from (id, generation, island, mode, rationale, status, critic, proxies, descriptors,
+    fitness, body): no per-position scores, no gate log."""
+    cid, gen, island, mode, rationale, status, critic, proxies_json, descriptors_json, fitness, body = row
+    d = json.loads(descriptors_json) if descriptors_json else []
+    shape = f', mean reduction {d[0]:.3f}, re-searched {100 * d[1]:.2f}%' if len(d) > 1 else ''
+    verdict = json.loads(critic) if critic else {}
+    reasons = f', critic: {verdict.get("reasons", "")[:200]}' if verdict and not verdict.get('accept') else ''
+    return (f'- #{cid} g{gen} {island} {mode} {status}{score_text(fitness, proxies_json, descriptors_json)}{shape}'
+            f', inputs {population.inputs_used(body or "")}{reasons}: {(rationale or "")[:240]}')
+
+
 class Loop:
     def __init__(self, cfg, run_dir, agent, runner, clock=time.time):
         self.cfg = cfg
@@ -93,7 +125,7 @@ class Loop:
             return None
         engine = self.runner.work / f'cand-{cid}' / 'build' / 'fork'
         self.refresh(status=f'generation {generation}: measuring candidate {cid}')
-        proxy = proxies.run_proxies(engine, self.labels, cfg['proxy_nodes'])
+        proxy = proxies.run_proxies(engine, self.labels, cfg['proxy_nodes'], cfg.get('proxy_jobs', 1))
         desc = self.descriptors(f'cand-{cid}')
         fitness = proxy.fitness()
         record = dict(proxy.__dict__)
@@ -104,6 +136,14 @@ class Loop:
         self.pop.update(cid, status='scored', proxies=json.dumps(record), descriptors=json.dumps(desc),
                         fitness=fitness)
         entered = self.pop.offer_elite(island, cid, desc, fitness) if place else False
+        best = getattr(self, 'best_scores', None)
+        if place and best:
+            # An improvement (the stopping rule's) is beyond the noise: the
+            # paired interval against the best so far lies above zero.
+            vs_best = proxies.paired_interval(proxy.per_position, best, self.cfg['seed'] + 7 * cid)
+            if vs_best and vs_best[1] > 0:
+                self.best_scores, self.best_fitness, self.best_generation = proxy.per_position, fitness, generation
+                self.say(generation, 'improved', {'id': cid, 'gain_over_best': [round(x, 4) for x in vs_best]})
         self.say(generation, 'scored', {'id': cid, 'island': island, 'fitness': round(fitness, 4),
                                         'agreement': round(proxy.agreement, 4),
                                         'score_error': round(proxy.score_error, 1), 'depth': round(proxy.depth, 2),
@@ -143,8 +183,8 @@ class Loop:
         for pid in ids:
             c = self.pop.get(pid)
             p = json.loads(c['proxies']) if c['proxies'] else {}
-            parts.append(f"- candidate {pid} (fitness {c['fitness']:.4f}, agreement {p.get('agreement', 0):.4f}, "
-                         f"score error {p.get('score_error', 0):.1f}, descriptors {c['descriptors']}):\n"
+            parts.append(f"- candidate {pid} (agreement {p.get('agreement', 0):.4f}, score error "
+                         f"{p.get('score_error', 0):.1f}{score_text(c['fitness'], c['proxies'], c['descriptors'])}):\n"
                          f"```cpp\n{c['body']}\n```")
         return ids[0] if ids else None, '\n'.join(parts) or '(none: start from the baseline, a zero correction)'
 
@@ -164,6 +204,7 @@ class Loop:
                                        protected=cfg['explorer_protected'])
             reply = self.agent.ask(role, prompt)
             self.budget.spend(tokens=reply.tokens, candidates=1)
+            self.say(g, 'agent_call', {'role': role, 'tokens': reply.tokens, 'usage': reply.usage})
             proposal = agents.parse_proposal(reply.text)
             if proposal is None:
                 self.say(g, 'malformed', {'island': island, 'reply': reply.text[:400]})
@@ -173,6 +214,7 @@ class Loop:
             review = self.agent.ask('critic', agents.prompt_for('critic', mode=proposal.mode,
                                                                 rationale=proposal.rationale, body=proposal.body))
             self.budget.spend(tokens=review.tokens)
+            self.say(g, 'agent_call', {'role': 'critic', 'tokens': review.tokens, 'usage': review.usage})
             verdict = agents.parse_verdict(review.text)
             self.pop.update(cid, critic=json.dumps(verdict.__dict__))
             audit = not verdict.accept and rng.random() < cfg['critic_audit_share']
@@ -195,11 +237,8 @@ class Loop:
             self.analyse(g)
         if gate_runs and gate_failures / gate_runs > cfg['max_gate_failure_rate'] and gate_runs >= 4:
             return f'gate failure rate {gate_failures}/{gate_runs}'
-        best = self.pop.best()
-        if best and (self.best_fitness is None or best[1] > self.best_fitness):
-            self.best_fitness, self.best_generation = best[1], g
         if g - self.best_generation >= cfg['patience']:
-            return f'no improvement for {cfg["patience"]} generations'
+            return f'no improvement beyond the fitness interval for {cfg["patience"]} generations'
         return None
 
     def promote(self, g, cid, fitness):
@@ -259,19 +298,20 @@ class Loop:
 
     def analyse(self, g):
         rows = self.pop.db.execute(
-            'SELECT id, generation, island, mode, rationale, status, critic, proxies, descriptors, fitness '
+            'SELECT id, generation, island, mode, rationale, status, critic, proxies, descriptors, fitness, body '
             'FROM candidates WHERE generation > ? ORDER BY id', (g - self.cfg['analyst_every'],)).fetchall()
-        text = '\n'.join(json.dumps(r) for r in rows) or '(no candidates)'
+        text = '\n'.join(summary_line(r) for r in rows) or '(no candidates)'
         reply = self.agent.ask('analyst', agents.prompt_for('analyst', every=self.cfg['analyst_every'],
                                                             candidates=text))
         self.budget.spend(tokens=reply.tokens)
+        self.say(g, 'agent_call', {'role': 'analyst', 'tokens': reply.tokens, 'usage': reply.usage})
         self.insights = reply.text.strip() or self.insights
         self.say(g, 'analyst', {'insights': self.insights[:2000]})
 
     def history_text(self):
-        rows = self.pop.db.execute('SELECT id, island, mode, status, fitness, rationale FROM candidates '
-                                   'ORDER BY id DESC LIMIT 12').fetchall()
-        return '\n'.join(f'- {r[0]} ({r[1]}, {r[2]}): {r[3]}, fitness {r[4]}: {(r[5] or "")[:160]}'
+        rows = self.pop.db.execute('SELECT id, island, mode, status, fitness, proxies, descriptors, rationale '
+                                   'FROM candidates ORDER BY id DESC LIMIT ?', (RecentScores,)).fetchall()
+        return '\n'.join(f'- {r[0]} ({r[1]}, {r[2]}): {r[3]}{score_text(r[4], r[5], r[6])}: {(r[7] or "")[:120]}'
                          for r in rows) or '(nothing yet)'
 
     # --- the run -----------------------------------------------------------------
@@ -294,9 +334,11 @@ class Loop:
             self.pop.offer_elite(island, cid, json.loads(self.pop.get(cid)['descriptors']), fitness)
         self.baseline_fitness = fitness
         self.baseline_scores = json.loads(self.pop.get(cid)['proxies']).get('per_position') or None
+        self.best_scores = self.baseline_scores
         _, out = self.runner.run([str(self.runner.work / f'cand-{cid}' / 'build-stats' / 'fork'), 'bench'],
                                  timeout=900)
-        self.statistics = '\n'.join(line for line in out.split('\n') if line.startswith('stats:')) or self.statistics
+        self.statistics = '\n'.join(line for line in out.split('\n') if line.startswith('stats:') and any(
+            k in line for k in ('reduc', 'cutoff', 'LMR'))) or self.statistics
         self.best_fitness, self.best_generation = fitness, 0
         self.status = 'running'
         self.say(0, 'baseline', {'id': cid, 'fitness': fitness, 'perft': self.baseline_perft})

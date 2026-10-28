@@ -28,6 +28,7 @@ ROLES = ('proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer
 class Reply:
     text: str
     tokens: int = 0
+    usage: dict | None = None  # the CLI's own breakdown, when it gives one
 
 
 @dataclass
@@ -43,10 +44,20 @@ class Verdict:
     reasons: str
 
 
+# The roles that judge or summarize get the shared context's rules and the
+# region only: the measurements, the history, the analyst's notes and the
+# proposers' reply format are for the proposers.
+_CONTEXT_ONLY_RULES = ('critic', 'analyst')
+_PROPOSER_PART = "## Fork's measurements"
+
+
 def prompt_for(role, **fields):
-    """The role's prompt: the shared context, then the role's file, with {fields} filled in."""
-    text = (PROMPTS / 'context.md').read_text(encoding='utf-8') + '\n\n' + \
-        (PROMPTS / f'{role}.md').read_text(encoding='utf-8')
+    """The role's prompt: the shared context (for the critic and the analyst,
+    only its rules and the region), then the role's file, with {fields} filled in."""
+    context = (PROMPTS / 'context.md').read_text(encoding='utf-8')
+    if role in _CONTEXT_ONLY_RULES:
+        context = context.split(_PROPOSER_PART)[0].rstrip() + '\n'
+    text = context + '\n\n' + (PROMPTS / f'{role}.md').read_text(encoding='utf-8')
     for k, v in fields.items():
         text = text.replace('{' + k + '}', str(v))
     return text
@@ -181,4 +192,5 @@ def parse_stream(text, role='agent'):
     usage = result.get('usage', {})
     tokens = sum(int(usage.get(k, 0) or 0) for k in ('input_tokens', 'output_tokens',
                                                      'cache_creation_input_tokens', 'cache_read_input_tokens'))
-    return Reply(result.get('result', ''), tokens)
+    return Reply(result.get('result', ''), tokens, {k: usage.get(k, 0) for k in (
+        'input_tokens', 'output_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens')})

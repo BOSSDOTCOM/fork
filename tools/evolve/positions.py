@@ -134,6 +134,7 @@ def main():
     ap.add_argument('--label-depth', type=int, default=15)
     ap.add_argument('--opening-plies', type=int, default=8)
     ap.add_argument('--seed', type=int, default=20261027)
+    ap.add_argument('--id-prefix', default='p', help='id prefix, so later batches can be appended (default p)')
     a = ap.parse_args()
     rng = random.Random(a.seed)
     t0 = time.time()
@@ -163,7 +164,7 @@ def main():
             move, score, depth, nodes = labeler.search(board, f'depth {a.label_depth}')
             split = 'holdout' if rng.randrange(6) == 0 else 'evolve'
             if score and score[0] == 'cp' and abs(score[1]) <= 1500 and depth >= a.label_depth:
-                f.write(json.dumps({'id': f'p{i:05d}', 'fen': fen, 'bm': move.uci(), 'san': board.san(move),
+                f.write(json.dumps({'id': f'{a.id_prefix}{i:05d}', 'fen': fen, 'bm': move.uci(), 'san': board.san(move),
                                     'ce': score[1], 'depth': depth, 'nodes': nodes, 'split': split}) + '\n')
                 kept += 1
             if (i + 1) % 50 == 0:

@@ -221,6 +221,27 @@ class ProxyTests(unittest.TestCase):
         self.assertEqual(r.per_position, [0.98, -0.4])
         self.assertAlmostEqual(r.fitness(), sum(r.per_position) / 2)
 
+    def test_parallel_proxies_keep_the_order(self):
+        class Fake:
+            def __init__(self, path):
+                pass
+
+            def answer(self, fen, nodes):
+                return proxies.Answer(fen, 0, 1)
+
+            def close(self):
+                pass
+        real = proxies.Engine
+        proxies.Engine = Fake
+        try:
+            labels = [{'fen': f'm{i}', 'bm': f'm{i}' if i % 3 else 'x', 'ce': 0} for i in range(23)]
+            one = proxies.run_proxies('e', labels, 1)
+            four = proxies.run_proxies('e', labels, 1, jobs=4)
+        finally:
+            proxies.Engine = real
+        self.assertEqual(one, four)
+        self.assertEqual(one.per_position[:3], [0.0, 1.0, 1.0])
+
     def test_load_positions_splits(self):
         with tempfile.NamedTemporaryFile('w', suffix='.jsonl', delete=False) as f:
             for i, split in enumerate(['evolve', 'holdout', 'evolve']):
@@ -254,13 +275,14 @@ class PopulationTests(unittest.TestCase):
     def test_inputs_used_is_a_grid_axis(self):
         self.assertEqual(population.inputs_used('  return c.depth > 8 ? c.base : 0;'), '-')
         self.assertEqual(population.inputs_used('  if (c.threatened && c.history < 0) return 1;\n  return 0;'),
-                         'history+threatened')
-        self.assertEqual(population.inputs_used('  return c.historyx + c.phase;'), 'phase')
+                         'move')
+        self.assertEqual(population.inputs_used('  return c.historyx + c.phase + c.on_pv;'), 'node')
+        self.assertEqual(population.inputs_used('  return c.attacks + c.piece + c.branch_share;'), 'move+iteration')
         a = self.pop.add(1, 'i', 'r', None, 'residual', '  return c.history < 0;', '')
         b = self.pop.add(1, 'i', 'r', None, 'residual', '  return c.phase < 8;', '')
         self.assertTrue(self.pop.offer_elite('i', a, (1.0, 0.01), 0.5))
         self.assertTrue(self.pop.offer_elite('i', b, (1.0, 0.01), 0.4))  # same behaviour, other inputs
-        self.assertEqual(sorted(cell for cell, _, _ in self.pop.elites('i')), ['4:0:history', '4:0:phase'])
+        self.assertEqual(sorted(cell for cell, _, _ in self.pop.elites('i')), ['4:0:move', '4:0:node'])
 
     def test_parents_are_seeded(self):
         ids = [self.pop.add(1, 'i', 'r', None, 'residual', str(k), '') for k in range(6)]
@@ -361,7 +383,7 @@ class OrchestratorTests(unittest.TestCase):
                         'match': dict(cfg['match'], games=0)})
             fitness = iter([0.30, 0.31, 0.29])
             real = proxies.run_proxies
-            proxies.run_proxies = lambda engine, labels, nodes: (
+            proxies.run_proxies = lambda engine, labels, nodes, jobs=1: (
                 lambda f: proxies.ProxyResult(1, f, 0.0, 9.0, [f]))(next(fitness))
             try:
                 runner = FakeRunner(Path(tmp) / 'work', benches=[{'nodes': '1', 'signature': 's'}] * 20)
@@ -389,6 +411,8 @@ class OrchestratorTests(unittest.TestCase):
             self.assertEqual(len(pop.events('critic_rejected')), 1)
             self.assertEqual(len(pop.events('analyst')), 0)    # every 3 generations
             self.assertEqual(pop.best()[0], 2)                 # the fittest so far
+            self.assertEqual(len(pop.events('improved')), 1)   # 0.31 beyond the baseline's 0.30; 0.29 is not
+            self.assertEqual(loop.best_generation, 1)
             self.assertEqual(len(pop.events('promoted')), 1)   # the match is skipped (games = 0)
             page = (Path(tmp) / 'run' / 'dashboard.html').read_text(encoding='utf-8')
             for section in ('Islands', 'Top candidates', 'Promotions', 'Critic rejections (1)',
