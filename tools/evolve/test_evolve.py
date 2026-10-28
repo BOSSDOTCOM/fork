@@ -159,6 +159,44 @@ class StaticRuleTests(unittest.TestCase):
         self.assertTrue(gate.static_violations('  return 0;\n}\nint x() {\n  return 1;'))  # balanced, but below 0
         self.assertTrue(gate.static_violations('  if (c.on_pv) {\n  return 0;'))
 
+    # The residual gap of the gate (owner, 2026-10-27): a body's own lines are
+    # left out of the preprocessed comparison, so a body that closes its
+    # function and adds code after it is stopped by the bracket rule alone.
+    # These bodies break no other rule, so the bracket reason must be the
+    # only one: if the bracket rule stops working, this test fails.
+    LEAVES = 'leaves the function (unbalanced braces, brackets or parentheses)'
+
+    def test_closing_the_function_early_is_caught_by_the_bracket_rule_alone(self):
+        for body in (
+                # closes the function, then defines another (balanced overall)
+                '  return 0;\n}\nconstexpr int evolve_extra(const LmrContext& c) {\n  return c.depth;',
+                # closes the function, then adds an overload that the next code could pick
+                '  return c.base > 0 ? 0 : 0;\n}\nconstexpr int lmr_correction(int depth) {\n  return depth;',
+                # one closer too many at the end
+                '  return 0;\n}',
+                # a brace opened in a string does not balance a real closer
+                '  const char* s = "{"; static_cast<void>(s);\n  return 0;\n}\nconstexpr int f() {\n  return 1;',
+                # nor one in a comment, a character literal or a raw string
+                '  return 0; // {\n}\nconstexpr int f() {\n  return 1;',
+                "  const char q = '{'; static_cast<void>(q);\n  return 0;\n}\nconstexpr int f() {\n  return 1;",
+                '  const char* r = R"x({)x"; static_cast<void>(r);\n  return 0;\n}\nconstexpr int f() {\n'
+                '  return 1;',
+                # brackets of different kinds that do not nest
+                '  return (c.depth];',
+                '  return c.depth > 3 ? (c.base) : 0);',
+                # an opener left open
+                '  if (c.on_pv) {\n  return 0;'):
+            self.assertEqual(gate.static_violations(body), [self.LEAVES], body)
+
+    def test_brackets_inside_literals_and_comments_do_not_count(self):
+        for body in ('  const char* s = "}"; static_cast<void>(s);\n  return 0;',
+                     '  return 0; // }\n',
+                     '  return 0; /* } ) ] */',
+                     "  const char q = '}'; static_cast<void>(q);\n  return 0;",
+                     '  const char* r = R"x(} ")x"; static_cast<void>(r);\n  return 0;',
+                     '  if (c.on_pv) {\n    return (c.depth + 1) / 2;\n  }\n  return 0;'):
+            self.assertEqual(gate.static_violations(body), [], body)
+
     def test_clock_environment_and_builtins(self):
         for body, reason in (('  return __builtin_ia32_rdtsc() & 1 ? 1 : 0;', 'reserved names or compiler builtins'),
                              ('  return std::chrono::steady_clock::now().time_since_epoch().count() & 1;',
@@ -290,6 +328,15 @@ class GateTests(unittest.TestCase):
         self.assertEqual(result.step, 'done')
         self.assertEqual([c[0] for c in runner.calls],
                          ['tree', 'configure', 'preprocess', 'build', 'perft', 'suites', 'bench', 'bench'])
+
+    def test_a_body_that_closes_its_function_stops_at_the_static_step(self):
+        """The gate refuses it before writing a tree or building anything (owner, 2026-10-27)."""
+        result, runner = self.gate(body='  return 0;\n}\nconstexpr int evolve_extra(const LmrContext& c) {\n'
+                                        '  return c.depth;')
+        self.assertFalse(result.passed)
+        self.assertEqual(result.step, 'static')
+        self.assertIn('leaves the function', result.detail)
+        self.assertEqual(runner.calls, [])
 
     def test_preprocessed_check_catches_what_the_rules_miss(self):
         """A body whose effect reaches code outside the region (the audit's %:define) fails before
