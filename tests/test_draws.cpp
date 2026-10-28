@@ -1,7 +1,10 @@
-// Draw rules: repetition counting and insufficient material.
+// Draw rules: repetition counting, insufficient material and the fifty-move
+// clock.
 #include <algorithm>
 #include <array>
+#include <initializer_list>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/position.hpp"
@@ -118,6 +121,45 @@ TEST_CASE("draws", "the repetition window stops at a null move") {
   // After the null move, ordinary repetitions still count.
   play(pos, {"g8f6", "b1c3", "f6g8", "c3b1"});
   CHECK_EQ(pos.repetition_count(), 2);
+}
+
+// Audit-1 Q-3: the fifty-move clock (reset by every capture and pawn move)
+// after captures, pawn moves, en passant, a promotion and castling, and the
+// rule reached at exactly 100 half-moves. A capture that
+// kept the count (mutant M01) passed every test, bench included, and silently
+// stopped every endgame-table probe after a capture (probes need a zero
+// clock); the rule one ply late (M05) passed too. Every clock value below is
+// python-chess 1.11.2's for the same moves (tools/check_search_positions.py).
+TEST_CASE("draws", "the halfmove clock resets on captures and pawn moves; the rule binds at exactly 100") {
+  struct ClockCase {
+    std::string_view fen;
+    std::initializer_list<const char*> moves;
+    std::initializer_list<int> clocks;  // after each move
+  };
+  for (const ClockCase& c :
+       {ClockCase{Position::StartFen,
+                  {"g1f3", "b8c6", "f3e5", "c6e5", "g2g3", "e5f3", "e2f3"},
+                  {1, 2, 3, 0, 0, 1, 0}},
+        ClockCase{"4k3/8/8/8/8/8/8/R3K2R w K - 37 50", {"e1g1", "e8d7", "f1f7", "d7e6"}, {38, 39, 40, 41}},
+        ClockCase{"4k3/8/8/8/8/8/r7/R3K3 w - - 37 50", {"a1a2"}, {0}},
+        ClockCase{"4k3/1p6/8/2P5/8/8/8/4K3 b - - 37 50", {"b7b5"}, {0}},
+        ClockCase{"4k3/8/8/1pP5/8/8/8/4K3 w - b6 12 50", {"c5b6"}, {0}},
+        ClockCase{"4k3/1P6/8/8/8/8/8/4K3 w - - 37 50", {"b7b8q"}, {0}}}) {
+    Position pos;
+    CHECK_MSG(pos.set_fen(c.fen), c.fen);
+    auto clock = c.clocks.begin();
+    for (const char* uci : c.moves) {
+      play(pos, {uci});
+      CHECK_MSG(pos.halfmove_clock() == *clock, c.fen << " after " << uci << ": " << pos.halfmove_clock());
+      ++clock;
+    }
+  }
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/8/8/8/8/8/R3K3 w - - 99 80"));
+  CHECK(!pos.fifty_move_reached());
+  play(pos, {"a1a2"});
+  CHECK_EQ(pos.halfmove_clock(), 100);
+  CHECK(pos.fifty_move_reached());
 }
 
 // Insufficient material (DESIGN.md 4.5): every signature with at most two

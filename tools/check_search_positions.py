@@ -204,5 +204,27 @@ b.pop()
 b.push_uci('h1h7')
 check(not b.is_checkmate(), 'K+R v K: c6b6 a8b8 h1h7 is not mate')
 
+# tests/test_draws.cpp, the fifty-move clock (audit-1 Q-3): the halfmove
+# clock after each move, and the rule reached at exactly 100 half-moves.
+for fen, moves, clocks in [
+    (chess.STARTING_FEN, ['g1f3', 'b8c6', 'f3e5', 'c6e5', 'g2g3', 'e5f3', 'e2f3'], [1, 2, 3, 0, 0, 1, 0]),
+    ('4k3/8/8/8/8/8/8/R3K2R w K - 37 50', ['e1g1', 'e8d7', 'f1f7', 'd7e6'], [38, 39, 40, 41]),
+    ('4k3/8/8/8/8/8/r7/R3K3 w - - 37 50', ['a1a2'], [0]),
+    ('4k3/1p6/8/2P5/8/8/8/4K3 b - - 37 50', ['b7b5'], [0]),
+    ('4k3/8/8/1pP5/8/8/8/4K3 w - b6 12 50', ['c5b6'], [0]),
+    ('4k3/1P6/8/8/8/8/8/4K3 w - - 37 50', ['b7b8q'], [0]),
+    ('4k3/8/8/8/8/8/8/R3K3 w - - 99 80', ['a1a2'], [100]),
+]:
+    b = board_of(fen)
+    got = []
+    for uci in moves:
+        b.push_uci(uci)
+        got.append(b.halfmove_clock)
+    check(got == clocks, f'halfmove clocks from {fen}: {got}')
+b = board_of('4k3/8/8/8/8/8/8/R3K3 w - - 99 80')
+check(not b.is_fifty_moves(), 'fifty-move rule not reached at 99 half-moves')
+b.push_uci('a1a2')
+check(b.is_fifty_moves(), 'fifty-move rule reached at 100 half-moves')
+
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)
