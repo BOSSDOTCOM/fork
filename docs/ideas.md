@@ -835,3 +835,23 @@ tuned by SPSA.
 - **runtime cost:** none if it pays.
 - **earliest phase:** Phase 3.
 - **status:** untested
+
+## 38. Phase-end fuzzing on GitHub
+
+- **type:** TOOLING
+- **idea:** a manually triggered workflow (`workflow_dispatch`) that
+  builds the clang-fuzz preset and runs each fuzz target with the
+  plateau rule (`tools/fuzz/run_fuzz.py --max-seconds 3600
+  --plateau-seconds 1200`), one job per target, then minimizes each run's
+  corpus into the committed seeds (libFuzzer `-merge=1`) and uploads the
+  coverage-adding inputs and any crash artifacts. Phase-end fuzzing then no
+  longer uses the local machine: at the Phase 3 end, the local run of
+  fuzz_moves was killed when the shared machine ran low on memory (owner,
+  2026-10-28).
+- **phase:** Phase 4 backlog (owner, 2026-10-28), ready before the Phase 4
+  phase end.
+- **metric:** each target's runs, coverage and plateau verdict as the
+  local run reports them; the job fails on a crash artifact.
+- **runtime cost:** none for the engine; hosted runners only.
+- **earliest phase:** Phase 4.
+- **status:** queued

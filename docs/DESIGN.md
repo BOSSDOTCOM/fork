@@ -337,7 +337,10 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   use no local CPU). **The removal round folds into the search
   re-validation after the first network**: one round over every search
   feature, tier 2's included, instead of one at the end of Phase 3 and
-  another after the network. **Late Phase 4, if the owner said go after the Phase 3
+  another after the network. **Phase 4 backlog** (owner, 2026-10-28): a
+  manually triggered GitHub workflow that runs each fuzz target with the
+  plateau rule, so phase-end fuzzing no longer uses the local machine
+  (ideas.md idea 38). **Late Phase 4, if the owner said go after the Phase 3
   pilot (deliverable 8c):** the first real campaigns of the
   heuristic-discovery loop (ideas.md idea 23), after the first strong
   network and that re-validation; afterwards a standing tool in the
