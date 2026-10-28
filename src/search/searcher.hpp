@@ -75,8 +75,6 @@ struct SearchQuota {
 //   1 / ForcedMoveFraction of its soft limit (audit-1, B-1).
 // - use_tt_keep_deeper: a stale TT entry still deeper after aging is kept
 //   against an inexact result (audit-1, B-5).
-// - use_shallow_fail_high: the re-search after a root aspiration fail high
-//   is FailHighDepthCut plies shallower (audit-1, B-3).
 // - use_tables_full_depth: a table result that settles a node is stored in
 //   the TT at full depth, not the node's (audit-1, B-2).
 // - use_tt_stand_pat: the quiescence search's stand-pat value refined by
@@ -103,7 +101,6 @@ struct SearchQuota {
   X(use_tt_eval_refine, UseTtEvalRefine, true)       \
   X(use_forced_move_stop, UseForcedMoveStop, true)   \
   X(use_tt_keep_deeper, UseTtKeepDeeper, true)       \
-  X(use_shallow_fail_high, UseShallowFailHigh, true) \
   X(use_tables_full_depth, UseTablesFullDepth, true) \
   X(use_tt_stand_pat, UseTtStandPat, true)           \
   X(use_tables, UseTables, true)

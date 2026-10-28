@@ -598,13 +598,8 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       beta = std::min(previous + delta, ScoreInfinite);
     }
     int score;
-    // After a fail high the re-search only has to place a score already shown
-    // to be at least beta, so it searches FailHighDepthCut plies less (once,
-    // not cumulatively); a fail low gets the full depth again (audit-1, B-3;
-    // KB T6). The iteration is still reported at `depth`.
-    int pass_depth = depth;
     for (;;) {
-      score = search_root(alpha, beta, pass_depth);
+      score = search_root(alpha, beta, depth);
       if (stopped_) break;
       if (score > alpha && score < beta) break;
       if (elapsed_ms() >= fail_report_ms) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
@@ -615,10 +610,8 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       delta = std::min(delta + std::abs(score - previous), ScoreInfinite);
       if (score <= alpha) {
         alpha = is_tb_or_mate(score) ? -ScoreInfinite : std::max(score - delta, -ScoreInfinite);
-        pass_depth = depth;
       } else {
         beta = is_tb_or_mate(score) ? ScoreInfinite : std::min(score + delta, ScoreInfinite);
-        if (switches.use_shallow_fail_high) pass_depth = std::max(1, depth - FailHighDepthCut);
       }
     }
     if (stopped_) {

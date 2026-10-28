@@ -30,7 +30,6 @@
 #define FORK_SEARCH_PARAMS(X)             \
   X(AspirationMinDepth, 5, 2, 10, 1)      \
   X(AspirationHalfWidth, 12, 6, 24, 1)    \
-  X(FailHighDepthCut, 1, 0, 2, 1)         \
   X(IterationGrowthThirds, 5, 3, 10, 1)   \
   X(ForcedMoveFraction, 8, 4, 16, 1)      \
   X(RfpMaxDepth, 6, 3, 12, 1)             \
