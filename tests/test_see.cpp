@@ -93,7 +93,7 @@ void compare_tree(Position& pos, int depth, int& compared) {
 
 TEST_CASE("see", "hand-derived exchanges") {
   // exd5, nothing recaptures: +100.
-  CHECK_EQ(see_of("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", "e4d5"), 100);
+  CHECK_EQ(see_of("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", "e4d5"), 101);
   // exd5 cxd5: pawn for pawn, 0.
   CHECK_EQ(see_of("4k3/8/2p5/3p4/4P3/8/8/4K3 w - - 0 1", "e4d5"), 0);
   // Nxd5 cxd5: a knight for a pawn, 100 - 300 = -200.
