@@ -211,6 +211,12 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
 // Debug counters (DESIGN.md §5.2), compiled in only with the CMake option
 // FORK_SEARCH_STATS: they show whether ordering and pruning behave as
 // intended, which an Elo test cannot. Normal builds have none.
+// FORK_STAT(statement) runs a counter statement in stats builds only.
+#ifdef FORK_SEARCH_STATS
+#define FORK_STAT(...) __VA_ARGS__
+#else
+#define FORK_STAT(...) static_cast<void>(0)
+#endif
 struct SearchCounters {
   std::uint64_t beta_cutoffs = 0;        // main-search nodes that failed high
   std::uint64_t first_move_cutoffs = 0;  // ... on the first move searched

@@ -178,9 +178,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // the node fails high without a search.
   if (switches.use_rfp && can_prune && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
       prune_eval - RfpMargin * depth >= beta) {
-#ifdef FORK_SEARCH_STATS
-    ++counters.rfp_cuts;
-#endif
+    FORK_STAT(++counters.rfp_cuts);
     return prune_eval;
   }
 
@@ -198,9 +196,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     pos.unmake_null();
     if (stopped_) return 0;
     if (score >= beta) {
-#ifdef FORK_SEARCH_STATS
-      ++counters.null_cuts;
-#endif
+      FORK_STAT(++counters.null_cuts);
       return is_tb_or_mate(score) ? beta : score;  // a mate found after passing is not trusted
     }
   }
@@ -220,9 +216,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   const int futility_value = in_check ? 0 : prune_eval + FutilityOffset + FutilityGrowth * depth;
   const bool futile_node = switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
                            !is_tb_or_mate(alpha) && futility_value <= alpha;
-#ifdef FORK_SEARCH_STATS
-  counters.futile_nodes += futile_node;
-#endif
+  FORK_STAT(counters.futile_nodes += futile_node);
   bool quiet_checks_only = false;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
     ++moves_seen;
@@ -238,9 +232,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     if (moves_searched > 0 && best > -(MateScore - MaxPly)) {
       if (lmp_node && quiet && quiets_searched >= LmpQuietAllowance + depth) {
         f.selector.stop_quiets();  // late move pruning (T21)
-#ifdef FORK_SEARCH_STATS
-        ++counters.lmp_prunes;
-#endif
+        FORK_STAT(++counters.lmp_prunes);
         continue;
       }
 #ifdef FORK_SEARCH_STATS
@@ -260,8 +252,6 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           !see_at_least(pos, m, -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth)) {
 #ifdef FORK_SEARCH_STATS
         counters.bad_captures_after_stop_pruned += bad_after_stop;
-#endif
-#ifdef FORK_SEARCH_STATS
         ++counters.see_prunes;
 #endif
         continue;  // SEE pruning (T23)
@@ -348,8 +338,6 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           if (quiet && !OnPv && !in_check && depth < SearchCounters::CutoffDepths)
             ++counters.quiet_cutoff_index[depth]
                                          [std::min(quiets_searched - 1, SearchCounters::CutoffIndices - 1)];
-#endif
-#ifdef FORK_SEARCH_STATS
           ++counters.beta_cutoffs;
           counters.first_move_cutoffs += moves_searched == 1;
           counters.cutoff_index_sum += static_cast<std::uint64_t>(moves_searched - 1);
@@ -374,9 +362,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // loop sees there is a checking one. The bound stays honest as if each
   // dropped quiet had been seen.
   if (f.selector.quiets_filtered() > 0) best = std::max(best, futility_value);
-#ifdef FORK_SEARCH_STATS
-  counters.futility_prunes += static_cast<std::uint64_t>(f.selector.quiets_filtered());
-#endif
+  FORK_STAT(counters.futility_prunes += static_cast<std::uint64_t>(f.selector.quiets_filtered()));
   // No legal move is mate or stalemate; legal moves that were all pruned are
   // not (the guard above prevents it; this keeps the result right regardless).
   if (moves_seen == 0) return in_check ? mated_score(ply) : 0;
@@ -397,9 +383,7 @@ template <bool OnPv>
 int Searcher::quiesce(int alpha, int beta, int ply) {
   pv_[ply].length = 0;
   ++nodes_;
-#ifdef FORK_SEARCH_STATS
-  ++(OnPv ? counters.quiesce_nodes_pv : counters.quiesce_nodes_non_pv);
-#endif
+  FORK_STAT(++(OnPv ? counters.quiesce_nodes_pv : counters.quiesce_nodes_non_pv));
   if (poll_limits()) return 0;
   max_ply_reached_ = std::max(max_ply_reached_, ply);
   Position& pos = *pos_;
@@ -453,9 +437,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     ++moves_searched;
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     pos.make(m);
-#ifdef FORK_SEARCH_STATS
-    ++counters.makes;
-#endif
+    FORK_STAT(++counters.makes);
     const int score = -quiesce<OnPv>(-beta, -alpha, ply + 1);
     pos.unmake(m);
     if (stopped_) return 0;
