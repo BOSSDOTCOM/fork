@@ -171,6 +171,17 @@ std::vector<Position> oracle_positions() {
 
 }  // namespace
 
+// The search bench begins with the CPW perft suite, retyped in
+// src/search/search_bench.cpp; tests/suite.hpp holds the copy checked
+// against chessprogramming.org with its published counts (audit-1 A9 F-10:
+// every retyped FEN is a risk, non-negotiable 1).
+TEST_CASE("search", "the search bench's perft-suite FENs equal the cited suite") {
+  const auto& suite = perft_suite();
+  CHECK(search_bench_fens().size() >= suite.size());
+  for (std::size_t i = 0; i < suite.size() && i < search_bench_fens().size(); ++i)
+    CHECK_MSG(search_bench_fens()[i] == suite[i].fen, suite[i].name << ": " << search_bench_fens()[i]);
+}
+
 TEST_CASE("search",
           "root score equals plain minimax: PVS, aspiration, mate distance pruning, TT on and off") {
   Fixture fx;
