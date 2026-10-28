@@ -8,6 +8,7 @@ match parser, and one orchestrated generation with stub agents and fakes.
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -728,6 +729,142 @@ class OrchestratorTests(unittest.TestCase):
             detail = json.loads(loop.pop.events('not_promoted')[0][2])
             self.assertEqual((detail['reason'], detail['holdout_low']), ('not confirmed on the held-out set', 0.0))
             loop.close()
+
+
+def loop_cfg(tmp):
+    """The committed config with a two-position set, three islands of one proposal each, no match."""
+    labels = Path(tmp) / 'p.jsonl'
+    labels.write_text(json.dumps({'id': 0, 'fen': 'x', 'bm': 'e2e4', 'ce': 0, 'split': 'evolve'}) + '\n' +
+                      json.dumps({'id': 1, 'fen': 'y', 'bm': 'e2e4', 'ce': 0, 'split': 'holdout'}) + '\n',
+                      encoding='utf-8')
+    cfg = json.loads((Path(__file__).resolve().parent / 'config.json').read_text(encoding='utf-8'))
+    cfg.update({'positions': str(labels), 'per_island': 1, 'critic_audit_share': 0.0, 'dashboard_mirror': None,
+                'islands': ['proposer_aggressive', 'proposer_cautious', 'explorer'],
+                'match': dict(cfg['match'], games=0)})
+    return cfg
+
+
+def fake_proxies(engine, labels, nodes, jobs=1):
+    return proxies.ProxyResult(1, 0.3, 0.0, 9.0, [0.3])
+
+
+class Crash(BaseException):
+    """A process killed mid-run: not an Exception, so nothing in the loop catches it."""
+
+
+class LoopFailureTests(unittest.TestCase):
+    """Audit-1 U-7: one failure must not end a run, and a run can be resumed."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.real = proxies.run_proxies
+        proxies.run_proxies = fake_proxies
+        self.slept = []
+
+    def tearDown(self):
+        proxies.run_proxies = self.real
+        self.tmp.cleanup()
+
+    def loop(self, agent=None, resume=False, runner=None):
+        runner = runner or FakeRunner(Path(self.tmp.name) / 'work', benches=[{'nodes': '1', 'signature': 's'}] * 99)
+        return orchestrator.Loop(loop_cfg(self.tmp.name), Path(self.tmp.name) / 'run',
+                                 agent or orchestrator.dry_run_agent(), runner, resume=resume, sleep=self.slept.append)
+
+    def statuses(self, loop):
+        return [r[0] for r in loop.pop.db.execute('SELECT status FROM candidates ORDER BY id')]
+
+    def test_one_failed_agent_call_does_not_end_the_run(self):
+        class Flaky(agents.StubAgent):
+            def ask(self, role, prompt):
+                if role == 'critic':
+                    raise RuntimeError('claude -p failed for critic: rate limited')  # CliAgent.ask's error
+                return super().ask(role, prompt)
+        loop = self.loop(Flaky(orchestrator.dry_run_agent().script))
+        loop.start()
+        self.assertIsNone(loop.generation(1))  # 3 errors: under the 4 gate runs the stop needs
+        self.assertEqual(self.statuses(loop)[1:], ['error:critic'] * 3)
+        self.assertEqual(len(loop.pop.events('error')), 3)
+        self.assertEqual(self.slept, [60, 120, 240] * 3)  # agent_retries 3, backoff 60 s doubling
+        self.assertEqual(len(loop.pop.events('generation_done')), 1)
+        loop.close()
+
+    def test_a_transient_failure_is_retried(self):
+        class OnceFlaky(agents.StubAgent):
+            failed = False
+
+            def ask(self, role, prompt):
+                if not self.failed:
+                    OnceFlaky.failed = True
+                    raise subprocess.TimeoutExpired('claude', 900)
+                return super().ask(role, prompt)
+        loop = self.loop(OnceFlaky(orchestrator.dry_run_agent().script))
+        loop.start()
+        loop.generation(1)
+        self.assertEqual(self.slept, [60])
+        self.assertEqual(len(loop.pop.events('agent_retry')), 1)
+        self.assertEqual(len(loop.pop.events('error')), 0)
+        loop.close()
+
+    def test_errors_count_toward_the_gate_failure_stop(self):
+        loop = self.loop()
+        loop.start()
+        loop.cfg.update(per_island=2, critic_audit_share=1.0)  # 6 requests, every one gated
+
+        def broken(*a, **k):
+            raise subprocess.TimeoutExpired('fork bench', 600)
+        loop.runner.bench = broken  # every gate's bench times out
+        stop = loop.generation(1)
+        self.assertTrue(stop.startswith('gate failure rate'), stop)
+        self.assertIn('error:gate', self.statuses(loop))
+        loop.close()
+
+    def test_a_used_run_dir_needs_resume(self):
+        loop = self.loop()
+        loop.start()
+        loop.close()
+        with self.assertRaises(orchestrator.RunDirError):
+            self.loop()
+        with self.assertRaises(orchestrator.RunDirError):
+            orchestrator.Loop(loop_cfg(self.tmp.name), Path(self.tmp.name) / 'empty', orchestrator.dry_run_agent(),
+                              FakeRunner(Path(self.tmp.name) / 'work'), resume=True)
+
+    def test_restarting_in_the_same_run_dir_resumes(self):
+        stub = agents.StubAgent(orchestrator.dry_run_agent().script, tokens_per_reply=10)
+        loop = self.loop(stub)
+        loop.run(1)
+        used = dict(loop.budget.used)
+        self.assertEqual(used, {'tokens': 60, 'candidates': 3})  # 3 proposals and 3 critic calls
+        loop = self.loop(agents.StubAgent(orchestrator.dry_run_agent().script, tokens_per_reply=10), resume=True)
+        loop.run(2)
+        pop = population.Population(str(Path(self.tmp.name) / 'run' / 'population.sqlite'))
+        self.assertEqual(pop.db.execute("SELECT COUNT(*) FROM candidates WHERE agent = 'baseline'").fetchone()[0], 1)
+        self.assertEqual(pop.db.execute('SELECT COUNT(*) FROM candidates WHERE generation = 1').fetchone()[0], 3)
+        self.assertEqual(pop.db.execute('SELECT COUNT(*) FROM candidates WHERE generation = 2').fetchone()[0], 3)
+        self.assertEqual(loop.budget.used, {'tokens': 120, 'candidates': 6})
+        self.assertEqual([json.loads(d)['generation'] for _, _, d in pop.events('resumed')], [2])
+        self.assertAlmostEqual(loop.baseline_fitness, 0.3)
+        self.assertTrue(loop.baseline_scores)
+        pop.close()
+
+    def test_resume_mid_generation(self):
+        class Dies(agents.StubAgent):
+            def ask(self, role, prompt):
+                if role == 'proposer_cautious':
+                    raise Crash()
+                return super().ask(role, prompt)
+        loop = self.loop(Dies(orchestrator.dry_run_agent().script))
+        loop.start()
+        with self.assertRaises(Crash):
+            loop.generation(1)
+        loop.close()
+        loop = self.loop(resume=True)
+        self.assertEqual(loop.run(1), 'generation limit')
+        pop = population.Population(str(Path(self.tmp.name) / 'run' / 'population.sqlite'))
+        islands = [r[0] for r in pop.db.execute('SELECT island FROM candidates WHERE generation = 1 ORDER BY id')]
+        self.assertEqual(islands, ['proposer_aggressive', 'proposer_cautious', 'explorer'])  # each request once
+        self.assertEqual([json.loads(d)['first_request'] for _, _, d in pop.events('resumed')], [1])
+        self.assertEqual(len(pop.events('generation_done')), 1)
+        pop.close()
 
 
 class DashboardTests(unittest.TestCase):

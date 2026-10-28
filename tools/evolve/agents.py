@@ -97,6 +97,11 @@ class Budget:
         self.clock = clock
         self.start = clock()
 
+    def restore(self, tokens, candidates, seconds):
+        """A resumed run's use so far: tokens, candidates, and wall time already spent."""
+        self.used = {'tokens': tokens, 'candidates': candidates}
+        self.start = self.clock() - seconds
+
     def spend(self, tokens=0, candidates=0):
         self.used['tokens'] += tokens
         self.used['candidates'] += candidates
