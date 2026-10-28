@@ -675,6 +675,26 @@ results meaningful until Phase 4:
   search can play out mates such as KRK without tablebases;
 - insufficient material scores as a draw (`cannot_mate`, Phase 1).
 
+**Its weights** (`bootstrap_eval.cpp`; audit-1 T-5, recorded 2026-10-28)
+were chosen by reasoning, not measured or tuned: Phase 3 settles structure,
+and Phase 4's network replaces this evaluation. The constant screen of
+2026-10-27 found no match among them (ORIGINALITY.md). The rule throughout:
+every placement term stays well below a pawn, so material always decides
+first, and the terms only order otherwise equal positions.
+
+| Weight | Value | Reasoning |
+|---|---|---|
+| Ring (`centre_distance`) | 0 on d4/e4/d5/e5 ... 3 on the edge | The Chebyshev distance to the four centre squares: one formula for every piece, no tables. |
+| `KnightCentre` | 8 cp per ring | A knight's reach grows from 2 squares in a corner to 8 in the centre, so it gains most from centralization: at most 24 cp, a quarter of a pawn. |
+| `BishopCentre` | 4 cp per ring | A bishop keeps long diagonals from the edge, so it loses less there: half the knight's weight. |
+| `PawnAdvanceMg` | 2 cp per rank | In the middlegame an advanced pawn is also a weakness, so advancing earns little (10 cp on the 7th rank). |
+| `PawnAdvanceEg` | 10 cp per rank | In a pawn ending advancing wins races: half a pawn on the 7th rank, still below promotion's value. Blended with the middlegame weight by the game phase. |
+| `KingShelterMg` | 6 cp per ring from the centre | The middlegame king is safer away from the centre: at most 18 cp. |
+| `KingCentreEg` | 10 cp per ring towards the centre | The endgame king is a fighting piece: at most 30 cp, blended by phase. |
+| `MopUpLead` | 400 cp | The lead (no pawns left) at which the mop-up term starts: a rook (500) or more qualifies, a lone minor piece (300), which cannot force mate, does not. |
+| `MopUpEdge` | 20 cp per ring | Driving the losing king to the edge is what mates: at most 60 cp. |
+| `MopUpApproach` | 6 cp per square the kings are closer | Bringing the winning king is needed too, but matters less than the edge: at most 30 cp (kings never stand next to each other, so they are at least two squares apart). Together with `MopUpEdge`, under a pawn. |
+
 It is called directly, a plain function with no virtual dispatch (hot-path
 rule 3). **The evaluator is selected at build time, with no indirect call**
 (owner, 2026-10-24): Phase 4's "swappable Evaluator" is a build option, not
