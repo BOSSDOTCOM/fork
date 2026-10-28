@@ -92,6 +92,22 @@ class MergeTests(unittest.TestCase):
         b['meta']['opening_start'] = '1251'
         self.assertEqual(sm.merge([a, b])['pairs'], 18)
 
+    def test_shards_on_different_books_are_refused(self):
+        a = self.shard([1, 2, 3, 2, 1], opening_start='1', rounds='50', book_sha='aa')
+        b = self.shard([1, 2, 3, 2, 1], opening_start='51', rounds='50', book_sha='bb')
+        with self.assertRaisesRegex(ValueError, 'book_sha'):
+            sm.merge([a, b])
+        b['meta']['book_sha'] = 'aa'
+        self.assertEqual(sm.merge([a, b])['pairs'], 18)
+
+    def test_adjacent_ranges_merge_intersecting_ones_do_not(self):
+        a = self.shard([1, 2, 3, 2, 1], opening_start='1', opening_end='50')
+        b = self.shard([1, 2, 3, 2, 1], opening_start='51', opening_end='100')
+        self.assertEqual(sm.merge([b, a])['pairs'], 18)
+        b['meta']['opening_start'] = '50'
+        with self.assertRaisesRegex(ValueError, 'lines 1-50 and 50-100'):
+            sm.merge([a, b])
+
     def test_shards_of_different_tests_are_refused(self):
         with self.assertRaises(ValueError):
             sm.merge([self.shard([1, 2, 3, 2, 1]), self.shard([1, 2, 3, 2, 1], test='ccc')])
@@ -106,6 +122,33 @@ class MergeTests(unittest.TestCase):
         merged = sm.merge([on, dict(off, meta=dict(off['meta'], tables='3-4-5'))])
         self.assertEqual(merged['meta']['tables'], '3-4-5')
         self.assertIn('Tables: 3-4-5 (both engines)', sm.report(merged, -3, 0))
+
+    # Audit-1 (A6) U-4: the auditor's two cases, which the old merge (equal
+    # opening_start only) accepted.
+    @staticmethod
+    def plan(stage, shards, games):
+        """The openings run_shard.sh gives each shard: sprt.yml's (and
+        aws_spot_sprt.sh's) per-shard games, run_shard.sh's rounds and start."""
+        per = (games + 2 * shards - 1) // (2 * shards) * 2
+        rounds = (per + 1) // 2
+        return [(1 + (stage * shards + i) * rounds, rounds) for i in range(shards)]
+
+    def staged(self, stage, shards, games, runner='github'):
+        return [self.shard([1, 2, 3, 2, 1], opening_start=str(start), rounds=str(rounds), stage=str(stage),
+                           shards=str(shards), runner=runner) for start, rounds in self.plan(stage, shards, games)]
+
+    def test_stages_with_a_different_game_count_share_openings(self):
+        # Stage 0: 16 x 1,600 games, openings 1-800; stage 1 with games=1088:
+        # openings 545-1,088, no start equal to a stage-0 start.
+        with self.assertRaises(ValueError):
+            sm.merge(self.staged(0, 16, 1600) + self.staged(1, 16, 1088))
+        self.assertEqual(sm.merge(self.staged(0, 16, 1600) + self.staged(1, 16, 1600))['shards'], 32)
+
+    def test_aws_and_github_shards_of_one_test_overlap(self):
+        # One AWS shard of 5,000 games (openings 1-2,500) and a GitHub stage 1
+        # (openings 801-1,600).
+        with self.assertRaises(ValueError):
+            sm.merge(self.staged(0, 1, 5000, 'aws') + self.staged(1, 16, 1600))
 
     def test_snapshot_reads_the_last_report(self):
         log = '\n'.join([

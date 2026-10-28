@@ -18,7 +18,9 @@
 #
 # Openings: shard I of stage S plays rounds G/2 openings starting at
 # 1 + (S * N + I) * G/2 in the order of the book it is given, so no two
-# shards or stages share an opening (the book has 2,632,036). The cloud
+# shards or stages run with the same G and N share an opening (the book has
+# 2,632,036); the meta records the range (opening_start, opening_end), and
+# sprt_merge.py refuses shards whose ranges intersect. The cloud
 # gives it fetch_tools.sh's fixed-seed permutation of the book, whose name
 # carries the seed (*.shuffled-SEED.epd); the meta records the book's name,
 # seed and SHA-256. SIGTERM or SIGINT stops fastchess and records the counts
@@ -61,7 +63,7 @@ log=$out/fastchess.log
 book_seed=$(basename "$book" | sed -n 's/.*\.shuffled-\([0-9]*\)\.epd$/\1/p')
 meta+=(--meta "base_build=$(sha256sum "$base" | cut -c1-16)" --meta "test_build=$(sha256sum "$test" | cut -c1-16)"
        --meta "tc=$tc" --meta "hash=$hash" --meta "base_opts=$base_opts" --meta "test_opts=$test_opts"
-       --meta "shard=$shard" --meta "shards=$shards" --meta "stage=$stage" --meta "opening_start=$start"
+       --meta "shard=$shard" --meta "shards=$shards" --meta "stage=$stage" --meta "opening_start=$start" --meta "opening_end=$((start + rounds - 1))"
        --meta "rounds=$rounds" --meta "concurrency=$conc" --meta "tables=$tables"
        --meta "book=$(basename "$book")" --meta "book_seed=${book_seed:-none}"
        --meta "book_sha=$(sha256sum "$book" | cut -d' ' -f1)")

@@ -87,5 +87,8 @@ cp "$tmp/book.epd" "$tmp/UHO.shuffled-42.epd"
 shard seeded --book "$tmp/UHO.shuffled-42.epd"
 check "book: seed from a shuffled book's name" test "$(meta seeded book_seed)" = 42
 
+# U-4: the opening range is recorded at both ends (shard 1 of 4, 5 rounds).
+check "openings 6-10" test "$(meta notables opening_start)-$(meta notables opening_end)" = 6-10
+
 echo "${failures} failure(s)"
 exit $((failures > 0))

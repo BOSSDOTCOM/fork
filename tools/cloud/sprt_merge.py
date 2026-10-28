@@ -120,22 +120,38 @@ def snapshot(log_text):
             'abnormal': abnormal, 'fastchess_ptnml': [int(x) for x in reports[-1]] if reports else None}
 
 
+def opening_range(meta):
+    """(first, last) book line a shard played, or None if not recorded:
+    opening_end when the shard recorded it, else opening_start + rounds - 1
+    (older shards), else opening_start alone."""
+    if meta.get('opening_start') is None:
+        return None
+    start = int(meta['opening_start'])
+    if meta.get('opening_end') is not None:
+        return start, int(meta['opening_end'])
+    if meta.get('rounds') is not None:
+        return start, start + int(meta['rounds']) - 1
+    return start, start
+
+
 def merge(shards):
     """The summed counts; refuses shards of different tests (commits,
-    conditions, tables on or off), or two shards that played the same
-    openings. The test is identified by its commits and
-    conditions, not by binary hashes: machines that build for themselves
-    produce different bytes (debug info, build paths)."""
-    keys = ('base', 'test', 'tc', 'hash', 'base_opts', 'test_opts', 'tables')
+    conditions, tables on or off, opening book), or two shards whose opening
+    ranges intersect (stages run with different games or shards values, or
+    AWS shards beside GitHub ones, would otherwise replay openings). The
+    test is identified by its commits and conditions, not by binary hashes:
+    machines that build for themselves produce different bytes (debug info,
+    build paths)."""
+    keys = ('base', 'test', 'tc', 'hash', 'base_opts', 'test_opts', 'tables', 'book_sha')
     first = shards[0].get('meta', {})
     for s in shards[1:]:
         for k in keys:
             if s.get('meta', {}).get(k) != first.get(k):
                 raise ValueError(f'shards differ in {k}: {first.get(k)!r} vs {s.get("meta", {}).get(k)!r}')
-    starts = [s.get('meta', {}).get('opening_start') for s in shards]
-    dup = sorted({x for x in starts if x is not None and starts.count(x) > 1})
-    if dup:
-        raise ValueError(f'shards share openings (opening_start {", ".join(map(str, dup))})')
+    ranges = sorted(r for r in (opening_range(s.get('meta', {})) for s in shards) if r is not None)
+    for (a0, a1), (b0, b1) in zip(ranges, ranges[1:]):
+        if b0 <= a1:
+            raise ValueError(f'shards share openings: lines {a0}-{a1} and {b0}-{b1} of the book intersect')
     total = [sum(s['ptnml'][i] for s in shards) for i in range(5)]
     return {'meta': {k: first.get(k) for k in keys + ('book', 'book_seed')}, 'shards': len(shards), 'ptnml': total,
             'pairs': sum(total), 'finished_games': sum(s.get('finished_games', 0) for s in shards),
