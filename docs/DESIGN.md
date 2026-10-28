@@ -360,6 +360,35 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   eval, keeping tension. Each item is documented here as genuine evaluation.
 - **Phase 8: TCEC-conditions testing** from `tcec.json`: paired openings,
   adjudication, gauntlet against pinned engines, SPRT, stress testing.
+  **TCEC-readiness checks** (audit-1's unmeasured suspicions; owner,
+  2026-10-28), each measured before anything changes:
+  - **Hash at TCEC sizes and under cgroups**: a refused 256 GiB request
+    falls back to the previous size (16 MB at an event's start), not the
+    largest size that fits, and a cgroup memory limit is invisible to
+    `MemAvailable`. Settle with a `systemd-run -p MemoryMax=...` run, then
+    decide on a halving fallback (A3 suspicions 3, 4).
+  - **Fathom's `exit()` paths**: a failed `mmap` in mid-game ends the
+    process, and a truncated table file with a valid magic is read out of
+    bounds. Settle with a crafted file or a FIFO swap (A3 suspicions 1, 2).
+  - **No BMI2**: a default x86-64-v3 binary on a CPU without BMI2 dies with
+    SIGILL (47 `pext` instructions, no CPU check). TCEC's EPYCs have BMI2.
+    Settle under Intel SDE `-nhm` (A4 suspicion 1).
+  - **TT prefetch at 4 GB Hash**: the 16 MB bench table fits the 96 MB L3,
+    so prefetch and TT changes are under-measured. A/B at 4 GB Hash with
+    prefetch on and off (A2 S-c).
+  - **Ponder timing**: the limits count from `go ponder`, so a long ponder
+    leaves an instant move after `ponderhit`, and `bestmove` carries no
+    ponder move. TCEC does not ponder (A1 suspicion 7).
+  - **7-piece cold-cache cost**: probe rate and movetime with the 7-man set
+    on disk and a cold page cache (`TableProbeMinDepth` 1, Fathom's lazy
+    first-probe `mmap`, the root DTZ probe before the first hard-limit
+    poll; A2 S-d, A3 suspicion 5).
+  **Near term, before tier 2** (not Phase 8): the TT ignores the halfmove
+  clock, so a table result stored at a zero clock can cut at a later visit
+  with a non-zero clock, where the position may be a fifty-move draw (A1
+  suspicion 4, A8 S-A8-1; B-2 stores such results at full depth, which
+  widens it). Settle with a constructed 5-man two-path test: the same
+  position reached once right after a capture and once 90 plies later.
 - **Improvement pass** (after Phase 8; owner, 2026-10-26). The layers again,
   in dependency order: network, search, time management, threads,
   tournament behavior, TCEC-conditions validation. It repeats in rounds,
@@ -1871,6 +1900,7 @@ and Weiss (results in ORIGINALITY.md).
 | 2026-10-26 | **External reviews' outcomes (owner).** Root fail-high fix: REJECTED at STC (-14.6 ± 10.8) and reverted (1fb18f4), an exception to the LTC-retest rule recorded on 2026-10-27 (idea 29 reopens the question). Futile-node quiet filter: ACCEPTED on the owner's stop ([-3, 0], +11.5 ± 11.9). TT victim blend: INCONCLUSIVE at LTC, off (idea 24). Keeping exact TT entries: INCONCLUSIVE at the cap, off, into the removal round. |
 | 2026-10-27 | **Deliverable 8 split and merged (owner).** mc-time was inconclusive; variant B2 (the danger-zone reserve) with the iteration rule was chosen and ACCEPTED on the owner's stop (d8-final, +1.9 ± 10.6 on [-3, 0]); d8-ltc stopped INCONCLUSIVE and flagged to Phase 5 (the iteration rule first). The parameter table (8b) and the heuristic-discovery harness (8c) were built; the pilot's long run is on hold. |
 | 2026-10-27 | **Full engine audit (owner), branch `audit-1`** before idea 23 and tier 2: ten parallel auditors, then the owner's decisions on the reconciled list: SPRTs give both sides the 3-4-5 tables; the 15 borderline names are kept as domain vocabulary (§8); `RfpMargin` gets a measured justification; Move Overhead's 100 / 0 / 10000 kept as Fork's protocol defaults; time-budget reasoning now, measurement in Phase 5; PVS and LMR switches decoupled; the forced-move stop SPRTed on [-3, 0]; the rv-failhigh exception recorded; constant screens report match / no match only. |
+| 2026-10-28 | **Audit-1 Phase C decisions (owner).** B-1 (forced-move stop) ACCEPTED at its cap; B-3 (shallower fail-high re-search) reverted (inconclusive at the cap on [0, 3]); B-5 (keep-deeper TT rule) stopped, off by default, deferred to Phase 6 (ideas.md idea 30); non-regression SPRTs stop once past 10,000 games with the 95% interval above -3 (Testing setup); perft_epd_full gates CI only when move generation's files change, plus nightly on main. R-3: two positions with room for 16,384 plies reserved at startup, a failed `position` retried once, else no search of the unknown position (`bestmove 0000`). R-4: `go mate N` searches at most 2N - 1 plies. T-6: the TT digest mixed by splitmix64's output function, no SPRT (ORIGINALITY.md). T-13: an SPDX line in every source file. A1 suspicion 8: node limits kept exactly. **F-9 skipped**: merging the two move printers and the two bench reports would touch only cold code (UCI output, `fork bench`), each merge needs new names and their screens, and both printers are now checked by the UCI transcript replay (audit-1 Q-2); revisit when either printer changes. **D-20**: the tag `d8/final` (8b8e34c) is annotated "Deliverable 8 split, variant (c): the iteration rule alone", but the commit holds B2 (the danger-zone reserve) plus (c) (the iteration rule): the variant SPRTed as d8-final and merged as deliverable 8 (sprt-log.md). The pushed tag is not rewritten (owner: no force push); this row is the correct record. |
 
 ## 7. Performance doctrine (governs every phase)
 

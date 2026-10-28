@@ -16,6 +16,8 @@ paths:
   - constants and enumerators `PascalCase`;
   - macros `FORK_UPPER_CASE`;
   - everything lives in `namespace forkeng` (tests in `forkeng::test`).
+- Every source file starts with `// SPDX-License-Identifier: GPL-3.0-or-later`
+  (scripts: `#`, after the shebang; owner, 2026-10-28), then a blank line.
 - Every module header starts with a comment giving its purpose and its
   invariants. Keep it true when you change behaviour.
 - Hot paths (movegen, make/unmake, search, eval):
