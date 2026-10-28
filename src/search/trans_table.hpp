@@ -77,6 +77,21 @@ struct TtHit {
   bool was_pv;
 };
 
+// Whether a score with this bound settles a node searched with the window
+// (alpha, beta): an exact score always, a lower bound at or above beta, an
+// upper bound at or below alpha.
+constexpr bool bound_settles(TtBound bound, int score, int alpha, int beta) {
+  return bound == TtBound::Exact || (bound == TtBound::Lower && score >= beta) ||
+         (bound == TtBound::Upper && score <= alpha);
+}
+
+// The bound a fail-soft result carries for a node searched with the window
+// (alpha_start, beta): exact only at PV nodes, the only ones searched with a
+// full window.
+constexpr TtBound result_bound(int best, int alpha_start, int beta, bool on_pv) {
+  return best >= beta ? TtBound::Lower : on_pv && best > alpha_start ? TtBound::Exact : TtBound::Upper;
+}
+
 class TransTable {
  public:
   // Uses `bytes` of `memory` (64-byte aligned) as the table; null or fewer

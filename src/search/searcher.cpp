@@ -122,9 +122,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (tt_hit && !OnPv) {
     const int s = score_from_tt(hit.score, ply);
     const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
-    if (deep_enough && (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s >= beta) ||
-                        (hit.bound == TtBound::Upper && s <= alpha)))
-      return s;
+    if (deep_enough && bound_settles(hit.bound, s, alpha, beta)) return s;
   }
 
   // A TT entry stores the static evaluation of its position (review 2, claim
@@ -147,7 +145,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       const TtBound b = *wdl == TableWdl::Win    ? TtBound::Lower
                         : *wdl == TableWdl::Loss ? TtBound::Upper
                                                  : TtBound::Exact;
-      if (b == TtBound::Exact || (b == TtBound::Lower && s >= beta) || (b == TtBound::Upper && s <= alpha)) {
+      if (bound_settles(b, s, alpha, beta)) {
         // A table result holds at any depth, so it is stored as deep as the
         // TT allows: a deeper visit in a later iteration cuts on it instead of
         // probing again (audit-1, B-2).
@@ -385,9 +383,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (moves_searched == 0) return best;
   best = std::clamp(best, table_floor, table_ceiling);
   if (switches.use_tt) {
-    const TtBound bound = best >= beta                 ? TtBound::Lower
-                          : OnPv && best > alpha_start ? TtBound::Exact
-                                                       : TtBound::Upper;
+    const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
     tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
   }
   return best;
@@ -419,9 +415,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
   if (tt_hit && !OnPv && (!switches.tt_exact_depth || hit.depth == 0)) {
     const int s = score_from_tt(hit.score, ply);
-    if (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s >= beta) ||
-        (hit.bound == TtBound::Upper && s <= alpha))
-      return s;
+    if (bound_settles(hit.bound, s, alpha, beta)) return s;
   }
 
   const int alpha_start = alpha;
@@ -477,9 +471,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   }
   if (in_check && moves_searched == 0) return mated_score(ply);
   if (switches.use_tt) {
-    const TtBound bound = best >= beta                 ? TtBound::Lower
-                          : OnPv && best > alpha_start ? TtBound::Exact
-                                                       : TtBound::Upper;
+    const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
     tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, OnPv);
   }
   return best;
