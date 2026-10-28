@@ -353,7 +353,8 @@ if(FORK_BUILD_TESTS)
 
   # The smallest 7-man Syzygy pair, KPPPPPvK (deliverable 7's 7-piece test;
   # KB tools.md §6.9): downloaded once into .cache/ and pinned by SHA-256,
-  # never committed. A failed download makes those cases fail loudly.
+  # never committed. A failed download makes those cases fail loudly
+  # (tests/test_endgame_tables.cpp: a missing file is a failure, not a skip).
   set(FORK_SYZYGY7_DIR ${CMAKE_SOURCE_DIR}/.cache/syzygy7)
   foreach(spec
       "KPPPPPvK.rtbw|https://tablebase.lichess.ovh/tables/standard/7/6v1_pawnful/KPPPPPvK.rtbw|f2e587b1acd940ef836ea80e0c64eb6093255b8273e1f8b049ab8f9f2631cc0b"
@@ -383,6 +384,58 @@ if(FORK_BUILD_TESTS)
     endif()
   endforeach()
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY7_DIR="${FORK_SYZYGY7_DIR}")
+
+  # Small 3-4-5 Syzygy tables (audit-1 Q-6): draws, a promotion, a cursed
+  # win and a blessed loss (KNNvKP, WDL only, with the tables its captures
+  # reach), KQvKP (WDL), and the 3-man tables with their DTZ files for root
+  # ranking. From the lichess mirror's 3-4-5-wdl/ and 3-4-5-dtz/, pinned by
+  # the SHA-256s of the mirror's own list (https://tablebase.lichess.ovh/
+  # tables/standard/sha256; the list's SHA-256, 6dc75697...a783, is the one
+  # the KB records, tools.md §6), downloaded and checked 2026-10-27:
+  # 13,962,656 bytes in all, 13,729,360 of them KNNvKP.rtbw. Never
+  # committed. A failed download makes the table tests fail.
+  set(FORK_SYZYGY345_DIR ${CMAKE_SOURCE_DIR}/.cache/syzygy345)
+  set(syzygy345_url https://tablebase.lichess.ovh/tables/standard)
+  foreach(spec
+      "KPvK.rtbw|3-4-5-wdl|02fd2bdcd92821c869458f019f63524def1c9e7a2862ca8d2b16dc7712b16183"
+      "KQvK.rtbw|3-4-5-wdl|517667dff787162dbb1ed9d5d6484d30ee854e686ee0675c08d99ecf045d2d50"
+      "KRvK.rtbw|3-4-5-wdl|386fbde73308e49a4207836922c68b30b664e83c5a37f7fa37305a15cd16f2f1"
+      "KBvK.rtbw|3-4-5-wdl|bc0d8ab3560de9038460f0e8f61e3b7efd3e3d0327d19ae0387c0da7ddeb244d"
+      "KNvK.rtbw|3-4-5-wdl|9d3518b12df3d2006441df758bce31e961346e70a11920aaad75c647003bb6e7"
+      "KQvKP.rtbw|3-4-5-wdl|2f92788170e8a5c05608f44a47fd42f3f4fff372d0af64633c56bd081039d8f9"
+      "KNNvKP.rtbw|3-4-5-wdl|ffee4c066be8d25d148a61bfce3bd317bfe2a592a979147cfbe698aeee06a668"
+      "KNNvK.rtbw|3-4-5-wdl|8b5195abd7f1d4be7aa4b4dca669e9075d61d1c6b02dec8b71f5e9ea21d9eced"
+      "KNvKP.rtbw|3-4-5-wdl|f21332cc4b380764847d6c32511dee16cbf56e65604596ca24e784f8e4c13bdb"
+      "KPvK.rtbz|3-4-5-dtz|ad01af2076183c90ccee662ca6c5d74da3222ff1fee47c01b5d4e56ed01938de"
+      "KQvK.rtbz|3-4-5-dtz|71ea9444fa5bd42897d781a0c356975ea6f23e0f65a4254e470897031c161c8c"
+      "KRvK.rtbz|3-4-5-dtz|cab59f42e75c2a25da3939231850a79fa838593fff5c28d7772da92062ed965a"
+      "KBvK.rtbz|3-4-5-dtz|6246c8a5c643eec9d4758d55ed843e31cc28a9b82a6f630c1c950d8b7755975b"
+      "KNvK.rtbz|3-4-5-dtz|0e49a0f2810a131c32fc14872e83044aa9810ce2c86df071851512077291fc25")
+    string(REPLACE "|" ";" parts "${spec}")
+    list(GET parts 0 tb_name)
+    list(GET parts 1 tb_dir)
+    list(GET parts 2 tb_hash)
+    set(tb_file ${FORK_SYZYGY345_DIR}/${tb_name})
+    if(EXISTS ${tb_file})
+      file(SHA256 ${tb_file} have)
+      if(NOT have STREQUAL tb_hash)
+        file(REMOVE ${tb_file})
+      endif()
+    endif()
+    if(NOT EXISTS ${tb_file})
+      file(DOWNLOAD ${syzygy345_url}/${tb_dir}/${tb_name} ${tb_file} STATUS st TIMEOUT 600 INACTIVITY_TIMEOUT 60)
+      list(GET st 0 code)
+      set(have "")
+      if(code EQUAL 0)
+        file(SHA256 ${tb_file} have)
+      endif()
+      if(NOT have STREQUAL tb_hash)
+        file(REMOVE ${tb_file})
+        message(WARNING "could not download ${tb_name} with the pinned SHA-256 (${st}); the 3-4-5 table tests will fail")
+      endif()
+    endif()
+  endforeach()
+  target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
                 search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing)

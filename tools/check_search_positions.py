@@ -244,5 +244,29 @@ for fen, moves in [('8/1p6/8/6k1/8/8/4P3/7K b - - 0 1', ['b7b5', 'b7b6']),
     b = board_of(fen)
     check(all(chess.Move.from_uci(u) in b.legal_moves for u in moves), f'legal in {fen}: {moves}')
 
+# tests/test_endgame_tables.cpp, the 3-4-5 cases (audit-1 Q-6; the table
+# results are the lichess API's, cited there): legal positions and moves;
+# KQvKP: Black's only moves are c7c6 and c7c5, each answered by a mate in 1;
+# the KQvK king shuffle is legal and repeats the position.
+for fen, moves in [('8/8/8/pK6/5k1N/8/2N5/8 b - - 0 1', ['a5a4']),
+                   ('8/8/8/1K6/p4k1N/8/2N5/8 w - - 0 1', ['c2a3']),
+                   ('k7/8/8/8/2P5/8/8/6K1 w - - 0 1', ['c4c5', 'g1f1', 'g1f2', 'g1g2', 'g1h1', 'g1h2']),
+                   ('8/1P6/8/2k2K2/8/8/8/8 w - - 0 1', ['b7b8q', 'b7b8r', 'b7b8b', 'b7b8n']),
+                   ('8/8/8/5k2/8/7K/6P1/8 w - - 0 1', ['h3h4', 'g2g3', 'g2g4', 'h3h2', 'h3g3']),
+                   ('8/8/8/8/6K1/3k4/8/6Q1 w - - 0 1', ['g1c5'])]:
+    b = board_of(fen)
+    check(all(chess.Move.from_uci(u) in b.legal_moves for u in moves), f'legal in {fen}: {moves}')
+check(board_of('k7/8/8/8/2P5/8/8/6K1 w - - 0 1').legal_moves.count() == 6, 'KPvK draw: six legal moves')
+b = board_of('8/2p5/8/8/2Q5/k7/2K5/8 b - - 0 1')
+check(sorted(m.uci() for m in b.legal_moves) == ['c7c5', 'c7c6'], 'KQvKP: c7c6 and c7c5 are the only moves')
+for uci in ['c7c6', 'c7c5']:
+    b.push_uci(uci)
+    check(forced_mate_within(b, 1), f'KQvKP: mate in 1 after {uci}')
+    b.pop()
+b = board_of('8/8/8/8/6K1/3k4/8/6Q1 w - - 0 1')
+for uci in ['g4h5', 'd3e4', 'h5g4', 'e4d3']:
+    b.push_uci(uci)
+check(b.is_repetition(2) and b.halfmove_clock == 4, 'KQvK: the king shuffle repeats the position (clock 4)')
+
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)
