@@ -14,6 +14,9 @@
 # pinned too. Needs curl, tar, unzip, sha256sum, python3.
 set -euo pipefail
 dir=${1:?usage: fetch_tools.sh DIR}
+# Before the cd below: $0 may be a relative path (the shards run
+# "bash tools/cloud/fetch_tools.sh DIR"), which a cd would break.
+here=$(cd "$(dirname "$0")" && pwd)
 mkdir -p "$dir"
 cd "$dir"
 
@@ -32,7 +35,6 @@ book_sha=7a7f6470615a69c6cf23d565417701d38732876f480af90d67b42abade35644a
 book_seed=20261027
 shuffled=UHO_Lichess_4852_v1.shuffled-$book_seed.epd
 shuffled_sha=51eb21c01ab03f1caa96a5205268faf6f11f26547dc9e0e7ab6a574181b4dbdc
-here=$(cd "$(dirname "$0")" && pwd)
 
 if [ ! -x fastchess ]; then
   curl -fsSL --retry 3 -o fastchess.tar "$fc_url"
