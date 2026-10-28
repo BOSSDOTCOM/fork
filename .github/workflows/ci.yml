@@ -179,8 +179,15 @@ jobs:
         run: |
           case "${{ matrix.preset }}" in *-tsan) export REQUIRE_NO_ALLOC=0 ;; esac
           if [ "${{ steps.cpu.outputs.sde }}" = true ]; then
-            REQUIRE_BENCH=0 bash .github/ci/run-tests.sh build/${{ matrix.preset }} -E '^(bench_parity|perft_bench_parity)$'
-            bash .github/ci/bench-parity.sh build/${{ matrix.preset }}/fork-sde
+            d=build/${{ matrix.preset }}
+            REQUIRE_BENCH=0 bash .github/ci/run-tests.sh $d -E '^(bench_parity|perft_bench_parity|version_lto)$'
+            bash .github/ci/bench-parity.sh $d/fork-sde
+            # version_lto runs the engine directly too: the same check through
+            # the wrapper, against the expectation the test itself declares.
+            want=$(ctest --test-dir $d --show-only=json-v1 -R '^version_lto$' | grep -oE 'lto (on|off)' | head -n 1)
+            got=$($d/fork-sde version | tr -d '\r' | grep -E '^lto ')
+            [ -n "$want" ] && [ "$got" = "$want" ] || { echo "::error::version_lto under SDE: got '$got', expected '$want'"; exit 1; }
+            echo "version_lto ok under SDE ($got)"
           else
             bash .github/ci/run-tests.sh build/${{ matrix.preset }}
           fi
