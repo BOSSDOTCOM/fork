@@ -518,11 +518,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     if (score > alpha) {
       best_index = i;
       update_pv(0, m);
-      if (score >= beta) {
-        root_fail_high_ = m;
-        root_fail_high_score_ = score;
-        root_fail_high_pv_ = pv_[0];
-      }
+      if (score >= beta) root_fail_high_ = m;
       if (score < beta) {
         iteration_best_ = m;
         iteration_best_score_ = score;

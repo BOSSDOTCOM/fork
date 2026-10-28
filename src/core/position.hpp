@@ -80,7 +80,6 @@ class Position {
   int halfmove_clock() const { return state().halfmove; }
   int fullmove_number() const { return fullmove_; }
   Key key() const { return state().key; }
-  std::size_t ply_count() const { return states_.size() - 1; }  // moves made since set_fen
 
   Bitboard checkers() const { return state().checkers; }
   bool in_check() const { return state().checkers != 0; }

@@ -42,12 +42,6 @@ inline Square pop_lsb(Bitboard& b) {
 }
 inline bool has_multiple(Bitboard b) { return b & (b - 1); }
 
-// One-step shifts that drop squares falling off the a/h files.
-constexpr Bitboard shift_north(Bitboard b) { return b << 8; }
-constexpr Bitboard shift_south(Bitboard b) { return b >> 8; }
-constexpr Bitboard shift_east(Bitboard b) { return (b & ~FileH) << 1; }
-constexpr Bitboard shift_west(Bitboard b) { return (b & ~FileA) >> 1; }
-
 // Slider lookup entry for one square (CPW "Magic Bitboards", fancy layout):
 // `table` is this square's slice of the shared attack table. With PEXT the
 // magic and shift are unused.
