@@ -6,7 +6,7 @@
 #   the PGO builds;
 # - Windows (windows-latest): the local development toolchain (LLVM-MinGW
 #   and WinLibs GCC, pinned in .github/ci/win-tools.sh), the presets
-#   scripts/check.sh full covers;
+#   scripts/check.sh full covers plus the full gcc-debug suite;
 # - the TCEC toolchain (Ubuntu 22.04: gcc 11.4, g++-12, clang 16, clang 19,
 #   CMake 3.22) with update.sh;
 # - the slow perft suites, one job each.
@@ -295,6 +295,10 @@ jobs:
             tools: llvm-mingw
           - preset: gcc-release
             tools: winlibs
+          # The full gcc-debug suite on Windows (CLAUDE.md, phase-end
+          # checklist: a Windows gcc-debug crash once went unseen for a phase).
+          - preset: gcc-debug
+            tools: winlibs
     defaults:
       run:
         shell: bash
@@ -412,6 +416,6 @@ jobs:
           cmake --preset clang-release
           cmake --build build/clang-release --target fork fork_tests
       - name: ${{ matrix.suite }}
-        run: ctest --test-dir build/clang-release -R '^${{ matrix.suite }}$' --timeout 16000 --output-on-failure
+        run: ctest --test-dir build/clang-release -R '^${{ matrix.suite }}$' --timeout 16000 --no-tests=error --output-on-failure
       - name: Bench parity
         run: bash .github/ci/bench-parity.sh build/clang-release/fork
