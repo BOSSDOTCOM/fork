@@ -161,7 +161,7 @@ jobs:
       - name: Run the test binaries under Intel SDE
         if: steps.cpu.outputs.sde == 'true'
         run: |
-          echo "::notice::${{ matrix.preset }}: this runner's CPU lacks the target's features; the tests run under Intel SDE"
+          echo "::notice::${{ matrix.preset }}: AVX-512 tests run under Intel SDE (the CPU lacks AVX-512, or force-sde was set)"
           d=build/${{ matrix.preset }}
           # The test executables run under SDE. The engine stays the real
           # binary: SDE follows the UCI suites' exec of it, and an engine
@@ -374,7 +374,7 @@ jobs:
             cmake --build build/$p --target fork
             bin=build/$p/fork.exe
             if [ "$p" = gcc-avx512 ] && [ "${{ steps.cpu.outputs.sde }}" = true ]; then
-              echo "::notice::gcc-avx512: this runner's CPU lacks AVX-512; its engine runs under Intel SDE"
+              echo "::notice::gcc-avx512: the engine runs under Intel SDE (the CPU lacks AVX-512, or force-sde was set)"
               bash .github/ci/sde.sh wrap /c/fork-tools/sde "$bin" build/$p/fork-sde
               bin=build/$p/fork-sde
             fi
