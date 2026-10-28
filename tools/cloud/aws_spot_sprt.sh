@@ -7,13 +7,17 @@
 #
 #   tools/cloud/aws_spot_sprt.sh --bucket s3://BUCKET/PREFIX --instance-profile NAME \
 #       --base COMMIT --test COMMIT [--games 5000] [--shards 1] [--stage 0] [--tc 8+0.08] \
-#       [--hash 16] [--type c7a.16xlarge] [--region us-east-1] [--max-hours 3] \
+#       [--hash 16] [--type c7a.16xlarge] [--arch x86-64-v3] [--region us-east-1] [--max-hours 3] \
 #       [--base-opts "..."] [--test-opts "..."] [--subnet ID] [--security-group ID] [--no-tables] [--dry-run]
 #
 # Each instance (Ubuntu 22.04 LTS, the TCEC toolchain's release: gcc 11.4):
 #  1. arms a shutdown after --max-hours whatever happens (the cost cap);
 #  2. clones the public repository, builds both commits with update.sh
-#     (CXX=g++, x86-64-v3), fetches the pinned fastchess and book, and the
+#     (CXX=g++, FORK_ARCH from --arch: x86-64-v3 by default, x86-64-v4 for
+#     AVX-512, which C7a lists; build_pair.sh refuses it on a CPU without
+#     it and checks each binary reports the target; native is refused by
+#     update.sh), fetches the
+#     pinned fastchess and book, and the
 #     Syzygy 3-4-5 tables both engines get (tools/cloud/fetch_tables.sh,
 #     every file checked against the committed manifest; --no-tables plays
 #     without them, recorded as tables=off in each shard's result);
@@ -30,12 +34,12 @@
 set -euo pipefail
 repo_url=https://github.com/BOSSDOTCOM/fork.git
 games=5000 shards=1 stage=0 tc=8+0.08 hash=16 type=c7a.16xlarge region=${AWS_REGION:-us-east-1}
-max_hours=3 base_opts="" test_opts="" subnet="" sg="" dry=0 bucket="" profile="" base="" test="" tables=1
+arch=x86-64-v3 max_hours=3 base_opts="" test_opts="" subnet="" sg="" dry=0 bucket="" profile="" base="" test="" tables=1
 while [ $# -gt 0 ]; do
   case $1 in
     --bucket) bucket=$2 ;; --instance-profile) profile=$2 ;; --base) base=$2 ;; --test) test=$2 ;;
     --games) games=$2 ;; --shards) shards=$2 ;; --stage) stage=$2 ;; --tc) tc=$2 ;; --hash) hash=$2 ;;
-    --type) type=$2 ;; --region) region=$2 ;; --max-hours) max_hours=$2 ;; --base-opts) base_opts=$2 ;;
+    --type) type=$2 ;; --arch) arch=$2 ;; --region) region=$2 ;; --max-hours) max_hours=$2 ;; --base-opts) base_opts=$2 ;;
     --test-opts) test_opts=$2 ;; --subnet) subnet=$2 ;; --security-group) sg=$2 ;;
     --dry-run) dry=1; shift; continue ;;
     --no-tables) tables=0; shift; continue ;;
@@ -48,6 +52,7 @@ for v in bucket profile base test; do
 done
 case "$games$shards$stage$hash$max_hours" in *[!0-9]*) echo "numbers expected" >&2; exit 2 ;; esac
 case $type in c7a.*|c8a.*) ;; *) echo "aws_spot_sprt.sh: c7a or c8a instance types only" >&2; exit 2 ;; esac
+case $arch in x86-64-v3|x86-64-v4) ;; *) echo "aws_spot_sprt.sh: --arch x86-64-v3 or x86-64-v4" >&2; exit 2 ;; esac
 # Commits as full hashes, so every shard builds the same code.
 here=$(cd "$(dirname "$0")/../.." && pwd)
 base=$(git -C "$here" rev-parse --verify "$base^{commit}")
@@ -70,7 +75,7 @@ export DEBIAN_FRONTEND=noninteractive HOME=/root
 apt-get update -q && apt-get install -y -q build-essential cmake git python3 curl unzip awscli
 git clone -q $repo_url /opt/fork
 cd /opt/fork && git checkout -q $tools
-CXX=g++ bash tools/cloud/build_pair.sh /opt/fork $base $test /opt/engines || { upload /var/log/fork-shard.log shard-$1.boot.log; shutdown -h now; }
+FORK_ARCH=$arch CXX=g++ bash tools/cloud/build_pair.sh /opt/fork $base $test /opt/engines || { upload /var/log/fork-shard.log shard-$1.boot.log; shutdown -h now; }
 bash tools/cloud/fetch_tools.sh /opt/tools || { upload /var/log/fork-shard.log shard-$1.boot.log; shutdown -h now; }
 $(if [ "$tables" = 1 ]; then echo "bash tools/cloud/fetch_tables.sh /opt/syzygy || { upload /var/log/fork-shard.log shard-$1.boot.log; shutdown -h now; }"; fi)
 conc=\$(( \$(nproc) - 2 ))
@@ -78,7 +83,7 @@ bash tools/cloud/run_shard.sh --base /opt/engines/base/fork --test /opt/engines/
   --fastchess /opt/tools/fastchess --book /opt/tools/UHO_Lichess_4852_v1.shuffled-20261027.epd \\
   --shard $1 --shards $shards --stage $stage --games $per --tc '$tc' --hash $hash --concurrency \$conc \\
   --base-opts '$base_opts' --test-opts '$test_opts' $([ "$tables" = 1 ] && echo "--syzygy /opt/syzygy ")--out /opt/shard \\
-  --meta base=$base --meta test=$test --meta runner=aws-$type --meta run=$run \\
+  --meta base=$base --meta test=$test --meta runner=aws-$type --meta arch=$arch --meta run=$run \\
   --checkpoint "aws s3 cp --only-show-errors /opt/shard/result.json ${bucket%/}/$run/shard-$1.json" &
 shard=\$!
 # Spot interruption: the notice appears at spot/instance-action about two
@@ -99,7 +104,7 @@ shutdown -h now
 EOF
 }
 
-echo "run $run: $shards x $type spot, $per games each, $tc, test $test vs base $base, results ${bucket%/}/$run/"
+echo "run $run: $shards x $type spot, $arch, $per games each, $tc, test $test vs base $base, results ${bucket%/}/$run/"
 if [ "$dry" = 1 ]; then
   echo "--- user data of shard 0 (dry run: nothing is launched)"
   user_data 0

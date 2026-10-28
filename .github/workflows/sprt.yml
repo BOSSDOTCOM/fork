@@ -74,8 +74,12 @@ jobs:
           echo "per_shard=$per" >>"$GITHUB_OUTPUT"
           echo "base_sha=$(git rev-parse --verify "$BASE^{commit}")" >>"$GITHUB_OUTPUT"
           echo "test_sha=$(git rev-parse --verify "$TEST^{commit}")" >>"$GITHUB_OUTPUT"
-      - name: Build both engines (update.sh, CXX=g++)
+      # Pinned here, not left to update.sh's default: hosted runners may lack
+      # AVX-512, so the shards must never get an x86-64-v4 build.
+      # build_pair.sh checks each binary reports this target.
+      - name: Build both engines (update.sh, CXX=g++, x86-64-v3)
         env:
+          FORK_ARCH: x86-64-v3
           BASE_SHA: ${{ steps.plan.outputs.base_sha }}
           TEST_SHA: ${{ steps.plan.outputs.test_sha }}
         run: CXX=g++ bash tools/cloud/build_pair.sh . "$BASE_SHA" "$TEST_SHA" engines
@@ -144,7 +148,8 @@ jobs:
             --fastchess "$RUNNER_TEMP/tools/fastchess" --book "$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.shuffled-20261027.epd" \
             --shard "$SHARD" --shards "$SHARDS" --stage "$STAGE" --games "$GAMES" --tc "$TC" --hash "$HASH_MB" \
             --base-opts "$BASE_OPTS" --test-opts "$TEST_OPTS" --syzygy "$SYZYGY" --out out \
-            --meta "base=$BASE_SHA" --meta "test=$TEST_SHA" --meta runner=github
+            --meta "base=$BASE_SHA" --meta "test=$TEST_SHA" --meta runner=github \
+            --meta "arch=$(sed -n 's/^test_arch=//p' engines/meta.env)"
       - uses: actions/upload-artifact@v4
         if: always()
         with: {name: "shard-${{ inputs.stage }}-${{ matrix.shard }}", path: out, retention-days: 30}

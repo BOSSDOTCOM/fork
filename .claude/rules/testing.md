@@ -55,6 +55,12 @@ paths:
   presets included, and
   `scripts/check.sh` fails if its Passed line is missing. (The PGO builds run
   bench parity only, no ctest.)
+- **SPRT builds pin their target** (DESIGN.md §5.2 "Build target per
+  machine"): GitHub's SPRT shards use x86-64-v3, set as `FORK_ARCH` in
+  `.github/workflows/sprt.yml`, because hosted runners may lack AVX-512;
+  AWS uses `aws_spot_sprt.sh --arch` (x86-64-v3 by default, x86-64-v4 for
+  AVX-512); local SPRTs use update.sh's x86-64-v3. Never `native`.
+  `tools/cloud/build_pair.sh` refuses to build without an explicit target.
 - **Valgrind needs a non-AVX-512 build** (`FORK_ARCH=x86-64-v3`): it cannot
   decode AVX-512, which `-march=native` emits on the Ryzen 7600X3D.
 - **Long jobs** (perft_epd_full, difftest, fuzzing) run one at a time, with

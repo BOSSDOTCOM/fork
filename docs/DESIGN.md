@@ -1062,6 +1062,29 @@ the external reviews' queue: the root fail-high fix and the futile-node
 filter [-3, 0], the TT-refined pruning eval [0, 3], keeping exact TT entries
 (a safety guard) [-3, 0].
 
+**Build target per machine** (owner, 2026-10-28). Both engines of an SPRT
+always share one target, so the target sets only speed, never a bias, and
+bench is identical across targets (`bench_parity`). Every SPRT build is
+update.sh's TCEC build (Ubuntu 22.04, g++ 11.4); `native` is never used,
+because update.sh refuses it.
+- **GitHub-hosted runners** (`.github/workflows/sprt.yml`): **x86-64-v3**,
+  pinned as `FORK_ARCH` in the workflow's build step rather than taken from
+  update.sh's default, since hosted runners may lack AVX-512 (CI run
+  40717379840: AVX-512 binaries died with an illegal instruction on such
+  runners). `tools/cloud/build_pair.sh` has no default target: it needs
+  `FORK_ARCH`, accepts only x86-64-v3 or x86-64-v4, refuses x86-64-v4 on a
+  CPU without its five AVX-512 features, and fails unless each binary's
+  `fork version` reports the pinned target. Every shard result records it
+  (`arch`).
+- **AWS EC2 c7a/c8a** (`tools/cloud/aws_spot_sprt.sh`): the `--arch`
+  option, **x86-64-v3 by default** (the SPRT log records no AWS run yet);
+  `--arch x86-64-v4` gives an AVX-512 build, which C7a supports (its
+  product page, KB tools.md §11). C8a's AVX-512 is UNVERIFIED in the KB;
+  build_pair.sh's CPU check refuses x86-64-v4 there if the CPU lacks it.
+  The shard results record the target.
+- **Local** (WSL on the 7600X3D, `tools/sprt.sh`): update.sh's default,
+  x86-64-v3.
+
 Conditions: **STC** 8+0.08 s, Hash 16 MB; **LTC** 40+0.4 s,
 Hash 64 MB; one thread per engine, 3-4-5 Syzygy for both sides (owner,
 audit-1 Phase C: `tools/sprt.sh` passes `option.SyzygyPath` from
