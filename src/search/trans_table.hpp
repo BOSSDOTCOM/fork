@@ -13,9 +13,11 @@
 //   low bits) with a whole byte for the age of the search that wrote it, the
 //   move, the score (node-relative for mates and tablebase results,
 //   score_bounds.hpp), the static eval, the depth, and a byte of flags: the
-//   bound and the TT-PV flag (T19). With 24 check bits and every TT move
-//   validated before use, a false match is harmless (Hyatt and Cozzie 2005,
-//   KB search-techniques.md T4).
+//   bound and the TT-PV flag (T19). With 24 check bits a false match (another
+//   position's entry) is rare and its move is validated before use, but its
+//   score, bound and depth are used as they are: rare, not harmless (audit-1,
+//   A1 suspicion 9; Hyatt and Cozzie 2005, KB search-techniques.md T4, on how
+//   seldom such errors change the move played).
 // - Replacement follows the KB's description (techniques.md, "Transposition
 //   table"): prefer deeper and current-search entries, replace stale ones.
 // - The bucket is chosen by a multiply-high range reduction of the full
