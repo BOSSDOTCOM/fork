@@ -137,7 +137,7 @@ def merge(shards):
     if dup:
         raise ValueError(f'shards share openings (opening_start {", ".join(map(str, dup))})')
     total = [sum(s['ptnml'][i] for s in shards) for i in range(5)]
-    return {'meta': {k: first.get(k) for k in keys}, 'shards': len(shards), 'ptnml': total,
+    return {'meta': {k: first.get(k) for k in keys + ('book', 'book_seed')}, 'shards': len(shards), 'ptnml': total,
             'pairs': sum(total), 'finished_games': sum(s.get('finished_games', 0) for s in shards),
             'time_losses': sum(s.get('time_losses', 0) for s in shards),
             'abnormal': sum(s.get('abnormal', 0) for s in shards),
@@ -154,7 +154,8 @@ def report(merged, nelo0, nelo1, alpha=0.05, beta=0.05):
     return '\n'.join([
         f'Shards: {merged["shards"]} ({", ".join(merged["status"])}); pairs {n}, games {2 * n} '
         f'({merged["finished_games"]} finished, time losses {merged["time_losses"]}, abnormal {merged["abnormal"]})',
-        f'Tables: {merged["meta"].get("tables") or "not recorded"} (both engines)',
+        f'Tables: {merged["meta"].get("tables") or "not recorded"} (both engines); book: '
+        f'{merged["meta"].get("book") or "not recorded"}, seed {merged["meta"].get("book_seed") or "not recorded"}',
         f'Elo: {elo(mean):.2f} +/- {half:.2f}, nElo: {nelo(p):.2f} +/- {1.96 * NELO_SCALE / math.sqrt(n) if n else 0:.2f}',
         f'Ptnml(0-2): {p}',
         f'LLR: {value:.2f} ({lower:.2f}, {upper:.2f}) [{nelo0:.2f}, {nelo1:.2f}] nElo: {decision}',

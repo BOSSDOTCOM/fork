@@ -79,5 +79,13 @@ check "no tables: meta tables=off" test "$(meta notables tables)" = off
 shard badtables --syzygy "$tmp/tb-short"
 check "an incomplete set is refused" test "$status" = 2
 
+# U-3: the book's name, permutation seed and SHA-256 are in the meta.
+check "book: name" test "$(meta notables book)" = book.epd
+check "book: no seed for a book in file order" test "$(meta notables book_seed)" = none
+check "book: SHA-256" test "$(meta notables book_sha)" = "$(sha256sum "$tmp/book.epd" | cut -d' ' -f1)"
+cp "$tmp/book.epd" "$tmp/UHO.shuffled-42.epd"
+shard seeded --book "$tmp/UHO.shuffled-42.epd"
+check "book: seed from a shuffled book's name" test "$(meta seeded book_seed)" = 42
+
 echo "${failures} failure(s)"
 exit $((failures > 0))

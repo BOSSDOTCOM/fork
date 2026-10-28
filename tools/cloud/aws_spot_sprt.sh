@@ -74,7 +74,7 @@ bash tools/cloud/fetch_tools.sh /opt/tools || { upload /var/log/fork-shard.log s
 $(if [ "$tables" = 1 ]; then echo "bash tools/cloud/fetch_tables.sh /opt/syzygy || { upload /var/log/fork-shard.log shard-$1.boot.log; shutdown -h now; }"; fi)
 conc=\$(( \$(nproc) - 2 ))
 bash tools/cloud/run_shard.sh --base /opt/engines/base/fork --test /opt/engines/test/fork \\
-  --fastchess /opt/tools/fastchess --book /opt/tools/UHO_Lichess_4852_v1.epd \\
+  --fastchess /opt/tools/fastchess --book /opt/tools/UHO_Lichess_4852_v1.shuffled-20261027.epd \\
   --shard $1 --shards $shards --stage $stage --games $per --tc '$tc' --hash $hash --concurrency \$conc \\
   --base-opts '$base_opts' --test-opts '$test_opts' $([ "$tables" = 1 ] && echo "--syzygy /opt/syzygy ")--out /opt/shard \\
   --meta base=$base --meta test=$test --meta runner=aws-$type --meta run=$run \\

@@ -141,7 +141,7 @@ jobs:
         run: |
           chmod +x engines/base/fork engines/test/fork
           bash tools/cloud/run_shard.sh --base engines/base/fork --test engines/test/fork \
-            --fastchess "$RUNNER_TEMP/tools/fastchess" --book "$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.epd" \
+            --fastchess "$RUNNER_TEMP/tools/fastchess" --book "$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.shuffled-20261027.epd" \
             --shard "$SHARD" --shards "$SHARDS" --stage "$STAGE" --games "$GAMES" --tc "$TC" --hash "$HASH_MB" \
             --base-opts "$BASE_OPTS" --test-opts "$TEST_OPTS" --syzygy "$SYZYGY" --out out \
             --meta "base=$BASE_SHA" --meta "test=$TEST_SHA" --meta runner=github
