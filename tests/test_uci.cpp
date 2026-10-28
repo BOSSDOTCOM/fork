@@ -48,8 +48,47 @@ bool starts_with(std::string_view s, std::string_view prefix) { return s.starts_
 struct Gui {
   EngineProcess engine{FORK_EXE_PATH};
   std::size_t cursor = 0;
+  // The position last sent, as this GUI reads the UCI spec's `position`
+  // command, and the position each `go` searched, in order (go perft, a Fork
+  // extension, answers no bestmove and is left out). check_transcript replays
+  // every pv and bestmove from them (audit-1 Q-2). Only lines sent through
+  // send() whose first word is the command are followed.
+  Position sent_position;
+  std::vector<Position> searched;
 
-  void send(std::string_view line) { CHECK_MSG(engine.send(line), "write failed: " << line); }
+  void send(std::string_view line) {
+    CHECK_MSG(engine.send(line), "write failed: " << line);
+    follow(line);
+  }
+
+  void follow(std::string_view line) {
+    const std::vector<LineToken> t = split_tokens(line);
+    if (t.empty()) return;
+    if (t[0].text == "go") {
+      if (t.size() < 2 || t[1].text != "perft") searched.push_back(sent_position);
+      return;
+    }
+    if (t[0].text != "position" || t.size() < 2) return;
+    Position pos;
+    std::size_t i = 2;
+    if (t[1].text == "fen") {
+      std::string fen;
+      for (; i < t.size() && t[i].text != "moves"; ++i) (fen += fen.empty() ? "" : " ") += t[i].text;
+      if (!pos.set_fen(fen)) return;  // an invalid FEN leaves the position as it was
+    } else if (t[1].text != "startpos") {
+      return;  // so does a position command without startpos or fen
+    }
+    while (i < t.size() && t[i].text != "moves") ++i;
+    for (++i; i < t.size(); ++i) {
+      std::string text(t[i].text);
+      if (text.size() == 5 && text[4] >= 'A' && text[4] <= 'Z')
+        text[4] = static_cast<char>(text[4] - 'A' + 'a');
+      const Move m = legal_move_named(pos, text);
+      if (m.is_none()) break;  // the position reached before an illegal move is kept
+      pos.make(m);
+    }
+    sent_position = pos;
+  }
 
   // The next line starting with `prefix` (skipping others); moves the cursor past it.
   std::optional<std::string> next(std::string_view prefix, std::chrono::milliseconds wait = Patience) {
@@ -86,17 +125,34 @@ struct Gui {
     return line->substr(std::string_view("info string fen ").size());
   }
 
-  // Checks the whole transcript: every line valid UCI, and a scored info
-  // line right before every bestmove.
+  // Checks the whole transcript: every line valid UCI; every info and
+  // bestmove line right for the position its go searched (the k-th bestmove
+  // answers the k-th go, and a go's info lines come after the previous
+  // bestmove: one search at a time); a scored info line right before every
+  // bestmove, whose pv, if it has one, starts with the move played.
   void check_transcript() const {
     const std::vector<std::string> all = texts();
+    std::size_t answered = 0;  // bestmoves so far: the index of the go being answered
     for (std::size_t i = 0; i < all.size(); ++i) {
       CHECK_MSG(valid_engine_line(all[i]), "not a UCI engine message: '" << all[i] << "'");
+      if (answered < searched.size()) {
+        const std::string problem = search_line_problem(searched[answered], all[i]);
+        CHECK_MSG(problem.empty(), problem << ": '" << all[i] << "' (go " << answered + 1 << ")");
+      }
       if (starts_with(all[i], "bestmove")) {
         const bool scored_info = i > 0 && starts_with(all[i - 1], "info ") &&
                                  !starts_with(all[i - 1], "info string") &&
                                  all[i - 1].find(" score ") != std::string::npos;
         CHECK_MSG(scored_info, "no final scored info line before '" << all[i] << "'");
+        const std::size_t pv = scored_info ? all[i - 1].find(" pv ") : std::string::npos;
+        if (pv != std::string::npos) {
+          const std::string_view first = split_tokens(std::string_view(all[i - 1]).substr(pv + 4))[0].text;
+          const std::vector<LineToken> best = split_tokens(all[i]);
+          CHECK_MSG(best.size() >= 2 && best[1].text == first,
+                    "the final info line's pv does not start with the move played: '" << all[i - 1] << "', '"
+                                                                                      << all[i] << "'");
+        }
+        ++answered;
       }
     }
   }
@@ -347,6 +403,76 @@ TEST_CASE("uci_protocol", "bestmove (none) on checkmate and stalemate, after a s
   CHECK_EQ(g.count("bestmove"), 1);
   g.send("stop");
   CHECK_EQ(g.next("bestmove").value_or(""), std::string("bestmove (none)"));
+  g.check_transcript();
+  g.quit();
+}
+
+// Audit-1 Q-2: the transcript check itself can fail (testing.md: check that
+// a checker can fail). Lines as the mutants of the audit printed them: a
+// castling move as king takes rook (M47), the internal score after "score
+// mate" (M46), a mate in 2 whose pv was cut to its first move (M28).
+// Positions: tests/suite.hpp's "all castling"; the back-rank mate in 1 and
+// K+R v K mate in 2 of test_search.cpp (both checked by
+// tools/check_search_positions.py).
+TEST_CASE("uci_protocol",
+          "the search-line check rejects illegal moves, wrong castling and false mate scores") {
+  Position castling, mate1, mate2;
+  CHECK(castling.set_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"));
+  CHECK(mate1.set_fen("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1"));
+  CHECK(mate2.set_fen("k7/8/2K5/8/8/8/8/7R w - - 0 1"));
+  for (const char* good : {"bestmove e1g1", "bestmove e1c1", "info depth 2 score cp 10 pv e1g1 e8c8",
+                           "info string e1h1 anything", "info depth 1 score cp 5 lowerbound pv a1a8"})
+    CHECK_MSG(search_line_problem(castling, good).empty(),
+              good << ": " << search_line_problem(castling, good));
+  for (const char* bad :
+       {"bestmove e1h1", "bestmove e1a1", "bestmove (none)", "info depth 2 score cp 10 pv e1h1",
+        "info depth 2 score cp 10 pv e1g1 e8a8", "info depth 2 score cp 29900 pv e1g1"})
+    CHECK_MSG(!search_line_problem(castling, bad).empty(), bad);
+  CHECK(search_line_problem(mate1, "info depth 3 score mate 1 pv a1a8").empty());
+  CHECK(!search_line_problem(mate1, "info depth 3 score mate 29999 pv a1a8").empty());
+  CHECK(!search_line_problem(mate1, "info depth 3 score mate 2 pv a1a8").empty());
+  CHECK(!search_line_problem(mate1, "info depth 3 score mate -1 pv a1a8").empty());
+  CHECK(!search_line_problem(mate1, "info depth 3 score mate 0").empty());
+  CHECK(search_line_problem(mate2, "info depth 4 score mate 2 pv c6b6 a8b8 h1h8").empty());
+  CHECK(!search_line_problem(mate2, "info depth 4 score mate 2 pv c6b6").empty());
+  CHECK(!search_line_problem(mate2, "info depth 4 score mate 2 pv c6b6 a8b8 h1h7").empty());
+  CHECK(search_line_problem(mate2, "info depth 4 score mate 2 lowerbound pv c6b6")
+            .empty());  // a bound: no claim
+}
+
+// Audit-1 Q-2: no UCI case made Fork print a castling move, so printing it
+// as king takes rook (e1h1, mutant M47) passed every test. searchmoves forces
+// each castling move; check_transcript replays every pv and the bestmove.
+TEST_CASE("uci_protocol", "castling is printed as the king's two-square move in bestmove and info pv") {
+  Gui g;
+  g.send("position fen r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");  // tests/suite.hpp "all castling"
+  for (const char* castle : {"e1g1", "e1c1"}) {
+    g.send(std::string("go depth 3 searchmoves ") + castle);
+    CHECK_EQ(g.next("bestmove").value_or(""), std::string("bestmove ") + castle);
+  }
+  g.check_transcript();
+  g.quit();
+}
+
+// Audit-1 Q-2: no UCI case read a mate score, so printing the internal score
+// after "score mate" (M46) or cutting the pv to its first move (M28) passed
+// every test. Mate in 1 (Ra8#) and K+R v K mate in 2 (and not in 1), both
+// checked by tools/check_search_positions.py; check_transcript requires each
+// exact "score mate N" line's pv to end in checkmate after 2N - 1 plies.
+TEST_CASE("uci_protocol", "mates are reported as score mate N with a pv that mates") {
+  Gui g;
+  for (const auto& [fen, mate] :
+       {std::pair<const char*, const char*>{"6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "1"},
+        {"k7/8/2K5/8/8/8/8/7R w - - 0 1", "2"}}) {
+    g.send(std::string("position fen ") + fen);
+    const std::size_t mark = g.cursor;
+    g.send("go depth 5");
+    CHECK(g.next("bestmove").has_value());
+    const std::vector<std::string> out = g.texts(mark);
+    CHECK_MSG(out.size() >= 2 &&
+                  out[out.size() - 2].find(std::string(" score mate ") + mate + " ") != std::string::npos,
+              fen << ": " << (out.size() >= 2 ? out[out.size() - 2] : std::string("no info line")));
+  }
   g.check_transcript();
   g.quit();
 }

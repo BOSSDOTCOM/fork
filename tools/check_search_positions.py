@@ -182,5 +182,27 @@ check(board_of('k7/8/8/8/8/8/PPPPP3/7K b - - 0 1').legal_moves.count() == 3, 'ta
 board_of('k7/8/8/8/8/8/PPPPP3/7K w - - 3 1')
 check(len(board_of('k7/p7/8/8/8/8/PPPPP3/7K w - - 0 1').piece_map()) == 8, 'tables: eight pieces')
 
+# tests/test_uci.cpp, the search-line check (audit-1 Q-2): the castling
+# position's two castling moves, Rxa8 legal there, Black's queenside castling
+# legal after O-O; the K+R v K mate in 2 line c6b6 a8b8 h1h8 (and c6b6 a8b8
+# h1h7 not mate).
+b = board_of('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
+check(sorted(m.uci() for m in b.legal_moves if b.is_castling(m)) == ['e1c1', 'e1g1'],
+      'castling position: e1g1 and e1c1 are its castling moves')
+check(chess.Move.from_uci('a1a8') in b.legal_moves, 'castling position: a1a8 is legal')
+b.push_uci('e1g1')
+check(b.is_castling(chess.Move.from_uci('e8c8')) and chess.Move.from_uci('e8c8') in b.legal_moves,
+      'castling position: e8c8 castles after e1g1')
+b = board_of('k7/8/2K5/8/8/8/8/7R w - - 0 1')
+for uci in ['c6b6', 'a8b8']:
+    b.push_uci(uci)
+check(chess.Move.from_uci('h1h8') in b.legal_moves and chess.Move.from_uci('h1h7') in b.legal_moves,
+      'K+R v K: h1h8 and h1h7 legal after c6b6 a8b8')
+b.push_uci('h1h8')
+check(b.is_checkmate(), 'K+R v K: c6b6 a8b8 h1h8 is mate')
+b.pop()
+b.push_uci('h1h7')
+check(not b.is_checkmate(), 'K+R v K: c6b6 a8b8 h1h7 is not mate')
+
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)
