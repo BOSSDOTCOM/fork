@@ -280,20 +280,20 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // side not to move: its history is the mover's (mover_history).
         const int base = reduction_for(depth, moves_searched + 1);
         const LmrMoveFacts facts = lmr_move_facts(pos, m);
-        const LmrContext context{depth,
-                                 moves_searched + 1,
-                                 base,
-                                 mover_history(history_, pos, m),
-                                 OnPv,
-                                 facts.piece,
-                                 facts.threatened,
-                                 facts.attacks,
-                                 f.selector.stage_size(),
-                                 game_phase(pos),
-                                 tt_hit ? static_cast<int>(hit.bound) : 0,
-                                 tt_hit ? static_cast<int>(hit.depth) : -1,
-                                 score_trend_,
-                                 branch_share_};
+        const LmrContext context{.depth = depth,
+                                 .move_number = moves_searched + 1,
+                                 .base = base,
+                                 .history = mover_history(history_, pos, m),
+                                 .on_pv = OnPv,
+                                 .piece = facts.piece,
+                                 .threatened = facts.threatened,
+                                 .attacks = facts.attacks,
+                                 .quiet_moves = f.selector.stage_size(),
+                                 .phase = game_phase(pos),
+                                 .entry_bound = tt_hit ? static_cast<int>(hit.bound) : 0,
+                                 .entry_depth = tt_hit ? static_cast<int>(hit.depth) : -1,
+                                 .score_trend = score_trend_,
+                                 .branch_share = branch_share_};
         const int rule = lmr_correction(context);
         const int correction = rule * LmrCorrectionStrength / 64;
         reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
