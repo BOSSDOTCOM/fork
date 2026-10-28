@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // eval: the static evaluation the search calls, chosen when Fork is built.
 //
 // Purpose: one entry point, static_eval(), whose implementation is fixed at

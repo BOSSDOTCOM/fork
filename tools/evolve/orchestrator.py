@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The heuristic-discovery loop's orchestrator (ideas.md idea 23, DESIGN.md
 §5.2 deliverable 8c): a deterministic script, not an agent.
 

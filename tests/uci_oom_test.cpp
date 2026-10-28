@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Review test (adversarial review of Phase 2, 2026-10-24): one failed heap allocation
 // must not cost a game. The session's own comments promise that every `go`
 // gets exactly one bestmove, "Out of memory while formatting: still answer

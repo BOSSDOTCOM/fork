@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """A fixed-seed permutation of an opening book, for cloud SPRT shards.
 
 The cloud shards index the book by line number (tools/cloud/run_shard.sh),

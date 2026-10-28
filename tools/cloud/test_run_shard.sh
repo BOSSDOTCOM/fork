@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Dry-run test of tools/cloud/run_shard.sh with a fake fastchess (no engine
 # runs, no game is played): what it passes to fastchess, what it records in
 # result.json, and its exit status. Uses python3, or $PYTHON if set.

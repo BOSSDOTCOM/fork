@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The evaluator funnel's second stage: cheap proxies (ideas.md idea 23).
 
 On the loop's position set (tools/evolve/positions.py: Fork's own

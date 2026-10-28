@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Static exchange evaluation (DESIGN.md §5.2, deliverable 4). Positions are
 // constructed for Fork (legality checked by tools/check_search_positions.py);
 // each expected value is derived by hand in its comment.

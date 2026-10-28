@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Writes Fork's between, line, mask and slider attack tables as binary files,
 // so their SHA-256 fingerprints can be compared across rewrites and builds
 // (docs/ORIGINALITY.md lists the expected values). Every value is a uint64

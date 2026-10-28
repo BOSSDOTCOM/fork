@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # CI (Windows, Git Bash): the local development toolchain, pinned.
 #
 #   .github/ci/win-tools.sh install llvm-mingw|winlibs   download what is

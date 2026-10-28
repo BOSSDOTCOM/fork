@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // zobrist: key generation (see zobrist.hpp).
 #include "core/zobrist.hpp"
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # The Syzygy 3-4-5 tablebases a cloud SPRT shard gives both engines
 # (DESIGN.md §5.2, "Testing setup": 3-4-5 Syzygy for both sides), checked
 # file by file against the committed manifest tools/cloud/syzygy-345.sha256

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # PostToolUse hook (Edit|Write): after any edit to src/ or tests/, format the
 # file with clang-format, then run the quick check (clang-release build +
 # fast tests). Exit 2 reports a failure to Claude (the edit itself stands).

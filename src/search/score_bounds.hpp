@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // score_bounds: the search's score scale (DESIGN.md §5.2, deliverable 2).
 //
 // Purpose: the constants and helpers that place evaluations, tablebase

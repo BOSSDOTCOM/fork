@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # CI (Ubuntu runner): one clang major from the LLVM project's apt repository
 # (https://apt.llvm.org, suite llvm-toolchain-<codename>-<major>), the way
 # scripts/tcec-toolchain-setup.sh installs clang 16 and 19, plus its

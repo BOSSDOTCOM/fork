@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // bitboard: table construction and the magic search (see bitboard.hpp).
 //
 // Everything here is built by walking the board one step at a time from

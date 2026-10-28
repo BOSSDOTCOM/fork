@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // splitmix: Fork's one pseudo-random stream, for table generation only.
 //
 // Purpose: a fixed-seed generator for the Zobrist keys (zobrist.cpp) and the

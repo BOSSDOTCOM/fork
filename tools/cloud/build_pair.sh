@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds the two engines of a cloud SPRT from one Fork repository, the way
 # TCEC builds Fork (update.sh; on Ubuntu 22.04 with CXX=g++, gcc 11.4, and
 # the default FORK_ARCH x86-64-v3, never native), each from a clean export

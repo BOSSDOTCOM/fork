@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Tests update.sh's clone mode (FORK_REPO) against a toy upstream, without
 # building: FORK_CHECKOUT_ONLY stops it after the checkout. Each run must
 # check out the upstream's current commit: after a fast-forward, after a

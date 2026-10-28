@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Sharded SPRT results: one shard's snapshot, and the merge of many.
 
 A sharded SPRT splits one test across machines or jobs (tools/cloud/,

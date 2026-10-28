@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The population database and the event log (ideas.md idea 23).
 
 SQLite (standard library), one file per run, never committed. Tables:

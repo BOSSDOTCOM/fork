@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Fetches the match tools a cloud SPRT shard needs, pinned and checked
 # (docs/kb/tools.md "Cloud SPRT"): the fastchess Linux release and the
 # opening book, at the versions of the local test setup (branch kb,

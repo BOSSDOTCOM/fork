@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // position: implementation (see position.hpp for the invariants).
 #include "core/position.hpp"
 

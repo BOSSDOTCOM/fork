@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // movegen: fully legal move generation.
 //
 // Purpose: generate<Legal|Captures|Quiets> without make-and-test, using the

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # CI: bench parity for one engine binary, run directly (also when the binary
 # is an SDE wrapper script, which CMake's execute_process cannot start on
 # Windows). The same comparison as cmake/check_bench.cmake: the node count

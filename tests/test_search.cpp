@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The search (DESIGN.md §5.2, deliverables 2-4). Positions other than the
 // perft suite are constructed for Fork; the facts each test relies on (mate
 // in N, no mate in 1, legal FEN) are checked with python-chess by

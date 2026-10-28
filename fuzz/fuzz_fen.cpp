@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // libFuzzer target: arbitrary bytes into the FEN parser. Accepted positions
 // must round-trip and stay consistent through make/unmake of every legal move.
 #include <cstdint>

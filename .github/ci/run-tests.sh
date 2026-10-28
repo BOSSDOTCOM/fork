@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # CI: the fast suite (every test not labelled slow) of one CMake build, with
 # the same guarantees as scripts/check.sh: bench parity must have run and
 # passed (unless REQUIRE_BENCH=0, when the caller checks it with

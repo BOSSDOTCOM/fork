@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Fork's entry point. Without arguments it speaks UCI on stdin/stdout
 // (src/uci/session.hpp); with a subcommand it runs that tool: perft, divide,
 // bench (the search bench), perftbench, version, difftest, wdl (endgame-table

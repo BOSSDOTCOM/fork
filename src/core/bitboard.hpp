@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // bitboard: bit helpers, attack tables and slider lookups.
 //
 // Purpose: precomputed leaper attacks, between/line tables, and rook/bishop

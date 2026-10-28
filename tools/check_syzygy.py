@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Deliverable 7 (DESIGN.md §5.2): Fork's Syzygy probes against an independent
 prober. Random legal positions within the installed tables (no castling
 rights, a zero halfmove clock: the conditions under which Fork probes) are

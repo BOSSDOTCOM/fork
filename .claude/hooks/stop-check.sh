@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Stop hook: before Claude finishes, run the fast check (scripts/check.sh
 # stop): clang-release build, every non-slow test, bench parity and no_alloc,
 # on this platform only. It is skipped, instantly, when no source, test or

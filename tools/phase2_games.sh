@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Phase 2 acceptance games (DESIGN.md §5.1, test 7): Fork against itself under
 # standard cutechess-cli and under fastchess, with concurrency, from seeded
 # random openings (tools/make_openings.py; each opening played with both

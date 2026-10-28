@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // uci_message: is a line a well-formed UCI engine-to-GUI message?
 //
 // Purpose: the one check, shared by the UCI tests (tests/test_uci.cpp) and the

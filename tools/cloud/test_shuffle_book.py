@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests of the cloud book permutation (tools/cloud/shuffle_book.py).
 
     python3 -m unittest discover -s tools/cloud -p 'test_*.py'

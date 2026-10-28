@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Downloads the SPRT opening book into ~/fork-tools/books (run in WSL).
 #
 # UHO_Lichess_4852_v1.epd from official-stockfish/books (CC0-1.0), pinned to

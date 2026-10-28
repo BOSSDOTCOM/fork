@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests of tools/pgn_summary.py: adjudication is a normal ending, and the
 abnormal kinds are counted apart.
 

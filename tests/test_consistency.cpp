@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Walks perft trees and checks internal invariants at every node against
 // independent (slow, obvious) oracles.
 #include <algorithm>

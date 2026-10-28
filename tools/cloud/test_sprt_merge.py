@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests of the sharded-SPRT statistics (tools/cloud/sprt_merge.py).
 
 The oracle is fastchess itself: the pentanomial counts, Elo, nElo and LLR it

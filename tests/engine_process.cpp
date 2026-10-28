@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "engine_process.hpp"
 
 #ifdef _WIN32

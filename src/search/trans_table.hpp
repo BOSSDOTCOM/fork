@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // trans_table: the transposition table (DESIGN.md §5.2, deliverable 3).
 //
 // Purpose: remember, per position, the best move found, its score with the

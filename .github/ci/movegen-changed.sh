@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # CI: did this push or pull request change a file that move generation's
 # results depend on? Decides whether the 2-hour perft_epd_full job runs
 # (owner, 2026-10-28: required only when such files change; nightly on main

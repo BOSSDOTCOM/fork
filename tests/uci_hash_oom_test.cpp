@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Review test (adversarial review of Phase 3 deliverable 3, 2026-10-24):
 // after a Hash resize whose report string cannot be allocated, the session's
 // TransTable must not keep pointing at the freed table.

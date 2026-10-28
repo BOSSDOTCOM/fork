@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Writes an EPD file of opening positions for Fork's self-play test runs.
 
 Each position comes from a random game of --plies plies played by

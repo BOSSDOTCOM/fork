@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Elo baseline gauntlet (Milestone A, owner 2026-10-25), in WSL: Fork against
 # the anchor engines built by tools/get_anchor_engines.sh, then Ordo with the
 # anchors fixed at their CCRL Blitz ratings (KB competition.md §5).
@@ -15,7 +16,7 @@
 # Exits 1 with no ratings when fastchess fails or plays fewer games than
 # planned (the partial PGN is kept), or when Ordo fails.
 set -euo pipefail
-[ $# -ge 3 ] || { sed -n '2,15p' "$0"; exit 2; }
+[ $# -ge 3 ] || { sed -n '3,16p' "$0"; exit 2; }
 fork=$(realpath "$1")
 book=$(realpath "$2")
 out=$3

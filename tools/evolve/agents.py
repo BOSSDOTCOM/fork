@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The loop's agents and their budget (ideas.md idea 23).
 
 Roles (the owner's spec): two proposers with distinct perspectives

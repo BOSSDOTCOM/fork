@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # CI: one slow perft suite on a clang-release build, then bench parity
 # (ci.yml's slow jobs and nightly.yml).
 #

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Times the Hash table's allocation and parallel clear per worker count
 // (DESIGN.md §5.1, test 2: "hash clear time at 1, 4 and 16 GiB recorded per
 // thread count"). The engine itself clears with max(Threads, hardware

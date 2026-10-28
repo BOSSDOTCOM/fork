@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The evaluator funnel's first stage: the gate (ideas.md idea 23).
 
 A candidate passes only if, in order:

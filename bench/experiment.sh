@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds an A/B experiment variant next to a reference preset, checks bench
 # parity and the test suite on the variant, then runs the interleaved
 # comparison (bench/ab.py).

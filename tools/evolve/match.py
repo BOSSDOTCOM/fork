@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The evaluator funnel's last two stages (ideas.md idea 23): a short
 fast-game match against the baseline, then the hand-off to a full SPRT.
 

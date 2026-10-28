@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Checks the facts that the tests' constructed positions rely on
 (tests/test_search.cpp, test_eval.cpp, test_see.cpp, test_ordering.cpp,
 test_pruning.cpp, test_draws.cpp, test_uci.cpp, test_endgame_tables.cpp),

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Names the compilers the CMake presets use. Source it: . scripts/env.sh
 # Linux: system clang++/g++ (override by exporting FORK_CLANG_CXX/FORK_GCC_CXX first).
 # Git Bash on Windows: the winget-installed toolchain.

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tallies match PGNs: games, results, Termination tags and the runner's
 reason for each result (the last {comment} of the movetext, e.g. "{Black
 mates}" or "{Draw by 3-fold repetition}"). Standard library only.

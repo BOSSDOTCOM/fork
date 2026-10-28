@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Fork's single source of truth for "is the tree healthy?", shared by the
 # Claude Code hooks (.claude/settings.json) and the git pre-commit hook
 # (scripts/hooks/pre-commit).

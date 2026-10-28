@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // position: board state, FEN, make/unmake, legality and check queries.
 //
 // Purpose: the board (bitboards and mailbox), the per-ply State stack, FEN

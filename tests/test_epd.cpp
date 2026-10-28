@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Large public perft suites, downloaded at configure time (not committed; see
 // docs/ORIGINALITY.md) and checked against a pinned SHA-256 by CMake:
 //   perftsuite.epd   126 positions to depth 6 (the Roce suite, via Mediocre)

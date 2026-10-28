@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // material: piece values and the game phase, shared by the search and the
 // evaluation.
 //

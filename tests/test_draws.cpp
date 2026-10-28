@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Draw rules: repetition counting, insufficient material and the fifty-move
 // clock.
 #include <algorithm>

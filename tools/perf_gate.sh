@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Performance gate for one deliverable (DESIGN.md §5.2, Quality control 2), in
 # WSL. Usage:
 #   tools/perf_gate.sh NEW_COMMIT [OLD_COMMIT]

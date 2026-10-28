@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Unit tests of the heuristic-discovery harness (ideas.md idea 23): regions
 and the guard, the gate's rules and order (with a fake runner: no builds),
 the proxies' metrics, the population, the agents' parsing and budget, the

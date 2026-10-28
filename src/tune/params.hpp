@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // params: the parameter table (DESIGN.md §1 and §5.2, deliverable 8b).
 //
 // Purpose: every tunable numeric search parameter in one place, with its

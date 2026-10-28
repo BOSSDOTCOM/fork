@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Git pre-commit hook (installed with: git config core.hooksPath scripts/hooks).
 # Runs the quick check (scripts/check.sh quick: one clang-release build, the
 # core suites with bench parity and no_alloc) when the commit touches code.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // session: the UCI protocol loop and its threads of control.
 //
 // Purpose: read commands, keep the game position and options, run searches

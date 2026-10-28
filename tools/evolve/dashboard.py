@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The heuristic-discovery run's live dashboard (ideas.md idea 23,
 deliverable 8c): one self-contained HTML page in the run folder, rewritten
 after every candidate and refreshing itself in the browser every 60

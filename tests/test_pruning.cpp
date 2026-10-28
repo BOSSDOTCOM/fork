@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Tier 1 pruning and reductions (DESIGN.md §5.2, deliverable 6).
 #include <atomic>
 #include <cmath>

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The transposition table (DESIGN.md §5.2, deliverable 3).
 #include <cstdlib>
 #include <cstring>

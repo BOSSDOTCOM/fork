@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Separate executable: replaces global operator new/delete with counting
 // versions and asserts that the hot paths (move generation, make/unmake,
 // null moves, legality and check queries, the search) never touch the heap.

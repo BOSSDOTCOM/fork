@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # CI: Intel Software Development Emulator (SDE), to run binaries built for a
 # CPU level the runner lacks (GitHub's hosted runners may have no AVX-512).
 #

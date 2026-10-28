@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // UCI protocol tests: the fork binary driven over pipes, as a GUI drives it
 // (DESIGN.md §5.1, "Tests and acceptance checks", test 1).
 //

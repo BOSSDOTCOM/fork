@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // bootstrap_eval: Phase 3's deliberately simple evaluation (DESIGN.md §5.2,
 // deliverable 1), replaced in Phase 4.
 //

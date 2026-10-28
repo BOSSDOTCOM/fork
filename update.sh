@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds the Fork binary for TCEC (or any Linux x86-64 machine) from source.
 #
 #   ./update.sh                     inside a Fork checkout: builds that tree

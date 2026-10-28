@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Interleaved A/B comparison of search speed (DESIGN.md §5.2, performance gate).
 
 The search-bench sibling of bench/ab.py: runs `fork bench` of two engine

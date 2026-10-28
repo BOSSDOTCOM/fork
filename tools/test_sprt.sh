@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Dry-run test of tools/sprt.sh: nothing is compiled and no game is played.
 # A throwaway repository holds a copy of sprt.sh, a fake update.sh that
 # "builds" a shell-script engine, and two commits; a fake fastchess prints

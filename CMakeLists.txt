@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # 3.22 is Ubuntu 22.04's CMake, which TCEC's servers run (DESIGN.md §5.1).
 # CMakePresets.json needs 3.25 and is a developer convenience only; the TCEC
 # build (update.sh) configures without presets.

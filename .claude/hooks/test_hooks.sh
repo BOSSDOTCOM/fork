@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Self-test for the enforcement hooks: feeds them the JSON Claude Code sends
 # and checks the exit status. Run on a clean tree: scripts must pass there and
 # fail on the breakages that test_hooks.sh introduces and then reverts.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # One SPRT between two commits (DESIGN.md §5.2, "Testing setup"), run in WSL.
 #
 #   tools/sprt.sh NAME BASE TEST ELO0 ELO1 TC [HASH_MB]
@@ -56,7 +57,7 @@
 # fastchess's exit status.
 set -euo pipefail
 
-[ $# -ge 6 ] || { awk 'NR > 1 && /^set -euo/ { exit } NR > 1' "$0"; exit 2; }
+[ $# -ge 6 ] || { awk 'NR > 2 && /^set -euo/ { exit } NR > 2' "$0"; exit 2; }
 name=$1 base=$2 test=$3 elo0=$4 elo1=$5 tc=$6 hash=${7:-16}
 repo=$(cd "$(dirname "$0")/.." && pwd)
 dir=${FORK_SPRT_DIR:-$HOME/fork-sprt}

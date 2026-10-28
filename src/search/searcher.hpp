@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // searcher: the alpha-beta search (DESIGN.md §5.2, deliverables 2-6).
 //
 // Purpose: iterative deepening with aspiration windows over a fail-soft

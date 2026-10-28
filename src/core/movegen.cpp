@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // movegen: implementation (see movegen.hpp).
 #include "core/movegen.hpp"
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # One or more AWS EC2 spot instances, each running one shard of a sharded
 # SPRT (docs/kb/tools.md "Cloud SPRT", branch kb). Run on the owner's own
 # machine with the owner's AWS CLI configuration; the repository holds no

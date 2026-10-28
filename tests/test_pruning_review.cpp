@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Tests from the adversarial review of deliverable 6 (tier 1 pruning):
 // pruned mate scores are real, and stopped searches and probes leave no
 // state behind. (The review also showed pruning delaying a mate in 3 in

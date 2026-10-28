@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Samples the Lichess positions of Fork's search bench (DESIGN.md §5.2).
 
 Reads the Lichess CC0 game export for January 2013 (moves only: comments,

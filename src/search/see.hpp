@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // see: static exchange evaluation (DESIGN.md §5.2, deliverable 4; KB
 // search-techniques.md T7).
 //

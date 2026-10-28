@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The heuristic-discovery loop's position set (ideas.md idea 23, DESIGN.md
 §5.2 deliverable 8c): positions from Fork's own self-play, labeled by Fork's
 own much deeper search (KB data-policy.md rule 1: labels come from Fork).

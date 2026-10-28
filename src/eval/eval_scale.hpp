@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // eval_scale: the range every evaluator's scores stay within.
 //
 // Purpose: the bound the search's score bands are built around

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Syzygy endgame tables through Fathom (DESIGN.md §5.2, deliverable 7).
 //
 // The 7-piece cases use the smallest 7-man pair, KPPPPPvK, downloaded by

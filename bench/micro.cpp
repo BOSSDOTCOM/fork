@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Microbenchmarks for core operations, with repeated timed runs on a pinned
 // core. Reports median ns/op and the p10-p90 spread, flags noisy results, and
 // saves/compares baselines.

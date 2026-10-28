@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // lmr_table: the late move reduction table (DESIGN.md §5.2, deliverable 6;
 // KB search-techniques.md T15).
 //

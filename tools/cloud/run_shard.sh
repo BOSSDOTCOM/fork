@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # One shard of a sharded SPRT (docs/kb/tools.md "Cloud SPRT"): a fixed number
 # of games between two Fork builds on the shard's own slice of the openings,
 # with the same conditions as tools/sprt.sh (Hash, one thread, adjudication,
