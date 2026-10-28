@@ -409,16 +409,6 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   } else {
     f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : static_eval(pos);  // as in negamax
     best = f.static_eval;
-    // The stand-pat value corrected by the TT score in the direction its
-    // bound proves, as the main search's pruning eval (KB T50, its quiescence
-    // use; audit-1, B-4). Mate and table scores are left out; the TT keeps
-    // the raw static eval.
-    if (switches.use_tt_stand_pat && tt_hit) {
-      const int s = score_from_tt(hit.score, ply);
-      if (!is_tb_or_mate(s) && (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s > best) ||
-                                (hit.bound == TtBound::Upper && s < best)))
-        best = s;
-    }
     if (best >= beta) {
       if (switches.use_tt)
         tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);

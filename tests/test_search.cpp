@@ -120,10 +120,6 @@ SearchSwitches exact_switches() {
   SearchSwitches s;
   s.tt_exact_depth = true;
   s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
-  // Inexact like the pruning: a stand-pat raised to another search's bound
-  // (audit-1, B-4) is not the reference's value; the zero-window oracle
-  // caught it (a fail high of 16 where the exact value is 0).
-  s.use_tt_stand_pat = false;
   return s;
 }
 
@@ -1097,30 +1093,5 @@ TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
   CHECK_EQ(depth_reached(forced, true), 1);
   CHECK_EQ(depth_reached(forced, false), 6);
   CHECK_EQ(depth_reached("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", true), 6);
-}
-// Audit-1, B-4: the quiescence stand-pat value refined by the TT score, an
-// inexact refinement (exact_switches turns it off for the oracles); here it
-// changes the search over the perft suite and every move stays legal.
-TEST_CASE("search", "the TT-refined stand-pat changes the search, soundly") {
-  Fixture fx;
-  std::uint64_t nodes[2] = {0, 0};
-  for (int off = 0; off < 2; ++off) {
-    SearchSwitches s;
-    s.use_tt_stand_pat = off == 0;
-    fx.searcher->switches = s;
-    for (const auto& p : perft_suite()) {
-      Position pos;
-      CHECK(pos.set_fen(p.fen));
-      MoveList legal;
-      generate<GenMode::Legal>(pos, legal);
-      fx.store.clear();
-      SearchQuota limits;
-      limits.depth = Optimized ? 9 : 6;
-      const SearchResult r = fx.search(pos, limits);
-      CHECK_MSG(legal.contains(r.best), p.fen);
-      nodes[off] += r.nodes;
-    }
-  }
-  CHECK_MSG(nodes[0] != nodes[1], "nodes " << nodes[0] << " either way");
 }
 }  // namespace forkeng::test

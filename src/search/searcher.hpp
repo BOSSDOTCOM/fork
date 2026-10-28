@@ -79,8 +79,6 @@ struct SearchQuota {
 //   against an inexact result (audit-1, B-5). Off by default (owner,
 //   2026-10-28): its LTC SPRT was stopped undecided, leaning negative; it
 //   is retested with Phase 6's TT tests under large Hash and many threads.
-// - use_tt_stand_pat: the quiescence search's stand-pat value refined by
-//   the TT score (KB T50; audit-1, B-4).
 // - use_tables: Syzygy endgame tables, when loaded (deliverable 7):
 //   win/draw/loss probes in the search and the ranking of root moves.
 #define FORK_SEARCH_SWITCHES(X)                    \
@@ -103,7 +101,6 @@ struct SearchQuota {
   X(use_tt_eval_refine, UseTtEvalRefine, true)     \
   X(use_forced_move_stop, UseForcedMoveStop, true) \
   X(use_tt_keep_deeper, UseTtKeepDeeper, false)    \
-  X(use_tt_stand_pat, UseTtStandPat, true)         \
   X(use_tables, UseTables, true)
 
 struct SearchSwitches {
