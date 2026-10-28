@@ -4,16 +4,44 @@ mates}" or "{Draw by 3-fold repetition}"). Standard library only.
 
     python3 tools/pgn_summary.py a.pgn [b.pgn ...]
 
-Exit status 1 if any game ended other than by the rules: a Termination
-other than "normal" (cutechess-cli and fastchess write e.g. "time
-forfeit", "illegal move", "abandoned", "stalled connection"), or a reason
-mentioning time, illegal, disconnect, crash or stall.
+Exit status 1 if any game ended other than by the rules or by
+adjudication. Normal endings are the Terminations "normal" and
+"adjudication" (fastchess writes the latter for its resign and draw
+adjudication, which sprt.sh and run_shard.sh turn on). Every other
+Termination, or a reason mentioning time, a forfeit, an illegal move, a
+disconnect, a stall, a crash or an abandoned game, is counted by kind and
+reported on its own line. (The pinned fastchess, v1.8.2-alpha, has the
+Terminations "time forfeit", "illegal move", "abandoned" and "unterminated",
+and reasons such as "loses on time", "disconnects", "'s connection stalls",
+"makes an illegal move": the strings in its binary, read 2026-10-27.)
 """
 import collections
 import re
 import sys
 
-BAD = re.compile(r'time|illegal|disconnect|crash|stall|abandon|connection|forfeit|unterminated', re.I)
+NORMAL_TERMINATIONS = {'normal', 'adjudication'}
+# Kind of an abnormal ending, from the Termination tag and the reason; the
+# first match wins.
+KINDS = [
+    ('time forfeit', re.compile(r'time|forfeit', re.I)),
+    ('illegal move', re.compile(r'illegal', re.I)),
+    ('stall', re.compile(r'stall', re.I)),
+    ('disconnect', re.compile(r'disconnect|connection', re.I)),
+    ('crash', re.compile(r'crash', re.I)),
+    ('abandoned', re.compile(r'abandon', re.I)),
+    ('unterminated', re.compile(r'unterminated', re.I)),
+]
+
+
+def abnormal_kind(termination, reason):
+    """None for a game that ended by the rules or by adjudication, else the
+    kind of abnormal ending."""
+    for kind, pattern in KINDS:
+        if pattern.search(termination) or pattern.search(reason):
+            return kind
+    if termination.lower() not in NORMAL_TERMINATIONS:
+        return f'other termination "{termination}"'
+    return None
 
 
 def games(text):
@@ -24,9 +52,10 @@ def games(text):
 
 
 def main(paths):
-    bad = 0
+    bad = collections.Counter()
     for path in paths:
-        text = open(path, encoding='utf-8', errors='replace').read()
+        with open(path, encoding='utf-8', errors='replace') as f:
+            text = f.read()
         results, terms, reasons = collections.Counter(), collections.Counter(), collections.Counter()
         n = 0
         plies = []
@@ -44,14 +73,17 @@ def main(paths):
             bare = re.sub(r'\{[^}]*\}', ' ', moves)
             plies.append(len([t for t in bare.split() if not re.fullmatch(r'\d+\.+|1-0|0-1|1/2-1/2|\*', t)]))
             reasons[reason] += 1
-            if term.lower() != 'normal' or BAD.search(reason):
-                bad += 1
+            kind = abnormal_kind(term, reason)
+            if kind:
+                bad[kind] += 1
         print(f'{path}: {n} games; results {dict(results)}; terminations {dict(terms)}; '
               f'plies min {min(plies, default=0)}, mean {sum(plies) / max(1, len(plies)):.0f}, '
               f'max {max(plies, default=0)}')
         for reason, k in reasons.most_common():
             print(f'    {k:4d}  {reason}')
-    print(f'games not ending by the rules: {bad}')
+    print(f'games not ending by the rules or adjudication: {sum(bad.values())}')
+    for kind, k in bad.most_common():
+        print(f'    {k:4d}  {kind}')
     return 1 if bad else 0
 
 
