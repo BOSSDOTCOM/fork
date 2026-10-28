@@ -190,7 +190,7 @@ struct LmrMoveFacts {
   // attacked; the king now stands on its landing square.
   if (m.is_castle()) return {King, false, (king_attacks(after.king_square(mover)) & targets) != 0};
   const Square from = m.from(), to = m.to();
-  const PieceType type = static_cast<PieceType>(after.piece_at(to) & 7);
+  const PieceType type = kind_of(after.piece_at(to));
   const Bitboard before = (after.pieces() & ~bb(to)) | bb(from);
   const Bitboard diagonal = after.pieces(them, Bishop, Queen), straight = after.pieces(them, Rook, Queen);
   const Bitboard attackers =
