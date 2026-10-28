@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // time_budget: how long one search may run (DESIGN.md §5.2, deliverable 8;
 // a first version is in place from deliverable 2 so games can be played).
 //

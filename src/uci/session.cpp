@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "uci/session.hpp"
 
 #include <algorithm>
@@ -26,19 +28,19 @@ constexpr std::string_view Commands[] = {"uci",        "debug",    "isready", "s
 
 bool is_command(std::string_view t) { return std::ranges::find(Commands, t) != std::end(Commands); }
 
-// Whether the first command word of `line` is `go`, found without
+// The first command word of `line` (empty if none), found without
 // allocating (so it still works when the tokenizer could not).
-bool names_go(std::string_view line) {
+std::string_view first_command(std::string_view line) {
   std::size_t i = 0;
   while (i < line.size()) {
     while (i < line.size() && is_uci_space(line[i])) ++i;
     std::size_t j = i;
     while (j < line.size() && !is_uci_space(line[j])) ++j;
     const std::string_view word = line.substr(i, j - i);
-    if (is_command(word)) return word == "go";
+    if (is_command(word)) return word;
     i = j;
   }
-  return false;
+  return {};
 }
 
 // "e2e4", "e7e8q" or "(none)" without allocating: info lines and the
@@ -151,8 +153,15 @@ std::string describe_syzygy_path(const std::string& paths) {
 
 }  // namespace
 
+// The State room each of root_ and spare_ reserves: 8,192 moves, far beyond
+// any real game (TCEC games end in the hundreds of moves), for about 1 MB
+// each (audit-1 R-3). Longer move lists still work: make() grows the stack.
+constexpr std::size_t GameStatePlies = 16384;
+
 UciSession::UciSession(OutputChannel& out, SessionConfig config)
     : out_(out), config_(config), searcher_(std::make_unique<Searcher>(tt_)) {
+  root_.reserve_plies(GameStatePlies);
+  spare_.reserve_plies(GameStatePlies);
   declare_options();
 }
 
@@ -179,21 +188,9 @@ void UciSession::declare_options() {
     const char* name;
     bool SearchSwitches::* field;
   };
-  for (const SwitchOption s :
-       {SwitchOption{"UseTT", &SearchSwitches::use_tt}, SwitchOption{"UsePvs", &SearchSwitches::use_pvs},
-        SwitchOption{"UseAspiration", &SearchSwitches::use_aspiration},
-        SwitchOption{"UseMateDistance", &SearchSwitches::use_mate_distance},
-        SwitchOption{"UseQuiesce", &SearchSwitches::use_quiesce},
-        SwitchOption{"UseSeeQuiesce", &SearchSwitches::use_see_quiesce},
-        SwitchOption{"UseHistory", &SearchSwitches::use_history},
-        SwitchOption{"UseHistoryMalus", &SearchSwitches::use_history_malus},
-        SwitchOption{"UseRfp", &SearchSwitches::use_rfp}, SwitchOption{"UseNmp", &SearchSwitches::use_nmp},
-        SwitchOption{"UseLmr", &SearchSwitches::use_lmr}, SwitchOption{"UseLmp", &SearchSwitches::use_lmp},
-        SwitchOption{"UseFutility", &SearchSwitches::use_futility},
-        SwitchOption{"UseSeePrune", &SearchSwitches::use_see_prune},
-        SwitchOption{"UseTtAgeBlend", &SearchSwitches::tt_age_blend},
-        SwitchOption{"UseTtKeepExact", &SearchSwitches::tt_keep_exact},
-        SwitchOption{"UseTtEvalRefine", &SearchSwitches::use_tt_eval_refine}}) {
+#define FORK_SWITCH_OPTION(member, option, value) SwitchOption{#option, &SearchSwitches::member},
+  for (const SwitchOption s : {FORK_SEARCH_SWITCHES(FORK_SWITCH_OPTION)}) {
+#undef FORK_SWITCH_OPTION
     options_.add_check(s.name, searcher_->switches.*s.field,
                        [this, field = s.field](const OptionEntry& e, std::string&) {
                          searcher_->switches.*field = e.number != 0;
@@ -251,6 +248,8 @@ bool UciSession::apply_pending() {
     } rebind{tt_, hash_};
     tt_.bind_memory(nullptr, 0);
     const bool ok = hash_.resize(bytes, report);
+    // A Clear Hash in the same batch also forgets the history (audit-1, V-2).
+    if (clear_pending_) searcher_->clear_history();
     hash_pending_ = clear_pending_ = false;
     tt_.bind_memory(hash_.data(), hash_.bytes());
     const unsigned workers = hash_workers();
@@ -300,8 +299,8 @@ int UciSession::run(std::FILE* in) {
 
 bool UciSession::handle_line(std::string_view line) {
   go_answered_ = false;
-  try {
-    out_.log_input(line);
+  // Tokenizes and runs the line; false for quit.
+  auto run = [&]() {
     const std::vector<LineToken> tokens = split_tokens(line);
     // The spec: unknown tokens before a command are skipped.
     std::size_t i = 0;
@@ -317,21 +316,54 @@ bool UciSession::handle_line(std::string_view line) {
       return false;
     }
     dispatch(tokens, i, line);
+    return true;
+  };
+  try {
+    out_.log_input(line);
+    return run();
   } catch (const std::exception& e) {
     // A go that failed before its search started (no memory to tokenize the
-    // line, say) still gets its one bestmove.
-    if (names_go(line) && !go_answered_) {
+    // line, say) still gets its one bestmove, and an isready its readyok
+    // (audit-1, R-2: a Hash resize that ran out of memory lost it).
+    const std::string_view command = first_command(line);
+    if (command == "go" && !go_answered_) {
       try {
         stop_search();
       } catch (...) {
         // ignored: a join that fails leaves no search to wait for
       }
-      answer_without_memory(root_, NoMove, false);
+      if (position_unknown_) {
+        try {
+          out_.send_line("bestmove 0000");  // never a move of an unknown position (R-3)
+        } catch (...) {
+          // ignored: only a failing mutex can throw here
+        }
+      } else {
+        answer_without_memory(root_, NoMove, false);
+      }
+    }
+    // A position command that ran out of memory is tried once more; if that
+    // fails too, the position is unknown, and no go searches until the next
+    // position command succeeds (audit-1 R-3; owner, 2026-10-28).
+    if (command == "position") {
+      try {
+        run();
+        return true;
+      } catch (...) {
+        position_unknown_ = true;
+      }
     }
     try {
       out_.send_info_string(std::string("error: ") + e.what());
     } catch (...) {
       // ignored: no memory for the message either
+    }
+    if (command == "isready") {
+      try {
+        out_.send_line("readyok");
+      } catch (...) {
+        // ignored: only a failing mutex can throw here
+      }
     }
   }
   return true;
@@ -422,7 +454,7 @@ void UciSession::cmd_ponderhit() {
 
 void UciSession::cmd_position(const std::vector<LineToken>& tokens, std::size_t first,
                               std::string_view line) {
-  Position pos;
+  Position pos;  // the FEN or the start position; the moves are made on spare_
   std::size_t i = first;
   if (i < tokens.size() && tokens[i].text == "startpos") {
     ++i;
@@ -441,20 +473,40 @@ void UciSession::cmd_position(const std::vector<LineToken>& tokens, std::size_t 
     out_.send_info_string("position: expected startpos or fen; position unchanged");
     return;
   }
+  // Copied into spare_'s reserved States (no allocation), and the moves made
+  // there, so the move list of a long game cannot run out of memory.
+  spare_ = pos;
+  std::size_t illegal = tokens.size();
   while (i < tokens.size() && tokens[i].text != "moves") ++i;
   for (++i; i < tokens.size(); ++i) {
-    const Move m = parse_uci_move(pos, tokens[i].text);
+    const Move m = parse_uci_move(spare_, tokens[i].text);
     if (m.is_none()) {
-      out_.send_info_string("illegal move " + std::string(tokens[i].text) + "; position kept before it");
+      illegal = i;
       break;
     }
-    pos.make(m);
+    spare_.make(m);
   }
-  root_ = std::move(pos);
+  std::swap(root_, spare_);  // moves only: no allocation
+  position_unknown_ = false;
+  if (illegal < tokens.size())
+    out_.send_info_string("illegal move " + std::string(tokens[illegal].text) + "; position kept before it");
 }
 
 void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first) {
-  if (first < tokens.size() && tokens[first].text == "perft") {
+  const bool perft = first < tokens.size() && tokens[first].text == "perft";
+  if (position_unknown_) {
+    // Never search a position that may not be the GUI's (audit-1 R-3): the
+    // go is answered at once with the null move (go perft gets no bestmove).
+    go_answered_ = true;
+    try {
+      out_.send_info_string("error: the last position command failed; no search until a position succeeds");
+    } catch (...) {
+      // ignored: no memory for the message; the bestmove still goes out
+    }
+    if (!perft) out_.send_line("bestmove 0000");
+    return;
+  }
+  if (perft) {
     go_answered_ = true;  // a Fork extension, not a search: no bestmove
     cmd_perft(tokens, first + 1);
     return;
@@ -466,7 +518,7 @@ void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first)
   if (go.restrict_sent && go.restrict_to.empty())
     out_.send_info_string("go: no legal move in searchmoves; searching every move");
   apply_pending();
-  SearchQuota limits = search_limits(go);
+  SearchQuota limits = quota_for_go(go, root_.side_to_move(), options_.number("Move Overhead"));
   limits.go_received = go_time;
   const bool infinite = go.infinite;
   {
@@ -511,23 +563,30 @@ void UciSession::stop_search() {
   search_thread_.join();
 }
 
-// The search limits of a go: depth, nodes, mate and searchmoves as sent, and
-// the time budget from the clock arguments and Move Overhead. go infinite has
-// no time limit; a ponder search ignores time until ponderhit.
-SearchQuota UciSession::search_limits(const GoLimits& go) const {
+// A ponder search ignores time until ponderhit (the session's pondering flag,
+// not the limits).
+SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhead_ms) {
   SearchQuota l;
   if (go.depth) l.depth = static_cast<int>(std::clamp<std::int64_t>(*go.depth, 1, MaxPly - 1));
   if (go.nodes) l.nodes = static_cast<std::uint64_t>(std::max<std::int64_t>(*go.nodes, 1));
-  if (go.mate && *go.mate > 0) l.mate_moves = static_cast<int>(std::min<std::int64_t>(*go.mate, MaxPly));
+  if (go.mate) {
+    // A mate in N moves is N moves of the side to move and N - 1 replies:
+    // 2N - 1 plies, the depth at which a full-width search finds it. The
+    // search goes no deeper and plays its best move, so a `go mate N` with
+    // no mate in N still answers (audit-1 R-4; owner, 2026-10-28); `mate 0`
+    // or less searches one ply.
+    const std::int64_t moves = std::min<std::int64_t>(*go.mate, MaxPly);
+    l.depth = std::min(l.depth, static_cast<int>(std::clamp<std::int64_t>(2 * moves - 1, 1, MaxPly - 1)));
+    if (moves > 0) l.mate_moves = static_cast<int>(moves);
+  }
   for (Move m : go.restrict_to) l.restrict_to.add(m);
   if (!go.infinite) {
-    const Color us = root_.side_to_move();
     ClockInput clock;
     clock.remaining_ms = go.remaining_ms[us];
     clock.increment_ms = go.increment_ms[us];
     clock.movestogo = go.movestogo;
     clock.movetime = go.movetime;
-    clock.overhead_ms = options_.number("Move Overhead");
+    clock.overhead_ms = move_overhead_ms;
     const TimeBudget budget = plan_time(clock);
     l.soft_ms = budget.soft_ms;
     l.hard_ms = budget.hard_ms;

@@ -1,14 +1,17 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Tier 1 pruning and reductions (DESIGN.md §5.2, deliverable 6).
 #include <atomic>
 #include <cmath>
 #include <memory>
 #include <vector>
 
+#include "core/material.hpp"
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
-#include "eval/bootstrap_eval.hpp"
 #include "harness.hpp"
 #include "search/lmr_table.hpp"
+#include "search/quiet_history.hpp"
 #include "search/searcher.hpp"
 
 namespace forkeng::test {
@@ -210,10 +213,35 @@ TEST_CASE("pruning", "TT-refined pruning eval: still correct, and it changes the
   CHECK_MSG(refined.nodes != plain.nodes, "nodes " << refined.nodes << " with and without refinement");
 }
 
+// The switches are independent (audit-1, A9-2): with PVS off, late moves were
+// searched only as full-window PV children, so LMR never ran and switching it
+// made no difference; a removal test of PVS would have measured LMR too.
+TEST_CASE("pruning", "with PVS off, LMR still reduces: the two switches are independent") {
+  PruningFixture fx;
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  const int depth = Optimized ? 7 : 5;
+  SearchSwitches no_pvs;
+  no_pvs.use_pvs = false;
+  fx.searcher->switches = no_pvs;
+  const SearchResult with_lmr = fx.search(kiwipete, depth);
+  no_pvs.use_lmr = false;
+  fx.searcher->switches = no_pvs;
+  const SearchResult without_lmr = fx.search(kiwipete, depth);
+  CHECK(legal.contains(with_lmr.best));
+  CHECK(legal.contains(without_lmr.best));
+  CHECK_MSG(with_lmr.nodes < without_lmr.nodes,
+            "PVS off: nodes " << with_lmr.nodes << " with LMR, " << without_lmr.nodes << " without");
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
-// move, board.attacks after it; the positions checked legal there). Case 3's
+// move, board.attacks after it; the positions checked legal there; committed
+// in tools/check_search_positions.py since audit-1 Q-11). Case 3's
 // rook was attacked along the file through the square it moves to, so the
 // board before the move must be rebuilt, not read after it.
 TEST_CASE("pruning", "LMR move facts: piece, threatened before the move, attacks after it") {
@@ -243,8 +271,30 @@ TEST_CASE("pruning", "LMR move facts: piece, threatened before the move, attacks
   }
 }
 
-// The game phase the LMR context reads (Fork's evaluation's own, moved inline
-// into bootstrap_eval.hpp unchanged): python-chess counts 24, 0 and 6 here.
+// Audit-1 V-4 (b89185f): the LMR context's history is the mover's. The
+// search builds the context after making the move, so the side to move is
+// the opponent; reading its table instead passed every test (the committed
+// correction is 0). One entry is set for the mover only, another for the
+// opponent only, both for the same from and to squares.
+TEST_CASE("pruning", "LMR context: the history read is the mover's, after the move is made") {
+  for (const char* fen : {"4k3/8/8/8/8/8/8/R3K3 w - - 0 1", "r3k3/8/8/8/8/8/8/4K3 b - - 0 1"}) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    const Color mover = pos.side_to_move();
+    const Move m = pos.parse_uci(mover == White ? "a1a2" : "a8a7");
+    CHECK_MSG(!m.is_none(), fen);
+    QuietHistory history;
+    history.apply(mover, m, 300);
+    history.apply(~mover, m, -700);
+    const int mine = history.value(mover, m);
+    CHECK(mine > 0 && history.value(~mover, m) < 0);
+    pos.make(m);
+    CHECK_MSG(mover_history(history, pos, m) == mine, fen << ": " << mover_history(history, pos, m));
+  }
+}
+
+// The game phase the LMR context reads (Fork's evaluation's own, now in
+// core/material.hpp unchanged): python-chess counts 24, 0 and 6 here.
 TEST_CASE("pruning", "game phase: all pieces 24, a pawn ending 0, rook and queen 6") {
   Position pos;
   CHECK(pos.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));

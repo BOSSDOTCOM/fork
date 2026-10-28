@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tests of the sharded-SPRT statistics (tools/cloud/sprt_merge.py).
 
 The oracle is fastchess itself: the pentanomial counts, Elo, nElo and LLR it
@@ -92,11 +94,63 @@ class MergeTests(unittest.TestCase):
         b['meta']['opening_start'] = '1251'
         self.assertEqual(sm.merge([a, b])['pairs'], 18)
 
+    def test_shards_on_different_books_are_refused(self):
+        a = self.shard([1, 2, 3, 2, 1], opening_start='1', rounds='50', book_sha='aa')
+        b = self.shard([1, 2, 3, 2, 1], opening_start='51', rounds='50', book_sha='bb')
+        with self.assertRaisesRegex(ValueError, 'book_sha'):
+            sm.merge([a, b])
+        b['meta']['book_sha'] = 'aa'
+        self.assertEqual(sm.merge([a, b])['pairs'], 18)
+
+    def test_adjacent_ranges_merge_intersecting_ones_do_not(self):
+        a = self.shard([1, 2, 3, 2, 1], opening_start='1', opening_end='50')
+        b = self.shard([1, 2, 3, 2, 1], opening_start='51', opening_end='100')
+        self.assertEqual(sm.merge([b, a])['pairs'], 18)
+        b['meta']['opening_start'] = '50'
+        with self.assertRaisesRegex(ValueError, 'lines 1-50 and 50-100'):
+            sm.merge([a, b])
+
     def test_shards_of_different_tests_are_refused(self):
         with self.assertRaises(ValueError):
             sm.merge([self.shard([1, 2, 3, 2, 1]), self.shard([1, 2, 3, 2, 1], test='ccc')])
         with self.assertRaises(ValueError):
             sm.merge([self.shard([1, 2, 3, 2, 1]), self.shard([1, 2, 3, 2, 1], tc='40+0.4')])
+
+    def test_tables_on_and_off_do_not_mix(self):
+        on = self.shard([1, 2, 3, 2, 1], tables='3-4-5', opening_start='1')
+        off = self.shard([1, 2, 3, 2, 1], tables='off', opening_start='101')
+        with self.assertRaisesRegex(ValueError, 'tables'):
+            sm.merge([on, off])
+        merged = sm.merge([on, dict(off, meta=dict(off['meta'], tables='3-4-5'))])
+        self.assertEqual(merged['meta']['tables'], '3-4-5')
+        self.assertIn('Tables: 3-4-5 (both engines)', sm.report(merged, -3, 0))
+
+    # Audit-1 (A6) U-4: the auditor's two cases, which the old merge (equal
+    # opening_start only) accepted.
+    @staticmethod
+    def plan(stage, shards, games):
+        """The openings run_shard.sh gives each shard: sprt.yml's (and
+        aws_spot_sprt.sh's) per-shard games, run_shard.sh's rounds and start."""
+        per = (games + 2 * shards - 1) // (2 * shards) * 2
+        rounds = (per + 1) // 2
+        return [(1 + (stage * shards + i) * rounds, rounds) for i in range(shards)]
+
+    def staged(self, stage, shards, games, runner='github'):
+        return [self.shard([1, 2, 3, 2, 1], opening_start=str(start), rounds=str(rounds), stage=str(stage),
+                           shards=str(shards), runner=runner) for start, rounds in self.plan(stage, shards, games)]
+
+    def test_stages_with_a_different_game_count_share_openings(self):
+        # Stage 0: 16 x 1,600 games, openings 1-800; stage 1 with games=1088:
+        # openings 545-1,088, no start equal to a stage-0 start.
+        with self.assertRaises(ValueError):
+            sm.merge(self.staged(0, 16, 1600) + self.staged(1, 16, 1088))
+        self.assertEqual(sm.merge(self.staged(0, 16, 1600) + self.staged(1, 16, 1600))['shards'], 32)
+
+    def test_aws_and_github_shards_of_one_test_overlap(self):
+        # One AWS shard of 5,000 games (openings 1-2,500) and a GitHub stage 1
+        # (openings 801-1,600).
+        with self.assertRaises(ValueError):
+            sm.merge(self.staged(0, 1, 5000, 'aws') + self.staged(1, 16, 1600))
 
     def test_snapshot_reads_the_last_report(self):
         log = '\n'.join([
@@ -115,6 +169,35 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(s['fastchess_ptnml'], [2, 4, 6, 5, 3])
         self.assertEqual((s['pairs'], s['finished_games'], s['time_losses'], s['abnormal']), (2, 4, 1, 0))
         self.assertEqual(sm.snapshot('nothing yet')['ptnml'], [0, 0, 0, 0, 0])
+
+    def test_time_losses_in_fastchess_wording(self):
+        # The reason strings of the pinned fastchess (v1.8.2-alpha, the
+        # binary in ~/fork-tools/bin, read with `strings` on 2026-10-27):
+        # "{} loses on time ({}ms overrun)" and "Engine {} loses on time by
+        # {}ms"; disconnects, stalls and illegal moves are counted as abnormal.
+        log = '\n'.join([
+            'Finished game 1 (test vs base): 0-1 {White loses on time (12ms overrun)}',
+            'Finished game 2 (base vs test): 1-0 {Black disconnects}',
+            "Finished game 3 (test vs base): 0-1 {White's connection stalls}",
+            'Finished game 4 (base vs test): 0-1 {White makes an illegal move}',
+        ])
+        s = sm.snapshot(log)
+        self.assertEqual((s['finished_games'], s['time_losses'], s['abnormal']), (4, 1, 3))
+
+    def test_a_shard_that_ends_early_is_short(self):
+        self.assertEqual(sm.final_status('done', 2, {'rounds': '50'}), 'short')
+        self.assertEqual(sm.final_status('done', 50, {'rounds': '50'}), 'done')
+        self.assertEqual(sm.final_status('interrupted', 2, {'rounds': '50'}), 'interrupted')
+        self.assertEqual(sm.final_status('failed', 50, {'rounds': '50'}), 'failed')
+
+    def test_report_lists_planned_and_played_pairs_per_shard(self):
+        a = self.shard([1, 2, 3, 2, 1], stage='0', shard='1', rounds='50', opening_start='51', runner='github')
+        b = self.shard([0, 1, 0, 1, 0], stage='0', shard='0', rounds='50', opening_start='1', runner='github',
+                       fastchess_exit='139')
+        b['status'] = 'failed'
+        text = sm.report(sm.merge([a, b]), -3, 0)
+        self.assertIn('  stage 0 shard 0 (github): failed, pairs 2 of 50 planned, fastchess exit 139\n'
+                      '  stage 0 shard 1 (github): done, pairs 9 of 50 planned\n', text)
 
     def test_pairs_count_only_when_both_games_are_done(self):
         # Concurrency finishes games out of order; game 6 is still running.

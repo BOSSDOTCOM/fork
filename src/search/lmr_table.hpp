@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // lmr_table: the late move reduction table (DESIGN.md §5.2, deliverable 6;
 // KB search-techniques.md T15).
 //
@@ -79,10 +81,13 @@ FORK_TUNABLE_CONSTEXPR int reduction_for(int depth, int move) {
 
 // The heuristic-discovery loop's first evolvable region (ideas.md idea 23,
 // deliverable 8c; tools/evolve/): a correction in plies added to the table's
-// reduction, scaled by LmrCorrectionStrength / 64 (the parameter table). Only
+// reduction, scaled by LmrCorrectionStrength / LmrCorrectionUnit (the
+// parameter table; 64 of 64 applies the rule as written). Only
 // the body between the markers may change, and tools/evolve/regions.py
 // rejects anything else. The committed body returns 0, which keeps the search
 // exactly as the table alone makes it (bench unchanged).
+constexpr int LmrCorrectionUnit = 64;
+
 struct LmrContext {
   int depth;        // remaining depth at the node
   int move_number;  // the move's number in the order, 1 = first
@@ -92,15 +97,15 @@ struct LmrContext {
   // Added 2026-10-27 (the owner: new information for the loop to use). Each
   // is built from inline, side-effect-free code, so a rule that does not
   // read it costs nothing.
-  int piece;          // the moved piece: 0 pawn, 1 knight, 2 bishop, 3 rook, 4 queen, 5 king
-  bool threatened;    // the opponent attacked the moved piece's square before the move
-  bool attacks;       // from its new square it attacks an enemy piece other than a pawn or the king
-  int quiet_moves;    // quiet moves generated at this node
-  int phase;          // game phase, 0 (no pieces) to 24 (all of them), from non-pawn material
-  int entry_bound;    // this node's TT entry: 0 none, 1 upper bound, 2 lower bound, 3 exact
-  int entry_depth;    // its depth in plies, -1 without an entry
-  int score_trend;    // the root score's change between the last two finished iterations, cp, in [-1000, 1000]
-  int branch_share;   // per mille of the last finished iteration's nodes spent under this line's root move
+  int piece;         // the moved piece: 0 pawn, 1 knight, 2 bishop, 3 rook, 4 queen, 5 king
+  bool threatened;   // the opponent attacked the moved piece's square before the move
+  bool attacks;      // from its new square it attacks an enemy piece other than a pawn or the king
+  int quiet_moves;   // quiet moves generated at this node
+  int phase;         // game phase, 0 (no pieces) to 24 (all of them), from non-pawn material
+  int entry_bound;   // this node's TT entry: 0 none, 1 upper bound, 2 lower bound, 3 exact
+  int entry_depth;   // its depth in plies, -1 without an entry
+  int score_trend;   // the root score's change between the last two finished iterations, cp, in [-1000, 1000]
+  int branch_share;  // per mille of the last finished iteration's nodes spent under this line's root move
 };
 
 constexpr int lmr_correction(const LmrContext& c) {

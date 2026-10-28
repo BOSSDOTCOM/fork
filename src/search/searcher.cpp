@@ -1,10 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "search/searcher.hpp"
 
 #include <algorithm>
 #include <cstdlib>
 
+#include "core/material.hpp"
 #include "core/movegen.hpp"
-#include "eval/bootstrap_eval.hpp"
 #include "eval/eval.hpp"
 #include "search/endgame_tables.hpp"
 #include "search/lmr_table.hpp"
@@ -31,6 +33,9 @@ namespace {
 // margins are in the bootstrap evaluation's centipawns and are retuned after
 // Phase 4. These stay constants (not strength parameters):
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
+// The LMR context's root score trend is clamped to ten pawns (DESIGN.md,
+// "Search constants": beyond that a change only says "decisive").
+constexpr int ScoreTrendLimit = 1000;
 // Cursed wins and blessed losses (the fifty-move rule turns them into draws)
 // score just off zero, so a real draw is never preferred to them and no real
 // advantage is given up for them.
@@ -40,6 +45,16 @@ constexpr int TableNearDrawScore = 1;
 // zugzwang guard: pawn endings are where passing is most often best).
 bool has_non_pawn_material(const Position& pos, Color c) {
   return (pos.pieces(c) & ~pos.pieces(Pawn) & ~pos.pieces(King)) != 0;
+}
+
+// The fifty-move rule has been reached: a draw, unless the side to move is
+// checkmated (mate takes precedence). Rare (50-move positions in check), so
+// its move list is a local one.
+int fifty_move_score(const Position& pos, bool in_check, int ply) {
+  if (!in_check) return 0;
+  MoveList evasions;
+  generate<GenMode::Legal>(pos, evasions);
+  return evasions.size() ? 0 : mated_score(ply);
 }
 
 }  // namespace
@@ -92,12 +107,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // Draws: repetition (one earlier occurrence is enough inside the search),
   // insufficient material, and the 50-move rule unless this move is mate.
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
-  if (pos.fifty_move_reached()) {
-    if (!in_check) return 0;
-    MoveList fifty_scratch;  // rare (50-move positions in check), so a local list
-    generate<GenMode::Legal>(pos, fifty_scratch);
-    return fifty_scratch.size() ? 0 : mated_score(ply);
-  }
+  if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
   if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
   if (depth <= 0) return static_eval(pos);  // only with the quiescence search switched off
 
@@ -117,9 +127,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (tt_hit && !OnPv) {
     const int s = score_from_tt(hit.score, ply);
     const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
-    if (deep_enough && (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s >= beta) ||
-                        (hit.bound == TtBound::Upper && s <= alpha)))
-      return s;
+    if (deep_enough && bound_settles(hit.bound, s, alpha, beta)) return s;
   }
 
   // A TT entry stores the static evaluation of its position (review 2, claim
@@ -142,7 +150,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       const TtBound b = *wdl == TableWdl::Win    ? TtBound::Lower
                         : *wdl == TableWdl::Loss ? TtBound::Upper
                                                  : TtBound::Exact;
-      if (b == TtBound::Exact || (b == TtBound::Lower && s >= beta) || (b == TtBound::Upper && s <= alpha)) {
+      if (bound_settles(b, s, alpha, beta)) {
         if (switches.use_tt) tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv);
         return s;
       }
@@ -170,9 +178,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // the node fails high without a search.
   if (switches.use_rfp && can_prune && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
       prune_eval - RfpMargin * depth >= beta) {
-#ifdef FORK_SEARCH_STATS
-    ++counters.rfp_cuts;
-#endif
+    FORK_STAT(++counters.rfp_cuts);
     return prune_eval;
   }
 
@@ -190,9 +196,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     pos.unmake_null();
     if (stopped_) return 0;
     if (score >= beta) {
-#ifdef FORK_SEARCH_STATS
-      ++counters.null_cuts;
-#endif
+      FORK_STAT(++counters.null_cuts);
       return is_tb_or_mate(score) ? beta : score;  // a mate found after passing is not trusted
     }
   }
@@ -212,9 +216,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   const int futility_value = in_check ? 0 : prune_eval + FutilityOffset + FutilityGrowth * depth;
   const bool futile_node = switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
                            !is_tb_or_mate(alpha) && futility_value <= alpha;
-#ifdef FORK_SEARCH_STATS
-  counters.futile_nodes += futile_node;
-#endif
+  FORK_STAT(counters.futile_nodes += futile_node);
   bool quiet_checks_only = false;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
     ++moves_seen;
@@ -227,25 +229,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #endif
     // Pruning: only once a move has been searched (so no node is pruned into
     // a false stalemate or mate) and while not already losing to a mate.
-    if (moves_searched > 0 && best > -(MateScore - MaxPly)) {
+    if (moves_searched > 0 && best > -MateBandFloor) {
       if (lmp_node && quiet && quiets_searched >= LmpQuietAllowance + depth) {
         f.selector.stop_quiets();  // late move pruning (T21)
-#ifdef FORK_SEARCH_STATS
-        ++counters.lmp_prunes;
-#endif
+        FORK_STAT(++counters.lmp_prunes);
         continue;
-      }
-      if (futile_node && quiet) {
-#ifdef FORK_SEARCH_STATS
-        ++counters.gives_check_calls;
-#endif
-        if (!pos.gives_check(m)) {  // futility pruning (T22); the bound stays honest
-          best = std::max(best, futility_value);
-#ifdef FORK_SEARCH_STATS
-          ++counters.futility_prunes;
-#endif
-          continue;
-        }
       }
 #ifdef FORK_SEARCH_STATS
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth) {
@@ -264,8 +252,6 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           !see_at_least(pos, m, -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth)) {
 #ifdef FORK_SEARCH_STATS
         counters.bad_captures_after_stop_pruned += bad_after_stop;
-#endif
-#ifdef FORK_SEARCH_STATS
         ++counters.see_prunes;
 #endif
         continue;  // SEE pruning (T23)
@@ -278,36 +264,38 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     counters.futile_quiets_searched += futile_node && quiet;
 #endif
     int score;
-    if (moves_searched == 0 || !switches.use_pvs) {
+    if (moves_searched == 0) {
       score = -negamax<OnPv>(-beta, -alpha, depth - 1, ply + 1);
     } else {
       // Late move reductions (T15): late quiet moves get a reduced
       // zero-window search first, then the full depth if they beat alpha.
+      // With PVS off the windows stay full, but LMR keeps its meaning
+      // (audit-1: the two switches were coupled).
       const int new_depth = depth - 1;
       int reduced = new_depth;
       if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet &&
           !in_check) {
         // The table's reduction plus the evolvable correction (lmr_table.hpp;
         // 0 as committed). The move is already made here, so its mover is the
-        // side not to move: its history is the mover's.
+        // side not to move: its history is the mover's (mover_history).
         const int base = reduction_for(depth, moves_searched + 1);
         const LmrMoveFacts facts = lmr_move_facts(pos, m);
-        const LmrContext context{depth,
-                                 moves_searched + 1,
-                                 base,
-                                 history_.value(~pos.side_to_move(), m),
-                                 OnPv,
-                                 facts.piece,
-                                 facts.threatened,
-                                 facts.attacks,
-                                 f.selector.stage_size(),
-                                 game_phase(pos),
-                                 tt_hit ? static_cast<int>(hit.bound) : 0,
-                                 tt_hit ? static_cast<int>(hit.depth) : -1,
-                                 score_trend_,
-                                 branch_share_};
+        const LmrContext context{.depth = depth,
+                                 .move_number = moves_searched + 1,
+                                 .base = base,
+                                 .history = mover_history(history_, pos, m),
+                                 .on_pv = OnPv,
+                                 .piece = facts.piece,
+                                 .threatened = facts.threatened,
+                                 .attacks = facts.attacks,
+                                 .quiet_moves = f.selector.stage_size(),
+                                 .phase = game_phase(pos),
+                                 .entry_bound = tt_hit ? static_cast<int>(hit.bound) : 0,
+                                 .entry_depth = tt_hit ? static_cast<int>(hit.depth) : -1,
+                                 .score_trend = score_trend_,
+                                 .branch_share = branch_share_};
         const int rule = lmr_correction(context);
-        const int correction = rule * LmrCorrectionStrength / 64;
+        const int correction = rule * LmrCorrectionStrength / LmrCorrectionUnit;
         reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
@@ -315,19 +303,25 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         counters.lmr_rule_changes += reduced != std::clamp(new_depth - base, 1, new_depth);
 #endif
       }
-      score = -negamax<false>(-alpha - 1, -alpha, reduced, ply + 1);
+      if (!switches.use_pvs && reduced == new_depth) {
+        score = -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);  // plain alpha-beta
+      } else {
+        // PVS off: the reduced search gets the full window, as a non-PV child.
+        score = -negamax<false>(switches.use_pvs ? -alpha - 1 : -beta, -alpha, reduced, ply + 1);
 #ifdef FORK_SEARCH_STATS
-      counters.lmr_searches += reduced < new_depth;
-      counters.lmr_plies_sum += static_cast<std::uint64_t>(new_depth - reduced);
-      counters.lmr_researches += reduced < new_depth && score > alpha;
+        counters.lmr_searches += reduced < new_depth;
+        counters.lmr_plies_sum += static_cast<std::uint64_t>(new_depth - reduced);
+        counters.lmr_researches += reduced < new_depth && score > alpha;
 #endif
-      // No re-search once the search has stopped: a stopped child returns 0,
-      // which can beat alpha, and each call would still count a node past a
-      // node limit (found by the heuristic-discovery gate, 2026-10-27).
-      if (!stopped_ && score > alpha && reduced < new_depth)
-        score = -negamax<false>(-alpha - 1, -alpha, new_depth, ply + 1);
-      if (!stopped_ && OnPv && score > alpha && score < beta)
-        score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
+        // No re-search once the search has stopped: a stopped child returns 0,
+        // which can beat alpha, and each call would still count a node past a
+        // node limit (found by the heuristic-discovery gate, 2026-10-27).
+        if (!stopped_ && score > alpha && reduced < new_depth)
+          score = switches.use_pvs ? -negamax<false>(-alpha - 1, -alpha, new_depth, ply + 1)
+                                   : -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);
+        if (!stopped_ && switches.use_pvs && OnPv && score > alpha && score < beta)
+          score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
+      }
     }
     pos.unmake(m);
     if (stopped_) return 0;
@@ -344,8 +338,6 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           if (quiet && !OnPv && !in_check && depth < SearchCounters::CutoffDepths)
             ++counters.quiet_cutoff_index[depth]
                                          [std::min(quiets_searched - 1, SearchCounters::CutoffIndices - 1)];
-#endif
-#ifdef FORK_SEARCH_STATS
           ++counters.beta_cutoffs;
           counters.first_move_cutoffs += moves_searched == 1;
           counters.cutoff_index_sum += static_cast<std::uint64_t>(moves_searched - 1);
@@ -360,23 +352,24 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     // mate, every later non-checking quiet is pruned (the conditions at the
     // top of this loop), and both conditions only grow more true: the
     // selector may drop those quiets unscored.
-    if (!quiet_checks_only && futile_node && best > -(MateScore - MaxPly)) {
+    if (!quiet_checks_only && futile_node && best > -MateBandFloor) {
       f.selector.keep_quiet_checks();
       quiet_checks_only = true;
     }
   }
-  // Quiets the selector dropped at a futile node were pruned by futility, so
-  // the bound stays honest as if each had been seen.
+  // Futility pruning (T22): at a futile node the selector drops the quiets
+  // that do not give check (keep_quiet_checks above), so every quiet the
+  // loop sees there is a checking one. The bound stays honest as if each
+  // dropped quiet had been seen.
   if (f.selector.quiets_filtered() > 0) best = std::max(best, futility_value);
+  FORK_STAT(counters.futility_prunes += static_cast<std::uint64_t>(f.selector.quiets_filtered()));
   // No legal move is mate or stalemate; legal moves that were all pruned are
   // not (the guard above prevents it; this keeps the result right regardless).
   if (moves_seen == 0) return in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
   best = std::clamp(best, table_floor, table_ceiling);
   if (switches.use_tt) {
-    const TtBound bound = best >= beta                 ? TtBound::Lower
-                          : OnPv && best > alpha_start ? TtBound::Exact
-                                                       : TtBound::Upper;
+    const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
     tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
   }
   return best;
@@ -390,9 +383,7 @@ template <bool OnPv>
 int Searcher::quiesce(int alpha, int beta, int ply) {
   pv_[ply].length = 0;
   ++nodes_;
-#ifdef FORK_SEARCH_STATS
-  ++(OnPv ? counters.quiesce_nodes_pv : counters.quiesce_nodes_non_pv);
-#endif
+  FORK_STAT(++(OnPv ? counters.quiesce_nodes_pv : counters.quiesce_nodes_non_pv));
   if (poll_limits()) return 0;
   max_ply_reached_ = std::max(max_ply_reached_, ply);
   Position& pos = *pos_;
@@ -400,12 +391,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   const bool in_check = pos.in_check();
 
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
-  if (pos.fifty_move_reached()) {
-    if (!in_check) return 0;
-    MoveList fifty_scratch;  // rare (50-move positions in check), so a local list
-    generate<GenMode::Legal>(pos, fifty_scratch);
-    return fifty_scratch.size() ? 0 : mated_score(ply);
-  }
+  if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
   if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
 
   const Key key = pos.key();
@@ -413,9 +399,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
   if (tt_hit && !OnPv && (!switches.tt_exact_depth || hit.depth == 0)) {
     const int s = score_from_tt(hit.score, ply);
-    if (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s >= beta) ||
-        (hit.bound == TtBound::Upper && s <= alpha))
-      return s;
+    if (bound_settles(hit.bound, s, alpha, beta)) return s;
   }
 
   const int alpha_start = alpha;
@@ -443,9 +427,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     ++moves_searched;
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     pos.make(m);
-#ifdef FORK_SEARCH_STATS
-    ++counters.makes;
-#endif
+    FORK_STAT(++counters.makes);
     const int score = -quiesce<OnPv>(-beta, -alpha, ply + 1);
     pos.unmake(m);
     if (stopped_) return 0;
@@ -461,9 +443,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   }
   if (in_check && moves_searched == 0) return mated_score(ply);
   if (switches.use_tt) {
-    const TtBound bound = best >= beta                 ? TtBound::Lower
-                          : OnPv && best > alpha_start ? TtBound::Exact
-                                                       : TtBound::Upper;
+    const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
     tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, OnPv);
   }
   return best;
@@ -474,6 +454,9 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   ++nodes_;
   pv_[0].length = 0;
   int best = -ScoreInfinite;
+  // The root node counts too, so a node limit reached here stops here, not
+  // one node later in the first child (audit-1, A1 suspicion 8).
+  if (poll_limits()) return best;
   std::size_t best_index = 0;  // the move that last raised alpha
   for (std::size_t i = 0; i < root_count_; ++i) {
     const Move m = root_moves_[i].move;
@@ -485,7 +468,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
       score = -negamax<true>(-beta, -alpha, depth - 1, 1);
     } else {
       score = -negamax<false>(-alpha - 1, -alpha, depth - 1, 1);
-      if (score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, 1);
+      if (!stopped_ && score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, 1);
     }
     pos.unmake(m);
     root_moves_[i].nodes = nodes_ - nodes_before;
@@ -495,11 +478,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     if (score > alpha) {
       best_index = i;
       update_pv(0, m);
-      if (score >= beta) {
-        root_fail_high_ = m;
-        root_fail_high_score_ = score;
-        root_fail_high_pv_ = pv_[0];
-      }
+      if (score >= beta) root_fail_high_ = m;
       if (score < beta) {
         iteration_best_ = m;
         iteration_best_score_ = score;
@@ -557,6 +536,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   tt_.advance_age();
   tt_.set_age_blend(switches.tt_age_blend);
   tt_.set_keep_exact(switches.tt_keep_exact);
+  tt_.set_keep_deeper(switches.use_tt_keep_deeper);
   SearchResult result;
   // The first iteration's root order is the selector's (no TT move).
   PlyFrame& root = frames_[0];
@@ -647,11 +627,12 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     }
     // The LMR context's iteration inputs: the root score's last change, and
     // each root move's share of this iteration's nodes for the next one.
-    score_trend_ = depth > 1 ? std::clamp(score - previous, -1000, 1000) : 0;
+    score_trend_ = depth > 1 ? std::clamp(score - previous, -ScoreTrendLimit, ScoreTrendLimit) : 0;
     std::uint64_t iteration_nodes = 0;
     for (std::size_t i = 0; i < root_count_; ++i) iteration_nodes += root_moves_[i].nodes;
     for (std::size_t i = 0; i < root_count_; ++i)
-      root_moves_[i].share = iteration_nodes ? static_cast<int>(root_moves_[i].nodes * 1000 / iteration_nodes) : 0;
+      root_moves_[i].share =
+          iteration_nodes ? static_cast<int>(root_moves_[i].nodes * 1000 / iteration_nodes) : 0;
     previous = score;
     result.best = root_moves_[0].move;
     result.score = score;
@@ -663,6 +644,13 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       break;
     const bool timed = !(pondering && pondering->load(std::memory_order_relaxed));
     if (timed && limits.soft_ms >= 0 && elapsed_ms() >= limits.soft_ms) break;
+    // With one root move (one legal move, one searchmoves move, or one the
+    // tables keep) nothing the search finds can change the move: only the
+    // reported score and the next move's TT and history gain from more
+    // time, so a fraction of the soft limit is enough (audit-1, B-1).
+    if (timed && switches.use_forced_move_stop && root_count_ == 1 && limits.soft_ms >= 0 &&
+        elapsed_ms() * ForcedMoveFraction >= limits.soft_ms)
+      break;
     // An iteration that would probably not finish before the hard limit is
     // not started (deliverable 8): its time would be spent for nothing. This
     // binds where the hard limit is close to the soft one: `go movetime`,

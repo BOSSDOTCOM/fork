@@ -1,0 +1,37 @@
+# Fork nightly: perft_epd_full (perft-random.epd to depth 6, about 2 hours)
+# on main, whatever changed (owner, 2026-10-28). ci.yml runs it on a push
+# or pull request only when move generation's files change. Scheduled runs
+# use the default branch's copy of this file, so the schedule takes effect
+# once this file is on main; a manual run can target any branch.
+name: nightly
+
+on:
+  schedule:
+    - cron: '17 7 * * *'  # 07:17 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  perft-full:
+    name: Nightly perft_epd_full
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      FORK_CLANG_CXX: clang++
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: perft_epd_full and bench parity (clang-release)
+        run: bash .github/ci/slow-suite.sh perft_epd_full

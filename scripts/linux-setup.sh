@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # One-time setup of the Linux working copy in WSL2 Ubuntu (DESIGN.md 2).
 # Run inside Ubuntu:  bash /mnt/c/<path to the Windows repo>/scripts/linux-setup.sh
 # Installs the build toolchain (asks for your sudo password), then clones the

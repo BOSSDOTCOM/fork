@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Separate executable: replaces global operator new/delete with counting
 // versions and asserts that the hot paths (move generation, make/unmake,
 // null moves, legality and check queries, the search) never touch the heap.
@@ -15,10 +17,21 @@
 
 namespace {
 std::atomic<long> allocations{0};
-}
+std::atomic<std::size_t> largest_allocation{0};  // in bytes, since last reset
+}  // namespace
 
+// These replacements pair malloc with free themselves. GCC 16 (WinLibs
+// 16.2.0 at -O1, the Windows gcc-debug preset) still reports the free in
+// the sized delete as mismatched with operator new and fails the build
+// under -Werror, so that one warning is off for the replacements only.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
 void* operator new(std::size_t n) {
   allocations.fetch_add(1, std::memory_order_relaxed);
+  for (std::size_t seen = largest_allocation.load();
+       n > seen && !largest_allocation.compare_exchange_weak(seen, n);) {}
   if (void* p = std::malloc(n ? n : 1)) return p;
   throw std::bad_alloc();
 }
@@ -27,6 +40,9 @@ void operator delete(void* p) noexcept { std::free(p); }
 void operator delete[](void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 namespace {
 
@@ -100,6 +116,36 @@ int main() {
                   static_cast<unsigned long long>(n), during);
       if (during != 0) ++failures;
     }
+  }
+  {
+    // Audit-1 R-3: the UCI session reserves room for 16,384 plies at startup
+    // (GameStatePlies, session.cpp), so a long game's move list never
+    // allocates. 4,000 plies of knight moves, back to the start placement:
+    // none with the reserve; without it, the stack grows past its default
+    // 1,024 (which shows the counter would see it).
+    const char* shuffle[] = {"g1f3", "g8f6", "f3g1", "f6g8"};
+    for (const bool reserved : {true, false}) {
+      forkeng::Position pos;
+      if (reserved) pos.reserve_plies(16384);
+      long before = allocations.load();
+      for (int ply = 0; ply < 4000; ++ply) pos.make(pos.parse_uci(shuffle[ply % 4]));
+      long during = allocations.load() - before;
+      std::printf("4,000 plies %s: %ld heap allocations\n", reserved ? "with the reserve" : "without it",
+                  during);
+      if (reserved ? during != 0 : during == 0) ++failures;
+    }
+    // Only the UCI root and its spare hold that reserve (owner, 2026-10-28,
+    // for Phase 6): a copy, which is what a search thread gets, reserves its
+    // own plies plus StateReserve (1,024, position.hpp), as before. Checked
+    // by the copy's largest allocation, one State block.
+    forkeng::Position root;
+    root.reserve_plies(16384);
+    largest_allocation = 0;
+    const forkeng::Position copy = root;
+    const std::size_t copy_block = largest_allocation.load();
+    std::printf("copy of a reserved 1-ply Position: largest allocation %zu bytes (%zu States)\n", copy_block,
+                copy_block / sizeof(forkeng::State));
+    if (copy_block != (1 + 1024) * sizeof(forkeng::State) || copy.state() != root.state()) ++failures;
   }
   {
     // The search (DESIGN.md §5.2, hot-path rule 3): after setup (the

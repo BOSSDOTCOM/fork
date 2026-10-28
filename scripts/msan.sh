@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # MemorySanitizer build of Fork against an MSan-instrumented libc++ (Linux
 # only). MSan needs every part of the program instrumented, the C++ standard
 # library included; against the distro's uninstrumented libstdc++ it reports

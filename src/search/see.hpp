@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // see: static exchange evaluation (DESIGN.md §5.2, deliverable 4; KB
 // search-techniques.md T7).
 //
@@ -29,8 +31,11 @@ int see_value(const Position& pos, Move m);
 // choose between stopping and capturing again can always stop, so when the
 // mover is to choose and the gain so far reaches the threshold the answer is
 // yes, and when the opponent is to choose and it falls short the answer is
-// no; otherwise the exchange goes on, and with no capture left the gain so
-// far decides. Equal to see_value(pos, m) >= threshold for every move and
+// no. Nor can one more capture move the gain by more than the piece now on
+// the square, after which the other side may stop: when that cannot cross
+// the threshold either, the answer is settled too (audit-1, P-3). Otherwise
+// the exchange goes on, and with no capture left the gain so far decides.
+// Equal to see_value(pos, m) >= threshold for every move and
 // threshold (tests/test_see.cpp).
 bool see_at_least(const Position& pos, Move m, int threshold);
 

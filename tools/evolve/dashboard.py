@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The heuristic-discovery run's live dashboard (ideas.md idea 23,
 deliverable 8c): one self-contained HTML page in the run folder, rewritten
 after every candidate and refreshing itself in the browser every 60
@@ -68,7 +70,8 @@ def render(run_dir, mirror=None):
     run = Path(run_dir)
     db = sqlite3.connect(str(run / 'population.sqlite'))
     try:
-        page = _page(db, _json((run / 'state.json').read_text()) if (run / 'state.json').exists() else {})
+        state = run / 'state.json'
+        page = _page(db, _json(state.read_text(encoding='utf-8')) if state.exists() else {})
     finally:
         db.close()
     tmp = run / 'dashboard.html.tmp'

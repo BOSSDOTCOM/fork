@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // search_bench: Fork's bench workload from Phase 3 on (DESIGN.md §5.2,
 // "Search bench"): a fixed-depth, one-thread search of fixed positions.
 //

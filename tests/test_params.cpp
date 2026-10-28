@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The parameter table (DESIGN.md §5.2, deliverable 8b): every entry is
 // well-formed, moving the LMR divisor into the table kept the table exactly,
 // and a tuning build's set_param reaches the search.

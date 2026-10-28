@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Writes Fork's between, line, mask and slider attack tables as binary files,
 // so their SHA-256 fingerprints can be compared across rewrites and builds
 // (docs/ORIGINALITY.md lists the expected values). Every value is a uint64
@@ -64,7 +66,8 @@ int main(int argc, char** argv) {
     for (Square s = 0; s < 64; ++s) put(tables::bishop[s].mask);
   });
   ok &= write_all(dir + "/rook_attacks.bin", [](auto put) {
-    for (Square s = 0; s < 64; ++s) each_subset(tables::rook[s].mask, [&](Bitboard o) { put(rook_attacks(s, o)); });
+    for (Square s = 0; s < 64; ++s)
+      each_subset(tables::rook[s].mask, [&](Bitboard o) { put(rook_attacks(s, o)); });
   });
   ok &= write_all(dir + "/bishop_attacks.bin", [](auto put) {
     for (Square s = 0; s < 64; ++s)

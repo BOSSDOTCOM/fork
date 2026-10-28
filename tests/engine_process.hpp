@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // engine_process: runs the fork binary as a child process over pipes, the way
 // a GUI does, for the UCI tests.
 //

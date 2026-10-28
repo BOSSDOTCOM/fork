@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // perft: perft and divide (see perft.hpp).
 #include "core/perft.hpp"
 

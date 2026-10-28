@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // options: the UCI option table.
 //
 // Purpose: declare Fork's options, print them for `uci`, and apply

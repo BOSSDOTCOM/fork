@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The search (DESIGN.md §5.2, deliverables 2-4). Positions other than the
 // perft suite are constructed for Fork; the facts each test relies on (mate
 // in N, no mate in 1, legal FEN) are checked with python-chess by
@@ -20,6 +22,9 @@
 #include "search/see.hpp"
 #include "search/time_budget.hpp"
 #include "suite.hpp"
+#include "uci/go_limits.hpp"
+#include "uci/session.hpp"
+#include "uci/tokens.hpp"
 
 namespace forkeng::test {
 
@@ -164,6 +169,17 @@ std::vector<Position> oracle_positions() {
 
 }  // namespace
 
+// The search bench begins with the CPW perft suite, retyped in
+// src/search/search_bench.cpp; tests/suite.hpp holds the copy checked
+// against chessprogramming.org with its published counts (audit-1 A9 F-10:
+// every retyped FEN is a risk, non-negotiable 1).
+TEST_CASE("search", "the search bench's perft-suite FENs equal the cited suite") {
+  const auto& suite = perft_suite();
+  CHECK(search_bench_fens().size() >= suite.size());
+  for (std::size_t i = 0; i < suite.size() && i < search_bench_fens().size(); ++i)
+    CHECK_MSG(search_bench_fens()[i] == suite[i].fen, suite[i].name << ": " << search_bench_fens()[i]);
+}
+
 TEST_CASE("search",
           "root score equals plain minimax: PVS, aspiration, mate distance pruning, TT on and off") {
   Fixture fx;
@@ -224,6 +240,172 @@ TEST_CASE("search", "TT cutoffs at exact depth equal plain minimax on small endg
     CHECK_MSG(nodes[1] < nodes[0],
               fen << ": " << nodes[1] << " nodes with the TT, " << nodes[0] << " without");
   }
+}
+
+// Audit-1 Q-7: zero-window searches against a zero-window reference. The
+// root-score oracle above runs full windows, where the TT's bound checks,
+// the bound stored by a PV node that fails low and mate distance pruning
+// never decide: a TT upper bound cutting on the wrong side (mutant M12) and a
+// mate-distance beta one ply too tight (M14) were caught only by bench
+// parity (M14 is caught here, M12 by the next case). Here, with one TT shared
+// as in a real search (a full-window search first, then probes at every
+// depth), every probe at beta must fail high exactly when the reference
+// (fail-hard, window [beta - 1, beta]) does, and its fail-soft score must be
+// a valid bound of the exact value. Betas lie around the exact value and, in
+// the mate positions (test_search.cpp's mates, checked by
+// tools/check_search_positions.py), on the mate scores, where mate distance
+// pruning binds.
+TEST_CASE("search",
+          "zero-window probes agree with a zero-window reference, mate bands included (TT shared)") {
+  Fixture fx;
+  struct Probed {
+    std::string_view fen;
+    int depth;
+  };
+  std::vector<Probed> positions;
+  for (const PerftPosition& p : perft_suite()) positions.push_back({p.fen, Optimized ? 3 : 2});
+  // The TT endgames above, to depth 6, so the full-window search that fills
+  // the TT uses aspiration windows (from depth 5).
+  for (std::string_view fen : {"8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1", "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
+                               "8/8/3k4/8/8/3K4/8/R7 w - - 0 1", "8/5pk1/8/8/8/8/5PK1/8 b - - 0 1"})
+    positions.push_back({fen, Optimized ? 6 : 4});
+  for (std::string_view fen : {"6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "k7/8/2K5/8/8/8/8/7R w - - 0 1",
+                               "6k1/5ppp/8/8/8/8/8/R5K1 b - - 0 1"})
+    positions.push_back({fen, 4});
+  int probes = 0, mate_band = 0;
+  for (const Probed& p : positions) {
+    Position pos;
+    CHECK(pos.set_fen(p.fen));
+    fx.store.clear();
+    fx.searcher->clear_history();
+    fx.searcher->switches = exact_switches();
+    SearchQuota limits;
+    limits.depth = p.depth;
+    const int full = fx.search(pos, limits).score;  // fills the TT with PV and non-PV entries
+    for (int d = 1; d <= p.depth; ++d) {
+      const int value = reference_minimax(pos, d, 0);
+      if (d == p.depth) CHECK_MSG(full == value, p.fen << ": full window " << full << " vs " << value);
+      std::vector<int> betas;
+      for (int offset : {-300, -40, -1, 0, 1, 40, 300}) betas.push_back(value + offset);
+      for (int n = 1; n <= 5; ++n) {
+        betas.push_back(mate_score(n));
+        betas.push_back(mated_score(n));
+        betas.push_back(mated_score(n) + 1);
+      }
+      for (int beta : betas) {
+        beta = std::clamp(beta, -ScoreInfinite + 1, ScoreInfinite);
+        const int s = fx.searcher->probe_zero_window(pos, beta, d, fx.stop);
+        const int ref = reference_alphabeta(pos, d, 0, beta - 1, beta, true);
+        ++probes;
+        mate_band += is_mate_score(beta);
+        CHECK_MSG((s >= beta) == (ref >= beta),
+                  p.fen << " depth " << d << " beta " << beta << ": probe " << s << ", reference " << ref);
+        CHECK_MSG(s >= beta ? value >= s : value <= s,
+                  p.fen << " depth " << d << " beta " << beta << ": fail-soft " << s << ", exact " << value);
+      }
+    }
+  }
+  CHECK(probes > 0 && mate_band > 0);
+}
+
+// Audit-1 Q-10 (DESIGN.md §5.2's tiny-hash stress test): every search
+// fixture used 16,384 buckets, so the TT's replacement under heavy pressure
+// was never searched through. With 1, 2 and 16 buckets: the exact-depth
+// search still equals minimax, and the release search plays a legal move
+// with a score inside the score bands, on the oracle positions.
+TEST_CASE("search",
+          "a tiny TT (1 to 16 buckets): still minimax at exact depth, legal moves, scores in band") {
+  const int depth = Optimized ? 3 : 2;
+  std::vector<Position> positions = oracle_positions();
+  std::vector<int> minimax;
+  for (Position& pos : positions) minimax.push_back(reference_minimax(pos, depth, 0));
+  for (const std::size_t count : {std::size_t{1}, std::size_t{2}, std::size_t{16}}) {
+    std::vector<TtBucket> buckets(count);
+    TransTable table;
+    table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+    auto searcher = std::make_unique<Searcher>(table);
+    const std::atomic<bool> stop{false};
+    for (std::size_t i = 0; i < positions.size(); ++i) {
+      Position& pos = positions[i];
+      const int expected = minimax[i];
+      searcher->switches = exact_switches();
+      SearchQuota limits;
+      limits.depth = depth;
+      const SearchResult exact = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+      CHECK_MSG(exact.score == expected,
+                pos.fen() << " with " << count << " buckets: " << exact.score << " vs " << expected);
+      searcher->switches = SearchSwitches{};
+      limits.depth = Optimized ? 8 : 5;
+      const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      CHECK_MSG(legal.contains(r.best), pos.fen() << " with " << count << " buckets: best move not legal");
+      CHECK_MSG(std::abs(r.score) <= MateScore && (is_tb_or_mate(r.score) || std::abs(r.score) <= EvalLimit),
+                pos.fen() << " with " << count << " buckets: score " << r.score);
+    }
+  }
+}
+
+// Audit-1 V-5: the search stack's frame stays small (review 2, claim (e):
+// shrunk from 4 KB to 2,664 B; 2,672 B measured with clang on 2026-10-27).
+// A guard, so a growing frame is a decision, not an accident.
+static_assert(sizeof(PlyFrame) <= 2688,
+              "PlyFrame grew past 2,688 bytes (DESIGN.md §5.2, review 2 claim (e))");
+
+// Audit-1 Q-7: the TT's bound checks at their edge (mutant M12: an upper
+// bound cut when s <= beta instead of s <= alpha). An upper bound u, stored
+// for the probed position at the probe's depth, is a true bound here (the
+// exact value plus 50): a probe whose alpha equals u must cut and return u;
+// a probe whose beta equals u must not cut (the value is below it) and must
+// fail low.
+TEST_CASE("search", "a TT upper bound cuts when it is at or below alpha, never at beta") {
+  Fixture fx;
+  for (std::string_view fen : {"8/8/3k4/8/8/3K4/8/R7 w - - 0 1",
+                               "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"}) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    const int depth = 2;
+    const int value = reference_minimax(pos, depth, 0);
+    const int upper = value + 50;
+    fx.searcher->switches = exact_switches();
+    for (int beta : {upper + 1, upper}) {
+      fx.store.clear();
+      fx.store.table.deposit(pos.key(), NoMove, upper, ScoreNone, depth, TtBound::Upper, false);
+      const int s = fx.searcher->probe_zero_window(pos, beta, depth, fx.stop);
+      if (beta == upper + 1)
+        CHECK_MSG(s == upper, fen << ": alpha at the bound: " << s << " (bound " << upper << ")");
+      else
+        CHECK_MSG(s < beta,
+                  fen << ": beta at the bound: " << s << " (bound " << upper << ", value " << value << ")");
+    }
+  }
+}
+
+// Audit-1 Q-7: the null move's zugzwang guard (no null move for a side with
+// only pawns: pawn endings are where passing is most often best). Dropping
+// it was caught only by bench parity (mutant M18b). Two constructed king and
+// pawn endings where the depth-9 search with the guard keeps the tables'
+// result and the search without it does not (found by comparing the two
+// builds over random pawn endings). The moves' results are from the lichess
+// tablebase API (https://tablebase.lichess.ovh/standard?fen=..., fetched
+// 2026-10-27; Syzygy WDL, the fifty-move rule counted):
+// - 8/1p6/8/6k1/8/8/4P3/7K b: a win for Black only by b7b5 (b7b6 and every
+//   king move draw);
+// - 8/3p4/8/6P1/3k3p/5K2/8/8 b: a draw only by d4d5 or d4e5 (every other
+//   move loses).
+TEST_CASE("search", "no null move without pieces: two pawn endings keep their tablebase result") {
+  Fixture fx;
+  Position pos;
+  SearchResult r = fx.search("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1", 9);
+  CHECK(pos.set_fen("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1"));
+  CHECK_MSG(pos.move_to_uci(r.best) == "b7b5",
+            "played " << pos.move_to_uci(r.best) << " (score " << r.score << ")");
+  fx.store.clear();
+  fx.searcher->clear_history();
+  r = fx.search("8/3p4/8/6P1/3k3p/5K2/8/8 b - - 0 1", 9);
+  CHECK(pos.set_fen("8/3p4/8/6P1/3k3p/5K2/8/8 b - - 0 1"));
+  const std::string played = pos.move_to_uci(r.best);
+  CHECK_MSG(played == "d4d5" || played == "d4e5", "played " << played << " (score " << r.score << ")");
 }
 
 // DESIGN.md §5.2 deliverable 4: quiescence values on constructed exchanges,
@@ -299,13 +481,22 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
   CHECK(static_eval(pos) != 0);  // so the 0 is the draw, not the evaluation
 }
 
+// Audit-1 Q-8: the quiescence search's own "mate on the 100th half-move" rule.
+// The case above searches to depth 3, so the mate is seen by the main search;
+// scoring it a draw in the quiescence search passed every test (mutant M15).
+// At depth 1 the mated child is a quiescence node.
+TEST_CASE("search", "draws: mate on the 100th half-move is found at a quiescence node") {
+  Fixture fx;
+  CHECK_EQ(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 99 80", 1).score, mate_score(1));
+}
+
 TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still returns a legal move") {
   Fixture fx;
   Position pos;
   SearchQuota limits;
   limits.nodes = 5000;
   SearchResult r = fx.search(pos, limits);
-  CHECK(r.nodes >= 5000 && r.nodes <= 5001);
+  CHECK_EQ(r.nodes, 5000u);
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
   CHECK(legal.contains(r.best));
@@ -427,22 +618,111 @@ TEST_CASE("time_budget", "the increment adds exactly three quarters of itself, s
 
 // Deliverable 8, variant B2: one more Move Overhead of reserve inside the
 // danger zone (less than two overheads plus an increment left), and only a
-// tenth of the clock outside it.
+// tenth of the clock outside it. Literal budgets (audit-1 Q-11: this case
+// recomputed the zone with the implementation's own expressions and checked
+// an upper bound only, so `<` turned `<=` at the zone's edge passed). Each
+// value comes from a separate restatement of the rule in
+// tools/check_search_positions.py, not from this code (overhead 100, AssumedMovesLeft 30,
+// ReserveDivisor 10, HardOverSoft 4): available = clock - 100; reserve a
+// tenth, or max(a tenth, 100) in the zone; cap = available - reserve; share =
+// available / 30 + 3/4 of the increment; hard = min(share, cap / 4) x 4.
+// 379 and 380 ms with an 80 ms increment straddle the zone's edge
+// (available 279 < 280, and 280): there the cap decides, hard 176 and 252.
 TEST_CASE("time_budget", "an extra overhead of reserve only in the danger zone") {
-  for (std::int64_t remaining : {150, 250, 300, 319, 320, 500, 1000, 2000}) {
-    for (std::int64_t inc : {0, 20, 80}) {
-      ClockInput c;
-      c.remaining_ms = remaining;
-      c.increment_ms = inc;
-      c.overhead_ms = 100;
-      const TimeBudget t = plan_time(c);
-      const std::int64_t available = remaining - 100;
-      const bool zone = available < 200 + inc;
-      const std::int64_t reserve = zone ? std::max<std::int64_t>(available / 10, 100) : available / 10;
-      CHECK_MSG(t.hard_ms <= std::max<std::int64_t>(1, available - reserve), remaining << " ms + " << inc);
-      if (zone && available <= 100) CHECK_MSG(t.hard_ms == 1, remaining << " ms + " << inc);
-    }
+  struct Budget {
+    std::int64_t remaining, inc, soft, hard;
+  };
+  for (const Budget& b : {Budget{150, 0, 1, 1},     Budget{150, 20, 1, 1},     Budget{150, 80, 1, 1},
+                          Budget{250, 0, 5, 20},    Budget{250, 20, 20, 48},   Budget{250, 80, 42, 48},
+                          Budget{300, 0, 6, 24},    Budget{300, 20, 21, 84},   Budget{300, 80, 66, 100},
+                          Budget{319, 0, 7, 28},    Budget{319, 20, 22, 88},   Budget{319, 80, 67, 116},
+                          Budget{320, 0, 7, 28},    Budget{320, 20, 22, 88},   Budget{320, 80, 67, 120},
+                          Budget{379, 0, 9, 36},    Budget{379, 20, 24, 96},   Budget{379, 80, 69, 176},
+                          Budget{380, 0, 9, 36},    Budget{380, 20, 24, 96},   Budget{380, 80, 69, 252},
+                          Budget{500, 0, 13, 52},   Budget{500, 20, 28, 112},  Budget{500, 80, 73, 292},
+                          Budget{1000, 0, 30, 120}, Budget{1000, 20, 45, 180}, Budget{1000, 80, 90, 360},
+                          Budget{2000, 0, 63, 252}, Budget{2000, 20, 78, 312}, Budget{2000, 80, 123, 492}}) {
+    ClockInput c;
+    c.remaining_ms = b.remaining;
+    c.increment_ms = b.inc;
+    c.overhead_ms = 100;
+    const TimeBudget t = plan_time(c);
+    CHECK_MSG(t.soft_ms == b.soft && t.hard_ms == b.hard,
+              b.remaining << " ms + " << b.inc << ": soft " << t.soft_ms << " hard " << t.hard_ms << ", want "
+                          << b.soft << " and " << b.hard);
   }
+}
+
+// Audit-1 Q-4 and Q-5: what a go turns into (quota_for_go, the session's
+// assembly of the clock arguments, Move Overhead and the other limits). The
+// side to move's own increment (the opponent's passed every test, mutant
+// M40), the Move Overhead (ignoring it passed too, M42), movestogo 0 or
+// negative (unclamped, a division by zero, M38) and the depth, nodes and mate
+// clamps (M43, M44). Each budget below is worked by hand from time_budget.cpp
+// with the parameter defaults (AssumedMovesLeft 30, ReserveDivisor 10,
+// DangerZoneOverheads 2, HardOverSoft 4):
+// - Black, 2000 ms + 60 s, overhead 100: available 1900, inside the danger
+//   zone (1900 < 2 x 100 + 60000), reserve max(190, 100) = 190, cap 1710;
+//   share 1900 / 30 + 1710 x 3 / 4 = 63 + 1282 = 1345; hard min(1345, 1710 / 4)
+//   x 4 = 1708; soft 1345. White, no increment: share 63, hard 252, soft 63.
+// - White, 10000 ms, overhead 500: available 9500, reserve 950, cap 8550;
+//   share 316, hard 1264, soft 316 (overhead 0 would give 333 and 1332).
+// - movestogo 0 or -3, 1000 ms, overhead 100: one move to go; available 900,
+//   reserve 90, cap 810; share 900, hard min(900, 202) x 4 = 808, soft 808.
+TEST_CASE("time_budget", "a go's limits: the side to move's clock and increment, Move Overhead, clamps") {
+  auto quota = [](std::string_view args, Color us, std::int64_t overhead) {
+    std::vector<std::string> warnings;
+    const GoLimits go = parse_go(split_tokens(args), 0, Position(), warnings);
+    CHECK_MSG(warnings.empty(), args);
+    return quota_for_go(go, us, overhead);
+  };
+  SearchQuota q = quota("wtime 2000 btime 2000 winc 0 binc 60000", Black, 100);
+  CHECK_EQ(q.soft_ms, 1345);
+  CHECK_EQ(q.hard_ms, 1708);
+  q = quota("wtime 2000 btime 2000 winc 0 binc 60000", White, 100);
+  CHECK_EQ(q.soft_ms, 63);
+  CHECK_EQ(q.hard_ms, 252);
+  q = quota("wtime 10000 btime 3000", White, 500);
+  CHECK_EQ(q.soft_ms, 316);
+  CHECK_EQ(q.hard_ms, 1264);
+  for (const char* mtg : {"wtime 1000 btime 1000 movestogo 0", "wtime 1000 btime 1000 movestogo -3"}) {
+    q = quota(mtg, White, 100);
+    CHECK_MSG(q.soft_ms == 808 && q.hard_ms == 808, mtg << ": soft " << q.soft_ms << " hard " << q.hard_ms);
+  }
+  q = quota("movetime 1000", Black, 100);
+  CHECK_MSG(q.soft_ms == 900 && q.hard_ms == 900, "movetime: soft " << q.soft_ms << " hard " << q.hard_ms);
+  q = quota("infinite wtime 1000 btime 1000", White, 100);
+  CHECK_MSG(q.soft_ms == -1 && q.hard_ms == -1, "infinite: soft " << q.soft_ms << " hard " << q.hard_ms);
+  // No limit sent: none applies.
+  q = quota("", White, 100);
+  CHECK(q.depth == MaxPly - 1 && q.nodes == 0 && q.mate_moves == 0 && q.soft_ms == -1 && q.hard_ms == -1);
+  // Zero, negative and huge values a GUI can send.
+  for (const auto& [args, depth] : {std::pair<const char*, int>{"depth 0", 1},
+                                    {"depth -7", 1},
+                                    {"depth 1", 1},
+                                    {"depth 249", MaxPly - 1},
+                                    {"depth 1000000000000", MaxPly - 1}})
+    CHECK_MSG(quota(args, White, 100).depth == depth, args << ": " << quota(args, White, 100).depth);
+  for (const auto& [args, nodes] : {std::pair<const char*, std::uint64_t>{"nodes 0", 1},
+                                    {"nodes -5", 1},
+                                    {"nodes 1", 1},
+                                    {"nodes 123456", 123456}})
+    CHECK_MSG(quota(args, White, 100).nodes == nodes, args << ": " << quota(args, White, 100).nodes);
+  for (const auto& [args, mate] :
+       {std::pair<const char*, int>{"mate 0", 0}, {"mate -3", 0}, {"mate 2", 2}, {"mate 1000", MaxPly}})
+    CHECK_MSG(quota(args, White, 100).mate_moves == mate, args << ": " << quota(args, White, 100).mate_moves);
+  // Audit-1 R-4: go mate N searches at most the 2N - 1 plies a mate in N
+  // needs (at least 1), and a smaller depth limit still applies.
+  for (const auto& [args, depth] : {std::pair<const char*, int>{"mate 1", 1},
+                                    {"mate 2", 3},
+                                    {"mate 7", 13},
+                                    {"mate 0", 1},
+                                    {"mate -3", 1},
+                                    {"mate 1000", MaxPly - 1},
+                                    {"mate 99999999999999999999", MaxPly - 1},
+                                    {"mate 5 depth 4", 4},
+                                    {"depth 20 mate 5", 9}})
+    CHECK_MSG(quota(args, White, 100).depth == depth, args << ": depth " << quota(args, White, 100).depth);
 }
 
 // Deliverable 8, Milestone A's time loss: at 2+0.02 under full load the
@@ -470,7 +750,7 @@ TEST_CASE("time_budget", "a low clock keeps enough reserve to survive a stall") 
 
 }  // namespace forkeng::test
 
-// ---- Adversarial review of deliverable 2 (uncommitted; failing tests) ----
+// ---- Adversarial review of deliverable 2 (tests written failing, then fixed) ----
 namespace forkeng::test {
 
 // The most negative clock a GUI can send: go_limits.hpp clamps values beyond
@@ -620,5 +900,198 @@ TEST_CASE("search", "an iteration that would not finish before the hard limit is
   listener.pause = std::chrono::milliseconds{60};
   const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &listener);
   CHECK_EQ(r.depth, 3);
+}
+
+// Audit-1 Q-1: the soft limit ends the iterations. The time_budget cases test
+// plan_time's numbers only, and the case above binds through the hard-limit
+// rule (soft = hard); removing the soft check passed every test (mutant M57).
+// The search's clock counts from go_received, set a second in the past here,
+// so the soft limit has passed when depth 1 finishes and no second iteration
+// starts, however far away the hard limit (an hour) is. Load cannot make it
+// fail: a slower machine only makes the elapsed time larger.
+TEST_CASE("search", "a search stops iterating once its soft limit has passed") {
+  TestHash store;
+  auto searcher = std::make_unique<Searcher>(store.table);
+  const std::atomic<bool> stop{false};
+  Position pos;
+  SearchQuota limits;
+  limits.depth = 12;
+  limits.soft_ms = 1;
+  limits.hard_ms = 3'600'000;
+  limits.go_received = std::chrono::steady_clock::now() - std::chrono::milliseconds{1000};
+  CHECK_EQ(searcher->deliberate(pos, limits, stop, nullptr, nullptr).depth, 1);
+}
+
+// Audit-1 Q-8: a pondering search ignores its soft and hard limits (they
+// apply from ponderhit on). The UCI ponder case checks only when bestmove is
+// printed, which the session holds until ponderhit anyway, so applying either
+// limit while pondering passed every test (mutants M26, M27). Both limits
+// have passed here (go a second ago, 1 ms each), yet the search reaches the
+// depth asked for.
+TEST_CASE("search", "a pondering search ignores its soft and hard limits") {
+  TestHash store;
+  auto searcher = std::make_unique<Searcher>(store.table);
+  const std::atomic<bool> stop{false};
+  const std::atomic<bool> pondering{true};
+  Position pos;
+  SearchQuota limits;
+  limits.depth = 7;
+  limits.soft_ms = 1;
+  limits.hard_ms = 1;
+  limits.go_received = std::chrono::steady_clock::now() - std::chrono::milliseconds{1000};
+  CHECK_EQ(searcher->deliberate(pos, limits, stop, &pondering, nullptr).depth, 7);
+}
+
+namespace {
+// Every report of a search: depth, score, bound and the pv's first move.
+struct ReportLog final : SearchListener {
+  struct Entry {
+    int depth, score, bound;
+    Move first;
+  };
+  std::vector<Entry> entries;
+  void on_iteration(const Position&, const IterationReport& r) override {
+    entries.push_back({r.depth, r.score, r.bound, r.pv->length ? r.pv->moves[0] : NoMove});
+  }
+};
+}  // namespace
+
+// Audit-1 Q-8: after a stop mid-iteration, a move other than the last
+// finished iteration's best is played only if it came back with an exact
+// score above that iteration's (searcher.cpp, the stop rule). The fail-high
+// case above covers the other half of the rule; playing the unfinished
+// iteration's best whatever its score passed every test (mutant M24).
+// Node-limited searches over the bench positions stop at many points; the
+// last finished iteration is the first exact report at the result's depth.
+// At least one stop must play a new move, or the test proves nothing. That
+// is required of optimized builds only: node-limited searches are the same
+// in every build (bench parity), and the smaller sample debug builds can
+// afford may hold no such stop (none in the first 6 positions after
+// 304081e, RfpMargin 40, so gcc-debug failed in CI).
+TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored above the last iteration") {
+  Fixture fx;
+  int switched = 0;
+  const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
+  for (std::size_t i = 0; i < positions; ++i) {
+    const std::string_view fen = search_bench_fens()[i];
+    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
+      fx.store.clear();
+      fx.searcher->clear_history();
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      SearchQuota q;
+      q.nodes = nodes;
+      ReportLog log;
+      const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
+      if (r.depth == 0) continue;
+      const auto finished = std::ranges::find_if(
+          log.entries, [&](const ReportLog::Entry& e) { return e.depth == r.depth && e.bound == 0; });
+      CHECK_MSG(finished != log.entries.end(),
+                fen << " at " << nodes << " nodes: no report of depth " << r.depth);
+      if (finished == log.entries.end() || r.best == finished->first) continue;
+      ++switched;
+      CHECK_MSG(r.score > finished->score, fen << " at " << nodes << " nodes: played "
+                                               << pos.move_to_uci(r.best) << " at " << r.score << " over "
+                                               << pos.move_to_uci(finished->first) << " at "
+                                               << finished->score << " (depth " << r.depth << ")");
+    }
+  }
+  if (Optimized)
+    CHECK_MSG(switched > 0, "no stop played a move other than the last finished iteration's");
+  else if (switched == 0)
+    NOTE("no stop in the debug sample played a new move; optimized builds require one");
+}
+
+// Audit-1 V-4 (00bed14): no LMR or PVS re-search once the search has
+// stopped (a stopped child returns 0, which can beat alpha, and each
+// re-search counts one more node past a node limit). Reverting 00bed14
+// passed every test; over many limits, it counts two or more nodes over the
+// limit. Since audit-1 A1 suspicion 8 the limit is exact: the root's PVS
+// re-search checks the stop too (without it, 16 of these limits end one
+// node over), and the root node polls the limits (without it, one does: an
+// iteration that ends one node short of the limit).
+TEST_CASE("search", "a node limit is kept exactly") {
+  Fixture fx;
+  int searches = 0;
+  for (const PerftPosition& p : perft_suite()) {
+    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 60000u : 15000u); nodes += 997) {
+      fx.store.clear();
+      fx.searcher->clear_history();
+      Position pos;
+      CHECK(pos.set_fen(p.fen));
+      SearchQuota q;
+      q.nodes = nodes;
+      const SearchResult r = fx.search(pos, q);
+      ++searches;
+      CHECK_MSG(r.nodes == nodes, p.fen << ": limit " << nodes << ", searched " << r.nodes);
+    }
+  }
+  CHECK(searches > 0);
+}
+
+// Audit-1, A1 S-2: the listener's contract (searcher.hpp). A depth-limited
+// search that is never stopped reports each finished iteration exactly once,
+// in order, as an exact score, and with fail reports on (fail_report_ms 0)
+// adds one bound line per aspiration fail; over the perft suite at depth 12
+// some fail (the A1 audit counted 12).
+TEST_CASE("search", "the listener: one exact report per finished iteration, plus one per reported fail") {
+  struct Counter final : SearchListener {
+    int exact = 0, bounds = 0, last_exact_depth = 0;
+    bool in_order = true;
+    void on_iteration(const Position&, const IterationReport& r) override {
+      if (r.bound != 0) {
+        ++bounds;
+        return;
+      }
+      in_order = in_order && r.depth == last_exact_depth + 1;
+      last_exact_depth = r.depth;
+      ++exact;
+    }
+  };
+  Fixture fx;
+  fx.searcher->fail_report_ms = 0;
+  const int depth = Optimized ? 12 : 8;
+  int bounds = 0;
+  for (const auto& p : perft_suite()) {
+    Position pos;
+    CHECK(pos.set_fen(p.fen));
+    fx.store.clear();
+    fx.searcher->clear_history();
+    SearchQuota limits;
+    limits.depth = depth;
+    Counter c;
+    const SearchResult r = fx.searcher->deliberate(pos, limits, fx.stop, nullptr, &c);
+    CHECK_EQ(r.depth, depth);
+    CHECK_MSG(c.exact == depth && c.in_order, p.fen << ": " << c.exact << " exact reports");
+    bounds += c.bounds;
+  }
+  CHECK_MSG(bounds > 0, "no aspiration fail was reported");
+}
+// Audit-1, B-1: with one root move a timed search stops once 1/8 of its soft
+// limit has passed. A 150 ms pause after depth 1 passes 1/8 of 800 ms, so
+// the forced position (White's only move is g2g3; tools/check_search_positions.py)
+// stops at depth 1; with the switch off, and in a position with more moves,
+// the search runs to its depth limit, far below the soft limit.
+TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
+  TestHash store;
+  auto searcher = std::make_unique<Searcher>(store.table);
+  const std::atomic<bool> stop{false};
+  auto depth_reached = [&](std::string_view fen, bool rule) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    searcher->switches.use_forced_move_stop = rule;
+    SearchQuota limits;
+    limits.depth = 6;
+    limits.soft_ms = 800;
+    limits.hard_ms = 3200;
+    PausingListener listener;
+    listener.pause_after = 1;
+    listener.pause = std::chrono::milliseconds{150};
+    return searcher->deliberate(pos, limits, stop, nullptr, &listener).depth;
+  };
+  const std::string_view forced = "rnb1kbnr/pppp1ppp/8/4p3/7q/5P2/PPPPP1PP/RNBQKBNR w KQkq - 1 3";
+  CHECK_EQ(depth_reached(forced, true), 1);
+  CHECK_EQ(depth_reached(forced, false), 6);
+  CHECK_EQ(depth_reached("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", true), 6);
 }
 }  // namespace forkeng::test

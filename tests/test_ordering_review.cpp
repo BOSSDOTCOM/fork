@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Reviewer tests for deliverable 5 (move ordering). Each case pins a claim
 // made in a module header comment of the change under review.
 #include <algorithm>

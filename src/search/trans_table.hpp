@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // trans_table: the transposition table (DESIGN.md §5.2, deliverable 3).
 //
 // Purpose: remember, per position, the best move found, its score with the
@@ -11,9 +13,11 @@
 //   low bits) with a whole byte for the age of the search that wrote it, the
 //   move, the score (node-relative for mates and tablebase results,
 //   score_bounds.hpp), the static eval, the depth, and a byte of flags: the
-//   bound and the TT-PV flag (T19). With 24 check bits and every TT move
-//   validated before use, a false match is harmless (Hyatt and Cozzie 2005,
-//   KB search-techniques.md T4).
+//   bound and the TT-PV flag (T19). With 24 check bits a false match (another
+//   position's entry) is rare and its move is validated before use, but its
+//   score, bound and depth are used as they are: rare, not harmless (audit-1,
+//   A1 suspicion 9; Hyatt and Cozzie 2005, KB search-techniques.md T4, on how
+//   seldom such errors change the move played).
 // - Replacement follows the KB's description (techniques.md, "Transposition
 //   table"): prefer deeper and current-search entries, replace stale ones.
 // - The bucket is chosen by a multiply-high range reduction of the full
@@ -77,6 +81,21 @@ struct TtHit {
   bool was_pv;
 };
 
+// Whether a score with this bound settles a node searched with the window
+// (alpha, beta): an exact score always, a lower bound at or above beta, an
+// upper bound at or below alpha.
+constexpr bool bound_settles(TtBound bound, int score, int alpha, int beta) {
+  return bound == TtBound::Exact || (bound == TtBound::Lower && score >= beta) ||
+         (bound == TtBound::Upper && score <= alpha);
+}
+
+// The bound a fail-soft result carries for a node searched with the window
+// (alpha_start, beta): exact only at PV nodes, the only ones searched with a
+// full window.
+constexpr TtBound result_bound(int best, int alpha_start, int beta, bool on_pv) {
+  return best >= beta ? TtBound::Lower : on_pv && best > alpha_start ? TtBound::Exact : TtBound::Upper;
+}
+
 class TransTable {
  public:
   // Uses `bytes` of `memory` (64-byte aligned) as the table; null or fewer
@@ -94,6 +113,10 @@ class TransTable {
   // position's entry. On (review 2, claim (e), 2026-10-26): an exact entry is
   // not replaced by a bound of the same depth, which carries less.
   void set_keep_exact(bool on) { keep_exact_ = on; }
+  // On (audit-1, B-5): the position's entry from an earlier search is kept
+  // against an inexact result while it is still deeper after losing
+  // StaleDepthPerSearch plies per search of age.
+  void set_keep_deeper(bool on) { keep_deeper_ = on; }
 
   static std::size_t bucket_index(Key key, std::size_t bucket_count);
 
@@ -116,6 +139,7 @@ class TransTable {
   std::uint8_t search_age_ = 0;  // wraps at 256
   bool age_blend_ = false;
   bool keep_exact_ = false;
+  bool keep_deeper_ = false;
 };
 
 }  // namespace forkeng

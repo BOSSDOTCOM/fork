@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // libFuzzer target: move parsing and validation. The first byte picks a
 // position; the rest is split into UCI-like tokens (parse_uci) and read as
 // raw 16-bit encodings (is_pseudo_legal / is_legal / gives_check / predicted_key),

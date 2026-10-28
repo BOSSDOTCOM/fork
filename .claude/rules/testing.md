@@ -26,10 +26,27 @@ paths:
     bench_parity test).
   - A change that alters search or move order updates bench.ref in the same
     commit, with the new count in the message.
+- **Untested changes never ship** (owner, 2026-10-28; DESIGN.md §5.2,
+  Testing setup): a behaviour change ships only after its SPRT's verdict,
+  a speed claim only with the A/B harness, every change only with the full
+  check. If the test is skipped or stopped before a verdict, the change is
+  shelved (reverted or left off behind its switch), the baseline stays,
+  and ideas.md logs it as untested with its partial data. One
+  owner-approved exception: `UseTtEvalRefine` stays on (DESIGN.md §5.2,
+  Testing setup).
+- **Early acceptance reads nElo** (owner, 2026-10-28): the SPRT bounds
+  are normalized Elo, so the non-regression early-acceptance rule reads
+  the "nElo: x +/- e" interval, never the logistic "Elo" one (DESIGN.md
+  §5.2, Testing setup).
 - **Run before claiming done:**
-  - `scripts/check.sh full` (the Stop hook and pre-commit run it too);
+  - the full check: the CI matrix (`.github/workflows/ci.yml`) green on
+    the pushed commit, or `scripts/check.sh full` on demand (pre-commit
+    runs `check.sh quick` on the staged tree; the Stop hook runs
+    `check.sh stop`);
   - `scripts/build.sh` (all presets) before a phase sign-off;
-  - slow suites (`ctest -L slow`) at sign-off.
+  - slow suites (`ctest -L slow`) at sign-off. CI runs perft_epd_full
+    only when move generation's files change, plus nightly on main, so a
+    sign-off cannot rely on a push having run it.
 - **Sanitizers:** clang-debug runs ASan+UBSan on Windows. GCC sanitizers,
   TSan, MSan and valgrind run on Linux. TSan has its own presets,
   `clang-tsan` and `gcc-tsan` (Linux only; `FORK_TSAN=ON`, no
@@ -50,6 +67,13 @@ paths:
   presets included, and
   `scripts/check.sh` fails if its Passed line is missing. (The PGO builds run
   bench parity only, no ctest.)
+- **SPRT builds pin their target** (DESIGN.md §5.2 "Build target per
+  machine"): GitHub's SPRT shards use x86-64-v3, set as `FORK_ARCH` in
+  `.github/workflows/sprt.yml`, because hosted runners may lack AVX-512;
+  AWS uses `aws_spot_sprt.sh --arch`, kept at x86-64-v3 until Phase 4
+  (owner, 2026-10-28; x86-64-v4 exists for AVX-512); local SPRTs use
+  update.sh's x86-64-v3. Never `native`.
+  `tools/cloud/build_pair.sh` refuses to build without an explicit target.
 - **Valgrind needs a non-AVX-512 build** (`FORK_ARCH=x86-64-v3`): it cannot
   decode AVX-512, which `-march=native` emits on the Ryzen 7600X3D.
 - **Long jobs** (perft_epd_full, difftest, fuzzing) run one at a time, with

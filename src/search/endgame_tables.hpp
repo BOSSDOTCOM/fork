@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // endgame_tables: Syzygy endgame tablebases through the vendored Fathom
 // library (DESIGN.md §5.2, deliverable 7; third_party/fathom, MIT; KB
 // tools.md §6).

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Tactical and mate regression guards (DESIGN.md §5.2): runs Fork on a test
 suite at a fixed node count and counts the positions it solves. Solve counts
 guard against pruning that hides tactics or mates; they never replace an

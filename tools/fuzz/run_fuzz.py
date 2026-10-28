@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Time-boxed libFuzzer run with plateau detection.
 
 Runs one fuzz target in libFuzzer fork mode on all cores, at most

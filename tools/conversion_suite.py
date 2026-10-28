@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Deliverable 7's won-ending conversion suite (DESIGN.md §5.2): TB-won
 positions near the fifty-move limit, played out by Fork (with the tables)
 against a TB-perfect defender; the share Fork converts before the

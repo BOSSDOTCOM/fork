@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Finds, for every square, a seed whose first magic candidate already works,
 // and prints the seed tables for src/core/bitboard.cpp. Fork's magics come
 // from its own search; these seeds only make that search fast at startup.

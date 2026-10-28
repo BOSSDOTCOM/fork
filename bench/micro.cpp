@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Microbenchmarks for core operations, with repeated timed runs on a pinned
 // core. Reports median ns/op and the p10-p90 spread, flags noisy results, and
 // saves/compares baselines.
@@ -321,6 +323,11 @@ static int run(int argc, char** argv) {
     out << "# " << build_info() << "\n# name median_ns p10_ns p90_ns min_ns\n";
     for (const Result& r : results)
       out << r.name << ' ' << r.median << ' ' << r.p10 << ' ' << r.p90 << ' ' << r.min << '\n';
+    out.close();
+    if (!out) {
+      std::fprintf(stderr, "\ncannot write %s\n", save.c_str());
+      return 1;
+    }
     std::printf("\nsaved %s\n", save.c_str());
   }
   return 0;

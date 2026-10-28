@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Minimal in-house test harness: named suites of cases, CHECK macros.
 #pragma once
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Elo baseline gauntlet (Milestone A, owner 2026-10-25), in WSL: Fork against
 # the anchor engines built by tools/get_anchor_engines.sh, then Ordo with the
 # anchors fixed at their CCRL Blitz ratings (KB competition.md §5).
@@ -12,8 +13,10 @@
 # 8-ply positions (tools/make_openings.py), the same for every pairing.
 # Caveat for the result: CCRL Blitz is 2'+1" on CCRL's hardware, so an Elo
 # fitted at 10+0.1 on this machine is a rough placement, not a CCRL rating.
+# Exits 1 with no ratings when fastchess fails or plays fewer games than
+# planned (the partial PGN is kept), or when Ordo fails.
 set -euo pipefail
-[ $# -ge 3 ] || { sed -n '2,13p' "$0"; exit 2; }
+[ $# -ge 3 ] || { sed -n '3,16p' "$0"; exit 2; }
 fork=$(realpath "$1")
 book=$(realpath "$2")
 out=$3
@@ -65,11 +68,23 @@ for a in "${anchors[@]}"; do
   echo "\"$name\",$rating" >>"$out/anchors.csv"
 done
 
+fc_status=0
 "$bin/fastchess" "${args[@]}" -tournament gauntlet -seeds 1 \
   -each tc=10+0.1 \
   -openings file="$book" format=epd order=random -srand 20261025 \
   -rounds $((per / 2)) -repeat -concurrency "${CONCURRENCY:-10}" \
-  -pgnout file="$out/gauntlet.pgn" >"$out/gauntlet.log" 2>&1 || echo "fastchess ended with an error"
-echo "fastchess done"
-"$bin/ordo" -p "$out/gauntlet.pgn" -m "$out/anchors.csv" -W -D -s 1000 -o "$out/ordo.txt" >/dev/null 2>&1
+  -pgnout file="$out/gauntlet.pgn" >"$out/gauntlet.log" 2>&1 || fc_status=$?
+# Games played against games planned (per anchor, with both colours).
+planned=$(( per / 2 * 2 * ${#anchors[@]} ))
+played=$(grep -c '^\[Event ' "$out/gauntlet.pgn" 2>/dev/null || true)
+echo "fastchess done: ${played:-0} of $planned games, exit status $fc_status"
+# A failed or short gauntlet gives no ratings: a partial result would read
+# like a finished one. The partial PGN stays in $out for a look by hand.
+if [ "$fc_status" != 0 ] || [ "${played:-0}" != "$planned" ]; then
+  echo "elo_gauntlet.sh: fastchess failed or stopped early (exit status $fc_status, ${played:-0} of $planned games); no ratings, see $out/gauntlet.log" >&2
+  tail -n 5 "$out/gauntlet.log" >&2
+  exit 1
+fi
+"$bin/ordo" -p "$out/gauntlet.pgn" -m "$out/anchors.csv" -W -D -s 1000 -o "$out/ordo.txt" >"$out/ordo.log" 2>&1 ||
+  { echo "elo_gauntlet.sh: ordo failed, see $out/ordo.log" >&2; tail -n 5 "$out/ordo.log" >&2; exit 1; }
 cat "$out/ordo.txt"

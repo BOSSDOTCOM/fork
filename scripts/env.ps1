@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Puts the winget-installed toolchain on PATH and names the compilers the
 # CMake presets use. Dot-source it: . scripts\env.ps1
 $pk = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'

@@ -189,7 +189,7 @@ LLR: 0.21 (7.1%) (-2.94, 2.94) [0.00, 3.00]
 ### 20261026T210311Z rv-failhigh
 
 - base `077db27` (077db27), test `f0a9caf` (f0a9caf), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40
-- Verdict: **REJECTED (stopped by the owner, 2026-10-26)** after 2,143 finished games. The last report (2,000 games): the root fail-high fix (first external review, claim (a)) at -14.6 ± 10.8 Elo (nElo -20.7 ± 15.2), its 95% interval entirely below zero; LLR -0.95 of -2.94. The behaviour is reverted: when the search stops with a root fail high still awaiting its re-search, the previous iteration's move is kept (the bookkeeping stays; ideas.md idea 29). No time losses, crashes or illegal moves.
+- Verdict: **REJECTED (stopped by the owner, 2026-10-26)** after 2,143 finished games. The last report (2,000 games): the root fail-high fix (first external review, claim (a)) at -14.6 ± 10.8 Elo (nElo -20.7 ± 15.2), its 95% interval entirely below zero; LLR -0.95 of -2.94. The behaviour is reverted: when the search stops with a root fail high still awaiting its re-search, the previous iteration's move is kept (the bookkeeping stays; ideas.md idea 29). Rejected on STC alone: the owner's recorded exception to the LTC-retest rule (2026-10-27; DESIGN.md §5.2), with idea 29's measurement plan reopening the question. No time losses, crashes or illegal moves.
 ```
 Elo: -14.60 +/- 10.75, nElo: -20.71 +/- 15.23
 Games: 2000, Wins: 647, Losses: 731, Draws: 622, Points: 958.0 (47.90 %)
@@ -290,7 +290,7 @@ check after; if it fails, B2 and (c) are tested separately.
 ### 20261027T165757Z d8-final
 
 - base `d51462f` (d51462f: deliverable 8a, the increment fix, with the last-info-line fix), test `8b8e34c` (8b8e34c: + B2, the danger-zone reserve, + (c), the iteration rule), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40; cap 5,000 games
-- Verdict: **ACCEPTED (stopped by the owner, 2026-10-27: "I trust the changes")** after 2,303 finished games. The last report (2,200 games): +1.9 +/- 10.6 Elo, LLR 0.22 of 2.94 on non-regression bounds; it was not decided by the rule. With its stress results (B2 0 time losses in 2,000 games at 2+0.02 under full load, (a) alone 3, (c) alone 1), the combination is merged as deliverable 8. sprt.sh's own summary of this run was cut off when the run was stopped; the figures here are from its game log. No time losses, crashes or illegal moves.
+- Verdict: **ACCEPTED (stopped by the owner, 2026-10-27: "I trust the changes")** after 2,303 finished games. The last report (2,200 games): +1.9 +/- 10.6 Elo, LLR 0.22 of 2.94 on non-regression bounds; it was not decided by the rule. With its stress results (B2 0 time losses in 2,000 games at 2+0.02 under full load, (a) alone 3, (c) alone 1), the combination is merged as deliverable 8. sprt.sh's own summary of this run was cut off, and the figures here are from its game log. (Audit-1, U-1: the cut-off was a bug in sprt.sh, which aborted on an unset BASE_OPTS when writing the entry, not the stop.) No time losses, crashes or illegal moves.
 ```
 Elo: 1.89 +/- 10.62, nElo: 2.59 +/- 14.51
 Games: 2202, Wins: 764, Losses: 752, Draws: 686, Points: 1107.0 (50.27 %)
@@ -307,3 +307,111 @@ Games: 400, Wins: 124, Losses: 141, Draws: 135, Points: 191.5 (47.88 %)
 Ptnml(0-2): [12, 43, 100, 40, 5], WL/DD Ratio: 2.85
 LLR: -0.23 (-7.7%) (-2.94, 2.94) [-3.00, 0.00]
 ```
+
+### Note (audit-1, 2026-10-28): SPRTs on the GitHub shards
+
+From audit-1 on, the STC SPRTs run on GitHub-hosted runners
+(`.github/workflows/sprt.yml`), in stages of 16 shards x 100 game pairs
+(3,200 games), each shard a fastchess run over its own range of a
+fixed-seed permutation of UHO_Lichess_4852_v1.epd (seed 20261027), both
+engines with Syzygy 3-4-5. After each stage the shards' results are merged
+by `tools/cloud/sprt_merge.py` (pentanomial, normalized Elo, alpha = beta =
+0.05), which decides the SPRT; a run is capped at 20,000 games (it stops
+after the stage that passes the cap). 8+0.08 s, Hash 16 MB, 1 thread.
+
+### 20261028T045512Z b1-forced (GitHub shards)
+
+- base `25c84a2` (25c84a2f1a13ff1389979001cd17f2fba290836c), test `15cf506` (15cf506e975db0b2ea016334123578e6ee2a2693: audit-1 B-1, stop a forced move early), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, 7 stages x 16 shards (runs 40634996379, 40637985671, 40640832350, 40643811569, 40647047024, 40650215657, 40653533452); cap 20,000 games
+- Verdict: **ACCEPTED (owner decision, 2026-10-28)**. The SPRT reached the cap undecided (22,400 games, LLR 1.52 of 2.94, 0 time losses, 0 abnormal endings); its 95% interval, -2.58 to +4.50 Elo, lies entirely above the lower bound -3, so the change is kept without the resumed run that was queued.
+```
+Elo: 0.96 +/- 3.54, nElo: 1.24 +/- 4.55
+Ptnml(0-2): [1132, 2249, 4342, 2379, 1098]
+LLR: 1.52 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+```
+
+### 20261028T045620Z b5-keep-deeper
+
+- base `15cf506` (15cf506e975db0b2ea016334123578e6ee2a2693), test `808dd8a` (808dd8a537e58254c10bee0540afab61a0122499), bounds [0, 3] nElo, 40+0.4, Hash 64 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, Syzygy 3-4-5 for both sides (~/fork-tools/syzygy/3-4-5)
+- Builds: base Fork 0.3.0-dev, clang 21.1.8 (6ubuntu1), bench 17309921 372dc2e2d8a88e4b (= bench.ref); test Fork 0.3.0-dev, clang 21.1.8 (6ubuntu1), bench 17309921 372dc2e2d8a88e4b (= bench.ref). Openings in random order, -srand 20261028045620.
+- Verdict: **INCONCLUSIVE: stopped by the owner (2026-10-28)** after 2,604 games (fastchess exit status 1: the stop); cap 10,000 games. The owner's decision, at 2,000 games (-7.3 +/- 11.5 Elo, LLR -0.55): stop, leaning negative; the rule is switched off (d33ee48) and deferred to Phase 6's TT tests under large Hash and many threads (ideas.md idea 30).
+```
+Elo: -5.07 +/- 10.08, nElo: -6.72 +/- 13.35
+Games: 2602, Wins: 826, Losses: 864, Draws: 912, Points: 1282.0 (49.27 %)
+Ptnml(0-2): [116, 306, 486, 286, 107], WL/DD Ratio: 2.04
+LLR: -0.53 (-18.0%) (-2.94, 2.94) [0.00, 3.00]
+```
+
+### 20261028T082946Z b3-shallow-fh (GitHub shards)
+
+- base `4b3a808` (4b3a80886533844e67bfca7873c100f19712c63a), test `b001d1e` (b001d1e7687019db81790d73bef2d1474e2fc433: audit-1 B-3, re-search a root fail high one ply shallower), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, 7 stages x 16 shards (runs 40657189708, 40661209179, 40667882215, 40671981921, 40676026047, 40680069346, 40683903943); cap 20,000 games
+- Verdict: **INCONCLUSIVE at the cap** (22,400 games, LLR -0.37, 0 time losses, 0 abnormal endings). Phase C keeps passes only: **reverted** in bc44071.
+```
+Elo: 0.65 +/- 3.56, nElo: 0.83 +/- 4.55
+Ptnml(0-2): [1123, 2313, 4329, 2269, 1166]
+LLR: -0.37 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+```
+
+### Note (owner, 2026-10-28): non-regression early acceptance
+
+From b2-tb-depth's stage 3 on, a non-regression SPRT ([-3, 0]) on a change
+with a clear rationale stops once at least 10,000 games are in and the 95%
+Elo interval's lower bound is above -3: **ACCEPTED (by rule)**, logged with
+the interval (DESIGN.md §5.2, Testing setup). Gainer-bound tests never stop
+early this way. The cloud driver checks it after every stage.
+
+### 20261028T122710Z b2-tb-depth (GitHub shards)
+
+- base `b001d1e` (b001d1e7687019db81790d73bef2d1474e2fc433), test `6ab7cb7` (6ab7cb7890ec034e48e0e76a7826caea8357ec9e: audit-1 B-2, a settling table result stored in the TT at full depth), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, Syzygy 3-4-5 for both sides, 7 stages x 16 shards (runs 40687916291, 40692238847, 40696702688, 40701359689, 40706348255, 40711472101, 40716437644); cap 20,000 games
+- The early-acceptance rule was checked after stages 3-6: Elo intervals [-3.95, +5.53] at 12,800 games, [-4.42, +4.08] at 16,000, [-4.41, +3.32] at 19,200, [-4.49, +2.66] at 22,400; the lower bound never cleared -3.
+- Verdict: **INCONCLUSIVE at the cap** (22,400 games, LLR 0.19, 0 time losses, 0 abnormal endings). Phase C keeps passes only: **reverted** in 8e87028.
+```
+Elo: -0.92 +/- 3.58, nElo: -1.16 +/- 4.55
+Ptnml(0-2): [1172, 2299, 4281, 2312, 1136]
+LLR: 0.19 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+```
+
+### 20261028T160027Z b4-qs-standpat (GitHub shards)
+
+- base `6ab7cb7` (6ab7cb7890ec034e48e0e76a7826caea8357ec9e), test `6c797e1` (6c797e1c243e03becfd50a5ec25cfd2a3d886815: audit-1 B-4, the quiescence stand-pat value refined by the TT score's bound), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, Syzygy 3-4-5 for both sides, 6 stages x 16 shards (runs 40721660610, 40726653980, 40731533475, 40736388753, 40741067355, 40745782166); cap 20,000 games
+- LLR after each stage: 0.13, -1.06, -1.43, -1.99, -2.15, -3.17.
+- Verdict: **H0 accepted** (19,200 games, 0 time losses, 0 abnormal endings; 95% Elo interval [-8.03, -0.18]). Phase C keeps passes only: **reverted** in 1e16853.
+```
+Elo: -4.11 +/- 3.93, nElo: -5.14 +/- 4.91
+Ptnml(0-2): [1071, 2043, 3510, 1994, 982]
+LLR: -3.17 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
+```
+
+### 20261028T190033Z b6-rfp40 (GitHub shards): superseded
+
+- base `6c797e1` (6c797e1c243e03becfd50a5ec25cfd2a3d886815: audit-1 B-4), test `304081e` (304081e1ee361cca34e7b573d3984bc852e2a305: RfpMargin 40 cp per ply, was 80), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, Syzygy 3-4-5 for both sides, stage 0 of 16 shards (run 40750364290); stage 1 (run 40755073172) was cancelled while running; cap 20,000 games
+- Verdict: **SUPERSEDED** (owner, 2026-10-28) after 3,200 games, undecided (LLR 0.23, 0 time losses, 0 abnormal endings). Both engines had B-4, which its own SPRT rejected and which was reverted in 1e16853, so the result would not describe the code that keeps RfpMargin. Restarted as b6r-rfp40 on a pair without B-4: base 8550a78 (RfpMargin 80), test 306bd9a (RfpMargin 40, the same tree as 4f5c4b6), the same bounds and stages.
+```
+Elo: 3.47 +/- 9.61, nElo: 4.35 +/- 12.04
+Ptnml(0-2): [163, 332, 598, 324, 183]
+LLR: 0.23 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+```
+
+### 20261028T195013Z b6r-rfp40 (GitHub shards): stopped, RfpMargin 40 accepted without an SPRT
+
+- base `8550a78` (8550a78cfc5e1ee0a9139276bdf95c4aed8f80a0: audit-1 after the B-4 revert, RfpMargin 80), test `306bd9a` (306bd9a94710e6cc24479ebad8c3f679c57986c0: RfpMargin 40), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, Syzygy 3-4-5 for both sides; stage 0 (run 40757856982) cancelled while running, so no games were merged
+- Verdict: **NOT RUN TO A RESULT.** The owner accepted RfpMargin 40 without an SPRT (2026-10-28) and dropped the LTC follow-up. The only game data on RfpMargin 40 is the superseded b6-rfp40 run above (3,200 games with B-4 in both engines, Elo +3.47 +/- 9.61, LLR 0.23, undecided): its effect on strength is UNVERIFIED (DESIGN.md, Search constants).
+
+### Note (owner, 2026-10-28): RfpMargin 40 reverted
+
+RfpMargin 40, accepted without an SPRT (b6r-rfp40 above), was reverted to
+80 in fd7d4b5 after the Phase D gauntlet (22.5 points below Milestone C on
+the same 357 games with 40; level with Milestone C over 1,200 games with
+80; history/phase-3/audit-1.md). It is logged as untested in ideas.md
+idea 34. From now on a change whose test is skipped or unfinished is
+shelved, never shipped (DESIGN.md §5.2, Testing setup).
+
+### Note (owner, 2026-10-28): the early-acceptance rule reads nElo
+
+The bounds are normalized Elo, so the non-regression early-acceptance
+rule now reads the nElo interval ("nElo: x +/- e"), not the logistic Elo
+one used above (DESIGN.md §5.2, Testing setup). On that scale B-1
+(b1-forced) is +1.24 ± 4.55, [-3.31, +5.79], which does not clear -3; it
+was kept by the owner's decision on the logistic interval, before the
+correction, and the owner kept it after the correction too (its SPRT ran
+to the cap, LLR +1.52 of 2.94; the Phase D gauntlet with it matched
+Milestone C).

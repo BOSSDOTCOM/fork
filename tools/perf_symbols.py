@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Sums a perf report's raw addresses by containing function, from the
 binary's own symbol table (`nm -n -C`): WSL's perf is built without libelf
 and cannot name them. Inlined code counts for the function it was inlined

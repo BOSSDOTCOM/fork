@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Move ordering (DESIGN.md §5.2, deliverable 5): the staged selector yields
 // exactly the right moves, and the history update stays bounded.
 #include <algorithm>

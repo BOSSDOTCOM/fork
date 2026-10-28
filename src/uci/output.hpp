@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // output: the single path for everything the engine writes in UCI mode.
 //
 // Purpose: whole lines to the GUI, from any thread, plus the optional

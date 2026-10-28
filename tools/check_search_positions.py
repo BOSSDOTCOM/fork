@@ -1,7 +1,12 @@
-"""Checks the facts that tests/test_search.cpp and tests/test_eval.cpp rely on
-for their constructed positions, with python-chess as the independent oracle:
-legal FENs, forced mates in N (and none sooner), checkmate and stalemate, and
-the repetition. Exits non-zero if any fact is wrong.
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""Checks the facts that the tests' constructed positions rely on
+(tests/test_search.cpp, test_eval.cpp, test_see.cpp, test_ordering.cpp,
+test_pruning.cpp, test_draws.cpp, test_uci.cpp, test_endgame_tables.cpp),
+with python-chess as the independent oracle: legal FENs, forced mates in N
+(and none sooner), checkmate and stalemate, repetitions, halfmove clocks and
+the LMR move facts; and restates the danger-zone time budgets. Exits non-zero
+if any fact is wrong.
 
     .venv/Scripts/python.exe -I tools/check_search_positions.py
 """
@@ -181,6 +186,150 @@ for fen in ('k7/8/8/8/8/8/PPPPP3/7K w - - 0 1', 'k7/8/8/8/8/8/PPPPP3/7K b - - 0 
 check(board_of('k7/8/8/8/8/8/PPPPP3/7K b - - 0 1').legal_moves.count() == 3, 'tables: Black has 3 legal moves')
 board_of('k7/8/8/8/8/8/PPPPP3/7K w - - 3 1')
 check(len(board_of('k7/p7/8/8/8/8/PPPPP3/7K w - - 0 1').piece_map()) == 8, 'tables: eight pieces')
+
+# tests/test_uci.cpp, the search-line check (audit-1 Q-2): the castling
+# position's two castling moves, Rxa8 legal there, Black's queenside castling
+# legal after O-O; the K+R v K mate in 2 line c6b6 a8b8 h1h8 (and c6b6 a8b8
+# h1h7 not mate).
+b = board_of('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
+check(sorted(m.uci() for m in b.legal_moves if b.is_castling(m)) == ['e1c1', 'e1g1'],
+      'castling position: e1g1 and e1c1 are its castling moves')
+check(chess.Move.from_uci('a1a8') in b.legal_moves, 'castling position: a1a8 is legal')
+b.push_uci('e1g1')
+check(b.is_castling(chess.Move.from_uci('e8c8')) and chess.Move.from_uci('e8c8') in b.legal_moves,
+      'castling position: e8c8 castles after e1g1')
+b = board_of('k7/8/2K5/8/8/8/8/7R w - - 0 1')
+for uci in ['c6b6', 'a8b8']:
+    b.push_uci(uci)
+check(chess.Move.from_uci('h1h8') in b.legal_moves and chess.Move.from_uci('h1h7') in b.legal_moves,
+      'K+R v K: h1h8 and h1h7 legal after c6b6 a8b8')
+b.push_uci('h1h8')
+check(b.is_checkmate(), 'K+R v K: c6b6 a8b8 h1h8 is mate')
+b.pop()
+b.push_uci('h1h7')
+check(not b.is_checkmate(), 'K+R v K: c6b6 a8b8 h1h7 is not mate')
+
+# tests/test_draws.cpp, the fifty-move clock (audit-1 Q-3): the halfmove
+# clock after each move, and the rule reached at exactly 100 half-moves.
+for fen, moves, clocks in [
+    (chess.STARTING_FEN, ['g1f3', 'b8c6', 'f3e5', 'c6e5', 'g2g3', 'e5f3', 'e2f3'], [1, 2, 3, 0, 0, 1, 0]),
+    ('4k3/8/8/8/8/8/8/R3K2R w K - 37 50', ['e1g1', 'e8d7', 'f1f7', 'd7e6'], [38, 39, 40, 41]),
+    ('4k3/8/8/8/8/8/r7/R3K3 w - - 37 50', ['a1a2'], [0]),
+    ('4k3/1p6/8/2P5/8/8/8/4K3 b - - 37 50', ['b7b5'], [0]),
+    ('4k3/8/8/1pP5/8/8/8/4K3 w - b6 12 50', ['c5b6'], [0]),
+    ('4k3/1P6/8/8/8/8/8/4K3 w - - 37 50', ['b7b8q'], [0]),
+    ('4k3/8/8/8/8/8/8/R3K3 w - - 99 80', ['a1a2'], [100]),
+]:
+    b = board_of(fen)
+    got = []
+    for uci in moves:
+        b.push_uci(uci)
+        got.append(b.halfmove_clock)
+    check(got == clocks, f'halfmove clocks from {fen}: {got}')
+b = board_of('4k3/8/8/8/8/8/8/R3K3 w - - 99 80')
+check(not b.is_fifty_moves(), 'fifty-move rule not reached at 99 half-moves')
+b.push_uci('a1a2')
+check(b.is_fifty_moves(), 'fifty-move rule reached at 100 half-moves')
+
+# tests/test_pruning.cpp, the LMR context's history (audit-1 V-4): legal
+# positions and moves.
+for fen, uci in [('4k3/8/8/8/8/8/8/R3K3 w - - 0 1', 'a1a2'), ('r3k3/8/8/8/8/8/8/4K3 b - - 0 1', 'a8a7')]:
+    b = board_of(fen)
+    check(chess.Move.from_uci(uci) in b.legal_moves and not b.is_capture(chess.Move.from_uci(uci)),
+          f'quiet and legal: {uci} in {fen}')
+
+# tests/test_search.cpp, the zero-window and null-move cases (audit-1 Q-7):
+# the back-rank position with Black to move is legal and not over; the two
+# pawn endings (results from the lichess tablebase API, cited in the test)
+# are legal and the moves named there legal.
+b = board_of('6k1/5ppp/8/8/8/8/8/R5K1 b - - 0 1')
+check(not b.is_game_over() and not b.is_check(), 'back rank, Black to move: not over, not in check')
+for fen, moves in [('8/1p6/8/6k1/8/8/4P3/7K b - - 0 1', ['b7b5', 'b7b6']),
+                   ('8/3p4/8/6P1/3k3p/5K2/8/8 b - - 0 1', ['d4d5', 'd4e5', 'd7d5'])]:
+    b = board_of(fen)
+    check(all(chess.Move.from_uci(u) in b.legal_moves for u in moves), f'legal in {fen}: {moves}')
+
+# tests/test_endgame_tables.cpp, the 3-4-5 cases (audit-1 Q-6; the table
+# results are the lichess API's, cited there): legal positions and moves;
+# KQvKP: Black's only moves are c7c6 and c7c5, each answered by a mate in 1;
+# the KQvK king shuffle is legal and repeats the position.
+for fen, moves in [('8/8/8/pK6/5k1N/8/2N5/8 b - - 0 1', ['a5a4']),
+                   ('8/8/8/1K6/p4k1N/8/2N5/8 w - - 0 1', ['c2a3']),
+                   ('k7/8/8/8/2P5/8/8/6K1 w - - 0 1', ['c4c5', 'g1f1', 'g1f2', 'g1g2', 'g1h1', 'g1h2']),
+                   ('8/1P6/8/2k2K2/8/8/8/8 w - - 0 1', ['b7b8q', 'b7b8r', 'b7b8b', 'b7b8n']),
+                   ('8/8/8/5k2/8/7K/6P1/8 w - - 0 1', ['h3h4', 'g2g3', 'g2g4', 'h3h2', 'h3g3']),
+                   ('8/8/8/8/6K1/3k4/8/6Q1 w - - 0 1', ['g1c5'])]:
+    b = board_of(fen)
+    check(all(chess.Move.from_uci(u) in b.legal_moves for u in moves), f'legal in {fen}: {moves}')
+check(board_of('k7/8/8/8/2P5/8/8/6K1 w - - 0 1').legal_moves.count() == 6, 'KPvK draw: six legal moves')
+b = board_of('8/2p5/8/8/2Q5/k7/2K5/8 b - - 0 1')
+check(sorted(m.uci() for m in b.legal_moves) == ['c7c5', 'c7c6'], 'KQvKP: c7c6 and c7c5 are the only moves')
+for uci in ['c7c6', 'c7c5']:
+    b.push_uci(uci)
+    check(forced_mate_within(b, 1), f'KQvKP: mate in 1 after {uci}')
+    b.pop()
+b = board_of('8/8/8/8/6K1/3k4/8/6Q1 w - - 0 1')
+for uci in ['g4h5', 'd3e4', 'h5g4', 'e4d3']:
+    b.push_uci(uci)
+check(b.is_repetition(2) and b.halfmove_clock == 4, 'KQvK: the king shuffle repeats the position (clock 4)')
+
+# tests/test_pruning.cpp, "LMR move facts" (audit-1 Q-11: the derivation was
+# not committed): the moved piece's type (0 pawn ... 5 king), whether the
+# opponent attacked its square before the move, and whether from its new
+# square (a castling king's landing square) it attacks an enemy piece other
+# than a pawn or the king.
+PIECE_INDEX = {chess.PAWN: 0, chess.KNIGHT: 1, chess.BISHOP: 2, chess.ROOK: 3, chess.QUEEN: 4, chess.KING: 5}
+for fen, uci, piece, threatened, attacks in [
+    ('4k3/8/8/3p4/4N3/8/8/4K3 w - - 0 1', 'e4c3', 1, True, False),
+    ('4k3/8/8/8/1r6/8/8/N3K3 w - - 0 1', 'a1c2', 1, False, True),
+    ('r3k3/8/8/8/8/8/8/R3K3 w - - 0 1', 'a1a2', 3, True, True),
+    ('4k3/8/8/8/8/8/8/4K3 w - - 0 1', 'e1d1', 5, False, False),
+    ('4k3/8/8/2n5/8/3P4/8/4K3 w - - 0 1', 'd3d4', 0, True, True),
+    ('4k3/8/8/8/3n4/4P3/8/4K3 b - - 0 1', 'd4b5', 1, True, False),
+    ('4k3/8/8/8/8/8/7r/4K2R w K - 0 1', 'e1g1', 5, False, True),
+]:
+    b = board_of(fen)
+    m = chess.Move.from_uci(uci)
+    mover, them = b.turn, not b.turn
+    got_piece = PIECE_INDEX[b.piece_type_at(m.from_square)]
+    got_threatened = b.is_attacked_by(them, m.from_square)
+    landing = m.to_square
+    b.push(m)
+    targets = [s for s in b.attacks(landing)
+               if b.color_at(s) == them and b.piece_type_at(s) not in (chess.PAWN, chess.KING)]
+    got = (got_piece, got_threatened, bool(targets))
+    check(got == (piece, threatened, attacks), f'LMR facts {fen} {uci}: {got}')
+
+# tests/test_search.cpp, "an extra overhead of reserve only in the danger
+# zone" (audit-1 Q-11): its literal budgets, restated here from the rule in
+# src/search/time_budget.cpp's comments (Move Overhead 100, 30 moves left, a
+# tenth of the clock in reserve, or max(a tenth, one overhead) when less
+# than two overheads plus the increment are left; the soft limit one share,
+# the hard limit four shares, capped at the clock less the reserve).
+def budget(remaining, inc, overhead=100):
+    available = max(1, remaining - overhead)
+    zone = available < 2 * overhead + inc
+    reserve = max(available // 10, overhead) if zone else available // 10
+    cap = max(1, available - reserve)
+    share = available // 30 + min(inc, cap) * 3 // 4
+    hard = min(max(min(share, cap // 4) * 4, 1), cap)
+    return min(max(share, 1), hard), hard
+
+
+DANGER = {150: [(1, 1), (1, 1), (1, 1)], 250: [(5, 20), (20, 48), (42, 48)], 300: [(6, 24), (21, 84), (66, 100)],
+          319: [(7, 28), (22, 88), (67, 116)], 320: [(7, 28), (22, 88), (67, 120)],
+          379: [(9, 36), (24, 96), (69, 176)], 380: [(9, 36), (24, 96), (69, 252)],
+          500: [(13, 52), (28, 112), (73, 292)], 1000: [(30, 120), (45, 180), (90, 360)],
+          2000: [(63, 252), (78, 312), (123, 492)]}
+for remaining, rows in DANGER.items():
+    got = [budget(remaining, inc) for inc in (0, 20, 80)]
+    check(got == rows, f'danger-zone budgets at {remaining} ms: {got}')
+
+# tests/test_search.cpp, the forced-move stop (audit-1, B-1): White's only
+# legal move is g2g3 (in check from the queen on h4), and a quiet position
+# with more than one.
+check([m.uci() for m in board_of('rnb1kbnr/pppp1ppp/8/4p3/7q/5P2/PPPPP1PP/RNBQKBNR w KQkq - 1 3').legal_moves] == ['g2g3'],
+      'forced move: g2g3 only')
 
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)

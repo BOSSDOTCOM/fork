@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The bootstrap evaluation (DESIGN.md §5.2, deliverable 1). Positions other
 // than the perft suite are constructed for Fork; set_fen validates them.
 #include "core/movegen.hpp"

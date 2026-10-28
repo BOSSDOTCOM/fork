@@ -150,3 +150,40 @@ estimators needs a stated reason or a fix.
   (3a8a1b6) moved most of take_next's share.
 - The gate's profile step failed (`perf_symbols.py` resolved from a relative
   path after a cd); `tools/perf_gate.sh` fixed; the profile taken by hand.
+
+## Audit-1 speed checks (2026-10-28)
+
+Each bench-identical; `bench/ab_search.py` (search nps) and `bench/ab.py`
+(fork_micro ns/op) in WSL, clang 21.1.8 with LTO unless stated, core 4,
+identity checked on every run. B is the change, A its parent.
+
+| Change | Measurement | Verdict |
+|---|---|---|
+| Cleanups and refactors 0211f43..afd56f0 (dead members, the futility branch that never pruned, F-2..F-8, F-10..F-12, F-25), together | search, 10 rounds: median +1.1%, best +1.5% | no significant difference: no slowdown |
+| P-6, inlining `attackers_to`, `repetition_count` and `TransTable::bucket_index` (headers) | search, 10 rounds: LTO +0.3% / +0.1%; without LTO (`-DFORK_LTO=OFF`) +0.4% / +1.7%; TCEC's clang 16 via update.sh +0.1% / -0.1% (noise threshold 3.6%) | no gain: **not adopted**; only the `lto on/off` line in `fork version` (2c1ecd6). All four TCEC compilers build with LTO in Ubuntu-22.04 (update.sh) |
+| P-3, see_at_least settled when one more capture cannot cross the threshold (1a87872) | search: 10 rounds +2.2% / +2.9% (noise threshold 6.6%), 20 rounds +2.3% / +1.7% | below the 3% threshold both times; adopted for its simplicity, no gain claimed |
+| P-2, pins and discovered-check candidates computed on first read (88825fa) | micro, 8 rounds: make_unmake -28.3%, null_move -32.2%, perft_bench -4.8% (significant), is_legal +13.3% (0.4 ns), the rest within noise; search, 20 rounds: +2.4% / +1.6% | micro faster; search below the 3% threshold; adopted |
+| P-3 and P-2 with TCEC's g++ 11.4 (update.sh build in Ubuntu-22.04, LTO on, x86-64-v3; the audit asked for g++ as well as clang) | search, 20 rounds each: P-3 +1.9% median / +3.0% best (noise threshold 9.9%); P-2 +3.8% / +4.3% (threshold 4.7%) | both faster in both estimators, neither significant; consistent with the clang runs, both stay |
+
+## Audit-1 Phase D gate (72148a8, against main 6b04ed5)
+
+`tools/perf_gate.sh 72148a8 6b04ed5` in WSL (clang 21.1.8, Release,
+-march=native, LTO; 6 interleaved rounds, core 4, identity checked on all
+12 runs), 2026-10-28.
+
+- Bench 15,841,575 nodes, signature 1d2d827b25d171e4 (main: 17,309,921,
+  372dc2e2d8a88e4b: different trees, RfpMargin 40 against 80).
+- nps: median 6,750,883 -> 6,943,739 (+2.9%), best +2.4%, noise threshold
+  3.0%: no significant difference. The gate passes: no slowdown.
+- **Same tree**: 8550a78 (audit-1 with RfpMargin 80, the SPRT base, bench
+  17,309,921 / 372dc2e2d8a88e4b, identical to main's) against main, 10
+  rounds, identity checked on all 20 runs: median 6,707,903 -> 6,928,647
+  (+3.3%), best +3.0%, noise threshold 3.0%: B faster. This is audit-1's
+  speed work (P-2, P-3, the cleanups) on the same search.
+- Profile (72148a8, `fork bench`): `take_next` 20.5%, `see_at_least`
+  10.5%, `generate<Captures>` 9.9%, `side_score` 9.3%, `negamax<false>`
+  8.4%, `quiesce<false>` 6.6%, `make` 6.3%, `fetch` 5.3%, `deposit` 5.2%,
+  `generate<Quiets>` 2.9%, `predicted_key` 2.8%, `unmake` 2.3%,
+  `bootstrap_eval` 2.2%, `insufficient_material` 1.3%. `refresh_check_info`
+  (7.7% at Milestone C) is gone from the top 15: P-2 computes pins on first
+  read.

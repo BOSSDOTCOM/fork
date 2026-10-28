@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Review test (adversarial review of Phase 3 deliverable 3, 2026-10-24):
 // after a Hash resize whose report string cannot be allocated, the session's
 // TransTable must not keep pointing at the freed table.
@@ -13,11 +15,13 @@
 // Separate executable (replaces global operator new): for k = 1, 2, ... the
 // k-th allocation on this thread during "isready" (which applies a pending
 // Hash of 4194304 MB, more than any machine has) throws; then "go depth 4"
-// runs on the same thread (use_threads = false). A crash is the failure.
+// runs on the same thread (use_threads = false). A crash is a failure, and
+// so is an isready without its readyok (audit-1, R-2).
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <new>
+#include <string>
 
 #include "core/position.hpp"
 #include "uci/output.hpp"
@@ -50,6 +54,7 @@ void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 
 int main() {
   forkeng::init();
+  bool missing_readyok = false;
   for (long k = 1; k <= 60; ++k) {
     std::FILE* f = std::tmpfile();
     if (!f) return 2;
@@ -70,12 +75,29 @@ int main() {
       if (!injected) {
         std::printf("k=%ld: no allocation failed; no crash for any k\n", k);
         std::fclose(f);
-        return 0;
+        return missing_readyok ? 1 : 0;
       }
       std::printf("k=%ld: allocation failed during isready; engine output so far:\n", k);
       std::fflush(f);
       std::rewind(f);
-      for (int c; (c = std::fgetc(f)) != EOF;) std::putchar(c);
+      // Each isready still gets its readyok (audit-1, R-2): a GUI that never
+      // sees readyok waits until its timeout and forfeits the engine, so two
+      // isready lines need two readyok lines.
+      int readyoks = 0;
+      std::string line;
+      for (int c; (c = std::fgetc(f)) != EOF;) {
+        std::putchar(c);
+        if (c != '\n') {
+          line += static_cast<char>(c);
+          continue;
+        }
+        if (line == "readyok" || line == "readyok\r") ++readyoks;
+        line.clear();
+      }
+      if (readyoks != 2) {
+        std::printf("FAIL k=%ld: %d readyok lines for 2 isready commands\n", k, readyoks);
+        missing_readyok = true;
+      }
       std::printf("now go depth 4\n");
       std::fflush(stdout);
       session.handle_line("position startpos");

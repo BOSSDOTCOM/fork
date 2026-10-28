@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The evaluator funnel's second stage: cheap proxies (ideas.md idea 23).
 
 On the loop's position set (tools/evolve/positions.py: Fork's own
@@ -87,7 +89,8 @@ class Engine:
     """One UCI engine process answering `go nodes N` from a fresh state per position."""
 
     def __init__(self, path, hash_mb=16):
-        self.p = subprocess.Popen([str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        self.p = subprocess.Popen([str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+                                  encoding='utf-8', bufsize=1)
         self.send('uci')
         self.until('uciok')
         self.send(f'setoption name Hash value {hash_mb}')

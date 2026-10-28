@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // position: implementation (see position.hpp for the invariants).
 #include "core/position.hpp"
 
@@ -120,17 +122,16 @@ Bitboard Position::lone_shields(Square king, Bitboard shields, Bitboard rook_sli
   return found;
 }
 
-// Check information for the side to move, from the board alone. Pins and
-// discovered-check candidates are one computation seen from each king (CPW
-// "Discovered Check"): our pieces shielding our king from enemy sliders are
-// pinned; our pieces shielding the enemy king from our sliders can discover
-// check by moving off the line.
+// Check information for the side to move, from the board alone: the
+// checkers now; pins and discovered-check candidates on first read
+// (pinned(), discoverers()). Those are one computation seen from each king
+// (CPW "Discovered Check"): our pieces shielding our king from enemy sliders
+// are pinned; our pieces shielding the enemy king from our sliders can
+// discover check by moving off the line.
 void Position::refresh_check_info(State& s) const {
-  const Color us = side_, them = ~us;
-  const Square own_king = king_square(us), their_king = king_square(them);
-  s.checkers = attackers_to(own_king, pieces()) & pieces(them);
-  s.pinned = lone_shields(own_king, pieces(us), pieces(them, Rook, Queen), pieces(them, Bishop, Queen));
-  s.discoverers = lone_shields(their_king, pieces(us), pieces(us, Rook, Queen), pieces(us, Bishop, Queen));
+  s.checkers = attackers_to(king_square(side_), pieces()) & pieces(~side_);
+  s.pinned = ~Bitboard{0};
+  s.discoverers = ~Bitboard{0};
 }
 
 // Occupancy once the side to move has captured en passant from `from` to
@@ -162,7 +163,12 @@ State Position::compute_state() const {
   if (side_ == Black) s.key ^= zobrist::side;
   s.key ^= zobrist::castling[s.castling];
   if (s.ep != NoSquare) s.key ^= zobrist::ep_file[file_of(s.ep)];
-  refresh_check_info(s);
+  const Color us = side_, them = ~us;
+  s.checkers = attackers_to(king_square(us), pieces()) & pieces(them);
+  s.pinned =
+      lone_shields(king_square(us), pieces(us), pieces(them, Rook, Queen), pieces(them, Bishop, Queen));
+  s.discoverers =
+      lone_shields(king_square(them), pieces(us), pieces(us, Rook, Queen), pieces(us, Bishop, Queen));
   return s;
 }
 
@@ -670,6 +676,12 @@ Position Position::mirrored() const {
 }
 
 bool Position::same_state(const Position& o) const {
+  // Settle the lazily computed fields first, so that whether a field was
+  // read does not count as a difference.
+  pinned();
+  discoverers();
+  o.pinned();
+  o.discoverers();
   return std::equal(std::begin(board_), std::end(board_), std::begin(o.board_)) &&
          std::equal(std::begin(by_type_), std::end(by_type_), std::begin(o.by_type_)) &&
          std::equal(std::begin(by_color_), std::end(by_color_), std::begin(o.by_color_)) &&

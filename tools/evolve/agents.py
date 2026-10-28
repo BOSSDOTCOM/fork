@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The loop's agents and their budget (ideas.md idea 23).
 
 Roles (the owner's spec): two proposers with distinct perspectives
@@ -96,6 +98,11 @@ class Budget:
         self.used = {'tokens': 0, 'candidates': 0}
         self.clock = clock
         self.start = clock()
+
+    def restore(self, tokens, candidates, seconds):
+        """A resumed run's use so far: tokens, candidates, and wall time already spent."""
+        self.used = {'tokens': tokens, 'candidates': candidates}
+        self.start = self.clock() - seconds
 
     def spend(self, tokens=0, candidates=0):
         self.used['tokens'] += tokens

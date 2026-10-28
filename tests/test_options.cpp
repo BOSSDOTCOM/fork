@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // In-process tests of the option table, the go parser and the hash memory
 // (the protocol itself is tested over pipes in test_uci.cpp).
 #include <algorithm>

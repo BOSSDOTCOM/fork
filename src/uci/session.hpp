@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // session: the UCI protocol loop and its threads of control.
 //
 // Purpose: read commands, keep the game position and options, run searches
@@ -43,6 +45,13 @@ namespace forkeng {
 
 // The engine's version string, "<semver>-dev+<short commit>" (DESIGN.md §5.1).
 const char* engine_version();
+
+// The search limits of a go: depth (clamped to [1, MaxPly - 1]), nodes (at
+// least 1), mate (ignored unless positive, at most MaxPly) and searchmoves as
+// sent, and, unless go infinite, the time budget (plan_time) from the clock
+// and increment of `us`, the side to move, and the Move Overhead. A free
+// function so that tests can check it with numbers (audit-1 Q-5).
+SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhead_ms);
 
 // Limits on what a session may do, for the fuzz target: the defaults are the
 // real engine's.
@@ -104,7 +113,6 @@ class UciSession {
 
   void stop_search();  // stops and joins the running search, if any
   bool search_running();
-  SearchQuota search_limits(const GoLimits& go) const;
   void search_main(Position pos, SearchQuota limits, bool waits);  // the search thread
   // The last info line when no iteration was reported (none finished, or
   // no legal move), in a fixed buffer.
@@ -125,6 +133,14 @@ class UciSession {
   std::string syzygy_path_;
   bool tables_pending_ = false;
   Position root_;
+  // cmd_position builds the new position here, then swaps it with root_.
+  // Both reserve GameStatePlies States at startup, so a move list of a long
+  // game never allocates (audit-1 R-3).
+  Position spare_;
+  // The last position command failed even when tried again: no go searches
+  // (the root may be the previous position, the other side to move) until a
+  // position command succeeds (audit-1 R-3).
+  bool position_unknown_ = false;
   bool go_answered_ = false;  // the go being handled has started its search or answered
   SearchSignals signals_;
   // The search reads these without the mutex: stop is set with signals_.stop

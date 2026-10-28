@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Fork's entry point. Without arguments it speaks UCI on stdin/stdout
 // (src/uci/session.hpp); with a subcommand it runs that tool: perft, divide,
 // bench (the search bench), perftbench, version, difftest, wdl (endgame-table
@@ -47,6 +49,7 @@ void print_version() {
             << "compiler " << compiler_name() << '\n'
             << "arch " << FORK_ARCH_NAME << '\n'
             << "build " << FORK_BUILD_TYPE << '\n'
+            << "lto " << (FORK_LTO ? "on" : "off") << '\n'
             << "sliders " << (FORK_USE_PEXT ? "pext" : "magic")
             << '\n'
             // For bench/ab_search.py's identity check (cmake/build_id.cmake).

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds the Elo-baseline anchor engines (KB competition.md §5, "Elo-baseline
 # anchors (weak engines)", branch kb) as opponent binaries, in WSL.
 #

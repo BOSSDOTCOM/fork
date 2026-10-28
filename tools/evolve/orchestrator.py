@@ -1,10 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """The heuristic-discovery loop's orchestrator (ideas.md idea 23, DESIGN.md
 §5.2 deliverable 8c): a deterministic script, not an agent.
 
 Each generation, for every island in turn: choose parents from the island's
 grid (seeded), ask the island's agent for a proposal (residual mode, or a
 full replacement for the explorer's share), have the critic review it, gate
-it (static rules, guard, build, perft, the correctness suites, determinism),
+it (static rules, guard, the preprocessed comparison, build, perft, the
+correctness suites, determinism),
 score it on the proxies at the baseline's node budget, place it in the
 grid by its behaviour descriptors, and promote clear proxy winners to the
 short match and the SPRT hand-off. Every N generations the analyst
@@ -17,12 +20,36 @@ generations, or a gate-failure rate that says something is broken.
 Runs in WSL (Linux builds, fastchess). A live loop needs --live; the pilot's
 preparation only runs --dry-run with stub agents.
 
+The gate builds with the config's `compiler` (passed to CMake as
+CMAKE_CXX_COMPILER; its --version goes into the baseline event). For TCEC's
+compilers, run the loop in the WSL distro Ubuntu-22.04
+(scripts/tcec-toolchain-setup.sh): there "g++" is GCC 11.4, the strictest
+of the four on the constexpr region (a body calling a non-constexpr function
+compiles with Clang and fails with GCC: audit-1 U-17), and "clang++-19" is
+the compiler update.sh picks first. The hand-off's full check
+(scripts/check.sh full) builds all four before any SPRT.
+
     python3 tools/evolve/orchestrator.py --config tools/evolve/config.json --run-dir ~/fork-evolve/run1 \\
         (--dry-run | --live) [--generations G]
+    python3 tools/evolve/orchestrator.py --run-dir ~/fork-evolve/run1 --resume (--dry-run | --live)
+
+Failures: each agent call is retried with exponential backoff
+(`agent_retries`, `agent_backoff_seconds`); a request that still fails (an
+agent, a gate step that times out, a stats build, a crashed engine in the
+proxies, the match) is logged as an `error` event, its candidate gets the
+status `error:<step>`, it counts as a failed gate run toward the
+gate-failure stop, and the generation goes on. A new run needs an empty
+--run-dir; --resume continues a stopped or crashed run from its database:
+the baseline (rebuilt from its commit, perft checked), the best so far, the
+analyst's notes, the budget used (tokens and candidates from the logged
+agent calls, wall time as the sum of the sessions' spans) and the next
+request of the unfinished generation. A candidate whose request did not
+finish is marked `interrupted`, not redone.
 """
 import argparse
 import json
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -71,14 +98,46 @@ def summary_line(row):
             f', inputs {population.inputs_used(body or "")}{reasons}: {(rationale or "")[:240]}')
 
 
+class RunDirError(RuntimeError):
+    pass
+
+
 class Loop:
-    def __init__(self, cfg, run_dir, agent, runner, clock=time.time):
+    def __init__(self, cfg, run_dir, agent, runner, clock=time.time, resume=False, sleep=time.sleep):
         self.cfg = cfg
         self.run_dir = Path(run_dir)
+        # One run per folder: a second start would mix two runs' baselines,
+        # generations and budgets in one database (audit-1 U-7).
+        database = self.run_dir / 'population.sqlite'
+        if resume and not database.exists():
+            raise RunDirError(f'nothing to resume: {database} does not exist')
+        if not resume and self.run_dir.exists() and any(self.run_dir.iterdir()):
+            raise RunDirError(f'{self.run_dir} is not empty: pass --resume to continue its run, or choose a new '
+                              f'--run-dir')
+        self.resume = resume
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.agent = agent
         self.runner = runner
-        self.pop = population.Population(str(self.run_dir / 'population.sqlite'))
+        self.sleep = sleep
+        self.cid, self.step = None, None
+        self.pop = population.Population(str(database))
+        # The baseline commit is pinned to its full hash once, at the start: a
+        # symbolic ref such as HEAD would move under a long run when the owner
+        # commits beside it, and every later candidate would be built on other
+        # code than the baseline it is scored against (audit-1 U-8). Every
+        # read, tree, hand-off patch and printed command uses the hash.
+        if resume:
+            self.commit = self.pop.get_meta('baseline_commit')
+            if not self.commit:
+                raise RunDirError('cannot resume: the database has no pinned baseline commit')
+        else:
+            self.commit = runner.resolve(cfg['baseline_commit'])
+            if not re.fullmatch(r'[0-9a-f]{40}', self.commit or ''):
+                raise RunDirError(f'{cfg["baseline_commit"]!r} did not resolve to a full commit hash: {self.commit!r}')
+            self.pop.set_meta('baseline_commit', self.commit)
+            self.pop.set_meta('baseline_ref', cfg['baseline_commit'])
+            # The run's configuration as it started; --resume reads it back.
+            (self.run_dir / 'config.json').write_text(json.dumps(cfg, indent=1), encoding='utf-8')
         self.budget = agents.Budget(cfg['budget']['tokens'], cfg['budget']['candidates'],
                                     cfg['budget']['hours'] * 3600, clock)
         self.log_file = open(self.run_dir / 'run.log', 'a', encoding='utf-8')
@@ -107,9 +166,9 @@ class Loop:
                  'generation': getattr(self, 'generation_now', 0), 'generations': self.cfg.get('generations'),
                  'budget_used': self.budget.used, 'budget_limits': self.budget.limits,
                  'elapsed_seconds': self.budget.clock() - self.budget.start, 'islands': self.cfg['islands'],
-                 'explorer_protected': self.cfg['explorer_protected']}
+                 'explorer_protected': self.cfg['explorer_protected'], 'baseline_commit': self.commit}
         try:
-            (self.run_dir / 'state.json').write_text(json.dumps(state, indent=1))
+            (self.run_dir / 'state.json').write_text(json.dumps(state, indent=1), encoding='utf-8')
             mirror = self.cfg.get('dashboard_mirror')
             dashboard.render(self.run_dir, mirror and str(Path(mirror) / self.run_dir.name))
         except Exception as e:  # noqa: BLE001 (the dashboard must never stop a run)
@@ -119,8 +178,9 @@ class Loop:
     def evaluate(self, generation, cid, island, body, place=True):
         """Gate, proxies and (if `place`) the grid for candidate `cid`; returns its fitness or None."""
         cfg = self.cfg
+        self.step = 'gate'
         self.refresh(status=f'generation {generation}: gating candidate {cid}')
-        result = gate.run_gate(self.runner, cfg['baseline_commit'], cfg['region'], body, self.baseline_perft,
+        result = gate.run_gate(self.runner, self.commit, cfg['region'], body, self.reference,
                                f'cand-{cid}')
         self.pop.update(cid, gate=json.dumps(result.__dict__))
         if not result.passed:
@@ -128,8 +188,10 @@ class Loop:
             self.say(generation, 'gate_failed', {'id': cid, 'step': result.step, 'detail': result.detail[-400:]})
             return None
         engine = self.runner.work / f'cand-{cid}' / 'build' / 'fork'
+        self.step = 'proxies'
         self.refresh(status=f'generation {generation}: measuring candidate {cid}')
         proxy = proxies.run_proxies(engine, self.labels, cfg['proxy_nodes'], cfg.get('proxy_jobs', 1))
+        self.step = 'descriptors'
         desc = self.descriptors(f'cand-{cid}')
         fitness = proxy.fitness()
         record = dict(proxy.__dict__)
@@ -138,6 +200,7 @@ class Loop:
         if interval:
             record.update(gain=interval[0], gain_low=interval[1], gain_high=interval[2])
         if self.holdout:
+            self.step = 'holdout'
             held = proxies.run_proxies(engine, self.holdout, cfg['proxy_nodes'], cfg.get('proxy_jobs', 1))
             record.update(holdout_fitness=held.fitness(), holdout_per_position=held.per_position)
             held_base = getattr(self, 'baseline_holdout', None)
@@ -201,58 +264,112 @@ class Loop:
                          f"```cpp\n{c['body']}\n```")
         return ids[0] if ids else None, '\n'.join(parts) or '(none: start from the baseline, a zero correction)'
 
-    def generation(self, g):
+    def ask(self, g, role, prompt):
+        """The agent's reply, retried with exponential backoff (a rate limit, a refused or
+        timed-out session); the last failure is raised."""
+        retries = self.cfg.get('agent_retries', 3)
+        delay = self.cfg.get('agent_backoff_seconds', 60)
+        for attempt in range(retries + 1):
+            try:
+                return self.agent.ask(role, prompt)
+            except Exception as e:  # noqa: BLE001 (any CLI failure is retried, then reported)
+                if attempt == retries:
+                    raise
+                wait = delay * 2 ** attempt
+                self.say(g, 'agent_retry', {'role': role, 'attempt': attempt + 1, 'wait': wait,
+                                            'error': repr(e)[-300:]})
+                self.sleep(wait)
+
+    def generation(self, g, first=0):
+        """Generation `g` from request `first` on (a resumed run starts mid-generation); the
+        stop reason, or None. Each request ends with a request_done event, so a resume
+        knows where it is; one request's failure is logged and counted, not fatal."""
         cfg = self.cfg
-        rng = random.Random(cfg['seed'] * 7919 + g)
-        gate_runs = gate_failures = 0
         requests = self.requests(g)
+        counts = self.request_counts(g)
         for index, (island, role, mode) in enumerate(requests):
+            if index < first:
+                continue
             stop = self.budget.exhausted()
             if stop:
                 return stop
-            self.refresh(status=f'generation {g}: asking the {role} ({index + 1} of {len(requests)})')
-            parent, parents = self.parents_text(island, g, index)
-            prompt = agents.prompt_for(role, mode=mode, parents=parents, statistics=self.statistics,
-                                       history=self.history_text(), insights=self.insights,
-                                       protected=cfg['explorer_protected'])
-            reply = self.agent.ask(role, prompt)
-            self.budget.spend(tokens=reply.tokens, candidates=1)
-            self.say(g, 'agent_call', {'role': role, 'tokens': reply.tokens, 'usage': reply.usage})
-            proposal = agents.parse_proposal(reply.text)
-            if proposal is None:
-                self.say(g, 'malformed', {'island': island, 'reply': reply.text[:400]})
-                continue
-            cid = self.pop.add(g, island, role, parent, proposal.mode, proposal.body, proposal.rationale)
-            self.refresh(status=f'generation {g}: the critic reviews candidate {cid}')
-            review = self.agent.ask('critic', agents.prompt_for('critic', mode=proposal.mode,
-                                                                rationale=proposal.rationale, body=proposal.body))
-            self.budget.spend(tokens=review.tokens)
-            self.say(g, 'agent_call', {'role': 'critic', 'tokens': review.tokens, 'usage': review.usage})
-            verdict = agents.parse_verdict(review.text)
-            self.pop.update(cid, critic=json.dumps(verdict.__dict__))
-            audit = not verdict.accept and rng.random() < cfg['critic_audit_share']
-            if not verdict.accept:
-                self.say(g, 'critic_rejected', {'id': cid, 'reasons': verdict.reasons, 'audited': audit})
-                self.pop.update(cid, status='critic_rejected')
-                if not audit:
-                    continue
-            gate_runs += 1
-            fitness = self.evaluate(g, cid, island, proposal.body, place=not audit)
-            if audit:  # scored only to measure the critic: it stays rejected
-                self.pop.update(cid, status='critic_rejected (audited: ' + self.pop.get(cid)['status'] + ')')
-            if fitness is None:
-                gate_failures += 1
-                continue
-            if verdict.accept:
-                self.promote(g, cid, fitness)
+            self.cid, self.step = None, 'proposer'
+            gated = failed = False
+            try:
+                gated, failed = self.request(g, index, island, role, mode, len(requests))
+            except Exception as e:  # noqa: BLE001 (one candidate's failure must not end the run)
+                gated = failed = True
+                if self.cid is not None:
+                    self.pop.update(self.cid, status=f'error:{self.step}')
+                self.say(g, 'error', {'id': self.cid, 'island': island, 'step': self.step, 'error': repr(e)[-400:]})
+            counts[0] += gated
+            counts[1] += failed
+            self.say(g, 'request_done', {'index': index, 'id': self.cid, 'gated': gated, 'failed': failed})
         self.explorer_and_resets(g)
         if g % cfg['analyst_every'] == 0:
-            self.analyse(g)
+            try:
+                self.analyse(g)
+            except Exception as e:  # noqa: BLE001 (the analyst's notes are kept as they were)
+                self.say(g, 'error', {'id': None, 'step': 'analyst', 'error': repr(e)[-400:]})
+        self.say(g, 'generation_done', {'gate_runs': counts[0], 'gate_failures': counts[1]})
+        gate_runs, gate_failures = counts
         if gate_runs and gate_failures / gate_runs > cfg['max_gate_failure_rate'] and gate_runs >= 4:
             return f'gate failure rate {gate_failures}/{gate_runs}'
         if g - self.best_generation >= cfg['patience']:
             return f'no improvement beyond the fitness interval for {cfg["patience"]} generations'
         return None
+
+    def request_counts(self, g):
+        """[gate runs, gate failures] of generation g's finished requests (errors count as both)."""
+        counts = [0, 0]
+        for row in self.pop.db.execute("SELECT detail FROM events WHERE kind = 'request_done' AND generation = ?",
+                                       (g,)):
+            d = json.loads(row[0])
+            counts[0] += d['gated']
+            counts[1] += d['failed']
+        return counts
+
+    def request(self, g, index, island, role, mode, total):
+        """One proposal through the funnel; (gated, gate failed)."""
+        cfg = self.cfg
+        # Seeded per request, so a run resumed mid-generation draws as an uninterrupted one would.
+        rng = random.Random(cfg['seed'] * 7919 + g * 1009 + index)
+        self.refresh(status=f'generation {g}: asking the {role} ({index + 1} of {total})')
+        parent, parents = self.parents_text(island, g, index)
+        prompt = agents.prompt_for(role, mode=mode, parents=parents, statistics=self.statistics,
+                                   history=self.history_text(), insights=self.insights,
+                                   protected=cfg['explorer_protected'])
+        reply = self.ask(g, role, prompt)
+        self.budget.spend(tokens=reply.tokens, candidates=1)
+        self.say(g, 'agent_call', {'role': role, 'tokens': reply.tokens, 'usage': reply.usage})
+        proposal = agents.parse_proposal(reply.text)
+        if proposal is None:
+            self.say(g, 'malformed', {'island': island, 'reply': reply.text[:400]})
+            return False, False
+        cid = self.cid = self.pop.add(g, island, role, parent, proposal.mode, proposal.body, proposal.rationale)
+        self.step = 'critic'
+        self.refresh(status=f'generation {g}: the critic reviews candidate {cid}')
+        review = self.ask(g, 'critic', agents.prompt_for('critic', mode=proposal.mode,
+                                                         rationale=proposal.rationale, body=proposal.body))
+        self.budget.spend(tokens=review.tokens)
+        self.say(g, 'agent_call', {'role': 'critic', 'tokens': review.tokens, 'usage': review.usage})
+        verdict = agents.parse_verdict(review.text)
+        self.pop.update(cid, critic=json.dumps(verdict.__dict__))
+        audit = not verdict.accept and rng.random() < cfg['critic_audit_share']
+        if not verdict.accept:
+            self.say(g, 'critic_rejected', {'id': cid, 'reasons': verdict.reasons, 'audited': audit})
+            self.pop.update(cid, status='critic_rejected')
+            if not audit:
+                return False, False
+        fitness = self.evaluate(g, cid, island, proposal.body, place=not audit)
+        if audit:  # scored only to measure the critic: it stays rejected
+            self.pop.update(cid, status='critic_rejected (audited: ' + self.pop.get(cid)['status'] + ')')
+        if fitness is None:
+            return True, True
+        if verdict.accept:
+            self.step = 'promote'
+            self.promote(g, cid, fitness)
+        return True, False
 
     def promote(self, g, cid, fitness):
         """Short match and SPRT hand-off for a candidate clearly above the baseline on the proxies:
@@ -288,9 +405,9 @@ class Loop:
         if result and result.passes(m['elo_floor']):
             c = self.pop.get(cid)
             path = regions.REGIONS[cfg['region']]
-            text = regions.replace_body(self.runner.read(cfg['baseline_commit'], path), cfg['region'], c['body'])
-            patch = make_patch(self.runner.read(cfg['baseline_commit'], path), text, path)
-            where = match.hand_off(self.run_dir / 'handoff', cid, path, patch, cfg['baseline_commit'])
+            text = regions.replace_body(self.runner.read(self.commit, path), cfg['region'], c['body'])
+            patch = make_patch(self.runner.read(self.commit, path), text, path)
+            where = match.hand_off(self.run_dir / 'handoff', cid, path, patch, self.commit)
             self.pop.update(cid, status='sprt hand-off (originality screen first)')
             self.say(g, 'handoff', {'id': cid, 'commands': str(where)})
         else:
@@ -320,8 +437,8 @@ class Loop:
             'SELECT id, generation, island, mode, rationale, status, critic, proxies, descriptors, fitness, body '
             'FROM candidates WHERE generation > ? ORDER BY id', (g - self.cfg['analyst_every'],)).fetchall()
         text = '\n'.join(summary_line(r) for r in rows) or '(no candidates)'
-        reply = self.agent.ask('analyst', agents.prompt_for('analyst', every=self.cfg['analyst_every'],
-                                                            candidates=text))
+        reply = self.ask(g, 'analyst', agents.prompt_for('analyst', every=self.cfg['analyst_every'],
+                                                         candidates=text))
         self.budget.spend(tokens=reply.tokens)
         self.say(g, 'agent_call', {'role': 'analyst', 'tokens': reply.tokens, 'usage': reply.usage})
         self.insights = reply.text.strip() or self.insights
@@ -334,17 +451,28 @@ class Loop:
                          for r in rows) or '(nothing yet)'
 
     # --- the run -----------------------------------------------------------------
-    def start(self):
-        """Generation 0: the baseline (the region as committed) gated, scored and seeded in every island."""
+    def prepare_baseline(self):
+        """Builds the baseline tree and the gate's reference (its perft, files and preprocessed
+        units); returns the committed region body."""
         cfg = self.cfg
-        self.refresh(status='baseline: building, gating and measuring the committed region')
         path = regions.REGIONS[cfg['region']]
-        body = regions.body(self.runner.read(cfg['baseline_commit'], path), cfg['region'])
-        tree = self.runner.tree(cfg['baseline_commit'], {}, 'baseline')
+        body = regions.body(self.runner.read(self.commit, path), cfg['region'])
+        tree = self.runner.tree(self.commit, {}, 'baseline')
         built, log, build = self.runner.build(tree)
         if not built:
             raise RuntimeError('the baseline does not build: ' + log[-500:])
         self.baseline_perft = self.runner.perft(build / 'fork')
+        # What the gate compares every candidate with: the baseline tree's
+        # files and the preprocessed text of each unit that includes the region.
+        self.reference = gate.make_reference(self.runner, cfg['region'], tree, build, self.baseline_perft)
+        return body
+
+    def start(self):
+        """Generation 0: the baseline (the region as committed) gated, scored and seeded in every island."""
+        cfg = self.cfg
+        self.say(0, 'session', {'resumed': False})
+        self.refresh(status='baseline: building, gating and measuring the committed region')
+        body = self.prepare_baseline()
         cid = self.pop.add(0, 'baseline', 'baseline', None, 'residual', body, 'the committed region')
         fitness = self.evaluate(0, cid, cfg['islands'][0], body)
         if fitness is None:
@@ -361,17 +489,86 @@ class Loop:
             k in line for k in ('reduc', 'cutoff', 'LMR'))) or self.statistics
         self.best_fitness, self.best_generation = fitness, 0
         self.status = 'running'
-        self.say(0, 'baseline', {'id': cid, 'fitness': fitness, 'perft': self.baseline_perft})
+        self.say(0, 'baseline', {'id': cid, 'fitness': fitness, 'perft': self.baseline_perft, 'commit': self.commit,
+                                 'compiler': self.runner.compiler_version(), 'statistics': self.statistics})
+
+    def restore(self):
+        """A resumed run's state from its database (population.py: "so a run can be audited and
+        resumed"): the baseline (rebuilt from the same commit; its perft must not change), its
+        scores, the best so far, the analyst's notes, the budget used, and where to go on.
+        Returns (generation, first request)."""
+        db = self.pop.db
+        row = db.execute("SELECT id FROM candidates WHERE agent = 'baseline' ORDER BY id").fetchall()
+        events = self.pop.events('baseline')
+        if len(row) != 1 or not events:
+            raise RunDirError(f'cannot resume: {len(row)} baselines and {len(events)} baseline events in the database')
+        cid = row[0][0]
+        detail = json.loads(events[-1][2])
+        self.say(0, 'session', {'resumed': True})
+        self.refresh(status='resuming: rebuilding the baseline and the gate reference')
+        self.prepare_baseline()
+        if self.baseline_perft != detail['perft']:
+            raise RuntimeError(f'the baseline perft changed: {self.baseline_perft} != {detail["perft"]}')
+        c = self.pop.get(cid)
+        record = json.loads(c['proxies'])
+        self.baseline_fitness = c['fitness']
+        self.baseline_scores = record.get('per_position') or None
+        self.baseline_holdout = record.get('holdout_per_position') or None
+        self.statistics = detail.get('statistics') or self.statistics
+        self.best_scores, self.best_fitness, self.best_generation = self.baseline_scores, c['fitness'], 0
+        improved = self.pop.events('improved')
+        if improved:
+            best_generation, _, best = improved[-1]
+            b = self.pop.get(json.loads(best)['id'])
+            self.best_scores = json.loads(b['proxies'])['per_position']
+            self.best_fitness, self.best_generation = b['fitness'], best_generation
+        analyst = self.pop.events('analyst')
+        if analyst:
+            self.insights = json.loads(analyst[-1][2])['insights']
+        # The budget: tokens and candidates from the logged agent calls; wall
+        # time as the sum of the sessions' spans (first to last event of each).
+        tokens = candidates = 0
+        for _, _, d in self.pop.events('agent_call'):
+            d = json.loads(d)
+            tokens += d['tokens']
+            candidates += d['role'] not in ('critic', 'analyst')
+        elapsed, span_start, last = 0.0, None, None
+        for kind, created in db.execute('SELECT kind, created FROM events ORDER BY id'):
+            if kind == 'session' or span_start is None:
+                if span_start is not None:
+                    elapsed += last - span_start
+                span_start = created
+            last = created
+        self.budget.restore(tokens, candidates, elapsed)
+        done = [g for g, _, _ in self.pop.events('generation_done')]
+        g = max(done) + 1 if done else 1
+        finished = [json.loads(d) for gen, _, d in self.pop.events('request_done') if gen == g]
+        first = max((d['index'] for d in finished), default=-1) + 1
+        # A candidate whose request did not finish is marked, not redone.
+        kept = {d['id'] for d in finished}
+        for stale, status in db.execute('SELECT id, status FROM candidates WHERE generation >= ?', (g,)).fetchall():
+            if stale not in kept and not (status or '').startswith('interrupted'):
+                self.pop.update(stale, status='interrupted: ' + (status or ''))
+        self.status = 'running'
+        self.say(g, 'resumed', {'generation': g, 'first_request': first, 'budget': self.budget.used,
+                                'elapsed_seconds': round(elapsed, 1), 'best_generation': self.best_generation,
+                                'commit': self.commit})
+        return g, first
 
     def close(self):
         self.log_file.close()
         self.pop.close()
 
     def run(self, generations):
-        self.start()
+        if self.resume:
+            first_generation, first_request = self.restore()
+        else:
+            self.start()
+            first_generation, first_request = 1, 0
         reason = 'generation limit'
-        for g in range(1, generations + 1):
-            stop = self.generation(g)
+        g = first_generation - 1
+        for g in range(first_generation, generations + 1):
+            stop = self.generation(g, first_request if g == first_generation else 0)
             if stop:
                 reason = stop
                 break
@@ -410,34 +607,49 @@ def dry_run_agent():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--config', required=True)
+    ap.add_argument('--config', help='the run configuration (a resumed run uses the copy in its run dir)')
     ap.add_argument('--run-dir', required=True)
     ap.add_argument('--generations', type=int)
+    ap.add_argument('--resume', action='store_true', help='continue the run in --run-dir where it stopped')
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument('--dry-run', action='store_true', help='stub agents (no tokens)')
     mode.add_argument('--live', action='store_true', help='real agents through claude -p: the evolution loop')
     a = ap.parse_args()
-    cfg = json.loads(Path(a.config).read_text())
-    # Paths: the repository is the one holding this script unless given;
-    # relative paths are from it, and ~ is the user's home (the config is
-    # committed, so it names no user).
-    repo = Path(cfg.get('repo') or HERE.parents[1]).expanduser()
-    cfg['repo'] = str(repo)
-    cfg['positions'] = str(repo / Path(cfg['positions']).expanduser())
-    for key in ('fastchess', 'book'):
-        cfg['match'][key] = str(Path(cfg['match'][key]).expanduser())
     run_dir = Path(a.run_dir).expanduser()
+    if a.resume:
+        # The run's own configuration, as it started (edit that copy to
+        # change a limit); the dry-run island set is already in it.
+        cfg = json.loads((run_dir / 'config.json').read_text(encoding='utf-8'))
+    else:
+        if not a.config:
+            ap.error('--config is required for a new run')
+        cfg = json.loads(Path(a.config).read_text(encoding='utf-8'))
+        # Paths: the repository is the one holding this script unless given;
+        # relative paths are from it, and ~ is the user's home (the config is
+        # committed, so it names no user).
+        repo = Path(cfg.get('repo') or HERE.parents[1]).expanduser()
+        cfg['repo'] = str(repo)
+        cfg['positions'] = str(repo / Path(cfg['positions']).expanduser())
+        for key in ('fastchess', 'book'):
+            cfg['match'][key] = str(Path(cfg['match'][key]).expanduser())
+        if a.dry_run:
+            # The stub's script: one proposal from each of four islands, each a
+            # different funnel outcome; every rejected proposal is gated too.
+            cfg.update(islands=['proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer'],
+                       per_island=1, critic_audit_share=1.0)
     if a.live:
         agent = agents.CliAgent(**cfg.get('agent', {}))
         print('LIVE loop: real agents and tokens (owner approval required: deliverable 8c).', flush=True)
     else:
         agent = dry_run_agent()
-        # The stub's script: one proposal from each of four islands, each a
-        # different funnel outcome; every rejected proposal is gated too.
-        cfg.update(islands=['proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer'],
-                   per_island=1, critic_audit_share=1.0)
-    runner = gate.Runner(cfg['repo'], run_dir / 'work', jobs=cfg.get('jobs', 4), test_cache=cfg.get('test_cache'))
-    loop = Loop(cfg, run_dir, agent, runner)
+    # The gate's compiler is named, never CMake's default: a candidate's
+    # verdict must not depend on what `c++` happens to be (audit-1 U-17).
+    runner = gate.Runner(cfg['repo'], run_dir / 'work', jobs=cfg.get('jobs', 4), test_cache=cfg.get('test_cache'),
+                         compiler=cfg['compiler'])
+    try:
+        loop = Loop(cfg, run_dir, agent, runner, resume=a.resume)
+    except RunDirError as e:
+        sys.exit(f'orchestrator: {e}')
     reason = loop.run(a.generations or cfg['generations'])
     print(f'stopped: {reason}; budget used {loop.budget.used}; run log {run_dir / "run.log"}')
 

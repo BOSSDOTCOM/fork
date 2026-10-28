@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // eval: the static evaluation the search calls, chosen when Fork is built.
 //
 // Purpose: one entry point, static_eval(), whose implementation is fixed at
@@ -11,6 +13,7 @@
 #pragma once
 
 #include "core/position.hpp"
+#include "eval/eval_scale.hpp"
 
 #if defined(FORK_EVAL_BOOTSTRAP)
 #include "eval/bootstrap_eval.hpp"
@@ -19,8 +22,6 @@
 #endif
 
 namespace forkeng {
-
-constexpr int EvalLimit = 20000;
 
 inline int static_eval(const Position& pos) {
 #if defined(FORK_EVAL_BOOTSTRAP)

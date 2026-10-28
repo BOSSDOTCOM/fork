@@ -1,32 +1,52 @@
-# Fork CI: build from a clean clone on TCEC's toolchain
-# (Ubuntu 22.04: gcc 11.4, g++-12, clang 16, clang 19, CMake 3.22) and on
-# current Ubuntu, run the fast tests and check bench parity.
-# The local equivalent is scripts/check.sh full (CLAUDE.md).
+# Fork CI: the full build and test matrix, from a clean clone.
 #
-# Actions minutes are limited for private repos, so (owner, 2026-10-24):
-# only pushes to main and pull requests run it (never kb, which holds docs
-# and tools only); docs-only changes are skipped; a newer push cancels the
-# run it supersedes; apt downloads in the TCEC container are cached.
+# - Linux (ubuntu-latest): every preset that runs on Linux (clang and gcc,
+#   release, debug with ASan+UBSan, v3, avx512, nopext, TSan), MSan against
+#   an instrumented libc++, the fuzz targets over their committed seeds, the
+#   PGO builds and the tuning build (FORK_TUNE);
+# - Windows (windows-latest): the local development toolchain (LLVM-MinGW
+#   and WinLibs GCC, pinned in .github/ci/win-tools.sh), the presets
+#   scripts/check.sh full covers plus the full gcc-debug suite;
+# - the TCEC toolchain (Ubuntu 22.04: gcc 11.4, g++-12, clang 16, clang 19,
+#   CMake 3.22) with update.sh;
+# - the slow perft suites, one job each: perft_epd_full (about 2 hours) only
+#   when move generation's files change, and nightly on main (nightly.yml).
+# Every job ends with bench parity, and every ctest job runs the fast suite
+# (everything not labelled slow). The local equivalent is
+# scripts/check.sh full plus scripts/build.sh (CLAUDE.md).
+#
+# The repository is public, so hosted-runner minutes are free (owner,
+# 2026-10-28: the full matrix on every push to main and audit-1 and on every
+# pull request). A newer push cancels the run it supersedes. Pushes that only
+# touch docs skip the run; pull requests always run it, because a required
+# check that never starts blocks the merge. CPUs a binary needs but the
+# runner lacks (AVX-512 on most hosted runners) are emulated with Intel SDE
+# (.github/ci/sde.sh). Toolchains, SDE, the MSan libc++ and the test data
+# are cached.
 name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, audit-1]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
       - '*.md'
       - 'LICENSE'
   pull_request:
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
-      - '*.md'
-      - 'LICENSE'
   workflow_dispatch:
+    inputs:
+      force-sde:
+        description: Run the AVX-512 binaries under Intel SDE even where the CPU has AVX-512 (tests the SDE path)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+env:
+  # Read by .github/ci/sde.sh; always 0 outside a manual run that asks for it.
+  FORK_CI_FORCE_SDE: ${{ inputs.force-sde && '1' || '0' }}
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -43,14 +63,14 @@ jobs:
     steps:
       - name: Install git for the checkout
         run: apt-get update -q && apt-get install -y -q git ca-certificates
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Keep downloaded packages for the cache
         # The ubuntu image deletes .deb files after every install.
         run: rm -f /etc/apt/apt.conf.d/docker-clean
       - name: Cache apt downloads (clang 16/19, g++-12, cmake)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /var/cache/apt/archives
           key: apt-jammy-${{ hashFiles('scripts/tcec-toolchain-setup.sh') }}
@@ -73,7 +93,7 @@ jobs:
             echo "::endgroup::"
           done
       - name: Cache test data (perft EPD suites, pinned SHA-256)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache
           key: epd-${{ hashFiles('CMakeLists.txt') }}
@@ -83,21 +103,24 @@ jobs:
           set -euo pipefail
           cmake -S . -B build/gcc11 -G Ninja -DCMAKE_CXX_COMPILER=g++ -DCMAKE_BUILD_TYPE=Release -DFORK_ARCH=x86-64-v3
           cmake --build build/gcc11
-          ctest --test-dir build/gcc11 -LE slow --output-on-failure
+          bash .github/ci/run-tests.sh build/gcc11
 
-  current-ubuntu:
-    name: Current Ubuntu (${{ matrix.preset }})
+  linux:
+    name: Linux (${{ matrix.preset }})
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       matrix:
-        preset: [clang-release, gcc-release, clang-debug]
+        preset: [clang-release, clang-debug, clang-v3, clang-avx512, clang-nopext, clang-tsan,
+                 gcc-release, gcc-debug, gcc-v3, gcc-avx512, gcc-nopext, gcc-tsan]
     env:
       FORK_CLANG_CXX: clang++
       FORK_GCC_CXX: g++
+      # A TSan report kills the engine and fails the test (.claude/rules/testing.md).
+      TSAN_OPTIONS: halt_on_error=1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Install build tools
@@ -106,9 +129,29 @@ jobs:
           pkgs="ninja-build"
           if apt-cache show libclang-rt-dev >/dev/null 2>&1; then pkgs="$pkgs libclang-rt-dev"; fi
           sudo apt-get install -y -q $pkgs
+          # Sanitizer runtimes need the classic mmap randomization range.
+          sudo sysctl -w vm.mmap_rnd_bits=28
           cmake --version | head -n 1; clang++ --version | head -n 1; g++ --version | head -n 1
+      - name: Can this CPU run the binaries?
+        id: cpu
+        run: |
+          case "${{ matrix.preset }}" in
+            *-avx512) arch=x86-64-v4 ;;
+            *-v3|*-nopext) arch=x86-64-v3 ;;
+            *) arch=native ;;
+          esac
+          if bash .github/ci/sde.sh needs "$arch"; then echo "sde=true" >>"$GITHUB_OUTPUT"; else echo "sde=false" >>"$GITHUB_OUTPUT"; fi
+      - name: Cache Intel SDE
+        if: steps.cpu.outputs.sde == 'true'
+        uses: actions/cache@v6
+        with:
+          path: ~/sde
+          key: sde-linux-${{ hashFiles('.github/ci/sde.sh') }}
+      - name: Install Intel SDE
+        if: steps.cpu.outputs.sde == 'true'
+        run: bash .github/ci/sde.sh install ~/sde
       - name: Cache test data (perft EPD suites, pinned SHA-256)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache
           key: epd-${{ hashFiles('CMakeLists.txt') }}
@@ -116,5 +159,310 @@ jobs:
         run: |
           cmake --preset ${{ matrix.preset }}
           cmake --build build/${{ matrix.preset }}
-      - name: Fast tests (includes bench parity and no_alloc)
-        run: ctest --test-dir build/${{ matrix.preset }} -LE slow --output-on-failure
+      - name: Run the test binaries under Intel SDE
+        if: steps.cpu.outputs.sde == 'true'
+        run: |
+          echo "::notice::${{ matrix.preset }}: AVX-512 tests run under Intel SDE (the CPU lacks AVX-512, or force-sde was set)"
+          d=build/${{ matrix.preset }}
+          # The test executables run under SDE. The engine stays the real
+          # binary: SDE follows the UCI suites' exec of it, and an engine
+          # wrapped in a second SDE under the first one crashes Pin (seen
+          # 2026-10-28). Bench parity runs it through its own wrapper.
+          bins="$d/fork_tests"
+          for b in fork_alloc_test fork_uci_oom_test fork_uci_hash_oom_test; do [ -f "$d/$b" ] && bins="$bins $d/$b"; done
+          bash .github/ci/sde.sh inplace ~/sde $bins
+          bash .github/ci/sde.sh wrap ~/sde "$d/fork" "$d/fork-sde"
+          # Under emulation timings say nothing about Fork: the timing cases
+          # report SKIPPED, as they do while test games run (scripts/env.sh).
+          echo "FORK_GAMES_RUNNING=1" >>"$GITHUB_ENV"
+      - name: Fast tests (bench parity, no_alloc)
+        run: |
+          case "${{ matrix.preset }}" in *-tsan) export REQUIRE_NO_ALLOC=0 ;; esac
+          if [ "${{ steps.cpu.outputs.sde }}" = true ]; then
+            d=build/${{ matrix.preset }}
+            REQUIRE_BENCH=0 bash .github/ci/run-tests.sh $d -E '^(bench_parity|perft_bench_parity|version_lto)$'
+            bash .github/ci/bench-parity.sh $d/fork-sde
+            # version_lto runs the engine directly too: the same check through
+            # the wrapper, against the expectation the test itself declares.
+            want=$(ctest --test-dir $d --show-only=json-v1 -R '^version_lto$' | grep -oE 'lto (on|off)' | head -n 1)
+            got=$($d/fork-sde version | tr -d '\r' | grep -E '^lto ')
+            [ -n "$want" ] && [ "$got" = "$want" ] || { echo "::error::version_lto under SDE: got '$got', expected '$want'"; exit 1; }
+            echo "version_lto ok under SDE ($got)"
+          else
+            bash .github/ci/run-tests.sh build/${{ matrix.preset }}
+          fi
+
+  linux-msan:
+    name: Linux MSan (clang 21, libc++)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      LLVM_MAJOR: 21
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install clang from apt.llvm.org
+        id: llvm
+        run: |
+          bash .github/ci/llvm-apt.sh "$LLVM_MAJOR"
+          sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Cache the MSan-instrumented libc++
+        id: libcxx
+        uses: actions/cache@v6
+        with:
+          path: ~/fork-tools/libcxx-msan-${{ steps.llvm.outputs.version }}
+          key: libcxx-msan-${{ steps.llvm.outputs.tag }}-${{ hashFiles('scripts/msan.sh') }}-${{ steps.llvm.outputs.ident }}
+      - name: Build the MSan-instrumented libc++ (cache miss only)
+        if: steps.libcxx.outputs.cache-hit != 'true'
+        env:
+          FORK_LLVM_TAG: ${{ steps.llvm.outputs.tag }}
+          FORK_MSAN_CC: clang-${{ env.LLVM_MAJOR }}
+          FORK_MSAN_CXX: clang++-${{ env.LLVM_MAJOR }}
+        run: bash scripts/msan.sh libcxx
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: MSan selftest and build
+        env:
+          FORK_LLVM_TAG: ${{ steps.llvm.outputs.tag }}
+          FORK_MSAN_CC: clang-${{ env.LLVM_MAJOR }}
+          FORK_MSAN_CXX: clang++-${{ env.LLVM_MAJOR }}
+        run: |
+          bash scripts/msan.sh selftest
+          bash scripts/msan.sh build
+      - name: Fast tests under MSan (bench parity; no_alloc, uci_oom, uci_hash_oom excluded)
+        env:
+          REQUIRE_NO_ALLOC: 0
+        run: bash .github/ci/run-tests.sh build/clang-msan-libcxx -E '^(no_alloc|uci_oom|uci_hash_oom)$'
+
+  linux-fuzz:
+    name: Linux fuzz seeds (clang-fuzz)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FORK_CLANG_CXX: clang++
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          pkgs="ninja-build"
+          if apt-cache show libclang-rt-dev >/dev/null 2>&1; then pkgs="$pkgs libclang-rt-dev"; fi
+          sudo apt-get install -y -q $pkgs
+          sudo sysctl -w vm.mmap_rnd_bits=28
+      - name: Build the fuzz targets (ASan+UBSan, libFuzzer)
+        run: |
+          cmake --preset clang-fuzz
+          cmake --build build/clang-fuzz
+      - name: Every committed seed through its target
+        run: |
+          # -runs=0: run the corpus once, no new inputs; a crash or sanitizer
+          # report fails the step.
+          for t in fen moves uci; do
+            echo "::group::fuzz_$t over fuzz/corpus/$t ($(ls fuzz/corpus/$t | wc -l) seeds)"
+            build/clang-fuzz/fuzz_$t -runs=0 fuzz/corpus/$t
+            echo "::endgroup::"
+          done
+
+  linux-pgo:
+    name: Linux PGO and tuning builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build
+          v=$(clang++ -dumpversion | cut -d. -f1)
+          # llvm-profdata merges clang's profiles; it sits beside that clang.
+          [ -x /usr/lib/llvm-$v/bin/llvm-profdata ] || sudo apt-get install -y -q llvm-$v
+          echo "FORK_CLANG_CXX=/usr/lib/llvm-$v/bin/clang++" >>"$GITHUB_ENV"
+          echo "FORK_GCC_CXX=g++" >>"$GITHUB_ENV"
+      - name: PGO builds and their bench parity (scripts/build.sh)
+        run: bash scripts/build.sh clang-pgo gcc-pgo
+      - name: Tuning build (FORK_TUNE) declares every switch, bench parity
+        # The SPRT removal round and SPSA run tuning builds, which no other
+        # job compiles (one broke unseen in 6ab7cb7).
+        run: |
+          cmake --preset clang-release -B build/tune -DFORK_TUNE=ON -DFORK_BUILD_TESTS=OFF
+          cmake --build build/tune --target fork
+          want=$(sed -n '/^#define FORK_SEARCH_SWITCHES/,/^$/p' src/search/searcher.hpp | grep -c '^ *X(')
+          got=$(printf 'uci\nquit\n' | build/tune/fork | grep -c '^option name Use[A-Za-z]* type check')
+          echo "switches in FORK_SEARCH_SWITCHES: $want, check options: $got"
+          [ "$want" -gt 0 ] && [ "$got" -eq "$want" ]
+          bash .github/ci/bench-parity.sh build/tune/fork
+
+  windows:
+    name: Windows (${{ matrix.preset }})
+    runs-on: windows-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: clang-release
+            tools: llvm-mingw
+          - preset: clang-debug
+            tools: llvm-mingw
+          - preset: gcc-release
+            tools: winlibs
+          # The full gcc-debug suite on Windows (CLAUDE.md, phase-end
+          # checklist: a Windows gcc-debug crash once went unseen for a phase).
+          - preset: gcc-debug
+            tools: winlibs
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Cache the toolchain (${{ matrix.tools }}, CMake, Ninja)
+        uses: actions/cache@v6
+        with:
+          path: |
+            C:\fork-tools\${{ matrix.tools }}
+            C:\fork-tools\cmake
+            C:\fork-tools\ninja
+          key: win-${{ matrix.tools }}-${{ hashFiles('.github/ci/win-tools.sh') }}
+      - name: Install the toolchain (pinned SHA-256)
+        run: bash .github/ci/win-tools.sh install ${{ matrix.tools }}
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: Build
+        run: |
+          . .github/ci/win-tools.sh env
+          cmake --preset ${{ matrix.preset }}
+          cmake --build build/${{ matrix.preset }}
+      - name: Fast tests (bench parity, no_alloc)
+        run: |
+          . .github/ci/win-tools.sh env
+          bash .github/ci/run-tests.sh build/${{ matrix.preset }}
+
+  windows-gcc-smoke:
+    name: Windows GCC UCI smoke (debug, release, v3, avx512, nopext)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Cache the toolchain (winlibs, CMake, Ninja)
+        uses: actions/cache@v6
+        with:
+          path: |
+            C:\fork-tools\winlibs
+            C:\fork-tools\cmake
+            C:\fork-tools\ninja
+          key: win-winlibs-${{ hashFiles('.github/ci/win-tools.sh') }}
+      - name: Install the toolchain (pinned SHA-256)
+        run: bash .github/ci/win-tools.sh install winlibs
+      - name: Can this CPU run AVX-512 binaries?
+        id: cpu
+        run: |
+          if bash .github/ci/sde.sh needs x86-64-v4; then echo "sde=true" >>"$GITHUB_OUTPUT"; else echo "sde=false" >>"$GITHUB_OUTPUT"; fi
+          if bash .github/ci/sde.sh needs x86-64-v3; then
+            echo "::error::this runner cannot run x86-64-v3 binaries (gcc-v3, gcc-nopext)"
+            exit 1
+          fi
+      - name: Cache Intel SDE
+        if: steps.cpu.outputs.sde == 'true'
+        uses: actions/cache@v6
+        with:
+          path: C:\fork-tools\sde
+          key: sde-windows-${{ hashFiles('.github/ci/sde.sh') }}
+      - name: Install Intel SDE
+        if: steps.cpu.outputs.sde == 'true'
+        run: bash .github/ci/sde.sh install /c/fork-tools/sde
+      - name: Build each MinGW GCC engine, 50 UCI starts and bench parity
+        run: |
+          . .github/ci/win-tools.sh env
+          for p in gcc-debug gcc-release gcc-v3 gcc-avx512 gcc-nopext; do
+            echo "::group::$p"
+            cmake --preset $p
+            cmake --build build/$p --target fork
+            bin=build/$p/fork.exe
+            if [ "$p" = gcc-avx512 ] && [ "${{ steps.cpu.outputs.sde }}" = true ]; then
+              echo "::notice::gcc-avx512: the engine runs under Intel SDE (the CPU lacks AVX-512, or force-sde was set)"
+              bash .github/ci/sde.sh wrap /c/fork-tools/sde "$bin" build/$p/fork-sde
+              bin=build/$p/fork-sde
+            fi
+            bash scripts/uci-smoke.sh "$bin" 50
+            bash .github/ci/bench-parity.sh "$bin"
+            echo "::endgroup::"
+          done
+
+  slow:
+    name: Slow (perft_epd_deep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FORK_CLANG_CXX: clang++
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: perft_epd_deep and bench parity (clang-release)
+        run: bash .github/ci/slow-suite.sh perft_epd_deep
+
+  # perft_epd_full takes about 2 hours, so it runs here only when the push or
+  # pull request changes a file move generation depends on
+  # (.github/ci/movegen-changed.sh), and nightly on main otherwise
+  # (nightly.yml). A job skipped by its condition counts as passed, so as a
+  # required check it binds exactly when it runs (owner, 2026-10-28). If the
+  # changed files cannot be listed, it runs.
+  movegen-changed:
+    name: Move generation changed?
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      movegen: ${{ steps.diff.outputs.movegen }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: bash .github/ci/movegen-changed.sh
+
+  perft-full:
+    name: Slow (perft_epd_full, when move generation changes)
+    needs: movegen-changed
+    if: ${{ !cancelled() && (needs.movegen-changed.result != 'success' || needs.movegen-changed.outputs.movegen == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      FORK_CLANG_CXX: clang++
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: perft_epd_full and bench parity (clang-release)
+        run: bash .github/ci/slow-suite.sh perft_epd_full

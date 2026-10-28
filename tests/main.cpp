@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Test runner: `fork_tests <suite>` runs one suite, `fork_tests` runs all
 // suites that are not slow-only.
 #include <chrono>

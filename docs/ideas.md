@@ -9,7 +9,7 @@ Candidate improvements, each with the evidence needed to adopt it.
 | **type** | **ELO**: a playing-strength change. It's measured by SPRT and sits behind a config flag until accepted. **TOOLING**: infrastructure measured by its own success metric. No flag needed. |
 | **phase** | When the idea is scheduled. |
 | **metric** | What decides success (SPRT result for ELO; the stated metric for TOOLING). |
-| **status** | untested, in progress, accepted, rejected (with the evidence). |
+| **status** | untested, in progress, accepted, rejected, inconclusive, parked (with the evidence and the date). |
 | **sources** | References consulted. Every outside source is also logged in docs/ORIGINALITY.md. Ideas only, never code. |
 | **runtime cost** | **none**: the shipped engine does no extra work (training- or test-side only). **possible**: the idea may cost speed in the engine itself. |
 | **earliest phase** | The first phase whose infrastructure the idea needs. |
@@ -57,7 +57,7 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **phase:** before the Phase 3 search work, repeated before Phases 4-6.
 - **metric / output:** a ranked list of candidate ELO ideas, entered in this
   log.
-- **status:** untested
+- **status:** in progress: the Phase 3 idea mining was done (2026-10-24; KB search-techniques.md, ORIGINALITY.md); to be repeated before Phases 4-6.
 
 ## 4. TCEC game mining for blind spots
 
@@ -80,7 +80,7 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **phase:** starts in Phase 3 when SPRT testing begins; formalized in
   Phase 8.
 - **metric:** games needed per accepted change.
-- **status:** untested
+- **status:** in progress: every Phase 3 SPRT is pentanomial (`tools/sprt.sh`, `tools/cloud/sprt_merge.py`).
 
 ## 6. On-demand analysis tools
 
@@ -149,7 +149,7 @@ added on 2026-10-24; ideas 1-12 predate them.
     mailbox is not the cause. gcc is_pseudo_legal back to neutral.
   - **v4** (v3 with a branchless King mask): gives_check worse (3.66 ns vs
     3.43 for v2). The v4 "uint8" binaries were mislabeled (actually v2); see
-    HANDOFF.md, harness fix.
+    the harness fix of that session (its notes were not kept).
   - **v5** (6 check-square entries, State 136 B, no State alignment, uint8
     mailbox): the gives_check regression is gone. make/unmake min -4..-5%,
     null move -5..-8%, gcc is_pseudo_legal min +5%. All verdicts "no
@@ -283,7 +283,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   - the DTZ, cursed-win and 50-move logic above is the same for 7 pieces;
     the suite of won positions near the 50-move limit includes 7-piece
     positions checked against that API.
-- **status:** untested (7-piece requirement set)
+- **status:** accepted (2026-10-27): deliverable 7 built it, and the mc-tables SPRT gave +17.5 ± 7.2 Elo at the cap (sprt-log); the conversion suite converted 100 of 100. The two UNVERIFIED notes above are settled (DESIGN.md §5.2 deliverable 7, ORIGINALITY.md).
 
 ## 13. Cheap/expensive self-play data mixing
 
@@ -478,7 +478,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   mating move. Candidates: no LMP or LMR when alpha or beta is already a
   mate score, or when the defending king has few squares; checks exempt
   from LMP. No wrong score is ever reported, only a later mate.
-- **phase:** Phase 3 tier 2 (deliverable 7) or the removal round; measure
+- **phase:** Phase 3 tier 2 (deliverable 9) or the removal round; measure
   with mate-suite solve counts (the kb-researcher's suite) and SPRT.
 - **re-checked with tablebases** (owner, 2026-10-26, after deliverable 7):
   with today's search (Fork's own constants, the futile-node filter) the
@@ -582,7 +582,11 @@ tuned by SPSA.
 - **earliest phase:** Phase 3 (deliverable 8c).
 - **status:** harness built (2026-10-26, `tools/evolve/`; DESIGN.md §5.2
   implementation notes): unit-tested and dry-run with stub agents; the
-  evolution loop itself not started (owner). Pilot scheduled
+  evolution loop itself not started (owner). Since then: the validation
+  run of 2026-10-27 (18 live proposals), the 4x position set and the
+  held-out promotion check (DESIGN.md §5.2, deliverable 8c); the long run
+  (40 generations) is on hold until the audit-1 branch is approved, and
+  the audit's gate, resume and pinning fixes come first. Pilot scheduled
 
 ## 24. TT victim policy under real table pressure
 
@@ -655,7 +659,7 @@ tuned by SPSA.
   is now the same size as the cutoff move's bonus. Make the ratio a
   parameter (owner, 2026-10-26, second external review) and let SPSA find
   it, with the removal round's UseHistoryMalus result as the reference.
-- **phase:** deliverable 8b (the parameter table) adds it; SPSA after Phase 4.
+- **phase:** a parameter-table entry still to add (8b was built without it); SPSA after Phase 4.
 - **metric:** SPSA, then SPRT [0, 3] of the tuned value.
 - **runtime cost:** none (a multiply where the malus is applied).
 - **earliest phase:** Phase 3 (8b).
@@ -689,4 +693,144 @@ tuned by SPSA.
   then SPRT.
 - **runtime cost:** none for the measurement; a time extension costs time.
 - **earliest phase:** Phase 3 (deliverable 8).
-- **status:** measurement queued
+- **status:** measurement queued. **Run it before B-3 is revisited**
+  (audit-1 B-3, re-searching a root fail high one ply shallower: reverted
+  after its SPRT reached the cap undecided, +0.65 ± 3.56 Elo; sprt-log.md
+  b3-shallow-fh). The audit meant this measurement to come first; B-3 ran
+  without it.
+
+## 30. Keeping a stale TT entry that is still deeper once aged
+
+- **type:** ELO (switch `use_tt_keep_deeper`, UCI `UseTtKeepDeeper` in
+  tuning builds)
+- **idea:** the position's own entry from an earlier search is kept against
+  an inexact new result while its depth minus StaleDepthPerSearch plies per
+  search of age still exceeds the new depth (audit-1, B-5; 808dd8a). Its
+  LTC SPRT (40+0.4, Hash 64 MB, 1 thread, [0, 3]) was stopped by the owner
+  as inconclusive, leaning negative: -5.1 +/- 10.1 Elo after 2,602 games
+  (2026-10-28, sprt-log.md b5-keep-deeper). At 64 MB and one thread the
+  table is rarely under pressure (as for idea 24).
+- **phase:** Phase 6's TT tests, under large Hash and many threads.
+- **metric:** SPRT [0, 3] at LTC, at Phase 6 Hash and thread counts.
+- **runtime cost:** none measurable (one comparison per replacement of the
+  position's own entry).
+- **earliest phase:** Phase 6.
+- **status:** inconclusive (Phase 3); off by default
+
+## 31. Repetition of a position from before the root
+
+- **type:** ELO (behind a switch)
+- **idea:** inside the search a position that occurred once before scores
+  as a draw (`repetition_count() >= 2`, searcher.cpp), also when that
+  earlier occurrence is in the game before the root, a deliberate choice
+  of deliverable 2 ("one repetition is enough inside the search"). But a
+  position reached once in the game is not a draw yet: the opponent can
+  deviate. So a losing Fork may steer for a "draw" the opponent declines,
+  and a winning Fork avoids lines through old positions. Variant: three
+  occurrences when the earlier ones are before the root, two when both are
+  in the tree (audit-1, A1 suspicion 1).
+- **phase:** tier 2, or Phase 7 (tournament behaviour).
+- **metric:** SPRT [0, 3] at STC and LTC.
+- **runtime cost:** none measurable (the same history walk).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 32. Pruning guards for tablebase losses
+
+- **type:** ELO (behind a switch)
+- **idea:** late move pruning, futility and SEE pruning stop once the best
+  score so far is a mate loss (`best <= -(MateScore - MaxPly)`), but go on
+  when it is a tablebase loss, so at shallow non-PV nodes they may prune
+  the quiet move that saves the draw. Guard with `is_tb_or_mate(best)`
+  instead (audit-1, A1 suspicion 6). Heuristic: it matters only in table
+  positions, which TCEC adjudicates.
+- **phase:** with the next table work (Phase 8's 7-man measurements).
+- **metric:** a table conversion and defence suite first, then SPRT
+  [0, 3] with tables on both sides.
+- **runtime cost:** none (one comparison).
+- **earliest phase:** Phase 3.
+- **status:** untested (measure first)
+
+## 33. A shallow exact result replacing a deeper entry
+
+- **type:** ELO (behind a switch)
+- **idea:** `TransTable::deposit` keeps the position's own entry only
+  against shallower inexact results, so an exact result from a shallow
+  search (a quiescence PV, depth 0) overwrites a depth-N entry of the same
+  search. That follows deliverable 3's spec, but may lose information.
+  Variant: never replace a deeper entry of the same search (audit-1, A1
+  suspicion 5).
+- **phase:** tier 2, before the TT tests of Phase 6.
+- **metric:** first a FORK_SEARCH_STATS counter of exact writes whose own
+  entry was deeper (how often it happens); if frequent, SPRT [0, 3].
+- **runtime cost:** none (one comparison per store).
+- **earliest phase:** Phase 3.
+- **status:** untested (measure first)
+
+## 34. Reverse futility margin 40 cp per ply
+
+- **type:** ELO (a search constant)
+- **idea:** `RfpMargin` 40 instead of 80. Fork's own measurement (DESIGN.md,
+  Search constants) bounds the margin from below: every M from 40 to 160
+  keeps the share of RFP-prunable nodes whose search then fails low under
+  1% at every depth 1-6, and 40 is the smallest such M. The data do not
+  pick a value, so only games can.
+- **phase:** audit-1 (2026-10-27, 304081e and 306bd9a); reverted to 80 on
+  2026-10-28.
+- **metric:** SPRT [0, 3] at STC, then LTC.
+- **runtime cost:** none (a constant).
+- **earliest phase:** Phase 3.
+- **status:** **untested**. No SPRT decided it: the first STC run was
+  superseded after 3,200 games (B-4 in both engines; +3.47 ± 9.61, LLR
+  0.23), and its restart without B-4 was stopped in stage 0 when the owner
+  accepted 40 without a test. The Phase D gauntlet then gave an
+  **unfavorable but not conclusive** result: with 40, Fork scored 156.0
+  of 357 games against Milestone C's 178.5 on the same games (43.7% vs
+  50.0%, about -44 Elo, roughly two standard errors) before that gauntlet
+  was stopped; with 80, all 1,200 games, it matched Milestone C (606.5 vs
+  600.5; Ordo 2411.5 ± 22.5 against 2402.5 ± 23.3). Reverted to 80 by the
+  owner's decision (sprt-log.md, history/phase-3/audit-1.md). **Revisit
+  when the eval-dependent margins are retuned after Phase 4** (Quality
+  control 6), with an SPRT.
+
+## 35. The bootstrap eval calls insufficient_material twice
+
+- **type:** TOOLING (performance)
+- **idea:** the bootstrap evaluation repeats the `insufficient_material`
+  test that the search has already made at the node (12.4 M calls over
+  the bench, about 0.2% of the profile; audit-1 P-5). Pass the result in,
+  or drop the eval's own call.
+- **phase:** only if the bootstrap eval is touched before Phase 4, whose
+  network replaces it.
+- **metric:** search nps with `bench/ab_search.py`, bench identical.
+- **runtime cost:** none (a saving).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 36. A SIMD pick in MoveSelector::take_next
+
+- **type:** TOOLING (performance)
+- **idea:** `take_next` is the largest single entry in the profile (20.5%
+  at the audit-1 Phase D gate). Find the best remaining score with SIMD
+  compares over the score array instead of a scalar scan (audit-1, A2
+  speed suspicion).
+- **phase:** after tier 2's history tables settle the selector's scores.
+- **metric:** search nps with `bench/ab_search.py`, bench identical; the
+  same move order as a scalar reference, by an equivalence test.
+- **runtime cost:** none if it pays; report the maintenance cost first
+  (Performance doctrine).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 37. A cache-friendlier MoveList and PlyFrame layout
+
+- **type:** TOOLING (performance)
+- **idea:** lay out the move list and the per-ply frame so that a node's
+  hot fields share cache lines (audit-1, A2 speed suspicion).
+- **phase:** with tier 2's PlyFrame changes (F-13, F-17/F-18), so the
+  layout is settled once.
+- **metric:** search nps with `bench/ab_search.py` and fork_micro, bench
+  identical; `static_assert(sizeof(PlyFrame) <= 2688)` updated with it.
+- **runtime cost:** none if it pays.
+- **earliest phase:** Phase 3.
+- **status:** untested

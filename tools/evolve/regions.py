@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Evolvable regions and the mutator guard (ideas.md idea 23).
 
 An evolvable region is the code between two marker lines in one source file:

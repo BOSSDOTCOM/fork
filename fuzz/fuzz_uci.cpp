@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // libFuzzer target: arbitrary bytes into the UCI command handler, split into
 // lines the way the input loop splits them (LF, CR).
 //

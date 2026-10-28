@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Sharded SPRT results: one shard's snapshot, and the merge of many.
 
 A sharded SPRT splits one test across machines or jobs (tools/cloud/,
@@ -120,23 +122,53 @@ def snapshot(log_text):
             'abnormal': abnormal, 'fastchess_ptnml': [int(x) for x in reports[-1]] if reports else None}
 
 
+def opening_range(meta):
+    """(first, last) book line a shard played, or None if not recorded:
+    opening_end when the shard recorded it, else opening_start + rounds - 1
+    (older shards), else opening_start alone."""
+    if meta.get('opening_start') is None:
+        return None
+    start = int(meta['opening_start'])
+    if meta.get('opening_end') is not None:
+        return start, int(meta['opening_end'])
+    if meta.get('rounds') is not None:
+        return start, start + int(meta['rounds']) - 1
+    return start, start
+
+
+def final_status(status, pairs, meta):
+    """A shard that ended normally ("done") with fewer finished pairs than
+    its planned rounds is "short"."""
+    if status == 'done' and meta.get('rounds') is not None and pairs < int(meta['rounds']):
+        return 'short'
+    return status
+
+
 def merge(shards):
-    """The summed counts; refuses shards of different tests, or two shards
-    that played the same openings. The test is identified by its commits and
-    conditions, not by binary hashes: machines that build for themselves
-    produce different bytes (debug info, build paths)."""
-    keys = ('base', 'test', 'tc', 'hash', 'base_opts', 'test_opts')
+    """The summed counts; refuses shards of different tests (commits,
+    conditions, tables on or off, opening book), or two shards whose opening
+    ranges intersect (stages run with different games or shards values, or
+    AWS shards beside GitHub ones, would otherwise replay openings). The
+    test is identified by its commits and conditions, not by binary hashes:
+    machines that build for themselves produce different bytes (debug info,
+    build paths)."""
+    keys = ('base', 'test', 'tc', 'hash', 'base_opts', 'test_opts', 'tables', 'book_sha')
     first = shards[0].get('meta', {})
     for s in shards[1:]:
         for k in keys:
             if s.get('meta', {}).get(k) != first.get(k):
                 raise ValueError(f'shards differ in {k}: {first.get(k)!r} vs {s.get("meta", {}).get(k)!r}')
-    starts = [s.get('meta', {}).get('opening_start') for s in shards]
-    dup = sorted({x for x in starts if x is not None and starts.count(x) > 1})
-    if dup:
-        raise ValueError(f'shards share openings (opening_start {", ".join(map(str, dup))})')
+    ranges = sorted(r for r in (opening_range(s.get('meta', {})) for s in shards) if r is not None)
+    for (a0, a1), (b0, b1) in zip(ranges, ranges[1:]):
+        if b0 <= a1:
+            raise ValueError(f'shards share openings: lines {a0}-{a1} and {b0}-{b1} of the book intersect')
     total = [sum(s['ptnml'][i] for s in shards) for i in range(5)]
-    return {'meta': {k: first.get(k) for k in keys}, 'shards': len(shards), 'ptnml': total,
+    per_shard = sorted(({'stage': s.get('meta', {}).get('stage'), 'shard': s.get('meta', {}).get('shard'),
+                         'runner': s.get('meta', {}).get('runner'), 'status': s.get('status', '?'),
+                         'pairs': sum(s['ptnml']), 'planned': s.get('meta', {}).get('rounds'),
+                         'fastchess_exit': s.get('meta', {}).get('fastchess_exit')} for s in shards),
+                       key=lambda r: (int(r['stage'] or 0), int(r['shard'] or 0)))
+    return {'per_shard': per_shard, 'meta': {k: first.get(k) for k in keys + ('book', 'book_seed')}, 'shards': len(shards), 'ptnml': total,
             'pairs': sum(total), 'finished_games': sum(s.get('finished_games', 0) for s in shards),
             'time_losses': sum(s.get('time_losses', 0) for s in shards),
             'abnormal': sum(s.get('abnormal', 0) for s in shards),
@@ -150,9 +182,15 @@ def report(merged, nelo0, nelo1, alpha=0.05, beta=0.05):
     lower, upper = bounds(alpha, beta)
     se = math.sqrt(var / n) if n else 0.0
     half = (elo(mean + 1.96 * se) - elo(mean - 1.96 * se)) / 2 if n else 0.0
-    return '\n'.join([
+    shard_lines = [f'  stage {r["stage"]} shard {r["shard"]} ({r["runner"]}): {r["status"]}, pairs {r["pairs"]} of '
+                   f'{r["planned"] if r["planned"] is not None else "?"} planned'
+                   + (f', fastchess exit {r["fastchess_exit"]}' if r['fastchess_exit'] not in (None, '0') else '')
+                   for r in merged.get('per_shard', [])]
+    return '\n'.join(shard_lines + [
         f'Shards: {merged["shards"]} ({", ".join(merged["status"])}); pairs {n}, games {2 * n} '
         f'({merged["finished_games"]} finished, time losses {merged["time_losses"]}, abnormal {merged["abnormal"]})',
+        f'Tables: {merged["meta"].get("tables") or "not recorded"} (both engines); book: '
+        f'{merged["meta"].get("book") or "not recorded"}, seed {merged["meta"].get("book_seed") or "not recorded"}',
         f'Elo: {elo(mean):.2f} +/- {half:.2f}, nElo: {nelo(p):.2f} +/- {1.96 * NELO_SCALE / math.sqrt(n) if n else 0:.2f}',
         f'Ptnml(0-2): {p}',
         f'LLR: {value:.2f} ({lower:.2f}, {upper:.2f}) [{nelo0:.2f}, {nelo1:.2f}] nElo: {decision}',
@@ -179,7 +217,7 @@ def main(argv=None):
         with open(a.log, encoding='utf-8', errors='replace') as f:
             result = snapshot(f.read())
         result['meta'] = dict(kv.split('=', 1) for kv in a.meta)
-        result['status'] = a.status
+        result['status'] = final_status(a.status, result['pairs'], result['meta'])
         with open(a.out, 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=1)
         return 0

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Configure, build and test presets; prints a summary table.
 #   scripts\build.ps1                     all presets, then PGO for both compilers
 #   scripts\build.ps1 clang-debug gcc-v3  chosen presets (clang-pgo / gcc-pgo run PGO)

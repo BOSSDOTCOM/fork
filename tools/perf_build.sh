@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds `fork` at a commit for the performance gate (DESIGN.md §5.2, Quality
 # control 2), in WSL: clang, Release, -march=native, no tests, into
 # ~/fork-perf/<short commit>/fork (reused if present).

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Runs `fork <CMD>` (bench, the default, or perftbench) and compares its node
 # count and signature with the committed reference.
 # Usage: cmake -DFORK=<exe> [-DCMD=bench|perftbench] -DREF=<ref file> -P check_bench.cmake

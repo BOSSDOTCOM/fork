@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // quiet_history: the butterfly history of quiet moves (DESIGN.md §5.2,
 // deliverable 5; KB search-techniques.md T9).
 //
