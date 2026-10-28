@@ -390,3 +390,8 @@ Elo: 3.47 +/- 9.61, nElo: 4.35 +/- 12.04
 Ptnml(0-2): [163, 332, 598, 324, 183]
 LLR: 0.23 (-2.94, 2.94) [0.00, 3.00] nElo: continue
 ```
+
+### 20261028T195013Z b6r-rfp40 (GitHub shards): stopped, RfpMargin 40 accepted without an SPRT
+
+- base `8550a78` (8550a78cfc5e1ee0a9139276bdf95c4aed8f80a0: audit-1 after the B-4 revert, RfpMargin 80), test `306bd9a` (306bd9a94710e6cc24479ebad8c3f679c57986c0: RfpMargin 40), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, Syzygy 3-4-5 for both sides; stage 0 (run 40757856982) cancelled while running, so no games were merged
+- Verdict: **NOT RUN TO A RESULT.** The owner accepted RfpMargin 40 without an SPRT (2026-10-28) and dropped the LTC follow-up. The only game data on RfpMargin 40 is the superseded b6-rfp40 run above (3,200 games with B-4 in both engines, Elo +3.47 +/- 9.61, LLR 0.23, undecided): its effect on strength is UNVERIFIED (DESIGN.md, Search constants).
