@@ -113,6 +113,24 @@ int main() {
     }
   }
   {
+    // Audit-1 R-3: the UCI session reserves room for 16,384 plies at startup
+    // (GameStatePlies, session.cpp), so a long game's move list never
+    // allocates. 4,000 plies of knight moves, back to the start placement:
+    // none with the reserve; without it, the stack grows past its default
+    // 1,024 (which shows the counter would see it).
+    const char* shuffle[] = {"g1f3", "g8f6", "f3g1", "f6g8"};
+    for (const bool reserved : {true, false}) {
+      forkeng::Position pos;
+      if (reserved) pos.reserve_plies(16384);
+      long before = allocations.load();
+      for (int ply = 0; ply < 4000; ++ply) pos.make(pos.parse_uci(shuffle[ply % 4]));
+      long during = allocations.load() - before;
+      std::printf("4,000 plies %s: %ld heap allocations\n", reserved ? "with the reserve" : "without it",
+                  during);
+      if (reserved ? during != 0 : during == 0) ++failures;
+    }
+  }
+  {
     // The search (DESIGN.md §5.2, hot-path rule 3): after setup (the
     // Searcher is created once, outside any search), deliberate() never allocates,
     // on any of the search-bench positions.

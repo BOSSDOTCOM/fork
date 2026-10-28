@@ -131,6 +131,14 @@ class UciSession {
   std::string syzygy_path_;
   bool tables_pending_ = false;
   Position root_;
+  // cmd_position builds the new position here, then swaps it with root_.
+  // Both reserve GameStatePlies States at startup, so a move list of a long
+  // game never allocates (audit-1 R-3).
+  Position spare_;
+  // The last position command failed even when tried again: no go searches
+  // (the root may be the previous position, the other side to move) until a
+  // position command succeeds (audit-1 R-3).
+  bool position_unknown_ = false;
   bool go_answered_ = false;  // the go being handled has started its search or answered
   SearchSignals signals_;
   // The search reads these without the mutex: stop is set with signals_.stop

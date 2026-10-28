@@ -151,8 +151,15 @@ std::string describe_syzygy_path(const std::string& paths) {
 
 }  // namespace
 
+// The State room each of root_ and spare_ reserves: 8,192 moves, far beyond
+// any real game (TCEC games end in the hundreds of moves), for about 1 MB
+// each (audit-1 R-3). Longer move lists still work: make() grows the stack.
+constexpr std::size_t GameStatePlies = 16384;
+
 UciSession::UciSession(OutputChannel& out, SessionConfig config)
     : out_(out), config_(config), searcher_(std::make_unique<Searcher>(tt_)) {
+  root_.reserve_plies(GameStatePlies);
+  spare_.reserve_plies(GameStatePlies);
   declare_options();
 }
 
@@ -290,8 +297,8 @@ int UciSession::run(std::FILE* in) {
 
 bool UciSession::handle_line(std::string_view line) {
   go_answered_ = false;
-  try {
-    out_.log_input(line);
+  // Tokenizes and runs the line; false for quit.
+  auto run = [&]() {
     const std::vector<LineToken> tokens = split_tokens(line);
     // The spec: unknown tokens before a command are skipped.
     std::size_t i = 0;
@@ -307,6 +314,11 @@ bool UciSession::handle_line(std::string_view line) {
       return false;
     }
     dispatch(tokens, i, line);
+    return true;
+  };
+  try {
+    out_.log_input(line);
+    return run();
   } catch (const std::exception& e) {
     // A go that failed before its search started (no memory to tokenize the
     // line, say) still gets its one bestmove, and an isready its readyok
@@ -318,7 +330,26 @@ bool UciSession::handle_line(std::string_view line) {
       } catch (...) {
         // ignored: a join that fails leaves no search to wait for
       }
-      answer_without_memory(root_, NoMove, false);
+      if (position_unknown_) {
+        try {
+          out_.send_line("bestmove 0000");  // never a move of an unknown position (R-3)
+        } catch (...) {
+          // ignored: only a failing mutex can throw here
+        }
+      } else {
+        answer_without_memory(root_, NoMove, false);
+      }
+    }
+    // A position command that ran out of memory is tried once more; if that
+    // fails too, the position is unknown, and no go searches until the next
+    // position command succeeds (audit-1 R-3; owner, 2026-10-28).
+    if (command == "position") {
+      try {
+        run();
+        return true;
+      } catch (...) {
+        position_unknown_ = true;
+      }
     }
     try {
       out_.send_info_string(std::string("error: ") + e.what());
@@ -421,7 +452,7 @@ void UciSession::cmd_ponderhit() {
 
 void UciSession::cmd_position(const std::vector<LineToken>& tokens, std::size_t first,
                               std::string_view line) {
-  Position pos;
+  Position pos;  // the FEN or the start position; the moves are made on spare_
   std::size_t i = first;
   if (i < tokens.size() && tokens[i].text == "startpos") {
     ++i;
@@ -440,20 +471,40 @@ void UciSession::cmd_position(const std::vector<LineToken>& tokens, std::size_t 
     out_.send_info_string("position: expected startpos or fen; position unchanged");
     return;
   }
+  // Copied into spare_'s reserved States (no allocation), and the moves made
+  // there, so the move list of a long game cannot run out of memory.
+  spare_ = pos;
+  std::size_t illegal = tokens.size();
   while (i < tokens.size() && tokens[i].text != "moves") ++i;
   for (++i; i < tokens.size(); ++i) {
-    const Move m = parse_uci_move(pos, tokens[i].text);
+    const Move m = parse_uci_move(spare_, tokens[i].text);
     if (m.is_none()) {
-      out_.send_info_string("illegal move " + std::string(tokens[i].text) + "; position kept before it");
+      illegal = i;
       break;
     }
-    pos.make(m);
+    spare_.make(m);
   }
-  root_ = std::move(pos);
+  std::swap(root_, spare_);  // moves only: no allocation
+  position_unknown_ = false;
+  if (illegal < tokens.size())
+    out_.send_info_string("illegal move " + std::string(tokens[illegal].text) + "; position kept before it");
 }
 
 void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first) {
-  if (first < tokens.size() && tokens[first].text == "perft") {
+  const bool perft = first < tokens.size() && tokens[first].text == "perft";
+  if (position_unknown_) {
+    // Never search a position that may not be the GUI's (audit-1 R-3): the
+    // go is answered at once with the null move (go perft gets no bestmove).
+    go_answered_ = true;
+    try {
+      out_.send_info_string("error: the last position command failed; no search until a position succeeds");
+    } catch (...) {
+      // ignored: no memory for the message; the bestmove still goes out
+    }
+    if (!perft) out_.send_line("bestmove 0000");
+    return;
+  }
+  if (perft) {
     go_answered_ = true;  // a Fork extension, not a search: no bestmove
     cmd_perft(tokens, first + 1);
     return;

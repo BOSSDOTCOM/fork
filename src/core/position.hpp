@@ -118,6 +118,11 @@ class Position {
   // The square of the piece a capture by the side to move removes.
   Square capture_square(Move m) const { return m.is_en_passant() ? m.to() - forward(side_) : m.to(); }
 
+  // Room for this many plies in the State stack, so that make() up to there
+  // never allocates; copies and assignments keep it (audit-1 R-3: the UCI
+  // session reserves a long game's worth at startup).
+  void reserve_plies(std::size_t plies) { states_.reserve(plies); }
+
   void make(Move m);
   void unmake(Move m);
   void make_null();
