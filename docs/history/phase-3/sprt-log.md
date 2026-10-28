@@ -189,7 +189,7 @@ LLR: 0.21 (7.1%) (-2.94, 2.94) [0.00, 3.00]
 ### 20261026T210311Z rv-failhigh
 
 - base `077db27` (077db27), test `f0a9caf` (f0a9caf), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40
-- Verdict: **REJECTED (stopped by the owner, 2026-10-26)** after 2,143 finished games. The last report (2,000 games): the root fail-high fix (first external review, claim (a)) at -14.6 ± 10.8 Elo (nElo -20.7 ± 15.2), its 95% interval entirely below zero; LLR -0.95 of -2.94. The behaviour is reverted: when the search stops with a root fail high still awaiting its re-search, the previous iteration's move is kept (the bookkeeping stays; ideas.md idea 29). No time losses, crashes or illegal moves.
+- Verdict: **REJECTED (stopped by the owner, 2026-10-26)** after 2,143 finished games. The last report (2,000 games): the root fail-high fix (first external review, claim (a)) at -14.6 ± 10.8 Elo (nElo -20.7 ± 15.2), its 95% interval entirely below zero; LLR -0.95 of -2.94. The behaviour is reverted: when the search stops with a root fail high still awaiting its re-search, the previous iteration's move is kept (the bookkeeping stays; ideas.md idea 29). Rejected on STC alone: the owner's recorded exception to the LTC-retest rule (2026-10-27; DESIGN.md §5.2), with idea 29's measurement plan reopening the question. No time losses, crashes or illegal moves.
 ```
 Elo: -14.60 +/- 10.75, nElo: -20.71 +/- 15.23
 Games: 2000, Wins: 647, Losses: 731, Draws: 622, Points: 958.0 (47.90 %)
@@ -290,7 +290,7 @@ check after; if it fails, B2 and (c) are tested separately.
 ### 20261027T165757Z d8-final
 
 - base `d51462f` (d51462f: deliverable 8a, the increment fix, with the last-info-line fix), test `8b8e34c` (8b8e34c: + B2, the danger-zone reserve, + (c), the iteration rule), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40; cap 5,000 games
-- Verdict: **ACCEPTED (stopped by the owner, 2026-10-27: "I trust the changes")** after 2,303 finished games. The last report (2,200 games): +1.9 +/- 10.6 Elo, LLR 0.22 of 2.94 on non-regression bounds; it was not decided by the rule. With its stress results (B2 0 time losses in 2,000 games at 2+0.02 under full load, (a) alone 3, (c) alone 1), the combination is merged as deliverable 8. sprt.sh's own summary of this run was cut off when the run was stopped; the figures here are from its game log. No time losses, crashes or illegal moves.
+- Verdict: **ACCEPTED (stopped by the owner, 2026-10-27: "I trust the changes")** after 2,303 finished games. The last report (2,200 games): +1.9 +/- 10.6 Elo, LLR 0.22 of 2.94 on non-regression bounds; it was not decided by the rule. With its stress results (B2 0 time losses in 2,000 games at 2+0.02 under full load, (a) alone 3, (c) alone 1), the combination is merged as deliverable 8. sprt.sh's own summary of this run was cut off, and the figures here are from its game log. (Audit-1, U-1: the cut-off was a bug in sprt.sh, which aborted on an unset BASE_OPTS when writing the entry, not the stop.) No time losses, crashes or illegal moves.
 ```
 Elo: 1.89 +/- 10.62, nElo: 2.59 +/- 14.51
 Games: 2202, Wins: 764, Losses: 752, Draws: 686, Points: 1107.0 (50.27 %)

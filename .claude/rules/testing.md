@@ -27,7 +27,8 @@ paths:
   - A change that alters search or move order updates bench.ref in the same
     commit, with the new count in the message.
 - **Run before claiming done:**
-  - `scripts/check.sh full` (the Stop hook and pre-commit run it too);
+  - `scripts/check.sh full` (pre-commit runs it; the Stop hook runs
+    `check.sh stop`);
   - `scripts/build.sh` (all presets) before a phase sign-off;
   - slow suites (`ctest -L slow`) at sign-off.
 - **Sanitizers:** clang-debug runs ASan+UBSan on Windows. GCC sanitizers,

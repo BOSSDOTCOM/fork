@@ -182,7 +182,7 @@ next phase begins. Report each item's result.
    statuses, ORIGINALITY.md and the KB (branch `kb`); re-check every item
    marked UNVERIFIED and resolve or keep it with a reason. Then **merge
    `main` into `kb`** (in `../fork-kb`; on a conflict in `docs/DESIGN.md`
-   take main's, as kb's copy is only a pointer) and push both branches, so
+   take main's: kb's copy is an old one, not maintained there) and push both branches, so
    the KB never drifts from the code it describes.
 7. **Memory notes:** review the saved memory files
    (Claude Code's memory directory for this project, under `~/.claude/projects/`) and update or delete

@@ -9,7 +9,7 @@ Candidate improvements, each with the evidence needed to adopt it.
 | **type** | **ELO**: a playing-strength change. It's measured by SPRT and sits behind a config flag until accepted. **TOOLING**: infrastructure measured by its own success metric. No flag needed. |
 | **phase** | When the idea is scheduled. |
 | **metric** | What decides success (SPRT result for ELO; the stated metric for TOOLING). |
-| **status** | untested, in progress, accepted, rejected (with the evidence). |
+| **status** | untested, in progress, accepted, rejected, inconclusive, parked (with the evidence and the date). |
 | **sources** | References consulted. Every outside source is also logged in docs/ORIGINALITY.md. Ideas only, never code. |
 | **runtime cost** | **none**: the shipped engine does no extra work (training- or test-side only). **possible**: the idea may cost speed in the engine itself. |
 | **earliest phase** | The first phase whose infrastructure the idea needs. |
@@ -57,7 +57,7 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **phase:** before the Phase 3 search work, repeated before Phases 4-6.
 - **metric / output:** a ranked list of candidate ELO ideas, entered in this
   log.
-- **status:** untested
+- **status:** in progress: the Phase 3 idea mining was done (2026-10-24; KB search-techniques.md, ORIGINALITY.md); to be repeated before Phases 4-6.
 
 ## 4. TCEC game mining for blind spots
 
@@ -80,7 +80,7 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **phase:** starts in Phase 3 when SPRT testing begins; formalized in
   Phase 8.
 - **metric:** games needed per accepted change.
-- **status:** untested
+- **status:** in progress: every Phase 3 SPRT is pentanomial (`tools/sprt.sh`, `tools/cloud/sprt_merge.py`).
 
 ## 6. On-demand analysis tools
 
@@ -149,7 +149,7 @@ added on 2026-10-24; ideas 1-12 predate them.
     mailbox is not the cause. gcc is_pseudo_legal back to neutral.
   - **v4** (v3 with a branchless King mask): gives_check worse (3.66 ns vs
     3.43 for v2). The v4 "uint8" binaries were mislabeled (actually v2); see
-    HANDOFF.md, harness fix.
+    the harness fix of that session (its notes were not kept).
   - **v5** (6 check-square entries, State 136 B, no State alignment, uint8
     mailbox): the gives_check regression is gone. make/unmake min -4..-5%,
     null move -5..-8%, gcc is_pseudo_legal min +5%. All verdicts "no
@@ -283,7 +283,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   - the DTZ, cursed-win and 50-move logic above is the same for 7 pieces;
     the suite of won positions near the 50-move limit includes 7-piece
     positions checked against that API.
-- **status:** untested (7-piece requirement set)
+- **status:** accepted (2026-10-27): deliverable 7 built it, and the mc-tables SPRT gave +17.5 ± 7.2 Elo at the cap (sprt-log); the conversion suite converted 100 of 100. The two UNVERIFIED notes above are settled (DESIGN.md §5.2 deliverable 7, ORIGINALITY.md).
 
 ## 13. Cheap/expensive self-play data mixing
 
@@ -478,7 +478,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   mating move. Candidates: no LMP or LMR when alpha or beta is already a
   mate score, or when the defending king has few squares; checks exempt
   from LMP. No wrong score is ever reported, only a later mate.
-- **phase:** Phase 3 tier 2 (deliverable 7) or the removal round; measure
+- **phase:** Phase 3 tier 2 (deliverable 9) or the removal round; measure
   with mate-suite solve counts (the kb-researcher's suite) and SPRT.
 - **re-checked with tablebases** (owner, 2026-10-26, after deliverable 7):
   with today's search (Fork's own constants, the futile-node filter) the
@@ -582,7 +582,11 @@ tuned by SPSA.
 - **earliest phase:** Phase 3 (deliverable 8c).
 - **status:** harness built (2026-10-26, `tools/evolve/`; DESIGN.md §5.2
   implementation notes): unit-tested and dry-run with stub agents; the
-  evolution loop itself not started (owner). Pilot scheduled
+  evolution loop itself not started (owner). Since then: the validation
+  run of 2026-10-27 (18 live proposals), the 4x position set and the
+  held-out promotion check (DESIGN.md §5.2, deliverable 8c); the long run
+  (40 generations) is on hold until the audit-1 branch is approved, and
+  the audit's gate, resume and pinning fixes come first. Pilot scheduled
 
 ## 24. TT victim policy under real table pressure
 
@@ -655,7 +659,7 @@ tuned by SPSA.
   is now the same size as the cutoff move's bonus. Make the ratio a
   parameter (owner, 2026-10-26, second external review) and let SPSA find
   it, with the removal round's UseHistoryMalus result as the reference.
-- **phase:** deliverable 8b (the parameter table) adds it; SPSA after Phase 4.
+- **phase:** a parameter-table entry still to add (8b was built without it); SPSA after Phase 4.
 - **metric:** SPSA, then SPRT [0, 3] of the tuned value.
 - **runtime cost:** none (a multiply where the malus is applied).
 - **earliest phase:** Phase 3 (8b).
