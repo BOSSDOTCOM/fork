@@ -179,24 +179,27 @@ void UciSession::declare_options() {
     const char* name;
     bool SearchSwitches::* field;
   };
-  for (const SwitchOption s :
-       {SwitchOption{"UseTT", &SearchSwitches::use_tt}, SwitchOption{"UsePvs", &SearchSwitches::use_pvs},
-        SwitchOption{"UseAspiration", &SearchSwitches::use_aspiration},
-        SwitchOption{"UseMateDistance", &SearchSwitches::use_mate_distance},
-        SwitchOption{"UseQuiesce", &SearchSwitches::use_quiesce},
-        SwitchOption{"UseSeeQuiesce", &SearchSwitches::use_see_quiesce},
-        SwitchOption{"UseHistory", &SearchSwitches::use_history},
-        SwitchOption{"UseHistoryMalus", &SearchSwitches::use_history_malus},
-        SwitchOption{"UseRfp", &SearchSwitches::use_rfp}, SwitchOption{"UseNmp", &SearchSwitches::use_nmp},
-        SwitchOption{"UseLmr", &SearchSwitches::use_lmr}, SwitchOption{"UseLmp", &SearchSwitches::use_lmp},
-        SwitchOption{"UseFutility", &SearchSwitches::use_futility},
-        SwitchOption{"UseSeePrune", &SearchSwitches::use_see_prune},
-        SwitchOption{"UseTtAgeBlend", &SearchSwitches::tt_age_blend},
-        SwitchOption{"UseTtKeepExact", &SearchSwitches::tt_keep_exact},
-        SwitchOption{"UseTtEvalRefine", &SearchSwitches::use_tt_eval_refine},
-        SwitchOption{"UseTables", &SearchSwitches::use_tables},
-        SwitchOption{"UseForcedMoveStop", &SearchSwitches::use_forced_move_stop},
-        SwitchOption{"UseTtKeepDeeper", &SearchSwitches::use_tt_keep_deeper}}) {
+  for (const SwitchOption s : {SwitchOption{"UseTT", &SearchSwitches::use_tt},
+                               SwitchOption{"UsePvs", &SearchSwitches::use_pvs},
+                               SwitchOption{"UseAspiration", &SearchSwitches::use_aspiration},
+                               SwitchOption{"UseMateDistance", &SearchSwitches::use_mate_distance},
+                               SwitchOption{"UseQuiesce", &SearchSwitches::use_quiesce},
+                               SwitchOption{"UseSeeQuiesce", &SearchSwitches::use_see_quiesce},
+                               SwitchOption{"UseHistory", &SearchSwitches::use_history},
+                               SwitchOption{"UseHistoryMalus", &SearchSwitches::use_history_malus},
+                               SwitchOption{"UseRfp", &SearchSwitches::use_rfp},
+                               SwitchOption{"UseNmp", &SearchSwitches::use_nmp},
+                               SwitchOption{"UseLmr", &SearchSwitches::use_lmr},
+                               SwitchOption{"UseLmp", &SearchSwitches::use_lmp},
+                               SwitchOption{"UseFutility", &SearchSwitches::use_futility},
+                               SwitchOption{"UseSeePrune", &SearchSwitches::use_see_prune},
+                               SwitchOption{"UseTtAgeBlend", &SearchSwitches::tt_age_blend},
+                               SwitchOption{"UseTtKeepExact", &SearchSwitches::tt_keep_exact},
+                               SwitchOption{"UseTtEvalRefine", &SearchSwitches::use_tt_eval_refine},
+                               SwitchOption{"UseTables", &SearchSwitches::use_tables},
+                               SwitchOption{"UseForcedMoveStop", &SearchSwitches::use_forced_move_stop},
+                               SwitchOption{"UseTtKeepDeeper", &SearchSwitches::use_tt_keep_deeper},
+                               SwitchOption{"UseShallowFailHigh", &SearchSwitches::use_shallow_fail_high}}) {
     options_.add_check(s.name, searcher_->switches.*s.field,
                        [this, field = s.field](const OptionEntry& e, std::string&) {
                          searcher_->switches.*field = e.number != 0;

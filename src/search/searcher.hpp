@@ -84,6 +84,9 @@ struct SearchSwitches {
   // A stale TT entry still deeper after aging is kept against an inexact
   // result (audit-1, B-5).
   bool use_tt_keep_deeper = true;
+  // The re-search after a root aspiration fail high is FailHighDepthCut
+  // plies shallower (audit-1, B-3).
+  bool use_shallow_fail_high = true;
   // Syzygy endgame tables, when loaded (deliverable 7): win/draw/loss probes
   // in the search and the ranking of root moves.
   bool use_tables = true;

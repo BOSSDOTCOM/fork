@@ -11,6 +11,7 @@
 #include "search/lmr_table.hpp"
 #include "search/quiet_history.hpp"
 #include "search/searcher.hpp"
+#include "suite.hpp"
 
 namespace forkeng::test {
 
@@ -86,9 +87,15 @@ TEST_CASE("pruning", "a side with only quiet moves is never pruned into a stalem
 
 TEST_CASE("pruning", "each technique off and all on: legal moves, mates still found") {
   PruningFixture fx;
-  for (int off = -1; off < 6; ++off) {
+  for (int off = -1; off < 7; ++off) {
     SearchSwitches s;
-    bool* flags[] = {&s.use_rfp, &s.use_nmp, &s.use_lmr, &s.use_lmp, &s.use_futility, &s.use_see_prune};
+    bool* flags[] = {&s.use_rfp,
+                     &s.use_nmp,
+                     &s.use_lmr,
+                     &s.use_lmp,
+                     &s.use_futility,
+                     &s.use_see_prune,
+                     &s.use_shallow_fail_high};
     if (off >= 0) *flags[off] = false;
     fx.searcher->switches = s;
     // Back-rank mate in 1 and K+R v K mate in 2 (tests/test_search.cpp).
@@ -233,6 +240,29 @@ TEST_CASE("pruning", "with PVS off, LMR still reduces: the two switches are inde
   CHECK(legal.contains(without_lmr.best));
   CHECK_MSG(with_lmr.nodes < without_lmr.nodes,
             "PVS off: nodes " << with_lmr.nodes << " with LMR, " << without_lmr.nodes << " without");
+}
+// Audit-1, B-3: after a root aspiration fail high the re-search is one ply
+// shallower. Over the perft suite (tests/suite.hpp) at depth 10 it changes
+// the search (some root fails high), and every move stays legal.
+TEST_CASE("pruning", "a shallower re-search after a root fail high changes the search, soundly") {
+  PruningFixture fx;
+  const int depth = Optimized ? 10 : 7;
+  std::uint64_t nodes[2] = {0, 0};
+  for (int full = 0; full < 2; ++full) {
+    SearchSwitches s;
+    s.use_shallow_fail_high = full == 0;
+    fx.searcher->switches = s;
+    for (const auto& p : perft_suite()) {
+      Position pos;
+      CHECK(pos.set_fen(p.fen));
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      const SearchResult r = fx.search(p.fen, depth);
+      CHECK_MSG(legal.contains(r.best), p.fen);
+      nodes[full] += r.nodes;
+    }
+  }
+  CHECK_MSG(nodes[0] != nodes[1], "nodes " << nodes[0] << " either way");
 }
 
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery

@@ -803,9 +803,14 @@ TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV st
 // unresolved whose move differs from the last finished iteration's best
 // (found by re-running the search to that depth, which repeats those
 // iterations exactly), that move must not be the one played. At least one
-// such stop must occur, or the test proves nothing.
+// such stop must occur, or the test proves nothing. The re-search runs at
+// full depth here (UseShallowFailHigh off): the policy does not depend on the
+// re-search's depth, and with the shallower re-search (audit-1, B-3) such
+// stops became too rare for this sweep (0 up to 30,000 nodes on all 46
+// positions; 16 up to 60,000, at 18 times the run time).
 TEST_CASE("search", "a stop during a root fail high's re-search keeps the previous iteration's move") {
   Fixture fx;
+  fx.searcher->switches.use_shallow_fail_high = false;
   auto fresh_search = [&](std::string_view fen, const SearchQuota& q) {
     fx.store.clear();
     fx.searcher->clear_history();
