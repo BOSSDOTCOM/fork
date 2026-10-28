@@ -20,6 +20,9 @@
 #include "search/see.hpp"
 #include "search/time_budget.hpp"
 #include "suite.hpp"
+#include "uci/go_limits.hpp"
+#include "uci/session.hpp"
+#include "uci/tokens.hpp"
 
 namespace forkeng::test {
 
@@ -443,6 +446,66 @@ TEST_CASE("time_budget", "an extra overhead of reserve only in the danger zone")
       if (zone && available <= 100) CHECK_MSG(t.hard_ms == 1, remaining << " ms + " << inc);
     }
   }
+}
+
+// Audit-1 Q-4 and Q-5: what a go turns into (quota_for_go, the session's
+// assembly of the clock arguments, Move Overhead and the other limits). The
+// side to move's own increment (the opponent's passed every test, mutant
+// M40), the Move Overhead (ignoring it passed too, M42), movestogo 0 or
+// negative (unclamped, a division by zero, M38) and the depth, nodes and mate
+// clamps (M43, M44). Each budget below is worked by hand from time_budget.cpp
+// with the parameter defaults (AssumedMovesLeft 30, ReserveDivisor 10,
+// DangerZoneOverheads 2, HardOverSoft 4):
+// - Black, 2000 ms + 60 s, overhead 100: available 1900, inside the danger
+//   zone (1900 < 2 x 100 + 60000), reserve max(190, 100) = 190, cap 1710;
+//   share 1900 / 30 + 1710 x 3 / 4 = 63 + 1282 = 1345; hard min(1345, 1710 / 4)
+//   x 4 = 1708; soft 1345. White, no increment: share 63, hard 252, soft 63.
+// - White, 10000 ms, overhead 500: available 9500, reserve 950, cap 8550;
+//   share 316, hard 1264, soft 316 (overhead 0 would give 333 and 1332).
+// - movestogo 0 or -3, 1000 ms, overhead 100: one move to go; available 900,
+//   reserve 90, cap 810; share 900, hard min(900, 202) x 4 = 808, soft 808.
+TEST_CASE("time_budget", "a go's limits: the side to move's clock and increment, Move Overhead, clamps") {
+  auto quota = [](std::string_view args, Color us, std::int64_t overhead) {
+    std::vector<std::string> warnings;
+    const GoLimits go = parse_go(split_tokens(args), 0, Position(), warnings);
+    CHECK_MSG(warnings.empty(), args);
+    return quota_for_go(go, us, overhead);
+  };
+  SearchQuota q = quota("wtime 2000 btime 2000 winc 0 binc 60000", Black, 100);
+  CHECK_EQ(q.soft_ms, 1345);
+  CHECK_EQ(q.hard_ms, 1708);
+  q = quota("wtime 2000 btime 2000 winc 0 binc 60000", White, 100);
+  CHECK_EQ(q.soft_ms, 63);
+  CHECK_EQ(q.hard_ms, 252);
+  q = quota("wtime 10000 btime 3000", White, 500);
+  CHECK_EQ(q.soft_ms, 316);
+  CHECK_EQ(q.hard_ms, 1264);
+  for (const char* mtg : {"wtime 1000 btime 1000 movestogo 0", "wtime 1000 btime 1000 movestogo -3"}) {
+    q = quota(mtg, White, 100);
+    CHECK_MSG(q.soft_ms == 808 && q.hard_ms == 808, mtg << ": soft " << q.soft_ms << " hard " << q.hard_ms);
+  }
+  q = quota("movetime 1000", Black, 100);
+  CHECK_MSG(q.soft_ms == 900 && q.hard_ms == 900, "movetime: soft " << q.soft_ms << " hard " << q.hard_ms);
+  q = quota("infinite wtime 1000 btime 1000", White, 100);
+  CHECK_MSG(q.soft_ms == -1 && q.hard_ms == -1, "infinite: soft " << q.soft_ms << " hard " << q.hard_ms);
+  // No limit sent: none applies.
+  q = quota("", White, 100);
+  CHECK(q.depth == MaxPly - 1 && q.nodes == 0 && q.mate_moves == 0 && q.soft_ms == -1 && q.hard_ms == -1);
+  // Zero, negative and huge values a GUI can send.
+  for (const auto& [args, depth] : {std::pair<const char*, int>{"depth 0", 1},
+                                    {"depth -7", 1},
+                                    {"depth 1", 1},
+                                    {"depth 249", MaxPly - 1},
+                                    {"depth 1000000000000", MaxPly - 1}})
+    CHECK_MSG(quota(args, White, 100).depth == depth, args << ": " << quota(args, White, 100).depth);
+  for (const auto& [args, nodes] : {std::pair<const char*, std::uint64_t>{"nodes 0", 1},
+                                    {"nodes -5", 1},
+                                    {"nodes 1", 1},
+                                    {"nodes 123456", 123456}})
+    CHECK_MSG(quota(args, White, 100).nodes == nodes, args << ": " << quota(args, White, 100).nodes);
+  for (const auto& [args, mate] :
+       {std::pair<const char*, int>{"mate 0", 0}, {"mate -3", 0}, {"mate 2", 2}, {"mate 1000", MaxPly}})
+    CHECK_MSG(quota(args, White, 100).mate_moves == mate, args << ": " << quota(args, White, 100).mate_moves);
 }
 
 // Deliverable 8, Milestone A's time loss: at 2+0.02 under full load the

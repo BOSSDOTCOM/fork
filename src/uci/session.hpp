@@ -44,6 +44,13 @@ namespace forkeng {
 // The engine's version string, "<semver>-dev+<short commit>" (DESIGN.md §5.1).
 const char* engine_version();
 
+// The search limits of a go: depth (clamped to [1, MaxPly - 1]), nodes (at
+// least 1), mate (ignored unless positive, at most MaxPly) and searchmoves as
+// sent, and, unless go infinite, the time budget (plan_time) from the clock
+// and increment of `us`, the side to move, and the Move Overhead. A free
+// function so that tests can check it with numbers (audit-1 Q-5).
+SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhead_ms);
+
 // Limits on what a session may do, for the fuzz target: the defaults are the
 // real engine's.
 struct SessionConfig {
@@ -104,7 +111,6 @@ class UciSession {
 
   void stop_search();  // stops and joins the running search, if any
   bool search_running();
-  SearchQuota search_limits(const GoLimits& go) const;
   void search_main(Position pos, SearchQuota limits, bool waits);  // the search thread
   // The last info line when no iteration was reported (none finished, or
   // no legal move), in a fixed buffer.

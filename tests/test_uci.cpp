@@ -477,6 +477,26 @@ TEST_CASE("uci_protocol", "mates are reported as score mate N with a pv that mat
   g.quit();
 }
 
+// Audit-1 Q-4: zero and negative go values a GUI or a test script can send.
+// No case sent movestogo 0 (unclamped it divides by zero and kills the
+// engine: mutant M38) or nodes 0 (unclamped it searches without a node limit:
+// M44). Each go must end by itself with a legal move (check_transcript), and
+// the engine must still quit cleanly. depth 0 and -7 are robustness cases.
+TEST_CASE("uci_protocol",
+          "go with movestogo, depth or nodes 0 or negative ends by itself with a legal move") {
+  Gui g;
+  g.send("position startpos");
+  for (const char* go : {"go wtime 1000 btime 1000 movestogo 0", "go wtime 1000 btime 1000 movestogo -3",
+                         "go depth 0", "go depth -7", "go nodes 0", "go nodes -5"}) {
+    g.send(go);
+    const bool answered = g.next("bestmove").has_value();
+    CHECK_MSG(answered, go << ": no bestmove");
+    if (!answered) break;  // dead or still searching: the later gos would only wait too
+  }
+  g.check_transcript();
+  g.quit();
+}
+
 TEST_CASE("uci_protocol", "go arguments: every argument, combined, negative and huge numbers, junk") {
   Gui g;
   g.send("position startpos");
