@@ -395,3 +395,12 @@ LLR: 0.23 (-2.94, 2.94) [0.00, 3.00] nElo: continue
 
 - base `8550a78` (8550a78cfc5e1ee0a9139276bdf95c4aed8f80a0: audit-1 after the B-4 revert, RfpMargin 80), test `306bd9a` (306bd9a94710e6cc24479ebad8c3f679c57986c0: RfpMargin 40), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, Syzygy 3-4-5 for both sides; stage 0 (run 40757856982) cancelled while running, so no games were merged
 - Verdict: **NOT RUN TO A RESULT.** The owner accepted RfpMargin 40 without an SPRT (2026-10-28) and dropped the LTC follow-up. The only game data on RfpMargin 40 is the superseded b6-rfp40 run above (3,200 games with B-4 in both engines, Elo +3.47 +/- 9.61, LLR 0.23, undecided): its effect on strength is UNVERIFIED (DESIGN.md, Search constants).
+
+### Note (owner, 2026-10-28): RfpMargin 40 reverted
+
+RfpMargin 40, accepted without an SPRT (b6r-rfp40 above), was reverted to
+80 in fd7d4b5 after the Phase D gauntlet (22.5 points below Milestone C on
+the same 357 games with 40; level with Milestone C over 1,200 games with
+80; history/phase-3/audit-1.md). It is logged as untested in ideas.md
+idea 34. From now on a change whose test is skipped or unfinished is
+shelved, never shipped (DESIGN.md §5.2, Testing setup).

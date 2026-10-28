@@ -1094,6 +1094,18 @@ the external reviews' queue: the root fail-high fix and the futile-node
 filter [-3, 0], the TT-refined pruning eval [0, 3], keeping exact TT entries
 (a safety guard) [-3, 0].
 
+**Untested changes never ship** (owner, 2026-10-28). A change ships only
+after the test its kind requires has given its verdict: an SPRT for a
+behaviour change (passed, or ACCEPTED by the non-regression rule above),
+the A/B harness for a speed claim, the full check for every change. A
+change whose test is skipped, or stopped before a verdict, is **shelved**:
+it is reverted (or left off behind its switch), the baseline stays, and
+ideas.md logs it as untested with whatever partial data exist, to be
+tested later. No decision accepts a change in place of its test. The
+case that set the rule: RfpMargin 40, adopted without an SPRT, scored
+22.5 points below Milestone C on the same 357 gauntlet games and was
+reverted to 80 (ideas.md idea 34).
+
 **Build target per machine** (owner, 2026-10-28). Both engines of an SPRT
 always share one target, so the target sets only speed, never a bias, and
 bench is identical across targets (`bench_parity`). Every SPRT build is
@@ -1968,6 +1980,7 @@ and Weiss (results in ORIGINALITY.md).
 | 2026-10-27 | **Full engine audit (owner), branch `audit-1`** before idea 23 and tier 2: ten parallel auditors, then the owner's decisions on the reconciled list: SPRTs give both sides the 3-4-5 tables; the 15 borderline names are kept as domain vocabulary (§8); `RfpMargin` gets a measured justification; Move Overhead's 100 / 0 / 10000 kept as Fork's protocol defaults; time-budget reasoning now, measurement in Phase 5; PVS and LMR switches decoupled; the forced-move stop SPRTed on [-3, 0]; the rv-failhigh exception recorded; constant screens report match / no match only. |
 | 2026-10-28 | **Audit-1 Phase C decisions (owner).** B-1 (forced-move stop) ACCEPTED at its cap; B-3 (shallower fail-high re-search) reverted (inconclusive at the cap on [0, 3]); B-2 (table results stored at full depth) reverted (inconclusive at the cap on [-3, 0], its interval never above -3); B-5 (keep-deeper TT rule) stopped, off by default, deferred to Phase 6 (ideas.md idea 30); non-regression SPRTs stop once past 10,000 games with the 95% interval above -3 (Testing setup); perft_epd_full gates CI only when move generation's files change, plus nightly on main. R-3: two positions with room for 16,384 plies reserved at startup, a failed `position` retried once, else no search of the unknown position (`bestmove 0000`). R-4: `go mate N` searches at most 2N - 1 plies. T-6: the TT digest mixed by splitmix64's output function, no SPRT (ORIGINALITY.md). T-13: an SPDX line in every source file. A1 suspicion 8: node limits kept exactly. **F-9 skipped**: merging the two move printers and the two bench reports would touch only cold code (UCI output, `fork bench`), each merge needs new names and their screens, and both printers are now checked by the UCI transcript replay (audit-1 Q-2); revisit when either printer changes. **D-20**: the tag `d8/final` (8b8e34c) is annotated "Deliverable 8 split, variant (c): the iteration rule alone", but the commit holds B2 (the danger-zone reserve) plus (c) (the iteration rule): the variant SPRTed as d8-final and merged as deliverable 8 (sprt-log.md). The pushed tag is not rewritten (owner: no force push); this row is the correct record. |
 | 2026-10-28 | **B-4 and RfpMargin (owner).** B-4 (the quiescence stand-pat refined by the TT score) reverted: its STC SPRT accepted H0 (19,200 games, Elo -4.11 +/- 3.93). RfpMargin 40 (was 80) **accepted without an SPRT**, by the owner's decision: its STC run was restarted on a pair without B-4 (8550a78 vs 306bd9a), then stopped in stage 0, and the LTC follow-up was dropped. Its only game data is the superseded run's 3,200 games (with B-4 in both engines: +3.47 +/- 9.61, undecided), so its strength effect is UNVERIFIED; the measured fail-low shares justify the value (Search constants). |
+| 2026-10-28 | **Audit-1 Phase D (owner).** Performance gate against main: +2.9% nps at the audit head of the time (not significant; different trees), +3.3% on the same tree (8550a78, significant at the 3.0% threshold), so no slowdown (perf-log.md). Gauntlet against the Milestone C anchors, Milestone C's openings and settings: with RfpMargin 40 stopped after 357 games, 22.5 points below Milestone C on the same games; with RfpMargin 80 (8550a78), all 1,200 games, **Fork 2411.5 ± 22.5** on the Milestone B anchors against 2402.5 ± 23.3 (2416.0 ± 22.2 with Weiss). **RfpMargin reverted to 80** (fd7d4b5; bench 17309921, as main's); 40 logged as untested (ideas.md idea 34). New policy: **untested changes never ship**; a skipped or unfinished test shelves the change and keeps the baseline (Testing setup). Report: history/phase-3/audit-1.md. |
 
 ## 7. Performance doctrine (governs every phase)
 

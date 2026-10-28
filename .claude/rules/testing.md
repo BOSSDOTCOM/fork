@@ -26,6 +26,12 @@ paths:
     bench_parity test).
   - A change that alters search or move order updates bench.ref in the same
     commit, with the new count in the message.
+- **Untested changes never ship** (owner, 2026-10-28; DESIGN.md §5.2,
+  Testing setup): a behaviour change ships only after its SPRT's verdict,
+  a speed claim only with the A/B harness, every change only with the full
+  check. If the test is skipped or stopped before a verdict, the change is
+  shelved (reverted or left off behind its switch), the baseline stays,
+  and ideas.md logs it as untested with its partial data.
 - **Run before claiming done:**
   - the full check: the CI matrix (`.github/workflows/ci.yml`) green on
     the pushed commit, or `scripts/check.sh full` on demand (pre-commit
