@@ -370,41 +370,52 @@ class MatchTests(unittest.TestCase):
 class OrchestratorTests(unittest.TestCase):
     """One generation through the whole funnel, with fakes for builds, engines and the proxies."""
 
+    def run_generation(self, tmp, held):
+        """Generation 1 with stub agents; fake proxies by candidate: scoring-set fitness 0.30 (the
+        baseline), 0.31 and 0.29, and held-out fitness from `held` (candidate -> fitness)."""
+        labels = Path(tmp) / 'p.jsonl'
+        labels.write_text(json.dumps({'id': 0, 'fen': 'x', 'bm': 'e2e4', 'ce': 0, 'split': 'evolve'}) + '\n' +
+                          json.dumps({'id': 1, 'fen': 'y', 'bm': 'e2e4', 'ce': 0, 'split': 'holdout'}) + '\n')
+        cfg = json.loads((Path(__file__).resolve().parent / 'config.json').read_text())
+        import re
+        self.assertIsNone(re.search(r'/Users/(?!Public/)', json.dumps(cfg)))  # names no user
+        self.assertNotIn('/home/', json.dumps(cfg))
+        cfg.update({'positions': str(labels), 'per_island': 1, 'critic_audit_share': 1.0, 'dashboard_mirror': None,
+                    'islands': ['proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer'],
+                    'match': dict(cfg['match'], games=0)})
+        scoring = {1: 0.30, 2: 0.31, 3: 0.29}
+
+        def fake(engine, labels, nodes, jobs=1):
+            cid = int(Path(engine).parent.parent.name.split('-')[1])
+            f = held[cid] if labels[0]['split'] == 'holdout' else scoring[cid]
+            return proxies.ProxyResult(1, f, 0.0, 9.0, [f])
+        real = proxies.run_proxies
+        proxies.run_proxies = fake
+        try:
+            runner = FakeRunner(Path(tmp) / 'work', benches=[{'nodes': '1', 'signature': 's'}] * 20)
+            loop = orchestrator.Loop(cfg, Path(tmp) / 'run', orchestrator.dry_run_agent(), runner)
+            loop.start()
+            runner.built = True
+            # The build stub fails for the body that does not compile.
+            real_build = runner.build
+
+            def build(tree, stats=False):
+                if not stats and tree.name == 'cand-4':
+                    return False, 'syntax error', tree / 'build'
+                return real_build(tree, stats)
+            runner.build = build
+            self.assertIsNone(loop.generation(1))
+        finally:
+            proxies.run_proxies = real
+        statuses = {r[0]: r[1] for r in loop.pop.db.execute('SELECT id, status FROM candidates')}
+        return loop, statuses
+
     def test_one_generation(self):
         with tempfile.TemporaryDirectory() as tmp:
-            labels = Path(tmp) / 'p.jsonl'
-            labels.write_text(json.dumps({'id': 0, 'fen': 'x', 'bm': 'e2e4', 'ce': 0, 'split': 'evolve'}) + '\n')
-            cfg = json.loads((Path(__file__).resolve().parent / 'config.json').read_text())
-            import re
-            self.assertIsNone(re.search(r'/Users/(?!Public/)', json.dumps(cfg)))  # names no user
-            self.assertNotIn('/home/', json.dumps(cfg))
-            cfg.update({'positions': str(labels), 'per_island': 1, 'critic_audit_share': 1.0, 'dashboard_mirror': None,
-                        'islands': ['proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer'],
-                        'match': dict(cfg['match'], games=0)})
-            fitness = iter([0.30, 0.31, 0.29])
-            real = proxies.run_proxies
-            proxies.run_proxies = lambda engine, labels, nodes, jobs=1: (
-                lambda f: proxies.ProxyResult(1, f, 0.0, 9.0, [f]))(next(fitness))
-            try:
-                runner = FakeRunner(Path(tmp) / 'work', benches=[{'nodes': '1', 'signature': 's'}] * 20)
-                loop = orchestrator.Loop(cfg, Path(tmp) / 'run', orchestrator.dry_run_agent(), runner)
-                loop.start()
-                runner.built = True
-                # The build stub fails for the body that does not compile.
-                real_build = runner.build
-
-                def build(tree, stats=False):
-                    if not stats and tree.name == 'cand-4':
-                        return False, 'syntax error', tree / 'build'
-                    return real_build(tree, stats)
-                runner.build = build
-                self.assertIsNone(loop.generation(1))
-            finally:
-                proxies.run_proxies = real
+            loop, statuses = self.run_generation(tmp, {1: 0.40, 2: 0.42, 3: 0.39})
             pop = loop.pop
-            statuses = {r[0]: r[1] for r in pop.db.execute('SELECT id, status FROM candidates')}
             self.assertEqual(statuses[1], 'scored')            # the baseline
-            self.assertEqual(statuses[2], 'promoted (match skipped)')  # aggressive: 0.31 >= 0.30 + 0.005
+            self.assertEqual(statuses[2], 'promoted (match skipped)')  # 0.31 >= 0.30 + 0.005, held out 0.42 > 0.40
             self.assertEqual(statuses[3], 'scored')            # cautious: 0.29
             self.assertEqual(statuses[4], 'gate:build')        # the body that does not compile
             self.assertTrue(statuses[5].startswith('critic_rejected (audited: gate:static'))  # floating point
@@ -414,11 +425,24 @@ class OrchestratorTests(unittest.TestCase):
             self.assertEqual(len(pop.events('improved')), 1)   # 0.31 beyond the baseline's 0.30; 0.29 is not
             self.assertEqual(loop.best_generation, 1)
             self.assertEqual(len(pop.events('promoted')), 1)   # the match is skipped (games = 0)
+            record = json.loads(pop.get(2)['proxies'])
+            self.assertAlmostEqual(record['holdout_fitness'], 0.42)
+            self.assertAlmostEqual(record['holdout_low'], 0.02)
             page = (Path(tmp) / 'run' / 'dashboard.html').read_text(encoding='utf-8')
             for section in ('Islands', 'Top candidates', 'Promotions', 'Critic rejections (1)',
-                            'Gate failures and malformed replies', 'Analyst summaries', 'Tokens'):
+                            'Gate failures and malformed replies', 'Analyst summaries', 'Tokens',
+                            'Held-out fitness', '0.4200'):
                 self.assertIn(section, page)
             self.assertIn('floating point breaks the hot-path rules', page)  # the critic's reason
+            loop.close()
+
+    def test_promotion_needs_the_held_out_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            loop, statuses = self.run_generation(tmp, {1: 0.40, 2: 0.40, 3: 0.39})  # no held-out gain
+            self.assertEqual(statuses[2], 'not confirmed on the held-out set: not promoted')
+            self.assertEqual(len(loop.pop.events('promoted')), 0)
+            detail = json.loads(loop.pop.events('not_promoted')[0][2])
+            self.assertEqual((detail['reason'], detail['holdout_low']), ('not confirmed on the held-out set', 0.0))
             loop.close()
 
 

@@ -85,6 +85,10 @@ class Loop:
         self.insights = '(none yet)'
         self.best_fitness, self.best_generation = None, 0
         self.labels = proxies.load_positions(cfg['positions'], 'evolve')[:cfg.get('positions_limit') or None]
+        # The held-out split: measured for every scored candidate, shown on the
+        # dashboard and required for promotion, but never shown to an agent
+        # and never used for selection, so it stays independent of the search.
+        self.holdout = proxies.load_positions(cfg['positions'], 'holdout')
         self.statistics = '(baseline statistics not measured yet)'
 
     def say(self, generation, kind, detail):
@@ -133,6 +137,15 @@ class Loop:
         interval = proxies.paired_interval(proxy.per_position, base, self.cfg['seed'] + cid) if base else None
         if interval:
             record.update(gain=interval[0], gain_low=interval[1], gain_high=interval[2])
+        if self.holdout:
+            held = proxies.run_proxies(engine, self.holdout, cfg['proxy_nodes'], cfg.get('proxy_jobs', 1))
+            record.update(holdout_fitness=held.fitness(), holdout_per_position=held.per_position)
+            held_base = getattr(self, 'baseline_holdout', None)
+            held_interval = proxies.paired_interval(held.per_position, held_base,
+                                                    self.cfg['seed'] + 3 * cid) if held_base else None
+            if held_interval:
+                record.update(holdout_gain=held_interval[0], holdout_low=held_interval[1],
+                              holdout_high=held_interval[2])
         self.pop.update(cid, status='scored', proxies=json.dumps(record), descriptors=json.dumps(desc),
                         fitness=fitness)
         entered = self.pop.offer_elite(island, cid, desc, fitness) if place else False
@@ -244,17 +257,23 @@ class Loop:
     def promote(self, g, cid, fitness):
         """Short match and SPRT hand-off for a candidate clearly above the baseline on the proxies:
         past the margin, with its paired bootstrap interval's low end above zero (beyond the
-        position-sampling noise), and a rule that changes some reductions."""
+        position-sampling noise) on the scoring set and on the held-out set, and a rule that
+        changes some reductions."""
         cfg = self.cfg
         if fitness < self.baseline_fitness + cfg['promote_margin']:
             return
         c = self.pop.get(cid)
         record, desc = json.loads(c['proxies'] or '{}'), json.loads(c['descriptors'] or '[]')
         low, trigger = record.get('gain_low'), desc[2] if len(desc) > 2 else None
-        if low is None or low <= 0 or not trigger:
-            self.pop.update(cid, status='within noise: not promoted' if trigger else 'no trigger: not promoted')
-            self.say(g, 'not_promoted', {'id': cid, 'gain': record.get('gain'), 'gain_low': low,
-                                         'gain_high': record.get('gain_high'), 'trigger_rate': trigger})
+        held_low = record.get('holdout_low')
+        if low is None or low <= 0 or not trigger or held_low is None or held_low <= 0:
+            why = ('no trigger' if not trigger else 'within noise' if low is None or low <= 0
+                   else 'not confirmed on the held-out set')
+            self.pop.update(cid, status=f'{why}: not promoted')
+            self.say(g, 'not_promoted', {'id': cid, 'reason': why, 'gain': record.get('gain'), 'gain_low': low,
+                                         'gain_high': record.get('gain_high'), 'trigger_rate': trigger,
+                                         'holdout_gain': record.get('holdout_gain'), 'holdout_low': held_low,
+                                         'holdout_high': record.get('holdout_high')})
             return
         if cfg['match']['games'] <= 0:
             self.pop.update(cid, status='promoted (match skipped)')
@@ -334,6 +353,7 @@ class Loop:
             self.pop.offer_elite(island, cid, json.loads(self.pop.get(cid)['descriptors']), fitness)
         self.baseline_fitness = fitness
         self.baseline_scores = json.loads(self.pop.get(cid)['proxies']).get('per_position') or None
+        self.baseline_holdout = json.loads(self.pop.get(cid)['proxies']).get('holdout_per_position') or None
         self.best_scores = self.baseline_scores
         _, out = self.runner.run([str(self.runner.work / f'cand-{cid}' / 'build-stats' / 'fork'), 'bench'],
                                  timeout=900)

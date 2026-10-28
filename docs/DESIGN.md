@@ -1681,6 +1681,16 @@ Choices made while building, where the spec leaves a gap:
       (36 s on the old set single-process), so a generation stays at about
       9.5-11 minutes (the validation run's took 9.0, 9.9 and 11.5, the
       last with the analyst): 40 generations in about 6.5 hours.
+    - **Held-out confirmation** (owner, 2026-10-27): every scored
+      candidate is also measured on the 940 held-out positions (about 6 s
+      with 8 processes). A candidate is promoted only if its paired interval
+      against the baseline lies above zero on both sets; otherwise it is
+      logged "not confirmed on the held-out set". The dashboard shows each
+      candidate's held-out fitness and gain. The held-out results never
+      reach an agent and are never used to pick parents or elites, so the
+      split stays independent of the search. Its only use is this final
+      check. Tests: both outcomes; fault-injected (with the check removed,
+      the candidate is promoted and the test fails).
     - **On hold** (owner, 2026-10-27): the long run waits for the full
       engine audit (branch audit-1), which comes before idea 23 and tier 2.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
