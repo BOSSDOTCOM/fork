@@ -5,7 +5,9 @@
 // Invariants:
 // - by_type_/by_color_/board_ always describe the same placement.
 // - states_.back() is the current ply; every State field equals what
-//   compute_state() derives from the board (checked at every perft node).
+//   compute_state() derives from the board (checked at every perft node),
+//   except that pinned and discoverers are all ones until first read at
+//   their ply (computed lazily: most plies never read them).
 // - The ep square is stored, hashed and printed only when an ep capture is
 //   legal (DESIGN.md 4.4).
 // - make()/unmake() never allocate while the State stack is within its reserve,
@@ -42,7 +44,10 @@ struct State {
   // repetition window (review M2).
   int game_span;
   // Check information for the side to move.
-  Bitboard checkers;     // enemy pieces attacking our king
+  Bitboard checkers;  // enemy pieces attacking our king
+  // Both computed on first read (pinned(), discoverers()); until then all
+  // ones, which neither can be (neither ever holds a king). Audit-1, P-2:
+  // most plies never read them (57% and 97.9% of their work was unused).
   Bitboard pinned;       // our pieces that are the only piece between our king and an enemy slider
   Bitboard discoverers;  // our pieces that are the only piece between the enemy king and one of our sliders
   // For unmake().
@@ -84,9 +89,21 @@ class Position {
   Bitboard checkers() const { return state().checkers; }
   bool in_check() const { return state().checkers != 0; }
   // Pieces of the side to move that may only move along the line to their king.
-  Bitboard pinned() const { return state().pinned; }
+  Bitboard pinned() const {
+    State& s = states_.back();
+    if (s.pinned == ~Bitboard{0})
+      s.pinned = lone_shields(king_square(side_), pieces(side_), pieces(~side_, Rook, Queen),
+                              pieces(~side_, Bishop, Queen));
+    return s.pinned;
+  }
   // Pieces of the side to move that give discovered check by leaving their line.
-  Bitboard discoverers() const { return state().discoverers; }
+  Bitboard discoverers() const {
+    State& s = states_.back();
+    if (s.discoverers == ~Bitboard{0})
+      s.discoverers = lone_shields(king_square(~side_), pieces(side_), pieces(side_, Rook, Queen),
+                                   pieces(side_, Bishop, Queen));
+    return s.discoverers;
+  }
 
   Bitboard attackers_to(Square s, Bitboard occ) const;  // both colors
   bool attacked_by(Color by, Square s, Bitboard occ) const;
@@ -115,8 +132,8 @@ class Position {
   std::string move_to_uci(Move m) const;
   Move parse_uci(std::string_view uci) const;  // a legal move, or NoMove
 
-  Position mirrored() const;  // ranks flipped, colors swapped
-  bool same_state(const Position& o) const;
+  Position mirrored() const;                 // ranks flipped, colors swapped
+  bool same_state(const Position& o) const;  // lazily computed fields included
 
   // Recomputes every key and the per-ply state from the board, for tests.
   State compute_state() const;
@@ -138,7 +155,7 @@ class Position {
   void put(Piece p, Square s);
   void remove(Square s);
   void toggle_keys(State& s, Piece p, Square sq) const;
-  void refresh_check_info(State& s) const;  // checkers, pinned, discoverers
+  void refresh_check_info(State& s) const;  // checkers; pinned and discoverers unread
   Bitboard lone_shields(Square king, Bitboard shields, Bitboard rook_sliders, Bitboard bishop_sliders) const;
   bool ep_capture_legal(Square ep) const;  // for the side to move
   // True when material alone rules out a mate by side c (DESIGN.md 4.5).
@@ -174,7 +191,9 @@ class Position {
   Bitboard by_color_[2];
   Color side_ = White;
   int fullmove_ = 1;
-  StateStack states_;  // states_.back() is the current ply
+  // states_.back() is the current ply. Mutable: pinned() and discoverers()
+  // fill in their ply's lazily computed fields.
+  mutable StateStack states_;
 };
 
 }  // namespace forkeng

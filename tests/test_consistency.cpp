@@ -42,9 +42,16 @@ Bitboard shields_by_removal(const Position& pos, Color king_side, Color shield_s
 }
 
 void check_state(const Position& pos, const std::string& fen) {
+  // pinned and discoverers are computed on first read (audit-1, P-2): until
+  // then each holds all ones; every other field is always current.
   const State& s = pos.state();
   const State fresh = pos.compute_state();
   CHECK_MSG(s.key == fresh.key, "key, " << fen);
+  CHECK_MSG(s.pinned == fresh.pinned || s.pinned == ~Bitboard{0}, "pinned before reading, " << fen);
+  CHECK_MSG(s.discoverers == fresh.discoverers || s.discoverers == ~Bitboard{0},
+            "discoverers before reading, " << fen);
+  pos.pinned();
+  pos.discoverers();
   CHECK_MSG(s == fresh, "full state, " << fen);
 
   const Color us = pos.side_to_move(), them = ~us;
