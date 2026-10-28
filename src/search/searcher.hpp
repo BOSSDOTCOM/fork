@@ -90,6 +90,9 @@ struct SearchSwitches {
   // A table result that settles a node is stored in the TT at full depth, not
   // the node's (audit-1, B-2).
   bool use_tables_full_depth = true;
+  // The quiescence search's stand-pat value refined by the TT score (KB T50;
+  // audit-1, B-4).
+  bool use_tt_stand_pat = true;
   // Syzygy endgame tables, when loaded (deliverable 7): win/draw/loss probes
   // in the search and the ranking of root moves.
   bool use_tables = true;
