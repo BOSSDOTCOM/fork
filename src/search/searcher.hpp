@@ -79,34 +79,31 @@ struct SearchQuota {
 //   against an inexact result (audit-1, B-5). Off by default (owner,
 //   2026-10-28): its LTC SPRT was stopped undecided, leaning negative; it
 //   is retested with Phase 6's TT tests under large Hash and many threads.
-// - use_tables_full_depth: a table result that settles a node is stored in
-//   the TT at full depth, not the node's (audit-1, B-2).
 // - use_tt_stand_pat: the quiescence search's stand-pat value refined by
 //   the TT score (KB T50; audit-1, B-4).
 // - use_tables: Syzygy endgame tables, when loaded (deliverable 7):
 //   win/draw/loss probes in the search and the ranking of root moves.
-#define FORK_SEARCH_SWITCHES(X)                      \
-  X(use_tt, UseTT, true)                             \
-  X(use_pvs, UsePvs, true)                           \
-  X(use_aspiration, UseAspiration, true)             \
-  X(use_mate_distance, UseMateDistance, true)        \
-  X(use_quiesce, UseQuiesce, true)                   \
-  X(use_see_quiesce, UseSeeQuiesce, true)            \
-  X(use_history, UseHistory, true)                   \
-  X(use_history_malus, UseHistoryMalus, true)        \
-  X(use_rfp, UseRfp, true)                           \
-  X(use_nmp, UseNmp, true)                           \
-  X(use_lmr, UseLmr, true)                           \
-  X(use_lmp, UseLmp, true)                           \
-  X(use_futility, UseFutility, true)                 \
-  X(use_see_prune, UseSeePrune, true)                \
-  X(tt_age_blend, UseTtAgeBlend, false)              \
-  X(tt_keep_exact, UseTtKeepExact, false)            \
-  X(use_tt_eval_refine, UseTtEvalRefine, true)       \
-  X(use_forced_move_stop, UseForcedMoveStop, true)   \
-  X(use_tt_keep_deeper, UseTtKeepDeeper, false)      \
-  X(use_tables_full_depth, UseTablesFullDepth, true) \
-  X(use_tt_stand_pat, UseTtStandPat, true)           \
+#define FORK_SEARCH_SWITCHES(X)                    \
+  X(use_tt, UseTT, true)                           \
+  X(use_pvs, UsePvs, true)                         \
+  X(use_aspiration, UseAspiration, true)           \
+  X(use_mate_distance, UseMateDistance, true)      \
+  X(use_quiesce, UseQuiesce, true)                 \
+  X(use_see_quiesce, UseSeeQuiesce, true)          \
+  X(use_history, UseHistory, true)                 \
+  X(use_history_malus, UseHistoryMalus, true)      \
+  X(use_rfp, UseRfp, true)                         \
+  X(use_nmp, UseNmp, true)                         \
+  X(use_lmr, UseLmr, true)                         \
+  X(use_lmp, UseLmp, true)                         \
+  X(use_futility, UseFutility, true)               \
+  X(use_see_prune, UseSeePrune, true)              \
+  X(tt_age_blend, UseTtAgeBlend, false)            \
+  X(tt_keep_exact, UseTtKeepExact, false)          \
+  X(use_tt_eval_refine, UseTtEvalRefine, true)     \
+  X(use_forced_move_stop, UseForcedMoveStop, true) \
+  X(use_tt_keep_deeper, UseTtKeepDeeper, false)    \
+  X(use_tt_stand_pat, UseTtStandPat, true)         \
   X(use_tables, UseTables, true)
 
 struct SearchSwitches {

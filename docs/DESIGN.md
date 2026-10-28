@@ -397,8 +397,8 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   **Near term, before tier 2** (not Phase 8): the TT ignores the halfmove
   clock, so a table result stored at a zero clock can cut at a later visit
   with a non-zero clock, where the position may be a fifty-move draw (A1
-  suspicion 4, A8 S-A8-1; B-2 stores such results at full depth, which
-  widens it). Settle with a constructed 5-man two-path test: the same
+  suspicion 4, A8 S-A8-1; B-2's storing of table results at full depth,
+  reverted 2026-10-28, would widen it). Settle with a constructed 5-man two-path test: the same
   position reached once right after a capture and once 90 plies later.
 - **Improvement pass** (after Phase 8; owner, 2026-10-26). The layers again,
   in dependency order: network, search, time management, threads,
