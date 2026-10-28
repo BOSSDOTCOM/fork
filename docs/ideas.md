@@ -693,7 +693,11 @@ tuned by SPSA.
   then SPRT.
 - **runtime cost:** none for the measurement; a time extension costs time.
 - **earliest phase:** Phase 3 (deliverable 8).
-- **status:** measurement queued
+- **status:** measurement queued. **Run it before B-3 is revisited**
+  (audit-1 B-3, re-searching a root fail high one ply shallower: reverted
+  after its SPRT reached the cap undecided, +0.65 ± 3.56 Elo; sprt-log.md
+  b3-shallow-fh). The audit meant this measurement to come first; B-3 ran
+  without it.
 
 ## 30. Keeping a stale TT entry that is still deeper once aged
 
@@ -788,3 +792,45 @@ tuned by SPSA.
   owner's decision (sprt-log.md, history/phase-3/audit-1.md). **Revisit
   when the eval-dependent margins are retuned after Phase 4** (Quality
   control 6), with an SPRT.
+
+## 35. The bootstrap eval calls insufficient_material twice
+
+- **type:** TOOLING (performance)
+- **idea:** the bootstrap evaluation repeats the `insufficient_material`
+  test that the search has already made at the node (12.4 M calls over
+  the bench, about 0.2% of the profile; audit-1 P-5). Pass the result in,
+  or drop the eval's own call.
+- **phase:** only if the bootstrap eval is touched before Phase 4, whose
+  network replaces it.
+- **metric:** search nps with `bench/ab_search.py`, bench identical.
+- **runtime cost:** none (a saving).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 36. A SIMD pick in MoveSelector::take_next
+
+- **type:** TOOLING (performance)
+- **idea:** `take_next` is the largest single entry in the profile (20.5%
+  at the audit-1 Phase D gate). Find the best remaining score with SIMD
+  compares over the score array instead of a scalar scan (audit-1, A2
+  speed suspicion).
+- **phase:** after tier 2's history tables settle the selector's scores.
+- **metric:** search nps with `bench/ab_search.py`, bench identical; the
+  same move order as a scalar reference, by an equivalence test.
+- **runtime cost:** none if it pays; report the maintenance cost first
+  (Performance doctrine).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 37. A cache-friendlier MoveList and PlyFrame layout
+
+- **type:** TOOLING (performance)
+- **idea:** lay out the move list and the per-ply frame so that a node's
+  hot fields share cache lines (audit-1, A2 speed suspicion).
+- **phase:** with tier 2's PlyFrame changes (F-13, F-17/F-18), so the
+  layout is settled once.
+- **metric:** search nps with `bench/ab_search.py` and fork_micro, bench
+  identical; `static_assert(sizeof(PlyFrame) <= 2688)` updated with it.
+- **runtime cost:** none if it pays.
+- **earliest phase:** Phase 3.
+- **status:** untested

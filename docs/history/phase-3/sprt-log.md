@@ -404,3 +404,14 @@ the same 357 games with 40; level with Milestone C over 1,200 games with
 80; history/phase-3/audit-1.md). It is logged as untested in ideas.md
 idea 34. From now on a change whose test is skipped or unfinished is
 shelved, never shipped (DESIGN.md §5.2, Testing setup).
+
+### Note (owner, 2026-10-28): the early-acceptance rule reads nElo
+
+The bounds are normalized Elo, so the non-regression early-acceptance
+rule now reads the nElo interval ("nElo: x +/- e"), not the logistic Elo
+one used above (DESIGN.md §5.2, Testing setup). On that scale B-1
+(b1-forced) is +1.24 ± 4.55, [-3.31, +5.79], which does not clear -3; it
+was kept by the owner's decision on the logistic interval, before the
+correction, and the owner kept it after the correction too (its SPRT ran
+to the cap, LLR +1.52 of 2.94; the Phase D gauntlet with it matched
+Milestone C).

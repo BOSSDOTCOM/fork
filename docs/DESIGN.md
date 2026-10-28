@@ -426,6 +426,16 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
     on disk and a cold page cache (`TableProbeMinDepth` 1, Fathom's lazy
     first-probe `mmap`, the root DTZ probe before the first hard-limit
     poll; A2 S-d, A3 suspicion 5).
+  - **Fathom's lineage at TCEC** (audit-1 suspicion 12a): whether TCEC
+    treats Fathom's Cfish-derived code as another engine's code
+    (UNVERIFIED in ORIGINALITY.md). Settle by asking TCEC before the
+    submission.
+  - **The public KB's technique prose** (suspicion 12b): it was written by
+    a research agent that had read engine code. Settle with an originality
+    review of the KB pages the submission depends on.
+  - **A load and stress run with B-1's forced-move stop** (audit-1 proof
+    not run): games at 2+0.02 under artificial system load, checking that
+    the shortened forced moves never lose on time.
   **Near term, before tier 2** (not Phase 8): the TT ignores the halfmove
   clock, so a table result stored at a zero clock can cut at a later visit
   with a non-zero clock, where the position may be a fifty-move draw (A1
@@ -1121,7 +1131,8 @@ because update.sh refuses it.
   `fork version` reports the pinned target. Every shard result records it
   (`arch`).
 - **AWS EC2 c7a/c8a** (`tools/cloud/aws_spot_sprt.sh`): the `--arch`
-  option, **x86-64-v3 by default** (the SPRT log records no AWS run yet);
+  option, **x86-64-v3 by default, and AWS SPRTs stay on x86-64-v3 until
+  Phase 4** (owner, 2026-10-28; the SPRT log records no AWS run yet);
   `--arch x86-64-v4` gives an AVX-512 build, which C7a supports (its
   product page, KB tools.md §11). C8a's AVX-512 is UNVERIFIED in the KB;
   build_pair.sh's CPU check refuses x86-64-v4 there if the CPU lacks it.
@@ -1156,12 +1167,16 @@ acceptable for Milestone A (owner, 2026-10-25). **Non-regression early
 acceptance** (owner, 2026-10-28): a non-regression SPRT ([-3, 0]) on a
 change with a clear rationale stops once at least 10,000 games are in and
 the 95% interval's lower bound is above -3, and is logged **ACCEPTED (by
-rule)** with that interval. The interval is the Elo one that fastchess and
-`tools/cloud/sprt_merge.py` report as "Elo: x +/- e" (the logistic Elo of
-the mean pair score, ±1.96 standard errors), as the owner applied it to
-B-1 (+0.96 ± 3.54 after 22,400 games: [-2.58, +4.50]); the bounds
-themselves are in normalized Elo, whose interval is wider (B-1: nElo
-+1.24 ± 4.55). **Gainer-bound tests never stop early this way**: they pass
+rule)** with that interval. **The interval is read on the bounds' own
+scale, normalized Elo** (owner, 2026-10-28): the SPRT bounds are nElo
+(fastchess `model=normalized` in `tools/sprt.sh`; the same model in
+`tools/cloud/sprt_merge.py`), so the rule reads the "nElo: x +/- e" line
+(e = 1.96 × 800 / (ln 10 × √2) / √pairs), not the logistic "Elo: x +/- e"
+line. The rule first read the logistic interval, as the owner had applied
+it to B-1 ([-2.58, +4.50]); on the nElo scale B-1's interval is +1.24 ±
+4.55, [-3.31, +5.79], which does not clear -3. On this scale the rule can
+fire only on a clearly positive measurement: nElo above about +3.8 at
+10,000 games, above about +1.8 at the 20,000-game cap. **Gainer-bound tests never stop early this way**: they pass
 or reach their cap. The cloud SPRT driver checks the rule after every
 stage; a local fastchess SPRT is checked at its rating reports.
 **Concurrency 10**
@@ -1370,6 +1385,30 @@ holds, which is why search decisions use no floating point (deliverable 6).
      (`UseTtKeepExact`, the second review's claim (e)), off by default: its
      SPRT on [-3, 0] ended INCONCLUSIVE at the cap, -0.6 ± 7.5 Elo after
      4,800 games (LLR 0.09 of 2.94).
+7. **Next phase-end audit** (audit-1's open items; owner, 2026-10-28):
+   checked at the end of Phase 3 with the phase-end checklist, each
+   settled by a test, a measurement or a recorded reason:
+   - a one-sided table bound clamped inside the window is stored as Exact
+     at PV nodes (audit-1 suspicion 1b; A1 s2);
+   - mate distances beyond MaxPly overstated through the TT (suspicion 9;
+     theoretical, A1 s3);
+   - idea 23's proxies may favour the baseline's own LMR shape and barely
+     see root fail highs (10a, 10b; A6 S-4, A8 S-A8-2, S-A8-3); undefined
+     behaviour in a candidate body passes the gate, which builds Release
+     without sanitizers (10c; A6 S-5); the evolve loop's originality
+     screen is a manual step (10h; A4 s2). All before idea 23 resumes;
+   - spot-interruption pair bias in the AWS shards (10f; A6 S-2), before
+     the first AWS SPRT;
+   - the "just above available memory" test can race other processes
+     (11b; A5 S-1);
+   - the post-edit hook's clang-format version against the one the audit
+     used (13; A9 U-2);
+   - proofs not run: fuzz_uci's coverage of the search on a `go depth 5`
+     seed (with the checklist's fuzz step); the book-slice match (the
+     cloud shards' shuffled book removes the bias it would measure, so it
+     may be dropped with that reason); `test_hooks.sh` with its two build
+     cases; `uci_timing` on an idle machine; the local Windows rebuild of
+     the v3, AVX-512, no-PEXT and PGO presets (checklist item 1 covers it).
 
 #### Implementation notes (2026-10-24)
 

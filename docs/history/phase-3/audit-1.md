@@ -153,33 +153,37 @@ notes):
   `exit()` paths, Hash at TCEC sizes and cgroup limits, a no-BMI2 CPU
   under SDE, the 4 GB-Hash prefetch A/B, ponder timing.
 
-Not done, no target yet (from the reconciled list; for the owner to place):
-- suspicions 1b (a one-sided table bound stored as Exact at PV nodes), 9
-  (mate distances beyond MaxPly via the TT), 10a/10b (the idea 23 proxies
-  may favour the baseline's LMR shape and barely see root fail highs),
-  10c (UB in a candidate body passes the gate), 10f (spot-interruption
-  pair bias), 10h (the evolve loop's manual originality screen), 11b (the
-  "just above available memory" test can race), 12a (whether TCEC treats
-  Fathom's Cfish-derived code as another engine's; UNVERIFIED in
-  ORIGINALITY.md), 12b (KB technique prose written by an agent that read
-  engine code), 13 (the hook's clang-format version);
-- proofs not run: fuzz_uci's search coverage on a `go depth 5` seed, the
-  book-slice match (the shuffled cloud book removes the bias it would
-  measure), a load or stress run after B-1, `test_hooks.sh`'s two build
-  cases, a local Windows rebuild of the v3, AVX-512, no-PEXT and PGO
-  presets (CI builds them on Linux; Windows runs the GCC smoke loop);
-- P-5 (`insufficient_material` repeated in the bootstrap eval, about
-  0.2%), and the speed ideas of a SIMD pick in `take_next` and a
-  cache-friendlier MoveList/PlyFrame layout;
-- idea 29 (how often unconfirmed root fail highs hold) was meant to run
-  before or with B-3; B-3 ran without it and was reverted.
+The rest, given targets by the owner (2026-10-28):
+- **Phase 8 TCEC-readiness list** (DESIGN.md, Phase 8): whether TCEC
+  treats Fathom's Cfish-derived code as another engine's (suspicion 12a,
+  UNVERIFIED), the KB's technique prose written by an agent that read
+  engine code (12b), and a load and stress run with B-1's forced-move
+  stop.
+- **Next phase-end audit** (DESIGN.md §5.2, Quality control 7): suspicions
+  1b (a one-sided table bound stored as Exact at PV nodes), 9 (mate
+  distances beyond MaxPly via the TT), 10a, 10b, 10c and 10h (idea 23's
+  proxies and gate, before idea 23 resumes), 10f (spot-interruption pair
+  bias, before the first AWS SPRT), 11b (the memory test's race), 13 (the
+  hook's clang-format version); the proofs not run: fuzz_uci's search
+  coverage, the book-slice match (may be dropped: the shuffled cloud book
+  removes the bias it would measure), `test_hooks.sh`'s two build cases,
+  `uci_timing` on an idle machine, and the local Windows rebuild of the
+  v3, AVX-512, no-PEXT and PGO presets.
+- **ideas.md:** P-5 as idea 35, the SIMD pick in `take_next` as idea 36,
+  the MoveList/PlyFrame layout as idea 37; idea 29 is to run before B-3 is
+  revisited (linked both ways).
 
-## Before merge and at the phase end
+## Owner's decisions after the report (2026-10-28)
 
-The owner decides the merge. Phase-end checklist items still open after
-it: fuzz the changed targets and promote minimized corpora, merge main
-into kb and push both, move the untracked audit reports into
-`docs/history/` or delete them, the memory review. Questions still open
-for the owner: whether the non-regression early-acceptance rule should
-read the normalized-Elo interval instead of the Elo one, and whether AWS
-SPRTs should default to x86-64-v4.
+- Merge audit-1 into main through a pull request once the full CI matrix
+  is green.
+- **The early-acceptance rule reads the normalized-Elo interval**, the
+  scale of the SPRT bounds (fastchess `model=normalized`; the same model in
+  `sprt_merge.py`); it first read the logistic one. On the nElo scale B-1's
+  interval is [-3.31, +5.79], which does not clear -3. B-1 was kept by
+  the owner's decision on the logistic interval, before this correction,
+  and the owner kept it after it: B-1 ran its full SPRT to the cap
+  (22,400 games, LLR +1.52 of 2.94, no time losses), and the gauntlet with
+  it matched Milestone C (sprt-log.md).
+- AWS SPRTs stay on x86-64-v3 until Phase 4.
+- Every open item has a target (above).

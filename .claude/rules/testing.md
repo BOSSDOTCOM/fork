@@ -32,6 +32,10 @@ paths:
   check. If the test is skipped or stopped before a verdict, the change is
   shelved (reverted or left off behind its switch), the baseline stays,
   and ideas.md logs it as untested with its partial data.
+- **Early acceptance reads nElo** (owner, 2026-10-28): the SPRT bounds
+  are normalized Elo, so the non-regression early-acceptance rule reads
+  the "nElo: x +/- e" interval, never the logistic "Elo" one (DESIGN.md
+  §5.2, Testing setup).
 - **Run before claiming done:**
   - the full check: the CI matrix (`.github/workflows/ci.yml`) green on
     the pushed commit, or `scripts/check.sh full` on demand (pre-commit
@@ -64,8 +68,9 @@ paths:
 - **SPRT builds pin their target** (DESIGN.md §5.2 "Build target per
   machine"): GitHub's SPRT shards use x86-64-v3, set as `FORK_ARCH` in
   `.github/workflows/sprt.yml`, because hosted runners may lack AVX-512;
-  AWS uses `aws_spot_sprt.sh --arch` (x86-64-v3 by default, x86-64-v4 for
-  AVX-512); local SPRTs use update.sh's x86-64-v3. Never `native`.
+  AWS uses `aws_spot_sprt.sh --arch`, kept at x86-64-v3 until Phase 4
+  (owner, 2026-10-28; x86-64-v4 exists for AVX-512); local SPRTs use
+  update.sh's x86-64-v3. Never `native`.
   `tools/cloud/build_pair.sh` refuses to build without an explicit target.
 - **Valgrind needs a non-AVX-512 build** (`FORK_ARCH=x86-64-v3`): it cannot
   decode AVX-512, which `-march=native` emits on the Ryzen 7600X3D.
