@@ -248,4 +248,32 @@ TEST_CASE("tt", "same depth, same search: a bound replaces an exact entry unless
   }
 }
 
+// Audit-1, B-5: an earlier search's entry that is still deeper after aging
+// (depth minus StaleDepthPerSearch = 2 plies per search of age) is kept
+// against an inexact result; an exact result, or an entry aged below the new
+// depth, is replaced.
+TEST_CASE("tt", "keep-deeper: a stale entry still deeper after aging is kept against a bound") {
+  for (const bool keep : {false, true}) {
+    TestTable t(1024);
+    t.table.set_keep_deeper(keep);
+    const Key key = 0x0123456789abcdefULL;
+    t.table.deposit(key, Move(12, 28, Quiet), 40, 0, 10, TtBound::Lower, false);
+    t.table.advance_age();  // one search later: worth 10 - 2 = 8
+    t.table.deposit(key, NoMove, -15, 0, 7, TtBound::Upper, false);
+    TtHit hit{};
+    CHECK(t.table.fetch(key, hit));
+    CHECK_MSG((hit.depth == 10) == keep, "keep " << keep << ": depth " << hit.depth);
+    t.table.deposit(key, NoMove, -15, 0, 8, TtBound::Upper, false);  // 8 is not below 8: replaced
+    CHECK(t.table.fetch(key, hit) && hit.depth == 8);
+  }
+  TestTable t(1024);
+  t.table.set_keep_deeper(true);
+  const Key key = 0x0123456789abcdefULL;
+  t.table.deposit(key, Move(12, 28, Quiet), 40, 0, 10, TtBound::Lower, false);
+  t.table.advance_age();
+  t.table.deposit(key, NoMove, 5, 0, 1, TtBound::Exact, false);  // an exact result always replaces
+  TtHit hit{};
+  CHECK(t.table.fetch(key, hit) && hit.depth == 1 && hit.bound == TtBound::Exact);
+}
+
 }  // namespace forkeng::test

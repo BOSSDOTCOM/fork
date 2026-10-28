@@ -81,6 +81,9 @@ struct SearchSwitches {
   // With one root move a timed search stops at 1 / ForcedMoveFraction of its
   // soft limit (audit-1, B-1).
   bool use_forced_move_stop = true;
+  // A stale TT entry still deeper after aging is kept against an inexact
+  // result (audit-1, B-5).
+  bool use_tt_keep_deeper = true;
   // Syzygy endgame tables, when loaded (deliverable 7): win/draw/loss probes
   // in the search and the ranking of root moves.
   bool use_tables = true;

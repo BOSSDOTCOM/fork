@@ -104,6 +104,13 @@ void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtB
         (stored_depth < own->depth ||
          (keep_exact_ && stored_depth == own->depth && own->bound() == TtBound::Exact)))
       return;
+    // An earlier search's result for this position, still deeper once aged
+    // (it is that many plies nearer the root now), is worth more than an
+    // inexact shallower one (audit-1, B-5).
+    if (keep_deeper_ && own->age() != search_age_ && bound != TtBound::Exact) {
+      const int age_gap = static_cast<std::uint8_t>(search_age_ - static_cast<std::uint8_t>(own->age()));
+      if (own->depth - StaleDepthPerSearch * age_gap > stored_depth) return;
+    }
     if (move.is_none()) move = Move::from_raw(own->move);
   } else {
     // An empty slot, else the slot least worth keeping (first on ties).

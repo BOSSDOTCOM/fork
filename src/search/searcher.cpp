@@ -565,6 +565,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   tt_.advance_age();
   tt_.set_age_blend(switches.tt_age_blend);
   tt_.set_keep_exact(switches.tt_keep_exact);
+  tt_.set_keep_deeper(switches.use_tt_keep_deeper);
   SearchResult result;
   // The first iteration's root order is the selector's (no TT move).
   PlyFrame& root = frames_[0];

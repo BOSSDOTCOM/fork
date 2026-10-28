@@ -94,6 +94,10 @@ class TransTable {
   // position's entry. On (review 2, claim (e), 2026-10-26): an exact entry is
   // not replaced by a bound of the same depth, which carries less.
   void set_keep_exact(bool on) { keep_exact_ = on; }
+  // On (audit-1, B-5): the position's entry from an earlier search is kept
+  // against an inexact result while it is still deeper after losing
+  // StaleDepthPerSearch plies per search of age.
+  void set_keep_deeper(bool on) { keep_deeper_ = on; }
 
   static std::size_t bucket_index(Key key, std::size_t bucket_count);
 
@@ -116,6 +120,7 @@ class TransTable {
   std::uint8_t search_age_ = 0;  // wraps at 256
   bool age_blend_ = false;
   bool keep_exact_ = false;
+  bool keep_deeper_ = false;
 };
 
 }  // namespace forkeng
