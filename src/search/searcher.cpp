@@ -467,6 +467,9 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   ++nodes_;
   pv_[0].length = 0;
   int best = -ScoreInfinite;
+  // The root node counts too, so a node limit reached here stops here, not
+  // one node later in the first child (audit-1, A1 suspicion 8).
+  if (poll_limits()) return best;
   std::size_t best_index = 0;  // the move that last raised alpha
   for (std::size_t i = 0; i < root_count_; ++i) {
     const Move m = root_moves_[i].move;
@@ -478,7 +481,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
       score = -negamax<true>(-beta, -alpha, depth - 1, 1);
     } else {
       score = -negamax<false>(-alpha - 1, -alpha, depth - 1, 1);
-      if (score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, 1);
+      if (!stopped_ && score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, 1);
     }
     pos.unmake(m);
     root_moves_[i].nodes = nodes_ - nodes_before;

@@ -498,7 +498,7 @@ TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still retu
   SearchQuota limits;
   limits.nodes = 5000;
   SearchResult r = fx.search(pos, limits);
-  CHECK(r.nodes >= 5000 && r.nodes <= 5001);
+  CHECK_EQ(r.nodes, 5000u);
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
   CHECK(legal.contains(r.best));
@@ -994,12 +994,13 @@ TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored abo
 
 // Audit-1 V-4 (00bed14): no LMR or PVS re-search once the search has
 // stopped (a stopped child returns 0, which can beat alpha, and each
-// re-search counts one more node past a node limit). The limits case above
-// allows one node over, and so must this: the root's PVS re-search has no
-// stop check (audit-1 A1, measured at most one node over). Reverting
-// 00bed14 passed every test; over many limits, it counts two or more nodes
-// over the limit.
-TEST_CASE("search", "a node limit is kept to within one node") {
+// re-search counts one more node past a node limit). Reverting 00bed14
+// passed every test; over many limits, it counts two or more nodes over the
+// limit. Since audit-1 A1 suspicion 8 the limit is exact: the root's PVS
+// re-search checks the stop too (without it, 16 of these limits end one
+// node over), and the root node polls the limits (without it, one does: an
+// iteration that ends one node short of the limit).
+TEST_CASE("search", "a node limit is kept exactly") {
   Fixture fx;
   int searches = 0;
   for (const PerftPosition& p : perft_suite()) {
@@ -1012,8 +1013,7 @@ TEST_CASE("search", "a node limit is kept to within one node") {
       q.nodes = nodes;
       const SearchResult r = fx.search(pos, q);
       ++searches;
-      CHECK_MSG(r.nodes >= nodes && r.nodes <= nodes + 1,
-                p.fen << ": limit " << nodes << ", searched " << r.nodes);
+      CHECK_MSG(r.nodes == nodes, p.fen << ": limit " << nodes << ", searched " << r.nodes);
     }
   }
   CHECK(searches > 0);
