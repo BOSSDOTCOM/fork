@@ -150,3 +150,16 @@ estimators needs a stated reason or a fix.
   (3a8a1b6) moved most of take_next's share.
 - The gate's profile step failed (`perf_symbols.py` resolved from a relative
   path after a cd); `tools/perf_gate.sh` fixed; the profile taken by hand.
+
+## Audit-1 speed checks (2026-10-28)
+
+Each bench-identical; `bench/ab_search.py` (search nps) and `bench/ab.py`
+(fork_micro ns/op) in WSL, clang 21.1.8 with LTO unless stated, core 4,
+identity checked on every run. B is the change, A its parent.
+
+| Change | Measurement | Verdict |
+|---|---|---|
+| Cleanups and refactors 0211f43..afd56f0 (dead members, the futility branch that never pruned, F-2..F-8, F-10..F-12, F-25), together | search, 10 rounds: median +1.1%, best +1.5% | no significant difference: no slowdown |
+| P-6, inlining `attackers_to`, `repetition_count` and `TransTable::bucket_index` (headers) | search, 10 rounds: LTO +0.3% / +0.1%; without LTO (`-DFORK_LTO=OFF`) +0.4% / +1.7%; TCEC's clang 16 via update.sh +0.1% / -0.1% (noise threshold 3.6%) | no gain: **not adopted**; only the `lto on/off` line in `fork version` (2c1ecd6). All four TCEC compilers build with LTO in Ubuntu-22.04 (update.sh) |
+| P-3, see_at_least settled when one more capture cannot cross the threshold (1a87872) | search: 10 rounds +2.2% / +2.9% (noise threshold 6.6%), 20 rounds +2.3% / +1.7% | below the 3% threshold both times; adopted for its simplicity, no gain claimed |
+| P-2, pins and discovered-check candidates computed on first read (88825fa) | micro, 8 rounds: make_unmake -28.3%, null_move -32.2%, perft_bench -4.8% (significant), is_legal +13.3% (0.4 ns), the rest within noise; search, 20 rounds: +2.4% / +1.6% | micro faster; search below the 3% threshold; adopted |
