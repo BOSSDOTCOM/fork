@@ -233,5 +233,16 @@ for fen, uci in [('4k3/8/8/8/8/8/8/R3K3 w - - 0 1', 'a1a2'), ('r3k3/8/8/8/8/8/8/
     check(chess.Move.from_uci(uci) in b.legal_moves and not b.is_capture(chess.Move.from_uci(uci)),
           f'quiet and legal: {uci} in {fen}')
 
+# tests/test_search.cpp, the zero-window and null-move cases (audit-1 Q-7):
+# the back-rank position with Black to move is legal and not over; the two
+# pawn endings (results from the lichess tablebase API, cited in the test)
+# are legal and the moves named there legal.
+b = board_of('6k1/5ppp/8/8/8/8/8/R5K1 b - - 0 1')
+check(not b.is_game_over() and not b.is_check(), 'back rank, Black to move: not over, not in check')
+for fen, moves in [('8/1p6/8/6k1/8/8/4P3/7K b - - 0 1', ['b7b5', 'b7b6']),
+                   ('8/3p4/8/6P1/3k3p/5K2/8/8 b - - 0 1', ['d4d5', 'd4e5', 'd7d5'])]:
+    b = board_of(fen)
+    check(all(chess.Move.from_uci(u) in b.legal_moves for u in moves), f'legal in {fen}: {moves}')
+
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)

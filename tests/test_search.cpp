@@ -229,6 +229,128 @@ TEST_CASE("search", "TT cutoffs at exact depth equal plain minimax on small endg
   }
 }
 
+// Audit-1 Q-7: zero-window searches against a zero-window reference. The
+// root-score oracle above runs full windows, where the TT's bound checks,
+// the bound stored by a PV node that fails low and mate distance pruning
+// never decide: a TT upper bound cutting on the wrong side (mutant M12) and a
+// mate-distance beta one ply too tight (M14) were caught only by bench
+// parity (M14 is caught here, M12 by the next case). Here, with one TT shared
+// as in a real search (a full-window search first, then probes at every
+// depth), every probe at beta must fail high exactly when the reference
+// (fail-hard, window [beta - 1, beta]) does, and its fail-soft score must be
+// a valid bound of the exact value. Betas lie around the exact value and, in
+// the mate positions (test_search.cpp's mates, checked by
+// tools/check_search_positions.py), on the mate scores, where mate distance
+// pruning binds.
+TEST_CASE("search",
+          "zero-window probes agree with a zero-window reference, mate bands included (TT shared)") {
+  Fixture fx;
+  struct Probed {
+    std::string_view fen;
+    int depth;
+  };
+  std::vector<Probed> positions;
+  for (const PerftPosition& p : perft_suite()) positions.push_back({p.fen, Optimized ? 3 : 2});
+  // The TT endgames above, to depth 6, so the full-window search that fills
+  // the TT uses aspiration windows (from depth 5).
+  for (std::string_view fen : {"8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1", "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
+                               "8/8/3k4/8/8/3K4/8/R7 w - - 0 1", "8/5pk1/8/8/8/8/5PK1/8 b - - 0 1"})
+    positions.push_back({fen, Optimized ? 6 : 4});
+  for (std::string_view fen : {"6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "k7/8/2K5/8/8/8/8/7R w - - 0 1",
+                               "6k1/5ppp/8/8/8/8/8/R5K1 b - - 0 1"})
+    positions.push_back({fen, 4});
+  int probes = 0, mate_band = 0;
+  for (const Probed& p : positions) {
+    Position pos;
+    CHECK(pos.set_fen(p.fen));
+    fx.store.clear();
+    fx.searcher->clear_history();
+    fx.searcher->switches = exact_switches();
+    SearchQuota limits;
+    limits.depth = p.depth;
+    const int full = fx.search(pos, limits).score;  // fills the TT with PV and non-PV entries
+    for (int d = 1; d <= p.depth; ++d) {
+      const int value = reference_minimax(pos, d, 0);
+      if (d == p.depth) CHECK_MSG(full == value, p.fen << ": full window " << full << " vs " << value);
+      std::vector<int> betas;
+      for (int offset : {-300, -40, -1, 0, 1, 40, 300}) betas.push_back(value + offset);
+      for (int n = 1; n <= 5; ++n) {
+        betas.push_back(mate_score(n));
+        betas.push_back(mated_score(n));
+        betas.push_back(mated_score(n) + 1);
+      }
+      for (int beta : betas) {
+        beta = std::clamp(beta, -ScoreInfinite + 1, ScoreInfinite);
+        const int s = fx.searcher->probe_zero_window(pos, beta, d, fx.stop);
+        const int ref = reference_alphabeta(pos, d, 0, beta - 1, beta, true);
+        ++probes;
+        mate_band += is_mate_score(beta);
+        CHECK_MSG((s >= beta) == (ref >= beta),
+                  p.fen << " depth " << d << " beta " << beta << ": probe " << s << ", reference " << ref);
+        CHECK_MSG(s >= beta ? value >= s : value <= s,
+                  p.fen << " depth " << d << " beta " << beta << ": fail-soft " << s << ", exact " << value);
+      }
+    }
+  }
+  CHECK(probes > 0 && mate_band > 0);
+}
+
+// Audit-1 Q-7: the TT's bound checks at their edge (mutant M12: an upper
+// bound cut when s <= beta instead of s <= alpha). An upper bound u, stored
+// for the probed position at the probe's depth, is a true bound here (the
+// exact value plus 50): a probe whose alpha equals u must cut and return u;
+// a probe whose beta equals u must not cut (the value is below it) and must
+// fail low.
+TEST_CASE("search", "a TT upper bound cuts when it is at or below alpha, never at beta") {
+  Fixture fx;
+  for (std::string_view fen : {"8/8/3k4/8/8/3K4/8/R7 w - - 0 1",
+                               "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"}) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    const int depth = 2;
+    const int value = reference_minimax(pos, depth, 0);
+    const int upper = value + 50;
+    fx.searcher->switches = exact_switches();
+    for (int beta : {upper + 1, upper}) {
+      fx.store.clear();
+      fx.store.table.deposit(pos.key(), NoMove, upper, ScoreNone, depth, TtBound::Upper, false);
+      const int s = fx.searcher->probe_zero_window(pos, beta, depth, fx.stop);
+      if (beta == upper + 1)
+        CHECK_MSG(s == upper, fen << ": alpha at the bound: " << s << " (bound " << upper << ")");
+      else
+        CHECK_MSG(s < beta,
+                  fen << ": beta at the bound: " << s << " (bound " << upper << ", value " << value << ")");
+    }
+  }
+}
+
+// Audit-1 Q-7: the null move's zugzwang guard (no null move for a side with
+// only pawns: pawn endings are where passing is most often best). Dropping
+// it was caught only by bench parity (mutant M18b). Two constructed king and
+// pawn endings where the depth-9 search with the guard keeps the tables'
+// result and the search without it does not (found by comparing the two
+// builds over random pawn endings). The moves' results are from the lichess
+// tablebase API (https://tablebase.lichess.ovh/standard?fen=..., fetched
+// 2026-10-27; Syzygy WDL, the fifty-move rule counted):
+// - 8/1p6/8/6k1/8/8/4P3/7K b: a win for Black only by b7b5 (b7b6 and every
+//   king move draw);
+// - 8/3p4/8/6P1/3k3p/5K2/8/8 b: a draw only by d4d5 or d4e5 (every other
+//   move loses).
+TEST_CASE("search", "no null move without pieces: two pawn endings keep their tablebase result") {
+  Fixture fx;
+  Position pos;
+  SearchResult r = fx.search("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1", 9);
+  CHECK(pos.set_fen("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1"));
+  CHECK_MSG(pos.move_to_uci(r.best) == "b7b5",
+            "played " << pos.move_to_uci(r.best) << " (score " << r.score << ")");
+  fx.store.clear();
+  fx.searcher->clear_history();
+  r = fx.search("8/3p4/8/6P1/3k3p/5K2/8/8 b - - 0 1", 9);
+  CHECK(pos.set_fen("8/3p4/8/6P1/3k3p/5K2/8/8 b - - 0 1"));
+  const std::string played = pos.move_to_uci(r.best);
+  CHECK_MSG(played == "d4d5" || played == "d4e5", "played " << played << " (score " << r.score << ")");
+}
+
 // DESIGN.md §5.2 deliverable 4: quiescence values on constructed exchanges,
 // against python-chess. tools/check_search_positions.py computes each
 // position's material-only value of a depth-1 search ending in a capture
