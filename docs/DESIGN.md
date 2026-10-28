@@ -1657,6 +1657,32 @@ Choices made while building, where the spec leaves a gap:
       74,300 tokens per generation (6 × 11,928, plus the analyst's 8,056
       every 3), so **about 40 generations at 3M**. The count includes cache
       reads.
+    - **The 4× position set** (the noise fix): ten more batches of Fork
+      self-play (`positions.py`, seeds 20261101-20261110, 46 games each,
+      20,000 nodes per move, labels at depth 18 by Fork at 65f9b63, ids
+      `b01p…`-`b10p…`, run from the Windows `.venv`, python-chess 1.11.2).
+      They add 4,314 positions with no duplicates of the first set: 5,734
+      in total, **4,794 evolve** (4.1×) and 940 holdout. Measured on HEAD
+      builds of the baseline and the validation run's four best candidates
+      (8 engine processes):
+
+      | Candidate | Old set (1,170): gain [95% interval], width | New set (4,794): gain [95% interval], width |
+      |---|---|---|
+      | #2 | +0.0114 [−0.0093, +0.0341], 0.0434 | −0.0069 [−0.0178, +0.0045], 0.0223 |
+      | #14 | +0.0054 [−0.0029, +0.0136], 0.0165 | −0.0006 [−0.0047, +0.0034], 0.0081 |
+      | #17 | +0.0099 [−0.0031, +0.0243], 0.0273 | −0.0005 [−0.0076, +0.0063], 0.0139 |
+      | #19 | +0.0104 [−0.0094, +0.0313], 0.0406 | −0.0047 [−0.0152, +0.0063], 0.0215 |
+
+      The intervals halve (1/√4.1 ≈ 0.49). The four best of the validation
+      run gain nothing on the larger set: their positive gains on the old
+      set came from being selected on those same positions (winner's
+      curse), and those 1,170 positions are part of the new set. Baseline
+      fitness on the new set: 0.6009. Proxy time per candidate: 30-33 s
+      (36 s on the old set single-process), so a generation stays at about
+      9.5-11 minutes (the validation run's took 9.0, 9.9 and 11.5, the
+      last with the analyst): 40 generations in about 6.5 hours.
+    - **On hold** (owner, 2026-10-27): the long run waits for the full
+      engine audit (branch audit-1), which comes before idea 23 and tier 2.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
