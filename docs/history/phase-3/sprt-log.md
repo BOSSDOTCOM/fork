@@ -380,3 +380,13 @@ Elo: -4.11 +/- 3.93, nElo: -5.14 +/- 4.91
 Ptnml(0-2): [1071, 2043, 3510, 1994, 982]
 LLR: -3.17 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
 ```
+
+### 20261028T190033Z b6-rfp40 (GitHub shards): superseded
+
+- base `6c797e1` (6c797e1c243e03becfd50a5ec25cfd2a3d886815: audit-1 B-4), test `304081e` (304081e1ee361cca34e7b573d3984bc852e2a305: RfpMargin 40 cp per ply, was 80), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, Syzygy 3-4-5 for both sides, stage 0 of 16 shards (run 40750364290); stage 1 (run 40755073172) was cancelled while running; cap 20,000 games
+- Verdict: **SUPERSEDED** (owner, 2026-10-28) after 3,200 games, undecided (LLR 0.23, 0 time losses, 0 abnormal endings). Both engines had B-4, which its own SPRT rejected and which was reverted in 1e16853, so the result would not describe the code that keeps RfpMargin. Restarted as b6r-rfp40 on a pair without B-4: base 8550a78 (RfpMargin 80), test 306bd9a (RfpMargin 40, the same tree as 4f5c4b6), the same bounds and stages.
+```
+Elo: 3.47 +/- 9.61, nElo: 4.35 +/- 12.04
+Ptnml(0-2): [163, 332, 598, 324, 183]
+LLR: 0.23 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+```
