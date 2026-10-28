@@ -1894,9 +1894,8 @@ invariants.
 |---|---|---|
 | `src/core/` | chess rules: value types, bitboards and attack tables, hashing keys, board state, move generation, perft/bench | 1 |
 | `src/uci/` | protocol loop, option registry, info output | 2 |
-| `src/search/` | searcher, transposition table, move ordering, time control, thread pool | 3, 5, 6 |
+| `src/search/` | searcher, transposition table, move ordering, time control, thread pool; the Syzygy bridge (`endgame_tables.*`, the only code that calls Fathom in `third_party/fathom/`) | 3, 5, 6 |
 | `src/eval/` | evaluator interface, tapered PST, NNUE (`eval/nnue/`) | 4 |
-| `src/tb/` | Syzygy bridge (wraps Fathom) | 3 |
 | `src/tune/` | the single tunable-parameter table | 3 |
 | `tests/`, `bench/`, `fuzz/`, `tools/` | tests, microbenchmarks, fuzz targets, offline tools | all |
 
