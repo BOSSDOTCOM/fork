@@ -369,3 +369,14 @@ Elo: -0.92 +/- 3.58, nElo: -1.16 +/- 4.55
 Ptnml(0-2): [1172, 2299, 4281, 2312, 1136]
 LLR: 0.19 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
 ```
+
+### 20261028T160027Z b4-qs-standpat (GitHub shards)
+
+- base `6ab7cb7` (6ab7cb7890ec034e48e0e76a7826caea8357ec9e), test `6c797e1` (6c797e1c243e03becfd50a5ec25cfd2a3d886815: audit-1 B-4, the quiescence stand-pat value refined by the TT score's bound), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, Syzygy 3-4-5 for both sides, 6 stages x 16 shards (runs 40721660610, 40726653980, 40731533475, 40736388753, 40741067355, 40745782166); cap 20,000 games
+- LLR after each stage: 0.13, -1.06, -1.43, -1.99, -2.15, -3.17.
+- Verdict: **H0 accepted** (19,200 games, 0 time losses, 0 abnormal endings; 95% Elo interval [-8.03, -0.18]). Phase C keeps passes only: **reverted** in 1e16853.
+```
+Elo: -4.11 +/- 3.93, nElo: -5.14 +/- 4.91
+Ptnml(0-2): [1071, 2043, 3510, 1994, 982]
+LLR: -3.17 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
+```
