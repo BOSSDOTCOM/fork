@@ -468,6 +468,26 @@ if(FORK_BUILD_TESTS)
     add_test(NAME uci_hash_oom COMMAND fork_uci_hash_oom_test)
   endif()
 
+  # A short differential run against python-chess (tools/difftest; audit-1
+  # Q-10: make, the fifty-move clock, repetitions and insufficient material,
+  # which only manual runs checked). Registered only where a Python with
+  # python-chess is at hand: FORK_TEST_PYTHON, by default the repository's
+  # .venv if it exists. CI, TCEC and the check's Linux copies have no .venv
+  # (it is not tracked), so there the test does not exist. Label "python".
+  set(FORK_TEST_PYTHON "" CACHE FILEPATH "Python with python-chess for the difftest_short test (default: .venv)")
+  set(test_python ${FORK_TEST_PYTHON})
+  foreach(candidate ${CMAKE_SOURCE_DIR}/.venv/Scripts/python.exe ${CMAKE_SOURCE_DIR}/.venv/bin/python)
+    if(NOT test_python AND EXISTS ${candidate})
+      set(test_python ${candidate})
+    endif()
+  endforeach()
+  if(test_python)
+    add_test(NAME difftest_short
+             COMMAND ${test_python} -I ${CMAKE_SOURCE_DIR}/tools/difftest/difftest.py
+                     --fork $<TARGET_FILE:fork> --positions 20000 --workers 2)
+    set_tests_properties(difftest_short PROPERTIES LABELS python)
+  endif()
+
   # The search bench (`fork bench`) and, so move generation stays tied across
   # builds too, the Phase 1 perft workload (`fork perftbench`).
   add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}

@@ -803,6 +803,21 @@ namespace {
 
 constexpr double Slack = Optimized ? 1.0 : 10.0;
 
+// True in AddressSanitizer, ThreadSanitizer and MemorySanitizer builds (the
+// tests are built with the engine's flags): their shadow memory multiplies
+// what a large Hash costs.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+constexpr bool SanitizedBuild = true;
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer) || __has_feature(memory_sanitizer)
+constexpr bool SanitizedBuild = true;
+#else
+constexpr bool SanitizedBuild = false;
+#endif
+#else
+constexpr bool SanitizedBuild = false;
+#endif
+
 // While test games run (scripts/env.sh sets FORK_GAMES_RUNNING=1) or
 // development runs at low priority (FORK_LOW_PRIORITY=1), timings say nothing
 // about Fork, so the timing cases report SKIPPED instead of passing or
@@ -935,7 +950,7 @@ TEST_CASE("uci_options", "review: a refused Hash clears its fallback table with 
 
 }  // namespace forkeng::test
 
-// ---- Adversarial review of deliverable 2 (uncommitted; failing test) ----
+// ---- Adversarial review of deliverable 2 (a test written failing, then fixed) ----
 namespace forkeng::test {
 
 // time_budget.hpp: "Limits are milliseconds from the moment go was
@@ -948,8 +963,8 @@ TEST_CASE("uci_timing", "review: go movetime counts the Hash work done at go") {
   CHECK(g.sync());
   g.send("setoption name Move Overhead value 0");  // the whole 50 ms is the budget
   CHECK(g.sync());
-  // The Hash work itself cannot be undone (4 GB takes far longer than 50 ms
-  // here), but the search must not add its 50 ms on top: bestmove comes at
+  // The Hash work itself cannot be undone (a few GB take far longer than
+  // 50 ms here), but the search must not add its 50 ms on top: bestmove comes at
   // max(Hash work, 50 ms) plus a small margin, not at their sum (owner,
   // 2026-10-26, after it failed beside a full check):
   // - the size actually allocated is read from the report; if the table fell
@@ -958,11 +973,30 @@ TEST_CASE("uci_timing", "review: go movetime counts the Hash work done at go") {
   // - the best of three attempts counts, each with a real resize (the size
   //   alternates), as for the other timing tests here, and every failed
   //   attempt is logged as a NOTE so intermittent slowdowns stay visible.
+  // The size (audit-1 Q-12): a fixed 4096 MB fell back and skipped in 5 of 6
+  // runs on the shared 15 GB machine, so the largest of 4096, 2048 and 1024
+  // MB that leaves 1 GB of what is available now is asked for (1024 MB still
+  // takes longer to clear than the margin below). Sanitizer builds ask for
+  // 256 MB: their shadow memory multiplies the table (a 4096 MB table got a
+  // TSan engine OOM-killed at 7.2 GB in a 7.5 GB WSL, audit-1 2026-10-27), and
+  // their tenfold margin cannot tell the sum from the maximum anyway.
+  const int size = [] {
+    if (SanitizedBuild) return 256;
+    const std::size_t available_mb = available_memory() / BytesPerMB;
+    for (int mb : {4096, 2048, 1024})
+      if (available_mb >= static_cast<std::size_t>(mb) + 1024) return mb;
+    return 0;
+  }();
+  if (size == 0) {
+    g.quit();
+    SKIP("less than 2 GB available (" << available_memory() / BytesPerMB
+                                      << " MB), so the Hash work at go cannot be timed");
+  }
   constexpr std::string_view Prefix = "info string Hash ";
   constexpr std::string_view Middle = " MB allocated and cleared in ";
   bool passed = false;
   for (int attempt = 1; attempt <= 3 && !passed; ++attempt) {
-    const int asked = attempt % 2 ? 4096 : 4064;
+    const int asked = attempt % 2 ? size : size - 32;
     g.send("setoption name Hash value " + std::to_string(asked));
     g.send("position startpos");
     const std::size_t mark = g.cursor;

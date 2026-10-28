@@ -238,7 +238,8 @@ TEST_CASE("pruning", "with PVS off, LMR still reduces: the two switches are inde
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
-// move, board.attacks after it; the positions checked legal there). Case 3's
+// move, board.attacks after it; the positions checked legal there; committed
+// in tools/check_search_positions.py since audit-1 Q-11). Case 3's
 // rook was attacked along the file through the square it moves to, so the
 // board before the move must be rebuilt, not read after it.
 TEST_CASE("pruning", "LMR move facts: piece, threatened before the move, attacks after it") {

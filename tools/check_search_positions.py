@@ -1,7 +1,10 @@
-"""Checks the facts that tests/test_search.cpp and tests/test_eval.cpp rely on
-for their constructed positions, with python-chess as the independent oracle:
-legal FENs, forced mates in N (and none sooner), checkmate and stalemate, and
-the repetition. Exits non-zero if any fact is wrong.
+"""Checks the facts that the tests' constructed positions rely on
+(tests/test_search.cpp, test_eval.cpp, test_see.cpp, test_ordering.cpp,
+test_pruning.cpp, test_draws.cpp, test_uci.cpp, test_endgame_tables.cpp),
+with python-chess as the independent oracle: legal FENs, forced mates in N
+(and none sooner), checkmate and stalemate, repetitions, halfmove clocks and
+the LMR move facts; and restates the danger-zone time budgets. Exits non-zero
+if any fact is wrong.
 
     .venv/Scripts/python.exe -I tools/check_search_positions.py
 """
@@ -267,6 +270,58 @@ b = board_of('8/8/8/8/6K1/3k4/8/6Q1 w - - 0 1')
 for uci in ['g4h5', 'd3e4', 'h5g4', 'e4d3']:
     b.push_uci(uci)
 check(b.is_repetition(2) and b.halfmove_clock == 4, 'KQvK: the king shuffle repeats the position (clock 4)')
+
+# tests/test_pruning.cpp, "LMR move facts" (audit-1 Q-11: the derivation was
+# not committed): the moved piece's type (0 pawn ... 5 king), whether the
+# opponent attacked its square before the move, and whether from its new
+# square (a castling king's landing square) it attacks an enemy piece other
+# than a pawn or the king.
+PIECE_INDEX = {chess.PAWN: 0, chess.KNIGHT: 1, chess.BISHOP: 2, chess.ROOK: 3, chess.QUEEN: 4, chess.KING: 5}
+for fen, uci, piece, threatened, attacks in [
+    ('4k3/8/8/3p4/4N3/8/8/4K3 w - - 0 1', 'e4c3', 1, True, False),
+    ('4k3/8/8/8/1r6/8/8/N3K3 w - - 0 1', 'a1c2', 1, False, True),
+    ('r3k3/8/8/8/8/8/8/R3K3 w - - 0 1', 'a1a2', 3, True, True),
+    ('4k3/8/8/8/8/8/8/4K3 w - - 0 1', 'e1d1', 5, False, False),
+    ('4k3/8/8/2n5/8/3P4/8/4K3 w - - 0 1', 'd3d4', 0, True, True),
+    ('4k3/8/8/8/3n4/4P3/8/4K3 b - - 0 1', 'd4b5', 1, True, False),
+    ('4k3/8/8/8/8/8/7r/4K2R w K - 0 1', 'e1g1', 5, False, True),
+]:
+    b = board_of(fen)
+    m = chess.Move.from_uci(uci)
+    mover, them = b.turn, not b.turn
+    got_piece = PIECE_INDEX[b.piece_type_at(m.from_square)]
+    got_threatened = b.is_attacked_by(them, m.from_square)
+    landing = m.to_square
+    b.push(m)
+    targets = [s for s in b.attacks(landing)
+               if b.color_at(s) == them and b.piece_type_at(s) not in (chess.PAWN, chess.KING)]
+    got = (got_piece, got_threatened, bool(targets))
+    check(got == (piece, threatened, attacks), f'LMR facts {fen} {uci}: {got}')
+
+# tests/test_search.cpp, "an extra overhead of reserve only in the danger
+# zone" (audit-1 Q-11): its literal budgets, restated here from the rule in
+# src/search/time_budget.cpp's comments (Move Overhead 100, 30 moves left, a
+# tenth of the clock in reserve, or max(a tenth, one overhead) when less
+# than two overheads plus the increment are left; the soft limit one share,
+# the hard limit four shares, capped at the clock less the reserve).
+def budget(remaining, inc, overhead=100):
+    available = max(1, remaining - overhead)
+    zone = available < 2 * overhead + inc
+    reserve = max(available // 10, overhead) if zone else available // 10
+    cap = max(1, available - reserve)
+    share = available // 30 + min(inc, cap) * 3 // 4
+    hard = min(max(min(share, cap // 4) * 4, 1), cap)
+    return min(max(share, 1), hard), hard
+
+
+DANGER = {150: [(1, 1), (1, 1), (1, 1)], 250: [(5, 20), (20, 48), (42, 48)], 300: [(6, 24), (21, 84), (66, 100)],
+          319: [(7, 28), (22, 88), (67, 116)], 320: [(7, 28), (22, 88), (67, 120)],
+          379: [(9, 36), (24, 96), (69, 176)], 380: [(9, 36), (24, 96), (69, 252)],
+          500: [(13, 52), (28, 112), (73, 292)], 1000: [(30, 120), (45, 180), (90, 360)],
+          2000: [(63, 252), (78, 312), (123, 492)]}
+for remaining, rows in DANGER.items():
+    got = [budget(remaining, inc) for inc in (0, 20, 80)]
+    check(got == rows, f'danger-zone budgets at {remaining} ms: {got}')
 
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)

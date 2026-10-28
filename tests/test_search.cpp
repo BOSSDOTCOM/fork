@@ -295,6 +295,50 @@ TEST_CASE("search",
   CHECK(probes > 0 && mate_band > 0);
 }
 
+// Audit-1 Q-10 (DESIGN.md §5.2's tiny-hash stress test): every search
+// fixture used 16,384 buckets, so the TT's replacement under heavy pressure
+// was never searched through. With 1, 2 and 16 buckets: the exact-depth
+// search still equals minimax, and the release search plays a legal move
+// with a score inside the score bands, on the oracle positions.
+TEST_CASE("search",
+          "a tiny TT (1 to 16 buckets): still minimax at exact depth, legal moves, scores in band") {
+  const int depth = Optimized ? 3 : 2;
+  std::vector<Position> positions = oracle_positions();
+  std::vector<int> minimax;
+  for (Position& pos : positions) minimax.push_back(reference_minimax(pos, depth, 0));
+  for (const std::size_t count : {std::size_t{1}, std::size_t{2}, std::size_t{16}}) {
+    std::vector<TtBucket> buckets(count);
+    TransTable table;
+    table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+    auto searcher = std::make_unique<Searcher>(table);
+    const std::atomic<bool> stop{false};
+    for (std::size_t i = 0; i < positions.size(); ++i) {
+      Position& pos = positions[i];
+      const int expected = minimax[i];
+      searcher->switches = exact_switches();
+      SearchQuota limits;
+      limits.depth = depth;
+      const SearchResult exact = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+      CHECK_MSG(exact.score == expected,
+                pos.fen() << " with " << count << " buckets: " << exact.score << " vs " << expected);
+      searcher->switches = SearchSwitches{};
+      limits.depth = Optimized ? 8 : 5;
+      const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      CHECK_MSG(legal.contains(r.best), pos.fen() << " with " << count << " buckets: best move not legal");
+      CHECK_MSG(std::abs(r.score) <= MateScore && (is_tb_or_mate(r.score) || std::abs(r.score) <= EvalLimit),
+                pos.fen() << " with " << count << " buckets: score " << r.score);
+    }
+  }
+}
+
+// Audit-1 V-5: the search stack's frame stays small (review 2, claim (e):
+// shrunk from 4 KB to 2,664 B; 2,672 B measured with clang on 2026-10-27).
+// A guard, so a growing frame is a decision, not an accident.
+static_assert(sizeof(PlyFrame) <= 2688,
+              "PlyFrame grew past 2,688 bytes (DESIGN.md §5.2, review 2 claim (e))");
+
 // Audit-1 Q-7: the TT's bound checks at their edge (mutant M12: an upper
 // bound cut when s <= beta instead of s <= alpha). An upper bound u, stored
 // for the probed position at the probe's depth, is a true bound here (the
@@ -561,21 +605,38 @@ TEST_CASE("time_budget", "the increment adds exactly three quarters of itself, s
 
 // Deliverable 8, variant B2: one more Move Overhead of reserve inside the
 // danger zone (less than two overheads plus an increment left), and only a
-// tenth of the clock outside it.
+// tenth of the clock outside it. Literal budgets (audit-1 Q-11: this case
+// recomputed the zone with the implementation's own expressions and checked
+// an upper bound only, so `<` turned `<=` at the zone's edge passed). Each
+// value comes from a separate restatement of the rule in
+// tools/check_search_positions.py, not from this code (overhead 100, AssumedMovesLeft 30,
+// ReserveDivisor 10, HardOverSoft 4): available = clock - 100; reserve a
+// tenth, or max(a tenth, 100) in the zone; cap = available - reserve; share =
+// available / 30 + 3/4 of the increment; hard = min(share, cap / 4) x 4.
+// 379 and 380 ms with an 80 ms increment straddle the zone's edge
+// (available 279 < 280, and 280): there the cap decides, hard 176 and 252.
 TEST_CASE("time_budget", "an extra overhead of reserve only in the danger zone") {
-  for (std::int64_t remaining : {150, 250, 300, 319, 320, 500, 1000, 2000}) {
-    for (std::int64_t inc : {0, 20, 80}) {
-      ClockInput c;
-      c.remaining_ms = remaining;
-      c.increment_ms = inc;
-      c.overhead_ms = 100;
-      const TimeBudget t = plan_time(c);
-      const std::int64_t available = remaining - 100;
-      const bool zone = available < 200 + inc;
-      const std::int64_t reserve = zone ? std::max<std::int64_t>(available / 10, 100) : available / 10;
-      CHECK_MSG(t.hard_ms <= std::max<std::int64_t>(1, available - reserve), remaining << " ms + " << inc);
-      if (zone && available <= 100) CHECK_MSG(t.hard_ms == 1, remaining << " ms + " << inc);
-    }
+  struct Budget {
+    std::int64_t remaining, inc, soft, hard;
+  };
+  for (const Budget& b : {Budget{150, 0, 1, 1},     Budget{150, 20, 1, 1},     Budget{150, 80, 1, 1},
+                          Budget{250, 0, 5, 20},    Budget{250, 20, 20, 48},   Budget{250, 80, 42, 48},
+                          Budget{300, 0, 6, 24},    Budget{300, 20, 21, 84},   Budget{300, 80, 66, 100},
+                          Budget{319, 0, 7, 28},    Budget{319, 20, 22, 88},   Budget{319, 80, 67, 116},
+                          Budget{320, 0, 7, 28},    Budget{320, 20, 22, 88},   Budget{320, 80, 67, 120},
+                          Budget{379, 0, 9, 36},    Budget{379, 20, 24, 96},   Budget{379, 80, 69, 176},
+                          Budget{380, 0, 9, 36},    Budget{380, 20, 24, 96},   Budget{380, 80, 69, 252},
+                          Budget{500, 0, 13, 52},   Budget{500, 20, 28, 112},  Budget{500, 80, 73, 292},
+                          Budget{1000, 0, 30, 120}, Budget{1000, 20, 45, 180}, Budget{1000, 80, 90, 360},
+                          Budget{2000, 0, 63, 252}, Budget{2000, 20, 78, 312}, Budget{2000, 80, 123, 492}}) {
+    ClockInput c;
+    c.remaining_ms = b.remaining;
+    c.increment_ms = b.inc;
+    c.overhead_ms = 100;
+    const TimeBudget t = plan_time(c);
+    CHECK_MSG(t.soft_ms == b.soft && t.hard_ms == b.hard,
+              b.remaining << " ms + " << b.inc << ": soft " << t.soft_ms << " hard " << t.hard_ms << ", want "
+                          << b.soft << " and " << b.hard);
   }
 }
 
@@ -664,7 +725,7 @@ TEST_CASE("time_budget", "a low clock keeps enough reserve to survive a stall") 
 
 }  // namespace forkeng::test
 
-// ---- Adversarial review of deliverable 2 (uncommitted; failing tests) ----
+// ---- Adversarial review of deliverable 2 (tests written failing, then fixed) ----
 namespace forkeng::test {
 
 // The most negative clock a GUI can send: go_limits.hpp clamps values beyond
