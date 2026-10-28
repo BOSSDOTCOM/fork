@@ -136,15 +136,18 @@ struct RootEntry {
 // The moved piece's facts for the LMR context, from the position after a
 // quiet move: its type, whether the opponent attacked its square before the
 // move (on the board as it stood then), and whether it now attacks an enemy
-// piece other than a pawn or the king. Inline and pure, so unused facts are
-// never computed. A castling move is read as its king's move: it is encoded
-// king to rook square, so its target square may be empty afterwards.
+// piece other than a pawn or the king. Always inlined (its helpers are all
+// inline table lookups), so a compiler drops the work when the LMR rule reads
+// none of the facts: g++ 11.4 with LTO (a TCEC compiler) called it at every
+// LMR site otherwise, while clang inlined and dropped it (audit-1, P-1). A
+// castling move is read as its king's move: it is encoded king to rook
+// square, so its target square may be empty afterwards.
 struct LmrMoveFacts {
   int piece;
   bool threatened;
   bool attacks;
 };
-inline LmrMoveFacts lmr_move_facts(const Position& after, Move m) {
+[[gnu::always_inline]] inline LmrMoveFacts lmr_move_facts(const Position& after, Move m) {
   const Color them = after.side_to_move();
   const Color mover = ~them;
   const Bitboard targets = after.pieces(them) & ~after.pieces(Pawn) & ~after.pieces(King);
