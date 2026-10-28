@@ -1025,7 +1025,19 @@ games at STC (10,000 at any other time control; `MAX_GAMES` overrides)
 stops and is logged as **inconclusive**, for the owner to decide on. For
 techniques expected to be near zero in Elo (mate distance pruning,
 possibly aspiration windows), an inconclusive result at the cap is
-acceptable for Milestone A (owner, 2026-10-25). **Concurrency 10**
+acceptable for Milestone A (owner, 2026-10-25). **Non-regression early
+acceptance** (owner, 2026-10-28): a non-regression SPRT ([-3, 0]) on a
+change with a clear rationale stops once at least 10,000 games are in and
+the 95% interval's lower bound is above -3, and is logged **ACCEPTED (by
+rule)** with that interval. The interval is the Elo one that fastchess and
+`tools/cloud/sprt_merge.py` report as "Elo: x +/- e" (the logistic Elo of
+the mean pair score, ±1.96 standard errors), as the owner applied it to
+B-1 (+0.96 ± 3.54 after 22,400 games: [-2.58, +4.50]); the bounds
+themselves are in normalized Elo, whose interval is wider (B-1: nElo
++1.24 ± 4.55). **Gainer-bound tests never stop early this way**: they pass
+or reach their cap. The cloud SPRT driver checks the rule after every
+stage; a local fastchess SPRT is checked at its rating reports.
+**Concurrency 10**
 (owner, 2026-10-25, raised from 5 for the remaining Milestone A SPRTs; 8
 if time losses ever appear): measured on the first 505 games of the PVS
 SPRT at STC, 1,478 games per hour (about 790 at concurrency 5) with 0 time
