@@ -323,5 +323,11 @@ for remaining, rows in DANGER.items():
     got = [budget(remaining, inc) for inc in (0, 20, 80)]
     check(got == rows, f'danger-zone budgets at {remaining} ms: {got}')
 
+# tests/test_search.cpp, the forced-move stop (audit-1, B-1): White's only
+# legal move is g2g3 (in check from the queen on h4), and a quiet position
+# with more than one.
+check([m.uci() for m in board_of('rnb1kbnr/pppp1ppp/8/4p3/7q/5P2/PPPPP1PP/RNBQKBNR w KQkq - 1 3').legal_moves] == ['g2g3'],
+      'forced move: g2g3 only')
+
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)

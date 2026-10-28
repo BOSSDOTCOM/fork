@@ -194,7 +194,8 @@ void UciSession::declare_options() {
         SwitchOption{"UseTtAgeBlend", &SearchSwitches::tt_age_blend},
         SwitchOption{"UseTtKeepExact", &SearchSwitches::tt_keep_exact},
         SwitchOption{"UseTtEvalRefine", &SearchSwitches::use_tt_eval_refine},
-        SwitchOption{"UseTables", &SearchSwitches::use_tables}}) {
+        SwitchOption{"UseTables", &SearchSwitches::use_tables},
+        SwitchOption{"UseForcedMoveStop", &SearchSwitches::use_forced_move_stop}}) {
     options_.add_check(s.name, searcher_->switches.*s.field,
                        [this, field = s.field](const OptionEntry& e, std::string&) {
                          searcher_->switches.*field = e.number != 0;

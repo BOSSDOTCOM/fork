@@ -1035,4 +1035,31 @@ TEST_CASE("search", "the listener: one exact report per finished iteration, plus
   }
   CHECK_MSG(bounds > 0, "no aspiration fail was reported");
 }
+// Audit-1, B-1: with one root move a timed search stops once 1/8 of its soft
+// limit has passed. A 150 ms pause after depth 1 passes 1/8 of 800 ms, so
+// the forced position (White's only move is g2g3; tools/check_search_positions.py)
+// stops at depth 1; with the switch off, and in a position with more moves,
+// the search runs to its depth limit, far below the soft limit.
+TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
+  TestHash store;
+  auto searcher = std::make_unique<Searcher>(store.table);
+  const std::atomic<bool> stop{false};
+  auto depth_reached = [&](std::string_view fen, bool rule) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    searcher->switches.use_forced_move_stop = rule;
+    SearchQuota limits;
+    limits.depth = 6;
+    limits.soft_ms = 800;
+    limits.hard_ms = 3200;
+    PausingListener listener;
+    listener.pause_after = 1;
+    listener.pause = std::chrono::milliseconds{150};
+    return searcher->deliberate(pos, limits, stop, nullptr, &listener).depth;
+  };
+  const std::string_view forced = "rnb1kbnr/pppp1ppp/8/4p3/7q/5P2/PPPPP1PP/RNBQKBNR w KQkq - 1 3";
+  CHECK_EQ(depth_reached(forced, true), 1);
+  CHECK_EQ(depth_reached(forced, false), 6);
+  CHECK_EQ(depth_reached("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", true), 6);
+}
 }  // namespace forkeng::test

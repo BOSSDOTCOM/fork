@@ -672,6 +672,13 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       break;
     const bool timed = !(pondering && pondering->load(std::memory_order_relaxed));
     if (timed && limits.soft_ms >= 0 && elapsed_ms() >= limits.soft_ms) break;
+    // With one root move (one legal move, one searchmoves move, or one the
+    // tables keep) nothing the search finds can change the move: only the
+    // reported score and the next move's TT and history gain from more
+    // time, so a fraction of the soft limit is enough (audit-1, B-1).
+    if (timed && switches.use_forced_move_stop && root_count_ == 1 && limits.soft_ms >= 0 &&
+        elapsed_ms() * ForcedMoveFraction >= limits.soft_ms)
+      break;
     // An iteration that would probably not finish before the hard limit is
     // not started (deliverable 8): its time would be spent for nothing. This
     // binds where the hard limit is close to the soft one: `go movetime`,
