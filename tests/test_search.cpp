@@ -996,4 +996,43 @@ TEST_CASE("search", "a node limit is kept to within one node") {
   }
   CHECK(searches > 0);
 }
+
+// Audit-1, A1 S-2: the listener's contract (searcher.hpp). A depth-limited
+// search that is never stopped reports each finished iteration exactly once,
+// in order, as an exact score, and with fail reports on (fail_report_ms 0)
+// adds one bound line per aspiration fail; over the perft suite at depth 12
+// some fail (the A1 audit counted 12).
+TEST_CASE("search", "the listener: one exact report per finished iteration, plus one per reported fail") {
+  struct Counter final : SearchListener {
+    int exact = 0, bounds = 0, last_exact_depth = 0;
+    bool in_order = true;
+    void on_iteration(const Position&, const IterationReport& r) override {
+      if (r.bound != 0) {
+        ++bounds;
+        return;
+      }
+      in_order = in_order && r.depth == last_exact_depth + 1;
+      last_exact_depth = r.depth;
+      ++exact;
+    }
+  };
+  Fixture fx;
+  fx.searcher->fail_report_ms = 0;
+  const int depth = Optimized ? 12 : 8;
+  int bounds = 0;
+  for (const auto& p : perft_suite()) {
+    Position pos;
+    CHECK(pos.set_fen(p.fen));
+    fx.store.clear();
+    fx.searcher->clear_history();
+    SearchQuota limits;
+    limits.depth = depth;
+    Counter c;
+    const SearchResult r = fx.searcher->deliberate(pos, limits, fx.stop, nullptr, &c);
+    CHECK_EQ(r.depth, depth);
+    CHECK_MSG(c.exact == depth && c.in_order, p.fen << ": " << c.exact << " exact reports");
+    bounds += c.bounds;
+  }
+  CHECK_MSG(bounds > 0, "no aspiration fail was reported");
+}
 }  // namespace forkeng::test

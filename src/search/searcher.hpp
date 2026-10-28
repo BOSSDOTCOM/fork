@@ -15,9 +15,13 @@
 //   parity); the history persists between searches until clear_history()
 //   (ucinewgame, Clear Hash, each bench position).
 // - No exceptions, virtual calls or std::function inside the recursion; the
-//   listener is called once per finished iteration only.
+//   listener is called outside it: once per finished iteration (bound 0),
+//   once per reported aspiration fail (bound +1 or -1, after fail_report_ms),
+//   and at most once more when a search stops, repeating or replacing the
+//   last line (audit-1, A1 S-2: this said "once per finished iteration only").
 // - Every technique has a switch in SearchSwitches, so one binary can test
-//   it on and off; release defaults are the techniques adopted by SPRT.
+//   it on and off; release defaults follow the SPRT log, and the provisional
+//   ones are marked where they are declared (audit-1, A7 D-19).
 #pragma once
 
 #include <atomic>
