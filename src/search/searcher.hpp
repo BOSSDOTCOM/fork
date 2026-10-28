@@ -200,7 +200,6 @@ struct SearchCounters {
   std::uint64_t first_move_cutoffs = 0;  // ... on the first move searched
   std::uint64_t cutoff_index_sum = 0;    // sum of the cutoff move's index (0 = first)
   std::uint64_t makes = 0;               // moves made in the main and quiescence searches
-  std::uint64_t gives_check_calls = 0;   // gives_check calls by the pruning (ideas.md idea 9)
   // Deliverable 6: nodes cut by RFP and the null move; moves pruned by LMP,
   // futility and SEE; LMR's reduced searches and their full-depth re-searches.
   std::uint64_t rfp_cuts = 0;

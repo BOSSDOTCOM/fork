@@ -240,18 +240,6 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #endif
         continue;
       }
-      if (futile_node && quiet) {
-#ifdef FORK_SEARCH_STATS
-        ++counters.gives_check_calls;
-#endif
-        if (!pos.gives_check(m)) {  // futility pruning (T22); the bound stays honest
-          best = std::max(best, futility_value);
-#ifdef FORK_SEARCH_STATS
-          ++counters.futility_prunes;
-#endif
-          continue;
-        }
-      }
 #ifdef FORK_SEARCH_STATS
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth) {
         const SelectorStage st = f.selector.yielding_stage();
@@ -378,9 +366,14 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       quiet_checks_only = true;
     }
   }
-  // Quiets the selector dropped at a futile node were pruned by futility, so
-  // the bound stays honest as if each had been seen.
+  // Futility pruning (T22): at a futile node the selector drops the quiets
+  // that do not give check (keep_quiet_checks above), so every quiet the
+  // loop sees there is a checking one. The bound stays honest as if each
+  // dropped quiet had been seen.
   if (f.selector.quiets_filtered() > 0) best = std::max(best, futility_value);
+#ifdef FORK_SEARCH_STATS
+  counters.futility_prunes += static_cast<std::uint64_t>(f.selector.quiets_filtered());
+#endif
   // No legal move is mate or stalemate; legal moves that were all pruned are
   // not (the guard above prevents it; this keeps the result right regardless).
   if (moves_seen == 0) return in_check ? mated_score(ply) : 0;

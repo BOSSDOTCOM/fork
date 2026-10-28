@@ -139,9 +139,7 @@ SearchBenchResult run_search_bench() {
       c.beta_cutoffs ? 100.0 * static_cast<double>(c.first_move_cutoffs) / static_cast<double>(c.beta_cutoffs)
                      : 0.0,
       c.beta_cutoffs ? static_cast<double>(c.cutoff_index_sum) / static_cast<double>(c.beta_cutoffs) : 0.0);
-  std::fprintf(stderr, "stats: %llu makes, %llu gives_check calls (%.3f per make; ideas.md idea 9)\n",
-               static_cast<unsigned long long>(c.makes), static_cast<unsigned long long>(c.gives_check_calls),
-               c.makes ? static_cast<double>(c.gives_check_calls) / static_cast<double>(c.makes) : 0.0);
+  std::fprintf(stderr, "stats: %llu makes\n", static_cast<unsigned long long>(c.makes));
   std::fprintf(stderr, "stats: cuts rfp %llu null %llu; prunes lmp %llu futility %llu see %llu\n",
                static_cast<unsigned long long>(c.rfp_cuts), static_cast<unsigned long long>(c.null_cuts),
                static_cast<unsigned long long>(c.lmp_prunes),
@@ -152,10 +150,12 @@ SearchBenchResult run_search_bench() {
       static_cast<unsigned long long>(c.lmr_searches), static_cast<unsigned long long>(c.lmr_researches),
       c.lmr_searches ? 100.0 * static_cast<double>(c.lmr_researches) / static_cast<double>(c.lmr_searches)
                      : 0.0);
-  std::fprintf(stderr, "stats: mean reduction %.3f plies\n",
-               c.lmr_searches ? static_cast<double>(c.lmr_plies_sum) / static_cast<double>(c.lmr_searches) : 0.0);
+  std::fprintf(
+      stderr, "stats: mean reduction %.3f plies\n",
+      c.lmr_searches ? static_cast<double>(c.lmr_plies_sum) / static_cast<double>(c.lmr_searches) : 0.0);
   std::fprintf(stderr, "stats: LMR rule ran at %llu sites, fired at %llu, changed the reduction at %llu\n",
-               static_cast<unsigned long long>(c.lmr_rule_sites), static_cast<unsigned long long>(c.lmr_rule_fires),
+               static_cast<unsigned long long>(c.lmr_rule_sites),
+               static_cast<unsigned long long>(c.lmr_rule_fires),
                static_cast<unsigned long long>(c.lmr_rule_changes));
   std::fprintf(stderr,
                "stats: SEE pruning: good captures %llu (skipped), tested: bad captures %llu, quiets %llu, "
