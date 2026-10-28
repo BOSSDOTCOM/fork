@@ -334,6 +334,38 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   heuristic-discovery loop (ideas.md idea 23), after the first strong
   network and that re-validation; afterwards a standing tool in the
   improvement pass (below).
+
+  **Phase 4 multi-agent plan (not started)** (owner, 2026-10-28; recorded
+  only, nothing of it has been run).
+  - **Principle:** agents propose, build and review; training and SPRT
+    decide. No architecture is chosen by argument alone.
+  - **Step 1, research** (branch kb, ideas only): clean-room descriptions
+    of modern NNUE design (input features including threat-aware inputs,
+    king buckets and mirroring as concepts, output buckets, activations,
+    quantization and quantization-aware training, training practices),
+    plus the queued pipeline-streamlining research
+    (`docs/kb/phase4-pipeline.md`; queued, not yet on branch kb as of
+    2026-10-28). Never another engine's code or exact constants.
+  - **Step 2, competing designs:** two or three independent designer
+    agents each propose a full architecture for Fork, with reasoning,
+    expected inference speed on x86-64-v3 and v4, Kaggle training cost,
+    and risks.
+  - **Step 3, judge:** one agent compares the proposals and recommends 2-3
+    candidates.
+  - **Step 4, bake-off:** small versions of each candidate trained on the
+    same data, compared by SPRT. The winner becomes Fork's first
+    architecture.
+  - **Step 5, implementation:** one implementer session writes the
+    inference code; independent reviewers check correctness, SIMD
+    equivalence with the scalar reference, performance, and originality.
+  - **Step 6, data:** a data-policy auditor enforces strategy A+ (own
+    self-play labels, Lichess CC0 positions with evals stripped, Syzygy
+    labels, nothing from off-limits sources).
+  - **Step 7, training:** an analyst agent reviews each network
+    generation's results and recommends the next change.
+  - **Timing:** steps 1-3 may run in parallel with tier 2 once audit-1 is
+    merged, since they need little CPU; steps 4-7 run in Phase 4. Each
+    step stops for the owner's review before the next.
 - **Phase 5: Time management.** Soft and hard limits tuned for long
   increment games without ponder, and a stress test under artificial system
   load. Before this phase starts: research the current TCEC season's full
