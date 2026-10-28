@@ -1,0 +1,21 @@
+# Every path whose content can change what the checks build or test: git
+# pathspecs (a folder covers everything under it), one per line. Read by
+# scripts/check.sh (the fingerprint that lets `stop` and `full` skip an
+# unchanged tree) and by scripts/hooks/pre-commit (a commit touching none of
+# these skips the full check), so the two can never disagree.
+src
+tests
+bench
+fuzz
+third_party
+cmake
+CMakeLists.txt
+CMakePresets.json
+update.sh
+tools/magic_seeds.cpp
+tools/dump_tables.cpp
+tools/hash_timing.cpp
+scripts/check.sh
+scripts/env.sh
+scripts/uci-smoke.sh
+scripts/code-paths.txt
