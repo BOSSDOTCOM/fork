@@ -114,13 +114,27 @@ stamp_matches() {  # fingerprint, stamp files...
 # (a link error under TSan/MSan; under valgrind the test's self-check reports
 # that the counter is not in effect). ASan/UBSan builds run it. See
 # .claude/rules/testing.md.
+# Build parallelism is capped so a full check fits in this machine's 15 GB
+# beside other work (2026-10-28: an uncapped check, about 14 compile jobs
+# and 12 LTO jobs in the 7.5 GB WSL VM, ran the machine out of memory):
+# 6 jobs on Windows, 4 inside WSL (its VM gets half the RAM). FORK_CHECK_JOBS
+# overrides both. The legs (this platform's presets, then the Linux leg, then
+# the TCEC leg) run one after another, never at once, and the lock keeps a
+# second check from starting beside them.
+check_jobs() {
+  if [ -n "${FORK_CHECK_JOBS:-}" ]; then echo "$FORK_CHECK_JOBS"
+  elif [ "$(uname -s)" = Linux ]; then echo 4
+  else echo 6
+  fi
+}
+
 build_and_test() {  # preset, ctest filter args...
   local preset=$1 out
   shift
   if [ ! -f "build/$preset/build.ninja" ]; then
     cmake --preset "$preset" >>"$log" 2>&1 || fail "configure $preset"
   fi
-  cmake --build "build/$preset" >>"$log" 2>&1 || fail "build $preset"
+  cmake --build "build/$preset" -j "$(check_jobs)" >>"$log" 2>&1 || fail "build $preset"
   out=$(ctest --test-dir "build/$preset" --output-on-failure "$@" 2>&1)
   local status=$?
   echo "$out" >>"$log"
@@ -153,7 +167,7 @@ windows_gcc_smoke() {
     if [ ! -f "build/$preset/build.ninja" ]; then
       cmake --preset "$preset" >>"$log" 2>&1 || fail "configure $preset"
     fi
-    cmake --build "build/$preset" --target fork >>"$log" 2>&1 || fail "build $preset (fork)"
+    cmake --build "build/$preset" --target fork -j "$(check_jobs)" >>"$log" 2>&1 || fail "build $preset (fork)"
     scripts/uci-smoke.sh "build/$preset/fork.exe" 50 >>"$log" 2>&1 || fail "UCI start-up smoke loop, $preset"
   done
 }
@@ -193,7 +207,7 @@ case "$mode" in
     for pair in "g++:gcc 11.4." "g++-12:gcc 12." "clang++-16:clang 16." "clang++-19:clang 19."; do
       cxx=${pair%%:*} want=${pair#*:}
       echo "== TCEC build with $cxx"
-      out=$(CXX=$cxx bash ./update.sh 2>&1) || { echo "$out"; echo "update.sh failed with $cxx" >&2; exit 1; }
+      out=$(CXX=$cxx FORK_JOBS=$(check_jobs) bash ./update.sh 2>&1) || { echo "$out"; echo "update.sh failed with $cxx" >&2; exit 1; }
       bin=$(echo "$out" | tail -n 1)
       echo "$out" | grep -q "^compiler $want" ||
         { echo "$out"; echo "$cxx is not the expected $want" >&2; exit 1; }
