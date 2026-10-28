@@ -302,6 +302,15 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
   CHECK(static_eval(pos) != 0);  // so the 0 is the draw, not the evaluation
 }
 
+// Audit-1 Q-8: the quiescence search's own "mate on the 100th half-move" rule.
+// The case above searches to depth 3, so the mate is seen by the main search;
+// scoring it a draw in the quiescence search passed every test (mutant M15).
+// At depth 1 the mated child is a quiescence node.
+TEST_CASE("search", "draws: mate on the 100th half-move is found at a quiescence node") {
+  Fixture fx;
+  CHECK_EQ(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 99 80", 1).score, mate_score(1));
+}
+
 TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still returns a legal move") {
   Fixture fx;
   Position pos;
@@ -703,5 +712,105 @@ TEST_CASE("search", "a search stops iterating once its soft limit has passed") {
   limits.hard_ms = 3'600'000;
   limits.go_received = std::chrono::steady_clock::now() - std::chrono::milliseconds{1000};
   CHECK_EQ(searcher->deliberate(pos, limits, stop, nullptr, nullptr).depth, 1);
+}
+
+// Audit-1 Q-8: a pondering search ignores its soft and hard limits (they
+// apply from ponderhit on). The UCI ponder case checks only when bestmove is
+// printed, which the session holds until ponderhit anyway, so applying either
+// limit while pondering passed every test (mutants M26, M27). Both limits
+// have passed here (go a second ago, 1 ms each), yet the search reaches the
+// depth asked for.
+TEST_CASE("search", "a pondering search ignores its soft and hard limits") {
+  TestHash store;
+  auto searcher = std::make_unique<Searcher>(store.table);
+  const std::atomic<bool> stop{false};
+  const std::atomic<bool> pondering{true};
+  Position pos;
+  SearchQuota limits;
+  limits.depth = 7;
+  limits.soft_ms = 1;
+  limits.hard_ms = 1;
+  limits.go_received = std::chrono::steady_clock::now() - std::chrono::milliseconds{1000};
+  CHECK_EQ(searcher->deliberate(pos, limits, stop, &pondering, nullptr).depth, 7);
+}
+
+namespace {
+// Every report of a search: depth, score, bound and the pv's first move.
+struct ReportLog final : SearchListener {
+  struct Entry {
+    int depth, score, bound;
+    Move first;
+  };
+  std::vector<Entry> entries;
+  void on_iteration(const Position&, const IterationReport& r) override {
+    entries.push_back({r.depth, r.score, r.bound, r.pv->length ? r.pv->moves[0] : NoMove});
+  }
+};
+}  // namespace
+
+// Audit-1 Q-8: after a stop mid-iteration, a move other than the last
+// finished iteration's best is played only if it came back with an exact
+// score above that iteration's (searcher.cpp, the stop rule). The fail-high
+// case above covers the other half of the rule; playing the unfinished
+// iteration's best whatever its score passed every test (mutant M24).
+// Node-limited searches over the bench positions stop at many points; the
+// last finished iteration is the first exact report at the result's depth.
+// At least one stop must play a new move, or the test proves nothing.
+TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored above the last iteration") {
+  Fixture fx;
+  int switched = 0;
+  const std::size_t positions = Optimized ? 10 : 6;
+  for (std::size_t i = 0; i < positions; ++i) {
+    const std::string_view fen = search_bench_fens()[i];
+    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
+      fx.store.clear();
+      fx.searcher->clear_history();
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      SearchQuota q;
+      q.nodes = nodes;
+      ReportLog log;
+      const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
+      if (r.depth == 0) continue;
+      const auto finished = std::ranges::find_if(
+          log.entries, [&](const ReportLog::Entry& e) { return e.depth == r.depth && e.bound == 0; });
+      CHECK_MSG(finished != log.entries.end(),
+                fen << " at " << nodes << " nodes: no report of depth " << r.depth);
+      if (finished == log.entries.end() || r.best == finished->first) continue;
+      ++switched;
+      CHECK_MSG(r.score > finished->score, fen << " at " << nodes << " nodes: played "
+                                               << pos.move_to_uci(r.best) << " at " << r.score << " over "
+                                               << pos.move_to_uci(finished->first) << " at "
+                                               << finished->score << " (depth " << r.depth << ")");
+    }
+  }
+  CHECK_MSG(switched > 0, "no stop played a move other than the last finished iteration's");
+}
+
+// Audit-1 V-4 (00bed14): no LMR or PVS re-search once the search has
+// stopped (a stopped child returns 0, which can beat alpha, and each
+// re-search counts one more node past a node limit). The limits case above
+// allows one node over, and so must this: the root's PVS re-search has no
+// stop check (audit-1 A1, measured at most one node over). Reverting
+// 00bed14 passed every test; over many limits, it counts two or more nodes
+// over the limit.
+TEST_CASE("search", "a node limit is kept to within one node") {
+  Fixture fx;
+  int searches = 0;
+  for (const PerftPosition& p : perft_suite()) {
+    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 60000u : 15000u); nodes += 997) {
+      fx.store.clear();
+      fx.searcher->clear_history();
+      Position pos;
+      CHECK(pos.set_fen(p.fen));
+      SearchQuota q;
+      q.nodes = nodes;
+      const SearchResult r = fx.search(pos, q);
+      ++searches;
+      CHECK_MSG(r.nodes >= nodes && r.nodes <= nodes + 1,
+                p.fen << ": limit " << nodes << ", searched " << r.nodes);
+    }
+  }
+  CHECK(searches > 0);
 }
 }  // namespace forkeng::test

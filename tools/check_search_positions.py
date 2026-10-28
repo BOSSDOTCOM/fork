@@ -226,5 +226,12 @@ check(not b.is_fifty_moves(), 'fifty-move rule not reached at 99 half-moves')
 b.push_uci('a1a2')
 check(b.is_fifty_moves(), 'fifty-move rule reached at 100 half-moves')
 
+# tests/test_pruning.cpp, the LMR context's history (audit-1 V-4): legal
+# positions and moves.
+for fen, uci in [('4k3/8/8/8/8/8/8/R3K3 w - - 0 1', 'a1a2'), ('r3k3/8/8/8/8/8/8/4K3 b - - 0 1', 'a8a7')]:
+    b = board_of(fen)
+    check(chess.Move.from_uci(uci) in b.legal_moves and not b.is_capture(chess.Move.from_uci(uci)),
+          f'quiet and legal: {uci} in {fen}')
+
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)

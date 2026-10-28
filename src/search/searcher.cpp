@@ -291,13 +291,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           !in_check) {
         // The table's reduction plus the evolvable correction (lmr_table.hpp;
         // 0 as committed). The move is already made here, so its mover is the
-        // side not to move: its history is the mover's.
+        // side not to move: its history is the mover's (mover_history).
         const int base = reduction_for(depth, moves_searched + 1);
         const LmrMoveFacts facts = lmr_move_facts(pos, m);
         const LmrContext context{depth,
                                  moves_searched + 1,
                                  base,
-                                 history_.value(~pos.side_to_move(), m),
+                                 mover_history(history_, pos, m),
                                  OnPv,
                                  facts.piece,
                                  facts.threatened,

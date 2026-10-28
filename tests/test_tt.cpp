@@ -25,6 +25,27 @@ struct TestTable {
 
 }  // namespace
 
+// Audit-1 Q-8: the band clamp of score_from_tt (review, 2026-10-24). The
+// conversion cases of this suite use scores that stay inside their band, so
+// removing the clamp passed every test (mutant M08). Every mate and
+// tablebase score, read back at any ply, must stay a score of its own kind
+// and sign (score_bounds.hpp's bands).
+TEST_CASE("tt", "score_from_tt keeps every mate and tablebase score in its band at every ply") {
+  for (int ply = 0; ply <= MaxPly; ++ply) {
+    for (int n = 0; n <= MaxPly; ++n) {
+      const int mate = score_from_tt(mate_score(n), ply), mated = score_from_tt(mated_score(n), ply);
+      CHECK_MSG(is_mate_score(mate) && mate > 0, "mate at " << n << ", read at ply " << ply << ": " << mate);
+      CHECK_MSG(is_mate_score(mated) && mated < 0,
+                "mated at " << n << ", read at ply " << ply << ": " << mated);
+      const int win = score_from_tt(TbWinScore - n, ply), loss = score_from_tt(-(TbWinScore - n), ply);
+      CHECK_MSG(is_tb_or_mate(win) && !is_mate_score(win) && win > 0,
+                "win " << n << " at ply " << ply << ": " << win);
+      CHECK_MSG(is_tb_or_mate(loss) && !is_mate_score(loss) && loss < 0,
+                "loss " << n << " at ply " << ply << ": " << loss);
+    }
+  }
+}
+
 TEST_CASE("tt", "deposit then fetch returns the entry; other keys miss; an unbound table misses") {
   TestTable t(1024);
   const Key key = 0x123456789abcdef0ULL;

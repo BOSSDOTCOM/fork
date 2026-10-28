@@ -166,6 +166,13 @@ struct LmrMoveFacts {
   return {static_cast<int>(type), attackers != 0, (reach & targets) != 0};
 }
 
+// The LMR context's history: the mover's entry for the move, read from the
+// position after the move, where the mover is the side not to move (b89185f:
+// it read the opponent's table; tests/test_pruning.cpp).
+inline int mover_history(const QuietHistory& history, const Position& after, Move m) {
+  return history.value(~after.side_to_move(), m);
+}
+
 // Debug counters (DESIGN.md §5.2), compiled in only with the CMake option
 // FORK_SEARCH_STATS: they show whether ordering and pruning behave as
 // intended, which an Elo test cannot. Normal builds have none.

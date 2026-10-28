@@ -9,6 +9,7 @@
 #include "eval/bootstrap_eval.hpp"
 #include "harness.hpp"
 #include "search/lmr_table.hpp"
+#include "search/quiet_history.hpp"
 #include "search/searcher.hpp"
 
 namespace forkeng::test {
@@ -264,6 +265,28 @@ TEST_CASE("pruning", "LMR move facts: piece, threatened before the move, attacks
     CHECK_MSG(f.piece == c.piece, c.fen << " " << c.move << ": piece " << f.piece);
     CHECK_MSG(f.threatened == c.threatened, c.fen << " " << c.move << ": threatened " << f.threatened);
     CHECK_MSG(f.attacks == c.attacks, c.fen << " " << c.move << ": attacks " << f.attacks);
+  }
+}
+
+// Audit-1 V-4 (b89185f): the LMR context's history is the mover's. The
+// search builds the context after making the move, so the side to move is
+// the opponent; reading its table instead passed every test (the committed
+// correction is 0). One entry is set for the mover only, another for the
+// opponent only, both for the same from and to squares.
+TEST_CASE("pruning", "LMR context: the history read is the mover's, after the move is made") {
+  for (const char* fen : {"4k3/8/8/8/8/8/8/R3K3 w - - 0 1", "r3k3/8/8/8/8/8/8/4K3 b - - 0 1"}) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    const Color mover = pos.side_to_move();
+    const Move m = pos.parse_uci(mover == White ? "a1a2" : "a8a7");
+    CHECK_MSG(!m.is_none(), fen);
+    QuietHistory history;
+    history.apply(mover, m, 300);
+    history.apply(~mover, m, -700);
+    const int mine = history.value(mover, m);
+    CHECK(mine > 0 && history.value(~mover, m) < 0);
+    pos.make(m);
+    CHECK_MSG(mover_history(history, pos, m) == mine, fen << ": " << mover_history(history, pos, m));
   }
 }
 
