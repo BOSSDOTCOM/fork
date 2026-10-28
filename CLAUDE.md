@@ -27,12 +27,18 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
 - `.claude/rules/`: area rules (C++ style, testing, SIMD).
 - GitHub: **public** repo https://github.com/BOSSDOTCOM/fork (made public by
   the owner on 2026-10-26 after a history audit; remote `origin`;
-  push main, kb, tcec-cutechess and tags). CI in `.github/workflows/ci.yml`:
-  TCEC toolchain (ubuntu:22.04 container, update.sh with 4 compilers, bench
-  parity, gcc 11.4 fast tests) and current Ubuntu presets. It runs only on
-  pushes to main and pull requests, skips docs-only changes, cancels
-  superseded runs (Actions minutes are limited: about 10 billed minutes per
-  run). Never push the local backup bundles (`*.bundle`).
+  push main, kb, tcec-cutechess and tags). CI in `.github/workflows/ci.yml`
+  is the full check (owner, 2026-10-28), parallel jobs with bench parity in
+  each: every Linux preset (ASan/UBSan, TSan), MSan with an instrumented
+  libc++, the fuzz seeds, PGO, the Windows toolchains (LLVM-MinGW, WinLibs,
+  pinned in `.github/ci/win-tools.sh`) with the gcc-debug full suite and the
+  GCC smoke loop, TCEC's four compilers (ubuntu:22.04), and the slow suites
+  as their own jobs (perft_epd_full takes about 2 hours). AVX-512 binaries
+  run under Intel SDE on runners without it. It runs on pushes to main and
+  audit-1 (docs-only pushes skipped) and on every pull request; a newer push
+  cancels the older run. Hosted runners are free for the public repo.
+  Branch protection on main requires every job green. Never push the local
+  backup bundles (`*.bundle`).
 - TCEC toolchain: WSL distro `Ubuntu-22.04` (gcc 11.4, g++-12, clang 16/19,
   CMake 3.22), set up by `scripts/tcec-toolchain-setup.sh`; runs as root.
   CMake must stay at a 3.22 floor and the code within libstdc++ 11's C++20.
@@ -43,9 +49,9 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
 . scripts/env.sh                              # toolchain on PATH (Windows) / compilers (Linux)
 scripts/build.sh                              # all presets + PGO, summary table
 scripts/build.sh clang-release gcc-debug      # chosen presets
-scripts/check.sh quick                        # clang-release build + fast tests
+scripts/check.sh quick                        # clang-release build + fast tests (the pre-commit hook, on the staged tree)
 scripts/check.sh stop                         # Stop hook: clang-release, all non-slow tests; skipped if code unchanged
-scripts/check.sh full                         # Windows presets + UCI smoke loop of every MinGW GCC preset,
+scripts/check.sh full                         # on demand (CI runs the full matrix): Windows presets + UCI smoke loop of every MinGW GCC preset,
                                               # then the same + gcc-debug on Linux (WSL),
                                               # then update.sh + bench with TCEC's 4 compilers (WSL Ubuntu-22.04)
 scripts/uci-smoke.sh build/gcc-debug/fork.exe 50   # 50 starts of uci/isready/quit, all must exit 0
@@ -77,7 +83,8 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
    caught it.
 2. **Never claim something works without running it.** Report numbers from
    actual runs, and say when something was not run.
-3. **Every functional change:** the full check passes (`scripts/check.sh full`),
+3. **Every functional change:** the full check passes (the CI matrix on the
+   pushed commit, or `scripts/check.sh full` locally),
    bench parity is checked, and the commit message states the bench node
    count (and the new signature if bench intentionally changed, with
    `tests/bench.ref` updated in the same commit).
@@ -138,8 +145,9 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
   attribution lines the session provides.
 - Push policy (owner, 2026-10-24): commit locally as often as needed, but
   push to GitHub only at milestones, meaning each completed deliverable or
-  when the owner asks, so CI (and its limited minutes) runs on meaningful
-  checkpoints. Push `kb` with the same milestones; it never triggers CI.
+  when the owner asks, so CI runs on meaningful checkpoints (the full
+  matrix takes about 2 hours of wall time and shares runners with the SPRT
+  shards). Push `kb` with the same milestones; it never triggers CI.
 
 ### Phase-end checklist
 

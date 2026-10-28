@@ -318,7 +318,10 @@ generic vocabulary (DESIGN.md §8).
 | WinLibs GCC (MinGW-w64, UCRT) | GCC 16.2.0 | GPL-3.0 with GCC Runtime Library Exception |
 | CMake | 4.4.4 | BSD-3-Clause |
 | Ninja | 1.13.2 | Apache-2.0 |
-| GitHub Actions (CI): `actions/checkout@v4`, `actions/cache@v4`, runner `ubuntu-latest`, container `ubuntu:22.04` | as pinned in .github/workflows/ci.yml | MIT (the two actions) |
+| GitHub Actions (CI): `actions/checkout@v7`, `actions/cache@v6` (tag refs, not SHAs), runners `ubuntu-latest` (Ubuntu 26.04 on 2026-10-28) and `windows-latest`, container `ubuntu:22.04` | as pinned in .github/workflows/ci.yml | MIT (the two actions) |
+| CI Windows toolchain (.github/ci/win-tools.sh): the LLVM-MinGW, WinLibs GCC, CMake and Ninja releases above, from their GitHub releases | llvm-mingw-20261006-ucrt-x86_64.zip, winlibs-x86_64-posix-seh-gcc-16.2.0-mingw-w64ucrt-14.0.0-r2.zip, cmake-4.4.4-windows-x86_64.zip, ninja-win.zip 1.13.2; SHA-256 of each pinned in the script and checked before extraction (taken from the winget-pkgs manifests, equal to GitHub's release digests) | as the rows above (the LLVM-MinGW and WinLibs per-component licences UNVERIFIED in detail) |
+| Intel SDE (CI only, .github/ci/sde.sh) | 10.13.1 (2026-07-28), Linux and Windows archives from downloadmirror.intel.com, SHA-256 pinned in the script | Intel SDE licence agreement; not redistributed with Fork |
+| CI MSan compiler (.github/ci/llvm-apt.sh): clang-21, libclang-rt-21-dev from apt.llvm.org | 21.1.8 (llvmorg-21.1.8, commit 2078da43); apt-signed, key fingerprint not pinned (as in tcec-toolchain-setup.sh) | Apache-2.0 with LLVM exception |
 | GitHub CLI (`gh`) | 2.103.2 | MIT |
 | Linux (WSL2 Ubuntu): clang / gcc | 21.1.8 / 15.2.0 | Apache-2.0 with LLVM exception / GPL-3.0 with GCC Runtime Library Exception |
 | Linux: CMake, Ninja | 4.2.3, 1.13.2 | BSD-3-Clause, Apache-2.0 |

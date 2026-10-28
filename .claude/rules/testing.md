@@ -27,7 +27,9 @@ paths:
   - A change that alters search or move order updates bench.ref in the same
     commit, with the new count in the message.
 - **Run before claiming done:**
-  - `scripts/check.sh full` (pre-commit runs it; the Stop hook runs
+  - the full check: the CI matrix (`.github/workflows/ci.yml`) green on
+    the pushed commit, or `scripts/check.sh full` on demand (pre-commit
+    runs `check.sh quick` on the staged tree; the Stop hook runs
     `check.sh stop`);
   - `scripts/build.sh` (all presets) before a phase sign-off;
   - slow suites (`ctest -L slow`) at sign-off.
