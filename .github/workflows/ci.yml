@@ -34,9 +34,18 @@ on:
       - 'LICENSE'
   pull_request:
   workflow_dispatch:
+    inputs:
+      force-sde:
+        description: Run the AVX-512 binaries under Intel SDE even where the CPU has AVX-512 (tests the SDE path)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+env:
+  # Read by .github/ci/sde.sh; always 0 outside a manual run that asks for it.
+  FORK_CI_FORCE_SDE: ${{ inputs.force-sde && '1' || '0' }}
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -154,16 +163,26 @@ jobs:
         run: |
           echo "::notice::${{ matrix.preset }}: this runner's CPU lacks the target's features; the tests run under Intel SDE"
           d=build/${{ matrix.preset }}
-          bins="$d/fork $d/fork_tests"
+          # The test executables run under SDE. The engine stays the real
+          # binary: SDE follows the UCI suites' exec of it, and an engine
+          # wrapped in a second SDE under the first one crashes Pin (seen
+          # 2026-10-28). Bench parity runs it through its own wrapper.
+          bins="$d/fork_tests"
           for b in fork_alloc_test fork_uci_oom_test fork_uci_hash_oom_test; do [ -f "$d/$b" ] && bins="$bins $d/$b"; done
           bash .github/ci/sde.sh inplace ~/sde $bins
+          bash .github/ci/sde.sh wrap ~/sde "$d/fork" "$d/fork-sde"
           # Under emulation timings say nothing about Fork: the timing cases
           # report SKIPPED, as they do while test games run (scripts/env.sh).
           echo "FORK_GAMES_RUNNING=1" >>"$GITHUB_ENV"
       - name: Fast tests (bench parity, no_alloc)
         run: |
           case "${{ matrix.preset }}" in *-tsan) export REQUIRE_NO_ALLOC=0 ;; esac
-          bash .github/ci/run-tests.sh build/${{ matrix.preset }}
+          if [ "${{ steps.cpu.outputs.sde }}" = true ]; then
+            REQUIRE_BENCH=0 bash .github/ci/run-tests.sh build/${{ matrix.preset }} -E '^(bench_parity|perft_bench_parity)$'
+            bash .github/ci/bench-parity.sh build/${{ matrix.preset }}/fork-sde
+          else
+            bash .github/ci/run-tests.sh build/${{ matrix.preset }}
+          fi
 
   linux-msan:
     name: Linux MSan (clang 21, libc++)

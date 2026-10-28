@@ -4,7 +4,9 @@
 #
 #   .github/ci/sde.sh needs ARCH         exit 0 when this CPU cannot run a
 #                                        FORK_ARCH=ARCH build (prints the
-#                                        CPU and the missing flags), else 1
+#                                        CPU and the missing flags), else 1;
+#                                        FORK_CI_FORCE_SDE=1 forces SDE for
+#                                        x86-64-v4 (to test this path)
 #   .github/ci/sde.sh install DIR        download (pinned SHA-256) and
 #                                        extract SDE into DIR, unless there
 #   .github/ci/sde.sh wrap DIR BIN OUT   write OUT, a script running BIN
@@ -63,6 +65,10 @@ case "${1:-}" in
     done
     if [ -n "$missing" ]; then
       echo "CPU lacks$missing: $arch binaries need SDE"
+      exit 0
+    fi
+    if [ "${FORK_CI_FORCE_SDE:-0}" = 1 ] && [ "$arch" = x86-64-v4 ]; then
+      echo "CPU runs $arch natively, but FORK_CI_FORCE_SDE=1: using SDE anyway"
       exit 0
     fi
     echo "CPU runs $arch natively"
