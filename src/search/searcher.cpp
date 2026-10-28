@@ -321,9 +321,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       counters.lmr_plies_sum += static_cast<std::uint64_t>(new_depth - reduced);
       counters.lmr_researches += reduced < new_depth && score > alpha;
 #endif
-      if (score > alpha && reduced < new_depth)
+      // No re-search once the search has stopped: a stopped child returns 0,
+      // which can beat alpha, and each call would still count a node past a
+      // node limit (found by the heuristic-discovery gate, 2026-10-27).
+      if (!stopped_ && score > alpha && reduced < new_depth)
         score = -negamax<false>(-alpha - 1, -alpha, new_depth, ply + 1);
-      if (OnPv && score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
+      if (!stopped_ && OnPv && score > alpha && score < beta)
+        score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
     }
     pos.unmake(m);
     if (stopped_) return 0;
