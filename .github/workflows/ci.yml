@@ -2,8 +2,8 @@
 #
 # - Linux (ubuntu-latest): every preset that runs on Linux (clang and gcc,
 #   release, debug with ASan+UBSan, v3, avx512, nopext, TSan), MSan against
-#   an instrumented libc++, the fuzz targets over their committed seeds, and
-#   the PGO builds;
+#   an instrumented libc++, the fuzz targets over their committed seeds, the
+#   PGO builds and the tuning build (FORK_TUNE);
 # - Windows (windows-latest): the local development toolchain (LLVM-MinGW
 #   and WinLibs GCC, pinned in .github/ci/win-tools.sh), the presets
 #   scripts/check.sh full covers plus the full gcc-debug suite;
@@ -262,7 +262,7 @@ jobs:
           done
 
   linux-pgo:
-    name: Linux PGO (clang, gcc)
+    name: Linux PGO and tuning builds
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -280,6 +280,19 @@ jobs:
           echo "FORK_GCC_CXX=g++" >>"$GITHUB_ENV"
       - name: PGO builds and their bench parity (scripts/build.sh)
         run: bash scripts/build.sh clang-pgo gcc-pgo
+      - name: Tuning build (FORK_TUNE) declares every switch, bench parity
+        # The SPRT removal round and SPSA run tuning builds, which no other
+        # job compiles (one broke unseen in 6ab7cb7).
+        run: |
+          cmake --preset clang-release -B build/tune -DFORK_TUNE=ON -DFORK_BUILD_TESTS=OFF
+          cmake --build build/tune --target fork
+          want=$(sed -n '/^#define FORK_SEARCH_SWITCHES/,/^$/p' src/search/searcher.hpp | grep -c '^ *X(')
+          got=$(printf 'uci
+quit
+' | build/tune/fork | grep -c '^option name Use[A-Za-z]* type check')
+          echo "switches in FORK_SEARCH_SWITCHES: $want, check options: $got"
+          [ "$want" -gt 0 ] && [ "$got" -eq "$want" ]
+          bash .github/ci/bench-parity.sh build/tune/fork
 
   windows:
     name: Windows (${{ matrix.preset }})

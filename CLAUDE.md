@@ -30,7 +30,7 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
   push main, kb, tcec-cutechess and tags). CI in `.github/workflows/ci.yml`
   is the full check (owner, 2026-10-28), parallel jobs with bench parity in
   each: every Linux preset (ASan/UBSan, TSan), MSan with an instrumented
-  libc++, the fuzz seeds, PGO, the Windows toolchains (LLVM-MinGW, WinLibs,
+  libc++, the fuzz seeds, PGO, the tuning build (FORK_TUNE), the Windows toolchains (LLVM-MinGW, WinLibs,
   pinned in `.github/ci/win-tools.sh`) with the gcc-debug full suite and the
   GCC smoke loop, TCEC's four compilers (ubuntu:22.04), and the slow suites
   as their own jobs (perft_epd_full takes about 2 hours). AVX-512 binaries
