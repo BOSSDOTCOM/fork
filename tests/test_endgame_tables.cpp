@@ -338,6 +338,37 @@ TEST_CASE("tables", "3-4-5 root ranking: after a repetition only the fastest win
   load_endgame_tables("");
 }
 
+// Audit-1, B-2: a table result that settles a node is stored at full depth,
+// so the next iteration's deeper visit cuts on the TT entry instead of
+// probing again: fewer probes, the same move and score (the probe and the TT
+// cut return the same score).
+TEST_CASE("tables", "table results are stored at full depth: fewer probes, the same search") {
+  if (!seven_man_present()) return;
+  CHECK(load_endgame_tables(seven_man_dir()).find("7 pieces") != std::string::npos);
+  std::vector<TtBucket> buckets(16384);
+  TransTable tt;
+  tt.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  auto searcher = std::make_unique<Searcher>(tt);
+  const std::atomic<bool> stop{false};
+  SearchQuota q;
+  q.depth = 8;
+  std::uint64_t hits[2];
+  SearchResult r[2];
+  for (int full = 0; full < 2; ++full) {
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    searcher->clear_history();
+    searcher->switches.use_tables_full_depth = full == 1;
+    Position w = at(WhiteWins);
+    TableHitCounter counter;
+    r[full] = searcher->deliberate(w, q, stop, nullptr, &counter);
+    hits[full] = counter.hits;
+  }
+  CHECK_MSG(hits[1] < hits[0], "tbhits " << hits[1] << " at full depth, " << hits[0] << " at the node's");
+  CHECK(r[1].best == r[0].best);
+  CHECK_EQ(r[1].score, r[0].score);
+  load_endgame_tables("");
+}
+
 #ifdef __linux__
 // TCEC asks 7-man users to advise random access on the mapped tables
 // (MADV_RANDOM, KB competition.md); Fathom does so when tbprobe.c is built

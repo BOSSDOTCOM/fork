@@ -87,6 +87,9 @@ struct SearchSwitches {
   // The re-search after a root aspiration fail high is FailHighDepthCut
   // plies shallower (audit-1, B-3).
   bool use_shallow_fail_high = true;
+  // A table result that settles a node is stored in the TT at full depth, not
+  // the node's (audit-1, B-2).
+  bool use_tables_full_depth = true;
   // Syzygy endgame tables, when loaded (deliverable 7): win/draw/loss probes
   // in the search and the ranking of root moves.
   bool use_tables = true;

@@ -143,7 +143,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                         : *wdl == TableWdl::Loss ? TtBound::Upper
                                                  : TtBound::Exact;
       if (b == TtBound::Exact || (b == TtBound::Lower && s >= beta) || (b == TtBound::Upper && s <= alpha)) {
-        if (switches.use_tt) tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv);
+        // A table result holds at any depth, so it is stored as deep as the
+        // TT allows: a deeper visit in a later iteration cuts on it instead of
+        // probing again (audit-1, B-2).
+        if (switches.use_tt)
+          tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone,
+                      switches.use_tables_full_depth ? MaxPly : depth, b, OnPv);
         return s;
       }
       (b == TtBound::Lower ? table_floor : table_ceiling) = s;
