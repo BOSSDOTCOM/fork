@@ -26,19 +26,19 @@ constexpr std::string_view Commands[] = {"uci",        "debug",    "isready", "s
 
 bool is_command(std::string_view t) { return std::ranges::find(Commands, t) != std::end(Commands); }
 
-// Whether the first command word of `line` is `go`, found without
+// The first command word of `line` (empty if none), found without
 // allocating (so it still works when the tokenizer could not).
-bool names_go(std::string_view line) {
+std::string_view first_command(std::string_view line) {
   std::size_t i = 0;
   while (i < line.size()) {
     while (i < line.size() && is_uci_space(line[i])) ++i;
     std::size_t j = i;
     while (j < line.size() && !is_uci_space(line[j])) ++j;
     const std::string_view word = line.substr(i, j - i);
-    if (is_command(word)) return word == "go";
+    if (is_command(word)) return word;
     i = j;
   }
-  return false;
+  return {};
 }
 
 // "e2e4", "e7e8q" or "(none)" without allocating: info lines and the
@@ -320,8 +320,10 @@ bool UciSession::handle_line(std::string_view line) {
     dispatch(tokens, i, line);
   } catch (const std::exception& e) {
     // A go that failed before its search started (no memory to tokenize the
-    // line, say) still gets its one bestmove.
-    if (names_go(line) && !go_answered_) {
+    // line, say) still gets its one bestmove, and an isready its readyok
+    // (audit-1, R-2: a Hash resize that ran out of memory lost it).
+    const std::string_view command = first_command(line);
+    if (command == "go" && !go_answered_) {
       try {
         stop_search();
       } catch (...) {
@@ -333,6 +335,13 @@ bool UciSession::handle_line(std::string_view line) {
       out_.send_info_string(std::string("error: ") + e.what());
     } catch (...) {
       // ignored: no memory for the message either
+    }
+    if (command == "isready") {
+      try {
+        out_.send_line("readyok");
+      } catch (...) {
+        // ignored: only a failing mutex can throw here
+      }
     }
   }
   return true;
