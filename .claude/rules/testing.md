@@ -32,7 +32,9 @@ paths:
     runs `check.sh quick` on the staged tree; the Stop hook runs
     `check.sh stop`);
   - `scripts/build.sh` (all presets) before a phase sign-off;
-  - slow suites (`ctest -L slow`) at sign-off.
+  - slow suites (`ctest -L slow`) at sign-off. CI runs perft_epd_full
+    only when move generation's files change, plus nightly on main, so a
+    sign-off cannot rely on a push having run it.
 - **Sanitizers:** clang-debug runs ASan+UBSan on Windows. GCC sanitizers,
   TSan, MSan and valgrind run on Linux. TSan has its own presets,
   `clang-tsan` and `gcc-tsan` (Linux only; `FORK_TSAN=ON`, no

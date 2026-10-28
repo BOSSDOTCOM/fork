@@ -33,11 +33,15 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
   libc++, the fuzz seeds, PGO, the tuning build (FORK_TUNE), the Windows toolchains (LLVM-MinGW, WinLibs,
   pinned in `.github/ci/win-tools.sh`) with the gcc-debug full suite and the
   GCC smoke loop, TCEC's four compilers (ubuntu:22.04), and the slow suites
-  as their own jobs (perft_epd_full takes about 2 hours). AVX-512 binaries
+  as their own jobs: perft_epd_deep always, perft_epd_full (about 2 hours)
+  only when move generation's files change (`.github/ci/movegen-changed.sh`)
+  and nightly on main (`.github/workflows/nightly.yml`; owner, 2026-10-28;
+  the phase-end checklist still runs it). AVX-512 binaries
   run under Intel SDE on runners without it. It runs on pushes to main and
   audit-1 (docs-only pushes skipped) and on every pull request; a newer push
   cancels the older run. Hosted runners are free for the public repo.
-  Branch protection on main requires every job green. Never push the local
+  Branch protection on main requires every job green (a job skipped
+  by its condition counts as passed). Never push the local
   backup bundles (`*.bundle`).
 - TCEC toolchain: WSL distro `Ubuntu-22.04` (gcc 11.4, g++-12, clang 16/19,
   CMake 3.22), set up by `scripts/tcec-toolchain-setup.sh`; runs as root.
@@ -146,8 +150,8 @@ Linux (WSL2 working copy `~/fork`); Windows is the second platform.
 - Push policy (owner, 2026-10-24): commit locally as often as needed, but
   push to GitHub only at milestones, meaning each completed deliverable or
   when the owner asks, so CI runs on meaningful checkpoints (the full
-  matrix takes about 2 hours of wall time and shares runners with the SPRT
-  shards). Push `kb` with the same milestones; it never triggers CI.
+  matrix takes about 35 minutes of wall time, 2 hours when perft_epd_full
+  runs, and shares runners with the SPRT shards). Push `kb` with the same milestones; it never triggers CI.
 
 ### Phase-end checklist
 

@@ -9,7 +9,8 @@
 #   scripts/check.sh full covers plus the full gcc-debug suite;
 # - the TCEC toolchain (Ubuntu 22.04: gcc 11.4, g++-12, clang 16, clang 19,
 #   CMake 3.22) with update.sh;
-# - the slow perft suites, one job each.
+# - the slow perft suites, one job each: perft_epd_full (about 2 hours) only
+#   when move generation's files change, and nightly on main (nightly.yml).
 # Every job ends with bench parity, and every ctest job runs the fast suite
 # (everything not labelled slow). The local equivalent is
 # scripts/check.sh full plus scripts/build.sh (CLAUDE.md).
@@ -399,34 +400,62 @@ jobs:
           done
 
   slow:
-    name: Slow (${{ matrix.suite }})
+    name: Slow (perft_epd_deep)
     runs-on: ubuntu-latest
-    timeout-minutes: 300
-    strategy:
-      fail-fast: false
-      matrix:
-        suite: [perft_epd_deep, perft_epd_full]
+    timeout-minutes: 60
     env:
       FORK_CLANG_CXX: clang++
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Install build tools
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ninja-build
-          nproc; grep -m1 'model name' /proc/cpuinfo
       - name: Cache test data (perft EPD suites, pinned SHA-256)
         uses: actions/cache@v6
         with:
           path: .cache
           key: epd-${{ hashFiles('CMakeLists.txt') }}
-      - name: Build (clang-release)
-        run: |
-          cmake --preset clang-release
-          cmake --build build/clang-release --target fork fork_tests
-      - name: ${{ matrix.suite }}
-        run: ctest --test-dir build/clang-release -R '^${{ matrix.suite }}$' --timeout 16000 --no-tests=error --output-on-failure
-      - name: Bench parity
-        run: bash .github/ci/bench-parity.sh build/clang-release/fork
+      - name: perft_epd_deep and bench parity (clang-release)
+        run: bash .github/ci/slow-suite.sh perft_epd_deep
+
+  # perft_epd_full takes about 2 hours, so it runs here only when the push or
+  # pull request changes a file move generation depends on
+  # (.github/ci/movegen-changed.sh), and nightly on main otherwise
+  # (nightly.yml). A job skipped by its condition counts as passed, so as a
+  # required check it binds exactly when it runs (owner, 2026-10-28). If the
+  # changed files cannot be listed, it runs.
+  movegen-changed:
+    name: Move generation changed?
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      movegen: ${{ steps.diff.outputs.movegen }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: bash .github/ci/movegen-changed.sh
+
+  perft-full:
+    name: Slow (perft_epd_full, when move generation changes)
+    needs: movegen-changed
+    if: ${{ !cancelled() && (needs.movegen-changed.result != 'success' || needs.movegen-changed.outputs.movegen == 'true') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      FORK_CLANG_CXX: clang++
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: perft_epd_full and bench parity (clang-release)
+        run: bash .github/ci/slow-suite.sh perft_epd_full
