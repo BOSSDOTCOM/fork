@@ -3,14 +3,17 @@
 # Claude Code hooks (.claude/settings.json) and the git pre-commit hook
 # (scripts/hooks/pre-commit).
 #
-#   scripts/check.sh quick   clang-release build + fast tests (post-edit hook)
+#   scripts/check.sh quick   clang-release build + fast tests (post-edit hook),
+#                            plus the tooling's Python unit tests
 #   scripts/check.sh stop    clang-release build + every non-slow test,
 #                            including bench parity and no_alloc; this
 #                            platform only (Stop hook). Skipped when the code
 #                            is unchanged since a passing stop or full run.
 #   scripts/check.sh full    clang-release, clang-debug (ASan+UBSan) and
 #                            gcc-release: build + every non-slow test,
-#                            including bench parity (pre-commit, sign-offs).
+#                            including bench parity (pre-commit, sign-offs),
+#                            plus the tooling's tests (the Python suites and
+#                            the dry runs of tools/sprt.sh and run_shard.sh).
 #                            On Linux also gcc-debug (GCC ASan+UBSan). On
 #                            Windows also a UCI start-up smoke loop (50 runs)
 #                            of every MinGW GCC preset's engine, then the
@@ -92,6 +95,11 @@ else
   echo $$ >"$lock/pid"
   trap 'rm -f "$log"; rm -rf "$lock"' EXIT
 fi
+# A signal (a hook's `timeout`, Ctrl-C) exits through the EXIT trap, so the
+# lock is released at once (bash skips the EXIT trap on an untrapped
+# SIGTERM: checked with Git Bash, 2026-10-27).
+trap 'exit 143' TERM
+trap 'exit 130' INT
 
 fail() {
   {
@@ -162,6 +170,25 @@ build_and_test() {  # preset, ctest filter args...
   echo "$out" | grep -qE 'Test +#[0-9]+: no_alloc \.+ +Passed' || fail "no_alloc did not run in $preset"
 }
 
+# The tooling's own tests (audit-1 U-15): standard-library Python suites
+# (sprt_merge and the book permutation, the evolve harness, pgn_summary),
+# about 2 s; with "all", also the dry runs of tools/sprt.sh and
+# tools/cloud/run_shard.sh with fake fastchess binaries (about 30 s).
+tool_tests() {  # python | all
+  local py="" c
+  for c in .venv/Scripts/python.exe .venv/bin/python python3 python; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c pass >/dev/null 2>&1; then py=$c; break; fi
+  done
+  [ -n "$py" ] || fail "no Python for the tool tests"
+  "$py" -I -B -m unittest discover -s tools/cloud -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/cloud"
+  "$py" -I -B -m unittest discover -s tools/evolve -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/evolve"
+  "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
+  [ "$1" = all ] || return 0
+  bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
+  case $py in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; *) py=$(command -v "$py") ;; esac
+  PYTHON=$py bash tools/cloud/test_run_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/cloud/test_run_shard.sh"
+}
+
 native_full() {
   local presets=(clang-release clang-debug gcc-release)
   [ "$(uname -s)" = Linux ] && presets+=(gcc-debug)
@@ -169,6 +196,7 @@ native_full() {
     build_and_test "$preset" -LE slow
   done
   [ "$(uname -s)" = Linux ] || windows_gcc_smoke
+  tool_tests all
   echo "${presets[*]}"
 }
 
@@ -259,7 +287,8 @@ case "$mode" in
     ;;
   quick)
     build_and_test clang-release -R '^(magics|fen|zobrist_ep|perft_edge|pseudo_legal|no_alloc|bench_parity)$'
-    echo "fork check quick: ok"
+    tool_tests python
+    echo "fork check quick: ok (with the tooling's Python tests)"
     ;;
   stop)
     mkdir -p build
@@ -304,7 +333,7 @@ case "$mode" in
       exit 0
     fi
     echo "$fp" >"$stamp"
-    echo "fork check full: ok ($platforms; bench parity included)"
+    echo "fork check full: ok ($platforms; bench parity and the tooling's tests included)"
     ;;
   *)
     echo "usage: scripts/check.sh quick|stop|full" >&2
