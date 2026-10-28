@@ -34,7 +34,7 @@
   X(IterationGrowthThirds, 5, 3, 10, 1)   \
   X(ForcedMoveFraction, 8, 4, 16, 1)      \
   X(RfpMaxDepth, 6, 3, 12, 1)             \
-  X(RfpMargin, 40, 20, 80, 3)             \
+  X(RfpMargin, 41, 20, 80, 3)             \
   X(NullMinDepth, 3, 1, 6, 1)             \
   X(NullSurplusPerPly, 300, 150, 600, 23) \
   X(NullSurplusPliesMax, 2, 0, 4, 1)      \
