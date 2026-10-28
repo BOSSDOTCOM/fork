@@ -811,4 +811,35 @@ TEST_CASE("uci_options", "Clear Hash also clears the move-ordering history: a re
   g.quit();
 }
 
+// Clear Hash sent together with a Hash change (both applied
+// at the same isready) must still forget the move-ordering history (audit-1, V-2).
+TEST_CASE("uci_options", "Clear Hash with a Hash change in the same batch still clears the history") {
+  const std::string position = "position fen " + std::string(perft_suite()[1].fen);  // Kiwipete
+  auto nodes_of_depth_6 = [&](Gui& g) {
+    g.send(position);
+    const std::size_t mark = g.cursor;
+    g.send("go depth 6");
+    CHECK(g.next("bestmove").has_value());
+    std::string last;
+    for (const std::string& line : g.texts(mark))
+      if (starts_with(line, "info depth 6 ")) last = line;
+    const std::size_t at = last.find(" nodes ");
+    return at == std::string::npos ? std::string("?") : last.substr(at + 7, last.find(' ', at + 7) - at - 7);
+  };
+  Gui fresh;
+  fresh.send("setoption name Hash value 8");
+  CHECK(fresh.sync());
+  const std::string want = nodes_of_depth_6(fresh);
+  fresh.quit();
+  Gui g;
+  CHECK(g.sync());
+  (void)nodes_of_depth_6(g);  // fills the history
+  g.send("setoption name Hash value 8");
+  g.send("setoption name Clear Hash");
+  CHECK(g.sync());
+  const std::string got = nodes_of_depth_6(g);
+  CHECK_MSG(got == want && want != "?", "fresh engine " << want << " nodes, after Hash change + Clear Hash " << got);
+  g.quit();
+}
+
 }  // namespace forkeng::test

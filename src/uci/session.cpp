@@ -252,6 +252,8 @@ bool UciSession::apply_pending() {
     } rebind{tt_, hash_};
     tt_.bind_memory(nullptr, 0);
     const bool ok = hash_.resize(bytes, report);
+    // A Clear Hash in the same batch also forgets the history (audit-1, V-2).
+    if (clear_pending_) searcher_->clear_history();
     hash_pending_ = clear_pending_ = false;
     tt_.bind_memory(hash_.data(), hash_.bytes());
     const unsigned workers = hash_workers();
