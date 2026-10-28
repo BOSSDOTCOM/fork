@@ -584,9 +584,10 @@ tuned by SPSA.
   implementation notes): unit-tested and dry-run with stub agents; the
   evolution loop itself not started (owner). Since then: the validation
   run of 2026-10-27 (18 live proposals), the 4x position set and the
-  held-out promotion check (DESIGN.md §5.2, deliverable 8c); the long run
-  (40 generations) is on hold until the audit-1 branch is approved, and
-  the audit's gate, resume and pinning fixes come first. Pilot scheduled
+  held-out promotion check (DESIGN.md §5.2, deliverable 8c); the audit's
+  gate, resume and pinning fixes are in (audit-1, merged 2026-10-28). The
+  long run (40 generations) stays in **late Phase 4** (owner, 2026-10-28),
+  after the first strong network and the search re-validation. Pilot scheduled
 
 ## 24. TT victim policy under real table pressure
 

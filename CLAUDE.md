@@ -204,7 +204,8 @@ next phase begins. Report each item's result.
    - **end of Phase 3:** one removal round: each search feature switched
      off in turn and SPRTed on non-regression bounds [-3, 0]; a feature
      whose removal costs nothing is simplified away; every result goes in
-     the SPRT log;
+     the SPRT log. **Folded into Phase 4's re-validation** (owner, 2026-10-28:
+     Phase 3 closed before tier 2, which moved into Phase 4);
    - **end of Phase 4 (after the network):** the full re-validation of
      every search feature, plus a retune of every eval-dependent margin;
    - search features keep their switches in the code until the Phase 4
