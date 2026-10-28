@@ -307,3 +307,46 @@ Games: 400, Wins: 124, Losses: 141, Draws: 135, Points: 191.5 (47.88 %)
 Ptnml(0-2): [12, 43, 100, 40, 5], WL/DD Ratio: 2.85
 LLR: -0.23 (-7.7%) (-2.94, 2.94) [-3.00, 0.00]
 ```
+
+### Note (audit-1, 2026-10-28): SPRTs on the GitHub shards
+
+From audit-1 on, the STC SPRTs run on GitHub-hosted runners
+(`.github/workflows/sprt.yml`), in stages of 16 shards x 100 game pairs
+(3,200 games), each shard a fastchess run over its own range of a
+fixed-seed permutation of UHO_Lichess_4852_v1.epd (seed 20261027), both
+engines with Syzygy 3-4-5. After each stage the shards' results are merged
+by `tools/cloud/sprt_merge.py` (pentanomial, normalized Elo, alpha = beta =
+0.05), which decides the SPRT; a run is capped at 20,000 games (it stops
+after the stage that passes the cap). 8+0.08 s, Hash 16 MB, 1 thread.
+
+### 20261028T045512Z b1-forced (GitHub shards)
+
+- base `25c84a2` (25c84a2f1a13ff1389979001cd17f2fba290836c), test `15cf506` (15cf506e975db0b2ea016334123578e6ee2a2693: audit-1 B-1, stop a forced move early), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, 7 stages x 16 shards (runs 40634996379, 40637985671, 40640832350, 40643811569, 40647047024, 40650215657, 40653533452); cap 20,000 games
+- Verdict: **ACCEPTED (owner decision, 2026-10-28)**. The SPRT reached the cap undecided (22,400 games, LLR 1.52 of 2.94, 0 time losses, 0 abnormal endings); its 95% interval, -2.58 to +4.50 Elo, lies entirely above the lower bound -3, so the change is kept without the resumed run that was queued.
+```
+Elo: 0.96 +/- 3.54, nElo: 1.24 +/- 4.55
+Ptnml(0-2): [1132, 2249, 4342, 2379, 1098]
+LLR: 1.52 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+```
+
+### 20261028T045620Z b5-keep-deeper
+
+- base `15cf506` (15cf506e975db0b2ea016334123578e6ee2a2693), test `808dd8a` (808dd8a537e58254c10bee0540afab61a0122499), bounds [0, 3] nElo, 40+0.4, Hash 64 MB, 1 thread, concurrency 10, adjudication resign 1000 cp x 5 moves (two-sided), draw |10| cp x 10 moves from move 40, Syzygy 3-4-5 for both sides (~/fork-tools/syzygy/3-4-5)
+- Builds: base Fork 0.3.0-dev, clang 21.1.8 (6ubuntu1), bench 17309921 372dc2e2d8a88e4b (= bench.ref); test Fork 0.3.0-dev, clang 21.1.8 (6ubuntu1), bench 17309921 372dc2e2d8a88e4b (= bench.ref). Openings in random order, -srand 20261028045620.
+- Verdict: **INCONCLUSIVE: stopped by the owner (2026-10-28)** after 2,604 games (fastchess exit status 1: the stop); cap 10,000 games. The owner's decision, at 2,000 games (-7.3 +/- 11.5 Elo, LLR -0.55): stop, leaning negative; the rule is switched off (d33ee48) and deferred to Phase 6's TT tests under large Hash and many threads (ideas.md idea 30).
+```
+Elo: -5.07 +/- 10.08, nElo: -6.72 +/- 13.35
+Games: 2602, Wins: 826, Losses: 864, Draws: 912, Points: 1282.0 (49.27 %)
+Ptnml(0-2): [116, 306, 486, 286, 107], WL/DD Ratio: 2.04
+LLR: -0.53 (-18.0%) (-2.94, 2.94) [0.00, 3.00]
+```
+
+### 20261028T082946Z b3-shallow-fh (GitHub shards)
+
+- base `4b3a808` (4b3a80886533844e67bfca7873c100f19712c63a), test `b001d1e` (b001d1e7687019db81790d73bef2d1474e2fc433: audit-1 B-3, re-search a root fail high one ply shallower), bounds [0, 3] nElo, 8+0.08, Hash 16 MB, 1 thread, 7 stages x 16 shards (runs 40657189708, 40661209179, 40667882215, 40671981921, 40676026047, 40680069346, 40683903943); cap 20,000 games
+- Verdict: **INCONCLUSIVE at the cap** (22,400 games, LLR -0.37, 0 time losses, 0 abnormal endings). Phase C keeps passes only: **reverted** in bc44071.
+```
+Elo: 0.65 +/- 3.56, nElo: 0.83 +/- 4.55
+Ptnml(0-2): [1123, 2313, 4329, 2269, 1166]
+LLR: -0.37 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+```
