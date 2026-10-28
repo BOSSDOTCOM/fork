@@ -7,6 +7,7 @@ match parser, and one orchestrated generation with stub agents and fakes.
 """
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -99,15 +100,114 @@ class StaticRuleTests(unittest.TestCase):
         for body, reason in cases.items():
             self.assertIn(reason, gate.static_violations(body), body)
 
+    # Audit-1 (A6, U-2): bodies the first rules let through, each of which
+    # compiles in searcher.cpp with clang -Werror (the audit's probe).
+    def test_float_literals_in_every_form(self):
+        for body in ('  return static_cast<int>(.5 * c.depth) - c.base;',
+                     '  return static_cast<int>(c.depth / 2. + 1.f) - c.base;',
+                     '  return static_cast<int>(1e3) > c.history ? 1 : 0;',
+                     "  return static_cast<int>(1'0e1'0) > 0;",
+                     '  return static_cast<int>(0x1p3) - c.base;',
+                     '  return static_cast<int>(0x1.8p1L) - c.base;',
+                     '  return c.depth > 0 ? static_cast<int>(sqrt(c.depth)) - 1 : 0;',
+                     '  long double r = 1; return static_cast<int>(r);',
+                     '  std::float32_t r = 1; return static_cast<int>(r);'):
+            self.assertIn('floating point', gate.static_violations(body), body)
+        for body in ("  return c.history > 1'000 ? 0x1E : 0b10;", '  return c.depth > 2u ? 1ll : 0x0eull;'):
+            self.assertEqual(gate.static_violations(body), [], body)
+
+    def test_digraph_preprocessor_line(self):
+        # %: is the digraph of # ([lex.digraph]); this one rewrites a
+        # parameter that searcher.cpp reads outside the region.
+        reasons = gate.static_violations('  return 0;\n%:define LmrCorrectionStrength 640\n')
+        self.assertIn('preprocessor lines', reasons)
+        self.assertIn('digraphs or trigraphs', reasons)
+        for body in ('  if (c.on_pv) <% return 1; %>\n  return 0;', '  int t<:2:> = {0, 1};\n  return t[0];',
+                     '  return 0; // ??/\n', '  return 0;\n  ??=define X 1\n'):
+            self.assertIn('digraphs or trigraphs', gate.static_violations(body), body)
+
+    def test_line_splices(self):
+        self.assertIn('line splices (backslash-newline)', gate.static_violations('  // a comment \\\n  return 0;'))
+        self.assertIn('line splices (backslash-newline)', gate.static_violations('  return 0; /\\\n/ x\n'))
+        self.assertIn('backslashes outside literals', gate.static_violations('  int \\u0061 = 1; return a;'))
+
+    def test_code_after_a_string_holding_two_slashes(self):
+        self.assertIn('floating point', gate.static_violations(
+            '  const char* s = "//"; double x = 0.5 * c.depth; static_cast<void>(s);\n'
+            '  return static_cast<int>(x) - c.base;'))
+        self.assertIn('static or shared state', gate.static_violations(
+            '  const char* s = R"x(")x"; static int n = 0; static_cast<void>(s);\n  return ++n;'))
+        self.assertIn('static or shared state', gate.static_violations(
+            "  const char q = '\"'; static int n = 0; static_cast<void>(q);\n  return ++n;"))
+        # What a literal or a comment holds is not code.
+        self.assertEqual(gate.static_violations('  const char* s = "new double /* static"; static_cast<void>(s);\n'
+                                                '  return 0; /* "float" */'), [])
+
+    def test_heap_allocation_without_new(self):
+        for body in ('  auto p = std::make_unique<int>(c.depth);\n  return *p > 100 ? 1 : 0;',
+                     '  auto p = std::make_shared<int>(1);\n  return *p;',
+                     '  std::allocator<int> a;\n  return 0;'):
+            self.assertIn('heap allocation', gate.static_violations(body), body)
+        self.assertIn('containers', gate.static_violations('  std::vector<int> v{1};\n  return v[0];'))
+
+    def test_body_that_leaves_the_function(self):
+        body = ('  return 0;\n}\ninline int evolve_calls = 0;\n'
+                'inline int evolve_hidden(const LmrContext& c) {\n  ++evolve_calls;\n  return c.depth;')
+        self.assertIn('leaves the function (unbalanced braces, brackets or parentheses)',
+                      gate.static_violations(body))
+        self.assertTrue(gate.static_violations('  return 0;\n}\nint x() {\n  return 1;'))  # balanced, but below 0
+        self.assertTrue(gate.static_violations('  if (c.on_pv) {\n  return 0;'))
+
+    def test_clock_environment_and_builtins(self):
+        for body, reason in (('  return __builtin_ia32_rdtsc() & 1 ? 1 : 0;', 'reserved names or compiler builtins'),
+                             ('  return std::chrono::steady_clock::now().time_since_epoch().count() & 1;',
+                              'randomness or the clock'),
+                             ('  return clock() & 1;', 'randomness or the clock'),
+                             ('  return std::getenv("X") ? 1 : 0;', 'the environment'),
+                             ('  thread_local int n = 0;\n  return ++n;', 'static or shared state'),
+                             ('  asm("nop");\n  return 0;', 'inline assembly'),
+                             ('  _Pragma("once") return 0;', 'reserved names or compiler builtins')):
+            self.assertIn(reason, gate.static_violations(body), body)
+
+    def test_validation_run_bodies_pass(self):
+        """Bodies from the validation run (2026-10-27) that compiled: none breaks a rule."""
+        for body in (
+                '  if (c.on_pv)\n    return 0;\n  if (c.history > 2000 || c.threatened || c.attacks)\n    return -1;\n'
+                '  if (c.history < -1000 && c.quiet_moves >= 8 && c.move_number >= 6)\n    return 1;\n  return 0;\n',
+                '  int corr = 0;\n  const bool good_history = c.history >= 4000;\n'
+                '  const bool tactical = c.threatened && c.attacks;\n'
+                '  if ((good_history || tactical) && (c.on_pv || c.depth <= 4)) {\n    corr = -1;\n  }\n'
+                '  return corr;\n',
+                '  int r = c.base;\n\n  // History as weak evidence: coarse steps so only strong scores matter.\n'
+                '  r -= c.history / 3500;\n  if (c.on_pv) r -= 1;\n'
+                '  if (c.entry_bound == 1 && c.entry_depth >= c.depth - 1 && !c.on_pv) r += 1;\n'
+                '  if (r < 1) r = 1;\n  if (r > c.depth - 1) r = c.depth - 1;\n  return r - c.base;\n',
+                '  int r = c.base * 4;\n  int n = c.quiet_moves > 0 ? c.quiet_moves : 1;\n'
+                '  int pos = c.move_number * 16 / n;\n  if (pos >= 12) r += 2;\n  else if (pos <= 5) r -= 1;\n'
+                '  if (r < 4) r = 4;\n  if (r > 4 * c.depth) r = 4 * c.depth;\n  return (r + 2) / 4 - c.base;\n'):
+            self.assertEqual(gate.static_violations(body), [], body)
+
+
+# A preprocessed unit as `-E` writes it (line markers, comments gone), for
+# the fake runner: searcher.cpp's own lines around the included header.
+def fake_preprocessed(tree, header_text, leak=''):
+    root = Path(tree).as_posix()
+    text = f'# 1 "{root}/src/search/searcher.cpp"\nint before;\n# 1 "{root}/{PATH}" 1\n'
+    text += '\n'.join(line if not line.strip().startswith('//') else '' for line in header_text.split('\n'))
+    return text + f'\n# 3 "{root}/src/search/searcher.cpp" 2\nint strength = {leak or "LmrCorrectionStrength"};\n'
+
 
 class FakeRunner:
-    """The gate's runner without builds: each step's answer is set by the test."""
+    """The gate's runner without builds: each step's answer is set by the test.
+    Trees are real folders (the guard reads them back); preprocessing is faked."""
 
     def __init__(self, work, built=True, perft=('a', 'b'), suites=True, benches=None):
         self.work = Path(work)
         self.built, self.perft_out, self.suites_ok = built, list(perft), suites
         self.benches = list(benches or [{'nodes': '1', 'signature': 's'}] * 2)
         self.calls = []
+        self.leak = ''  # what the fake preprocessor puts outside the region for a candidate tree
+        self.write_hook = None  # (path, text) -> text, to fake a runner that writes something else
 
     def read(self, commit, path):
         return FILE
@@ -115,8 +215,28 @@ class FakeRunner:
     def tree(self, commit, files, name):
         self.calls.append(('tree', name))
         d = self.work / name
-        d.mkdir(parents=True, exist_ok=True)
+        files = dict({PATH: FILE, 'src/search/searcher.cpp': '#include "search/lmr_table.hpp"\n'}, **files)
+        for path, text in files.items():
+            (d / path).parent.mkdir(parents=True, exist_ok=True)
+            (d / path).write_text(self.write_hook(path, text) if self.write_hook else text, encoding='utf-8',
+                                  newline='\n')
         return d
+
+    def read_file(self, tree, path):
+        return (Path(tree) / path).read_text(encoding='utf-8')
+
+    def snapshot(self, tree):
+        return gate.Runner.snapshot(self, tree)
+
+    def configure(self, tree, stats=False):
+        self.calls.append(('configure',))
+        return True, 'log', tree / 'build'
+
+    def preprocess(self, build, units):
+        self.calls.append(('preprocess',))
+        tree = Path(build).parent
+        leak = self.leak if tree.name != 'baseline' else ''
+        return {'src/search/searcher.cpp': fake_preprocessed(tree, self.read_file(tree, PATH), leak)}
 
     def build(self, tree, stats=False):
         self.calls.append(('build', stats))
@@ -146,15 +266,71 @@ class GateTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def gate(self, body='  return 1;', **kw):
+    def gate(self, body='  return 1;', setup=None, **kw):
         runner = FakeRunner(self.tmp.name, **kw)
-        return gate.run_gate(runner, 'HEAD', 'lmr', body, ['a', 'b'], 't'), runner
+        base = runner.tree('HEAD', {}, 'baseline')
+        reference = gate.make_reference(runner, 'lmr', base, base / 'build', ['a', 'b'])
+        runner.calls = []
+        if setup:
+            setup(runner)
+        return gate.run_gate(runner, 'HEAD', 'lmr', body, reference, 't'), runner
 
     def test_pass(self):
         result, runner = self.gate()
         self.assertTrue(result.passed)
         self.assertEqual(result.step, 'done')
-        self.assertEqual([c[0] for c in runner.calls], ['tree', 'build', 'perft', 'suites', 'bench', 'bench'])
+        self.assertEqual([c[0] for c in runner.calls],
+                         ['tree', 'configure', 'preprocess', 'build', 'perft', 'suites', 'bench', 'bench'])
+
+    def test_preprocessed_check_catches_what_the_rules_miss(self):
+        """A body whose effect reaches code outside the region (the audit's %:define) fails before
+        any build, even with the static rules switched off."""
+        real = gate.static_violations
+        gate.static_violations = lambda body: []
+        try:
+            result, runner = self.gate(body='  return 0;\n%:define LmrCorrectionStrength 640\n',
+                                       setup=lambda r: setattr(r, 'leak', '640'))
+        finally:
+            gate.static_violations = real
+        self.assertEqual((result.passed, result.step), (False, 'preprocessed'))
+        self.assertIn("'int strength = 640;'", result.detail)
+        self.assertNotIn(('build', False), runner.calls)
+
+    def test_guard_reads_the_written_tree(self):
+        """The guard checks the file as written, not text rebuilt from the baseline: a runner that
+        writes something else outside the body, or touches another file, is caught."""
+        def outside(r):
+            r.write_hook = lambda path, text: text.replace('int after();', 'int after(); int sneaky = 1;')
+        result, _ = self.gate(setup=outside)
+        self.assertEqual((result.passed, result.step), (False, 'guard'))
+        self.assertIn('outside region', result.detail)
+
+        def other_file(r):
+            real_tree = r.tree
+
+            def tree(commit, files, name):
+                d = real_tree(commit, files, name)
+                (d / 'src' / 'search' / 'searcher.cpp').write_text('int changed;\n', encoding='utf-8')
+                return d
+            r.tree = tree
+        result, _ = self.gate(setup=other_file)
+        self.assertEqual((result.passed, result.step), (False, 'guard'))
+        self.assertIn('src/search/searcher.cpp', result.detail)
+
+    def test_outside_lines(self):
+        root = '/w/cand-1'
+        pre = ('# 1 "/w/cand-1/src/a.cpp"\nint a;\n# 1 "/w/cand-1/src/search/lmr_table.hpp" 1\n'
+               'h1\nh2\nBODY1\nBODY2\nh5\n# 2 "/w/cand-1/src/a.cpp" 2\n\nint b = "/w/cand-1/x";\n')
+        lines, included = gate.outside_lines(pre, root, 'src/search/lmr_table.hpp', (3, 4))
+        self.assertTrue(included)
+        self.assertEqual(lines, [('<tree>/src/a.cpp', 'int a;'), ('<tree>/src/search/lmr_table.hpp', 'h1'),
+                                 ('<tree>/src/search/lmr_table.hpp', 'h2'), ('<tree>/src/search/lmr_table.hpp', 'h5'),
+                                 ('<tree>/src/a.cpp', 'int b = "<tree>/x";')])
+        self.assertFalse(gate.outside_lines('# 1 "/w/cand-1/src/b.cpp"\nint x;\n', root,
+                                            'src/search/lmr_table.hpp', (3, 4))[1])
+        self.assertEqual(gate.preprocess_command({'command': 'c++ -DX -I/t/src -O2 -o a.o -c /t/src/a.cpp',
+                                                  'directory': '/t/b', 'file': '/t/src/a.cpp'}),
+                         ['c++', '-DX', '-I/t/src', '-O2', '/t/src/a.cpp', '-E'])
 
     def test_perft_count_ignores_timing(self):
         # Found by the first dry run: the last line (nps) varies, the count does not.
@@ -175,6 +351,52 @@ class GateTests(unittest.TestCase):
                           'determinism')):
             result, _ = self.gate(**kw)
             self.assertEqual((result.passed, result.step), (False, step), kw)
+
+
+def find_compiler():
+    for name in (os.environ.get('FORK_GCC_CXX'), os.environ.get('FORK_CLANG_CXX'), 'g++', 'clang++', 'c++'):
+        if name and shutil.which(name):
+            return shutil.which(name)
+    return None
+
+
+@unittest.skipUnless(find_compiler(), 'no C++ compiler on PATH (source scripts/env.sh)')
+class RealPreprocessTests(unittest.TestCase):
+    """The preprocessed comparison on the engine's real searcher.cpp, with a real compiler's `-E`
+    (the audit's %:define candidate, which compiles: A6 U-2)."""
+
+    def unit_lines(self, tmp, name, body):
+        repo = Path(__file__).resolve().parents[2]
+        tree = Path(tmp) / name
+        shutil.copytree(repo / 'src', tree / 'src')
+        if body is not None:
+            text = (tree / PATH).read_text(encoding='utf-8')
+            (tree / PATH).write_text(regions.replace_body(text, 'lmr', body), encoding='utf-8', newline='\n')
+        (tree / 'build').mkdir()
+        source = (tree / 'src' / 'search' / 'searcher.cpp').as_posix()
+        (tree / 'build' / 'compile_commands.json').write_text(json.dumps([{
+            'directory': (tree / 'build').as_posix(), 'file': source,
+            'arguments': [find_compiler(), '-std=c++20', '-DNDEBUG', '-DFORK_EVAL_BOOTSTRAP',
+                          '-I' + (tree / 'src').as_posix(), '-o', 'searcher.o', '-c', source]}]), encoding='utf-8')
+        runner = gate.Runner(repo, tmp, jobs=1)
+        text = runner.preprocess(tree / 'build', None)['src/search/searcher.cpp']
+        lines = gate.body_lines(runner.read_file(tree, PATH), 'lmr')
+        return gate.outside_lines(text, tree, PATH, lines)
+
+    def test_digraph_define_changes_searcher_cpp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base, included = self.unit_lines(tmp, 'baseline', None)
+            self.assertTrue(included)
+            self.assertIn(('<tree>/src/search/searcher.cpp', 'const int correction = rule * LmrCorrectionStrength / 64;'),
+                          base)
+            same, _ = self.unit_lines(tmp, 'rule', '  if (c.on_pv)\n    return 0;\n  // a longer body\n'
+                                                   '  return c.history < -4000 ? 1 : 0;')
+            self.assertIsNone(gate.first_difference(base, same))
+            leak, _ = self.unit_lines(tmp, 'digraph', '  static_cast<void>(c);\n  return 0;\n'
+                                                      '%:define LmrCorrectionStrength 640\n')
+            diff = gate.first_difference(base, leak)
+            self.assertIsNotNone(diff)
+            self.assertIn('rule * 640 / 64', diff)
 
 
 class ProxyTests(unittest.TestCase):

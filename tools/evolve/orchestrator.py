@@ -4,7 +4,8 @@
 Each generation, for every island in turn: choose parents from the island's
 grid (seeded), ask the island's agent for a proposal (residual mode, or a
 full replacement for the explorer's share), have the critic review it, gate
-it (static rules, guard, build, perft, the correctness suites, determinism),
+it (static rules, guard, the preprocessed comparison, build, perft, the
+correctness suites, determinism),
 score it on the proxies at the baseline's node budget, place it in the
 grid by its behaviour descriptors, and promote clear proxy winners to the
 short match and the SPRT hand-off. Every N generations the analyst
@@ -120,7 +121,7 @@ class Loop:
         """Gate, proxies and (if `place`) the grid for candidate `cid`; returns its fitness or None."""
         cfg = self.cfg
         self.refresh(status=f'generation {generation}: gating candidate {cid}')
-        result = gate.run_gate(self.runner, cfg['baseline_commit'], cfg['region'], body, self.baseline_perft,
+        result = gate.run_gate(self.runner, cfg['baseline_commit'], cfg['region'], body, self.reference,
                                f'cand-{cid}')
         self.pop.update(cid, gate=json.dumps(result.__dict__))
         if not result.passed:
@@ -345,6 +346,9 @@ class Loop:
         if not built:
             raise RuntimeError('the baseline does not build: ' + log[-500:])
         self.baseline_perft = self.runner.perft(build / 'fork')
+        # What the gate compares every candidate with: the baseline tree's
+        # files and the preprocessed text of each unit that includes the region.
+        self.reference = gate.make_reference(self.runner, cfg['region'], tree, build, self.baseline_perft)
         cid = self.pop.add(0, 'baseline', 'baseline', None, 'residual', body, 'the committed region')
         fitness = self.evaluate(0, cid, cfg['islands'][0], body)
         if fitness is None:
