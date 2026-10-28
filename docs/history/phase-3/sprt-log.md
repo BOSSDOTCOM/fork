@@ -350,3 +350,22 @@ Elo: 0.65 +/- 3.56, nElo: 0.83 +/- 4.55
 Ptnml(0-2): [1123, 2313, 4329, 2269, 1166]
 LLR: -0.37 (-2.94, 2.94) [0.00, 3.00] nElo: continue
 ```
+
+### Note (owner, 2026-10-28): non-regression early acceptance
+
+From b2-tb-depth's stage 3 on, a non-regression SPRT ([-3, 0]) on a change
+with a clear rationale stops once at least 10,000 games are in and the 95%
+Elo interval's lower bound is above -3: **ACCEPTED (by rule)**, logged with
+the interval (DESIGN.md §5.2, Testing setup). Gainer-bound tests never stop
+early this way. The cloud driver checks it after every stage.
+
+### 20261028T122710Z b2-tb-depth (GitHub shards)
+
+- base `b001d1e` (b001d1e7687019db81790d73bef2d1474e2fc433), test `6ab7cb7` (6ab7cb7890ec034e48e0e76a7826caea8357ec9e: audit-1 B-2, a settling table result stored in the TT at full depth), bounds [-3, 0] nElo, 8+0.08, Hash 16 MB, 1 thread, Syzygy 3-4-5 for both sides, 7 stages x 16 shards (runs 40687916291, 40692238847, 40696702688, 40701359689, 40706348255, 40711472101, 40716437644); cap 20,000 games
+- The early-acceptance rule was checked after stages 3-6: Elo intervals [-3.95, +5.53] at 12,800 games, [-4.42, +4.08] at 16,000, [-4.41, +3.32] at 19,200, [-4.49, +2.66] at 22,400; the lower bound never cleared -3.
+- Verdict: **INCONCLUSIVE at the cap** (22,400 games, LLR 0.19, 0 time losses, 0 abnormal endings). Phase C keeps passes only: **reverted** in 8e87028.
+```
+Elo: -0.92 +/- 3.58, nElo: -1.16 +/- 4.55
+Ptnml(0-2): [1172, 2299, 4281, 2312, 1136]
+LLR: 0.19 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+```
