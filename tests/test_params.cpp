@@ -59,7 +59,7 @@ TEST_CASE("params", "tuning build: set_param changes, clamps and rebuilds") {
   CHECK(!set_param("NoSuchParameter", 1));
   for (const TuneParam& p : param_table()) CHECK(set_param(p.name, p.default_value));
   CHECK_EQ(reduction_for(20, 30), before);
-  CHECK_EQ(RfpMargin, 40);
+  CHECK_EQ(RfpMargin, 80);
 }
 #endif
 

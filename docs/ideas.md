@@ -762,3 +762,29 @@ tuned by SPSA.
 - **runtime cost:** none (one comparison per store).
 - **earliest phase:** Phase 3.
 - **status:** untested (measure first)
+
+## 34. Reverse futility margin 40 cp per ply
+
+- **type:** ELO (a search constant)
+- **idea:** `RfpMargin` 40 instead of 80. Fork's own measurement (DESIGN.md,
+  Search constants) bounds the margin from below: every M from 40 to 160
+  keeps the share of RFP-prunable nodes whose search then fails low under
+  1% at every depth 1-6, and 40 is the smallest such M. The data do not
+  pick a value, so only games can.
+- **phase:** audit-1 (2026-10-27, 304081e and 306bd9a); reverted to 80 on
+  2026-10-28.
+- **metric:** SPRT [0, 3] at STC, then LTC.
+- **runtime cost:** none (a constant).
+- **earliest phase:** Phase 3.
+- **status:** **untested**. No SPRT decided it: the first STC run was
+  superseded after 3,200 games (B-4 in both engines; +3.47 ± 9.61, LLR
+  0.23), and its restart without B-4 was stopped in stage 0 when the owner
+  accepted 40 without a test. The Phase D gauntlet then gave an
+  **unfavorable but not conclusive** result: with 40, Fork scored 156.0
+  of 357 games against Milestone C's 178.5 on the same games (43.7% vs
+  50.0%, about -44 Elo, roughly two standard errors) before that gauntlet
+  was stopped; with 80, all 1,200 games, it matched Milestone C (606.5 vs
+  600.5; Ordo 2411.5 ± 22.5 against 2402.5 ± 23.3). Reverted to 80 by the
+  owner's decision (sprt-log.md, history/phase-3/audit-1.md). **Revisit
+  when the eval-dependent margins are retuned after Phase 4** (Quality
+  control 6), with an SPRT.
