@@ -42,6 +42,16 @@ bool has_non_pawn_material(const Position& pos, Color c) {
   return (pos.pieces(c) & ~pos.pieces(Pawn) & ~pos.pieces(King)) != 0;
 }
 
+// The fifty-move rule has been reached: a draw, unless the side to move is
+// checkmated (mate takes precedence). Rare (50-move positions in check), so
+// its move list is a local one.
+int fifty_move_score(const Position& pos, bool in_check, int ply) {
+  if (!in_check) return 0;
+  MoveList evasions;
+  generate<GenMode::Legal>(pos, evasions);
+  return evasions.size() ? 0 : mated_score(ply);
+}
+
 }  // namespace
 
 std::int64_t Searcher::elapsed_ms() const {
@@ -92,12 +102,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // Draws: repetition (one earlier occurrence is enough inside the search),
   // insufficient material, and the 50-move rule unless this move is mate.
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
-  if (pos.fifty_move_reached()) {
-    if (!in_check) return 0;
-    MoveList fifty_scratch;  // rare (50-move positions in check), so a local list
-    generate<GenMode::Legal>(pos, fifty_scratch);
-    return fifty_scratch.size() ? 0 : mated_score(ply);
-  }
+  if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
   if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
   if (depth <= 0) return static_eval(pos);  // only with the quiescence search switched off
 
@@ -406,12 +411,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   const bool in_check = pos.in_check();
 
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
-  if (pos.fifty_move_reached()) {
-    if (!in_check) return 0;
-    MoveList fifty_scratch;  // rare (50-move positions in check), so a local list
-    generate<GenMode::Legal>(pos, fifty_scratch);
-    return fifty_scratch.size() ? 0 : mated_score(ply);
-  }
+  if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
   if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
 
   const Key key = pos.key();
