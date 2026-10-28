@@ -112,6 +112,8 @@ if(FORK_LTO AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(WARNING "LTO not supported by this toolchain, building without it")
   endif()
 endif()
+# `fork version` reports whether LTO is on (audit-1, P-6).
+target_compile_definitions(fork_flags INTERFACE FORK_LTO=$<BOOL:${CMAKE_INTERPROCEDURAL_OPTIMIZATION}>)
 
 # PGO flags apply only to the engine (core + main), never to tests.
 add_library(fork_pgo INTERFACE)
@@ -498,4 +500,12 @@ if(FORK_BUILD_TESTS)
     -DFORK=$<TARGET_FILE:fork> -DCMD=perftbench
     -DREF=${CMAKE_SOURCE_DIR}/tests/perft_bench.ref
     -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+
+  # `fork version` says whether this build has LTO (audit-1, P-6).
+  add_test(NAME version_lto COMMAND fork version)
+  if(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
+    set_tests_properties(version_lto PROPERTIES PASS_REGULAR_EXPRESSION "\nlto on[\r\n]")
+  else()
+    set_tests_properties(version_lto PROPERTIES PASS_REGULAR_EXPRESSION "\nlto off[\r\n]")
+  endif()
 endif()

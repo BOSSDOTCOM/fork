@@ -47,6 +47,7 @@ void print_version() {
             << "compiler " << compiler_name() << '\n'
             << "arch " << FORK_ARCH_NAME << '\n'
             << "build " << FORK_BUILD_TYPE << '\n'
+            << "lto " << (FORK_LTO ? "on" : "off") << '\n'
             << "sliders " << (FORK_USE_PEXT ? "pext" : "magic")
             << '\n'
             // For bench/ab_search.py's identity check (cmake/build_id.cmake).
