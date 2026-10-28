@@ -17,6 +17,14 @@ namespace {
 std::atomic<long> allocations{0};
 }
 
+// These replacements pair malloc with free themselves. GCC 16 (WinLibs
+// 16.2.0 at -O1, the Windows gcc-debug preset) still reports the free in
+// the sized delete as mismatched with operator new and fails the build
+// under -Werror, so that one warning is off for the replacements only.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+#endif
 void* operator new(std::size_t n) {
   allocations.fetch_add(1, std::memory_order_relaxed);
   if (void* p = std::malloc(n ? n : 1)) return p;
@@ -27,6 +35,9 @@ void operator delete(void* p) noexcept { std::free(p); }
 void operator delete[](void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 namespace {
 
