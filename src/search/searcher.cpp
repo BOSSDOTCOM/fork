@@ -31,6 +31,9 @@ namespace {
 // margins are in the bootstrap evaluation's centipawns and are retuned after
 // Phase 4. These stay constants (not strength parameters):
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
+// The LMR context's root score trend is clamped to ten pawns (DESIGN.md,
+// "Search constants": beyond that a change only says "decisive").
+constexpr int ScoreTrendLimit = 1000;
 // Cursed wins and blessed losses (the fifty-move rule turns them into draws)
 // score just off zero, so a real draw is never preferred to them and no real
 // advantage is given up for them.
@@ -229,7 +232,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #endif
     // Pruning: only once a move has been searched (so no node is pruned into
     // a false stalemate or mate) and while not already losing to a mate.
-    if (moves_searched > 0 && best > -(MateScore - MaxPly)) {
+    if (moves_searched > 0 && best > -MateBandFloor) {
       if (lmp_node && quiet && quiets_searched >= LmpQuietAllowance + depth) {
         f.selector.stop_quiets();  // late move pruning (T21)
         FORK_STAT(++counters.lmp_prunes);
@@ -295,7 +298,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                                  .score_trend = score_trend_,
                                  .branch_share = branch_share_};
         const int rule = lmr_correction(context);
-        const int correction = rule * LmrCorrectionStrength / 64;
+        const int correction = rule * LmrCorrectionStrength / LmrCorrectionUnit;
         reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
@@ -352,7 +355,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     // mate, every later non-checking quiet is pruned (the conditions at the
     // top of this loop), and both conditions only grow more true: the
     // selector may drop those quiets unscored.
-    if (!quiet_checks_only && futile_node && best > -(MateScore - MaxPly)) {
+    if (!quiet_checks_only && futile_node && best > -MateBandFloor) {
       f.selector.keep_quiet_checks();
       quiet_checks_only = true;
     }
@@ -641,7 +644,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     }
     // The LMR context's iteration inputs: the root score's last change, and
     // each root move's share of this iteration's nodes for the next one.
-    score_trend_ = depth > 1 ? std::clamp(score - previous, -1000, 1000) : 0;
+    score_trend_ = depth > 1 ? std::clamp(score - previous, -ScoreTrendLimit, ScoreTrendLimit) : 0;
     std::uint64_t iteration_nodes = 0;
     for (std::size_t i = 0; i < root_count_; ++i) iteration_nodes += root_moves_[i].nodes;
     for (std::size_t i = 0; i < root_count_; ++i)

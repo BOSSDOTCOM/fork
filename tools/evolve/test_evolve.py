@@ -510,7 +510,7 @@ class RealPreprocessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base, included = self.unit_lines(tmp, 'baseline', None)
             self.assertTrue(included)
-            self.assertIn(('<tree>/src/search/searcher.cpp', 'const int correction = rule * LmrCorrectionStrength / 64;'),
+            self.assertIn(('<tree>/src/search/searcher.cpp', 'const int correction = rule * LmrCorrectionStrength / LmrCorrectionUnit;'),
                           base)
             same, _ = self.unit_lines(tmp, 'rule', '  if (c.on_pv)\n    return 0;\n  // a longer body\n'
                                                    '  return c.history < -4000 ? 1 : 0;')
@@ -519,7 +519,7 @@ class RealPreprocessTests(unittest.TestCase):
                                                       '%:define LmrCorrectionStrength 640\n')
             diff = gate.first_difference(base, leak)
             self.assertIsNotNone(diff)
-            self.assertIn('rule * 640 / 64', diff)
+            self.assertIn('rule * 640 / LmrCorrectionUnit', diff)
 
 
 class ProxyTests(unittest.TestCase):

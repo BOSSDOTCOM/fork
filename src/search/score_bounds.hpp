@@ -29,13 +29,17 @@ constexpr int ScoreNone = 32000;  // "no score" (e.g. no static eval in check); 
 constexpr int MateScore = 30000;
 constexpr int TbWinScore = 29500;
 
-static_assert(MateScore - MaxPly > TbWinScore && TbWinScore - MaxPly > EvalLimit);
+// The bottom of the mate band: every mate scores at least this, every
+// mated result at most -MateBandFloor.
+constexpr int MateBandFloor = MateScore - MaxPly;
+
+static_assert(MateBandFloor > TbWinScore && TbWinScore - MaxPly > EvalLimit);
 static_assert(ScoreInfinite > MateScore && ScoreNone < 32767);
 
 constexpr int mate_score(int ply) { return MateScore - ply; }    // we mate at `ply`
 constexpr int mated_score(int ply) { return -MateScore + ply; }  // we are mated at `ply`
 
-constexpr bool is_mate_score(int s) { return std::abs(s) >= MateScore - MaxPly; }
+constexpr bool is_mate_score(int s) { return std::abs(s) >= MateBandFloor; }
 // A forced result: a mate or a tablebase win or loss.
 constexpr bool is_tb_or_mate(int s) { return std::abs(s) >= TbWinScore - MaxPly; }
 
@@ -49,8 +53,8 @@ constexpr int score_to_tt(int s, int ply) {
 // A result too far below this node to count from the root within MaxPly
 // stays at the bottom of its band (review, 2026-10-24: it fell out of it).
 constexpr int score_from_tt(int s, int ply) {
-  if (s >= MateScore - MaxPly) return std::max(s - ply, MateScore - MaxPly);
-  if (s <= -(MateScore - MaxPly)) return std::min(s + ply, -(MateScore - MaxPly));
+  if (s >= MateBandFloor) return std::max(s - ply, MateBandFloor);
+  if (s <= -MateBandFloor) return std::min(s + ply, -MateBandFloor);
   if (s >= TbWinScore - MaxPly) return std::max(s - ply, TbWinScore - MaxPly);
   if (s <= -(TbWinScore - MaxPly)) return std::min(s + ply, -(TbWinScore - MaxPly));
   return s;

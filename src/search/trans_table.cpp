@@ -47,12 +47,15 @@ std::uint32_t expected_check(const TtEntry& e, std::uint32_t key_bits) {
 // of the current search ranks above every stale one; within each group,
 // deeper ranks higher. Blended: depth minus StaleDepthPerSearch per search of
 // age (the age wraps at 256, so the gap is taken modulo 256).
+// Above any depth (a uint8), so a current entry outranks every stale one.
+constexpr int CurrentSearchBonus = 256;
+
 int slot_rank(const TtEntry& e, std::uint8_t search_age, bool age_blend) {
   if (age_blend) {
     const int age_gap = static_cast<std::uint8_t>(search_age - static_cast<std::uint8_t>(e.age()));
     return e.depth - StaleDepthPerSearch * age_gap;
   }
-  return (e.age() == search_age ? 256 : 0) + e.depth;
+  return (e.age() == search_age ? CurrentSearchBonus : 0) + e.depth;
 }
 
 }  // namespace
