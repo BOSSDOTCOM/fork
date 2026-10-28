@@ -694,3 +694,21 @@ tuned by SPSA.
 - **runtime cost:** none for the measurement; a time extension costs time.
 - **earliest phase:** Phase 3 (deliverable 8).
 - **status:** measurement queued
+
+## 30. Keeping a stale TT entry that is still deeper once aged
+
+- **type:** ELO (switch `use_tt_keep_deeper`, UCI `UseTtKeepDeeper` in
+  tuning builds)
+- **idea:** the position's own entry from an earlier search is kept against
+  an inexact new result while its depth minus StaleDepthPerSearch plies per
+  search of age still exceeds the new depth (audit-1, B-5; 808dd8a). Its
+  LTC SPRT (40+0.4, Hash 64 MB, 1 thread, [0, 3]) was stopped by the owner
+  as inconclusive, leaning negative: -5.1 +/- 10.1 Elo after 2,602 games
+  (2026-10-28, sprt-log.md b5-keep-deeper). At 64 MB and one thread the
+  table is rarely under pressure (as for idea 24).
+- **phase:** Phase 6's TT tests, under large Hash and many threads.
+- **metric:** SPRT [0, 3] at LTC, at Phase 6 Hash and thread counts.
+- **runtime cost:** none measurable (one comparison per replacement of the
+  position's own entry).
+- **earliest phase:** Phase 6.
+- **status:** inconclusive (Phase 3); off by default
