@@ -947,11 +947,15 @@ struct ReportLog final : SearchListener {
 // iteration's best whatever its score passed every test (mutant M24).
 // Node-limited searches over the bench positions stop at many points; the
 // last finished iteration is the first exact report at the result's depth.
-// At least one stop must play a new move, or the test proves nothing.
+// At least one stop must play a new move, or the test proves nothing. That
+// is required of optimized builds only: node-limited searches are the same
+// in every build (bench parity), and the smaller sample debug builds can
+// afford may hold no such stop (none in the first 6 positions after
+// 304081e, RfpMargin 40, so gcc-debug failed in CI).
 TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored above the last iteration") {
   Fixture fx;
   int switched = 0;
-  const std::size_t positions = Optimized ? 10 : 6;
+  const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
   for (std::size_t i = 0; i < positions; ++i) {
     const std::string_view fen = search_bench_fens()[i];
     for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
@@ -976,7 +980,10 @@ TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored abo
                                                << finished->score << " (depth " << r.depth << ")");
     }
   }
-  CHECK_MSG(switched > 0, "no stop played a move other than the last finished iteration's");
+  if (Optimized)
+    CHECK_MSG(switched > 0, "no stop played a move other than the last finished iteration's");
+  else if (switched == 0)
+    NOTE("no stop in the debug sample played a new move; optimized builds require one");
 }
 
 // Audit-1 V-4 (00bed14): no LMR or PVS re-search once the search has
