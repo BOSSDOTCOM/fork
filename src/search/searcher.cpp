@@ -278,11 +278,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     counters.futile_quiets_searched += futile_node && quiet;
 #endif
     int score;
-    if (moves_searched == 0 || !switches.use_pvs) {
+    if (moves_searched == 0) {
       score = -negamax<OnPv>(-beta, -alpha, depth - 1, ply + 1);
     } else {
       // Late move reductions (T15): late quiet moves get a reduced
       // zero-window search first, then the full depth if they beat alpha.
+      // With PVS off the windows stay full, but LMR keeps its meaning
+      // (audit-1: the two switches were coupled).
       const int new_depth = depth - 1;
       int reduced = new_depth;
       if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet &&
@@ -315,19 +317,25 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         counters.lmr_rule_changes += reduced != std::clamp(new_depth - base, 1, new_depth);
 #endif
       }
-      score = -negamax<false>(-alpha - 1, -alpha, reduced, ply + 1);
+      if (!switches.use_pvs && reduced == new_depth) {
+        score = -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);  // plain alpha-beta
+      } else {
+        // PVS off: the reduced search gets the full window, as a non-PV child.
+        score = -negamax<false>(switches.use_pvs ? -alpha - 1 : -beta, -alpha, reduced, ply + 1);
 #ifdef FORK_SEARCH_STATS
-      counters.lmr_searches += reduced < new_depth;
-      counters.lmr_plies_sum += static_cast<std::uint64_t>(new_depth - reduced);
-      counters.lmr_researches += reduced < new_depth && score > alpha;
+        counters.lmr_searches += reduced < new_depth;
+        counters.lmr_plies_sum += static_cast<std::uint64_t>(new_depth - reduced);
+        counters.lmr_researches += reduced < new_depth && score > alpha;
 #endif
-      // No re-search once the search has stopped: a stopped child returns 0,
-      // which can beat alpha, and each call would still count a node past a
-      // node limit (found by the heuristic-discovery gate, 2026-10-27).
-      if (!stopped_ && score > alpha && reduced < new_depth)
-        score = -negamax<false>(-alpha - 1, -alpha, new_depth, ply + 1);
-      if (!stopped_ && OnPv && score > alpha && score < beta)
-        score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
+        // No re-search once the search has stopped: a stopped child returns 0,
+        // which can beat alpha, and each call would still count a node past a
+        // node limit (found by the heuristic-discovery gate, 2026-10-27).
+        if (!stopped_ && score > alpha && reduced < new_depth)
+          score = switches.use_pvs ? -negamax<false>(-alpha - 1, -alpha, new_depth, ply + 1)
+                                   : -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);
+        if (!stopped_ && switches.use_pvs && OnPv && score > alpha && score < beta)
+          score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
+      }
     }
     pos.unmake(m);
     if (stopped_) return 0;
@@ -651,7 +659,8 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     std::uint64_t iteration_nodes = 0;
     for (std::size_t i = 0; i < root_count_; ++i) iteration_nodes += root_moves_[i].nodes;
     for (std::size_t i = 0; i < root_count_; ++i)
-      root_moves_[i].share = iteration_nodes ? static_cast<int>(root_moves_[i].nodes * 1000 / iteration_nodes) : 0;
+      root_moves_[i].share =
+          iteration_nodes ? static_cast<int>(root_moves_[i].nodes * 1000 / iteration_nodes) : 0;
     previous = score;
     result.best = root_moves_[0].move;
     result.score = score;

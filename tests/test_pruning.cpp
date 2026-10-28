@@ -210,6 +210,30 @@ TEST_CASE("pruning", "TT-refined pruning eval: still correct, and it changes the
   CHECK_MSG(refined.nodes != plain.nodes, "nodes " << refined.nodes << " with and without refinement");
 }
 
+// The switches are independent (audit-1, A9-2): with PVS off, late moves were
+// searched only as full-window PV children, so LMR never ran and switching it
+// made no difference; a removal test of PVS would have measured LMR too.
+TEST_CASE("pruning", "with PVS off, LMR still reduces: the two switches are independent") {
+  PruningFixture fx;
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  const int depth = Optimized ? 7 : 5;
+  SearchSwitches no_pvs;
+  no_pvs.use_pvs = false;
+  fx.searcher->switches = no_pvs;
+  const SearchResult with_lmr = fx.search(kiwipete, depth);
+  no_pvs.use_lmr = false;
+  fx.searcher->switches = no_pvs;
+  const SearchResult without_lmr = fx.search(kiwipete, depth);
+  CHECK(legal.contains(with_lmr.best));
+  CHECK(legal.contains(without_lmr.best));
+  CHECK_MSG(with_lmr.nodes < without_lmr.nodes,
+            "PVS off: nodes " << with_lmr.nodes << " with LMR, " << without_lmr.nodes << " without");
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
