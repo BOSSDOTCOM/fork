@@ -343,6 +343,11 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   report, -4.7 ± 18.0 over all 590 games; sprt-log.md d8-ltc). Phase 5
   revisits it at long time controls, **the iteration rule first** (the
   danger-zone reserve should almost never bind at 40+0.4).
+  **Also to settle** (owner, 2026-10-28; audit-1 R-4's remainder): a `go`
+  with a clock only for the opponent (e.g. `go btime 1000 binc 10` with
+  White to move) gives Fork no time limit today, so it searches until
+  `stop` (checked: depth 20 after 3 s). Decide between that and a fallback
+  budget, with a test.
 - **Phase 6: SMP.** Lazy SMP, NUMA-aware thread/memory placement, no large
   page dependence, scaling benchmark. **Shared-TT test plan** (owner,
   2026-10-24): TT entries are self-verifying (§5.2 deliverable 3), so a torn
@@ -356,6 +361,12 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   vote), and how the threads' searches are kept diverse (different depths,
   move orders or other per-thread variation), each from the
   kb-researcher's clean-room description and measured by a scaling test.
+  **Memory per thread** (owner, 2026-10-28): the 16,384-ply State reserve
+  (audit-1 R-3) belongs to the UCI session's root position and its spare
+  only; a search thread's copy reserves its own plies plus `StateReserve`
+  (1,024), about 57 KB at a game's start. `no_alloc` checks the copy's
+  allocation; keep it that way when threads multiply the copies (F-24's
+  memory numbers).
 - **Phase 7: Tournament-aware play.** Contempt/style options, TB-aware
   eval, keeping tension. Each item is documented here as genuine evaluation.
 - **Phase 8: TCEC-conditions testing** from `tcec.json`: paired openings,

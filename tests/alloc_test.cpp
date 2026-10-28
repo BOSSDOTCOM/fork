@@ -17,7 +17,8 @@
 
 namespace {
 std::atomic<long> allocations{0};
-}
+std::atomic<std::size_t> largest_allocation{0};  // in bytes, since last reset
+}  // namespace
 
 // These replacements pair malloc with free themselves. GCC 16 (WinLibs
 // 16.2.0 at -O1, the Windows gcc-debug preset) still reports the free in
@@ -29,6 +30,8 @@ std::atomic<long> allocations{0};
 #endif
 void* operator new(std::size_t n) {
   allocations.fetch_add(1, std::memory_order_relaxed);
+  for (std::size_t seen = largest_allocation.load();
+       n > seen && !largest_allocation.compare_exchange_weak(seen, n);) {}
   if (void* p = std::malloc(n ? n : 1)) return p;
   throw std::bad_alloc();
 }
@@ -131,6 +134,18 @@ int main() {
                   during);
       if (reserved ? during != 0 : during == 0) ++failures;
     }
+    // Only the UCI root and its spare hold that reserve (owner, 2026-10-28,
+    // for Phase 6): a copy, which is what a search thread gets, reserves its
+    // own plies plus StateReserve (1,024, position.hpp), as before. Checked
+    // by the copy's largest allocation, one State block.
+    forkeng::Position root;
+    root.reserve_plies(16384);
+    largest_allocation = 0;
+    const forkeng::Position copy = root;
+    const std::size_t copy_block = largest_allocation.load();
+    std::printf("copy of a reserved 1-ply Position: largest allocation %zu bytes (%zu States)\n", copy_block,
+                copy_block / sizeof(forkeng::State));
+    if (copy_block != (1 + 1024) * sizeof(forkeng::State) || copy.state() != root.state()) ++failures;
   }
   {
     // The search (DESIGN.md §5.2, hot-path rule 3): after setup (the
