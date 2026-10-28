@@ -50,54 +50,70 @@ struct SearchQuota {
   std::optional<std::chrono::steady_clock::time_point> go_received;
 };
 
-// Technique switches (DESIGN.md §5.2: every technique sits behind a flag).
+// Technique switches (DESIGN.md §5.2: every technique sits behind a flag):
+// X(member, option name in tuning builds, default). One list, so a switch
+// cannot exist without its tuning option (src/uci/session.cpp; a hand-kept
+// second list lost six switches once, in 6ab7cb7).
+// - use_see_quiesce: qsearch skips captures that lose material by SEE.
+// - use_history: quiet moves ordered by butterfly history (else generation
+//   order); use_history_malus: quiets tried before a cutoff lose what the
+//   cutoff move gains.
+// - Tier 1 pruning and reductions (deliverable 6): reverse futility (T20),
+//   null move (T13), LMR (T15), LMP (T21), futility (T22), SEE pruning in
+//   the main search (T23).
+// - tt_age_blend: TT victims ranked by depth minus two plies per search of
+//   age instead of current-search-first (owner's experiment, 2026-10-26;
+//   off by default).
+// - tt_keep_exact: an exact TT entry is not replaced by a bound of the same
+//   depth from the same search (review 2, claim (e), 2026-10-26; off by
+//   default).
+// - use_tt_eval_refine: pruning decisions use the static eval corrected by
+//   the TT score's bound (review 2, claim (d); KB T50). On by default since
+//   2026-10-26, provisionally (owner): its SPRT was stopped undecided, so
+//   the end-of-Phase-3 removal round verifies it, at 40+0.4 too.
+// - use_forced_move_stop: with one root move a timed search stops at
+//   1 / ForcedMoveFraction of its soft limit (audit-1, B-1).
+// - use_tt_keep_deeper: a stale TT entry still deeper after aging is kept
+//   against an inexact result (audit-1, B-5).
+// - use_shallow_fail_high: the re-search after a root aspiration fail high
+//   is FailHighDepthCut plies shallower (audit-1, B-3).
+// - use_tables_full_depth: a table result that settles a node is stored in
+//   the TT at full depth, not the node's (audit-1, B-2).
+// - use_tt_stand_pat: the quiescence search's stand-pat value refined by
+//   the TT score (KB T50; audit-1, B-4).
+// - use_tables: Syzygy endgame tables, when loaded (deliverable 7):
+//   win/draw/loss probes in the search and the ranking of root moves.
+#define FORK_SEARCH_SWITCHES(X)                      \
+  X(use_tt, UseTT, true)                             \
+  X(use_pvs, UsePvs, true)                           \
+  X(use_aspiration, UseAspiration, true)             \
+  X(use_mate_distance, UseMateDistance, true)        \
+  X(use_quiesce, UseQuiesce, true)                   \
+  X(use_see_quiesce, UseSeeQuiesce, true)            \
+  X(use_history, UseHistory, true)                   \
+  X(use_history_malus, UseHistoryMalus, true)        \
+  X(use_rfp, UseRfp, true)                           \
+  X(use_nmp, UseNmp, true)                           \
+  X(use_lmr, UseLmr, true)                           \
+  X(use_lmp, UseLmp, true)                           \
+  X(use_futility, UseFutility, true)                 \
+  X(use_see_prune, UseSeePrune, true)                \
+  X(tt_age_blend, UseTtAgeBlend, false)              \
+  X(tt_keep_exact, UseTtKeepExact, false)            \
+  X(use_tt_eval_refine, UseTtEvalRefine, true)       \
+  X(use_forced_move_stop, UseForcedMoveStop, true)   \
+  X(use_tt_keep_deeper, UseTtKeepDeeper, true)       \
+  X(use_shallow_fail_high, UseShallowFailHigh, true) \
+  X(use_tables_full_depth, UseTablesFullDepth, true) \
+  X(use_tt_stand_pat, UseTtStandPat, true)           \
+  X(use_tables, UseTables, true)
+
 struct SearchSwitches {
-  bool use_tt = true;
-  bool use_pvs = true;
-  bool use_aspiration = true;
-  bool use_mate_distance = true;
-  bool use_quiesce = true;
-  bool use_see_quiesce = true;    // qsearch skips captures that lose material by SEE
-  bool use_history = true;        // quiet moves ordered by butterfly history (else generation order)
-  bool use_history_malus = true;  // quiets tried before a cutoff lose what the cutoff move gains
-  // Tier 1 pruning and reductions (deliverable 6).
-  bool use_rfp = true;        // reverse futility pruning (T20)
-  bool use_nmp = true;        // null move pruning (T13)
-  bool use_lmr = true;        // late move reductions (T15)
-  bool use_lmp = true;        // late move pruning (T21)
-  bool use_futility = true;   // futility pruning (T22)
-  bool use_see_prune = true;  // SEE pruning in the main search (T23)
-  // TT victims ranked by depth minus two plies per search of age instead of
-  // current-search-first (owner's experiment, 2026-10-26; off by default).
-  bool tt_age_blend = false;
-  // An exact TT entry is not replaced by a bound of the same depth from the
-  // same search (review 2, claim (e), 2026-10-26; off by default).
-  bool tt_keep_exact = false;
-  // Pruning decisions use the static eval corrected by the TT score's bound
-  // (review 2, claim (d); KB T50). On by default since 2026-10-26, provisionally
-  // (owner): its SPRT was stopped undecided, so the end-of-Phase-3 removal round
-  // verifies it, at 40+0.4 too.
-  bool use_tt_eval_refine = true;
-  // With one root move a timed search stops at 1 / ForcedMoveFraction of its
-  // soft limit (audit-1, B-1).
-  bool use_forced_move_stop = true;
-  // A stale TT entry still deeper after aging is kept against an inexact
-  // result (audit-1, B-5).
-  bool use_tt_keep_deeper = true;
-  // The re-search after a root aspiration fail high is FailHighDepthCut
-  // plies shallower (audit-1, B-3).
-  bool use_shallow_fail_high = true;
-  // A table result that settles a node is stored in the TT at full depth, not
-  // the node's (audit-1, B-2).
-  bool use_tables_full_depth = true;
-  // The quiescence search's stand-pat value refined by the TT score (KB T50;
-  // audit-1, B-4).
-  bool use_tt_stand_pat = true;
-  // Syzygy endgame tables, when loaded (deliverable 7): win/draw/loss probes
-  // in the search and the ranking of root moves.
-  bool use_tables = true;
-  // Tests only: a TT entry cuts only at exactly the depth it was searched
-  // to, so a search equals plain minimax (tests/test_search.cpp).
+#define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
+  FORK_SEARCH_SWITCHES(FORK_SWITCH_MEMBER)
+#undef FORK_SWITCH_MEMBER
+  // Tests only (no option): a TT entry cuts only at exactly the depth it was
+  // searched to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
 };
 
