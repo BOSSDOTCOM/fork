@@ -98,6 +98,15 @@ class MergeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             sm.merge([self.shard([1, 2, 3, 2, 1]), self.shard([1, 2, 3, 2, 1], tc='40+0.4')])
 
+    def test_tables_on_and_off_do_not_mix(self):
+        on = self.shard([1, 2, 3, 2, 1], tables='3-4-5', opening_start='1')
+        off = self.shard([1, 2, 3, 2, 1], tables='off', opening_start='101')
+        with self.assertRaisesRegex(ValueError, 'tables'):
+            sm.merge([on, off])
+        merged = sm.merge([on, dict(off, meta=dict(off['meta'], tables='3-4-5'))])
+        self.assertEqual(merged['meta']['tables'], '3-4-5')
+        self.assertIn('Tables: 3-4-5 (both engines)', sm.report(merged, -3, 0))
+
     def test_snapshot_reads_the_last_report(self):
         log = '\n'.join([
             'Started game 1 of 400 (test vs base)',

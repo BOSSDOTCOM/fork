@@ -5,6 +5,13 @@
 # beside it), one merge job whose summary is the combined SPRT. A stage runs
 # a fixed number of games; if undecided, run the next stage (its openings
 # follow on) and merge all stages' results (tools/cloud/sprt_merge.py).
+# Both engines get the Syzygy 3-4-5 tables (DESIGN.md §5.2; input tables=off
+# plays without them, recorded in each shard's result): the tables job
+# restores them from the Actions cache, keyed by the committed manifest
+# tools/cloud/syzygy-345.sha256, or on a miss downloads them from the
+# lichess mirror and verifies every file against it
+# (tools/cloud/fetch_tables.sh), and the cache keeps them for the next run;
+# each shard restores the same cache and verifies it again.
 # Inputs reach the shell only through environment variables.
 name: sprt
 
@@ -21,6 +28,7 @@ on:
       stage: {description: "Stage number (0 first; later stages use new openings)", required: true, default: "0"}
       test_opts: {description: "fastchess options for the test engine (e.g. option.UseTables=false)", required: false, default: ""}
       base_opts: {description: "fastchess options for the base engine", required: false, default: ""}
+      tables: {description: "Syzygy 3-4-5 for both engines: on or off", required: true, default: "on"}
 
 permissions:
   contents: read
@@ -55,9 +63,11 @@ jobs:
           STAGE: ${{ inputs.stage }}
           BASE: ${{ inputs.base }}
           TEST: ${{ inputs.test }}
+          TABLES: ${{ inputs.tables }}
         run: |
           git config --global --add safe.directory "$PWD"
           case "$SHARDS$GAMES$STAGE" in *[!0-9]*) echo "shards, games and stage must be numbers"; exit 1 ;; esac
+          case "$TABLES" in on | off) ;; *) echo "tables must be on or off"; exit 1 ;; esac
           [ "$SHARDS" -ge 1 ] && [ "$SHARDS" -le 16 ] || { echo "shards must be 1-16"; exit 1; }
           per=$(( (GAMES + 2 * SHARDS - 1) / (2 * SHARDS) * 2 ))
           echo "shards=$(python3 -c "print(list(range($SHARDS)))")" >>"$GITHUB_OUTPUT"
@@ -72,8 +82,28 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: {name: engines, path: engines, retention-days: 7}
 
+  # On the plain runner, like the shards, not in the build job's container:
+  # a cache's version is a hash of its paths and of the compression tool
+  # (actions/cache README, "Cache Version"), so the job that saves the
+  # tables and the shards that restore them run on the same kind of runner.
+  tables:
+    if: github.repository == 'BOSSDOTCOM/fork'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        if: inputs.tables == 'on'
+      - uses: actions/cache@v4
+        if: inputs.tables == 'on'
+        with:
+          path: syzygy-345
+          key: syzygy-345-${{ hashFiles('tools/cloud/syzygy-345.sha256') }}
+      - name: Syzygy 3-4-5 (restored or downloaded, verified)
+        if: inputs.tables == 'on'
+        run: bash tools/cloud/fetch_tables.sh syzygy-345
+
   shard:
-    needs: build
+    needs: [build, tables]
     runs-on: ubuntu-latest
     timeout-minutes: 300
     strategy:
@@ -87,6 +117,14 @@ jobs:
         with: {name: engines, path: engines}
       - name: Tools (pinned fastchess release and book)
         run: bash tools/cloud/fetch_tools.sh "$RUNNER_TEMP/tools"
+      - uses: actions/cache/restore@v4
+        if: inputs.tables == 'on'
+        with:
+          path: syzygy-345
+          key: syzygy-345-${{ hashFiles('tools/cloud/syzygy-345.sha256') }}
+      - name: Syzygy 3-4-5 (verified; downloaded only if the cache missed)
+        if: inputs.tables == 'on'
+        run: bash tools/cloud/fetch_tables.sh syzygy-345
       - name: Games
         env:
           SHARD: ${{ matrix.shard }}
@@ -97,6 +135,7 @@ jobs:
           HASH_MB: ${{ inputs.hash }}
           BASE_OPTS: ${{ inputs.base_opts }}
           TEST_OPTS: ${{ inputs.test_opts }}
+          SYZYGY: ${{ inputs.tables == 'on' && 'syzygy-345' || '' }}
           BASE_SHA: ${{ needs.build.outputs.base_sha }}
           TEST_SHA: ${{ needs.build.outputs.test_sha }}
         run: |
@@ -104,7 +143,7 @@ jobs:
           bash tools/cloud/run_shard.sh --base engines/base/fork --test engines/test/fork \
             --fastchess "$RUNNER_TEMP/tools/fastchess" --book "$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.epd" \
             --shard "$SHARD" --shards "$SHARDS" --stage "$STAGE" --games "$GAMES" --tc "$TC" --hash "$HASH_MB" \
-            --base-opts "$BASE_OPTS" --test-opts "$TEST_OPTS" --out out \
+            --base-opts "$BASE_OPTS" --test-opts "$TEST_OPTS" --syzygy "$SYZYGY" --out out \
             --meta "base=$BASE_SHA" --meta "test=$TEST_SHA" --meta runner=github
       - uses: actions/upload-artifact@v4
         if: always()

@@ -20,7 +20,14 @@
 # check option, so one commit can be tested with a technique on and off),
 # MAX_GAMES to change the cap below, CXX (default: update.sh's choice, the
 # first found of clang++-19, clang++-16, clang++, g++-12, g++), SRAND (the
-# opening order's seed; default: the run's UTC stamp as a number).
+# opening order's seed; default: the run's UTC stamp as a number),
+# TABLES (default 1: both engines get the Syzygy 3-4-5 tables; 0: neither
+# does, and BASE_OPTS / TEST_OPTS may then give them to one side),
+# SYZYGY_PATH (default: config/local-test.json's syzygy.path).
+#
+# Tables (DESIGN.md §5.2; owner, audit-1 Phase C): both engines get
+# option.SyzygyPath, the 3-4-5 set (145 .rtbw + 145 .rtbz, checked here);
+# the log entry says whether tables were on.
 #
 # Cap (owner, 2026-10-25): an SPRT that has not decided after MAX_GAMES games
 # (default 20,000 at STC, 10,000 at any other time control) stops and is
@@ -62,6 +69,24 @@ mkdir -p "$dir/logs"
 [ -x "$fastchess" ] || { echo "sprt.sh: no fastchess at $fastchess" >&2; exit 1; }
 [ -f "$book" ] && [ "$(sha256sum "$book" | cut -d' ' -f1)" = "$book_sha" ] ||
   { echo "sprt.sh: $book missing or not the pinned UHO_Lichess_4852_v1.epd (tools/get_books.sh)" >&2; exit 1; }
+
+each_tb=() tables_note="no tables"
+case ${TABLES:-1} in
+  1)
+    case "${BASE_OPTS:-} ${TEST_OPTS:-}" in
+      *SyzygyPath*) echo "sprt.sh: BASE_OPTS/TEST_OPTS set SyzygyPath, but TABLES=1 already gives both sides the tables; set TABLES=0 to choose per side" >&2; exit 2 ;;
+    esac
+    tb=${SYZYGY_PATH:-$(sed -n '/"syzygy"/,/}/ s/^[[:space:]]*"path":[[:space:]]*"\([^"]*\)".*/\1/p' "$repo/config/local-test.json" | head -n 1)}
+    tb=${tb/#\~/$HOME}
+    w=$(find "$tb" -maxdepth 1 -name '*.rtbw' 2>/dev/null | wc -l) z=$(find "$tb" -maxdepth 1 -name '*.rtbz' 2>/dev/null | wc -l)
+    [ -n "$tb" ] && [ "$w" = 145 ] && [ "$z" = 145 ] ||
+      { echo "sprt.sh: '$tb' does not hold the Syzygy 3-4-5 set (145 + 145 files, found $w + $z); set SYZYGY_PATH, or TABLES=0 to play without tables" >&2; exit 1; }
+    each_tb=(option.SyzygyPath="$tb")
+    tables_note="Syzygy 3-4-5 for both sides (${tb//$HOME/\~})"
+    ;;
+  0) ;;
+  *) echo "sprt.sh: TABLES must be 1 or 0" >&2; exit 2 ;;
+esac
 
 # One compiler for both sides and both build modes (update.sh's order when
 # CXX is unset); its --version line keys the build cache, so a build made
@@ -140,7 +165,7 @@ stamp=$(date -u +%Y%m%dT%H%M%SZ)
 seed=${SRAND:-${stamp//[!0-9]/}}
 case $seed in '' | *[!0-9]*) echo "sprt.sh: SRAND must be a number" >&2; exit 2 ;; esac
 out=$dir/logs/$stamp-$name.txt
-echo "sprt.sh: $name: $base vs $test${TUNE:+ (tuning builds)}, [$elo0, $elo1], $tc, Hash $hash, concurrency ${CONCURRENCY:-10}, cap $MAX_GAMES games, $adjudication_note, openings seed $seed; log $out"
+echo "sprt.sh: $name: $base vs $test${TUNE:+ (tuning builds)}, [$elo0, $elo1], $tc, Hash $hash, concurrency ${CONCURRENCY:-10}, cap $MAX_GAMES games, $adjudication_note, $tables_note, openings seed $seed; log $out"
 
 # From the log directory: fastchess writes its config.json autosave into the
 # working directory, which must not be the repository.
@@ -150,7 +175,7 @@ fc_status=0
 "$fastchess" \
   -engine cmd="$test_exe" name=test ${TEST_OPTS:-} \
   -engine cmd="$base_exe" name=base ${BASE_OPTS:-} \
-  -each tc="$tc" option.Hash="$hash" option.Threads=1 \
+  -each tc="$tc" option.Hash="$hash" option.Threads=1 "${each_tb[@]}" \
   -openings file="$book" format=epd order=random -srand "$seed" \
   -repeat -rounds $((MAX_GAMES / 2)) -concurrency "${CONCURRENCY:-10}" \
   -sprt elo0="$elo0" elo1="$elo1" alpha=0.05 beta=0.05 model=normalized \
@@ -188,7 +213,7 @@ fi
   BASE_OPTS=${BASE_OPTS:-} TEST_OPTS=${TEST_OPTS:-}
   BASE_OPTS=${BASE_OPTS//$HOME/\~}
   TEST_OPTS=${TEST_OPTS//$HOME/\~}
-  echo "- base \`$(git -C "$repo" rev-parse --short "$base^{commit}")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test^{commit}")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-10}, $adjudication_note${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
+  echo "- base \`$(git -C "$repo" rev-parse --short "$base^{commit}")\` ($base), test \`$(git -C "$repo" rev-parse --short "$test^{commit}")\` ($test), bounds [$elo0, $elo1] nElo, $tc, Hash $hash MB, 1 thread, concurrency ${CONCURRENCY:-10}, $adjudication_note, $tables_note${TUNE:+, tuning builds}${BASE_OPTS:+, base opts $BASE_OPTS}${TEST_OPTS:+, test opts $TEST_OPTS}"
   echo "- Builds: base $base_id; test $test_id. Openings in random order, -srand $seed."
   echo "- Verdict: **$verdict**; cap $MAX_GAMES games."
   echo '```'

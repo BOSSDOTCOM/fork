@@ -996,8 +996,13 @@ filter [-3, 0], the TT-refined pruning eval [0, 3], keeping exact TT entries
 (a safety guard) [-3, 0].
 
 Conditions: **STC** 8+0.08 s, Hash 16 MB; **LTC** 40+0.4 s,
-Hash 64 MB; one thread per engine, 3-4-5 Syzygy for both sides once
-deliverable 7 is in; concurrency 5 (the 7600X3D's 6 physical cores minus
+Hash 64 MB; one thread per engine, 3-4-5 Syzygy for both sides (owner,
+audit-1 Phase C: `tools/sprt.sh` passes `option.SyzygyPath` from
+config/local-test.json to both engines, `TABLES=0` opts out; the cloud
+shards get the set from the Actions cache or the lichess mirror, checked
+against `tools/cloud/syzygy-345.sha256`; the SPRT log entry and the shard
+results record whether tables were on. The SPRTs between deliverable 7 and
+this fix ran without tables, except mc-tables' test side); concurrency 5 (the 7600X3D's 6 physical cores minus
 one, since the machine is shared). Openings: UHO_Lichess_4852_v1.epd (KB
 tools.md), **test openings only, never training data** (owner,
 2026-10-24; KB data-policy.md decision 6), with its SHA-256 and source in ORIGINALITY.md

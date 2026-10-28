@@ -51,8 +51,13 @@ chmod +x "$home/fork-tools/bin/fastchess"
 
 # The throwaway repository: two commits, each with a fake update.sh.
 repo=$tmp/repo
-mkdir -p "$repo/tools" "$repo/docs/history/phase-3" "$repo/tests"
+mkdir -p "$repo/tools" "$repo/docs/history/phase-3" "$repo/tests" "$repo/config"
 sed "s/^book_sha=.*/book_sha=$book_sha/" "$here/sprt.sh" >"$repo/tools/sprt.sh"
+# The tables: the real config's layout, and 145 + 145 empty files.
+cp "$here/../config/local-test.json" "$repo/config/"
+mkdir -p "$home/fork-tools/syzygy/3-4-5" "$tmp/tb-short"
+for i in $(seq 1 145); do : >"$home/fork-tools/syzygy/3-4-5/T$i.rtbw"; : >"$home/fork-tools/syzygy/3-4-5/T$i.rtbz"; done
+: >"$tmp/tb-short/KPvK.rtbw"
 : >"$repo/docs/history/phase-3/sprt-log.md"
 printf 'nodes 100\nsignature 00000000000000aa\n' >"$repo/tests/bench.ref"
 # The fake engine names the compiler it was "built" with ($1) and reports a
@@ -116,7 +121,7 @@ run() {  # name, env assignments... ; runs sprt.sh, output in $tmp/out, status i
   local name=$1
   shift
   : >"$log_md"
-  env -u BASE_OPTS -u TEST_OPTS -u TUNE -u SRAND HOME="$home" FORK_SPRT_DIR="$tmp/sprt" FAKE_ARGS="$tmp/args" \
+  env -u BASE_OPTS -u TEST_OPTS -u TUNE -u SRAND -u TABLES -u SYZYGY_PATH HOME="$home" FORK_SPRT_DIR="$tmp/sprt" FAKE_ARGS="$tmp/args" \
     CXX=fakecxx "$@" bash "$repo/tools/sprt.sh" "$name" HEAD~1 HEAD 0 3 8+0.08 >"$tmp/out" 2>&1
   status=$?
 }
@@ -131,8 +136,23 @@ check "plain run logs the report" logged '^Ptnml(0-2): \[0, 0, 0, 1, 0\]'
 check "no unbound variable" bash -c "! grep -q 'unbound variable' '$tmp/out'"
 
 # Options under the home folder are logged from ~.
-run opts TEST_OPTS="option.SyzygyPath=$home/tb"
+run opts TABLES=0 TEST_OPTS="option.SyzygyPath=$home/tb"
 check "home path in options logged as ~" logged 'test opts option.SyzygyPath=~/tb'
+
+# D-2: by default both engines get the 3-4-5 tables from
+# config/local-test.json (-each), and the log says so.
+run tables
+check "tables: exit 0" test "$status" = 0
+check "tables: SyzygyPath for both engines" bash -c "grep -A6 -x -- -each '$tmp/args' | grep -qx 'option.SyzygyPath=$home/fork-tools/syzygy/3-4-5'"
+check "tables: logged" logged 'Syzygy 3-4-5 for both sides (~/fork-tools/syzygy/3-4-5)'
+run notables TABLES=0
+check "TABLES=0: no SyzygyPath" bash -c "! grep -q SyzygyPath '$tmp/args'"
+check "TABLES=0: logged as no tables" logged ', no tables'
+run missing SYZYGY_PATH="$tmp/tb-short"
+check "an incomplete set stops the run" test "$status" = 1
+check "an incomplete set logs nothing" test ! -s "$log_md"
+run twice TEST_OPTS="option.SyzygyPath=$home/tb"
+check "SyzygyPath in options with TABLES=1 is refused" test "$status" = 2
 
 # U-10: the builds' identities (version, compiler, bench) are logged; the
 # compiler is passed to update.sh and keys the build cache.

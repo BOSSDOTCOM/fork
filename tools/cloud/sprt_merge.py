@@ -121,11 +121,12 @@ def snapshot(log_text):
 
 
 def merge(shards):
-    """The summed counts; refuses shards of different tests, or two shards
-    that played the same openings. The test is identified by its commits and
+    """The summed counts; refuses shards of different tests (commits,
+    conditions, tables on or off), or two shards that played the same
+    openings. The test is identified by its commits and
     conditions, not by binary hashes: machines that build for themselves
     produce different bytes (debug info, build paths)."""
-    keys = ('base', 'test', 'tc', 'hash', 'base_opts', 'test_opts')
+    keys = ('base', 'test', 'tc', 'hash', 'base_opts', 'test_opts', 'tables')
     first = shards[0].get('meta', {})
     for s in shards[1:]:
         for k in keys:
@@ -153,6 +154,7 @@ def report(merged, nelo0, nelo1, alpha=0.05, beta=0.05):
     return '\n'.join([
         f'Shards: {merged["shards"]} ({", ".join(merged["status"])}); pairs {n}, games {2 * n} '
         f'({merged["finished_games"]} finished, time losses {merged["time_losses"]}, abnormal {merged["abnormal"]})',
+        f'Tables: {merged["meta"].get("tables") or "not recorded"} (both engines)',
         f'Elo: {elo(mean):.2f} +/- {half:.2f}, nElo: {nelo(p):.2f} +/- {1.96 * NELO_SCALE / math.sqrt(n) if n else 0:.2f}',
         f'Ptnml(0-2): {p}',
         f'LLR: {value:.2f} ({lower:.2f}, {upper:.2f}) [{nelo0:.2f}, {nelo1:.2f}] nElo: {decision}',
