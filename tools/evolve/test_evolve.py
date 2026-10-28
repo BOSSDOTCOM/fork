@@ -210,6 +210,11 @@ class FakeRunner:
         self.leak = ''  # what the fake preprocessor puts outside the region for a candidate tree
         self.write_hook = None  # (path, text) -> text, to fake a runner that writes something else
 
+    head = '0123456789abcdef0123456789abcdef01234567'  # what the fake repository's refs resolve to
+
+    def resolve(self, ref):
+        return self.head
+
     def read(self, commit, path):
         return FILE
 
@@ -399,6 +404,14 @@ class RunnerTests(unittest.TestCase):
         signature = next(line for line in header.split('\n') if 'lmr_correction(const LmrContext& c)' in line)
         self.assertEqual(signature, 'constexpr int lmr_correction(const LmrContext& c) {')
         self.assertIn(signature, context.split('\n'))
+
+    def test_resolve_gives_the_full_hash(self):
+        runner = gate.Runner(Path(__file__).resolve().parents[2], '.')
+        head = runner.resolve('HEAD')
+        self.assertRegex(head, r'^[0-9a-f]{40}$')
+        self.assertEqual(runner.resolve(head[:12]), head)
+        with self.assertRaises(subprocess.CalledProcessError):
+            runner.resolve('no-such-ref-anywhere')
 
     def test_text_is_utf8_whatever_the_locale(self):
         """The region file holds non-ASCII text (a section sign); the runner reads, writes and decodes
@@ -865,6 +878,69 @@ class LoopFailureTests(unittest.TestCase):
         self.assertEqual([json.loads(d)['first_request'] for _, _, d in pop.events('resumed')], [1])
         self.assertEqual(len(pop.events('generation_done')), 1)
         pop.close()
+
+
+class RecordingRunner(FakeRunner):
+    """A fake runner that records the commit of every read and tree."""
+
+    def __init__(self, work):
+        super().__init__(work, benches=[{'nodes': '1', 'signature': 's'}] * 99)
+        self.commits = []
+
+    def read(self, commit, path):
+        self.commits.append(commit)
+        return super().read(commit, path)
+
+    def tree(self, commit, files, name):
+        self.commits.append(commit)
+        return super().tree(commit, files, name)
+
+
+class PinnedBaselineTests(unittest.TestCase):
+    """Audit-1 U-8: the baseline commit is resolved once and only its hash is used."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.real = proxies.run_proxies, match.run_match
+        proxies.run_proxies = fake_proxies
+
+    def tearDown(self):
+        proxies.run_proxies, match.run_match = self.real
+        self.tmp.cleanup()
+
+    def test_baseline_commit_is_pinned_for_the_run(self):
+        runner = RecordingRunner(Path(self.tmp.name) / 'work')
+        cfg = loop_cfg(self.tmp.name)
+        self.assertEqual(cfg['baseline_commit'], 'HEAD')  # the committed config names a moving ref
+        loop = orchestrator.Loop(cfg, Path(self.tmp.name) / 'run', orchestrator.dry_run_agent(), runner)
+        loop.start()
+        runner.head = 'f' * 40  # a commit made during the run moves HEAD
+        loop.generation(1)
+        self.assertEqual(set(runner.commits), {FakeRunner.head})
+        self.assertEqual(loop.pop.get_meta('baseline_commit'), FakeRunner.head)
+        state = json.loads((Path(self.tmp.name) / 'run' / 'state.json').read_text(encoding='utf-8'))
+        self.assertEqual(state['baseline_commit'], FakeRunner.head)
+        loop.close()
+        # A resumed run keeps the pinned hash, wherever the ref points now.
+        loop = orchestrator.Loop(cfg, Path(self.tmp.name) / 'run', orchestrator.dry_run_agent(), runner, resume=True)
+        self.assertEqual(loop.commit, FakeRunner.head)
+        loop.close()
+
+    def test_hand_off_names_the_hash(self):
+        cfg = loop_cfg(self.tmp.name)
+        cfg['match'] = dict(cfg['match'], games=2)
+        match.run_match = lambda *a, **k: match.MatchResult(2, 2, 0, 0, 400.0, 10.0)
+        loop = orchestrator.Loop(cfg, Path(self.tmp.name) / 'run', orchestrator.dry_run_agent(),
+                                 RecordingRunner(Path(self.tmp.name) / 'work'))
+        loop.start()
+        cid = loop.pop.add(1, 'proposer_aggressive', 'r', None, 'residual', '  return 1;', '')
+        loop.pop.update(cid, proxies=json.dumps({'gain_low': 0.1, 'holdout_low': 0.1}),
+                        descriptors=json.dumps([1.0, 0.0, 0.2]))
+        loop.promote(1, cid, loop.baseline_fitness + 1)
+        text = (Path(self.tmp.name) / 'run' / 'handoff' / f'candidate-{cid}-sprt.txt').read_text(encoding='utf-8')
+        self.assertIn(f'git switch -c evolve-{cid} {FakeRunner.head}', text)
+        self.assertNotIn('HEAD', text)
+        loop.close()
 
 
 class DashboardTests(unittest.TestCase):

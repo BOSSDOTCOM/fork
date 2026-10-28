@@ -47,6 +47,7 @@ finish is marked `interrupted`, not redone.
 import argparse
 import json
 import random
+import re
 import sys
 import time
 from pathlib import Path
@@ -118,7 +119,22 @@ class Loop:
         self.sleep = sleep
         self.cid, self.step = None, None
         self.pop = population.Population(str(database))
-        if not resume:  # the run's configuration as it started; --resume reads it back
+        # The baseline commit is pinned to its full hash once, at the start: a
+        # symbolic ref such as HEAD would move under a long run when the owner
+        # commits beside it, and every later candidate would be built on other
+        # code than the baseline it is scored against (audit-1 U-8). Every
+        # read, tree, hand-off patch and printed command uses the hash.
+        if resume:
+            self.commit = self.pop.get_meta('baseline_commit')
+            if not self.commit:
+                raise RunDirError('cannot resume: the database has no pinned baseline commit')
+        else:
+            self.commit = runner.resolve(cfg['baseline_commit'])
+            if not re.fullmatch(r'[0-9a-f]{40}', self.commit or ''):
+                raise RunDirError(f'{cfg["baseline_commit"]!r} did not resolve to a full commit hash: {self.commit!r}')
+            self.pop.set_meta('baseline_commit', self.commit)
+            self.pop.set_meta('baseline_ref', cfg['baseline_commit'])
+            # The run's configuration as it started; --resume reads it back.
             (self.run_dir / 'config.json').write_text(json.dumps(cfg, indent=1), encoding='utf-8')
         self.budget = agents.Budget(cfg['budget']['tokens'], cfg['budget']['candidates'],
                                     cfg['budget']['hours'] * 3600, clock)
@@ -148,7 +164,7 @@ class Loop:
                  'generation': getattr(self, 'generation_now', 0), 'generations': self.cfg.get('generations'),
                  'budget_used': self.budget.used, 'budget_limits': self.budget.limits,
                  'elapsed_seconds': self.budget.clock() - self.budget.start, 'islands': self.cfg['islands'],
-                 'explorer_protected': self.cfg['explorer_protected']}
+                 'explorer_protected': self.cfg['explorer_protected'], 'baseline_commit': self.commit}
         try:
             (self.run_dir / 'state.json').write_text(json.dumps(state, indent=1), encoding='utf-8')
             mirror = self.cfg.get('dashboard_mirror')
@@ -162,7 +178,7 @@ class Loop:
         cfg = self.cfg
         self.step = 'gate'
         self.refresh(status=f'generation {generation}: gating candidate {cid}')
-        result = gate.run_gate(self.runner, cfg['baseline_commit'], cfg['region'], body, self.reference,
+        result = gate.run_gate(self.runner, self.commit, cfg['region'], body, self.reference,
                                f'cand-{cid}')
         self.pop.update(cid, gate=json.dumps(result.__dict__))
         if not result.passed:
@@ -387,9 +403,9 @@ class Loop:
         if result and result.passes(m['elo_floor']):
             c = self.pop.get(cid)
             path = regions.REGIONS[cfg['region']]
-            text = regions.replace_body(self.runner.read(cfg['baseline_commit'], path), cfg['region'], c['body'])
-            patch = make_patch(self.runner.read(cfg['baseline_commit'], path), text, path)
-            where = match.hand_off(self.run_dir / 'handoff', cid, path, patch, cfg['baseline_commit'])
+            text = regions.replace_body(self.runner.read(self.commit, path), cfg['region'], c['body'])
+            patch = make_patch(self.runner.read(self.commit, path), text, path)
+            where = match.hand_off(self.run_dir / 'handoff', cid, path, patch, self.commit)
             self.pop.update(cid, status='sprt hand-off (originality screen first)')
             self.say(g, 'handoff', {'id': cid, 'commands': str(where)})
         else:
@@ -438,8 +454,8 @@ class Loop:
         units); returns the committed region body."""
         cfg = self.cfg
         path = regions.REGIONS[cfg['region']]
-        body = regions.body(self.runner.read(cfg['baseline_commit'], path), cfg['region'])
-        tree = self.runner.tree(cfg['baseline_commit'], {}, 'baseline')
+        body = regions.body(self.runner.read(self.commit, path), cfg['region'])
+        tree = self.runner.tree(self.commit, {}, 'baseline')
         built, log, build = self.runner.build(tree)
         if not built:
             raise RuntimeError('the baseline does not build: ' + log[-500:])
@@ -471,7 +487,7 @@ class Loop:
             k in line for k in ('reduc', 'cutoff', 'LMR'))) or self.statistics
         self.best_fitness, self.best_generation = fitness, 0
         self.status = 'running'
-        self.say(0, 'baseline', {'id': cid, 'fitness': fitness, 'perft': self.baseline_perft,
+        self.say(0, 'baseline', {'id': cid, 'fitness': fitness, 'perft': self.baseline_perft, 'commit': self.commit,
                                  'compiler': self.runner.compiler_version(), 'statistics': self.statistics})
 
     def restore(self):
@@ -533,7 +549,8 @@ class Loop:
                 self.pop.update(stale, status='interrupted: ' + (status or ''))
         self.status = 'running'
         self.say(g, 'resumed', {'generation': g, 'first_request': first, 'budget': self.budget.used,
-                                'elapsed_seconds': round(elapsed, 1), 'best_generation': self.best_generation})
+                                'elapsed_seconds': round(elapsed, 1), 'best_generation': self.best_generation,
+                                'commit': self.commit})
         return g, first
 
     def close(self):

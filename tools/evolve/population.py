@@ -15,7 +15,8 @@ SQLite (standard library), one file per run, never committed. Tables:
   candidate enters an empty cell or replaces a fitter-proxied occupant only
   if it is fitter;
 - events: an append-only log (critic rejections with reasons, gate
-  failures, budget use, stops).
+  failures, budget use, stops);
+- meta: the run's fixed facts, such as the baseline commit's full hash.
 Parent selection is seeded and depends only on the database's contents, so
 a run is reproducible.
 """
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS elites (
   island TEXT, cell TEXT, candidate INTEGER, fitness REAL, PRIMARY KEY (island, cell));
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY, generation INTEGER, kind TEXT, detail TEXT, created REAL);
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
 
 # Grid bins: mean reduction in steps of 0.25 plies, re-search share in steps
@@ -90,6 +92,14 @@ class Population:
             return None
         names = [d[0] for d in self.db.execute('SELECT * FROM candidates LIMIT 0').description]
         return dict(zip(names, row))
+
+    def set_meta(self, key, value):
+        self.db.execute('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', (key, value))
+        self.db.commit()
+
+    def get_meta(self, key):
+        row = self.db.execute('SELECT value FROM meta WHERE key = ?', (key,)).fetchone()
+        return row[0] if row else None
 
     def log(self, generation, kind, detail):
         self.db.execute('INSERT INTO events (generation, kind, detail, created) VALUES (?, ?, ?, ?)',

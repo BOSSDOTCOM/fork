@@ -381,6 +381,12 @@ class Runner:
             ok, log = code == 0, log[-3000:]
         return ok, log, out
 
+    def resolve(self, ref):
+        """The full hash of the commit `ref` names (a branch, HEAD, a short hash)."""
+        return subprocess.run(['git', '-C', str(self.repo), 'rev-parse', '--verify', '--end-of-options',
+                               f'{ref}^{{commit}}'], capture_output=True, text=True, encoding='utf-8',
+                              check=True).stdout.strip()
+
     def read(self, commit, path):
         return subprocess.run(['git', '-C', str(self.repo), 'show', f'{commit}:{path}'], capture_output=True,
                               text=True, encoding='utf-8', check=True).stdout
