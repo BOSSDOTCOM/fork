@@ -287,9 +287,7 @@ jobs:
           cmake --preset clang-release -B build/tune -DFORK_TUNE=ON -DFORK_BUILD_TESTS=OFF
           cmake --build build/tune --target fork
           want=$(sed -n '/^#define FORK_SEARCH_SWITCHES/,/^$/p' src/search/searcher.hpp | grep -c '^ *X(')
-          got=$(printf 'uci
-quit
-' | build/tune/fork | grep -c '^option name Use[A-Za-z]* type check')
+          got=$(printf 'uci\nquit\n' | build/tune/fork | grep -c '^option name Use[A-Za-z]* type check')
           echo "switches in FORK_SEARCH_SWITCHES: $want, check options: $got"
           [ "$want" -gt 0 ] && [ "$got" -eq "$want" ]
           bash .github/ci/bench-parity.sh build/tune/fork
