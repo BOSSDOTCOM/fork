@@ -34,6 +34,10 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
   forkeng::Position again;
   require(again.set_fen(pos.fen()));
   require(again.fen() == pos.fen() && again.key() == pos.key());
+  // pinned and discoverers are computed on first read (audit-1 P-2): until
+  // then each is all ones; once read, every field must match.
+  pos.pinned();
+  pos.discoverers();
   require(pos.state() == pos.compute_state());
 
   forkeng::MoveList list;
@@ -45,7 +49,16 @@ extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size
     forkeng::Key k = pos.predicted_key(m);
     pos.make(m);
     require(pos.in_check() == check && pos.key() == k);
-    require(pos.state() == pos.compute_state());
+    {
+      const forkeng::State fresh = pos.compute_state();
+      const forkeng::State& now = pos.state();
+      constexpr forkeng::Bitboard Unread = ~forkeng::Bitboard{0};
+      require(now.pinned == Unread || now.pinned == fresh.pinned);
+      require(now.discoverers == Unread || now.discoverers == fresh.discoverers);
+      pos.pinned();
+      pos.discoverers();
+      require(now == fresh);
+    }
     pos.unmake(m);
     require(pos.same_state(snapshot));
   }
