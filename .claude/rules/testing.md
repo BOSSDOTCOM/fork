@@ -31,7 +31,9 @@ paths:
   a speed claim only with the A/B harness, every change only with the full
   check. If the test is skipped or stopped before a verdict, the change is
   shelved (reverted or left off behind its switch), the baseline stays,
-  and ideas.md logs it as untested with its partial data.
+  and ideas.md logs it as untested with its partial data. One
+  owner-approved exception: `UseTtEvalRefine` stays on (DESIGN.md §5.2,
+  Testing setup).
 - **Early acceptance reads nElo** (owner, 2026-10-28): the SPRT bounds
   are normalized Elo, so the non-regression early-acceptance rule reads
   the "nElo: x +/- e" interval, never the logistic "Elo" one (DESIGN.md

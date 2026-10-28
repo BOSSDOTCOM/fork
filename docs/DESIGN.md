@@ -1114,7 +1114,12 @@ ideas.md logs it as untested with whatever partial data exist, to be
 tested later. No decision accepts a change in place of its test. The
 case that set the rule: RfpMargin 40, adopted without an SPRT, scored
 22.5 points below Milestone C on the same 357 gauntlet games and was
-reverted to 80 (ideas.md idea 34).
+reverted to 80 (ideas.md idea 34). **The one exception** (owner-approved,
+2026-10-28): the TT-refined pruning eval (`UseTtEvalRefine`) stays on by
+default. Its SPRT on [0, 3] was stopped undecided at +17.0 ± 19.9 Elo
+after 800 games (Quality control 6), and it has been on through two
+stable gauntlets: Milestone C (2402.5 ± 23.3) and audit-1 (2411.5 ±
+22.5). The end-of-Phase-3 removal round still tests it.
 
 **Build target per machine** (owner, 2026-10-28). Both engines of an SPRT
 always share one target, so the target sets only speed, never a bias, and
@@ -1380,7 +1385,9 @@ holds, which is why search decisions use no floating point (deliverable 6).
      SPRT on gainer bounds [0, 3] was stopped undecided by the owner (at
      +17.0 ± 19.9 Elo after 800 games; the last report, 1,000 games:
      +14.6 ± 17.8, LLR 0.40 of 2.94), so it was never accepted. The
-     removal round tests it at STC and also at LTC 40+0.4.
+     removal round tests it at STC and also at LTC 40+0.4. It is the
+     owner-approved exception to "untested changes never ship" (Testing
+     setup; 2026-10-28): on through the Milestone C and audit-1 gauntlets.
    - **Also flagged** (owner's cap, 2026-10-26): keeping exact TT entries
      (`UseTtKeepExact`, the second review's claim (e)), off by default: its
      SPRT on [-3, 0] ended INCONCLUSIVE at the cap, -0.6 ± 7.5 Elo after
