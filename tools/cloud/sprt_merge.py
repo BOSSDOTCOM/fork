@@ -134,6 +134,14 @@ def opening_range(meta):
     return start, start
 
 
+def final_status(status, pairs, meta):
+    """A shard that ended normally ("done") with fewer finished pairs than
+    its planned rounds is "short"."""
+    if status == 'done' and meta.get('rounds') is not None and pairs < int(meta['rounds']):
+        return 'short'
+    return status
+
+
 def merge(shards):
     """The summed counts; refuses shards of different tests (commits,
     conditions, tables on or off, opening book), or two shards whose opening
@@ -153,7 +161,12 @@ def merge(shards):
         if b0 <= a1:
             raise ValueError(f'shards share openings: lines {a0}-{a1} and {b0}-{b1} of the book intersect')
     total = [sum(s['ptnml'][i] for s in shards) for i in range(5)]
-    return {'meta': {k: first.get(k) for k in keys + ('book', 'book_seed')}, 'shards': len(shards), 'ptnml': total,
+    per_shard = sorted(({'stage': s.get('meta', {}).get('stage'), 'shard': s.get('meta', {}).get('shard'),
+                         'runner': s.get('meta', {}).get('runner'), 'status': s.get('status', '?'),
+                         'pairs': sum(s['ptnml']), 'planned': s.get('meta', {}).get('rounds'),
+                         'fastchess_exit': s.get('meta', {}).get('fastchess_exit')} for s in shards),
+                       key=lambda r: (int(r['stage'] or 0), int(r['shard'] or 0)))
+    return {'per_shard': per_shard, 'meta': {k: first.get(k) for k in keys + ('book', 'book_seed')}, 'shards': len(shards), 'ptnml': total,
             'pairs': sum(total), 'finished_games': sum(s.get('finished_games', 0) for s in shards),
             'time_losses': sum(s.get('time_losses', 0) for s in shards),
             'abnormal': sum(s.get('abnormal', 0) for s in shards),
@@ -167,7 +180,11 @@ def report(merged, nelo0, nelo1, alpha=0.05, beta=0.05):
     lower, upper = bounds(alpha, beta)
     se = math.sqrt(var / n) if n else 0.0
     half = (elo(mean + 1.96 * se) - elo(mean - 1.96 * se)) / 2 if n else 0.0
-    return '\n'.join([
+    shard_lines = [f'  stage {r["stage"]} shard {r["shard"]} ({r["runner"]}): {r["status"]}, pairs {r["pairs"]} of '
+                   f'{r["planned"] if r["planned"] is not None else "?"} planned'
+                   + (f', fastchess exit {r["fastchess_exit"]}' if r['fastchess_exit'] not in (None, '0') else '')
+                   for r in merged.get('per_shard', [])]
+    return '\n'.join(shard_lines + [
         f'Shards: {merged["shards"]} ({", ".join(merged["status"])}); pairs {n}, games {2 * n} '
         f'({merged["finished_games"]} finished, time losses {merged["time_losses"]}, abnormal {merged["abnormal"]})',
         f'Tables: {merged["meta"].get("tables") or "not recorded"} (both engines); book: '
@@ -198,7 +215,7 @@ def main(argv=None):
         with open(a.log, encoding='utf-8', errors='replace') as f:
             result = snapshot(f.read())
         result['meta'] = dict(kv.split('=', 1) for kv in a.meta)
-        result['status'] = a.status
+        result['status'] = final_status(a.status, result['pairs'], result['meta'])
         with open(a.out, 'w', encoding='utf-8') as f:
             json.dump(result, f, indent=1)
         return 0

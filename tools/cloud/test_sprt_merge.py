@@ -168,6 +168,35 @@ class MergeTests(unittest.TestCase):
         self.assertEqual((s['pairs'], s['finished_games'], s['time_losses'], s['abnormal']), (2, 4, 1, 0))
         self.assertEqual(sm.snapshot('nothing yet')['ptnml'], [0, 0, 0, 0, 0])
 
+    def test_time_losses_in_fastchess_wording(self):
+        # The reason strings of the pinned fastchess (v1.8.2-alpha, the
+        # binary in ~/fork-tools/bin, read with `strings` on 2026-10-27):
+        # "{} loses on time ({}ms overrun)" and "Engine {} loses on time by
+        # {}ms"; disconnects, stalls and illegal moves are counted as abnormal.
+        log = '\n'.join([
+            'Finished game 1 (test vs base): 0-1 {White loses on time (12ms overrun)}',
+            'Finished game 2 (base vs test): 1-0 {Black disconnects}',
+            "Finished game 3 (test vs base): 0-1 {White's connection stalls}",
+            'Finished game 4 (base vs test): 0-1 {White makes an illegal move}',
+        ])
+        s = sm.snapshot(log)
+        self.assertEqual((s['finished_games'], s['time_losses'], s['abnormal']), (4, 1, 3))
+
+    def test_a_shard_that_ends_early_is_short(self):
+        self.assertEqual(sm.final_status('done', 2, {'rounds': '50'}), 'short')
+        self.assertEqual(sm.final_status('done', 50, {'rounds': '50'}), 'done')
+        self.assertEqual(sm.final_status('interrupted', 2, {'rounds': '50'}), 'interrupted')
+        self.assertEqual(sm.final_status('failed', 50, {'rounds': '50'}), 'failed')
+
+    def test_report_lists_planned_and_played_pairs_per_shard(self):
+        a = self.shard([1, 2, 3, 2, 1], stage='0', shard='1', rounds='50', opening_start='51', runner='github')
+        b = self.shard([0, 1, 0, 1, 0], stage='0', shard='0', rounds='50', opening_start='1', runner='github',
+                       fastchess_exit='139')
+        b['status'] = 'failed'
+        text = sm.report(sm.merge([a, b]), -3, 0)
+        self.assertIn('  stage 0 shard 0 (github): failed, pairs 2 of 50 planned, fastchess exit 139\n'
+                      '  stage 0 shard 1 (github): done, pairs 9 of 50 planned\n', text)
+
     def test_pairs_count_only_when_both_games_are_done(self):
         # Concurrency finishes games out of order; game 6 is still running.
         log = '\n'.join([

@@ -25,6 +25,13 @@
 # carries the seed (*.shuffled-SEED.epd); the meta records the book's name,
 # seed and SHA-256. SIGTERM or SIGINT stops fastchess and records the counts
 # with status "interrupted".
+#
+# Final status (result.json, with fastchess's exit status as
+# meta.fastchess_exit): "done" when every planned pair finished; "short"
+# when fastchess ended normally with fewer pairs; "failed" when fastchess
+# exited non-zero (a crash) or reported a fatal error; "interrupted" when
+# stopped. The script exits non-zero for "short" and "failed" (so the job is
+# red), 0 for "done" and "interrupted" (the merge counts finished pairs).
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 hash=16 stage=0 conc=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 )) base_opts="" test_opts="" checkpoint="" syzygy="" meta=()
@@ -90,13 +97,25 @@ while kill -0 "$fc" 2>/dev/null; do
   kill -0 "$fc" 2>/dev/null && snap running
 done
 wait "$fc" 2>/dev/null
-if [ "$stopped" = 1 ]; then snap interrupted; else snap done; fi
-python3 -c "import json,sys; r=json.load(open(sys.argv[1])); print('shard', r['meta']['shard'], r['status'], 'ptnml', r['ptnml'], 'time losses', r['time_losses'])" "$out/result.json"
-# A shard that played nothing, or whose fastchess stopped on a fatal error,
-# fails (so its job is red, not a silent empty success).
-if grep -q '^Fatal' "$log"; then grep '^Fatal' "$log" >&2; exit 1; fi
-if [ "$stopped" = 0 ] && ! grep -q '^Finished game' "$log"; then
-  echo "run_shard.sh: no game finished" >&2
-  tail -n 5 "$log" >&2
-  exit 1
+fc_status=$?
+meta+=(--meta "fastchess_exit=$fc_status")
+if [ "$stopped" = 1 ]; then
+  snap interrupted
+elif [ "$fc_status" != 0 ] || grep -q '^Fatal' "$log"; then
+  snap failed
+else
+  snap done  # becomes "short" if fewer pairs than planned finished
 fi
+status=$(python3 -c "import json,sys; r=json.load(open(sys.argv[1])); print(r['status'])" "$out/result.json")
+python3 -c "import json,sys; r=json.load(open(sys.argv[1])); print('shard', r['meta']['shard'], r['status'], 'pairs', r['pairs'], 'of', r['meta']['rounds'], 'ptnml', r['ptnml'], 'time losses', r['time_losses'], 'fastchess exit', r['meta']['fastchess_exit'])" "$out/result.json"
+# A shard that crashed, played nothing or fell short fails (so its job is
+# red, not a silent partial success).
+case $status in
+  failed | short)
+    grep '^Fatal' "$log" >&2
+    grep -q '^Finished game' "$log" || echo "run_shard.sh: no game finished" >&2
+    echo "run_shard.sh: shard $status (fastchess exit status $fc_status)" >&2
+    tail -n 5 "$log" >&2
+    exit 1
+    ;;
+esac

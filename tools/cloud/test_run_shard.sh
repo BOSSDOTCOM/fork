@@ -29,7 +29,8 @@ chmod +x "$tmp/bin/python3"
 export PATH="$tmp/bin:$PATH"
 
 # Fake fastchess: FAKE_FC=full (every pair asked for), crash (2 pairs, then
-# SIGSEGV) or fail (2 pairs, then exit 1). Arguments go to $tmp/args.
+# SIGSEGV), fail (2 pairs, then exit 1) or short (2 pairs, exit 0).
+# Arguments go to $tmp/args.
 cat >"$tmp/fastchess" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" >"$FAKE_ARGS"
@@ -89,6 +90,21 @@ check "book: seed from a shuffled book's name" test "$(meta seeded book_seed)" =
 
 # U-4: the opening range is recorded at both ends (shard 1 of 4, 5 rounds).
 check "openings 6-10" test "$(meta notables opening_start)-$(meta notables opening_end)" = 6-10
+
+# U-9: fastchess's exit status decides; fewer pairs than planned is short.
+status_of() {  # out dir -> result.json status
+  "$py" -c 'import json, sys; print(json.load(open(sys.argv[1]))["status"])' "$tmp/$1/result.json"
+}
+check "all pairs: done" test "$(status_of notables)" = done
+check "all pairs: fastchess exit 0 recorded" test "$(meta notables fastchess_exit)" = 0
+FAKE_FC=crash shard crash
+check "crash: exit 1" test "$status" = 1
+check "crash: status failed" test "$(status_of crash)" = failed
+check "crash: fastchess exit 139 (SIGSEGV) recorded" test "$(meta crash fastchess_exit)" = 139
+FAKE_FC=fail shard fail
+check "fastchess error: exit 1, failed" test "$status-$(status_of fail)" = 1-failed
+FAKE_FC=short shard short
+check "too few pairs: exit 1, short" test "$status-$(status_of short)" = 1-short
 
 echo "${failures} failure(s)"
 exit $((failures > 0))
