@@ -1,6 +1,7 @@
 #include "search/trans_table.hpp"
 
 #include <algorithm>
+#include "core/splitmix.hpp"
 #include "tune/params.hpp"
 
 namespace forkeng {
@@ -20,15 +21,16 @@ std::uint32_t key_check_of(Key key) { return static_cast<std::uint32_t>(key) & K
 // stored check is the key's 24 bits XORed with it, so an entry whose words
 // come from two different writes (a torn write under Phase 6's shared
 // table) fails the check and reads as a miss, unless the 24-bit digests
-// collide (Fork's own design, DESIGN.md §5.2 deliverable 3).
+// collide (Fork's own design, DESIGN.md §5.2 deliverable 3). Mixed by
+// splitmix64's output function (Vigna's reference, core/splitmix.hpp;
+// audit-1 T-6: it replaced a multiplier of unrecorded origin).
 std::uint32_t data_digest(std::uint16_t move, std::int16_t score, std::int16_t eval, std::uint8_t depth,
                           std::uint8_t flags, std::uint8_t age) {
   std::uint64_t x = move | std::uint64_t{static_cast<std::uint16_t>(score)} << 16 |
                     std::uint64_t{static_cast<std::uint16_t>(eval)} << 32 | std::uint64_t{depth} << 48 |
                     std::uint64_t{flags} << 56;
   x ^= std::uint64_t{age} * 0x9E3779B97F4A7C15ULL;
-  x *= 0xD6E8FEB86659FD93ULL;
-  return static_cast<std::uint32_t>(x >> 40) & KeyCheckMask;
+  return static_cast<std::uint32_t>(splitmix_finalize(x) >> 40) & KeyCheckMask;
 }
 
 // The check an entry would carry for `key` given its own data.
