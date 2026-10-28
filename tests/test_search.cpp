@@ -621,4 +621,24 @@ TEST_CASE("search", "an iteration that would not finish before the hard limit is
   const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &listener);
   CHECK_EQ(r.depth, 3);
 }
+
+// Audit-1 Q-1: the soft limit ends the iterations. The time_budget cases test
+// plan_time's numbers only, and the case above binds through the hard-limit
+// rule (soft = hard); removing the soft check passed every test (mutant M57).
+// The search's clock counts from go_received, set a second in the past here,
+// so the soft limit has passed when depth 1 finishes and no second iteration
+// starts, however far away the hard limit (an hour) is. Load cannot make it
+// fail: a slower machine only makes the elapsed time larger.
+TEST_CASE("search", "a search stops iterating once its soft limit has passed") {
+  TestHash store;
+  auto searcher = std::make_unique<Searcher>(store.table);
+  const std::atomic<bool> stop{false};
+  Position pos;
+  SearchQuota limits;
+  limits.depth = 12;
+  limits.soft_ms = 1;
+  limits.hard_ms = 3'600'000;
+  limits.go_received = std::chrono::steady_clock::now() - std::chrono::milliseconds{1000};
+  CHECK_EQ(searcher->deliberate(pos, limits, stop, nullptr, nullptr).depth, 1);
+}
 }  // namespace forkeng::test

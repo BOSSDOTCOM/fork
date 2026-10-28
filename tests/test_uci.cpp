@@ -27,6 +27,7 @@
 #include "engine_process.hpp"
 #include "harness.hpp"
 #include "search/hash_memory.hpp"
+#include "search/time_budget.hpp"
 #include "suite.hpp"
 #include "uci/tokens.hpp"
 #include "uci_message.hpp"
@@ -110,6 +111,14 @@ struct Gui {
 
 // The bestmove's move text, if it names one.
 std::string bestmove_of(const std::string& line) { return line.substr(std::string_view("bestmove ").size()); }
+
+// The number after ` key ` in an info line, if there is one.
+std::optional<std::int64_t> info_number(const std::string& line, std::string_view key) {
+  const std::string pattern = " " + std::string(key) + " ";
+  const std::size_t at = line.find(pattern);
+  if (at == std::string::npos) return std::nullopt;
+  return parse_int64(split_tokens(std::string_view(line).substr(at + pattern.size()))[0].text);
+}
 
 }  // namespace
 
@@ -381,6 +390,60 @@ TEST_CASE("uci_protocol", "go arguments: every argument, combined, negative and 
   g.send("stop");
   CHECK(g.next("bestmove").has_value());
   CHECK_EQ(g.count("info string go: no legal move in searchmoves", mark), 1);
+  g.check_transcript();
+  g.quit();
+}
+
+// Audit-1 Q-1: a clock go ends between its soft and hard limits. Two bounds
+// that load cannot break falsely (a slow machine only makes times larger):
+// - bestmove comes no sooner than the soft limit after go was sent: before
+//   it, every finished iteration starts another (depth, mate and nodes do
+//   not limit this go);
+// - no iteration starts after the soft limit: every depth reported, except
+//   the deepest, was first reported (as an exact line; the engine's own
+//   clock, counted from go) before the soft limit. Without the soft check
+//   (mutant M57) iterations go on until the hard-limit rule (3/5 of the hard
+//   limit) or the hard limit itself.
+// The limits are plan_time's for White's clock and the default Move Overhead
+// of 100 ms: 2900 ms over 30 moves, soft 96 ms, hard 4 x 96 = 384 ms.
+TEST_CASE("uci_protocol", "a clock go: bestmove not before the soft limit, no iteration started after it") {
+  Gui g;
+  g.send("position startpos");
+  CHECK(g.sync());
+  ClockInput clock;
+  clock.remaining_ms = 3000;
+  clock.overhead_ms = 100;
+  const TimeBudget plan = plan_time(clock);
+  CHECK_EQ(plan.soft_ms, 96);
+  CHECK_EQ(plan.hard_ms, 384);
+  const std::size_t mark = g.engine.line_count();
+  const Clock::time_point sent = Clock::now();
+  g.send("go wtime 3000 btime 3000");
+  const std::optional<std::size_t> best = g.engine.wait_prefix("bestmove", mark, Patience);
+  CHECK(best.has_value());
+  if (best) {
+    const std::vector<OutputLine> all = g.engine.lines();
+    const double ms = std::chrono::duration<double, std::milli>(all[*best].at - sent).count();
+    CHECK_MSG(ms >= static_cast<double>(plan.soft_ms), "bestmove after " << ms << " ms");
+    std::vector<std::pair<std::int64_t, std::int64_t>>
+        first_seen;  // (depth, time) of each depth's first exact line
+    for (std::size_t i = mark; i < *best; ++i) {
+      const std::string& line = all[i].text;
+      if (!starts_with(line, "info depth ") || line.find("bound") != std::string::npos) continue;
+      const std::optional<std::int64_t> depth = info_number(line, "depth"), time = info_number(line, "time");
+      CHECK_MSG(depth && time, line);
+      if (!depth || !time) continue;
+      if (std::ranges::none_of(first_seen, [&](const auto& seen) { return seen.first == *depth; }))
+        first_seen.emplace_back(*depth, *time);
+    }
+    CHECK(!first_seen.empty());
+    std::int64_t deepest = 0;
+    for (const auto& [depth, time] : first_seen) deepest = std::max(deepest, depth);
+    for (const auto& [depth, time] : first_seen)
+      CHECK_MSG(depth == deepest || time < plan.soft_ms, "depth " << depth << " finished at " << time
+                                                                  << " ms, past the soft limit, and depth "
+                                                                  << deepest << " still started");
+  }
   g.check_transcript();
   g.quit();
 }
