@@ -11,13 +11,22 @@ budget per move (deterministic), ended by the rules, by a decided score
 from ply 12 on, every 6th ply, out of check and with at least 8 pieces, at
 most 10 per game; each is labeled with `go depth D` from a fresh state
 (ucinewgame, Hash 64). Labels with a mate score or |score| > 1500 cp are
-dropped (the score-error proxy needs centipawn labels). One position in six
-goes to the holdout split, never used during evolution.
+dropped (the score-error proxy needs centipawn labels). One game in six
+goes to the holdout split with all of its positions, never used during
+evolution: the split is drawn per game, so no held-out position shares a
+game with an evolve position (audit-1 U-13).
 
-Output: JSON Lines, one position per line: id, fen (the full FEN the label
-was searched from, clocks included), bm (the label's best move, UCI), san
-(the same in SAN), ce (its score in cp, side to move), depth, nodes, split
-("evolve" or "holdout"). The loop's own scripts read it without python-chess.
+Batches made before that change (the committed positions.jsonl: ids p…
+and b01p… to b10p…) drew the split per position and record no game; they
+keep their split as committed (an audit measured the within-game
+correlation of the gains as negligible, -0.022 to +0.015). The per-game
+split applies to batches generated from now on.
+
+Output: JSON Lines, one position per line: id, game (the batch's id prefix,
+"g" and the game's number), fen (the full FEN the label was searched from,
+clocks included), bm (the label's best move, UCI), san (the same in SAN),
+ce (its score in cp, side to move), depth, nodes, split ("evolve" or
+"holdout"). The loop's own scripts read it without python-chess.
 
     .venv/Scripts/python.exe -I tools/evolve/positions.py OUT.jsonl --engine FORK \\
         [--games 150] [--play-nodes 20000] [--label-depth 15] [--seed 20261027]
@@ -29,7 +38,22 @@ import subprocess
 import sys
 import time
 
-import chess
+try:
+    import chess
+except ImportError:  # the split rule (assign_splits) and its tests need no python-chess
+    chess = None
+
+HoldoutShare = 6  # one game in six is held out
+
+
+def assign_splits(games, rng):
+    """{game: "evolve" or "holdout"} for each distinct game in `games`, in order of first
+    appearance: one draw per game, so every position of a game lands in the same split."""
+    splits = {}
+    for game in games:
+        if game not in splits:
+            splits[game] = 'holdout' if rng.randrange(HoldoutShare) == 0 else 'evolve'
+    return splits
 
 
 class Uci:
@@ -137,11 +161,13 @@ def main():
     ap.add_argument('--seed', type=int, default=20261027)
     ap.add_argument('--id-prefix', default='p', help='id prefix, so later batches can be appended (default p)')
     a = ap.parse_args()
+    if chess is None:
+        sys.exit('positions.py needs python-chess (the .venv has it)')
     rng = random.Random(a.seed)
     t0 = time.time()
 
     player = Uci(a.engine, {'Hash': 16})
-    fens, seen = [], set()
+    fens, seen = [], set()  # (fen, game id)
     for g in range(a.games):
         player.send('ucinewgame')
         player.ready()
@@ -150,23 +176,24 @@ def main():
             key = ' '.join(fen.split()[:4])
             if key not in seen:
                 seen.add(key)
-                fens.append(fen)
+                fens.append((fen, f'{a.id_prefix}g{g:04d}'))
         print(f'game {g + 1}/{a.games}: {len(game.move_stack)} plies, {len(fens)} positions '
               f'({time.time() - t0:.0f} s)', flush=True)
     player.close()
+    splits = assign_splits([game for _, game in fens], rng)
 
     labeler = Uci(a.engine, {'Hash': 64})
     kept = 0
     with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
-        for i, fen in enumerate(fens):
+        for i, (fen, game) in enumerate(fens):
             board = chess.Board(fen)
             labeler.send('ucinewgame')
             labeler.ready()
             move, score, depth, nodes = labeler.search(board, f'depth {a.label_depth}')
-            split = 'holdout' if rng.randrange(6) == 0 else 'evolve'
             if score and score[0] == 'cp' and abs(score[1]) <= 1500 and depth >= a.label_depth:
-                f.write(json.dumps({'id': f'{a.id_prefix}{i:05d}', 'fen': fen, 'bm': move.uci(), 'san': board.san(move),
-                                    'ce': score[1], 'depth': depth, 'nodes': nodes, 'split': split}) + '\n')
+                f.write(json.dumps({'id': f'{a.id_prefix}{i:05d}', 'game': game, 'fen': fen, 'bm': move.uci(),
+                                    'san': board.san(move), 'ce': score[1], 'depth': depth, 'nodes': nodes,
+                                    'split': splits[game]}) + '\n')
                 kept += 1
             if (i + 1) % 50 == 0:
                 print(f'labeled {i + 1}/{len(fens)}, kept {kept} ({time.time() - t0:.0f} s)', flush=True)

@@ -552,6 +552,33 @@ class ProxyTests(unittest.TestCase):
             os.unlink(f.name)
 
 
+class PositionSplitTests(unittest.TestCase):
+    """Audit-1 U-13: the held-out split is drawn per game, for batches made from now on."""
+
+    def test_every_position_of_a_game_shares_its_split(self):
+        import random
+        import positions
+        games = [f'b11pg{g:04d}' for g in range(600) for _ in range(10)]  # 10 positions per game
+        splits = positions.assign_splits(games, random.Random(20261111))
+        self.assertEqual(len(splits), 600)
+        self.assertEqual(splits, positions.assign_splits(games, random.Random(20261111)))  # seeded
+        held = sum(s == 'holdout' for s in splits.values())
+        self.assertTrue(70 <= held <= 130, held)  # one game in six: 100 expected
+        rows = [{'game': g, 'split': splits[g]} for g in games]
+        by_game = {}
+        for r in rows:
+            by_game.setdefault(r['game'], set()).add(r['split'])
+        self.assertTrue(all(len(s) == 1 for s in by_game.values()))
+
+    def test_the_committed_set_is_unchanged(self):
+        """The committed batches keep their per-position split (no game field): 4,794 evolve, 940 held out."""
+        path = Path(__file__).resolve().parent / 'positions.jsonl'
+        rows = proxies.load_positions(path, None)
+        self.assertEqual((len(proxies.load_positions(path)), len(proxies.load_positions(path, 'holdout'))),
+                         (4794, 940))
+        self.assertFalse(any('game' in r for r in rows))
+
+
 class PopulationTests(unittest.TestCase):
     def setUp(self):
         self.pop = population.Population(':memory:')
