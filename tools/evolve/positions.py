@@ -36,7 +36,8 @@ class Uci:
     """A minimal UCI driver: one engine process, lines read synchronously."""
 
     def __init__(self, path, options):
-        self.p = subprocess.Popen([path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        self.p = subprocess.Popen([path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, encoding='utf-8',
+                                  bufsize=1)
         self.send('uci')
         self.until('uciok')
         for name, value in options.items():
@@ -156,7 +157,7 @@ def main():
 
     labeler = Uci(a.engine, {'Hash': 64})
     kept = 0
-    with open(a.out, 'w', newline='\n') as f:
+    with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
         for i, fen in enumerate(fens):
             board = chess.Board(fen)
             labeler.send('ucinewgame')

@@ -250,6 +250,9 @@ class FakeRunner:
         self.calls.append(('suites',))
         return self.suites_ok, 'suite log'
 
+    def compiler_version(self):
+        return 'fake c++ 1.0'
+
     def bench(self, engine):
         self.calls.append(('bench',))
         return self.benches.pop(0)
@@ -351,6 +354,65 @@ class GateTests(unittest.TestCase):
                           'determinism')):
             result, _ = self.gate(**kw)
             self.assertEqual((result.passed, result.step), (False, step), kw)
+
+
+class RunnerTests(unittest.TestCase):
+    """The real Runner's commands and text handling, with its processes recorded, not run."""
+
+    def recording(self, **kw):
+        runner = gate.Runner('.', '.', **kw)
+        runner.commands = []
+
+        def run(cmd, cwd=None, timeout=None):
+            runner.commands.append(cmd)
+            return 0, '100% tests passed, 0 tests failed out of 6\n'
+        runner.run = run
+        return runner
+
+    def test_suites_must_all_run(self):
+        """A renamed or dropped suite fails the gate (audit-1 U-11): ctest exits 0 when nothing matches."""
+        self.assertTrue(gate.suites_passed(0, 'x\n100% tests passed, 0 tests failed out of 6\n'))
+        self.assertFalse(gate.suites_passed(0, 'No tests were found!!!\n'))
+        self.assertFalse(gate.suites_passed(0, '100% tests passed, 0 tests failed out of 5\n'))
+        self.assertFalse(gate.suites_passed(8, 'No tests were found!!!\n'))
+        self.assertFalse(gate.suites_passed(8, '83% tests passed, 1 tests failed out of 6\n'))
+        runner = self.recording()
+        self.assertTrue(runner.suites(Path('b'))[0])
+        cmd = runner.commands[0]
+        self.assertIn('--no-tests=error', cmd)
+        self.assertEqual(cmd[-1], '^(search|pruning|params|tt|ordering|no_alloc)$')
+
+    def test_the_compiler_is_named(self):
+        """The gate builds with the configured compiler, not CMake's default (audit-1 U-17)."""
+        runner = self.recording(compiler='g++-12')
+        runner.configure(Path('t'))
+        self.assertIn('-DCMAKE_CXX_COMPILER=g++-12', runner.commands[0])
+        cfg = json.loads((Path(__file__).resolve().parent / 'config.json').read_text(encoding='utf-8'))
+        self.assertTrue(cfg['compiler'])
+
+    def test_prompt_states_the_region_signature(self):
+        """The prompt shows the function as the header declares it: constexpr (audit-1 U-17)."""
+        repo = Path(__file__).resolve().parents[2]
+        header = (repo / PATH).read_text(encoding='utf-8')
+        context = (Path(__file__).resolve().parent / 'prompts' / 'context.md').read_text(encoding='utf-8')
+        signature = next(line for line in header.split('\n') if 'lmr_correction(const LmrContext& c)' in line)
+        self.assertEqual(signature, 'constexpr int lmr_correction(const LmrContext& c) {')
+        self.assertIn(signature, context.split('\n'))
+
+    def test_text_is_utf8_whatever_the_locale(self):
+        """The region file holds non-ASCII text (a section sign); the runner reads, writes and decodes
+        UTF-8 explicitly, not in the locale's encoding (audit-1 S-6)."""
+        runner = gate.Runner(Path(__file__).resolve().parents[2], '.')
+        code, out = runner.run([sys.executable, '-c',
+                                "import sys; sys.stdout.buffer.write('\\u00a7 \\u2212'.encode())"])
+        self.assertEqual((code, out), (0, '§ −'))
+        self.assertIn('§5.2', runner.read('HEAD', PATH))
+        with tempfile.TemporaryDirectory() as tmp:
+            runner.work = Path(tmp)
+            text = '// § −\n' + runner.read('HEAD', PATH)
+            tree = runner.tree('HEAD', {PATH: text}, 't')
+            self.assertEqual((tree / PATH).read_bytes(), text.encode('utf-8'))
+            self.assertEqual(runner.read_file(tree, PATH), text)
 
 
 def find_compiler():
@@ -598,7 +660,7 @@ class OrchestratorTests(unittest.TestCase):
         labels = Path(tmp) / 'p.jsonl'
         labels.write_text(json.dumps({'id': 0, 'fen': 'x', 'bm': 'e2e4', 'ce': 0, 'split': 'evolve'}) + '\n' +
                           json.dumps({'id': 1, 'fen': 'y', 'bm': 'e2e4', 'ce': 0, 'split': 'holdout'}) + '\n')
-        cfg = json.loads((Path(__file__).resolve().parent / 'config.json').read_text())
+        cfg = json.loads((Path(__file__).resolve().parent / 'config.json').read_text(encoding='utf-8'))
         import re
         self.assertIsNone(re.search(r'/Users/(?!Public/)', json.dumps(cfg)))  # names no user
         self.assertNotIn('/home/', json.dumps(cfg))

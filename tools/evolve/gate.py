@@ -330,7 +330,8 @@ class Runner:
         self.compiler = compiler
 
     def run(self, cmd, cwd=None, timeout=None):
-        p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout or self.timeout)
+        p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding='utf-8', errors='replace',
+                           timeout=timeout or self.timeout)
         return p.returncode, p.stdout + p.stderr
 
     def tree(self, commit, files, name):
@@ -342,7 +343,7 @@ class Runner:
         archive = subprocess.run(['git', '-C', str(self.repo), 'archive', commit], capture_output=True, check=True)
         subprocess.run(['tar', '-x', '-C', str(dest)], input=archive.stdout, check=True)
         for path, text in files.items():
-            (dest / path).write_text(text, newline='\n')
+            (dest / path).write_text(text, encoding='utf-8', newline='\n')
         if self.test_cache and self.test_cache.is_dir():
             shutil.copytree(self.test_cache, dest / '.cache')
         return dest
@@ -382,7 +383,7 @@ class Runner:
 
     def read(self, commit, path):
         return subprocess.run(['git', '-C', str(self.repo), 'show', f'{commit}:{path}'], capture_output=True,
-                              text=True, check=True).stdout
+                              text=True, encoding='utf-8', check=True).stdout
 
     def preprocess(self, build, units):
         """{unit: `-E` output} for the C++ units of a configured build (relative
@@ -420,9 +421,14 @@ class Runner:
         return lines
 
     def suites(self, build):
-        code, log = self.run(['ctest', '--test-dir', str(build), '--output-on-failure', '-R',
-                              '^(search|pruning|params|tt|ordering|no_alloc)$'])
-        return code == 0, log[-3000:]
+        code, log = self.run(['ctest', '--test-dir', str(build), '--output-on-failure', '--no-tests=error', '-R',
+                              '^(' + '|'.join(SUITES) + ')$'])
+        return suites_passed(code, log), log[-3000:]
+
+    def compiler_version(self):
+        """The first line of the configured compiler's --version (CMake's default when none is set)."""
+        code, out = self.run([self.compiler or 'c++', '--version'], timeout=60)
+        return out.split('\n')[0].strip() if code == 0 else f'unknown ({self.compiler or "c++"})'
 
     def bench(self, engine):
         code, out = self.run([str(engine), 'bench'], timeout=600)
@@ -449,6 +455,20 @@ def preprocess_command(entry):
             continue
         out.append(a)
     return out + ['-E']
+
+
+# The correctness suites the gate runs (ctest names). A rename or a dropped
+# suite must fail the gate, not shrink it: ctest runs with --no-tests=error
+# (exit 8 when nothing matches; checked on CMake 3.22.1, TCEC's) and the
+# count it reports must equal this list's.
+SUITES = ('search', 'pruning', 'params', 'tt', 'ordering', 'no_alloc')
+_CTEST_TOTAL = re.compile(r'tests passed, \d+ tests? failed out of (\d+)')
+
+
+def suites_passed(code, log):
+    """True if ctest exited 0 and ran exactly the gate's suites, no fewer."""
+    totals = _CTEST_TOTAL.findall(log)
+    return code == 0 and bool(totals) and int(totals[-1]) == len(SUITES)
 
 
 def perft_count(output):

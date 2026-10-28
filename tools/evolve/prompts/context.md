@@ -56,10 +56,15 @@ struct LmrContext {
                     // line starts with, 0 to 1000 (0 in the first iteration)
 };
 
-int lmr_correction(const LmrContext& c) {
+constexpr int lmr_correction(const LmrContext& c) {
   // YOUR BODY HERE
 }
 ```
+
+The function is `constexpr` (C++20) and must compile as such with GCC 11
+and Clang 16 to 19: call only `constexpr` functions (no library math, no
+I/O), and declare no `static` or `thread_local` variables. Write plain
+integer code: locals, `if`, `?:`, arithmetic and bounded loops.
 
 The search reduces a late quiet move (not in check, not a capture or
 promotion) by `base + correction * strength / 64` plies, where `strength`

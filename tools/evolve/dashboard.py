@@ -68,7 +68,8 @@ def render(run_dir, mirror=None):
     run = Path(run_dir)
     db = sqlite3.connect(str(run / 'population.sqlite'))
     try:
-        page = _page(db, _json((run / 'state.json').read_text()) if (run / 'state.json').exists() else {})
+        state = run / 'state.json'
+        page = _page(db, _json(state.read_text(encoding='utf-8')) if state.exists() else {})
     finally:
         db.close()
     tmp = run / 'dashboard.html.tmp'

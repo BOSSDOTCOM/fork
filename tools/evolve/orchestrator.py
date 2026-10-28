@@ -18,6 +18,15 @@ generations, or a gate-failure rate that says something is broken.
 Runs in WSL (Linux builds, fastchess). A live loop needs --live; the pilot's
 preparation only runs --dry-run with stub agents.
 
+The gate builds with the config's `compiler` (passed to CMake as
+CMAKE_CXX_COMPILER; its --version goes into the baseline event). For TCEC's
+compilers, run the loop in the WSL distro Ubuntu-22.04
+(scripts/tcec-toolchain-setup.sh): there "g++" is GCC 11.4, the strictest
+of the four on the constexpr region (a body calling a non-constexpr function
+compiles with Clang and fails with GCC: audit-1 U-17), and "clang++-19" is
+the compiler update.sh picks first. The hand-off's full check
+(scripts/check.sh full) builds all four before any SPRT.
+
     python3 tools/evolve/orchestrator.py --config tools/evolve/config.json --run-dir ~/fork-evolve/run1 \\
         (--dry-run | --live) [--generations G]
 """
@@ -110,7 +119,7 @@ class Loop:
                  'elapsed_seconds': self.budget.clock() - self.budget.start, 'islands': self.cfg['islands'],
                  'explorer_protected': self.cfg['explorer_protected']}
         try:
-            (self.run_dir / 'state.json').write_text(json.dumps(state, indent=1))
+            (self.run_dir / 'state.json').write_text(json.dumps(state, indent=1), encoding='utf-8')
             mirror = self.cfg.get('dashboard_mirror')
             dashboard.render(self.run_dir, mirror and str(Path(mirror) / self.run_dir.name))
         except Exception as e:  # noqa: BLE001 (the dashboard must never stop a run)
@@ -365,7 +374,8 @@ class Loop:
             k in line for k in ('reduc', 'cutoff', 'LMR'))) or self.statistics
         self.best_fitness, self.best_generation = fitness, 0
         self.status = 'running'
-        self.say(0, 'baseline', {'id': cid, 'fitness': fitness, 'perft': self.baseline_perft})
+        self.say(0, 'baseline', {'id': cid, 'fitness': fitness, 'perft': self.baseline_perft,
+                                 'compiler': self.runner.compiler_version()})
 
     def close(self):
         self.log_file.close()
@@ -421,7 +431,7 @@ def main():
     mode.add_argument('--dry-run', action='store_true', help='stub agents (no tokens)')
     mode.add_argument('--live', action='store_true', help='real agents through claude -p: the evolution loop')
     a = ap.parse_args()
-    cfg = json.loads(Path(a.config).read_text())
+    cfg = json.loads(Path(a.config).read_text(encoding='utf-8'))
     # Paths: the repository is the one holding this script unless given;
     # relative paths are from it, and ~ is the user's home (the config is
     # committed, so it names no user).
@@ -440,7 +450,10 @@ def main():
         # different funnel outcome; every rejected proposal is gated too.
         cfg.update(islands=['proposer_aggressive', 'proposer_cautious', 'proposer_stats', 'explorer'],
                    per_island=1, critic_audit_share=1.0)
-    runner = gate.Runner(cfg['repo'], run_dir / 'work', jobs=cfg.get('jobs', 4), test_cache=cfg.get('test_cache'))
+    # The gate's compiler is named, never CMake's default: a candidate's
+    # verdict must not depend on what `c++` happens to be (audit-1 U-17).
+    runner = gate.Runner(cfg['repo'], run_dir / 'work', jobs=cfg.get('jobs', 4), test_cache=cfg.get('test_cache'),
+                         compiler=cfg['compiler'])
     loop = Loop(cfg, run_dir, agent, runner)
     reason = loop.run(a.generations or cfg['generations'])
     print(f'stopped: {reason}; budget used {loop.budget.used}; run log {run_dir / "run.log"}')

@@ -51,8 +51,8 @@ def run_match(fastchess, candidate, baseline, book, games, tc, concurrency, out_
            '-openings', f'file={book}', 'format=epd', 'order=random', '-srand', '20261027',
            '-rounds', str(games // 2), '-repeat', '-concurrency', str(concurrency),
            '-pgnout', f'file={out / "match.pgn"}']
-    p = subprocess.run(cmd, cwd=out, capture_output=True, text=True)
-    (out / 'match.log').write_text(p.stdout + p.stderr)
+    p = subprocess.run(cmd, cwd=out, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    (out / 'match.log').write_text(p.stdout + p.stderr, encoding='utf-8')
     return parse(p.stdout)
 
 
@@ -60,7 +60,7 @@ def hand_off(out_dir, cid, region_file, patch, base_commit):
     """Writes the survivor's patch and the SPRT commands; returns the commands file."""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    (out / f'candidate-{cid}.patch').write_text(patch)
+    (out / f'candidate-{cid}.patch').write_text(patch, encoding='utf-8', newline='')
     name = f'evolve-{cid}'
     text = f"""# Candidate {cid}: SPRT hand-off (ideas.md idea 23; not run by the loop)
 # 1. The originality-checker screens the region's constants and structure.
@@ -72,5 +72,5 @@ tools/sprt.sh {name} {base_commit} <commit of step 2> 0 3 8+0.08
 tools/sprt.sh {name}-ltc {base_commit} <commit of step 2> 0 3 40+0.4 64
 """
     path = out / f'candidate-{cid}-sprt.txt'
-    path.write_text(text)
+    path.write_text(text, encoding='utf-8')
     return path
