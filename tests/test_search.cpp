@@ -713,6 +713,18 @@ TEST_CASE("time_budget", "a go's limits: the side to move's clock and increment,
   for (const auto& [args, mate] :
        {std::pair<const char*, int>{"mate 0", 0}, {"mate -3", 0}, {"mate 2", 2}, {"mate 1000", MaxPly}})
     CHECK_MSG(quota(args, White, 100).mate_moves == mate, args << ": " << quota(args, White, 100).mate_moves);
+  // Audit-1 R-4: go mate N searches at most the 2N - 1 plies a mate in N
+  // needs (at least 1), and a smaller depth limit still applies.
+  for (const auto& [args, depth] : {std::pair<const char*, int>{"mate 1", 1},
+                                    {"mate 2", 3},
+                                    {"mate 7", 13},
+                                    {"mate 0", 1},
+                                    {"mate -3", 1},
+                                    {"mate 1000", MaxPly - 1},
+                                    {"mate 99999999999999999999", MaxPly - 1},
+                                    {"mate 5 depth 4", 4},
+                                    {"depth 20 mate 5", 9}})
+    CHECK_MSG(quota(args, White, 100).depth == depth, args << ": depth " << quota(args, White, 100).depth);
 }
 
 // Deliverable 8, Milestone A's time loss: at 2+0.02 under full load the

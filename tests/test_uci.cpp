@@ -540,6 +540,37 @@ TEST_CASE("uci_protocol", "go arguments: every argument, combined, negative and 
   g.quit();
 }
 
+// Audit-1 R-4: go mate N with no mate in N (and mate 0) used to run towards
+// depth 249 and never answer. Each now answers with a legal move, searched
+// to the 2N - 1 plies a mate in N needs; a mate in 2 that exists is still
+// reported as such (tests/test_search.cpp has the same position).
+TEST_CASE("uci_protocol", "go mate N answers after 2N - 1 plies, mate or not") {
+  Gui g;
+  for (const char* go : {"go mate 1", "go mate 3", "go mate 0", "go mate -2"}) {
+    g.send("position startpos moves e2e4 e7e5");
+    const std::size_t mark = g.cursor;
+    g.send(go);
+    const std::optional<std::string> best = g.next("bestmove");
+    CHECK_MSG(best.has_value(), go << ": no bestmove");
+    std::int64_t deepest = 0;
+    for (const std::string& line : g.texts(mark))
+      if (starts_with(line, "info depth "))
+        deepest = std::max(deepest, info_number(line, "depth").value_or(0));
+    const std::int64_t bound = std::string_view(go) == "go mate 3" ? 5 : 1;
+    CHECK_MSG(deepest >= 1 && deepest <= bound, go << ": depth " << deepest);
+  }
+  g.send("position fen k7/8/2K5/8/8/8/8/7R w - - 0 1");
+  const std::size_t mark = g.cursor;
+  g.send("go mate 2");
+  CHECK(g.next("bestmove").has_value());
+  CHECK(std::ranges::any_of(g.texts(mark), [](const std::string& line) {
+    return starts_with(line, "info depth ") && line.find(" score mate 2 ") != std::string::npos;
+  }));
+  CHECK(g.sync());
+  g.check_transcript();
+  g.quit();
+}
+
 // Audit-1 Q-1: a clock go ends between its soft and hard limits. Two bounds
 // that load cannot break falsely (a slow machine only makes times larger):
 // - bestmove comes no sooner than the soft limit after go was sent: before

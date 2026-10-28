@@ -516,7 +516,16 @@ SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhea
   SearchQuota l;
   if (go.depth) l.depth = static_cast<int>(std::clamp<std::int64_t>(*go.depth, 1, MaxPly - 1));
   if (go.nodes) l.nodes = static_cast<std::uint64_t>(std::max<std::int64_t>(*go.nodes, 1));
-  if (go.mate && *go.mate > 0) l.mate_moves = static_cast<int>(std::min<std::int64_t>(*go.mate, MaxPly));
+  if (go.mate) {
+    // A mate in N moves is N moves of the side to move and N - 1 replies:
+    // 2N - 1 plies, the depth at which a full-width search finds it. The
+    // search goes no deeper and plays its best move, so a `go mate N` with
+    // no mate in N still answers (audit-1 R-4; owner, 2026-10-28); `mate 0`
+    // or less searches one ply.
+    const std::int64_t moves = std::min<std::int64_t>(*go.mate, MaxPly);
+    l.depth = std::min(l.depth, static_cast<int>(std::clamp<std::int64_t>(2 * moves - 1, 1, MaxPly - 1)));
+    if (moves > 0) l.mate_moves = static_cast<int>(moves);
+  }
   for (Move m : go.restrict_to) l.restrict_to.add(m);
   if (!go.infinite) {
     ClockInput clock;
