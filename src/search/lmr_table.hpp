@@ -92,15 +92,15 @@ struct LmrContext {
   // Added 2026-10-27 (the owner: new information for the loop to use). Each
   // is built from inline, side-effect-free code, so a rule that does not
   // read it costs nothing.
-  int piece;          // the moved piece: 0 pawn, 1 knight, 2 bishop, 3 rook, 4 queen, 5 king
-  bool threatened;    // the opponent attacked the moved piece's square before the move
-  bool attacks;       // from its new square it attacks an enemy piece other than a pawn or the king
-  int quiet_moves;    // quiet moves generated at this node
-  int phase;          // game phase, 0 (no pieces) to 24 (all of them), from non-pawn material
-  int entry_bound;    // this node's TT entry: 0 none, 1 upper bound, 2 lower bound, 3 exact
-  int entry_depth;    // its depth in plies, -1 without an entry
-  int score_trend;    // the root score's change between the last two finished iterations, cp, in [-1000, 1000]
-  int branch_share;   // per mille of the last finished iteration's nodes spent under this line's root move
+  int piece;         // the moved piece: 0 pawn, 1 knight, 2 bishop, 3 rook, 4 queen, 5 king
+  bool threatened;   // the opponent attacked the moved piece's square before the move
+  bool attacks;      // from its new square it attacks an enemy piece other than a pawn or the king
+  int quiet_moves;   // quiet moves generated at this node
+  int phase;         // game phase, 0 (no pieces) to 24 (all of them), from non-pawn material
+  int entry_bound;   // this node's TT entry: 0 none, 1 upper bound, 2 lower bound, 3 exact
+  int entry_depth;   // its depth in plies, -1 without an entry
+  int score_trend;   // the root score's change between the last two finished iterations, cp, in [-1000, 1000]
+  int branch_share;  // per mille of the last finished iteration's nodes spent under this line's root move
 };
 
 constexpr int lmr_correction(const LmrContext& c) {

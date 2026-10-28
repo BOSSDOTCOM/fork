@@ -1081,7 +1081,8 @@ TEST_CASE("uci_options", "Clear Hash with a Hash change in the same batch still 
   g.send("setoption name Clear Hash");
   CHECK(g.sync());
   const std::string got = nodes_of_depth_6(g);
-  CHECK_MSG(got == want && want != "?", "fresh engine " << want << " nodes, after Hash change + Clear Hash " << got);
+  CHECK_MSG(got == want && want != "?",
+            "fresh engine " << want << " nodes, after Hash change + Clear Hash " << got);
   g.quit();
 }
 

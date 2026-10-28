@@ -8,8 +8,8 @@ namespace {
 // One loop per piece type, so each slider lookup is resolved at compile time
 // (measured: legal generation 8-9% faster on clang and gcc, DESIGN.md 6).
 template <PieceType Pt, bool Captures, bool Quiets>
-void add_piece_moves(const Position& pos, MoveList& list, Color us, Square own_king, Bitboard occ, Bitboard pinned,
-                     Bitboard capture_target, Bitboard quiet_target) {
+void add_piece_moves(const Position& pos, MoveList& list, Color us, Square own_king, Bitboard occ,
+                     Bitboard pinned, Bitboard capture_target, Bitboard quiet_target) {
   for (Bitboard pcs = pos.pieces(us, Pt); pcs;) {
     Square from = pop_lsb(pcs);
     Bitboard a;
@@ -62,10 +62,13 @@ void fill_moves(const Position& pos, MoveList& list) {
   const Bitboard quiet_target = ~occ & target;
   const Bitboard pinned = pos.pinned();
 
-  add_piece_moves<Knight, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target, quiet_target);
-  add_piece_moves<Bishop, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target, quiet_target);
+  add_piece_moves<Knight, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target,
+                                            quiet_target);
+  add_piece_moves<Bishop, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target,
+                                            quiet_target);
   add_piece_moves<Rook, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target, quiet_target);
-  add_piece_moves<Queen, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target, quiet_target);
+  add_piece_moves<Queen, Captures, Quiets>(pos, list, us, own_king, occ, pinned, capture_target,
+                                           quiet_target);
 
   const int up = forward(us);
   const Square ep = pos.ep_target();
