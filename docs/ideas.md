@@ -712,3 +712,53 @@ tuned by SPSA.
   position's own entry).
 - **earliest phase:** Phase 6.
 - **status:** inconclusive (Phase 3); off by default
+
+## 31. Repetition of a position from before the root
+
+- **type:** ELO (behind a switch)
+- **idea:** inside the search a position that occurred once before scores
+  as a draw (`repetition_count() >= 2`, searcher.cpp), also when that
+  earlier occurrence is in the game before the root, a deliberate choice
+  of deliverable 2 ("one repetition is enough inside the search"). But a
+  position reached once in the game is not a draw yet: the opponent can
+  deviate. So a losing Fork may steer for a "draw" the opponent declines,
+  and a winning Fork avoids lines through old positions. Variant: three
+  occurrences when the earlier ones are before the root, two when both are
+  in the tree (audit-1, A1 suspicion 1).
+- **phase:** tier 2, or Phase 7 (tournament behaviour).
+- **metric:** SPRT [0, 3] at STC and LTC.
+- **runtime cost:** none measurable (the same history walk).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 32. Pruning guards for tablebase losses
+
+- **type:** ELO (behind a switch)
+- **idea:** late move pruning, futility and SEE pruning stop once the best
+  score so far is a mate loss (`best <= -(MateScore - MaxPly)`), but go on
+  when it is a tablebase loss, so at shallow non-PV nodes they may prune
+  the quiet move that saves the draw. Guard with `is_tb_or_mate(best)`
+  instead (audit-1, A1 suspicion 6). Heuristic: it matters only in table
+  positions, which TCEC adjudicates.
+- **phase:** with the next table work (Phase 8's 7-man measurements).
+- **metric:** a table conversion and defence suite first, then SPRT
+  [0, 3] with tables on both sides.
+- **runtime cost:** none (one comparison).
+- **earliest phase:** Phase 3.
+- **status:** untested (measure first)
+
+## 33. A shallow exact result replacing a deeper entry
+
+- **type:** ELO (behind a switch)
+- **idea:** `TransTable::deposit` keeps the position's own entry only
+  against shallower inexact results, so an exact result from a shallow
+  search (a quiescence PV, depth 0) overwrites a depth-N entry of the same
+  search. That follows deliverable 3's spec, but may lose information.
+  Variant: never replace a deeper entry of the same search (audit-1, A1
+  suspicion 5).
+- **phase:** tier 2, before the TT tests of Phase 6.
+- **metric:** first a FORK_SEARCH_STATS counter of exact writes whose own
+  entry was deeper (how often it happens); if frequent, SPRT [0, 3].
+- **runtime cost:** none (one comparison per store).
+- **earliest phase:** Phase 3.
+- **status:** untested (measure first)
