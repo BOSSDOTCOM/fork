@@ -4,9 +4,9 @@
 #include <memory>
 #include <vector>
 
+#include "core/material.hpp"
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
-#include "eval/bootstrap_eval.hpp"
 #include "harness.hpp"
 #include "search/lmr_table.hpp"
 #include "search/quiet_history.hpp"
@@ -321,8 +321,8 @@ TEST_CASE("pruning", "LMR context: the history read is the mover's, after the mo
   }
 }
 
-// The game phase the LMR context reads (Fork's evaluation's own, moved inline
-// into bootstrap_eval.hpp unchanged): python-chess counts 24, 0 and 6 here.
+// The game phase the LMR context reads (Fork's evaluation's own, now in
+// core/material.hpp unchanged): python-chess counts 24, 0 and 6 here.
 TEST_CASE("pruning", "game phase: all pieces 24, a pawn ending 0, rook and queen 6") {
   Position pos;
   CHECK(pos.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));

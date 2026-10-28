@@ -8,7 +8,7 @@
 // - Bands, from the top: a mate found at ply n scores MateScore - n, in
 //   [MateScore - MaxPly, MateScore]; a tablebase win at ply n scores
 //   TbWinScore - n, in [TbWinScore - MaxPly, TbWinScore]; evaluations stay
-//   within [-EvalLimit, EvalLimit] (eval/eval.hpp), far below both. Losses
+//   within [-EvalLimit, EvalLimit] (eval/eval_scale.hpp), far below both. Losses
 //   mirror wins. The bands do not overlap.
 // - Draws score 0 (contempt is Phase 7).
 // - Values are Fork's own choice, not taken from any engine.
@@ -17,7 +17,7 @@
 #include <algorithm>
 #include <cstdlib>
 
-#include "eval/eval.hpp"
+#include "eval/eval_scale.hpp"
 
 namespace forkeng {
 

@@ -9,10 +9,6 @@ namespace forkeng {
 
 namespace {
 
-// The conventional 1/3/3/5/9 pawn-unit scale, in centipawns (source in
-// docs/ORIGINALITY.md, "Bootstrap evaluation").
-constexpr int MaterialCp[6] = {100, 300, 300, 500, 900, 0};
-
 // Rings around the four centre squares: 0 for d4/e4/d5/e5 up to 3 on the edge.
 int centre_distance(Square s) {
   const int f = file_of(s), r = rank_of(s);
@@ -58,8 +54,6 @@ int mop_up(const Position& pos, Color strong) {
 }
 
 }  // namespace
-
-int piece_value(PieceType t) { return MaterialCp[t]; }
 
 int bootstrap_eval(const Position& pos) {
   if (pos.insufficient_material()) return 0;

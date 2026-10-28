@@ -2,8 +2,8 @@
 
 #include <utility>
 
+#include "core/material.hpp"
 #include "core/movegen.hpp"
-#include "eval/bootstrap_eval.hpp"
 #include "search/see.hpp"
 
 namespace forkeng {
@@ -15,7 +15,7 @@ namespace {
 // score, (queen + queen promotion) * 8, every score fits the int16 score
 // array (review claim (e), 2026-10-26: the array was int, 1,292 bytes).
 constexpr int EvasionCaptureBase = HistoryMax + 1;
-constexpr int LargestVictimAttackerScore = (900 + 900) * 8;
+constexpr int LargestVictimAttackerScore = (piece_value(Queen) + piece_value(Queen)) * 8;
 static_assert(EvasionCaptureBase + LargestVictimAttackerScore <= INT16_MAX);
 static_assert(-HistoryMax >= INT16_MIN);
 

@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cstdlib>
 
+#include "core/material.hpp"
 #include "core/movegen.hpp"
-#include "eval/bootstrap_eval.hpp"
 #include "eval/eval.hpp"
 #include "search/endgame_tables.hpp"
 #include "search/lmr_table.hpp"
