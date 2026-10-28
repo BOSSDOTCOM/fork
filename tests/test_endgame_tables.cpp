@@ -76,6 +76,28 @@ TEST_CASE("tables", "no tables: an empty path, a missing directory, an empty dir
   CHECK(!probe_table_wdl(at(BlackLoses)).has_value());
 }
 
+// Audit-1, R-1: Fathom's tb_init counts a separator at the end of the path as
+// one more, empty, directory and then reads past its copy of the string
+// looking for it (a heap-buffer-overflow under ASan in the clang-debug build).
+TEST_CASE("tables", "empty directories in the path (a trailing separator, or only one) are ignored") {
+#ifdef _WIN32
+  const std::string separator = ";";
+#else
+  const std::string separator = ":";
+#endif
+  for (const std::string& path : {separator, separator + separator}) {
+    CHECK_MSG(load_endgame_tables(path).find("no tables") != std::string::npos, "path '" << path << "'");
+    CHECK_EQ(endgame_table_pieces(), 0);
+  }
+  if (seven_man_present()) {
+    for (const std::string& path : {seven_man_dir() + separator, separator + seven_man_dir() + separator}) {
+      CHECK_MSG(load_endgame_tables(path).find("7 pieces") != std::string::npos, "path '" << path << "'");
+      CHECK_EQ(endgame_table_pieces(), 7);
+    }
+  }
+  load_endgame_tables("");
+}
+
 TEST_CASE("tables", "7 pieces: the largest count comes from the files, and the probes answer") {
   if (!seven_man_present())
     SKIP("the KPPPPPvK pair is missing from " << seven_man_dir() << " (CMake downloads it)");

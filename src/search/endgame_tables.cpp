@@ -68,7 +68,24 @@ Move legal_move_for(const MoveList& legal, TbMove tm) {
 }  // namespace
 
 std::string load_endgame_tables(const std::string& path) {
-  tb_init(path.c_str());  // re-initializes; an empty path unloads every table
+  // Empty directories (a separator at either end, or two in a row) are
+  // dropped first: tb_init counts a trailing one as one more directory and
+  // reads past its copy of the string looking for it (audit-1, R-1).
+#ifdef _WIN32
+  constexpr char Separator = ';';
+#else
+  constexpr char Separator = ':';
+#endif
+  std::string dirs;
+  for (std::size_t from = 0; from <= path.size();) {
+    const std::size_t to = std::min(path.find(Separator, from), path.size());
+    if (to > from) {
+      if (!dirs.empty()) dirs += Separator;
+      dirs.append(path, from, to - from);
+    }
+    from = to + 1;
+  }
+  tb_init(dirs.c_str());  // re-initializes; an empty path unloads every table
   if (TB_LARGEST == 0) {
     root_results.reset();
     return path.empty() ? "Syzygy: no tables" : "Syzygy: no tables found in " + path;
