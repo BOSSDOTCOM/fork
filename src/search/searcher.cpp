@@ -15,6 +15,37 @@
 
 namespace forkeng {
 
+Searcher::Searcher(TransTable& tt) : tt_(tt) {
+#if defined(FORK_EVAL_NNUE)
+  net_ = &embedded_net();  // read now, so no search ever allocates for it
+#endif
+}
+
+[[gnu::always_inline]] inline void Searcher::play(int ply, Move m) {
+#if defined(FORK_EVAL_NNUE)
+  features_.push_move(ply, *pos_, m);
+#endif
+  (void)ply;
+  pos_->make(m);
+}
+
+[[gnu::always_inline]] inline void Searcher::play_null(int ply) {
+#if defined(FORK_EVAL_NNUE)
+  features_.push_null(ply);
+#endif
+  (void)ply;
+  pos_->make_null();
+}
+
+[[gnu::always_inline]] inline int Searcher::eval_at(int ply) {
+#if defined(FORK_EVAL_NNUE)
+  return features_.evaluate(*net_, ply, *pos_);
+#else
+  (void)ply;
+  return static_eval(*pos_);
+#endif
+}
+
 namespace {
 
 // Fork's own values, each justified in DESIGN.md §5.2 ("Search constants").
@@ -108,8 +139,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // insufficient material, and the 50-move rule unless this move is mate.
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
-  if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
-  if (depth <= 0) return static_eval(pos);  // only with the quiescence search switched off
+  if (ply >= MaxPly) return in_check ? 0 : eval_at(ply);
+  if (depth <= 0) return eval_at(ply);  // only with the quiescence search switched off
 
   if (switches.use_mate_distance) {
     alpha = std::max(alpha, mated_score(ply));
@@ -158,7 +189,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
   }
 
-  f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : static_eval(pos);
+  f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
   // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
   // score from a real search corrects the static estimate in the direction
   // its bound proves (a lower bound above it raises it, an upper bound below
@@ -189,7 +220,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     const int surplus_plies = std::min((prune_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
     const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)
-    pos.make_null();
+    play_null(ply);
     frames_[ply + 1].after_null = true;
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
     frames_[ply + 1].after_null = false;
@@ -258,7 +289,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       }
     }
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
-    pos.make(m);
+    play(ply, m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
     counters.futile_quiets_searched += futile_node && quiet;
@@ -392,7 +423,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
-  if (ply >= MaxPly) return in_check ? 0 : static_eval(pos);
+  if (ply >= MaxPly) return in_check ? 0 : eval_at(ply);
 
   const Key key = pos.key();
   TtHit hit{};
@@ -407,7 +438,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   if (in_check) {
     f.static_eval = ScoreNone;
   } else {
-    f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : static_eval(pos);  // as in negamax
+    f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
     best = f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)
@@ -426,7 +457,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   for (Move m; !(m = f.selector.take_next()).is_none();) {
     ++moves_searched;
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
-    pos.make(m);
+    play(ply, m);
     FORK_STAT(++counters.makes);
     const int score = -quiesce<OnPv>(-beta, -alpha, ply + 1);
     pos.unmake(m);
@@ -462,7 +493,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     const Move m = root_moves_[i].move;
     branch_share_ = root_moves_[i].share;
     const std::uint64_t nodes_before = nodes_;
-    pos.make(m);
+    play(0, m);
     int score;
     if (i == 0 || !switches.use_pvs) {
       score = -negamax<true>(-beta, -alpha, depth - 1, 1);
@@ -517,6 +548,9 @@ int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::a
   max_ply_reached_ = 0;
   stopped_ = false;
   frames_[0].after_null = false;
+#if defined(FORK_EVAL_NNUE)
+  features_.reset(*net_, pos);
+#endif
   return negamax<false>(beta - 1, beta, depth, 0);
 }
 
@@ -533,6 +567,9 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   stopped_ = false;
   unresolved_fail_high_ = NoMove;
 
+#if defined(FORK_EVAL_NNUE)
+  features_.reset(*net_, pos);
+#endif
   tt_.advance_age();
   tt_.set_age_blend(switches.tt_age_blend);
   tt_.set_keep_exact(switches.tt_keep_exact);

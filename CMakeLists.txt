@@ -164,10 +164,22 @@ target_compile_options(fathom PRIVATE -w)
 
 # The evaluator is chosen at build time (owner, 2026-10-24; DESIGN.md §5.2):
 # no runtime interface and no indirect call in the search.
-set(FORK_EVALUATOR "bootstrap" CACHE STRING "Static evaluation built into Fork: bootstrap")
-set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap)
-if(NOT FORK_EVALUATOR STREQUAL "bootstrap")
-  message(FATAL_ERROR "FORK_EVALUATOR must be bootstrap (Phase 3)")
+# The bootstrap evaluation is the default until B0 passes its SPRT (DESIGN.md
+# §5.3, deliverable 7); nnue compiles the network file FORK_NET into Fork.
+set(FORK_EVALUATOR "bootstrap" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
+set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/b0.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+if(FORK_EVALUATOR STREQUAL "nnue")
+  if(NOT EXISTS ${FORK_NET})
+    message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")
+  endif()
+  set(fork_net_source ${CMAKE_BINARY_DIR}/generated/embedded_net_data.cpp)
+  add_custom_command(OUTPUT ${fork_net_source}
+    COMMAND ${CMAKE_COMMAND} -DNET=${FORK_NET} -DOUT=${fork_net_source} -P ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    DEPENDS ${FORK_NET} ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    COMMENT "Embedding the network ${FORK_NET}")
+elseif(NOT FORK_EVALUATOR STREQUAL "bootstrap")
+  message(FATAL_ERROR "FORK_EVALUATOR must be bootstrap or nnue")
 endif()
 
 # Evaluation and search (src/eval/, src/search/ except the hash memory).
@@ -182,7 +194,13 @@ add_library(forksearch STATIC
   src/search/time_budget.cpp
   src/search/trans_table.cpp
   src/tune/params.cpp)
-target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
+if(FORK_EVALUATOR STREQUAL "nnue")
+  target_sources(forksearch PRIVATE src/eval/nnue/embedded_net.cpp ${fork_net_source})
+  target_compile_definitions(forksearch PUBLIC FORK_EVAL_NNUE)
+  target_link_libraries(forksearch PUBLIC forknnue)
+else()
+  target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
+endif()
 find_package(Threads REQUIRED)
 target_link_libraries(forksearch PUBLIC forkcore fathom Threads::Threads PRIVATE fork_pgo)
 if(FORK_SEARCH_STATS)
@@ -531,10 +549,22 @@ if(FORK_BUILD_TESTS)
 
   # The search bench (`fork bench`) and, so move generation stays tied across
   # builds too, the Phase 1 perft workload (`fork perftbench`).
-  add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}
-    -DFORK=$<TARGET_FILE:fork> -DCMD=bench
-    -DREF=${CMAKE_SOURCE_DIR}/tests/bench.ref
-    -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+  # The search bench's reference belongs to the evaluator: tests/bench.ref for
+  # the bootstrap evaluation, tests/bench-<net>.ref for a network once one is
+  # adopted (DESIGN.md §5.3, deliverable 7). An nnue build of a test network
+  # with no reference has no bench_parity test.
+  get_filename_component(fork_net_name ${FORK_NET} NAME_WE)
+  if(FORK_EVALUATOR STREQUAL "bootstrap")
+    set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench.ref)
+  else()
+    set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench-${fork_net_name}.ref)
+  endif()
+  if(EXISTS ${fork_bench_ref})
+    add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}
+      -DFORK=$<TARGET_FILE:fork> -DCMD=bench
+      -DREF=${fork_bench_ref}
+      -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+  endif()
   add_test(NAME perft_bench_parity COMMAND ${CMAKE_COMMAND}
     -DFORK=$<TARGET_FILE:fork> -DCMD=perftbench
     -DREF=${CMAKE_SOURCE_DIR}/tests/perft_bench.ref
@@ -546,6 +576,12 @@ if(FORK_BUILD_TESTS)
   # DESIGN.md §5.3, deliverable 6). Needs no Python, so every preset runs it.
   add_test(NAME nnue_netcheck COMMAND fork netcheck ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.parity
                                                      ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.fnet)
+  # An nnue build checks its own embedded network against the parity file
+  # named after it (tests/nnue/<net>.parity), the gate games run behind.
+  if(FORK_EVALUATOR STREQUAL "nnue")
+    get_filename_component(fork_net_stem ${FORK_NET} NAME_WE)
+    add_test(NAME nnue_netcheck_embedded COMMAND fork netcheck ${CMAKE_SOURCE_DIR}/tests/nnue/${fork_net_stem}.parity)
+  endif()
 
   # `fork version` says whether this build has LTO (audit-1, P-6).
   add_test(NAME version_lto COMMAND fork version)

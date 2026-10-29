@@ -23,6 +23,7 @@
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
 #include "core/position.hpp"
+#include "eval/eval.hpp"
 #include "eval/nnue/accumulator.hpp"
 #include "eval/nnue/net_file.hpp"
 #include "search/endgame_tables.hpp"
@@ -129,7 +130,8 @@ int usage() {
                "       fork perftbench   (the Phase 1 perft workload)\n"
                "       fork difftest   (stdin: fen|moves, see tools/difftest)\n"
                "       fork wdl <syzygy path>   (stdin: one fen per line; tools/check_syzygy.py)\n"
-               "       fork netcheck <parity file> <net file>   (the network parity gate)\n"
+               "       fork netcheck <parity file> [net file]   (the network parity gate; without a\n"
+               "                                                 net file, an nnue build's own network)\n"
                "       fork version\n";
   return 2;
 }
@@ -195,19 +197,14 @@ static int wdl_dump(const std::string& path) {
   return 0;
 }
 
-// `fork netcheck PARITY NET`: the game gate of the trainer-engine parity test
-// (DESIGN.md §5.3, deliverable 6). PARITY is tools/nnue/reference.py's file: a
-// JSON header line, then "FEN | R-int" per position. Every position must
-// evaluate exactly to its R-int value with this binary's inference path.
-static int netcheck(const std::string& parity_path, const std::string& net_path) {
-  std::ifstream net_in(net_path, std::ios::binary);
-  const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(net_in)), std::istreambuf_iterator<char>());
-  auto net = std::make_unique<forkeng::NetFile>();
+// `fork netcheck PARITY [NET]`: the game gate of the trainer-engine parity
+// test (DESIGN.md §5.3, deliverable 6). PARITY is tools/nnue/reference.py's
+// file: a JSON header line, then "FEN | R-int" per position. Every position
+// must evaluate exactly to its R-int value with this binary's inference path,
+// for the net file NET, or without NET the network compiled into an
+// FORK_EVALUATOR=nnue build.
+static int netcheck(const std::string& parity_path, const forkeng::NetFile& net) {
   std::string error;
-  if (!forkeng::read_net_file(bytes, *net, error)) {
-    std::cerr << "netcheck: " << net_path << ": " << error << '\n';
-    return 1;
-  }
   std::ifstream parity(parity_path);
   std::string line;
   if (!std::getline(parity, line)) {
@@ -226,16 +223,36 @@ static int netcheck(const std::string& parity_path, const std::string& net_path)
     }
     const int expected = std::stoi(line.substr(bar + 1));
     forkeng::Accumulator acc;
-    forkeng::accumulate_board(*net, pos, acc);
-    const int got = forkeng::output_layer(*net, acc, pos.side_to_move());
+    forkeng::accumulate_board(net, pos, acc);
+    const int got = forkeng::output_layer(net, acc, pos.side_to_move());
     ++positions;
     if (got != expected) {
-      if (++mismatches <= 10) std::cerr << "netcheck: " << got << " != " << expected << " at " << pos.fen() << '\n';
+      if (++mismatches <= 10)
+        std::cerr << "netcheck: " << got << " != " << expected << " at " << pos.fen() << '\n';
     }
   }
-  std::cout << "netcheck: " << positions << " positions, " << mismatches << " mismatches (arch " << FORK_ARCH_NAME
-            << ")\n";
+  std::cout << "netcheck: " << positions << " positions, " << mismatches << " mismatches (arch "
+            << FORK_ARCH_NAME << ")\n";
   return positions > 0 && mismatches == 0 ? 0 : 1;
+}
+
+static int netcheck_main(int argc, char** argv) {
+  if (argc == 4) {
+    std::ifstream net_in(argv[3], std::ios::binary);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(net_in)),
+                                          std::istreambuf_iterator<char>());
+    auto net = std::make_unique<forkeng::NetFile>();
+    std::string error;
+    if (!forkeng::read_net_file(bytes, *net, error)) {
+      std::cerr << "netcheck: " << argv[3] << ": " << error << '\n';
+      return 1;
+    }
+    return netcheck(argv[2], *net);
+  }
+#if defined(FORK_EVAL_NNUE)
+  if (argc == 3) return netcheck(argv[2], forkeng::embedded_net());
+#endif
+  return usage();
 }
 
 static int run(int argc, char** argv) {
@@ -249,7 +266,7 @@ static int run(int argc, char** argv) {
   }
   if (cmd == "difftest") return difftest();
   if (cmd == "wdl") return argc == 3 ? wdl_dump(argv[2]) : usage();
-  if (cmd == "netcheck") return argc == 4 ? netcheck(argv[2], argv[3]) : usage();
+  if (cmd == "netcheck") return netcheck_main(argc, argv);
   if (cmd == "bench") {
     const forkeng::SearchBenchResult r = forkeng::run_search_bench();
     std::cout << "nodes " << r.nodes << '\n'

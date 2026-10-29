@@ -37,6 +37,10 @@
 #include "search/score_bounds.hpp"
 #include "search/trans_table.hpp"
 
+#if defined(FORK_EVAL_NNUE)
+#include "eval/nnue/accumulator.hpp"
+#endif
+
 namespace forkeng {
 
 struct SearchQuota {
@@ -261,7 +265,7 @@ struct SearchCounters {
 
 class Searcher {
  public:
-  explicit Searcher(TransTable& tt) : tt_(tt) {}
+  explicit Searcher(TransTable& tt);
 
   // Searches `pos` (restored on return) until a limit is reached or `stop`
   // becomes true. While `pondering` is true, time limits do not apply.
@@ -294,6 +298,15 @@ class Searcher {
   template <bool OnPv>
   int quiesce(int alpha, int beta, int ply);
   int search_root(int alpha, int beta, int depth);
+
+  // The evaluator's hooks (DESIGN.md §5.3, deliverable 5): every move and
+  // null move the search makes, and every static evaluation, go through
+  // these. With the bootstrap evaluation they are exactly make, make_null
+  // and static_eval; with the network they also keep its per-ply
+  // accumulators (FeatureStack). `ply` is the node's ply.
+  void play(int ply, Move m);
+  void play_null(int ply);
+  int eval_at(int ply);
 
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
@@ -338,6 +351,10 @@ class Searcher {
   // so the last line before bestmove names the move played.
   PrincipalLine finished_pv_;
   Move last_reported_ = NoMove;
+#if defined(FORK_EVAL_NNUE)
+  const NetFile* net_;
+  FeatureStack features_;
+#endif
 };
 
 }  // namespace forkeng

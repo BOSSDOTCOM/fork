@@ -21,6 +21,15 @@
 #include "harness.hpp"
 #include "suite.hpp"
 
+#if defined(FORK_EVAL_NNUE)
+#include <atomic>
+#include <string>
+
+#include "eval/eval.hpp"
+#include "search/hash_memory.hpp"
+#include "search/searcher.hpp"
+#endif
+
 namespace forkeng::test {
 
 namespace {
@@ -203,5 +212,37 @@ TEST_CASE("nnue", "a position and its colour mirror evaluate the same") {
   }
   CHECK(checked > 100);
 }
+
+#if defined(FORK_EVAL_NNUE)
+TEST_CASE("nnue", "searches through the evaluator hooks keep every accumulator exact") {
+  // The search makes every move through Searcher::play and evaluates through
+  // FeatureStack; in debug builds FeatureStack::evaluate checks each
+  // incremental accumulator against a refresh and stops the program on a
+  // difference, so these searches check every node they evaluate.
+  auto table = std::make_unique<TransTable>();
+  HashMemory memory;
+  std::string report;
+  if (!memory.resize(std::size_t{4} << 20, report)) SKIP("no memory for the table: " << report);
+  table->bind_memory(memory.data(), memory.bytes());
+  auto searcher = std::make_unique<Searcher>(*table);
+  const std::atomic<bool> stop{false};
+  SearchQuota limits;
+  limits.depth = Optimized ? 8 : 5;
+  std::uint64_t nodes = 0;
+  for (const auto& sp : perft_suite()) {
+    Position pos;
+    pos.set_fen(sp.fen);
+    const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+    CHECK(r.best != NoMove);
+    CHECK_EQ(pos.fen(), Position(pos).fen());
+    nodes += r.nodes;
+  }
+  CHECK(nodes > 1000);
+  // The embedded network evaluates a position the same through static_eval
+  // (from scratch) as through the search's root accumulator.
+  Position start;
+  CHECK_EQ(static_eval(start), full_eval(embedded_net(), start));
+}
+#endif
 
 }  // namespace forkeng::test
