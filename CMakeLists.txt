@@ -362,7 +362,8 @@ if(FORK_BUILD_TESTS)
     tests/test_options.cpp
     tests/test_params.cpp
     tests/test_datagen.cpp
-    tests/test_nnue.cpp)
+    tests/test_nnue.cpp
+    tests/test_bakeoff.cpp)
   target_link_libraries(fork_tests PRIVATE forkuci forkdatagen forknnue)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
@@ -489,7 +490,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue)
+                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue bakeoff)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
@@ -550,6 +551,12 @@ if(FORK_BUILD_TESTS)
       -DFORK=$<TARGET_FILE:fork> -DPYTHON=${test_python} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
       -DWORK=${CMAKE_BINARY_DIR}/nnue_parity -P ${CMAKE_SOURCE_DIR}/cmake/nnue_parity.cmake)
     set_tests_properties(nnue_parity PROPERTIES LABELS python)
+    # The bake-off candidate S-512 against its independent reference (an
+    # experiment branch: tools/nnue/reference_s512.py).
+    add_test(NAME bakeoff_parity COMMAND ${CMAKE_COMMAND} -E env FORK_BAKEOFF_PARITY_DIR=${CMAKE_BINARY_DIR}/bakeoff_parity
+      ${CMAKE_COMMAND} -DPY=${test_python} -DSRC=${CMAKE_SOURCE_DIR} -DOUT=${CMAKE_BINARY_DIR}/bakeoff_parity
+      -DTESTS=$<TARGET_FILE:fork_tests> -P ${CMAKE_SOURCE_DIR}/cmake/bakeoff_parity.cmake)
+    set_tests_properties(bakeoff_parity PROPERTIES LABELS python)
   endif()
 
   # The search bench (`fork bench`) and, so move generation stays tied across
