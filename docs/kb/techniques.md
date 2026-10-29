@@ -365,8 +365,12 @@ takes precedence over the short entries below for Phase 3 planning.
 
 ### SIMD and quantisation
 - int16 accumulator, clipped ReLU (or squared clipped ReLU, SCReLU) then
-  int8 or int16 for the next layer; QA=255, QB=64 typical in bullet-style
-  nets; Stockfish-style nets use 127 and scale 64.
+  int8 or int16 for the next layer. Scale factors are chosen from overflow
+  bounds and the integer types used (an activation scale that fits the
+  next layer's input type, an output-weight scale with headroom in int16).
+  Fork's values and their reasoning are in DESIGN.md §5.3 (QA and QB follow
+  bullet's convention, credited in ORIGINALITY.md); other engines' values
+  are deliberately not recorded here (owner, 2026-10-28).
 - AVX2 (16 int16 lanes), AVX-512 (32 lanes, more registers), VNNI for
   int8 dot products; sparse-input kernels for the first dense layer.
 - Pitfalls: int16 overflow with SCReLU (clip output weights or rearrange the
@@ -376,7 +380,7 @@ takes precedence over the short entries below for Phase 3 planning.
 
 ### Output buckets / layer stacks
 - Choose the output layer (or a whole small sub-network) by piece count,
-  e.g. 8 buckets via (pieces - 1) / 4. Cheap and a clear gain.
+  a handful of buckets over the piece count. Cheap and a clear gain.
 - Source: CPW NNUE; nnue-pytorch docs
 
 ---
@@ -402,9 +406,12 @@ takes precedence over the short entries below for Phase 3 planning.
   source describes this chain end to end.)
 
 ### WDL / score blending
-- Target = lambda * sigmoid(score / scale) + (1 - lambda) * result; scale
-  around 400 cp; nnue-pytorch reports an MSE exponent around 2.6 working
-  well. Lambda is tuned per generation.
+- Target = lambda * sigmoid(score / scale) + (1 - lambda) * result. The
+  scale maps centipawns to win probability (Fork fits its own from its
+  data, DESIGN.md §5.3); nnue-pytorch reports a loss exponent somewhat
+  above the plain squared error working well. Lambda is tuned per
+  generation. (Other engines' exact values deliberately not recorded,
+  owner 2026-10-28.)
 - Source: nnue-pytorch docs (REFERENCE ONLY)
 
 ### Rescoring

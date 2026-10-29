@@ -311,11 +311,12 @@ OFF-LIMITS as training data even when its license would allow it.
 - Core ideas (own words): keep active inputs few and slowly changing so the
   first layer can be huge yet cheap; accumulate first layer incrementally;
   run inference in integers.
-- **Feature sets:** "A" = 768 (piece x colour x square). HalfKP = 64 king
-  squares x 64 x 10 piece kinds = 40,960, no king features, full refresh on
-  king move. HalfKA adds kings. HalfKAv2 merges both kings into one
-  "king" piece slot (about 8% smaller). HalfKAv2_hm mirrors horizontally so
-  the own king is on files e-h, halving king buckets.
+- **Feature sets:** "A" = piece x colour x square. HalfKP crosses every
+  own-king square with every non-king piece on every square: no king
+  features, full refresh on king move. HalfKA adds kings. HalfKAv2 merges
+  both kings into one "king" piece slot (somewhat smaller). HalfKAv2_hm
+  mirrors horizontally so the own king is on files e-h, halving the king
+  buckets.
 - **Threat features (Full_Threats):** attacker-piece/target-piece pairs from
   each side's perspective; redundant pairs dropped (e.g. king-king, attacks
   on kings, duplicates); stored as int8, widened to int16 when accumulated;
@@ -325,17 +326,19 @@ OFF-LIMITS as training data even when its license would allow it.
 - **Factorisers:** training-only "virtual" features (e.g. piece-square
   ignoring king) that share learning across king buckets; folded into real
   weights after training so inference cost is unchanged; mostly help early.
-- **Layer stacks / output buckets:** 8 sub-networks chosen by
-  (piece_count - 1) / 4; implemented as one wide layer and gathered.
-- **Quantisation:** feature transformer int16 accumulation, clipped to
-  0..127 then int8; hidden weights int8 with scale 64 (max about 1.98);
-  powers-of-two scaling so divisions are shifts.
+- **Layer stacks / output buckets:** several sub-networks chosen by the
+  piece count; implemented as one wide layer and gathered.
+- **Quantisation:** feature transformer int16 accumulation, clipped and
+  narrowed to int8; hidden weights int8 with a power-of-two scale (which
+  bounds the largest representable weight); powers-of-two scaling so
+  divisions are shifts.
 - **SIMD:** AVX2 16 int16 lanes / 16 registers (32 on AVX-512); int8 dense
   layers via multiply-add into int32; VNNI fuses it; first dense layer is
-  sparse (about 15% non-zero) so sparse kernels pay off.
-- **Loss:** cp scores mapped to win probability with a sigmoid (scale around
-  400); lambda blends engine score target with game result; MSE-style loss
-  with exponent around 2.6 found good for Stockfish.
+  sparse (mostly zeros) so sparse kernels pay off.
+- **Loss:** cp scores mapped to win probability with a sigmoid; lambda
+  blends engine score target with game result; an MSE-style loss with an
+  exponent above 2 found good for Stockfish. (Exact values deliberately
+  not recorded, owner 2026-10-28.)
 - **For Fork:** the most complete public description of design choices;
   read it for ideas, write Fork's own trainer or use bullet (MIT).
 - Source: https://github.com/official-stockfish/nnue-pytorch/blob/master/docs/nnue.md
@@ -345,8 +348,9 @@ OFF-LIMITS as training data even when its license would allow it.
 
 ### Chess Programming Wiki: NNUE page
 - History (Nasu 2018 for Shogi, Stockfish NNUE 2020 / SF12), perspective
-  accumulators, quantisation constants commonly QA=255, QB=64, SCALE=400 (as
-  of 2024), SCReLU overflow handling, output buckets by piece count, king
+  accumulators, commonly used quantisation and output-scale constants (not
+  recorded here, owner 2026-10-28), SCReLU overflow handling, output
+  buckets by piece count, king
   input buckets (bucket crossing forces refresh), Finny tables (accumulator
   cache per king bucket, credited to Finn Eggers / Koivisto), pairwise
   multiplication, lazy updates, Lizard SCReLU SIMD trick. States bullet is
@@ -364,7 +368,7 @@ OFF-LIMITS as training data even when its license would allow it.
   drops side-to-move/halfmove/castling. Text format
   `<FEN> | <score cp, white-relative> | <result 1/0.5/0>`. bullet-utils
   shuffles/interleaves. Docs advise: start with 768 inputs and widen the
-  hidden layer (>=1024) before adding depth; do not copy Stockfish
+  hidden layer substantially before adding depth; do not copy Stockfish
   architectures without the data to support them.
 - **For Fork:** strongest candidate for Phase 4 training. Using a trainer is
   allowed by Fork's rules (it is a tool, not an engine); log version in
@@ -375,14 +379,19 @@ OFF-LIMITS as training data even when its license would allow it.
 
 ### Study of the Proper NNUE Dataset (arXiv 2412.17948, 2024-12-23)
 - Tan, Watkinson Medina. Algorithm to generate and filter "quiet" positions
-  for NNUE training; reports significant gains. Filtering details not on
-  the abstract page (**UNVERIFIED**).
+  for NNUE training; reports significant gains. Filter (resolved
+  2026-10-28 from the paper, nnue-design.md §6.5): drops positions in
+  check and positions whose static eval differs from the quiescence or
+  search score by more than a margin, and aims at a balanced eval
+  distribution. Evidence is weak for chess: a Xiangqi study with no SPRT
+  and no ablation.
 - Source: https://arxiv.org/abs/2412.17948. Verified 2026-10-23.
   Tag: **REFERENCE ONLY**.
 
 ### Lc0 transformer progress (blog 2024-02-28, Daniel Monroe)
-- T78 conv baseline vs BT1..BT4. BT4: 191.3M params, 15 layers, embedding
-  1024, FFN 1536, 32 heads, about +270 policy Elo over T78. Gains from
+- Convolutional baseline vs a series of transformer nets; the largest
+  (an order of magnitude more parameters than any NNUE) gained about +270
+  policy Elo over the convolutional baseline. Gains from
   learned attention bias (like +50% size), "smolgen" position-dependent
   attention (like +50% size for about 10% throughput), board-aware
   embedding. MoE/GLU did not help. Page later updated to point to the
