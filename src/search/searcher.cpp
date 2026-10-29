@@ -304,8 +304,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       // (audit-1: the two switches were coupled).
       const int new_depth = depth - 1;
       int reduced = new_depth;
+      // Tier 2 step 0 (KB T16's in-check term): with use_lmr_in_check, late
+      // quiet evasions are reduced like any late quiet move.
       if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet &&
-          !in_check) {
+          (!in_check || switches.use_lmr_in_check)) {
         // The table's reduction plus the evolvable correction (lmr_table.hpp;
         // 0 as committed). The move is already made here, so its mover is the
         // side not to move: its history is the mover's (mover_history).

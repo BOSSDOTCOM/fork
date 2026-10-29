@@ -85,6 +85,10 @@ struct SearchQuota {
 //   is retested with Phase 6's TT tests under large Hash and many threads.
 // - use_tables: Syzygy endgame tables, when loaded (deliverable 7):
 //   win/draw/loss probes in the search and the ranking of root moves.
+// - use_lmr_in_check: late quiet evasions get the normal reduction instead
+//   of none (tier 2 step 0, KB T16's in-check term, §3.28: Halogen #212
+//   gained by replacing the exemption with normal LMR; on by default only
+//   once its SPRT passes).
 #define FORK_SEARCH_SWITCHES(X)                    \
   X(use_tt, UseTT, true)                           \
   X(use_pvs, UsePvs, true)                         \
@@ -105,7 +109,8 @@ struct SearchQuota {
   X(use_tt_eval_refine, UseTtEvalRefine, true)     \
   X(use_forced_move_stop, UseForcedMoveStop, true) \
   X(use_tt_keep_deeper, UseTtKeepDeeper, false)    \
-  X(use_tables, UseTables, true)
+  X(use_tables, UseTables, true)                   \
+  X(use_lmr_in_check, UseLmrInCheck, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
