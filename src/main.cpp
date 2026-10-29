@@ -60,7 +60,8 @@ void print_version() {
             << "sliders " << (FORK_USE_PEXT ? "pext" : "magic") << '\n'
             << "evaluator " << FORK_EVALUATOR_NAME << '\n'
 #if defined(FORK_EVAL_NNUE)
-            << "net " << FORK_NET_NAME << '\n'
+            << "net " << FORK_NET_NAME
+            << '\n'
 #endif
 
             // For bench/ab_search.py's identity check (cmake/build_id.cmake).
@@ -136,6 +137,7 @@ int usage() {
                "       fork wdl <syzygy path>   (stdin: one fen per line; tools/check_syzygy.py)\n"
                "       fork netcheck <parity file> [net file]   (the network parity gate; without a\n"
                "                                                 net file, an nnue build's own network)\n"
+               "       fork evalfens   (stdin: one fen per line; this build's static evaluation)\n"
                "       fork version\n";
   return 2;
 }
@@ -259,6 +261,23 @@ static int netcheck_main(int argc, char** argv) {
   return usage();
 }
 
+// `fork evalfens`: for each FEN read from stdin, this build's static
+// evaluation (centipawns, side to move's view), or "invalid". An offline
+// tool (tools/nnue/exposure_pretest.py), not used by the engine.
+static int evalfens() {
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line.empty()) continue;
+    forkeng::Position pos;
+    if (!pos.set_fen(line))
+      std::cout << "invalid\n";
+    else
+      std::cout << forkeng::static_eval(pos) << '\n';
+  }
+  return 0;
+}
+
 static int run(int argc, char** argv) {
   forkeng::init();
   if (argc < 2) return uci_main();
@@ -271,6 +290,7 @@ static int run(int argc, char** argv) {
   if (cmd == "difftest") return difftest();
   if (cmd == "wdl") return argc == 3 ? wdl_dump(argv[2]) : usage();
   if (cmd == "netcheck") return netcheck_main(argc, argv);
+  if (cmd == "evalfens") return evalfens();
   if (cmd == "bench") {
     const forkeng::SearchBenchResult r = forkeng::run_search_bench();
     std::cout << "nodes " << r.nodes << '\n'

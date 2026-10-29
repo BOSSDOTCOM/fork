@@ -1,4 +1,4 @@
-# The trainer-engine parity positions (DESIGN.md ง5.3, deliverable 6), written by
+# The trainer-engine parity positions (DESIGN.md ยง5.3, deliverable 6), written by
 # tools/nnue/make_parity_positions.py --seed 20261029: the search bench positions
 # (cited in src/search/search_bench.cpp), then positions from Fork's own
 # generation-0 self-play shards.

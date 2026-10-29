@@ -84,7 +84,7 @@ def main(argv=None):
             chosen.append(fen)
     rest = [p for p in pool if p not in set(chosen)]
     chosen += rest[:max(0, a.count - len(chosen))]
-    with open(a.out, 'w', newline='\n') as f:
+    with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
         f.write('# The trainer-engine parity positions (DESIGN.md §5.3, deliverable 6), written by\n'
                 f'# tools/nnue/make_parity_positions.py --seed {a.seed}: the search bench positions\n'
                 '# (cited in src/search/search_bench.cpp), then positions from Fork\'s own\n'

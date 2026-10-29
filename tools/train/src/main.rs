@@ -14,7 +14,7 @@
 //!   fork-train check  --out DIR
 //!   fork-train dump   --data SHARD --count N
 //!   fork-train train  --data SHARD... --out DIR --scale S [--val SHARD --patience P] [options]
-//!   fork-train eval   --checkpoint DIR --epd FILE --out FILE
+//!   fork-train eval   (--checkpoint DIR | --weights weights.bin) --epd FILE --out FILE
 //!   fork-train loader --data SHARD... [--positions N]   (decoding speed, one thread)
 //!
 //! With --val, the loss on the first --val-positions (default 20,000) kept positions of a
@@ -382,8 +382,14 @@ fn main() {
             let weights = ModelWeights::new(&defn, 1);
             let device = DefaultDevice::new(a.num("--device", 0)).expect("device");
             let mut opt = AdamW::new(defn, weights, device.clone(), AdamWParams::default()).expect("optimiser");
-            let state = Path::new(a.need("--checkpoint")).join("optimiser_state");
-            opt.load_from_checkpoint(state.to_str().expect("path")).expect("load");
+            // A checkpoint folder, or (--weights) just a float weights file,
+            // as train_b0.py keeps for the best checkpoint.
+            if let Some(file) = a.get("--weights") {
+                opt.load_weights_from_file(file).expect("load weights");
+            } else {
+                let state = Path::new(a.need("--checkpoint")).join("optimiser_state");
+                opt.load_from_checkpoint(state.to_str().expect("path")).expect("load");
+            }
             let mut evaluator = ModelEvaluator::new(opt.definition(), opt.device()).expect("evaluator");
             evaluator.load_device_weights(opt.weights()).expect("weights");
             let map = mapper(&ins, 1.0, 0.0);
