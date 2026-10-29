@@ -1,0 +1,5 @@
+position fen r3k2r/pqpp1pb1/bn2pnp1/3PN3/1q2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves P3/2N2Q1p¯PPBBPPP/R6K2R`w KQkq - 5 1 move KQkq - 0 1 movesÃe1g1 e8c8
+stop
+g4P3/8/8/8/8/k7/4K3 w - - 0 1 moveq e7e4Q
+go de 1pht nmie8Qion depth 1 ntime 
+d

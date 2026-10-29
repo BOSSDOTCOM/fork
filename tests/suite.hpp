@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // The CPW perft suite (chessprogramming.org "Perft Results"): published
 // counts used as test oracles.
 #pragma once

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // bench: the fixed bench workload (see perft.hpp). Changing the positions or
 // depths changes the bench reference (tests/bench.ref).
 #include <chrono>

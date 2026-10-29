@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // position: implementation (see position.hpp for the invariants).
 #include "core/position.hpp"
 
@@ -13,7 +15,7 @@ namespace forkeng {
 namespace {
 
 constexpr std::string_view PieceChars = "PNBRQK??pnbrqk";
-constexpr Bitboard DarkSquares = 0xAA55AA55AA55AA55ULL;  // a1 is dark
+constexpr Bitboard DarkSquares = 0xAA55AA55AA55AA55ULL;              // a1 is dark
 constexpr int MaxHalfmoveClock = 10000, MaxFullmoveNumber = 100000;  // accepted in a FEN
 
 struct CastleInfo {
@@ -120,17 +122,16 @@ Bitboard Position::lone_shields(Square king, Bitboard shields, Bitboard rook_sli
   return found;
 }
 
-// Check information for the side to move, from the board alone. Pins and
-// discovered-check candidates are one computation seen from each king (CPW
-// "Discovered Check"): our pieces shielding our king from enemy sliders are
-// pinned; our pieces shielding the enemy king from our sliders can discover
-// check by moving off the line.
+// Check information for the side to move, from the board alone: the
+// checkers now; pins and discovered-check candidates on first read
+// (pinned(), discoverers()). Those are one computation seen from each king
+// (CPW "Discovered Check"): our pieces shielding our king from enemy sliders
+// are pinned; our pieces shielding the enemy king from our sliders can
+// discover check by moving off the line.
 void Position::refresh_check_info(State& s) const {
-  const Color us = side_, them = ~us;
-  const Square own_king = king_square(us), their_king = king_square(them);
-  s.checkers = attackers_to(own_king, pieces()) & pieces(them);
-  s.pinned = lone_shields(own_king, pieces(us), pieces(them, Rook, Queen), pieces(them, Bishop, Queen));
-  s.discoverers = lone_shields(their_king, pieces(us), pieces(us, Rook, Queen), pieces(us, Bishop, Queen));
+  s.checkers = attackers_to(king_square(side_), pieces()) & pieces(~side_);
+  s.pinned = ~Bitboard{0};
+  s.discoverers = ~Bitboard{0};
 }
 
 // Occupancy once the side to move has captured en passant from `from` to
@@ -162,7 +163,12 @@ State Position::compute_state() const {
   if (side_ == Black) s.key ^= zobrist::side;
   s.key ^= zobrist::castling[s.castling];
   if (s.ep != NoSquare) s.key ^= zobrist::ep_file[file_of(s.ep)];
-  refresh_check_info(s);
+  const Color us = side_, them = ~us;
+  s.checkers = attackers_to(king_square(us), pieces()) & pieces(them);
+  s.pinned =
+      lone_shields(king_square(us), pieces(us), pieces(them, Rook, Queen), pieces(them, Bishop, Queen));
+  s.discoverers =
+      lone_shields(king_square(them), pieces(us), pieces(us, Rook, Queen), pieces(us, Bishop, Queen));
   return s;
 }
 
@@ -496,7 +502,8 @@ bool Position::gives_check(Move m) const {
     const auto [king_to, rook_to] = castle_landing(from, to);
     Bitboard occ = (pieces() ^ bb(from) ^ bb(to)) | bb(king_to) | bb(rook_to);
     Bitboard rooks = (pieces(us, Rook, Queen) ^ bb(to)) | bb(rook_to);
-    return (rook_attacks(their_king, occ) & rooks) || (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen));
+    return (rook_attacks(their_king, occ) & rooks) ||
+           (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen));
   }
 
   // Discovered check: the moving piece was the only piece between one of our
@@ -521,6 +528,11 @@ bool Position::gives_check(Move m) const {
            (bishop_attacks(their_king, occ) & pieces(us, Bishop, Queen));
   }
   return false;
+}
+
+Key Position::predicted_null_key() const {
+  const State& s = state();
+  return s.key ^ zobrist::side ^ (s.ep != NoSquare ? zobrist::ep_file[file_of(s.ep)] : Key{0});
 }
 
 Key Position::predicted_key(Move m) const {
@@ -664,6 +676,12 @@ Position Position::mirrored() const {
 }
 
 bool Position::same_state(const Position& o) const {
+  // Settle the lazily computed fields first, so that whether a field was
+  // read does not count as a difference.
+  pinned();
+  discoverers();
+  o.pinned();
+  o.discoverers();
   return std::equal(std::begin(board_), std::end(board_), std::begin(o.board_)) &&
          std::equal(std::begin(by_type_), std::end(by_type_), std::begin(o.by_type_)) &&
          std::equal(std::begin(by_color_), std::end(by_color_), std::begin(o.by_color_)) &&

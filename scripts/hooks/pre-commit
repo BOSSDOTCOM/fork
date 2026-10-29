@@ -1,28 +1,59 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Git pre-commit hook (installed with: git config core.hooksPath scripts/hooks).
-# Runs the same full check as the Claude Code Stop hook when the commit
-# touches code, so nothing broken can be committed from any tool.
+# Runs the quick check (scripts/check.sh quick: one clang-release build, the
+# core suites with bench parity and no_alloc) when the commit touches code.
+# The full matrix (every preset on Linux and Windows, the sanitizers, TCEC's
+# compilers, the slow suites) runs in GitHub CI on every push to main and
+# audit-1 and on every pull request (owner, 2026-10-28: the local full check
+# ran this 15 GB machine out of memory); scripts/check.sh full stays
+# available on demand.
 #
-# The check runs on the working tree. Stashing unstaged changes keeps it
-# honest: what is tested is exactly what is being committed.
+# What is tested is exactly what is being committed: the index (the tree
+# `git write-tree` gives, so `commit -a` and `commit <paths>` are covered),
+# checked out into its own worktree, build/precommit-tree. Untracked files
+# and unstaged changes are neither tested nor touched: no stash, so the
+# working tree, and the stash stack that every worktree and session shares,
+# stay as they are. The copy keeps its build folders between commits, and
+# git rewrites only the files that changed, so builds stay incremental. It
+# shares the main tree's check lock (one check at a time).
+#
+# "Touches code" means a staged path under scripts/code-paths.txt, the list
+# check.sh's fingerprint uses too.
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)"
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
 
-code='^(src/|tests/|bench/|fuzz/|cmake/|tools/magic_seeds\.cpp|tools/hash_timing\.cpp|CMakeLists\.txt|CMakePresets\.json|scripts/(check|env|uci-smoke)\.sh)'
-if ! git diff --cached --name-only | grep -qE "$code"; then
+# The list as staged (a commit that edits it is judged by its new version).
+mapfile -t paths < <(git show :scripts/code-paths.txt 2>/dev/null | sed -e 's/#.*//' -e 's/[[:space:]]*$//' | grep .)
+[ "${#paths[@]}" -gt 0 ] || { echo "pre-commit: scripts/code-paths.txt is missing or empty" >&2; exit 1; }
+if [ -z "$(git diff --cached --name-only -- "${paths[@]}")" ]; then
   exit 0  # docs/config-only commit
 fi
 
-stashed=0
-if ! git diff --quiet; then
-  git stash push --keep-index --quiet -m "pre-commit: unstaged changes" && stashed=1
+tree=$(git write-tree) || { echo "pre-commit: cannot write the index as a tree" >&2; exit 1; }
+wt=$root/build/precommit-tree
+# Git exports GIT_INDEX_FILE (and may export GIT_DIR) to hooks: the copy
+# must use its own index, never the commit's.
+copy() { env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE -u GIT_PREFIX "$@"; }
+# A usable copy is a worktree whose root is $wt itself (not a plain folder
+# inside this checkout, nor one whose worktree entry was pruned).
+if ! [ -e "$wt/.git" ] || ! cdup=$(copy git -C "$wt" rev-parse --show-cdup 2>/dev/null) || [ -n "$cdup" ]; then
+  rm -rf "$wt"
+  copy git worktree prune
+  copy git worktree add --quiet --detach "$wt" HEAD >/dev/null 2>&1 ||
+    copy git worktree add --quiet --detach "$wt" >/dev/null ||
+    { echo "pre-commit: cannot create the check copy $wt" >&2; exit 1; }
 fi
-scripts/check.sh full
+# The commit's tree, exactly: changed files rewritten, deleted ones removed,
+# untracked leftovers cleaned (ignored ones, the builds, kept).
+copy git -C "$wt" read-tree --reset -u "$tree" && copy git -C "$wt" clean -fdq ||
+  { echo "pre-commit: cannot check out the commit's tree in $wt" >&2; exit 1; }
+
+(cd "$wt" && copy env FORK_CHECK_LOCK="$root/build/.check.lock" FORK_CHECK_DIR_NAME=fork-check-precommit \
+  bash scripts/check.sh quick)
 status=$?
-if [ "$stashed" = 1 ]; then
-  git stash pop --quiet
-fi
 if [ $status -ne 0 ]; then
-  echo "pre-commit: checks failed, commit blocked (scripts/check.sh full)" >&2
+  echo "pre-commit: checks failed, commit blocked (scripts/check.sh quick on the staged tree in $wt)" >&2
 fi
 exit $status

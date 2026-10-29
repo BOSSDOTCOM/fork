@@ -1,12 +1,16 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Fork's entry point. Without arguments it speaks UCI on stdin/stdout
 // (src/uci/session.hpp); with a subcommand it runs that tool: perft, divide,
-// bench, version, difftest.
+// bench (the search bench), perftbench, version, difftest, wdl (endgame-table
+// results for FENs on stdin, for tools/check_syzygy.py).
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <exception>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,8 +19,13 @@
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
 #include "core/position.hpp"
+#include "search/endgame_tables.hpp"
+#include "search/search_bench.hpp"
 #include "uci/output.hpp"
 #include "uci/session.hpp"
+
+// Generated at build time: the variant label and git commit of this build.
+#include "build_id.hpp"
 
 #ifdef _WIN32
 #include <fcntl.h>
@@ -40,7 +49,11 @@ void print_version() {
             << "compiler " << compiler_name() << '\n'
             << "arch " << FORK_ARCH_NAME << '\n'
             << "build " << FORK_BUILD_TYPE << '\n'
-            << "sliders " << (FORK_USE_PEXT ? "pext" : "magic") << '\n';
+            << "lto " << (FORK_LTO ? "on" : "off") << '\n'
+            << "sliders " << (FORK_USE_PEXT ? "pext" : "magic")
+            << '\n'
+            // For bench/ab_search.py's identity check (cmake/build_id.cmake).
+            << "variant " FORK_BUILD_VARIANT " | commit " FORK_BUILD_COMMIT " |\n";
 }
 
 // One line per ply for differential testing against an independent
@@ -106,8 +119,10 @@ std::string hex16(std::uint64_t v) {
 int usage() {
   std::cerr << "usage: fork perft <depth> [fen]\n"
                "       fork divide <depth> [fen]\n"
-               "       fork bench\n"
+               "       fork bench        (the search bench)\n"
+               "       fork perftbench   (the Phase 1 perft workload)\n"
                "       fork difftest   (stdin: fen|moves, see tools/difftest)\n"
+               "       fork wdl <syzygy path>   (stdin: one fen per line; tools/check_syzygy.py)\n"
                "       fork version\n";
   return 2;
 }
@@ -148,6 +163,31 @@ static int uci_main() {
   return session.run(stdin);
 }
 
+// `fork wdl PATH`: loads the endgame tables in PATH and prints, for each FEN
+// read from stdin, the win/draw/loss result for the side to move (-2 loss, -1
+// blessed loss, 0 draw, 1 cursed win, 2 win) or "none" when the tables cannot
+// answer; "invalid" for a FEN Fork rejects. Deliverable 7's comparison with
+// an independent prober (tools/check_syzygy.py).
+static int wdl_dump(const std::string& path) {
+  std::cerr << forkeng::load_endgame_tables(path) << '\n';
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line.empty()) continue;
+    forkeng::Position pos;
+    if (!pos.set_fen(line)) {
+      std::cout << "invalid\n";
+      continue;
+    }
+    const std::optional<forkeng::TableWdl> wdl = forkeng::probe_table_wdl(pos);
+    if (wdl)
+      std::cout << static_cast<int>(*wdl) << '\n';
+    else
+      std::cout << "none\n";
+  }
+  return 0;
+}
+
 static int run(int argc, char** argv) {
   forkeng::init();
   if (argc < 2) return uci_main();
@@ -158,7 +198,16 @@ static int run(int argc, char** argv) {
     return 0;
   }
   if (cmd == "difftest") return difftest();
+  if (cmd == "wdl") return argc == 3 ? wdl_dump(argv[2]) : usage();
   if (cmd == "bench") {
+    const forkeng::SearchBenchResult r = forkeng::run_search_bench();
+    std::cout << "nodes " << r.nodes << '\n'
+              << "signature " << hex16(r.signature) << '\n'
+              << "nps "
+              << static_cast<std::uint64_t>(static_cast<double>(r.nodes) / std::max(r.seconds, 1e-9)) << '\n';
+    return 0;
+  }
+  if (cmd == "perftbench") {
     forkeng::BenchResult r = forkeng::bench();
     std::cout << "nodes " << r.nodes << '\n'
               << "signature " << hex16(r.signature) << '\n'

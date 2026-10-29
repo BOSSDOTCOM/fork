@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // perft: move path enumeration and the fixed bench workload.
 //
 // Purpose: perft/divide for move generator verification, and bench(), the

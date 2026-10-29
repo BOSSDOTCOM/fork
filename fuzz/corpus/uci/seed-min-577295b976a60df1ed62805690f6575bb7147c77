@@ -1,0 +1,18 @@
+position fen r3k2r/p1ppqpb1/rn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infinite searchmoves a4a3 b2b3
+isržždy
+stop
+go perftr movesPPP/R1K2R w KQkq - 5 1 moves e1g1 e8cñ
+go infinite searchmition fen r3k2r/p1ppqpb1/rn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infinite searchmoves a4a3 b2b3
+isržždy
+stop
+go perftr movesPPP/R1K2R w KQkq - 5 1 moves e1g1 e8cñ
+go infinite searchmoves a2a3 b2b3
+isržždy
+stop
+go perftr movestogo 3 wtime -5  1 noves a2a3 b2b3
+isržždy
+stop
+go perftr movestogo 3 wtime -5  1 nodes n r3k2r/pmovetlme 1
+d

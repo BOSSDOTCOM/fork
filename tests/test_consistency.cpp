@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Walks perft trees and checks internal invariants at every node against
 // independent (slow, obvious) oracles.
 #include <algorithm>
@@ -42,9 +44,16 @@ Bitboard shields_by_removal(const Position& pos, Color king_side, Color shield_s
 }
 
 void check_state(const Position& pos, const std::string& fen) {
+  // pinned and discoverers are computed on first read (audit-1, P-2): until
+  // then each holds all ones; every other field is always current.
   const State& s = pos.state();
   const State fresh = pos.compute_state();
   CHECK_MSG(s.key == fresh.key, "key, " << fen);
+  CHECK_MSG(s.pinned == fresh.pinned || s.pinned == ~Bitboard{0}, "pinned before reading, " << fen);
+  CHECK_MSG(s.discoverers == fresh.discoverers || s.discoverers == ~Bitboard{0},
+            "discoverers before reading, " << fen);
+  pos.pinned();
+  pos.discoverers();
   CHECK_MSG(s == fresh, "full state, " << fen);
 
   const Color us = pos.side_to_move(), them = ~us;
@@ -83,6 +92,12 @@ void check_node(Position& pos, const MoveList& legal, const MoveList* parent) {
     CHECK_MSG(predicted_check == pos.in_check(), "gives_check, " << fen << " " << m.raw());
     CHECK_MSG(predicted_key == pos.key(), "predicted_key, " << fen << " " << m.raw());
     pos.unmake(m);
+  }
+  if (!pos.in_check()) {  // the null move's key, for its TT prefetch
+    const Key predicted_null = pos.predicted_null_key();
+    pos.make_null();
+    CHECK_MSG(predicted_null == pos.key(), "predicted_null_key, " << fen);
+    pos.unmake_null();
   }
   if (parent)
     for (Move m : *parent)

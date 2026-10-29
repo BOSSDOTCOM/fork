@@ -18,7 +18,18 @@ Check:
    - Stockfish-specific file, class, function or variable names (for
      example Stockfish's own names for the per-ply state, the move picker
      or the search stack);
-   - copied magic numbers, tuned constants, tables or comment text;
+   - copied magic numbers, tuned constants, tables or comment text. Screen
+     **every new or changed search constant and formula** (margins, depth
+     limits, reductions, counts, history scales, time factors) against
+     Stockfish (current and historical releases), Ethereal, Berserk and
+     Weiss, and report each as a match, a near match or no match, with the
+     page that shows it (owner, 2026-10-25: model memory can reproduce
+     famous values without any source being opened). **Report only that
+     verdict** (owner, 2026-10-27): for a match or near match, the engine,
+     release and file and the role in one phrase; for no match, nothing
+     more. Never write down another engine's values, formulas or code
+     where they differ from Fork's, in the report or in any note or file;
+     the same holds for names (match / no match per name, DESIGN.md §8);
    - test data or nets taken from another engine.
 
    Shared textbook techniques (bitboards, PVS, null move, LMR, NNUE as a

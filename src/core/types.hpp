@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // types: basic chess value types shared by every module.
 //
 // Purpose: squares, colors, piece types and pieces, castling-right bits, the

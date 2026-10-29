@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Builds the Fork binary for TCEC (or any Linux x86-64 machine) from source.
 #
 #   ./update.sh                     inside a Fork checkout: builds that tree
@@ -13,7 +14,8 @@
 #               TCEC may build on one server and run on another of a
 #               different CPU generation. x86-64-v4 adds AVX-512.
 #   FORK_REF    branch, tag or commit to build after cloning (default: the
-#               repository's default branch)
+#               repository's default branch). Every run builds the remote's
+#               current state, also after a rewritten history.
 #   FORK_JOBS   parallel build jobs (default: nproc)
 #
 # Needs CMake 3.22+ and either Ninja or make. Builds the engine only: no
@@ -28,15 +30,27 @@ if [ -f CMakeLists.txt ] && [ -f src/main.cpp ] && grep -q '^project(fork ' CMak
 elif [ -n "${FORK_REPO:-}" ]; then
   command -v git >/dev/null || die "git not found"
   if [ -d fork/.git ]; then
-    git -C fork fetch --tags origin
+    # --force: a rewritten tag (or branch) upstream replaces the local one.
+    git -C fork fetch --force --tags origin || die "git fetch failed"
+    git -C fork remote set-head origin --auto >/dev/null || die "cannot read the default branch"
   else
-    git clone "$FORK_REPO" fork
+    git clone "$FORK_REPO" fork || die "git clone failed"
   fi
-  if [ -n "${FORK_REF:-}" ]; then
-    git -C fork checkout --detach "$FORK_REF"
+  # Always the remote's state, never a local branch: a local branch does not
+  # move on fetch, and a merge cannot follow a rewritten history (audit-1,
+  # T-1: an old commit was built with exit status 0). A branch name is read
+  # as origin's branch, anything else as a tag or commit.
+  ref=${FORK_REF:-HEAD}
+  if git -C fork rev-parse --verify --quiet "refs/remotes/origin/$ref^{commit}" >/dev/null; then
+    target=origin/$ref
+  elif git -C fork rev-parse --verify --quiet "$ref^{commit}" >/dev/null; then
+    target=$ref
   else
-    git -C fork merge --ff-only "@{u}" 2>/dev/null || true
+    die "FORK_REF '$ref' is neither a branch of origin nor a tag or commit"
   fi
+  git -C fork checkout --quiet --detach "$target" || die "cannot check out $target"
+  echo "update.sh: building $target ($(git -C fork rev-parse HEAD))"
+  [ -z "${FORK_CHECKOUT_ONLY:-}" ] || exit 0  # tests: stop before the build
   src=$(cd fork && pwd)
 else
   die "run inside a Fork checkout, or set FORK_REPO to clone one"

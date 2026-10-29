@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // hash_memory: the memory behind the transposition table (the TT itself is
 // Phase 3).
 //

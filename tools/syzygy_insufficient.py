@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Checks Fork's insufficient-material rule against Syzygy WDL tables.
 
 Fork's insufficient_material() mirrors python-chess's per-side rule (so

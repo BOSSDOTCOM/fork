@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Names the compilers the CMake presets use. Source it: . scripts/env.sh
 # Linux: system clang++/g++ (override by exporting FORK_CLANG_CXX/FORK_GCC_CXX first).
 # Git Bash on Windows: the winget-installed toolchain.
@@ -17,3 +18,36 @@ case "$(uname -s)" in
     export FORK_GCC_CXX="${FORK_GCC_CXX:-g++}"
     ;;
 esac
+
+# Test games and priority (owner, 2026-10-26). While a game queue runs, it
+# keeps build/.games-running in this tree: timing tests then report SKIPPED
+# (FORK_GAMES_RUNNING=1), as their measurements would not mean anything.
+# Development keeps normal priority beside the games. Low priority is on
+# request: build/.low-priority in this tree (a queue's watcher creates it
+# after a time loss and removes it when the games end) or FORK_LOW_PRIORITY=1.
+# Then the shell that sources this file drops its priority, which every
+# build, test and check it starts inherits (below normal on Windows, nice 19
+# on Linux, where all WSL distros share one kernel with the games), and
+# builds and tests run with few parallel jobs. The check's WSL legs source
+# the Windows tree's copy first (through /mnt/c), so they see both files.
+fork_env_dir=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+if [ -f "$fork_env_dir/../build/.games-running" ]; then
+  export FORK_GAMES_RUNNING=1
+fi
+if [ "${FORK_LOW_PRIORITY:-}" = 1 ] || [ -f "$fork_env_dir/../build/.low-priority" ]; then
+  export FORK_LOW_PRIORITY=1
+  export FORK_JOBS=${FORK_LOW_JOBS:-4}                       # update.sh
+  export CMAKE_BUILD_PARALLEL_LEVEL=${FORK_LOW_JOBS:-4}      # cmake --build
+  export CTEST_PARALLEL_LEVEL=1                              # one test at a time
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+      if [ -r "/proc/$$/winpid" ]; then
+        powershell.exe -NoProfile -Command \
+          "\$p = Get-Process -Id $(cat "/proc/$$/winpid"); if (\$p.PriorityClass -eq 'Normal') { \$p.PriorityClass = 'BelowNormal' }" \
+          >/dev/null 2>&1 || true
+      fi
+      ;;
+    *) renice -n 19 -p $$ >/dev/null 2>&1 || true ;;
+  esac
+fi
+unset fork_env_dir

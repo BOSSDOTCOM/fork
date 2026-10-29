@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // tokens: splitting a UCI input line into words, and reading numbers.
 //
 // Purpose: the one tokenizer and number parser every command parser uses,

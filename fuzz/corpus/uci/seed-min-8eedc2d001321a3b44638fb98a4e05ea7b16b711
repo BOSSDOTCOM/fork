@@ -1,0 +1,8 @@
+position fen r3k2r/pqpp1pb1/bn2pnp1/3PN3/1q2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1gec 818
+go infimie8Qion P3/2N2Q1p¯PPBBPPP/R6K2R`w KQkq - 5 1 move KQkq - 0 1 movesÃe1g1 e8c8
+stop
+go popdes + mat8c8
+go t
+position fen 8/4P3/8/8/8/8/k7/4K3 w - - 0 1 moveq e7e4Q
+go depth 1 nmie8Qionate 1 movetime 
+d

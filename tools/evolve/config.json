@@ -1,0 +1,55 @@
+{
+  "repo": null,
+  "baseline_commit": "HEAD",
+  "region": "lmr",
+  "positions": "tools/evolve/positions.jsonl",
+  "positions_limit": 0,
+  "proxy_nodes": 200000,
+  "seed": 20261027,
+  "islands": [
+    "proposer_aggressive",
+    "proposer_cautious",
+    "explorer"
+  ],
+  "per_island": 2,
+  "full_share": 0.3333,
+  "explorer_protected": 6,
+  "analyst_every": 3,
+  "reset_every": 4,
+  "critic_audit_share": 0.25,
+  "agent_retries": 3,
+  "agent_backoff_seconds": 60,
+  "promote_margin": 0.005,
+  "patience": 6,
+  "max_gate_failure_rate": 0.8,
+  "generations": 40,
+  "compiler": "g++",
+  "jobs": 4,
+  "proxy_jobs": 8,
+  "test_cache": "~/fork-check/.cache",
+  "budget": {
+    "tokens": 3000000,
+    "candidates": 1000,
+    "hours": 9
+  },
+  "match": {
+    "games": 400,
+    "tc": "4+0.04",
+    "concurrency": 8,
+    "elo_floor": 0,
+    "fastchess": "~/fork-tools/bin/fastchess",
+    "book": "~/fork-games/ma_openings.epd"
+  },
+  "agent": {
+    "launcher": [
+      "cmd.exe",
+      "/c",
+      "claude"
+    ],
+    "workdir": "/mnt/c/Users/Public/fork-agent",
+    "model": "sonnet",
+    "max_turns": 2,
+    "timeout": 900
+  },
+  "dashboard_mirror": "/mnt/c/Users/Public/fork-evolve"
+}

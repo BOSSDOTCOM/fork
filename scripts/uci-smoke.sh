@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # UCI start-up smoke loop: starts the engine RUNS times (default 50), each
 # time sending "uci", "isready", "quit", and fails unless every run exits 0
 # and prints uciok and readyok.

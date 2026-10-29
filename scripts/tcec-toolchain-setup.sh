@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Provisions the TCEC-toolchain check environment: a WSL distro running
 # Ubuntu 22.04 with the compilers TCEC's servers have (gcc 11.4, g++-12,
 # clang 16 and 19; docs/kb/competition.md on branch kb) and Ubuntu 22.04's

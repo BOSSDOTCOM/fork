@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // session: the UCI protocol loop and its threads of control.
 //
 // Purpose: read commands, keep the game position and options, run searches
@@ -6,7 +8,8 @@
 // - Commands are handled one at a time on the input thread (the caller of
 //   run() or handle_line()), which a search never blocks: isready, stop,
 //   ponderhit and quit are answered while a search runs.
-// - A search runs on its own thread, on its own copy of the position. Every
+// - A search runs on its own thread, on its own copy of the position, with
+//   the session's one Searcher (src/search/searcher.hpp). Every
 //   `go` produces exactly one `bestmove`, printed by that thread after its
 //   final `info` line.
 // - At most one search exists. A command that changes what a search depends
@@ -19,9 +22,11 @@
 //   thread outlives the session. No exception escapes handle_line().
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -30,6 +35,7 @@
 
 #include "core/position.hpp"
 #include "search/hash_memory.hpp"
+#include "search/searcher.hpp"
 #include "uci/go_limits.hpp"
 #include "uci/options.hpp"
 #include "uci/output.hpp"
@@ -39,6 +45,13 @@ namespace forkeng {
 
 // The engine's version string, "<semver>-dev+<short commit>" (DESIGN.md §5.1).
 const char* engine_version();
+
+// The search limits of a go: depth (clamped to [1, MaxPly - 1]), nodes (at
+// least 1), mate (ignored unless positive, at most MaxPly) and searchmoves as
+// sent, and, unless go infinite, the time budget (plan_time) from the clock
+// and increment of `us`, the side to move, and the Move Overhead. A free
+// function so that tests can check it with numbers (audit-1 Q-5).
+SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhead_ms);
 
 // Limits on what a session may do, for the fuzz target: the defaults are the
 // real engine's.
@@ -100,8 +113,10 @@ class UciSession {
 
   void stop_search();  // stops and joins the running search, if any
   bool search_running();
-  void search_main(Position pos, GoLimits limits);  // the search thread
-  void report_search(const Position& pos, Move best, std::uint64_t nodes, std::int64_t elapsed_ms);
+  void search_main(Position pos, SearchQuota limits, bool waits);  // the search thread
+  // The last info line when no iteration was reported (none finished, or
+  // no legal move), in a fixed buffer.
+  void report_unfinished(const Position& pos, const SearchResult& r, std::int64_t elapsed_ms);
   // Answers a go when memory has run out (review 2026-10-24): fixed buffers,
   // `best` or, if not `known`, the first legal move.
   void answer_without_memory(const Position& pos, Move best, bool known) noexcept;
@@ -110,11 +125,29 @@ class UciSession {
   SessionConfig config_;
   OptionTable options_;
   HashMemory hash_;
+  TransTable tt_;             // a view over hash_, rebound whenever hash_ is resized
   bool hash_pending_ = true;  // the table is allocated at the first isready, ucinewgame or go
   bool clear_pending_ = false;
+  // SyzygyPath: loaded at the next isready, ucinewgame or go, outside any
+  // search (deliverable 7).
+  std::string syzygy_path_;
+  bool tables_pending_ = false;
   Position root_;
+  // cmd_position builds the new position here, then swaps it with root_.
+  // Both reserve GameStatePlies States at startup, so a move list of a long
+  // game never allocates (audit-1 R-3).
+  Position spare_;
+  // The last position command failed even when tried again: no go searches
+  // (the root may be the previous position, the other side to move) until a
+  // position command succeeds (audit-1 R-3).
+  bool position_unknown_ = false;
   bool go_answered_ = false;  // the go being handled has started its search or answered
   SearchSignals signals_;
+  // The search reads these without the mutex: stop is set with signals_.stop
+  // (stop_search), pondering is cleared by ponderhit.
+  std::atomic<bool> stop_flag_{false};
+  std::atomic<bool> pondering_{false};
+  std::unique_ptr<Searcher> searcher_;  // created once, used by one search at a time
   std::thread search_thread_;
 };
 

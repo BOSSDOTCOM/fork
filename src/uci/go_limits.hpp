@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // go_limits: the arguments of a UCI `go` command.
 //
 // Purpose: parse `go` into one value that the search (Phase 3) and time

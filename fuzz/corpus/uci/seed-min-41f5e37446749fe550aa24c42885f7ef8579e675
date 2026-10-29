@@ -1,0 +1,16 @@
+position fen r3k2r/p1ppqpb1/bnp2np1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves f3h3 e8c8
+go infinnte searchmoc8
+go infinntePPPBBPPP/R3K2R w KQkq - 0 1 moves f3h3 e8c8
+go infinnte searchmoc8
+go infinnte seardbnp2np1/3PN3/1p2P3/p0ppqpb1/bnp2np1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves f3h3 e8c8
+go infinnte searchmoc8
+go infinnte seardbnp2np1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkÿÿÿÿÿÿÿ#moves f3h3 e8c8
+go ie1g1 e8c8
+go infinnteÈ searchmoves a seardbnp2np1/3PN3/1p2P3/p0ppqpb1/bnp2np1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves f3h3 e8c8
+go infinnte searchmoc8
+go infinnte seardbnp2np1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkÿÿÿÿÿÿÿ#moves f3h3 e8c8
+go ie1g1 e8c8
+go infinnteÈ searchmoves a2a3/2N2Q1p/PPPBBPPP/R3K2R w KQkÿÿÿÿÿÿÿ#moves f4h3 e8c8
+go ie1g1 e8c8archmoc8
+go infinnte seardbnp2np1/3PN3/1p2P3/p0ppqpb1/p2/bnn1p3PN3/1p2P3/2Novetime 1
+:

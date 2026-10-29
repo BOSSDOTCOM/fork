@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Interleaved A/B microbenchmark comparison.
 
 Runs two fork_micro binaries alternately (A B B A ...) for several rounds on

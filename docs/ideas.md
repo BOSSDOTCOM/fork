@@ -9,7 +9,7 @@ Candidate improvements, each with the evidence needed to adopt it.
 | **type** | **ELO**: a playing-strength change. It's measured by SPRT and sits behind a config flag until accepted. **TOOLING**: infrastructure measured by its own success metric. No flag needed. |
 | **phase** | When the idea is scheduled. |
 | **metric** | What decides success (SPRT result for ELO; the stated metric for TOOLING). |
-| **status** | untested, in progress, accepted, rejected (with the evidence). |
+| **status** | untested, in progress, accepted, rejected, inconclusive, parked (with the evidence and the date). |
 | **sources** | References consulted. Every outside source is also logged in docs/ORIGINALITY.md. Ideas only, never code. |
 | **runtime cost** | **none**: the shipped engine does no extra work (training- or test-side only). **possible**: the idea may cost speed in the engine itself. |
 | **earliest phase** | The first phase whose infrastructure the idea needs. |
@@ -57,7 +57,7 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **phase:** before the Phase 3 search work, repeated before Phases 4-6.
 - **metric / output:** a ranked list of candidate ELO ideas, entered in this
   log.
-- **status:** untested
+- **status:** in progress: the Phase 3 idea mining was done (2026-10-24; KB search-techniques.md, ORIGINALITY.md); to be repeated before Phases 4-6.
 
 ## 4. TCEC game mining for blind spots
 
@@ -80,7 +80,7 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **phase:** starts in Phase 3 when SPRT testing begins; formalized in
   Phase 8.
 - **metric:** games needed per accepted change.
-- **status:** untested
+- **status:** in progress: every Phase 3 SPRT is pentanomial (`tools/sprt.sh`, `tools/cloud/sprt_merge.py`).
 
 ## 6. On-demand analysis tools
 
@@ -149,7 +149,7 @@ added on 2026-10-24; ideas 1-12 predate them.
     mailbox is not the cause. gcc is_pseudo_legal back to neutral.
   - **v4** (v3 with a branchless King mask): gives_check worse (3.66 ns vs
     3.43 for v2). The v4 "uint8" binaries were mislabeled (actually v2); see
-    HANDOFF.md, harness fix.
+    the harness fix of that session (its notes were not kept).
   - **v5** (6 check-square entries, State 136 B, no State alignment, uint8
     mailbox): the gives_check regression is gone. make/unmake min -4..-5%,
     null move -5..-8%, gcc is_pseudo_legal min +5%. All verdicts "no
@@ -186,7 +186,31 @@ added on 2026-10-24; ideas 1-12 predate them.
   made). If the ratio approaches 2 or more, test the lazy per-ply
   check-squares variant: compute the direct-check squares on the first
   gives_check call in a ply and reuse them for that ply's remaining calls.
-- **status:** deferred to Phase 3
+- **measured in Phase 3, Milestone B (2026-10-26)** with `bench/ab_search.py`
+  (search nps, `fork bench` at depth 13, 12 interleaved rounds, core 4, WSL,
+  clang 21; variants built from an experiment worktree off f919c01, none
+  committed):
+  - **gives_check ratio:** 0.646 calls per make (10.30M calls, 15.94M makes,
+    FORK_SEARCH_STATS bench; 0.849 with deliverable 6's first values),
+    almost all from futility pruning. Far below 2, so the lazy per-ply
+    check-squares variant is not warranted.
+  - **State 48 bytes** (bitboards first; castling, en passant square and
+    captured piece as bytes; halfmove clock and game span stay 32-bit,
+    since a FEN may carry a clock up to 10,000 that then grows): bench
+    identical, median +0.4%, best +1.3%, noise threshold 3.0%: no
+    significant difference.
+  - **State alignas(64)**: bench identical, median -2.5%, best -2.4%,
+    threshold 4.0%: no significant difference (leaning slower).
+  - **History table int32** (instead of int16): bench identical, median
+    -1.5%, best -0.5%, threshold 3.6%: no significant difference.
+  - **TT 16-byte entries, 4 per bucket** (instead of 12-byte entries, 5 per
+    bucket; padding only): bench 16,550,224 nodes (+0.06%, the capacity
+    changes the tree), median -0.3%, best -0.2%, threshold 3.0%: no
+    significant difference. Two TT tests assume 5 entries per bucket.
+- **decision:** main keeps its layout (no candidate clears the noise rule).
+  Revisit with Phase 6's threads (several State stacks per core) and Phase
+  4's network, which change what the cache holds.
+- **status:** tested in Phase 3, rejected for now
 
 ## 10. Steer into TB-drawn 6-piece endings
 
@@ -259,7 +283,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   - the DTZ, cursed-win and 50-move logic above is the same for 7 pieces;
     the suite of won positions near the 50-move limit includes 7-piece
     positions checked against that API.
-- **status:** untested (7-piece requirement set)
+- **status:** accepted (2026-10-27): deliverable 7 built it, and the mc-tables SPRT gave +17.5 ± 7.2 Elo at the cap (sprt-log); the conversion suite converted 100 of 100. The two UNVERIFIED notes above are settled (DESIGN.md §5.2 deliverable 7, ORIGINALITY.md).
 
 ## 13. Cheap/expensive self-play data mixing
 
@@ -339,3 +363,495 @@ added on 2026-10-24; ideas 1-12 predate them.
   its nps loss to pass SPRT.
 - **earliest phase:** after Phase 8 (parked).
 - **status:** parked until after Phase 8
+
+## 17. Correction history shared across threads
+
+- **type:** ELO
+- **flag:** a build or tuning flag selecting shared or per-thread
+  correction tables (name set in Phase 6).
+- **idea:** Phase 3 keeps the static-eval correction tables (KB
+  search-techniques.md T32) per thread. Share them between all search
+  threads instead, with lockless access, so every thread learns from the
+  whole tree. Published results show it neutral at 1 thread but gaining at
+  high thread counts (Caissa 24fde49, 2024-12: +44 at 32 threads; Halogen
+  #842, 2026-01: about +19 at 8 threads; KB §1 lesson 4). TCEC runs 512
+  threads.
+- **phase:** Phase 6.
+- **metric:** SPRT at a high thread count (shared vs per-thread), at a long
+  time control, reported with the nps change.
+- **runtime cost:** possible (cache-line contention between threads).
+- **earliest phase:** Phase 6 (needs T32 from Phase 3 and Lazy SMP).
+- **sources:** docs/kb/search-techniques.md (branch kb), §1 and §3.23;
+  engine references logged in ORIGINALITY.md (2026-10-24 rows).
+- **status:** untested
+
+## 18. Root moves ordered by previous-iteration node counts
+
+- **type:** ELO
+- **flag:** a SearchSwitches flag (name set when it is built).
+- **idea:** Phase 3 orders root moves by move-to-front: after each root
+  search the move that last raised alpha goes first and the others keep
+  their order (DESIGN.md §5.2, implementation notes). Instead, order the
+  moves after the first by the number of nodes their subtrees took in the
+  previous iteration, largest first, on the reasoning that a move that was
+  hard to refute is more likely to become the best.
+- **phase:** Phase 3, tier 2 experiment (owner, 2026-10-24).
+- **metric:** SPRT [0, 3] at STC, with an LTC confirmation (it changes the
+  tree's shape), reported with the nps change.
+- **runtime cost:** possible (a node count per root move).
+- **earliest phase:** Phase 3 (after deliverable 2).
+- **sources:** Fork's own idea, logged by the owner's request; no source
+  consulted yet.
+- **status:** untested
+
+## 19. Explicit huge pages for the TT
+
+- **type:** TOOLING (performance)
+- **idea:** Fork's Hash is one 2 MiB-aligned block with
+  `madvise(MADV_HUGEPAGE)` (transparent huge pages, a hint; DESIGN.md §5.1).
+  Try explicit huge pages: `MAP_HUGETLB` with 2 MiB or 1 GiB pages on Linux
+  (needs a reserved hugetlbfs pool), and large pages on Windows
+  (`MEM_LARGE_PAGES`, needs the "Lock pages in memory" privilege), always
+  with a silent fallback to the current path. With a 256 GiB TT, fewer TLB
+  misses per probe could matter.
+- **TCEC:** "Large pages: enabled automatically" (KB competition.md,
+  verified 2026-10-23), which reads as transparent huge pages. Whether the
+  servers reserve a hugetlbfs pool, and whether an engine may use
+  `MAP_HUGETLB` or 1 GiB pages, is **UNVERIFIED**: add it to the TCEC
+  Discord questions (KB competition.md) before relying on it.
+- **phase:** Phase 6 (with the 256 GiB / NUMA work), measured earlier if
+  cheap.
+- **metric:** search nps with the A/B harness at a large Hash (bench
+  unchanged), and `perf stat` dTLB misses.
+- **runtime cost:** none in the search (allocation only); possible risk in
+  allocation failure paths, which must keep the fallback.
+- **earliest phase:** Phase 3 (the TT exists).
+- **status:** untested
+
+## 20. AVX-512 VNNI for Phase 4 inference
+
+- **type:** TOOLING (performance)
+- **idea:** Use AVX-512 VNNI (`vpdpbusd`, int8 dot products) in the NNUE
+  layers where the network's quantization allows, with the scalar reference
+  and equivalence tests the SIMD rules require (.claude/rules/simd.md);
+  DESIGN.md §7 already plans an AVX-512 VNNI preset for Phase 4.
+- **TCEC:** both servers are AVX-512 capable (KB); that their EPYC 9754 and
+  9175F support AVX-512 VNNI is **UNVERIFIED** (check the CPU documentation
+  in Phase 4). `update.sh` would then need a `FORK_ARCH` with VNNI, which
+  TCEC's build must be told to use.
+- **phase:** Phase 4.
+- **metric:** inference speed (bench nps, A/B harness), bench identical
+  across VNNI, AVX-512, AVX2 and scalar builds.
+- **runtime cost:** none beyond the speed gain (inference only).
+- **earliest phase:** Phase 4.
+- **status:** untested
+
+## 21. BOLT post-link optimization (optional, later)
+
+- **type:** TOOLING (performance)
+- **idea:** LLVM BOLT reorders a linked binary's code layout from a
+  profile, on top of PGO and LTO. Optional, after the search and evaluation
+  stabilize.
+- **constraints (UNVERIFIED until checked):** TCEC builds Fork from source
+  with `update.sh`, so BOLT would have to run inside that script on TCEC's
+  machine (is `llvm-bolt` available there, and may the build run a profiling
+  pass?); BOLT profiles normally come from hardware branch sampling (`perf`
+  with LBR or AMD's equivalent), whose availability in WSL and on Zen 4 is
+  to be checked; bench parity must hold, as BOLT changes layout only.
+- **phase:** after Phase 8 (optional), or earlier only if TCEC's build
+  allows it.
+- **metric:** search nps (A/B harness), bench identical.
+- **runtime cost:** none (layout only).
+- **earliest phase:** Phase 3 (any time a stable binary exists).
+- **status:** untested
+
+## 22. Mate-aware late move pruning and reductions
+
+- **type:** ELO
+- **idea:** The deliverable 6 review found the default pruning delaying a
+  mate in 3 in KQR v K (`8/8/5k2/8/8/8/5K2/RQ6 w - - 8 5`, from a random
+  test game; the exact search finds mate in 5 plies at depth 6) until
+  depth 11: at depth 10 it scores cp 1496 with every technique on, and
+  finds the mate with LMR or LMP alone off (RFP, the null move, futility or
+  SEE pruning off: still no mate). In K+Q+R v K every attacking move is
+  quiet, so LMR shortens the mating line and LMP then drops the late quiet
+  mating move. Candidates: no LMP or LMR when alpha or beta is already a
+  mate score, or when the defending king has few squares; checks exempt
+  from LMP. No wrong score is ever reported, only a later mate.
+- **phase:** Phase 3 tier 2 (deliverable 9) or the removal round; measure
+  with mate-suite solve counts (the kb-researcher's suite) and SPRT.
+- **re-checked with tablebases** (owner, 2026-10-26, after deliverable 7):
+  with today's search (Fork's own constants, the futile-node filter) the
+  first mate appears at depth 8 without tables (a mate in 4) and at depth 9
+  with the 3-4-5 tables, the mate in 3 by depth 14 in both. The tables do
+  not fix this: they give win/draw/loss, not distance to mate, and probes
+  need a zero halfmove clock (131 probes in that search). The case stays a
+  search question.
+- **metric:** SPRT; mate-suite solves at fixed nodes.
+- **runtime cost:** a score test per pruning decision.
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 23. AI-driven discovery of search heuristics
+
+Consolidated spec (owner, 2026-10-26; replaces the earlier fragments).
+
+- **type:** TOOLING feeding ELO. Each discovered heuristic is its own ELO
+  change behind its own switch; its runtime cost is reported with its SPRT
+  (the rule above).
+
+**Loop**
+- An evolutionary loop (AlphaEvolve/FunSearch style): AI agents propose
+  code changes, an automated evaluator scores them, and the best survive to
+  seed the next generation.
+- **Evolvable regions:** only delimited functions (pilot: the LMR formula
+  only). Any candidate touching code outside them is rejected before
+  building.
+- **Residual mode (default):** candidates evolve a correction added to the
+  current formula (final = base + correction), with its own strength
+  coefficient for later SPSA tuning; a zero correction reproduces the
+  baseline exactly. About 1 in 5 candidates may be full replacements, to
+  keep the search open.
+- **Diversity:** an island/MAP-Elites style population (e.g. axes: mean
+  reduction and re-search rate).
+
+**Agents**
+- **Proposers:** 2 for the pilot, each with a distinct perspective and its
+  own island (e.g. aggressive vs cautious); optionally a third reasoning
+  from Fork's search statistics.
+- **Explorer:** unconventional proposals that question standard
+  assumptions and borrow from other fields; it uses the full-replacement
+  share, and has its own protected island for a few generations before
+  competing with the main population.
+- **Critic:** reviews every proposal before building (determinism, the
+  hot-path rules, resemblance to known engine formulas, proxy gaming);
+  rejections are logged with reasons.
+- **Analyst:** every N generations, summarizes what wins and loses and
+  feeds the insights back to the proposers and the explorer.
+- **Originality screener:** the existing originality-checker, for promoted
+  survivors (constants and structure against known engines, since model
+  memory can reproduce famous formulas).
+- **Orchestrator:** a deterministic script, not an agent.
+- All agents follow the clean-room rules; none sees another engine's
+  source.
+
+**Evaluator funnel**
+1. **Gate:** build, perft, the minimax oracle with pruning off,
+   determinism, the hot-path rules.
+2. **Proxies:** best-move agreement and score error against Fork's own much
+   deeper search, at equal node budgets, on a held-out self-play position
+   set labeled by Fork's own search (data policy rule 1); nodes to depth
+   only as a secondary signal, never alone. WAC and matetrack are excluded.
+3. A short fast-game match against the baseline.
+4. The full SPRT with gainer bounds, short then long time control per the
+   LTC rule.
+
+Survivors' constants are justified by the loop's log (DESIGN.md §8), then
+tuned by SPSA.
+
+**Pilot** (DESIGN.md §5.2, deliverable 8c)
+- **Slot:** after Milestone C and the parameter table (8b), before tier 2
+  (deliverable 9). Time box about two weeks. Target: the LMR formula only.
+- **Prerequisites:** 8b done; the kb-researcher has verified the
+  AlphaEvolve, FunSearch and MAP-Elites papers (cited in the KB and
+  ORIGINALITY.md); run when weekly Claude capacity is fresh.
+- **Metrics:** whether proxy rankings predict SPRT outcomes; the cost per
+  accepted change (compute, games, tokens, session time); the gate-failure
+  rate with and without the critic; the improvement rate against a
+  single-proposer baseline; the explorer's survival rate and SPRT wins;
+  residual against full-replacement results.
+- **Ends with a stop for the owner's go/no-go decision.**
+- **If go:** real campaigns in late Phase 4 (after the first strong network
+  and the search re-validation), then a standing tool in the improvement
+  pass; candidate future targets include pruning margins, history updates,
+  move ordering and time management.
+- **If no-go:** the loop is archived; its log and findings go into this
+  file.
+
+- **phase:** pilot as deliverable 8c (Phase 3); campaigns in late Phase 4
+  and the improvement pass, if go.
+- **metric:** the pilot metrics above; then SPRT for each heuristic.
+- **sources:** verified from the primary sources by the kb-researcher
+  (2026-10-26; KB research.md §9, ORIGINALITY.md): AlphaEvolve (Novikov et
+  al., arXiv:2506.13131), FunSearch (Romera-Paredes et al., Nature 625,
+  2024) and MAP-Elites (Mouret and Clune, arXiv:1504.04909). Not in any of
+  them: the residual mode, the critic, analyst and explorer roles, any
+  handling of noisy fitness (KB): those are this spec's own.
+- **runtime cost:** possible: depends on the candidate (reported with each
+  SPRT).
+- **earliest phase:** Phase 3 (deliverable 8c).
+- **status:** harness built (2026-10-26, `tools/evolve/`; DESIGN.md §5.2
+  implementation notes): unit-tested and dry-run with stub agents; the
+  evolution loop itself not started (owner). Since then: the validation
+  run of 2026-10-27 (18 live proposals), the 4x position set and the
+  held-out promotion check (DESIGN.md §5.2, deliverable 8c); the audit's
+  gate, resume and pinning fixes are in (audit-1, merged 2026-10-28). The
+  long run (40 generations) stays in **late Phase 4** (owner, 2026-10-28),
+  after the first strong network and the search re-validation. Pilot scheduled
+
+## 24. TT victim policy under real table pressure
+
+- **type:** ELO (switch `tt_age_blend`, UCI `UseTtAgeBlend` in tuning builds)
+- **idea:** the blended victim policy (rank = depth − 2 plies per search of
+  age, f140963) against the default lexicographic one (current search
+  first, then depth). Its first SPRT (LTC 40+0.4, Hash 64 MB, 1 thread,
+  [0, 3]) was stopped by the owner as inconclusive: +5.7 ± 13.8 Elo after
+  1,400 games (2026-10-26, sprt-log.md). At 64 MB and one thread the table
+  is rarely under pressure, so the victim choice seldom matters.
+- **phase:** re-test after Phase 4's network (a different tree shape) and
+  under Phase 6 conditions (large Hash, many threads), where table pressure
+  differs.
+- **metric:** SPRT [0, 3] at LTC, at Phase 6 Hash and thread counts.
+- **runtime cost:** none measurable (one rank formula per replacement).
+- **earliest phase:** Phase 6.
+- **status:** inconclusive (Phase 3); default stays lexicographic
+
+## 25. Queued tests: Hash size at LTC and time scaling
+
+- **type:** TOOLING (measurement)
+- **idea:** two tests queued by the owner (2026-10-26), skipped for now:
+  1. **Hash 256 MB vs 16 MB at LTC** (40+0.4): how much a larger table is
+     worth at Fork's current speed, which also informs idea 24.
+  2. **Time-scaling mini-gauntlet at 60+0.6** against Stash 19.0 and
+     WyldChess 1.51: whether Fork's score against fixed anchors holds,
+     grows or shrinks with more time per move (Milestone B's gauntlet ran
+     at 10+0.1).
+- **phase:** when the machine is free (after deliverable 8, whose time
+  management changes how longer games are played).
+- **metric:** Elo difference with error bars for (1); score per anchor
+  against the 10+0.1 gauntlet for (2).
+- **runtime cost:** none (test-side only).
+- **earliest phase:** Phase 3.
+- **status:** queued
+
+## 26. Upcoming repetition detection
+
+- **type:** ELO (behind a switch)
+- **idea:** detect that the side to move can force a repetition before it
+  happens (owner, 2026-10-26, second external review), so a draw score is
+  available one ply earlier, without searching the repeating moves. Built
+  from the kb-researcher's clean-room description of the published method.
+- **phase:** Phase 3 tier 2, or Phase 7 (tournament behaviour), whichever
+  comes first after the description exists.
+- **metric:** SPRT [0, 3].
+- **runtime cost:** possible (a lookup per node).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 27. Fifty-move-rule scaling of the evaluation in long endgames
+
+- **type:** ELO (behind a switch)
+- **idea:** scale the evaluation toward a draw as the fifty-move counter
+  grows (owner, 2026-10-26, second external review), so the search prefers
+  progress (captures, pawn moves) in long endgames instead of shuffling
+  into a fifty-move draw. Tied to idea 12 (Syzygy: the DTZ and 50-move
+  questions, and TCEC's long endgames): with tablebases the probe decides
+  in the covered endings, and the scaling matters for the rest.
+- **phase:** Phase 4 (the evaluation), after deliverable 7 (Syzygy).
+- **metric:** SPRT [0, 3], plus the conversion suite (deliverable 7's).
+- **runtime cost:** possible (one multiply per evaluation).
+- **earliest phase:** Phase 4.
+- **status:** untested
+
+## 28. History malus balance
+
+- **type:** ELO (a tunable parameter)
+- **idea:** the quiet history's malus for the quiets tried before a cutoff
+  is now the same size as the cutoff move's bonus. Make the ratio a
+  parameter (owner, 2026-10-26, second external review) and let SPSA find
+  it, with the removal round's UseHistoryMalus result as the reference.
+- **phase:** a parameter-table entry still to add (8b was built without it); SPSA after Phase 4.
+- **metric:** SPSA, then SPRT [0, 3] of the tuned value.
+- **runtime cost:** none (a multiply where the malus is applied).
+- **earliest phase:** Phase 3 (8b).
+- **status:** untested
+
+## 29. How often unconfirmed root fail highs hold
+
+- **type:** TOOLING (measurement), possibly feeding ELO
+- **idea:** the first external review's claim (a) proposed playing a root
+  move that failed high when the search stops before its re-search ends.
+  It was confirmed (626 of 34,254 node-limited searches over the bench
+  positions and WAC stopped with a distinct fail high pending) and built
+  (f0a9caf), but its SPRT rejected it: -14.6 +/- 10.8 Elo at STC after
+  2,000 games, the 95% interval entirely below zero (owner, 2026-10-26;
+  sprt-log.md rv-failhigh). The behaviour is reverted; the bookkeeping stays
+  (Searcher::unresolved_fail_high).
+  - **Measurement:** on the 626 sweep cases, re-search both moves (the
+    pending fail high and the previous iteration's best) deeper, e.g. with
+    `searchmoves` restricted to each, and count how often the fail high
+    holds, by depth and by how far its re-search had got.
+  - **Middle ground, if the data supports it:** play the fail high only
+    when it has held through part of its re-search (some of its subtree
+    searched with the wider window), or only by a margin.
+- **Connection to deliverable 8:** the cleaner answer may be a time
+  decision, not a move choice: when a stop would land during a root fail
+  high's re-search, allow a bounded extension to finish it. Deliverable 8's
+  stopping rules should consider that, measured by the same sweep.
+- **phase:** the measurement after the current SPRT queue (it is a CPU job);
+  any policy change is an SPRT on gainer bounds [0, 3].
+- **metric:** the share of pending fail highs that hold at a deeper search;
+  then SPRT.
+- **runtime cost:** none for the measurement; a time extension costs time.
+- **earliest phase:** Phase 3 (deliverable 8).
+- **status:** measurement queued. **Run it before B-3 is revisited**
+  (audit-1 B-3, re-searching a root fail high one ply shallower: reverted
+  after its SPRT reached the cap undecided, +0.65 ± 3.56 Elo; sprt-log.md
+  b3-shallow-fh). The audit meant this measurement to come first; B-3 ran
+  without it.
+
+## 30. Keeping a stale TT entry that is still deeper once aged
+
+- **type:** ELO (switch `use_tt_keep_deeper`, UCI `UseTtKeepDeeper` in
+  tuning builds)
+- **idea:** the position's own entry from an earlier search is kept against
+  an inexact new result while its depth minus StaleDepthPerSearch plies per
+  search of age still exceeds the new depth (audit-1, B-5; 808dd8a). Its
+  LTC SPRT (40+0.4, Hash 64 MB, 1 thread, [0, 3]) was stopped by the owner
+  as inconclusive, leaning negative: -5.1 +/- 10.1 Elo after 2,602 games
+  (2026-10-28, sprt-log.md b5-keep-deeper). At 64 MB and one thread the
+  table is rarely under pressure (as for idea 24).
+- **phase:** Phase 6's TT tests, under large Hash and many threads.
+- **metric:** SPRT [0, 3] at LTC, at Phase 6 Hash and thread counts.
+- **runtime cost:** none measurable (one comparison per replacement of the
+  position's own entry).
+- **earliest phase:** Phase 6.
+- **status:** inconclusive (Phase 3); off by default
+
+## 31. Repetition of a position from before the root
+
+- **type:** ELO (behind a switch)
+- **idea:** inside the search a position that occurred once before scores
+  as a draw (`repetition_count() >= 2`, searcher.cpp), also when that
+  earlier occurrence is in the game before the root, a deliberate choice
+  of deliverable 2 ("one repetition is enough inside the search"). But a
+  position reached once in the game is not a draw yet: the opponent can
+  deviate. So a losing Fork may steer for a "draw" the opponent declines,
+  and a winning Fork avoids lines through old positions. Variant: three
+  occurrences when the earlier ones are before the root, two when both are
+  in the tree (audit-1, A1 suspicion 1).
+- **phase:** tier 2, or Phase 7 (tournament behaviour).
+- **metric:** SPRT [0, 3] at STC and LTC.
+- **runtime cost:** none measurable (the same history walk).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 32. Pruning guards for tablebase losses
+
+- **type:** ELO (behind a switch)
+- **idea:** late move pruning, futility and SEE pruning stop once the best
+  score so far is a mate loss (`best <= -(MateScore - MaxPly)`), but go on
+  when it is a tablebase loss, so at shallow non-PV nodes they may prune
+  the quiet move that saves the draw. Guard with `is_tb_or_mate(best)`
+  instead (audit-1, A1 suspicion 6). Heuristic: it matters only in table
+  positions, which TCEC adjudicates.
+- **phase:** with the next table work (Phase 8's 7-man measurements).
+- **metric:** a table conversion and defence suite first, then SPRT
+  [0, 3] with tables on both sides.
+- **runtime cost:** none (one comparison).
+- **earliest phase:** Phase 3.
+- **status:** untested (measure first)
+
+## 33. A shallow exact result replacing a deeper entry
+
+- **type:** ELO (behind a switch)
+- **idea:** `TransTable::deposit` keeps the position's own entry only
+  against shallower inexact results, so an exact result from a shallow
+  search (a quiescence PV, depth 0) overwrites a depth-N entry of the same
+  search. That follows deliverable 3's spec, but may lose information.
+  Variant: never replace a deeper entry of the same search (audit-1, A1
+  suspicion 5).
+- **phase:** tier 2, before the TT tests of Phase 6.
+- **metric:** first a FORK_SEARCH_STATS counter of exact writes whose own
+  entry was deeper (how often it happens); if frequent, SPRT [0, 3].
+- **runtime cost:** none (one comparison per store).
+- **earliest phase:** Phase 3.
+- **status:** untested (measure first)
+
+## 34. Reverse futility margin 40 cp per ply
+
+- **type:** ELO (a search constant)
+- **idea:** `RfpMargin` 40 instead of 80. Fork's own measurement (DESIGN.md,
+  Search constants) bounds the margin from below: every M from 40 to 160
+  keeps the share of RFP-prunable nodes whose search then fails low under
+  1% at every depth 1-6, and 40 is the smallest such M. The data do not
+  pick a value, so only games can.
+- **phase:** audit-1 (2026-10-27, 304081e and 306bd9a); reverted to 80 on
+  2026-10-28.
+- **metric:** SPRT [0, 3] at STC, then LTC.
+- **runtime cost:** none (a constant).
+- **earliest phase:** Phase 3.
+- **status:** **untested**. No SPRT decided it: the first STC run was
+  superseded after 3,200 games (B-4 in both engines; +3.47 ± 9.61, LLR
+  0.23), and its restart without B-4 was stopped in stage 0 when the owner
+  accepted 40 without a test. The Phase D gauntlet then gave an
+  **unfavorable but not conclusive** result: with 40, Fork scored 156.0
+  of 357 games against Milestone C's 178.5 on the same games (43.7% vs
+  50.0%, about -44 Elo, roughly two standard errors) before that gauntlet
+  was stopped; with 80, all 1,200 games, it matched Milestone C (606.5 vs
+  600.5; Ordo 2411.5 ± 22.5 against 2402.5 ± 23.3). Reverted to 80 by the
+  owner's decision (sprt-log.md, history/phase-3/audit-1.md). **Revisit
+  when the eval-dependent margins are retuned after Phase 4** (Quality
+  control 6), with an SPRT.
+
+## 35. The bootstrap eval calls insufficient_material twice
+
+- **type:** TOOLING (performance)
+- **idea:** the bootstrap evaluation repeats the `insufficient_material`
+  test that the search has already made at the node (12.4 M calls over
+  the bench, about 0.2% of the profile; audit-1 P-5). Pass the result in,
+  or drop the eval's own call.
+- **phase:** only if the bootstrap eval is touched before Phase 4, whose
+  network replaces it.
+- **metric:** search nps with `bench/ab_search.py`, bench identical.
+- **runtime cost:** none (a saving).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 36. A SIMD pick in MoveSelector::take_next
+
+- **type:** TOOLING (performance)
+- **idea:** `take_next` is the largest single entry in the profile (20.5%
+  at the audit-1 Phase D gate). Find the best remaining score with SIMD
+  compares over the score array instead of a scalar scan (audit-1, A2
+  speed suspicion).
+- **phase:** after tier 2's history tables settle the selector's scores.
+- **metric:** search nps with `bench/ab_search.py`, bench identical; the
+  same move order as a scalar reference, by an equivalence test.
+- **runtime cost:** none if it pays; report the maintenance cost first
+  (Performance doctrine).
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 37. A cache-friendlier MoveList and PlyFrame layout
+
+- **type:** TOOLING (performance)
+- **idea:** lay out the move list and the per-ply frame so that a node's
+  hot fields share cache lines (audit-1, A2 speed suspicion).
+- **phase:** with tier 2's PlyFrame changes (F-13, F-17/F-18), so the
+  layout is settled once.
+- **metric:** search nps with `bench/ab_search.py` and fork_micro, bench
+  identical; `static_assert(sizeof(PlyFrame) <= 2688)` updated with it.
+- **runtime cost:** none if it pays.
+- **earliest phase:** Phase 3.
+- **status:** untested
+
+## 38. Phase-end fuzzing on GitHub
+
+- **type:** TOOLING
+- **idea:** a manually triggered workflow (`workflow_dispatch`) that
+  builds the clang-fuzz preset and runs each fuzz target with the
+  plateau rule (`tools/fuzz/run_fuzz.py --max-seconds 3600
+  --plateau-seconds 1200`), one job per target, then minimizes each run's
+  corpus into the committed seeds (libFuzzer `-merge=1`) and uploads the
+  coverage-adding inputs and any crash artifacts. Phase-end fuzzing then no
+  longer uses the local machine: at the Phase 3 end, the local run of
+  fuzz_moves was killed when the shared machine ran low on memory (owner,
+  2026-10-28).
+- **phase:** Phase 4 backlog (owner, 2026-10-28), ready before the Phase 4
+  phase end.
+- **metric:** each target's runs, coverage and plateau verdict as the
+  local run reports them; the job fails on a crash artifact.
+- **runtime cost:** none for the engine; hosted runners only.
+- **earliest phase:** Phase 4.
+- **status:** queued

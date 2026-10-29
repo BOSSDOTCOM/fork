@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Two-stage profile-guided build driven by `fork bench`.
 # Usage: cmake -DSOURCE_DIR=<repo> -DCXX=<compiler> -DCOMPILER_ID=<Clang|GNU>
 #              [-DARCH=native] [-DNO_PEXT=OFF] -P pgo.cmake

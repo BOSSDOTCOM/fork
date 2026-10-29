@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Differential test: Fork's move generator against python-chess.
 
 python-chess (GPL-3.0) is an independent move generator used here only as a

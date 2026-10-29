@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 # MemorySanitizer build of Fork against an MSan-instrumented libc++ (Linux
 # only). MSan needs every part of the program instrumented, the C++ standard
 # library included; against the distro's uninstrumented libstdc++ it reports
@@ -19,7 +20,7 @@
 # libunwind is NOT built: with an MSan-instrumented libunwind linked in,
 # every MSan report crashed with a stack overflow in the reporter (found by
 # the selftest, 2026-10-23), so libc++abi uses the system unwinder.
-# no_alloc and uci_oom are excluded: their replacement operator new/delete collides with the
+# no_alloc, uci_oom and uci_hash_oom are excluded: their replacement operator new/delete collides with the
 # MSan runtime (.claude/rules/testing.md).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -86,7 +87,7 @@ case "${1:-}" in
     ;;
   test)
     shift
-    ctest --test-dir "$dir" -E "^(no_alloc|uci_oom)$" --output-on-failure "$@"
+    ctest --test-dir "$dir" -E "^(no_alloc|uci_oom|uci_hash_oom)$" --output-on-failure "$@"
     ;;
   *)
     echo "usage: scripts/msan.sh libcxx|selftest|build|test [ctest args]" >&2

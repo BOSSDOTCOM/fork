@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # 3.22 is Ubuntu 22.04's CMake, which TCEC's servers run (DESIGN.md §5.1).
 # CMakePresets.json needs 3.25 and is a developer convenience only; the TCEC
 # build (update.sh) configures without presets.
@@ -10,7 +11,7 @@ if(DEFINED CMAKE_CXX_COMPILER AND CMAKE_CXX_COMPILER STREQUAL "")
                       "before using the presets, or pass -DCMAKE_CXX_COMPILER=<compiler>")
 endif()
 # The semver in `id name` (DESIGN.md §5.1): 0.<phase>.0 until the first release.
-project(fork VERSION 0.2.0 LANGUAGES CXX)
+project(fork VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -24,6 +25,8 @@ option(FORK_TSAN "Build with ThreadSanitizer (Linux; not with FORK_SANITIZE)" OF
 option(FORK_LTO "Link-time optimization for optimized builds" ON)
 option(FORK_BUILD_TESTS "Build the test executable and CTest tests" ON)
 option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
+option(FORK_SEARCH_STATS "Debug counters in the search, printed by fork bench (never released)" OFF)
+option(FORK_TUNE "Tuning build: every search switch is a UCI option (SPRT and SPSA only, never released)" OFF)
 set(FORK_PGO "OFF" CACHE STRING "Profile-guided optimization stage: OFF, GEN, USE")
 set(FORK_PGO_DATA "" CACHE PATH "Profile directory (GEN) or merged profile file / directory (USE)")
 
@@ -110,6 +113,8 @@ if(FORK_LTO AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(WARNING "LTO not supported by this toolchain, building without it")
   endif()
 endif()
+# `fork version` reports whether LTO is on (audit-1, P-6).
+target_compile_definitions(fork_flags INTERFACE FORK_LTO=$<BOOL:${CMAKE_INTERPROCEDURAL_OPTIMIZATION}>)
 
 # PGO flags apply only to the engine (core + main), never to tests.
 add_library(fork_pgo INTERFACE)
@@ -138,18 +143,61 @@ add_library(forkcore STATIC
 target_include_directories(forkcore PUBLIC src)
 target_link_libraries(forkcore PUBLIC fork_flags PRIVATE fork_pgo)
 
-find_package(Threads REQUIRED)
+# Syzygy tablebase probing (DESIGN.md §5.2, deliverable 7): the vendored
+# Fathom library, jdart1/Fathom at c9c6fef0 (MIT; third_party/fathom, file
+# SHA-256s and lineage in docs/ORIGINALITY.md). tbprobe.c is compiled as
+# C++: <sys/mman.h> then provides POSIX_MADV_RANDOM and Fathom advises random
+# access on every mapped table (TCEC asks 7-man users for MADV_RANDOM; KB
+# tools.md §6), which a strict ISO C build silently skips. Fathom's own
+# warnings stay in this target (-w), so Fork's -Werror stays on Fork's code;
+# its header is clean under Fork's flags.
+add_library(fathom STATIC third_party/fathom/src/tbprobe.c)
+set_source_files_properties(third_party/fathom/src/tbprobe.c PROPERTIES LANGUAGE CXX)
+target_include_directories(fathom SYSTEM PUBLIC third_party/fathom/src)
+target_compile_definitions(fathom PUBLIC TB_NO_HELPER_API)
+target_link_libraries(fathom PRIVATE fork_flags)
+target_compile_options(fathom PRIVATE -w)
 
-# The UCI front end (src/uci/): protocol loop, options, placeholder search.
-add_library(forkuci STATIC
+# The evaluator is chosen at build time (owner, 2026-10-24; DESIGN.md §5.2):
+# no runtime interface and no indirect call in the search.
+set(FORK_EVALUATOR "bootstrap" CACHE STRING "Static evaluation built into Fork: bootstrap")
+set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap)
+if(NOT FORK_EVALUATOR STREQUAL "bootstrap")
+  message(FATAL_ERROR "FORK_EVALUATOR must be bootstrap (Phase 3)")
+endif()
+
+# Evaluation and search (src/eval/, src/search/ except the hash memory).
+add_library(forksearch STATIC
+  src/eval/bootstrap_eval.cpp
+  src/search/search_bench.cpp
+  src/search/endgame_tables.cpp
   src/search/hash_memory.cpp
+  src/search/move_selector.cpp
+  src/search/searcher.cpp
+  src/search/see.cpp
+  src/search/time_budget.cpp
+  src/search/trans_table.cpp
+  src/tune/params.cpp)
+target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
+find_package(Threads REQUIRED)
+target_link_libraries(forksearch PUBLIC forkcore fathom Threads::Threads PRIVATE fork_pgo)
+if(FORK_SEARCH_STATS)
+  target_compile_definitions(forksearch PUBLIC FORK_SEARCH_STATS)
+endif()
+
+# The UCI front end (src/uci/): protocol loop, options, info output.
+add_library(forkuci STATIC
   src/uci/go_limits.cpp
   src/uci/options.cpp
   src/uci/output.cpp
-  src/uci/placeholder.cpp
   src/uci/session.cpp
   src/uci/version.cpp)
-target_link_libraries(forkuci PUBLIC forkcore Threads::Threads PRIVATE fork_pgo)
+target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pgo)
+if(FORK_TUNE)
+  # Public on the search library, so the search, the UCI session and the tests
+  # all see the same parameter declarations (src/tune/params.hpp).
+  target_compile_definitions(forksearch PUBLIC FORK_TUNE)
+endif()
 
 # Version string `<semver>-dev+<short commit>`, read from git at configure
 # time (owner, 2026-10-24); without git, or outside a checkout (a tarball),
@@ -202,6 +250,9 @@ add_custom_target(fork_build_id
   VERBATIM)
 add_dependencies(fork_micro fork_build_id)
 target_include_directories(fork_micro PRIVATE ${CMAKE_BINARY_DIR}/generated)
+# `fork version` reports the same identity, for bench/ab_search.py.
+add_dependencies(fork fork_build_id)
+target_include_directories(fork PRIVATE ${CMAKE_BINARY_DIR}/generated)
 
 if(FORK_FUZZ)
   # Coverage instrumentation for everything (engine code included), libFuzzer
@@ -251,9 +302,19 @@ if(FORK_BUILD_TESTS)
     tests/test_consistency.cpp
     tests/test_epd.cpp
     tests/test_draws.cpp
+    tests/test_eval.cpp
+    tests/test_search.cpp
+    tests/test_see.cpp
+    tests/test_tt.cpp
+    tests/test_ordering.cpp
+    tests/test_pruning.cpp
+    tests/test_endgame_tables.cpp
+    tests/test_pruning_review.cpp
+    tests/test_ordering_review.cpp
     tests/engine_process.cpp
     tests/test_uci.cpp
-    tests/test_options.cpp)
+    tests/test_options.cpp
+    tests/test_params.cpp)
   target_link_libraries(fork_tests PRIVATE forkuci)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
@@ -293,10 +354,99 @@ if(FORK_BUILD_TESTS)
   endforeach()
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
 
-  foreach(suite magics fen zobrist_ep draws perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                uci_protocol uci_options uci_placeholder uci_timing)
-    add_test(NAME ${suite} COMMAND fork_tests ${suite})
+  # The smallest 7-man Syzygy pair, KPPPPPvK (deliverable 7's 7-piece test;
+  # KB tools.md §6.9): downloaded once into .cache/ and pinned by SHA-256,
+  # never committed. A failed download makes those cases fail loudly
+  # (tests/test_endgame_tables.cpp: a missing file is a failure, not a skip).
+  set(FORK_SYZYGY7_DIR ${CMAKE_SOURCE_DIR}/.cache/syzygy7)
+  foreach(spec
+      "KPPPPPvK.rtbw|https://tablebase.lichess.ovh/tables/standard/7/6v1_pawnful/KPPPPPvK.rtbw|f2e587b1acd940ef836ea80e0c64eb6093255b8273e1f8b049ab8f9f2631cc0b"
+      "KPPPPPvK.rtbz|https://tablebase.lichess.ovh/tables/standard/7/6v1_pawnful/KPPPPPvK.rtbz|397a03d6d11823b2ead174c14f0c9e0a9be54c5b4b30890715a36d5fd1c16519")
+    string(REPLACE "|" ";" parts "${spec}")
+    list(GET parts 0 tb_name)
+    list(GET parts 1 tb_url)
+    list(GET parts 2 tb_hash)
+    set(tb_file ${FORK_SYZYGY7_DIR}/${tb_name})
+    if(EXISTS ${tb_file})
+      file(SHA256 ${tb_file} have)
+      if(NOT have STREQUAL tb_hash)
+        file(REMOVE ${tb_file})
+      endif()
+    endif()
+    if(NOT EXISTS ${tb_file})
+      file(DOWNLOAD ${tb_url} ${tb_file} STATUS st TIMEOUT 600 INACTIVITY_TIMEOUT 60)
+      list(GET st 0 code)
+      set(have "")
+      if(code EQUAL 0)
+        file(SHA256 ${tb_file} have)
+      endif()
+      if(NOT have STREQUAL tb_hash)
+        file(REMOVE ${tb_file})
+        message(WARNING "could not download ${tb_name} with the pinned SHA-256 (${st}); the 7-piece tests will fail")
+      endif()
+    endif()
   endforeach()
+  target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY7_DIR="${FORK_SYZYGY7_DIR}")
+
+  # Small 3-4-5 Syzygy tables (audit-1 Q-6): draws, a promotion, a cursed
+  # win and a blessed loss (KNNvKP, WDL only, with the tables its captures
+  # reach), KQvKP (WDL), and the 3-man tables with their DTZ files for root
+  # ranking. From the lichess mirror's 3-4-5-wdl/ and 3-4-5-dtz/, pinned by
+  # the SHA-256s of the mirror's own list (https://tablebase.lichess.ovh/
+  # tables/standard/sha256; the list's SHA-256, 6dc75697...a783, is the one
+  # the KB records, tools.md §6), downloaded and checked 2026-10-27:
+  # 13,962,656 bytes in all, 13,729,360 of them KNNvKP.rtbw. Never
+  # committed. A failed download makes the table tests fail.
+  set(FORK_SYZYGY345_DIR ${CMAKE_SOURCE_DIR}/.cache/syzygy345)
+  set(syzygy345_url https://tablebase.lichess.ovh/tables/standard)
+  foreach(spec
+      "KPvK.rtbw|3-4-5-wdl|02fd2bdcd92821c869458f019f63524def1c9e7a2862ca8d2b16dc7712b16183"
+      "KQvK.rtbw|3-4-5-wdl|517667dff787162dbb1ed9d5d6484d30ee854e686ee0675c08d99ecf045d2d50"
+      "KRvK.rtbw|3-4-5-wdl|386fbde73308e49a4207836922c68b30b664e83c5a37f7fa37305a15cd16f2f1"
+      "KBvK.rtbw|3-4-5-wdl|bc0d8ab3560de9038460f0e8f61e3b7efd3e3d0327d19ae0387c0da7ddeb244d"
+      "KNvK.rtbw|3-4-5-wdl|9d3518b12df3d2006441df758bce31e961346e70a11920aaad75c647003bb6e7"
+      "KQvKP.rtbw|3-4-5-wdl|2f92788170e8a5c05608f44a47fd42f3f4fff372d0af64633c56bd081039d8f9"
+      "KNNvKP.rtbw|3-4-5-wdl|ffee4c066be8d25d148a61bfce3bd317bfe2a592a979147cfbe698aeee06a668"
+      "KNNvK.rtbw|3-4-5-wdl|8b5195abd7f1d4be7aa4b4dca669e9075d61d1c6b02dec8b71f5e9ea21d9eced"
+      "KNvKP.rtbw|3-4-5-wdl|f21332cc4b380764847d6c32511dee16cbf56e65604596ca24e784f8e4c13bdb"
+      "KPvK.rtbz|3-4-5-dtz|ad01af2076183c90ccee662ca6c5d74da3222ff1fee47c01b5d4e56ed01938de"
+      "KQvK.rtbz|3-4-5-dtz|71ea9444fa5bd42897d781a0c356975ea6f23e0f65a4254e470897031c161c8c"
+      "KRvK.rtbz|3-4-5-dtz|cab59f42e75c2a25da3939231850a79fa838593fff5c28d7772da92062ed965a"
+      "KBvK.rtbz|3-4-5-dtz|6246c8a5c643eec9d4758d55ed843e31cc28a9b82a6f630c1c950d8b7755975b"
+      "KNvK.rtbz|3-4-5-dtz|0e49a0f2810a131c32fc14872e83044aa9810ce2c86df071851512077291fc25")
+    string(REPLACE "|" ";" parts "${spec}")
+    list(GET parts 0 tb_name)
+    list(GET parts 1 tb_dir)
+    list(GET parts 2 tb_hash)
+    set(tb_file ${FORK_SYZYGY345_DIR}/${tb_name})
+    if(EXISTS ${tb_file})
+      file(SHA256 ${tb_file} have)
+      if(NOT have STREQUAL tb_hash)
+        file(REMOVE ${tb_file})
+      endif()
+    endif()
+    if(NOT EXISTS ${tb_file})
+      file(DOWNLOAD ${syzygy345_url}/${tb_dir}/${tb_name} ${tb_file} STATUS st TIMEOUT 600 INACTIVITY_TIMEOUT 60)
+      list(GET st 0 code)
+      set(have "")
+      if(code EQUAL 0)
+        file(SHA256 ${tb_file} have)
+      endif()
+      if(NOT have STREQUAL tb_hash)
+        file(REMOVE ${tb_file})
+        message(WARNING "could not download ${tb_name} with the pinned SHA-256 (${st}); the 3-4-5 table tests will fail")
+      endif()
+    endif()
+  endforeach()
+  target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
+
+  foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
+                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing)
+    add_test(NAME ${suite} COMMAND fork_tests ${suite})
+    set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
+  endforeach()
+  # Timing tests run alone, never beside another test (owner, 2026-10-26).
+  set_tests_properties(uci_timing PROPERTIES RUN_SERIAL TRUE)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_test(NAME perft_full COMMAND fork_tests perft_full)
     set_tests_properties(perft_full PROPERTIES LABELS slow)
@@ -308,17 +458,55 @@ if(FORK_BUILD_TESTS)
 
   if(NOT FORK_TSAN)
     add_executable(fork_alloc_test tests/alloc_test.cpp)
-    target_link_libraries(fork_alloc_test PRIVATE forkcore)
+    target_link_libraries(fork_alloc_test PRIVATE forksearch)
     add_test(NAME no_alloc COMMAND fork_alloc_test)
     # One failed allocation during go still gives exactly one real bestmove
     # (review, 2026-10-24). Replaces operator new too, so the same exclusions.
     add_executable(fork_uci_oom_test tests/uci_oom_test.cpp)
     target_link_libraries(fork_uci_oom_test PRIVATE forkuci)
     add_test(NAME uci_oom COMMAND fork_uci_oom_test)
+    # Review test (Phase 3 deliverable 3): TT dangling after a throwing Hash resize.
+    add_executable(fork_uci_hash_oom_test tests/uci_hash_oom_test.cpp)
+    target_link_libraries(fork_uci_hash_oom_test PRIVATE forkuci)
+    add_test(NAME uci_hash_oom COMMAND fork_uci_hash_oom_test)
   endif()
 
+  # A short differential run against python-chess (tools/difftest; audit-1
+  # Q-10: make, the fifty-move clock, repetitions and insufficient material,
+  # which only manual runs checked). Registered only where a Python with
+  # python-chess is at hand: FORK_TEST_PYTHON, by default the repository's
+  # .venv if it exists. CI, TCEC and the check's Linux copies have no .venv
+  # (it is not tracked), so there the test does not exist. Label "python".
+  set(FORK_TEST_PYTHON "" CACHE FILEPATH "Python with python-chess for the difftest_short test (default: .venv)")
+  set(test_python ${FORK_TEST_PYTHON})
+  foreach(candidate ${CMAKE_SOURCE_DIR}/.venv/Scripts/python.exe ${CMAKE_SOURCE_DIR}/.venv/bin/python)
+    if(NOT test_python AND EXISTS ${candidate})
+      set(test_python ${candidate})
+    endif()
+  endforeach()
+  if(test_python)
+    add_test(NAME difftest_short
+             COMMAND ${test_python} -I ${CMAKE_SOURCE_DIR}/tools/difftest/difftest.py
+                     --fork $<TARGET_FILE:fork> --positions 20000 --workers 2)
+    set_tests_properties(difftest_short PROPERTIES LABELS python)
+  endif()
+
+  # The search bench (`fork bench`) and, so move generation stays tied across
+  # builds too, the Phase 1 perft workload (`fork perftbench`).
   add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}
-    -DFORK=$<TARGET_FILE:fork>
+    -DFORK=$<TARGET_FILE:fork> -DCMD=bench
     -DREF=${CMAKE_SOURCE_DIR}/tests/bench.ref
     -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+  add_test(NAME perft_bench_parity COMMAND ${CMAKE_COMMAND}
+    -DFORK=$<TARGET_FILE:fork> -DCMD=perftbench
+    -DREF=${CMAKE_SOURCE_DIR}/tests/perft_bench.ref
+    -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+
+  # `fork version` says whether this build has LTO (audit-1, P-6).
+  add_test(NAME version_lto COMMAND fork version)
+  if(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
+    set_tests_properties(version_lto PROPERTIES PASS_REGULAR_EXPRESSION "\nlto on[\r\n]")
+  else()
+    set_tests_properties(version_lto PROPERTIES PASS_REGULAR_EXPRESSION "\nlto off[\r\n]")
+  endif()
 endif()

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "uci/session.hpp"
 
 #include <algorithm>
@@ -10,7 +12,11 @@
 
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
-#include "uci/placeholder.hpp"
+#include "eval/eval.hpp"
+#include "search/endgame_tables.hpp"
+#include "search/search_bench.hpp"
+#include "search/time_budget.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng {
 
@@ -22,22 +28,23 @@ constexpr std::string_view Commands[] = {"uci",        "debug",    "isready", "s
 
 bool is_command(std::string_view t) { return std::ranges::find(Commands, t) != std::end(Commands); }
 
-// Whether the first command word of `line` is `go`, found without
+// The first command word of `line` (empty if none), found without
 // allocating (so it still works when the tokenizer could not).
-bool names_go(std::string_view line) {
+std::string_view first_command(std::string_view line) {
   std::size_t i = 0;
   while (i < line.size()) {
     while (i < line.size() && is_uci_space(line[i])) ++i;
     std::size_t j = i;
     while (j < line.size() && !is_uci_space(line[j])) ++j;
     const std::string_view word = line.substr(i, j - i);
-    if (is_command(word)) return word == "go";
+    if (is_command(word)) return word;
     i = j;
   }
-  return false;
+  return {};
 }
 
-// "e2e4", "e7e8q" or "(none)" without allocating: the out-of-memory path.
+// "e2e4", "e7e8q" or "(none)" without allocating: info lines and the
+// out-of-memory path.
 void write_move_text(Move m, char (&text)[8]) {
   if (m.is_none()) {
     (void)std::snprintf(text, sizeof text, "(none)");
@@ -52,6 +59,48 @@ void write_move_text(Move m, char (&text)[8]) {
   if (m.is_promotion()) text[n++] = "nbrq"[m.promo_type() - Knight];
   text[n] = '\0';
 }
+
+// Writes the info lines of a search into a fixed buffer: no allocation
+// while the search runs (DESIGN.md §5.2, hot-path rules).
+class InfoWriter final : public SearchListener {
+ public:
+  explicit InfoWriter(OutputChannel& out) : out_(out) {}
+  void on_iteration(const Position&, const IterationReport& r) override {
+    char* const line = line_;
+    const std::uint64_t ms = static_cast<std::uint64_t>(std::max<std::int64_t>(r.elapsed_ms, 0));
+    const std::uint64_t nps = r.nodes * 1000 / std::max<std::uint64_t>(ms, 1);
+    const bool mate = is_mate_score(r.score);
+    int n = std::snprintf(
+        line, sizeof line_,
+        "info depth %d seldepth %d score %s %d%s nodes %llu nps %llu hashfull %d tbhits %llu time %llu",
+        r.depth, std::max(r.max_ply_reached, 1), mate ? "mate" : "cp",
+        mate ? mate_in_moves(r.score) : r.score,
+        r.bound > 0   ? " lowerbound"
+        : r.bound < 0 ? " upperbound"
+                      : "",
+        static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(nps), r.fill_permille,
+        static_cast<unsigned long long>(r.table_hits), static_cast<unsigned long long>(ms));
+    if (r.pv->length > 0) n += std::snprintf(line + n, sizeof line_ - static_cast<std::size_t>(n), " pv");
+    for (int i = 0; i < r.pv->length; ++i) {
+      char move[8];
+      write_move_text(r.pv->moves[i], move);
+      n += std::snprintf(line + n, sizeof line_ - static_cast<std::size_t>(n), " %s", move);
+    }
+    length_ = static_cast<std::size_t>(n);
+    sent_after_ = out_.send_line(std::string_view(line_, length_));
+  }
+  // Sends the last line again if another line (readyok, say) came after it,
+  // so the final info line is always right before bestmove.
+  void repeat_if_interrupted() {
+    if (length_ > 0 && out_.lines_sent() != sent_after_) out_.send_line(std::string_view(line_, length_));
+  }
+
+ private:
+  OutputChannel& out_;
+  char line_[4096];
+  std::size_t length_ = 0;
+  std::uint64_t sent_after_ = 0;
+};
 
 std::string hex16(std::uint64_t v) {
   char buf[17];
@@ -104,7 +153,15 @@ std::string describe_syzygy_path(const std::string& paths) {
 
 }  // namespace
 
-UciSession::UciSession(OutputChannel& out, SessionConfig config) : out_(out), config_(config) {
+// The State room each of root_ and spare_ reserves: 8,192 moves, far beyond
+// any real game (TCEC games end in the hundreds of moves), for about 1 MB
+// each (audit-1 R-3). Longer move lists still work: make() grows the stack.
+constexpr std::size_t GameStatePlies = 16384;
+
+UciSession::UciSession(OutputChannel& out, SessionConfig config)
+    : out_(out), config_(config), searcher_(std::make_unique<Searcher>(tt_)) {
+  root_.reserve_plies(GameStatePlies);
+  spare_.reserve_plies(GameStatePlies);
   declare_options();
 }
 
@@ -117,10 +174,38 @@ void UciSession::declare_options() {
   options_.add_spin("Threads", 1, 1, config_.max_threads);
   options_.add_spin("Move Overhead", 100, 0, 10000);
   options_.add_string("SyzygyPath", "", [this](const OptionEntry& e, std::string& message) {
+    syzygy_path_ = e.text;
+    tables_pending_ = config_.allow_files;
     if (e.text.empty()) return true;
     message = config_.allow_files ? describe_syzygy_path(e.text) : "SyzygyPath: file access disabled";
     return true;
   });
+#ifdef FORK_TUNE
+  // Tuning builds only (CMake FORK_TUNE; DESIGN.md §1 and §5.2): each search
+  // switch as a check option, so an SPRT can compare a technique on and off
+  // in one binary. Released and TCEC builds never declare these.
+  struct SwitchOption {
+    const char* name;
+    bool SearchSwitches::* field;
+  };
+#define FORK_SWITCH_OPTION(member, option, value) SwitchOption{#option, &SearchSwitches::member},
+  for (const SwitchOption s : {FORK_SEARCH_SWITCHES(FORK_SWITCH_OPTION)}) {
+#undef FORK_SWITCH_OPTION
+    options_.add_check(s.name, searcher_->switches.*s.field,
+                       [this, field = s.field](const OptionEntry& e, std::string&) {
+                         searcher_->switches.*field = e.number != 0;
+                         return true;
+                       });
+  }
+  // And every numeric search parameter as a spin option (deliverable 8b; the
+  // table and its ranges are src/tune/params.hpp), for SPSA.
+  for (const TuneParam& p : param_table()) {
+    options_.add_spin(std::string(p.name), p.default_value, p.lowest, p.highest,
+                      [name = p.name](const OptionEntry& e, std::string&) {
+                        return set_param(name, static_cast<int>(e.number));
+                      });
+  }
+#endif
   options_.add_string("LogFile", "", [this](const OptionEntry& e, std::string& message) {
     if (!config_.allow_files) {
       message = "LogFile: file access disabled";
@@ -140,12 +225,33 @@ unsigned UciSession::hash_workers() const {
 }
 
 bool UciSession::apply_pending() {
+  if (tables_pending_) {
+    // Never during a search: this runs only where the Hash work runs. An
+    // empty path (or "<empty>", the GUIs' way to clear it) unloads quietly.
+    tables_pending_ = false;
+    const bool cleared = syzygy_path_.empty() || syzygy_path_ == "<empty>";
+    const std::string report = load_endgame_tables(cleared ? std::string() : syzygy_path_);
+    if (!cleared) out_.send_info_string(report);
+  }
   if (hash_pending_) {
-    hash_pending_ = clear_pending_ = false;
     const std::size_t bytes = hash_bytes_for_mb(static_cast<std::uint64_t>(options_.number("Hash")));
     const auto start = std::chrono::steady_clock::now();
     std::string report;
+    // resize() frees the old table and may then throw (its report string), so
+    // the TT is unbound first and rebound from whatever the memory holds on
+    // every way out (review, 2026-10-24: it was left on freed memory). If it
+    // throws, the Hash stays pending and the next isready or go tries again.
+    struct Rebind {
+      TransTable& table;
+      const HashMemory& source;
+      ~Rebind() { table.bind_memory(source.data(), source.bytes()); }
+    } rebind{tt_, hash_};
+    tt_.bind_memory(nullptr, 0);
     const bool ok = hash_.resize(bytes, report);
+    // A Clear Hash in the same batch also forgets the history (audit-1, V-2).
+    if (clear_pending_) searcher_->clear_history();
+    hash_pending_ = clear_pending_ = false;
+    tt_.bind_memory(hash_.data(), hash_.bytes());
     const unsigned workers = hash_workers();
     hash_.clear(workers);
     const std::int64_t ms = ms_since(start);
@@ -158,6 +264,7 @@ bool UciSession::apply_pending() {
   if (clear_pending_) {
     clear_pending_ = false;
     hash_.clear(hash_workers());
+    searcher_->clear_history();  // Clear Hash forgets all search memory (review, deliverable 5)
     return true;
   }
   return false;
@@ -192,8 +299,8 @@ int UciSession::run(std::FILE* in) {
 
 bool UciSession::handle_line(std::string_view line) {
   go_answered_ = false;
-  try {
-    out_.log_input(line);
+  // Tokenizes and runs the line; false for quit.
+  auto run = [&]() {
     const std::vector<LineToken> tokens = split_tokens(line);
     // The spec: unknown tokens before a command are skipped.
     std::size_t i = 0;
@@ -209,21 +316,54 @@ bool UciSession::handle_line(std::string_view line) {
       return false;
     }
     dispatch(tokens, i, line);
+    return true;
+  };
+  try {
+    out_.log_input(line);
+    return run();
   } catch (const std::exception& e) {
     // A go that failed before its search started (no memory to tokenize the
-    // line, say) still gets its one bestmove.
-    if (names_go(line) && !go_answered_) {
+    // line, say) still gets its one bestmove, and an isready its readyok
+    // (audit-1, R-2: a Hash resize that ran out of memory lost it).
+    const std::string_view command = first_command(line);
+    if (command == "go" && !go_answered_) {
       try {
         stop_search();
       } catch (...) {
         // ignored: a join that fails leaves no search to wait for
       }
-      answer_without_memory(root_, NoMove, false);
+      if (position_unknown_) {
+        try {
+          out_.send_line("bestmove 0000");  // never a move of an unknown position (R-3)
+        } catch (...) {
+          // ignored: only a failing mutex can throw here
+        }
+      } else {
+        answer_without_memory(root_, NoMove, false);
+      }
+    }
+    // A position command that ran out of memory is tried once more; if that
+    // fails too, the position is unknown, and no go searches until the next
+    // position command succeeds (audit-1 R-3; owner, 2026-10-28).
+    if (command == "position") {
+      try {
+        run();
+        return true;
+      } catch (...) {
+        position_unknown_ = true;
+      }
     }
     try {
       out_.send_info_string(std::string("error: ") + e.what());
     } catch (...) {
       // ignored: no memory for the message either
+    }
+    if (command == "isready") {
+      try {
+        out_.send_line("readyok");
+      } catch (...) {
+        // ignored: only a failing mutex can throw here
+      }
     }
   }
   return true;
@@ -300,9 +440,11 @@ void UciSession::cmd_setoption(const std::vector<LineToken>& tokens, std::size_t
 
 void UciSession::cmd_ucinewgame() {
   if (!apply_pending()) hash_.clear(hash_workers());
+  searcher_->clear_history();
 }
 
 void UciSession::cmd_ponderhit() {
+  pondering_.store(false);
   {
     std::scoped_lock lock(signals_.mutex);
     signals_.ponder = false;
@@ -312,7 +454,7 @@ void UciSession::cmd_ponderhit() {
 
 void UciSession::cmd_position(const std::vector<LineToken>& tokens, std::size_t first,
                               std::string_view line) {
-  Position pos;
+  Position pos;  // the FEN or the start position; the moves are made on spare_
   std::size_t i = first;
   if (i < tokens.size() && tokens[i].text == "startpos") {
     ++i;
@@ -331,43 +473,69 @@ void UciSession::cmd_position(const std::vector<LineToken>& tokens, std::size_t 
     out_.send_info_string("position: expected startpos or fen; position unchanged");
     return;
   }
+  // Copied into spare_'s reserved States (no allocation), and the moves made
+  // there, so the move list of a long game cannot run out of memory.
+  spare_ = pos;
+  std::size_t illegal = tokens.size();
   while (i < tokens.size() && tokens[i].text != "moves") ++i;
   for (++i; i < tokens.size(); ++i) {
-    const Move m = parse_uci_move(pos, tokens[i].text);
+    const Move m = parse_uci_move(spare_, tokens[i].text);
     if (m.is_none()) {
-      out_.send_info_string("illegal move " + std::string(tokens[i].text) + "; position kept before it");
+      illegal = i;
       break;
     }
-    pos.make(m);
+    spare_.make(m);
   }
-  root_ = std::move(pos);
+  std::swap(root_, spare_);  // moves only: no allocation
+  position_unknown_ = false;
+  if (illegal < tokens.size())
+    out_.send_info_string("illegal move " + std::string(tokens[illegal].text) + "; position kept before it");
 }
 
 void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first) {
-  if (first < tokens.size() && tokens[first].text == "perft") {
+  const bool perft = first < tokens.size() && tokens[first].text == "perft";
+  if (position_unknown_) {
+    // Never search a position that may not be the GUI's (audit-1 R-3): the
+    // go is answered at once with the null move (go perft gets no bestmove).
+    go_answered_ = true;
+    try {
+      out_.send_info_string("error: the last position command failed; no search until a position succeeds");
+    } catch (...) {
+      // ignored: no memory for the message; the bestmove still goes out
+    }
+    if (!perft) out_.send_line("bestmove 0000");
+    return;
+  }
+  if (perft) {
     go_answered_ = true;  // a Fork extension, not a search: no bestmove
     cmd_perft(tokens, first + 1);
     return;
   }
+  const auto go_time = std::chrono::steady_clock::now();  // time limits count from here
   std::vector<std::string> warnings;
-  const GoLimits limits = parse_go(tokens, first, root_, warnings);
+  const GoLimits go = parse_go(tokens, first, root_, warnings);
   for (const std::string& w : warnings) out_.send_info_string(w);
-  if (limits.restrict_sent && limits.restrict_to.empty())
+  if (go.restrict_sent && go.restrict_to.empty())
     out_.send_info_string("go: no legal move in searchmoves; searching every move");
   apply_pending();
+  SearchQuota limits = quota_for_go(go, root_.side_to_move(), options_.number("Move Overhead"));
+  limits.go_received = go_time;
+  const bool infinite = go.infinite;
   {
     std::scoped_lock lock(signals_.mutex);
     signals_.stop = !config_.use_threads;  // no thread: nothing could stop it later
-    signals_.ponder = limits.ponder && config_.use_threads;
+    signals_.ponder = go.ponder && config_.use_threads;
     signals_.finished = false;
   }
+  stop_flag_.store(!config_.use_threads);
+  pondering_.store(go.ponder && config_.use_threads);
   if (!config_.use_threads) {
-    search_main(root_, limits);
+    search_main(root_, limits, infinite);
     go_answered_ = true;
     return;
   }
   try {
-    search_thread_ = std::thread(&UciSession::search_main, this, root_, limits);
+    search_thread_ = std::thread(&UciSession::search_main, this, root_, limits, infinite);
   } catch (...) {
     // No thread (std::system_error) or no memory for its copy of the
     // position: answer at once on this thread, without allocating, so the go
@@ -390,25 +558,60 @@ void UciSession::stop_search() {
     std::scoped_lock lock(signals_.mutex);
     signals_.stop = true;
   }
+  stop_flag_.store(true);
   signals_.wake.notify_all();
   search_thread_.join();
 }
 
-void UciSession::search_main(Position pos, GoLimits limits) {
+// A ponder search ignores time until ponderhit (the session's pondering flag,
+// not the limits).
+SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhead_ms) {
+  SearchQuota l;
+  if (go.depth) l.depth = static_cast<int>(std::clamp<std::int64_t>(*go.depth, 1, MaxPly - 1));
+  if (go.nodes) l.nodes = static_cast<std::uint64_t>(std::max<std::int64_t>(*go.nodes, 1));
+  if (go.mate) {
+    // A mate in N moves is N moves of the side to move and N - 1 replies:
+    // 2N - 1 plies, the depth at which a full-width search finds it. The
+    // search goes no deeper and plays its best move, so a `go mate N` with
+    // no mate in N still answers (audit-1 R-4; owner, 2026-10-28); `mate 0`
+    // or less searches one ply.
+    const std::int64_t moves = std::min<std::int64_t>(*go.mate, MaxPly);
+    l.depth = std::min(l.depth, static_cast<int>(std::clamp<std::int64_t>(2 * moves - 1, 1, MaxPly - 1)));
+    if (moves > 0) l.mate_moves = static_cast<int>(moves);
+  }
+  for (Move m : go.restrict_to) l.restrict_to.add(m);
+  if (!go.infinite) {
+    ClockInput clock;
+    clock.remaining_ms = go.remaining_ms[us];
+    clock.increment_ms = go.increment_ms[us];
+    clock.movestogo = go.movestogo;
+    clock.movetime = go.movetime;
+    clock.overhead_ms = move_overhead_ms;
+    const TimeBudget budget = plan_time(clock);
+    l.soft_ms = budget.soft_ms;
+    l.hard_ms = budget.hard_ms;
+  }
+  return l;
+}
+
+void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
   const auto start = std::chrono::steady_clock::now();
   Move best = NoMove;
   bool picked = false;
   try {
-    const PlaceholderPick pick = pick_placeholder_move(pos, limits.restrict_to);
-    best = pick.move;
+    InfoWriter writer(out_);
+    const SearchResult r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer);
+    best = r.best;
     picked = true;
-    const bool waits = limits.infinite || limits.ponder;
-    if (waits) report_search(pos, best, pick.nodes, ms_since(start));
     {
+      // go infinite and go ponder never end by themselves.
       std::unique_lock<std::mutex> lock(signals_.mutex);
-      signals_.wake.wait(lock, [&] { return signals_.stop || (!limits.infinite && !signals_.ponder); });
+      signals_.wake.wait(lock, [&] { return signals_.stop || (!infinite && !signals_.ponder); });
     }
-    report_search(pos, best, pick.nodes, ms_since(start));
+    if (r.depth == 0)
+      report_unfinished(pos, r, ms_since(start));
+    else
+      writer.repeat_if_interrupted();
     char move[8];
     write_move_text(best, move);
     char line[32];
@@ -421,6 +624,29 @@ void UciSession::search_main(Position pos, GoLimits limits) {
   }
   std::scoped_lock lock(signals_.mutex);
   signals_.finished = true;
+}
+
+// The last info line when no iteration finished (stopped early, or no legal
+// move), from fixed buffers.
+void UciSession::report_unfinished(const Position& pos, const SearchResult& r, std::int64_t elapsed_ms) {
+  const std::uint64_t ms = static_cast<std::uint64_t>(std::max<std::int64_t>(elapsed_ms, 0));
+  const std::uint64_t nps = r.nodes * 1000 / std::max<std::uint64_t>(ms, 1);
+  char line[160];
+  int n;
+  if (r.best.is_none()) {
+    n = std::snprintf(line, sizeof line, "info depth 0 seldepth 0 score %s nodes %llu nps %llu time %llu",
+                      pos.in_check() ? "mate 0" : "cp 0", static_cast<unsigned long long>(r.nodes),
+                      static_cast<unsigned long long>(nps), static_cast<unsigned long long>(ms));
+  } else {
+    // Stopped before depth 1 finished: the static evaluation is the score.
+    char move[8];
+    write_move_text(r.best, move);
+    n = std::snprintf(line, sizeof line,
+                      "info depth 0 seldepth 1 score cp %d nodes %llu nps %llu time %llu pv %s",
+                      pos.in_check() ? 0 : static_eval(pos), static_cast<unsigned long long>(r.nodes),
+                      static_cast<unsigned long long>(nps), static_cast<unsigned long long>(ms), move);
+  }
+  out_.send_line(std::string_view(line, static_cast<std::size_t>(n)));
 }
 
 // The last-resort answer to a go: a scored info line and a bestmove, built in
@@ -446,20 +672,6 @@ void UciSession::answer_without_memory(const Position& pos, Move best, bool know
   } catch (...) {
     // ignored: only a failing mutex can throw here; nothing more can be said
   }
-}
-
-void UciSession::report_search(const Position& pos, Move best, std::uint64_t nodes, std::int64_t elapsed_ms) {
-  const std::uint64_t nps = nodes * 1000 / static_cast<std::uint64_t>(std::max<std::int64_t>(elapsed_ms, 1));
-  std::string line;
-  if (best.is_none()) {
-    line = std::string("info depth 0 seldepth 0 score ") + (pos.in_check() ? "mate 0" : "cp 0");
-  } else {
-    line = "info depth 1 seldepth 1 score cp 0";
-  }
-  line += " nodes " + std::to_string(nodes) + " nps " + std::to_string(nps) + " time " +
-          std::to_string(elapsed_ms);
-  if (!best.is_none()) line += " pv " + pos.move_to_uci(best);
-  out_.send_line(line);
 }
 
 void UciSession::cmd_perft(const std::vector<LineToken>& tokens, std::size_t first) {
@@ -490,7 +702,7 @@ void UciSession::cmd_bench() {
     out_.send_info_string("bench: disabled");
     return;
   }
-  const BenchResult r = bench();
+  const SearchBenchResult r = run_search_bench();
   out_.send_info_string("nodes " + std::to_string(r.nodes));
   out_.send_info_string("signature " + hex16(r.signature));
   out_.send_info_string("nps " + std::to_string(static_cast<std::uint64_t>(static_cast<double>(r.nodes) /

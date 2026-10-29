@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Writes build_id.hpp for fork_micro: the build's variant label and the git
 # commit it was built from ("-dirty" if tracked files had uncommitted changes).
 # Runs at every build; the header is rewritten only when its content changes,

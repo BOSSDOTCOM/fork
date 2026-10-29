@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // zobrist: hashing keys.
 //
 // Purpose: random keys for piece-squares, side, castling rights and en
