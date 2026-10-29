@@ -289,7 +289,8 @@ All of this comes from `trainer/src/model/weights.rs`,
    - The value is then quantised: multiplied by the factor and
      **truncated toward zero** by default, or **rounded** if `.round()` was
      given (where `.round()` appears in the chain does not matter).
-     Target types: i8 (with an i16 factor), i16 (i16 factor), i32 (i32
+     The exact rule (multiply in f64, round half away from zero) is in
+     bullet-internals.md §1 (2026-10-28). Target types: i8 (with an i16 factor), i16 (i16 factor), i32 (i32
      factor). With no `.quantise`, the value is written as f32.
    - A value that does not fit its type aborts the whole file (it is not
      clamped).
@@ -1025,6 +1026,42 @@ every result in training-data.md §2.1 and the decisions log.
 | K22 | **Both T4s usable** (optional) | two trainings at once on devices 0 and 1 (`use_device`) | both run; record the combined positions/s; the CPU is likely the limit |
 
 ---
+
+### 8.1 Session 1 results (2026-10-28)
+
+The owner ran main's `tools/train/kaggle/session_check.py` in one cell of a
+private Kaggle notebook (GPU T4 x2, internet on). Its output, verbatim
+except that the 57 library paths are summarised:
+
+- **K2:** `https://github.com/` 200; `https://static.rust-lang.org/rustup/dist/`
+  and `https://crates.io/` "HTTP Error 404: Not Found" (servers reached;
+  real downloads untested).
+- **K3 GPUs:** "Tesla T4, 580.178.04, 15360 MiB" twice; nvidia-smi header
+  "Driver Version: 580.178.04 CUDA Version: 13.0".
+- **K3 CUDA toolkit:** nvcc "Cuda compilation tools, release 12.8, V12.8.93";
+  in `/usr/local/cuda/lib64` (same files under
+  `/usr/local/cuda/targets/x86_64-linux/lib`): libcudart.so.12.8.90,
+  libnvrtc.so.12.8.93 (and the `.alt` and builtins variants),
+  libcublas.so.12.8.4.1, libcublasLt.so.12.8.4.1, plus the static
+  archives. `libcuda.so.580.178.04` only in `/usr/local/nvidia/lib64`, which
+  the loader cache (`ldconfig -p`) does not list.
+- **K3 environment:** `CUDA_PATH` unset; `CUDA_HOME=/usr/local/cuda`;
+  `LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda/lib64`.
+- **K4:** `rustc` not installed.
+- **K11:** free space `/kaggle/working` 19.5 GB, `/kaggle/input` 19.5 GB,
+  `/tmp` and `/` 1,048.8 GB.
+- **K17:** 4 CPUs; 31.3 GB RAM; Linux-6.18.55+-x86_64-with-glibc2.39;
+  Python 3.13.15.
+
+**Reading.** T4 x2 is confirmed. The toolkit (12.8) and the driver (CUDA
+13.0) both meet the 12.4 minimum inferred in §1.2 and bullet-internals.md
+§8, and the driver is newer than NVRTC; whether bullet builds and runs on
+them stays open until session 2 (K4/K5). `libcuda` outside the loader
+cache may matter when Rust links `cuda` at build time (§9 item 11):
+session 2 sets `CUDA_PATH=/usr/local/cuda` and adds
+`-L /usr/local/nvidia/lib64` if the link fails. The owner's manual items
+(the accelerator menu, the weekly quota before and after, the idle
+timeout, a per-file upload limit, the terms) were not yet reported.
 
 ## 9. UNVERIFIED items (with reasons)
 

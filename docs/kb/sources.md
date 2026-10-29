@@ -1148,3 +1148,115 @@ All checked 2026-10-28. "Clone" means the temporary bullet clone at
 | https://database.lichess.org/standard/list.txt | download list | URL pattern |
 | `HEAD` https://database.lichess.org/standard/lichess_db_standard_rated_{2016-09,2016-12,2026-09}.pgn.zst | headers only, no download | exact byte sizes, Last-Modified, range support |
 | (search) "cuFuncLoad CUDA driver API 12.4" | web search, used only to find NVIDIA's archived pages | not a source; the archived pages above were opened |
+
+## bullet internals at the pin (bullet-internals.md), 2026-10-28
+
+All checked 2026-10-28. "Clone" means a temporary shallow clone of
+github.com/jw1912/bullet at `da426a49b2a4b79a55a87031cd51c89bdf1ff030`,
+outside both repositories, deleted after reading (owner's approval of
+2026-10-28 to read bullet's code). No chess engine's source was opened;
+the viriformat crate's source was not opened (docs.rs rendered pages only).
+
+| URL / file | What it is | Used for |
+|---|---|---|
+| https://github.com/jw1912/bullet (clone): `Cargo.toml`, `Cargo.lock`, `README.md`, `docs/2-getting-started.md`, `docs/3-data.md`, `docs/4-saved-networks.md` | bullet workspace manifest, lock file, docs (MIT) | pins of data crates, CUDA setup text, stm-relative `ChessBoard`, saved-network layout (sections 1, 4, 8) |
+| clone: `crates/trainer/src/model/weights.rs` | `SavedFormat`, `QuantTarget`, quantised buffer, padding, weights-file records | quantization rule, overflow check, layouts (1, 2) |
+| clone: `crates/bullet_lib/src/value/save.rs` | checkpoint writing and loading | checkpoint files, error handling (1.2, 2) |
+| clone: `crates/trainer/src/optimiser.rs`, `optimiser/{adam,utils,wrap,clip,decay}.rs` | optimiser state, AdamW kernel, checkpoint record files, wrappers | AdamW defaults and update, clipping, moments files (2.2, 5.4, 7) |
+| clone: `crates/bullet_lib/src/{lib,nn,value,trainer}.rs`, `value/builder.rs` | public API, `ValueTrainer`, `ValueTrainerBuilder`, target mapper, `eval` | training program calls, target formula, evaluation (3, 5, 6) |
+| clone: `crates/bullet_lib/src/game.rs`, `game/inputs.rs`, `inputs/{chess768,chess_buckets,factorised,adapter}.rs`, `game/outputs.rs` | input types and output buckets | feature indices, mirroring, buckets, factoriser layout, `MaterialCount` (4) |
+| clone: `crates/bullet_lib/src/value/loader.rs`, `loader/{viribinpack,rng,text}.rs`, `loader/direct.rs` (skip handling only) | data loaders | viriformat loader behaviour, filter plumbing, clock-seeded RNG (5.2, 6) |
+| clone: `crates/bullet_lib/src/trainer/{settings,schedule}.rs`, `schedule/{lr,wdl}.rs` | settings and schedulers | schedule fields, WDL weight meaning, LR schedulers, unused queue size (5.3, 5.5) |
+| clone: `crates/trainer/src/{lib,model,reader}.rs`, `model/{evaluator,inputs}.rs` (mapper part), `run.rs`, `run/{schedule,dataloader}.rs` | run loop, steps, evaluator, batch mapping | superbatch semantics, gradient averaging, evaluator buffer sharing (3, 5.6) |
+| clone: `crates/compiler/src/model/builder.rs`, `model/operations/{pointwise,index,linear}.rs` (parts), `tensor/operation/autograd/qat.rs`, `tensor/operation/linear/sparse.rs` (reference evaluate functions), `tensor/operation/pointwise/unary.rs` (round/trunc lines) | graph API and operations | graph features, CReLU/SCReLU, QAT node, duplicate sparse indices (7) |
+| clone: `crates/gpu/build.rs`, `crates/gpu/src/runtime.rs` (module compile), `runtime/cuda.rs` (bindings, device props), `runtime/mock.rs`, `pointwise/write.rs` (unary and sparse kernels), `buffer.rs` (`to_host`), `kernel.rs`/`runtime.rs` (function list only), `Cargo.toml` of `gpu`, `trainer`, `bullet_lib` | GPU runtime and build | linked libraries, NVRTC to PTX, bound driver calls, mock behaviour, sparse forward/backward summation (7, 8) |
+| clone: `examples/simple.rs`, `examples/progression/{2_output_buckets,3_input_buckets}.rs`, `examples/tests/test1.rs`, `examples/advanced/{main,filter}.rs`, `examples/advanced/inputs.rs` | bullet examples | B0-shaped program, factoriser merge transform, output-bucket transpose, eval scaling, low-level API, slice-and-multiply, stacked select. The advanced example is another engine's training setup with a threat-input design: read for API patterns only, nothing of its feature layout recorded (9) |
+| https://crates.io/api/v1/crates/bulletformat/1.8.0/download | bulletformat 1.8.0 crate (MIT, jw1912), SHA-256 `6d171953…c1b0` = bullet's lock; read `Cargo.toml.orig`, `LICENSE`, `src/chess.rs`; deleted after reading | `ChessBoard` layout, stm-relative conversion, king squares, text parser (3, 4.1, 6) |
+| https://crates.io/api/v1/crates/sfbinpack, `/montyformat`, `/viriformat`, and `/sfbinpack/0.6.4`, `/montyformat/0.9.2`, `/viriformat/2.0.1` | crates.io metadata (JSON only, no crate downloaded) | descriptions, repositories, licences GPL-3.0 / AGPL-3.0 / MIT (9) |
+| https://docs.rs/viriformat/2.0.1/viriformat/dataformat/struct.Filter.html | viriformat rendered API docs (no source opened) | `Filter` field meanings, `Default`/serde, `UNRESTRICTED`, `should_filter` signature (5.2) |
+| https://docs.rs/viriformat/2.0.1/viriformat/dataformat/struct.Game.html | viriformat rendered API docs (no source opened) | "evaluation of the position in which they were played", `MAX_SPLATTABLE_GAME_SIZE` = 512, splat methods (6) |
+| https://doc.rust-lang.org/std/primitive.f64.html | Rust standard library, `f64` | `round` halfway away from zero, `trunc` toward zero (1.2) |
+| https://doc.rust-lang.org/reference/expressions/operator-expr.html | Rust Reference, operator expressions | float-to-integer `as` casts saturate, NaN to 0 (1.2) |
+| https://docs.nvidia.com/cuda/cuda-math-api/cuda_math_api/group__CUDA__MATH__SINGLE.html | CUDA Math API, single precision | `roundf` rounds halfway cases away from zero (7, QAT) |
+| https://docs.nvidia.com/cuda/archive/12.3.0/cuda-driver-api/group__CUDA__EXEC.html and `/12.4.0/…` | CUDA driver API, Execution Control | `cuFuncLoad` absent in 12.3.0, present in 12.4.0 (rechecked) (8) |
+| https://docs.nvidia.com/deploy/cuda-compatibility/index.html | CUDA Compatibility guide, index | navigation only |
+| https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html | CUDA minor-version compatibility | PTX-compiled device code does not work on older drivers; NVRTC minor-version compatibility from 11.3 (8) |
+| https://api.github.com/repos/jw1912/bullet/pulls/483 and `/files` | GitHub API, PR #483 metadata and file list (diff not read) | "Add QAT operation", merged 2025-10-20, files since restructured (7) |
+| (local computation) Python script in the scratch folder, pure standard library | my own rounding check | tie vectors and f32-vs-f64 multiply disagreement counts (1.4); deleted afterwards |
+
+## Excluding sfbinpack and montyformat (bullet-internals.md §12), 2026-10-28
+
+All checked 2026-10-28. "Clone" means a new temporary shallow clone of
+github.com/jw1912/bullet at `da426a49b2a4b79a55a87031cd51c89bdf1ff030`
+(MIT; owner's approval of 2026-10-28 to read bullet's code), outside both
+repositories, deleted after reading. No source of sfbinpack, montyformat or
+viriformat was opened or downloaded; no cargo command was run. One shell
+write attempt failed (a heredoc parse error, nothing written); no fetch
+failed.
+
+| URL / file | What it is | Used for |
+|---|---|---|
+| clone: `Cargo.toml` (workspace), `crates/{bullet_lib,compiler,gpu,trainer,utils}/Cargo.toml` | bullet manifests | which crate depends on sfbinpack and montyformat, optional or not, feature tables, resolver, edition (12.1, 12.2) |
+| clone: `Cargo.lock` | bullet lock file (version 4) | lock entries of the four data crates; dependency closures of bullet-trainer, viriformat, bulletformat, bullet_lib (12.1) |
+| clone: `README.md`, `docs/2-getting-started.md`, `docs/3-data.md` (searched for crate and feature mentions) | bullet docs | `bullet-trainer` used directly by the advanced example; bullet-utils build; loader list (12.1, 12.2) |
+| clone: `crates/bullet_lib/src/game.rs` (formats module), `src/value/loader.rs` (module and re-export lines), `src/value/loader/{sfbinpack,montybinpack}.rs` (import lines and public items only), plus a file search over the clone for the three crate names | bullet_lib's uses of the crates | paths and counts of the uses (12.3) |
+| clone: `crates/trainer/src/{lib,model,reader,run,optimiser}.rs`, `src/model/weights.rs` (public item lists), `src/run.rs` (`DefaultDevice` cfg lines), `crates/bullet_lib/src/value.rs` (`eval` signatures) | bullet-trainer public API | what a trainer-only program gets and must write (12.4) |
+| clone: `examples/ataxx.rs` | bullet example built on bullet-trainer alone (an Ataxx board, not chess) | evidence that the trainer crate supports a full training run; nothing recorded beyond that (12.1) |
+| https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html | Cargo Book, specifying dependencies | git dependencies found by searching the repository; `rev`; git commits locked in `Cargo.lock` (12.5) |
+| https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html | Cargo Book, overriding dependencies | `[patch]` for crates-io and git URLs, root manifest only, a same-version patch replaces the original; silent on downloads (12.4) |
+| https://doc.rust-lang.org/cargo/reference/resolver.html | Cargo Book, dependency resolution | resolver set only by the top-level workspace; lock generated as if all features of workspace members are on; resolver 2/3 defaults (12.2) |
+| https://doc.rust-lang.org/cargo/commands/cargo-fetch.html | Cargo Book, `cargo fetch` | fetches all git and registry dependencies in the lock, all targets by default; nothing on features (12.2) |
+| https://doc.rust-lang.org/cargo/reference/workspaces.html | Cargo Book, workspaces | shared lock at the workspace root; `[patch]` only in the root manifest (12.2, 12.4) |
+| https://doc.rust-lang.org/cargo/faq.html | Cargo FAQ | a package's `Cargo.lock` does not affect its consumers (12.2) |
+| https://doc.rust-lang.org/cargo/reference/cargo-targets.html | Cargo Book, targets | looked for which targets of a dependency are built: not stated, so marked UNVERIFIED (12.3) |
+| (local computation) Python script in the scratch folder, standard library `tomllib` | my own dependency-closure walk over bullet's `Cargo.lock` | 63 / 33 / 1 / 98 package closures (12.1); deleted afterwards |
+
+## Trainer-only program for B0 (bullet-internals.md §13), 2026-10-28
+
+All checked 2026-10-28. "Clone" means a fresh temporary shallow clone of
+github.com/jw1912/bullet at `da426a49b2a4b79a55a87031cd51c89bdf1ff030`
+(MIT) in the session scratch folder, outside both repositories, deleted
+after reading (owner's approval of 2026-10-28 to read bullet's code). No
+chess engine's source was opened; no viriformat, sfbinpack or montyformat
+source; nothing downloaded through Cargo; nothing built or run.
+
+| URL / file | What it is | Used for |
+|---|---|---|
+| https://github.com/jw1912/bullet (clone): `Cargo.toml`, `crates/{trainer,gpu,compiler,bullet_lib}/Cargo.toml`, `.github/workflows/checks.yaml`, `README.md`, `docs/2-getting-started.md` | manifests, CI, docs | features (no `default`), workspace inheritance, `[[example]]` entries, edition and rust-version, CI toolchain (13.8) |
+| clone: `crates/trainer/src/` (all files: `lib.rs`, `model.rs`, `model/{definition,evaluator,inputs,weights}.rs`, `optimiser.rs`, `optimiser/{adam,utils}.rs`, `reader.rs`, `reader/fixed_size.rs`, `run.rs`, `run/{schedule,dataloader,events}.rs`, `run/logger.rs` signatures) | the trainer crate's public API | every signature in 13.2-13.6 |
+| clone: `examples/ataxx.rs`, `examples/tests/test4.rs`, `examples/advanced/main.rs` (import and API-call lines only; `inputs.rs` not opened) | trainer-only examples | example wiring and values (13.4), evaluator call pattern (13.6) |
+| clone: `crates/bullet_lib/src/{lib,nn,value}.rs`, `value/{builder,save,loader}.rs`, `value/loader/viribinpack.rs`, `game.rs`, `game/inputs.rs`, `inputs/chess768.rs`, `trainer/{schedule,settings}.rs`, `schedule/lr.rs` (first 90 lines) | what `ValueTrainer` did on top of the trainer | the duties Fork takes over (13.1), viriformat calls (13.3), save and load wrappers (13.4, 13.5) |
+| clone: `crates/compiler/src/model/builder.rs` (input, affine, activation, loss, concat functions), `model.rs` (head), `tensor/ttype.rs` (`TValue` methods) | graph builder | graph API (13.2), reading outputs (13.6) |
+| clone: `crates/gpu/src/runtime.rs` (head, device, stream allocator), `runtime/mock.rs`, `buffer.rs` (function list, transfer paths), `function.rs` (function list, `prealloc`), `kernel.rs` (function list), `build.rs` (feature checks), `lib.rs` (module list, test imports) | GPU runtime | mock behaviour (13.7) |
+| https://docs.rs/viriformat/2.0.1/viriformat/dataformat/struct.Game.html | viriformat rendered API docs (no source opened) | `deserialise_*`, `splat_to_bulletformat*`, `should_filter` parameter types, `anyhow::Result` and `std::io::Result` return types, `moves` field (13.3) |
+| https://docs.rs/bulletformat/1.8.0/bulletformat/chess/struct.ChessBoard.html | bulletformat rendered API docs | `IntoIterator` item `(u8, u8)`, `FromStr`, `from_raw`, `BulletFormat` methods (13.3, 13.6) |
+| https://docs.rs/bulletformat/1.8.0/bulletformat/trait.BulletFormat.html | bulletformat rendered API docs | `score`, `result`, `result_idx` signatures (13.3) |
+| https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html | Cargo Book, specifying dependencies | git crates found by searching the repository; inherited dependency keys (13.8) |
+| https://doc.rust-lang.org/cargo/reference/workspaces.html | Cargo Book, workspaces | members find their workspace by searching parent directories; `workspace.package` keys (13.8) |
+| https://doc.rust-lang.org/cargo/reference/features.html | Cargo Book, features | no feature enabled unless a `default` list exists (13.8) |
+
+## Kaggle terms re-checked (training-data.md §2.1), 2026-10-28
+
+All checked 2026-10-28, logged out. The kaggle.com pages were rendered in
+headless Microsoft Edge (156), first with `--dump-dom`, then through the
+DevTools protocol (a scratch Node script that reads the rendered page text
+and opens the version dropdowns; deleted afterwards). No chess engine
+source was opened.
+
+| URL | What it is | Used for |
+|---|---|---|
+| https://www.kaggle.com/terms (`--dump-dom`, then DevTools) | Kaggle Terms of Use, effective June 22, 2025 | personal/non-commercial clause, one-account rule, crawling ban, licence section (Section 9), 14-day change notice; version list (6 entries, none newer than 2025-06-22) |
+| https://www.kaggle.com/aup (`--dump-dom`, then DevTools) | Kaggle Acceptable Use Policy, effective June 22, 2025 | resource-abuse list, ML-data-science scope; version list (4 entries, none newer). The `--dump-dom` run segfaulted on exit after writing complete output |
+| https://www.kaggle.com/community-guidelines | Community Guidelines, updated March 4, 2026 | synthetic-data tag, duplicate-account and free-storage bans, unused-dataset rule, on-topic rule |
+| https://www.kaggle.com/community-guidelines-2025-02-24 | previous Community Guidelines (February 24, 2025) | full diff against the current version (two changes) |
+| https://www.kaggle.com/paid-services | Kaggle Paid Services | the only paid service is hosting competitions |
+| https://www.kaggle.com/docs | docs index | list of docs pages |
+| https://www.kaggle.com/docs/notebooks | Notebooks docs | session specs, idle timeout, scheduling limits, Colab Pro promotion and its legal terms |
+| https://www.kaggle.com/docs/efficient-gpu-usage | GPU tips | 30 h/week quota, 60 min idle, API pushes recommended |
+| https://www.kaggle.com/docs/datasets | Datasets docs | "Technical Specifications" storage limits, private-by-default sharing |
+| https://www.kaggle.com/docs/api | Public API docs | dynamic rate limits and 429 handling, tokens for automated scripts |
+| https://www.kaggle.com/tags/synthetic | tag page | **failed**: "Unauthenticated" when logged out (whether the tag exists is unverified) |
+| https://www.kaggle.com/datasets?tags=synthetic | dataset listing filtered by tag | **failed**: "Loading items failed" when logged out |
+| https://api.github.com/repos/Kaggle/kaggle-cli/commits?per_page=3 | Kaggle CLI commit list | head is still `a636fc70` |
+| https://raw.githubusercontent.com/Kaggle/kaggle-cli/main/docs/datasets_metadata.md | CLI dataset metadata docs (Apache-2.0) | the `keywords` field must match an existing tag; unknown tags are skipped |
+| web search "Kaggle terms of use update 2026" | search (snippets not relied on) | looked for a change announcement: none from Kaggle found |

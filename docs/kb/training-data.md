@@ -410,6 +410,9 @@ Kaggle CLI docs kernels.md, 2026-10-22)
 - Kaggle takes a licence to operate the service with user content, but
   ownership is not affected. No claim on trained outputs was found, so
   publishing nets under GPL-3.0 is not blocked.
+- Re-checked 2026-10-28: both documents are unchanged; the Community
+  Guidelines changed instead. See "Kaggle terms re-checked (2026-10-28)"
+  at the end of this section.
 
 **Google Colab** (research.google.com/colaboratory/faq.html, made binding
 by the Colab Additional Terms tos_v5, 2024-05-14)
@@ -426,6 +429,179 @@ by the Colab Additional Terms tos_v5, 2024-05-14)
   - Disk size is not stated (**UNVERIFIED**).
   - Google Drive gives 15 GB shared with Gmail and Photos.
   - Using several accounts to dodge limits is banned.
+
+#### Kaggle terms re-checked (2026-10-28)
+
+- **What it is:** a second, full reading of Kaggle's rules. The trigger:
+  during the Kaggle test session the owner answered "no" to "the Terms
+  and AUP still say personal, non-commercial use".
+- **Why it matters for Fork:** Phase 4 training (step 0, baseline net B0,
+  and every later run) depends on Kaggle Notebooks (GPU), Kaggle Datasets
+  (the only copy of the training data, section 2.2) and the Kaggle CLI
+  (headless pushes and polling, phase4-pipeline.md section 4).
+- **Sources (official pages only, all opened 2026-10-28):**
+  - kaggle.com/terms, /aup and /community-guidelines;
+  - /community-guidelines-2025-02-24 (the previous version, for a diff);
+  - /paid-services, /docs/notebooks, /docs/efficient-gpu-usage,
+    /docs/datasets and /docs/api;
+  - the Kaggle CLI's `docs/datasets_metadata.md` at commit `a636fc70`.
+
+  The Kaggle pages return only a JavaScript shell to plain fetches, so
+  they were rendered logged out in headless Edge. The version dropdowns
+  were opened through the DevTools protocol to list every version.
+- **Tag:** USE (the service, under the conditions below). **Licence:**
+  none applies (these are terms of service). The Kaggle CLI is Apache-2.0.
+- This is a reading, not legal advice.
+
+**1. Effective dates and what changed**
+
+| Document | Active version | Versions listed in its selector | Changed since the 2026-10-24 reading? |
+|---|---|---|---|
+| Terms of Use | "Effective Date: June 22, 2025" | June 22, 2025 (active); a French copy of the same date; October 4, 2024; February 16, 2024; May 26, 2022; March 10, 2022 | **No.** There is no newer or pending version. The Terms say a change takes effect at least 14 days after it is posted, except for new functions or legal reasons |
+| Acceptable Use Policy | "Effective: June 22, 2025" | June 22, 2025 (active); French copy; October 4, 2024; September 2, 2020 | **No** |
+| Community Guidelines (part of the Terms, per the Terms' opening paragraph) | "Updated March 4, 2026" | links to the previous version, dated February 24, 2025 | **Yes**, but only slightly (below). The KB's 2026-10-24 reading did not cover this page |
+| Paid Services | undated | the only paid service is hosting competitions | not read before |
+
+- **Personal, non-commercial clause: still present, unchanged.** It is in
+  the Terms section "What are the basics of using Kaggle?". Use must be
+  your own internal, personal and non-commercial use. It must not be on
+  behalf of a third party or for a third party's benefit, and it must be
+  lawful.
+- **AUP: unchanged.** The last item lists the ways to "abuse resources"
+  that are banned: cryptomining, DDoS attacks, server farming, creating
+  harmful content, malicious activity, "activity unrelated to ML data
+  science" and excessive crawling. The Terms section "Are there any
+  additional restrictions on my use of the Services?" also bans
+  cryptomining.
+- **No new compute-use restriction** was found in the Terms, the AUP,
+  the Guidelines or the Notebooks and GPU docs.
+- **Games, chess, reinforcement learning, self-play, models for use
+  outside Kaggle:** no clause on any of these, in any of the pages read.
+  The Terms mention games only in two places:
+  - competitions may not be games of chance, except Simulations;
+  - "Environments" run uploaded agents.
+
+  Neither concerns Fork. The GPU tips page says GPUs are meant for
+  training deep-learning models. (Contrast Colab's free tier above, which
+  names chess training as disallowed.)
+- **What did change: the Community Guidelines (2025-02-24 -> 2026-03-04).**
+  The two versions were compared in full. There are two changes:
+  - a new paragraph, "Synthetic Dataset Etiquette": data that is partly
+    or fully synthetic should carry the "Synthetic" tag when uploaded.
+    Untagged data may be removed and the author warned;
+  - the heading "AI-and LLM-generated content" became "AI-generated
+    content".
+
+  The Guidelines already said the following before this change; the KB
+  had not recorded it until now:
+  - **immediate bans** for creating duplicate accounts and for abusing
+    "kernel resources such as free storage" (section "Enforcement and
+    Reporting");
+  - attaching unused or unrelated datasets or models to a notebook is
+    not allowed (section "Unacceptable Conduct");
+  - public models, datasets and notebooks should be on-topic for data
+    science, AI and ML. A public portfolio of one's own work counts.
+- **Conclusion on the owner's "no":** Kaggle's pages, viewed logged out
+  on 2026-10-28, do not support it. The non-commercial clause and the
+  ML-scope AUP item are both still there and match the 2026-10-24
+  summary. **UNVERIFIED** which page or wording the owner saw. Possible
+  explanations: a page shown only to logged-in users, a different page
+  (for example the Community Guidelines or the Colab promotion terms), or
+  a misreading. Ask the owner before relying on either reading.
+
+**2. Does Fork's planned use fit?**
+
+The plan: train a neural-network evaluation on Fork's own self-play data
+in a private notebook, download the outputs, and publish them under
+GPL-3.0 in an open-source hobby project with no revenue.
+
+- **ML scope (AUP): fits.** Training a network is ML work. Self-play
+  datagen stays local, as decided on 2026-10-24, so no Kaggle compute
+  goes to engine games.
+- **Personal, non-commercial (Terms, "What are the basics of using
+  Kaggle?"): fits on this reading.** There is no revenue, and it is the
+  owner's own project. **UNVERIFIED (ambiguous):** whether giving a net
+  away publicly, and entering it in TCEC, counts as use "for the benefit
+  of any third party". The Terms do not define the phrase. The Guidelines
+  themselves encourage sharing your work publicly, which suggests the
+  clause aims at work done for clients or employers. Re-check if Fork
+  ever earns money (sponsorship, prizes, paid work).
+- **Ownership of outputs (Terms section "Do I have to grant any licenses
+  to Kaggle or to other users?", which calls itself Section 9):**
+  - everything you upload, store or provide is a "User Submission";
+  - Kaggle receives a royalty-free, perpetual, irrevocable, worldwide
+    licence, limited to running the Services;
+  - private items get only one extra right: Kaggle may show them to you;
+  - the section says outright that ownership does not change.
+
+  No clause gives Kaggle ownership of notebook outputs. None restricts
+  publishing a model trained on Kaggle, or licensing it under the GPL.
+  Kaggle's operating licence does not conflict with a GPL release.
+  **UNVERIFIED (minor):** whether files a notebook writes to
+  `/kaggle/working` count as "User Submissions". Either way, no clause
+  claims them.
+- **The "Synthetic" tag:** Fork's self-play data is artificially
+  generated. The guideline is worded around *sharing* and *uploading*
+  synthetic data. **UNVERIFIED** whether it applies to private datasets.
+  Tagging costs nothing, so the plan is to add it: put the tag in the
+  `keywords` list of `dataset-metadata.json`. The CLI docs say keywords
+  must match an existing Kaggle tag, and unknown ones are skipped without
+  failing. **UNVERIFIED** whether a tag spelled "synthetic" exists: the
+  tag page returned "Unauthenticated" when logged out.
+- **Verdict: fits, on this reading.** The one open point is the
+  undefined "third party" phrase above.
+
+**3. Accounts, automation, storage**
+
+- **One account only:**
+  - The Terms section "What are the basics of using Kaggle?" bans having,
+    controlling or operating more than one active account. Kaggle may act
+    without notice, up to a ban.
+  - The Guidelines list duplicate accounts among the grounds for an
+    immediate ban.
+  - The Colab Pro promotion (docs/notebooks, its "Legal Terms") allows
+    one linked Kaggle account per Colab Pro subscriber.
+
+  So a second account to double the 30 h/week quota is out.
+- **CLI/API automation:** allowed and encouraged.
+  - The GPU tips page suggests using the Kaggle API to push new notebook
+    versions without opening an interactive session.
+  - docs/api says personal API tokens are meant for "automated scripts,
+    notebook workflows, CI/CD".
+  - Rate limiting is dynamic. On HTTP 429 the page says to wait and
+    retry, and to check automated scripts for runaway loops. No numeric
+    limits are published (**UNVERIFIED**).
+  - The Terms ban crawling or scraping by automated means, and the AUP
+    bans "excessive crawling". Checking the status of your own notebook
+    every few minutes is not crawling on this reading. Fork's plan: poll
+    at minute-scale intervals, with back-off on 429 (a design choice, not
+    a Kaggle number).
+- **Scheduling:** scheduled notebooks are limited, but the docs give no
+  number (docs/notebooks, "Scheduling Notebooks").
+- **Private dataset storage:** unchanged (docs/datasets, "Technical
+  Specifications"):
+  - 200 GB per dataset;
+  - 200 GB of private datasets in total (beyond that, make some public or
+    delete them);
+  - at most 50 top-level files.
+
+  **UNVERIFIED** where "abuse of kernel resources such as free storage"
+  begins (the Guidelines' ground for an immediate ban). Keeping training
+  data that Fork's own notebooks read, within the 200 GB, is ML use on
+  this reading. To stay clear of the rule:
+  - delete batches once they are retired;
+  - never park unrelated files there;
+  - attach to each run only the datasets it reads (the Guidelines'
+    "unused and/or unrelated" rule).
+
+**Docs facts seen on this pass:**
+
+- The CPU session spec reads 4 cores and 30 GB RAM.
+- TPU sessions last 9 h; CPU and GPU sessions 12 h.
+- The interactive idle timeout still conflicts: 20 min on docs/notebooks,
+  60 min on the GPU tips page.
+- Both pages still describe the P100 (phase4-pipeline.md 4.1 has the
+  "Drop P100 support" finding).
 
 ### 2.2 Training-data storage and upload (Phase 4 spec input, 2026-10-24)
 
