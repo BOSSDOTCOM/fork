@@ -12,7 +12,10 @@ not from Fork's C++, and replays it with python-chess's move generator:
 - the stored result must follow from how the game ended: a mate or a rules
   draw on the board, or an adjudication Fork makes (a mate score in the
   last record, or a position within --table-pieces pieces, whose table
-  result is not rechecked here);
+  result is not rechecked here), or a draw by a repetition whose third
+  occurrence lies in the random plies before the record (the final
+  position twice in the record, the halfmove clock reaching past its
+  start);
 - with --manifest (fork_datagen's <run>.json), each shard's game and
   position counts must match.
 
@@ -113,6 +116,13 @@ def expected_end(board, last_score, table_pieces):
         return '1/2-1/2', 'rules draw'
     if last_score is not None and abs(last_score) >= MATE_BAND_FLOOR:
         return ('1-0' if last_score > 0 else '0-1'), 'mate score'
+    # fork_datagen plays the opening's random plies on the game's own
+    # position, before the record starts, so its threefold count includes
+    # them. With the final position twice in the record and a halfmove clock
+    # reaching back past the record's start, the third occurrence can lie
+    # there: a draw, whose earlier ply this check cannot see.
+    if board.is_repetition(2) and board.halfmove_clock > len(board.move_stack):
+        return '1/2-1/2', 'repetition before the record'
     if chess.popcount(board.occupied) <= table_pieces:
         return None, 'table'
     return None, 'unexplained'
