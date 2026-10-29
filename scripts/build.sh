@@ -25,7 +25,7 @@ for p in $presets; do
       cmake -DSOURCE_DIR="$PWD" -DCXX="$cxx" -DCOMPILER_ID=$id -P cmake/pgo.cmake
       ;;
     *)
-      cmake --preset "$p" >/dev/null && cmake --build "build/$p" &&
+      cmake --preset "$p" -U FORK_EVALUATOR -U FORK_NET >/dev/null && cmake --build "build/$p" &&
         ctest --test-dir "build/$p" $ctest_args
       ;;
   esac

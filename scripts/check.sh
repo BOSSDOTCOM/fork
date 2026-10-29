@@ -151,12 +151,15 @@ check_jobs() {
   fi
 }
 
+# Every check configures with the tree's default evaluator and network:
+# without -U a cached FORK_EVALUATOR or FORK_NET outlives a change of the
+# default (B0 became the default on 2026-10-29, and the local check builds
+# went on testing the bootstrap evaluation). A reconfigure that changes
+# nothing rebuilds nothing.
 build_and_test() {  # preset, ctest filter args...
   local preset=$1 out
   shift
-  if [ ! -f "build/$preset/build.ninja" ]; then
-    cmake --preset "$preset" >>"$log" 2>&1 || fail "configure $preset"
-  fi
+  cmake --preset "$preset" -U FORK_EVALUATOR -U FORK_NET >>"$log" 2>&1 || fail "configure $preset"
   cmake --build "build/$preset" -j "$(check_jobs)" >>"$log" 2>&1 || fail "build $preset"
   out=$(ctest --test-dir "build/$preset" --output-on-failure "$@" 2>&1)
   local status=$?
@@ -216,9 +219,7 @@ native_full() {
 windows_gcc_smoke() {
   local preset
   for preset in gcc-debug gcc-release gcc-v3 gcc-avx512 gcc-nopext; do
-    if [ ! -f "build/$preset/build.ninja" ]; then
-      cmake --preset "$preset" >>"$log" 2>&1 || fail "configure $preset"
-    fi
+    cmake --preset "$preset" -U FORK_EVALUATOR -U FORK_NET >>"$log" 2>&1 || fail "configure $preset"
     cmake --build "build/$preset" --target fork -j "$(check_jobs)" >>"$log" 2>&1 || fail "build $preset (fork)"
     scripts/uci-smoke.sh "build/$preset/fork.exe" 50 >>"$log" 2>&1 || fail "UCI start-up smoke loop, $preset"
   done

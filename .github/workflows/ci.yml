@@ -87,8 +87,7 @@ jobs:
             out=$(CXX=$cxx bash ./update.sh 2>&1) || { echo "$out"; exit 1; }
             echo "$out" | tail -n 8
             echo "$out" | grep -q "^compiler $want" || { echo "$cxx is not the expected $want"; exit 1; }
-            "$(echo "$out" | tail -n 1)" bench | head -n 2 > bench.out
-            diff bench.out tests/bench.ref
+            bash .github/ci/bench-parity.sh "$(echo "$out" | tail -n 1)"
             echo "bench parity ok with $cxx"
             echo "::endgroup::"
           done
