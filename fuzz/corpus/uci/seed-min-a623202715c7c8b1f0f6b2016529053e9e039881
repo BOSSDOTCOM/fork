@@ -1,0 +1,22 @@
+position fen r3k2r/p1ppqpb1/bn2rnp1/3QN3/1p2P3/N22Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infin2P3/N22Q1p+PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+/bn2rnp1/3QN3/1p2P3/N22Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infin2P3/N22Q1p+PPPBBPPP/R3K2R w KQkq - 0 1 moves e1g1 e8c8
+go infinite secr^hmoves a1a3b3
+isready
+stop
+goves e7e8Q
+go derth  nodetite secr^hmoves a1a3b3
+isready
+stop
+goves e7e8Q
+go derth  nodego infinite secr^hmoves a1a3b3
+isready
+stop
+goves e7e8Q
+go derth  nodetite secr^hmoves a1a3b3
+isready
+stop
+goves e7e8Q
+go derth  nodetime 1
+d

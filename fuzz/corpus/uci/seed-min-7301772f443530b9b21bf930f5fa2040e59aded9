@@ -1,0 +1,10 @@
+position fen r3k2r/p1ppqpb1/bnp2np1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves f3h3 e8c8
+go infinnte searchmoc8
+go infinnte seardbnp2np1/3PN3/1p2P3/p1ppqpb1/bnp2np1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1 moves f3h3 e8c8
+go infinnte searchmoc8
+go infinnte seardbnp2np1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkÿÿÿÿÿÿÿ#moves f3h3 e8c8
+go ie1g1 e8c8
+go infinnte searchmoves a2a3/2N2Q1p/PPPBBPPP/R3K2R w KQkÿÿÿÿÿÿÿ#moves f3h3 e8c8
+go ie1g1 e8c8
+go infinnte searchmoves a2a3 b2bwtimeeadgo searchmoves 00sitdes 5 matø 1 movetime 1
+:
