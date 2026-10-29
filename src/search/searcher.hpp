@@ -88,6 +88,10 @@ struct SearchQuota {
 // - use_lmr_check_relief: a late quiet move that gives check is reduced
 //   LmrCheckRelief plies less (tier 2 step 0, KB T16's check term; its STC
 //   SPRT passed, +11.26 +/- 5.54 Elo; owner, 2026-10-29).
+// - use_lmr_in_check: late quiet evasions get the normal reduction instead
+//   of none (tier 2 step 0, KB T16's in-check term, §3.28: Halogen #212
+//   gained by replacing the exemption with normal LMR; its STC SPRT passed,
+//   +4.21 +/- 2.89 Elo).
 #define FORK_SEARCH_SWITCHES(X)                    \
   X(use_tt, UseTT, true)                           \
   X(use_pvs, UsePvs, true)                         \
@@ -109,7 +113,8 @@ struct SearchQuota {
   X(use_forced_move_stop, UseForcedMoveStop, true) \
   X(use_tt_keep_deeper, UseTtKeepDeeper, false)    \
   X(use_tables, UseTables, true)                   \
-  X(use_lmr_check_relief, UseLmrCheckRelief, true)
+  X(use_lmr_check_relief, UseLmrCheckRelief, true) \
+  X(use_lmr_in_check, UseLmrInCheck, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
