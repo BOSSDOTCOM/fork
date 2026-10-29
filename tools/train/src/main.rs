@@ -13,8 +13,14 @@
 //!
 //!   fork-train check  --out DIR
 //!   fork-train dump   --data SHARD --count N
-//!   fork-train train  --data SHARD... --out DIR --scale S [options]
+//!   fork-train train  --data SHARD... --out DIR --scale S [--val SHARD --patience P] [options]
 //!   fork-train eval   --checkpoint DIR --epd FILE --out FILE
+//!   fork-train loader --data SHARD... [--positions N]   (decoding speed, one thread)
+//!
+//! With --val, the loss on the first --val-positions kept positions of a
+//! held-out shard is measured after every superbatch (written to val.txt);
+//! training stops early, after that superbatch's checkpoint, once it has not
+//! improved for --patience superbatches (stopped-early.txt names the best).
 
 use std::{
     fs::{self, File},
@@ -184,6 +190,26 @@ impl DataReader<ChessBoard> for ShardReader {
     }
 }
 
+/// The kept positions of a shard (the training filter), at most `limit`.
+fn read_positions(path: &Path, limit: usize) -> Vec<ChessBoard> {
+    let mut out = Vec::new();
+    let filter = filter();
+    ShardReader::for_each_game(path, |game| {
+        if out.len() < limit {
+            game.splat_to_bulletformat(
+                |b| {
+                    out.push(b);
+                    Ok(())
+                },
+                &filter,
+            )
+            .expect("splat");
+        }
+    });
+    out.truncate(limit);
+    out
+}
+
 struct Args(Vec<String>);
 impl Args {
     fn get(&self, key: &str) -> Option<&str> {
@@ -270,7 +296,13 @@ fn main() {
             let defn = definition(&ins);
             let weights = ModelWeights::new(&defn, a.num("--seed", 1));
             let device = DefaultDevice::new(a.num("--device", 0)).expect("device");
-            let mut opt = AdamW::new(defn, weights, device, AdamWParams::default()).expect("optimiser");
+            let pool = HostPool::new(device.clone());
+            let mut opt = AdamW::new(defn, weights, device.clone(), AdamWParams::default()).expect("optimiser");
+            let val: Vec<ChessBoard> =
+                a.get("--val").map(|p| read_positions(Path::new(p), a.num("--val-positions", 200_000))).unwrap_or_default();
+            let patience: usize = a.num("--patience", 3);
+            let val_map = mapper(&ins, scale, result_weight);
+            let mut best: Option<(f64, usize)> = None;
             if let Some(dir) = a.get("--resume") {
                 let state = Path::new(dir).join("optimiser_state");
                 opt.load_from_checkpoint(state.to_str().expect("path")).expect("resume");
@@ -304,6 +336,47 @@ fn main() {
                         opt.cpu_weights().expect("weights").to_quantised_buffer(&save_list(), true).expect("quantise");
                     fs::write(dir.join("quantised.bin"), bytes).expect("quantised.bin");
                     fs::write(dir.join("superbatch.txt"), format!("{}\n", step.superbatch())).expect("superbatch.txt");
+                    if val.is_empty() {
+                        return;
+                    }
+                    // Validation: mean squared error of sigmoid(output)
+                    // against the same target as training, in chunks.
+                    let mut evaluator = ModelEvaluator::new(opt.definition(), opt.device()).expect("evaluator");
+                    evaluator.load_device_weights(opt.weights()).expect("weights");
+                    let mut total = 0.0f64;
+                    for chunk in val.chunks(16384) {
+                        let batch = val_map.map(&pool, chunk, Step::default(), 4).expect("map");
+                        let targets: Vec<f32> = chunk
+                            .iter()
+                            .map(|pos| {
+                                let expected = 1.0 / (1.0 + (-f32::from(pos.score()) / scale).exp());
+                                (1.0 - result_weight) * expected + result_weight * pos.result()
+                            })
+                            .collect();
+                        let batch = batch.to_device(&device).expect("device");
+                        let out = evaluator.evaluate(&batch).expect("eval").get("output").expect("output");
+                        let host = out.to_host().expect("host");
+                        let raw = host.f32();
+                        for (o, t) in raw.iter().zip(&targets) {
+                            let p = 1.0 / (1.0 + (-f64::from(*o)).exp());
+                            total += (p - f64::from(*t)).powi(2);
+                        }
+                    }
+                    let loss = total / val.len() as f64;
+                    let sb = step.superbatch();
+                    let mut log = fs::OpenOptions::new().create(true).append(true).open(out.join("val.txt")).expect("val.txt");
+                    writeln!(log, "{sb} {loss:.8}").expect("val.txt");
+                    println!("superbatch {sb} validation loss {loss:.8}");
+                    if best.is_none_or(|(b, _)| loss < b) {
+                        best = Some((loss, sb));
+                    }
+                    let (b, bsb) = best.expect("best");
+                    if sb >= bsb + patience {
+                        fs::write(out.join("stopped-early.txt"), format!("best superbatch {bsb} loss {b:.8}\n"))
+                            .expect("stopped-early.txt");
+                        println!("stopping early: best superbatch {bsb}");
+                        std::process::exit(0);
+                    }
                 },
             )
             .expect("train");
@@ -333,6 +406,20 @@ fn main() {
                 let raw = evaluator.evaluate(&batch).expect("eval").get("output").expect("output").to_host().expect("host").f32()[0];
                 writeln!(out, "{fen} | {raw}").expect("write");
             }
+        }
+        "loader" => {
+            // K17: how fast one thread decodes and filters Fork's shards.
+            let limit: usize = a.num("--positions", 2_000_000);
+            let start = std::time::Instant::now();
+            let mut n = 0usize;
+            for f in a.all("--data") {
+                n += read_positions(Path::new(&f), limit - n).len();
+                if n >= limit {
+                    break;
+                }
+            }
+            let secs = start.elapsed().as_secs_f64();
+            println!("loader: {n} kept positions in {secs:.2} s, {:.0} positions/s on one thread", n as f64 / secs);
         }
         _ => {
             eprintln!("unknown command {cmd}");

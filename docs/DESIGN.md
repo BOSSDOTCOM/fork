@@ -2086,7 +2086,7 @@ Fork's own code. New references go into ORIGINALITY.md when first used.
 
 **Build status (2026-10-28, branch `phase-4`).**
 - Deliverable 0: Kaggle session 1 done (results under deliverable 0);
-  session 2 (build, training, resume, datasets, T) waits for K16's answer.
+  K16 verified (owner, 2026-10-29); session 2 runs through the Kaggle CLI.
 - Deliverable 1: done (32a2298, 1561c13); 591,871 openings from 2016-09;
   2026-09 streaming for generation 1.
 - Deliverable 2: done (4e81783 and later); generation 0 running in WSL
@@ -2212,7 +2212,7 @@ quoted in KB phase4-pipeline.md §8.1:
 | K11 disk | `/kaggle/working` 19.5 GB free (the documented 20 GB); `/tmp` and `/` 1,048.8 GB free (session scratch, lost at session end; how much of it is usable in practice: UNVERIFIED). Per-file upload limit: **none stated in the Datasets docs** (owner: only 200 GB per dataset, 200 GB of private datasets in total, at most 50 top-level files; archives are unpacked); confirmed by a real 1-2 GB shard upload in session 2 (K8) | partly verified |
 | K12 idle timeout | No idle-timeout warning during session 1 (owner); a short interactive session, so the cutoff itself is still unmeasured; training runs are commit runs anyway | noted |
 | K13 quota | Weekly GPU hours before and after were not noted (owner) | open: note them in session 2 |
-| K16 terms | The owner answered **"no"** to "the Terms and AUP still say personal, non-commercial use" (2026-10-28). A research subagent then read the current pages logged out (KB training-data.md §2.1, "Kaggle terms re-checked"): the Terms and the AUP are still the versions effective 2025-06-22, with no newer or pending version, and still say personal, non-commercial use; no clause covers chess, self-play or publishing a model trained on Kaggle; outputs stay the user's; one account only; automation through the API is allowed. Only the Community Guidelines changed (2026-03-04: synthetic datasets should carry the "Synthetic" tag). On that reading Fork's use fits. Which page and wording led to "no" is asked of the owner | **open until the owner confirms; blocks training on Kaggle** |
+| K16 terms | The current Terms and AUP (effective 2025-06-22, no newer version) still say personal, non-commercial use; no clause covers chess, self-play or publishing a model trained on Kaggle; outputs stay the user's; one account only; automation through the API is allowed (KB training-data.md §2.1, "Kaggle terms re-checked", 2026-10-28). The owner's earlier "no" was a mistake (owner, 2026-10-29) | **verified** |
 | K17 cores | 4 CPUs, 31.3 GB RAM; Linux 6.18.55, glibc 2.39, Python 3.13.15 | verified |
 
 Session 2 (after `tools/train` exists): K2's downloads, K4-K10, K15, K17's

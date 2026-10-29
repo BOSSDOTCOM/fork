@@ -19,7 +19,7 @@ import subprocess
 import time
 
 COMMIT = 'phase-4'  # branch or commit pushed to github.com/BOSSDOTCOM/fork
-DATA = '/kaggle/input'  # the attached dataset (shards *.vf anywhere below)
+DATA = '/kaggle/input'  # attached datasets (shards *.vf anywhere below; *-val.vf held out)
 WORK = '/kaggle/working/s2'
 facts = {}
 
@@ -45,12 +45,20 @@ rc, out, secs = sh(f'cd {WORK}/fork/tools/train && cargo build --release --locke
                    env=cargo_env, timeout=5400)
 facts['K4_build'] = {'rc': rc, 'seconds': secs, 'tail': out[-800:]}
 train = f'{WORK}/fork/tools/train/target/release/fork-train'
-shards = sorted(glob.glob(f'{DATA}/**/*.vf', recursive=True))
+found = sorted(glob.glob(f'{DATA}/**/*.vf', recursive=True))
+shards = [p for p in found if not p.endswith('-val.vf')]
+val = [p for p in found if p.endswith('-val.vf')]
 facts['shards'] = len(shards)
+facts['val_shards'] = len(val)
+facts['gpus'] = sh('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader')[1].strip()
 
 if rc == 0 and shards:
     data = ' '.join(shards)
     common = f'--data {data} --scale 400 --batch 16384 --batches 512 --lr-step 18 --threads 3'
+    if val:
+        common += f' --val {val[0]} --val-positions 100000 --patience 3'
+    rc, out, secs = sh(f'{train} loader --data {data} --positions 2000000', env=cargo_env)
+    facts['K17_loader_one_thread'] = {'rc': rc, 'out': out.strip()[-200:]}
     rc, out, secs = sh(f'{train} check --out {WORK}/check', env=cargo_env)
     facts['check'] = {'rc': rc, 'out': out.strip()[-200:]}
     rc, out, secs = sh(f'{train} train {common} --superbatches 2 --out {WORK}/run', env=cargo_env, timeout=7200)
@@ -69,4 +77,10 @@ if rc == 0 and shards:
     rc, out, secs = sh(both, env=cargo_env, timeout=7200)
     facts['K18_two_gpus_1x512x16384_each'] = {'rc': rc, 'seconds': secs}
     facts['files'] = sorted(os.path.relpath(p, WORK) for p in glob.glob(f'{WORK}/run/**/*', recursive=True))[:40]
+    for name in ('val.txt', 'stopped-early.txt'):
+        p = f'{WORK}/run/{name}'
+        if os.path.exists(p):
+            facts[name] = open(p).read()[-500:]
+with open('/kaggle/working/session2.json', 'w') as f:
+    json.dump(facts, f, indent=1)
 print(json.dumps(facts, indent=1))
