@@ -60,7 +60,8 @@ namespace {
 // search; LMR (LmrMinDepth, LmrMinMove; the table in lmr_table.hpp); late
 // move pruning (LmpMaxDepth; LmpQuietAllowance + d quiets); futility
 // (FutilityMaxDepth; FutilityOffset + FutilityGrowth * depth); SEE pruning
-// (SeePruneMaxDepth; QuietSeeFloor and CaptureSeeFloor cp per ply). The
+// (SeePruneMaxDepth; QuietSeeFloor and CaptureSeeFloor cp per ply); delta
+// pruning in the quiescence search (QuiesceGainSlack cp). The
 // margins are in the bootstrap evaluation's centipawns and are retuned after
 // Phase 4. These stay constants (not strength parameters):
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
@@ -93,6 +94,10 @@ int fifty_move_score(const Position& pos, bool in_check, int ply) {
 }
 
 }  // namespace
+
+bool quiesce_gain_cut_allowed(const Position& pos) {
+  return !pos.in_check() && has_non_pawn_material(pos, White) && has_non_pawn_material(pos, Black);
+}
 
 std::int64_t Searcher::elapsed_ms() const {
   return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_)
@@ -462,9 +467,24 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   f.selector.start_quiesce(pos, tt_hit ? hit.move : NoMove, switches.use_see_quiesce,
                            switches.use_history ? &history_ : nullptr);
 
+  // Delta pruning (tier 2 step 0, KB T25's per-move form): a capture that
+  // cannot lift the stand-pat to alpha even with QuiesceGainSlack to spare
+  // is skipped, and counts as scoring that much (fail-soft). Not in check,
+  // not for promotions, and not once a side is down to pawns, where a capture
+  // can buy a won pawn ending (DESIGN.md, "Search constants").
+  const bool delta_prune = switches.use_qs_delta && quiesce_gain_cut_allowed(pos);
+
   Move best_move = NoMove;
   int moves_searched = 0;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
+    if (delta_prune && m.is_capture() && !m.is_promotion()) {
+      const int reach =
+          f.static_eval + piece_value(kind_of(pos.piece_at(pos.capture_square(m)))) + QuiesceGainSlack;
+      if (reach <= alpha) {
+        best = std::max(best, reach);
+        continue;
+      }
+    }
     ++moves_searched;
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     play(ply, m);

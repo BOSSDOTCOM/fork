@@ -92,6 +92,10 @@ struct SearchQuota {
 //   of none (tier 2 step 0, KB T16's in-check term, §3.28: Halogen #212
 //   gained by replacing the exemption with normal LMR; its STC SPRT passed,
 //   +4.21 +/- 2.89 Elo).
+// - use_qs_delta: the quiescence search skips a capture whose captured
+//   piece cannot lift the stand-pat to alpha even with QuiesceGainSlack more
+//   (tier 2 step 0, KB T25 per-move form; on by default only once its SPRT
+//   passes).
 #define FORK_SEARCH_SWITCHES(X)                    \
   X(use_tt, UseTT, true)                           \
   X(use_pvs, UsePvs, true)                         \
@@ -114,7 +118,8 @@ struct SearchQuota {
   X(use_tt_keep_deeper, UseTtKeepDeeper, false)    \
   X(use_tables, UseTables, true)                   \
   X(use_lmr_check_relief, UseLmrCheckRelief, true) \
-  X(use_lmr_in_check, UseLmrInCheck, true)
+  X(use_lmr_in_check, UseLmrInCheck, true)         \
+  X(use_qs_delta, UseQsDelta, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -271,6 +276,11 @@ struct SearchCounters {
   std::uint64_t quiesce_nodes_pv = 0;
   std::uint64_t quiesce_nodes_non_pv = 0;
 };
+
+// Whether the quiescence search's delta pruning (use_qs_delta) may skip
+// captures here: not in check, and both sides still have a piece other than
+// pawns (in a pawn ending a capture can buy a won ending).
+bool quiesce_gain_cut_allowed(const Position& pos);
 
 class Searcher {
  public:

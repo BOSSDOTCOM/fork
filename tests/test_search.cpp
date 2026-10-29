@@ -7,10 +7,13 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "core/movegen.hpp"
@@ -144,7 +147,7 @@ struct TestHash {
 SearchSwitches exact_switches() {
   SearchSwitches s;
   s.tt_exact_depth = true;
-  s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = s.use_qs_delta = false;
   return s;
 }
 
@@ -336,6 +339,37 @@ TEST_CASE("search", "known: with a repetition in reach, TT cutoffs may differ sl
     else
       CHECK_MSG(std::abs(r.score - expected) <= 50 && r.score > 0 && !is_mate_score(r.score),
                 "TT: " << r.score << " vs " << expected);
+  }
+}
+
+// Tier 2 step 0 (exp/qs-delta): delta pruning skips hopeless quiescence
+// captures, so the oracle positions take fewer nodes with it; in a pawn
+// ending (a side without a piece) or in check it never applies.
+TEST_CASE("search", "delta pruning cuts quiescence captures, except in pawn endings") {
+  auto nodes_with = [](Position& pos, bool delta) {
+    Fixture fx;  // fresh, so no history carries over from the other search
+    fx.searcher->switches = SearchSwitches{};
+    fx.searcher->switches.use_qs_delta = delta;
+    SearchQuota limits;
+    limits.depth = Optimized ? 6 : 3;
+    return fx.search(pos, limits).nodes;
+  };
+  std::uint64_t on = 0, off = 0;
+  for (Position& pos : oracle_positions()) {
+    on += nodes_with(pos, true);
+    off += nodes_with(pos, false);
+  }
+  CHECK_MSG(on < off, on << " nodes with delta pruning, " << off << " without");
+  // Where the rule may apply (constructed positions): only with a piece on
+  // each side and the side to move not in check.
+  for (const auto& [fen, allowed] : std::initializer_list<std::pair<std::string_view, bool>>{
+           {"4k3/2p1p3/1p1p1p2/2P1P3/1P1P1P2/8/8/4K3 w - - 0 1", false},  // pawn ending
+           {"4k3/8/8/8/8/8/4P3/R3K3 b - - 0 1", false},                   // Black has only its king
+           {"r3k3/8/8/8/8/8/4P3/R3K3 w - - 0 1", true},
+           {"r3k3/8/8/8/8/8/8/R3K2r w - - 0 1", false}}) {  // White in check
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    CHECK_MSG(quiesce_gain_cut_allowed(pos) == allowed, fen);
   }
 }
 

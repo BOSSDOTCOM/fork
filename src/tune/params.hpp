@@ -51,6 +51,7 @@
   X(FutilityGrowth, 70, 35, 140, 5)       \
   X(SeePruneMaxDepth, 6, 3, 12, 1)        \
   X(QuietSeeFloor, 60, 30, 120, 5)        \
+  X(QuiesceGainSlack, 150, 75, 300, 11)   \
   X(CaptureSeeFloor, 100, 50, 200, 8)     \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
