@@ -3,10 +3,12 @@
 # and its R-int values into OUT; fork_tests bakeoff (with the folder in
 # FORK_BAKEOFF_PARITY_DIR, set by the caller) checks Fork's S-512 inference
 # against them exactly. Experiment branch (DESIGN.md §5 plan, step 4).
-execute_process(COMMAND ${PY} -I ${SRC}/tools/nnue/reference_s512.py write ${OUT} RESULT_VARIABLE rc)
-if(NOT rc EQUAL 0)
-  message(FATAL_ERROR "reference_s512.py failed")
-endif()
+foreach(arch s512 h512)
+  execute_process(COMMAND ${PY} -I ${SRC}/tools/nnue/reference_s512.py write ${OUT} --arch ${arch} RESULT_VARIABLE rc)
+  if(NOT rc EQUAL 0)
+    message(FATAL_ERROR "reference_s512.py --arch ${arch} failed")
+  endif()
+endforeach()
 execute_process(COMMAND ${TESTS} bakeoff RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 message(STATUS "${out}${err}")
 if(NOT rc EQUAL 0)

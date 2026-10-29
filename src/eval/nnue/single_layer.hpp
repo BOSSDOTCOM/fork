@@ -35,6 +35,7 @@
 #include <immintrin.h>
 #endif
 
+#include "core/material.hpp"
 #include "core/position.hpp"
 #include "eval/eval_scale.hpp"
 
@@ -47,6 +48,7 @@ template <class Features, int Hidden, class Buckets>
 struct SingleLayerNet {
   static constexpr int Inputs = Features::Size;
   static constexpr int OutBuckets = Buckets::Count;
+  static constexpr int HiddenSize = Hidden;
   static_assert(Hidden % 32 == 0, "Hidden must fill whole AVX-512 vectors");
 
   alignas(64) std::int16_t ft_weights[Inputs * Hidden];
@@ -235,6 +237,44 @@ struct PieceCountBuckets {
     const int n = popcount(pos.pieces());
     return std::min(Count - 1, (n - 1) / 4);
   }
+};
+
+// The hybrid H-512's feature set (KB phase4-designs/judgement.md: AF's
+// fitted king regions on S's kernel): 768 mirrored piece-square inputs per
+// king region. The region of the perspective's own king comes from its
+// mirrored square (32 cells: cell = 4 * rank + file - 4, files e-h, rank 0 the
+// perspective's own first rank) through a map fitted to Fork's data
+// (tools/nnue/fit_regions.py on the generation-0 snapshot g0s1, 400,030
+// positions, theta 10%, at most 4 regions; shares 24.7%, 24.2%, 34.4%,
+// 16.7%). CANDIDATE CONSTANTS: the map is data-fitted; "at most 4 regions"
+// is flagged by the judge's screen note.
+struct RegionMirroredPieceSquare {
+  static constexpr int Regions = 4;
+  static constexpr int Size = 768 * Regions;
+  static constexpr std::uint8_t RegionOfCell[32] = {0, 2, 1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 3, 3, 3, 3,
+                                                    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3};
+  static constexpr int region(Color perspective, Square king) {
+    const Square seen = perspective == White ? king : king ^ 56;
+    const int file = seen & 7, rank = seen >> 3;
+    return RegionOfCell[4 * rank + (file < 4 ? 7 - file : file) - 4];
+  }
+  static constexpr int index(Color perspective, Piece piece, Square sq, Square own_king) {
+    return 768 * region(perspective, own_king) + MirroredPieceSquare::index(perspective, piece, sq, own_king);
+  }
+  static constexpr bool needs_refresh(Color perspective, Square king_before, Square king_after) {
+    return MirroredPieceSquare::needs_refresh(perspective, king_before, king_after) ||
+           region(perspective, king_before) != region(perspective, king_after);
+  }
+};
+
+// H-512's output buckets: game_phase (0-24, core/material.hpp) through a
+// table cut at the octiles of Fork's own phase histogram (fit_regions.py,
+// the same 400,030 positions). CANDIDATE CONSTANTS (8 buckets, flagged).
+struct PhaseBuckets {
+  static constexpr int Count = 8;
+  static constexpr std::uint8_t BucketOfPhase[25] = {0, 0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 3, 4,
+                                                     4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 7, 7};
+  static int index(const Position& pos) { return BucketOfPhase[game_phase(pos)]; }
 };
 
 }  // namespace forkeng
