@@ -6,7 +6,7 @@ correctness first, then speed. This file records the architecture and every
 decision that affects play. Phase 7 evaluation adjustments must be documented
 here; no logic may alter reported scores to trigger or avoid adjudication.
 
-Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/history/phase-3/summary.md)**: Milestones A, B and C, the parameter table (8b), the heuristic-discovery harness and its validation run (8c), and the full engine audit (branch `audit-1`, merged through PR #5). By the owner's decision, tier 2 (deliverable 9) and the removal round move into Phase 4. **Phase 4 (evaluation) started 2026-10-28: step 0's spec (§5.3) and steps 1-3 of the multi-agent plan are in review.** Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`).
+Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/history/phase-3/summary.md)**: Milestones A, B and C, the parameter table (8b), the heuristic-discovery harness and its validation run (8c), and the full engine audit (branch `audit-1`, merged through PR #5). By the owner's decision, tier 2 (deliverable 9) and the removal round move into Phase 4. **Phase 4 (evaluation) started 2026-10-28: step 0's spec (§5.3) approved and steps 1-3 of the multi-agent plan reviewed the same day; step 0 is being built.** Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`).
 
 ---
 
@@ -390,7 +390,16 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   - **Step 4, bake-off:** small versions of each candidate trained on the
     same data, compared by SPRT. The winner is confirmed at a larger size
     before Fork commits to it (owner, 2026-10-28); then it becomes Fork's
-    first architecture.
+    first architecture. **Settled at the step 0-3 review** (owner,
+    2026-10-28; §5.3 "Owner's answers"): the judge's four entries (S-512,
+    the hybrid H-512, AF-S, and XGR-512 if its pre-test passes), all at
+    width 512, on a shared kernel framework, trained on generation 0
+    data; STC narrows the field and LTC decides between the finalists;
+    Fork's Elo per speed doubling is measured by 2:1 time-odds games at
+    STC only; the design-level originality screen comes first for X, G,
+    R, the fitted king regions and AF's threat encoding. One net until
+    the pipeline is proven; threat inputs come later as an add-on to the
+    winner.
   - **Step 5, implementation:** one implementer session writes the
     inference code; independent reviewers check correctness, SIMD
     equivalence with the scalar reference, performance, and originality.
@@ -2046,7 +2055,7 @@ and Weiss (results in ORIGINALITY.md).
 4. MultiPV deferred to Phase 7.
 5. The evaluator is selected at build time, with no indirect call.
 
-### 5.3 Phase 4 spec, step 0: the baseline network and the pipeline (DRAFT, awaiting the owner's approval)
+### 5.3 Phase 4 spec, step 0: the baseline network and the pipeline (approved by the owner 2026-10-28)
 
 **Goal.** One simple, proven network shape carried through the whole
 pipeline end to end, so every later architecture (steps 1-4 of the
@@ -2482,7 +2491,7 @@ match goes to the owner first.
 | Opening ply range, random plies | a random ply in 8-16, then 2-4 random plies | The KB's A+ description gives 8-16; a few random plies multiply the distinct positions without leaving plausible play. |
 | Decided-opening bound | the bootstrap search at the datagen node count beyond ±400 cp | Four pawns: openings that lopsided teach little and end fast. |
 | Shard size | 1 GB, or less if K11 shows a lower file limit | The KB storage design's 1-2 GB, at its low end so one failed upload costs little. |
-| Generation 0 size | about 200 M positions | Within the KB's 100-200 M per first generation; refined by K5's training throughput and the measured datagen rate. |
+| Generation 0 size | about 200 M positions, at least; more if the bake-off needs it | Within the KB's 100-200 M per first generation; refined by K5's training throughput and the measured datagen rate. The bake-off also runs on generation 0 (owner, 2026-10-28), and the judge sized its entries at about 0.7 B positions, so generation 0 may be extended before the bake-off; decided with the measured rate. |
 | λ (score weight) | 0.5 for B0 | Generation-0 scores come from a weak evaluation and game results are noisy, so neither is trusted over the other; the analyst (step 7) tunes it per generation from measured results. |
 | Loss, schedule, batch | from bullet's documented defaults for a single-layer net, recorded in the run record | Step 0 proves the pipeline; schedule tuning is step 7's. Each value used is written into this table at deliverable 4 with its source. |
 
@@ -2498,25 +2507,55 @@ prefers it, §8 domain vocabulary), `FeatureStack`, `nnue_parity`,
 directories `tools/datagen`, `tools/train`, `tools/nnue`, `nets`,
 `data/manifests`.
 
-#### Questions for the owner (before approval)
+#### Owner's answers (2026-10-28)
 
-1. **External SSD**: is it in place? Generation 0 (about 1 GB in the
-   compact format) fits on C: either way; later generations and
-   rescoring want the SSD as the staging directory.
-2. **Kaggle**: does the account exist, and when can the test session
-   (deliverable 0) run? It needs you for the account steps (K1, K14).
-3. **Datagen versus development**: datagen takes 10 threads for long
-   stretches. Local builds and tests then run on 2 threads (slow), and
-   `scripts/check.sh full` waits for a datagen pause. Acceptable, with
-   CI as the full check meanwhile?
-4. **The baseline net in the repository**: commit `nets/*.fnet` (about
-   400 KB for B0; Fork's own GPL data), or Release-only from the start?
-5. **Name for the accumulator**: keep the field's term `Accumulator`
-   (domain vocabulary) or use a Fork name such as `FeatureSums`?
-6. *Answered (owner, 2026-10-28)*: QA and QB stay 255 and 64, bullet's
-   standard quantization convention, recorded in ORIGINALITY.md as a
-   trainer-interface convention credited to bullet, not a tuned
-   constant.
+The review of this spec and of steps 1-3 (KB phase4-designs/, with the
+judge's questions) was one batched stop; the answers, which the
+deliverables above follow:
+
+1. **No external SSD.** The staging directory is on C: (36 GB free on
+   2026-10-28). Generation 0 (about 1 GB) fits easily; local shards are
+   deleted after the Kaggle hash check (deliverable 3), so staging never
+   holds more than the batches in flight. Disk is rechecked before each
+   long datagen run.
+2. **Kaggle**: the account exists; the test session (deliverable 0) runs
+   with the owner.
+3. **Datagen takes 10 of the 12 threads**; CI is the full check while it
+   runs.
+4. **B0's net is committed** to the repository (`nets/`), since TCEC
+   builds offline from the source; every other net is published as a
+   GitHub Release.
+5. **"Accumulator" stays** (domain vocabulary, §8) if the name screen
+   agrees; otherwise a Fork name.
+6. QA and QB stay 255 and 64, bullet's standard quantization convention,
+   recorded in ORIGINALITY.md as a trainer-interface convention credited
+   to bullet, not a tuned constant (answered earlier the same day).
+7. **Bake-off (plan step 4)**: every entry at accumulator width 512;
+   the four candidates are built on **a shared kernel framework** (one
+   accumulator, SIMD and parity framework that every candidate plugs
+   into, not four separate implementations); **STC narrows the field,
+   LTC decides between the finalists**; the bake-off runs on
+   **generation 0 data** (not waiting for generation 1), and the winner
+   is confirmed at full size later.
+8. **Speed price**: the 2:1 time-odds games are approved at **STC only**.
+9. **Design-level originality screen** for XGR's exposure plane (X),
+   phase gate (G) and revision head (R), AF's fitted king regions and
+   AF's threat encoding, before any of them is built.
+10. **bullet's code** (MIT, a tool) may be read by a subagent at the
+    pinned commit, to settle the trainer features the KB marks
+    UNVERIFIED (rounding rule, custom buckets, pairwise products, custom
+    inputs, graph operations).
+11. **Quantization-loss thresholds**: the implementer proposes each
+    architecture's thresholds from its first net, for the owner's
+    approval.
+12. **One net** until the pipeline is proven; a separate datagen net is
+    a later question.
+13. **Threat inputs are in scope** for Phase 4, as a later add-on to the
+    bake-off's winner.
+14. **VNNI on TCEC's EPYCs stays UNVERIFIED** and is on the TCEC question
+    list (KB competition.md, question 8). Nothing may depend on it.
+15. **The older KB pages are scrubbed** of other engines' constants
+    (techniques.md §4-5, research.md §6), keeping the ideas and sources.
 
 ## 6. Decisions log
 
@@ -2549,6 +2588,7 @@ directories `tools/datagen`, `tools/train`, `tools/nnue`, `nets`,
 | 2026-10-28 | **B-4 and RfpMargin (owner).** B-4 (the quiescence stand-pat refined by the TT score) reverted: its STC SPRT accepted H0 (19,200 games, Elo -4.11 +/- 3.93). RfpMargin 40 (was 80) **accepted without an SPRT**, by the owner's decision: its STC run was restarted on a pair without B-4 (8550a78 vs 306bd9a), then stopped in stage 0, and the LTC follow-up was dropped. Its only game data is the superseded run's 3,200 games (with B-4 in both engines: +3.47 +/- 9.61, undecided), so its strength effect is UNVERIFIED; the measured fail-low shares justify the value (Search constants). |
 | 2026-10-28 | **Audit-1 Phase D (owner).** Performance gate against main: +2.9% nps at the audit head of the time (not significant; different trees), +3.3% on the same tree (8550a78, significant at the 3.0% threshold), so no slowdown (perf-log.md). Gauntlet against the Milestone C anchors, Milestone C's openings and settings: with RfpMargin 40 stopped after 357 games, 22.5 points below Milestone C on the same games; with RfpMargin 80 (8550a78), all 1,200 games, **Fork 2411.5 ± 22.5** on the Milestone B anchors against 2402.5 ± 23.3 (2416.0 ± 22.2 with Weiss). **RfpMargin reverted to 80** (fd7d4b5; bench 17309921, as main's); 40 logged as untested (ideas.md idea 34). New policy: **untested changes never ship**; a skipped or unfinished test shelves the change and keeps the baseline (Testing setup). Report: history/phase-3/audit-1.md. |
 | 2026-10-28 | **Phase 3 closed (owner).** Audit-1 merged into main (PR #5, 80f725e) after its full CI matrix passed (run 40773853691, perft_epd_full included). No new SPRTs. The roadmap changes: tier 2 (deliverable 9) moves into Phase 4, its SPRTs on the GitHub shards beside the local self-play data generation; the end-of-Phase-3 removal round folds into Phase 4's search re-validation after the first network; idea 23's long run stays in late Phase 4. `UseTtEvalRefine` stays on as the owner-approved exception to "untested changes never ship". Summary: history/phase-3/summary.md; tag `phase-3`. Phase 4 starts in a fresh session. |
+| 2026-10-28 | **Step 0 spec approved; steps 1-3 reviewed (owner).** §5.3 approved with the answers in its "Owner's answers": no SSD (staging on C:), Kaggle account ready, datagen on 10 of 12 threads, B0's net committed (other nets as Releases), "accumulator" kept if the name screen agrees. Bake-off: the judge's four entries at width 512 on a shared kernel framework, on generation 0 data, STC narrows and LTC decides, time-odds games at STC only, a design-level originality screen for X, G, R, the fitted king regions and AF's threat encoding, a subagent may read bullet's code at the pin, loss thresholds proposed for approval, one net until the pipeline is proven, threat inputs later as an add-on. VNNI on TCEC stays UNVERIFIED (TCEC question list); older KB pages scrubbed of other engines' constants. |
 | 2026-10-28 | **QA/QB and the openings month (owner, answering §5.3 question 6).** QA = 255 and QB = 64 stay as bullet's standard quantization convention, recorded in ORIGINALITY.md as a trainer-interface convention credited to bullet, not a tuned constant (so outside the constant screen). The choice of Lichess 2016-09 for datagen openings and the case for a larger or more recent month later are recorded in §5.3, deliverable 1. |
 | 2026-10-28 | **Phase 4 started (owner).** The multi-agent plan gains a step 0 requirement: the trainer-engine parity test (the trainer's model against Fork's scalar and every SIMD path, exactly or within the quantization's documented tolerance), passing before any network plays a game and run in CI on every network and inference change. Step 0's spec (§5.3, the baseline network B0 and the whole pipeline, with the Kaggle test session checklist) is written as a draft for review, together with steps 1-3 (research, three designs with divergent briefs, a judge) on branch kb; one batched review stop. The training-data decisions of 2026-10-24 are copied from the KB into §5.3. |
 
