@@ -17,7 +17,7 @@
 //!   fork-train eval   --checkpoint DIR --epd FILE --out FILE
 //!   fork-train loader --data SHARD... [--positions N]   (decoding speed, one thread)
 //!
-//! With --val, the loss on the first --val-positions kept positions of a
+//! With --val, the loss on the first --val-positions (default 20,000) kept positions of a
 //! held-out shard is measured after every superbatch (written to val.txt);
 //! training stops early, after that superbatch's checkpoint, once it has not
 //! improved for --patience superbatches (stopped-early.txt names the best).
@@ -299,7 +299,7 @@ fn main() {
             let pool = HostPool::new(device.clone());
             let mut opt = AdamW::new(defn, weights, device.clone(), AdamWParams::default()).expect("optimiser");
             let val: Vec<ChessBoard> =
-                a.get("--val").map(|p| read_positions(Path::new(p), a.num("--val-positions", 200_000))).unwrap_or_default();
+                a.get("--val").map(|p| read_positions(Path::new(p), a.num("--val-positions", 20_000))).unwrap_or_default();
             let patience: usize = a.num("--patience", 3);
             let val_map = mapper(&ins, scale, result_weight);
             let mut best: Option<(f64, usize)> = None;
@@ -344,23 +344,17 @@ fn main() {
                     let mut evaluator = ModelEvaluator::new(opt.definition(), opt.device()).expect("evaluator");
                     evaluator.load_device_weights(opt.weights()).expect("weights");
                     let mut total = 0.0f64;
-                    for chunk in val.chunks(16384) {
-                        let batch = val_map.map(&pool, chunk, Step::default(), 4).expect("map");
-                        let targets: Vec<f32> = chunk
-                            .iter()
-                            .map(|pos| {
-                                let expected = 1.0 / (1.0 + (-f32::from(pos.score()) / scale).exp());
-                                (1.0 - result_weight) * expected + result_weight * pos.result()
-                            })
-                            .collect();
+                    // bullet's evaluator is compiled for one position at a
+                    // time (ModelEvaluator::new lowers the graph at batch 1).
+                    for pos in &val {
+                        let batch = val_map.map(&pool, std::slice::from_ref(pos), Step::default(), 1).expect("map");
+                        let expected = 1.0 / (1.0 + (-f32::from(pos.score()) / scale).exp());
+                        let target = (1.0 - result_weight) * expected + result_weight * pos.result();
                         let batch = batch.to_device(&device).expect("device");
                         let out = evaluator.evaluate(&batch).expect("eval").get("output").expect("output");
                         let host = out.to_host().expect("host");
-                        let raw = host.f32();
-                        for (o, t) in raw.iter().zip(&targets) {
-                            let p = 1.0 / (1.0 + (-f64::from(*o)).exp());
-                            total += (p - f64::from(*t)).powi(2);
-                        }
+                        let p = 1.0 / (1.0 + (-f64::from(host.f32()[0])).exp());
+                        total += (p - f64::from(target)).powi(2);
                     }
                     let loss = total / val.len() as f64;
                     let sb = step.superbatch();

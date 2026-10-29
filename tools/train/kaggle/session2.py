@@ -56,7 +56,7 @@ if rc == 0 and shards:
     data = ' '.join(shards)
     common = f'--data {data} --scale 400 --batch 16384 --batches 512 --lr-step 18 --threads 3'
     if val:
-        common += f' --val {val[0]} --val-positions 100000 --patience 3'
+        common += f' --val {val[0]} --val-positions 20000 --patience 3'
     rc, out, secs = sh(f'{train} loader --data {data} --positions 2000000', env=cargo_env)
     facts['K17_loader_one_thread'] = {'rc': rc, 'out': out.strip()[-200:]}
     rc, out, secs = sh(f'{train} check --out {WORK}/check', env=cargo_env)
@@ -74,7 +74,7 @@ if rc == 0 and shards:
                          'tail': out[-300:]}
     both = (f'{train} train {common} --superbatches 1 --device 0 --out {WORK}/d0 > {WORK}/d0.log 2>&1 & '
             f'{train} train {common} --superbatches 1 --device 1 --out {WORK}/d1 > {WORK}/d1.log 2>&1; wait; '
-            f'tail -2 {WORK}/d0.log {WORK}/d1.log')
+            f'tail -n 3 {WORK}/d0.log {WORK}/d1.log')
     rc, out, secs = sh(both, env=cargo_env, timeout=7200)
     facts['K18_two_gpus_1x512x16384_each'] = {'rc': rc, 'seconds': secs, 'tail': out[-500:]}
     facts['files'] = sorted(os.path.relpath(p, WORK) for p in glob.glob(f'{WORK}/run/**/*', recursive=True))[:40]
