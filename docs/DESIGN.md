@@ -2084,6 +2084,34 @@ helper; bullet (MIT, a tool, KB tag USE) is read for its documented
 interfaces and file layouts only, and Fork's training configuration is
 Fork's own code. New references go into ORIGINALITY.md when first used.
 
+**Build status (2026-10-28, branch `phase-4`).**
+- Deliverable 0: Kaggle session 1 done (results under deliverable 0);
+  session 2 (build, training, resume, datasets, T) waits for K16's answer.
+- Deliverable 1: done (32a2298, 1561c13); 591,871 openings from 2016-09;
+  2026-09 streaming for generation 1.
+- Deliverable 2: done (4e81783 and later); generation 0 running in WSL
+  (10 workers, 20,000 nodes, target 200 M positions).
+- Deliverable 3: sealing done (cb97e9b); upload and confirmation after
+  session 2's CLI checks.
+- Deliverable 4: training program done and checked on the CPU (5644fcf):
+  bullet-trainer only, no bullet_lib (owner, 2026-10-28; KB
+  bullet-internals.md §12-13); viriformat's own reader decodes Fork's
+  shards exactly as python-chess replays them (45,626 positions), and its
+  "tactical" filter is "a capture or promotion was played" (measured).
+  Training needs CUDA (session 2).
+- Deliverables 5-6: inference library, kernels, presets, net file,
+  converter, reference and `fork netcheck` done (e2a5fa3); against files
+  bullet itself wrote, the quantization leg and netcheck pass exactly.
+  Still to do: the search integration (FORK_EVALUATOR=nnue, FeatureStack
+  hooks in the Searcher), embedding the net, the gate in `tools/sprt.sh`,
+  `build_pair.sh`, `elo_gauntlet.sh` and `fork_datagen`, and T from bullet
+  on a GPU.
+- Deliverable 7: after generation 0 and session 2.
+- Names as built (four throwaway-clone screens, 2026-10-28, all no match
+  or generic): the third screen's three case-insensitive matches were
+  renamed before commit (`refresh_accumulator` -> `accumulate_board`,
+  `apply_delta` -> `advance_accumulator`, `Columns` -> `DeltaColumns`).
+
 #### Training-data decisions (copied from KB data-policy.md, "Owner decisions", 2026-10-24)
 
 Copied as the Phase 4 outline requires; the KB keeps the evidence
@@ -2184,7 +2212,7 @@ quoted in KB phase4-pipeline.md §8.1:
 | K11 disk | `/kaggle/working` 19.5 GB free (the documented 20 GB); `/tmp` and `/` 1,048.8 GB free (session scratch, lost at session end; how much of it is usable in practice: UNVERIFIED). Per-file upload limit: **none stated in the Datasets docs** (owner: only 200 GB per dataset, 200 GB of private datasets in total, at most 50 top-level files; archives are unpacked); confirmed by a real 1-2 GB shard upload in session 2 (K8) | partly verified |
 | K12 idle timeout | No idle-timeout warning during session 1 (owner); a short interactive session, so the cutoff itself is still unmeasured; training runs are commit runs anyway | noted |
 | K13 quota | Weekly GPU hours before and after were not noted (owner) | open: note them in session 2 |
-| K16 terms | The owner answered **"no"** to "the Terms and AUP still say personal, non-commercial use" (2026-10-28). What they say now, and whether Fork's use (a GPL hobby engine's training) is still allowed, is being checked against the current pages before any training runs on Kaggle | **open, blocks training on Kaggle** |
+| K16 terms | The owner answered **"no"** to "the Terms and AUP still say personal, non-commercial use" (2026-10-28). A research subagent then read the current pages logged out (KB training-data.md §2.1, "Kaggle terms re-checked"): the Terms and the AUP are still the versions effective 2025-06-22, with no newer or pending version, and still say personal, non-commercial use; no clause covers chess, self-play or publishing a model trained on Kaggle; outputs stay the user's; one account only; automation through the API is allowed. Only the Community Guidelines changed (2026-03-04: synthetic datasets should carry the "Synthetic" tag). On that reading Fork's use fits. Which page and wording led to "no" is asked of the owner | **open until the owner confirms; blocks training on Kaggle** |
 | K17 cores | 4 CPUs, 31.3 GB RAM; Linux 6.18.55, glibc 2.39, Python 3.13.15 | verified |
 
 Session 2 (after `tools/train` exists): K2's downloads, K4-K10, K15, K17's
