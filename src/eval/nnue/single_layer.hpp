@@ -44,6 +44,39 @@ namespace forkeng {
 constexpr int SlQa = 255;
 constexpr int SlQb = 64;
 
+// The pieces a move takes off and puts on the board (at most two each).
+struct PieceChange {
+  Piece piece;
+  Square square;
+};
+
+struct MoveChanges {
+  PieceChange removed[2], added[2];
+  int nr = 0, na = 0;
+};
+
+// `before` is the position the move is played from.
+inline MoveChanges move_changes(const Position& before, Move m) {
+  MoveChanges c;
+  const Color us = before.side_to_move();
+  const Piece mover = before.piece_at(m.from());
+  if (m.is_castle()) {
+    const auto landing = Position::castle_landing(m.from(), m.to());
+    c.removed[c.nr++] = {mover, m.from()};
+    c.removed[c.nr++] = {before.piece_at(m.to()), m.to()};
+    c.added[c.na++] = {mover, landing.king};
+    c.added[c.na++] = {piece_of(us, Rook), landing.rook};
+  } else {
+    c.removed[c.nr++] = {mover, m.from()};
+    if (m.is_capture()) {
+      const Square cs = before.capture_square(m);
+      c.removed[c.nr++] = {before.piece_at(cs), cs};
+    }
+    c.added[c.na++] = {m.is_promotion() ? piece_of(us, m.promo_type()) : mover, m.to()};
+  }
+  return c;
+}
+
 template <class Features, int Hidden, class Buckets>
 struct SingleLayerNet {
   static constexpr int Inputs = Features::Size;
@@ -96,28 +129,7 @@ struct SingleLayerNet {
   // `after` is the position after it). A perspective whose king mapping
   // changes is refreshed from `after`.
   void advance(const Position& before, const Position& after, Move m, const Acc& from, Acc& to) const {
-    struct Change {
-      Piece piece;
-      Square square;
-    };
-    Change removed[2], added[2];
-    int nr = 0, na = 0;
-    const Color us = before.side_to_move();
-    const Piece mover = before.piece_at(m.from());
-    if (m.is_castle()) {
-      const auto landing = Position::castle_landing(m.from(), m.to());
-      removed[nr++] = {mover, m.from()};
-      removed[nr++] = {before.piece_at(m.to()), m.to()};
-      added[na++] = {mover, landing.king};
-      added[na++] = {piece_of(us, Rook), landing.rook};
-    } else {
-      removed[nr++] = {mover, m.from()};
-      if (m.is_capture()) {
-        const Square cs = before.capture_square(m);
-        removed[nr++] = {before.piece_at(cs), cs};
-      }
-      added[na++] = {m.is_promotion() ? piece_of(us, m.promo_type()) : mover, m.to()};
-    }
+    const MoveChanges c = move_changes(before, m);
     for (const Color p : {White, Black}) {
       const Square king_before = before.king_square(p), king_after = after.king_square(p);
       if (Features::needs_refresh(p, king_before, king_after)) {
@@ -126,11 +138,11 @@ struct SingleLayerNet {
       }
       const std::int16_t* sub[2];
       const std::int16_t* add[2];
-      for (int k = 0; k < nr; ++k)
-        sub[k] = ft_weights + Features::index(p, removed[k].piece, removed[k].square, king_before) * Hidden;
-      for (int k = 0; k < na; ++k)
-        add[k] = ft_weights + Features::index(p, added[k].piece, added[k].square, king_after) * Hidden;
-      update(from.values[p], to.values[p], sub, nr, add, na);
+      for (int k = 0; k < c.nr; ++k)
+        sub[k] = ft_weights + Features::index(p, c.removed[k].piece, c.removed[k].square, king_before) * Hidden;
+      for (int k = 0; k < c.na; ++k)
+        add[k] = ft_weights + Features::index(p, c.added[k].piece, c.added[k].square, king_after) * Hidden;
+      update(from.values[p], to.values[p], sub, c.nr, add, c.na);
     }
   }
 
