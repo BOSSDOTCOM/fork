@@ -15,12 +15,17 @@ comes from a generator seeded by (--seed, the game's index in the file), so
 the same file and settings give the same output byte for byte.
 
 The source's SHA-256 is checked against --sha256 (from Lichess's published
-sha256sums.txt) before anything is read. The output EPD is not committed
+sha256sums.txt) before anything is read. With SOURCE "-" the compressed
+file is read from standard input instead (a month too large to store,
+streamed from its download): it is hashed while it streams, and the
+output is written only if the hash matches at the end. The output EPD is not committed
 (size); the manifest written beside it (OUT.manifest.json, or --manifest)
 is, under data/manifests/, and regenerates it.
 
     .venv/Scripts/python.exe -I tools/datagen/datagen_openings.py \\
         lichess_db_standard_rated_2016-09.pgn.zst OUT.epd --sha256 HEX
+    curl -sSfL URL | .venv/Scripts/python.exe -I tools/datagen/datagen_openings.py \\
+        - OUT.epd --sha256 HEX --source-name NAME.pgn.zst
 """
 import argparse
 import hashlib
@@ -49,8 +54,25 @@ def sha256_of(path):
     return h.hexdigest()
 
 
+class HashingReader:
+    """A binary stream that hashes everything read through it."""
+
+    def __init__(self, raw):
+        self.raw = raw
+        self.sha = hashlib.sha256()
+
+    def read(self, n=-1):
+        data = self.raw.read(n)
+        self.sha.update(data)
+        return data
+
+
 def open_text(path):
     """The PGN text of a file, decompressing .zst while streaming."""
+    if isinstance(path, HashingReader):
+        import zstandard
+        return io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(path, read_across_frames=True),
+                                encoding='utf-8', errors='replace')
     if str(path).endswith('.zst'):
         import zstandard
         raw = open(path, 'rb')
@@ -187,22 +209,36 @@ def main(argv=None):
     ap.add_argument('--random-min', type=int, default=2)
     ap.add_argument('--random-max', type=int, default=4)
     ap.add_argument('--limit-games', type=int, default=0, help='stop after N games (tests; 0 = all)')
+    ap.add_argument('--source-name', help='with SOURCE "-": the streamed file\'s name, for the manifest')
     a = ap.parse_args(argv)
     if not (0 < a.ply_min <= a.ply_max and 0 <= a.random_min <= a.random_max):
         ap.error('need 0 < ply-min <= ply-max and 0 <= random-min <= random-max')
 
-    digest = sha256_of(a.source)
+    if a.source == '-':
+        if not a.source_name or a.limit_games:
+            ap.error('streaming needs --source-name, and reads the whole stream (no --limit-games)')
+        stream = HashingReader(sys.stdin.buffer)
+        with open_text(stream) as lines:
+            fens, stats = run(a, lines)
+            while stream.read(1 << 20):  # hash any bytes the decompressor left unread
+                pass
+        digest = stream.sha.hexdigest()
+        source_name = a.source_name
+    else:
+        digest = sha256_of(a.source)
+        source_name = Path(a.source).name
+        if digest == a.sha256.lower():
+            with open_text(a.source) as lines:
+                fens, stats = run(a, lines)
     if digest != a.sha256.lower():
-        print(f'SHA-256 mismatch for {a.source}: {digest}, expected {a.sha256}', file=sys.stderr)
+        print(f'SHA-256 mismatch for {a.source}: {digest}, expected {a.sha256}; nothing written', file=sys.stderr)
         return 1
-    with open_text(a.source) as lines:
-        fens, stats = run(a, lines)
     data = ''.join(f + '\n' for f in fens).encode()
     Path(a.out).write_bytes(data)
     manifest = {
         'tool': 'tools/datagen/datagen_openings.py',
         'tool_commit': git_commit(),
-        'source': Path(a.source).name,
+        'source': source_name,
         'source_sha256': digest,
         'settings': {k: getattr(a, k) for k in
                      ('seed', 'min_rating', 'ply_min', 'ply_max', 'random_min', 'random_max', 'limit_games')},

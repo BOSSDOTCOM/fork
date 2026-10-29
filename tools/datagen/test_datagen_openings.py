@@ -137,6 +137,29 @@ class RunTests(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertFalse(out.exists())
 
+    def test_streamed_source_matches_the_file_and_checks_its_hash(self):
+        import io
+        src, digest = self.write_source(fixture())
+        _, from_file = self.run_tool(src, digest, 'file.epd')
+        saved = sys.stdin
+
+        class Stdin:
+            def __init__(self, data):
+                self.buffer = io.BytesIO(data)
+
+        try:
+            sys.stdin = Stdin(src.read_bytes())
+            rc = dg.main(['-', str(self.tmp / 'stream.epd'), '--sha256', digest, '--source-name', 'src.pgn.zst'])
+            self.assertEqual(rc, 0)
+            self.assertEqual((self.tmp / 'stream.epd').read_bytes(), from_file.read_bytes())
+            sys.stdin = Stdin(src.read_bytes())
+            bad = ('0' if digest[0] != '0' else '1') + digest[1:]
+            rc = dg.main(['-', str(self.tmp / 'bad.epd'), '--sha256', bad, '--source-name', 'src.pgn.zst'])
+            self.assertEqual(rc, 1)
+            self.assertFalse((self.tmp / 'bad.epd').exists())
+        finally:
+            sys.stdin = saved
+
     def test_bot_filter_can_fail(self):
         # Checker check: with the BOT test removed from the filter, the
         # counts test above would see the BOT games pass.
