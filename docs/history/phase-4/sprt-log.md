@@ -41,4 +41,21 @@ Elo: 15.86 +/- 13.86, nElo: 19.53 +/- 17.02
 Ptnml(0-2): [78, 157, 282, 180, 103]
 LLR: 0.72 (-2.94, 2.94) [0.00, 3.00] nElo: continue
 ```
-- Stage 1: run 40825124514 (paused for the B0 SPRT between stages 0 and 1).
+- Stages 1-5: runs 40825124514 (after a pause for the B0 SPRT),
+  40826734135, 40828537082, 40830278485, 40831983959. Result: **H1
+  accepted** after 9,600 games:
+```
+Shards: 96 (done); pairs 4800, games 9600 (9600 finished, time losses 0, abnormal 0)
+Elo: 11.26 +/- 5.54, nElo: 14.13 +/- 6.95
+Ptnml(0-2): [469, 938, 1763, 1073, 557]
+LLR: 3.01 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
+```
+- Not merged: its constant matches one engine's in the same role, so the
+  owner decides first.
+
+### 2026-10-29 lmr-in-check (tier 2 step 0, experiment)
+
+- base `e370847` (phase-4, bootstrap), test `db99ebd` (branch
+  exp/lmr-in-check: late quiet evasions get the normal reduction instead
+  of none), bounds [0, 3] nElo, 8+0.08, Hash 16 MB.
+- Stage 0: run 40833730003.
