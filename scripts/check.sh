@@ -173,7 +173,7 @@ build_and_test() {  # preset, ctest filter args...
 
 # The tooling's own tests (audit-1 U-15): standard-library Python suites
 # (sprt_merge and the book permutation, the evolve harness, pgn_summary),
-# about 2 s; with "all", also the dry runs of tools/sprt.sh and
+# plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
 # tools/cloud/run_shard.sh with fake fastchess binaries (about 30 s).
 tool_tests() {  # python | all
   local py="" c
@@ -184,6 +184,13 @@ tool_tests() {  # python | all
   "$py" -I -B -m unittest discover -s tools/cloud -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/cloud"
   "$py" -I -B -m unittest discover -s tools/evolve -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/evolve"
   "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
+  # tools/datagen needs python-chess and zstandard (the repository's .venv);
+  # the log says when they are missing and the suite is skipped.
+  if "$py" -I -c 'import chess, zstandard' >/dev/null 2>&1; then
+    "$py" -I -B -m unittest discover -s tools/datagen -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/datagen"
+  else
+    echo "tool tests: tools/datagen skipped (no python-chess or zstandard in $py)" >>"$log"
+  fi
   bash scripts/update-test.sh >>"$log" 2>&1 || fail "tool tests: scripts/update-test.sh (update.sh clone mode)"
   [ "$1" = all ] || return 0
   bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
