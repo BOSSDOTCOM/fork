@@ -2132,7 +2132,20 @@ Fork's own code. New references go into ORIGINALITY.md when first used.
   loss exactly before training (0.02482651); best superbatch 19 of 27,
   validation loss 0.02298 (B0: 0.02483). Parity: trainer leg 0.00012 cp,
   quantization leg exact, netcheck exact on 446; loss max 8.6 / p99 7.9 cp.
-  Its SPRT against B0 follows (docs/nets.md).
+  SPRT against B0: +200.24 +/- 16.05 Elo, H1 at [0, 5] after 1,600 games.
+  It is the default network (nets/b0r1.fnet, tests/bench-b0r1.ref:
+  15,453,694 nodes) and the network for generation 1. Three search tests
+  were fixed for it, as was done for B0:
+  - determinism clears the history as well as the TT (the history persists
+    between searches by design);
+  - the fail-high stop test scans every bench position until three
+    qualifying stops;
+  - in the exchange test, a network may play any move that keeps the
+    Syzygy result (owner), checked on K+R+P v K+R, where 4 of the 16 moves
+    keep the win (fault-injected).
+
+  B0r1's Rb2 in the two-rook position keeps the win, like every legal
+  move there, so it is not recorded as a weakness (docs/nets.md).
 - Names as built (four throwaway-clone screens, 2026-10-28, all no match
   or generic): the third screen's three case-insensitive matches were
   renamed before commit (`refresh_accumulator` -> `accumulate_board`,
@@ -2774,6 +2787,7 @@ regions) still to be screened as constants.
 | 2026-10-29 | **Delta pruning's margin (owner).** QuiesceGainSlack's 150 cp (branch exp/qs-delta) was chosen after seeing the data (the marginal curve read off the bench measurement; the pre-declared 1% criterion only bounds it from below at 80); recorded as such, and its SPRT decides. |
 | 2026-10-29 | **No script prints credentials (owner).** Audit of every committed script and workflow: no secrets in the workflows; the Kaggle kernels read none, and session_check.py reports only three named CUDA variables; the AWS script uses its instance-metadata token only inside a request header; the Kaggle CLI is used only through its own token file and prints only URLs and status. The local session scripts likewise read and print no token. |
 | 2026-10-29 | **B0's retrain queued (owner): B0r1.** On all generation-0 data so far (g0s2, worker 9 held out), same architecture, warm-started from B0's weights, early stopping within Kaggle's limit; then the parity chain, netcheck and an STC SPRT against B0 at [0, 5] on the GitHub shards (never beside CI); if it passes it becomes the default and the network for the next data generation. |
+| 2026-10-29 | **B0r1 adopted; tablebase result, not material, for a network's quiet choice (owner).** B0r1 passed its SPRT against B0 (+200.24 +/- 16.05 Elo, H1 at [0, 5], STC) and is the default network. Three search tests were fixed for it: determinism clears the history too; the fail-high stop test scans every bench position; in the exchange test a network's move is checked against Syzygy where the material-best move is not forced. Owner's rule: in Syzygy range, accept any move that keeps the tablebase result; otherwise compare the moves with a deep search, and record a real loss as a known weakness of the net, not a test change. The check must be able to fail: K+R+P v K+R with 4 winning and 12 non-winning moves, fault-injected. |
 
 ## 7. Performance doctrine (governs every phase)
 

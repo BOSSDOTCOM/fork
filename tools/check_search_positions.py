@@ -168,11 +168,26 @@ for fen, value, moves in [
     ('4k3/8/2p5/3p4/8/8/3Q4/4K3 w - - 0 1', 700, None),  # every quiet move; never d2d5
     ('4k3/1P6/8/8/8/8/8/4K3 w - - 0 1', 900, ['b7b8q']),
     ('3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1', 500, ['d2d5']),
+    ('7k/8/P7/3r4/8/8/3R4/4K3 w - - 0 1', 600, ['d2d5']),
 ]:
     board_of(fen)
     got_value, got_moves = depth_one(fen)
     ok = got_value == value and (moves is None or got_moves == moves) and (moves is not None or 'd2d5' not in got_moves)
     check(ok, f'capture search {fen}: value {got_value}, best {got_moves[:6]}')
+
+# The same test's tablebase lists (the WDL results themselves are cited in
+# the test, from Syzygy and the lichess API; not re-probed here): in the
+# two-rook position every one of the 16 legal moves keeps the win; in the
+# K+R+P v K+R position the moves that keep it, those that draw and those that
+# lose are legal and together are all 16 legal moves, so the list can fail.
+check(len(list(board_of('3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1').legal_moves)) == 16,
+      'capture search: the two-rook position has 16 legal moves')
+keeps = 'a6a7 d2a2 d2d5 d2h2'.split()
+draws = 'd2b2 d2c2 d2d1 d2e2 d2f2 d2g2 e1d1 e1e2'.split()
+loses = 'd2d3 d2d4 e1f1 e1f2'.split()
+check(sorted(m.uci() for m in board_of('7k/8/P7/3r4/8/8/3R4/4K3 w - - 0 1').legal_moves)
+      == sorted(keeps + draws + loses),
+      'capture search: K+R+P v K+R, 4 moves keep the win, 8 draw, 4 lose: all 16 legal moves')
 
 # tests/test_endgame_tables.cpp (deliverable 7). The two KPPPPPvK positions
 # and their results are from the KB (tools.md §6.9, Fathom and the lichess API

@@ -67,3 +67,21 @@ Ptnml(0-2): [1784, 3623, 6523, 3722, 1948]
 LLR: 3.32 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
 ```
 - Merged into phase-4 with the check relief (owner, 2026-10-29).
+
+### 2026-10-29 b0r1-vs-b0 (step 4, deliverable 7)
+
+- base `a3dd67c` (phase-4: B0, bench 16,538,042), test `3d66a40` (branch
+  b0r1-candidate: B0r1 embedded, bench 15,453,694; only the network
+  differs), bounds [0, 5] nElo, 8+0.08, Hash 16 MB, Syzygy 3-4-5 for both,
+  book UHO_Lichess_4852_v1 (shuffled, seed 20261027). Run 40916705615,
+  dispatched once CI was idle. An earlier dispatch (run 40894512618) went
+  out while the nightly run was active and was cancelled within a minute,
+  with no result. Result: **H1 accepted** after stage 0:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: 200.24 +/- 16.05, nElo: 263.05 +/- 17.02
+Ptnml(0-2): [10, 37, 191, 235, 327]
+LLR: 17.27 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+- Merged into phase-4 as the default network (docs/nets.md; three search
+  tests fixed for it, DESIGN.md §5.3).

@@ -518,6 +518,19 @@ TEST_CASE("search", "no null move without pieces: two pawn endings keep their ta
 // quiet move ties, avoid the losing capture) and, with the bootstrap
 // evaluation, score within 100 cp of the material value: its placement terms
 // make the rest.
+//
+// A network may prefer a quiet move to the material gain, so where a
+// position is in Syzygy range its move is checked against the tablebase
+// result instead: it must play a move that keeps it (owner, 2026-10-29). In
+// the two-rook position every one of White's 16 legal moves keeps the win
+// (lichess tablebase API, 2026-10-29; B0r1 plays d2b2, DTM 41 against d2d5's
+// 31), so only the bootstrap evaluation's d2d5 is checked there. The K+R+P v
+// K+R position below separates the moves: d2d5, a6a7, d2a2 and d2h2 keep the
+// win; d2b2, d2c2, d2d1, d2e2, d2f2, d2g2, e1d1 and e1e2 draw; d2d3, d2d4,
+// e1f1 and e1f2 lose (Syzygy 3-4-5 through python-chess's chess.syzygy, and
+// the lichess tablebase API,
+// https://tablebase.lichess.ovh/standard?fen=7k/8/P7/3r4/8/8/3R4/4K3_w_-_-_0_1,
+// agreeing, 2026-10-29).
 TEST_CASE("search", "quiescence values on constructed exchanges match python-chess") {
   Fixture fx;
   struct Exchange {
@@ -525,18 +538,33 @@ TEST_CASE("search", "quiescence values on constructed exchanges match python-che
     int material;           // python-chess value, centipawns for the side to move
     std::string_view best;  // the only best move, or "" if many quiet moves tie
     std::string_view avoid;
+    std::string_view keeps_result = "";  // with a network: the moves that keep the tablebase result
+    bool best_bootstrap_only = false;    // with a network: every move keeps the result, nothing to check
   };
-  for (const Exchange& x : {Exchange{"4k3/8/8/3q4/4P3/8/8/4K3 w - - 0 1", 100, "e4d5", ""},
-                            Exchange{"4k3/8/3p4/4r3/8/5N2/8/4K3 w - - 0 1", -100, "f3e5", ""},
-                            Exchange{"4k3/8/2p5/3p4/8/8/3Q4/4K3 w - - 0 1", 700, "", "d2d5"},
-                            Exchange{"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1", 900, "b7b8q", ""},
-                            Exchange{"3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1", 500, "d2d5", ""}}) {
+  for (const Exchange& x :
+       {Exchange{"4k3/8/8/3q4/4P3/8/8/4K3 w - - 0 1", 100, "e4d5", ""},
+        Exchange{"4k3/8/3p4/4r3/8/5N2/8/4K3 w - - 0 1", -100, "f3e5", ""},
+        Exchange{"4k3/8/2p5/3p4/8/8/3Q4/4K3 w - - 0 1", 700, "", "d2d5"},
+        Exchange{"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1", 900, "b7b8q", ""},
+        Exchange{"3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1", 500, "d2d5", "", "", true},
+        Exchange{"7k/8/P7/3r4/8/8/3R4/4K3 w - - 0 1", 600, "d2d5", "", "a6a7 d2a2 d2d5 d2h2"}}) {
     fx.store.clear();
     Position pos;
     CHECK(pos.set_fen(x.fen));
     const SearchResult r = fx.search(x.fen, 1);
     const std::string played = pos.move_to_uci(r.best);
-    if (!x.best.empty()) CHECK_MSG(played == x.best, x.fen << ": played " << played);
+#if defined(FORK_EVAL_BOOTSTRAP)
+    const bool network = false;
+#else
+    const bool network = true;
+#endif
+    if (network && !x.keeps_result.empty()) {
+      const std::string list = " " + std::string(x.keeps_result) + " ";
+      CHECK_MSG(list.find(" " + played + " ") != std::string::npos,
+                x.fen << ": played " << played << ", which changes the tablebase result");
+    } else if (!x.best.empty() && !(network && x.best_bootstrap_only)) {
+      CHECK_MSG(played == x.best, x.fen << ": played " << played);
+    }
     if (!x.avoid.empty()) CHECK_MSG(played != x.avoid, x.fen << ": played " << played);
 #if defined(FORK_EVAL_BOOTSTRAP)
     // The tolerance is the bootstrap evaluation's (its 1/3/3/5/9 material
@@ -640,6 +668,11 @@ TEST_CASE("search", "the same search twice gives the same nodes, move and score"
   Fixture fx;
   const SearchResult a = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
   fx.store.clear();  // the same TT contents too
+  // and the same history, which persists between searches (searcher.hpp).
+  // Without this the second search started from the first one's history;
+  // the node counts still agreed with the bootstrap evaluation and B0, not
+  // with B0r1 (5631 vs 5610).
+  fx.searcher->clear_history();
   const SearchResult b = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
   CHECK_EQ(a.nodes, b.nodes);
   CHECK(a.best == b.best);
@@ -936,7 +969,11 @@ TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV st
 // unresolved whose move differs from the last finished iteration's best
 // (found by re-running the search to that depth, which repeats those
 // iterations exactly), that move must not be the one played. At least one
-// such stop must occur, or the test proves nothing.
+// such stop must occur, or the test proves nothing. How often one occurs
+// depends on the network: B0's first ten bench positions had some, B0r1's
+// none, its first ones at positions 30 and 34 below 30,000 nodes and at 34
+// and 41 below 12,000. So every bench position is scanned, until three
+// such stops are seen.
 TEST_CASE("search", "a stop during a root fail high's re-search keeps the previous iteration's move") {
   Fixture fx;
   auto fresh_search = [&](std::string_view fen, const SearchQuota& q) {
@@ -949,8 +986,7 @@ TEST_CASE("search", "a stop during a root fail high's re-search keeps the previo
   int distinct_fail_highs = 0;
   // The first bench positions are the perft suite (perft position 6 stopped
   // at 4,991 nodes with g5f6 failed high and c3d5 the previous best).
-  const std::size_t positions = Optimized ? 10 : 6;
-  for (std::size_t i = 0; i < positions; ++i) {
+  for (std::size_t i = 0; i < search_bench_fens().size() && distinct_fail_highs < 3; ++i) {
     const std::string_view fen = search_bench_fens()[i];
     for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
       SearchQuota q;
