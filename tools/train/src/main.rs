@@ -132,6 +132,21 @@ impl ShardReader {
     }
 }
 
+/// Shuffles `buf` with `rng` and hands it to `f` in chunks; true once `f`
+/// asks to stop.
+fn emit_shuffled<F: FnMut(&[ChessBoard]) -> bool>(buf: &mut Vec<ChessBoard>, rng: &mut SplitMix, f: &mut F) -> bool {
+    for i in (1..buf.len()).rev() {
+        buf.swap(i, (rng.next() % (i as u64 + 1)) as usize);
+    }
+    for chunk in buf.chunks(16384) {
+        if f(chunk) {
+            return true;
+        }
+    }
+    buf.clear();
+    false
+}
+
 impl DataReader<ChessBoard> for ShardReader {
     fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _skip_count: usize, mut f: F) {
         let mut rng = SplitMix(self.seed);
@@ -153,21 +168,17 @@ impl DataReader<ChessBoard> for ShardReader {
                     )
                     .expect("splat");
                     if buf.len() >= self.buffer {
-                        for i in (1..buf.len()).rev() {
-                            buf.swap(i, (rng.next() % (i as u64 + 1)) as usize);
-                        }
-                        for chunk in buf.chunks(16384) {
-                            if f(chunk) {
-                                stop = true;
-                                return;
-                            }
-                        }
-                        buf.clear();
+                        stop = emit_shuffled(&mut buf, &mut rng, &mut f);
                     }
                 });
                 if stop {
                     return;
                 }
+            }
+            // The end of a pass over every file: flush the partial buffer, so
+            // data smaller than one buffer still trains (a test dataset).
+            if !buf.is_empty() && emit_shuffled(&mut buf, &mut rng, &mut f) {
+                return;
             }
         }
     }
