@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""B0's training run on Kaggle (DESIGN.md §5.3, deliverables 4 and 7), pushed
+"""B0-class training runs on Kaggle (DESIGN.md §5.3, deliverables 4 and 7), pushed
 with `kaggle kernels push` (GPU T4 x2, internet on, the shard dataset
 attached). It builds tools/train at COMMIT, trains on every attached shard
 except the held-out *-val.vf, validates after each superbatch, stops early
@@ -10,7 +10,15 @@ model at the best checkpoint (the parity test's T) and copies that
 checkpoint's quantised.bin and float weights to /kaggle/working/result/
 with a summary (result/train.json).
 
+A warm start (INIT_WEIGHTS) continues from an earlier net's float weights,
+mounted with the shards and checked against INIT_SHA256; its validation loss
+before training is superbatch 0 and must equal INIT_VAL_LOSS (the earlier
+run's best, measured on the same held-out positions) within 1e-5, else
+nothing is trained.
+
 The settings below are this run's; the run record (train.json) repeats them.
+B0 (2026-10-29): commit phase-4 at fadfc02, g0s1, no warm start. B0r1: the
+first retrain, on g0s2, warm-started from B0.
 """
 import glob
 import json
@@ -19,8 +27,9 @@ import shutil
 import subprocess
 import time
 
-COMMIT = 'phase-4'
-SCALE = 134                 # S, fitted on this data's nine training shards (fit_scale.py, 600,000 positions)
+COMMIT = 'phase-4'          # replaced by the pushed commit's hash before the push
+NET_ID = 'b0r1'
+SCALE = 134                 # S, B0's (fit_scale.py on g0s1); a warm start keeps its net's target scale
 RESULT_WEIGHT = 0.5         # bullet's weight on the game result: 1 - lambda, lambda = 0.5 (§5.3)
 BATCH = 16384
 BATCHES = 305               # 5 M positions per superbatch: validation about every 0.85 epoch of g0s1
@@ -29,7 +38,10 @@ PATIENCE = 8
 LR = 0.001                  # bullet's example value (KB bullet-internals.md §5.3)
 LR_STEP = 40                # tenfold drop every 40 superbatches
 VAL_POSITIONS = 20000
-MANIFEST = 'data/manifests/g0s1.json'  # the sealed shards' SHA-256s, checked before training
+MANIFEST = 'data/manifests/g0s2.json'  # the sealed shards' SHA-256s, checked before training
+INIT_WEIGHTS = 'b0-weights.bin'          # B0's best checkpoint's float weights (superbatch 3), or None
+INIT_SHA256 = '290ddbb28ef50ebac0334a0c020edfc7c954f44872ff99e39c1d845d33e8f7a9'
+INIT_VAL_LOSS = 0.02482651               # B0's validation loss at superbatch 3 (g0s1's worker 9 = g0s2's prefix)
 DATA = '/kaggle/input'
 WORK = '/kaggle/working/b0'
 RESULT = '/kaggle/working/result'
@@ -48,7 +60,7 @@ os.makedirs(RESULT, exist_ok=True)
 home = os.path.expanduser('~')
 env = {'PATH': f"{home}/.cargo/bin:{os.environ['PATH']}", 'CUDA_PATH': '/usr/local/cuda',
        'RUSTFLAGS': '-L /usr/local/nvidia/lib64'}
-record = {'commit': COMMIT, 'scale': SCALE, 'result_weight': RESULT_WEIGHT, 'batch': BATCH, 'batches': BATCHES,
+record = {'commit': COMMIT, 'net_id': NET_ID, 'init_weights': INIT_WEIGHTS, 'scale': SCALE, 'result_weight': RESULT_WEIGHT, 'batch': BATCH, 'batches': BATCHES,
           'max_superbatches': MAX_SUPERBATCHES, 'patience': PATIENCE, 'lr': LR, 'lr_step': LR_STEP,
           'val_positions': VAL_POSITIONS}
 rc, out, secs = sh('curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal')
@@ -76,11 +88,32 @@ for p in found:
 record['hash_check'] = {'shards': len(found), 'sealed': len(sealed), 'mismatches': mismatch}
 if mismatch or len(found) != len(sealed):
     rc = 1
+init = ''
+if INIT_WEIGHTS:
+    paths = glob.glob(f'{DATA}/**/{INIT_WEIGHTS}', recursive=True)
+    h = hashlib.sha256(open(paths[0], 'rb').read()).hexdigest() if paths else None
+    record['init_check'] = {'found': len(paths), 'sha256_ok': h == INIT_SHA256}
+    if h != INIT_SHA256:
+        rc = 1
+    else:
+        init = f'--init-weights {paths[0]} '
 if rc == 0 and shards and val:
     cmd = (f'{train} train --data {" ".join(shards)} --val {val[0]} --val-positions {VAL_POSITIONS} '
            f'--patience {PATIENCE} --scale {SCALE} --result-weight {RESULT_WEIGHT} --batch {BATCH} '
            f'--batches {BATCHES} --superbatches {MAX_SUPERBATCHES} --lr {LR} --lr-step {LR_STEP} '
-           f'--threads 3 --out {WORK}/run > {RESULT}/train.log 2>&1')
+           f'{init}--id {NET_ID} --threads 3 --out {WORK}/run > {RESULT}/train.log 2>&1')
+    if INIT_WEIGHTS:
+        # Superbatch 0 alone first: the warm start must reproduce the earlier
+        # run's validation loss before any training is spent.
+        rc0, _, _ = sh(cmd.replace(f'--superbatches {MAX_SUPERBATCHES}', '--superbatches 0'), env=env)
+        first = open(f'{WORK}/run/val.txt').read().split() if os.path.exists(f'{WORK}/run/val.txt') else []
+        loss0 = float(first[1]) if len(first) >= 2 and first[0] == '0' else None
+        record['warm_start_check'] = {'rc': rc0, 'loss0': loss0, 'expected': INIT_VAL_LOSS,
+                                      'ok': loss0 is not None and abs(loss0 - INIT_VAL_LOSS) < 1e-5}
+        shutil.rmtree(f'{WORK}/run', ignore_errors=True)
+        if not record['warm_start_check']['ok']:
+            rc = 1
+if rc == 0 and shards and val:
     rc, _, secs = sh(cmd, env=env, timeout=11 * 3600)
     record['train'] = {'rc': rc, 'seconds': secs}
     curve = []
@@ -89,18 +122,20 @@ if rc == 0 and shards and val:
     record['val_curve'] = curve
     if os.path.exists(f'{WORK}/run/stopped-early.txt'):
         record['stopped_early'] = open(f'{WORK}/run/stopped-early.txt').read().strip()
-    if curve:
-        best = min(curve, key=lambda c: c[1])[0]
-        record['best_superbatch'] = best
-        ck = f'{WORK}/run/b0-{best}'
+    best = min(curve, key=lambda c: c[1])[0] if curve else 0
+    record['best_superbatch'] = best
+    if best == 0:
+        record['result'] = 'no superbatch beat the initial weights'
+    else:
+        ck = f'{WORK}/run/{NET_ID}-{best}'
         shutil.copy(f'{ck}/quantised.bin', f'{RESULT}/quantised.bin')
         shutil.copy(f'{ck}/optimiser_state/weights.bin', f'{RESULT}/weights.bin')
         rc, out, secs = sh(f'{train} eval --checkpoint {ck} --epd {WORK}/fork/tests/nnue/parity.epd '
                            f'--out {RESULT}/parity-trainer.txt', env=env)
         record['eval'] = {'rc': rc, 'tail': out[-300:]}
     # Keep the output small: only the result folder and the last checkpoint.
-    keep = sorted(glob.glob(f'{WORK}/run/b0-*'), key=lambda p: int(p.rsplit('-', 1)[1]))[-1:]
-    for p in glob.glob(f'{WORK}/run/b0-*'):
+    keep = sorted(glob.glob(f'{WORK}/run/{NET_ID}-*'), key=lambda p: int(p.rsplit('-', 1)[1]))[-1:]
+    for p in glob.glob(f'{WORK}/run/{NET_ID}-*'):
         if p not in keep:
             shutil.rmtree(p, ignore_errors=True)
 shutil.rmtree(f'{WORK}/fork', ignore_errors=True)

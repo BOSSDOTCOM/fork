@@ -13,7 +13,8 @@
 //!
 //!   fork-train check  --out DIR
 //!   fork-train dump   --data SHARD --count N
-//!   fork-train train  --data SHARD... --out DIR --scale S [--val SHARD --patience P] [options]
+//!   fork-train train  --data SHARD... --out DIR --scale S [--val SHARD --patience P]
+//!                     [--init-weights weights.bin] [options]
 //!   fork-train eval   (--checkpoint DIR | --weights weights.bin) --epd FILE --out FILE
 //!   fork-train loader --data SHARD... [--positions N]   (decoding speed, one thread)
 //!
@@ -307,6 +308,47 @@ fn main() {
                 let state = Path::new(dir).join("optimiser_state");
                 opt.load_from_checkpoint(state.to_str().expect("path")).expect("resume");
             }
+            // Validation: mean squared error of sigmoid(output) against the
+            // same target as training. bullet's evaluator is compiled for one
+            // position at a time (ModelEvaluator::new lowers the graph at
+            // batch 1). A macro, so the warm start and the per-superbatch
+            // callback share it without naming the optimiser's types.
+            macro_rules! validation_loss {
+                ($opt:expr) => {{
+                    let mut evaluator = ModelEvaluator::new($opt.definition(), $opt.device()).expect("evaluator");
+                    evaluator.load_device_weights($opt.weights()).expect("weights");
+                    let mut total = 0.0f64;
+                    for pos in &val {
+                        let batch = val_map.map(&pool, std::slice::from_ref(pos), Step::default(), 1).expect("map");
+                        let expected = 1.0 / (1.0 + (-f32::from(pos.score()) / scale).exp());
+                        let target = (1.0 - result_weight) * expected + result_weight * pos.result();
+                        let batch = batch.to_device(&device).expect("device");
+                        let out = evaluator.evaluate(&batch).expect("eval").get("output").expect("output");
+                        let host = out.to_host().expect("host");
+                        let p = 1.0 / (1.0 + (-f64::from(host.f32()[0])).exp());
+                        total += (p - f64::from(target)).powi(2);
+                    }
+                    total / val.len() as f64
+                }};
+            }
+            // A warm start (--init-weights): an earlier net's float weights
+            // (train_b0.py keeps the best checkpoint's), AdamW's moments
+            // fresh. Its validation loss is superbatch 0 in val.txt and the
+            // first best, so a run that never beats it stops after --patience.
+            if let Some(file) = a.get("--init-weights") {
+                opt.load_weights_from_file(file).expect("init weights");
+                if !val.is_empty() {
+                    let loss = validation_loss!(opt);
+                    fs::create_dir_all(&out).expect("out");
+                    fs::write(out.join("val.txt"), format!("0 {loss:.8}\n")).expect("val.txt");
+                    println!("superbatch 0 (initial weights) validation loss {loss:.8}");
+                    best = Some((loss, 0));
+                }
+            }
+            // --superbatches below --start: only the initial validation.
+            if end < start {
+                return;
+            }
             let schedule = TrainingSchedule {
                 steps: TrainingSteps {
                     batch_size: a.num("--batch", 16384),
@@ -339,24 +381,7 @@ fn main() {
                     if val.is_empty() {
                         return;
                     }
-                    // Validation: mean squared error of sigmoid(output)
-                    // against the same target as training, in chunks.
-                    let mut evaluator = ModelEvaluator::new(opt.definition(), opt.device()).expect("evaluator");
-                    evaluator.load_device_weights(opt.weights()).expect("weights");
-                    let mut total = 0.0f64;
-                    // bullet's evaluator is compiled for one position at a
-                    // time (ModelEvaluator::new lowers the graph at batch 1).
-                    for pos in &val {
-                        let batch = val_map.map(&pool, std::slice::from_ref(pos), Step::default(), 1).expect("map");
-                        let expected = 1.0 / (1.0 + (-f32::from(pos.score()) / scale).exp());
-                        let target = (1.0 - result_weight) * expected + result_weight * pos.result();
-                        let batch = batch.to_device(&device).expect("device");
-                        let out = evaluator.evaluate(&batch).expect("eval").get("output").expect("output");
-                        let host = out.to_host().expect("host");
-                        let p = 1.0 / (1.0 + (-f64::from(host.f32()[0])).exp());
-                        total += (p - f64::from(target)).powi(2);
-                    }
-                    let loss = total / val.len() as f64;
+                    let loss = validation_loss!(opt);
                     let sb = step.superbatch();
                     let mut log = fs::OpenOptions::new().create(true).append(true).open(out.join("val.txt")).expect("val.txt");
                     writeln!(log, "{sb} {loss:.8}").expect("val.txt");
