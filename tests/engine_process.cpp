@@ -105,6 +105,10 @@ std::optional<int> EngineProcess::wait_exit(std::chrono::milliseconds timeout) {
   GetExitCodeProcess(static_cast<HANDLE>(process_), &code);
   exited_ = true;
   exit_code_ = static_cast<int>(code);
+  // The reader may not have taken the last lines yet: wait for the end of
+  // output, so a caller counting lines after the exit sees them all.
+  std::unique_lock lock(mutex_);
+  grew_.wait_for(lock, std::chrono::seconds(10), [&] { return output_closed_; });
   return exit_code_;
 }
 
@@ -190,6 +194,9 @@ std::optional<int> EngineProcess::wait_exit(std::chrono::milliseconds timeout) {
     if (r == pid_) {
       exited_ = true;
       exit_code_ = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+      // As on Windows: the last lines may still be in the reader's hands.
+      std::unique_lock lock(mutex_);
+      grew_.wait_for(lock, std::chrono::seconds(10), [&] { return output_closed_; });
       return exit_code_;
     }
     if (Clock::now() >= deadline) return std::nullopt;

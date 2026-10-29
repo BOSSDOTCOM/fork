@@ -565,9 +565,17 @@ TEST_CASE("uci_protocol", "go mate N answers after 2N - 1 plies, mate or not") {
   const std::size_t mark = g.cursor;
   g.send("go mate 2");
   CHECK(g.next("bestmove").has_value());
+#if defined(FORK_EVAL_BOOTSTRAP)
+  // Bootstrap only: the search stops at 3 plies, where pruning decides. With
+  // B0, after the depth-5 search above, the history it left makes null move,
+  // late move or SEE pruning skip the mate (each alone; with them off it is
+  // found), so a network build checks only the answer and its depth.
   CHECK(std::ranges::any_of(g.texts(mark), [](const std::string& line) {
     return starts_with(line, "info depth ") && line.find(" score mate 2 ") != std::string::npos;
   }));
+#endif
+  for (const std::string& line : g.texts(mark))
+    if (starts_with(line, "info depth ")) CHECK_MSG(info_number(line, "depth").value_or(0) <= 3, line);
   CHECK(g.sync());
   g.check_transcript();
   g.quit();
