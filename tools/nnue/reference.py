@@ -137,6 +137,7 @@ def legs(a):
 
     trainer = read_trainer(a.trainer) if a.trainer else {}
     rows, losses = [], []
+    trainer_diff = 0.0
     for fen in read_fens(a.epd):
         board = chess.Board(fen)
         ri = r_int(net, board)
@@ -145,6 +146,7 @@ def legs(a):
         if fen in trainer:
             t = trainer[fen] * scale
             row['trainer'] = round(t, 4)
+            trainer_diff = max(trainer_diff, abs(rf - t))
             if abs(rf - t) > 0.01:
                 fails.append(f'R-float {rf:.4f} vs trainer {t:.4f} cp at {fen}')
         losses.append(abs(ri - rf))
@@ -152,7 +154,8 @@ def legs(a):
     losses.sort()
     stats = {'positions': len(rows), 'loss_max': round(losses[-1], 3),
              'loss_p99': round(losses[min(len(losses) - 1, int(0.99 * len(losses)))], 3),
-             'loss_mean': round(sum(losses) / len(losses), 3), 'trainer_positions': len(trainer)}
+             'loss_mean': round(sum(losses) / len(losses), 3), 'trainer_positions': len(trainer),
+             'trainer_max_diff_cp': round(trainer_diff, 5)}
     if a.max_loss is not None and stats['loss_max'] > a.max_loss:
         fails.append(f"quantization loss {stats['loss_max']} cp above the threshold {a.max_loss}")
     if a.p99_loss is not None and stats['loss_p99'] > a.p99_loss:
