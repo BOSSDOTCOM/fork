@@ -112,8 +112,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        preset: [clang-release, clang-debug, clang-v3, clang-avx512, clang-nopext, clang-tsan,
-                 gcc-release, gcc-debug, gcc-v3, gcc-avx512, gcc-nopext, gcc-tsan]
+        preset: [clang-release, clang-debug, clang-v3, clang-avx512, clang-nopext, clang-tsan, clang-scalar,
+                 clang-vnni, gcc-release, gcc-debug, gcc-v3, gcc-avx512, gcc-nopext, gcc-tsan, gcc-scalar, gcc-vnni]
     env:
       FORK_CLANG_CXX: clang++
       FORK_GCC_CXX: g++
@@ -137,6 +137,7 @@ jobs:
         run: |
           case "${{ matrix.preset }}" in
             *-avx512) arch=x86-64-v4 ;;
+            *-vnni) arch=x86-64-v4-vnni; echo "FORK_SDE_CHIP=-icx" >>"$GITHUB_ENV" ;;
             *-v3|*-nopext) arch=x86-64-v3 ;;
             *) arch=native ;;
           esac
@@ -180,8 +181,11 @@ jobs:
           case "${{ matrix.preset }}" in *-tsan) export REQUIRE_NO_ALLOC=0 ;; esac
           if [ "${{ steps.cpu.outputs.sde }}" = true ]; then
             d=build/${{ matrix.preset }}
-            REQUIRE_BENCH=0 bash .github/ci/run-tests.sh $d -E '^(bench_parity|perft_bench_parity|version_lto)$'
+            REQUIRE_BENCH=0 bash .github/ci/run-tests.sh $d -E '^(bench_parity|perft_bench_parity|version_lto|nnue_netcheck)$'
             bash .github/ci/bench-parity.sh $d/fork-sde
+            # The network parity gate on this build's SIMD path, through the
+            # wrapper (tests/nnue/synthetic.parity; DESIGN.md §5.3).
+            $d/fork-sde netcheck tests/nnue/synthetic.parity tests/nnue/synthetic.fnet
             # version_lto runs the engine directly too: the same check through
             # the wrapper, against the expectation the test itself declares.
             want=$(ctest --test-dir $d --show-only=json-v1 -R '^version_lto$' | grep -oE 'lto (on|off)' | head -n 1)
@@ -191,6 +195,41 @@ jobs:
           else
             bash .github/ci/run-tests.sh build/${{ matrix.preset }}
           fi
+
+  linux-python:
+    name: Linux Python suites (datagen, NNUE parity)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FORK_CLANG_CXX: clang++
+      FORK_GCC_CXX: g++
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install build tools and the pinned Python packages
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build
+          # The repository's .venv, which CMake picks up for the python-labelled
+          # tests (CMakeLists.txt, FORK_TEST_PYTHON).
+          python3 -m venv .venv
+          .venv/bin/pip install --quiet chess==1.11.2 zstandard==0.25.0
+          .venv/bin/python -c "import chess, zstandard; print(chess.__version__, zstandard.__version__)"
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: Build (clang-release)
+        run: |
+          cmake --preset clang-release
+          cmake --build build/clang-release
+      - name: Python-labelled tests (difftest_short, datagen_verify, nnue_parity) and the tool suites
+        run: |
+          ctest --test-dir build/clang-release -L python --output-on-failure
+          .venv/bin/python -I -B -m unittest discover -s tools/datagen -p 'test_*.py'
+          .venv/bin/python -I -B -m unittest discover -s tools/nnue -p 'test_*.py'
 
   linux-msan:
     name: Linux MSan (clang 21, libc++)

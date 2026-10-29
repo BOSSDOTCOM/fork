@@ -20,6 +20,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(FORK_ARCH "native" CACHE STRING "Target CPU: native, x86-64-v3, x86-64-v4")
 option(FORK_NO_PEXT "Use magic multiplication even when BMI2 PEXT is available" OFF)
+option(FORK_VNNI "Add AVX-512 VNNI to the target (with FORK_ARCH=x86-64-v4; the vnni presets)" OFF)
 option(FORK_SANITIZE "Build with ASan + UBSan (where the toolchain supports it)" OFF)
 option(FORK_TSAN "Build with ThreadSanitizer (Linux; not with FORK_SANITIZE)" OFF)
 option(FORK_LTO "Link-time optimization for optimized builds" ON)
@@ -43,6 +44,9 @@ set(CMAKE_CXX_FLAGS_DEBUG "-O1 -g -fno-omit-frame-pointer -DFORK_DEBUG")
 add_library(fork_flags INTERFACE)
 target_compile_options(fork_flags INTERFACE
   -Wall -Wextra -Wpedantic -Wshadow -Werror -march=${FORK_ARCH})
+if(FORK_VNNI)
+  target_compile_options(fork_flags INTERFACE -mavx512vnni)
+endif()
 # A/B experiments (Part C): -DFORK_EXPERIMENT=NAME defines FORK_EXP_NAME.
 set(FORK_EXPERIMENT "" CACHE STRING "Optimization experiment to enable (A/B builds only)")
 if(FORK_EXPERIMENT)
@@ -193,6 +197,14 @@ add_library(forkuci STATIC
   src/uci/session.cpp
   src/uci/version.cpp)
 target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pgo)
+# B0's inference (src/eval/nnue/; DESIGN.md §5.3, deliverable 5): built and
+# tested in every configuration; the search uses it only with
+# FORK_EVALUATOR=nnue.
+add_library(forknnue STATIC
+  src/eval/nnue/accumulator.cpp
+  src/eval/nnue/net_file.cpp)
+target_link_libraries(forknnue PUBLIC forkcore PRIVATE fork_pgo)
+
 # Self-play training data (src/datagen/; DESIGN.md §5.3, deliverable 2): the
 # game format and the game player, shared by fork_datagen, the tests and a
 # fuzz target. fork_datagen is never part of the engine binary TCEC builds.
@@ -229,7 +241,7 @@ message(STATUS "Fork version ${fork_version}")
 set_source_files_properties(src/uci/version.cpp PROPERTIES COMPILE_DEFINITIONS "FORK_VERSION=\"${fork_version}\"")
 
 add_executable(fork src/main.cpp)
-target_link_libraries(fork PRIVATE forkuci fork_pgo)
+target_link_libraries(fork PRIVATE forkuci forknnue fork_pgo)
 
 add_executable(fork_magic_seeds tools/magic_seeds.cpp)
 target_link_libraries(fork_magic_seeds PRIVATE forkcore)
@@ -326,8 +338,9 @@ if(FORK_BUILD_TESTS)
     tests/test_uci.cpp
     tests/test_options.cpp
     tests/test_params.cpp
-    tests/test_datagen.cpp)
-  target_link_libraries(fork_tests PRIVATE forkuci forkdatagen)
+    tests/test_datagen.cpp
+    tests/test_nnue.cpp)
+  target_link_libraries(fork_tests PRIVATE forkuci forkdatagen forknnue)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
   target_compile_definitions(fork_tests PRIVATE FORK_EXE_PATH="$<TARGET_FILE:fork>")
@@ -453,7 +466,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen)
+                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
@@ -508,6 +521,12 @@ if(FORK_BUILD_TESTS)
       -DWORK=${CMAKE_BINARY_DIR}/datagen_verify -DTABLES=${FORK_SYZYGY345_DIR}
       -P ${CMAKE_SOURCE_DIR}/cmake/datagen_verify.cmake)
     set_tests_properties(datagen_verify PROPERTIES LABELS python)
+    # The trainer-engine parity chain on a synthetic net, ending in Fork's own
+    # inference on this build's SIMD path (DESIGN.md §5.3, deliverable 6).
+    add_test(NAME nnue_parity COMMAND ${CMAKE_COMMAND}
+      -DFORK=$<TARGET_FILE:fork> -DPYTHON=${test_python} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+      -DWORK=${CMAKE_BINARY_DIR}/nnue_parity -P ${CMAKE_SOURCE_DIR}/cmake/nnue_parity.cmake)
+    set_tests_properties(nnue_parity PROPERTIES LABELS python)
   endif()
 
   # The search bench (`fork bench`) and, so move generation stays tied across
@@ -520,6 +539,13 @@ if(FORK_BUILD_TESTS)
     -DFORK=$<TARGET_FILE:fork> -DCMD=perftbench
     -DREF=${CMAKE_SOURCE_DIR}/tests/perft_bench.ref
     -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+
+  # The network parity gate on this build's SIMD path: Fork's inference must
+  # give exactly the reference's R-int values for the committed synthetic net
+  # (tests/nnue/synthetic.*, from tools/nnue/reference.py synthetic --seed 7;
+  # DESIGN.md §5.3, deliverable 6). Needs no Python, so every preset runs it.
+  add_test(NAME nnue_netcheck COMMAND fork netcheck ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.parity
+                                                     ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.fnet)
 
   # `fork version` says whether this build has LTO (audit-1, P-6).
   add_test(NAME version_lto COMMAND fork version)
