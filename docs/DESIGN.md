@@ -350,6 +350,11 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   only, nothing of it has been run).
   - **Principle:** agents propose, build and review; training and SPRT
     decide. No architecture is chosen by argument alone.
+  - **Step 0, a baseline network first** (owner, 2026-10-28): a simple,
+    proven network shape, chosen in the Phase 4 spec, gets the whole
+    pipeline working end to end (data generation, training, inference,
+    testing). Self-play data generation starts with it as early as
+    possible, while the design work of steps 1-3 continues in parallel.
   - **Step 1, research** (branch kb, ideas only): clean-room descriptions
     of modern NNUE design (input features including threat-aware inputs,
     king buckets and mirroring as concepts, output buckets, activations,
@@ -360,12 +365,15 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   - **Step 2, competing designs:** two or three independent designer
     agents each propose a full architecture for Fork, with reasoning,
     expected inference speed on x86-64-v3 and v4, Kaggle training cost,
-    and risks.
+    and risks. Their briefs differ on purpose (owner, 2026-10-28), so the
+    proposals actually diverge: one speed-first, one accuracy-first, one
+    novelty-first.
   - **Step 3, judge:** one agent compares the proposals and recommends 2-3
     candidates.
   - **Step 4, bake-off:** small versions of each candidate trained on the
-    same data, compared by SPRT. The winner becomes Fork's first
-    architecture.
+    same data, compared by SPRT. The winner is confirmed at a larger size
+    before Fork commits to it (owner, 2026-10-28); then it becomes Fork's
+    first architecture.
   - **Step 5, implementation:** one implementer session writes the
     inference code; independent reviewers check correctness, SIMD
     equivalence with the scalar reference, performance, and originality.
@@ -374,9 +382,17 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
     labels, nothing from off-limits sources).
   - **Step 7, training:** an analyst agent reviews each network
     generation's results and recommends the next change.
+  - **Originality:** distinctive architecture choices (input features,
+    bucketing, layer shapes, activations, quantization scheme) go through
+    the originality screen, match / no match only (§8), before they are
+    built.
+  - **Compute:** heavy steps (data generation, training, bake-off SPRTs)
+    run one at a time on the local machine, or on GitHub or AWS.
   - **Timing:** steps 1-3 may run in parallel with tier 2 once audit-1 is
     merged, since they need little CPU; steps 4-7 run in Phase 4. Each
-    step stops for the owner's review before the next.
+    step stops for the owner's review before the next; reviews are
+    batched where possible (owner, 2026-10-28): results that do not depend
+    on each other's outcome go to the owner together, to reduce waiting.
 - **Phase 5: Time management.** Soft and hard limits tuned for long
   increment games without ponder, and a stress test under artificial system
   load. Before this phase starts: research the current TCEC season's full
