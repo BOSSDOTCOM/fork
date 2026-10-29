@@ -58,4 +58,12 @@ LLR: 3.01 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
 - base `e370847` (phase-4, bootstrap), test `db99ebd` (branch
   exp/lmr-in-check: late quiet evasions get the normal reduction instead
   of none), bounds [0, 3] nElo, 8+0.08, Hash 16 MB.
-- Stage 0: run 40833730003.
+- Stages 0-21: runs 40833730003 to 40878713471. Result: **H1 accepted**
+  after 35,200 games:
+```
+Shards: 352 (done); pairs 17600, games 35200 (35200 finished, time losses 0, abnormal 0)
+Elo: 4.21 +/- 2.89, nElo: 5.30 +/- 3.63
+Ptnml(0-2): [1784, 3623, 6523, 3722, 1948]
+LLR: 3.32 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
+```
+- Merged into phase-4 with the check relief (owner, 2026-10-29).

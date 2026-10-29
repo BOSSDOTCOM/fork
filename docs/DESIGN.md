@@ -2112,20 +2112,27 @@ Fork's own code. New references go into ORIGINALITY.md when first used.
   cp, quantization leg exact, netcheck exact on 446 positions; loss max
   11.1 / p99 8.8 cp) and its SPRT against the bootstrap evaluation (+486.85
   +/- 32.07 Elo, H1 at [0, 5]; docs/nets.md, history/phase-4/sprt-log.md).
-  **Not yet the default** on phase-4: with B0 as the default, the search
-  suite's TT-at-exact-depth = minimax test and the zero-window probe test
-  fail on one KRK position at depth 6 (554 vs 558; with the TT off they
-  agree), and a mate-in-2 UCI test fails. The hookup was verified exact
-  (the refresh check on at every evaluation, release and debug). The
-  cause is graph-history interaction (verified 2026-10-29): with repetition
-  draws switched off in both the search and the minimax reference (a
-  throwaway worktree), both tests pass with B0, so the TT reuses a score a
-  repetition draw shaped on another path, and the tests' premise does not
-  hold once repetitions fit in the horizon; the bootstrap evaluation never
-  hit it on those positions. The remaining failures (a fresh queen scored
-  763 against a 900 expectation, the UCI mate-in-2, two debug node counts)
-  are expectations tied to the bootstrap evaluation. B0 waits on branch
-  b0-candidate for the owner's decision on the test changes.
+  **B0 is the default evaluator since 2026-10-29** (owner). With B0 the
+  search suite's TT-at-exact-depth = minimax tests failed on a KRK
+  position at depth 6 (554 vs 558; without the TT they agreed): graph-
+  history interaction (verified: with repetition draws off in both the
+  search and the reference, they pass), so the TT reuses a score a
+  repetition draw shaped on another path; the bootstrap evaluation never
+  hit it there. The hookup was verified exact (the refresh check on at
+  every evaluation). By the owner's decision the tests were fixed, not the
+  engine: the exact TT tests run where a full-width walk finds no
+  repetition in reach (depth 3), a separate case documents the KRK case as
+  tolerated, and checks tied to the bootstrap evaluation (score near
+  material, the UCI mate-in-2 report) are bootstrap-only. The checks now
+  follow the default evaluator (check.sh, build.sh, the PGO script and
+  CI's bench parity pick bench-<net>.ref for a network).
+- Deliverable 7, first retrain (B0r1, 2026-10-29): warm-started from B0 on
+  the snapshot g0s2 (82.9 M positions; data/manifests/g0s2.json), same
+  architecture and settings; the warm start reproduced B0's validation
+  loss exactly before training (0.02482651); best superbatch 19 of 27,
+  validation loss 0.02298 (B0: 0.02483). Parity: trainer leg 0.00012 cp,
+  quantization leg exact, netcheck exact on 446; loss max 8.6 / p99 7.9 cp.
+  Its SPRT against B0 follows (docs/nets.md).
 - Names as built (four throwaway-clone screens, 2026-10-28, all no match
   or generic): the third screen's three case-insensitive matches were
   renamed before commit (`refresh_accumulator` -> `accumulate_board`,
@@ -2761,6 +2768,12 @@ regions) still to be screened as constants.
 | 2026-10-28 | **Step 0 spec approved; steps 1-3 reviewed (owner).** §5.3 approved with the answers in its "Owner's answers": no SSD (staging on C:), Kaggle account ready, datagen on 10 of 12 threads, B0's net committed (other nets as Releases), "accumulator" kept if the name screen agrees. Bake-off: the judge's four entries at width 512 on a shared kernel framework, on generation 0 data, STC narrows and LTC decides, time-odds games at STC only, a design-level originality screen for X, G, R, the fitted king regions and AF's threat encoding, a subagent may read bullet's code at the pin, loss thresholds proposed for approval, one net until the pipeline is proven, threat inputs later as an add-on. VNNI on TCEC stays UNVERIFIED (TCEC question list); older KB pages scrubbed of other engines' constants. |
 | 2026-10-28 | **QA/QB and the openings month (owner, answering §5.3 question 6).** QA = 255 and QB = 64 stay as bullet's standard quantization convention, recorded in ORIGINALITY.md as a trainer-interface convention credited to bullet, not a tuned constant (so outside the constant screen). The choice of Lichess 2016-09 for datagen openings and the case for a larger or more recent month later are recorded in §5.3, deliverable 1. |
 | 2026-10-28 | **Phase 4 started (owner).** The multi-agent plan gains a step 0 requirement: the trainer-engine parity test (the trainer's model against Fork's scalar and every SIMD path, exactly or within the quantization's documented tolerance), passing before any network plays a game and run in CI on every network and inference change. Step 0's spec (§5.3, the baseline network B0 and the whole pipeline, with the Kaggle test session checklist) is written as a draft for review, together with steps 1-3 (research, three designs with divergent briefs, a judge) on branch kb; one batched review stop. The training-data decisions of 2026-10-24 are copied from the KB into §5.3. |
+| 2026-10-29 | **B0 adopted; its failing tests fixed, not the engine (owner).** B0 passed its SPRT against the bootstrap evaluation (+486.85 +/- 32.07 Elo, H1 at [0, 5], STC) and is the default evaluator. The TT-equals-minimax tests run their endgames at depth 3, where a full-width walk (repetition_in_tree) finds no repetition in reach; the known path-dependent repetition/TT case (KRK, depth 6) has its own test as tolerated; checks tied to the bootstrap evaluation are made bootstrap-only. Bench re-pinned (tests/bench-b0.ref). |
+| 2026-10-29 | **Check relief kept at 1 ply and merged (owner).** LmrCheckRelief is recorded as the minimal reduction unit in Fork's whole-ply LMR, not a tuned constant; the coincidence with Berserk's one-ply relief is noted in ORIGINALITY.md. Its STC SPRT passed (+11.26 +/- 5.54 Elo, [0, 3]). The in-check LMR term (late quiet evasions reduced normally; no constant) passed its own STC SPRT (+4.21 +/- 2.89 Elo, 35,200 games) and is merged too. Both were tested against the bootstrap evaluation, separately. |
+| 2026-10-29 | **Quantization-loss thresholds approved for B0-class nets (owner): max 15 cp, p99 12 cp**, revisited for each new architecture (§5.3, answer 11). B0 (11.1 / 8.8) and B0r1 (8.6 / 7.9) pass (`reference.py legs --max-loss 15 --p99-loss 12`). |
+| 2026-10-29 | **Delta pruning's margin (owner).** QuiesceGainSlack's 150 cp (branch exp/qs-delta) was chosen after seeing the data (the marginal curve read off the bench measurement; the pre-declared 1% criterion only bounds it from below at 80); recorded as such, and its SPRT decides. |
+| 2026-10-29 | **No script prints credentials (owner).** Audit of every committed script and workflow: no secrets in the workflows; the Kaggle kernels read none, and session_check.py reports only three named CUDA variables; the AWS script uses its instance-metadata token only inside a request header; the Kaggle CLI is used only through its own token file and prints only URLs and status. The local session scripts likewise read and print no token. |
+| 2026-10-29 | **B0's retrain queued (owner): B0r1.** On all generation-0 data so far (g0s2, worker 9 held out), same architecture, warm-started from B0's weights, early stopping within Kaggle's limit; then the parity chain, netcheck and an STC SPRT against B0 at [0, 5] on the GitHub shards (never beside CI); if it passes it becomes the default and the network for the next data generation. |
 
 ## 7. Performance doctrine (governs every phase)
 
