@@ -29,6 +29,9 @@ Fork, where the information came from, and when it was verified.
 | [originality.md](originality.md) | What TCEC allows and bans, precedents, how Fork documents provenance |
 | [training-data.md](training-data.md) | External NNUE training-data sources (Lc0, Lichess, engine archives, Syzygy, datasets) evaluated, own vs external vs hybrid strategies, recommendation |
 | [data-policy.md](data-policy.md) | Fork's data rules and the status of every external source (ALLOWED / ALLOWED WITH CATEGORY CHANGE / OFF-LIMITS / UNVERIFIED) |
+| [nnue-design.md](nnue-design.md) | Phase 4 step 1 (2026-10-28): clean-room NNUE design concepts (inputs, accumulators, bodies, activations, quantization, training, SIMD, trainer-engine parity), evidence as cited ranges, no engine constants, and the design space for Fork |
+| [phase4-pipeline.md](phase4-pipeline.md) | Phase 4 pipeline facts (2026-10-28): bullet (build, checkpoints, quantized layout, FEN evaluation), viriformat, Kaggle in practice, Fathom thread safety, Lichess openings, streamlining options, the Kaggle test session checklist |
+| [phase4-designs/](phase4-designs/) | Phase 4 steps 2-3: three competing architecture proposals (speed-, accuracy- and novelty-first) and the judge's comparison |
 | [sources.md](sources.md) | Every page consulted, with the date checked |
 | [../../tools/install.sh](../../tools/install.sh) | Installs and smoke-tests the toolbase in WSL Ubuntu |
 | [../../tools/versions.lock](../../tools/versions.lock) | Pinned versions of every tool |

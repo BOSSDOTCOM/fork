@@ -1024,3 +1024,127 @@ No engine source was cloned, downloaded or opened. GitHub Docs pages were read t
 | https://api.github.com/repos/algorithmicsuperintelligence/openevolve (+ /readme, /releases/latest) | API metadata, README (raw), latest release | 2026-10-27 | Apache-2.0, created 2025-05-15, v0.4.0 published 2026-09-28, README feature list, config example, cost notes, examples gallery |
 | https://api.github.com/repos/codelion/openevolve and https://api.github.com/repositories/984096689 | API redirect check | 2026-10-27 | codelion/openevolve redirects (301) to algorithmicsuperintelligence/openevolve |
 | web searches (14 queries, e.g. "LLM evolutionary search chess engine heuristics AlphaEvolve arXiv", "LLM evolve chess engine code Elo SPRT", "LLM-written patches tested fishtest OR OpenBench", "late move reduction OR move ordering evolved by language model", "chess engine written by Claude Code SPRT", "Pratola Wolf GoTools") | search results only | 2026-10-27 | locating the URLs above; also the basis of the "no chess-engine LLM-evolution work found" headline (a search result, not proof). Leads seen only in results and not opened: the Coda engine and talkchess threads, a Whittington Chess forensics page, MCTS-AHD (arXiv 2501.08603), CogMCTS (arXiv 2512.08609), MuEvo (arXiv 2608.03636), colehurwitz/chess-evolve (prompt evolution) |
+
+## NNUE design concepts, Phase 4 step 1 (nnue-design.md), 2026-10-28
+
+All checked 2026-10-28. "Prose only" means the page has illustrative or
+engine code, and only its text was used.
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://raw.githubusercontent.com/jw1912/bullet/main/README.md | bullet README (MIT trainer); main at da426a49, 2026-10-26 | 2026-10-28 | §3.1, §8; examples list |
+| https://api.github.com/repos/jw1912/bullet/git/trees/main?recursive=1 | bullet file tree (only `.md` paths listed) | 2026-10-28 | finding the docs files |
+| https://api.github.com/repos/jw1912/bullet/commits/main | bullet head commit | 2026-10-28 | version pin |
+| https://raw.githubusercontent.com/jw1912/bullet/main/docs/0-contents.md | bullet docs index | 2026-10-28 | doc list |
+| https://raw.githubusercontent.com/jw1912/bullet/main/docs/1-basics.md | bullet NNUE basics and beginner traps | 2026-10-28 | §1.1, §1.2, §2.1, §3.1, §3.2, §6.6, §6.7 |
+| https://raw.githubusercontent.com/jw1912/bullet/main/docs/2-getting-started.md | bullet setup and utilities | 2026-10-28 | background |
+| https://raw.githubusercontent.com/jw1912/bullet/main/docs/3-data.md | bullet data formats and loaders | 2026-10-28 | §6.5, §6.10 |
+| https://raw.githubusercontent.com/jw1912/bullet/main/docs/4-saved-networks.md | bullet checkpoint and SavedFormat layout | 2026-10-28 | §5.4, §8 |
+| https://api.github.com/search/issues?q=repo:jw1912/bullet+... | bullet issue/PR searches (QAT, eval fen, inference; "quantisation aware", "quantization aware", "fake quant" returned 0) | 2026-10-28 | finding PRs #483, #178, issue #167 |
+| https://api.github.com/repos/jw1912/bullet/issues/483 | bullet PR "Add QAT operation" (metadata; empty body) | 2026-10-28 | §5.6 |
+| https://api.github.com/repos/jw1912/bullet/issues/178 | bullet PR "Eval FENs with WDL output" (metadata; empty body) | 2026-10-28 | §8 |
+| https://api.github.com/repos/jw1912/bullet/issues/167 and /comments | bullet issue on int8 dense weights, with maintainer reply | 2026-10-28 | §5.2 |
+| https://www.chessprogramming.org/NNUE | CPW NNUE page (prose only) | 2026-10-28 | §1-§5 |
+| https://www.chessprogramming.org/Stockfish_NNUE | CPW Stockfish NNUE history | 2026-10-28 | §7.4 |
+| https://www.chessprogramming.org/SSSE3 | CPW SSSE3 (PMADDUBSW saturation) | 2026-10-28 | §7.2 |
+| https://www.chessprogramming.org/AVX2 | CPW AVX2 | 2026-10-28 | opened; nothing NNUE-specific used |
+| https://www.chessprogramming.org/AVX-512 | CPW AVX-512 (VNNI, VPDPBUSD) | 2026-10-28 | §7.2 |
+| https://www.chessprogramming.org/Lazy_Evaluation | CPW lazy evaluation (HCE topic) | 2026-10-28 | opened; not used (different topic) |
+| https://raw.githubusercontent.com/official-stockfish/nnue-pytorch/master/docs/nnue.md | nnue-pytorch NNUE doc (GPL-3.0 repo; docs only, prose only); last doc commit 9d1702fd, 2026-10-01 | 2026-10-28 | §1-§7 |
+| https://api.github.com/repos/official-stockfish/nnue-pytorch/commits?path=docs/nnue.md | doc commit history | 2026-10-28 | version date |
+| https://raw.githubusercontent.com/official-stockfish/nnue-pytorch/master/docs/nnue_architecture_history.md | Stockfish net architecture history (widths not recorded here) | 2026-10-28 | §1.6, §1.7, §1.8, §5.6 |
+| https://api.github.com/repos/official-stockfish/nnue-pytorch/contents/docs | docs folder listing | 2026-10-28 | finding docs |
+| https://raw.githubusercontent.com/official-stockfish/nnue-pytorch/master/README.md | nnue-pytorch README | 2026-10-28 | §8 (cross-check pointer) |
+| https://raw.githubusercontent.com/official-stockfish/nnue-pytorch/master/docs/development.md | nnue-pytorch dev guide (cross_check_eval, pipeline test) | 2026-10-28 | §8 |
+| https://raw.githubusercontent.com/official-stockfish/nnue-pytorch/master/docs/training.md | nnue-pytorch training doc | 2026-10-28 | background |
+| https://raw.githubusercontent.com/official-stockfish/nnue-pytorch/master/docs/features.md | nnue-pytorch feature-set doc | 2026-10-28 | background (factorizer serialization) |
+| https://stockfishchess.org/blog/2026/stockfish-19/ | Stockfish 19 release post (2026-09-05) | 2026-10-28 | §1.6, §1.7, §5.6, §6.6, §6.8 |
+| https://stockfishchess.org/blog/2026/stockfish-18/ | Stockfish 18 release post (2026-01-31) | 2026-10-28 | §1.6, §2.7, §7.4 |
+| https://stockfishchess.org/blog/2024/stockfish-17/ | Stockfish 17 release post | 2026-10-28 | opened; not used |
+| https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/{sf_14, sf_15, sf_15.1, sf_16, sf_16.1, sf_17, sf_18, sf_19} | Stockfish GitHub release notes | 2026-10-28 | §3.5 (SF16 sparsity), §1.6, §5.6 |
+| https://official-stockfish.github.io/docs/stockfish-wiki/Home.html | Stockfish wiki index | 2026-10-28 | finding the commands page |
+| https://official-stockfish.github.io/docs/stockfish-wiki/UCI-&-Commands.html | old wiki URL | 2026-10-28 | **failed: HTTP 404** |
+| https://official-stockfish.github.io/docs/stockfish-wiki/UCI-Protocol-and-Stockfish-Commands.html | Stockfish UCI and commands doc | 2026-10-28 | §8 (`eval`, `export_net`, `flip`) |
+| https://cosmo.tardis.ac/files/2024-06-01-nnue.html | old blog URL | 2026-10-28 | redirect stub to asteri.sm |
+| https://asteri.sm/files/2024-06-01-nnue.html | "NNUE performance improvements", Cosmo Bobak (prose only; quotes engine code) | 2026-10-28 | §2.2, §2.4, §2.5, §4.1-§4.3 |
+| https://asteri.sm/sitemap | blog sitemap | 2026-10-28 | finding posts |
+| https://asteri.sm/files/2024-06-02-advanced-nnue.html | "The advanced NNUE program" | 2026-10-28 | §1.8 |
+| https://asteri.sm/files/2024-06-25-nnue-research-01.html | NNUE research 01 (activations, batch size, output buckets, LR schedules) | 2026-10-28 | §3.3, §4.1, §6.4 |
+| https://asteri.sm/files/2024-07-15-nnue-research-02.html | NNUE research 02 (buckets, scaling, community SPRTs) | 2026-10-28 | §1.5, §3.1, §4.3, §6.2, §6.4 |
+| https://asteri.sm/files/2024-08-17-multilayer.html | "Deep NNUE" (prose only; quotes engine code) | 2026-10-28 | §3.4, §3.5, §3.7 |
+| https://asteri.sm/files/2025-12-12-nnue-eval-scale.html | Eval scale against λ | 2026-10-28 | §6.1, §6.3, §6.10 |
+| https://asteri.sm/files/2026-01-13-activation.html | Pairwise multiplication as a GLU variant | 2026-10-28 | §3.4, §4.5 |
+| https://asteri.sm/files/2026-01-27-activation-2.html | Swish and SwiGLU in NNUE, with SPRTs | 2026-10-28 | §3.5, §3.6, §4.5 |
+| https://asteri.sm/files/2026-07-27-optimisers.html | Optimisers and schedule-free AdamW, with SPRTs | 2026-10-28 | §6.4 |
+| https://arxiv.org/abs/2412.17948 (and /html, /pdf) | Tan and Watkinson Medina, Study of the Proper NNUE Dataset | 2026-10-28 | §0, §6.5 |
+| https://arxiv.org/abs/1712.05877 and /pdf | Jacob et al., integer-only inference with simulated-quantization training | 2026-10-28 | §5.6 |
+| https://arxiv.org/abs/1308.3432 | Bengio et al., straight-through estimator | 2026-10-28 | §5.6 |
+| https://arxiv.org/abs/2002.05202 | Shazeer, GLU Variants Improve Transformer | 2026-10-28 | §4.5 |
+| https://api.github.com/repos/cosmobobak/viridithas/releases | Viridithas release notes v2-v20 | 2026-10-28 | §1.3, §1.5, §2.5, §2.7, §3.1, §4.1, §6.3, §6.5, §6.7, §7.3 |
+| https://api.github.com/repos/Ciekce/Stormphrax/releases | Stormphrax release notes v1-v8 | 2026-10-28 | §1.6, §1.7, §6.3, §6.6, §7.3 |
+| https://api.github.com/repos/Yoshie2000/PlentyChess/releases | PlentyChess release notes | 2026-10-28 | §0, §1.6, §1.7, §6.6, §6.9, §6.10, §7.3 |
+| https://api.github.com/repos/codedeliveryservice/Reckless/releases | Reckless release notes | 2026-10-28 | §1.6, §3.3, §4.1, §6.7, §6.9 |
+| https://api.github.com/repos/PGG106/Alexandria/releases | Alexandria release notes | 2026-10-28 | §1.4, §1.5, §2.4, §2.5, §3.5, §3.6, §4.3, §6.1, §6.5 |
+| https://api.github.com/repos/KierenP/Halogen/releases | Halogen release notes | 2026-10-28 | §3.5, §6.9, §7.3 |
+| https://api.github.com/repos/aronpetko/integral/releases | Integral release notes | 2026-10-28 | §1.6, §6.6 |
+| https://api.github.com/repos/gab8192/Obsidian/releases | Obsidian release notes | 2026-10-28 | §3.2 |
+| https://api.github.com/repos/Witek902/Caissa/releases | Caissa release notes | 2026-10-28 | §2.5, §3.4, §6.4, §6.5, §6.6, §8 |
+| https://api.github.com/repos/jhonnold/berserk/releases | Berserk release notes | 2026-10-28 | §1.4, §2.4, §6.3 |
+| https://api.github.com/repos/Luecx/Koivisto/releases | Koivisto release notes | 2026-10-28 | opened; nothing used |
+| https://api.github.com/repos/connormcmonigle/seer-nnue/releases | Seer release notes | 2026-10-28 | opened; nothing used |
+| https://api.github.com/repos/Yoshie2000/PlentyChess/pulls/400 | PlentyChess threat-inputs PR description (text only, code blocks stripped, no diff) | 2026-10-28 | §1.6 |
+| https://api.github.com/repos/Ciekce/Stormphrax/pulls/293 | Stormphrax threat-inputs PR description (text only, no diff) | 2026-10-28 | §1.6 |
+| https://api.github.com/repos/KierenP/Halogen/pulls/517 | Halogen TDLeaf/self-play net PR description (text only, no diff) | 2026-10-28 | §6.6, §6.9, §6.10 |
+| https://raw.githubusercontent.com/cosmobobak/viriformat/main/README.md | viriformat spec (format doc) | 2026-10-28 | §6.10 |
+| https://raw.githubusercontent.com/wiki/AndyGrant/OpenBench/Data-Generation-Workloads.md | OpenBench datagen wiki (genfens) | 2026-10-28 | §6.10 |
+| https://www.amd.com/en/products/processors/server/epyc/4th-generation-9004-and-8004-series/amd-epyc-9754.html | AMD EPYC 9754 product page | 2026-10-28 | §7.3: no ISA list on the page |
+| https://www.amd.com/en/products/processors/server/epyc/9005-series/amd-epyc-9175f.html | AMD EPYC 9175F product page | 2026-10-28 | §7.3: no ISA list on the page |
+| https://www.amd.com/en/products/processors/server/epyc/4th-generation-9004-and-8004-series.html | AMD EPYC 9004 series page | 2026-10-28 | §7.3: no AVX-512 or VNNI mention found |
+| https://www.amd.com/en/products/processors/server/epyc/9005-series.html | AMD EPYC 9005 series page | 2026-10-28 | §7.3: no AVX-512 or VNNI mention found |
+| https://www.intel.com/content/dam/develop/public/us/en/include/intrinsics-guide/data-latest.xml | Intel intrinsics data | 2026-10-28 | **failed: HTTP 403**. A retry was blocked by the session's permission system and not run. CPW pages used instead |
+| Web search: NNUE "dual activation" | search only | 2026-10-28 | no primary definition found (snippets not used) |
+| Web search (arxiv.org): NNUE papers 2025-2026 | search only | 2026-10-28 | found nothing new beyond 2412.17948 (snippets not used) |
+
+## Phase 4 pipeline: bullet, viriformat, Kaggle, Fathom threads, Lichess openings (phase4-pipeline.md), 2026-10-28
+
+All checked 2026-10-28. "Clone" means the temporary bullet clone at
+`da426a49`, deleted after reading.
+
+| URL | What it is | Used for |
+|---|---|---|
+| https://api.github.com/repos/jw1912/bullet (and `/commits`) | bullet repo metadata, recent commits | pin `da426a49`, licence MIT, activity |
+| https://github.com/jw1912/bullet at `da426a49b2a4b79a55a87031cd51c89bdf1ff030` (shallow clone): `README.md`, `docs/0-contents.md` … `docs/4-saved-networks.md`, `Cargo.toml`, `Cargo.lock`, `.github/workflows/checks.yaml`, `crates/gpu/build.rs`, `crates/gpu/src/runtime.rs`, `runtime/cuda.rs`, `runtime/mock.rs`, `pointwise/write.rs`, `crates/bullet_lib/src/{lib,nn,value}.rs`, `value/save.rs`, `value/loader/*.rs`, `game/inputs/chess768.rs`, `trainer/settings.rs`, `trainer/schedule.rs`, `crates/trainer/src/model/weights.rs`, `optimiser.rs`, `optimiser/adam.rs`, `reader/fixed_size.rs`, `run.rs`, `run/schedule.rs`, `crates/compiler/src/model/builder.rs`, `crates/utils/src/*.rs`, `examples/simple.rs`, `examples/progression/4_multi_layer.rs`, `examples/advanced/filter.rs` (signature and approach only), `examples/tests/test1.rs` | bullet source and docs (MIT tool) | sections 1-2: toolchain, backends, run definition, checkpoint files, quantised/raw/weights layouts, Chess768 indices, `eval`, loaders, filters, bullet-utils |
+| https://crates.io/api/v1/crates/bulletformat and `/1.8.0/download` | bulletformat crate (MIT, jw1912); SHA-256 `6d171953…c1b0` = bullet's lock | `ChessBoard` layout; marlinformat nibble order (3.2) |
+| https://crates.io/api/v1/crates/viriformat | viriformat versions, licences, checksums | 2.0.1 vs 3.0.0 dates; MIT |
+| https://api.github.com/repos/cosmobobak/viriformat (and `/commits`, `/tags`, `/contents/`) | viriformat repo metadata | pin `0238b315`; no licence file; commit history (nibble fix, extension record) |
+| https://raw.githubusercontent.com/cosmobobak/viriformat/0238b315ea62/README.md | viriformat spec, current | section 3 |
+| https://raw.githubusercontent.com/cosmobobak/viriformat/5967bbac4266/README.md | viriformat spec at the 2.0.1 release | diff against main (3.2, 3.5) |
+| https://raw.githubusercontent.com/cosmobobak/viriformat/0238b315ea62/Cargo.toml | crate manifest | version 3.0.0, licence MIT |
+| https://docs.rs/viriformat/2.0.1/viriformat/dataformat/struct.Filter.html | rendered API docs (no source opened) | `Filter` fields and methods (2.2) |
+| https://docs.nvidia.com/cuda/archive/{11.8.0,12.0.0,12.2.0,12.3.0,12.4.0}/cuda-driver-api/group__CUDA__EXEC.html | CUDA driver API, Execution Control, per version | `cuFuncLoad` first documented in 12.4 (1.2) |
+| https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html | CUDA 13.4 Update 2 release notes | current CUDA; driver ranges per major version (13.x ≥ 580, 12.x ≥ 525); pre-Turing removal in libraries |
+| https://docs.nvidia.com/cuda/archive/13.0.0/cuda-toolkit-release-notes/index.html | CUDA 13.0 release notes | "Deprecated Architectures": Maxwell/Pascal/Volta offline compilation and library support removed |
+| https://api.github.com/repos/Kaggle/docker-python (and `/commits`, `/contents/`) | Kaggle image repo metadata | activity; "Drop P100 support" found |
+| https://api.github.com/repos/Kaggle/docker-python/commits/1ed8d43599a7 | commit "Drop P100 support (#1560)", 2026-09-05 | P100 test agent removed (4.1) |
+| https://raw.githubusercontent.com/Kaggle/docker-python/c43593a3e3ec/Dockerfile.tmpl | Kaggle image Dockerfile template | Colab base image tag, `CUDA_HOME`, driver lib path, `build-essential` (4.1-4.2) |
+| https://raw.githubusercontent.com/Kaggle/docker-python/c43593a3e3ec/{kaggle_requirements.txt,README.md,tests/test_nvidia.py,tests/test_user_secrets.py,patches/kaggle_secrets.py} and `/contents/tests` | Kaggle image files | secrets client behaviour (4.6); no CUDA pin in Kaggle's own files |
+| https://api.github.com/repos/googlecolab/backend-info (and `/contents/`, `/commits`, `/commits?path=apt-list-gpu.txt`) | Colab runtime package lists (official Google repo) | CUDA history around the Kaggle base-image date |
+| https://raw.githubusercontent.com/googlecolab/backend-info/{003ff5738a00,f14042477cce…,e9534f11baca…,b8506613d574…}/{README.md,os-info-gpu.txt,apt-list-gpu.txt,pip-freeze.gpu.txt} | Colab package snapshots | CUDA 12.8 / 13.3 / 13.0 by date; Ubuntu 24.04; no Rust; gcc 13; kaggle 2.0.2 in Colab |
+| https://api.github.com/repos/Kaggle/kaggle-api | old CLI repo | **redirect** ("Moved Permanently") to Kaggle/kaggle-cli |
+| https://api.github.com/repos/Kaggle/kaggle-cli (and `/commits`, `/releases`, `/contents/docs`, `/git/trees/a636fc70…`) | Kaggle CLI repo (Apache-2.0) | head `a636fc70`, release v2.2.5 (2026-10-22) |
+| https://raw.githubusercontent.com/Kaggle/kaggle-cli/a636fc70230c9e8feeb33a525dce1a07df62fbea/docs/{kernels.md,kernels_metadata.md,datasets.md,configuration.md} | CLI docs | push/status/output/secrets, accelerator list, metadata fields, `--dir-mode`, config location (4.4-4.7) |
+| https://raw.githubusercontent.com/Kaggle/kaggle-cli/a636fc70…/src/kaggle/api/kaggle_api_extended.py and `src/kaggle/cli.py` | CLI source | resumable upload state and limits, `--no-resume`, token auth, `kernels logs`, status call (4.4, 4.7) |
+| https://www.kaggle.com/docs/notebooks, /docs/datasets, /docs/efficient-gpu-usage (plain curl) | Kaggle docs | **failed**: JavaScript shells only (about 5.6 KB each) |
+| same three pages via headless Microsoft Edge `--dump-dom` | Kaggle docs, rendered | session limits, hardware, idle timeouts, scheduling, Colab Pro hours, dataset limits (4.1); the browser segfaulted on exit for two pages after writing complete output |
+| https://www.rust-lang.org/tools/install | Rust install page | rustup installer command |
+| https://static.rust-lang.org/dist/channel-rust-stable.toml | stable channel manifest | Rust 1.99.1 (2026-10-13) |
+| https://rust-lang.github.io/rustup/installation/other.html | rustup install options | `sh -s --` option passing, `--profile minimal`, `--default-toolchain` |
+| https://sh.rustup.rs (the installer script, read, not run) | rustup-init shell script | `-y/--yes` option |
+| https://doc.rust-lang.org/cargo/commands/cargo-vendor.html | Cargo book, `cargo vendor` | offline-build variant (4.2) |
+| https://github.com/jdart1/Fathom (`git ls-remote`) | Fathom head | pin `c9c6fef0` is still master |
+| https://raw.githubusercontent.com/jdart1/Fathom/c9c6fef0dddc05d2e242c183acf5833149ab676d/README.md | Fathom README at the pin (SHA-256 `8a44c2a0…cd074b`) | thread-safety statements (5) |
+| https://database.lichess.org/ | Lichess open database page | sizes, game counts, CC0, BOT tags, `%eval`/`%clk`, known issues (6) |
+| https://database.lichess.org/standard/sha256sums.txt | standard monthly checksums | SHA-256 of candidate months |
+| https://database.lichess.org/standard/list.txt | download list | URL pattern |
+| `HEAD` https://database.lichess.org/standard/lichess_db_standard_rated_{2016-09,2016-12,2026-09}.pgn.zst | headers only, no download | exact byte sizes, Last-Modified, range support |
+| (search) "cuFuncLoad CUDA driver API 12.4" | web search, used only to find NVIDIA's archived pages | not a source; the archived pages above were opened |
