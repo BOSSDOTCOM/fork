@@ -2106,7 +2106,18 @@ Fork's own code. New references go into ORIGINALITY.md when first used.
   hooks in the Searcher), embedding the net, the gate in `tools/sprt.sh`,
   `build_pair.sh`, `elo_gauntlet.sh` and `fork_datagen`, and T from bullet
   on a GPU.
-- Deliverable 7: after generation 0 and session 2.
+- Deliverable 7 (2026-10-29): B0 trained on the generation-0 snapshot
+  g0s1 (9.5 M positions), passed the full parity test (trainer leg 0.00012
+  cp, quantization leg exact, netcheck exact on 446 positions; loss max
+  11.1 / p99 8.8 cp) and its SPRT against the bootstrap evaluation (+486.85
+  +/- 32.07 Elo, H1 at [0, 5]; docs/nets.md, history/phase-4/sprt-log.md).
+  **Not yet the default** on phase-4: with B0 as the default, the search
+  suite's TT-at-exact-depth = minimax test and the zero-window probe test
+  fail on one KRK position at depth 6 (554 vs 558; with the TT off they
+  agree), and a mate-in-2 UCI test fails. The hookup was verified exact
+  (the refresh check on at every evaluation, release and debug), so the
+  suspicion is a TT/repetition interaction the bootstrap evaluation never
+  exposed (UNVERIFIED). B0 waits on branch b0-candidate for the owner.
 - Names as built (four throwaway-clone screens, 2026-10-28, all no match
   or generic): the third screen's three case-insensitive matches were
   renamed before commit (`refresh_accumulator` -> `accumulate_board`,

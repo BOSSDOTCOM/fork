@@ -347,7 +347,14 @@ converter and inference code are Fork's own.
 
 ## Training data provenance
 
-No net trained yet. Planned inputs (DESIGN.md §5.3; KB data-policy.md):
+**B0** (2026-10-29; docs/nets.md): trained only on Fork's own generation-0
+self-play (the bootstrap evaluation's search labels, game results, Syzygy
+3-4-5 adjudication), openings from Lichess 2016-09 as below; the data
+manifest is data/manifests/g0s1.json. No other engine's data, net or
+labels. Trainer: bullet-trainer (MIT) at da426a49, run by Fork's own
+program (tools/train).
+
+Inputs (DESIGN.md §5.3; KB data-policy.md):
 - **Datagen openings: Lichess standard database, 2016-09** (CC0; 6.8 M
   games; SHA-256 checked against Lichess's published list before use).
   Only moves and headers are read, never comments (so no `[%eval]`), BOT
