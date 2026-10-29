@@ -44,3 +44,6 @@ __pycache__/
 *.pem
 *.key
 .aws/
+
+# Rust build output of the training program (tools/train).
+/tools/train/target/
