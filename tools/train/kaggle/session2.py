@@ -72,10 +72,11 @@ if rc == 0 and shards:
                        env=cargo_env)
     facts['K15_eval'] = {'rc': rc, 'lines': sum(1 for _ in open(f'{WORK}/parity-trainer.txt')) if rc == 0 else 0,
                          'tail': out[-300:]}
-    both = (f'({train} train {common} --superbatches 1 --device 0 --out {WORK}/d0 > {WORK}/d0.log 2>&1 &) ; '
-            f'{train} train {common} --superbatches 1 --device 1 --out {WORK}/d1 > {WORK}/d1.log 2>&1; wait')
+    both = (f'{train} train {common} --superbatches 1 --device 0 --out {WORK}/d0 > {WORK}/d0.log 2>&1 & '
+            f'{train} train {common} --superbatches 1 --device 1 --out {WORK}/d1 > {WORK}/d1.log 2>&1; wait; '
+            f'tail -2 {WORK}/d0.log {WORK}/d1.log')
     rc, out, secs = sh(both, env=cargo_env, timeout=7200)
-    facts['K18_two_gpus_1x512x16384_each'] = {'rc': rc, 'seconds': secs}
+    facts['K18_two_gpus_1x512x16384_each'] = {'rc': rc, 'seconds': secs, 'tail': out[-500:]}
     facts['files'] = sorted(os.path.relpath(p, WORK) for p in glob.glob(f'{WORK}/run/**/*', recursive=True))[:40]
     for name in ('val.txt', 'stopped-early.txt'):
         p = f'{WORK}/run/{name}'

@@ -154,5 +154,18 @@ class PipelineTests(unittest.TestCase):
             netformat.read_net(bytes(bad), self.desc)
 
 
+class FitScaleTests(unittest.TestCase):
+    def test_recovers_a_known_scale(self):
+        import math
+        import fit_scale
+        rng = random.Random(3)
+        data = []
+        for _ in range(20000):
+            sc = rng.uniform(-1500, 1500)
+            p = 1 / (1 + math.exp(-sc / 350))
+            data.append((sc, 1.0 if rng.random() < p else 0.0))
+        self.assertAlmostEqual(fit_scale.fit(data), 350, delta=25)
+
+
 if __name__ == '__main__':
     unittest.main()
