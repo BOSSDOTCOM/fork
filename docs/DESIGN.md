@@ -2171,6 +2171,25 @@ acceptable result:
 | K18 | Both T4s | one training run per GPU at once | Recorded; two bake-off candidates can then train side by side |
 | K16 | Terms | re-read Kaggle's terms and AUP pages as of the session | Still personal, non-commercial ML use; datagen stays local |
 
+**Session 1 results (2026-10-28)**, from `tools/train/kaggle/session_check.py`
+run by the owner in a private GPU notebook (internet on); the JSON is
+quoted in KB phase4-pipeline.md §8.1:
+
+| Item | Result | Status |
+|---|---|---|
+| K1 GPUs | Two Tesla T4, 15,360 MiB each, driver 580.178.04. The accelerator menu offers "GPU T4 x2" and "TPU v5e-8" only (owner): no P100 for this account | verified |
+| K2 internet | github.com answered 200; the rustup distribution root and crates.io answered HTTP 404, so both servers were reached (DNS, TLS and HTTP work from a GPU session). A real download (rustup, the crates index) is session 2's test | reachability verified; downloads open |
+| K3 CUDA | Toolkit **12.8** (nvcc 12.8.93; cudart 12.8.90, NVRTC 12.8.93, cuBLAS 12.8.4.1 in `/usr/local/cuda/lib64`); the driver reports CUDA **13.0**. Both are above the 12.4 minimum inferred from bullet's code, and the driver is newer than NVRTC, as bullet needs (KB bullet-internals.md §8). `libcuda.so` is only in `/usr/local/nvidia/lib64` (on `LD_LIBRARY_PATH`, not in the loader cache); `CUDA_HOME=/usr/local/cuda`, `CUDA_PATH` unset | versions verified; that bullet builds and runs on them is K4/K5 (session 2) |
+| K4 Rust | Not preinstalled (`rustc` absent). Plan: session 2 installs it with rustup and builds `tools/train` there (the image's glibc is 2.39); the binary is kept in `/kaggle/working` and attached as an input to later sessions, rebuilt when the image or CUDA version changes. If linking `cuda` fails, set `CUDA_PATH=/usr/local/cuda` and add `-L /usr/local/nvidia/lib64` to the linker flags | open |
+| K11 disk | `/kaggle/working` 19.5 GB free (the documented 20 GB); `/tmp` and `/` 1,048.8 GB free (session scratch, lost at session end; how much of it is usable in practice: UNVERIFIED). Per-file upload limit: **none stated in the Datasets docs** (owner: only 200 GB per dataset, 200 GB of private datasets in total, at most 50 top-level files; archives are unpacked); confirmed by a real 1-2 GB shard upload in session 2 (K8) | partly verified |
+| K12 idle timeout | No idle-timeout warning during session 1 (owner); a short interactive session, so the cutoff itself is still unmeasured; training runs are commit runs anyway | noted |
+| K13 quota | Weekly GPU hours before and after were not noted (owner) | open: note them in session 2 |
+| K16 terms | The owner answered **"no"** to "the Terms and AUP still say personal, non-commercial use" (2026-10-28). What they say now, and whether Fork's use (a GPL hobby engine's training) is still allowed, is being checked against the current pages before any training runs on Kaggle | **open, blocks training on Kaggle** |
+| K17 cores | 4 CPUs, 31.3 GB RAM; Linux 6.18.55, glibc 2.39, Python 3.13.15 | verified |
+
+Session 2 (after `tools/train` exists): K2's downloads, K4-K10, K15, K17's
+loader rate, K18, with the build steps above.
+
 The Kaggle API token lives in `~/.kaggle/kaggle.json` in WSL (mode 600)
 and in Kaggle Secrets; it is never committed, logged or uploaded.
 
@@ -2190,6 +2209,13 @@ streamed and never stored whole:
 - write an EPD with a manifest (source file and its SHA-256, filters,
   seed, count, output SHA-256). The EPD is not committed (size); it is
   regenerable from the manifest, which is.
+
+**The 2016-09 run** (2026-10-28, `datagen_openings.py` with the default
+settings, seed 20261028; manifest `data/manifests/openings-lichess-2016-09.json`):
+6,813,113 games read in 31 minutes; 6,216,013 below the rating floor,
+597,100 with both players at 2000 or more (8.8%), no BOT titles (as
+expected before the Bot API), 4,308 too short, 76 ending during the random
+plies, 845 duplicates; **591,871 openings** (EPD SHA-256 0ae298e1...831b).
 
 **Why 2016-09** (recorded at the owner's request, 2026-10-28; facts from
 KB phase4-pipeline.md, which read Lichess's database page):
@@ -2235,7 +2261,14 @@ target linking the engine library, never part of the TCEC binary).
   and its own small transposition table, cleared before each game.
   Every move is a fixed node-count search (`go nodes`, exact since
   audit-1), so a game is a pure function of (commit, evaluator and net,
-  opening, seed): any shard can be regenerated.
+  opening, seed): any shard can be regenerated. Where the node limit runs
+  out before depth 1 finishes (long capture chains), that move is searched
+  to depth 1 without a node limit instead, so no label is ever a depth-0
+  score. **Per-game random plies** (owner, 2026-10-28): each game first
+  plays 2 to 4 uniformly random legal plies (the range already screened
+  for the openings tool) from a stream seeded by (seed, game index), so an
+  opening used more than once still starts different games: generation 0
+  needs about 2.2 M games and 2016-09 gave 591,871 openings.
 - **Game end**: the rules only (mate, stalemate, threefold, fifty-move,
   insufficient material), plus two exact adjudications: Syzygy WDL once
   5 pieces or fewer remain (both sides' probes through
@@ -2310,7 +2343,12 @@ for B0, and a Kaggle notebook driver pushed with `kaggle kernels push`.
 - Target: a blend of the search score (through the sigmoid with the
   fitted scale S) and the game result, weight λ on the score; loss and
   schedule as in the constants table. Position filters as in
-  deliverable 2.
+  deliverable 2. In bullet's terms (KB bullet-internals.md §5): its WDL
+  setting is the weight on the game result, so Fork passes 1 - λ; its
+  eval scale is S; its optimizer defaults (AdamW, weight clip ±1.98) are
+  recorded in the run record; and B0's training program saves the
+  tensors in a fixed order (`l0b`, `l0w`, `l1b`, `l1w` in the float file)
+  that the converter's description file names.
 - Runs are commit runs of at most 12 hours that checkpoint and resume
   (K6), inside the measured weekly quota (K13).
 - Every run writes a run record: bullet commit, Fork commit of
@@ -2386,8 +2424,12 @@ for B0, and a Kaggle notebook driver pushed with `kaggle kernels push`.
      numpy): written from this spec, not from Fork's C++ or from
      `convert.py`. It reads bullet's float weights file and computes the
      float forward pass (R-float); it **quantizes those float weights
-     itself** (R-quant: f32 multiply, then bullet's rounding rule as read
-     at the pinned commit, never numpy's round-half-to-even); and it
+     itself** (R-quant, exactly as bullet does at the pinned commit, KB
+     bullet-internals.md §1: each f32 weight widened to f64 and multiplied
+     by the factor in f64, rounded half away from zero, cast with
+     saturation, and the whole file refused if any value leaves its type's
+     range; never an f32 multiply, which disagrees with bullet on some
+     weights, and never numpy's round-half-to-even); and it
      emulates Fork's integer arithmetic exactly on Fork's net file
      (R-int).
   3. **F, Fork's inference**: the scalar path and every SIMD path, through
@@ -2481,11 +2523,13 @@ match goes to the owner first.
 
 | Constant | Value | Reasoning |
 |---|---|---|
-| H (hidden width) | 256 | Above (B0 table). |
+| H (hidden width) | 256, kept by the owner (2026-10-28, question 7) | Above (B0 table). B0 is the generic minimal baseline shape (768 = 12 piece kinds × 64 squares; 256 a common round size) and exists to prove the pipeline, not as a distinctive design. The constant screen found the same shape in Berserk's 2021 release (a coincidence, recorded in ORIGINALITY.md) and 256 as a first-layer width in Stockfish 12-13 (near match, different inputs and body). |
 | QA, QB | 255, 64 | bullet's standard quantization convention, kept by the owner (2026-10-28) as a trainer-interface convention credited to bullet (ORIGINALITY.md), not a tuned constant; the arithmetic above shows it is safe. Not screened. |
 | S (output scale) | fitted | Logistic fit of result against score on generation-0 data. |
-| Datagen nodes per move | measured, about the count where the bootstrap search reaches depth 8 to 9 in a typical middlegame | Deep enough that the label is a search result, not a static eval, and cheap enough for volume. Settled by a short measurement over the bench positions before generation 0 and recorded with its numbers. |
-| Datagen TT size per worker | the smallest power of two that holds one move's search without heavy replacement at the node count above | Measured with the hit rate at that node count; 10 workers must fit RAM beside the machine's other users. |
+| Datagen nodes per move | 20,000 (screen: match; kept by the owner, question 10) | The count where the bootstrap search reaches depth 8 to 9 in a typical position. Measured 2026-10-28 with `tools/datagen/measure_nodes.py` (clang-release, Windows, a cleared 1 MB table per position) over the 46 bench positions: median last finished depth 3 at 1,000 nodes, 4 at 2,000, 5 at 5,000, 7 at 10,000, **8.5 at 20,000** (range 5-11), 10 at 50,000. Within a game the table carries entries from earlier moves, so the effective depth is a little higher. |
+| Datagen TT size per worker | 1 MB (screen: no match) | The smallest power of two that holds one move's search: in the same measurement, one 20,000-node search from an empty 1 MB table filled 12% of it (median hashfull 120 per mille, largest 203), so replacement inside a 5-entry bucket is rare. Ten workers' tables (10 MB) also fit the 96 MB L3 cache. |
+| Datagen game cap | 500 plies (screen: role not present) | Longer games are discarded. bullet's game reader at the pin stops at 512 records per game and would fail a loader thread beyond it (KB bullet-internals.md, UNVERIFIED whether records or plies; 500 keeps a margin either way). The throughput run below discarded none. |
+| Datagen throughput | measured: 2,546 positions per second on 10 threads | `fork_datagen` on Windows (clang-release, bootstrap evaluation), 20,000 nodes, 1 MB tables, 3-4-5 tables partly present, the 46 bench positions as openings: 150,427 positions in 59.1 s (1,642 games, about 92 positions per game), about 220 M positions per day. Every game passed `verify_games.py`. Measured again on the real openings before generation 0. |
 | Workers | 10 of 12 threads | Leaves two threads for development and CI-adjacent work; the one-heavy-job rule still applies (datagen is the heavy job while it runs). |
 | Opening rating floor | 2000 (both players) | The KB's A+ description (training-data.md §3.4): positions from competent play, without engine choice. |
 | Opening ply range, random plies | a random ply in 8-16, then 2-4 random plies | The KB's A+ description gives 8-16; a few random plies multiply the distinct positions without leaving plausible play. |
@@ -2497,15 +2541,32 @@ match goes to the owner first.
 
 #### Names (to be checked before use, §8 procedure)
 
-Candidate new names, handed to a throwaway research subagent for the
-four-engine check before any code uses them: `fork_datagen`,
-`SelfPlayGame`, `SelfPlayRecord`, `fuzz_selfplay_record`, `NetFile`,
-`NetHeader`, `fuzz_net_file`, `netcheck`, `FeatureSums` (the accumulator
-type; "accumulator" itself is the field's term, kept if the owner
-prefers it, §8 domain vocabulary), `FeatureStack`, `nnue_parity`,
-`net_format`, `feature_sums`, `clipped_relu`, `output_layer`, and the
-directories `tools/datagen`, `tools/train`, `tools/nnue`, `nets`,
-`data/manifests`.
+Screened 2026-10-28 by a throwaway subagent (Stockfish ff7cee42,
+Ethereal 0e47e9b6, Berserk 32628515, Weiss c735b8f3; match / no match
+only):
+- **No match:** `fork_datagen`, `SelfPlayGame`, `SelfPlayConfig`,
+  `GameWriter`, `GameReader`, `CompactBoard`, `encode_move`,
+  `decode_move`, `NetFile`, `NetHeader`, `FeatureSums`, `FeatureStack`,
+  `output_layer`, `feature_index`, `netcheck`, `run_self_play`,
+  `self_play`, `game_record`, `fuzz_game_record`, `net_file`,
+  `fuzz_net_file`, `nnue_parity`, `net_format`, `feature_sums`,
+  `datagen_openings`, `verify_games`, `upload_batch`, and the paths
+  `tools/datagen`, `tools/nnue`, `tools/train`, `data/manifests`.
+- **Accumulator** (type and file): matches in three engines, as the
+  field's term (CPW's NNUE page has an Accumulator section): kept as
+  domain vocabulary, as the owner allowed.
+- **datagen** (the directory `src/datagen/`): one engine has a source
+  file pair of that name in the same role; the word is the community's
+  general term (OpenBench's workload type is called DATAGEN), so it is
+  kept as domain vocabulary, flagged to the owner (question 8).
+- **Renamed before use:** `AccumulatorStack` (an exact compound type name
+  in one engine; the per-ply stack becomes `FeatureStack`, no match) and
+  `clipped_relu` (an exact file and identifier in one engine; becomes
+  `crelu`, no match).
+- **Second screen** (same commits, 2026-10-28): the 37 further
+  identifiers deliverable 2 introduced (its types, enumerators, helpers,
+  `test_datagen`, `datagen_verify`, `datagen_main`, `measure_nodes`,
+  `forkdatagen`): no match in any of the four.
 
 #### Owner's answers (2026-10-28)
 
@@ -2557,6 +2618,48 @@ deliverables above follow:
 15. **The older KB pages are scrubbed** of other engines' constants
     (techniques.md §4-5, research.md §6), keeping the ideas and sources.
 
+#### Open questions (2026-10-28, raised while building step 0)
+
+7. *Answered (owner, 2026-10-28)*: B0 stays 768 -> 256 -> 1, recorded in
+   ORIGINALITY.md as the generic minimal baseline shape (768 = 12 pieces ×
+   64 squares; 256 a common round size), noting the coincidence with
+   Berserk's 2021 release; B0 exists to prove the pipeline, not as a
+   distinctive design.
+8. *Answered (owner, 2026-10-28)*: `src/datagen/` stays, as community
+   vocabulary (OpenBench's DATAGEN).
+9. **bullet's GPL and AGPL dependencies**: building bullet always pulls the
+   Stockfish binpack reader (sfbinpack, GPL-3.0) and Monty's format crate
+   (montyformat, AGPL-3.0, chess code from the Monty engine) into Cargo's
+   cache (KB bullet-internals.md §9). Fork never uses them, but a local
+   build would leave another engine's code on this machine. Options:
+   (a) build bullet only on Kaggle, where the planned local check that
+   bullet's loader decodes Fork's shards also runs (on a CPU session);
+   (b) local builds with a throwaway `CARGO_HOME` in the scratchpad,
+   deleted after each run, as the name-check clones are; (c) accept the
+   cache. *Answered (owner, 2026-10-28)*: local bullet builds use a
+   throwaway Cargo folder, deleted after each run; training builds run
+   only on Kaggle; Fork never vendors or links those crates. Preferred if
+   possible: bullet's Cargo features exclude the Stockfish binpack reader
+   and the Monty crate entirely (checked by a research subagent; KB
+   bullet-internals.md §12).
+10. **Datagen nodes per move**: the second constant screen found 20,000 in
+    Berserk's current documentation as the node limit of its OpenBench
+    datagen preset (same role). Fork's 20,000 comes from its own
+    measurement (median depth 8.5 on the bench positions, the spec's
+    depth 8-9 target). *Answered (owner, 2026-10-28)*: keep 20,000, with
+    the coincidence noted in ORIGINALITY.md.
+
+**Design-screen credits** (the design-level screen of 2026-10-28, for the
+bake-off; KB phase4-designs/judgement.md): XGR's linear output lanes
+follow Stockfish's former PSQT accumulator (credit it; size the lanes by
+XGR's own reasoning or to the three used); the purpose of XGR's revision
+head (scaling pruning by how unreliable the evaluation is) is published
+in Stockfish and Alexandria by other mechanisms (credit both); the
+exposure plane, the learned phase gate, AF's fitted king regions and AF's
+compact threat encoding have no precedent found; the hybrid H-512 is an
+assembly of common concepts, with its counts (8 buckets, at most 4
+regions) still to be screened as constants.
+
 ## 6. Decisions log
 
 | Date | Decision |
@@ -2588,6 +2691,7 @@ deliverables above follow:
 | 2026-10-28 | **B-4 and RfpMargin (owner).** B-4 (the quiescence stand-pat refined by the TT score) reverted: its STC SPRT accepted H0 (19,200 games, Elo -4.11 +/- 3.93). RfpMargin 40 (was 80) **accepted without an SPRT**, by the owner's decision: its STC run was restarted on a pair without B-4 (8550a78 vs 306bd9a), then stopped in stage 0, and the LTC follow-up was dropped. Its only game data is the superseded run's 3,200 games (with B-4 in both engines: +3.47 +/- 9.61, undecided), so its strength effect is UNVERIFIED; the measured fail-low shares justify the value (Search constants). |
 | 2026-10-28 | **Audit-1 Phase D (owner).** Performance gate against main: +2.9% nps at the audit head of the time (not significant; different trees), +3.3% on the same tree (8550a78, significant at the 3.0% threshold), so no slowdown (perf-log.md). Gauntlet against the Milestone C anchors, Milestone C's openings and settings: with RfpMargin 40 stopped after 357 games, 22.5 points below Milestone C on the same games; with RfpMargin 80 (8550a78), all 1,200 games, **Fork 2411.5 ± 22.5** on the Milestone B anchors against 2402.5 ± 23.3 (2416.0 ± 22.2 with Weiss). **RfpMargin reverted to 80** (fd7d4b5; bench 17309921, as main's); 40 logged as untested (ideas.md idea 34). New policy: **untested changes never ship**; a skipped or unfinished test shelves the change and keeps the baseline (Testing setup). Report: history/phase-3/audit-1.md. |
 | 2026-10-28 | **Phase 3 closed (owner).** Audit-1 merged into main (PR #5, 80f725e) after its full CI matrix passed (run 40773853691, perft_epd_full included). No new SPRTs. The roadmap changes: tier 2 (deliverable 9) moves into Phase 4, its SPRTs on the GitHub shards beside the local self-play data generation; the end-of-Phase-3 removal round folds into Phase 4's search re-validation after the first network; idea 23's long run stays in late Phase 4. `UseTtEvalRefine` stays on as the owner-approved exception to "untested changes never ship". Summary: history/phase-3/summary.md; tag `phase-3`. Phase 4 starts in a fresh session. |
+| 2026-10-28 | **Step 0 screens answered (owner).** B0 stays 768 -> 256 -> 1 as the generic minimal baseline shape (the coincidence with Berserk 6 noted in ORIGINALITY.md); `src/datagen/` kept as community vocabulary; datagen at 20,000 nodes per move, Fork's own measurement (the coincidence with Berserk's OpenBench preset noted); local bullet builds only with a throwaway Cargo folder, training builds only on Kaggle, Fork never vendors or links bullet's GPL/AGPL dependencies (excluding them by Cargo features preferred). Quantization reference corrected to bullet's f64 rule; datagen game cap 500 plies (bullet's 512-record reader limit). |
 | 2026-10-28 | **Step 0 spec approved; steps 1-3 reviewed (owner).** §5.3 approved with the answers in its "Owner's answers": no SSD (staging on C:), Kaggle account ready, datagen on 10 of 12 threads, B0's net committed (other nets as Releases), "accumulator" kept if the name screen agrees. Bake-off: the judge's four entries at width 512 on a shared kernel framework, on generation 0 data, STC narrows and LTC decides, time-odds games at STC only, a design-level originality screen for X, G, R, the fitted king regions and AF's threat encoding, a subagent may read bullet's code at the pin, loss thresholds proposed for approval, one net until the pipeline is proven, threat inputs later as an add-on. VNNI on TCEC stays UNVERIFIED (TCEC question list); older KB pages scrubbed of other engines' constants. |
 | 2026-10-28 | **QA/QB and the openings month (owner, answering §5.3 question 6).** QA = 255 and QB = 64 stay as bullet's standard quantization convention, recorded in ORIGINALITY.md as a trainer-interface convention credited to bullet, not a tuned constant (so outside the constant screen). The choice of Lichess 2016-09 for datagen openings and the case for a larger or more recent month later are recorded in §5.3, deliverable 1. |
 | 2026-10-28 | **Phase 4 started (owner).** The multi-agent plan gains a step 0 requirement: the trainer-engine parity test (the trainer's model against Fork's scalar and every SIMD path, exactly or within the quantization's documented tolerance), passing before any network plays a game and run in CI on every network and inference change. Step 0's spec (§5.3, the baseline network B0 and the whole pipeline, with the Kaggle test session checklist) is written as a draft for review, together with steps 1-3 (research, three designs with divergent briefs, a judge) on branch kb; one batched review stop. The training-data decisions of 2026-10-24 are copied from the KB into §5.3. |
