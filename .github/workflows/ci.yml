@@ -263,7 +263,7 @@ jobs:
         run: |
           # -runs=0: run the corpus once, no new inputs; a crash or sanitizer
           # report fails the step.
-          for t in fen moves uci; do
+          for t in fen moves uci game_record; do
             echo "::group::fuzz_$t over fuzz/corpus/$t ($(ls fuzz/corpus/$t | wc -l) seeds)"
             build/clang-fuzz/fuzz_$t -runs=0 fuzz/corpus/$t
             echo "::endgroup::"

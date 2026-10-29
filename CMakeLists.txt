@@ -193,6 +193,17 @@ add_library(forkuci STATIC
   src/uci/session.cpp
   src/uci/version.cpp)
 target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pgo)
+# Self-play training data (src/datagen/; DESIGN.md §5.3, deliverable 2): the
+# game format and the game player, shared by fork_datagen, the tests and a
+# fuzz target. fork_datagen is never part of the engine binary TCEC builds.
+add_library(forkdatagen STATIC
+  src/datagen/game_record.cpp
+  src/datagen/self_play.cpp)
+target_link_libraries(forkdatagen PUBLIC forksearch PRIVATE fork_pgo)
+add_executable(fork_datagen src/datagen/datagen_main.cpp)
+target_link_libraries(fork_datagen PRIVATE forkdatagen forkuci)
+target_compile_definitions(fork_datagen PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}")
+
 if(FORK_TUNE)
   # Public on the search library, so the search, the UCI session and the tests
   # all see the same parameter declarations (src/tune/params.hpp).
@@ -268,9 +279,9 @@ if(FORK_FUZZ)
   else()
     target_compile_options(fork_flags INTERFACE -fsanitize=fuzzer-no-link)
   endif()
-  foreach(target fuzz_fen fuzz_moves fuzz_uci)
+  foreach(target fuzz_fen fuzz_moves fuzz_uci fuzz_game_record)
     add_executable(${target} fuzz/${target}.cpp)
-    target_link_libraries(${target} PRIVATE forkuci)
+    target_link_libraries(${target} PRIVATE forkuci forkdatagen)
     target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/tests)  # uci_message.hpp
     if(MINGW)
       target_link_libraries(${target} PRIVATE ${fuzz_runtime})
@@ -314,8 +325,9 @@ if(FORK_BUILD_TESTS)
     tests/engine_process.cpp
     tests/test_uci.cpp
     tests/test_options.cpp
-    tests/test_params.cpp)
-  target_link_libraries(fork_tests PRIVATE forkuci)
+    tests/test_params.cpp
+    tests/test_datagen.cpp)
+  target_link_libraries(fork_tests PRIVATE forkuci forkdatagen)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
   target_compile_definitions(fork_tests PRIVATE FORK_EXE_PATH="$<TARGET_FILE:fork>")
@@ -441,7 +453,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing)
+                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
@@ -489,6 +501,13 @@ if(FORK_BUILD_TESTS)
              COMMAND ${test_python} -I ${CMAKE_SOURCE_DIR}/tools/difftest/difftest.py
                      --fork $<TARGET_FILE:fork> --positions 20000 --workers 2)
     set_tests_properties(difftest_short PROPERTIES LABELS python)
+    # fork_datagen's shards against an independent decoder and python-chess,
+    # and a second run for byte-identical output (DESIGN.md §5.3).
+    add_test(NAME datagen_verify COMMAND ${CMAKE_COMMAND}
+      -DDATAGEN=$<TARGET_FILE:fork_datagen> -DPYTHON=${test_python} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+      -DWORK=${CMAKE_BINARY_DIR}/datagen_verify -DTABLES=${FORK_SYZYGY345_DIR}
+      -P ${CMAKE_SOURCE_DIR}/cmake/datagen_verify.cmake)
+    set_tests_properties(datagen_verify PROPERTIES LABELS python)
   endif()
 
   # The search bench (`fork bench`) and, so move generation stays tied across
