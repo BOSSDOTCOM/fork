@@ -6,7 +6,7 @@ correctness first, then speed. This file records the architecture and every
 decision that affects play. Phase 7 evaluation adjustments must be documented
 here; no logic may alter reported scores to trigger or avoid adjudication.
 
-Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/history/phase-3/summary.md)**: Milestones A, B and C, the parameter table (8b), the heuristic-discovery harness and its validation run (8c), and the full engine audit (branch `audit-1`, merged through PR #5). By the owner's decision, tier 2 (deliverable 9) and the removal round move into Phase 4. **Phase 4 (evaluation) next, in a fresh session.** Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`).
+Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/history/phase-3/summary.md)**: Milestones A, B and C, the parameter table (8b), the heuristic-discovery harness and its validation run (8c), and the full engine audit (branch `audit-1`, merged through PR #5). By the owner's decision, tier 2 (deliverable 9) and the removal round move into Phase 4. **Phase 4 (evaluation) started 2026-10-28: step 0's spec (§5.3) and steps 1-3 of the multi-agent plan are in review.** Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`).
 
 ---
 
@@ -346,8 +346,8 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   network and that re-validation; afterwards a standing tool in the
   improvement pass (below).
 
-  **Phase 4 multi-agent plan (not started)** (owner, 2026-10-28; recorded
-  only, nothing of it has been run).
+  **Phase 4 multi-agent plan** (owner, 2026-10-28; started 2026-10-28:
+  step 0's spec is §5.3, steps 1-3 run on branch kb).
   - **Principle:** agents propose, build and review; training and SPRT
     decide. No architecture is chosen by argument alone.
   - **Step 0, a baseline network first** (owner, 2026-10-28): a simple,
@@ -355,6 +355,17 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
     pipeline working end to end (data generation, training, inference,
     testing). Self-play data generation starts with it as early as
     possible, while the design work of steps 1-3 continues in parallel.
+  - **Step 0 requirement: the trainer-engine parity test** (owner,
+    2026-10-28). For a fixed set of positions, the trainer's own model
+    and Fork's inference code (the scalar path and every SIMD path) must
+    produce matching evaluations: exactly where both compute the same
+    integer arithmetic, and within the quantization's documented
+    tolerance where the trainer computes in floating point. It must pass
+    **before any network is tested in games**, and it runs in CI for
+    **every network change and every inference change**. Spec: §5.3,
+    deliverable 6. It applies to every later architecture too: step 4's
+    bake-off candidates and step 5's implementation each pass it before
+    their first game.
   - **Step 1, research** (branch kb, ideas only): clean-room descriptions
     of modern NNUE design (input features including threat-aware inputs,
     king buckets and mirroring as concepts, output buckets, activations,
@@ -369,7 +380,13 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
     proposals actually diverge: one speed-first, one accuracy-first, one
     novelty-first.
   - **Step 3, judge:** one agent compares the proposals and recommends 2-3
-    candidates.
+    candidates. **It may also propose one hybrid** (owner, 2026-10-28):
+    a design combining components from different proposals, listing
+    each component's source proposal and why the components should work
+    together. The hybrid enters the bake-off as an extra candidate
+    beside the originals and is never chosen without testing. The judge
+    also records which components could later be tested individually by
+    swapping them into the winner (each such swap is its own SPRT).
   - **Step 4, bake-off:** small versions of each candidate trained on the
     same data, compared by SPRT. The winner is confirmed at a larger size
     before Fork commits to it (owner, 2026-10-28); then it becomes Fork's
@@ -2029,6 +2046,478 @@ and Weiss (results in ORIGINALITY.md).
 4. MultiPV deferred to Phase 7.
 5. The evaluator is selected at build time, with no indirect call.
 
+### 5.3 Phase 4 spec, step 0: the baseline network and the pipeline (DRAFT, awaiting the owner's approval)
+
+**Goal.** One simple, proven network shape carried through the whole
+pipeline end to end, so every later architecture (steps 1-4 of the
+multi-agent plan) plugs into machinery that already works and is already
+tested: self-play data generation, upload, training on Kaggle with
+bullet, Fork's own inference (scalar and SIMD), the trainer-engine parity
+test, and the SPRT that decides. **Step 0 settles the pipeline, not the
+architecture**: the baseline only has to beat the bootstrap evaluation
+and to exercise every stage. Its second job is to start the data: the
+first generation is labelled by the bootstrap evaluation's search and
+can start as soon as deliverables 1-2 exist, before any network does.
+
+**Out of scope for step 0.** King buckets, mirroring, output buckets,
+threat inputs, deeper bodies, SCReLU and other activations, int8 hidden
+layers, refresh caches (all candidates for steps 2-4); the search
+re-validation and margin retune (after the first strong network, §5.2
+Quality control 6); tier 2 (built and SPRTed beside this on the GitHub
+shards, on bootstrap builds until the baseline network is adopted, then
+rebased onto it); multithreaded search (Phase 6).
+
+**Sources.** Concepts only, from the KB on branch kb: techniques.md §4-5,
+research.md §6, tools.md §7-8, training-data.md, data-policy.md, and the
+step 1 files `nnue-design.md` and `phase4-pipeline.md` (2026-10-28). No
+engine's source code is opened by the implementing session or any
+helper; bullet (MIT, a tool, KB tag USE) is read for its documented
+interfaces and file layouts only, and Fork's training configuration is
+Fork's own code. New references go into ORIGINALITY.md when first used.
+
+#### Training-data decisions (copied from KB data-policy.md, "Owner decisions", 2026-10-24)
+
+Copied as the Phase 4 outline requires; the KB keeps the evidence
+(training-data.md) and the per-source statuses (data-policy.md).
+
+1. **Strategy A+.** Labels come from Fork's own self-play only. Datagen
+   openings are Lichess CC0 game positions, with `[%eval]` comments
+   stripped and BOT games dropped. Positions with 7 pieces or fewer are
+   labelled and adjudicated with Syzygy WDL (3-4-5 locally, so 5 pieces
+   or fewer in practice). Fork rescores old data with newer Fork nets.
+   No Lc0 data.
+2. **Compute split.** Datagen on the owner's CPU (12 threads); training
+   on Kaggle (free CUDA) first, rented CUDA only if Kaggle falls short.
+   Colab is dropped (its FAQ bans chess training on free runtimes). The
+   local Radeon RX 580 is not supported.
+3. **Disk and storage.** A compact data format (a few bytes per position)
+   regardless of disk. Kaggle Datasets holds the only copy of the
+   training data; local shards are deleted once the Kaggle hash check
+   passes; each net and its data manifests go to GitHub Releases. Accepted
+   risk: lost data means regeneration.
+4. **Lichess puzzles**: a diagnostic report only; never a tuning target,
+   an acceptance or SPRT gate, or a training input.
+5. **Review gate for Lc0 data**: revisited (an owner decision on measured
+   numbers, never an automatic switch) when two consecutive generations
+   each gain less than about 10 Elo by SPRT against the previous one, or
+   after 4 generations, or 2 billion own positions, whichever comes first.
+6. **UHO_Lichess_4852_v1.epd**: test openings only, never training data,
+   datagen openings, labelled positions or a tuning set; positions from
+   test-match games are never kept for training.
+7. **matetrack**: a diagnostic test input only, download-only, never
+   training data or a tuning target.
+
+Every net chains back to the bootstrap evaluation (KB originality.md §4):
+generation 0 is labelled by the bootstrap evaluation's search, generation
+n by net n-1's.
+
+#### The baseline network, B0
+
+| Part | Choice | Reasoning |
+|---|---|---|
+| Inputs | 768 piece-square features per perspective (2 colours × 6 piece types × 64 squares), seen from each side: the side's own pieces as "ours", the board flipped vertically for Black | The simplest input set that bullet's documentation starts from; no king dependence, so no refresh is ever needed after the root and the accumulator logic stays minimal while the pipeline is proven. |
+| Body | one hidden layer of H = 256 per perspective; the two halves concatenated side to move first; one output | The smallest shape the KB lists as proven, and cheap at every stage: 256 int16 values are 512 bytes (8 cache lines) per perspective, a quiet move updates 2 × 2 columns, and training on generation-0 volumes takes little Kaggle time (measured in deliverable 4). Width is the first lever steps 2-4 pull, not step 0's. |
+| Activation | clipped ReLU, clipped to [0, 1] in float, [0, QA] in integers | Exact and overflow-free in integers with plain int16/int32 arithmetic; squared variants need the overflow care the KB describes and belong to the designs. |
+| Quantization | accumulator weights and biases int16, scaled by QA = 255; output weights int16, scaled by QB = 64; output bias int32, scaled by QA × QB | QA = 255 is the largest activation that fits an unsigned byte, which keeps an int8 path open for later designs. QB = 64 leaves output weights up to about ±511 in float before int16 overflows, far beyond trained values. Worst-case output sum: 2 × 256 × 255 × 32767 ≈ 4.3 × 10^9 would overflow int32 only at saturated weights; with |w| ≤ 2 in float (128 quantized) it is about 1.7 × 10^7, so the loader rejects any net whose quantized output weights exceed a bound that keeps the sum inside int32 (checked, not assumed). The int16 accumulator gets the same treatment: at most 32 features are active, so the loader also rejects a net where any hidden unit's |bias| plus 32 times its largest |feature weight| exceeds 32767. **Owner's decision (2026-10-28):** 255 and 64 are kept as bullet's standard quantization convention, a trainer-interface convention credited to bullet in ORIGINALITY.md, not a tuned constant; the constant screen does not apply to them. |
+| Output scale | eval (cp) = output × S / (QA × QB), S fitted to Fork's own data | S maps the network's win-probability space to centipawns. It is **fitted, not chosen**: a logistic fit of game result against search score over generation-0 data (the Texel method's K fit, KB techniques.md §4), so a centipawn keeps roughly the meaning the search's margins were built on until their retune. |
+| Clamp | the result clamped to ±(EvalLimit - 1) | `EvalLimit` (eval_scale.hpp) is the contract every evaluator keeps. |
+
+Expected cost: per evaluation one 512-value dot product (16 AVX2 or 8
+AVX-512 multiply-adds per perspective) plus incremental updates; the
+measured nps goes into perf-log.md at deliverable 5 (not estimated here).
+
+#### Deliverables in build order
+
+Each deliverable is one or more commits with its tests. The full check
+(the CI matrix) passes on each pushed milestone; bench changes only at
+deliverable 7 (the evaluator switch), with tests/bench.ref in the same
+commit. **The review stop**: this spec (with steps 1-3's results), then
+the Kaggle test session's results (deliverable 0), then B0's SPRT
+(deliverable 7). Nothing else stops unless something fails.
+
+**0. Kaggle test session** (with the owner, who holds the account). One
+real session, run from a private notebook, settles the facts the KB marks
+UNVERIFIED before anything depends on them. Results go into the KB
+(training-data.md §2.1) and the decisions log. Checklist, each with its
+acceptable result:
+
+| # | Check | How | Acceptable |
+|---|---|---|---|
+| K1 | Account can use GPUs and internet | Settings page; phone verification if asked | GPU T4 x2 selectable (P100 appears to be gone since September 2026, phase4-pipeline.md; UNVERIFIED for free accounts); internet toggle on |
+| K2 | Internet inside a GPU session | `curl -sI https://static.rust-lang.org` in a GPU notebook | HTTP 200; otherwise the fallback below |
+| K3 | CUDA toolkit and driver | `nvidia-smi`; the CUDA libraries bullet links (cuda, cudart, nvrtc, cublas) present and linkable; `nvcc` is not needed (bullet compiles its kernels at run time) | CUDA 12.4 or newer for driver and toolkit (phase4-pipeline.md's inference from bullet's driver calls; UNVERIFIED until this check). The version goes into every run record, since Kaggle's image follows Colab's runtime and its CUDA major version can change |
+| K4 | Rust and bullet build | Rust is not preinstalled: rustup (bullet needs Rust 1.87 or newer), then `cargo build --release` of `tools/train` at the pinned bullet commit; time it | Builds in under 30 min. **Fallback**: build once, attach the binary as a private dataset, and check that it runs in a fresh session (glibc and CUDA match) |
+| K5 | Toy training run | 1-2 superbatches of B0 on a 10 M-position sample dataset | Loss falls; positions per second recorded (sets deliverable 4's budget) |
+| K6 | Checkpoint and resume | stop after N superbatches, save to `/kaggle/working`, resume in a **second** session that attaches the first's output as input, with the start superbatch set to the saved one plus one (bullet does not store it) | The weights and optimizer state loaded equal the saved ones (hash), and the loss continues from the saved level. Not a bit-identical continuation: bullet's data loader shuffles with a clock-seeded generator (phase4-pipeline.md), so training runs are not bit-reproducible, and the run record says so |
+| K7 | Headless runs | `kaggle kernels push` of the notebook from WSL, `kaggle kernels status` polling, `kaggle kernels output` download | A full "Save & Run All" run completes without a browser open; outputs download |
+| K8 | Datasets | `kaggle datasets create` of a 1-2 GB test shard from WSL; interrupt and re-run once; `kaggle datasets files` | Upload resumes; sizes match; mounted read-only at `/kaggle/input/...` |
+| K9 | Mounted-data hash check | a CPU-only session hashes the mounted shard | SHA-256 equals the local manifest; CPU session uses no GPU quota |
+| K10 | Read speed | time a full read of the mounted shard in a GPU session | Fast enough that data loading does not bound training (compared with K5's rate) |
+| K11 | Scratch disk and limits | `df -h` in the session; largest single file uploaded | Recorded; the shard size (deliverable 2) is set below the limits found |
+| K12 | Idle timeout and session length | note the interactive idle cutoff; commit runs are expected to ignore it | Recorded; training runs only as commit runs |
+| K13 | Weekly quota | the quota display before and after | Recorded; deliverable 4's schedule fits the measured hours |
+| K14 | Secrets | a Kaggle Secret read from the notebook (no token in the notebook text) | Works; nothing secret in any committed or uploaded file |
+| K15 | The trainer's evaluation of fixed positions | bullet's own evaluation of FENs with the trained float model (its value trainer's eval call, GPU only; phase4-pipeline.md) on the parity positions | Prints a score per position, written to the run's outputs |
+| K17 | Data loading on 4 CPU cores | time bullet's game-format loader alone against K5's training rate (a GPU session has only 4 CPU cores) | Loading keeps up; otherwise convert batches to bullet's fixed-size format (about 8 times larger) before training |
+| K18 | Both T4s | one training run per GPU at once | Recorded; two bake-off candidates can then train side by side |
+| K16 | Terms | re-read Kaggle's terms and AUP pages as of the session | Still personal, non-commercial ML use; datagen stays local |
+
+The Kaggle API token lives in `~/.kaggle/kaggle.json` in WSL (mode 600)
+and in Kaggle Secrets; it is never committed, logged or uploaded.
+
+**1. Datagen openings** (`tools/datagen/`, Python in `.venv`, run with
+`-I`). From one pinned Lichess CC0 monthly file (its published SHA-256
+checked before use; first 2016-09, about 1.2 GB and 6.8 M games, after
+Lichess's documented self-play and castling issues, per
+phase4-pipeline.md; recent months are about 30 GB each),
+streamed and never stored whole:
+- keep rated standard games with both players rated at least a
+  threshold, drop any game with a BOT title, ignore `[%eval]` and every
+  other comment (only moves and headers are read);
+- take the position after a random ply in a fixed range, then play a
+  few uniformly random legal plies (seeded) for diversity;
+- drop positions that are already decided (game over, or a short
+  bootstrap search scores beyond a bound), and duplicates;
+- write an EPD with a manifest (source file and its SHA-256, filters,
+  seed, count, output SHA-256). The EPD is not committed (size); it is
+  regenerable from the manifest, which is.
+
+**Why 2016-09** (recorded at the owner's request, 2026-10-28; facts from
+KB phase4-pipeline.md, which read Lichess's database page):
+- It is the **first month after both of Lichess's known data issues that
+  matter here**: before March 2016 some players played themselves in
+  rated games (fake games, worthless as "human play"), and up to August
+  2016 a few games contain illegal castling moves. Lichess's other listed
+  issues (evaluation problems in December 2016 and July-August 2020;
+  wrong results on 12 March 2021) do not affect openings, since Fork
+  reads neither evaluations nor results here.
+- It is **small**: 1.2 GB compressed and 6.8 M games, against about
+  30 GB and about 90 M games for a 2026 month. The first run of the tool
+  is then minutes of download and streaming, and a mistake costs little.
+- **Is a larger or more recent month worth it?** Not for generation 0,
+  probably yes later. Generation 0 (about 200 M positions, roughly a
+  million games at the expected game lengths; *estimate*) needs about a
+  million openings, and 2016-09 can supply that only if enough of its
+  games have both players at 2000 or more. That count is UNVERIFIED and
+  is the first number the tool reports; if it falls short, 2016-10 or
+  2016-12 (1.35 and 1.7 GB, same clean window) come next. Later
+  generations need tens of millions of games, and then a recent month
+  adds what matters: about 13 times as many games, so many more distinct
+  2000+ positions and today's opening repertoire rather than 2016's. It
+  also filters bots better: the BOT title exists only since Lichess's Bot
+  API, so engine accounts in 2016 months are not tagged (UNVERIFIED when
+  the API began), while a recent month's bots are dropped by the title
+  filter. The cost is a 30 GB download, streamed through `zstdcat`
+  without storing the file. So the plan is: 2016-09 for generation 0; a
+  recent month (or several old ones) added to the pool before generation
+  1, with each month in the manifest. Whether the extra variety helps is
+  measured, not assumed: the tool reports distinct positions after the
+  filters and the spread over opening codes (the PGN `ECO` header), and
+  the analyst (step 7) can test a net trained on the wider pool by SPRT.
+Thresholds (rating, ply range, random plies, the decided bound) are in
+the constants table below. Test: the tool reproduces its own output
+byte for byte from the same manifest; a fixture PGN with a BOT game, an
+`[%eval]` comment and a low-rated game shows each filtered.
+
+**2. Self-play data generation** (`fork_datagen`, a separate CMake
+target linking the engine library, never part of the TCEC binary).
+- **Games**: N worker threads (default 10, leaving 2 for other work),
+  each playing whole games one after another with its own `Searcher`
+  and its own small transposition table, cleared before each game.
+  Every move is a fixed node-count search (`go nodes`, exact since
+  audit-1), so a game is a pure function of (commit, evaluator and net,
+  opening, seed): any shard can be regenerated.
+- **Game end**: the rules only (mate, stalemate, threefold, fifty-move,
+  insufficient material), plus two exact adjudications: Syzygy WDL once
+  5 pieces or fewer remain (both sides' probes through
+  `endgame_tables.*`; Fathom's README states WDL probes are thread-safe
+  unless built with `TB_NO_THREADS`, provided the tables are loaded once
+  before the workers start and never freed while they run; the probe
+  comes right after the capture that enters the tables, when the
+  fifty-move clock is zero, phase4-pipeline.md; concurrent probing is
+  tested, not assumed), and a search-reported
+  mate score, which ends the game with that result. **No eval-based win
+  or draw adjudication in generation 0**: the bootstrap evaluation is
+  weak, so a score threshold would write wrong results into the labels;
+  the time saved is measured later and revisited per generation.
+- **What is recorded**: every position, its search score from White's
+  view (or the convention the format fixes), the move played, and the
+  game result. Filtering (in check, best move a capture or promotion,
+  mate or tablebase scores) happens at training time, not here, so the
+  data stays complete for later rescoring and filter changes.
+- **Format**: viriformat (MIT; a game-based compact format with one
+  32-byte packed board per game, then a 16-bit move and a 16-bit score
+  per position: about 4 bytes per position), written by Fork's own C++
+  code from the format's README specification (phase4-pipeline.md
+  pins it). It is the format bullet documents for self-generated data,
+  and bullet's loader reads the game files directly and shuffles in
+  memory, so no converter or shuffle step stands between datagen and
+  training. Two traps from the research: piece nibbles are low nibble
+  first (an older README example had them reversed), and bullet pins an
+  older format version without the extension record, so Fork never
+  writes extension records. The conventions the README leaves open (the
+  en passant square, whether a score belongs to the position before its
+  move; UNVERIFIED) are settled by a test, not by assumption: bullet's
+  own loader, run on the CPU with its mock device, decodes a Fork shard,
+  and every decoded position, score and result must equal python-chess's
+  replay of the same games. A data format is
+  an interface, like UCI, not engine code; recorded in ORIGINALITY.md.
+- **Shards** of a fixed size (constants table) in a staging directory
+  (`FORK_DATA_DIR`, outside the repository), each with a manifest line:
+  SHA-256, games, positions, generator commit, evaluator and net hash,
+  node limit, openings manifest hash, seed range, start and end time.
+  Manifests are committed under `data/manifests/` (no paths beyond `~`,
+  no personal data).
+- **Tests**: a reader for the format (C++, used by the tests, the
+  rescoring tool later, and a new fuzz target `fuzz_selfplay_record`
+  under the phase-end fuzz rule) round-trips every written game; every
+  stored move is legal in its position when replayed by python-chess
+  (an independent oracle, `tools/datagen/verify.py`); the stored result
+  matches the game's end by the rules or the tablebase; two runs with
+  the same seed give byte-identical shards; the `no_alloc` style check
+  that a worker allocates nothing per move after warm-up.
+- **Throughput** is measured (positions per second per thread), not
+  estimated, and recorded in perf-log.md before the first long run.
+
+**3. Upload and confirmation** (`tools/datagen/upload.sh`), following the
+KB's storage design (training-data.md §2.2): one immutable private
+Kaggle dataset per batch (never versioned), at most 50 shards as plain
+files at the dataset's top level (the CLI skips subfolders by default,
+phase4-pipeline.md; that caps a batch at about 50 GB), the kaggle CLI
+re-run on interruption, with its resume state kept outside `/tmp`; then a CPU-only Kaggle
+session hashes the mounted shards; only a full SHA-256 match against the
+manifests deletes the local shards. It is network-bound and runs beside
+datagen (not a second heavy job; checked not to disturb a benchmark).
+Test: a dry-run mode against a fake CLI covers the mismatch and resume
+paths.
+
+**4. Training** (`tools/train/`): a Cargo project depending on bullet at a
+pinned commit (Cargo.lock committed), with Fork's own training program
+for B0, and a Kaggle notebook driver pushed with `kaggle kernels push`.
+- Inputs: the batch datasets (mounted), the previous run's output (for
+  resume). Outputs: the float checkpoint, bullet's quantized file, the
+  training log, and the trainer's evaluation of the parity positions
+  (deliverable 6) when bullet can produce it.
+- Target: a blend of the search score (through the sigmoid with the
+  fitted scale S) and the game result, weight λ on the score; loss and
+  schedule as in the constants table. Position filters as in
+  deliverable 2.
+- Runs are commit runs of at most 12 hours that checkpoint and resume
+  (K6), inside the measured weekly quota (K13).
+- Every run writes a run record: bullet commit, Fork commit of
+  `tools/train`, dataset names and their manifest hashes, settings,
+  final loss, output hashes. The record goes into the net registry
+  (deliverable 7) and the net's GitHub Release.
+
+**5. Inference** (`src/eval/nnue/`; FORK_EVALUATOR gains `nnue`):
+- **Fork's own net file format**: a header (magic, format version,
+  architecture id, dimensions, QA, QB, S, the payload's SHA-256), then
+  the tensors in the order and layout Fork's kernels read. A converter
+  (`tools/nnue/convert.py`) turns bullet's quantized file into it, so
+  Fork's format never depends on the trainer's layout; the parity test
+  checks the converter end to end. bullet's quantized file has no
+  header, names or shapes: the tensors follow the order the training
+  program saves them, little-endian, column-major unless transposed,
+  padded to a multiple of 64 bytes (phase4-pipeline.md). So the
+  converter takes the tensor order and shapes from one description file
+  shared with Fork's training program, never by guessing. bullet
+  truncates when quantizing unless rounding is asked for, so Fork's
+  training program asks for rounding, and the parity bound assumes it. The loader validates everything
+  (sizes, version, the output-weight bound of B0's table, the hash) and
+  is a new parser, so it gets a fuzz target (`fuzz_net_file`).
+- **Embedding**: the net Fork plays with is compiled in, from
+  `nets/<sha-prefix>.fnet` in the repository (B0 is about 400 KB),
+  checked against its SHA-256 at configure time, so TCEC's build from a
+  clean clone needs nothing else. Larger nets later move to a GitHub
+  Release fetched by CMake with a pinned SHA-256 (the clean-clone rule
+  allows both). No runtime net option in step 0.
+- **Accumulator**: two int16 vectors per position (one per perspective),
+  kept in a per-ply stack owned by the `Searcher` beside the `PlyFrame`
+  array, not in `Position` (audit-1 F-21: perft and movegen stay free
+  of it). Updated incrementally from the parent's on make (added and
+  removed features of the move, both perspectives; castling, en passant
+  and promotion included); null move copies; unmake just pops. Lazy:
+  computed when `static_eval` needs it, from the nearest computed
+  ancestor. Root and new-game positions are computed from scratch.
+  Debug builds check incremental against from-scratch at every
+  evaluation.
+- **Kernels**: scalar reference always compiled; AVX2 (x86-64-v3),
+  AVX-512 (x86-64-v4) and AVX-512 VNNI where it helps (for B0, the
+  int16 output dot product), selected at compile time (`.claude/rules/
+  simd.md`). New presets: `{clang,gcc}-scalar` (baseline x86-64, no
+  SIMD paths) and `{clang,gcc}-vnni` (x86-64-v4 plus VNNI; run under
+  Intel SDE in CI on runners without it), each with bench parity.
+  `update.sh`'s default target is revisited once SIMD code exists
+  (decisions log, 2026-10-24).
+- **Bootstrap evaluation stays** as `FORK_EVALUATOR=bootstrap`: it labels
+  generation 0 and anchors the provenance chain. The default switches to
+  `nnue` only after B0 passes deliverable 7.
+- **Tests**: SIMD against scalar, bit-identical, randomized and edge
+  inputs (saturation at 0 and QA, extreme weights, all-features-active
+  positions); incremental against from-scratch along random game lines
+  with null moves, castling, en passant, promotions and captures of
+  every kind; colour-flip symmetry (a position and its mirror give the
+  same score from the side to move's view, exactly); `no_alloc` over a
+  search with the network; bench parity across every preset. Speed:
+  `fork bench` nps before and after, recorded in perf-log.md.
+
+**6. The trainer-engine parity test** (the owner's step 0 requirement).
+- **Positions**: a committed EPD, `tests/nnue/parity.epd`, of a few
+  hundred positions: hand-made edge cases (every one of the 768 features
+  active somewhere in the set; promotion-heavy positions such as several
+  queens per side; both kings in every region; positions in check;
+  positions scoring at the clamp), the bench positions, and positions
+  drawn with a fixed seed from Fork's own generation-0 data. Sources are
+  cited in the file, as for every test input.
+- **Three evaluators of the same positions**:
+  1. **T, the trainer's model**: bullet's own forward pass with the float
+     weights, run on Kaggle at the end of training (K15), written as
+     `parity-trainer.txt` with the run's outputs.
+  2. **R, Fork's independent reference** (`tools/nnue/reference.py`,
+     numpy): written from this spec, not from Fork's C++ or from
+     `convert.py`. It reads bullet's float weights file and computes the
+     float forward pass (R-float); it **quantizes those float weights
+     itself** (R-quant: f32 multiply, then bullet's rounding rule as read
+     at the pinned commit, never numpy's round-half-to-even); and it
+     emulates Fork's integer arithmetic exactly on Fork's net file
+     (R-int).
+  3. **F, Fork's inference**: the scalar path and every SIMD path, through
+     `static_eval` on each position set up from its FEN, and again after
+     reaching each position incrementally from a parent.
+- **What must match** (revised 2026-10-28 after the step 3 judge
+  showed that the first draft's worst-case bound could never fail: for
+  B0 it comes to the order of 1,000 cp, so a converter error smaller than
+  that would pass; KB phase4-designs/judgement.md §6.6):
+  - **Quantization leg, exact.** R-quant's integers equal bullet's
+    quantized file and the tensors of Fork's net file, integer for
+    integer. Three implementations (bullet's quantizer, `convert.py`,
+    R-quant) check each other, so a layout, transposition, rounding or
+    converter error fails here exactly, however small its effect on the
+    score.
+  - **F equals R-int exactly**: every path (scalar and every SIMD path),
+    both routes (from the FEN and incrementally), every position.
+  - **R-float equals T within floating-point noise**: |R-float - T| ≤
+    0.01 cp (GPU summation order differs; revisited if K15's data show
+    it is too tight, never loosened silently). This proves Fork's reading
+    of the trainer's float model is right.
+  - **The documented quantization tolerance**: the quantization loss
+    |R-int - R-float| is computed exactly on every position (no bound).
+    Its maximum and 99th percentile must stay under per-architecture
+    thresholds, set at the architecture's first net from its measured
+    loss, recorded in the net registry, and approved by the owner; they
+    change only with the owner's approval. Since R-float equals T within
+    0.01 cp, this bounds |R-int - T|, and so |F - T|, by the threshold
+    plus 0.01 cp. For B0 the thresholds are proposed from its first
+    trained net, with its numbers, at the deliverable 7 review, before
+    any game.
+  - **Feature leg** (for B0 a simple check; essential for every later
+    design with king regions, mirroring, buckets or computed features):
+    the active feature indices from Fork's C++ and from `reference.py`
+    (python-chess for the board) are identical on the parity positions
+    and on 1 M positions sampled from Fork's data; later designs add the
+    trainer's own input code (a CPU-only test build) as a third party.
+  - **The checker is shown able to fail**, each mutation tied to the leg
+    that must catch it: a corrupted weight, a transposed tensor and a
+    missing rounding step (quantization leg); a wrong perspective flip in
+    the C++ (F = R-int or the feature leg); a too-coarse QB in a test
+    copy (the loss threshold).
+- **T needs a GPU**: bullet evaluates FENs with the float model on its
+  GPU backend only, and has no evaluation of its quantized file
+  (phase4-pipeline.md). So T is produced once per net on Kaggle and
+  committed; CI and local runs compare against the committed T values
+  and never run bullet. R-float reads bullet's self-describing float
+  weights file (names, counts, f32 values) from the checkpoint.
+- **Where it runs**: R-int against F as a ctest (`nnue_parity`) on every
+  preset, so CI runs it on every push and pull request (scalar, v3, v4
+  and VNNI under SDE, TCEC's four compilers); the Python legs (the
+  quantization leg, R-float against T, the loss thresholds, the feature
+  leg on the parity positions) as a CI job whenever `src/eval/**`,
+  `nets/**`, `tests/nnue/**` or `tools/nnue/**` change; the 1 M-position
+  feature leg nightly and on such changes. The expected values (T's,
+  R-int's, the loss statistics and thresholds) are committed per net in
+  `tests/nnue/<net>.parity`.
+- **The game gate**: `fork netcheck FILE` (a hidden command, like
+  `bench`) evaluates the parity positions and compares them with the
+  committed R-int values, and refuses a net whose recorded loss exceeds
+  its architecture's thresholds. `tools/sprt.sh`, the cloud shards'
+  `build_pair.sh`, `tools/elo_gauntlet.sh` and `fork_datagen` run it on
+  the exact binary before their first game and refuse to start on a
+  mismatch, and refuse a net with no parity record at all.
+
+**7. B0, generation 0 and the first SPRT.**
+- Generation 0: `fork_datagen` with the bootstrap evaluation on the
+  openings of deliverable 1, size in the constants table; uploaded and
+  confirmed (deliverable 3).
+- Fit S on generation-0 data; train B0 (deliverable 4); convert, run the
+  parity test (deliverable 6); only then games.
+- SPRT: B0 (`FORK_EVALUATOR=nnue`) against the bootstrap evaluation at
+  STC on gainer bounds [0, 5] (gains this large end it quickly; the
+  bounds policy of §5.2), on the GitHub shards. A pass switches the
+  default evaluator, with the new bench in tests/bench.ref and the
+  commit message; a fail goes back to deliverable 4 (more data, λ) with
+  its result in the SPRT log.
+- **Net registry** (`docs/nets.md`): one row per net (name, SHA-256,
+  architecture, data manifests, training run record, parity bound and
+  observed maximum, SPRT result), mirrored in ORIGINALITY.md's
+  "Training data provenance" and published as a GitHub Release with the
+  net file, the run record and the manifests.
+- Generation 1 data starts with B0 at once (the Phase 4 outline:
+  datagen keeps the local CPU busy while the designs proceed).
+
+#### Constants (the owner's rule: every value justified and screened)
+
+Initial values with their reasoning; each is screened by the
+originality-checker (match / no match only) before its commit, and any
+match goes to the owner first.
+
+| Constant | Value | Reasoning |
+|---|---|---|
+| H (hidden width) | 256 | Above (B0 table). |
+| QA, QB | 255, 64 | bullet's standard quantization convention, kept by the owner (2026-10-28) as a trainer-interface convention credited to bullet (ORIGINALITY.md), not a tuned constant; the arithmetic above shows it is safe. Not screened. |
+| S (output scale) | fitted | Logistic fit of result against score on generation-0 data. |
+| Datagen nodes per move | measured, about the count where the bootstrap search reaches depth 8 to 9 in a typical middlegame | Deep enough that the label is a search result, not a static eval, and cheap enough for volume. Settled by a short measurement over the bench positions before generation 0 and recorded with its numbers. |
+| Datagen TT size per worker | the smallest power of two that holds one move's search without heavy replacement at the node count above | Measured with the hit rate at that node count; 10 workers must fit RAM beside the machine's other users. |
+| Workers | 10 of 12 threads | Leaves two threads for development and CI-adjacent work; the one-heavy-job rule still applies (datagen is the heavy job while it runs). |
+| Opening rating floor | 2000 (both players) | The KB's A+ description (training-data.md §3.4): positions from competent play, without engine choice. |
+| Opening ply range, random plies | a random ply in 8-16, then 2-4 random plies | The KB's A+ description gives 8-16; a few random plies multiply the distinct positions without leaving plausible play. |
+| Decided-opening bound | the bootstrap search at the datagen node count beyond ±400 cp | Four pawns: openings that lopsided teach little and end fast. |
+| Shard size | 1 GB, or less if K11 shows a lower file limit | The KB storage design's 1-2 GB, at its low end so one failed upload costs little. |
+| Generation 0 size | about 200 M positions | Within the KB's 100-200 M per first generation; refined by K5's training throughput and the measured datagen rate. |
+| λ (score weight) | 0.5 for B0 | Generation-0 scores come from a weak evaluation and game results are noisy, so neither is trusted over the other; the analyst (step 7) tunes it per generation from measured results. |
+| Loss, schedule, batch | from bullet's documented defaults for a single-layer net, recorded in the run record | Step 0 proves the pipeline; schedule tuning is step 7's. Each value used is written into this table at deliverable 4 with its source. |
+
+#### Names (to be checked before use, §8 procedure)
+
+Candidate new names, handed to a throwaway research subagent for the
+four-engine check before any code uses them: `fork_datagen`,
+`SelfPlayGame`, `SelfPlayRecord`, `fuzz_selfplay_record`, `NetFile`,
+`NetHeader`, `fuzz_net_file`, `netcheck`, `FeatureSums` (the accumulator
+type; "accumulator" itself is the field's term, kept if the owner
+prefers it, §8 domain vocabulary), `FeatureStack`, `nnue_parity`,
+`net_format`, `feature_sums`, `clipped_relu`, `output_layer`, and the
+directories `tools/datagen`, `tools/train`, `tools/nnue`, `nets`,
+`data/manifests`.
+
+#### Questions for the owner (before approval)
+
+1. **External SSD**: is it in place? Generation 0 (about 1 GB in the
+   compact format) fits on C: either way; later generations and
+   rescoring want the SSD as the staging directory.
+2. **Kaggle**: does the account exist, and when can the test session
+   (deliverable 0) run? It needs you for the account steps (K1, K14).
+3. **Datagen versus development**: datagen takes 10 threads for long
+   stretches. Local builds and tests then run on 2 threads (slow), and
+   `scripts/check.sh full` waits for a datagen pause. Acceptable, with
+   CI as the full check meanwhile?
+4. **The baseline net in the repository**: commit `nets/*.fnet` (about
+   400 KB for B0; Fork's own GPL data), or Release-only from the start?
+5. **Name for the accumulator**: keep the field's term `Accumulator`
+   (domain vocabulary) or use a Fork name such as `FeatureSums`?
+6. *Answered (owner, 2026-10-28)*: QA and QB stay 255 and 64, bullet's
+   standard quantization convention, recorded in ORIGINALITY.md as a
+   trainer-interface convention credited to bullet, not a tuned
+   constant.
+
 ## 6. Decisions log
 
 | Date | Decision |
@@ -2060,6 +2549,8 @@ and Weiss (results in ORIGINALITY.md).
 | 2026-10-28 | **B-4 and RfpMargin (owner).** B-4 (the quiescence stand-pat refined by the TT score) reverted: its STC SPRT accepted H0 (19,200 games, Elo -4.11 +/- 3.93). RfpMargin 40 (was 80) **accepted without an SPRT**, by the owner's decision: its STC run was restarted on a pair without B-4 (8550a78 vs 306bd9a), then stopped in stage 0, and the LTC follow-up was dropped. Its only game data is the superseded run's 3,200 games (with B-4 in both engines: +3.47 +/- 9.61, undecided), so its strength effect is UNVERIFIED; the measured fail-low shares justify the value (Search constants). |
 | 2026-10-28 | **Audit-1 Phase D (owner).** Performance gate against main: +2.9% nps at the audit head of the time (not significant; different trees), +3.3% on the same tree (8550a78, significant at the 3.0% threshold), so no slowdown (perf-log.md). Gauntlet against the Milestone C anchors, Milestone C's openings and settings: with RfpMargin 40 stopped after 357 games, 22.5 points below Milestone C on the same games; with RfpMargin 80 (8550a78), all 1,200 games, **Fork 2411.5 ± 22.5** on the Milestone B anchors against 2402.5 ± 23.3 (2416.0 ± 22.2 with Weiss). **RfpMargin reverted to 80** (fd7d4b5; bench 17309921, as main's); 40 logged as untested (ideas.md idea 34). New policy: **untested changes never ship**; a skipped or unfinished test shelves the change and keeps the baseline (Testing setup). Report: history/phase-3/audit-1.md. |
 | 2026-10-28 | **Phase 3 closed (owner).** Audit-1 merged into main (PR #5, 80f725e) after its full CI matrix passed (run 40773853691, perft_epd_full included). No new SPRTs. The roadmap changes: tier 2 (deliverable 9) moves into Phase 4, its SPRTs on the GitHub shards beside the local self-play data generation; the end-of-Phase-3 removal round folds into Phase 4's search re-validation after the first network; idea 23's long run stays in late Phase 4. `UseTtEvalRefine` stays on as the owner-approved exception to "untested changes never ship". Summary: history/phase-3/summary.md; tag `phase-3`. Phase 4 starts in a fresh session. |
+| 2026-10-28 | **QA/QB and the openings month (owner, answering §5.3 question 6).** QA = 255 and QB = 64 stay as bullet's standard quantization convention, recorded in ORIGINALITY.md as a trainer-interface convention credited to bullet, not a tuned constant (so outside the constant screen). The choice of Lichess 2016-09 for datagen openings and the case for a larger or more recent month later are recorded in §5.3, deliverable 1. |
+| 2026-10-28 | **Phase 4 started (owner).** The multi-agent plan gains a step 0 requirement: the trainer-engine parity test (the trainer's model against Fork's scalar and every SIMD path, exactly or within the quantization's documented tolerance), passing before any network plays a game and run in CI on every network and inference change. Step 0's spec (§5.3, the baseline network B0 and the whole pipeline, with the Kaggle test session checklist) is written as a draft for review, together with steps 1-3 (research, three designs with divergent briefs, a judge) on branch kb; one batched review stop. The training-data decisions of 2026-10-24 are copied from the KB into §5.3. |
 
 ## 7. Performance doctrine (governs every phase)
 

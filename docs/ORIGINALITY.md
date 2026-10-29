@@ -329,6 +329,29 @@ generic vocabulary (DESIGN.md §8).
 | Linux analysis: clang-tidy, cppcheck, valgrind, ASan/UBSan/TSan/MSan | LLVM 21.1.8, 2.19.0, 3.26.0, the compilers' runtimes | Apache-2.0 with LLVM exception, GPL-3.0, GPL-2.0, as the compilers |
 | TCEC toolchain check (WSL Ubuntu 22.04.5): gcc / g++-12 / clang-16 / clang-19, CMake | 11.4.0, 12.3.0, 16.0.6 and 19.1.7 (apt.llvm.org jammy suites), 3.22.1 | as the compilers above; CMake BSD-3-Clause. Set up by scripts/tcec-toolchain-setup.sh. |
 
+## Training tools and trainer-interface conventions (Phase 4)
+
+A trainer is a tool, like a compiler: Fork's nets are Fork's because the
+data and the architecture choices are Fork's (KB tools.md §7). No trainer
+code is copied into Fork; Fork's training program, net file format,
+converter and inference code are Fork's own.
+
+| Item | What Fork takes from it | Credit and licence |
+|---|---|---|
+| bullet (jw1912/bullet), NNUE trainer | Used as a tool on Kaggle to train Fork's nets, at a pinned commit (KB phase4-pipeline.md; the pin goes into `tools/train/Cargo.lock` at deliverable 4) | MIT |
+| **Quantization convention QA = 255, QB = 64** (accumulator scale and output-weight scale; DESIGN.md §5.3, B0) | **A trainer-interface convention credited to bullet, not a tuned constant** (owner, 2026-10-28). These are bullet's standard quantization factors, shared by many bullet-trained nets; Fork adopts them so its training program and its integer inference agree with the trainer's conventions. They are not one of Fork's search or evaluation constants, so the constant screen does not apply; DESIGN.md §5.3 shows the overflow arithmetic that makes them safe for B0 | bullet (MIT) |
+| viriformat, training-data format (planned, DESIGN.md §5.3 deliverable 2) | The file layout only, written by Fork's own code from the format's README; an interface, like UCI | MIT |
+
 ## Training data provenance
 
-None yet (Phase 4).
+No net trained yet. Planned inputs (DESIGN.md §5.3; KB data-policy.md):
+- **Datagen openings: Lichess standard database, 2016-09** (CC0; 6.8 M
+  games; SHA-256 checked against Lichess's published list before use).
+  Only moves and headers are read, never comments (so no `[%eval]`), BOT
+  games are dropped, both players rated 2000 or more. Chosen as the first
+  month after Lichess's known self-play and illegal-castling issues, and
+  small enough to test the tool quickly; a recent month is planned before
+  generation 1 for more variety and better bot filtering (DESIGN.md
+  §5.3, deliverable 1).
+- **Labels**: Fork's own search (generation 0: the bootstrap evaluation),
+  game results, Syzygy WDL.
