@@ -393,8 +393,9 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
     first architecture. **Settled at the step 0-3 review** (owner,
     2026-10-28; §5.3 "Owner's answers"): the judge's four entries (S-512,
     the hybrid H-512, AF-S, and XGR-512 if its pre-test passes), all at
-    width 512, on a shared kernel framework, trained on generation 0
-    data; STC narrows the field and LTC decides between the finalists;
+    width 512, on a shared kernel framework, trained on generation 1
+    data, every candidate on the same data (owner, 2026-10-29; first
+    generation 0); STC narrows the field and LTC decides between the finalists;
     Fork's Elo per speed doubling is measured by 2:1 time-odds games at
     STC only; the design-level originality screen comes first for X, G,
     R, the fitted king regions and AF's threat encoding. One net until
@@ -2621,7 +2622,7 @@ match goes to the owner first.
 | Opening ply range, random plies | a random ply in 8-16, then 2-4 random plies | The KB's A+ description gives 8-16; a few random plies multiply the distinct positions without leaving plausible play. |
 | Decided-opening bound | the bootstrap search at the datagen node count beyond ±400 cp | Four pawns: openings that lopsided teach little and end fast. |
 | Shard size | 1 GB, or less if K11 shows a lower file limit | The KB storage design's 1-2 GB, at its low end so one failed upload costs little. |
-| Generation 0 size | about 200 M positions, at least; more if the bake-off needs it | Within the KB's 100-200 M per first generation; refined by K5's training throughput and the measured datagen rate. The bake-off also runs on generation 0 (owner, 2026-10-28), and the judge sized its entries at about 0.7 B positions, so generation 0 may be extended before the bake-off; decided with the measured rate. |
+| Generation 0 size | about 200 M positions, at least; more if the bake-off needs it | Within the KB's 100-200 M per first generation; refined by K5's training throughput and the measured datagen rate. The bake-off also runs on generation 0 (owner, 2026-10-28), and the judge sized its entries at about 0.7 B positions, so generation 0 may be extended before the bake-off; decided with the measured rate. **Outcome (owner, 2026-10-29):** generation 0 was stopped at 130,615,808 positions (1,366,657 complete games; data/manifests/g0.json) once B0r1 passed its SPRT. Generation 1 (B0r1, the same settings, seed 20261030) followed at once, and the bake-off trains on generation 1 data. |
 | λ (score weight) | 0.5 for B0 | Generation-0 scores come from a weak evaluation and game results are noisy, so neither is trusted over the other; the analyst (step 7) tunes it per generation from measured results. |
 | Loss, schedule, batch | from bullet's documented defaults for a single-layer net, recorded in the run record | Step 0 proves the pipeline; schedule tuning is step 7's. Each value used is written into this table at deliverable 4 with its source. |
 
@@ -2683,7 +2684,9 @@ deliverables above follow:
    into, not four separate implementations); **STC narrows the field,
    LTC decides between the finalists**; the bake-off runs on
    **generation 0 data** (not waiting for generation 1), and the winner
-   is confirmed at full size later.
+   is confirmed at full size later. **Changed 2026-10-29 (owner):** the
+   bake-off trains on generation 1 data (B0r1's self-play), and every
+   candidate trains on the same data.
 8. **Speed price**: the 2:1 time-odds games are approved at **STC only**.
 9. **Design-level originality screen** for XGR's exposure plane (X),
    phase gate (G) and revision head (R), AF's fitted king regions and
@@ -2788,6 +2791,7 @@ regions) still to be screened as constants.
 | 2026-10-29 | **No script prints credentials (owner).** Audit of every committed script and workflow: no secrets in the workflows; the Kaggle kernels read none, and session_check.py reports only three named CUDA variables; the AWS script uses its instance-metadata token only inside a request header; the Kaggle CLI is used only through its own token file and prints only URLs and status. The local session scripts likewise read and print no token. |
 | 2026-10-29 | **B0's retrain queued (owner): B0r1.** On all generation-0 data so far (g0s2, worker 9 held out), same architecture, warm-started from B0's weights, early stopping within Kaggle's limit; then the parity chain, netcheck and an STC SPRT against B0 at [0, 5] on the GitHub shards (never beside CI); if it passes it becomes the default and the network for the next data generation. |
 | 2026-10-29 | **B0r1 adopted; tablebase result, not material, for a network's quiet choice (owner).** B0r1 passed its SPRT against B0 (+200.24 +/- 16.05 Elo, H1 at [0, 5], STC) and is the default network. Three search tests were fixed for it: determinism clears the history too; the fail-high stop test scans every bench position; in the exchange test a network's move is checked against Syzygy where the material-best move is not forced. Owner's rule: in Syzygy range, accept any move that keeps the tablebase result; otherwise compare the moves with a deep search, and record a real loss as a known weakness of the net, not a test change. The check must be able to fail: K+R+P v K+R with 4 winning and 12 non-winning moves, fault-injected. |
+| 2026-10-29 | **Generation 0 stopped, generation 1 started with B0r1; the bake-off trains on generation 1 (owner).** Generation 0 was stopped at 1:42 PM EST and sealed from its complete games: 1,366,657 games, 130,615,808 positions (data/manifests/g0.json, worker 9 held out; g0s1 and g0s2 are byte prefixes of its shards). Generation 1 has the same settings (10 threads, 20,000 nodes, 2-4 random plies per game, 400 cp decided bound, Syzygy 3-4-5, 1 MB hash, Lichess 2016-09 openings) with a new seed (20261030) and fork_datagen from phase-4 bb4f75a (B0r1). The Lichess 2026-09 openings are added when their stream finishes. All bake-off candidates train on the same generation-1 data. |
 
 ## 7. Performance doctrine (governs every phase)
 
