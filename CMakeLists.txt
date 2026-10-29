@@ -164,9 +164,9 @@ target_compile_options(fathom PRIVATE -w)
 
 # The evaluator is chosen at build time (owner, 2026-10-24; DESIGN.md §5.2):
 # no runtime interface and no indirect call in the search.
-# The bootstrap evaluation is the default until B0 passes its SPRT (DESIGN.md
-# §5.3, deliverable 7); nnue compiles the network file FORK_NET into Fork.
-set(FORK_EVALUATOR "bootstrap" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
+# B0 candidate (DESIGN.md §5.3, deliverable 7): nnue, the network nets/b0.fnet,
+# is the default on this branch for B0's SPRT against the bootstrap evaluation.
+set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
 set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/b0.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
 if(FORK_EVALUATOR STREQUAL "nnue")
