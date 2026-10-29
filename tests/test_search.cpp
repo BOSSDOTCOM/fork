@@ -241,17 +241,44 @@ TEST_CASE("search",
 }
 
 // Endgames transpose a lot, so the TT really cuts here (counted below).
-// Constructed positions, at depth 3: from depth 4 each holds a repetition
-// (both kings can step out and back), which the TT may carry across paths
-// (the next test case), so exactness is claimed only where none fits; the
-// test checks that first (owner, 2026-10-29).
+// Exactness is claimed only where no repetition is in reach (a path-blind
+// TT may carry a repetition draw across paths: the next test case), and the
+// test checks that first (owner, 2026-10-29). Constructed positions:
+// - four plain endgames at depth 3: from depth 4 each holds a repetition
+//   (both kings can step out and back);
+// - four locked ones at depth 6 (5 in debug builds): one side's king is
+//   walled in by a pawn cluster with no capture on either side (black: Ka5,
+//   b6 and b4 against a4, b3 and b5; or its colour mirror), so that side
+//   can only push its free pawns, every one of its moves is irreversible,
+//   and no position can repeat; python-chess found none to depth 7 (the
+//   check below repeats it).
+namespace {
+
+struct DepthCase {
+  std::string_view fen;
+  int depth;
+};
+std::vector<DepthCase> repetition_free_cases() {
+  std::vector<DepthCase> out;
+  for (std::string_view fen : {"8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1", "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
+                               "8/8/3k4/8/8/3K4/8/R7 w - - 0 1", "8/5pk1/8/8/8/8/5PK1/8 b - - 0 1"})
+    out.push_back({fen, 3});
+  for (std::string_view fen :
+       {"8/6pp/1p6/kP6/Pp6/1P6/8/3K4 w - - 0 1", "8/6pp/1p6/kP6/Pp6/1P6/8/3K4 b - - 0 1",
+        "3k4/8/1p6/pP6/Kp6/1P6/6PP/8 w - - 0 1", "8/6pp/1p6/kP6/Pp6/1P6/8/3K3R w - - 0 1"})
+    out.push_back({fen, Optimized ? 6 : 5});
+  return out;
+}
+
+}  // namespace
+
 TEST_CASE("search",
           "TT cutoffs at exact depth equal plain minimax on small endgames, no repetition in reach") {
   Fixture fx;
-  const int depth = 3;
   std::uint64_t first_nodes = 0, again_nodes = 0;
-  for (std::string_view fen : {"8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1", "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
-                               "8/8/3k4/8/8/3K4/8/R7 w - - 0 1", "8/5pk1/8/8/8/8/5PK1/8 b - - 0 1"}) {
+  for (const DepthCase& c : repetition_free_cases()) {
+    const std::string_view fen = c.fen;
+    const int depth = c.depth;
     Position pos;
     CHECK(pos.set_fen(fen));
     CHECK_MSG(!repetition_in_tree(pos, depth), fen << ": a repetition fits in depth " << depth);
@@ -266,7 +293,7 @@ TEST_CASE("search",
       CHECK_MSG(r.score == expected, fen << " tt " << tt << ": " << r.score << " vs " << expected);
     }
     // The TT really cuts: searching again over the filled table still equals
-    // minimax, and over the four positions takes fewer nodes (its exact-depth
+    // minimax, and over all the positions takes fewer nodes (its exact-depth
     // entries cut, at non-PV nodes only, so not in every tiny tree). Fewer
     // nodes than without a TT is not a given at depth 3, where the TT's move
     // ordering can cost more than its few cutoffs save.
@@ -335,14 +362,14 @@ TEST_CASE("search",
   };
   std::vector<Probed> positions;
   for (const PerftPosition& p : perft_suite()) positions.push_back({p.fen, Optimized ? 3 : 2, false});
-  // The TT endgames above and the mates, at depth 3: from depth 4 each holds
-  // a repetition, where exactness is not claimed (the TT case above; so the
-  // aspiration windows, from depth 5, are no longer exercised here). The
-  // perft positions are too large for the full-width check (every capture
+  // The TT endgames above (the locked ones to depth 6, 5 in debug builds, so
+  // the full-window search that fills the TT uses aspiration windows, from
+  // depth 5) and the mates, at depth 3: from depth 4 each of those holds a
+  // repetition, where exactness is not claimed (the TT case above). The perft
+  // positions are too large for the full-width check (every capture
   // sequence) and are not checked for repetitions.
-  for (std::string_view fen : {"8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1", "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
-                               "8/8/3k4/8/8/3K4/8/R7 w - - 0 1", "8/5pk1/8/8/8/8/5PK1/8 b - - 0 1",
-                               "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "k7/8/2K5/8/8/8/8/7R w - - 0 1",
+  for (const DepthCase& c : repetition_free_cases()) positions.push_back({c.fen, c.depth});
+  for (std::string_view fen : {"6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "k7/8/2K5/8/8/8/8/7R w - - 0 1",
                                "6k1/5ppp/8/8/8/8/8/R5K1 b - - 0 1"})
     positions.push_back({fen, 3});
   int probes = 0, mate_band = 0;

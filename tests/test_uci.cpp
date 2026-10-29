@@ -581,6 +581,31 @@ TEST_CASE("uci_protocol", "go mate N answers after 2N - 1 plies, mate or not") {
   g.quit();
 }
 
+// With every evaluator, the default network included, the mate in 2 above
+// is reported within depth 6, also after the go mate searches that left
+// their history (owner, 2026-10-29): a mate in 2 needs 3 plies, and the
+// slack covers pruning at the shallowest depths. B0 reports it from depth 3.
+TEST_CASE("uci_protocol", "the mate in 2 is reported within depth 6, after other searches") {
+  Gui g;
+  for (const char* go : {"go mate 1", "go mate 3", "go mate 0", "go mate -2"}) {
+    g.send("position startpos moves e2e4 e7e5");
+    g.send(go);
+    CHECK_MSG(g.next("bestmove").has_value(), go << ": no bestmove");
+  }
+  g.send("position fen k7/8/2K5/8/8/8/8/7R w - - 0 1");
+  const std::size_t mark = g.cursor;
+  g.send("go depth 6");
+  CHECK(g.next("bestmove").has_value());
+  std::int64_t first = 0;
+  for (const std::string& line : g.texts(mark))
+    if (first == 0 && starts_with(line, "info depth ") && line.find(" score mate 2 ") != std::string::npos)
+      first = info_number(line, "depth").value_or(0);
+  CHECK_MSG(first >= 3 && first <= 6, "mate 2 first reported at depth " << first);
+  CHECK(g.sync());
+  g.check_transcript();
+  g.quit();
+}
+
 // Audit-1 Q-1: a clock go ends between its soft and hard limits. Two bounds
 // that load cannot break falsely (a slow machine only makes times larger):
 // - bestmove comes no sooner than the soft limit after go was sent: before
