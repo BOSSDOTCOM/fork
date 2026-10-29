@@ -2115,9 +2115,16 @@ Fork's own code. New references go into ORIGINALITY.md when first used.
   suite's TT-at-exact-depth = minimax test and the zero-window probe test
   fail on one KRK position at depth 6 (554 vs 558; with the TT off they
   agree), and a mate-in-2 UCI test fails. The hookup was verified exact
-  (the refresh check on at every evaluation, release and debug), so the
-  suspicion is a TT/repetition interaction the bootstrap evaluation never
-  exposed (UNVERIFIED). B0 waits on branch b0-candidate for the owner.
+  (the refresh check on at every evaluation, release and debug). The
+  cause is graph-history interaction (verified 2026-10-29): with repetition
+  draws switched off in both the search and the minimax reference (a
+  throwaway worktree), both tests pass with B0, so the TT reuses a score a
+  repetition draw shaped on another path, and the tests' premise does not
+  hold once repetitions fit in the horizon; the bootstrap evaluation never
+  hit it on those positions. The remaining failures (a fresh queen scored
+  763 against a 900 expectation, the UCI mate-in-2, two debug node counts)
+  are expectations tied to the bootstrap evaluation. B0 waits on branch
+  b0-candidate for the owner's decision on the test changes.
 - Names as built (four throwaway-clone screens, 2026-10-28, all no match
   or generic): the third screen's three case-insensitive matches were
   renamed before commit (`refresh_accumulator` -> `accumulate_board`,
