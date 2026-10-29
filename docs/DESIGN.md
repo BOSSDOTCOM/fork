@@ -2215,8 +2215,27 @@ quoted in KB phase4-pipeline.md §8.1:
 | K16 terms | The current Terms and AUP (effective 2025-06-22, no newer version) still say personal, non-commercial use; no clause covers chess, self-play or publishing a model trained on Kaggle; outputs stay the user's; one account only; automation through the API is allowed (KB training-data.md §2.1, "Kaggle terms re-checked", 2026-10-28). The owner's earlier "no" was a mistake (owner, 2026-10-29) | **verified** |
 | K17 cores | 4 CPUs, 31.3 GB RAM; Linux 6.18.55, glibc 2.39, Python 3.13.15 | verified |
 
-Session 2 (after `tools/train` exists): K2's downloads, K4-K10, K15, K17's
-loader rate, K18, with the build steps above.
+**Session 2 (2026-10-29)**, run headless with the Kaggle CLI (kernel
+`fork-session-2`, version 2; dataset `fork-s2-test`: two generation-0
+shard snapshots of 637,006 and 643,039 positions):
+- **K2, K4**: rustup installed Rust 1.99.1 in 13 s; `tools/train` at
+  7c84ae7 built with `--locked --features cuda` in 36 s (CUDA_PATH set,
+  `-L /usr/local/nvidia/lib64`); `check` wrote 394,816 bytes.
+- **K5**: B0 trains at 1,236,220-1,302,414 positions per second on one T4
+  (512 batches of 16,384 per superbatch, 6.4-6.8 s each).
+- **K6**: resume from a checkpoint (start superbatch 3) works; the loss
+  continues.
+- **K15**: the trainer's own evaluation of the 46 test positions works.
+- **K17**: one thread decodes and filters 1,366,487 positions per second
+  (433,777 kept of 637,006), just above the training rate.
+- **K18**: both T4s train at once (one run each, 14 s per superbatch).
+- **Validation and early stopping** work; on this tiny set the loss rose
+  after superbatch 1 (0.0302, 0.0319, 0.0328: overfitting, as expected).
+- Run 1 found one bug of Fork's: bullet's evaluator runs at batch size 1,
+  so validation evaluates one position at a time (7c84ae7).
+- Still open: K7's headless output download (`kernels output` also fetches
+  the cloned repository: scripts now delete it), K8/K9 at shard scale (a
+  1-2 GB upload and the CPU-session hash check), K10, K13.
 
 The Kaggle API token lives in `~/.kaggle/kaggle.json` in WSL (mode 600)
 and in Kaggle Secrets; it is never committed, logged or uploaded.
