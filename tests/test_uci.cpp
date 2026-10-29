@@ -865,6 +865,13 @@ TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
 // 16 MB Hash. Each check takes the best of three fresh engines, so one
 // scheduler hiccup on this shared machine does not fail it; all three are
 // printed. Debug (sanitizer) builds are timed against ten times the limits.
+// The search looks at the stop flag every StopCheckInterval (1,024) nodes,
+// so a build that searches slowly enough takes longer than that to stop:
+// gcc-tsan with a network searches about 9,400 nodes/s (CI, 2026-10-29),
+// 109 ms per 1,024 nodes. The stop limit therefore grows to twice the time
+// the engine needs for 1,024 nodes at the slowest node rate it reports in
+// the three runs, capped at 1 s, and never falls below 10 ms (release) or
+// 100 ms (debug) (owner, 2026-10-29).
 namespace {
 
 constexpr double Slack = Optimized ? 1.0 : 10.0;
@@ -929,22 +936,38 @@ double time_reply(Gui& g, std::string_view command, std::string_view answer) {
 TEST_CASE("uci_timing", "uci to uciok, first isready to readyok, stop to bestmove") {
   if (const char* why = timing_not_measurable()) SKIP(why);
   Timing uci, ready, stop;
+  double slowest_nps = 0;
   for (int run = 0; run < 3; ++run) {
     Gui g;
     uci.runs.push_back(time_reply(g, "uci", "uciok"));
     ready.runs.push_back(time_reply(g, "isready", "readyok"));
+    const std::size_t go_at = g.engine.line_count();
     g.send("go infinite");
     CHECK(g.sync());
     stop.runs.push_back(time_reply(g, "stop", "bestmove"));
+    // The node rate of this search's last info line before bestmove.
+    double nps = 0;
+    const std::vector<OutputLine> lines = g.engine.lines();
+    for (std::size_t i = go_at; i < lines.size() && !lines[i].text.starts_with("bestmove"); ++i) {
+      const std::size_t at = lines[i].text.find(" nps ");
+      if (lines[i].text.starts_with("info ") && at != std::string::npos)
+        nps = std::stod(lines[i].text.substr(at + 5));
+    }
+    CHECK_MSG(nps > 0, "no info line with nps before bestmove");
+    if (nps > 0 && (slowest_nps == 0 || nps < slowest_nps)) slowest_nps = nps;
     g.check_transcript();
     g.quit();
   }
+  const double poll_ms = slowest_nps > 0 ? 1024 * 1000.0 / slowest_nps : 0;
+  const double stop_limit = std::max(10 * Slack, std::min(1000.0, 2 * poll_ms));
   std::cout << "  uci -> uciok:         " << uci.text() << "\n"
             << "  isready -> readyok:   " << ready.text() << "\n"
-            << "  stop -> bestmove:     " << stop.text() << "\n";
+            << "  stop -> bestmove:     " << stop.text() << " (limit " << stop_limit << " ms; slowest "
+            << slowest_nps << " nodes/s)\n";
   CHECK_MSG(uci.best() >= 0 && uci.best() < 50 * Slack, uci.text());
   CHECK_MSG(ready.best() >= 0 && ready.best() < 50 * Slack, ready.text());
-  CHECK_MSG(stop.best() >= 0 && stop.best() < 10 * Slack, stop.text());
+  CHECK_MSG(stop.best() >= 0 && stop.best() < stop_limit,
+            stop.text() << ", limit " << stop_limit << " ms at " << slowest_nps << " nodes/s");
 }
 
 // Option boundaries (owner, 2026-10-24): the minimum and maximum of every
