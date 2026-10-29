@@ -7,3 +7,7 @@ fuzz/corpus/** -text
 
 # Vendored Fathom: exact bytes as pinned (SHA-256s in docs/ORIGINALITY.md); never convert.
 third_party/fathom/** -text
+
+# GitHub's language bar shows the engine: tooling folders are not counted.
+tools/** linguist-detectable=false
+bench/** linguist-detectable=false

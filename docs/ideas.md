@@ -584,9 +584,10 @@ tuned by SPSA.
   implementation notes): unit-tested and dry-run with stub agents; the
   evolution loop itself not started (owner). Since then: the validation
   run of 2026-10-27 (18 live proposals), the 4x position set and the
-  held-out promotion check (DESIGN.md §5.2, deliverable 8c); the long run
-  (40 generations) is on hold until the audit-1 branch is approved, and
-  the audit's gate, resume and pinning fixes come first. Pilot scheduled
+  held-out promotion check (DESIGN.md §5.2, deliverable 8c); the audit's
+  gate, resume and pinning fixes are in (audit-1, merged 2026-10-28). The
+  long run (40 generations) stays in **late Phase 4** (owner, 2026-10-28),
+  after the first strong network and the search re-validation. Pilot scheduled
 
 ## 24. TT victim policy under real table pressure
 
@@ -834,3 +835,23 @@ tuned by SPSA.
 - **runtime cost:** none if it pays.
 - **earliest phase:** Phase 3.
 - **status:** untested
+
+## 38. Phase-end fuzzing on GitHub
+
+- **type:** TOOLING
+- **idea:** a manually triggered workflow (`workflow_dispatch`) that
+  builds the clang-fuzz preset and runs each fuzz target with the
+  plateau rule (`tools/fuzz/run_fuzz.py --max-seconds 3600
+  --plateau-seconds 1200`), one job per target, then minimizes each run's
+  corpus into the committed seeds (libFuzzer `-merge=1`) and uploads the
+  coverage-adding inputs and any crash artifacts. Phase-end fuzzing then no
+  longer uses the local machine: at the Phase 3 end, the local run of
+  fuzz_moves was killed when the shared machine ran low on memory (owner,
+  2026-10-28).
+- **phase:** Phase 4 backlog (owner, 2026-10-28), ready before the Phase 4
+  phase end.
+- **metric:** each target's runs, coverage and plateau verdict as the
+  local run reports them; the job fails on a crash artifact.
+- **runtime cost:** none for the engine; hosted runners only.
+- **earliest phase:** Phase 4.
+- **status:** queued

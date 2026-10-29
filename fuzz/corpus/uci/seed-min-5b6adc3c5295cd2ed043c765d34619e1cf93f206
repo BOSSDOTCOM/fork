@@ -1,0 +1,15 @@
+isready
+position startpos moves e2e4isready
+go
+
+  	 debug on
+xyzzy isready
+position fen 7 1
+go
+position f nke7/5Q2/6K1/8/8/8/8/8 b - - 0 1
+go infin bad
+position startpos moves e2e5
+go searchmoves 0000
+bench
+go perft 3
+register later

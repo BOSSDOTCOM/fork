@@ -6,7 +6,7 @@ correctness first, then speed. This file records the architecture and every
 decision that affects play. Phase 7 evaluation adjustments must be documented
 here; no logic may alter reported scores to trigger or avoid adjudication.
 
-Status: **Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`). Every preset green on Windows, Linux and the TCEC toolchain. Phase 3 (search) spec approved 2026-10-24 (§5.2): Milestones A, B and C done (C merged 2026-10-27), the parameter table (8b) done, the heuristic-discovery pilot (8c) on hold for the full engine audit (branch `audit-1`, 2026-10-27); tier 2 (deliverable 9) next.**
+Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/history/phase-3/summary.md)**: Milestones A, B and C, the parameter table (8b), the heuristic-discovery harness and its validation run (8c), and the full engine audit (branch `audit-1`, merged through PR #5). By the owner's decision, tier 2 (deliverable 9) and the removal round move into Phase 4. **Phase 4 (evaluation) next, in a fresh session.** Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`).
 
 ---
 
@@ -316,7 +316,9 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
 - **Phase 3: Search.** PVS + ID + aspiration, qsearch with SEE, TT,
   ordering, pruning and extensions as listed in the brief, Syzygy
   (Fathom), deterministic `bench` (fixed positions, fixed depth, 1 thread).
-  Detailed spec: §5.2.
+  Detailed spec: §5.2. **Closed 2026-10-28** (owner; tag `phase-3`)
+  without tier 2: deliverable 9 and the end-of-Phase-3 removal round move
+  into Phase 4 (below).
 - **Phase 4: Evaluation.** A swappable `Evaluator` interface; tapered
   PST first, then NNUE (HalfKA-style, incremental accumulator, AVX2/AVX-512 plus
   scalar) trained only on Fork self-play data, with provenance logged.
@@ -329,7 +331,16 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   in this file. **After the network arrives**: the full re-validation of
   every search feature and the retune of eval-dependent margins (§5.2,
   Quality control 6, owner 2026-10-25); search switches stay in the code
-  until it is done. **Late Phase 4, if the owner said go after the Phase 3
+  until it is done. **Tier 2 moves here** (owner, 2026-10-28): deliverable
+  9's refinements (§5.2) are built and SPRTed one at a time on the GitHub
+  shards, in parallel with the local self-play data generation (the shards
+  use no local CPU). **The removal round folds into the search
+  re-validation after the first network**: one round over every search
+  feature, tier 2's included, instead of one at the end of Phase 3 and
+  another after the network. **Phase 4 backlog** (owner, 2026-10-28): a
+  manually triggered GitHub workflow that runs each fuzz target with the
+  plateau rule, so phase-end fuzzing no longer uses the local machine
+  (ideas.md idea 38). **Late Phase 4, if the owner said go after the Phase 3
   pilot (deliverable 8c):** the first real campaigns of the
   heuristic-discovery loop (ideas.md idea 23), after the first strong
   network and that re-validation; afterwards a standing tool in the
@@ -339,6 +350,11 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   only, nothing of it has been run).
   - **Principle:** agents propose, build and review; training and SPRT
     decide. No architecture is chosen by argument alone.
+  - **Step 0, a baseline network first** (owner, 2026-10-28): a simple,
+    proven network shape, chosen in the Phase 4 spec, gets the whole
+    pipeline working end to end (data generation, training, inference,
+    testing). Self-play data generation starts with it as early as
+    possible, while the design work of steps 1-3 continues in parallel.
   - **Step 1, research** (branch kb, ideas only): clean-room descriptions
     of modern NNUE design (input features including threat-aware inputs,
     king buckets and mirroring as concepts, output buckets, activations,
@@ -349,12 +365,15 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   - **Step 2, competing designs:** two or three independent designer
     agents each propose a full architecture for Fork, with reasoning,
     expected inference speed on x86-64-v3 and v4, Kaggle training cost,
-    and risks.
+    and risks. Their briefs differ on purpose (owner, 2026-10-28), so the
+    proposals actually diverge: one speed-first, one accuracy-first, one
+    novelty-first.
   - **Step 3, judge:** one agent compares the proposals and recommends 2-3
     candidates.
   - **Step 4, bake-off:** small versions of each candidate trained on the
-    same data, compared by SPRT. The winner becomes Fork's first
-    architecture.
+    same data, compared by SPRT. The winner is confirmed at a larger size
+    before Fork commits to it (owner, 2026-10-28); then it becomes Fork's
+    first architecture.
   - **Step 5, implementation:** one implementer session writes the
     inference code; independent reviewers check correctness, SIMD
     equivalence with the scalar reference, performance, and originality.
@@ -363,9 +382,17 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
     labels, nothing from off-limits sources).
   - **Step 7, training:** an analyst agent reviews each network
     generation's results and recommends the next change.
+  - **Originality:** distinctive architecture choices (input features,
+    bucketing, layer shapes, activations, quantization scheme) go through
+    the originality screen, match / no match only (§8), before they are
+    built.
+  - **Compute:** heavy steps (data generation, training, bake-off SPRTs)
+    run one at a time on the local machine, or on GitHub or AWS.
   - **Timing:** steps 1-3 may run in parallel with tier 2 once audit-1 is
     merged, since they need little CPU; steps 4-7 run in Phase 4. Each
-    step stops for the owner's review before the next.
+    step stops for the owner's review before the next; reviews are
+    batched where possible (owner, 2026-10-28): results that do not depend
+    on each other's outcome go to the owner together, to reduce waiting.
 - **Phase 5: Time management.** Soft and hard limits tuned for long
   increment games without ponder, and a stress test under artificial system
   load. Before this phase starts: research the current TCEC season's full
@@ -1047,8 +1074,9 @@ consolidated spec of 2026-10-26; owner).
   loop is archived, and its log and findings go into ideas.md.
 
 **9. Tier 2 refinements**, built one at a time, each behind a flag and
-SPRT-tested on its own, **reported in batches at the end of Phase 3**, not
-individually. The order follows the KB's build order (steps 5 and 7-10),
+SPRT-tested on its own, reported in batches, not individually. **Moved
+into Phase 4** (owner, 2026-10-28): built there, its SPRTs on the GitHub
+shards beside the local self-play data generation. The order follows the KB's build order (steps 5 and 7-10),
 with the owner's changes of 2026-10-26 (second external review): Fork has
 neither singular extensions nor check-aware reductions yet, so checks come
 first, and the quiescence delta pruning moves up. Every new technique gets
@@ -1315,8 +1343,8 @@ holds, which is why search decisions use no floating point (deliverable 6).
    - **Milestone C**: Syzygy probing and basic time management done (the
      core of Phase 3 complete).
 
-   Tier 2 refinements are reported in batches at the end of Phase 3, not
-   individually. The performance gate still runs after every deliverable,
+   Tier 2 refinements are reported in batches (in Phase 4 since
+   2026-10-28), not individually. The performance gate still runs after every deliverable,
    automatically: its results are recorded in
    `docs/history/phase-3/perf-log.md`, and work stops early only for an
    unexplained slowdown beyond the noise floor or a reviewer finding that
@@ -1356,8 +1384,11 @@ holds, which is why search decisions use no floating point (deliverable 6).
 6. **Re-validation** (owner, 2026-10-25). Features interact: one that
    passed early can become redundant once later ones are in. So:
    - **No removal tests at the individual milestones** A, B and C.
-   - **One removal round at the end of Phase 3**, after the tier 2
-     refinements: every search feature is switched off in turn (a tuning
+   - **Folded into Phase 4's re-validation** (owner, 2026-10-28): Phase 3
+     closed before tier 2, so the round below runs once, after the first
+     network, and the items flagged here for "the end-of-Phase-3 removal
+     round" are tested there. As first planned, **one removal round at
+     the end of Phase 3**, after the tier 2 refinements: every search feature is switched off in turn (a tuning
      build, `TUNE=1`) and SPRTed against the full search on
      non-regression bounds [-3, 0], with the feature off as the test side.
      If removing it costs nothing (H1 accepted), the feature is simplified
@@ -1393,7 +1424,8 @@ holds, which is why search decisions use no floating point (deliverable 6).
      SPRT on [-3, 0] ended INCONCLUSIVE at the cap, -0.6 ± 7.5 Elo after
      4,800 games (LLR 0.09 of 2.94).
 7. **Next phase-end audit** (audit-1's open items; owner, 2026-10-28):
-   checked at the end of Phase 3 with the phase-end checklist, each
+   checked at the end of Phase 4 with the phase-end checklist (Phase 3
+   closed the same day without them), each
    settled by a test, a measurement or a recorded reason:
    - a one-sided table bound clamped inside the window is stored as Exact
      at PV nodes (audit-1 suspicion 1b; A1 s2);
@@ -2027,6 +2059,7 @@ and Weiss (results in ORIGINALITY.md).
 | 2026-10-28 | **Audit-1 Phase C decisions (owner).** B-1 (forced-move stop) ACCEPTED at its cap; B-3 (shallower fail-high re-search) reverted (inconclusive at the cap on [0, 3]); B-2 (table results stored at full depth) reverted (inconclusive at the cap on [-3, 0], its interval never above -3); B-5 (keep-deeper TT rule) stopped, off by default, deferred to Phase 6 (ideas.md idea 30); non-regression SPRTs stop once past 10,000 games with the 95% interval above -3 (Testing setup); perft_epd_full gates CI only when move generation's files change, plus nightly on main. R-3: two positions with room for 16,384 plies reserved at startup, a failed `position` retried once, else no search of the unknown position (`bestmove 0000`). R-4: `go mate N` searches at most 2N - 1 plies. T-6: the TT digest mixed by splitmix64's output function, no SPRT (ORIGINALITY.md). T-13: an SPDX line in every source file. A1 suspicion 8: node limits kept exactly. **F-9 skipped**: merging the two move printers and the two bench reports would touch only cold code (UCI output, `fork bench`), each merge needs new names and their screens, and both printers are now checked by the UCI transcript replay (audit-1 Q-2); revisit when either printer changes. **D-20**: the tag `d8/final` (8b8e34c) is annotated "Deliverable 8 split, variant (c): the iteration rule alone", but the commit holds B2 (the danger-zone reserve) plus (c) (the iteration rule): the variant SPRTed as d8-final and merged as deliverable 8 (sprt-log.md). The pushed tag is not rewritten (owner: no force push); this row is the correct record. |
 | 2026-10-28 | **B-4 and RfpMargin (owner).** B-4 (the quiescence stand-pat refined by the TT score) reverted: its STC SPRT accepted H0 (19,200 games, Elo -4.11 +/- 3.93). RfpMargin 40 (was 80) **accepted without an SPRT**, by the owner's decision: its STC run was restarted on a pair without B-4 (8550a78 vs 306bd9a), then stopped in stage 0, and the LTC follow-up was dropped. Its only game data is the superseded run's 3,200 games (with B-4 in both engines: +3.47 +/- 9.61, undecided), so its strength effect is UNVERIFIED; the measured fail-low shares justify the value (Search constants). |
 | 2026-10-28 | **Audit-1 Phase D (owner).** Performance gate against main: +2.9% nps at the audit head of the time (not significant; different trees), +3.3% on the same tree (8550a78, significant at the 3.0% threshold), so no slowdown (perf-log.md). Gauntlet against the Milestone C anchors, Milestone C's openings and settings: with RfpMargin 40 stopped after 357 games, 22.5 points below Milestone C on the same games; with RfpMargin 80 (8550a78), all 1,200 games, **Fork 2411.5 ± 22.5** on the Milestone B anchors against 2402.5 ± 23.3 (2416.0 ± 22.2 with Weiss). **RfpMargin reverted to 80** (fd7d4b5; bench 17309921, as main's); 40 logged as untested (ideas.md idea 34). New policy: **untested changes never ship**; a skipped or unfinished test shelves the change and keeps the baseline (Testing setup). Report: history/phase-3/audit-1.md. |
+| 2026-10-28 | **Phase 3 closed (owner).** Audit-1 merged into main (PR #5, 80f725e) after its full CI matrix passed (run 40773853691, perft_epd_full included). No new SPRTs. The roadmap changes: tier 2 (deliverable 9) moves into Phase 4, its SPRTs on the GitHub shards beside the local self-play data generation; the end-of-Phase-3 removal round folds into Phase 4's search re-validation after the first network; idea 23's long run stays in late Phase 4. `UseTtEvalRefine` stays on as the owner-approved exception to "untested changes never ship". Summary: history/phase-3/summary.md; tag `phase-3`. Phase 4 starts in a fresh session. |
 
 ## 7. Performance doctrine (governs every phase)
 
