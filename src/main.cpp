@@ -57,8 +57,12 @@ void print_version() {
             << "arch " << FORK_ARCH_NAME << '\n'
             << "build " << FORK_BUILD_TYPE << '\n'
             << "lto " << (FORK_LTO ? "on" : "off") << '\n'
-            << "sliders " << (FORK_USE_PEXT ? "pext" : "magic")
-            << '\n'
+            << "sliders " << (FORK_USE_PEXT ? "pext" : "magic") << '\n'
+            << "evaluator " << FORK_EVALUATOR_NAME << '\n'
+#if defined(FORK_EVAL_NNUE)
+            << "net " << FORK_NET_NAME << '\n'
+#endif
+
             // For bench/ab_search.py's identity check (cmake/build_id.cmake).
             << "variant " FORK_BUILD_VARIANT " | commit " FORK_BUILD_COMMIT " |\n";
 }

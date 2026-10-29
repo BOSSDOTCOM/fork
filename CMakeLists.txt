@@ -260,6 +260,11 @@ set_source_files_properties(src/uci/version.cpp PROPERTIES COMPILE_DEFINITIONS "
 
 add_executable(fork src/main.cpp)
 target_link_libraries(fork PRIVATE forkuci forknnue fork_pgo)
+# `fork version` names the evaluator and, for nnue, the network (its file's
+# stem): the SPRT tools use it for the game gate (tools/cloud/build_pair.sh).
+get_filename_component(fork_net_stem_for_version ${FORK_NET} NAME_WE)
+target_compile_definitions(fork PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}"
+                                        FORK_NET_NAME="${fork_net_stem_for_version}")
 
 add_executable(fork_magic_seeds tools/magic_seeds.cpp)
 target_link_libraries(fork_magic_seeds PRIVATE forkcore)
