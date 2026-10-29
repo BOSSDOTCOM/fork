@@ -97,7 +97,9 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   hidden[20] = 128;
   rejects(hidden, "hidden size");
   auto scale = bytes;
-  std::memset(&scale[32], 0, 4);
+  // Byte by byte: GCC at -O1 takes a memset here for a write past an empty
+  // vector (-Warray-bounds, a false positive; CI, 2026-10-29).
+  for (std::size_t i = 32; i < 36; ++i) scale[i] = 0;
   rejects(scale, "scale 0");
   auto loud = random_net(2);
   loud->ft_bias[7] = 32000;
