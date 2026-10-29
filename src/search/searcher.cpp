@@ -71,6 +71,10 @@ constexpr int ScoreTrendLimit = 1000;
 // score just off zero, so a real draw is never preferred to them and no real
 // advantage is given up for them.
 constexpr int TableNearDrawScore = 1;
+// A late quiet move that gives check is reduced one ply less (tier 2 step 0;
+// DESIGN.md, "Search constants": the smallest step in whole plies, which is
+// the unit Fork's LMR table works in).
+constexpr int LmrCheckRelief = 1;
 
 // The side has a piece other than pawns and its king (the null move's main
 // zugzwang guard: pawn endings are where passing is most often best).
@@ -327,7 +331,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                                  .branch_share = branch_share_};
         const int rule = lmr_correction(context);
         const int correction = rule * LmrCorrectionStrength / LmrCorrectionUnit;
-        reduced = std::clamp(new_depth - (base + correction), 1, new_depth);
+        // Tier 2 step 0 (KB T16's check term): a checking move starts a
+        // forcing line, so it is reduced less. The move is already made, so
+        // "gives check" is the child's side to move being in check.
+        const int relief = switches.use_lmr_check_relief && pos.in_check() ? LmrCheckRelief : 0;
+        reduced = std::clamp(new_depth - (base + correction - relief), 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;
