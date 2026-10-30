@@ -111,7 +111,8 @@ bool parse(int argc, char** argv, Options& o) {
     }
   }
   return !o.openings.empty() && !o.out_dir.empty() && o.positions > 0 && o.nodes > 0 && o.threads > 0 &&
-         o.hash_mb > 0 && o.shard_mb > 0 && o.max_plies > 0 && 0 <= o.random_min && o.random_min <= o.random_max;
+         o.hash_mb > 0 && o.shard_mb > 0 && o.max_plies > 0 && 0 <= o.random_min &&
+         o.random_min <= o.random_max;
 }
 
 std::string shard_name(const Options& o, int worker, int index) {
@@ -154,8 +155,9 @@ void run_worker(const Options& o, int worker, const std::vector<std::string>& op
     Position opening;
     opening.set_fen(openings[order[g % order.size()]]);  // checked when loaded
     std::uint64_t stream = splitmix_finalize(o.seed ^ splitmix_finalize(g + 1));
-    const int plies = o.random_min + static_cast<int>(splitmix_next(stream) %
-                                                      static_cast<std::uint64_t>(o.random_max - o.random_min + 1));
+    const int plies =
+        o.random_min +
+        static_cast<int>(splitmix_next(stream) % static_cast<std::uint64_t>(o.random_max - o.random_min + 1));
     for (int i = 0; i < plies; ++i) {
       MoveList legal;
       generate<GenMode::Legal>(opening, legal);
@@ -200,7 +202,11 @@ void run_worker(const Options& o, int worker, const std::vector<std::string>& op
 void write_manifest(const Options& o, const Totals& t, double seconds, std::size_t opening_count) {
   std::ofstream f(o.out_dir + "/" + o.run + ".json", std::ios::trunc);
   f << "{\n  \"tool\": \"fork_datagen\",\n  \"version\": \"" << engine_version() << "\",\n"
-    << "  \"evaluator\": \"" << FORK_EVALUATOR_NAME << "\",\n"
+    << "  \"evaluator\": \"" << FORK_EVALUATOR_NAME
+#if defined(FORK_EVAL_NNUE)
+    << " (" << FORK_NET_NAME << ')'  // the labelling network: data from different nets stays apart
+#endif
+    << "\",\n"
     << "  \"arch\": \"" << FORK_ARCH_NAME << "\",\n"
     << "  \"settings\": {\"openings\": \""
     << std::string(o.openings.substr(o.openings.find_last_of("/\\") + 1))

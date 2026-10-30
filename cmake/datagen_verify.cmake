@@ -5,7 +5,7 @@
 # tools/datagen/verify_games.py over its shards and manifest; then the same
 # run again, which must give byte-identical shards (reproducibility).
 #
-#   cmake -DDATAGEN=... -DPYTHON=... -DSOURCE_DIR=... -DWORK=... -DTABLES=... -P datagen_verify.cmake
+#   cmake -DDATAGEN=... -DPYTHON=... -DSOURCE_DIR=... -DWORK=... -DTABLES=... -DEVALUATOR=... -P datagen_verify.cmake
 
 file(REMOVE_RECURSE ${WORK})
 file(MAKE_DIRECTORY ${WORK}/a ${WORK}/b)
@@ -19,6 +19,14 @@ foreach(dir a b)
     message(FATAL_ERROR "fork_datagen failed (${rc}): ${err}")
   endif()
 endforeach()
+
+# The run manifest names the labelling evaluator, and for nnue the network,
+# so data from different nets stays apart (owner, 2026-10-30).
+file(READ ${WORK}/a/t.json manifest)
+string(FIND "${manifest}" "\"evaluator\": \"${EVALUATOR}\"" at)
+if(at EQUAL -1)
+  message(FATAL_ERROR "the run manifest does not name the evaluator \"${EVALUATOR}\"")
+endif()
 
 file(GLOB shards ${WORK}/a/*.vf)
 list(LENGTH shards n)

@@ -278,6 +278,9 @@ target_link_libraries(fork PRIVATE forkuci forknnue fork_pgo)
 get_filename_component(fork_net_stem_for_version ${FORK_NET} NAME_WE)
 target_compile_definitions(fork PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}"
                                         FORK_NET_NAME="${fork_net_stem_for_version}")
+# fork_datagen's run manifest names the labelling network the same way, so
+# data labelled by different nets stays apart (owner, 2026-10-30).
+target_compile_definitions(fork_datagen PRIVATE FORK_NET_NAME="${fork_net_stem_for_version}")
 
 add_executable(fork_magic_seeds tools/magic_seeds.cpp)
 target_link_libraries(fork_magic_seeds PRIVATE forkcore)
@@ -551,10 +554,16 @@ if(FORK_BUILD_TESTS)
                      --fork $<TARGET_FILE:fork> --positions 20000 --workers 2)
     set_tests_properties(difftest_short PROPERTIES LABELS python)
     # fork_datagen's shards against an independent decoder and python-chess,
-    # and a second run for byte-identical output (DESIGN.md §5.3).
+    # and a second run for byte-identical output (DESIGN.md §5.3); its
+    # manifest must name the labelling evaluator (and network).
+    set(fork_datagen_evaluator ${FORK_EVALUATOR})
+    if(FORK_EVALUATOR STREQUAL "nnue")
+      set(fork_datagen_evaluator "nnue (${fork_net_stem_for_version})")
+    endif()
     add_test(NAME datagen_verify COMMAND ${CMAKE_COMMAND}
       -DDATAGEN=$<TARGET_FILE:fork_datagen> -DPYTHON=${test_python} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
       -DWORK=${CMAKE_BINARY_DIR}/datagen_verify -DTABLES=${FORK_SYZYGY345_DIR}
+      "-DEVALUATOR=${fork_datagen_evaluator}"
       -P ${CMAKE_SOURCE_DIR}/cmake/datagen_verify.cmake)
     set_tests_properties(datagen_verify PROPERTIES LABELS python)
     # The trainer-engine parity chain on a synthetic net, ending in Fork's own

@@ -31,8 +31,9 @@
 # tree is copied into a second WSL distro running Ubuntu 22.04 with TCEC's
 # compilers (FORK_TCEC_DISTRO, default Ubuntu-22.04; set up once with
 # scripts/tcec-toolchain-setup.sh), built there with update.sh using gcc 11.4,
-# g++-12, clang 16 and clang 19 in turn, and each binary's `fork bench` must
-# match tests/bench.ref. FORK_SKIP_TCEC=1 skips it with a warning and records
+# g++-12, clang 16 and clang 19 in turn, and each binary's bench and perft
+# bench must match the evaluator's references (.github/ci/bench-parity.sh, as
+# CI: tests/bench-<net>.ref for a network). FORK_SKIP_TCEC=1 skips it with a warning and records
 # no pass. Run directly on Linux, `full` cannot reach the TCEC distro and
 # records no pass either.
 #
@@ -266,8 +267,9 @@ case "$mode" in
       echo "$out" | grep -q "^compiler $want" ||
         { echo "$out"; echo "$cxx is not the expected $want" >&2; exit 1; }
       echo "$out" | grep -q -i 'LTO not supported' && echo "note: $cxx built without LTO"
-      "$bin" bench | head -n 2 >bench.out
-      diff bench.out tests/bench.ref || { echo "bench parity failed with $cxx" >&2; exit 1; }
+      # The evaluator's own reference, as CI's TCEC job checks it (bench.ref
+      # for bootstrap, bench-<net>.ref for a network; perft bench too).
+      bash .github/ci/bench-parity.sh "$bin" || { echo "bench parity failed with $cxx" >&2; exit 1; }
       echo "bench parity ok with $cxx"
     done
     ;;
