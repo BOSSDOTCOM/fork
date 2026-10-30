@@ -10,7 +10,9 @@
 // --random-min to --random-max uniformly random legal plies drawn from a
 // stream seeded by (--seed, g), so an opening used more than once still
 // starts different games (owner, 2026-10-28; the search itself is
-// deterministic). Each worker stops after the game that brings it to its
+// deterministic). With the split search on (--save-percent below 100),
+// game g's save decisions come from their own stream, seeded by finalizing
+// the random plies' seed. Each worker stops after the game that brings it to its
 // share of --positions. A game that ends before any position is recorded
 // is not written.
 //
@@ -46,6 +48,8 @@ struct Options {
   int decided_cp = 400, max_plies = 500;
   int random_min = 2, random_max = 4;
   int adjudicate_cp = 0, adjudicate_plies = 0;
+  int save_percent = 100;
+  std::uint64_t unsaved_nodes = 0, check_nodes = 0;
 };
 
 struct ShardInfo {
@@ -59,7 +63,7 @@ struct Totals {
   std::vector<ShardInfo> shards;
   std::uint64_t ends[GameEndCount] = {};
   std::uint64_t results[3] = {};
-  std::atomic<std::uint64_t> games{0}, positions{0};
+  std::atomic<std::uint64_t> games{0}, positions{0}, unsaved{0}, nodes_searched{0};
 };
 
 int usage() {
@@ -68,7 +72,8 @@ int usage() {
                "         [--threads T] [--seed S] [--run NAME] [--hash-mb M] [--shard-mb M]\n"
                "         [--tables PATH] [--decided-cp CP] [--max-plies P]\n"
                "         [--random-min N] [--random-max N]\n"
-               "         [--adjudicate-cp CP --adjudicate-plies N]\n");
+               "         [--adjudicate-cp CP --adjudicate-plies N]\n"
+               "         [--save-percent P --unsaved-nodes N] [--check-nodes N]\n");
   return 2;
 }
 
@@ -110,6 +115,12 @@ bool parse(int argc, char** argv, Options& o) {
         o.adjudicate_cp = std::stoi(v);
       else if (a == "--adjudicate-plies")
         o.adjudicate_plies = std::stoi(v);
+      else if (a == "--save-percent")
+        o.save_percent = std::stoi(v);
+      else if (a == "--unsaved-nodes")
+        o.unsaved_nodes = std::stoull(v);
+      else if (a == "--check-nodes")
+        o.check_nodes = std::stoull(v);
       else
         return false;
     } catch (const std::exception&) {
@@ -119,7 +130,8 @@ bool parse(int argc, char** argv, Options& o) {
   return !o.openings.empty() && !o.out_dir.empty() && o.positions > 0 && o.nodes > 0 && o.threads > 0 &&
          o.hash_mb > 0 && o.shard_mb > 0 && o.max_plies > 0 && 0 <= o.random_min &&
          o.random_min <= o.random_max && o.adjudicate_cp >= 0 && o.adjudicate_plies >= 0 &&
-         (o.adjudicate_plies == 0 || o.adjudicate_cp > 0);
+         (o.adjudicate_plies == 0 || o.adjudicate_cp > 0) && 1 <= o.save_percent && o.save_percent <= 100 &&
+         (o.save_percent == 100 || o.unsaved_nodes > 0);
 }
 
 std::string shard_name(const Options& o, int worker, int index) {
@@ -137,6 +149,9 @@ void run_worker(const Options& o, int worker, const std::vector<std::string>& op
   config.max_plies = o.max_plies;
   config.adjudicate_cp = o.adjudicate_cp;
   config.adjudicate_plies = o.adjudicate_plies;
+  config.save_percent = o.save_percent;
+  config.unsaved_nodes = o.unsaved_nodes;
+  config.check_nodes = o.check_nodes;
   std::string report;
   auto player = SelfPlayGame::create(config, report);
   if (!player) {
@@ -164,6 +179,7 @@ void run_worker(const Options& o, int worker, const std::vector<std::string>& op
     Position opening;
     opening.set_fen(openings[order[g % order.size()]]);  // checked when loaded
     std::uint64_t stream = splitmix_finalize(o.seed ^ splitmix_finalize(g + 1));
+    const std::uint64_t save_seed = splitmix_finalize(stream);  // the split's own stream for game g
     const int plies =
         o.random_min +
         static_cast<int>(splitmix_next(stream) % static_cast<std::uint64_t>(o.random_max - o.random_min + 1));
@@ -173,7 +189,8 @@ void run_worker(const Options& o, int worker, const std::vector<std::string>& op
       if (legal.size() == 0) break;
       opening.make(legal[splitmix_next(stream) % legal.size()]);
     }
-    const SelfPlayOutcome outcome = player->play(opening, writer);
+    const SelfPlayOutcome outcome = player->play(opening, writer, save_seed);
+    totals.nodes_searched += player->nodes_searched();
     {
       std::lock_guard lock(totals.mutex);
       ++totals.ends[static_cast<int>(outcome.end)];
@@ -203,6 +220,7 @@ void run_worker(const Options& o, int worker, const std::vector<std::string>& op
     written += static_cast<std::uint64_t>(writer.positions());
     totals.games += 1;
     totals.positions += static_cast<std::uint64_t>(writer.positions());
+    totals.unsaved += static_cast<std::uint64_t>(player->unsaved_positions());
     if (shard.bytes >= (o.shard_mb << 20)) close_shard();
   }
   close_shard();
@@ -225,8 +243,12 @@ void write_manifest(const Options& o, const Totals& t, double seconds, std::size
     << (o.tables.empty() ? "none" : "syzygy " + std::to_string(endgame_table_pieces()) + "-piece")
     << "\", \"decided_cp\": " << o.decided_cp << ", \"max_plies\": " << o.max_plies
     << ", \"random_min\": " << o.random_min << ", \"random_max\": " << o.random_max
-    << ", \"adjudicate_cp\": " << o.adjudicate_cp << ", \"adjudicate_plies\": " << o.adjudicate_plies << "},\n"
+    << ", \"adjudicate_cp\": " << o.adjudicate_cp << ", \"adjudicate_plies\": " << o.adjudicate_plies
+    << ", \"save_percent\": " << o.save_percent << ", \"unsaved_nodes\": " << o.unsaved_nodes
+    << ", \"check_nodes\": " << o.check_nodes << "},\n"
     << "  \"games\": " << t.games.load() << ",\n  \"positions\": " << t.positions.load() << ",\n"
+    << "  \"positions_unsaved\": " << t.unsaved.load() << ",\n  \"nodes_searched\": " << t.nodes_searched.load()
+    << ",\n"
     << "  \"seconds\": " << seconds << ",\n  \"results\": {\"white\": " << t.results[2]
     << ", \"draw\": " << t.results[1] << ", \"black\": " << t.results[0] << "},\n  \"ends\": {";
   for (int i = 0; i < GameEndCount; ++i)

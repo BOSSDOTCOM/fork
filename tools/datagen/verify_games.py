@@ -20,8 +20,13 @@ not from Fork's C++, and replays it with python-chess's move generator:
   also end on the PLIES-th recorded score in a row at least CP for one
   side, stored as that side's win; no earlier record may complete such a
   run (the game would have ended there);
+- a record scored UNSAVED_SCORE is an unsaved position of the split
+  search (self_play.hpp UnsavedScore): its move is checked, its score
+  neither ends the game nor counts for the score adjudication;
 - with --manifest (fork_datagen's <run>.json), each shard's game and
-  position counts must match.
+  position counts must match, and the unsaved records must total the
+  manifest's positions_unsaved (none at all when the run's save_percent is
+  100 or absent).
 
     .venv/Scripts/python.exe -I tools/datagen/verify_games.py SHARD... [--manifest RUN.json]
 
@@ -35,6 +40,7 @@ from pathlib import Path
 import chess
 
 MATE_BAND_FLOOR = 30000 - 250  # src/search/score_bounds.hpp: MateScore - MaxPly
+UNSAVED_SCORE = 32767  # src/datagen/self_play.hpp: an unsaved position's record
 PIECE_TYPES = [chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.KING]
 CASTLING_CORNERS = {(chess.H1, chess.WHITE): 'K', (chess.A1, chess.WHITE): 'Q',
                     (chess.H8, chess.BLACK): 'k', (chess.A8, chess.BLACK): 'q'}
@@ -173,8 +179,12 @@ def verify_file(path, table_pieces, totals, adjudicate=None):
             if done_sign:
                 raise Bad(f'{path}: game {games} continued past its score adjudication at {board.fen()}')
             board.push(matches[0])
-            last_score = score
             positions += 1
+            if score == UNSAVED_SCORE:
+                last_score = None
+                totals['_unsaved'] = totals.get('_unsaved', 0) + 1
+                continue
+            last_score = score
             if adjudicate and abs(score) < MATE_BAND_FLOOR:
                 count, sign = streak_step(count, sign, score, adjudicate[0])
                 if count >= adjudicate[1]:
@@ -213,12 +223,19 @@ def main(argv=None):
             missing = set(listed) - set(counts)
             if missing:
                 raise Bad(f'shards in the manifest but not checked: {sorted(missing)}')
+            unsaved = totals.get('_unsaved', 0)
+            if man.get('settings', {}).get('save_percent', 100) == 100 and unsaved:
+                raise Bad(f'{unsaved} unsaved records in a run without the split search')
+            if 'positions_unsaved' in man and man['positions_unsaved'] != unsaved:
+                raise Bad(f"{unsaved} unsaved records, manifest says {man['positions_unsaved']}")
     except Bad as e:
         print(f'FAIL {e}', file=sys.stderr)
         return 1
+    unsaved = totals.pop('_unsaved', 0)
     g = sum(c[0] for c in counts.values())
     p = sum(c[1] for c in counts.values())
-    print(f'ok: {len(counts)} shards, {g} games, {p} positions; ends {json.dumps(totals, sort_keys=True)}')
+    print(f'ok: {len(counts)} shards, {g} games, {p} positions ({unsaved} unsaved); '
+          f'ends {json.dumps(totals, sort_keys=True)}')
     return 0
 
 

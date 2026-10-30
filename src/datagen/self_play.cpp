@@ -7,6 +7,7 @@
 #include <new>
 
 #include "core/movegen.hpp"
+#include "core/splitmix.hpp"
 #include "search/endgame_tables.hpp"
 
 namespace forkeng {
@@ -57,14 +58,16 @@ std::unique_ptr<SelfPlayGame> SelfPlayGame::create(const SelfPlayConfig& config,
   return game;
 }
 
-SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer) {
+SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer, std::uint64_t save_seed) {
   memory_.clear(1);
+  unsaved_ = 0;
+  nodes_searched_ = 0;
+  std::uint64_t save_stream = save_seed;
   searcher_.clear_history();
   Position pos = opening;
   pos.reserve_plies(static_cast<std::size_t>(config_.max_plies) + 1);
   writer.begin(pos);
   SearchQuota limits;
-  limits.nodes = config_.nodes;
   const int table_pieces = endgame_table_pieces();
   ScoreStreak streak;
   streak.cp = config_.adjudicate_cp;
@@ -97,8 +100,19 @@ SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer) 
     }
     if (ply >= config_.max_plies) return SelfPlayOutcome{GameEnd::TooLong, GameResult::Draw, false};
 
+    // The split search (off unless save_percent < 100 or check_nodes is set).
+    bool saved = true;
+    limits.nodes = config_.nodes;
+    if (pos.in_check()) {
+      if (config_.check_nodes) limits.nodes = config_.check_nodes;
+    } else if (config_.save_percent < 100) {
+      saved = splitmix_next(save_stream) % 100 < static_cast<std::uint64_t>(config_.save_percent);
+      if (!saved) limits.nodes = config_.unsaved_nodes;
+    }
+
     table_.advance_age();
     SearchResult s = searcher_.deliberate(pos, limits, stop_, nullptr, nullptr);
+    nodes_searched_ += s.nodes;
     // deliberate() always returns a legal root move, but where the node limit
     // runs out before depth 1 finishes (a position with long capture chains)
     // its score is meaningless (0 at depth 0) and must never be written: that
@@ -108,6 +122,7 @@ SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer) 
       SearchQuota one_ply;
       one_ply.depth = 1;
       s = searcher_.deliberate(pos, one_ply, stop_, nullptr, nullptr);
+      nodes_searched_ += s.nodes;
     }
     if (s.best == NoMove || !legal.contains(s.best) || s.depth == 0) {
       std::fprintf(stderr, "fork_datagen: no finished search in %s\n", pos.fen().c_str());
@@ -116,7 +131,15 @@ SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer) 
     if (ply == 0 && !is_mate_score(s.score) && std::abs(s.score) > config_.decided_cp)
       return SelfPlayOutcome{GameEnd::DecidedOpening, GameResult::Draw, false};
 
+    // An unsaved position keeps its move but not its score, except a mate
+    // score, which ends the game and is written as the reason.
     const int white_score = us == White ? s.score : -s.score;
+    if (!saved && !is_mate_score(s.score)) {
+      writer.add(s.best, UnsavedScore);
+      ++unsaved_;
+      pos.make(s.best);
+      continue;
+    }
     writer.add(s.best, white_score);
     if (is_mate_score(s.score)) return finish(GameEnd::MateFound, s.score > 0 ? win_for(us) : win_for(~us));
     if (config_.adjudicate_plies > 0) {

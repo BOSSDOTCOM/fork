@@ -83,4 +83,39 @@ execute_process(
 if(rc EQUAL 0)
   message(FATAL_ERROR "verify_games.py accepted the adjudicated run under a shorter run length")
 endif()
+
+# The split search (off above): a run with it on must record unsaved
+# positions, pass the independent checker, and fail it against a manifest
+# that claims no unsaved positions (so the count check can fail).
+file(MAKE_DIRECTORY ${WORK}/split)
+execute_process(
+  COMMAND ${DATAGEN} --openings ${SOURCE_DIR}/tests/datagen_openings.epd --out ${WORK}/split
+          --positions 4000 --nodes 2000 --threads 2 --seed 7 --run t --hash-mb 2 --shard-mb 1
+          --tables ${TABLES} --save-percent 50 --unsaved-nodes 500 --check-nodes 500
+  RESULT_VARIABLE rc ERROR_VARIABLE err)
+if(NOT rc EQUAL 0)
+  message(FATAL_ERROR "fork_datagen with the split search failed (${rc}): ${err}")
+endif()
+file(READ ${WORK}/split/t.json manifest)
+string(FIND "${manifest}" "\"save_percent\": 50, \"unsaved_nodes\": 500, \"check_nodes\": 500" at)
+string(REGEX MATCH "\"positions_unsaved\": ([0-9]+)" _ "${manifest}")
+if(at EQUAL -1 OR NOT CMAKE_MATCH_1 GREATER 0)
+  message(FATAL_ERROR "the split run's manifest lacks its settings or saved every position")
+endif()
+file(GLOB shards ${WORK}/split/*.vf)
+execute_process(
+  COMMAND ${PYTHON} -I ${SOURCE_DIR}/tools/datagen/verify_games.py ${shards} --manifest ${WORK}/split/t.json
+  RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
+message(STATUS "${out}")
+if(NOT rc EQUAL 0)
+  message(FATAL_ERROR "verify_games.py failed on the split run: ${err}")
+endif()
+string(REGEX REPLACE "\"positions_unsaved\": [0-9]+" "\"positions_unsaved\": 0" bad "${manifest}")
+file(WRITE ${WORK}/split/bad.json "${bad}")
+execute_process(
+  COMMAND ${PYTHON} -I ${SOURCE_DIR}/tools/datagen/verify_games.py ${shards} --manifest ${WORK}/split/bad.json
+  RESULT_VARIABLE rc OUTPUT_QUIET ERROR_QUIET)
+if(rc EQUAL 0)
+  message(FATAL_ERROR "verify_games.py accepted a manifest with the wrong unsaved count")
+endif()
 file(REMOVE_RECURSE ${WORK})

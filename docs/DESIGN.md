@@ -2380,6 +2380,20 @@ target linking the engine library, never part of the TCEC binary).
   end count; `verify_games.py --adjudicate CP N` checks it independently.
   No draw adjudication: in the generation-1 study the settings that
   misjudged no game saved under 0.2% of positions.
+- **Split search (ideas.md idea 13; 2026-10-30, off by default)**:
+  `--save-percent P --unsaved-nodes N` saves each position not in check
+  with probability P% (searched with `--nodes`) and searches the others
+  with N nodes; `--check-nodes C` searches positions in check with C nodes
+  (the trainer drops them anyway). A viriformat record cannot skip a ply,
+  so an unsaved position keeps its move and records the score 32767
+  (`UnsavedScore`, above every search score), which the trainer's existing
+  |score| > 20000 filter drops; a mate score is always written, and the
+  score adjudication skips unsaved positions. Save decisions come from a
+  stream of their own per (seed, game), so with the split off the shards
+  are byte-identical to before. The manifest records the three settings,
+  `positions_unsaved` and `nodes_searched` (every search's nodes, for the
+  compute comparison); `verify_games.py` checks the unsaved count against
+  it. Used only by the idea-13 experiment until its result decides.
 - **What is recorded**: every position, its search score from White's
   view (or the convention the format fixes), the move played, and the
   game result. Filtering (in check, best move a capture or promotion,
