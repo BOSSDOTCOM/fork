@@ -201,6 +201,12 @@ tool_tests() {  # python | all
   bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
   case $py in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; *) py=$(command -v "$py") ;; esac
   PYTHON=$py bash tools/cloud/test_run_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/cloud/test_run_shard.sh"
+  # The cloud safeguards (owner, 2026-10-30): the spot quota check, the
+  # cleanup of instances past their limit, a simulated spot interruption.
+  local t
+  for t in test_spot_quota test_aws_cleanup test_spot_watch; do
+    PYTHON=$py bash "tools/cloud/$t.sh" >>"$log" 2>&1 || fail "tool tests: tools/cloud/$t.sh"
+  done
 }
 
 native_full() {

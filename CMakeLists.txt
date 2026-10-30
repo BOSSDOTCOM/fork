@@ -566,6 +566,15 @@ if(FORK_BUILD_TESTS)
       "-DEVALUATOR=${fork_datagen_evaluator}"
       -P ${CMAKE_SOURCE_DIR}/cmake/datagen_verify.cmake)
     set_tests_properties(datagen_verify PROPERTIES LABELS python)
+    # Cloud data generation end to end without AWS (tools/cloud/
+    # cloud_datagen.sh uploading to a folder, pull_datagen.sh verifying it);
+    # bash scripts, so Linux only, and network builds (it checks the
+    # manifests name the labelling net).
+    if(NOT WIN32 AND FORK_EVALUATOR STREQUAL "nnue")
+      add_test(NAME cloud_datagen COMMAND bash ${CMAKE_SOURCE_DIR}/tools/cloud/test_cloud_datagen.sh
+        $<TARGET_FILE:fork_datagen> ${FORK_SYZYGY345_DIR} ${test_python})
+      set_tests_properties(cloud_datagen PROPERTIES LABELS python)
+    endif()
     # The trainer-engine parity chain on a synthetic net, ending in Fork's own
     # inference on this build's SIMD path (DESIGN.md §5.3, deliverable 6).
     # The synthetic net is a B0 file: builds for another architecture check
