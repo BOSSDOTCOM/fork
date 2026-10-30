@@ -2369,6 +2369,17 @@ target linking the engine library, never part of the TCEC binary).
   or draw adjudication in generation 0**: the bootstrap evaluation is
   weak, so a score threshold would write wrong results into the labels;
   the time saved is measured later and revisited per generation.
+  **Score adjudication (2026-10-30, off by default)**: `fork_datagen
+  --adjudicate-cp CP --adjudicate-plies N` ends a game as a win once N
+  recorded scores in a row are at least CP for the same side (a score
+  inside the band or for the other side restarts the count; a mate score
+  still ends the game first). It is adopted per labelling network only by
+  measurement: the rule's misjudgment rate on that network's own data must
+  be essentially zero, and an adopted rule starts a new part. The run
+  manifest records both values (0 when off) and the `score_adjudicated`
+  end count; `verify_games.py --adjudicate CP N` checks it independently.
+  No draw adjudication: in the generation-1 study the settings that
+  misjudged no game saved under 0.2% of positions.
 - **What is recorded**: every position, its search score from White's
   view (or the convention the format fixes), the move played, and the
   game result. Filtering (in check, best move a capture or promotion,

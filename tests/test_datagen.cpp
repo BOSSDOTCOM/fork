@@ -58,16 +58,22 @@ bool same_game(const ReadGame& a, const ReadGame& b) {
   return true;
 }
 
-std::unique_ptr<SelfPlayGame> player(std::uint64_t nodes, int max_plies = 500) {
-  SelfPlayConfig c;
-  c.nodes = nodes;
+std::unique_ptr<SelfPlayGame> player(SelfPlayConfig c) {
   c.hash_bytes = std::size_t{1} << 20;
-  c.max_plies = max_plies;
   std::string report;
   auto p = SelfPlayGame::create(c, report);
   CHECK_MSG(p != nullptr, report);
   return p;
 }
+
+std::unique_ptr<SelfPlayGame> player(std::uint64_t nodes, int max_plies = 500) {
+  SelfPlayConfig c;
+  c.nodes = nodes;
+  c.max_plies = max_plies;
+  return player(c);
+}
+
+std::vector<std::uint8_t> copy_bytes(const GameWriter& w) { return {w.bytes().begin(), w.bytes().end()}; }
 
 }  // namespace
 
@@ -264,6 +270,88 @@ TEST_CASE("datagen", "the Syzygy tables adjudicate a game whose root they cover"
     CHECK(o.result == GameResult::Draw);
   }
   load_endgame_tables("");
+}
+
+TEST_CASE("datagen", "a score streak counts positions in a row beyond the band for one side") {
+  auto run = [](int cp, int plies, std::vector<int> scores) {
+    ScoreStreak s;
+    s.cp = cp;
+    s.plies = plies;
+    std::vector<int> out;
+    for (const int v : scores) out.push_back(s.add(v));
+    return out;
+  };
+  // The bound is inclusive and the third score in a row decides.
+  CHECK(run(300, 3, {300, 400, 500}) == std::vector<int>({0, 0, 1}));
+  // A score inside the band starts the count again.
+  CHECK(run(300, 3, {300, 400, 299, 300, 300, 300}) == std::vector<int>({0, 0, 0, 0, 0, 1}));
+  // So does a score for the other side.
+  CHECK(run(300, 3, {300, 400, -500, -300, -301}) == std::vector<int>({0, 0, 0, 0, -1}));
+  // plies = 0 is off.
+  CHECK(run(300, 0, {900, 900, 900}) == std::vector<int>({0, 0, 0}));
+}
+
+TEST_CASE("datagen", "score adjudication that cannot trigger leaves the game unchanged") {
+  SelfPlayConfig off;
+  off.nodes = 3000;
+  SelfPlayConfig unreachable = off;
+  unreachable.adjudicate_cp = 31000;  // beyond any search score (ScoreInfinite)
+  unreachable.adjudicate_plies = 1;
+  auto a = player(off);
+  auto b = player(unreachable);
+  if (!a || !b) return;
+  GameWriter wa, wb;
+  const SelfPlayOutcome oa = a->play(Position(), wa);
+  const SelfPlayOutcome ob = b->play(Position(), wb);
+  CHECK(copy_bytes(wa) == copy_bytes(wb));
+  CHECK(oa.end == ob.end && oa.result == ob.result);
+  CHECK(ob.end != GameEnd::ScoreAdjudicated);
+}
+
+TEST_CASE("datagen", "score adjudication ends the game for the side that stays ahead") {
+  // The start position without Black's queen, and the same without White's:
+  // built for this case, a queen up for one side. The opening bound is
+  // lifted so the game is played.
+  const struct {
+    const char* fen;
+    GameResult winner;
+  } cases[] = {{"rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", GameResult::WhiteWin},
+               {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNB1KBNR w KQkq - 0 1", GameResult::BlackWin}};
+  constexpr int Cp = 200, Plies = 6;
+  SelfPlayConfig c;
+  c.nodes = 3000;
+  c.decided_cp = 30000;
+  c.adjudicate_cp = Cp;
+  c.adjudicate_plies = Plies;
+  auto p = player(c);
+  if (!p) return;
+  for (const auto& k : cases) {
+    Position pos;
+    CHECK(pos.set_fen(k.fen));
+    GameWriter w;
+    const SelfPlayOutcome o = p->play(pos, w);
+    CHECK(o.written);
+    CHECK(o.end == GameEnd::ScoreAdjudicated);
+    CHECK(o.result == k.winner);
+    std::size_t offset = 0;
+    ReadGame got;
+    std::string error;
+    const std::vector<std::uint8_t> bytes = copy_bytes(w);
+    CHECK_MSG(decode_game(bytes, offset, got, error), error);
+    CHECK(got.result == k.winner);
+    // The game ends on the Plies-th score in a row for the winner, and no
+    // earlier run of Plies scores exists.
+    const int sign = k.winner == GameResult::WhiteWin ? 1 : -1;
+    const int n = static_cast<int>(got.moves.size());
+    CHECK(n >= Plies);
+    if (n < Plies) continue;
+    for (int i = n - Plies; i < n; ++i) CHECK(got.moves[i].white_score * sign >= Cp);
+    if (n > Plies) CHECK(got.moves[n - Plies - 1].white_score * sign < Cp);
+    ScoreStreak s;
+    s.cp = Cp;
+    s.plies = Plies;
+    for (int i = 0; i + 1 < n; ++i) CHECK_EQ(s.add(got.moves[i].white_score), 0);
+  }
 }
 
 }  // namespace forkeng::test

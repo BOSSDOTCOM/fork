@@ -16,6 +16,10 @@ not from Fork's C++, and replays it with python-chess's move generator:
   occurrence lies in the random plies before the record (the final
   position twice in the record, the halfmove clock reaching past its
   start);
+- with --adjudicate CP PLIES (the run's score adjudication), a game may
+  also end on the PLIES-th recorded score in a row at least CP for one
+  side, stored as that side's win; no earlier record may complete such a
+  run (the game would have ended there);
 - with --manifest (fork_datagen's <run>.json), each shard's game and
   position counts must match.
 
@@ -105,9 +109,16 @@ def code_of(board, move):
     return frm | to << 6 | promo << 12 | kind << 14
 
 
-def expected_end(board, last_score, table_pieces):
+def expected_end(board, last_score, table_pieces, streak_sign=0):
     """'1-0', '0-1' or '1/2-1/2' if the end can be judged here, else None,
-    and what ended the game."""
+    and what ended the game. streak_sign is +1 or -1 when the last record
+    completed a score adjudication run for White or Black."""
+    if last_score is not None and abs(last_score) >= MATE_BAND_FLOOR:
+        return ('1-0' if last_score > 0 else '0-1'), 'mate score'
+    # fork_datagen adjudicates right after recording the score, before it
+    # looks at the next position.
+    if streak_sign:
+        return ('1-0' if streak_sign > 0 else '0-1'), 'score adjudication'
     if board.is_checkmate():
         return ('0-1' if board.turn == chess.WHITE else '1-0'), 'checkmate'
     if board.is_stalemate() or board.is_insufficient_material():
@@ -128,7 +139,14 @@ def expected_end(board, last_score, table_pieces):
     return None, 'unexplained'
 
 
-def verify_file(path, table_pieces, totals):
+def streak_step(count, sign, score, cp):
+    """One step of the score adjudication's count (self_play.hpp ScoreStreak)."""
+    s = 1 if score >= cp else (-1 if score <= -cp else 0)
+    count = 0 if s == 0 else (count + 1 if s == sign else 1)
+    return count, s
+
+
+def verify_file(path, table_pieces, totals, adjudicate=None):
     data = Path(path).read_bytes()
     games = positions = 0
     i = 0
@@ -138,6 +156,8 @@ def verify_file(path, table_pieces, totals):
         board, result = decode_board(data[i:i + 32])
         i += 32
         last_score = None
+        count = sign = 0
+        done_sign = 0
         while True:
             if len(data) - i < 4:
                 raise Bad(f'{path}: truncated moves at byte {i}')
@@ -150,10 +170,16 @@ def verify_file(path, table_pieces, totals):
             matches = [m for m in board.legal_moves if code_of(board, m) == code]
             if len(matches) != 1:
                 raise Bad(f'{path}: move code {code} matches {len(matches)} legal moves in {board.fen()}')
+            if done_sign:
+                raise Bad(f'{path}: game {games} continued past its score adjudication at {board.fen()}')
             board.push(matches[0])
             last_score = score
             positions += 1
-        want, why = expected_end(board, last_score, table_pieces)
+            if adjudicate and abs(score) < MATE_BAND_FLOOR:
+                count, sign = streak_step(count, sign, score, adjudicate[0])
+                if count >= adjudicate[1]:
+                    done_sign = sign
+        want, why = expected_end(board, last_score, table_pieces, done_sign)
         stored = ['0-1', '1/2-1/2', '1-0'][result]
         if why == 'unexplained':
             raise Bad(f'{path}: game {games} ended without a reason at {board.fen()}')
@@ -168,6 +194,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('shards', nargs='+')
     ap.add_argument('--manifest', help="fork_datagen's <run>.json, to compare counts")
+    ap.add_argument('--adjudicate', type=int, nargs=2, metavar=('CP', 'PLIES'),
+                    help="the run's score adjudication (fork_datagen --adjudicate-cp/--adjudicate-plies)")
     ap.add_argument('--table-pieces', type=int, default=5,
                     help='largest piece count the run adjudicated by tables (0: none)')
     a = ap.parse_args(argv)
@@ -175,7 +203,7 @@ def main(argv=None):
     counts = {}
     try:
         for s in a.shards:
-            counts[Path(s).name] = verify_file(s, a.table_pieces, totals)
+            counts[Path(s).name] = verify_file(s, a.table_pieces, totals, a.adjudicate)
         if a.manifest:
             man = json.loads(Path(a.manifest).read_text())
             listed = {e['file']: (e['games'], e['positions']) for e in man['shards']}

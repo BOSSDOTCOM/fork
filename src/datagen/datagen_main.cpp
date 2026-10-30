@@ -45,6 +45,7 @@ struct Options {
   std::size_t hash_mb = 16, shard_mb = 1024;
   int decided_cp = 400, max_plies = 500;
   int random_min = 2, random_max = 4;
+  int adjudicate_cp = 0, adjudicate_plies = 0;
 };
 
 struct ShardInfo {
@@ -66,7 +67,8 @@ int usage() {
                "usage: fork_datagen --openings FILE --out DIR --positions N --nodes N\n"
                "         [--threads T] [--seed S] [--run NAME] [--hash-mb M] [--shard-mb M]\n"
                "         [--tables PATH] [--decided-cp CP] [--max-plies P]\n"
-               "         [--random-min N] [--random-max N]\n");
+               "         [--random-min N] [--random-max N]\n"
+               "         [--adjudicate-cp CP --adjudicate-plies N]\n");
   return 2;
 }
 
@@ -104,6 +106,10 @@ bool parse(int argc, char** argv, Options& o) {
         o.random_min = std::stoi(v);
       else if (a == "--random-max")
         o.random_max = std::stoi(v);
+      else if (a == "--adjudicate-cp")
+        o.adjudicate_cp = std::stoi(v);
+      else if (a == "--adjudicate-plies")
+        o.adjudicate_plies = std::stoi(v);
       else
         return false;
     } catch (const std::exception&) {
@@ -112,7 +118,8 @@ bool parse(int argc, char** argv, Options& o) {
   }
   return !o.openings.empty() && !o.out_dir.empty() && o.positions > 0 && o.nodes > 0 && o.threads > 0 &&
          o.hash_mb > 0 && o.shard_mb > 0 && o.max_plies > 0 && 0 <= o.random_min &&
-         o.random_min <= o.random_max;
+         o.random_min <= o.random_max && o.adjudicate_cp >= 0 && o.adjudicate_plies >= 0 &&
+         (o.adjudicate_plies == 0 || o.adjudicate_cp > 0);
 }
 
 std::string shard_name(const Options& o, int worker, int index) {
@@ -128,6 +135,8 @@ void run_worker(const Options& o, int worker, const std::vector<std::string>& op
   config.hash_bytes = o.hash_mb << 20;
   config.decided_cp = o.decided_cp;
   config.max_plies = o.max_plies;
+  config.adjudicate_cp = o.adjudicate_cp;
+  config.adjudicate_plies = o.adjudicate_plies;
   std::string report;
   auto player = SelfPlayGame::create(config, report);
   if (!player) {
@@ -215,7 +224,8 @@ void write_manifest(const Options& o, const Totals& t, double seconds, std::size
     << ", \"hash_mb\": " << o.hash_mb << ", \"shard_mb\": " << o.shard_mb << ", \"tables\": \""
     << (o.tables.empty() ? "none" : "syzygy " + std::to_string(endgame_table_pieces()) + "-piece")
     << "\", \"decided_cp\": " << o.decided_cp << ", \"max_plies\": " << o.max_plies
-    << ", \"random_min\": " << o.random_min << ", \"random_max\": " << o.random_max << "},\n"
+    << ", \"random_min\": " << o.random_min << ", \"random_max\": " << o.random_max
+    << ", \"adjudicate_cp\": " << o.adjudicate_cp << ", \"adjudicate_plies\": " << o.adjudicate_plies << "},\n"
     << "  \"games\": " << t.games.load() << ",\n  \"positions\": " << t.positions.load() << ",\n"
     << "  \"seconds\": " << seconds << ",\n  \"results\": {\"white\": " << t.results[2]
     << ", \"draw\": " << t.results[1] << ", \"black\": " << t.results[0] << "},\n  \"ends\": {";

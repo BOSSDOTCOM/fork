@@ -54,6 +54,32 @@ class ExpectedEndTests(unittest.TestCase):
         board = played(PERPETUAL, PERPETUAL_MOVES)
         self.assertEqual(vg.expected_end(board, 29990, 5), ('1-0', 'mate score'))
 
+    def test_a_completed_score_adjudication_is_judged_before_the_board(self):
+        board = played(PERPETUAL, PERPETUAL_MOVES)
+        self.assertEqual(vg.expected_end(board, -900, 5, -1), ('0-1', 'score adjudication'))
+        self.assertEqual(vg.expected_end(board, 900, 5, 1), ('1-0', 'score adjudication'))
+
+
+class ScoreStreakTests(unittest.TestCase):
+    """The same sequences as tests/test_datagen.cpp's ScoreStreak case."""
+
+    def run_streak(self, cp, scores):
+        count = sign = 0
+        out = []
+        for v in scores:
+            count, sign = vg.streak_step(count, sign, v, cp)
+            out.append(count * sign)
+        return out
+
+    def test_inclusive_bound(self):
+        self.assertEqual(self.run_streak(300, [300, 400, 500]), [1, 2, 3])
+
+    def test_band_restarts(self):
+        self.assertEqual(self.run_streak(300, [300, 400, 299, 300]), [1, 2, 0, 1])
+
+    def test_other_side_restarts(self):
+        self.assertEqual(self.run_streak(300, [300, 400, -500, -300]), [1, 2, -1, -2])
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -37,6 +37,8 @@ const char* game_end_name(GameEnd end) {
       return "decided_opening";
     case GameEnd::TooLong:
       return "too_long";
+    case GameEnd::ScoreAdjudicated:
+      return "score_adjudicated";
   }
   return "?";
 }
@@ -64,6 +66,9 @@ SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer) 
   SearchQuota limits;
   limits.nodes = config_.nodes;
   const int table_pieces = endgame_table_pieces();
+  ScoreStreak streak;
+  streak.cp = config_.adjudicate_cp;
+  streak.plies = config_.adjudicate_plies;
 
   auto finish = [&](GameEnd end, GameResult result) {
     writer.finish(result);
@@ -111,8 +116,13 @@ SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer) 
     if (ply == 0 && !is_mate_score(s.score) && std::abs(s.score) > config_.decided_cp)
       return SelfPlayOutcome{GameEnd::DecidedOpening, GameResult::Draw, false};
 
-    writer.add(s.best, us == White ? s.score : -s.score);
+    const int white_score = us == White ? s.score : -s.score;
+    writer.add(s.best, white_score);
     if (is_mate_score(s.score)) return finish(GameEnd::MateFound, s.score > 0 ? win_for(us) : win_for(~us));
+    if (config_.adjudicate_plies > 0) {
+      if (const int winner = streak.add(white_score))
+        return finish(GameEnd::ScoreAdjudicated, winner > 0 ? GameResult::WhiteWin : GameResult::BlackWin);
+    }
     pos.make(s.best);
   }
 }
