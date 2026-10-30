@@ -23,6 +23,8 @@ check() {  # description, command...
   shift
   if "$@"; then echo "PASS  $what"; else echo "FAIL  $what"; failures=$((failures + 1)); fi
 }
+# A command failed (exit status, first argument) and its log says why.
+failed_with() { [ "$1" -ne 0 ] && grep -q "$2" "$3"; }
 openings=$repo/tests/datagen_openings.epd
 printf '{"output": "datagen_openings.epd", "output_sha256": "%s", "positions": %d, "source": "tests", "source_sha256": "-"}\n' \
   "$(sha256sum "$openings" | cut -d' ' -f1)" "$(wc -l <"$openings")" >"$tmp/om.json"
@@ -32,7 +34,7 @@ common=(--datagen "$datagen" --openings "$openings" --openings-manifest "$tmp/om
 # 1. Two chunks, uploaded with sealed manifests.
 bash "$here/cloud_datagen.sh" --run t1 --seed-base 1000000000000 --upload-to "$tmp/up1" --max-chunks 2 \
   --work "$tmp/w1" "${common[@]}" >"$tmp/run1.log" 2>&1
-check "two chunks run and upload" [ -f "$tmp/up1/t1-c0000/t1-c0000.json" ] && [ -f "$tmp/up1/t1-c0001/t1-c0001.json" ]
+check "two chunks run and upload" [ -f "$tmp/up1/t1-c0000/t1-c0000.json" -a -f "$tmp/up1/t1-c0001/t1-c0001.json" ]
 check "the sealed manifest names the labelling network and why the chunk ended" \
   "$PYTHON" -c 'import json,sys; m=json.load(open(sys.argv[1])); sys.exit(not (m["generator"]["evaluator"].startswith("nnue (") and m["part_end"].startswith("chunk complete")))' \
   "$tmp/up1/t1-c0000/t1-c0000.json"
@@ -86,7 +88,8 @@ check "no chunk starts after the time limit" grep -q "would not finish before th
 sed 's/"output_sha256": "./"output_sha256": "0/' "$tmp/om.json" >"$tmp/om-bad.json"
 bash "$here/cloud_datagen.sh" --run t4 --seed-base 1 --upload-to "$tmp/up4" --work "$tmp/w4" \
   "${common[@]}" --openings-manifest "$tmp/om-bad.json" >"$tmp/run4.log" 2>&1
-check "wrong openings are refused" [ $? -ne 0 ] && grep -q "is not the manifest's" "$tmp/run4.log"
+rc=$?
+check "wrong openings are refused" failed_with $rc "is not the manifest's" "$tmp/run4.log"
 
 # 5. The owner's side verifies the uploads, and rejects a damaged shard.
 # (A chunk ends with whole games, so it holds a few more positions than asked.)
@@ -98,7 +101,8 @@ check "the verified shards and manifests are copied home" [ "$(ls "$tmp/home" | 
 shard=$(ls "$tmp"/up1/t1-c0001/*.vf | head -1)
 printf 'x' | dd of="$shard" bs=1 seek=40 conv=notrunc 2>/dev/null
 bash "$here/pull_datagen.sh" --from "$tmp/up1" --to "$tmp/home2" >"$tmp/pull2.log" 2>&1
-check "a damaged shard is rejected" [ $? -ne 0 ] && grep -q "SHA-256 differs" "$tmp/pull2.log"
+rc=$?
+check "a damaged shard is rejected" failed_with $rc "SHA-256 differs" "$tmp/pull2.log"
 
 echo "$failures failure(s)"
 [ $failures -eq 0 ]

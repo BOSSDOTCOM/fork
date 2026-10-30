@@ -205,7 +205,7 @@ tool_tests() {  # python | all
   # cleanup of instances past their limit, a simulated spot interruption,
   # the data-generation fleet request.
   local t
-  for t in test_spot_quota test_aws_cleanup test_spot_watch test_aws_spot_datagen; do
+  for t in test_spot_quota test_aws_cleanup test_spot_watch test_aws_spot_datagen test_cost_guard; do
     PYTHON=$py bash "tools/cloud/$t.sh" >>"$log" 2>&1 || fail "tool tests: tools/cloud/$t.sh"
   done
 }

@@ -41,8 +41,9 @@ case "$1 $2" in
 esac
 EOF
 chmod +x "$tmp/aws"
-export FORK_AWS=$tmp/aws STUB_QUOTA=8.0
-launcher=(bash "$here/aws_spot_datagen.sh" --bucket s3://b --instance-profile p --region r)
+export FORK_AWS=$tmp/aws STUB_QUOTA=8.0 FORK_LAUNCH_LEDGER=$tmp/ledger.tsv
+unset FORK_CREDITS_START FORK_DAILY_CAP
+launcher=(bash "$here/aws_spot_datagen.sh" --bucket s3://b --instance-profile p --region us-east-1)
 # A pushed commit with a default network (B0r2) whose manifests name it.
 commit=3978e91
 
@@ -51,6 +52,22 @@ commit=3978e91
 check "a type outside the list is refused" [ $? -eq 2 ]
 "${launcher[@]}" --max-price 1e3 --dry-run >"$tmp/o" 2>&1
 check "a malformed price is refused" [ $? -eq 2 ]
+"${launcher[@]}" --region eu-west-1 --dry-run >"$tmp/o" 2>&1
+check "a region outside the three is refused" [ $? -eq 2 ]
+
+# 1b. Regions: each run's seeds carry its region's slot (us-east-2 0,
+# us-east-1 1, us-west-2 2), its name the region, and its uploads go to the
+# bucket's region.
+for rs in us-east-2:0 us-east-1:1 us-west-2:2; do
+  r=${rs%:*} s=${rs#*:}
+  bash "$here/aws_spot_datagen.sh" --bucket s3://b --instance-profile p --region "$r" --commit HEAD --dry-run \
+    >"$tmp/d-$r" 2>&1
+  base=$(sed -n 's/.*seeds from \([0-9]*\),.*/\1/p' "$tmp/d-$r")
+  slot_ok() { [ -n "$1" ] && [ $((($1 - 1000000000000) / 1000 % 4)) -eq "$2" ] && [ $(($1 % 1000)) -eq 0 ]; }
+  check "$r: the seed base carries slot $s" slot_ok "$base" "$s"
+  check "$r: the run is named after its region" grep -q "^run g2-aws-$r-" "$tmp/d-$r"
+  check "$r: uploads go to the bucket's region" grep -qx "export AWS_DEFAULT_REGION=us-east-2" "$tmp/d-$r"
+done
 
 if ! git -C "$here" branch -r --contains "$commit" 2>/dev/null | grep -q .; then
   echo "SKIP  launch cases: $commit is not on a remote branch in this clone"
@@ -99,6 +116,17 @@ sys.exit(not all({"fork-run", "fork-expires"} <= {x["Key"] for x in s["Tags"]} f
   "${launcher[@]}" --commit $commit >"$tmp/o3" 2>&1
   check "a launch over the quota is refused" [ $? -eq 3 ]
   check "nothing is created" bash -c "! grep -q 'create-' '$STUB_DIR/calls'"
+
+  # 5. The cost guard: the successful launch above was recorded at its worst
+  # case (12 h at $0.25), and launches beyond the daily cap are refused
+  # before anything is created.
+  check "the launch was recorded in the ledger at \$3.00" grep -q $'\t3.00$' "$FORK_LAUNCH_LEDGER"
+  export STUB_DIR=$tmp/s4 STUB_QUOTA=8.0 FORK_DAILY_CAP=5
+  mkdir -p "$STUB_DIR"
+  "${launcher[@]}" --commit $commit >"$tmp/o4" 2>&1
+  check "a launch over the daily cap is refused (exit 5)" [ $? -eq 5 ]
+  check "nothing is created over the cap" bash -c "! grep -q 'create-' '$STUB_DIR/calls'"
+  unset FORK_DAILY_CAP
 fi
 
 echo "$failures failure(s)"

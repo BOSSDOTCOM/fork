@@ -69,6 +69,8 @@ trap 'stopping=1; [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null' TERM INT
 k=0 uploaded=0 last=0
 while :; do
   [ "$max_chunks" -gt 0 ] && [ "$k" -ge "$max_chunks" ] && { log "stop: $max_chunks chunks done"; break; }
+  # A run's seeds are --seed-base + k with k below 1000 (aws_spot_datagen.sh's seed rule).
+  [ "$k" -lt 1000 ] || { log "stop: 1000 chunks, the end of this run's seed range"; break; }
   if [ "$stop_at" -gt 0 ] && [ $(( $(date +%s) + last * 3 / 2 + 60 )) -gt "$stop_at" ]; then
     log "stop: the next chunk would not finish before the time limit"
     break

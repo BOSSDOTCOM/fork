@@ -8,7 +8,7 @@
 #   tools/cloud/aws_spot_datagen.sh --bucket s3://BUCKET --instance-profile NAME [--commit REF]
 #       [--generation g2] [--types T1,T2,...] [--arch auto] [--max-price 0.25] [--region us-east-2]
 #       [--max-hours 12] [--chunk-positions 1000000] [--nodes 20000]
-#       [--adjudicate-cp CP --adjudicate-plies N] [--dry-run]
+#       [--adjudicate-cp CP --adjudicate-plies N] [--bucket-region us-east-2] [--dry-run]
 #
 # One spot instance is requested through an instant EC2 Fleet with the
 # capacity-optimized-prioritized strategy over every --types entry in every
@@ -17,7 +17,10 @@
 # node-limited, so the machine type does not change the data (owner,
 # 2026-10-30; the one-type rule applies to SPRTs only). Default types (all
 # 8 vCPU): c7a, c8a, m7a, c7i, m7i, then c6a, c6i (.2xlarge). Exits 4 when
-# no type has spot capacity, so a caller can retry later.
+# no type has spot capacity, so a caller can retry later; 5 or 6 when
+# tools/cloud/cost_guard.sh refuses the launch (the daily cap, the credit
+# floor), checked at the launch's worst case (--max-hours at --max-price)
+# before anything is created, and recorded in its ledger once launched.
 #
 # The instance (Ubuntu 22.04 LTS, gcc 11.4):
 #  1. arms a shutdown after --max-hours whatever happens (the cost cap);
@@ -46,9 +49,17 @@
 # if any would exceed it. The instance, its volume and the fleet are tagged
 # fork-run and fork-expires (launch time + --max-hours, UTC) for
 # tools/cloud/aws_cleanup.sh; the run's launch template exists only during
-# the request and is deleted afterwards. Seeds: chunk k of a run uses
-# 10^12 + (launch time in Unix seconds) x 1000 + k, a range no local run
-# uses (local seeds are dates, about 2 x 10^7). Bring the data home with
+# the request and is deleted afterwards.
+# Regions (owner, 2026-10-30): us-east-2, us-east-1 and us-west-2, one
+# instance per region within each region's own spot quota; every instance
+# uploads to the bucket in --bucket-region. The run name carries the region.
+# Seeds: chunk k of a run uses 10^12 + (4 x launch time in Unix seconds +
+# region slot) x 1000 + k, the slot 0 for us-east-2, 1 for us-east-1, 2 for
+# us-west-2: runs in different regions never share a seed even when launched
+# in the same second, cloud_datagen.sh keeps k below 1000, and no local run
+# comes near (local seeds are dates, about 2 x 10^7; the first cloud run,
+# g2-aws-20261030T212852Z, used 10^12 + launch x 1000 + k, about 2.8 x 10^12,
+# below every seed of this rule). Bring the data home with
 # tools/cloud/pull_datagen.sh. FORK_AWS names the AWS CLI command (the
 # tests use a stub).
 set -euo pipefail
@@ -57,14 +68,14 @@ repo_url=https://github.com/BOSSDOTCOM/fork.git
 openings_url=https://database.lichess.org/standard/lichess_db_standard_rated_2016-09.pgn.zst
 types=c7a.2xlarge,c8a.2xlarge,m7a.2xlarge,c7i.2xlarge,m7i.2xlarge,c6a.2xlarge,c6i.2xlarge
 arch=auto max_price=0.25 region=${AWS_REGION:-us-east-2} max_hours=12 chunk=1000000 nodes=20000
-adj_cp=0 adj_plies=0
+adj_cp=0 adj_plies=0 bucket_region=us-east-2
 generation=g2 bucket="" profile="" commit=HEAD dry=0
 while [ $# -gt 0 ]; do
   case $1 in
     --bucket) bucket=$2 ;; --instance-profile) profile=$2 ;; --commit) commit=$2 ;; --generation) generation=$2 ;;
     --types | --type) types=$2 ;; --arch) arch=$2 ;; --max-price) max_price=$2 ;; --region) region=$2 ;;
     --max-hours) max_hours=$2 ;; --chunk-positions) chunk=$2 ;; --nodes) nodes=$2 ;;
-    --adjudicate-cp) adj_cp=$2 ;; --adjudicate-plies) adj_plies=$2 ;;
+    --adjudicate-cp) adj_cp=$2 ;; --adjudicate-plies) adj_plies=$2 ;; --bucket-region) bucket_region=$2 ;;
     --dry-run) dry=1; shift; continue ;;
     *) echo "aws_spot_datagen.sh: unknown option $1" >&2; exit 2 ;;
   esac
@@ -84,6 +95,11 @@ for t in "${type_list[@]}"; do
 done
 case $arch in auto | x86-64-v3 | x86-64-v4) ;; *) echo "aws_spot_datagen.sh: --arch auto, x86-64-v3 or x86-64-v4" >&2; exit 2 ;; esac
 case $generation in g[0-9]*) ;; *) echo "aws_spot_datagen.sh: --generation like g2" >&2; exit 2 ;; esac
+case $region in
+  us-east-2) slot=0 ;; us-east-1) slot=1 ;; us-west-2) slot=2 ;;
+  *) echo "aws_spot_datagen.sh: --region us-east-2, us-east-1 or us-west-2" >&2; exit 2 ;;
+esac
+[[ $bucket_region =~ ^[a-z]{2}-[a-z]+-[0-9]$ ]] || { echo "aws_spot_datagen.sh: --bucket-region like us-east-2" >&2; exit 2; }
 here=$(cd "$(dirname "$0")/../.." && pwd)
 commit=$(git -C "$here" rev-parse --verify "$commit^{commit}")
 git -C "$here" merge-base --is-ancestor 3978e91 "$commit" ||
@@ -91,8 +107,8 @@ git -C "$here" merge-base --is-ancestor 3978e91 "$commit" ||
 net=$(git -C "$here" show "$commit:CMakeLists.txt" | sed -n 's|^set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/\([a-z0-9]*\)\.fnet".*|\1|p')
 [ -n "$net" ] || { echo "aws_spot_datagen.sh: no default network found at $commit" >&2; exit 2; }
 launch=$(date -u +%s)
-seed_base=$((1000000000000 + launch * 1000))
-run=$generation-aws-$(date -u -d "@$launch" +%Y%m%dT%H%M%SZ)
+seed_base=$((1000000000000 + (4 * launch + slot) * 1000))
+run=$generation-aws-$region-$(date -u -d "@$launch" +%Y%m%dT%H%M%SZ)
 expires=$(date -u -d "@$((launch + max_hours * 3600))" +%Y-%m-%dT%H:%M:%SZ)
 source_sha=$(git -C "$here" show "$commit:data/manifests/openings-lichess-2016-09.json" |
   sed -n 's/.*"source_sha256": "\([0-9a-f]*\)".*/\1/p')
@@ -104,6 +120,8 @@ user_data() {
 # Fork cloud data generation $run, generated by tools/cloud/aws_spot_datagen.sh.
 exec >/var/log/fork-datagen.log 2>&1
 set -uo pipefail
+# Instance $region, bucket $bucket_region: every S3 call goes to the bucket's region.
+export AWS_DEFAULT_REGION=$bucket_region
 shutdown -h +$((max_hours * 60))
 stop_at=\$(( \$(date +%s) + $((max_hours * 3600 - 900)) ))
 fail() { echo "FAILED: \$1"; aws s3 cp --only-show-errors /var/log/fork-datagen.log ${bucket%/}/datagen/$run/boot.log; shutdown -h now; exit 1; }
@@ -178,10 +196,14 @@ check_quota() {
     bash "$here/tools/cloud/spot_quota.sh" --region "$region" --type "$t" --count 1 || quota_ok=0
   done
 }
+# The spending guards (tools/cloud/cost_guard.sh): this launch at its worst
+# case, every hour it may run at the price cap.
+worst=$(awk -v h="$max_hours" -v p="$max_price" 'BEGIN { printf "%.2f", h * p }')
 if [ "$dry" = 1 ]; then
   if command -v "$aws" >/dev/null; then
     check_quota
     [ $quota_ok = 1 ] || echo "(dry run: this launch would be refused)"
+    bash "$here/tools/cloud/cost_guard.sh" check "$worst" || echo "(dry run: the cost guard would refuse it)"
   fi
   echo "--- tags: Name=fork-$run, fork-run=$run, fork-expires=$expires"
   echo "--- fleet request (subnets as listed at launch; dry run: nothing is launched)"
@@ -195,6 +217,7 @@ git -C "$here" branch -r --contains "$commit" | grep -q . ||
   { echo "aws_spot_datagen.sh: $commit is not pushed (the instance clones the public repository)" >&2; exit 2; }
 check_quota
 [ $quota_ok = 1 ] || exit 3
+bash "$here/tools/cloud/cost_guard.sh" check "$worst" || exit $?
 read -r -a subnets <<<"$("$aws" ec2 describe-subnets --region "$region" --filters Name=default-for-az,Values=true \
   --query 'Subnets[].SubnetId' --output text)"
 [ ${#subnets[@]} -gt 0 ] || { echo "aws_spot_datagen.sh: no default subnets in $region" >&2; exit 1; }
@@ -231,4 +254,5 @@ print("no instance launched:", ", ".join(f"{c} ({n})" for c, n in collections.Co
     "$tmp/out.json"
   exit 4
 fi
+bash "$here/tools/cloud/cost_guard.sh" record "$run" "$worst"
 echo "launched $id ($itype); follow with: aws s3 ls ${bucket%/}/datagen/$run/ --recursive"
