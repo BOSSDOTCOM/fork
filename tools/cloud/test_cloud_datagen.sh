@@ -36,10 +36,21 @@ check "two chunks run and upload" [ -f "$tmp/up1/t1-c0000/t1-c0000.json" ] && [ 
 check "the sealed manifest names the labelling network and why the chunk ended" \
   "$PYTHON" -c 'import json,sys; m=json.load(open(sys.argv[1])); sys.exit(not (m["generator"]["evaluator"].startswith("nnue (") and m["part_end"].startswith("chunk complete")))' \
   "$tmp/up1/t1-c0000/t1-c0000.json"
+check "without --instance-type the manifest has no machine record" \
+  "$PYTHON" -c 'import json,sys; sys.exit("machine" in json.load(open(sys.argv[1])))' "$tmp/up1/t1-c0000/t1-c0000.json"
 check "each chunk has its own seed from the base" \
   "$PYTHON" -c 'import json,sys; s=[json.load(open(p))["settings"]["seed"] for p in sys.argv[1:]]; sys.exit(s != [1000000000000, 1000000000001])' \
   "$tmp/up1/t1-c0000/t1-c0000.json" "$tmp/up1/t1-c0001/t1-c0001.json"
 check "finished chunks leave no local files" [ -z "$(ls -A "$tmp/w1")" ]
+
+# 1b. With --instance-type, each sealed manifest records the machine.
+bash "$here/cloud_datagen.sh" --run t5 --seed-base 1000000000000 --upload-to "$tmp/up5" --max-chunks 1 \
+  --work "$tmp/w5" "${common[@]}" --instance-type c7a.2xlarge >"$tmp/run5.log" 2>&1
+check "the sealed manifest records the instance type and CPU" \
+  "$PYTHON" -c 'import json,sys; m=json.load(open(sys.argv[1]))["machine"]; sys.exit(not (m["instance_type"] == "c7a.2xlarge" and m["cpu"]))' \
+  "$tmp/up5/t5-c0000/t5-c0000.json"
+bash "$here/pull_datagen.sh" --from "$tmp/up5" --to "$tmp/home5" >"$tmp/pull5.log" 2>&1
+check "pull_datagen still verifies a chunk with a machine record" grep -q "1 chunk(s), .* positions verified" "$tmp/pull5.log"
 
 # 2. A SIGTERM (spot notice) during a chunk: the run stops, that chunk is lost.
 bash "$here/cloud_datagen.sh" --run t2 --seed-base 1000000000000 --upload-to "$tmp/up2" \

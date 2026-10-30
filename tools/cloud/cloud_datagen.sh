@@ -10,14 +10,17 @@
 # (tools/datagen/verify_games.py against its run manifest), sealed as its
 # own manifest (tools/datagen/upload_batch.py seal: the labelling network,
 # which fork_datagen names itself, the openings file, and why the chunk
-# ended) and uploaded with its shards; then its local files are deleted.
+# ended; with --instance-type, also the machine: that type and the CPU model
+# from /proc/cpuinfo, the build target being the generator's arch) and
+# uploaded with its shards; then its local files are deleted.
 # Chunk k uses seed --seed-base + k: cloud seed bases start at 10^12, far
 # from the local runs' date-shaped seeds (about 2 x 10^7), so cloud and local
 # games never share a seed.
 #
 #   tools/cloud/cloud_datagen.sh --run NAME --seed-base N --datagen BIN --openings EPD \
 #       --openings-manifest JSON --tables DIR --upload-to DEST [--chunk-positions 1000000] \
-#       [--nodes 20000] [--threads N] [--stop-at EPOCH] [--max-chunks 0] [--work DIR]
+#       [--nodes 20000] [--threads N] [--stop-at EPOCH] [--max-chunks 0] [--work DIR] \
+#       [--instance-type TYPE]
 #
 # DEST is s3://BUCKET/PREFIX (aws s3 cp) or a local folder (cp). --stop-at
 # (Unix time) stops before a chunk that would not finish by then (the
@@ -28,13 +31,13 @@
 set -uo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
 run="" seed_base="" datagen="" openings="" om="" tables="" dest="" chunk=1000000 nodes=20000
-threads=$(nproc) stop_at=0 max_chunks=0 work=""
+threads=$(nproc) stop_at=0 max_chunks=0 work="" instance_type=""
 while [ $# -gt 0 ]; do
   case $1 in
     --run) run=$2 ;; --seed-base) seed_base=$2 ;; --datagen) datagen=$2 ;; --openings) openings=$2 ;;
     --openings-manifest) om=$2 ;; --tables) tables=$2 ;; --upload-to) dest=$2 ;;
     --chunk-positions) chunk=$2 ;; --nodes) nodes=$2 ;; --threads) threads=$2 ;;
-    --stop-at) stop_at=$2 ;; --max-chunks) max_chunks=$2 ;; --work) work=$2 ;;
+    --stop-at) stop_at=$2 ;; --max-chunks) max_chunks=$2 ;; --work) work=$2 ;; --instance-type) instance_type=$2 ;;
     *) echo "cloud_datagen.sh: unknown option $1" >&2; exit 2 ;;
   esac
   shift 2
@@ -88,6 +91,14 @@ while :; do
     { log "chunk $name failed verification"; tail -5 "$dir/verify.log"; exit 1; }
   "$py" -I "$here/tools/datagen/upload_batch.py" seal "$dir/$name.json" --openings-manifest "$om" \
     --part-end "chunk complete: $chunk positions" --out "$dir/sealed" >/dev/null || { log "chunk $name: seal failed"; exit 1; }
+  if [ -n "$instance_type" ]; then
+    "$py" -I -c 'import json, sys
+p, t, cpu = sys.argv[1:]
+m = json.load(open(p))
+m["machine"] = {"instance_type": t, "cpu": cpu}
+open(p, "w", newline="\n").write(json.dumps(m, indent=1) + "\n")' "$dir/sealed/$name.json" "$instance_type" \
+      "$(grep -m1 '^model name' /proc/cpuinfo | cut -d: -f2 | sed 's/^ *//')" || { log "chunk $name: machine record failed"; exit 1; }
+  fi
   for f in "$dir"/*.vf; do upload "$f" "$name/$(basename "$f")" || { log "upload of $f failed"; exit 1; }; done
   upload "$dir/sealed/$name.json" "$name/$name.json" || { log "upload of $name.json failed"; exit 1; }
   upload "$dir/datagen.log" "$name/datagen.log" || true
