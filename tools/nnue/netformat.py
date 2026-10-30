@@ -13,7 +13,8 @@ from pathlib import Path
 MASK64 = (1 << 64) - 1
 MAGIC = b'FORKNET\0'
 HEADER_BYTES = 64
-TYPES = {'i16': ('h', 2, -32768, 32767), 'i32': ('i', 4, -2**31, 2**31 - 1)}  # struct codes
+TYPES = {'i8': ('b', 1, -128, 127), 'i16': ('h', 2, -32768, 32767), 'i32': ('i', 4, -2**31, 2**31 - 1),
+         'f32': ('f', 4, None, None)}  # struct codes
 
 
 def splitmix_finalize(z):
@@ -135,3 +136,23 @@ def read_net(data, desc):
     if len(payload) != at + 6 * h + 4:
         raise ValueError('net file size does not match the description')
     return scale, l0w, l0b, l1w, l1b
+
+
+def write_net2(arch_id, inputs, hidden, buckets, scale, payload):
+    """A version-2 net file (the bake-off architectures, tools/nnue/models.py):
+    B0's header with version 2 and the bucket count in its last field."""
+    header = MAGIC + struct.pack('<IIIIiiiI', 2, arch_id, inputs, hidden, 255, 64, scale, buckets)
+    header += struct.pack('<Q', net_checksum(payload))
+    return header.ljust(HEADER_BYTES, b'\0') + payload
+
+
+def header_fields(data):
+    """A net file's header fields, checking the magic and the checksum."""
+    if data[:8] != MAGIC:
+        raise ValueError('not a Fork net file')
+    version, arch, n_in, h, qa, qb, scale, extra = struct.unpack_from('<IIIIiiiI', data, 8)
+    (checksum,) = struct.unpack_from('<Q', data, 40)
+    if net_checksum(data[HEADER_BYTES:]) != checksum:
+        raise ValueError('net file checksum mismatch')
+    return {'version': version, 'architecture': arch, 'inputs': n_in, 'hidden': h, 'qa': qa, 'qb': qb,
+            'scale': scale, 'buckets': extra}

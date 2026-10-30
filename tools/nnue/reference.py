@@ -18,6 +18,10 @@ perspective).
     reference.py legs --net NET --weights weights.bin --quantised quantised.bin
         --epd POSITIONS [--trainer parity-trainer.txt] [--out NET.parity]
     reference.py eval --net NET --epd POSITIONS     (R-int only, one line per position)
+    reference.py features --rust FEATURES.txt         (the feature leg against fork-train features)
+With --layout s512/h512/afs/xgr512.json (fitted maps included), every
+command handles that bake-off architecture through models.py (DESIGN.md
+§5.4); without it, B0.
     reference.py synthetic --out DIR [--seed N]      (random bullet-layout files, for tests)
 """
 import argparse
@@ -29,6 +33,7 @@ from pathlib import Path
 import chess
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import models  # noqa: E402
 import netformat  # noqa: E402
 
 EVAL_LIMIT = 20000  # src/eval/eval_scale.hpp
@@ -116,32 +121,57 @@ def read_trainer(path):
     return out
 
 
+def arch_of(desc):
+    """The bake-off architecture a description names (tools/nnue/models.py)."""
+    return models.Arch(desc['name'], desc.get('regions'), desc.get('table'))
+
+
+def quantization_leg(desc, weights, quantised, net_bytes, scale, fails):
+    """R-quant == bullet's quantised.bin == Fork's net file; returns the
+    evaluators (R-int, R-float) of the network."""
+    bq = netformat.read_quantised(quantised, desc)
+    if desc['architecture'] == 1:
+        net = netformat.read_net(net_bytes, desc)
+        rq = {t['name']: quantise_like_bullet(weights[t['name']], t['factor'], t['type']) for t in desc['quantised']}
+        expected = netformat.fork_payload(rq, desc)
+        evaluators = (lambda board: r_int(net, board)), (lambda board: r_float(weights, board))
+    else:
+        arch = arch_of(desc)
+        header = netformat.header_fields(net_bytes)
+        if (header['version'], header['architecture'], header['inputs'], header['hidden']) != \
+                (2, arch.id, arch.saved_inputs, arch.hidden):
+            fails.append(f'net file header {header} does not match {arch.name}')
+        net = models.unpack(arch, net_bytes[netformat.HEADER_BYTES:])
+        saved = models.saved_tensors(arch, weights)
+        rq = {name: values for name, (_, values) in saved.items()}
+        expected = models.map_block(arch) + models.pack(models.fork_tensors(arch, saved, scale))
+        evaluators = (lambda board: models.r_int(arch, net, scale, board)), \
+            (lambda board: models.r_float(arch, weights, board))
+    for name in bq:
+        if rq[name] != bq[name]:
+            diff = sum(1 for x, y in zip(rq[name], bq[name]) if x != y)
+            fails.append(f'quantization leg: {name} differs from bullet in {diff} values')
+    if expected != net_bytes[netformat.HEADER_BYTES:]:
+        fails.append("quantization leg: Fork's net file differs from R-quant")
+    return evaluators
+
+
 def legs(a):
     desc = netformat.layout(a.layout)
     fails = []
     net_bytes = Path(a.net).read_bytes()
-    net = netformat.read_net(net_bytes, desc)
-    scale = net[0]
-
-    # Quantization leg: R-quant == bullet's quantised.bin == Fork's net file.
+    scale = netformat.header_fields(net_bytes)['scale']
     weights = netformat.read_weights_bin(Path(a.weights).read_bytes())
     weights = {k: [to_f32(x) for x in v] for k, v in weights.items()}
-    rq = {t['name']: quantise_like_bullet(weights[t['name']], t['factor'], t['type']) for t in desc['quantised']}
-    bq = netformat.read_quantised(Path(a.quantised).read_bytes(), desc)
-    for name in rq:
-        if rq[name] != bq[name]:
-            diff = sum(1 for x, y in zip(rq[name], bq[name]) if x != y)
-            fails.append(f'quantization leg: {name} differs from bullet in {diff} values')
-    if netformat.fork_payload(rq, desc) != net_bytes[netformat.HEADER_BYTES:]:
-        fails.append("quantization leg: Fork's net file differs from R-quant")
+    eval_int, eval_float = quantization_leg(desc, weights, Path(a.quantised).read_bytes(), net_bytes, scale, fails)
 
     trainer = read_trainer(a.trainer) if a.trainer else {}
     rows, losses = [], []
     trainer_diff = 0.0
     for fen in read_fens(a.epd):
         board = chess.Board(fen)
-        ri = r_int(net, board)
-        rf = r_float(weights, board) * scale
+        ri = eval_int(board)
+        rf = eval_float(board) * scale
         row = {'fen': fen, 'r_int': ri, 'r_float': round(rf, 4)}
         if fen in trainer:
             t = trainer[fen] * scale
@@ -199,10 +229,55 @@ def synthetic(a):
 
 def evaluate(a):
     desc = netformat.layout(a.layout)
-    net = netformat.read_net(Path(a.net).read_bytes(), desc)
+    data = Path(a.net).read_bytes()
+    if desc['architecture'] == 1:
+        net = netformat.read_net(data, desc)
+        fn = lambda board: r_int(net, board)  # noqa: E731
+    else:
+        arch = arch_of(desc)
+        scale = netformat.header_fields(data)['scale']
+        net = models.unpack(arch, data[netformat.HEADER_BYTES:])
+        fn = lambda board: models.r_int(arch, net, scale, board)  # noqa: E731
     for fen in read_fens(a.epd):
-        print(f'{fen} | {r_int(net, chess.Board(fen))}')
+        print(f'{fen} | {fn(chess.Board(fen))}')
     return 0
+
+
+def board_from_pieces(text):
+    """A board from the trainer's "piece:square ..." text (bulletformat's
+    side-to-move frame: White to move, bit 3 marks the opponent's pieces,
+    types 0-5 pawn to king)."""
+    board = chess.Board(None)
+    for item in text.split():
+        code, sq = (int(x) for x in item.split(':'))
+        board.set_piece_at(sq, chess.Piece((code & 7) + 1, chess.BLACK if code & 8 else chess.WHITE))
+    board.turn = chess.WHITE
+    return board
+
+
+def feature_leg(a):
+    """The feature leg: every line of `fork-train features` (FEN or pieces |
+    stm inputs | ntm inputs | bucket) against this reference's features."""
+    desc = netformat.layout(a.layout)
+    arch = arch_of(desc) if desc['architecture'] != 1 else None
+    n, bad = 0, []
+    for line in open(a.rust, encoding='utf-8'):
+        if '|' not in line:
+            continue
+        text, stm, ntm, k = (x.strip() for x in line.split('|'))
+        board = chess.Board(text) if '/' in text else board_from_pieces(text)
+        if arch is None:
+            ours = (sorted(features(board, board.turn)), sorted(features(board, not board.turn)), 0)
+        else:
+            ours = models.both_perspectives(arch, board)
+        theirs = ([int(x) for x in stm.split()], [int(x) for x in ntm.split()], int(k))
+        n += 1
+        if (list(ours[0]), list(ours[1]), ours[2]) != theirs:
+            bad.append(text)
+    print(f'feature leg: {n} positions, {len(bad)} differ')
+    for text in bad[:10]:
+        print('  differs:', text, file=sys.stderr)
+    return 1 if bad or n == 0 else 0
 
 
 def main(argv=None):
@@ -226,8 +301,11 @@ def main(argv=None):
     e.add_argument('--net', required=True)
     e.add_argument('--epd', required=True)
     e.add_argument('--layout')
+    f = sub.add_parser('features')
+    f.add_argument('--rust', required=True, help='output of fork-train features')
+    f.add_argument('--layout')
     a = ap.parse_args(argv)
-    return {'legs': legs, 'eval': evaluate, 'synthetic': synthetic}[a.cmd](a)
+    return {'legs': legs, 'eval': evaluate, 'synthetic': synthetic, 'features': feature_leg}[a.cmd](a)
 
 
 if __name__ == '__main__':

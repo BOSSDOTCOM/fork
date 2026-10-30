@@ -1,0 +1,103 @@
+{
+  "comment": "XGR-512's tensors as Fork's training program saves them (tools/train --arch xgr512), in save order, after its transforms (factorisers merged, output layers transposed to one bucket's or stack's weights per row); read by convert.py and reference.py (DESIGN.md \u00a75.4). The maps are fitted on the training data by tools/nnue/fit_maps.py (XGR's regions are fixed by its design).",
+  "name": "xgr512",
+  "architecture": 5,
+  "inputs": 3712,
+  "hidden": 512,
+  "qa": 255,
+  "qb": 64,
+  "regions": [
+    0,
+    1,
+    1,
+    1,
+    2,
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3,
+    3
+  ],
+  "table": null,
+  "maps_fitted_on": null,
+  "quantised": [
+    {
+      "name": "l0w",
+      "rows": 512,
+      "cols": 3712,
+      "type": "i16",
+      "factor": 255
+    },
+    {
+      "name": "l0b",
+      "rows": 512,
+      "cols": 1,
+      "type": "i16",
+      "factor": 255
+    },
+    {
+      "name": "s0w",
+      "rows": 3,
+      "cols": 3712,
+      "type": "i16",
+      "factor": 255
+    },
+    {
+      "name": "s0b",
+      "rows": 3,
+      "cols": 1,
+      "type": "i16",
+      "factor": 255
+    },
+    {
+      "name": "oaw",
+      "rows": 1,
+      "cols": 1024,
+      "type": "i16",
+      "factor": 64
+    },
+    {
+      "name": "oab",
+      "rows": 1,
+      "cols": 1,
+      "type": "i32",
+      "factor": 16320
+    },
+    {
+      "name": "obw",
+      "rows": 1,
+      "cols": 1024,
+      "type": "i16",
+      "factor": 64
+    },
+    {
+      "name": "obb",
+      "rows": 1,
+      "cols": 1,
+      "type": "i32",
+      "factor": 16320
+    }
+  ]
+}

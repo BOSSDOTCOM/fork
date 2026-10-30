@@ -2749,6 +2749,94 @@ compact threat encoding have no precedent found; the hybrid H-512 is an
 assembly of common concepts, with its counts (8 buckets, at most 4
 regions) still to be screened as constants.
 
+### 5.4 Phase 4 step 4: the bake-off (owner's instructions, 2026-10-30)
+
+**Instructions.** (a) Training configurations for S-512, H-512, AF-S,
+XGR-512 and the B0 control in the training program, each one's feature
+handling checked against its parity reference. (b) A dry run of each on
+Kaggle on a small data slice: it trains, saves, quantizes and passes the
+parity chain. (c) At about 150 M generation-1 positions, a snapshot with a
+held-out validation shard; all five trained on exactly that snapshot, same
+steps, same tuning budget, two seeds each. (d) Parity and netcheck per net,
+SPRTs one at a time on the GitHub shards against the B0 control (fixed
+time, plus the fixed-node check), decided by the pre-registered rule
+(judgement.md §6.3: complex against simpler on [0, 5], STC narrows, LTC
+decides, an inconclusive pairing keeps the simpler design); LTC for the
+finalists. Nothing is promoted before the owner's review.
+
+**The entries as built** (`tools/train --arch`, descriptions in
+`tools/nnue/<arch>.json`, independent reference `tools/nnue/models.py`):
+
+| Entry (id) | Inputs per perspective | Body and output | Clips | Saved file |
+|---|---|---|---|---|
+| B0 control (1) | 768 | 256 CReLU -> 1 | bullet's ±1.98 | 394,756 B |
+| S-512 (2) | 768, mirrored | 512 SCReLU -> 8, picked by phase | ±1.98 | 803,872 B |
+| H-512 (3) | 768 × 4 fitted regions, mirrored, + 768 factoriser | 512 SCReLU -> 8, picked by phase | first layer and factoriser ±0.99 each, biases ±0.99 | 3,163,168 B |
+| AF-S (4) | as H-512 | 512 clipped, halves multiplied -> 512 -> 16 -> 32 -> 1, SCReLU between, 8 phase stacks per layer | as H-512 | 3,222,560 B |
+| XGR-512 (5) | 768 × 4 fixed regions (e1; f1-h1; rank 2; ranks 3-8), mirrored, + 768 factoriser, + 640 exposure + 10 factoriser | 512 SCReLU and 3 side values; two outputs blended by the gate | first layer, side layer and their factorisers ±0.99 | 3,828,494 B |
+
+- **Features** (the same in Rust, Python and later C++): a perspective
+  sees the board from its side (vertical flip for Black, its own pieces
+  first: 384 × [enemy] + 64 × type + square); mirrored left-right (square
+  XOR 7) when its own king stands on files a-d; the region of its mirrored
+  king square (cell rank × 4 + file - 4) offsets the index by 768 per
+  region; the factoriser input repeats the 768 index after the regions.
+  XGR's exposure rule: a non-king piece is exposed when an enemy piece of
+  a lower class attacks it (pawn < knight = bishop < rook < queen < king)
+  or an enemy attacks it and no own piece defends it (pseudo-attacks on the
+  real occupancy); its inputs are 320 × [enemy] + 64 × type + square, then
+  5 × [enemy] + type for the factoriser. The phase selector is Fork's
+  `game_phase` (knights and bishops 1, rooks 2, queens 4, capped at 24)
+  through a 25-entry table.
+- **S-512's selector** (owner, 2026-10-30): H-512's phase octiles instead
+  of S's piece-count buckets (a near match to Stockfish's layer-stack
+  selection), so S and H differ only in the king regions.
+- **AF-S's body** (owner, 2026-10-30): kept as designed (16, 32, 8 stacks,
+  int8 L1 at 64), although the constant screen found the same widths and
+  stack count in Stockfish 14-18; recorded in ORIGINALITY.md.
+- **XGR's side lanes**: 3 in the net file (the lanes used; the design
+  screen's credit note), not the design's 8.
+- **Maps, fitted on the training data** (`fork-train stats`, then
+  `tools/nnue/fit_maps.py`): H-512's and AF-S's regions by AF's rule with
+  the judge's θ = 10% and at most 4 regions; the phase octiles of all three
+  selectors. The dry run fits them on its slice; the bake-off refits them
+  on its snapshot before training.
+- **Net file, version 2** (layout in `tools/nnue/models.py`): B0's 64-byte
+  header with the bucket count, a 128-byte map block (regions, phase
+  table), then each entry's tensors. AF-S's biases and output multiplier
+  are quantized by the converter (their scales are not integers: L1 sums
+  at 64 × 65,025 / 512 per unit, and so on, as exact rationals).
+- **Integer arithmetic** as the designs specify it (design-speed.md §5,
+  design-accuracy.md §5.3-5.4, design-novelty.md §5.1), emulated in
+  `models.py` (R-int); the engine's inference follows the same spec.
+- **Training** (`tools/train/kaggle/bakeoff.py`): every entry with the
+  same settings and schedule, S fitted once on the training data, two at
+  a time on the two T4s, the checkpoint with the lowest validation loss
+  kept, the trainer's own evaluation of the parity positions (T) per run.
+
+**Checked so far (2026-10-30, CPU, throwaway Cargo home).** Every graph
+builds and its quantized file has the size above (bullet's own `check`).
+**Feature leg**: the trainer's active inputs and bucket equal the
+reference's (python-chess attack sets for XGR's exposure) on the 446
+parity positions and on 200,000 generation-0 positions, for all five
+(0 differences); planted faults are caught (exposure rule ≤ for <: 49,468
+positions differ; mirror on the wrong side: all 200,000; a shifted region
+map: 74,376; a queen phase weight of 3: 60,341). **Quantization leg**
+against bullet's files of the initial weights: exact for all five,
+factoriser merges and transposes included. Unit tests
+(`tools/nnue/test_bakeoff.py`): legs pass on synthetic nets; a corrupted
+weight, a missing factoriser merge, a transposed output layer and
+truncation instead of rounding each fail. Not yet checked: R-float
+against T (needs the GPU: the dry run), which also settles that `select`
+keeps one contiguous block of rows per bucket (UNVERIFIED until then);
+F = R-int needs the engine's inference for each entry, the next build.
+
+**Not in this bake-off**: AF's small-layer activation sweep and XGR's two
+ablation nets (no X; buckets instead of G); judgement.md lists them as
+optional, the owner's five entries leave them out. XGR enters only if its
+exposure pre-test passes with the current net on generation-1 data
+(judgement.md §3).
+
 ## 6. Decisions log
 
 | Date | Decision |
@@ -2793,6 +2881,8 @@ regions) still to be screened as constants.
 | 2026-10-29 | **B0r1 adopted; tablebase result, not material, for a network's quiet choice (owner).** B0r1 passed its SPRT against B0 (+200.24 +/- 16.05 Elo, H1 at [0, 5], STC) and is the default network. Three search tests were fixed for it: determinism clears the history too; the fail-high stop test scans every bench position; in the exchange test a network's move is checked against Syzygy where the material-best move is not forced. Owner's rule: in Syzygy range, accept any move that keeps the tablebase result; otherwise compare the moves with a deep search, and record a real loss as a known weakness of the net, not a test change. The check must be able to fail: K+R+P v K+R with 4 winning and 12 non-winning moves, fault-injected. |
 | 2026-10-29 | **Generation 0 stopped, generation 1 started with B0r1; the bake-off trains on generation 1 (owner).** Generation 0 was stopped at 1:42 PM EST and sealed from its complete games: 1,366,657 games, 130,615,808 positions (data/manifests/g0.json, worker 9 held out; g0s1 and g0s2 are byte prefixes of its shards). Generation 1 has the same settings (10 threads, 20,000 nodes, 2-4 random plies per game, 400 cp decided bound, Syzygy 3-4-5, 1 MB hash, Lichess 2016-09 openings) with a new seed (20261030) and fork_datagen from phase-4 bb4f75a (B0r1). The Lichess 2026-09 openings are added when their stream finishes. All bake-off candidates train on the same generation-1 data. |
 | 2026-10-30 | **Delta pruning inconclusive, kept off (owner).** Its STC SPRT against B0r1 was stopped undecided after 27,200 games: -0.40 +/- 2.93 Elo, nElo -0.56 +/- 4.13, LLR -1.39 on [0, 3] (history/phase-4/sprt-log.md). Not merged; exp/qs-delta keeps it for the post-network re-validation, with its margin retuned (ideas.md 39). |
+| 2026-10-30 | **Openings tool resumable and small (owner).** The 2026-09 stream was stopped for low memory after 6.4 hours (its python held 1.17 GB). `datagen_openings.py` now writes positions straight to a state folder, finds duplicates through 64-bit digests in one table capped at 256 MB, and checkpoints every 2 minutes; the same command resumes (the stream is re-read from its start and the finished games skipped; the re-read prefix must hash as recorded). Lichess 2016-09, killed after 600 s and resumed, reproduced its committed manifest byte for byte at a peak of 57 MB. |
+| 2026-10-30 | **Bake-off constants (owner).** AF-S keeps its body (16, 32, 8 stacks, int8 L1 at 64) though the screen found it in Stockfish 14-18; S-512 takes H-512's phase octiles instead of piece-count buckets; XGR stores 3 side lanes (§5.4; ORIGINALITY.md). |
 
 ## 7. Performance doctrine (governs every phase)
 
