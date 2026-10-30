@@ -126,3 +126,21 @@ LLR: 21.98 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
   games plan item 0): the default network (docs/nets.md; one search test
   fixed for it) and generation 1's labeller from then on. The bake-off
   entries still play against this net as the B0 control (bake/g1b0).
+
+### 2026-10-30 g1s512-vs-g1b0 (bake-off stage A, games plan 3)
+
+- base `5cacf8a` (branch bake/g1b0: the B0 control, promoted as B0r2;
+  bench 14,589,665), test `ba8c4cb` (branch bake/g1s512: S-512, seed 1,
+  S = 101; bench 15,249,025), bounds [0, 5] nElo, 8+0.08, Hash 16 MB,
+  Syzygy 3-4-5, GitHub shards.
+- Stage 0: run 41125906800, dispatched while CI was idle. Result: **H1
+  accepted** after stage 0:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: 43.66 +/- 12.02, nElo: 62.52 +/- 17.02
+Ptnml(0-2): [30, 137, 320, 229, 84]
+LLR: 3.98 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+- Promoted provisionally as the default network S512 by the owner
+  (docs/nets.md); the bake-off continues unchanged (H-512 next), and a
+  later entry that beats it is promoted then.

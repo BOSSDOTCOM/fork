@@ -43,5 +43,19 @@ labels are Fork's own (KB data-policy.md, strategy A+).
 | Parity (tests/nnue/b0r2.parity, 446 positions) | quantization leg exact; R-float vs the trainer's float evaluation at most 0.00012 cp; netcheck exact on all 446; quantization loss max 9.0 cp, p99 7.2 cp, mean 2.0 cp (within the B0-class thresholds) |
 | Bench | 14,589,665 nodes, signature 9dba694dd1ee4c41 (tests/bench-b0r2.ref) |
 | SPRT | vs B0r1 (phase-4 c9a4a7c), [0, 5], 8+0.08, GitHub shards, run 41104107035: **+235.45 +/- 16.04 Elo (nElo +334.16 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
-| Status | **The default network since 2026-10-30** (owner's standing instruction, DESIGN.md §5.4 games plan item 0), and generation 1's labeller from then on; the bake-off entries still play against it as the B0 control |
+| Status | The default network on 2026-10-30 (owner's standing instruction, DESIGN.md §5.4 games plan item 0) until S-512 replaced it the same day, and the labeller of generation 1's part g1b; the bake-off entries still play against it as the B0 control; still buildable with `-DFORK_NET=nets/b0r2.fnet` (tests/bench-b0r2.ref) |
 | Notes | One search test that passed with B0r1 failed with B0r2: the repetition case checked that the evaluation of the position after 1. e4 Nf6 2. Nf3 Ng8 3. Ng1 is not 0, and B0r2 scores it exactly 0. The line now starts without Black's queen and the check asks for an evaluation below -300, so it holds for any evaluator. |
+
+## S512, the bake-off's S-512 entry (2026-10-30)
+
+| Item | Value |
+|---|---|
+| File | `nets/s512.fnet` (branch bake/g1s512 ba8c4cb as `nets/g1s512.fnet`, byte-identical), 804,064 bytes, Fork checksum ef88709dc8d2bcba |
+| Architecture | 768 inputs per perspective, mirrored left-right, -> 512 SCReLU -> 8 outputs, one picked by game phase (H-512's phase octiles; owner, 2026-10-30); QA 255 / QB 64; S = 101, matched to the B0 control's output scale (DESIGN.md §5.4, plan 2) |
+| Data | generation-1 snapshot g1s1, as B0r2 (workers 0-8 for training, worker 9 held out) |
+| Training | Kaggle kernel fork-bake at d4ccadb (T4), seed 1, no warm start: target 0.5 sigmoid(score / 105) + 0.5 result, AdamW, LR 0.001 dropped tenfold after 40, batch 16,384 x 305 per superbatch, 80 superbatches (400 M positions seen); the checkpoint with the lowest validation loss kept: superbatch 68, validation loss 0.020974 (seed 2: 0.021176 at 71, branch bake/g1s512b). Still improving when training stopped (DESIGN.md §5.4) |
+| Parity (tests/nnue/s512.parity, 446 positions) | R-float vs the trainer's float evaluation at most 0.00012 cp; netcheck exact on all 446; quantization loss max 15.6 cp, p99 12.1 cp, mean 3.6 cp. This is the first net of its architecture, whose thresholds are not yet approved (proposed to the owner: max 21 cp, p99 16 cp) |
+| Bench | 15,249,025 nodes, signature 13001f412d6e8d7e (tests/bench-s512.ref) |
+| SPRT | vs the B0 control (bake/g1b0 5cacf8a, the net promoted as B0r2), [0, 5], 8+0.08, GitHub shards, run 41125906800 (bake-off stage A): **+43.66 +/- 12.02 Elo (nElo +62.52 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
+| Status | **The default network since 2026-10-30, provisionally** (owner): the bake-off continues unchanged, and a later entry that beats it is promoted then. The labeller of generation 2 and of the cloud data generation from then on |
+| Notes | One search test that passed with B0r2 failed with S-512: K+R v K with the fifty-move clock at 0 had to score above 300 cp, and S-512 scores it 263. The check, which only contrasts the position with the same one drawn by the fifty-move rule, now asks for any score above the draw's 0. |

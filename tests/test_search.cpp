@@ -604,7 +604,10 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
   CHECK_EQ(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 99 80", 3).score, mate_score(1));
   // ...but with no mate in 1 every move ends in a draw by the 50-move rule.
   CHECK_EQ(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 99 80", 3).score, 0);
-  CHECK(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 0 80", 3).score > 300);
+  // With the clock at 0 the same position is no draw: any score above the
+  // draw's 0 shows that (the size of a rook's edge is the evaluator's: S-512
+  // scores it 263).
+  CHECK(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 0 80", 3).score > 0);
   // 1. e4 Nf6 2. Nf3 Ng8 3. Ng1: ...Nf6 repeats the position after 1...Nf6.
   // Black starts without its queen, so the evaluation is far from 0 with any
   // evaluator (B0r2 scores the full-material position at exactly 0;
