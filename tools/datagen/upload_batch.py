@@ -12,13 +12,18 @@ files (Kaggle's top-level file limit; the CLI skips subfolders by default,
 KB phase4-pipeline.md §4.7). No paths are written, only file names, so
 the manifest is safe to publish.
 
+Each sealed run is one part of a generation (the labeller policy, DESIGN.md
+§5.3, deliverable 2): its manifest records the labelling network (a network
+run's evaluator must name it, "nnue (<net>)"), its openings file and why
+the part ended (--part-end, required).
+
 The upload and confirmation steps (kaggle datasets create, the CPU-session
 hash check, deleting local shards only on a full match) are added after
 the Kaggle test session (deliverable 0, checks K7-K9) has shown the CLI's
 real behaviour.
 
     .venv/Scripts/python.exe -I tools/datagen/upload_batch.py seal RUN.json \\
-        --openings-manifest OPENINGS.manifest.json [--out data/manifests]
+        --openings-manifest OPENINGS.manifest.json --part-end REASON [--out data/manifests]
 """
 import argparse
 import hashlib
@@ -37,9 +42,13 @@ def sha256_of(path):
     return h.hexdigest()
 
 
-def seal(run_json, openings_manifest, out_dir):
+def seal(run_json, openings_manifest, out_dir, part_end):
     run_json = Path(run_json)
     run = json.loads(run_json.read_text())
+    if not part_end.strip():
+        raise SystemExit('say why this part ended (--part-end)')
+    if run['evaluator'] == 'nnue':
+        raise SystemExit('the run does not name its labelling network; set "evaluator": "nnue (<net>)"')
     shards = sorted(run['shards'], key=lambda s: s['file'])
     for s in shards:
         path = run_json.parent / s['file']
@@ -60,6 +69,7 @@ def seal(run_json, openings_manifest, out_dir):
         'seconds': run['seconds'],
         'results': run['results'],
         'ends': run['ends'],
+        'part_end': part_end,
         'batches': [shards[i:i + BATCH_FILES] for i in range(0, len(shards), BATCH_FILES)],
     }
     if sum(s['games'] for s in shards) != run['games'] or sum(s['positions'] for s in shards) != run['positions']:
@@ -78,9 +88,10 @@ def main(argv=None):
     s.add_argument('run_json')
     s.add_argument('--openings-manifest', required=True)
     s.add_argument('--out', default=str(Path(__file__).resolve().parents[2] / 'data' / 'manifests'))
+    s.add_argument('--part-end', required=True, help='why this part of the generation ended')
     a = ap.parse_args(argv)
     if a.cmd == 'seal':
-        seal(a.run_json, a.openings_manifest, a.out)
+        seal(a.run_json, a.openings_manifest, a.out, a.part_end)
     return 0
 
 

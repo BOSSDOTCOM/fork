@@ -2401,14 +2401,19 @@ target linking the engine library, never part of the TCEC binary).
   always labelled by the current default network. Whenever a new network
   is promoted to the default (for example the bake-off's winner beating
   B0r2), the running generation is stopped at a game boundary, the part
-  generated so far is sealed from its complete games as its own manifest
-  with its labelling network recorded (`"evaluator": "nnue (<net>)"`,
-  which fork_datagen writes itself since 3978e91), and the generation
-  continues as a new part (run names g2, g2b, g2c, ...) labelled by the
-  new default, with a new seed and the rest of the generation's target.
-  Parts are never merged into one manifest, so training can always tell
-  which network labelled which positions. Generation 1 is the first
-  instance: g1 (B0r1) and g1b (B0r2).
+  generated so far is sealed from its complete games as its own manifest,
+  and the generation continues as a new part labelled by the new default,
+  with a new seed and the rest of the generation's target. **One naming
+  scheme** (owner, 2026-10-30): a part ends for any reason (a new
+  labelling network, new openings, or the target reached), and the next
+  part takes the next letter (g2, g2b, g2c, ...). Every part's manifest
+  records its labelling network (`"evaluator": "nnue (<net>)"`, which
+  fork_datagen writes itself since 3978e91), its openings file, and why
+  the part ended (`"part_end"`; `upload_batch.py seal` refuses to seal
+  without it, or with a network run that does not name its net). Parts
+  are never merged into one manifest, so training can always tell which
+  network labelled which positions. Generation 1 is the first instance:
+  g1 (B0r1, ended by B0r2's promotion) and g1b (B0r2).
 - **Tests**: a reader for the format (C++, used by the tests, the
   rescoring tool later, and a new fuzz target `fuzz_selfplay_record`
   under the phase-end fuzz rule) round-trips every written game; every
@@ -2666,6 +2671,9 @@ only):
   identifiers deliverable 2 introduced (its types, enumerators, helpers,
   `test_datagen`, `datagen_verify`, `datagen_main`, `measure_nodes`,
   `forkdatagen`): no match in any of the four.
+- **Labeller policy** (2026-10-30, Stockfish ff7cee4, Ethereal 0e47e9b,
+  Berserk 3262851, Weiss c735b8f): `part_end` (seal's parameter,
+  `--part-end` and the manifest key): no match in any of the four.
 
 #### Owner's answers (2026-10-28)
 
@@ -3031,7 +3039,7 @@ exposure pre-test passes with the current net on generation-1 data
 | 2026-10-30 | **B0r2 is the default network (owner's standing instruction, §5.4 games plan item 0).** The bake-off's B0 control (B0's shape on g1s1) beat B0r1 at STC on [0, 5]: +235.45 +/- 16.04 Elo, H1 after 1,600 games. It becomes `nets/b0r2.fnet` with its parity file and bench reference (14,589,665 / 9dba694dd1ee4c41) and generation 1's labeller from then on (docs/nets.md); one search test made evaluator-independent. **H-512 plays as trained (owner)**: its gap is overfitting (§5.4), the pre-registered plan is unchanged, and king regions are retested with much more data in the winner's full-size confirmation, a hand-drawn map with the castled squares together included (judgement.md §5, row 5). |
 | 2026-10-30 | **Generation 1 switched to B0r2 (owner's standing instruction).** The B0r1 run was stopped at 1:45 PM EST and sealed from its complete games: 1,717,530 games, 171,297,909 positions (data/manifests/g1.json, worker 9 held out; g1s1's shards are byte prefixes of its shards, checked). The rest of the 200 M target, 28,702,091 positions, comes from run g1b: fork_datagen from phase-4 ac2ce91 (B0r2, bench checked), generation 1's settings with a new seed (20261031), started at 1:46 PM EST. The Lichess 2026-09 openings are still added when their stream finishes. |
 | 2026-10-30 | **Each labelling net's data stays apart (owner).** Generation 1's two parts keep separate manifests: g1.json (B0r1) and g1b.json (B0r2, sealed when g1b finishes), never merged, so training can tell them apart. fork_datagen's run manifest now names the network (`"evaluator": "nnue (b0r2)"`; before, only "nnue"), checked by datagen_verify; g1b's binary predates this, so its seal sets the field. **check.sh full's TCEC leg** compared each TCEC binary's bench with tests/bench.ref (the bootstrap evaluation's) and so failed whenever a network is the default; it now calls .github/ci/bench-parity.sh as CI does (the net's reference and perft bench), and passed with gcc 11.4, g++-12, clang 16 and clang 19. |
-| 2026-10-30 | **Generation 2 and the standing labeller policy (owner).** After generation 1 (g1 + g1b) and the WSL restart that applies `.wslconfig` (6 GB cap, gradual memory reclaim), generation 2 starts as run g2: labelled by B0r2, generation 1's settings, seed 20261101, target 500 M positions; the Lichess 2026-09 openings are added when their stream finishes. **Labeller policy** (§5.3, deliverable 2): whenever a new network is promoted, the running generation stops at a game boundary, the part so far is sealed with its labelling network recorded, and the generation continues as a new part (g2b, ...) labelled by the new default; parts are never merged. |
+| 2026-10-30 | **Generation 2 and the standing labeller policy (owner).** After generation 1 (g1 + g1b) and the WSL restart that applies `.wslconfig` (6 GB cap, gradual memory reclaim), generation 2 starts as run g2: labelled by B0r2, generation 1's settings, seed 20261101, target 500 M positions; the Lichess 2026-09 openings are added when their stream finishes. **Labeller policy** (§5.3, deliverable 2): whenever a new network is promoted, the running generation stops at a game boundary, the part so far is sealed with its labelling network recorded, and the generation continues as a new part (g2b, ...) labelled by the new default; parts are never merged. **One naming scheme (owner)**: a part ends for any reason (a new labelling net or new openings), the next part takes the next letter, and each manifest records its labelling network, openings file and why the part ended (`part_end`, required by `upload_batch.py seal`, which also refuses a network run that does not name its net; name screened, no match). g1.json gains its reason: B0r2's promotion. |
 
 ## 7. Performance doctrine (governs every phase)
 

@@ -37,8 +37,16 @@ class SealTests(unittest.TestCase):
     def tearDown(self):
         self.dir.cleanup()
 
+    def seal(self, part_end='target reached'):
+        return ub.seal(self.tmp / 'r.json', self.tmp / 'o.json', self.tmp / 'm', part_end)
+
+    def set_evaluator(self, evaluator):
+        run = json.loads((self.tmp / 'r.json').read_text())
+        run['evaluator'] = evaluator
+        (self.tmp / 'r.json').write_text(json.dumps(run))
+
     def test_hashes_batches_and_no_paths(self):
-        out = ub.seal(self.tmp / 'r.json', self.tmp / 'o.json', self.tmp / 'm')
+        out = self.seal()
         sealed = json.loads(out.read_text())
         self.assertEqual([len(b) for b in sealed['batches']], [50, 3])
         flat = [s for b in sealed['batches'] for s in b]
@@ -50,14 +58,42 @@ class SealTests(unittest.TestCase):
     def test_size_mismatch_stops(self):
         (self.tmp / self.shards[0]['file']).write_bytes(b'x')
         with self.assertRaises(SystemExit):
-            ub.seal(self.tmp / 'r.json', self.tmp / 'o.json', self.tmp / 'm')
+            self.seal()
 
     def test_counts_must_add_up(self):
         run = json.loads((self.tmp / 'r.json').read_text())
         run['positions'] += 1
         (self.tmp / 'r.json').write_text(json.dumps(run))
         with self.assertRaises(SystemExit):
-            ub.seal(self.tmp / 'r.json', self.tmp / 'o.json', self.tmp / 'm')
+            self.seal()
+
+    # The labeller policy (DESIGN.md §5.3, deliverable 2): every part
+    # records its labelling network, its openings and why it ended.
+    def test_records_why_the_part_ended(self):
+        sealed = json.loads(self.seal('a new labelling net: B0r3 promoted').read_text())
+        self.assertEqual(sealed['part_end'], 'a new labelling net: B0r3 promoted')
+        self.assertEqual(sealed['openings']['file'], 'o.epd')
+
+    def test_a_reason_is_required(self):
+        for reason in ('', '   '):
+            with self.assertRaises(SystemExit):
+                self.seal(reason)
+
+    def test_a_network_run_must_name_its_net(self):
+        self.set_evaluator('nnue')
+        with self.assertRaises(SystemExit):
+            self.seal()
+        self.set_evaluator('nnue (b0r2)')
+        sealed = json.loads(self.seal().read_text())
+        self.assertEqual(sealed['generator']['evaluator'], 'nnue (b0r2)')
+
+    def test_cli_requires_the_reason(self):
+        with self.assertRaises(SystemExit):
+            ub.main(['seal', str(self.tmp / 'r.json'), '--openings-manifest', str(self.tmp / 'o.json'),
+                     '--out', str(self.tmp / 'm')])
+        ub.main(['seal', str(self.tmp / 'r.json'), '--openings-manifest', str(self.tmp / 'o.json'),
+                 '--out', str(self.tmp / 'm'), '--part-end', 'stopped by the owner'])
+        self.assertEqual(json.loads((self.tmp / 'm' / 'r.json').read_text())['part_end'], 'stopped by the owner')
 
 
 if __name__ == '__main__':
