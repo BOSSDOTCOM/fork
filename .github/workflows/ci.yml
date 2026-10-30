@@ -183,8 +183,12 @@ jobs:
             REQUIRE_BENCH=0 bash .github/ci/run-tests.sh $d -E '^(bench_parity|perft_bench_parity|version_lto|nnue_netcheck|nnue_netcheck_embedded)$'
             bash .github/ci/bench-parity.sh $d/fork-sde
             # The network parity gate on this build's SIMD path, through the
-            # wrapper (tests/nnue/synthetic.parity; DESIGN.md §5.3).
-            $d/fork-sde netcheck tests/nnue/synthetic.parity tests/nnue/synthetic.fnet
+            # wrapper (tests/nnue/synthetic.parity; DESIGN.md §5.3). The
+            # synthetic net is a B0 file, so, as for CMake's nnue_netcheck,
+            # only builds whose embedded network has B0's shape can read it.
+            if ctest --test-dir $d -N -R '^nnue_netcheck$' | grep -q 'nnue_netcheck'; then
+              $d/fork-sde netcheck tests/nnue/synthetic.parity tests/nnue/synthetic.fnet
+            fi
             # nnue_netcheck_embedded too: the embedded network against the
             # parity file named after it, when the build has one.
             net=$($d/fork-sde version | tr -d '\r' | sed -n 's/^net //p')
