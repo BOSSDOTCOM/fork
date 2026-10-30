@@ -85,3 +85,23 @@ LLR: 17.27 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
 ```
 - Merged into phase-4 as the default network (docs/nets.md; three search
   tests fixed for it, DESIGN.md §5.3).
+
+### 2026-10-29 qs-delta-vs-b0r1 (tier 2 step 0, experiment)
+
+- base `bb4f75a` (phase-4, B0r1, bench 15,453,694), test `a3b2859`
+  (branch exp/qs-delta: delta pruning in the quiescence search behind
+  `use_qs_delta`, QuiesceGainSlack 150 cp; bench 14,952,431), bounds
+  [0, 3] nElo, 8+0.08, Hash 16 MB.
+- Stages 0-16: runs 40948681273 to 40983743442, one at a time, each
+  dispatched only while CI was idle. After stage 15 the stage loop was
+  stopped when the machine ran low on memory; stage 16 had already been
+  dispatched and was collected. Result: **inconclusive**, stopped by the
+  owner (2026-10-30) after 27,200 games:
+```
+Shards: 272 (done); pairs 13600, games 27200 (27200 finished, time losses 0, abnormal 0)
+Elo: -0.40 +/- 2.93, nElo: -0.56 +/- 4.13
+Ptnml(0-2): [946, 3135, 5417, 3208, 894]
+LLR: -1.39 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+```
+- Not merged; the switch stays off (it exists only on exp/qs-delta).
+  Revisited in the post-network re-validation (ideas.md 39).

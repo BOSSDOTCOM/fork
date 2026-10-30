@@ -855,3 +855,25 @@ tuned by SPSA.
 - **runtime cost:** none for the engine; hosted runners only.
 - **earliest phase:** Phase 4.
 - **status:** queued
+
+## 39. Quiescence delta pruning
+
+- **type:** ELO (switch `use_qs_delta`, branch exp/qs-delta)
+- **idea:** in the quiescence search, skip a capture (not a promotion,
+  side not in check, both sides with a piece) when stand-pat plus the
+  captured piece's value plus QuiesceGainSlack (150 cp) cannot reach
+  alpha, scoring it as that bound (fail-soft); tier 2 step 0 (KB
+  search-techniques.md §3.27, T25's per-move form).
+- **phase:** Phase 4 tier 2; revisit in the post-network re-validation
+  (§5.2 Quality control 6), with the margin retuned for the network's
+  centipawns (150 was read off a bench curve measured with the bootstrap
+  evaluation's search, DESIGN.md decisions log 2026-10-29).
+- **metric:** SPRT [0, 3] at STC, then LTC; the nps change beside it.
+- **runtime cost:** possible (one comparison per quiescence capture; it
+  saves nodes: bench 14,952,431 against 15,453,694). The nps change was
+  not measured.
+- **earliest phase:** Phase 3.
+- **status:** **inconclusive** (2026-10-30, owner): against B0r1, -0.40
+  ± 2.93 Elo (nElo -0.56 ± 4.13) after 27,200 games, LLR -1.39 on
+  [0, 3], stopped undecided (history/phase-4/sprt-log.md). Kept off;
+  exp/qs-delta keeps the code for the re-validation.
