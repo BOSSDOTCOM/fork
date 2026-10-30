@@ -5,6 +5,22 @@ architecture, data, training run, parity results and SPRT. Every net
 chains back to the bootstrap evaluation (KB originality.md §4); data and
 labels are Fork's own (KB data-policy.md, strategy A+).
 
+## Quantization-loss limits
+
+Each architecture has limits on the quantization loss |R-int - R-float|
+over the 446 parity positions (DESIGN.md §5.3, deliverable 6), set from
+its first healthy net and approved by the owner. **The rule** (owner,
+2026-10-30): the limits leave headroom above the first healthy net's loss,
+to catch broken conversions (a missing rounding step, a too-coarse scale,
+a transposed tensor), not to rank nets. They are checked with
+`tools/nnue/reference.py legs --max-loss MAX --p99-loss P99` when a net is
+added; no CI job applies them automatically.
+
+| Architecture | First net and its loss (max / p99) | Limits (max / p99) | Approved |
+|---|---|---|---|
+| B0 (768 -> 256 -> 1) | B0: 11.1 / 8.8 cp | 15 / 12 cp | owner, 2026-10-29 |
+| S-512 (768 mirrored -> 512 SCReLU -> 8 by phase) | S512: 15.6 / 12.1 cp | 21 / 16 cp | owner, 2026-10-30 |
+
 ## B0 (2026-10-29)
 
 | Item | Value |
@@ -54,7 +70,7 @@ labels are Fork's own (KB data-policy.md, strategy A+).
 | Architecture | 768 inputs per perspective, mirrored left-right, -> 512 SCReLU -> 8 outputs, one picked by game phase (H-512's phase octiles; owner, 2026-10-30); QA 255 / QB 64; S = 101, matched to the B0 control's output scale (DESIGN.md §5.4, plan 2) |
 | Data | generation-1 snapshot g1s1, as B0r2 (workers 0-8 for training, worker 9 held out) |
 | Training | Kaggle kernel fork-bake at d4ccadb (T4), seed 1, no warm start: target 0.5 sigmoid(score / 105) + 0.5 result, AdamW, LR 0.001 dropped tenfold after 40, batch 16,384 x 305 per superbatch, 80 superbatches (400 M positions seen); the checkpoint with the lowest validation loss kept: superbatch 68, validation loss 0.020974 (seed 2: 0.021176 at 71, branch bake/g1s512b). Still improving when training stopped (DESIGN.md §5.4) |
-| Parity (tests/nnue/s512.parity, 446 positions) | R-float vs the trainer's float evaluation at most 0.00012 cp; netcheck exact on all 446; quantization loss max 15.6 cp, p99 12.1 cp, mean 3.6 cp. This is the first net of its architecture, whose thresholds are not yet approved (proposed to the owner: max 21 cp, p99 16 cp) |
+| Parity (tests/nnue/s512.parity, 446 positions) | R-float vs the trainer's float evaluation at most 0.00012 cp; netcheck exact on all 446; quantization loss max 15.6 cp, p99 12.1 cp, mean 3.6 cp: the first net of its architecture, within the limits set from it (max 21 cp, p99 16 cp; owner, 2026-10-30; see "Quantization-loss limits") |
 | Bench | 15,249,025 nodes, signature 13001f412d6e8d7e (tests/bench-s512.ref) |
 | SPRT | vs the B0 control (bake/g1b0 5cacf8a, the net promoted as B0r2), [0, 5], 8+0.08, GitHub shards, run 41125906800 (bake-off stage A): **+43.66 +/- 12.02 Elo (nElo +62.52 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
 | Status | **The default network since 2026-10-30, provisionally** (owner): the bake-off continues unchanged, and a later entry that beats it is promoted then. The labeller of generation 2 and of the cloud data generation from then on |

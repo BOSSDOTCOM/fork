@@ -305,7 +305,12 @@ added on 2026-10-24; ideas 1-12 predate them.
   (KataGo), arXiv:1902.10565 (title, author and abstract checked on
   2026-10-24; that its full text describes playout cap randomization is
   UNVERIFIED: the PDF could not be read here and ar5iv did not respond).
-- **status:** untested
+- **status:** experiment approved and running (owner, 2026-10-30;
+  DESIGN.md decisions log): fork_datagen's split search (`--save-percent`,
+  `--unsaved-nodes`, `--check-nodes`, off by default); arm A is generation
+  2's first 6 hours, arm B its own 6-hour part, both labelled by S-512 with
+  the score adjudication and the same build, the split the only
+  difference.
 
 ## 14. Auxiliary training targets
 
