@@ -166,13 +166,14 @@ target_compile_options(fathom PRIVATE -w)
 # no runtime interface and no indirect call in the search.
 # nnue is the default since B0 passed its SPRT against the bootstrap
 # evaluation (+486.85 +/- 32.07 Elo; DESIGN.md §5.3, deliverable 7; owner,
-# 2026-10-29). The network is nets/b0r1.fnet, B0's first retrain, since it
-# passed its SPRT against B0 (+200.24 +/- 16.05 Elo, 2026-10-29). nets/b0.fnet
-# stays buildable with FORK_NET (tests/bench-b0.ref), and so does bootstrap
-# (tests/bench.ref).
+# 2026-10-29). The network is nets/b0r2.fnet, B0's shape trained on
+# generation 1 (the bake-off's B0 control), since it passed its SPRT against
+# B0r1 (+235.45 +/- 16.04 Elo, 2026-10-30; docs/nets.md). nets/b0r1.fnet and
+# nets/b0.fnet stay buildable with FORK_NET (tests/bench-b0r1.ref,
+# tests/bench-b0.ref), and so does bootstrap (tests/bench.ref).
 set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
-set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/b0r1.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/b0r2.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
 if(FORK_EVALUATOR STREQUAL "nnue")
   if(NOT EXISTS ${FORK_NET})
     message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")

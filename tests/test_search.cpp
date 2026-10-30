@@ -606,7 +606,11 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
   CHECK_EQ(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 99 80", 3).score, 0);
   CHECK(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 0 80", 3).score > 300);
   // 1. e4 Nf6 2. Nf3 Ng8 3. Ng1: ...Nf6 repeats the position after 1...Nf6.
+  // Black starts without its queen, so the evaluation is far from 0 with any
+  // evaluator (B0r2 scores the full-material position at exactly 0;
+  // python-chess confirms the line legal and ...Nf6 a repetition).
   Position pos;
+  CHECK(pos.set_fen("rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
   for (const char* uci : {"e2e4", "g8f6", "g1f3", "f6g8", "f3g1"}) pos.make(pos.parse_uci(uci));
   SearchQuota limits;
   limits.depth = 1;
@@ -614,7 +618,7 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
   const SearchResult r = fx.search(pos, limits);
   CHECK_EQ(pos.move_to_uci(r.best), std::string("g8f6"));
   CHECK_EQ(r.score, 0);
-  CHECK(static_eval(pos) != 0);  // so the 0 is the draw, not the evaluation
+  CHECK(static_eval(pos) < -300);  // so the 0 is the draw, not the evaluation
 }
 
 // Audit-1 Q-8: the quiescence search's own "mate on the 100th half-move" rule.

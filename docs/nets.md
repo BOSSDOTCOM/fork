@@ -29,5 +29,19 @@ labels are Fork's own (KB data-policy.md, strategy A+).
 | Parity (tests/nnue/b0r1.parity, 446 positions) | quantization leg exact; R-float vs bullet's float evaluation at most 0.00012 cp; netcheck exact on all 446; quantization loss max 8.6 cp, p99 7.9 cp, mean 2.5 cp (within the B0-class thresholds) |
 | Bench | 15,453,694 nodes, signature 13b0972dfaf384ee (tests/bench-b0r1.ref) |
 | SPRT | vs B0 (phase-4 a3dd67c), [0, 5], 8+0.08, GitHub shards, run 40916705615: **+200.24 +/- 16.05 Elo (nElo +263.05 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
-| Status | **The default network since 2026-10-29**, and the network for the next data generation |
+| Status | The default network from 2026-10-29 until B0r2 replaced it on 2026-10-30, and generation 1's labeller until then; still buildable with `-DFORK_NET=nets/b0r1.fnet` (tests/bench-b0r1.ref) |
 | Notes | Three search tests that passed with B0 failed with B0r1, all fixed in the tests (DESIGN.md §5.3): the determinism test now clears the history as well as the TT; the stop-during-fail-high test scans every bench position, since B0r1's first ten gave no qualifying stop; and at depth 1 B0r1 plays Rb2 instead of Rxd5 in 3rk3/8/8/3p4/8/8/3R4/3RK3 w (it scores 2R v R+P at 447 cp over the K+R v K it reaches after the exchanges at 420). That is not a weakness: every legal move there keeps the tablebase win (lichess API: Rxd5 DTM 31, Rb2 DTM 41). With a network, the test now checks a K+R+P v K+R position where 4 moves keep the win and 12 do not. |
+
+## B0r2, B0's shape on generation 1 (2026-10-30)
+
+| Item | Value |
+|---|---|
+| File | `nets/b0r2.fnet` (the bake-off's B0 control, branch bake/g1b0 5cacf8a as `nets/g1b0.fnet`), 394,820 bytes, Fork checksum 245cdb44ff2b4cc9 |
+| Architecture | B0's (768 -> 256 -> 1, clipped ReLU, QA 255 / QB 64), S = 105 (fit on g1s1, DESIGN.md §5.4) |
+| Data | generation-1 snapshot g1s1 (data/manifests/g1s1.json): 1,505,322 games, 150,117,509 positions of Fork self-play labelled by B0r1 at 10:32 AM EST; workers 0-8 for training (93,502,604 positions pass the filter), worker 9 held out; hashes checked on Kaggle before training |
+| Training | Kaggle kernel fork-bake (T4), commit d4ccadb on bullet-trainer da426a49, seed 1, no warm start: target 0.5 sigmoid(score / 105) + 0.5 result, AdamW, LR 0.001 dropped tenfold after 40, batch 16,384 x 305 per superbatch, 80 superbatches (400 M positions seen), the checkpoint with the lowest validation loss kept: superbatch 61, validation loss 0.02167907 (seed 2: 0.02180452 at 71); 1,083 s |
+| Parity (tests/nnue/b0r2.parity, 446 positions) | quantization leg exact; R-float vs the trainer's float evaluation at most 0.00012 cp; netcheck exact on all 446; quantization loss max 9.0 cp, p99 7.2 cp, mean 2.0 cp (within the B0-class thresholds) |
+| Bench | 14,589,665 nodes, signature 9dba694dd1ee4c41 (tests/bench-b0r2.ref) |
+| SPRT | vs B0r1 (phase-4 c9a4a7c), [0, 5], 8+0.08, GitHub shards, run 41104107035: **+235.45 +/- 16.04 Elo (nElo +334.16 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
+| Status | **The default network since 2026-10-30** (owner's standing instruction, DESIGN.md §5.4 games plan item 0), and generation 1's labeller from then on; the bake-off entries still play against it as the B0 control |
+| Notes | One search test that passed with B0r1 failed with B0r2: the repetition case checked that the evaluation of the position after 1. e4 Nf6 2. Nf3 Ng8 3. Ng1 is not 0, and B0r2 scores it exactly 0. The line now starts without Black's queen and the check asks for an evaluation below -300, so it holds for any evaluator. |

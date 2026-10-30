@@ -2883,6 +2883,53 @@ superbatches of 5 M positions (400 M seen, about 4.3 passes), LR 0.001
 dropped tenfold after 40, λ 0.5, the checkpoint with the lowest
 validation loss (20,000 held-out positions) kept; no per-entry tuning.
 
+**Training results** (kernel fork-bake at d4ccadb, 2026-10-30; ten runs of
+18-28 minutes on a T4). Validation loss at the kept checkpoint, seed 1 /
+seed 2: B0 control 0.021679 / 0.021805; S-512 0.020974 / 0.021176; H-512
+0.022349 / 0.022425; AF-S 0.021829 / 0.021631; XGR-512 0.021375 /
+0.021201. Chosen (plan 1): B0 s1, S-512 s1, H-512 s1, AF-S s2, XGR-512
+s2. The parity chain passes on all ten (R-float against the trainer
+within 0.0002 cp). Matched scales (plan 2; the first 10,000 filtered
+positions of g1s1-w09-val, the control's mean |eval| 281.9 cp): S-512
+101 (both seeds), H-512 100, AF-S 111, XGR-512 96; parity and netcheck
+redone on the rescaled files (0 mismatches). Candidate branches:
+bake/g1b0, bake/g1s512, bake/g1h512, bake/g1afs, bake/g1xgr and
+bake/g1s512b (S-512's seed 2, for plan 5).
+
+**S-512 was still improving when training stopped**: its validation loss
+over superbatches 71-80 is below that over 41-50 by 0.00018 (s1) and
+0.00015 (s2), and its kept checkpoints are 68 and 71 of 80. The shared
+budget ends before S converges.
+
+**H-512's gap, diagnosed** (owner, 2026-10-30: no retraining, the plan
+unchanged, H plays its games as is): **overfitting**. H has about 2.0 M
+first-layer weights (four region copies of 768 × 512, the factoriser
+merged in) against S's 0.39 M, on 93.5 M positions seen about 4.3 times.
+Over superbatches 71-80 its training loss is the lowest of the entries
+(0.01784 against S's 0.01958) and its validation loss the highest
+(0.02269 against 0.02113): a gap of 0.0049 against S's 0.0016, and seed
+1's validation loss rises after superbatch 52. On the held-out positions
+it is worse than S-512 s1 **in every one of its regions** (the trainer's
+loss recomputed per side-to-move region, reproducing the trainer's
+totals exactly): +0.0010, +0.0017, +0.0019 and +0.0011 for regions 0-3
+(seed 2: +0.0002, +0.0016, +0.0028, +0.0016), worst in {g1}, the largest
+single-square region, so no starved or mixed region explains it; on
+20,000 of its training positions both seeds beat S-512 in every region
+(by 0.0013-0.0026). XGR-512 (the same four-copy input with a factoriser)
+is about level with S-512 region by region on the held-out positions. Setup checked: trainer, reference and engine agree
+(parity, netcheck); the committed map is what fit_maps.py's rule gives on
+the stored histogram; the trainer's region lookup matches the histogram's
+cells; the ±0.99 first-layer clip barely binds (no weight beyond 0.990,
+under 0.001% at 0.98 or more). The data volume is the likely cause: θ =
+10% with four regions was sized for 0.7 B positions (design-accuracy.md
+§2.1's data-per-weight anchor, about 12.8 M touches per row), and g1s1's
+93.5 M give about 1.7 M. The fitted map's shape also differs from the
+design's expectation: g1 stands alone while h1, g2 and h2 share a region
+with every rank 5-8 square, and e1 shares one with e4, f4 and g4. **King
+regions join the component list** (judgement.md §5, row 5): retested
+with much more data during the winner's full-size confirmation,
+including a hand-drawn region map with the castled squares together.
+
 **Games: the pre-registered plan** (written 2026-10-30, before any
 bake-off game; judgement.md §6.2-6.3, the owner's (d)):
 0. **First in the queue (owner, 2026-10-30): the B0 control against
@@ -2969,6 +3016,7 @@ exposure pre-test passes with the current net on generation-1 data
 | 2026-10-30 | **Delta pruning inconclusive, kept off (owner).** Its STC SPRT against B0r1 was stopped undecided after 27,200 games: -0.40 +/- 2.93 Elo, nElo -0.56 +/- 4.13, LLR -1.39 on [0, 3] (history/phase-4/sprt-log.md). Not merged; exp/qs-delta keeps it for the post-network re-validation, with its margin retuned (ideas.md 39). |
 | 2026-10-30 | **Openings tool resumable and small (owner).** The 2026-09 stream was stopped for low memory after 6.4 hours (its python held 1.17 GB). `datagen_openings.py` now writes positions straight to a state folder, finds duplicates through 64-bit digests in one table capped at 256 MB, and checkpoints every 2 minutes; the same command resumes (the stream is re-read from its start and the finished games skipped; the re-read prefix must hash as recorded). Lichess 2016-09, killed after 600 s and resumed, reproduced its committed manifest byte for byte at a peak of 57 MB. |
 | 2026-10-30 | **Bake-off constants (owner).** AF-S keeps its body (16, 32, 8 stacks, int8 L1 at 64) though the screen found it in Stockfish 14-18; S-512 takes H-512's phase octiles instead of piece-count buckets; XGR stores 3 side lanes (§5.4; ORIGINALITY.md). |
+| 2026-10-30 | **B0r2 is the default network (owner's standing instruction, §5.4 games plan item 0).** The bake-off's B0 control (B0's shape on g1s1) beat B0r1 at STC on [0, 5]: +235.45 +/- 16.04 Elo, H1 after 1,600 games. It becomes `nets/b0r2.fnet` with its parity file and bench reference (14,589,665 / 9dba694dd1ee4c41) and generation 1's labeller from then on (docs/nets.md); one search test made evaluator-independent. **H-512 plays as trained (owner)**: its gap is overfitting (§5.4), the pre-registered plan is unchanged, and king regions are retested with much more data in the winner's full-size confirmation, a hand-drawn map with the castled squares together included (judgement.md §5, row 5). |
 
 ## 7. Performance doctrine (governs every phase)
 

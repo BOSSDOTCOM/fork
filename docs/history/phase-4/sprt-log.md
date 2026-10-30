@@ -105,3 +105,24 @@ LLR: -1.39 (-2.94, 2.94) [0.00, 3.00] nElo: continue
 ```
 - Not merged; the switch stays off (it exists only on exp/qs-delta).
   Revisited in the post-network re-validation (ideas.md 39).
+
+### 2026-10-30 g1b0-vs-b0r1 (bake-off games plan item 0)
+
+- base `c9a4a7c` (phase-4, B0r1, bench 15,453,694), test `5cacf8a`
+  (branch bake/g1b0: the bake-off's B0 control, B0's shape trained on
+  snapshot g1s1, seed 1, S = 105; bench 14,589,665), bounds [0, 5] nElo,
+  8+0.08, Hash 16 MB, GitHub shards.
+- Stage 0: run 41104107035, dispatched while CI was idle. The local stage
+  loop was stopped by the machine's low memory while the stage played;
+  the run finished on GitHub and was collected afterwards. Result: **H1
+  accepted** after stage 0:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: 235.45 +/- 16.04, nElo: 334.16 +/- 17.02
+Ptnml(0-2): [7, 20, 140, 288, 345]
+LLR: 21.98 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+- Promoted as B0r2 by the owner's standing instruction (DESIGN.md §5.4,
+  games plan item 0): the default network (docs/nets.md; one search test
+  fixed for it) and generation 1's labeller from then on. The bake-off
+  entries still play against this net as the B0 control (bake/g1b0).
