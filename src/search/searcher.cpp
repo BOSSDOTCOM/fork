@@ -23,7 +23,7 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 
 [[gnu::always_inline]] inline void Searcher::play(int ply, Move m) {
 #if defined(FORK_EVAL_NNUE)
-  features_.push_move(ply, *pos_, m);
+  features_.push_move(*net_, ply, *pos_, m);
 #endif
   (void)ply;
   pos_->make(m);

@@ -2838,7 +2838,39 @@ factorisers are read as bullet computes them); quantization loss max / p99:
 B0 11.1 / 7.1, S-512 13.0 / 11.2, H-512 18.1 / 11.9, AF-S 23.6 / 20.9,
 XGR-512 9.8 / 8.7 cp. Training rates with two runs sharing the session's
 4 cores: about 2 M positions/s for S-512, 1 M/s for H-512, AF-S and XGR-512.
-F = R-int needs the engine's inference for each entry (the next build).
+
+**The engine's inference for every entry** (2026-10-30): one shared
+framework in `src/eval/nnue/`, the architecture fixed at build time from
+the embedded net's header (CMake reads its id into `FORK_NET_ARCH`;
+`net_shape.hpp` holds each shape's constants). A perspective's frame (its
+file flip and region rows) changes only when its own king crosses the d/e
+line or a region boundary; that perspective is then recomputed from the
+board at once, every other update stays incremental and lazy. XGR's
+exposure rows are added at each evaluation (no incremental state). Every
+output has a scalar reference and an AVX2 kernel (S/H/XGR: v * (v * w)
+through 16-bit multiply and multiply-add; AF-S: the pairwise product as a
+rounding high multiply, L1 as unsigned-by-signed byte multiply-adds); the
+first-layer updates use B0's AVX2 and AVX-512 kernels. On each dry-run
+net, for clang native, x86-64-v3 and scalar builds: the NNUE suite passes
+(incremental against refresh along random games with king moves across
+the mirror line and regions, every move kind's delta, SIMD against scalar,
+colour symmetry, left-right symmetry for the mirrored entries, XGR's
+exposure rule) and **netcheck gives the reference's R-int on all 446
+parity positions** (F = R-int, every path); bench node counts agree across
+the three builds of each entry. Local bench nps beside datagen (not an A/B
+measurement): B0 2.96 M, S-512 2.31 M, H-512 2.21 M, AF-S 1.66 M, XGR-512
+1.43 M (0.78, 0.75, 0.56, 0.48 of B0; the judge's model said 0.74, 0.73,
+0.58-0.62, 0.51 of the bootstrap). Without a refresh cache: a frame change
+recomputes the perspective from the board (judgement.md's cache is a speed
+item for the winner). B0 is unchanged: bench 15,453,694, and its search
+speed within noise of the previous build (`bench/ab_search.py`, 8 rounds,
+-1.5% median, threshold 3%).
+
+**XGR's entry condition** (judgement.md §3): the exposure pre-test on 10 M
+g1s1 positions with B0r1 (`exposure_pretest.py`, now streaming in chunks):
+mean k 0.50, k = 0 in 63.3%; the static evaluation's residual against the
+search score is 75.2 cp (median 30) at k = 0 and 112.4 cp (median 53) at
+k >= 1: X has something to fix, so XGR-512 enters the games.
 
 **The bake-off snapshot g1s1** (2026-10-30, 10:32 AM EST): generation 1's
 complete games at that moment, 1,505,322 games and 150,117,509 positions
@@ -2850,6 +2882,34 @@ positions). Training (`bakeoff.py`): every entry with seeds 1 and 2, 80
 superbatches of 5 M positions (400 M seen, about 4.3 passes), LR 0.001
 dropped tenfold after 40, λ 0.5, the checkpoint with the lowest
 validation loss (20,000 held-out positions) kept; no per-entry tuning.
+
+**Games: the pre-registered plan** (written 2026-10-30, before any
+bake-off game; judgement.md §6.2-6.3, the owner's (d)):
+1. **One net per entry**: of its two seeds, the one with the lower
+   validation loss at its kept checkpoint. The other seed stays for the
+   noise check (5).
+2. **Eval-scale normalization** (§6.2): each entry's S in its net file is
+   rescaled so that its mean |eval| over 10,000 positions of g1s1's
+   held-out shard equals the B0 control's; the parity file and netcheck are
+   redone with the rescaled file.
+3. **Stage A, sanity**: each entry against the B0 control at STC (8+0.08,
+   16 MB, Syzygy 3-4-5, the UHO book) on gainer bounds [0, 5], one SPRT at
+   a time on the GitHub shards, never beside CI. A fail sends the entry
+   back to training, not out of the bake-off.
+4. **Stage B, fixed nodes** (diagnostic, no SPRT): each entry against the
+   B0 control at a fixed node count per move, 1,600 games, for the accuracy
+   term without the speed price.
+5. **Training noise**: the two seeds of S-512 against each other, 1,600
+   games at STC; if they differ by more than about 10 Elo, margins below
+   that mean nothing and the top two get repeated trainings.
+6. **Stage C, decisive pairings** in the judge's order, the more complex
+   design against the simpler on [0, 5]: H-512 against S-512 (regions);
+   AF-S against the better of S and H (the body); XGR-512 against H-512
+   (X and G). STC narrows, **LTC decides** (40+0.4); an inconclusive
+   pairing keeps the simpler design; caps 20,000 games at STC, 10,000 at
+   LTC. The finalists play LTC.
+7. Nothing is promoted (no default network change) before the owner's
+   review of the results.
 
 **Not in this bake-off**: AF's small-layer activation sweep and XGR's two
 ablation nets (no X; buckets instead of G); judgement.md lists them as

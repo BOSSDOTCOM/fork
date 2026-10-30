@@ -230,7 +230,7 @@ static int netcheck(const std::string& parity_path, const forkeng::NetFile& net)
     const int expected = std::stoi(line.substr(bar + 1));
     forkeng::Accumulator acc;
     forkeng::accumulate_board(net, pos, acc);
-    const int got = forkeng::output_layer(net, acc, pos.side_to_move());
+    const int got = forkeng::evaluate_position(net, acc, pos);
     ++positions;
     if (got != expected) {
       if (++mismatches <= 10)

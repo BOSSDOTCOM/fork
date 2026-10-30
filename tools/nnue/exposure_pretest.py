@@ -57,11 +57,13 @@ def exposed_count(board):
 
 
 def samples(paths, limit):
-    out = []
+    """Yields (FEN, search score from White's view, k) for the kept
+    positions, at most `limit`, reading one shard at a time."""
+    n = 0
     for path in paths:
         data = Path(path).read_bytes()
         i = 0
-        while i + 32 <= len(data) and len(out) < limit:
+        while i + 32 <= len(data) and n < limit:
             board, _ = vg.decode_board(data[i:i + 32])
             i += 32
             while i + 4 <= len(data):
@@ -70,13 +72,24 @@ def samples(paths, limit):
                 if code == 0:
                     break
                 move = next(m for m in board.legal_moves if vg.code_of(board, m) == code)
-                if not board.is_check() and not board.is_capture(move) and move.promotion is None \
+                if n < limit and not board.is_check() and not board.is_capture(move) and move.promotion is None \
                         and abs(score) <= MAX_SCORE:
-                    out.append((board.fen(), score if board.turn == chess.WHITE else -score, exposed_count(board)))
+                    yield board.fen(), score if board.turn == chess.WHITE else -score, exposed_count(board)
+                    n += 1
                 board.push(move)
-        if len(out) >= limit:
-            break
-    return out[:limit]
+        if n >= limit:
+            return
+
+
+def chunks(items, size):
+    chunk = []
+    for item in items:
+        chunk.append(item)
+        if len(chunk) == size:
+            yield chunk
+            chunk = []
+    if chunk:
+        yield chunk
 
 
 def main(argv=None):
@@ -84,20 +97,22 @@ def main(argv=None):
     ap.add_argument('fork')
     ap.add_argument('shards', nargs='+')
     ap.add_argument('--positions', type=int, default=300000)
+    ap.add_argument('--chunk', type=int, default=100000, help='positions per evalfens call (memory)')
     a = ap.parse_args(argv)
-    data = samples(a.shards, a.positions)
-    fens = ''.join(f + '\n' for f, _, _ in data)
-    out = subprocess.run([str(Path(a.fork).resolve()), 'evalfens'], input=fens, capture_output=True, text=True,
-                         check=True).stdout.split()
-    evaluator = subprocess.run([str(Path(a.fork).resolve()), 'version'], capture_output=True, text=True).stdout
+    from array import array
+    fork = str(Path(a.fork).resolve())
+    groups = {'k=0': array('i'), 'k>=1': array('i')}
+    ks = array('b')
+    for chunk in chunks(samples(a.shards, a.positions), a.chunk):
+        fens = ''.join(f + '\n' for f, _, _ in chunk)
+        out = subprocess.run([fork, 'evalfens'], input=fens, capture_output=True, text=True, check=True).stdout.split()
+        assert len(out) == len(chunk), 'evalfens gave a different number of scores'
+        for (_, search, k), static in zip(chunk, out):
+            groups['k=0' if k == 0 else 'k>=1'].append(abs(int(static) - search))
+            ks.append(min(k, 127))
+    evaluator = subprocess.run([fork, 'version'], capture_output=True, text=True).stdout
     evaluator = next((l for l in evaluator.splitlines() if l.startswith(('evaluator', 'net'))), 'unknown')
-    groups = {'k=0': [], 'k>=1': []}
-    ks = []
-    for (fen, search, k), static in zip(data, out):
-        r = abs(int(static) - search)
-        groups['k=0' if k == 0 else 'k>=1'].append(r)
-        ks.append(k)
-    print(f'{len(data)} positions, {evaluator}; mean k {statistics.mean(ks):.2f}, '
+    print(f'{len(ks)} positions, {evaluator}; mean k {statistics.mean(ks):.2f}, '
           f'k=0 in {100 * ks.count(0) / len(ks):.1f}%, k>=3 in {100 * sum(k >= 3 for k in ks) / len(ks):.1f}%')
     for name, rs in groups.items():
         print(f'  {name:5} n {len(rs):>7}  residual mean {statistics.mean(rs):7.1f} cp  median '

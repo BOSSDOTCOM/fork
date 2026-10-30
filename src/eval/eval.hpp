@@ -41,7 +41,7 @@ inline int static_eval(const Position& pos) {
 #elif defined(FORK_EVAL_NNUE)
   Accumulator acc;
   accumulate_board(embedded_net(), pos, acc);
-  return output_layer(embedded_net(), acc, pos.side_to_move());
+  return evaluate_position(embedded_net(), acc, pos);
 #endif
 }
 

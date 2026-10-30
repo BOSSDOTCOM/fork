@@ -313,6 +313,14 @@ def map_block(arch):
     return block + bytes(MAP_BLOCK - len(block))
 
 
+def arch_from_net(name, payload):
+    """The architecture with the maps a net file's map block stores (an
+    evaluation must use the net's own maps, not a description's)."""
+    regions = list(payload[:32]) if name in ('h512', 'afs') else None
+    table = list(payload[32:57]) if name != 'xgr512' else None
+    return Arch(name, regions, table)
+
+
 def unpack(arch, payload):
     """Fork's payload as {name: values}, in the layout above."""
     h, n = arch.hidden, arch.saved_inputs

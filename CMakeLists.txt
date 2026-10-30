@@ -177,6 +177,11 @@ if(FORK_EVALUATOR STREQUAL "nnue")
   if(NOT EXISTS ${FORK_NET})
     message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")
   endif()
+  # The inference is compiled for the embedded network's architecture
+  # (src/eval/nnue/net_shape.hpp): its id is the header's u32 at byte 12.
+  file(READ ${FORK_NET} fork_net_arch_hex OFFSET 12 LIMIT 4 HEX)
+  string(SUBSTRING "${fork_net_arch_hex}" 0 2 fork_net_arch_byte)
+  math(EXPR FORK_NET_ARCH "0x${fork_net_arch_byte}")
   set(fork_net_source ${CMAKE_BINARY_DIR}/generated/embedded_net_data.cpp)
   add_custom_command(OUTPUT ${fork_net_source}
     COMMAND ${CMAKE_COMMAND} -DNET=${FORK_NET} -DOUT=${fork_net_source} -P ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
@@ -184,6 +189,8 @@ if(FORK_EVALUATOR STREQUAL "nnue")
     COMMENT "Embedding the network ${FORK_NET}")
 elseif(NOT FORK_EVALUATOR STREQUAL "bootstrap")
   message(FATAL_ERROR "FORK_EVALUATOR must be bootstrap or nnue")
+else()
+  set(FORK_NET_ARCH 1)
 endif()
 
 # Evaluation and search (src/eval/, src/search/ except the hash memory).
@@ -225,6 +232,7 @@ target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pg
 add_library(forknnue STATIC
   src/eval/nnue/accumulator.cpp
   src/eval/nnue/net_file.cpp)
+target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH})
 target_link_libraries(forknnue PUBLIC forkcore PRIVATE fork_pgo)
 
 # Self-play training data (src/datagen/; DESIGN.md §5.3, deliverable 2): the
@@ -550,10 +558,14 @@ if(FORK_BUILD_TESTS)
     set_tests_properties(datagen_verify PROPERTIES LABELS python)
     # The trainer-engine parity chain on a synthetic net, ending in Fork's own
     # inference on this build's SIMD path (DESIGN.md §5.3, deliverable 6).
-    add_test(NAME nnue_parity COMMAND ${CMAKE_COMMAND}
-      -DFORK=$<TARGET_FILE:fork> -DPYTHON=${test_python} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-      -DWORK=${CMAKE_BINARY_DIR}/nnue_parity -P ${CMAKE_SOURCE_DIR}/cmake/nnue_parity.cmake)
-    set_tests_properties(nnue_parity PROPERTIES LABELS python)
+    # The synthetic net is a B0 file: builds for another architecture check
+    # their embedded network instead (nnue_netcheck_embedded).
+    if(FORK_NET_ARCH EQUAL 1)
+      add_test(NAME nnue_parity COMMAND ${CMAKE_COMMAND}
+        -DFORK=$<TARGET_FILE:fork> -DPYTHON=${test_python} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DWORK=${CMAKE_BINARY_DIR}/nnue_parity -P ${CMAKE_SOURCE_DIR}/cmake/nnue_parity.cmake)
+      set_tests_properties(nnue_parity PROPERTIES LABELS python)
+    endif()
   endif()
 
   # The search bench (`fork bench`) and, so move generation stays tied across
@@ -583,8 +595,10 @@ if(FORK_BUILD_TESTS)
   # give exactly the reference's R-int values for the committed synthetic net
   # (tests/nnue/synthetic.*, from tools/nnue/reference.py synthetic --seed 7;
   # DESIGN.md §5.3, deliverable 6). Needs no Python, so every preset runs it.
-  add_test(NAME nnue_netcheck COMMAND fork netcheck ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.parity
-                                                     ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.fnet)
+  if(FORK_NET_ARCH EQUAL 1)
+    add_test(NAME nnue_netcheck COMMAND fork netcheck ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.parity
+                                                       ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.fnet)
+  endif()
   # An nnue build checks its own embedded network against the parity file
   # named after it (tests/nnue/<net>.parity), the gate games run behind.
   if(FORK_EVALUATOR STREQUAL "nnue")

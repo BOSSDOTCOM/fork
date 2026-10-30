@@ -234,7 +234,7 @@ def evaluate(a):
         net = netformat.read_net(data, desc)
         fn = lambda board: r_int(net, board)  # noqa: E731
     else:
-        arch = arch_of(desc)
+        arch = models.arch_from_net(desc['name'], data[netformat.HEADER_BYTES:])
         scale = netformat.header_fields(data)['scale']
         net = models.unpack(arch, data[netformat.HEADER_BYTES:])
         fn = lambda board: models.r_int(arch, net, scale, board)  # noqa: E731
