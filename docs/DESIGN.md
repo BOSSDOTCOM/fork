@@ -2885,6 +2885,12 @@ validation loss (20,000 held-out positions) kept; no per-entry tuning.
 
 **Games: the pre-registered plan** (written 2026-10-30, before any
 bake-off game; judgement.md §6.2-6.3, the owner's (d)):
+0. **First in the queue (owner, 2026-10-30): the B0 control against
+   B0r1**, the default network, at STC on [0, 5]. If it passes it is
+   promoted as **B0r2**: the default network (with its bench reference and
+   parity file, as for B0r1), generation 1's labeller from then on, and an
+   entry in docs/nets.md. The bake-off entries still play against the same
+   B0 control.
 1. **One net per entry**: of its two seeds, the one with the lower
    validation loss at its kept checkpoint. The other seed stays for the
    noise check (5).
