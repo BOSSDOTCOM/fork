@@ -1,0 +1,123 @@
+{
+ "run": "g1s1",
+ "generator": {
+  "tool": "fork_datagen (snapshot of complete games of the running generation-1 run)",
+  "version": "0.3.0-dev+bb4f75a (WSL clang-release, clang 21.1.8)",
+  "evaluator": "nnue (B0r1)",
+  "arch": "native (Ryzen 7600X3D)"
+ },
+ "settings": {
+  "openings": "lichess-2016-09.epd",
+  "positions_target": 200000000,
+  "nodes": 20000,
+  "threads": 10,
+  "seed": 20261030,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4
+ },
+ "openings": {
+  "file": "lichess-2016-09.epd",
+  "sha256": "0ae298e1c7c635606fcddb056ee08073aeed8f4db4de3f19b8ef721d4a72831b",
+  "positions": 591871,
+  "source": "lichess_db_standard_rated_2016-09.pgn.zst",
+  "source_sha256": "3a4d18db787db558083aacb7c27ab3588f0745c1baaca37846b3f0d8b9677db3"
+ },
+ "games": 1505322,
+ "positions": 150117509,
+ "seconds": null,
+ "results": {
+  "white": 627565,
+  "draw": 283220,
+  "black": 594537
+ },
+ "ends": "not counted (a snapshot of a running run)",
+ "batches": [
+  [
+   {
+    "file": "g1s1-w00.vf",
+    "worker": 0,
+    "games": 148809,
+    "positions": 14833491,
+    "bytes": 64691088,
+    "sha256": "8b78fcada46c9779ced85dfea6b066b434b6cbfeb4816a9f73e6ad3aef64e709"
+   },
+   {
+    "file": "g1s1-w01.vf",
+    "worker": 1,
+    "games": 150468,
+    "positions": 15016782,
+    "bytes": 65483976,
+    "sha256": "40cef89f9134c375b84c3ca3b90c21f8c221547d7242d722bceb3b240c239c73"
+   },
+   {
+    "file": "g1s1-w02.vf",
+    "worker": 2,
+    "games": 149885,
+    "positions": 14948132,
+    "bytes": 65188388,
+    "sha256": "c063088e8cf87ed55b1ffeb3e593b079f3cd3d6884d134faa7974571fe1e5b9a"
+   },
+   {
+    "file": "g1s1-w03.vf",
+    "worker": 3,
+    "games": 150561,
+    "positions": 14997001,
+    "bytes": 65408200,
+    "sha256": "3771c942594bf3bac60673df5092cd9829a3d70e68fce1a2546171256f000b58"
+   },
+   {
+    "file": "g1s1-w04.vf",
+    "worker": 4,
+    "games": 150689,
+    "positions": 15032130,
+    "bytes": 65553324,
+    "sha256": "e68153e01ddc9088532bc3904e229c8c2ad1147b985dd3fcb10f0df831965186"
+   },
+   {
+    "file": "g1s1-w05.vf",
+    "worker": 5,
+    "games": 150931,
+    "positions": 15046799,
+    "bytes": 65620712,
+    "sha256": "08c6e28894c211902bfa0e8feca5139a17c2902dcc8ce1e26479a17446ec1158"
+   },
+   {
+    "file": "g1s1-w06.vf",
+    "worker": 6,
+    "games": 151137,
+    "positions": 15085751,
+    "bytes": 65783936,
+    "sha256": "de50095f4bcdf188b59b3739bf50eece22848cf710a9e229d994e0506d7351cf"
+   },
+   {
+    "file": "g1s1-w07.vf",
+    "worker": 7,
+    "games": 150568,
+    "positions": 15033284,
+    "bytes": 65553584,
+    "sha256": "8bb516e2a402989300b0ec28ccd70882426115abf7d40d0cb46b75a00afad0e0"
+   },
+   {
+    "file": "g1s1-w08.vf",
+    "worker": 8,
+    "games": 151234,
+    "positions": 15065273,
+    "bytes": 65705516,
+    "sha256": "73567cc7a84cf3899d60784d6f08169bc15bdd54010b5d492190ccdae9c67c97"
+   },
+   {
+    "file": "g1s1-w09-val.vf",
+    "worker": 9,
+    "games": 151040,
+    "positions": 15058866,
+    "bytes": 65672904,
+    "sha256": "0762ce2778cf14134e333880203fd1b668b520afd939e6befba8ad336159cff1"
+   }
+  ]
+ ]
+}

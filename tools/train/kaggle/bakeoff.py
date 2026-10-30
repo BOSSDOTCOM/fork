@@ -12,7 +12,9 @@ trainer's own evaluation of the parity positions (parity-trainer.txt, the
 parity test's T), the validation curve and a run record (run.json). The
 summary of all runs is result/bakeoff.json.
 
-The settings below are this push's; every run record repeats them.
+The settings below are this push's; every run record repeats them. The
+dry run (2026-10-30, g1s0) used one seed per entry, 3 superbatches of 100
+batches and S = 107; the bake-off (g1s1) uses the values below.
 """
 import glob
 import hashlib
@@ -23,17 +25,17 @@ import subprocess
 import time
 
 COMMIT = 'phase-4'          # replaced by the pushed commit's hash before the push
-RUNS = [('b0', 1), ('s512', 1), ('h512', 1), ('afs', 1), ('xgr512', 1)]
-SCALE = 107                 # S fitted on the training data (fit_scale.py); the same for every entry
+RUNS = [(arch, seed) for arch in ('b0', 's512', 'h512', 'afs', 'xgr512') for seed in (1, 2)]
+SCALE = 105                 # S fitted on g1s1 (fit_scale.py, 2 M positions); the same for every entry
 RESULT_WEIGHT = 0.5         # bullet's weight on the game result: 1 - lambda, lambda = 0.5 (§5.3)
 BATCH = 16384
-BATCHES = 100               # per superbatch
-SUPERBATCHES = 3
+BATCHES = 305               # per superbatch: 5 M positions
+SUPERBATCHES = 80           # 400 M positions seen, about 4.3 passes over g1s1's 93.5 M kept
 LR = 0.001                  # bullet's example value (KB bullet-internals.md §5.3)
 LR_STEP = 40                # tenfold drop every LR_STEP superbatches
 VAL_POSITIONS = 20000
 KEEP = 'best'               # 'best': the lowest validation loss; 'last': the final superbatch
-MANIFEST = 'data/manifests/g1s0.json'
+MANIFEST = 'data/manifests/g1s1.json'
 DATA = '/kaggle/input'
 WORK = '/kaggle/working/bake'
 RESULT = '/kaggle/working/result'

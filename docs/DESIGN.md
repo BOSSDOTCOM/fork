@@ -2826,10 +2826,30 @@ against bullet's files of the initial weights: exact for all five,
 factoriser merges and transposes included. Unit tests
 (`tools/nnue/test_bakeoff.py`): legs pass on synthetic nets; a corrupted
 weight, a missing factoriser merge, a transposed output layer and
-truncation instead of rounding each fail. Not yet checked: R-float
-against T (needs the GPU: the dry run), which also settles that `select`
-keeps one contiguous block of rows per bucket (UNVERIFIED until then);
-F = R-int needs the engine's inference for each entry, the next build.
+truncation instead of rounding each fail.
+
+**Dry run (2026-10-30, Kaggle kernel fork-bake-dry, 65a4c27, dataset
+fork-g1s0)**: each entry trained 3 superbatches of 100 batches on g1s0
+(S = 107, one seed), saved, quantized and evaluated the parity positions.
+The parity chain on those nets: quantization leg exact for all five;
+R-float against T at most 0.00018 cp (so `select` keeps one contiguous
+block of rows per bucket, and the slices, gate, pairwise product and
+factorisers are read as bullet computes them); quantization loss max / p99:
+B0 11.1 / 7.1, S-512 13.0 / 11.2, H-512 18.1 / 11.9, AF-S 23.6 / 20.9,
+XGR-512 9.8 / 8.7 cp. Training rates with two runs sharing the session's
+4 cores: about 2 M positions/s for S-512, 1 M/s for H-512, AF-S and XGR-512.
+F = R-int needs the engine's inference for each entry (the next build).
+
+**The bake-off snapshot g1s1** (2026-10-30, 10:32 AM EST): generation 1's
+complete games at that moment, 1,505,322 games and 150,117,509 positions
+(data/manifests/g1s1.json, worker 9 held out); 93,502,604 positions pass
+the training filter in the training shards. Maps fitted on it: regions
+{e1-e4, f4, g4} 31.5%, {f1-f3, g3} 20.9%, {g1} 22.7%, the rest 24.8% of
+own-king samples; phase stacks 9-16% each. S = 105 (fit_scale.py, 2 M
+positions). Training (`bakeoff.py`): every entry with seeds 1 and 2, 80
+superbatches of 5 M positions (400 M seen, about 4.3 passes), LR 0.001
+dropped tenfold after 40, λ 0.5, the checkpoint with the lowest
+validation loss (20,000 held-out positions) kept; no per-entry tuning.
 
 **Not in this bake-off**: AF's small-layer activation sweep and XGR's two
 ablation nets (no X; buckets instead of G); judgement.md lists them as
