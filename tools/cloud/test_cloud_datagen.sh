@@ -52,6 +52,20 @@ check "the sealed manifest records the instance type and CPU" \
 bash "$here/pull_datagen.sh" --from "$tmp/up5" --to "$tmp/home5" >"$tmp/pull5.log" 2>&1
 check "pull_datagen still verifies a chunk with a machine record" grep -q "1 chunk(s), .* positions verified" "$tmp/pull5.log"
 
+# 1c. The score adjudication passes through to fork_datagen; both
+# verifications read it from the manifest, and a manifest that misstates it
+# fails at home.
+bash "$here/cloud_datagen.sh" --run t6 --seed-base 1000000000000 --upload-to "$tmp/up6" --max-chunks 1 \
+  --work "$tmp/w6" "${common[@]}" --adjudicate-cp 300 --adjudicate-plies 8 >"$tmp/run6.log" 2>&1
+m6=$tmp/up6/t6-c0000/t6-c0000.json
+check "an adjudicating chunk is verified and uploaded with its settings" \
+  "$PYTHON" -c 'import json,sys; m=json.load(open(sys.argv[1])); s=m["settings"]; sys.exit(not (s["adjudicate_cp"] == 300 and s["adjudicate_plies"] == 8 and m["ends"]["score_adjudicated"] > 0))' "$m6"
+bash "$here/pull_datagen.sh" --from "$tmp/up6" --to "$tmp/home6" >"$tmp/pull6.log" 2>&1
+check "pull_datagen verifies the adjudicated games" grep -q "1 chunk(s), .* positions verified" "$tmp/pull6.log"
+"$PYTHON" -c 'import json,sys; m=json.load(open(sys.argv[1])); m["settings"]["adjudicate_plies"] = 9; json.dump(m, open(sys.argv[1], "w"))' "$m6"
+bash "$here/pull_datagen.sh" --from "$tmp/up6" --to "$tmp/home6b" >"$tmp/pull6b.log" 2>&1
+check "a manifest that misstates the adjudication fails at home" [ $? -ne 0 ]
+
 # 2. A SIGTERM (spot notice) during a chunk: the run stops, that chunk is lost.
 bash "$here/cloud_datagen.sh" --run t2 --seed-base 1000000000000 --upload-to "$tmp/up2" \
   --work "$tmp/w2" "${common[@]}" --chunk-positions 2000000 >"$tmp/run2.log" 2>&1 &

@@ -87,6 +87,15 @@ class SealTests(unittest.TestCase):
         sealed = json.loads(self.seal().read_text())
         self.assertEqual(sealed['generator']['evaluator'], 'nnue (b0r2)')
 
+    def test_split_search_counts_carried_when_present(self):
+        sealed = json.loads(self.seal().read_text())
+        self.assertNotIn('positions_unsaved', sealed)
+        run = json.loads((self.tmp / 'r.json').read_text())
+        run.update(positions_unsaved=12, nodes_spent=3456)
+        (self.tmp / 'r.json').write_text(json.dumps(run))
+        sealed = json.loads(self.seal().read_text())
+        self.assertEqual((sealed['positions_unsaved'], sealed['nodes_spent']), (12, 3456))
+
     def test_cli_requires_the_reason(self):
         with self.assertRaises(SystemExit):
             ub.main(['seal', str(self.tmp / 'r.json'), '--openings-manifest', str(self.tmp / 'o.json'),

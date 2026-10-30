@@ -61,7 +61,7 @@ std::unique_ptr<SelfPlayGame> SelfPlayGame::create(const SelfPlayConfig& config,
 SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer, std::uint64_t save_seed) {
   memory_.clear(1);
   unsaved_ = 0;
-  nodes_searched_ = 0;
+  nodes_spent_ = 0;
   std::uint64_t save_stream = save_seed;
   searcher_.clear_history();
   Position pos = opening;
@@ -112,7 +112,7 @@ SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer, 
 
     table_.advance_age();
     SearchResult s = searcher_.deliberate(pos, limits, stop_, nullptr, nullptr);
-    nodes_searched_ += s.nodes;
+    nodes_spent_ += s.nodes;
     // deliberate() always returns a legal root move, but where the node limit
     // runs out before depth 1 finishes (a position with long capture chains)
     // its score is meaningless (0 at depth 0) and must never be written: that
@@ -122,7 +122,7 @@ SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer, 
       SearchQuota one_ply;
       one_ply.depth = 1;
       s = searcher_.deliberate(pos, one_ply, stop_, nullptr, nullptr);
-      nodes_searched_ += s.nodes;
+      nodes_spent_ += s.nodes;
     }
     if (s.best == NoMove || !legal.contains(s.best) || s.depth == 0) {
       std::fprintf(stderr, "fork_datagen: no finished search in %s\n", pos.fen().c_str());

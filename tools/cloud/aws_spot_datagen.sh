@@ -7,7 +7,8 @@
 #
 #   tools/cloud/aws_spot_datagen.sh --bucket s3://BUCKET --instance-profile NAME [--commit REF]
 #       [--generation g2] [--types T1,T2,...] [--arch auto] [--max-price 0.25] [--region us-east-2]
-#       [--max-hours 12] [--chunk-positions 1000000] [--nodes 20000] [--dry-run]
+#       [--max-hours 12] [--chunk-positions 1000000] [--nodes 20000]
+#       [--adjudicate-cp CP --adjudicate-plies N] [--dry-run]
 #
 # One spot instance is requested through an instant EC2 Fleet with the
 # capacity-optimized-prioritized strategy over every --types entry in every
@@ -56,12 +57,14 @@ repo_url=https://github.com/BOSSDOTCOM/fork.git
 openings_url=https://database.lichess.org/standard/lichess_db_standard_rated_2016-09.pgn.zst
 types=c7a.2xlarge,c8a.2xlarge,m7a.2xlarge,c7i.2xlarge,m7i.2xlarge,c6a.2xlarge,c6i.2xlarge
 arch=auto max_price=0.25 region=${AWS_REGION:-us-east-2} max_hours=12 chunk=1000000 nodes=20000
+adj_cp=0 adj_plies=0
 generation=g2 bucket="" profile="" commit=HEAD dry=0
 while [ $# -gt 0 ]; do
   case $1 in
     --bucket) bucket=$2 ;; --instance-profile) profile=$2 ;; --commit) commit=$2 ;; --generation) generation=$2 ;;
     --types | --type) types=$2 ;; --arch) arch=$2 ;; --max-price) max_price=$2 ;; --region) region=$2 ;;
     --max-hours) max_hours=$2 ;; --chunk-positions) chunk=$2 ;; --nodes) nodes=$2 ;;
+    --adjudicate-cp) adj_cp=$2 ;; --adjudicate-plies) adj_plies=$2 ;;
     --dry-run) dry=1; shift; continue ;;
     *) echo "aws_spot_datagen.sh: unknown option $1" >&2; exit 2 ;;
   esac
@@ -70,7 +73,7 @@ done
 for v in bucket profile; do
   [ -n "${!v}" ] || { echo "aws_spot_datagen.sh: --${v/profile/instance-profile} is required" >&2; exit 2; }
 done
-case "$max_hours$chunk$nodes" in *[!0-9]*) echo "numbers expected" >&2; exit 2 ;; esac
+case "$max_hours$chunk$nodes$adj_cp$adj_plies" in *[!0-9]*) echo "numbers expected" >&2; exit 2 ;; esac
 [[ $max_price =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "aws_spot_datagen.sh: --max-price in dollars, like 0.25" >&2; exit 2; }
 IFS=, read -r -a type_list <<<"$types"
 [ ${#type_list[@]} -gt 0 ] || { echo "aws_spot_datagen.sh: --types is empty" >&2; exit 2; }
@@ -133,7 +136,7 @@ PYTHON=/opt/venv/bin/python bash tools/cloud/cloud_datagen.sh --run $run --seed-
   --datagen build/dg/fork_datagen --openings /opt/openings/lichess-2016-09.epd \\
   --openings-manifest data/manifests/openings-lichess-2016-09.json --tables /opt/syzygy \\
   --upload-to ${bucket%/}/datagen/$run --chunk-positions $chunk --nodes $nodes --stop-at \$stop_at \\
-  --instance-type "\$itype" &
+  --instance-type "\$itype" --adjudicate-cp $adj_cp --adjudicate-plies $adj_plies &
 job=\$!
 bash tools/cloud/spot_watch.sh \$job &
 wait \$job
@@ -166,7 +169,7 @@ EOF
 }
 
 echo "run $run: 1 spot instance of $types (in that order, at most \$$max_price/h), build $arch,"
-echo "  labelled by $net (commit ${commit:0:7}), chunks of $chunk positions at $nodes nodes,"
+echo "  labelled by $net (commit ${commit:0:7}), chunks of $chunk positions at $nodes nodes, score adjudication $adj_cp cp x $adj_plies plies (0: off),"
 echo "  seeds from $seed_base, max $max_hours h (expires $expires), data to ${bucket%/}/datagen/$run/"
 quota_ok=1
 check_quota() {

@@ -26,7 +26,8 @@ not from Fork's C++, and replays it with python-chess's move generator:
 - with --manifest (fork_datagen's <run>.json), each shard's game and
   position counts must match, and the unsaved records must total the
   manifest's positions_unsaved (none at all when the run's save_percent is
-  100 or absent).
+  100 or absent); without --adjudicate, the manifest's settings give the
+  score adjudication (adjudicate_cp and adjudicate_plies).
 
     .venv/Scripts/python.exe -I tools/datagen/verify_games.py SHARD... [--manifest RUN.json]
 
@@ -211,9 +212,15 @@ def main(argv=None):
     a = ap.parse_args(argv)
     totals = {}
     counts = {}
+    adjudicate = a.adjudicate
+    if adjudicate is None and a.manifest:
+        # Without --adjudicate, the run's own settings say whether it adjudicated.
+        st = json.loads(Path(a.manifest).read_text()).get('settings', {})
+        if st.get('adjudicate_plies', 0) > 0:
+            adjudicate = [st['adjudicate_cp'], st['adjudicate_plies']]
     try:
         for s in a.shards:
-            counts[Path(s).name] = verify_file(s, a.table_pieces, totals, a.adjudicate)
+            counts[Path(s).name] = verify_file(s, a.table_pieces, totals, adjudicate)
         if a.manifest:
             man = json.loads(Path(a.manifest).read_text())
             listed = {e['file']: (e['games'], e['positions']) for e in man['shards']}

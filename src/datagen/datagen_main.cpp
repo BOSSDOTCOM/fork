@@ -63,7 +63,7 @@ struct Totals {
   std::vector<ShardInfo> shards;
   std::uint64_t ends[GameEndCount] = {};
   std::uint64_t results[3] = {};
-  std::atomic<std::uint64_t> games{0}, positions{0}, unsaved{0}, nodes_searched{0};
+  std::atomic<std::uint64_t> games{0}, positions{0}, unsaved{0}, nodes_spent{0};
 };
 
 int usage() {
@@ -190,7 +190,7 @@ void run_worker(const Options& o, int worker, const std::vector<std::string>& op
       opening.make(legal[splitmix_next(stream) % legal.size()]);
     }
     const SelfPlayOutcome outcome = player->play(opening, writer, save_seed);
-    totals.nodes_searched += player->nodes_searched();
+    totals.nodes_spent += player->nodes_spent();
     {
       std::lock_guard lock(totals.mutex);
       ++totals.ends[static_cast<int>(outcome.end)];
@@ -247,7 +247,7 @@ void write_manifest(const Options& o, const Totals& t, double seconds, std::size
     << ", \"save_percent\": " << o.save_percent << ", \"unsaved_nodes\": " << o.unsaved_nodes
     << ", \"check_nodes\": " << o.check_nodes << "},\n"
     << "  \"games\": " << t.games.load() << ",\n  \"positions\": " << t.positions.load() << ",\n"
-    << "  \"positions_unsaved\": " << t.unsaved.load() << ",\n  \"nodes_searched\": " << t.nodes_searched.load()
+    << "  \"positions_unsaved\": " << t.unsaved.load() << ",\n  \"nodes_spent\": " << t.nodes_spent.load()
     << ",\n"
     << "  \"seconds\": " << seconds << ",\n  \"results\": {\"white\": " << t.results[2]
     << ", \"draw\": " << t.results[1] << ", \"black\": " << t.results[0] << "},\n  \"ends\": {";

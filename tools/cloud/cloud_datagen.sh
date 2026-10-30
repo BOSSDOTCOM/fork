@@ -20,24 +20,27 @@
 #   tools/cloud/cloud_datagen.sh --run NAME --seed-base N --datagen BIN --openings EPD \
 #       --openings-manifest JSON --tables DIR --upload-to DEST [--chunk-positions 1000000] \
 #       [--nodes 20000] [--threads N] [--stop-at EPOCH] [--max-chunks 0] [--work DIR] \
-#       [--instance-type TYPE]
+#       [--instance-type TYPE] [--adjudicate-cp CP --adjudicate-plies N]
 #
 # DEST is s3://BUCKET/PREFIX (aws s3 cp) or a local folder (cp). --stop-at
 # (Unix time) stops before a chunk that would not finish by then (the
 # instance's own shutdown comes later). SIGTERM (a spot interruption notice
 # via tools/cloud/spot_watch.sh) stops the chunk in progress and ends the
 # run; its log records the lost chunk. Exits 0 when at least one chunk was
-# uploaded or the stop was clean.
+# uploaded or the stop was clean. --adjudicate-cp and --adjudicate-plies go
+# to fork_datagen (its score adjudication; off when not given), and the
+# verification reads them back from each chunk's run manifest.
 set -uo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
 run="" seed_base="" datagen="" openings="" om="" tables="" dest="" chunk=1000000 nodes=20000
-threads=$(nproc) stop_at=0 max_chunks=0 work="" instance_type=""
+threads=$(nproc) stop_at=0 max_chunks=0 work="" instance_type="" adj_cp=0 adj_plies=0
 while [ $# -gt 0 ]; do
   case $1 in
     --run) run=$2 ;; --seed-base) seed_base=$2 ;; --datagen) datagen=$2 ;; --openings) openings=$2 ;;
     --openings-manifest) om=$2 ;; --tables) tables=$2 ;; --upload-to) dest=$2 ;;
     --chunk-positions) chunk=$2 ;; --nodes) nodes=$2 ;; --threads) threads=$2 ;;
     --stop-at) stop_at=$2 ;; --max-chunks) max_chunks=$2 ;; --work) work=$2 ;; --instance-type) instance_type=$2 ;;
+    --adjudicate-cp) adj_cp=$2 ;; --adjudicate-plies) adj_plies=$2 ;;
     *) echo "cloud_datagen.sh: unknown option $1" >&2; exit 2 ;;
   esac
   shift 2
@@ -45,7 +48,7 @@ done
 for v in run seed_base datagen openings om tables dest; do
   [ -n "${!v}" ] || { echo "cloud_datagen.sh: --${v//_/-} is required" >&2; exit 2; }
 done
-case "$seed_base$chunk$nodes$threads$stop_at$max_chunks" in *[!0-9]*) echo "numbers expected" >&2; exit 2 ;; esac
+case "$seed_base$chunk$nodes$threads$stop_at$max_chunks$adj_cp$adj_plies" in *[!0-9]*) echo "numbers expected" >&2; exit 2 ;; esac
 work=${work:-$(mktemp -d)}
 mkdir -p "$work"
 py=${PYTHON:-python3}
@@ -77,7 +80,7 @@ while :; do
   log "chunk $name: seed $((seed_base + k)), $chunk positions"
   "$datagen" --openings "$openings" --out "$dir" --run "$name" --positions "$chunk" --nodes "$nodes" \
     --threads "$threads" --seed $((seed_base + k)) --hash-mb 1 --shard-mb 1024 --tables "$tables" \
-    >"$dir/datagen.log" 2>&1 &
+    --adjudicate-cp "$adj_cp" --adjudicate-plies "$adj_plies" >"$dir/datagen.log" 2>&1 &
   pid=$!
   wait "$pid"
   rc=$?

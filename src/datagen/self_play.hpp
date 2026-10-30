@@ -110,7 +110,7 @@ class SelfPlayGame {
   // The last game's unsaved positions, and its nodes searched (every search,
   // depth-1 fallbacks included).
   int unsaved_positions() const { return unsaved_; }
-  std::uint64_t nodes_searched() const { return nodes_searched_; }
+  std::uint64_t nodes_spent() const { return nodes_spent_; }
 
  private:
   explicit SelfPlayGame(const SelfPlayConfig& config) : config_(config), searcher_(table_) {}
@@ -121,7 +121,7 @@ class SelfPlayGame {
   Searcher searcher_;
   std::atomic<bool> stop_{false};
   int unsaved_ = 0;
-  std::uint64_t nodes_searched_ = 0;
+  std::uint64_t nodes_spent_ = 0;
 };
 
 }  // namespace forkeng

@@ -72,6 +72,10 @@ def seal(run_json, openings_manifest, out_dir, part_end):
         'part_end': part_end,
         'batches': [shards[i:i + BATCH_FILES] for i in range(0, len(shards), BATCH_FILES)],
     }
+    # The split search's counts, from runs whose fork_datagen writes them.
+    for k in ('positions_unsaved', 'nodes_spent'):
+        if k in run:
+            sealed[k] = run[k]
     if sum(s['games'] for s in shards) != run['games'] or sum(s['positions'] for s in shards) != run['positions']:
         raise SystemExit('the shard counts do not add up to the run totals')
     out = Path(out_dir) / f'{name}.json'

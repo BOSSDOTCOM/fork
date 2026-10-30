@@ -438,8 +438,8 @@ TEST_CASE("datagen", "the split search gives a position in check its own node li
   GameWriter w;
   CHECK(a->play(pos, w).end == GameEnd::TooLong);
   CHECK(b->play(pos, w).end == GameEnd::TooLong);
-  CHECK_MSG(a->nodes_searched() >= 10000, std::to_string(a->nodes_searched()));
-  CHECK_MSG(b->nodes_searched() <= 2000, std::to_string(b->nodes_searched()));
+  CHECK_MSG(a->nodes_spent() >= 10000, std::to_string(a->nodes_spent()));
+  CHECK_MSG(b->nodes_spent() <= 2000, std::to_string(b->nodes_spent()));
 }
 
 }  // namespace forkeng::test

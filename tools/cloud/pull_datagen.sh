@@ -52,7 +52,10 @@ for s in shards:
     h = hashlib.sha256(open(p, 'rb').read()).hexdigest()
     if h != s['sha256']:
         sys.exit(f"{s['file']}: SHA-256 differs from the manifest")
-json.dump({'shards': shards}, open(os.path.join(d, 'shards.json'), 'w'))
+# The run's settings travel along: verify_games.py reads the score
+# adjudication and the split search's settings from them.
+json.dump({'shards': shards, 'settings': man['settings'], 'positions_unsaved': man.get('positions_unsaved', 0)},
+          open(os.path.join(d, 'shards.json'), 'w'))
 print(man['positions'], ev)
 EOF
   "$py" -I "$here/tools/datagen/verify_games.py" "$d"*.vf --manifest "$d/shards.json" >"$stage/$name.verify" 2>&1 ||
