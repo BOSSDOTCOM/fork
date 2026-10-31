@@ -310,7 +310,13 @@ added on 2026-10-24; ideas 1-12 predate them.
   `--unsaved-nodes`, `--check-nodes`, off by default); arm A is generation
   2's first 6 hours, arm B its own 6-hour part, both labelled by S-512 with
   the score adjudication and the same build, the split the only
-  difference.
+  difference. **Arm A done** (2026-10-31): run g2 stopped at 12:28:41 AM
+  EST after 21,738 s and sealed (data/manifests/g2.json): 390,227 games,
+  35,592,241 positions (1,637 positions/s), every shard passing
+  verify_games.py. The Lichess 2026-09 openings stream ran beside it for
+  about 74 of its first 75 minutes (paused at 7:41:39 PM EST, until arm B
+  ends); Windows CPU 91.1% with the stream, 85.3% without, WSL load1
+  about 10.2 throughout (the manifest's part_end). Arm B is run g2b.
 
 ## 14. Auxiliary training targets
 

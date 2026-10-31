@@ -144,3 +144,63 @@ LLR: 3.98 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
 - Promoted provisionally as the default network S512 by the owner
   (docs/nets.md); the bake-off continues unchanged (H-512 next), and a
   later entry that beats it is promoted then.
+
+### 2026-10-30 g1h512-vs-g1b0 (bake-off stage A, games plan 3)
+
+- base `5cacf8a` (branch bake/g1b0: the B0 control, promoted as B0r2;
+  bench 14,589,665), test `21fb7fc` (branch bake/g1h512: H-512, seed 1,
+  S = 100; bench 14,987,230), bounds [0, 5] nElo, 8+0.08, Hash 16 MB,
+  Syzygy 3-4-5, GitHub shards.
+- Stage 0: run 41141375944: Elo -25.67 +/- 12.92, nElo -33.97 +/- 17.02,
+  LLR -2.42, continue. Stage 1: run 41143214710. Result: **H0 accepted**
+  after stage 1:
+```
+Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+Elo: -24.36 +/- 9.06, nElo: -32.48 +/- 12.04
+Ptnml(0-2): [172, 398, 623, 296, 111]
+LLR: -4.64 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
+```
+- Stage A fail: under games plan item 3 the entry goes back to training,
+  not out of the bake-off.
+
+### 2026-10-30 g1afs-vs-g1b0 (bake-off stage A, games plan 3)
+
+- base `5cacf8a` (branch bake/g1b0: the B0 control, promoted as B0r2;
+  bench 14,589,665), test `b5da3bc` (branch bake/g1afs: AF-S, seed 2,
+  S = 111; bench 26,382,157), bounds [0, 5] nElo, 8+0.08, Hash 16 MB,
+  Syzygy 3-4-5, GitHub shards.
+- Stage 0: run 41144977957. Result: **H0 accepted** after stage 0:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: -48.52 +/- 12.78, nElo: -65.51 +/- 17.02
+Ptnml(0-2): [109, 213, 304, 139, 35]
+LLR: -4.51 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
+```
+- Stage A fail: under games plan item 3 the entry goes back to training,
+  not out of the bake-off.
+
+### 2026-10-30 g1xgr-vs-g1b0 (bake-off stage A, games plan 3)
+
+- base `5cacf8a` (branch bake/g1b0: the B0 control, promoted as B0r2;
+  bench 14,589,665), test `a697945` (branch bake/g1xgr: XGR-512, seed 2,
+  S = 96; bench 15,540,185), bounds [0, 5] nElo, 8+0.08, Hash 16 MB,
+  Syzygy 3-4-5, GitHub shards.
+- Stage 0: run 41159549810, dispatched once CI was idle. Result: **H0
+  accepted** after stage 0:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: -38.15 +/- 13.03, nElo: -50.26 +/- 17.02
+Ptnml(0-2): [102, 210, 297, 143, 48]
+LLR: -3.50 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
+```
+- Stage A fail: under games plan item 3 the entry goes back to training,
+  not out of the bake-off.
+- Stage A complete: S-512 passed, H-512, AF-S and XGR-512 failed against
+  the B0 control. Next per the games plan: stage B (fixed nodes, no SPRT)
+  and the S-512 seed-noise match, after the owner's review.
+- Owner's review (2026-10-31, DESIGN.md §5.4 "Amendments after stage A"):
+  the fail rule above is replaced. No entry is retrained alone; an entry
+  without an accuracy advantage over the control in stage B (its Elo
+  point estimate not above 0; rule set before any stage B result) is dropped,
+  and the remaining entries, S-512 and the control included, are
+  retrained together in round 2 on about 500 M positions.

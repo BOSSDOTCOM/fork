@@ -3009,6 +3009,39 @@ bake-off game; judgement.md §6.2-6.3, the owner's (d)):
 7. Nothing is promoted (no default network change) before the owner's
    review of the results.
 
+**Amendments after stage A (owner, 2026-10-31; decided after seeing stage
+A's results**, sprt-log.md: S-512 H1, H-512, AF-S and XGR-512 H0 against
+the B0 control, **and before any stage B or noise game**):
+- **Item 3's retraining rule is replaced**: no entry is retrained alone.
+  A stage A fail no longer sends the entry back to training by itself.
+- **Item 4 decides who stays**: an entry that shows no accuracy advantage
+  over the B0 control in stage B is dropped from the bake-off, not
+  retrained. **The rule (owner, 2026-10-31, 12:04 AM EST, decided before
+  any stage B result; the first run was still playing):** an entry has an
+  accuracy advantage, and stays for round 2, if its stage B Elo point
+  estimate against the B0 control is above 0. Why the point estimate and
+  not an interval: keeping an entry costs only one more training run,
+  while dropping one could discard a design expected to benefit most from
+  more data; round 2's STC SPRTs remain the real filter.
+  Stage B's conditions: 800,000 nodes per move for both engines (fastchess
+  `nodes=`), under a 600+6 clock that never binds, otherwise as stage A
+  (16 MB, Syzygy 3-4-5, the UHO book, stage 0's openings), 1,600 games,
+  no SPRT (the run's LLR is ignored). The node count is a measurement:
+  B0's first-move depth at STC in S-512's stage A games (50 opening
+  positions, fresh hash) has mean 14.40 at 0.42 s per move; the B0
+  control reaches mean 14.44 at 1.6 M nodes on the same positions, so the
+  runners search about 3.8 M nodes/s (an estimate), and an average STC
+  move (0.208 s) is worth about 800,000 nodes.
+- **Round 2 of the bake-off**: once about 500 M positions exist
+  (generation 2 and the cloud data so far), every entry still in the
+  bake-off, S-512 and the B0 control included, is retrained on the same
+  larger snapshot with identical settings (one schedule and tuning budget
+  for all, set before training), then the parity chain, scale matching
+  and the games plan as for round 1.
+- **XGR's three parts become add-ons to S-512**: the exposure plane (X),
+  the phase gate (G) and the revision head (R), each its own experiment
+  on top of S-512, planned after round 2.
+
 **Not in this bake-off**: AF's small-layer activation sweep and XGR's two
 ablation nets (no X; buckets instead of G); judgement.md lists them as
 optional, the owner's five entries leave them out. XGR enters only if its
@@ -3075,6 +3108,7 @@ exposure pre-test passes with the current net on generation-1 data
 | 2026-10-30 | **Cloud data generation in three regions (owner).** `aws_spot_datagen.sh --region` takes us-east-2, us-east-1 or us-west-2, one 8-vCPU instance per region within that region's own spot quota, and every instance uploads to the bucket in `--bucket-region` (us-east-2; the instance sets AWS_DEFAULT_REGION to it). Applied Standard spot quota (L-34B43A08) before any launch there: 8 vCPU in each of the three (default 5; us-east-2 also has an increase to 32 requested, case open). Dry runs of run-instances with the instance profile and of create-launch-template succeed in all three regions, so the SSO permission set and its iam:PassRole policy already cover them; the bucket has no bucket policy. The instance role's own policy cannot be read with PowerUserAccess (no IAM reads); that it has no region condition was confirmed when the first cross-region chunk (us-west-2, run g2-aws-us-west-2-20261030T233227Z) uploaded to the us-east-2 bucket. Seeds: 10^12 + (4 x launch time + region slot) x 1000 + chunk, the slot 0 / 1 / 2 for us-east-2 / us-east-1 / us-west-2, and cloud_datagen.sh stops a run at 1,000 chunks, so no two runs share a seed even when launched in the same second; the run name carries the region. Tests: the stub test checks each region's slot, name and upload region (fault-injected: a shared slot fails it); three older checks in test_cloud_datagen.sh that tested only their first condition now test both. |
 | 2026-10-30 | **Cloud spending guards (owner): a $10 daily cap and a $25 credit floor.** `tools/cloud/cost_guard.sh`, run by `aws_spot_datagen.sh` before anything is created: every launch is recorded in a local ledger (outside the repository) at its worst case, --max-hours at the --max-price cap (12 h at $0.25 = $3), and a launch is refused (exit 5) when the last 24 hours' worst cases plus its own exceed FORK_DAILY_CAP ($10); it is refused (exit 6) when the remaining credits, the balance the owner read on a date (FORK_CREDITS_START, FORK_CREDITS_SINCE) minus the credits Cost Explorer shows applied since, fall below FORK_CREDIT_FLOOR ($25). Running instances always finish. Without a starting balance the credits are reported as unknown and do not block; no API giving the remaining credit balance directly is known here (UNVERIFIED). `cost_guard.sh report` lists the window's launches and the credits, run daily. Stub test `test_cost_guard.sh` (fault-injected: ignoring the new launch's own cost fails it); the launcher's stub test checks the ledger record and a refusal over the cap with nothing created. |
 | 2026-10-30 | **Cloud launch rule: expected cost per million positions (owner).** The first measured rates (S-512, 20,000 nodes, adjudication 700/8, x86-64-v4 on 8 vCPU): c8a.2xlarge 2,075 positions/s (median of 18 chunks, 2,046-2,188), c7a.2xlarge 1,640 (2 chunks), so at the spot prices seen c8a costs about $0.015 per million positions and us-west-2's c7a at $0.227/h about $0.038. Rule: each spot pool (a type in a zone) is judged by its current spot price over its type's measured rate (`tools/cloud/datagen-rates.tsv`, keyed by net, nodes and adjudication); `aws_spot_datagen.sh` leaves out pools above `--max-cost-per-m` (default $0.03), above the $0.25/h cap or of a type with no measured rate, and gives the fleet the rest cheapest first (ties in --types order, c8a first by default), each capped at the price where it reaches the limit, so an instance whose price climbs past it is interrupted. No qualifying pool exits 7 with nothing created or recorded. The daily cap and its worst-case booking are unchanged ($0.25/h x 12 h). The five types without a measured rate (m7a, c7i, m7i, c6a, c6i) cannot launch until a rate is recorded for them. Ranking in `tools/cloud/spot_pools.py` (unit tests `test_spot_pools.py`; fault-injected: ranking by hourly price, and no limit check, each fail them), the fleet request and the refusal in the launcher's stub test; dry runs against the live price history in all three regions. Names screened (spot_pools, datagen-rates, load_rates, latest_prices, choose_pools, max-cost-per-m, per_m, refused): no match. |
+| 2026-10-31 | **Bake-off amended after stage A (owner; decided after seeing stage A's results, before any stage B game).** Stage A: S-512 H1; H-512, AF-S and XGR-512 H0 against the B0 control. No entry is retrained alone; stage B (fixed nodes, 800,000 per move) decides who stays: an entry stays if its stage B Elo point estimate against the control is above 0 (rule set before any stage B result), otherwise it is dropped, not retrained. Round 2: every remaining entry, S-512 and the B0 control included, retrained on one snapshot of about 500 M positions (generation 2 and the cloud data) with identical settings. XGR's exposure plane, phase gate and revision head become separate add-on experiments to S-512 after round 2 (§5.4, "Amendments after stage A"). |
 
 ## 7. Performance doctrine (governs every phase)
 
