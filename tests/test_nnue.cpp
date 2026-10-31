@@ -392,6 +392,47 @@ TEST_CASE("nnue", "XGR's exposure rule") {
   CHECK(exposed & (Bitboard{1} << 10));    // c2
   CHECK(!(exposed & (Bitboard{1} << 7)));  // h1
 }
+
+// The rule square by square, from each piece's attackers (the first
+// implementation's method), as the reference for the set-wise one.
+Bitboard exposed_reference(const Position& pos) {
+  constexpr int Class[6] = {1, 2, 2, 3, 4, 5};
+  const Bitboard occ = pos.pieces();
+  Bitboard out = 0;
+  for (Bitboard b = occ & ~pos.pieces(King); b;) {
+    const Square s = pop_lsb(b);
+    const Color c = side_of(pos.piece_at(s));
+    const Bitboard attackers = pos.attackers_to(s, occ);
+    const Bitboard enemy = attackers & pos.pieces(~c);
+    if (!enemy) continue;
+    int lowest = 5;
+    for (const PieceType t : {Queen, Rook, Bishop, Knight, Pawn})
+      if (enemy & pos.pieces(t)) lowest = Class[t];
+    if (lowest < Class[kind_of(pos.piece_at(s))] || !(attackers & pos.pieces(c))) out |= Bitboard{1} << s;
+  }
+  return out;
+}
+
+TEST_CASE("nnue", "XGR's exposure rule matches the square-by-square reference along random games") {
+  int checked = 0, nonempty = 0;
+  for (const auto& sp : perft_suite()) {
+    Position pos;
+    pos.set_fen(sp.fen);
+    std::uint64_t rng = 91 + checked;
+    for (int ply = 0; ply < 80; ++ply) {
+      const Bitboard got = exposed_pieces(pos), want = exposed_reference(pos);
+      CHECK_MSG(got == want, pos.fen());
+      nonempty += want != 0;
+      ++checked;
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      if (legal.size() == 0) break;
+      pos.make(legal[splitmix_next(rng) % legal.size()]);
+    }
+  }
+  CHECK(checked > 200);
+  CHECK(nonempty > 50);
+}
 #endif
 
 #if defined(FORK_EVAL_NNUE)

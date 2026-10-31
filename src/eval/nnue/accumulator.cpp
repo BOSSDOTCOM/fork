@@ -253,12 +253,14 @@ int af_output(const NetFile& net, const Accumulator& acc, const Position& pos) {
 
 #if FORK_NET_ARCH == 5
 // XGR: the accumulator plus the exposed pieces' rows (summed at every
-// evaluation, no incremental state), then the two experts blended by the
-// gate (design-novelty.md §5.1).
+// evaluation, no incremental state; the accumulator itself when none is
+// exposed), then the two experts blended by the gate (design-novelty.md
+// §5.1).
 template <bool Scalar>
 int xgr_output(const NetFile& net, const Accumulator& acc, const Position& pos) {
-  Accumulator a = acc;
   const Bitboard exposed = exposed_pieces(pos);
+  Accumulator summed;
+  if (exposed) summed = acc;
   const int first = NetPieceSquares * net.region_count;
   for (const Color perspective : {White, Black}) {
     const Frame f = frame_of(net, perspective, pos.king_square(perspective));
@@ -268,12 +270,14 @@ int xgr_output(const NetFile& net, const Accumulator& acc, const Position& pos) 
       const Square seen = perspective == White ? s : s ^ 56;
       const int row = first + 320 * (side_of(p) != perspective) + 64 * kind_of(p) + (seen ^ f.flip);
       const std::int16_t* w = column(net, row);
-      std::int16_t* v = a.values[perspective];
+      std::int16_t* v = summed.values[perspective];
       for (int i = 0; i < NetHidden; ++i) v[i] = static_cast<std::int16_t>(v[i] + w[i]);
       for (int k = 0; k < 4; ++k)
-        a.side[perspective][k] = static_cast<std::int16_t>(a.side[perspective][k] + net.side_weights[row][k]);
+        summed.side[perspective][k] =
+            static_cast<std::int16_t>(summed.side[perspective][k] + net.side_weights[row][k]);
     }
   }
+  const Accumulator& a = exposed ? summed : acc;
   const Color stm = pos.side_to_move();
   std::int64_t o[2];
   for (int e = 0; e < 2; ++e) {
@@ -388,27 +392,34 @@ int evaluate_position_scalar(const NetFile& net, const Accumulator& acc, const P
 }
 
 #if FORK_NET_ARCH == 5
+// Set-wise: each side's attacked squares, accumulated by attacker class
+// (pawns; + knights and bishops; + rooks; + queens; + the king), so a
+// piece's lowest enemy attacker class is read off the sets instead of each
+// piece's attackers. Attacks are symmetric on one occupancy, so the sets
+// give the same answer as attackers_to square by square.
 Bitboard exposed_pieces(const Position& pos) {
-  constexpr int Class[6] = {1, 2, 2, 3, 4, 5};
   const Bitboard occ = pos.pieces();
+  Bitboard upto[2][5];  // upto[c][k]: squares attacked by c's pieces of class k + 1 or lower
+  for (const Color c : {White, Black}) {
+    Bitboard pawns = 0, minors = 0, rooks = 0, queens = 0;
+    for (Bitboard b = pos.pieces(c, Pawn); b;) pawns |= pawn_attacks(c, pop_lsb(b));
+    for (Bitboard b = pos.pieces(c, Knight); b;) minors |= knight_attacks(pop_lsb(b));
+    for (Bitboard b = pos.pieces(c, Bishop); b;) minors |= bishop_attacks(pop_lsb(b), occ);
+    for (Bitboard b = pos.pieces(c, Rook); b;) rooks |= rook_attacks(pop_lsb(b), occ);
+    for (Bitboard b = pos.pieces(c, Queen); b;) queens |= queen_attacks(pop_lsb(b), occ);
+    upto[c][0] = pawns;
+    upto[c][1] = pawns | minors;
+    upto[c][2] = upto[c][1] | rooks;
+    upto[c][3] = upto[c][2] | queens;
+    upto[c][4] = upto[c][3] | king_attacks(pos.king_square(c));
+  }
   Bitboard out = 0;
-  for (Bitboard b = occ & ~pos.pieces(King); b;) {
-    const Square s = pop_lsb(b);
-    const Piece p = pos.piece_at(s);
-    const Color c = side_of(p);
-    const Bitboard attackers = pos.attackers_to(s, occ);
-    const Bitboard enemy = attackers & pos.pieces(~c);
-    if (!enemy) continue;
-    int lowest = 5;
-    if (enemy & pos.pieces(Pawn))
-      lowest = 1;
-    else if (enemy & (pos.pieces(Knight) | pos.pieces(Bishop)))
-      lowest = 2;
-    else if (enemy & pos.pieces(Rook))
-      lowest = 3;
-    else if (enemy & pos.pieces(Queen))
-      lowest = 4;
-    if (lowest < Class[kind_of(p)] || !(attackers & pos.pieces(c))) out |= Bitboard{1} << s;
+  for (const Color c : {White, Black}) {
+    const Bitboard* enemy = upto[~c];
+    out |= pos.pieces(c, Knight, Bishop) & enemy[0];
+    out |= pos.pieces(c, Rook) & enemy[1];
+    out |= pos.pieces(c, Queen) & enemy[2];
+    out |= (pos.pieces(c) & ~pos.pieces(King)) & enemy[4] & ~upto[c][4];
   }
   return out;
 }

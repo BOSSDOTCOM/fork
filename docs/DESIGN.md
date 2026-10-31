@@ -3053,14 +3053,21 @@ state). Investigate a cheaper computation, incremental or partial updates
 in place of the full recompute, measure the speed gain with the A/B
 harness with the output unchanged (netcheck's R-int on the parity
 positions, bench identical), and report to the owner before round 2.
-**Result (2026-10-31, branch `xgr-speed`, 49c421c on bake/g1xgr; not
-adopted until the owner decides):** the exposure rule computed set-wise
+**Result (2026-10-31, branch `xgr-speed`, 49c421c on bake/g1xgr; adopted
+into phase-4 for round 2 by the owner, identical evaluations being the
+condition: inference speed is not a training change, so round 2's rules
+are unaffected):** the exposure rule computed set-wise
 (each side's attacked squares accumulated by attacker class, every piece's
 lowest enemy attacker class read off the sets, in place of attackers_to
 square by square) and no accumulator copy when nothing is exposed. Output
 unchanged: bench 15,540,185 / 9564dc8f27cd9708 on both sides, netcheck 446
 positions with 0 mismatches; a test checks the rule against the
 square-by-square reference at every ply of random games (fault-injected).
+Every XGR-512 net, old build against new: netcheck 446 positions with 0
+mismatches for the entry (seed 2 scale-matched, g1xgr) and the raw seeds 1
+and 2, and `fork evalfens` byte-identical on 500,005 positions of run g2's
+held-out shard for each of the three (48.8% of them with an exposed piece,
+so both paths ran).
 Speed (bench/ab_search.py, WSL clang-release, core 4, g2c paused, the
 openings stream running; an A/A run beside it moved -0.4% / +0.9%):
 +15.5% median nps (2.42 to 2.80 M), +15.1% best, 10 rounds. Against the
@@ -3138,6 +3145,7 @@ exposure pre-test passes with the current net on generation-1 data
 | 2026-10-30 | **Cloud launch rule: expected cost per million positions (owner).** The first measured rates (S-512, 20,000 nodes, adjudication 700/8, x86-64-v4 on 8 vCPU): c8a.2xlarge 2,075 positions/s (median of 18 chunks, 2,046-2,188), c7a.2xlarge 1,640 (2 chunks), so at the spot prices seen c8a costs about $0.015 per million positions and us-west-2's c7a at $0.227/h about $0.038. Rule: each spot pool (a type in a zone) is judged by its current spot price over its type's measured rate (`tools/cloud/datagen-rates.tsv`, keyed by net, nodes and adjudication); `aws_spot_datagen.sh` leaves out pools above `--max-cost-per-m` (default $0.03), above the $0.25/h cap or of a type with no measured rate, and gives the fleet the rest cheapest first (ties in --types order, c8a first by default), each capped at the price where it reaches the limit, so an instance whose price climbs past it is interrupted. No qualifying pool exits 7 with nothing created or recorded. The daily cap and its worst-case booking are unchanged ($0.25/h x 12 h). The five types without a measured rate (m7a, c7i, m7i, c6a, c6i) cannot launch until a rate is recorded for them. Ranking in `tools/cloud/spot_pools.py` (unit tests `test_spot_pools.py`; fault-injected: ranking by hourly price, and no limit check, each fail them), the fleet request and the refusal in the launcher's stub test; dry runs against the live price history in all three regions. Names screened (spot_pools, datagen-rates, load_rates, latest_prices, choose_pools, max-cost-per-m, per_m, refused): no match. |
 | 2026-10-31 | **Bake-off amended after stage A (owner; decided after seeing stage A's results, before any stage B game).** Stage A: S-512 H1; H-512, AF-S and XGR-512 H0 against the B0 control. No entry is retrained alone; stage B (fixed nodes, 800,000 per move) decides who stays: an entry stays if its stage B Elo point estimate against the control is above 0 (rule set before any stage B result), otherwise it is dropped, not retrained. Round 2: every remaining entry, S-512 and the B0 control included, retrained on one snapshot of about 500 M positions (generation 2 and the cloud data) with identical settings. XGR's exposure plane, phase gate and revision head become separate add-on experiments to S-512 after round 2 (§5.4, "Amendments after stage A"). |
 | 2026-10-31 | **The daily cap counts ended instances at their cost (owner).** A launch stays booked at its worst case ($0.25/h x 12 h) while its instance runs; once the instance has ended (finished, interrupted or terminated), `cost_guard.sh` replaces the booking with its cost: hours run times the spot price paid, each stretch of the run at the price then in effect (`tools/cloud/spot_cost.py`), from the instance's spot request (start, end, type, zone) and the zone's spot price history. `check` and `report` settle first; the launcher records each launch's region and instance. AWS lists closed spot requests only for some hours, so an instance it no longer lists keeps its worst case until `settle RUN COST` sets it by hand. The three launches of 2026-10-30 were settled by hand: us-east-2's c8a $0.73 (6.1 h, from AWS's record), us-west-2's c7a $0.57 (2.5 h, end from its boot log), us-east-1's c7a $0.26 (an upper bound: reclaimed before its first chunk, zone and end unknown, so 1.1 h at the dearest zone's price). Tests: `test_spot_cost.py` and `test_cost_guard.sh` (fault-injected: check without settling, a running instance counted as ended, price changes ignored, and a hand-settled row losing its state on a rewrite each fail them). Names screened (spot_cost, cost_between, settle, booked, paid): no match. |
+| 2026-10-31 | **XGR's set-wise exposure adopted for round 2 (owner).** Condition: evaluations exactly identical and faster (§5.4, the engineering task's result). Old build against new, every XGR-512 net (the entry and the raw seeds 1 and 2): netcheck 446 positions, 0 mismatches each; `fork evalfens` byte-identical on 500,005 game positions each; bench 15,540,185 / 9564dc8f27cd9708 on both. Speed: +15.5% median nps (bench/ab_search.py, 10 rounds, datagen paused, the openings stream running at low priority; an A/A run beside it moved -0.4% / +0.9%). Inference only, so round 2's training rules are unaffected. |
 
 ## 7. Performance doctrine (governs every phase)
 
