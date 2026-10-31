@@ -38,12 +38,21 @@ endif()
 # -g: debug info in the optimized binary, as TCEC recommends (owner,
 # 2026-10-24); it does not change the generated code.
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
+if(EMSCRIPTEN)
+  # No debug information in the web page's modules (size, and no build paths).
+  set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+  set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
+endif()
 set(CMAKE_CXX_FLAGS_DEBUG "-O1 -g -fno-omit-frame-pointer -DFORK_DEBUG")
 
 # Flags shared by every Fork target.
 add_library(fork_flags INTERFACE)
-target_compile_options(fork_flags INTERFACE
-  -Wall -Wextra -Wpedantic -Wshadow -Werror -march=${FORK_ARCH})
+target_compile_options(fork_flags INTERFACE -Wall -Wextra -Wpedantic -Wshadow -Werror)
+# WebAssembly (Emscripten, the web page; DESIGN.md §5.5) has no -march: its
+# builds use the scalar inference and the magic-multiplication sliders.
+if(NOT EMSCRIPTEN)
+  target_compile_options(fork_flags INTERFACE -march=${FORK_ARCH})
+endif()
 if(FORK_VNNI)
   target_compile_options(fork_flags INTERFACE -mavx512vnni)
 endif()
@@ -215,8 +224,15 @@ if(FORK_EVALUATOR STREQUAL "nnue")
 else()
   target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
 endif()
-find_package(Threads REQUIRED)
-target_link_libraries(forksearch PUBLIC forkcore fathom Threads::Threads PRIVATE fork_pgo)
+# WebAssembly builds are single-threaded (DESIGN.md §5.5): Emscripten's threads
+# need shared memory, which a GitHub Pages site cannot enable.
+if(EMSCRIPTEN)
+  set(fork_threads "")
+else()
+  find_package(Threads REQUIRED)
+  set(fork_threads Threads::Threads)
+endif()
+target_link_libraries(forksearch PUBLIC forkcore fathom ${fork_threads} PRIVATE fork_pgo)
 if(FORK_SEARCH_STATS)
   target_compile_definitions(forksearch PUBLIC FORK_SEARCH_STATS)
 endif()
@@ -228,7 +244,7 @@ add_library(forkuci STATIC
   src/uci/output.cpp
   src/uci/session.cpp
   src/uci/version.cpp)
-target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pgo)
+target_link_libraries(forkuci PUBLIC forksearch ${fork_threads} PRIVATE fork_pgo)
 # B0's inference (src/eval/nnue/; DESIGN.md §5.3, deliverable 5): built and
 # tested in every configuration; the search uses it only with
 # FORK_EVALUATOR=nnue.
@@ -283,6 +299,26 @@ target_compile_definitions(fork PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}"
 # fork_datagen's run manifest names the labelling network the same way, so
 # data labelled by different nets stays apart (owner, 2026-10-30).
 target_compile_definitions(fork_datagen PRIVATE FORK_NET_NAME="${fork_net_stem_for_version}")
+
+# The web page's entry points (src/web/; DESIGN.md §5.5): a synchronous
+# interface for one Web Worker, tested natively in fork_tests.
+add_library(forkweb STATIC src/web/web_engine.cpp)
+target_link_libraries(forkweb PUBLIC forksearch PRIVATE fork_pgo)
+if(EMSCRIPTEN)
+  # A native thread's 8 MB stack (Emscripten's default is far smaller than the
+  # search's recursion needs); memory grows past the hash table as needed.
+  set(fork_wasm_link -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8388608)
+  # fork.js: the command-line program under Node.js, for the parity checks
+  # (netcheck, bench) with real file access and its exit status kept.
+  target_link_options(fork PRIVATE ${fork_wasm_link} -sNODERAWFS=1 -sEXIT_RUNTIME=1 -sENVIRONMENT=node)
+  # fork_web.js: an ES module for the page's Web Worker.
+  add_executable(fork_web src/web/web_engine.cpp)
+  target_link_libraries(fork_web PRIVATE forksearch fork_pgo)
+  target_link_options(fork_web PRIVATE ${fork_wasm_link} --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1
+    -sENVIRONMENT=worker -sEXPORT_NAME=createFork
+    "-sEXPORTED_FUNCTIONS=_fork_web_init,_fork_web_set_position,_fork_web_fen,_fork_web_legal_moves,_fork_web_status,_fork_web_search,_fork_web_new_game"
+    "-sEXPORTED_RUNTIME_METHODS=cwrap")
+endif()
 
 add_executable(fork_magic_seeds tools/magic_seeds.cpp)
 target_link_libraries(fork_magic_seeds PRIVATE forkcore)
@@ -380,8 +416,9 @@ if(FORK_BUILD_TESTS)
     tests/test_options.cpp
     tests/test_params.cpp
     tests/test_datagen.cpp
-    tests/test_nnue.cpp)
-  target_link_libraries(fork_tests PRIVATE forkuci forkdatagen forknnue)
+    tests/test_nnue.cpp
+    tests/test_web.cpp)
+  target_link_libraries(fork_tests PRIVATE forkuci forkdatagen forknnue forkweb)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
   target_compile_definitions(fork_tests PRIVATE FORK_EXE_PATH="$<TARGET_FILE:fork>")
@@ -507,7 +544,8 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue)
+                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue
+                web)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()

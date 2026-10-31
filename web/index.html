@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Play Fork</title>
+  <meta name="description" content="Play Fork, an original open-source chess engine, in your browser.">
+  <link rel="stylesheet" href="vendor/chessground/chessground.base.css">
+  <link rel="stylesheet" href="vendor/chessground/chessground.brown.css">
+  <link rel="stylesheet" href="vendor/chessground/chessground.cburnett.css">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Fork</h1>
+    <p class="tagline">An original chess engine, playing in your browser.</p>
+    <button id="theme" type="button" aria-label="Switch between light and dark">◐</button>
+  </header>
+  <main>
+    <div class="board-box"><div id="board"></div></div>
+    <div class="side">
+      <p id="status" role="status" aria-live="polite">Loading…</p>
+      <div class="controls">
+        <label>Play as
+          <select id="colour">
+            <option value="white">White</option>
+            <option value="black">Black</option>
+            <option value="random">Random</option>
+          </select>
+        </label>
+        <button id="new-game" type="button">New game</button>
+      </div>
+      <div id="promotion" hidden>
+        <span>Promote to</span>
+        <button type="button" data-piece="q">Queen</button>
+        <button type="button" data-piece="r">Rook</button>
+        <button type="button" data-piece="b">Bishop</button>
+        <button type="button" data-piece="n">Knight</button>
+      </div>
+      <p class="note">Fork searches 200,000 positions per move, running entirely on this device.</p>
+    </div>
+  </main>
+  <footer>
+    <p><a href="https://github.com/BOSSDOTCOM/fork">Fork</a> is free software under the
+      <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3 or later</a>; its source code is on GitHub.</p>
+    <p>Board: <a href="https://github.com/lichess-org/chessground">chessground</a> by Lichess (GPL v3 or later).
+      Pieces: cburnett, by Colin M.L. Burnett (GPL v2 or later). Compiled to WebAssembly with
+      <a href="https://emscripten.org">Emscripten</a>.</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,142 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# The public play page (DESIGN.md §5.5, the bare-bones version; owner,
+# 2026-10-31), built and checked on GitHub's runners only:
+# 1. Fork with its default network (S-512) compiled to WebAssembly with
+#    Emscripten (pinned), single-threaded, scalar inference;
+# 2. the WebAssembly parity checks under Node.js: netcheck on the network's
+#    parity file (0 mismatches) and bench parity against the native
+#    references (tests/bench-<net>.ref, tests/perft_bench.ref);
+# 3. the page assembled from web/, the engine module and chessground (npm,
+#    pinned by version and integrity hash), then scanned for personal data;
+# 4. deployed to GitHub Pages only when the run asks for it (input deploy)
+#    and every check above passed.
+# Manual trigger only; runs one at a time, and never beside the SPRT, gauntlet
+# or CI runs (the dispatcher waits for an idle queue).
+name: web
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Deploy the checked page to GitHub Pages
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web
+  cancel-in-progress: false
+
+env:
+  EMSDK_VERSION: "6.0.13"
+  CHESSGROUND_VERSION: "10.5.0"
+  CHESSGROUND_INTEGRITY: "sha512-LmTNnzCQ67RQsryzouWY0jYoN24LlpubtPyYko1gmdpTj5HSfz0VgUGB4Gpo6oifg0MyeT9YeV2TdZEbOP6byA=="
+
+jobs:
+  build:
+    name: WebAssembly build, parity and page
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build
+      - name: Cache the Emscripten SDK
+        uses: actions/cache@v6
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}
+      - name: Emscripten SDK (pinned)
+        run: |
+          if [ ! -x ~/emsdk/emsdk ]; then
+            git clone --depth 1 --branch "$EMSDK_VERSION" https://github.com/emscripten-core/emsdk.git ~/emsdk
+          fi
+          cd ~/emsdk
+          ./emsdk install "$EMSDK_VERSION"
+          ./emsdk activate "$EMSDK_VERSION"
+      - name: Build fork.js (Node, for the checks) and fork_web.js (the page's engine)
+        run: |
+          source ~/emsdk/emsdk_env.sh >/dev/null
+          emcc --version | head -1
+          emcmake cmake -S . -B build/wasm -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DFORK_BUILD_TESTS=OFF -DFORK_LTO=OFF -DFORK_ARCH=wasm32
+          cmake --build build/wasm --target fork fork_web
+          ls -l build/wasm/fork.js build/wasm/fork.wasm build/wasm/fork_web.js build/wasm/fork_web.wasm
+      - name: WebAssembly parity (netcheck and bench under Node.js)
+        run: |
+          source ~/emsdk/emsdk_env.sh >/dev/null
+          node --version
+          printf '#!/bin/sh\nexec node "%s/build/wasm/fork.js" "$@"\n' "$PWD" > build/wasm/fork-node
+          chmod +x build/wasm/fork-node
+          fork=build/wasm/fork-node
+          "$fork" version
+          net=$("$fork" version | sed -n 's/^net //p')
+          [ -n "$net" ] || { echo "::error::the WebAssembly build names no network"; exit 1; }
+          "$fork" netcheck "tests/nnue/$net.parity" | tee netcheck.txt
+          grep -q ' 0 mismatches' netcheck.txt
+          bash .github/ci/bench-parity.sh "$fork" | tee bench.txt
+          {
+            echo "### WebAssembly parity ($net)"
+            echo '```'
+            cat netcheck.txt bench.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Assemble the page
+        run: |
+          mkdir -p site/vendor/chessground cg
+          cp web/index.html web/style.css web/app.js web/engine-worker.js site/
+          cp build/wasm/fork_web.js build/wasm/fork_web.wasm site/
+          cp LICENSE site/LICENSE.txt
+          curl -sSfL -o cg/cg.tgz \
+            "https://registry.npmjs.org/@lichess-org/chessground/-/chessground-$CHESSGROUND_VERSION.tgz"
+          got="sha512-$(openssl dgst -sha512 -binary cg/cg.tgz | base64 -w0)"
+          [ "$got" = "$CHESSGROUND_INTEGRITY" ] || { echo "::error::chessground integrity mismatch: $got"; exit 1; }
+          tar -xzf cg/cg.tgz -C cg
+          cp cg/package/dist/chessground.min.js cg/package/assets/chessground.base.css \
+            cg/package/assets/chessground.brown.css cg/package/assets/chessground.cburnett.css site/vendor/chessground/
+          cp cg/package/LICENSE site/vendor/chessground/LICENSE.txt
+          {
+            echo "Fork commit: $(git rev-parse HEAD)"
+            echo "Emscripten: $EMSDK_VERSION; chessground: $CHESSGROUND_VERSION"
+            cat netcheck.txt bench.txt
+          } > site/build.txt
+          touch site/.nojekyll
+          find site -type f -printf '%s\t%p\n' | sort -k2
+      - name: Scan the page for personal data
+        # Paths, addresses, keys and tokens anywhere in what would be
+        # published (text files whole, the WebAssembly through `strings`).
+        run: |
+          pattern='(/home/|/Users/|[A-Za-z]:.Users|s3://|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20}|-----BEGIN [A-Z ]*PRIVATE KEY|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})'
+          found=0
+          for f in $(find site -type f); do
+            case "$f" in *.wasm) text=$(strings -n 6 "$f") ;; *) text=$(cat "$f") ;; esac
+            hits=$(printf '%s' "$text" | grep -o -E "$pattern" | sort -u || true)
+            if [ -n "$hits" ]; then echo "::error::$f: $hits"; found=1; fi
+          done
+          [ "$found" = 0 ] && echo "scan clean: $(find site -type f | wc -l) files"
+          exit $found
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: inputs.deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

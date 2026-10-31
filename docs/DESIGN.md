@@ -3211,6 +3211,33 @@ adds (as for the repository: the user name, home paths, the personal
 email, account ids, bucket and profile names, secrets) must come back
 empty; networks and modules are built only from pushed public commits.
 
+**The bare-bones version first (owner, 2026-10-31).** Built now, ahead
+of the rest, which stays pinned as planned above:
+- `.github/workflows/web.yml`, manual trigger, on GitHub's runners only
+  (no local CPU, no `site` branch): Emscripten 6.0.13 builds Fork with its
+  default network (S-512), scalar inference, single-threaded, with a 16 MB
+  hash on the page; `fork.js` runs under Node.js for the parity checks
+  (netcheck on the network's parity file, 0 mismatches required; bench
+  parity against tests/bench-<net>.ref and tests/perft_bench.ref, through
+  .github/ci/bench-parity.sh unchanged); only if they pass is the page
+  assembled, scanned for personal data (paths, addresses, keys, tokens;
+  the WebAssembly through `strings`) and, when the run's `deploy` input is
+  set, deployed with GitHub Pages' Actions deployment (configure in the
+  repository settings: Pages source "GitHub Actions").
+- The page (`web/`): the chessground board (credited, with its licence),
+  a choice of colour, Fork answering at 200,000 nodes per move (a page
+  setting chosen to keep a phone's move near a second; measured once the
+  module runs), new game, game-over messages (checkmate, stalemate, the
+  fifty-move rule, threefold repetition, insufficient material), phones
+  first, light and dark. Fork is the only rules source: legal moves,
+  positions and the game's end come from the engine through
+  `src/web/web_engine.hpp`.
+- The engine side: `src/web/web_engine.*` (the synchronous entry points,
+  tested natively in fork_tests' `web` suite), the `fork_web` target and
+  `fork.js` link options under Emscripten, no `-march` and no `-g` there,
+  and no thread library (Emscripten's threads need shared memory).
+- After the first good run, the WebAssembly parity checks join CI as a job.
+
 **Tests.** The entry module's functions get native unit tests (they compile
 outside Emscripten too); the Node runs above are the WASM tests. Whether
 CI gains an Emscripten job (cached SDK) is decided with the owner once the
