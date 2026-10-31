@@ -3213,8 +3213,12 @@ empty; networks and modules are built only from pushed public commits.
 
 **The bare-bones version first (owner, 2026-10-31).** Built now, ahead
 of the rest, which stays pinned as planned above:
-- `.github/workflows/web.yml`, manual trigger, on GitHub's runners only
-  (no local CPU, no `site` branch): Emscripten 6.0.13 builds Fork with its
+- `.github/workflows/web.yml`, started by hand, on GitHub's runners only
+  (no local CPU, no `site` branch): by a push to the trigger branch
+  `web-build` (checks only) or `web-deploy` (checks, then deploy), since
+  GitHub dispatches a workflow by hand only once its file is on the
+  default branch; by manual dispatch once it reaches main. The deploy
+  needs the `github-pages` environment to allow `web-deploy`: Emscripten 6.0.13 builds Fork with its
   default network (S-512), scalar inference, single-threaded, with a 16 MB
   hash on the page; `fork.js` runs under Node.js for the parity checks
   (netcheck on the network's parity file, 0 mismatches required; bench

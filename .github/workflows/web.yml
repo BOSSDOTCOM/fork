@@ -10,11 +10,17 @@
 #    pinned by version and integrity hash), then scanned for personal data;
 # 4. deployed to GitHub Pages only when the run asks for it (input deploy)
 #    and every check above passed.
-# Manual trigger only; runs one at a time, and never beside the SPRT, gauntlet
-# or CI runs (the dispatcher waits for an idle queue).
+# Started by hand only, one run at a time, never beside the SPRT, gauntlet or
+# CI runs (whoever starts it waits for an idle queue): by a push to the
+# trigger branch web-build (checks only) or web-deploy (checks, then deploy),
+# since GitHub dispatches a workflow by hand only once its file is on the
+# default branch, which development does not touch; or, from then on, by a
+# manual dispatch.
 name: web
 
 on:
+  push:
+    branches: [web-build, web-deploy]
   workflow_dispatch:
     inputs:
       deploy:
@@ -128,7 +134,7 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
-    if: inputs.deploy
+    if: github.ref == 'refs/heads/web-deploy' || inputs.deploy
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
