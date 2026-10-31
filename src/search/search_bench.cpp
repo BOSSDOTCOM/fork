@@ -176,6 +176,9 @@ SearchBenchResult run_search_bench() {
   std::fprintf(stderr, "stats: quiescence nodes PV %llu, non-PV %llu\n",
                static_cast<unsigned long long>(c.quiesce_nodes_pv),
                static_cast<unsigned long long>(c.quiesce_nodes_non_pv));
+  std::fprintf(stderr, "stats: multi-cut cuts %llu, negative extensions %llu\n",
+               static_cast<unsigned long long>(c.multi_cut_cuts),
+               static_cast<unsigned long long>(c.negative_extensions));
   std::fprintf(stderr, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
                static_cast<unsigned long long>(c.singular_tests),
                static_cast<unsigned long long>(c.singular_extended),

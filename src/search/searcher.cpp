@@ -267,10 +267,18 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // move fails low there, the TT move is the only good one, and it is
   // searched one ply deeper. The test runs before this node's own move
   // selection, since its search reuses this ply's frame.
-  Move singular_move = NoMove;
-  if (switches.use_singular_extension && !withheld && ply > 0 && depth >= SingularMinDepth && tt_hit &&
-      !hit.move.is_none() && (hit.bound == TtBound::Lower || hit.bound == TtBound::Exact) &&
-      hit.depth >= depth - SingularEntrySlack) {
+  // The same test also finds the opposite case at non-PV nodes (T28, T30):
+  // other moves reach the bar too. If the bar is at or above beta, at least
+  // two moves beat beta, and the node fails high at once with the bar
+  // (multi-cut; never with a mate or tablebase score). Otherwise, if the
+  // entry's score is already at or above beta, the TT move is searched one
+  // ply shallower: other moves are likely to refute as well (negative
+  // extension).
+  Move tested_move = NoMove;
+  int tested_extension = 0;
+  if ((switches.use_singular_extension || switches.use_multi_cut || switches.use_negative_extension) &&
+      !withheld && ply > 0 && depth >= SingularMinDepth && tt_hit && !hit.move.is_none() &&
+      (hit.bound == TtBound::Lower || hit.bound == TtBound::Exact) && hit.depth >= depth - SingularEntrySlack) {
     const int s = score_from_tt(hit.score, ply);
     if (!is_tb_or_mate(s)) {
       const int bar = s - SingularMarginPerPly * depth;
@@ -280,8 +288,18 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       f.withheld_move = NoMove;
       if (stopped_) return 0;
       if (score < bar) {
-        singular_move = hit.move;
-        FORK_STAT(++counters.singular_extended);
+        if (switches.use_singular_extension) {
+          tested_move = hit.move;
+          tested_extension = 1;
+          FORK_STAT(++counters.singular_extended);
+        }
+      } else if (!OnPv && switches.use_multi_cut && bar >= beta && !is_tb_or_mate(bar)) {
+        FORK_STAT(++counters.multi_cut_cuts);
+        return bar;
+      } else if (!OnPv && switches.use_negative_extension && s >= beta) {
+        tested_move = hit.move;
+        tested_extension = -1;
+        FORK_STAT(++counters.negative_extensions);
       }
     }
   }
@@ -307,7 +325,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     if (m == f.withheld_move) continue;
     ++moves_seen;
     const bool quiet = !m.is_capture() && !m.is_promotion();
-    const int extension = m == singular_move ? 1 : 0;
+    const int extension = m == tested_move ? tested_extension : 0;
 #ifdef FORK_SEARCH_STATS
     counters.futile_quiets_taken += futile_node && quiet;
     const bool bad_after_stop =

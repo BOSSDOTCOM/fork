@@ -95,6 +95,10 @@ struct SearchQuota {
 // - use_singular_extension: a TT move that the singular test shows to be the
 //   only good move is searched one ply deeper (tier 2, T27). Off until its
 //   SPRT decides.
+// - use_multi_cut, use_negative_extension: the same test's other outcome at
+//   non-PV nodes (T28, T30): a node where another move also reaches a bar at
+//   or above beta fails high at once; otherwise a TT move whose score is at
+//   or above beta is searched one ply shallower. Off until their SPRTs.
 #define FORK_SEARCH_SWITCHES(X)                    \
   X(use_tt, UseTT, true)                           \
   X(use_pvs, UsePvs, true)                         \
@@ -118,7 +122,9 @@ struct SearchQuota {
   X(use_tables, UseTables, true)                   \
   X(use_lmr_check_relief, UseLmrCheckRelief, true) \
   X(use_lmr_in_check, UseLmrInCheck, true)        \
-  X(use_singular_extension, UseSingularExtension, false)
+  X(use_singular_extension, UseSingularExtension, false) \
+  X(use_multi_cut, UseMultiCut, false)                   \
+  X(use_negative_extension, UseNegativeExtension, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -279,6 +285,8 @@ struct SearchCounters {
   std::uint64_t singular_candidates = 0;
   std::uint64_t singular_tests = 0;     // singular tests run (their searches)
   std::uint64_t singular_extended = 0;  // ... that found the TT move singular
+  std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
+  std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
 };
 
 class Searcher {
