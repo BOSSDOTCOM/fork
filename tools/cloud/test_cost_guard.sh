@@ -22,11 +22,11 @@ expect() {  # description, wanted exit status, cost_guard.sh arguments...
 cat >"$tmp/aws" <<'EOF'
 #!/usr/bin/env bash
 # Stub: Cost Explorer's applied credits per month (STUB_CREDITS, negative
-# amounts); spot requests of instance i-ended (ended after 3 hours in
+# amounts; the query fails when STUB_CE_FAIL is set); spot requests of instance i-ended (ended after 3 hours in
 # us-x-1a), i-run (running) and none for any other; the pool's prices,
 # $0.10 from 18:00 and $0.20 from 21:00.
 case "$1 $2" in
-  "ce get-cost-and-usage") echo "$STUB_CREDITS" ;;
+  "ce get-cost-and-usage") [ -z "${STUB_CE_FAIL:-}" ] || exit 255; echo "$STUB_CREDITS" ;;
   "ec2 describe-spot-instance-requests")
     case "$*" in
       *Values=i-ended*) printf 'instance-terminated-by-price\t2026-10-30T19:00:00+00:00\t2026-10-30T22:00:00+00:00\tc8a.2xlarge\tus-x-1a\n' ;;
@@ -73,6 +73,19 @@ expect "without a starting balance the floor cannot refuse" 0 check 3
 bash "$here/cost_guard.sh" report >"$tmp/report"
 if grep -q 'credits: unknown' "$tmp/report"; then echo "PASS  the report says the credits are unknown"; else
   echo "FAIL  unknown report"; cat "$tmp/report"; failures=$((failures + 1)); fi
+
+# 3b. A failed Cost Explorer query (an expired login): launches allowed as
+# for an unknown balance, and the report says the query failed rather than
+# asking for the balance.
+export FORK_CREDITS_START=100 STUB_CE_FAIL=1
+expect "a failed credit query cannot refuse" 0 check 3
+grep -q 'credits unread (the AWS query failed)' "$tmp/out" && echo "PASS  check says the query failed" ||
+  { echo "FAIL  check message"; cat "$tmp/out"; failures=$((failures + 1)); }
+bash "$here/cost_guard.sh" report >"$tmp/report" 2>&1
+if grep -q 'credits: unknown (the Cost Explorer query failed' "$tmp/report" && ! grep -q 'set FORK_CREDITS_START' "$tmp/report"; then
+  echo "PASS  the report says the credit query failed"; else
+  echo "FAIL  failed-query report"; cat "$tmp/report"; failures=$((failures + 1)); fi
+unset FORK_CREDITS_START STUB_CE_FAIL
 
 # 4. An ended instance's booking becomes its cost: 2 hours at $0.10 and 1 at
 # $0.20 is $0.40. A running instance, one AWS no longer lists and a row

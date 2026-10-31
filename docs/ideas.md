@@ -332,7 +332,11 @@ added on 2026-10-24; ideas 1-12 predate them.
   adjudication 42.3% (arm A 64.3%), a mate score 27.2% (13.5%), the
   tables 20.5% (10.9%), a rules draw 10.0% (11.2%); likely because
   unsaved positions do not count towards the 8 scores in a row, so the
-  adjudication needs about twice the plies (not measured). For the
+  adjudication needs about twice the plies (not measured). So the arms
+  differ in game endings as well as in the split, and the experiment's
+  result reflects the split as implemented, not the split alone (owner,
+  2026-10-31). Generation 2 keeps normal settings until the trained-net
+  SPRT decides (owner, 2026-10-31). For the
   equal-budget comparison, arm B's training set is cut at arm A's
   21,738 s: each worker's first games in
   the share 21,738 / 26,458 of its total (fork_datagen's log, steady at
