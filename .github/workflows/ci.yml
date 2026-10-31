@@ -107,7 +107,9 @@ jobs:
   linux:
     name: Linux (${{ matrix.preset }})
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    # TSan with S-512 takes about 87 minutes on a typical runner and was
+    # about 1.8x slower (over 150) on a slow one.
+    timeout-minutes: ${{ endsWith(matrix.preset, '-tsan') && 240 || 150 }}
     strategy:
       fail-fast: false
       matrix:

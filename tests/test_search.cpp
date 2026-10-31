@@ -1219,10 +1219,12 @@ TEST_CASE("search", "the listener: one exact report per finished iteration, plus
   CHECK_MSG(bounds > 0, "no aspiration fail was reported");
 }
 // Audit-1, B-1: with one root move a timed search stops once 1/8 of its soft
-// limit has passed. A 150 ms pause after depth 1 passes 1/8 of 800 ms, so
+// limit has passed. A 1,100 ms pause after depth 1 passes 1/8 of 8,000 ms, so
 // the forced position (White's only move is g2g3; tools/check_search_positions.py)
 // stops at depth 1; with the switch off, and in a position with more moves,
-// the search runs to its depth limit, far below the soft limit.
+// the search runs to its depth limit, below the soft limit. The limits leave
+// about 7 s for depth 6 because sanitizer builds on a slow runner need it: with
+// 800 ms and a 150 ms pause, gcc-tsan once stopped the start position at depth 5.
 TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
   TestHash store;
   auto searcher = std::make_unique<Searcher>(store.table);
@@ -1233,11 +1235,11 @@ TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
     searcher->switches.use_forced_move_stop = rule;
     SearchQuota limits;
     limits.depth = 6;
-    limits.soft_ms = 800;
-    limits.hard_ms = 3200;
+    limits.soft_ms = 8000;
+    limits.hard_ms = 32000;
     PausingListener listener;
     listener.pause_after = 1;
-    listener.pause = std::chrono::milliseconds{150};
+    listener.pause = std::chrono::milliseconds{1100};
     return searcher->deliberate(pos, limits, stop, nullptr, &listener).depth;
   };
   const std::string_view forced = "rnb1kbnr/pppp1ppp/8/4p3/7q/5P2/PPPPP1PP/RNBQKBNR w KQkq - 1 3";
