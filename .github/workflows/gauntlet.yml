@@ -1,0 +1,188 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Elo gauntlet on GitHub's runners (owner, 2026-10-31): Fork against the
+# anchors of tools/gauntlet/anchors.tsv, each built on the runners from its
+# official source at the pinned commit; 200 games per anchor at 10+0.1, one
+# thread each, Fork's Hash 16 MB (the anchors keep their default hash), from
+# the earlier gauntlets' 200 random 8-ply openings (tools/make_openings.py,
+# seed 20261025, sha256-checked), each opening played with both colours; then
+# Ordo with the anchors fixed at their CCRL Blitz ratings. A new anchor whose
+# build fails is replaced by the next alternate that builds; a continuity
+# anchor that fails stops the run. Each shard records its CPU model: the
+# runner label does not pin the hardware.
+# Started by a push to the trigger branch gauntlet-run (GitHub dispatches a
+# workflow by hand only once its file is on the default branch); one run at a
+# time, never beside the SPRT, CI or web runs (whoever starts it waits for an
+# idle queue).
+name: gauntlet
+
+on:
+  push:
+    branches: [gauntlet-run]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gauntlet
+  cancel-in-progress: false
+
+env:
+  OPENINGS_SEED: "20261025"
+  OPENINGS_SHA256: "03fc9fc93b999cb6c71954a9a5b52fe255ec0e4aa7d4aeabbfa33d983e4e8a22"
+  ORDO_COMMIT: 17eec774f2e4b9fdd2b1b38739f55ea221fb851a
+  TC: "10+0.1"
+  GAMES_PER_SHARD: "100"
+
+jobs:
+  fork:
+    name: Build Fork (update.sh, gcc 11.4, x86-64-v3)
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    timeout-minutes: 30
+    steps:
+      - name: "Toolchain (Ubuntu 22.04, gcc 11.4, CMake 3.22, as TCEC)"
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q build-essential cmake git ca-certificates python3
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Build
+        env: {FORK_ARCH: x86-64-v3}
+        run: |
+          git config --global --add safe.directory "$PWD"
+          head=$(git rev-parse HEAD)
+          CXX=g++ bash tools/cloud/build_pair.sh . "$head" "$head" engines
+      - uses: actions/upload-artifact@v4
+        with: {name: fork, path: engines/base/fork, retention-days: 7}
+
+  anchors:
+    name: Build every anchor (choose alternates)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential cmake clang
+      - name: Build each anchor; plan the shards
+        id: plan
+        run: |
+          built=()
+          for stem in $(grep -v '^#' tools/gauntlet/anchors.tsv | cut -f2); do
+            if bash tools/gauntlet/build_anchor.sh "$stem" anchors; then built+=("$stem"); fi
+          done
+          python3 - "${built[@]}" <<'PY' >> "$GITHUB_OUTPUT"
+          import json, sys
+          built = set(sys.argv[1:])
+          rows = [l.rstrip('\n').split('\t') for l in open('tools/gauntlet/anchors.tsv') if l.strip() and not l.startswith('#')]
+          alternates = [r[1] for r in rows if r[3] == 'alternate' and r[1] in built]
+          chosen = []
+          for r in rows:
+              if r[3] == 'continuity':
+                  if r[1] not in built:
+                      sys.exit(f'continuity anchor {r[0]} did not build')
+                  chosen.append(r[1])
+              elif r[3] == 'new':
+                  if r[1] in built:
+                      chosen.append(r[1])
+                  elif alternates:
+                      sub = alternates.pop(0)
+                      print(f'{r[0]} did not build: replaced by {sub}', file=sys.stderr)
+                      chosen.append(sub)
+                  else:
+                      sys.exit(f'{r[0]} did not build and no alternate is left')
+          shards = [{'anchor': s, 'start': start} for s in chosen for start in (1, 51)]
+          print('shards=' + json.dumps(shards))
+          PY
+          { echo "### Anchors built"; printf -- '- %s\n' "${built[@]}"; } >> "$GITHUB_STEP_SUMMARY"
+
+  games:
+    name: Games ${{ matrix.anchor }} from opening ${{ matrix.start }}
+    needs: [fork, anchors]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.anchors.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: fork, path: fork}
+      - name: Tools (pinned fastchess; python-chess for the openings)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential cmake clang
+          bash tools/cloud/fetch_tools.sh "$RUNNER_TEMP/tools"
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet chess==1.11.2
+      - name: Openings (the earlier gauntlets' 200, regenerated and checked)
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" -I tools/make_openings.py openings.epd --seed "$OPENINGS_SEED"
+          echo "$OPENINGS_SHA256  openings.epd" | sha256sum -c
+      - name: Build the anchor here (native for this runner)
+        run: bash tools/gauntlet/build_anchor.sh "${{ matrix.anchor }}" anchors
+      - name: Games
+        env:
+          STEM: ${{ matrix.anchor }}
+          START: ${{ matrix.start }}
+        run: |
+          chmod +x fork/fork
+          IFS=$'\t' read -r name _ ccrl _ _ _ _ _ _ opts <<<"$(grep -v '^#' tools/gauntlet/anchors.tsv | awk -F'\t' -v s="$STEM" '$2 == s')"
+          [ "$opts" = - ] && opts=""
+          mkdir -p out
+          cpu=$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)
+          conc=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
+          echo "cpu=$cpu nproc=$(nproc) concurrency=$conc anchor=$name ccrl=$ccrl start=$START" | tee out/shard.txt
+          # shellcheck disable=SC2086
+          "$RUNNER_TEMP/tools/fastchess" -engine cmd=fork/fork name=Fork option.Hash=16 \
+            -engine cmd="anchors/$STEM" name="$name" $opts \
+            -each tc="$TC" -openings file=openings.epd format=epd order=sequential start="$START" \
+            -rounds $((GAMES_PER_SHARD / 2)) -repeat -concurrency "$conc" \
+            -pgnout file="out/games.pgn" > out/fastchess.log 2>&1 || true
+          played=$(grep -c '^\[Event ' out/games.pgn || true)
+          echo "played=$played of $GAMES_PER_SHARD" | tee -a out/shard.txt
+          printf '"%s",%s\n' "$name" "$ccrl" > out/anchor.csv
+          [ "$played" = "$GAMES_PER_SHARD" ] || { tail -n 20 out/fastchess.log; exit 1; }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: "games-${{ matrix.anchor }}-${{ matrix.start }}", path: out, retention-days: 90}
+
+  ordo:
+    name: Ordo (anchored to CCRL Blitz)
+    needs: games
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with: {pattern: "games-*", path: shards}
+      - name: Ordo (pinned, built here)
+        run: |
+          git init -q ordo-src
+          git -C ordo-src fetch -q --depth 1 https://github.com/michiguel/Ordo.git "$ORDO_COMMIT"
+          git -C ordo-src checkout -q FETCH_HEAD
+          make -C ordo-src ordo >/dev/null 2>&1 ||
+            make -C ordo-src ordo CFLAGS="-DNDEBUG -DMY_SEMAPHORES -flto -I myopt -I sysport -fcommon" >/dev/null
+      - name: Ratings
+        run: |
+          cat shards/*/games.pgn > gauntlet.pgn
+          sort -u shards/*/anchor.csv > anchors.csv
+          ./ordo-src/ordo -p gauntlet.pgn -m anchors.csv -W -D -s 1000 -o ordo.txt > ordo.log 2>&1
+          {
+            echo "### Gauntlet: $(grep -c '^\[Event ' gauntlet.pgn) games"
+            echo '```'; cat ordo.txt; echo '```'
+            echo "Shards:"; for f in shards/*/shard.txt; do echo "- $(tr '\n' ' ' < "$f")"; done
+          } | tee summary.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gauntlet-result
+          retention-days: 90
+          path: |
+            gauntlet.pgn
+            anchors.csv
+            ordo.txt
+            summary.md
