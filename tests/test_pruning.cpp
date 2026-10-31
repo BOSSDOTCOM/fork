@@ -245,7 +245,7 @@ TEST_CASE("pruning", "with PVS off, LMR still reduces: the two switches are inde
 // is with the switch off).
 TEST_CASE("pruning", "singular extension: still correct, bounded, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_singular_extension);  // off until its SPRT decides
+  CHECK(SearchSwitches{}.use_singular_extension);  // on in this SPRT's test build
   SearchSwitches on;
   on.use_singular_extension = true;
   fx.searcher->switches = on;
@@ -272,7 +272,9 @@ TEST_CASE("pruning", "singular extension: still correct, bounded, and it changes
   const std::string_view kiwipete = Forcing[2];
   const int depth = Optimized ? 10 : 7;
   const SearchResult with = fx.search(kiwipete, depth);
-  fx.searcher->switches = SearchSwitches{};
+  SearchSwitches off;
+  off.use_singular_extension = false;
+  fx.searcher->switches = off;
   const SearchResult without = fx.search(kiwipete, depth);
   CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without singular extension");
 }
