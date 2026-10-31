@@ -247,8 +247,8 @@ TEST_CASE("pruning", "with PVS off, LMR still reduces: the two switches are inde
 TEST_CASE("pruning",
           "singular extension, multi-cut, negative extension: correct, bounded, each changes the search") {
   PruningFixture fx;
-  // Off until their SPRTs decide.
-  CHECK(!SearchSwitches{}.use_singular_extension);
+  // Singular extension on since its SPRT (2026-10-31); the others off until theirs.
+  CHECK(SearchSwitches{}.use_singular_extension);
   CHECK(!SearchSwitches{}.use_multi_cut);
   CHECK(!SearchSwitches{}.use_negative_extension);
   static constexpr std::string_view Forcing[] = {
@@ -259,6 +259,7 @@ TEST_CASE("pruning",
   const std::string_view kiwipete = Forcing[2];
   const int depth = Optimized ? 10 : 7;
   SearchSwitches s;
+  s.use_singular_extension = false;
   fx.searcher->switches = s;
   std::uint64_t previous = fx.search(kiwipete, depth).nodes;
   bool* added[] = {&s.use_singular_extension, &s.use_multi_cut, &s.use_negative_extension};

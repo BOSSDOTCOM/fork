@@ -305,3 +305,20 @@ LLR: 5.70 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
   seeds of one arm). As the owner noted, it measures the split search as
   implemented, including its different game endings (fewer score
   adjudications, more mates and table results), not the split alone.
+
+### 2026-10-31 se-vs-base (tier 2, T27: singular extension)
+
+- Base `2179297` (phase-4: singular extension built, switch off; bench
+  15,249,025), test `e94a3e6` (branch tier2/se: the switch on; bench
+  19,910,368), bounds [0, 5] nElo (a large gain expected: Fork had no
+  extensions), 8+0.08, Hash 16 MB, Syzygy 3-4-5, the UHO book, S-512 the
+  default network. Runs 41243485437, 41244836141 and 41246310199 (stages
+  0-2). Result: **H1 accepted** after stage 2.
+```
+Shards: 48 (done); pairs 2400, games 4800 (4800 finished, time losses 0, abnormal 0)
+Elo: 14.12 +/- 6.55, nElo: 21.21 +/- 9.83
+Ptnml(0-2): [98, 544, 958, 665, 135]
+LLR: 3.72 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+- Stages: 0 +9.56 +/- 11.35 (LLR 0.79), 1 +12.49 +/- 7.98 (2.17), 2 H1.
+- Adopted: the switch is on in phase-4 (the next tier-2 SPRTs build on it).
