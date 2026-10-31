@@ -93,8 +93,9 @@ struct SearchQuota {
 //   gained by replacing the exemption with normal LMR; its STC SPRT passed,
 //   +4.21 +/- 2.89 Elo).
 // - use_singular_extension: a TT move that the singular test shows to be the
-//   only good move is searched one ply deeper (tier 2, T27). Off until its
-//   SPRT decides.
+//   only good move is searched one ply deeper (tier 2, T27). On since its
+//   STC SPRT passed: +14.12 +/- 6.55 Elo after 4,800 games ([0, 5],
+//   2026-10-31).
 // - use_multi_cut, use_negative_extension: the same test's other outcome at
 //   non-PV nodes (T28, T30): a node where another move also reaches a bar at
 //   or above beta fails high at once; otherwise a TT move whose score is at
@@ -131,7 +132,7 @@ struct SearchQuota {
   X(use_tables, UseTables, true)                         \
   X(use_lmr_check_relief, UseLmrCheckRelief, true)       \
   X(use_lmr_in_check, UseLmrInCheck, true)               \
-  X(use_singular_extension, UseSingularExtension, false) \
+  X(use_singular_extension, UseSingularExtension, true) \
   X(use_multi_cut, UseMultiCut, false)                   \
   X(use_negative_extension, UseNegativeExtension, false) \
   X(use_reply_history, UseReplyHistory, false)           \
