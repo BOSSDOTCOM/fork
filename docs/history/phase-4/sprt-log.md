@@ -251,3 +251,57 @@ Ptnml(0-2): [62, 178, 314, 194, 52]
   threshold for repeated trainings): the estimate is -0.9. The match
   cannot rule out a difference of that size either (95% interval about
   ±12 Elo).
+
+### 2026-10-31 Idea 13 seed noise, arm A (ideas.md 13)
+
+- Base `dd2027e` (bake/i13a2: arm A seed 2, S = 90; bench 19,291,319), test
+  `ab5cfed` (bake/i13a1: arm A seed 1, converted at S = 89; bench
+  18,340,829), 8+0.08, Hash 16 MB, Syzygy 3-4-5, the UHO book, stage 0's
+  openings, 1,600 games on the GitHub shards, no SPRT (the run's LLR on
+  [-5, 5] is ignored).
+- Run 41230452410:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: 3.26 +/- 12.62, nElo: 4.40 +/- 17.02
+Ptnml(0-2): [56, 196, 293, 187, 68]
+```
+- Arm A's two seeds are within item 5's 10 Elo: the estimate is +3.3, the
+  95% interval about ±12.6. A duplicate of this match (run 41231978376),
+  started by a stale queue script, was cancelled after about a minute and
+  is not counted.
+
+### 2026-10-31 Idea 13 seed noise, arm B (ideas.md 13)
+
+- Base `0f1f4b6` (bake/i13b1: arm B seed 1, S = 90; bench 18,091,193), test
+  `6b92eb8` (bake/i13b2: arm B seed 2, S = 90; bench 15,940,717), same
+  conditions as arm A's.
+- Run 41235532025:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: -14.77 +/- 12.36, nElo: -20.38 +/- 17.02
+Ptnml(0-2): [68, 199, 320, 159, 54]
+```
+- Arm B's seed 2 is weaker than seed 1: the estimate, -14.8, is past item
+  5's 10 Elo, and the 95% interval (about -27.1 to -2.4) excludes 0 but not
+  differences below 10. Seed 1, the better own-validation loss (0.02532),
+  is the one the SPRT plays.
+
+### 2026-10-31 i13b1-vs-i13a2 (idea 13: the split search's data against the normal data)
+
+- Base `dd2027e` (bake/i13a2: arm A's best own-validation net, 0.02380),
+  test `0f1f4b6` (bake/i13b1: arm B's best, 0.02532), bounds [0, 5] nElo,
+  8+0.08, Hash 16 MB, Syzygy 3-4-5, the UHO book. Each arm's nets were
+  trained on its own data at the same compute budget (arm B cut at arm A's
+  21,738 s: data/manifests/g2bc.json) with the same schedule
+  (tools/train/kaggle/idea13.py). Run 41236941019. Result: **H1 accepted**
+  after stage 0.
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: 65.47 +/- 12.90, nElo: 88.52 +/- 17.02
+Ptnml(0-2): [32, 110, 314, 216, 128]
+LLR: 5.70 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+- The gap is far beyond the seed noise above (up to about 15 Elo between
+  seeds of one arm). As the owner noted, it measures the split search as
+  implemented, including its different game endings (fewer score
+  adjudications, more mates and table results), not the split alone.

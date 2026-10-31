@@ -305,7 +305,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   (KataGo), arXiv:1902.10565 (title, author and abstract checked on
   2026-10-24; that its full text describes playout cap randomization is
   UNVERIFIED: the PDF could not be read here and ar5iv did not respond).
-- **status:** experiment approved and running (owner, 2026-10-30;
+- **status:** experiment done, H1 accepted (2026-10-31); approved (owner, 2026-10-30;
   DESIGN.md decisions log): fork_datagen's split search (`--save-percent`,
   `--unsaved-nodes`, `--check-nodes`, off by default); arm A is generation
   2's first 6 hours, arm B its own 6-hour part, both labelled by S-512 with
@@ -342,6 +342,15 @@ added on 2026-10-24; ideas 1-12 predate them.
   the share 21,738 / 26,458 of its total (fork_datagen's log, steady at
   3,011-3,012 records per second, gives 709,080 games at 21,720 s; the
   cut gives about 710,000).
+  **Result (2026-10-31): H1 accepted.** Arm B's best net (i13b1) against
+  arm A's best (i13a2) on [0, 5] at 8+0.08: +65.47 ± 12.90 Elo (nElo
+  +88.52 ± 17.02) after 1,600 games (run 41236941019). Seed noise at the
+  same conditions: arm A's seeds +3.3 ± 12.6, arm B's seeds -14.8 ± 12.4,
+  so the gap between arms is several times the gap between seeds
+  (docs/history/phase-4/sprt-log.md). The result covers the split as
+  implemented, game endings included. Round 2's snapshot includes g2b,
+  since the SPRT passed before it. Whether generation 2's next parts
+  switch to the split settings is the owner's call.
 
 ## 14. Auxiliary training targets
 
