@@ -104,34 +104,39 @@ struct SearchQuota {
 //   bonus and malus (tier 2, T10, the 1-ply table). Off until its SPRT.
 // - use_follow_history: the same after the side's own previous move, two
 //   plies back (T10's 2-ply table). Off until its SPRT.
-#define FORK_SEARCH_SWITCHES(X)                    \
-  X(use_tt, UseTT, true)                           \
-  X(use_pvs, UsePvs, true)                         \
-  X(use_aspiration, UseAspiration, true)           \
-  X(use_mate_distance, UseMateDistance, true)      \
-  X(use_quiesce, UseQuiesce, true)                 \
-  X(use_see_quiesce, UseSeeQuiesce, true)          \
-  X(use_history, UseHistory, true)                 \
-  X(use_history_malus, UseHistoryMalus, true)      \
-  X(use_rfp, UseRfp, true)                         \
-  X(use_nmp, UseNmp, true)                         \
-  X(use_lmr, UseLmr, true)                         \
-  X(use_lmp, UseLmp, true)                         \
-  X(use_futility, UseFutility, true)               \
-  X(use_see_prune, UseSeePrune, true)              \
-  X(tt_age_blend, UseTtAgeBlend, false)            \
-  X(tt_keep_exact, UseTtKeepExact, false)          \
-  X(use_tt_eval_refine, UseTtEvalRefine, true)     \
-  X(use_forced_move_stop, UseForcedMoveStop, true) \
-  X(use_tt_keep_deeper, UseTtKeepDeeper, false)    \
-  X(use_tables, UseTables, true)                   \
-  X(use_lmr_check_relief, UseLmrCheckRelief, true) \
-  X(use_lmr_in_check, UseLmrInCheck, true)        \
+// - use_take_history: captures are ordered by their victim and the take
+//   history instead of MVV-LVA; a capture that cuts gains the history bonus,
+//   and the captures tried before any cutoff take it as a malus (tier 2,
+//   T11). Off until its SPRT.
+#define FORK_SEARCH_SWITCHES(X)                          \
+  X(use_tt, UseTT, true)                                 \
+  X(use_pvs, UsePvs, true)                               \
+  X(use_aspiration, UseAspiration, true)                 \
+  X(use_mate_distance, UseMateDistance, true)            \
+  X(use_quiesce, UseQuiesce, true)                       \
+  X(use_see_quiesce, UseSeeQuiesce, true)                \
+  X(use_history, UseHistory, true)                       \
+  X(use_history_malus, UseHistoryMalus, true)            \
+  X(use_rfp, UseRfp, true)                               \
+  X(use_nmp, UseNmp, true)                               \
+  X(use_lmr, UseLmr, true)                               \
+  X(use_lmp, UseLmp, true)                               \
+  X(use_futility, UseFutility, true)                     \
+  X(use_see_prune, UseSeePrune, true)                    \
+  X(tt_age_blend, UseTtAgeBlend, false)                  \
+  X(tt_keep_exact, UseTtKeepExact, false)                \
+  X(use_tt_eval_refine, UseTtEvalRefine, true)           \
+  X(use_forced_move_stop, UseForcedMoveStop, true)       \
+  X(use_tt_keep_deeper, UseTtKeepDeeper, false)          \
+  X(use_tables, UseTables, true)                         \
+  X(use_lmr_check_relief, UseLmrCheckRelief, true)       \
+  X(use_lmr_in_check, UseLmrInCheck, true)               \
   X(use_singular_extension, UseSingularExtension, false) \
   X(use_multi_cut, UseMultiCut, false)                   \
   X(use_negative_extension, UseNegativeExtension, false) \
   X(use_reply_history, UseReplyHistory, false)           \
-  X(use_follow_history, UseFollowHistory, false)
+  X(use_follow_history, UseFollowHistory, false)         \
+  X(use_take_history, UseTakeHistory, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -179,9 +184,9 @@ class SearchListener {
 // One ply of the search stack.
 struct PlyFrame {
   MoveSelector selector;
-  MoveList failed_quiets;   // quiet moves searched here without a cutoff (the malus)
-  int static_eval;          // ScoreNone in check
-  bool after_null = false;  // this node was reached by a null move (no second one in a row)
+  MoveList failed_moves;        // quiet moves and captures searched here without a cutoff (the maluses)
+  int static_eval;              // ScoreNone in check
+  bool after_null = false;      // this node was reached by a null move (no second one in a row)
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
 };
@@ -291,8 +296,8 @@ struct SearchCounters {
   std::uint64_t quiesce_nodes_non_pv = 0;
   // Tier 2: nodes where a singular test could run (the measurement's sampling).
   std::uint64_t singular_candidates = 0;
-  std::uint64_t singular_tests = 0;     // singular tests run (their searches)
-  std::uint64_t singular_extended = 0;  // ... that found the TT move singular
+  std::uint64_t singular_tests = 0;       // singular tests run (their searches)
+  std::uint64_t singular_extended = 0;    // ... that found the TT move singular
   std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
   std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
 };
@@ -318,6 +323,7 @@ class Searcher {
   void clear_history() {
     history_.clear();
     for (PairHistory& table : pair_history_) table.clear();
+    take_history_.clear();
   }
 
   // Tests only: the root move that failed high in the iteration the last
@@ -357,6 +363,7 @@ class Searcher {
   TransTable& tt_;
   QuietHistory history_;
   PairHistory pair_history_[2];  // tier 2, T10: the reply and follow tables (ReplyTable, FollowTable)
+  TakeHistory take_history_;     // tier 2, T11
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;

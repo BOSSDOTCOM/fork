@@ -450,9 +450,12 @@ TEST_CASE("search",
 
 // Audit-1 V-5: the search stack's frame stays small (review 2, claim (e):
 // shrunk from 4 KB to 2,664 B; 2,672 B measured with clang on 2026-10-27).
-// A guard, so a growing frame is a decision, not an accident.
-static_assert(sizeof(PlyFrame) <= 2688,
-              "PlyFrame grew past 2,688 bytes (DESIGN.md §5.2, review 2 claim (e))");
+// A guard, so a growing frame is a decision, not an accident. Decisions:
+// 2,688 B with tier 2's singular test and pair history (2026-10-31; the two
+// pair tables share one pointer to stay there), then 2,696 B with the take
+// history's pointer in the move selector (2026-10-31, tier 2 T11).
+static_assert(sizeof(PlyFrame) <= 2696,
+              "PlyFrame grew past 2,696 bytes (DESIGN.md §5.2, review 2 claim (e))");
 
 // Audit-1 Q-7: the TT's bound checks at their edge (mutant M12: an upper
 // bound cut when s <= beta instead of s <= alpha). An upper bound u, stored

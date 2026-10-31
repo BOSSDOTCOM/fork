@@ -57,6 +57,32 @@ constexpr int PairSlots = 2 * 6 * 64;
 constexpr int NoArrival = -1;
 inline int pair_slot(Piece moved, Square to) { return (side_of(moved) * 6 + kind_of(moved)) * 64 + to; }
 
+// The take history (tier 2, T11; KB search-techniques.md §3.11): captures
+// scored by how often they cut in this tree, indexed by the moving piece
+// (colour and type), its destination and the captured piece's type (a pawn
+// for en passant). Same scale, bounds and update as the other histories.
+constexpr int TakeSlots = PairSlots * 6;
+inline int take_slot(Piece moved, Square to, PieceType victim) { return pair_slot(moved, to) * 6 + victim; }
+
+class TakeHistory {
+ public:
+  int value(int slot) const { return table_[slot]; }
+
+  // As QuietHistory::apply.
+  void apply(int slot, int amount) {
+    std::int16_t& v = table_[slot];
+    const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
+    v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
+  }
+
+  void clear() {
+    for (std::int16_t& v : table_) v = 0;
+  }
+
+ private:
+  std::int16_t table_[TakeSlots] = {};
+};
+
 // The searcher keeps both pair tables in one array, so the move selector
 // holds a single pointer (the search stack's frame stays within its size
 // guard, tests/test_search.cpp).

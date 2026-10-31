@@ -202,6 +202,53 @@ TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quie
   CHECK(drain(s) == plain);
 }
 
+// The take history (tier 2, T11): distinct slots, bounded updates, and the
+// selector orders two captures of the same victim by it instead of by the
+// attacker. Constructed position (checked with python-chess: legal, the
+// only captures are Qxd5 and exd5, d5 undefended, so both are good
+// captures): MVV-LVA puts exd5 first (the cheaper attacker); a take history
+// entry for Qxd5 must put it first, and only when the table is given.
+TEST_CASE("ordering", "take history: distinct slots, bounded, and it reorders equal-victim captures") {
+  std::set<int> slots;
+  for (Color c : {White, Black})
+    for (int t = Pawn; t <= King; ++t)
+      for (int sq = 0; sq < 64; ++sq)
+        for (int v = Pawn; v <= King; ++v) {
+          const int slot =
+              take_slot(static_cast<Piece>(c * 8 + t), static_cast<Square>(sq), static_cast<PieceType>(v));
+          CHECK(slot >= 0 && slot < TakeSlots);
+          slots.insert(slot);
+        }
+  CHECK_EQ(static_cast<int>(slots.size()), TakeSlots);
+
+  auto takes = std::make_unique<TakeHistory>();
+  std::uint64_t seed = 13;
+  for (int i = 0; i < 200000; ++i) {
+    const int amount = static_cast<int>(splitmix_next(seed) % (2 * HistoryMax + 1)) - HistoryMax;
+    takes->apply(1234, amount);
+    const int v = takes->value(1234);
+    CHECK_MSG(v >= -HistoryMax && v <= HistoryMax, "value " << v << " after amount " << amount);
+  }
+  takes->clear();
+  CHECK_EQ(takes->value(1234), 0);
+
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/8/3p4/4P3/8/8/3QK3 w - - 0 1"));
+  const Move queen = pos.parse_uci("d1d5"), pawn = pos.parse_uci("e4d5");
+  QuietHistory history;
+  MoveSelector s;
+  s.start_main(pos, NoMove, &history);
+  const std::vector<Move> plain = drain(s);
+  CHECK(plain.size() >= 2 && plain[0] == pawn && plain[1] == queen);
+  takes->apply(take_slot(pos.piece_at(queen.from()), queen.to(), Pawn), 1600);
+  s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, takes.get());
+  const std::vector<Move> learned = drain(s);
+  CHECK(learned.size() >= 2 && learned[0] == queen && learned[1] == pawn);
+  s.start_quiesce(pos, NoMove, true, &history, takes.get());
+  const std::vector<Move> quiesce = drain(s);
+  CHECK(quiesce.size() == 2 && quiesce[0] == queen);
+}
+
 TEST_CASE("ordering",
           "history: bounded for any update sequence, monotone, bonus grows with depth and is capped") {
   QuietHistory h;

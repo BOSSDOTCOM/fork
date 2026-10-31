@@ -136,7 +136,7 @@ SearchBenchResult run_search_bench() {
 #ifdef FORK_SEARCH_STATS
   const SearchCounters& c = searcher->counters;
   std::fprintf(
-      stderr, "stats: %llu beta cutoffs, %.1f%% on the first move, mean cutoff index %.2f\n",
+      stderr, "stats: %llu beta cutoffs, %.1f%% on the first move, mean cutoff index %.4f\n",
       static_cast<unsigned long long>(c.beta_cutoffs),
       c.beta_cutoffs ? 100.0 * static_cast<double>(c.first_move_cutoffs) / static_cast<double>(c.beta_cutoffs)
                      : 0.0,

@@ -18,7 +18,8 @@ namespace forkeng {
 
 Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #ifdef FORK_SEARCH_STATS
-  if (const char* every = std::getenv("FORK_SINGULAR_PROBE")) singular_probe_ = std::strtoull(every, nullptr, 10);
+  if (const char* every = std::getenv("FORK_SINGULAR_PROBE"))
+    singular_probe_ = std::strtoull(every, nullptr, 10);
 #endif
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
@@ -116,18 +117,33 @@ bool Searcher::poll_limits() {
 // A quiet move cut off: it gains a bonus that grows with depth, and the
 // quiet moves tried before it here lose as much (the malus).
 void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
-  if (!switches.use_history) return;
-  const Color us = pos_->side_to_move();
+  const Position& here = *pos_;
   const int bonus = bonus_for_depth(depth);
+  // The take history (tier 2, T11): a capture that cuts gains the bonus, and
+  // the captures tried before any cutoff, quiet or capture, take the malus.
+  if (switches.use_take_history) {
+    const auto slot = [&](Move c) {
+      return take_slot(here.piece_at(c.from()), c.to(),
+                       c.is_en_passant() ? Pawn : kind_of(here.piece_at(c.to())));
+    };
+    if (m.is_capture()) take_history_.apply(slot(m), bonus);
+    if (switches.use_history_malus)
+      for (Move c : f.failed_moves)
+        if (c.is_capture()) take_history_.apply(slot(c), -bonus);
+  }
+  if (m.is_capture() || !switches.use_history) return;
+  const Color us = here.side_to_move();
   history_.apply(us, m, bonus);
   if (switches.use_history_malus)
-    for (Move q : f.failed_quiets) history_.apply(us, q, -bonus);
+    for (Move q : f.failed_moves)
+      if (!q.is_capture()) history_.apply(us, q, -bonus);
   // The pair histories (tier 2, T10) take the same bonus and malus.
   const auto update = [&](PairHistory& table, int arrival) {
     const Position& pos = *pos_;
     table.apply(arrival, pair_slot(pos.piece_at(m.from()), m.to()), bonus);
     if (switches.use_history_malus)
-      for (Move q : f.failed_quiets) table.apply(arrival, pair_slot(pos.piece_at(q.from()), q.to()), -bonus);
+      for (Move q : f.failed_moves)
+        if (!q.is_capture()) table.apply(arrival, pair_slot(pos.piece_at(q.from()), q.to()), -bonus);
   };
   if (switches.use_reply_history && f.arrival != NoArrival) update(pair_history_[ReplyTable], f.arrival);
   const int follow = follow_arrival(f);
@@ -204,7 +220,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                         : *wdl == TableWdl::Loss ? TtBound::Upper
                                                  : TtBound::Exact;
       if (bound_settles(b, s, alpha, beta)) {
-        if (switches.use_tt && !withheld) tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv);
+        if (switches.use_tt && !withheld)
+          tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv);
         return s;
       }
       (b == TtBound::Lower ? table_floor : table_ceiling) = s;
@@ -289,7 +306,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   int tested_extension = 0;
   if ((switches.use_singular_extension || switches.use_multi_cut || switches.use_negative_extension) &&
       !withheld && ply > 0 && depth >= SingularMinDepth && tt_hit && !hit.move.is_none() &&
-      (hit.bound == TtBound::Lower || hit.bound == TtBound::Exact) && hit.depth >= depth - SingularEntrySlack) {
+      (hit.bound == TtBound::Lower || hit.bound == TtBound::Exact) &&
+      hit.depth >= depth - SingularEntrySlack) {
     const int s = score_from_tt(hit.score, ply);
     if (!is_tb_or_mate(s)) {
       const int bar = s - SingularMarginPerPly * depth;
@@ -317,11 +335,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 
   // The selector checks the TT move (a colliding entry's move may not be
   // legal here) before it is tried first; a withheld move is not tried.
-  f.selector.start_main(pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr,
-                        switches.use_history ? pair_history_ : nullptr,
-                        switches.use_reply_history ? f.arrival : NoArrival,
-                        switches.use_follow_history ? follow_arrival(f) : NoArrival);
-  f.failed_quiets.count = 0;
+  f.selector.start_main(
+      pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr,
+      switches.use_history ? pair_history_ : nullptr, switches.use_reply_history ? f.arrival : NoArrival,
+      switches.use_follow_history ? follow_arrival(f) : NoArrival,
+      switches.use_take_history ? &take_history_ : nullptr);
+  f.failed_moves.count = 0;
 
   const int alpha_start = alpha;
   int best = -ScoreInfinite;
@@ -459,7 +478,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         best_move = m;
         if (OnPv) update_pv(ply, m);
         if (score >= beta) {
-          if (quiet) record_cutoff(f, m, depth);
+          if (quiet || m.is_capture()) record_cutoff(f, m, depth);
 #ifdef FORK_SEARCH_STATS
           if (quiet && !OnPv && !in_check && depth < SearchCounters::CutoffDepths)
             ++counters.quiet_cutoff_index[depth]
@@ -473,7 +492,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         alpha = score;
       }
     }
-    if (quiet) f.failed_quiets.add(m);
+    if (quiet || m.is_capture()) f.failed_moves.add(m);
     // Once a move has been searched at a futile node not already lost to a
     // mate, every later non-checking quiet is pruned (the conditions at the
     // top of this loop), and both conditions only grow more true: the
@@ -547,7 +566,8 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   // Captures and queen promotions (under-promotions dropped, and with the SEE
   // filter captures that lose material), or every evasion in check.
   f.selector.start_quiesce(pos, tt_hit ? hit.move : NoMove, switches.use_see_quiesce,
-                           switches.use_history ? &history_ : nullptr);
+                           switches.use_history ? &history_ : nullptr,
+                           switches.use_take_history ? &take_history_ : nullptr);
 
   Move best_move = NoMove;
   int moves_searched = 0;

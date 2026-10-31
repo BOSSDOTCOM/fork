@@ -244,7 +244,8 @@ TEST_CASE("pruning", "with PVS off, LMR still reduces: the two switches are inde
 // positions, where singular moves are common); and each switch really
 // changes the tree (fault check: an outcome that never applies leaves the
 // tree as it was without that switch).
-TEST_CASE("pruning", "singular extension, multi-cut, negative extension: correct, bounded, each changes the search") {
+TEST_CASE("pruning",
+          "singular extension, multi-cut, negative extension: correct, bounded, each changes the search") {
   PruningFixture fx;
   // Off until their SPRTs decide.
   CHECK(!SearchSwitches{}.use_singular_extension);
@@ -280,8 +281,8 @@ TEST_CASE("pruning", "singular extension, multi-cut, negative extension: correct
       CHECK_MSG(pos.fen() == fen, fen);
     }
     const std::uint64_t nodes = fx.search(kiwipete, depth).nodes;
-    CHECK_MSG(nodes != previous, "step " << step << ": nodes " << nodes << " with the switch, " << previous
-                                         << " without");
+    CHECK_MSG(nodes != previous,
+              "step " << step << ": nodes " << nodes << " with the switch, " << previous << " without");
     previous = nodes;
   }
 }
@@ -321,6 +322,30 @@ TEST_CASE("pruning", "reply and follow tables: still correct, and each changes t
     CHECK_MSG(r.nodes != (reply ? with.nodes : without.nodes),
               "nodes " << r.nodes << " with the follow table (reply table " << (reply ? "on" : "off") << ")");
   }
+}
+
+// The take history (tier 2, T11): with it on, mates are still found and the
+// best move is legal, and it changes the tree (fault check: a table never
+// read or never updated leaves the tree as it is with the switch off).
+TEST_CASE("pruning", "take history: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_take_history);  // off until its SPRT decides
+  SearchSwitches on;
+  on.use_take_history = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  const SearchResult with = fx.search(kiwipete, depth);
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(with.best));
+  fx.searcher->switches = SearchSwitches{};
+  const SearchResult without = fx.search(kiwipete, depth);
+  CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without the take history");
 }
 
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery

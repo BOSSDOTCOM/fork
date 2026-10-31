@@ -55,10 +55,15 @@ class MoveSelector {
   // follow entry after the side's own previous move (`follow_arrival`), times
   // FollowWeight / 4; NoArrival leaves a table out. Evasions keep the
   // butterfly history alone.
+  // With `take_history` (tier 2, T11) a capture's score is its victim's
+  // value (with any promotion's gain) times 8 plus its take history entry
+  // times TakeWeight / 32, instead of MVV-LVA; evasions keep MVV-LVA.
   void start_main(const Position& pos, Move tt_move, const QuietHistory* history,
-                  const PairHistory* pairs = nullptr, int arrival = NoArrival, int follow_arrival = NoArrival);
+                  const PairHistory* pairs = nullptr, int arrival = NoArrival, int follow_arrival = NoArrival,
+                  const TakeHistory* take_history = nullptr);
   // Quiescence search (all evasions when in check).
-  void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history);
+  void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
+                     const TakeHistory* take_history = nullptr);
 
   // The next move, or NoMove when there are no more.
   Move take_next();
@@ -87,6 +92,7 @@ class MoveSelector {
   const Position* pos_ = nullptr;
   const QuietHistory* history_ = nullptr;
   const PairHistory* pair_history_ = nullptr;
+  const TakeHistory* take_history_ = nullptr;
   std::int16_t arrival_ = NoArrival;
   std::int16_t follow_arrival_ = NoArrival;
   Move tt_move_ = NoMove;
