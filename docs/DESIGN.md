@@ -3053,6 +3053,22 @@ state). Investigate a cheaper computation, incremental or partial updates
 in place of the full recompute, measure the speed gain with the A/B
 harness with the output unchanged (netcheck's R-int on the parity
 positions, bench identical), and report to the owner before round 2.
+**Result (2026-10-31, branch `xgr-speed`, 49c421c on bake/g1xgr; not
+adopted until the owner decides):** the exposure rule computed set-wise
+(each side's attacked squares accumulated by attacker class, every piece's
+lowest enemy attacker class read off the sets, in place of attackers_to
+square by square) and no accumulator copy when nothing is exposed. Output
+unchanged: bench 15,540,185 / 9564dc8f27cd9708 on both sides, netcheck 446
+positions with 0 mismatches; a test checks the rule against the
+square-by-square reference at every ply of random games (fault-injected).
+Speed (bench/ab_search.py, WSL clang-release, core 4, g2c paused, the
+openings stream running; an A/A run beside it moved -0.4% / +0.9%):
++15.5% median nps (2.42 to 2.80 M), +15.1% best, 10 rounds. Against the
+B0 control's bench nps XGR goes from 0.44 to 0.50. Exposure switched off
+entirely (a timing build only, its output differs) runs about 13% faster
+than the new version, the most an incremental exposure could still gain;
+most of the remaining gap to B0 lies outside the exposure (the profile:
+evaluate_position 30% of the run, advance_perspective 19%).
 
 **Not in this bake-off**: AF's small-layer activation sweep and XGR's two
 ablation nets (no X; buckets instead of G); judgement.md lists them as
