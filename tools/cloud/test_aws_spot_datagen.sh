@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Tests of tools/cloud/aws_spot_datagen.sh with a stub AWS CLI (FORK_AWS):
-# the fleet request it builds (every type in every subnet, in priority
-# order, each under the price cap), the instance's build-target choice in
-# its user data, the quota refusal, and the launch template's cleanup on
-# success and on no capacity. No AWS account is needed.
+# the fleet request it builds (the pools that meet the launch rule, cheapest
+# per million positions first, each capped where it reaches the limit), the
+# refusal when no pool meets it, the instance's build-target choice in its
+# user data, the quota refusal, and the launch template's cleanup on success
+# and on no capacity. No AWS account is needed.
 #
 #   bash tools/cloud/test_aws_spot_datagen.sh
 set -uo pipefail
@@ -19,13 +20,15 @@ check() {  # description, command...
 }
 cat >"$tmp/aws" <<'EOF'
 #!/usr/bin/env bash
-# Stub: STUB_QUOTA, STUB_FLEET (ok | none); records calls in $STUB_DIR.
+# Stub: STUB_QUOTA, STUB_FLEET (ok | none), STUB_PRICES (spot price rows);
+# records calls in $STUB_DIR.
 echo "$1 $2" >>"$STUB_DIR/calls"
 case "$1 $2" in
   "service-quotas get-service-quota") echo "$STUB_QUOTA" ;;
   "ec2 describe-instance-types") echo 8 ;;
   "ec2 describe-instances") echo "" ;;
-  "ec2 describe-subnets") echo "subnet-1 subnet-2" ;;
+  "ec2 describe-subnets") echo '[["subnet-1", "us-x-1a"], ["subnet-2", "us-x-1b"]]' ;;
+  "ec2 describe-spot-price-history") echo "$STUB_PRICES" ;;
   "ssm get-parameter") echo ami-123 ;;
   "ec2 create-launch-template")
     for a in "$@"; do case $a in file://*) cp "${a#file://}" "$STUB_DIR/template.json" ;; esac; done ;;
@@ -41,9 +44,19 @@ case "$1 $2" in
 esac
 EOF
 chmod +x "$tmp/aws"
-export FORK_AWS=$tmp/aws STUB_QUOTA=8.0 FORK_LAUNCH_LEDGER=$tmp/ledger.tsv
+# Measured rates for the launch rule (the test commit's net, b0r2, no
+# adjudication): 2075 positions/s is 7.47 M an hour, 1640 is 5.904 M.
+printf 'c8a.2xlarge\tb0r2\t20000\toff\t2075\nc7a.2xlarge\tb0r2\t20000\toff\t1640\n' >"$tmp/rates.tsv"
+# Spot prices: per million positions c7a in 1a $0.0169, c8a in 1a $0.0201,
+# c8a in 1b $0.0268; c7a in 1b $0.0322 (over $0.03); m7a has no rate.
+prices='[["us-x-1a", "c8a.2xlarge", "0.150000", "2026-10-30T22:00:00+00:00"],
+ ["us-x-1b", "c8a.2xlarge", "0.200000", "2026-10-30T22:00:00+00:00"],
+ ["us-x-1a", "c7a.2xlarge", "0.100000", "2026-10-30T22:00:00+00:00"],
+ ["us-x-1b", "c7a.2xlarge", "0.190000", "2026-10-30T22:00:00+00:00"],
+ ["us-x-1a", "m7a.2xlarge", "0.050000", "2026-10-30T22:00:00+00:00"]]'
+export FORK_AWS=$tmp/aws STUB_QUOTA=8.0 FORK_LAUNCH_LEDGER=$tmp/ledger.tsv STUB_PRICES=$prices
 unset FORK_CREDITS_START FORK_DAILY_CAP
-launcher=(bash "$here/aws_spot_datagen.sh" --bucket s3://b --instance-profile p --region us-east-1)
+launcher=(bash "$here/aws_spot_datagen.sh" --bucket s3://b --instance-profile p --region us-east-1 --rates "$tmp/rates.tsv")
 # A pushed commit with a default network (B0r2) whose manifests name it.
 commit=3978e91
 
@@ -79,18 +92,19 @@ else
   check "a launch with capacity succeeds" [ $? -eq 0 ]
   check "it reports the instance and its type" grep -q "launched i-123 (c8a.2xlarge)" "$tmp/o1"
   check "the launch template is deleted afterwards" [ -f "$STUB_DIR/deleted" ]
-  check "the fleet asks for every type in every subnet, in order, under the cap" "${PYTHON:-python3}" -c '
+  check "the fleet asks for the pools within \$0.03 per M, cheapest first, capped at the limit" "${PYTHON:-python3}" -c '
 import json, sys
 f = json.load(open(sys.argv[1]))
 o = f["LaunchTemplateConfigs"][0]["Overrides"]
-types = "c7a c8a m7a c7i m7i c6a c6i".split()
-want = [(t + ".2xlarge", s, i + 1) for i, t in enumerate(types) for s in ("subnet-1", "subnet-2")]
-ok = [(x["InstanceType"], x["SubnetId"], x["Priority"]) for x in o] == want
-ok &= all(x["MaxPrice"] == "0.25" for x in o)
+want = [("c7a.2xlarge", "subnet-1", 1, "0.1771"), ("c8a.2xlarge", "subnet-1", 2, "0.2241"),
+        ("c8a.2xlarge", "subnet-2", 3, "0.2241")]
+ok = [(x["InstanceType"], x["SubnetId"], x["Priority"], x["MaxPrice"]) for x in o] == want
 ok &= f["Type"] == "instant" and f["TargetCapacitySpecification"]["TotalTargetCapacity"] == 1
 ok &= f["SpotOptions"]["AllocationStrategy"] == "capacity-optimized-prioritized"
 ok &= f["SpotOptions"]["MaxTotalPrice"] == "0.25"
 sys.exit(not ok)' "$STUB_DIR/fleet.json"
+  check "it shows why a pool was left out" grep -q 'left out: c7a.2xlarge us-x-1b: \$0.0322 per M is over the limit' "$tmp/o1"
+  check "and an unmeasured type" grep -q 'left out: m7a.2xlarge: no measured rate' "$tmp/o1"
   "${PYTHON:-python3}" -c 'import base64, json, sys
 print(base64.b64decode(json.load(open(sys.argv[1]))["UserData"]).decode())' "$STUB_DIR/template.json" >"$tmp/ud"
   check "the instance picks x86-64-v4 only with all five AVX-512 flags" \
@@ -109,6 +123,17 @@ sys.exit(not all({"fork-run", "fork-expires"} <= {x["Key"] for x in s["Tags"]} f
   check "no capacity exits 4" [ $? -eq 4 ]
   check "it says why" grep -q "no instance launched: InsufficientInstanceCapacity (2)" "$tmp/o2"
   check "the launch template is deleted after a failure too" [ -f "$STUB_DIR/deleted" ]
+
+  # 3b. No pool within the cost limit: exit 7, nothing created, nothing recorded.
+  export STUB_DIR=$tmp/s2b
+  mkdir -p "$STUB_DIR"
+  lines=$(wc -l <"$FORK_LAUNCH_LEDGER")
+  STUB_PRICES='[["us-x-1a", "c8a.2xlarge", "0.230000", "t"], ["us-x-1a", "c7a.2xlarge", "0.180000", "t"]]' \
+    "${launcher[@]}" --commit $commit >"$tmp/o2b" 2>&1
+  check "no pool within the limit exits 7" [ $? -eq 7 ]
+  check "it says so" grep -q "no spot pool meets the launch rule" "$tmp/o2b"
+  check "nothing is created without a pool" bash -c "! grep -q 'create-' '$STUB_DIR/calls'"
+  check "nothing is recorded without a pool" [ "$(wc -l <"$FORK_LAUNCH_LEDGER")" = "$lines" ]
 
   # 4. Over the quota: refused before any template or fleet exists.
   export STUB_DIR=$tmp/s3 STUB_QUOTA=4.0

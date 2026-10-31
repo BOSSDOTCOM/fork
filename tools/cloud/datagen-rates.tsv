@@ -1,0 +1,8 @@
+# Measured data-generation rates per instance type, for tools/cloud/spot_pools.py
+# (the launch rule: expected cost per million positions = spot price / rate).
+# Each rate is the median of positions / seconds over the type's sealed cloud
+# chunks (fork_datagen on all 8 vCPUs, x86-64-v4 build) with these settings.
+# Columns (tab-separated): type, net, nodes, adjudicate (CP/PLIES or off),
+# positions/s, chunks, CPU, source.
+c8a.2xlarge	s512	20000	700/8	2075	18	AMD EPYC 9R45	g2-aws-20261030T212852Z, 2026-10-30 (2046-2188)
+c7a.2xlarge	s512	20000	700/8	1640	2	AMD EPYC 9R14	g2-aws-us-west-2-20261030T233227Z, 2026-10-30 (1636-1645)
