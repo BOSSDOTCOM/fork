@@ -204,3 +204,50 @@ LLR: -3.50 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
   point estimate not above 0; rule set before any stage B result) is dropped,
   and the remaining entries, S-512 and the control included, are
   retrained together in round 2 on about 500 M positions.
+
+### 2026-10-31 bake-off stage B: fixed nodes (games plan 4, diagnostic, no SPRT)
+
+- Each entry (its stage A test commit) against the B0 control (`5cacf8a`),
+  800,000 nodes per move for both engines (fastchess `nodes=800000`) under
+  a 600+6 clock that never binds, Hash 16 MB, Syzygy 3-4-5, the UHO book,
+  stage 0's openings, 1,600 games on the GitHub shards; the runs' LLR
+  (bounds [0, 5]) is ignored. Rule (owner, set before any stage B result):
+  an entry stays for round 2 if its Elo point estimate is above 0.
+- The node limit binds: in shard 0 of S-512's run, S-512's median move took
+  1.26 times B0's (its measured speed is 0.78 of B0's, so 1.28 was
+  expected), and no game lost on time. B0's median move took 0.33 s for
+  800,000 nodes, so the runners search about 2.4 M nodes/s, not the 3.8 M
+  estimated from the first-move depth when the count was chosen (DESIGN.md
+  §5.4): an average STC move is nearer 500,000 nodes, and stage B searches
+  deeper than STC (median depth 17 against 15 in S-512's stage A games).
+
+| Entry | Test commit | Run | Elo | nElo | Ptnml | Stage A Elo | Stays |
+|---|---|---|---|---|---|---|---|
+| S-512 | ba8c4cb | 41170753141 | +74.52 ± 12.10 | +108.13 ± 17.02 | [21, 101, 304, 267, 107] | +43.66 ± 12.02 | yes |
+| H-512 | 21fb7fc | 41172824043 | +32.23 ± 12.03 | +45.89 ± 17.02 | [37, 151, 309, 233, 70] | −24.36 ± 9.06 | yes |
+| AF-S | b5da3bc | 41174960498 | +41.67 ± 12.01 | +59.65 ± 17.02 | [30, 138, 329, 217, 86] | −48.52 ± 12.78 | yes |
+| XGR-512 | a697945 | 41177610204 | +52.07 ± 11.81 | +76.24 ± 17.02 | [21, 134, 318, 240, 87] | −38.15 ± 13.03 | yes |
+
+- Owner's reading (2026-10-31): S-512 +74.5 at fixed nodes against +43.7
+  at STC, so about 30 Elo is spent on speed; H-512 +32.2 at fixed nodes
+  against -24.4 at STC: better judgement than the control, lost on speed
+  and overfitting.
+- Stage B complete: all four entries are above 0 at fixed nodes, so all
+  four stay for round 2 with the B0 control.
+
+### 2026-10-31 S-512 seed noise (games plan 5)
+
+- Base `ba8c4cb` (bake/g1s512: S-512 seed 1, the entry), test `236fc58`
+  (bake/g1s512b: seed 2, S = 101 as seed 1; bench 16,059,585), 8+0.08,
+  Hash 16 MB, Syzygy 3-4-5, the UHO book, stage 0's openings, 1,600 games
+  on the GitHub shards, no SPRT (the run's LLR on [-5, 5] is ignored).
+- Run 41180151074:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: -0.87 +/- 12.25, nElo: -1.21 +/- 17.02
+Ptnml(0-2): [62, 178, 314, 194, 52]
+```
+- The two seeds do not differ by more than about 10 Elo (item 5's
+  threshold for repeated trainings): the estimate is -0.9. The match
+  cannot rule out a difference of that size either (95% interval about
+  ±12 Elo).

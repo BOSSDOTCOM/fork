@@ -145,7 +145,8 @@ sys.exit(not all({"fork-run", "fork-expires"} <= {x["Key"] for x in s["Tags"]} f
   # 5. The cost guard: the successful launch above was recorded at its worst
   # case (12 h at $0.25), and launches beyond the daily cap are refused
   # before anything is created.
-  check "the launch was recorded in the ledger at \$3.00" grep -q $'\t3.00$' "$FORK_LAUNCH_LEDGER"
+  check "the launch was booked in the ledger at \$3.00 with its region and instance" \
+    grep -q $'\t3.00\tus-east-1\ti-123\tbooked$' "$FORK_LAUNCH_LEDGER"
   export STUB_DIR=$tmp/s4 STUB_QUOTA=8.0 FORK_DAILY_CAP=5
   mkdir -p "$STUB_DIR"
   "${launcher[@]}" --commit $commit >"$tmp/o4" 2>&1

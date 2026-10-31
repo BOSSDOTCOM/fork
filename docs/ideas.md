@@ -316,7 +316,28 @@ added on 2026-10-24; ideas 1-12 predate them.
   verify_games.py. The Lichess 2026-09 openings stream ran beside it for
   about 74 of its first 75 minutes (paused at 7:41:39 PM EST, until arm B
   ends); Windows CPU 91.1% with the stream, 85.3% without, WSL load1
-  about 10.2 throughout (the manifest's part_end). Arm B is run g2b.
+  about 10.2 throughout (the manifest's part_end). **Arm B done**
+  (2026-10-31): run g2b (seed 20261102, `--save-percent 50
+  --unsaved-nodes 4000 --check-nodes 2000`) started at 1:16:54 AM EST and
+  was stopped at 8:37:52 AM EST after 26,458 s, 1 h 21 min past its
+  planned 6 hours (the stop was late, not a choice), and sealed
+  (data/manifests/g2b.json): 864,114 games (32.7 games/s, arm A 18.0),
+  79,693,421 records, of which 43,409,795 saved (1,641 per second, arm A
+  1,637) and 36,283,626 unsaved (45.5%; positions in check are always
+  saved, at 2,000 nodes, and a mate score always written); every shard
+  passes verify_games.py. The openings stream stayed paused throughout:
+  Windows CPU 84.7%, WSL load1 10.22, busy 83.0%, as arm A's paused
+  stretch. So at the same rate of saved labels the split search played
+  1.8 times as many games. Its games end differently: the score
+  adjudication 42.3% (arm A 64.3%), a mate score 27.2% (13.5%), the
+  tables 20.5% (10.9%), a rules draw 10.0% (11.2%); likely because
+  unsaved positions do not count towards the 8 scores in a row, so the
+  adjudication needs about twice the plies (not measured). For the
+  equal-budget comparison, arm B's training set is cut at arm A's
+  21,738 s: each worker's first games in
+  the share 21,738 / 26,458 of its total (fork_datagen's log, steady at
+  3,011-3,012 records per second, gives 709,080 games at 21,720 s; the
+  cut gives about 710,000).
 
 ## 14. Auxiliary training targets
 

@@ -3031,7 +3031,10 @@ the B0 control, **and before any stage B or noise game**):
   positions, fresh hash) has mean 14.40 at 0.42 s per move; the B0
   control reaches mean 14.44 at 1.6 M nodes on the same positions, so the
   runners search about 3.8 M nodes/s (an estimate), and an average STC
-  move (0.208 s) is worth about 800,000 nodes.
+  move (0.208 s) is worth about 800,000 nodes. **The estimate was high**:
+  in the stage B games B0's median move took 0.33 s for 800,000 nodes
+  (about 2.4 M nodes/s), so stage B searches deeper than STC (median depth
+  17 against 15); the games themselves are unaffected (sprt-log.md).
 - **Round 2 of the bake-off**: once about 500 M positions exist
   (generation 2 and the cloud data so far), every entry still in the
   bake-off, S-512 and the B0 control included, is retrained on the same
@@ -3041,6 +3044,15 @@ the B0 control, **and before any stage B or noise game**):
 - **XGR's three parts become add-ons to S-512**: the exposure plane (X),
   the phase gate (G) and the revision head (R), each its own experiment
   on top of S-512, planned after round 2.
+
+**Engineering task before round 2 (owner, 2026-10-31; not a change to
+round 2's rules):** XGR-512 placed second at fixed nodes (+52.07) but lost
+at STC (-38.15), mainly on speed (0.48 of B0's nps). Its exposure rows are
+recomputed from the board and added at every evaluation (no incremental
+state). Investigate a cheaper computation, incremental or partial updates
+in place of the full recompute, measure the speed gain with the A/B
+harness with the output unchanged (netcheck's R-int on the parity
+positions, bench identical), and report to the owner before round 2.
 
 **Not in this bake-off**: AF's small-layer activation sweep and XGR's two
 ablation nets (no X; buckets instead of G); judgement.md lists them as
@@ -3109,6 +3121,7 @@ exposure pre-test passes with the current net on generation-1 data
 | 2026-10-30 | **Cloud spending guards (owner): a $10 daily cap and a $25 credit floor.** `tools/cloud/cost_guard.sh`, run by `aws_spot_datagen.sh` before anything is created: every launch is recorded in a local ledger (outside the repository) at its worst case, --max-hours at the --max-price cap (12 h at $0.25 = $3), and a launch is refused (exit 5) when the last 24 hours' worst cases plus its own exceed FORK_DAILY_CAP ($10); it is refused (exit 6) when the remaining credits, the balance the owner read on a date (FORK_CREDITS_START, FORK_CREDITS_SINCE) minus the credits Cost Explorer shows applied since, fall below FORK_CREDIT_FLOOR ($25). Running instances always finish. Without a starting balance the credits are reported as unknown and do not block; no API giving the remaining credit balance directly is known here (UNVERIFIED). `cost_guard.sh report` lists the window's launches and the credits, run daily. Stub test `test_cost_guard.sh` (fault-injected: ignoring the new launch's own cost fails it); the launcher's stub test checks the ledger record and a refusal over the cap with nothing created. |
 | 2026-10-30 | **Cloud launch rule: expected cost per million positions (owner).** The first measured rates (S-512, 20,000 nodes, adjudication 700/8, x86-64-v4 on 8 vCPU): c8a.2xlarge 2,075 positions/s (median of 18 chunks, 2,046-2,188), c7a.2xlarge 1,640 (2 chunks), so at the spot prices seen c8a costs about $0.015 per million positions and us-west-2's c7a at $0.227/h about $0.038. Rule: each spot pool (a type in a zone) is judged by its current spot price over its type's measured rate (`tools/cloud/datagen-rates.tsv`, keyed by net, nodes and adjudication); `aws_spot_datagen.sh` leaves out pools above `--max-cost-per-m` (default $0.03), above the $0.25/h cap or of a type with no measured rate, and gives the fleet the rest cheapest first (ties in --types order, c8a first by default), each capped at the price where it reaches the limit, so an instance whose price climbs past it is interrupted. No qualifying pool exits 7 with nothing created or recorded. The daily cap and its worst-case booking are unchanged ($0.25/h x 12 h). The five types without a measured rate (m7a, c7i, m7i, c6a, c6i) cannot launch until a rate is recorded for them. Ranking in `tools/cloud/spot_pools.py` (unit tests `test_spot_pools.py`; fault-injected: ranking by hourly price, and no limit check, each fail them), the fleet request and the refusal in the launcher's stub test; dry runs against the live price history in all three regions. Names screened (spot_pools, datagen-rates, load_rates, latest_prices, choose_pools, max-cost-per-m, per_m, refused): no match. |
 | 2026-10-31 | **Bake-off amended after stage A (owner; decided after seeing stage A's results, before any stage B game).** Stage A: S-512 H1; H-512, AF-S and XGR-512 H0 against the B0 control. No entry is retrained alone; stage B (fixed nodes, 800,000 per move) decides who stays: an entry stays if its stage B Elo point estimate against the control is above 0 (rule set before any stage B result), otherwise it is dropped, not retrained. Round 2: every remaining entry, S-512 and the B0 control included, retrained on one snapshot of about 500 M positions (generation 2 and the cloud data) with identical settings. XGR's exposure plane, phase gate and revision head become separate add-on experiments to S-512 after round 2 (§5.4, "Amendments after stage A"). |
+| 2026-10-31 | **The daily cap counts ended instances at their cost (owner).** A launch stays booked at its worst case ($0.25/h x 12 h) while its instance runs; once the instance has ended (finished, interrupted or terminated), `cost_guard.sh` replaces the booking with its cost: hours run times the spot price paid, each stretch of the run at the price then in effect (`tools/cloud/spot_cost.py`), from the instance's spot request (start, end, type, zone) and the zone's spot price history. `check` and `report` settle first; the launcher records each launch's region and instance. AWS lists closed spot requests only for some hours, so an instance it no longer lists keeps its worst case until `settle RUN COST` sets it by hand. The three launches of 2026-10-30 were settled by hand: us-east-2's c8a $0.73 (6.1 h, from AWS's record), us-west-2's c7a $0.57 (2.5 h, end from its boot log), us-east-1's c7a $0.26 (an upper bound: reclaimed before its first chunk, zone and end unknown, so 1.1 h at the dearest zone's price). Tests: `test_spot_cost.py` and `test_cost_guard.sh` (fault-injected: check without settling, a running instance counted as ended, price changes ignored, and a hand-settled row losing its state on a rewrite each fail them). Names screened (spot_cost, cost_between, settle, booked, paid): no match. |
 
 ## 7. Performance doctrine (governs every phase)
 

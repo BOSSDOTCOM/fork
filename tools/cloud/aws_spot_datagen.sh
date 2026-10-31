@@ -28,7 +28,9 @@
 # pool meets the rule (nothing is created); 5 or 6 when
 # tools/cloud/cost_guard.sh refuses the launch (the daily cap, the credit
 # floor), checked at the launch's worst case (--max-hours at --max-price)
-# before anything is created, and recorded in its ledger once launched.
+# before anything is created, and booked in its ledger once launched, with
+# its region and instance, so the booking becomes the instance's cost once
+# it ends.
 #
 # The instance (Ubuntu 22.04 LTS, gcc 11.4):
 #  1. arms a shutdown after --max-hours whatever happens (the cost cap);
@@ -278,5 +280,5 @@ print("no instance launched:", ", ".join(f"{c} ({n})" for c, n in collections.Co
     "$tmp/out.json"
   exit 4
 fi
-bash "$here/tools/cloud/cost_guard.sh" record "$run" "$worst"
+bash "$here/tools/cloud/cost_guard.sh" record "$run" "$worst" "$region" "$id"
 echo "launched $id ($itype); follow with: aws s3 ls ${bucket%/}/datagen/$run/ --recursive"
