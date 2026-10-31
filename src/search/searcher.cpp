@@ -3,6 +3,7 @@
 #include "search/searcher.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 
 #include "core/material.hpp"
@@ -16,6 +17,9 @@
 namespace forkeng {
 
 Searcher::Searcher(TransTable& tt) : tt_(tt) {
+#ifdef FORK_SEARCH_STATS
+  if (const char* every = std::getenv("FORK_SINGULAR_PROBE")) singular_probe_ = std::strtoull(every, nullptr, 10);
+#endif
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
 #endif
@@ -138,6 +142,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   Position& pos = *pos_;
   PlyFrame& f = frames_[ply];
   const bool in_check = pos.in_check();
+  // A singular test's search of this node without its TT move (tier 2, T27):
+  // it neither cuts on nor writes this node's TT entry, and skips the
+  // node-level pruning, which would answer for the whole node.
+  const bool withheld = !f.withheld_move.is_none();
 
   // Draws: repetition (one earlier occurrence is enough inside the search),
   // insufficient material, and the 50-move rule unless this move is mate.
@@ -159,7 +167,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   const Key key = pos.key();
   TtHit hit{};
   const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
-  if (tt_hit && !OnPv) {
+  if (tt_hit && !OnPv && !withheld) {
     const int s = score_from_tt(hit.score, ply);
     const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
     if (deep_enough && bound_settles(hit.bound, s, alpha, beta)) return s;
@@ -186,7 +194,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                         : *wdl == TableWdl::Loss ? TtBound::Upper
                                                  : TtBound::Exact;
       if (bound_settles(b, s, alpha, beta)) {
-        if (switches.use_tt) tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv);
+        if (switches.use_tt && !withheld) tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv);
         return s;
       }
       (b == TtBound::Lower ? table_floor : table_ceiling) = s;
@@ -208,10 +216,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       prune_eval = s;
   }
   const bool can_prune = !OnPv && !in_check;
+  const bool can_prune_node = can_prune && !withheld;
 
   // Reverse futility pruning (T20): far enough above beta at shallow depth,
   // the node fails high without a search.
-  if (switches.use_rfp && can_prune && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
+  if (switches.use_rfp && can_prune_node && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
       prune_eval - RfpMargin * depth >= beta) {
     FORK_STAT(++counters.rfp_cuts);
     return prune_eval;
@@ -219,7 +228,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 
   // Null move pruning (T13): if passing still fails high on a reduced
   // search, the node is taken to fail high.
-  if (switches.use_nmp && can_prune && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
+  if (switches.use_nmp && can_prune_node && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
       prune_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
     const int surplus_plies = std::min((prune_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
     const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
@@ -236,9 +245,50 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
   }
 
+#ifdef FORK_SEARCH_STATS
+  // The singular-extension measurement (tier 2; DESIGN.md, "Search
+  // constants"): every Nth node where a singular test could run, under the
+  // widest conditions considered, is printed for tools/singular_measure.py
+  // (N from the environment variable FORK_SINGULAR_PROBE; unset or 0: none).
+  if (singular_probe_ > 0 && !withheld && ply > 0 && depth >= 4 && tt_hit && !hit.move.is_none() &&
+      (hit.bound == TtBound::Lower || hit.bound == TtBound::Exact) && hit.depth >= depth - 4) {
+    const int s = score_from_tt(hit.score, ply);
+    if (!is_tb_or_mate(s) && ++counters.singular_candidates % singular_probe_ == 0)
+      std::fprintf(stderr, "singular_probe %s|%d|%s|%d|%d|%d|%d\n", pos.fen().c_str(), depth,
+                   pos.move_to_uci(hit.move).c_str(), s, static_cast<int>(hit.bound),
+                   static_cast<int>(hit.depth), OnPv ? 1 : 0);
+  }
+#endif
+
+  // Singular extension (tier 2, T27; KB search-techniques.md §3.21): when
+  // the TT entry proves a score for its move at nearly this depth, this node
+  // is searched again at half depth without that move, on a zero window
+  // SingularMarginPerPly cp per ply below the entry's score. If every other
+  // move fails low there, the TT move is the only good one, and it is
+  // searched one ply deeper. The test runs before this node's own move
+  // selection, since its search reuses this ply's frame.
+  Move singular_move = NoMove;
+  if (switches.use_singular_extension && !withheld && ply > 0 && depth >= SingularMinDepth && tt_hit &&
+      !hit.move.is_none() && (hit.bound == TtBound::Lower || hit.bound == TtBound::Exact) &&
+      hit.depth >= depth - SingularEntrySlack) {
+    const int s = score_from_tt(hit.score, ply);
+    if (!is_tb_or_mate(s)) {
+      const int bar = s - SingularMarginPerPly * depth;
+      FORK_STAT(++counters.singular_tests);
+      f.withheld_move = hit.move;
+      const int score = negamax<false>(bar - 1, bar, depth / 2, ply);
+      f.withheld_move = NoMove;
+      if (stopped_) return 0;
+      if (score < bar) {
+        singular_move = hit.move;
+        FORK_STAT(++counters.singular_extended);
+      }
+    }
+  }
+
   // The selector checks the TT move (a colliding entry's move may not be
-  // legal here) before it is tried first.
-  f.selector.start_main(pos, tt_hit ? hit.move : NoMove, switches.use_history ? &history_ : nullptr);
+  // legal here) before it is tried first; a withheld move is not tried.
+  f.selector.start_main(pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr);
   f.failed_quiets.count = 0;
 
   const int alpha_start = alpha;
@@ -254,8 +304,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   FORK_STAT(counters.futile_nodes += futile_node);
   bool quiet_checks_only = false;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
+    if (m == f.withheld_move) continue;
     ++moves_seen;
     const bool quiet = !m.is_capture() && !m.is_promotion();
+    const int extension = m == singular_move ? 1 : 0;
 #ifdef FORK_SEARCH_STATS
     counters.futile_quiets_taken += futile_node && quiet;
     const bool bad_after_stop =
@@ -300,13 +352,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #endif
     int score;
     if (moves_searched == 0) {
-      score = -negamax<OnPv>(-beta, -alpha, depth - 1, ply + 1);
+      score = -negamax<OnPv>(-beta, -alpha, depth - 1 + extension, ply + 1);
     } else {
       // Late move reductions (T15): late quiet moves get a reduced
       // zero-window search first, then the full depth if they beat alpha.
       // With PVS off the windows stay full, but LMR keeps its meaning
       // (audit-1: the two switches were coupled).
-      const int new_depth = depth - 1;
+      const int new_depth = depth - 1 + extension;
       int reduced = new_depth;
       // Tier 2 step 0 (KB T16's in-check term): with use_lmr_in_check, late
       // quiet evasions are reduced like any late quiet move.
@@ -406,10 +458,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   FORK_STAT(counters.futility_prunes += static_cast<std::uint64_t>(f.selector.quiets_filtered()));
   // No legal move is mate or stalemate; legal moves that were all pruned are
   // not (the guard above prevents it; this keeps the result right regardless).
-  if (moves_seen == 0) return in_check ? mated_score(ply) : 0;
+  // Without its withheld move a node may have none left: it fails low, so the
+  // withheld move counts as singular.
+  if (moves_seen == 0) return withheld ? alpha : in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
   best = std::clamp(best, table_floor, table_ceiling);
-  if (switches.use_tt) {
+  if (switches.use_tt && !withheld) {
     const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
     tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
   }

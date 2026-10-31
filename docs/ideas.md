@@ -633,6 +633,13 @@ tuned by SPSA.
   gate, resume and pinning fixes are in (audit-1, merged 2026-10-28). The
   long run (40 generations) stays in **late Phase 4** (owner, 2026-10-28),
   after the first strong network and the search re-validation. Pilot scheduled
+- **Candidate region for the long run (owner, 2026-10-31):** a correction
+  to the singular test's margin and depth (tier 2, T27), for example a
+  dependence on the TT entry's depth deficit. The measured form (DESIGN.md
+  "Search constants": 6 cp per ply, minimum depth 6, entry up to 3 plies
+  shallower, test at d / 2) closely matches Stockfish 11's test as a whole
+  (ORIGINALITY.md); an evolved correction is one route to a form of Fork's
+  own.
 
 ## 24. TT victim policy under real table pressure
 

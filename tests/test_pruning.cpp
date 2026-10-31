@@ -237,6 +237,46 @@ TEST_CASE("pruning", "with PVS off, LMR still reduces: the two switches are inde
             "PVS off: nodes " << with_lmr.nodes << " with LMR, " << without_lmr.nodes << " without");
 }
 
+// Singular extension (tier 2, T27): with it on, mates are still found and
+// the best move is legal; searches to the maximum depth and to a node budget
+// stay in bounds (KB §3.21's stress test against an extension explosion:
+// forcing positions, where singular moves are common); and the test really
+// runs (fault check: a test whose search never happens leaves the tree as it
+// is with the switch off).
+TEST_CASE("pruning", "singular extension: still correct, bounded, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_singular_extension);  // off until its SPRT decides
+  SearchSwitches on;
+  on.use_singular_extension = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 8).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 8).score == mate_score(3));
+  static constexpr std::string_view Forcing[] = {
+      "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "4k3/8/8/1p1p1p2/1P1P1P2/8/8/4K3 w - - 0 1",
+      // Kiwipete (tests/suite.hpp's perft position 2) and perft position 5.
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"};
+  for (std::string_view fen : Forcing) {
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    Position pos;
+    CHECK_MSG(pos.set_fen(fen), fen);
+    SearchQuota limits;  // depth MaxPly - 1
+    limits.nodes = Optimized ? 3'000'000 : 200'000;
+    const SearchResult r = fx.searcher->deliberate(pos, limits, fx.stop, nullptr, nullptr);
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    CHECK_MSG(legal.contains(r.best), fen);
+    CHECK_MSG(pos.fen() == fen, fen);
+  }
+  const std::string_view kiwipete = Forcing[2];
+  const int depth = Optimized ? 10 : 7;
+  const SearchResult with = fx.search(kiwipete, depth);
+  fx.searcher->switches = SearchSwitches{};
+  const SearchResult without = fx.search(kiwipete, depth);
+  CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without singular extension");
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the

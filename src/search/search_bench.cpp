@@ -176,6 +176,12 @@ SearchBenchResult run_search_bench() {
   std::fprintf(stderr, "stats: quiescence nodes PV %llu, non-PV %llu\n",
                static_cast<unsigned long long>(c.quiesce_nodes_pv),
                static_cast<unsigned long long>(c.quiesce_nodes_non_pv));
+  std::fprintf(stderr, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
+               static_cast<unsigned long long>(c.singular_tests),
+               static_cast<unsigned long long>(c.singular_extended),
+               c.singular_tests
+                   ? 100.0 * static_cast<double>(c.singular_extended) / static_cast<double>(c.singular_tests)
+                   : 0.0);
   for (int d = 1; d < SearchCounters::CutoffDepths; ++d) {
     std::fprintf(stderr, "stats: quiet cutoffs at depth %d by quiet index:", d);
     for (int i = 0; i < SearchCounters::CutoffIndices; ++i)

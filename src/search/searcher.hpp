@@ -92,6 +92,9 @@ struct SearchQuota {
 //   of none (tier 2 step 0, KB T16's in-check term, §3.28: Halogen #212
 //   gained by replacing the exemption with normal LMR; its STC SPRT passed,
 //   +4.21 +/- 2.89 Elo).
+// - use_singular_extension: a TT move that the singular test shows to be the
+//   only good move is searched one ply deeper (tier 2, T27). Off until its
+//   SPRT decides.
 #define FORK_SEARCH_SWITCHES(X)                    \
   X(use_tt, UseTT, true)                           \
   X(use_pvs, UsePvs, true)                         \
@@ -114,7 +117,8 @@ struct SearchQuota {
   X(use_tt_keep_deeper, UseTtKeepDeeper, false)    \
   X(use_tables, UseTables, true)                   \
   X(use_lmr_check_relief, UseLmrCheckRelief, true) \
-  X(use_lmr_in_check, UseLmrInCheck, true)
+  X(use_lmr_in_check, UseLmrInCheck, true)        \
+  X(use_singular_extension, UseSingularExtension, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -165,6 +169,7 @@ struct PlyFrame {
   MoveList failed_quiets;   // quiet moves searched here without a cutoff (the malus)
   int static_eval;          // ScoreNone in check
   bool after_null = false;  // this node was reached by a null move (no second one in a row)
+  Move withheld_move = NoMove;  // set while a singular test searches this node without that move
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -270,6 +275,10 @@ struct SearchCounters {
   // (f) Quiescence nodes at PV and non-PV nodes.
   std::uint64_t quiesce_nodes_pv = 0;
   std::uint64_t quiesce_nodes_non_pv = 0;
+  // Tier 2: nodes where a singular test could run (the measurement's sampling).
+  std::uint64_t singular_candidates = 0;
+  std::uint64_t singular_tests = 0;     // singular tests run (their searches)
+  std::uint64_t singular_extended = 0;  // ... that found the TT move singular
 };
 
 class Searcher {
@@ -360,6 +369,9 @@ class Searcher {
   // so the last line before bestmove names the move played.
   PrincipalLine finished_pv_;
   Move last_reported_ = NoMove;
+#ifdef FORK_SEARCH_STATS
+  std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
+#endif
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;
   FeatureStack features_;

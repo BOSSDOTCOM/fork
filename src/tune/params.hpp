@@ -27,7 +27,8 @@
 
 // X(name, default, lowest, highest, step), in groups: aspiration and the
 // iteration rule; reverse futility and the null move; endgame tables; late
-// move reductions and pruning; futility and SEE pruning; history; the TT
+// move reductions and pruning; futility and SEE pruning; the singular test;
+// history; the TT
 // victim policy; the time budget.
 #define FORK_SEARCH_PARAMS(X)             \
   X(AspirationMinDepth, 5, 2, 10, 1)      \
@@ -52,6 +53,9 @@
   X(SeePruneMaxDepth, 6, 3, 12, 1)        \
   X(QuietSeeFloor, 60, 30, 120, 5)        \
   X(CaptureSeeFloor, 100, 50, 200, 8)     \
+  X(SingularMinDepth, 6, 4, 12, 1)        \
+  X(SingularEntrySlack, 3, 0, 6, 1)       \
+  X(SingularMarginPerPly, 6, 3, 12, 1)     \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(StaleDepthPerSearch, 2, 1, 4, 1)      \
