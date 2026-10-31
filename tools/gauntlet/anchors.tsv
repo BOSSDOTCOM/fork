@@ -18,3 +18,10 @@ Winter 0.9	winter-0.9	3168	new	https://github.com/rosenthj/Winter.git	9e1af2584f
 Laser 1.7	laser-1.7	3292	new	https://github.com/jeffreyan11/laser-chess-engine.git	96bfbdba8d064442626e1bb23e02473a46559a2e	src	make	-	option.Threads=1
 Topple 0.8.1	topple-0.8.1	3036	alternate	https://github.com/konsolas/ToppleChess.git	be2f6945b4f42ce3975f71a5b9f3e5358432cbc1	.	cmake Topple	-	option.Threads=1
 Seawall 20250322	seawall-20250322	2978	alternate	https://github.com/petur/seawall.git	7992f7be49fc1e584d7a409fa60ff65fc6c0af9d	.	make	-	-
+# The strong anchor (owner, 2026-10-31), played only when Fork scores over
+# about 70% against Laser 1.7 (the run started from gauntlet-strong-run):
+# Marvin 6.3.0, or Arcanum 2.8 if Marvin does not build. Marvin loads book.bin
+# from its executable's folder when one is there; only the binary is ever
+# kept, so its repository's res/ folder never sits beside it.
+Marvin 6.3.0	marvin-6.3.0	3458	strong	https://github.com/bmdanielsson/marvin-chess.git	e87a148d611ddc3fcbcf0c7a0d16d6d0e76a5161	.	make	CC=gcc	-
+Arcanum 2.8	arcanum-2.8	3460	strong	https://github.com/LarsAur/Arcanum.git	e1e95262d5226d6b3f5370fb556650785f9091ad	.	make release NAME=Arcanum VERSION=2.8	-	-

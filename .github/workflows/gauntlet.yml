@@ -9,6 +9,12 @@
 # build fails is replaced by the next alternate that builds; a continuity
 # anchor that fails stops the run. Each shard records its CPU model: the
 # runner label does not pin the hardware.
+# The strong anchor (role strong: Marvin 6.3.0, else Arcanum 2.8) plays only in
+# a run started from gauntlet-strong-run (owner: when Fork scores over about
+# 70% against Laser 1.7), which replays the whole gauntlet with it. Every
+# anchor's UCI options are read from its own `uci` output: listed options are
+# passed only if the engine has them, any thread option is set to 1 and any
+# book switch to false.
 # Started by a push to the trigger branch gauntlet-run (GitHub dispatches a
 # workflow by hand only once its file is on the default branch); one run at a
 # time, never beside the SPRT, CI or web runs (whoever starts it waits for an
@@ -17,7 +23,7 @@ name: gauntlet
 
 on:
   push:
-    branches: [gauntlet-run]
+    branches: [gauntlet-run, gauntlet-strong-run]
   workflow_dispatch:
 
 permissions:
@@ -70,13 +76,15 @@ jobs:
           sudo apt-get install -y -q build-essential cmake clang
       - name: Build each anchor; plan the shards
         id: plan
+        env:
+          STRONG: ${{ github.ref == 'refs/heads/gauntlet-strong-run' && '1' || '' }}
         run: |
           built=()
-          for stem in $(grep -v '^#' tools/gauntlet/anchors.tsv | cut -f2); do
+          for stem in $(grep -v '^#' tools/gauntlet/anchors.tsv | awk -F'\t' -v s="$STRONG" '$4 != "strong" || s' | cut -f2); do
             if bash tools/gauntlet/build_anchor.sh "$stem" anchors; then built+=("$stem"); fi
           done
           python3 - "${built[@]}" <<'PY' >> "$GITHUB_OUTPUT"
-          import json, sys
+          import json, os, sys
           built = set(sys.argv[1:])
           rows = [l.rstrip('\n').split('\t') for l in open('tools/gauntlet/anchors.tsv') if l.strip() and not l.startswith('#')]
           alternates = [r[1] for r in rows if r[3] == 'alternate' and r[1] in built]
@@ -95,6 +103,11 @@ jobs:
                       chosen.append(sub)
                   else:
                       sys.exit(f'{r[0]} did not build and no alternate is left')
+          if os.environ.get('STRONG'):
+              strong = [r[1] for r in rows if r[3] == 'strong' and r[1] in built]
+              if not strong:
+                  sys.exit('no strong anchor built')
+              chosen.append(strong[0])
           shards = [{'anchor': s, 'start': start} for s in chosen for start in (1, 51)]
           print('shards=' + json.dumps(shards))
           PY
@@ -132,12 +145,36 @@ jobs:
           START: ${{ matrix.start }}
         run: |
           chmod +x fork/fork
-          IFS=$'\t' read -r name _ ccrl _ _ _ _ _ _ opts <<<"$(grep -v '^#' tools/gauntlet/anchors.tsv | awk -F'\t' -v s="$STEM" '$2 == s')"
-          [ "$opts" = - ] && opts=""
+          IFS=$'\t' read -r name _ ccrl _ _ _ _ _ _ listed <<<"$(grep -v '^#' tools/gauntlet/anchors.tsv | awk -F'\t' -v s="$STEM" '$2 == s')"
+          # Options from the engine's own `uci` output: the listed ones it has,
+          # any thread option at 1, any book switch off.
+          printf 'uci\nquit\n' | timeout 20 "anchors/$STEM" > uci.txt || true
+          opts=$(python3 - "$listed" uci.txt <<'PY'
+          import re, sys
+          listed = [] if sys.argv[1] == '-' else sys.argv[1].split()
+          names = {}
+          for line in open(sys.argv[2], errors='replace'):
+              m = re.match(r'option name (.+?) type (\w+)', line.strip())
+              if m:
+                  names[m.group(1)] = m.group(2)
+          chosen = {}
+          for o in listed:
+              key, value = o[len('option.'):].split('=', 1)
+              if key in names:
+                  chosen[key] = value
+          for key, kind in names.items():
+              if re.fullmatch(r'(num)?_?threads', key, re.I):
+                  chosen.setdefault(key, '1')
+              if 'book' in key.lower() and kind == 'check':
+                  chosen.setdefault(key, 'false')
+          print(' '.join(f'option.{k}={v}' for k, v in chosen.items()))
+          PY
+          )
+          echo "options for $name: ${opts:-none}"
           mkdir -p out
           cpu=$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)
           conc=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
-          echo "cpu=$cpu nproc=$(nproc) concurrency=$conc anchor=$name ccrl=$ccrl start=$START" | tee out/shard.txt
+          echo "cpu=$cpu nproc=$(nproc) concurrency=$conc anchor=$name ccrl=$ccrl start=$START options=${opts:-none}" | tee out/shard.txt
           # shellcheck disable=SC2086
           "$RUNNER_TEMP/tools/fastchess" -engine cmd=fork/fork name=Fork option.Hash=16 \
             -engine cmd="anchors/$STEM" name="$name" $opts \
