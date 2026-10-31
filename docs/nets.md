@@ -75,3 +75,30 @@ added; no CI job applies them automatically.
 | SPRT | vs the B0 control (bake/g1b0 5cacf8a, the net promoted as B0r2), [0, 5], 8+0.08, GitHub shards, run 41125906800 (bake-off stage A): **+43.66 +/- 12.02 Elo (nElo +62.52 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
 | Status | **The default network since 2026-10-30, provisionally** (owner): the bake-off continues unchanged, and a later entry that beats it is promoted then. The labeller of generation 2 and of the cloud data generation from then on |
 | Notes | One search test that passed with B0r2 failed with S-512: K+R v K with the fifty-move clock at 0 had to score above 300 cp, and S-512 scores it 263. The check, which only contrasts the position with the same one drawn by the fifty-move rule, now asks for any score above the draw's 0. |
+
+## The bake-off entries in CI (2026-10-31)
+
+Every round-2 architecture is built with its entry's network and checked
+on every CI run (owner, 2026-10-31): the `nets` job of
+`.github/workflows/ci.yml` runs `.github/ci/net-check.sh NET` for each, a
+clang release build of `fork` with `-DFORK_NET=nets/NET.fnet`, then
+netcheck against `tests/nnue/NET.parity` (446 positions) and bench parity
+against `tests/bench-NET.ref`. The H-512, AF-S and XGR-512 files are the
+bake-off's own (bake/g1h512 21fb7fc, bake/g1afs b5da3bc, bake/g1xgr
+a697945), byte for byte; the S-512 and B0 control entries were already
+here as `s512` and `b0r2` (byte-identical to bake/g1s512's and
+bake/g1b0's nets).
+
+| Entry | Network | Architecture id | Bench (nodes / signature) |
+|---|---|---|---|
+| S-512 (the default) | `nets/s512.fnet` | 2 | 15,249,025 / 13001f412d6e8d7e |
+| B0 control | `nets/b0r2.fnet` | 1 | 14,589,665 / 9dba694dd1ee4c41 |
+| H-512 | `nets/g1h512.fnet` | 3 | 14,987,230 / 1190b45ba0d0ab53 |
+| AF-S | `nets/g1afs.fnet` | 4 | 26,382,157 / 4d87061f4e7b57ac |
+| XGR-512 | `nets/g1xgr.fnet` | 5 | 15,540,185 / 9564dc8f27cd9708 |
+
+Checked at phase-4 6eef2a7 in WSL (clang 21, -march=native): netcheck 0
+mismatches and bench parity for all five; the perft workload is the same
+for every network (26,401,709 / f298a22041a6270a). The script fails on a
+wrong bench reference, a wrong parity value or a missing reference
+(fault-injected).
