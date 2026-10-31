@@ -79,8 +79,10 @@ void MoveSelector::score_captures() {
       continue;
     }
     // The take history replaces the attacker term: the victim still counts
-    // 8 per centipawn, so a history at its limit (HistoryMax * TakeWeight /
-    // 32) can reorder captures of near-equal victims only.
+    // 8 per centipawn, and two entries at opposite limits differ by
+    // 2 * HistoryMax * TakeWeight / 32 (2,500 at 4), so captures whose
+    // victims are less than about 3.1 pawns apart can be reordered, never a
+    // rook capture after a pawn capture (tests/test_ordering.cpp).
     const PieceType victim = m.is_en_passant() ? Pawn : kind_of(pos_->piece_at(m.to()));
     const int promo = m.is_promotion() ? piece_value(m.promo_type()) : 0;
     const int learned = take_history_->value(take_slot(pos_->piece_at(m.from()), m.to(), victim));

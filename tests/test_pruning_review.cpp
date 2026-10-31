@@ -144,3 +144,39 @@ TEST_CASE("pruning", "probe_zero_window is reproducible") {
 }
 
 }  // namespace forkeng::test
+
+namespace forkeng::test {
+
+// As "stopped searches and probes leave no state behind", with every tier-2
+// switch on, so stops land inside singular tests' withheld searches too
+// (from the tier-2 review of 2026-10-31).
+TEST_CASE("pruning", "tier 2, all switches on: stopped searches leave no state behind") {
+  SearchSwitches s;
+  s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
+  s.use_reply_history = s.use_follow_history = s.use_take_history = true;
+  static constexpr std::string_view Fens[] = {
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"};
+  const int depth = Optimized ? 11 : 6;
+  for (std::string_view fen : Fens) {
+    ReviewFixture fresh;
+    fresh.searcher->switches = s;
+    const SearchResult want = fresh.search(fen, depth);
+    ReviewFixture used;
+    used.searcher->switches = s;
+    for (std::uint64_t n = 37; n < (Optimized ? 2000000u : 50000u); n = n * 3 + 11) {
+      used.search(fen, MaxPly - 1, n);
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      used.searcher->probe_zero_window(pos, 50, 7, used.stop);
+      CHECK_MSG(pos.fen() == fen, fen);
+    }
+    const SearchResult got = used.search(fen, depth);
+    CHECK_MSG(got.nodes == want.nodes && got.score == want.score && got.best == want.best,
+              fen << ": nodes " << got.nodes << " vs " << want.nodes << ", score " << got.score << " vs "
+                  << want.score);
+  }
+}
+
+}  // namespace forkeng::test

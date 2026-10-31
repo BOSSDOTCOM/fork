@@ -120,7 +120,8 @@ void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
   const Position& here = *pos_;
   const int bonus = bonus_for_depth(depth);
   // The take history (tier 2, T11): a capture that cuts gains the bonus, and
-  // the captures tried before any cutoff, quiet or capture, take the malus.
+  // the captures tried before a quiet or capture cutoff take the malus (a
+  // non-capture promotion's cutoff updates nothing).
   if (switches.use_take_history) {
     const auto slot = [&](Move c) {
       return take_slot(here.piece_at(c.from()), c.to(),

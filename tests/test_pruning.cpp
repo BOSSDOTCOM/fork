@@ -417,3 +417,33 @@ TEST_CASE("pruning", "game phase: all pieces 24, a pawn ending 0, rook and queen
 }
 
 }  // namespace forkeng::test
+
+namespace forkeng::test {
+
+// Every tier-2 switch on (from the tier-2 review of 2026-10-31): a search
+// from the same state twice is identical, and the best move is legal.
+TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
+  PruningFixture fx;
+  SearchSwitches s;
+  s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
+  s.use_reply_history = s.use_follow_history = s.use_take_history = true;
+  fx.searcher->switches = s;
+  static constexpr std::string_view Fens[] = {
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+  const int depth = Optimized ? 12 : 7;
+  for (std::string_view fen : Fens) {
+    const SearchResult a = fx.search(fen, depth);
+    const SearchResult b = fx.search(fen, depth);
+    CHECK_MSG(a.nodes == b.nodes && a.best == b.best && a.score == b.score,
+              fen << ": nodes " << a.nodes << " vs " << b.nodes);
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    CHECK_MSG(legal.contains(a.best), fen);
+  }
+}
+
+}  // namespace forkeng::test

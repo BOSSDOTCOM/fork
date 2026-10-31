@@ -280,3 +280,39 @@ TEST_CASE("ordering",
 }
 
 }  // namespace forkeng::test
+
+namespace forkeng::test {
+
+// The take history's reach (tier 2, T11; found by the tier-2 review of
+// 2026-10-31, which showed the first justification counted one side of the
+// history's range only): two entries at opposite limits move two captures
+// apart by 2 * HistoryMax * TakeWeight / 32 = 2,500 score units, 3.1 pawns
+// at 8 units per centipawn. So a pawn capture can come before a knight
+// capture (2 pawns apart), and never before a rook capture (4 pawns apart).
+// Constructed positions, checked with python-chess: legal, the only
+// captures are Qxa5 and exd5, both good captures (a5 undefended; d5
+// undefended, or defended by the rook so exd5 is an even trade).
+TEST_CASE("ordering", "take history: it can reorder victims 2 pawns apart, never 4") {
+  const auto ordered = [](std::string_view fen, PieceType big) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    const Move takes_big = pos.parse_uci("a1a5"), takes_pawn = pos.parse_uci("e4d5");
+    auto takes = std::make_unique<TakeHistory>();
+    // Repeated capped bonuses and maluses (record_cutoff's amounts) drive
+    // the two entries to their opposite limits.
+    for (int i = 0; i < 200; ++i) {
+      takes->apply(take_slot(pos.piece_at(takes_pawn.from()), takes_pawn.to(), Pawn), HistoryBonusCap);
+      takes->apply(take_slot(pos.piece_at(takes_big.from()), takes_big.to(), big), -HistoryBonusCap);
+    }
+    QuietHistory history;
+    MoveSelector s;
+    s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, takes.get());
+    const std::vector<Move> got = drain(s);
+    CHECK(got.size() >= 2);
+    return got.size() >= 2 && got[0] == takes_big;
+  };
+  CHECK(!ordered("4k3/8/8/n2p4/4P3/8/8/Q6K w - - 0 1", Knight));  // within the reach: reordered
+  CHECK(ordered("4k3/8/8/r2p4/4P3/8/8/Q6K w - - 0 1", Rook));     // beyond it: never
+}
+
+}  // namespace forkeng::test
