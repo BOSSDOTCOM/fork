@@ -21,6 +21,7 @@
 #       --openings-manifest JSON --tables DIR --upload-to DEST [--chunk-positions 1000000] \
 #       [--nodes 20000] [--threads N] [--stop-at EPOCH] [--max-chunks 0] [--work DIR] \
 #       [--instance-type TYPE] [--adjudicate-cp CP --adjudicate-plies N]
+#       [--save-percent P --unsaved-nodes N --check-nodes N]
 #
 # DEST is s3://BUCKET/PREFIX (aws s3 cp) or a local folder (cp). --stop-at
 # (Unix time) stops before a chunk that would not finish by then (the
@@ -29,11 +30,15 @@
 # run; its log records the lost chunk. Exits 0 when at least one chunk was
 # uploaded or the stop was clean. --adjudicate-cp and --adjudicate-plies go
 # to fork_datagen (its score adjudication; off when not given), and the
-# verification reads them back from each chunk's run manifest.
+# verification reads them back from each chunk's run manifest. So do
+# --save-percent, --unsaved-nodes and --check-nodes (fork_datagen's split
+# search, ideas.md 13; passed only when --save-percent is below 100, the
+# default); --chunk-positions then counts every record, saved or not.
 set -uo pipefail
 here=$(cd "$(dirname "$0")/../.." && pwd)
 run="" seed_base="" datagen="" openings="" om="" tables="" dest="" chunk=1000000 nodes=20000
 threads=$(nproc) stop_at=0 max_chunks=0 work="" instance_type="" adj_cp=0 adj_plies=0
+save_percent=100 unsaved_nodes=0 check_nodes=0
 while [ $# -gt 0 ]; do
   case $1 in
     --run) run=$2 ;; --seed-base) seed_base=$2 ;; --datagen) datagen=$2 ;; --openings) openings=$2 ;;
@@ -41,6 +46,7 @@ while [ $# -gt 0 ]; do
     --chunk-positions) chunk=$2 ;; --nodes) nodes=$2 ;; --threads) threads=$2 ;;
     --stop-at) stop_at=$2 ;; --max-chunks) max_chunks=$2 ;; --work) work=$2 ;; --instance-type) instance_type=$2 ;;
     --adjudicate-cp) adj_cp=$2 ;; --adjudicate-plies) adj_plies=$2 ;;
+    --save-percent) save_percent=$2 ;; --unsaved-nodes) unsaved_nodes=$2 ;; --check-nodes) check_nodes=$2 ;;
     *) echo "cloud_datagen.sh: unknown option $1" >&2; exit 2 ;;
   esac
   shift 2
@@ -48,7 +54,12 @@ done
 for v in run seed_base datagen openings om tables dest; do
   [ -n "${!v}" ] || { echo "cloud_datagen.sh: --${v//_/-} is required" >&2; exit 2; }
 done
-case "$seed_base$chunk$nodes$threads$stop_at$max_chunks$adj_cp$adj_plies" in *[!0-9]*) echo "numbers expected" >&2; exit 2 ;; esac
+case "$seed_base$chunk$nodes$threads$stop_at$max_chunks$adj_cp$adj_plies$save_percent$unsaved_nodes$check_nodes" in
+  *[!0-9]*) echo "numbers expected" >&2; exit 2 ;;
+esac
+split=()
+[ "$save_percent" -lt 100 ] &&
+  split=(--save-percent "$save_percent" --unsaved-nodes "$unsaved_nodes" --check-nodes "$check_nodes")
 work=${work:-$(mktemp -d)}
 mkdir -p "$work"
 py=${PYTHON:-python3}
@@ -82,7 +93,7 @@ while :; do
   log "chunk $name: seed $((seed_base + k)), $chunk positions"
   "$datagen" --openings "$openings" --out "$dir" --run "$name" --positions "$chunk" --nodes "$nodes" \
     --threads "$threads" --seed $((seed_base + k)) --hash-mb 1 --shard-mb 1024 --tables "$tables" \
-    --adjudicate-cp "$adj_cp" --adjudicate-plies "$adj_plies" >"$dir/datagen.log" 2>&1 &
+    --adjudicate-cp "$adj_cp" --adjudicate-plies "$adj_plies" "${split[@]}" >"$dir/datagen.log" 2>&1 &
   pid=$!
   wait "$pid"
   rc=$?

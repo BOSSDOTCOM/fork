@@ -68,6 +68,23 @@ check "pull_datagen verifies the adjudicated games" grep -q "1 chunk(s), .* posi
 bash "$here/pull_datagen.sh" --from "$tmp/up6" --to "$tmp/home6b" >"$tmp/pull6b.log" 2>&1
 check "a manifest that misstates the adjudication fails at home" [ $? -ne 0 ]
 
+# 1d. The split search (ideas.md 13) passes through to fork_datagen: the
+# chunk's manifest records it, it holds unsaved records, and both
+# verifications accept them. Without the options a chunk has none (1).
+bash "$here/cloud_datagen.sh" --run t7 --seed-base 1000000000000 --upload-to "$tmp/up7" --max-chunks 1 \
+  --work "$tmp/w7" "${common[@]}" --save-percent 50 --unsaved-nodes 300 --check-nodes 200 >"$tmp/run7.log" 2>&1
+m7=$tmp/up7/t7-c0000/t7-c0000.json
+check "a split-search chunk is verified and uploaded with its settings and unsaved records" \
+  "$PYTHON" -c 'import json,sys; m=json.load(open(sys.argv[1])); s=m["settings"]; sys.exit(not (s["save_percent"] == 50 and s["unsaved_nodes"] == 300 and s["check_nodes"] == 200 and m["positions_unsaved"] > 0))' "$m7"
+check "a chunk without the options has no split search" \
+  "$PYTHON" -c 'import json,sys; m=json.load(open(sys.argv[1])); sys.exit(not (m["settings"].get("save_percent", 100) == 100 and m.get("positions_unsaved", 0) == 0))' \
+  "$tmp/up1/t1-c0000/t1-c0000.json"
+bash "$here/pull_datagen.sh" --from "$tmp/up7" --to "$tmp/home7" >"$tmp/pull7.log" 2>&1
+check "pull_datagen verifies the split-search chunk" grep -q "1 chunk(s), .* positions verified" "$tmp/pull7.log"
+"$PYTHON" -c 'import json,sys; m=json.load(open(sys.argv[1])); m["positions_unsaved"] += 1; json.dump(m, open(sys.argv[1], "w"))' "$m7"
+bash "$here/pull_datagen.sh" --from "$tmp/up7" --to "$tmp/home7b" >"$tmp/pull7b.log" 2>&1
+check "a manifest that miscounts the unsaved records fails at home" [ $? -ne 0 ]
+
 # 2. A SIGTERM (spot notice) during a chunk: the run stops, that chunk is lost.
 bash "$here/cloud_datagen.sh" --run t2 --seed-base 1000000000000 --upload-to "$tmp/up2" \
   --work "$tmp/w2" "${common[@]}" --chunk-positions 2000000 >"$tmp/run2.log" 2>&1 &

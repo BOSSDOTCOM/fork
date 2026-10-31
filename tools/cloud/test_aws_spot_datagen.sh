@@ -81,6 +81,16 @@ for rs in us-east-2:0 us-east-1:1 us-west-2:2; do
   check "$r: the run is named after its region" grep -q "^run g2-aws-$r-" "$tmp/d-$r"
   check "$r: uploads go to the bucket's region" grep -qx "export AWS_DEFAULT_REGION=us-east-2" "$tmp/d-$r"
 done
+# 1c. The split search (ideas.md 13) reaches the instance's cloud_datagen.sh;
+# without the options it stays off (save percent 100).
+bash "$here/aws_spot_datagen.sh" --bucket s3://b --instance-profile p --commit HEAD --dry-run \
+  --save-percent 50 --unsaved-nodes 4000 --check-nodes 2000 >"$tmp/d-split" 2>&1
+check "the split search's options reach the instance" \
+  grep -qF -- '--save-percent 50 --unsaved-nodes 4000 --check-nodes 2000' "$tmp/d-split"
+check "without them the split search stays off" \
+  grep -qF -- '--save-percent 100 --unsaved-nodes 0 --check-nodes 0' "$tmp/d-us-east-2"
+"${launcher[@]}" --save-percent half --dry-run >"$tmp/o" 2>&1
+check "a malformed save percent is refused" [ $? -eq 2 ]
 
 if ! git -C "$here" branch -r --contains "$commit" 2>/dev/null | grep -q .; then
   echo "SKIP  launch cases: $commit is not on a remote branch in this clone"

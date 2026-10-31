@@ -10,6 +10,7 @@
 #       [--max-cost-per-m 0.03] [--rates tools/cloud/datagen-rates.tsv]
 #       [--max-hours 12] [--chunk-positions 1000000] [--nodes 20000]
 #       [--adjudicate-cp CP --adjudicate-plies N] [--bucket-region us-east-2] [--dry-run]
+#       [--save-percent P --unsaved-nodes N --check-nodes N]
 #
 # One spot instance is requested through an instant EC2 Fleet with the
 # capacity-optimized-prioritized strategy over the region's spot pools (an
@@ -79,6 +80,7 @@ openings_url=https://database.lichess.org/standard/lichess_db_standard_rated_201
 types=c8a.2xlarge,c7a.2xlarge,m7a.2xlarge,c7i.2xlarge,m7i.2xlarge,c6a.2xlarge,c6i.2xlarge
 arch=auto max_price=0.25 region=${AWS_REGION:-us-east-2} max_hours=12 chunk=1000000 nodes=20000
 adj_cp=0 adj_plies=0 bucket_region=us-east-2 max_cost=0.03 rates=""
+save_percent=100 unsaved_nodes=0 check_nodes=0
 generation=g2 bucket="" profile="" commit=HEAD dry=0
 while [ $# -gt 0 ]; do
   case $1 in
@@ -87,6 +89,7 @@ while [ $# -gt 0 ]; do
     --max-hours) max_hours=$2 ;; --chunk-positions) chunk=$2 ;; --nodes) nodes=$2 ;;
     --adjudicate-cp) adj_cp=$2 ;; --adjudicate-plies) adj_plies=$2 ;; --bucket-region) bucket_region=$2 ;;
     --max-cost-per-m) max_cost=$2 ;; --rates) rates=$2 ;;
+    --save-percent) save_percent=$2 ;; --unsaved-nodes) unsaved_nodes=$2 ;; --check-nodes) check_nodes=$2 ;;
     --dry-run) dry=1; shift; continue ;;
     *) echo "aws_spot_datagen.sh: unknown option $1" >&2; exit 2 ;;
   esac
@@ -95,7 +98,9 @@ done
 for v in bucket profile; do
   [ -n "${!v}" ] || { echo "aws_spot_datagen.sh: --${v/profile/instance-profile} is required" >&2; exit 2; }
 done
-case "$max_hours$chunk$nodes$adj_cp$adj_plies" in *[!0-9]*) echo "numbers expected" >&2; exit 2 ;; esac
+case "$max_hours$chunk$nodes$adj_cp$adj_plies$save_percent$unsaved_nodes$check_nodes" in
+  *[!0-9]*) echo "numbers expected" >&2; exit 2 ;;
+esac
 [[ $max_price =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "aws_spot_datagen.sh: --max-price in dollars, like 0.25" >&2; exit 2; }
 [[ $max_cost =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "aws_spot_datagen.sh: --max-cost-per-m in dollars, like 0.03" >&2; exit 2; }
 IFS=, read -r -a type_list <<<"$types"
@@ -170,7 +175,8 @@ PYTHON=/opt/venv/bin/python bash tools/cloud/cloud_datagen.sh --run $run --seed-
   --datagen build/dg/fork_datagen --openings /opt/openings/lichess-2016-09.epd \\
   --openings-manifest data/manifests/openings-lichess-2016-09.json --tables /opt/syzygy \\
   --upload-to ${bucket%/}/datagen/$run --chunk-positions $chunk --nodes $nodes --stop-at \$stop_at \\
-  --instance-type "\$itype" --adjudicate-cp $adj_cp --adjudicate-plies $adj_plies &
+  --instance-type "\$itype" --adjudicate-cp $adj_cp --adjudicate-plies $adj_plies \\
+  --save-percent $save_percent --unsaved-nodes $unsaved_nodes --check-nodes $check_nodes &
 job=\$!
 bash tools/cloud/spot_watch.sh \$job &
 wait \$job
