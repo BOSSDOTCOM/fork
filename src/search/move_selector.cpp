@@ -34,9 +34,12 @@ bool is_under_promotion(Move m) { return m.is_promotion() && m.promo_type() != Q
 
 }  // namespace
 
-void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHistory* history) {
+void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHistory* history,
+                              const PairHistory* reply_history, int arrival) {
   pos_ = &pos;
   history_ = history;
+  reply_history_ = arrival == NoArrival ? nullptr : reply_history;
+  arrival_ = arrival;
   quiesce_ = false;
   see_filter_ = false;
   quiets_stopped_ = false;
@@ -69,8 +72,13 @@ void MoveSelector::score_captures() {
 
 void MoveSelector::score_quiets() {
   const Color us = pos_->side_to_move();
-  for (std::size_t i = 0; i < list_.size(); ++i)
-    scores_[i] = static_cast<std::int16_t>(history_ ? history_->value(us, list_[i]) : 0);
+  for (std::size_t i = 0; i < list_.size(); ++i) {
+    const Move m = list_[i];
+    int score = history_ ? history_->value(us, m) : 0;
+    if (reply_history_)
+      score += reply_history_->value(arrival_, pair_slot(pos_->piece_at(m.from()), m.to())) * ReplyWeight / 4;
+    scores_[i] = static_cast<std::int16_t>(score);
+  }
 }
 
 void MoveSelector::score_evasions() {

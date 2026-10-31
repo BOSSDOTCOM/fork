@@ -122,6 +122,13 @@ void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
   history_.apply(us, m, bonus);
   if (switches.use_history_malus)
     for (Move q : f.failed_quiets) history_.apply(us, q, -bonus);
+  // The pair history (tier 2, T10) takes the same bonus and malus.
+  if (switches.use_reply_history && f.arrival != NoArrival) {
+    const Position& pos = *pos_;
+    reply_history_.apply(f.arrival, pair_slot(pos.piece_at(m.from()), m.to()), bonus);
+    if (switches.use_history_malus)
+      for (Move q : f.failed_quiets) reply_history_.apply(f.arrival, pair_slot(pos.piece_at(q.from()), q.to()), -bonus);
+  }
 }
 
 void Searcher::update_pv(int ply, Move m) {
@@ -235,6 +242,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)
     play_null(ply);
     frames_[ply + 1].after_null = true;
+    frames_[ply + 1].arrival = NoArrival;
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
     frames_[ply + 1].after_null = false;
     pos.unmake_null();
@@ -306,7 +314,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 
   // The selector checks the TT move (a colliding entry's move may not be
   // legal here) before it is tried first; a withheld move is not tried.
-  f.selector.start_main(pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr);
+  f.selector.start_main(pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr,
+                        switches.use_history && switches.use_reply_history ? &reply_history_ : nullptr, f.arrival);
   f.failed_quiets.count = 0;
 
   const int alpha_start = alpha;
@@ -363,6 +372,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       }
     }
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
+    frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
     play(ply, m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
@@ -575,6 +585,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     const Move m = root_moves_[i].move;
     branch_share_ = root_moves_[i].share;
     const std::uint64_t nodes_before = nodes_;
+    frames_[1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
     play(0, m);
     int score;
     if (i == 0 || !switches.use_pvs) {
@@ -630,6 +641,7 @@ int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::a
   max_ply_reached_ = 0;
   stopped_ = false;
   frames_[0].after_null = false;
+  frames_[0].arrival = NoArrival;
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);
 #endif

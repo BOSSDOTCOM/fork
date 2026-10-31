@@ -16,8 +16,13 @@
 //   the quiet moves tried before it at that node get the same amount as a
 //   malus.
 // - Integer arithmetic only (bench determinism); 16-bit entries, so summing
-//   several tables later (continuation history, tier 2) cannot overflow an
-//   int.
+//   several tables (the pair history below) cannot overflow an int.
+// - The pair history (tier 2, T10; KB search-techniques.md §3.10) scores a
+//   quiet move by the move that led to its node, paired with it: the
+//   opponent's last move (the reply table). A move is a slot: its piece
+//   (colour and type) and its destination square; a node reached by a null
+//   move, or the root, has no arrival and reads and updates nothing. Same
+//   scale, bounds and update as the butterfly history.
 #pragma once
 
 #include <cstdint>
@@ -44,6 +49,32 @@ FORK_TUNABLE_CONSTEXPR int bonus_for_depth(int depth) {
   const int quadratic = depth * depth * HistoryBonusFactor / 2;
   return quadratic > HistoryBonusCap ? HistoryBonusCap : quadratic;
 }
+
+// A move's slot in the pair history: its piece (colour and type) and its
+// destination square (for castling the encoded square, the rook's).
+constexpr int PairSlots = 2 * 6 * 64;
+constexpr int NoArrival = -1;
+inline int pair_slot(Piece moved, Square to) { return (side_of(moved) * 6 + kind_of(moved)) * 64 + to; }
+
+class PairHistory {
+ public:
+  int value(int arrival, int slot) const { return table_[arrival][slot]; }
+
+  // As QuietHistory::apply.
+  void apply(int arrival, int slot, int amount) {
+    std::int16_t& v = table_[arrival][slot];
+    const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
+    v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
+  }
+
+  void clear() {
+    for (auto& row : table_)
+      for (std::int16_t& v : row) v = 0;
+  }
+
+ private:
+  std::int16_t table_[PairSlots][PairSlots] = {};
+};
 
 class QuietHistory {
  public:

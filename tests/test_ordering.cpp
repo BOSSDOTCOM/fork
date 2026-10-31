@@ -3,6 +3,8 @@
 // Move ordering (DESIGN.md §5.2, deliverable 5): the staged selector yields
 // exactly the right moves, and the history update stays bounded.
 #include <algorithm>
+#include <memory>
+#include <set>
 #include <vector>
 
 #include "core/movegen.hpp"
@@ -140,6 +142,56 @@ TEST_CASE("ordering", "a losing capture comes after the quiets; the best-history
   const std::vector<Move> got = drain(s);
   CHECK(!got.empty() && got.back() == pos.parse_uci("e3d5"));
   CHECK(!got.empty() && got.front() == pos.parse_uci("e1f1"));
+}
+
+// The pair history (tier 2, T10): every piece (colour and type) on every
+// square has its own slot in [0, PairSlots); the table stays within the
+// butterfly history's bounds for any update sequence; and the selector puts
+// a quiet move with a reply entry first after the move it is paired with,
+// and ignores the table at a node with no arrival (the root, after a null
+// move). Heap-allocated: the table is about 1.2 MB.
+TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quiets after the arrival only") {
+  std::set<int> slots;
+  for (Color c : {White, Black})
+    for (int t = Pawn; t <= King; ++t)
+      for (int sq = 0; sq < 64; ++sq) {
+        const int slot = pair_slot(static_cast<Piece>(c * 8 + t), static_cast<Square>(sq));
+        CHECK(slot >= 0 && slot < PairSlots);
+        slots.insert(slot);
+      }
+  CHECK_EQ(static_cast<int>(slots.size()), PairSlots);
+
+  auto pairs = std::make_unique<PairHistory>();
+  std::uint64_t seed = 11;
+  for (int i = 0; i < 200000; ++i) {
+    const int amount = static_cast<int>(splitmix_next(seed) % (2 * HistoryMax + 1)) - HistoryMax;
+    pairs->apply(100, 200, amount);
+    const int v = pairs->value(100, 200);
+    CHECK_MSG(v >= -HistoryMax && v <= HistoryMax, "value " << v << " after amount " << amount);
+  }
+  pairs->clear();
+  CHECK_EQ(pairs->value(100, 200), 0);
+
+  // The position of the case above, without its history. Without the pair
+  // table the quiets come in generation order and the deferred losing
+  // capture last; the last quiet gets the only reply entry, paired with an
+  // arrival of a black pawn on h5, and must then come first.
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/2p5/3p3p/8/4N1Q1/8/4K3 w - - 0 1"));
+  QuietHistory history;
+  MoveSelector s;
+  s.start_main(pos, NoMove, &history);
+  const std::vector<Move> plain = drain(s);
+  CHECK(plain.size() >= 3 && plain.back() == pos.parse_uci("e3d5"));
+  const Move reply = plain[plain.size() - 2];
+  CHECK(!reply.is_capture() && !reply.is_promotion() && plain.front() != reply);
+  const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Pawn), static_cast<Square>(39));  // h5
+  pairs->apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
+  s.start_main(pos, NoMove, &history, pairs.get(), arrival);
+  const std::vector<Move> got = drain(s);
+  CHECK(!got.empty() && got.front() == reply);
+  s.start_main(pos, NoMove, &history, pairs.get(), NoArrival);
+  CHECK(drain(s) == plain);
 }
 
 TEST_CASE("ordering",

@@ -99,6 +99,9 @@ struct SearchQuota {
 //   non-PV nodes (T28, T30): a node where another move also reaches a bar at
 //   or above beta fails high at once; otherwise a TT move whose score is at
 //   or above beta is searched one ply shallower. Off until their SPRTs.
+// - use_reply_history: quiet moves are also ordered by the pair history
+//   after the opponent's last move, updated with the butterfly history's
+//   bonus and malus (tier 2, T10, the 1-ply table). Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                    \
   X(use_tt, UseTT, true)                           \
   X(use_pvs, UsePvs, true)                         \
@@ -124,7 +127,8 @@ struct SearchQuota {
   X(use_lmr_in_check, UseLmrInCheck, true)        \
   X(use_singular_extension, UseSingularExtension, false) \
   X(use_multi_cut, UseMultiCut, false)                   \
-  X(use_negative_extension, UseNegativeExtension, false)
+  X(use_negative_extension, UseNegativeExtension, false) \
+  X(use_reply_history, UseReplyHistory, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -176,6 +180,7 @@ struct PlyFrame {
   int static_eval;          // ScoreNone in check
   bool after_null = false;  // this node was reached by a null move (no second one in a row)
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
+  int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -307,7 +312,10 @@ class Searcher {
 #endif
 
   // Forgets the move-ordering history (ucinewgame, and each bench position).
-  void clear_history() { history_.clear(); }
+  void clear_history() {
+    history_.clear();
+    reply_history_.clear();
+  }
 
   // Tests only: the root move that failed high in the iteration the last
   // deliberate() stopped in and was not yet re-searched to an exact score
@@ -342,6 +350,7 @@ class Searcher {
 
   TransTable& tt_;
   QuietHistory history_;
+  PairHistory reply_history_;  // tier 2, T10: after the opponent's last move
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;

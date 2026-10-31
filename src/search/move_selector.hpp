@@ -49,7 +49,11 @@ enum class SelectorStage : std::uint8_t {
 class MoveSelector {
  public:
   // Main search. `history` may be null: quiets then keep generation order.
-  void start_main(const Position& pos, Move tt_move, const QuietHistory* history);
+  // With `reply_history` (tier 2, T10) a quiet move's score adds its pair
+  // history entry after the move that led here (`arrival`), times
+  // ReplyWeight / 4; evasions keep the butterfly history alone.
+  void start_main(const Position& pos, Move tt_move, const QuietHistory* history,
+                  const PairHistory* reply_history = nullptr, int arrival = NoArrival);
   // Quiescence search (all evasions when in check).
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history);
 
@@ -79,6 +83,8 @@ class MoveSelector {
 
   const Position* pos_ = nullptr;
   const QuietHistory* history_ = nullptr;
+  const PairHistory* reply_history_ = nullptr;
+  int arrival_ = NoArrival;
   Move tt_move_ = NoMove;
   SelectorStage stage_ = SelectorStage::Done;
   bool quiesce_ = false;
