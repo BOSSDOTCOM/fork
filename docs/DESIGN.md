@@ -3083,6 +3083,139 @@ optional, the owner's five entries leave them out. XGR enters only if its
 exposure pre-test passes with the current net on generation-1 data
 (judgement.md §3).
 
+### 5.5 The public web page: Fork in the browser (owner, 2026-10-31; plan, not built)
+
+The owner's request: a public GitHub Pages site where anyone can play Fork
+and watch it learn. **Timing:** building starts after round 2 of the
+bake-off starts, on spare CPU only: Emscripten builds and Node test runs at
+idle priority (`nice -n 19`), never beside a timing measurement, a local
+SPRT, a verification run or another heavy job (the background datagen goes
+on as it does beside every other job). **Order:** the five parts below, in
+order; the WASM parity results go to the owner before anything is
+published. Facts below were checked on 2026-10-31 from the sources named
+(kb-researcher; to be logged in docs/kb/sources.md on branch kb when the
+build starts); anything not checked is marked UNVERIFIED.
+
+**Where things live.** The engine-side additions (a `wasm` build
+configuration, the web entry points, their tests) are ordinary commits on
+the development branch, with CI and bench parity like any other change.
+The site itself lives on a dedicated orphan branch `site`: the page source
+(plain HTML, CSS and JavaScript modules, no framework, no build step beyond
+copying), the build script that compiles the engine modules at a named,
+pushed engine commit, and the published output in `/docs`. GitHub Pages
+can deploy from any branch, folder `/` or `/docs`, with a `.nojekyll` file
+to skip Jekyll (docs.github.com, "Configuring a publishing source"). Pages
+limits: published site at most 1 GB, soft bandwidth 100 GB a month, files
+over 100 MiB blocked by GitHub (docs.github.com, "GitHub Pages limits",
+"About large files"). `.wasm` is served as `application/wasm` (checked
+with `curl -I` on two github.io sites). Enabling Pages on the repository
+is a settings change: done with the owner's go-ahead at the first publish.
+
+**1. The engine in WebAssembly.**
+- Toolchain: Emscripten 6.0.13 (released 2026-10-19; MIT or NCSA), built
+  with `emcmake cmake` (its toolchain file accepts C++20 under CMake 3.12+,
+  so Fork's 3.22 floor is fine; emscripten.org "Building projects",
+  cmake/Modules/Platform/Emscripten.cmake). A `wasm` preset: no `-march`,
+  the no-PEXT magics (BMI2/PEXT is not among Emscripten's emulated
+  intrinsics), no Syzygy (Fathom maps table files with `mmap`, and the
+  tables are gigabytes), a fixed small hash. Whether Fork compiles
+  unchanged under Emscripten is UNVERIFIED until the first build.
+- Single-threaded. Emscripten's threads need SharedArrayBuffer, which
+  browsers allow only on pages served with COOP/COEP headers, and GitHub
+  Pages cannot set response headers (emscripten.org "Pthreads"; Pages
+  limits; community discussion 13309, open). The only workaround, a
+  service worker that adds the headers (coi-serviceworker, MIT), reloads
+  the page on first visit and is untested here, so it is not used. The UCI
+  session runs each search on its own thread, so the web build gets a
+  small synchronous entry module (new names, screened before use): set a
+  position, list legal moves, search to a node or time limit (the search
+  already polls its hard time limit) while passing each iteration's
+  depth, score and principal variation to JavaScript, return the best
+  move; and the static evaluation of a position. The engine runs in a Web
+  Worker, so the page never freezes; a search cannot be interrupted, so
+  "stop" ends the worker and starts a fresh one.
+- One module per network. A build compiles the inference for its embedded
+  network's architecture (FORK_NET_ARCH comes from the net file), so each
+  promoted network is its own module, `fork-<net>.wasm` with its JavaScript
+  loader, downloaded only when chosen; the bootstrap evaluation is a module
+  built with FORK_EVALUATOR=bootstrap. Network sizes: B0, B0r1, B0r2 about
+  0.4 MB, S-512 0.8 MB (plus the engine code, to be measured). No
+  run-time network loading is added to the engine.
+- Inference: first the existing scalar paths (`*_scalar`, the parity
+  references). Then, only if speed calls for it, WASM SIMD (128-bit; Chrome
+  91+, Firefox 89+, Safari 16.4+ including iOS 16.4+, Node 16.4+;
+  webassembly.org features.json, v8.dev, webkit.org): Emscripten compiles
+  SSE to AVX2 intrinsics with `-msimd128`, most 256-bit operations as two
+  128-bit ones and some scalarized (emscripten.org "Porting SIMD code"), so
+  the first try is Fork's AVX2 kernels unchanged, measured against scalar;
+  a `wasm_simd128.h` path is written only if that is slow. Every inference
+  path is checked as below.
+- **Verification (reported to the owner before publishing):** each
+  module run under Node.js (`node fork-<net>.js netcheck ...`, real file
+  access with `-sNODERAWFS=1`) must give 0 mismatches on its network's
+  parity file (tests/nnue/<net>.parity, 446 positions), for the scalar and
+  for any SIMD build; and its `bench` must give the native build's node
+  count and signature (tests/bench-<net>.ref): the search is deterministic,
+  so equal evaluations and move ordering must give an equal bench, and a
+  difference (for example from wasm32's 32-bit pointers in the hash) is
+  investigated, not accepted. Speed is reported as bench nodes per second
+  in Node and in a desktop and a phone browser.
+
+**2. Play tab.**
+- Board: chessground 10.5.0 (lichess-org, GPL-3.0-or-later, so compatible
+  with Fork's licence; no dependencies; touch drag and drop; npm
+  `@lichess-org/chessground`), vendored into the site branch with its
+  licence and credited on the page and in ORIGINALITY.md. Fallback:
+  cm-chessboard (MIT, no dependencies, touch). Legal moves come from
+  Fork's own move generator through the entry module, so no second rules
+  library is needed; move notation (SAN) is written for the page from the
+  legal-move list.
+- Choices: colour (or random), time per move, and a strength level. Levels
+  are node limits per move (no engine change); their Elo is not claimed
+  unless measured.
+- Evaluation bar from the search score (the side-to-move score turned to
+  White's view; the bar shows the network's own win probability,
+  sigmoid(score / S) with that network's output scale S from docs/nets.md)
+  and the principal variation in SAN, updated each iteration.
+
+**3. "Watch it learn" tab.**
+- A network manifest (`nets.json`): each promoted network's name,
+  architecture, module file, size and SHA-256, promotion date, its SPRT
+  result against the network it replaced (Elo, interval, games, run), the
+  data it was trained on and its validation loss. The first entries:
+  bootstrap, B0, B0r1, B0r2, S-512; later networks are added by the
+  promotion step.
+- Generation against generation: pick two networks; they play live in the
+  browser, two workers, at a fixed node count per move, from openings in
+  Fork's own openings set (Lichess human games).
+- A fixed set of positions with each network's evaluation side by side.
+  The positions are taken only from sources fetched and checked character
+  by character (non-negotiable 1): the CPW perft positions already in
+  tests/suite.hpp first, others with their source named on the page.
+- Progress timeline: Elo (the chain of promotion SPRT results; self-play
+  Elo, labelled as such), training data (positions per generation, from
+  data/manifests) and validation loss, read from `progress.json`, which a
+  tool (`tools/site/`, names screened) regenerates from committed records;
+  the promotion checklist gains a step that rebuilds it and the network
+  modules on the site branch.
+
+**4. Phones, themes, size.** One layout from phone to desktop (board first,
+controls below on narrow screens); light and dark following the system
+setting, with a toggle; network modules loaded on demand, nothing larger
+than the page and the first module loaded up front; no web fonts, no
+external requests at run time (the board library is vendored).
+
+**5. Privacy.** Static files only: no analytics, no cookies, no third-party
+requests. Before every push of the site branch a scan of everything it
+adds (as for the repository: the user name, home paths, the personal
+email, account ids, bucket and profile names, secrets) must come back
+empty; networks and modules are built only from pushed public commits.
+
+**Tests.** The entry module's functions get native unit tests (they compile
+outside Emscripten too); the Node runs above are the WASM tests. Whether
+CI gains an Emscripten job (cached SDK) is decided with the owner once the
+build exists.
+
 ## 6. Decisions log
 
 | Date | Decision |
@@ -3147,6 +3280,7 @@ exposure pre-test passes with the current net on generation-1 data
 | 2026-10-31 | **The daily cap counts ended instances at their cost (owner).** A launch stays booked at its worst case ($0.25/h x 12 h) while its instance runs; once the instance has ended (finished, interrupted or terminated), `cost_guard.sh` replaces the booking with its cost: hours run times the spot price paid, each stretch of the run at the price then in effect (`tools/cloud/spot_cost.py`), from the instance's spot request (start, end, type, zone) and the zone's spot price history. `check` and `report` settle first; the launcher records each launch's region and instance. AWS lists closed spot requests only for some hours, so an instance it no longer lists keeps its worst case until `settle RUN COST` sets it by hand. The three launches of 2026-10-30 were settled by hand: us-east-2's c8a $0.73 (6.1 h, from AWS's record), us-west-2's c7a $0.57 (2.5 h, end from its boot log), us-east-1's c7a $0.26 (an upper bound: reclaimed before its first chunk, zone and end unknown, so 1.1 h at the dearest zone's price). Tests: `test_spot_cost.py` and `test_cost_guard.sh` (fault-injected: check without settling, a running instance counted as ended, price changes ignored, and a hand-settled row losing its state on a rewrite each fail them). Names screened (spot_cost, cost_between, settle, booked, paid): no match. |
 | 2026-10-31 | **XGR's set-wise exposure adopted for round 2 (owner).** Condition: evaluations exactly identical and faster (§5.4, the engineering task's result). Old build against new, every XGR-512 net (the entry and the raw seeds 1 and 2): netcheck 446 positions, 0 mismatches each; `fork evalfens` byte-identical on 500,005 game positions each; bench 15,540,185 / 9564dc8f27cd9708 on both. Speed: +15.5% median nps (bench/ab_search.py, 10 rounds, datagen paused, the openings stream running at low priority; an A/A run beside it moved -0.4% / +0.9%). Inference only, so round 2's training rules are unaffected. |
 | 2026-10-31 | **AWS used as much as needed (owner).** The owner has a budget set and accepts paying it daily, so cloud data generation is no longer held back by cost: the launch rule allows any pool at up to $1 per million positions and a spot price of $0.40/h (was $0.03 and $0.25), the credit floor is 0 (was $25), and the daily cap is raised from $10 to $100 at worst-case booking, kept only as a backstop against a runaway relaunch loop. Each instance still shuts itself down after 12 hours. The binding limit is the applied spot quota, 8 vCPU (one 8-vCPU instance) per region in us-east-2, us-east-1 and us-west-2; increases to 32 were requested for us-east-1 and us-west-2 (us-east-2's has been open since 2026-10-30), and the relaunch watcher fills each region up to its applied quota. The on-demand quota is also 8 vCPU per region (the launcher uses spot only). |
+| 2026-10-31 | **A public web page for Fork, planned (owner).** GitHub Pages from a dedicated `site` branch: Fork compiled to WebAssembly (Emscripten, single-threaded, scalar then WASM SIMD, in a Web Worker), checked by netcheck and bench parity under Node before anything is published; a Play tab (chessground, GPL-3.0-or-later), a "Watch it learn" tab (any promoted network, live generation-against-generation games, fixed positions, a progress timeline from a summary JSON the promotion step updates); phones, light and dark, networks loaded on demand, no personal data. Built after round 2 starts, on spare CPU only (§5.5). |
 
 ## 7. Performance doctrine (governs every phase)
 
