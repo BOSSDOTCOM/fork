@@ -2,6 +2,9 @@
 
 #include "search/move_selector.hpp"
 
+#include <algorithm>
+#include <cstdint>
+
 #include <utility>
 
 #include "core/material.hpp"
@@ -35,11 +38,12 @@ bool is_under_promotion(Move m) { return m.is_promotion() && m.promo_type() != Q
 }  // namespace
 
 void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHistory* history,
-                              const PairHistory* reply_history, int arrival) {
+                              const PairHistory* pairs, int arrival, int follow_arrival) {
   pos_ = &pos;
   history_ = history;
-  reply_history_ = arrival == NoArrival ? nullptr : reply_history;
-  arrival_ = arrival;
+  pair_history_ = pairs;
+  arrival_ = static_cast<std::int16_t>(pairs ? arrival : NoArrival);
+  follow_arrival_ = static_cast<std::int16_t>(pairs ? follow_arrival : NoArrival);
   quiesce_ = false;
   see_filter_ = false;
   quiets_stopped_ = false;
@@ -75,8 +79,13 @@ void MoveSelector::score_quiets() {
   for (std::size_t i = 0; i < list_.size(); ++i) {
     const Move m = list_[i];
     int score = history_ ? history_->value(us, m) : 0;
-    if (reply_history_)
-      score += reply_history_->value(arrival_, pair_slot(pos_->piece_at(m.from()), m.to())) * ReplyWeight / 4;
+    if (arrival_ != NoArrival || follow_arrival_ != NoArrival) {
+      const int slot = pair_slot(pos_->piece_at(m.from()), m.to());
+      if (arrival_ != NoArrival) score += pair_history_[ReplyTable].value(arrival_, slot) * ReplyWeight / 4;
+      if (follow_arrival_ != NoArrival) score += pair_history_[FollowTable].value(follow_arrival_, slot) * FollowWeight / 4;
+      // Weights above one can take the sum past int16 at the extremes.
+      score = std::clamp(score, -INT16_MAX, INT16_MAX);
+    }
     scores_[i] = static_cast<std::int16_t>(score);
   }
 }

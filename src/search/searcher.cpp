@@ -122,13 +122,16 @@ void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
   history_.apply(us, m, bonus);
   if (switches.use_history_malus)
     for (Move q : f.failed_quiets) history_.apply(us, q, -bonus);
-  // The pair history (tier 2, T10) takes the same bonus and malus.
-  if (switches.use_reply_history && f.arrival != NoArrival) {
+  // The pair histories (tier 2, T10) take the same bonus and malus.
+  const auto update = [&](PairHistory& table, int arrival) {
     const Position& pos = *pos_;
-    reply_history_.apply(f.arrival, pair_slot(pos.piece_at(m.from()), m.to()), bonus);
+    table.apply(arrival, pair_slot(pos.piece_at(m.from()), m.to()), bonus);
     if (switches.use_history_malus)
-      for (Move q : f.failed_quiets) reply_history_.apply(f.arrival, pair_slot(pos.piece_at(q.from()), q.to()), -bonus);
-  }
+      for (Move q : f.failed_quiets) table.apply(arrival, pair_slot(pos.piece_at(q.from()), q.to()), -bonus);
+  };
+  if (switches.use_reply_history && f.arrival != NoArrival) update(pair_history_[ReplyTable], f.arrival);
+  const int follow = follow_arrival(f);
+  if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
 }
 
 void Searcher::update_pv(int ply, Move m) {
@@ -315,7 +318,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // The selector checks the TT move (a colliding entry's move may not be
   // legal here) before it is tried first; a withheld move is not tried.
   f.selector.start_main(pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr,
-                        switches.use_history && switches.use_reply_history ? &reply_history_ : nullptr, f.arrival);
+                        switches.use_history ? pair_history_ : nullptr,
+                        switches.use_reply_history ? f.arrival : NoArrival,
+                        switches.use_follow_history ? follow_arrival(f) : NoArrival);
   f.failed_quiets.count = 0;
 
   const int alpha_start = alpha;
@@ -660,6 +665,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   max_ply_reached_ = 0;
   stopped_ = false;
   unresolved_fail_high_ = NoMove;
+  frames_[0].arrival = NoArrival;  // the root has none (the follow table's arrival at ply 1)
 
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);

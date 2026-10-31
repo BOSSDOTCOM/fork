@@ -102,6 +102,8 @@ struct SearchQuota {
 // - use_reply_history: quiet moves are also ordered by the pair history
 //   after the opponent's last move, updated with the butterfly history's
 //   bonus and malus (tier 2, T10, the 1-ply table). Off until its SPRT.
+// - use_follow_history: the same after the side's own previous move, two
+//   plies back (T10's 2-ply table). Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                    \
   X(use_tt, UseTT, true)                           \
   X(use_pvs, UsePvs, true)                         \
@@ -128,7 +130,8 @@ struct SearchQuota {
   X(use_singular_extension, UseSingularExtension, false) \
   X(use_multi_cut, UseMultiCut, false)                   \
   X(use_negative_extension, UseNegativeExtension, false) \
-  X(use_reply_history, UseReplyHistory, false)
+  X(use_reply_history, UseReplyHistory, false)           \
+  X(use_follow_history, UseFollowHistory, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -314,7 +317,7 @@ class Searcher {
   // Forgets the move-ordering history (ucinewgame, and each bench position).
   void clear_history() {
     history_.clear();
-    reply_history_.clear();
+    for (PairHistory& table : pair_history_) table.clear();
   }
 
   // Tests only: the root move that failed high in the iteration the last
@@ -345,12 +348,15 @@ class Searcher {
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
   void record_cutoff(const PlyFrame& f, Move m, int depth);
+  // The follow table's arrival at frame `f`: the move that led to the ply
+  // above, the side's own previous move (none at the root's children).
+  int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
 
   TransTable& tt_;
   QuietHistory history_;
-  PairHistory reply_history_;  // tier 2, T10: after the opponent's last move
+  PairHistory pair_history_[2];  // tier 2, T10: the reply and follow tables (ReplyTable, FollowTable)
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;

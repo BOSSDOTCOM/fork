@@ -18,8 +18,9 @@
 // - Integer arithmetic only (bench determinism); 16-bit entries, so summing
 //   several tables (the pair history below) cannot overflow an int.
 // - The pair history (tier 2, T10; KB search-techniques.md §3.10) scores a
-//   quiet move by the move that led to its node, paired with it: the
-//   opponent's last move (the reply table). A move is a slot: its piece
+//   quiet move by a move that led to its node, paired with it: the
+//   opponent's last move (the reply table) or the side's own previous move,
+//   two plies back (the follow table). A move is a slot: its piece
 //   (colour and type) and its destination square; a node reached by a null
 //   move, or the root, has no arrival and reads and updates nothing. Same
 //   scale, bounds and update as the butterfly history.
@@ -55,6 +56,12 @@ FORK_TUNABLE_CONSTEXPR int bonus_for_depth(int depth) {
 constexpr int PairSlots = 2 * 6 * 64;
 constexpr int NoArrival = -1;
 inline int pair_slot(Piece moved, Square to) { return (side_of(moved) * 6 + kind_of(moved)) * 64 + to; }
+
+// The searcher keeps both pair tables in one array, so the move selector
+// holds a single pointer (the search stack's frame stays within its size
+// guard, tests/test_search.cpp).
+constexpr int ReplyTable = 0;
+constexpr int FollowTable = 1;
 
 class PairHistory {
  public:

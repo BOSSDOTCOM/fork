@@ -59,6 +59,7 @@
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 8, 1)              \
+  X(FollowWeight, 4, 0, 8, 1)             \
   X(StaleDepthPerSearch, 2, 1, 4, 1)      \
   X(AssumedMovesLeft, 30, 15, 60, 2)      \
   X(MaxMovesToGo, 40, 20, 80, 3)          \

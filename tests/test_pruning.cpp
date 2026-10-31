@@ -289,7 +289,7 @@ TEST_CASE("pruning", "singular extension, multi-cut, negative extension: correct
 // The reply table (tier 2, T10): with it on, mates are still found and the
 // best move is legal, and it changes the tree (fault check: a table never
 // read or never updated leaves the tree as it is with the switch off).
-TEST_CASE("pruning", "reply history: still correct, and it changes the search") {
+TEST_CASE("pruning", "reply and follow tables: still correct, and each changes the search") {
   PruningFixture fx;
   CHECK(!SearchSwitches{}.use_reply_history);  // off until its SPRT decides
   SearchSwitches on;
@@ -308,6 +308,19 @@ TEST_CASE("pruning", "reply history: still correct, and it changes the search") 
   fx.searcher->switches = SearchSwitches{};
   const SearchResult without = fx.search(kiwipete, depth);
   CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without the reply table");
+  // The follow table (T10's 2-ply table), on its own and with the reply table.
+  CHECK(!SearchSwitches{}.use_follow_history);
+  for (bool reply : {false, true}) {
+    SearchSwitches follow;
+    follow.use_follow_history = true;
+    follow.use_reply_history = reply;
+    fx.searcher->switches = follow;
+    CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+    const SearchResult r = fx.search(kiwipete, depth);
+    CHECK(legal.contains(r.best));
+    CHECK_MSG(r.nodes != (reply ? with.nodes : without.nodes),
+              "nodes " << r.nodes << " with the follow table (reply table " << (reply ? "on" : "off") << ")");
+  }
 }
 
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery

@@ -161,16 +161,16 @@ TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quie
       }
   CHECK_EQ(static_cast<int>(slots.size()), PairSlots);
 
-  auto pairs = std::make_unique<PairHistory>();
+  auto pairs = std::make_unique<PairHistory[]>(2);  // the reply and follow tables, as in the searcher
   std::uint64_t seed = 11;
   for (int i = 0; i < 200000; ++i) {
     const int amount = static_cast<int>(splitmix_next(seed) % (2 * HistoryMax + 1)) - HistoryMax;
-    pairs->apply(100, 200, amount);
-    const int v = pairs->value(100, 200);
+    pairs[ReplyTable].apply(100, 200, amount);
+    const int v = pairs[ReplyTable].value(100, 200);
     CHECK_MSG(v >= -HistoryMax && v <= HistoryMax, "value " << v << " after amount " << amount);
   }
-  pairs->clear();
-  CHECK_EQ(pairs->value(100, 200), 0);
+  pairs[ReplyTable].clear();
+  CHECK_EQ(pairs[ReplyTable].value(100, 200), 0);
 
   // The position of the case above, without its history. Without the pair
   // table the quiets come in generation order and the deferred losing
@@ -186,11 +186,19 @@ TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quie
   const Move reply = plain[plain.size() - 2];
   CHECK(!reply.is_capture() && !reply.is_promotion() && plain.front() != reply);
   const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Pawn), static_cast<Square>(39));  // h5
-  pairs->apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
+  pairs[ReplyTable].apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
   s.start_main(pos, NoMove, &history, pairs.get(), arrival);
   const std::vector<Move> got = drain(s);
   CHECK(!got.empty() && got.front() == reply);
   s.start_main(pos, NoMove, &history, pairs.get(), NoArrival);
+  CHECK(drain(s) == plain);
+  // The same entry in the follow table, read with the follow arrival only.
+  pairs[ReplyTable].clear();
+  pairs[FollowTable].apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
+  s.start_main(pos, NoMove, &history, pairs.get(), NoArrival, arrival);
+  const std::vector<Move> followed = drain(s);
+  CHECK(!followed.empty() && followed.front() == reply);
+  s.start_main(pos, NoMove, &history, pairs.get(), arrival, NoArrival);
   CHECK(drain(s) == plain);
 }
 
