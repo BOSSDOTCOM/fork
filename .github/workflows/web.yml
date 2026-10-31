@@ -116,13 +116,15 @@ jobs:
           find site -type f -printf '%s\t%p\n' | sort -k2
       - name: Scan the page for personal data
         # Paths, addresses, keys and tokens anywhere in what would be
-        # published (text files whole, the WebAssembly through `strings`).
+        # published (text files whole, the WebAssembly through `strings`),
+        # each hit shown with its surroundings. Only Emscripten's own
+        # in-memory home folder, /home/web_user, is let through.
         run: |
           pattern='(/home/|/Users/|[A-Za-z]:.Users|s3://|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{20}|-----BEGIN [A-Z ]*PRIVATE KEY|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})'
           found=0
           for f in $(find site -type f); do
             case "$f" in *.wasm) text=$(strings -n 6 "$f") ;; *) text=$(cat "$f") ;; esac
-            hits=$(printf '%s' "$text" | grep -o -E "$pattern" | sort -u || true)
+            hits=$(printf '%s' "$text" | sed 's#/home/web_user\b##g' | grep -o -E ".{0,30}$pattern.{0,30}" | sort -u || true)
             if [ -n "$hits" ]; then echo "::error::$f: $hits"; found=1; fi
           done
           [ "$found" = 0 ] && echo "scan clean: $(find site -type f | wc -l) files"
