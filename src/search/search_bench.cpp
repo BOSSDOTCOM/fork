@@ -179,6 +179,8 @@ SearchBenchResult run_search_bench() {
   std::fprintf(stderr, "stats: multi-cut cuts %llu, negative extensions %llu\n",
                static_cast<unsigned long long>(c.multi_cut_cuts),
                static_cast<unsigned long long>(c.negative_extensions));
+  std::fprintf(stderr, "stats: nodes reduced for having no TT move %llu\n",
+               static_cast<unsigned long long>(c.no_move_reductions));
   std::fprintf(stderr, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
                static_cast<unsigned long long>(c.singular_tests),
                static_cast<unsigned long long>(c.singular_extended),

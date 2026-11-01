@@ -289,6 +289,18 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   }
 #endif
 
+  // Internal iterative reduction (tier 2, T26; KB search-techniques.md
+  // §3.20): a node with no TT move, deep enough, is searched one ply
+  // shallower. Its ordering is poor, and the cheaper search stores a move
+  // for the next iteration. Every node type: Fork does not track expected
+  // cut nodes. After the node-level pruning, whose decisions keep the
+  // node's full depth.
+  if (switches.use_no_move_reduction && !withheld && depth >= NoMoveReduceMinDepth &&
+      (!tt_hit || hit.move.is_none())) {
+    --depth;
+    FORK_STAT(++counters.no_move_reductions);
+  }
+
   // Singular extension (tier 2, T27; KB search-techniques.md §3.21): when
   // the TT entry proves a score for its move at nearly this depth, this node
   // is searched again at half depth without that move, on a zero window

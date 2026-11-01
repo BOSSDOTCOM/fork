@@ -115,6 +115,9 @@ struct SearchQuota {
 //   and the captures tried before any cutoff take it as a malus (tier 2,
 //   T11). On since its STC SPRT passed (+4.53 +/- 2.99 Elo after 22,400
 //   games, [0, 3]; 2026-11-01).
+// - use_no_move_reduction: a node without a TT move, at least
+//   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
+//   internal iterative reduction). Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -138,12 +141,13 @@ struct SearchQuota {
   X(use_tables, UseTables, true)                         \
   X(use_lmr_check_relief, UseLmrCheckRelief, true)       \
   X(use_lmr_in_check, UseLmrInCheck, true)               \
-  X(use_singular_extension, UseSingularExtension, true) \
-  X(use_multi_cut, UseMultiCut, true)                   \
+  X(use_singular_extension, UseSingularExtension, true)  \
+  X(use_multi_cut, UseMultiCut, true)                    \
   X(use_negative_extension, UseNegativeExtension, false) \
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
-  X(use_take_history, UseTakeHistory, true)
+  X(use_take_history, UseTakeHistory, true)              \
+  X(use_no_move_reduction, UseNoMoveReduction, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -307,6 +311,7 @@ struct SearchCounters {
   std::uint64_t singular_extended = 0;    // ... that found the TT move singular
   std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
   std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
+  std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
 };
 
 class Searcher {
