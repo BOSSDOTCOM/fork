@@ -336,7 +336,7 @@ TEST_CASE("pruning", "reply and follow tables: still correct, and each changes t
 // read or never updated leaves the tree as it is with the switch off).
 TEST_CASE("pruning", "take history: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_take_history);  // off until its SPRT decides
+  CHECK(SearchSwitches{}.use_take_history);  // on in this SPRT's test build
   SearchSwitches on;
   on.use_take_history = true;
   fx.searcher->switches = on;
@@ -350,7 +350,9 @@ TEST_CASE("pruning", "take history: still correct, and it changes the search") {
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
   CHECK(legal.contains(with.best));
-  fx.searcher->switches = SearchSwitches{};
+  SearchSwitches off;
+  off.use_take_history = false;
+  fx.searcher->switches = off;
   const SearchResult without = fx.search(kiwipete, depth);
   CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without the take history");
 }

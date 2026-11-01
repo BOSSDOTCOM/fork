@@ -142,7 +142,7 @@ struct SearchQuota {
   X(use_negative_extension, UseNegativeExtension, false) \
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
-  X(use_take_history, UseTakeHistory, false)
+  X(use_take_history, UseTakeHistory, true) 
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
