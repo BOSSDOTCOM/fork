@@ -295,7 +295,7 @@ TEST_CASE("pruning",
 // read or never updated leaves the tree as it is with the switch off).
 TEST_CASE("pruning", "reply and follow tables: still correct, and each changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_reply_history);  // off until its SPRT decides
+  CHECK(SearchSwitches{}.use_reply_history);  // on since its SPRT (2026-11-01)
   SearchSwitches on;
   on.use_reply_history = true;
   fx.searcher->switches = on;
@@ -309,7 +309,9 @@ TEST_CASE("pruning", "reply and follow tables: still correct, and each changes t
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
   CHECK(legal.contains(with.best));
-  fx.searcher->switches = SearchSwitches{};
+  SearchSwitches off;
+  off.use_reply_history = false;
+  fx.searcher->switches = off;
   const SearchResult without = fx.search(kiwipete, depth);
   CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without the reply table");
   // The follow table (T10's 2-ply table), on its own and with the reply table.

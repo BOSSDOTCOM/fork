@@ -358,3 +358,22 @@ LLR: -2.96 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   is at or above beta, one ply less) took 28% off the bench's nodes at fixed
   depth and lost Elo at STC; a narrower gating (KB §3.21: Fork's choice by
   experiment) is left for later.
+
+### 2026-11-01 reply-vs-mc (tier 2, T10: the reply table)
+
+- Base `dc6dec8` (phase-4: singular extension and multi-cut on; bench
+  19,841,861), test `8464d29` (branch tier2/reply: the reply table on as
+  well; bench 19,724,297), bounds [0, 5] nElo (set before the run, by the
+  expected gain), 8+0.08, Hash 16 MB, Syzygy 3-4-5, the UHO book, S-512.
+  Stages 0-3, after CI run
+  41263900061 on dc6dec8 (passed). Result: **H1 accepted**.
+```
+Shards: 64 (done); pairs 3200, games 6400 (6400 finished, time losses 0, abnormal 0)
+Elo: 11.46 +/- 5.57, nElo: 17.53 +/- 8.51
+Ptnml(0-2): [126, 697, 1409, 776, 192]
+LLR: 3.99 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+- Stages: 0 +6.30 +/- 11.14 (LLR 0.47), 1 +6.08 +/- 7.78 (0.92), 2 +10.79
+  +/- 6.45 (2.77), 3 H1.
+- Adopted: the switch is on in phase-4 (the follow table's SPRT builds on
+  it).

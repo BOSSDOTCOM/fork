@@ -105,7 +105,8 @@ struct SearchQuota {
 //   after 8,000 games, H0; 2026-10-31).
 // - use_reply_history: quiet moves are also ordered by the pair history
 //   after the opponent's last move, updated with the butterfly history's
-//   bonus and malus (tier 2, T10, the 1-ply table). Off until its SPRT.
+//   bonus and malus (tier 2, T10, the 1-ply table). On since its STC SPRT
+//   passed (+11.46 +/- 5.57 Elo after 6,400 games, [0, 5]; 2026-11-01).
 // - use_follow_history: the same after the side's own previous move, two
 //   plies back (T10's 2-ply table). Off until its SPRT.
 // - use_take_history: captures are ordered by their victim and the take
@@ -138,7 +139,7 @@ struct SearchQuota {
   X(use_singular_extension, UseSingularExtension, true) \
   X(use_multi_cut, UseMultiCut, true)                   \
   X(use_negative_extension, UseNegativeExtension, false) \
-  X(use_reply_history, UseReplyHistory, false)           \
+  X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, false)         \
   X(use_take_history, UseTakeHistory, false)
 
