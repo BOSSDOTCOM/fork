@@ -250,7 +250,7 @@ TEST_CASE("pruning",
   // Singular extension on since its SPRT (2026-10-31); the others off until theirs.
   CHECK(SearchSwitches{}.use_singular_extension);
   CHECK(SearchSwitches{}.use_multi_cut);  // on in this SPRT's test build
-  CHECK(!SearchSwitches{}.use_negative_extension);
+  CHECK(SearchSwitches{}.use_negative_extension);  // on in this SPRT's test build
   static constexpr std::string_view Forcing[] = {
       "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "4k3/8/8/1p1p1p2/1P1P1P2/8/8/4K3 w - - 0 1",
       // Kiwipete (tests/suite.hpp's perft position 2) and perft position 5.
@@ -261,6 +261,7 @@ TEST_CASE("pruning",
   SearchSwitches s;
   s.use_singular_extension = false;
   s.use_multi_cut = false;
+  s.use_negative_extension = false;
   fx.searcher->switches = s;
   std::uint64_t previous = fx.search(kiwipete, depth).nodes;
   bool* added[] = {&s.use_singular_extension, &s.use_multi_cut, &s.use_negative_extension};
