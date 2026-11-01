@@ -47,6 +47,11 @@ SearchSwitches no_pruning() {
   SearchSwitches s;
   s.tt_exact_depth = true;
   s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  // Tier 2's selective steps too: multi-cut prunes a node, the negative
+  // extension and the no-move reduction cut depth. With multi-cut left on,
+  // S512r2 found two real mates in 7 plies (one confirmed by the lichess
+  // tablebase, DTM 7) that this search missed at depth 8 (2026-11-01).
+  s.use_multi_cut = s.use_negative_extension = s.use_no_move_reduction = false;
   return s;
 }
 

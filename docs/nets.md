@@ -73,8 +73,23 @@ added; no CI job applies them automatically.
 | Parity (tests/nnue/s512.parity, 446 positions) | R-float vs the trainer's float evaluation at most 0.00012 cp; netcheck exact on all 446; quantization loss max 15.6 cp, p99 12.1 cp, mean 3.6 cp: the first net of its architecture, within the limits set from it (max 21 cp, p99 16 cp; owner, 2026-10-30; see "Quantization-loss limits") |
 | Bench | 15,249,025 nodes, signature 13001f412d6e8d7e (tests/bench-s512.ref) |
 | SPRT | vs the B0 control (bake/g1b0 5cacf8a, the net promoted as B0r2), [0, 5], 8+0.08, GitHub shards, run 41125906800 (bake-off stage A): **+43.66 +/- 12.02 Elo (nElo +62.52 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
-| Status | **The default network since 2026-10-30, provisionally** (owner): the bake-off continues unchanged, and a later entry that beats it is promoted then. The labeller of generation 2 and of the cloud data generation from then on |
+| Status | The default network from 2026-10-30 (provisionally, owner) until S512r2 replaced it on 2026-11-01, and the labeller of generation 2 and of the cloud data generation until then; still buildable with `-DFORK_NET=nets/s512.fnet` (tests/bench-s512.ref), and checked in CI as round 1's S-512 entry |
 | Notes | One search test that passed with B0r2 failed with S-512: K+R v K with the fifty-move clock at 0 had to score above 300 cp, and S-512 scores it 263. The check, which only contrasts the position with the same one drawn by the fifty-move rule, now asks for any score above the draw's 0. |
+
+## S512r2, S-512 retrained in round 2 (2026-11-01)
+
+| Item | Value |
+|---|---|
+| File | `nets/s512r2.fnet` (branch bake/r2s512 84dc337 as `nets/r2s512.fnet`, byte-identical: the net that played the SPRT), 804,064 bytes, Fork checksum 093e3fda66afab43 |
+| Architecture | S-512's (768 inputs per perspective, mirrored left-right, -> 512 SCReLU -> 8 outputs picked by game phase; QA 255 / QB 64), with round 2's phase octiles (tools/nnue/s512.json at 6600af3, refitted on g2s1); S = 92 |
+| Data | generation-2 snapshot g2s1 (data/manifests/g2s1.json): 9,176,386 games, 614,769,222 saved positions labelled by S512 (local parts g2-g2e and 8 cloud runs; 415,949,440 pass the training filter); validation on g2s1-val (780 games, 60 from a designated shard of each of the 13 sources) |
+| Training | Kaggle kernel fork-round2a at 6600af3 (T4), seed 2, no warm start: target 0.5 sigmoid(score / 92) + 0.5 result, AdamW, LR 0.001 dropped tenfold after 180, batch 16,384 x 305 per superbatch, 360 superbatches (1.8 B positions seen, about 4.3 passes); the checkpoint with the lowest validation loss kept: superbatch 307, validation loss 0.019458 (seed 1: 0.019496 at 305; the owner's rule: the seed with the lower loss); 5,929 s. The curve is flat from about superbatch 220 (within about 0.0002) |
+| Parity (tests/nnue/s512r2.parity, 446 positions) | quantization leg exact; R-float vs the trainer's float evaluation at most 0.00014 cp; netcheck exact on all 446; quantization loss max 12.5 cp, p99 10.2 cp, mean 2.9 cp (within S-512's limits, 21 / 16 cp) |
+| Scale | **S = 92, the scale it played its SPRT with** (owner, 2026-11-01: promoted with exactly the tested scale). Scale matching on the first 10,000 filtered positions of g2s1-val gave two values: matched to the current default S512, the SPRT's opponent, 92 (mean \|eval\| 226.39 against S512's 226.68 cp), the trainer's own S, so no rescale; matched to round 2's B0 control (seed 2, the bake-off plan's reference), 89 (B0's mean \|eval\| 219.04 cp). 92 was chosen for the SPRT because it keeps the evaluation at the scale the search's margins were tuned on, which is the purpose of matching (DESIGN.md §5.4, plan 2), and the pairing was against S512. 89 is untested: if it is preferred on principle, it gets its own SPRT before any change |
+| Bench | 17,904,298 nodes, signature 698205c2870d96a4 (tests/bench-s512r2.ref; search at 32bb1ff) |
+| SPRT | vs S512 (phase-4 6600af3), [0, 5], 8+0.08, GitHub shards, run 41349145950: **+151.35 +/- 12.50 Elo (nElo +233.38 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
+| Status | **The default network since 2026-11-01** (owner, after review), and the labeller of generation 3 and of the cloud data generation from then on (DESIGN.md §5.3, labeller policy) |
+| Notes | One search test failed with S512r2 and was fixed in the test: the mate-confirmation test's "exact" search still had multi-cut on, which prunes, and missed two real mates in 7 plies that S512r2's search reported (4k3/8/1Q6/8/8/r7/8/1R2K3 w: the lichess tablebase gives DTM 7). The exact search now also switches off multi-cut, the negative extension and the no-move reduction. |
 
 ## The bake-off entries in CI (2026-10-31)
 
@@ -91,7 +106,7 @@ bake/g1b0's nets).
 
 | Entry | Network | Architecture id | Bench (nodes / signature) |
 |---|---|---|---|
-| S-512 (the default) | `nets/s512.fnet` | 2 | 15,249,025 / 13001f412d6e8d7e |
+| S-512 (round 1; the default until 2026-11-01) | `nets/s512.fnet` | 2 | 15,249,025 / 13001f412d6e8d7e |
 | B0 control | `nets/b0r2.fnet` | 1 | 14,589,665 / 9dba694dd1ee4c41 |
 | H-512 | `nets/g1h512.fnet` | 3 | 14,987,230 / 1190b45ba0d0ab53 |
 | AF-S | `nets/g1afs.fnet` | 4 | 26,382,157 / 4d87061f4e7b57ac |

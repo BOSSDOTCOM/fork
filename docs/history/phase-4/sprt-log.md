@@ -420,3 +420,20 @@ LLR: 3.01 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
 - Adopted: the switch is on in phase-4. The reach question the tier-2
   review raised (two entries at opposite limits can reorder victims up to
   about 3.1 pawns apart) is answered in games: the history as built gains.
+
+### 2026-11-01 r2s512-vs-s512 (bake-off round 2: S-512 retrained, promotion test)
+
+- Base `6600af3` (phase-4: S512, round 1's S-512, the default; bench
+  19,698,287), test `84dc337` (branch bake/r2s512: S-512 retrained on
+  g2s1, seed 2, S = 92; bench 17,904,298), bounds [0, 5] nElo, 8+0.08,
+  Hash 16 MB, Syzygy 3-4-5, GitHub shards; started before round 2's other
+  nets were ready (owner).
+- Stage 0: run 41349145950. Result: **H1 accepted** after stage 0:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: 151.35 +/- 12.50, nElo: 233.38 +/- 17.02
+Ptnml(0-2): [3, 47, 224, 343, 183]
+LLR: 15.30 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+- Promoted by the owner as the default network S512r2, with the scale it
+  was tested at (S = 92; docs/nets.md).

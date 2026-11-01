@@ -6,3 +6,5 @@
 # positions/s, chunks, CPU, source.
 c8a.2xlarge	s512	20000	700/8	2075	18	AMD EPYC 9R45	g2-aws-20261030T212852Z, 2026-10-30 (2046-2188)
 c7a.2xlarge	s512	20000	700/8	1640	2	AMD EPYC 9R14	g2-aws-us-west-2-20261030T233227Z, 2026-10-30 (1636-1645)
+c8a.2xlarge	s512r2	20000	700/8	2075	0	AMD EPYC 9R45	provisional: S512's rate (same architecture), 2026-11-01; replace with S512r2's measured chunks
+c7a.2xlarge	s512r2	20000	700/8	1640	0	AMD EPYC 9R14	provisional: S512's rate (same architecture), 2026-11-01; replace with S512r2's measured chunks
