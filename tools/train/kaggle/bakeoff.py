@@ -14,7 +14,13 @@ summary of all runs is result/bakeoff.json.
 
 The settings below are this push's; every run record repeats them. The
 dry run (2026-10-30, g1s0) used one seed per entry, 3 superbatches of 100
-batches and S = 107; the bake-off (g1s1) uses the values below.
+batches and S = 107. Round 1 (g1s1, 2026-10-30) used S = 105, 80
+superbatches with the drop at 40 (400 M positions seen, about 4.3 passes
+over its 93.5 M kept), the manifest data/manifests/g1s1.json and round 1's
+maps. Round 2 (g2s1, owner, 2026-11-01: the same 4.3 passes) uses the
+values below and the maps refitted on g2s1; it runs in two pushes, each
+copy's RUNS replaced like COMMIT (b0, s512 and h512, then afs and xgr512),
+so neither session nears Kaggle's 12-hour limit.
 """
 import glob
 import hashlib
@@ -26,16 +32,17 @@ import time
 
 COMMIT = 'phase-4'          # replaced by the pushed commit's hash before the push
 RUNS = [(arch, seed) for arch in ('b0', 's512', 'h512', 'afs', 'xgr512') for seed in (1, 2)]
-SCALE = 105                 # S fitted on g1s1 (fit_scale.py, 2 M positions); the same for every entry
+SCALE = 92                  # S fitted on g2s1 (fit_scale.py's fit, 2 M positions drawn from every source
+                            # in proportion to its saved positions); the same for every entry
 RESULT_WEIGHT = 0.5         # bullet's weight on the game result: 1 - lambda, lambda = 0.5 (§5.3)
 BATCH = 16384
 BATCHES = 305               # per superbatch: 5 M positions
-SUPERBATCHES = 80           # 400 M positions seen, about 4.3 passes over g1s1's 93.5 M kept
+SUPERBATCHES = 360          # 1.8 B positions seen, about 4.3 passes over g2s1's 415.9 M kept
 LR = 0.001                  # bullet's example value (KB bullet-internals.md §5.3)
-LR_STEP = 40                # tenfold drop every LR_STEP superbatches
+LR_STEP = 180               # tenfold drop every LR_STEP superbatches (halfway, as round 1)
 VAL_POSITIONS = 20000
 KEEP = 'best'               # 'best': the lowest validation loss; 'last': the final superbatch
-MANIFEST = 'data/manifests/g1s1.json'
+MANIFEST = 'data/manifests/g2s1.json'
 DATA = '/kaggle/input'
 WORK = '/kaggle/working/bake'
 RESULT = '/kaggle/working/result'
