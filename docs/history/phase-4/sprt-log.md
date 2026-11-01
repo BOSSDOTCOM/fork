@@ -396,3 +396,27 @@ LLR: 3.05 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
   +7.42 +/- 4.52 (2.37), 6 +7.76 +/- 4.18 (2.91), 7 H1.
 - Adopted: the switch is on in phase-4 (the take history's SPRT builds on
   it).
+
+### 2026-11-01 take-vs-follow (tier 2, T11: the take history)
+
+- Base `459d487` (phase-4: singular extension, multi-cut, the reply and
+  follow tables on; bench 19,702,992), test `93360ea` (branch tier2/take:
+  the take history on as well; bench 19,698,287), bounds [0, 3] nElo (set
+  before the run, by the expected gain), conditions as above. Stages 0-12
+  ended without a verdict (LLR 2.70), so the test continued with stages
+  13-24 (testing rules: an SPRT runs to its verdict); stage 13 decided.
+  Result: **H1 accepted**.
+```
+Shards: 224 (done); pairs 11200, games 22400 (22400 finished, time losses 0, abnormal 0)
+Elo: 4.53 +/- 2.99, nElo: 6.90 +/- 4.55
+Ptnml(0-2): [503, 2609, 4745, 2779, 564]
+LLR: 3.01 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
+```
+- Stages: 0 -3.69 +/- 10.78 (LLR -0.29), 1 +1.30 +/- 7.81 (0.04), 2 +4.20
+  +/- 6.42 (0.59), 3 +2.77 +/- 5.57 (0.43), 4 +3.78 +/- 5.00 (0.85), 5
+  +4.20 +/- 4.56 (1.17), 6 +4.99 +/- 4.22 (1.70), 7 +4.75 +/- 3.96 (1.82),
+  8 +4.46 +/- 3.75 (1.88), 9 +4.54 +/- 3.55 (2.14), 10 +4.05 +/- 3.39
+  (2.03), 11 +4.42 +/- 3.23 (2.49), 12 +4.41 +/- 3.10 (2.70), 13 H1.
+- Adopted: the switch is on in phase-4. The reach question the tier-2
+  review raised (two entries at opposite limits can reorder victims up to
+  about 3.1 pawns apart) is answered in games: the history as built gains.

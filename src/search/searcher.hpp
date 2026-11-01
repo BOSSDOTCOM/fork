@@ -113,7 +113,8 @@ struct SearchQuota {
 // - use_take_history: captures are ordered by their victim and the take
 //   history instead of MVV-LVA; a capture that cuts gains the history bonus,
 //   and the captures tried before any cutoff take it as a malus (tier 2,
-//   T11). Off until its SPRT.
+//   T11). On since its STC SPRT passed (+4.53 +/- 2.99 Elo after 22,400
+//   games, [0, 3]; 2026-11-01).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -142,7 +143,7 @@ struct SearchQuota {
   X(use_negative_extension, UseNegativeExtension, false) \
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
-  X(use_take_history, UseTakeHistory, false)
+  X(use_take_history, UseTakeHistory, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
