@@ -362,7 +362,7 @@ TEST_CASE("pruning", "take history: still correct, and it changes the search") {
 // reduction that never fires leaves the tree as it is with the switch off).
 TEST_CASE("pruning", "no-move reduction: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_no_move_reduction);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_no_move_reduction);  // on in this SPRT's test build
   SearchSwitches on;
   on.use_no_move_reduction = true;
   fx.searcher->switches = on;
