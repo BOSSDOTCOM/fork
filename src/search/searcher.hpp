@@ -138,7 +138,7 @@ struct SearchQuota {
   X(use_singular_extension, UseSingularExtension, true) \
   X(use_multi_cut, UseMultiCut, true)                   \
   X(use_negative_extension, UseNegativeExtension, false) \
-  X(use_reply_history, UseReplyHistory, false)           \
+  X(use_reply_history, UseReplyHistory, true)           \
   X(use_follow_history, UseFollowHistory, false)         \
   X(use_take_history, UseTakeHistory, false)
 
