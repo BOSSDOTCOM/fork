@@ -322,3 +322,39 @@ LLR: 3.72 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
 ```
 - Stages: 0 +9.56 +/- 11.35 (LLR 0.79), 1 +12.49 +/- 7.98 (2.17), 2 H1.
 - Adopted: the switch is on in phase-4 (the next tier-2 SPRTs build on it).
+
+### 2026-10-31 mc-vs-se (tier 2, T28: multi-cut)
+
+- Base `1e1e2e9` (branch tier2/se-on: singular extension on; bench
+  19,910,368), test `ab9d471` (branch tier2/mc: multi-cut on as well; bench
+  19,841,861), bounds [0, 3] nElo (a few Elo expected), 8+0.08, Hash 16 MB,
+  Syzygy 3-4-5, the UHO book, S-512. Stages 0-5. Result: **H1 accepted**.
+```
+Shards: 96 (done); pairs 4800, games 9600 (9600 finished, time losses 0, abnormal 0)
+Elo: 9.19 +/- 4.62, nElo: 13.85 +/- 6.95
+Ptnml(0-2): [215, 1091, 1976, 1261, 257]
+LLR: 2.95 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
+```
+- Stages: 0 +1.95 +/- 11.62 (LLR 0.05), 1 +6.62 +/- 8.06 (0.67), 2 +6.37
+  +/- 6.54 (0.96), 3 +6.57 +/- 5.63 (1.34), 4 +8.08 +/- 5.06 (2.12), 5 H1.
+- Adopted (owner, 2026-10-31: adopt on passing, with the credit note for the
+  textbook form, ORIGINALITY.md).
+
+### 2026-10-31 ne-vs-mc (tier 2, T30: negative extension)
+
+- Base `ab9d471` (singular extension and multi-cut on; bench 19,841,861),
+  test `75e98f9` (branch tier2/ne: the negative extension on as well; bench
+  14,233,520), bounds [0, 3], conditions as above. Stages 0-4. Result:
+  **H0 accepted**.
+```
+Shards: 80 (done); pairs 4000, games 8000 (8000 finished, time losses 0, abnormal 0)
+Elo: -8.73 +/- 4.98, nElo: -13.36 +/- 7.61
+Ptnml(0-2): [218, 1002, 1699, 925, 156]
+LLR: -2.96 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
+```
+- Stages: 0 -11.95 +/- 11.61, 1 -12.06 +/- 7.93, 2 -8.76 +/- 6.46, 3 -8.63
+  +/- 5.60, 4 H0.
+- Rejected: the switch stays off. Its form (every non-PV node whose TT score
+  is at or above beta, one ply less) took 28% off the bench's nodes at fixed
+  depth and lost Elo at STC; a narrower gating (KB §3.21: Fork's choice by
+  experiment) is left for later.

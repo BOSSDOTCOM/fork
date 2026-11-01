@@ -99,7 +99,10 @@ struct SearchQuota {
 // - use_multi_cut, use_negative_extension: the same test's other outcome at
 //   non-PV nodes (T28, T30): a node where another move also reaches a bar at
 //   or above beta fails high at once; otherwise a TT move whose score is at
-//   or above beta is searched one ply shallower. Off until their SPRTs.
+//   or above beta is searched one ply shallower. Multi-cut is on since its
+//   STC SPRT passed (+9.19 +/- 4.62 Elo after 9,600 games, [0, 3]); the
+//   negative extension is off: its SPRT rejected it (-8.73 +/- 4.98 Elo
+//   after 8,000 games, H0; 2026-10-31).
 // - use_reply_history: quiet moves are also ordered by the pair history
 //   after the opponent's last move, updated with the butterfly history's
 //   bonus and malus (tier 2, T10, the 1-ply table). Off until its SPRT.
@@ -133,7 +136,7 @@ struct SearchQuota {
   X(use_lmr_check_relief, UseLmrCheckRelief, true)       \
   X(use_lmr_in_check, UseLmrInCheck, true)               \
   X(use_singular_extension, UseSingularExtension, true) \
-  X(use_multi_cut, UseMultiCut, false)                   \
+  X(use_multi_cut, UseMultiCut, true)                   \
   X(use_negative_extension, UseNegativeExtension, false) \
   X(use_reply_history, UseReplyHistory, false)           \
   X(use_follow_history, UseFollowHistory, false)         \
