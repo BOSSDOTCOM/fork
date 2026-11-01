@@ -377,3 +377,22 @@ LLR: 3.99 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
   +/- 6.45 (2.77), 3 H1.
 - Adopted: the switch is on in phase-4 (the follow table's SPRT builds on
   it).
+
+### 2026-11-01 follow-vs-reply (tier 2, T10: the follow table)
+
+- Base `cf85955` (phase-4: singular extension, multi-cut and the reply table
+  on; bench 19,724,297), test `4a7cbe9` (branch tier2/follow: the follow
+  table on as well; bench 19,702,992), bounds [0, 3] nElo (set before the
+  run: the second table expected to add less than the first), conditions
+  as above. Stages 0-7. Result: **H1 accepted**.
+```
+Shards: 128 (done); pairs 6400, games 12800 (12800 finished, time losses 0, abnormal 0)
+Elo: 7.22 +/- 3.92, nElo: 11.09 +/- 6.02
+Ptnml(0-2): [274, 1454, 2714, 1648, 310]
+LLR: 3.05 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
+```
+- Stages: 0 +11.08 +/- 11.11 (LLR 0.62), 1 +6.95 +/- 7.73 (0.74), 2 +4.99
+  +/- 6.33 (0.75), 3 +6.90 +/- 5.53 (1.45), 4 +7.91 +/- 4.97 (2.11), 5
+  +7.42 +/- 4.52 (2.37), 6 +7.76 +/- 4.18 (2.91), 7 H1.
+- Adopted: the switch is on in phase-4 (the take history's SPRT builds on
+  it).

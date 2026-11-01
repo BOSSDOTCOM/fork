@@ -108,7 +108,8 @@ struct SearchQuota {
 //   bonus and malus (tier 2, T10, the 1-ply table). On since its STC SPRT
 //   passed (+11.46 +/- 5.57 Elo after 6,400 games, [0, 5]; 2026-11-01).
 // - use_follow_history: the same after the side's own previous move, two
-//   plies back (T10's 2-ply table). Off until its SPRT.
+//   plies back (T10's 2-ply table). On since its STC SPRT passed (+7.22
+//   +/- 3.92 Elo after 12,800 games, [0, 3]; 2026-11-01).
 // - use_take_history: captures are ordered by their victim and the take
 //   history instead of MVV-LVA; a capture that cuts gains the history bonus,
 //   and the captures tried before any cutoff take it as a malus (tier 2,
@@ -140,7 +141,7 @@ struct SearchQuota {
   X(use_multi_cut, UseMultiCut, true)                   \
   X(use_negative_extension, UseNegativeExtension, false) \
   X(use_reply_history, UseReplyHistory, true)            \
-  X(use_follow_history, UseFollowHistory, false)         \
+  X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, false)
 
 struct SearchSwitches {

@@ -298,6 +298,7 @@ TEST_CASE("pruning", "reply and follow tables: still correct, and each changes t
   CHECK(SearchSwitches{}.use_reply_history);  // on since its SPRT (2026-11-01)
   SearchSwitches on;
   on.use_reply_history = true;
+  on.use_follow_history = false;
   fx.searcher->switches = on;
   CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
@@ -311,11 +312,12 @@ TEST_CASE("pruning", "reply and follow tables: still correct, and each changes t
   CHECK(legal.contains(with.best));
   SearchSwitches off;
   off.use_reply_history = false;
+  off.use_follow_history = false;
   fx.searcher->switches = off;
   const SearchResult without = fx.search(kiwipete, depth);
   CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without the reply table");
   // The follow table (T10's 2-ply table), on its own and with the reply table.
-  CHECK(!SearchSwitches{}.use_follow_history);
+  CHECK(SearchSwitches{}.use_follow_history);  // on since its SPRT (2026-11-01)
   for (bool reply : {false, true}) {
     SearchSwitches follow;
     follow.use_follow_history = true;
