@@ -1316,3 +1316,55 @@ No engine repository was cloned or downloaded and no engine source file was open
 | api.github.com/repos/lucametehau/CloverEngine/pulls/{174, 265, 389} | PR bodies (#265, #389 empty) | 2026-11-02 | variants without published results |
 | https://www.chessprogramming.org/{History_Heuristic, Move_Ordering, Threat_Move, Butterfly_Boards, Attack_and_Defend_Maps, Seer, Koivisto} | CPW pages (read-only recovery) | 2026-11-02 | no threat-indexed history on any of them; Threat Move is the null-move refutation (T43) |
 | https://www.chessprogramming.org/Threat_Detection | FAILED 404 | 2026-11-02 | none |
+
+## Time management (time-management.md), 2026-11-02
+
+No engine repository was cloned or downloaded and no engine source file was opened. Commit messages came from the GitHub commit-search API (message text only; no diff or commit endpoint). PR data came from the GitHub REST API `pulls/{n}` endpoint (title, author, dates, merge SHA, body). Fishtest run records came from the fishtest JSON API (run arguments and pentanomial counts only). One talkchess post (Grant, 2017-12-23) contains a short code listing: only its prose was used, and nothing from the listing was copied or kept. Downloaded pages and PDFs were kept in a temporary folder outside the repository and deleted before reporting. Engine constants stated in messages were deliberately not recorded. Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| https://www.chessprogramming.org/Time_Management | CPW (read-only recovery) | 2026-11-02 | time-control types, soft and hard bound, considerations, premature termination, historical techniques, publication and forum list |
+| https://www.chessprogramming.org/Pondering | CPW | 2026-11-02 | pondering approaches (§4.10) |
+| https://www.chessprogramming.org/Iterative_Deepening | CPW | 2026-11-02 | ID as a TM framework; extra time on a severe score drop |
+| https://www.chessprogramming.org/Search_Progression | CPW | 2026-11-02 | hard and soft bounds; node-based scaling, best-move and eval stability as the usual progression |
+| https://www.chessprogramming.org/Move_Overhead and https://www.chessprogramming.org/Time_Control | CPW | 2026-11-02 | FAILED (404); none |
+| https://tcec-chess.com/tournament.json and https://tcec-chess.com/live.json | TCEC JSON | 2026-11-02 | current event (Swiss 10 Tiebreak 1) and TimeControl 1800+3 |
+| https://wiki.chessdom.org/Rules | TCEC rules (all events; curl with a browser User-Agent) | 2026-11-02 | Leagues time controls (30'+3", 60'+6", 120'+12"), time losses not replayed, lag scenarios |
+| https://wiki.chessdom.org/TCEC_Swiss_rules | Swiss rules | 2026-11-02 | 30'+3", time loss = loss (5.b), lag scenarios (7.b) |
+| https://wiki.chessdom.org/TCEC_Swiss_10 | Swiss 10 page | 2026-11-02 | testing time losses and MoveOverhead changes, the "one second margin" note |
+| https://wiki.chessdom.org/TCEC_Leagues_Season_30 | Leagues S30 overview | 2026-11-02 | navigation; questionnaire note |
+| https://wiki.chessdom.org/Further_information | wiki | 2026-11-02 | FAILED (404); the page is TCEC_Season_Further_information |
+| https://wiki.chessdom.org/TCEC_Season_Further_information | TCEC further information | 2026-11-02 | ponder off (one computer), options at default, DTZ on HDD, server hardware |
+| http://facta.junis.ni.ac.rs/acar/acar200901/acar2009-07.html and .../acar2009-07.pdf | Vučković and Šolak (2009), Time Management Procedure in Computer Chess, Facta Universitatis ACR 8(1):75-87 (abstract page and full PDF) | 2026-11-02 | moves-left models, the recapture case, the replacement-probability rule, Achilles' long-TC observation |
+| https://www.ijcai.org/Proceedings/93-2/Papers/020.pdf | Markovitch and Sella (1993), Learning of Resource Allocation Strategies for Game Playing, IJCAI 1993 (full PDF) | 2026-11-02 | static, semi-dynamic and dynamic strategies; learned allocation in checkers |
+| http://remi.coulom.free.fr/Publications/TimeManagement.pdf | Huang, Coulom and Lin (TAAI 2010), Time Management for MCTS Applied to the Game of Go (author PDF) | 2026-11-02 | unstable-evaluation and think-longer-when-behind heuristics; pondering variants |
+| https://dke.maastrichtuniversity.nl/m.winands/documents/time_management_for_monte_carlo_tree_search.pdf | Baier and Winands (2016), Time Management for MCTS, IEEE TCIAIG 8(3) (author draft, revised 24 Oct 2015) | 2026-11-02 | STOP strategy, DISTRIBUTION control players (time-shift effect), summaries of Donninger 1994 and Kocsis 2000 |
+| http://zaphod.aml.sztaki.hu/papers/kocsis-CG00.ps | Kocsis et al. (CG 2000) postscript | 2026-11-02 | FAILED (no response); not used |
+| https://talkchess.com/viewtopic.php?t=47242 | Hyatt, "panic time" and "easy moves" (CCC, 2013-02-16) and replies | 2026-11-02 | fail-low extension history, Hsu's panic time, node-count easy and hard moves, TT distortion |
+| https://talkchess.com/viewtopic.php?t=66099 | Grant, Time Management translating to SMP (CCC, 2017-12-23) and replies (contains a code listing; prose only used) | 2026-11-02 | next-iteration prediction and its SMP problem; Hyatt's objection |
+| https://talkchess.com/viewtopic.php?t=54939 | Laskos, Elo gain and optimal time management (CCC, 2015-01-11) | 2026-11-02 | the value of a node doubling falls for later starting positions |
+| https://talkchess.com/viewtopic.php?t=62586 | Althoff, On time management (CCC, 2016-12-24) and replies (Muller) | 2026-11-02 | CT800 shortcuts, the rule against starting an iteration late |
+| https://www.shredderchess.com/download/div/uci.zip | UCI spec (sha256 966de351..., engine-interface.txt sha256 cda40659..., unchanged since 2026-10-23) | 2026-11-02 | `go` semantics for §8 |
+| https://raw.githubusercontent.com/Disservin/fastchess/v1.8.2-alpha/man.md | fastchess man page at the pinned tag | 2026-11-02 | per-engine `tc=`, `timemargin`, `-show-latency`, PGN timeleft and latency |
+| https://github.com/AndyGrant/OpenBench/wiki and .../wiki/SPRT-and-Fixed%E2%80%90Game-Workloads | OpenBench wiki | 2026-11-02 | time formats; the 250 ms time-margin buffer |
+| https://lczero.org/play/flags/ | Lc0 flags page (last updated 2020-04-19) | 2026-11-02 | SmartPruningFactor, MoveOverheadMs, TimeManager descriptions |
+| api.github.com/repos/{official-stockfish/Stockfish, AndyGrant/Ethereal, jhonnold/berserk, TerjeKir/weiss, Luecx/Koivisto, cosmobobak/viridithas, Ciekce/Stormphrax, codedeliveryservice/Reckless, Yoshie2000/PlentyChess, KierenP/Halogen, PGG106/Alexandria, LeelaChessZero/lc0, Disservin/fastchess, AndyGrant/OpenBench} | API repo metadata | 2026-11-02 | licence (spdx_id) of each project cited |
+| api.github.com/search/commits?q=repo:official-stockfish/Stockfish+{time management, timeman, nodes effort, bestMoveChanges, fallingEval, move overhead, single legal move, time odds, nodestime, increment, ponderhit, time loss, draw PV, think, tablebase time} | commit-message searches (leads only) | 2026-11-02 | finding the Stockfish commits cited |
+| api.github.com/search/commits?q=repo:official-stockfish/Stockfish+hash:{5ca4bfe7, 19a02f44, 944bee71, c7875096, 82908e0f, c9538625, fe7b9b14, 8681d3c2, 0f01a516, a615efb1, 07a2619b, 536d692a, cf3dbcb5, 2e02dd79, 285a79ea, 2b037231, 18f2b12c, 04a32066, 208c53df, c6ce612f, 69204f07, 20484ccd, 58d3ee61, 4b88bea4, d71adc5b, bf2c7306, 1982fe25, 83c9e591, 21926ce2, fe60caba, 4b71d8e2, f5940894, d34bb889, 9be2977d, b19ad497, acc47e8b, a84e3ac2, 926f2150, 4b297976, 486c8175, 01d97521, 4d65257b, 23df8290, 46ac9a7e, e50af36a, 108f0da4} | full Stockfish commit messages | 2026-11-02 | §4 evidence and lineage |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/7113 | PR body | 2026-11-02 | the clock-difference term (no formula given) |
+| https://tests.stockfishchess.org/api/get_run/{65e4ca73416ecd92c162a57d, 65e40599f2ef6c733362b03b, 6a8ade7a08c0f6a39c9e79cc, 5ebc34857dd5693aad4e6877} | fishtest run records (JSON) | 2026-11-02 | "TCEC style" TC 10+0.01, VLTC SPSA at 180+1.8, the separate tc and new_tc fields |
+| api.github.com/repos/official-stockfish/fishtest/issues/910 (and an issue-title search for "time odds") | fishtest issue | 2026-11-02 | the TC handicap proposal |
+| api.github.com/search/issues?q=repo:{R}+is:pr+{time, tm, instant, tablebase}+in:title for Koivisto, Ethereal, Berserk, Weiss, Viridithas, Stormphrax, Reckless, PlentyChess, Halogen, Alexandria, Obsidian | PR title searches (leads only) | 2026-11-02 | finding PRs; Obsidian had none |
+| api.github.com/search/commits?q=repo:{Luecx/Koivisto, AndyGrant/Ethereal}+{time, nodes, tm} | commit-message searches (leads) | 2026-11-02 | Koivisto's node-TM origin not found; Ethereal TM commits |
+| api.github.com/search/commits?q=repo:AndyGrant/Ethereal+hash:{60f4d5c5, 083c7286, 41e10402, 9b29aaa0, 8a638e7e} and repo:Luecx/Koivisto+hash:{99034aa4, 690719e6, b65dd64e} | full commit messages | 2026-11-02 | node share (credit to Koivisto), the estimatedUsage removal, score-drop scaling |
+| api.github.com/repos/Luecx/Koivisto/pulls/{160, 173, 180} | PR bodies | 2026-11-02 | increment weight |
+| api.github.com/repos/AndyGrant/Ethereal/pulls/{64, 67, 147, 148} | PR bodies | 2026-11-02 | score jumps, MoveOverhead, stability |
+| api.github.com/repos/jhonnold/berserk/pulls/{412, 379, 244, 251, 101, 335, 327, 435, 228, 213} | PR bodies | 2026-11-02 | stability, window expansions, score difference, max time between depths, cyclic fix, instant moves |
+| api.github.com/repos/TerjeKir/weiss/pulls/{752, 502, 727, 297, 309} | PR bodies | 2026-11-02 | effort, forced moves, nodes time, uncertainty, finishing iterations |
+| api.github.com/repos/cosmobobak/viridithas/pulls/{54, 31, 131, 137, 400, 359, 360} | PR bodies (#360 empty, not merged) | 2026-11-02 | subtree-size TM, stability, tunable TM, clock caps |
+| api.github.com/repos/Ciekce/Stormphrax/pulls/{187, 315, 137} | PR bodies | 2026-11-02 | score trend, decisive positions, node TM |
+| api.github.com/repos/codedeliveryservice/Reckless/pulls/{1, 142, 143, 144, 145, 375, 390, 565, 667, 573, 392, 797, 707} | PR bodies | 2026-11-02 | node TM, stability, score trend, move number, recaptures, time checks with threads |
+| api.github.com/repos/Yoshie2000/PlentyChess/pulls/{108, 104, 106, 422, 358} | PR bodies | 2026-11-02 | node fraction, stability, eval difference, corrplexity, VLTC tune |
+| api.github.com/repos/KierenP/Halogen/pulls/{638, 757, 761, 132, 377, 294} | PR bodies | 2026-11-02 | node TM, stability, score change, time panic, fail-low (not merged) |
+| api.github.com/repos/PGG106/Alexandria/pulls/{167, 281, 438, 618, 562} | PR bodies (#281, #438, #562 without results) | 2026-11-02 | node share, stability, score stability |
+| Fork's own files on branch phase-4: docs/DESIGN.md (Phase 5 bullet, Deliverable 8, Search constants), src/search/time_budget.cpp, src/search/searcher.cpp, src/search/searcher.hpp | Fork's design and code | 2026-11-02 | §1 baseline and §3 arithmetic |

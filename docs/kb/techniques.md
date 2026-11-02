@@ -428,6 +428,11 @@ takes precedence over the short entries below for Phase 3 planning.
 
 ## 6. Time management (Phase 5)
 
+**Superseded in detail by [time-management.md](time-management.md)**
+(2026-11-02): the clean-room Phase 5 entry with sources, evidence and
+Fork's ranked order. The summary below is the 2026-10-23 first pass; its
+numeric baseline is CPW's generic illustration, not a recommendation.
+
 - Baseline: time/20 + increment/2 per move is competitive. Soft limit
   checked when starting a new iteration; hard limit checked every N nodes.
 - Scale the soft limit by best-move stability (how many iterations it has
