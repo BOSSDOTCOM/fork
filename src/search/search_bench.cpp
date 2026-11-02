@@ -181,6 +181,9 @@ SearchBenchResult run_search_bench() {
                static_cast<unsigned long long>(c.negative_extensions));
   std::fprintf(stderr, "stats: nodes reduced for having no TT move %llu\n",
                static_cast<unsigned long long>(c.no_move_reductions));
+  std::fprintf(stderr, "stats: capture probe: %llu captures searched, %llu nodes cut\n",
+               static_cast<unsigned long long>(c.capture_probes),
+               static_cast<unsigned long long>(c.capture_probe_cuts));
   std::fprintf(stderr, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
                static_cast<unsigned long long>(c.singular_tests),
                static_cast<unsigned long long>(c.singular_extended),

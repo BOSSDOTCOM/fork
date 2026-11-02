@@ -346,5 +346,18 @@ for remaining, rows in DANGER.items():
 check([m.uci() for m in board_of('rnb1kbnr/pppp1ppp/8/4p3/7q/5P2/PPPPP1PP/RNBQKBNR w KQkq - 1 3').legal_moves] == ['g2g3'],
       'forced move: g2g3 only')
 
+# tests/test_pruning.cpp, the capture probe (ProbCut, T31): legal, White not
+# in check, and the rook's capture of the queen is legal with no black piece
+# defending d5.
+b = board_of('4k3/pp6/8/3q4/8/8/PP1R4/4K3 w - - 0 1')
+check(not b.is_check() and chess.Move.from_uci('d2d5') in b.legal_moves and b.is_capture(chess.Move.from_uci('d2d5'))
+      and not b.is_attacked_by(chess.BLACK, chess.D5), 'capture probe position: Rxd5 takes the undefended queen')
+
+# tests/test_ordering.cpp, the threat buckets: in kiwipete (tests/suite.hpp's
+# perft position 2) c3b1 is a legal quiet move whose from-square Black attacks.
+b = board_of('r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1')
+check(chess.Move.from_uci('c3b1') in b.legal_moves and not b.is_capture(chess.Move.from_uci('c3b1'))
+      and b.is_attacked_by(chess.BLACK, chess.C3), 'threat buckets: c3b1 quiet, legal, from an attacked square')
+
 print(f'{failures} failures')
 sys.exit(1 if failures else 0)

@@ -128,6 +128,11 @@ struct SearchQuota {
 //   to-square before the move (tier 2, T56's threat-indexed history, "any
 //   enemy attack"; quiet_history.hpp). Off: every move uses bucket 0, the
 //   table as before. Off until SPRTed.
+// - use_capture_probe: ProbCut (tier 2, T31): at a non-PV node at least
+//   CaptureProbeMinDepth deep, a capture that holds CaptureProbeMargin above
+//   beta in a quiescence search and then in a search CaptureProbeReduction
+//   plies shallower than a normal child makes the node fail high. Off until
+//   measured and SPRTed.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -159,7 +164,8 @@ struct SearchQuota {
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_rising_rfp, UseRisingRfp, false)                 \
-  X(use_threat_buckets, UseThreatBuckets, false)
+  X(use_threat_buckets, UseThreatBuckets, false)         \
+  X(use_capture_probe, UseCaptureProbe, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -325,6 +331,8 @@ struct SearchCounters {
   std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
   std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
   std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
+  std::uint64_t capture_probes = 0;       // captures the capture probe searched (T31)
+  std::uint64_t capture_probe_cuts = 0;   // ... nodes it made fail high
 };
 
 class Searcher {

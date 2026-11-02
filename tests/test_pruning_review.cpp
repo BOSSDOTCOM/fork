@@ -52,6 +52,7 @@ SearchSwitches no_pruning() {
   // S512r2 found two real mates in 7 plies (one confirmed by the lichess
   // tablebase, DTM 7) that this search missed at depth 8 (2026-11-01).
   s.use_multi_cut = s.use_negative_extension = s.use_no_move_reduction = false;
+  s.use_capture_probe = false;  // ProbCut prunes a node too (off by default; T31)
   return s;
 }
 
@@ -84,20 +85,28 @@ TEST_CASE("pruning", "every mate score the pruned search reports is confirmed by
     generate<GenMode::Legal>(pos, list);
     if (list.size() == 0) continue;
     const std::string fen = pos.fen();
-    fx.searcher->switches = SearchSwitches{};
-    const int pruned = fx.search(fen, Optimized ? 9 : 6).score;
-    if (!is_mate_score(pruned)) continue;
-    ++mates;
-    const int k = pruned > 0 ? MateScore - pruned : MateScore + pruned;
-    if (k + 1 > (Optimized ? 9 : 6)) continue;  // keep the exact search affordable
-    fx.searcher->switches = no_pruning();
-    const int exact = fx.search(fen, k + 1).score;
-    if (pruned > 0)
-      CHECK_MSG(exact >= pruned,
-                fen << ": pruned " << pruned << ", exact at depth " << k + 1 << " " << exact);
-    if (pruned < 0)
-      CHECK_MSG(exact <= pruned,
-                fen << ": pruned " << pruned << ", exact at depth " << k + 1 << " " << exact);
+    // The defaults, then with the switches built off for measurement on as
+    // well (2026-11-02: the rising-eval RFP margin, the threat buckets and
+    // ProbCut, which prunes whole nodes).
+    for (bool off_switches_on : {false, true}) {
+      SearchSwitches pruning;
+      if (off_switches_on)
+        pruning.use_rising_rfp = pruning.use_threat_buckets = pruning.use_capture_probe = true;
+      fx.searcher->switches = pruning;
+      const int pruned = fx.search(fen, Optimized ? 9 : 6).score;
+      if (!is_mate_score(pruned)) continue;
+      ++mates;
+      const int k = pruned > 0 ? MateScore - pruned : MateScore + pruned;
+      if (k + 1 > (Optimized ? 9 : 6)) continue;  // keep the exact search affordable
+      fx.searcher->switches = no_pruning();
+      const int exact = fx.search(fen, k + 1).score;
+      if (pruned > 0)
+        CHECK_MSG(exact >= pruned, fen << ": pruned " << pruned << " (switches built off on: "
+                                       << off_switches_on << "), exact at depth " << k + 1 << " " << exact);
+      if (pruned < 0)
+        CHECK_MSG(exact <= pruned, fen << ": pruned " << pruned << " (switches built off on: "
+                                       << off_switches_on << "), exact at depth " << k + 1 << " " << exact);
+    }
   }
   CHECK(mates > 0);
 }
@@ -159,7 +168,7 @@ TEST_CASE("pruning", "tier 2, all switches on: stopped searches leave no state b
   SearchSwitches s;
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
-  s.use_rising_rfp = s.use_threat_buckets = true;
+  s.use_rising_rfp = s.use_threat_buckets = s.use_capture_probe = true;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
