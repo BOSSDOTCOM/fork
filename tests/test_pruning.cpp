@@ -3,6 +3,7 @@
 // Tier 1 pruning and reductions (DESIGN.md §5.2, deliverable 6).
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -37,6 +38,21 @@ struct PruningFixture {
     SearchQuota limits;
     limits.depth = depth;
     return searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+  }
+  // Node counts of three searches with the given switches (tests/suite.hpp's
+  // perft positions 2 and 5, and the start position), for the fault checks
+  // that a technique changes the search: one position alone can give the
+  // same tree with and without a technique at a debug build's shallow
+  // depth (S512r2 did at kiwipete, 2026-11-01), three together did not.
+  std::vector<std::uint64_t> tree_sizes(const SearchSwitches& switches, int depth) {
+    static constexpr std::string_view Fens[] = {
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+    searcher->switches = switches;
+    std::vector<std::uint64_t> nodes;
+    for (std::string_view fen : Fens) nodes.push_back(search(fen, depth).nodes);
+    return nodes;
   }
 };
 
@@ -304,18 +320,17 @@ TEST_CASE("pruning", "reply and follow tables: still correct, and each changes t
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
   const int depth = Optimized ? 10 : 7;
-  const SearchResult with = fx.search(kiwipete, depth);
   Position pos;
   CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
-  CHECK(legal.contains(with.best));
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
   SearchSwitches off;
   off.use_reply_history = false;
   off.use_follow_history = false;
-  fx.searcher->switches = off;
-  const SearchResult without = fx.search(kiwipete, depth);
-  CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without the reply table");
+  const std::vector<std::uint64_t> with = fx.tree_sizes(on, depth);
+  const std::vector<std::uint64_t> without = fx.tree_sizes(off, depth);
+  CHECK_MSG(with != without, "the reply table left all three trees unchanged");
   // The follow table (T10's 2-ply table), on its own and with the reply table.
   CHECK(SearchSwitches{}.use_follow_history);  // on since its SPRT (2026-11-01)
   for (bool reply : {false, true}) {
@@ -324,10 +339,10 @@ TEST_CASE("pruning", "reply and follow tables: still correct, and each changes t
     follow.use_reply_history = reply;
     fx.searcher->switches = follow;
     CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
-    const SearchResult r = fx.search(kiwipete, depth);
-    CHECK(legal.contains(r.best));
-    CHECK_MSG(r.nodes != (reply ? with.nodes : without.nodes),
-              "nodes " << r.nodes << " with the follow table (reply table " << (reply ? "on" : "off") << ")");
+    CHECK(legal.contains(fx.search(kiwipete, depth).best));
+    CHECK_MSG(
+        fx.tree_sizes(follow, depth) != (reply ? with : without),
+        "the follow table left all three trees unchanged (reply table " << (reply ? "on" : "off") << ")");
   }
 }
 
@@ -344,17 +359,15 @@ TEST_CASE("pruning", "take history: still correct, and it changes the search") {
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
   const int depth = Optimized ? 10 : 7;
-  const SearchResult with = fx.search(kiwipete, depth);
   Position pos;
   CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
-  CHECK(legal.contains(with.best));
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
   SearchSwitches off;
   off.use_take_history = false;
-  fx.searcher->switches = off;
-  const SearchResult without = fx.search(kiwipete, depth);
-  CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without the take history");
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the take history left all three trees unchanged");
 }
 
 // Internal iterative reduction (tier 2, T26): with it on, mates are still
@@ -370,17 +383,15 @@ TEST_CASE("pruning", "no-move reduction: still correct, and it changes the searc
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
   const int depth = Optimized ? 12 : 9;
-  const SearchResult with = fx.search(kiwipete, depth);
   Position pos;
   CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
-  CHECK(legal.contains(with.best));
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
   SearchSwitches off;
   off.use_no_move_reduction = false;
-  fx.searcher->switches = off;
-  const SearchResult without = fx.search(kiwipete, depth);
-  CHECK_MSG(with.nodes != without.nodes, "nodes " << with.nodes << " with and without the no-move reduction");
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the no-move reduction left all three trees unchanged");
 }
 
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
