@@ -306,8 +306,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // selector before the node's own move selection starts.
   if (switches.use_capture_probe && can_prune_node && depth >= CaptureProbeMinDepth && !is_tb_or_mate(beta)) {
     const int bar = beta + CaptureProbeMargin;
-    const int probe_depth = depth - 1 - CaptureProbeReduction;
-    const bool proven_below = tt_hit && hit.depth >= probe_depth + 1 &&
+    const int probe_plies = depth - 1 - CaptureProbeReduction;
+    const bool proven_below = tt_hit && hit.depth >= probe_plies + 1 &&
                               (hit.bound == TtBound::Upper || hit.bound == TtBound::Exact) &&
                               score_from_tt(hit.score, ply) < bar;
     if (!is_tb_or_mate(bar) && !proven_below) {
@@ -321,13 +321,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         play(ply, m);
         // Depth 0 is the quiescence search (or the static eval with it off).
         int score = -negamax<false>(-bar, -bar + 1, 0, ply + 1);
-        if (!stopped_ && score >= bar) score = -negamax<false>(-bar, -bar + 1, probe_depth, ply + 1);
+        if (!stopped_ && score >= bar) score = -negamax<false>(-bar, -bar + 1, probe_plies, ply + 1);
         pos.unmake(m);
         if (stopped_) return 0;
         if (score >= bar) {
           FORK_STAT(++counters.capture_probe_cuts);
           if (switches.use_tt)
-            tt_.deposit(key, m, score_to_tt(score, ply), f.static_eval, probe_depth + 1, TtBound::Lower,
+            tt_.deposit(key, m, score_to_tt(score, ply), f.static_eval, probe_plies + 1, TtBound::Lower,
                         false);
           return score;
         }
