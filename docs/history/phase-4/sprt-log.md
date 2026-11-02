@@ -475,3 +475,27 @@ LLR: 15.30 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
   were stages 2 to 7 of the cancelled first IIR SPRT, whose local driver
   kept dispatching against the replaced test commit 988843c; no games were
   played, and the driver was stopped. None of them is part of any result.
+
+### 2026-11-02 r2afs-vs-s512r2 (bake-off round 2: AF-S, promotion test)
+
+- Base `9814ad6` (phase-4: S512r2, the default; bench 17,904,298), test
+  `5e72ab1` (branch bake/r2afs: AF-S, round 2 seed 1, S = 89 matched to
+  S512r2; bench 25,009,605), bounds [0, 5] nElo, 8+0.08, Hash 16 MB,
+  Syzygy 3-4-5, GitHub shards; entered on its fixed-node screen (+10.43 ±
+  10.36, above).
+- Stage 0: run 41399769054. Result: **H0 accepted** after stage 0:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: -55.85 +/- 11.42, nElo: -84.71 +/- 17.02
+Ptnml(0-2): [80, 253, 326, 124, 17]
+LLR: -5.78 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
+```
+- Not promoted. Under the round 2 candidate rules (DESIGN.md §5.4, set
+  2026-11-02 before this result): an **LTC / TCEC-conditions candidate**
+  (it beat S512r2 at fixed nodes and failed its STC SPRT), and a **retest
+  candidate** for after the post-network search retune (its fixed-node
+  interval, −0.07 to +20.79, includes 0; its STC interval, −67.27 to
+  −44.43, does not). At equal nodes it was ahead; at equal time, about 0.72
+  of S512r2's speed (round 1's bench nps, 0.56 against 0.78 of B0's), it
+  lost by about 56 Elo.
+
