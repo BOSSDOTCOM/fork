@@ -32,6 +32,7 @@
 #include <optional>
 
 #include "core/position.hpp"
+#include "search/eval_drift.hpp"
 #include "search/move_selector.hpp"
 #include "search/quiet_history.hpp"
 #include "search/score_bounds.hpp"
@@ -119,6 +120,10 @@ struct SearchQuota {
 //   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
 //   internal iterative reduction). On since its STC SPRT passed (+21.45
 //   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
+// - use_pawn_drift: the eval the search estimates with (pruning, the
+//   quiescence stand-pat) is the raw eval plus the pawn drift table's
+//   learned drift for its pawn structure (tier 2, T32; eval_drift.hpp). Off
+//   until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -148,7 +153,8 @@ struct SearchQuota {
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
-  X(use_no_move_reduction, UseNoMoveReduction, true)
+  X(use_no_move_reduction, UseNoMoveReduction, true)     \
+  X(use_pawn_drift, UsePawnDrift, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -313,6 +319,21 @@ struct SearchCounters {
   std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
   std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
   std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
+  // The pawn drift measurement (T32; DESIGN.md, "Search constants"), at every
+  // node where the table learns (whether or not use_pawn_drift applies the
+  // drift): the samples, and the summed error of the raw and of the drifted
+  // eval against the search's result (for a bound, only the part the bound
+  // proves). Exact results' raw errors, in 10 cp bins (the last bin 1000 cp
+  // and more). Learns whose entry was last written by another structure, per
+  // slot count 2^10 to 2^16 (DriftCheckLow + i bits).
+  static constexpr int DriftErrorBins = 101;
+  static constexpr int DriftCheckLow = 10;
+  static constexpr int DriftCheckSizes = 7;
+  std::uint64_t drift_samples = 0;
+  std::uint64_t drift_error_raw = 0;
+  std::uint64_t drift_error_drifted = 0;
+  std::uint64_t drift_error_counts[DriftErrorBins] = {};
+  std::uint64_t drift_foreign[DriftCheckSizes] = {};
 };
 
 class Searcher {
@@ -337,6 +358,7 @@ class Searcher {
     history_.clear();
     for (PairHistory& table : pair_history_) table.clear();
     take_history_.clear();
+    pawn_drift_.clear();
   }
 
   // Tests only: the root move that failed high in the iteration the last
@@ -364,6 +386,13 @@ class Searcher {
   void play_null(int ply);
   int eval_at(int ply);
 
+  // The static estimate from the raw eval (out of check): plus the pawn
+  // drift when use_pawn_drift, kept out of the tablebase and mate range.
+  int drifted(int raw) const;
+#ifdef FORK_SEARCH_STATS
+  void count_drift(int best, int raw, int estimate, TtBound bound, std::uint32_t structure);
+#endif
+
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
   void record_cutoff(const PlyFrame& f, Move m, int depth);
@@ -377,6 +406,7 @@ class Searcher {
   QuietHistory history_;
   PairHistory pair_history_[2];  // tier 2, T10: the reply and follow tables (ReplyTable, FollowTable)
   TakeHistory take_history_;     // tier 2, T11
+  EvalDrift pawn_drift_;         // tier 2, T32
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;
@@ -414,6 +444,10 @@ class Searcher {
   Move last_reported_ = NoMove;
 #ifdef FORK_SEARCH_STATS
   std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
+  bool drift_report_ = false;         // FORK_DRIFT_REPORT: print the drift counters after each search
+  // The structure that last wrote each slot, per checked slot count (the
+  // collision counts above); sized for the largest, 2^16.
+  std::uint32_t drift_owner_[SearchCounters::DriftCheckSizes][1 << (SearchCounters::DriftCheckLow + 6)] = {};
 #endif
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;

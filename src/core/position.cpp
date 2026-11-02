@@ -91,7 +91,7 @@ void Position::remove(Square s) {
 
 void Position::toggle_keys(State& s, Piece p, Square sq) const {
   s.key ^= zobrist::piece_square[p][sq];
-  if (kind_of(p) == Pawn) s.pawn_structure_key ^= zobrist::piece_square[p][sq];
+  if (kind_of(p) == Pawn) s.pawn_structure_key ^= static_cast<std::uint32_t>(zobrist::piece_square[p][sq] >> 32);
 }
 
 Bitboard Position::attackers_to(Square s, Bitboard occ) const {

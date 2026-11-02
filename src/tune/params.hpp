@@ -28,7 +28,7 @@
 // X(name, default, lowest, highest, step), in groups: aspiration and the
 // iteration rule; reverse futility and the null move; endgame tables; late
 // move reductions and pruning; futility and SEE pruning; the singular test;
-// history; the TT
+// internal iterative reduction; the pawn drift table (T32); history; the TT
 // victim policy; the time budget.
 #define FORK_SEARCH_PARAMS(X)             \
   X(AspirationMinDepth, 5, 2, 10, 1)      \
@@ -57,6 +57,9 @@
   X(SingularEntrySlack, 3, 0, 6, 1)       \
   X(SingularMarginPerPly, 6, 3, 12, 1)    \
   X(NoMoveReduceMinDepth, 8, 2, 10, 1)    \
+  X(DriftWeightCap, 16, 8, 32, 1)         \
+  X(DriftWeightTotal, 64, 32, 128, 5)     \
+  X(DriftLimit, 250, 125, 500, 19)        \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 8, 1)              \

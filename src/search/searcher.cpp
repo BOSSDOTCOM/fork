@@ -20,6 +20,7 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #ifdef FORK_SEARCH_STATS
   if (const char* every = std::getenv("FORK_SINGULAR_PROBE"))
     singular_probe_ = std::strtoull(every, nullptr, 10);
+  drift_report_ = std::getenv("FORK_DRIFT_REPORT") != nullptr;
 #endif
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
@@ -98,6 +99,38 @@ int fifty_move_score(const Position& pos, bool in_check, int ply) {
 }
 
 }  // namespace
+
+int Searcher::drifted(int raw) const {
+  if (!switches.use_pawn_drift) return raw;
+  const Position& pos = *pos_;
+  constexpr int Bound = TbWinScore - MaxPly - 1;  // the largest score is_tb_or_mate does not flag
+  return std::clamp(raw + pawn_drift_.offset(pos.side_to_move(), pos.pawn_structure_key()), -Bound, Bound);
+}
+
+#ifdef FORK_SEARCH_STATS
+// The drift measurement's counters at a learning node (SearchCounters): the
+// error each estimate shows against the result, one-sided for a bound, and
+// whether the slot was last written by another structure.
+void Searcher::count_drift(int best, int raw, int estimate, TtBound bound, std::uint32_t structure) {
+  const auto error = [&](int e) {
+    const int gap = best - e;
+    return static_cast<std::uint64_t>(bound == TtBound::Exact   ? std::abs(gap)
+                                      : bound == TtBound::Lower ? std::max(gap, 0)
+                                                                : std::max(-gap, 0));
+  };
+  SearchCounters& c = counters;
+  ++c.drift_samples;
+  c.drift_error_raw += error(raw);
+  c.drift_error_drifted += error(estimate);
+  if (bound == TtBound::Exact)
+    ++c.drift_error_counts[std::min(std::abs(best - raw) / 10, SearchCounters::DriftErrorBins - 1)];
+  for (int i = 0; i < SearchCounters::DriftCheckSizes; ++i) {
+    std::uint32_t& owner = drift_owner_[i][structure >> (32 - SearchCounters::DriftCheckLow - i)];
+    c.drift_foreign[i] += owner != 0 && owner != structure;
+    owner = structure;
+  }
+}
+#endif
 
 std::int64_t Searcher::elapsed_ms() const {
   return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_)
@@ -230,12 +263,15 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   }
 
   f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
+  // The static estimate: the raw eval plus the pawn drift (tier 2, T32),
+  // kept out of the tablebase and mate range. The TT keeps the raw eval.
+  const int estimate = in_check ? ScoreNone : drifted(f.static_eval);
   // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
   // score from a real search corrects the static estimate in the direction
   // its bound proves (a lower bound above it raises it, an upper bound below
   // it lowers it, an exact score replaces it). Mate and tablebase scores are
-  // left out; the TT keeps the raw static eval.
-  int prune_eval = f.static_eval;
+  // left out.
+  int prune_eval = estimate;
   if (switches.use_tt_eval_refine && tt_hit && !in_check) {
     const int s = score_from_tt(hit.score, ply);
     if (!is_tb_or_mate(s) &&
@@ -528,10 +564,22 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (moves_seen == 0) return withheld ? alpha : in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
   best = std::clamp(best, table_floor, table_ceiling);
-  if (switches.use_tt && !withheld) {
-    const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
-    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
+  const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
+  // The pawn drift table learns from this node (tier 2, T32): out of check,
+  // not in a singular test's search, after a quiet best move or none (a
+  // capture's gain says little about the structure), when the result is no
+  // mate or tablebase score and its bound shows the estimate erred the way
+  // the error points (a lower bound only proves the estimate too low, an
+  // upper bound only too high).
+  if (!in_check && !withheld && (best_move.is_none() || (!best_move.is_capture() && !best_move.is_promotion())) &&
+      !is_tb_or_mate(best) &&
+      (bound == TtBound::Exact || (bound == TtBound::Lower && best > estimate) ||
+       (bound == TtBound::Upper && best < estimate))) {
+    FORK_STAT(count_drift(best, f.static_eval, estimate, bound, pos.pawn_structure_key()));
+    if (switches.use_pawn_drift)
+      pawn_drift_.learn(pos.side_to_move(), pos.pawn_structure_key(), best - f.static_eval, depth);
   }
+  if (switches.use_tt && !withheld) tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
   return best;
 }
 
@@ -568,7 +616,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     f.static_eval = ScoreNone;
   } else {
     f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
-    best = f.static_eval;
+    best = drifted(f.static_eval);  // the stand-pat is the static estimate (T32)
     if (best >= beta) {
       if (switches.use_tt)
         tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);
@@ -828,6 +876,20 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     if (timed && limits.hard_ms >= 0 && elapsed_ms() * IterationGrowthThirds / 3 > limits.hard_ms) break;
   }
   result.nodes = nodes_;
+#ifdef FORK_SEARCH_STATS
+  // The drift measurement (tools/drift_measure.py): the counters so far, since
+  // this Searcher was made (they are never reset), one line per search.
+  if (drift_report_) {
+    const SearchCounters& c = counters;
+    std::fprintf(stderr, "drift_report %llu %llu %llu |", static_cast<unsigned long long>(c.drift_samples),
+                 static_cast<unsigned long long>(c.drift_error_raw),
+                 static_cast<unsigned long long>(c.drift_error_drifted));
+    for (std::uint64_t n : c.drift_error_counts) std::fprintf(stderr, " %llu", static_cast<unsigned long long>(n));
+    std::fprintf(stderr, " |");
+    for (std::uint64_t n : c.drift_foreign) std::fprintf(stderr, " %llu", static_cast<unsigned long long>(n));
+    std::fprintf(stderr, "\n");
+  }
+#endif
   return result;
 }
 

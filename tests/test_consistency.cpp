@@ -51,9 +51,10 @@ void check_state(const Position& pos, const std::string& fen) {
   const State fresh = pos.compute_state();
   CHECK_MSG(s.key == fresh.key, "key, " << fen);
   // The pawn key from the pawn bitboards alone, not through the key code.
-  Key pawns = 0;
+  std::uint32_t pawns = 0;
   for (Color c : {White, Black})
-    for (Bitboard b = pos.pieces(c, Pawn); b;) pawns ^= zobrist::piece_square[piece_of(c, Pawn)][pop_lsb(b)];
+    for (Bitboard b = pos.pieces(c, Pawn); b;)
+      pawns ^= static_cast<std::uint32_t>(zobrist::piece_square[piece_of(c, Pawn)][pop_lsb(b)] >> 32);
   CHECK_MSG(pos.pawn_structure_key() == pawns, "pawn key, " << fen);
   CHECK_MSG(s.pinned == fresh.pinned || s.pinned == ~Bitboard{0}, "pinned before reading, " << fen);
   CHECK_MSG(s.discoverers == fresh.discoverers || s.discoverers == ~Bitboard{0},

@@ -161,17 +161,17 @@ TEST_CASE("pawn_structure_key", "pawns alone decide it") {
     return p.pawn_structure_key();
   };
   // Same pawns, other pieces, side, castling and ep: the same pawn key.
-  const Key start = pawns(Position::StartFen);
+  const std::uint32_t start = pawns(Position::StartFen);
   CHECK_EQ(pawns("4k3/pppppppp/8/8/8/8/PPPPPPPP/4K3 b - - 0 1"), start);
   CHECK(key_of("4k3/pppppppp/8/8/8/8/PPPPPPPP/4K3 b - - 0 1") != key_of(Position::StartFen));
   // A pawn on another square, or one pawn fewer: a different key.
   CHECK(pawns("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1") != start);
   CHECK(pawns("rnbqkbnr/pppppppp/8/8/8/8/PPPP1PPP/RNBQKBNR w KQkq - 0 1") != start);
-  CHECK_EQ(pawns("4k3/8/8/8/8/8/8/4K3 w - - 0 1"), Key{0});
+  CHECK_EQ(pawns("4k3/8/8/8/8/8/8/4K3 w - - 0 1"), 0u);
   // Kept through make and unmake: a capture by a pawn, a promotion, en passant.
   Position p;
   CHECK(p.set_fen("4k3/1P6/8/3pP3/8/8/8/4K3 w - d6 0 1"));
-  const Key before = p.pawn_structure_key();
+  const std::uint32_t before = p.pawn_structure_key();
   for (const char* mv : {"e5d6", "b7b8q"}) {
     const Move m = p.parse_uci(mv);
     p.make(m);
