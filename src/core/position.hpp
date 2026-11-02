@@ -37,6 +37,10 @@ void init();
 struct State {
   // Hash and rule state.
   Key key;
+  // The pawns' share of key: the same piece-square keys, pawns only (no side,
+  // castling or ep), so positions with the same pawns on the same squares
+  // share it (tier 2, T32: the pawn drift table's index).
+  Key pawn_structure_key;
   int castling;
   Square ep;  // NoSquare unless an ep capture is legal
   int halfmove;
@@ -87,6 +91,7 @@ class Position {
   int halfmove_clock() const { return state().halfmove; }
   int fullmove_number() const { return fullmove_; }
   Key key() const { return state().key; }
+  Key pawn_structure_key() const { return state().pawn_structure_key; }
 
   Bitboard checkers() const { return state().checkers; }
   bool in_check() const { return state().checkers != 0; }

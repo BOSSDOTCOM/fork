@@ -89,7 +89,10 @@ void Position::remove(Square s) {
   board_[s] = NoPiece;
 }
 
-void Position::toggle_keys(State& s, Piece p, Square sq) const { s.key ^= zobrist::piece_square[p][sq]; }
+void Position::toggle_keys(State& s, Piece p, Square sq) const {
+  s.key ^= zobrist::piece_square[p][sq];
+  if (kind_of(p) == Pawn) s.pawn_structure_key ^= zobrist::piece_square[p][sq];
+}
 
 Bitboard Position::attackers_to(Square s, Bitboard occ) const {
   return (pawn_attacks(Black, s) & pieces(White, Pawn)) | (pawn_attacks(White, s) & pieces(Black, Pawn)) |
@@ -158,6 +161,7 @@ bool Position::ep_capture_legal(Square ep) const {
 State Position::compute_state() const {
   State s = state();
   s.key = 0;
+  s.pawn_structure_key = 0;
   for (Square sq = 0; sq < 64; ++sq)
     if (board_[sq] != NoPiece) toggle_keys(s, board_[sq], sq);
   if (side_ == Black) s.key ^= zobrist::side;
