@@ -544,3 +544,26 @@ LLR: 4.04 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
   depth had found no depth better than "off" on its quality proxy (DESIGN.md
   Search constants, `NoMoveReduceMinDepth`); in games the reduction gains.
 
+
+### 2026-11-02 ltc-r2xgr512-vs-s512r2 (round 2's LTC candidate: XGR-512 at 40+0.4)
+
+- Base `9814ad6` (phase-4: S512r2, the default), test `22c3494` (branch
+  bake/r2xgr512: XGR-512, round 2 seed 2, S = 89): the same pair as its
+  STC SPRT, so the network is the only difference (neither has IIR).
+  Bounds [0, 5] nElo, **40+0.4, Hash 64 MB**, x86-64-v3 on both sides,
+  Syzygy 3-4-5, GitHub shards (16 per stage, 1,664 games per stage, cap
+  9,984 games: the owner's 10,000 in whole stages without reusing an
+  opening), driven by tools/github/sprt_run.sh (owner, 2026-11-02: the
+  LTC tests on GitHub's shards; the AVX-512 x86-64-v4 half of the
+  TCEC-conditions check waits for the 32-vCPU AWS quota).
+- Stage 0: run 41469160529. Result: **H0 accepted** after stage 0:
+```
+Shards: 16 (done); pairs 832, games 1664 (1664 finished, time losses 0, abnormal 0)
+Elo: -30.56 +/- 9.96, nElo: -51.53 +/- 16.69
+Ptnml(0-2): [37, 249, 386, 143, 17]
+LLR: -3.72 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
+```
+- Not promoted; it loses at LTC by about as much as at STC (−34.42 ±
+  11.88). Its x86-64-v4 check at TCEC conditions is still owed when the
+  AWS quota allows (owner's plan), but this result gives no reason to
+  expect a pass.
