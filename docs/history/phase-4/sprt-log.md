@@ -499,3 +499,26 @@ LLR: -5.78 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
   of S512r2's speed (round 1's bench nps, 0.56 against 0.78 of B0's), it
   lost by about 56 Elo.
 
+### 2026-11-02 r2xgr512-vs-s512r2 (bake-off round 2: XGR-512, promotion test)
+
+- Base `9814ad6` (phase-4: S512r2, the default; bench 17,904,298), test
+  `22c3494` (branch bake/r2xgr512: XGR-512, round 2 seed 2, S = 89 matched
+  to S512r2; bench 18,390,499), bounds [0, 5] nElo, 8+0.08, Hash 16 MB,
+  Syzygy 3-4-5, GitHub shards, driven by tools/github/sprt_run.sh; entered
+  on its fixed-node screen (+30.70 ± 10.37, above).
+- Stage 0: run 41402192712. Result: **H0 accepted** after stage 0:
+```
+Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+Elo: -34.42 +/- 11.88, nElo: -49.69 +/- 17.02
+Ptnml(0-2): [66, 241, 315, 141, 37]
+LLR: -3.46 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
+```
+- Not promoted. Under the round 2 candidate rules (DESIGN.md §5.4, set
+  before this result): an **LTC / TCEC-conditions candidate** (it beat
+  S512r2 at fixed nodes, +30.70, and failed its STC SPRT); **not a retest
+  candidate** (its fixed-node interval, +20.33 to +41.07, and its STC
+  interval, −46.30 to −22.54, both exclude 0). At equal nodes it was about
+  31 Elo ahead; at equal time it lost by about 34.
+- Round 2 ends with no promotion: S512r2 stays the default. LTC candidates:
+  AF-S and XGR-512; retest candidate: AF-S.
+
