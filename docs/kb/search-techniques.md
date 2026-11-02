@@ -12,6 +12,9 @@ Pre-Phase 3 research, 2026-10-24. Two parts:
 IDs) and full descriptions of T25, T34, T36/T37 and T41 (with T16's check
 terms), researched without cloning any engine.
 
+**Update 2026-11-02:** §3.34 adds T56, threat-aware move ordering (new ID),
+researched the same way: no engine cloned, no engine source opened.
+
 All of it is **REFERENCE ONLY**. No code, pseudocode, tuned constants or
 comment text from any engine appears in this file. Parameters are
 described by their shape only ("a margin that grows with depth"). Fork
@@ -241,6 +244,7 @@ expected values are as defined in §0.
 | T53 | Lazy SMP final move selection: voting by depth and score (§3.31) | 2 | 6 | Lazy SMP, per-thread root move lists | small to medium at high thread counts |
 | T54 | Lazy SMP thread diversity (§3.32) | 2-3 | 6 | Lazy SMP | small each |
 | T55 | History bonus versus malus balance (§3.33) | 2 | 3 | T9, T10, T11 | small |
+| T56 | Threat-aware move ordering: histories indexed by threatened from/to squares, escape bonus and en-prise penalty, threat-aware capture history (§3.34) | 2 | 3 (search tier 2, now done in Phase 4) | T8, T9, T11, Phase 1 attack functions, piece values | small |
 
 Not on the list, but used in this file: **staged move generation**
 (Phase 1 already has the pieces), **excluded-move search** (needed by T27),
@@ -1249,6 +1253,7 @@ technique:
 | Lazy SMP: choosing the move to play | **T53** (new, Phase 6) | one line in techniques.md §7 |
 | Lazy SMP: keeping threads diverse | **T54** (new, Phase 6) | one line in techniques.md §7 |
 | History bonus versus malus balance | **T55** (new) | "history malus" named in §2 only |
+| Threat-aware move ordering (added 2026-11-02, §3.34) | **T56** (new) | not in the KB (T43 covers only the null-move threat) |
 
 **How this round was researched.** No engine repository was cloned or
 downloaded, and no engine source file was opened. The sources were:
@@ -1930,6 +1935,281 @@ CPW text is CC BY-SA 3.0, and its code quotes are OFF-LIMITS.
   tables), Phase 3, tuned with T9 to T11. Tier 2 (as part of T9).
   Expected value: small.
 
+### 3.34 T56 Threat-aware move ordering
+
+Added 2026-11-02, **REFERENCE ONLY**, verified 2026-11-02. Researched as
+§3A was: commit messages (GitHub commit-search API, message text only),
+pull-request bodies (GitHub REST API), fishtest run records (JSON API) and
+CPW. No engine repository was cloned or downloaded and no engine source
+file was opened, so every "how" below comes from the authors' own prose
+and is described at the idea level. Where a message gives only a title,
+the form is marked UNVERIFIED. Sources are in [sources.md](sources.md),
+"Threat-aware move ordering".
+
+- **What it is:** quiet moves (and, in a later variant, captures) are
+  ordered with knowledge of what the opponent attacks right now. Three
+  families exist, and engines combine them:
+  1. **Threat-indexed history.** The butterfly history (T9) gains two
+     extra index bits: is the move's from-square attacked by the opponent,
+     and is its to-square attacked. The table becomes four sub-tables per
+     side, one per (from attacked, to attacked) combination. The same
+     update rule, bonus and malus apply, so the engine *learns* that "move
+     this attacked piece to a safe square" is a different move from "move
+     this piece when nothing is attacked", even with the same squares.
+  2. **Static escape bonus and en-prise penalty** in the quiet scorer. A
+     fixed bonus is added when the moving piece stands on a square
+     attacked by a cheaper enemy piece and goes to a square that is not;
+     a fixed penalty when it goes onto a square attacked by a cheaper
+     piece. Both grow with the moving piece's value (a queen leaving a
+     pawn's attack matters more than a knight leaving a rook's attack).
+     This is a hand-made shortcut to what SEE (T7) would say about the
+     piece's square, without running SEE on quiets.
+  3. **Threat-aware capture history.** The capture history (T11) is
+     indexed, or "factorized", by whether the capture's destination (and
+     sometimes its origin) is attacked, so a capture that lands on a
+     defended square learns a separate score.
+  A related offensive variant scores quiet moves that *create* a threat,
+  for example a pawn push that attacks a piece (Viridithas #305 below).
+- **How the threat set is computed (once per node):**
+  - The union of the attacks of all the opponent's pieces in the current
+    position, before the move: pawns set-wise by shifts, knights and the
+    king by table lookups, sliders by the normal slider lookup on the
+    current occupancy. One bitboard, about 16 lookups at most.
+  - For the "attacked by a cheaper piece" form, the same pass is
+    accumulated in value order, giving nested sets: squares attacked by a
+    pawn; by a pawn or a minor; by a pawn, minor or rook. A moving piece
+    looks up the set for its own value class. Stockfish's 2022 message
+    describes this layering in prose: attacked squares are collected per
+    attacking piece type.
+  - Where the set is built differs:
+    - at the node, lazily, only when the picker reaches the quiet stage
+      (Stockfish 6a9ec5c3, 2026-10: a pure speedup; the competing PR #7227
+      measured +0.67 % nps);
+    - in make-move, for every position (Berserk #509, 2023-09: about 1.2 %
+      faster locally, because the same bitboard also speeds up king-move
+      and castling generation);
+    - kept on the search stack, so that other uses (LMR, null move, RFP)
+      read it for free.
+  - The king's own moves need no threat score: a king move onto an
+    attacked square is illegal (Stockfish 4c0878cb, 2026-02, stopped
+    computing that entry).
+- **Why it gains:**
+  - The most common reason a quiet move is good is that it saves a piece
+    that is attacked. The plain butterfly history cannot see this: the
+    same from-to pair is excellent when the piece is attacked and
+    mediocre when it is not, and the two cases dilute each other. The
+    extra index separates them at almost no cost.
+  - The en-prise penalty pushes quiet moves that hang a piece to the end,
+    where LMR and LMP (T15, T21) treat them harshly and the cutoff move
+    comes earlier.
+  - Stockfish's 2022 message presents its escape bonus as a mix of the
+    Koivisto and Seer threat history and an LMR rule for moves that escape
+    a capture, which had been simplified away earlier and is now applied
+    in the picker instead. Stockfish introduced one such LMR rule in 2014
+    (83a574ff); which removal the message means was not located
+    (UNVERIFIED).
+- **Conditions:**
+  - Compute the set once per node, from the opponent's point of view, on
+    the position before the move. Do not recompute per move.
+  - In check, evasions are ordered by their own rules (T8); the threat
+    terms are meant for the normal quiet stage.
+  - Choose the definition of "threat" deliberately. Engines use three:
+    any enemy attack (Ethereal, Berserk after #369, Halogen after #699,
+    Clover #174); attack by a cheaper piece (Stockfish's static terms;
+    Clover #265 by pawns, minors and rooks); or the engine's evaluation
+    threat definition (Koivisto #164, "Koivisto type threats", details
+    UNVERIFIED). Berserk #369 and Halogen #699 both gained by moving from
+    a narrower definition to every attacked square.
+  - Static bonuses are in history units, so they must be scaled to the
+    history range and retuned when the history scale changes (T55).
+- **Costs:**
+  - **Attack map per node:** one pass over the opponent's pieces. Cheap
+    next to move generation, but at every node that reaches the quiet
+    stage. Laziness (build it only when the quiet stage starts) avoids the
+    cost at nodes cut by the TT move or a capture.
+  - **History table size:** two index bits multiply the butterfly table
+    by four. Fork's current quiet table (two sides, 64 by 64 squares, 16-
+    bit entries; `src/search/quiet_history.hpp`) is 16 KB, so it would
+    become 64 KB per thread, out of L1 but within L2. A threat dimension on
+    the capture history grows it by two or four times in the same way.
+    No engine in the set indexed continuation history by threats for
+    ordering (PlentyChess #428 did it for *correction* history, T47,
+    title only).
+  - **nps:** no engine published an nps cost for the feature itself. The
+    only figures are the speedups from computing the set lazily or
+    reusing it (above). Fork measures its own with `bench/ab.py`.
+- **Pitfalls:**
+  - **Sliding attacks through the mover.** The set is computed with the
+    mover still on its from-square, so a piece that retreats along the
+    attacking slider's line looks safe when it is not. Reckless #740
+    (2026-03) fixed this case for the queen (rook and bishop attacks are
+    traced through the side's own queen): +3.4 STC, +1.3 LTC.
+  - **Attacked is not lost.** "Any attack" ignores defenders and piece
+    values, "attacked by a cheaper piece" ignores defended targets and
+    x-rays. Neither is SEE. The history form learns around this; the
+    static form cannot.
+  - **Double counting with LMR.** Fork's LMR context already has a
+    per-move "threatened" fact (the mover's square was attacked before
+    the move; `src/search/lmr_table.hpp`, computed per move in
+    `src/search/searcher.hpp`). Once ordering knows threats, an LMR term
+    for the same thing may become redundant. Stockfish's history: an LMR
+    rule for escaping moves in 2014 (83a574ff); a new one in 2022-09 that
+    read the picker's set of threatened pieces (f436bf77, gainer bounds
+    passed at STC and LTC); then, in 2023-03, the removal of a "moving a
+    threatened piece" reduction rule (c3c46fee, non-regression) after a
+    count showed it fired at about 0.12 % of moves. Whether that removed
+    rule is the 2022 one is UNVERIFIED. The separate set of threatened
+    pieces was dropped as unused in 2025-05 (d27298d7).
+  - **The static terms keep shrinking.** Stockfish simplified its terms
+    five times in 2024-2026 (below) without losing Elo. Expect the right
+    shape to drift as the history tables and the evaluation improve, and
+    re-test after Phase 4's network.
+  - **Pseudo-legal moves.** Scoring moves that later prove illegal still
+    changes the order of the rest (Stockfish #6261: a speedup changed
+    bench through illegal king moves alone). Keep bench deterministic and
+    update `tests/bench.ref`.
+- **How to test:**
+  - Unit test the threat-set builder against a slow oracle: for every
+    square, the existing single-square attack query, over Fork's perft
+    positions. Check the nested sets' invariant (by pawn, then by minor or
+    less, then by rook or less, then any: each contains the previous one).
+  - Ordering statistics (FORK_SEARCH_STATS): first-move cutoff rate, the
+    mean index of the quiet cutoff move, and the share of quiet cutoffs
+    that move an attacked piece, before and after.
+  - SPRT one family at a time: (1) the threat-indexed butterfly history
+    with "any enemy attack"; (2) the static escape bonus and en-prise
+    penalty on top; (3) the capture-history threat dimension. Each at STC,
+    then LTC (§3 general rules).
+  - Speed: build the set lazily versus eagerly, A/B with `bench/ab.py`,
+    bench unchanged.
+  - After each pass, re-run the LMR "threatened" term as a removal test.
+- **Evidence** (Elo is each engine's own result at its own stage; "STC"
+  is 8+0.08 or 10+0.1 unless stated; ± is the 95 % interval as posted):
+  - **Threat-indexed history, the origin.**
+    - Seer #92 (a3533047, 2021-11-19): +4.8 ± 3.6 at 8+0.08, +3.3 ± 2.5
+      at 40+0.4. Koivisto's and Stockfish's messages credit Seer's author
+      with the idea. Seer's threat definition is not described in the PR
+      (UNVERIFIED).
+    - Koivisto #164 (2bce0753, 2021-11-24): +4.6 ± 3.2 and +4.1 ± 2.9, two
+      runs at 8+0.08.
+    - Berserk #304 (c6881cd9, 2021-12-09; one of three changes in the PR):
+      +2.6 ± 2.1 at 8+0.08. Berserk #369 (716b0091, 2022-05-19) switched to
+      every square the opponent attacks: +3.3 ± 3.2 STC, +2.6 ± 2.1 at
+      40+0.4.
+    - Ethereal 341c43f0 (2022-05-21; from- and to-square attacked by any
+      enemy piece): +2.3 ± 1.9 at 10+0.1, +2.9 ± 1.9 at 60+0.6.
+  - **Threat-indexed history, later adopters.**
+    - Viridithas #80 (c8a3abc0, 2023-09-10, from- and to-square attacked by
+      the opponent, written by Stormphrax's author): +9.5 ± 5.0 STC.
+    - Stormphrax #24 (02a0d29d, 2023-09-26): no result in the PR or the
+      message. Stormphrax #107 (0bd1c9dd, 2024-04-23), same idea again:
+      +7.4 ± 5.8 at 22+0.22. Why it was added twice is UNVERIFIED.
+    - Clover #174 (f3120b8a, 2023-09-25): threats from all pieces, history
+      indexed by from- and to-square threatened; no result published.
+    - Seer #169 (6ad281e6, 2023-10-09), a threat-history rework combined
+      with an LMR simplification: +4.2 ± 3.0 STC, +4.2 ± 2.9 at 40+0.4;
+      its contents are not described (UNVERIFIED).
+    - PlentyChess #187 (4b372d75, 2024-06-15): +2.2 ± 2.3 at 40+0.4.
+    - Halogen #576 (f9cd2730, 2024-10-08): +2.9 ± 2.1 STC, +1.5 ± 1.2 at
+      40+0.4. Halogen #699 (2500ae81, 2025-08-04), all threats on both the
+      from- and to-square: +5.2 ± 3.0 STC. Halogen #700 (50fd3f26), a
+      knight attacking a bishop also counts as a threat: +4.5 ± 3.0 STC.
+    - Reckless #96 (065f4737, 2025-02-21): an unfinished STC at +3.0 ± 3.8,
+      then passed at 20+0.2 with +8.8 ± 5.6.
+    - Title-only forms (the PR or message names "threats in quiet move
+      ordering" without saying how; UNVERIFIED which family): PlentyChess
+      #178/#179 (2024-06-08, +2.6 ± 2.5 STC); Integral #88 (c49e2192,
+      2024-10-01, +2.5 ± 1.9 STC); Obsidian d8a03568 (2024-05-02, +1.6 ±
+      2.3 STC, committed with LLR 1.64, short of its 2.89 pass bound).
+  - **Static escape bonus and en-prise penalty.**
+    - Stockfish, first try: a bonus for moving away the piece that the
+      null move's refutation captured (eba8925d, 2008-11-25), reverted the
+      next day as no improvement (cff3a6d3). This is T43's idea, not
+      threat maps.
+    - Stockfish 08e0f52b (2022-03-28, PR #3970): bonus for moving a piece
+      from a square attacked by a cheaper piece type to an unattacked one,
+      larger for more valuable pieces. Derived +4.4 (95 % about +1.9 to
+      +6.9) at 10+0.1 over 19,816 games; +2.1 (+0.7 to +3.5) at 60+0.6 over
+      51,200 games.
+    - Stockfish 65ece7d9 (2023-07-26, PR #4711): penalty for moving onto a
+      square threatened, larger the cheaper the attacker. Derived +1.5
+      (+0.3 to +2.6) STC over 95,552 games; +1.2 (+0.4 to +1.9) LTC over
+      190,230.
+    - Stockfish simplifications, each passed non-regression bounds at STC
+      and LTC: queen-attacked-by-pawn part removed (3372ee9c, 2024-01),
+      rook-attacked-by-pawn part removed (9a9702d6, 2024-01),
+      queen-attacked-by-minor part removed (0ea6337c, 2024-05), the two
+      terms merged, with a new penalty for exposing a knight or bishop to a
+      pawn (f0de8dc0, 2025-04), "simplify threat term" (9e38023a, 2025-10),
+      from- and to-square treated symmetrically (bc28ff15, 2026-02).
+    - Stockfish 20bc1955 (2025-08-23, PR #6261): a faster computation of
+      the by-cheaper-piece sets that also changed the order of illegal
+      moves; passed gainer bounds, derived +1.2 STC, +1.0 LTC (most of it
+      likely speed).
+    - Stockfish 6a9ec5c3 (2026-10-17, PR #7228): the sets computed lazily;
+      non-functional, passed STC gainer bounds. So the feature is still in
+      Stockfish as of 2026-10.
+    - Viridithas #306 (21138635, 2025-08-05), bonuses for moving in and
+      out of threats: +2.2 ± 1.7 STC. Viridithas #305 (2fe3f371), a bonus
+      for pawn moves that create threats: +4.2 ± 2.6 STC.
+    - Clover #265 (5748fde6, 2024-08-12): bonus and malus for moving out
+      of and into threats by pawns, minors and rooks; no result published.
+    - Reckless #740 (0edb9cd4, 2026-03-02): the queen x-ray fix above plus
+      a queen penalty for moving into a threat: +3.4 ± 2.3 STC, +1.3 ± 1.0
+      at 40+0.4. Reckless #755 (ef19fde0) simplified it (non-regression);
+      #791 (94286355) extended "dangerous move" scoring to all pieces
+      (non-regression bounds, +2.9 ± 2.7 STC).
+  - **Threat-aware capture ordering.**
+    - Ethereal b0e3d52b (2022-05-25), threats in the capture history: +2.3
+      ± 1.9 at 10+0.1, +1.4 ± 1.1 at 60+0.6. Which squares it indexes is
+      not stated (UNVERIFIED).
+    - Reckless #223 (29251fa6, 2025-04-06), a factorized capture history
+      with threats: +3.3 ± 2.6 STC.
+    - Viridithas #315 (b5a9d712, 2025-08-20), capture history factored by
+      threats: +1.8 ± 1.4 at 40+0.4.
+    - Clover #389 (231b5990, 2025-08-20): capture history indexed by a
+      threat on the to-square; no result published.
+  - **Not found:** no CPW page covers threat-indexed history (History
+    Heuristic and Move Ordering pages checked; CPW "Threat Move" is about
+    the null-move refutation, T43). No threat history was found in Weiss
+    or Alexandria PR titles (searched, not proof of absence). No removal
+    test of the feature was found in any engine.
+  - **Derived values:** the Stockfish Elo figures are this file's
+    logistic conversion of fishtest's pentanomial counts, with the run
+    records' time controls (10+0.1 and 60+0.6, 1 thread) confirmed in the
+    JSON API. They are approximate and not fishtest's normalized Elo.
+- **Which engines use which variant** (as of the last change read, not
+  checked against current source):
+  - threat-indexed quiet history: Seer, Koivisto, Berserk, Ethereal,
+    Viridithas, Stormphrax, Clover, PlentyChess, Halogen, Reckless;
+  - static escape bonus / en-prise penalty: Stockfish (no threat-indexed
+    history found in its messages), Viridithas, Clover, Reckless;
+  - threat-aware capture history: Ethereal, Reckless, Viridithas, Clover;
+  - threat set built in make-move: Berserk; built lazily at the quiet
+    stage: Stockfish.
+- **Expected value: small (2 to 10), tier 2.** Nine engines published a
+  passing test of the threat-indexed history, at +2.3 to +9.5 at STC-like
+  controls (8+0.08 to 22+0.22) and +1.5 to +3.3 at LTC (five engines).
+  It is cheap and nearly free of parameters. The static terms and the
+  capture variant add +1 to +4 each in the engines that measured them,
+  and Stockfish shows the static terms shrinking to about +1-2 at LTC
+  once the rest is mature. Fork already has strong histories (T9-T11), so
+  the combined value is expected at the low-to-middle end of "small",
+  most of it from the history index. Survival in current engines is
+  confirmed only for Stockfish's static terms (2026-10); for the others,
+  only up to the latest PR read.
+- **Fork:** `src/search` (quiet_history, the capture table and
+  move_selector), plus a threat-set builder next to Phase 1's attack
+  functions in `src/core`. One builder should serve ordering, history
+  indexing and the existing LMR "threatened" fact. If Phase 4 adopts
+  threat inputs for the network (nnue-design.md §1.6), check whether their
+  attack bookkeeping can supply the set; this is Fork's inference, not
+  measured anywhere (UNVERIFIED). Licences of the engines cited: GPL-3.0
+  (Stockfish, Ethereal, Berserk, Koivisto, Seer, Stormphrax, Obsidian,
+  PlentyChess, Halogen, Clover per its `src/LICENSE`, checked 2026-11-02 in
+  sources.md "Gauntlet anchor"), AGPL-3.0 (Viridithas, Reckless); Integral
+  has none. Only ideas are used.
+
 ---
 
 **Names Fork's code must not use** (engine-specific identifiers or comment
@@ -1941,7 +2221,10 @@ DESIGN.md §8 grep rule applies to all new names): `statScore`, `ttPv`,
 quotes read for §3A: `refine_eval`, `ttValue`, `has_game_cycle`,
 `upcoming_repetition`, `progressKey`, `rule50_count`, `stat_bonus`,
 `stat_malus`, `get_best_thread`, `completedDepth`, `voteMap`, `ThreadValue`,
-`bestThread`. The concepts are fine; the identifiers are not.
+`bestThread`. Added 2026-11-02 from the commit and PR titles read for
+§3.34: `threatByLesser`, `threatenedPieces`, `threatenedByPawn`,
+`threatenedByMinor`, `threatenedByRook`. The concepts are fine; the
+identifiers are not.
 
 ## 4. Tier 3 entries (short)
 
@@ -2147,3 +2430,20 @@ engines under their own licences and are OFF-LIMITS.
     CPW, but no measured instance was opened.
 16. Emil Fredrik Ostensen's 2016 Lazy SMP thesis (University of Oslo): the
     repository link redirected again on 2026-10-26, so it is still unread.
+17. (§3.34, 2026-11-02) T56 details known only from titles or bare
+    results: the threat definitions behind Seer #92 and Koivisto #164
+    ("Koivisto type threats"); the contents of Seer #169; why Stormphrax
+    added the threat-indexed history twice (#24, #107); which family
+    PlentyChess #178/#179, Integral #88 and Obsidian d8a03568 used; which
+    squares Ethereal b0e3d52b's capture history indexes; results for
+    Clover #174, #265 and #389 and Stormphrax #24 (none published in the
+    PR or message).
+18. (§3.34) Which earlier Stockfish LMR removal its 2022 escape-bonus
+    message refers to, and whether c3c46fee (2023) removed the 2022 LMR
+    rule f436bf77.
+19. (§3.34) Whether each engine still uses its threat-ordering variant
+    today: only Stockfish's static terms are confirmed current (2026-10
+    commits); the rest are as of the latest PR read. No source was opened
+    to check.
+20. (§3.34) Whether a Phase 4 NNUE threat-input accumulator could supply
+    the per-node threat set cheaply: Fork's inference, unmeasured.

@@ -1285,3 +1285,34 @@ No engine repository was cloned or downloaded and no engine source file was open
 | https://raw.githubusercontent.com/{zzzzz151/Starzix/ed34293d..., OmerFarukTutkun/Devre/HEAD, Alex2262/AltairChessEngine/HEAD, Sazgr/peacekeeper/HEAD}/README.md | READMEs | 2026-11-02 | screen (Starzix: Lc0 data, WTFPL) |
 | https://raw.githubusercontent.com/jdart1/arasan-chess/575a91e6.../.gitmodules | raw at tag | 2026-11-02 | Fathom submodule (not pursued) |
 | https://www.chessprogramming.org/Koivisto and https://www.chessprogramming.org/Clover | CPW engine pages | 2026-11-02 | authors, licence, "own NNUE" (Koivisto); neither states training data |
+
+## Threat-aware move ordering (search-techniques.md §3.34, T56), 2026-11-02
+
+No engine repository was cloned or downloaded and no engine source file was opened. Commit messages came from the GitHub commit-search API (message text only; no diff or commit endpoint). PR data came from the GitHub REST API `pulls/{n}` endpoint (title, author, dates, merge SHA, body). Fishtest run records came from the fishtest JSON API (run metadata and game counts; Elo derived locally from the pentanomial counts by a scratch script, deleted afterwards). Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| api.github.com/search/issues?q=repo:{R}+is:pr+threat+in:title for R in Stockfish, Ethereal, Berserk, Weiss, Koivisto, Stormphrax, Viridithas, Obsidian, Reckless, Alexandria, PlentyChess, Halogen, Seer, Integral, Patricia, Clover | PR title searches (leads only) | 2026-11-02 | finding PRs; title-only items marked UNVERIFIED |
+| api.github.com/search/issues?q=repo:{R}+is:pr+(escape OR prise OR lesser OR attacked OR hanging)+in:title for the same engines except Stockfish and Seer | PR title searches (leads only) | 2026-11-02 | found Stormphrax #107, Viridithas #80 |
+| api.github.com/search/issues?q=repo:{PGG106/Alexandria, TerjeKir/weiss}+is:pr+history+in:title | PR title searches | 2026-11-02 | no threat history found in either |
+| api.github.com/search/commits?q=repo:official-stockfish/Stockfish+{threat, threatened, escape, lesser, attacked, hanging, threatenedPieces, move ordering threat, movepick} | Stockfish commit-message searches | 2026-11-02 | leads; T56 Stockfish evidence |
+| api.github.com/search/commits?q=repo:official-stockfish/Stockfish+hash:{08e0f52b, 65ece7d9, f0de8dc0, 9e38023a, 20bc1955, bc28ff15, 4c0878cb, 0ea6337c, 3372ee9c, 9a9702d6, d27298d7, eba8925d, cff3a6d3, 6a9ec5c3, f436bf77, 83a574ff, c3c46fee} | full Stockfish commit messages | 2026-11-02 | T56 static-term evidence, laziness, LMR history |
+| api.github.com/repos/official-stockfish/Stockfish/git/commits/08e0f52b | FAILED 404 (Git Data API needs the full SHA) | 2026-11-02 | none (search API used instead) |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/{3970, 4711, 6023, 6261, 6401, 6637, 5306, 4977, 4993, 6288, 7227, 7228} | Stockfish PR bodies | 2026-11-02 | T56 evidence; #6288 (open) king-move use of the set; #7227 nps figure |
+| https://tests.stockfishchess.org/api/get_run/{62406e473b32264b9aa1478b, 62407f2e3b32264b9aa149c8, 64c11269dc56e1650abb935d, 64c2004ddc56e1650abba8b3, 68074379878abf56f9a0d5b1, 6808954a878abf56f9a0d76d, 690454c7ea4b268f1fac1bbe, 69063956ea4b268f1fac1f66, 68a9a75b75da51a345a5a66d, 68a9f58475da51a345a5a6e0, 699da988eaae015cd278ede4, 699f4bee2be03365d5073c71, 66578d036b0e318cefa8d43d, 66579cf86b0e318cefa8d5b1, 659d614c79aa8af82b9677d0, 659d94d379aa8af82b967cb2, 65a3fa4179aa8af82b96face, 65a42b9a79aa8af82b96fe88} | fishtest run records (JSON) | 2026-11-02 | TC (10+0.1 / 60+0.6), threads (1), SPRT bounds and state, pentanomial counts for the derived Elo |
+| https://tests.stockfishchess.org/api/get_elo/62406e473b32264b9aa1478b and https://tests.stockfishchess.org/tests/view/62406e473b32264b9aa1478b | fishtest Elo API and run page | 2026-11-02 | API returned the run record without an Elo field; the HTML page needs JavaScript (no Elo read); hence the local derivation |
+| api.github.com/search/commits?q=repo:{AndyGrant/Ethereal, connormcmonigle/seer-nnue, gab8192/Obsidian, PGG106/Alexandria, Adam-Kulju/Patricia, Ciekce/Stormphrax, TerjeKir/weiss, Luecx/Koivisto, jhonnold/berserk, lucametehau/CloverEngine}+threat | commit-message searches (leads) | 2026-11-02 | found Ethereal 341c43f0 and b0e3d52b, Seer a3533047, Obsidian d8a03568 |
+| api.github.com/search/commits?q=repo:{R}+hash:{H}: Ethereal 341c43f0, b0e3d52b; Seer a3533047, 6ad281e6, 688332f9; Obsidian d8a03568; Stormphrax 02a0d29d; Koivisto 2bce0753; Clover f3120b8a, 5748fde6, 231b5990; Alexandria 9a9c5645 | full commit messages | 2026-11-02 | T56 evidence (Seer 688332f9 is an LMR change and Alexandria 9a9c5645 has no result: neither cited) |
+| api.github.com/repos/Luecx/Koivisto/pulls/{164, 70} | PR bodies | 2026-11-02 | #164 threat history; #70 is a null-move/qsearch change (not cited) |
+| api.github.com/repos/connormcmonigle/seer-nnue/pulls/{92, 169, 138} | PR bodies (all empty or bench only) | 2026-11-02 | dates; results came from the merge-commit messages |
+| api.github.com/repos/jhonnold/berserk/pulls/{304, 369, 509} | PR bodies | 2026-11-02 | threat history, definition change, make-move threat set and its speed |
+| api.github.com/repos/TerjeKir/weiss/pulls/582 | PR body | 2026-11-02 | an evaluation change, not ordering (not cited) |
+| api.github.com/repos/Ciekce/Stormphrax/pulls/{24, 107} | PR bodies (#24 empty) | 2026-11-02 | threat-indexed butterfly history |
+| api.github.com/repos/cosmobobak/viridithas/pulls/{80, 305, 306, 315} | PR bodies | 2026-11-02 | history index, threat-creating pawn moves, in/out bonuses, capture history |
+| api.github.com/repos/codedeliveryservice/Reckless/pulls/{96, 223, 740, 755, 791} | PR bodies | 2026-11-02 | quiet and noisy threat history, queen x-ray fix, simplifications |
+| api.github.com/repos/Yoshie2000/PlentyChess/pulls/{178, 179, 187} | PR bodies | 2026-11-02 | threats in quiet ordering and in the quiet history |
+| api.github.com/repos/KierenP/Halogen/pulls/{576, 699, 700} | PR bodies | 2026-11-02 | quiet threat history and its definition changes |
+| api.github.com/repos/aronpetko/integral/pulls/88 | PR body | 2026-11-02 | threats in quiet ordering |
+| api.github.com/repos/lucametehau/CloverEngine/pulls/{174, 265, 389} | PR bodies (#265, #389 empty) | 2026-11-02 | variants without published results |
+| https://www.chessprogramming.org/{History_Heuristic, Move_Ordering, Threat_Move, Butterfly_Boards, Attack_and_Defend_Maps, Seer, Koivisto} | CPW pages (read-only recovery) | 2026-11-02 | no threat-indexed history on any of them; Threat Move is the null-move refutation (T43) |
+| https://www.chessprogramming.org/Threat_Detection | FAILED 404 | 2026-11-02 | none |
