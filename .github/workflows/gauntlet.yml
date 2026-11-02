@@ -7,7 +7,8 @@
 # seed 20261025, sha256-checked), each opening played with both colours; then
 # Ordo with the anchors fixed at their CCRL Blitz ratings. A new anchor whose
 # build fails is replaced by its own alternate (role alternate:STEM) if that
-# builds; a continuity anchor that fails stops the run. Each shard records
+# builds (a trial anchor with neither built is left out); a continuity
+# anchor that fails stops the run. Each shard records
 # its CPU model: the runner label does not pin the hardware. Every anchor's
 # UCI options are read from its own `uci` output: listed options are passed
 # only if the engine has them, any thread option is set to 1 and any book
@@ -89,11 +90,14 @@ jobs:
                   if r[1] not in built:
                       sys.exit(f'continuity anchor {r[0]} did not build')
                   chosen.append(r[1])
-              elif r[3] == 'new':
+              elif r[3] in ('new', 'trial'):
                   if r[1] in built:
                       chosen.append(r[1])
                       continue
                   subs = [a[1] for a in rows if a[3] == 'alternate:' + r[1] and a[1] in built]
+                  if not subs and r[3] == 'trial':
+                      print(f'{r[0]} did not build and neither did its alternate: left out', file=sys.stderr)
+                      continue
                   if not subs:
                       sys.exit(f'{r[0]} did not build and neither did its alternate')
                   print(f'{r[0]} did not build: replaced by {subs[0]}', file=sys.stderr)
