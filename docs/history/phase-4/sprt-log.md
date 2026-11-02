@@ -437,3 +437,25 @@ LLR: 15.30 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
 ```
 - Promoted by the owner as the default network S512r2, with the scale it
   was tested at (S = 92; docs/nets.md).
+
+### 2026-11-01 round 2: fixed nodes against S512r2 (DESIGN.md §5.4, round 2 amendment; no SPRT)
+
+- Each remaining round-2 entry (the seed with the lower validation loss,
+  scale-matched to S512r2 on g2s1-val) against S512r2 (base: phase-4 with
+  S512r2 as the default; bench 17,904,298), 800,000 nodes per move for both
+  engines under a 600+6 clock that never binds, Hash 16 MB, Syzygy 3-4-5,
+  the UHO book, 1,600 games on the GitHub shards; the runs' LLR (bounds
+  [0, 5]) is ignored. Rule (owner, set before any round-2 game result): an
+  entry proceeds to an STC promotion SPRT against S512r2 on [0, 5] only if
+  its Elo point estimate is above 0; the others leave the bake-off.
+
+| Entry | Base | Test commit | Run | Elo (95%) | nElo | Ptnml | Proceeds |
+|---|---|---|---|---|---|---|---|
+| H-512 (seed 1, S = 92) | 4c68385 | 828bdc7 | 41371135671 | −12.17 ± 10.58 | −19.60 ± 17.02 | [37, 211, 339, 197, 16] | no |
+
+- H-512: 1,600 games finished, no time losses, no abnormal ends. Its Elo
+  interval, −22.75 to −1.59, lies wholly below 0, so it is not a retest
+  candidate for after the post-network search retune (owner, 2026-11-02:
+  an entry whose interval included 0 would have been recorded as one).
+  It leaves the bake-off. At round 1's stage B it scored +32.23 ± 12.03
+  against B0 under the same conditions.
