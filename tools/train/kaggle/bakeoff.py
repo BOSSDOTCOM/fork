@@ -21,6 +21,14 @@ maps. Round 2 (g2s1, owner, 2026-11-01: the same 4.3 passes) uses the
 values below and the maps refitted on g2s1; it runs in two pushes, each
 copy's RUNS replaced like COMMIT (b0, s512 and h512, then afs and xgr512),
 so neither session nears Kaggle's 12-hour limit.
+
+The trainer writes a checkpoint every superbatch (float weights, AdamW's
+moments, quantised.bin). While a run trains, the checkpoints that can no
+longer be kept are deleted: only the best so far and the two newest stay.
+Keeping all of them filled /kaggle/working (about 20 GB) in round 2's
+second push: XGR-512's two runs stopped at superbatches 326 and 328 of 360
+with "No space left on device" (an H-512 checkpoint is about 27 MB; 360
+per run, two runs at once).
 """
 import glob
 import hashlib
@@ -110,6 +118,29 @@ def start(arch, seed, device):
     return name, out_dir, time.time(), subprocess.Popen(cmd, shell=True, env={**os.environ, **env})
 
 
+def drop_old_checkpoints(name, out_dir):
+    """Deletes the run's checkpoints except the one KEEP would choose so far
+    (from val.txt) and the two newest (the newest may still be written)."""
+    found = {}
+    for d in glob.glob(f'{out_dir}/{name}-*'):
+        tail = d.rsplit('-', 1)[1]
+        if tail.isdigit():
+            found[int(tail)] = d
+    keep = set(sorted(found)[-2:])
+    curve = []
+    if os.path.exists(f'{out_dir}/val.txt'):
+        for line in open(f'{out_dir}/val.txt'):
+            # Complete lines only: a line still being written can parse as a
+            # smaller loss than it will hold ("0.0" of "0.0213...").
+            if line.endswith('\n') and len(line.split()) == 2:
+                curve.append((int(line.split()[0]), float(line.split()[1])))
+    if curve:
+        keep.add(min(curve, key=lambda c: c[1])[0] if KEEP == 'best' else curve[-1][0])
+    for sb, d in found.items():
+        if sb not in keep:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 def finish(arch, seed, name, out_dir, began, proc):
     rc = proc.wait()
     record = {'arch': arch, 'seed': seed, 'rc': rc, 'seconds': round(time.time() - began, 1), **settings}
@@ -141,7 +172,12 @@ if ok:
     while pending:
         batch = [pending.pop(0) for _ in range(min(2, len(pending)))]
         live = [(arch, seed, *start(arch, seed, device)) for device, (arch, seed) in enumerate(batch)]
+        while any(proc.poll() is None for *_, proc in live):
+            for arch, seed, name, out_dir, began, proc in live:
+                drop_old_checkpoints(name, out_dir)
+            time.sleep(60)
         for arch, seed, name, out_dir, began, proc in live:
+            drop_old_checkpoints(name, out_dir)
             summary['runs'][name] = finish(arch, seed, name, out_dir, began, proc)
             json.dump(summary, open(f'{RESULT}/bakeoff.json', 'w'), indent=1)
 shutil.rmtree(repo, ignore_errors=True)
