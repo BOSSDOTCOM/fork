@@ -57,9 +57,9 @@
   X(SingularEntrySlack, 3, 0, 6, 1)       \
   X(SingularMarginPerPly, 6, 3, 12, 1)    \
   X(NoMoveReduceMinDepth, 8, 2, 10, 1)    \
-  X(DriftWeightCap, 16, 8, 32, 1)         \
-  X(DriftWeightTotal, 64, 32, 128, 5)     \
-  X(DriftLimit, 250, 125, 500, 19)        \
+  X(DriftWeightCap, 4, 2, 8, 1)           \
+  X(DriftWeightTotal, 256, 128, 512, 19)  \
+  X(DriftLimit, 300, 150, 600, 23)        \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 8, 1)              \

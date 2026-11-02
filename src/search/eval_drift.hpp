@@ -30,7 +30,7 @@ namespace forkeng {
 
 // Fork's sizes (justified in DESIGN.md §5.2, "Search constants"); the
 // weights and the limit are in the parameter table.
-constexpr int DriftSlotBits = 14;
+constexpr int DriftSlotBits = 15;
 constexpr int DriftSlots = 1 << DriftSlotBits;
 constexpr int DriftGrain = 128;
 
