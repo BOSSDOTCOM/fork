@@ -105,6 +105,7 @@ check "H1 after one stage exits 0" [ "$(rc h1)" = 0 ]
 check "one dispatch" [ "$(dispatches h1)" = 1 ]
 check "dispatched only after the busy runs finished" grep -q "^501 busy=0 " "$tmp/h1/dispatches"
 check "the merged verdict is logged" grep -q "H1 accepted" "$tmp/h1/data/h1/driver.log"
+check "the games and time losses are logged" grep -q "Shards: 2 (done); pairs 100, games 200 (200 finished, time losses 0" "$tmp/h1/data/h1/driver.log"
 
 # 4-6: undecided runs every stage in order, then exits 2.
 setup undecided 0 "$even"

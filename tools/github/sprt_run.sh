@@ -121,7 +121,7 @@ EOF
   [ -z "$wrong" ] || stop "stage $stage: run $id's results are not this SPRT's (first: $(echo "$wrong" | head -1))"
   got=$(find "$data/s$stage" -name result.json | wc -l)
   [ "$got" -eq "$SHARDS" ] || stop "stage $stage: run $id gave $got shard results, not $SHARDS"
-  merged=$("$py" -I tools/cloud/sprt_merge.py merge --elo0 "$elo0" --elo1 "$elo1" "${files[@]}" 2>&1 | tail -4)
+  merged=$("$py" -I tools/cloud/sprt_merge.py merge --elo0 "$elo0" --elo1 "$elo1" "${files[@]}" 2>&1 | tail -5)
   say "stage $stage: run $id merged"
   echo "$merged" | sed 's/^/    /' | tee -a "$data/driver.log"
   case $(echo "$merged" | grep -E '^LLR:' | tail -1) in
