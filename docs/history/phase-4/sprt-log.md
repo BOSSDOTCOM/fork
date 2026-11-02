@@ -452,6 +452,7 @@ LLR: 15.30 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
 | Entry | Base | Test commit | Run | Elo (95%) | nElo | Ptnml | Proceeds |
 |---|---|---|---|---|---|---|---|
 | H-512 (seed 1, S = 92) | 4c68385 | 828bdc7 | 41371135671 | −12.17 ± 10.58 | −19.60 ± 17.02 | [37, 211, 339, 197, 16] | no |
+| AF-S (seed 1, S = 89) | 40198f5 | 5e72ab1 | 41390867039 | +10.43 ± 10.36 | +17.15 ± 17.02 | [25, 169, 368, 209, 29] | yes |
 
 - H-512: 1,600 games finished, no time losses, no abnormal ends. Its Elo
   interval, −22.75 to −1.59, lies wholly below 0, so it is not a retest
@@ -459,3 +460,7 @@ LLR: 15.30 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
   an entry whose interval included 0 would have been recorded as one).
   It leaves the bake-off. At round 1's stage B it scored +32.23 ± 12.03
   against B0 under the same conditions.
+- AF-S: 1,600 games finished, no time losses, no abnormal ends. Its point
+  estimate is above 0 (interval −0.07 to +20.79), so it proceeds to the
+  STC promotion SPRT against S512r2 on [0, 5]. At round 1's stage B it
+  scored +41.67 ± 12.01 against B0.
