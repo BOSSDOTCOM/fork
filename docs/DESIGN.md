@@ -1189,7 +1189,13 @@ because update.sh refuses it.
   `FORK_ARCH`, accepts only x86-64-v3 or x86-64-v4, refuses x86-64-v4 on a
   CPU without its five AVX-512 features, and fails unless each binary's
   `fork version` reports the pinned target. Every shard result records it
-  (`arch`).
+  (`arch`). `tools/github/sprt_run.sh` drives one SPRT there, a stage of
+  1,600 games at a time until the merged result decides: it dispatches only
+  when no run of any workflow is queued or running, refuses commits not on
+  GitHub, stops at the first run that does not succeed, and merges only
+  shard results whose meta names its own base, test and stage
+  (2026-11-02, after a cancelled SPRT's local driver kept dispatching
+  stages; `tools/github/test_sprt_run.sh` checks each rule with a fake gh).
 - **AWS EC2 c7a/c8a** (`tools/cloud/aws_spot_sprt.sh`): the `--arch`
   option, **x86-64-v3 by default, and AWS SPRTs stay on x86-64-v3 until
   Phase 4** (owner, 2026-10-28; the SPRT log records no AWS run yet);
