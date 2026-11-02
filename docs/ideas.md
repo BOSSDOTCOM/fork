@@ -929,3 +929,45 @@ tuned by SPSA.
   ± 2.93 Elo (nElo -0.56 ± 4.13) after 27,200 games, LLR -1.39 on
   [0, 3], stopped undecided (history/phase-4/sprt-log.md). Kept off;
   exp/qs-delta keeps the code for the re-validation.
+
+## 40. Structure System
+
+- **type:** ELO, one flag per layer (names set at build time, each
+  screened).
+- **idea** (owner, 2026-11-02; one integrated idea, plan only; there were
+  no earlier "Structure focus" entries in this file, any branch or the KB
+  to replace): five layers about pawn structure, each able to stand on its
+  own if a later one fails.
+  - **L1 Knowledge:** a small learned network on pawns and kings only,
+    its output cached by `pawn_structure_key` and added to the main
+    network's evaluation.
+  - **L2 Memory:** the pawn correction table (the pawn drift table, T32,
+    in progress: its LTC SPRT started 2026-11-02) and the pawn-structure
+    history (T12).
+  - **L3 Direction:** a root-only planner: a deep search over pawns and
+    kings, scored by L1's network, that produces a target structure and
+    breaks near-ties between root moves toward it.
+  - **L4 Teaching:** for the main network's training, a higher weight on
+    the game result, a long-horizon auxiliary target, and the planner's
+    verdicts as a further auxiliary target.
+  - **L5 Proof:** a held-out strategic test set (positions decided by
+    their structure, each verified by deep search), plus SPRTs and
+    gauntlets.
+- **gates, before any building:** measure how often root moves are near
+  ties (whether L3 has anything to decide), and whether structures L1
+  rates highly correlate with results in Fork's own games (whether L1's
+  signal is real). Then build L2, L1, L3, L4, in that order, each with its
+  own SPRT.
+- **phase:** Phase 4, after the current tier-2 queue (DESIGN.md decisions
+  log, 2026-11-02).
+- **metric:** the two gates' measurements first (rules fixed before they
+  run); then an SPRT per layer (L4 through the networks' own promotion
+  tests), L5's test set and the gauntlet.
+- **runtime cost:** possible (L1 evaluates a second network, mostly from
+  its cache; L3 spends root time; L2's table is measured with its SPRT).
+- **sources:** the owner's design; Fork's own KB descriptions (T12, T32);
+  clean-room design throughout, every name and constant screened, every
+  outside source logged in ORIGINALITY.md.
+- **earliest phase:** Phase 4 (the pawn structure key exists since
+  2026-11-02, branch tier2/drift).
+- **status:** untested (planned 2026-11-02); L2's pawn table in progress.

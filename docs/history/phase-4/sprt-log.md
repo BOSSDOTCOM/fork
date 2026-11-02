@@ -567,3 +567,12 @@ LLR: -3.72 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
   11.88). Its x86-64-v4 check at TCEC conditions is still owed when the
   AWS quota allows (owner's plan), but this result gives no reason to
   expect a pass.
+
+### 2026-11-02 AF-S at LTC: shelved, not tested (owner)
+
+- Round 2's other LTC candidate, AF-S (`5e72ab1`), is **not tested at
+  LTC**: it trailed XGR-512 at fixed nodes (+10.43 ± 10.36 against
+  +30.70 ± 10.37) and at STC against S512r2 (−55.85 ± 11.42 against
+  −34.42 ± 11.88), and XGR-512 failed at LTC (above). No game was played
+  for it at LTC. It stays a retest candidate after the post-network
+  search retune (DESIGN.md §5.4).
