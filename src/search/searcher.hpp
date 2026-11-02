@@ -119,6 +119,10 @@ struct SearchQuota {
 //   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
 //   internal iterative reduction). On since its STC SPRT passed (+21.45
 //   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
+// - use_rising_rfp: reverse futility's margin is RfpRisingRelief cp smaller
+//   when the side to move's static eval has risen since its previous turn
+//   (tier 2, T18's flag, its RFP use alone: the owner's order tests one use
+//   at a time). Off until measured and SPRTed.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -148,7 +152,8 @@ struct SearchQuota {
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
-  X(use_no_move_reduction, UseNoMoveReduction, true)
+  X(use_no_move_reduction, UseNoMoveReduction, true)     \
+  X(use_rising_rfp, UseRisingRfp, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -370,6 +375,12 @@ class Searcher {
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
+  // Whether the side to move's static eval at `ply` is above its eval at its
+  // previous turn (tier 2, T18): two plies back, or four when two plies back
+  // was in check. False when there is nothing to compare (in check now, the
+  // root's children, or check at both earlier turns): without evidence of a
+  // rise the cautious margin applies.
+  bool eval_rising(int ply) const;
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
 

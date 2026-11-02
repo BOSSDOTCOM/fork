@@ -58,7 +58,8 @@ namespace {
 // deliverable 8b): aspiration (AspirationMinDepth, AspirationHalfWidth); the
 // iteration rule (no new iteration when elapsed * IterationGrowthThirds / 3
 // passes the hard limit: the work grows by a measured median of 1.66 per
-// iteration); reverse futility (RfpMaxDepth, RfpMargin cp per ply); the null
+// iteration); reverse futility (RfpMaxDepth, RfpMargin cp per ply,
+// less RfpRisingRelief when the eval rises); the null
 // move (NullMinDepth; half the remaining depth less one ply, and one ply less
 // again per NullSurplusPerPly of static eval above beta, at most
 // NullSurplusPliesMax); endgame tables from TableProbeMinDepth in the main
@@ -149,6 +150,16 @@ void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
   if (switches.use_reply_history && f.arrival != NoArrival) update(pair_history_[ReplyTable], f.arrival);
   const int follow = follow_arrival(f);
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
+}
+
+bool Searcher::eval_rising(int ply) const {
+  const int now = frames_[ply].static_eval;
+  if (now == ScoreNone) return false;
+  for (int back = 2; back <= 4 && back <= ply; back += 2) {
+    const int then = frames_[ply - back].static_eval;
+    if (then != ScoreNone) return now > then;
+  }
+  return false;
 }
 
 void Searcher::update_pv(int ply, Move m) {
@@ -247,11 +258,16 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   const bool can_prune_node = can_prune && !withheld;
 
   // Reverse futility pruning (T20): far enough above beta at shallow depth,
-  // the node fails high without a search.
-  if (switches.use_rfp && can_prune_node && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
-      prune_eval - RfpMargin * depth >= beta) {
-    FORK_STAT(++counters.rfp_cuts);
-    return prune_eval;
+  // the node fails high without a search. With use_rising_rfp the margin is
+  // smaller when the side's static eval has risen since its last turn (T18):
+  // a position getting better is less likely to need the margin's full
+  // allowance for the opponent's recovery.
+  if (switches.use_rfp && can_prune_node && depth <= RfpMaxDepth && !is_tb_or_mate(beta)) {
+    const int relief = switches.use_rising_rfp && eval_rising(ply) ? RfpRisingRelief : 0;
+    if (prune_eval - (RfpMargin * depth - relief) >= beta) {
+      FORK_STAT(++counters.rfp_cuts);
+      return prune_eval;
+    }
   }
 
   // Null move pruning (T13): if passing still fails high on a reduced
@@ -703,6 +719,9 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);
 #endif
+  // The root's static eval, which its grandchildren compare theirs with
+  // (eval_rising); search_root itself never reads it.
+  frames_[0].static_eval = pos.in_check() ? ScoreNone : eval_at(0);
   tt_.advance_age();
   tt_.set_age_blend(switches.tt_age_blend);
   tt_.set_keep_exact(switches.tt_keep_exact);
