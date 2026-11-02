@@ -45,6 +45,15 @@ Rules, fixed before the measurement's data were seen (2026-11-02):
 3. DriftSlotBits: in the chosen setting's run, the smallest slot count from
    2^10 to 2^16 whose learns find another structure's entry in under 2% of
    learns (2^16 if none does).
+4. The extension (owner, 2026-11-02, after rule 2 chose 128/8 at the
+   grid's edge, the slowest learning tried; declared before its runs): three
+   slower settings, 128/4, 256/4 and 256/8, same limit, same 2^14 slots,
+   same games and budget, from a build whose parameter ranges admit them
+   (its only other change, the default slot count, is set back to 2^14 for
+   these runs); that build also runs 128/8 again, which must reproduce the
+   first run's counters exactly. Rule 2 then applies unchanged to all twelve
+   settings: an extended setting that wins is used; if 128/8 stays best, it
+   stays. Rule 3 is applied to the chosen setting's run.
 Reported but not part of the rules: each setting's samples and mean errors,
 and the nodes searched.
 
@@ -68,6 +77,9 @@ import chess.pgn
 
 Totals = [32, 64, 128]
 Caps = [8, 16, 32]
+# Rule 4's extension (declared 2026-11-02 before its runs).
+Extension = ['128/4', '256/4', '256/8']
+Settings = [f'{t}/{c}' for t in Totals for c in Caps] + Extension
 TieMargin = 0.005
 LimitPercentile = 0.99
 LimitStep = 25
@@ -236,11 +248,11 @@ def report(a):
         judged = '' if s == 'off' else f' drifted {drifted:.2f}, fitness {fitness(rows):.4f}'
         print(f'{s:>6}: {len(rows)} games, {sum(r["searched"] for r in rows)} searches, {samples} samples, '
               f'mean error raw {raw:.2f}{judged}')
-    grid = [f'{t}/{c}' for t in Totals for c in Caps if f'{t}/{c}' in runs]
+    grid = [s for s in Settings if s in runs]
     if not grid:
         return
-    if len(grid) < len(Totals) * len(Caps):
-        print(f'partial grid: {len(grid)} of {len(Totals) * len(Caps)} settings')
+    if len(grid) < len(Settings):
+        print(f'partial grid: {len(grid)} of {len(Settings)} settings')
     fit = {s: fitness(runs[s]) for s in grid}
     best = min(fit.values())
     tied = [s for s in grid if fit[s] <= best + TieMargin]
