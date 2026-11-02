@@ -11,14 +11,17 @@
 //
 // Test positions: the CPW perft suite (tests/suite.hpp, cited there) and
 // random legal games from it.
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "core/material.hpp"
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
+#include "eval/eval_scale.hpp"
 #include "eval/nnue/accumulator.hpp"
 #include "eval/nnue/net_file.hpp"
 #include "harness.hpp"
@@ -61,7 +64,7 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
 #if FORK_NET_ARCH == 1
   for (auto& w : net->out_weights) w = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
   net->out_bias = uniform(rng, -100000, 100000);
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6
   for (auto& row : net->out_weights)
     for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -128, 128));
   for (auto& b : net->out_bias) b = uniform(rng, -100000, 100000);
@@ -188,7 +191,7 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   auto wide = random_net(3);
   for (auto& w : wide->out_weights) w = 32000;
   rejects(write_net_file(*wide), "an output sum beyond int32");
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6
   auto wide = random_net(3);
   wide->out_weights[2][5] = 129;
   rejects(write_net_file(*wide), "an output weight beyond the squared output's bound");
@@ -379,7 +382,7 @@ TEST_CASE("nnue", "mirrored networks evaluate a position and its left-right mirr
   CHECK(checked > 100);
 }
 
-#if FORK_NET_ARCH == 5
+#if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
 TEST_CASE("nnue", "XGR's exposure rule") {
   // A white knight attacked by a pawn (a lower class) is exposed though
   // defended; an undefended bishop attacked by the queen is exposed; a rook
@@ -432,6 +435,92 @@ TEST_CASE("nnue", "XGR's exposure rule matches the square-by-square reference al
   }
   CHECK(checked > 200);
   CHECK(nonempty > 50);
+}
+#endif
+
+#if FORK_NET_ARCH == 6
+// S512+X's evaluation the obvious way: per perspective, the bias, every
+// piece's row and every exposed piece's exposure row (the square-by-square
+// rule) summed in 64 bits, clipped to [0, QA], then S-512's squared output
+// in the phase's bucket. `beyond` counts the units whose sum leaves int16.
+int s512x_reference(const NetFile& net, const Position& pos, int* beyond = nullptr) {
+  const Bitboard exposed = exposed_reference(pos);
+  const Color stm = pos.side_to_move();
+  const int k = net.phase_table[game_phase(pos)];
+  std::int64_t total = 0;
+  for (int half = 0; half < 2; ++half) {
+    const Color persp = half == 0 ? stm : ~stm;
+    const Frame f = frame_of(net, persp, pos.king_square(persp));
+    for (int i = 0; i < NetHidden; ++i) {
+      std::int64_t v = net.ft_bias[i];
+      for (Bitboard b = pos.pieces(); b;) {
+        const Square s = pop_lsb(b);
+        const Piece p = pos.piece_at(s);
+        v += net.ft_weights[feature_index(persp, p, s, f) * NetHidden + i];
+        if (exposed & (Bitboard{1} << s)) {
+          const Square seen = persp == White ? s : s ^ 56;
+          const int row = NetPieceSquares + 320 * (side_of(p) != persp) + 64 * kind_of(p) + (seen ^ f.flip);
+          v += net.ft_weights[row * NetHidden + i];
+        }
+      }
+      if (beyond && (v < -32768 || v > 32767)) ++*beyond;
+      const std::int64_t x = std::clamp<std::int64_t>(v, 0, NetQa);
+      total += x * x * net.out_weights[k][half * NetHidden + i];
+    }
+  }
+  const std::int64_t y = total / NetQa + net.out_bias[k];
+  return static_cast<int>(std::clamp<std::int64_t>(y * net.scale / (NetQa * NetQb), -(EvalLimit - 1), EvalLimit - 1));
+}
+
+TEST_CASE("nnue", "S512+X sums its exposure rows beyond the int16 range exactly") {
+  // Exposure rows of up to +-20,000 per unit: a few exposed pieces take a
+  // unit's sum past int16, which the reader accepts (only the piece rows are
+  // bounded) and the evaluation handles as the 64-bit reference does.
+  auto net = random_net(12);
+  std::uint64_t rng = 77;
+  for (int f = NetPieceSquares; f < net->inputs; ++f)
+    for (int i = 0; i < NetHidden; ++i)
+      net->ft_weights[f * NetHidden + i] = static_cast<std::int16_t>(uniform(rng, -20000, 20000));
+  auto back = std::make_unique<NetFile>();
+  std::string error;
+  CHECK_MSG(read_net_file(write_net_file(*net), *back, error), error);
+  int checked = 0, beyond = 0;
+  for (const auto& sp : perft_suite()) {
+    Position pos;
+    pos.set_fen(sp.fen);
+    std::uint64_t game = 5 + checked;
+    for (int ply = 0; ply < 60; ++ply) {
+      int units = 0;
+      CHECK_MSG(full_eval(*back, pos) == s512x_reference(*back, pos, &units), pos.fen());
+      beyond += units > 0;
+      ++checked;
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      if (legal.size() == 0) break;
+      pos.make(legal[splitmix_next(game) % legal.size()]);
+    }
+  }
+  CHECK(checked > 200);
+  CHECK(beyond > 20);  // positions where some unit's sum left int16
+}
+
+TEST_CASE("nnue", "S512+X's evaluation equals the reference with ordinary weights") {
+  auto net = random_net(13);
+  int checked = 0;
+  for (const auto& sp : perft_suite()) {
+    Position pos;
+    pos.set_fen(sp.fen);
+    std::uint64_t game = 17 + checked;
+    for (int ply = 0; ply < 60; ++ply) {
+      CHECK_MSG(full_eval(*net, pos) == s512x_reference(*net, pos), pos.fen());
+      ++checked;
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      if (legal.size() == 0) break;
+      pos.make(legal[splitmix_next(game) % legal.size()]);
+    }
+  }
+  CHECK(checked > 200);
 }
 #endif
 

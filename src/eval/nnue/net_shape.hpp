@@ -17,6 +17,8 @@
 //   perspective's clipped values multiplied, then 16 -> 32 -> 1 in 8 phase
 //   stacks. 5 XGR-512: 4 king regions, 640 exposure inputs, 3 side lanes per
 //   input (a gate and two linear lanes), two outputs blended by the gate.
+//   6 S512+X: S-512 plus XGR's 640 exposure inputs (owner, 2026-11-02: XGR's
+//   parts as add-ons to S512r2), S-512's output.
 // - QA = 255, QB = 64 (bullet's quantization convention; ORIGINALITY.md).
 #pragma once
 
@@ -27,22 +29,22 @@
 namespace forkeng {
 
 inline constexpr int NetArchitecture = FORK_NET_ARCH;
-static_assert(NetArchitecture >= 1 && NetArchitecture <= 5, "unknown network architecture");
+static_assert(NetArchitecture >= 1 && NetArchitecture <= 6, "unknown network architecture");
 
 inline constexpr int NetQa = 255;
 inline constexpr int NetQb = 64;
 inline constexpr int NetPieceSquares = 768;  // 2 colours x 6 piece types x 64 squares
 inline constexpr int NetHidden = NetArchitecture == 1 ? 256 : 512;
 inline constexpr bool NetMirrored = NetArchitecture != 1;
-inline constexpr bool NetRegioned = NetArchitecture >= 3;
+inline constexpr bool NetRegioned = NetArchitecture >= 3 && NetArchitecture <= 5;
 inline constexpr int NetMaxRegions = NetRegioned ? 4 : 1;
-inline constexpr bool NetExposure = NetArchitecture == 5;
+inline constexpr bool NetExposure = NetArchitecture == 5 || NetArchitecture == 6;
 inline constexpr int NetExposureRows = 640;  // own/enemy x 5 non-king types x 64 squares
 inline constexpr int NetMaxInputs = NetPieceSquares * NetMaxRegions + (NetExposure ? NetExposureRows : 0);
 // Outputs (or layer stacks) picked by the game phase through a 25-entry table.
-inline constexpr bool NetPhasePicked = NetArchitecture >= 2 && NetArchitecture <= 4;
+inline constexpr bool NetPhasePicked = (NetArchitecture >= 2 && NetArchitecture <= 4) || NetArchitecture == 6;
 inline constexpr int NetBuckets = NetPhasePicked ? 8 : 1;
-inline constexpr int NetSideLanes = NetExposure ? 3 : 0;
+inline constexpr int NetSideLanes = NetArchitecture == 5 ? 3 : 0;
 // AF-S's body.
 inline constexpr int NetL1 = 16, NetL2 = 32;
 

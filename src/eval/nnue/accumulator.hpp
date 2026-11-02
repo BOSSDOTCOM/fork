@@ -16,7 +16,8 @@
 //   king 5) + the square seen from P (a1 = 0 ... h8 = 63, ranks flipped for
 //   Black). Mirrored architectures also flip the files (XOR 7) when P's own
 //   king stands on files a-d, and add 768 times the region of P's mirrored
-//   king square (a Frame). XGR's exposure inputs follow the piece rows.
+//   king square (a Frame). XGR's and S512+X's exposure inputs follow the
+//   piece rows.
 // - A perspective's frame changes only when its own king moves across the
 //   d/e line or into another region; then that perspective is recomputed
 //   from the board, every other update is incremental.
@@ -91,8 +92,8 @@ void advance_accumulator_scalar(const NetFile& net, const Accumulator& from, con
 int output_layer_scalar(const NetFile& net, const Accumulator& acc, Color stm);
 #endif
 
-#if FORK_NET_ARCH == 5
-// XGR's exposed pieces: non-king pieces attacked by an enemy piece of a
+#if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
+// XGR's exposed pieces (S512+X's too): non-king pieces attacked by an enemy piece of a
 // lower class (pawn < knight = bishop < rook < queen < king), or attacked
 // and not defended (pseudo-attacks on the occupancy).
 Bitboard exposed_pieces(const Position& pos);

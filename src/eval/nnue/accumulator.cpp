@@ -119,7 +119,7 @@ void sum_perspective(const NetFile& net, Color perspective, Frame f, ForEach for
   return net.phase_table[game_phase(pos)];
 }
 
-#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5
+#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
 // sum over both halves (side to move first) of v * (v * w), v the clipped
 // value: S-512's and H-512's output, and each of XGR's experts.
 std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
@@ -291,16 +291,51 @@ int xgr_output(const NetFile& net, const Accumulator& acc, const Position& pos) 
 }
 #endif
 
+#if FORK_NET_ARCH == 6
+// S512+X: the accumulator plus the exposed pieces' rows (XGR's rule), summed
+// in 32 bits at every evaluation and held to the int16 range in `out`: the
+// net file bounds only the piece rows, and the output clips each value to
+// [0, QA], so holding the sum to int16 first changes nothing. False, with
+// `out` untouched, when no piece is exposed. Plain loops, one path for the
+// scalar and the vector builds.
+bool add_exposure_rows(const NetFile& net, const Accumulator& acc, const Position& pos, Accumulator& out) {
+  const Bitboard exposed = exposed_pieces(pos);
+  if (!exposed) return false;
+  for (const Color perspective : {White, Black}) {
+    const Frame f = frame_of(net, perspective, pos.king_square(perspective));
+    alignas(64) std::int32_t sum[NetHidden];
+    for (int i = 0; i < NetHidden; ++i) sum[i] = acc.values[perspective][i];
+    for (Bitboard b = exposed; b;) {
+      const Square s = pop_lsb(b);
+      const Piece p = pos.piece_at(s);
+      const Square seen = perspective == White ? s : s ^ 56;
+      const std::int16_t* w =
+          column(net, NetPieceSquares + 320 * (side_of(p) != perspective) + 64 * kind_of(p) + (seen ^ f.flip));
+      for (int i = 0; i < NetHidden; ++i) sum[i] += w[i];
+    }
+    for (int i = 0; i < NetHidden; ++i)
+      out.values[perspective][i] = static_cast<std::int16_t>(std::clamp<std::int32_t>(sum[i], -32768, 32767));
+  }
+  return true;
+}
+#endif
+
 template <bool Scalar>
 int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& pos) {
 #if FORK_NET_ARCH == 1
   return Scalar ? output_layer_scalar(net, acc, pos.side_to_move())
                 : output_layer(net, acc, pos.side_to_move());
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6
+#if FORK_NET_ARCH == 6
+  Accumulator summed;
+  const Accumulator& a = add_exposure_rows(net, acc, pos, summed) ? summed : acc;
+#else
+  const Accumulator& a = acc;
+#endif
   const Color stm = pos.side_to_move();
   const int k = phase_bucket(net, pos);
-  const std::int64_t s = Scalar ? squared_sum_scalar(acc.values[stm], acc.values[~stm], net.out_weights[k])
-                                : squared_sum(acc.values[stm], acc.values[~stm], net.out_weights[k]);
+  const std::int64_t s = Scalar ? squared_sum_scalar(a.values[stm], a.values[~stm], net.out_weights[k])
+                                : squared_sum(a.values[stm], a.values[~stm], net.out_weights[k]);
   const std::int64_t y = s / NetQa + net.out_bias[k];
   return clamp_cp(y * net.scale / (NetQa * NetQb));
 #elif FORK_NET_ARCH == 4
@@ -391,7 +426,7 @@ int evaluate_position_scalar(const NetFile& net, const Accumulator& acc, const P
   return evaluate_with<true>(net, acc, pos);
 }
 
-#if FORK_NET_ARCH == 5
+#if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
 // Set-wise: each side's attacked squares, accumulated by attacker class
 // (pawns; + knights and bishops; + rooks; + queens; + the king), so a
 // piece's lowest enemy attacker class is read off the sets instead of each

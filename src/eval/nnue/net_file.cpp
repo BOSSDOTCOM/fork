@@ -74,14 +74,16 @@ bool first_layer_in_range(const std::int16_t* weights, const std::int16_t* bias,
 // The overflow bounds of the header comment; false names the first broken one.
 bool sums_in_range(const NetFile& net, std::string& error) {
   const int piece_rows = NetPieceSquares * net.region_count;
-  if (!first_layer_in_range(net.ft_weights, net.ft_bias, NetHidden, piece_rows, net.inputs, error))
+  // S512+X sums its exposure rows in 32 bits: only the piece rows are bounded.
+  const int bounded_rows = NetArchitecture == 6 ? piece_rows : net.inputs;
+  if (!first_layer_in_range(net.ft_weights, net.ft_bias, NetHidden, piece_rows, bounded_rows, error))
     return false;
 #if FORK_NET_ARCH == 1
   std::int64_t total = 0;
   for (int i = 0; i < 2 * NetHidden; ++i) total += std::abs(int{net.out_weights[i]});
   if (NetQa * total + std::abs(std::int64_t{net.out_bias}) > std::numeric_limits<std::int32_t>::max())
     return error = "the output layer can leave the int32 range", false;
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
   // Squared outputs: each product v * (v * w) needs |w| <= 128 so that v * w
   // stays in int16; the sums run in int64.
 #if FORK_NET_ARCH == 5
@@ -186,7 +188,7 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
 #if FORK_NET_ARCH == 1
   for (int i = 0; i < 2 * NetHidden; ++i) out.out_weights[i] = c.i16();
   out.out_bias = c.i32();
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6
   for (auto& row : out.out_weights)
     for (auto& w : row) w = c.i16();
   for (auto& b : out.out_bias) b = c.i32();
@@ -239,7 +241,7 @@ std::vector<std::uint8_t> write_net_file(const NetFile& net) {
 #if FORK_NET_ARCH == 1
   for (int i = 0; i < 2 * NetHidden; ++i) put_i16(net.out_weights[i]);
   put_i32(net.out_bias);
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6
   for (const auto& row : net.out_weights)
     for (const auto w : row) put_i16(w);
   for (const auto b : net.out_bias) put_i32(b);
