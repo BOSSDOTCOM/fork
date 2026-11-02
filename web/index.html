@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>Play Fork</title>
-  <meta name="description" content="Play Fork, an original open-source chess engine, in your browser.">
+  <meta name="description" content="Play Fork, an original open-source chess engine, in your browser, and watch its networks learn.">
   <link rel="stylesheet" href="vendor/chessground/chessground.base.css">
   <link rel="stylesheet" href="vendor/chessground/chessground.brown.css">
   <link rel="stylesheet" href="vendor/chessground/chessground.cburnett.css">
@@ -19,8 +19,16 @@
     <p class="tagline">An original chess engine, playing in your browser.</p>
     <button id="theme" type="button" aria-label="Switch between light and dark">◐</button>
   </header>
-  <main>
-    <div class="board-box"><div id="board"></div></div>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="play" aria-selected="true" aria-controls="panel-play">Play</button>
+    <button type="button" role="tab" data-tab="watch" aria-selected="false" aria-controls="panel-watch">Watch it learn</button>
+  </nav>
+
+  <main id="panel-play" role="tabpanel">
+    <div class="board-wrap">
+      <div class="evalbar" id="bar" role="meter" aria-label="White's expected result" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><div class="white"></div></div>
+      <div class="board-box"><div id="board"></div></div>
+    </div>
     <div class="side">
       <p id="status" role="status" aria-live="polite">Loading…</p>
       <div class="controls">
@@ -31,7 +39,10 @@
             <option value="random">Random</option>
           </select>
         </label>
-        <button id="new-game" type="button">New game</button>
+        <label>Strength
+          <select id="level"></select>
+        </label>
+        <button id="new-game" class="primary" type="button">New game</button>
       </div>
       <div id="promotion" hidden>
         <span>Promote to</span>
@@ -40,9 +51,65 @@
         <button type="button" data-piece="b">Bishop</button>
         <button type="button" data-piece="n">Knight</button>
       </div>
-      <p class="note">Fork searches 200,000 positions per move, running entirely on this device.</p>
+      <section class="analysis" aria-label="Fork's thinking">
+        <p><strong id="bar-score" class="score"></strong> <span id="search-info" class="muted"></span></p>
+        <p id="pv" class="line"></p>
+      </section>
+      <p id="moves" class="line moves"></p>
+      <p class="note"><span id="level-note"></span> Network: <span id="playing-net"></span>. The bar shows the network's own estimate of White's result.</p>
     </div>
   </main>
+
+  <main id="panel-watch" role="tabpanel" hidden>
+    <div class="board-wrap">
+      <div class="evalbar" id="watch-bar" role="meter" aria-label="White's expected result" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><div class="white"></div></div>
+      <div class="board-box"><div id="watch-board"></div></div>
+    </div>
+    <div class="side">
+      <p id="watch-status" role="status" aria-live="polite">Pick two networks and start a game.</p>
+      <div class="controls">
+        <label>White <select id="white-net"></select></label>
+        <label>Black <select id="black-net"></select></label>
+        <label>Search <select id="watch-nodes"></select></label>
+        <label>Start from
+          <select id="watch-opening">
+            <option value="start">the start position</option>
+            <option value="bench">a position from Fork's test set</option>
+          </select>
+        </label>
+        <button id="watch-start" class="primary" type="button">Start</button>
+        <button id="watch-stop" type="button">Stop</button>
+      </div>
+      <section class="analysis" aria-label="The side to move's thinking">
+        <p><strong id="watch-bar-score" class="score"></strong></p>
+        <p id="watch-info" class="line muted"></p>
+      </section>
+      <p id="watch-moves" class="line moves"></p>
+    </div>
+    <section class="wide">
+      <h2>Fork's networks</h2>
+      <p class="note">Each network replaced the one before it after winning a sequential test (SPRT) in
+        self-play at 8+0.08 seconds; the running total adds up those results. These are self-play Elo
+        differences, not ratings on any list. Each validation loss is measured on its own training data's
+        held-out games.</p>
+      <div class="table-box">
+        <table>
+          <thead><tr><th>Network</th><th>Promoted</th><th>Promotion test</th><th>Running total</th>
+            <th>Validation loss</th><th>Data</th><th>Architecture</th><th>Module size</th></tr></thead>
+          <tbody id="nets-body"></tbody>
+        </table>
+      </div>
+      <h2>How each one sees a few positions</h2>
+      <p class="note">The static evaluation (no search) of the chess programming wiki's perft test positions,
+        in pawns from White's view. Each network is downloaded when you press the button.</p>
+      <button id="compare" type="button">Evaluate the positions</button>
+      <p id="compare-note" class="note"></p>
+      <div class="table-box">
+        <table><thead id="compare-head"></thead><tbody id="compare-body"></tbody></table>
+      </div>
+    </section>
+  </main>
+
   <footer>
     <p><a href="https://github.com/BOSSDOTCOM/fork">Fork</a> is free software under the
       <a href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL v3 or later</a>; its source code is on GitHub.</p>

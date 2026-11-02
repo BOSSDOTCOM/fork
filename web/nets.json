@@ -1,0 +1,66 @@
+{
+ "comment": "Fork's promoted evaluators for the page (DESIGN.md §5.5), oldest first. Every value below is copied from docs/nets.md and docs/history/phase-4/sprt-log.md (2026-11-02); the build (.github/workflows/web.yml) adds each module's file, size and SHA-256. scale is the output scale S the evaluation bar reads scores with (docs/nets.md); the bootstrap evaluation has none of its own, so it takes 134, the S with which B0's training read the bootstrap's labels (docs/nets.md, B0). Each validation loss is on its own data's held-out games, so losses on different data are not comparable.",
+ "default": "s512r2",
+ "networks": [
+  {
+   "id": "bootstrap",
+   "name": "Bootstrap",
+   "architecture": "Fork's hand-written evaluation (Phase 3), where every network's chain begins",
+   "promoted": null,
+   "scale": 134,
+   "data": null,
+   "validation_loss": null,
+   "sprt": null
+  },
+  {
+   "id": "b0",
+   "name": "B0",
+   "architecture": "768 inputs per perspective -> 256, clipped ReLU -> 1",
+   "promoted": "2026-10-29",
+   "scale": 134,
+   "data": "generation-0 snapshot g0s1: 99,775 games, 9,535,083 positions of Fork self-play with the bootstrap evaluation",
+   "validation_loss": "0.02483",
+   "sprt": {"against": "Bootstrap", "elo": "+486.85 +/- 32.07", "games": 1600, "conditions": "[0, 5], 8+0.08", "run": "40821861574", "result": "H1 accepted"}
+  },
+  {
+   "id": "b0r1",
+   "name": "B0r1",
+   "architecture": "768 -> 256 -> 1, clipped ReLU (B0's, warm-started from B0)",
+   "promoted": "2026-10-29",
+   "scale": 134,
+   "data": "generation-0 snapshot g0s2: 867,948 games, 82,943,968 positions",
+   "validation_loss": "0.02298352",
+   "sprt": {"against": "B0", "elo": "+200.24 +/- 16.05", "games": 1600, "conditions": "[0, 5], 8+0.08", "run": "40916705615", "result": "H1 accepted"}
+  },
+  {
+   "id": "b0r2",
+   "name": "B0r2",
+   "architecture": "768 -> 256 -> 1, clipped ReLU (B0's)",
+   "promoted": "2026-10-30",
+   "scale": 105,
+   "data": "generation-1 snapshot g1s1: 1,505,322 games, 150,117,509 positions of Fork self-play labelled by B0r1",
+   "validation_loss": "0.02167907",
+   "sprt": {"against": "B0r1", "elo": "+235.45 +/- 16.04", "games": 1600, "conditions": "[0, 5], 8+0.08", "run": "41104107035", "result": "H1 accepted"}
+  },
+  {
+   "id": "s512",
+   "name": "S512",
+   "architecture": "768 inputs per perspective, mirrored left-right, -> 512 SCReLU -> 8 outputs, one picked by game phase",
+   "promoted": "2026-10-30",
+   "scale": 101,
+   "data": "generation-1 snapshot g1s1, as B0r2",
+   "validation_loss": "0.020974",
+   "sprt": {"against": "B0r2 (the B0 control)", "elo": "+43.66 +/- 12.02", "games": 1600, "conditions": "[0, 5], 8+0.08", "run": "41125906800", "result": "H1 accepted"}
+  },
+  {
+   "id": "s512r2",
+   "name": "S512r2",
+   "architecture": "S512's (768 mirrored -> 512 SCReLU -> 8 outputs by game phase), retrained",
+   "promoted": "2026-11-01",
+   "scale": 92,
+   "data": "generation-2 snapshot g2s1: 9,176,386 games, 614,769,222 saved positions labelled by S512",
+   "validation_loss": "0.019458",
+   "sprt": {"against": "S512", "elo": "+151.35 +/- 12.50", "games": 1600, "conditions": "[0, 5], 8+0.08", "run": "41349145950", "result": "H1 accepted"}
+  }
+ ]
+}
