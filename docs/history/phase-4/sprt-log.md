@@ -453,6 +453,7 @@ LLR: 15.30 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
 |---|---|---|---|---|---|---|---|
 | H-512 (seed 1, S = 92) | 4c68385 | 828bdc7 | 41371135671 | −12.17 ± 10.58 | −19.60 ± 17.02 | [37, 211, 339, 197, 16] | no |
 | AF-S (seed 1, S = 89) | 40198f5 | 5e72ab1 | 41390867039 | +10.43 ± 10.36 | +17.15 ± 17.02 | [25, 169, 368, 209, 29] | yes |
+| XGR-512 (seed 2, S = 89) | 40198f5 | 22c3494 | 41395484353 | +30.70 ± 10.37 | +50.67 ± 17.02 | [20, 139, 356, 250, 35] | yes |
 
 - H-512: 1,600 games finished, no time losses, no abnormal ends. Its Elo
   interval, −22.75 to −1.59, lies wholly below 0, so it is not a retest
@@ -464,3 +465,13 @@ LLR: 15.30 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
   estimate is above 0 (interval −0.07 to +20.79), so it proceeds to the
   STC promotion SPRT against S512r2 on [0, 5]. At round 1's stage B it
   scored +41.67 ± 12.01 against B0.
+- XGR-512: 1,600 games finished, no time losses, no abnormal ends. Its
+  point estimate is above 0 (interval +20.33 to +41.07), so it proceeds to
+  the STC promotion SPRT against S512r2 on [0, 5]. At round 1's stage B it
+  scored +52.07 ± 11.81 against B0.
+- Stray runs: between 2026-11-01 8:12 PM and 2026-11-02 12:38 AM EST, six
+  sprt runs (41371254296, 41374609261, 41374700577, 41390975177,
+  41395037917, 41395238185) failed at checkout within about a minute. They
+  were stages 2 to 7 of the cancelled first IIR SPRT, whose local driver
+  kept dispatching against the replaced test commit 988843c; no games were
+  played, and the driver was stopped. None of them is part of any result.
