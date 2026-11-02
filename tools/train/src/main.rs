@@ -25,6 +25,9 @@
 //!   ReLU; two outputs blended by a gate: out = b + g (a - b), g the clipped
 //!   sum of both perspectives' side value 0, a and b each plus twice the
 //!   difference of the perspectives' side value 1 or 2.
+//! - s512x: s512 plus XGR's exposure inputs (640 and their 10-input
+//!   factoriser, merged when saved; owner, 2026-11-02: XGR's parts as add-ons
+//!   to S512r2, the exposure plane first); the output as s512's.
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
@@ -84,6 +87,7 @@ enum Arch {
     H512,
     AfS,
     Xgr512,
+    S512x,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -121,6 +125,7 @@ impl Spec {
             "h512" => Arch::H512,
             "afs" => Arch::AfS,
             "xgr512" => Arch::Xgr512,
+            "s512x" => Arch::S512x,
             other => panic!("unknown --arch {other}"),
         };
         let mut s = Spec {
@@ -151,6 +156,10 @@ impl Spec {
                 s.regions = XGR_REGIONS;
                 s.factoriser = true;
                 s.exposure = true;
+            }
+            Arch::S512x => {
+                s.exposure = true;
+                s.picker = Picker::Phase;
             }
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
@@ -362,7 +371,7 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                 let l1 = builder.new_affine("l1", 2 * h, 1);
                 l1.forward(l0.forward(stm).crelu().concat(l0.forward(ntm).crelu()))
             }
-            Arch::S512 | Arch::H512 => {
+            Arch::S512 | Arch::H512 | Arch::S512x => {
                 let l0 = builder.new_affine("l0", n, h);
                 let l1 = builder.new_affine("l1", 2 * h, nb);
                 l1.forward(l0.forward(stm).screlu().concat(l0.forward(ntm).screlu())).select(bucket)
@@ -399,14 +408,20 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
 
 /// A first-layer weight (rows values per input, input-major as bullet
 /// stores it) with its factoriser inputs added into the inputs they share
-/// (an f32 addition each, KB bullet-internals.md §1.5) and dropped.
+/// (an f32 addition each, KB bullet-internals.md §1.5) and dropped; an
+/// architecture without the piece factoriser keeps its piece inputs as they
+/// are.
 fn merge_factors(spec: &Spec, rows: usize, v: &[f32]) -> Vec<f32> {
     let col = |c: usize| &v[c * rows..(c + 1) * rows];
     let mut out = Vec::with_capacity(rows * spec.saved_inputs());
     for r in 0..spec.region_count {
         for f in 0..PIECE_SQUARES {
-            let (a, b) = (col(PIECE_SQUARES * r + f), col(spec.factor_start() + f));
-            out.extend(a.iter().zip(b).map(|(x, y)| x + y));
+            let a = col(PIECE_SQUARES * r + f);
+            if spec.factoriser {
+                out.extend(a.iter().zip(col(spec.factor_start() + f)).map(|(x, y)| x + y));
+            } else {
+                out.extend_from_slice(a);
+            }
         }
     }
     if spec.exposure {
@@ -423,7 +438,7 @@ fn merge_factors(spec: &Spec, rows: usize, v: &[f32]) -> Vec<f32> {
 fn first_layer(spec: &Spec, id: &str, rows: usize) -> SavedFormat {
     let s = spec.clone();
     let f = SavedFormat::id(id);
-    if spec.factoriser { f.transform(move |_, v| merge_factors(&s, rows, &v)) } else { f }
+    if spec.factoriser || spec.exposure { f.transform(move |_, v| merge_factors(&s, rows, &v)) } else { f }
 }
 
 // The quantized file, in tools/nnue/<arch>.json's order: QA = 255 and QB = 64
@@ -439,7 +454,7 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
             SavedFormat::id("l1w").round().quantise::<i16>(64),
             SavedFormat::id("l1b").round().quantise::<i32>(255 * 64),
         ],
-        Arch::S512 | Arch::H512 => vec![
+        Arch::S512 | Arch::H512 | Arch::S512x => vec![
             first_layer(spec, "l0w", h).round().quantise::<i16>(255),
             SavedFormat::id("l0b").round().quantise::<i16>(255),
             SavedFormat::id("l1w").transpose().round().quantise::<i16>(64),
@@ -470,10 +485,12 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
 
 /// Per-tensor weight clips: the first layer and its factorisers at +-0.99
 /// each, so a merged weight stays within 1.98 (judgement.md §1.1, §4); every
-/// other tensor at bullet's default +-1.98.
+/// other tensor at bullet's default +-1.98. S512x keeps S-512's rule (no
+/// first-layer clip: a warm start from S512r2 must not move its weights; Fork
+/// sums its exposure rows in 32 bits, so their size needs no bound).
 fn clipped(spec: &Spec) -> Vec<&'static str> {
     match spec.arch {
-        Arch::B0 | Arch::S512 => vec![],
+        Arch::B0 | Arch::S512 | Arch::S512x => vec![],
         Arch::H512 | Arch::AfS => vec!["l0w", "l0b"],
         Arch::Xgr512 => vec!["l0w", "l0b", "s0w", "s0b"],
     }

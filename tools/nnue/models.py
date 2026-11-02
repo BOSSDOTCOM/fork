@@ -17,13 +17,14 @@ from the designs, not from Fork's training program or C++:
 - R-int: Fork's integer arithmetic on Fork's net file (the payload layout
   below), exactly as the designs specify it.
 
-Architecture ids: 2 S-512, 3 H-512, 4 AF-S, 5 XGR-512 (1 is B0, in
-reference.py). Fork's net file, version 2: the 64-byte header (magic,
+Architecture ids: 2 S-512, 3 H-512, 4 AF-S, 5 XGR-512, 6 S512+X (S-512
+plus XGR's exposure inputs; 1 is B0, in reference.py). Fork's net file, version 2: the 64-byte header (magic,
 version 2, id, saved inputs, hidden, QA, QB, S, bucket count, checksum),
 then a 128-byte map block (32 region bytes, 25 phase-table bytes, zeros),
 then the tensors, little-endian:
-- 2, 3: feature weights i16 [inputs][H], feature biases i16 [H], output
-  weights i16 [8][2H] (side to move's half first), output biases i32 [8];
+- 2, 3, 6: feature weights i16 [inputs][H], feature biases i16 [H], output
+  weights i16 [8][2H] (side to move's half first), output biases i32 [8]
+  (6: the inputs are the 768 piece rows, then the 640 exposure rows);
 - 4: feature weights and biases as above, then per stack k: L1 i8 [8][16][H],
   L1 biases i32 [8][16], L2 i16 [8][32][16], L2 biases i32 [8][32], L3 i16
   [8][32], L3 biases i32 [8], and the output multiplier M (i64);
@@ -44,7 +45,7 @@ EXPOSURE_ROWS = 640
 XGR_REGIONS = [0, 1, 1, 1, 2, 2, 2, 2] + [3] * 24  # e1; f1-h1; rank 2; ranks 3-8 (design-novelty.md §2.1)
 PHASE_WEIGHT = {chess.KNIGHT: 1, chess.BISHOP: 1, chess.ROOK: 2, chess.QUEEN: 4}
 CLASS = {chess.PAWN: 1, chess.KNIGHT: 2, chess.BISHOP: 2, chess.ROOK: 3, chess.QUEEN: 4, chess.KING: 5}
-ARCH = {'s512': 2, 'h512': 3, 'afs': 4, 'xgr512': 5}
+ARCH = {'s512': 2, 'h512': 3, 'afs': 4, 'xgr512': 5, 's512x': 6}
 MAP_BLOCK = 128
 
 # AF-S's integer scales (design-accuracy.md §5.3-5.4), as exact rationals.
@@ -65,7 +66,7 @@ class Arch:
         self.regions = list(regions) if regions is not None else [0] * 32
         self.region_count = max(self.regions) + 1
         self.factoriser = name in ('h512', 'afs', 'xgr512')
-        self.exposure = name == 'xgr512'
+        self.exposure = name in ('xgr512', 's512x')
         self.picker = 'phase' if name != 'xgr512' else None
         self.table = list(table) if table is not None else []
         if self.picker:
@@ -180,7 +181,7 @@ def r_float(arch, w, board):
     stm, ntm, k = both_perspectives(arch, board)
     h = arch.hidden
     a_s, a_n = (column_sum(w['l0w'], h, f, w['l0b']) for f in (stm, ntm))
-    if arch.name in ('s512', 'h512'):
+    if arch.name in ('s512', 'h512', 's512x'):
         x = [clip(v) ** 2 for v in a_s + a_n]
         return dense(w['l1w'], w['l1b'], x, 1, k)[0]
     if arch.name == 'afs':
@@ -260,10 +261,10 @@ def saved_tensors(arch, w):
     the further tensors Fork's file holds: {name: (kind, values)}."""
     h, nb = arch.hidden, 8
     t = {}
-    l0 = merge(arch, w['l0w'], h) if arch.factoriser else w['l0w']
+    l0 = merge(arch, w['l0w'], h) if arch.factoriser or arch.exposure else w['l0w']
     t['l0w'] = ('i16', quantise(l0, 255, 'i16'))
     t['l0b'] = ('i16', quantise(w['l0b'], 255, 'i16'))
-    if arch.name in ('s512', 'h512'):
+    if arch.name in ('s512', 'h512', 's512x'):
         t['l1w'] = ('i16', quantise(transpose(w['l1w'], nb, 2 * h), 64, 'i16'))
         t['l1b'] = ('i32', quantise(w['l1b'], 255 * 64, 'i32'))
     elif arch.name == 'afs':
@@ -291,7 +292,7 @@ def fork_tensors(arch, t, scale):
     """Fork's payload tensors (after the map block) from the saved tensors,
     in file order: [(kind, values)]."""
     h = arch.hidden
-    if arch.name in ('s512', 'h512'):
+    if arch.name in ('s512', 'h512', 's512x'):
         return [t['l0w'], t['l0b'], t['l1w'], t['l1b']]
     if arch.name == 'afs':
         return [t['l0w'], t['l0b'], t['l1w'], ('i32', quantise(t['l1b'][1], AF_S1, 'i32')),
@@ -331,7 +332,7 @@ def unpack(arch, payload):
                       ('mult', 'i64', 1)],
               'xgr512': [('ftw', 'i16', n * h), ('ftb', 'i16', h), ('sidew', 'i16', n * 3), ('sideb', 'i16', 3),
                          ('aw', 'i16', 2 * h), ('ab', 'i32', 1), ('bw', 'i16', 2 * h), ('bb', 'i32', 1)]}
-    shapes['h512'] = shapes['s512']
+    shapes['h512'] = shapes['s512x'] = shapes['s512']
     out = {'regions': list(payload[:32]), 'table': list(payload[32:65])}
     for name, kind, count in shapes[arch.name]:
         size = struct.calcsize('<' + CODES[kind])
@@ -370,12 +371,29 @@ def limit_eval(cp):
     return max(-(EVAL_LIMIT - 1), min(EVAL_LIMIT - 1, cp))
 
 
+def exposure_sum(net, arch, active, acc):
+    """S512+X: the piece accumulator plus the exposed pieces' rows, summed
+    without a range limit and then held to the int16 range (Fork sums them
+    in 32 bits; the output clips to [0, QA] anyway)."""
+    out = list(acc)
+    for f in saved_features(arch, active):
+        if f >= arch.factor_start:
+            row = net['ftw'][f * arch.hidden:(f + 1) * arch.hidden]
+            out = [a + w for a, w in zip(out, row)]
+    return [min(max(a, -32768), 32767) for a in out]
+
+
 def r_int(arch, net, scale, board):
     stm, ntm, k = both_perspectives(arch, board)
     h = arch.hidden
-    a_s, a_n = accumulate(net, arch, stm), accumulate(net, arch, ntm)
+    if arch.name == 's512x':
+        pieces = [f for f in stm if f < arch.factor_start], [f for f in ntm if f < arch.factor_start]
+        a_s, a_n = (exposure_sum(net, arch, f, accumulate(net, arch, p))
+                    for f, p in zip((stm, ntm), pieces))
+    else:
+        a_s, a_n = accumulate(net, arch, stm), accumulate(net, arch, ntm)
     v = [min(max(x, 0), QA) for x in a_s + a_n]
-    if arch.name in ('s512', 'h512'):
+    if arch.name in ('s512', 'h512', 's512x'):
         w = net['outw'][k * 2 * h:(k + 1) * 2 * h]
         total = sum(vi * (vi * wi) for vi, wi in zip(v, w))
         y = trunc_div(total, QA) + net['outb'][k]
