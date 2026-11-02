@@ -6,7 +6,7 @@
 // rules: legal moves, the resulting position, the notation and the game's
 // end all come from it.
 import { Chessground } from './vendor/chessground/chessground.min.js';
-import { countText, endingText, givesCheck, numberedLine, turnOf } from './chess-text.js';
+import { countText, endingText, lastMoveChecks, numberedLine, turnOf } from './chess-text.js';
 import { EngineClient, loadNetworks } from './engine-client.js';
 import { setBar } from './eval-bar.js';
 import { startWatchTab } from './watch.js';
@@ -72,7 +72,7 @@ function show(state) {
   ground.set({
     fen: state.fen.split(' ')[0],
     turnColor: turn,
-    check: givesCheck(state.sans),
+    check: lastMoveChecks(state.sans),
     lastMove: last ? [last.slice(0, 2), last.slice(2, 4)] : undefined,
     movable: { color: humanToMove ? game.human : undefined, dests: humanToMove ? destinations(state.legal) : new Map() },
   });

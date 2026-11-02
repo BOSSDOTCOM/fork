@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import {
   countText,
   endingText,
-  givesCheck,
+  lastMoveChecks,
   numberedLine,
   parseReport,
   scoreText,
@@ -64,9 +64,9 @@ test('numbered lines, sides to move and endings', () => {
   assert.equal(endingText('checkmate', 'black'), 'Checkmate: White wins.');
   assert.equal(endingText('repetition', 'white'), 'Draw by threefold repetition.');
   assert.equal(endingText('playing', 'white'), null);
-  assert.equal(givesCheck(['e4', 'Qh4#']), true);
-  assert.equal(givesCheck(['Bb5+', 'c6']), false);
-  assert.equal(givesCheck([]), false);
+  assert.equal(lastMoveChecks(['e4', 'Qh4#']), true);
+  assert.equal(lastMoveChecks(['Bb5+', 'c6']), false);
+  assert.equal(lastMoveChecks([]), false);
   assert.equal(countText(200000), '200,000');
 });
 

@@ -93,6 +93,6 @@ export function endingText(status, turn) {
 }
 
 // Whether the last move in SAN gave check (its "+" or "#").
-export function givesCheck(sans) {
+export function lastMoveChecks(sans) {
   return sans.length > 0 && /[+#]$/.test(sans[sans.length - 1]);
 }

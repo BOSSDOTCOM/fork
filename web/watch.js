@@ -4,7 +4,7 @@
 // node count per move; the networks' record from nets.json; and their static
 // evaluations of fixed positions side by side.
 import { Chessground } from './vendor/chessground/chessground.min.js';
-import { countText, endingText, givesCheck, numberedLine, scoreText, turnOf } from './chess-text.js';
+import { countText, endingText, lastMoveChecks, numberedLine, scoreText, turnOf } from './chess-text.js';
 import { EngineClient } from './engine-client.js';
 import { setBar } from './eval-bar.js';
 import { SuitePositions } from './suite-positions.js';
@@ -120,7 +120,7 @@ export function startWatchTab(manifest) {
 
   function showPosition(state, startFen) {
     const moves = state.sans;
-    ground.set({ fen: state.fen.split(' ')[0], turnColor: turnOf(state.fen), check: givesCheck(moves) });
+    ground.set({ fen: state.fen.split(' ')[0], turnColor: turnOf(state.fen), check: lastMoveChecks(moves) });
     el('watch-moves').textContent = numberedLine(startFen, moves);
   }
 
