@@ -387,8 +387,8 @@ class Searcher {
   int eval_at(int ply);
 
   // The static estimate from the raw eval (out of check): plus the pawn
-  // drift when use_pawn_drift, kept out of the tablebase and mate range.
-  int drifted(int raw) const;
+  // drift if `apply`, kept out of the tablebase and mate range.
+  int drifted(int raw, bool apply) const;
 #ifdef FORK_SEARCH_STATS
   void count_drift(int best, int raw, int estimate, TtBound bound, std::uint32_t structure);
 #endif

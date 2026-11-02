@@ -100,8 +100,8 @@ int fifty_move_score(const Position& pos, bool in_check, int ply) {
 
 }  // namespace
 
-int Searcher::drifted(int raw) const {
-  if (!switches.use_pawn_drift) return raw;
+int Searcher::drifted(int raw, bool apply) const {
+  if (!apply) return raw;
   const Position& pos = *pos_;
   constexpr int Bound = TbWinScore - MaxPly - 1;  // the largest score is_tb_or_mate does not flag
   return std::clamp(raw + pawn_drift_.offset(pos.side_to_move(), pos.pawn_structure_key()), -Bound, Bound);
@@ -265,7 +265,20 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
   // The static estimate: the raw eval plus the pawn drift (tier 2, T32),
   // kept out of the tablebase and mate range. The TT keeps the raw eval.
-  const int estimate = in_check ? ScoreNone : drifted(f.static_eval);
+  const int estimate = in_check ? ScoreNone : drifted(f.static_eval, switches.use_pawn_drift);
+  // The drift measurement (FORK_DRIFT_REPORT in stats builds) with the drift
+  // off: the table still learns and its estimate is judged at the learning
+  // nodes, but the search keeps the raw eval, so every setting searches the
+  // same tree and the estimate judged never shaped the results it is judged
+  // by (tools/drift_measure.py).
+  bool drift_learns = switches.use_pawn_drift;
+  int judged = estimate;
+#ifdef FORK_SEARCH_STATS
+  if (drift_report_ && !drift_learns) {
+    drift_learns = true;
+    judged = in_check ? ScoreNone : drifted(f.static_eval, true);
+  }
+#endif
   // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
   // score from a real search corrects the static estimate in the direction
   // its bound proves (a lower bound above it raises it, an upper bound below
@@ -573,10 +586,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // upper bound only too high).
   if (!in_check && !withheld && (best_move.is_none() || (!best_move.is_capture() && !best_move.is_promotion())) &&
       !is_tb_or_mate(best) &&
-      (bound == TtBound::Exact || (bound == TtBound::Lower && best > estimate) ||
-       (bound == TtBound::Upper && best < estimate))) {
-    FORK_STAT(count_drift(best, f.static_eval, estimate, bound, pos.pawn_structure_key()));
-    if (switches.use_pawn_drift)
+      (bound == TtBound::Exact || (bound == TtBound::Lower && best > judged) ||
+       (bound == TtBound::Upper && best < judged))) {
+    FORK_STAT(count_drift(best, f.static_eval, judged, bound, pos.pawn_structure_key()));
+    if (drift_learns)
       pawn_drift_.learn(pos.side_to_move(), pos.pawn_structure_key(), best - f.static_eval, depth);
   }
   if (switches.use_tt && !withheld) tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
@@ -616,7 +629,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     f.static_eval = ScoreNone;
   } else {
     f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
-    best = drifted(f.static_eval);  // the stand-pat is the static estimate (T32)
+    best = drifted(f.static_eval, switches.use_pawn_drift);  // the stand-pat is the static estimate (T32)
     if (best >= beta) {
       if (switches.use_tt)
         tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);
