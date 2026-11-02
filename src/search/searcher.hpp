@@ -122,8 +122,8 @@ struct SearchQuota {
 //   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
 // - use_pawn_drift: the eval the search estimates with (pruning, the
 //   quiescence stand-pat) is the raw eval plus the pawn drift table's
-//   learned drift for its pawn structure (tier 2, T32; eval_drift.hpp). Off
-//   until its SPRT.
+//   learned drift for its pawn structure (tier 2, T32; eval_drift.hpp). On
+//   for its LTC SPRT (branch tier2/drift).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -154,7 +154,7 @@ struct SearchQuota {
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
-  X(use_pawn_drift, UsePawnDrift, false)
+  X(use_pawn_drift, UsePawnDrift, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
