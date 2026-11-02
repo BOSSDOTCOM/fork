@@ -7,8 +7,9 @@
 # no dispatch while any run is busy; an H1 verdict ends the SPRT after one
 # stage; an undecided SPRT runs every stage, in order, then exits 2; a
 # failed run stops it; results naming another commit stop it, unmerged; a
-# commit not on GitHub stops it before any dispatch; RUN_ID waits for that
-# run without dispatching. Uses python3 (or $PYTHON) for the merge.
+# commit not on GitHub stops it before any dispatch, and a missing gh is
+# named as such; RUN_ID waits for that run without dispatching. Uses
+# python3 (or $PYTHON) for the merge.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -137,7 +138,13 @@ drive missing "$sha" "$sha" 0 5
 check "a commit not on GitHub exits 1" [ "$(rc missing)" = 1 ]
 check "no dispatch for it" [ "$(dispatches missing)" = 1 ]
 
-# 14-15: RUN_ID waits for a dispatched run without dispatching it again.
+# 14: no gh at all is reported as such, not as a missing commit.
+setup nogh 0 "$strong"
+FAKE_GH=$tmp/nogh GH=$tmp/no-such-gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/nogh/data \
+  bash "$here/sprt_run.sh" nogh "$sha" "$sha" 0 5 >"$tmp/nogh/out" 2>&1
+check "a missing gh is named" grep -q "no gh command" "$tmp/nogh/out"
+
+# 15-16: RUN_ID waits for a dispatched run without dispatching it again.
 setup adopt 0 "$strong"
 printf 'base=%s\ntest=%s\nstage=0\n' "$sha" "$sha" >"$tmp/adopt/run.77"
 FAKE_GH=$tmp/adopt GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/adopt/data RUN_ID=77 \

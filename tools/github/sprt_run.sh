@@ -60,6 +60,7 @@ if [ -z "$py" ]; then
   done
 fi
 [ -n "$py" ] || stop "no Python for the merge"
+command -v "$GH" >/dev/null 2>&1 || stop "no gh command '$GH' (set GH to its path)"
 base=$(git rev-parse --verify --quiet "$2^{commit}") || stop "base $2 is not a commit in this clone"
 test=$(git rev-parse --verify --quiet "$3^{commit}") || stop "test $3 is not a commit in this clone"
 REF=${REF:-$(git rev-parse --abbrev-ref HEAD)}
