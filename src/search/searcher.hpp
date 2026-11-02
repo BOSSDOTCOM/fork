@@ -117,7 +117,8 @@ struct SearchQuota {
 //   games, [0, 3]; 2026-11-01).
 // - use_no_move_reduction: a node without a TT move, at least
 //   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
-//   internal iterative reduction). Off until its SPRT.
+//   internal iterative reduction). On since its STC SPRT passed (+21.45
+//   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -147,7 +148,7 @@ struct SearchQuota {
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
-  X(use_no_move_reduction, UseNoMoveReduction, false)
+  X(use_no_move_reduction, UseNoMoveReduction, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

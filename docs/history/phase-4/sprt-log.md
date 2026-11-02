@@ -522,3 +522,25 @@ LLR: -3.46 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
 - Round 2 ends with no promotion: S512r2 stays the default. LTC candidates:
   AF-S and XGR-512; retest candidate: AF-S.
 
+### 2026-11-02 iir-d8-vs-s512r2 (tier 2, T26: internal iterative reduction)
+
+- Base `387f338` (phase-4: S512r2, the default; singular extension,
+  multi-cut, the reply, follow and take tables on; bench 17,904,298), test
+  `5282a71` (branch tier2/iir: the same with `use_no_move_reduction` on,
+  NoMoveReduceMinDepth 8; bench 14,180,299), bounds [0, 3] nElo, 8+0.08,
+  Hash 16 MB, Syzygy 3-4-5, GitHub shards, driven by
+  tools/github/sprt_run.sh. The first attempt (on S512, before S512r2's
+  promotion) was cancelled at stage 0 and is not part of this result.
+- Stages (Elo, nElo, LLR after each): 0 (run 41404320026) +22.18 ± 10.34,
+  +36.63 ± 17.02, 1.40; 1 (run 41406334196) +20.11 ± 7.34, +33.05 ± 12.04,
+  2.51; 2 (run 41408301291) H1. Result: **H1 accepted** after stage 2:
+```
+Shards: 48 (done); pairs 2400, games 4800 (4800 finished, time losses 0, abnormal 0)
+Elo: 21.45 +/- 5.98, nElo: 35.35 +/- 9.83
+Ptnml(0-2): [60, 472, 1080, 688, 100]
+LLR: 4.04 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
+```
+- Adopted: the switch is on in phase-4. The measurement that chose the
+  depth had found no depth better than "off" on its quality proxy (DESIGN.md
+  Search constants, `NoMoveReduceMinDepth`); in games the reduction gains.
+
