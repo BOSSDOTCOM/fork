@@ -1260,3 +1260,28 @@ source was opened.
 | https://api.github.com/repos/Kaggle/kaggle-cli/commits?per_page=3 | Kaggle CLI commit list | head is still `a636fc70` |
 | https://raw.githubusercontent.com/Kaggle/kaggle-cli/main/docs/datasets_metadata.md | CLI dataset metadata docs (Apache-2.0) | the `keywords` field must match an existing tag; unknown tags are skipped |
 | web search "Kaggle terms of use update 2026" | search (snippets not relied on) | looked for a change announcement: none from Kaggle found |
+
+## Gauntlet anchor above Marvin 6.3.0 (competition.md section 5), 2026-11-02
+
+No engine repository was cloned or downloaded and no engine source file was opened on purpose. Only CCRL pages, READMEs, licence files, build files, tree listings, release notes and GitHub/GitLab API metadata were read. One page, the Koivisto GitHub wiki "Evaluation" page, turned out to include a source-code listing after its prose introduction; only the prose was used (it does not state the training data), nothing from the listing was copied or kept, and the page was not used further. Scratch copies of listings and pages lived in a temporary folder outside the repository and were deleted before reporting.
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://computerchess.org.uk/ccrl/404/ and https://computerchess.org.uk/ccrl/404/rating_list_all.html | CCRL Blitz best-in-class and complete lists, "Computed on October 31, 2026" (curl, parsed locally) | 2026-11-02 | every entry 3530-3670: names, ratings, +/-, games, open-source flag |
+| https://computerchess.org.uk/ccrl/404/cgi/engine_details.cgi?print=Details&eng=... (Koivisto 9.0, Seer 2.8.0, Clover 6.1, Uralochka 3.41a, Devre 6.0, Altair 7.0.0, Peacekeeper 3.01, each "64-bit") | CCRL engine details pages | 2026-11-02 | rating, author and repository link |
+| `git ls-remote --tags` on Luecx/Koivisto, connormcmonigle/seer-nnue, lucametehau/CloverEngine, gitlab.com/freemanzlat/uralochka3, jdart1/arasan-chess, zzzzz151/Starzix, OmerFarukTutkun/Devre, Alex2262/AltairChessEngine, Sazgr/peacekeeper | tag lists | 2026-11-02 | tag SHAs; lightweight vs annotated (Arasan's are annotated) |
+| https://api.github.com/repos/{Luecx/Koivisto, Luecx/KoivistoNetworks, connormcmonigle/seer-nnue, lucametehau/CloverEngine, jdart1/arasan-chess, zzzzz151/Starzix, OmerFarukTutkun/Devre, Alex2262/AltairChessEngine, Sazgr/peacekeeper} | API repo metadata | 2026-11-02 | language, licence, fork flag |
+| https://api.github.com/repos/{repo}/git/trees/{commit}?recursive=1 for Koivisto v9.0, Seer v2.8.0, Clover v6.1, Starzix 5.0, Devre v6.0, Altair v7.0.0; root tree for Arasan v25.3 | API tree listings | 2026-11-02 | net files and sizes, submodules, build and licence files (only non-source paths printed) |
+| https://api.github.com/repos/{repo}/commits/{commit} for the same tags; Luecx/KoivistoNetworks commit 8cae8123 | API commits | 2026-11-02 | commit dates and messages; Koivisto net submodule commit |
+| https://api.github.com/repos/{Alex2262/AltairChessEngine, lucametehau/CloverEngine}/git/refs/tags/{v7.0.0, v6.1} | API refs | 2026-11-02 | tag object type `commit` |
+| https://api.github.com/repos/{Luecx/Koivisto, lucametehau/CloverEngine}/releases; .../Alex2262/AltairChessEngine/releases/tags/v7.0.0 | API release notes | 2026-11-02 | net data statements (Koivisto 5.0/6.0/9.0, Clover 3.0-9.0, Altair 7.0.0) |
+| https://raw.githubusercontent.com/Alex2262/AltairChessEngine/9b52e0e1.../{README.md, makefile, LICENSE} | raw at tag | 2026-11-02 | data originality, build, MIT |
+| https://raw.githubusercontent.com/lucametehau/CloverEngine/20f8701a.../{README.md, .gitattributes, src/README.md, src/makefile, src/LICENSE} | raw at tag | 2026-11-02 | build, options, GPL-3.0 |
+| https://raw.githubusercontent.com/Luecx/Koivisto/2895237d.../{README.md, .gitmodules, src_files/makefile, LICENSE.md}; https://raw.githubusercontent.com/Luecx/KoivistoNetworks/HEAD/README.md | raw | 2026-11-02 | Koivisto build and net submodule (rejected) |
+| https://raw.githubusercontent.com/wiki/Luecx/Koivisto/Evaluation.md | Koivisto wiki page (contains a code listing; prose only used, see above) | 2026-11-02 | looked for the net's data source: not stated |
+| https://raw.githubusercontent.com/connormcmonigle/seer-nnue/f9b341ea.../{README.md, build/makefile, LICENSE.md} | raw at tag | 2026-11-02 | Seer net download step (rejected) |
+| https://gitlab.com/api/v4/projects/freemanzlat%2Furalochka3 (+ /repository/tree at v.3.41, root and nn/); https://gitlab.com/freemanzlat/uralochka3/-/raw/90d697b1.../{.gitattributes, README.md, Makefile, LICENSE} | GitLab API and raw at tag | 2026-11-02 | LFS net, Makefile, data statement (rejected) |
+| https://raw.githubusercontent.com/OmerFarukTutkun/Devre/17f07ffe.../README.md (LICENSE, makefile, Makefile, .gitmodules, .gitattributes at the tag: 404) | raw at tag | 2026-11-02 | Leela data, no licence (rejected) |
+| https://raw.githubusercontent.com/{zzzzz151/Starzix/ed34293d..., OmerFarukTutkun/Devre/HEAD, Alex2262/AltairChessEngine/HEAD, Sazgr/peacekeeper/HEAD}/README.md | READMEs | 2026-11-02 | screen (Starzix: Lc0 data, WTFPL) |
+| https://raw.githubusercontent.com/jdart1/arasan-chess/575a91e6.../.gitmodules | raw at tag | 2026-11-02 | Fathom submodule (not pursued) |
+| https://www.chessprogramming.org/Koivisto and https://www.chessprogramming.org/Clover | CPW engine pages | 2026-11-02 | authors, licence, "own NNUE" (Koivisto); neither states training data |
