@@ -123,6 +123,11 @@ struct SearchQuota {
 //   when the side to move's static eval has risen since its previous turn
 //   (tier 2, T18's flag, its RFP use alone: the owner's order tests one use
 //   at a time). Off until measured and SPRTed.
+// - use_threat_buckets: the butterfly history is read and updated in one of
+//   four buckets by whether the opponent attacks the quiet move's from- and
+//   to-square before the move (tier 2, T56's threat-indexed history, "any
+//   enemy attack"; quiet_history.hpp). Off: every move uses bucket 0, the
+//   table as before. Off until SPRTed.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -153,7 +158,8 @@ struct SearchQuota {
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
-  X(use_rising_rfp, UseRisingRfp, false)
+  X(use_rising_rfp, UseRisingRfp, false)                 \
+  X(use_threat_buckets, UseThreatBuckets, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -252,9 +258,10 @@ struct LmrMoveFacts {
 
 // The LMR context's history: the mover's entry for the move, read from the
 // position after the move, where the mover is the side not to move (b89185f:
-// it read the opponent's table; tests/test_pruning.cpp).
-inline int mover_history(const QuietHistory& history, const Position& after, Move m) {
-  return history.value(~after.side_to_move(), m);
+// it read the opponent's table; tests/test_pruning.cpp). `bucket` is the
+// move's threat bucket, taken before the move was made (T56; 0 when off).
+inline int mover_history(const QuietHistory& history, const Position& after, Move m, int bucket = 0) {
+  return history.value(~after.side_to_move(), m, bucket);
 }
 
 // Debug counters (DESIGN.md §5.2), compiled in only with the CMake option
@@ -371,7 +378,7 @@ class Searcher {
 
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
-  void record_cutoff(const PlyFrame& f, Move m, int depth);
+  void record_cutoff(PlyFrame& f, Move m, int depth);
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }

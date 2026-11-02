@@ -67,20 +67,25 @@ void check_node(Position& pos, const QuietHistory& history, std::uint64_t& seed,
     tt_moves.push_back(Move::from_raw(static_cast<std::uint16_t>(splitmix_next(seed))));
   for (Move tt : tt_moves) {
     for (const QuietHistory* h : {static_cast<const QuietHistory*>(nullptr), &history}) {
-      MoveSelector s;
-      s.start_main(pos, tt, h);
-      const std::vector<Move> got = drain(s);
-      CHECK_MSG(sorted_raw(got) == want, pos.fen() << " tt " << tt.raw() << ": main selector set differs");
-      // A legal TT move comes first.
-      if (!tt.is_none() && std::find(legal.begin(), legal.end(), tt) != legal.end())
-        CHECK_MSG(!got.empty() && got.front() == tt, pos.fen());
-      ++c.checks;
-      for (bool see_filter : {true, false}) {
-        MoveSelector q;
-        q.start_quiesce(pos, tt, see_filter, h);
-        CHECK_MSG(sorted_raw(drain(q)) == sorted_raw(quiesce_set(pos, see_filter)),
-                  pos.fen() << " tt " << tt.raw() << " see " << see_filter << ": quiescence set differs");
+      // With and without the threat buckets (tier 2, T56): only the order
+      // may change.
+      for (bool aware : {false, true}) {
+        MoveSelector s;
+        s.start_main(pos, tt, h, nullptr, NoArrival, NoArrival, nullptr, aware);
+        const std::vector<Move> got = drain(s);
+        CHECK_MSG(sorted_raw(got) == want,
+                  pos.fen() << " tt " << tt.raw() << " aware " << aware << ": main selector set differs");
+        // A legal TT move comes first.
+        if (!tt.is_none() && std::find(legal.begin(), legal.end(), tt) != legal.end())
+          CHECK_MSG(!got.empty() && got.front() == tt, pos.fen());
         ++c.checks;
+        for (bool see_filter : {true, false}) {
+          MoveSelector q;
+          q.start_quiesce(pos, tt, see_filter, h, nullptr, aware);
+          CHECK_MSG(sorted_raw(drain(q)) == sorted_raw(quiesce_set(pos, see_filter)),
+                    pos.fen() << " tt " << tt.raw() << " see " << see_filter << ": quiescence set differs");
+          ++c.checks;
+        }
       }
     }
   }
@@ -313,6 +318,88 @@ TEST_CASE("ordering", "take history: it can reorder victims 2 pawns apart, never
   };
   CHECK(!ordered("4k3/8/8/n2p4/4P3/8/8/Q6K w - - 0 1", Knight));  // within the reach: reordered
   CHECK(ordered("4k3/8/8/r2p4/4P3/8/8/Q6K w - - 0 1", Rook));     // beyond it: never
+}
+
+// The threat set (tier 2, T56; KB §3.34's test plan): attacked_squares(by)
+// equals the single-square query attacked_by on every square, for both
+// colours, over the perft and edge positions of tests/suite.hpp.
+TEST_CASE("ordering", "attacked squares: equal to the single-square attack query everywhere") {
+  std::vector<std::string_view> fens;
+  for (const PerftPosition& p : perft_suite()) fens.push_back(p.fen);
+  for (const EdgePosition& p : edge_positions()) fens.push_back(p.fen);
+  int compared = 0;
+  for (std::string_view fen : fens) {
+    Position pos;
+    CHECK_MSG(pos.set_fen(fen), fen);
+    for (Color by : {White, Black}) {
+      Bitboard want = 0;
+      for (Square s = 0; s < 64; ++s)
+        if (pos.attacked_by(by, s, pos.pieces())) want |= bb(s);
+      CHECK_MSG(pos.attacked_squares(by) == want, fen << " by " << static_cast<int>(by));
+      ++compared;
+    }
+  }
+  CHECK(compared > 20);
+}
+
+// Threat buckets (tier 2, T56): a quiet move's bucket is 2 * (from-square
+// attacked) + (to-square attacked) by the opponent, against the
+// single-square query; kiwipete (tests/suite.hpp's perft position 2) has
+// quiets in all four buckets; and an update to one bucket leaves the other
+// three as they were.
+TEST_CASE("ordering", "threat buckets: from and to bits, all four reached, independent entries") {
+  Position pos;
+  CHECK(pos.set_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"));
+  const Bitboard attacked = pos.attacked_squares(Black);
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  bool reached[ThreatBuckets] = {};
+  for (Move m : legal) {
+    if (m.is_capture() || m.is_promotion()) continue;
+    const int want =
+        2 * pos.attacked_by(Black, m.from(), pos.pieces()) + pos.attacked_by(Black, m.to(), pos.pieces());
+    CHECK_MSG(threat_bucket(attacked, m) == want, pos.move_to_uci(m));
+    reached[want] = true;
+  }
+  for (int b = 0; b < ThreatBuckets; ++b) CHECK_MSG(reached[b], "bucket " << b);
+  const Move m = pos.parse_uci("c3b1");
+  QuietHistory history;
+  history.apply(White, m, 1000, 3);
+  CHECK(history.value(White, m, 3) > 0);
+  for (int b = 0; b < 3; ++b) CHECK_EQ(history.value(White, m, b), 0);
+  CHECK_EQ(history.value(White, m), 0);  // the default bucket is 0
+}
+
+// The selector reads the threat bucket only when threat-aware: in kiwipete
+// the knight on c3, attacked by the b4 pawn, has a bonus for c3b1 in that
+// move's bucket, and another quiet has a smaller bonus in bucket 0. With
+// the buckets, c3b1 comes before it; without them c3b1 reads bucket 0,
+// where it has nothing, so the other quiet comes first.
+TEST_CASE("ordering", "threat buckets: the selector orders quiets by the move's own bucket") {
+  Position pos;
+  CHECK(pos.set_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"));
+  const Bitboard attacked = pos.attacked_squares(Black);
+  const Move escape = pos.parse_uci("c3b1");
+  CHECK(threat_bucket(attacked, escape) >= 2);  // its from-square is attacked
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  Move other = NoMove;
+  for (Move m : legal)
+    if (!m.is_capture() && !m.is_promotion() && threat_bucket(attacked, m) == 0) {
+      other = m;
+      break;
+    }
+  CHECK(!other.is_none());
+  QuietHistory history;
+  history.apply(White, escape, 1600, threat_bucket(attacked, escape));
+  history.apply(White, other, 800, 0);
+  for (bool aware : {false, true}) {
+    MoveSelector s;
+    s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, nullptr, aware);
+    const std::vector<Move> got = drain(s);
+    const auto at = [&](Move m) { return std::find(got.begin(), got.end(), m) - got.begin(); };
+    CHECK_MSG((at(escape) < at(other)) == aware, "aware " << aware);
+  }
 }
 
 }  // namespace forkeng::test

@@ -11,7 +11,8 @@
 //   captures and queen promotions by most valuable victim and least valuable
 //   attacker, a capture that loses material by SEE being deferred when it
 //   comes up (SEE is computed only for the captures reached), then quiet
-//   moves by butterfly history (generation order without a history), then
+//   moves by butterfly history (its threat bucket when threat-aware;
+//   generation order without a history), then
 //   the deferred bad captures and under-promotions, in the order deferred.
 // - In check (main search and quiescence): the TT move, then every evasion,
 //   captures first (by victim and attacker), then quiets by history.
@@ -58,12 +59,15 @@ class MoveSelector {
   // With `take_history` (tier 2, T11) a capture's score is its victim's
   // value (with any promotion's gain) times 8 plus its take history entry
   // times TakeWeight / 32, instead of MVV-LVA; evasions keep MVV-LVA.
+  // With `threat_aware` (tier 2, T56) quiets and quiet evasions read the
+  // butterfly history's threat bucket (quiet_history.hpp) for the opponent's
+  // attacks in this position; without it, bucket 0.
   void start_main(const Position& pos, Move tt_move, const QuietHistory* history,
                   const PairHistory* pairs = nullptr, int arrival = NoArrival, int follow_arrival = NoArrival,
-                  const TakeHistory* take_history = nullptr);
+                  const TakeHistory* take_history = nullptr, bool threat_aware = false);
   // Quiescence search (all evasions when in check).
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
-                     const TakeHistory* take_history = nullptr);
+                     const TakeHistory* take_history = nullptr, bool threat_aware = false);
 
   // The next move, or NoMove when there are no more.
   Move take_next();
@@ -83,6 +87,19 @@ class MoveSelector {
   SelectorStage yielding_stage() const { return stage_; }
   bool quiets_stopped() const { return quiets_stopped_; }
 
+  // The squares the opponent attacks at this node, built at the first call
+  // (the quiet or evasion stage, or the search's history update), so a node
+  // cut before its quiets never pays for it; 0 unless threat-aware. The
+  // position must still be this node's (no move made).
+  Bitboard attacked_by_opponent() {
+    if (!threat_aware_) return 0;
+    if (!attacked_known_) {
+      attacked_ = pos_->attacked_squares(~pos_->side_to_move());
+      attacked_known_ = true;
+    }
+    return attacked_;
+  }
+
  private:
   void score_captures();
   void score_quiets();
@@ -101,7 +118,10 @@ class MoveSelector {
   bool see_filter_ = false;
   bool quiets_stopped_ = false;
   bool quiet_checks_only_ = false;
-  int quiets_filtered_ = 0;
+  bool threat_aware_ = false;
+  bool attacked_known_ = false;
+  std::int16_t quiets_filtered_ = 0;  // at most MaxMoves; int16 keeps the flags above within the padding
+  Bitboard attacked_ = 0;
 
   MoveList list_;                  // the stage's moves
   std::int16_t scores_[MaxMoves];  // every score fits (move_selector.cpp)

@@ -117,7 +117,7 @@ bool Searcher::poll_limits() {
 
 // A quiet move cut off: it gains a bonus that grows with depth, and the
 // quiet moves tried before it here lose as much (the malus).
-void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
+void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   const Position& here = *pos_;
   const int bonus = bonus_for_depth(depth);
   // The take history (tier 2, T11): a capture that cuts gains the bonus, and
@@ -135,10 +135,13 @@ void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
   }
   if (m.is_capture() || !switches.use_history) return;
   const Color us = here.side_to_move();
-  history_.apply(us, m, bonus);
+  // Each quiet's threat bucket (T56) from this node's threat set, the one its
+  // ordering read (0 with use_threat_buckets off).
+  const Bitboard attacked = f.selector.attacked_by_opponent();
+  history_.apply(us, m, bonus, threat_bucket(attacked, m));
   if (switches.use_history_malus)
     for (Move q : f.failed_moves)
-      if (!q.is_capture()) history_.apply(us, q, -bonus);
+      if (!q.is_capture()) history_.apply(us, q, -bonus, threat_bucket(attacked, q));
   // The pair histories (tier 2, T10) take the same bonus and malus.
   const auto update = [&](PairHistory& table, int arrival) {
     const Position& pos = *pos_;
@@ -368,7 +371,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr,
       switches.use_history ? pair_history_ : nullptr, switches.use_reply_history ? f.arrival : NoArrival,
       switches.use_follow_history ? follow_arrival(f) : NoArrival,
-      switches.use_take_history ? &take_history_ : nullptr);
+      switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets);
   f.failed_moves.count = 0;
 
   const int alpha_start = alpha;
@@ -426,6 +429,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
+    // A quiet's threat bucket for the LMR context's history (T56): taken
+    // here, on the board before the move (0 with use_threat_buckets off).
+    const int bucket = quiet ? threat_bucket(f.selector.attacked_by_opponent(), m) : 0;
     play(ply, m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
@@ -453,7 +459,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         const LmrContext context{.depth = depth,
                                  .move_number = moves_searched + 1,
                                  .base = base,
-                                 .history = mover_history(history_, pos, m),
+                                 .history = mover_history(history_, pos, m, bucket),
                                  .on_pv = OnPv,
                                  .piece = facts.piece,
                                  .threatened = facts.threatened,
@@ -596,7 +602,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   // filter captures that lose material), or every evasion in check.
   f.selector.start_quiesce(pos, tt_hit ? hit.move : NoMove, switches.use_see_quiesce,
                            switches.use_history ? &history_ : nullptr,
-                           switches.use_take_history ? &take_history_ : nullptr);
+                           switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets);
 
   Move best_move = NoMove;
   int moves_searched = 0;
@@ -730,7 +736,8 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   // The first iteration's root order is the selector's (no TT move).
   PlyFrame& root = frames_[0];
   MoveList root_list;  // once per search, so a local list
-  root.selector.start_main(pos, NoMove, switches.use_history ? &history_ : nullptr);
+  root.selector.start_main(pos, NoMove, switches.use_history ? &history_ : nullptr, nullptr, NoArrival,
+                           NoArrival, nullptr, switches.use_threat_buckets);
   for (Move m; !(m = root.selector.take_next()).is_none();) root_list.add(m);
   root_count_ = 0;
   for (Move m : root_list)
