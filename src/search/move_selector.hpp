@@ -24,6 +24,7 @@
 // - No allocation; the selector lives in the search stack (PlyFrame).
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 
@@ -31,6 +32,24 @@
 #include "search/quiet_history.hpp"
 
 namespace forkeng {
+
+// A quiet move's ordering score in `pos`: its butterfly history (0 without
+// one), plus with `pairs` its reply entry after `arrival` times ReplyWeight
+// / 4 and its follow entry after `follow_arrival` times FollowWeight / 4
+// (NoArrival leaves a table out), within int16. The selector orders quiets
+// by it, and the LMR history term reads the same score (tier 2, T16).
+inline int quiet_order_score(const Position& pos, Move m, const QuietHistory* history, const PairHistory* pairs,
+                             int arrival, int follow_arrival) {
+  int score = history ? history->value(pos.side_to_move(), m) : 0;
+  if (arrival != NoArrival || follow_arrival != NoArrival) {
+    const int slot = pair_slot(pos.piece_at(m.from()), m.to());
+    if (arrival != NoArrival) score += pairs[ReplyTable].value(arrival, slot) * ReplyWeight / 4;
+    if (follow_arrival != NoArrival) score += pairs[FollowTable].value(follow_arrival, slot) * FollowWeight / 4;
+    // Weights above one can take the sum past int16 at the extremes.
+    score = std::clamp(score, -INT16_MAX, INT16_MAX);
+  }
+  return score;
+}
 
 enum class SelectorStage : std::uint8_t {
   TtMove,

@@ -409,6 +409,14 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       }
     }
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
+    // The LMR history term's score (tier 2, T16): the move's ordering score,
+    // read in the position before it, with the tables the selector uses.
+    const int order_score = quiet && switches.use_lmr_history
+                                ? quiet_order_score(pos, m, switches.use_history ? &history_ : nullptr,
+                                                    switches.use_history ? pair_history_ : nullptr,
+                                                    switches.use_reply_history ? f.arrival : NoArrival,
+                                                    switches.use_follow_history ? follow_arrival(f) : NoArrival)
+                                : 0;
     frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
     play(ply, m);
 #ifdef FORK_SEARCH_STATS
@@ -429,10 +437,14 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       // quiet evasions are reduced like any late quiet move.
       if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet &&
           (!in_check || switches.use_lmr_in_check)) {
-        // The table's reduction plus the evolvable correction (lmr_table.hpp;
-        // 0 as committed). The move is already made here, so its mover is the
-        // side not to move: its history is the mover's (mover_history).
-        const int base = reduction_for(depth, moves_searched + 1);
+        // The base reduction plus the evolvable correction (lmr_table.hpp;
+        // 0 as committed). The base is the table's reduction, less the
+        // history term with use_lmr_history (T16: a good ordering history
+        // reduces less, a bad one more; it may go below zero, and the clamp
+        // below keeps the search between one ply and the full depth). The
+        // move is already made here, so its mover is the side not to move:
+        // its history is the mover's (mover_history).
+        const int base = reduction_for(depth, moves_searched + 1) - order_score / LmrHistoryDivisor;
         const LmrMoveFacts facts = lmr_move_facts(pos, m);
         const LmrContext context{.depth = depth,
                                  .move_number = moves_searched + 1,

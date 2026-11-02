@@ -91,7 +91,7 @@ constexpr int LmrCorrectionUnit = 64;
 struct LmrContext {
   int depth;        // remaining depth at the node
   int move_number;  // the move's number in the order, 1 = first
-  int base;         // the table's reduction, reduction_for(depth, move_number)
+  int base;         // the base reduction: reduction_for(depth, move_number), less the history term (T16) when on
   int history;      // the move's butterfly history score (the mover's), [-HistoryMax, HistoryMax]
   bool on_pv;       // a PV node
   // Added 2026-10-27 (the owner: new information for the loop to use). Each

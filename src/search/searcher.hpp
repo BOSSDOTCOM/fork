@@ -119,6 +119,11 @@ struct SearchQuota {
 //   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
 //   internal iterative reduction). On since its STC SPRT passed (+21.45
 //   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
+// - use_lmr_history: a late quiet move's base reduction is the table's less
+//   its ordering history score (quiet_order_score) / LmrHistoryDivisor, so
+//   a good history reduces less and a bad one more (tier 2, T16's history
+//   term; owner, 2026-11-02: in the base reduction, which idea 23's
+//   evolvable correction is added to). Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -148,7 +153,8 @@ struct SearchQuota {
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
-  X(use_no_move_reduction, UseNoMoveReduction, true)
+  X(use_no_move_reduction, UseNoMoveReduction, true)     \
+  X(use_lmr_history, UseLmrHistory, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

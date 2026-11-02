@@ -91,20 +91,9 @@ void MoveSelector::score_captures() {
 }
 
 void MoveSelector::score_quiets() {
-  const Color us = pos_->side_to_move();
-  for (std::size_t i = 0; i < list_.size(); ++i) {
-    const Move m = list_[i];
-    int score = history_ ? history_->value(us, m) : 0;
-    if (arrival_ != NoArrival || follow_arrival_ != NoArrival) {
-      const int slot = pair_slot(pos_->piece_at(m.from()), m.to());
-      if (arrival_ != NoArrival) score += pair_history_[ReplyTable].value(arrival_, slot) * ReplyWeight / 4;
-      if (follow_arrival_ != NoArrival)
-        score += pair_history_[FollowTable].value(follow_arrival_, slot) * FollowWeight / 4;
-      // Weights above one can take the sum past int16 at the extremes.
-      score = std::clamp(score, -INT16_MAX, INT16_MAX);
-    }
-    scores_[i] = static_cast<std::int16_t>(score);
-  }
+  for (std::size_t i = 0; i < list_.size(); ++i)
+    scores_[i] = static_cast<std::int16_t>(
+        quiet_order_score(*pos_, list_[i], history_, pair_history_, arrival_, follow_arrival_));
 }
 
 void MoveSelector::score_evasions() {

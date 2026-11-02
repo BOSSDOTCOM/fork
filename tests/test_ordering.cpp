@@ -315,4 +315,39 @@ TEST_CASE("ordering", "take history: it can reorder victims 2 pawns apart, never
   CHECK(ordered("4k3/8/8/r2p4/4P3/8/8/Q6K w - - 0 1", Rook));     // beyond it: never
 }
 
+// quiet_order_score (shared by the selector and the LMR history term, tier 2
+// T16): the butterfly entry, plus each pair entry times its weight in
+// quarters, only for the tables given an arrival, clamped to int16; the
+// expected sums are computed here from the entries and the weights.
+TEST_CASE("ordering", "quiet order score: butterfly plus weighted pair entries, clamped") {
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/2p5/3p3p/8/4N1Q1/8/4K3 w - - 0 1"));
+  const Move m = pos.parse_uci("g3g4");
+  auto history = std::make_unique<QuietHistory>();
+  auto pairs = std::make_unique<PairHistory[]>(2);
+  CHECK_EQ(quiet_order_score(pos, m, nullptr, nullptr, NoArrival, NoArrival), 0);
+  history->apply(White, m, 1000);
+  const int butterfly = history->value(White, m);
+  CHECK_EQ(quiet_order_score(pos, m, history.get(), pairs.get(), NoArrival, NoArrival), butterfly);
+  const int arrival = 7, follow = 11, slot = pair_slot(pos.piece_at(m.from()), m.to());
+  pairs[ReplyTable].apply(arrival, slot, 800);
+  pairs[FollowTable].apply(follow, slot, -400);
+  const int reply_part = pairs[ReplyTable].value(arrival, slot) * ReplyWeight / 4;
+  const int follow_part = pairs[FollowTable].value(follow, slot) * FollowWeight / 4;
+  CHECK_EQ(quiet_order_score(pos, m, history.get(), pairs.get(), arrival, NoArrival), butterfly + reply_part);
+  CHECK_EQ(quiet_order_score(pos, m, history.get(), pairs.get(), NoArrival, follow), butterfly + follow_part);
+  CHECK_EQ(quiet_order_score(pos, m, history.get(), pairs.get(), arrival, follow),
+           butterfly + reply_part + follow_part);
+  // At the tables' limits the sum is clamped to int16.
+  for (int i = 0; i < 200; ++i) {
+    history->apply(White, m, HistoryMax);
+    pairs[ReplyTable].apply(arrival, slot, HistoryMax);
+    pairs[FollowTable].apply(follow, slot, HistoryMax);
+  }
+  const int sum = history->value(White, m) + pairs[ReplyTable].value(arrival, slot) * ReplyWeight / 4 +
+                  pairs[FollowTable].value(follow, slot) * FollowWeight / 4;
+  CHECK(sum > INT16_MAX);
+  CHECK_EQ(quiet_order_score(pos, m, history.get(), pairs.get(), arrival, follow), static_cast<int>(INT16_MAX));
+}
+
 }  // namespace forkeng::test

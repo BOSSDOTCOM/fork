@@ -67,6 +67,12 @@ BootstrapSeed = 20261102
 class Engine(proxies.Engine):
     """proxies.Engine, keeping the nodes at which each depth finished."""
 
+    def __init__(self, path, hash_mb=16):
+        super().__init__(path, hash_mb)
+        if os.name == 'nt':  # Windows children do not inherit the priority class
+            import ctypes
+            ctypes.windll.kernel32.SetPriorityClass(int(self.p._handle), 0x4000)  # BELOW_NORMAL_PRIORITY_CLASS
+
     def configure(self, setting):
         if setting is None:  # the labels: the default engine, no options
             return
