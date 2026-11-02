@@ -6,15 +6,13 @@
 # the earlier gauntlets' 200 random 8-ply openings (tools/make_openings.py,
 # seed 20261025, sha256-checked), each opening played with both colours; then
 # Ordo with the anchors fixed at their CCRL Blitz ratings. A new anchor whose
-# build fails is replaced by the next alternate that builds; a continuity
-# anchor that fails stops the run. Each shard records its CPU model: the
-# runner label does not pin the hardware.
-# The strong anchor (role strong: Marvin 6.3.0, else Arcanum 2.8) plays only in
-# a run started from gauntlet-strong-run (owner: when Fork scores over about
-# 70% against Laser 1.7), which replays the whole gauntlet with it. Every
-# anchor's UCI options are read from its own `uci` output: listed options are
-# passed only if the engine has them, any thread option is set to 1 and any
-# book switch to false.
+# build fails is replaced by its own alternate (role alternate:STEM) if that
+# builds; a continuity anchor that fails stops the run. Each shard records
+# its CPU model: the runner label does not pin the hardware. Every anchor's
+# UCI options are read from its own `uci` output: listed options are passed
+# only if the engine has them, any thread option is set to 1 and any book
+# switch to false. The anchor set changed on 2026-11-02 (owner; anchors.tsv):
+# Marvin 6.3.0 plays in every run, so the separate strong run is gone.
 # Started by a push to the trigger branch gauntlet-run (GitHub dispatches a
 # workflow by hand only once its file is on the default branch); one run at a
 # time, never beside the SPRT, CI or web runs (whoever starts it waits for an
@@ -23,7 +21,7 @@ name: gauntlet
 
 on:
   push:
-    branches: [gauntlet-run, gauntlet-strong-run]
+    branches: [gauntlet-run]
   workflow_dispatch:
 
 permissions:
@@ -76,18 +74,15 @@ jobs:
           sudo apt-get install -y -q build-essential cmake clang
       - name: Build each anchor; plan the shards
         id: plan
-        env:
-          STRONG: ${{ github.ref == 'refs/heads/gauntlet-strong-run' && '1' || '' }}
         run: |
           built=()
-          for stem in $(grep -v '^#' tools/gauntlet/anchors.tsv | awk -F'\t' -v s="$STRONG" '$4 != "strong" || s' | cut -f2); do
+          for stem in $(grep -v '^#' tools/gauntlet/anchors.tsv | cut -f2); do
             if bash tools/gauntlet/build_anchor.sh "$stem" anchors; then built+=("$stem"); fi
           done
           python3 - "${built[@]}" <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os, sys
+          import json, sys
           built = set(sys.argv[1:])
           rows = [l.rstrip('\n').split('\t') for l in open('tools/gauntlet/anchors.tsv') if l.strip() and not l.startswith('#')]
-          alternates = [r[1] for r in rows if r[3] == 'alternate' and r[1] in built]
           chosen = []
           for r in rows:
               if r[3] == 'continuity':
@@ -97,17 +92,12 @@ jobs:
               elif r[3] == 'new':
                   if r[1] in built:
                       chosen.append(r[1])
-                  elif alternates:
-                      sub = alternates.pop(0)
-                      print(f'{r[0]} did not build: replaced by {sub}', file=sys.stderr)
-                      chosen.append(sub)
-                  else:
-                      sys.exit(f'{r[0]} did not build and no alternate is left')
-          if os.environ.get('STRONG'):
-              strong = [r[1] for r in rows if r[3] == 'strong' and r[1] in built]
-              if not strong:
-                  sys.exit('no strong anchor built')
-              chosen.append(strong[0])
+                      continue
+                  subs = [a[1] for a in rows if a[3] == 'alternate:' + r[1] and a[1] in built]
+                  if not subs:
+                      sys.exit(f'{r[0]} did not build and neither did its alternate')
+                  print(f'{r[0]} did not build: replaced by {subs[0]}', file=sys.stderr)
+                  chosen.append(subs[0])
           shards = [{'anchor': s, 'start': start} for s in chosen for start in (1, 51)]
           print('shards=' + json.dumps(shards))
           PY

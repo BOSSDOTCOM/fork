@@ -1,27 +1,27 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# The Elo gauntlet's anchors (owner, 2026-10-31), built on GitHub's runners from
-# their official sources at the pinned commits (tools/gauntlet/build_anchor.sh).
+# The Elo gauntlet's anchors, built on GitHub's runners from their official
+# sources at the pinned commits (tools/gauntlet/build_anchor.sh).
 # Ratings: CCRL Blitz 2'+1", single-CPU entries, list of 2026-10-31
 # (computerchess.org.uk/ccrl/404/); repositories, commits, licences and build
-# commands checked by the research agent on 2026-10-31 from each project's
-# README, LICENSE and build files (no engine source opened).
-# Roles: continuity (the earlier gauntlets' anchors), new, alternate (replaces
-# a new anchor whose build fails, in this order).
+# commands checked by research agents from each project's README, LICENSE and
+# build files (no engine source opened): 2026-10-31 for the first set.
+# The set of 2026-11-02 (owner): Stash 19.0 and WyldChess 1.51 dropped
+# (Fork scored 92-94% against them), Marvin 6.3.0 a standing anchor (no
+# longer only for a run where Fork scores over about 70% against Laser 1.7).
+# Topple 0.8.1 and Seawall 20250322, the first set's alternates, left
+# with them: every anchor they could replace has since built on the runners.
+# Roles: continuity (built and played in an earlier gauntlet; a failed build
+# stops the run), new (replaced by its alternate if its build fails),
+# alternate:STEM (replaces the new anchor STEM).
 # Columns, tab-separated: name, file stem, CCRL Blitz, role, repository,
 # commit, build folder, build command ("make ARGS" or "cmake TARGET"), fallback
 # make arguments (or -), UCI options for fastchess (or -).
-Stash 19.0	stash-19.0	2473	continuity	https://gitlab.com/mhouppin/stash-bot.git	de408a3e8d8ffbd41f4b1608b19f18c69eac2512	src	make	-	-
-WyldChess 1.51	wyldchess-1.51	2603	continuity	https://github.com/Mk-Chan/WyldChess.git	322b028cb5e8ba4d8596ca71071d4a9428782f31	src	make	-	-
 Weiss 1.0	weiss-1.0	2896	continuity	https://github.com/TerjeKir/weiss.git	f44a4c654c67139ecbd5f3afd9da1ebe41241464	src	make	-	option.NoobBook=false option.Threads=1
-Monolith 2.01	monolith-2.01	3061	new	https://github.com/cimarronOST/Monolith.git	19b8a61f74b3bdcdc2708bae7012bf8aed65a8f4	Source	make COMP=g++	-	option.OwnBook=false option.Threads=1
-Winter 0.9	winter-0.9	3168	new	https://github.com/rosenthj/Winter.git	9e1af2584f7c5f992b70e7597f81c4c6032c8383	.	make	CC=g++	option.Threads=1
-Laser 1.7	laser-1.7	3292	new	https://github.com/jeffreyan11/laser-chess-engine.git	96bfbdba8d064442626e1bb23e02473a46559a2e	src	make	-	option.Threads=1
-Topple 0.8.1	topple-0.8.1	3036	alternate	https://github.com/konsolas/ToppleChess.git	be2f6945b4f42ce3975f71a5b9f3e5358432cbc1	.	cmake Topple	-	option.Threads=1
-Seawall 20250322	seawall-20250322	2978	alternate	https://github.com/petur/seawall.git	7992f7be49fc1e584d7a409fa60ff65fc6c0af9d	.	make	-	-
-# The strong anchor (owner, 2026-10-31), played only when Fork scores over
-# about 70% against Laser 1.7 (the run started from gauntlet-strong-run):
-# Marvin 6.3.0, or Arcanum 2.8 if Marvin does not build. Marvin loads book.bin
-# from its executable's folder when one is there; only the binary is ever
-# kept, so its repository's res/ folder never sits beside it.
-Marvin 6.3.0	marvin-6.3.0	3458	strong	https://github.com/bmdanielsson/marvin-chess.git	e87a148d611ddc3fcbcf0c7a0d16d6d0e76a5161	.	make	CC=gcc	-
-Arcanum 2.8	arcanum-2.8	3460	strong	https://github.com/LarsAur/Arcanum.git	e1e95262d5226d6b3f5370fb556650785f9091ad	.	make release NAME=Arcanum VERSION=2.8	-	-
+Monolith 2.01	monolith-2.01	3061	continuity	https://github.com/cimarronOST/Monolith.git	19b8a61f74b3bdcdc2708bae7012bf8aed65a8f4	Source	make COMP=g++	-	option.OwnBook=false option.Threads=1
+Winter 0.9	winter-0.9	3168	continuity	https://github.com/rosenthj/Winter.git	9e1af2584f7c5f992b70e7597f81c4c6032c8383	.	make	CC=g++	option.Threads=1
+Laser 1.7	laser-1.7	3292	continuity	https://github.com/jeffreyan11/laser-chess-engine.git	96bfbdba8d064442626e1bb23e02473a46559a2e	src	make	-	option.Threads=1
+# Marvin loads book.bin from its executable's folder when one is there;
+# only the binary is ever kept, so its repository's res/ folder never sits
+# beside it.
+Marvin 6.3.0	marvin-6.3.0	3458	new	https://github.com/bmdanielsson/marvin-chess.git	e87a148d611ddc3fcbcf0c7a0d16d6d0e76a5161	.	make	CC=gcc	-
+Arcanum 2.8	arcanum-2.8	3460	alternate:marvin-6.3.0	https://github.com/LarsAur/Arcanum.git	e1e95262d5226d6b3f5370fb556650785f9091ad	.	make release NAME=Arcanum VERSION=2.8	-	-
