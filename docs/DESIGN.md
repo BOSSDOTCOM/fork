@@ -3145,6 +3145,12 @@ keep an entry on record instead of ending it:
 An entry can be both. Neither kind is promoted without that later test and
 the owner's review (item 7).
 
+**An STC SPRT undecided at its cap (owner, 2026-11-02; decided after
+AF-S's STC result and before XGR-512's).** An STC SPRT still undecided at
+its 20,000-game cap counts as **not passed**: no promotion. The entry
+qualifies as both an LTC candidate (if it beat S512r2 at fixed nodes) and
+a retest candidate (an undecided result is within the error margin).
+
 **Not in this bake-off**: AF's small-layer activation sweep and XGR's two
 ablation nets (no X; buckets instead of G); judgement.md lists them as
 optional, the owner's five entries leave them out. XGR enters only if its
@@ -3388,6 +3394,7 @@ build exists.
 | 2026-11-01 | **S512r2 promoted; generation 3 begins (owner).** Round 2's S-512 (seed 2, the lower validation loss) was tested before the other round-2 nets were ready (owner): parity chain passed, S = 92 (matched to S512, the opponent; 89 against round 2's B0 control, untested), SPRT against S512 +151.35 +/- 12.50 Elo, H1 at [0, 5] after 1,600 games (run 41349145950). Promoted after the owner's review with exactly the tested scale (docs/nets.md; the other scale would need its own SPRT). Bench 17,904,298 (signature 698205c2870d96a4); one test whose "exact" search still pruned with multi-cut fixed (nets.md). **Labeller policy:** generation 2 had already ended (g2e sealed at 9:17 AM EST, past 500 M), so no local part was running; generation 3 starts as part g3, labelled by S512r2, with g2e's settings (the split search, the Lichess 2016-09 openings) and a new seed, target 500 M; cloud launches label with S512r2 from now on as runs g3-aws-* (each instance builds the pushed phase-4 with its default network). Their launch rule needs a measured rate for the net: S512r2 has S-512's architecture, so its rows in `tools/cloud/datagen-rates.tsv` carry S512's measured rates, marked provisional until its own chunks are measured (the $1 per million cost limit is about 50 times the expected cost). IIR's SPRT, started on S512, was stopped at its first stage and restarts on top of this commit. A gauntlet measures the new strength after round 2. |
 | 2026-11-01 | **Round 2 amended (owner; decided before any round-2 game result).** H-512, AF-S and XGR-512 (round-2 seeds by validation loss) each first play a fixed-node match against S512r2, 1,600 games at round 1's stage B conditions (800,000 nodes per move for both); only an entry scoring above S512r2 there (Elo point estimate above 0) proceeds to the STC promotion SPRT against S512r2 on [0, 5]. Reasoning: every entry is slower than S512r2, so failing at equal nodes rules out winning at equal time. Replaces stages A to C for these entries; scale matching to S512r2 (§5.4, "Round 2 amendment"). |
 | 2026-11-02 | **Round 2's retest and LTC candidates (owner; decided after the fixed-node results, before any round-2 STC result).** An entry whose fixed-node Elo interval includes 0, or whose STC result is within its error margin of S512r2, is kept as a retest candidate for after the post-network search retune; an entry that beats S512r2 at fixed nodes but fails its STC SPRT is recorded as an LTC / TCEC-conditions candidate, tested later at long time control with an x86-64-v4 build on AWS (§5.4, "Retest and LTC candidates"). Fixed-node results against S512r2: H-512 −12.17 ± 10.58 (interval excludes 0: out, not a candidate), AF-S +10.43 ± 10.36 and XGR-512 +30.70 ± 10.37 (both proceed to STC). |
+| 2026-11-02 | **Round 2: an STC SPRT undecided at its cap (owner; decided after AF-S's STC result, before XGR-512's).** An STC SPRT still undecided at its 20,000-game cap counts as not passed (no promotion); the entry qualifies as both an LTC candidate (if it beat S512r2 at fixed nodes) and a retest candidate (an undecided result is within the error margin). AF-S's STC SPRT had already ended in H0 (−55.85 ± 11.42, history/phase-4/sprt-log.md): LTC and retest candidate under the earlier rules (§5.4, "Retest and LTC candidates"). |
 
 ## 7. Performance doctrine (governs every phase)
 
