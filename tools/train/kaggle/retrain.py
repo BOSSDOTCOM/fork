@@ -229,6 +229,10 @@ def drop_old_checkpoints(name, out_dir):
             # Complete lines only (a line still being written can parse short).
             if line.endswith('\n') and len(line.split()) == 2:
                 curve.append((int(line.split()[0]), float(line.split()[1])))
+    # Superbatch 0 is the initial weights, which have no checkpoint and are
+    # never the result: the kept checkpoint is the best trained one, even
+    # when none beats the initial loss.
+    curve = [c for c in curve if c[0] > 0]
     if curve:
         keep.add(min(curve, key=lambda c: c[1])[0] if KEEP == 'best' else curve[-1][0])
     for sb, d in kept.items():
