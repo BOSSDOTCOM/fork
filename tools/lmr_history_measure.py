@@ -52,6 +52,7 @@ import json
 import math
 import os
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'evolve'))
@@ -102,12 +103,19 @@ class Engine(proxies.Engine):
         return {'move': move, 'score': score, 'mate': mate, 'depth': depth, 'finished': finished}
 
 
-def run(fork, rows, nodes, setting, jobs, hash_mb):
+def run(fork, rows, nodes, setting, jobs, hash_mb, record=None):
+    """Every row's search; `record(row, answer)`, if given, is called as each
+    one finishes (from the worker threads)."""
     def part(chunk):
         engine = Engine(fork, hash_mb)
         try:
             engine.configure(setting)
-            return [engine.search(r['fen'], nodes) for r in chunk]
+            out = []
+            for r in chunk:
+                out.append(engine.search(r['fen'], nodes))
+                if record:
+                    record(r, out[-1])
+            return out
         finally:
             engine.close()
     jobs = max(1, min(jobs, len(rows)))
@@ -123,7 +131,31 @@ def run(fork, rows, nodes, setting, jobs, hash_mb):
 def label(a):
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     rows = proxies.load_positions(os.path.join(repo, 'tools', 'evolve', 'positions.jsonl'), 'evolve')
-    answers = run(a.fork, rows, a.nodes, None, a.jobs, 64)
+    # Each answer is saved as it finishes (OUT.answers), so a stopped run
+    # resumes where it was: every search starts from a fresh state, so the
+    # answers do not depend on which run or job computed them.
+    saved_path = a.out + '.answers'
+    done = {}
+    if os.path.exists(saved_path):
+        with open(saved_path, 'rb') as f:
+            data = f.read()
+        data = data[:data.rfind(b'\n') + 1]  # a line cut off by a stop is dropped
+        with open(saved_path, 'wb') as f:
+            f.write(data)
+        for line in data.decode('utf-8').splitlines():
+            d = json.loads(line)
+            done[d['id']] = d['answer']
+    todo = [r for r in rows if r['id'] not in done]
+    print(f'{len(done)} answers saved earlier, {len(todo)} to search', flush=True)
+    lock = threading.Lock()
+    with open(saved_path, 'a', encoding='utf-8') as saved:
+        def record(r, s):
+            with lock:
+                saved.write(json.dumps({'id': r['id'], 'answer': s}) + '\n')
+                saved.flush()
+        for r, s in zip(todo, run(a.fork, todo, a.nodes, None, a.jobs, 64, record)):
+            done[r['id']] = s
+    answers = [done[r['id']] for r in rows]
     kept = 0
     with open(a.out, 'w', encoding='utf-8') as f:
         for r, s in zip(rows, answers):
