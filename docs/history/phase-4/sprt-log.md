@@ -576,3 +576,29 @@ LLR: -3.72 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
   −34.42 ± 11.88), and XGR-512 failed at LTC (above). No game was played
   for it at LTC. It stays a retest candidate after the post-network
   search retune (DESIGN.md §5.4).
+
+### 2026-11-02 ltc-drift-vs-base (tier 2, T32: the pawn drift table, correction history)
+
+- Base `2d582fc` (phase-4: S512r2 with IIR on), test `0342ad6` (branch
+  tier2/drift: the pawn structure key, the drift table with the measured
+  constants DriftWeightTotal 256, DriftWeightCap 4, DriftLimit 300, and
+  `use_pawn_drift` on). Bounds [0, 3] nElo, **40+0.4, Hash 64 MB**
+  (straight to LTC per Testing setup), x86-64-v3 on both sides, Syzygy
+  3-4-5, GitHub shards (16 per stage, 1,664 games per stage, cap 9,984
+  games), driven by tools/github/sprt_run.sh.
+- Stages 0-5: runs 41484476694, 41506184505, 41519311035, 41532210496,
+  41544978779, 41555370610. After each stage (cumulative): +4.59 ± 9.19,
+  +0.84 ± 6.41, −0.35 ± 5.26, −0.94 ± 4.51, −1.09 ± 4.05, then the cap.
+  Result: **undecided at the 9,984-game cap**:
+```
+Shards: 96 (done); pairs 4992, games 9984 (9984 finished, time losses 0, abnormal 0)
+Elo: -0.35 +/- 3.72, nElo: -0.64 +/- 6.82
+Ptnml(0-2): [62, 1224, 2447, 1180, 79]
+LLR: -0.53 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+```
+- Not adopted: a test that ends without a verdict counts as not passed
+  (Testing setup: the change is shelved, the baseline stays), so
+  `use_pawn_drift` stays off and tier2/drift is not merged. The interval
+  (nElo −7.5 to +6.2) leaves little room for the gain the bounds asked
+  for; the owner decides whether the further correction tables, queued
+  after this result, go ahead.
