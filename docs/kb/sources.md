@@ -1414,3 +1414,28 @@ Same method as the section above (no engine source opened; PR bodies, commit mes
 | api.github.com/repos/Yoshie2000/PlentyChess/pulls/{482, 487}; api.github.com/repos/Yoshie2000/PlentyChess/releases (b-v8.0.0) | PlentyChess PR bodies and release notes | 2026-11-05 | §2.3, §2.5 |
 | api.github.com/search/issues?q=repo:{Stormphrax, PlentyChess, Reckless, viridithas, integral, Halogen, Alexandria}+is:pr+pawn+in:title+created:>2026-03-01, and Stormphrax / PlentyChess PR lists for 2026-05 to 2026-07 | PR title searches (leads) | 2026-11-05 | finding the pawn-pair PRs |
 | api.github.com/repos/JonathanHallstrom/pawnocchio | API repo metadata | 2026-11-05 | licence GPL-3.0 |
+
+## Fractional depth (T57) and continuation histories in LMR (T58) (search-techniques.md §3.35, §3.36), 2026-11-05
+
+No engine repository was cloned or downloaded and no engine source file was opened. Commit messages came from the GitHub commit-search API (message text only, no diff). PR data came from the REST API `pulls/{n}` and `issues/{n}/comments` endpoints (code blocks and quoted code in comments skipped). Derived Elo values were computed locally from the win/loss/draw counts by a scratch script, deleted afterwards. Engine constants stated in messages were deliberately not recorded. Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| https://www.chessprogramming.org/Depth | CPW (read-only recovery): draft against ply index, fractional plies, Junior's depth, forum links | 2026-11-05 | §3.35 what it is, lineage |
+| https://www.chessprogramming.org/Extensions | CPW: fractional extensions, SEX origin, node-type-dependent extensions | 2026-11-05 | §3.35 |
+| https://www.chessprogramming.org/SEX_Algorithm | CPW: the SEX algorithm and excerpts of the 1989 paper | 2026-11-05 | §3.35 lineage, the two-budget horizon fix |
+| https://www.chessprogramming.org/Ply and https://www.chessprogramming.org/Late_Move_Reductions | CPW | 2026-11-05 | opened; nothing on fractions used |
+| https://www.chessprogramming.org/Fractional_Plies and https://www.chessprogramming.org/Search_Extensions | CPW | 2026-11-05 | FAILED (404); none |
+| https://api.crossref.org/works?query.bibliographic=The+SEX+Algorithm+in+Computer+Chess... and ...Realization+probability... | Crossref metadata | 2026-11-05 | DOIs 10.3233/ICG-1989-12103 (ICGA J. 12(1):10-21) and 10.3233/ICG-2002-25304 (ICGA J. 25(3):145-152) |
+| https://talkchess.com/viewtopic.php?t=56044 | talkchess "Fractional plies and transposition tables" (Mosoi, Hyatt, Muller; 2015-04-18 to 20) | 2026-11-05 | §3.35 TT depth storage, Zurichess result |
+| api.github.com/search/commits?q=repo:official-stockfish/Stockfish+{fractional, ONE_PLY, half ply} | Stockfish commit-message searches (leads) | 2026-11-05 | finding the commits |
+| api.github.com/search/commits?q=repo:official-stockfish/Stockfish+hash:{ea9c424b, 222f59b9, e60cdca9, 4c5cbb1b, 49a1fdd3, ca7d4e9a, cc5c67c5, d7f5f15d} | full Stockfish commit messages | 2026-11-05 | §3.35 lineage and evidence |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/5667 and /issues/{5667, 2289}/comments | PR body and discussion (fractional LMR; eliminating ONE_PLY) | 2026-11-05 | §3.35 arguments for and against, threshold re-centring |
+| api.github.com/search/issues?q=is:pr+fractional+in:title (global), and per engine (PlentyChess, Stockfish, Reckless, Viridithas, Stormphrax, Halogen, Integral, Alexandria, Obsidian, Berserk, Ethereal, Koivisto, Weiss, Caissa, Pawnocchio) | PR title searches (leads) | 2026-11-05 | finding the fractional PRs |
+| api.github.com/repos/Yoshie2000/PlentyChess/pulls/{325, 379, 457, 458} | PlentyChess PR bodies (result blocks) | 2026-11-05 | §3.35 evidence |
+| api.github.com/repos/codedeliveryservice/Reckless/pulls/{29, 60} | Reckless PR bodies | 2026-11-05 | §3.35 evidence |
+| api.github.com/repos/KierenP/Halogen/pulls/{756, 796, 800} | Halogen PR bodies (#796, #800 empty) | 2026-11-05 | §3.35 typed fractions |
+| api.github.com/repos/aronpetko/integral/pulls/172 | Integral PR body | 2026-11-05 | §3.35 evidence |
+| api.github.com/repos/cosmobobak/viridithas/pulls/{212, 242}; commit search repo:cosmobobak/viridithas+granular; releases (v16.0.0) | Viridithas PR bodies, commit and release notes | 2026-11-05 | §3.35 granular depth removed, rounding error |
+| api.github.com/repos/{Yoshie2000/PlentyChess, codedeliveryservice/Reckless, official-stockfish/Stockfish, KierenP/Halogen, aronpetko/integral, Ciekce/Stormphrax, cosmobobak/viridithas}/releases | release notes searched for "fraction" | 2026-11-05 | PlentyChess 7.0.0 and 8.0.0 fractional depth notes; Halogen's unused fractional extension rewrite |
+| Fork's own files on branch phase-4: src/search/lmr_table.hpp, src/search/trans_table.hpp, src/search/searcher.cpp, src/search/move_selector.cpp, docs/DESIGN.md (2026-11-02 decisions row) | Fork's code and design | 2026-11-05 | the "Fork" bullets of §3.35 and §3.36 |

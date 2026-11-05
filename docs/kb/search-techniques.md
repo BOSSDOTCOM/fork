@@ -15,6 +15,9 @@ terms), researched without cloning any engine.
 **Update 2026-11-02:** §3.34 adds T56, threat-aware move ordering (new ID),
 researched the same way: no engine cloned, no engine source opened.
 
+**Update 2026-11-05:** §3.35 adds T57, fractional depth (new ID), researched
+the same way.
+
 All of it is **REFERENCE ONLY**. No code, pseudocode, tuned constants or
 comment text from any engine appears in this file. Parameters are
 described by their shape only ("a margin that grows with depth"). Fork
@@ -245,6 +248,7 @@ expected values are as defined in §0.
 | T54 | Lazy SMP thread diversity (§3.32) | 2-3 | 6 | Lazy SMP | small each |
 | T55 | History bonus versus malus balance (§3.33) | 2 | 3 | T9, T10, T11 | small |
 | T56 | Threat-aware move ordering: histories indexed by threatened from/to squares, escape bonus and en-prise penalty, threat-aware capture history (§3.34) | 2 | 3 (search tier 2, now done in Phase 4) | T8, T9, T11, Phase 1 attack functions, piece values | small |
+| T57 | Fractional depth: sub-ply reductions and extensions, from fractional LMR arithmetic to fractional child depth and TT depth (§3.35) | 3 | 3-4 (with the Phase 4 re-validation) | T4, T15, T16, T29 | small, time-control dependent; can be worth nothing |
 
 Not on the list, but used in this file: **staged move generation**
 (Phase 1 already has the pieces), **excluded-move search** (needed by T27),
@@ -2210,6 +2214,202 @@ the form is marked UNVERIFIED. Sources are in [sources.md](sources.md),
   sources.md "Gauntlet anchor"), AGPL-3.0 (Viridithas, Reckless); Integral
   has none. Only ideas are used.
 
+### 3.35 T57 Fractional depth: sub-ply reductions and extensions
+
+Added 2026-11-05, **REFERENCE ONLY**, verified 2026-11-05. Same method as
+§3.34: commit messages (commit-search API, text only), PR bodies and their
+discussion comments (REST API), release notes, CPW, Crossref and one forum
+thread. No engine repository was cloned and no engine source was opened.
+Most engine PRs on this topic carry results but no description, so how
+each engine implements it is **UNVERIFIED** where marked. Sources are in
+[sources.md](sources.md), "Fractional depth (T57) and continuation
+histories in LMR (T58)".
+
+- **What it is.** The search counts remaining depth in units smaller than a
+  ply. With a resolution of N units per ply, a reduction or extension can
+  be any multiple of 1/N ply, and iterative deepening still steps one ply
+  (N units) per iteration (CPW "Depth", "Fractional Plies"). Engines use it
+  at three levels:
+  1. **Fractional reduction arithmetic.** The LMR reduction and its
+     adjustments are summed in fine units and rounded once, at the end, to
+     whole plies for the child search. Stockfish's "Introduce Fractional
+     LMR" (cc5c67c5, 2024-10-27), Reckless's "Fractional LMR" (#29) and
+     "Fully fractional LMR" (#60), and Viridithas's "granular LMR" (#242)
+     carry this name. Their exact form is **UNVERIFIED**: the messages give
+     results only.
+  2. **Full fractional depth.** The fraction survives into the child.
+     Every depth test, the TT's stored depth and the extensions all work
+     in sub-ply units. Examples: Stockfish's half plies until 2014,
+     Zurichess (its author reported about +6 Elo in 2015), PlentyChess
+     "Introduce fractional depth" (#379, 2025-07-29), and Viridithas's
+     "granular depth" (removed in #212, see the evidence).
+  3. **Other heuristics reading the fraction.** Integral #172 uses the
+     fractional part of the LMR depth in futility pruning (title and
+     result only). PlentyChess made its extension formula fractional
+     (#457, 2026-01-14), and its 8.0.0 release (2026-06-27) says it pushed
+     fractional depth "further to more heuristics".
+- **Lineage.**
+  - **The SEX algorithm** (David Levy, David Broughton, Mark Taylor, "The
+    SEX Algorithm in Computer Chess", ICCA Journal 12(1), 1989, pp. 10-21,
+    DOI 10.3233/ICG-1989-12103; content known from CPW's excerpts, the paper
+    itself was not opened). It replaced the integer depth with a budget
+    that each move decremented by an amount set by how "interesting" the
+    move was: forcing moves cost a fraction of a ply, late quiet moves more
+    than a ply. That is fractional extensions, fractional reductions and an
+    early form of LMR in one scheme, developed from 1981 in commercial
+    programs.
+  - **SEX's horizon fix.** Defensive "uninteresting" moves could use up the
+    attacker's budget and cut a sound combination short. The authors kept
+    a separate budget for each side and continued while either was
+    positive. That is an early instance of the pitfall in "Pitfalls" below.
+  - **Junior** reported a nominal depth about twice its brute-force depth
+    (Amir Ban, rgcc 1998, quoted on CPW): another case where reported depth
+    and real depth are in different units.
+  - **Stockfish's half plies.** Stockfish searched in half plies until
+    2014:
+    - Uri Blass removed the half-ply reductions from LMR, null move, IID and
+      singular extensions (ea9c424b, 2014-09-28): +3.80 ± 3.1 at STC, and
+      it passed [−3, 1] at LTC (derived +6.4).
+    - The ply unit became 1 (222f59b9), and the TT depth was narrowed to a
+      byte (e60cdca9).
+    - The code was kept independent of the unit size from 2016 (4c5cbb1b,
+      checked up to 256 units per ply; again in 2019, 49a1fdd3, with a CI
+      check that doubled the unit and compared bench).
+    - The unit was eliminated in 2019 (ca7d4e9a, PR #2289) because five
+      years of experiments had never gained.
+    - Fractional LMR returned in 2024 (cc5c67c5): after a 90,000-game SPSA
+      run it passed STC [0, 2] and LTC [0.5, 2.5], derived +0.9 and +1.6.
+- **Why it can gain.**
+  - *Finer selectivity.* Several reasons to reduce or extend that are each
+    worth less than a ply can add up to a whole ply, instead of each being
+    rounded away or each costing a full ply (CPW "Extensions": a fractional
+    extension that does nothing alone triggers once a second one arrives).
+  - *Smooth parameters for tuning.* With whole plies, every LMR adjustment
+    changes the search only when it crosses a rounding boundary, so the
+    objective is a step function of the parameter and SPSA's finite
+    differences see mostly zeros and jumps. In fine units each parameter has
+    a gradual effect. locutus2's argument in the 2019 Stockfish discussion
+    is the same point in reverse: with 256 units per ply the parameter
+    space is 256 times larger, so the whole-ply optimum is unlikely to be
+    the true one. PlentyChess introduced fractional LMR "via VLTC tune"
+    (#325).
+  - *Typed units.* Halogen moved its search constants to strongly typed
+    fixed-precision fractions (#756, 2025-10, passed non-regression). A
+    type makes unit mistakes (plies against fractions) compile errors.
+- **What changes in a search that adopts full fractional depth** (from the
+  Stockfish 2019 discussion, the 2015 talkchess thread and CPW; the list is
+  Fork's synthesis):
+  - **Units everywhere.** Every depth constant (minimum depths for null
+    move, LMR, singular extensions, ProbCut, RFP and futility margins per
+    ply, IIR, the qsearch boundary) is rewritten in sub-ply units. The ply
+    index from the root (stacks, mate distance, PV) stays in plies. Only
+    the remaining depth (the "draft") becomes fractional.
+  - **The qsearch boundary.** A child with between 0 and 1 ply left must
+    go one way: qsearch, or a full node with a final ply. That is a design
+    choice.
+  - **TT depth.** The stored depth needs more bits (Stockfish narrowed its
+    field to a byte only after the half plies went). The comparison
+    "stored depth at least the needed depth" becomes finer, so entries a
+    fraction of a ply too shallow no longer cut off. That was the main
+    theoretical objection in 2019: different paths reach the same position
+    at slightly different fractional depths and stop sharing work. The
+    2015 thread's consensus (Hyatt, Muller) was to store the remaining
+    fractional depth, because the entry exists to answer "is this result
+    deep enough?". Muller added that an engine pruning differently by node
+    type should encode the node type too. Replacement policy and the
+    age-depth trade (T4) read the same field.
+  - **Thresholds move.** A condition like "depth at least k plies" now
+    flips a fraction of a ply earlier or later than before. In 2019
+    locutus2 re-centred such intervals by half a ply so that trigger points
+    sat between whole plies, not on them.
+  - **The LMR table** produces fine units, and every adjustment (T16) adds
+    in fine units. Rounding happens once, or never. Viridithas's "Reduce
+    rounding error in granular LMR" (#242) shows that the rounding step
+    itself matters.
+  - **Extensions accumulate.** Fractional extensions add up along a line,
+    so the per-line cap (T29) and the search-explosion guard must be in
+    the same units.
+  - **Depth-scaled bonuses.** History bonuses and malus (T9, T55) and the
+    correction-history weight (T32) grow with depth. Choose whether they
+    read the fractional depth or a rounded one.
+  - **Reporting.** UCI `depth` stays the iteration number in plies.
+    `seldepth` is the ply index.
+  - **Conversion test.** Converting an integer engine without changing its
+    behaviour should leave bench identical. Stockfish's CI did exactly this
+    by doubling the unit and comparing bench. Any functional use of
+    fractions comes after that, one SPRT at a time.
+- **Pitfalls.**
+  - **TT efficiency.** Fewer depth-sufficient hits (above). Measure the TT
+    cutoff rate before and after.
+  - **Synergies upset.** Every pruning and reduction rule was tuned on
+    whole plies. Changing depth granularity shifts all of them at once
+    (SapphireBrand in the 2019 Stockfish discussion). Expect a retune.
+  - **It can be worth nothing.**
+    - Stockfish carried the option for five years without a gain.
+    - Viridithas removed its granular depth with a non-regression pass
+      (#212, 2024-12-03: +0.26 ± 2.36 at STC on [−5, 0]).
+    - gvreuls noted (2019) that if the TT keeps only whole plies,
+      fractions can only reduce less, so they mostly search deeper for the
+      same result.
+  - **Time-control dependence.**
+    - PlentyChess's fractional depth failed at STC (−2.05 ± 2.40) but
+      passed at 80+0.8 (+3.25 ± 2.02) and gained with 8 threads (+2.81 ±
+      2.19, not finished).
+    - PlentyChess's fractional extensions failed STC (−2.37 ± 2.51) and
+      were merged after an unfinished non-regression LTC (+0.95 ± 1.92).
+    - Judge at LTC.
+- **How to test (Fork).**
+  1. A unit-only conversion with bench unchanged, behind a switch.
+  2. Then fractional LMR arithmetic only (level 1): reductions summed in
+     fine units and rounded once. SPRT at STC and LTC.
+  3. Then level 2 (fractional child depth and TT depth), as its own SPRT
+     at LTC, with the TT cutoff rate and the nodes-to-depth counters
+     compared.
+  4. Retune the LMR constants by SPSA in fine units.
+- **Evidence** (each project's own results; "derived" as in §0):
+  - Stockfish ea9c424b (2014, removing half plies): +3.80 ± 3.1 STC;
+    passed [−3, 1] LTC, derived +6.4.
+  - Stockfish cc5c67c5 (2024, fractional LMR): passed STC [0, 2] and LTC
+    [0.5, 2.5], derived +0.9 and +1.6.
+  - Reckless #29 (2024-03, fractional LMR): +10.62 ± 7.16 at 8+0.08.
+    Reckless #60 (2024-08, fully fractional LMR): +4.66 ± 3.48 at 8+0.08.
+  - PlentyChess #325 (2025-02, fractional LMR via a VLTC tune): +1.61 ±
+    3.67 STC and +4.95 ± 5.74 LTC (both unfinished), +7.72 ± 3.96 at
+    80+0.8 (LLR 2.44, short of its bound).
+  - PlentyChess #379 (2025-07, fractional depth): as in "Pitfalls".
+  - Integral #172 (2025-02, fractional LMR depth in futility pruning):
+    +2.73 ± 2.02 STC.
+  - Zurichess (Alexandru Mosoi, talkchess, 2015-04-20): about +6 Elo from
+    switching to fractional depth, with no test details posted.
+  - Viridithas #212 (2024-12, removal): non-regression.
+- **Related lineage, not opened.** Realization-probability search
+  (Tsuruoka, Yokoyama, Chikayama, "Game-tree search algorithm based on
+  realization probability", ICGA Journal 25(3), 2002, pp. 145-152, DOI
+  10.3233/ICG-2002-25304, metadata checked on Crossref only) is the
+  probability-based descendant of the same idea, from shogi. Its content
+  is **UNVERIFIED** here.
+- **Fork.**
+  - Depth is whole plies today. The LMR table holds whole plies, rounded
+    from fixed-point logarithms (`src/search/lmr_table.hpp`), and the TT
+    stores depth in a byte (`src/search/trans_table.hpp`).
+  - Level 1 is a local change to the LMR computation. It fits the planned
+    LMR history term (T16, DESIGN.md 2026-11-02). Idea 23's evolvable
+    correction slot (`lmr_table.hpp`) returns whole plies scaled by a
+    strength parameter, so a fine unit would give the evolution loop a
+    smoother target too. That is Fork's inference.
+  - Level 2 touches the TT entry layout, every depth constant in the
+    Search constants table, and the bench reference. It is a Phase 4 or
+    later decision, best taken together with the Phase 4 re-validation
+    (CLAUDE.md, phase-end item 8), when every margin is retuned anyway.
+  - New constants need Fork's own measurement on a wide grid (the owner's
+    rule).
+  - Licences of the engines cited:
+    - GPL-3.0: Stockfish, PlentyChess, Halogen.
+    - AGPL-3.0: Reckless, Viridithas.
+    - Integral: none.
+
+    Only ideas are used.
+
 ---
 
 **Names Fork's code must not use** (engine-specific identifiers or comment
@@ -2223,7 +2423,8 @@ quotes read for §3A: `refine_eval`, `ttValue`, `has_game_cycle`,
 `stat_malus`, `get_best_thread`, `completedDepth`, `voteMap`, `ThreadValue`,
 `bestThread`. Added 2026-11-02 from the commit and PR titles read for
 §3.34: `threatByLesser`, `threatenedPieces`, `threatenedByPawn`,
-`threatenedByMinor`, `threatenedByRook`. The concepts are fine; the
+`threatenedByMinor`, `threatenedByRook`. Added 2026-11-05 from the messages and
+discussions read for §3.35: `ONE_PLY`, `DEPTH_NONE`. The concepts are fine; the
 identifiers are not.
 
 ## 4. Tier 3 entries (short)
@@ -2447,3 +2648,13 @@ engines under their own licences and are OFF-LIMITS.
     to check.
 20. (§3.34) Whether a Phase 4 NNUE threat-input accumulator could supply
     the per-node threat set cheaply: Fork's inference, unmeasured.
+21. (§3.35, 2026-11-05) How Stockfish's 2024 fractional LMR (cc5c67c5),
+    Reckless #29 and #60, Viridithas's granular LMR and depth, and
+    PlentyChess #379 and #457 implement fractions: the messages and PR
+    bodies give results only, and no code was read.
+22. (§3.35) The SEX paper (ICCA J. 12(1), 1989) and the
+    realization-probability paper (ICGA J. 25(3), 2002) were not opened.
+    SEX is known from CPW's excerpts, the 2002 paper from Crossref metadata
+    only.
+23. (§3.35) Zurichess's "about +6 Elo" from fractional depth (2015): a forum
+    remark without test details.
