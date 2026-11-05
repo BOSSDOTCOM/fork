@@ -399,7 +399,7 @@ TEST_CASE("pruning", "no-move reduction: still correct, and it changes the searc
 // never moves a reduction leaves the tree as it is with the switch off).
 TEST_CASE("pruning", "LMR history term: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_lmr_history);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_lmr_history);  // on: its SPRT's test side
   SearchSwitches on;
   on.use_lmr_history = true;
   fx.searcher->switches = on;
