@@ -623,3 +623,26 @@ LLR: 4.00 (-2.94, 2.94) [-3.00, 0.00] nElo: H1 accepted
 - Confirmed: IIR stays on. Its LTC gain (+26.25 ± 6.65) is at least its
   STC one (+21.45 ± 5.98). With this result the LTC queue of 2026-11-02 is
   done (XGR-512 failed, the drift table undecided, AF-S shelved).
+
+### 2026-11-05 lmrh-24000-vs-base (tier 2, T16: the LMR history term)
+
+- Base `684bac6` (phase-4: S512r2, IIR on), test `cf614e0` (branch
+  sprt/lmr-history: the same with `use_lmr_history` on and the measured
+  LmrHistoryDivisor 24000; bench 14,141,348). Bounds [0, 3] nElo, 8+0.08,
+  Hash 16 MB, Syzygy 3-4-5, GitHub shards, driven by
+  tools/github/sprt_run.sh.
+- Stages (Elo, nElo, LLR after each): 0 (run 42113566721) −13.90 ± 10.10,
+  −23.47 ± 17.02, −0.99; 1 (run 42116312709) −12.49 ± 7.09, −21.23 ±
+  12.04, −1.81; 2 (run 42119021732) −9.12 ± 5.78, −15.51 ± 9.83, −2.03;
+  3 (run 42121703916) H0. Result: **H0 accepted** after stage 3:
+```
+Shards: 64 (done); pairs 3200, games 6400 (6400 finished, time losses 0, abnormal 0)
+Elo: -10.81 +/- 5.01, nElo: -18.38 +/- 8.51
+Ptnml(0-2): [104, 830, 1496, 701, 69]
+LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
+```
+- Not adopted: `use_lmr_history` stays off and tier2/lmr-history is not
+  merged as a change of the default. It agrees with its measurement, where
+  no divisor beat "off" (DESIGN.md, Search constants). The branch's
+  ordering-score refactor and test fix stay available to the later items
+  built on it (tier2/batch4).
