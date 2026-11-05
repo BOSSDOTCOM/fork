@@ -1,0 +1,34 @@
+{
+ "measurement": "Threat-aware ordering (tier 2, T56): the butterfly history split by threats to the quiet move's from- and to-square, with two definitions of a threatened square: any enemy attack (use_threat_buckets alone), or an attack by a cheaper enemy piece (use_cheaper_threats too: pawn attacks for knights and bishops, pawn or minor-piece attacks for rooks, pawn, minor or rook attacks for queens; pawns count enemy pawn attacks, kings any attack). Declared 2026-11-05 before any run. Ties go to any attack (the simpler set, built in one pass).",
+ "budgets": [
+  250000,
+  2500000
+ ],
+ "settings": [
+  {
+   "id": "off",
+   "options": {
+    "UseThreatBuckets": false,
+    "UseCheaperThreats": false
+   }
+  },
+  {
+   "id": "any-attack",
+   "options": {
+    "UseThreatBuckets": true,
+    "UseCheaperThreats": false
+   }
+  },
+  {
+   "id": "cheaper-attacker",
+   "options": {
+    "UseThreatBuckets": true,
+    "UseCheaperThreats": true
+   }
+  }
+ ],
+ "tie_order": [
+  "any-attack",
+  "cheaper-attacker"
+ ]
+}

@@ -1,0 +1,84 @@
+{
+ "measurement": "RfpRisingRelief, the improving flag's RFP use (tier 2, T18). Declared 2026-11-05 before any run: a linear grid from 10 to 240 cp (the placeholder 40 lies in its lower part); RFP's margin is RfpMargin 80 cp per ply at depths 1-6, so at the top of the grid a rising eval prunes at depth 1-2 even below the usual margin's floor. Ties go to the smaller relief (the smaller change from RFP as it is).",
+ "budgets": [
+  250000,
+  2500000
+ ],
+ "grid": {
+  "RfpRisingRelief": [
+   10,
+   25,
+   50,
+   80,
+   120,
+   160,
+   240
+  ]
+ },
+ "settings": [
+  {
+   "id": "off",
+   "options": {
+    "UseRisingRfp": false
+   }
+  },
+  {
+   "id": "relief-10",
+   "options": {
+    "UseRisingRfp": true,
+    "RfpRisingRelief": 10
+   }
+  },
+  {
+   "id": "relief-25",
+   "options": {
+    "UseRisingRfp": true,
+    "RfpRisingRelief": 25
+   }
+  },
+  {
+   "id": "relief-50",
+   "options": {
+    "UseRisingRfp": true,
+    "RfpRisingRelief": 50
+   }
+  },
+  {
+   "id": "relief-80",
+   "options": {
+    "UseRisingRfp": true,
+    "RfpRisingRelief": 80
+   }
+  },
+  {
+   "id": "relief-120",
+   "options": {
+    "UseRisingRfp": true,
+    "RfpRisingRelief": 120
+   }
+  },
+  {
+   "id": "relief-160",
+   "options": {
+    "UseRisingRfp": true,
+    "RfpRisingRelief": 160
+   }
+  },
+  {
+   "id": "relief-240",
+   "options": {
+    "UseRisingRfp": true,
+    "RfpRisingRelief": 240
+   }
+  }
+ ],
+ "tie_order": [
+  "relief-10",
+  "relief-25",
+  "relief-50",
+  "relief-80",
+  "relief-120",
+  "relief-160",
+  "relief-240"
+ ]
+}

@@ -29,7 +29,9 @@
 // iteration rule; reverse futility and the null move; endgame tables; late
 // move reductions and pruning; futility and SEE pruning; the singular test;
 // the no-move reduction and ProbCut; history; the TT
-// victim policy; the time budget.
+// victim policy; the time budget. A placeholder constant (one awaiting its
+// measurement, DESIGN.md §5.2) has a range that covers its measurement's grid
+// (tools/tier2_measure/) instead of the usual half to twice its default.
 #define FORK_SEARCH_PARAMS(X)             \
   X(AspirationMinDepth, 5, 2, 10, 1)      \
   X(AspirationHalfWidth, 12, 6, 24, 1)    \
@@ -37,7 +39,7 @@
   X(ForcedMoveFraction, 8, 4, 16, 1)      \
   X(RfpMaxDepth, 6, 3, 12, 1)             \
   X(RfpMargin, 80, 40, 160, 6)            \
-  X(RfpRisingRelief, 40, 20, 80, 3)       \
+  X(RfpRisingRelief, 40, 5, 320, 16)      \
   X(NullMinDepth, 3, 1, 6, 1)             \
   X(NullSurplusPerPly, 300, 150, 600, 23) \
   X(NullSurplusPliesMax, 2, 0, 4, 1)      \
@@ -58,9 +60,9 @@
   X(SingularEntrySlack, 3, 0, 6, 1)       \
   X(SingularMarginPerPly, 6, 3, 12, 1)    \
   X(NoMoveReduceMinDepth, 8, 2, 10, 1)    \
-  X(CaptureProbeMinDepth, 6, 3, 12, 1)    \
+  X(CaptureProbeMinDepth, 6, 2, 12, 1)    \
   X(CaptureProbeReduction, 3, 2, 6, 1)    \
-  X(CaptureProbeMargin, 240, 120, 480, 18) \
+  X(CaptureProbeMargin, 240, 40, 640, 30) \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 8, 1)              \
