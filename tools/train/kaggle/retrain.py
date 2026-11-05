@@ -41,6 +41,7 @@ import os
 import shutil
 import subprocess
 import time
+import traceback
 
 COMMIT = 'phase-4'          # replaced by the pushed commit's hash before the push
 RUNS = [('s512', 1), ('s512', 2), ('s512x', 1), ('s512x', 2)]
@@ -270,17 +271,28 @@ def finish(arch, seed, name, out_dir, began, proc):
 
 
 pending = [r for r in RUNS if r[0] in trainable]
-while pending:
-    batch = [pending.pop(0) for _ in range(min(2, len(pending)))]
-    live = [(arch, seed, *start(arch, seed, device)) for device, (arch, seed) in enumerate(batch)]
-    while any(proc.poll() is None for *_, proc in live):
+try:
+    while pending:
+        batch = [pending.pop(0) for _ in range(min(2, len(pending)))]
+        live = [(arch, seed, *start(arch, seed, device)) for device, (arch, seed) in enumerate(batch)]
+        while any(proc.poll() is None for *_, proc in live):
+            for arch, seed, name, out_dir, began, proc in live:
+                drop_old_checkpoints(name, out_dir)
+            time.sleep(60)
         for arch, seed, name, out_dir, began, proc in live:
             drop_old_checkpoints(name, out_dir)
-        time.sleep(60)
-    for arch, seed, name, out_dir, began, proc in live:
-        drop_old_checkpoints(name, out_dir)
-        summary['runs'][name] = finish(arch, seed, name, out_dir, began, proc)
-        save()
-shutil.rmtree(repo, ignore_errors=True)
+            try:
+                summary['runs'][name] = finish(arch, seed, name, out_dir, began, proc)
+            except Exception:  # recorded, and the other runs go on
+                summary['runs'][name] = {'arch': arch, 'seed': seed, 'error': traceback.format_exc()[-2000:]}
+                if os.path.exists(f'{out_dir}/train.log'):
+                    os.makedirs(f'{RESULT}/{name}', exist_ok=True)
+                    shutil.copy(f'{out_dir}/train.log', f'{RESULT}/{name}/train.log')
+            save()
+finally:
+    # Even after a failure: the clone and its build would otherwise fill the
+    # session's output with thousands of files (and its download hits Kaggle's
+    # rate limit before reaching the logs, as retrain3's first version did).
+    shutil.rmtree(repo, ignore_errors=True)
 save()
 print(json.dumps(summary, indent=1))
