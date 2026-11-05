@@ -58,6 +58,27 @@ struct State {
   bool operator==(const State&) const = default;
 };
 
+// The squares one side attacks, in tiers by the cheapest attacker (tier 2,
+// T56's second threat set): its pawns; its pawns or minor pieces; its pawns,
+// minors or rooks; every piece (Position::attacked_squares). Each tier holds
+// the one before it.
+struct AttackTiers {
+  Bitboard pawns = 0, minors = 0, rooks = 0, all = 0;
+
+  // The squares where a piece of `kind` would stand attacked by a cheaper
+  // enemy piece: pawn attacks for knights and bishops, the minor tier for
+  // rooks, the rook tier for queens. Nothing is cheaper than a pawn, so a
+  // pawn counts enemy pawns; a king counts every attack.
+  Bitboard threatening(PieceType kind) const {
+    switch (kind) {
+      case Rook: return minors;
+      case Queen: return rooks;
+      case King: return all;
+      default: return pawns;
+    }
+  }
+};
+
 class Position {
  public:
   static constexpr std::string_view StartFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -113,6 +134,8 @@ class Position {
   // attacked_by over all squares, built in one pass (pawns set-wise, sliders
   // stopped by the first piece of either colour). Tier 2, T56's threat set.
   Bitboard attacked_squares(Color by) const;
+  // The same squares in tiers by the cheapest attacker (AttackTiers).
+  AttackTiers attack_tiers(Color by) const;
 
   bool is_pseudo_legal(Move m) const;  // any 16-bit pattern is safe to pass
   bool is_legal(Move m) const;         // requires is_pseudo_legal(m)

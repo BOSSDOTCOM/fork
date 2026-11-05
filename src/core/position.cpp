@@ -117,6 +117,26 @@ Bitboard Position::attacked_squares(Color by) const {
   return covered | king_attacks(king_square(by));
 }
 
+AttackTiers Position::attack_tiers(Color by) const {
+  const Bitboard occ = pieces();
+  const Bitboard pawns = pieces(by, Pawn);
+  AttackTiers t;
+  t.pawns = by == White ? ((pawns << 7) & ~FileH) | ((pawns << 9) & ~FileA)
+                        : ((pawns >> 9) & ~FileH) | ((pawns >> 7) & ~FileA);
+  t.minors = t.pawns;
+  for (Bitboard b = pieces(by, Knight); b;) t.minors |= knight_attacks(pop_lsb(b));
+  for (Bitboard b = pieces(by, Bishop); b;) t.minors |= bishop_attacks(pop_lsb(b), occ);
+  t.rooks = t.minors;
+  for (Bitboard b = pieces(by, Rook); b;) t.rooks |= rook_attacks(pop_lsb(b), occ);
+  t.all = t.rooks;
+  for (Bitboard b = pieces(by, Queen); b;) {
+    const Square s = pop_lsb(b);
+    t.all |= bishop_attacks(s, occ) | rook_attacks(s, occ);
+  }
+  t.all |= king_attacks(king_square(by));
+  return t;
+}
+
 // The pieces in `shields` that are the only piece between `king` and a slider
 // of `rook_sliders` (on a rank or file) or `bishop_sliders` (on a diagonal),
 // so that lifting one opens that slider's line to the king. Found with x-ray

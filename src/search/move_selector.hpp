@@ -47,6 +47,12 @@ enum class SelectorStage : std::uint8_t {
   Done
 };
 
+// Which squares count as threatened for the butterfly history's threat
+// buckets (tier 2, T56; quiet_history.hpp): none (every move in bucket 0),
+// any square the opponent attacks, or one an enemy piece cheaper than the
+// moving piece attacks (AttackTiers::threatening).
+enum class ThreatSet : std::uint8_t { Off, AnyAttack, CheaperAttacker };
+
 class MoveSelector {
  public:
   // Main search. `history` may be null: quiets then keep generation order.
@@ -59,15 +65,15 @@ class MoveSelector {
   // With `take_history` (tier 2, T11) a capture's score is its victim's
   // value (with any promotion's gain) times 8 plus its take history entry
   // times TakeWeight / 32, instead of MVV-LVA; evasions keep MVV-LVA.
-  // With `threat_aware` (tier 2, T56) quiets and quiet evasions read the
-  // butterfly history's threat bucket (quiet_history.hpp) for the opponent's
-  // attacks in this position; without it, bucket 0.
+  // With a `threats` set other than Off (tier 2, T56) quiets and quiet
+  // evasions read the butterfly history's threat bucket (quiet_history.hpp)
+  // for the opponent's attacks in this position; with Off, bucket 0.
   void start_main(const Position& pos, Move tt_move, const QuietHistory* history,
                   const PairHistory* pairs = nullptr, int arrival = NoArrival, int follow_arrival = NoArrival,
-                  const TakeHistory* take_history = nullptr, bool threat_aware = false);
+                  const TakeHistory* take_history = nullptr, ThreatSet threats = ThreatSet::Off);
   // Quiescence search (all evasions when in check).
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
-                     const TakeHistory* take_history = nullptr, bool threat_aware = false);
+                     const TakeHistory* take_history = nullptr, ThreatSet threats = ThreatSet::Off);
 
   // The next move, or NoMove when there are no more.
   Move take_next();
@@ -87,17 +93,23 @@ class MoveSelector {
   SelectorStage yielding_stage() const { return stage_; }
   bool quiets_stopped() const { return quiets_stopped_; }
 
-  // The squares the opponent attacks at this node, built at the first call
-  // (the quiet or evasion stage, or the search's history update), so a node
-  // cut before its quiets never pays for it; 0 unless threat-aware. The
-  // position must still be this node's (no move made).
-  Bitboard attacked_by_opponent() {
-    if (!threat_aware_) return 0;
+  // A quiet move's threat bucket at this node under the threat set (0 with
+  // Off). The opponent's attacks are built at the first call (the quiet or
+  // evasion stage, or the search's history update), so a node cut before its
+  // quiets never pays for them. The position must still be this node's (no
+  // move made).
+  int threat_bucket_of(Move m) {
+    if (threats_ == ThreatSet::Off) return 0;
     if (!attacked_known_) {
-      attacked_ = pos_->attacked_squares(~pos_->side_to_move());
+      if (threats_ == ThreatSet::AnyAttack)
+        attacked_.all = pos_->attacked_squares(~pos_->side_to_move());
+      else
+        attacked_ = pos_->attack_tiers(~pos_->side_to_move());
       attacked_known_ = true;
     }
-    return attacked_;
+    return threat_bucket(threats_ == ThreatSet::AnyAttack ? attacked_.all
+                                                          : attacked_.threatening(kind_of(pos_->piece_at(m.from()))),
+                         m);
   }
 
  private:
@@ -118,10 +130,10 @@ class MoveSelector {
   bool see_filter_ = false;
   bool quiets_stopped_ = false;
   bool quiet_checks_only_ = false;
-  bool threat_aware_ = false;
+  ThreatSet threats_ = ThreatSet::Off;
   bool attacked_known_ = false;
   std::int16_t quiets_filtered_ = 0;  // at most MaxMoves; int16 keeps the flags above within the padding
-  Bitboard attacked_ = 0;
+  AttackTiers attacked_;  // only `all` with AnyAttack
 
   MoveList list_;                  // the stage's moves
   std::int16_t scores_[MaxMoves];  // every score fits (move_selector.cpp)

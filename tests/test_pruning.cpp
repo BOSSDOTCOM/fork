@@ -445,6 +445,31 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
             "the threat buckets left all three trees unchanged");
 }
 
+// The cheaper-attacker threat set (T56's second set): with it on, mates are
+// still found and the best move is legal, and it changes the tree against
+// the any-attack set (fault check: a switch that never reaches the selector
+// leaves the any-attack tree).
+TEST_CASE("pruning", "cheaper threats: still correct, and they change the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_cheaper_threats);  // off until measured
+  SearchSwitches cheaper;
+  cheaper.use_threat_buckets = cheaper.use_cheaper_threats = true;
+  fx.searcher->switches = cheaper;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches any;
+  any.use_threat_buckets = true;
+  CHECK_MSG(fx.tree_sizes(cheaper, depth) != fx.tree_sizes(any, depth),
+            "the cheaper-attacker set left all three trees as the any-attack set's");
+}
+
 // ProbCut, the capture probe (tier 2, T31): with it on, mates are still
 // found and the best move is legal, and it changes the tree (fault check: a
 // probe that never cuts leaves the tree as it is with the switch off). Deep

@@ -128,6 +128,10 @@ struct SearchQuota {
 //   to-square before the move (tier 2, T56's threat-indexed history, "any
 //   enemy attack"; quiet_history.hpp). Off: every move uses bucket 0, the
 //   table as before. Off until SPRTed.
+// - use_cheaper_threats: with use_threat_buckets, a square counts as
+//   threatened for the moving piece only when an enemy piece cheaper than it
+//   attacks it (AttackTiers::threatening), not any enemy attack (T56's second
+//   threat set, measured against the first). Off.
 // - use_capture_probe: ProbCut (tier 2, T31): at a non-PV node at least
 //   CaptureProbeMinDepth deep, a capture that holds CaptureProbeMargin above
 //   beta in a quiescence search and then in a search CaptureProbeReduction
@@ -165,6 +169,7 @@ struct SearchQuota {
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_rising_rfp, UseRisingRfp, false)                 \
   X(use_threat_buckets, UseThreatBuckets, false)         \
+  X(use_cheaper_threats, UseCheaperThreats, false)       \
   X(use_capture_probe, UseCaptureProbe, false)
 
 struct SearchSwitches {
@@ -396,6 +401,11 @@ class Searcher {
   // root's children, or check at both earlier turns): without evidence of a
   // rise the cautious margin applies.
   bool eval_rising(int ply) const;
+  // The move selector's threat set from the switches (T56).
+  ThreatSet threat_set() const {
+    if (!switches.use_threat_buckets) return ThreatSet::Off;
+    return switches.use_cheaper_threats ? ThreatSet::CheaperAttacker : ThreatSet::AnyAttack;
+  }
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
 

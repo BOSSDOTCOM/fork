@@ -456,9 +456,12 @@ TEST_CASE("search",
 // history's pointer in the move selector (2026-10-31, tier 2 T11), then
 // 2,704 B with the threat set the selector keeps for its node (2026-11-02,
 // tier 2 T56; the counter of filtered quiets narrowed to int16 so the two
-// new flags fit in the existing padding).
-static_assert(sizeof(PlyFrame) <= 2704,
-              "PlyFrame grew past 2,704 bytes (DESIGN.md §5.2, review 2 claim (e))");
+// new flags fit in the existing padding), then 2,728 B with the
+// cheaper-attacker threat set's four attack tiers in place of one attacked
+// set (2026-11-05, tier 2 T56's second set, measured against the first; if
+// it loses, the frame goes back to one set).
+static_assert(sizeof(PlyFrame) <= 2728,
+              "PlyFrame grew past 2,728 bytes (DESIGN.md §5.2, review 2 claim (e))");
 
 // Audit-1 Q-7: the TT's bound checks at their edge (mutant M12: an upper
 // bound cut when s <= beta instead of s <= alpha). An upper bound u, stored

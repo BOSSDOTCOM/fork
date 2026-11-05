@@ -67,11 +67,12 @@ void check_node(Position& pos, const QuietHistory& history, std::uint64_t& seed,
     tt_moves.push_back(Move::from_raw(static_cast<std::uint16_t>(splitmix_next(seed))));
   for (Move tt : tt_moves) {
     for (const QuietHistory* h : {static_cast<const QuietHistory*>(nullptr), &history}) {
-      // With and without the threat buckets (tier 2, T56): only the order
-      // may change.
-      for (bool aware : {false, true}) {
+      // With and without the threat buckets, under either threat set (tier 2,
+      // T56): only the order may change.
+      for (ThreatSet threats : {ThreatSet::Off, ThreatSet::AnyAttack, ThreatSet::CheaperAttacker}) {
+        const int aware = static_cast<int>(threats);
         MoveSelector s;
-        s.start_main(pos, tt, h, nullptr, NoArrival, NoArrival, nullptr, aware);
+        s.start_main(pos, tt, h, nullptr, NoArrival, NoArrival, nullptr, threats);
         const std::vector<Move> got = drain(s);
         CHECK_MSG(sorted_raw(got) == want,
                   pos.fen() << " tt " << tt.raw() << " aware " << aware << ": main selector set differs");
@@ -81,7 +82,7 @@ void check_node(Position& pos, const QuietHistory& history, std::uint64_t& seed,
         ++c.checks;
         for (bool see_filter : {true, false}) {
           MoveSelector q;
-          q.start_quiesce(pos, tt, see_filter, h, nullptr, aware);
+          q.start_quiesce(pos, tt, see_filter, h, nullptr, threats);
           CHECK_MSG(sorted_raw(drain(q)) == sorted_raw(quiesce_set(pos, see_filter)),
                     pos.fen() << " tt " << tt.raw() << " see " << see_filter << ": quiescence set differs");
           ++c.checks;
@@ -395,11 +396,79 @@ TEST_CASE("ordering", "threat buckets: the selector orders quiets by the move's 
   history.apply(White, other, 800, 0);
   for (bool aware : {false, true}) {
     MoveSelector s;
-    s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, nullptr, aware);
+    s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, nullptr,
+                 aware ? ThreatSet::AnyAttack : ThreatSet::Off);
     const std::vector<Move> got = drain(s);
     const auto at = [&](Move m) { return std::find(got.begin(), got.end(), m) - got.begin(); };
     CHECK_MSG((at(escape) < at(other)) == aware, "aware " << aware);
   }
+}
+
+// The cheaper-attacker threat set (tier 2, T56's second set): each tier of
+// attack_tiers(by) is exactly the squares attacked by its pieces (pawns;
+// pawns and minors; pawns, minors and rooks; every piece, as
+// attacked_squares), against the single-square attackers_to query, over the
+// perft and edge positions of tests/suite.hpp.
+TEST_CASE("ordering", "attack tiers: each tier is its attackers' squares") {
+  std::vector<std::string_view> fens;
+  for (const PerftPosition& p : perft_suite()) fens.push_back(p.fen);
+  for (const EdgePosition& p : edge_positions()) fens.push_back(p.fen);
+  int compared = 0;
+  for (std::string_view fen : fens) {
+    Position pos;
+    CHECK_MSG(pos.set_fen(fen), fen);
+    for (Color by : {White, Black}) {
+      const Bitboard pawns = pos.pieces(by, Pawn);
+      const Bitboard minors = pawns | pos.pieces(by, Knight, Bishop);
+      const Bitboard rooks = minors | pos.pieces(by, Rook);
+      AttackTiers want;
+      for (Square s = 0; s < 64; ++s) {
+        const Bitboard at = pos.attackers_to(s, pos.pieces()) & pos.pieces(by);
+        if (at & pawns) want.pawns |= bb(s);
+        if (at & minors) want.minors |= bb(s);
+        if (at & rooks) want.rooks |= bb(s);
+        if (at) want.all |= bb(s);
+      }
+      const AttackTiers got = pos.attack_tiers(by);
+      CHECK_MSG(got.pawns == want.pawns && got.minors == want.minors && got.rooks == want.rooks &&
+                    got.all == want.all,
+                fen << " by " << static_cast<int>(by));
+      CHECK_EQ(got.all, pos.attacked_squares(by));
+      ++compared;
+    }
+  }
+  CHECK(compared > 20);
+}
+
+// Under the cheaper-attacker set a square is threatened for the moving piece
+// only when a cheaper enemy piece attacks it: the knight on d4, attacked by
+// the queen alone, is threatened under any attack and not under the cheaper
+// set; the knight on f4, attacked by the g5 pawn, is threatened under both;
+// with the set Off every bucket is 0.
+TEST_CASE("ordering", "cheaper threats: only a cheaper attacker threatens the moving piece") {
+  Position pos;
+  CHECK(pos.set_fen("k2q4/8/8/6p1/3N1N2/8/8/7K w - - 0 1"));
+  const Move by_queen = pos.parse_uci("d4b3");
+  const Move by_pawn = pos.parse_uci("f4h3");
+  QuietHistory history;
+  const auto from_bit = [&](ThreatSet threats, Move m) {
+    MoveSelector s;
+    s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, nullptr, threats);
+    return s.threat_bucket_of(m);
+  };
+  CHECK(from_bit(ThreatSet::AnyAttack, by_queen) >= 2);
+  CHECK(from_bit(ThreatSet::CheaperAttacker, by_queen) < 2);
+  CHECK(from_bit(ThreatSet::AnyAttack, by_pawn) >= 2);
+  CHECK(from_bit(ThreatSet::CheaperAttacker, by_pawn) >= 2);
+  CHECK_EQ(from_bit(ThreatSet::Off, by_queen), 0);
+  CHECK_EQ(from_bit(ThreatSet::Off, by_pawn), 0);
+  const AttackTiers tiers = pos.attack_tiers(Black);
+  CHECK_EQ(tiers.threatening(Knight), tiers.pawns);
+  CHECK_EQ(tiers.threatening(Bishop), tiers.pawns);
+  CHECK_EQ(tiers.threatening(Pawn), tiers.pawns);
+  CHECK_EQ(tiers.threatening(Rook), tiers.minors);
+  CHECK_EQ(tiers.threatening(Queen), tiers.rooks);
+  CHECK_EQ(tiers.threatening(King), tiers.all);
 }
 
 }  // namespace forkeng::test
