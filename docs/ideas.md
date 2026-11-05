@@ -941,6 +941,9 @@ tuned by SPSA.
   - **L1 Knowledge:** a small learned network on pawns and kings only,
     its output cached by `pawn_structure_key` and added to the main
     network's evaluation.
+    **First step (owner, 2026-11-05): pawn-pair inputs in the main
+    network** (idea 41's architecture; KB nnue-inputs.md §2): structure
+    knowledge learned inside the main network before any separate one.
   - **L2 Memory:** the pawn correction table (the pawn drift table, T32,
     in progress: its LTC SPRT started 2026-11-02) and the pawn-structure
     history (T12).
@@ -971,3 +974,78 @@ tuned by SPSA.
 - **earliest phase:** Phase 4 (the pawn structure key exists since
   2026-11-02, branch tier2/drift).
 - **status:** untested (planned 2026-11-02); L2's pawn table in progress.
+
+## 41. S-512 with Fork's own threat and pawn-pair inputs
+
+- **type:** ELO (a network architecture: an entry like the bake-off's;
+  its name and every new identifier screened at build time).
+- **idea** (owner, 2026-11-05; replaces the S512+X plan): S-512 plus two
+  input families of Fork's own design, from the concepts in the KB only
+  (nnue-inputs.md §1-2, no engine's indexing or constants): threat inputs
+  (attacker-victim pairs, with Fork's own redundancy removal: dropping
+  pairs implied by others, mutual duplicates and impossible pairs) and
+  pawn-pair inputs (pairs of pawns describing the structure's geometry; the
+  first step of idea 40's L1).
+- **phase:** Phase 4.
+- **metric:** as the bake-off's entries: trained on the current snapshot,
+  a fixed-node screen first, then an STC SPRT against the default network.
+- **runtime cost:** possible (larger first layer, incremental threat
+  updates; nps reported with the SPRT).
+- **sources:** Fork KB nnue-inputs.md §1-2 (kb 962f1ab, 5cd96c3) and the
+  sources it lists (ORIGINALITY.md, 2026-11-05).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05).
+
+## 42. Continuation histories as inputs to the LMR history term
+
+- **type:** ELO (flags set at build time).
+- **idea** (owner, 2026-11-05): the LMR history term reads continuation
+  histories as inputs. Note: the term as built (T16, `use_lmr_history`)
+  already read the quiet ordering score, which sums the butterfly history
+  and the reply and follow tables (1- and 2-ply continuations); it failed
+  its STC SPRT at its measured divisor (H0, -10.81 +/- 5.01 Elo,
+  2026-11-05). The plan is therefore a new form: each table as its own
+  input with its own weight, and deeper continuations, each measured
+  before its SPRT (KB search-techniques.md §3.36, T58, which has an SPRT
+  plan step by step).
+- **phase:** Phase 4.
+- **metric:** a measurement with a pre-declared rule, then an STC SPRT.
+- **runtime cost:** possible (small).
+- **sources:** Fork KB §3.36 (kb 5fac98e) and its sources (ORIGINALITY.md).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05).
+
+## 43. Fractional depth
+
+- **type:** TOOLING first (a search refactor with bench unchanged at the
+  whole-ply equivalent), then ELO for what it enables.
+- **idea** (owner, 2026-11-05): depth in sub-ply units, so reductions and
+  extensions can be fractional (KB §3.35, T57: units, TT depth and its
+  comparisons, thresholds, extensions), done **before the SPSA retuning**
+  so the tuner sees smooth parameters.
+- **phase:** Phase 4, before the post-network retune.
+- **metric:** the refactor: bench node count and signature unchanged at the
+  whole-ply setting, the full check; then SPRTs of the fractional uses.
+- **runtime cost:** none for the refactor itself (to be confirmed with
+  bench/ab.py).
+- **sources:** Fork KB §3.35 (kb 024fb9e) and its sources (ORIGINALITY.md).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05).
+
+## 44. Quantization-aware training
+
+- **type:** TOOLING (the training pipeline), measured through the networks
+  it trains.
+- **idea** (owner, 2026-11-05): QAT in Fork's training pipeline (KB
+  nnue-design.md §5.6: simulated rounding and clipping in training,
+  straight-through gradients), so the trained float network and its
+  integer form agree; small for the all-int16 S-512 family, more for later
+  int8 layers.
+- **phase:** Phase 4.
+- **metric:** the quantised network's loss and its parity against the float
+  network, then the network's promotion test.
+- **runtime cost:** none (training only).
+- **sources:** Fork KB nnue-design.md §5.6 (kb 02912f5) and its sources
+  (ORIGINALITY.md).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05).
