@@ -293,6 +293,9 @@ margins that depend on eval (CLAUDE.md, phase-end item 8).
   (adoption).
 
 ### 1.7 Pawn-structure inputs
+- **Deeper entry (2026-11-05):** [nnue-inputs.md](nnue-inputs.md) §2 covers
+  the origin (Pawnocchio), what the pairs capture, cost, isolated SPRT
+  results and pitfalls. It is newer than this entry.
 - **What.** Inputs for unordered pairs of pawns (any colours) on the same
   or adjacent files. They generalize pawn-to-pawn attacks, which are then
   removed from the threat set to avoid duplication. Stockfish's history
@@ -1209,7 +1212,7 @@ own reasoning, sweeps and SPRTs, never from another engine.
 |---|---|
 | What "dual activation" means (Alexandria 9.x) | Only named in release notes; no opened source or search result defines it |
 | Isolated Elo of HalfKP/HalfKA against 768, of mirroring, of pairwise multiplication, of output buckets | No isolated SPRT in the opened sources (loss-only evidence for output buckets) |
-| Isolated Elo of pawn-pair and opposed-pawn inputs | Only bundled release results found |
+| Isolated Elo of pawn-pair and opposed-pawn inputs | Only bundled release results found. **Resolved for pawn pairs 2026-11-05:** isolated SPRTs in Stormphrax #341, Viridithas #445, Integral #254 and Stockfish f4bcd404 (nnue-inputs.md §2.5); opposed-pawn (pawn pusher) inputs: Stockfish PR #6694 passed STC and LTC alone, derived +2.5 and +1.4 |
 | Minimum data needed for threat inputs, and a positions-per-width rule | No opened source states one |
 | How incremental threat deltas are computed (the Yukari approach) | Credited in a PR description; not opened. §1.6's list is Fork reasoning. **Partly resolved 2026-11-05:** the three groups of changed relations are confirmed by 87flowers' post (nnue-inputs.md §1.5); Yukari's own method is still not opened |
 | Results of passed-pawn, castling-rights and bishop-pair inputs | Planned in a 2024 blog post; no result found |

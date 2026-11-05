@@ -1395,3 +1395,22 @@ No engine or trainer repository was cloned or downloaded and no engine or traine
 | https://talkchess.com/viewtopic.php?p=988632 | talkchess thread "Threat inputs and engine eval stability" (2026-01-27 to 29) | 2026-11-05 | §1.6 contrary report |
 | Web search: 87flowers blog incremental threat inputs | search only | 2026-11-05 | leads; snippets not used |
 | api.github.com/repos/{official-monty/Monty, yukarichess/yukari, official-stockfish/nnue-pytorch, official-stockfish/Stockfish, Yoshie2000/PlentyChess, Ciekce/Stormphrax, cosmobobak/viridithas, aronpetko/integral, PGG106/Alexandria, codedeliveryservice/Reckless, KierenP/Halogen, jw1912/bullet} | API repo metadata | 2026-11-05 | licence (spdx_id) of each project cited |
+
+### Pawn-pair inputs (nnue-inputs.md §2), 2026-11-05
+
+Same method as the section above (no engine source opened; PR bodies, commit messages and release notes only).
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| api.github.com/search/commits?q=repo:official-stockfish/Stockfish+pawn+pair, and +hash:{f4bcd404, ff7cee42, edb0d9db} | Stockfish commit messages: SFNNv16 pawn pairs (credit to Hallström and Pawnocchio), SFNNv19 mirroring flip, Stockfish 19 release text | 2026-11-05 | §2.2, §2.3, §2.5, §2.6 |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/{6694, 6982, 7275} | Stockfish PR bodies: pawn-pusher threats, pawn pairs, ram pairs | 2026-11-05 | §2.3, §2.5 |
+| api.github.com/repos/official-stockfish/nnue-pytorch/pulls/{444, 502, 561} | trainer PR bodies (companions, no technical text) | 2026-11-05 | dates |
+| api.github.com/search/repositories?q=pawnocchio; api.github.com/repos/JonathanHallstrom/pawnocchio/releases | Pawnocchio repo search and release notes (v2.0, 2026-06-27) | 2026-11-05 | §2.2 (own-invention statement), licence |
+| https://raw.githubusercontent.com/JonathanHallstrom/pawnocchio/main/README.md | Pawnocchio README (licensing section) | 2026-11-05 | licence; no feature description found |
+| api.github.com/search/commits?q=repo:JonathanHallstrom/pawnocchio+pawn, and is:pr pawn | Pawnocchio commit and PR searches | 2026-11-05 | no pawn-pair PR found |
+| api.github.com/repos/Ciekce/Stormphrax/pulls/{340, 341, 342}; api.github.com/repos/Ciekce/Stormphrax/releases (v8.0.0) | Stormphrax PR bodies and release notes | 2026-11-05 | §2.4, §2.5 |
+| api.github.com/repos/cosmobobak/viridithas/pulls/445 (and #446 by title) | Viridithas PR body | 2026-11-05 | §2.4, §2.5 |
+| api.github.com/repos/aronpetko/integral/pulls/254 | Integral PR body | 2026-11-05 | §2.5 |
+| api.github.com/repos/Yoshie2000/PlentyChess/pulls/{482, 487}; api.github.com/repos/Yoshie2000/PlentyChess/releases (b-v8.0.0) | PlentyChess PR bodies and release notes | 2026-11-05 | §2.3, §2.5 |
+| api.github.com/search/issues?q=repo:{Stormphrax, PlentyChess, Reckless, viridithas, integral, Halogen, Alexandria}+is:pr+pawn+in:title+created:>2026-03-01, and Stormphrax / PlentyChess PR lists for 2026-05 to 2026-07 | PR title searches (leads) | 2026-11-05 | finding the pawn-pair PRs |
+| api.github.com/repos/JonathanHallstrom/pawnocchio | API repo metadata | 2026-11-05 | licence GPL-3.0 |

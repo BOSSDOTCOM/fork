@@ -328,3 +328,148 @@ which filters invalid pairs earlier, measured about a 1% speedup.
    indexing: Monty's slides describe it for Monty's V2 scheme. Whether
    Stockfish indexes the same way is not stated in prose, and its code was
    not read.
+
+---
+
+## 2. Pawn-pair inputs
+
+Verified 2026-11-05.
+
+### 2.1 What they are
+
+- One binary input for each **unordered pair of pawns**, of either colour,
+  whose files are the same or adjacent. Each feature describes both pawns
+  (their squares and colours relative to the perspective), so it encodes
+  one geometric relation between two pawns.
+- Like threat inputs, they are an add-on to the king-relative piece-square
+  inputs. Every adopter added them to a net that already had threat inputs
+  (§2.5).
+- Pairs further apart than one file are not represented. That restriction
+  is the core of the idea (§2.2).
+
+### 2.2 Origin and the observation behind it
+
+- Pawn-pair inputs were invented by **Jonathan Hallström for Pawnocchio**
+  (Stockfish commit f4bcd404, 2026-07-20). His release notes for Pawnocchio
+  2.0 (2026-06-27) call the "pawn-pawn inputs" his own invention.
+- The observation, as the Stockfish commit message reports it: in a net
+  trained on *all* pairs of pawns, the most important pairs turned out to
+  be those at most one file apart. So the feature set keeps the informative
+  part of the full pair space and drops the rest. This is the same kind of
+  pruning of a pair space as the threat-input dedup (§1.4), but driven by
+  measured importance instead of logical redundancy.
+
+### 2.3 What they capture that piece-square inputs do not
+
+Fork's reasoning from the definitions (no opened source analyses this):
+
+- Piece-square inputs see each pawn separately. Pawn-structure concepts are
+  relations between pawns, so the first layer cannot represent them
+  directly:
+  - doubled pawns: same file, same colour;
+  - phalanx and connected pawns: adjacent files, same colour;
+  - chains and protected pawns: diagonal contact;
+  - opposed, blocked and rammed pawns: same file, opposite colours;
+  - levers: adjacent files, opposite colours, about to contact.
+- Concepts defined by an **absence** remain indirect. An isolated pawn has
+  no friendly pawn on a neighbouring file; a passed pawn has no enemy pawn
+  ahead on its file or the neighbouring files. A pair feature can only
+  signal that a relation is present. The net must infer "no such pair" from
+  the piece inputs and from which pair features are off. That is still more
+  than piece-square inputs offer, because the presence features are exactly
+  the ones whose absence defines the concept.
+- The threat set covers only pawn-attacks-pawn (diagonal contact), and
+  Stockfish later added "pawn pusher" features (a pawn whose forward square
+  is occupied by another pawn) to it. Pawn-pair inputs are a superset of
+  both, so both were removed from the threat set when pawn pairs came in
+  (Stockfish f4bcd404; PlentyChess #482).
+
+### 2.4 Cost
+
+- **Few updates.** Pawns move rarely, and most moves change no pair at all.
+  A pawn move or a pawn capture changes every pair that includes the moved
+  or captured pawn (pawns on up to three files). A promotion removes all
+  pairs that include the promoted pawn.
+  Refreshes follow the same mirroring rule as threats.
+- **Speed in practice.**
+  - Stockfish's first implementation cost about 10% speed. Optimizations,
+    mostly by Hallström, brought that down to about 3.5% on the committer's
+    machine.
+  - Stormphrax's efficient SIMD update for the pawn-pawn inputs (#340) was
+    written by Hallström; its description says it also includes speedups
+    that apply to threat inputs.
+  - Viridithas added a VBMI path for pawn-pair index generation (#446,
+    title only).
+- **Wasted space.** nnue-pytorch's docs say its indexing reserves the whole
+  space of pawn pairs for fast SIMD indexing. Pairs more than one file
+  apart are never active, so their weights are never trained. That is a
+  speed-for-size trade, not a requirement.
+- **int8 weights**, as for threats (nnue-pytorch docs).
+
+### 2.5 Evidence
+
+| Engine, PR | Fixed nodes | STC | LTC | Notes |
+|---|---|---|---|---|
+| Stockfish f4bcd404 (PR #6982, 2026-07-20) | not given | failed [0, 2], derived −0.1 | passed [0.5, 2.5], derived +1.2 | VLTC passed [0, 2], derived +2.2; VVLTC passed [0.5, 2.5], derived +2.3; also removed pawn-pawn threats |
+| Stormphrax #341 (2026-06-13) | +6.36 ± 3.82 | +2.08 ± 1.67 | +3.09 ± 2.15 | with extra threat-input speedups also included, STC +10.54 ± 4.61 |
+| Viridithas #445 (2026-06-20) | +3.65 ± 3.00 (LLR 2.13, short of its bound; merged) | not given | not given | |
+| PlentyChess #482 (2026-06-17) | not given | +1.36 ± 1.10 | +4.13 ± 2.82 against the pre-SPSA net, +2.43 ± 2.99 against master (both unfinished) | bundled with the removal of king and pawn-pawn threats |
+| Integral #254 (2026-09-22) | +11.86 ± 5.90 | +6.63 ± 3.86 | +7.22 ± 3.97 | "idea from Pawnocchio author" |
+
+- The gain is a few Elo in mature engines, and in Stockfish it **grows with
+  time control** (no gain at STC, about +2 at the longest controls). That
+  is the same direction as threat inputs and favourable for TCEC.
+- Stockfish 19's release (2026-09-05) credits the new pawn-pair features
+  with increased strength.
+- **A failed extension.** Stockfish PR #7275 (2026-10-31, open when read)
+  added pairs of *rams* (an own pawn pushing against an enemy pawn). It
+  passed STC and failed LTC against the current master, and the author
+  plans to simplify it away. Not every pawn-relation feature pays.
+
+This settles the old **UNVERIFIED** "no isolated SPRT for pawn-pair
+inputs" item in nnue-design.md §10: Stormphrax #341, Viridithas #445,
+Integral #254 and Stockfish f4bcd404 are isolated tests.
+
+### 2.6 Pitfalls
+
+- **Index space.** Decide between compact indexing (only pairs within one
+  file) and a full reserved space. The compact form saves file space and
+  training memory. The reserved form is simpler to index with SIMD.
+- **Mirroring consistency.** Stockfish's SFNNv19 commit (ff7cee42,
+  2026-10-28) flipped the threat and pawn-pair mirroring to match the
+  piece inputs' orientation. The mirroring of every feature family must
+  agree, in the trainer and in the engine.
+- **Training data.** Rare structures (many doubled pawns, odd chains) get
+  few samples. That matters more for a small own-data set (strategy A+)
+  than for the multi-billion-position sets of the adopters.
+- **Isolating the effect.** Most releases bundle pawn pairs with other
+  changes. Test them alone, at more than one time control.
+
+### 2.7 For Fork
+
+- After threat inputs, or as a test of its own on a threat-free net. All
+  adopters had threat inputs first, so whether pawn pairs help a
+  piece-square-only net is **UNVERIFIED**. It would be a cheap experiment,
+  because pawn pairs change rarely.
+- **Caching by pawn key.** Fork already keeps a pawn key for T12 and T32.
+  A pawn-pair accumulator contribution depends only on the pawns and the
+  mirroring state, so it could be cached by pawn key plus mirror bit. That
+  is Fork's inference and **UNVERIFIED** (no source describes it).
+- **Names not to use:** `PP_3Wide`, `DirtyPawnPairs`,
+  `add_pawn_pawn_indexes`, `Ram_Ram`.
+- **Licences.**
+  - GPL-3.0: Pawnocchio, Stockfish, nnue-pytorch, Stormphrax, PlentyChess.
+  - AGPL-3.0: Viridithas.
+  - Integral: none.
+
+  Only ideas are used.
+
+### 2.8 UNVERIFIED items (pawn pairs)
+
+1. Whether pawn-pair inputs help a net without threat inputs: every adopter
+   had threats.
+2. Pawnocchio's own measurement of the feature (its v2.0 release bundles
+   many changes; no per-feature result was found).
+3. The pawn-key caching idea in §2.7: Fork's inference, unmeasured.
+4. The §2.3 analysis of which structures the features capture: Fork's
+   reasoning, not a published analysis.
