@@ -602,3 +602,24 @@ LLR: -0.53 (-2.94, 2.94) [0.00, 3.00] nElo: continue
   (nElo −7.5 to +6.2) leaves little room for the gain the bounds asked
   for; the owner decides whether the further correction tables, queued
   after this result, go ahead.
+
+### 2026-11-03 ltc-iir-on-vs-off (tier 2, T26: internal iterative reduction's LTC confirmation)
+
+- Base `0f62af5` (branch ltc/iir-off: phase-4 with `use_no_move_reduction`
+  off), test `2d582fc` (phase-4: S512r2 with IIR on, adopted on its STC
+  pass above). Non-regression bounds [−3, 0] nElo, **40+0.4, Hash 64 MB**,
+  x86-64-v3 on both sides, Syzygy 3-4-5, GitHub shards (16 per stage,
+  1,664 games per stage, cap 9,984 games), driven by
+  tools/github/sprt_run.sh (owner, 2026-11-02: the LTC queue's third entry).
+- Stages (Elo, nElo, LLR after each): 0 (run 41738319103) +25.52 ± 9.48,
+  +45.13 ± 16.69, 1.93; 1 (run 41748641433) H1. Result: **H1 accepted**
+  after stage 1:
+```
+Shards: 32 (done); pairs 1664, games 3328 (3328 finished, time losses 0, abnormal 0)
+Elo: 26.25 +/- 6.65, nElo: 46.80 +/- 11.80
+Ptnml(0-2): [17, 312, 790, 493, 52]
+LLR: 4.00 (-2.94, 2.94) [-3.00, 0.00] nElo: H1 accepted
+```
+- Confirmed: IIR stays on. Its LTC gain (+26.25 ± 6.65) is at least its
+  STC one (+21.45 ± 5.98). With this result the LTC queue of 2026-11-02 is
+  done (XGR-512 failed, the drift table undecided, AF-S shelved).
