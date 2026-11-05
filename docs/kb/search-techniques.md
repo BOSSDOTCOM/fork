@@ -15,8 +15,9 @@ terms), researched without cloning any engine.
 **Update 2026-11-02:** §3.34 adds T56, threat-aware move ordering (new ID),
 researched the same way: no engine cloned, no engine source opened.
 
-**Update 2026-11-05:** §3.35 adds T57, fractional depth (new ID), researched
-the same way.
+**Update 2026-11-05:** §3.35 adds T57, fractional depth, and §3.36 adds T58,
+continuation histories in the LMR history term (new IDs), researched the
+same way.
 
 All of it is **REFERENCE ONLY**. No code, pseudocode, tuned constants or
 comment text from any engine appears in this file. Parameters are
@@ -249,6 +250,7 @@ expected values are as defined in §0.
 | T55 | History bonus versus malus balance (§3.33) | 2 | 3 | T9, T10, T11 | small |
 | T56 | Threat-aware move ordering: histories indexed by threatened from/to squares, escape bonus and en-prise penalty, threat-aware capture history (§3.34) | 2 | 3 (search tier 2, now done in Phase 4) | T8, T9, T11, Phase 1 attack functions, piece values | small |
 | T57 | Fractional depth: sub-ply reductions and extensions, from fractional LMR arithmetic to fractional child depth and TT depth (§3.35) | 3 | 3-4 (with the Phase 4 re-validation) | T4, T15, T16, T29 | small, time-control dependent; can be worth nothing |
+| T58 | Continuation histories (1-ply, 2-ply; not 4-ply) in the LMR history term, plus post-LMR continuation-history updates (§3.36) | 2 | 3 (with the T16 history term) | T10, T16, T9 | small |
 
 Not on the list, but used in this file: **staged move generation**
 (Phase 1 already has the pieces), **excluded-move search** (needed by T27),
@@ -646,6 +648,8 @@ the evidence in §1):
     2026 (a43f3682).
 - **How to test:** Add the 1-ply table first, then the 2-ply table, then
   deeper ones, each its own SPRT. Watch nps.
+- **In LMR:** the same tables in T16's history term are T58, §3.36
+  (2026-11-05).
 - **Evidence:**
   - Stockfish 13c11f40 (2015, countermove history: +8.8 / +7.8) and
     a273b6ef (2016, follow-up history: +7.0 / +8.9).
@@ -799,6 +803,8 @@ the evidence in §1):
     from the summed quiet histories (capture history for captures).
     Berserk #43: +28; Weiss #451: +14 / +14; Stockfish 74e2fa97 (2016): +1.9
     / +5.5.
+    Which tables the term should sum (butterfly alone, or with the
+    continuation tables): T58, §3.36 (2026-11-05).
   - **Improving:** reduce more when the side to move's eval is not
     improving. Stockfish fff6b9f0 (2013): +7.6 / +6.0; Alexandria #28: +12.
   - **Expected cut node:** reduce more at nodes expected to fail high,
@@ -2410,6 +2416,149 @@ histories in LMR (T58)".
 
     Only ideas are used.
 
+### 3.36 T58 Continuation histories in the LMR history term
+
+Added 2026-11-05, **REFERENCE ONLY**, verified 2026-11-05. It refines T16's
+"History" adjustment (§3.13) with the tables of T10 (§3.10). Researched as
+§3.35. Most engine PRs on history-based LMR give a result but do not say
+which tables they read; only those that say so are used for the "which
+tables" question. Sources are in [sources.md](sources.md), "Fractional depth
+(T57) and continuation histories in LMR (T58)".
+
+- **What it is.** T16 reduces moves with a good history less and moves with
+  a bad history more. The question here is which history goes into that
+  statistic:
+  - the butterfly history (T9) alone: side, from-square and to-square;
+  - or the butterfly history plus continuation-history entries (T10),
+    keyed by the current move together with the move played one ply ago
+    (the opponent's last move, the "reply" or countermove history), two
+    plies ago (one's own previous move, the "follow-up" history), and in
+    some engines four plies ago.
+
+  The combined value is usually the same sum the quiet move ordering uses,
+  sometimes with its own weights. Captures use the capture history (T11)
+  instead.
+- **Why it gains.**
+  - LMR's decision is a bet on whether the move could fail high. The
+    continuation tables hold that probability *in context*: what tends to
+    work after the move just played. The butterfly table averages over all
+    contexts, so a reply that is excellent after one move and useless after
+    another looks mediocre in both.
+  - **Consistency with ordering.** The move was placed late because of its
+    ordering score. Reducing it by a different statistic can contradict
+    the order, for example reducing a move less than the moves before it.
+    Stockfish's 2015 commit that changed its LMR history condition says so
+    in its title: it was done "to help sync up with move ordering"
+    (20e92895).
+- **Variants.**
+  - Weighting: an equal-weight sum, the ordering's weights, or separate
+    tuned weights per table.
+  - Depth of context: 1-ply only, 1- and 2-ply, or also 4-ply.
+  - In check: Stockfish uses only the butterfly and the 1-ply table there
+    (37c2b568, 2021).
+  - Divisor: the summed value is turned into a reduction by dividing by a
+    scale. A sum over more tables has a wider range, so the scale must be
+    re-measured (Avalanche #86 changed it, untuned, with the same change).
+    Stockfish later made the divisor depth-dependent (3bdfa0fb, 2024-05,
+    tuned with nevergrad; #6741, 2026-04, as a per-depth array).
+  - Clamping: Ethereal removed both its maximum and its minimum clamp on
+    LMR's history component (#205, 2024-01, non-regression at 10+0.1 and
+    60+0.6; #206 known by its title).
+- **The feedback loop (related).** After a reduced move fails high and is
+  re-searched at full depth, update its continuation histories by the
+  re-search's outcome ("post-LMR continuation-history update"). LMR then
+  teaches the tables it reads. This is a separate change with its own
+  evidence (below).
+- **Conditions.**
+  - The search stack must hold each ply's moved piece and destination
+    (T10). A null move has no continuation entry: use a neutral value or
+    skip that table, the same choice as in ordering.
+  - Read the same entries the move picker already read for this move.
+    Reusing the picker's per-move score saves a second set of table
+    lookups, and with it cache misses.
+- **Pitfalls.**
+  - **Double counting.** Low history moved the move late, and late moves
+    are already reduced more by the base table. A strong history term
+    pushes the same signal twice, so over-reduction of tactically good but
+    unfamiliar moves is the risk. Measure the re-search rate and its
+    success rate (§3.13).
+  - **Deeper tables help less.**
+    - Stockfish first halved the 4-ply table's weight in pruning (a gainer).
+    - It then removed the 4-ply table from LMR's statistic (3b4ddf4a,
+      2024-05-06, non-regression at STC and LTC, derived +2.3 and +2.2) and
+      from move-loop pruning (23439e40, same week).
+    - Start with the 1-ply and 2-ply tables.
+  - **Window dependence and instability.** As T16: history depends on what
+    was searched before (CPW Search Instability).
+  - **Scale drift.** If the history update rule (T55) or the table count
+    changes, the LMR divisor must be re-measured.
+- **How to test (Fork).** One SPRT per step, on the same base:
+  1. the LMR history term with the butterfly history only (T16, as
+     planned);
+  2. add the 1-ply (reply) table;
+  3. add the 2-ply (follow) table;
+  4. alternatively, use the picker's full ordering score as one variant
+     against step 3.
+
+  Re-measure the divisor on a pre-declared wide grid at each step (the
+  owner's rule). The post-LMR update is a separate SPRT afterwards.
+- **Evidence** (each engine's own results; "derived" as in §0):
+  - **Stockfish's path to continuation histories in LMR:**
+    - countermove history (the 1-ply table) entered its LMR rules in 2015:
+      20e92895 (2015-04-10, the "sync up with move ordering" change;
+      non-regression at STC and LTC); b7063ef6 (2015-04-26; passed STC and
+      LTC, derived +1.6 and +5.1); 7e9f776f (2015-06-27, reduce less when
+      both the 1-ply and butterfly histories are positive; derived +4.7 STC,
+      +3.2 LTC);
+    - 74e2fa97 (2016-01-13) adjusted reductions by the butterfly and 1-ply
+      tables together: derived +1.9 STC, +5.5 LTC (T16 lists it);
+    - e082112c (2016-04-17) added the follow-up histories to the LMR
+      formula: derived +2.3 STC, +1.5 LTC;
+    - the in-check variant above (37c2b568, 2021): derived +1.1 STC, +1.1
+      LTC;
+    - the 4-ply table removed (3b4ddf4a, 2024), see "Pitfalls".
+  - **Avalanche #86** (2026-10-02): the LMR history term changed from the
+    butterfly history alone to butterfly plus the 1-ply and 2-ply tables.
+    OpenBench STC 8+0.08 on [0, 3]: passed, +3.97 nElo [+0.87, +7.07] over
+    48,228 games. LTC 40+0.4: passed, +21.20 nElo [+12.43, +29.96] over
+    6,038 games. These are normalized Elo, and the LTC interval is wide.
+  - **Post-LMR continuation-history updates:**
+    - Stockfish 389e6074 (2019-07-12, half bonus after a full-depth
+      re-search): derived +3.2 STC, +3.3 LTC;
+    - Weiss #662 (2023-04-19): +2.61 ± 2.70 STC, +8.92 ± 6.02 LTC;
+    - Alexandria #249 (2023-09-24): +5.49 ± 3.54 STC;
+    - Berserk #529 (2023-12-03): +1.40 ± 1.40 at 10+0.1, +2.65 ± 2.36 at
+      60+0.6;
+    - Stormphrax #141 (2024-05-15): +6.90 ± 4.43 at 14+0.14;
+    - Integral #79 (2024-09-26): +2.97 ± 2.14 STC;
+    - Reckless #218 (2025-04-02): +3.67 ± 2.80 STC. Its description: since
+      LMR is so common, it pays to order first the moves that pass LMR
+      quickly.
+  - **History in LMR without the tables named** (cannot answer "which
+    history"): Berserk #43 and #110, Weiss #451, #452 and #482, Halogen
+    #351, Alexandria #150 and #171, PlentyChess #74, Stormphrax #122. Their
+    figures for the history term in general are in T16 (§3.13).
+- **Expected value: small (2 to 10) on top of a butterfly-only LMR history
+  term.** Larger if Fork's term starts from nothing. Avalanche's LTC figure
+  is an outlier with a wide interval.
+- **Fork.**
+  - The LMR context carries only the butterfly score today
+    (`src/search/lmr_table.hpp`, branch phase-4, 2026-11-05).
+  - The move picker's quiet score already sums the butterfly history with
+    the reply and follow tables, each with its own measured weight
+    (`src/search/move_selector.cpp`; T10's two tables passed their SPRTs,
+    DESIGN.md 2026-11-01).
+  - DESIGN.md's 2026-11-02 row plans the LMR history term from "the move's
+    ordering history score", so the choice in this entry is open:
+    butterfly alone, or the ordering sum. Settle it by the steps above.
+  - Licences of the engines cited:
+    - GPL-3.0: Stockfish, Ethereal, Berserk, Weiss, Stormphrax, Alexandria,
+      PlentyChess, Halogen, Avalanche.
+    - AGPL-3.0: Reckless.
+    - Integral: none.
+
+    Only ideas are used.
+
 ---
 
 **Names Fork's code must not use** (engine-specific identifiers or comment
@@ -2658,3 +2807,9 @@ engines under their own licences and are OFF-LIMITS.
     only.
 23. (§3.35) Zurichess's "about +6 Elo" from fractional depth (2015): a forum
     remark without test details.
+24. (§3.36) Which history tables the LMR history terms of Berserk, Weiss,
+    Halogen, Alexandria, PlentyChess and Stormphrax read: their PRs give
+    results without naming the tables, and no code was read.
+25. (§3.36) Avalanche #86's LTC result (+21.2 nElo over 6,038 games) is
+    unusually large for this change and has not been replicated in the
+    sources read.
