@@ -1368,3 +1368,30 @@ No engine repository was cloned or downloaded and no engine source file was open
 | api.github.com/repos/KierenP/Halogen/pulls/{638, 757, 761, 132, 377, 294} | PR bodies | 2026-11-02 | node TM, stability, score change, time panic, fail-low (not merged) |
 | api.github.com/repos/PGG106/Alexandria/pulls/{167, 281, 438, 618, 562} | PR bodies (#281, #438, #562 without results) | 2026-11-02 | node share, stability, score stability |
 | Fork's own files on branch phase-4: docs/DESIGN.md (Phase 5 bullet, Deliverable 8, Search constants), src/search/time_budget.cpp, src/search/searcher.cpp, src/search/searcher.hpp | Fork's design and code | 2026-11-02 | §1 baseline and §3 arithmetic |
+
+## NNUE inputs: threat and pawn-pair inputs (nnue-inputs.md), 2026-11-05
+
+No engine or trainer repository was cloned or downloaded and no engine or trainer source file was opened. PR data came from the GitHub REST API `pulls/{n}` and `issues/{n}/comments` endpoints (title, author, dates, body; code blocks in bodies skipped), commit messages from the commit-search API (message text only, no diff), release notes from the releases API. Two PDF attachments of Stockfish PR #6411 were downloaded to a temporary folder outside the repository, read as prose and deleted. Counts, architecture strings and constants printed in these sources were deliberately not recorded. Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| api.github.com/search/issues?q=repo:official-stockfish/Stockfish+is:pr+threat(s)+in:title, and repo:official-stockfish/nnue-pytorch+is:pr+threat+in:title | PR title searches (leads only) | 2026-11-05 | finding the Stockfish and trainer PRs |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/{6406, 6411, 6415, 6430, 6453, 6479, 6559, 6593, 6602, 6609, 6614, 6635, 6739, 6890, 6936, 6990, 7203} | Stockfish PR bodies | 2026-11-05 | §1.3-§1.6: definition, lineage credits, king-threat removals, compression, i8 weights, cancelling pairs, prefetch, merged accumulators, hybrid king-move update, perft path, threat-delta LMR proposal, STC/LTC/VVLTC results |
+| https://github.com/user-attachments/files/23478634/Stockfish.threat.inputs.PR.summary.pdf | "Stockfish threat inputs PR summary" (3 pages, attached to PR #6411) | 2026-11-05 | §1.3, §1.4, §1.6: dedup rule, mirroring, history of development, failed variants, i8 results, speed, scaling, not SPSA-tuned |
+| https://github.com/user-attachments/files/23478441/NewInputs.pdf | "Monty Inputs V2" slides (12 pages, attached to PR #6411) | 2026-11-05 | §1.4: reachable-geometry enumeration and duplicate removal (counts not recorded) |
+| api.github.com/repos/official-stockfish/nnue-pytorch/pulls/{373, 387, 388, 398, 444} | trainer PR bodies | 2026-11-05 | §1.3 (bullet credit), §1.4 (king-threat removals) |
+| https://raw.githubusercontent.com/official-stockfish/nnue-pytorch/master/docs/nnue.md | nnue-pytorch NNUE doc, Full_Threats and PP_3Wide sections (prose only; last doc commit 2026-10-01) | 2026-11-05 | §1.1, §1.4, §1.5 |
+| https://raw.githubusercontent.com/official-stockfish/nnue-pytorch/master/docs/nnue_architecture_history.md | Stockfish net history | 2026-11-05 | dates of the king-threat removals and opposed-pawn features |
+| api.github.com/repos/official-monty/Monty/pulls/{87, 114, 116} | Monty PR bodies | 2026-11-05 | §1.3, §1.4 (i8 weights), §1.7 (colour-indexing fix) |
+| api.github.com/search/commits?q=repo:yukarichess/yukari+hash:2d482c64 (and +threat) | Yukari commit message | 2026-11-05 | §1.3, §1.6 |
+| api.github.com/repos/Yoshie2000/PlentyChess/pulls/{400, 406, 411, 438, 488} | PlentyChess PR bodies (result blocks read) | 2026-11-05 | §1.3, §1.4, §1.5, §1.6 |
+| api.github.com/repos/Ciekce/Stormphrax/pulls/{285, 289, 293} | Stormphrax PR bodies | 2026-11-05 | §1.3, §1.4 (king->piece removal), credits |
+| api.github.com/repos/cosmobobak/viridithas/pulls/425 | Viridithas threat-inputs PR body | 2026-11-05 | §1.3, §1.6 |
+| api.github.com/repos/aronpetko/integral/pulls/{243, 266} | Integral PR bodies | 2026-11-05 | §1.3, §1.5, §1.6 |
+| api.github.com/repos/PGG106/Alexandria/pulls/630 | Alexandria PR body | 2026-11-05 | §1.3, §1.6 |
+| api.github.com/search/issues?q=repo:{Reckless, viridithas, integral, Halogen, Alexandria, Obsidian, Stormphrax, PlentyChess}+is:pr+threat... in:title | PR title searches (leads; Halogen #888 and Viridithas #433 used by title only) | 2026-11-05 | §1.5 |
+| https://87flowers.com/ and https://87flowers.com/threat-geometry/ | 87flowers' blog index and draft post "accelerating threat input feature calculation with AVX-512" (2026-10-18; prose only, the post contains code) | 2026-11-05 | §1.4 (Reckless dedup speed), §1.5 (what changes on a move, capture as replacement) |
+| api.github.com/users/87flowers | GitHub profile (blog link) | 2026-11-05 | finding the blog |
+| https://talkchess.com/viewtopic.php?p=988632 | talkchess thread "Threat inputs and engine eval stability" (2026-01-27 to 29) | 2026-11-05 | §1.6 contrary report |
+| Web search: 87flowers blog incremental threat inputs | search only | 2026-11-05 | leads; snippets not used |
+| api.github.com/repos/{official-monty/Monty, yukarichess/yukari, official-stockfish/nnue-pytorch, official-stockfish/Stockfish, Yoshie2000/PlentyChess, Ciekce/Stormphrax, cosmobobak/viridithas, aronpetko/integral, PGG106/Alexandria, codedeliveryservice/Reckless, KierenP/Halogen, jw1912/bullet} | API repo metadata | 2026-11-05 | licence (spdx_id) of each project cited |

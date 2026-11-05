@@ -214,6 +214,9 @@ margins that depend on eval (CLAUDE.md, phase-end item 8).
   release.
 
 ### 1.6 Threat-aware inputs (attacker/target relations)
+- **Deeper entry (2026-11-05):** [nnue-inputs.md](nnue-inputs.md) §1 covers
+  the lineage, redundancy removal, the incremental update, the later merge
+  of the two accumulators, and more evidence. It is newer than this entry.
 - **What.** Extra binary inputs, one per (attacking piece and square,
   attacked piece and square) pair where the first piece attacks the
   second, seen from each perspective. They cover both threats (attacks on
@@ -1208,7 +1211,7 @@ own reasoning, sweeps and SPRTs, never from another engine.
 | Isolated Elo of HalfKP/HalfKA against 768, of mirroring, of pairwise multiplication, of output buckets | No isolated SPRT in the opened sources (loss-only evidence for output buckets) |
 | Isolated Elo of pawn-pair and opposed-pawn inputs | Only bundled release results found |
 | Minimum data needed for threat inputs, and a positions-per-width rule | No opened source states one |
-| How incremental threat deltas are computed (the Yukari approach) | Credited in a PR description; not opened. §1.6's list is Fork reasoning |
+| How incremental threat deltas are computed (the Yukari approach) | Credited in a PR description; not opened. §1.6's list is Fork reasoning. **Partly resolved 2026-11-05:** the three groups of changed relations are confirmed by 87flowers' post (nnue-inputs.md §1.5); Yukari's own method is still not opened |
 | Results of passed-pawn, castling-rights and bishop-pair inputs | Planned in a 2024 blog post; no result found |
 | Effect of removing Stockfish's direct PSQT-like shortcut | History doc gives only the change |
 | Viridithas "merge king planes", "speculative materialisation" and "separate sum vector" details | Release notes give titles only |
