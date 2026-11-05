@@ -140,7 +140,7 @@ struct SearchQuota {
   X(use_forced_move_stop, UseForcedMoveStop, true)       \
   X(use_tt_keep_deeper, UseTtKeepDeeper, false)          \
   X(use_tables, UseTables, true)                         \
-  X(use_lmr_check_relief, UseLmrCheckRelief, true)       \
+  X(use_lmr_check_relief, UseLmrCheckRelief, false)      \
   X(use_lmr_in_check, UseLmrInCheck, true)               \
   X(use_singular_extension, UseSingularExtension, true)  \
   X(use_multi_cut, UseMultiCut, true)                    \
