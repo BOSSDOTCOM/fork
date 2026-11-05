@@ -1451,3 +1451,19 @@ No engine repository was cloned or downloaded and no engine source file was open
 | api.github.com/repos/Ciekce/Stormphrax/pulls/{11, 122, 141}; api.github.com/repos/cosmobobak/viridithas/pulls/{204, 242}; api.github.com/repos/codedeliveryservice/Reckless/pulls/{218, 568}; api.github.com/repos/aronpetko/integral/pulls/79 | PR bodies (result blocks) | 2026-11-05 | §3.36 post-LMR updates; Viridithas #242 for §3.35 |
 | api.github.com/search/commits?q=repo:AndyGrant/Ethereal+{LMR history, counter move history}, and +hash:{0d5fe31a, f01531b8} | Ethereal commit messages | 2026-11-05 | §3.36 clamping removal |
 | api.github.com/repos/{SnowballSH/Avalanche, TerjeKir/weiss, jhonnold/berserk, AndyGrant/Ethereal} | API repo metadata | 2026-11-05 | licences |
+
+## Quantization-aware training (nnue-design.md §5.6), 2026-11-05
+
+No engine or trainer source file was opened (bullet's operation is cited from bullet-internals.md §7, read at the pin on 2026-10-28 under bullet's MIT licence). PR bodies and comments were read as text; code quoted in comments was not used. Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| https://export.arxiv.org/api/query?id_list=1806.08342,2106.08295,1902.08153 | arXiv API: abstracts of Krishnamoorthi (2018), Nagel et al. (2021), Esser et al. (2019, LSQ) | 2026-11-05 | §5.6 literature (abstracts only) |
+| http://export.arxiv.org/api/query?id_list=1806.08342,... | same query over http | 2026-11-05 | FAILED (empty response); https used |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/{6856, 7275} | Stockfish PR bodies: first QAT net; SFNNv20 (ram pairs, used in nnue-inputs.md §2.5) | 2026-11-05 | §5.6 evidence and required engine changes |
+| api.github.com/repos/official-stockfish/nnue-pytorch/pulls/{416, 442, 448, 475, 477} and /issues/477/comments | trainer PR bodies and review discussion | 2026-11-05 | §5.6 fake quantization of weights and activations, power-of-two scales, mismatch example, overflow check |
+| api.github.com/search/issues?q=repo:official-stockfish/{nnue-pytorch, Stockfish}+is:pr+{qat, quantization}, repo:jw1912/bullet+is:pr+qat | PR searches (leads) | 2026-11-05 | finding the QAT PRs |
+| api.github.com/search/issues?q=repo:{Monty, Stormphrax, PlentyChess, Reckless, viridithas, integral, Halogen, pawnocchio}+is:pr+{qat, quantisation}, and global "qat nnue", "quantization aware" chess, "quantisation aware" | PR searches (no engine QAT result found; hobby repositories not used) | 2026-11-05 | §5.6 "no engine PR reports a result for bullet's QAT" |
+| api.github.com/repos/jw1912/bullet/pulls/483 | bullet PR "Add QAT operation" (author jw1912, empty body) | 2026-11-05 | §5.6 |
+| https://asteri.sm/sitemap | Viridithas author's blog index | 2026-11-05 | no QAT post found |
+| bullet-internals.md §1.2 and §7 (this KB) | bullet's rounding rule and QAT operation at the pin | 2026-11-05 | §5.6 bullet support, Fork's needs |

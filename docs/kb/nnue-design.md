@@ -65,6 +65,10 @@ margins that depend on eval (CLAUDE.md, phase-end item 8).
 6. **Quantization-aware training** was used for Stockfish 19's nets. bullet
    has a merged PR titled "Add QAT operation" (October 2025), but its docs
    do not describe it, so how it works is **UNVERIFIED** (§5.6).
+   *Update 2026-11-05:* resolved. bullet's operation is a fake-quantization
+   node with a straight-through gradient (bullet-internals.md §7).
+   Stockfish's first QAT net passed STC and LTC (PR #6856, 2026-05), and the
+   concept and Fork's needs are in §5.6.
 7. **Parity.** bullet's docs specify its saved file layout: little-endian,
    column-major, a quantized file padded to 64 bytes, and a separate raw
    float file. Its default quantization **truncates** unless rounding is
@@ -754,35 +758,149 @@ margins that depend on eval (CLAUDE.md, phase-end item 8).
   quantization in the trainer).
 
 ### 5.6 Quantization-aware training (QAT)
-- **What.** In training, the forward pass simulates the integer inference:
-  weights and activations are rounded and clipped to their quantized grids
-  ("fake quantization"), while the stored weights stay in float. The
-  backward pass treats rounding as the identity (a straight-through
-  estimator), so gradients still flow. The net learns weights that are
-  robust to the rounding it will meet at inference.
-- **Foundations.**
-  - Jacob et al. (arXiv 1712.05877) describe simulating quantization in
-    the forward pass, with fake-quantization operators placed where
-    tensors are down-cast at inference.
-  - Bengio et al. (arXiv 1308.3432) name and analyze the straight-through
-    estimator.
-  - nnue-pytorch's lighter version clamps weights to the representable
-    range after every optimizer step, without simulated rounding. For
-    non-differentiable layers it substitutes a smooth gradient.
-- **Evidence in chess.** Stockfish 19's release (2026-09) lists QAT among
-  the new training techniques. No isolated Elo is given (**UNVERIFIED** as
-  a number). Stockfish's history also records an "updated fixed-point
-  quantization" step in 2026-05.
-- **bullet support.** bullet has a merged PR #483, "Add QAT operation"
-  (2025-10-20), with an empty description. **bullet's docs do not mention
-  QAT.** What the operation does and how to use it are **UNVERIFIED** from
-  docs. Reading bullet's code would answer it; that is allowed for a tool
-  under MIT, but was not done here.
-- **When it matters.** Most for int8 layers and small quantization factors.
-  Least for int16 accumulators with generous factors (reasoning).
-- Sources: Stockfish 19 release; `nnue_architecture_history.md`; arXiv
-  1712.05877 (paper text, section 3); arXiv 1308.3432 (abstract);
-  nnue-pytorch `nnue.md`; bullet PR #483 (title and metadata only).
+
+Rewritten and extended 2026-11-05 (verified 2026-11-05; the 2026-10-28
+facts are kept). Same clean-room method as the rest of this file. PR
+descriptions and their discussion comments were read as text; code quoted
+in comments was not used. Sources are in [sources.md](sources.md),
+"Quantization-aware training (nnue-design.md §5.6), 2026-11-05".
+
+- **What it is.** The trainer's forward pass computes what the engine's
+  integer inference will compute, while the optimizer keeps updating
+  full-precision float weights.
+  - Each weight (and optionally each activation) is replaced, in the
+    forward pass only, by its value after the engine's own scale, rounding
+    and clipping, mapped back to float ("fake quantization").
+  - The loss is measured on that quantized forward pass, so the net is
+    optimized for the numbers it will actually use.
+  - Post-training quantization (PTQ) is the alternative: train in float,
+    then round once and accept the error.
+- **Straight-through gradients.**
+  - Rounding has zero gradient almost everywhere, so training through it
+    directly would stop learning.
+  - The straight-through estimator (STE) uses the identity as the gradient
+    of the rounding step. The update then moves the float weight as if no
+    rounding had happened, and the float weight drifts across rounding
+    boundaries as needed.
+  - Clipping is handled in one of two ways: the gradient is zeroed outside
+    the clip range (the weight stops moving there), or passed through
+    unchanged.
+  - STE is a biased estimator. Bengio et al. (arXiv 1308.3432) name and
+    analyze it. Jacob et al. (arXiv 1712.05877) place the fake-quantization
+    operators where tensors are down-cast at inference.
+- **Learned scales.** Learned Step Size Quantization (Esser et al., arXiv
+  1902.08153) also learns each quantizer's step size by gradient. NNUE
+  trainers use fixed, power-of-two scales instead (below), so LSQ is a
+  reference, not a pattern.
+- **What the literature reports** (abstracts only; image-classification
+  CNNs, not chess):
+  - Krishnamoorthi (arXiv 1806.08342): 8-bit PTQ lands within 2% of float
+    accuracy, and QAT narrows that to 1%. QAT also allows 4-bit weights at
+    a 2-10% loss, worse for smaller networks.
+  - Nagel et al. (arXiv 2106.08295): PTQ is usually enough at 8 bits. QAT
+    needs fine-tuning with labelled training data but makes lower bit
+    widths competitive.
+  - The lesson for NNUE (Fork's reading): QAT matters most where the grid
+    is coarse relative to the weights, which means int8 layers and small
+    scales.
+- **Where it matters in an NNUE** (Fork's reasoning from §5.1-§5.5, not a
+  measurement):
+  - **int8 dense-layer weights**: the coarsest grid in the net, on layers
+    with few inputs, where one weight's error does not average out.
+  - **Activations between layers**: rounding after the clipped activation,
+    and after the products and shifts of SCReLU or pairwise layers (§4.2,
+    §4.3).
+  - **int8 threat-input weights**, which are clipped small in training
+    (nnue-inputs.md §1.4). The clip is a partial, range-only form of QAT.
+  - **The output scale** and the final rounding.
+  - **Least affected**: an int16 first layer with a generous scale, where
+    each weight's error is a tiny fraction of its value and many errors
+    average over the active inputs. Fork's S-512 net is of this kind
+    (int16 accumulator and int16 output weights, DESIGN.md §5.3).
+- **Evidence in chess.**
+  - **Stockfish's first QAT net:** PR #6856 (2026-05-25) "using a net
+    trained with QAT" passed STC [0, 2] and LTC [0.5, 2.5], derived +4.4
+    and +1.75. It is not an isolated test: the same PR changed the
+    quantization scheme (below), and the net is a new training run.
+  - **The trainer side:** nnue-pytorch PR #477 ("Towards Perfect Cross
+    Eval", merged 2026-06-02) added optional fake quantization of
+    activations and of weights, extended the trainer-against-engine cross
+    check to compare fake-quantization settings, and changed every scale to
+    a clean power of two.
+  - **Engine changes QAT required** (PR #6856):
+    - power-of-two scales everywhere except the very last output;
+    - the final output conversion in 64-bit integers, removing any chance
+      of overflow;
+    - different weight scales allowed per layer.
+  - **Stockfish 19's release** (2026-09-05) lists QAT among the new
+    training techniques. The architecture history's "updated fixed-point
+    quantization" step (2026-05) is the same change.
+- **A cautionary example.**
+  - A Stockfish trainer PR (#416, 2026-03-05, closed without merging)
+    found that a scale correction in the trainer no longer matched the
+    engine after the threat-input quantization change of 2025-12. Training
+    and inference had silently differed for about three months.
+  - #477 (merged) fixed it by deriving every correction from one
+    quantization configuration (#442 and #448 were earlier attempts).
+  - #475 (2026-05-12) makes conversion raise an error on integer overflow
+    instead of clipping silently. QAT only helps if the fake quantization is
+  exactly the engine's arithmetic. A mismatch trains the net for the wrong
+  rounding.
+- **bullet's support** (resolves the 2026-10-28 UNVERIFIED item;
+  bullet-internals.md §7, read at the pin, MIT):
+  - bullet has a fake-quantization graph operation. Its forward pass
+    multiplies by a factor, rounds or truncates, and divides back in float;
+    its backward pass passes the gradient through unchanged (STE).
+  - There is also a clip operation whose gradient passes through.
+  - Neither is described in bullet's docs. PR #483 ("Add QAT operation",
+    jw1912, merged 2025-10-20) has an empty description.
+  - No engine PR read here reports a result for bullet's QAT (searched
+    across the OpenBench engines; **UNVERIFIED** whether any uses it).
+- **What Fork's pipeline would need** (concept; DESIGN.md §5.3's parity
+  rules stay as they are):
+  1. **Fake-quantization nodes that copy Fork's inference exactly**: the
+     same scales (QA, QB and any later ones), the same rounding rule
+     (Fork's converter rounds half away from zero as bullet does;
+     bullet-internals.md §1.2), and the same clamp points, at every place
+     where Fork's integer path rounds, clamps or shifts. A shift that
+     truncates in the engine must truncate in the trainer too.
+  2. **STE gradients** through the rounding, and a deliberate choice of
+     clip gradient (zero or pass-through), matching the loader's bounds
+     (DESIGN.md §5.3: the loader rejects nets outside its overflow bounds).
+  3. **Power-of-two scales** where a division becomes a shift (§5.3), so
+     the trainer needs no correction factors (Stockfish's lesson above).
+  4. **Probably a fine-tune, not a whole run.** Train in float, then
+     enable fake quantization for a final stretch (Nagel et al. describe
+     QAT as fine-tuning). Which schedule works best for NNUE is
+     **UNVERIFIED**: Stockfish's PR does not say whether its net used QAT
+     throughout or only at the end.
+  5. **Measurement.** The quantization leg and its per-architecture loss
+     limits (DESIGN.md 2026-10-29 and 2026-10-30 rows; `reference.py
+     legs`) already measure the float-to-quantized gap. With QAT the
+     relevant comparison becomes "quantized net trained with QAT" against
+     "quantized net trained without". Then a fixed-nodes and an LTC SPRT.
+  6. **Parity unchanged.** QAT changes the training, not the exactness
+     rule. The quantized file must still match Fork's integer inference
+     exactly, on every SIMD path.
+  7. **When.** For the current all-int16 S-512 family the expected gain is
+     small (Fork's reasoning). QAT becomes worth building for int8 dense
+     layers, int8 threat weights or small activation scales in a later
+     architecture. The phase4-designs accuracy design already makes it
+     conditional on a measured quantization loss
+     ([phase4-designs/design-accuracy.md](phase4-designs/design-accuracy.md)).
+- **Pitfalls.**
+  - Training is slower: extra elementwise operations in every forward
+    pass.
+  - The STE's bias can stall weights that sit near a rounding boundary.
+  - QAT can hide a scale that is too small: the loss looks fine, but the
+    net is trained into a coarse grid.
+  - A net trained with QAT for one quantization scheme must be run with
+    exactly that scheme.
+- **Tag.** REFERENCE ONLY for the technique (the papers and Stockfish's
+  approach). USE for bullet's operations (MIT, a tool).
+- **Names not to use** (from the PR texts read): `fake_quantize_weights`,
+  `safe_convert`, `cross_check_eval`. bullet's operation names are
+  bullet's API and are called, not copied, as with every bullet call.
 
 ---
 
@@ -1185,7 +1303,7 @@ with no recommendation.
 | Output selection | one output | output buckets / layer stacks | nearly free at inference; rare buckets get little data |
 | Activation | CReLU | SCReLU; pairwise; Swish/SwiGLU in small layers | non-linearity and Elo against overflow risk, hand SIMD and sparsity |
 | Hidden precision | int16 everywhere | int8 dense layers (VNNI); float small layers | throughput against range, clipping, saturation and reproducibility |
-| Quantization | post-training (round, clip) | clamp-in-optimizer; full QAT | accuracy at long time controls against trainer complexity (bullet's QAT **UNVERIFIED**) |
+| Quantization | post-training (round, clip) | clamp-in-optimizer; full QAT | accuracy at long time controls against trainer complexity (bullet's QAT operation exists: §5.6, bullet-internals.md §7) |
 | Sparsity | dense first layer | sparse with NNZ blocks, L1 activation penalty, permutation | speed against extra code and training terms |
 | Target and loss | fixed λ, squared error | λ schedule, exponent >2, WDL head | must be judged at the target time control; changes the eval scale, which affects search margins |
 | Data per generation | ≈ hundreds of millions | many billions | days of datagen against net size; see §6.6 for what projects used |
@@ -1218,9 +1336,10 @@ own reasoning, sweeps and SPRTs, never from another engine.
 | Results of passed-pawn, castling-rights and bishop-pair inputs | Planned in a 2024 blog post; no result found |
 | Effect of removing Stockfish's direct PSQT-like shortcut | History doc gives only the change |
 | Viridithas "merge king planes", "speculative materialisation" and "separate sum vector" details | Release notes give titles only |
-| What bullet's QAT operation (PR #483) does, and how to use it | Empty PR description; not in docs |
+| What bullet's QAT operation (PR #483) does, and how to use it | Empty PR description; not in docs. **Resolved 2026-11-05** from bullet-internals.md §7 (read at the pin): fake quantization with a pass-through gradient (§5.6). Usage in any engine: still unknown |
 | Whether bullet can evaluate a FEN with a float model (PR #178) | Empty PR description; not in docs |
-| Stockfish 19's QAT gain | Release names the technique, gives no number |
+| Stockfish 19's QAT gain | Release names the technique, gives no number. **Partly resolved 2026-11-05:** PR #6856's net passed STC and LTC (derived +4.4 / +1.75), but bundled with scheme changes, so no isolated QAT figure |
+| Best QAT schedule for NNUE (whole run or final fine-tune) | Not stated in Stockfish's PRs (§5.6) |
 | PlentyChess 4's "different way of generating training data" | Not described in the notes |
 | WDL-head details (Viridithas experiments, Alexandria's WDL loss term) | Not described |
 | VNNI on TCEC's EPYC 9754 and 9175F | AMD pages opened list no ISA extensions; KB question still open |
