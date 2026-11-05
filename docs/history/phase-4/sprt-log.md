@@ -544,3 +544,82 @@ LLR: 4.04 (-2.94, 2.94) [0.00, 3.00] nElo: H1 accepted
   depth had found no depth better than "off" on its quality proxy (DESIGN.md
   Search constants, `NoMoveReduceMinDepth`); in games the reduction gains.
 
+
+### 2026-11-02 ltc-r2xgr512-vs-s512r2 (round 2's LTC candidate: XGR-512 at 40+0.4)
+
+- Base `9814ad6` (phase-4: S512r2, the default), test `22c3494` (branch
+  bake/r2xgr512: XGR-512, round 2 seed 2, S = 89): the same pair as its
+  STC SPRT, so the network is the only difference (neither has IIR).
+  Bounds [0, 5] nElo, **40+0.4, Hash 64 MB**, x86-64-v3 on both sides,
+  Syzygy 3-4-5, GitHub shards (16 per stage, 1,664 games per stage, cap
+  9,984 games: the owner's 10,000 in whole stages without reusing an
+  opening), driven by tools/github/sprt_run.sh (owner, 2026-11-02: the
+  LTC tests on GitHub's shards; the AVX-512 x86-64-v4 half of the
+  TCEC-conditions check waits for the 32-vCPU AWS quota).
+- Stage 0: run 41469160529. Result: **H0 accepted** after stage 0:
+```
+Shards: 16 (done); pairs 832, games 1664 (1664 finished, time losses 0, abnormal 0)
+Elo: -30.56 +/- 9.96, nElo: -51.53 +/- 16.69
+Ptnml(0-2): [37, 249, 386, 143, 17]
+LLR: -3.72 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
+```
+- Not promoted; it loses at LTC by about as much as at STC (−34.42 ±
+  11.88). Its x86-64-v4 check at TCEC conditions is still owed when the
+  AWS quota allows (owner's plan), but this result gives no reason to
+  expect a pass.
+
+### 2026-11-02 AF-S at LTC: shelved, not tested (owner)
+
+- Round 2's other LTC candidate, AF-S (`5e72ab1`), is **not tested at
+  LTC**: it trailed XGR-512 at fixed nodes (+10.43 ± 10.36 against
+  +30.70 ± 10.37) and at STC against S512r2 (−55.85 ± 11.42 against
+  −34.42 ± 11.88), and XGR-512 failed at LTC (above). No game was played
+  for it at LTC. It stays a retest candidate after the post-network
+  search retune (DESIGN.md §5.4).
+
+### 2026-11-02 ltc-drift-vs-base (tier 2, T32: the pawn drift table, correction history)
+
+- Base `2d582fc` (phase-4: S512r2 with IIR on), test `0342ad6` (branch
+  tier2/drift: the pawn structure key, the drift table with the measured
+  constants DriftWeightTotal 256, DriftWeightCap 4, DriftLimit 300, and
+  `use_pawn_drift` on). Bounds [0, 3] nElo, **40+0.4, Hash 64 MB**
+  (straight to LTC per Testing setup), x86-64-v3 on both sides, Syzygy
+  3-4-5, GitHub shards (16 per stage, 1,664 games per stage, cap 9,984
+  games), driven by tools/github/sprt_run.sh.
+- Stages 0-5: runs 41484476694, 41506184505, 41519311035, 41532210496,
+  41544978779, 41555370610. After each stage (cumulative): +4.59 ± 9.19,
+  +0.84 ± 6.41, −0.35 ± 5.26, −0.94 ± 4.51, −1.09 ± 4.05, then the cap.
+  Result: **undecided at the 9,984-game cap**:
+```
+Shards: 96 (done); pairs 4992, games 9984 (9984 finished, time losses 0, abnormal 0)
+Elo: -0.35 +/- 3.72, nElo: -0.64 +/- 6.82
+Ptnml(0-2): [62, 1224, 2447, 1180, 79]
+LLR: -0.53 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+```
+- Not adopted: a test that ends without a verdict counts as not passed
+  (Testing setup: the change is shelved, the baseline stays), so
+  `use_pawn_drift` stays off and tier2/drift is not merged. The interval
+  (nElo −7.5 to +6.2) leaves little room for the gain the bounds asked
+  for; the owner decides whether the further correction tables, queued
+  after this result, go ahead.
+
+### 2026-11-03 ltc-iir-on-vs-off (tier 2, T26: internal iterative reduction's LTC confirmation)
+
+- Base `0f62af5` (branch ltc/iir-off: phase-4 with `use_no_move_reduction`
+  off), test `2d582fc` (phase-4: S512r2 with IIR on, adopted on its STC
+  pass above). Non-regression bounds [−3, 0] nElo, **40+0.4, Hash 64 MB**,
+  x86-64-v3 on both sides, Syzygy 3-4-5, GitHub shards (16 per stage,
+  1,664 games per stage, cap 9,984 games), driven by
+  tools/github/sprt_run.sh (owner, 2026-11-02: the LTC queue's third entry).
+- Stages (Elo, nElo, LLR after each): 0 (run 41738319103) +25.52 ± 9.48,
+  +45.13 ± 16.69, 1.93; 1 (run 41748641433) H1. Result: **H1 accepted**
+  after stage 1:
+```
+Shards: 32 (done); pairs 1664, games 3328 (3328 finished, time losses 0, abnormal 0)
+Elo: 26.25 +/- 6.65, nElo: 46.80 +/- 11.80
+Ptnml(0-2): [17, 312, 790, 493, 52]
+LLR: 4.00 (-2.94, 2.94) [-3.00, 0.00] nElo: H1 accepted
+```
+- Confirmed: IIR stays on. Its LTC gain (+26.25 ± 6.65) is at least its
+  STC one (+21.45 ± 5.98). With this result the LTC queue of 2026-11-02 is
+  done (XGR-512 failed, the drift table undecided, AF-S shelved).
