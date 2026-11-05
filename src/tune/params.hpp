@@ -45,7 +45,7 @@
   X(LmrMinMove, 4, 2, 8, 1)               \
   X(LmrDivisorTenths, 45, 23, 90, 3)      \
   X(LmrCorrectionStrength, 64, 0, 128, 6) \
-  X(LmrHistoryDivisor, 9000, 3000, 24000, 1050) \
+  X(LmrHistoryDivisor, 24000, 3000, 24000, 1050) \
   X(LmpMaxDepth, 4, 2, 8, 1)              \
   X(LmpQuietAllowance, 12, 6, 24, 1)      \
   X(FutilityMaxDepth, 6, 3, 12, 1)        \
