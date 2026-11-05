@@ -1008,6 +1008,10 @@ tuned by SPSA.
   input with its own weight, and deeper continuations, each measured
   before its SPRT (KB search-techniques.md §3.36, T58, which has an SPRT
   plan step by step).
+  **The LMR history term's follow-up** (owner, 2026-11-05): measured the
+  same way as the term was (tools/lmr_history_measure.py's method: the
+  25 M-node labels, both budgets, a rule and a wide grid declared before
+  the runs), then its SPRT.
 - **phase:** Phase 4.
 - **metric:** a measurement with a pre-declared rule, then an STC SPRT.
 - **runtime cost:** possible (small).
