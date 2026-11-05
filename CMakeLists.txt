@@ -315,7 +315,7 @@ if(EMSCRIPTEN)
   target_link_libraries(fork_web PRIVATE forksearch fork_pgo)
   target_link_options(fork_web PRIVATE ${fork_wasm_link} --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1
     -sENVIRONMENT=worker -sEXPORT_NAME=createFork
-    "-sEXPORTED_FUNCTIONS=_fork_web_init,_fork_web_set_position,_fork_web_fen,_fork_web_legal_moves,_fork_web_status,_fork_web_search,_fork_web_new_game"
+    "-sEXPORTED_FUNCTIONS=_fork_web_init,_fork_web_set_position,_fork_web_fen,_fork_web_legal_moves,_fork_web_status,_fork_web_san,_fork_web_evaluate,_fork_web_search,_fork_web_new_game"
     "-sEXPORTED_RUNTIME_METHODS=cwrap")
 endif()
 

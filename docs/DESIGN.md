@@ -3327,6 +3327,47 @@ of the rest, which stays pinned as planned above:
   and no thread library (Emscripten's threads need shared memory).
 - After the first good run, the WebAssembly parity checks join CI as a job.
 
+**v2 (owner, 2026-11-02: strength levels, the evaluation bar and a network
+selector for "Watch it learn"; code written on branch `web/v2`, deployed
+only when GitHub's queue is free).** Unverified in WebAssembly until its
+first `web` run: the native and Node.js tests below ran, the Emscripten
+build did not (it runs on GitHub's runners only).
+- Engine side (`src/web/web_engine.*`, native tests in the `web` suite, each
+  fault-injected): each finished iteration is reported during
+  `fork_web_search` (depth, score, nodes, line), to the page through an
+  `EM_JS` call of the module's `onIteration` and natively to a hook set by
+  `fork_web_set_iteration_hook`; `fork_web_san` writes a line in standard
+  algebraic notation from the legal-move list on a position of its own (so
+  it may run during a search), the engine staying the page's only rules
+  source; `fork_web_evaluate` gives the static evaluation. The expected SAN
+  in the tests is python-chess 1.11.2's for the same moves.
+- One module per evaluator: `web.yml` builds the bootstrap evaluation and
+  every promoted network (B0, B0r1, B0r2, S512, S512r2) as
+  `engines/<id>/fork_web.{js,wasm}`, one job each, each with netcheck (0
+  mismatches; none for the bootstrap) and bench parity under Node.js; a
+  worker loads only the module its `net` parameter names, when it starts.
+  `web/nets.json` is the network manifest (values copied from docs/nets.md
+  and the Phase 4 SPRT log, checked against both by `web/test/page.test.js`);
+  the build adds each module's path, size and SHA-256 (`web/fill_nets.py`).
+  The promotion step adds a network to nets.json and to the matrix.
+- Play tab: five strength levels (1,000, 10,000, 50,000, 200,000 and
+  1,000,000 nodes per move; no rating claimed), the evaluation bar
+  (sigmoid(score / S) from White's view with the playing network's S, mates
+  at the ends), the principal variation and the game in SAN, updated each
+  iteration.
+- "Watch it learn" tab: two chosen evaluators play each other live, two
+  workers, at 10,000, 50,000 or 200,000 nodes per move, from the start
+  position or a random position of Fork's committed test set
+  (tests/datagen_openings.epd, the bench positions: CPW perft and Lichess
+  CC0 games); the networks' record (promotion date, SPRT, the running total
+  of the promotion SPRTs labelled as self-play Elo, data, validation loss,
+  module size); and every evaluator's static evaluation of the CPW perft
+  positions of tests/suite.hpp side by side.
+- Tests: `node --test web/test/page.test.js` (the score, bar and notation
+  helpers; the fixed positions against tests/suite.hpp; nets.json against
+  the docs and the files each network needs), run locally with Node.js 24
+  and by the workflow before the page is assembled.
+
 **Tests.** The entry module's functions get native unit tests (they compile
 outside Emscripten too); the Node runs above are the WASM tests. Whether
 CI gains an Emscripten job (cached SDK) is decided with the owner once the

@@ -1,15 +1,22 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# The public play page (DESIGN.md §5.5, the bare-bones version; owner,
-# 2026-10-31), built and checked on GitHub's runners only:
-# 1. Fork with its default network (S-512) compiled to WebAssembly with
-#    Emscripten (pinned), single-threaded, scalar inference;
-# 2. the WebAssembly parity checks under Node.js: netcheck on the network's
-#    parity file (0 mismatches) and bench parity against the native
-#    references (tests/bench-<net>.ref, tests/perft_bench.ref);
-# 3. the page assembled from web/, the engine module and chessground (npm,
-#    pinned by version and integrity hash), then scanned for personal data;
-# 4. deployed to GitHub Pages only when the run asks for it (input deploy)
-#    and every check above passed.
+# The public page (DESIGN.md §5.5; the bare-bones version, owner 2026-10-31,
+# then v2: strength levels, the evaluation bar and the "Watch it learn"
+# tab), built and checked on GitHub's runners only:
+# 1. one WebAssembly module per promoted evaluator (web/nets.json: the
+#    bootstrap evaluation and each promoted network), each Fork compiled with
+#    Emscripten (pinned) with that evaluator built in, single-threaded,
+#    scalar inference, one job per module;
+# 2. each module's parity checks under Node.js: netcheck on its network's
+#    parity file (0 mismatches; none for the bootstrap evaluation) and bench
+#    parity against the native references (tests/bench-<net>.ref or
+#    tests/bench.ref, tests/perft_bench.ref);
+# 3. the page's own tests (node --test web/test/page.test.js), then the page
+#    assembled from web/, the modules, the openings (tests/datagen_openings.epd)
+#    and chessground (npm, pinned by version and integrity hash), nets.json
+#    completed with each module's size and SHA-256, and the whole scanned
+#    for personal data;
+# 4. deployed to GitHub Pages only when the run asks for it (input deploy,
+#    or a push to web-deploy) and every check above passed.
 # Started by hand only, one run at a time, never beside the SPRT, gauntlet or
 # CI runs (whoever starts it waits for an idle queue): by a push to the
 # trigger branch web-build (checks only) or web-deploy (checks, then deploy),
@@ -41,10 +48,15 @@ env:
   CHESSGROUND_INTEGRITY: "sha512-LmTNnzCQ67RQsryzouWY0jYoN24LlpubtPyYko1gmdpTj5HSfz0VgUGB4Gpo6oifg0MyeT9YeV2TdZEbOP6byA=="
 
 jobs:
-  build:
-    name: WebAssembly build, parity and page
+  engine:
+    name: WebAssembly module (${{ matrix.net }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        # web/nets.json's networks; the page job checks that the lists agree.
+        net: [bootstrap, b0, b0r1, b0r2, s512, s512r2]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -67,14 +79,19 @@ jobs:
           ./emsdk install "$EMSDK_VERSION"
           ./emsdk activate "$EMSDK_VERSION"
       - name: Build fork.js (Node, for the checks) and fork_web.js (the page's engine)
+        env:
+          NET: ${{ matrix.net }}
         run: |
           source ~/emsdk/emsdk_env.sh >/dev/null
           emcc --version | head -1
+          if [ "$NET" = bootstrap ]; then evaluator=-DFORK_EVALUATOR=bootstrap; else evaluator=-DFORK_NET=$PWD/nets/$NET.fnet; fi
           emcmake cmake -S . -B build/wasm -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DFORK_BUILD_TESTS=OFF -DFORK_LTO=OFF -DFORK_ARCH=wasm32
+            -DFORK_BUILD_TESTS=OFF -DFORK_LTO=OFF -DFORK_ARCH=wasm32 "$evaluator"
           cmake --build build/wasm --target fork fork_web
           ls -l build/wasm/fork.js build/wasm/fork.wasm build/wasm/fork_web.js build/wasm/fork_web.wasm
       - name: WebAssembly parity (netcheck and bench under Node.js)
+        env:
+          NET: ${{ matrix.net }}
         run: |
           source ~/emsdk/emsdk_env.sh >/dev/null
           node --version
@@ -82,22 +99,50 @@ jobs:
           chmod +x build/wasm/fork-node
           fork=build/wasm/fork-node
           "$fork" version
-          net=$("$fork" version | sed -n 's/^net //p')
-          [ -n "$net" ] || { echo "::error::the WebAssembly build names no network"; exit 1; }
-          "$fork" netcheck "tests/nnue/$net.parity" | tee netcheck.txt
-          grep -q ' 0 mismatches' netcheck.txt
+          named=$("$fork" version | sed -n 's/^net //p')
+          : > netcheck.txt
+          if [ "$NET" = bootstrap ]; then
+            [ -z "$named" ] || { echo "::error::the bootstrap build names a network ($named)"; exit 1; }
+          else
+            [ "$named" = "$NET" ] || { echo "::error::the module names the network '$named', not '$NET'"; exit 1; }
+            "$fork" netcheck "tests/nnue/$NET.parity" | tee netcheck.txt
+            grep -q ' 0 mismatches' netcheck.txt
+          fi
           bash .github/ci/bench-parity.sh "$fork" | tee bench.txt
           {
-            echo "### WebAssembly parity ($net)"
+            echo "### WebAssembly parity ($NET)"
             echo '```'
             cat netcheck.txt bench.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          mkdir -p out/engines/$NET out/checks
+          cp build/wasm/fork_web.js build/wasm/fork_web.wasm out/engines/$NET/
+          { echo "== $NET"; cat netcheck.txt bench.txt; } > out/checks/$NET.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-${{ matrix.net }}
+          path: out
+          retention-days: 7
+
+  page:
+    name: Page tests, assembly and scan
+    needs: engine
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with: {pattern: "engine-*", path: out, merge-multiple: true}
+      - name: The page's tests (Node.js)
+        run: |
+          node --version
+          node --test web/test/page.test.js
       - name: Assemble the page
         run: |
           mkdir -p site/vendor/chessground cg
-          cp web/index.html web/style.css web/app.js web/engine-worker.js site/
-          cp build/wasm/fork_web.js build/wasm/fork_web.wasm site/
+          cp web/index.html web/style.css web/*.js site/
+          cp -r out/engines site/
+          cp tests/datagen_openings.epd site/openings.epd
           cp LICENSE site/LICENSE.txt
           curl -sSfL -o cg/cg.tgz \
             "https://registry.npmjs.org/@lichess-org/chessground/-/chessground-$CHESSGROUND_VERSION.tgz"
@@ -107,10 +152,11 @@ jobs:
           cp cg/package/dist/chessground.min.js cg/package/assets/chessground.base.css \
             cg/package/assets/chessground.brown.css cg/package/assets/chessground.cburnett.css site/vendor/chessground/
           cp cg/package/LICENSE site/vendor/chessground/LICENSE.txt
+          python3 web/fill_nets.py web/nets.json site
           {
             echo "Fork commit: $(git rev-parse HEAD)"
             echo "Emscripten: $EMSDK_VERSION; chessground: $CHESSGROUND_VERSION"
-            cat netcheck.txt bench.txt
+            cat out/checks/*.txt
           } > site/build.txt
           touch site/.nojekyll
           find site -type f -printf '%s\t%p\n' | sort -k2
@@ -135,7 +181,7 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    needs: build
+    needs: page
     if: github.ref == 'refs/heads/web-deploy' || inputs.deploy
     runs-on: ubuntu-latest
     timeout-minutes: 15
