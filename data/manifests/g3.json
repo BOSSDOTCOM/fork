@@ -1,0 +1,143 @@
+{
+ "run": "g3",
+ "generator": {
+  "tool": "fork_datagen (complete games of generation 3's first run g3, with the split search (idea 13), finished on 2026-11-03 at its 500 M-position target)",
+  "version": "0.3.0-dev+387f338",
+  "evaluator": "nnue (s512r2)",
+  "arch": "native"
+ },
+ "settings": {
+  "openings": "lichess-2016-09.epd",
+  "openings_count": 591871,
+  "positions_target": 500000000,
+  "nodes": 20000,
+  "threads": 10,
+  "seed": 20261106,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 50,
+  "unsaved_nodes": 4000,
+  "check_nodes": 2000
+ },
+ "openings": {
+  "file": "lichess-2016-09.epd",
+  "sha256": "0ae298e1c7c635606fcddb056ee08073aeed8f4db4de3f19b8ef721d4a72831b",
+  "positions": 591871,
+  "source": "lichess_db_standard_rated_2016-09.pgn.zst",
+  "source_sha256": "3a4d18db787db558083aacb7c27ab3588f0745c1baaca37846b3f0d8b9677db3"
+ },
+ "games": 5334231,
+ "positions": 500000697,
+ "seconds": 182879,
+ "results": {
+  "white": 2227179,
+  "draw": 993160,
+  "black": 2114836
+ },
+ "ends": {
+  "checkmate": 944,
+  "stalemate": 4908,
+  "repetition": 531953,
+  "fifty_moves": 30695,
+  "insufficient_material": 0,
+  "table_result": 1137269,
+  "mate_found": 1485935,
+  "decided_opening": 1221012,
+  "too_long": 247,
+  "score_adjudicated": 2143471
+ },
+ "part_end": "generation 3's first part (labelled by S512r2 before IIR's adoption), finished on 2026-11-03 at its 500 M-position target; every game verified (tools/datagen/verify_games.py: fork-g3s1's prefix of each shard and fork-g3rest's remainder), and each shard's full copy checked against the original byte for byte",
+ "batches": [
+  [
+   {
+    "file": "g3-w00-0000.vf",
+    "worker": 0,
+    "games": 533513,
+    "positions": 50000157,
+    "bytes": 219207096,
+    "sha256": "05756c0b36c5b05e01ad23159c46d417edd7bfda97b8705c5982bbdd8ddf30ee"
+   },
+   {
+    "file": "g3-w01-0000.vf",
+    "worker": 1,
+    "games": 533733,
+    "positions": 50000021,
+    "bytes": 219214472,
+    "sha256": "2b1bfd839d043bcdfb7d0ff7ffb8fd1bfeaf5f4ea3cf77d66a98b729cf545970"
+   },
+   {
+    "file": "g3-w02-0000.vf",
+    "worker": 2,
+    "games": 533063,
+    "positions": 50000115,
+    "bytes": 219190728,
+    "sha256": "12b8b0f93b39abb8fd9cdee2c4b944471866e1f7805f0a1bad2e89fca1b9d242"
+   },
+   {
+    "file": "g3-w03-0000.vf",
+    "worker": 3,
+    "games": 533504,
+    "positions": 50000022,
+    "bytes": 219206232,
+    "sha256": "029526cb12c770e083a048093f6c03ed93514eb7c225cc66999e684f66b600e3"
+   },
+   {
+    "file": "g3-w04-0000.vf",
+    "worker": 4,
+    "games": 534079,
+    "positions": 50000074,
+    "bytes": 219227140,
+    "sha256": "c5a0c3c7774fd3f2e9025efe2e8dd693e6e473b480e1c7aee3884f45f54ea355"
+   },
+   {
+    "file": "g3-w05-0000.vf",
+    "worker": 5,
+    "games": 533281,
+    "positions": 50000092,
+    "bytes": 219198484,
+    "sha256": "d40c3dd4a7cd7f1e2341069bb727b5be382cee586c01008904fa8e533e917c40"
+   },
+   {
+    "file": "g3-w06-0000.vf",
+    "worker": 6,
+    "games": 533043,
+    "positions": 50000079,
+    "bytes": 219189864,
+    "sha256": "cabfc22496fabb7c303420e1f508cc9d0447cc9500af483a3ccbf262a971bbc5"
+   },
+   {
+    "file": "g3-w07-0000.vf",
+    "worker": 7,
+    "games": 533392,
+    "positions": 50000053,
+    "bytes": 219202324,
+    "sha256": "cc7064ae8c7168b906171cc89ff6bb62915c4f730dcfe9fa30255edadc44ce0f"
+   },
+   {
+    "file": "g3-w08-0000.vf",
+    "worker": 8,
+    "games": 533262,
+    "positions": 50000013,
+    "bytes": 219197484,
+    "sha256": "2c3bb695df377b6441317b2c12bb0b3d06432c63e6d7d2eab3d36df03ec283e9"
+   },
+   {
+    "file": "g3-w09-0000.vf",
+    "worker": 9,
+    "games": 533361,
+    "positions": 50000071,
+    "bytes": 219201280,
+    "sha256": "4470f86e553a2b8f656b5c6403bd7234ea7e6f4e46a7a3890207390925347c74"
+   }
+  ]
+ ],
+ "positions_unsaved": 227791196,
+ "nodes_spent": 5578338512874
+}
