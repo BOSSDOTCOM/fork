@@ -46,8 +46,32 @@ TREE = textwrap.dedent('''
     ''')
 
 
+ORPHAN = textwrap.dedent('''
+    import subprocess, sys, time
+    out, mode = sys.argv[1], sys.argv[2]
+    if mode == 'root':
+        subprocess.Popen([sys.executable, __file__, out, 'orphaner']).wait()
+        time.sleep(600)
+    elif mode == 'orphaner':
+        p = subprocess.Popen([sys.executable, __file__, out, 'sleeper'])
+        open(out, 'w').write(str(p.pid))
+    else:
+        time.sleep(600)
+    ''')
+
+
 def alive(pid):
     return jobctl.pid_alive(pid)
+
+
+def kill(pid):
+    if os.name == 'nt':
+        subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True)
+    else:
+        try:
+            os.kill(pid, 9)
+        except OSError:
+            pass
 
 
 class Supervisor(unittest.TestCase):
@@ -159,6 +183,49 @@ class Supervisor(unittest.TestCase):
         r = self.start('test', 'third', *sleep)
         self.assertNotEqual(r.returncode, 0)
         self.assertIn('held by job next', r.stderr)
+
+    def test_stop_ends_the_tree_after_its_keeper_and_command_died(self):
+        # 2026-11-06: a job whose keeper had died lost its Job Object's name, so `stop` saw no process and
+        # reported none left while an SPRT driver lived on.
+        script = self.root / 'orphan.py'
+        script.write_text(ORPHAN, encoding='utf-8')
+        pids = self.root / 'orphan-pid'
+        r = self.start('test', 'bereaved', sys.executable, '-I', str(script), str(pids), 'root')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(self.wait_for(lambda: pids.exists() and pids.read_text().strip()))
+        orphan = int(pids.read_text())
+        time.sleep(2.5)  # the keeper hands out the Job Object's handles once a second
+        rec = self.record('bereaved')
+        for pid in (rec['keeper'], rec['pid']):
+            kill(pid)
+        self.assertTrue(self.wait_for(lambda: not alive(rec['keeper']) and not alive(rec['pid'])))
+        self.assertTrue(alive(orphan))
+        r = self.ctl('stop', 'bereaved', '--grace', '2')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue(self.wait_for(lambda: not alive(orphan), 10), f'pid {orphan} survived the stop')
+
+    def test_a_job_started_inside_another_outlives_its_stop(self):
+        # 2026-11-06: stopping a chain job killed the SPRT job it had started.
+        inner = [sys.executable, '-I', '-c', 'import time; time.sleep(600)']
+        outer = ('import subprocess, sys, time; '
+                 f'subprocess.run([sys.executable, "-I", {str(JOBCTL)!r}, "start", "test", "inner", "--", *{inner!r}]); '
+                 'time.sleep(600)')
+        r = self.start('queue', 'outer', sys.executable, '-I', '-c', outer)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.started.append('inner')
+        path = self.root / 'jobs' / 'jobs' / 'inner.json'
+        self.assertTrue(self.wait_for(lambda: path.exists() and self.record('inner').get('state') == 'running'))
+        own = jobctl.live(self.record('outer'))
+        r = self.ctl('stop', 'outer', '--grace', '2')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual([p for p in own if alive(p)], [])
+        time.sleep(1)
+        rec = self.record('inner')
+        self.assertTrue(alive(rec['keeper']) and alive(rec['pid']), rec)
+        self.assertEqual(self.ctl('status', 'inner').returncode, 0)
+        self.assertEqual(self.lock('test')['name'], 'inner')
+        self.assertEqual(self.ctl('stop', 'inner', '--grace', '1').returncode, 0)
+        self.assertFalse(alive(rec['pid']))
 
     def test_a_failed_stop_keeps_the_lock(self):
         sleep = [sys.executable, '-I', '-c', 'import time; time.sleep(600)']

@@ -7,9 +7,17 @@ generation, measurements) start and stop only through it.
   logged); a lock whose job still has processes is never taken over.
 - The whole process tree is contained: a keeper process starts the command and waits for it. On Windows the
   command starts suspended, joins a Job Object of its own and only then runs, so every descendant (Git Bash
-  children, gh, engines) is in the job, whatever happens to its parents. On POSIX the command leads a new
+  children, gh, engines) is in the job, whatever happens to its parents. The keeper gives each of the
+  job's processes a handle to the Job Object (checked every second), so the object and the name `stop` opens
+  it by last while any of them lives, even after the keeper dies (2026-11-06: a job whose keeper had died lost
+  the name, and a stop reported none left while an SPRT driver lived on). On POSIX the command leads a new
   session, and every process carries FORK_JOB_ID in its environment, which finds descendants that started a
   session of their own.
+- A job started from inside another job is not part of it (2026-11-06: stopping a chain job killed the SPRT
+  job it had started): the keeper does not carry the caller's FORK_JOB_ID, and a job's processes exclude
+  every other running job's keeper and processes. On Windows those are also in the outer Job Object (a job
+  started inside one nests in it), so a stop then ends the outer job's own processes one by one instead of
+  terminating the whole object.
 - `stop NAME` stops the whole tree, gently first (SIGTERM on POSIX: fork_datagen ends at a game boundary;
   on Windows the job is terminated), then verifies that no process of the job remains before it releases
   the lock; it exits 1, keeping the lock, if any process survived.
@@ -94,7 +102,14 @@ if WINDOWS:
     k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     k32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
     k32.CloseHandle.argtypes = [wintypes.HANDLE]
+    k32.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    k32.GetCurrentProcess.restype = wintypes.HANDLE
+    k32.DuplicateHandle.argtypes = [wintypes.HANDLE, wintypes.HANDLE, wintypes.HANDLE,
+                                    ctypes.POINTER(wintypes.HANDLE), wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     ntdll.NtResumeProcess.argtypes = [wintypes.HANDLE]
+    PROCESS_TERMINATE = 0x1
+    PROCESS_DUP_HANDLE = 0x40
+    DUPLICATE_SAME_ACCESS = 0x2
     JOB_ALL_ACCESS = 0x1F001F
     PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
     STILL_ACTIVE = 259
@@ -133,7 +148,8 @@ if WINDOWS:
             k32.CloseHandle(h)
 
     def launch(record, cmd, log, cwd):
-        """Starts cmd suspended, puts it in a new Job Object, then lets it run. Returns (Popen, job handle)."""
+        """Starts cmd suspended, puts it in a new Job Object, gives it an inheritable handle to the object, then
+        lets it run. Returns (Popen, job handle)."""
         job = k32.CreateJobObjectW(None, job_object_name(record['id']))
         if not job:
             raise OSError(ctypes.get_last_error(), 'CreateJobObject')
@@ -144,20 +160,56 @@ if WINDOWS:
             err = ctypes.get_last_error()
             p.kill()
             raise OSError(err, 'AssignProcessToJobObject')
+        hand_out(job, [p.pid], set())
         ntdll.NtResumeProcess(int(p._handle))
         return p, job
 
+    def hand_out(job, pids, given):
+        """Gives each process in `pids` not in `given` a handle to the Job Object, so the object and its name
+        last while any of them lives, the keeper gone or not."""
+        for pid in pids:
+            if pid in given:
+                continue
+            h = k32.OpenProcess(PROCESS_DUP_HANDLE, False, pid)
+            if not h:
+                continue
+            held = wintypes.HANDLE()
+            if k32.DuplicateHandle(k32.GetCurrentProcess(), job, h, ctypes.byref(held), 0, False,
+                                   DUPLICATE_SAME_ACCESS):
+                given.add(pid)
+            k32.CloseHandle(h)
+
     def terminate(record, grace):
+        """Terminates the Job Object, or, when other jobs' processes are in it (jobs started from inside this
+        one), this job's own processes one by one until none is left."""
         h = k32.OpenJobObjectW(JOB_ALL_ACCESS, False, job_object_name(record['id']))
-        if h:
-            try:
+        if not h:
+            return
+        try:
+            if not other_jobs_pids(record) & set(job_pids(record)):
                 k32.TerminateJobObject(h, 1)
-            finally:
-                k32.CloseHandle(h)
+                return
+            deadline = time.time() + max(5.0, grace)
+            while time.time() < deadline:
+                own = own_pids(record)
+                if not own:
+                    return
+                for pid in own:
+                    p = k32.OpenProcess(PROCESS_TERMINATE, False, pid)
+                    if p:
+                        k32.TerminateProcess(p, 1)
+                        k32.CloseHandle(p)
+                time.sleep(0.2)
+        finally:
+            k32.CloseHandle(h)
 
     def spawn_keeper(args):
-        return subprocess.Popen([sys.executable, '-I', os.path.abspath(__file__), '_keep', *args],
+        # The base interpreter: a venv's python.exe is a stub that runs it as a child and takes it down when
+        # it dies, and the stub (in the caller's Job Object, recorded nowhere) would die with the caller's job.
+        return subprocess.Popen([getattr(sys, '_base_executable', sys.executable), '-I', os.path.abspath(__file__),
+                                 '_keep', *args],
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                env=keeper_env(),
                                 creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW,
                                 close_fds=True)
 else:
@@ -206,19 +258,42 @@ else:
                     pass
         send(signal.SIGTERM)
         deadline = time.time() + grace
-        while time.time() < deadline and job_pids(record):
+        while time.time() < deadline and own_pids(record):
             time.sleep(0.2)
         send(signal.SIGKILL)
 
     def spawn_keeper(args):
         return subprocess.Popen([sys.executable, '-I', os.path.abspath(__file__), '_keep', *args],
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                start_new_session=True, close_fds=True)
+                                env=keeper_env(), start_new_session=True, close_fds=True)
+
+
+def keeper_env():
+    """The caller's environment without its job's marker: a job started from inside another is not part of it."""
+    return {k: v for k, v in os.environ.items() if k not in ('FORK_JOB_ID', 'FORK_JOB')}
+
+
+def other_jobs_pids(record):
+    """The keepers and processes of every other job that has not ended or stopped."""
+    out = set()
+    for path in (root() / 'jobs').glob('*.json'):
+        other = read_json(path)
+        if not other or other.get('id') == record.get('id') or other.get('state') in ('ended', 'stopped', 'failed'):
+            continue
+        out.update(job_pids(other))
+        out.update(other[k] for k in ('keeper', 'pid') if other.get(k) and pid_alive(other[k]))
+    return out
+
+
+def own_pids(record):
+    """The job's processes, without those of jobs started from inside it."""
+    pids = set(job_pids(record))
+    return sorted(pids - other_jobs_pids(record)) if pids else []
 
 
 def live(record):
     """The job's live processes, the keeper included."""
-    pids = set(job_pids(record))
+    pids = set(own_pids(record))
     for k in ('keeper', 'pid'):
         if record.get(k) and pid_alive(record[k]):
             pids.add(record[k])
@@ -321,12 +396,15 @@ def cmd_keep(argv):
     if not WINDOWS:
         record['session'] = p.pid  # the command leads its own session
     write_json(job_path(name), record)
-    rc = p.wait()
-    # The job ends when its whole tree has: a descendant may outlive the command. The keeper waits for it,
-    # and on Windows its handle keeps the Job Object (and its name, which `stop` opens) alive until then:
-    # a Job Object's name goes when its last handle closes, even with processes still in it.
-    while job_pids(record):
+    # The job ends when its whole tree has: a descendant may outlive the command. The keeper waits for it.
+    # On Windows a Job Object's name (which `stop` opens) goes when its last handle closes, even with
+    # processes still in it, so the keeper hands each of the job's processes a handle of its own.
+    given = set()
+    while p.poll() is None or own_pids(record):
+        if handle is not None:
+            hand_out(handle, own_pids(record), given)
         time.sleep(1)
+    rc = p.returncode
     current = read_json(job_path(name)) or record
     if current.get('id') == record['id'] and current.get('state') == 'running':
         current.update(state='ended', exit_code=rc, ended=now())
