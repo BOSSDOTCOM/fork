@@ -11,15 +11,22 @@
 //
 // Test positions: the CPW perft suite (tests/suite.hpp, cited there) and
 // random legal games from it.
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
+#include <iterator>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
+#include "core/material.hpp"
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
+#include "eval/eval_scale.hpp"
 #include "eval/nnue/accumulator.hpp"
+#include "eval/nnue/contacts.hpp"
 #include "eval/nnue/net_file.hpp"
 #include "harness.hpp"
 #include "suite.hpp"
@@ -55,13 +62,19 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   }
   for (int p = 0; p < 25; ++p)
     net->phase_table[p] = static_cast<std::uint8_t>(NetPhasePicked ? p * 8 / 25 : 0);
-  net->inputs = NetPieceSquares * net->region_count + (NetExposure ? NetExposureRows : 0);
+  net->inputs = NetPieceSquares * net->region_count + (NetExposure ? NetExposureRows : 0) +
+                (NetContacts ? NetContactInputs + NetLinkInputs : 0) + (NetLinks ? NetLinkInputs : 0);
   for (auto& w : net->ft_weights) w = static_cast<std::int16_t>(uniform(rng, -400, 400));
+  // S512+PP's link rows sit in the same int16 sums, up to 64 at once: within
+  // +-150 (2000 + 32 x 400 + 64 x 150 < 32767).
+  if constexpr (NetLinks)
+    for (int i = NetPieceSquares * NetHidden; i < (NetPieceSquares + NetLinkInputs) * NetHidden; ++i)
+      net->ft_weights[i] = static_cast<std::int16_t>(uniform(rng, -150, 150));
   for (auto& b : net->ft_bias) b = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
 #if FORK_NET_ARCH == 1
   for (auto& w : net->out_weights) w = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
   net->out_bias = uniform(rng, -100000, 100000);
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
   for (auto& row : net->out_weights)
     for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -128, 128));
   for (auto& b : net->out_bias) b = uniform(rng, -100000, 100000);
@@ -184,11 +197,20 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   auto loud = random_net(2);
   loud->ft_bias[7] = 32000;
   rejects(write_net_file(*loud), "a first-layer unit beyond int16");
+#if FORK_NET_ARCH == 8
+  // One link weight that the most links at once (64 at S512+PP's rank limit)
+  // would take past int16 whatever unit 3's bias: its largest piece weight
+  // is near the test bound 400, and 32 x 300 + 64 x 400 = 35,200 already
+  // exceeds 32,767.
+  auto linked = random_net(4);
+  linked->ft_weights[(NetPieceSquares + 500) * NetHidden + 3] = 400;
+  rejects(write_net_file(*linked), "a link weight that 64 links would take beyond int16");
+#endif
 #if FORK_NET_ARCH == 1
   auto wide = random_net(3);
   for (auto& w : wide->out_weights) w = 32000;
   rejects(write_net_file(*wide), "an output sum beyond int32");
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6
   auto wide = random_net(3);
   wide->out_weights[2][5] = 129;
   rejects(write_net_file(*wide), "an output weight beyond the squared output's bound");
@@ -379,7 +401,7 @@ TEST_CASE("nnue", "mirrored networks evaluate a position and its left-right mirr
   CHECK(checked > 100);
 }
 
-#if FORK_NET_ARCH == 5
+#if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
 TEST_CASE("nnue", "XGR's exposure rule") {
   // A white knight attacked by a pawn (a lower class) is exposed though
   // defended; an undefended bishop attacked by the queen is exposed; a rook
@@ -435,6 +457,93 @@ TEST_CASE("nnue", "XGR's exposure rule matches the square-by-square reference al
 }
 #endif
 
+#if FORK_NET_ARCH == 6
+// S512+X's evaluation the obvious way: per perspective, the bias, every
+// piece's row and every exposed piece's exposure row (the square-by-square
+// rule) summed in 64 bits, clipped to [0, QA], then S-512's squared output
+// in the phase's bucket. `beyond` counts the units whose sum leaves int16.
+int s512x_reference(const NetFile& net, const Position& pos, int* beyond = nullptr) {
+  const Bitboard exposed = exposed_reference(pos);
+  const Color stm = pos.side_to_move();
+  const int k = net.phase_table[game_phase(pos)];
+  std::int64_t total = 0;
+  for (int half = 0; half < 2; ++half) {
+    const Color persp = half == 0 ? stm : ~stm;
+    const Frame f = frame_of(net, persp, pos.king_square(persp));
+    for (int i = 0; i < NetHidden; ++i) {
+      std::int64_t v = net.ft_bias[i];
+      for (Bitboard b = pos.pieces(); b;) {
+        const Square s = pop_lsb(b);
+        const Piece p = pos.piece_at(s);
+        v += net.ft_weights[feature_index(persp, p, s, f) * NetHidden + i];
+        if (exposed & (Bitboard{1} << s)) {
+          const Square seen = persp == White ? s : s ^ 56;
+          const int row = NetPieceSquares + 320 * (side_of(p) != persp) + 64 * kind_of(p) + (seen ^ f.flip);
+          v += net.ft_weights[row * NetHidden + i];
+        }
+      }
+      if (beyond && (v < -32768 || v > 32767)) ++*beyond;
+      const std::int64_t x = std::clamp<std::int64_t>(v, 0, NetQa);
+      total += x * x * net.out_weights[k][half * NetHidden + i];
+    }
+  }
+  const std::int64_t y = total / NetQa + net.out_bias[k];
+  return static_cast<int>(
+      std::clamp<std::int64_t>(y * net.scale / (NetQa * NetQb), -(EvalLimit - 1), EvalLimit - 1));
+}
+
+TEST_CASE("nnue", "S512+X sums its exposure rows beyond the int16 range exactly") {
+  // Exposure rows of up to +-20,000 per unit: a few exposed pieces take a
+  // unit's sum past int16, which the reader accepts (only the piece rows are
+  // bounded) and the evaluation handles as the 64-bit reference does.
+  auto net = random_net(12);
+  std::uint64_t rng = 77;
+  for (int f = NetPieceSquares; f < net->inputs; ++f)
+    for (int i = 0; i < NetHidden; ++i)
+      net->ft_weights[f * NetHidden + i] = static_cast<std::int16_t>(uniform(rng, -20000, 20000));
+  auto back = std::make_unique<NetFile>();
+  std::string error;
+  CHECK_MSG(read_net_file(write_net_file(*net), *back, error), error);
+  int checked = 0, beyond = 0;
+  for (const auto& sp : perft_suite()) {
+    Position pos;
+    pos.set_fen(sp.fen);
+    std::uint64_t game = 5 + checked;
+    for (int ply = 0; ply < 60; ++ply) {
+      int units = 0;
+      CHECK_MSG(full_eval(*back, pos) == s512x_reference(*back, pos, &units), pos.fen());
+      beyond += units > 0;
+      ++checked;
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      if (legal.size() == 0) break;
+      pos.make(legal[splitmix_next(game) % legal.size()]);
+    }
+  }
+  CHECK(checked > 200);
+  CHECK(beyond > 20);  // positions where some unit's sum left int16
+}
+
+TEST_CASE("nnue", "S512+X's evaluation equals the reference with ordinary weights") {
+  auto net = random_net(13);
+  int checked = 0;
+  for (const auto& sp : perft_suite()) {
+    Position pos;
+    pos.set_fen(sp.fen);
+    std::uint64_t game = 17 + checked;
+    for (int ply = 0; ply < 60; ++ply) {
+      CHECK_MSG(full_eval(*net, pos) == s512x_reference(*net, pos), pos.fen());
+      ++checked;
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      if (legal.size() == 0) break;
+      pos.make(legal[splitmix_next(game) % legal.size()]);
+    }
+  }
+  CHECK(checked > 200);
+}
+#endif
+
 #if defined(FORK_EVAL_NNUE)
 TEST_CASE("nnue", "searches through the evaluator hooks keep every accumulator exact") {
   // The search makes every move through Searcher::play and evaluates through
@@ -466,5 +575,161 @@ TEST_CASE("nnue", "searches through the evaluator hooks keep every accumulator e
   CHECK_EQ(static_eval(start), full_eval(embedded_net(), start));
 }
 #endif
+
+// S512cl's contact and link inputs (ideas.md 41; contacts.hpp): the index
+// space has the sizes net_shape.hpp gives (the reference's and the
+// trainer's too), and each perspective's inputs on 200 parity positions are
+// the Python reference's (tests/nnue/s512cl-contacts.txt, written by
+// `tools/nnue/contacts.py lists tests/nnue/parity.epd --count 200` from
+// python-chess's attack sets; compared as sorted lists). Any build but
+// S512+PP's, whose links have a rank limit (the frame's file flip is computed
+// here, not taken from the network).
+#if FORK_NET_ARCH != 8
+TEST_CASE("nnue", "S512cl's contact and link inputs equal the Python reference's") {
+  CHECK_EQ(contact_table_size(), NetContactInputs);
+  CHECK_EQ(link_table_size(), NetLinkInputs);
+  std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/s512cl-contacts.txt");
+  CHECK_MSG(in.good(), "tests/nnue/s512cl-contacts.txt is missing");
+  const auto numbers = [](const std::string& text) {
+    std::vector<std::int32_t> v;
+    std::istringstream is(text);
+    for (std::int32_t x; is >> x;) v.push_back(x);
+    return v;
+  };
+  int compared = 0;
+  for (std::string line; std::getline(in, line);) {
+    const std::size_t a = line.find('|'), b = line.find('|', a + 1);
+    if (a == std::string::npos || b == std::string::npos) continue;
+    Position pos;
+    CHECK_MSG(pos.set_fen(line.substr(0, a)), line.substr(0, a));
+    const std::vector<std::int32_t> want[2] = {numbers(line.substr(a + 1, b - a - 1)),
+                                               numbers(line.substr(b + 1))};
+    for (int k = 0; k < 2; ++k) {
+      const Color perspective = k == 0 ? pos.side_to_move() : ~pos.side_to_move();
+      const Square seen =
+          perspective == White ? pos.king_square(perspective) : pos.king_square(perspective) ^ 56;
+      std::int32_t out[ContactMaxActive];
+      const int n = contact_inputs(pos, perspective, (seen & 7) < 4 ? 7 : 0, out);
+      std::vector<std::int32_t> got(out, out + n);
+      std::sort(got.begin(), got.end());
+      CHECK_MSG(got == want[k], line.substr(0, a) << (k == 0 ? " (side to move)" : " (the other side)"));
+      ++compared;
+    }
+  }
+  CHECK_EQ(compared, 400);
+}
+#endif
+
+// The added-rows kernel's vector path (AVX-512 or AVX2 as built) equals its
+// scalar reference bit for bit: random rows and counts up to the most active
+// inputs, and rows at the int16 extremes, whose sums pass the int16 range
+// both ways and must saturate.
+TEST_CASE("nnue", "the added-rows kernel equals its scalar reference, saturation included") {
+  std::uint64_t rng = 2026110541;
+  std::vector<std::int16_t> pool(std::size_t{ContactMaxActive + 2} * NetHidden);
+  alignas(64) std::int16_t base[NetHidden], vec[NetHidden], ref[NetHidden];
+  std::vector<const std::int16_t*> rows(ContactMaxActive);
+  int saturated = 0;
+  for (int round = 0; round < 60; ++round) {
+    const bool extreme = round % 3 == 0;
+    for (auto& v : pool)
+      v = static_cast<std::int16_t>(extreme ? (splitmix_next(rng) % 2 ? 32767 : -32768)
+                                            : uniform(rng, -600, 600));
+    for (auto& v : base) v = static_cast<std::int16_t>(uniform(rng, -32768, 32767));
+    const int count = round < 3 ? round : uniform(rng, 0, ContactMaxActive);
+    for (int r = 0; r < count; ++r)
+      rows[r] =
+          pool.data() + std::size_t{static_cast<unsigned>(uniform(rng, 0, ContactMaxActive + 1))} * NetHidden;
+    sum_rows_saturated(base, rows.data(), count, vec);
+    sum_rows_saturated_scalar(base, rows.data(), count, ref);
+    CHECK_MSG(std::memcmp(vec, ref, sizeof vec) == 0, "round " << round << ", " << count << " rows");
+    for (int i = 0; i < NetHidden; ++i) saturated += ref[i] == 32767 || ref[i] == -32768;
+  }
+  CHECK(saturated > 1000);  // the extreme rounds reached both limits
+}
+
+// The link inputs from the pawns alone equal the reference's links
+// (tools/nnue/contacts.py), ascending: in S512+PP's builds those of its rank
+// limit (tests/nnue/s512pp-links.txt, written by `contacts.py links
+// tests/nnue/parity.epd --ranks 1 --count 200`), in the others S512cl's (the
+// link block of tests/nnue/s512cl-contacts.txt).
+TEST_CASE("nnue", "the link inputs from the pawns equal the Python reference's") {
+  CHECK_EQ(link_table_size(), NetLinkInputs);
+  const std::string file = NetLinkRanks == 1 ? "s512pp-links.txt" : "s512cl-contacts.txt";
+  const int offset = NetLinkRanks == 1 ? 0 : NetContactInputs;  // the link block's first number in the file
+  std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/" + file);
+  CHECK_MSG(in.good(), "tests/nnue/" << file << " is missing");
+  int compared = 0, nonempty = 0;
+  for (std::string line; std::getline(in, line);) {
+    const std::size_t a = line.find('|'), b = line.find('|', a + 1);
+    if (a == std::string::npos || b == std::string::npos) continue;
+    Position pos;
+    CHECK_MSG(pos.set_fen(line.substr(0, a)), line.substr(0, a));
+    for (int k = 0; k < 2; ++k) {
+      std::istringstream is(k == 0 ? line.substr(a + 1, b - a - 1) : line.substr(b + 1));
+      std::vector<std::int32_t> want;
+      for (std::int32_t x; is >> x;)
+        if (x >= offset) want.push_back(x - offset);
+      const Color perspective = k == 0 ? pos.side_to_move() : ~pos.side_to_move();
+      const Square seen =
+          perspective == White ? pos.king_square(perspective) : pos.king_square(perspective) ^ 56;
+      std::int32_t out[LinkMaxActive];
+      const int n = link_inputs(pos.pieces(White, Pawn), pos.pieces(Black, Pawn), perspective,
+                                (seen & 7) < 4 ? 7 : 0, out);
+      const std::vector<std::int32_t> got(out, out + n);
+      CHECK_MSG(std::is_sorted(got.begin(), got.end()), line.substr(0, a));
+      std::sort(want.begin(), want.end());
+      CHECK_MSG(got == want, line.substr(0, a) << (k == 0 ? " (side to move)" : " (the other side)"));
+      nonempty += n > 0;
+      ++compared;
+    }
+  }
+  CHECK_EQ(compared, 400);
+  CHECK(nonempty > 200);
+}
+
+// S512+PP's incremental link change equals the difference of the full lists
+// before and after each move, along random games from the perft suite
+// (captures of pawns, promotions and en passant among the moves), both
+// perspectives in both frames.
+TEST_CASE("nnue", "a move's link changes equal the difference of the full link lists") {
+  int moves = 0, changed = 0;
+  for (const auto& sp : perft_suite()) {
+    for (std::uint64_t seed = 1; seed <= 6; ++seed) {
+      Position pos;
+      pos.set_fen(sp.fen);
+      std::uint64_t rng = seed * 104729 + moves;
+      for (int ply = 0; ply < 60; ++ply) {
+        MoveList legal;
+        generate<GenMode::Legal>(pos, legal);
+        if (legal.size() == 0) break;
+        const Move m = legal[splitmix_next(rng) % legal.size()];
+        const Bitboard before[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
+        pos.make(m);
+        const Bitboard after[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
+        for (const Color perspective : {White, Black})
+          for (const int flip : {0, 7}) {
+            std::int32_t was[LinkMaxActive], now[LinkMaxActive], removed[LinkMaxActive], added[LinkMaxActive];
+            const int a = link_inputs(before[White], before[Black], perspective, flip, was);
+            const int b = link_inputs(after[White], after[Black], perspective, flip, now);
+            std::vector<std::int32_t> want_removed, want_added;
+            std::set_difference(was, was + a, now, now + b, std::back_inserter(want_removed));
+            std::set_difference(now, now + b, was, was + a, std::back_inserter(want_added));
+            int subs = 0, adds = 0;
+            link_changes(before, after, perspective, flip, removed, subs, added, adds);
+            std::vector<std::int32_t> got_removed(removed, removed + subs), got_added(added, added + adds);
+            std::sort(got_removed.begin(), got_removed.end());
+            std::sort(got_added.begin(), got_added.end());
+            CHECK_MSG(got_removed == want_removed && got_added == want_added,
+                      pos.fen() << " (after the move), flip " << flip);
+            changed += subs + adds > 0;
+          }
+        ++moves;
+      }
+    }
+  }
+  CHECK(moves > 1000);
+  CHECK(changed > 500);
+}
 
 }  // namespace forkeng::test

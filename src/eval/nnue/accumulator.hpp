@@ -16,7 +16,9 @@
 //   king 5) + the square seen from P (a1 = 0 ... h8 = 63, ranks flipped for
 //   Black). Mirrored architectures also flip the files (XOR 7) when P's own
 //   king stands on files a-d, and add 768 times the region of P's mirrored
-//   king square (a Frame). XGR's exposure inputs follow the piece rows.
+//   king square (a Frame). XGR's and S512+X's exposure inputs follow the
+//   piece rows. S512+PP's link inputs follow the piece rows in the same sums:
+//   a move changes them only when a pawn moves, is captured or promotes.
 // - A perspective's frame changes only when its own king moves across the
 //   d/e line or into another region; then that perspective is recomputed
 //   from the board, every other update is incremental.
@@ -67,6 +69,13 @@ struct FeatureDelta {
   int removed_count = 0, added_count = 0;
   Piece removed_piece[2], added_piece[2];
   Square removed_square[2], added_square[2];
+#if FORK_NET_ARCH == 8
+  // S512+PP's links change only when a pawn moves, is captured or promotes:
+  // then pawn_change is set and these hold each side's pawns before and
+  // after the move (left unset otherwise).
+  bool pawn_change = false;
+  Bitboard pawns_before[2] = {0, 0}, pawns_after[2] = {0, 0};
+#endif
 };
 
 // The delta of `m`, legal in `before`.
@@ -91,8 +100,18 @@ void advance_accumulator_scalar(const NetFile& net, const Accumulator& from, con
 int output_layer_scalar(const NetFile& net, const Accumulator& acc, Color stm);
 #endif
 
-#if FORK_NET_ARCH == 5
-// XGR's exposed pieces: non-king pieces attacked by an enemy piece of a
+// The added-rows kernel (S512cl's contact and link rows; compiled in every
+// build, for its equivalence test): out = base plus the `count` rows (each NetHidden
+// values), summed in 32 bits and held to the int16 range. The scalar
+// reference and the build's vector path (AVX-512 or AVX2 where compiled; the
+// scalar one otherwise) give the same values bit for bit.
+void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                        std::int16_t* out);
+void sum_rows_saturated_scalar(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                               std::int16_t* out);
+
+#if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
+// XGR's exposed pieces (S512+X's too): non-king pieces attacked by an enemy piece of a
 // lower class (pawn < knight = bishop < rook < queen < king), or attacked
 // and not defended (pseudo-attacks on the occupancy).
 Bitboard exposed_pieces(const Position& pos);

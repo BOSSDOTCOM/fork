@@ -25,10 +25,23 @@
 //!   ReLU; two outputs blended by a gate: out = b + g (a - b), g the clipped
 //!   sum of both perspectives' side value 0, a and b each plus twice the
 //!   difference of the perspectives' side value 1 or 2.
+//! - s512x: s512 plus XGR's exposure inputs (640 and their 10-input
+//!   factoriser, merged when saved; owner, 2026-11-02: XGR's parts as add-ons
+//!   to S512r2, the exposure plane first); the output as s512's.
+//! - s512cl: s512 plus Fork's contact and pawn-link inputs (ideas.md 41;
+//!   DESIGN.md §5.4, "S512cl"; no exposure plane): 50,416 contacts (a
+//!   non-king piece attacking another, not both pawns, of a mutual pair only
+//!   the cheaper attacker's) and 1,488 links (two pawns on the same or
+//!   adjacent files), after the 768 piece inputs; the output as s512's.
+//! - s512pp: s512 plus the pawn links only, of pawns at most one rank apart
+//!   (S512+PP; ideas.md 40; owner, 2026-11-06): 608 links after the 768
+//!   piece inputs, numbered as S512cl's in their own space; the output as
+//!   s512's.
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
 //!   fork-train check    --arch A [maps] --out DIR
+//!   fork-train order    --data SHARD... [--count N]   (the file of each game of an --interleave pass)
 //!   fork-train dump     --data SHARD --count N
 //!   fork-train stats    --data SHARD... [--positions N]   (king squares, phase, piece counts)
 //!   fork-train features --arch A [maps] (--epd FILE | --data SHARD --count N)
@@ -36,6 +49,8 @@
 //!                       [--init-weights weights.bin] [options]
 //!   fork-train eval     --arch A [maps] (--checkpoint DIR | --weights weights.bin) --epd FILE --out FILE
 //!   fork-train loader   --data SHARD... [--positions N]   (decoding speed, one thread)
+//! --qat (train, eval, check; the S-512 family): quantization-aware training
+//! (ideas.md 44), the forward pass on the integer file's weight grid.
 //! [maps] are --regions (32 comma-separated region numbers) and --buckets (25
 //! bucket numbers), as the architecture needs; the files in
 //! tools/nnue/ hold the fitted ones.
@@ -47,7 +62,7 @@
 
 use std::{
     fs::{self, File},
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Seek, Write},
     path::{Path, PathBuf},
 };
 
@@ -84,6 +99,9 @@ enum Arch {
     H512,
     AfS,
     Xgr512,
+    S512x,
+    S512cl,
+    S512pp,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -102,6 +120,11 @@ struct Spec {
     region_count: usize,
     factoriser: bool,
     exposure: bool,
+    contacts: bool,
+    /// S512+PP's links of rank limit PP_LINK_RANKS (no contacts).
+    links: bool,
+    /// --qat: quantization-aware training (the S-512 family; ideas.md 44).
+    qat: bool,
     picker: Picker,
     table: Vec<u8>,
     buckets: usize,
@@ -121,6 +144,9 @@ impl Spec {
             "h512" => Arch::H512,
             "afs" => Arch::AfS,
             "xgr512" => Arch::Xgr512,
+            "s512x" => Arch::S512x,
+            "s512cl" => Arch::S512cl,
+            "s512pp" => Arch::S512pp,
             other => panic!("unknown --arch {other}"),
         };
         let mut s = Spec {
@@ -131,6 +157,9 @@ impl Spec {
             region_count: 1,
             factoriser: false,
             exposure: false,
+            contacts: false,
+            links: false,
+            qat: a.0.iter().any(|x| x == "--qat"),
             picker: Picker::None,
             table: Vec::new(),
             buckets: 1,
@@ -152,8 +181,21 @@ impl Spec {
                 s.factoriser = true;
                 s.exposure = true;
             }
+            Arch::S512x => {
+                s.exposure = true;
+                s.picker = Picker::Phase;
+            }
+            Arch::S512cl => {
+                s.contacts = true;
+                s.picker = Picker::Phase;
+            }
+            Arch::S512pp => {
+                s.links = true;
+                s.picker = Picker::Phase;
+            }
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
+        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp), "--qat: the S-512 family only");
         match s.picker {
             Picker::None => {}
             Picker::Phase => s.table = parse_list(a.need("--buckets"), FULL_PHASE + 1, "--buckets"),
@@ -173,15 +215,36 @@ impl Spec {
     fn exposure_start(&self) -> usize {
         self.factor_start() + if self.factoriser { PIECE_SQUARES } else { 0 }
     }
-    fn inputs(&self) -> usize {
-        self.exposure_start() + if self.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 }
+    /// First contact input, first link input (S512cl: right after the
+    /// piece inputs).
+    fn contact_start(&self) -> usize {
+        self.factor_start()
     }
+    fn link_start(&self) -> usize {
+        self.contact_start() + if self.contacts { contact_tables().contacts } else { 0 }
+    }
+    fn contact_inputs(&self) -> usize {
+        if self.contacts { contact_tables().contacts + contact_tables().links } else { 0 }
+    }
+    /// S512+PP's link inputs.
+    fn pp_link_inputs(&self) -> usize {
+        if self.links { rank_links().links } else { 0 }
+    }
+    fn inputs(&self) -> usize {
+        self.exposure_start() + if self.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 } + self.contact_inputs()
+            + self.pp_link_inputs()
+    }
+    /// At most 8 contacts per non-king piece (8 rays or knight squares) and
+    /// a link per pair of the 16 pawns.
     fn max_active(&self) -> usize {
-        32 * (1 + usize::from(self.factoriser)) + if self.exposure { 60 } else { 0 }
+        32 * (1 + usize::from(self.factoriser))
+            + if self.exposure { 60 } else { 0 }
+            + if self.contacts { 30 * 8 + 120 } else { 0 }
+            + if self.links { 64 } else { 0 }
     }
     /// Inputs that remain after the factorisers are merged (the saved file).
     fn saved_inputs(&self) -> usize {
-        self.factor_start() + if self.exposure { EXPOSURE_ROWS } else { 0 }
+        self.factor_start() + if self.exposure { EXPOSURE_ROWS } else { 0 } + self.contact_inputs() + self.pp_link_inputs()
     }
 }
 
@@ -296,6 +359,193 @@ impl Board {
     }
 }
 
+// S512cl's contact and link inputs (DESIGN.md §5.4, "S512cl"): a class is
+// side * 5 + kind (side 0 the perspective's own, kinds pawn .. queen);
+// squares are frame squares. The index space is enumerated in one fixed
+// order (tools/nnue/contacts.py and the engine build the same).
+const CLASS_KINDS: usize = 5;
+const KIND_VALUE: [u8; 5] = [1, 2, 2, 3, 4];
+
+struct ContactTables {
+    /// [attacker class][attacker square][target square][victim class], -1 when impossible.
+    contact: Vec<i32>,
+    /// [pawn slot][pawn slot] (slot = side * 48 + square - 8), -1 when not a link.
+    link: Vec<i32>,
+    contacts: usize,
+    links: usize,
+}
+
+fn contact_slot(att: usize, a: usize, b: usize, vic: usize) -> usize {
+    ((att * 64 + a) * 64 + b) * (2 * CLASS_KINDS) + vic
+}
+
+fn link_slot(i: usize, j: usize) -> usize {
+    i * 96 + j
+}
+
+/// Whether a contact can be active in some position (b in the attacker's
+/// empty-board reach from a): kings and pawn-pawn left out, pawns only on
+/// ranks 2-7, of one kind only the lower attacker square, and the mutual
+/// pairs whose dearer attacker's input is never kept.
+fn contact_possible(att: usize, a: usize, b: usize, vic: usize) -> bool {
+    let (sa, ka) = (att / CLASS_KINDS, att % CLASS_KINDS);
+    let (sv, kv) = (vic / CLASS_KINDS, vic % CLASS_KINDS);
+    let _ = sa;
+    let middle = |s: usize| (8..56).contains(&s);
+    let line = a % 8 == b % 8 || a / 8 == b / 8;
+    let diagonal = (a % 8).abs_diff(b % 8) == (a / 8).abs_diff(b / 8);
+    if (ka == 0 && !middle(a)) || (kv == 0 && !middle(b)) || (ka == 0 && kv == 0) {
+        return false;
+    }
+    if ka == kv && a > b {
+        return false;
+    }
+    if ka == 4 && ((kv == 3 && line) || (kv == 2 && diagonal)) {
+        return false;
+    }
+    let empty = Board { piece: [None; 64], count: 0 };
+    if (ka == 2 || ka == 4) && kv == 0 && empty.attacks(b, 0, sv) & (1u64 << a) != 0 {
+        return false;
+    }
+    true
+}
+
+fn contact_tables() -> &'static ContactTables {
+    static TABLES: std::sync::OnceLock<ContactTables> = std::sync::OnceLock::new();
+    TABLES.get_or_init(|| {
+        let empty = Board { piece: [None; 64], count: 0 };
+        let mut contact = vec![-1i32; 2 * CLASS_KINDS * 64 * 64 * 2 * CLASS_KINDS];
+        let mut contacts = 0usize;
+        for att in 0..2 * CLASS_KINDS {
+            for a in 0..64 {
+                let mut reach = empty.attacks(a, att % CLASS_KINDS, att / CLASS_KINDS);
+                while reach != 0 {
+                    let b = reach.trailing_zeros() as usize;
+                    reach &= reach - 1;
+                    for vic in 0..2 * CLASS_KINDS {
+                        if contact_possible(att, a, b, vic) {
+                            contact[contact_slot(att, a, b, vic)] = contacts as i32;
+                            contacts += 1;
+                        }
+                    }
+                }
+            }
+        }
+        let mut link = vec![-1i32; 96 * 96];
+        let mut links = 0usize;
+        for i in 0..96usize {
+            for j in i + 1..96 {
+                let (qi, qj) = (i % 48 + 8, j % 48 + 8);
+                if qi != qj && (qi % 8).abs_diff(qj % 8) <= 1 {
+                    link[link_slot(i, j)] = links as i32;
+                    links += 1;
+                }
+            }
+        }
+        ContactTables { contact, link, contacts, links }
+    })
+}
+
+/// S512+PP's link space: S512cl's pairs of pawn slots whose squares are at
+/// most PP_LINK_RANKS ranks apart, numbered in the same order.
+const PP_LINK_RANKS: usize = 1;
+
+struct RankLinks {
+    /// [pawn slot][pawn slot], -1 when not a link.
+    link: Vec<i32>,
+    links: usize,
+}
+
+fn rank_links() -> &'static RankLinks {
+    static TABLE: std::sync::OnceLock<RankLinks> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut link = vec![-1i32; 96 * 96];
+        let mut links = 0usize;
+        for i in 0..96usize {
+            for j in i + 1..96 {
+                let (qi, qj) = (i % 48 + 8, j % 48 + 8);
+                if qi != qj && (qi % 8).abs_diff(qj % 8) <= 1 && (qi / 8).abs_diff(qj / 8) <= PP_LINK_RANKS {
+                    link[link_slot(i, j)] = links as i32;
+                    links += 1;
+                }
+            }
+        }
+        RankLinks { link, links }
+    })
+}
+
+/// S512+PP's link inputs of one perspective (numbers within the link block),
+/// appended to `links`; `frame` and `own` as contact_features's.
+fn pp_link_features(b: &Board, frame: impl Fn(usize) -> usize, own: impl Fn(usize) -> usize, links: &mut Vec<usize>) {
+    let t = rank_links();
+    let mut pawns: Vec<usize> = (0..64)
+        .filter_map(|s| match b.piece[s] {
+            Some((0, side)) => Some(own(side) * 48 + frame(s) - 8),
+            _ => None,
+        })
+        .collect();
+    pawns.sort_unstable();
+    for (n, &i) in pawns.iter().enumerate() {
+        for &j in &pawns[n + 1..] {
+            let l = t.link[link_slot(i, j)];
+            if l >= 0 {
+                links.push(l as usize);
+            }
+        }
+    }
+}
+
+/// A perspective's contact and link inputs (numbers within each block),
+/// appended to `contacts` and `links`; `frame` maps a stored square to the
+/// perspective's frame square, `own` a stored side to the relative one.
+fn contact_features(
+    b: &Board,
+    frame: impl Fn(usize) -> usize,
+    own: impl Fn(usize) -> usize,
+    contacts: &mut Vec<usize>,
+    links: &mut Vec<usize>,
+) {
+    let t = contact_tables();
+    let mut pawns: Vec<usize> = Vec::new();
+    for s in 0..64 {
+        let Some((kind, side)) = b.piece[s] else { continue };
+        if kind == 5 {
+            continue;
+        }
+        if kind == 0 {
+            pawns.push(own(side) * 48 + frame(s) - 8);
+        }
+        let mut hit = b.attacks(s, kind, side);
+        while hit != 0 {
+            let v = hit.trailing_zeros() as usize;
+            hit &= hit - 1;
+            let Some((vkind, vside)) = b.piece[v] else { continue };
+            if vkind == 5 || (kind == 0 && vkind == 0) {
+                continue;
+            }
+            // Of two pieces attacking each other, only the cheaper attacker's
+            // input (of one kind, the lower attacker frame square's).
+            if b.attacks(v, vkind, vside) & (1u64 << s) != 0
+                && (KIND_VALUE[vkind] < KIND_VALUE[kind] || (vkind == kind && frame(v) < frame(s)))
+            {
+                continue;
+            }
+            let i = t.contact[contact_slot(own(side) * CLASS_KINDS + kind, frame(s), frame(v), own(vside) * CLASS_KINDS + vkind)];
+            assert!(i >= 0, "an active contact outside the index space");
+            contacts.push(i as usize);
+        }
+    }
+    pawns.sort_unstable();
+    for (n, &i) in pawns.iter().enumerate() {
+        for &j in &pawns[n + 1..] {
+            let l = t.link[link_slot(i, j)];
+            if l >= 0 {
+                links.push(l as usize);
+            }
+        }
+    }
+}
+
 /// The active inputs of one perspective (0: the side to move, 1: the
 /// other), written to `out`; returns their count.
 fn perspective_features(spec: &Spec, b: &Board, exposed: u64, persp: usize, out: &mut [i32]) -> usize {
@@ -323,6 +573,26 @@ fn perspective_features(spec: &Spec, b: &Board, exposed: u64, persp: usize, out:
             out[n] = (x + 320 * own + 64 * kind + sq) as i32;
             out[n + 1] = (x + EXPOSURE_ROWS + 5 * own + kind) as i32;
             n += 2;
+        }
+    }
+    if spec.contacts {
+        let (mut c, mut l) = (Vec::with_capacity(64), Vec::with_capacity(32));
+        contact_features(b, |sq| orient(sq) ^ flip, |side| usize::from(side != persp), &mut c, &mut l);
+        for i in c {
+            out[n] = (spec.contact_start() + i) as i32;
+            n += 1;
+        }
+        for i in l {
+            out[n] = (spec.link_start() + i) as i32;
+            n += 1;
+        }
+    }
+    if spec.links {
+        let mut l = Vec::with_capacity(64);
+        pp_link_features(b, |sq| orient(sq) ^ flip, |side| usize::from(side != persp), &mut l);
+        for i in l {
+            out[n] = (spec.link_start() + i) as i32;
+            n += 1;
         }
     }
     n
@@ -362,10 +632,24 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                 let l1 = builder.new_affine("l1", 2 * h, 1);
                 l1.forward(l0.forward(stm).crelu().concat(l0.forward(ntm).crelu()))
             }
-            Arch::S512 | Arch::H512 => {
+            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp => {
                 let l0 = builder.new_affine("l0", n, h);
                 let l1 = builder.new_affine("l1", 2 * h, nb);
-                l1.forward(l0.forward(stm).screlu().concat(l0.forward(ntm).screlu())).select(bucket)
+                if s.qat {
+                    // Quantization-aware training (ideas.md 44; KB nnue-design.md
+                    // §5.6): the forward pass uses each weight and bias rounded to
+                    // the grid Fork's integer file stores it on (save_list's
+                    // factors: 255 for the first layer, 64 for the output
+                    // weights, 255 x 64 for their biases), so the loss is the
+                    // quantized network's; the gradient passes the rounding
+                    // unchanged (a straight-through estimate).
+                    let (w0, b0) = (l0.weights.faux_quantise(255.0, true), l0.bias.faux_quantise(255.0, true));
+                    let (w1, b1) = (l1.weights.faux_quantise(64.0, true), l1.bias.faux_quantise(255.0 * 64.0, true));
+                    let (a_s, a_n) = (w0.matmul(stm) + b0, w0.matmul(ntm) + b0);
+                    (w1.matmul(a_s.screlu().concat(a_n.screlu())) + b1).select(bucket)
+                } else {
+                    l1.forward(l0.forward(stm).screlu().concat(l0.forward(ntm).screlu())).select(bucket)
+                }
             }
             Arch::AfS => {
                 let l0 = builder.new_affine("l0", n, h);
@@ -399,14 +683,20 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
 
 /// A first-layer weight (rows values per input, input-major as bullet
 /// stores it) with its factoriser inputs added into the inputs they share
-/// (an f32 addition each, KB bullet-internals.md §1.5) and dropped.
+/// (an f32 addition each, KB bullet-internals.md §1.5) and dropped; an
+/// architecture without the piece factoriser keeps its piece inputs as they
+/// are.
 fn merge_factors(spec: &Spec, rows: usize, v: &[f32]) -> Vec<f32> {
     let col = |c: usize| &v[c * rows..(c + 1) * rows];
     let mut out = Vec::with_capacity(rows * spec.saved_inputs());
     for r in 0..spec.region_count {
         for f in 0..PIECE_SQUARES {
-            let (a, b) = (col(PIECE_SQUARES * r + f), col(spec.factor_start() + f));
-            out.extend(a.iter().zip(b).map(|(x, y)| x + y));
+            let a = col(PIECE_SQUARES * r + f);
+            if spec.factoriser {
+                out.extend(a.iter().zip(col(spec.factor_start() + f)).map(|(x, y)| x + y));
+            } else {
+                out.extend_from_slice(a);
+            }
         }
     }
     if spec.exposure {
@@ -423,7 +713,7 @@ fn merge_factors(spec: &Spec, rows: usize, v: &[f32]) -> Vec<f32> {
 fn first_layer(spec: &Spec, id: &str, rows: usize) -> SavedFormat {
     let s = spec.clone();
     let f = SavedFormat::id(id);
-    if spec.factoriser { f.transform(move |_, v| merge_factors(&s, rows, &v)) } else { f }
+    if spec.factoriser || spec.exposure { f.transform(move |_, v| merge_factors(&s, rows, &v)) } else { f }
 }
 
 // The quantized file, in tools/nnue/<arch>.json's order: QA = 255 and QB = 64
@@ -439,7 +729,7 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
             SavedFormat::id("l1w").round().quantise::<i16>(64),
             SavedFormat::id("l1b").round().quantise::<i32>(255 * 64),
         ],
-        Arch::S512 | Arch::H512 => vec![
+        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp => vec![
             first_layer(spec, "l0w", h).round().quantise::<i16>(255),
             SavedFormat::id("l0b").round().quantise::<i16>(255),
             SavedFormat::id("l1w").transpose().round().quantise::<i16>(64),
@@ -470,10 +760,12 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
 
 /// Per-tensor weight clips: the first layer and its factorisers at +-0.99
 /// each, so a merged weight stays within 1.98 (judgement.md §1.1, §4); every
-/// other tensor at bullet's default +-1.98.
+/// other tensor at bullet's default +-1.98. S512x and S512cl keep S-512's rule (no
+/// first-layer clip: a warm start from S512r2 must not move its weights; Fork
+/// sums its exposure rows in 32 bits, so their size needs no bound).
 fn clipped(spec: &Spec) -> Vec<&'static str> {
     match spec.arch {
-        Arch::B0 | Arch::S512 => vec![],
+        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp => vec![],
         Arch::H512 | Arch::AfS => vec!["l0w", "l0b"],
         Arch::Xgr512 => vec!["l0w", "l0b", "s0w", "s0b"],
     }
@@ -522,12 +814,58 @@ fn filter() -> Filter {
 
 /// Reads Fork's shards (viriformat games) forever, in file order, through
 /// viriformat's own conversion, shuffling each buffer of `buffer` positions
-/// with a seeded stream (so the data order is reproducible).
+/// with a seeded stream (so the data order is reproducible). With
+/// `interleave` (--interleave; owner, 2026-11-06: the endgame slice spread
+/// through the snapshot), each pass reads the files side by side instead,
+/// one game at a time from the file furthest behind in the share of its
+/// bytes read, so every file is spread evenly over the pass.
 #[derive(Clone)]
 struct ShardReader {
     files: Vec<PathBuf>,
     buffer: usize,
     seed: u64,
+    interleave: bool,
+}
+
+/// The next file of an interleaved pass: of the files not finished, the one
+/// whose share read (read / size) is smallest, the lower index on ties.
+fn interleave_next(read: &[u64], size: &[u64], done: &[bool]) -> Option<usize> {
+    let mut best: Option<usize> = None;
+    for k in 0..read.len() {
+        if done[k] {
+            continue;
+        }
+        // read[k] / size[k] < read[b] / size[b], without division.
+        if best.map_or(true, |b| (read[k] as u128) * (size[b] as u128) < (read[b] as u128) * (size[k] as u128)) {
+            best = Some(k);
+        }
+    }
+    best
+}
+
+/// One interleaved pass over `files`: `f(file index, game)` for every game,
+/// in interleave_next's order; stops early when `f` returns true.
+fn for_each_interleaved(files: &[PathBuf], mut f: impl FnMut(usize, Game) -> bool) {
+    let mut readers: Vec<BufReader<File>> = files
+        .iter()
+        .map(|p| BufReader::new(File::open(p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))))
+        .collect();
+    let size: Vec<u64> = files.iter().map(|p| fs::metadata(p).expect("size").len().max(1)).collect();
+    let mut read = vec![0u64; files.len()];
+    let mut done = vec![false; files.len()];
+    while let Some(k) = interleave_next(&read, &size, &done) {
+        let r = &mut readers[k];
+        if r.fill_buf().expect("read").is_empty() {
+            done[k] = true;
+            continue;
+        }
+        let game = Game::deserialise_from(r, Vec::new())
+            .unwrap_or_else(|e| panic!("{}: undecodable game: {e}", files[k].display()));
+        read[k] = r.stream_position().expect("position");
+        if f(k, game) {
+            return;
+        }
+    }
 }
 
 impl ShardReader {
@@ -562,6 +900,30 @@ impl DataReader<ChessBoard> for ShardReader {
         let mut buf = Vec::with_capacity(self.buffer);
         let filter = filter();
         loop {
+            if self.interleave {
+                let mut stop = false;
+                for_each_interleaved(&self.files, |_, game| {
+                    game.splat_to_bulletformat(
+                        |b| {
+                            buf.push(b);
+                            Ok(())
+                        },
+                        &filter,
+                    )
+                    .expect("splat");
+                    if buf.len() >= self.buffer {
+                        stop = emit_shuffled(&mut buf, &mut rng, &mut f);
+                    }
+                    stop
+                });
+                if stop {
+                    return;
+                }
+                if !buf.is_empty() && emit_shuffled(&mut buf, &mut rng, &mut f) {
+                    return;
+                }
+                continue;
+            }
             for path in &self.files {
                 let mut stop = false;
                 Self::for_each_game(path, |game| {
@@ -667,6 +1029,19 @@ fn main() {
             weights.write_into(&mut wf).expect("write weights");
             println!("{:?}: {} inputs, quantised.bin {} bytes", spec.arch, spec.inputs(), bytes.len());
         }
+        "order" => {
+            // The source file of each of the first --count games of one
+            // interleaved pass (--interleave's order), one index per line.
+            let files: Vec<PathBuf> = a.all("--data").into_iter().map(PathBuf::from).collect();
+            let mut left: usize = a.num("--count", 1000);
+            let out = std::io::stdout();
+            let mut out = out.lock();
+            for_each_interleaved(&files, |k, _| {
+                writeln!(out, "{k}").unwrap();
+                left -= 1;
+                left == 0
+            });
+        }
         "dump" => {
             // Positions exactly as training sees them (side-to-move relative):
             // "piece:square ... | score | result" per kept position.
@@ -769,6 +1144,7 @@ fn main() {
                 files: a.all("--data").into_iter().map(PathBuf::from).collect(),
                 buffer: a.num("--buffer", 1 << 24),
                 seed: a.num("--seed", 1),
+                interleave: a.0.iter().any(|x| x == "--interleave"),
             };
             let defn = definition(&spec, &ins);
             let weights = ModelWeights::new(&defn, a.num("--seed", 1));
@@ -929,5 +1305,35 @@ fn main() {
             eprintln!("unknown command {cmd}");
             std::process::exit(2);
         }
+    }
+}
+
+#[cfg(test)]
+mod interleave_tests {
+    use super::interleave_next;
+
+    #[test]
+    fn the_file_furthest_behind_comes_next() {
+        // A 2% file beside a 98% one: about one game in 50 from it, spread
+        // evenly, and both finish together.
+        let size = [9800u64, 200];
+        let mut read = [0u64, 0];
+        let done = [false, false];
+        let mut order = Vec::new();
+        for _ in 0..500 {
+            let k = interleave_next(&read, &size, &done).unwrap();
+            read[k] += 10;
+            order.push(k);
+        }
+        let small: Vec<usize> = order.iter().enumerate().filter(|&(_, &k)| k == 1).map(|(i, _)| i).collect();
+        assert_eq!(small.len(), 10);
+        assert!(small.windows(2).all(|w| w[1] - w[0] == 50), "{small:?}");
+    }
+
+    #[test]
+    fn finished_files_are_skipped_and_ties_take_the_lower_index() {
+        assert_eq!(interleave_next(&[0, 0], &[10, 10], &[false, false]), Some(0));
+        assert_eq!(interleave_next(&[5, 0], &[10, 10], &[false, true]), Some(0));
+        assert_eq!(interleave_next(&[5, 5], &[10, 10], &[true, true]), None);
     }
 }

@@ -25,6 +25,7 @@ import chess
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import convert  # noqa: E402
+import extend_weights  # noqa: E402
 import fit_maps  # noqa: E402
 import models  # noqa: E402
 import netformat  # noqa: E402
@@ -61,7 +62,7 @@ def synthetic_weights(arch, seed):
     def r(count, lim):
         return [models.to_f32(rng.uniform(-lim, lim)) for _ in range(count)]
     w = {'l0w': r(n * h, 0.06), 'l0b': r(h, 0.3)}
-    if arch.name in ('s512', 'h512'):
+    if arch.name in ('s512', 'h512', 's512x'):
         w.update(l1w=r(8 * 2 * h, 0.5), l1b=r(8, 0.2))
     elif arch.name == 'afs':
         w.update(l1w=r(128 * h, 0.5), l1b=r(128, 0.3), l2w=r(256 * 16, 0.6), l2b=r(256, 0.3),
@@ -114,7 +115,7 @@ class Bakeoff(unittest.TestCase):
         return rc, json.loads(out.getvalue().splitlines()[0])
 
     def test_every_architecture_passes_its_legs(self):
-        for name in ('s512', 'h512', 'afs', 'xgr512'):
+        for name in ('s512', 'h512', 'afs', 'xgr512', 's512x'):
             with self.subTest(name):
                 rc, stats = self.legs(name)
                 self.assertEqual(rc, 0)
@@ -170,10 +171,81 @@ class Bakeoff(unittest.TestCase):
     def test_integer_and_float_passes_agree(self):
         # With moderate weights the quantization loss stays small for every
         # design (a wrong scale or shift would put it in the hundreds).
-        for name in ('s512', 'h512', 'afs', 'xgr512'):
+        for name in ('s512', 'h512', 'afs', 'xgr512', 's512x'):
             with self.subTest(name):
                 rc, stats = self.legs(name)
                 self.assertLess(stats['loss_max'], 30, stats)
+
+
+class ExposureAddOn(unittest.TestCase):
+    """S512+X (architecture 6): S-512 plus XGR's exposure plane."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.tmp = Path(self.dir.name)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def net_of(self, name, w):
+        desc = description(name)
+        arch = reference.arch_of(desc)
+        _, qbin = bullet_files(arch, desc, w)
+        data = convert.convert(qbin, desc, 107)
+        return arch, models.unpack(arch, data[netformat.HEADER_BYTES:])
+
+    def test_zero_exposure_weights_evaluate_as_s512(self):
+        # The warm start: S-512's weights with the exposure inputs appended as
+        # zeros give S-512's evaluations exactly, float and integer.
+        w = synthetic_weights(models.Arch('s512', table=PHASE), 7)
+        wx = extend_weights.add_exposure_inputs(w)
+        a, net = self.net_of('s512', w)
+        ax, netx = self.net_of('s512x', wx)
+        self.assertEqual(len(wx['l0w']), (768 + 650) * 512)
+        for fen in FENS:
+            board = chess.Board(fen)
+            self.assertTrue(models.exposed_squares(board) or fen == FENS[0])
+            self.assertEqual(models.r_int(ax, netx, 107, board), models.r_int(a, net, 107, board), fen)
+            self.assertEqual(models.r_float(ax, wx, board), models.r_float(a, w, board), fen)
+
+    def test_extending_keeps_every_other_tensor(self):
+        w = synthetic_weights(models.Arch('s512', table=PHASE), 8)
+        data = netformat.write_weights_bin(extend_weights.add_exposure_inputs(w))
+        back = netformat.read_weights_bin(data)
+        self.assertEqual(back['l0w'][:768 * 512], w['l0w'])
+        self.assertTrue(all(x == 0.0 for x in back['l0w'][768 * 512:]))
+        for k in ('l0b', 'l1w', 'l1b'):
+            self.assertEqual(back[k], w[k])
+        with self.assertRaises(ValueError):  # already extended
+            extend_weights.add_exposure_inputs(extend_weights.add_exposure_inputs(w))
+
+    def test_exposure_rows_change_the_evaluation(self):
+        # An exposed piece's row reaches the output (a converter or reference
+        # that dropped the exposure rows would give S-512's value).
+        w = extend_weights.add_exposure_inputs(synthetic_weights(models.Arch('s512', table=PHASE), 9))
+        a0, net0 = self.net_of('s512x', w)
+        rng = random.Random(3)
+        start = 768 * 512
+        w['l0w'] = w['l0w'][:start] + [models.to_f32(rng.uniform(-0.3, 0.3)) for _ in range(650 * 512)]
+        a1, net1 = self.net_of('s512x', w)
+        board = chess.Board(FENS[1])
+        self.assertTrue(models.exposed_squares(board))
+        self.assertNotEqual(models.r_int(a1, net1, 107, board), models.r_int(a0, net0, 107, board))
+
+    def test_exposure_sums_beyond_int16_are_held_to_its_range(self):
+        # Exposure rows are summed without a bound (Fork: in 32 bits) and the
+        # result held to the int16 range; the piece accumulator keeps its own.
+        arch = models.Arch('s512x', table=PHASE)
+        h = arch.hidden
+        net = {'ftw': [0] * (arch.saved_inputs * h), 'ftb': [0] * h}
+        rows = [768 + 0, 768 + 1, 768 + 2]
+        for r in rows:
+            net['ftw'][r * h] = 20000
+            net['ftw'][r * h + 1] = -20000
+        out = models.exposure_sum(net, arch, rows, [100] * h)
+        self.assertEqual(out[:3], [32767, -32768, 100])
+        out = models.exposure_sum(net, arch, rows[:1], [100] * h)
+        self.assertEqual(out[:2], [20100, -19900])
 
 
 class Rounding(unittest.TestCase):

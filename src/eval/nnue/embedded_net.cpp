@@ -11,7 +11,9 @@
 
 namespace forkeng {
 
-extern const unsigned char embedded_net_bytes[];
+// The bytes (cmake/embed_net.cmake: an array for small networks, the
+// assembler's .incbin for large ones) and their count.
+extern const unsigned char* const embedded_net_bytes;
 extern const std::size_t embedded_net_size;
 
 const NetFile& embedded_net() {

@@ -1,0 +1,363 @@
+{
+ "run": "g3s1",
+ "generator": {
+  "tool": "generation 3's first snapshot (owner, 2026-11-02): every S512r2-labelled source so far, the local part g3 as a byte prefix of the running run (verify_games-checked) and every sealed cloud chunk (checked against its manifest); per source, the first 60 games of a designated shard held out (the local part's g3-w09-val.vf, a cloud run's first chunk's w07 shard) and interleaved with g2s1-val.vf's games into g3s1-val.vf; the rest of each source concatenated into g3s1-<source>.vf. Trained on together with g2s1 (data/manifests/g2s1.json)",
+  "evaluator": "nnue (s512r2)"
+ },
+ "hold_games_per_source": 60,
+ "sources": [
+  {
+   "source": "g3",
+   "kind": "local",
+   "snapshot_of": "the running local part g3 (each file a byte prefix of its worker's shard)",
+   "version": "0.3.0-dev+387f338 (WSL clang PGO, clang 21.1.8)",
+   "arch": "native (Ryzen 7600X3D)",
+   "settings": {
+    "openings": "lichess-2016-09.epd",
+    "openings_count": 591871,
+    "positions_target": 500000000,
+    "nodes": 20000,
+    "threads": 10,
+    "seed": 20261106,
+    "hash_mb": 1,
+    "shard_mb": 1024,
+    "tables": "syzygy 5-piece",
+    "decided_cp": 400,
+    "max_plies": 500,
+    "random_min": 2,
+    "random_max": 4,
+    "adjudicate_cp": 700,
+    "adjudicate_plies": 8,
+    "save_percent": 50,
+    "unsaved_nodes": 4000,
+    "check_nodes": 2000
+   },
+   "files": [
+    {
+     "file": "g3-w00.vf",
+     "bytes": 94207212,
+     "sha256": "791b4bd8ca559813887b2e3bec89edd920abe7102b7bad455a25473489f7f37a"
+    },
+    {
+     "file": "g3-w01.vf",
+     "bytes": 94625952,
+     "sha256": "c36bc328e7498cfe6511827c0d4a879a0164ea0422bee107dcca094a7fad3610"
+    },
+    {
+     "file": "g3-w02.vf",
+     "bytes": 94785476,
+     "sha256": "06d6cd6c96d20d117886793a51ec07cc0da00f94682200f016bb4db2c619571f"
+    },
+    {
+     "file": "g3-w03.vf",
+     "bytes": 94349792,
+     "sha256": "98a93a0b436f872a6dc7dfffe135df01c32b389773c7b473f0c86be74e20a932"
+    },
+    {
+     "file": "g3-w04.vf",
+     "bytes": 94272476,
+     "sha256": "36900ffad91345a855d4563465be6cce9f4bc209979ec8c2821e1b953e5bd744"
+    },
+    {
+     "file": "g3-w05.vf",
+     "bytes": 94784200,
+     "sha256": "a40bb83e0b65c1e00d31f9357fbe8681cf087d2a1671258c7cead6c2b3b207e6"
+    },
+    {
+     "file": "g3-w06.vf",
+     "bytes": 94534548,
+     "sha256": "a6ac3b69c63d5d47764a580b47fab3ac715dbf43c00e6075399176745885d960"
+    },
+    {
+     "file": "g3-w07.vf",
+     "bytes": 94341144,
+     "sha256": "013cf2063605478ce84759d9e7a49e96b00691f0153b45cb940da30da7dc479d"
+    },
+    {
+     "file": "g3-w08.vf",
+     "bytes": 94515928,
+     "sha256": "e4483c6dbaa466b27719f96c5dde4e4da6e1e7d0a7355257524c8c8bb9a4ba28"
+    },
+    {
+     "file": "g3-w09-val.vf",
+     "bytes": 94664824,
+     "sha256": "929381f48fdc3d43024dca8366a3dbd700f24e9a5e7d67a4032f625c0c2fd50f"
+    }
+   ],
+   "shards": 10,
+   "held_out_from": "g3-w09-val.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-east-1-20261101T235903Z",
+   "kind": "cloud",
+   "chunks": 9,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+4c68385"
+   ],
+   "shards": 72,
+   "held_out_from": "g3-aws-us-east-1-20261101T235903Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-east-1-20261102T013108Z",
+   "kind": "cloud",
+   "chunks": 13,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+40198f5"
+   ],
+   "shards": 104,
+   "held_out_from": "g3-aws-us-east-1-20261102T013108Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-east-1-20261102T032411Z",
+   "kind": "cloud",
+   "chunks": 15,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+1948b59"
+   ],
+   "shards": 120,
+   "held_out_from": "g3-aws-us-east-1-20261102T032411Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-east-1-20261102T052634Z",
+   "kind": "cloud",
+   "chunks": 14,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+1948b59"
+   ],
+   "shards": 112,
+   "held_out_from": "g3-aws-us-east-1-20261102T052634Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-east-1-20261102T071850Z",
+   "kind": "cloud",
+   "chunks": 94,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+33967d7"
+   ],
+   "shards": 752,
+   "held_out_from": "g3-aws-us-east-1-20261102T071850Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-east-2-20261102T021222Z",
+   "kind": "cloud",
+   "chunks": 120,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+1948b59"
+   ],
+   "shards": 960,
+   "held_out_from": "g3-aws-us-east-2-20261102T021222Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-east-2-20261102T135543Z",
+   "kind": "cloud",
+   "chunks": 13,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+8a60ed2"
+   ],
+   "shards": 104,
+   "held_out_from": "g3-aws-us-east-2-20261102T135543Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-west-2-20261101T234806Z",
+   "kind": "cloud",
+   "chunks": 127,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+4c68385"
+   ],
+   "shards": 1016,
+   "held_out_from": "g3-aws-us-west-2-20261101T234806Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-west-2-20261102T113302Z",
+   "kind": "cloud",
+   "chunks": 29,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+8a60ed2"
+   ],
+   "shards": 232,
+   "held_out_from": "g3-aws-us-west-2-20261102T113302Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-west-2-20261102T144710Z",
+   "kind": "cloud",
+   "chunks": 10,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+3902d00"
+   ],
+   "shards": 80,
+   "held_out_from": "g3-aws-us-west-2-20261102T144710Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  },
+  {
+   "source": "g3-aws-us-west-2-20261102T162108Z",
+   "kind": "cloud",
+   "chunks": 27,
+   "chunks_unsealed_skipped": 0,
+   "versions": [
+    "0.3.0-dev+33e7883"
+   ],
+   "shards": 216,
+   "held_out_from": "g3-aws-us-west-2-20261102T162108Z-c0000-w07-0000.vf",
+   "held_out_games": 60
+  }
+ ],
+ "validation": {
+  "file": "g3s1-val.vf",
+  "games": 1500,
+  "positions": 137570,
+  "positions_saved": 97176,
+  "bytes": 604280,
+  "sha256": "80c138f17a3e6259bdef88c6a8b40527802fcb9f3ba35142d9f9bbde8f7519c5",
+  "sources": "12 generation-3 sources x 60 games and g2s1-val.vf (13 sources x 60 games)"
+ },
+ "training": {
+  "games": 7321720,
+  "positions": 686713539,
+  "positions_saved": 373842515,
+  "with_g2s1": {
+   "games": 16498106,
+   "positions_saved": 988611737
+  }
+ },
+ "positions_note": "positions count every record; positions_saved leaves out the split search's unsaved records (score 32767), which the trainer drops",
+ "batches": [
+  [
+   {
+    "file": "g3s1-g3.vf",
+    "games": 2299231,
+    "positions": 215570231,
+    "positions_unsaved": 98215679,
+    "positions_saved": 117354552,
+    "bytes": 945053240,
+    "sha256": "2e886a1442a7467165233a9ec4a92e11d6cbf3c86aa05145b5db90984dafbd01"
+   },
+   {
+    "file": "g3s1-g3-aws-us-east-1-20261101T235903Z.vf",
+    "games": 95886,
+    "positions": 8998781,
+    "positions_unsaved": 4101123,
+    "positions_saved": 4897658,
+    "bytes": 39447020,
+    "sha256": "0e35e9527d56840c14baf17a04135668536e9b508914df57b939e0e54370c421"
+   },
+   {
+    "file": "g3s1-g3-aws-us-east-1-20261102T013108Z.vf",
+    "games": 138852,
+    "positions": 13000633,
+    "positions_unsaved": 5922398,
+    "positions_saved": 7078235,
+    "bytes": 57001204,
+    "sha256": "bae96bff1b4df1fbc20c0fb2999887919bc791794119174130136bdcd56ae218"
+   },
+   {
+    "file": "g3s1-g3-aws-us-east-1-20261102T032411Z.vf",
+    "games": 159796,
+    "positions": 15000415,
+    "positions_unsaved": 6837692,
+    "positions_saved": 8162723,
+    "bytes": 65754316,
+    "sha256": "fdbbe13354f0cba0e02cf543fd04664dd3ad37886d7c3c7387aade733fcf3249"
+   },
+   {
+    "file": "g3s1-g3-aws-us-east-1-20261102T052634Z.vf",
+    "games": 149535,
+    "positions": 14000710,
+    "positions_unsaved": 6377177,
+    "positions_saved": 7623533,
+    "bytes": 61386100,
+    "sha256": "4a94c9459817ca10ef6d88ea69bda05c64cd08d5ac1f9dc116648b4f1ecfad69"
+   },
+   {
+    "file": "g3s1-g3-aws-us-east-1-20261102T071850Z.vf",
+    "games": 1002760,
+    "positions": 94035268,
+    "positions_unsaved": 42840777,
+    "positions_saved": 51194491,
+    "bytes": 412240432,
+    "sha256": "f413689724b8d6c1e885286a2e4d596391a08a357224b1f2413ee099d589b2ff"
+   },
+   {
+    "file": "g3s1-g3-aws-us-east-2-20261102T021222Z.vf",
+    "games": 1279524,
+    "positions": 120047795,
+    "positions_unsaved": 54687843,
+    "positions_saved": 65359952,
+    "bytes": 526254044,
+    "sha256": "5e8628f4527b2538f7a8e8d31966c263d4c7cecb10ceca35a4ece08c1281abf2"
+   },
+   {
+    "file": "g3s1-g3-aws-us-east-2-20261102T135543Z.vf",
+    "games": 138688,
+    "positions": 12999467,
+    "positions_unsaved": 5922506,
+    "positions_saved": 7076961,
+    "bytes": 56990636,
+    "sha256": "708064446cb2dd19ca0aadddb88c3bed329f6c708590e1bff7e55998691f2d10"
+   },
+   {
+    "file": "g3s1-g3-aws-us-west-2-20261101T234806Z.vf",
+    "games": 1354388,
+    "positions": 127048535,
+    "positions_unsaved": 57883450,
+    "positions_saved": 69165085,
+    "bytes": 556952108,
+    "sha256": "5ea13d8695499f337c9e8d550b9a241ea0b0f455f719bfa8fff250c0c548d1c5"
+   },
+   {
+    "file": "g3s1-g3-aws-us-west-2-20261102T113302Z.vf",
+    "games": 308990,
+    "positions": 29007197,
+    "positions_unsaved": 13218556,
+    "positions_saved": 15788641,
+    "bytes": 127152428,
+    "sha256": "0fd63f60d30bf7a51b05376883115155616aa2499011a85ba3f48b99d8ecad13"
+   },
+   {
+    "file": "g3s1-g3-aws-us-west-2-20261102T144710Z.vf",
+    "games": 106379,
+    "positions": 9998652,
+    "positions_unsaved": 4557745,
+    "positions_saved": 5440907,
+    "bytes": 43824252,
+    "sha256": "99018c88396d2e539c1b7be2aed6f987d7c1bcb83ab132ff16dc3e8d5be98206"
+   },
+   {
+    "file": "g3s1-g3-aws-us-west-2-20261102T162108Z.vf",
+    "games": 287691,
+    "positions": 27005855,
+    "positions_unsaved": 12306078,
+    "positions_saved": 14699777,
+    "bytes": 118380296,
+    "sha256": "e532411440d494903c00cdddbaad78dacebd0dd1be464d91e5cc276fce81fd3e"
+   },
+   {
+    "file": "g3s1-val.vf",
+    "games": 1500,
+    "positions": 137570,
+    "positions_saved": 97176,
+    "bytes": 604280,
+    "sha256": "80c138f17a3e6259bdef88c6a8b40527802fcb9f3ba35142d9f9bbde8f7519c5"
+   }
+  ]
+ ]
+}
