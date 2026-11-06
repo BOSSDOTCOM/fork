@@ -691,3 +691,65 @@ LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   TCEC-conditions candidate. Its priority is low: XGR-512 showed the same
   pattern with a larger fixed-node gain (+30.70 ± 10.37) and failed at LTC
   as well (ltc-r2xgr512-vs-s512r2: −30.56 ± 9.96, H0).
+
+### 2026-11-05 attribution audit of the evening's SPRT runs (owner)
+
+- Why: two SPRT drivers believed stopped kept running (stopping their
+  tool tasks ended only a wrapper shell), and the session reported the
+  check-relief filler's stage 7 (run 42140703160) as the rising-RFP SPRT's
+  stage 0. The owner asked for the job supervisor first (DESIGN.md
+  decisions, 2026-11-05) and then this audit.
+- Method: every run of sprt.yml created from 5:00 PM EST on, each
+  attributed by the inputs GitHub recorded for it (BASE, TEST and STAGE in
+  its build job's environment, TC and TEST_OPTS in its shard jobs, read
+  from the run's log), then compared with every driver log and with this
+  log. Each folder of merged results was checked too (16 shard results,
+  every one's meta naming its stage's base, test and stage). Every run
+  below is now in the run-ID ledger, imported with that evidence.
+
+| Run | Created (EST) | Base | Test | Stage | TC | Conclusion | Attributed to |
+|---|---|---|---|---|---|---|---|
+| 42119021732 | 5:09 PM | 684bac6 | cf614e0 | 2 | 8+0.08 | success | lmrh-24000-vs-base, stage 2 (as logged above) |
+| 42121703916 | 5:27 PM | 684bac6 | cf614e0 | 3 | 8+0.08 | success | lmrh-24000-vs-base, stage 3, H0 (as logged above) |
+| 42124558432 | 5:48 PM | 684bac6 | 7d72dc5 | 0 | 8+0.08 | success | reval-no-check-relief, stage 0 |
+| 42127059653 | 6:06 PM | 684bac6 | 7d72dc5 | 1 | 8+0.08 | success | reval-no-check-relief, stage 1 |
+| 42129326936 | 6:26 PM | 684bac6 | 7d72dc5 | 2 | 8+0.08 | success | reval-no-check-relief, stage 2 |
+| 42131787180 | 6:45 PM | 684bac6 | 7d72dc5 | 3 | 8+0.08 | success | reval-no-check-relief, stage 3 |
+| 42134041089 | 7:03 PM | 684bac6 | 7d72dc5 | 4 | 8+0.08 | success | reval-no-check-relief, stage 4 |
+| 42136314266 | 7:22 PM | 684bac6 | 7d72dc5 | 5 | 8+0.08 | success | reval-no-check-relief, stage 5 |
+| 42138562937 | 7:40 PM | 684bac6 | 7d72dc5 | 6 | 8+0.08 | success | reval-no-check-relief, stage 6 |
+| 42140703160 | 7:59 PM | 684bac6 | 7d72dc5 | 7 | 8+0.08 | success | reval-no-check-relief, stage 7 (**reported at the time as rising-RFP stage 0: wrong**) |
+| 42142711426 | 8:16 PM | 684bac6 | c62bb3b | 0 | 600+6, nodes=800000 | success | S512+X fixed-node match (as logged above) |
+| 42147267048 | 8:58 PM | 684bac6 | 7d72dc5 | 8 | 8+0.08 | success | reval-no-check-relief, stage 8 |
+| 42149140337 | 9:15 PM | 684bac6 | c62bb3b | 0 | 8+0.08 | success | s512x-vs-s512r2-stc, stage 0, H0 (as logged above) |
+| 42151218549 | 9:34 PM | 684bac6 | 7d72dc5 | 9 | 8+0.08 | cancelled | reval-no-check-relief, stage 9, cancelled at 9:39 PM so that PR #7's CI ran alone; not merged |
+
+- Corrections:
+  - **The rising-RFP SPRT (684bac6 against db6a238, [0, 3]) has not
+    played a game.** Its driver started at 7:53 PM, waited for an idle
+    GitHub and never dispatched; it was killed with the filler's driver.
+    No run of it exists.
+  - **The check-relief filler was not paused at 7:52 PM**: its driver kept
+    running and dispatched stages 6 to 9 (stage 9 cancelled). Stages 6, 7
+    and 8 are valid results of its own test and are kept.
+  - The milestone checklist (docs/history/phase-4/m1-checklist.md, PR #7)
+    quotes the filler after stage 5 (9,600 games), stale when written; its
+    standing is the stage 8 line below.
+- No result was merged into the wrong SPRT: every driver logged and merged
+  only its own runs (the merge's meta check), and the S512+X and
+  LMR-history results above stand.
+
+### reval-no-check-relief (re-validation filler: check relief removed, [−3, 0]; in progress)
+
+- Base `684bac6` (phase-4: S512r2, IIR on), test `7d72dc5`
+  (reval/no-check-relief: `use_lmr_check_relief` off; bench 13,846,386).
+  Non-regression bounds [−3, 0] nElo: H1 would mean the feature can be
+  simplified away. 8+0.08, Hash 16 MB, Syzygy 3-4-5, GitHub shards.
+- After each stage (runs above; Elo, nElo, LLR): 0 −2.61 ± 10.27, −4.32 ±
+  17.02, −0.11; 1 −2.06 ± 7.18, −3.46 ± 12.04, −0.16; 2 −3.91 ± 5.84,
+  −6.58 ± 9.83, −0.61; 3 −2.77 ± 5.09, −4.63 ± 8.51, −0.50; 4 −4.56 ±
+  4.58, −7.58 ± 7.61, −1.21; 5 −3.58 ± 4.17, −5.98 ± 6.95, −1.07; 6 −3.57 ±
+  3.86, −5.95 ± 6.43, −1.24; 7 −4.53 ± 3.61, −7.55 ± 6.02, −1.93; **8
+  (14,400 games) −3.86 ± 3.40, −6.44 ± 5.67, LLR −1.77: continue.**
+- Resumes at stage 9 under the job supervisor, after the higher-priority
+  runs (the PR's CI, the rising-RFP SPRT).
