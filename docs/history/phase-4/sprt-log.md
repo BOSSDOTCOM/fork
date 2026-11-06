@@ -787,7 +787,7 @@ LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   ORIGINALITY.md on tier2/batch3; no finer grid), and the test commit
   follows.
 
-### 2026-11-06 threat-set-cheaper-vs-base (tier 2, T56: threat-aware ordering; in progress)
+### 2026-11-06 threat-set-cheaper-vs-base (tier 2, T56: threat-aware ordering): H0, rejected (stays off)
 
 - The measurement (threat_set.json, declared 2026-11-05): off 0.7539,
   any-attack 0.7331 (gain −0.0208 [−0.0285, −0.0128]), cheaper-attacker
@@ -799,6 +799,17 @@ LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   Bounds [0, 3] nElo, 8+0.08, under the job supervisor (job sprt-threat),
   started 9:47 AM EST; stage 0 is run 42237009121 (ledger). It took the
   GitHub slot while ProbCut's test commit waits on the owner.
+- Stages 1-4: runs 42270364725, 42273143225, 42275889794, 42278631502
+  (stages 3-4 dispatched by a driver that outlived its job's stop; their
+  results are valid and in the ledger). Re-attached for stages 5-7 by job
+  sprt-threat2 (`RUN_ID`): runs 42281365784, 42289547143, 42292120505.
+- **Result (after stage 7, 4:11 PM EST): H0 accepted.** 12,800 games, Elo
+  −6.08 +/- 3.59, nElo −10.20 +/- 6.02, LLR −3.72 (−2.94, 2.94),
+  Ptnml [180, 1671, 2922, 1447, 180]; no time losses. The cheaper-attacker
+  threat set costs about 6 Elo at STC: `use_threat_buckets` and
+  `use_cheaper_threats` stay off. As with the measurement, both variants lost
+  to "off"; T56 is closed for this network (a later net may be re-tested only
+  as a new idea).
 
 ### reval-no-check-relief (re-validation filler: check relief removed, [−3, 0]; undecided at the cap)
 

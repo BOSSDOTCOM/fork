@@ -3488,7 +3488,7 @@ every Phase 3 margin go to the SPSA retune instead of SPRTs.
 
 | item | status (2026-11-06) |
 |---|---|
-| Tier 2, batch 3 | rising RFP: H0 (off). Threat-aware ordering (cheaper-attacker): **STC SPRT running** (stage 0 merged, −11.30 ± 10.67). ProbCut (9 / 5 / 80): measured, test branch ready, **next in the queue** |
+| Tier 2, batch 3 | rising RFP: H0 (off). Threat-aware ordering (cheaper-attacker): **H0 (off)**, −6.08 ± 3.59 after 12,800 games (sprt-log). ProbCut (9 / 5 / 80): measured, test branch ready, **queued after S512+PP's STC SPRT** |
 | Tier 2, batch 4 | built behind switches with placeholders (tier2/batch4, bench unchanged): razoring, quiet history pruning, bad-capture futility, fifty-move eval scaling (a placeholder, ClockDampingSpan 200, its formula an exact Berserk match: measured first on a wide pre-declared grid not centred on the current values, the measured result kept and any remaining match credited; owner, 2026-11-06), the history malus balance, double extensions, node types with their LMR uses, the pawn-structure history, upcoming-repetition detection; each gets its constants from a short SPRT ladder, then its constant screen and STC SPRT (the streamlined standard, owner, 2026-11-06; the fifty-move scaling's label-and-sweep measurement, already running, is finished first) |
 | Further correction tables | non-pawn per side, minor, continuation, threat, material: **deferred to the gated items, after the SPSA retune** (owner, 2026-11-06); the pawn drift table stays off (undecided at LTC) |
 | Continuation histories in LMR (idea 42) | planned (KB T58); measured and SPRTed like the LMR history term |
