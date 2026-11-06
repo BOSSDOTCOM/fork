@@ -28,6 +28,11 @@
 //! - s512x: s512 plus XGR's exposure inputs (640 and their 10-input
 //!   factoriser, merged when saved; owner, 2026-11-02: XGR's parts as add-ons
 //!   to S512r2, the exposure plane first); the output as s512's.
+//! - s512cl: s512 plus Fork's contact and pawn-link inputs (ideas.md 41;
+//!   DESIGN.md §5.4, "S512cl"; no exposure plane): 50,416 contacts (a
+//!   non-king piece attacking another, not both pawns, of a mutual pair only
+//!   the cheaper attacker's) and 1,488 links (two pawns on the same or
+//!   adjacent files), after the 768 piece inputs; the output as s512's.
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
@@ -88,6 +93,7 @@ enum Arch {
     AfS,
     Xgr512,
     S512x,
+    S512cl,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -106,6 +112,7 @@ struct Spec {
     region_count: usize,
     factoriser: bool,
     exposure: bool,
+    contacts: bool,
     picker: Picker,
     table: Vec<u8>,
     buckets: usize,
@@ -126,6 +133,7 @@ impl Spec {
             "afs" => Arch::AfS,
             "xgr512" => Arch::Xgr512,
             "s512x" => Arch::S512x,
+            "s512cl" => Arch::S512cl,
             other => panic!("unknown --arch {other}"),
         };
         let mut s = Spec {
@@ -136,6 +144,7 @@ impl Spec {
             region_count: 1,
             factoriser: false,
             exposure: false,
+            contacts: false,
             picker: Picker::None,
             table: Vec::new(),
             buckets: 1,
@@ -161,6 +170,10 @@ impl Spec {
                 s.exposure = true;
                 s.picker = Picker::Phase;
             }
+            Arch::S512cl => {
+                s.contacts = true;
+                s.picker = Picker::Phase;
+            }
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
         match s.picker {
@@ -182,15 +195,30 @@ impl Spec {
     fn exposure_start(&self) -> usize {
         self.factor_start() + if self.factoriser { PIECE_SQUARES } else { 0 }
     }
-    fn inputs(&self) -> usize {
-        self.exposure_start() + if self.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 }
+    /// First contact input, first link input (S512cl: right after the
+    /// piece inputs).
+    fn contact_start(&self) -> usize {
+        self.factor_start()
     }
+    fn link_start(&self) -> usize {
+        self.contact_start() + contact_tables().contacts
+    }
+    fn contact_inputs(&self) -> usize {
+        if self.contacts { contact_tables().contacts + contact_tables().links } else { 0 }
+    }
+    fn inputs(&self) -> usize {
+        self.exposure_start() + if self.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 } + self.contact_inputs()
+    }
+    /// At most 8 contacts per non-king piece (8 rays or knight squares) and
+    /// a link per pair of the 16 pawns.
     fn max_active(&self) -> usize {
-        32 * (1 + usize::from(self.factoriser)) + if self.exposure { 60 } else { 0 }
+        32 * (1 + usize::from(self.factoriser))
+            + if self.exposure { 60 } else { 0 }
+            + if self.contacts { 30 * 8 + 120 } else { 0 }
     }
     /// Inputs that remain after the factorisers are merged (the saved file).
     fn saved_inputs(&self) -> usize {
-        self.factor_start() + if self.exposure { EXPOSURE_ROWS } else { 0 }
+        self.factor_start() + if self.exposure { EXPOSURE_ROWS } else { 0 } + self.contact_inputs()
     }
 }
 
@@ -305,6 +333,144 @@ impl Board {
     }
 }
 
+// S512cl's contact and link inputs (DESIGN.md §5.4, "S512cl"): a class is
+// side * 5 + kind (side 0 the perspective's own, kinds pawn .. queen);
+// squares are frame squares. The index space is enumerated in one fixed
+// order (tools/nnue/contacts.py and the engine build the same).
+const CLASS_KINDS: usize = 5;
+const KIND_VALUE: [u8; 5] = [1, 2, 2, 3, 4];
+
+struct ContactTables {
+    /// [attacker class][attacker square][target square][victim class], -1 when impossible.
+    contact: Vec<i32>,
+    /// [pawn slot][pawn slot] (slot = side * 48 + square - 8), -1 when not a link.
+    link: Vec<i32>,
+    contacts: usize,
+    links: usize,
+}
+
+fn contact_slot(att: usize, a: usize, b: usize, vic: usize) -> usize {
+    ((att * 64 + a) * 64 + b) * (2 * CLASS_KINDS) + vic
+}
+
+fn link_slot(i: usize, j: usize) -> usize {
+    i * 96 + j
+}
+
+/// Whether a contact can be active in some position (b in the attacker's
+/// empty-board reach from a): kings and pawn-pawn left out, pawns only on
+/// ranks 2-7, of one kind only the lower attacker square, and the mutual
+/// pairs whose dearer attacker's input is never kept.
+fn contact_possible(att: usize, a: usize, b: usize, vic: usize) -> bool {
+    let (sa, ka) = (att / CLASS_KINDS, att % CLASS_KINDS);
+    let (sv, kv) = (vic / CLASS_KINDS, vic % CLASS_KINDS);
+    let _ = sa;
+    let middle = |s: usize| (8..56).contains(&s);
+    let line = a % 8 == b % 8 || a / 8 == b / 8;
+    let diagonal = (a % 8).abs_diff(b % 8) == (a / 8).abs_diff(b / 8);
+    if (ka == 0 && !middle(a)) || (kv == 0 && !middle(b)) || (ka == 0 && kv == 0) {
+        return false;
+    }
+    if ka == kv && a > b {
+        return false;
+    }
+    if ka == 4 && ((kv == 3 && line) || (kv == 2 && diagonal)) {
+        return false;
+    }
+    let empty = Board { piece: [None; 64], count: 0 };
+    if (ka == 2 || ka == 4) && kv == 0 && empty.attacks(b, 0, sv) & (1u64 << a) != 0 {
+        return false;
+    }
+    true
+}
+
+fn contact_tables() -> &'static ContactTables {
+    static TABLES: std::sync::OnceLock<ContactTables> = std::sync::OnceLock::new();
+    TABLES.get_or_init(|| {
+        let empty = Board { piece: [None; 64], count: 0 };
+        let mut contact = vec![-1i32; 2 * CLASS_KINDS * 64 * 64 * 2 * CLASS_KINDS];
+        let mut contacts = 0usize;
+        for att in 0..2 * CLASS_KINDS {
+            for a in 0..64 {
+                let mut reach = empty.attacks(a, att % CLASS_KINDS, att / CLASS_KINDS);
+                while reach != 0 {
+                    let b = reach.trailing_zeros() as usize;
+                    reach &= reach - 1;
+                    for vic in 0..2 * CLASS_KINDS {
+                        if contact_possible(att, a, b, vic) {
+                            contact[contact_slot(att, a, b, vic)] = contacts as i32;
+                            contacts += 1;
+                        }
+                    }
+                }
+            }
+        }
+        let mut link = vec![-1i32; 96 * 96];
+        let mut links = 0usize;
+        for i in 0..96usize {
+            for j in i + 1..96 {
+                let (qi, qj) = (i % 48 + 8, j % 48 + 8);
+                if qi != qj && (qi % 8).abs_diff(qj % 8) <= 1 {
+                    link[link_slot(i, j)] = links as i32;
+                    links += 1;
+                }
+            }
+        }
+        ContactTables { contact, link, contacts, links }
+    })
+}
+
+/// A perspective's contact and link inputs (numbers within each block),
+/// appended to `contacts` and `links`; `frame` maps a stored square to the
+/// perspective's frame square, `own` a stored side to the relative one.
+fn contact_features(
+    b: &Board,
+    frame: impl Fn(usize) -> usize,
+    own: impl Fn(usize) -> usize,
+    contacts: &mut Vec<usize>,
+    links: &mut Vec<usize>,
+) {
+    let t = contact_tables();
+    let mut pawns: Vec<usize> = Vec::new();
+    for s in 0..64 {
+        let Some((kind, side)) = b.piece[s] else { continue };
+        if kind == 5 {
+            continue;
+        }
+        if kind == 0 {
+            pawns.push(own(side) * 48 + frame(s) - 8);
+        }
+        let mut hit = b.attacks(s, kind, side);
+        while hit != 0 {
+            let v = hit.trailing_zeros() as usize;
+            hit &= hit - 1;
+            let Some((vkind, vside)) = b.piece[v] else { continue };
+            if vkind == 5 || (kind == 0 && vkind == 0) {
+                continue;
+            }
+            // Of two pieces attacking each other, only the cheaper attacker's
+            // input (of one kind, the lower attacker frame square's).
+            if b.attacks(v, vkind, vside) & (1u64 << s) != 0
+                && (KIND_VALUE[vkind] < KIND_VALUE[kind] || (vkind == kind && frame(v) < frame(s)))
+            {
+                continue;
+            }
+            let i = t.contact[contact_slot(own(side) * CLASS_KINDS + kind, frame(s), frame(v), own(vside) * CLASS_KINDS + vkind)];
+            assert!(i >= 0, "an active contact outside the index space");
+            contacts.push(i as usize);
+        }
+    }
+    pawns.sort_unstable();
+    for (n, &i) in pawns.iter().enumerate() {
+        for &j in &pawns[n + 1..] {
+            let l = t.link[link_slot(i, j)];
+            if l >= 0 {
+                links.push(l as usize);
+            }
+        }
+    }
+}
+
 /// The active inputs of one perspective (0: the side to move, 1: the
 /// other), written to `out`; returns their count.
 fn perspective_features(spec: &Spec, b: &Board, exposed: u64, persp: usize, out: &mut [i32]) -> usize {
@@ -332,6 +498,18 @@ fn perspective_features(spec: &Spec, b: &Board, exposed: u64, persp: usize, out:
             out[n] = (x + 320 * own + 64 * kind + sq) as i32;
             out[n + 1] = (x + EXPOSURE_ROWS + 5 * own + kind) as i32;
             n += 2;
+        }
+    }
+    if spec.contacts {
+        let (mut c, mut l) = (Vec::with_capacity(64), Vec::with_capacity(32));
+        contact_features(b, |sq| orient(sq) ^ flip, |side| usize::from(side != persp), &mut c, &mut l);
+        for i in c {
+            out[n] = (spec.contact_start() + i) as i32;
+            n += 1;
+        }
+        for i in l {
+            out[n] = (spec.link_start() + i) as i32;
+            n += 1;
         }
     }
     n
@@ -371,7 +549,7 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                 let l1 = builder.new_affine("l1", 2 * h, 1);
                 l1.forward(l0.forward(stm).crelu().concat(l0.forward(ntm).crelu()))
             }
-            Arch::S512 | Arch::H512 | Arch::S512x => {
+            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl => {
                 let l0 = builder.new_affine("l0", n, h);
                 let l1 = builder.new_affine("l1", 2 * h, nb);
                 l1.forward(l0.forward(stm).screlu().concat(l0.forward(ntm).screlu())).select(bucket)
@@ -454,7 +632,7 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
             SavedFormat::id("l1w").round().quantise::<i16>(64),
             SavedFormat::id("l1b").round().quantise::<i32>(255 * 64),
         ],
-        Arch::S512 | Arch::H512 | Arch::S512x => vec![
+        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl => vec![
             first_layer(spec, "l0w", h).round().quantise::<i16>(255),
             SavedFormat::id("l0b").round().quantise::<i16>(255),
             SavedFormat::id("l1w").transpose().round().quantise::<i16>(64),
@@ -485,12 +663,12 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
 
 /// Per-tensor weight clips: the first layer and its factorisers at +-0.99
 /// each, so a merged weight stays within 1.98 (judgement.md §1.1, §4); every
-/// other tensor at bullet's default +-1.98. S512x keeps S-512's rule (no
+/// other tensor at bullet's default +-1.98. S512x and S512cl keep S-512's rule (no
 /// first-layer clip: a warm start from S512r2 must not move its weights; Fork
 /// sums its exposure rows in 32 bits, so their size needs no bound).
 fn clipped(spec: &Spec) -> Vec<&'static str> {
     match spec.arch {
-        Arch::B0 | Arch::S512 | Arch::S512x => vec![],
+        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl => vec![],
         Arch::H512 | Arch::AfS => vec!["l0w", "l0b"],
         Arch::Xgr512 => vec!["l0w", "l0b", "s0w", "s0b"],
     }
