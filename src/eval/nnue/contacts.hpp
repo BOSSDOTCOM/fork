@@ -9,7 +9,8 @@
 // and link inputs (two pawns, of either side, on the same or adjacent
 // files), as row numbers after the piece rows.
 // Invariants:
-// - The index space is enumerated once, at first use, in the order
+// - The index space is enumerated (the contacts once, at first use; the links
+//   at compile time) in the order
 //   tools/nnue/contacts.py and tools/train build too: contacts by attacker
 //   class (side x 5 + kind, side 0 the perspective's own), attacker frame
 //   square, target frame square (ascending, over the attacker kind's reach on

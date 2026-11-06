@@ -22,7 +22,8 @@
 //   contact and pawn-link inputs (contacts.hpp; ideas.md 41, owner,
 //   2026-11-05; no exposure plane), S-512's output. 8 S512+PP: S-512 plus
 //   the pawn-link inputs only (owner, 2026-11-05; idea 40's first L1 step),
-//   kept incrementally in a 32-bit accumulator, S-512's output.
+//   kept incrementally in the main int16 sums (net_file.hpp's bound of 96
+//   links), S-512's output.
 // - QA = 255, QB = 64 (bullet's quantization convention; ORIGINALITY.md).
 #pragma once
 

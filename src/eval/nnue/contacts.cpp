@@ -4,7 +4,6 @@
 #include "eval/nnue/contacts.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cassert>
 #include <cstdlib>
 #include <vector>
@@ -57,10 +56,9 @@ bool possible(int att, Square a, Square b, int vic) {
 
 struct ContactTable {
   std::vector<std::int32_t> contact;  // [att][a][b][vic], -1 when impossible
-  std::vector<std::int16_t> link;     // [slot][slot], -1 when not a link (int16: 1,488 links; half the cache)
-  int contacts = 0, links = 0;
+  int contacts = 0;
 
-  ContactTable() : contact(std::size_t{Classes} * 64 * 64 * Classes, -1), link(96 * 96, -1) {
+  ContactTable() : contact(std::size_t{Classes} * 64 * 64 * Classes, -1) {
     for (int att = 0; att < Classes; ++att)
       for (Square a = 0; a < 64; ++a)
         for (Bitboard r = reach(att, a, 0); r;) {
@@ -68,11 +66,6 @@ struct ContactTable {
           for (int vic = 0; vic < Classes; ++vic)
             if (possible(att, a, b, vic)) contact[slot(att, a, b, vic)] = contacts++;
         }
-    for (int i = 0; i < 96; ++i)
-      for (int j = i + 1; j < 96; ++j) {
-        const int qi = i % 48 + 8, qj = j % 48 + 8;
-        if (qi != qj && std::abs((qi & 7) - (qj & 7)) <= 1) link[i * 96 + j] = static_cast<std::int16_t>(links++);
-      }
   }
   static std::size_t slot(int att, Square a, Square b, int vic) {
     return ((std::size_t{static_cast<unsigned>(att)} * 64 + a) * 64 + b) * Classes + vic;
@@ -83,6 +76,35 @@ const ContactTable& contact_table() {
   static const ContactTable t;
   return t;
 }
+
+// The link space, built at compile time: each pair of pawn slots' input in
+// both orders (-1 when the pair is not a link; int16, 1,488 links, half the
+// cache of int32) and each square's partner squares (its own file and the
+// neighbouring ones, itself excluded).
+struct LinkTables {
+  std::int16_t input[96 * 96] = {};
+  Bitboard partners[64] = {};
+  int size = 0;
+};
+
+constexpr LinkTables make_link_tables() {
+  const auto partnered = [](int a, int b) { return a != b && (a & 7) - (b & 7) <= 1 && (b & 7) - (a & 7) <= 1; };
+  LinkTables t;
+  for (int i = 0; i < 96 * 96; ++i) t.input[i] = -1;
+  for (int i = 0; i < 96; ++i)
+    for (int j = i + 1; j < 96; ++j)
+      if (partnered(i % 48 + 8, j % 48 + 8)) {
+        t.input[i * 96 + j] = t.input[j * 96 + i] = static_cast<std::int16_t>(t.size);
+        ++t.size;
+      }
+  for (int a = 0; a < 64; ++a)
+    for (int b = 0; b < 64; ++b)
+      if (partnered(a, b)) t.partners[a] |= Bitboard{1} << b;
+  return t;
+}
+
+constexpr LinkTables Links = make_link_tables();
+static_assert(Links.size == NetLinkInputs, "the link space's size is net_shape.hpp's");
 
 }  // namespace
 
@@ -126,7 +148,6 @@ int contact_inputs(const Position& pos, Color perspective, int flip, std::int32_
 }
 
 int link_inputs(Bitboard white_pawns, Bitboard black_pawns, Color perspective, int flip, std::int32_t* out) {
-  const ContactTable& t = contact_table();
   int slots[16];
   int pawns = 0;
   for (const Color c : {White, Black})
@@ -141,53 +162,37 @@ int link_inputs(Bitboard white_pawns, Bitboard black_pawns, Color perspective, i
   int n = 0;
   for (int i = 0; i < pawns; ++i)
     for (int j = i + 1; j < pawns; ++j) {
-      const std::int32_t l = t.link[slots[i] * 96 + slots[j]];
+      const std::int32_t l = Links.input[slots[i] * 96 + slots[j]];
       if (l >= 0) out[n++] = l;
     }
   return n;
 }
 
-namespace {
-
-// The squares on the same file as s or a neighbouring one, s excluded: where a
-// pawn's link partners stand.
-Bitboard near_files(Square s) {
-  static const auto masks = [] {
-    std::array<Bitboard, 64> m{};
-    for (Square a = 0; a < 64; ++a)
-      for (Square b = 0; b < 64; ++b)
-        if (a != b && std::abs((a & 7) - (b & 7)) <= 1) m[a] |= bb(b);
-    return m;
-  }();
-  return masks[s];
-}
-
-}  // namespace
-
 int link_changes(const Bitboard (&before)[2], const Bitboard (&after)[2], Color perspective, int flip,
                  std::int32_t* removed, int& removed_count, std::int32_t* added, int& added_count) {
-  const ContactTable& t = contact_table();
-  const auto slot = [&](Color c, Square s) {
-    return (c != perspective) * 48 + ((perspective == White ? s : s ^ 56) ^ flip) - 8;
-  };
+  // A pawn's slot is slot_base[its side] + (its square ^ key).
+  const int key = (perspective == White ? 0 : 56) ^ flip;
+  const int slot_base[2] = {perspective == White ? -8 : 40, perspective == White ? 40 : -8};
   // The links a set of pawns loses (or gains) with `changed`: every pair of a
-  // changed pawn and a pawn of `pool` near it, each pair once (a changed pawn
-  // leaves the pool once its pairs are listed).
+  // changed pawn and a pawn of the pool on its own or a neighbouring file, each
+  // pair once (a changed pawn leaves the pool once its pairs are listed). One
+  // loop over both sides' partners, a partner's side read from the pool's
+  // black pawns; the table holds both orders of a pair.
   const auto pairs = [&](const Bitboard (&pool_in)[2], const Bitboard (&changed)[2], std::int32_t* out) {
-    Bitboard pool[2] = {pool_in[White], pool_in[Black]};
+    const Bitboard black = pool_in[Black];
+    Bitboard pool = pool_in[White] | black;
     int n = 0;
     for (const Color c : {White, Black})
       for (Bitboard g = changed[c]; g;) {
         const Square s = pop_lsb(g);
-        pool[c] &= ~bb(s);
-        const int a = slot(c, s);
-        for (const Color d : {White, Black})
-          for (Bitboard p = pool[d] & near_files(s); p;) {
-            const int b = slot(d, pop_lsb(p));
-            const std::int32_t l = t.link[std::min(a, b) * 96 + std::max(a, b)];
-            assert(l >= 0 && "a pawn pair outside the link space");
-            out[n++] = l;
-          }
+        pool &= ~bb(s);
+        const std::int16_t* row = Links.input + (slot_base[c] + (s ^ key)) * 96;
+        for (Bitboard p = pool & Links.partners[s]; p;) {
+          const Square q = pop_lsb(p);
+          const std::int16_t l = row[slot_base[(black >> q) & 1] + (q ^ key)];
+          assert(l >= 0 && "a pawn pair outside the link space");
+          out[n++] = l;
+        }
       }
     return n;
   };
@@ -199,6 +204,6 @@ int link_changes(const Bitboard (&before)[2], const Bitboard (&after)[2], Color 
 }
 
 int contact_table_size() { return contact_table().contacts; }
-int link_table_size() { return contact_table().links; }
+int link_table_size() { return Links.size; }
 
 }  // namespace forkeng
