@@ -646,3 +646,27 @@ LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   no divisor beat "off" (DESIGN.md, Search constants). The branch's
   ordering-score refactor and test fix stay available to the later items
   built on it (tier2/batch4).
+
+### 2026-11-05 S512+X: fixed nodes against S512r2, then the STC promotion SPRT (owner)
+
+- The owner (2026-11-05, on its 2.2% lower validation loss) made S512+X a
+  promotion candidate: a fixed-node match against S512r2 first, then, if it
+  scores above 0, an STC SPRT against S512r2 on [0, 5] and a speed
+  measurement; a pass is reported before any promotion.
+- Candidate: bake/s512x c62bb3b (nets/s512x 3641a51, phase-4 merged, with
+  S512+X seed 2 as the default network, S = 89; bench 14,141,414,
+  signature 029f61c7d020711e). Network-dependent tests failing on the
+  candidate, logged in its commit (updated only if the SPRT passes): the
+  K+P v K promotion at depth 1, the K+R v K mate in 2 at depth 4 and its
+  go mate stop, the web test's eval threshold. The endgame check: 307 of
+  900 misjudged against S512r2's 249 (KQK 28 of 300 against 0).
+- Base: 684bac6 (phase-4, S512r2; bench 14,180,299).
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, 800,000 per move (600+6 clock that never binds, Hash 16, Syzygy 3-4-5, UHO book) | 42142711426 | 1,600 (no time losses, no abnormal ends) | +25.67 ± 10.26 | +42.76 ± 17.02 | [18, 152, 355, 244, 31] | above 0: the SPRT follows |
+
+- Speed (2026-11-05, 8 interleaved single-thread `fork bench` pairs of the
+  two clang-release builds, measurement c running beside them): S512+X
+  median 2,074,797 nps, S512r2 2,556,500; the pairwise ratio median 0.818
+  (0.797 to 0.850): S512+X searches about 18% fewer nodes per second.
