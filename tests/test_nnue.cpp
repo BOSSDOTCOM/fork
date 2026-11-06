@@ -14,7 +14,9 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -23,6 +25,7 @@
 #include "core/splitmix.hpp"
 #include "eval/eval_scale.hpp"
 #include "eval/nnue/accumulator.hpp"
+#include "eval/nnue/contacts.hpp"
 #include "eval/nnue/net_file.hpp"
 #include "harness.hpp"
 #include "suite.hpp"
@@ -469,7 +472,8 @@ int s512x_reference(const NetFile& net, const Position& pos, int* beyond = nullp
     }
   }
   const std::int64_t y = total / NetQa + net.out_bias[k];
-  return static_cast<int>(std::clamp<std::int64_t>(y * net.scale / (NetQa * NetQb), -(EvalLimit - 1), EvalLimit - 1));
+  return static_cast<int>(
+      std::clamp<std::int64_t>(y * net.scale / (NetQa * NetQb), -(EvalLimit - 1), EvalLimit - 1));
 }
 
 TEST_CASE("nnue", "S512+X sums its exposure rows beyond the int16 range exactly") {
@@ -555,5 +559,74 @@ TEST_CASE("nnue", "searches through the evaluator hooks keep every accumulator e
   CHECK_EQ(static_eval(start), full_eval(embedded_net(), start));
 }
 #endif
+
+// S512cl's contact and link inputs (ideas.md 41; contacts.hpp): the index
+// space has the sizes net_shape.hpp gives (the reference's and the
+// trainer's too), and each perspective's inputs on 200 parity positions are
+// the Python reference's (tests/nnue/s512cl-contacts.txt, written by
+// `tools/nnue/contacts.py lists tests/nnue/parity.epd --count 200` from
+// python-chess's attack sets; compared as sorted lists). Any build: the
+// frame's file flip is computed here, not taken from the network.
+TEST_CASE("nnue", "S512cl's contact and link inputs equal the Python reference's") {
+  CHECK_EQ(contact_table_size(), NetContactInputs);
+  CHECK_EQ(link_table_size(), NetLinkInputs);
+  std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/s512cl-contacts.txt");
+  CHECK_MSG(in.good(), "tests/nnue/s512cl-contacts.txt is missing");
+  const auto numbers = [](const std::string& text) {
+    std::vector<std::int32_t> v;
+    std::istringstream is(text);
+    for (std::int32_t x; is >> x;) v.push_back(x);
+    return v;
+  };
+  int compared = 0;
+  for (std::string line; std::getline(in, line);) {
+    const std::size_t a = line.find('|'), b = line.find('|', a + 1);
+    if (a == std::string::npos || b == std::string::npos) continue;
+    Position pos;
+    CHECK_MSG(pos.set_fen(line.substr(0, a)), line.substr(0, a));
+    const std::vector<std::int32_t> want[2] = {numbers(line.substr(a + 1, b - a - 1)),
+                                               numbers(line.substr(b + 1))};
+    for (int k = 0; k < 2; ++k) {
+      const Color perspective = k == 0 ? pos.side_to_move() : ~pos.side_to_move();
+      const Square seen =
+          perspective == White ? pos.king_square(perspective) : pos.king_square(perspective) ^ 56;
+      std::int32_t out[ContactMaxActive];
+      const int n = contact_inputs(pos, perspective, (seen & 7) < 4 ? 7 : 0, out);
+      std::vector<std::int32_t> got(out, out + n);
+      std::sort(got.begin(), got.end());
+      CHECK_MSG(got == want[k], line.substr(0, a) << (k == 0 ? " (side to move)" : " (the other side)"));
+      ++compared;
+    }
+  }
+  CHECK_EQ(compared, 400);
+}
+
+// The added-rows kernel's vector path (AVX-512 or AVX2 as built) equals its
+// scalar reference bit for bit: random rows and counts up to the most active
+// inputs, and rows at the int16 extremes, whose sums pass the int16 range
+// both ways and must saturate.
+TEST_CASE("nnue", "the added-rows kernel equals its scalar reference, saturation included") {
+  std::uint64_t rng = 2026110541;
+  std::vector<std::int16_t> pool(std::size_t{ContactMaxActive + 2} * NetHidden);
+  alignas(64) std::int16_t base[NetHidden], vec[NetHidden], ref[NetHidden];
+  std::vector<const std::int16_t*> rows(ContactMaxActive);
+  int saturated = 0;
+  for (int round = 0; round < 60; ++round) {
+    const bool extreme = round % 3 == 0;
+    for (auto& v : pool)
+      v = static_cast<std::int16_t>(extreme ? (splitmix_next(rng) % 2 ? 32767 : -32768)
+                                            : uniform(rng, -600, 600));
+    for (auto& v : base) v = static_cast<std::int16_t>(uniform(rng, -32768, 32767));
+    const int count = round < 3 ? round : uniform(rng, 0, ContactMaxActive);
+    for (int r = 0; r < count; ++r)
+      rows[r] =
+          pool.data() + std::size_t{static_cast<unsigned>(uniform(rng, 0, ContactMaxActive + 1))} * NetHidden;
+    sum_rows_saturated(base, rows.data(), count, vec);
+    sum_rows_saturated_scalar(base, rows.data(), count, ref);
+    CHECK_MSG(std::memcmp(vec, ref, sizeof vec) == 0, "round " << round << ", " << count << " rows");
+    for (int i = 0; i < NetHidden; ++i) saturated += ref[i] == 32767 || ref[i] == -32768;
+  }
+  CHECK(saturated > 1000);  // the extreme rounds reached both limits
+}
 
 }  // namespace forkeng::test

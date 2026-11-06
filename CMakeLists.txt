@@ -249,6 +249,7 @@ target_link_libraries(forkuci PUBLIC forksearch ${fork_threads} PRIVATE fork_pgo
 # FORK_EVALUATOR=nnue.
 add_library(forknnue STATIC
   src/eval/nnue/accumulator.cpp
+  src/eval/nnue/contacts.cpp
   src/eval/nnue/net_file.cpp)
 target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH})
 target_link_libraries(forknnue PUBLIC forkcore PRIVATE fork_pgo)
@@ -455,6 +456,8 @@ if(FORK_BUILD_TESTS)
     endif()
   endforeach()
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
+  # The repository (tests/nnue/ data files read at run time).
+  target_compile_definitions(fork_tests PRIVATE FORK_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
   # The smallest 7-man Syzygy pair, KPPPPPvK (deliverable 7's 7-piece test;
   # KB tools.md §6.9): downloaded once into .cache/ and pinned by SHA-256,

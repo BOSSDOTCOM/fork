@@ -3,6 +3,7 @@
 #include "eval/nnue/accumulator.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 
 #if defined(__AVX2__)
@@ -11,6 +12,7 @@
 
 #include "core/material.hpp"
 #include "eval/eval_scale.hpp"
+#include "eval/nnue/contacts.hpp"
 
 namespace forkeng {
 
@@ -119,7 +121,7 @@ void sum_perspective(const NetFile& net, Color perspective, Frame f, ForEach for
   return net.phase_table[game_phase(pos)];
 }
 
-#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
+#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7
 // sum over both halves (side to move first) of v * (v * w), v the clipped
 // value: S-512's and H-512's output, and each of XGR's experts.
 std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
@@ -309,8 +311,8 @@ bool add_exposure_rows(const NetFile& net, const Accumulator& acc, const Positio
       const Square s = pop_lsb(b);
       const Piece p = pos.piece_at(s);
       const Square seen = perspective == White ? s : s ^ 56;
-      const std::int16_t* w =
-          column(net, NetPieceSquares + 320 * (side_of(p) != perspective) + 64 * kind_of(p) + (seen ^ f.flip));
+      const std::int16_t* w = column(
+          net, NetPieceSquares + 320 * (side_of(p) != perspective) + 64 * kind_of(p) + (seen ^ f.flip));
       for (int i = 0; i < NetHidden; ++i) sum[i] += w[i];
     }
     for (int i = 0; i < NetHidden; ++i)
@@ -320,15 +322,41 @@ bool add_exposure_rows(const NetFile& net, const Accumulator& acc, const Positio
 }
 #endif
 
+#if FORK_NET_ARCH == 7
+// S512cl: the accumulator plus the contact and link rows (contacts.hpp), found
+// from the position and summed in 32 bits at every evaluation (no
+// incremental state yet: DESIGN.md §5.4, "S512cl"), held to the int16 range
+// in `out`. The net file bounds only the piece rows, and the output clips
+// each value to [0, QA], so holding the sum to int16 first changes nothing.
+template <bool Scalar>
+void add_contact_rows(const NetFile& net, const Accumulator& acc, const Position& pos, Accumulator& out) {
+  for (const Color perspective : {White, Black}) {
+    const Frame f = frame_of(net, perspective, pos.king_square(perspective));
+    std::int32_t inputs[ContactMaxActive];
+    const int n = contact_inputs(pos, perspective, f.flip, inputs);
+    const std::int16_t* rows[ContactMaxActive];
+    for (int i = 0; i < n; ++i) rows[i] = column(net, NetPieceSquares + inputs[i]);
+    if constexpr (Scalar)
+      sum_rows_saturated_scalar(acc.values[perspective], rows, n, out.values[perspective]);
+    else
+      sum_rows_saturated(acc.values[perspective], rows, n, out.values[perspective]);
+  }
+}
+#endif
+
 template <bool Scalar>
 int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& pos) {
 #if FORK_NET_ARCH == 1
   return Scalar ? output_layer_scalar(net, acc, pos.side_to_move())
                 : output_layer(net, acc, pos.side_to_move());
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7
 #if FORK_NET_ARCH == 6
   Accumulator summed;
   const Accumulator& a = add_exposure_rows(net, acc, pos, summed) ? summed : acc;
+#elif FORK_NET_ARCH == 7
+  Accumulator summed;
+  add_contact_rows<Scalar>(net, acc, pos, summed);
+  const Accumulator& a = summed;
 #else
   const Accumulator& a = acc;
 #endif
@@ -346,6 +374,54 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
 }
 
 }  // namespace
+
+void sum_rows_saturated_scalar(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                               std::int16_t* out) {
+  for (int i = 0; i < NetHidden; ++i) {
+    std::int32_t s = base[i];
+    for (int r = 0; r < count; ++r) s += rows[r][i];
+    out[i] = static_cast<std::int16_t>(std::clamp<std::int32_t>(s, -32768, 32767));
+  }
+}
+
+// The vector paths: each int32 lane adds at most ContactMaxActive + 1 values
+// of at most 32,768, far inside int32, then saturates to int16 as the scalar
+// reference clamps. AVX-512 widens 16 values per register and narrows with
+// signed saturation; AVX2 widens 8 per register and packs with signed
+// saturation, the 64-bit lanes then put back in order.
+#if defined(__AVX512BW__)
+void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                        std::int16_t* out) {
+  for (int i = 0; i < NetHidden; i += 16) {
+    __m512i s = _mm512_cvtepi16_epi32(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(base + i)));
+    for (int r = 0; r < count; ++r)
+      s = _mm512_add_epi32(
+          s, _mm512_cvtepi16_epi32(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(rows[r] + i))));
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(out + i), _mm512_cvtsepi32_epi16(s));
+  }
+}
+#elif defined(__AVX2__)
+void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                        std::int16_t* out) {
+  for (int i = 0; i < NetHidden; i += 16) {
+    const __m256i b = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(base + i));
+    __m256i lo = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b));
+    __m256i hi = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b, 1));
+    for (int r = 0; r < count; ++r) {
+      const __m256i w = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rows[r] + i));
+      lo = _mm256_add_epi32(lo, _mm256_cvtepi16_epi32(_mm256_castsi256_si128(w)));
+      hi = _mm256_add_epi32(hi, _mm256_cvtepi16_epi32(_mm256_extracti128_si256(w, 1)));
+    }
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(out + i),
+                        _mm256_permute4x64_epi64(_mm256_packs_epi32(lo, hi), 0xD8));
+  }
+}
+#else
+void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                        std::int16_t* out) {
+  sum_rows_saturated_scalar(base, rows, count, out);
+}
+#endif
 
 Frame frame_of([[maybe_unused]] const NetFile& net, Color perspective, Square own_king) {
   if constexpr (!NetMirrored) {

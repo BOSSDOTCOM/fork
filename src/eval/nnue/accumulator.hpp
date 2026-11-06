@@ -92,6 +92,16 @@ void advance_accumulator_scalar(const NetFile& net, const Accumulator& from, con
 int output_layer_scalar(const NetFile& net, const Accumulator& acc, Color stm);
 #endif
 
+// The added-rows kernel (S512cl's contact and link rows; compiled in every
+// build, for its equivalence test): out = base plus the `count` rows (each NetHidden
+// values), summed in 32 bits and held to the int16 range. The scalar
+// reference and the build's vector path (AVX-512 or AVX2 where compiled; the
+// scalar one otherwise) give the same values bit for bit.
+void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                        std::int16_t* out);
+void sum_rows_saturated_scalar(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                               std::int16_t* out);
+
 #if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
 // XGR's exposed pieces (S512+X's too): non-king pieces attacked by an enemy piece of a
 // lower class (pawn < knight = bishop < rook < queen < king), or attacked

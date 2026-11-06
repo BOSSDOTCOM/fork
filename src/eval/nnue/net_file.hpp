@@ -19,7 +19,7 @@
 // - Version 2 payload (tools/nnue/models.py): a 128-byte map block (32
 //   region bytes for the mirrored own-king cell rank * 4 + file - 4, 25
 //   phase-table bytes, zeros), the feature weights and biases as above, then
-//   per architecture: 2, 3, 6: output weights i16 [8][2H], biases i32 [8];
+//   per architecture: 2, 3, 6, 7: output weights i16 [8][2H], biases i32 [8];
 //   4: L1 i8 [8][16][H], biases i32 [8][16], L2 i16 [8][32][16], biases i32
 //   [8][32], L3 i16 [8][32], biases i32 [8], the output output_multiplier i64;
 //   5: side weights i16 [inputs][3], side biases i16 [3], two experts' i16
@@ -62,7 +62,7 @@ struct NetFile {
 #if FORK_NET_ARCH == 1
   alignas(64) std::int16_t out_weights[2 * NetHidden];
   std::int32_t out_bias = 0;
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7
   alignas(64) std::int16_t out_weights[NetBuckets][2 * NetHidden];
   std::int32_t out_bias[NetBuckets] = {};
 #elif FORK_NET_ARCH == 4

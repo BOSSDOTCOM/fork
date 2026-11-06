@@ -31,7 +31,13 @@ the first or last rank; for one kind, the higher attacker square; a queen's
 contact with a rook on a line or a bishop on a diagonal; a bishop's or a
 queen's with a pawn that attacks it back); links by the pair of pawn slots
 (side * 48 + frame square - 8), the lower first.
+
+    contacts.py lists EPD [--count N]   each position's inputs per perspective
+        ("FEN | side to move's | the other's": contacts, then links offset by
+        the contact count, each list sorted; tests/nnue/s512cl-contacts.txt)
 """
+import sys
+
 import chess
 
 KINDS = 5
@@ -160,3 +166,24 @@ def link_features(board, persp):
             if abs(qa % 8 - qb % 8) <= 1:
                 out.append(links[(a, b)])
     return sorted(out)
+
+
+def lists(board, persp):
+    return contact_features(board, persp) + [contact_count() + i for i in link_features(board, persp)]
+
+
+def main(argv):
+    if len(argv) < 2 or argv[0] != 'lists':
+        print('usage: contacts.py lists EPD [--count N]', file=sys.stderr)
+        return 2
+    count = int(argv[argv.index('--count') + 1]) if '--count' in argv else None
+    fens = [line.strip() for line in open(argv[1], encoding='utf-8') if line.strip() and not line.startswith('#')]
+    for fen in fens[:count]:
+        board = chess.Board(fen)
+        print(fen, '|', ' '.join(map(str, lists(board, board.turn))), '|',
+              ' '.join(map(str, lists(board, not board.turn))))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
