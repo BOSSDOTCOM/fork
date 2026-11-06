@@ -1467,3 +1467,15 @@ No engine or trainer source file was opened (bullet's operation is cited from bu
 | api.github.com/repos/jw1912/bullet/pulls/483 | bullet PR "Add QAT operation" (author jw1912, empty body) | 2026-11-05 | §5.6 |
 | https://asteri.sm/sitemap | Viridithas author's blog index | 2026-11-05 | no QAT post found |
 | bullet-internals.md §1.2 and §7 (this KB) | bullet's rounding rule and QAT operation at the pin | 2026-11-05 | §5.6 bullet support, Fork's needs |
+
+## Quiet-position selection (research-nnue-dataset-quiet-positions.md), 2026-11-06
+
+Only the paper was opened (no engine or trainer source, and none of the paper's references). Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| https://arxiv.org/abs/2412.17948 | arXiv abstract page: Tan and Watkinson Medina, "Study of the Proper NNUE Dataset", v1 2024-12-23, CC BY 4.0, cs.AI and cs.LG, 10 pages, 4 figures, DOI 10.48550/arXiv.2412.17948 | 2026-11-06 | header (citation, licence) |
+| https://arxiv.org/pdf/2412.17948v1 | full text, PDF v1 (read in full) | 2026-11-06 | §1 method, §2 results |
+| https://arxiv.org/html/2412.17948v1 | arXiv HTML rendering of v1 | 2026-11-06 | cross-check of the two margins and the distribution targets |
+| Fork repo, branch phase-4: src/datagen/self_play.hpp, tools/train/src/main.rs, tools/datagen/endgame_slice.py, docs/DESIGN.md §5.3 and §5.6, docs/ideas.md ideas 13, 45, 46 | Fork's own code and docs | 2026-11-06 | §3.2 pipeline facts, §3.1 plan context |
+| git grep over every local branch's docs/ and tools/, and this KB, for "better labels", "label filter", "label quality", "quiet position" | repo search | 2026-11-06 | §3.1: no written "better labels" experiment found |
