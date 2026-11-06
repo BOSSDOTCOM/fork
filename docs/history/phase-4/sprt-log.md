@@ -779,12 +779,13 @@ LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   "off" also preceded IIR's adoption (no depth beat "off" in its
   measurement, then +21.45 ± 5.98 Elo at STC and +26.25 ± 6.65 at LTC), so a
   score below "off" does not by itself predict the SPRT.
-- **Waiting on the owner:** the constant screen (before the commit that
-  sets the values) found the margin 80 an exact same-role match (Ethereal
-  12.50-13.00's ProbCut margin; also Xiphos); the reduction 5 matches as a
-  literal only (Fork's verification search is one ply deeper); the minimum
-  depth 9 has no same-role match. The test commit is held until the owner
-  decides on the margin.
+- The constant screen (before the commit that sets the values) found the
+  margin 80 an exact same-role match (Ethereal 12.50-13.00's ProbCut
+  margin; also Xiphos); the reduction 5 matches as a literal only (Fork's
+  verification search is one ply deeper); the minimum depth 9 has no
+  same-role match. **The owner kept 80 with a credit note** (2026-11-06,
+  ORIGINALITY.md on tier2/batch3; no finer grid), and the test commit
+  follows.
 
 ### 2026-11-06 threat-set-cheaper-vs-base (tier 2, T56: threat-aware ordering; in progress)
 
@@ -824,5 +825,5 @@ LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
 ```
 - Removing check relief cost about 3 Elo (−3.16 ± 2.86, the interval
   almost entirely below zero), so H1 (simplify it away) was not reached:
-  check relief stays on. The owner decides whether an undecided removal
-  test counts as "keep" or runs further.
+  check relief stays on. **Closed by the owner** (2026-11-06): check relief
+  stays on, and the filler is not run further.

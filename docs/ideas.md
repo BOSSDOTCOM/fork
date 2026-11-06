@@ -1232,7 +1232,12 @@ tuned by SPSA.
   | 7 | **threat-keyed correction and volatility tables** (a residual table keyed by the threat configuration; error magnitude scaling the pruning margins); an offline replay first | chess knowledge, novelty | 4-6 | 0 to +4 |
   | 8 | **stand-pat check under multiple threats** in quiescence (a new constant, measured on a wide grid) | chess knowledge | 4-6 | 0 to +4 |
 
-- **first experiments, with their rules** (declared here, before any run):
+- **first experiments, with their rules** (declared here, before any run;
+  **approved by the owner as ranked, 2026-11-06, with the exchange rate
+  first among these experiments (after the current SPRT queue: the threat
+  set, then ProbCut), and every go/kill rule kept as written except rule
+  5's, amended by the owner the same day**; DESIGN.md decisions log,
+  2026-11-06):
   1. Exchange rate: S512r2 against itself at 0.85x time, STC, about 4,000
      games on GitHub's runners (about ±8 Elo). It sets every design's
      go/kill; under 1.5 Elo per 1% nps, the 0.90 gate would be too strict
@@ -1256,8 +1261,10 @@ tuned by SPSA.
   5. Distillation and auxiliary targets (one Kaggle session; the relabelling
      by S512+X through jobctl): two seeds per arm; an arm is kept only if
      both seeds beat both control seeds beyond the spread with ≥ 0.3% lower
-     loss on the original labels, then an STC SPRT on [0, 5] (no
-     fixed-node screen: it cannot resolve the gain).
+     loss on the original labels, then a fixed-node screen and an STC
+     SPRT on [0, 5], as for every new network (owner, 2026-11-06; the
+     judge's proposal to skip the screen, which cannot resolve gains of
+     this size, was not adopted).
 - **novelty** (the judge's view, low confidence, UNVERIFIED): possibly new
   are threat-class head selection, a threat-configuration key for
   correction tables, and confining an input family to a column subset of
@@ -1287,4 +1294,5 @@ tuned by SPSA.
   (DESIGN.md §5.4).
 - **phase:** Phase 4.
 - **metric:** each experiment's rule above; then SPRTs.
-- **status:** designed, awaiting the owner's review (2026-11-06).
+- **status:** approved as ranked (owner, 2026-11-06); the exchange rate
+  runs first.
