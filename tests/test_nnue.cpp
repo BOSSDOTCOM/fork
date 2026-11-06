@@ -65,6 +65,11 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   net->inputs = NetPieceSquares * net->region_count + (NetExposure ? NetExposureRows : 0) +
                 (NetContacts ? NetContactInputs + NetLinkInputs : 0) + (NetLinks ? NetLinkInputs : 0);
   for (auto& w : net->ft_weights) w = static_cast<std::int16_t>(uniform(rng, -400, 400));
+  // S512+PP's link rows sit in the same int16 sums, up to 96 at once: within
+  // +-150 (2000 + 32 x 400 + 96 x 150 < 32767).
+  if constexpr (NetLinks)
+    for (int i = NetPieceSquares * NetHidden; i < (NetPieceSquares + NetLinkInputs) * NetHidden; ++i)
+      net->ft_weights[i] = static_cast<std::int16_t>(uniform(rng, -150, 150));
   for (auto& b : net->ft_bias) b = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
 #if FORK_NET_ARCH == 1
   for (auto& w : net->out_weights) w = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
@@ -192,6 +197,13 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   auto loud = random_net(2);
   loud->ft_bias[7] = 32000;
   rejects(write_net_file(*loud), "a first-layer unit beyond int16");
+#if FORK_NET_ARCH == 8
+  // One link weight that 96 links at once would take past int16 (bias and
+  // piece rows of unit 3 within their test bounds, 2000 + 32 x 400 + 96 x 300).
+  auto linked = random_net(4);
+  linked->ft_weights[(NetPieceSquares + 1000) * NetHidden + 3] = 300;
+  rejects(write_net_file(*linked), "a link weight that 96 links would take beyond int16");
+#endif
 #if FORK_NET_ARCH == 1
   auto wide = random_net(3);
   for (auto& w : wide->out_weights) w = 32000;
@@ -269,10 +281,6 @@ TEST_CASE("nnue", "every move kind's delta matches a refresh") {
 #if FORK_NET_ARCH == 5
         CHECK_MSG(std::memcmp(child.side[perspective], fresh.side[perspective], sizeof fresh.side[0]) == 0,
                   pos.fen());
-#endif
-#if FORK_NET_ARCH == 8
-        CHECK_MSG(std::memcmp(child.links[perspective], fresh.links[perspective], sizeof fresh.links[0]) == 0,
-                  pos.fen() << " (links)");
 #endif
         ++stepped;
       }
@@ -711,44 +719,6 @@ TEST_CASE("nnue", "a move's link changes equal the difference of the full link l
   }
   CHECK(moves > 1000);
   CHECK(changed > 500);
-}
-
-// S512+PP's kernels' vector paths equal their scalar references bit for bit:
-// the 32-bit link sums advanced by random row counts, and the saturating add
-// with sums far past the int16 range both ways.
-TEST_CASE("nnue", "the wide-sum kernels equal their scalar references, saturation included") {
-  std::uint64_t rng = 2026110542;
-  std::vector<std::int16_t> pool(std::size_t{LinkMaxActive + 2} * NetHidden);
-  alignas(64) std::int32_t src[NetHidden], vec[NetHidden], ref[NetHidden];
-  alignas(64) std::int16_t base[NetHidden], out_vec[NetHidden], out_ref[NetHidden];
-  std::vector<const std::int16_t*> sub(LinkMaxActive), add(LinkMaxActive);
-  int saturated = 0;
-  for (int round = 0; round < 60; ++round) {
-    const bool extreme = round % 3 == 0;
-    for (auto& v : pool)
-      v = static_cast<std::int16_t>(extreme ? (splitmix_next(rng) % 2 ? 32767 : -32768)
-                                            : uniform(rng, -600, 600));
-    for (auto& v : src) v = uniform(rng, -2000000, 2000000);
-    for (auto& v : base) v = static_cast<std::int16_t>(uniform(rng, -32768, 32767));
-    const int subs = round < 3 ? round : uniform(rng, 0, LinkMaxActive);
-    const int adds = round < 3 ? 2 - round : uniform(rng, 0, LinkMaxActive);
-    const auto pick = [&] {
-      return pool.data() + std::size_t{static_cast<unsigned>(uniform(rng, 0, LinkMaxActive + 1))} * NetHidden;
-    };
-    for (int r = 0; r < subs; ++r) sub[r] = pick();
-    for (int r = 0; r < adds; ++r) add[r] = pick();
-    advance_wide(src, sub.data(), subs, add.data(), adds, vec);
-    advance_wide_scalar(src, sub.data(), subs, add.data(), adds, ref);
-    CHECK_MSG(std::memcmp(vec, ref, sizeof vec) == 0, "round " << round << ", " << subs << " - " << adds << " +");
-    std::memcpy(vec, src, sizeof vec);  // in place, as the stack may advance
-    advance_wide(vec, sub.data(), subs, add.data(), adds, vec);
-    CHECK_MSG(std::memcmp(vec, ref, sizeof vec) == 0, "round " << round << " in place");
-    add_saturated(base, ref, out_vec);
-    add_saturated_scalar(base, ref, out_ref);
-    CHECK_MSG(std::memcmp(out_vec, out_ref, sizeof out_vec) == 0, "round " << round << ": the saturating add");
-    for (int i = 0; i < NetHidden; ++i) saturated += out_ref[i] == 32767 || out_ref[i] == -32768;
-  }
-  CHECK(saturated > 1000);  // both limits reached
 }
 
 }  // namespace forkeng::test

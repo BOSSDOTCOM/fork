@@ -17,7 +17,8 @@
 //   Black). Mirrored architectures also flip the files (XOR 7) when P's own
 //   king stands on files a-d, and add 768 times the region of P's mirrored
 //   king square (a Frame). XGR's and S512+X's exposure inputs follow the
-//   piece rows.
+//   piece rows. S512+PP's link inputs follow the piece rows in the same sums:
+//   a move changes them only when a pawn moves, is captured or promotes.
 // - A perspective's frame changes only when its own king moves across the
 //   d/e line or into another region; then that perspective is recomputed
 //   from the board, every other update is incremental.
@@ -43,11 +44,6 @@ struct alignas(64) Accumulator {
   std::int16_t values[2][NetHidden];  // indexed by perspective colour
 #if FORK_NET_ARCH == 5
   std::int16_t side[2][4];  // XGR's gate and linear lanes (lane 3 unused)
-#endif
-#if FORK_NET_ARCH == 8
-  // S512+PP: the active link rows' sums in 32 bits (no bound on the link
-  // weights is needed), added to `values` with saturation at evaluation.
-  alignas(64) std::int32_t links[2][NetHidden];
 #endif
 };
 
@@ -112,17 +108,6 @@ void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* row
 void sum_rows_saturated_scalar(const std::int16_t* base, const std::int16_t* const* rows, int count,
                                std::int16_t* out);
 
-// S512+PP's kernels (compiled in every build, for their equivalence tests):
-// the 32-bit link sums advanced by rows subtracted and added (dst may be
-// src), and the piece sums plus the link sums held to the int16 range.
-// Each has a scalar reference giving the same values bit for bit.
-void advance_wide(const std::int32_t* src, const std::int16_t* const* sub, int subs,
-                  const std::int16_t* const* add, int adds, std::int32_t* dst);
-void advance_wide_scalar(const std::int32_t* src, const std::int16_t* const* sub, int subs,
-                         const std::int16_t* const* add, int adds, std::int32_t* dst);
-void add_saturated(const std::int16_t* base, const std::int32_t* wide, std::int16_t* out);
-void add_saturated_scalar(const std::int16_t* base, const std::int32_t* wide, std::int16_t* out);
-
 #if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
 // XGR's exposed pieces (S512+X's too): non-king pieces attacked by an enemy piece of a
 // lower class (pawn < knight = bishop < rook < queen < king), or attacked
@@ -156,11 +141,6 @@ class FeatureStack {
     FeatureDelta delta;
     Frame frame[2];
     bool computed[2] = {false, false};
-#if FORK_NET_ARCH == 8
-    // The ply whose acc.links holds this ply's link sums, per perspective: a
-    // move that changes no pawn shares its parent's instead of copying them.
-    int links_at[2] = {0, 0};
-#endif
   };
   Entry entries_[MaxPly + 1];
 };

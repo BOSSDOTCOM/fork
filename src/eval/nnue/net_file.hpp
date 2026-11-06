@@ -29,12 +29,12 @@
 // - The reader accepts a file only if every field matches what this build
 //   computes with, the checksum matches, and the weights keep every sum in
 //   range: no first-layer unit's (or side lane's) |bias| + 32 * its largest
-//   |piece weight| (+ 30 * its largest |exposure weight|, XGR) exceeds the
+//   |piece weight| (+ 30 * its largest |exposure weight|, XGR; + 96 * its
+//   largest |link weight|, S512+PP) exceeds the
 //   int16 range, and the output layers' worst cases stay within int32 (int64
-//   for the squared outputs' sums). S512+X's exposure rows, S512cl's contact
-//   and link rows and S512+PP's link rows need no bound: they are summed in
-//   32 bits (accumulator.cpp) and held to int16 only when added to the piece
-//   sums. So the
+//   for the squared outputs' sums). S512+X's exposure rows and S512cl's
+//   contact and link rows need no bound: they are summed in 32 bits
+//   (accumulator.cpp) and held to int16 only when added to the piece sums. So the
 //   integer arithmetic of every path (scalar and SIMD) never overflows, and
 //   all paths give identical results.
 #pragma once

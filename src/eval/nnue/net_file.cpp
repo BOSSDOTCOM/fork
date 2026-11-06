@@ -17,6 +17,11 @@ namespace {
 constexpr char Magic[8] = {'F', 'O', 'R', 'K', 'N', 'E', 'T', 0};
 constexpr int MaxActivePieces = 32;
 constexpr int MaxExposed = 30;  // every piece but the kings
+// The most pawn links one position can hold (S512+PP): the largest
+// sum over files of C(n, 2) + n * n(next file), for at most 16 pawns and 6 per
+// file, is 96 (4, 6 and 6 pawns on three adjacent files), found by trying every
+// distribution.
+constexpr int MaxActiveLinks = 96;
 
 std::uint32_t get_u32(const std::uint8_t* p) {
   return std::uint32_t{p[0]} | std::uint32_t{p[1]} << 8 | std::uint32_t{p[2]} << 16 |
@@ -60,9 +65,10 @@ int largest(const std::int16_t* table, int width, int j, int from, int to) {
 bool first_layer_in_range(const std::int16_t* weights, const std::int16_t* bias, int width, int piece_rows,
                           int rows, std::string& error) {
   for (int j = 0; j < width; ++j) {
+    constexpr int MaxAdded = NetLinks ? MaxActiveLinks : MaxExposed;  // the rows after the piece rows
     const std::int64_t worst = std::abs(int{bias[j]}) +
                                MaxActivePieces * largest(weights, width, j, 0, piece_rows) +
-                               MaxExposed * largest(weights, width, j, piece_rows, rows);
+                               MaxAdded * largest(weights, width, j, piece_rows, rows);
     if (worst > std::numeric_limits<std::int16_t>::max()) {
       error = "first-layer unit " + std::to_string(j) + " can leave the int16 range";
       return false;
@@ -74,10 +80,10 @@ bool first_layer_in_range(const std::int16_t* weights, const std::int16_t* bias,
 // The overflow bounds of the header comment; false names the first broken one.
 bool sums_in_range(const NetFile& net, std::string& error) {
   const int piece_rows = NetPieceSquares * net.region_count;
-  // S512+X, S512cl and S512+PP sum their added rows in 32 bits: only the
-  // piece rows are bounded.
-  const int bounded_rows =
-      NetArchitecture == 6 || NetArchitecture == 7 || NetArchitecture == 8 ? piece_rows : net.inputs;
+  // S512+X and S512cl sum their added rows in 32 bits: only the piece rows are
+  // bounded. S512+PP keeps its link rows in the int16 accumulator, so they are
+  // bounded too (MaxActiveLinks of them).
+  const int bounded_rows = NetArchitecture == 6 || NetArchitecture == 7 ? piece_rows : net.inputs;
   if (!first_layer_in_range(net.ft_weights, net.ft_bias, NetHidden, piece_rows, bounded_rows, error))
     return false;
 #if FORK_NET_ARCH == 1
