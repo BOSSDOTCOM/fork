@@ -3,8 +3,9 @@
 """The default network's retrain on g3s2 (owner, 2026-11-06; DESIGN.md §5.6
 item 7), on Kaggle. Its architecture is chosen by S512+PP's evidence: S512+PP
 (s512pp) only if S512+PP passed its STC SPRT against S512r2, plain S-512
-(s512) otherwise; ARCH is set to the decided one before the push and the
-kernel refuses to run without it.
+(s512) otherwise. It passed (run 42294907752, +32.67 +/- 10.48), so ARCH is
+s512pp; S512+PP was then promoted to the default (owner, 2026-11-06), so
+the candidate must beat S512+PP.
 
 Two recipes, two seeds each, declared before the run:
 - warm: a warm start at an initial LR of 0.0001, dropped tenfold after 180
@@ -31,7 +32,7 @@ Validation: g3s2-val.vf, shared by every run.
 Scoring (summary['recipes']): each recipe by the mean of its seeds'
 best-checkpoint losses on g3s2-val.vf; the better recipe's best seed is the
 candidate (then the parity chain, the endgame acceptance test and its STC
-SPRT against S512r2, locally). A difference within 4e-5 (S-512's measured
+SPRT against S512+PP, the default network, locally). A difference within 4e-5 (S-512's measured
 seed spread from scratch) is recorded as unresolved. The run layout is
 retrain.py's: /kaggle/working/result/<arch>-<recipe>-s<seed>/, the summary
 result/retrain.json.
@@ -46,7 +47,7 @@ import time
 import traceback
 
 COMMIT = 'nets/s512pp'      # replaced by the pushed commit's hash before the push
-ARCH = None                 # 's512pp' or 's512': set from S512+PP's STC SPRT before the push
+ARCH = 's512pp'             # S512+PP passed its STC SPRT against S512r2 (run 42294907752, +32.67 +/- 10.48): the owner's gate
 SEEDS = (1, 2)
 RECIPES = {'warm': {'lr': 0.0001, 'lr_step': 180, 'init': True},
            'scratch': {'lr': 0.001, 'lr_step': 180, 'init': False}}
