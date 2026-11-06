@@ -3409,7 +3409,7 @@ outside Emscripten too); the Node runs above are the WASM tests. Whether
 CI gains an Emscripten job (cached SDK) is decided with the owner once the
 build exists.
 
-### 5.6 The Phase 4 checklist and its order (owner, 2026-11-06; the order awaits the owner's review)
+### 5.6 The Phase 4 checklist and its order (owner, 2026-11-06; the order approved the same day, item 7 changed)
 
 Everything Phase 4 still owes, nothing cut, each item with its status, kept
 current as items move (the decisions log records each owner decision once;
@@ -3430,8 +3430,9 @@ results**:
 2. Keeping exact TT entries (`UseTtKeepExact`, off; inconclusive at its
    cap, −0.6 ± 7.5 at 4,800 games, on [−3, 0]).
 3. B-3, the shallower fail-high re-search (b001d1e; reverted, inconclusive
-   at its cap on [0, 3]), with idea 29 (how often unconfirmed root fail
-   highs hold; its measurement informs the retest).
+   at its cap on [0, 3]), retested alongside idea 29's measurement (how
+   often unconfirmed root fail highs hold; the owner confirmed this
+   reading, 2026-11-06).
 4. The root fail-high fix (f0a9caf; rejected at STC, −14.6 ± 10.8, reverted
    in 1fb18f4; idea 29 reopens it).
 RfpMargin 40 (rejected in favour of 80 by its gauntlet data, idea 34) and
@@ -3441,8 +3442,8 @@ every Phase 3 margin go to the SPSA retune instead of SPRTs.
 
 | item | status (2026-11-06) |
 |---|---|
-| More data generations | g3 (500 M), g3b, g3c, g3d sealed; **g3e running** (10 threads since 10:45 AM EST, the default engine, seed 20261110, target 477 M); the next snapshot (g3s2) and a retrain of the default on it follow g3e |
-| Endgame slice and the standing acceptance test (idea 45) | **on hold** (owner, 2026-11-05); the 900-position check exists (tools/nnue/endgame_check.py) and is run for each new net; the KRK conversion test found 3 of 20 drawn by the fifty-move rule |
+| More data generations | g3 (500 M), g3b, g3c, g3d sealed; **g3e running** (10 threads since 10:45 AM EST, the default engine, seed 20261110, target 477 M); the next snapshot (g3s2) and a retrain of the default on it follow g3e (order item 7) |
+| Endgame slice and the standing acceptance test (idea 45) | **in the next snapshot** (owner, 2026-11-06; lifted from its hold): the Syzygy-labelled slice of at most 5 pieces goes into g3s2, and the 900-position check (tools/nnue/endgame_check.py) becomes the standing acceptance test for the retrained default (targets to be set); the KRK conversion test found 3 of 20 drawn by the fifty-move rule |
 | S512+PP evidence (idea 40's L1 first step) | R = 1 (608 links) **training on Kaggle** (fork-s512pp, two seeds, the owner's recorded exception to the speed gate at 0.895); then parity, the endgame check and a fixed-node screen against S512r2 (800k nodes, 1,600 games); an STC SPRT only if the screen exceeds about +30 Elo; reported before any promotion |
 | Threat inputs (S512cl, idea 41) | **held by the speed gate** (0.195 of S512r2's nps, recomputed per evaluation); speed work in order: incremental updates, 8-bit rows with clipping-aware training, fewer features; its own update cost measured when its turn comes |
 | Idea 40's structure system | L1 (a pawn-and-king network cached by structure key): after S512+PP's evidence. L2 (tables): the pawn drift table's LTC was undecided (not adopted; the owner decides whether the further tables go ahead); the pawn-structure history is built in batch 4. L3 (root planner), L4 (teaching targets), L5 (proof set): planned; the two gates (near-tie frequency at the root, L1's signal against results) are measured first |
@@ -3455,8 +3456,8 @@ every Phase 3 margin go to the SPSA retune instead of SPRTs.
 | item | status (2026-11-06) |
 |---|---|
 | Tier 2, batch 3 | rising RFP: H0 (off). Threat-aware ordering (cheaper-attacker): **STC SPRT running** (stage 0 merged, −11.30 ± 10.67). ProbCut (9 / 5 / 80): measured, test branch ready, **next in the queue** |
-| Tier 2, batch 4 | built behind switches with placeholders (tier2/batch4, bench unchanged): razoring, quiet history pruning, bad-capture futility, fifty-move eval scaling (its formula an exact Berserk match: the owner's decision pending), the history malus balance, double extensions, node types with their LMR uses, the pawn-structure history, upcoming-repetition detection; each needs its measurement (a wide pre-declared grid), constant screen and STC SPRT |
-| Further correction tables | non-pawn per side, minor, continuation, threat, material: queued after the pawn drift table, whose LTC was undecided (owner's decision pending) |
+| Tier 2, batch 4 | built behind switches with placeholders (tier2/batch4, bench unchanged): razoring, quiet history pruning, bad-capture futility, fifty-move eval scaling (a placeholder, ClockDampingSpan 200, its formula an exact Berserk match: measured first on a wide pre-declared grid not centred on the current values, the measured result kept and any remaining match credited; owner, 2026-11-06), the history malus balance, double extensions, node types with their LMR uses, the pawn-structure history, upcoming-repetition detection; each needs its measurement (a wide pre-declared grid), constant screen and STC SPRT |
+| Further correction tables | non-pawn per side, minor, continuation, threat, material: **deferred to the gated items, after the SPSA retune** (owner, 2026-11-06); the pawn drift table stays off (undecided at LTC) |
 | Continuation histories in LMR (idea 42) | planned (KB T58); measured and SPRTed like the LMR history term |
 | Fractional depth (idea 43) | designed (plan only); a search refactor before the SPSA retune |
 | The re-validation queue | recorded above; GitHub filler |
@@ -3467,7 +3468,7 @@ every Phase 3 margin go to the SPSA retune instead of SPRTs.
 
 | item | status (2026-11-06) |
 |---|---|
-| The default engine's speed sprint | round 1: +4.0% (C4, committed 5ba7d0d); C1 parked for TCEC's x86-64-v4 builds; C2, C3 not kept. Round 2 (a refresh cache for mirror-frame changes, a SIMD `select_best`, both perspectives updated in one pass) built behind flags, bench identical; its A/B waits for a quiet machine (g3e paused) |
+| The default engine's speed sprint | round 1: +4.0% (C4, committed 5ba7d0d); C1 parked for TCEC's x86-64-v4 builds; C2, C3 not kept. Round 2 (a refresh cache for mirror-frame changes −5.3%, a SIMD `select_best` +1.0%, both perspectives in one pass −0.6%, the last two together −0.2%): nothing kept (archive/sprint-candidates-2). Cumulative: +4.0% |
 
 **Idea 23's long run**: the harness is built (tools/evolve/); the long run
 is planned late in Phase 4, after the search changes settle.
@@ -3476,30 +3477,31 @@ is planned late in Phase 4, after the search changes settle.
 
 | item | status |
 |---|---|
-| LTC confirmations owed | none outstanding today (IIR confirmed); each reduction or pruning change adopted at STC from here on (the threat set, ProbCut, batch 4) gets its LTC confirmation; the pawn drift table's undecided LTC awaits the owner |
+| LTC confirmations owed | none outstanding today (IIR confirmed); each reduction or pruning change adopted at STC from here on (the threat set, ProbCut, batch 4) gets its LTC confirmation; the pawn drift table stays off (undecided at LTC; owner, 2026-11-06) |
 | Final gauntlet | after the last adoption (GitHub's gauntlet workflow, as milestone 1's) |
 | Audit-2 and its fixes | not started (an audit in audit-1's form after the last search and network change) |
 | Phase-end checklist (CLAUDE.md), merge to main, tag `phase-4`, summary | at the end |
 
-**Proposed order** (by expected Elo per unit of effort, dependencies kept;
-estimates UNVERIFIED):
+**The order** (by expected Elo per unit of effort, dependencies kept;
+approved by the owner on 2026-11-06 with item 7 changed; estimates
+UNVERIFIED):
 
 | # | item | why here | estimate |
 |---|---|---|---|
 | 1 | The current SPRT queue: the threat set, then ProbCut (GitHub) | running and ready | 0.5-1 day |
 | 2 | S512+PP R = 1's evaluation (Kaggle running; parity, endgame check, fixed-node screen) | in flight; decides idea 40's L1 | 1 day |
-| 3 | Speed sprint round 2's A/B (a quiet hour, g3e paused) | sure Elo for little effort | 0.5 day |
+| 3 | Speed sprint round 2's A/B (a quiet hour, g3e paused): **done** 2026-11-06, nothing kept | sure Elo for little effort | 0.5 day |
 | 4 | The speed-to-Elo measurement (GitHub, about 4,000 games) | resets the speed gate; idea 46's first | 0.5 day |
 | 5 | Batch 4: measurements (local, beside g3e at low priority), screens, then STC SPRTs one at a time | nine built items, each a possible few Elo | 4-6 days of GitHub |
 | 6 | Idea 46's kill tests (attack-map pricing, residual study), then distillation with auxiliary targets (Kaggle), fixed-node screen, STC | no speed cost if it works | 2-3 days |
-| 7 | g3e sealed, the next snapshot, a retrain of the default on it (Kaggle), its tests | more data; the labeller policy needs the search settled first | 3-4 days (g3e alone about 2 days at 10 threads) |
-| 8 | Continuation histories in LMR (idea 42), the further correction tables (on the owner's word) | tier 2's remaining gains | 2-3 days |
+| 7 | **First, S512r3's non-improvement diagnosed** on a shared validation set: a warm start against training from scratch, and the current schedule against a longer one with a lower final LR. Then g3e sealed, the next snapshot g3s2 **with the Syzygy endgame slice**, the default retrained with the winning recipe (Kaggle), its tests with the endgame acceptance test | more data and a better recipe; the labeller policy needs the search settled first | 4-6 days (g3e alone about 2 days at 10 threads) |
+| 8 | Continuation histories in LMR (idea 42) | tier 2's remaining gain | 1-2 days |
 | 9 | The re-validation queue (as GitHub filler throughout) | whenever GitHub would idle | filler |
 | 10 | Fractional depth (idea 43) | a refactor; must precede the SPSA retune | 2-3 days |
 | 11 | The full re-validation (removal round) | after the last feature is in | 3-5 days of GitHub |
 | 12 | SPSA retune, STC then LTC | after the search and the network settle | 4-7 days |
 | 13 | Idea 23's long run | late, on the settled search | 3+ days |
-| 14 | Idea 40's later layers, S512cl's speed work, the endgame slice (when the owner lifts its hold), QAT, the rest of idea 46 | larger efforts, gated by their own measurements | as gated |
+| 14 | Idea 40's later layers, S512cl's speed work, the further correction tables (after SPSA), QAT, the rest of idea 46 | larger efforts, gated by their own measurements | as gated |
 | 15 | LTC confirmations owed, the final gauntlet, audit-2 and its fixes, the phase-end checklist, merge to main, tag, summary | the close | 3-4 days |
 
 ## 6. Decisions log
@@ -3590,6 +3592,7 @@ estimates UNVERIFIED):
 | 2026-11-05 | **The job supervisor and the run-ID ledger (owner).** Two SPRT drivers believed stopped (their tool tasks were stopped, which ended only a wrapper shell) kept running: the check-relief filler dispatched stages 7-9 while the rising-RFP driver, waiting for an idle GitHub, never dispatched, and its stage 0 was reported from the filler's run. No result was merged into the wrong SPRT (the driver's meta check), but attribution and process control failed. Built before any SPRT resumes: `tools/jobs/jobctl.py` (one lock per job type; the whole process tree contained, in a Windows Job Object the command joins before it runs, or a POSIX session plus an environment marker; `stop` ends the tree, gently first, and verifies none is left before releasing the lock; the keeper lives until the whole tree has ended, so a descendant outliving its command is still stopped); `tools/jobs/ledger.py` (every dispatched run with its inputs; an after-the-fact attribution goes in as an import with its evidence); `sprt_run.sh` runs only under the supervisor, takes its run by sprt.yml's new run title, records it, and merges only ledger-recorded stages. Tests: tools/jobs/test_jobctl.py (7, Windows and WSL) and tools/github/test_sprt_run.sh (29 checks); planted faults (a root-only kill, the old newest-run rule) fail them. |
 | 2026-11-06 | **The reconciliation of two chats' instructions (owner).** Each decision recorded once, here. (1) **S512+PP's speed gate:** trained at 0.90 or more of the default's nps by the identical-tree method, 0.95 the goal reported beside it; revisited after the speed-to-Elo measurement (idea 46); final adoption by SPRT (§5.4). (2) **The speed gate's method:** the identical-tree method (bench rounds, every new-input weight zero) whenever the tree can be held identical; fixed time per position otherwise, e.g. synthetic nets (§5.4). (3) **The SPRT queue:** the threat set (running), then ProbCut (d9-r5-m80, STC [0, 3]; the margin 80 kept with credit, ORIGINALITY.md; the switch stays off until its SPRT passes), then the speed-to-Elo measurement. (4) **Docs-only pull requests** with green CI may be merged without asking (standing rule); PR #8's merge (0e7247b) ratified. (5) **Data generation:** g3e starts on 10 threads as soon as the quiet session of 2026-11-06 ends (the current default engine, the standing settings, a new seed), the measurement queue being empty. (6) **Idea 46's training experiment** (distillation and auxiliary targets): a fixed-node screen first, then STC, as for every new network (its rule 5 amended). (7) **Idea 46's order:** the speed-to-Elo measurement is first among its experiments, after the current SPRT queue. (8) **Performance-only settings** (S512+PP's cache size, prefetch depth): the higher median nps ratio wins, the smaller setting if the difference is within the 3% noise rule; declared before Part A's results were seen. Also: the AVX-512/VNNI output layer (speed sprint C1) is parked, not dropped (the SPRT shards build x86-64-v3 only), to be revisited for TCEC's x86-64-v4 builds; check relief stays on and the filler is closed (undecided at its cap: not passed, so the removal is not accepted). |
 | 2026-11-06 | **The re-validation queue and the Phase 4 checklist (owner).** Four network-era retests of bootstrap-era results, recorded as GitHub filler after the current SPRT queue, each STC [0, 3] with S512r2 as the default: B-4 (the TT-refined stand-pat), keeping exact TT entries, B-3 with idea 29, and the root fail-high fix; RfpMargin 40 and every Phase 3 margin go to the SPSA retune. The full Phase 4 checklist, each item's status and a proposed order are in §5.6 (the order awaits the owner's review). |
+| 2026-11-06 | **§5.6's order approved, with changes (owner).** Item 7: S512r3's non-improvement is diagnosed first on a shared validation set (warm start against from scratch; the current schedule against a longer one with a lower final LR), then the default is retrained with the winning recipe on the next snapshot, which includes the Syzygy endgame slice (idea 45, lifted from its hold), with the endgame acceptance test. The fifty-move scaling's formula, a placeholder, is measured on a wide grid not centred on it before its SPRT, the result kept and any remaining match credited. The further correction tables are deferred to the gated items, after the SPSA retune; the pawn drift table stays off. B-3 is retested alongside idea 29's measurement. |
 
 ## 7. Performance doctrine (governs every phase)
 

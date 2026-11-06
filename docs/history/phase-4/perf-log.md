@@ -13,8 +13,10 @@ round-to-round spread (the harness's rule), and is kept only then (owner,
 **Profile** (the default engine, S512r2 with IIR, phase-4 at 684bac6; perf
 cpu-clock at 4 kHz over 64 UHO positions, every 4,000th line of
 `UHO_Lichess_4852_v1.epd`, `go movetime 250` each after `ucinewgame`, Hash
-16, 1 thread; self time, inlined code counted in its caller; shares of
-Fork's samples):
+16, 1 thread; self time by source function as `llvm-addr2line -f` names
+the sampled address, so inlined code is counted under the inlined function
+(`TtEntry::bound`, for example, is the inlined read of a TT entry, not a
+call; corrected 2026-11-06); shares of Fork's samples):
 
 | area | share | largest functions |
 |---|---|---|
@@ -51,3 +53,24 @@ first maximum, so the order of moves, and bench, are unchanged.
 
 **Cumulative speedup of the kept changes: +4.0% median, +3.3% best (C4
 alone).**
+
+### Round 2 (2026-11-06, the owner's "new candidates from the profile")
+
+On phase-4 with C4 (9f368d6) as the base, each behind a build flag on
+archive/sprint-candidates-2, every bench 14180299 / 4cf778ff753861f7; a
+debug build with all three passed the consistency, search, ordering,
+pruning and nnue suites (its every incremental accumulator checked against
+a refresh); 10 interleaved rounds each on a quiet machine (g3e and the
+SPRT driver suspended):
+
+| candidate | median | verdict |
+|---|---|---|
+| E1: a per-thread slot per perspective and file flip holding that frame's last sums and their pieces, so a frame change (the king across the d/e line) applies only the pieces that differ instead of summing every piece (the refresh-cache concept publicly described for NNUE engines, "Finny tables") | −5.3% | **slower**: not kept |
+| E2: `select_best`'s scan on AVX2 (the largest score 16 at a time, then the first index holding it: the same first maximum) for lists of 16 or more | +1.0% | no significant difference: not kept |
+| E4: both perspectives advanced in one pass when both need the same plies | −0.6% | no significant difference: not kept |
+| E2 + E4 together (owner: every candidate below the threshold, combined) | −0.2% (noise threshold 5.1% in that run) | no significant difference: not kept |
+
+Round 2 keeps nothing; **the cumulative speedup stays +4.0% (C4)**. E1's
+loss likely comes from copying 1 KB per slot at every frame change and the
+larger FeatureStack, against refreshes that were only 2.5% of the time
+(UNVERIFIED, not profiled).

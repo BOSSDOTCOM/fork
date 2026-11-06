@@ -1169,7 +1169,7 @@ tuned by SPSA.
 ## 45. Simple endings: a tablebase-labelled data slice, a standing endgame check, conversion
 
 - **type:** ELO (the data slice), TOOLING (the check and the conversion test).
-- **idea** (owner, 2026-11-05; **on hold**, the owner, the same day): three parts.
+- **idea** (owner, 2026-11-05; put on hold the same day; **lifted 2026-11-06**: the slice and the acceptance test go with the next snapshot): three parts.
   1. **Endgame slice** for the next training snapshot: random legal
      positions of at most 5 pieces (KRK, KQK, KPK and the common 4-5 piece
      endings), labelled by their Syzygy WDL, a small fixed share of the
@@ -1210,7 +1210,7 @@ tuned by SPSA.
 - **related:** idea 11 (TB boundary data), idea 12 (endgame conversion).
 - **metric:** the endgame check's misjudged counts against targets (to be
   set), the conversion rate, then the net's promotion test.
-- **status:** on hold (owner, 2026-11-05).
+- **status:** in the next snapshot (owner, 2026-11-06: lifted from its hold): the slice goes into g3s2, and the check becomes the standing acceptance test for the retrained default (DESIGN.md §5.6, order item 7).
 
 ## 46. Threat knowledge at a low speed cost: the design brainstorm
 
