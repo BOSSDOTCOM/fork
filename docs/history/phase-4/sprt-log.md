@@ -576,3 +576,73 @@ LLR: -3.72 (-2.94, 2.94) [0.00, 5.00] nElo: H0 accepted
   −34.42 ± 11.88), and XGR-512 failed at LTC (above). No game was played
   for it at LTC. It stays a retest candidate after the post-network
   search retune (DESIGN.md §5.4).
+
+### 2026-11-02 ltc-drift-vs-base (tier 2, T32: the pawn drift table, correction history)
+
+- Base `2d582fc` (phase-4: S512r2 with IIR on), test `0342ad6` (branch
+  tier2/drift: the pawn structure key, the drift table with the measured
+  constants DriftWeightTotal 256, DriftWeightCap 4, DriftLimit 300, and
+  `use_pawn_drift` on). Bounds [0, 3] nElo, **40+0.4, Hash 64 MB**
+  (straight to LTC per Testing setup), x86-64-v3 on both sides, Syzygy
+  3-4-5, GitHub shards (16 per stage, 1,664 games per stage, cap 9,984
+  games), driven by tools/github/sprt_run.sh.
+- Stages 0-5: runs 41484476694, 41506184505, 41519311035, 41532210496,
+  41544978779, 41555370610. After each stage (cumulative): +4.59 ± 9.19,
+  +0.84 ± 6.41, −0.35 ± 5.26, −0.94 ± 4.51, −1.09 ± 4.05, then the cap.
+  Result: **undecided at the 9,984-game cap**:
+```
+Shards: 96 (done); pairs 4992, games 9984 (9984 finished, time losses 0, abnormal 0)
+Elo: -0.35 +/- 3.72, nElo: -0.64 +/- 6.82
+Ptnml(0-2): [62, 1224, 2447, 1180, 79]
+LLR: -0.53 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+```
+- Not adopted: a test that ends without a verdict counts as not passed
+  (Testing setup: the change is shelved, the baseline stays), so
+  `use_pawn_drift` stays off and tier2/drift is not merged. The interval
+  (nElo −7.5 to +6.2) leaves little room for the gain the bounds asked
+  for; the owner decides whether the further correction tables, queued
+  after this result, go ahead.
+
+### 2026-11-03 ltc-iir-on-vs-off (tier 2, T26: internal iterative reduction's LTC confirmation)
+
+- Base `0f62af5` (branch ltc/iir-off: phase-4 with `use_no_move_reduction`
+  off), test `2d582fc` (phase-4: S512r2 with IIR on, adopted on its STC
+  pass above). Non-regression bounds [−3, 0] nElo, **40+0.4, Hash 64 MB**,
+  x86-64-v3 on both sides, Syzygy 3-4-5, GitHub shards (16 per stage,
+  1,664 games per stage, cap 9,984 games), driven by
+  tools/github/sprt_run.sh (owner, 2026-11-02: the LTC queue's third entry).
+- Stages (Elo, nElo, LLR after each): 0 (run 41738319103) +25.52 ± 9.48,
+  +45.13 ± 16.69, 1.93; 1 (run 41748641433) H1. Result: **H1 accepted**
+  after stage 1:
+```
+Shards: 32 (done); pairs 1664, games 3328 (3328 finished, time losses 0, abnormal 0)
+Elo: 26.25 +/- 6.65, nElo: 46.80 +/- 11.80
+Ptnml(0-2): [17, 312, 790, 493, 52]
+LLR: 4.00 (-2.94, 2.94) [-3.00, 0.00] nElo: H1 accepted
+```
+- Confirmed: IIR stays on. Its LTC gain (+26.25 ± 6.65) is at least its
+  STC one (+21.45 ± 5.98). With this result the LTC queue of 2026-11-02 is
+  done (XGR-512 failed, the drift table undecided, AF-S shelved).
+
+### 2026-11-05 lmrh-24000-vs-base (tier 2, T16: the LMR history term)
+
+- Base `684bac6` (phase-4: S512r2, IIR on), test `cf614e0` (branch
+  sprt/lmr-history: the same with `use_lmr_history` on and the measured
+  LmrHistoryDivisor 24000; bench 14,141,348). Bounds [0, 3] nElo, 8+0.08,
+  Hash 16 MB, Syzygy 3-4-5, GitHub shards, driven by
+  tools/github/sprt_run.sh.
+- Stages (Elo, nElo, LLR after each): 0 (run 42113566721) −13.90 ± 10.10,
+  −23.47 ± 17.02, −0.99; 1 (run 42116312709) −12.49 ± 7.09, −21.23 ±
+  12.04, −1.81; 2 (run 42119021732) −9.12 ± 5.78, −15.51 ± 9.83, −2.03;
+  3 (run 42121703916) H0. Result: **H0 accepted** after stage 3:
+```
+Shards: 64 (done); pairs 3200, games 6400 (6400 finished, time losses 0, abnormal 0)
+Elo: -10.81 +/- 5.01, nElo: -18.38 +/- 8.51
+Ptnml(0-2): [104, 830, 1496, 701, 69]
+LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
+```
+- Not adopted: `use_lmr_history` stays off and tier2/lmr-history is not
+  merged as a change of the default. It agrees with its measurement, where
+  no divisor beat "off" (DESIGN.md, Search constants). The branch's
+  ordering-score refactor and test fix stay available to the later items
+  built on it (tier2/batch4).

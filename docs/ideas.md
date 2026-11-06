@@ -941,6 +941,9 @@ tuned by SPSA.
   - **L1 Knowledge:** a small learned network on pawns and kings only,
     its output cached by `pawn_structure_key` and added to the main
     network's evaluation.
+    **First step (owner, 2026-11-05): pawn-pair inputs in the main
+    network** (idea 41's architecture; KB nnue-inputs.md §2): structure
+    knowledge learned inside the main network before any separate one.
   - **L2 Memory:** the pawn correction table (the pawn drift table, T32,
     in progress: its LTC SPRT started 2026-11-02) and the pawn-structure
     history (T12).
@@ -971,3 +974,151 @@ tuned by SPSA.
 - **earliest phase:** Phase 4 (the pawn structure key exists since
   2026-11-02, branch tier2/drift).
 - **status:** untested (planned 2026-11-02); L2's pawn table in progress.
+
+## 41. S-512 with Fork's own threat and pawn-pair inputs
+
+- **type:** ELO (a network architecture: an entry like the bake-off's;
+  its name and every new identifier screened at build time).
+- **idea** (owner, 2026-11-05; replaces the S512+X plan): S-512 plus two
+  input families of Fork's own design, from the concepts in the KB only
+  (nnue-inputs.md §1-2, no engine's indexing or constants): threat inputs
+  (attacker-victim pairs, with Fork's own redundancy removal: dropping
+  pairs implied by others, mutual duplicates and impossible pairs) and
+  pawn-pair inputs (pairs of pawns describing the structure's geometry; the
+  first step of idea 40's L1).
+- **phase:** Phase 4.
+- **metric:** as the bake-off's entries: trained on the current snapshot,
+  a fixed-node screen first, then an STC SPRT against the default network.
+- **runtime cost:** possible (larger first layer, incremental threat
+  updates; nps reported with the SPRT).
+- **sources:** Fork KB nnue-inputs.md §1-2 (kb 962f1ab, 5cd96c3) and the
+  sources it lists (ORIGINALITY.md, 2026-11-05).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05).
+
+## 42. Continuation histories as inputs to the LMR history term
+
+- **type:** ELO (flags set at build time).
+- **idea** (owner, 2026-11-05): the LMR history term reads continuation
+  histories as inputs. Note: the term as built (T16, `use_lmr_history`)
+  already read the quiet ordering score, which sums the butterfly history
+  and the reply and follow tables (1- and 2-ply continuations); it failed
+  its STC SPRT at its measured divisor (H0, -10.81 +/- 5.01 Elo,
+  2026-11-05). The plan is therefore a new form: each table as its own
+  input with its own weight, and deeper continuations, each measured
+  before its SPRT (KB search-techniques.md §3.36, T58, which has an SPRT
+  plan step by step).
+  **The LMR history term's follow-up** (owner, 2026-11-05): measured the
+  same way as the term was (tools/lmr_history_measure.py's method: the
+  25 M-node labels, both budgets, a rule and a wide grid declared before
+  the runs), then its SPRT.
+- **phase:** Phase 4.
+- **metric:** a measurement with a pre-declared rule, then an STC SPRT.
+- **runtime cost:** possible (small).
+- **sources:** Fork KB §3.36 (kb 5fac98e) and its sources (ORIGINALITY.md).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05).
+
+## 43. Fractional depth
+
+- **type:** TOOLING first (a search refactor with bench unchanged at the
+  whole-ply equivalent), then ELO for what it enables.
+- **idea** (owner, 2026-11-05): depth in sub-ply units, so reductions and
+  extensions can be fractional (KB §3.35, T57: units, TT depth and its
+  comparisons, thresholds, extensions), done **before the SPSA retuning**
+  so the tuner sees smooth parameters.
+- **phase:** Phase 4, before the post-network retune.
+- **metric:** the refactor: bench node count and signature unchanged at the
+  whole-ply setting, the full check; then SPRTs of the fractional uses.
+- **runtime cost:** none for the refactor itself (to be confirmed with
+  bench/ab.py).
+- **sources:** Fork KB §3.35 (kb 024fb9e) and its sources (ORIGINALITY.md).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05); design below (owner, 2026-11-05:
+  plan only, no code yet).
+- **Design** (Fork's own, from the KB entry's concepts):
+  - **Unit:** depth is held in units of 1/64 ply (`OnePly = 64`): a power
+    of two, fine enough for SPSA to move a reduction in small steps
+    (Fork's LMR table already computes its value in fixed point before the
+    final division to whole plies), and far inside int32 at MaxPly (250 x
+    64 = 16,000).
+  - **What stays whole plies:** the TT stores depth / OnePly, rounded down,
+    in its existing byte (the entry layout and its replacement unchanged;
+    the KB's TT-sharing pitfall avoided, and a cutoff still needs a stored
+    depth of at least the node's whole plies, so it stays conservative);
+    the UCI `depth` the engine reports and `go depth N` (N x OnePly); the
+    iteration counter; the history bonus by depth (whole plies until a
+    measurement says otherwise); every depth threshold of the parameter
+    table (`RfpMaxDepth` and the like stay in plies, compared as
+    depth <= X x OnePly).
+  - **Per-ply formulas** (RFP's and futility's margins, the singular test's
+    margin, the null move's depth) read depth / OnePly while the uses are
+    unconverted, so they compute exactly what they do now.
+  - **The first fractional uses, in order, each behind its own switch,
+    measured with a rule declared before its runs and then SPRTed:** (1) the
+    base LMR reduction in units (the table's value without its final
+    rounding; the KB's strongest evidence is fractional LMR); (2) the LMR
+    adjustments as fractional amounts (the check relief, the cut-node and
+    PV-trace steps, idea 42's continuation terms); (3) the null move's depth;
+    (4) extensions (the singular extension's +1 as a measured fraction).
+- **Conversion plan, behaviour identical until each use is measured:**
+  1. One refactor: negamax's depth and every child depth in units
+     (depth - OnePly + extension x OnePly - reduction x OnePly), the
+     quiescence search below one ply, thresholds and formulas through the
+     whole-ply reads above. Every depth stays a multiple of OnePly, so
+     **bench is unchanged, node count and signature**, and so is every test;
+     the full check and bench/ab.py (no slowdown beyond the noise floor)
+     confirm it before the commit.
+  2. Tests added: a randomized check that the refactored search equals the
+     whole-ply one node for node over the bench positions at several depths
+     (both builds kept for the comparison during the change); the TT depth
+     rounding; `go depth` and the reported depth.
+  3. Each fractional use then lands as its own switch, off: bench
+     unchanged until a switch is turned on after its measurement and SPRT,
+     when the reference is recomputed in that commit.
+  4. Timing: steps 1-3 for the first use (fractional LMR) come **before the
+     post-network SPSA retune**, so the tuner sees the smooth parameters.
+- **Pitfalls kept in view** (KB §3.35): rounding at every threshold (a node
+  at 5.5 plies counts as 5 for a whole-ply limit unless a use says
+  otherwise), TT depth rounding, and results that depend on time control
+  (each use's SPRT at STC, and LTC where the rules ask).
+
+## 44. Quantization-aware training
+
+- **type:** TOOLING (the training pipeline), measured through the networks
+  it trains.
+- **idea** (owner, 2026-11-05): QAT in Fork's training pipeline (KB
+  nnue-design.md §5.6: simulated rounding and clipping in training,
+  straight-through gradients), so the trained float network and its
+  integer form agree; small for the all-int16 S-512 family, more for later
+  int8 layers.
+- **phase:** Phase 4.
+- **metric:** the quantised network's loss and its parity against the float
+  network, then the network's promotion test.
+- **runtime cost:** none (training only).
+- **sources:** Fork KB nnue-design.md §5.6 (kb 02912f5) and its sources
+  (ORIGINALITY.md).
+- **earliest phase:** Phase 4.
+- **status:** in progress: built behind an option, not yet run (2026-11-05).
+- **Built** (branch nets/s512cl, tools/train): `fork-train --qat` (train,
+  eval, check; the S-512 family: S-512, H-512, S512+X, S512cl; refused for
+  the others): the forward pass uses each weight and bias rounded to the
+  grid of Fork's integer file (bullet's `faux_quantise`: 255 for the first
+  layer, 64 for the output weights, 255 x 64 for their biases; half away
+  from zero, as the save list rounds), the gradient passed through
+  unchanged. Rounding the weights is the whole of Fork's quantization for
+  these architectures (the accumulator is an exact sum of integer weights;
+  the activation clips in integer units), so the QAT loss is the integer
+  network's apart from the output layer's truncating divisions. The saved
+  file is unchanged. Checked: the graphs build and their save lists match
+  (fork-train check, S512 and S512cl, with and without --qat); the CPU
+  build cannot run a graph, so the first run is on Kaggle.
+- **Validation run, planned for Kaggle** (one session, two GPUs, after the
+  S512cl training): S-512 warm-started from S512r2 on g2s1 + g3s1, 40
+  superbatches at a low learning rate, runs A1 and A2 (seeds 1, 2) without
+  and B1 and B2 with `--qat`. Each final net is then measured both ways with
+  `--superbatches 0` (the initial validation loss of the float graph and of
+  the QAT graph, the latter being the quantized net's). The rule, declared
+  now: QAT is worth keeping if both B runs' quantized losses are below both A
+  runs' by more than the larger of the two pairs' seed spreads; then a fixed-node match of the
+  two quantized nets decides whether it enters the training settings.
