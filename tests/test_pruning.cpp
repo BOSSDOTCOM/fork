@@ -401,7 +401,7 @@ TEST_CASE("pruning", "no-move reduction: still correct, and it changes the searc
 // relief never applied, leaves the tree as it is with the switch off).
 TEST_CASE("pruning", "rising-eval RFP margin: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_rising_rfp);  // off until measured and SPRTed
+  CHECK(SearchSwitches{}.use_rising_rfp);  // on: its SPRT's test side
   SearchSwitches on;
   on.use_rising_rfp = true;
   fx.searcher->switches = on;
