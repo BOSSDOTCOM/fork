@@ -1297,14 +1297,38 @@ control results alone.
   all extensions (T27-T30, and T38-T41 if ever tried), IIR (T26), TT-PV
   uses in pruning and reductions (T19, T16's TT-PV adjustment), and capture
   history (T11; Weiss #428 failed STC and passed LTC).
-- **Everything else**: STC first. An STC pass is accepted for changes that
-  don't alter tree shape (ordering scores, speed, eval); a change to
-  pruning, reductions or extensions is also confirmed at LTC (KB tests
-  rule). **An STC failure gets an LTC retest before it is rejected**, and
-  the LTC result decides. One recorded exception (owner, 2026-10-27):
-  rv-failhigh (the root fail-high fix) was rejected on STC alone; its
-  question is reopened by the measurement plan of ideas.md idea 29.
+- **Everything else**: STC only (owner, 2026-11-06: LTC confirmations
+  only for the list above). The STC verdict decides: a pass is adopted, a
+  failure rejected, with no LTC confirmation or retest. Until 2026-11-06 a
+  change to pruning, reductions or extensions was also confirmed at LTC
+  and an STC failure was retested at LTC before rejection (one recorded
+  exception, owner, 2026-10-27: rv-failhigh, the root fail-high fix, was
+  rejected on STC alone; its question is reopened by ideas.md idea 29).
 - Every result, including rejections, goes in the SPRT log.
+
+**The streamlined standard (owner, 2026-11-06; for batch 4 and everything
+after it).**
+- **A search constant is chosen by a short SPRT ladder**, not by a
+  label-and-sweep measurement: 2-3 sensible values (each with its
+  reasoning recorded in the constants table; the placeholder may be one),
+  each a quick STC test of the feature at that value against the default
+  with the feature off (an SPRT on [0, 3] capped at 2 stages, 3,200 games;
+  one that reaches H0 sooner drops out); the value with the best Elo point
+  estimate is kept (within half the estimates' error bars of each other,
+  the more cautious one), then the feature's normal STC SPRT runs with it
+  on fresh openings. The ladder counts as Fork's own measurement for the
+  originality rule (non-negotiable 6; the constant screen still runs
+  before the commit that sets the value, matches recorded and credited as
+  before); final values are refined later by the SPSA retune. The
+  fifty-move scaling's label-and-sweep measurement, already running, is
+  finished; batch 4's other declared measurement specs are not run.
+- **No seed-noise matches**: the noise level is known (a net's seeds
+  differ by about 4e-5 in validation loss, docs/history/phase-4).
+- **The re-validation queue runs only as idle filler**: when GitHub would
+  otherwise sit idle, never ahead of new work.
+- **Kept as they are**: SPRTs; the parity chain and netcheck; the endgame
+  acceptance test; data verification before a part is sealed; the full CI
+  before any merge to main; the fixed-node screen for new networks.
 
 **Search bench** (replaces the perft bench as `fork bench` and in
 `tests/bench.ref`). It searches a fixed set of positions to a fixed depth,
@@ -3465,11 +3489,11 @@ every Phase 3 margin go to the SPSA retune instead of SPRTs.
 | item | status (2026-11-06) |
 |---|---|
 | Tier 2, batch 3 | rising RFP: H0 (off). Threat-aware ordering (cheaper-attacker): **STC SPRT running** (stage 0 merged, −11.30 ± 10.67). ProbCut (9 / 5 / 80): measured, test branch ready, **next in the queue** |
-| Tier 2, batch 4 | built behind switches with placeholders (tier2/batch4, bench unchanged): razoring, quiet history pruning, bad-capture futility, fifty-move eval scaling (a placeholder, ClockDampingSpan 200, its formula an exact Berserk match: measured first on a wide pre-declared grid not centred on the current values, the measured result kept and any remaining match credited; owner, 2026-11-06), the history malus balance, double extensions, node types with their LMR uses, the pawn-structure history, upcoming-repetition detection; each needs its measurement (a wide pre-declared grid), constant screen and STC SPRT |
+| Tier 2, batch 4 | built behind switches with placeholders (tier2/batch4, bench unchanged): razoring, quiet history pruning, bad-capture futility, fifty-move eval scaling (a placeholder, ClockDampingSpan 200, its formula an exact Berserk match: measured first on a wide pre-declared grid not centred on the current values, the measured result kept and any remaining match credited; owner, 2026-11-06), the history malus balance, double extensions, node types with their LMR uses, the pawn-structure history, upcoming-repetition detection; each gets its constants from a short SPRT ladder, then its constant screen and STC SPRT (the streamlined standard, owner, 2026-11-06; the fifty-move scaling's label-and-sweep measurement, already running, is finished first) |
 | Further correction tables | non-pawn per side, minor, continuation, threat, material: **deferred to the gated items, after the SPSA retune** (owner, 2026-11-06); the pawn drift table stays off (undecided at LTC) |
 | Continuation histories in LMR (idea 42) | planned (KB T58); measured and SPRTed like the LMR history term |
 | Fractional depth (idea 43) | designed (plan only); a search refactor before the SPSA retune |
-| The re-validation queue | recorded above; GitHub filler |
+| The re-validation queue | recorded above; idle filler only, never ahead of new work (owner, 2026-11-06) |
 | The full re-validation (§5.2, Quality control 6) | owed at Phase 4's end: every search feature switched off in turn, SPRT [−3, 0]; switches folded into plain code only after it |
 | SPSA retune | owed: every eval-dependent margin and the Phase 3 margins (RfpMargin 40 among the candidates), at STC, then at LTC; after the search changes settle |
 
@@ -3486,7 +3510,7 @@ is planned late in Phase 4, after the search changes settle.
 
 | item | status |
 |---|---|
-| LTC confirmations owed | none outstanding today (IIR confirmed); each reduction or pruning change adopted at STC from here on (the threat set, ProbCut, batch 4) gets its LTC confirmation; the pawn drift table stays off (undecided at LTC; owner, 2026-11-06) |
+| LTC confirmations owed | none outstanding today (IIR confirmed); LTC confirmations only for the LTC-sensitive list (Testing setup; owner, 2026-11-06), so of the queued items only batch 4's double extensions and its TT-PV use go to LTC; the pawn drift table stays off (undecided at LTC; owner, 2026-11-06) |
 | Final gauntlet | after the last adoption (GitHub's gauntlet workflow, as milestone 1's) |
 | Audit-2 and its fixes | not started (an audit in audit-1's form after the last search and network change) |
 | Phase-end checklist (CLAUDE.md), merge to main, tag `phase-4`, summary | at the end |
@@ -3604,6 +3628,7 @@ UNVERIFIED):
 | 2026-11-06 | **§5.6's order approved, with changes (owner).** Item 7: S512r3's non-improvement is diagnosed first on a shared validation set (warm start against from scratch; the current schedule against a longer one with a lower final LR), then the default is retrained with the winning recipe on the next snapshot, which includes the Syzygy endgame slice (idea 45, lifted from its hold), with the endgame acceptance test. The fifty-move scaling's formula, a placeholder, is measured on a wide grid not centred on it before its SPRT, the result kept and any remaining match credited. The further correction tables are deferred to the gated items, after the SPSA retune; the pawn drift table stays off. B-3 is retested alongside idea 29's measurement. |
 | 2026-11-06 | **Item 7 becomes the retrain itself (owner).** The separate S512r3 diagnosis is dropped (archived unrun). The default is retrained on g3s2 with the endgame slice, in the S512+PP architecture only if S512+PP passes an STC SPRT against S512r2, which runs only if its fixed-node screen exceeds about +30 Elo (a screen above zero but below +30: evidence for idea 40 and an LTC candidate, the retrain in plain S-512; clarified by the owner the same day), else plain S-512, never launched before that result; two recipes side by side, two seeds each: a warm start at 0.0001 then the usual drop, and from scratch on the current schedule, scored by the mean best loss on a shared validation set; the better recipe's best seed goes through parity, the endgame acceptance test and its SPRT against S512r2; the recipe result is recorded (§5.6, item 7). |
 | 2026-11-06 | **The Fork Control Center, and its decisions (owner).** A Windows desktop window (`tools/control_center/`, tkinter, no other dependencies; launched from a desktop shortcut) over the job supervisors, the SPRTs and GitHub runs, Kaggle training, the networks and gauntlets, the sealed data, the machine and §5.6; everything read-only except data generation: Start (the next part by the labeller policy, through the WSL supervisor), Stop & seal (`jobctl.py stop`, then a seal job that copies the complete games, runs `verify_games.py` and `upload_batch.py seal`, and keeps every file if verification fails), an optional auto-stop, and Windows kept awake while a part runs. Decided: (1) **the disk margin is policy** (§5.3 deliverable 2, "Disk margin"); (2) **the next part (after g3e) starts from a fresh PGO build of phase-4 including 5ba7d0d** (select_best's register change, +4.0% nps, bench identical), as the labeller policy requires for any adopted change, rather than g3e's 684bac6 binary; (3) its test suite joins `scripts/check.sh`'s tool tests (the Python suite in every mode, `test_start_part.sh` on Linux in "all"). A rehearsal re-sealed g3b from WSL into scratch folders with the real verify_games.py: every data field equal to data/manifests/g3b.json. Names screened (ORIGINALITY.md). |
+| 2026-11-06 | **Testing streamlined (owner; the new standard, Testing setup).** Search constants for batch 4 and everything after it are chosen by a short SPRT ladder (2-3 sensible values, quick STC tests capped at 2 stages, the best kept), then the feature's normal SPRT; the ladder counts as Fork's own measurement for the originality rule, SPSA refines later; the running fifty-move measurement is finished, batch 4's other declared measurement specs are not run. Seed-noise matches are dropped. The re-validation queue runs only as idle filler. LTC confirmations only for the LTC-sensitive list (Testing setup, "Straight to LTC"); for everything else the STC verdict decides. Kept: SPRTs, parity and netcheck, the endgame acceptance test, data verification before sealing, CI before merges to main, the fixed-node screen for new networks. |
 
 ## 7. Performance doctrine (governs every phase)
 
