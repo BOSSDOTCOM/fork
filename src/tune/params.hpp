@@ -39,7 +39,7 @@
   X(ForcedMoveFraction, 8, 4, 16, 1)      \
   X(RfpMaxDepth, 6, 3, 12, 1)             \
   X(RfpMargin, 80, 40, 160, 6)            \
-  X(RfpRisingRelief, 40, 5, 320, 16)      \
+  X(RfpRisingRelief, 25, 12, 50, 2)       \
   X(NullMinDepth, 3, 1, 6, 1)             \
   X(NullSurplusPerPly, 300, 150, 600, 23) \
   X(NullSurplusPliesMax, 2, 0, 4, 1)      \
