@@ -499,11 +499,13 @@ TEST_CASE("pruning", "capture probe: still correct, and it changes the search") 
 // probe's own searches change the tree even if it never cuts). White's rook
 // can take the undefended queen, with two pawns each left on the board
 // (constructed; checked by tools/check_search_positions.py). A zero-window
-// search at depth 7 (above RFP's depth limit, below the no-move reduction's)
-// with beta one above White's static eval, so the null move does not apply
-// and the queen's capture (SEE 900) passes the probe's SEE filter, stores
-// the node at the probe's depth, 7 - CaptureProbeReduction, as a lower bound
-// with the capture as its move; without the probe, at the node's own depth.
+// search at the probe's minimum depth (above RFP's depth limit; the no-move
+// reduction switched off in both arms, so the node keeps that depth) with
+// beta one above White's static eval, so the null move does not apply and
+// the queen's capture (SEE 900) passes the probe's SEE filter, stores the
+// node at the probe's depth, the depth less CaptureProbeReduction, as a lower
+// bound with the capture as its move; without the probe, at the node's own
+// depth.
 // Without the pawns S512r2 scored the bare rook ending after the capture at
 // about 0 cp, below the bar, and the probe rightly let the node be searched.
 TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the probe's depth") {
@@ -511,15 +513,17 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
     PruningFixture fx;
     SearchSwitches s;
     s.use_capture_probe = probe;
+    s.use_no_move_reduction = false;
     fx.searcher->switches = s;
     Position pos;
     CHECK(pos.set_fen("4k3/pp6/8/3q4/8/8/PP1R4/4K3 w - - 0 1"));
     const int beta = static_eval(pos) + 1;
-    const int score = fx.searcher->probe_zero_window(pos, beta, 7, fx.stop);
+    const int depth = CaptureProbeMinDepth;
+    const int score = fx.searcher->probe_zero_window(pos, beta, depth, fx.stop);
     CHECK_MSG(score >= beta, "probe " << probe << ": beta " << beta << ", score " << score);
     TtHit hit{};
     CHECK(fx.table.fetch(pos.key(), hit));
-    CHECK_MSG(hit.depth == (probe ? 7 - CaptureProbeReduction : 7),
+    CHECK_MSG(hit.depth == (probe ? depth - CaptureProbeReduction : depth),
               "probe " << probe << ": depth " << hit.depth);
     if (probe) CHECK(hit.move == pos.parse_uci("d2d5") && hit.bound == TtBound::Lower);
   }

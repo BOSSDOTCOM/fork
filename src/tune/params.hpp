@@ -60,9 +60,9 @@
   X(SingularEntrySlack, 3, 0, 6, 1)       \
   X(SingularMarginPerPly, 6, 3, 12, 1)    \
   X(NoMoveReduceMinDepth, 8, 2, 10, 1)    \
-  X(CaptureProbeMinDepth, 6, 2, 12, 1)    \
-  X(CaptureProbeReduction, 3, 2, 6, 1)    \
-  X(CaptureProbeMargin, 240, 40, 640, 30) \
+  X(CaptureProbeMinDepth, 9, 4, 18, 1)    \
+  X(CaptureProbeReduction, 5, 2, 10, 1)   \
+  X(CaptureProbeMargin, 80, 40, 160, 6)   \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 8, 1)              \
