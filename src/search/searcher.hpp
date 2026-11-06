@@ -168,8 +168,8 @@ struct SearchQuota {
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_rising_rfp, UseRisingRfp, false)                 \
-  X(use_threat_buckets, UseThreatBuckets, false)         \
-  X(use_cheaper_threats, UseCheaperThreats, false)       \
+  X(use_threat_buckets, UseThreatBuckets, true)          \
+  X(use_cheaper_threats, UseCheaperThreats, true)        \
   X(use_capture_probe, UseCaptureProbe, false)
 
 struct SearchSwitches {

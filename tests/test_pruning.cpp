@@ -426,7 +426,7 @@ TEST_CASE("pruning", "rising-eval RFP margin: still correct, and it changes the 
 // leaves the tree as it is with the switch off).
 TEST_CASE("pruning", "threat buckets: still correct, and they change the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_threat_buckets);  // off until SPRTed
+  CHECK(SearchSwitches{}.use_threat_buckets);  // on: its SPRT's test side
   SearchSwitches on;
   on.use_threat_buckets = true;
   fx.searcher->switches = on;
@@ -451,7 +451,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // leaves the any-attack tree).
 TEST_CASE("pruning", "cheaper threats: still correct, and they change the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_cheaper_threats);  // off until measured
+  CHECK(SearchSwitches{}.use_cheaper_threats);  // on: its SPRT's test side
   SearchSwitches cheaper;
   cheaper.use_threat_buckets = cheaper.use_cheaper_threats = true;
   fx.searcher->switches = cheaper;
@@ -466,6 +466,7 @@ TEST_CASE("pruning", "cheaper threats: still correct, and they change the search
   CHECK(legal.contains(fx.search(kiwipete, depth).best));
   SearchSwitches any;
   any.use_threat_buckets = true;
+  any.use_cheaper_threats = false;
   CHECK_MSG(fx.tree_sizes(cheaper, depth) != fx.tree_sizes(any, depth),
             "the cheaper-attacker set left all three trees as the any-attack set's");
 }
