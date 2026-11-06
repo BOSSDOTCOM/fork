@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -61,13 +62,14 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   }
   for (int p = 0; p < 25; ++p)
     net->phase_table[p] = static_cast<std::uint8_t>(NetPhasePicked ? p * 8 / 25 : 0);
-  net->inputs = NetPieceSquares * net->region_count + (NetExposure ? NetExposureRows : 0);
+  net->inputs = NetPieceSquares * net->region_count + (NetExposure ? NetExposureRows : 0) +
+                (NetContacts ? NetContactInputs + NetLinkInputs : 0) + (NetLinks ? NetLinkInputs : 0);
   for (auto& w : net->ft_weights) w = static_cast<std::int16_t>(uniform(rng, -400, 400));
   for (auto& b : net->ft_bias) b = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
 #if FORK_NET_ARCH == 1
   for (auto& w : net->out_weights) w = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
   net->out_bias = uniform(rng, -100000, 100000);
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
   for (auto& row : net->out_weights)
     for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -128, 128));
   for (auto& b : net->out_bias) b = uniform(rng, -100000, 100000);
@@ -267,6 +269,10 @@ TEST_CASE("nnue", "every move kind's delta matches a refresh") {
 #if FORK_NET_ARCH == 5
         CHECK_MSG(std::memcmp(child.side[perspective], fresh.side[perspective], sizeof fresh.side[0]) == 0,
                   pos.fen());
+#endif
+#if FORK_NET_ARCH == 8
+        CHECK_MSG(std::memcmp(child.links[perspective], fresh.links[perspective], sizeof fresh.links[0]) == 0,
+                  pos.fen() << " (links)");
 #endif
         ++stepped;
       }
@@ -627,6 +633,122 @@ TEST_CASE("nnue", "the added-rows kernel equals its scalar reference, saturation
     for (int i = 0; i < NetHidden; ++i) saturated += ref[i] == 32767 || ref[i] == -32768;
   }
   CHECK(saturated > 1000);  // the extreme rounds reached both limits
+}
+
+// S512+PP's link inputs from the pawns alone equal the reference's links
+// (tools/nnue/contacts.py, the same file's link block), ascending.
+TEST_CASE("nnue", "the link inputs from the pawns equal the Python reference's") {
+  std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/s512cl-contacts.txt");
+  CHECK_MSG(in.good(), "tests/nnue/s512cl-contacts.txt is missing");
+  int compared = 0, nonempty = 0;
+  for (std::string line; std::getline(in, line);) {
+    const std::size_t a = line.find('|'), b = line.find('|', a + 1);
+    if (a == std::string::npos || b == std::string::npos) continue;
+    Position pos;
+    CHECK_MSG(pos.set_fen(line.substr(0, a)), line.substr(0, a));
+    for (int k = 0; k < 2; ++k) {
+      std::istringstream is(k == 0 ? line.substr(a + 1, b - a - 1) : line.substr(b + 1));
+      std::vector<std::int32_t> want;
+      for (std::int32_t x; is >> x;)
+        if (x >= NetContactInputs) want.push_back(x - NetContactInputs);
+      const Color perspective = k == 0 ? pos.side_to_move() : ~pos.side_to_move();
+      const Square seen =
+          perspective == White ? pos.king_square(perspective) : pos.king_square(perspective) ^ 56;
+      std::int32_t out[LinkMaxActive];
+      const int n = link_inputs(pos.pieces(White, Pawn), pos.pieces(Black, Pawn), perspective,
+                                (seen & 7) < 4 ? 7 : 0, out);
+      const std::vector<std::int32_t> got(out, out + n);
+      CHECK_MSG(std::is_sorted(got.begin(), got.end()), line.substr(0, a));
+      std::sort(want.begin(), want.end());
+      CHECK_MSG(got == want, line.substr(0, a) << (k == 0 ? " (side to move)" : " (the other side)"));
+      nonempty += n > 0;
+      ++compared;
+    }
+  }
+  CHECK_EQ(compared, 400);
+  CHECK(nonempty > 200);
+}
+
+// S512+PP's incremental link change equals the difference of the full lists
+// before and after each move, along random games from the perft suite
+// (captures of pawns, promotions and en passant among the moves), both
+// perspectives in both frames.
+TEST_CASE("nnue", "a move's link changes equal the difference of the full link lists") {
+  int moves = 0, changed = 0;
+  for (const auto& sp : perft_suite()) {
+    for (std::uint64_t seed = 1; seed <= 6; ++seed) {
+      Position pos;
+      pos.set_fen(sp.fen);
+      std::uint64_t rng = seed * 104729 + moves;
+      for (int ply = 0; ply < 60; ++ply) {
+        MoveList legal;
+        generate<GenMode::Legal>(pos, legal);
+        if (legal.size() == 0) break;
+        const Move m = legal[splitmix_next(rng) % legal.size()];
+        const Bitboard before[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
+        pos.make(m);
+        const Bitboard after[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
+        for (const Color perspective : {White, Black})
+          for (const int flip : {0, 7}) {
+            std::int32_t was[LinkMaxActive], now[LinkMaxActive], removed[LinkMaxActive], added[LinkMaxActive];
+            const int a = link_inputs(before[White], before[Black], perspective, flip, was);
+            const int b = link_inputs(after[White], after[Black], perspective, flip, now);
+            std::vector<std::int32_t> want_removed, want_added;
+            std::set_difference(was, was + a, now, now + b, std::back_inserter(want_removed));
+            std::set_difference(now, now + b, was, was + a, std::back_inserter(want_added));
+            int subs = 0, adds = 0;
+            link_changes(before, after, perspective, flip, removed, subs, added, adds);
+            std::vector<std::int32_t> got_removed(removed, removed + subs), got_added(added, added + adds);
+            std::sort(got_removed.begin(), got_removed.end());
+            std::sort(got_added.begin(), got_added.end());
+            CHECK_MSG(got_removed == want_removed && got_added == want_added,
+                      pos.fen() << " (after the move), flip " << flip);
+            changed += subs + adds > 0;
+          }
+        ++moves;
+      }
+    }
+  }
+  CHECK(moves > 1000);
+  CHECK(changed > 500);
+}
+
+// S512+PP's kernels' vector paths equal their scalar references bit for bit:
+// the 32-bit link sums advanced by random row counts, and the saturating add
+// with sums far past the int16 range both ways.
+TEST_CASE("nnue", "the wide-sum kernels equal their scalar references, saturation included") {
+  std::uint64_t rng = 2026110542;
+  std::vector<std::int16_t> pool(std::size_t{LinkMaxActive + 2} * NetHidden);
+  alignas(64) std::int32_t src[NetHidden], vec[NetHidden], ref[NetHidden];
+  alignas(64) std::int16_t base[NetHidden], out_vec[NetHidden], out_ref[NetHidden];
+  std::vector<const std::int16_t*> sub(LinkMaxActive), add(LinkMaxActive);
+  int saturated = 0;
+  for (int round = 0; round < 60; ++round) {
+    const bool extreme = round % 3 == 0;
+    for (auto& v : pool)
+      v = static_cast<std::int16_t>(extreme ? (splitmix_next(rng) % 2 ? 32767 : -32768)
+                                            : uniform(rng, -600, 600));
+    for (auto& v : src) v = uniform(rng, -2000000, 2000000);
+    for (auto& v : base) v = static_cast<std::int16_t>(uniform(rng, -32768, 32767));
+    const int subs = round < 3 ? round : uniform(rng, 0, LinkMaxActive);
+    const int adds = round < 3 ? 2 - round : uniform(rng, 0, LinkMaxActive);
+    const auto pick = [&] {
+      return pool.data() + std::size_t{static_cast<unsigned>(uniform(rng, 0, LinkMaxActive + 1))} * NetHidden;
+    };
+    for (int r = 0; r < subs; ++r) sub[r] = pick();
+    for (int r = 0; r < adds; ++r) add[r] = pick();
+    advance_wide(src, sub.data(), subs, add.data(), adds, vec);
+    advance_wide_scalar(src, sub.data(), subs, add.data(), adds, ref);
+    CHECK_MSG(std::memcmp(vec, ref, sizeof vec) == 0, "round " << round << ", " << subs << " - " << adds << " +");
+    std::memcpy(vec, src, sizeof vec);  // in place, as the stack may advance
+    advance_wide(vec, sub.data(), subs, add.data(), adds, vec);
+    CHECK_MSG(std::memcmp(vec, ref, sizeof vec) == 0, "round " << round << " in place");
+    add_saturated(base, ref, out_vec);
+    add_saturated_scalar(base, ref, out_ref);
+    CHECK_MSG(std::memcmp(out_vec, out_ref, sizeof out_vec) == 0, "round " << round << ": the saturating add");
+    for (int i = 0; i < NetHidden; ++i) saturated += out_ref[i] == 32767 || out_ref[i] == -32768;
+  }
+  CHECK(saturated > 1000);  // both limits reached
 }
 
 }  // namespace forkeng::test

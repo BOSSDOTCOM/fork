@@ -4,6 +4,7 @@
 #include "eval/nnue/contacts.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdlib>
 #include <vector>
@@ -98,14 +99,11 @@ int contact_inputs(const Position& pos, Color perspective, int flip, std::int32_
     return reach(cls, s, occ);
   };
   int n = 0;
-  int slots[16];
-  int pawns = 0;
   for (Bitboard pieces = targets; pieces;) {
     const Square s = pop_lsb(pieces);
     const Piece x = pos.piece_at(s);
     const int kx = kind_of(x);
     const int own_x = side_of(x) != perspective;
-    if (kx == Pawn) slots[pawns++] = own_x * 48 + frame(s) - 8;
     for (Bitboard hit = attacks(x, s) & targets; hit;) {
       const Square v = pop_lsb(hit);
       const Piece y = pos.piece_at(v);
@@ -121,13 +119,83 @@ int contact_inputs(const Position& pos, Color perspective, int flip, std::int32_
       out[n++] = i;
     }
   }
+  std::int32_t links[LinkMaxActive];
+  const int m = link_inputs(pos.pieces(White, Pawn), pos.pieces(Black, Pawn), perspective, flip, links);
+  for (int i = 0; i < m; ++i) out[n++] = NetContactInputs + links[i];
+  return n;
+}
+
+int link_inputs(Bitboard white_pawns, Bitboard black_pawns, Color perspective, int flip, std::int32_t* out) {
+  const ContactTable& t = contact_table();
+  int slots[16];
+  int pawns = 0;
+  for (const Color c : {White, Black})
+    for (Bitboard b = c == White ? white_pawns : black_pawns; b;) {
+      const Square s = pop_lsb(b);
+      const int seen = (perspective == White ? s : s ^ 56) ^ flip;
+      slots[pawns++] = (c != perspective) * 48 + seen - 8;
+    }
   std::sort(slots, slots + pawns);
+  // Pairs in slot order, the order the index space enumerates them, so the
+  // inputs come out ascending.
+  int n = 0;
   for (int i = 0; i < pawns; ++i)
     for (int j = i + 1; j < pawns; ++j) {
       const std::int32_t l = t.link[slots[i] * 96 + slots[j]];
-      if (l >= 0) out[n++] = NetContactInputs + l;
+      if (l >= 0) out[n++] = l;
     }
   return n;
+}
+
+namespace {
+
+// The squares on the same file as s or a neighbouring one, s excluded: where a
+// pawn's link partners stand.
+Bitboard near_files(Square s) {
+  static const auto masks = [] {
+    std::array<Bitboard, 64> m{};
+    for (Square a = 0; a < 64; ++a)
+      for (Square b = 0; b < 64; ++b)
+        if (a != b && std::abs((a & 7) - (b & 7)) <= 1) m[a] |= bb(b);
+    return m;
+  }();
+  return masks[s];
+}
+
+}  // namespace
+
+int link_changes(const Bitboard (&before)[2], const Bitboard (&after)[2], Color perspective, int flip,
+                 std::int32_t* removed, int& removed_count, std::int32_t* added, int& added_count) {
+  const ContactTable& t = contact_table();
+  const auto slot = [&](Color c, Square s) {
+    return (c != perspective) * 48 + ((perspective == White ? s : s ^ 56) ^ flip) - 8;
+  };
+  // The links a set of pawns loses (or gains) with `changed`: every pair of a
+  // changed pawn and a pawn of `pool` near it, each pair once (a changed pawn
+  // leaves the pool once its pairs are listed).
+  const auto pairs = [&](const Bitboard (&pool_in)[2], const Bitboard (&changed)[2], std::int32_t* out) {
+    Bitboard pool[2] = {pool_in[White], pool_in[Black]};
+    int n = 0;
+    for (const Color c : {White, Black})
+      for (Bitboard g = changed[c]; g;) {
+        const Square s = pop_lsb(g);
+        pool[c] &= ~bb(s);
+        const int a = slot(c, s);
+        for (const Color d : {White, Black})
+          for (Bitboard p = pool[d] & near_files(s); p;) {
+            const int b = slot(d, pop_lsb(p));
+            const std::int32_t l = t.link[std::min(a, b) * 96 + std::max(a, b)];
+            assert(l >= 0 && "a pawn pair outside the link space");
+            out[n++] = l;
+          }
+      }
+    return n;
+  };
+  const Bitboard gone[2] = {before[White] & ~after[White], before[Black] & ~after[Black]};
+  const Bitboard came[2] = {after[White] & ~before[White], after[Black] & ~before[Black]};
+  removed_count = pairs(before, gone, removed);
+  added_count = pairs(after, came, added);
+  return removed_count + added_count;
 }
 
 int contact_table_size() { return contact_table().contacts; }

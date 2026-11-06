@@ -20,7 +20,9 @@
 //   6 S512+X: S-512 plus XGR's 640 exposure inputs (owner, 2026-11-02: XGR's
 //   parts as add-ons to S512r2), S-512's output. 7 S512cl: S-512 plus Fork's
 //   contact and pawn-link inputs (contacts.hpp; ideas.md 41, owner,
-//   2026-11-05; no exposure plane), S-512's output.
+//   2026-11-05; no exposure plane), S-512's output. 8 S512+PP: S-512 plus
+//   the pawn-link inputs only (owner, 2026-11-05; idea 40's first L1 step),
+//   kept incrementally in a 32-bit accumulator, S-512's output.
 // - QA = 255, QB = 64 (bullet's quantization convention; ORIGINALITY.md).
 #pragma once
 
@@ -31,7 +33,7 @@
 namespace forkeng {
 
 inline constexpr int NetArchitecture = FORK_NET_ARCH;
-static_assert(NetArchitecture >= 1 && NetArchitecture <= 7, "unknown network architecture");
+static_assert(NetArchitecture >= 1 && NetArchitecture <= 8, "unknown network architecture");
 
 inline constexpr int NetQa = 255;
 inline constexpr int NetQb = 64;
@@ -47,11 +49,15 @@ inline constexpr int NetExposureRows = 640;  // own/enemy x 5 non-king types x 6
 inline constexpr bool NetContacts = NetArchitecture == 7;
 inline constexpr int NetContactInputs = 50416;
 inline constexpr int NetLinkInputs = 1488;
+// S512+PP's pawn-link inputs, right after the piece rows.
+inline constexpr bool NetLinks = NetArchitecture == 8;
 inline constexpr int NetMaxInputs = NetPieceSquares * NetMaxRegions + (NetExposure ? NetExposureRows : 0) +
-                                    (NetContacts ? NetContactInputs + NetLinkInputs : 0);
+                                    (NetContacts ? NetContactInputs + NetLinkInputs : 0) +
+                                    (NetLinks ? NetLinkInputs : 0);
 // Outputs (or layer stacks) picked by the game phase through a 25-entry table.
 inline constexpr bool NetPhasePicked =
-    (NetArchitecture >= 2 && NetArchitecture <= 4) || NetArchitecture == 6 || NetArchitecture == 7;
+    (NetArchitecture >= 2 && NetArchitecture <= 4) || NetArchitecture == 6 || NetArchitecture == 7 ||
+    NetArchitecture == 8;
 inline constexpr int NetBuckets = NetPhasePicked ? 8 : 1;
 inline constexpr int NetSideLanes = NetArchitecture == 5 ? 3 : 0;
 // AF-S's body.

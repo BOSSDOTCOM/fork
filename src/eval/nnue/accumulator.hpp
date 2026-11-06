@@ -44,6 +44,11 @@ struct alignas(64) Accumulator {
 #if FORK_NET_ARCH == 5
   std::int16_t side[2][4];  // XGR's gate and linear lanes (lane 3 unused)
 #endif
+#if FORK_NET_ARCH == 8
+  // S512+PP: the active link rows' sums in 32 bits (no bound on the link
+  // weights is needed), added to `values` with saturation at evaluation.
+  alignas(64) std::int32_t links[2][NetHidden];
+#endif
 };
 
 // How one perspective sees the board: the file flip (7 when its own king
@@ -68,6 +73,11 @@ struct FeatureDelta {
   int removed_count = 0, added_count = 0;
   Piece removed_piece[2], added_piece[2];
   Square removed_square[2], added_square[2];
+#if FORK_NET_ARCH == 8
+  // Each side's pawns before and after the move (S512+PP's links change only
+  // when a pawn moves, is captured or promotes).
+  Bitboard pawns_before[2] = {0, 0}, pawns_after[2] = {0, 0};
+#endif
 };
 
 // The delta of `m`, legal in `before`.
@@ -102,6 +112,17 @@ void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* row
 void sum_rows_saturated_scalar(const std::int16_t* base, const std::int16_t* const* rows, int count,
                                std::int16_t* out);
 
+// S512+PP's kernels (compiled in every build, for their equivalence tests):
+// the 32-bit link sums advanced by rows subtracted and added (dst may be
+// src), and the piece sums plus the link sums held to the int16 range.
+// Each has a scalar reference giving the same values bit for bit.
+void advance_wide(const std::int32_t* src, const std::int16_t* const* sub, int subs,
+                  const std::int16_t* const* add, int adds, std::int32_t* dst);
+void advance_wide_scalar(const std::int32_t* src, const std::int16_t* const* sub, int subs,
+                         const std::int16_t* const* add, int adds, std::int32_t* dst);
+void add_saturated(const std::int16_t* base, const std::int32_t* wide, std::int16_t* out);
+void add_saturated_scalar(const std::int16_t* base, const std::int32_t* wide, std::int16_t* out);
+
 #if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
 // XGR's exposed pieces (S512+X's too): non-king pieces attacked by an enemy piece of a
 // lower class (pawn < knight = bishop < rook < queen < king), or attacked
@@ -135,6 +156,11 @@ class FeatureStack {
     FeatureDelta delta;
     Frame frame[2];
     bool computed[2] = {false, false};
+#if FORK_NET_ARCH == 8
+    // The ply whose acc.links holds this ply's link sums, per perspective: a
+    // move that changes no pawn shares its parent's instead of copying them.
+    int links_at[2] = {0, 0};
+#endif
   };
   Entry entries_[MaxPly + 1];
 };

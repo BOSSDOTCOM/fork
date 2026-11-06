@@ -19,7 +19,8 @@
 //   tests/test_nnue.cpp checks them, and the lists against the reference).
 // - A frame square is the piece inputs': vertically flipped for Black, files
 //   flipped by `flip` (7 when that side's king is on files a-d, else 0).
-// - Compiled into every build (the tests use it); only S512cl evaluates it.
+// - Compiled into every build (the tests use it); only S512cl evaluates the
+//   contacts, S512cl and S512+PP the links.
 #pragma once
 
 #include <cstdint>
@@ -36,6 +37,21 @@ inline constexpr int ContactMaxActive = 30 * 8 + 16 * 15 / 2;
 // link inputs (NetContactInputs .. + NetLinkInputs - 1), unsorted, written to
 // `out` (room for ContactMaxActive); returns their count.
 int contact_inputs(const Position& pos, Color perspective, int flip, std::int32_t* out);
+
+// The most link inputs one perspective can have: a pair per two of 16 pawns.
+inline constexpr int LinkMaxActive = 16 * 15 / 2;
+
+// The perspective's link inputs (0 .. NetLinkInputs - 1, within the link
+// block), ascending, from the two sides' pawns (S512+PP keeps them
+// incrementally; contact_inputs appends the same list); returns their count.
+int link_inputs(Bitboard white_pawns, Bitboard black_pawns, Color perspective, int flip, std::int32_t* out);
+
+// The link inputs a move removes and adds, from each side's pawns before and
+// after it: only the pairs of the pawns that left or arrived (a link between
+// two unchanged pawns is in both lists, so it is in neither change). Each list
+// has room for LinkMaxActive; unsorted. Returns the two counts' sum.
+int link_changes(const Bitboard (&before)[2], const Bitboard (&after)[2], Color perspective, int flip,
+                 std::int32_t* removed, int& removed_count, std::int32_t* added, int& added_count);
 
 // The index space's sizes as built (tests).
 int contact_table_size();

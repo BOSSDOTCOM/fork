@@ -121,7 +121,8 @@ void sum_perspective(const NetFile& net, Color perspective, Frame f, ForEach for
   return net.phase_table[game_phase(pos)];
 }
 
-#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7
+#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
+    FORK_NET_ARCH == 8
 // sum over both halves (side to move first) of v * (v * w), v the clipped
 // value: S-512's and H-512's output, and each of XGR's experts.
 std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
@@ -344,8 +345,80 @@ void add_contact_rows(const NetFile& net, const Accumulator& acc, const Position
 }
 #endif
 
+#if FORK_NET_ARCH == 8
+// S512+PP: one perspective's link rows, from the two sides' pawns, in frame
+// `flip` (ascending, as link_inputs gives them); returns their count.
+int link_rows(const NetFile& net, const Bitboard (&pawns)[2], Color perspective, int flip,
+              const std::int16_t** rows, std::int32_t* inputs) {
+  const int n = link_inputs(pawns[White], pawns[Black], perspective, flip, inputs);
+  for (int i = 0; i < n; ++i) rows[i] = column(net, NetPieceSquares + inputs[i]);
+  return n;
+}
+
+void links_from_scratch(const NetFile& net, const Bitboard (&pawns)[2], Color perspective, int flip,
+                        std::int32_t* out) {
+  const std::int16_t* rows[LinkMaxActive];
+  std::int32_t inputs[LinkMaxActive];
+  const int n = link_rows(net, pawns, perspective, flip, rows, inputs);
+  std::memset(out, 0, sizeof(std::int32_t) * NetHidden);
+  advance_wide(out, nullptr, 0, rows, n, out);
+}
+
+bool pawns_changed(const FeatureDelta& d) {
+  return d.pawns_before[White] != d.pawns_after[White] || d.pawns_before[Black] != d.pawns_after[Black];
+}
+
+// The link sums after a move: unchanged unless a pawn moved, was captured or
+// promoted; then the pairs of the pawns that left are subtracted and those of
+// the pawns that arrived added (link_changes).
+void advance_links(const NetFile& net, const std::int32_t* from, const FeatureDelta& d, Color perspective,
+                   int flip, std::int32_t* to) {
+  if (!pawns_changed(d)) {
+    if (to != from) std::memcpy(to, from, sizeof(std::int32_t) * NetHidden);
+    return;
+  }
+  std::int32_t removed[LinkMaxActive], added[LinkMaxActive];
+  int subs = 0, adds = 0;
+  link_changes(d.pawns_before, d.pawns_after, perspective, flip, removed, subs, added, adds);
+  const std::int16_t* sub[LinkMaxActive];
+  const std::int16_t* add[LinkMaxActive];
+  for (int i = 0; i < subs; ++i) sub[i] = column(net, NetPieceSquares + removed[i]);
+  for (int i = 0; i < adds; ++i) add[i] = column(net, NetPieceSquares + added[i]);
+  advance_wide(from, sub, subs, add, adds, to);
+}
+#endif
+
+#if FORK_NET_ARCH == 8
+// S512+PP's output from each perspective's piece sums and link sums (which
+// may sit in different plies' accumulators): their sum held to int16 (the
+// output clips each value to [0, QA], so holding it first changes nothing),
+// then S-512's output.
+template <bool Scalar>
+int links_output(const NetFile& net, const std::int16_t* const (&values)[2], const std::int32_t* const (&links)[2],
+                 const Position& pos) {
+  alignas(64) std::int16_t summed[2][NetHidden];
+  for (const Color perspective : {White, Black}) {
+    if constexpr (Scalar)
+      add_saturated_scalar(values[perspective], links[perspective], summed[perspective]);
+    else
+      add_saturated(values[perspective], links[perspective], summed[perspective]);
+  }
+  const Color stm = pos.side_to_move();
+  const int k = phase_bucket(net, pos);
+  const std::int64_t s = Scalar ? squared_sum_scalar(summed[stm], summed[~stm], net.out_weights[k])
+                                : squared_sum(summed[stm], summed[~stm], net.out_weights[k]);
+  const std::int64_t y = s / NetQa + net.out_bias[k];
+  return clamp_cp(y * net.scale / (NetQa * NetQb));
+}
+#endif
+
 template <bool Scalar>
 int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& pos) {
+#if FORK_NET_ARCH == 8
+  const std::int16_t* const values[2] = {acc.values[White], acc.values[Black]};
+  const std::int32_t* const links[2] = {acc.links[White], acc.links[Black]};
+  return links_output<Scalar>(net, values, links, pos);
+#endif
 #if FORK_NET_ARCH == 1
   return Scalar ? output_layer_scalar(net, acc, pos.side_to_move())
                 : output_layer(net, acc, pos.side_to_move());
@@ -370,6 +443,8 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
   return af_output<Scalar>(net, acc, pos);
 #elif FORK_NET_ARCH == 5
   return xgr_output<Scalar>(net, acc, pos);
+#elif FORK_NET_ARCH == 8
+  // (links_output above)
 #endif
 }
 
@@ -423,6 +498,86 @@ void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* row
 }
 #endif
 
+void advance_wide_scalar(const std::int32_t* src, const std::int16_t* const* sub, int subs,
+                         const std::int16_t* const* add, int adds, std::int32_t* dst) {
+  for (int i = 0; i < NetHidden; ++i) {
+    std::int32_t s = src[i];
+    for (int r = 0; r < subs; ++r) s -= sub[r][i];
+    for (int r = 0; r < adds; ++r) s += add[r][i];
+    dst[i] = s;
+  }
+}
+
+void add_saturated_scalar(const std::int16_t* base, const std::int32_t* wide, std::int16_t* out) {
+  for (int i = 0; i < NetHidden; ++i)
+    out[i] = static_cast<std::int16_t>(std::clamp<std::int32_t>(base[i] + wide[i], -32768, 32767));
+}
+
+// The vector paths widen the int16 rows into int32 lanes (16 per AVX-512
+// register, 8 per AVX2 one) and add exactly; a link sum holds at most
+// LinkMaxActive rows of at most 32,768, far inside int32. add_saturated
+// narrows with signed saturation, as the scalar reference clamps.
+#if defined(__AVX512BW__)
+void advance_wide(const std::int32_t* src, const std::int16_t* const* sub, int subs,
+                  const std::int16_t* const* add, int adds, std::int32_t* dst) {
+  for (int i = 0; i < NetHidden; i += 16) {
+    __m512i s = _mm512_loadu_si512(src + i);
+    for (int r = 0; r < subs; ++r)
+      s = _mm512_sub_epi32(
+          s, _mm512_cvtepi16_epi32(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(sub[r] + i))));
+    for (int r = 0; r < adds; ++r)
+      s = _mm512_add_epi32(
+          s, _mm512_cvtepi16_epi32(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(add[r] + i))));
+    _mm512_storeu_si512(dst + i, s);
+  }
+}
+
+void add_saturated(const std::int16_t* base, const std::int32_t* wide, std::int16_t* out) {
+  for (int i = 0; i < NetHidden; i += 16) {
+    const __m512i s = _mm512_add_epi32(
+        _mm512_cvtepi16_epi32(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(base + i))),
+        _mm512_loadu_si512(wide + i));
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(out + i), _mm512_cvtsepi32_epi16(s));
+  }
+}
+#elif defined(__AVX2__)
+void advance_wide(const std::int32_t* src, const std::int16_t* const* sub, int subs,
+                  const std::int16_t* const* add, int adds, std::int32_t* dst) {
+  for (int i = 0; i < NetHidden; i += 8) {
+    __m256i s = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src + i));
+    for (int r = 0; r < subs; ++r)
+      s = _mm256_sub_epi32(
+          s, _mm256_cvtepi16_epi32(_mm_loadu_si128(reinterpret_cast<const __m128i*>(sub[r] + i))));
+    for (int r = 0; r < adds; ++r)
+      s = _mm256_add_epi32(
+          s, _mm256_cvtepi16_epi32(_mm_loadu_si128(reinterpret_cast<const __m128i*>(add[r] + i))));
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(dst + i), s);
+  }
+}
+
+void add_saturated(const std::int16_t* base, const std::int32_t* wide, std::int16_t* out) {
+  for (int i = 0; i < NetHidden; i += 16) {
+    const __m256i b = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(base + i));
+    const __m256i lo = _mm256_add_epi32(_mm256_cvtepi16_epi32(_mm256_castsi256_si128(b)),
+                                        _mm256_loadu_si256(reinterpret_cast<const __m256i*>(wide + i)));
+    const __m256i hi = _mm256_add_epi32(_mm256_cvtepi16_epi32(_mm256_extracti128_si256(b, 1)),
+                                        _mm256_loadu_si256(reinterpret_cast<const __m256i*>(wide + i + 8)));
+    // packs interleaves the 128-bit halves; the permute restores order.
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(out + i),
+                        _mm256_permute4x64_epi64(_mm256_packs_epi32(lo, hi), 0xD8));
+  }
+}
+#else
+void advance_wide(const std::int32_t* src, const std::int16_t* const* sub, int subs,
+                  const std::int16_t* const* add, int adds, std::int32_t* dst) {
+  advance_wide_scalar(src, sub, subs, add, adds, dst);
+}
+
+void add_saturated(const std::int16_t* base, const std::int32_t* wide, std::int16_t* out) {
+  add_saturated_scalar(base, wide, out);
+}
+#endif
+
 Frame frame_of([[maybe_unused]] const NetFile& net, Color perspective, Square own_king) {
   if constexpr (!NetMirrored) {
     return {};
@@ -440,13 +595,22 @@ FeatureDelta delta_for_move(const Position& before, Move m) {
   const Color us = before.side_to_move();
   const Square from = m.from(), to = m.to();
   const Piece mover = before.piece_at(from);
+#if FORK_NET_ARCH == 8
+  for (const Color c : {White, Black}) d.pawns_before[c] = d.pawns_after[c] = before.pieces(c, Pawn);
+#endif
   auto remove = [&](Piece p, Square s) {
     d.removed_piece[d.removed_count] = p;
     d.removed_square[d.removed_count++] = s;
+#if FORK_NET_ARCH == 8
+    if (kind_of(p) == Pawn) d.pawns_after[side_of(p)] &= ~bb(s);
+#endif
   };
   auto add = [&](Piece p, Square s) {
     d.added_piece[d.added_count] = p;
     d.added_square[d.added_count++] = s;
+#if FORK_NET_ARCH == 8
+    if (kind_of(p) == Pawn) d.pawns_after[side_of(p)] |= bb(s);
+#endif
   };
   if (m.is_castle()) {  // encoded king to its own rook's square
     const auto landing = Position::castle_landing(from, to);
@@ -477,6 +641,10 @@ void accumulate_board(const NetFile& net, const Position& pos, Accumulator& out)
           }
         },
         out);
+#if FORK_NET_ARCH == 8
+    const Bitboard pawns[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
+    links_from_scratch(net, pawns, perspective, f.flip, out.links[perspective]);
+#endif
   }
 }
 
@@ -484,6 +652,9 @@ void advance_perspective(const NetFile& net, const Accumulator& from, const Feat
                          Color perspective, Frame frame, Accumulator& to) {
   const DeltaColumns c = columns_for(net, d, perspective, frame);
   advance_values(from.values[perspective], c, to.values[perspective]);
+#if FORK_NET_ARCH == 8
+  advance_links(net, from.links[perspective], d, perspective, frame.flip, to.links[perspective]);
+#endif
 #if FORK_NET_ARCH == 5
   for (int k = 0; k < 4; ++k) {
     int x = from.side[perspective][k];
@@ -623,6 +794,9 @@ void FeatureStack::reset(const NetFile& net, const Position& root) {
   for (const Color perspective : {White, Black}) {
     e.frame[perspective] = frame_of(net, perspective, root.king_square(perspective));
     e.computed[perspective] = true;
+#if FORK_NET_ARCH == 8
+    e.links_at[perspective] = 0;
+#endif
   }
   accumulate_board(net, root, e.acc);
 }
@@ -658,6 +832,10 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
               for (int i = 0; i < d.added_count; ++i) visit(d.added_piece[i], d.added_square[i]);
             },
             e.acc);
+#if FORK_NET_ARCH == 8
+        links_from_scratch(net, d.pawns_after, us, f.flip, e.acc.links[us]);
+        e.links_at[us] = ply + 1;
+#endif
         e.computed[us] = true;
       }
     }
@@ -673,6 +851,40 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
     advance_accumulator(net, entries_[p - 1].acc, entries_[p].delta, entries_[p].acc);
     entries_[p].computed[White] = entries_[p].computed[Black] = true;
   }
+#elif FORK_NET_ARCH == 8
+  // As below, but a ply whose move changes no pawn shares the link sums of
+  // the ply that last computed them (links_at), instead of copying them.
+  for (const Color perspective : {White, Black}) {
+    int base = ply;
+    while (!entries_[base].computed[perspective]) --base;  // ply 0 is always computed
+    for (int p = base + 1; p <= ply; ++p) {
+      Entry& e = entries_[p];
+      const Entry& parent = entries_[p - 1];
+      advance_values(parent.acc.values[perspective], columns_for(net, e.delta, perspective, e.frame[perspective]),
+                     e.acc.values[perspective]);
+      if (pawns_changed(e.delta)) {
+        advance_links(net, entries_[parent.links_at[perspective]].acc.links[perspective], e.delta, perspective,
+                      e.frame[perspective].flip, e.acc.links[perspective]);
+        e.links_at[perspective] = p;
+      } else {
+        e.links_at[perspective] = parent.links_at[perspective];
+      }
+      e.computed[perspective] = true;
+    }
+  }
+  const Entry& e = entries_[ply];
+  const std::int16_t* const values[2] = {e.acc.values[White], e.acc.values[Black]};
+  const std::int32_t* const links[2] = {entries_[e.links_at[White]].acc.links[White],
+                                        entries_[e.links_at[Black]].acc.links[Black]};
+#ifdef FORK_DEBUG
+  Accumulator check;
+  accumulate_board(net, pos, check);
+  for (const Color perspective : {White, Black})
+    if (std::memcmp(check.values[perspective], values[perspective], sizeof check.values[0]) != 0 ||
+        std::memcmp(check.links[perspective], links[perspective], sizeof check.links[0]) != 0)
+      __builtin_trap();
+#endif
+  return links_output<false>(net, values, links, pos);
 #else
   for (const Color perspective : {White, Black}) {
     int base = ply;
@@ -684,12 +896,14 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
     }
   }
 #endif
+#if FORK_NET_ARCH != 8
 #ifdef FORK_DEBUG
   Accumulator check;
   accumulate_board(net, pos, check);
   if (std::memcmp(&check, &entries_[ply].acc, sizeof check) != 0) __builtin_trap();
 #endif
   return evaluate_position(net, entries_[ply].acc, pos);
+#endif
 }
 
 }  // namespace forkeng
