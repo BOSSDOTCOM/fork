@@ -14,6 +14,9 @@
 # each shard restores the same cache and verifies it again.
 # Inputs reach the shell only through environment variables.
 name: sprt
+# The run's title names its inputs, so a driver finds the run it dispatched by them, never as "the newest
+# sprt run" (tools/github/sprt_run.sh; owner, 2026-11-05: two drivers once read each other's runs).
+run-name: sprt ${{ inputs.base }} ${{ inputs.test }} stage ${{ inputs.stage }}
 
 on:
   workflow_dispatch:

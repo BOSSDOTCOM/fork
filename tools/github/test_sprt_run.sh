@@ -8,8 +8,13 @@
 # stage; an undecided SPRT runs every stage, in order, then exits 2; a
 # failed run stops it; results naming another commit stop it, unmerged; a
 # commit not on GitHub stops it before any dispatch, and a missing gh is
-# named as such; RUN_ID waits for that run without dispatching. Uses
-# python3 (or $PYTHON) for the merge.
+# named as such; RUN_ID waits for that run without dispatching. Since
+# 2026-11-05 (the job supervisor and the run-ID ledger): started outside the
+# supervisor it refuses; it takes its own run by title even when another
+# run was dispatched just after it; every dispatched run is in the ledger;
+# RUN_ID needs a ledger record; a stage folder the ledger does not record
+# stops it, unmerged. Uses python3 (or $PYTHON) for the merge and the
+# ledger.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -29,16 +34,18 @@ other=ffffffffffffffffffffffffffffffffffffffff
 cat >"$tmp/gh" <<'EOF'
 #!/usr/bin/env bash
 # The fake gh. State in $FAKE_GH: busy (runs still to report busy), latest
-# (the newest sprt run id), commits (shas on GitHub), run.<id> (its inputs),
-# fail.<id>, foreign.<id>, ptnml (each shard's pentanomial counts).
+# (the newest sprt run id), titles (each run's "ID TITLE", newest first),
+# intruder (if present, another run is dispatched right after each of
+# ours), commits (shas on GitHub), run.<id> (its inputs), fail.<id>,
+# foreign.<id>, ptnml (each shard's pentanomial counts).
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
 case "$1 $2" in
   "api "*)
     grep -qx "${2##*/}" "$st/commits" ;;
   "run list")
-    if [[ "$*" == *databaseId* ]]; then
-      cat "$st/latest"
+    if [[ "$*" == *displayTitle* ]]; then
+      cat "$st/titles" 2>/dev/null
     else
       n=$(cat "$st/busy")
       if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$st/busy"; echo 1; else echo 0; fi
@@ -47,6 +54,15 @@ case "$1 $2" in
     id=$(($(cat "$st/latest") + 1))
     echo "$id busy=$(cat "$st/busy") $*" >>"$st/dispatches"
     for a in "$@"; do case $a in base=* | test=* | stage=*) echo "$a" >>"$st/run.$id" ;; esac; done
+    . "$st/run.$id"
+    { echo "$id sprt $base $test stage $stage"; cat "$st/titles" 2>/dev/null; } >"$st/titles.new"
+    mv "$st/titles.new" "$st/titles"
+    if [ -f "$st/intruder" ]; then  # someone else's run, newer than ours
+      id=$((id + 1))
+      printf 'base=%s\ntest=%s\nstage=0\n' "$base" ffffffffffffffffffffffffffffffffffffffff >"$st/run.$id"
+      { echo "$id sprt $base ffffffffffffffffffffffffffffffffffffffff stage 0"; cat "$st/titles"; } >"$st/titles.new"
+      mv "$st/titles.new" "$st/titles"
+    fi
     echo $id >"$st/latest" ;;
   "run view")
     if [[ "$*" == *conclusion* ]]; then
@@ -89,8 +105,14 @@ drive() {  # label args...
   local label=$1
   shift
   FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data \
+    FORK_JOBS=$tmp/$label/jobs SPRT_UNSUPERVISED=${UNSUPERVISED-1} \
     bash "$here/sprt_run.sh" "$label" "$@" >"$tmp/$label/out" 2>&1
   echo $? >"$tmp/$label/rc"
+}
+ledger() {  # label args...
+  local label=$1
+  shift
+  FORK_JOBS=$tmp/$label/jobs "$PYTHON" -I "$here/../jobs/ledger.py" "$@"
 }
 rc() { cat "$tmp/$1/rc"; }
 dispatches() { wc -l <"$tmp/$1/dispatches" | tr -d ' '; }
@@ -141,18 +163,47 @@ check "no dispatch for it" [ "$(dispatches missing)" = 1 ]
 
 # 14: no gh at all is reported as such, not as a missing commit.
 setup nogh 0 "$strong"
-FAKE_GH=$tmp/nogh GH=$tmp/no-such-gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/nogh/data \
+SPRT_UNSUPERVISED=1 FAKE_GH=$tmp/nogh GH=$tmp/no-such-gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/nogh/data \
   bash "$here/sprt_run.sh" nogh "$sha" "$sha" 0 5 >"$tmp/nogh/out" 2>&1
 check "a missing gh is named" grep -q "no gh command" "$tmp/nogh/out"
 
 # 15-16: RUN_ID waits for a dispatched run without dispatching it again.
 setup adopt 0 "$strong"
 printf 'base=%s\ntest=%s\nstage=0\n' "$sha" "$sha" >"$tmp/adopt/run.77"
-FAKE_GH=$tmp/adopt GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/adopt/data RUN_ID=77 \
-  bash "$here/sprt_run.sh" adopt "$sha" "$sha" 0 5 >"$tmp/adopt/out" 2>&1
-echo $? >"$tmp/adopt/rc"
+ledger adopt add adopt 0 77 --base "$sha" --test "$sha" --source import --note test
+RUN_ID=77 drive adopt "$sha" "$sha" 0 5
 check "RUN_ID's run decides it" [ "$(rc adopt)" = 0 ]
 check "RUN_ID dispatches nothing" [ "$(dispatches adopt)" = 0 ]
+
+# 17-18: RUN_ID without a ledger record stops it before anything is merged.
+setup unrecorded 0 "$strong"
+printf 'base=%s\ntest=%s\nstage=0\n' "$sha" "$sha" >"$tmp/unrecorded/run.78"
+RUN_ID=78 drive unrecorded "$sha" "$sha" 0 5
+check "an unrecorded RUN_ID exits 1" [ "$(rc unrecorded)" = 1 ]
+check "the missing record is named" grep -q "RUN_ID 78 is not in the ledger" "$tmp/unrecorded/out"
+
+# 19-20: outside the supervisor it refuses, before any dispatch.
+setup unsupervised 0 "$strong"
+UNSUPERVISED= drive unsupervised "$sha" "$sha" 0 5
+check "started outside the supervisor exits 1" [ "$(rc unsupervised)" = 1 ]
+check "and dispatches nothing" [ "$(dispatches unsupervised)" = 0 ]
+
+# 21-23: another run dispatched right after ours is newer; the driver still takes its own by title.
+setup intruder 0 "$strong"
+touch "$tmp/intruder/intruder"
+drive intruder "$sha" "$sha" 0 5
+check "with an intruding run, H1 exits 0" [ "$(rc intruder)" = 0 ]
+check "it took its own run, 501, not the newer 502" grep -q "stage 0: run 501 dispatched" "$tmp/intruder/out"
+check "the ledger records stage 0 as run 501" [ "$(ledger intruder runs intruder)" = "0 501 $sha $sha" ]
+
+# 24-25: a stage folder the ledger does not record (results from elsewhere) stops it, unmerged.
+setup stray 0 "$even"
+mkdir -p "$tmp/stray/data/stray/s0/shard-0-0"
+echo 400 >"$tmp/stray/data/stray/s0/run_id"
+cp "$tmp/undecided/data/undecided/s0/shard-0-0/result.json" "$tmp/stray/data/stray/s0/shard-0-0/"
+drive stray "$sha" "$sha" 0 5 1 1
+check "an unrecorded stage folder exits 1" [ "$(rc stray)" = 1 ]
+check "the stray stage is named, nothing merged" bash -c "grep -q \"stage 0's results (run 400) are not in the ledger\" '$tmp/stray/out' && ! grep -q LLR '$tmp/stray/out'"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"

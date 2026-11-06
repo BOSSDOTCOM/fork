@@ -25,6 +25,20 @@
 # - every shard result merged must name this SPRT's base and test commits
 #   and its own stage (result.json's meta), and the stage must have SHARDS
 #   of them, so a run picked up by mistake is never merged.
+# Rules (owner, 2026-11-05; two drivers believed stopped kept dispatching,
+# and one waited on the other's run):
+# - it runs only under the job supervisor (tools/jobs/jobctl.py start github
+#   NAME -- ...), which allows one job of type github at a time and stops a
+#   job's whole process tree; started any other way it refuses;
+# - it finds the run it dispatched by the run's title, which sprt.yml builds
+#   from its inputs ("sprt BASE TEST stage N"), among runs newer than the
+#   dispatch and not yet in the ledger, never as "the newest sprt run";
+# - every dispatched run goes into the run-ID ledger (tools/jobs/ledger.py)
+#   with its inputs, and a stage's results are merged only if the ledger
+#   records that stage's run, with this SPRT's commits, and the stage's
+#   folder holds that run's download (s<stage>/run_id); RUN_ID is accepted
+#   only for a run the ledger already records for that stage (a run
+#   attributed after the fact goes in with ledger.py add --source import).
 #
 # Environment: TC (default 8+0.08), HASH (16), GAMES (1600 per stage),
 # SHARDS (16), TABLES (on), BASE_OPTS and TEST_OPTS (fastchess engine
@@ -33,7 +47,10 @@
 # default gh), PYTHON (default the repository's .venv, else python3),
 # SPRT_DATA (default ~/fork-sprt/github), POLL (seconds between status
 # checks, default 120), RUN_ID (FIRST's run was already dispatched, e.g. by
-# a driver that was stopped: wait for that run instead of dispatching).
+# a driver that was stopped: wait for that run instead of dispatching; the
+# ledger must record it), FORK_JOBS (the supervisor's and the ledger's
+# folder, default ~/fork-jobs), SPRT_UNSUPERVISED=1 (tests only: run
+# without the supervisor).
 #
 # Exit status: 0 decided (H0 or H1 accepted), 2 undecided after LAST, 1
 # stopped by a rule above or an error.
@@ -60,6 +77,9 @@ if [ -z "$py" ]; then
   done
 fi
 [ -n "$py" ] || stop "no Python for the merge"
+[ -n "${FORK_JOB:-}" ] || [ "${SPRT_UNSUPERVISED:-}" = 1 ] ||
+  stop "not started by the job supervisor (tools/jobs/jobctl.py start github $name -- $0 ...)"
+ledger() { "$py" -I tools/jobs/ledger.py "$@"; }
 command -v "$GH" >/dev/null 2>&1 || stop "no gh command '$GH' (set GH to its path)"
 base=$(git rev-parse --verify --quiet "$2^{commit}") || stop "base $2 is not a commit in this clone"
 test=$(git rev-parse --verify --quiet "$3^{commit}") || stop "test $3 is not a commit in this clone"
@@ -72,28 +92,39 @@ done
 # Prints the number of runs not completed; anything but "0" (gh failing
 # included) counts as busy.
 busy() { "$GH" run list -R "$REPO" -L 50 --json status --jq '[.[] | select(.status != "completed")] | length' 2>/dev/null; }
-latest() { "$GH" run list -R "$REPO" -w sprt.yml -L 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null; }
+# The newest sprt runs, "ID TITLE" per line.
+runs() { "$GH" run list -R "$REPO" -w sprt.yml -L 30 --json databaseId,displayTitle \
+  --jq '.[] | "\(.databaseId) \(.displayTitle)"' 2>/dev/null; }
 
 say "base $base, test $test, bounds [$elo0, $elo1], stages $first to $last, ref $REF"
 for stage in $(seq "$first" "$last"); do
+  title="sprt $base $test stage $stage"
   if [ "$stage" = "$first" ] && [ -n "${RUN_ID:-}" ]; then
     id=$RUN_ID
-    say "stage $stage: waiting for run $id (RUN_ID)"
+    ledger check "$name" "$stage" "$id" "$base" "$test" ||
+      stop "stage $stage: RUN_ID $id is not in the ledger as this SPRT's stage $stage (ledger.py add --source import)"
+    say "stage $stage: waiting for run $id (RUN_ID, in the ledger)"
   else
     while [ "$(busy)" != 0 ]; do sleep "$POLL"; done
-    before=$(latest)
+    before=$(runs | awk 'NR == 1 {print $1}')
+    before=${before:-0}
     "$GH" workflow run sprt.yml -R "$REPO" --ref "$REF" -f base="$base" -f test="$test" -f bounds="$elo0 $elo1" \
       -f tc="${TC:-8+0.08}" -f hash="${HASH:-16}" -f games="${GAMES:-1600}" -f shards="$SHARDS" -f stage="$stage" \
       -f tables="${TABLES:-on}" -f test_opts="${TEST_OPTS:-}" -f base_opts="${BASE_OPTS:-}" >/dev/null 2>&1 ||
       stop "stage $stage: dispatch failed"
-    id=$before
+    id=
     for _ in $(seq 30); do
       sleep $((POLL < 10 ? POLL : 10))
-      id=$(latest)
-      [ -n "$id" ] && [ "$id" != "$before" ] && break
+      mine=$(runs | while read -r rid rtitle; do
+        [ "$rid" -gt "$before" ] && [ "$rtitle" = "$title" ] && ! ledger known "$rid" && echo "$rid"
+      done)
+      [ -n "$mine" ] && break
     done
-    [ -n "$id" ] && [ "$id" != "$before" ] || stop "stage $stage: no new sprt run after the dispatch"
-    say "stage $stage: run $id dispatched"
+    [ -n "$mine" ] || stop "stage $stage: no new run titled '$title' after the dispatch"
+    [ "$(echo "$mine" | wc -l)" -eq 1 ] || stop "stage $stage: more than one new run titled '$title': $(echo $mine)"
+    id=$mine
+    ledger add "$name" "$stage" "$id" --base "$base" --test "$test" || stop "stage $stage: run $id: ledger refused it"
+    say "stage $stage: run $id dispatched (ledger)"
   fi
   while [ "$("$GH" run view "$id" -R "$REPO" --json status --jq .status 2>/dev/null)" != completed ]; do sleep "$POLL"; done
   concl=$("$GH" run view "$id" -R "$REPO" --json conclusion --jq .conclusion 2>/dev/null)
@@ -101,11 +132,16 @@ for stage in $(seq "$first" "$last"); do
   rm -rf "$data/s$stage"
   mkdir -p "$data/s$stage"
   "$GH" run download "$id" -R "$REPO" -D "$data/s$stage" >/dev/null 2>&1 || stop "stage $stage: run $id's download failed"
+  echo "$id" >"$data/s$stage/run_id"
   # The shard results of stages FIRST..this one (earlier stages too when
   # resuming), each checked against this SPRT's commits and its stage.
+  # Only stages the ledger records for this SPRT, each folder holding its recorded run's download.
   files=()
   for s in $(seq 0 "$stage"); do
     [ -d "$data/s$s" ] || continue
+    rid=$(cat "$data/s$s/run_id" 2>/dev/null)
+    [ -n "$rid" ] && ledger check "$name" "$s" "$rid" "$base" "$test" ||
+      stop "stage $stage: stage $s's results (run ${rid:-unknown}) are not in the ledger as this SPRT's stage $s"
     while IFS= read -r f; do files+=("$f"); done < <(find "$data/s$s" -name result.json | sort)
   done
   wrong=$("$py" -I - "$base" "$test" "$data" "${files[@]}" <<'EOF'

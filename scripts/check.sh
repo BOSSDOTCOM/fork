@@ -188,6 +188,8 @@ tool_tests() {  # python | all
   "$py" -I -B -m unittest discover -s tools/cloud -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/cloud"
   "$py" -I -B -m unittest discover -s tools/evolve -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/evolve"
   "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
+  # The job supervisor and the run-ID ledger (owner, 2026-11-05): whole-tree stops, one lock per type.
+  "$py" -I -B -m unittest discover -s tools/jobs -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/jobs"
   # tools/datagen and tools/nnue need python-chess and zstandard (the
   # repository's .venv); the log says when they are missing and the suites are skipped.
   if "$py" -I -c 'import chess, zstandard' >/dev/null 2>&1; then

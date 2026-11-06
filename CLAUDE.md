@@ -71,7 +71,16 @@ python -I bench/ab.py A/fork_micro B/fork_micro --a-variant baseline --a-commit 
 bash bench/experiment.sh clang NAME           # build FORK_EXPERIMENT=NAME and compare
 python -I tools/difftest/difftest.py --fork build/clang-release/fork   # vs python-chess
 python -I tools/fuzz/run_fuzz.py --target build/clang-fuzz/fuzz_fen --corpus fuzz/corpus/fen
+python -I tools/jobs/jobctl.py start github NAME -- bash tools/github/sprt_run.sh NAME BASE TEST ELO0 ELO1
+python -I tools/jobs/jobctl.py stop NAME      # whole process tree, verified; also: status [NAME]
+python -I tools/jobs/ledger.py runs NAME      # each stage's GitHub run, as dispatched (~/fork-jobs/ledger.jsonl)
 ```
+
+Long-running jobs (SPRT, fixed-node and gauntlet drivers, data generation,
+measurements) start and stop only through `tools/jobs/jobctl.py` (owner,
+2026-11-05): one job per type, and a stop is verified over the job's whole
+process tree. A run is attributed by the ledger and its title, never as
+"the newest run".
 
 Presets: `{clang,gcc}-{debug,release,v3,avx512,nopext}`, `clang-fuzz`,
 `{clang,gcc}-tsan` (Linux only); PGO
