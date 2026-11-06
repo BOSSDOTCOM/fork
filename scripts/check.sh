@@ -197,6 +197,8 @@ tool_tests() {  # python | all
     echo "tool tests: tools/datagen skipped (no python-chess or zstandard in $py)" >>"$log"
   fi
   bash scripts/update-test.sh >>"$log" 2>&1 || fail "tool tests: scripts/update-test.sh (update.sh clone mode)"
+  # The push gate (owner, 2026-11-05): a planted hit of each kind blocks the scan and the push.
+  bash scripts/test_scan_push.sh >>"$log" 2>&1 || fail "tool tests: scripts/test_scan_push.sh (the push gate)"
   [ "$1" = all ] || return 0
   bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
   case $py in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; *) py=$(command -v "$py") ;; esac

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-/* Fork's play page: one column on phones, board and controls side by side on
-   wide screens; light and dark from the system unless the visitor picks one. */
+/* Fork's page: one column on phones, board and controls side by side on wide
+   screens; light and dark from the system unless the visitor picks one. */
 :root {
   --bg: #f6f5f2;
   --fg: #1f1f1f;
@@ -71,11 +71,37 @@ main {
   max-width: 1000px;
   margin: 0 auto;
 }
-.board-box {
-  width: min(100%, 72vh, 600px);
-  aspect-ratio: 1 / 1;
+.board-wrap {
+  display: flex;
+  gap: 6px;
+  width: min(100%, calc(72vh + 20px), 620px);
   flex: 0 0 auto;
 }
+.board-box {
+  flex: 1 1 auto;
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+}
+/* The evaluation bar: White's share from the bottom (or the top when the
+   board shows Black at the bottom). Piece colours, so the same in both themes. */
+.evalbar {
+  flex: 0 0 14px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #3b3936;
+  border: 1px solid var(--border);
+}
+.evalbar .white {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 50%;
+  background: #f2f0eb;
+  transition: height 0.3s ease;
+}
+.evalbar.flipped .white { bottom: auto; top: 0; }
 #board { width: 100%; height: 100%; }
 .side { flex: 1 1 260px; min-width: 0; }
 
@@ -98,11 +124,63 @@ select, .controls button, #promotion button {
   background: var(--panel);
   color: var(--fg);
 }
-#new-game { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); cursor: pointer; }
+.controls button { cursor: pointer; }
+.controls .primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.controls button:disabled, #compare:disabled { opacity: 0.6; cursor: default; }
 label select { margin-left: 6px; }
 #promotion { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 #promotion[hidden] { display: none; }
-.note { color: var(--muted); font-size: 0.9rem; }
+.note, .muted { color: var(--muted); font-size: 0.9rem; }
+.analysis {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  min-height: 4.5em;
+}
+.analysis p { margin: 0 0 4px; }
+.score { font-variant-numeric: tabular-nums; }
+.line { overflow-wrap: anywhere; }
+.moves { max-height: 9em; overflow-y: auto; }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 16px 12px;
+}
+.tabs button {
+  font: inherit;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--fg);
+  cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+main[hidden] { display: none; }
+
+.wide { flex: 1 1 100%; min-width: 0; }
+.wide h2 { font-size: 1.15rem; margin: 20px 0 6px; }
+#compare {
+  font: inherit;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--fg);
+  cursor: pointer;
+}
+.table-box { overflow-x: auto; margin: 8px 0; }
+table { border-collapse: collapse; font-size: 0.9rem; min-width: 100%; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+td { font-variant-numeric: tabular-nums; }
 
 footer {
   max-width: 1000px;
