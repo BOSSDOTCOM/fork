@@ -811,6 +811,38 @@ LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   to "off"; T56 is closed for this network (a later net may be re-tested only
   as a new idea).
 
+### 2026-11-06 S512+PP R = 1: fixed nodes against S512r2, then the STC SPRT (owner)
+
+- The owner's rule (2026-11-06, DESIGN.md §5.6 item 7): the fixed-node
+  screen against S512r2 first; an STC SPRT only if it exceeds about +30
+  Elo; a pass makes S512+PP the architecture of item 7's retrain, and is
+  reported before any promotion.
+- Candidate: bake/s512pp 412b13f (S512+PP seed 2, S = 90, 2 of 311,296
+  link weights clamped; bench 13,909,380, signature 831e5c9295839f87).
+  Network-dependent search checks failing on it, logged in its commit:
+  the K+P v K promotion at depth 1, K+R v K at depth 3 scoring at most 0.
+  Endgame check: 351 of 900 misjudged against S512r2's 249 (KQK 59 of 300
+  against 0). Speed: 0.895 of S512r2's nps (identical-tree method, the
+  owner's recorded exception to the 0.90 gate; ideas.md idea 40).
+- Base: 684bac6 (phase-4, S512r2; bench 14,180,299). Both under the job
+  supervisor (jobs sprt-ppfixed, sprt-ppstc).
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, 800,000 per move (600+6 clock that never binds, Hash 16, Syzygy 3-4-5, UHO book) | 42284077960 | 1,600 (no time losses, no abnormal ends) | +46.09 ± 10.37 | +76.54 ± 17.02 | [16, 121, 339, 284, 40] | above +30: the STC SPRT follows |
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027) | 42294907752 (stage 0) | 1,600 (no time losses, no abnormal ends) | **+32.67 ± 10.48** | +53.37 ± 17.02 | [14, 154, 341, 250, 41] | **H1 accepted** (LLR 3.37) after stage 0, 4:33 PM EST |
+
+- Unlike S512+X (+25.67 at fixed nodes, −30.04 at STC), most of S512+PP's
+  per-node gain survives its speed cost at a real clock.
+- **Consequence (the owner's pre-declared gate): item 7's retrain uses the
+  S512+PP architecture** (retrain_g3s2.py's ARCH = s512pp; the warm recipe
+  starts from this candidate's float weights).
+- **Not promoted:** a promotion is the owner's decision (reported first).
+  Open before one: the two failing search checks and the weaker endgame
+  check (KQK 59 of 300), which the Syzygy slice in g3s2 is meant to fix;
+  the nps ratio below the 0.90 gate; and whether to promote this net now
+  or wait for item 7's retrain (UNVERIFIED which is better).
+
 ### reval-no-check-relief (re-validation filler: check relief removed, [−3, 0]; undecided at the cap)
 
 - Base `684bac6` (phase-4: S512r2, IIR on), test `7d72dc5`
