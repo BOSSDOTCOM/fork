@@ -45,8 +45,11 @@ Quality control 6; not started):
   (LLR 1.52 and 2.72).
 
 The network re-validation of check relief and in-check LMR has started as
-filler (`reval/no-check-relief`: -3.58 ± 4.17 after 9,600 games, LLR -1.07
-on [-3, 0], undecided; `reval/no-lmr-in-check` not started).
+filler (`reval/no-check-relief`: -3.86 ± 3.40 after stage 8, 14,400 games,
+nElo -6.44 ± 5.67, LLR -1.77 on [-3, 0], undecided; `reval/no-lmr-in-check`
+not started). Corrected 2026-11-06: the figure first written here was the
+stage 5 result (9,600 games), already stale when written; the run IDs are in
+the SPRT log's attribution audit (docs/history/phase-4/sprt-log.md).
 
 ## 2. Experimental switches and builds are off
 
