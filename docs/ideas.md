@@ -974,6 +974,42 @@ tuned by SPSA.
 - **earliest phase:** Phase 4 (the pawn structure key exists since
   2026-11-02, branch tier2/drift).
 - **status:** untested (planned 2026-11-02); L2's pawn table in progress.
+- **L1's first step, S512+PP: speed** (branch nets/s512pp, not pushed;
+  every number a quiet-machine median ratio to S512r2's nps by the
+  identical-tree method: release builds whose net is S512r2's weights with
+  every link weight zero, so bench is S512r2's 14180299, in interleaved
+  bench rounds with the order rotated each round; the gate to train is
+  0.90, the goal 0.95, DESIGN.md §5.4):
+  - the links in a 32-bit accumulator (cab0114) 0.666; **in the main int16
+    sums** (399a43b, with the 96-link bound) 0.787; plus the pawn-change
+    flag (4ef9172) 0.784 (16 rounds, 2026-11-06).
+  - **the changed-pair search in one tight pass** (9e04b4a: both sides'
+    partners in one loop, the side read branch-free, constexpr tables
+    with both orders of a pair): **0.818** (+4.3% over 4ef9172; 0.807 in a
+    second 12-round session). Kept.
+  - the pawn structure key in make/unmake (8851d34, tier2/drift's) 0.813;
+    **a cache of each structure's link sum** keyed by it and checked
+    against the pawns (1,024 slots of 1 KB per perspective and flip, per
+    thread): without refills 0.791 (19.7% hits: a miss left the subtree
+    uncached), with the parent's sum refilled on a miss 0.809 (61.7% hits
+    in bench), 4,096 slots 0.824 (71.4% hits). No gain over the tight pass
+    alone, so not kept (the owner's rule for the size: within the 3% noise
+    rule, the smaller); the TT stall (perf, `TtEntry::bound`) varied from 5
+    to 45 ns per node between repeated runs of the same build, with no
+    consistent difference between 1,024 and 4,096 slots (three runs each).
+    Archived on archive/s512pp-structure-cache.
+  - **prefetch at make-move** on the cache: the cache slots 0.798, the
+    piece rows 0.774, both 0.776: slower, not kept.
+  - **fewer pairs with the tight pass:** links only between pawns at most
+    one rank apart (R = 1) **0.895** (rounds 0.873-0.915), R = 2 0.859
+    (12 rounds; R = 1 without the tight pass 0.860). R = 1 is just below
+    the 0.90 gate; the full design is well below it. Earlier
+    (2026-11-05/06, before the tight pass): 8-bit link rows, constexpr
+    tables, the changes found at the push and their rows prefetched did
+    not help (archive/s512pp-speed-switches); perf stat put the extra cost
+    in instructions (the pair search about 200 per node), with branch
+    misses about 20% of the extra cycles.
+  - **not trained** (below the gate).
 
 ## 41. S-512 with Fork's own threat and pawn-pair inputs
 
