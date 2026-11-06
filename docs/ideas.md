@@ -1122,3 +1122,49 @@ tuned by SPSA.
   now: QAT is worth keeping if both B runs' quantized losses are below both A
   runs' by more than the larger of the two pairs' seed spreads; then a fixed-node match of the
   two quantized nets decides whether it enters the training settings.
+
+## 45. Simple endings: a tablebase-labelled data slice, a standing endgame check, conversion
+
+- **type:** ELO (the data slice), TOOLING (the check and the conversion test).
+- **idea** (owner, 2026-11-05; **on hold**, the owner, the same day): three parts.
+  1. **Endgame slice** for the next training snapshot: random legal
+     positions of at most 5 pieces (KRK, KQK, KPK and the common 4-5 piece
+     endings), labelled by their Syzygy WDL, a small fixed share of the
+     data, so the nets learn endings that the games themselves end at
+     (adjudication at table entry keeps them out of the data).
+  2. **A standing acceptance test** with targets, reported for every new
+     net: the KPK/KQK/KRK check below, on a committed position set.
+  3. **A conversion test** without tables: does Fork mate from a won simple
+     ending before the fifty-move rule?
+- **why:** the endgame check (tools/nnue/endgame_check.py: 900 quiet random
+  KPK, KQK and KRK positions, Syzygy-verified; a won position misjudged
+  below +100 cp, a lost one above -100, a drawn one beyond +-200, declared
+  before the run) found S512r2 misjudging 249 (27.7%), S512r3 329 (36.6%),
+  S512+X 307 (34.1%); KQK S512r2 0 of 300, S512r3 41, S512+X 28; KRK all
+  badly (S512r2 223 of 300, S512r3 264, S512+X 257). The retrained nets
+  lost KQK and fail network-dependent tests (K+P v K promotion at depth 1,
+  K+R v K mate in 2 at depth 4).
+- **found so far** (2026-11-05):
+  - conversion, KRK, S512r2 (the default build, bench 14180299), 200 ms
+    per move, no tables, Hash 16, 1 thread, Fork for both sides, 20 won
+    starts (seed 20261105): 17 mated (mean 15.6 moves, max 39), **3 drawn
+    by the fifty-move rule** (starts with DTZ 27, 17 and 29). KQK was
+    started and stopped when the work was put on hold.
+  - the trainer's target is (1 - w) sigmoid(score / S) + w result, so the
+    slice's records need a score as well as the result (a design choice
+    still open: a fixed score per WDL, or the score of a search with the
+    tables); and the loader reads shards in file order, shuffling only
+    within its buffer, so slice games must be interleaved evenly into the
+    snapshot's shards, not kept in a file of their own.
+  - the choice of "common" 4-5 piece endings was to come from the material
+    signatures Fork's own games reach at 5 pieces (a statistics run over a
+    g3s1 shard was started and stopped).
+- **tools written** (scratch, not committed): a conversion runner (python-chess
+  driving Fork over UCI, start positions chosen and verified by the tables)
+  and a table-entry statistics script.
+- **originality:** tablebase labels are not engine-generated data (idea
+  11's note); log the tablebase source in ORIGINALITY.md before use.
+- **related:** idea 11 (TB boundary data), idea 12 (endgame conversion).
+- **metric:** the endgame check's misjudged counts against targets (to be
+  set), the conversion rate, then the net's promotion test.
+- **status:** on hold (owner, 2026-11-05).
