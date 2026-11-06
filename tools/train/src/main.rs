@@ -41,6 +41,7 @@
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
 //!   fork-train check    --arch A [maps] --out DIR
+//!   fork-train order    --data SHARD... [--count N]   (the file of each game of an --interleave pass)
 //!   fork-train dump     --data SHARD --count N
 //!   fork-train stats    --data SHARD... [--positions N]   (king squares, phase, piece counts)
 //!   fork-train features --arch A [maps] (--epd FILE | --data SHARD --count N)
@@ -61,7 +62,7 @@
 
 use std::{
     fs::{self, File},
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Seek, Write},
     path::{Path, PathBuf},
 };
 
@@ -813,12 +814,58 @@ fn filter() -> Filter {
 
 /// Reads Fork's shards (viriformat games) forever, in file order, through
 /// viriformat's own conversion, shuffling each buffer of `buffer` positions
-/// with a seeded stream (so the data order is reproducible).
+/// with a seeded stream (so the data order is reproducible). With
+/// `interleave` (--interleave; owner, 2026-11-06: the endgame slice spread
+/// through the snapshot), each pass reads the files side by side instead,
+/// one game at a time from the file furthest behind in the share of its
+/// bytes read, so every file is spread evenly over the pass.
 #[derive(Clone)]
 struct ShardReader {
     files: Vec<PathBuf>,
     buffer: usize,
     seed: u64,
+    interleave: bool,
+}
+
+/// The next file of an interleaved pass: of the files not finished, the one
+/// whose share read (read / size) is smallest, the lower index on ties.
+fn interleave_next(read: &[u64], size: &[u64], done: &[bool]) -> Option<usize> {
+    let mut best: Option<usize> = None;
+    for k in 0..read.len() {
+        if done[k] {
+            continue;
+        }
+        // read[k] / size[k] < read[b] / size[b], without division.
+        if best.map_or(true, |b| (read[k] as u128) * (size[b] as u128) < (read[b] as u128) * (size[k] as u128)) {
+            best = Some(k);
+        }
+    }
+    best
+}
+
+/// One interleaved pass over `files`: `f(file index, game)` for every game,
+/// in interleave_next's order; stops early when `f` returns true.
+fn for_each_interleaved(files: &[PathBuf], mut f: impl FnMut(usize, Game) -> bool) {
+    let mut readers: Vec<BufReader<File>> = files
+        .iter()
+        .map(|p| BufReader::new(File::open(p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))))
+        .collect();
+    let size: Vec<u64> = files.iter().map(|p| fs::metadata(p).expect("size").len().max(1)).collect();
+    let mut read = vec![0u64; files.len()];
+    let mut done = vec![false; files.len()];
+    while let Some(k) = interleave_next(&read, &size, &done) {
+        let r = &mut readers[k];
+        if r.fill_buf().expect("read").is_empty() {
+            done[k] = true;
+            continue;
+        }
+        let game = Game::deserialise_from(r, Vec::new())
+            .unwrap_or_else(|e| panic!("{}: undecodable game: {e}", files[k].display()));
+        read[k] = r.stream_position().expect("position");
+        if f(k, game) {
+            return;
+        }
+    }
 }
 
 impl ShardReader {
@@ -853,6 +900,30 @@ impl DataReader<ChessBoard> for ShardReader {
         let mut buf = Vec::with_capacity(self.buffer);
         let filter = filter();
         loop {
+            if self.interleave {
+                let mut stop = false;
+                for_each_interleaved(&self.files, |_, game| {
+                    game.splat_to_bulletformat(
+                        |b| {
+                            buf.push(b);
+                            Ok(())
+                        },
+                        &filter,
+                    )
+                    .expect("splat");
+                    if buf.len() >= self.buffer {
+                        stop = emit_shuffled(&mut buf, &mut rng, &mut f);
+                    }
+                    stop
+                });
+                if stop {
+                    return;
+                }
+                if !buf.is_empty() && emit_shuffled(&mut buf, &mut rng, &mut f) {
+                    return;
+                }
+                continue;
+            }
             for path in &self.files {
                 let mut stop = false;
                 Self::for_each_game(path, |game| {
@@ -958,6 +1029,19 @@ fn main() {
             weights.write_into(&mut wf).expect("write weights");
             println!("{:?}: {} inputs, quantised.bin {} bytes", spec.arch, spec.inputs(), bytes.len());
         }
+        "order" => {
+            // The source file of each of the first --count games of one
+            // interleaved pass (--interleave's order), one index per line.
+            let files: Vec<PathBuf> = a.all("--data").into_iter().map(PathBuf::from).collect();
+            let mut left: usize = a.num("--count", 1000);
+            let out = std::io::stdout();
+            let mut out = out.lock();
+            for_each_interleaved(&files, |k, _| {
+                writeln!(out, "{k}").unwrap();
+                left -= 1;
+                left == 0
+            });
+        }
         "dump" => {
             // Positions exactly as training sees them (side-to-move relative):
             // "piece:square ... | score | result" per kept position.
@@ -1060,6 +1144,7 @@ fn main() {
                 files: a.all("--data").into_iter().map(PathBuf::from).collect(),
                 buffer: a.num("--buffer", 1 << 24),
                 seed: a.num("--seed", 1),
+                interleave: a.0.iter().any(|x| x == "--interleave"),
             };
             let defn = definition(&spec, &ins);
             let weights = ModelWeights::new(&defn, a.num("--seed", 1));
@@ -1220,5 +1305,35 @@ fn main() {
             eprintln!("unknown command {cmd}");
             std::process::exit(2);
         }
+    }
+}
+
+#[cfg(test)]
+mod interleave_tests {
+    use super::interleave_next;
+
+    #[test]
+    fn the_file_furthest_behind_comes_next() {
+        // A 2% file beside a 98% one: about one game in 50 from it, spread
+        // evenly, and both finish together.
+        let size = [9800u64, 200];
+        let mut read = [0u64, 0];
+        let done = [false, false];
+        let mut order = Vec::new();
+        for _ in 0..500 {
+            let k = interleave_next(&read, &size, &done).unwrap();
+            read[k] += 10;
+            order.push(k);
+        }
+        let small: Vec<usize> = order.iter().enumerate().filter(|&(_, &k)| k == 1).map(|(i, _)| i).collect();
+        assert_eq!(small.len(), 10);
+        assert!(small.windows(2).all(|w| w[1] - w[0] == 50), "{small:?}");
+    }
+
+    #[test]
+    fn finished_files_are_skipped_and_ties_take_the_lower_index() {
+        assert_eq!(interleave_next(&[0, 0], &[10, 10], &[false, false]), Some(0));
+        assert_eq!(interleave_next(&[5, 0], &[10, 10], &[false, true]), Some(0));
+        assert_eq!(interleave_next(&[5, 5], &[10, 10], &[true, true]), None);
     }
 }
