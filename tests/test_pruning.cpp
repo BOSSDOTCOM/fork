@@ -476,7 +476,7 @@ TEST_CASE("pruning", "cheaper threats: still correct, and they change the search
 // enough that non-PV nodes reach its minimum depth in a debug build too.
 TEST_CASE("pruning", "capture probe: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_capture_probe);  // off until measured and SPRTed
+  CHECK(SearchSwitches{}.use_capture_probe);  // on: its SPRT's test side
   SearchSwitches on;
   on.use_capture_probe = true;
   fx.searcher->switches = on;
