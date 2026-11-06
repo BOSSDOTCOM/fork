@@ -1332,3 +1332,42 @@ tuned by SPSA.
 - **metric:** each experiment's rule above; then SPRTs.
 - **status:** approved as ranked (owner, 2026-11-06); the exchange rate
   runs first.
+
+## 47. The better-training plan: relabelled data and quieter positions
+
+- **type:** ELO.
+- **idea** (owner, 2026-11-06): later experiments on the training data
+  itself, each measured before any bulk change. Data generation meanwhile
+  continues as it is: g3f generates new data labelled by S512+PP, the
+  default since 2026-11-06, and nothing is relabelled now.
+  1. **Relabelling old data with a newer net.** Generation 1 first (labelled
+     by B0r1 and B0r2): rescore a sample of it with the current default and
+     test it against an equal amount of newly generated data, with a small
+     net (training cost of minutes, as B0's), before any bulk relabel.
+     Generation 0 (bootstrap-labelled) only if generation 1's test helps.
+     The test is declared before it runs: the same positions seen, two
+     seeds per arm, one shared validation set; a gain only if the relabelled
+     arm's mean loss is lower by more than the seed spread, then the usual
+     SPRT path for a net trained on it. Relabelling keeps strategy A+ (Fork
+     rescores its own data with its own nets, DESIGN.md §5.4 data decision
+     1); each relabelled part gets its own manifest naming its new labeller.
+  2. **Quiet-position selection** ("better labels"; KB
+     research-nnue-dataset-quiet-positions.md, a clean-room summary of arXiv
+     2412.17948): an offline pass marking positions whose static evaluation
+     is far from their quiescence value as unsaved (score 32767, which the
+     trainer already drops), written as derived shards with their own
+     manifests; sealed data is never changed. First the offline counts on a
+     wide pre-declared threshold grid (not centred on the paper's values:
+     no constant is taken from it), and how much the test overlaps the
+     capture-and-promotion filter; then training arms against the current
+     filter, two seeds each, equal positions seen; then the usual path. The
+     paper's second test (static evaluation against the label) is a
+     measurement of the labelling net's error, as idea 46's residual study,
+     not a filter; the Syzygy slice is exempt from both.
+- **why:** the labels are only as good as the net that searched them, and
+  the oldest data was labelled by the weakest evaluators; the paper claims
+  a gain from quieter data but measured no ablation of its filter, so both
+  ideas need Fork's own measurement.
+- **phase:** Phase 4 or later, after item 7's retrain.
+- **metric:** each experiment's declared rule above; then SPRTs.
+- **status:** recorded (owner, 2026-11-06); not started.

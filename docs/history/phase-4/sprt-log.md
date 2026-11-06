@@ -786,6 +786,12 @@ LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   same-role match. **The owner kept 80 with a credit note** (2026-11-06,
   ORIGINALITY.md on tier2/batch3; no finer grid), and the test commit
   follows.
+- The SPRT: base 684bac6 (S512r2), test 899c10b (sprt/probcut), [0, 3],
+  8+0.08, job sprt-probcut, started 4:35 PM EST on 2026-11-06, after
+  S512+PP's STC SPRT. **The owner's rule after S512+PP's promotion**
+  (2026-11-06): if it passes, a quick confirmation on S512+PP (the same
+  change on the new default, STC [0, 3], at most 2 stages) before it is
+  adopted; if it fails, no retest.
 
 ### 2026-11-06 threat-set-cheaper-vs-base (tier 2, T56: threat-aware ordering): H0, rejected (stays off)
 
@@ -831,6 +837,22 @@ LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
 |---|---|---|---|---|---|---|
 | fixed nodes, 800,000 per move (600+6 clock that never binds, Hash 16, Syzygy 3-4-5, UHO book) | 42284077960 | 1,600 (no time losses, no abnormal ends) | +46.09 ± 10.37 | +76.54 ± 17.02 | [16, 121, 339, 284, 40] | above +30: the STC SPRT follows |
 | STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027) | 42294907752 (stage 0) | 1,600 (no time losses, no abnormal ends) | **+32.67 ± 10.48** | +53.37 ± 17.02 | [14, 154, 341, 250, 41] | **H1 accepted** (LLR 3.37) after stage 0, 4:33 PM EST |
+
+The driver's result blocks (jobs sprt-ppfixed and sprt-ppstc):
+
+```
+s512pp-r1-fixednode, stage 0, run 42284077960:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 46.09 +/- 10.37, nElo: 76.54 +/- 17.02
+    Ptnml(0-2): [16, 121, 339, 284, 40]
+s512pp-r1-stc, stage 0, run 42294907752:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 32.67 +/- 10.48, nElo: 53.37 +/- 17.02
+    Ptnml(0-2): [14, 154, 341, 250, 41]
+    LLR: 3.37 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
 
 - Unlike S512+X (+25.67 at fixed nodes, −30.04 at STC), most of S512+PP's
   per-node gain survives its speed cost at a real clock.

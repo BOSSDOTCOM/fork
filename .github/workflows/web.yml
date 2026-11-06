@@ -56,7 +56,7 @@ jobs:
       fail-fast: true
       matrix:
         # web/nets.json's networks; the page job checks that the lists agree.
-        net: [bootstrap, b0, b0r1, b0r2, s512, s512r2]
+        net: [bootstrap, b0, b0r1, b0r2, s512, s512r2, s512pp]
     steps:
       - uses: actions/checkout@v7
         with:
