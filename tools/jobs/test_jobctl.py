@@ -227,6 +227,21 @@ class Supervisor(unittest.TestCase):
         self.assertEqual(self.ctl('stop', 'inner', '--grace', '1').returncode, 0)
         self.assertFalse(alive(rec['pid']))
 
+    def test_a_finished_jobs_recorded_ids_are_not_its_processes(self):
+        # 2026-11-06: a stopped WSL job's keeper and command ids (461, 462) were reused by short-lived
+        # processes, and the Control Center refused to start the next part while "g3e was running".
+        other = subprocess.Popen([sys.executable, '-I', '-c', 'import time; time.sleep(60)'])
+        try:
+            for state in ('stopped', 'ended'):
+                rec = {'name': 'done', 'type': 'test', 'id': 'feedfacefeedface', 'state': state,
+                       'keeper': other.pid, 'pid': other.pid}
+                self.assertEqual(jobctl.live(rec), [], state)
+            rec['state'] = 'running'
+            self.assertEqual(jobctl.live(rec), [other.pid])
+        finally:
+            other.kill()
+            other.wait()
+
     def test_a_failed_stop_keeps_the_lock(self):
         sleep = [sys.executable, '-I', '-c', 'import time; time.sleep(600)']
         self.assertEqual(self.start('test', 'stubborn', *sleep).returncode, 0)

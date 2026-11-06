@@ -292,11 +292,14 @@ def own_pids(record):
 
 
 def live(record):
-    """The job's live processes, the keeper included."""
+    """The job's live processes, the keeper included. Once a job has ended or been stopped (its stop verified
+    that none was left), its recorded keeper and command ids are not counted: a live process with one of them
+    is another process that reused the id (2026-11-06, in WSL)."""
     pids = set(own_pids(record))
-    for k in ('keeper', 'pid'):
-        if record.get(k) and pid_alive(record[k]):
-            pids.add(record[k])
+    if record.get('state') not in ('ended', 'stopped', 'failed'):
+        for k in ('keeper', 'pid'):
+            if record.get(k) and pid_alive(record[k]):
+                pids.add(record[k])
     return sorted(pids)
 
 
