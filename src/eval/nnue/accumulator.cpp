@@ -25,9 +25,7 @@ int clamp_cp(std::int64_t cp) {
 }
 
 #if FORK_NET_ARCH == 8
-bool pawns_changed(const FeatureDelta& d) {
-  return d.pawns_before[White] != d.pawns_after[White] || d.pawns_before[Black] != d.pawns_after[Black];
-}
+bool pawns_changed(const FeatureDelta& d) { return d.pawn_change; }
 
 // S512+PP: adds one perspective's link rows (from the two sides' pawns, in
 // frame `flip`) to its sums.
@@ -478,22 +476,13 @@ FeatureDelta delta_for_move(const Position& before, Move m) {
   const Color us = before.side_to_move();
   const Square from = m.from(), to = m.to();
   const Piece mover = before.piece_at(from);
-#if FORK_NET_ARCH == 8
-  for (const Color c : {White, Black}) d.pawns_before[c] = d.pawns_after[c] = before.pieces(c, Pawn);
-#endif
   auto remove = [&](Piece p, Square s) {
     d.removed_piece[d.removed_count] = p;
     d.removed_square[d.removed_count++] = s;
-#if FORK_NET_ARCH == 8
-    if (kind_of(p) == Pawn) d.pawns_after[side_of(p)] &= ~bb(s);
-#endif
   };
   auto add = [&](Piece p, Square s) {
     d.added_piece[d.added_count] = p;
     d.added_square[d.added_count++] = s;
-#if FORK_NET_ARCH == 8
-    if (kind_of(p) == Pawn) d.pawns_after[side_of(p)] |= bb(s);
-#endif
   };
   if (m.is_castle()) {  // encoded king to its own rook's square
     const auto landing = Position::castle_landing(from, to);
@@ -509,6 +498,18 @@ FeatureDelta delta_for_move(const Position& before, Move m) {
     remove(before.piece_at(captured), captured);
   }
   add(m.is_promotion() ? piece_of(us, m.promo_type()) : mover, to);
+#if FORK_NET_ARCH == 8
+  // Castling moves no pawn; otherwise the mover or the captured piece may be one.
+  const bool captured_pawn = d.removed_count == 2 && kind_of(d.removed_piece[1]) == Pawn;
+  if (kind_of(mover) == Pawn || captured_pawn) {
+    d.pawn_change = true;
+    for (const Color c : {White, Black}) d.pawns_before[c] = d.pawns_after[c] = before.pieces(c, Pawn);
+    for (int i = 0; i < d.removed_count; ++i)
+      if (kind_of(d.removed_piece[i]) == Pawn) d.pawns_after[side_of(d.removed_piece[i])] &= ~bb(d.removed_square[i]);
+    for (int i = 0; i < d.added_count; ++i)
+      if (kind_of(d.added_piece[i]) == Pawn) d.pawns_after[side_of(d.added_piece[i])] |= bb(d.added_square[i]);
+  }
+#endif
   return d;
 }
 
@@ -710,7 +711,11 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
             },
             e.acc);
 #if FORK_NET_ARCH == 8
-        add_link_rows(net, d.pawns_after, us, f.flip, e.acc.values[us]);
+        // A king move that changes the frame changes no pawn, except a king
+        // capturing one.
+        const Bitboard pawns_now[2] = {d.pawn_change ? d.pawns_after[White] : before.pieces(White, Pawn),
+                                       d.pawn_change ? d.pawns_after[Black] : before.pieces(Black, Pawn)};
+        add_link_rows(net, pawns_now, us, f.flip, e.acc.values[us]);
 #endif
         e.computed[us] = true;
       }

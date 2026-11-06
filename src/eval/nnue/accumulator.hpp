@@ -70,8 +70,10 @@ struct FeatureDelta {
   Piece removed_piece[2], added_piece[2];
   Square removed_square[2], added_square[2];
 #if FORK_NET_ARCH == 8
-  // Each side's pawns before and after the move (S512+PP's links change only
-  // when a pawn moves, is captured or promotes).
+  // S512+PP's links change only when a pawn moves, is captured or promotes:
+  // then pawn_change is set and these hold each side's pawns before and
+  // after the move (left unset otherwise).
+  bool pawn_change = false;
   Bitboard pawns_before[2] = {0, 0}, pawns_after[2] = {0, 0};
 #endif
 };

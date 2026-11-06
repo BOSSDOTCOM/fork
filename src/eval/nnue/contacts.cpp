@@ -57,7 +57,7 @@ bool possible(int att, Square a, Square b, int vic) {
 
 struct ContactTable {
   std::vector<std::int32_t> contact;  // [att][a][b][vic], -1 when impossible
-  std::vector<std::int32_t> link;     // [slot][slot], -1 when not a link
+  std::vector<std::int16_t> link;     // [slot][slot], -1 when not a link (int16: 1,488 links; half the cache)
   int contacts = 0, links = 0;
 
   ContactTable() : contact(std::size_t{Classes} * 64 * 64 * Classes, -1), link(96 * 96, -1) {
@@ -71,7 +71,7 @@ struct ContactTable {
     for (int i = 0; i < 96; ++i)
       for (int j = i + 1; j < 96; ++j) {
         const int qi = i % 48 + 8, qj = j % 48 + 8;
-        if (qi != qj && std::abs((qi & 7) - (qj & 7)) <= 1) link[i * 96 + j] = links++;
+        if (qi != qj && std::abs((qi & 7) - (qj & 7)) <= 1) link[i * 96 + j] = static_cast<std::int16_t>(links++);
       }
   }
   static std::size_t slot(int att, Square a, Square b, int vic) {
