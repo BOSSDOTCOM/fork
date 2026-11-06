@@ -189,8 +189,10 @@ class Parsing(unittest.TestCase):
 
     def test_nets_md(self):
         n = P.nets_md((REPO / 'docs' / 'nets.md').read_text('utf-8'))
-        # nets.md's default is the network CMakeLists.txt builds in (whichever it is)
-        self.assertEqual(n['default']['name'].lower(), P.default_net((REPO / 'CMakeLists.txt').read_text()))
+        # nets.md's default is the network CMakeLists.txt builds in (whichever it is), by its file: a section's
+        # display name need not be the file's stem (S512+PP is nets/s512pp.fnet)
+        stem = P.default_net((REPO / 'CMakeLists.txt').read_text())
+        self.assertIn(f'nets/{stem}.fnet', n['default']['items']['File'])
         self.assertEqual(sum(x['default'] for x in n['nets']), 1)
         self.assertIn('B0r2', [x['name'] for x in n['nets']])
         self.assertIn('nets/s512.fnet', [x['net'] for x in n['entries']])

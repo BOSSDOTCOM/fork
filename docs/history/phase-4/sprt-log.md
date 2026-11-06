@@ -837,11 +837,16 @@ LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
 - **Consequence (the owner's pre-declared gate): item 7's retrain uses the
   S512+PP architecture** (retrain_g3s2.py's ARCH = s512pp; the warm recipe
   starts from this candidate's float weights).
-- **Not promoted:** a promotion is the owner's decision (reported first).
-  Open before one: the two failing search checks and the weaker endgame
-  check (KQK 59 of 300), which the Syzygy slice in g3s2 is meant to fix;
-  the nps ratio below the 0.90 gate; and whether to promote this net now
-  or wait for item 7's retrain (UNVERIFIED which is better).
+- Reported to the owner with what was open: the two failing search
+  checks, the weaker endgame check (KQK 59 of 300, which the Syzygy slice
+  in g3s2 is meant to fix) and the nps ratio below the 0.90 gate.
+- **Promoted (owner, 2026-11-06, the same evening): S512+PP is the default
+  network**, with the speed exception (0.895) and the endgame-check result
+  recorded (docs/nets.md); the two search checks rewritten to hold for any
+  evaluator (the promotion rule); bench 13,909,380 / 831e5c9295839f87.
+  Generation 3's part g3e was stopped and sealed, and the next part, g3f,
+  is labelled by S512+PP (the labeller policy). Item 7's candidate must
+  now beat S512+PP.
 
 ### reval-no-check-relief (re-validation filler: check relief removed, [−3, 0]; undecided at the cap)
 

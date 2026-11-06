@@ -533,7 +533,10 @@ TEST_CASE("search", "no null move without pieces: two pawn endings keep their ta
 // e1f1 and e1f2 lose (Syzygy 3-4-5 through python-chess's chess.syzygy, and
 // the lichess tablebase API,
 // https://tablebase.lichess.ovh/standard?fen=7k/8/P7/3r4/8/8/3R4/4K3_w_-_-_0_1,
-// agreeing, 2026-10-29).
+// agreeing, 2026-10-29). In K+P v K, b7b8q, b7b8r and all five king moves
+// keep the win and only b7b8b and b7b8n draw (the same two sources,
+// https://tablebase.lichess.ovh/standard?fen=4k3/1P6/8/8/8/8/8/4K3_w_-_-_0_1,
+// 2026-11-06): S512+PP plays e1f2 at depth 1.
 TEST_CASE("search", "quiescence values on constructed exchanges match python-chess") {
   Fixture fx;
   struct Exchange {
@@ -548,7 +551,7 @@ TEST_CASE("search", "quiescence values on constructed exchanges match python-che
        {Exchange{"4k3/8/8/3q4/4P3/8/8/4K3 w - - 0 1", 100, "e4d5", ""},
         Exchange{"4k3/8/3p4/4r3/8/5N2/8/4K3 w - - 0 1", -100, "f3e5", ""},
         Exchange{"4k3/8/2p5/3p4/8/8/3Q4/4K3 w - - 0 1", 700, "", "d2d5"},
-        Exchange{"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1", 900, "b7b8q", ""},
+        Exchange{"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1", 900, "b7b8q", "", "b7b8q b7b8r e1d1 e1d2 e1e2 e1f1 e1f2"},
         Exchange{"3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1", 500, "d2d5", "", "", true},
         Exchange{"7k/8/P7/3r4/8/8/3R4/4K3 w - - 0 1", 600, "d2d5", "", "a6a7 d2a2 d2d5 d2h2"}}) {
     fx.store.clear();
@@ -607,10 +610,13 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
   CHECK_EQ(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 99 80", 3).score, mate_score(1));
   // ...but with no mate in 1 every move ends in a draw by the 50-move rule.
   CHECK_EQ(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 99 80", 3).score, 0);
-  // With the clock at 0 the same position is no draw: any score above the
-  // draw's 0 shows that (the size of a rook's edge is the evaluator's: S-512
-  // scores it 263).
-  CHECK(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 0 80", 3).score > 0);
+  // The rule must not fire early. A position's score with the clock at 0 is the
+  // evaluator's (S512+PP scores K+R v K above at most 0 at depth 3), so the
+  // contrast uses a forced mate, which any evaluator's search finds: K+R v K
+  // mate in 2 with no mate in 1 (python-chess, 2026-11-06). With the clock at
+  // 99 every move draws; with the clock at 0 the mate stands.
+  CHECK_EQ(fx.search("k7/8/2K5/8/8/8/8/7R w - - 99 80", 4).score, 0);
+  CHECK_EQ(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 80", 4).score, mate_score(3));
   // 1. e4 Nf6 2. Nf3 Ng8 3. Ng1: ...Nf6 repeats the position after 1...Nf6.
   // Black starts without its queen, so the evaluation is far from 0 with any
   // evaluator (B0r2 scores the full-material position at exactly 0;
