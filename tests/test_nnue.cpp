@@ -65,8 +65,8 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   net->inputs = NetPieceSquares * net->region_count + (NetExposure ? NetExposureRows : 0) +
                 (NetContacts ? NetContactInputs + NetLinkInputs : 0) + (NetLinks ? NetLinkInputs : 0);
   for (auto& w : net->ft_weights) w = static_cast<std::int16_t>(uniform(rng, -400, 400));
-  // S512+PP's link rows sit in the same int16 sums, up to 96 at once: within
-  // +-150 (2000 + 32 x 400 + 96 x 150 < 32767).
+  // S512+PP's link rows sit in the same int16 sums, up to 64 at once: within
+  // +-150 (2000 + 32 x 400 + 64 x 150 < 32767).
   if constexpr (NetLinks)
     for (int i = NetPieceSquares * NetHidden; i < (NetPieceSquares + NetLinkInputs) * NetHidden; ++i)
       net->ft_weights[i] = static_cast<std::int16_t>(uniform(rng, -150, 150));
@@ -198,11 +198,13 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   loud->ft_bias[7] = 32000;
   rejects(write_net_file(*loud), "a first-layer unit beyond int16");
 #if FORK_NET_ARCH == 8
-  // One link weight that 96 links at once would take past int16 (bias and
-  // piece rows of unit 3 within their test bounds, 2000 + 32 x 400 + 96 x 300).
+  // One link weight that the most links at once (64 at S512+PP's rank limit)
+  // would take past int16 whatever unit 3's bias: its largest piece weight
+  // is near the test bound 400, and 32 x 300 + 64 x 400 = 35,200 already
+  // exceeds 32,767.
   auto linked = random_net(4);
-  linked->ft_weights[(NetPieceSquares + 1000) * NetHidden + 3] = 300;
-  rejects(write_net_file(*linked), "a link weight that 96 links would take beyond int16");
+  linked->ft_weights[(NetPieceSquares + 500) * NetHidden + 3] = 400;
+  rejects(write_net_file(*linked), "a link weight that 64 links would take beyond int16");
 #endif
 #if FORK_NET_ARCH == 1
   auto wide = random_net(3);
@@ -579,8 +581,10 @@ TEST_CASE("nnue", "searches through the evaluator hooks keep every accumulator e
 // trainer's too), and each perspective's inputs on 200 parity positions are
 // the Python reference's (tests/nnue/s512cl-contacts.txt, written by
 // `tools/nnue/contacts.py lists tests/nnue/parity.epd --count 200` from
-// python-chess's attack sets; compared as sorted lists). Any build: the
-// frame's file flip is computed here, not taken from the network.
+// python-chess's attack sets; compared as sorted lists). Any build but
+// S512+PP's, whose links have a rank limit (the frame's file flip is computed
+// here, not taken from the network).
+#if FORK_NET_ARCH != 8
 TEST_CASE("nnue", "S512cl's contact and link inputs equal the Python reference's") {
   CHECK_EQ(contact_table_size(), NetContactInputs);
   CHECK_EQ(link_table_size(), NetLinkInputs);
@@ -614,6 +618,7 @@ TEST_CASE("nnue", "S512cl's contact and link inputs equal the Python reference's
   }
   CHECK_EQ(compared, 400);
 }
+#endif
 
 // The added-rows kernel's vector path (AVX-512 or AVX2 as built) equals its
 // scalar reference bit for bit: random rows and counts up to the most active
@@ -643,11 +648,17 @@ TEST_CASE("nnue", "the added-rows kernel equals its scalar reference, saturation
   CHECK(saturated > 1000);  // the extreme rounds reached both limits
 }
 
-// S512+PP's link inputs from the pawns alone equal the reference's links
-// (tools/nnue/contacts.py, the same file's link block), ascending.
+// The link inputs from the pawns alone equal the reference's links
+// (tools/nnue/contacts.py), ascending: in S512+PP's builds those of its rank
+// limit (tests/nnue/s512pp-links.txt, written by `contacts.py links
+// tests/nnue/parity.epd --ranks 1 --count 200`), in the others S512cl's (the
+// link block of tests/nnue/s512cl-contacts.txt).
 TEST_CASE("nnue", "the link inputs from the pawns equal the Python reference's") {
-  std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/s512cl-contacts.txt");
-  CHECK_MSG(in.good(), "tests/nnue/s512cl-contacts.txt is missing");
+  CHECK_EQ(link_table_size(), NetLinkInputs);
+  const std::string file = NetLinkRanks == 1 ? "s512pp-links.txt" : "s512cl-contacts.txt";
+  const int offset = NetLinkRanks == 1 ? 0 : NetContactInputs;  // the link block's first number in the file
+  std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/" + file);
+  CHECK_MSG(in.good(), "tests/nnue/" << file << " is missing");
   int compared = 0, nonempty = 0;
   for (std::string line; std::getline(in, line);) {
     const std::size_t a = line.find('|'), b = line.find('|', a + 1);
@@ -658,7 +669,7 @@ TEST_CASE("nnue", "the link inputs from the pawns equal the Python reference's")
       std::istringstream is(k == 0 ? line.substr(a + 1, b - a - 1) : line.substr(b + 1));
       std::vector<std::int32_t> want;
       for (std::int32_t x; is >> x;)
-        if (x >= NetContactInputs) want.push_back(x - NetContactInputs);
+        if (x >= offset) want.push_back(x - offset);
       const Color perspective = k == 0 ? pos.side_to_move() : ~pos.side_to_move();
       const Square seen =
           perspective == White ? pos.king_square(perspective) : pos.king_square(perspective) ^ 56;

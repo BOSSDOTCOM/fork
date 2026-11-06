@@ -107,6 +107,28 @@ class Contacts(unittest.TestCase):
         # Links: 8 pawns per side; pairs on the same or adjacent files: per
         # side 7 adjacent pairs; across sides, same file 8, adjacent 14.
         self.assertEqual(len(contacts.link_features(b, chess.WHITE)), 7 + 7 + 8 + 14)
+        # S512+PP's rank limit 1: only the 7 pairs on each side's own rank;
+        # the two sides' pawns are five ranks apart.
+        self.assertEqual(len(contacts.link_features(b, chess.WHITE, contacts.S512PP_RANKS)), 7 + 7)
+
+    def test_rank_limited_links(self):
+        # S512+PP's links (rank limit 1): 608, counted here from the squares
+        # directly (a pawn slot pairs with the slots on its own and the
+        # neighbouring files and ranks; each pair once).
+        squares = [(side, q) for side in (0, 1) for q in range(8, 56)]
+        want = sum(1 for i, (_, a) in enumerate(squares) for (_, b) in squares[i + 1:]
+                   if a != b and abs(a % 8 - b % 8) <= 1 and abs(a // 8 - b // 8) <= 1)
+        self.assertEqual(want, 608)
+        self.assertEqual(contacts.link_count(contacts.S512PP_RANKS), want)
+        for board in positions():
+            pawns = list(board.pieces(chess.PAWN, True) | board.pieces(chess.PAWN, False))
+            near = sum(1 for i, p in enumerate(pawns) for q in pawns[i + 1:]
+                       if abs(p % 8 - q % 8) <= 1 and abs(p // 8 - q // 8) <= 1)
+            for persp in (chess.WHITE, chess.BLACK):
+                got = contacts.link_features(board, persp, contacts.S512PP_RANKS)
+                self.assertEqual(len(got), len(set(got)), board.fen())
+                self.assertEqual(len(got), near, board.fen())
+                self.assertTrue(all(0 <= x < 608 for x in got), board.fen())
 
 
 if __name__ == '__main__':

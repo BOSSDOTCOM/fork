@@ -22,8 +22,9 @@
 //   contact and pawn-link inputs (contacts.hpp; ideas.md 41, owner,
 //   2026-11-05; no exposure plane), S-512's output. 8 S512+PP: S-512 plus
 //   the pawn-link inputs only (owner, 2026-11-05; idea 40's first L1 step),
-//   kept incrementally in the main int16 sums (net_file.hpp's bound of 96
-//   links), S-512's output.
+//   of pawns at most one rank apart (NetLinkRanks; owner, 2026-11-06), kept
+//   incrementally in the main int16 sums (net_file.cpp's bound of 64 links),
+//   S-512's output.
 // - QA = 255, QB = 64 (bullet's quantization convention; ORIGINALITY.md).
 #pragma once
 
@@ -49,7 +50,24 @@ inline constexpr int NetExposureRows = 640;  // own/enemy x 5 non-king types x 6
 // tests/test_nnue.cpp checks these sizes against it).
 inline constexpr bool NetContacts = NetArchitecture == 7;
 inline constexpr int NetContactInputs = 50416;
-inline constexpr int NetLinkInputs = 1488;
+// The links' rank limit: two pawns on the same or adjacent files form a link
+// when their ranks are at most this far apart (S512cl: any, 7; S512+PP: 1,
+// owner, 2026-11-06, its measured speed step, ideas.md 40).
+inline constexpr int NetLinkRanks = NetArchitecture == 8 ? 1 : 7;
+// Whether pawns on frame squares a and b (8 .. 55) form a link.
+constexpr bool link_squares(int a, int b) {
+  const int df = (a & 7) - (b & 7), dr = (a >> 3) - (b >> 3);
+  return a != b && df <= 1 && df >= -1 && dr <= NetLinkRanks && dr >= -NetLinkRanks;
+}
+// The link space's size: pairs of pawn slots (side x 48 + frame square - 8),
+// the lower first, whose squares form a link (1,488 at 7 ranks, 608 at 1).
+constexpr int link_space() {
+  int n = 0;
+  for (int i = 0; i < 96; ++i)
+    for (int j = i + 1; j < 96; ++j) n += link_squares(i % 48 + 8, j % 48 + 8);
+  return n;
+}
+inline constexpr int NetLinkInputs = link_space();
 // S512+PP's pawn-link inputs, right after the piece rows.
 inline constexpr bool NetLinks = NetArchitecture == 8;
 inline constexpr int NetMaxInputs = NetPieceSquares * NetMaxRegions + (NetExposure ? NetExposureRows : 0) +

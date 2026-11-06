@@ -20,7 +20,9 @@ cheaper piece (pawn < knight = bishop < rook < queen); between pieces of one
 kind, the one whose attacker stands on the lower frame square.
 
 Links: one input per unordered pair of pawns, of either side, whose files
-are the same or adjacent.
+are the same or adjacent, and, with a rank limit R, whose ranks are at most
+R apart (S512cl: no limit, R = 7; S512+PP: R = 1, owner, 2026-11-06, the
+measured speed step; ideas.md 40).
 
 The index space is enumerated once, statically, in a fixed order (the order
 the engine and the trainer use too): contacts by attacker class, attacker
@@ -35,6 +37,9 @@ queen's with a pawn that attacks it back); links by the pair of pawn slots
     contacts.py lists EPD [--count N]   each position's inputs per perspective
         ("FEN | side to move's | the other's": contacts, then links offset by
         the contact count, each list sorted; tests/nnue/s512cl-contacts.txt)
+    contacts.py links EPD --ranks R [--count N]   the links alone (numbers
+        within the link block of rank limit R, each list sorted;
+        tests/nnue/s512pp-links.txt with R = 1)
 """
 import sys
 
@@ -97,10 +102,31 @@ def contact_possible(att, a, b, vic):
 
 
 _TABLES = None
+_LINKS = {}
+NO_RANK_LIMIT = 7  # S512cl's links: any two ranks
+S512PP_RANKS = 1   # S512+PP's links: neighbouring or equal ranks
+
+
+def linked(qa, qb, ranks):
+    """Whether pawns on frame squares qa and qb form a link."""
+    return qa != qb and abs(qa % 8 - qb % 8) <= 1 and abs(qa // 8 - qb // 8) <= ranks
+
+
+def link_table(ranks=NO_RANK_LIMIT):
+    """{(slot, slot): link number} of rank limit `ranks`, built once each."""
+    if ranks not in _LINKS:
+        slots = [(side, sq) for side in (0, 1) for sq in range(8, 56)]
+        links = {}
+        for i, (si, qi) in enumerate(slots):
+            for j in range(i + 1, len(slots)):
+                if linked(qi, slots[j][1], ranks):
+                    links[(i, j)] = len(links)
+        _LINKS[ranks] = links
+    return _LINKS[ranks]
 
 
 def tables():
-    """(contact index dict, link index dict), built once."""
+    """(contact index dict, link index dict), built once: S512cl's."""
     global _TABLES
     if _TABLES is None:
         contacts = {}
@@ -110,14 +136,7 @@ def tables():
                     for vic in range(2 * KINDS):
                         if contact_possible(att, a, b, vic):
                             contacts[(att, a, b, vic)] = len(contacts)
-        slots = [(side, sq) for side in (0, 1) for sq in range(8, 56)]
-        links = {}
-        for i, (si, qi) in enumerate(slots):
-            for j in range(i + 1, len(slots)):
-                sj, qj = slots[j]
-                if qi != qj and abs(qi % 8 - qj % 8) <= 1:
-                    links[(i, j)] = len(links)
-        _TABLES = (contacts, links)
+        _TABLES = (contacts, link_table())
     return _TABLES
 
 
@@ -125,8 +144,8 @@ def contact_count():
     return len(tables()[0])
 
 
-def link_count():
-    return len(tables()[1])
+def link_count(ranks=NO_RANK_LIMIT):
+    return len(link_table(ranks))
 
 
 def contact_features(board, persp):
@@ -153,17 +172,17 @@ def contact_features(board, persp):
     return sorted(out)
 
 
-def link_features(board, persp):
-    """Link input numbers (0-based within the link block) of `persp`."""
-    _, links = tables()
+def link_features(board, persp, ranks=NO_RANK_LIMIT):
+    """Link input numbers (0-based within the link block of rank limit
+    `ranks`) of `persp`."""
+    links = link_table(ranks)
     f = frame_of(board, persp)
     slots = sorted((int(board.color_at(s) != persp)) * 48 + f(s) - 8 for s in board.pieces(chess.PAWN, True) |
                    board.pieces(chess.PAWN, False))
     out = []
     for i, a in enumerate(slots):
         for b in slots[i + 1:]:
-            qa, qb = a % 48 + 8, b % 48 + 8
-            if abs(qa % 8 - qb % 8) <= 1:
+            if linked(a % 48 + 8, b % 48 + 8, ranks):
                 out.append(links[(a, b)])
     return sorted(out)
 
@@ -173,15 +192,21 @@ def lists(board, persp):
 
 
 def main(argv):
-    if len(argv) < 2 or argv[0] != 'lists':
-        print('usage: contacts.py lists EPD [--count N]', file=sys.stderr)
+    if len(argv) < 2 or argv[0] not in ('lists', 'links') or (argv[0] == 'links' and '--ranks' not in argv):
+        print('usage: contacts.py lists EPD [--count N] | contacts.py links EPD --ranks R [--count N]',
+              file=sys.stderr)
         return 2
     count = int(argv[argv.index('--count') + 1]) if '--count' in argv else None
     fens = [line.strip() for line in open(argv[1], encoding='utf-8') if line.strip() and not line.startswith('#')]
+    if argv[0] == 'links':
+        ranks = int(argv[argv.index('--ranks') + 1])
+        each = lambda b, p: link_features(b, p, ranks)  # noqa: E731
+    else:
+        each = lists
     for fen in fens[:count]:
         board = chess.Board(fen)
-        print(fen, '|', ' '.join(map(str, lists(board, board.turn))), '|',
-              ' '.join(map(str, lists(board, not board.turn))))
+        print(fen, '|', ' '.join(map(str, each(board, board.turn))), '|',
+              ' '.join(map(str, each(board, not board.turn))))
     return 0
 
 

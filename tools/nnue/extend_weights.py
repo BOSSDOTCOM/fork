@@ -12,9 +12,10 @@ validation loss.
 
 S512cl's warm start (ideas.md 41) is the same with its contact and link
 inputs (tools/nnue/contacts.py; no factoriser) appended instead, done on the
-file's bytes (its first layer has about 27 M values).
+file's bytes (its first layer has about 27 M values); S512+PP's (ideas.md
+40) with its links of rank limit 1 only.
 
-    extend_weights.py S512_WEIGHTS.bin OUT.bin [--arch s512x|s512cl]
+    extend_weights.py S512_WEIGHTS.bin OUT.bin [--arch s512x|s512cl|s512pp]
 """
 import argparse
 import struct
@@ -68,12 +69,18 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('weights')
     ap.add_argument('out')
-    ap.add_argument('--arch', default='s512x', choices=('s512x', 's512cl'))
+    ap.add_argument('--arch', default='s512x', choices=('s512x', 's512cl', 's512pp'))
     a = ap.parse_args(argv)
     if a.arch == 's512cl':
         data = append_l0w_inputs(Path(a.weights).read_bytes(), contact_inputs())
         Path(a.out).write_bytes(data)
         print(f'{a.out}: {len(data)} bytes, {contact_inputs()} contact and link inputs appended to l0w')
+        return 0
+    if a.arch == 's512pp':
+        links = contacts.link_count(contacts.S512PP_RANKS)
+        data = append_l0w_inputs(Path(a.weights).read_bytes(), links)
+        Path(a.out).write_bytes(data)
+        print(f'{a.out}: {len(data)} bytes, {links} link inputs appended to l0w')
         return 0
     w = netformat.read_weights_bin(Path(a.weights).read_bytes())
     data = netformat.write_weights_bin(add_exposure_inputs(w))

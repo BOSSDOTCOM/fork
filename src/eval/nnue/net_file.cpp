@@ -17,11 +17,13 @@ namespace {
 constexpr char Magic[8] = {'F', 'O', 'R', 'K', 'N', 'E', 'T', 0};
 constexpr int MaxActivePieces = 32;
 constexpr int MaxExposed = 30;  // every piece but the kings
-// The most pawn links one position can hold (S512+PP): the largest
-// sum over files of C(n, 2) + n * n(next file), for at most 16 pawns and 6 per
-// file, is 96 (4, 6 and 6 pawns on three adjacent files), found by trying every
-// distribution.
-constexpr int MaxActiveLinks = 96;
+// The most pawn links one position can hold. Any ranks apart (S512cl's
+// links): the largest sum over files of C(n, 2) + n * n(next file), for at
+// most 16 pawns and 6 per file, is 96 (4, 6 and 6 pawns on three adjacent
+// files), found by trying every distribution. At most one rank apart
+// (S512+PP's): a pawn's partners stand on the 8 squares around it, so 16
+// pawns hold at most 16 x 8 / 2 = 64 links.
+constexpr int MaxActiveLinks = NetLinkRanks == 1 ? 64 : 96;
 
 std::uint32_t get_u32(const std::uint8_t* p) {
   return std::uint32_t{p[0]} | std::uint32_t{p[1]} << 8 | std::uint32_t{p[2]} << 16 |

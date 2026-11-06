@@ -1,8 +1,8 @@
 {
-  "comment": "S512+PP's tensors as Fork's training program saves them (tools/train --arch s512pp), in save order: the 768 piece rows, then the 1,488 pawn-link rows (tools/nnue/contacts.py's links; no contacts, no factoriser, no exposure plane), the output layer transposed to one bucket's weights per row; read by convert.py and reference.py (DESIGN.md \u00a75.4, \"S512+PP\"; ideas.md 40). The phase table is S512r2's (s512.json, fitted on g2s1), so a warm start from S512r2 keeps its output buckets.",
+  "comment": "S512+PP's tensors as Fork's training program saves them (tools/train --arch s512pp), in save order: the 768 piece rows, then the 608 pawn-link rows of rank limit 1 (tools/nnue/contacts.py's links of pawns at most one rank apart; owner, 2026-11-06; no contacts, no factoriser, no exposure plane), the output layer transposed to one bucket's weights per row; read by convert.py and reference.py (DESIGN.md \u00a75.4, \"S512+PP\"; ideas.md 40). The phase table is S512r2's (s512.json, fitted on g2s1), so a warm start from S512r2 keeps its output buckets.",
   "name": "s512pp",
   "architecture": 8,
-  "inputs": 2256,
+  "inputs": 1376,
   "hidden": 512,
   "qa": 255,
   "qb": 64,

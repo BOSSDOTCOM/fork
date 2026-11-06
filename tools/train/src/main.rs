@@ -33,6 +33,10 @@
 //!   non-king piece attacking another, not both pawns, of a mutual pair only
 //!   the cheaper attacker's) and 1,488 links (two pawns on the same or
 //!   adjacent files), after the 768 piece inputs; the output as s512's.
+//! - s512pp: s512 plus the pawn links only, of pawns at most one rank apart
+//!   (S512+PP; ideas.md 40; owner, 2026-11-06): 608 links after the 768
+//!   piece inputs, numbered as S512cl's in their own space; the output as
+//!   s512's.
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
@@ -96,6 +100,7 @@ enum Arch {
     Xgr512,
     S512x,
     S512cl,
+    S512pp,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -115,6 +120,8 @@ struct Spec {
     factoriser: bool,
     exposure: bool,
     contacts: bool,
+    /// S512+PP's links of rank limit PP_LINK_RANKS (no contacts).
+    links: bool,
     /// --qat: quantization-aware training (the S-512 family; ideas.md 44).
     qat: bool,
     picker: Picker,
@@ -138,6 +145,7 @@ impl Spec {
             "xgr512" => Arch::Xgr512,
             "s512x" => Arch::S512x,
             "s512cl" => Arch::S512cl,
+            "s512pp" => Arch::S512pp,
             other => panic!("unknown --arch {other}"),
         };
         let mut s = Spec {
@@ -149,6 +157,7 @@ impl Spec {
             factoriser: false,
             exposure: false,
             contacts: false,
+            links: false,
             qat: a.0.iter().any(|x| x == "--qat"),
             picker: Picker::None,
             table: Vec::new(),
@@ -179,9 +188,13 @@ impl Spec {
                 s.contacts = true;
                 s.picker = Picker::Phase;
             }
+            Arch::S512pp => {
+                s.links = true;
+                s.picker = Picker::Phase;
+            }
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
-        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl), "--qat: the S-512 family only");
+        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp), "--qat: the S-512 family only");
         match s.picker {
             Picker::None => {}
             Picker::Phase => s.table = parse_list(a.need("--buckets"), FULL_PHASE + 1, "--buckets"),
@@ -207,13 +220,18 @@ impl Spec {
         self.factor_start()
     }
     fn link_start(&self) -> usize {
-        self.contact_start() + contact_tables().contacts
+        self.contact_start() + if self.contacts { contact_tables().contacts } else { 0 }
     }
     fn contact_inputs(&self) -> usize {
         if self.contacts { contact_tables().contacts + contact_tables().links } else { 0 }
     }
+    /// S512+PP's link inputs.
+    fn pp_link_inputs(&self) -> usize {
+        if self.links { rank_links().links } else { 0 }
+    }
     fn inputs(&self) -> usize {
         self.exposure_start() + if self.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 } + self.contact_inputs()
+            + self.pp_link_inputs()
     }
     /// At most 8 contacts per non-king piece (8 rays or knight squares) and
     /// a link per pair of the 16 pawns.
@@ -221,10 +239,11 @@ impl Spec {
         32 * (1 + usize::from(self.factoriser))
             + if self.exposure { 60 } else { 0 }
             + if self.contacts { 30 * 8 + 120 } else { 0 }
+            + if self.links { 64 } else { 0 }
     }
     /// Inputs that remain after the factorisers are merged (the saved file).
     fn saved_inputs(&self) -> usize {
-        self.factor_start() + if self.exposure { EXPOSURE_ROWS } else { 0 } + self.contact_inputs()
+        self.factor_start() + if self.exposure { EXPOSURE_ROWS } else { 0 } + self.contact_inputs() + self.pp_link_inputs()
     }
 }
 
@@ -426,6 +445,55 @@ fn contact_tables() -> &'static ContactTables {
     })
 }
 
+/// S512+PP's link space: S512cl's pairs of pawn slots whose squares are at
+/// most PP_LINK_RANKS ranks apart, numbered in the same order.
+const PP_LINK_RANKS: usize = 1;
+
+struct RankLinks {
+    /// [pawn slot][pawn slot], -1 when not a link.
+    link: Vec<i32>,
+    links: usize,
+}
+
+fn rank_links() -> &'static RankLinks {
+    static TABLE: std::sync::OnceLock<RankLinks> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut link = vec![-1i32; 96 * 96];
+        let mut links = 0usize;
+        for i in 0..96usize {
+            for j in i + 1..96 {
+                let (qi, qj) = (i % 48 + 8, j % 48 + 8);
+                if qi != qj && (qi % 8).abs_diff(qj % 8) <= 1 && (qi / 8).abs_diff(qj / 8) <= PP_LINK_RANKS {
+                    link[link_slot(i, j)] = links as i32;
+                    links += 1;
+                }
+            }
+        }
+        RankLinks { link, links }
+    })
+}
+
+/// S512+PP's link inputs of one perspective (numbers within the link block),
+/// appended to `links`; `frame` and `own` as contact_features's.
+fn pp_link_features(b: &Board, frame: impl Fn(usize) -> usize, own: impl Fn(usize) -> usize, links: &mut Vec<usize>) {
+    let t = rank_links();
+    let mut pawns: Vec<usize> = (0..64)
+        .filter_map(|s| match b.piece[s] {
+            Some((0, side)) => Some(own(side) * 48 + frame(s) - 8),
+            _ => None,
+        })
+        .collect();
+    pawns.sort_unstable();
+    for (n, &i) in pawns.iter().enumerate() {
+        for &j in &pawns[n + 1..] {
+            let l = t.link[link_slot(i, j)];
+            if l >= 0 {
+                links.push(l as usize);
+            }
+        }
+    }
+}
+
 /// A perspective's contact and link inputs (numbers within each block),
 /// appended to `contacts` and `links`; `frame` maps a stored square to the
 /// perspective's frame square, `own` a stored side to the relative one.
@@ -518,6 +586,14 @@ fn perspective_features(spec: &Spec, b: &Board, exposed: u64, persp: usize, out:
             n += 1;
         }
     }
+    if spec.links {
+        let mut l = Vec::with_capacity(64);
+        pp_link_features(b, |sq| orient(sq) ^ flip, |side| usize::from(side != persp), &mut l);
+        for i in l {
+            out[n] = (spec.link_start() + i) as i32;
+            n += 1;
+        }
+    }
     n
 }
 
@@ -555,7 +631,7 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                 let l1 = builder.new_affine("l1", 2 * h, 1);
                 l1.forward(l0.forward(stm).crelu().concat(l0.forward(ntm).crelu()))
             }
-            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl => {
+            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp => {
                 let l0 = builder.new_affine("l0", n, h);
                 let l1 = builder.new_affine("l1", 2 * h, nb);
                 if s.qat {
@@ -652,7 +728,7 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
             SavedFormat::id("l1w").round().quantise::<i16>(64),
             SavedFormat::id("l1b").round().quantise::<i32>(255 * 64),
         ],
-        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl => vec![
+        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp => vec![
             first_layer(spec, "l0w", h).round().quantise::<i16>(255),
             SavedFormat::id("l0b").round().quantise::<i16>(255),
             SavedFormat::id("l1w").transpose().round().quantise::<i16>(64),
@@ -688,7 +764,7 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
 /// sums its exposure rows in 32 bits, so their size needs no bound).
 fn clipped(spec: &Spec) -> Vec<&'static str> {
     match spec.arch {
-        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl => vec![],
+        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp => vec![],
         Arch::H512 | Arch::AfS => vec!["l0w", "l0b"],
         Arch::Xgr512 => vec!["l0w", "l0b", "s0w", "s0b"],
     }

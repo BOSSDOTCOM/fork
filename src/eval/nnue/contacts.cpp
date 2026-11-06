@@ -88,7 +88,7 @@ struct LinkTables {
 };
 
 constexpr LinkTables make_link_tables() {
-  const auto partnered = [](int a, int b) { return a != b && (a & 7) - (b & 7) <= 1 && (b & 7) - (a & 7) <= 1; };
+  const auto partnered = [](int a, int b) { return link_squares(a, b); };  // rank distances survive the frame
   LinkTables t;
   for (int i = 0; i < 96 * 96; ++i) t.input[i] = -1;
   for (int i = 0; i < 96; ++i)

@@ -19,7 +19,8 @@ from the designs, not from Fork's training program or C++:
 
 Architecture ids: 2 S-512, 3 H-512, 4 AF-S, 5 XGR-512, 6 S512+X (S-512
 plus XGR's exposure inputs), 7 S512cl (S-512 plus Fork's contact and
-pawn-link inputs, contacts.py; ideas.md 41); 1 is B0, in reference.py. Fork's net file, version 2: the 64-byte header (magic,
+pawn-link inputs, contacts.py; ideas.md 41), 8 S512+PP (S-512 plus the
+pawn links only, of rank limit 1; ideas.md 40); 1 is B0, in reference.py. Fork's net file, version 2: the 64-byte header (magic,
 version 2, id, saved inputs, hidden, QA, QB, S, bucket count, checksum),
 then a 128-byte map block (32 region bytes, 25 phase-table bytes, zeros),
 then the tensors, little-endian:
@@ -75,6 +76,7 @@ class Arch:
         self.exposure = name in ('xgr512', 's512x')
         self.contacts = name == 's512cl'
         self.links = name in ('s512cl', 's512pp')  # S512+PP: the pawn links only
+        self.link_ranks = contact_inputs.S512PP_RANKS if name == 's512pp' else contact_inputs.NO_RANK_LIMIT
         self.picker = 'phase' if name != 'xgr512' else None
         self.table = list(table) if table is not None else []
         if self.picker:
@@ -101,7 +103,7 @@ class Arch:
     @property
     def saved_inputs(self):
         extra = ((contact_inputs.contact_count() if self.contacts else 0) +
-                 (contact_inputs.link_count() if self.links else 0))
+                 (contact_inputs.link_count(self.link_ranks) if self.links else 0))
         return self.factor_start + (EXPOSURE_ROWS if self.exposure else 0) + extra
 
 
@@ -145,7 +147,7 @@ def features(arch, board, persp, exposed=None):
     if arch.contacts:
         out += [arch.contact_start + c for c in contact_inputs.contact_features(board, persp)]
     if arch.links:
-        out += [arch.link_start + c for c in contact_inputs.link_features(board, persp)]
+        out += [arch.link_start + c for c in contact_inputs.link_features(board, persp, arch.link_ranks)]
     return sorted(out)
 
 
