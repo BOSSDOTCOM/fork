@@ -3409,6 +3409,99 @@ outside Emscripten too); the Node runs above are the WASM tests. Whether
 CI gains an Emscripten job (cached SDK) is decided with the owner once the
 build exists.
 
+### 5.6 The Phase 4 checklist and its order (owner, 2026-11-06; the order awaits the owner's review)
+
+Everything Phase 4 still owes, nothing cut, each item with its status, kept
+current as items move (the decisions log records each owner decision once;
+this section is the running list). Estimates are rough wall-clock times
+(UNVERIFIED until run): GitHub's shards run one SPRT at a time (an STC SPRT
+up to 12 stages of about 18 minutes, so up to about 3.6 hours; an LTC SPRT
+up to 6 stages of 1,664 games at 40+0.4); Kaggle sessions run beside them;
+local CPU jobs run one heavy job at a time beside data generation.
+
+**The re-validation queue** (owner, 2026-11-06; recorded, not started):
+GitHub filler after the current SPRT queue (the threat set, ProbCut, the
+speed-to-Elo measurement), each STC on [0, 3] with S512r2 as the default,
+logged in the SPRT log as **network-era retests of bootstrap-era
+results**:
+1. B-4, the TT-refined quiescence stand-pat (reverted in 1e16853 after H0
+   at STC with the bootstrap evaluator, −4.11 ± 3.93 Elo; its code comes
+   back from 6c797e1 behind a switch).
+2. Keeping exact TT entries (`UseTtKeepExact`, off; inconclusive at its
+   cap, −0.6 ± 7.5 at 4,800 games, on [−3, 0]).
+3. B-3, the shallower fail-high re-search (b001d1e; reverted, inconclusive
+   at its cap on [0, 3]), with idea 29 (how often unconfirmed root fail
+   highs hold; its measurement informs the retest).
+4. The root fail-high fix (f0a9caf; rejected at STC, −14.6 ± 10.8, reverted
+   in 1fb18f4; idea 29 reopens it).
+RfpMargin 40 (rejected in favour of 80 by its gauntlet data, idea 34) and
+every Phase 3 margin go to the SPSA retune instead of SPRTs.
+
+**Network**
+
+| item | status (2026-11-06) |
+|---|---|
+| More data generations | g3 (500 M), g3b, g3c, g3d sealed; **g3e running** (10 threads since 10:45 AM EST, the default engine, seed 20261110, target 477 M); the next snapshot (g3s2) and a retrain of the default on it follow g3e |
+| Endgame slice and the standing acceptance test (idea 45) | **on hold** (owner, 2026-11-05); the 900-position check exists (tools/nnue/endgame_check.py) and is run for each new net; the KRK conversion test found 3 of 20 drawn by the fifty-move rule |
+| S512+PP evidence (idea 40's L1 first step) | R = 1 (608 links) **training on Kaggle** (fork-s512pp, two seeds, the owner's recorded exception to the speed gate at 0.895); then parity, the endgame check and a fixed-node screen against S512r2 (800k nodes, 1,600 games); an STC SPRT only if the screen exceeds about +30 Elo; reported before any promotion |
+| Threat inputs (S512cl, idea 41) | **held by the speed gate** (0.195 of S512r2's nps, recomputed per evaluation); speed work in order: incremental updates, 8-bit rows with clipping-aware training, fewer features; its own update cost measured when its turn comes |
+| Idea 40's structure system | L1 (a pawn-and-king network cached by structure key): after S512+PP's evidence. L2 (tables): the pawn drift table's LTC was undecided (not adopted; the owner decides whether the further tables go ahead); the pawn-structure history is built in batch 4. L3 (root planner), L4 (teaching targets), L5 (proof set): planned; the two gates (near-tie frequency at the root, L1's signal against results) are measured first |
+| QAT (idea 44) | `--qat` built; its validation plan written; not yet run (with the next training session) |
+| Idea 46 (threat knowledge at low speed cost) | approved as ranked: the speed-to-Elo measurement first (after ProbCut), then the attack-map pricing and the residual study (cheap kill tests), then distillation from S512+X with auxiliary threat targets (one Kaggle session; a fixed-node screen, then STC), threat-class output heads, the gated evaluation's oracle, the danger vector, column-restricted exposure rows, the structure-keyed delta cache, threat-keyed correction tables, the stand-pat check |
+| S512+X | an LTC candidate at low priority (+25.67 fixed nodes, H0 at STC at 0.818 nps) |
+
+**Search**
+
+| item | status (2026-11-06) |
+|---|---|
+| Tier 2, batch 3 | rising RFP: H0 (off). Threat-aware ordering (cheaper-attacker): **STC SPRT running** (stage 0 merged, −11.30 ± 10.67). ProbCut (9 / 5 / 80): measured, test branch ready, **next in the queue** |
+| Tier 2, batch 4 | built behind switches with placeholders (tier2/batch4, bench unchanged): razoring, quiet history pruning, bad-capture futility, fifty-move eval scaling (its formula an exact Berserk match: the owner's decision pending), the history malus balance, double extensions, node types with their LMR uses, the pawn-structure history, upcoming-repetition detection; each needs its measurement (a wide pre-declared grid), constant screen and STC SPRT |
+| Further correction tables | non-pawn per side, minor, continuation, threat, material: queued after the pawn drift table, whose LTC was undecided (owner's decision pending) |
+| Continuation histories in LMR (idea 42) | planned (KB T58); measured and SPRTed like the LMR history term |
+| Fractional depth (idea 43) | designed (plan only); a search refactor before the SPSA retune |
+| The re-validation queue | recorded above; GitHub filler |
+| The full re-validation (§5.2, Quality control 6) | owed at Phase 4's end: every search feature switched off in turn, SPRT [−3, 0]; switches folded into plain code only after it |
+| SPSA retune | owed: every eval-dependent margin and the Phase 3 margins (RfpMargin 40 among the candidates), at STC, then at LTC; after the search changes settle |
+
+**Speed**
+
+| item | status (2026-11-06) |
+|---|---|
+| The default engine's speed sprint | round 1: +4.0% (C4, committed 5ba7d0d); C1 parked for TCEC's x86-64-v4 builds; C2, C3 not kept. Round 2 (a refresh cache for mirror-frame changes, a SIMD `select_best`, both perspectives updated in one pass) built behind flags, bench identical; its A/B waits for a quiet machine (g3e paused) |
+
+**Idea 23's long run**: the harness is built (tools/evolve/); the long run
+is planned late in Phase 4, after the search changes settle.
+
+**Final steps**
+
+| item | status |
+|---|---|
+| LTC confirmations owed | none outstanding today (IIR confirmed); each reduction or pruning change adopted at STC from here on (the threat set, ProbCut, batch 4) gets its LTC confirmation; the pawn drift table's undecided LTC awaits the owner |
+| Final gauntlet | after the last adoption (GitHub's gauntlet workflow, as milestone 1's) |
+| Audit-2 and its fixes | not started (an audit in audit-1's form after the last search and network change) |
+| Phase-end checklist (CLAUDE.md), merge to main, tag `phase-4`, summary | at the end |
+
+**Proposed order** (by expected Elo per unit of effort, dependencies kept;
+estimates UNVERIFIED):
+
+| # | item | why here | estimate |
+|---|---|---|---|
+| 1 | The current SPRT queue: the threat set, then ProbCut (GitHub) | running and ready | 0.5-1 day |
+| 2 | S512+PP R = 1's evaluation (Kaggle running; parity, endgame check, fixed-node screen) | in flight; decides idea 40's L1 | 1 day |
+| 3 | Speed sprint round 2's A/B (a quiet hour, g3e paused) | sure Elo for little effort | 0.5 day |
+| 4 | The speed-to-Elo measurement (GitHub, about 4,000 games) | resets the speed gate; idea 46's first | 0.5 day |
+| 5 | Batch 4: measurements (local, beside g3e at low priority), screens, then STC SPRTs one at a time | nine built items, each a possible few Elo | 4-6 days of GitHub |
+| 6 | Idea 46's kill tests (attack-map pricing, residual study), then distillation with auxiliary targets (Kaggle), fixed-node screen, STC | no speed cost if it works | 2-3 days |
+| 7 | g3e sealed, the next snapshot, a retrain of the default on it (Kaggle), its tests | more data; the labeller policy needs the search settled first | 3-4 days (g3e alone about 2 days at 10 threads) |
+| 8 | Continuation histories in LMR (idea 42), the further correction tables (on the owner's word) | tier 2's remaining gains | 2-3 days |
+| 9 | The re-validation queue (as GitHub filler throughout) | whenever GitHub would idle | filler |
+| 10 | Fractional depth (idea 43) | a refactor; must precede the SPSA retune | 2-3 days |
+| 11 | The full re-validation (removal round) | after the last feature is in | 3-5 days of GitHub |
+| 12 | SPSA retune, STC then LTC | after the search and the network settle | 4-7 days |
+| 13 | Idea 23's long run | late, on the settled search | 3+ days |
+| 14 | Idea 40's later layers, S512cl's speed work, the endgame slice (when the owner lifts its hold), QAT, the rest of idea 46 | larger efforts, gated by their own measurements | as gated |
+| 15 | LTC confirmations owed, the final gauntlet, audit-2 and its fixes, the phase-end checklist, merge to main, tag, summary | the close | 3-4 days |
+
 ## 6. Decisions log
 
 | Date | Decision |
@@ -3496,6 +3589,7 @@ build exists.
 | 2026-11-05 | **S512+X: not promoted, an LTC candidate at low priority; the speed gate for new inputs (owner).** S512+X (seed 2, S = 89; bake/s512x c62bb3b) scored +25.67 ± 10.26 at fixed nodes (run 42142711426) and −30.04 ± 10.82 at STC (run 42149140337, H0 after stage 0) against S512r2, at 0.818 of its nps (a quiet 12-round A/B). By §5.4's rule (it beat S512r2 at fixed nodes and failed at STC) it is recorded as an **LTC / TCEC-conditions candidate**, at low priority: XGR-512, the same pattern with a larger fixed-node gain (+30.70), failed at LTC too (−30.56 ± 9.96, H0). S512r2 stays the default. New rule in §5.4: a new input type must keep 0.90 of the default's nps in a quiet fixed-time A/B before it trains; below that it is optimized first. Applied first to S512cl, measured before any Kaggle training. |
 | 2026-11-05 | **The job supervisor and the run-ID ledger (owner).** Two SPRT drivers believed stopped (their tool tasks were stopped, which ended only a wrapper shell) kept running: the check-relief filler dispatched stages 7-9 while the rising-RFP driver, waiting for an idle GitHub, never dispatched, and its stage 0 was reported from the filler's run. No result was merged into the wrong SPRT (the driver's meta check), but attribution and process control failed. Built before any SPRT resumes: `tools/jobs/jobctl.py` (one lock per job type; the whole process tree contained, in a Windows Job Object the command joins before it runs, or a POSIX session plus an environment marker; `stop` ends the tree, gently first, and verifies none is left before releasing the lock; the keeper lives until the whole tree has ended, so a descendant outliving its command is still stopped); `tools/jobs/ledger.py` (every dispatched run with its inputs; an after-the-fact attribution goes in as an import with its evidence); `sprt_run.sh` runs only under the supervisor, takes its run by sprt.yml's new run title, records it, and merges only ledger-recorded stages. Tests: tools/jobs/test_jobctl.py (7, Windows and WSL) and tools/github/test_sprt_run.sh (29 checks); planted faults (a root-only kill, the old newest-run rule) fail them. |
 | 2026-11-06 | **The reconciliation of two chats' instructions (owner).** Each decision recorded once, here. (1) **S512+PP's speed gate:** trained at 0.90 or more of the default's nps by the identical-tree method, 0.95 the goal reported beside it; revisited after the speed-to-Elo measurement (idea 46); final adoption by SPRT (§5.4). (2) **The speed gate's method:** the identical-tree method (bench rounds, every new-input weight zero) whenever the tree can be held identical; fixed time per position otherwise, e.g. synthetic nets (§5.4). (3) **The SPRT queue:** the threat set (running), then ProbCut (d9-r5-m80, STC [0, 3]; the margin 80 kept with credit, ORIGINALITY.md; the switch stays off until its SPRT passes), then the speed-to-Elo measurement. (4) **Docs-only pull requests** with green CI may be merged without asking (standing rule); PR #8's merge (0e7247b) ratified. (5) **Data generation:** g3e starts on 10 threads as soon as the quiet session of 2026-11-06 ends (the current default engine, the standing settings, a new seed), the measurement queue being empty. (6) **Idea 46's training experiment** (distillation and auxiliary targets): a fixed-node screen first, then STC, as for every new network (its rule 5 amended). (7) **Idea 46's order:** the speed-to-Elo measurement is first among its experiments, after the current SPRT queue. (8) **Performance-only settings** (S512+PP's cache size, prefetch depth): the higher median nps ratio wins, the smaller setting if the difference is within the 3% noise rule; declared before Part A's results were seen. Also: the AVX-512/VNNI output layer (speed sprint C1) is parked, not dropped (the SPRT shards build x86-64-v3 only), to be revisited for TCEC's x86-64-v4 builds; check relief stays on and the filler is closed (undecided at its cap: not passed, so the removal is not accepted). |
+| 2026-11-06 | **The re-validation queue and the Phase 4 checklist (owner).** Four network-era retests of bootstrap-era results, recorded as GitHub filler after the current SPRT queue, each STC [0, 3] with S512r2 as the default: B-4 (the TT-refined stand-pat), keeping exact TT entries, B-3 with idea 29, and the root fail-high fix; RfpMargin 40 and every Phase 3 margin go to the SPSA retune. The full Phase 4 checklist, each item's status and a proposed order are in §5.6 (the order awaits the owner's review). |
 
 ## 7. Performance doctrine (governs every phase)
 
