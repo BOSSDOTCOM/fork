@@ -20,6 +20,7 @@ added; no CI job applies them automatically.
 |---|---|---|---|
 | B0 (768 -> 256 -> 1) | B0: 11.1 / 8.8 cp | 15 / 12 cp | owner, 2026-10-29 |
 | S-512 (768 mirrored -> 512 SCReLU -> 8 by phase) | S512: 15.6 / 12.1 cp | 21 / 16 cp | owner, 2026-10-30 |
+| S512+PP (S-512 plus 608 pawn links of rank limit 1, in the main int16 sums) | s512pp (bake/s512pp 412b13f, seed 2): 8.3 / 6.8 cp | 21 / 16 cp (S-512's) | owner, 2026-11-06 |
 
 ## B0 (2026-10-29)
 
