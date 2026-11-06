@@ -665,6 +665,7 @@ LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
 | Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
 |---|---|---|---|---|---|---|
 | fixed nodes, 800,000 per move (600+6 clock that never binds, Hash 16, Syzygy 3-4-5, UHO book) | 42142711426 | 1,600 (no time losses, no abnormal ends) | +25.67 ± 10.26 | +42.76 ± 17.02 | [18, 152, 355, 244, 31] | above 0: the SPRT follows |
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027) | 42149140337 (stage 0) | 1,600 (no time losses, no abnormal ends) | −30.04 ± 10.82 | −47.52 ± 17.02 | [49, 235, 338, 161, 17] | **H0 accepted** (LLR −3.32) after stage 0: not promoted |
 
 - Speed (2026-11-05, the owner's method): every other CPU job suspended
   in place (the machine about 6% busy), 12 interleaved rounds of
@@ -675,3 +676,13 @@ LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   S512+X 3,060,734; the pairwise ratio median **0.818** (0.793 to 0.846):
   S512+X searches about 18% fewer nodes per second. (A first, loaded
   measurement, 8 pairs beside measurement c, gave the same ratio, 0.818.)
+
+- **Decision: S512+X is not promoted; S512r2 stays the default.** Its
+  per-node gain (+25.67 at fixed nodes) does not survive its cost in
+  speed at a real clock: at STC it lost 30.04 ± 10.82 Elo. The 0.818 nps
+  ratio alone explains part of the swing; the rest is UNVERIFIED (a
+  fixed-node match and a timed match also differ in how a net's
+  per-node quality turns into depth). The exposure plane's evaluation
+  cost is the thing to cut before a retest; the S512cl design, which
+  replaces it, is measured for speed before it trains (owner,
+  2026-11-05).
