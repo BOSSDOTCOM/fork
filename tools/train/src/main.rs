@@ -44,6 +44,8 @@
 //!                       [--init-weights weights.bin] [options]
 //!   fork-train eval     --arch A [maps] (--checkpoint DIR | --weights weights.bin) --epd FILE --out FILE
 //!   fork-train loader   --data SHARD... [--positions N]   (decoding speed, one thread)
+//! --qat (train, eval, check; the S-512 family): quantization-aware training
+//! (ideas.md 44), the forward pass on the integer file's weight grid.
 //! [maps] are --regions (32 comma-separated region numbers) and --buckets (25
 //! bucket numbers), as the architecture needs; the files in
 //! tools/nnue/ hold the fitted ones.
@@ -113,6 +115,8 @@ struct Spec {
     factoriser: bool,
     exposure: bool,
     contacts: bool,
+    /// --qat: quantization-aware training (the S-512 family; ideas.md 44).
+    qat: bool,
     picker: Picker,
     table: Vec<u8>,
     buckets: usize,
@@ -145,6 +149,7 @@ impl Spec {
             factoriser: false,
             exposure: false,
             contacts: false,
+            qat: a.0.iter().any(|x| x == "--qat"),
             picker: Picker::None,
             table: Vec::new(),
             buckets: 1,
@@ -176,6 +181,7 @@ impl Spec {
             }
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
+        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl), "--qat: the S-512 family only");
         match s.picker {
             Picker::None => {}
             Picker::Phase => s.table = parse_list(a.need("--buckets"), FULL_PHASE + 1, "--buckets"),
@@ -552,7 +558,21 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
             Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl => {
                 let l0 = builder.new_affine("l0", n, h);
                 let l1 = builder.new_affine("l1", 2 * h, nb);
-                l1.forward(l0.forward(stm).screlu().concat(l0.forward(ntm).screlu())).select(bucket)
+                if s.qat {
+                    // Quantization-aware training (ideas.md 44; KB nnue-design.md
+                    // §5.6): the forward pass uses each weight and bias rounded to
+                    // the grid Fork's integer file stores it on (save_list's
+                    // factors: 255 for the first layer, 64 for the output
+                    // weights, 255 x 64 for their biases), so the loss is the
+                    // quantized network's; the gradient passes the rounding
+                    // unchanged (a straight-through estimate).
+                    let (w0, b0) = (l0.weights.faux_quantise(255.0, true), l0.bias.faux_quantise(255.0, true));
+                    let (w1, b1) = (l1.weights.faux_quantise(64.0, true), l1.bias.faux_quantise(255.0 * 64.0, true));
+                    let (a_s, a_n) = (w0.matmul(stm) + b0, w0.matmul(ntm) + b0);
+                    (w1.matmul(a_s.screlu().concat(a_n.screlu())) + b1).select(bucket)
+                } else {
+                    l1.forward(l0.forward(stm).screlu().concat(l0.forward(ntm).screlu())).select(bucket)
+                }
             }
             Arch::AfS => {
                 let l0 = builder.new_affine("l0", n, h);
