@@ -135,10 +135,14 @@ class Parsing(unittest.TestCase):
         self.assertTrue(v['compiler'].startswith('clang '))
 
     def test_bench_expected_and_default_net(self):
-        ref = P.bench_expected((REPO / 'tests' / 'bench-s512r2.ref').read_text())
+        """The default network as CMakeLists.txt sets it (whichever it is), and its bench reference."""
+        net = P.default_net((REPO / 'CMakeLists.txt').read_text())
+        self.assertRegex(net or '', r'^[a-z0-9_]+$')
+        self.assertTrue((REPO / 'nets' / f'{net}.fnet').is_file())
+        ref = P.bench_expected((REPO / 'tests' / f'bench-{net}.ref').read_text())
         self.assertEqual(set(ref), {'nodes', 'signature'})
         self.assertTrue(ref['nodes'].isdigit())
-        self.assertEqual(P.default_net((REPO / 'CMakeLists.txt').read_text()), 's512r2')
+        self.assertIsNone(P.default_net('set(FORK_NET "nets/x.fnet")'))  # only the source-dir form counts
 
     def test_manifests(self):
         m = json.loads((REPO / 'data' / 'manifests' / 'g3d.json').read_text())
@@ -185,7 +189,9 @@ class Parsing(unittest.TestCase):
 
     def test_nets_md(self):
         n = P.nets_md((REPO / 'docs' / 'nets.md').read_text('utf-8'))
-        self.assertEqual(n['default']['name'], 'S512r2')
+        # nets.md's default is the network CMakeLists.txt builds in (whichever it is)
+        self.assertEqual(n['default']['name'].lower(), P.default_net((REPO / 'CMakeLists.txt').read_text()))
+        self.assertEqual(sum(x['default'] for x in n['nets']), 1)
         self.assertIn('B0r2', [x['name'] for x in n['nets']])
         self.assertIn('nets/s512.fnet', [x['net'] for x in n['entries']])
 
@@ -292,7 +298,7 @@ class World:
             if sub[0] == 'rev-parse':
                 return ok(self.commit + '\n')
             if sub[0] == 'show' and sub[1].endswith(':CMakeLists.txt'):
-                return ok((REPO / 'CMakeLists.txt').read_text())
+                return ok('set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512r2.fnet" CACHE FILEPATH "x")\n')
             if sub[0] == 'show' and sub[1].endswith('.ref'):
                 return ok('nodes 14180299\nsignature 4cf778ff753861f7\n')
             if sub[0] == 'diff':

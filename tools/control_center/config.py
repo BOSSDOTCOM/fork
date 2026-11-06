@@ -8,10 +8,9 @@ since 2026-10-31"): 20,000 nodes, the score adjudication at 700 cp for 8 plies, 
 --save-percent 50 --unsaved-nodes 4000 --check-nodes 2000; hash 1 MB and 1,024 MB shards as every part so
 far; 10 threads ("Datagen takes 10 of the 12 threads", section 5.3, owner's answers of 2026-10-28, 3).
 
-The disk margin is the app's own rule, not a documented number (DESIGN.md only says "Disk is rechecked
-before each long datagen run"): a start needs room for the part's remaining target at the measured
-bytes per position on WSL's disk and twice that on C: (WSL's virtual disk grows on C:, and the sealed copy
-goes there too), plus disk_reserve_gb on each. UNVERIFIED as policy: the owner may set another margin.
+The disk margin is policy (DESIGN.md section 5.3, deliverable 2, "Disk margin"; owner, 2026-11-06): a
+start needs room for the part's remaining target at bytes_per_position on WSL's disk and twice that on C:
+(WSL's virtual disk grows on C:, and the sealed copy goes there too), plus disk_reserve_gb on each.
 """
 import json
 import os

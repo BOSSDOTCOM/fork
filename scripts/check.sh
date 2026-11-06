@@ -176,8 +176,8 @@ build_and_test() {  # preset, ctest filter args...
 }
 
 # The tooling's own tests (audit-1 U-15): standard-library Python suites
-# (sprt_merge and the book permutation, the evolve harness, pgn_summary),
-# plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
+# (sprt_merge and the book permutation, the evolve harness, pgn_summary, the job supervisor, the
+# Control Center), plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
 # tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh with a fake gh (about 40 s).
 tool_tests() {  # python | all
   local py="" c
@@ -190,6 +190,10 @@ tool_tests() {  # python | all
   "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
   # The job supervisor and the run-ID ledger (owner, 2026-11-05): whole-tree stops, one lock per type.
   "$py" -I -B -m unittest discover -s tools/jobs -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/jobs"
+  # The Fork Control Center (owner, 2026-11-06): its parsers on the real formats, the data-generation
+  # controls against a simulated supervisor, the seal, and the read-only tabs under a write-blocking guard.
+  "$py" -I -B -m unittest discover -s tools/control_center -p 'test_*.py' >>"$log" 2>&1 \
+    || fail "tool tests: tools/control_center"
   # tools/datagen and tools/nnue need python-chess and zstandard (the
   # repository's .venv); the log says when they are missing and the suites are skipped.
   if "$py" -I -c 'import chess, zstandard' >/dev/null 2>&1; then
@@ -207,6 +211,10 @@ tool_tests() {  # python | all
   # The GitHub SPRT driver against a fake gh (its wait, stop and commit-check rules).
   PYTHON=$py bash tools/github/test_sprt_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_sprt_run.sh"
   PYTHON=$py bash tools/cloud/test_run_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/cloud/test_run_shard.sh"
+  # The Control Center's WSL launch script for a data-generation part, with stubs (Linux only).
+  if [ "$(uname -s)" = Linux ]; then
+    bash tools/control_center/test_start_part.sh >>"$log" 2>&1 || fail "tool tests: tools/control_center/test_start_part.sh"
+  fi
   # The cloud safeguards (owner, 2026-10-30): the spot quota check, the
   # cleanup of instances past their limit, a simulated spot interruption,
   # the data-generation fleet request.

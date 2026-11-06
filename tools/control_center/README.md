@@ -23,8 +23,8 @@ the repository.
    the generation's target, shows the plan for confirmation and starts it through the WSL supervisor
    (`jobctl.py start datagen NAME`). It refuses while any data-generation job lives or holds the lock (in
    either supervisor), while the last part is neither sealed nor copied, and when the disk margin is not met
-   (`config.py`: the part's size at 4.6 bytes a position on WSL's disk, twice that on C:, plus 20 GB each;
-   the app's own margin, since the docs give no number). A running part (such as g3e, started by hand) is
+   (the policy in DESIGN.md §5.3 deliverable 2, "Disk margin": the part's size at 4.6 bytes a position on
+   WSL's disk, twice that on C:, plus 20 GB each; `config.py`). A running part (such as g3e, started by hand) is
    attached: its settings are read from fork_datagen's command line. Live: part, elapsed time, games,
    positions, positions/s (the log's average and the last 30 s). A watchdog process (`watchdog.py`) keeps
    Windows from sleeping (system sleep only) while the part's job lives, also with the window closed, and

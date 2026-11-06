@@ -2507,6 +2507,15 @@ target linking the engine library, never part of the TCEC binary).
   are never merged into one manifest, so training can always tell which
   network labelled which positions. Generation 1 is the first instance:
   g1 (B0r1, ended by B0r2's promotion) and g1b (B0r2).
+- **Disk margin (standing; owner, 2026-11-06).** A part starts only when
+  the disk has room for it: its remaining target at the measured bytes
+  per recorded position (4.6, above g3d's measured 4.38), once on
+  WSL's disk and twice on C: (WSL's virtual disk grows on C:, and the
+  sealed complete-games copy goes there too), plus a 20 GB reserve on
+  each. The Fork Control Center (`tools/control_center/`, the only
+  place that starts or stops a part from a button) refuses a start below
+  it; the values are `bytes_per_position` and `disk_reserve_gb` in its
+  `config.py`. The same 20 GB is its low-disk warning.
 - **Tests**: a reader for the format (C++, used by the tests, the
   rescoring tool later, and a new fuzz target `fuzz_selfplay_record`
   under the phase-end fuzz rule) round-trips every written game; every
@@ -3594,6 +3603,7 @@ UNVERIFIED):
 | 2026-11-06 | **The re-validation queue and the Phase 4 checklist (owner).** Four network-era retests of bootstrap-era results, recorded as GitHub filler after the current SPRT queue, each STC [0, 3] with S512r2 as the default: B-4 (the TT-refined stand-pat), keeping exact TT entries, B-3 with idea 29, and the root fail-high fix; RfpMargin 40 and every Phase 3 margin go to the SPSA retune. The full Phase 4 checklist, each item's status and a proposed order are in §5.6 (the order awaits the owner's review). |
 | 2026-11-06 | **§5.6's order approved, with changes (owner).** Item 7: S512r3's non-improvement is diagnosed first on a shared validation set (warm start against from scratch; the current schedule against a longer one with a lower final LR), then the default is retrained with the winning recipe on the next snapshot, which includes the Syzygy endgame slice (idea 45, lifted from its hold), with the endgame acceptance test. The fifty-move scaling's formula, a placeholder, is measured on a wide grid not centred on it before its SPRT, the result kept and any remaining match credited. The further correction tables are deferred to the gated items, after the SPSA retune; the pawn drift table stays off. B-3 is retested alongside idea 29's measurement. |
 | 2026-11-06 | **Item 7 becomes the retrain itself (owner).** The separate S512r3 diagnosis is dropped (archived unrun). The default is retrained on g3s2 with the endgame slice, in the S512+PP architecture only if S512+PP passes an STC SPRT against S512r2, which runs only if its fixed-node screen exceeds about +30 Elo (a screen above zero but below +30: evidence for idea 40 and an LTC candidate, the retrain in plain S-512; clarified by the owner the same day), else plain S-512, never launched before that result; two recipes side by side, two seeds each: a warm start at 0.0001 then the usual drop, and from scratch on the current schedule, scored by the mean best loss on a shared validation set; the better recipe's best seed goes through parity, the endgame acceptance test and its SPRT against S512r2; the recipe result is recorded (§5.6, item 7). |
+| 2026-11-06 | **The Fork Control Center, and its decisions (owner).** A Windows desktop window (`tools/control_center/`, tkinter, no other dependencies; launched from a desktop shortcut) over the job supervisors, the SPRTs and GitHub runs, Kaggle training, the networks and gauntlets, the sealed data, the machine and §5.6; everything read-only except data generation: Start (the next part by the labeller policy, through the WSL supervisor), Stop & seal (`jobctl.py stop`, then a seal job that copies the complete games, runs `verify_games.py` and `upload_batch.py seal`, and keeps every file if verification fails), an optional auto-stop, and Windows kept awake while a part runs. Decided: (1) **the disk margin is policy** (§5.3 deliverable 2, "Disk margin"); (2) **the next part (after g3e) starts from a fresh PGO build of phase-4 including 5ba7d0d** (select_best's register change, +4.0% nps, bench identical), as the labeller policy requires for any adopted change, rather than g3e's 684bac6 binary; (3) its test suite joins `scripts/check.sh`'s tool tests (the Python suite in every mode, `test_start_part.sh` on Linux in "all"). A rehearsal re-sealed g3b from WSL into scratch folders with the real verify_games.py: every data field equal to data/manifests/g3b.json. Names screened (ORIGINALITY.md). |
 
 ## 7. Performance doctrine (governs every phase)
 
