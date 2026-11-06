@@ -1175,3 +1175,116 @@ tuned by SPSA.
 - **metric:** the endgame check's misjudged counts against targets (to be
   set), the conversion rate, then the net's promotion test.
 - **status:** on hold (owner, 2026-11-05).
+
+## 46. Threat knowledge at a low speed cost: the design brainstorm
+
+- **type:** ELO (a family of network, training and search designs; nothing
+  built).
+- **idea** (owner, 2026-11-06; design only, stopped for the owner's
+  review): how to get XGR/S512+X-style threat knowledge into the
+  evaluation without S512+X's speed loss (fixed-node +25.67 ± 10.26 Elo,
+  STC −30.04 ± 10.82 at 0.818x nps). Four proposers with different briefs
+  (systems/CPU, ML/compression, chess knowledge, novelty) wrote 17 designs
+  from one brief of Fork's measured numbers; a judge merged and ranked
+  them. Clean room: concepts only, no engine source opened; every estimate
+  below is reasoned, not measured (UNVERIFIED until its experiment runs).
+- **the judge's checks** (the parts that change the plan):
+  - S512r2 is about 1,300 cycles per node (3.59 M nps at about 4.7 GHz,
+    the clock UNVERIFIED): the 0.90 gate allows about 145 extra cycles per
+    node, 0.95 about 70.
+  - **Finding threats costs more than summing them.** Switching off XGR's
+    set-wise exposure made it about 13% faster (§5.4), so finding exposed
+    pieces is near 150 cycles before any rows are summed. A per-node attack
+    map shared with move ordering saves less than it seems: most
+    evaluations are at quiescence stand-pat, where quiet ordering does not
+    run. Every "unshared" cost estimate should be read 0.03-0.06x worse
+    until measured.
+  - **The Elo value of speed is uncertain:** S512+X's swing gives about
+    3.1 Elo per 1% nps (2.2-3.9), the usual rule of thumb about 0.9
+    (UNVERIFIED for Fork). Plan with 2 ± 1 and measure it.
+  - **An evaluation that depends on the search window** (alpha, beta, a
+    pruning threshold) is not safe as proposed: the TT, the drift table's
+    residuals, the improving flag and re-searches all assume a position
+    has one static eval. Safe gates depend on the position only, or cache
+    the fuller evaluation once computed (a TT flag that only upgrades).
+  - A 1,600-game fixed-node match (about ±10 Elo) cannot screen designs
+    worth +3 to +8: those need a loss screen, then an STC SPRT.
+  - Column-restricted rows in the main accumulator break the loader's int16
+    bound (it assumes at most 32 piece features): it would have to be redone.
+  - 8-bit rows and additive low-rank factorization were argued out: S512+PP
+    showed the cost is instructions and row width, and an additive
+    factorization of attacker-victim weights reduces to per-square exposure
+    features.
+- **the designs, merged and ranked** (expected net Elo at STC per day of
+  effort; effort in days of build, training and testing):
+
+  | rank | design | proposers | effort | net STC Elo |
+  |---|---|---|---|---|
+  | 0 | the speed-Elo exchange rate (S512r2 against itself at 0.85x time) | judge | 0.5 + runners | enabler |
+  | 0 | price the attack map in fork_micro (tiers: pawn attacks; + knights and kings; full per-kind maps; exposure sets) and split S512+X's 18% into finding and summing | systems, judge | 1 | enabler |
+  | 0 | offline residual study: frozen S512r2's residuals against the labels, fitted by danger features and threat classes | chess knowledge, systems, novelty | 1-2 | kill test |
+  | 1 | **distillation from S512+X** (teacher-blended score labels, λ 0.25 or 0.5, and an arm weighting positions where teacher and S512r2 disagree) **plus auxiliary threat targets** (a training-only head predicting hanging pieces and king-zone attacks): one Kaggle session, no speed cost | ML, novelty | 5-7 | 0 to +5 |
+  | 2 | **threat-class output heads**: the head picked by phase x a cheap class (pawn and knight attacks on the mover's pieces), about 0.99x | systems, chess knowledge, novelty | 5-7 | 0 to +5 |
+  | 3 | **gated threat evaluation** (S512+X's plane only where a position-only gate fires; one net trained with the plane dropped half the time); its oracle first: both nets in one engine at fixed nodes, no training | ML, systems, novelty | 3-4 (oracle), 12-15 | −10 to +8 |
+  | 4 | **dense danger vector** into the last layer (counts of hanging and lower-attacked pieces, king-zone attackers, safe checks, restricted pieces), at the tier the attack-map pricing allows | chess knowledge, systems | 6-8 | −5 to +6 |
+  | 5 | **column-restricted exposure rows**: exposure inputs confined to 64 of the 512 columns, updated incrementally (alive only if the attack map is cheap; a separate narrow lane is dominated by it) | systems (the lane: ML, chess knowledge, novelty) | 10-12 | −8 to +8 |
+  | 6 | **pawn(+king)-keyed delta cache**, generalized from S512+PP's (after the cache's own measurement) | systems | 4-6 | 0 to +5 |
+  | 7 | **threat-keyed correction and volatility tables** (a residual table keyed by the threat configuration; error magnitude scaling the pruning margins); an offline replay first | chess knowledge, novelty | 4-6 | 0 to +4 |
+  | 8 | **stand-pat check under multiple threats** in quiescence (a new constant, measured on a wide grid) | chess knowledge | 4-6 | 0 to +4 |
+
+- **first experiments, with their rules** (declared here, before any run):
+  1. Exchange rate: S512r2 against itself at 0.85x time, STC, about 4,000
+     games on GitHub's runners (about ±8 Elo). It sets every design's
+     go/kill; under 1.5 Elo per 1% nps, the 0.90 gate would be too strict
+     for designs with large judgment gains (the owner decides).
+  2. Attack-map pricing (quiet machine): full maps plus exposure sets ≤ 60
+     cycles keeps the dense vector and column-restricted rows alive; 60-120
+     keeps only pawn/knight-tier features and the gate; over 120 kills
+     every ungated slider-feature design; if finding is over 2/3 of
+     S512+X's cost, the separate lane is dropped.
+  3. Residual study (2-5 M held-out positions, frozen S512r2, WDL space):
+     ≥ 0.5% loss reduction at an affordable tier trains the dense vector or
+     the class heads there; 0.2-0.5% only the pawn-class heads (if ≥ 0.98x
+     on a synthetic A/B); under 0.2% kills the output-layer family. The
+     volatility table needs its top quintile of predicted uncertainty at
+     ≥ 2x the bottom quintile's mean |residual|.
+  4. Gate oracle (fixed nodes, both nets in one engine, 3,200 games):
+     policies PV only, band 50, band 100 and a position-only gate; go if one
+     keeps ≥ +15 with gate rate p x 18% + 3% ≤ 7%; the position-only gate is
+     preferred if within 3 Elo of the best; otherwise the gated design is
+     killed.
+  5. Distillation and auxiliary targets (one Kaggle session; the relabelling
+     by S512+X through jobctl): two seeds per arm; an arm is kept only if
+     both seeds beat both control seeds beyond the spread with ≥ 0.3% lower
+     loss on the original labels, then an STC SPRT on [0, 5] (no
+     fixed-node screen: it cannot resolve the gain).
+- **novelty** (the judge's view, low confidence, UNVERIFIED): possibly new
+  are threat-class head selection, a threat-configuration key for
+  correction tables, and confining an input family to a column subset of
+  the main accumulator (block-sparse layers are known ML, so at most a new
+  application). Not new: window-gated evaluation is classical lazy
+  evaluation; uncertainty-scaled margins are partly public; auxiliary
+  targets are standard multi-task learning.
+- **sources to credit** (ORIGINALITY.md when a design is built): Fork KB
+  nnue-inputs.md §1 and its sources (threat inputs in NNUE); Giraffe (M.
+  Lai, 2015; attack and defend maps as inputs); public NNUE descriptions
+  (phase and material output buckets, side paths into the output layer,
+  accumulator refresh caches); Stockfish's public description of switching
+  between a small and a big net by |eval|; correction history (public
+  descriptions, first source UNVERIFIED); Chessprogramming wiki (Lazy
+  Evaluation, Kogge-Stone Algorithm, SIMD and SWAR Techniques, Hyperbola
+  Quintessence, Pawn Hash Table, King Safety, Attack and Defend Maps,
+  Mobility, Trapped Pieces, Quiescence Search, Null Move, Botvinnik-Markoff
+  Extension); Intel's ISA documentation and Wojciech Muła's blog (GFNI);
+  KataGo (Wu 2019); Bucilua, Caruana and Niculescu-Mizil (2006); Hinton,
+  Vinyals and Dean (2015); Furlanello et al. (2018); Shrivastava et al.
+  (2016); Katharopoulos and Fleuret (2018); Jaderberg et al. (2016);
+  Caruana (1997); Vapnik and Vashist (2009); Srivastava et al. (2014); Yu
+  et al. (2018); Viola and Jones (2001); Teerapittayanon et al. (2016);
+  Graves (2016); Denton et al. (2014); Jaderberg, Vedaldi and Zisserman
+  (2014); Yuan and Lin (2006); Wen et al. (2016).
+- **related:** ideas 40, 41 (S512cl), 44 (QAT); S512+X and XGR-512
+  (DESIGN.md §5.4).
+- **phase:** Phase 4.
+- **metric:** each experiment's rule above; then SPRTs.
+- **status:** designed, awaiting the owner's review (2026-11-06).
