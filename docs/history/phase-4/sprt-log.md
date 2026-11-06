@@ -666,7 +666,12 @@ LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
 |---|---|---|---|---|---|---|
 | fixed nodes, 800,000 per move (600+6 clock that never binds, Hash 16, Syzygy 3-4-5, UHO book) | 42142711426 | 1,600 (no time losses, no abnormal ends) | +25.67 ± 10.26 | +42.76 ± 17.02 | [18, 152, 355, 244, 31] | above 0: the SPRT follows |
 
-- Speed (2026-11-05, 8 interleaved single-thread `fork bench` pairs of the
-  two clang-release builds, measurement c running beside them): S512+X
-  median 2,074,797 nps, S512r2 2,556,500; the pairwise ratio median 0.818
-  (0.797 to 0.850): S512+X searches about 18% fewer nodes per second.
+- Speed (2026-11-05, the owner's method): every other CPU job suspended
+  in place (the machine about 6% busy), 12 interleaved rounds of
+  single-thread `fork bench`, the order alternating each round, both
+  clang-release builds from the candidate's own tree (c62bb3b), S512r2's
+  with `FORK_NET` set to nets/s512r2.fnet (its bench 14,180,299, as the
+  reference); only the network differs. Median nps: S512r2 3,730,026,
+  S512+X 3,060,734; the pairwise ratio median **0.818** (0.793 to 0.846):
+  S512+X searches about 18% fewer nodes per second. (A first, loaded
+  measurement, 8 pairs beside measurement c, gave the same ratio, 0.818.)
