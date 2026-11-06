@@ -33,6 +33,9 @@ __pycache__/
 *.pgn
 *.pgn.gz
 *.epd
+# Fork's own test openings (the cited bench positions; DESIGN.md §5.3).
+!tests/datagen_openings.epd
+!tests/nnue/parity.epd
 *.zst
 *.7z
 # Secrets and personal configuration never belong in the public repository
@@ -42,3 +45,6 @@ __pycache__/
 *.pem
 *.key
 .aws/
+
+# Rust build output of the training program (tools/train).
+/tools/train/target/

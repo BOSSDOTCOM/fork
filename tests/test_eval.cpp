@@ -48,6 +48,9 @@ TEST_CASE("eval", "colour symmetry on every perft-suite node to depth 3 (2 in de
 }
 
 TEST_CASE("eval", "start position scores 0; insufficient material scores 0") {
+#if defined(FORK_EVAL_NNUE)
+  SKIP("the bootstrap evaluation's own values (an nnue build)");
+#endif
   CHECK_EQ(eval_of(Position::StartFen), 0);
   CHECK_EQ(eval_of("8/8/8/4k3/8/8/8/4K3 w - - 0 1"), 0);    // K v K
   CHECK_EQ(eval_of("8/8/8/4k3/8/8/8/2B1K3 b - - 0 1"), 0);  // K+B v K
@@ -55,12 +58,18 @@ TEST_CASE("eval", "start position scores 0; insufficient material scores 0") {
 }
 
 TEST_CASE("eval", "material decides the sign; side to move flips it") {
+#if defined(FORK_EVAL_NNUE)
+  SKIP("the bootstrap evaluation's own values (an nnue build)");
+#endif
   // White is a rook up.
   CHECK(eval_of("4k3/pppppppp/8/8/8/8/PPPPPPPP/R3K3 w - - 0 1") > 300);
   CHECK(eval_of("4k3/pppppppp/8/8/8/8/PPPPPPPP/R3K3 b - - 0 1") < -300);
 }
 
 TEST_CASE("eval", "mop-up: with K+R v K the bare king on the edge scores better for the rook side") {
+#if defined(FORK_EVAL_NNUE)
+  SKIP("the bootstrap evaluation's own values (an nnue build)");
+#endif
   const int edge = eval_of("k7/8/8/8/8/8/8/1R2K3 w - - 0 1");
   const int centre = eval_of("8/8/8/3k4/8/8/8/1R2K3 w - - 0 1");
   CHECK(edge > centre);

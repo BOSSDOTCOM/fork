@@ -6,7 +6,7 @@ correctness first, then speed. This file records the architecture and every
 decision that affects play. Phase 7 evaluation adjustments must be documented
 here; no logic may alter reported scores to trigger or avoid adjudication.
 
-Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/history/phase-3/summary.md)**: Milestones A, B and C, the parameter table (8b), the heuristic-discovery harness and its validation run (8c), and the full engine audit (branch `audit-1`, merged through PR #5). By the owner's decision, tier 2 (deliverable 9) and the removal round move into Phase 4. **Phase 4 (evaluation) next, in a fresh session.** Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`).
+Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/history/phase-3/summary.md)**: Milestones A, B and C, the parameter table (8b), the heuristic-discovery harness and its validation run (8c), and the full engine audit (branch `audit-1`, merged through PR #5). By the owner's decision, tier 2 (deliverable 9) and the removal round move into Phase 4. **Phase 4 (evaluation) started 2026-10-28: step 0's spec (§5.3) approved and steps 1-3 of the multi-agent plan reviewed the same day; step 0 is being built.** Phase 2 (UCI) signed off 2026-10-24 (tag `phase-2`); Phase 1 signed off 2026-10-24 (tag `phase-1`).
 
 ---
 
@@ -346,8 +346,8 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   network and that re-validation; afterwards a standing tool in the
   improvement pass (below).
 
-  **Phase 4 multi-agent plan (not started)** (owner, 2026-10-28; recorded
-  only, nothing of it has been run).
+  **Phase 4 multi-agent plan** (owner, 2026-10-28; started 2026-10-28:
+  step 0's spec is §5.3, steps 1-3 run on branch kb).
   - **Principle:** agents propose, build and review; training and SPRT
     decide. No architecture is chosen by argument alone.
   - **Step 0, a baseline network first** (owner, 2026-10-28): a simple,
@@ -355,6 +355,17 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
     pipeline working end to end (data generation, training, inference,
     testing). Self-play data generation starts with it as early as
     possible, while the design work of steps 1-3 continues in parallel.
+  - **Step 0 requirement: the trainer-engine parity test** (owner,
+    2026-10-28). For a fixed set of positions, the trainer's own model
+    and Fork's inference code (the scalar path and every SIMD path) must
+    produce matching evaluations: exactly where both compute the same
+    integer arithmetic, and within the quantization's documented
+    tolerance where the trainer computes in floating point. It must pass
+    **before any network is tested in games**, and it runs in CI for
+    **every network change and every inference change**. Spec: §5.3,
+    deliverable 6. It applies to every later architecture too: step 4's
+    bake-off candidates and step 5's implementation each pass it before
+    their first game.
   - **Step 1, research** (branch kb, ideas only): clean-room descriptions
     of modern NNUE design (input features including threat-aware inputs,
     king buckets and mirroring as concepts, output buckets, activations,
@@ -369,11 +380,27 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
     proposals actually diverge: one speed-first, one accuracy-first, one
     novelty-first.
   - **Step 3, judge:** one agent compares the proposals and recommends 2-3
-    candidates.
+    candidates. **It may also propose one hybrid** (owner, 2026-10-28):
+    a design combining components from different proposals, listing
+    each component's source proposal and why the components should work
+    together. The hybrid enters the bake-off as an extra candidate
+    beside the originals and is never chosen without testing. The judge
+    also records which components could later be tested individually by
+    swapping them into the winner (each such swap is its own SPRT).
   - **Step 4, bake-off:** small versions of each candidate trained on the
     same data, compared by SPRT. The winner is confirmed at a larger size
     before Fork commits to it (owner, 2026-10-28); then it becomes Fork's
-    first architecture.
+    first architecture. **Settled at the step 0-3 review** (owner,
+    2026-10-28; §5.3 "Owner's answers"): the judge's four entries (S-512,
+    the hybrid H-512, AF-S, and XGR-512 if its pre-test passes), all at
+    width 512, on a shared kernel framework, trained on generation 1
+    data, every candidate on the same data (owner, 2026-10-29; first
+    generation 0); STC narrows the field and LTC decides between the finalists;
+    Fork's Elo per speed doubling is measured by 2:1 time-odds games at
+    STC only; the design-level originality screen comes first for X, G,
+    R, the fitted king regions and AF's threat encoding. One net until
+    the pipeline is proven; threat inputs come later as an add-on to the
+    winner.
   - **Step 5, implementation:** one implementer session writes the
     inference code; independent reviewers check correctness, SIMD
     equivalence with the scalar reference, performance, and originality.
@@ -388,6 +415,8 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
     built.
   - **Compute:** heavy steps (data generation, training, bake-off SPRTs)
     run one at a time on the local machine, or on GitHub or AWS.
+    **AWS is unavailable until further notice** (owner, 2026-11-05: the
+    account is suspended; decisions log).
   - **Timing:** steps 1-3 may run in parallel with tier 2 once audit-1 is
     merged, since they need little CPU; steps 4-7 run in Phase 4. Each
     step stops for the owner's review before the next; reviews are
@@ -1162,8 +1191,16 @@ because update.sh refuses it.
   `FORK_ARCH`, accepts only x86-64-v3 or x86-64-v4, refuses x86-64-v4 on a
   CPU without its five AVX-512 features, and fails unless each binary's
   `fork version` reports the pinned target. Every shard result records it
-  (`arch`).
-- **AWS EC2 c7a/c8a** (`tools/cloud/aws_spot_sprt.sh`): the `--arch`
+  (`arch`). `tools/github/sprt_run.sh` drives one SPRT there, a stage of
+  1,600 games at a time until the merged result decides: it dispatches only
+  when no run of any workflow is queued or running, refuses commits not on
+  GitHub, stops at the first run that does not succeed, and merges only
+  shard results whose meta names its own base, test and stage
+  (2026-11-02, after a cancelled SPRT's local driver kept dispatching
+  stages; `tools/github/test_sprt_run.sh` checks each rule with a fake gh).
+- **AWS EC2 c7a/c8a** (**unavailable until further notice**: owner,
+  2026-11-05, the account is suspended; decisions log)
+  (`tools/cloud/aws_spot_sprt.sh`): the `--arch`
   option, **x86-64-v3 by default, and AWS SPRTs stay on x86-64-v3 until
   Phase 4** (owner, 2026-10-28; the SPRT log records no AWS run yet);
   `--arch x86-64-v4` gives an AVX-512 build, which C7a supports (its
@@ -1381,6 +1418,27 @@ holds, which is why search decisions use no floating point (deliverable 6).
 5. **Strength.** Every technique and refinement must pass SPRT before it
    stays. One that fails (after its LTC retest where the rule applies)
    stays off behind its flag or is removed, and the result is logged.
+   **The SPRT checklist** (owner, 2026-11-05), every item before a
+   feature's SPRT is dispatched:
+   - each new or changed constant is a measured value (no placeholder ships
+     unmeasured: a rule declared before the data, a wide grid not centered
+     on the placeholder), and **the constant screen ran before the commit
+     that set it** (the originality-checker; matches recorded beside the
+     constant, non-generic ones to the owner);
+   - **the test branch's full non-slow suite passes** on its test commit
+     (`ctest -LE slow` on a fresh clang-release build), not only the quick
+     pre-commit check, which leaves out the search suites (the LMR history
+     term's SPRT ran with a pruning test that failed at its measured
+     divisor; found and fixed on 2026-11-05);
+   - the test commit's bench is recorded in its message, and its source
+     diff against the base is the feature alone;
+   - the new names were screened;
+   - **the personal-data scan passes as its own step before the branch is
+     pushed** (`scripts/scan-push.sh REF`; a hit blocks the push, and the
+     pre-push hook runs the same scan as a backstop,
+     `scripts/test_scan_push.sh` shows a planted hit stops it);
+   - `tools/github/sprt_run.sh`'s own rules (one run at a time, both commits
+     on GitHub, results matched to their stage).
 6. **Re-validation** (owner, 2026-10-25). Features interact: one that
    passed early can become redundant once later ones are in. So:
    - **No removal tests at the individual milestones** A, B and C.
@@ -1989,6 +2047,15 @@ and Weiss (results in ORIGINALITY.md).
 | `LmrMinDepth` | 3 | From depth 3 a reduced search still has at least one ply left (reductions are clamped to [1, d − 1]). |
 | `LmrMinMove` | 4 | The first three moves (the TT move and the best captures, usually) take almost all cutoffs: 87.8% on the first move, mean cutoff index 0.27 (bench, FORK_SEARCH_STATS). |
 | LMR divisor | 4.5 (log2 · log2) | Fork's choice of anchors: one ply at depth 3 from the third move, 2 plies at (8, 10), 3 at (12, 20), 5 at (20, 30), 8 at (63, 63); the reductions grow slowly enough to stay below a third of the depth. |
+| `LmrCheckRelief` (tier 2 step 0) | 1 ply | **The minimal reduction unit, not a tuned constant** (owner, 2026-10-29): a late quiet move that gives check is reduced one whole ply less, the smallest step there is in Fork's LMR, whose reductions are whole plies. Its STC SPRT passed: +11.26 +/- 5.54 Elo after 9,600 games ([0, 3]). The constant screen found the same one-ply relief for checking moves in Berserk, a coincidence noted in ORIGINALITY.md, kept by the owner. |
+| `SingularMarginPerPly` (tier 2, T27) | 6 cp per ply | **Measured** (2026-10-31, `tools/singular_measure.py`, S-512): 2,700 nodes where a singular test could run, 300 per depth 4-12, sampled from depth-13 searches of 80 evolve positions, each searched again from scratch with `searchmoves` (the TT move alone and the other moves, at half and at full depth). A margin flags the TT move when the other moves' half-depth score is below the TT score minus M·d; the pre-declared rule takes the smallest M at which, at every depth 6-12, at least 90% of flagged moves are still strictly best at full depth (cells with fewer than 20 flagged samples count as unknown). At 6 that is 0.91 at depth 6 rising to 0.97-0.98 at 7-12 (31-72 flagged per depth); at 4, depth 6 gives 0.89. Unflagged, the TT move is strictly best at full depth in 61% of the samples. |
+| `SingularMinDepth` (tier 2, T27) | 6 | **Measured**, same data and rule: at 6 cp per ply depth 5 gives 0.86 and depth 4 0.92, so 6 is the smallest depth from which every depth to 12 passes. |
+| `SingularEntrySlack` (tier 2, T27) | 3 plies | **Measured**, same data and rule: the TT entry may be up to 3 plies shallower than the node. By deficit (depths 6-12, margin 6): 0 plies 0.94 (31 flagged), 1 0.98 (256), 2 1.00 (37), 3 0.92 (26); 4 plies has 13 flagged samples, too few to count. |
+| `NoMoveReduceMinDepth` (tier 2, T26) | 8 | **Measured** (2026-11-01, `tools/no_move_measure.py`, S-512, in a separate worktree; owner: option B, a quality-per-node sweep with the rule fixed before the runs): the 4,794 evolve positions relabeled by the current engine at 25 M nodes with the reduction off (4,740 kept: no mate, \|score\| ≤ 1500 cp), then searched at 250,000 and 2,500,000 nodes from a fresh state with the reduction off and at minimum depths 2-8; per position, 1 for the label's move less the capped score error / 1000 (the evolve proxies), averaged over both budgets. Fitness: off 0.7273, 2 0.7113, 3 0.7090, 4 0.7203, 5 0.7179, 6 0.7149, 7 0.7206, **8 0.7204**; 7, 8 and 4 lie within the rule's 0.001 tie margin and the tie goes to the largest depth. **No depth beat "off"**: the paired 95% intervals of the gain over off are all below zero or reach it at most (8: −0.0068 [−0.0131, −0.0004]). The loss is in agreement at 2.5 M nodes (off 0.827, 7-8 0.807-0.808); the score error is lower with the reduction (23.9 cp against 25.7) and agreement at 250,000 nodes is level (0.698-0.702). The labels come from "off", which favours it on move agreement; the reduction also reaches depth 14 in fewer nodes (geometric mean, 4,636 positions: off 625,906, 8 495,872, 2 273,371). The rule sends 8 to the SPRT, which decides: **passed** (+21.45 ± 5.98 Elo after 4,800 games, [0, 3], on S512r2; 2026-11-02), the switch is on. The constant screen found 8 with a 1-ply reduction on a missing TT move in Stockfish 15 and in current Weiss, both at cut nodes only (Weiss before reverse futility and null-move pruning); Fork reduces at every node type, after them. Kept by the owner with credit (2026-11-01; ORIGINALITY.md). The tied 7 was screened too and matched Ethereal and Stockfish 17.1 in the same role. |
+| Singular test depth | d / 2 | Fork's form, measured with it: the test only has to show that no other move comes near the TT score, so half the remaining depth (rounded down) is enough, as for the null move's question; the measurement above used exactly this depth. |
+| Singular extension | 1 ply | The minimal unit, not a tuned constant (as `LmrCheckRelief`): Fork's depths are whole plies. With SE on the bench's nodes at fixed depth rise from 15,249,025 to 19,910,368, and 22.0% of the singular tests find the TT move singular (FORK_SEARCH_STATS). |
+| Multi-cut (tier 2, T28) | returns the bar when the bar ≥ beta | **A definition, not a tuned constant:** the withheld-move search reaching a bar at or above beta shows a second move that beats beta, so the node is taken to fail high, with the bar as the proven lower bound (a half-depth score above it is not trusted further). Non-PV nodes only (a PV node needs an exact score) and never with a mate or tablebase bar (KB §3.21's pitfall, Halogen #637). On the bench with SE on it ends 11,700 of 48,568 tests (24%; FORK_SEARCH_STATS). |
+| Negative extension (tier 2, T30) | −1 ply | **The minimal unit**, as the singular extension's +1: when the test finds other moves reaching the bar and the entry's score is already at or above beta, the TT move is searched one ply shallower. Non-PV nodes only, Fork's choice (KB: the gating is decided by experiment; its SPRT decides). With SE and multi-cut on, 9,326 such moves on the bench, whose nodes at fixed depth fall from 19,841,861 to 14,233,520. |
 | `LmpMaxDepth` | 4 | The cutoff-index measurement (next row) has the same shape to depth 6, but from depth 5 on LMR already reduces late quiets by 2 plies or more (`reduction_for(5, 13)` = 2), so LMP adds little there. |
 | `LmpQuietAllowance` | 12 (count 12 + d) | **Measured** on the bench (LMP off, FORK_SEARCH_STATS histogram of the cutting quiet's index): fewer than 1% of quiet cutoffs come after the 13th, 13th, 14th and 11th quiet at depths 1-4. 12 + d keeps that 1% bound at depths 1-3 and prunes later at depth 4, where a missed cutoff costs a bigger subtree. |
 | `FutilityMaxDepth` | 6 | As for RFP: at depth 6 the margin is 520 cp, past which a static eval says little. |
@@ -1999,6 +2066,10 @@ and Weiss (results in ORIGINALITY.md).
 | `HistoryMax` | 10000 | The scale is free (ordering compares values within one table); 10000 is a round value well inside int16, so up to three tables summed in tier 2 (T10, T11) still fit in an int16 range. |
 | `HistoryBonusCap` | HistoryMax / 8 = 1250 | No single cutoff moves a value by more than an eighth of the range, so about eight agreeing cutoffs are needed to approach the limit. |
 | History bonus | 12.5·d², capped | Grows with depth because deeper cutoffs refute bigger subtrees; quadratic so the rarer deep cutoffs outweigh the many shallow ones; reaches the cap at depth 10. |
+| `ReplyWeight` (tier 2, T10) | 6 (quarters: the reply table weighs 1.5 times the butterfly history in a quiet's score) | **Measured** on the bench (2026-10-31, FORK_SEARCH_STATS, S-512): the mean index of the cutting quiet among the quiets searched, over the quiet cutoffs at depths 1-6 (non-PV, out of check), lower being better ordering, with the rule fixed before the runs (the lowest mean; ties to the smaller tree): table off 0.6500, weight 1 0.6554, 2 0.6380, 4 0.6217, **6 0.6142**, 8 0.6293 (each 586,000 to 638,000 quiet cutoffs). Scores stay within int16: 10,000 + 1.5 · 10,000. |
+| `FollowWeight` (tier 2, T10) | 4 (quarters: the follow table weighs as much as the butterfly history) | **Measured** like `ReplyWeight`, in a separate worktree, with the reply table on at 6 (the follow table is tested on top of it): mean index of the cutting quiet, follow table off 0.6142, weight 1 0.6101, 2 0.6084, **4 0.5786**, 6 0.5841, 8 0.5980 (581,000 to 665,000 quiet cutoffs each). With both tables a quiet's score can pass int16 at the extremes (10,000 + 1.5 · 10,000 + 10,000), so the sum is clamped to the int16 range. |
+| Pair-history slots | piece (colour and type) × destination, 768 | Fork's index for both moves of a pair (KB §3.10: a move is identified by its piece and destination); the table, 768 × 768 int16, is about 1.2 MB per searcher. The reply table takes the butterfly history's bonus and malus and its bounds (the same update), and is not read for evasions, whose captures must stay above every quiet (`EvasionCaptureBase`). A node reached by a null move, and the root, have no arrival: no read, no update (KB: Fork's choice between a neutral slot and none). The follow table (2-ply) reads the arrival of the ply above, the side's own previous move. Both tables live in one array, so the move selector holds one pointer and two int16 arrivals and the search stack's frame stays at 2,688 bytes, within its guard. |
+| `TakeWeight` (tier 2, T11) | 4 (32nds: a take history entry at its limit adds 1,250 to a capture's score, whose victim counts 8 per centipawn) | **Measured** on the bench (2026-10-31, FORK_SEARCH_STATS, S-512, in a separate worktree), with the rule fixed before the runs (the lowest mean cutoff index over all cutoffs; ties to the smaller tree): take history off (MVV-LVA) 0.3499, weight 1 0.3430, 2 0.3407, **4 0.3331**, 8 0.3350, 16 0.3416. At 4, two entries at opposite limits differ by 2,500, so the history can reorder captures whose victims are less than about 3.1 pawns apart (a pawn is 800 here): a pawn capture can come before a minor-piece capture, never before a rook capture (tests/test_ordering.cpp). This row first said 1.6 pawns, counting one side of the history's range only; the tier-2 review of 2026-10-31 showed it with a failing test. Whether that reach is too far for KB §3.11's pitfall (history overriding real material) is what the SPRT measures. The table (moving piece and colour × destination × captured type, 4,608 int16) takes the history bonus on a capture cutoff and the malus for every capture tried before any cutoff; evasions keep MVV-LVA (`EvasionCaptureBase`). Its pointer grows the search stack's frame to 2,696 bytes, a recorded decision in the size guard (tests/test_search.cpp). |
 | `StaleDepthPerSearch` | 2 plies (TT victim policy, experimental switch `UseTtAgeBlend`, off by default) | Between two of Fork's searches in a game two plies are played, so a stored position is two plies nearer the new root, and the new search asks it for two plies more depth than the search that wrote it. The shape depth − k·age is the common one (Stockfish, Ethereal, Berserk and Weiss); their rates are 4-16 plies per search (constant screen, 2026-10-26). |
 | `EvasionCaptureBase` | HistoryMax + 1 | Above any history value (|h| ≤ 10000), so evasion captures always come before quiet evasions; with the largest victim-attacker score (14,400) every score fits the int16 score array (6ae4128; it was 2^20 with an int array). |
 | `TableProbeMinDepth` | 1 | Endgame tables are probed at every main-search node that meets the conditions: a fifty-move-safe probe needs a zero halfmove clock, so probes come only right after captures and pawn moves anyway. A higher minimum pays only with slow table storage (TCEC's 7-man set is on disk); tuned in Phase 8 on TCEC-like storage. |
@@ -2028,6 +2099,1300 @@ and Weiss (results in ORIGINALITY.md).
    with checks.
 4. MultiPV deferred to Phase 7.
 5. The evaluator is selected at build time, with no indirect call.
+
+### 5.3 Phase 4 spec, step 0: the baseline network and the pipeline (approved by the owner 2026-10-28)
+
+**Goal.** One simple, proven network shape carried through the whole
+pipeline end to end, so every later architecture (steps 1-4 of the
+multi-agent plan) plugs into machinery that already works and is already
+tested: self-play data generation, upload, training on Kaggle with
+bullet, Fork's own inference (scalar and SIMD), the trainer-engine parity
+test, and the SPRT that decides. **Step 0 settles the pipeline, not the
+architecture**: the baseline only has to beat the bootstrap evaluation
+and to exercise every stage. Its second job is to start the data: the
+first generation is labelled by the bootstrap evaluation's search and
+can start as soon as deliverables 1-2 exist, before any network does.
+
+**Out of scope for step 0.** King buckets, mirroring, output buckets,
+threat inputs, deeper bodies, SCReLU and other activations, int8 hidden
+layers, refresh caches (all candidates for steps 2-4); the search
+re-validation and margin retune (after the first strong network, §5.2
+Quality control 6); tier 2 (built and SPRTed beside this on the GitHub
+shards, on bootstrap builds until the baseline network is adopted, then
+rebased onto it); multithreaded search (Phase 6).
+
+**Sources.** Concepts only, from the KB on branch kb: techniques.md §4-5,
+research.md §6, tools.md §7-8, training-data.md, data-policy.md, and the
+step 1 files `nnue-design.md` and `phase4-pipeline.md` (2026-10-28). No
+engine's source code is opened by the implementing session or any
+helper; bullet (MIT, a tool, KB tag USE) is read for its documented
+interfaces and file layouts only, and Fork's training configuration is
+Fork's own code. New references go into ORIGINALITY.md when first used.
+
+**Build status (2026-10-28, branch `phase-4`).**
+- Deliverable 0: Kaggle session 1 done (results under deliverable 0);
+  K16 verified (owner, 2026-10-29); session 2 runs through the Kaggle CLI.
+- Deliverable 1: done (32a2298, 1561c13); 591,871 openings from 2016-09;
+  2026-09 streaming for generation 1.
+- Deliverable 2: done (4e81783 and later); generation 0 running in WSL
+  (10 workers, 20,000 nodes, target 200 M positions).
+- Deliverable 3: sealing done (cb97e9b); upload and confirmation after
+  session 2's CLI checks.
+- Deliverable 4: training program done and checked on the CPU (5644fcf):
+  bullet-trainer only, no bullet_lib (owner, 2026-10-28; KB
+  bullet-internals.md §12-13); viriformat's own reader decodes Fork's
+  shards exactly as python-chess replays them (45,626 positions), and its
+  "tactical" filter is "a capture or promotion was played" (measured).
+  Training needs CUDA (session 2).
+- Deliverables 5-6: inference library, kernels, presets, net file,
+  converter, reference and `fork netcheck` done (e2a5fa3); against files
+  bullet itself wrote, the quantization leg and netcheck pass exactly.
+  Still to do: the search integration (FORK_EVALUATOR=nnue, FeatureStack
+  hooks in the Searcher), embedding the net, the gate in `tools/sprt.sh`,
+  `build_pair.sh`, `elo_gauntlet.sh` and `fork_datagen`, and T from bullet
+  on a GPU.
+- Deliverable 7 (2026-10-29): B0 trained on the generation-0 snapshot
+  g0s1 (9.5 M positions), passed the full parity test (trainer leg 0.00012
+  cp, quantization leg exact, netcheck exact on 446 positions; loss max
+  11.1 / p99 8.8 cp) and its SPRT against the bootstrap evaluation (+486.85
+  +/- 32.07 Elo, H1 at [0, 5]; docs/nets.md, history/phase-4/sprt-log.md).
+  **B0 is the default evaluator since 2026-10-29** (owner). With B0 the
+  search suite's TT-at-exact-depth = minimax tests failed on a KRK
+  position at depth 6 (554 vs 558; without the TT they agreed): graph-
+  history interaction (verified: with repetition draws off in both the
+  search and the reference, they pass), so the TT reuses a score a
+  repetition draw shaped on another path; the bootstrap evaluation never
+  hit it there. The hookup was verified exact (the refresh check on at
+  every evaluation). By the owner's decision the tests were fixed, not the
+  engine: the exact TT tests run where a full-width walk finds no
+  repetition in reach (depth 3), a separate case documents the KRK case as
+  tolerated, and checks tied to the bootstrap evaluation (score near
+  material, the UCI mate-in-2 report) are bootstrap-only. The checks now
+  follow the default evaluator (check.sh, build.sh, the PGO script and
+  CI's bench parity pick bench-<net>.ref for a network).
+- Deliverable 7, first retrain (B0r1, 2026-10-29): warm-started from B0 on
+  the snapshot g0s2 (82.9 M positions; data/manifests/g0s2.json), same
+  architecture and settings; the warm start reproduced B0's validation
+  loss exactly before training (0.02482651); best superbatch 19 of 27,
+  validation loss 0.02298 (B0: 0.02483). Parity: trainer leg 0.00012 cp,
+  quantization leg exact, netcheck exact on 446; loss max 8.6 / p99 7.9 cp.
+  SPRT against B0: +200.24 +/- 16.05 Elo, H1 at [0, 5] after 1,600 games.
+  It is the default network (nets/b0r1.fnet, tests/bench-b0r1.ref:
+  15,453,694 nodes) and the network for generation 1. Three search tests
+  were fixed for it, as was done for B0:
+  - determinism clears the history as well as the TT (the history persists
+    between searches by design);
+  - the fail-high stop test scans every bench position until three
+    qualifying stops;
+  - in the exchange test, a network may play any move that keeps the
+    Syzygy result (owner), checked on K+R+P v K+R, where 4 of the 16 moves
+    keep the win (fault-injected).
+
+  B0r1's Rb2 in the two-rook position keeps the win, like every legal
+  move there, so it is not recorded as a weakness (docs/nets.md).
+- Names as built (four throwaway-clone screens, 2026-10-28, all no match
+  or generic): the third screen's three case-insensitive matches were
+  renamed before commit (`refresh_accumulator` -> `accumulate_board`,
+  `apply_delta` -> `advance_accumulator`, `Columns` -> `DeltaColumns`).
+
+#### Training-data decisions (copied from KB data-policy.md, "Owner decisions", 2026-10-24)
+
+Copied as the Phase 4 outline requires; the KB keeps the evidence
+(training-data.md) and the per-source statuses (data-policy.md).
+
+1. **Strategy A+.** Labels come from Fork's own self-play only. Datagen
+   openings are Lichess CC0 game positions, with `[%eval]` comments
+   stripped and BOT games dropped. Positions with 7 pieces or fewer are
+   labelled and adjudicated with Syzygy WDL (3-4-5 locally, so 5 pieces
+   or fewer in practice). Fork rescores old data with newer Fork nets.
+   No Lc0 data.
+2. **Compute split.** Datagen on the owner's CPU (12 threads); training
+   on Kaggle (free CUDA) first, rented CUDA only if Kaggle falls short.
+   Colab is dropped (its FAQ bans chess training on free runtimes). The
+   local Radeon RX 580 is not supported.
+3. **Disk and storage.** A compact data format (a few bytes per position)
+   regardless of disk. Kaggle Datasets holds the only copy of the
+   training data; local shards are deleted once the Kaggle hash check
+   passes; each net and its data manifests go to GitHub Releases. Accepted
+   risk: lost data means regeneration.
+4. **Lichess puzzles**: a diagnostic report only; never a tuning target,
+   an acceptance or SPRT gate, or a training input.
+5. **Review gate for Lc0 data**: revisited (an owner decision on measured
+   numbers, never an automatic switch) when two consecutive generations
+   each gain less than about 10 Elo by SPRT against the previous one, or
+   after 4 generations, or 2 billion own positions, whichever comes first.
+6. **UHO_Lichess_4852_v1.epd**: test openings only, never training data,
+   datagen openings, labelled positions or a tuning set; positions from
+   test-match games are never kept for training.
+7. **matetrack**: a diagnostic test input only, download-only, never
+   training data or a tuning target.
+
+Every net chains back to the bootstrap evaluation (KB originality.md §4):
+generation 0 is labelled by the bootstrap evaluation's search, generation
+n by net n-1's.
+
+#### The baseline network, B0
+
+| Part | Choice | Reasoning |
+|---|---|---|
+| Inputs | 768 piece-square features per perspective (2 colours × 6 piece types × 64 squares), seen from each side: the side's own pieces as "ours", the board flipped vertically for Black | The simplest input set that bullet's documentation starts from; no king dependence, so no refresh is ever needed after the root and the accumulator logic stays minimal while the pipeline is proven. |
+| Body | one hidden layer of H = 256 per perspective; the two halves concatenated side to move first; one output | The smallest shape the KB lists as proven, and cheap at every stage: 256 int16 values are 512 bytes (8 cache lines) per perspective, a quiet move updates 2 × 2 columns, and training on generation-0 volumes takes little Kaggle time (measured in deliverable 4). Width is the first lever steps 2-4 pull, not step 0's. |
+| Activation | clipped ReLU, clipped to [0, 1] in float, [0, QA] in integers | Exact and overflow-free in integers with plain int16/int32 arithmetic; squared variants need the overflow care the KB describes and belong to the designs. |
+| Quantization | accumulator weights and biases int16, scaled by QA = 255; output weights int16, scaled by QB = 64; output bias int32, scaled by QA × QB | QA = 255 is the largest activation that fits an unsigned byte, which keeps an int8 path open for later designs. QB = 64 leaves output weights up to about ±511 in float before int16 overflows, far beyond trained values. Worst-case output sum: 2 × 256 × 255 × 32767 ≈ 4.3 × 10^9 would overflow int32 only at saturated weights; with |w| ≤ 2 in float (128 quantized) it is about 1.7 × 10^7, so the loader rejects any net whose quantized output weights exceed a bound that keeps the sum inside int32 (checked, not assumed). The int16 accumulator gets the same treatment: at most 32 features are active, so the loader also rejects a net where any hidden unit's |bias| plus 32 times its largest |feature weight| exceeds 32767. **Owner's decision (2026-10-28):** 255 and 64 are kept as bullet's standard quantization convention, a trainer-interface convention credited to bullet in ORIGINALITY.md, not a tuned constant; the constant screen does not apply to them. |
+| Output scale | eval (cp) = output × S / (QA × QB), S fitted to Fork's own data | S maps the network's win-probability space to centipawns. It is **fitted, not chosen**: a logistic fit of game result against search score over generation-0 data (the Texel method's K fit, KB techniques.md §4), so a centipawn keeps roughly the meaning the search's margins were built on until their retune. |
+| Clamp | the result clamped to ±(EvalLimit - 1) | `EvalLimit` (eval_scale.hpp) is the contract every evaluator keeps. |
+
+Expected cost: per evaluation one 512-value dot product (16 AVX2 or 8
+AVX-512 multiply-adds per perspective) plus incremental updates; the
+measured nps goes into perf-log.md at deliverable 5 (not estimated here).
+
+#### Deliverables in build order
+
+Each deliverable is one or more commits with its tests. The full check
+(the CI matrix) passes on each pushed milestone; bench changes only at
+deliverable 7 (the evaluator switch), with tests/bench.ref in the same
+commit. **The review stop**: this spec (with steps 1-3's results), then
+the Kaggle test session's results (deliverable 0), then B0's SPRT
+(deliverable 7). Nothing else stops unless something fails.
+
+**0. Kaggle test session** (with the owner, who holds the account). One
+real session, run from a private notebook, settles the facts the KB marks
+UNVERIFIED before anything depends on them. Results go into the KB
+(training-data.md §2.1) and the decisions log. Checklist, each with its
+acceptable result:
+
+| # | Check | How | Acceptable |
+|---|---|---|---|
+| K1 | Account can use GPUs and internet | Settings page; phone verification if asked | GPU T4 x2 selectable (P100 appears to be gone since September 2026, phase4-pipeline.md; UNVERIFIED for free accounts); internet toggle on |
+| K2 | Internet inside a GPU session | `curl -sI https://static.rust-lang.org` in a GPU notebook | HTTP 200; otherwise the fallback below |
+| K3 | CUDA toolkit and driver | `nvidia-smi`; the CUDA libraries bullet links (cuda, cudart, nvrtc, cublas) present and linkable; `nvcc` is not needed (bullet compiles its kernels at run time) | CUDA 12.4 or newer for driver and toolkit (phase4-pipeline.md's inference from bullet's driver calls; UNVERIFIED until this check). The version goes into every run record, since Kaggle's image follows Colab's runtime and its CUDA major version can change |
+| K4 | Rust and bullet build | Rust is not preinstalled: rustup (bullet needs Rust 1.87 or newer), then `cargo build --release` of `tools/train` at the pinned bullet commit; time it | Builds in under 30 min. **Fallback**: build once, attach the binary as a private dataset, and check that it runs in a fresh session (glibc and CUDA match) |
+| K5 | Toy training run | 1-2 superbatches of B0 on a 10 M-position sample dataset | Loss falls; positions per second recorded (sets deliverable 4's budget) |
+| K6 | Checkpoint and resume | stop after N superbatches, save to `/kaggle/working`, resume in a **second** session that attaches the first's output as input, with the start superbatch set to the saved one plus one (bullet does not store it) | The weights and optimizer state loaded equal the saved ones (hash), and the loss continues from the saved level. Not a bit-identical continuation: bullet's data loader shuffles with a clock-seeded generator (phase4-pipeline.md), so training runs are not bit-reproducible, and the run record says so |
+| K7 | Headless runs | `kaggle kernels push` of the notebook from WSL, `kaggle kernels status` polling, `kaggle kernels output` download | A full "Save & Run All" run completes without a browser open; outputs download |
+| K8 | Datasets | `kaggle datasets create` of a 1-2 GB test shard from WSL; interrupt and re-run once; `kaggle datasets files` | Upload resumes; sizes match; mounted read-only at `/kaggle/input/...` |
+| K9 | Mounted-data hash check | a CPU-only session hashes the mounted shard | SHA-256 equals the local manifest; CPU session uses no GPU quota |
+| K10 | Read speed | time a full read of the mounted shard in a GPU session | Fast enough that data loading does not bound training (compared with K5's rate) |
+| K11 | Scratch disk and limits | `df -h` in the session; largest single file uploaded | Recorded; the shard size (deliverable 2) is set below the limits found |
+| K12 | Idle timeout and session length | note the interactive idle cutoff; commit runs are expected to ignore it | Recorded; training runs only as commit runs |
+| K13 | Weekly quota | the quota display before and after | Recorded; deliverable 4's schedule fits the measured hours |
+| K14 | Secrets | a Kaggle Secret read from the notebook (no token in the notebook text) | Works; nothing secret in any committed or uploaded file |
+| K15 | The trainer's evaluation of fixed positions | bullet's own evaluation of FENs with the trained float model (its value trainer's eval call, GPU only; phase4-pipeline.md) on the parity positions | Prints a score per position, written to the run's outputs |
+| K17 | Data loading on 4 CPU cores | time bullet's game-format loader alone against K5's training rate (a GPU session has only 4 CPU cores) | Loading keeps up; otherwise convert batches to bullet's fixed-size format (about 8 times larger) before training |
+| K18 | Both T4s | one training run per GPU at once | Recorded; two bake-off candidates can then train side by side |
+| K16 | Terms | re-read Kaggle's terms and AUP pages as of the session | Still personal, non-commercial ML use; datagen stays local |
+
+**Session 1 results (2026-10-28)**, from `tools/train/kaggle/session_check.py`
+run by the owner in a private GPU notebook (internet on); the JSON is
+quoted in KB phase4-pipeline.md §8.1:
+
+| Item | Result | Status |
+|---|---|---|
+| K1 GPUs | Two Tesla T4, 15,360 MiB each, driver 580.178.04. The accelerator menu offers "GPU T4 x2" and "TPU v5e-8" only (owner): no P100 for this account | verified |
+| K2 internet | github.com answered 200; the rustup distribution root and crates.io answered HTTP 404, so both servers were reached (DNS, TLS and HTTP work from a GPU session). A real download (rustup, the crates index) is session 2's test | reachability verified; downloads open |
+| K3 CUDA | Toolkit **12.8** (nvcc 12.8.93; cudart 12.8.90, NVRTC 12.8.93, cuBLAS 12.8.4.1 in `/usr/local/cuda/lib64`); the driver reports CUDA **13.0**. Both are above the 12.4 minimum inferred from bullet's code, and the driver is newer than NVRTC, as bullet needs (KB bullet-internals.md §8). `libcuda.so` is only in `/usr/local/nvidia/lib64` (on `LD_LIBRARY_PATH`, not in the loader cache); `CUDA_HOME=/usr/local/cuda`, `CUDA_PATH` unset | versions verified; that bullet builds and runs on them is K4/K5 (session 2) |
+| K4 Rust | Not preinstalled (`rustc` absent). Plan: session 2 installs it with rustup and builds `tools/train` there (the image's glibc is 2.39); the binary is kept in `/kaggle/working` and attached as an input to later sessions, rebuilt when the image or CUDA version changes. If linking `cuda` fails, set `CUDA_PATH=/usr/local/cuda` and add `-L /usr/local/nvidia/lib64` to the linker flags | open |
+| K11 disk | `/kaggle/working` 19.5 GB free (the documented 20 GB); `/tmp` and `/` 1,048.8 GB free (session scratch, lost at session end; how much of it is usable in practice: UNVERIFIED). Per-file upload limit: **none stated in the Datasets docs** (owner: only 200 GB per dataset, 200 GB of private datasets in total, at most 50 top-level files; archives are unpacked); confirmed by a real 1-2 GB shard upload in session 2 (K8) | partly verified |
+| K12 idle timeout | No idle-timeout warning during session 1 (owner); a short interactive session, so the cutoff itself is still unmeasured; training runs are commit runs anyway | noted |
+| K13 quota | Weekly GPU hours before and after were not noted (owner) | open: note them in session 2 |
+| K16 terms | The current Terms and AUP (effective 2025-06-22, no newer version) still say personal, non-commercial use; no clause covers chess, self-play or publishing a model trained on Kaggle; outputs stay the user's; one account only; automation through the API is allowed (KB training-data.md §2.1, "Kaggle terms re-checked", 2026-10-28). The owner's earlier "no" was a mistake (owner, 2026-10-29) | **verified** |
+| K17 cores | 4 CPUs, 31.3 GB RAM; Linux 6.18.55, glibc 2.39, Python 3.13.15 | verified |
+
+**Session 2 (2026-10-29)**, run headless with the Kaggle CLI (kernel
+`fork-session-2`, version 2; dataset `fork-s2-test`: two generation-0
+shard snapshots of 637,006 and 643,039 positions):
+- **K2, K4**: rustup installed Rust 1.99.1 in 13 s; `tools/train` at
+  7c84ae7 built with `--locked --features cuda` in 36 s (CUDA_PATH set,
+  `-L /usr/local/nvidia/lib64`); `check` wrote 394,816 bytes.
+- **K5**: B0 trains at 1,236,220-1,302,414 positions per second on one T4
+  (512 batches of 16,384 per superbatch, 6.4-6.8 s each).
+- **K6**: resume from a checkpoint (start superbatch 3) works; the loss
+  continues.
+- **K15**: the trainer's own evaluation of the 46 test positions works.
+- **K17**: one thread decodes and filters 1,366,487 positions per second
+  (433,777 kept of 637,006), just above the training rate.
+- **K18**: both T4s train at once (one run each, 14 s per superbatch).
+- **Validation and early stopping** work; on this tiny set the loss rose
+  after superbatch 1 (0.0302, 0.0319, 0.0328: overfitting, as expected).
+- Run 1 found one bug of Fork's: bullet's evaluator runs at batch size 1,
+  so validation evaluates one position at a time (7c84ae7).
+- Still open: K7's headless output download (`kernels output` also fetches
+  the cloned repository: scripts now delete it), K8/K9 at shard scale (a
+  1-2 GB upload and the CPU-session hash check), K10, K13.
+
+The Kaggle API token lives in `~/.kaggle/kaggle.json` in WSL (mode 600)
+and in Kaggle Secrets; it is never committed, logged or uploaded.
+
+**1. Datagen openings** (`tools/datagen/`, Python in `.venv`, run with
+`-I`). From one pinned Lichess CC0 monthly file (its published SHA-256
+checked before use; first 2016-09, about 1.2 GB and 6.8 M games, after
+Lichess's documented self-play and castling issues, per
+phase4-pipeline.md; recent months are about 30 GB each),
+streamed and never stored whole:
+- keep rated standard games with both players rated at least a
+  threshold, drop any game with a BOT title, ignore `[%eval]` and every
+  other comment (only moves and headers are read);
+- take the position after a random ply in a fixed range, then play a
+  few uniformly random legal plies (seeded) for diversity;
+- drop positions that are already decided (game over, or a short
+  bootstrap search scores beyond a bound), and duplicates;
+- write an EPD with a manifest (source file and its SHA-256, filters,
+  seed, count, output SHA-256). The EPD is not committed (size); it is
+  regenerable from the manifest, which is.
+
+**The 2016-09 run** (2026-10-28, `datagen_openings.py` with the default
+settings, seed 20261028; manifest `data/manifests/openings-lichess-2016-09.json`):
+6,813,113 games read in 31 minutes; 6,216,013 below the rating floor,
+597,100 with both players at 2000 or more (8.8%), no BOT titles (as
+expected before the Bot API), 4,308 too short, 76 ending during the random
+plies, 845 duplicates; **591,871 openings** (EPD SHA-256 0ae298e1...831b).
+
+**Why 2016-09** (recorded at the owner's request, 2026-10-28; facts from
+KB phase4-pipeline.md, which read Lichess's database page):
+- It is the **first month after both of Lichess's known data issues that
+  matter here**: before March 2016 some players played themselves in
+  rated games (fake games, worthless as "human play"), and up to August
+  2016 a few games contain illegal castling moves. Lichess's other listed
+  issues (evaluation problems in December 2016 and July-August 2020;
+  wrong results on 12 March 2021) do not affect openings, since Fork
+  reads neither evaluations nor results here.
+- It is **small**: 1.2 GB compressed and 6.8 M games, against about
+  30 GB and about 90 M games for a 2026 month. The first run of the tool
+  is then minutes of download and streaming, and a mistake costs little.
+- **Is a larger or more recent month worth it?** Not for generation 0,
+  probably yes later. Generation 0 (about 200 M positions, roughly a
+  million games at the expected game lengths; *estimate*) needs about a
+  million openings, and 2016-09 can supply that only if enough of its
+  games have both players at 2000 or more. That count is UNVERIFIED and
+  is the first number the tool reports; if it falls short, 2016-10 or
+  2016-12 (1.35 and 1.7 GB, same clean window) come next. Later
+  generations need tens of millions of games, and then a recent month
+  adds what matters: about 13 times as many games, so many more distinct
+  2000+ positions and today's opening repertoire rather than 2016's. It
+  also filters bots better: the BOT title exists only since Lichess's Bot
+  API, so engine accounts in 2016 months are not tagged (UNVERIFIED when
+  the API began), while a recent month's bots are dropped by the title
+  filter. The cost is a 30 GB download, streamed through `zstdcat`
+  without storing the file. So the plan is: 2016-09 for generation 0; a
+  recent month (or several old ones) added to the pool before generation
+  1, with each month in the manifest. Whether the extra variety helps is
+  measured, not assumed: the tool reports distinct positions after the
+  filters and the spread over opening codes (the PGN `ECO` header), and
+  the analyst (step 7) can test a net trained on the wider pool by SPRT.
+Thresholds (rating, ply range, random plies, the decided bound) are in
+the constants table below. Test: the tool reproduces its own output
+byte for byte from the same manifest; a fixture PGN with a BOT game, an
+`[%eval]` comment and a low-rated game shows each filtered.
+
+**2. Self-play data generation** (`fork_datagen`, a separate CMake
+target linking the engine library, never part of the TCEC binary).
+- **Games**: N worker threads (default 10, leaving 2 for other work),
+  each playing whole games one after another with its own `Searcher`
+  and its own small transposition table, cleared before each game.
+  Every move is a fixed node-count search (`go nodes`, exact since
+  audit-1), so a game is a pure function of (commit, evaluator and net,
+  opening, seed): any shard can be regenerated. Where the node limit runs
+  out before depth 1 finishes (long capture chains), that move is searched
+  to depth 1 without a node limit instead, so no label is ever a depth-0
+  score. **Per-game random plies** (owner, 2026-10-28): each game first
+  plays 2 to 4 uniformly random legal plies (the range already screened
+  for the openings tool) from a stream seeded by (seed, game index), so an
+  opening used more than once still starts different games: generation 0
+  needs about 2.2 M games and 2016-09 gave 591,871 openings.
+- **Game end**: the rules only (mate, stalemate, threefold, fifty-move,
+  insufficient material), plus two exact adjudications: Syzygy WDL once
+  5 pieces or fewer remain (both sides' probes through
+  `endgame_tables.*`; Fathom's README states WDL probes are thread-safe
+  unless built with `TB_NO_THREADS`, provided the tables are loaded once
+  before the workers start and never freed while they run; the probe
+  comes right after the capture that enters the tables, when the
+  fifty-move clock is zero, phase4-pipeline.md; concurrent probing is
+  tested, not assumed), and a search-reported
+  mate score, which ends the game with that result. **No eval-based win
+  or draw adjudication in generation 0**: the bootstrap evaluation is
+  weak, so a score threshold would write wrong results into the labels;
+  the time saved is measured later and revisited per generation.
+  **Score adjudication (2026-10-30, off by default)**: `fork_datagen
+  --adjudicate-cp CP --adjudicate-plies N` ends a game as a win once N
+  recorded scores in a row are at least CP for the same side (a score
+  inside the band or for the other side restarts the count; a mate score
+  still ends the game first). It is adopted per labelling network only by
+  measurement: the rule's misjudgment rate on that network's own data must
+  be essentially zero, and an adopted rule starts a new part. The run
+  manifest records both values (0 when off) and the `score_adjudicated`
+  end count; `verify_games.py --adjudicate CP N` checks it independently.
+  No draw adjudication: in the generation-1 study the settings that
+  misjudged no game saved under 0.2% of positions.
+- **Split search (ideas.md idea 13; 2026-10-30, off by default)**:
+  `--save-percent P --unsaved-nodes N` saves each position not in check
+  with probability P% (searched with `--nodes`) and searches the others
+  with N nodes; `--check-nodes C` searches positions in check with C nodes
+  (the trainer drops them anyway). A viriformat record cannot skip a ply,
+  so an unsaved position keeps its move and records the score 32767
+  (`UnsavedScore`, above every search score), which the trainer's existing
+  |score| > 20000 filter drops; a mate score is always written, and the
+  score adjudication skips unsaved positions. Save decisions come from a
+  stream of their own per (seed, game), so with the split off the shards
+  are byte-identical to before. The manifest records the three settings,
+  `positions_unsaved` and `nodes_spent` (every search's nodes, for the
+  compute comparison); `verify_games.py` checks the unsaved count against
+  it. **Standing data-generation setting since 2026-10-31 (owner; idea
+  13 adopted, +65.5 ± 12.9 Elo):** `--save-percent 50 --unsaved-nodes
+  4000 --check-nodes 2000`, with the other settings unchanged (20,000
+  nodes, the score adjudication at 700 cp for 8 plies). It starts a new
+  part: locally g2d was stopped and sealed and g2e continues with it; in
+  the cloud the running 12-hour instances finish with the old settings
+  and every relaunch uses it (`tools/cloud/aws_spot_datagen.sh` and
+  `cloud_datagen.sh` pass the three options through). Each part's
+  manifest records the settings.
+- **What is recorded**: every position, its search score from White's
+  view (or the convention the format fixes), the move played, and the
+  game result. Filtering (in check, best move a capture or promotion,
+  mate or tablebase scores) happens at training time, not here, so the
+  data stays complete for later rescoring and filter changes.
+- **Format**: viriformat (MIT; a game-based compact format with one
+  32-byte packed board per game, then a 16-bit move and a 16-bit score
+  per position: about 4 bytes per position), written by Fork's own C++
+  code from the format's README specification (phase4-pipeline.md
+  pins it). It is the format bullet documents for self-generated data,
+  and bullet's loader reads the game files directly and shuffles in
+  memory, so no converter or shuffle step stands between datagen and
+  training. Two traps from the research: piece nibbles are low nibble
+  first (an older README example had them reversed), and bullet pins an
+  older format version without the extension record, so Fork never
+  writes extension records. The conventions the README leaves open (the
+  en passant square, whether a score belongs to the position before its
+  move; UNVERIFIED) are settled by a test, not by assumption: bullet's
+  own loader, run on the CPU with its mock device, decodes a Fork shard,
+  and every decoded position, score and result must equal python-chess's
+  replay of the same games. A data format is
+  an interface, like UCI, not engine code; recorded in ORIGINALITY.md.
+- **Shards** of a fixed size (constants table) in a staging directory
+  (`FORK_DATA_DIR`, outside the repository), each with a manifest line:
+  SHA-256, games, positions, generator commit, evaluator and net hash,
+  node limit, openings manifest hash, seed range, start and end time.
+  Manifests are committed under `data/manifests/` (no paths beyond `~`,
+  no personal data).
+- **Labeller policy (standing; owner, 2026-10-30, extended 2026-11-05).**
+  Data generation always uses the current default **engine**: the default
+  network and every adopted search change (until 2026-11-05 the policy
+  named only the network). Whenever a new network is promoted to the
+  default (for example the bake-off's winner beating B0r2) or a search
+  change is adopted into phase-4, the running generation is stopped at a
+  game boundary, the part generated so far is sealed from its complete
+  games as its own manifest, and the generation continues as a new part
+  from a PGO build of the new default (bench-checked against its
+  reference), with a new seed and the rest of the generation's target.
+  **One naming scheme** (owner, 2026-10-30): a part ends for any reason
+  (a new labelling network, a new default engine, new openings, or the
+  target reached), and the next
+  part takes the next letter (g2, g2b, g2c, ...). Every part's manifest
+  records its labelling network (`"evaluator": "nnue (<net>)"`, which
+  fork_datagen writes itself since 3978e91), its openings file, and why
+  the part ended (`"part_end"`; `upload_batch.py seal` refuses to seal
+  without it, or with a network run that does not name its net). Parts
+  are never merged into one manifest, so training can always tell which
+  network labelled which positions. Generation 1 is the first instance:
+  g1 (B0r1, ended by B0r2's promotion) and g1b (B0r2).
+- **Tests**: a reader for the format (C++, used by the tests, the
+  rescoring tool later, and a new fuzz target `fuzz_selfplay_record`
+  under the phase-end fuzz rule) round-trips every written game; every
+  stored move is legal in its position when replayed by python-chess
+  (an independent oracle, `tools/datagen/verify.py`); the stored result
+  matches the game's end by the rules or the tablebase; two runs with
+  the same seed give byte-identical shards; the `no_alloc` style check
+  that a worker allocates nothing per move after warm-up.
+- **Throughput** is measured (positions per second per thread), not
+  estimated, and recorded in perf-log.md before the first long run.
+
+**3. Upload and confirmation** (`tools/datagen/upload.sh`), following the
+KB's storage design (training-data.md §2.2): one immutable private
+Kaggle dataset per batch (never versioned), at most 50 shards as plain
+files at the dataset's top level (the CLI skips subfolders by default,
+phase4-pipeline.md; that caps a batch at about 50 GB), the kaggle CLI
+re-run on interruption, with its resume state kept outside `/tmp`; then a CPU-only Kaggle
+session hashes the mounted shards; only a full SHA-256 match against the
+manifests deletes the local shards. It is network-bound and runs beside
+datagen (not a second heavy job; checked not to disturb a benchmark).
+Test: a dry-run mode against a fake CLI covers the mismatch and resume
+paths.
+
+**4. Training** (`tools/train/`): a Cargo project depending on bullet at a
+pinned commit (Cargo.lock committed), with Fork's own training program
+for B0, and a Kaggle notebook driver pushed with `kaggle kernels push`.
+- Inputs: the batch datasets (mounted), the previous run's output (for
+  resume). Outputs: the float checkpoint, bullet's quantized file, the
+  training log, and the trainer's evaluation of the parity positions
+  (deliverable 6) when bullet can produce it.
+- Target: a blend of the search score (through the sigmoid with the
+  fitted scale S) and the game result, weight λ on the score; loss and
+  schedule as in the constants table. Position filters as in
+  deliverable 2. In bullet's terms (KB bullet-internals.md §5): its WDL
+  setting is the weight on the game result, so Fork passes 1 - λ; its
+  eval scale is S; its optimizer defaults (AdamW, weight clip ±1.98) are
+  recorded in the run record; and B0's training program saves the
+  tensors in a fixed order (`l0b`, `l0w`, `l1b`, `l1w` in the float file)
+  that the converter's description file names.
+- Runs are commit runs of at most 12 hours that checkpoint and resume
+  (K6), inside the measured weekly quota (K13).
+- Every run writes a run record: bullet commit, Fork commit of
+  `tools/train`, dataset names and their manifest hashes, settings,
+  final loss, output hashes. The record goes into the net registry
+  (deliverable 7) and the net's GitHub Release.
+
+**5. Inference** (`src/eval/nnue/`; FORK_EVALUATOR gains `nnue`):
+- **Fork's own net file format**: a header (magic, format version,
+  architecture id, dimensions, QA, QB, S, the payload's SHA-256), then
+  the tensors in the order and layout Fork's kernels read. A converter
+  (`tools/nnue/convert.py`) turns bullet's quantized file into it, so
+  Fork's format never depends on the trainer's layout; the parity test
+  checks the converter end to end. bullet's quantized file has no
+  header, names or shapes: the tensors follow the order the training
+  program saves them, little-endian, column-major unless transposed,
+  padded to a multiple of 64 bytes (phase4-pipeline.md). So the
+  converter takes the tensor order and shapes from one description file
+  shared with Fork's training program, never by guessing. bullet
+  truncates when quantizing unless rounding is asked for, so Fork's
+  training program asks for rounding, and the parity bound assumes it. The loader validates everything
+  (sizes, version, the output-weight bound of B0's table, the hash) and
+  is a new parser, so it gets a fuzz target (`fuzz_net_file`).
+- **Embedding**: the net Fork plays with is compiled in, from
+  `nets/<sha-prefix>.fnet` in the repository (B0 is about 400 KB),
+  checked against its SHA-256 at configure time, so TCEC's build from a
+  clean clone needs nothing else. Larger nets later move to a GitHub
+  Release fetched by CMake with a pinned SHA-256 (the clean-clone rule
+  allows both). No runtime net option in step 0.
+- **Accumulator**: two int16 vectors per position (one per perspective),
+  kept in a per-ply stack owned by the `Searcher` beside the `PlyFrame`
+  array, not in `Position` (audit-1 F-21: perft and movegen stay free
+  of it). Updated incrementally from the parent's on make (added and
+  removed features of the move, both perspectives; castling, en passant
+  and promotion included); null move copies; unmake just pops. Lazy:
+  computed when `static_eval` needs it, from the nearest computed
+  ancestor. Root and new-game positions are computed from scratch.
+  Debug builds check incremental against from-scratch at every
+  evaluation.
+- **Kernels**: scalar reference always compiled; AVX2 (x86-64-v3),
+  AVX-512 (x86-64-v4) and AVX-512 VNNI where it helps (for B0, the
+  int16 output dot product), selected at compile time (`.claude/rules/
+  simd.md`). New presets: `{clang,gcc}-scalar` (baseline x86-64, no
+  SIMD paths) and `{clang,gcc}-vnni` (x86-64-v4 plus VNNI; run under
+  Intel SDE in CI on runners without it), each with bench parity.
+  `update.sh`'s default target is revisited once SIMD code exists
+  (decisions log, 2026-10-24).
+- **Bootstrap evaluation stays** as `FORK_EVALUATOR=bootstrap`: it labels
+  generation 0 and anchors the provenance chain. The default switches to
+  `nnue` only after B0 passes deliverable 7.
+- **Tests**: SIMD against scalar, bit-identical, randomized and edge
+  inputs (saturation at 0 and QA, extreme weights, all-features-active
+  positions); incremental against from-scratch along random game lines
+  with null moves, castling, en passant, promotions and captures of
+  every kind; colour-flip symmetry (a position and its mirror give the
+  same score from the side to move's view, exactly); `no_alloc` over a
+  search with the network; bench parity across every preset. Speed:
+  `fork bench` nps before and after, recorded in perf-log.md.
+
+**6. The trainer-engine parity test** (the owner's step 0 requirement).
+- **Positions**: a committed EPD, `tests/nnue/parity.epd`, of a few
+  hundred positions: hand-made edge cases (every one of the 768 features
+  active somewhere in the set; promotion-heavy positions such as several
+  queens per side; both kings in every region; positions in check;
+  positions scoring at the clamp), the bench positions, and positions
+  drawn with a fixed seed from Fork's own generation-0 data. Sources are
+  cited in the file, as for every test input.
+- **Three evaluators of the same positions**:
+  1. **T, the trainer's model**: bullet's own forward pass with the float
+     weights, run on Kaggle at the end of training (K15), written as
+     `parity-trainer.txt` with the run's outputs.
+  2. **R, Fork's independent reference** (`tools/nnue/reference.py`,
+     numpy): written from this spec, not from Fork's C++ or from
+     `convert.py`. It reads bullet's float weights file and computes the
+     float forward pass (R-float); it **quantizes those float weights
+     itself** (R-quant, exactly as bullet does at the pinned commit, KB
+     bullet-internals.md §1: each f32 weight widened to f64 and multiplied
+     by the factor in f64, rounded half away from zero, cast with
+     saturation, and the whole file refused if any value leaves its type's
+     range; never an f32 multiply, which disagrees with bullet on some
+     weights, and never numpy's round-half-to-even); and it
+     emulates Fork's integer arithmetic exactly on Fork's net file
+     (R-int).
+  3. **F, Fork's inference**: the scalar path and every SIMD path, through
+     `static_eval` on each position set up from its FEN, and again after
+     reaching each position incrementally from a parent.
+- **What must match** (revised 2026-10-28 after the step 3 judge
+  showed that the first draft's worst-case bound could never fail: for
+  B0 it comes to the order of 1,000 cp, so a converter error smaller than
+  that would pass; KB phase4-designs/judgement.md §6.6):
+  - **Quantization leg, exact.** R-quant's integers equal bullet's
+    quantized file and the tensors of Fork's net file, integer for
+    integer. Three implementations (bullet's quantizer, `convert.py`,
+    R-quant) check each other, so a layout, transposition, rounding or
+    converter error fails here exactly, however small its effect on the
+    score.
+  - **F equals R-int exactly**: every path (scalar and every SIMD path),
+    both routes (from the FEN and incrementally), every position.
+  - **R-float equals T within floating-point noise**: |R-float - T| ≤
+    0.01 cp (GPU summation order differs; revisited if K15's data show
+    it is too tight, never loosened silently). This proves Fork's reading
+    of the trainer's float model is right.
+  - **The documented quantization tolerance**: the quantization loss
+    |R-int - R-float| is computed exactly on every position (no bound).
+    Its maximum and 99th percentile must stay under per-architecture
+    thresholds, set at the architecture's first net from its measured
+    loss, recorded in the net registry, and approved by the owner; they
+    change only with the owner's approval. Since R-float equals T within
+    0.01 cp, this bounds |R-int - T|, and so |F - T|, by the threshold
+    plus 0.01 cp. For B0 the thresholds are proposed from its first
+    trained net, with its numbers, at the deliverable 7 review, before
+    any game.
+  - **Feature leg** (for B0 a simple check; essential for every later
+    design with king regions, mirroring, buckets or computed features):
+    the active feature indices from Fork's C++ and from `reference.py`
+    (python-chess for the board) are identical on the parity positions
+    and on 1 M positions sampled from Fork's data; later designs add the
+    trainer's own input code (a CPU-only test build) as a third party.
+  - **The checker is shown able to fail**, each mutation tied to the leg
+    that must catch it: a corrupted weight, a transposed tensor and a
+    missing rounding step (quantization leg); a wrong perspective flip in
+    the C++ (F = R-int or the feature leg); a too-coarse QB in a test
+    copy (the loss threshold).
+- **T needs a GPU**: bullet evaluates FENs with the float model on its
+  GPU backend only, and has no evaluation of its quantized file
+  (phase4-pipeline.md). So T is produced once per net on Kaggle and
+  committed; CI and local runs compare against the committed T values
+  and never run bullet. R-float reads bullet's self-describing float
+  weights file (names, counts, f32 values) from the checkpoint.
+- **Where it runs**: R-int against F as a ctest (`nnue_parity`) on every
+  preset, so CI runs it on every push and pull request (scalar, v3, v4
+  and VNNI under SDE, TCEC's four compilers); the Python legs (the
+  quantization leg, R-float against T, the loss thresholds, the feature
+  leg on the parity positions) as a CI job whenever `src/eval/**`,
+  `nets/**`, `tests/nnue/**` or `tools/nnue/**` change; the 1 M-position
+  feature leg nightly and on such changes. The expected values (T's,
+  R-int's, the loss statistics and thresholds) are committed per net in
+  `tests/nnue/<net>.parity`.
+- **The game gate**: `fork netcheck FILE` (a hidden command, like
+  `bench`) evaluates the parity positions and compares them with the
+  committed R-int values, and refuses a net whose recorded loss exceeds
+  its architecture's thresholds. `tools/sprt.sh`, the cloud shards'
+  `build_pair.sh`, `tools/elo_gauntlet.sh` and `fork_datagen` run it on
+  the exact binary before their first game and refuse to start on a
+  mismatch, and refuse a net with no parity record at all.
+
+**7. B0, generation 0 and the first SPRT.**
+- Generation 0: `fork_datagen` with the bootstrap evaluation on the
+  openings of deliverable 1, size in the constants table; uploaded and
+  confirmed (deliverable 3).
+- Fit S on generation-0 data; train B0 (deliverable 4); convert, run the
+  parity test (deliverable 6); only then games.
+- SPRT: B0 (`FORK_EVALUATOR=nnue`) against the bootstrap evaluation at
+  STC on gainer bounds [0, 5] (gains this large end it quickly; the
+  bounds policy of §5.2), on the GitHub shards. A pass switches the
+  default evaluator, with the new bench in tests/bench.ref and the
+  commit message; a fail goes back to deliverable 4 (more data, λ) with
+  its result in the SPRT log.
+- **Net registry** (`docs/nets.md`): one row per net (name, SHA-256,
+  architecture, data manifests, training run record, parity bound and
+  observed maximum, SPRT result), mirrored in ORIGINALITY.md's
+  "Training data provenance" and published as a GitHub Release with the
+  net file, the run record and the manifests.
+- Generation 1 data starts with B0 at once (the Phase 4 outline:
+  datagen keeps the local CPU busy while the designs proceed).
+
+#### Constants (the owner's rule: every value justified and screened)
+
+Initial values with their reasoning; each is screened by the
+originality-checker (match / no match only) before its commit, and any
+match goes to the owner first.
+
+| Constant | Value | Reasoning |
+|---|---|---|
+| H (hidden width) | 256, kept by the owner (2026-10-28, question 7) | Above (B0 table). B0 is the generic minimal baseline shape (768 = 12 piece kinds × 64 squares; 256 a common round size) and exists to prove the pipeline, not as a distinctive design. The constant screen found the same shape in Berserk's 2021 release (a coincidence, recorded in ORIGINALITY.md) and 256 as a first-layer width in Stockfish 12-13 (near match, different inputs and body). |
+| QA, QB | 255, 64 | bullet's standard quantization convention, kept by the owner (2026-10-28) as a trainer-interface convention credited to bullet (ORIGINALITY.md), not a tuned constant; the arithmetic above shows it is safe. Not screened. |
+| S (output scale) | fitted | Logistic fit of result against score on generation-0 data. |
+| Datagen nodes per move | 20,000 (screen: match; kept by the owner, question 10) | The count where the bootstrap search reaches depth 8 to 9 in a typical position. Measured 2026-10-28 with `tools/datagen/measure_nodes.py` (clang-release, Windows, a cleared 1 MB table per position) over the 46 bench positions: median last finished depth 3 at 1,000 nodes, 4 at 2,000, 5 at 5,000, 7 at 10,000, **8.5 at 20,000** (range 5-11), 10 at 50,000. Within a game the table carries entries from earlier moves, so the effective depth is a little higher. |
+| Datagen TT size per worker | 1 MB (screen: no match) | The smallest power of two that holds one move's search: in the same measurement, one 20,000-node search from an empty 1 MB table filled 12% of it (median hashfull 120 per mille, largest 203), so replacement inside a 5-entry bucket is rare. Ten workers' tables (10 MB) also fit the 96 MB L3 cache. |
+| Datagen game cap | 500 plies (screen: role not present) | Longer games are discarded. bullet's game reader at the pin stops at 512 records per game and would fail a loader thread beyond it (KB bullet-internals.md, UNVERIFIED whether records or plies; 500 keeps a margin either way). The throughput run below discarded none. |
+| Datagen throughput | measured: 2,546 positions per second on 10 threads | `fork_datagen` on Windows (clang-release, bootstrap evaluation), 20,000 nodes, 1 MB tables, 3-4-5 tables partly present, the 46 bench positions as openings: 150,427 positions in 59.1 s (1,642 games, about 92 positions per game), about 220 M positions per day. Every game passed `verify_games.py`. Measured again on the real openings before generation 0. |
+| Workers | 10 of 12 threads | Leaves two threads for development and CI-adjacent work; the one-heavy-job rule still applies (datagen is the heavy job while it runs). |
+| Opening rating floor | 2000 (both players) | The KB's A+ description (training-data.md §3.4): positions from competent play, without engine choice. |
+| Opening ply range, random plies | a random ply in 8-16, then 2-4 random plies | The KB's A+ description gives 8-16; a few random plies multiply the distinct positions without leaving plausible play. |
+| Decided-opening bound | the bootstrap search at the datagen node count beyond ±400 cp | Four pawns: openings that lopsided teach little and end fast. |
+| Shard size | 1 GB, or less if K11 shows a lower file limit | The KB storage design's 1-2 GB, at its low end so one failed upload costs little. |
+| Generation 0 size | about 200 M positions, at least; more if the bake-off needs it | Within the KB's 100-200 M per first generation; refined by K5's training throughput and the measured datagen rate. The bake-off also runs on generation 0 (owner, 2026-10-28), and the judge sized its entries at about 0.7 B positions, so generation 0 may be extended before the bake-off; decided with the measured rate. **Outcome (owner, 2026-10-29):** generation 0 was stopped at 130,615,808 positions (1,366,657 complete games; data/manifests/g0.json) once B0r1 passed its SPRT. Generation 1 (B0r1, the same settings, seed 20261030) followed at once, and the bake-off trains on generation 1 data. |
+| λ (score weight) | 0.5 for B0 | Generation-0 scores come from a weak evaluation and game results are noisy, so neither is trusted over the other; the analyst (step 7) tunes it per generation from measured results. |
+| Loss, schedule, batch | from bullet's documented defaults for a single-layer net, recorded in the run record | Step 0 proves the pipeline; schedule tuning is step 7's. Each value used is written into this table at deliverable 4 with its source. |
+
+#### Names (to be checked before use, §8 procedure)
+
+Screened 2026-10-28 by a throwaway subagent (Stockfish ff7cee42,
+Ethereal 0e47e9b6, Berserk 32628515, Weiss c735b8f3; match / no match
+only):
+- **No match:** `fork_datagen`, `SelfPlayGame`, `SelfPlayConfig`,
+  `GameWriter`, `GameReader`, `CompactBoard`, `encode_move`,
+  `decode_move`, `NetFile`, `NetHeader`, `FeatureSums`, `FeatureStack`,
+  `output_layer`, `feature_index`, `netcheck`, `run_self_play`,
+  `self_play`, `game_record`, `fuzz_game_record`, `net_file`,
+  `fuzz_net_file`, `nnue_parity`, `net_format`, `feature_sums`,
+  `datagen_openings`, `verify_games`, `upload_batch`, and the paths
+  `tools/datagen`, `tools/nnue`, `tools/train`, `data/manifests`.
+- **Accumulator** (type and file): matches in three engines, as the
+  field's term (CPW's NNUE page has an Accumulator section): kept as
+  domain vocabulary, as the owner allowed.
+- **datagen** (the directory `src/datagen/`): one engine has a source
+  file pair of that name in the same role; the word is the community's
+  general term (OpenBench's workload type is called DATAGEN), so it is
+  kept as domain vocabulary, flagged to the owner (question 8).
+- **Renamed before use:** `AccumulatorStack` (an exact compound type name
+  in one engine; the per-ply stack becomes `FeatureStack`, no match) and
+  `clipped_relu` (an exact file and identifier in one engine; becomes
+  `crelu`, no match).
+- **Second screen** (same commits, 2026-10-28): the 37 further
+  identifiers deliverable 2 introduced (its types, enumerators, helpers,
+  `test_datagen`, `datagen_verify`, `datagen_main`, `measure_nodes`,
+  `forkdatagen`): no match in any of the four.
+- **Labeller policy** (2026-10-30, Stockfish ff7cee4, Ethereal 0e47e9b,
+  Berserk 3262851, Weiss c735b8f): `part_end` (seal's parameter,
+  `--part-end` and the manifest key): no match in any of the four.
+
+#### Owner's answers (2026-10-28)
+
+The review of this spec and of steps 1-3 (KB phase4-designs/, with the
+judge's questions) was one batched stop; the answers, which the
+deliverables above follow:
+
+1. **No external SSD.** The staging directory is on C: (36 GB free on
+   2026-10-28). Generation 0 (about 1 GB) fits easily; local shards are
+   deleted after the Kaggle hash check (deliverable 3), so staging never
+   holds more than the batches in flight. Disk is rechecked before each
+   long datagen run.
+2. **Kaggle**: the account exists; the test session (deliverable 0) runs
+   with the owner.
+3. **Datagen takes 10 of the 12 threads**; CI is the full check while it
+   runs.
+4. **B0's net is committed** to the repository (`nets/`), since TCEC
+   builds offline from the source; every other net is published as a
+   GitHub Release.
+5. **"Accumulator" stays** (domain vocabulary, §8) if the name screen
+   agrees; otherwise a Fork name.
+6. QA and QB stay 255 and 64, bullet's standard quantization convention,
+   recorded in ORIGINALITY.md as a trainer-interface convention credited
+   to bullet, not a tuned constant (answered earlier the same day).
+7. **Bake-off (plan step 4)**: every entry at accumulator width 512;
+   the four candidates are built on **a shared kernel framework** (one
+   accumulator, SIMD and parity framework that every candidate plugs
+   into, not four separate implementations); **STC narrows the field,
+   LTC decides between the finalists**; the bake-off runs on
+   **generation 0 data** (not waiting for generation 1), and the winner
+   is confirmed at full size later. **Changed 2026-10-29 (owner):** the
+   bake-off trains on generation 1 data (B0r1's self-play), and every
+   candidate trains on the same data.
+8. **Speed price**: the 2:1 time-odds games are approved at **STC only**.
+9. **Design-level originality screen** for XGR's exposure plane (X),
+   phase gate (G) and revision head (R), AF's fitted king regions and
+   AF's threat encoding, before any of them is built.
+10. **bullet's code** (MIT, a tool) may be read by a subagent at the
+    pinned commit, to settle the trainer features the KB marks
+    UNVERIFIED (rounding rule, custom buckets, pairwise products, custom
+    inputs, graph operations).
+11. **Quantization-loss thresholds**: the implementer proposes each
+    architecture's thresholds from its first net, for the owner's
+    approval.
+12. **One net** until the pipeline is proven; a separate datagen net is
+    a later question.
+13. **Threat inputs are in scope** for Phase 4, as a later add-on to the
+    bake-off's winner.
+14. **VNNI on TCEC's EPYCs stays UNVERIFIED** and is on the TCEC question
+    list (KB competition.md, question 8). Nothing may depend on it.
+15. **The older KB pages are scrubbed** of other engines' constants
+    (techniques.md §4-5, research.md §6), keeping the ideas and sources.
+
+#### Open questions (2026-10-28, raised while building step 0)
+
+7. *Answered (owner, 2026-10-28)*: B0 stays 768 -> 256 -> 1, recorded in
+   ORIGINALITY.md as the generic minimal baseline shape (768 = 12 pieces ×
+   64 squares; 256 a common round size), noting the coincidence with
+   Berserk's 2021 release; B0 exists to prove the pipeline, not as a
+   distinctive design.
+8. *Answered (owner, 2026-10-28)*: `src/datagen/` stays, as community
+   vocabulary (OpenBench's DATAGEN).
+9. **bullet's GPL and AGPL dependencies**: building bullet always pulls the
+   Stockfish binpack reader (sfbinpack, GPL-3.0) and Monty's format crate
+   (montyformat, AGPL-3.0, chess code from the Monty engine) into Cargo's
+   cache (KB bullet-internals.md §9). Fork never uses them, but a local
+   build would leave another engine's code on this machine. Options:
+   (a) build bullet only on Kaggle, where the planned local check that
+   bullet's loader decodes Fork's shards also runs (on a CPU session);
+   (b) local builds with a throwaway `CARGO_HOME` in the scratchpad,
+   deleted after each run, as the name-check clones are; (c) accept the
+   cache. *Answered (owner, 2026-10-28)*: local bullet builds use a
+   throwaway Cargo folder, deleted after each run; training builds run
+   only on Kaggle; Fork never vendors or links those crates. Preferred if
+   possible: bullet's Cargo features exclude the Stockfish binpack reader
+   and the Monty crate entirely (checked by a research subagent; KB
+   bullet-internals.md §12).
+10. **Datagen nodes per move**: the second constant screen found 20,000 in
+    Berserk's current documentation as the node limit of its OpenBench
+    datagen preset (same role). Fork's 20,000 comes from its own
+    measurement (median depth 8.5 on the bench positions, the spec's
+    depth 8-9 target). *Answered (owner, 2026-10-28)*: keep 20,000, with
+    the coincidence noted in ORIGINALITY.md.
+
+**Design-screen credits** (the design-level screen of 2026-10-28, for the
+bake-off; KB phase4-designs/judgement.md): XGR's linear output lanes
+follow Stockfish's former PSQT accumulator (credit it; size the lanes by
+XGR's own reasoning or to the three used); the purpose of XGR's revision
+head (scaling pruning by how unreliable the evaluation is) is published
+in Stockfish and Alexandria by other mechanisms (credit both); the
+exposure plane, the learned phase gate, AF's fitted king regions and AF's
+compact threat encoding have no precedent found; the hybrid H-512 is an
+assembly of common concepts, with its counts (8 buckets, at most 4
+regions) still to be screened as constants.
+
+### 5.4 Phase 4 step 4: the bake-off (owner's instructions, 2026-10-30)
+
+**Instructions.** (a) Training configurations for S-512, H-512, AF-S,
+XGR-512 and the B0 control in the training program, each one's feature
+handling checked against its parity reference. (b) A dry run of each on
+Kaggle on a small data slice: it trains, saves, quantizes and passes the
+parity chain. (c) At about 150 M generation-1 positions, a snapshot with a
+held-out validation shard; all five trained on exactly that snapshot, same
+steps, same tuning budget, two seeds each. (d) Parity and netcheck per net,
+SPRTs one at a time on the GitHub shards against the B0 control (fixed
+time, plus the fixed-node check), decided by the pre-registered rule
+(judgement.md §6.3: complex against simpler on [0, 5], STC narrows, LTC
+decides, an inconclusive pairing keeps the simpler design); LTC for the
+finalists. Nothing is promoted before the owner's review.
+
+**The entries as built** (`tools/train --arch`, descriptions in
+`tools/nnue/<arch>.json`, independent reference `tools/nnue/models.py`):
+
+| Entry (id) | Inputs per perspective | Body and output | Clips | Saved file |
+|---|---|---|---|---|
+| B0 control (1) | 768 | 256 CReLU -> 1 | bullet's ±1.98 | 394,756 B |
+| S-512 (2) | 768, mirrored | 512 SCReLU -> 8, picked by phase | ±1.98 | 803,872 B |
+| H-512 (3) | 768 × 4 fitted regions, mirrored, + 768 factoriser | 512 SCReLU -> 8, picked by phase | first layer and factoriser ±0.99 each, biases ±0.99 | 3,163,168 B |
+| AF-S (4) | as H-512 | 512 clipped, halves multiplied -> 512 -> 16 -> 32 -> 1, SCReLU between, 8 phase stacks per layer | as H-512 | 3,222,560 B |
+| XGR-512 (5) | 768 × 4 fixed regions (e1; f1-h1; rank 2; ranks 3-8), mirrored, + 768 factoriser, + 640 exposure + 10 factoriser | 512 SCReLU and 3 side values; two outputs blended by the gate | first layer, side layer and their factorisers ±0.99 | 3,828,494 B |
+
+- **Features** (the same in Rust, Python and later C++): a perspective
+  sees the board from its side (vertical flip for Black, its own pieces
+  first: 384 × [enemy] + 64 × type + square); mirrored left-right (square
+  XOR 7) when its own king stands on files a-d; the region of its mirrored
+  king square (cell rank × 4 + file - 4) offsets the index by 768 per
+  region; the factoriser input repeats the 768 index after the regions.
+  XGR's exposure rule: a non-king piece is exposed when an enemy piece of
+  a lower class attacks it (pawn < knight = bishop < rook < queen < king)
+  or an enemy attacks it and no own piece defends it (pseudo-attacks on the
+  real occupancy); its inputs are 320 × [enemy] + 64 × type + square, then
+  5 × [enemy] + type for the factoriser. The phase selector is Fork's
+  `game_phase` (knights and bishops 1, rooks 2, queens 4, capped at 24)
+  through a 25-entry table.
+- **S-512's selector** (owner, 2026-10-30): H-512's phase octiles instead
+  of S's piece-count buckets (a near match to Stockfish's layer-stack
+  selection), so S and H differ only in the king regions.
+- **AF-S's body** (owner, 2026-10-30): kept as designed (16, 32, 8 stacks,
+  int8 L1 at 64), although the constant screen found the same widths and
+  stack count in Stockfish 14-18; recorded in ORIGINALITY.md.
+- **XGR's side lanes**: 3 in the net file (the lanes used; the design
+  screen's credit note), not the design's 8.
+- **Maps, fitted on the training data** (`fork-train stats`, then
+  `tools/nnue/fit_maps.py`): H-512's and AF-S's regions by AF's rule with
+  the judge's θ = 10% and at most 4 regions; the phase octiles of all three
+  selectors. The dry run fits them on its slice; the bake-off refits them
+  on its snapshot before training.
+- **Net file, version 2** (layout in `tools/nnue/models.py`): B0's 64-byte
+  header with the bucket count, a 128-byte map block (regions, phase
+  table), then each entry's tensors. AF-S's biases and output multiplier
+  are quantized by the converter (their scales are not integers: L1 sums
+  at 64 × 65,025 / 512 per unit, and so on, as exact rationals).
+- **Integer arithmetic** as the designs specify it (design-speed.md §5,
+  design-accuracy.md §5.3-5.4, design-novelty.md §5.1), emulated in
+  `models.py` (R-int); the engine's inference follows the same spec.
+- **Training** (`tools/train/kaggle/bakeoff.py`): every entry with the
+  same settings and schedule, S fitted once on the training data, two at
+  a time on the two T4s, the checkpoint with the lowest validation loss
+  kept, the trainer's own evaluation of the parity positions (T) per run.
+
+**Checked so far (2026-10-30, CPU, throwaway Cargo home).** Every graph
+builds and its quantized file has the size above (bullet's own `check`).
+**Feature leg**: the trainer's active inputs and bucket equal the
+reference's (python-chess attack sets for XGR's exposure) on the 446
+parity positions and on 200,000 generation-0 positions, for all five
+(0 differences); planted faults are caught (exposure rule ≤ for <: 49,468
+positions differ; mirror on the wrong side: all 200,000; a shifted region
+map: 74,376; a queen phase weight of 3: 60,341). **Quantization leg**
+against bullet's files of the initial weights: exact for all five,
+factoriser merges and transposes included. Unit tests
+(`tools/nnue/test_bakeoff.py`): legs pass on synthetic nets; a corrupted
+weight, a missing factoriser merge, a transposed output layer and
+truncation instead of rounding each fail.
+
+**Dry run (2026-10-30, Kaggle kernel fork-bake-dry, 65a4c27, dataset
+fork-g1s0)**: each entry trained 3 superbatches of 100 batches on g1s0
+(S = 107, one seed), saved, quantized and evaluated the parity positions.
+The parity chain on those nets: quantization leg exact for all five;
+R-float against T at most 0.00018 cp (so `select` keeps one contiguous
+block of rows per bucket, and the slices, gate, pairwise product and
+factorisers are read as bullet computes them); quantization loss max / p99:
+B0 11.1 / 7.1, S-512 13.0 / 11.2, H-512 18.1 / 11.9, AF-S 23.6 / 20.9,
+XGR-512 9.8 / 8.7 cp. Training rates with two runs sharing the session's
+4 cores: about 2 M positions/s for S-512, 1 M/s for H-512, AF-S and XGR-512.
+
+**The engine's inference for every entry** (2026-10-30): one shared
+framework in `src/eval/nnue/`, the architecture fixed at build time from
+the embedded net's header (CMake reads its id into `FORK_NET_ARCH`;
+`net_shape.hpp` holds each shape's constants). A perspective's frame (its
+file flip and region rows) changes only when its own king crosses the d/e
+line or a region boundary; that perspective is then recomputed from the
+board at once, every other update stays incremental and lazy. XGR's
+exposure rows are added at each evaluation (no incremental state). Every
+output has a scalar reference and an AVX2 kernel (S/H/XGR: v * (v * w)
+through 16-bit multiply and multiply-add; AF-S: the pairwise product as a
+rounding high multiply, L1 as unsigned-by-signed byte multiply-adds); the
+first-layer updates use B0's AVX2 and AVX-512 kernels. On each dry-run
+net, for clang native, x86-64-v3 and scalar builds: the NNUE suite passes
+(incremental against refresh along random games with king moves across
+the mirror line and regions, every move kind's delta, SIMD against scalar,
+colour symmetry, left-right symmetry for the mirrored entries, XGR's
+exposure rule) and **netcheck gives the reference's R-int on all 446
+parity positions** (F = R-int, every path); bench node counts agree across
+the three builds of each entry. Local bench nps beside datagen (not an A/B
+measurement): B0 2.96 M, S-512 2.31 M, H-512 2.21 M, AF-S 1.66 M, XGR-512
+1.43 M (0.78, 0.75, 0.56, 0.48 of B0; the judge's model said 0.74, 0.73,
+0.58-0.62, 0.51 of the bootstrap). Without a refresh cache: a frame change
+recomputes the perspective from the board (judgement.md's cache is a speed
+item for the winner). B0 is unchanged: bench 15,453,694, and its search
+speed within noise of the previous build (`bench/ab_search.py`, 8 rounds,
+-1.5% median, threshold 3%).
+
+**XGR's entry condition** (judgement.md §3): the exposure pre-test on 10 M
+g1s1 positions with B0r1 (`exposure_pretest.py`, now streaming in chunks):
+mean k 0.50, k = 0 in 63.3%; the static evaluation's residual against the
+search score is 75.2 cp (median 30) at k = 0 and 112.4 cp (median 53) at
+k >= 1: X has something to fix, so XGR-512 enters the games.
+
+**The bake-off snapshot g1s1** (2026-10-30, 10:32 AM EST): generation 1's
+complete games at that moment, 1,505,322 games and 150,117,509 positions
+(data/manifests/g1s1.json, worker 9 held out); 93,502,604 positions pass
+the training filter in the training shards. Maps fitted on it: regions
+{e1-e4, f4, g4} 31.5%, {f1-f3, g3} 20.9%, {g1} 22.7%, the rest 24.8% of
+own-king samples; phase stacks 9-16% each. S = 105 (fit_scale.py, 2 M
+positions). Training (`bakeoff.py`): every entry with seeds 1 and 2, 80
+superbatches of 5 M positions (400 M seen, about 4.3 passes), LR 0.001
+dropped tenfold after 40, λ 0.5, the checkpoint with the lowest
+validation loss (20,000 held-out positions) kept; no per-entry tuning.
+
+**Training results** (kernel fork-bake at d4ccadb, 2026-10-30; ten runs of
+18-28 minutes on a T4). Validation loss at the kept checkpoint, seed 1 /
+seed 2: B0 control 0.021679 / 0.021805; S-512 0.020974 / 0.021176; H-512
+0.022349 / 0.022425; AF-S 0.021829 / 0.021631; XGR-512 0.021375 /
+0.021201. Chosen (plan 1): B0 s1, S-512 s1, H-512 s1, AF-S s2, XGR-512
+s2. The parity chain passes on all ten (R-float against the trainer
+within 0.0002 cp). Matched scales (plan 2; the first 10,000 filtered
+positions of g1s1-w09-val, the control's mean |eval| 281.9 cp): S-512
+101 (both seeds), H-512 100, AF-S 111, XGR-512 96; parity and netcheck
+redone on the rescaled files (0 mismatches). Candidate branches:
+bake/g1b0, bake/g1s512, bake/g1h512, bake/g1afs, bake/g1xgr and
+bake/g1s512b (S-512's seed 2, for plan 5).
+
+**S-512 was still improving when training stopped**: its validation loss
+over superbatches 71-80 is below that over 41-50 by 0.00018 (s1) and
+0.00015 (s2), and its kept checkpoints are 68 and 71 of 80. The shared
+budget ends before S converges.
+
+**H-512's gap, diagnosed** (owner, 2026-10-30: no retraining, the plan
+unchanged, H plays its games as is): **overfitting**. H has about 2.0 M
+first-layer weights (four region copies of 768 × 512, the factoriser
+merged in) against S's 0.39 M, on 93.5 M positions seen about 4.3 times.
+Over superbatches 71-80 its training loss is the lowest of the entries
+(0.01784 against S's 0.01958) and its validation loss the highest
+(0.02269 against 0.02113): a gap of 0.0049 against S's 0.0016, and seed
+1's validation loss rises after superbatch 52. On the held-out positions
+it is worse than S-512 s1 **in every one of its regions** (the trainer's
+loss recomputed per side-to-move region, reproducing the trainer's
+totals exactly): +0.0010, +0.0017, +0.0019 and +0.0011 for regions 0-3
+(seed 2: +0.0002, +0.0016, +0.0028, +0.0016), worst in {g1}, the largest
+single-square region, so no starved or mixed region explains it; on
+20,000 of its training positions both seeds beat S-512 in every region
+(by 0.0013-0.0026). XGR-512 (the same four-copy input with a factoriser)
+is about level with S-512 region by region on the held-out positions. Setup checked: trainer, reference and engine agree
+(parity, netcheck); the committed map is what fit_maps.py's rule gives on
+the stored histogram; the trainer's region lookup matches the histogram's
+cells; the ±0.99 first-layer clip barely binds (no weight beyond 0.990,
+under 0.001% at 0.98 or more). The data volume is the likely cause: θ =
+10% with four regions was sized for 0.7 B positions (design-accuracy.md
+§2.1's data-per-weight anchor, about 12.8 M touches per row), and g1s1's
+93.5 M give about 1.7 M. The fitted map's shape also differs from the
+design's expectation: g1 stands alone while h1, g2 and h2 share a region
+with every rank 5-8 square, and e1 shares one with e4, f4 and g4. **King
+regions join the component list** (judgement.md §5, row 5): retested
+with much more data during the winner's full-size confirmation,
+including a hand-drawn region map with the castled squares together.
+
+**Games: the pre-registered plan** (written 2026-10-30, before any
+bake-off game; judgement.md §6.2-6.3, the owner's (d)):
+0. **First in the queue (owner, 2026-10-30): the B0 control against
+   B0r1**, the default network, at STC on [0, 5]. If it passes it is
+   promoted as **B0r2**: the default network (with its bench reference and
+   parity file, as for B0r1), generation 1's labeller from then on, and an
+   entry in docs/nets.md. The bake-off entries still play against the same
+   B0 control.
+1. **One net per entry**: of its two seeds, the one with the lower
+   validation loss at its kept checkpoint. The other seed stays for the
+   noise check (5).
+2. **Eval-scale normalization** (§6.2): each entry's S in its net file is
+   rescaled so that its mean |eval| over 10,000 positions of g1s1's
+   held-out shard equals the B0 control's; the parity file and netcheck are
+   redone with the rescaled file.
+3. **Stage A, sanity**: each entry against the B0 control at STC (8+0.08,
+   16 MB, Syzygy 3-4-5, the UHO book) on gainer bounds [0, 5], one SPRT at
+   a time on the GitHub shards, never beside CI. A fail sends the entry
+   back to training, not out of the bake-off.
+4. **Stage B, fixed nodes** (diagnostic, no SPRT): each entry against the
+   B0 control at a fixed node count per move, 1,600 games, for the accuracy
+   term without the speed price.
+5. **Training noise**: the two seeds of S-512 against each other, 1,600
+   games at STC; if they differ by more than about 10 Elo, margins below
+   that mean nothing and the top two get repeated trainings.
+6. **Stage C, decisive pairings** in the judge's order, the more complex
+   design against the simpler on [0, 5]: H-512 against S-512 (regions);
+   AF-S against the better of S and H (the body); XGR-512 against H-512
+   (X and G). STC narrows, **LTC decides** (40+0.4); an inconclusive
+   pairing keeps the simpler design; caps 20,000 games at STC, 10,000 at
+   LTC. The finalists play LTC.
+7. Nothing is promoted (no default network change) before the owner's
+   review of the results.
+
+**Amendments after stage A (owner, 2026-10-31; decided after seeing stage
+A's results**, sprt-log.md: S-512 H1, H-512, AF-S and XGR-512 H0 against
+the B0 control, **and before any stage B or noise game**):
+- **Item 3's retraining rule is replaced**: no entry is retrained alone.
+  A stage A fail no longer sends the entry back to training by itself.
+- **Item 4 decides who stays**: an entry that shows no accuracy advantage
+  over the B0 control in stage B is dropped from the bake-off, not
+  retrained. **The rule (owner, 2026-10-31, 12:04 AM EST, decided before
+  any stage B result; the first run was still playing):** an entry has an
+  accuracy advantage, and stays for round 2, if its stage B Elo point
+  estimate against the B0 control is above 0. Why the point estimate and
+  not an interval: keeping an entry costs only one more training run,
+  while dropping one could discard a design expected to benefit most from
+  more data; round 2's STC SPRTs remain the real filter.
+  Stage B's conditions: 800,000 nodes per move for both engines (fastchess
+  `nodes=`), under a 600+6 clock that never binds, otherwise as stage A
+  (16 MB, Syzygy 3-4-5, the UHO book, stage 0's openings), 1,600 games,
+  no SPRT (the run's LLR is ignored). The node count is a measurement:
+  B0's first-move depth at STC in S-512's stage A games (50 opening
+  positions, fresh hash) has mean 14.40 at 0.42 s per move; the B0
+  control reaches mean 14.44 at 1.6 M nodes on the same positions, so the
+  runners search about 3.8 M nodes/s (an estimate), and an average STC
+  move (0.208 s) is worth about 800,000 nodes. **The estimate was high**:
+  in the stage B games B0's median move took 0.33 s for 800,000 nodes
+  (about 2.4 M nodes/s), so stage B searches deeper than STC (median depth
+  17 against 15); the games themselves are unaffected (sprt-log.md).
+- **Round 2 of the bake-off**: once about 500 M positions exist
+  (generation 2 and the cloud data so far), every entry still in the
+  bake-off, S-512 and the B0 control included, is retrained on the same
+  larger snapshot with identical settings (one schedule and tuning budget
+  for all, set before training), then the parity chain, scale matching
+  and the games plan as for round 1.
+- **XGR's three parts become add-ons to S-512**: the exposure plane (X),
+  the phase gate (G) and the revision head (R), each its own experiment
+  on top of S-512, planned after round 2. (2026-11-02, owner: on top of
+  S512r2, the exposure plane first, after the current tier-2 queue;
+  decisions log.)
+
+**Engineering task before round 2 (owner, 2026-10-31; not a change to
+round 2's rules):** XGR-512 placed second at fixed nodes (+52.07) but lost
+at STC (-38.15), mainly on speed (0.48 of B0's nps). Its exposure rows are
+recomputed from the board and added at every evaluation (no incremental
+state). Investigate a cheaper computation, incremental or partial updates
+in place of the full recompute, measure the speed gain with the A/B
+harness with the output unchanged (netcheck's R-int on the parity
+positions, bench identical), and report to the owner before round 2.
+**Result (2026-10-31, branch `xgr-speed`, 49c421c on bake/g1xgr; adopted
+into phase-4 for round 2 by the owner, identical evaluations being the
+condition: inference speed is not a training change, so round 2's rules
+are unaffected):** the exposure rule computed set-wise
+(each side's attacked squares accumulated by attacker class, every piece's
+lowest enemy attacker class read off the sets, in place of attackers_to
+square by square) and no accumulator copy when nothing is exposed. Output
+unchanged: bench 15,540,185 / 9564dc8f27cd9708 on both sides, netcheck 446
+positions with 0 mismatches; a test checks the rule against the
+square-by-square reference at every ply of random games (fault-injected).
+Every XGR-512 net, old build against new: netcheck 446 positions with 0
+mismatches for the entry (seed 2 scale-matched, g1xgr) and the raw seeds 1
+and 2, and `fork evalfens` byte-identical on 500,005 positions of run g2's
+held-out shard for each of the three (48.8% of them with an exposed piece,
+so both paths ran).
+Speed (bench/ab_search.py, WSL clang-release, core 4, g2c paused, the
+openings stream running; an A/A run beside it moved -0.4% / +0.9%):
++15.5% median nps (2.42 to 2.80 M), +15.1% best, 10 rounds. Against the
+B0 control's bench nps XGR goes from 0.44 to 0.50. Exposure switched off
+entirely (a timing build only, its output differs) runs about 13% faster
+than the new version, the most an incremental exposure could still gain;
+most of the remaining gap to B0 lies outside the exposure (the profile:
+evaluate_position 30% of the run, advance_perspective 19%).
+
+**Round 2 amendment (owner, 2026-11-01; decided before any round-2 game
+result).** Round 2's S-512 was promoted as S512r2 (+151.35 Elo against
+round 1's S-512, docs/nets.md) before the other round-2 nets were ready.
+Each remaining entry, H-512, AF-S and XGR-512 (each the round-2 seed with
+the lower validation loss, item 1), first plays a **fixed-node match
+against S512r2** at the same node budget for both engines, 1,600 games;
+**only an entry that scores above S512r2 there** (its Elo point estimate
+above 0, as in round 1's stage B rule) proceeds to an **STC promotion
+SPRT against S512r2 on [0, 5]**; the others leave the bake-off.
+**Reasoning:** every remaining entry is slower than S512r2 (round 1's
+bench nps relative to B0: S-512 0.78, H-512 0.75, AF-S 0.56, XGR-512
+0.48, about 0.50 after the exposure speed-up), so at equal time it searches fewer nodes than at equal nodes; an
+entry that fails at equal nodes cannot win at equal time, and the match
+costs no SPRT slot. For these entries this replaces stages A to C (items
+3, 4 and 6); items 1 and 7 still apply (one seed per entry, nothing
+promoted before the owner's review). The match's conditions are round 1's
+stage B: 800,000 nodes per move for both engines (fastchess `nodes=`)
+under a 600+6 clock that never binds, Hash 16 MB, Syzygy 3-4-5, the UHO
+book, no SPRT (the run's LLR is ignored). Scale matching (item 2) uses
+S512r2, the opponent in every remaining pairing, as the reference, as for
+S512r2's own SPRT, whose matching was to its opponent.
+
+**Retest and LTC candidates (owner, 2026-11-02; decided after the
+fixed-node results and before any round-2 STC result).** Two outcomes
+keep an entry on record instead of ending it:
+- **Retest candidate:** an entry whose fixed-node Elo interval (the run's
+  95% error bar) includes 0, or whose STC result against S512r2 is within
+  its error margin of S512r2 (its Elo interval includes 0), is kept as a
+  retest candidate for after the post-network search retune (the
+  re-validation and margin retune, §5.2 Quality control 6). The fixed-node
+  results (history/phase-4/sprt-log.md): H-512's interval, −22.75 to
+  −1.59, excludes 0, so its loss is clean and it is not a candidate;
+  AF-S's, −0.07 to +20.79, includes 0, but AF-S passed the screen on its
+  point estimate; XGR-512's, +20.33 to +41.07, is wholly above 0.
+- **LTC candidate:** an entry that beats S512r2 at fixed nodes (its point
+  estimate above 0, as AF-S and XGR-512 did) but fails its STC SPRT is
+  recorded as an LTC / TCEC-conditions candidate, tested later at a long
+  time control with an x86-64-v4 build on AWS (AWS is unavailable until
+  further notice: owner, 2026-11-05, decisions log).
+
+An entry can be both. Neither kind is promoted without that later test and
+the owner's review (item 7).
+
+**An STC SPRT undecided at its cap (owner, 2026-11-02; decided after
+AF-S's STC result and before XGR-512's).** An STC SPRT still undecided at
+its 20,000-game cap counts as **not passed**: no promotion. The entry
+qualifies as both an LTC candidate (if it beat S512r2 at fixed nodes) and
+a retest candidate (an undecided result is within the error margin).
+
+**Not in this bake-off**: AF's small-layer activation sweep and XGR's two
+ablation nets (no X; buckets instead of G); judgement.md lists them as
+optional, the owner's five entries leave them out. XGR enters only if its
+exposure pre-test passes with the current net on generation-1 data
+(judgement.md §3).
+
+### 5.5 The public web page: Fork in the browser (owner, 2026-10-31; plan, not built)
+
+The owner's request: a public GitHub Pages site where anyone can play Fork
+and watch it learn. **Timing:** building starts after round 2 of the
+bake-off starts, on spare CPU only: Emscripten builds and Node test runs at
+idle priority (`nice -n 19`), never beside a timing measurement, a local
+SPRT, a verification run or another heavy job (the background datagen goes
+on as it does beside every other job). **Order:** the five parts below, in
+order; the WASM parity results go to the owner before anything is
+published. Facts below were checked on 2026-10-31 from the sources named
+(kb-researcher; to be logged in docs/kb/sources.md on branch kb when the
+build starts); anything not checked is marked UNVERIFIED.
+
+**Where things live.** The engine-side additions (a `wasm` build
+configuration, the web entry points, their tests) are ordinary commits on
+the development branch, with CI and bench parity like any other change.
+The site itself lives on a dedicated orphan branch `site`: the page source
+(plain HTML, CSS and JavaScript modules, no framework, no build step beyond
+copying), the build script that compiles the engine modules at a named,
+pushed engine commit, and the published output in `/docs`. GitHub Pages
+can deploy from any branch, folder `/` or `/docs`, with a `.nojekyll` file
+to skip Jekyll (docs.github.com, "Configuring a publishing source"). Pages
+limits: published site at most 1 GB, soft bandwidth 100 GB a month, files
+over 100 MiB blocked by GitHub (docs.github.com, "GitHub Pages limits",
+"About large files"). `.wasm` is served as `application/wasm` (checked
+with `curl -I` on two github.io sites). Enabling Pages on the repository
+is a settings change: done with the owner's go-ahead at the first publish.
+
+**1. The engine in WebAssembly.**
+- Toolchain: Emscripten 6.0.13 (released 2026-10-19; MIT or NCSA), built
+  with `emcmake cmake` (its toolchain file accepts C++20 under CMake 3.12+,
+  so Fork's 3.22 floor is fine; emscripten.org "Building projects",
+  cmake/Modules/Platform/Emscripten.cmake). A `wasm` preset: no `-march`,
+  the no-PEXT magics (BMI2/PEXT is not among Emscripten's emulated
+  intrinsics), no Syzygy (Fathom maps table files with `mmap`, and the
+  tables are gigabytes), a fixed small hash. Whether Fork compiles
+  unchanged under Emscripten is UNVERIFIED until the first build.
+- Single-threaded. Emscripten's threads need SharedArrayBuffer, which
+  browsers allow only on pages served with COOP/COEP headers, and GitHub
+  Pages cannot set response headers (emscripten.org "Pthreads"; Pages
+  limits; community discussion 13309, open). The only workaround, a
+  service worker that adds the headers (coi-serviceworker, MIT), reloads
+  the page on first visit and is untested here, so it is not used. The UCI
+  session runs each search on its own thread, so the web build gets a
+  small synchronous entry module (new names, screened before use): set a
+  position, list legal moves, search to a node or time limit (the search
+  already polls its hard time limit) while passing each iteration's
+  depth, score and principal variation to JavaScript, return the best
+  move; and the static evaluation of a position. The engine runs in a Web
+  Worker, so the page never freezes; a search cannot be interrupted, so
+  "stop" ends the worker and starts a fresh one.
+- One module per network. A build compiles the inference for its embedded
+  network's architecture (FORK_NET_ARCH comes from the net file), so each
+  promoted network is its own module, `fork-<net>.wasm` with its JavaScript
+  loader, downloaded only when chosen; the bootstrap evaluation is a module
+  built with FORK_EVALUATOR=bootstrap. Network sizes: B0, B0r1, B0r2 about
+  0.4 MB, S-512 0.8 MB (plus the engine code, to be measured). No
+  run-time network loading is added to the engine.
+- Inference: first the existing scalar paths (`*_scalar`, the parity
+  references). Then, only if speed calls for it, WASM SIMD (128-bit; Chrome
+  91+, Firefox 89+, Safari 16.4+ including iOS 16.4+, Node 16.4+;
+  webassembly.org features.json, v8.dev, webkit.org): Emscripten compiles
+  SSE to AVX2 intrinsics with `-msimd128`, most 256-bit operations as two
+  128-bit ones and some scalarized (emscripten.org "Porting SIMD code"), so
+  the first try is Fork's AVX2 kernels unchanged, measured against scalar;
+  a `wasm_simd128.h` path is written only if that is slow. Every inference
+  path is checked as below.
+- **Verification (reported to the owner before publishing):** each
+  module run under Node.js (`node fork-<net>.js netcheck ...`, real file
+  access with `-sNODERAWFS=1`) must give 0 mismatches on its network's
+  parity file (tests/nnue/<net>.parity, 446 positions), for the scalar and
+  for any SIMD build; and its `bench` must give the native build's node
+  count and signature (tests/bench-<net>.ref): the search is deterministic,
+  so equal evaluations and move ordering must give an equal bench, and a
+  difference (for example from wasm32's 32-bit pointers in the hash) is
+  investigated, not accepted. Speed is reported as bench nodes per second
+  in Node and in a desktop and a phone browser.
+
+**2. Play tab.**
+- Board: chessground 10.5.0 (lichess-org, GPL-3.0-or-later, so compatible
+  with Fork's licence; no dependencies; touch drag and drop; npm
+  `@lichess-org/chessground`), vendored into the site branch with its
+  licence and credited on the page and in ORIGINALITY.md. Fallback:
+  cm-chessboard (MIT, no dependencies, touch). Legal moves come from
+  Fork's own move generator through the entry module, so no second rules
+  library is needed; move notation (SAN) is written for the page from the
+  legal-move list.
+- Choices: colour (or random), time per move, and a strength level. Levels
+  are node limits per move (no engine change); their Elo is not claimed
+  unless measured.
+- Evaluation bar from the search score (the side-to-move score turned to
+  White's view; the bar shows the network's own win probability,
+  sigmoid(score / S) with that network's output scale S from docs/nets.md)
+  and the principal variation in SAN, updated each iteration.
+
+**3. "Watch it learn" tab.**
+- A network manifest (`nets.json`): each promoted network's name,
+  architecture, module file, size and SHA-256, promotion date, its SPRT
+  result against the network it replaced (Elo, interval, games, run), the
+  data it was trained on and its validation loss. The first entries:
+  bootstrap, B0, B0r1, B0r2, S-512; later networks are added by the
+  promotion step.
+- Generation against generation: pick two networks; they play live in the
+  browser, two workers, at a fixed node count per move, from openings in
+  Fork's own openings set (Lichess human games).
+- A fixed set of positions with each network's evaluation side by side.
+  The positions are taken only from sources fetched and checked character
+  by character (non-negotiable 1): the CPW perft positions already in
+  tests/suite.hpp first, others with their source named on the page.
+- Progress timeline: Elo (the chain of promotion SPRT results; self-play
+  Elo, labelled as such), training data (positions per generation, from
+  data/manifests) and validation loss, read from `progress.json`, which a
+  tool (`tools/site/`, names screened) regenerates from committed records;
+  the promotion checklist gains a step that rebuilds it and the network
+  modules on the site branch.
+
+**4. Phones, themes, size.** One layout from phone to desktop (board first,
+controls below on narrow screens); light and dark following the system
+setting, with a toggle; network modules loaded on demand, nothing larger
+than the page and the first module loaded up front; no web fonts, no
+external requests at run time (the board library is vendored).
+
+**5. Privacy.** Static files only: no analytics, no cookies, no third-party
+requests. Before every push of the site branch a scan of everything it
+adds (as for the repository: the user name, home paths, the personal
+email, account ids, bucket and profile names, secrets) must come back
+empty; networks and modules are built only from pushed public commits.
+
+**The bare-bones version first (owner, 2026-10-31).** Built now, ahead
+of the rest, which stays pinned as planned above:
+- `.github/workflows/web.yml`, started by hand, on GitHub's runners only
+  (no local CPU, no `site` branch): by a push to the trigger branch
+  `web-build` (checks only) or `web-deploy` (checks, then deploy), since
+  GitHub dispatches a workflow by hand only once its file is on the
+  default branch; by manual dispatch once it reaches main. The deploy
+  needs the `github-pages` environment to allow `web-deploy`: Emscripten 6.0.13 builds Fork with its
+  default network (S-512), scalar inference, single-threaded, with a 16 MB
+  hash on the page; `fork.js` runs under Node.js for the parity checks
+  (netcheck on the network's parity file, 0 mismatches required; bench
+  parity against tests/bench-<net>.ref and tests/perft_bench.ref, through
+  .github/ci/bench-parity.sh unchanged); only if they pass is the page
+  assembled, scanned for personal data (paths, addresses, keys, tokens;
+  the WebAssembly through `strings`) and, when the run's `deploy` input is
+  set, deployed with GitHub Pages' Actions deployment (configure in the
+  repository settings: Pages source "GitHub Actions").
+- The page (`web/`): the chessground board (credited, with its licence),
+  a choice of colour, Fork answering at 200,000 nodes per move (a page
+  setting chosen to keep a phone's move near a second; measured once the
+  module runs), new game, game-over messages (checkmate, stalemate, the
+  fifty-move rule, threefold repetition, insufficient material), phones
+  first, light and dark. Fork is the only rules source: legal moves,
+  positions and the game's end come from the engine through
+  `src/web/web_engine.hpp`.
+- The engine side: `src/web/web_engine.*` (the synchronous entry points,
+  tested natively in fork_tests' `web` suite), the `fork_web` target and
+  `fork.js` link options under Emscripten, no `-march` and no `-g` there,
+  and no thread library (Emscripten's threads need shared memory).
+- After the first good run, the WebAssembly parity checks join CI as a job.
+
+**v2 (owner, 2026-11-02: strength levels, the evaluation bar and a network
+selector for "Watch it learn"; code written on branch `web/v2`, deployed
+only when GitHub's queue is free).** Unverified in WebAssembly until its
+first `web` run: the native and Node.js tests below ran, the Emscripten
+build did not (it runs on GitHub's runners only).
+- Engine side (`src/web/web_engine.*`, native tests in the `web` suite, each
+  fault-injected): each finished iteration is reported during
+  `fork_web_search` (depth, score, nodes, line), to the page through an
+  `EM_JS` call of the module's `onIteration` and natively to a hook set by
+  `fork_web_set_iteration_hook`; `fork_web_san` writes a line in standard
+  algebraic notation from the legal-move list on a position of its own (so
+  it may run during a search), the engine staying the page's only rules
+  source; `fork_web_evaluate` gives the static evaluation. The expected SAN
+  in the tests is python-chess 1.11.2's for the same moves.
+- One module per evaluator: `web.yml` builds the bootstrap evaluation and
+  every promoted network (B0, B0r1, B0r2, S512, S512r2) as
+  `engines/<id>/fork_web.{js,wasm}`, one job each, each with netcheck (0
+  mismatches; none for the bootstrap) and bench parity under Node.js; a
+  worker loads only the module its `net` parameter names, when it starts.
+  `web/nets.json` is the network manifest (values copied from docs/nets.md
+  and the Phase 4 SPRT log, checked against both by `web/test/page.test.js`);
+  the build adds each module's path, size and SHA-256 (`web/fill_nets.py`).
+  The promotion step adds a network to nets.json and to the matrix.
+- Play tab: five strength levels (1,000, 10,000, 50,000, 200,000 and
+  1,000,000 nodes per move; no rating claimed), the evaluation bar
+  (sigmoid(score / S) from White's view with the playing network's S, mates
+  at the ends), the principal variation and the game in SAN, updated each
+  iteration.
+- "Watch it learn" tab: two chosen evaluators play each other live, two
+  workers, at 10,000, 50,000 or 200,000 nodes per move, from the start
+  position or a random position of Fork's committed test set
+  (tests/datagen_openings.epd, the bench positions: CPW perft and Lichess
+  CC0 games); the networks' record (promotion date, SPRT, the running total
+  of the promotion SPRTs labelled as self-play Elo, data, validation loss,
+  module size); and every evaluator's static evaluation of the CPW perft
+  positions of tests/suite.hpp side by side.
+- Tests: `node --test web/test/page.test.js` (the score, bar and notation
+  helpers; the fixed positions against tests/suite.hpp; nets.json against
+  the docs and the files each network needs), run locally with Node.js 24
+  and by the workflow before the page is assembled.
+
+**Tests.** The entry module's functions get native unit tests (they compile
+outside Emscripten too); the Node runs above are the WASM tests. Whether
+CI gains an Emscripten job (cached SDK) is decided with the owner once the
+build exists.
 
 ## 6. Decisions log
 
@@ -2060,6 +3425,59 @@ and Weiss (results in ORIGINALITY.md).
 | 2026-10-28 | **B-4 and RfpMargin (owner).** B-4 (the quiescence stand-pat refined by the TT score) reverted: its STC SPRT accepted H0 (19,200 games, Elo -4.11 +/- 3.93). RfpMargin 40 (was 80) **accepted without an SPRT**, by the owner's decision: its STC run was restarted on a pair without B-4 (8550a78 vs 306bd9a), then stopped in stage 0, and the LTC follow-up was dropped. Its only game data is the superseded run's 3,200 games (with B-4 in both engines: +3.47 +/- 9.61, undecided), so its strength effect is UNVERIFIED; the measured fail-low shares justify the value (Search constants). |
 | 2026-10-28 | **Audit-1 Phase D (owner).** Performance gate against main: +2.9% nps at the audit head of the time (not significant; different trees), +3.3% on the same tree (8550a78, significant at the 3.0% threshold), so no slowdown (perf-log.md). Gauntlet against the Milestone C anchors, Milestone C's openings and settings: with RfpMargin 40 stopped after 357 games, 22.5 points below Milestone C on the same games; with RfpMargin 80 (8550a78), all 1,200 games, **Fork 2411.5 ± 22.5** on the Milestone B anchors against 2402.5 ± 23.3 (2416.0 ± 22.2 with Weiss). **RfpMargin reverted to 80** (fd7d4b5; bench 17309921, as main's); 40 logged as untested (ideas.md idea 34). New policy: **untested changes never ship**; a skipped or unfinished test shelves the change and keeps the baseline (Testing setup). Report: history/phase-3/audit-1.md. |
 | 2026-10-28 | **Phase 3 closed (owner).** Audit-1 merged into main (PR #5, 80f725e) after its full CI matrix passed (run 40773853691, perft_epd_full included). No new SPRTs. The roadmap changes: tier 2 (deliverable 9) moves into Phase 4, its SPRTs on the GitHub shards beside the local self-play data generation; the end-of-Phase-3 removal round folds into Phase 4's search re-validation after the first network; idea 23's long run stays in late Phase 4. `UseTtEvalRefine` stays on as the owner-approved exception to "untested changes never ship". Summary: history/phase-3/summary.md; tag `phase-3`. Phase 4 starts in a fresh session. |
+| 2026-10-28 | **Step 0 screens answered (owner).** B0 stays 768 -> 256 -> 1 as the generic minimal baseline shape (the coincidence with Berserk 6 noted in ORIGINALITY.md); `src/datagen/` kept as community vocabulary; datagen at 20,000 nodes per move, Fork's own measurement (the coincidence with Berserk's OpenBench preset noted); local bullet builds only with a throwaway Cargo folder, training builds only on Kaggle, Fork never vendors or links bullet's GPL/AGPL dependencies (excluding them by Cargo features preferred). Quantization reference corrected to bullet's f64 rule; datagen game cap 500 plies (bullet's 512-record reader limit). |
+| 2026-10-28 | **Step 0 spec approved; steps 1-3 reviewed (owner).** §5.3 approved with the answers in its "Owner's answers": no SSD (staging on C:), Kaggle account ready, datagen on 10 of 12 threads, B0's net committed (other nets as Releases), "accumulator" kept if the name screen agrees. Bake-off: the judge's four entries at width 512 on a shared kernel framework, on generation 0 data, STC narrows and LTC decides, time-odds games at STC only, a design-level originality screen for X, G, R, the fitted king regions and AF's threat encoding, a subagent may read bullet's code at the pin, loss thresholds proposed for approval, one net until the pipeline is proven, threat inputs later as an add-on. VNNI on TCEC stays UNVERIFIED (TCEC question list); older KB pages scrubbed of other engines' constants. |
+| 2026-10-28 | **QA/QB and the openings month (owner, answering §5.3 question 6).** QA = 255 and QB = 64 stay as bullet's standard quantization convention, recorded in ORIGINALITY.md as a trainer-interface convention credited to bullet, not a tuned constant (so outside the constant screen). The choice of Lichess 2016-09 for datagen openings and the case for a larger or more recent month later are recorded in §5.3, deliverable 1. |
+| 2026-10-28 | **Phase 4 started (owner).** The multi-agent plan gains a step 0 requirement: the trainer-engine parity test (the trainer's model against Fork's scalar and every SIMD path, exactly or within the quantization's documented tolerance), passing before any network plays a game and run in CI on every network and inference change. Step 0's spec (§5.3, the baseline network B0 and the whole pipeline, with the Kaggle test session checklist) is written as a draft for review, together with steps 1-3 (research, three designs with divergent briefs, a judge) on branch kb; one batched review stop. The training-data decisions of 2026-10-24 are copied from the KB into §5.3. |
+| 2026-10-29 | **B0 adopted; its failing tests fixed, not the engine (owner).** B0 passed its SPRT against the bootstrap evaluation (+486.85 +/- 32.07 Elo, H1 at [0, 5], STC) and is the default evaluator. The TT-equals-minimax tests run their endgames at depth 3, where a full-width walk (repetition_in_tree) finds no repetition in reach; the known path-dependent repetition/TT case (KRK, depth 6) has its own test as tolerated; checks tied to the bootstrap evaluation are made bootstrap-only. Bench re-pinned (tests/bench-b0.ref). |
+| 2026-10-29 | **Check relief kept at 1 ply and merged (owner).** LmrCheckRelief is recorded as the minimal reduction unit in Fork's whole-ply LMR, not a tuned constant; the coincidence with Berserk's one-ply relief is noted in ORIGINALITY.md. Its STC SPRT passed (+11.26 +/- 5.54 Elo, [0, 3]). The in-check LMR term (late quiet evasions reduced normally; no constant) passed its own STC SPRT (+4.21 +/- 2.89 Elo, 35,200 games) and is merged too. Both were tested against the bootstrap evaluation, separately. |
+| 2026-10-29 | **Quantization-loss thresholds approved for B0-class nets (owner): max 15 cp, p99 12 cp**, revisited for each new architecture (§5.3, answer 11). B0 (11.1 / 8.8) and B0r1 (8.6 / 7.9) pass (`reference.py legs --max-loss 15 --p99-loss 12`). |
+| 2026-10-29 | **Delta pruning's margin (owner).** QuiesceGainSlack's 150 cp (branch exp/qs-delta) was chosen after seeing the data (the marginal curve read off the bench measurement; the pre-declared 1% criterion only bounds it from below at 80); recorded as such, and its SPRT decides. |
+| 2026-10-29 | **No script prints credentials (owner).** Audit of every committed script and workflow: no secrets in the workflows; the Kaggle kernels read none, and session_check.py reports only three named CUDA variables; the AWS script uses its instance-metadata token only inside a request header; the Kaggle CLI is used only through its own token file and prints only URLs and status. The local session scripts likewise read and print no token. |
+| 2026-10-29 | **B0's retrain queued (owner): B0r1.** On all generation-0 data so far (g0s2, worker 9 held out), same architecture, warm-started from B0's weights, early stopping within Kaggle's limit; then the parity chain, netcheck and an STC SPRT against B0 at [0, 5] on the GitHub shards (never beside CI); if it passes it becomes the default and the network for the next data generation. |
+| 2026-10-29 | **B0r1 adopted; tablebase result, not material, for a network's quiet choice (owner).** B0r1 passed its SPRT against B0 (+200.24 +/- 16.05 Elo, H1 at [0, 5], STC) and is the default network. Three search tests were fixed for it: determinism clears the history too; the fail-high stop test scans every bench position; in the exchange test a network's move is checked against Syzygy where the material-best move is not forced. Owner's rule: in Syzygy range, accept any move that keeps the tablebase result; otherwise compare the moves with a deep search, and record a real loss as a known weakness of the net, not a test change. The check must be able to fail: K+R+P v K+R with 4 winning and 12 non-winning moves, fault-injected. |
+| 2026-10-29 | **Generation 0 stopped, generation 1 started with B0r1; the bake-off trains on generation 1 (owner).** Generation 0 was stopped at 1:42 PM EST and sealed from its complete games: 1,366,657 games, 130,615,808 positions (data/manifests/g0.json, worker 9 held out; g0s1 and g0s2 are byte prefixes of its shards). Generation 1 has the same settings (10 threads, 20,000 nodes, 2-4 random plies per game, 400 cp decided bound, Syzygy 3-4-5, 1 MB hash, Lichess 2016-09 openings) with a new seed (20261030) and fork_datagen from phase-4 bb4f75a (B0r1). The Lichess 2026-09 openings are added when their stream finishes. All bake-off candidates train on the same generation-1 data. |
+| 2026-10-30 | **Delta pruning inconclusive, kept off (owner).** Its STC SPRT against B0r1 was stopped undecided after 27,200 games: -0.40 +/- 2.93 Elo, nElo -0.56 +/- 4.13, LLR -1.39 on [0, 3] (history/phase-4/sprt-log.md). Not merged; exp/qs-delta keeps it for the post-network re-validation, with its margin retuned (ideas.md 39). |
+| 2026-10-30 | **Openings tool resumable and small (owner).** The 2026-09 stream was stopped for low memory after 6.4 hours (its python held 1.17 GB). `datagen_openings.py` now writes positions straight to a state folder, finds duplicates through 64-bit digests in one table capped at 256 MB, and checkpoints every 2 minutes; the same command resumes (the stream is re-read from its start and the finished games skipped; the re-read prefix must hash as recorded). Lichess 2016-09, killed after 600 s and resumed, reproduced its committed manifest byte for byte at a peak of 57 MB. |
+| 2026-10-30 | **Bake-off constants (owner).** AF-S keeps its body (16, 32, 8 stacks, int8 L1 at 64) though the screen found it in Stockfish 14-18; S-512 takes H-512's phase octiles instead of piece-count buckets; XGR stores 3 side lanes (§5.4; ORIGINALITY.md). |
+| 2026-10-30 | **B0r2 is the default network (owner's standing instruction, §5.4 games plan item 0).** The bake-off's B0 control (B0's shape on g1s1) beat B0r1 at STC on [0, 5]: +235.45 +/- 16.04 Elo, H1 after 1,600 games. It becomes `nets/b0r2.fnet` with its parity file and bench reference (14,589,665 / 9dba694dd1ee4c41) and generation 1's labeller from then on (docs/nets.md); one search test made evaluator-independent. **H-512 plays as trained (owner)**: its gap is overfitting (§5.4), the pre-registered plan is unchanged, and king regions are retested with much more data in the winner's full-size confirmation, a hand-drawn map with the castled squares together included (judgement.md §5, row 5). |
+| 2026-10-30 | **Generation 1 switched to B0r2 (owner's standing instruction).** The B0r1 run was stopped at 1:45 PM EST and sealed from its complete games: 1,717,530 games, 171,297,909 positions (data/manifests/g1.json, worker 9 held out; g1s1's shards are byte prefixes of its shards, checked). The rest of the 200 M target, 28,702,091 positions, comes from run g1b: fork_datagen from phase-4 ac2ce91 (B0r2, bench checked), generation 1's settings with a new seed (20261031), started at 1:46 PM EST. The Lichess 2026-09 openings are still added when their stream finishes. |
+| 2026-10-30 | **Each labelling net's data stays apart (owner).** Generation 1's two parts keep separate manifests: g1.json (B0r1) and g1b.json (B0r2, sealed when g1b finishes), never merged, so training can tell them apart. fork_datagen's run manifest now names the network (`"evaluator": "nnue (b0r2)"`; before, only "nnue"), checked by datagen_verify; g1b's binary predates this, so its seal sets the field. **check.sh full's TCEC leg** compared each TCEC binary's bench with tests/bench.ref (the bootstrap evaluation's) and so failed whenever a network is the default; it now calls .github/ci/bench-parity.sh as CI does (the net's reference and perft bench), and passed with gcc 11.4, g++-12, clang 16 and clang 19. |
+| 2026-10-30 | **Generation 2 and the standing labeller policy (owner).** After generation 1 (g1 + g1b) and the WSL restart that applies `.wslconfig` (6 GB cap, gradual memory reclaim), generation 2 starts as run g2: labelled by B0r2, generation 1's settings, seed 20261101, target 500 M positions; the Lichess 2026-09 openings are added when their stream finishes. **Labeller policy** (§5.3, deliverable 2): whenever a new network is promoted, the running generation stops at a game boundary, the part so far is sealed with its labelling network recorded, and the generation continues as a new part (g2b, ...) labelled by the new default; parts are never merged. **One naming scheme (owner)**: a part ends for any reason (a new labelling net or new openings), the next part takes the next letter, and each manifest records its labelling network, openings file and why the part ended (`part_end`, required by `upload_batch.py seal`, which also refuses a network run that does not name its net; name screened, no match). g1.json gains its reason: B0r2's promotion. |
+| 2026-10-30 | **AWS connected; cloud data generation built, not launched (owner).** The owner set up the account (root MFA, a $20 budget alert, a 30-day lifecycle rule, IAM Identity Center with PowerUserAccess for 12 h, an instance role with s3:PutObject on results/ and datagen/ only); AWS CLI v2 is installed in WSL user space (signature checked against the AWS CLI Team key's documented fingerprint) with an SSO profile; account names live only in local untracked settings. Applied spot quota (L-34B43A08, Standard families): 8 vCPU in us-east-2, so everything is sized to one c7a.2xlarge (8 cores, 1 thread per core, 3.7 GHz; spot $0.116-0.133 per hour over three days, about $3 a day). New safeguards in tools/cloud/: `spot_quota.sh` (every launch and dry run checks the applied quota and refuses an excess), `spot_watch.sh` (the spot interruption watcher, now shared; a simulated interruption against a fake IMDSv2 service, fault-injected once), `aws_cleanup.sh` (terminates tagged instances past `fork-expires`), and fork-run / fork-expires tags on instances, volumes and spot requests; aws_spot_sprt.sh uses them and defaults to c7a.2xlarge. Cloud data generation: `aws_spot_datagen.sh` (launcher: one spot instance, x86-64-v4, the commit's default net checked by bench, openings regenerated and checked byte for byte, seeds from 10^12 apart from every local run, a max-hours shutdown), `cloud_datagen.sh` (on the instance: chunks of 1 M positions, each verified, sealed with its labelling net, openings and reason, uploaded to datagen/), `pull_datagen.sh` (at home: download, SHA-256 and game checks, then a private Kaggle dataset); end to end without AWS in `test_cloud_datagen.sh` (CTest `cloud_datagen`, Linux). Names screened, no match. No real launch until the owner says go. |
+| 2026-10-30 | **Cloud data generation on any of seven 8-vCPU types (owner).** The first real launch (one c7a.2xlarge spot instance, us-east-2, approved by the owner) found no spot capacity (InsufficientInstanceCapacity; spot placement score 1 of 10 in every zone for c7a.2xlarge and c8a.2xlarge); nothing was created. Data generation is node-limited, so the machine type does not change the data (the one-type rule stays for SPRTs): `aws_spot_datagen.sh` now asks for one spot instance through an instant EC2 Fleet, capacity-optimized-prioritized over c7a, c8a, m7a, c7i, m7i, c6a and c6i (.2xlarge, 8 vCPU; in that order) in every zone, each capped at $0.25 an hour, and checks every type against the spot quota first. The instance picks its build from its CPU flags (x86-64-v4 with AVX-512 F, BW, CD, DQ and VL, else x86-64-v3; no AVX2, BMI2 and FMA: it stops), and `fork version` must report that target; each chunk's sealed manifest records the instance type and CPU model (`machine`), the generator's `arch` being the build. No capacity exits 4, and a local loop retries every 30 minutes for up to 12 hours, stopping at the first launch. Stub test `tools/cloud/test_aws_spot_datagen.sh` (check.sh's tool tests; fault-injected once: a flat priority fails it); the instance-type record is in `test_cloud_datagen.sh`. Both requests this script builds (the launch template and the fleet) were sent to EC2 with `--dry-run`, and EC2 answered that each would have succeeded. Names screened (fleet_config, check_quota, instance_type, max_price, test_aws_spot_datagen): no match; machine and types only as plain words. |
+| 2026-10-30 | **S-512 is the default network, provisionally (owner).** In bake-off stage A it beat the B0 control (B0r2) at STC on [0, 5]: +43.66 +/- 12.02 Elo (nElo +62.52 +/- 17.02), H1 after 1,600 games (run 41125906800). It becomes `nets/s512.fnet` (byte-identical to bake/g1s512's net) with its parity record and bench reference (15,249,025 / 13001f412d6e8d7e); one search test made evaluator-independent (docs/nets.md). The bake-off continues unchanged and a later entry that beats it is promoted then. S-512 labels generation 2 from its start (g2 had not begun; its first 6 hours stay arm A of the idea-13 experiment, and arm B uses the same labeller) and the cloud data generation. Its architecture's quantization-loss thresholds are not yet approved: its loss is max 15.6 cp, p99 12.1 cp (proposed: max 21, p99 16). |
+| 2026-10-30 | **The datagen options reach the cloud runs.** `cloud_datagen.sh` and `aws_spot_datagen.sh` take `--adjudicate-cp` and `--adjudicate-plies` and hand them to fork_datagen, so a cloud part can use the same score adjudication as the local one; `verify_games.py` reads the adjudication from the run manifest's settings when `--adjudicate` is not given, and `pull_datagen.sh` passes the sealed settings on, so both the instance and the home check verify adjudicated games (a manifest that misstates the rule fails at home: `test_cloud_datagen.sh`). `upload_batch.py seal` carries `positions_unsaved` and `nodes_spent` when a run has them. The manifest key and accessor `nodes_searched` became `nodes_spent` before the first commit: the name screen found the former as an identifier in Stockfish (generic words, but renaming cost nothing; `nodes_spent` and the other option names: no match). |
+| 2026-10-30 | **Quantization-loss limits for S-512's architecture (owner): max 21 cp, p99 16 cp.** Set from its first net (S512: 15.6 / 12.1 cp). The rule: limits per architecture leave headroom above the first healthy net's loss, to catch broken conversions, not to rank nets (docs/nets.md, "Quantization-loss limits", which lists every architecture's limits). They are applied with `reference.py legs` when a net is added; no CI job applies them automatically. |
+| 2026-10-30 | **The idea-13 experiment, as run (owner).** Both arms are labelled by S-512, use the score adjudication (700 cp for 8 plies) and the same fork_datagen build (chosen at the break); the split search is the only difference. Arm A: generation 2's first 6 hours (normal settings). Arm B: 6 hours as its own part with its own seed, in check 2,000 nodes, other positions saved with probability 0.5 at 20,000 nodes, otherwise 4,000 nodes and not saved. CPU load is logged for both arms. Then nets of B0's shape, two seeds per arm with identical training, the usual parity chain and scale matching, and arm B's best net against arm A's at STC on [0, 5], capped at 20,000 games, after a seed-against-seed match per arm; if it is inconclusive the simpler setting (no split) stays (ideas.md 13). |
+| 2026-10-30 | **Generation 1 complete; the score adjudication adopted for generation 2 (owner's rule).** Run g1b (B0r2) reached its target at 5:59 PM EST and is sealed as data/manifests/g1b.json: 286,781 games, 28,702,555 positions in 15,168.5 s (1,892 positions/s), worker 9 held out; part_end "target reached: generation 1's 200 M positions (g1 + g1b)". On all of g1b's games, a win adjudicated once one side scores at least 700 cp for 8 plies in a row ends 65.7% of the games early, 28 of them wrongly (0.015%: 27 were draws, 1 a loss) and saves 9.3% of the positions (on g1's B0r1 data: 20 wrong of about 104,000, 0.02%). The owner's condition was a rate near zero, so generation 2 (local and cloud) runs with `--adjudicate-cp 700 --adjudicate-plies 8`, recorded in every manifest's settings; no draw rule (the measured draw rules misjudge 1-10% of games where they save anything). |
+| 2026-10-30 | **Cloud data generation in three regions (owner).** `aws_spot_datagen.sh --region` takes us-east-2, us-east-1 or us-west-2, one 8-vCPU instance per region within that region's own spot quota, and every instance uploads to the bucket in `--bucket-region` (us-east-2; the instance sets AWS_DEFAULT_REGION to it). Applied Standard spot quota (L-34B43A08) before any launch there: 8 vCPU in each of the three (default 5; us-east-2 also has an increase to 32 requested, case open). Dry runs of run-instances with the instance profile and of create-launch-template succeed in all three regions, so the SSO permission set and its iam:PassRole policy already cover them; the bucket has no bucket policy. The instance role's own policy cannot be read with PowerUserAccess (no IAM reads); that it has no region condition was confirmed when the first cross-region chunk (us-west-2, run g2-aws-us-west-2-20261030T233227Z) uploaded to the us-east-2 bucket. Seeds: 10^12 + (4 x launch time + region slot) x 1000 + chunk, the slot 0 / 1 / 2 for us-east-2 / us-east-1 / us-west-2, and cloud_datagen.sh stops a run at 1,000 chunks, so no two runs share a seed even when launched in the same second; the run name carries the region. Tests: the stub test checks each region's slot, name and upload region (fault-injected: a shared slot fails it); three older checks in test_cloud_datagen.sh that tested only their first condition now test both. |
+| 2026-10-30 | **Cloud spending guards (owner): a $10 daily cap and a $25 credit floor.** `tools/cloud/cost_guard.sh`, run by `aws_spot_datagen.sh` before anything is created: every launch is recorded in a local ledger (outside the repository) at its worst case, --max-hours at the --max-price cap (12 h at $0.25 = $3), and a launch is refused (exit 5) when the last 24 hours' worst cases plus its own exceed FORK_DAILY_CAP ($10); it is refused (exit 6) when the remaining credits, the balance the owner read on a date (FORK_CREDITS_START, FORK_CREDITS_SINCE) minus the credits Cost Explorer shows applied since, fall below FORK_CREDIT_FLOOR ($25). Running instances always finish. Without a starting balance the credits are reported as unknown and do not block; no API giving the remaining credit balance directly is known here (UNVERIFIED). `cost_guard.sh report` lists the window's launches and the credits, run daily. Stub test `test_cost_guard.sh` (fault-injected: ignoring the new launch's own cost fails it); the launcher's stub test checks the ledger record and a refusal over the cap with nothing created. |
+| 2026-10-30 | **Cloud launch rule: expected cost per million positions (owner).** The first measured rates (S-512, 20,000 nodes, adjudication 700/8, x86-64-v4 on 8 vCPU): c8a.2xlarge 2,075 positions/s (median of 18 chunks, 2,046-2,188), c7a.2xlarge 1,640 (2 chunks), so at the spot prices seen c8a costs about $0.015 per million positions and us-west-2's c7a at $0.227/h about $0.038. Rule: each spot pool (a type in a zone) is judged by its current spot price over its type's measured rate (`tools/cloud/datagen-rates.tsv`, keyed by net, nodes and adjudication); `aws_spot_datagen.sh` leaves out pools above `--max-cost-per-m` (default $0.03), above the $0.25/h cap or of a type with no measured rate, and gives the fleet the rest cheapest first (ties in --types order, c8a first by default), each capped at the price where it reaches the limit, so an instance whose price climbs past it is interrupted. No qualifying pool exits 7 with nothing created or recorded. The daily cap and its worst-case booking are unchanged ($0.25/h x 12 h). The five types without a measured rate (m7a, c7i, m7i, c6a, c6i) cannot launch until a rate is recorded for them. Ranking in `tools/cloud/spot_pools.py` (unit tests `test_spot_pools.py`; fault-injected: ranking by hourly price, and no limit check, each fail them), the fleet request and the refusal in the launcher's stub test; dry runs against the live price history in all three regions. Names screened (spot_pools, datagen-rates, load_rates, latest_prices, choose_pools, max-cost-per-m, per_m, refused): no match. |
+| 2026-10-31 | **Bake-off amended after stage A (owner; decided after seeing stage A's results, before any stage B game).** Stage A: S-512 H1; H-512, AF-S and XGR-512 H0 against the B0 control. No entry is retrained alone; stage B (fixed nodes, 800,000 per move) decides who stays: an entry stays if its stage B Elo point estimate against the control is above 0 (rule set before any stage B result), otherwise it is dropped, not retrained. Round 2: every remaining entry, S-512 and the B0 control included, retrained on one snapshot of about 500 M positions (generation 2 and the cloud data) with identical settings. XGR's exposure plane, phase gate and revision head become separate add-on experiments to S-512 after round 2 (§5.4, "Amendments after stage A"). |
+| 2026-10-31 | **The daily cap counts ended instances at their cost (owner).** A launch stays booked at its worst case ($0.25/h x 12 h) while its instance runs; once the instance has ended (finished, interrupted or terminated), `cost_guard.sh` replaces the booking with its cost: hours run times the spot price paid, each stretch of the run at the price then in effect (`tools/cloud/spot_cost.py`), from the instance's spot request (start, end, type, zone) and the zone's spot price history. `check` and `report` settle first; the launcher records each launch's region and instance. AWS lists closed spot requests only for some hours, so an instance it no longer lists keeps its worst case until `settle RUN COST` sets it by hand. The three launches of 2026-10-30 were settled by hand: us-east-2's c8a $0.73 (6.1 h, from AWS's record), us-west-2's c7a $0.57 (2.5 h, end from its boot log), us-east-1's c7a $0.26 (an upper bound: reclaimed before its first chunk, zone and end unknown, so 1.1 h at the dearest zone's price). Tests: `test_spot_cost.py` and `test_cost_guard.sh` (fault-injected: check without settling, a running instance counted as ended, price changes ignored, and a hand-settled row losing its state on a rewrite each fail them). Names screened (spot_cost, cost_between, settle, booked, paid): no match. |
+| 2026-10-31 | **XGR's set-wise exposure adopted for round 2 (owner).** Condition: evaluations exactly identical and faster (§5.4, the engineering task's result). Old build against new, every XGR-512 net (the entry and the raw seeds 1 and 2): netcheck 446 positions, 0 mismatches each; `fork evalfens` byte-identical on 500,005 game positions each; bench 15,540,185 / 9564dc8f27cd9708 on both. Speed: +15.5% median nps (bench/ab_search.py, 10 rounds, datagen paused, the openings stream running at low priority; an A/A run beside it moved -0.4% / +0.9%). Inference only, so round 2's training rules are unaffected. |
+| 2026-10-31 | **AWS used as much as needed (owner).** The owner has a budget set and accepts paying it daily, so cloud data generation is no longer held back by cost: the launch rule allows any pool at up to $1 per million positions and a spot price of $0.40/h (was $0.03 and $0.25), the credit floor is 0 (was $25), and the daily cap is raised from $10 to $100 at worst-case booking, kept only as a backstop against a runaway relaunch loop. Each instance still shuts itself down after 12 hours. The binding limit is the applied spot quota, 8 vCPU (one 8-vCPU instance) per region in us-east-2, us-east-1 and us-west-2; increases to 32 were requested for us-east-1 and us-west-2 (us-east-2's has been open since 2026-10-30), and the relaunch watcher fills each region up to its applied quota. The on-demand quota is also 8 vCPU per region (the launcher uses spot only). |
+| 2026-10-31 | **A public web page for Fork, planned (owner).** GitHub Pages from a dedicated `site` branch: Fork compiled to WebAssembly (Emscripten, single-threaded, scalar then WASM SIMD, in a Web Worker), checked by netcheck and bench parity under Node before anything is published; a Play tab (chessground, GPL-3.0-or-later), a "Watch it learn" tab (any promoted network, live generation-against-generation games, fixed positions, a progress timeline from a summary JSON the promotion step updates); phones, light and dark, networks loaded on demand, no personal data. Built after round 2 starts, on spare CPU only (§5.5). |
+| 2026-10-31 | **The gauntlet moves to GitHub's runners, with stronger anchors (owner).** `.github/workflows/gauntlet.yml` (started by a push to `gauntlet-run`, one run at a time in the GitHub queue): Fork (update.sh, gcc 11.4, x86-64-v3) against the continuity anchors Weiss 1.0 (CCRL Blitz 2896), Stash 19.0 (2473), WyldChess 1.51 (2603) and the new Monolith 2.01 (3061), Winter 0.9 (3168), Laser 1.7 (3292), each built from its official source at a pinned commit (tools/gauntlet/anchors.tsv); Topple 0.8.1 (3036) and Seawall 20250322 (2978) replace a new anchor that does not build. 200 games per anchor at 10+0.1, one thread, Fork's Hash 16 MB, the earlier gauntlets' 200 random 8-ply openings (tools/make_openings.py, seed 20261025, sha256-checked on the runner), each with both colours; 12 shards on ubuntu-latest, each recording its CPU model; Ordo 1.2.6 anchored to CCRL Blitz (list of 2026-10-31). A stronger anchor is added only if Fork scores over about 70% against Laser 1.7 (owner, 2026-10-31): Marvin 6.3.0 (CCRL Blitz 3458, GPL-3.0, tag v6.3.0; its network built in; its book never placed beside the binary), or Arcanum 2.8 (3460, GPL-3.0) if Marvin does not build, in a run started from `gauntlet-strong-run`, which replays the whole gauntlet with it. Every anchor's options come from its own `uci` output: listed options only if it has them, any thread option at 1, any book switch off. |
+| 2026-10-31 | **First gauntlet on GitHub's runners: Fork 3325.9 ± 27.4 (Ordo, CCRL Blitz scale).** Run 41232350699, Fork at a38a37d (update.sh, gcc 11.4, x86-64-v3, the default network), 1,200 games at 10+0.1, all 12 shards complete, every game ended normally (no time losses or abnormal endings). Fork scored 965.0/1200 (80%): against Laser 1.7 109.0/200 (54.5%), Winter 0.9 155.0 (77.5%), Monolith 2.01 160.0 (80.0%), Weiss 1.0 168.5 (84.3%), WyldChess 1.51 184.0 (92.0%), Stash 19.0 188.5 (94.3%). Ordo: white advantage 118.0 ± 14.0, draw rate between equal opponents 19.2% ± 1.8. Every primary anchor built; no alternate was used. The shards ran on AMD EPYC 7763 (9 shards), EPYC 9V45, EPYC 9V74 and Xeon Platinum 8573C (one each), 4 cores, 3 games at a time. The rating is on the anchors' CCRL Blitz scale (2'+1" on CCRL's hardware) from 10+0.1 games on these runners, so it is an estimate in that scale, not a CCRL rating. **The strong anchor does not play:** Fork scored 54.5% against Laser 1.7, below the owner's threshold of about 70%. **A second run** (41238458381, at 62ce047: docs only after a38a37d, so the same engine), started at 3:20 PM EST by a queue script left running after it was meant to be stopped (it waited for an idle queue, so nothing overlapped): Fork 3305.3 ± 27.9, 948.5/1200, 56.5% against Laser 1.7, every game normal. Both runs together (Ordo 1.2.6, same settings, 2,400 games): **Fork 3315.6 ± 19.6**, 55.5% against Laser 1.7; both runs played the same 200 openings, so that error bar understates the uncertainty somewhat. |
+| 2026-10-31 | **Idea 13 adopted: the split search is the standing data-generation setting (owner).** i13b1 (arm B) beat i13a2 (arm A) by +65.47 ± 12.90 Elo (nElo +88.52 ± 17.02), H1 on [0, 5] after 1,600 games (run 41236941019; seed noise +3.3 ± 12.6 and -14.8 ± 12.4; ideas.md 13). Every new part uses `--save-percent 50 --unsaved-nodes 4000 --check-nodes 2000` with the other settings unchanged. Locally, run g2d was stopped at 3:30:05 PM EST after 19,859 s and sealed (data/manifests/g2d.json: 337,222 games, 30,755,288 positions, every shard passing verify_games.py), and g2e (seed 20261105) started at 3:30:11 PM EST with the split search. In the cloud, the running instances finish their 12-hour runs as launched, and every relaunch passes the three options (`aws_spot_datagen.sh` to `cloud_datagen.sh` to fork_datagen; tests in `test_aws_spot_datagen.sh` and `test_cloud_datagen.sh`). The launcher's cost rule is unchanged: at the same rate of saved positions (arm B 1,641 a second against arm A's 1,637, measured locally), the rates file's positions per second still give the cost per million saved positions (UNVERIFIED on the cloud types until their first split chunks report). |
+| 2026-10-31 | **Tier 2 resumes (deliverable 9; owner), in a new order.** One technique at a time, each behind its switch and SPRTed on the GitHub shards with S-512 as the default network, sharing the GitHub queue with round 2 (round 2's games first when they are ready): singular extensions (then multi-cut and negative extensions), continuation histories, capture history, internal iterative reduction, correction history, then razoring, futility pruning of bad captures, upcoming-repetition detection and fifty-move eval scaling. Gainer bounds by expected gain ([0, 5] where a large gain is expected, [0, 3] otherwise). Every constant is justified from Fork's own measurements, with the name and constant screens as usual. Check relief and in-check reductions, SPRTed on the bootstrap evaluation, are tested again with S-512 in the re-validation round. **Singular extension first:** built behind `use_singular_extension`, its SPRT passed (+14.12 ± 6.55 Elo after 4,800 games, [0, 5]; Phase 4 SPRT log) and the switch is on; multi-cut then passed on top of it (+9.19 ± 4.62 Elo after 9,600 games, [0, 3]) and is on (owner: adopted on passing, with the credit note for its textbook form); the negative extension was rejected (−8.73 ± 4.98 Elo after 8,000 games, H0) and stays off; its constants measured (Search constants: 6 cp per ply, minimum depth 6, entry slack 3, test at d / 2, 1-ply extension); the constant screen found the combination close to Stockfish 11's test, kept by the owner with credit (ORIGINALITY.md) and a correction to the margin and depth added as a candidate region for idea 23 (ideas.md). Then T10's reply table (the 1-ply continuation history, `ReplyWeight` 6 quarters, measured) passed on top of both (+11.46 ± 5.57 Elo after 6,400 games, [0, 5]; 2026-11-01) and is on, then the follow table (the 2-ply table, `FollowWeight` 4 quarters, measured) on top of it (+7.22 ± 3.92 Elo after 12,800 games, [0, 3]; 2026-11-01), on too; then T11's take history (capture history, `TakeWeight` 4 thirty-seconds, measured) on top of both (+4.53 ± 2.99 Elo after 22,400 games, [0, 3]; stages 0-12 ended without a verdict and the test ran on to stage 13), on too. |
+| 2026-11-01 | **Round 2 of the bake-off set up (owner: the schedule, before training).** Generation 2 ended at 614.8 M saved positions: local parts g2-g2e (g2e, the split search, stopped 9:17 AM EST and sealed) and 8 cloud runs (507 chunks). The snapshot g2s1 (`data/manifests/g2s1.json`): 9,176,386 games, 614,769,222 saved positions for training (415,949,440 kept by the training filter); validation 780 games, the first 60 of a designated shard from each of the 13 sources, interleaved. Refitted on g2s1 by the round-1 rules: S = 92 (fit_scale.py's fit on 2 M positions drawn from every source in proportion to its saved positions; round 1's 105 came from generation 1's data), and the maps (`fit_maps.py`: H-512's and AF-S's king regions, the phase octiles). **Schedule (owner, 2026-11-01, set before any training): round 1's exposure, about 4.3 passes**: 360 superbatches of 5 M positions (1.8 B seen per run), the learning rate dropped tenfold at 180, every other setting as round 1; the five entries (B0 control, S-512, H-512, AF-S, XGR-512), seeds 1 and 2, in two Kaggle sessions (`tools/train/kaggle/bakeoff.py`). |
+| 2026-11-01 | **S512r2 promoted; generation 3 begins (owner).** Round 2's S-512 (seed 2, the lower validation loss) was tested before the other round-2 nets were ready (owner): parity chain passed, S = 92 (matched to S512, the opponent; 89 against round 2's B0 control, untested), SPRT against S512 +151.35 +/- 12.50 Elo, H1 at [0, 5] after 1,600 games (run 41349145950). Promoted after the owner's review with exactly the tested scale (docs/nets.md; the other scale would need its own SPRT). Bench 17,904,298 (signature 698205c2870d96a4); one test whose "exact" search still pruned with multi-cut fixed (nets.md). **Labeller policy:** generation 2 had already ended (g2e sealed at 9:17 AM EST, past 500 M), so no local part was running; generation 3 starts as part g3, labelled by S512r2, with g2e's settings (the split search, the Lichess 2016-09 openings) and a new seed, target 500 M; cloud launches label with S512r2 from now on as runs g3-aws-* (each instance builds the pushed phase-4 with its default network). Their launch rule needs a measured rate for the net: S512r2 has S-512's architecture, so its rows in `tools/cloud/datagen-rates.tsv` carry S512's measured rates, marked provisional until its own chunks are measured (the $1 per million cost limit is about 50 times the expected cost). IIR's SPRT, started on S512, was stopped at its first stage and restarts on top of this commit. A gauntlet measures the new strength after round 2. |
+| 2026-11-01 | **Round 2 amended (owner; decided before any round-2 game result).** H-512, AF-S and XGR-512 (round-2 seeds by validation loss) each first play a fixed-node match against S512r2, 1,600 games at round 1's stage B conditions (800,000 nodes per move for both); only an entry scoring above S512r2 there (Elo point estimate above 0) proceeds to the STC promotion SPRT against S512r2 on [0, 5]. Reasoning: every entry is slower than S512r2, so failing at equal nodes rules out winning at equal time. Replaces stages A to C for these entries; scale matching to S512r2 (§5.4, "Round 2 amendment"). |
+| 2026-11-02 | **Round 2's retest and LTC candidates (owner; decided after the fixed-node results, before any round-2 STC result).** An entry whose fixed-node Elo interval includes 0, or whose STC result is within its error margin of S512r2, is kept as a retest candidate for after the post-network search retune; an entry that beats S512r2 at fixed nodes but fails its STC SPRT is recorded as an LTC / TCEC-conditions candidate, tested later at long time control with an x86-64-v4 build on AWS (§5.4, "Retest and LTC candidates"). Fixed-node results against S512r2: H-512 −12.17 ± 10.58 (interval excludes 0: out, not a candidate), AF-S +10.43 ± 10.36 and XGR-512 +30.70 ± 10.37 (both proceed to STC). |
+| 2026-11-02 | **Round 2: an STC SPRT undecided at its cap (owner; decided after AF-S's STC result, before XGR-512's).** An STC SPRT still undecided at its 20,000-game cap counts as not passed (no promotion); the entry qualifies as both an LTC candidate (if it beat S512r2 at fixed nodes) and a retest candidate (an undecided result is within the error margin). AF-S's STC SPRT had already ended in H0 (−55.85 ± 11.42, history/phase-4/sprt-log.md): LTC and retest candidate under the earlier rules (§5.4, "Retest and LTC candidates"). |
+| 2026-11-02 | **Internal iterative reduction on (tier 2, T26).** Its STC SPRT on S512r2 passed: +21.45 ± 5.98 Elo (nElo +35.35 ± 9.83) after 4,800 games, H1 on [0, 3] (Phase 4 SPRT log), and `use_no_move_reduction` is on (NoMoveReduceMinDepth 8, measured; kept by the owner with credit). Every bench reference recomputed; S512r2's bench is 14,180,299 (signature 4cf778ff753861f7). Engines built from phase-4 from now on, the cloud's g3-aws data runs among them, search with it; local part g3 keeps its PGO build from 387f338 (each run records its commit). |
+| 2026-11-02 | **Gauntlet with the new anchor set: Fork 3445.8 ± 21.6 (Ordo, CCRL Blitz scale; owner).** Run 41465146207, Fork at 3902d00 (S512r2 and every tier-2 feature adopted so far, IIR included; update.sh, gcc 11.4, x86-64-v3), 1,200 games at 10+0.1, the earlier gauntlets' 200 openings, all 12 shards complete, every game ended normally. Anchors (owner, 2026-11-02): Weiss 1.0, Monolith 2.01, Winter 0.9, Laser 1.7, Marvin 6.3.0 (now standing) and, on trial, Altair 7.0.0 (CCRL Blitz 3579, MIT; proposed by the research agent, alternate Clover 6.1); Stash 19.0 and WyldChess 1.51 dropped. Every anchor built, Altair and Marvin included; no alternate was used. Fork scored 823.0/1200 (69%): Altair 64.0/200 (32.0%), Marvin 103.0 (51.5%), Laser 140.0 (70.0%), Winter 164.0 (82.0%), Monolith 177.5 (88.8%), Weiss 174.5 (87.2%). Ordo: white advantage 123.9 ± 10.8, draw rate between equal opponents 25.4% ± 1.8. Shards on AMD EPYC 7763 (5), EPYC 9V74 (4), Xeon 6973P-C (2) and EPYC 9V45 (1), 4 cores, 3 games at a time. The first GitHub gauntlet (a38a37d, 2026-10-31) gave 3315.6 ± 19.6 over two runs, before the singular extension, multi-cut, the reply, follow and take histories, IIR and S512r2; its anchor set differed (Stash and WyldChess in, Marvin and Altair out), so the 130-point difference is the change on two different scales, not a measured gain. As before, a rating in the CCRL Blitz scale from 10+0.1 games on these runners, not a CCRL rating. Results in ~/fork-data/gauntlet/run-41465146207. |
+| 2026-11-02 | **The LTC queue and the rest of tier 2 (owner).** LTC tests on GitHub's shards at 40+0.4, Hash 64 MB, x86-64-v3, 1,664-game stages to 9,984 games (the owner's 10,000 cap in whole stages without reusing an opening), in this order: XGR-512 against S512r2 (failed: H0, −30.56 ± 9.96 Elo after 1,664 games; SPRT log), the pawn drift table's SPRT on [0, 3] (T32's first table; straight to LTC per Testing setup), IIR on against off on non-regression bounds [−3, 0] (its LTC confirmation: a reduction adopted on an STC pass; base branch ltc/iir-off), then AF-S against S512r2. The x86-64-v4 half of the TCEC-conditions check waits for the 32-vCPU AWS quota. A passing entry is reported before anything else. **The pawn drift table:** the measurement's first choice sat at its grid's edge, so the owner had the grid extended toward slower learning (declared before its runs, same rule): 256/4 won and was kept with credit (Search constants; ORIGINALITY.md). **LMR history term (T16):** in the base reduction (the table's less the move's ordering history score / LmrHistoryDivisor), not in idea 23's evolvable slot, which stays at 0 so the long run evolves a residual on the improved formula; measured (tools/lmr_history_measure.py, declared before its runs) and SPRTed as usual. **The order after it** (owner's adoption of the inventory of 2026-11-02, each with its own measurement and SPRT): the improving flag one use at a time (RFP, LMP, LMR, the NMP gate); the further correction tables (non-pawn per side, minor, continuation) after the pawn table's LTC result; ProbCut; quiet history pruning; node types, then TT-PV uses; threat-aware move ordering (KB T56, written 2026-11-02); double extensions; fifty-move scaling; pawn-structure history; upcoming repetition; bad-capture futility; the malus balance; razoring; the threat and material correction tables. |
+| 2026-11-02 | **AF-S's LTC test dropped; XGR's parts become add-ons to S512r2; the Structure System planned (owner).** AF-S is **shelved, not tested at LTC**: it trailed XGR-512 at fixed nodes (+10.43 against +30.70) and at STC (−55.85 against −34.42), and XGR-512 failed at LTC (−30.56 ± 9.96, H0 after 1,664 games, run 41469160529; SPRT log), so the LTC queue after the pawn drift table is IIR on against off. AF-S stays a retest candidate after the post-network search retune (§5.4). **XGR's parts** (the exposure plane X, the phase gate G, the revision head R) are planned as add-ons to S512r2 (was S-512, 2026-10-31): the exposure plane first, after the current tier-2 queue, with its AVX-512 (x86-64-v4) LTC check when the 32-vCPU AWS quota allows. **The Structure System** (ideas.md idea 40): five layers (a pawns-and-kings network, the pawn correction table and pawn-structure history, a root-only structure planner, training targets, a strategic test set), plan only, built after the current tier-2 queue, behind two measurement gates. |
+| 2026-11-02 | **The new nets' test order; the new search constants are placeholders (owner).** Each test takes the GitHub slot when it is free: (1) S512r3 against S512r2, STC SPRT on [0, 5], promoted if it passes; (2) S512+X against S512r3 (the same snapshot, warm start and settings, so the exposure plane is the only difference), a fixed-node screen first (the round-2 amendment's: 800,000 nodes per move for both, 1,600 games, an Elo point estimate above 0 proceeds), then an STC SPRT on [0, 5]; if it passes it becomes the default candidate, reviewed by the owner before any promotion. Web v2's build and deploy run only after these and the queued LTC tests leave a free slot. **Constants:** the values written with ProbCut, the improving flag's RFP use and threat-aware ordering (tier2/batch3) are placeholders only, the switches off: they likely come from memory of other engines (the constant screen found ProbCut's depth and reduction matching Berserk and Stockfish in the same role, its margin near Stockfish 18-19's, the relief near Igel's). Before any SPRT each is chosen by a measurement with a rule declared before its runs, on a grid spanning a wide range, not centered on the current value; the measured value is adopted and any remaining coincidence credited in ORIGINALITY.md, as with the singular extension. A placeholder is never shipped unmeasured. |
+| 2026-11-05 | **AWS unavailable until further notice: the account is suspended (owner).** The owner reported the AWS account suspended. The same day every AWS process was stopped and the cloud runner disabled: the relaunch watcher (running since 2026-11-01) was stopped, the local cloud settings file every launcher, watcher and report reads was renamed so none can start, a guard was added to the session's AWS scripts, and the daily credit report was cancelled; no AWS login or API call is made until the owner says otherwise. The relaunch log's last readable state (2026-11-02, 2:25 PM EST) showed no fork instance running in us-east-2, us-east-1 or us-west-2, each region's spot quota reading as allowing none from 11:31 AM that day; the login expired on 2026-11-03 at 9:31 AM EST, and from 2026-11-05 a new login was refused (AccessDenied on starting a device authorization), so whether any instance still runs is UNVERIFIED. **Data:** every uploaded chunk of the 19 cloud runs downloaded so far is held locally (each run's uploaded count in its boot log matches its local chunk manifests): generation 2, 8 runs, 507 chunks, 5,528,986 games and 507,219,344 positions, all in g2s1; generation 3, 11 runs, 471 chunks, 5,023,149 games and 471,203,685 positions, all in g3s1; both snapshots are also Kaggle datasets. Held only in S3, so lost while it is unreachable: seven generation-2 runs launched on 2026-11-01 between 9:24 AM and 3:24 PM EST, after the last generation-2 download ($4.29 of instance time; their chunk counts were never recorded, so their size is estimated from the downloaded runs' positions per dollar at about 180 to 270 million positions, 2.0 to 3.0 million games, UNVERIFIED). The other four launches with no local copy (two of generation 2, two of generation 3) wrote nothing to S3: each had ended before a download that copied every run of its generation there. Unaffected: the local generation-3 part g3, which finished at its 500 M target (5,334,231 games, 500,000,697 positions) on 2026-11-03 and was never uploaded, and the Kaggle training (its data are Kaggle datasets and its code comes from GitHub). Data generation continues on the local machine only; the plans that used AWS (x86-64-v4 LTC candidates, AWS SPRT shards) wait. |
+| 2026-11-05 | **The labeller policy covers the whole engine (owner).** Data generation always uses the current default engine, its network and every adopted search change, not only the default network (Labeller policy, §5.3 deliverable 2): a promoted network or an adopted search change ends the running part at a game boundary, the part is sealed, and the next part starts from a PGO build of the new default, bench-checked. **Generation 3's parts so far:** g3 (387f338: S512r2, IIR off) reached its 500 M target on 2026-11-03 and now has two verified copies besides WSL's (all of it on C:, and on Kaggle as fork-g3s1's prefix plus fork-g3rest, the games after it, each file checked to rebuild the original byte for byte). g3b started on 2026-11-05 at 3:48:50 PM EST with g3's own binary and settings (seed 20261107) and was stopped at 3:59:54 PM EST under this rule (16,265 games, 1,523,579 positions), since IIR, adopted on 2026-11-02 and confirmed at LTC on 2026-11-03, was missing from it. g3c started at 4:01:03 PM EST from a PGO build of phase-4 at 684bac6 (S512r2, IIR on; bench 14,180,299, signature 4cf778ff753861f7, as tests/bench-s512r2.ref), with g3's settings, seed 20261108 and the rest of the part's 500 M target, 498,476,421 positions; it was stopped at 4:20:49 PM EST (32,585 games, 3,060,039 positions) when the owner cut local data generation to 6 threads while the tier-2 measurements run (next row), and g3d continues with g3c's binary on 6 threads from 4:21:49 PM EST (seed 20261109, target 495,416,382), back to 10 threads as a new part once the measurement queue is empty. |
+| 2026-11-05 | **Tier 2 first; the measurement queue; the next batch; the network and search plans (owner).** Tier 2 has priority (the TCEC message and release drafts are skipped for now). **CPU:** local data generation runs on 6 threads while the measurements run (their searches are node-limited, so the load does not bias them), 10 again when the queue is empty, each change a new part under the labeller policy. **Measurement queue**, each with its rule declared before its data on a wide grid not centered on the placeholder, reusing the 25 M-node labels of the LMR measurement: (a) the LMR history term (measured: 24000 chosen, no divisor above "off"; its STC SPRT failed, H0 −10.81 ± 5.01 Elo, not adopted); (b) the improving flag's RFP use; (c) ProbCut's three constants; (d) threat-aware ordering's set, any attack against a cheaper attacker (tools/tier2_measure.py and its specs, tier2/batch3, committed before any run). **SPRTs** on GitHub one at a time as each measurement finishes, the network tests (S512r3) first when ready; when GitHub would sit idle, the re-validation's removal SPRTs as filler (LMR check relief, LMR on late quiet evasions; branches reval/no-check-relief, reval/no-lmr-in-check). **The next batch, built behind switches with placeholders** (tier2/batch4, bench unchanged, each with a test that fails when it is disabled and its names screened): quiet history pruning, node types with a TT-PV use, double extensions, fifty-move scaling, the pawn-structure history, upcoming-repetition detection, bad-capture futility, razoring and the malus balance; each gets its own measurement before any SPRT. **Plans** (kb-researcher's clean-room entries first, every source idea credited in ORIGINALITY.md): a new network architecture, S-512 with Fork's own threat inputs and pawn-pair inputs, **replacing the S512+X plan** (the S512+X runs already in the Kaggle session are kept as records but not tested), trained and tested like the bake-off entries (ideas.md 41; pawn-pair inputs as idea 40's first L1 step); continuation histories as the LMR history term's inputs (idea 42); fractional depth as a search refactor before the SPSA retune (idea 43); QAT in the training pipeline (idea 44). Batch 4's `pawn_key` overlaps tier2/drift's pawn structure key; whichever merges first keeps one key. |
+| 2026-11-05 | **The push gate, the SPRT checklist, S512+X as evidence (owner).** **Push gate:** the personal-data scan (`scripts/scan-push.sh`: every added line of every commit the remote lacks, for this machine's user name and home paths read at run time, a private patterns file outside the repository with the email and the cloud identifiers, and credential shapes) runs and passes as its own step before any push, and a hit blocks it; the pre-push hook runs the same scan as a backstop, and `scripts/test_scan_push.sh` (in the quick check) shows a planted hit of each kind stops both. It follows a slip: a scan and its push ran in one command, so the scan did not gate the push (its one hit was a bench signature's digits, nothing personal). **SPRT checklist** (Quality control 5): the test branch's full non-slow suite and the constant screen before committing constants, with the measured-constant, bench, name-screen and scan items. **S512+X:** when GitHub would otherwise sit idle, one fixed-node match of S512+X against S512r2 (800,000 nodes per move, 1,600 games), as evidence for the threat-input plan (ideas.md 41) only; S512+X is not a promotion candidate. **LMR history:** idea 42 (continuation histories in the term) is its follow-up, measured the same way. |
+| 2026-11-05 | **S512r3 is not tested; S512+X trains well (owner's rule for the decision).** Kaggle fork-retrain3 version 2 (commit ddd9c57, the checkpoint fix) completed all four runs on g2s1 + g3s1 (360 superbatches, warm-started from S512r2, S = 92). Validation loss on g3s1-val (its first 20,000 kept positions, the trainer's own measure, the same set for every net; the warm-start check's 0.01945765 was on g2s1-val): S512r2 0.01930359; **S512r3** seed 1 0.019348 (superbatch 302), seed 2 0.01933709 (284), both worse (the loss rose to 0.0211 at the first superbatch and never came back below the start); **S512+X** seed 1 0.01891247 (302), seed 2 0.01887023 (303), 2.0-2.2% lower. S512r3 seed 2 went through the chain (S = 90 matched to S512r2 on 4,000 g3s1-val positions; parity legs: trainer leg max 0.00015 cp, quantization loss mean 2.24 cp, max 10.55; netcheck 0 mismatches; bench 14,207,568), but two network-dependent tests failed on its candidate branch (at depth 1 in 4k3/1P6/8/8/8/8/8/4K3 w it plays e1f2, +177, instead of the promotion; the web test's eval threshold), so the SPRT checklist stopped it. **Endgame check** (tools/nnue/endgame_check.py, thresholds declared before the run: a won position misjudged below +100 cp, a lost one above -100, a drawn one beyond +-200; 900 quiet random KPK, KQK and KRK positions, verified with the Syzygy tables): S512r2 misjudges 249 (27.7%), S512r3 329 (36.6%); KQK S512r2 0 of 300, S512r3 41 (14.7% won, 12.7% lost); KRK both badly (S512r2 73-76%, S512r3 87-89%: the data adjudicates such endings by the tables, so the nets hardly see them; the tables cover them in play); KPK level. **The owner's rule** (worse on the like-for-like loss and clearly worse at endgames: skip it and record why) applies: S512r3 is not SPRTed and not promoted; S512r2 stays the default. The warm start at S512r2's learning rate is to be reconsidered before another retrain of the same architecture. S512+X runs its fixed-node evidence match when GitHub is idle (not a promotion candidate). |
 
 ## 7. Performance doctrine (governs every phase)
 

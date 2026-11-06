@@ -1,0 +1,5 @@
+{
+ "private": true,
+ "type": "module",
+ "comment": "Only so Node.js reads the page's scripts as ES modules for web/test/ (node --test web/test/page.test.js); the page itself has no build step and no dependencies."
+}

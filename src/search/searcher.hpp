@@ -37,6 +37,10 @@
 #include "search/score_bounds.hpp"
 #include "search/trans_table.hpp"
 
+#if defined(FORK_EVAL_NNUE)
+#include "eval/nnue/accumulator.hpp"
+#endif
+
 namespace forkeng {
 
 struct SearchQuota {
@@ -81,27 +85,70 @@ struct SearchQuota {
 //   is retested with Phase 6's TT tests under large Hash and many threads.
 // - use_tables: Syzygy endgame tables, when loaded (deliverable 7):
 //   win/draw/loss probes in the search and the ranking of root moves.
-#define FORK_SEARCH_SWITCHES(X)                    \
-  X(use_tt, UseTT, true)                           \
-  X(use_pvs, UsePvs, true)                         \
-  X(use_aspiration, UseAspiration, true)           \
-  X(use_mate_distance, UseMateDistance, true)      \
-  X(use_quiesce, UseQuiesce, true)                 \
-  X(use_see_quiesce, UseSeeQuiesce, true)          \
-  X(use_history, UseHistory, true)                 \
-  X(use_history_malus, UseHistoryMalus, true)      \
-  X(use_rfp, UseRfp, true)                         \
-  X(use_nmp, UseNmp, true)                         \
-  X(use_lmr, UseLmr, true)                         \
-  X(use_lmp, UseLmp, true)                         \
-  X(use_futility, UseFutility, true)               \
-  X(use_see_prune, UseSeePrune, true)              \
-  X(tt_age_blend, UseTtAgeBlend, false)            \
-  X(tt_keep_exact, UseTtKeepExact, false)          \
-  X(use_tt_eval_refine, UseTtEvalRefine, true)     \
-  X(use_forced_move_stop, UseForcedMoveStop, true) \
-  X(use_tt_keep_deeper, UseTtKeepDeeper, false)    \
-  X(use_tables, UseTables, true)
+// - use_lmr_check_relief: a late quiet move that gives check is reduced
+//   LmrCheckRelief plies less (tier 2 step 0, KB T16's check term; its STC
+//   SPRT passed, +11.26 +/- 5.54 Elo; owner, 2026-10-29).
+// - use_lmr_in_check: late quiet evasions get the normal reduction instead
+//   of none (tier 2 step 0, KB T16's in-check term, §3.28: Halogen #212
+//   gained by replacing the exemption with normal LMR; its STC SPRT passed,
+//   +4.21 +/- 2.89 Elo).
+// - use_singular_extension: a TT move that the singular test shows to be the
+//   only good move is searched one ply deeper (tier 2, T27). On since its
+//   STC SPRT passed: +14.12 +/- 6.55 Elo after 4,800 games ([0, 5],
+//   2026-10-31).
+// - use_multi_cut, use_negative_extension: the same test's other outcome at
+//   non-PV nodes (T28, T30): a node where another move also reaches a bar at
+//   or above beta fails high at once; otherwise a TT move whose score is at
+//   or above beta is searched one ply shallower. Multi-cut is on since its
+//   STC SPRT passed (+9.19 +/- 4.62 Elo after 9,600 games, [0, 3]); the
+//   negative extension is off: its SPRT rejected it (-8.73 +/- 4.98 Elo
+//   after 8,000 games, H0; 2026-10-31).
+// - use_reply_history: quiet moves are also ordered by the pair history
+//   after the opponent's last move, updated with the butterfly history's
+//   bonus and malus (tier 2, T10, the 1-ply table). On since its STC SPRT
+//   passed (+11.46 +/- 5.57 Elo after 6,400 games, [0, 5]; 2026-11-01).
+// - use_follow_history: the same after the side's own previous move, two
+//   plies back (T10's 2-ply table). On since its STC SPRT passed (+7.22
+//   +/- 3.92 Elo after 12,800 games, [0, 3]; 2026-11-01).
+// - use_take_history: captures are ordered by their victim and the take
+//   history instead of MVV-LVA; a capture that cuts gains the history bonus,
+//   and the captures tried before any cutoff take it as a malus (tier 2,
+//   T11). On since its STC SPRT passed (+4.53 +/- 2.99 Elo after 22,400
+//   games, [0, 3]; 2026-11-01).
+// - use_no_move_reduction: a node without a TT move, at least
+//   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
+//   internal iterative reduction). On since its STC SPRT passed (+21.45
+//   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
+#define FORK_SEARCH_SWITCHES(X)                          \
+  X(use_tt, UseTT, true)                                 \
+  X(use_pvs, UsePvs, true)                               \
+  X(use_aspiration, UseAspiration, true)                 \
+  X(use_mate_distance, UseMateDistance, true)            \
+  X(use_quiesce, UseQuiesce, true)                       \
+  X(use_see_quiesce, UseSeeQuiesce, true)                \
+  X(use_history, UseHistory, true)                       \
+  X(use_history_malus, UseHistoryMalus, true)            \
+  X(use_rfp, UseRfp, true)                               \
+  X(use_nmp, UseNmp, true)                               \
+  X(use_lmr, UseLmr, true)                               \
+  X(use_lmp, UseLmp, true)                               \
+  X(use_futility, UseFutility, true)                     \
+  X(use_see_prune, UseSeePrune, true)                    \
+  X(tt_age_blend, UseTtAgeBlend, false)                  \
+  X(tt_keep_exact, UseTtKeepExact, false)                \
+  X(use_tt_eval_refine, UseTtEvalRefine, true)           \
+  X(use_forced_move_stop, UseForcedMoveStop, true)       \
+  X(use_tt_keep_deeper, UseTtKeepDeeper, false)          \
+  X(use_tables, UseTables, true)                         \
+  X(use_lmr_check_relief, UseLmrCheckRelief, true)       \
+  X(use_lmr_in_check, UseLmrInCheck, true)               \
+  X(use_singular_extension, UseSingularExtension, true)  \
+  X(use_multi_cut, UseMultiCut, true)                    \
+  X(use_negative_extension, UseNegativeExtension, false) \
+  X(use_reply_history, UseReplyHistory, true)            \
+  X(use_follow_history, UseFollowHistory, true)          \
+  X(use_take_history, UseTakeHistory, true)              \
+  X(use_no_move_reduction, UseNoMoveReduction, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -149,9 +196,11 @@ class SearchListener {
 // One ply of the search stack.
 struct PlyFrame {
   MoveSelector selector;
-  MoveList failed_quiets;   // quiet moves searched here without a cutoff (the malus)
-  int static_eval;          // ScoreNone in check
-  bool after_null = false;  // this node was reached by a null move (no second one in a row)
+  MoveList failed_moves;        // quiet moves and captures searched here without a cutoff (the maluses)
+  int static_eval;              // ScoreNone in check
+  bool after_null = false;      // this node was reached by a null move (no second one in a row)
+  Move withheld_move = NoMove;  // set while a singular test searches this node without that move
+  int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -257,11 +306,18 @@ struct SearchCounters {
   // (f) Quiescence nodes at PV and non-PV nodes.
   std::uint64_t quiesce_nodes_pv = 0;
   std::uint64_t quiesce_nodes_non_pv = 0;
+  // Tier 2: nodes where a singular test could run (the measurement's sampling).
+  std::uint64_t singular_candidates = 0;
+  std::uint64_t singular_tests = 0;       // singular tests run (their searches)
+  std::uint64_t singular_extended = 0;    // ... that found the TT move singular
+  std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
+  std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
+  std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
 };
 
 class Searcher {
  public:
-  explicit Searcher(TransTable& tt) : tt_(tt) {}
+  explicit Searcher(TransTable& tt);
 
   // Searches `pos` (restored on return) until a limit is reached or `stop`
   // becomes true. While `pondering` is true, time limits do not apply.
@@ -277,7 +333,11 @@ class Searcher {
 #endif
 
   // Forgets the move-ordering history (ucinewgame, and each bench position).
-  void clear_history() { history_.clear(); }
+  void clear_history() {
+    history_.clear();
+    for (PairHistory& table : pair_history_) table.clear();
+    take_history_.clear();
+  }
 
   // Tests only: the root move that failed high in the iteration the last
   // deliberate() stopped in and was not yet re-searched to an exact score
@@ -295,14 +355,28 @@ class Searcher {
   int quiesce(int alpha, int beta, int ply);
   int search_root(int alpha, int beta, int depth);
 
+  // The evaluator's hooks (DESIGN.md §5.3, deliverable 5): every move and
+  // null move the search makes, and every static evaluation, go through
+  // these. With the bootstrap evaluation they are exactly make, make_null
+  // and static_eval; with the network they also keep its per-ply
+  // accumulators (FeatureStack). `ply` is the node's ply.
+  void play(int ply, Move m);
+  void play_null(int ply);
+  int eval_at(int ply);
+
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
   void record_cutoff(const PlyFrame& f, Move m, int depth);
+  // The follow table's arrival at frame `f`: the move that led to the ply
+  // above, the side's own previous move (none at the root's children).
+  int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
 
   TransTable& tt_;
   QuietHistory history_;
+  PairHistory pair_history_[2];  // tier 2, T10: the reply and follow tables (ReplyTable, FollowTable)
+  TakeHistory take_history_;     // tier 2, T11
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;
@@ -338,6 +412,13 @@ class Searcher {
   // so the last line before bestmove names the move played.
   PrincipalLine finished_pv_;
   Move last_reported_ = NoMove;
+#ifdef FORK_SEARCH_STATS
+  std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
+#endif
+#if defined(FORK_EVAL_NNUE)
+  const NetFile* net_;
+  FeatureStack features_;
+#endif
 };
 
 }  // namespace forkeng

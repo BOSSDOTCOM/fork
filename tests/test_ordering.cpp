@@ -3,6 +3,8 @@
 // Move ordering (DESIGN.md §5.2, deliverable 5): the staged selector yields
 // exactly the right moves, and the history update stays bounded.
 #include <algorithm>
+#include <memory>
+#include <set>
 #include <vector>
 
 #include "core/movegen.hpp"
@@ -142,6 +144,111 @@ TEST_CASE("ordering", "a losing capture comes after the quiets; the best-history
   CHECK(!got.empty() && got.front() == pos.parse_uci("e1f1"));
 }
 
+// The pair history (tier 2, T10): every piece (colour and type) on every
+// square has its own slot in [0, PairSlots); the table stays within the
+// butterfly history's bounds for any update sequence; and the selector puts
+// a quiet move with a reply entry first after the move it is paired with,
+// and ignores the table at a node with no arrival (the root, after a null
+// move). Heap-allocated: the table is about 1.2 MB.
+TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quiets after the arrival only") {
+  std::set<int> slots;
+  for (Color c : {White, Black})
+    for (int t = Pawn; t <= King; ++t)
+      for (int sq = 0; sq < 64; ++sq) {
+        const int slot = pair_slot(static_cast<Piece>(c * 8 + t), static_cast<Square>(sq));
+        CHECK(slot >= 0 && slot < PairSlots);
+        slots.insert(slot);
+      }
+  CHECK_EQ(static_cast<int>(slots.size()), PairSlots);
+
+  auto pairs = std::make_unique<PairHistory[]>(2);  // the reply and follow tables, as in the searcher
+  std::uint64_t seed = 11;
+  for (int i = 0; i < 200000; ++i) {
+    const int amount = static_cast<int>(splitmix_next(seed) % (2 * HistoryMax + 1)) - HistoryMax;
+    pairs[ReplyTable].apply(100, 200, amount);
+    const int v = pairs[ReplyTable].value(100, 200);
+    CHECK_MSG(v >= -HistoryMax && v <= HistoryMax, "value " << v << " after amount " << amount);
+  }
+  pairs[ReplyTable].clear();
+  CHECK_EQ(pairs[ReplyTable].value(100, 200), 0);
+
+  // The position of the case above, without its history. Without the pair
+  // table the quiets come in generation order and the deferred losing
+  // capture last; the last quiet gets the only reply entry, paired with an
+  // arrival of a black pawn on h5, and must then come first.
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/2p5/3p3p/8/4N1Q1/8/4K3 w - - 0 1"));
+  QuietHistory history;
+  MoveSelector s;
+  s.start_main(pos, NoMove, &history);
+  const std::vector<Move> plain = drain(s);
+  CHECK(plain.size() >= 3 && plain.back() == pos.parse_uci("e3d5"));
+  const Move reply = plain[plain.size() - 2];
+  CHECK(!reply.is_capture() && !reply.is_promotion() && plain.front() != reply);
+  const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Pawn), static_cast<Square>(39));  // h5
+  pairs[ReplyTable].apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
+  s.start_main(pos, NoMove, &history, pairs.get(), arrival);
+  const std::vector<Move> got = drain(s);
+  CHECK(!got.empty() && got.front() == reply);
+  s.start_main(pos, NoMove, &history, pairs.get(), NoArrival);
+  CHECK(drain(s) == plain);
+  // The same entry in the follow table, read with the follow arrival only.
+  pairs[ReplyTable].clear();
+  pairs[FollowTable].apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
+  s.start_main(pos, NoMove, &history, pairs.get(), NoArrival, arrival);
+  const std::vector<Move> followed = drain(s);
+  CHECK(!followed.empty() && followed.front() == reply);
+  s.start_main(pos, NoMove, &history, pairs.get(), arrival, NoArrival);
+  CHECK(drain(s) == plain);
+}
+
+// The take history (tier 2, T11): distinct slots, bounded updates, and the
+// selector orders two captures of the same victim by it instead of by the
+// attacker. Constructed position (checked with python-chess: legal, the
+// only captures are Qxd5 and exd5, d5 undefended, so both are good
+// captures): MVV-LVA puts exd5 first (the cheaper attacker); a take history
+// entry for Qxd5 must put it first, and only when the table is given.
+TEST_CASE("ordering", "take history: distinct slots, bounded, and it reorders equal-victim captures") {
+  std::set<int> slots;
+  for (Color c : {White, Black})
+    for (int t = Pawn; t <= King; ++t)
+      for (int sq = 0; sq < 64; ++sq)
+        for (int v = Pawn; v <= King; ++v) {
+          const int slot =
+              take_slot(static_cast<Piece>(c * 8 + t), static_cast<Square>(sq), static_cast<PieceType>(v));
+          CHECK(slot >= 0 && slot < TakeSlots);
+          slots.insert(slot);
+        }
+  CHECK_EQ(static_cast<int>(slots.size()), TakeSlots);
+
+  auto takes = std::make_unique<TakeHistory>();
+  std::uint64_t seed = 13;
+  for (int i = 0; i < 200000; ++i) {
+    const int amount = static_cast<int>(splitmix_next(seed) % (2 * HistoryMax + 1)) - HistoryMax;
+    takes->apply(1234, amount);
+    const int v = takes->value(1234);
+    CHECK_MSG(v >= -HistoryMax && v <= HistoryMax, "value " << v << " after amount " << amount);
+  }
+  takes->clear();
+  CHECK_EQ(takes->value(1234), 0);
+
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/8/3p4/4P3/8/8/3QK3 w - - 0 1"));
+  const Move queen = pos.parse_uci("d1d5"), pawn = pos.parse_uci("e4d5");
+  QuietHistory history;
+  MoveSelector s;
+  s.start_main(pos, NoMove, &history);
+  const std::vector<Move> plain = drain(s);
+  CHECK(plain.size() >= 2 && plain[0] == pawn && plain[1] == queen);
+  takes->apply(take_slot(pos.piece_at(queen.from()), queen.to(), Pawn), 1600);
+  s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, takes.get());
+  const std::vector<Move> learned = drain(s);
+  CHECK(learned.size() >= 2 && learned[0] == queen && learned[1] == pawn);
+  s.start_quiesce(pos, NoMove, true, &history, takes.get());
+  const std::vector<Move> quiesce = drain(s);
+  CHECK(quiesce.size() == 2 && quiesce[0] == queen);
+}
+
 TEST_CASE("ordering",
           "history: bounded for any update sequence, monotone, bonus grows with depth and is capped") {
   QuietHistory h;
@@ -170,6 +277,42 @@ TEST_CASE("ordering",
   CHECK_EQ(bonus_for_depth(100), HistoryBonusCap);
   h.clear();
   CHECK_EQ(h.value(White, m), 0);
+}
+
+}  // namespace forkeng::test
+
+namespace forkeng::test {
+
+// The take history's reach (tier 2, T11; found by the tier-2 review of
+// 2026-10-31, which showed the first justification counted one side of the
+// history's range only): two entries at opposite limits move two captures
+// apart by 2 * HistoryMax * TakeWeight / 32 = 2,500 score units, 3.1 pawns
+// at 8 units per centipawn. So a pawn capture can come before a knight
+// capture (2 pawns apart), and never before a rook capture (4 pawns apart).
+// Constructed positions, checked with python-chess: legal, the only
+// captures are Qxa5 and exd5, both good captures (a5 undefended; d5
+// undefended, or defended by the rook so exd5 is an even trade).
+TEST_CASE("ordering", "take history: it can reorder victims 2 pawns apart, never 4") {
+  const auto ordered = [](std::string_view fen, PieceType big) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    const Move takes_big = pos.parse_uci("a1a5"), takes_pawn = pos.parse_uci("e4d5");
+    auto takes = std::make_unique<TakeHistory>();
+    // Repeated capped bonuses and maluses (record_cutoff's amounts) drive
+    // the two entries to their opposite limits.
+    for (int i = 0; i < 200; ++i) {
+      takes->apply(take_slot(pos.piece_at(takes_pawn.from()), takes_pawn.to(), Pawn), HistoryBonusCap);
+      takes->apply(take_slot(pos.piece_at(takes_big.from()), takes_big.to(), big), -HistoryBonusCap);
+    }
+    QuietHistory history;
+    MoveSelector s;
+    s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, takes.get());
+    const std::vector<Move> got = drain(s);
+    CHECK(got.size() >= 2);
+    return got.size() >= 2 && got[0] == takes_big;
+  };
+  CHECK(!ordered("4k3/8/8/n2p4/4P3/8/8/Q6K w - - 0 1", Knight));  // within the reach: reordered
+  CHECK(ordered("4k3/8/8/r2p4/4P3/8/8/Q6K w - - 0 1", Rook));     // beyond it: never
 }
 
 }  // namespace forkeng::test

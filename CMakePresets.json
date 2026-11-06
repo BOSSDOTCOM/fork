@@ -22,12 +22,18 @@
       "cacheVariables": { "FORK_ARCH": "x86-64-v4" } },
     { "name": "nopext", "hidden": true, "inherits": "release",
       "cacheVariables": { "FORK_ARCH": "x86-64-v3", "FORK_NO_PEXT": "ON" } },
+    { "name": "scalar", "hidden": true, "inherits": "release",
+      "cacheVariables": { "FORK_ARCH": "x86-64" } },
+    { "name": "vnni", "hidden": true, "inherits": "release",
+      "cacheVariables": { "FORK_ARCH": "x86-64-v4", "FORK_VNNI": "ON" } },
 
     { "name": "clang-debug",   "inherits": ["clang", "debug"] },
     { "name": "clang-release", "inherits": ["clang", "release"] },
     { "name": "clang-v3",      "inherits": ["clang", "v3"] },
     { "name": "clang-avx512",  "inherits": ["clang", "avx512"] },
     { "name": "clang-nopext",  "inherits": ["clang", "nopext"] },
+    { "name": "clang-scalar",  "inherits": ["clang", "scalar"] },
+    { "name": "clang-vnni",    "inherits": ["clang", "vnni"] },
     { "name": "clang-fuzz",    "inherits": ["clang", "debug"],
       "cacheVariables": { "FORK_FUZZ": "ON", "FORK_BUILD_TESTS": "OFF" } },
     { "name": "clang-tsan",    "inherits": ["clang"],
@@ -38,6 +44,8 @@
     { "name": "gcc-release",   "inherits": ["gcc", "release"] },
     { "name": "gcc-v3",        "inherits": ["gcc", "v3"] },
     { "name": "gcc-avx512",    "inherits": ["gcc", "avx512"] },
-    { "name": "gcc-nopext",    "inherits": ["gcc", "nopext"] }
+    { "name": "gcc-nopext",    "inherits": ["gcc", "nopext"] },
+    { "name": "gcc-scalar",    "inherits": ["gcc", "scalar"] },
+    { "name": "gcc-vnni",      "inherits": ["gcc", "vnni"] }
   ]
 }

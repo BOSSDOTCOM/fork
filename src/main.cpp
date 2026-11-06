@@ -3,13 +3,17 @@
 // Fork's entry point. Without arguments it speaks UCI on stdin/stdout
 // (src/uci/session.hpp); with a subcommand it runs that tool: perft, divide,
 // bench (the search bench), perftbench, version, difftest, wdl (endgame-table
-// results for FENs on stdin, for tools/check_syzygy.py).
+// results for FENs on stdin, for tools/check_syzygy.py), netcheck (the
+// network parity gate, DESIGN.md §5.3 deliverable 6).
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <exception>
+#include <fstream>
 #include <iostream>
+#include <iterator>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -19,6 +23,9 @@
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
 #include "core/position.hpp"
+#include "eval/eval.hpp"
+#include "eval/nnue/accumulator.hpp"
+#include "eval/nnue/net_file.hpp"
 #include "search/endgame_tables.hpp"
 #include "search/search_bench.hpp"
 #include "uci/output.hpp"
@@ -50,8 +57,13 @@ void print_version() {
             << "arch " << FORK_ARCH_NAME << '\n'
             << "build " << FORK_BUILD_TYPE << '\n'
             << "lto " << (FORK_LTO ? "on" : "off") << '\n'
-            << "sliders " << (FORK_USE_PEXT ? "pext" : "magic")
+            << "sliders " << (FORK_USE_PEXT ? "pext" : "magic") << '\n'
+            << "evaluator " << FORK_EVALUATOR_NAME << '\n'
+#if defined(FORK_EVAL_NNUE)
+            << "net " << FORK_NET_NAME
             << '\n'
+#endif
+
             // For bench/ab_search.py's identity check (cmake/build_id.cmake).
             << "variant " FORK_BUILD_VARIANT " | commit " FORK_BUILD_COMMIT " |\n";
 }
@@ -123,6 +135,9 @@ int usage() {
                "       fork perftbench   (the Phase 1 perft workload)\n"
                "       fork difftest   (stdin: fen|moves, see tools/difftest)\n"
                "       fork wdl <syzygy path>   (stdin: one fen per line; tools/check_syzygy.py)\n"
+               "       fork netcheck <parity file> [net file]   (the network parity gate; without a\n"
+               "                                                 net file, an nnue build's own network)\n"
+               "       fork evalfens   (stdin: one fen per line; this build's static evaluation)\n"
                "       fork version\n";
   return 2;
 }
@@ -188,6 +203,81 @@ static int wdl_dump(const std::string& path) {
   return 0;
 }
 
+// `fork netcheck PARITY [NET]`: the game gate of the trainer-engine parity
+// test (DESIGN.md §5.3, deliverable 6). PARITY is tools/nnue/reference.py's
+// file: a JSON header line, then "FEN | R-int" per position. Every position
+// must evaluate exactly to its R-int value with this binary's inference path,
+// for the net file NET, or without NET the network compiled into an
+// FORK_EVALUATOR=nnue build.
+static int netcheck(const std::string& parity_path, const forkeng::NetFile& net) {
+  std::string error;
+  std::ifstream parity(parity_path);
+  std::string line;
+  if (!std::getline(parity, line)) {
+    std::cerr << "netcheck: cannot read " << parity_path << '\n';
+    return 1;
+  }
+  int positions = 0, mismatches = 0;
+  while (std::getline(parity, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    const std::size_t bar = line.rfind('|');
+    if (bar == std::string::npos) continue;
+    forkeng::Position pos;
+    if (!pos.set_fen(line.substr(0, bar), &error)) {
+      std::cerr << "netcheck: bad FEN: " << line << '\n';
+      return 1;
+    }
+    const int expected = std::stoi(line.substr(bar + 1));
+    forkeng::Accumulator acc;
+    forkeng::accumulate_board(net, pos, acc);
+    const int got = forkeng::evaluate_position(net, acc, pos);
+    ++positions;
+    if (got != expected) {
+      if (++mismatches <= 10)
+        std::cerr << "netcheck: " << got << " != " << expected << " at " << pos.fen() << '\n';
+    }
+  }
+  std::cout << "netcheck: " << positions << " positions, " << mismatches << " mismatches (arch "
+            << FORK_ARCH_NAME << ")\n";
+  return positions > 0 && mismatches == 0 ? 0 : 1;
+}
+
+static int netcheck_main(int argc, char** argv) {
+  if (argc == 4) {
+    std::ifstream net_in(argv[3], std::ios::binary);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(net_in)),
+                                          std::istreambuf_iterator<char>());
+    auto net = std::make_unique<forkeng::NetFile>();
+    std::string error;
+    if (!forkeng::read_net_file(bytes, *net, error)) {
+      std::cerr << "netcheck: " << argv[3] << ": " << error << '\n';
+      return 1;
+    }
+    return netcheck(argv[2], *net);
+  }
+#if defined(FORK_EVAL_NNUE)
+  if (argc == 3) return netcheck(argv[2], forkeng::embedded_net());
+#endif
+  return usage();
+}
+
+// `fork evalfens`: for each FEN read from stdin, this build's static
+// evaluation (centipawns, side to move's view), or "invalid". An offline
+// tool (tools/nnue/exposure_pretest.py), not used by the engine.
+static int evalfens() {
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line.empty()) continue;
+    forkeng::Position pos;
+    if (!pos.set_fen(line))
+      std::cout << "invalid\n";
+    else
+      std::cout << forkeng::static_eval(pos) << '\n';
+  }
+  return 0;
+}
+
 static int run(int argc, char** argv) {
   forkeng::init();
   if (argc < 2) return uci_main();
@@ -199,6 +289,8 @@ static int run(int argc, char** argv) {
   }
   if (cmd == "difftest") return difftest();
   if (cmd == "wdl") return argc == 3 ? wdl_dump(argv[2]) : usage();
+  if (cmd == "netcheck") return netcheck_main(argc, argv);
+  if (cmd == "evalfens") return evalfens();
   if (cmd == "bench") {
     const forkeng::SearchBenchResult r = forkeng::run_search_bench();
     std::cout << "nodes " << r.nodes << '\n'

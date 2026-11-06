@@ -47,6 +47,11 @@ SearchSwitches no_pruning() {
   SearchSwitches s;
   s.tt_exact_depth = true;
   s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  // Tier 2's selective steps too: multi-cut prunes a node, the negative
+  // extension and the no-move reduction cut depth. With multi-cut left on,
+  // S512r2 found two real mates in 7 plies (one confirmed by the lichess
+  // tablebase, DTM 7) that this search missed at depth 8 (2026-11-01).
+  s.use_multi_cut = s.use_negative_extension = s.use_no_move_reduction = false;
   return s;
 }
 
@@ -140,6 +145,42 @@ TEST_CASE("pruning", "probe_zero_window is reproducible") {
     const int sa = a.searcher->probe_zero_window(pa, beta, 5, a.stop);
     const int sb = b.searcher->probe_zero_window(pb, beta, 5, b.stop);
     CHECK_MSG(sa == sb, "beta " << beta << ": " << sa << " vs " << sb);
+  }
+}
+
+}  // namespace forkeng::test
+
+namespace forkeng::test {
+
+// As "stopped searches and probes leave no state behind", with every tier-2
+// switch on, so stops land inside singular tests' withheld searches too
+// (from the tier-2 review of 2026-10-31).
+TEST_CASE("pruning", "tier 2, all switches on: stopped searches leave no state behind") {
+  SearchSwitches s;
+  s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
+  s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
+  static constexpr std::string_view Fens[] = {
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+      "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"};
+  const int depth = Optimized ? 11 : 6;
+  for (std::string_view fen : Fens) {
+    ReviewFixture fresh;
+    fresh.searcher->switches = s;
+    const SearchResult want = fresh.search(fen, depth);
+    ReviewFixture used;
+    used.searcher->switches = s;
+    for (std::uint64_t n = 37; n < (Optimized ? 2000000u : 50000u); n = n * 3 + 11) {
+      used.search(fen, MaxPly - 1, n);
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      used.searcher->probe_zero_window(pos, 50, 7, used.stop);
+      CHECK_MSG(pos.fen() == fen, fen);
+    }
+    const SearchResult got = used.search(fen, depth);
+    CHECK_MSG(got.nodes == want.nodes && got.score == want.score && got.best == want.best,
+              fen << ": nodes " << got.nodes << " vs " << want.nodes << ", score " << got.score << " vs "
+                  << want.score);
   }
 }
 

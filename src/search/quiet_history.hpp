@@ -16,8 +16,14 @@
 //   the quiet moves tried before it at that node get the same amount as a
 //   malus.
 // - Integer arithmetic only (bench determinism); 16-bit entries, so summing
-//   several tables later (continuation history, tier 2) cannot overflow an
-//   int.
+//   several tables (the pair history below) cannot overflow an int.
+// - The pair history (tier 2, T10; KB search-techniques.md §3.10) scores a
+//   quiet move by a move that led to its node, paired with it: the
+//   opponent's last move (the reply table) or the side's own previous move,
+//   two plies back (the follow table). A move is a slot: its piece
+//   (colour and type) and its destination square; a node reached by a null
+//   move, or the root, has no arrival and reads and updates nothing. Same
+//   scale, bounds and update as the butterfly history.
 #pragma once
 
 #include <cstdint>
@@ -44,6 +50,64 @@ FORK_TUNABLE_CONSTEXPR int bonus_for_depth(int depth) {
   const int quadratic = depth * depth * HistoryBonusFactor / 2;
   return quadratic > HistoryBonusCap ? HistoryBonusCap : quadratic;
 }
+
+// A move's slot in the pair history: its piece (colour and type) and its
+// destination square (for castling the encoded square, the rook's).
+constexpr int PairSlots = 2 * 6 * 64;
+constexpr int NoArrival = -1;
+inline int pair_slot(Piece moved, Square to) { return (side_of(moved) * 6 + kind_of(moved)) * 64 + to; }
+
+// The take history (tier 2, T11; KB search-techniques.md §3.11): captures
+// scored by how often they cut in this tree, indexed by the moving piece
+// (colour and type), its destination and the captured piece's type (a pawn
+// for en passant). Same scale, bounds and update as the other histories.
+constexpr int TakeSlots = PairSlots * 6;
+inline int take_slot(Piece moved, Square to, PieceType victim) { return pair_slot(moved, to) * 6 + victim; }
+
+class TakeHistory {
+ public:
+  int value(int slot) const { return table_[slot]; }
+
+  // As QuietHistory::apply.
+  void apply(int slot, int amount) {
+    std::int16_t& v = table_[slot];
+    const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
+    v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
+  }
+
+  void clear() {
+    for (std::int16_t& v : table_) v = 0;
+  }
+
+ private:
+  std::int16_t table_[TakeSlots] = {};
+};
+
+// The searcher keeps both pair tables in one array, so the move selector
+// holds a single pointer (the search stack's frame stays within its size
+// guard, tests/test_search.cpp).
+constexpr int ReplyTable = 0;
+constexpr int FollowTable = 1;
+
+class PairHistory {
+ public:
+  int value(int arrival, int slot) const { return table_[arrival][slot]; }
+
+  // As QuietHistory::apply.
+  void apply(int arrival, int slot, int amount) {
+    std::int16_t& v = table_[arrival][slot];
+    const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
+    v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
+  }
+
+  void clear() {
+    for (auto& row : table_)
+      for (std::int16_t& v : row) v = 0;
+  }
+
+ private:
+  std::int16_t table_[PairSlots][PairSlots] = {};
+};
 
 class QuietHistory {
  public:

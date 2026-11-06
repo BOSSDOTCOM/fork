@@ -1,0 +1,14 @@
+{
+  "comment": "B0's tensors as Fork's training program saves them (tools/train), in save order; read by convert.py and reference.py (DESIGN.md §5.3, deliverables 4-6). bullet stores a weight of shape rows x cols column-major (KB bullet-internals.md §1.3), so l0w's 256 values for one input feature are contiguous.",
+  "architecture": 1,
+  "inputs": 768,
+  "hidden": 256,
+  "qa": 255,
+  "qb": 64,
+  "quantised": [
+    {"name": "l0w", "rows": 256, "cols": 768, "type": "i16", "factor": 255},
+    {"name": "l0b", "rows": 256, "cols": 1, "type": "i16", "factor": 255},
+    {"name": "l1w", "rows": 1, "cols": 512, "type": "i16", "factor": 64},
+    {"name": "l1b", "rows": 1, "cols": 1, "type": "i32", "factor": 16320}
+  ]
+}

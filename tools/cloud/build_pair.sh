@@ -35,9 +35,19 @@ for side in base test; do
     { tail -n 30 "$out/$side-build.log" >&2; exit 1; }
   mkdir -p "$out/$side"
   cp "$src/build/tcec/fork" "$out/$side/fork"
-  rm -rf "$src"
   got=$("$out/$side/fork" version | tr -d '\r' | sed -n 's/^arch //p')
   [ "$got" = "$FORK_ARCH" ] || { echo "build_pair.sh: $side reports arch '$got', not $FORK_ARCH" >&2; exit 1; }
+  # The game gate (DESIGN.md §5.3, deliverable 6): an nnue build plays only
+  # if its embedded network matches its parity file exactly, and a network
+  # without a parity file never plays.
+  net=$("$out/$side/fork" version | tr -d '\r' | sed -n 's/^net //p')
+  if [ -n "$net" ]; then
+    [ -f "$src/tests/nnue/$net.parity" ] || { echo "build_pair.sh: $side's network $net has no tests/nnue/$net.parity" >&2; exit 1; }
+    "$out/$side/fork" netcheck "$src/tests/nnue/$net.parity" >"$out/$side-netcheck.log" 2>&1 ||
+      { cat "$out/$side-netcheck.log" >&2; echo "build_pair.sh: $side's network fails its parity file" >&2; exit 1; }
+    echo "${side}_net=$net" >>"$out/meta.env"
+  fi
+  rm -rf "$src"
   echo "${side}_sha=$sha" >>"$out/meta.env"
   echo "${side}_arch=$got" >>"$out/meta.env"
   "$out/$side/fork" bench 2>/dev/null | head -n 2 | sed "s/^/${side}_/; s/ /=/" >>"$out/meta.env"

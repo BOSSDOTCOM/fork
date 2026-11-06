@@ -127,11 +127,24 @@ build() {  # commit -> path of its engine
 identity() {  # commit, engine -> "Fork <version>, <compiler>, bench <nodes> <signature>"
   # Fails when the bench differs from the commit's own tests/bench.ref
   # (non-negotiable 3 keeps bench.ref in step with every commit).
-  local version compiler bench ref
+  local version compiler bench ref net reffile parity
   version=$("$2" version | sed -n '1p')
   compiler=$("$2" version | sed -n 's/^compiler //p')
+  # An nnue build: its bench reference is tests/bench-<net>.ref, and it plays
+  # only if its embedded network matches tests/nnue/<net>.parity exactly
+  # (the game gate, DESIGN.md §5.3, deliverable 6).
+  net=$("$2" version | tr -d '\r' | sed -n 's/^net //p')
+  reffile=tests/bench.ref
+  if [ -n "$net" ]; then
+    reffile=tests/bench-$net.ref
+    parity=$(mktemp)
+    git -C "$repo" show "$1:tests/nnue/$net.parity" >"$parity" 2>/dev/null ||
+      { echo "sprt.sh: $1: network $net has no tests/nnue/$net.parity" >&2; rm -f "$parity"; return 1; }
+    "$2" netcheck "$parity" >&2 || { echo "sprt.sh: $1: network $net fails its parity file" >&2; rm -f "$parity"; return 1; }
+    rm -f "$parity"
+  fi
   bench=$("$2" bench | sed -n '1,2p' | awk '{ printf "%s%s", (NR > 1 ? " " : ""), $2 }')
-  ref=$(git -C "$repo" show "$1:tests/bench.ref" 2>/dev/null | sed -n '1,2p' | awk '{ printf "%s%s", (NR > 1 ? " " : ""), $2 }')
+  ref=$(git -C "$repo" show "$1:$reffile" 2>/dev/null | sed -n '1,2p' | awk '{ printf "%s%s", (NR > 1 ? " " : ""), $2 }')
   if [ -z "$bench" ] || { [ -n "$ref" ] && [ "$bench" != "$ref" ]; }; then
     echo "sprt.sh: $1: bench '$bench' is not its tests/bench.ref '$ref' (wrong or stale build in $2?)" >&2
     return 1

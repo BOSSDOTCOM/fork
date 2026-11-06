@@ -136,7 +136,7 @@ SearchBenchResult run_search_bench() {
 #ifdef FORK_SEARCH_STATS
   const SearchCounters& c = searcher->counters;
   std::fprintf(
-      stderr, "stats: %llu beta cutoffs, %.1f%% on the first move, mean cutoff index %.2f\n",
+      stderr, "stats: %llu beta cutoffs, %.1f%% on the first move, mean cutoff index %.4f\n",
       static_cast<unsigned long long>(c.beta_cutoffs),
       c.beta_cutoffs ? 100.0 * static_cast<double>(c.first_move_cutoffs) / static_cast<double>(c.beta_cutoffs)
                      : 0.0,
@@ -176,6 +176,17 @@ SearchBenchResult run_search_bench() {
   std::fprintf(stderr, "stats: quiescence nodes PV %llu, non-PV %llu\n",
                static_cast<unsigned long long>(c.quiesce_nodes_pv),
                static_cast<unsigned long long>(c.quiesce_nodes_non_pv));
+  std::fprintf(stderr, "stats: multi-cut cuts %llu, negative extensions %llu\n",
+               static_cast<unsigned long long>(c.multi_cut_cuts),
+               static_cast<unsigned long long>(c.negative_extensions));
+  std::fprintf(stderr, "stats: nodes reduced for having no TT move %llu\n",
+               static_cast<unsigned long long>(c.no_move_reductions));
+  std::fprintf(stderr, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
+               static_cast<unsigned long long>(c.singular_tests),
+               static_cast<unsigned long long>(c.singular_extended),
+               c.singular_tests
+                   ? 100.0 * static_cast<double>(c.singular_extended) / static_cast<double>(c.singular_tests)
+                   : 0.0);
   for (int d = 1; d < SearchCounters::CutoffDepths; ++d) {
     std::fprintf(stderr, "stats: quiet cutoffs at depth %d by quiet index:", d);
     for (int i = 0; i < SearchCounters::CutoffIndices; ++i)

@@ -2,6 +2,9 @@
 
 #include "search/move_selector.hpp"
 
+#include <algorithm>
+#include <cstdint>
+
 #include <utility>
 
 #include "core/material.hpp"
@@ -34,9 +37,15 @@ bool is_under_promotion(Move m) { return m.is_promotion() && m.promo_type() != Q
 
 }  // namespace
 
-void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHistory* history) {
+void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHistory* history,
+                              const PairHistory* pairs, int arrival, int follow_arrival,
+                              const TakeHistory* take_history) {
   pos_ = &pos;
   history_ = history;
+  take_history_ = take_history;
+  pair_history_ = pairs;
+  arrival_ = static_cast<std::int16_t>(pairs ? arrival : NoArrival);
+  follow_arrival_ = static_cast<std::int16_t>(pairs ? follow_arrival : NoArrival);
   quiesce_ = false;
   see_filter_ = false;
   quiets_stopped_ = false;
@@ -49,8 +58,8 @@ void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHist
 }
 
 void MoveSelector::start_quiesce(const Position& pos, Move tt_move, bool see_filter,
-                                 const QuietHistory* history) {
-  start_main(pos, tt_move, history);
+                                 const QuietHistory* history, const TakeHistory* take_history) {
+  start_main(pos, tt_move, history, nullptr, NoArrival, NoArrival, take_history);
   quiesce_ = true;
   see_filter_ = see_filter;
   // Out of check, the TT move counts only if the capture search would try it.
@@ -63,14 +72,39 @@ void MoveSelector::start_quiesce(const Position& pos, Move tt_move, bool see_fil
 }
 
 void MoveSelector::score_captures() {
-  for (std::size_t i = 0; i < list_.size(); ++i)
-    scores_[i] = static_cast<std::int16_t>(victim_attacker_score(*pos_, list_[i]));
+  for (std::size_t i = 0; i < list_.size(); ++i) {
+    const Move m = list_[i];
+    if (!take_history_ || !m.is_capture()) {
+      scores_[i] = static_cast<std::int16_t>(victim_attacker_score(*pos_, m));
+      continue;
+    }
+    // The take history replaces the attacker term: the victim still counts
+    // 8 per centipawn, and two entries at opposite limits differ by
+    // 2 * HistoryMax * TakeWeight / 32 (2,500 at 4), so captures whose
+    // victims are less than about 3.1 pawns apart can be reordered, never a
+    // rook capture after a pawn capture (tests/test_ordering.cpp).
+    const PieceType victim = m.is_en_passant() ? Pawn : kind_of(pos_->piece_at(m.to()));
+    const int promo = m.is_promotion() ? piece_value(m.promo_type()) : 0;
+    const int learned = take_history_->value(take_slot(pos_->piece_at(m.from()), m.to(), victim));
+    scores_[i] = static_cast<std::int16_t>((piece_value(victim) + promo) * 8 + learned * TakeWeight / 32);
+  }
 }
 
 void MoveSelector::score_quiets() {
   const Color us = pos_->side_to_move();
-  for (std::size_t i = 0; i < list_.size(); ++i)
-    scores_[i] = static_cast<std::int16_t>(history_ ? history_->value(us, list_[i]) : 0);
+  for (std::size_t i = 0; i < list_.size(); ++i) {
+    const Move m = list_[i];
+    int score = history_ ? history_->value(us, m) : 0;
+    if (arrival_ != NoArrival || follow_arrival_ != NoArrival) {
+      const int slot = pair_slot(pos_->piece_at(m.from()), m.to());
+      if (arrival_ != NoArrival) score += pair_history_[ReplyTable].value(arrival_, slot) * ReplyWeight / 4;
+      if (follow_arrival_ != NoArrival)
+        score += pair_history_[FollowTable].value(follow_arrival_, slot) * FollowWeight / 4;
+      // Weights above one can take the sum past int16 at the extremes.
+      score = std::clamp(score, -INT16_MAX, INT16_MAX);
+    }
+    scores_[i] = static_cast<std::int16_t>(score);
+  }
 }
 
 void MoveSelector::score_evasions() {

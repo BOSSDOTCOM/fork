@@ -1,0 +1,131 @@
+{
+ "run": "g2bc",
+ "generator": {
+  "tool": "fork_datagen (idea 13's arm B cut to arm A's budget: each worker's first games in the share 21738 / 26458 of its total in run g2b, data/manifests/g2b.json)",
+  "version": "0.3.0-dev+963eb22 (WSL clang PGO, clang 21.1.8)",
+  "evaluator": "nnue (s512)",
+  "arch": "native (Ryzen 7600X3D)"
+ },
+ "settings": {
+  "openings": "lichess-2016-09.epd",
+  "openings_count": 591871,
+  "positions_target": 500000000,
+  "nodes": 20000,
+  "threads": 10,
+  "seed": 20261102,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 50,
+  "unsaved_nodes": 4000,
+  "check_nodes": 2000
+ },
+ "openings": {
+  "file": "lichess-2016-09.epd",
+  "sha256": "0ae298e1c7c635606fcddb056ee08073aeed8f4db4de3f19b8ef721d4a72831b",
+  "positions": 591871,
+  "source": "lichess_db_standard_rated_2016-09.pgn.zst",
+  "source_sha256": "3a4d18db787db558083aacb7c27ab3588f0745c1baaca37846b3f0d8b9677db3"
+ },
+ "games": 709960,
+ "positions": 65484373,
+ "seconds": 21738.0,
+ "results": {
+  "white": 297683,
+  "draw": 128660,
+  "black": 283617
+ },
+ "ends": "not counted (the run was stopped, not finished)",
+ "part_end": "not a part of its own: idea 13's arm B (data/manifests/g2b.json) cut to arm A's budget of 21,738 s for the trained-net comparison (owner, 2026-10-31), each worker's first games in the share 21,738 / 26,458 of its total; its games are a subset of g2b's and must never be trained on together with them",
+ "batches": [
+  [
+   {
+    "file": "g2bc-w00.vf",
+    "worker": 0,
+    "games": 70941,
+    "positions": 6540080,
+    "bytes": 28714196,
+    "sha256": "f4df521509d27c5354a229026e56659a0006d8948787cab538eeabfb7935e24b"
+   },
+   {
+    "file": "g2bc-w01.vf",
+    "worker": 1,
+    "games": 71050,
+    "positions": 6536686,
+    "bytes": 28704544,
+    "sha256": "cfaa491b3e15a093b36a39d926ad943388a0796101bc4a13719920da6dc914b3"
+   },
+   {
+    "file": "g2bc-w02.vf",
+    "worker": 2,
+    "games": 71105,
+    "positions": 6563303,
+    "bytes": 28812992,
+    "sha256": "bb4dd932d60e688168d7680689c57f502cfd2283e13a660249ba2aed6af94b71"
+   },
+   {
+    "file": "g2bc-w03.vf",
+    "worker": 3,
+    "games": 70950,
+    "positions": 6554551,
+    "bytes": 28772404,
+    "sha256": "a4d747d2e5c3eddc92c3533e617a87fab1f2d0287bcad5d97ae1c1e798437040"
+   },
+   {
+    "file": "g2bc-w04.vf",
+    "worker": 4,
+    "games": 71020,
+    "positions": 6540929,
+    "bytes": 28720436,
+    "sha256": "b0190e9925794171cab51ed5a76352f2309e7820f44cf3f3a9df180bf007131e"
+   },
+   {
+    "file": "g2bc-w05.vf",
+    "worker": 5,
+    "games": 71261,
+    "positions": 6568899,
+    "bytes": 28840992,
+    "sha256": "8ee7033c636bc91d6f8906d651a00be67dccdd6c6527536315851c2211356839"
+   },
+   {
+    "file": "g2bc-w06.vf",
+    "worker": 6,
+    "games": 70946,
+    "positions": 6540063,
+    "bytes": 28714308,
+    "sha256": "16c34d069ec8afcad2a09f8c84039d62331ecc5a891af7973d36d41bdb84b4f0"
+   },
+   {
+    "file": "g2bc-w07.vf",
+    "worker": 7,
+    "games": 71115,
+    "positions": 6567128,
+    "bytes": 28828652,
+    "sha256": "93801ce054dd312f705fc7ef667afb430e68b0f879df576a33da35ea1b96d858"
+   },
+   {
+    "file": "g2bc-w08.vf",
+    "worker": 8,
+    "games": 70406,
+    "positions": 6510166,
+    "bytes": 28575280,
+    "sha256": "0875dd8204bc1117ee4e8454361307f61ec21d8cf435119277566f8281b938f4"
+   },
+   {
+    "file": "g2bc-w09-val.vf",
+    "worker": 9,
+    "games": 71166,
+    "positions": 6562568,
+    "bytes": 28812248,
+    "sha256": "e3c32f5658494bcb5027d9eebcec99b8a7e60e1c1c6b786df223b5c4c437c342"
+   }
+  ]
+ ],
+ "positions_unsaved": 29813310
+}

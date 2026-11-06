@@ -305,7 +305,52 @@ added on 2026-10-24; ideas 1-12 predate them.
   (KataGo), arXiv:1902.10565 (title, author and abstract checked on
   2026-10-24; that its full text describes playout cap randomization is
   UNVERIFIED: the PDF could not be read here and ar5iv did not respond).
-- **status:** untested
+- **status:** experiment done, H1 accepted (2026-10-31); approved (owner, 2026-10-30;
+  DESIGN.md decisions log): fork_datagen's split search (`--save-percent`,
+  `--unsaved-nodes`, `--check-nodes`, off by default); arm A is generation
+  2's first 6 hours, arm B its own 6-hour part, both labelled by S-512 with
+  the score adjudication and the same build, the split the only
+  difference. **Arm A done** (2026-10-31): run g2 stopped at 12:28:41 AM
+  EST after 21,738 s and sealed (data/manifests/g2.json): 390,227 games,
+  35,592,241 positions (1,637 positions/s), every shard passing
+  verify_games.py. The Lichess 2026-09 openings stream ran beside it for
+  about 74 of its first 75 minutes (paused at 7:41:39 PM EST, until arm B
+  ends); Windows CPU 91.1% with the stream, 85.3% without, WSL load1
+  about 10.2 throughout (the manifest's part_end). **Arm B done**
+  (2026-10-31): run g2b (seed 20261102, `--save-percent 50
+  --unsaved-nodes 4000 --check-nodes 2000`) started at 1:16:54 AM EST and
+  was stopped at 8:37:52 AM EST after 26,458 s, 1 h 21 min past its
+  planned 6 hours (the stop was late, not a choice), and sealed
+  (data/manifests/g2b.json): 864,114 games (32.7 games/s, arm A 18.0),
+  79,693,421 records, of which 43,409,795 saved (1,641 per second, arm A
+  1,637) and 36,283,626 unsaved (45.5%; positions in check are always
+  saved, at 2,000 nodes, and a mate score always written); every shard
+  passes verify_games.py. The openings stream stayed paused throughout:
+  Windows CPU 84.7%, WSL load1 10.22, busy 83.0%, as arm A's paused
+  stretch. So at the same rate of saved labels the split search played
+  1.8 times as many games. Its games end differently: the score
+  adjudication 42.3% (arm A 64.3%), a mate score 27.2% (13.5%), the
+  tables 20.5% (10.9%), a rules draw 10.0% (11.2%); likely because
+  unsaved positions do not count towards the 8 scores in a row, so the
+  adjudication needs about twice the plies (not measured). So the arms
+  differ in game endings as well as in the split, and the experiment's
+  result reflects the split as implemented, not the split alone (owner,
+  2026-10-31). Generation 2 keeps normal settings until the trained-net
+  SPRT decides (owner, 2026-10-31). For the
+  equal-budget comparison, arm B's training set is cut at arm A's
+  21,738 s: each worker's first games in
+  the share 21,738 / 26,458 of its total (fork_datagen's log, steady at
+  3,011-3,012 records per second, gives 709,080 games at 21,720 s; the
+  cut gives about 710,000).
+  **Result (2026-10-31): H1 accepted.** Arm B's best net (i13b1) against
+  arm A's best (i13a2) on [0, 5] at 8+0.08: +65.47 ± 12.90 Elo (nElo
+  +88.52 ± 17.02) after 1,600 games (run 41236941019). Seed noise at the
+  same conditions: arm A's seeds +3.3 ± 12.6, arm B's seeds -14.8 ± 12.4,
+  so the gap between arms is several times the gap between seeds
+  (docs/history/phase-4/sprt-log.md). The result covers the split as
+  implemented, game endings included. Round 2's snapshot includes g2b,
+  since the SPRT passed before it. Whether generation 2's next parts
+  switch to the split settings is the owner's call.
 
 ## 14. Auxiliary training targets
 
@@ -588,6 +633,13 @@ tuned by SPSA.
   gate, resume and pinning fixes are in (audit-1, merged 2026-10-28). The
   long run (40 generations) stays in **late Phase 4** (owner, 2026-10-28),
   after the first strong network and the search re-validation. Pilot scheduled
+- **Candidate region for the long run (owner, 2026-10-31):** a correction
+  to the singular test's margin and depth (tier 2, T27), for example a
+  dependence on the TT entry's depth deficit. The measured form (DESIGN.md
+  "Search constants": 6 cp per ply, minimum depth 6, entry up to 3 plies
+  shallower, test at d / 2) closely matches Stockfish 11's test as a whole
+  (ORIGINALITY.md); an evolved correction is one route to a form of Fork's
+  own.
 
 ## 24. TT victim policy under real table pressure
 
@@ -855,3 +907,264 @@ tuned by SPSA.
 - **runtime cost:** none for the engine; hosted runners only.
 - **earliest phase:** Phase 4.
 - **status:** queued
+
+## 39. Quiescence delta pruning
+
+- **type:** ELO (switch `use_qs_delta`, branch exp/qs-delta)
+- **idea:** in the quiescence search, skip a capture (not a promotion,
+  side not in check, both sides with a piece) when stand-pat plus the
+  captured piece's value plus QuiesceGainSlack (150 cp) cannot reach
+  alpha, scoring it as that bound (fail-soft); tier 2 step 0 (KB
+  search-techniques.md §3.27, T25's per-move form).
+- **phase:** Phase 4 tier 2; revisit in the post-network re-validation
+  (§5.2 Quality control 6), with the margin retuned for the network's
+  centipawns (150 was read off a bench curve measured with the bootstrap
+  evaluation's search, DESIGN.md decisions log 2026-10-29).
+- **metric:** SPRT [0, 3] at STC, then LTC; the nps change beside it.
+- **runtime cost:** possible (one comparison per quiescence capture; it
+  saves nodes: bench 14,952,431 against 15,453,694). The nps change was
+  not measured.
+- **earliest phase:** Phase 3.
+- **status:** **inconclusive** (2026-10-30, owner): against B0r1, -0.40
+  ± 2.93 Elo (nElo -0.56 ± 4.13) after 27,200 games, LLR -1.39 on
+  [0, 3], stopped undecided (history/phase-4/sprt-log.md). Kept off;
+  exp/qs-delta keeps the code for the re-validation.
+
+## 40. Structure System
+
+- **type:** ELO, one flag per layer (names set at build time, each
+  screened).
+- **idea** (owner, 2026-11-02; one integrated idea, plan only; there were
+  no earlier "Structure focus" entries in this file, any branch or the KB
+  to replace): five layers about pawn structure, each able to stand on its
+  own if a later one fails.
+  - **L1 Knowledge:** a small learned network on pawns and kings only,
+    its output cached by `pawn_structure_key` and added to the main
+    network's evaluation.
+    **First step (owner, 2026-11-05): pawn-pair inputs in the main
+    network** (idea 41's architecture; KB nnue-inputs.md §2): structure
+    knowledge learned inside the main network before any separate one.
+  - **L2 Memory:** the pawn correction table (the pawn drift table, T32,
+    in progress: its LTC SPRT started 2026-11-02) and the pawn-structure
+    history (T12).
+  - **L3 Direction:** a root-only planner: a deep search over pawns and
+    kings, scored by L1's network, that produces a target structure and
+    breaks near-ties between root moves toward it.
+  - **L4 Teaching:** for the main network's training, a higher weight on
+    the game result, a long-horizon auxiliary target, and the planner's
+    verdicts as a further auxiliary target.
+  - **L5 Proof:** a held-out strategic test set (positions decided by
+    their structure, each verified by deep search), plus SPRTs and
+    gauntlets.
+- **gates, before any building:** measure how often root moves are near
+  ties (whether L3 has anything to decide), and whether structures L1
+  rates highly correlate with results in Fork's own games (whether L1's
+  signal is real). Then build L2, L1, L3, L4, in that order, each with its
+  own SPRT.
+- **phase:** Phase 4, after the current tier-2 queue (DESIGN.md decisions
+  log, 2026-11-02).
+- **metric:** the two gates' measurements first (rules fixed before they
+  run); then an SPRT per layer (L4 through the networks' own promotion
+  tests), L5's test set and the gauntlet.
+- **runtime cost:** possible (L1 evaluates a second network, mostly from
+  its cache; L3 spends root time; L2's table is measured with its SPRT).
+- **sources:** the owner's design; Fork's own KB descriptions (T12, T32);
+  clean-room design throughout, every name and constant screened, every
+  outside source logged in ORIGINALITY.md.
+- **earliest phase:** Phase 4 (the pawn structure key exists since
+  2026-11-02, branch tier2/drift).
+- **status:** untested (planned 2026-11-02); L2's pawn table in progress.
+
+## 41. S-512 with Fork's own threat and pawn-pair inputs
+
+- **type:** ELO (a network architecture: an entry like the bake-off's;
+  its name and every new identifier screened at build time).
+- **idea** (owner, 2026-11-05; replaces the S512+X plan): S-512 plus two
+  input families of Fork's own design, from the concepts in the KB only
+  (nnue-inputs.md §1-2, no engine's indexing or constants): threat inputs
+  (attacker-victim pairs, with Fork's own redundancy removal: dropping
+  pairs implied by others, mutual duplicates and impossible pairs) and
+  pawn-pair inputs (pairs of pawns describing the structure's geometry; the
+  first step of idea 40's L1).
+- **phase:** Phase 4.
+- **metric:** as the bake-off's entries: trained on the current snapshot,
+  a fixed-node screen first, then an STC SPRT against the default network.
+- **runtime cost:** possible (larger first layer, incremental threat
+  updates; nps reported with the SPRT).
+- **sources:** Fork KB nnue-inputs.md §1-2 (kb 962f1ab, 5cd96c3) and the
+  sources it lists (ORIGINALITY.md, 2026-11-05).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05).
+
+## 42. Continuation histories as inputs to the LMR history term
+
+- **type:** ELO (flags set at build time).
+- **idea** (owner, 2026-11-05): the LMR history term reads continuation
+  histories as inputs. Note: the term as built (T16, `use_lmr_history`)
+  already read the quiet ordering score, which sums the butterfly history
+  and the reply and follow tables (1- and 2-ply continuations); it failed
+  its STC SPRT at its measured divisor (H0, -10.81 +/- 5.01 Elo,
+  2026-11-05). The plan is therefore a new form: each table as its own
+  input with its own weight, and deeper continuations, each measured
+  before its SPRT (KB search-techniques.md §3.36, T58, which has an SPRT
+  plan step by step).
+  **The LMR history term's follow-up** (owner, 2026-11-05): measured the
+  same way as the term was (tools/lmr_history_measure.py's method: the
+  25 M-node labels, both budgets, a rule and a wide grid declared before
+  the runs), then its SPRT.
+- **phase:** Phase 4.
+- **metric:** a measurement with a pre-declared rule, then an STC SPRT.
+- **runtime cost:** possible (small).
+- **sources:** Fork KB §3.36 (kb 5fac98e) and its sources (ORIGINALITY.md).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05).
+
+## 43. Fractional depth
+
+- **type:** TOOLING first (a search refactor with bench unchanged at the
+  whole-ply equivalent), then ELO for what it enables.
+- **idea** (owner, 2026-11-05): depth in sub-ply units, so reductions and
+  extensions can be fractional (KB §3.35, T57: units, TT depth and its
+  comparisons, thresholds, extensions), done **before the SPSA retuning**
+  so the tuner sees smooth parameters.
+- **phase:** Phase 4, before the post-network retune.
+- **metric:** the refactor: bench node count and signature unchanged at the
+  whole-ply setting, the full check; then SPRTs of the fractional uses.
+- **runtime cost:** none for the refactor itself (to be confirmed with
+  bench/ab.py).
+- **sources:** Fork KB §3.35 (kb 024fb9e) and its sources (ORIGINALITY.md).
+- **earliest phase:** Phase 4.
+- **status:** untested (planned 2026-11-05); design below (owner, 2026-11-05:
+  plan only, no code yet).
+- **Design** (Fork's own, from the KB entry's concepts):
+  - **Unit:** depth is held in units of 1/64 ply (`OnePly = 64`): a power
+    of two, fine enough for SPSA to move a reduction in small steps
+    (Fork's LMR table already computes its value in fixed point before the
+    final division to whole plies), and far inside int32 at MaxPly (250 x
+    64 = 16,000).
+  - **What stays whole plies:** the TT stores depth / OnePly, rounded down,
+    in its existing byte (the entry layout and its replacement unchanged;
+    the KB's TT-sharing pitfall avoided, and a cutoff still needs a stored
+    depth of at least the node's whole plies, so it stays conservative);
+    the UCI `depth` the engine reports and `go depth N` (N x OnePly); the
+    iteration counter; the history bonus by depth (whole plies until a
+    measurement says otherwise); every depth threshold of the parameter
+    table (`RfpMaxDepth` and the like stay in plies, compared as
+    depth <= X x OnePly).
+  - **Per-ply formulas** (RFP's and futility's margins, the singular test's
+    margin, the null move's depth) read depth / OnePly while the uses are
+    unconverted, so they compute exactly what they do now.
+  - **The first fractional uses, in order, each behind its own switch,
+    measured with a rule declared before its runs and then SPRTed:** (1) the
+    base LMR reduction in units (the table's value without its final
+    rounding; the KB's strongest evidence is fractional LMR); (2) the LMR
+    adjustments as fractional amounts (the check relief, the cut-node and
+    PV-trace steps, idea 42's continuation terms); (3) the null move's depth;
+    (4) extensions (the singular extension's +1 as a measured fraction).
+- **Conversion plan, behaviour identical until each use is measured:**
+  1. One refactor: negamax's depth and every child depth in units
+     (depth - OnePly + extension x OnePly - reduction x OnePly), the
+     quiescence search below one ply, thresholds and formulas through the
+     whole-ply reads above. Every depth stays a multiple of OnePly, so
+     **bench is unchanged, node count and signature**, and so is every test;
+     the full check and bench/ab.py (no slowdown beyond the noise floor)
+     confirm it before the commit.
+  2. Tests added: a randomized check that the refactored search equals the
+     whole-ply one node for node over the bench positions at several depths
+     (both builds kept for the comparison during the change); the TT depth
+     rounding; `go depth` and the reported depth.
+  3. Each fractional use then lands as its own switch, off: bench
+     unchanged until a switch is turned on after its measurement and SPRT,
+     when the reference is recomputed in that commit.
+  4. Timing: steps 1-3 for the first use (fractional LMR) come **before the
+     post-network SPSA retune**, so the tuner sees the smooth parameters.
+- **Pitfalls kept in view** (KB §3.35): rounding at every threshold (a node
+  at 5.5 plies counts as 5 for a whole-ply limit unless a use says
+  otherwise), TT depth rounding, and results that depend on time control
+  (each use's SPRT at STC, and LTC where the rules ask).
+
+## 44. Quantization-aware training
+
+- **type:** TOOLING (the training pipeline), measured through the networks
+  it trains.
+- **idea** (owner, 2026-11-05): QAT in Fork's training pipeline (KB
+  nnue-design.md §5.6: simulated rounding and clipping in training,
+  straight-through gradients), so the trained float network and its
+  integer form agree; small for the all-int16 S-512 family, more for later
+  int8 layers.
+- **phase:** Phase 4.
+- **metric:** the quantised network's loss and its parity against the float
+  network, then the network's promotion test.
+- **runtime cost:** none (training only).
+- **sources:** Fork KB nnue-design.md §5.6 (kb 02912f5) and its sources
+  (ORIGINALITY.md).
+- **earliest phase:** Phase 4.
+- **status:** in progress: built behind an option, not yet run (2026-11-05).
+- **Built** (branch nets/s512cl, tools/train): `fork-train --qat` (train,
+  eval, check; the S-512 family: S-512, H-512, S512+X, S512cl; refused for
+  the others): the forward pass uses each weight and bias rounded to the
+  grid of Fork's integer file (bullet's `faux_quantise`: 255 for the first
+  layer, 64 for the output weights, 255 x 64 for their biases; half away
+  from zero, as the save list rounds), the gradient passed through
+  unchanged. Rounding the weights is the whole of Fork's quantization for
+  these architectures (the accumulator is an exact sum of integer weights;
+  the activation clips in integer units), so the QAT loss is the integer
+  network's apart from the output layer's truncating divisions. The saved
+  file is unchanged. Checked: the graphs build and their save lists match
+  (fork-train check, S512 and S512cl, with and without --qat); the CPU
+  build cannot run a graph, so the first run is on Kaggle.
+- **Validation run, planned for Kaggle** (one session, two GPUs, after the
+  S512cl training): S-512 warm-started from S512r2 on g2s1 + g3s1, 40
+  superbatches at a low learning rate, runs A1 and A2 (seeds 1, 2) without
+  and B1 and B2 with `--qat`. Each final net is then measured both ways with
+  `--superbatches 0` (the initial validation loss of the float graph and of
+  the QAT graph, the latter being the quantized net's). The rule, declared
+  now: QAT is worth keeping if both B runs' quantized losses are below both A
+  runs' by more than the larger of the two pairs' seed spreads; then a fixed-node match of the
+  two quantized nets decides whether it enters the training settings.
+
+## 45. Simple endings: a tablebase-labelled data slice, a standing endgame check, conversion
+
+- **type:** ELO (the data slice), TOOLING (the check and the conversion test).
+- **idea** (owner, 2026-11-05; **on hold**, the owner, the same day): three parts.
+  1. **Endgame slice** for the next training snapshot: random legal
+     positions of at most 5 pieces (KRK, KQK, KPK and the common 4-5 piece
+     endings), labelled by their Syzygy WDL, a small fixed share of the
+     data, so the nets learn endings that the games themselves end at
+     (adjudication at table entry keeps them out of the data).
+  2. **A standing acceptance test** with targets, reported for every new
+     net: the KPK/KQK/KRK check below, on a committed position set.
+  3. **A conversion test** without tables: does Fork mate from a won simple
+     ending before the fifty-move rule?
+- **why:** the endgame check (tools/nnue/endgame_check.py: 900 quiet random
+  KPK, KQK and KRK positions, Syzygy-verified; a won position misjudged
+  below +100 cp, a lost one above -100, a drawn one beyond +-200, declared
+  before the run) found S512r2 misjudging 249 (27.7%), S512r3 329 (36.6%),
+  S512+X 307 (34.1%); KQK S512r2 0 of 300, S512r3 41, S512+X 28; KRK all
+  badly (S512r2 223 of 300, S512r3 264, S512+X 257). The retrained nets
+  lost KQK and fail network-dependent tests (K+P v K promotion at depth 1,
+  K+R v K mate in 2 at depth 4).
+- **found so far** (2026-11-05):
+  - conversion, KRK, S512r2 (the default build, bench 14180299), 200 ms
+    per move, no tables, Hash 16, 1 thread, Fork for both sides, 20 won
+    starts (seed 20261105): 17 mated (mean 15.6 moves, max 39), **3 drawn
+    by the fifty-move rule** (starts with DTZ 27, 17 and 29). KQK was
+    started and stopped when the work was put on hold.
+  - the trainer's target is (1 - w) sigmoid(score / S) + w result, so the
+    slice's records need a score as well as the result (a design choice
+    still open: a fixed score per WDL, or the score of a search with the
+    tables); and the loader reads shards in file order, shuffling only
+    within its buffer, so slice games must be interleaved evenly into the
+    snapshot's shards, not kept in a file of their own.
+  - the choice of "common" 4-5 piece endings was to come from the material
+    signatures Fork's own games reach at 5 pieces (a statistics run over a
+    g3s1 shard was started and stopped).
+- **tools written** (scratch, not committed): a conversion runner (python-chess
+  driving Fork over UCI, start positions chosen and verified by the tables)
+  and a table-entry statistics script.
+- **originality:** tablebase labels are not engine-generated data (idea
+  11's note); log the tablebase source in ORIGINALITY.md before use.
+- **related:** idea 11 (TB boundary data), idea 12 (endgame conversion).
+- **metric:** the endgame check's misjudged counts against targets (to be
+  set), the conversion rate, then the net's promotion test.
+- **status:** on hold (owner, 2026-11-05).

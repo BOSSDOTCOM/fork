@@ -104,6 +104,31 @@ int reference_minimax(Position& pos, int depth, int ply, bool see_filter = true)
   return reference_alphabeta(pos, depth, ply, -ScoreInfinite, ScoreInfinite, see_filter);
 }
 
+// Whether the full-width tree a search of `depth` plies can visit (every
+// legal move, then the quiescence search's moves: captures and queen
+// promotions, every evasion in check) holds a position that repeats one on
+// its path. The TT ignores the path, so where a repetition draw is in the
+// tree an entry can carry it to a path without that repetition, and TT
+// cutoffs need not equal minimax (graph-history interaction; DESIGN.md
+// §5.3, B0's tests). The exact tests check this first. Small trees only.
+bool repetition_in_tree(Position& pos, int depth, int ply = 0) {
+  if (ply > 0 && pos.repetition_count() >= 2) return true;
+  if (ply >= MaxPly || pos.insufficient_material() || pos.fifty_move_reached()) return false;
+  const bool in_check = pos.in_check();
+  MoveList list;
+  generate<GenMode::Legal>(pos, list);
+  for (Move m : list) {
+    if (depth <= 0 && !in_check &&
+        (!(m.is_capture() || m.is_promotion()) || (m.is_promotion() && m.promo_type() != Queen)))
+      continue;
+    pos.make(m);
+    const bool found = repetition_in_tree(pos, depth - 1, ply + 1);
+    pos.unmake(m);
+    if (found) return true;
+  }
+  return false;
+}
+
 // A 1 MB table of plain memory for the tests' searches.
 struct TestHash {
   std::vector<TtBucket> buckets = std::vector<TtBucket>(16384);
@@ -215,30 +240,102 @@ TEST_CASE("search",
   CHECK(compared >= 108);
 }
 
-// Endgames transpose a lot, so the TT really cuts here (counted below), and
-// minimax to depth 6 is still cheap. Constructed positions.
-TEST_CASE("search", "TT cutoffs at exact depth equal plain minimax on small endgames at depth 6") {
-  Fixture fx;
-  const int depth = Optimized ? 6 : 4;
+// Endgames transpose a lot, so the TT really cuts here (counted below).
+// Exactness is claimed only where no repetition is in reach (a path-blind
+// TT may carry a repetition draw across paths: the next test case), and the
+// test checks that first (owner, 2026-10-29). Constructed positions:
+// - four plain endgames at depth 3: from depth 4 each holds a repetition
+//   (both kings can step out and back);
+// - four locked ones at depth 6 (5 in debug builds): one side's king is
+//   walled in by a pawn cluster with no capture on either side (black: Ka5,
+//   b6 and b4 against a4, b3 and b5; or its colour mirror), so that side
+//   can only push its free pawns, every one of its moves is irreversible,
+//   and no position can repeat; python-chess found none to depth 7 (the
+//   check below repeats it).
+namespace {
+
+struct DepthCase {
+  std::string_view fen;
+  int depth;
+};
+std::vector<DepthCase> repetition_free_cases() {
+  std::vector<DepthCase> out;
   for (std::string_view fen : {"8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1", "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
-                               "8/8/3k4/8/8/3K4/8/R7 w - - 0 1", "8/5pk1/8/8/8/8/5PK1/8 b - - 0 1"}) {
+                               "8/8/3k4/8/8/3K4/8/R7 w - - 0 1", "8/5pk1/8/8/8/8/5PK1/8 b - - 0 1"})
+    out.push_back({fen, 3});
+  for (std::string_view fen :
+       {"8/6pp/1p6/kP6/Pp6/1P6/8/3K4 w - - 0 1", "8/6pp/1p6/kP6/Pp6/1P6/8/3K4 b - - 0 1",
+        "3k4/8/1p6/pP6/Kp6/1P6/6PP/8 w - - 0 1", "8/6pp/1p6/kP6/Pp6/1P6/8/3K3R w - - 0 1"})
+    out.push_back({fen, Optimized ? 6 : 5});
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("search",
+          "TT cutoffs at exact depth equal plain minimax on small endgames, no repetition in reach") {
+  Fixture fx;
+  std::uint64_t first_nodes = 0, again_nodes = 0;
+  for (const DepthCase& c : repetition_free_cases()) {
+    const std::string_view fen = c.fen;
+    const int depth = c.depth;
     Position pos;
     CHECK(pos.set_fen(fen));
+    CHECK_MSG(!repetition_in_tree(pos, depth), fen << ": a repetition fits in depth " << depth);
     const int expected = reference_minimax(pos, depth, 0);
-    std::uint64_t nodes[2] = {0, 0};
-    for (bool tt : {true, false}) {
+    SearchQuota limits;
+    limits.depth = depth;
+    for (bool tt : {false, true}) {
       fx.store.clear();
       fx.searcher->switches = exact_switches();
       fx.searcher->switches.use_tt = tt;
-      SearchQuota limits;
-      limits.depth = depth;
       const SearchResult r = fx.search(pos, limits);
       CHECK_MSG(r.score == expected, fen << " tt " << tt << ": " << r.score << " vs " << expected);
-      nodes[tt] = r.nodes;
     }
-    // The TT really cut: fewer nodes with it.
-    CHECK_MSG(nodes[1] < nodes[0],
-              fen << ": " << nodes[1] << " nodes with the TT, " << nodes[0] << " without");
+    // The TT really cuts: searching again over the filled table still equals
+    // minimax, and over all the positions takes fewer nodes (its exact-depth
+    // entries cut, at non-PV nodes only, so not in every tiny tree). Fewer
+    // nodes than without a TT is not a given at depth 3, where the TT's move
+    // ordering can cost more than its few cutoffs save.
+    fx.store.clear();
+    const SearchResult first = fx.search(pos, limits);
+    const SearchResult again = fx.search(pos, limits);
+    CHECK_MSG(again.score == expected, fen << " again: " << again.score << " vs " << expected);
+    first_nodes += first.nodes;
+    again_nodes += again.nodes;
+  }
+  CHECK_MSG(again_nodes < first_nodes,
+            again_nodes << " nodes over the filled TT, " << first_nodes << " before");
+}
+
+// The known path-dependent case, tolerated (owner, 2026-10-29): in KRK at
+// depth 6 a repetition fits in the tree, and a score the TT stored on a path
+// where the defending king repeated (a draw) can cut on another path, so the
+// root may differ a little from minimax (with B0, 554 against 558). That is
+// graph-history interaction, the usual price of a path-blind TT; Fork accepts
+// it. Without the TT the search must still equal minimax exactly; with it,
+// the score must stay near minimax and keep the win.
+TEST_CASE("search", "known: with a repetition in reach, TT cutoffs may differ slightly from minimax") {
+  Fixture fx;
+  const std::string_view fen = "8/8/3k4/8/8/3K4/8/R7 w - - 0 1";
+  const int depth = Optimized ? 6 : 4;
+  Position pos;
+  CHECK(pos.set_fen(fen));
+  CHECK(repetition_in_tree(pos, depth));
+  const int expected = reference_minimax(pos, depth, 0);
+  for (bool tt : {false, true}) {
+    fx.store.clear();
+    fx.searcher->clear_history();
+    fx.searcher->switches = exact_switches();
+    fx.searcher->switches.use_tt = tt;
+    SearchQuota limits;
+    limits.depth = depth;
+    const SearchResult r = fx.search(pos, limits);
+    if (!tt)
+      CHECK_MSG(r.score == expected, "no TT: " << r.score << " vs " << expected);
+    else
+      CHECK_MSG(std::abs(r.score - expected) <= 50 && r.score > 0 && !is_mate_score(r.score),
+                "TT: " << r.score << " vs " << expected);
   }
 }
 
@@ -261,21 +358,26 @@ TEST_CASE("search",
   struct Probed {
     std::string_view fen;
     int depth;
+    bool small = true;  // small enough to check for repetitions in full width
   };
   std::vector<Probed> positions;
-  for (const PerftPosition& p : perft_suite()) positions.push_back({p.fen, Optimized ? 3 : 2});
-  // The TT endgames above, to depth 6, so the full-window search that fills
-  // the TT uses aspiration windows (from depth 5).
-  for (std::string_view fen : {"8/2k5/8/1p6/1P6/8/5K2/8 w - - 0 1", "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1",
-                               "8/8/3k4/8/8/3K4/8/R7 w - - 0 1", "8/5pk1/8/8/8/8/5PK1/8 b - - 0 1"})
-    positions.push_back({fen, Optimized ? 6 : 4});
+  for (const PerftPosition& p : perft_suite()) positions.push_back({p.fen, Optimized ? 3 : 2, false});
+  // The TT endgames above (the locked ones to depth 6, 5 in debug builds, so
+  // the full-window search that fills the TT uses aspiration windows, from
+  // depth 5) and the mates, at depth 3: from depth 4 each of those holds a
+  // repetition, where exactness is not claimed (the TT case above). The perft
+  // positions are too large for the full-width check (every capture
+  // sequence) and are not checked for repetitions.
+  for (const DepthCase& c : repetition_free_cases()) positions.push_back({c.fen, c.depth});
   for (std::string_view fen : {"6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "k7/8/2K5/8/8/8/8/7R w - - 0 1",
                                "6k1/5ppp/8/8/8/8/8/R5K1 b - - 0 1"})
-    positions.push_back({fen, 4});
+    positions.push_back({fen, 3});
   int probes = 0, mate_band = 0;
   for (const Probed& p : positions) {
     Position pos;
     CHECK(pos.set_fen(p.fen));
+    if (p.small)
+      CHECK_MSG(!repetition_in_tree(pos, p.depth), p.fen << ": a repetition fits in depth " << p.depth);
     fx.store.clear();
     fx.searcher->clear_history();
     fx.searcher->switches = exact_switches();
@@ -348,9 +450,12 @@ TEST_CASE("search",
 
 // Audit-1 V-5: the search stack's frame stays small (review 2, claim (e):
 // shrunk from 4 KB to 2,664 B; 2,672 B measured with clang on 2026-10-27).
-// A guard, so a growing frame is a decision, not an accident.
-static_assert(sizeof(PlyFrame) <= 2688,
-              "PlyFrame grew past 2,688 bytes (DESIGN.md §5.2, review 2 claim (e))");
+// A guard, so a growing frame is a decision, not an accident. Decisions:
+// 2,688 B with tier 2's singular test and pair history (2026-10-31; the two
+// pair tables share one pointer to stay there), then 2,696 B with the take
+// history's pointer in the move selector (2026-10-31, tier 2 T11).
+static_assert(sizeof(PlyFrame) <= 2696,
+              "PlyFrame grew past 2,696 bytes (DESIGN.md §5.2, review 2 claim (e))");
 
 // Audit-1 Q-7: the TT's bound checks at their edge (mutant M12: an upper
 // bound cut when s <= beta instead of s <= alpha). An upper bound u, stored
@@ -413,8 +518,22 @@ TEST_CASE("search", "no null move without pieces: two pawn endings keep their ta
 // position's material-only value of a depth-1 search ending in a capture
 // search, and the moves reaching it (python-chess generates the moves; no
 // Fork code is involved). Fork must play one of those moves (or, where every
-// quiet move ties, avoid the losing capture) and score within 100 cp of the
-// material value: the bootstrap evaluation's placement terms make the rest.
+// quiet move ties, avoid the losing capture) and, with the bootstrap
+// evaluation, score within 100 cp of the material value: its placement terms
+// make the rest.
+//
+// A network may prefer a quiet move to the material gain, so where a
+// position is in Syzygy range its move is checked against the tablebase
+// result instead: it must play a move that keeps it (owner, 2026-10-29). In
+// the two-rook position every one of White's 16 legal moves keeps the win
+// (lichess tablebase API, 2026-10-29; B0r1 plays d2b2, DTM 41 against d2d5's
+// 31), so only the bootstrap evaluation's d2d5 is checked there. The K+R+P v
+// K+R position below separates the moves: d2d5, a6a7, d2a2 and d2h2 keep the
+// win; d2b2, d2c2, d2d1, d2e2, d2f2, d2g2, e1d1 and e1e2 draw; d2d3, d2d4,
+// e1f1 and e1f2 lose (Syzygy 3-4-5 through python-chess's chess.syzygy, and
+// the lichess tablebase API,
+// https://tablebase.lichess.ovh/standard?fen=7k/8/P7/3r4/8/8/3R4/4K3_w_-_-_0_1,
+// agreeing, 2026-10-29).
 TEST_CASE("search", "quiescence values on constructed exchanges match python-chess") {
   Fixture fx;
   struct Exchange {
@@ -422,21 +541,41 @@ TEST_CASE("search", "quiescence values on constructed exchanges match python-che
     int material;           // python-chess value, centipawns for the side to move
     std::string_view best;  // the only best move, or "" if many quiet moves tie
     std::string_view avoid;
+    std::string_view keeps_result = "";  // with a network: the moves that keep the tablebase result
+    bool best_bootstrap_only = false;    // with a network: every move keeps the result, nothing to check
   };
-  for (const Exchange& x : {Exchange{"4k3/8/8/3q4/4P3/8/8/4K3 w - - 0 1", 100, "e4d5", ""},
-                            Exchange{"4k3/8/3p4/4r3/8/5N2/8/4K3 w - - 0 1", -100, "f3e5", ""},
-                            Exchange{"4k3/8/2p5/3p4/8/8/3Q4/4K3 w - - 0 1", 700, "", "d2d5"},
-                            Exchange{"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1", 900, "b7b8q", ""},
-                            Exchange{"3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1", 500, "d2d5", ""}}) {
+  for (const Exchange& x :
+       {Exchange{"4k3/8/8/3q4/4P3/8/8/4K3 w - - 0 1", 100, "e4d5", ""},
+        Exchange{"4k3/8/3p4/4r3/8/5N2/8/4K3 w - - 0 1", -100, "f3e5", ""},
+        Exchange{"4k3/8/2p5/3p4/8/8/3Q4/4K3 w - - 0 1", 700, "", "d2d5"},
+        Exchange{"4k3/1P6/8/8/8/8/8/4K3 w - - 0 1", 900, "b7b8q", ""},
+        Exchange{"3rk3/8/8/3p4/8/8/3R4/3RK3 w - - 0 1", 500, "d2d5", "", "", true},
+        Exchange{"7k/8/P7/3r4/8/8/3R4/4K3 w - - 0 1", 600, "d2d5", "", "a6a7 d2a2 d2d5 d2h2"}}) {
     fx.store.clear();
     Position pos;
     CHECK(pos.set_fen(x.fen));
     const SearchResult r = fx.search(x.fen, 1);
     const std::string played = pos.move_to_uci(r.best);
-    if (!x.best.empty()) CHECK_MSG(played == x.best, x.fen << ": played " << played);
+#if defined(FORK_EVAL_BOOTSTRAP)
+    const bool network = false;
+#else
+    const bool network = true;
+#endif
+    if (network && !x.keeps_result.empty()) {
+      const std::string list = " " + std::string(x.keeps_result) + " ";
+      CHECK_MSG(list.find(" " + played + " ") != std::string::npos,
+                x.fen << ": played " << played << ", which changes the tablebase result");
+    } else if (!x.best.empty() && !(network && x.best_bootstrap_only)) {
+      CHECK_MSG(played == x.best, x.fen << ": played " << played);
+    }
     if (!x.avoid.empty()) CHECK_MSG(played != x.avoid, x.fen << ": played " << played);
+#if defined(FORK_EVAL_BOOTSTRAP)
+    // The tolerance is the bootstrap evaluation's (its 1/3/3/5/9 material
+    // plus placement terms); a network values material its own way (B0
+    // scores the fresh queen 763), so only the moves are checked there.
     CHECK_MSG(std::abs(r.score - x.material) <= 100,
               x.fen << ": score " << r.score << ", material " << x.material);
+#endif
   }
 }
 
@@ -468,9 +607,16 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
   CHECK_EQ(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 99 80", 3).score, mate_score(1));
   // ...but with no mate in 1 every move ends in a draw by the 50-move rule.
   CHECK_EQ(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 99 80", 3).score, 0);
-  CHECK(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 0 80", 3).score > 300);
+  // With the clock at 0 the same position is no draw: any score above the
+  // draw's 0 shows that (the size of a rook's edge is the evaluator's: S-512
+  // scores it 263).
+  CHECK(fx.search("7k/8/8/8/8/8/8/R5K1 w - - 0 80", 3).score > 0);
   // 1. e4 Nf6 2. Nf3 Ng8 3. Ng1: ...Nf6 repeats the position after 1...Nf6.
+  // Black starts without its queen, so the evaluation is far from 0 with any
+  // evaluator (B0r2 scores the full-material position at exactly 0;
+  // python-chess confirms the line legal and ...Nf6 a repetition).
   Position pos;
+  CHECK(pos.set_fen("rnb1kbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
   for (const char* uci : {"e2e4", "g8f6", "g1f3", "f6g8", "f3g1"}) pos.make(pos.parse_uci(uci));
   SearchQuota limits;
   limits.depth = 1;
@@ -478,7 +624,7 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
   const SearchResult r = fx.search(pos, limits);
   CHECK_EQ(pos.move_to_uci(r.best), std::string("g8f6"));
   CHECK_EQ(r.score, 0);
-  CHECK(static_eval(pos) != 0);  // so the 0 is the draw, not the evaluation
+  CHECK(static_eval(pos) < -300);  // so the 0 is the draw, not the evaluation
 }
 
 // Audit-1 Q-8: the quiescence search's own "mate on the 100th half-move" rule.
@@ -532,6 +678,11 @@ TEST_CASE("search", "the same search twice gives the same nodes, move and score"
   Fixture fx;
   const SearchResult a = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
   fx.store.clear();  // the same TT contents too
+  // and the same history, which persists between searches (searcher.hpp).
+  // Without this the second search started from the first one's history;
+  // the node counts still agreed with the bootstrap evaluation and B0, not
+  // with B0r1 (5631 vs 5610).
+  fx.searcher->clear_history();
   const SearchResult b = fx.search("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", 4);
   CHECK_EQ(a.nodes, b.nodes);
   CHECK(a.best == b.best);
@@ -828,7 +979,11 @@ TEST_CASE("search", "review: after a stop mid-iteration, the last reported PV st
 // unresolved whose move differs from the last finished iteration's best
 // (found by re-running the search to that depth, which repeats those
 // iterations exactly), that move must not be the one played. At least one
-// such stop must occur, or the test proves nothing.
+// such stop must occur, or the test proves nothing. How often one occurs
+// depends on the network: B0's first ten bench positions had some, B0r1's
+// none, its first ones at positions 30 and 34 below 30,000 nodes and at 34
+// and 41 below 12,000. So every bench position is scanned, until three
+// such stops are seen.
 TEST_CASE("search", "a stop during a root fail high's re-search keeps the previous iteration's move") {
   Fixture fx;
   auto fresh_search = [&](std::string_view fen, const SearchQuota& q) {
@@ -841,8 +996,7 @@ TEST_CASE("search", "a stop during a root fail high's re-search keeps the previo
   int distinct_fail_highs = 0;
   // The first bench positions are the perft suite (perft position 6 stopped
   // at 4,991 nodes with g5f6 failed high and c3d5 the previous best).
-  const std::size_t positions = Optimized ? 10 : 6;
-  for (std::size_t i = 0; i < positions; ++i) {
+  for (std::size_t i = 0; i < search_bench_fens().size() && distinct_fail_highs < 3; ++i) {
     const std::string_view fen = search_bench_fens()[i];
     for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
       SearchQuota q;
@@ -1068,10 +1222,12 @@ TEST_CASE("search", "the listener: one exact report per finished iteration, plus
   CHECK_MSG(bounds > 0, "no aspiration fail was reported");
 }
 // Audit-1, B-1: with one root move a timed search stops once 1/8 of its soft
-// limit has passed. A 150 ms pause after depth 1 passes 1/8 of 800 ms, so
+// limit has passed. A 1,100 ms pause after depth 1 passes 1/8 of 8,000 ms, so
 // the forced position (White's only move is g2g3; tools/check_search_positions.py)
 // stops at depth 1; with the switch off, and in a position with more moves,
-// the search runs to its depth limit, far below the soft limit.
+// the search runs to its depth limit, below the soft limit. The limits leave
+// about 7 s for depth 6 because sanitizer builds on a slow runner need it: with
+// 800 ms and a 150 ms pause, gcc-tsan once stopped the start position at depth 5.
 TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
   TestHash store;
   auto searcher = std::make_unique<Searcher>(store.table);
@@ -1082,11 +1238,11 @@ TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
     searcher->switches.use_forced_move_stop = rule;
     SearchQuota limits;
     limits.depth = 6;
-    limits.soft_ms = 800;
-    limits.hard_ms = 3200;
+    limits.soft_ms = 8000;
+    limits.hard_ms = 32000;
     PausingListener listener;
     listener.pause_after = 1;
-    listener.pause = std::chrono::milliseconds{150};
+    listener.pause = std::chrono::milliseconds{1100};
     return searcher->deliberate(pos, limits, stop, nullptr, &listener).depth;
   };
   const std::string_view forced = "rnb1kbnr/pppp1ppp/8/4p3/7q/5P2/PPPPP1PP/RNBQKBNR w KQkq - 1 3";

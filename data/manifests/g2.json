@@ -1,0 +1,131 @@
+{
+ "run": "g2",
+ "generator": {
+  "tool": "fork_datagen (complete games of generation 2's first run, idea 13's arm A, stopped on 2026-10-31 at the end of the arm's 6 hours)",
+  "version": "0.3.0-dev+963eb22 (WSL clang PGO, clang 21.1.8)",
+  "evaluator": "nnue (s512)",
+  "arch": "native (Ryzen 7600X3D)"
+ },
+ "settings": {
+  "openings": "lichess-2016-09.epd",
+  "openings_count": 591871,
+  "positions_target": 500000000,
+  "nodes": 20000,
+  "threads": 10,
+  "seed": 20261101,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 100,
+  "unsaved_nodes": 0,
+  "check_nodes": 0
+ },
+ "openings": {
+  "file": "lichess-2016-09.epd",
+  "sha256": "0ae298e1c7c635606fcddb056ee08073aeed8f4db4de3f19b8ef721d4a72831b",
+  "positions": 591871,
+  "source": "lichess_db_standard_rated_2016-09.pgn.zst",
+  "source_sha256": "3a4d18db787db558083aacb7c27ab3588f0745c1baaca37846b3f0d8b9677db3"
+ },
+ "games": 390227,
+ "positions": 35592241,
+ "seconds": 21738.0,
+ "results": {
+  "white": 161367,
+  "draw": 76233,
+  "black": 152627
+ },
+ "ends": "not counted (the run was stopped, not finished)",
+ "part_end": "end of idea 13's arm A: generation 2's first 6 hours with normal settings (started 2026-10-30 6:26:23 PM EST, stopped 2026-10-31 12:28:41 AM EST at a game boundary); arm B follows as its own part. The Lichess 2026-09 openings stream ran beside it for about 74 of its first 75 minutes and was paused at 7:41:39 PM EST. CPU load, stream active / paused: Windows 91.1% / 85.3% (typeperf, 1-minute means), WSL load1 10.18 / 10.23, busy 83.0% / 83.0%",
+ "batches": [
+  [
+   {
+    "file": "g2-w00.vf",
+    "worker": 0,
+    "games": 38832,
+    "positions": 3554310,
+    "bytes": 15615192,
+    "sha256": "cbd9f9f3a82e13ede9e4d8c06e66295157eb74b2c69a8d007a21fcd151f0d68f"
+   },
+   {
+    "file": "g2-w01.vf",
+    "worker": 1,
+    "games": 39008,
+    "positions": 3555325,
+    "bytes": 15625588,
+    "sha256": "97dae7d4a5d7a82dc9b876519ae359c8b732b07bc48e3e3ec032eebe7eff39a1"
+   },
+   {
+    "file": "g2-w02.vf",
+    "worker": 2,
+    "games": 38946,
+    "positions": 3559372,
+    "bytes": 15639544,
+    "sha256": "5ad553542ed8f941cd6bf24cb7683e1bfa35a75523d4fd7d3cdfd4e6a1627c47"
+   },
+   {
+    "file": "g2-w03.vf",
+    "worker": 3,
+    "games": 39009,
+    "positions": 3570960,
+    "bytes": 15688164,
+    "sha256": "89d3528a0baeb5eb8249c9e72250d33d77fb8687a10611f930303067c4e89da1"
+   },
+   {
+    "file": "g2-w04.vf",
+    "worker": 4,
+    "games": 39035,
+    "positions": 3568411,
+    "bytes": 15678904,
+    "sha256": "dff7a0eaf0b9d15136fecb31213969cfa8d0bcd2f11c74cb7b8f1a66e8ea6ac7"
+   },
+   {
+    "file": "g2-w05.vf",
+    "worker": 5,
+    "games": 39361,
+    "positions": 3565340,
+    "bytes": 15678356,
+    "sha256": "a06852094d1fefe12e0f21244e3c6e4a8ca95a801a2df17c574c7932b688fdf2"
+   },
+   {
+    "file": "g2-w06.vf",
+    "worker": 6,
+    "games": 39063,
+    "positions": 3548242,
+    "bytes": 15599236,
+    "sha256": "ada2122ddcbe0135dba5eea62a1576f940ac1e3ce39a6842f88a19721233f94f"
+   },
+   {
+    "file": "g2-w07.vf",
+    "worker": 7,
+    "games": 39095,
+    "positions": 3561543,
+    "bytes": 15653592,
+    "sha256": "4800513cddb0fe8df70471d607e33848d0b96a9bce6b4c87929edb8a0efa1415"
+   },
+   {
+    "file": "g2-w08.vf",
+    "worker": 8,
+    "games": 38765,
+    "positions": 3537686,
+    "bytes": 15546284,
+    "sha256": "385622e6ee0a2f4fd30c7bdd1a9567049919c1104bf50610cf36e28ea62e4cb2"
+   },
+   {
+    "file": "g2-w09-val.vf",
+    "worker": 9,
+    "games": 39113,
+    "positions": 3571052,
+    "bytes": 15692276,
+    "sha256": "967d1f93cf417d90044d89392e0e232a3f30beb06ee3e43e96b7da667a1b978d"
+   }
+  ]
+ ],
+ "positions_unsaved": 0
+}

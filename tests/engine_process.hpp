@@ -58,7 +58,8 @@ class EngineProcess {
   std::vector<OutputLine> lines() const;
   std::size_t line_count() const;
 
-  // Exit status once the child has exited within `timeout`.
+  // Exit status once the child has exited within `timeout`; its output is
+  // then read to the end (up to 10 s more), so lines() holds every line.
   std::optional<int> wait_exit(std::chrono::milliseconds timeout);
 
  private:

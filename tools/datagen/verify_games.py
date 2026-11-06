@@ -1,0 +1,250 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""Independent check of fork_datagen's shards (DESIGN.md §5.3, deliverable 2).
+
+Decodes each viriformat game with its own decoder, written from the
+format's README (cosmobobak/viriformat, pinned in KB phase4-pipeline.md §3),
+not from Fork's C++, and replays it with python-chess's move generator:
+- every move code must match exactly one legal move of its position
+  (castling as king to own rook, en passant type 1, promotions type 3);
+- the start board's fields (castling from the rook codes, en passant, side
+  to move) must give a valid position;
+- the stored result must follow from how the game ended: a mate or a rules
+  draw on the board, or an adjudication Fork makes (a mate score in the
+  last record, or a position within --table-pieces pieces, whose table
+  result is not rechecked here), or a draw by a repetition whose third
+  occurrence lies in the random plies before the record (the final
+  position twice in the record, the halfmove clock reaching past its
+  start);
+- with --adjudicate CP PLIES (the run's score adjudication), a game may
+  also end on the PLIES-th recorded score in a row at least CP for one
+  side, stored as that side's win; no earlier record may complete such a
+  run (the game would have ended there);
+- a record scored UNSAVED_SCORE is an unsaved position of the split
+  search (self_play.hpp UnsavedScore): its move is checked, its score
+  neither ends the game nor counts for the score adjudication;
+- with --manifest (fork_datagen's <run>.json), each shard's game and
+  position counts must match, and the unsaved records must total the
+  manifest's positions_unsaved (none at all when the run's save_percent is
+  100 or absent); without --adjudicate, the manifest's settings give the
+  score adjudication (adjudicate_cp and adjudicate_plies).
+
+    .venv/Scripts/python.exe -I tools/datagen/verify_games.py SHARD... [--manifest RUN.json]
+
+Exit status 0 when every game passes; prints a summary line.
+"""
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import chess
+
+MATE_BAND_FLOOR = 30000 - 250  # src/search/score_bounds.hpp: MateScore - MaxPly
+UNSAVED_SCORE = 32767  # src/datagen/self_play.hpp: an unsaved position's record
+PIECE_TYPES = [chess.PAWN, chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN, chess.KING]
+CASTLING_CORNERS = {(chess.H1, chess.WHITE): 'K', (chess.A1, chess.WHITE): 'Q',
+                    (chess.H8, chess.BLACK): 'k', (chess.A8, chess.BLACK): 'q'}
+
+
+class Bad(Exception):
+    pass
+
+
+def u16(b, i):
+    return b[i] | (b[i + 1] << 8)
+
+
+def i16(b, i):
+    v = u16(b, i)
+    return v - 65536 if v >= 32768 else v
+
+
+def decode_board(h):
+    occupancy = int.from_bytes(h[0:8], 'little')
+    if occupancy == 0:
+        raise Bad('zero occupancy')
+    board = chess.Board(None)
+    rights = []
+    k = 0
+    for sq in range(64):
+        if not occupancy >> sq & 1:
+            continue
+        code = (h[8 + k // 2] >> (4 * (k % 2))) & 15
+        k += 1
+        kind, color = code & 7, chess.BLACK if code & 8 else chess.WHITE
+        if kind == 7:
+            raise Bad('piece code 7')
+        if kind == 6:
+            if (sq, color) not in CASTLING_CORNERS:
+                raise Bad('castling rook off its corner')
+            rights.append(CASTLING_CORNERS[(sq, color)])
+            kind = 3
+        board.set_piece_at(sq, chess.Piece(PIECE_TYPES[kind], color))
+    if k > 32:
+        raise Bad('more than 32 pieces')
+    board.turn = chess.BLACK if h[24] & 128 else chess.WHITE
+    board.set_castling_fen(''.join(c for c in 'KQkq' if c in rights) or '-')
+    ep = h[24] & 127
+    if ep > 64:
+        raise Bad('bad ep square')
+    board.ep_square = None if ep == 64 else ep
+    board.halfmove_clock = h[25]
+    board.fullmove_number = max(1, u16(h, 26))
+    if h[30] > 2 or h[31] != 0:
+        raise Bad('bad result or reserved byte')
+    if not board.is_valid():
+        raise Bad(f'invalid start position {board.fen()} ({board.status()!r})')
+    if board.castling_rights != board.clean_castling_rights():
+        raise Bad('castling rights without king and rook at home')
+    return board, h[30]
+
+
+def code_of(board, move):
+    """The format's 16-bit code for a python-chess move."""
+    frm, to, kind, promo = move.from_square, move.to_square, 0, 0
+    if board.is_castling(move):
+        kind = 2
+        # python-chess gives standard castling as the king's two-square move;
+        # the format writes the king to its own rook's square.
+        to = chess.square(7 if chess.square_file(to) > chess.square_file(frm) else 0, chess.square_rank(frm))
+    elif board.is_en_passant(move):
+        kind = 1
+    elif move.promotion:
+        kind = 3
+        promo = move.promotion - chess.KNIGHT
+    return frm | to << 6 | promo << 12 | kind << 14
+
+
+def expected_end(board, last_score, table_pieces, streak_sign=0):
+    """'1-0', '0-1' or '1/2-1/2' if the end can be judged here, else None,
+    and what ended the game. streak_sign is +1 or -1 when the last record
+    completed a score adjudication run for White or Black."""
+    if last_score is not None and abs(last_score) >= MATE_BAND_FLOOR:
+        return ('1-0' if last_score > 0 else '0-1'), 'mate score'
+    # fork_datagen adjudicates right after recording the score, before it
+    # looks at the next position.
+    if streak_sign:
+        return ('1-0' if streak_sign > 0 else '0-1'), 'score adjudication'
+    if board.is_checkmate():
+        return ('0-1' if board.turn == chess.WHITE else '1-0'), 'checkmate'
+    if board.is_stalemate() or board.is_insufficient_material():
+        return '1/2-1/2', 'rules draw'
+    if board.halfmove_clock >= 100 or board.is_repetition(3):
+        return '1/2-1/2', 'rules draw'
+    if last_score is not None and abs(last_score) >= MATE_BAND_FLOOR:
+        return ('1-0' if last_score > 0 else '0-1'), 'mate score'
+    # fork_datagen plays the opening's random plies on the game's own
+    # position, before the record starts, so its threefold count includes
+    # them. With the final position twice in the record and a halfmove clock
+    # reaching back past the record's start, the third occurrence can lie
+    # there: a draw, whose earlier ply this check cannot see.
+    if board.is_repetition(2) and board.halfmove_clock > len(board.move_stack):
+        return '1/2-1/2', 'repetition before the record'
+    if chess.popcount(board.occupied) <= table_pieces:
+        return None, 'table'
+    return None, 'unexplained'
+
+
+def streak_step(count, sign, score, cp):
+    """One step of the score adjudication's count (self_play.hpp ScoreStreak)."""
+    s = 1 if score >= cp else (-1 if score <= -cp else 0)
+    count = 0 if s == 0 else (count + 1 if s == sign else 1)
+    return count, s
+
+
+def verify_file(path, table_pieces, totals, adjudicate=None):
+    data = Path(path).read_bytes()
+    games = positions = 0
+    i = 0
+    while i < len(data):
+        if len(data) - i < 32:
+            raise Bad(f'{path}: truncated board at byte {i}')
+        board, result = decode_board(data[i:i + 32])
+        i += 32
+        last_score = None
+        count = sign = 0
+        done_sign = 0
+        while True:
+            if len(data) - i < 4:
+                raise Bad(f'{path}: truncated moves at byte {i}')
+            code, score = u16(data, i), i16(data, i + 2)
+            i += 4
+            if code == 0:
+                if score != 0:
+                    raise Bad(f'{path}: bad terminator at byte {i - 4}')
+                break
+            matches = [m for m in board.legal_moves if code_of(board, m) == code]
+            if len(matches) != 1:
+                raise Bad(f'{path}: move code {code} matches {len(matches)} legal moves in {board.fen()}')
+            if done_sign:
+                raise Bad(f'{path}: game {games} continued past its score adjudication at {board.fen()}')
+            board.push(matches[0])
+            positions += 1
+            if score == UNSAVED_SCORE:
+                last_score = None
+                totals['_unsaved'] = totals.get('_unsaved', 0) + 1
+                continue
+            last_score = score
+            if adjudicate and abs(score) < MATE_BAND_FLOOR:
+                count, sign = streak_step(count, sign, score, adjudicate[0])
+                if count >= adjudicate[1]:
+                    done_sign = sign
+        want, why = expected_end(board, last_score, table_pieces, done_sign)
+        stored = ['0-1', '1/2-1/2', '1-0'][result]
+        if why == 'unexplained':
+            raise Bad(f'{path}: game {games} ended without a reason at {board.fen()}')
+        if want is not None and want != stored:
+            raise Bad(f'{path}: game {games} stored {stored} but ended by {why} as {want} at {board.fen()}')
+        totals[why] = totals.get(why, 0) + 1
+        games += 1
+    return games, positions
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    ap.add_argument('shards', nargs='+')
+    ap.add_argument('--manifest', help="fork_datagen's <run>.json, to compare counts")
+    ap.add_argument('--adjudicate', type=int, nargs=2, metavar=('CP', 'PLIES'),
+                    help="the run's score adjudication (fork_datagen --adjudicate-cp/--adjudicate-plies)")
+    ap.add_argument('--table-pieces', type=int, default=5,
+                    help='largest piece count the run adjudicated by tables (0: none)')
+    a = ap.parse_args(argv)
+    totals = {}
+    counts = {}
+    adjudicate = a.adjudicate
+    if adjudicate is None and a.manifest:
+        # Without --adjudicate, the run's own settings say whether it adjudicated.
+        st = json.loads(Path(a.manifest).read_text()).get('settings', {})
+        if st.get('adjudicate_plies', 0) > 0:
+            adjudicate = [st['adjudicate_cp'], st['adjudicate_plies']]
+    try:
+        for s in a.shards:
+            counts[Path(s).name] = verify_file(s, a.table_pieces, totals, adjudicate)
+        if a.manifest:
+            man = json.loads(Path(a.manifest).read_text())
+            listed = {e['file']: (e['games'], e['positions']) for e in man['shards']}
+            for name, got in counts.items():
+                if listed.get(name) != got:
+                    raise Bad(f'{name}: {got} games/positions, manifest says {listed.get(name)}')
+            missing = set(listed) - set(counts)
+            if missing:
+                raise Bad(f'shards in the manifest but not checked: {sorted(missing)}')
+            unsaved = totals.get('_unsaved', 0)
+            if man.get('settings', {}).get('save_percent', 100) == 100 and unsaved:
+                raise Bad(f'{unsaved} unsaved records in a run without the split search')
+            if 'positions_unsaved' in man and man['positions_unsaved'] != unsaved:
+                raise Bad(f"{unsaved} unsaved records, manifest says {man['positions_unsaved']}")
+    except Bad as e:
+        print(f'FAIL {e}', file=sys.stderr)
+        return 1
+    unsaved = totals.pop('_unsaved', 0)
+    g = sum(c[0] for c in counts.values())
+    p = sum(c[1] for c in counts.values())
+    print(f'ok: {len(counts)} shards, {g} games, {p} positions ({unsaved} unsaved); '
+          f'ends {json.dumps(totals, sort_keys=True)}')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

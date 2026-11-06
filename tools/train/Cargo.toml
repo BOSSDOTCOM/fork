@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Fork's NNUE training program (DESIGN.md §5.3, deliverable 4). It depends on
+# bullet's trainer crate only, never on bullet_lib, so the GPL and AGPL crates
+# bullet_lib pulls in (the Stockfish binpack reader, Monty's format crate) are
+# never downloaded (owner, 2026-10-28; KB bullet-internals.md §12). Local
+# builds use a throwaway CARGO_HOME; training builds run on Kaggle with
+# `--features cuda`. Build with `--locked`.
+
+[package]
+name = "fork-train"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.87"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+bullet-trainer = { git = "https://github.com/jw1912/bullet", rev = "da426a49b2a4b79a55a87031cd51c89bdf1ff030" }
+viriformat = "=2.0.1"
+bulletformat = "=1.8.0"
+
+[features]
+cuda = ["bullet-trainer/cuda"]
+
+[profile.release]
+debug = false

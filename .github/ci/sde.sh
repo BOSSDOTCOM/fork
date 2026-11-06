@@ -28,14 +28,16 @@
 # is never part of Fork.
 #
 # The emulated CPU is Skylake server (-skx): AVX-512 F, CD, BW, DQ and VL,
-# exactly the x86-64-v4 level the avx512 presets target.
+# exactly the x86-64-v4 level the avx512 presets target. FORK_SDE_CHIP
+# overrides it: the vnni presets (x86-64-v4 plus AVX-512 VNNI) use -icx (Ice
+# Lake server, which adds VNNI); Skylake server has no VNNI.
 set -euo pipefail
 
 sde_version=10.13.1-2026-07-28
 sde_mirror=https://downloadmirror.intel.com/924984
 sde_lin_sha256=94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50
 sde_win_sha256=74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651
-sde_chip=-skx
+sde_chip=${FORK_SDE_CHIP:--skx}
 
 is_windows() { case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) return 0 ;; *) return 1 ;; esac; }
 
@@ -58,6 +60,8 @@ case "${1:-}" in
       native) want="" ;;
       x86-64-v3) want="avx avx2 bmi1 bmi2 fma f16c movbe" ;;
       x86-64-v4) want="avx avx2 bmi1 bmi2 fma f16c movbe avx512f avx512cd avx512bw avx512dq avx512vl" ;;
+      x86-64-v4-vnni) want="avx avx2 bmi1 bmi2 fma f16c movbe avx512f avx512cd avx512bw avx512dq avx512vl avx512_vnni" ;;
+      x86-64) want="" ;;
       *) echo "unknown ARCH $arch" >&2; exit 2 ;;
     esac
     missing=""

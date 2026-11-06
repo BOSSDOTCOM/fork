@@ -3,6 +3,7 @@
 // Tier 1 pruning and reductions (DESIGN.md §5.2, deliverable 6).
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -37,6 +38,21 @@ struct PruningFixture {
     SearchQuota limits;
     limits.depth = depth;
     return searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+  }
+  // Node counts of three searches with the given switches (tests/suite.hpp's
+  // perft positions 2 and 5, and the start position), for the fault checks
+  // that a technique changes the search: one position alone can give the
+  // same tree with and without a technique at a debug build's shallow
+  // depth (S512r2 did at kiwipete, 2026-11-01), three together did not.
+  std::vector<std::uint64_t> tree_sizes(const SearchSwitches& switches, int depth) {
+    static constexpr std::string_view Fens[] = {
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+    searcher->switches = switches;
+    std::vector<std::uint64_t> nodes;
+    for (std::string_view fen : Fens) nodes.push_back(search(fen, depth).nodes);
+    return nodes;
   }
 };
 
@@ -237,6 +253,147 @@ TEST_CASE("pruning", "with PVS off, LMR still reduces: the two switches are inde
             "PVS off: nodes " << with_lmr.nodes << " with LMR, " << without_lmr.nodes << " without");
 }
 
+// Singular extension (tier 2, T27), then multi-cut (T28) and negative
+// extensions (T30) on top: with each on, mates are still found and the best
+// move is legal; searches to the maximum depth and to a node budget stay in
+// bounds (KB §3.21's stress test against an extension explosion: forcing
+// positions, where singular moves are common); and each switch really
+// changes the tree (fault check: an outcome that never applies leaves the
+// tree as it was without that switch).
+TEST_CASE("pruning",
+          "singular extension, multi-cut, negative extension: correct, bounded, each changes the search") {
+  PruningFixture fx;
+  // Singular extension and multi-cut on since their SPRTs (2026-10-31); the
+  // negative extension off (its SPRT rejected it).
+  CHECK(SearchSwitches{}.use_singular_extension);
+  CHECK(SearchSwitches{}.use_multi_cut);
+  CHECK(!SearchSwitches{}.use_negative_extension);
+  static constexpr std::string_view Forcing[] = {
+      "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "4k3/8/8/1p1p1p2/1P1P1P2/8/8/4K3 w - - 0 1",
+      // Kiwipete (tests/suite.hpp's perft position 2) and perft position 5.
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"};
+  const std::string_view kiwipete = Forcing[2];
+  const int depth = Optimized ? 10 : 7;
+  SearchSwitches s;
+  s.use_singular_extension = false;
+  s.use_multi_cut = false;
+  fx.searcher->switches = s;
+  std::uint64_t previous = fx.search(kiwipete, depth).nodes;
+  bool* added[] = {&s.use_singular_extension, &s.use_multi_cut, &s.use_negative_extension};
+  for (int step = 0; step < 3; ++step) {
+    *added[step] = true;
+    fx.searcher->switches = s;
+    CHECK_MSG(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 8).score == mate_score(1), "step " << step);
+    CHECK_MSG(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 8).score == mate_score(3), "step " << step);
+    for (std::string_view fen : Forcing) {
+      std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+      fx.searcher->clear_history();
+      Position pos;
+      CHECK_MSG(pos.set_fen(fen), fen);
+      SearchQuota limits;  // depth MaxPly - 1
+      limits.nodes = Optimized ? 3'000'000 : 200'000;
+      const SearchResult r = fx.searcher->deliberate(pos, limits, fx.stop, nullptr, nullptr);
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      CHECK_MSG(legal.contains(r.best), fen << " step " << step);
+      CHECK_MSG(pos.fen() == fen, fen);
+    }
+    const std::uint64_t nodes = fx.search(kiwipete, depth).nodes;
+    CHECK_MSG(nodes != previous,
+              "step " << step << ": nodes " << nodes << " with the switch, " << previous << " without");
+    previous = nodes;
+  }
+}
+
+// The reply table (tier 2, T10): with it on, mates are still found and the
+// best move is legal, and it changes the tree (fault check: a table never
+// read or never updated leaves the tree as it is with the switch off).
+TEST_CASE("pruning", "reply and follow tables: still correct, and each changes the search") {
+  PruningFixture fx;
+  CHECK(SearchSwitches{}.use_reply_history);  // on since its SPRT (2026-11-01)
+  SearchSwitches on;
+  on.use_reply_history = true;
+  on.use_follow_history = false;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_reply_history = false;
+  off.use_follow_history = false;
+  const std::vector<std::uint64_t> with = fx.tree_sizes(on, depth);
+  const std::vector<std::uint64_t> without = fx.tree_sizes(off, depth);
+  CHECK_MSG(with != without, "the reply table left all three trees unchanged");
+  // The follow table (T10's 2-ply table), on its own and with the reply table.
+  CHECK(SearchSwitches{}.use_follow_history);  // on since its SPRT (2026-11-01)
+  for (bool reply : {false, true}) {
+    SearchSwitches follow;
+    follow.use_follow_history = true;
+    follow.use_reply_history = reply;
+    fx.searcher->switches = follow;
+    CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+    CHECK(legal.contains(fx.search(kiwipete, depth).best));
+    CHECK_MSG(
+        fx.tree_sizes(follow, depth) != (reply ? with : without),
+        "the follow table left all three trees unchanged (reply table " << (reply ? "on" : "off") << ")");
+  }
+}
+
+// The take history (tier 2, T11): with it on, mates are still found and the
+// best move is legal, and it changes the tree (fault check: a table never
+// read or never updated leaves the tree as it is with the switch off).
+TEST_CASE("pruning", "take history: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(SearchSwitches{}.use_take_history);  // on since its SPRT (2026-11-01)
+  SearchSwitches on;
+  on.use_take_history = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_take_history = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the take history left all three trees unchanged");
+}
+
+// Internal iterative reduction (tier 2, T26): with it on, mates are still
+// found and the best move is legal, and it changes the tree (fault check: a
+// reduction that never fires leaves the tree as it is with the switch off).
+TEST_CASE("pruning", "no-move reduction: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(SearchSwitches{}.use_no_move_reduction);  // on since its SPRT (2026-11-02)
+  SearchSwitches on;
+  on.use_no_move_reduction = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 12 : 9;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_no_move_reduction = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the no-move reduction left all three trees unchanged");
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -303,6 +460,36 @@ TEST_CASE("pruning", "game phase: all pieces 24, a pawn ending 0, rook and queen
   CHECK_EQ(game_phase(pos), 0);
   CHECK(pos.set_fen("4k3/8/8/8/8/8/8/R3K2Q w - - 0 1"));
   CHECK_EQ(game_phase(pos), 6);
+}
+
+}  // namespace forkeng::test
+
+namespace forkeng::test {
+
+// Every tier-2 switch on (from the tier-2 review of 2026-10-31): a search
+// from the same state twice is identical, and the best move is legal.
+TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
+  PruningFixture fx;
+  SearchSwitches s;
+  s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
+  s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
+  fx.searcher->switches = s;
+  static constexpr std::string_view Fens[] = {
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+  const int depth = Optimized ? 12 : 7;
+  for (std::string_view fen : Fens) {
+    const SearchResult a = fx.search(fen, depth);
+    const SearchResult b = fx.search(fen, depth);
+    CHECK_MSG(a.nodes == b.nodes && a.best == b.best && a.score == b.score,
+              fen << ": nodes " << a.nodes << " vs " << b.nodes);
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    CHECK_MSG(legal.contains(a.best), fen);
+  }
 }
 
 }  // namespace forkeng::test

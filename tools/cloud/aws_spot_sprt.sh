@@ -7,7 +7,7 @@
 #
 #   tools/cloud/aws_spot_sprt.sh --bucket s3://BUCKET/PREFIX --instance-profile NAME \
 #       --base COMMIT --test COMMIT [--games 5000] [--shards 1] [--stage 0] [--tc 8+0.08] \
-#       [--hash 16] [--type c7a.16xlarge] [--arch x86-64-v3] [--region us-east-1] [--max-hours 3] \
+#       [--hash 16] [--type c7a.2xlarge] [--arch x86-64-v3] [--region us-east-1] [--max-hours 3] \
 #       [--base-opts "..."] [--test-opts "..."] [--subnet ID] [--security-group ID] [--no-tables] [--dry-run]
 #
 # Each instance (Ubuntu 22.04 LTS, the TCEC toolchain's release: gcc 11.4):
@@ -24,16 +24,22 @@
 #  3. runs tools/cloud/run_shard.sh with every vCPU but two, uploading
 #     result.json to S3 every minute;
 #  4. watches the instance metadata (IMDSv2) for a spot interruption notice
-#     and, on one, stops the shard so its finished pairs are uploaded;
+#     (tools/cloud/spot_watch.sh) and, on one, stops the shard so its
+#     finished pairs are uploaded;
 #  5. uploads the log and the games, and shuts down; with
 #     --instance-initiated-shutdown-behavior terminate, shutting down
 #     terminates the instance.
+# Before launching (and in a dry run, when the AWS CLI is there), the
+# request is checked against the applied spot quota (tools/cloud/
+# spot_quota.sh) and refused if it would exceed it. Instances are tagged
+# fork-run and fork-expires (launch time + --max-hours, UTC), which
+# tools/cloud/aws_cleanup.sh uses to terminate anything past its limit.
 # The instance profile (made by the owner) needs only s3:PutObject on the
 # bucket's prefix. Results: aws s3 cp --recursive s3://BUCKET/PREFIX/RUN dir,
 # then python3 tools/cloud/sprt_merge.py merge dir/*.json --elo0 E0 --elo1 E1.
 set -euo pipefail
 repo_url=https://github.com/BOSSDOTCOM/fork.git
-games=5000 shards=1 stage=0 tc=8+0.08 hash=16 type=c7a.16xlarge region=${AWS_REGION:-us-east-1}
+games=5000 shards=1 stage=0 tc=8+0.08 hash=16 type=c7a.2xlarge region=${AWS_REGION:-us-east-1}
 arch=x86-64-v3 max_hours=3 base_opts="" test_opts="" subnet="" sg="" dry=0 bucket="" profile="" base="" test="" tables=1
 while [ $# -gt 0 ]; do
   case $1 in
@@ -86,15 +92,7 @@ bash tools/cloud/run_shard.sh --base /opt/engines/base/fork --test /opt/engines/
   --meta base=$base --meta test=$test --meta runner=aws-$type --meta arch=$arch --meta run=$run \\
   --checkpoint "aws s3 cp --only-show-errors /opt/shard/result.json ${bucket%/}/$run/shard-$1.json" &
 shard=\$!
-# Spot interruption: the notice appears at spot/instance-action about two
-# minutes ahead (IMDSv2: a session token first).
-( while kill -0 \$shard 2>/dev/null; do
-    token=\$(curl -s -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' http://169.254.169.254/latest/api/token)
-    code=\$(curl -s -o /dev/null -w '%{http_code}' -H "X-aws-ec2-metadata-token: \$token" \\
-      http://169.254.169.254/latest/meta-data/spot/instance-action)
-    if [ "\$code" = 200 ]; then echo "spot interruption notice"; kill -TERM \$shard; break; fi
-    sleep 5
-  done ) &
+bash tools/cloud/spot_watch.sh \$shard &
 wait \$shard
 upload /opt/shard/result.json shard-$1.json
 gzip -c /opt/shard/games.pgn >/opt/shard/games.pgn.gz && upload /opt/shard/games.pgn.gz shard-$1.pgn.gz
@@ -105,12 +103,19 @@ EOF
 }
 
 echo "run $run: $shards x $type spot, $arch, $per games each, $tc, test $test vs base $base, results ${bucket%/}/$run/"
+expires=$(date -u -d "+$max_hours hours" +%Y-%m-%dT%H:%M:%SZ)
 if [ "$dry" = 1 ]; then
+  if command -v aws >/dev/null; then
+    bash "$here/tools/cloud/spot_quota.sh" --region "$region" --type "$type" --count "$shards" ||
+      echo "(dry run: this launch would be refused)"
+  fi
+  echo "--- tags: Name=fork-$run-<shard>, fork-run=$run, fork-expires=$expires"
   echo "--- user data of shard 0 (dry run: nothing is launched)"
   user_data 0
   exit 0
 fi
 command -v aws >/dev/null || { echo "aws_spot_sprt.sh: the AWS CLI is not installed" >&2; exit 1; }
+bash "$here/tools/cloud/spot_quota.sh" --region "$region" --type "$type" --count "$shards" || exit 3
 ami=$(aws ssm get-parameter --region "$region" --query Parameter.Value --output text \
   --name /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id)
 net=()
@@ -123,7 +128,9 @@ for i in $(seq 0 $(( shards - 1 ))); do
     --instance-market-options '{"MarketType":"spot","SpotOptions":{"SpotInstanceType":"one-time","InstanceInterruptionBehavior":"terminate"}}' \
     --instance-initiated-shutdown-behavior terminate \
     --iam-instance-profile "Name=$profile" --user-data "file://$ud" "${net[@]}" \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=fork-$run-$i},{Key=fork-run,Value=$run}]" \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=fork-$run-$i},{Key=fork-run,Value=$run},{Key=fork-expires,Value=$expires}]" \
+      "ResourceType=volume,Tags=[{Key=fork-run,Value=$run},{Key=fork-expires,Value=$expires}]" \
+      "ResourceType=spot-instances-request,Tags=[{Key=fork-run,Value=$run},{Key=fork-expires,Value=$expires}]" \
     --query 'Instances[0].InstanceId' --output text
   rm -f "$ud"
 done

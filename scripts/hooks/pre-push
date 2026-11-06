@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Git pre-push hook (installed with: git config core.hooksPath scripts/hooks).
+# The push gate (owner, 2026-11-05): the personal-data scan runs before
+# anything is sent, over every commit the remote does not have yet, and any
+# hit, or a scan that cannot run, blocks the push. The owner's procedure runs
+# scripts/scan-push.sh as its own step first; this hook is the backstop.
+# The scanner beside this hook (core.hooksPath names this folder), so a
+# worktree whose branch has no scripts/ folder of its own (kb) is scanned too.
+scanner="$(cd "$(dirname "$0")/.." && pwd)/scan-push.sh"
+[ -f "$scanner" ] || { echo "pre-push: $scanner is missing: the push is blocked" >&2; exit 1; }
+exec bash "$scanner" --pre-push

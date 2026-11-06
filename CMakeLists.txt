@@ -20,6 +20,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(FORK_ARCH "native" CACHE STRING "Target CPU: native, x86-64-v3, x86-64-v4")
 option(FORK_NO_PEXT "Use magic multiplication even when BMI2 PEXT is available" OFF)
+option(FORK_VNNI "Add AVX-512 VNNI to the target (with FORK_ARCH=x86-64-v4; the vnni presets)" OFF)
 option(FORK_SANITIZE "Build with ASan + UBSan (where the toolchain supports it)" OFF)
 option(FORK_TSAN "Build with ThreadSanitizer (Linux; not with FORK_SANITIZE)" OFF)
 option(FORK_LTO "Link-time optimization for optimized builds" ON)
@@ -37,12 +38,24 @@ endif()
 # -g: debug info in the optimized binary, as TCEC recommends (owner,
 # 2026-10-24); it does not change the generated code.
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG")
+if(EMSCRIPTEN)
+  # No debug information in the web page's modules (size, and no build paths).
+  set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+  set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
+endif()
 set(CMAKE_CXX_FLAGS_DEBUG "-O1 -g -fno-omit-frame-pointer -DFORK_DEBUG")
 
 # Flags shared by every Fork target.
 add_library(fork_flags INTERFACE)
-target_compile_options(fork_flags INTERFACE
-  -Wall -Wextra -Wpedantic -Wshadow -Werror -march=${FORK_ARCH})
+target_compile_options(fork_flags INTERFACE -Wall -Wextra -Wpedantic -Wshadow -Werror)
+# WebAssembly (Emscripten, the web page; DESIGN.md §5.5) has no -march: its
+# builds use the scalar inference and the magic-multiplication sliders.
+if(NOT EMSCRIPTEN)
+  target_compile_options(fork_flags INTERFACE -march=${FORK_ARCH})
+endif()
+if(FORK_VNNI)
+  target_compile_options(fork_flags INTERFACE -mavx512vnni)
+endif()
 # A/B experiments (Part C): -DFORK_EXPERIMENT=NAME defines FORK_EXP_NAME.
 set(FORK_EXPERIMENT "" CACHE STRING "Optimization experiment to enable (A/B builds only)")
 if(FORK_EXPERIMENT)
@@ -160,10 +173,35 @@ target_compile_options(fathom PRIVATE -w)
 
 # The evaluator is chosen at build time (owner, 2026-10-24; DESIGN.md §5.2):
 # no runtime interface and no indirect call in the search.
-set(FORK_EVALUATOR "bootstrap" CACHE STRING "Static evaluation built into Fork: bootstrap")
-set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap)
-if(NOT FORK_EVALUATOR STREQUAL "bootstrap")
-  message(FATAL_ERROR "FORK_EVALUATOR must be bootstrap (Phase 3)")
+# nnue is the default since B0 passed its SPRT against the bootstrap
+# evaluation (+486.85 +/- 32.07 Elo; DESIGN.md §5.3, deliverable 7; owner,
+# 2026-10-29). The network is nets/s512r2.fnet, S-512 retrained in round 2
+# of the bake-off, since it passed its SPRT against round 1's S-512
+# (+151.35 Elo, 2026-11-01; docs/nets.md; owner: promoted). nets/s512.fnet,
+# nets/b0r2.fnet, nets/b0r1.fnet and nets/b0.fnet stay buildable with
+# FORK_NET (tests/bench-s512.ref, tests/bench-b0r2.ref, tests/bench-b0r1.ref,
+# tests/bench-b0.ref), and so does bootstrap (tests/bench.ref).
+set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
+set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512r2.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+if(FORK_EVALUATOR STREQUAL "nnue")
+  if(NOT EXISTS ${FORK_NET})
+    message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")
+  endif()
+  # The inference is compiled for the embedded network's architecture
+  # (src/eval/nnue/net_shape.hpp): its id is the header's u32 at byte 12.
+  file(READ ${FORK_NET} fork_net_arch_hex OFFSET 12 LIMIT 4 HEX)
+  string(SUBSTRING "${fork_net_arch_hex}" 0 2 fork_net_arch_byte)
+  math(EXPR FORK_NET_ARCH "0x${fork_net_arch_byte}")
+  set(fork_net_source ${CMAKE_BINARY_DIR}/generated/embedded_net_data.cpp)
+  add_custom_command(OUTPUT ${fork_net_source}
+    COMMAND ${CMAKE_COMMAND} -DNET=${FORK_NET} -DOUT=${fork_net_source} -P ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    DEPENDS ${FORK_NET} ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    COMMENT "Embedding the network ${FORK_NET}")
+elseif(NOT FORK_EVALUATOR STREQUAL "bootstrap")
+  message(FATAL_ERROR "FORK_EVALUATOR must be bootstrap or nnue")
+else()
+  set(FORK_NET_ARCH 1)
 endif()
 
 # Evaluation and search (src/eval/, src/search/ except the hash memory).
@@ -178,9 +216,22 @@ add_library(forksearch STATIC
   src/search/time_budget.cpp
   src/search/trans_table.cpp
   src/tune/params.cpp)
-target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
-find_package(Threads REQUIRED)
-target_link_libraries(forksearch PUBLIC forkcore fathom Threads::Threads PRIVATE fork_pgo)
+if(FORK_EVALUATOR STREQUAL "nnue")
+  target_sources(forksearch PRIVATE src/eval/nnue/embedded_net.cpp ${fork_net_source})
+  target_compile_definitions(forksearch PUBLIC FORK_EVAL_NNUE)
+  target_link_libraries(forksearch PUBLIC forknnue)
+else()
+  target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
+endif()
+# WebAssembly builds are single-threaded (DESIGN.md §5.5): Emscripten's threads
+# need shared memory, which a GitHub Pages site cannot enable.
+if(EMSCRIPTEN)
+  set(fork_threads "")
+else()
+  find_package(Threads REQUIRED)
+  set(fork_threads Threads::Threads)
+endif()
+target_link_libraries(forksearch PUBLIC forkcore fathom ${fork_threads} PRIVATE fork_pgo)
 if(FORK_SEARCH_STATS)
   target_compile_definitions(forksearch PUBLIC FORK_SEARCH_STATS)
 endif()
@@ -192,7 +243,27 @@ add_library(forkuci STATIC
   src/uci/output.cpp
   src/uci/session.cpp
   src/uci/version.cpp)
-target_link_libraries(forkuci PUBLIC forksearch Threads::Threads PRIVATE fork_pgo)
+target_link_libraries(forkuci PUBLIC forksearch ${fork_threads} PRIVATE fork_pgo)
+# B0's inference (src/eval/nnue/; DESIGN.md §5.3, deliverable 5): built and
+# tested in every configuration; the search uses it only with
+# FORK_EVALUATOR=nnue.
+add_library(forknnue STATIC
+  src/eval/nnue/accumulator.cpp
+  src/eval/nnue/net_file.cpp)
+target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH})
+target_link_libraries(forknnue PUBLIC forkcore PRIVATE fork_pgo)
+
+# Self-play training data (src/datagen/; DESIGN.md §5.3, deliverable 2): the
+# game format and the game player, shared by fork_datagen, the tests and a
+# fuzz target. fork_datagen is never part of the engine binary TCEC builds.
+add_library(forkdatagen STATIC
+  src/datagen/game_record.cpp
+  src/datagen/self_play.cpp)
+target_link_libraries(forkdatagen PUBLIC forksearch PRIVATE fork_pgo)
+add_executable(fork_datagen src/datagen/datagen_main.cpp)
+target_link_libraries(fork_datagen PRIVATE forkdatagen forkuci)
+target_compile_definitions(fork_datagen PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}")
+
 if(FORK_TUNE)
   # Public on the search library, so the search, the UCI session and the tests
   # all see the same parameter declarations (src/tune/params.hpp).
@@ -218,7 +289,35 @@ message(STATUS "Fork version ${fork_version}")
 set_source_files_properties(src/uci/version.cpp PROPERTIES COMPILE_DEFINITIONS "FORK_VERSION=\"${fork_version}\"")
 
 add_executable(fork src/main.cpp)
-target_link_libraries(fork PRIVATE forkuci fork_pgo)
+target_link_libraries(fork PRIVATE forkuci forknnue fork_pgo)
+# `fork version` names the evaluator and, for nnue, the network (its file's
+# stem): the SPRT tools use it for the game gate (tools/cloud/build_pair.sh).
+get_filename_component(fork_net_stem_for_version ${FORK_NET} NAME_WE)
+target_compile_definitions(fork PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}"
+                                        FORK_NET_NAME="${fork_net_stem_for_version}")
+# fork_datagen's run manifest names the labelling network the same way, so
+# data labelled by different nets stays apart (owner, 2026-10-30).
+target_compile_definitions(fork_datagen PRIVATE FORK_NET_NAME="${fork_net_stem_for_version}")
+
+# The web page's entry points (src/web/; DESIGN.md §5.5): a synchronous
+# interface for one Web Worker, tested natively in fork_tests.
+add_library(forkweb STATIC src/web/web_engine.cpp)
+target_link_libraries(forkweb PUBLIC forksearch PRIVATE fork_pgo)
+if(EMSCRIPTEN)
+  # A native thread's 8 MB stack (Emscripten's default is far smaller than the
+  # search's recursion needs); memory grows past the hash table as needed.
+  set(fork_wasm_link -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=8388608)
+  # fork.js: the command-line program under Node.js, for the parity checks
+  # (netcheck, bench) with real file access and its exit status kept.
+  target_link_options(fork PRIVATE ${fork_wasm_link} -sNODERAWFS=1 -sEXIT_RUNTIME=1 -sENVIRONMENT=node)
+  # fork_web.js: an ES module for the page's Web Worker.
+  add_executable(fork_web src/web/web_engine.cpp)
+  target_link_libraries(fork_web PRIVATE forksearch fork_pgo)
+  target_link_options(fork_web PRIVATE ${fork_wasm_link} --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1
+    -sENVIRONMENT=worker -sEXPORT_NAME=createFork
+    "-sEXPORTED_FUNCTIONS=_fork_web_init,_fork_web_set_position,_fork_web_fen,_fork_web_legal_moves,_fork_web_status,_fork_web_san,_fork_web_evaluate,_fork_web_search,_fork_web_new_game"
+    "-sEXPORTED_RUNTIME_METHODS=cwrap")
+endif()
 
 add_executable(fork_magic_seeds tools/magic_seeds.cpp)
 target_link_libraries(fork_magic_seeds PRIVATE forkcore)
@@ -268,9 +367,9 @@ if(FORK_FUZZ)
   else()
     target_compile_options(fork_flags INTERFACE -fsanitize=fuzzer-no-link)
   endif()
-  foreach(target fuzz_fen fuzz_moves fuzz_uci)
+  foreach(target fuzz_fen fuzz_moves fuzz_uci fuzz_game_record)
     add_executable(${target} fuzz/${target}.cpp)
-    target_link_libraries(${target} PRIVATE forkuci)
+    target_link_libraries(${target} PRIVATE forkuci forkdatagen)
     target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/tests)  # uci_message.hpp
     if(MINGW)
       target_link_libraries(${target} PRIVATE ${fuzz_runtime})
@@ -314,8 +413,11 @@ if(FORK_BUILD_TESTS)
     tests/engine_process.cpp
     tests/test_uci.cpp
     tests/test_options.cpp
-    tests/test_params.cpp)
-  target_link_libraries(fork_tests PRIVATE forkuci)
+    tests/test_params.cpp
+    tests/test_datagen.cpp
+    tests/test_nnue.cpp
+    tests/test_web.cpp)
+  target_link_libraries(fork_tests PRIVATE forkuci forkdatagen forknnue forkweb)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
   target_compile_definitions(fork_tests PRIVATE FORK_EXE_PATH="$<TARGET_FILE:fork>")
@@ -441,7 +543,8 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing)
+                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue
+                web)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
@@ -489,18 +592,77 @@ if(FORK_BUILD_TESTS)
              COMMAND ${test_python} -I ${CMAKE_SOURCE_DIR}/tools/difftest/difftest.py
                      --fork $<TARGET_FILE:fork> --positions 20000 --workers 2)
     set_tests_properties(difftest_short PROPERTIES LABELS python)
+    # fork_datagen's shards against an independent decoder and python-chess,
+    # and a second run for byte-identical output (DESIGN.md §5.3); its
+    # manifest must name the labelling evaluator (and network).
+    set(fork_datagen_evaluator ${FORK_EVALUATOR})
+    if(FORK_EVALUATOR STREQUAL "nnue")
+      set(fork_datagen_evaluator "nnue (${fork_net_stem_for_version})")
+    endif()
+    add_test(NAME datagen_verify COMMAND ${CMAKE_COMMAND}
+      -DDATAGEN=$<TARGET_FILE:fork_datagen> -DPYTHON=${test_python} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+      -DWORK=${CMAKE_BINARY_DIR}/datagen_verify -DTABLES=${FORK_SYZYGY345_DIR}
+      "-DEVALUATOR=${fork_datagen_evaluator}"
+      -P ${CMAKE_SOURCE_DIR}/cmake/datagen_verify.cmake)
+    set_tests_properties(datagen_verify PROPERTIES LABELS python)
+    # Cloud data generation end to end without AWS (tools/cloud/
+    # cloud_datagen.sh uploading to a folder, pull_datagen.sh verifying it);
+    # bash scripts, so Linux only, and network builds (it checks the
+    # manifests name the labelling net).
+    if(NOT WIN32 AND FORK_EVALUATOR STREQUAL "nnue")
+      add_test(NAME cloud_datagen COMMAND bash ${CMAKE_SOURCE_DIR}/tools/cloud/test_cloud_datagen.sh
+        $<TARGET_FILE:fork_datagen> ${FORK_SYZYGY345_DIR} ${test_python})
+      set_tests_properties(cloud_datagen PROPERTIES LABELS python)
+    endif()
+    # The trainer-engine parity chain on a synthetic net, ending in Fork's own
+    # inference on this build's SIMD path (DESIGN.md §5.3, deliverable 6).
+    # The synthetic net is a B0 file: builds for another architecture check
+    # their embedded network instead (nnue_netcheck_embedded).
+    if(FORK_NET_ARCH EQUAL 1)
+      add_test(NAME nnue_parity COMMAND ${CMAKE_COMMAND}
+        -DFORK=$<TARGET_FILE:fork> -DPYTHON=${test_python} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DWORK=${CMAKE_BINARY_DIR}/nnue_parity -P ${CMAKE_SOURCE_DIR}/cmake/nnue_parity.cmake)
+      set_tests_properties(nnue_parity PROPERTIES LABELS python)
+    endif()
   endif()
 
   # The search bench (`fork bench`) and, so move generation stays tied across
   # builds too, the Phase 1 perft workload (`fork perftbench`).
-  add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}
-    -DFORK=$<TARGET_FILE:fork> -DCMD=bench
-    -DREF=${CMAKE_SOURCE_DIR}/tests/bench.ref
-    -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+  # The search bench's reference belongs to the evaluator: tests/bench.ref for
+  # the bootstrap evaluation, tests/bench-<net>.ref for a network once one is
+  # adopted (DESIGN.md §5.3, deliverable 7). An nnue build of a test network
+  # with no reference has no bench_parity test.
+  get_filename_component(fork_net_name ${FORK_NET} NAME_WE)
+  if(FORK_EVALUATOR STREQUAL "bootstrap")
+    set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench.ref)
+  else()
+    set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench-${fork_net_name}.ref)
+  endif()
+  if(EXISTS ${fork_bench_ref})
+    add_test(NAME bench_parity COMMAND ${CMAKE_COMMAND}
+      -DFORK=$<TARGET_FILE:fork> -DCMD=bench
+      -DREF=${fork_bench_ref}
+      -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+  endif()
   add_test(NAME perft_bench_parity COMMAND ${CMAKE_COMMAND}
     -DFORK=$<TARGET_FILE:fork> -DCMD=perftbench
     -DREF=${CMAKE_SOURCE_DIR}/tests/perft_bench.ref
     -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+
+  # The network parity gate on this build's SIMD path: Fork's inference must
+  # give exactly the reference's R-int values for the committed synthetic net
+  # (tests/nnue/synthetic.*, from tools/nnue/reference.py synthetic --seed 7;
+  # DESIGN.md §5.3, deliverable 6). Needs no Python, so every preset runs it.
+  if(FORK_NET_ARCH EQUAL 1)
+    add_test(NAME nnue_netcheck COMMAND fork netcheck ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.parity
+                                                       ${CMAKE_SOURCE_DIR}/tests/nnue/synthetic.fnet)
+  endif()
+  # An nnue build checks its own embedded network against the parity file
+  # named after it (tests/nnue/<net>.parity), the gate games run behind.
+  if(FORK_EVALUATOR STREQUAL "nnue")
+    get_filename_component(fork_net_stem ${FORK_NET} NAME_WE)
+    add_test(NAME nnue_netcheck_embedded COMMAND fork netcheck ${CMAKE_SOURCE_DIR}/tests/nnue/${fork_net_stem}.parity)
+  endif()
 
   # `fork version` says whether this build has LTO (audit-1, P-6).
   add_test(NAME version_lto COMMAND fork version)
