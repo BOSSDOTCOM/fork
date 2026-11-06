@@ -686,3 +686,8 @@ LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   cost is the thing to cut before a retest; the S512cl design, which
   replaces it, is measured for speed before it trains (owner,
   2026-11-05).
+- **LTC candidate, low priority** (owner, 2026-11-05; §5.4's rule: it beat
+  S512r2 at fixed nodes and failed at STC): S512+X is recorded as an LTC /
+  TCEC-conditions candidate. Its priority is low: XGR-512 showed the same
+  pattern with a larger fixed-node gain (+30.70 ± 10.37) and failed at LTC
+  as well (ltc-r2xgr512-vs-s512r2: −30.56 ± 9.96, H0).
