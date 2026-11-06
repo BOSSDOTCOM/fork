@@ -1034,7 +1034,54 @@ tuned by SPSA.
   bench/ab.py).
 - **sources:** Fork KB §3.35 (kb 024fb9e) and its sources (ORIGINALITY.md).
 - **earliest phase:** Phase 4.
-- **status:** untested (planned 2026-11-05).
+- **status:** untested (planned 2026-11-05); design below (owner, 2026-11-05:
+  plan only, no code yet).
+- **Design** (Fork's own, from the KB entry's concepts):
+  - **Unit:** depth is held in units of 1/64 ply (`OnePly = 64`): a power
+    of two, fine enough for SPSA to move a reduction in small steps
+    (Fork's LMR table already computes its value in fixed point before the
+    final division to whole plies), and far inside int32 at MaxPly (250 x
+    64 = 16,000).
+  - **What stays whole plies:** the TT stores depth / OnePly, rounded down,
+    in its existing byte (the entry layout and its replacement unchanged;
+    the KB's TT-sharing pitfall avoided, and a cutoff still needs a stored
+    depth of at least the node's whole plies, so it stays conservative);
+    the UCI `depth` the engine reports and `go depth N` (N x OnePly); the
+    iteration counter; the history bonus by depth (whole plies until a
+    measurement says otherwise); every depth threshold of the parameter
+    table (`RfpMaxDepth` and the like stay in plies, compared as
+    depth <= X x OnePly).
+  - **Per-ply formulas** (RFP's and futility's margins, the singular test's
+    margin, the null move's depth) read depth / OnePly while the uses are
+    unconverted, so they compute exactly what they do now.
+  - **The first fractional uses, in order, each behind its own switch,
+    measured with a rule declared before its runs and then SPRTed:** (1) the
+    base LMR reduction in units (the table's value without its final
+    rounding; the KB's strongest evidence is fractional LMR); (2) the LMR
+    adjustments as fractional amounts (the check relief, the cut-node and
+    PV-trace steps, idea 42's continuation terms); (3) the null move's depth;
+    (4) extensions (the singular extension's +1 as a measured fraction).
+- **Conversion plan, behaviour identical until each use is measured:**
+  1. One refactor: negamax's depth and every child depth in units
+     (depth - OnePly + extension x OnePly - reduction x OnePly), the
+     quiescence search below one ply, thresholds and formulas through the
+     whole-ply reads above. Every depth stays a multiple of OnePly, so
+     **bench is unchanged, node count and signature**, and so is every test;
+     the full check and bench/ab.py (no slowdown beyond the noise floor)
+     confirm it before the commit.
+  2. Tests added: a randomized check that the refactored search equals the
+     whole-ply one node for node over the bench positions at several depths
+     (both builds kept for the comparison during the change); the TT depth
+     rounding; `go depth` and the reported depth.
+  3. Each fractional use then lands as its own switch, off: bench
+     unchanged until a switch is turned on after its measurement and SPRT,
+     when the reference is recomputed in that commit.
+  4. Timing: steps 1-3 for the first use (fractional LMR) come **before the
+     post-network SPSA retune**, so the tuner sees the smooth parameters.
+- **Pitfalls kept in view** (KB §3.35): rounding at every threshold (a node
+  at 5.5 plies counts as 5 for a whole-ply limit unless a use says
+  otherwise), TT depth rounding, and results that depend on time control
+  (each use's SPRT at STC, and LTC where the rules ask).
 
 ## 44. Quantization-aware training
 
@@ -1052,4 +1099,26 @@ tuned by SPSA.
 - **sources:** Fork KB nnue-design.md §5.6 (kb 02912f5) and its sources
   (ORIGINALITY.md).
 - **earliest phase:** Phase 4.
-- **status:** untested (planned 2026-11-05).
+- **status:** in progress: built behind an option, not yet run (2026-11-05).
+- **Built** (branch nets/s512cl, tools/train): `fork-train --qat` (train,
+  eval, check; the S-512 family: S-512, H-512, S512+X, S512cl; refused for
+  the others): the forward pass uses each weight and bias rounded to the
+  grid of Fork's integer file (bullet's `faux_quantise`: 255 for the first
+  layer, 64 for the output weights, 255 x 64 for their biases; half away
+  from zero, as the save list rounds), the gradient passed through
+  unchanged. Rounding the weights is the whole of Fork's quantization for
+  these architectures (the accumulator is an exact sum of integer weights;
+  the activation clips in integer units), so the QAT loss is the integer
+  network's apart from the output layer's truncating divisions. The saved
+  file is unchanged. Checked: the graphs build and their save lists match
+  (fork-train check, S512 and S512cl, with and without --qat); the CPU
+  build cannot run a graph, so the first run is on Kaggle.
+- **Validation run, planned for Kaggle** (one session, two GPUs, after the
+  S512cl training): S-512 warm-started from S512r2 on g2s1 + g3s1, 40
+  superbatches at a low learning rate, runs A1 and A2 (seeds 1, 2) without
+  and B1 and B2 with `--qat`. Each final net is then measured both ways with
+  `--superbatches 0` (the initial validation loss of the float graph and of
+  the QAT graph, the latter being the quantized net's). The rule, declared
+  now: QAT is worth keeping if both B runs' quantized losses are below both A
+  runs' by more than the larger of the two pairs' seed spreads; then a fixed-node match of the
+  two quantized nets decides whether it enters the training settings.
