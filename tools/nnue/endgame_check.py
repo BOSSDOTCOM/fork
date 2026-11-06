@@ -6,7 +6,8 @@ to move) and evaluated by each net's integer evaluation (the reference's R-int, 
 the net's own scale). Declared before the run: a won position is misjudged below +100 cp, a lost one
 above -100 cp, a drawn one beyond +-200 cp.
 
-    endgame_check.py REPO SYZYGY_DIR NET_A NET_B [--per-kind 300]
+    endgame_check.py REPO SYZYGY_DIR NET_A[=LAYOUT] NET_B[=LAYOUT] [--per-kind 300]
+(LAYOUT defaults to tools/nnue/s512.json)
 """
 import random
 import sys
@@ -21,10 +22,11 @@ import netformat  # noqa: E402
 
 syzygy, nets = sys.argv[2], sys.argv[3:5]
 per_kind = int(sys.argv[sys.argv.index('--per-kind') + 1]) if '--per-kind' in sys.argv else 300
-desc = netformat.layout(str(repo / 'tools/nnue/s512.json'))
 
 
-def load(path):
+def load(arg):
+    path, _, layout = arg.partition('=')
+    desc = netformat.layout(layout or str(repo / 'tools/nnue/s512.json'))
     data = Path(path).read_bytes()
     arch = models.arch_from_net(desc['name'], data[netformat.HEADER_BYTES:])
     return arch, models.unpack(arch, data[netformat.HEADER_BYTES:]), netformat.header_fields(data)['scale']
@@ -69,7 +71,7 @@ for name, extra in (('KPK', chess.PAWN), ('KQK', chess.QUEEN), ('KRK', chess.ROO
             t = totals.setdefault((name, kind, k), [0, 0])
             t[0] += 1
             t[1] += misjudged(kind, cp)
-names = [Path(p).stem for p in nets]
+names = [Path(p.partition('=')[0]).stem for p in nets]
 print(f'{"ending":6} {"result":6} {"positions":>9}  ' + '  '.join(f'{n + " misjudged":>20}' for n in names))
 for name in ('KPK', 'KQK', 'KRK'):
     for kind in ('won', 'drawn', 'lost'):
