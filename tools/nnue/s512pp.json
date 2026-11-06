@@ -138,7 +138,7 @@
     {
       "name": "l0w",
       "rows": 512,
-      "cols": 52672,
+      "cols": 1376,
       "type": "i16",
       "factor": 255
     },
