@@ -994,7 +994,14 @@ tuned by SPSA.
 - **sources:** Fork KB nnue-inputs.md §1-2 (kb 962f1ab, 5cd96c3) and the
   sources it lists (ORIGINALITY.md, 2026-11-05).
 - **earliest phase:** Phase 4.
-- **status:** untested (planned 2026-11-05).
+- **status:** built on nets/s512cl (uncommitted engine code; trainer and reference committed), **held by the speed gate** (DESIGN.md §5.4, owner, 2026-11-05): not trained until it keeps 0.90 of the default's nps.
+- **Speed, measured 2026-11-05** (quiet machine, every other CPU job suspended; release builds; a synthetic architecture-7 net, whose weights do not change the evaluation's cost):
+  - fixed time (`go movetime 10000`, 6 bench positions, interleaved, Hash 16, 1 thread): S512cl median 680,114 nps, S512r2 3,591,160; per position **0.195** (0.095 to 0.475). Nodes reached on the start position: 3,405,824 (depth 14, seldepth 45) against 22,959,373 (depth 20, seldepth 32, stopped at 6.3 s); the synthetic net also deepens the quiescence lines, but the nps gap is the evaluation's cost, not the tree.
+  - profile (perf, cpu-clock, Linux clang 21 RelWithDebInfo, the start position, 10 s): `sum_rows_saturated` 65.5%, `contact_inputs` with its helpers 16.2%: **82% of the time is the contact and link inputs, which are recomputed and summed from scratch at every evaluation**, not updated on make and unmake. S512r2's profile is led by its incremental accumulator update (17.6%) and the output layer (15.9%).
+  - per-move change (200 g3s1 games, 37,720 perspective updates): 5.48 contact and link inputs change per move on average (contacts 4.20, links 1.28; p99 14 and 11), against 26.5 active (p99 66); a frame change (full refresh) in 452 updates.
+  - storage: every first-layer row int16 (52,672 rows x 512 = 53.9 MB of the 53,953,760-byte file; the output layer 16 KB). Trained first-layer weights at scale 255 fit int8 for 98.1% (S512r2's piece rows) and 99.37% (S512+X's exposure rows, new inputs trained from zero; p99.9 215, max 471): 8-bit contact and link rows need clipping-aware training (QAT, idea 44) or a smaller scale; they would halve those rows to 26.6 MB.
+  - cache: S512r2's first layer is 786 KB (within one core's 1 MB L2 on this machine); S512cl's table is 53.9 MB (27.4 MB with int8 contact rows), within this Ryzen 7600X3D's 96 MB L3 but larger than the L3 of most CPUs (TCEC's hardware: UNVERIFIED here). Rows read per evaluation now: about 27 per perspective (27 KB each side); incremental: about 5.5 per perspective per move.
+  - **estimate, UNVERIFIED** (from the profile shares, not measured): incremental contact updates with the feature search reduced to the squares a move touches would bring S512cl to roughly 0.5-0.6 of S512r2's nps; the gate (0.90) leaves room for about 1-2 extra row updates per move, so the design also needs far fewer active inputs (or cheaper ones) to pass.
 
 ## 42. Continuation histories as inputs to the LMR history term
 
