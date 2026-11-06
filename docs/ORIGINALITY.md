@@ -390,3 +390,25 @@ Inputs (DESIGN.md §5.3; KB data-policy.md):
   §5.3, deliverable 1).
 - **Labels**: Fork's own search (generation 0: the bootstrap evaluation),
   game results, Syzygy WDL.
+
+## Operations tooling (not linked into Fork)
+
+**Fork Control Center** (`tools/control_center/`, branch tools/control-center, 2026-11-06): a Windows
+desktop window over the job supervisors, SPRTs, training, networks, data and the Phase 4 checklist, with
+data generation as its only control. Fork's own code, standard-library Python (tkinter, ctypes) only; no
+other engine's code was opened.
+- Win32 values from Microsoft Learn (fetched 2026-11-06): SetThreadExecutionState (ES_CONTINUOUS
+  0x80000000, ES_SYSTEM_REQUIRED 0x00000001, the state lasting until the next ES_CONTINUOUS call),
+  process creation flags (CREATE_NO_WINDOW 0x08000000), GetPriorityClass (BELOW_NORMAL_PRIORITY_CLASS
+  0x00004000), CreateProcessW (a child of a below-normal process inherits its priority class),
+  MEMORYSTATUSEX and GlobalMemoryStatusEx (field order; dwLength set first).
+- Notifications use Windows PowerShell's WinRT toast API with PowerShell's AppUserModelID under
+  FOLDERID_System's GUID {1AC14E77-02E7-4E5D-B744-2EB1AE5198B7} (KNOWNFOLDERID page, read from a summary of
+  the page, not character by character: UNVERIFIED; a test toast was sent without error).
+- The viriformat record walk that keeps complete games (`seal_part.py`) follows the format as
+  tools/datagen/verify_games.py decodes it (above); the seal itself runs verify_games.py and
+  upload_batch.py unchanged.
+- Name screen (research subagent, clones deleted): no match for the new module, class and function names
+  except generic words (config, Result, Table, Fields, runner, notify, events, app, toast). `datagen` (a
+  file pair in one engine, already kept as domain vocabulary for src/datagen/) and `bench_ref` (a CI
+  variable in one engine) were renamed before use to `generation_control` and `bench_expected` (no match).

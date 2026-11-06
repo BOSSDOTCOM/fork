@@ -1,0 +1,23 @@
+2026-11-06 14:47 UTC threat-set-cheaper-vs-base: base 684bac654a31ff2ad1e8a564ed7435968dedec8a, test 541ea70bec3510de95fbff10b0c35b496437e05d, bounds [0, 3], stages 0 to 12, ref phase-4
+2026-11-06 14:47 UTC threat-set-cheaper-vs-base: stage 0: run 42237009121 dispatched (ledger)
+2026-11-06 15:05 UTC threat-set-cheaper-vs-base: stage 0: run 42237009121 merged
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -11.30 +/- 10.67, nElo: -18.04 +/- 17.02
+    Ptnml(0-2): [32, 217, 350, 173, 28]
+    LLR: -0.78 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+2026-11-06 18:24 UTC threat-set-cheaper-vs-base: stage 1: run 42270364725 dispatched (ledger)
+2026-11-06 18:42 UTC threat-set-cheaper-vs-base: stage 1: run 42270364725 merged
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -6.30 +/- 7.31, nElo: -10.37 +/- 12.04
+    Ptnml(0-2): [51, 419, 715, 367, 48]
+    LLR: -0.94 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+2026-11-06 18:42 UTC threat-set-cheaper-vs-base: stage 2: run 42273143225 dispatched (ledger)
+2026-11-06 19:01 UTC threat-set-cheaper-vs-base: stage 2: run 42273143225 merged
+    Shards: 48 (done); pairs 2400, games 4800 (4800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -5.57 +/- 5.91, nElo: -9.27 +/- 9.83
+    Ptnml(0-2): [73, 620, 1086, 553, 68]
+    LLR: -1.28 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+2026-11-06 19:01 UTC threat-set-cheaper-vs-base: stage 3: run 42275889794 dispatched (ledger)
