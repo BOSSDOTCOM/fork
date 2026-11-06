@@ -10,13 +10,19 @@ every other tensor is copied. With zero exposure weights the network
 computes exactly S-512's output, so the warm start begins at S512r2's
 validation loss.
 
-    extend_weights.py S512_WEIGHTS.bin OUT.bin
+S512cl's warm start (ideas.md 41) is the same with its contact and link
+inputs (tools/nnue/contacts.py; no factoriser) appended instead, done on the
+file's bytes (its first layer has about 27 M values).
+
+    extend_weights.py S512_WEIGHTS.bin OUT.bin [--arch s512x|s512cl]
 """
 import argparse
+import struct
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import contacts  # noqa: E402
 import models  # noqa: E402
 import netformat  # noqa: E402
 
@@ -32,11 +38,43 @@ def add_exposure_inputs(weights, hidden=512):
     return out
 
 
+def contact_inputs():
+    return contacts.contact_count() + contacts.link_count()
+
+
+def append_l0w_inputs(data, count, hidden=512):
+    """weights.bin bytes with `count` zero inputs (hidden zeros each)
+    appended to l0w, every other record copied byte for byte."""
+    out, at, done = bytearray(), 0, False
+    while at < len(data):
+        nl = data.index(b'\n', at)
+        name = data[at:nl].decode('ascii')
+        (n,) = struct.unpack_from('<Q', data, nl + 1)
+        body = data[nl + 9:nl + 9 + 4 * n]
+        if name == 'l0w':
+            if n != models.PIECE_SQUARES * hidden:
+                raise ValueError("not S-512's first layer")
+            out += b'l0w\n' + struct.pack('<Q', n + count * hidden) + body + bytes(4 * count * hidden)
+            done = True
+        else:
+            out += data[at:nl + 9 + 4 * n]
+        at = nl + 9 + 4 * n
+    if not done:
+        raise ValueError('no l0w record')
+    return bytes(out)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('weights')
     ap.add_argument('out')
+    ap.add_argument('--arch', default='s512x', choices=('s512x', 's512cl'))
     a = ap.parse_args(argv)
+    if a.arch == 's512cl':
+        data = append_l0w_inputs(Path(a.weights).read_bytes(), contact_inputs())
+        Path(a.out).write_bytes(data)
+        print(f'{a.out}: {len(data)} bytes, {contact_inputs()} contact and link inputs appended to l0w')
+        return 0
     w = netformat.read_weights_bin(Path(a.weights).read_bytes())
     data = netformat.write_weights_bin(add_exposure_inputs(w))
     Path(a.out).write_bytes(data)

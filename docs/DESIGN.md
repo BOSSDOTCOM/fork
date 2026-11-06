@@ -3159,6 +3159,69 @@ optional, the owner's five entries leave them out. XGR enters only if its
 exposure pre-test passes with the current net on generation-1 data
 (judgement.md §3).
 
+#### S512cl: S-512 with Fork's contact and pawn-link inputs (ideas.md 41; owner, 2026-11-05)
+
+Replaces the S512+X plan; **no exposure plane** (owner, 2026-11-05). Fork's
+own encoding, designed from the concepts in KB nnue-inputs.md §1-2 (no
+engine's indexing, layout or constants); branch nets/s512cl, built on
+nets/s512x's infrastructure (the trainer's add-on inputs, the warm start
+with new inputs at zero, the 32-bit row sums, the parity legs).
+Architecture id 7, name `s512cl`.
+- **Frame:** every square in a perspective's frame, the piece inputs' frame
+  (vertically flipped for Black, mirrored left-right when that side's king
+  is on files a-d), so every family mirrors alike (KB §2.6's pitfall).
+  Sides are relative (own, enemy); a class is side x 5 + kind (pawn,
+  knight, bishop, rook, queen). Kings take part in no contact or link.
+- **Contacts** (the threat inputs): one input per (attacker class, attacker
+  square, target square, victim class) for a piece that attacks another on
+  the current board (sliders stop at the first piece, pawns diagonally
+  forward), neither a king, not both pawns (the links take pawn contact).
+  **Fork's redundancy rule:** when two pieces attack each other one input
+  implies the other, and Fork keeps **the one whose attacker is the cheaper
+  piece** (pawn < knight = bishop < rook < queen), between pieces of one
+  kind the one whose attacker stands on the lower frame square. (The KB
+  reports one engine keeping the more valuable attacker; Fork's choice
+  keeps the "threatened by a lesser piece" direction, the one T56's cheaper
+  set uses too.) Mutual pairs arise only for one kind, a queen with a rook
+  on a line or a bishop on a diagonal, and a bishop or queen with a pawn
+  that attacks it back; so those combinations are left out of the index
+  space statically, with the others no position can activate (pawns on the
+  first or last rank).
+- **Links** (the pawn-pair inputs): one input per unordered pair of pawns,
+  of either side, on the same or adjacent files (KB §2.2's observation).
+- **Index space**, enumerated once in a fixed order that the engine, the
+  trainer and the Python reference each build themselves: contacts by
+  attacker class, attacker square, target square (ascending, over the
+  squares the attacker's kind reaches on an empty board) and victim class,
+  possible combinations only (**50,416**); links by the pair of pawn slots
+  (side x 48 + frame square - 8), the lower first (**1,488**). Inputs: the
+  768 piece rows, then the contacts, then the links: **52,672**.
+- **Net file:** version 2, as S-512's (feature weights i16 [inputs][512],
+  biases, output weights and biases; S-512's 8 phase-picked outputs), so
+  about 54 MB of feature weights. Storing the contact and link rows as int8
+  (KB §1.4 item 6) is a later option, with a training clip; **the file's size
+  in the public repository is a question for the owner before a trained
+  S512cl is committed**.
+- **Inference, first version:** the piece accumulator stays incremental; the
+  contact and link rows are found from the position and summed at
+  evaluation, in 32 bits from the piece accumulator, then held to int16
+  (exact: the activation clips to [0, QA]), as S512+X's exposure rows are.
+  The row-sum kernel has a scalar reference and AVX2 and AVX-512 paths with
+  an equivalence test (.claude/rules/simd.md). Incremental contact updates
+  (KB §1.5) and a cache of the links by pawn key are later speed steps,
+  each with bench unchanged.
+- **Parity:** the three implementations' feature lists are compared (the
+  trainer's `fork-train features` and the engine's against the reference),
+  on the parity positions and on data positions, then the network's
+  netcheck as for every architecture; planted faults must fail them.
+- **Training:** a warm start from S512r2's float weights with the 51,904 new
+  inputs appended as zero columns (so it starts at S512r2's exact output),
+  S512r3's settings and data (g2s1 + g3s1, 360 superbatches, S = 92, two
+  seeds), at most 392 active inputs per perspective (32 pieces, 240
+  contacts: at most eight per piece, 120 links).
+- **Tests** as the bake-off's entries: a fixed-node screen, then an STC SPRT
+  against the default network.
+
 ### 5.5 The public web page: Fork in the browser (owner, 2026-10-31; plan, not built)
 
 The owner's request: a public GitHub Pages site where anyone can play Fork
