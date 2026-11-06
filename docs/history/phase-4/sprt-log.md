@@ -739,7 +739,67 @@ LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   only its own runs (the merge's meta check), and the S512+X and
   LMR-history results above stand.
 
-### reval-no-check-relief (re-validation filler: check relief removed, [−3, 0]; in progress)
+### 2026-11-06 rising-rfp-25-vs-base (tier 2, T18: the improving flag's RFP use)
+
+- Base `684bac6` (phase-4: S512r2, IIR on), test `db6a238` (branch
+  sprt/rising-rfp: the same with `use_rising_rfp` on and the measured
+  RfpRisingRelief 25; bench 13,348,788). Bounds [0, 3] nElo, 8+0.08, Hash
+  16 MB, Syzygy 3-4-5, GitHub shards, under the job supervisor (job
+  sprt-queue); base and test confirmed from the driver's log, every run in
+  the ledger.
+- Stages (Elo, nElo, LLR after each): 0 (run 42182458597) +2.61 ± 10.13,
+  +4.38 ± 17.02, 0.11; 1 (42184474127) −4.89 ± 6.95, −8.47 ± 12.04,
+  −0.79; 2 (42186645482) −3.76 ± 5.77, −6.41 ± 9.83, −0.94; 3
+  (42188861332) −4.29 ± 5.03, −7.26 ± 8.51, −1.39; 4 (42191066128) −5.43 ±
+  4.50, −9.18 ± 7.61, −2.12; 5 (42193358994) −4.96 ± 4.12, −8.36 ± 6.95,
+  −2.35; 6 (42195711045) −3.32 ± 3.84, −5.56 ± 6.43, −1.96; 7
+  (42197996963) −3.77 ± 3.59, −6.32 ± 6.02, −2.49; 8 (42200356838) −3.23 ±
+  3.39, −5.42 ± 5.67, −2.48; 9 (42202745022) −3.02 ± 3.20, −5.08 ± 5.38,
+  −2.62; 10 (42205083270) −3.10 ± 3.05, −5.22 ± 5.13, −2.94 (continue); 11
+  (42207392364) H0. Result: **H0 accepted** after stage 11:
+```
+Shards: 192 (done); pairs 9600, games 19200 (19200 finished, time losses 0, abnormal 0)
+Elo: -3.78 +/- 2.92, nElo: -6.37 +/- 4.91
+Ptnml(0-2): [279, 2405, 4409, 2260, 247]
+LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
+```
+- Not adopted: `use_rising_rfp` stays off. It agrees with its measurement,
+  where no relief beat "off" (relief 25 chosen, gain interval below zero).
+
+### ProbCut (tier 2, T31): queued after rising-RFP and the filler (owner, 2026-11-06)
+
+- The measurement (tools/tier2_measure.py, spec capture_probe.json,
+  declared 2026-11-05; 120 settings screened at 250,000 nodes, the best 6
+  with "off" at both budgets) chose d9-r5-m80 (CaptureProbeMinDepth 9,
+  CaptureProbeReduction 5, CaptureProbeMargin 80): fitness 0.7490 against
+  off 0.7539, gain −0.0049 [−0.0101, +0.0006]; **no setting's gain interval
+  lies above zero**, and the depth and reduction sit at the top edge of
+  their grids. No grid extension (owner).
+- **The SPRT decides** (STC, [0, 3]; owner): measurement scores below
+  "off" also preceded IIR's adoption (no depth beat "off" in its
+  measurement, then +21.45 ± 5.98 Elo at STC and +26.25 ± 6.65 at LTC), so a
+  score below "off" does not by itself predict the SPRT.
+- **Waiting on the owner:** the constant screen (before the commit that
+  sets the values) found the margin 80 an exact same-role match (Ethereal
+  12.50-13.00's ProbCut margin; also Xiphos); the reduction 5 matches as a
+  literal only (Fork's verification search is one ply deeper); the minimum
+  depth 9 has no same-role match. The test commit is held until the owner
+  decides on the margin.
+
+### 2026-11-06 threat-set-cheaper-vs-base (tier 2, T56: threat-aware ordering; in progress)
+
+- The measurement (threat_set.json, declared 2026-11-05): off 0.7539,
+  any-attack 0.7331 (gain −0.0208 [−0.0285, −0.0128]), cheaper-attacker
+  0.7377 (−0.0162 [−0.0237, −0.0087]): cheaper-attacker chosen; no gain
+  interval above zero, so the SPRT decides. No new constants.
+- Base `684bac6` (phase-4: S512r2, IIR on), test `541ea70` (branch
+  sprt/threat-set: `use_threat_buckets` and `use_cheaper_threats` on; bench
+  13,277,455, signature a2aa28300166a46d; the full non-slow suite passes).
+  Bounds [0, 3] nElo, 8+0.08, under the job supervisor (job sprt-threat),
+  started 9:47 AM EST; stage 0 is run 42237009121 (ledger). It took the
+  GitHub slot while ProbCut's test commit waits on the owner.
+
+### reval-no-check-relief (re-validation filler: check relief removed, [−3, 0]; undecided at the cap)
 
 - Base `684bac6` (phase-4: S512r2, IIR on), test `7d72dc5`
   (reval/no-check-relief: `use_lmr_check_relief` off; bench 13,846,386).
@@ -751,5 +811,18 @@ LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   4.58, −7.58 ± 7.61, −1.21; 5 −3.58 ± 4.17, −5.98 ± 6.95, −1.07; 6 −3.57 ±
   3.86, −5.95 ± 6.43, −1.24; 7 −4.53 ± 3.61, −7.55 ± 6.02, −1.93; **8
   (14,400 games) −3.86 ± 3.40, −6.44 ± 5.67, LLR −1.77: continue.**
-- Resumes at stage 9 under the job supervisor, after the higher-priority
-  runs (the PR's CI, the rising-RFP SPRT).
+- Resumed at stage 9 under the job supervisor (job sprt-queue) after the
+  rising-RFP SPRT: 9 (run 42210007657) −2.89 ± 3.23, −4.82 ± 5.38, −1.32;
+  10 (42212271728) −2.37 ± 3.09, −3.94 ± 5.13, −1.07; 11 (42214489259)
+  −2.90 ± 2.97, −4.80 ± 4.91, −1.57; 12 (42216819947), the last stage.
+  Result: **undecided at the 12-stage cap** (20,800 games):
+```
+Shards: 208 (done); pairs 10400, games 20800 (20800 finished, time losses 1, abnormal 1)
+Elo: -3.16 +/- 2.86, nElo: -5.22 +/- 4.72
+Ptnml(0-2): [331, 2616, 4656, 2505, 292]
+LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+```
+- Removing check relief cost about 3 Elo (−3.16 ± 2.86, the interval
+  almost entirely below zero), so H1 (simplify it away) was not reached:
+  check relief stays on. The owner decides whether an undecided removal
+  test counts as "keep" or runs further.
