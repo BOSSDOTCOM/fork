@@ -1,0 +1,107 @@
+{
+ "run": "g3s3",
+ "hold_games_per_source": 60,
+ "reused": [
+  {
+   "record": "data/manifests/g2s1.json",
+   "note": "as item 7's kernel mounted it (fork-g2s1, fork-g3s1, fork-g3rest, fork-g3bcd, fork-g3e, fork-g3s2), checked by the kernel"
+  },
+  {
+   "record": "data/manifests/g3s1.json",
+   "note": "as item 7's kernel mounted it (fork-g2s1, fork-g3s1, fork-g3rest, fork-g3bcd, fork-g3e, fork-g3s2), checked by the kernel"
+  },
+  {
+   "record": "data/manifests/g3b.json",
+   "note": "as item 7's kernel mounted it (fork-g2s1, fork-g3s1, fork-g3rest, fork-g3bcd, fork-g3e, fork-g3s2), checked by the kernel"
+  },
+  {
+   "record": "data/manifests/g3c.json",
+   "note": "as item 7's kernel mounted it (fork-g2s1, fork-g3s1, fork-g3rest, fork-g3bcd, fork-g3e, fork-g3s2), checked by the kernel"
+  },
+  {
+   "record": "data/manifests/g3d.json",
+   "note": "as item 7's kernel mounted it (fork-g2s1, fork-g3s1, fork-g3rest, fork-g3bcd, fork-g3e, fork-g3s2), checked by the kernel"
+  },
+  {
+   "record": "data/manifests/g3e.json",
+   "note": "as item 7's kernel mounted it (fork-g2s1, fork-g3s1, fork-g3rest, fork-g3bcd, fork-g3e, fork-g3s2), checked by the kernel"
+  },
+  {
+   "record": "data/manifests/g3s2.json",
+   "note": "as item 7's kernel mounted it (fork-g2s1, fork-g3s1, fork-g3rest, fork-g3bcd, fork-g3e, fork-g3s2), checked by the kernel"
+  },
+  {
+   "dataset": "fork-g3f",
+   "record": "data/manifests/g3f.json",
+   "part": "g3f",
+   "designated_shard": "g3f-w09-val.vf"
+  },
+  {
+   "dataset": "fork-g3g",
+   "record": "data/manifests/g3g.json",
+   "part": "g3g",
+   "designated_shard": "g3g-w09-val.vf"
+  }
+ ],
+ "sources": [
+  {
+   "source": "g3f",
+   "held_out_from": "g3f-w09-val.vf",
+   "held_out_games": 60,
+   "rest": "g3s3-g3f-w09-val-rest.vf"
+  },
+  {
+   "source": "g3g",
+   "held_out_from": "g3g-w09-val.vf",
+   "held_out_games": 60,
+   "rest": "g3s3-g3g-w09-val-rest.vf"
+  }
+ ],
+ "validation": {
+  "file": "g3s3-val.vf",
+  "games": 1920,
+  "positions": 171261,
+  "positions_unsaved": 55675,
+  "positions_saved": 115586,
+  "bytes": 754164,
+  "sha256": "6422b3ac3e19670df3d6ca6cb6a186115658ac91d1e0c566ce3cceff4f1c28f5",
+  "sources": "g3s2-val.vf (30 sources x 60 games) and 2 new sources x 60 games"
+ },
+ "training": {
+  "files_here": 2,
+  "games_here": 184724,
+  "positions_saved_here": 9406232,
+  "new_part_files": 18,
+  "new_part_records": 156061810
+ },
+ "batches": [
+  [
+   {
+    "file": "g3s3-g3f-w09-val-rest.vf",
+    "games": 65647,
+    "positions": 6176839,
+    "positions_unsaved": 2816460,
+    "positions_saved": 3360379,
+    "bytes": 27070648,
+    "sha256": "ec055c6ccf753a3cc29cc7e58f48225c0e195fd35d8a95472078ac7137d49476"
+   },
+   {
+    "file": "g3s3-g3g-w09-val-rest.vf",
+    "games": 119077,
+    "positions": 11113327,
+    "positions_unsaved": 5067474,
+    "positions_saved": 6045853,
+    "bytes": 48740080,
+    "sha256": "9d254b5ac932701eb9336040f050b1b664e8ecb0eb4a334d712557f5ed21c2d7"
+   },
+   {
+    "file": "g3s3-val.vf",
+    "games": 1920,
+    "positions": 171261,
+    "positions_saved": 115586,
+    "bytes": 754164,
+    "sha256": "6422b3ac3e19670df3d6ca6cb6a186115658ac91d1e0c566ce3cceff4f1c28f5"
+   }
+  ]
+ ]
+}
