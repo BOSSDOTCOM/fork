@@ -107,8 +107,24 @@ added; no CI job applies them automatically.
 | Endgame check | tools/nnue/endgame_check.py, 900 positions: **351 misjudged against S512r2's 249** (KQK 59 of 300 against 0; KRK 267 against 223). The Syzygy endgame slice in item 7's snapshot g3s2 is meant for this |
 | Bench | 13,909,380 nodes, signature 831e5c9295839f87 (tests/bench-s512pp.ref) |
 | Tests | vs S512r2 (phase-4 684bac6): fixed nodes, 800,000 per move, run 42284077960: +46.09 +/- 10.37 Elo (nElo +76.54 +/- 17.02), 1,600 games; then STC 8+0.08 [0, 5], run 42294907752: **+32.67 +/- 10.48 Elo (nElo +53.37 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
-| Status | **The default network since 2026-11-06** (owner: promoted on its STC result), and the labeller of the data generation from generation 3's part g3f on (DESIGN.md §5.3, labeller policy). Item 7's retrain uses its architecture, and its candidate must beat it |
+| Status | The default network on 2026-11-06 (owner: promoted on its STC result) until S512ppr2 replaced it the same evening, and the labeller of generation 3's part g3f (DESIGN.md §5.3, labeller policy); item 7's retrain used its architecture and its float weights. Still buildable with `-DFORK_NET=nets/s512pp.fnet` (tests/bench-s512pp.ref), checked in CI's `nets` job |
 | Notes | Two network-dependent search checks failed with S512+PP and were rewritten to hold for any evaluator: at depth 1 in K+P v K it plays e1f2, not b7b8q, and the check now accepts any move that keeps the tablebase win (b7b8q, b7b8r and the five king moves; Syzygy 3-4-5 and the lichess tablebase agreeing); K+R v K with the halfmove clock at 0 scored at most 0 at depth 3, so the fifty-move contrast now uses a forced mate in 2 (0 with the clock at 99, the mate with the clock at 0). |
+
+## S512ppr2, S512+PP retrained on g3s2 (2026-11-06)
+
+| Item | Value |
+|---|---|
+| File | `nets/s512ppr2.fnet` (branch bake/s512ppr2 d56c2cf, the net that played its test), 1,426,656 bytes, Fork checksum 9daf35fd54878f7b |
+| Architecture | Architecture 8, as S512+PP (S-512 plus 608 pawn-link inputs of rank limit 1); S = 89. Its speed is S512+PP's (the same architecture; not measured separately) |
+| Data | g3s2 (data/manifests/g3s2.json): g2s1 and g3s1 as they are, plus every generation-3 part since (g3's rest, g3b to g3e), labelled by S512 and S512r2, and the Syzygy endgame slice (10 files of 2,600,000 one-move games of at most 5 pieces, about 2.1% of the training positions); 81 training files, about 1.24 B positions, read interleaved; validation on g3s2-val (1,800 games) |
+| Training | Kaggle kernel fork-retrain-g3s2 version 1 at d599df3 (DESIGN.md §5.6, item 7): the warm recipe (from S512+PP's float weights, LR 0.0001 dropped tenfold after 180), seed 1; best validation loss 0.01908862 at superbatch 352 (warm mean 0.01909453 over 2 seeds, scratch mean 0.01951758: the warm recipe better by 0.00042, about ten times S-512's seed spread of 4e-5, so resolved; DESIGN.md §5.6, item 7); 7,741 s |
+| Scale | S = 89, matched to S512+PP's mean \|eval\| on 4,000 g3s2-val positions (220.91 cp against 221.33) |
+| Conversion | 2 of 311,296 link weights clamped to their units' allowance under the reader's 64-link bound (2 of 512 units over it); the unclamped net passes every leg with the same losses |
+| Parity (tests/nnue/s512ppr2.parity, 446 positions) | trainer leg at most 0.0002 cp; netcheck exact on all 446; quantization loss max 7.9 cp, p99 6.1 cp, mean 2.0 cp (within S-512's 21 / 16 cp) |
+| Endgame check | tools/nnue/endgame_check.py, 900 positions: **8 misjudged (0.9%) against S512+PP's 351** (at the trained S = 92: KQK and KRK 0 of 600, KPK 8 of 300; S512+PP KQK 59, KRK 267, KPK 25) |
+| Tests | vs S512+PP (phase-4 b115e03): STC 8+0.08 [0, 5], runs 42335141916 and 42336446490: **+20.11 +/- 7.22 Elo (nElo +33.60 +/- 12.04), H1 accepted** after 3,200 games (docs/history/phase-4/sprt-log.md) |
+| Bench | 14,626,377 nodes, signature 9e43990217b0886d (tests/bench-s512ppr2.ref) |
+| Status | **The default network since 2026-11-06** (owner: promoted on its STC result), and the labeller of the data generation from generation 3's part g3g on (DESIGN.md §5.3, labeller policy) |
 
 ## The bake-off entries in CI (2026-10-31)
 

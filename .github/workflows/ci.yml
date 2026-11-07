@@ -457,8 +457,9 @@ jobs:
 
   # Every round-2 architecture (owner, 2026-10-31): the bake-off entries'
   # networks are built into Fork in turn (round 1's S-512, the B0 control
-  # B0r2, H-512, AF-S, XGR-512), and S512r2, the default until S512+PP's
-  # promotion (2026-11-06), each checked against its parity file
+  # B0r2, H-512, AF-S, XGR-512), S512r2, the default until S512+PP's
+  # promotion (2026-11-06), and S512+PP, the default until S512ppr2's
+  # (2026-11-06), each checked against its parity file
   # (netcheck) and its bench reference. Light on purpose: a clang release
   # build of `fork` only, no tests and no test data.
   nets:
@@ -468,7 +469,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        net: [s512r2, s512, b0r2, g1h512, g1afs, g1xgr]
+        net: [s512pp, s512r2, s512, b0r2, g1h512, g1afs, g1xgr]
     env:
       FORK_CLANG_CXX: clang++
     steps:

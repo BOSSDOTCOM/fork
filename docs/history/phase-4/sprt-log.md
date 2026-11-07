@@ -876,6 +876,48 @@ s512pp-r1-stc, stage 0, run 42294907752:
   is labelled by S512+PP (the labeller policy). Item 7's candidate must
   now beat S512+PP.
 
+### 2026-11-06 S512ppr2 (item 7's retrain): the STC SPRT against S512+PP (owner)
+
+- The owner's rule (2026-11-06, DESIGN.md §5.6 item 7): the better
+  recipe's best seed goes through parity, the endgame acceptance test and
+  its STC SPRT against S512+PP, the default; reported before any
+  promotion.
+- Candidate: bake/s512ppr2 d56c2cf (S512+PP retrained on g3s2 with the
+  Syzygy endgame slice: the warm recipe, seed 1, S = 89, 2 of 311,296 link
+  weights clamped; bench 14,626,377, signature 9e43990217b0886d). Recipes:
+  warm mean best loss 0.01909453, scratch 0.01951758 (resolved). Parity:
+  quantization loss max 7.9 cp, p99 6.1 cp. Endgame check: 8 of 900
+  misjudged against S512+PP's 351. The full non-slow suite passes on it.
+- Base: b115e03 (phase-4, S512+PP; bench 13,909,380). Under the job
+  supervisor (job sprt-ppr2).
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027) | 42335141916 (stage 0), 42336446490 (stage 1) | 3,200 (no time losses, no abnormal ends) | **+20.11 ± 7.22** | +33.60 ± 12.04 | [36, 323, 720, 462, 59] | **H1 accepted** (LLR 4.12) after stage 1, 11:18 PM EST |
+
+The driver's result blocks (job sprt-ppr2):
+
+```
+s512ppr2-stc, stage 0, run 42335141916:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 27.42 +/- 10.34, nElo: 45.36 +/- 17.02
+    Ptnml(0-2): [21, 143, 357, 247, 32]
+    LLR: 2.84 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr2-stc, stage 1, run 42336446490:
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 20.11 +/- 7.22, nElo: 33.60 +/- 12.04
+    Ptnml(0-2): [36, 323, 720, 462, 59]
+    LLR: 4.12 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- **Promoted (owner, 2026-11-06, the same evening): S512ppr2 is the
+  default network**; bench 14,626,377 / 9e43990217b0886d. The warm start
+  at LR 0.0001 becomes the standard retrain recipe. Generation 3's part
+  g3f was stopped and sealed, and the next part, g3g, is labelled by
+  S512ppr2 (the labeller policy).
+
 ### reval-no-check-relief (re-validation filler: check relief removed, [−3, 0]; undecided at the cap)
 
 - Base `684bac6` (phase-4: S512r2, IIR on), test `7d72dc5`

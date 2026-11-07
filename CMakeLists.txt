@@ -175,16 +175,18 @@ target_compile_options(fathom PRIVATE -w)
 # no runtime interface and no indirect call in the search.
 # nnue is the default since B0 passed its SPRT against the bootstrap
 # evaluation (+486.85 +/- 32.07 Elo; DESIGN.md §5.3, deliverable 7; owner,
-# 2026-10-29). The network is nets/s512pp.fnet, S512+PP (S-512 plus pawn
-# links of rank limit 1, architecture 8), since it passed its STC SPRT
-# against S512r2 (+32.67 Elo, 2026-11-06; docs/nets.md; owner: promoted).
+# 2026-10-29). The network is nets/s512ppr2.fnet, S512+PP (S-512 plus pawn
+# links of rank limit 1, architecture 8) retrained on g3s2 with the Syzygy
+# endgame slice, since it passed its STC SPRT against S512+PP (+20.11 Elo,
+# 2026-11-06; docs/nets.md; owner: promoted). nets/s512pp.fnet,
 # nets/s512r2.fnet, nets/s512.fnet, nets/b0r2.fnet, nets/b0r1.fnet and
-# nets/b0.fnet stay buildable with FORK_NET (tests/bench-s512r2.ref,
-# tests/bench-s512.ref, tests/bench-b0r2.ref, tests/bench-b0r1.ref,
-# tests/bench-b0.ref), and so does bootstrap (tests/bench.ref).
+# nets/b0.fnet stay buildable with FORK_NET (tests/bench-s512pp.ref,
+# tests/bench-s512r2.ref, tests/bench-s512.ref, tests/bench-b0r2.ref,
+# tests/bench-b0r1.ref, tests/bench-b0.ref), and so does bootstrap
+# (tests/bench.ref).
 set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
-set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512pp.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512ppr2.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
 if(FORK_EVALUATOR STREQUAL "nnue")
   if(NOT EXISTS ${FORK_NET})
     message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")
