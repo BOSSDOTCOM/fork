@@ -210,6 +210,9 @@ struct RootEntry {
   Move move;
   std::uint64_t nodes = 0;  // nodes under this move in the current iteration's last pass
   int share = 0;            // its per mille of the last finished iteration's nodes
+#ifdef FORK_SEARCH_STATS
+  std::uint64_t nodes_all_passes = 0;  // X6 (DESIGN.md §5.7): nodes under it in every pass of the iteration
+#endif
 };
 
 // The moved piece's facts for the LMR context, from the position after a
@@ -261,58 +264,207 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
 #else
 #define FORK_STAT(...) static_cast<void>(0)
 #endif
+// FORK_STAT_GATE(tokens): tokens that stats builds add to a search
+// condition (the decision ledger's force, X10); nothing in normal builds,
+// so their conditions are exactly as written without it.
+#ifdef FORK_SEARCH_STATS
+#define FORK_STAT_GATE(...) __VA_ARGS__
+#else
+#define FORK_STAT_GATE(...)
+#endif
+
+#ifdef FORK_SEARCH_STATS
+// The decision ledger (DESIGN.md §5.7, X10): one technique switched at one
+// node of a side search: RFP off, futility off, or futility on (dropping
+// the non-checking quiets after the first move, its bound capped at alpha
+// so the arm claims a fail low, as the rule always does).
+enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
+#endif
+// The scalar counters, one list (as the switches above), so the per-search
+// dump (stats_report.hpp) cannot miss one: X(member).
+// - beta_cutoffs: main-search nodes that failed high; first_move_cutoffs:
+//   ... on the first move searched; cutoff_index_sum: the cutoff move's index
+//   summed (0 = first); makes: moves made in the main and quiescence searches.
+// - Deliverable 6: nodes cut by RFP and the null move; moves pruned by LMP,
+//   futility and SEE; LMR's reduced searches, their full-depth re-searches,
+//   and the plies the reductions took off (the loop's mean-reduction
+//   descriptor).
+// - The heuristic-discovery rule (lmr_correction, idea 23): the LMR sites it
+//   ran at, those where it returned non-zero, and those where that changed
+//   the reduction after scaling and clamping (the loop's trigger rate).
+// - External review (2026-10-26). (c) SEE tests by the main-search SEE
+//   pruning, by where the move came from: good captures (SEE >= 0 already
+//   shown by the selector: skipped since claim (c)), bad captures (SEE < 0
+//   shown by the selector), quiets, other (TT moves and in-check evasions);
+//   bad captures reached after late move pruning stopped the quiets, and how
+//   many SEE pruning then drops. (d) Futile nodes: quiet moves taken from
+//   the selector there, and those searched (the checking ones and the first
+//   move). (f) Quiescence nodes at PV and non-PV nodes.
+// - Tier 2: nodes where a singular test could run (the measurement's
+//   sampling); singular tests run (their searches); those that found the TT
+//   move singular; those where another move also beat beta, so the node
+//   failed high (multi-cut); those where the TT move was searched one ply
+//   shallower; nodes without a TT move searched one ply shallower (T26).
+// - Phase 4 step 1, X1 (DESIGN.md §5.7): nodes at the root and in the main
+//   search (with the quiescence nodes above they sum to the node count);
+//   static evaluations computed, taken from the TT entry instead, or not
+//   needed (in check), in the main and the quiescence search, and at the ply
+//   limit (evals_horizon); moves made that move a pawn, all and in the
+//   quiescence search alone.
+// - X10: candidates of RFP and futility (every condition but the margin),
+//   the ledger rows printed, and the nodes its side searches took (kept
+//   apart: a side search restores every other counter).
+// - Idea 59 step 1: evaluation sites whose window has no finite bound (both
+//   in the mate or tablebase band), main and quiescence, computed and
+//   reused from the TT; computed ones with exactly one finite bound.
+// - X2: LMR sites whose node has no reply or no follow arrival (a null move
+//   or the root above), so those tables have no entry; late captures (every
+//   LMR gate passed but "quiet": R18's sites); and at LMR sites, where the
+//   LMR history term of sprt/lmr-history would reduce less (its shift > 0),
+//   more (< 0), and where it would change the reduction.
+#define FORK_SEARCH_COUNTERS(X)      \
+  X(beta_cutoffs)                    \
+  X(first_move_cutoffs)              \
+  X(cutoff_index_sum)                \
+  X(makes)                           \
+  X(rfp_cuts)                        \
+  X(null_cuts)                       \
+  X(lmp_prunes)                      \
+  X(futility_prunes)                 \
+  X(see_prunes)                      \
+  X(lmr_searches)                    \
+  X(lmr_researches)                  \
+  X(lmr_plies_sum)                   \
+  X(lmr_rule_sites)                  \
+  X(lmr_rule_fires)                  \
+  X(lmr_rule_changes)                \
+  X(see_tests_good_captures)         \
+  X(see_tests_bad_captures)          \
+  X(see_tests_quiets)                \
+  X(see_tests_other)                 \
+  X(bad_captures_after_stop)         \
+  X(bad_captures_after_stop_pruned)  \
+  X(futile_nodes)                    \
+  X(futile_quiets_taken)             \
+  X(futile_quiets_searched)          \
+  X(quiesce_nodes_pv)                \
+  X(quiesce_nodes_non_pv)            \
+  X(singular_candidates)             \
+  X(singular_tests)                  \
+  X(singular_extended)               \
+  X(multi_cut_cuts)                  \
+  X(negative_extensions)             \
+  X(no_move_reductions)              \
+  X(root_nodes)                      \
+  X(main_nodes)                      \
+  X(evals_main)                      \
+  X(tt_eval_hits_main)               \
+  X(check_nodes_main)                \
+  X(evals_quiesce)                   \
+  X(tt_eval_hits_quiesce)            \
+  X(check_nodes_quiesce)             \
+  X(evals_horizon)                   \
+  X(pawn_makes)                      \
+  X(pawn_makes_quiesce)              \
+  X(lmr_reply_absent)                \
+  X(lmr_follow_absent)               \
+  X(late_capture_sites)              \
+  X(lmr_history_fire_less)           \
+  X(lmr_history_fire_more)           \
+  X(lmr_history_changes)             \
+  X(ledger_rfp_candidates)           \
+  X(ledger_futility_candidates)      \
+  X(ledger_rows)                     \
+  X(ledger_side_nodes)               \
+  X(eval_gap_main_infinite)          \
+  X(eval_gap_quiesce_infinite)       \
+  X(eval_gap_main_reuse_infinite)    \
+  X(eval_gap_quiesce_reuse_infinite) \
+  X(eval_gap_main_one_sided)         \
+  X(eval_gap_quiesce_one_sided)
+
+// X2's histogram bins (DESIGN.md §5.7; measurement settings, no search
+// effect). Sign-magnitude bins: the value 0 and the positive values fill the
+// upper half from its first bin, the negative ones the lower half from its
+// last, so every bin edge sits at a multiple of the width in |v| and the
+// share at or beyond any multiple (24,000: the LMR history term's divisor)
+// is exact. Table values, within [-HistoryMax, HistoryMax], in bins of 250
+// (a fortieth of the range per side: fine enough for the quantiles; 82
+// bins); ordering scores, within int16, in bins of 500 (24,000 is the 48th
+// edge; 132 bins).
+constexpr int TableBinWidth = 250;
+constexpr int TableBins = 2 * (HistoryMax / TableBinWidth + 1);
+constexpr int OrderBinWidth = 500;
+constexpr int OrderBins = 2 * (INT16_MAX / OrderBinWidth + 1);
+constexpr int table_value_bin(int v) {
+  const int b = v >= 0 ? TableBins / 2 + v / TableBinWidth : TableBins / 2 - 1 - (-v) / TableBinWidth;
+  return b < 0 ? 0 : b >= TableBins ? TableBins - 1 : b;
+}
+constexpr int order_score_bin(int s) {
+  const int b = s >= 0 ? OrderBins / 2 + s / OrderBinWidth : OrderBins / 2 - 1 - (-s) / OrderBinWidth;
+  return b < 0 ? 0 : b >= OrderBins ? OrderBins - 1 : b;
+}
+// The LMR history term being measured (branch sprt/lmr-history, 7d94d93:
+// the base reduction less the ordering score / 24,000, integer division, so
+// it acts only at |score| >= 24,000). A measurement setting: the stats build
+// counts where the term would act, and the search never reads it.
+constexpr int LmrHistoryProbeDivisor = 24000;
+constexpr int lmr_history_probe_shift(int order_score) { return order_score / LmrHistoryProbeDivisor; }
+
+// Idea 59 step 1 (DESIGN.md §5.7; measurement settings, no search effect):
+// the gap between a static evaluation and the nearest finite bound of the
+// node's window, in bins of 1 cp up to 255 (so a margin of any whole number
+// of cp up to 255 is counted exactly), 64 cp up to 4,095 (the tail's shape),
+// and one overflow bin. A bound in the mate or tablebase band counts as
+// infinite: no gate could be set against it. Main-search sites are also
+// split by remaining depth: 1, 2, 3-4, 5-7, 8 and more.
+constexpr int GapBinsFine = 256;
+constexpr int GapBins = GapBinsFine + (4096 - GapBinsFine) / 64 + 1;
+constexpr int GapBands = 5;
+// The gap, or -1 when neither bound is finite.
+constexpr int window_gap(int eval, int alpha, int beta) {
+  const bool low = !is_tb_or_mate(alpha), high = !is_tb_or_mate(beta);
+  if (!low && !high) return -1;
+  const int to_alpha = eval > alpha ? eval - alpha : alpha - eval;
+  const int to_beta = eval > beta ? eval - beta : beta - eval;
+  return !low ? to_beta : !high ? to_alpha : to_alpha < to_beta ? to_alpha : to_beta;
+}
+constexpr int window_gap_bin(int gap) {
+  return gap < GapBinsFine ? gap : gap < 4096 ? GapBinsFine + (gap - GapBinsFine) / 64 : GapBins - 1;
+}
+constexpr int gap_depth_band(int depth) {
+  return depth <= 1 ? 0 : depth == 2 ? 1 : depth <= 4 ? 2 : depth <= 7 ? 3 : 4;
+}
+
 struct SearchCounters {
-  std::uint64_t beta_cutoffs = 0;        // main-search nodes that failed high
-  std::uint64_t first_move_cutoffs = 0;  // ... on the first move searched
-  std::uint64_t cutoff_index_sum = 0;    // sum of the cutoff move's index (0 = first)
-  std::uint64_t makes = 0;               // moves made in the main and quiescence searches
-  // Deliverable 6: nodes cut by RFP and the null move; moves pruned by LMP,
-  // futility and SEE; LMR's reduced searches and their full-depth re-searches.
-  std::uint64_t rfp_cuts = 0;
-  std::uint64_t null_cuts = 0;
-  std::uint64_t lmp_prunes = 0;
-  std::uint64_t futility_prunes = 0;
-  std::uint64_t see_prunes = 0;
-  std::uint64_t lmr_searches = 0;
-  std::uint64_t lmr_researches = 0;
-  std::uint64_t lmr_plies_sum = 0;  // plies taken off by reductions (the loop's mean-reduction descriptor)
-  // The heuristic-discovery rule (lmr_correction, idea 23): the LMR sites it
-  // ran at, those where it returned non-zero, and those where that changed
-  // the reduction after scaling and clamping (the loop's trigger rate).
-  std::uint64_t lmr_rule_sites = 0;
-  std::uint64_t lmr_rule_fires = 0;
-  std::uint64_t lmr_rule_changes = 0;
+#define FORK_COUNTER_MEMBER(member) std::uint64_t member = 0;
+  FORK_SEARCH_COUNTERS(FORK_COUNTER_MEMBER)
+#undef FORK_COUNTER_MEMBER
   // Quiet cutoffs at non-PV nodes out of check, by remaining depth (1-6) and
   // the cutting move's index among the quiets searched there (the late move
   // pruning measurement, DESIGN.md §5.2 deliverable 6).
   static constexpr int CutoffDepths = 7;
   static constexpr int CutoffIndices = 48;
   std::uint64_t quiet_cutoff_index[CutoffDepths][CutoffIndices] = {};
-  // External review (2026-10-26). (c) SEE tests by the main-search SEE
-  // pruning, by where the move came from; bad captures reached after late
-  // move pruning stopped the quiets, and how many SEE pruning then drops.
-  std::uint64_t see_tests_good_captures =
-      0;  // SEE >= 0 already shown by the selector: skipped since claim (c)
-  std::uint64_t see_tests_bad_captures = 0;  // SEE < 0 already shown by the selector
-  std::uint64_t see_tests_quiets = 0;
-  std::uint64_t see_tests_other = 0;  // TT moves and in-check evasions
-  std::uint64_t bad_captures_after_stop = 0;
-  std::uint64_t bad_captures_after_stop_pruned = 0;
-  // (d) Futile nodes: quiet moves taken from the selector there, and those
-  // searched (the checking ones and the first move).
-  std::uint64_t futile_nodes = 0;
-  std::uint64_t futile_quiets_taken = 0;
-  std::uint64_t futile_quiets_searched = 0;
-  // (f) Quiescence nodes at PV and non-PV nodes.
-  std::uint64_t quiesce_nodes_pv = 0;
-  std::uint64_t quiesce_nodes_non_pv = 0;
-  // Tier 2: nodes where a singular test could run (the measurement's sampling).
-  std::uint64_t singular_candidates = 0;
-  std::uint64_t singular_tests = 0;       // singular tests run (their searches)
-  std::uint64_t singular_extended = 0;    // ... that found the TT move singular
-  std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
-  std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
-  std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
+  // X2 (DESIGN.md §5.7): at LMR sites, the ordering score (quiet_order_score)
+  // and the raw entries of the mover's butterfly history and of the reply
+  // and follow tables (when the node has those arrivals); at late captures,
+  // the take history's entry.
+  std::uint64_t lmr_order_bins[OrderBins] = {};
+  std::uint64_t lmr_quiet_bins[TableBins] = {};
+  std::uint64_t lmr_reply_bins[TableBins] = {};
+  std::uint64_t lmr_follow_bins[TableBins] = {};
+  std::uint64_t late_take_bins[TableBins] = {};
+  // Idea 59 step 1 (DESIGN.md §5.7): window gaps at evaluation sites with a
+  // finite bound: computed in the main search and in quiescence, reused
+  // from the TT entry (main, quiescence), and the computed main-search ones
+  // by depth band (with each band's infinite-window count).
+  std::uint64_t eval_gap_main_bins[GapBins] = {};
+  std::uint64_t eval_gap_quiesce_bins[GapBins] = {};
+  std::uint64_t eval_gap_main_reuse_bins[GapBins] = {};
+  std::uint64_t eval_gap_quiesce_reuse_bins[GapBins] = {};
+  std::uint64_t eval_gap_band_bins[GapBands][GapBins] = {};
+  std::uint64_t eval_gap_band_infinite[GapBands] = {};
 };
 
 class Searcher {
@@ -330,6 +482,10 @@ class Searcher {
   std::int64_t fail_report_ms = 1000;
 #ifdef FORK_SEARCH_STATS
   SearchCounters counters;
+#if defined(FORK_EVAL_NNUE)
+  // The network's update counts (X1), kept by the feature stack.
+  const FeatureStackTally& feature_tally() const { return features_.tally(); }
+#endif
 #endif
 
   // Forgets the move-ordering history (ucinewgame, and each bench position).
@@ -372,6 +528,17 @@ class Searcher {
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
+#ifdef FORK_SEARCH_STATS
+  // X6 (DESIGN.md §5.7): one `iteration_trace` line for a finished iteration.
+  void trace_iteration(int depth, int score, int passes, std::uint64_t iteration_nodes) const;
+  // X10: the node at `ply` searched again with `force` applied there only,
+  // invisible to the real search (nodes, limits, TT writes, histories,
+  // counters and the tally restored); `side_nodes` gets the nodes it took.
+  int ledger_side_search(int alpha, int beta, int depth, int ply, LedgerForce force,
+                         std::uint64_t& side_nodes);
+  // X10: a decision at a position with this key is sampled (1 in ledger_every_).
+  bool ledger_sampled(Key key) const { return key % ledger_every_ == 0; }
+#endif
 
   TransTable& tt_;
   QuietHistory history_;
@@ -414,6 +581,19 @@ class Searcher {
   Move last_reported_ = NoMove;
 #ifdef FORK_SEARCH_STATS
   std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
+  bool report_counters_ = false;      // FORK_STATS_REPORT: dump the counters after each search
+  bool trace_iterations_ = false;     // FORK_ITERATION_TRACE: one line per finished iteration
+  // X10: FORK_PRUNE_LEDGER's sampling rate (0: no ledger), whether a side
+  // search is running, the force for the node it re-enters, and what it
+  // restores afterwards.
+  std::uint64_t ledger_every_ = 0;
+  bool ledger_active_ = false;
+  LedgerForce ledger_force_ = LedgerForce::Keep;
+  int ledger_force_ply_ = -1;
+  SearchCounters ledger_saved_counters_;
+#if defined(FORK_EVAL_NNUE)
+  FeatureStackTally ledger_saved_tally_;
+#endif
 #endif
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;
