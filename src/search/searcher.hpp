@@ -536,6 +536,10 @@ class Searcher {
   // counters and the tally restored); `side_nodes` gets the nodes it took.
   int ledger_side_search(int alpha, int beta, int depth, int ply, LedgerForce force,
                          std::uint64_t& side_nodes);
+  // Crucial-point ground truth (DESIGN.md §5.7): one `eval_site` line for a
+  // sampled evaluation site (kind 0 main search, 1 quiescence).
+  void print_eval_site(int kind, bool reused, int alpha, int beta, int eval, int prune_eval, int depth,
+                       int ply, bool tt_hit, const TtHit& hit, bool on_pv) const;
   // X10: a decision at a position with this key is sampled (1 in ledger_every_).
   bool ledger_sampled(Key key) const { return key % ledger_every_ == 0; }
 #endif
@@ -588,6 +592,12 @@ class Searcher {
   // restores afterwards.
   std::uint64_t ledger_every_ = 0;
   bool ledger_active_ = false;
+  // Crucial-point ground truth: FORK_EVAL_SITES=N,M samples every Nth
+  // main-search and every Mth quiescence evaluation site (0: none).
+  std::uint64_t eval_site_every_main_ = 0;
+  std::uint64_t eval_site_every_quiesce_ = 0;
+  std::uint64_t eval_site_seen_main_ = 0;
+  std::uint64_t eval_site_seen_quiesce_ = 0;
   LedgerForce ledger_force_ = LedgerForce::Keep;
   int ledger_force_ply_ = -1;
   SearchCounters ledger_saved_counters_;

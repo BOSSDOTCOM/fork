@@ -13,7 +13,11 @@ variables read at start-up (src/search/searcher.cpp):
 - FORK_PRUNE_LEDGER: per sampled prune candidate,
   `prune_ledger rfp|depth|ply|excess|static_excess|margin|tt_bound|tt_depth|swing|phase|fired|arm_minus_beta|arm_nodes|arm_mate`
   or
-  `prune_ledger futility|depth|ply|deficit|static_deficit|margin|tt_bound|tt_depth|swing|phase|fired|on_minus_beta|off_minus_beta|on_nodes|off_nodes|arm_mate`.
+  `prune_ledger futility|depth|ply|deficit|static_deficit|margin|tt_bound|tt_depth|swing|phase|fired|on_minus_beta|off_minus_beta|on_nodes|off_nodes|arm_mate`;
+- FORK_EVAL_SITES=N,M: every Nth main-search and every Mth quiescence
+  evaluation site,
+  `eval_site kind|reused|alpha|beta|eval|prune_eval|depth|ply|parent_eval|tt_bound|tt_depth|captured|on_pv|FEN`
+  (kind 0 main search, 1 quiescence; the FEN last, with its spaces).
 
 Each parser raises ValueError on a malformed line; callers add the line's
 number to the message.
@@ -77,6 +81,20 @@ def parse_ledger_line(line):
         raise ValueError(f'prune_ledger {technique}: {len(values) - 1} fields, expected {len(names)}')
     row = dict(zip(names, (int(v) for v in values[1:])))
     row['technique'] = technique
+    return row
+
+
+def parse_eval_site_line(line):
+    """One `eval_site` line -> a dict of its integer fields and 'fen'."""
+    names = ('kind', 'reused', 'alpha', 'beta', 'eval', 'prune_eval', 'depth', 'ply', 'parent_eval', 'tt_bound',
+             'tt_depth', 'captured', 'on_pv')
+    if not line.startswith('eval_site '):
+        raise ValueError(f'not an eval_site line: {line[:60]!r}')
+    parts = line[len('eval_site '):].rstrip('\r\n').split('|', len(names))
+    if len(parts) != len(names) + 1 or not parts[-1].strip():
+        raise ValueError(f'eval_site: {len(parts)} fields, expected {len(names) + 1}')
+    row = dict(zip(names, (int(v) for v in parts[:-1])))
+    row['fen'] = parts[-1].strip()
     return row
 
 

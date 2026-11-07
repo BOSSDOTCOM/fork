@@ -3701,6 +3701,19 @@ separately for main-search and quiescence evaluations, for computed ones
 search by depth band. `search_counters_report.py gap` gives the share of
 evaluations within 10, 25, 50 and 100 cp and the call rate per node.
 
+**Crucial-point ground truth** (owner's request, 2026-11-07, the gate for
+ideas 59 and 60). With `FORK_EVAL_SITES=N,M` the stats build prints every
+Nth main-search and every Mth quiescence evaluation site (computed or
+reused from the TT; counter-based, deterministic) with its FEN, window,
+static and TT-refined evaluation, depth, ply, the parent's evaluation, the
+TT entry and the last move's capture flag (`print_eval_site`; the FEN is a
+string, built only at sampled sites, as FORK_SINGULAR_PROBE does).
+`tools/measure/crucial_points.py` deep-searches every site with a finite
+bound with the default engine, evaluates it with other networks (R-int),
+labels it crucial when the static evaluation and the deep value fall on
+opposite sides of the nearest finite bound, and scores detectors by recall
+against the call rate per node, main search and quiescence apart.
+
 **Measurement settings** (they change no play; each is recorded here and
 in its code comment, as the orchestrator asked on 2026-11-07):
 
@@ -3726,6 +3739,10 @@ in its code comment, as the orchestrator asked on 2026-11-07):
 | Idea 59 window | the node's alpha and beta at the evaluation (main search: after mate distance pruning) | the window a gate would compare against at that moment; mate and tablebase bounds give no gate |
 | Idea 59 depth bands | 1, 2, 3-4, 5-7, 8+ | the pruning depths (1-6) apart from the deep nodes, each band with enough sites |
 | Idea 59 games and budgets | 100 games (seed 20261110, disjoint from X2's, X6's and X10's), the test engine's positions (at most 80 per game), 200,000 and 1,000,000 nodes | as X2's arms, so the call rates are comparable with X1's in-game evaluations per node |
+| Crucial-point sampling | every 140,000th main-search and every 170,000th quiescence site, 100 games (seed 20261111, disjoint from X2's, X6's, X10's and idea 59's), 200,000 nodes, at most 80 positions per game | about 3,000 sites per stratum; the smoke run's crucial rate of about 10% gives about 300 crucial sites each, enough for the ROC points at 2-10% of nodes |
+| Crucial-point deep value | 1,000,000 nodes, one thread, Hash 16, `ucinewgame` per site, the default engine (bench checked) | the owner's budget; a fresh hash per site keeps sites independent |
+| Seed networks | scratch seeds 1 and 2 and warm seed 2 of item 7's retrain, converted at S = 89, through R-int | the owner's choice; R-int gives the engine's values (checked: 50 of 50 equal for scratch seed 1), and the warm seed fails the engine's int16 load check |
+| Detector folds | two halves by a CRC-32 of the game id; logistic ridge 1e-3 on standardised features | each half is scored by the model fitted on the other; the ridge keeps rare features from separating |
 | Replay processes | at most 2, below-normal priority, through jobctl (kind `measure`) | the machine is shared with data generation (orchestrator, 2026-11-07); node limits make results independent of load |
 
 **Results, X1** (2026-11-07; stats build 68c00b8, S512ppr2; bench in the

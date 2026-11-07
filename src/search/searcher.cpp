@@ -25,6 +25,11 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
   if (const char* trace = std::getenv("FORK_ITERATION_TRACE"))
     trace_iterations_ = trace[0] && trace[0] != '0';
   if (const char* every = std::getenv("FORK_PRUNE_LEDGER")) ledger_every_ = std::strtoull(every, nullptr, 10);
+  if (const char* sites = std::getenv("FORK_EVAL_SITES")) {
+    char* rest = nullptr;
+    eval_site_every_main_ = std::strtoull(sites, &rest, 10);
+    if (rest && *rest == ',') eval_site_every_quiesce_ = std::strtoull(rest + 1, nullptr, 10);
+  }
 #endif
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
@@ -290,6 +295,14 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
          (hit.bound == TtBound::Upper && s < prune_eval)))
       prune_eval = s;
   }
+#ifdef FORK_SEARCH_STATS
+  // Crucial-point ground truth: a sampled main-search evaluation site
+  // (computed or reused from the TT), with the window it was reached with.
+  if (!in_check && eval_site_every_main_ && !ledger_active_ &&
+      ++eval_site_seen_main_ % eval_site_every_main_ == 0)
+    print_eval_site(0, tt_hit && hit.eval != ScoreNone, alpha, beta, f.static_eval, prune_eval, depth, ply,
+                    tt_hit, hit, OnPv);
+#endif
   const bool can_prune = !OnPv && !in_check;
   const bool can_prune_node = can_prune && !withheld;
 
@@ -739,6 +752,11 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
     FORK_STAT(++(tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_quiesce : counters.evals_quiesce));
 #ifdef FORK_SEARCH_STATS
+    // Crucial-point ground truth: a sampled quiescence evaluation site.
+    if (eval_site_every_quiesce_ && !ledger_active_ &&
+        ++eval_site_seen_quiesce_ % eval_site_every_quiesce_ == 0)
+      print_eval_site(1, tt_hit && hit.eval != ScoreNone, alpha, beta, f.static_eval, f.static_eval, 0, ply,
+                      tt_hit, hit, OnPv);
     {  // Idea 59 step 1: the stand-pat evaluation's window gap.
       const bool reused = tt_hit && hit.eval != ScoreNone;
       const int gap = window_gap(f.static_eval, alpha, beta);
@@ -874,6 +892,22 @@ void Searcher::trace_iteration(int depth, int score, int passes, std::uint64_t i
 #endif
 
 #ifdef FORK_SEARCH_STATS
+// Crucial-point ground truth (DESIGN.md §5.7): the site's kind, whether
+// its evaluation was reused from the TT, the window, the static and the
+// TT-refined evaluation, the depth (0 in quiescence), the ply, the parent's
+// static evaluation (from the opponent's view; ScoreNone if none), the TT
+// entry's bound and depth, whether the move that led here captured, the PV
+// flag, and the FEN last. Integers except the FEN, which allocates a string:
+// stats builds only, at sampled sites only (as FORK_SINGULAR_PROBE does).
+void Searcher::print_eval_site(int kind, bool reused, int alpha, int beta, int eval, int prune_eval,
+                               int depth, int ply, bool tt_hit, const TtHit& hit, bool on_pv) const {
+  const int parent_eval = ply > 0 ? frames_[ply - 1].static_eval : ScoreNone;
+  std::fprintf(stderr, "eval_site %d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%s\n", kind, reused ? 1 : 0, alpha,
+               beta, eval, prune_eval, depth, ply, parent_eval, tt_hit ? static_cast<int>(hit.bound) : 0,
+               tt_hit ? static_cast<int>(hit.depth) : -1, pos_->state().captured != NoPiece ? 1 : 0,
+               on_pv ? 1 : 0, pos_->fen().c_str());
+}
+
 int Searcher::ledger_side_search(int alpha, int beta, int depth, int ply, LedgerForce force,
                                  std::uint64_t& side_nodes) {
   // A side search must leave the real search exactly as it was: no node

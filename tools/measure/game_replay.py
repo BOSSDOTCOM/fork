@@ -17,7 +17,7 @@ each `bestmove` (the engine writes its report lines before it).
 
     game_replay.py games PGN_OR_DIR... OUT.jsonl --count N --seed S [--engine-name test] [--skip GAMES.jsonl ...]
     game_replay.py run FORK GAMES.jsonl OUTDIR --nodes N [--jobs 2] [--max-positions K] [--syzygy DIR]
-                   [--report counters,iterations,ledger] [--ledger-every 32] [--hash 16]
+                   [--report counters,iterations,ledger,sites] [--ledger-every 32] [--sites N,M] [--hash 16]
 
 `games` picks N games by a seeded shuffle of every game in the PGNs (games
 listed in a --skip file are left out, so measurements use disjoint games)
@@ -205,6 +205,8 @@ def replay_one_game(fork, game, index, outdir, settings):
         env['FORK_ITERATION_TRACE'] = '1'
     if 'ledger' in settings['report']:
         env['FORK_PRUNE_LEDGER'] = str(settings['ledger_every'])
+    if 'sites' in settings['report']:
+        env['FORK_EVAL_SITES'] = settings['sites']
     options = [('Hash', settings['hash']), ('Threads', 1)]
     if settings.get('syzygy'):
         options.append(('SyzygyPath', settings['syzygy']))
@@ -218,7 +220,8 @@ def replay_one_game(fork, game, index, outdir, settings):
             best, text = engine.search(game['fen'], pos['moves'], settings['nodes'])
             record = {'game': game['id'], 'index': index, 'ply': pos['ply'], 'move_number': pos['move_number'],
                       'side': pos['side'], 'legal': pos['legal'], 'pgn_depth': pos['pgn_depth'],
-                      'nodes_limit': settings['nodes'], 'bestmove': best, 'iterations': [], 'ledger': []}
+                      'nodes_limit': settings['nodes'], 'bestmove': best, 'iterations': [], 'ledger': [],
+                      'sites': []}
             dump = {}
             for number, line in enumerate(text.splitlines(), 1):
                 try:
@@ -231,6 +234,8 @@ def replay_one_game(fork, game, index, outdir, settings):
                         record['iterations'].append(engine_lines.parse_iteration_line(line))
                     elif line.startswith('prune_ledger '):
                         record['ledger'].append(engine_lines.parse_ledger_line(line))
+                    elif line.startswith('eval_site '):
+                        record['sites'].append(engine_lines.parse_eval_site_line(line))
                 except ValueError as e:
                     raise RuntimeError(f'game {game["id"]} ply {pos["ply"]} stderr line {number}: {e}')
             if dump:
@@ -286,6 +291,7 @@ def main(argv=None):
     r.add_argument('--report', default='counters')
     r.add_argument('--ledger-every', type=int, default=32)
     r.add_argument('--hash', type=int, default=16)
+    r.add_argument('--sites', default='0,0', help='with --report sites: FORK_EVAL_SITES (every Nth main, Mth quiescence)')
     r.add_argument('--no-bench-check', action='store_true', help='tests only: skip the bench reference check')
     a = parser.parse_args(argv)
 
@@ -306,10 +312,10 @@ def main(argv=None):
     a.fork = os.path.abspath(a.fork)
     games = [json.loads(line) for line in a.games.read_text(encoding='utf-8').splitlines()]
     report = set(a.report.split(','))
-    if not report <= {'counters', 'iterations', 'ledger'}:
-        raise SystemExit(f'unknown --report entries: {sorted(report - {"counters", "iterations", "ledger"})}')
+    if not report <= {'counters', 'iterations', 'ledger', 'sites'}:
+        raise SystemExit(f'unknown --report entries: {sorted(report - {"counters", "iterations", "ledger", "sites"})}')
     settings = {'nodes': a.nodes, 'max_positions': a.max_positions, 'syzygy': a.syzygy, 'report': sorted(report),
-                'ledger_every': a.ledger_every, 'hash': a.hash}
+                'ledger_every': a.ledger_every, 'hash': a.hash, 'sites': a.sites}
     a.outdir.mkdir(parents=True, exist_ok=True)
     version = subprocess.run([a.fork, 'version'], capture_output=True, text=True, check=True).stdout
     manifest = {'settings': settings, 'games': str(a.games.name), 'count': len(games), 'version': version}

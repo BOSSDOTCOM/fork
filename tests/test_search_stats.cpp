@@ -563,4 +563,88 @@ TEST_CASE("search_stats", "idea 59 window gaps account for every evaluation") {
   CHECK(c.eval_gap_main_bins[0] + c.eval_gap_quiesce_bins[0] > 0);  // some evaluations sit on a bound
 }
 
+// Crucial-point ground truth: the sampler prints exactly every Nth main and
+// every Mth quiescence evaluation site, and each computed site's evaluation
+// equals a from-scratch static evaluation of its FEN (an independent path:
+// the FEN parsed again, the network run without the search's stack); the
+// search is unchanged.
+TEST_CASE("search_stats", "sampled evaluation sites: every Nth, with their own FEN's evaluation") {
+  std::vector<TtBucket> buckets(16384);
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  const std::atomic<bool> stop{false};
+  const auto set_sites = [](const char* value) {
+#ifdef _WIN32
+    _putenv_s("FORK_EVAL_SITES", value ? value : "");
+#else
+    if (value)
+      setenv("FORK_EVAL_SITES", value, 1);
+    else
+      unsetenv("FORK_EVAL_SITES");
+#endif
+  };
+  SearchQuota limits;
+  limits.depth = 8;
+  Position root;
+  CHECK(root.set_fen(perft_suite()[1].fen));
+  auto plain = std::make_unique<Searcher>(table);
+  Position pos = root;
+  const SearchResult expected = plain->deliberate(pos, limits, stop, nullptr, nullptr);
+  std::fill(buckets.begin(), buckets.end(), TtBucket{});
+  set_sites("7,11");
+  auto sampled = std::make_unique<Searcher>(table);
+  set_sites(nullptr);
+  const std::string path = "search_stats_sites.txt";
+  std::fflush(stderr);
+#ifdef _WIN32
+  const int saved = _dup(_fileno(stderr));
+  std::FILE* sink = std::fopen(path.c_str(), "wb");
+  _dup2(_fileno(sink), _fileno(stderr));
+#else
+  const int saved = dup(fileno(stderr));
+  std::FILE* sink = std::fopen(path.c_str(), "wb");
+  dup2(fileno(sink), fileno(stderr));
+#endif
+  pos = root;
+  const SearchResult got = sampled->deliberate(pos, limits, stop, nullptr, nullptr);
+  std::fflush(stderr);
+#ifdef _WIN32
+  _dup2(saved, _fileno(stderr));
+  _close(saved);
+#else
+  dup2(saved, fileno(stderr));
+  close(saved);
+#endif
+  std::fclose(sink);
+  CHECK_EQ(got.nodes, expected.nodes);
+  CHECK_EQ(got.best.raw(), expected.best.raw());
+  std::ifstream in(path, std::ios::binary);
+  std::uint64_t main_rows = 0, quiesce_rows = 0, checked = 0;
+  for (std::string line; std::getline(in, line);) {
+    if (line.rfind("eval_site ", 0) != 0) continue;
+    std::vector<std::string> fields;
+    std::istringstream text(line.substr(10));
+    for (std::string field; fields.size() < 13 && std::getline(text, field, '|');) fields.push_back(field);
+    std::string fen;
+    std::getline(text, fen);
+    CHECK_EQ(fields.size(), std::size_t{13});
+    (std::stoi(fields[0]) == 0 ? main_rows : quiesce_rows) += 1;
+    const int alpha = std::stoi(fields[2]), beta = std::stoi(fields[3]), eval = std::stoi(fields[4]);
+    CHECK(alpha < beta);
+    Position site;
+    CHECK_MSG(site.set_fen(fen), fen);
+    CHECK(!site.in_check());  // evaluation sites are never in check
+    if (fields[1] == "0") {   // computed here: the FEN's own evaluation
+      CHECK_MSG(eval == static_eval(site), fen << ": " << eval << " vs " << static_eval(site));
+      ++checked;
+    }
+  }
+  in.close();
+  std::remove(path.c_str());
+  const SearchCounters& c = sampled->counters;
+  CHECK_EQ(main_rows, (c.evals_main + c.tt_eval_hits_main) / 7);
+  CHECK_EQ(quiesce_rows, (c.evals_quiesce + c.tt_eval_hits_quiesce) / 11);
+  CHECK(checked > 100);
+}
+
 }  // namespace forkeng::test
