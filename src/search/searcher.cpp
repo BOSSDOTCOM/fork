@@ -422,7 +422,31 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
-    FORK_STAT(counters.pawn_makes += kind_of(pos.piece_at(m.from())) == Pawn);
+#ifdef FORK_SEARCH_STATS
+    counters.pawn_makes += kind_of(pos.piece_at(m.from())) == Pawn;
+    // X2 (DESIGN.md §5.7): the move's history values, read before it is made
+    // (as the selector and sprt/lmr-history's term read them). The ordering
+    // score uses the tables the selector uses; the raw entries are the
+    // tables' own (the follow and reply entries only with their arrivals).
+    const int stats_slot = pair_slot(pos.piece_at(m.from()), m.to());
+    const int stats_follow = follow_arrival(f);
+    const int stats_order_score =
+        quiet ? quiet_order_score(pos, m, switches.use_history ? &history_ : nullptr,
+                                  switches.use_history ? pair_history_ : nullptr,
+                                  switches.use_reply_history ? f.arrival : NoArrival,
+                                  switches.use_follow_history ? stats_follow : NoArrival)
+              : 0;
+    const int stats_quiet_value = quiet ? history_.value(pos.side_to_move(), m) : 0;
+    const int stats_reply_value =
+        quiet && f.arrival != NoArrival ? pair_history_[ReplyTable].value(f.arrival, stats_slot) : 0;
+    const int stats_follow_value =
+        quiet && stats_follow != NoArrival ? pair_history_[FollowTable].value(stats_follow, stats_slot) : 0;
+    const int stats_take_value =
+        m.is_capture()
+            ? take_history_.value(take_slot(pos.piece_at(m.from()), m.to(),
+                                            m.is_en_passant() ? Pawn : kind_of(pos.piece_at(m.to()))))
+            : 0;
+#endif
     play(ply, m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
@@ -472,8 +496,34 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;
         counters.lmr_rule_changes += reduced != std::clamp(new_depth - base, 1, new_depth);
+        // X2: the history values at this LMR site, and what the LMR history
+        // term (sprt/lmr-history: the base less the ordering score / 24,000)
+        // would do here. The correction is the same with that base: the
+        // committed rule returns 0 whatever its context.
+        ++counters.lmr_order_bins[order_score_bin(stats_order_score)];
+        ++counters.lmr_quiet_bins[table_value_bin(stats_quiet_value)];
+        if (f.arrival != NoArrival)
+          ++counters.lmr_reply_bins[table_value_bin(stats_reply_value)];
+        else
+          ++counters.lmr_reply_absent;
+        if (stats_follow != NoArrival)
+          ++counters.lmr_follow_bins[table_value_bin(stats_follow_value)];
+        else
+          ++counters.lmr_follow_absent;
+        const int shift = lmr_history_probe_shift(stats_order_score);
+        counters.lmr_history_fire_less += shift > 0;
+        counters.lmr_history_fire_more += shift < 0;
+        counters.lmr_history_changes +=
+            std::clamp(new_depth - (base - shift + correction - relief), 1, new_depth) != reduced;
 #endif
       }
+#ifdef FORK_SEARCH_STATS
+      // X2: a late capture (every LMR gate passed but "quiet"; R18's sites).
+      if (m.is_capture() && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove) {
+        ++counters.late_capture_sites;
+        ++counters.late_take_bins[table_value_bin(stats_take_value)];
+      }
+#endif
       if (!switches.use_pvs && reduced == new_depth) {
         score = -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);  // plain alpha-beta
       } else {

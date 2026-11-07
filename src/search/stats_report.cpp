@@ -118,6 +118,30 @@ void print_counter_summary(const SearchCounters& c, const FeatureStackTally* tal
 #else
   (void)tally;
 #endif
+  // X2 (DESIGN.md §5.7): where the LMR history term (|ordering score| >=
+  // LmrHistoryProbeDivisor) would act, and the histograms.
+  std::fprintf(
+      out,
+      "stats: LMR history term would act at %.2f%% of LMR sites (reduce less %llu, more %llu), change "
+      "the reduction at %llu; sites without a reply arrival %llu, without a follow arrival %llu; late "
+      "captures %llu\n",
+      100.0 * ratio(c.lmr_history_fire_less + c.lmr_history_fire_more, c.lmr_rule_sites),
+      static_cast<unsigned long long>(c.lmr_history_fire_less),
+      static_cast<unsigned long long>(c.lmr_history_fire_more),
+      static_cast<unsigned long long>(c.lmr_history_changes),
+      static_cast<unsigned long long>(c.lmr_reply_absent),
+      static_cast<unsigned long long>(c.lmr_follow_absent),
+      static_cast<unsigned long long>(c.late_capture_sites));
+  const auto bins_line = [&](const char* name, const std::uint64_t* bins, int count) {
+    std::fprintf(out, "stats: %s bins:", name);
+    for (int i = 0; i < count; ++i) std::fprintf(out, " %llu", static_cast<unsigned long long>(bins[i]));
+    std::fprintf(out, "\n");
+  };
+  bins_line("LMR ordering score", c.lmr_order_bins, OrderBins);
+  bins_line("LMR quiet history", c.lmr_quiet_bins, TableBins);
+  bins_line("LMR reply history", c.lmr_reply_bins, TableBins);
+  bins_line("LMR follow history", c.lmr_follow_bins, TableBins);
+  bins_line("late capture take history", c.late_take_bins, TableBins);
 }
 
 void print_counter_dump(const SearchCounters& c, const FeatureStackTally* tally, std::FILE* out) {
@@ -144,6 +168,17 @@ void print_counter_dump(const SearchCounters& c, const FeatureStackTally* tally,
   (void)tally;
 #endif
   std::fprintf(out, "\n");
+  // The histograms (X2), one line each: `search_hist NAME bins...`.
+  const auto hist_line = [&](const char* name, const std::uint64_t* bins, int count) {
+    std::fprintf(out, "search_hist %s", name);
+    for (int i = 0; i < count; ++i) std::fprintf(out, " %llu", static_cast<unsigned long long>(bins[i]));
+    std::fprintf(out, "\n");
+  };
+  hist_line("lmr_order", c.lmr_order_bins, OrderBins);
+  hist_line("lmr_quiet", c.lmr_quiet_bins, TableBins);
+  hist_line("lmr_reply", c.lmr_reply_bins, TableBins);
+  hist_line("lmr_follow", c.lmr_follow_bins, TableBins);
+  hist_line("late_take", c.late_take_bins, TableBins);
 }
 
 #else

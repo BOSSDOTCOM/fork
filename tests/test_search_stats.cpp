@@ -7,6 +7,7 @@
 // off, and that run is pinned to tests/bench-<net>.ref by bench_parity.
 // Positions: the CPW perft suite (tests/suite.hpp) and a FEN reused from
 // tests/test_search.cpp (checked there by tools/check_search_positions.py).
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
@@ -231,5 +232,56 @@ TEST_CASE("search_stats", "the feature stack's tally matches hand counts") {
   CHECK_EQ(stack->tally().frame_refreshes - refreshes, std::uint64_t{NetMirrored ? 1 : 0});
 }
 #endif
+
+// X2: every LMR site lands in each histogram once (a missing arrival in its
+// own counter), the term's changes need a firing, every late capture lands
+// in the take histogram; and history persists across the searches of a
+// game, so the replay sees larger history values than a cleared search.
+TEST_CASE("search_stats", "X2 histograms add up, and history carries over between searches") {
+  std::vector<TtBucket> buckets(16384);
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  const std::atomic<bool> stop{false};
+  SearchQuota limits;
+  limits.depth = 9;
+  auto carried = std::make_unique<Searcher>(table);
+  Position pos;
+  CHECK(pos.set_fen(perft_suite()[0].fen));
+  // A short game: each side plays the search's move, history carried.
+  for (int ply = 0; ply < 8; ++ply) {
+    const SearchResult r = carried->deliberate(pos, limits, stop, nullptr, nullptr);
+    CHECK(!r.best.is_none());
+    pos.make(r.best);
+  }
+  const SearchCounters before = carried->counters;
+  carried->deliberate(pos, limits, stop, nullptr, nullptr);
+  const SearchCounters& c = carried->counters;
+  const auto sum = [](const std::uint64_t* bins, int count) {
+    std::uint64_t total = 0;
+    for (int i = 0; i < count; ++i) total += bins[i];
+    return total;
+  };
+  CHECK(c.lmr_rule_sites > 0);
+  CHECK_EQ(sum(c.lmr_order_bins, OrderBins), c.lmr_rule_sites);
+  CHECK_EQ(sum(c.lmr_quiet_bins, TableBins), c.lmr_rule_sites);
+  CHECK_EQ(sum(c.lmr_reply_bins, TableBins) + c.lmr_reply_absent, c.lmr_rule_sites);
+  CHECK_EQ(sum(c.lmr_follow_bins, TableBins) + c.lmr_follow_absent, c.lmr_rule_sites);
+  CHECK(c.lmr_history_changes <= c.lmr_history_fire_less + c.lmr_history_fire_more);
+  CHECK(c.late_capture_sites > 0);
+  CHECK_EQ(sum(c.late_take_bins, TableBins), c.late_capture_sites);
+  // The last search's sites with a zero-band butterfly value (bin of [0, 250)):
+  // fewer with history carried than in a cleared searcher on the same position.
+  const std::uint64_t carried_sites = c.lmr_rule_sites - before.lmr_rule_sites;
+  const std::uint64_t carried_zero = c.lmr_quiet_bins[TableBins / 2] - before.lmr_quiet_bins[TableBins / 2];
+  std::fill(buckets.begin(), buckets.end(), TtBucket{});
+  auto cleared = std::make_unique<Searcher>(table);
+  cleared->deliberate(pos, limits, stop, nullptr, nullptr);
+  const SearchCounters& f = cleared->counters;
+  CHECK(carried_sites > 0 && f.lmr_rule_sites > 0);
+  CHECK_MSG(static_cast<double>(carried_zero) / static_cast<double>(carried_sites) <
+                static_cast<double>(f.lmr_quiet_bins[TableBins / 2]) / static_cast<double>(f.lmr_rule_sites),
+            "zero-band share carried " << carried_zero << "/" << carried_sites << ", cleared "
+                                       << f.lmr_quiet_bins[TableBins / 2] << "/" << f.lmr_rule_sites);
+}
 
 }  // namespace forkeng::test

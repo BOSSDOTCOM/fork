@@ -3638,12 +3638,36 @@ and root refreshes, and the plies an evaluation walks. Report:
 `tools/measure/search_counters_report.py x1` on a stats bench's stderr
 (`FORK_STATS_REPORT=1 fork bench`) or on a replay folder (§X2).
 
+**X2, in-game history magnitudes.** History and the TT persist across a
+game's moves, while bench clears them per position, so the measurement
+replays Fork's own games: `tools/measure/game_replay.py` starts one engine
+per game, sends `ucinewgame` once, and searches every position where the
+SPRT PGN's "test" engine was to move, in order, with `go nodes N`
+(tools/drift_measure.py's method, rewritten). At each LMR site the stats
+build histograms the move's ordering score (`quiet_order_score`, the
+selector's formula as a function, the definition of branch
+sprt/lmr-history; a test on every preset checks it orders quiets as the
+selector does) and the raw butterfly, reply and follow entries; at late
+captures (every LMR gate but "quiet": R18's sites) the take entry. It
+counts where the LMR history term of sprt/lmr-history (the base reduction
+less the ordering score / 24,000) would act, on which side, and where it
+would change the reduction. Report: `search_counters_report.py x2` per
+game-move band against the stats bench, with the declared readings in its
+docstring.
+
 **Measurement settings** (they change no play; each is recorded here and
 in its code comment, as the orchestrator asked on 2026-11-07):
 
 | Setting | Value | Reason |
 |---|---|---|
 | Counter dump | cumulative, per search | bench sums 46 positions in one searcher; a cumulative dump needs no reset, and the reader takes differences |
+| Table-value bins | 250, sign-magnitude, 82 bins | a fortieth of HistoryMax per side resolves the quantiles; sign-magnitude edges make shares at multiples of the width exact |
+| Ordering-score bins | 500, sign-magnitude, 132 bins | 24,000 (the term's divisor) is the 48th edge, so the share where the term acts is exact |
+| `LmrHistoryProbeDivisor` | 24,000 | the value sprt/lmr-history tested (7d94d93), the thing measured; the search never reads it |
+| X2 games | 100 from `~/fork-data/sprt/s512ppr2-stc` (seed 20261107), "test" engine's positions | the current default network's own STC games; 100 games give a game-level bootstrap |
+| X2 node budgets | 200,000 and 1,000,000 per move | 200k is the drift measurement's and the ledger proposal's STC proxy; 1M shows the drift toward LTC, where more nodes per move age history further |
+| Replay engine options | Hash 16, Threads 1, Syzygy 3-4-5 | as the replayed SPRT games were played (sprt.yml's default Hash, run_shard.sh's tables) |
+| Replay processes | at most 2, below-normal priority, through jobctl (kind `measure`) | the machine is shared with data generation (orchestrator, 2026-11-07); node limits make results independent of load |
 
 ## 6. Decisions log
 

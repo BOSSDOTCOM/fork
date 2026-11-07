@@ -492,4 +492,52 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   }
 }
 
+// X2's histogram bins and the LMR history probe (DESIGN.md §5.7): the bins
+// cover their ranges, never go down, and split exactly at multiples of the
+// width in |v|, so the bins at or beyond 24,000 count exactly the values
+// with |s| >= 24,000 (the oracle: a direct count over every int16 value).
+TEST_CASE("pruning", "X2 histogram bins and the LMR history probe shift") {
+  int previous = -1;
+  for (int v = -HistoryMax; v <= HistoryMax; ++v) {
+    const int b = table_value_bin(v);
+    CHECK(b >= 0 && b < TableBins && b >= previous);
+    previous = b;
+  }
+  CHECK_EQ(table_value_bin(-HistoryMax), 0);
+  CHECK_EQ(table_value_bin(HistoryMax), TableBins - 1);
+  CHECK_EQ(table_value_bin(0), TableBins / 2);
+  CHECK_EQ(table_value_bin(-1), TableBins / 2 - 1);
+  CHECK_EQ(table_value_bin(249), TableBins / 2);
+  CHECK_EQ(table_value_bin(250), TableBins / 2 + 1);
+  CHECK_EQ(table_value_bin(-250), TableBins / 2 - 2);
+  std::vector<std::uint64_t> bins(OrderBins);
+  std::uint64_t direct = 0;
+  previous = -1;
+  for (int s = -INT16_MAX; s <= INT16_MAX; ++s) {
+    const int b = order_score_bin(s);
+    CHECK(b >= 0 && b < OrderBins && b >= previous);
+    previous = b;
+    ++bins[b];
+    direct += s >= 24000 || s <= -24000;
+  }
+  std::uint64_t from_bins = 0;
+  for (int b = 0; b < OrderBins; ++b)
+    if (b >= order_score_bin(24000) || b <= order_score_bin(-24000)) from_bins += bins[b];
+  CHECK_EQ(from_bins, direct);
+  CHECK_EQ(order_score_bin(0), OrderBins / 2);
+  CHECK_EQ(order_score_bin(499), OrderBins / 2);
+  CHECK_EQ(order_score_bin(500), OrderBins / 2 + 1);
+  CHECK_EQ(order_score_bin(-499), OrderBins / 2 - 1);
+  CHECK_EQ(order_score_bin(-500), OrderBins / 2 - 2);
+  CHECK(order_score_bin(23999) != order_score_bin(24000));
+  CHECK(order_score_bin(-23999) != order_score_bin(-24000));
+  CHECK_EQ(order_score_bin(-INT16_MAX), 0);
+  CHECK_EQ(order_score_bin(INT16_MAX), OrderBins - 1);
+  CHECK_EQ(lmr_history_probe_shift(23999), 0);
+  CHECK_EQ(lmr_history_probe_shift(24000), 1);
+  CHECK_EQ(lmr_history_probe_shift(-23999), 0);
+  CHECK_EQ(lmr_history_probe_shift(-24000), -1);
+  CHECK_EQ(lmr_history_probe_shift(INT16_MAX), 1);
+}
+
 }  // namespace forkeng::test

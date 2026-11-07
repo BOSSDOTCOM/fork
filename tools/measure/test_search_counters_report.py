@@ -39,6 +39,39 @@ class SearchCountersReportTests(unittest.TestCase):
             del c[name]
         self.assertNotIn('rows_per_update', scr.x1_ratios(c))
 
+    def test_share_above_matches_direct_count(self):
+        # The engine's sign-magnitude bins (searcher.hpp's order_score_bin),
+        # rebuilt here for synthetic scores; the oracle is a direct count.
+        width, count = 500, 132
+        half = count // 2
+        scores = list(range(-32767, 32768, 37)) + [24000, -24000, 23999, -23999, 0, -1]
+        bins = [0] * count
+        for s in scores:
+            b = half + s // width if s >= 0 else half - 1 - (-s) // width
+            bins[b] += 1
+        above, below, total = scr.history_share_above(bins, 24000, width)
+        self.assertEqual(above, sum(1 for s in scores if s >= 24000))
+        self.assertEqual(below, sum(1 for s in scores if s <= -24000))
+        self.assertEqual(total, len(scores))
+        with self.assertRaises(ValueError):
+            scr.history_share_above(bins, 24100, width)
+
+    def test_move_band(self):
+        self.assertEqual([scr.move_band(n) for n in (1, 15, 16, 29, 30, 60, 61, 200)],
+                         ['1-15', '1-15', '16-29', '16-29', '30-60', '30-60', '61+', '61+'])
+        # The report groups searches by band and bootstraps over games.
+        records = [{'game': g, 'move_number': n,
+                    'counters': {'lmr_rule_sites': 100, 'lmr_history_fire_less': 1, 'lmr_history_fire_more': 3,
+                                 'lmr_history_changes': 2, 'late_capture_sites': 5}}
+                   for g in ('a', 'b') for n in (10, 40)]
+        r = scr.x2_report(records, {'counters': {'lmr_rule_sites': 1000, 'lmr_history_fire_less': 0,
+                                                 'lmr_history_fire_more': 4}, 'hist': {}}, rounds=50)
+        self.assertEqual(r['bands']['30-60']['lmr_sites'], 200)
+        self.assertAlmostEqual(r['bands']['30-60']['term_acts_share'], 0.04)
+        self.assertAlmostEqual(r['bands']['all']['reduce_more_share_of_firings'], 0.75)
+        self.assertAlmostEqual(r['ratio_30_60_to_bench'], 10.0)
+        self.assertEqual(r['bands']['1-15']['games'], 2)
+
 
 if __name__ == '__main__':
     unittest.main()

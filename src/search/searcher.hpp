@@ -292,6 +292,11 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
 //   needed (in check), in the main and the quiescence search, and at the ply
 //   limit (evals_horizon); moves made that move a pawn, all and in the
 //   quiescence search alone.
+// - X2: LMR sites whose node has no reply or no follow arrival (a null move
+//   or the root above), so those tables have no entry; late captures (every
+//   LMR gate passed but "quiet": R18's sites); and at LMR sites, where the
+//   LMR history term of sprt/lmr-history would reduce less (its shift > 0),
+//   more (< 0), and where it would change the reduction.
 #define FORK_SEARCH_COUNTERS(X)     \
   X(beta_cutoffs)                   \
   X(first_move_cutoffs)             \
@@ -335,7 +340,41 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
   X(check_nodes_quiesce)            \
   X(evals_horizon)                  \
   X(pawn_makes)                     \
-  X(pawn_makes_quiesce)
+  X(pawn_makes_quiesce)             \
+  X(lmr_reply_absent)               \
+  X(lmr_follow_absent)              \
+  X(late_capture_sites)             \
+  X(lmr_history_fire_less)          \
+  X(lmr_history_fire_more)          \
+  X(lmr_history_changes)
+
+// X2's histogram bins (DESIGN.md §5.7; measurement settings, no search
+// effect). Sign-magnitude bins: the value 0 and the positive values fill the
+// upper half from its first bin, the negative ones the lower half from its
+// last, so every bin edge sits at a multiple of the width in |v| and the
+// share at or beyond any multiple (24,000: the LMR history term's divisor)
+// is exact. Table values, within [-HistoryMax, HistoryMax], in bins of 250
+// (a fortieth of the range per side: fine enough for the quantiles; 82
+// bins); ordering scores, within int16, in bins of 500 (24,000 is the 48th
+// edge; 132 bins).
+constexpr int TableBinWidth = 250;
+constexpr int TableBins = 2 * (HistoryMax / TableBinWidth + 1);
+constexpr int OrderBinWidth = 500;
+constexpr int OrderBins = 2 * (INT16_MAX / OrderBinWidth + 1);
+constexpr int table_value_bin(int v) {
+  const int b = v >= 0 ? TableBins / 2 + v / TableBinWidth : TableBins / 2 - 1 - (-v) / TableBinWidth;
+  return b < 0 ? 0 : b >= TableBins ? TableBins - 1 : b;
+}
+constexpr int order_score_bin(int s) {
+  const int b = s >= 0 ? OrderBins / 2 + s / OrderBinWidth : OrderBins / 2 - 1 - (-s) / OrderBinWidth;
+  return b < 0 ? 0 : b >= OrderBins ? OrderBins - 1 : b;
+}
+// The LMR history term being measured (branch sprt/lmr-history, 7d94d93:
+// the base reduction less the ordering score / 24,000, integer division, so
+// it acts only at |score| >= 24,000). A measurement setting: the stats build
+// counts where the term would act, and the search never reads it.
+constexpr int LmrHistoryProbeDivisor = 24000;
+constexpr int lmr_history_probe_shift(int order_score) { return order_score / LmrHistoryProbeDivisor; }
 
 struct SearchCounters {
 #define FORK_COUNTER_MEMBER(member) std::uint64_t member = 0;
@@ -347,6 +386,15 @@ struct SearchCounters {
   static constexpr int CutoffDepths = 7;
   static constexpr int CutoffIndices = 48;
   std::uint64_t quiet_cutoff_index[CutoffDepths][CutoffIndices] = {};
+  // X2 (DESIGN.md §5.7): at LMR sites, the ordering score (quiet_order_score)
+  // and the raw entries of the mover's butterfly history and of the reply
+  // and follow tables (when the node has those arrivals); at late captures,
+  // the take history's entry.
+  std::uint64_t lmr_order_bins[OrderBins] = {};
+  std::uint64_t lmr_quiet_bins[TableBins] = {};
+  std::uint64_t lmr_reply_bins[TableBins] = {};
+  std::uint64_t lmr_follow_bins[TableBins] = {};
+  std::uint64_t late_take_bins[TableBins] = {};
 };
 
 class Searcher {
