@@ -107,8 +107,23 @@ added; no CI job applies them automatically.
 | Endgame check | tools/nnue/endgame_check.py, 900 positions: **351 misjudged against S512r2's 249** (KQK 59 of 300 against 0; KRK 267 against 223). The Syzygy endgame slice in item 7's snapshot g3s2 is meant for this |
 | Bench | 13,909,380 nodes, signature 831e5c9295839f87 (tests/bench-s512pp.ref) |
 | Tests | vs S512r2 (phase-4 684bac6): fixed nodes, 800,000 per move, run 42284077960: +46.09 +/- 10.37 Elo (nElo +76.54 +/- 17.02), 1,600 games; then STC 8+0.08 [0, 5], run 42294907752: **+32.67 +/- 10.48 Elo (nElo +53.37 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
-| Status | **The default network since 2026-11-06** (owner: promoted on its STC result), and the labeller of the data generation from generation 3's part g3f on (DESIGN.md §5.3, labeller policy). Item 7's retrain uses its architecture, and its candidate must beat it |
+| Status | The default network on phase-4 from 2026-11-06 (owner: promoted on its STC result); on this candidate branch, the control S512ppr2 is tested against. The labeller of the data generation from generation 3's part g3f on (DESIGN.md §5.3, labeller policy). Item 7's retrain uses its architecture, and its candidate must beat it |
 | Notes | Two network-dependent search checks failed with S512+PP and were rewritten to hold for any evaluator: at depth 1 in K+P v K it plays e1f2, not b7b8q, and the check now accepts any move that keeps the tablebase win (b7b8q, b7b8r and the five king moves; Syzygy 3-4-5 and the lichess tablebase agreeing); K+R v K with the halfmove clock at 0 scored at most 0 at depth 3, so the fifty-move contrast now uses a forced mate in 2 (0 with the clock at 99, the mate with the clock at 0). |
+
+## S512ppr2, S512+PP retrained on g3s2 (2026-11-06, candidate)
+
+| Item | Value |
+|---|---|
+| File | `nets/s512ppr2.fnet`, 1,426,656 bytes |
+| Architecture | Architecture 8, as S512+PP; S = 89 |
+| Data | g3s2 (data/manifests/g3s2.json) with the Syzygy endgame slice interleaved; validation on g3s2-val |
+| Training | Kaggle kernel fork-retrain-g3s2 version 1 at d599df3 (DESIGN.md §5.6, item 7): the warm recipe (from S512+PP's float weights, LR 0.0001 dropped tenfold after 180), seed 1; best validation loss 0.01908862 (warm mean 0.01909453 over 2 seeds, scratch mean 0.01951758) |
+| Scale | S = 89, matched to S512+PP's mean \|eval\| on 4,000 g3s2-val positions (220.91 cp against 221.33) |
+| Conversion | 2 of 311,296 link weights clamped to their units' allowance under the reader's 64-link bound (2 of 512 units over it); the unclamped net passes every leg with the same losses |
+| Parity (tests/nnue/s512ppr2.parity, 446 positions) | trainer leg at most 0.0002 cp; netcheck exact on all 446; quantization loss max 7.9 cp, p99 6.1 cp, mean 2.0 cp (within S-512's 21 / 16 cp) |
+| Endgame check | tools/nnue/endgame_check.py, 900 positions: **8 misjudged against S512+PP's 351** |
+| Bench | 14,626,377 nodes, signature 9e43990217b0886d (tests/bench-s512ppr2.ref) |
+| Status | **The default network since 2026-11-06 on this candidate branch only** (bake/s512ppr2), for its STC SPRT against S512+PP; not promoted |
 
 ## The bake-off entries in CI (2026-10-31)
 
