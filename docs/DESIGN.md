@@ -3707,7 +3707,7 @@ in its code comment, as the orchestrator asked on 2026-11-07):
 | X6 node budget | 2,000,000 per move | the think tank's choice: deep enough (depth 18-22) that the depth >= 8 rows span the iterations where STC and LTC soft-limit decisions are taken |
 | X6 fit | depth >= 8 primary; share clipped to [0.005, 0.995]; stability capped at 10; score change clipped at 500 cp; ridge 1e-6 | the soft limit is never checked before depth 8 at STC; the clips keep the logit and log finite and stop rare extremes dominating; the ridge only guards a singular system |
 | X6 bootstrap | 300 rounds over games, seed 20261108 | each round refits the model twice per share definition in pure Python; 300 keeps that to minutes while the interval ends move by well under their width |
-| X10 sampling | 1 in 512 candidates (`FORK_PRUNE_LEDGER=512`) | the design's 1 in 32 (I1) was measured on bench first: 1 in 8 gave 578,079 rows and made bench 17x slower, so 1 in 32 would be about 5x slower and about 10 M rows over the X10 games, far beyond I1's need of about 60,000 sampled nodes near the margin per depth; 1 in 512 gives about 650,000 rows at about +25% time (changed from the approved design before any run; uniform sampling keeps every row's weight exact) |
+| X10 sampling | 1 in 512 candidates (`FORK_PRUNE_LEDGER=512`) | the design's 1 in 32 (I1) was tried on bench first: 1 in 8 gave 578,079 rows and made bench 17x slower, so 1 in 32 would give about 10 M rows over the X10 games, far beyond I1's need of about 60,000 sampled nodes near the margin per depth; 1 in 512 gives enough (893,987 rows in the run). Correction after the run: the side searches cost only 0.8% extra nodes (about 14 per sampled candidate); the slowdown was the rows' unbuffered output, so the rate is set by the row count, not by the side searches (changed before any run, accepted by the orchestrator 2026-11-07; uniform sampling keeps every row's weight exact) |
 | X10 games and budget | 120 games (seed 20261109, disjoint from X2's and X6's), every test-engine position, 200,000 nodes | I1's cheapest first experiment (120 STC games at 200k) |
 | X10 gap bins | 20 cp for rates, 10 cp for the fit | 20 cp resolves the margin's neighbourhood (RFP's margin grows 80 cp per ply); the finer fit bins lose little to binning |
 | X10 bootstrap | 200 rounds for the margin rate, 50 for the fitted sigma, seed 20261109 | the sigma rounds each refit by Nelder-Mead in pure Python |
@@ -3802,6 +3802,47 @@ searches at 2M nodes, TT and history carried; 18,782 rows at depth >= 8,
   times the share's information (partial R² 0.054 against 0.008), so the
   stability signal, which S1 held in reserve, deserves its own term; the
   score change adds almost nothing at depth >= 8.
+
+**Results, X10** (2026-11-07; stats build 9e01f26; 120 games of
+`s512ppr2-stc`, seed 20261109, disjoint from X2's and X6's; 7,876
+test-engine searches at 200k nodes; 1 in 512 candidates sampled: 893,987
+rows; the side searches took 0.8% extra nodes, about 14 per sampled
+candidate). Wrong rate = share of decisions where the prune is wrong (RFP:
+the node fails low with RFP off there; futility: the on arm fails low and
+the off arm fails high). "At the margin" = the 20 cp gap bin holding the
+current margin, with its wrong events / rows and a 95% interval over games.
+
+| Technique, depth | Margin | Prunes taken: wrong | Candidates not taken: wrong | At the margin |
+|---|---|---|---|---|
+| RFP 1 | 80 | 0.24% (609 / 255,215) | 5.5% | 0.49% (166 / 33,795) [0.37, 0.61] |
+| RFP 2 | 160 | 0.38% (232 / 61,457) | 5.0% | 0.72% (35 / 4,869) [0.41, 1.07] |
+| RFP 3 | 240 | 0.16% (49 / 30,745) | 3.7% | 0.12% (3 / 2,578) |
+| RFP 4 | 320 | 0.17% (25 / 14,690) | 3.2% | 0.09% (1 / 1,079) |
+| RFP 5 | 400 | 0.24% (15 / 6,371) | 2.8% | 0.24% (1 / 416) |
+| RFP 6 | 480 | 0.06% (2 / 3,488) | 3.4% | 0.60% (1 / 166) |
+| Futility 1 | 170 | 0.010% (3 / 29,460) | 5.7% | 0 / 2,797 |
+| Futility 2 | 240 | 0.024% (2 / 8,446) | 6.3% | 1 / 774 |
+| Futility 3 | 310 | 0.029% (1 / 3,443) | 3.3% | 0 / 354 |
+| Futility 4 | 380 | 0 / 2,048 | 3.4% | 0 / 166 |
+| Futility 5 | 450 | 0.17% (1 / 601) | 3.7% | 0 / 35 |
+| Futility 6 | 520 | 0 / 484 | 2.1% | 0 / 27 |
+
+- Declared reading (I1): the marginal RFP wrong rate falls at least 3x
+  from depth 1 to depth 5. Measured 2.0x (0.49% to 0.24%), but the depth-5
+  cell rests on one wrong event and every cell from depth 3 on has at
+  most three, so the prediction is **neither confirmed nor refuted**
+  (thin; I1 asked about 1,200 wrong events per depth, and only depth 1
+  has more than 100 at the margin). A run with more games, or one that
+  samples only near the margins, would settle it.
+- Futility's margins look conservative: the prunes it takes are wrong at
+  0.01-0.03% at depths 1-4, against 0.16-0.38% for RFP's, and no
+  margin-bin cell has more than one wrong event. That is evidence for
+  R14's ranges (room to lower futility's margins), not for any level.
+- I1's probit-with-floor model is poorly identified on these data: its
+  sigma is pinned only at RFP depth 1 (83 cp [75, 90]) and futility depths
+  1, 3 and 4 (247, 155, 105 cp); elsewhere the intervals span orders of
+  magnitude. The binned rates above (and the CSV of all rows, outside the
+  repository) are the result to use; the fitted curves are not.
 
 ## 6. Decisions log
 
