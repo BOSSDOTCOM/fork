@@ -474,9 +474,12 @@ def checklist(design_md):
         cells = [c.strip() for c in line.strip().strip('|').split('|')]
         if cells[0] in ('item', '#'):
             continue
-        if len(cells) == 4 and cells[0].isdigit():
-            order.append({'n': int(cells[0]), 'item': plain(cells[1]), 'why': plain(cells[2]),
-                          'estimate': plain(cells[3]), 'status': classify(cells[1])})
+        # The order table: "# | item | why here | estimate" (to 2026-11-06), or since the order of 2026-11-07
+        # "# | step | lane | when / depends on | estimate" (a "done" row first, which is not numbered).
+        if len(cells) in (4, 5) and cells[0].isdigit():
+            lane, why = ('', cells[2]) if len(cells) == 4 else (cells[2], cells[3])
+            order.append({'n': int(cells[0]), 'item': plain(cells[1]), 'why': plain(why), 'lane': plain(lane),
+                          'estimate': plain(cells[-1]), 'status': classify(cells[1])})
         elif len(cells) == 2 and group is not None:
             group['items'].append({'item': plain(cells[0]), 'status_text': plain(cells[1]),
                                    'status': classify(cells[1])})
