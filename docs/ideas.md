@@ -211,6 +211,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   Revisit with Phase 6's threads (several State stacks per core) and Phase
   4's network, which change what the cache holds.
 - **status:** tested in Phase 3, rejected for now
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** layout changes only under the 1% cycles-per-node acceptance rule (X13), not as a standalone item.
 
 ## 10. Steer into TB-drawn 6-piece endings
 
@@ -229,6 +230,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   when played out, so a weaker form of the idea may survive; that is what
   the re-evaluation decides.
 - **status:** re-evaluate (TB adjudication removed from the current rules)
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** dropped from Phase 4: replaced by the structure-class calibration scale (R33, order step 17).
 
 ## 11. TB boundary training data
 
@@ -248,6 +250,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   engine-generated data, but log the tablebase source in ORIGINALITY.md
   before use.
 - **status:** re-evaluate (TB adjudication removed from the current rules)
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 17):** replaced by the depth-matched endgame-start slice (R32, starts of 8-16 pieces), deferred until item 8a's result.
 
 ## 12. Endgame conversion
 
@@ -509,6 +512,7 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** none (layout only).
 - **earliest phase:** Phase 3 (any time a stable binary exists).
 - **status:** untested
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** dropped from Phase 4: TCEC's build host is unlikely to have the tools, and PGO takes most of the gain.
 
 ## 22. Mate-aware late move pruning and reductions
 
@@ -633,6 +637,7 @@ tuned by SPSA.
   gate, resume and pinning fixes are in (audit-1, merged 2026-10-28). The
   long run (40 generations) stays in **late Phase 4** (owner, 2026-10-28),
   after the first strong network and the search re-validation. Pilot scheduled
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 19):** the long run on the label-and-sweep proxy is replaced by a capped pilot with a game-based fitness (R38), after the LMR terms (§5.6 order step 20).
 - **Candidate region for the long run (owner, 2026-10-31):** a correction
   to the singular test's margin and depth (tier 2, T27), for example a
   dependence on the TT entry's depth deficit. The measured form (DESIGN.md
@@ -717,6 +722,7 @@ tuned by SPSA.
 - **runtime cost:** none (a multiply where the malus is applied).
 - **earliest phase:** Phase 3 (8b).
 - **status:** untested
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** becomes an SPSA parameter (the final retune by scaling class, R24), not an SPRT.
 
 ## 29. How often unconfirmed root fail highs hold
 
@@ -751,6 +757,7 @@ tuned by SPSA.
   after its SPRT reached the cap undecided, +0.65 ± 3.56 Elo; sprt-log.md
   b3-shallow-fh). The audit meant this measurement to come first; B-3 ran
   without it.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** B-3 and the root fail-high fix are dropped from the re-validation queue: a timed search reaches the soft check only after a completed iteration, so no root fail high is pending there.
 
 ## 30. Keeping a stale TT entry that is still deeper once aged
 
@@ -845,6 +852,7 @@ tuned by SPSA.
   owner's decision (sprt-log.md, history/phase-3/audit-1.md). **Revisit
   when the eval-dependent margins are retuned after Phase 4** (Quality
   control 6), with an SPRT.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** retired as a standalone test: RfpMargin is one point on the early SPSA's axis (R14, §5.6 order step 11).
 
 ## 35. The bootstrap eval calls insufficient_material twice
 
@@ -874,6 +882,7 @@ tuned by SPSA.
   (Performance doctrine).
 - **earliest phase:** Phase 3.
 - **status:** untested
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** closed: +1.0% in speed sprint round 2, not kept; C4 absorbed the gain.
 
 ## 37. A cache-friendlier MoveList and PlyFrame layout
 
@@ -887,6 +896,7 @@ tuned by SPSA.
 - **runtime cost:** none if it pays.
 - **earliest phase:** Phase 3.
 - **status:** untested
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** layout changes only under the 1% cycles-per-node acceptance rule (X13), not as a standalone item.
 
 ## 38. Phase-end fuzzing on GitHub
 
@@ -974,6 +984,7 @@ tuned by SPSA.
 - **earliest phase:** Phase 4 (the pawn structure key exists since
   2026-11-02, branch tier2/drift).
 - **status:** untested (planned 2026-11-02); L2's pawn table in progress.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** **L1 (the separate pawn-and-king network) and L2 (the pawn drift table) dropped; L3 (the root planner) parked**, kept here; L4 is handled by the decisive-share pilot and the result-weight arm (X11, R27); L5 becomes the blind-spot suite (X14).
 - **L1's first step, S512+PP: speed** (branch nets/s512pp, not pushed;
   every number a quiet-machine median ratio to S512r2's nps by the
   identical-tree method: release builds whose net is S512r2's weights with
@@ -1061,6 +1072,7 @@ tuned by SPSA.
 - **sources:** Fork KB §3.36 (kb 5fac98e) and its sources (ORIGINALITY.md).
 - **earliest phase:** Phase 4.
 - **status:** untested (planned 2026-11-05).
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 11):** folded into the round-once LMR step (R20) as its variant, run only if the centred history term passes; no longer §5.6's item 8.
 
 ## 43. Fractional depth
 
@@ -1079,6 +1091,7 @@ tuned by SPSA.
 - **earliest phase:** Phase 4.
 - **status:** untested (planned 2026-11-05); design below (owner, 2026-11-05:
   plan only, no code yet).
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** shrunk to round-once LMR arithmetic (R20); the full refactor (level 2) is out of Phase 4 and no longer precedes the SPSA retune.
 - **Design** (Fork's own, from the KB entry's concepts):
   - **Unit:** depth is held in units of 1/64 ply (`OnePly = 64`): a power
     of two, fine enough for SPSA to move a reduction in small steps
@@ -1143,6 +1156,7 @@ tuned by SPSA.
   (ORIGINALITY.md).
 - **earliest phase:** Phase 4.
 - **status:** in progress: built behind an option, not yet run (2026-11-05).
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** the validation session is retired; `--qat` stays for int8 designs; adaptive rounding of the output layer (R25) instead.
 - **Built** (branch nets/s512cl, tools/train): `fork-train --qat` (train,
   eval, check; the S-512 family: S-512, H-512, S512+X, S512cl; refused for
   the others): the forward pass uses each weight and bias rounded to the
@@ -1211,6 +1225,7 @@ tuned by SPSA.
 - **metric:** the endgame check's misjudged counts against targets (to be
   set), the conversion rate, then the net's promotion test.
 - **status:** in the next snapshot (owner, 2026-11-06: lifted from its hold): the slice goes into g3s2, and the check becomes the standing acceptance test for the retrained default (DESIGN.md §5.6, order item 7).
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 10):** the acceptance target is at most 15 of 900 misjudged; part 3 (conversion without tables) dropped; part 2 extended to 4-5-man classes (X19).
 
 ## 46. Threat knowledge at a low speed cost: the design brainstorm
 
@@ -1332,6 +1347,7 @@ tuned by SPSA.
 - **metric:** each experiment's rule above; then SPRTs.
 - **status:** approved as ranked (owner, 2026-11-06); the exchange rate
   runs first.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** distillation from S512+X dropped (refuted: the teacher is weaker than the default at fixed nodes) and the threat-keyed correction table dropped; threat inputs (ranks 3-5) parked; the residual study is redone against deep labels (X7); attack-map pricing folded into the zero-row build (X12); the stand-pat check only inside tail-risk-classed margins (R35); the speed-to-Elo measurement is the throttled 0.5x design (decision 7) and the gate is priced at 1.5 Elo per 1% nps (decision 8).
 
 ## 47. The better-training plan: relabelled data and quieter positions
 
@@ -1371,3 +1387,4 @@ tuned by SPSA.
 - **phase:** Phase 4 or later, after item 7's retrain.
 - **metric:** each experiment's declared rule above; then SPRTs.
 - **status:** recorded (owner, 2026-11-06); not started.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** 47.1 (relabelling generation 1 first) dropped: the recency arm (R3) asks the question that matters; 47.2 (the quiet filter) shrunk to its offline count, low priority.
