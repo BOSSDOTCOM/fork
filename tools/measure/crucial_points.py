@@ -254,15 +254,15 @@ def deep_search_sites(engine, todo, out_path, nodes, workers):
         t.join()
 
 
-def seed_evals(fens, net, layout):
-    """Each FEN's R-int evaluation by `net` (tools/nnue/reference.py eval)."""
+def seed_evals(fens, net, layout, work_dir):
+    """Each FEN's R-int evaluation by `net` (tools/nnue/reference.py eval); the
+    FEN list goes to a temporary file in `work_dir`."""
     reference = Path(__file__).resolve().parents[1] / 'nnue' / 'reference.py'
-    with open(Path(net).with_suffix('.fens.tmp'), 'w', encoding='utf-8') as f:
-        f.write('\n'.join(fens) + '\n')
-    done = subprocess.run([sys.executable, '-I', str(reference), 'eval', '--net', str(net), '--epd',
-                           str(Path(net).with_suffix('.fens.tmp')), '--layout', str(layout)],
-                          capture_output=True, text=True, check=True)
-    Path(net).with_suffix('.fens.tmp').unlink()
+    listing = Path(work_dir) / 'seed-fens.tmp'
+    listing.write_text('\n'.join(fens) + '\n', encoding='utf-8')
+    done = subprocess.run([sys.executable, '-I', str(reference), 'eval', '--net', str(net), '--epd', str(listing),
+                           '--layout', str(layout)], capture_output=True, text=True, check=True)
+    listing.unlink()
     values = [int(line.rsplit('|', 1)[1]) for line in done.stdout.splitlines() if '|' in line]
     if len(values) != len(fens):
         raise RuntimeError(f'{len(values)} evaluations for {len(fens)} positions')
@@ -325,7 +325,7 @@ def main(argv=None):
         return 0
 
     if a.command == 'seeds':
-        values = seed_evals([s['fen'] for s in sites], a.net, a.layout)
+        values = seed_evals([s['fen'] for s in sites], a.net, a.layout, a.out)
         with open(a.out / f'seed-{a.name}.tsv', 'w', encoding='utf-8') as f:
             for s, v in zip(sites, values):
                 f.write(f'{s["id"]}\t{v}\n')
