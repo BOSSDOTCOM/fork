@@ -9,9 +9,13 @@
   or when jobctl itself refuses; a start's launch files and command; attaching to a running part (g3e's
   real command line and log); stop & seal (the stop, then the seal job), a failed stop sealing nothing;
   the auto-stop and the sleep block's release (the watchdog loop on a fake clock); one watchdog at a time;
+  the openings book chosen for the next parts (next-openings.json: honoured with its SHA-256 checked against
+  its manifest, refused without the manifest, on a wrong SHA-256 or an unreadable file, cleared back to the
+  previous part's) and the preflight's hash of the WSL copy (missing or different: no start);
 - the seal: complete games only (a synthetic shard with an unfinished game; the real g3d copies when present
   on this machine), a failed verification keeping every file and sealing nothing, an occupied folder never
-  overwritten, a passing one sealed with its reason;
+  overwritten, a passing one sealed with its reason, the openings recorded from fork_datagen's command line
+  or, without one, from the part's planned settings;
 - that no read-only tab can change anything: the command guard, the read-only view without control(),
   every collector and every read-only tab's render() run under an audit hook that fails on any write,
   delete, rename, folder creation, process start or file launch, with the fixture tree's files hashed
@@ -252,6 +256,9 @@ class World:
         self.external_lock = None
         self.seal_starts = []
         self.commit = 'c' * 40
+        # The openings books in WSL and their SHA-256 (data/manifests/openings-lichess-2016-09.json)
+        self.wsl_files = {'/home/user/fork-data/openings/lichess-2016-09.epd':
+                          '0ae298e1c7c635606fcddb056ee08073aeed8f4db4de3f19b8ef721d4a72831b'}
 
     def add_running_g3e(self):
         self.jobs['g3e'] = {'record': json.loads(fixture('wsl-job-g3e.json')), 'live': [461, 462, 486]}
@@ -294,6 +301,10 @@ class World:
                 j['record'] = dict(j['record'], state='stopped', stopped='2026-11-06T20:00:00-0500')
                 self.datagen.get(cmd[4], {})['pid'] = None
                 return ok(f'stopped {cmd[4]}')
+            if cmd[0] == 'sha256sum' and len(cmd) == 2:
+                if cmd[1] not in self.wsl_files:
+                    return R.Result(1, '', f'sha256sum: {cmd[1]}: No such file or directory')
+                return ok(f'{self.wsl_files[cmd[1]]}  {cmd[1]}\n')
             raise AssertionError(f'unexpected WSL command {cmd}')
         if os.path.basename(a[0]) == 'git':
             sub = a[3:]
@@ -492,6 +503,93 @@ class Controls(unittest.TestCase):
             self.ctl.stop_and_seal('g3e', 'x')
         self.assertEqual(self.world.seal_starts, [])
 
+    # The Lichess 2026-09 book: SHA-256 dab45c9f... as the owner quoted it (2026-11-07), equal to the
+    # output_sha256 of data/manifests/openings-lichess-2026-09.json (a copy of the book's own manifest).
+
+    def test_plan_uses_the_chosen_openings(self):
+        shutil.copy(REPO / 'data' / 'manifests' / 'openings-lichess-2026-09.json', self.repo / 'data' / 'manifests')
+        self.world.wsl_files['/home/user/fork-data/openings/lichess-2026-09.epd'] = (
+            'dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef')
+        self.copy_g3e()  # g3e's copy names no openings: the generation's last sealed part's, Lichess 2016-09
+        self.ctl.set_next_openings('lichess-2026-09.epd',
+                                   'dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef', 'owner')
+        plan, probe = self.ctl.plan()
+        self.assertEqual(plan['openings'], 'lichess-2026-09.epd')
+        self.assertEqual(plan['openings_sha256'], 'dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef')
+        self.assertEqual(plan['settings']['openings'], 'lichess-2026-09.epd')
+        self.assertEqual(plan['differs_from_previous']['openings'], ('lichess-2016-09.epd', 'lichess-2026-09.epd'))
+        self.assertIn('next-openings.json', plan['openings_source'])
+        self.assertEqual(self.ctl.preflight(plan, probe), [])
+        # cleared: the previous part's openings again
+        self.ctl.set_next_openings(None)
+        self.assertIsNone(self.ctl.next_openings())
+        plan, probe = self.ctl.plan()
+        self.assertEqual((plan['openings'], plan['settings']['openings']), ('lichess-2016-09.epd',) * 2)
+        self.assertNotIn('openings', plan['differs_from_previous'])
+        self.assertIn('previous part (g3e)', plan['openings_source'])
+        self.assertEqual(self.ctl.preflight(plan, probe), [])
+        # chosen again, and started
+        self.ctl.set_next_openings('lichess-2026-09.epd',
+                                   'dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef')
+        plan, probe = self.ctl.plan()
+        self.ctl.start(plan, probe)
+        params = (self.state / 'parts' / 'g3f' / 'params.sh').read_text()
+        self.assertIn('OPENINGS=/home/user/fork-data/openings/lichess-2026-09.epd\n', params)
+        self.assertIn('OPENINGS_SHA256=dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef\n', params)
+        self.assertEqual(self.ctl.read_state('g3f', 'part.json')['settings']['openings'], 'lichess-2026-09.epd')
+
+    def test_chosen_openings_refused_without_their_manifest(self):
+        self.copy_g3e()
+        with self.assertRaises(generation_control.Refused) as e:
+            self.ctl.set_next_openings('lichess-2026-09.epd',
+                                       'dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef')
+        self.assertIn('openings-lichess-2026-09.json', str(e.exception))
+        self.assertFalse((self.state / 'next-openings.json').exists())
+        shutil.copy(REPO / 'data' / 'manifests' / 'openings-lichess-2026-09.json', self.repo / 'data' / 'manifests')
+        for args in (('lichess-2026-09.epd', 'ab' * 32), ('lichess-2026-09.epd', None),
+                     ('x/lichess-2026-09.epd', 'dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef')):
+            with self.assertRaises(generation_control.Refused):
+                self.ctl.set_next_openings(*args)
+            self.assertFalse((self.state / 'next-openings.json').exists())
+        self.state.mkdir(parents=True, exist_ok=True)
+        (self.state / 'next-openings.json').write_text(json.dumps({'file': 'lichess-2099-01.epd', 'sha256': 'ab' * 32}))
+        with self.assertRaises(generation_control.Refused) as e:  # written by hand, no manifest
+            self.ctl.plan()
+        self.assertIn('openings-lichess-2099-01.json', str(e.exception))
+        (self.state / 'next-openings.json').write_text(json.dumps({'file': 'lichess-2026-09.epd', 'sha256': 'ab' * 32}))
+        with self.assertRaises(generation_control.Refused):  # its SHA-256 is not the manifest's
+            self.ctl.plan()
+        (self.state / 'next-openings.json').write_text('{"file": "lichess-2026')
+        with self.assertRaises(generation_control.Refused) as e:  # unreadable: never the old book quietly
+            self.ctl.plan()
+        self.assertIn('next-openings.json', str(e.exception))
+        self.assertEqual(self.controls(), [])
+
+    def test_preflight_hashes_the_wsl_openings(self):
+        shutil.copy(REPO / 'data' / 'manifests' / 'openings-lichess-2026-09.json', self.repo / 'data' / 'manifests')
+        self.copy_g3e()
+        self.ctl.set_next_openings('lichess-2026-09.epd',
+                                   'dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef')
+        plan, probe = self.ctl.plan()
+        why = ' '.join(self.ctl.preflight(plan, probe))
+        self.assertIn('/home/user/fork-data/openings/lichess-2026-09.epd could not be hashed in WSL', why)
+        with self.assertRaises(generation_control.Refused):
+            self.ctl.start(plan, probe)
+        self.assertIsNone(self.ctl.read_state('g3f', 'part.json'))
+        self.assertEqual((self.controls(), self.spawned), ([], []))
+        self.world.wsl_files['/home/user/fork-data/openings/lichess-2026-09.epd'] = 'ef' * 32
+        why = ' '.join(self.ctl.preflight(plan, probe))
+        self.assertIn('hash to ' + 'ef' * 32, why)
+        calls = [c for c in self.runner.calls if c[0] == 'read' and 'sha256sum' in c[1]]
+        self.assertEqual(len(calls), 3)  # one per preflight (start's own included)
+        self.assertEqual(calls[0][1][-2:], ['sha256sum', '/home/user/fork-data/openings/lichess-2026-09.epd'])
+        # the previous part's openings are hashed the same way
+        self.ctl.set_next_openings(None)
+        del self.world.wsl_files['/home/user/fork-data/openings/lichess-2016-09.epd']
+        plan, probe = self.ctl.plan()
+        why = ' '.join(self.ctl.preflight(plan, probe))
+        self.assertIn('lichess-2016-09.epd could not be hashed in WSL', why)
+
     def test_watchdog_once(self):
         self.assertTrue(self.ctl.ensure_watchdog('g3e'))
         self.assertEqual(self.spawned, ['g3e'])
@@ -674,6 +772,43 @@ class Seal(unittest.TestCase):
         self.assertIn('every game verified', part_end)
         self.assertEqual(json.loads((self.here / 'seal-result.json').read_text())['state'], 'sealed')
 
+    def test_sealed_records_the_planned_openings_without_a_command_line(self):
+        """After a sealed g9 on the Lichess 2016-09 openings, g9b planned on 2026-09 (13,943,421 positions,
+        data/manifests/openings-lichess-2026-09.json) records 2026-09 when fork_datagen was gone at the stop:
+        the part's settings (the plan's) count."""
+        m = self.repo / 'data' / 'manifests'
+        (m / 'g9.json').write_text(json.dumps({'run': 'g9', 'part_end': 'test', 'settings': {
+            'openings': 'lichess-2016-09.epd', 'openings_count': 591871, 'nodes': 20000}}))
+        shutil.copy(REPO / 'data' / 'manifests' / 'openings-lichess-2026-09.json', m)
+        self.req['cmdline'] = None
+        self.req['settings'] = {'openings': 'lichess-2026-09.epd', 'threads': 2, 'seed': 7, 'positions_target': 1000}
+        seen = {}
+        rc = seal_part.seal(self.req, self.here, wsl_version=fixture('fork-version.txt'), verify=lambda a: 0,
+                            upload=lambda a: seen.update(upload=[str(x) for x in a]) or 0)
+        self.assertEqual(rc, 0, (self.here / 'seal-result.json').read_text())
+        run = json.loads((Path(self.req['copies']) / 'g9b' / 'g9b.json').read_text())
+        self.assertEqual((run['settings']['openings'], run['settings']['openings_count']),
+                         ('lichess-2026-09.epd', 13943421))
+        u = seen['upload']
+        self.assertTrue(u[u.index('--openings-manifest') + 1].endswith('openings-lichess-2026-09.json'))
+
+    def test_sealed_takes_the_openings_from_the_command_line(self):
+        """The same, with fork_datagen's own --openings naming 2026-09: it wins over g9's settings."""
+        m = self.repo / 'data' / 'manifests'
+        (m / 'g9.json').write_text(json.dumps({'run': 'g9', 'part_end': 'test', 'settings': {
+            'openings': 'lichess-2016-09.epd', 'openings_count': 591871, 'nodes': 20000}}))
+        shutil.copy(REPO / 'data' / 'manifests' / 'openings-lichess-2026-09.json', m)
+        self.req['cmdline'][2] = '/home/user/fork-data/openings/lichess-2026-09.epd'
+        seen = {}
+        rc = seal_part.seal(self.req, self.here, wsl_version=fixture('fork-version.txt'), verify=lambda a: 0,
+                            upload=lambda a: seen.update(upload=[str(x) for x in a]) or 0)
+        self.assertEqual(rc, 0, (self.here / 'seal-result.json').read_text())
+        run = json.loads((Path(self.req['copies']) / 'g9b' / 'g9b.json').read_text())
+        self.assertEqual((run['settings']['openings'], run['settings']['openings_count']),
+                         ('lichess-2026-09.epd', 13943421))
+        u = seen['upload']
+        self.assertTrue(u[u.index('--openings-manifest') + 1].endswith('openings-lichess-2026-09.json'))
+
 
 # ================================================================ the read-only tabs change nothing
 
@@ -690,7 +825,8 @@ class ReadOnlyTabs(unittest.TestCase):
               ['gh', 'run', 'list', '--json', 'x'], ['C:/x/gh.exe', 'run', 'view', '1'],
               ['C:/v/kaggle.exe', 'kernels', 'status', 'o/k'], ['kaggle', 'kernels', 'list', '--mine'],
               ['kaggle', 'datasets', 'list', '--mine'],
-              ['wsl.exe', '-d', 'Ubuntu', '--exec', '/home/user/fork-data/gen3e/fork', 'version']]
+              ['wsl.exe', '-d', 'Ubuntu', '--exec', '/home/user/fork-data/gen3e/fork', 'version'],
+              ['wsl.exe', '-d', 'U', '--exec', 'sha256sum', '/home/user/fork-data/openings/lichess-2026-09.epd']]
         for a in ro:
             self.assertTrue(R.is_read_only(a), a)
         self.assertTrue(R.is_read_only(['wsl.exe', '-d', 'U', '--exec', 'python3', '-I', '-', 'x'],
@@ -702,6 +838,11 @@ class ReadOnlyTabs(unittest.TestCase):
                     ['wsl.exe', '-d', 'U', '--exec', 'python3', '-I', 'jobctl.py', 'stop', 'g3e'],
                     ['wsl.exe', '-d', 'U', '--', 'python3', '-I', '-'],
                     ['wsl.exe', '-d', 'U', '--exec', '/x/../fork', 'version'],
+                    ['wsl.exe', '-d', 'U', '--exec', 'sha256sum', '-c', 'f'],
+                    ['wsl.exe', '-d', 'U', '--exec', 'sha256sum', '/x/../y.epd'],
+                    ['wsl.exe', '-d', 'U', '--exec', 'sha256sum', '/x/y.vf'],
+                    ['wsl.exe', '-d', 'U', '--exec', 'sha256sum', 'y.epd'],
+                    ['wsl.exe', '-d', 'U', '--', 'sha256sum', '/x/y.epd'],
                     ['python', '-I', 'jobctl.py', 'start', 'seal', 'x'], ['powershell.exe', '-c', 'x'], []]
         for a in changing:
             self.assertFalse(R.is_read_only(a), a)

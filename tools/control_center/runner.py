@@ -5,7 +5,8 @@ console window and with a timeout.
 Two doors, so the read-only tabs cannot change anything:
 - `read(argv)` runs only commands that is_read_only() accepts: git rev-parse/show/diff/log/cat-file, gh run
   list/view, the Kaggle CLI's kernels list/status and datasets list, `wsl --exec python3 -I -` fed the
-  read-only probe (wsl_probe.py), and `wsl --exec <part folder>/fork version` (--exec: no shell between).
+  read-only probe (wsl_probe.py), `wsl --exec <part folder>/fork version` and `wsl --exec sha256sum
+  </absolute path>.epd` (an openings book's hash, for the preflight) (--exec: no shell between).
   Anything else raises PermissionError before a process starts.
 - `control(argv)` runs anything; only the data-generation controller (generation_control.py) holds it. The tabs get
   a ReadOnly view, which has no control().
@@ -63,6 +64,8 @@ def is_read_only(argv, probe_source=None):
         cmd = args[args.index('--exec') + 1:]
         if cmd[:3] == ['python3', '-I', '-']:
             return probe_source is not None and probe_source == PROBE.read_text(encoding='utf-8')
+        if len(cmd) == 2 and cmd[0] == 'sha256sum':
+            return cmd[1].startswith('/') and cmd[1].endswith('.epd') and '..' not in cmd[1]
         return len(cmd) == 2 and cmd[1] == 'version' and cmd[0].endswith('/fork') and '..' not in cmd[0]
     return False
 
