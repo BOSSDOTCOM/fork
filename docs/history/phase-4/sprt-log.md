@@ -792,6 +792,12 @@ LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   (2026-11-06): if it passes, a quick confirmation on S512+PP (the same
   change on the new default, STC [0, 3], at most 2 stages) before it is
   adopted; if it fails, no retest.
+- Stages 0-7: runs 42297962496, 42300440558, 42302881667, 42305269054,
+  42307539187, 42309763357, 42311908276, 42313931445 (ledger).
+- **Result (after stage 7, 7:04 PM EST): H0 accepted.** 12,800 games, Elo
+  −5.29 +/- 3.58, nElo −8.90 +/- 6.02, LLR −3.31 (−2.94, 2.94), Ptnml [198,
+  1611, 2937, 1496, 158]; no time losses. ProbCut (d9-r5-m80) stays off;
+  no retest (the owner's rule).
 
 ### 2026-11-06 threat-set-cheaper-vs-base (tier 2, T56: threat-aware ordering): H0, rejected (stays off)
 
