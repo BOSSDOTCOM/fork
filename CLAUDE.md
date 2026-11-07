@@ -34,14 +34,20 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
   pinned in `.github/ci/win-tools.sh`) with the gcc-debug full suite and the
   GCC smoke loop, TCEC's four compilers (ubuntu:22.04), and the slow suites
   as their own jobs: perft_epd_deep always, perft_epd_full (about 2 hours)
-  only when move generation's files change (`.github/ci/movegen-changed.sh`)
-  and nightly on main (`.github/workflows/nightly.yml`; owner, 2026-10-28;
-  the phase-end checklist still runs it). AVX-512 binaries
+  only when move generation's files change and nightly on main
+  (`.github/workflows/nightly.yml`; owner, 2026-10-28; the phase-end
+  checklist still runs it). The full TSan suites (`.github/workflows/tsan.yml`)
+  run only when threads, the TT or the UCI layer change, nightly on main, and
+  on demand; "TSan, threaded suites" runs on every code change (owner,
+  2026-11-07). The `changes` job (`.github/ci/changed-areas.sh`) decides what
+  runs: documentation alone skips every build job. AVX-512 binaries
   run under Intel SDE on runners without it. It runs on pushes to main and
-  audit-1 (docs-only pushes skipped) and on every pull request; a newer push
-  cancels the older run. Hosted runners are free for the public repo.
-  Branch protection on main requires every job green (a job skipped
-  by its condition counts as passed). Never push the local
+  audit-1 (docs-only pushes skipped) and on every pull request (docs-only
+  ones skip every build job); a newer push cancels the older run. Hosted
+  runners are free for the public repo. Branch protection on main requires
+  the one job `CI result`, which needs every other job and passes only if
+  each passed or was skipped by its own rule (once the owner switches main's
+  protection to it; until then every job by name). Never push the local
   backup bundles (`*.bundle`).
 - TCEC toolchain: WSL distro `Ubuntu-22.04` (gcc 11.4, g++-12, clang 16/19,
   CMake 3.22), set up by `scripts/tcec-toolchain-setup.sh`; runs as root.
