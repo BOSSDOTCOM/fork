@@ -3771,6 +3771,38 @@ LMR history term of sprt/lmr-history would act (|ordering score| >=
   (the ordering score computed at every LMR site), is the next thing to
   measure (its nps, not part of this step).
 
+**Results, X6** (2026-11-07; stats build 9e01f26; 60 games of
+`s512ppr2-stc`, seed 20261108, disjoint from X2's; 2,086 test-engine
+searches at 2M nodes, TT and history carried; 18,782 rows at depth >= 8,
+33,384 at every depth; 95% intervals over games, 300 rounds).
+
+| Depth >= 8 (primary) | `share` (last pass) | `share_all` (every pass) |
+|---|---|---|
+| AUC of the full model | 0.768 [0.748, 0.786] | 0.772 [0.753, 0.789] |
+| Out-of-sample AUC (2 folds by game) | 0.767 | 0.771 |
+| AUC of the share alone | 0.643 | 0.667 |
+| McFadden pseudo-R² | 0.138 | 0.142 |
+| Partial R² of the share | 0.0031 [0.0006, 0.0071] | 0.0077 [0.0040, 0.0130] |
+| Partial R² of stability / of the score change | 0.062 / 0.001 | 0.054 / 0.001 |
+| Spearman rho² of the share | 0.028 [0.019, 0.038] | 0.038 [0.028, 0.048] |
+
+- Base rate: the best move changes within two iterations at 12.9% of
+  depth >= 8 iterations (21.0% at every depth).
+- P(change) by `share_all` decile (depth >= 8), from the lowest share to
+  the highest: 0.229, 0.223, 0.192, 0.162, 0.130, 0.105, 0.088, 0.075,
+  0.057, 0.034 (shares below 22%: 0.229; above 95.5%: 0.034). By stability
+  quintile: 0.308 (1-2 iterations unchanged), 0.170, 0.098, 0.050, 0.021
+  (13 or more).
+- Declared reading: the primary definition is `share_all` (the higher
+  AUC); its rho² is 0.038, above the 0.03 kill line, so R8's share term
+  goes ahead to its SPRT, though narrowly (the interval reaches 0.028, and
+  the engine's existing last-pass `share` gives 0.028, under the line; R8
+  should use the every-pass share). M5's table puts rho²·CV² of about
+  0.04 near +3 Elo (interpolated, UNVERIFIED). Stability carries several
+  times the share's information (partial R² 0.054 against 0.008), so the
+  stability signal, which S1 held in reserve, deserves its own term; the
+  score change adds almost nothing at depth >= 8.
+
 ## 6. Decisions log
 
 | Date | Decision |
