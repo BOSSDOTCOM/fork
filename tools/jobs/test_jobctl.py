@@ -8,7 +8,9 @@
 - a lock whose job has no process left is reclaimed (and logged); one whose job lives is never taken;
 - a stop that leaves a process alive exits 1 and keeps the lock (the termination stubbed out);
 - the ledger: records, the last record per stage, exact checks of a stage's run and inputs, a run id
-  refused for a second stage.
+  refused for a second stage;
+- the two-try limit (tries.jsonl): two tries per idea and time control class, a third only with an owner
+  override recorded verbatim, a resume not counted, the run records untouched.
 
     python -I -m unittest discover -s tools/jobs -p 'test_*.py'
 """
@@ -287,6 +289,84 @@ class Ledger(unittest.TestCase):
         self.assertEqual(self.run_ledger('known', '101').returncode, 0)
         self.assertEqual(self.run_ledger('known', '999').returncode, 1)
         self.assertNotEqual(self.run_ledger('add', 'x', '2', '106', '--base', 'abc', '--test', b).returncode, 0)
+
+
+class Tries(unittest.TestCase):
+    """The two-try limit (owner, DESIGN.md §6 2026-11-07 decision 2): at most two SPRTs per idea and time
+    control class; a third only with an owner override, recorded verbatim; tries.jsonl, apart from the run
+    ledger."""
+    A, B = '1' * 40, '2' * 40
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = dict(os.environ, FORK_JOBS=self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_ledger(self, *args):
+        return subprocess.run([sys.executable, '-I', str(LEDGER), *args], env=self.env, capture_output=True,
+                              text=True)
+
+    def try_(self, sprt, *extra, idea='razoring', tc='stc'):
+        return self.run_ledger('try', idea, sprt, '--kind', 'search', '--tc-class', tc, '--base', self.A,
+                               '--test', self.B, *extra)
+
+    def records(self):
+        p = Path(self.tmp.name) / 'tries.jsonl'
+        return [json.loads(x) for x in p.read_text(encoding='utf-8').splitlines()] if p.exists() else []
+
+    def test_tries_limit(self):
+        r = self.try_('raz-a')
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, 'try 1 of 2'))
+        self.assertEqual(self.try_('raz-b').returncode, 0)
+        r = self.try_('raz-c', '--check')
+        self.assertEqual(r.returncode, 3)
+        self.assertIn('already has 2 stc tries (raz-a, raz-b)', r.stderr)
+        self.assertEqual(self.try_('raz-c').returncode, 3)
+        self.assertEqual(len(self.records()), 2)  # refused: nothing written
+        r = self.try_('raz-c', '--owner-override', 'owner, 2026-11-09: third try', '--check')
+        self.assertEqual(r.returncode, 0)
+        self.assertEqual(len(self.records()), 2)  # --check writes nothing
+        self.assertEqual(self.try_('raz-c', '--owner-override', 'owner, 2026-11-09: third try').returncode, 0)
+        self.assertEqual(self.records()[-1]['override'], 'owner, 2026-11-09: third try')
+        self.assertEqual(self.records()[-1]['try'], 3)
+        self.assertEqual(self.try_('raz-d', '--owner-override', '').returncode, 2)
+        listed = self.run_ledger('tries', 'razoring').stdout.splitlines()
+        self.assertEqual(listed[0], f'1 raz-a search stc {self.A} {self.B}')
+        self.assertEqual(listed[2], f'3 raz-c search stc {self.A} {self.B} override: owner, 2026-11-09: third try')
+
+    def test_try_resume_not_counted(self):
+        self.assertEqual(self.try_('raz-a').returncode, 0)
+        r = self.try_('raz-a')
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, 'resume of try 1'))
+        self.assertEqual(len(self.records()), 1)
+        r = self.try_('raz-a', idea='other')  # one SPRT name belongs to one idea
+        self.assertEqual(r.returncode, 1)
+        self.assertIn('raz-a is a try of idea razoring', r.stderr)
+
+    def test_tries_by_tc_class(self):
+        self.assertEqual(self.try_('raz-a').returncode, 0)
+        self.assertEqual(self.try_('raz-b').returncode, 0)
+        r = self.try_('raz-ltc', tc='ltc')
+        self.assertEqual((r.returncode, r.stdout.strip()), (0, 'try 1 of 2'))
+
+    def test_run_ledger_untouched(self):
+        self.assertEqual(self.run_ledger('add', 'x', '0', '100', '--base', self.A, '--test', self.B).returncode, 0)
+        before = [self.run_ledger(*a).stdout for a in (('runs', 'x'),)]
+        self.assertEqual(self.try_('x').returncode, 0)
+        self.assertEqual([self.run_ledger(*a).stdout for a in (('runs', 'x'),)], before)
+        self.assertEqual(self.run_ledger('check', 'x', '0', '100', self.A, self.B).returncode, 0)
+        self.assertEqual(self.run_ledger('known', '100').returncode, 0)
+        self.assertEqual(len((Path(self.tmp.name) / 'ledger.jsonl').read_text().splitlines()), 1)
+
+    def test_bad_arguments_refused(self):
+        self.assertEqual(self.try_('raz-a', idea='Bad Idea').returncode, 2)
+        self.assertEqual(self.try_('raz-a', tc='vltc').returncode, 2)
+        r = self.run_ledger('try', 'razoring', 'raz-a', '--kind', 'custom', '--tc-class', 'stc', '--base', self.A,
+                            '--test', self.B)
+        self.assertEqual(r.returncode, 2)
+        self.assertEqual(self.records(), [])
 
 
 if __name__ == '__main__':
