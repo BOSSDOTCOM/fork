@@ -124,7 +124,22 @@ added; no CI job applies them automatically.
 | Endgame check | tools/nnue/endgame_check.py, 900 positions: **8 misjudged (0.9%) against S512+PP's 351** (at the trained S = 92: KQK and KRK 0 of 600, KPK 8 of 300; S512+PP KQK 59, KRK 267, KPK 25) |
 | Tests | vs S512+PP (phase-4 b115e03): STC 8+0.08 [0, 5], runs 42335141916 and 42336446490: **+20.11 +/- 7.22 Elo (nElo +33.60 +/- 12.04), H1 accepted** after 3,200 games (docs/history/phase-4/sprt-log.md) |
 | Bench | 14,626,377 nodes, signature 9e43990217b0886d (tests/bench-s512ppr2.ref) |
-| Status | **The default network since 2026-11-06** (owner: promoted on its STC result), and the labeller of the data generation from generation 3's part g3g on (DESIGN.md §5.3, labeller policy) |
+| Status | The default network on phase-4 from 2026-11-06 (owner: promoted on its STC result); on this candidate branch, the control S512ppr3 is screened against. The labeller of the data generation from generation 3's part g3g on (DESIGN.md §5.3, labeller policy) |
+
+## S512ppr3, S512ppr2 retrained on g3s3 (2026-11-07, candidate)
+
+| Item | Value |
+|---|---|
+| File | `nets/s512ppr3.fnet`, 1,426,656 bytes, Fork checksum 5861c1a319ca267b |
+| Architecture | Architecture 8, as S512+PP and S512ppr2; S = 89 |
+| Data | g3s3 (data/manifests/g3s3.json): g3s2 as it is plus the sealed parts g3f (S512+PP labels) and g3g (S512ppr2 labels), the Syzygy endgame slice kept; 101 training files read interleaved; validation on g3s3-val (1,920 games) |
+| Training | Kaggle kernel fork-retrain-g3s3 version 1 at 6053b51 (item 8a, DESIGN.md §6 decision 10): the standard recipe (from S512ppr2's float weights, LR 0.0001 dropped tenfold after 180, 360 superbatches), seed 1; the network is R1-avg, the mean of superbatches 331-360's float weights. Full g3s3-val loss 0.01966655 against S512ppr2's 0.01968472 (R1's best checkpoint 0.01965562, R2's 0.01972978, the cooldown average 0.01977483, the anneal-only arm 0.01975487); the candidate by the declared rule, 1.82e-5 below S512ppr2, short of the 2e-5 SPRT margin, so the owner's tie-break: a fixed-node screen, the STC SPRT only at +5 Elo or more |
+| Scale | S = 89, matched to S512ppr2's mean \|eval\| on 4,000 g3s3-val positions (214.84 cp against 213.86) |
+| Conversion | 1 of 311,296 link weights clamped to its unit's allowance under the reader's 64-link bound (1 of 512 units over it); the unclamped net passes every leg with the same losses |
+| Parity (tests/nnue/s512ppr3.parity, 446 positions) | trainer leg at most 0.00015 cp; netcheck exact on all 446; quantization loss max 9.4 cp, p99 7.5 cp, mean 2.3 cp (within S-512's 21 / 16 cp) |
+| Endgame check | tools/nnue/endgame_check.py, 900 positions: **8 misjudged (0.9%), as S512ppr2** |
+| Bench | 14,149,617 nodes, signature 1cb0717f040c294d (tests/bench-s512ppr3.ref) |
+| Status | **The default network since 2026-11-07 on this candidate branch only** (bake/s512ppr3), for its fixed-node screen against S512ppr2 (owner: the STC SPRT [0, 5] only if the screen reaches +5 Elo or more); not promoted |
 
 ## The bake-off entries in CI (2026-10-31)
 
