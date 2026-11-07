@@ -169,6 +169,7 @@ class FeatureStack {
   int evaluate(const NetFile& net, int ply, const Position& pos);
 #ifdef FORK_SEARCH_STATS
   const FeatureStackTally& tally() const { return tally_; }
+  void set_tally(const FeatureStackTally& t) { tally_ = t; }  // X10: undo a side search's counts
 #endif
 
  private:

@@ -264,6 +264,22 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
 #else
 #define FORK_STAT(...) static_cast<void>(0)
 #endif
+// FORK_STAT_GATE(tokens): tokens that stats builds add to a search
+// condition (the decision ledger's force, X10); nothing in normal builds,
+// so their conditions are exactly as written without it.
+#ifdef FORK_SEARCH_STATS
+#define FORK_STAT_GATE(...) __VA_ARGS__
+#else
+#define FORK_STAT_GATE(...)
+#endif
+
+#ifdef FORK_SEARCH_STATS
+// The decision ledger (DESIGN.md §5.7, X10): one technique switched at one
+// node of a side search: RFP off, futility off, or futility on (dropping
+// the non-checking quiets after the first move, its bound capped at alpha
+// so the arm claims a fail low, as the rule always does).
+enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
+#endif
 // The scalar counters, one list (as the switches above), so the per-search
 // dump (stats_report.hpp) cannot miss one: X(member).
 // - beta_cutoffs: main-search nodes that failed high; first_move_cutoffs:
@@ -295,6 +311,9 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
 //   needed (in check), in the main and the quiescence search, and at the ply
 //   limit (evals_horizon); moves made that move a pawn, all and in the
 //   quiescence search alone.
+// - X10: candidates of RFP and futility (every condition but the margin),
+//   the ledger rows printed, and the nodes its side searches took (kept
+//   apart: a side search restores every other counter).
 // - X2: LMR sites whose node has no reply or no follow arrival (a null move
 //   or the root above), so those tables have no entry; late captures (every
 //   LMR gate passed but "quiet": R18's sites); and at LMR sites, where the
@@ -349,7 +368,11 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
   X(late_capture_sites)             \
   X(lmr_history_fire_less)          \
   X(lmr_history_fire_more)          \
-  X(lmr_history_changes)
+  X(lmr_history_changes)            \
+  X(ledger_rfp_candidates)          \
+  X(ledger_futility_candidates)     \
+  X(ledger_rows)                    \
+  X(ledger_side_nodes)
 
 // X2's histogram bins (DESIGN.md §5.7; measurement settings, no search
 // effect). Sign-magnitude bins: the value 0 and the positive values fill the
@@ -464,6 +487,13 @@ class Searcher {
 #ifdef FORK_SEARCH_STATS
   // X6 (DESIGN.md §5.7): one `iteration_trace` line for a finished iteration.
   void trace_iteration(int depth, int score, int passes, std::uint64_t iteration_nodes) const;
+  // X10: the node at `ply` searched again with `force` applied there only,
+  // invisible to the real search (nodes, limits, TT writes, histories,
+  // counters and the tally restored); `side_nodes` gets the nodes it took.
+  int ledger_side_search(int alpha, int beta, int depth, int ply, LedgerForce force,
+                         std::uint64_t& side_nodes);
+  // X10: a decision at a position with this key is sampled (1 in ledger_every_).
+  bool ledger_sampled(Key key) const { return key % ledger_every_ == 0; }
 #endif
 
   TransTable& tt_;
@@ -509,6 +539,17 @@ class Searcher {
   std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
   bool report_counters_ = false;      // FORK_STATS_REPORT: dump the counters after each search
   bool trace_iterations_ = false;     // FORK_ITERATION_TRACE: one line per finished iteration
+  // X10: FORK_PRUNE_LEDGER's sampling rate (0: no ledger), whether a side
+  // search is running, the force for the node it re-enters, and what it
+  // restores afterwards.
+  std::uint64_t ledger_every_ = 0;
+  bool ledger_active_ = false;
+  LedgerForce ledger_force_ = LedgerForce::Keep;
+  int ledger_force_ply_ = -1;
+  SearchCounters ledger_saved_counters_;
+#if defined(FORK_EVAL_NNUE)
+  FeatureStackTally ledger_saved_tally_;
+#endif
 #endif
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;

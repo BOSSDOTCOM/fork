@@ -3666,6 +3666,23 @@ share's logit, stability, the score change and the depth, and reports AUC,
 the partial R² of the share and Spearman's rho², with the declared
 readings in its docstring.
 
+**X10, the decision ledger (RFP and futility rows).** With
+`FORK_PRUNE_LEDGER=N` the stats build samples 1 in N of the candidates of
+RFP and of futility (every condition but the margin) by the position's
+key (`key % N`, the key's low bits; the TT indexes by its high bits), and
+searches the sampled node again with that technique switched at that node
+only (`LedgerForce`, read through `FORK_STAT_GATE`, which is empty in
+normal builds): RFP off (wrong if that search fails low), futility on and
+off (wrong if on fails low and off fails high). The side search
+(`ledger_side_search`) is invisible to the real search: the node count, the
+limits (a static unlimited quota; the stop flag still ends it), the TT
+(`TransTable::set_hold_writes`), the histories (`record_cutoff` returns),
+the counters and the feature-stack tally are all restored, and bench with
+the ledger on equals bench.ref (tests; removing any one of the three
+guards fails them). Rows: `prune_ledger` lines; analysis:
+`tools/measure/prune_ledger_fit.py` (I1's probit with a tail floor, by
+depth, with the declared reading in its docstring).
+
 **Measurement settings** (they change no play; each is recorded here and
 in its code comment, as the orchestrator asked on 2026-11-07):
 
@@ -3682,6 +3699,11 @@ in its code comment, as the orchestrator asked on 2026-11-07):
 | X6 node budget | 2,000,000 per move | the think tank's choice: deep enough (depth 18-22) that the depth >= 8 rows span the iterations where STC and LTC soft-limit decisions are taken |
 | X6 fit | depth >= 8 primary; share clipped to [0.005, 0.995]; stability capped at 10; score change clipped at 500 cp; ridge 1e-6 | the soft limit is never checked before depth 8 at STC; the clips keep the logit and log finite and stop rare extremes dominating; the ridge only guards a singular system |
 | X6 bootstrap | 300 rounds over games, seed 20261108 | each round refits the model twice per share definition in pure Python; 300 keeps that to minutes while the interval ends move by well under their width |
+| X10 sampling | 1 in 512 candidates (`FORK_PRUNE_LEDGER=512`) | the design's 1 in 32 (I1) was measured on bench first: 1 in 8 gave 578,079 rows and made bench 17x slower, so 1 in 32 would be about 5x slower and about 10 M rows over the X10 games, far beyond I1's need of about 60,000 sampled nodes near the margin per depth; 1 in 512 gives about 650,000 rows at about +25% time (changed from the approved design before any run; uniform sampling keeps every row's weight exact) |
+| X10 games and budget | 120 games (seed 20261109, disjoint from X2's and X6's), every test-engine position, 200,000 nodes | I1's cheapest first experiment (120 STC games at 200k) |
+| X10 gap bins | 20 cp for rates, 10 cp for the fit | 20 cp resolves the margin's neighbourhood (RFP's margin grows 80 cp per ply); the finer fit bins lose little to binning |
+| X10 bootstrap | 200 rounds for the margin rate, 50 for the fitted sigma, seed 20261109 | the sigma rounds each refit by Nelder-Mead in pure Python |
+| X10 arm score clamp | +-2,000 cp, mate and tablebase arms flagged | only the side of beta matters; the clamp keeps the rows integer and short |
 | Replay processes | at most 2, below-normal priority, through jobctl (kind `measure`) | the machine is shared with data generation (orchestrator, 2026-11-07); node limits make results independent of load |
 
 ## 6. Decisions log

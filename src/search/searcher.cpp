@@ -24,6 +24,7 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
   if (const char* report = std::getenv("FORK_STATS_REPORT")) report_counters_ = report[0] && report[0] != '0';
   if (const char* trace = std::getenv("FORK_ITERATION_TRACE"))
     trace_iterations_ = trace[0] && trace[0] != '0';
+  if (const char* every = std::getenv("FORK_PRUNE_LEDGER")) ledger_every_ = std::strtoull(every, nullptr, 10);
 #endif
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
@@ -121,6 +122,9 @@ bool Searcher::poll_limits() {
 // A quiet move cut off: it gains a bonus that grows with depth, and the
 // quiet moves tried before it here lose as much (the malus).
 void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
+#ifdef FORK_SEARCH_STATS
+  if (ledger_active_) return;  // a decision-ledger side search leaves the histories as they were (X10)
+#endif
   const Position& here = *pos_;
   const int bonus = bonus_for_depth(depth);
   // The take history (tier 2, T11): a capture that cuts gains the bonus, and
@@ -165,6 +169,16 @@ void Searcher::update_pv(int ply, Move m) {
 
 template <bool OnPv>
 int Searcher::negamax(int alpha, int beta, int depth, int ply) {
+#ifdef FORK_SEARCH_STATS
+  // X10: the force of a decision-ledger side search applies to the node it
+  // re-enters (the first call at its ply) and to nothing below it.
+  LedgerForce force = LedgerForce::Keep;
+  if (ledger_force_ != LedgerForce::Keep && ply == ledger_force_ply_) {
+    force = ledger_force_;
+    ledger_force_ = LedgerForce::Keep;
+  }
+  const int ledger_entry_depth = depth;  // before the no-move reduction: a re-entry applies it once
+#endif
   if (depth <= 0 && switches.use_quiesce) return quiesce<OnPv>(alpha, beta, ply);
   pv_[ply].length = 0;
   ++nodes_;
@@ -260,10 +274,35 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   const bool can_prune = !OnPv && !in_check;
   const bool can_prune_node = can_prune && !withheld;
 
+#ifdef FORK_SEARCH_STATS
+  // X10, the decision ledger's RFP rows: at a sampled candidate (every
+  // condition but the margin), the node is also searched with RFP off here;
+  // a prune (taken, or one a smaller margin would take) is wrong when that
+  // search fails low. The real search goes on unchanged.
+  if (ledger_every_ && !ledger_active_ && switches.use_rfp && can_prune_node && depth <= RfpMaxDepth &&
+      !is_tb_or_mate(beta) && prune_eval >= beta) {
+    ++counters.ledger_rfp_candidates;
+    if (ledger_sampled(key)) {
+      const int saved_eval = f.static_eval;
+      std::uint64_t arm_nodes = 0;
+      const int arm = ledger_side_search(alpha, beta, depth, ply, LedgerForce::RfpOff, arm_nodes);
+      f.static_eval = saved_eval;
+      if (stopped_) return 0;
+      const int parent_eval = ply > 0 ? frames_[ply - 1].static_eval : ScoreNone;
+      std::fprintf(stderr, "prune_ledger rfp|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%llu|%d\n", depth, ply,
+                   prune_eval - beta, f.static_eval - beta, RfpMargin * depth,
+                   tt_hit ? static_cast<int>(hit.bound) : 0, tt_hit ? static_cast<int>(hit.depth) : -1,
+                   parent_eval != ScoreNone ? f.static_eval + parent_eval : ScoreNone, game_phase(pos),
+                   prune_eval - RfpMargin * depth >= beta ? 1 : 0, std::clamp(arm - beta, -2000, 2000),
+                   static_cast<unsigned long long>(arm_nodes), is_tb_or_mate(arm) ? 1 : 0);
+      ++counters.ledger_rows;
+    }
+  }
+#endif
   // Reverse futility pruning (T20): far enough above beta at shallow depth,
   // the node fails high without a search.
   if (switches.use_rfp && can_prune_node && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
-      prune_eval - RfpMargin * depth >= beta) {
+      prune_eval - RfpMargin * depth >= beta FORK_STAT_GATE(&&force != LedgerForce::RfpOff)) {
     FORK_STAT(++counters.rfp_cuts);
     return prune_eval;
   }
@@ -360,6 +399,40 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
   }
 
+#ifdef FORK_SEARCH_STATS
+  // X10, the decision ledger's futility rows: at a sampled candidate (every
+  // condition but the margin: the static estimate at or below alpha), the
+  // node is searched again with futility forced on and forced off here
+  // (both side searches, so both see the same TT); futility is wrong when
+  // the on arm fails low and the off arm fails high. Before the selector
+  // starts, so the re-entries cannot disturb this node's move loop.
+  if (ledger_every_ && !ledger_active_ && switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
+      !is_tb_or_mate(alpha) && prune_eval <= alpha) {
+    ++counters.ledger_futility_candidates;
+    if (ledger_sampled(key)) {
+      const int saved_eval = f.static_eval;
+      std::uint64_t on_nodes = 0, off_nodes = 0;
+      const int on =
+          ledger_side_search(alpha, beta, ledger_entry_depth, ply, LedgerForce::FutilityOn, on_nodes);
+      if (stopped_) return 0;
+      const int off =
+          ledger_side_search(alpha, beta, ledger_entry_depth, ply, LedgerForce::FutilityOff, off_nodes);
+      f.static_eval = saved_eval;
+      if (stopped_) return 0;
+      const int margin = FutilityOffset + FutilityGrowth * depth;
+      const int parent_eval = ply > 0 ? frames_[ply - 1].static_eval : ScoreNone;
+      std::fprintf(stderr, "prune_ledger futility|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%llu|%llu|%d\n", depth,
+                   ply, alpha - prune_eval, alpha - f.static_eval, margin,
+                   tt_hit ? static_cast<int>(hit.bound) : 0, tt_hit ? static_cast<int>(hit.depth) : -1,
+                   parent_eval != ScoreNone ? f.static_eval + parent_eval : ScoreNone, game_phase(pos),
+                   prune_eval + margin <= alpha ? 1 : 0, std::clamp(on - beta, -2000, 2000),
+                   std::clamp(off - beta, -2000, 2000), static_cast<unsigned long long>(on_nodes),
+                   static_cast<unsigned long long>(off_nodes),
+                   is_tb_or_mate(on) || is_tb_or_mate(off) ? 1 : 0);
+      ++counters.ledger_rows;
+    }
+  }
+#endif
   // The selector checks the TT move (a colliding entry's move may not be
   // legal here) before it is tried first; a withheld move is not tried.
   f.selector.start_main(
@@ -377,8 +450,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   int quiets_searched = 0;
   const bool lmp_node = switches.use_lmp && can_prune && depth <= LmpMaxDepth;
   const int futility_value = in_check ? 0 : prune_eval + FutilityOffset + FutilityGrowth * depth;
+  // (Stats builds: a decision-ledger side search may force the margin's
+  // test on or off at the node it re-enters, X10.)
   const bool futile_node = switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
-                           !is_tb_or_mate(alpha) && futility_value <= alpha;
+                           !is_tb_or_mate(alpha) &&
+                           (FORK_STAT_GATE(force == LedgerForce::FutilityOn    ? true
+                                           : force == LedgerForce::FutilityOff ? false
+                                                                               :) futility_value <= alpha);
   FORK_STAT(counters.futile_nodes += futile_node);
   bool quiet_checks_only = false;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
@@ -584,7 +662,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // that do not give check (keep_quiet_checks above), so every quiet the
   // loop sees there is a checking one. The bound stays honest as if each
   // dropped quiet had been seen.
-  if (f.selector.quiets_filtered() > 0) best = std::max(best, futility_value);
+  if (f.selector.quiets_filtered() > 0)
+    best = std::max(best,
+                    FORK_STAT_GATE(force == LedgerForce::FutilityOn ? std::min(futility_value, alpha_start) :)
+                        futility_value);
   FORK_STAT(counters.futility_prunes += static_cast<std::uint64_t>(f.selector.quiets_filtered()));
   // No legal move is mate or stalemate; legal moves that were all pruned are
   // not (the guard above prevents it; this keeps the result right regardless).
@@ -757,6 +838,43 @@ void Searcher::trace_iteration(int depth, int score, int passes, std::uint64_t i
                static_cast<unsigned long long>(share_all), runner_up,
                static_cast<unsigned long long>(last_pass), static_cast<unsigned long long>(iteration_nodes),
                score, passes, static_cast<int>(root_count_), max_ply_reached_);
+}
+#endif
+
+#ifdef FORK_SEARCH_STATS
+int Searcher::ledger_side_search(int alpha, int beta, int depth, int ply, LedgerForce force,
+                                 std::uint64_t& side_nodes) {
+  // A side search must leave the real search exactly as it was: no node
+  // count, no node or time limit (the stop flag still ends it, and then the
+  // real search stops too), no TT write, no history update, no counter.
+  static const SearchQuota ledger_quota;  // no limits
+  ledger_saved_counters_ = counters;
+#if defined(FORK_EVAL_NNUE)
+  ledger_saved_tally_ = features_.tally();
+#endif
+  const std::uint64_t saved_nodes = nodes_, saved_hits = table_hits_;
+  const int saved_max_ply = max_ply_reached_;
+  const SearchQuota* saved_limits = limits_;
+  limits_ = &ledger_quota;
+  ledger_active_ = true;
+  tt_.set_hold_writes(true);
+  ledger_force_ = force;
+  ledger_force_ply_ = ply;
+  const int score = negamax<false>(alpha, beta, depth, ply);
+  ledger_force_ = LedgerForce::Keep;
+  tt_.set_hold_writes(false);
+  ledger_active_ = false;
+  limits_ = saved_limits;
+  side_nodes = nodes_ - saved_nodes;
+  nodes_ = saved_nodes;
+  table_hits_ = saved_hits;
+  max_ply_reached_ = saved_max_ply;
+  counters = ledger_saved_counters_;
+#if defined(FORK_EVAL_NNUE)
+  features_.set_tally(ledger_saved_tally_);
+#endif
+  counters.ledger_side_nodes += side_nodes;
+  return score;
 }
 #endif
 

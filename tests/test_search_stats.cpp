@@ -365,4 +365,165 @@ TEST_CASE("search_stats", "the iteration trace has one row per finished iteratio
   CHECK(!rows.empty() && rows.back()[1] == static_cast<long long>(result.best.raw()));
 }
 
+// X10, the decision ledger: its side searches must be invisible to the real
+// search. The bench with the ledger, the trace and the counter report all on
+// equals the bench with them off (pinned to the reference by bench_parity).
+TEST_CASE("search_stats", "bench is unchanged with the ledger and the trace on") {
+  const auto set_env = [](const char* name, const char* value) {
+#ifdef _WIN32
+    _putenv_s(name, value ? value : "");
+#else
+    if (value)
+      setenv(name, value, 1);
+    else
+      unsetenv(name);
+#endif
+  };
+  const SearchBenchResult off = run_search_bench();
+  set_env("FORK_PRUNE_LEDGER", "64");
+  set_env("FORK_ITERATION_TRACE", "1");
+  set_env("FORK_STATS_REPORT", "1");
+  const std::string path = "search_stats_ledger_bench.txt";
+  std::fflush(stderr);
+#ifdef _WIN32
+  const int saved = _dup(_fileno(stderr));
+  std::FILE* sink = std::fopen(path.c_str(), "wb");
+  _dup2(_fileno(sink), _fileno(stderr));
+#else
+  const int saved = dup(fileno(stderr));
+  std::FILE* sink = std::fopen(path.c_str(), "wb");
+  dup2(fileno(sink), fileno(stderr));
+#endif
+  const SearchBenchResult on = run_search_bench();
+  std::fflush(stderr);
+#ifdef _WIN32
+  _dup2(saved, _fileno(stderr));
+  _close(saved);
+#else
+  dup2(saved, fileno(stderr));
+  close(saved);
+#endif
+  std::fclose(sink);
+  set_env("FORK_PRUNE_LEDGER", nullptr);
+  set_env("FORK_ITERATION_TRACE", nullptr);
+  set_env("FORK_STATS_REPORT", nullptr);
+  std::ifstream in(path, std::ios::binary);
+  std::size_t rfp_rows = 0, futility_rows = 0, traces = 0;
+  for (std::string line; std::getline(in, line);) {
+    rfp_rows += line.rfind("prune_ledger rfp|", 0) == 0;
+    futility_rows += line.rfind("prune_ledger futility|", 0) == 0;
+    traces += line.rfind("iteration_trace ", 0) == 0;
+  }
+  in.close();
+  std::remove(path.c_str());
+  CHECK_EQ(on.nodes, off.nodes);
+  CHECK_EQ(on.signature, off.signature);
+  CHECK(rfp_rows > 0);
+  CHECK(futility_rows > 0);
+  CHECK(traces > 0);
+}
+
+// X10: with every candidate sampled, the rows match the real search's own
+// counts (counters exclude the side searches): one fired RFP row per RFP
+// cut, one fired futility row per futile node; fired rows meet the margin,
+// unfired ones do not; and the searches equal the same searches without
+// the ledger.
+TEST_CASE("search_stats", "ledger rows match the real search's prunes, and the search is unchanged") {
+  std::vector<TtBucket> buckets(16384);
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  const std::atomic<bool> stop{false};
+  const auto set_ledger = [](const char* value) {
+#ifdef _WIN32
+    _putenv_s("FORK_PRUNE_LEDGER", value ? value : "");
+#else
+    if (value)
+      setenv("FORK_PRUNE_LEDGER", value, 1);
+    else
+      unsetenv("FORK_PRUNE_LEDGER");
+#endif
+  };
+  SearchQuota limits;
+  limits.depth = 7;
+  std::vector<SearchResult> plain;
+  for (int i = 0; i < 3; ++i) {
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    auto searcher = std::make_unique<Searcher>(table);
+    Position pos;
+    CHECK(pos.set_fen(perft_suite()[i].fen));
+    plain.push_back(searcher->deliberate(pos, limits, stop, nullptr, nullptr));
+  }
+  set_ledger("1");
+  auto ledger = std::make_unique<Searcher>(table);
+  set_ledger(nullptr);
+  const std::string path = "search_stats_ledger_rows.txt";
+  std::fflush(stderr);
+#ifdef _WIN32
+  const int saved = _dup(_fileno(stderr));
+  std::FILE* sink = std::fopen(path.c_str(), "wb");
+  _dup2(_fileno(sink), _fileno(stderr));
+#else
+  const int saved = dup(fileno(stderr));
+  std::FILE* sink = std::fopen(path.c_str(), "wb");
+  dup2(fileno(sink), fileno(stderr));
+#endif
+  std::vector<SearchResult> ledgered;
+  for (int i = 0; i < 3; ++i) {
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    ledger->clear_history();
+    Position pos;
+    CHECK(pos.set_fen(perft_suite()[i].fen));
+    ledgered.push_back(ledger->deliberate(pos, limits, stop, nullptr, nullptr));
+  }
+  std::fflush(stderr);
+#ifdef _WIN32
+  _dup2(saved, _fileno(stderr));
+  _close(saved);
+#else
+  dup2(saved, fileno(stderr));
+  close(saved);
+#endif
+  std::fclose(sink);
+  for (int i = 0; i < 3; ++i) {
+    CHECK_EQ(ledgered[i].nodes, plain[i].nodes);
+    CHECK_EQ(ledgered[i].best.raw(), plain[i].best.raw());
+    CHECK_EQ(ledgered[i].score, plain[i].score);
+    CHECK_EQ(ledgered[i].depth, plain[i].depth);
+  }
+  std::ifstream in(path, std::ios::binary);
+  std::uint64_t rfp_fired = 0, rfp_rows = 0, futility_fired = 0, futility_rows = 0;
+  for (std::string line; std::getline(in, line);) {
+    if (line.rfind("prune_ledger ", 0) != 0) continue;
+    std::vector<std::string> fields;
+    std::istringstream text(line.substr(13));
+    for (std::string field; std::getline(text, field, '|');) fields.push_back(field);
+    if (fields[0] == "rfp") {
+      CHECK_EQ(fields.size(), std::size_t{14});
+      const int excess = std::stoi(fields[3]), margin = std::stoi(fields[5]), fired = std::stoi(fields[10]);
+      CHECK_EQ(fired, excess >= margin ? 1 : 0);
+      CHECK(excess >= 0);
+      ++rfp_rows;
+      rfp_fired += fired;
+    } else {
+      CHECK(fields[0] == "futility");
+      CHECK_EQ(fields.size(), std::size_t{16});
+      const int deficit = std::stoi(fields[3]), margin = std::stoi(fields[5]), fired = std::stoi(fields[10]);
+      CHECK_EQ(fired, deficit >= margin ? 1 : 0);
+      CHECK(deficit >= 0);
+      ++futility_rows;
+      futility_fired += fired;
+    }
+  }
+  in.close();
+  std::remove(path.c_str());
+  const SearchCounters& c = ledger->counters;
+  CHECK(rfp_fired > 0 && futility_fired > 0);
+  CHECK_EQ(rfp_fired, c.rfp_cuts);
+  CHECK_EQ(futility_fired, c.futile_nodes);
+  CHECK_EQ(rfp_rows, c.ledger_rfp_candidates);
+  CHECK_EQ(futility_rows, c.ledger_futility_candidates);
+  CHECK_EQ(rfp_rows + futility_rows, c.ledger_rows);
+  CHECK(c.ledger_side_nodes > 0);
+}
+
 }  // namespace forkeng::test
