@@ -540,4 +540,39 @@ TEST_CASE("pruning", "X2 histogram bins and the LMR history probe shift") {
   CHECK_EQ(lmr_history_probe_shift(INT16_MAX), 1);
 }
 
+// Idea 59 step 1's window gap (DESIGN.md §5.7): the distance to the nearer
+// finite bound, a bound in the mate or tablebase band not counting, -1 with
+// none; 1 cp bins to 255, 64 cp bins to 4,095, one overflow bin; depth bands.
+TEST_CASE("pruning", "idea 59 window gap, its bins and depth bands") {
+  CHECK_EQ(window_gap(100, 50, 51), 49);
+  CHECK_EQ(window_gap(40, 50, 51), 10);
+  CHECK_EQ(window_gap(51, 50, 51), 0);
+  CHECK_EQ(window_gap(100, -ScoreInfinite, ScoreInfinite), -1);
+  CHECK_EQ(window_gap(100, mated_score(3), mate_score(4)), -1);  // mate distance bounds are not finite
+  CHECK_EQ(window_gap(100, -ScoreInfinite, 150), 50);            // one finite bound
+  CHECK_EQ(window_gap(100, 20, ScoreInfinite), 80);
+  CHECK_EQ(window_gap(100, TbWinScore - 10, ScoreInfinite), -1);
+  int previous = -1;
+  for (int g = 0; g < 6000; ++g) {
+    const int b = window_gap_bin(g);
+    CHECK(b >= 0 && b < GapBins && b >= previous);
+    previous = b;
+  }
+  CHECK_EQ(window_gap_bin(255), 255);
+  CHECK_EQ(window_gap_bin(256), 256);
+  CHECK_EQ(window_gap_bin(319), 256);
+  CHECK_EQ(window_gap_bin(320), 257);
+  CHECK_EQ(window_gap_bin(4095), GapBins - 2);
+  CHECK_EQ(window_gap_bin(4096), GapBins - 1);
+  CHECK_EQ(GapBins, 317);
+  CHECK_EQ(gap_depth_band(1), 0);
+  CHECK_EQ(gap_depth_band(2), 1);
+  CHECK_EQ(gap_depth_band(3), 2);
+  CHECK_EQ(gap_depth_band(4), 2);
+  CHECK_EQ(gap_depth_band(5), 3);
+  CHECK_EQ(gap_depth_band(7), 3);
+  CHECK_EQ(gap_depth_band(8), 4);
+  CHECK_EQ(gap_depth_band(40), GapBands - 1);
+}
+
 }  // namespace forkeng::test

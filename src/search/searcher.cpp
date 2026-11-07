@@ -258,6 +258,25 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   FORK_STAT(++(in_check                          ? counters.check_nodes_main
                : tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_main
                                                  : counters.evals_main));
+#ifdef FORK_SEARCH_STATS
+  // Idea 59 step 1: the static evaluation's gap to the nearest finite bound
+  // of this node's window (after mate distance pruning), computed or reused.
+  if (!in_check) {
+    const bool reused = tt_hit && hit.eval != ScoreNone;
+    const int gap = window_gap(f.static_eval, alpha, beta);
+    const int band = gap_depth_band(depth);
+    if (gap < 0) {
+      ++(reused ? counters.eval_gap_main_reuse_infinite : counters.eval_gap_main_infinite);
+      if (!reused) ++counters.eval_gap_band_infinite[band];
+    } else if (reused) {
+      ++counters.eval_gap_main_reuse_bins[window_gap_bin(gap)];
+    } else {
+      ++counters.eval_gap_main_bins[window_gap_bin(gap)];
+      ++counters.eval_gap_band_bins[band][window_gap_bin(gap)];
+      counters.eval_gap_main_one_sided += is_tb_or_mate(alpha) != is_tb_or_mate(beta);
+    }
+  }
+#endif
   // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
   // score from a real search corrects the static estimate in the direction
   // its bound proves (a lower bound above it raises it, an upper bound below
@@ -719,6 +738,19 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   } else {
     f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
     FORK_STAT(++(tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_quiesce : counters.evals_quiesce));
+#ifdef FORK_SEARCH_STATS
+    {  // Idea 59 step 1: the stand-pat evaluation's window gap.
+      const bool reused = tt_hit && hit.eval != ScoreNone;
+      const int gap = window_gap(f.static_eval, alpha, beta);
+      if (gap < 0)
+        ++(reused ? counters.eval_gap_quiesce_reuse_infinite : counters.eval_gap_quiesce_infinite);
+      else
+        ++(reused ? counters.eval_gap_quiesce_reuse_bins
+                  : counters.eval_gap_quiesce_bins)[window_gap_bin(gap)];
+      if (!reused && gap >= 0)
+        counters.eval_gap_quiesce_one_sided += is_tb_or_mate(alpha) != is_tb_or_mate(beta);
+    }
+#endif
     best = f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)

@@ -3691,6 +3691,16 @@ guards fails them). Rows: `prune_ledger` lines; analysis:
 `tools/measure/prune_ledger_fit.py` (I1's probit with a tail floor, by
 depth, with the declared reading in its docstring).
 
+**Idea 59 step 1, evaluations near the window** (owner's request,
+2026-11-07, for the Boundary Refiner's gate). At each static evaluation the
+stats build records the gap between the evaluation and the nearest finite
+bound of the node's window (`window_gap`; a bound in the mate or tablebase
+band does not count, and a site with no finite bound is counted apart),
+separately for main-search and quiescence evaluations, for computed ones
+(the network runs) and ones reused from the TT entry, and for the main
+search by depth band. `search_counters_report.py gap` gives the share of
+evaluations within 10, 25, 50 and 100 cp and the call rate per node.
+
 **Measurement settings** (they change no play; each is recorded here and
 in its code comment, as the orchestrator asked on 2026-11-07):
 
@@ -3712,6 +3722,10 @@ in its code comment, as the orchestrator asked on 2026-11-07):
 | X10 gap bins | 20 cp for rates, 10 cp for the fit | 20 cp resolves the margin's neighbourhood (RFP's margin grows 80 cp per ply); the finer fit bins lose little to binning |
 | X10 bootstrap | 200 rounds for the margin rate, 50 for the fitted sigma, seed 20261109 | the sigma rounds each refit by Nelder-Mead in pure Python |
 | X10 arm score clamp | +-2,000 cp, mate and tablebase arms flagged | only the side of beta matters; the clamp keeps the rows integer and short |
+| Idea 59 gap bins | 1 cp to 255, 64 cp to 4,095, one overflow bin (317) | every margin up to 255 cp counts exactly (the owner's 10, 25, 50, 100 among them); the coarse bins keep the tail's shape |
+| Idea 59 window | the node's alpha and beta at the evaluation (main search: after mate distance pruning) | the window a gate would compare against at that moment; mate and tablebase bounds give no gate |
+| Idea 59 depth bands | 1, 2, 3-4, 5-7, 8+ | the pruning depths (1-6) apart from the deep nodes, each band with enough sites |
+| Idea 59 games and budgets | 100 games (seed 20261110, disjoint from X2's, X6's and X10's), the test engine's positions (at most 80 per game), 200,000 and 1,000,000 nodes | as X2's arms, so the call rates are comparable with X1's in-game evaluations per node |
 | Replay processes | at most 2, below-normal priority, through jobctl (kind `measure`) | the machine is shared with data generation (orchestrator, 2026-11-07); node limits make results independent of load |
 
 **Results, X1** (2026-11-07; stats build 68c00b8, S512ppr2; bench in the

@@ -314,65 +314,74 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
 // - X10: candidates of RFP and futility (every condition but the margin),
 //   the ledger rows printed, and the nodes its side searches took (kept
 //   apart: a side search restores every other counter).
+// - Idea 59 step 1: evaluation sites whose window has no finite bound (both
+//   in the mate or tablebase band), main and quiescence, computed and
+//   reused from the TT; computed ones with exactly one finite bound.
 // - X2: LMR sites whose node has no reply or no follow arrival (a null move
 //   or the root above), so those tables have no entry; late captures (every
 //   LMR gate passed but "quiet": R18's sites); and at LMR sites, where the
 //   LMR history term of sprt/lmr-history would reduce less (its shift > 0),
 //   more (< 0), and where it would change the reduction.
-#define FORK_SEARCH_COUNTERS(X)     \
-  X(beta_cutoffs)                   \
-  X(first_move_cutoffs)             \
-  X(cutoff_index_sum)               \
-  X(makes)                          \
-  X(rfp_cuts)                       \
-  X(null_cuts)                      \
-  X(lmp_prunes)                     \
-  X(futility_prunes)                \
-  X(see_prunes)                     \
-  X(lmr_searches)                   \
-  X(lmr_researches)                 \
-  X(lmr_plies_sum)                  \
-  X(lmr_rule_sites)                 \
-  X(lmr_rule_fires)                 \
-  X(lmr_rule_changes)               \
-  X(see_tests_good_captures)        \
-  X(see_tests_bad_captures)         \
-  X(see_tests_quiets)               \
-  X(see_tests_other)                \
-  X(bad_captures_after_stop)        \
-  X(bad_captures_after_stop_pruned) \
-  X(futile_nodes)                   \
-  X(futile_quiets_taken)            \
-  X(futile_quiets_searched)         \
-  X(quiesce_nodes_pv)               \
-  X(quiesce_nodes_non_pv)           \
-  X(singular_candidates)            \
-  X(singular_tests)                 \
-  X(singular_extended)              \
-  X(multi_cut_cuts)                 \
-  X(negative_extensions)            \
-  X(no_move_reductions)             \
-  X(root_nodes)                     \
-  X(main_nodes)                     \
-  X(evals_main)                     \
-  X(tt_eval_hits_main)              \
-  X(check_nodes_main)               \
-  X(evals_quiesce)                  \
-  X(tt_eval_hits_quiesce)           \
-  X(check_nodes_quiesce)            \
-  X(evals_horizon)                  \
-  X(pawn_makes)                     \
-  X(pawn_makes_quiesce)             \
-  X(lmr_reply_absent)               \
-  X(lmr_follow_absent)              \
-  X(late_capture_sites)             \
-  X(lmr_history_fire_less)          \
-  X(lmr_history_fire_more)          \
-  X(lmr_history_changes)            \
-  X(ledger_rfp_candidates)          \
-  X(ledger_futility_candidates)     \
-  X(ledger_rows)                    \
-  X(ledger_side_nodes)
+#define FORK_SEARCH_COUNTERS(X)      \
+  X(beta_cutoffs)                    \
+  X(first_move_cutoffs)              \
+  X(cutoff_index_sum)                \
+  X(makes)                           \
+  X(rfp_cuts)                        \
+  X(null_cuts)                       \
+  X(lmp_prunes)                      \
+  X(futility_prunes)                 \
+  X(see_prunes)                      \
+  X(lmr_searches)                    \
+  X(lmr_researches)                  \
+  X(lmr_plies_sum)                   \
+  X(lmr_rule_sites)                  \
+  X(lmr_rule_fires)                  \
+  X(lmr_rule_changes)                \
+  X(see_tests_good_captures)         \
+  X(see_tests_bad_captures)          \
+  X(see_tests_quiets)                \
+  X(see_tests_other)                 \
+  X(bad_captures_after_stop)         \
+  X(bad_captures_after_stop_pruned)  \
+  X(futile_nodes)                    \
+  X(futile_quiets_taken)             \
+  X(futile_quiets_searched)          \
+  X(quiesce_nodes_pv)                \
+  X(quiesce_nodes_non_pv)            \
+  X(singular_candidates)             \
+  X(singular_tests)                  \
+  X(singular_extended)               \
+  X(multi_cut_cuts)                  \
+  X(negative_extensions)             \
+  X(no_move_reductions)              \
+  X(root_nodes)                      \
+  X(main_nodes)                      \
+  X(evals_main)                      \
+  X(tt_eval_hits_main)               \
+  X(check_nodes_main)                \
+  X(evals_quiesce)                   \
+  X(tt_eval_hits_quiesce)            \
+  X(check_nodes_quiesce)             \
+  X(evals_horizon)                   \
+  X(pawn_makes)                      \
+  X(pawn_makes_quiesce)              \
+  X(lmr_reply_absent)                \
+  X(lmr_follow_absent)               \
+  X(late_capture_sites)              \
+  X(lmr_history_fire_less)           \
+  X(lmr_history_fire_more)           \
+  X(lmr_history_changes)             \
+  X(ledger_rfp_candidates)           \
+  X(ledger_futility_candidates)      \
+  X(ledger_rows)                     \
+  X(ledger_side_nodes)               \
+  X(eval_gap_main_infinite)          \
+  X(eval_gap_quiesce_infinite)       \
+  X(eval_gap_main_reuse_infinite)    \
+  X(eval_gap_quiesce_reuse_infinite) \
+  X(eval_gap_main_one_sided)         \
+  X(eval_gap_quiesce_one_sided)
 
 // X2's histogram bins (DESIGN.md §5.7; measurement settings, no search
 // effect). Sign-magnitude bins: the value 0 and the positive values fill the
@@ -402,6 +411,31 @@ constexpr int order_score_bin(int s) {
 constexpr int LmrHistoryProbeDivisor = 24000;
 constexpr int lmr_history_probe_shift(int order_score) { return order_score / LmrHistoryProbeDivisor; }
 
+// Idea 59 step 1 (DESIGN.md §5.7; measurement settings, no search effect):
+// the gap between a static evaluation and the nearest finite bound of the
+// node's window, in bins of 1 cp up to 255 (so a margin of any whole number
+// of cp up to 255 is counted exactly), 64 cp up to 4,095 (the tail's shape),
+// and one overflow bin. A bound in the mate or tablebase band counts as
+// infinite: no gate could be set against it. Main-search sites are also
+// split by remaining depth: 1, 2, 3-4, 5-7, 8 and more.
+constexpr int GapBinsFine = 256;
+constexpr int GapBins = GapBinsFine + (4096 - GapBinsFine) / 64 + 1;
+constexpr int GapBands = 5;
+// The gap, or -1 when neither bound is finite.
+constexpr int window_gap(int eval, int alpha, int beta) {
+  const bool low = !is_tb_or_mate(alpha), high = !is_tb_or_mate(beta);
+  if (!low && !high) return -1;
+  const int to_alpha = eval > alpha ? eval - alpha : alpha - eval;
+  const int to_beta = eval > beta ? eval - beta : beta - eval;
+  return !low ? to_beta : !high ? to_alpha : to_alpha < to_beta ? to_alpha : to_beta;
+}
+constexpr int window_gap_bin(int gap) {
+  return gap < GapBinsFine ? gap : gap < 4096 ? GapBinsFine + (gap - GapBinsFine) / 64 : GapBins - 1;
+}
+constexpr int gap_depth_band(int depth) {
+  return depth <= 1 ? 0 : depth == 2 ? 1 : depth <= 4 ? 2 : depth <= 7 ? 3 : 4;
+}
+
 struct SearchCounters {
 #define FORK_COUNTER_MEMBER(member) std::uint64_t member = 0;
   FORK_SEARCH_COUNTERS(FORK_COUNTER_MEMBER)
@@ -421,6 +455,16 @@ struct SearchCounters {
   std::uint64_t lmr_reply_bins[TableBins] = {};
   std::uint64_t lmr_follow_bins[TableBins] = {};
   std::uint64_t late_take_bins[TableBins] = {};
+  // Idea 59 step 1 (DESIGN.md §5.7): window gaps at evaluation sites with a
+  // finite bound: computed in the main search and in quiescence, reused
+  // from the TT entry (main, quiescence), and the computed main-search ones
+  // by depth band (with each band's infinite-window count).
+  std::uint64_t eval_gap_main_bins[GapBins] = {};
+  std::uint64_t eval_gap_quiesce_bins[GapBins] = {};
+  std::uint64_t eval_gap_main_reuse_bins[GapBins] = {};
+  std::uint64_t eval_gap_quiesce_reuse_bins[GapBins] = {};
+  std::uint64_t eval_gap_band_bins[GapBands][GapBins] = {};
+  std::uint64_t eval_gap_band_infinite[GapBands] = {};
 };
 
 class Searcher {

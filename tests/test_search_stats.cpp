@@ -526,4 +526,41 @@ TEST_CASE("search_stats", "ledger rows match the real search's prunes, and the s
   CHECK(c.ledger_side_nodes > 0);
 }
 
+// Idea 59 step 1: every computed evaluation lands once in its gap histogram
+// or its infinite-window count (main search and quiescence apart), every
+// reused one in the reuse histograms, and the depth bands split the main
+// search's computed ones exactly.
+TEST_CASE("search_stats", "idea 59 window gaps account for every evaluation") {
+  std::vector<TtBucket> buckets(16384);
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  const std::atomic<bool> stop{false};
+  auto searcher = std::make_unique<Searcher>(table);
+  SearchQuota limits;
+  limits.depth = 9;
+  for (const PerftPosition& p : perft_suite()) {
+    Position pos;
+    CHECK(pos.set_fen(p.fen));
+    searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+  }
+  const SearchCounters& c = searcher->counters;
+  const auto sum = [](const std::uint64_t* bins, int count) {
+    std::uint64_t total = 0;
+    for (int i = 0; i < count; ++i) total += bins[i];
+    return total;
+  };
+  CHECK_EQ(sum(c.eval_gap_main_bins, GapBins) + c.eval_gap_main_infinite, c.evals_main);
+  CHECK_EQ(sum(c.eval_gap_quiesce_bins, GapBins) + c.eval_gap_quiesce_infinite, c.evals_quiesce);
+  CHECK_EQ(sum(c.eval_gap_main_reuse_bins, GapBins) + c.eval_gap_main_reuse_infinite, c.tt_eval_hits_main);
+  CHECK_EQ(sum(c.eval_gap_quiesce_reuse_bins, GapBins) + c.eval_gap_quiesce_reuse_infinite,
+           c.tt_eval_hits_quiesce);
+  std::uint64_t banded = 0;
+  for (int b = 0; b < GapBands; ++b) banded += sum(c.eval_gap_band_bins[b], GapBins);
+  CHECK_EQ(banded, sum(c.eval_gap_main_bins, GapBins));
+  CHECK_EQ(sum(c.eval_gap_band_infinite, GapBands), c.eval_gap_main_infinite);
+  CHECK(c.eval_gap_main_one_sided <= sum(c.eval_gap_main_bins, GapBins));
+  CHECK(c.eval_gap_quiesce_one_sided <= sum(c.eval_gap_quiesce_bins, GapBins));
+  CHECK(c.eval_gap_main_bins[0] + c.eval_gap_quiesce_bins[0] > 0);  // some evaluations sit on a bound
+}
+
 }  // namespace forkeng::test

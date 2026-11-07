@@ -142,6 +142,24 @@ void print_counter_summary(const SearchCounters& c, const FeatureStackTally* tal
   bins_line("LMR reply history", c.lmr_reply_bins, TableBins);
   bins_line("LMR follow history", c.lmr_follow_bins, TableBins);
   bins_line("late capture take history", c.late_take_bins, TableBins);
+  // Idea 59 step 1: computed evaluations within 10, 25, 50 and 100 cp of the
+  // nearest finite window bound (shares of all computed evaluations there).
+  const auto within = [&](const char* name, const std::uint64_t* bins, std::uint64_t infinite) {
+    std::uint64_t total = infinite, near[4] = {0, 0, 0, 0};
+    const int margins[4] = {10, 25, 50, 100};
+    for (int i = 0; i < GapBins; ++i) total += bins[i];
+    for (int k = 0; k < 4; ++k)
+      for (int i = 0; i <= margins[k]; ++i) near[k] += bins[i];
+    std::fprintf(
+        out,
+        "stats: %s evaluations %llu, no finite bound %.2f%%, within 10/25/50/100 cp of a bound %.2f%% "
+        "%.2f%% %.2f%% %.2f%%\n",
+        name, static_cast<unsigned long long>(total), 100.0 * ratio(infinite, total),
+        100.0 * ratio(near[0], total), 100.0 * ratio(near[1], total), 100.0 * ratio(near[2], total),
+        100.0 * ratio(near[3], total));
+  };
+  within("main-search", c.eval_gap_main_bins, c.eval_gap_main_infinite);
+  within("quiescence", c.eval_gap_quiesce_bins, c.eval_gap_quiesce_infinite);
 }
 
 void print_counter_dump(const SearchCounters& c, const FeatureStackTally* tally, std::FILE* out) {
@@ -179,6 +197,15 @@ void print_counter_dump(const SearchCounters& c, const FeatureStackTally* tally,
   hist_line("lmr_reply", c.lmr_reply_bins, TableBins);
   hist_line("lmr_follow", c.lmr_follow_bins, TableBins);
   hist_line("late_take", c.late_take_bins, TableBins);
+  // Idea 59 step 1: the window-gap histograms.
+  hist_line("eval_gap_main", c.eval_gap_main_bins, GapBins);
+  hist_line("eval_gap_quiesce", c.eval_gap_quiesce_bins, GapBins);
+  hist_line("eval_gap_main_reuse", c.eval_gap_main_reuse_bins, GapBins);
+  hist_line("eval_gap_quiesce_reuse", c.eval_gap_quiesce_reuse_bins, GapBins);
+  const char* const band_names[GapBands] = {"eval_gap_band_1", "eval_gap_band_2", "eval_gap_band_3_4",
+                                            "eval_gap_band_5_7", "eval_gap_band_8_plus"};
+  for (int b = 0; b < GapBands; ++b) hist_line(band_names[b], c.eval_gap_band_bins[b], GapBins);
+  hist_line("eval_gap_band_infinite", c.eval_gap_band_infinite, GapBands);
 }
 
 #else

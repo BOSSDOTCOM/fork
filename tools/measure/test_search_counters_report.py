@@ -72,6 +72,44 @@ class SearchCountersReportTests(unittest.TestCase):
         self.assertAlmostEqual(r['ratio_30_60_to_bench'], 10.0)
         self.assertEqual(r['bands']['1-15']['games'], 2)
 
+    def test_gap_bin_edges(self):
+        edges = scr.gap_bin_edges()
+        self.assertEqual(len(edges), 317)  # searcher.hpp's GapBins
+        self.assertEqual(edges[0], (0, 0))
+        self.assertEqual(edges[255], (255, 255))
+        self.assertEqual(edges[256], (256, 319))
+        self.assertEqual(edges[315], (4032, 4095))
+        self.assertEqual(edges[316], (4096, None))
+
+    def test_gap_share_within(self):
+        bins = [0] * 317
+        bins[0], bins[10], bins[11], bins[100], bins[300] = 2, 3, 4, 5, 6
+        self.assertEqual(scr.gap_share_within(bins, 10, 10), (5, 30))  # gaps of 10 count; infinite in the total
+        self.assertEqual(scr.gap_share_within(bins, 0, 100), (14, 20))
+        with self.assertRaises(ValueError):
+            scr.gap_share_within(bins, 0, 300)
+
+    def test_window_gap_report(self):
+        empty = [0] * 317
+        main, qs = list(empty), list(empty)
+        main[5], main[30] = 10, 30  # 40 main evaluations with a finite bound
+        qs[20], qs[60] = 50, 50
+        hist = {'eval_gap_main': main, 'eval_gap_quiesce': qs, 'eval_gap_main_reuse': list(empty),
+                'eval_gap_quiesce_reuse': list(empty), 'eval_gap_band_1': main,
+                'eval_gap_band_infinite': [10, 0, 0, 0, 0]}
+        counters = {'root_nodes': 0, 'main_nodes': 100, 'quiesce_nodes_pv': 0, 'quiesce_nodes_non_pv': 100,
+                    'eval_gap_main_infinite': 10, 'eval_gap_quiesce_infinite': 0, 'eval_gap_main_reuse_infinite': 0,
+                    'eval_gap_quiesce_reuse_infinite': 0, 'eval_gap_main_one_sided': 5, 'eval_gap_quiesce_one_sided': 0}
+        r = scr.window_gap_report(counters, hist)
+        self.assertEqual(r['main']['evaluations'], 50)
+        self.assertAlmostEqual(r['main']['infinite_share'], 0.2)
+        self.assertAlmostEqual(r['main']['within_10']['share'], 10 / 50)
+        self.assertAlmostEqual(r['main']['within_50']['call_rate_per_node'], 40 / 200)
+        self.assertAlmostEqual(r['quiescence']['within_25']['share'], 0.5)
+        self.assertAlmostEqual(r['combined_call_rate_per_node'][100], (40 + 100) / 200)
+        self.assertEqual(r['quiescence']['gap_p25'], 20)
+        self.assertEqual(r['main_by_depth']['1']['evaluations'], 50)
+
 
 if __name__ == '__main__':
     unittest.main()

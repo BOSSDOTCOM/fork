@@ -35,8 +35,21 @@ term's -10.8 Elo to its cost or asymmetry (then its nps is measured); B14
 predicted that at least 85% of the term's firings were on the reduce-more
 side.
 
+Idea 59 step 1 (the Boundary Refiner's gate): at evaluation sites, the gap
+between the static evaluation and the nearest finite bound of the node's
+alpha-beta window (a bound in the mate or tablebase band does not count;
+a site with none is "infinite"), separately for main-search and quiescence
+evaluations, computed ones (the network runs) and ones reused from the TT
+entry. For margins of 10, 25, 50 and 100 cp: the share of evaluations
+within the margin, and the call rate per node (those evaluations over all
+nodes; X1's evaluations per node times the share). Main-search evaluations
+are also split by remaining depth (1, 2, 3-4, 5-7, 8+). A measurement only:
+no decision rule was declared (the owner's request, 2026-11-07, sets the
+two gate margins from it later).
+
     search_counters_report.py x1 LOG_OR_REPLAY_DIR...
     search_counters_report.py x2 REPLAY_DIR --bench BENCH_STDERR [--json OUT]
+    search_counters_report.py gap LOG_OR_REPLAY_DIR... [--json OUT]
 """
 import argparse
 import json
@@ -181,6 +194,69 @@ def x2_report(records, bench, threshold=24000, rounds=2000, seed=20261107):
     return out
 
 
+def gap_bin_edges(count=317):
+    """The window-gap bins (searcher.hpp's window_gap_bin): [(low, high)], 1 cp
+    each up to 255, 64 cp up to 4,095, then one open bin (high None)."""
+    edges = [(g, g) for g in range(256)]
+    edges += [(256 + 64 * i, 256 + 64 * i + 63) for i in range(count - 257)]
+    edges.append((256 + 64 * (count - 257), None))
+    return edges
+
+
+def gap_share_within(bins, infinite, margin):
+    """(evaluations with a gap of at most `margin` cp, all evaluations of the
+    histogram, infinite windows included). `margin` must be at most 255."""
+    if margin > 255:
+        raise ValueError('margins above 255 cp fall in the coarse bins')
+    return sum(bins[:margin + 1]), sum(bins) + infinite
+
+
+def window_gap_report(counters, hist, margins=(10, 25, 50, 100)):
+    """Idea 59 step 1's numbers from summed counters and histograms."""
+    nodes = counters['root_nodes'] + counters['main_nodes'] + counters['quiesce_nodes_pv'] + \
+        counters['quiesce_nodes_non_pv']
+    edges = gap_bin_edges(len(hist['eval_gap_main']))
+
+    def describe(bins, infinite, one_sided=None):
+        total = sum(bins) + infinite
+        row = {'evaluations': total, 'per_node': total / nodes if nodes else 0.0,
+               'infinite_share': infinite / total if total else 0.0}
+        if one_sided is not None:
+            row['one_sided_share'] = one_sided / total if total else 0.0
+        finite = sum(bins)
+        seen = 0
+        for q in (0.25, 0.5, 0.75):
+            for (low, high), n in zip(edges, bins):
+                if finite and seen + n >= q * finite:
+                    row[f'gap_p{int(q * 100)}'] = low if high is None else (low + high) / 2
+                    break
+                seen += n
+            seen = 0
+        for m in margins:
+            within, all_evals = gap_share_within(bins, infinite, m)
+            row[f'within_{m}'] = {'share': within / all_evals if all_evals else 0.0,
+                                  'call_rate_per_node': within / nodes if nodes else 0.0}
+        return row
+
+    out = {'nodes': nodes,
+           'main': describe(hist['eval_gap_main'], counters['eval_gap_main_infinite'],
+                            counters['eval_gap_main_one_sided']),
+           'quiescence': describe(hist['eval_gap_quiesce'], counters['eval_gap_quiesce_infinite'],
+                                  counters['eval_gap_quiesce_one_sided']),
+           'main_reused': describe(hist['eval_gap_main_reuse'], counters['eval_gap_main_reuse_infinite']),
+           'quiescence_reused': describe(hist['eval_gap_quiesce_reuse'], counters['eval_gap_quiesce_reuse_infinite']),
+           'main_by_depth': {}}
+    infinite_bands = hist.get('eval_gap_band_infinite', [0] * 5)
+    for i, band in enumerate(('1', '2', '3-4', '5-7', '8+')):
+        name = 'eval_gap_band_' + band.replace('-', '_').replace('+', '_plus')
+        if name in hist:
+            out['main_by_depth'][band] = describe(hist[name], infinite_bands[i])
+    out['combined_call_rate_per_node'] = {
+        m: out['main'][f'within_{m}']['call_rate_per_node'] + out['quiescence'][f'within_{m}']['call_rate_per_node']
+        for m in margins}
+    return out
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     sub = parser.add_subparsers(dest='command', required=True)
@@ -190,7 +266,41 @@ def main(argv=None):
     p2.add_argument('replay', type=Path)
     p2.add_argument('--bench', type=Path, required=True, help='stderr of FORK_STATS_REPORT=1 fork bench')
     p2.add_argument('--json', type=Path, default=None)
+    p3 = sub.add_parser('gap', help="idea 59 step 1: evaluations' gaps to the window")
+    p3.add_argument('inputs', nargs='+', type=Path)
+    p3.add_argument('--json', type=Path, default=None)
     a = parser.parse_args(argv)
+
+    if a.command == 'gap':
+        results = {}
+        for path in a.inputs:
+            counters, hist = {}, {}
+            if path.is_dir():
+                for f in sorted(path.glob('game-*.jsonl')):
+                    for line in f.read_text(encoding='utf-8').splitlines():
+                        record = json.loads(line)
+                        for k, v in record['counters'].items():
+                            counters[k] = counters.get(k, 0) + v
+                        for k, v in record.get('hist', {}).items():
+                            acc = hist.setdefault(k, [0] * len(v))
+                            for i, n in enumerate(v):
+                                acc[i] += n
+            else:
+                for number, line in enumerate(path.read_text(encoding='utf-8', errors='replace').splitlines(), 1):
+                    try:
+                        if line.startswith('search_counters '):
+                            counters = engine_lines.parse_counter_line(line)
+                        elif line.startswith('search_hist '):
+                            name, bins = engine_lines.parse_hist_line(line)
+                            hist[name] = bins
+                    except ValueError as e:
+                        raise SystemExit(f'{path}:{number}: {e}')
+            results[str(path.name)] = window_gap_report(counters, hist)
+        text = json.dumps(results, indent=1)
+        if a.json:
+            a.json.write_text(text + '\n', encoding='utf-8')
+        print(text)
+        return 0
 
     if a.command == 'x2':
         records = []
