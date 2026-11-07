@@ -25,8 +25,8 @@ negative-expected-value or cannot decide anything at Fork's budget and should
 be dropped or redesigned: distillation from S512+X, S512cl's speed work, the
 removal round as planned, idea 23's long run on its current proxy, the full
 fractional-depth refactor, and the 0.85x time-odds speed measurement. The
-honest total for the rest of Phase 4 is **about +22 to +52 Elo at LTC head to
-head (central about +37)**, which is roughly +13 to +50 on a third-party
+honest total for the rest of Phase 4 is **about +20 to +50 Elo at LTC head to
+head (central about +35)**, which is roughly +12 to +45 on a third-party
 rating list, plus +3 to +10 at TCEC alone from building the TCEC binary
 properly. SMP (Phase 6) outweighs all of it at TCEC and is out of scope.
 
@@ -59,8 +59,8 @@ credited to the agent who verified it. Times are EST.
    GitHub-bound, so it never waits for the search queue.
 2. **Move node-share time management (plus best-move stability) into Phase 4
    (owner plan change).** Zero nps, about 2 engineering days and 6-8 GitHub
-   hours, **+5 to +12 at LTC** (B14's shrunk range, raised a little by a third
-   engine's record, OS-Stormphrax), more plausibly at TCEC's 30'+3". The "resolution-aware soft stop" half of the proposals is refuted
+   hours, **+4 to +10 at LTC** (B14's shrunk range from the OS survey's engines
+   and the KB's ten-engine record), more plausibly at TCEC's 30'+3". The "resolution-aware soft stop" half of the proposals is refuted
    by the code: a timed Fork search only reaches the soft check after a
    completed iteration, with every aspiration re-search resolved
    (searcher.cpp lines 761-776 and 816 [V]). Labels are untouched (datagen
@@ -73,8 +73,8 @@ credited to the agent who verified it. Times are EST.
    price is about 2% adoption of truly null features. Networks keep [0, 5].
 4. **Split the SPSA retune.** Build the GitHub SPSA driver now (2-3 days;
    Fork cannot run SPSA on the shards today, B14 [V]), tune the eight
-   eval-dependent margins early at STC (**+3 to +8 LTC**), and do the final
-   retune by scaling class at the end (**+1 to +6**): shallow margins at STC,
+   eval-dependent margins early at STC (**+2 to +7 LTC**), and do the final
+   retune by scaling class at the end (**+1 to +5**): shallow margins at STC,
    depth-scaling constants at LTC, time management never at a
    base/increment ratio of 100, the eval scale never.
 5. **Measure before building.** About a week of cheap measurements decides
@@ -111,20 +111,22 @@ passers).
 |---|---|---|---|
 | Item 8 (retrain on g3s3) | +4 to +12 | +7 | B13's adjusted figure; the one-time anneal is already banked in S512ppr2 |
 | Later retrains (8b, 8c) | +2 to +10 | +5 | each needs about 150 M new kept positions from a promoted labeller |
-| Node-share TM + stability | +5 to +12 | +8 | zero nps; does not flow into labels; three engines' records (OS, OS-Stormphrax), shrunk |
-| SPSA, early pass + final pass | +4 to +12 | +7 | R14 +3 to +8, R24 +1 to +6, not additive at the top |
-| Search features under design R (14-17 tests) | +4 to +12 | +7 | ST1's yield under B14's tighter priors; adds R40 and R41 and firmer priors for R7, R12, R15, R16, R34 |
+| Node-share TM + stability | +4 to +10 | +7 | zero nps; does not flow into labels; B14's range from OS and KB time-management §4.4 |
+| SPSA, early pass + final pass | +3 to +10 | +6 | R14 +2 to +7, R24 +1 to +5 (B14), not additive at the top |
+| Search features under design R (14-17 tests) | +3 to +11 | +6.5 | ST1's yield under B14's tighter priors; adds R40 and R41 |
 | Speed work, bench-identical (H4, H5, H7) | +2 to +7 | +4 | at 1.5 Elo per 1% nps; also more data per CPU-hour |
 | Network capacity and training extras (one family or W2, the result-weight arm or R39's high-WDL branch, recency, book, slice) | 0 to +9 | +3.5 | probability-weighted; most may fail their gates |
 | Removal round | 0 to +2 | +1 | mostly simplicity |
-| **Sum of centrals** | | **+42.5** | |
-| **After interaction shrink (about 10-15%)** | **+22 to +52** | **+37** | |
+| **Sum of centrals** | | **+40** | |
+| **After interaction shrink (about 10-15%)** | **+20 to +50** | **+35** | |
 
 - **On a third-party list** divide by 1.0-1.7 (A1 §2.2, UNVERIFIED): about
-  +13 to +50.
-- **What OS-Stormphrax changed:** about +2 on the central (TM, SPSA, search
-  features, one training branch). Its numbers are one engine's SPRT-selected
-  estimates, so they moved ranges modestly and changed no verdict.
+  +12 to +45.
+- **Reliance on OS-Stormphrax** (owner ruling, §8.3): every range is based on
+  sources other than Stormphrax wherever another source documents the idea;
+  Stormphrax is at most a corroborating data point there. It changes the
+  total by about 0. Items that rest on it alone are marked "sole source:
+  OS-Stormphrax".
 - **TCEC only:** the TCEC build adds +3 to +10 that no Fork test sees, and
   node-share TM is plausibly worth more at 30'+3" than at 40+0.4
   (UNVERIFIED).
@@ -159,8 +161,8 @@ passers).
 - **A blind result-weight ladder, a WDL-heavier end of training, TD-k
   targets or cross-entropy in item 8's main arms**: the result's bias is
   class-dependent and unmeasured; measure it first (B13 §3.2).
-  OS-Stormphrax's high-WDL fine-tune gain earns only a cheap, guarded branch
-  on a finished candidate (R39), never a change to the control.
+  The high-WDL fine-tune records (OS N2, SF §3.3) earn only a cheap, guarded
+  branch on a finished candidate (R39), never a change to the control.
 - **Re-validation filler as queued** (B-3, the root fail-high fix, plain
   B-4, keep-exact): posterior means about 0 or below (ST8); the root
   fail-high premise does not arise in timed play (R8 below).
@@ -190,11 +192,14 @@ decision before they run.
 
 IDs are stable labels; the ranks were recomputed after folding in the
 Stormphrax supplement (**OS-Stormphrax**: Phase B file, section B2,
-supplement). Its numbers are one engine's SPRT-selected OpenBench point
-estimates, so they were shrunk like every other survey prior: they move a
-range by at most a third of the distance toward the external figure, and
-never past what B13/B14 allowed for the same mechanism. The new items are R39,
-R40 and R41; R7, R8, R12, R14, R15, R16, R24 and R34 changed range.
+supplement) and after the owner's ruling to minimise reliance on it (§8.3).
+Where another source documents an idea (the SF, OS or TC surveys, the
+specialists, the KB, the literature), that source is credited first and the
+range is based on it; Stormphrax is at most one corroborating data point.
+Where Stormphrax is the only source, the entry says "sole source:
+OS-Stormphrax". R39, R40 and R41 were added from the supplement, each with a
+non-Stormphrax source for the idea; no range now rests mainly on Stormphrax's
+numbers.
 
 ### 2.1 Summary table: Elo items
 
@@ -206,37 +211,37 @@ R40 and R41; R7, R8, R12, R14, R15, R16, R24 and R34 changed range.
 | 4 | R7 | Fail-firm RFP return | +1.5 (0 to +3) | 0.45 | 3.3 | L-M | no | no |
 | 5 | R4 | Cut-node LMR (sub-ply) + TT-PV LMR at LTC | +2.5 (0 to +5) | 0.9 (built; ~6 STC + ~5 LTC stages) | 2.8 | M | no | no |
 | 6 | R5 | Later retrains (8b, 8c) by the cadence rule | +5 (+2 to +10) | 2.0 (Kaggle, datagen lane) | 2.5 | M | no | no |
-| 7 | R8 | **Node-share TM + best-move stability (+ score trend if X6 supports it), in Phase 4** | **+8 (+5 to +12)** | 3.3 (2 eng days, 3 CPU-h, ~8 GitHub-h) | 2.4 | M | method partly | **yes** |
-| 8 | R12 | Upcoming repetition, as a correctness change | +1.5 (0 to +3); more at TCEC | 0.65 | 2.3 | L-M | no | idea 31 first |
-| 9 | R6 | NMP at expected cut nodes; IIR gated by node type | +2 (0 to +4) | 0.9 | 2.2 | M-L | no | no |
+| 7 | R12 | Upcoming repetition, as a correctness change | +1.5 (0 to +3); more at TCEC | 0.65 | 2.3 | L-M | no | idea 31 first |
+| 8 | R6 | NMP at expected cut nodes; IIR gated by node type | +2 (0 to +4) | 0.9 | 2.2 | M-L | no | no |
+| 9 | R8 | **Node-share TM + best-move stability (+ score trend if X6 supports it), in Phase 4** | **+7 (+4 to +10)** | 3.3 (2 eng days, 3 CPU-h, ~8 GitHub-h) | 2.1 | M | method partly | **yes** |
 | 10 | R9 | One link-pair enumeration for both perspectives | +2.5 (+1.5 to +4) | 1.2 (1 eng day, quiet A/B) | 2.1 | M | no | needs X13's rule |
 | 11 | R10 | Post-LMR re-search depth from the reduced result | +1.5 (0 to +3) | 0.7 | 2.1 | L | no | no |
 | 12 | R16 | History ageing between searches (per-`go` scaling) | +1.5 (0 to +3) | 0.7 | 2.1 | L-M | no | no |
 | 13 | R11 | TCEC build: v4 + C1 (no VNNI) + PGO + compiler by A/B | 0 in tests; **TCEC +3 to +10** | 2.8 (2.5 eng days, 3 quiet h) | 2.1 (TCEC) | M | no | **yes** |
-| 14 | R14 | **Early SPSA of the eight eval-dependent margins** | **+5 (+3 to +8)** | 2.8 (half of the driver, 9 GitHub-h) | 1.8 | M | no | **yes** |
-| 15 | R39 | High-WDL final fine-tune of a finished candidate (a branch, judged by FN then STC) | +1 (−3 to +6) | 0.6 (0.3 GPU-h, 1 FN stage, an SPRT if it wins) | 1.7 | L | no | **yes** |
-| 16 | R15 | History mechanics: linear bonus, TT-cutoff bonus, eval-fail-low bonus, joint continuation cap | +2.5 (0 to +5) | 1.6 | 1.6 | L-M | no | no |
-| 17 | R13 | TT-eval hygiene (stand-pat refined only by main-search entries) | +1 (0 to +2) | 0.65 | 1.5 | L | no | no |
-| 18 | R41 | Eval-change adjustment after a reduction (extend a reduced move whose eval improved; reduce one whose eval collapsed) | +2 (0 to +5), mostly LTC | 1.3 (0.5 eng day, ~5 LTC stages) | 1.5 | L | no | no |
-| 19 | R17 | Improving as a measured mean shift (LMP first, then LMR) | +1.5 (0 to +3) | 1.2 | 1.25 | M-L | no | no |
-| 20 | R18 | LMR for late and bad captures | +1.5 (0 to +3) | 1.2 | 1.25 | L | no | no |
-| 21 | R19 | Network weights and history tables on huge pages | +1 (0 to +3) | 0.8 | 1.25 | L | no | no |
-| 22 | R40 | Negative extension at expected cut nodes only, sub-ply, at LTC | +1.5 (0 to +4) | 1.3 (0.5 eng day, ~5 LTC stages) | 1.15 | L | no | yes (confirm it is a new idea, not a retest) |
-| 23 | R20 | Round-once LMR + a centred, mean-preserving history term (idea 42 as its variant) | +2 (0 to +4) | 2.0 | 1.0 | M | partly | no |
-| 24 | R21 | Pawn-structure history, gated by the cutoff-index metric | +0.3 (0 to +2) | 0.3 | 1.0 | L | no | no |
-| 25 | R22 | Aspiration half-width re-measured (and score-dependent) | +0.3 (0 to +1) | 0.3 | 1.0 | M | no | no |
-| 26 | R23 | Fused last-ply update + output kernel | +2 (+1 to +4) | 2.1 | 0.95 | L-M | no | report the maintenance cost |
-| 27 | R24 | **Final retune by scaling class** (+ VLTC spot check) | +3 (+1 to +6) | 3.5 | 0.86 | M | no | **yes** |
-| 28 | R25 | Adaptive rounding of the output layer | +0.8 (+0.5 to +1.5) | 1.0 | 0.8 | H (size) | no | no |
+| 14 | R39 | High-WDL final fine-tune of a finished candidate (a branch, judged by FN then STC) | +1 (−3 to +6) | 0.6 (0.3 GPU-h, 1 FN stage, an SPRT if it wins) | 1.7 | L | no | **yes** |
+| 15 | R13 | TT-eval hygiene (stand-pat refined only by main-search entries) | +1 (0 to +2) | 0.65 | 1.5 | L | no | no |
+| 16 | R14 | **Early SPSA of the eight eval-dependent margins** | **+4 (+2 to +7)** | 2.8 (half of the driver, 9 GitHub-h) | 1.4 | M | no | **yes** |
+| 17 | R15 | History mechanics: linear bonus, TT-cutoff bonus (+ two optional sole-source candidates) | +2 (0 to +5) | 1.4 | 1.4 | L-M | no | no |
+| 18 | R17 | Improving as a measured mean shift (LMP first, then LMR) | +1.5 (0 to +3) | 1.2 | 1.25 | M-L | no | no |
+| 19 | R18 | LMR for late and bad captures | +1.5 (0 to +3) | 1.2 | 1.25 | L | no | no |
+| 20 | R19 | Network weights and history tables on huge pages | +1 (0 to +3) | 0.8 | 1.25 | L | no | no |
+| 21 | R41 | Eval-change adjustment after a reduction (extend a reduced move whose eval improved; reduce one whose eval collapsed) | +1.5 (0 to +3) | 1.3 (0.5 eng day, ~5 LTC stages) | 1.15 | L | no | no |
+| 22 | R20 | Round-once LMR + a centred, mean-preserving history term (idea 42 as its variant) | +2 (0 to +4) | 2.0 | 1.0 | M | partly | no |
+| 23 | R21 | Pawn-structure history, gated by the cutoff-index metric | +0.3 (0 to +2) | 0.3 | 1.0 | L | no | no |
+| 24 | R22 | Aspiration half-width re-measured (and score-dependent) | +0.3 (0 to +1) | 0.3 | 1.0 | M | no | no |
+| 25 | R23 | Fused last-ply update + output kernel | +2 (+1 to +4) | 2.1 | 0.95 | L-M | no | report the maintenance cost |
+| 26 | R24 | **Final retune by scaling class** (+ VLTC spot check) | +3 (+1 to +5) | 3.5 | 0.86 | M | no | **yes** |
+| 27 | R25 | Adaptive rounding of the output layer | +0.8 (+0.5 to +1.5) | 1.0 | 0.8 | H (size) | no | no |
+| 28 | R40 | Negative extension at expected cut nodes only, sub-ply, at LTC | +1 (0 to +3) | 1.3 (0.5 eng day, ~5 LTC stages) | 0.77 | L | no | yes (confirm it is a new idea, not a retest) |
 | 29 | R26 | Output experts chosen by frozen-feature probes | +2 (0 to +6) | 3.3 | 0.6 | L-M | method | no |
 | 30 | R27 | Result-weight arm at the measured w* (either direction) | +1 (−2 to +6) | 1.6 | 0.6 | L | the derivation | no |
 | 31 | R28 | Double extensions + depth-concave singular margin, LTC only | +1.5 (0 to +3) | 2.4 | 0.6 | L | partly | no |
 | 32 | R29 | Quiet history pruning, after X2 and R16 | +0.3 (−1 to +2) | 0.5 | 0.6 | L | no | no |
 | 33 | R30 | Removal round as a factorial screen | +1 (0 to +2), plus simplicity | 2.0 | 0.5 | M | **NOVEL** (process) | **yes** |
 | 34 | R31 | Eager child update before the TT read (runner/TCEC regime only) | +1 (0 to +3) | 2.2 | 0.45 | L | **NOVEL** | yes (doctrine) |
-| 35 | R34 | Correction tables: passive ranking, then the best key at LTC | +2 (0 to +4) | 4.5 | 0.44 | L-M | count gain | no |
-| 36 | R32 | Depth-matched endgame-start slice | +1 (0 to +4); more at TCEC | 2.7 | 0.4 | L | partly | **yes** |
-| 37 | R33 | Structure-class calibration scale on the eval | +1 (0 to +3) | 2.7 | 0.4 | L | no | yes (fit data) |
+| 35 | R32 | Depth-matched endgame-start slice | +1 (0 to +4); more at TCEC | 2.7 | 0.4 | L | partly | **yes** |
+| 36 | R33 | Structure-class calibration scale on the eval | +1 (0 to +3) | 2.7 | 0.4 | L | no | yes (fit data) |
+| 37 | R34 | Correction tables: passive ranking, then the best key at LTC | +1.5 (0 to +3) | 4.5 | 0.33 | L-M | count gain | no |
 | 38 | R35 | Tail-risk-classed margins | +0.8 (0 to +3) | 3.5 | 0.23 | L | partly | no |
 | 39 | R36 | One new input family, chosen by the screen (king-zone pawns or passers) | +1.5 (−3 to +6) | 7.5 | 0.2 | L | yes (UNVERIFIED) | no |
 | 40 | R37 | n-step / λ-return value targets (second line) | +0.5 (−3 to +5) | 2.5 | 0.2 | L | yes (UNVERIFIED) | no |
@@ -246,15 +251,16 @@ Not recommended in Phase 4 (each with its B13/B14 verdict): cross-entropy
 loss (WEAK-PLAUSIBLE; only once conversion-phase data exists), the threat
 side lane (WEAK, about −8), accumulator policy ordering (WEAK, a plan
 change), width narrowing or widening (WEAK), king buckets (WEAK), a
-multi-layer head (WEAK for Phase 4; OS-Stormphrax's head grew with TC, but the
-speed price and quantization risk at Fork's 512 width are unchanged), the
+multi-layer head (WEAK for Phase 4; the OS survey's heads grew with TC (OS
+N8), but the speed price and quantization risk at Fork's 512 width are
+unchanged), the
 scratch equal-compute control (low
 value), the 25% save-share arm (WEAK), QS futility (the qs-delta precedent is
-null and the eval-avoidance ceiling is low, H §3.8; OS-Stormphrax reports a
-gain for it, so it may run as idle filler, never ahead of ranked work), an
-LTC-only ProbCut retest (OS-Stormphrax: neutral at STC, positive at LTC; Fork's
-STC result was −5.3 and the owner ruled "no retest", so this is only an owner
-question, §7 item 25).
+null and the eval-avoidance ceiling is low, H §3.8; the OS survey records a
+gain for it (OS 4.7), so it may run as idle filler, never ahead of ranked
+work), an LTC-only ProbCut retest (sole source: OS-Stormphrax, neutral at STC
+and positive at LTC; Fork's STC result was −5.3 and the owner ruled "no
+retest", so this is only an owner question, §7 item 25).
 
 ### 2.2 Summary table: enablers and measurements, ranked by information per cost
 
@@ -331,7 +337,7 @@ See §5 for the full recipe. Summary:
 - **Kill.** If the best candidate's full-set offline loss is not at least
   2e-5 below S512ppr2's on g3s3-val, do not spend an SPRT; wait for g3h.
 
-#### R3. Recency arm: half-weight S512 labels (T4 + OS N1 + W critique 3 + OS-Stormphrax + B13)
+#### R3. Recency arm: half-weight S512 labels (T4 + OS N1 + SF §3.2 + W critique 3 + B13; OS-Stormphrax corroborating)
 
 - **Mechanism.** About half of g3s2 is S512-labelled (about −200 chain Elo
   behind the default). With no generalisation gap, old labels add bias more
@@ -339,10 +345,13 @@ See §5 for the full recipe. Summary:
 - **Math.** B − A ≈ 0.31 × 22 − 0.33 × (10 to 30) = −3 to +3.5 (T4): the
   model cannot sign it. External records lean positive but are SPRT-selected.
   −2 to +6.
-- **OS-Stormphrax's data curriculum (concept).** Its newer, deeper-labelled
-  data trained *alone* lost at STC and won only at long TC with threads; a
-  staged recipe that kept the old data in the final stage beat the hard
-  switch at STC and LTC. Two readings for Fork: (a) never purge the old
+- **Never purge outright (SF §3.2, OS N1).** The nnue-pytorch wiki (SF
+  survey §3.2) reports that training solely on the better-labelled data does
+  not produce as good results as staged training that keeps the earlier data
+  (coverage); the OS survey's engines purged only their weakest data.
+  OS-Stormphrax's data curriculum is one corroborating data point (newer data
+  alone lost at STC; keeping the old data in the final stage won). Two
+  readings for Fork: (a) never purge the old
   labels outright: arm B down-weights g2s1, it does not drop it, and a
   "no g2s1" arm stays off the table; (b) Fork's standard warm recipe already
   has the winning shape (the lineage trained on the old data; each retrain
@@ -425,42 +434,42 @@ See §5 for the full recipe. Summary:
 - **Kill.** As each prediction's refutation.
 - **Originality.** Generic concepts; no constants.
 
-#### R7. Fail-firm RFP return (A2 O5 + OS 4.7 + OS-Stormphrax)
+#### R7. Fail-firm RFP return (A2 O5 + OS 4.7 + KB §3.16; OS-Stormphrax corroborating)
 
 - **Mechanism.** RFP returns the full `prune_eval`; returning a value between
   it and β limits inflated fail-soft bounds entering the TT.
 - **Why Fork.** Every eval-gated loosening lost (A2 §3.1); this changes the
   bound, not the prune rate.
-- **Evidence.** Two engines in the OS survey plus OS-Stormphrax (two passes,
-  one depth-dependent) report gains at STC and smaller ones at LTC; shrunk,
-  the range rises from 0 to +2 to **0 to +3 (central +1.5)**.
+- **Evidence.** The OS survey's engines report passes (OS 4.7), the KB lists
+  return-value variants as a separate gain (KB §3.16), and B14 rates this
+  family of OS items at +1 to +3 each. Range **0 to +3 (central +1.5)**, from
+  those sources; OS-Stormphrax's passes corroborate.
 - **Cost.** A few lines; zero nps; the midpoint form has no tuned constant
   (a depth-dependent blend would be a constant to measure, not to copy).
 - **Prediction.** Passes design R at +1 to +3 with bench nodes within ±2%;
   refuted by H0.
 - **Kill.** H0.
 
-#### R8. Node-share time management plus best-move stability, moved into Phase 4 (A2 O1 + S1 + W1(a) + SF 7.1.a + OS 4.2 + OS-Stormphrax + TC F.1 + ST8(b); verdict B14)
+#### R8. Node-share time management plus best-move stability, moved into Phase 4 (A2 O1 + S1 + W1(a) + SF 7.1.a + OS 4.2 + KB time-management §4.2-4.4 + TC F.1 + ST8(b); verdict B14; OS-Stormphrax corroborating)
 
 - **Mechanism.** After each completed iteration, scale the soft limit by a
   decreasing function of the best move's share of that iteration's nodes
   (normalised so the mean spend is unchanged), and extend when the best
   move changed in the last iteration. Fork already computes the shares every
   iteration (searcher.cpp lines 800-805 [V]). A score-trend term (Fork also
-  records `score_trend_`) is a third candidate signal, added only if X6
-  shows it predicts best-move changes beyond share and stability.
+  records `score_trend_`) is a third candidate signal (SF's falling-eval
+  factors, OS 4.2, KB §4.2-4.4), added only if X6 shows it predicts
+  best-move changes beyond share and stability.
 - **Math.** Allocating time t_i ∝ c_i under log utility gains about
   exp(ρ_s²·CV²/2) in time equivalent (S1 M5): at ρ_s²·CV² = 0.10, ×1.05,
   about +7.6 at 106 Elo per doubling. ρ_s² is assumed until X6 measures it.
-  B14's shrunk range from two engines: +3 to +8 STC, +4 to +10 LTC.
-  OS-Stormphrax adds a third engine whose node-fraction term was its largest
-  single LTC search gain (about +21 LTC, at node-scaled controls), with
-  stability and score trend adding about +3 to +5 each at LTC; like the
-  others it is an SPRT-selected first-term gain in an engine with no dynamic
-  TM before. Three engines now agree in sign and in "LTC ≥ STC". Shrunk:
-  **+4 to +9 STC, +5 to +12 LTC (central +8)**. The iteration granularity
-  trims it slightly (a 0.6x soft limit moves the realised spend less than
-  0.6x).
+  The prior is B14's shrunk range from the OS survey's engines, with the KB's
+  record of node share across about ten engines (gains from a few to about 20
+  at STC, holding or growing at 40+0.4 in four; KB §4.4): **+3 to +8 STC,
+  +4 to +10 LTC (central +7)**. OS-Stormphrax's large node-fraction gain is
+  one more corroborating point, not a basis for the range. The iteration
+  granularity trims it slightly (a 0.6x soft limit moves the realised spend
+  less than 0.6x).
 - **What is dropped.** The "resolution-aware soft stop": the soft check
   (line 816) runs only after the aspiration loop (lines 761-776) has
   resolved the iteration's score, so no root fail high is pending there
@@ -481,7 +490,7 @@ See §5 for the full recipe. Summary:
   (X6), not from any engine's factors; the constant screen runs before the
   commit.
 - **Prediction.** X6's logistic model has AUC ≥ 0.70; the STC test passes at
-  +4 to +9; LTC ≥ STC within error. Predict the STC Elo from X6's ρ_s²
+  +3 to +8; LTC ≥ STC within error. Predict the STC Elo from X6's ρ_s²
   before the run and kill the *method* if the measured Elo lies outside
   0.5-2x the prediction (B14).
 - **Kill.** AUC < 0.65 (fall back to the plain share term with a ladder),
@@ -546,13 +555,14 @@ See §5 for the full recipe. Summary:
 - **Owner.** update.sh's default for TCEC; VNNI stays out (the 2026-10-28
   rule); the final gauntlet should play the TCEC build if it differs.
 
-#### R12. Upcoming repetition, as a correctness change (S5 + batch 4 + KB §3.29 + OS-Stormphrax)
+#### R12. Upcoming repetition, as a correctness change (S5 + batch 4 + KB §3.29 T51; OS-Stormphrax corroborating)
 
 - **Mechanism.** Detect a reachable repetition one move early, for earlier
   draw scores and cheap cutoffs (cycle detection, van Kervinck, KB).
-- **Evidence.** OS-Stormphrax passed it twice with sizeable STC gains; shrunk
-  and discounted for UHO's lower repetition rate, the range rises from 0 to
-  +2 to **0 to +3 (central +1.5)**, more at TCEC.
+- **Evidence.** The van Kervinck preprint reports a gain at 40 s + 2 s with a
+  tree change under 0.4% (KB §3.29), and S5 estimates +1.5 ± 2 for Fork; from
+  those, **0 to +3 (central +1.5)**, more at TCEC. OS-Stormphrax's passes
+  corroborate.
 - **Why Fork.** UHO openings repeat less than TCEC's balanced-ish openings,
   which are never win-adjudicated, so SPRTs undervalue it (S5). Its history
   walk grows in long endgames: measure nps on an endgame-heavy set (S5).
@@ -575,7 +585,7 @@ See §5 for the full recipe. Summary:
 - **Prediction.** Passes non-regression and lands at 0 to +3.
 - **Kill.** H0 → off for good.
 
-#### R14. Early SPSA of the eight eval-dependent margins (O1 + O2 + O3 + O6 + OS 4.1 + OS-Stormphrax + ST8(a) + PA rank 1; verdict B14 §3.1)
+#### R14. Early SPSA of the eight eval-dependent margins (O1 + O2 + O3 + O6 + OS 4.1 + ST8(a) + PA rank 1; verdict B14 §3.1; OS-Stormphrax corroborating)
 
 - **Mechanism.** Tune RfpMargin, FutilityOffset, FutilityGrowth,
   NullSurplusPerPly, AspirationHalfWidth, QuietSeeFloor, CaptureSeeFloor and
@@ -587,14 +597,12 @@ See §5 for the full recipe. Summary:
   80% of a recoverable T at p = 8 in 20k games. **B14: +2 to +8 STC, central
   about +4; LTC +2 to +7.** The surveys' +15-35 is the mean of four SPRT-
   selected whole-set tunes in two engines, then raised: discarded.
-  OS-Stormphrax adds a third engine: its first tune after a search rewrite
-  gained about +14 STC / +18 LTC, and later tunes about +4 to +5 at LTC. That
-  confirms the shape (the first tune after a big change pays most) but is
-  again a whole-set tune (LMR, history and extensions included) and
-  SPRT-selected. Shrunk and limited to eight margins: **+3 to +8 at LTC,
-  central +5** (raised from B14's +4). Its 8-thread LTC tune that cost about
-  19 Elo at STC is a second reason to tune each class at the condition it
-  serves (O5, R24).
+  The range stays B14's (**+2 to +7 at LTC, central +4**). The OS survey
+  (later tunes in the same engine paid less than the first) and
+  OS-Stormphrax (one corroborating point) agree that the first tune after a
+  big change pays most. Tune each class at the condition it serves (O5,
+  R24): SF's VLTC tunes failed STC and passed at long TC (SF §4), and an
+  8-thread tune lost at 1 thread (OS §4.1).
 - **Why Fork.** Every one-sided loosening lost; SPSA moves all eight at once
   and can find a different shape. Batch 4's pruning items are substitutes
   and complements of these margins; tuning first makes their tests cleaner.
@@ -611,7 +619,7 @@ See §5 for the full recipe. Summary:
 - **Originality.** SPSA is generic (Spall 1992). Every tuned value is a
   search constant: SPSA log plus the validation SPRT as its justification,
   and the originality screen before the commit.
-- **Prediction.** The validation test accepts with an estimate of +3 to +8;
+- **Prediction.** The validation test accepts with an estimate of +2 to +8;
   the reasoning-set parameters (futility, null surplus, capture SEE) move
   further in c-units than the measured ones; LmpQuietAllowance moves down.
   Refuted if the validation is H0 or its estimate is under +3 nElo.
@@ -619,19 +627,19 @@ See §5 for the full recipe. Summary:
 - **Owner.** It reorders §5.6 (part of item 12 before batch 4) and needs a
   workflow change (a FORK_TUNE build input and per-pair options).
 
-#### R15. History mechanics: linear bonus, TT-cutoff bonus, eval-fail-low bonus, joint continuation cap (OS 4.3 + OS-Stormphrax; verdict B14 +1 to +5 combined)
+#### R15. History mechanics: linear bonus and TT-cutoff bonus (OS 4.3; verdict B14 +1 to +5 combined); two optional extras with sole source OS-Stormphrax
 
 - **Mechanism.** Fork's bonus grows with depth squared, capped, under a
   gravity update; a quadratic bonus saturates entries after a few deep
   cutoffs (OS). Separately, Fork returns at a TT cutoff without rewarding the
-  quiet TT move. OS-Stormphrax adds two concept-level candidates: a larger
-  bonus when the static eval had failed low (the move refuted an expected
-  loss), and one joint soft cap over a move's summed continuation terms
-  instead of separate caps. Each is a single SPRT under design R; the
+  quiet TT move (both from the OS survey's engines, OS 4.3). Two optional
+  extras, **sole source: OS-Stormphrax**: a larger bonus when the static eval
+  had failed low (the move refuted an expected loss), and one joint soft cap
+  over a move's summed continuation terms instead of separate caps. Each is
+  a single SPRT under design R, run only after the two documented items; the
   bonus sizes come from head-to-head selection, never from another engine.
-- **Range.** Four candidates instead of two, each with a small prior:
-  **0 to +5, central +2.5** for the set (B14's +1 to +5 for two, plus
-  OS-Stormphrax's passes, shrunk).
+- **Range.** **0 to +5, central +2** for the two documented items (B14's +1 to
+  +5 for the OS 4.3 set); the sole-source extras add nothing to the range.
 - **Why Fork.** Persistent, possibly saturated histories (A2 O3) are the
   amplifier behind the LMR-history loss (B14 §3.7).
 - **Order.** The linear bonus changes every history scale: run it before the
@@ -642,17 +650,19 @@ See §5 for the full recipe. Summary:
 - **Originality.** Survey records are priors only; the bonus form is set by a
   head-to-head and screened.
 
-#### R16. History ageing between searches: per-`go` scaling (S8a + OS-Stormphrax; X2 informs it)
+#### R16. History ageing between searches: per-`go` scaling (S8a + KB §3.9 + A2 O3; OS-Stormphrax corroborating; X2 informs it)
 
 - **Mechanism.** At each `go`, scale every history entry by s ∈ {1, 3/4,
   1/2}. The gravity update is an EMA with time constant H/b: about 830
   updates at d = 1 and 8 at d ≥ 10 (S8), so shallow-only entries persist
   across moves unchanged; Fork never decays between moves (A2 §1.1, PA d).
-- **Evidence.** OS-Stormphrax found that keeping histories between searches
-  pays (Fork already does) and that *more* ageing between searches paid a
-  little more at STC and less at LTC. So mild ageing is a sound default
-  question, not one that depends on X2 alone. Range **0 to +3 (central
-  +1.5)**, raised from 0 to +2.
+- **Evidence.** The KB records a history-decay gain in another engine (KB
+  §3.9, SPRT-selected), and Schaeffer's history heuristic includes ageing
+  (KB §3.9's evidence); SF's low-ply history kept across moves (SF §4) shows
+  persistence itself pays, which Fork already has. Heavily shrunk from
+  those: **0 to +3 (central +1.5)**. So mild ageing is a sound default
+  question, not one that depends on X2 alone. OS-Stormphrax's ageing result
+  corroborates.
 - **Test.** A head-to-head of s = 3/4 against s = 1/2 (2 stages), then
   design R against s = 1.
 - **Prediction.** With s = 1/2 the in-game share of LMR sites at
@@ -771,9 +781,7 @@ See §5 for the full recipe. Summary:
   direction).
 - **Math.** O's simulation: p = 24 at 40k games recovers about 9 of a T of
   15; after R14 the remaining T is what adoptions re-misplace plus untouched
-  groups: +2 to +6 (O10); B14 +1 to +5. OS-Stormphrax's later LTC tunes
-  (about +4 to +5 each, SPRT-selected) widen the top slightly: **+1 to +6,
-  central +3**.
+  groups: +2 to +6 (O10); B14 +1 to +5. **+1 to +5, central +3** (B14).
 - **Compute.** About 22-26 GitHub-hours plus validation and the VLTC check.
 - **Prediction.** The STC pass passes validation or caps above +3 nElo; LTC
   moves the extension constants toward more extension (O5); refuted if H0
@@ -870,7 +878,8 @@ See §5 for the full recipe. Summary:
 - **Price the owner accepts.** The decision rule removes a true +3 nElo
   feature about 23% of the time.
 - **Keep out of the round:** the switch `use_negative_extension` (off). Do
-  not delete it before R40's cut-node retest (OS-Stormphrax §4).
+  not delete it before R40's cut-node retest (KB T30 lists the cut-node form;
+  OS-Stormphrax §4 makes the same point).
 - **Candidates for the screen.** lmr-in-check (bootstrap +4.2, never rechecked),
   SEE in quiescence (inconclusive), aspiration, mate distance pruning (never
   SPRTed), `UseTtEvalRefine` (never verified), the futile-node filter (a
@@ -928,7 +937,7 @@ See §5 for the full recipe. Summary:
 - **Kill.** Offline variance cut under 30%, or H0 at STC with an LTC estimate
   ≤ 0.
 
-#### R34. Correction tables: passive ranking first, then the best key at LTC (I5 + A2 O7 + SF 7.1.e + OS 4.4 + OS-Stormphrax)
+#### R34. Correction tables: passive ranking first, then the best key at LTC (I5 + A2 O7 + SF 7.1.e + OS 4.4 + KB §3.23; OS-Stormphrax corroborating)
 
 - **Mechanism.** Re-run drift_measure.py's passive method on S512ppr2 for
   three keys: pawn, non-pawn per side including the king square (S-512 has no
@@ -938,24 +947,24 @@ See §5 for the full recipe. Summary:
 - **Why.** The pawn table was undecided at LTC on S512r2, before the links;
   the OS survey's record says tables pay as an ensemble, at LTC and with
   shared threads.
-- **OS-Stormphrax partly contradicts "about 0 at STC".** Every one of its
-  tables (pawn, non-pawn, continuation at several plies) passed at STC, table
-  by table, with a gravity update; the OS survey's "about 0 at STC" rests
-  mainly on one engine's many-tables test. Revised reading: the first tables
-  pay at STC, marginal ones show only at LTC. For Fork the caveat is that the
-  pawn links already carry much of the pawn table's target (I5's P7), so the
-  non-pawn (king-inclusive) and continuation keys are the ones to expect at
-  STC. Range raised from 0 to +3 to **0 to +4 (central +2)**. The test stays
-  on the owner's LTC list; an STC H0 is now informative rather than expected.
-- **Design notes (concept level).** Build tables without a side-to-move
-  split (OS-Stormphrax simplified those away as non-regressions); use the
-  gravity update; correction size as an LMR or RFP input is a later,
-  separate test.
+- **First tables can pay at STC.** The OS survey's own records show it: a
+  first table passed at STC in several engines (OS 4.4), and SF's pawn and
+  continuation tables passed STC and LTC (SF §4); the "about 0 at STC"
+  applies to adding many marginal tables at once. OS-Stormphrax
+  corroborates. For Fork the caveat is that the pawn links already carry much
+  of the pawn table's target (I5's P7), so the non-pawn (king-inclusive) and
+  continuation keys are the ones to expect at STC. Range **0 to +3 (central
+  +1.5)**, B14's. The test stays on the owner's LTC list.
+- **Design notes (concept level).** Use the gravity update (OS 4.4; CPW);
+  correction size as an LMR or RFP input is a later, separate test (OS 4.4).
+  Building tables without a side-to-move split rests on **sole source:
+  OS-Stormphrax** (it simplified those away as non-regressions); treat it as
+  an option to test, not a rule.
 - **Drop.** Material, major and threat-keyed tables (removed elsewhere, or a
   key that changes almost every move).
 - **Prediction.** The pawn key's passive fitness on S512ppr2 is ≥ 0.94
   (S512r2: 0.919), a king-inclusive non-pawn key ≤ 0.92; refuted if pawn ≤
-  0.92. The best key passes LTC at +1 to +4.
+  0.92. The best key passes LTC at +1 to +3.
 - **Kill.** Every key's decision-accuracy gain under 2% of flipped decisions
   → shelve tables to Phase 6, where thread sharing is the real gain.
 
@@ -1010,23 +1019,26 @@ See §5 for the full recipe. Summary:
   positive; the tested LMR history form ≤ 0), or 0 of the top 5 pass.
 - **Owner.** Run this capped pilot or archive idea 23 per its own spec.
 
-#### R39. High-WDL final fine-tune of a finished candidate (OS-Stormphrax + OS N2 + SF λ schedule; weighed against B13 §3.2)
+#### R39. High-WDL final fine-tune of a finished candidate (OS N2 + SF §3.3 λ schedule + KB nnue-design §6.1-6.2; OS-Stormphrax corroborating; weighed against B13 §3.2)
 
 - **Mechanism.** After a retrain, branch a short low-LR continuation of the
   chosen candidate at a higher result weight (the value is a placeholder,
   set by measurement), re-match S, and judge the branch by FN against the
   candidate, then its own STC SPRT. The main arms of the retrain stay at
   w = 0.5, so the owner's control is untouched.
-- **Evidence.** OS-Stormphrax: a constant high-WDL fine-tune of a finished
-  net gained about +6 FN, +11 STC and +13 LTC; its three-stage recipe also
-  ends on a short high-WDL stage. OS N2 records one engine's similar gain and
-  the same family's −57 for a result-only fine-tune on recent data alone.
+- **Evidence.** OS N2: one engine's final fine-tune on the result gained at
+  STC and LTC, another's WDL schedule rising toward the result gained at long
+  TC, and Seer fine-tuned on the result; the same family also records a −57
+  for a result-only fine-tune on recent data alone. SF §3.3: nnue-pytorch's
+  retraining moves λ from score toward a blend over the run. KB
+  nnue-design §6.1-6.2 records λ scheduling gains (no values copied).
+  OS-Stormphrax's high-WDL fine-tune is one corroborating data point.
 - **Against it, for Fork (B13 §3.2).** Fork's results come from games in
   which half the moves are 4k-node moves, and their bias is class-signed:
   more result weight helps drawish endings and hurts rook endings (C E2).
-  OS-Stormphrax's results come from its own self-play at its own budgets, so
-  its gain does not transfer one to one. Shrunk hard: **−3 to +6, central
-  +1**.
+  The external results come from other engines' self-play at their own
+  budgets (or, for some, other data), so they do not transfer one to one.
+  Shrunk hard: **−3 to +6, central +1**.
 - **Why it still earns a slot.** It is cheap (about 0.3 GPU-h and one FN
   stage) and leaves the control intact, so it tests the external finding on
   Fork's data without risking item 8a's decision.
@@ -1040,42 +1052,46 @@ See §5 for the full recipe. Summary:
 - **Kill.** FN ≤ 0, or the rook-ending guard fails.
 - **Owner.** A target change on a branch (§7 item 10).
 
-#### R40. Negative extension at expected cut nodes only, sub-ply, at LTC (OS-Stormphrax + A2 O6 + S critique 7)
+#### R40. Negative extension at expected cut nodes only, sub-ply, at LTC (KB §3.21 T30 + A2 O6 + S critique 7; measured gains: sole source OS-Stormphrax)
 
 - **Mechanism.** Fork's negative extension fired at every non-PV node whose TT
   score was ≥ β when the singular test was neither singular nor a multi-cut,
   and cut a whole ply from the move carrying the node: −8.73 ± 4.98, H0 (A2
   §2.2). With batch 4's expected node types and round-once arithmetic (R20),
   apply it only at expected cut nodes, by a sub-ply amount.
-- **Evidence.** OS-Stormphrax's first gain from this idea was the cut-node
-  form; a TT-score-at-or-above-β form followed. A2 O6 and the search
-  specialist already argued the gated, fractional form is a different
-  change, not a retest.
+- **Evidence.** The idea is documented in the KB (T30, "negative extensions,
+  including the cut-node form"; the gating is Fork's experiment), and A2 O6
+  and the search specialist argued the gated, fractional form is a different
+  change, not a retest. The only *measured* gain for the gated form in the
+  think tank is **sole source: OS-Stormphrax**. So the range follows A2 O6's
+  expectation ("passes or is null, never −8"): **0 to +3, central +1**.
 - **Why LTC.** Extensions are on Fork's "straight to LTC" list.
-- **Prediction.** Passes LTC under design R at +1 to +4; never near the
+- **Prediction.** Passes LTC under design R at 0 to +3; never near the
   ungated form's −8. Refuted if H0 at both amounts (½ and ¼ ply).
 - **Kill.** H0 at both amounts; then `use_negative_extension` may go in the
   removal round.
 - **Owner.** Confirm that the gated, sub-ply form counts as a new idea rather
   than a retest of a rejected one (§7 item 26).
 
-#### R41. Eval-change adjustment after a reduction (OS-Stormphrax + OS item 9 hindsight + S6c)
+#### R41. Eval-change adjustment after a reduction (KB §4 T48 + OS item 9 + S6c; OS-Stormphrax corroborating)
 
 - **Mechanism.** After a heavily reduced search, extend the move by a unit
   when the child's static eval improved markedly over the parent's, and
   reduce one more when it collapsed. The eval change is information the
   reduction ignored (low-ρ class, S M3).
-- **Evidence.** OS-Stormphrax: the extension form gained modestly at STC and
-  much more at LTC; the reduction form was smaller, also larger at LTC.
-  Close to the OS survey's "hindsight" item. Shrunk: **0 to +5, central +2,
-  mostly at LTC**.
+- **Evidence.** The KB documents depth adjustment from the eval trend over
+  the last two plies (T48, with a passing test in another engine; it
+  overlaps "improving", T18), and the OS survey lists the same family (OS
+  item 9: about +1 to +3 for Fork). From those: **0 to +3, central +1.5**.
+  OS-Stormphrax's larger LTC gain corroborates the direction but does not set
+  the range; whether the gain grows at LTC is UNVERIFIED for Fork.
 - **Speed.** Both evals are already in the frames; one comparison.
 - **Constants.** The improvement and collapse thresholds come from X10's
   ledger or head-to-head selection, never from another engine.
 - **Test.** An extension: straight to LTC per Fork's list (about 5 LTC
   stages); the reduction half at STC.
-- **Prediction.** The extension form passes LTC at +1 to +5 and is about
-  neutral at STC; refuted if LTC is H0 at both thresholds.
+- **Prediction.** The extension form passes LTC at +1 to +3; refuted if LTC
+  is H0 at both thresholds.
 - **Kill.** As refuted.
 
 ### 2.4 The entries, enablers
@@ -1310,7 +1326,7 @@ numbering. If the owner prefers to keep §5.6's numbers, call the retrains 7b,
 | **D1: anneal only** | S512ppr2 at 1e-5 for 60 superbatches on g3s3, no 1e-4 phase | 1 | 0.36 | information: does a warm retrain need its stable phase? If D1 matches R1, future retrains cost about 20 minutes |
 | **B: recency (conditional)** | as R1, every other g2s1 file dropped, g3g listed twice | 1 | 2.15 | runs only if X7's gold set exists by session time; otherwise dropped |
 | X4 (optional here) | the anneal attribution, if not already run | 1 | 0.24 | §2.4 |
-| HW: high-WDL branch (optional, R39) | after the candidate is chosen: a short low-LR continuation at a higher result weight, S re-matched; FN against the candidate only after 8a's SPRT; promotes only through its own STC SPRT | 1 | ~0.3 | tests OS-Stormphrax's high-WDL fine-tune on Fork's data without touching the control; skipped if X11 shows the shallow results over-convert |
+| HW: high-WDL branch (optional, R39) | after the candidate is chosen: a short low-LR continuation at a higher result weight, S re-matched; FN against the candidate only after 8a's SPRT; promotes only through its own STC SPRT | 1 | ~0.3 | tests the high-WDL fine-tune records (OS N2, SF §3.3) on Fork's data without touching the control; skipped if X11 shows the shallow results over-convert |
 
 Total **5.0 GPU-h without B, 7.1 with B** (plus 0.24 for X4); wall time about
 3-4.5 h (GPU 0: R1 then B; GPU 1: R2, D1, then CD once R1 passes superbatch
@@ -1530,16 +1546,19 @@ ready: network promotions (8, 13), then TM (10), SPSA (11), search features
 24. **Optional:** bundle search adoptions into at most one datagen part switch
     per day, so frequent adoptions do not fragment parts (a labeller-policy
     refinement; a judge's suggestion, not reviewed by a skeptic).
-25. **ProbCut at LTC only?** OS-Stormphrax's ProbCut was neutral at STC and
-    positive at LTC. Fork's ProbCut reached H0 at STC (−5.29 ± 3.58) and the
+25. **ProbCut at LTC only?** Sole source: OS-Stormphrax, whose ProbCut was
+    neutral at STC and positive at LTC (the KB records ProbCut as worth about
+    10 Elo in Stockfish's removal test, KB search-techniques §1, without an
+    STC/LTC split). Fork's ProbCut reached H0 at STC (−5.29 ± 3.58) and the
     owner ruled no retest. The question is only whether an LTC-only test
     (about 5 LTC stages) is allowed after R6 gives Fork node types.
     Recommendation: keep the rule unless spare LTC capacity exists; expected
     0 to +2 at LTC (overlap with multi-cut and NMP, A2 §2.2).
 26. **Negative extension at cut nodes only (R40):** confirm that the gated,
     sub-ply form counts as a new idea rather than a retest of the rejected
-    ungated one (A2 O6 argued it is different; OS-Stormphrax's first gain was
-    this gated form). Keep `use_negative_extension` until then.
+    ungated one (A2 O6 argued it is different; KB T30 documents the cut-node
+    form; its only measured gain here is sole source OS-Stormphrax). Keep
+    `use_negative_extension` until then.
 
 ---
 
@@ -1558,12 +1577,12 @@ ready: network promotions (8, 13), then TM (10), SPSA (11), search features
 | Links worth "≈ 102 Elo per 1e-4" (18x T/U ratio)? | **Noise** (best-of-N); qualitative point only | B13 §2.1: on window means S512+PP's loss is worse than its control |
 | M4's "S compressed at every promotion" | **Artefact** of the training-S change (105 → 92); play/train ratio flat 0.96-1.00 | B13 §5, nets.md |
 | Distillation from S512+X | **Refuted** | B13 §3.6: the teacher is weaker at fixed nodes |
-| Result weight: raise it, lower it, or TD-k? | **Measure first** (X11 → w*); none in item 8a's main arms; OS-Stormphrax's high-WDL fine-tune gain earns only a guarded branch (R39) | B13 §3.2: shallow-play bias is class-signed; OS-Stormphrax's results come from its own, different self-play |
-| Correction tables: about 0 at STC (OS) or positive at STC (OS-Stormphrax)? | **First tables can pay at STC; marginal ones show at LTC**; for Fork the non-pawn and continuation keys, since the links overlap the pawn key; tests stay on the LTC list | OS §4.4; OS-Stormphrax (every table passed at STC); I5's P7 |
-| Recency: purge old labels or keep them? | **Down-weight, never purge**; the warm recipe already trains old and new together | OS-Stormphrax: newer data alone lost at STC, keeping old data in the last stage won; T4 |
-| History: persist across moves or decay? | **Persist, with mild ageing per search** (R16), tested regardless of X2 | OS-Stormphrax (persistence paid; extra ageing paid a little); A2 O3 |
-| Negative extension: dead, or only its ungated form? | **Only the ungated form is dead**; the cut-node, sub-ply form is a separate LTC test (owner to confirm) | A2 §2.2, A2 O6, OS-Stormphrax |
-| ProbCut: settled? | **Settled at STC (owner: no retest)**; an LTC-only test is an owner question, low expected value | Fork −5.29 ± 3.58 STC; OS-Stormphrax neutral STC, positive LTC |
+| Result weight: raise it, lower it, or TD-k? | **Measure first** (X11 → w*); none in item 8a's main arms; the high-WDL fine-tune records (OS N2, SF §3.3; OS-Stormphrax corroborating) earn only a guarded branch (R39) | B13 §3.2: shallow-play bias is class-signed; the external results come from other engines' different self-play |
+| Correction tables: about 0 at STC? | **First tables can pay at STC; marginal ones show at LTC**; for Fork the non-pawn and continuation keys, since the links overlap the pawn key; tests stay on the LTC list; range unchanged (B14) | OS §4.4 (first tables passed at STC in several engines), SF §4; OS-Stormphrax corroborating; I5's P7 |
+| Recency: purge old labels or keep them? | **Down-weight, never purge**; the warm recipe already trains old and new together | SF §3.2 (training solely on better data does worse), OS N1, T4; OS-Stormphrax corroborating |
+| History: persist across moves or decay? | **Persist, with mild ageing per search** (R16), tested regardless of X2 | KB §3.9 (history decay gain elsewhere), SF §4 (low-ply history kept across moves), S8, A2 O3; OS-Stormphrax corroborating |
+| Negative extension: dead, or only its ungated form? | **Only the ungated form is dead**; the cut-node, sub-ply form is a separate LTC test (owner to confirm) | A2 §2.2, A2 O6, KB T30; measured gain: sole source OS-Stormphrax |
+| ProbCut: settled? | **Settled at STC (owner: no retest)**; an LTC-only test is an owner question, low expected value | Fork −5.29 ± 3.58 STC; the STC/LTC split: sole source OS-Stormphrax |
 | C's island finding = weak-pawn knowledge? | **No**: position-type effect (leader's own islands convert more too) | B13 §2.4 |
 | Early SPSA: +15-35, +4-12, or ≤ +5? | **O1 +2 to +8 STC (central +4), LTC +2 to +7**; the full SPSA programme +5 to +12 LTC | B14 §3.1 |
 | Should I2's multiplier ladder gate SPSA? | **No**: a 1-D slice with ±7 Elo resolution; filler only | B14 §2.I2 |
@@ -1613,9 +1632,10 @@ ready: network promotions (8, 13), then TM (10), SPSA (11), search features
 - C's gauntlet blind-spot lifts (4-7 positions per threshold, S512r2 era).
 - The survey priors (SPSA, TM, correction tables, Elo per doubling at long TC)
   are other engines' SPRT-selected results. OS-Stormphrax's are one engine's
-  OpenBench point estimates, some at node-scaled controls during a rewrite
-  (its node-share and post-rewrite SPSA tests), so their transfer to Fork's
-  8+0.08 and 40+0.4 is UNVERIFIED.
+  OpenBench point estimates, some at node-scaled controls during a rewrite;
+  after the owner's ruling no range rests mainly on them, and the
+  sole-source items (R15's two extras, R40's measured gain, the no-split
+  correction design, the ProbCut STC/LTC split) are UNVERIFIED for Fork.
 - Novelty claims: no agent surveyed exhaustively; "NOVEL" means not found in
   the KB or the surveys.
 - My own checks this session: the iterative-deepening loop's soft check
@@ -1641,6 +1661,11 @@ ready: network promotions (8, 13), then TM (10), SPSA (11), search features
   with its numbers shrunk like every other survey prior (§2.0). Its README
   also says the author does not want LLMs mining the engine for ideas; the
   owner's ruling above governs its use here, at concept level only.
+- **Owner ruling, 2026-11-07 (second):** where an idea is also documented by
+  another source, credit that source and minimise reliance on Stormphrax.
+  Applied throughout: other sources credited first and used for every range;
+  Stormphrax kept only as corroboration, or marked "sole source:
+  OS-Stormphrax" where it is the only source.
 - **The standing rules hold for every item here.** Concepts from papers,
   wikis, release notes and PR prose only. No other engine's source, nets,
   games or evaluations. No other engine's constants: every number proposed
