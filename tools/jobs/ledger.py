@@ -122,7 +122,7 @@ def record_try(argv):
         print(f'ledger: idea {idea} already has {len(same)} {tc_class} tries ({names}); another needs '
               f'--owner-override', file=sys.stderr)
         sys.exit(3)
-    print(f'try {n} of {TRY_LIMIT}' if n <= TRY_LIMIT else f'try {n} (owner override: {override})')
+    print(f'try {n} of {TRY_LIMIT}' if n <= TRY_LIMIT else f'try {n}, owner override: {override}')
     if check:
         return
     rec = {'at': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'idea': idea, 'sprt': sprt, 'kind': kind,

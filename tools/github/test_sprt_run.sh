@@ -13,8 +13,11 @@
 # supervisor it refuses; it takes its own run by title even when another
 # run was dispatched just after it; every dispatched run is in the ledger;
 # RUN_ID needs a ledger record; a stage folder the ledger does not record
-# stops it, unmerged. Uses python3 (or $PYTHON) for the merge and the
-# ledger.
+# stops it, unmerged. Since 2026-11-07 (design R, owner, DESIGN.md §6
+# decision 2): the kinds search, network and fixed with their bounds,
+# alpha/beta, caps and the futility stop after 2 stages; the declared
+# design cannot change on a restart; the two-try limit per idea and time
+# control class. Uses python3 (or $PYTHON) for the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -31,63 +34,7 @@ export PYTHON=${PYTHON:-python3}
 sha=$(git -C "$here" rev-parse HEAD)
 other=ffffffffffffffffffffffffffffffffffffffff
 
-cat >"$tmp/gh" <<'EOF'
-#!/usr/bin/env bash
-# The fake gh. State in $FAKE_GH: busy (runs still to report busy), latest
-# (the newest sprt run id), titles (each run's "ID TITLE", newest first),
-# intruder (if present, another run is dispatched right after each of
-# ours), commits (shas on GitHub), run.<id> (its inputs), fail.<id>,
-# foreign.<id>, ptnml (each shard's pentanomial counts).
-st=$FAKE_GH
-echo "$*" >>"$st/calls"
-case "$1 $2" in
-  "api "*)
-    grep -qx "${2##*/}" "$st/commits" ;;
-  "run list")
-    if [[ "$*" == *displayTitle* ]]; then
-      cat "$st/titles" 2>/dev/null
-    else
-      n=$(cat "$st/busy")
-      if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$st/busy"; echo 1; else echo 0; fi
-    fi ;;
-  "workflow run")
-    id=$(($(cat "$st/latest") + 1))
-    echo "$id busy=$(cat "$st/busy") $*" >>"$st/dispatches"
-    for a in "$@"; do case $a in base=* | test=* | stage=*) echo "$a" >>"$st/run.$id" ;; esac; done
-    . "$st/run.$id"
-    { echo "$id sprt $base $test stage $stage"; cat "$st/titles" 2>/dev/null; } >"$st/titles.new"
-    mv "$st/titles.new" "$st/titles"
-    if [ -f "$st/intruder" ]; then  # someone else's run, newer than ours
-      id=$((id + 1))
-      printf 'base=%s\ntest=%s\nstage=0\n' "$base" ffffffffffffffffffffffffffffffffffffffff >"$st/run.$id"
-      { echo "$id sprt $base ffffffffffffffffffffffffffffffffffffffff stage 0"; cat "$st/titles"; } >"$st/titles.new"
-      mv "$st/titles.new" "$st/titles"
-    fi
-    echo $id >"$st/latest" ;;
-  "run view")
-    if [[ "$*" == *conclusion* ]]; then
-      if [ -f "$st/fail.$3" ]; then echo failure; else echo success; fi
-    else
-      echo completed
-    fi ;;
-  "run download")
-    id=$3
-    dir=${!#}  # the last argument, -D's
-    . "$st/run.$id"
-    [ -f "$st/foreign.$id" ] && test=ffffffffffffffffffffffffffffffffffffffff
-    for k in $(seq 0 $((SHARDS - 1))); do
-      mkdir -p "$dir/shard-$stage-$k"
-      start=$(((stage * SHARDS + k) * 50 + 1))
-      cat >"$dir/shard-$stage-$k/result.json" <<JSON
-{"ptnml": $(cat "$st/ptnml"), "pairs": 50, "finished_games": 100, "time_losses": 0, "abnormal": 0, "status": "done",
- "meta": {"base": "$base", "test": "$test", "stage": "$stage", "shard": "$k", "shards": "$SHARDS", "tc": "8+0.08",
-          "hash": "16", "base_opts": "", "test_opts": "", "tables": "3-4-5", "book_sha": "x",
-          "opening_start": "$start", "rounds": "50"}}
-JSON
-    done ;;
-  *) echo "fake gh: unexpected $*" >&2; exit 1 ;;
-esac
-EOF
+cp "$here/fake_gh.sh" "$tmp/gh"  # the fake gh (state in files; see its header)
 chmod +x "$tmp/gh"
 
 # One scenario: a fresh state, then the driver (args...); its exit status
@@ -105,7 +52,7 @@ drive() {  # label args...
   local label=$1
   shift
   FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data \
-    FORK_JOBS=$tmp/$label/jobs SPRT_UNSUPERVISED=${UNSUPERVISED-1} \
+    FORK_JOBS=${JOBS:-$tmp/$label/jobs} SPRT_UNSUPERVISED=${UNSUPERVISED-1} \
     bash "$here/sprt_run.sh" "$label" "$@" >"$tmp/$label/out" 2>&1
   echo $? >"$tmp/$label/rc"
 }
@@ -204,6 +151,107 @@ cp "$tmp/undecided/data/undecided/s0/shard-0-0/result.json" "$tmp/stray/data/str
 drive stray "$sha" "$sha" 0 5 1 1
 check "an unrecorded stage folder exits 1" [ "$(rc stray)" = 1 ]
 check "the stray stage is named, nothing merged" bash -c "grep -q \"stage 0's results (run 400) are not in the ledger\" '$tmp/stray/out' && ! grep -q LLR '$tmp/stray/out'"
+
+# Design R (owner, DESIGN.md §6 2026-11-07 decision 2): kind search is [0, 6] nElo, alpha 0.05, beta
+# 0.20, a cap of 8 stages (6 at LTC by default, 4-6 allowed), one futility look after 2 stages; kind
+# network keeps [0, 5] at alpha = beta = 0.05; kind fixed plays exactly --cap stages. Every kind but the
+# positional (custom) one needs an idea id.
+futile='[6, 11, 20, 9, 4]'  # per stage nElo -27.08, LLR -0.30 on [0, 6]: -0.60 after 2 stages
+verdict() { cat "$tmp/$1/data/$1/verdict" 2>/dev/null; }
+refused() {  # label dispatches-expected message: exit 1, no new dispatch, the reason named
+  [ "$(rc "$1")" = 1 ] && [ "$(dispatches "$1")" = "$2" ] && grep -qF -- "$3" "$tmp/$1/out"
+}
+stages() { grep -o 'stage=[0-9]*' "$tmp/$1/dispatches" | tr '\n' ' '; }
+check "the futile counts stay inside design R's LLR bounds after 2 stages (a futility stop is not an H0)" \
+  "$PYTHON" -I -c "
+import sys; sys.path.insert(0, sys.argv[1]); import sprt_merge as sm
+p = [4 * x for x in [6, 11, 20, 9, 4]]; lo, hi = sm.bounds(0.05, 0.20)
+sys.exit(not (lo < sm.llr(p, 0, 6) < hi and sm.nelo(p) < 0))" "$here/../cloud"
+
+setup r-h1 0 "$strong"
+drive r-h1 --kind search --idea t1 "$sha" "$sha"
+check "design R: H1 exits 0 after one dispatch" [ "$(rc r-h1):$(dispatches r-h1)" = 0:1 ]
+check "design R: the LLR bounds are alpha 0.05, beta 0.20's" grep -q "LLR: .* (-1.56, 2.77) \[0.00, 6.00\] nElo: H1 accepted" "$tmp/r-h1/out"
+check "design R: bounds, alpha and beta dispatched" grep -q "bounds=0 6 0.05 0.20" "$tmp/r-h1/dispatches"
+check "design R: the verdict file says H1" [ "$(verdict r-h1)" = "H1 accepted" ]
+check "design R: the header names the design and the try" grep -q "bounds \[0, 6\], stages 0 to 7, ref test, kind search, stc, alpha 0.05, beta 0.20, cap 8, futility after 2 stages, idea t1 (try 1 of 2)" "$tmp/r-h1/out"
+
+setup r-futility 0 "$futile"
+drive r-futility --kind search --idea t2 "$sha" "$sha"
+check "futility: exits 0 (decided) after exactly 2 dispatches" [ "$(rc r-futility):$(dispatches r-futility)" = 0:2 ]
+check "futility: the stop and its estimate are logged" grep -q "decided after stage 1: futility stop (nElo -27.08 < 0 after 2 stages), rejected" "$tmp/r-futility/data/r-futility/driver.log"
+check "futility: the verdict file says so" [ "$(verdict r-futility)" = "futility stop" ]
+
+setup r-stage-cap 0 "$even"
+drive r-stage-cap --kind search --idea t3 "$sha" "$sha"
+check "cap: undecided exits 2 after exactly 8 stages, 0 to 7" [ "$(rc r-stage-cap):$(stages r-stage-cap)" = "2:stage=0 stage=1 stage=2 stage=3 stage=4 stage=5 stage=6 stage=7 " ]
+check "cap: logged as capped" grep -q "undecided after stage 7: capped (8 of 8 stages, undecided), not passed" "$tmp/r-stage-cap/out"
+check "cap: the verdict file says capped" [ "$(verdict r-stage-cap)" = capped ]
+
+setup r-origin 0 "$futile"
+drive r-origin --kind search --idea t4 --origin 3 "$sha" "$sha"
+check "origin 3: stages 3 and 4 only, then the futility stop" [ "$(rc r-origin):$(stages r-origin)" = "0:stage=3 stage=4 " ]
+
+setup r-ltc 0 "$even"
+TC=40+0.4 drive r-ltc --kind search --idea t5 --cap 7 "$sha" "$sha"
+check "LTC: a cap of 7 is refused before any dispatch" refused r-ltc 0 "kind search at LTC takes --cap 4, 5 or 6"
+TC=40+0.4 drive r-ltc --kind search --idea t5 --cap 4 "$sha" "$sha"
+check "LTC: --cap 4 plays 4 stages" [ "$(rc r-ltc):$(dispatches r-ltc)" = 2:4 ]
+check "LTC: 1,664 games and 64 MB per stage" grep -q "tc=40+0.4 -f hash=64 -f games=1664" "$tmp/r-ltc/dispatches"
+setup r-ltc6 0 "$even"
+TC=40+0.4 drive r-ltc6 --kind search --idea t5b "$sha" "$sha"
+check "LTC: the default cap is 6 stages" [ "$(rc r-ltc6):$(dispatches r-ltc6)" = 2:6 ]
+setup r-stc-cap 0 "$even"
+drive r-stc-cap --kind search --idea t6 --cap 6 "$sha" "$sha"
+check "STC: design R's cap of 8 cannot be changed" refused r-stc-cap 0 "kind search at STC has design R's cap of 8 stages"
+setup r-oddtc 0 "$even"
+TC=120+1.2 drive r-oddtc --kind search --idea t6b "$sha" "$sha"
+check "another time control is refused for kind search" refused r-oddtc 0 "kind search runs at TC 8+0.08 (STC) or 40+0.4 (LTC)"
+
+setup r-network 0 "$futile"
+drive r-network --kind network --idea n1 "$sha" "$sha"
+check "network: [0, 5] at alpha = beta = 0.05 dispatched" grep -q "bounds=0 5 0.05 0.05" "$tmp/r-network/dispatches"
+check "network: no futility stop (more than 2 stages, none logged)" bash -c "[ \$(wc -l <'$tmp/r-network/dispatches') -gt 2 ] && grep -q 'no futility stop' '$tmp/r-network/out' && ! grep -q 'futility stop (nElo' '$tmp/r-network/out'"
+
+setup r-fixed 0 "$strong"
+drive r-fixed --kind fixed --idea f1 --cap 2 "$sha" "$sha"
+check "fixed: an H1 does not stop it; exactly 2 stages, exit 0" [ "$(rc r-fixed):$(dispatches r-fixed)" = 0:2 ]
+check "fixed: the verdict file says complete" [ "$(verdict r-fixed)" = complete ]
+
+drive r-stage-cap --kind network --idea t3 "$sha" "$sha"
+check "redesign: a restart with another design is refused" refused r-stage-cap 8 "differs from the declared design"
+
+setup r-missing-stage 0 "$even"
+drive r-missing-stage --kind search --idea t7 --first 1 "$sha" "$sha"
+check "resume past a stage with no results exits 1 before any dispatch" refused r-missing-stage 0 "resuming at stage 1: stage 0 has no recorded results"
+
+setup r-noidea 0 "$strong"
+drive r-noidea --kind search "$sha" "$sha"
+check "kind search without --idea is refused" refused r-noidea 0 "kind search needs --idea"
+drive r-noidea --kind network "$sha" "$sha"
+check "kind network without --idea is refused" refused r-noidea 0 "kind network needs --idea"
+drive r-noidea --kind search --idea t8 "$sha" "$sha" 0 6
+check "kind search with positional bounds is refused" refused r-noidea 0 "kind search takes its bounds from its design"
+
+# The two-try limit, per idea and time control class, in one jobs folder (run ids kept apart).
+tries=$tmp/tries-jobs
+n=600
+for t in r-tries-a r-tries-b r-tries-c r-tries-d; do setup $t 0 "$strong"; echo $n >"$tmp/$t/latest"; n=$((n + 100)); done
+JOBS=$tries drive r-tries-a --kind search --idea t9 "$sha" "$sha"
+JOBS=$tries drive r-tries-b --kind search --idea t9 "$sha" "$sha"
+check "tries: the first two run" [ "$(rc r-tries-a):$(rc r-tries-b)" = 0:0 ]
+JOBS=$tries drive r-tries-c --kind search --idea t9 "$sha" "$sha"
+check "tries: a third is refused before any dispatch" refused r-tries-c 0 "another needs --owner-override"
+check "tries: the refusal names the earlier tries" grep -q "already has 2 stc tries (r-tries-a, r-tries-b)" "$tmp/r-tries-c/out"
+JOBS=$tries drive r-tries-a --kind search --idea t9 "$sha" "$sha"
+check "tries: a restart of a recorded try is not a new try" [ "$(rc r-tries-a)" = 0 ]
+JOBS=$tries drive r-tries-c --kind search --idea t9 --owner-override "owner test: third try" "$sha" "$sha"
+check "tries: with an owner override the third runs" [ "$(rc r-tries-c):$(dispatches r-tries-c)" = 0:1 ]
+check "tries: the override is recorded verbatim" grep -q '"override": "owner test: third try"' "$tries/tries.jsonl"
+check "tries: and named in the header" grep -q "idea t9 (try 3, owner override: owner test: third try)" "$tmp/r-tries-c/out"
+check "tries: three records" [ "$(wc -l <"$tries/tries.jsonl" | tr -d ' ')" = 3 ]
+TC=40+0.4 JOBS=$tries drive r-tries-d --kind search --idea t9 --cap 4 "$sha" "$sha"
+check "tries: an LTC test of the same idea is counted apart" [ "$(rc r-tries-d)" = 0 ]
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"
