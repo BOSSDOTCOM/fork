@@ -3729,6 +3729,40 @@ prediction is refuted and evaluation skipping has a lower ceiling than
 assumed; quiescence evaluations are 68-72% of all evaluations, far above
 the 30% line, so the quiescence eval-avoidance ideas stay open.
 
+**Results, X2** (2026-11-07; stats build 68c00b8; 100 games of
+`s512ppr2-stc`, seed 20261107, 6,172 test-engine searches per arm, Hash 16,
+Syzygy 3-4-5; median PGN depth of the replayed moves 15; the replays'
+own depths were not recorded in this run). Share of LMR sites where the
+LMR history term of sprt/lmr-history would act (|ordering score| >=
+24,000), with 95% intervals over games:
+
+| Game moves | 200k nodes | 1M nodes |
+|---|---|---|
+| 1-15 | 0.0015% [0.0010, 0.0020] | 0.0074% [0.0059, 0.0090] |
+| 16-29 | 0.0016% [0.0010, 0.0025] | 0.0065% [0.0053, 0.0078] |
+| 30-60 | 0.039% [0.006, 0.105] | 0.086% [0.021, 0.211] |
+| 61+ | 0.064% [0.014, 0.157] | 0.154% [0.066, 0.304] |
+| all | 0.032% [0.008, 0.069] | 0.075% [0.030, 0.140] |
+| bench (cleared per position) | 0.0019% | 0.0019% |
+
+- In game at moves 30-60 the share is 20.8x the bench's at 200k and 45.5x
+  at 1M: over the declared 5x line, so **history persistence is
+  confirmed** (R16's per-go scaling comes before R20 and R29). History
+  grows through a game: the butterfly entry's 95th percentile at LMR sites
+  rises from 1,875 (moves 1-15) to 4,375 (61+) at 200k and to 5,625 at 1M
+  (bench: 875); the take history at late captures sits near saturation in
+  game (median 6,875-8,375 of 10,000 at moves 30+; bench 375).
+- **B14's prediction is refuted:** it expected at least 85% of the term's
+  firings on the reduce-more side; essentially all are on the reduce-less
+  side (200k: 0 of the firings reduce more; 1M: 0.1%). Ordering scores
+  reach +24,000 (good moves with all three tables high) but almost never
+  -24,000.
+- The term acts at well under 0.2% of LMR sites in every band and changes
+  the reduction at about the same rate, so its firing alone is unlikely to
+  explain the -10.8 Elo (UNVERIFIED); the declared alternative, its cost
+  (the ordering score computed at every LMR site), is the next thing to
+  measure (its nps, not part of this step).
+
 ## 6. Decisions log
 
 | Date | Decision |
