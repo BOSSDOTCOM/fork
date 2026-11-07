@@ -174,6 +174,39 @@ class Parsing(unittest.TestCase):
         self.assertEqual((t['stage'], t['stage_state'], t['merged_stage'], t['games'], t['elo'], t['llr']),
                          (3, 'dispatched', 2, 4800, -5.57, -1.28))
         self.assertEqual((t['elo0'], t['elo1'], t['last_stage'], t['finished']), (0.0, 3.0, 12, None))
+        # Design R (owner, DESIGN.md §6 2026-11-07 decision 2): the header names the kind and the cap; a
+        # futility stop and a fixed head-to-head pairing's end are finished SPRTs. Lines as sprt_run.sh writes
+        # them (its test, tools/github/test_sprt_run.sh, checks the same wording).
+        a, b = '1' * 40, '2' * 40
+        r = P.driver_log('\n'.join([
+            f'2026-11-08 10:00 UTC raz: base {a}, test {b}, bounds [0, 6], stages 0 to 7, ref phase-4, kind search, '
+            'stc, alpha 0.05, beta 0.20, cap 8, futility after 2 stages, idea razoring (try 1 of 2)',
+            '2026-11-08 10:01 UTC raz: stage 0: run 42400000001 dispatched (ledger)',
+            '2026-11-08 10:20 UTC raz: stage 0: run 42400000001 merged',
+            '    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)',
+            '    Elo: -1.00 +/- 13.00, nElo: -1.20 +/- 17.02',
+            '    LLR: -0.10 (-1.56, 2.77) [0.00, 6.00] nElo: continue',
+            '    Verdict: continue',
+            '2026-11-08 10:21 UTC raz: stage 1: run 42400000002 dispatched (ledger)',
+            '2026-11-08 10:40 UTC raz: stage 1: run 42400000002 merged',
+            '    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)',
+            '    Elo: -1.00 +/- 9.20, nElo: -1.20 +/- 12.04',
+            '    LLR: -0.20 (-1.56, 2.77) [0.00, 6.00] nElo: continue',
+            '    Verdict: futility stop (nElo -1.20 < 0 after 2 stages)',
+            '2026-11-08 10:40 UTC raz: decided after stage 1: futility stop (nElo -1.20 < 0 after 2 stages), rejected',
+            f'2026-11-08 11:00 UTC h.40-60: base {a}, test {b}, bounds [0, 6], stages 0 to 0, ref phase-4, kind fixed, '
+            'stc, alpha 0.05, beta 0.20, cap 1, fixed length, idea rfp (head-to-head pairing, not a try)',
+            '2026-11-08 11:20 UTC h.40-60: complete after stage 0: complete (1 of 1 stages, fixed length)',
+        ]))
+        raz = P.sprt_state(r['raz'])
+        self.assertEqual((raz['kind'], raz['cap'], raz['games'], raz['decision']),
+                         ('search', 8, 3200, 'futility stop (nElo -1.20 < 0 after 2 stages)'))
+        self.assertTrue(raz['finished'].startswith('decided after stage 1: futility stop'))
+        h = P.sprt_state(r['h.40-60'])
+        self.assertEqual((h['kind'], h['cap']), ('fixed', 1))
+        self.assertEqual(h['finished'], 'complete after stage 0: complete (1 of 1 stages, fixed length)')
+        old = P.sprt_state(d['rising-rfp-25-vs-base'])  # a positional (custom) SPRT: no kind, no cap
+        self.assertEqual((old['kind'], old['cap'], old['decision']), (None, None, None))
 
     def test_sprt_log(self):
         e = {x['name']: x for x in P.sprt_log((REPO / 'docs/history/phase-4/sprt-log.md').read_text('utf-8'))}
