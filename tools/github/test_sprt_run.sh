@@ -155,12 +155,9 @@ check "the stray stage is named, nothing merged" bash -c "grep -q \"stage 0's re
 # Design R (owner, DESIGN.md §6 2026-11-07 decision 2): kind search is [0, 6] nElo, alpha 0.05, beta
 # 0.20, a cap of 8 stages (6 at LTC by default, 4-6 allowed), one futility look after 2 stages; kind
 # network keeps [0, 5] at alpha = beta = 0.05; kind fixed plays exactly --cap stages. Every kind but the
-# positional (custom) one needs an idea id.
+# positional (custom) one needs an idea id. A refusal: exit 1, no new dispatch, the reason named.
 futile='[6, 11, 20, 9, 4]'  # per stage nElo -27.08, LLR -0.30 on [0, 6]: -0.60 after 2 stages
 verdict() { cat "$tmp/$1/data/$1/verdict" 2>/dev/null; }
-refused() {  # label dispatches-expected message: exit 1, no new dispatch, the reason named
-  [ "$(rc "$1")" = 1 ] && [ "$(dispatches "$1")" = "$2" ] && grep -qF -- "$3" "$tmp/$1/out"
-}
 stages() { grep -o 'stage=[0-9]*' "$tmp/$1/dispatches" | tr '\n' ' '; }
 check "the futile counts stay inside design R's LLR bounds after 2 stages (a futility stop is not an H0)" \
   "$PYTHON" -I -c "
@@ -194,7 +191,7 @@ check "origin 3: stages 3 and 4 only, then the futility stop" [ "$(rc r-origin):
 
 setup r-ltc 0 "$even"
 TC=40+0.4 drive r-ltc --kind search --idea t5 --cap 7 "$sha" "$sha"
-check "LTC: a cap of 7 is refused before any dispatch" refused r-ltc 0 "kind search at LTC takes --cap 4, 5 or 6"
+check "LTC: a cap of 7 is refused before any dispatch" eval '[ "$(rc r-ltc)" = 1 ] && [ "$(dispatches r-ltc)" = 0 ] && grep -qF -- "kind search at LTC takes --cap 4, 5 or 6" "$tmp/r-ltc/out"'
 TC=40+0.4 drive r-ltc --kind search --idea t5 --cap 4 "$sha" "$sha"
 check "LTC: --cap 4 plays 4 stages" [ "$(rc r-ltc):$(dispatches r-ltc)" = 2:4 ]
 check "LTC: 1,664 games and 64 MB per stage" grep -q "tc=40+0.4 -f hash=64 -f games=1664" "$tmp/r-ltc/dispatches"
@@ -203,10 +200,10 @@ TC=40+0.4 drive r-ltc6 --kind search --idea t5b "$sha" "$sha"
 check "LTC: the default cap is 6 stages" [ "$(rc r-ltc6):$(dispatches r-ltc6)" = 2:6 ]
 setup r-stc-cap 0 "$even"
 drive r-stc-cap --kind search --idea t6 --cap 6 "$sha" "$sha"
-check "STC: design R's cap of 8 cannot be changed" refused r-stc-cap 0 "kind search at STC has design R's cap of 8 stages"
+check "STC: design R's cap of 8 cannot be changed" eval '[ "$(rc r-stc-cap)" = 1 ] && [ "$(dispatches r-stc-cap)" = 0 ] && grep -qF -- "kind search at STC has design R'\''s cap of 8 stages" "$tmp/r-stc-cap/out"'
 setup r-oddtc 0 "$even"
 TC=120+1.2 drive r-oddtc --kind search --idea t6b "$sha" "$sha"
-check "another time control is refused for kind search" refused r-oddtc 0 "kind search runs at TC 8+0.08 (STC) or 40+0.4 (LTC)"
+check "another time control is refused for kind search" eval '[ "$(rc r-oddtc)" = 1 ] && [ "$(dispatches r-oddtc)" = 0 ] && grep -qF -- "kind search runs at TC 8+0.08 (STC) or 40+0.4 (LTC)" "$tmp/r-oddtc/out"'
 
 setup r-network 0 "$futile"
 drive r-network --kind network --idea n1 "$sha" "$sha"
@@ -219,19 +216,19 @@ check "fixed: an H1 does not stop it; exactly 2 stages, exit 0" [ "$(rc r-fixed)
 check "fixed: the verdict file says complete" [ "$(verdict r-fixed)" = complete ]
 
 drive r-stage-cap --kind network --idea t3 "$sha" "$sha"
-check "redesign: a restart with another design is refused" refused r-stage-cap 8 "differs from the declared design"
+check "redesign: a restart with another design is refused" eval '[ "$(rc r-stage-cap)" = 1 ] && [ "$(dispatches r-stage-cap)" = 8 ] && grep -qF -- "differs from the declared design" "$tmp/r-stage-cap/out"'
 
 setup r-missing-stage 0 "$even"
 drive r-missing-stage --kind search --idea t7 --first 1 "$sha" "$sha"
-check "resume past a stage with no results exits 1 before any dispatch" refused r-missing-stage 0 "resuming at stage 1: stage 0 has no recorded results"
+check "resume past a stage with no results exits 1 before any dispatch" eval '[ "$(rc r-missing-stage)" = 1 ] && [ "$(dispatches r-missing-stage)" = 0 ] && grep -qF -- "resuming at stage 1: stage 0 has no recorded results" "$tmp/r-missing-stage/out"'
 
 setup r-noidea 0 "$strong"
 drive r-noidea --kind search "$sha" "$sha"
-check "kind search without --idea is refused" refused r-noidea 0 "kind search needs --idea"
+check "kind search without --idea is refused" eval '[ "$(rc r-noidea)" = 1 ] && [ "$(dispatches r-noidea)" = 0 ] && grep -qF -- "kind search needs --idea" "$tmp/r-noidea/out"'
 drive r-noidea --kind network "$sha" "$sha"
-check "kind network without --idea is refused" refused r-noidea 0 "kind network needs --idea"
+check "kind network without --idea is refused" eval '[ "$(rc r-noidea)" = 1 ] && [ "$(dispatches r-noidea)" = 0 ] && grep -qF -- "kind network needs --idea" "$tmp/r-noidea/out"'
 drive r-noidea --kind search --idea t8 "$sha" "$sha" 0 6
-check "kind search with positional bounds is refused" refused r-noidea 0 "kind search takes its bounds from its design"
+check "kind search with positional bounds is refused" eval '[ "$(rc r-noidea)" = 1 ] && [ "$(dispatches r-noidea)" = 0 ] && grep -qF -- "kind search takes its bounds from its design" "$tmp/r-noidea/out"'
 
 # The two-try limit, per idea and time control class, in one jobs folder (run ids kept apart).
 tries=$tmp/tries-jobs
@@ -241,7 +238,7 @@ JOBS=$tries drive r-tries-a --kind search --idea t9 "$sha" "$sha"
 JOBS=$tries drive r-tries-b --kind search --idea t9 "$sha" "$sha"
 check "tries: the first two run" [ "$(rc r-tries-a):$(rc r-tries-b)" = 0:0 ]
 JOBS=$tries drive r-tries-c --kind search --idea t9 "$sha" "$sha"
-check "tries: a third is refused before any dispatch" refused r-tries-c 0 "another needs --owner-override"
+check "tries: a third is refused before any dispatch" eval '[ "$(rc r-tries-c)" = 1 ] && [ "$(dispatches r-tries-c)" = 0 ] && grep -qF -- "another needs --owner-override" "$tmp/r-tries-c/out"'
 check "tries: the refusal names the earlier tries" grep -q "already has 2 stc tries (r-tries-a, r-tries-b)" "$tmp/r-tries-c/out"
 JOBS=$tries drive r-tries-a --kind search --idea t9 "$sha" "$sha"
 check "tries: a restart of a recorded try is not a new try" [ "$(rc r-tries-a)" = 0 ]
