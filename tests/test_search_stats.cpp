@@ -284,4 +284,85 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
                                        << f.lmr_quiet_bins[TableBins / 2] << "/" << f.lmr_rule_sites);
 }
 
+// X6: one trace row per finished iteration. The oracle for each row's best
+// move is a separate search to that row's depth from the same cleared
+// state (a search is deterministic, so its iterations repeat the longer
+// search's first ones).
+TEST_CASE("search_stats", "the iteration trace has one row per finished iteration, with the best move") {
+  std::vector<TtBucket> buckets(16384);
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  const std::atomic<bool> stop{false};
+  const auto set_trace = [](bool on) {
+#ifdef _WIN32
+    _putenv_s("FORK_ITERATION_TRACE", on ? "1" : "");
+#else
+    if (on)
+      setenv("FORK_ITERATION_TRACE", "1", 1);
+    else
+      unsetenv("FORK_ITERATION_TRACE");
+#endif
+  };
+  Position pos;
+  CHECK(pos.set_fen(perft_suite()[1].fen));
+  SearchQuota limits;
+  limits.depth = 10;
+  set_trace(true);
+  auto traced = std::make_unique<Searcher>(table);
+  set_trace(false);
+  const std::string path = "search_stats_trace.txt";
+  std::fflush(stderr);
+#ifdef _WIN32
+  const int saved = _dup(_fileno(stderr));
+  std::FILE* sink = std::fopen(path.c_str(), "wb");
+  _dup2(_fileno(sink), _fileno(stderr));
+#else
+  const int saved = dup(fileno(stderr));
+  std::FILE* sink = std::fopen(path.c_str(), "wb");
+  dup2(fileno(sink), fileno(stderr));
+#endif
+  const SearchResult result = traced->deliberate(pos, limits, stop, nullptr, nullptr);
+  std::fflush(stderr);
+#ifdef _WIN32
+  _dup2(saved, _fileno(stderr));
+  _close(saved);
+#else
+  dup2(saved, fileno(stderr));
+  close(saved);
+#endif
+  std::fclose(sink);
+  std::ifstream in(path, std::ios::binary);
+  std::vector<std::vector<long long>> rows;
+  for (std::string line; std::getline(in, line);) {
+    if (line.rfind("iteration_trace ", 0) != 0) continue;
+    std::vector<long long> fields;
+    std::istringstream text(line.substr(16));
+    for (std::string field; std::getline(text, field, '|');) fields.push_back(std::stoll(field));
+    CHECK_EQ(fields.size(), std::size_t{11});
+    rows.push_back(fields);
+  }
+  in.close();
+  std::remove(path.c_str());
+  CHECK_EQ(static_cast<int>(rows.size()), result.depth);
+  for (std::size_t k = 0; k < rows.size(); ++k) {
+    const std::vector<long long>& r = rows[k];
+    CHECK_EQ(r[0], static_cast<long long>(k + 1));  // depth
+    CHECK(r[2] >= 0 && r[2] <= 1000);               // share
+    CHECK(r[3] >= 0 && r[3] <= 1000);               // share over every pass
+    CHECK(r[4] >= 0 && r[4] <= 1000);               // runner-up
+    CHECK(r[6] >= r[5]);                            // the iteration's nodes include its last pass
+    CHECK(r[8] >= 1);                               // passes
+    CHECK_EQ(r[9], 48LL);                           // Kiwipete's 48 root moves (tests/suite.hpp)
+    // The oracle: a search to this depth from the same cleared state.
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    auto shorter = std::make_unique<Searcher>(table);
+    SearchQuota to_depth;
+    to_depth.depth = static_cast<int>(k + 1);
+    const SearchResult s = shorter->deliberate(pos, to_depth, stop, nullptr, nullptr);
+    CHECK_EQ(r[1], static_cast<long long>(s.best.raw()));
+    CHECK_EQ(r[7], static_cast<long long>(s.score));
+  }
+  CHECK(!rows.empty() && rows.back()[1] == static_cast<long long>(result.best.raw()));
+}
+
 }  // namespace forkeng::test

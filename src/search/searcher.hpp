@@ -210,6 +210,9 @@ struct RootEntry {
   Move move;
   std::uint64_t nodes = 0;  // nodes under this move in the current iteration's last pass
   int share = 0;            // its per mille of the last finished iteration's nodes
+#ifdef FORK_SEARCH_STATS
+  std::uint64_t nodes_all_passes = 0;  // X6 (DESIGN.md §5.7): nodes under it in every pass of the iteration
+#endif
 };
 
 // The moved piece's facts for the LMR context, from the position after a
@@ -458,6 +461,10 @@ class Searcher {
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
+#ifdef FORK_SEARCH_STATS
+  // X6 (DESIGN.md §5.7): one `iteration_trace` line for a finished iteration.
+  void trace_iteration(int depth, int score, int passes, std::uint64_t iteration_nodes) const;
+#endif
 
   TransTable& tt_;
   QuietHistory history_;
@@ -501,6 +508,7 @@ class Searcher {
 #ifdef FORK_SEARCH_STATS
   std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
   bool report_counters_ = false;      // FORK_STATS_REPORT: dump the counters after each search
+  bool trace_iterations_ = false;     // FORK_ITERATION_TRACE: one line per finished iteration
 #endif
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;

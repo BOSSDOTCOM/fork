@@ -3655,6 +3655,17 @@ would change the reduction. Report: `search_counters_report.py x2` per
 game-move band against the stats bench, with the declared readings in its
 docstring.
 
+**X6, the node-share fit.** With `FORK_ITERATION_TRACE` the stats build
+prints one `iteration_trace` row per finished iteration: the best move, its
+per mille of the last aspiration pass's root nodes (the share the engine
+already computes) and of every pass's (`RootEntry::nodes_all_passes`), the
+largest other share, the nodes, the score, the passes, the root moves and
+the deepest ply. `tools/measure/node_share_fit.py` fits "the best move
+changes within the next two iterations" by logistic regression on the
+share's logit, stability, the score change and the depth, and reports AUC,
+the partial R² of the share and Spearman's rho², with the declared
+readings in its docstring.
+
 **Measurement settings** (they change no play; each is recorded here and
 in its code comment, as the orchestrator asked on 2026-11-07):
 
@@ -3667,6 +3678,10 @@ in its code comment, as the orchestrator asked on 2026-11-07):
 | X2 games | 100 from `~/fork-data/sprt/s512ppr2-stc` (seed 20261107), "test" engine's positions | the current default network's own STC games; 100 games give a game-level bootstrap |
 | X2 node budgets | 200,000 and 1,000,000 per move | 200k is the drift measurement's and the ledger proposal's STC proxy; 1M shows the drift toward LTC, where more nodes per move age history further |
 | Replay engine options | Hash 16, Threads 1, Syzygy 3-4-5 | as the replayed SPRT games were played (sprt.yml's default Hash, run_shard.sh's tables) |
+| X6 positions | 60 games (seed 20261108, disjoint from X2's), at most 35 test-engine positions each, about 2,100 | the think tank's 2,000 positions; consecutive positions of a game keep the in-game TT and history R8 would act in |
+| X6 node budget | 2,000,000 per move | the think tank's choice: deep enough (depth 18-22) that the depth >= 8 rows span the iterations where STC and LTC soft-limit decisions are taken |
+| X6 fit | depth >= 8 primary; share clipped to [0.005, 0.995]; stability capped at 10; score change clipped at 500 cp; ridge 1e-6 | the soft limit is never checked before depth 8 at STC; the clips keep the logit and log finite and stop rare extremes dominating; the ridge only guards a singular system |
+| X6 bootstrap | 300 rounds over games, seed 20261108 | each round refits the model twice per share definition in pure Python; 300 keeps that to minutes while the interval ends move by well under their width |
 | Replay processes | at most 2, below-normal priority, through jobctl (kind `measure`) | the machine is shared with data generation (orchestrator, 2026-11-07); node limits make results independent of load |
 
 ## 6. Decisions log

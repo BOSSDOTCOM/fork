@@ -22,6 +22,8 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
   if (const char* every = std::getenv("FORK_SINGULAR_PROBE"))
     singular_probe_ = std::strtoull(every, nullptr, 10);
   if (const char* report = std::getenv("FORK_STATS_REPORT")) report_counters_ = report[0] && report[0] != '0';
+  if (const char* trace = std::getenv("FORK_ITERATION_TRACE"))
+    trace_iterations_ = trace[0] && trace[0] != '0';
 #endif
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
@@ -708,6 +710,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     }
     pos.unmake(m);
     root_moves_[i].nodes = nodes_ - nodes_before;
+    FORK_STAT(root_moves_[i].nodes_all_passes += root_moves_[i].nodes);
     if (stopped_) return best;
     if (score > best) best = score;
     if (m == root_fail_high_ && score < beta) root_fail_high_ = NoMove;  // resolved by its re-search
@@ -732,6 +735,30 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   root_moves_[0] = front;
   return best;
 }
+
+#ifdef FORK_SEARCH_STATS
+// X6 (DESIGN.md §5.7): after a finished iteration (its shares computed), the
+// best move (the front root move, as a raw 16-bit move), its per mille of
+// the last pass's nodes and of every pass's, the largest other root move's
+// per mille of the last pass, the last pass's and the whole iteration's
+// nodes, the score, the aspiration passes, the root moves and the deepest
+// ply. Integers only, no allocation.
+void Searcher::trace_iteration(int depth, int score, int passes, std::uint64_t iteration_nodes) const {
+  std::uint64_t last_pass = 0, all_passes = 0;
+  int runner_up = 0;
+  for (std::size_t i = 0; i < root_count_; ++i) {
+    last_pass += root_moves_[i].nodes;
+    all_passes += root_moves_[i].nodes_all_passes;
+    if (i > 0) runner_up = std::max(runner_up, root_moves_[i].share);
+  }
+  const std::uint64_t share_all = all_passes ? root_moves_[0].nodes_all_passes * 1000 / all_passes : 0;
+  std::fprintf(stderr, "iteration_trace %d|%u|%d|%llu|%d|%llu|%llu|%d|%d|%d|%d\n", depth,
+               static_cast<unsigned>(root_moves_[0].move.raw()), root_moves_[0].share,
+               static_cast<unsigned long long>(share_all), runner_up,
+               static_cast<unsigned long long>(last_pass), static_cast<unsigned long long>(iteration_nodes),
+               score, passes, static_cast<int>(root_count_), max_ply_reached_);
+}
+#endif
 
 void Searcher::report_iteration(int depth, int score, int bound, const PrincipalLine& pv) {
   last_reported_ = pv.length ? pv.moves[0] : NoMove;
@@ -822,6 +849,12 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
 
   int previous = 0;
   for (int depth = 1; depth <= std::min(limits.depth, MaxPly - 1); ++depth) {
+#ifdef FORK_SEARCH_STATS
+    // X6: every pass's nodes per root move, the passes, the iteration's nodes.
+    for (std::size_t i = 0; i < root_count_; ++i) root_moves_[i].nodes_all_passes = 0;
+    int passes = 0;
+    const std::uint64_t iteration_start = nodes_;
+#endif
     iteration_best_ = NoMove;
     iteration_best_score_ = -ScoreInfinite;
     root_fail_high_ = NoMove;
@@ -834,6 +867,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     int score;
     for (;;) {
       score = search_root(alpha, beta, depth);
+      FORK_STAT(++passes);
       if (stopped_) break;
       if (score > alpha && score < beta) break;
       if (elapsed_ms() >= fail_report_ms) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
@@ -882,6 +916,9 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     result.score = score;
     result.depth = depth;
     finished_pv_ = pv_[0];
+#ifdef FORK_SEARCH_STATS
+    if (trace_iterations_) trace_iteration(depth, score, passes, nodes_ - iteration_start);
+#endif
     report_iteration(depth, score, 0, pv_[0]);
     if (limits.mate_moves > 0 && is_mate_score(score) && score > 0 &&
         mate_in_moves(score) <= limits.mate_moves)
