@@ -101,14 +101,15 @@ def normal_cdf(z):
 def probit_floor_probability(g, theta):
     """I1's P(wrong | g): theta = (mu, log sigma, logit pi, log tau)."""
     mu, log_sigma, logit_pi, log_tau = theta
-    pi = 1 / (1 + math.exp(-logit_pi))
+    # The logistic of logit_pi, without overflow at either extreme.
+    pi = 1 / (1 + math.exp(-logit_pi)) if logit_pi >= 0 else math.exp(logit_pi) / (1 + math.exp(logit_pi))
     p = (1 - pi) * normal_cdf((-g - mu) / math.exp(log_sigma)) + pi * 0.5 * math.exp(-g / math.exp(log_tau))
     return min(max(p, 1e-12), 1 - 1e-12)
 
 
 def negative_log_likelihood(theta, bins):
     """Binned Bernoulli likelihood: bins = [(gap midpoint, rows, wrong)]."""
-    if not all(math.isfinite(v) for v in theta) or abs(theta[1]) > 20 or abs(theta[3]) > 20:
+    if not all(math.isfinite(v) for v in theta) or abs(theta[1]) > 20 or abs(theta[2]) > 50 or abs(theta[3]) > 20:
         return float('inf')
     total = 0.0
     for g, n, k in bins:
@@ -233,7 +234,8 @@ def main(argv=None):
                 'margin_rate': rate, 'margin_rows': n_margin, 'margin_wrong': wrong_margin,
                 'margin_rate_ci95': bootstrap_fit(part, a.rounds, a.seed, margin_rate),
                 'thin': entry['wrong'] < 100,
-                'fit': {'mu': theta[0], 'sigma': math.exp(theta[1]), 'pi': 1 / (1 + math.exp(-theta[2])),
+                'fit': {'mu': theta[0], 'sigma': math.exp(theta[1]),
+                        'pi': math.exp(min(theta[2], 0)) / (math.exp(min(theta[2], 0)) + math.exp(min(-theta[2], 0))),
                         'tau': math.exp(theta[3]), 'neg_log_likelihood': nll,
                         'rate_at_margin': probit_floor_probability(entry['margin'], theta)},
                 'sigma_ci95': bootstrap_fit(part, min(a.rounds, 50), a.seed, fitted_sigma),

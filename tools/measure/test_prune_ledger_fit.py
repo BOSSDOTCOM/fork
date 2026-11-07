@@ -68,6 +68,12 @@ class PruneLedgerFitTests(unittest.TestCase):
         self.assertAlmostEqual(best[0], 3.0, delta=1e-3)
         self.assertAlmostEqual(best[1], -1.0, delta=1e-3)
         self.assertAlmostEqual(plf.normal_cdf(0.0), 0.5)
+        # Extreme parameters (the simplex can wander there) neither overflow nor break the bounds:
+        # the first real fit hit an overflow at logit pi below -709.
+        for logit_pi in (-1000.0, 1000.0):
+            p = plf.probit_floor_probability(50, (-60.0, math.log(70.0), logit_pi, math.log(150.0)))
+            self.assertTrue(0 < p < 1)
+        self.assertEqual(plf.negative_log_likelihood((0.0, 0.0, -1000.0, 0.0), [(5.0, 10, 1)]), float('inf'))
         lo, hi = plf.bootstrap_fit(rows, 50, 1, lambda s: sum(r['wrong'] for r in s) / len(s))
         rate = sum(r['wrong'] for r in rows) / len(rows)
         self.assertLessEqual(lo, rate)
