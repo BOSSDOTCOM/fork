@@ -261,58 +261,92 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
 #else
 #define FORK_STAT(...) static_cast<void>(0)
 #endif
+// The scalar counters, one list (as the switches above), so the per-search
+// dump (stats_report.hpp) cannot miss one: X(member).
+// - beta_cutoffs: main-search nodes that failed high; first_move_cutoffs:
+//   ... on the first move searched; cutoff_index_sum: the cutoff move's index
+//   summed (0 = first); makes: moves made in the main and quiescence searches.
+// - Deliverable 6: nodes cut by RFP and the null move; moves pruned by LMP,
+//   futility and SEE; LMR's reduced searches, their full-depth re-searches,
+//   and the plies the reductions took off (the loop's mean-reduction
+//   descriptor).
+// - The heuristic-discovery rule (lmr_correction, idea 23): the LMR sites it
+//   ran at, those where it returned non-zero, and those where that changed
+//   the reduction after scaling and clamping (the loop's trigger rate).
+// - External review (2026-10-26). (c) SEE tests by the main-search SEE
+//   pruning, by where the move came from: good captures (SEE >= 0 already
+//   shown by the selector: skipped since claim (c)), bad captures (SEE < 0
+//   shown by the selector), quiets, other (TT moves and in-check evasions);
+//   bad captures reached after late move pruning stopped the quiets, and how
+//   many SEE pruning then drops. (d) Futile nodes: quiet moves taken from
+//   the selector there, and those searched (the checking ones and the first
+//   move). (f) Quiescence nodes at PV and non-PV nodes.
+// - Tier 2: nodes where a singular test could run (the measurement's
+//   sampling); singular tests run (their searches); those that found the TT
+//   move singular; those where another move also beat beta, so the node
+//   failed high (multi-cut); those where the TT move was searched one ply
+//   shallower; nodes without a TT move searched one ply shallower (T26).
+// - Phase 4 step 1, X1 (DESIGN.md §5.7): nodes at the root and in the main
+//   search (with the quiescence nodes above they sum to the node count);
+//   static evaluations computed, taken from the TT entry instead, or not
+//   needed (in check), in the main and the quiescence search, and at the ply
+//   limit (evals_horizon); moves made that move a pawn, all and in the
+//   quiescence search alone.
+#define FORK_SEARCH_COUNTERS(X)     \
+  X(beta_cutoffs)                   \
+  X(first_move_cutoffs)             \
+  X(cutoff_index_sum)               \
+  X(makes)                          \
+  X(rfp_cuts)                       \
+  X(null_cuts)                      \
+  X(lmp_prunes)                     \
+  X(futility_prunes)                \
+  X(see_prunes)                     \
+  X(lmr_searches)                   \
+  X(lmr_researches)                 \
+  X(lmr_plies_sum)                  \
+  X(lmr_rule_sites)                 \
+  X(lmr_rule_fires)                 \
+  X(lmr_rule_changes)               \
+  X(see_tests_good_captures)        \
+  X(see_tests_bad_captures)         \
+  X(see_tests_quiets)               \
+  X(see_tests_other)                \
+  X(bad_captures_after_stop)        \
+  X(bad_captures_after_stop_pruned) \
+  X(futile_nodes)                   \
+  X(futile_quiets_taken)            \
+  X(futile_quiets_searched)         \
+  X(quiesce_nodes_pv)               \
+  X(quiesce_nodes_non_pv)           \
+  X(singular_candidates)            \
+  X(singular_tests)                 \
+  X(singular_extended)              \
+  X(multi_cut_cuts)                 \
+  X(negative_extensions)            \
+  X(no_move_reductions)             \
+  X(root_nodes)                     \
+  X(main_nodes)                     \
+  X(evals_main)                     \
+  X(tt_eval_hits_main)              \
+  X(check_nodes_main)               \
+  X(evals_quiesce)                  \
+  X(tt_eval_hits_quiesce)           \
+  X(check_nodes_quiesce)            \
+  X(evals_horizon)                  \
+  X(pawn_makes)                     \
+  X(pawn_makes_quiesce)
+
 struct SearchCounters {
-  std::uint64_t beta_cutoffs = 0;        // main-search nodes that failed high
-  std::uint64_t first_move_cutoffs = 0;  // ... on the first move searched
-  std::uint64_t cutoff_index_sum = 0;    // sum of the cutoff move's index (0 = first)
-  std::uint64_t makes = 0;               // moves made in the main and quiescence searches
-  // Deliverable 6: nodes cut by RFP and the null move; moves pruned by LMP,
-  // futility and SEE; LMR's reduced searches and their full-depth re-searches.
-  std::uint64_t rfp_cuts = 0;
-  std::uint64_t null_cuts = 0;
-  std::uint64_t lmp_prunes = 0;
-  std::uint64_t futility_prunes = 0;
-  std::uint64_t see_prunes = 0;
-  std::uint64_t lmr_searches = 0;
-  std::uint64_t lmr_researches = 0;
-  std::uint64_t lmr_plies_sum = 0;  // plies taken off by reductions (the loop's mean-reduction descriptor)
-  // The heuristic-discovery rule (lmr_correction, idea 23): the LMR sites it
-  // ran at, those where it returned non-zero, and those where that changed
-  // the reduction after scaling and clamping (the loop's trigger rate).
-  std::uint64_t lmr_rule_sites = 0;
-  std::uint64_t lmr_rule_fires = 0;
-  std::uint64_t lmr_rule_changes = 0;
+#define FORK_COUNTER_MEMBER(member) std::uint64_t member = 0;
+  FORK_SEARCH_COUNTERS(FORK_COUNTER_MEMBER)
+#undef FORK_COUNTER_MEMBER
   // Quiet cutoffs at non-PV nodes out of check, by remaining depth (1-6) and
   // the cutting move's index among the quiets searched there (the late move
   // pruning measurement, DESIGN.md §5.2 deliverable 6).
   static constexpr int CutoffDepths = 7;
   static constexpr int CutoffIndices = 48;
   std::uint64_t quiet_cutoff_index[CutoffDepths][CutoffIndices] = {};
-  // External review (2026-10-26). (c) SEE tests by the main-search SEE
-  // pruning, by where the move came from; bad captures reached after late
-  // move pruning stopped the quiets, and how many SEE pruning then drops.
-  std::uint64_t see_tests_good_captures =
-      0;  // SEE >= 0 already shown by the selector: skipped since claim (c)
-  std::uint64_t see_tests_bad_captures = 0;  // SEE < 0 already shown by the selector
-  std::uint64_t see_tests_quiets = 0;
-  std::uint64_t see_tests_other = 0;  // TT moves and in-check evasions
-  std::uint64_t bad_captures_after_stop = 0;
-  std::uint64_t bad_captures_after_stop_pruned = 0;
-  // (d) Futile nodes: quiet moves taken from the selector there, and those
-  // searched (the checking ones and the first move).
-  std::uint64_t futile_nodes = 0;
-  std::uint64_t futile_quiets_taken = 0;
-  std::uint64_t futile_quiets_searched = 0;
-  // (f) Quiescence nodes at PV and non-PV nodes.
-  std::uint64_t quiesce_nodes_pv = 0;
-  std::uint64_t quiesce_nodes_non_pv = 0;
-  // Tier 2: nodes where a singular test could run (the measurement's sampling).
-  std::uint64_t singular_candidates = 0;
-  std::uint64_t singular_tests = 0;       // singular tests run (their searches)
-  std::uint64_t singular_extended = 0;    // ... that found the TT move singular
-  std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
-  std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
-  std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
 };
 
 class Searcher {
@@ -330,6 +364,10 @@ class Searcher {
   std::int64_t fail_report_ms = 1000;
 #ifdef FORK_SEARCH_STATS
   SearchCounters counters;
+#if defined(FORK_EVAL_NNUE)
+  // The network's update counts (X1), kept by the feature stack.
+  const FeatureStackTally& feature_tally() const { return features_.tally(); }
+#endif
 #endif
 
   // Forgets the move-ordering history (ucinewgame, and each bench position).
@@ -414,6 +452,7 @@ class Searcher {
   Move last_reported_ = NoMove;
 #ifdef FORK_SEARCH_STATS
   std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
+  bool report_counters_ = false;      // FORK_STATS_REPORT: dump the counters after each search
 #endif
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;

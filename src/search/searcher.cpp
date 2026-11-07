@@ -12,6 +12,7 @@
 #include "search/endgame_tables.hpp"
 #include "search/lmr_table.hpp"
 #include "search/see.hpp"
+#include "search/stats_report.hpp"
 #include "tune/params.hpp"
 
 namespace forkeng {
@@ -20,6 +21,7 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #ifdef FORK_SEARCH_STATS
   if (const char* every = std::getenv("FORK_SINGULAR_PROBE"))
     singular_probe_ = std::strtoull(every, nullptr, 10);
+  if (const char* report = std::getenv("FORK_STATS_REPORT")) report_counters_ = report[0] && report[0] != '0';
 #endif
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
@@ -164,6 +166,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (depth <= 0 && switches.use_quiesce) return quiesce<OnPv>(alpha, beta, ply);
   pv_[ply].length = 0;
   ++nodes_;
+  FORK_STAT(++counters.main_nodes);
   if (poll_limits()) return 0;
   max_ply_reached_ = std::max(max_ply_reached_, ply);
   Position& pos = *pos_;
@@ -178,8 +181,14 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // insufficient material, and the 50-move rule unless this move is mate.
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
-  if (ply >= MaxPly) return in_check ? 0 : eval_at(ply);
-  if (depth <= 0) return eval_at(ply);  // only with the quiescence search switched off
+  if (ply >= MaxPly) {
+    FORK_STAT(counters.evals_horizon += !in_check);
+    return in_check ? 0 : eval_at(ply);
+  }
+  if (depth <= 0) {
+    FORK_STAT(++counters.evals_horizon);
+    return eval_at(ply);  // only with the quiescence search switched off
+  }
 
   if (switches.use_mate_distance) {
     alpha = std::max(alpha, mated_score(ply));
@@ -230,6 +239,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   }
 
   f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
+  FORK_STAT(++(in_check                          ? counters.check_nodes_main
+               : tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_main
+                                                 : counters.evals_main));
   // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
   // score from a real search corrects the static estimate in the direction
   // its bound proves (a lower bound above it raises it, an upper bound below
@@ -410,6 +422,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
+    FORK_STAT(counters.pawn_makes += kind_of(pos.piece_at(m.from())) == Pawn);
     play(ply, m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
@@ -552,7 +565,10 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
-  if (ply >= MaxPly) return in_check ? 0 : eval_at(ply);
+  if (ply >= MaxPly) {
+    FORK_STAT(counters.evals_horizon += !in_check);
+    return in_check ? 0 : eval_at(ply);
+  }
 
   const Key key = pos.key();
   TtHit hit{};
@@ -566,8 +582,10 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   int best = -ScoreInfinite;
   if (in_check) {
     f.static_eval = ScoreNone;
+    FORK_STAT(++counters.check_nodes_quiesce);
   } else {
     f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
+    FORK_STAT(++(tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_quiesce : counters.evals_quiesce));
     best = f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)
@@ -587,6 +605,11 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   for (Move m; !(m = f.selector.take_next()).is_none();) {
     ++moves_searched;
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
+#ifdef FORK_SEARCH_STATS
+    const bool pawn_move = kind_of(pos.piece_at(m.from())) == Pawn;
+    counters.pawn_makes += pawn_move;
+    counters.pawn_makes_quiesce += pawn_move;
+#endif
     play(ply, m);
     FORK_STAT(++counters.makes);
     const int score = -quiesce<OnPv>(-beta, -alpha, ply + 1);
@@ -613,6 +636,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 int Searcher::search_root(int alpha, int beta, int depth) {
   Position& pos = *pos_;
   ++nodes_;
+  FORK_STAT(++counters.root_nodes);
   pv_[0].length = 0;
   int best = -ScoreInfinite;
   // The root node counts too, so a node limit reached here stops here, not
@@ -828,6 +852,17 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     if (timed && limits.hard_ms >= 0 && elapsed_ms() * IterationGrowthThirds / 3 > limits.hard_ms) break;
   }
   result.nodes = nodes_;
+#ifdef FORK_SEARCH_STATS
+  // Phase 4 step 1 (DESIGN.md §5.7): cumulative counters after each search,
+  // for tools/measure/game_replay.py, which takes the differences.
+  if (report_counters_) {
+#if defined(FORK_EVAL_NNUE)
+    print_counter_dump(counters, &features_.tally(), stderr);
+#else
+    print_counter_dump(counters, nullptr, stderr);
+#endif
+  }
+#endif
   return result;
 }
 

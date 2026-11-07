@@ -3604,6 +3604,47 @@ UNVERIFIED):
 | 14 | Idea 40's later layers, S512cl's speed work, the further correction tables (after SPSA), QAT, the rest of idea 46 | larger efforts, gated by their own measurements | as gated |
 | 15 | LTC confirmations owed, the final gauntlet, audit-2 and its fixes, the phase-end checklist, merge to main, tag, summary | the close | 3-4 days |
 
+### 5.7 Phase 4 step 1: measurement instrumentation (owner-approved 2026-11-07)
+
+The think tank's cheapest measurements (research/phase4-think-tank,
+phase-c-synthesis.md §2.2 and §2.4: X1, X2, X6, X10), built as
+measurement-only code. **Normal builds are unchanged:** every engine line is
+inside `#ifdef FORK_SEARCH_STATS` (or an always-compiled helper that no
+normal build calls), so each commit keeps bench (14,626,377 /
+9e43990217b0886d) on every preset, and the release presets' `.text` is
+compared before and after. The stats build itself must search the same
+tree: the preset `clang-stats` (CMakePresets.json only; not in build.sh or
+CI, orchestrator's ruling 2026-11-07) runs bench_parity and the
+`search_stats` suite (tests/test_search_stats.cpp, compiled only there).
+The engine reads its report switches from environment variables once, at
+start-up: `FORK_STATS_REPORT` (a cumulative counter dump after each search),
+`FORK_ITERATION_TRACE` (one line per finished iteration), `FORK_PRUNE_LEDGER`
+(the decision ledger's sampling rate). Line formats:
+`tools/measure/engine_lines.py`. No allocation or exceptions in the
+recursion, even in stats builds; the dump's lines are integers only.
+
+**X1, search and accumulator counters.** `SearchCounters` became one
+X-macro list, `FORK_SEARCH_COUNTERS`, so the dump cannot miss a counter
+(the earlier `stats:` lines of `fork bench` keep their text; the summary
+moved to `src/search/stats_report.cpp`). New: root and main-search nodes
+(with the quiescence nodes they sum to the node count), static evaluations
+computed, taken from the TT entry, or not needed (in check), in the main
+and quiescence searches and at the ply limit, and pawn moves among the
+moves made. The feature stack keeps a `FeatureStackTally` (stats builds
+only; `forknnue` gets the define too, so every user of accumulator.hpp sees
+one layout): evaluations, pushes, perspective updates, rows per update
+(`delta_row_count`, the same columns the update uses), link updates, frame
+and root refreshes, and the plies an evaluation walks. Report:
+`tools/measure/search_counters_report.py x1` on a stats bench's stderr
+(`FORK_STATS_REPORT=1 fork bench`) or on a replay folder (§X2).
+
+**Measurement settings** (they change no play; each is recorded here and
+in its code comment, as the orchestrator asked on 2026-11-07):
+
+| Setting | Value | Reason |
+|---|---|---|
+| Counter dump | cumulative, per search | bench sums 46 positions in one searcher; a cumulative dump needs no reset, and the reader takes differences |
+
 ## 6. Decisions log
 
 | Date | Decision |
@@ -3699,6 +3740,7 @@ UNVERIFIED):
 | 2026-11-06 | **Testing streamlined (owner; the new standard, Testing setup).** Search constants for batch 4 and everything after it are chosen by a short SPRT ladder (2-3 sensible values, quick STC tests capped at 2 stages, the best kept), then the feature's normal SPRT; the ladder counts as Fork's own measurement for the originality rule, SPSA refines later; the running fifty-move measurement is finished, batch 4's other declared measurement specs are not run. Seed-noise matches are dropped. The re-validation queue runs only as idle filler. LTC confirmations only for the LTC-sensitive list (Testing setup, "Straight to LTC"); for everything else the STC verdict decides. Kept: SPRTs, parity and netcheck, the endgame acceptance test, data verification before sealing, CI before merges to main, the fixed-node screen for new networks. |
 | 2026-11-06 | **S512+PP promoted to the default network (owner).** S512+PP R = 1 (bake/s512pp 412b13f, S = 90) beat S512r2 at STC, +32.67 ± 10.48 Elo, H1 after 1,600 games (run 42294907752), after +46.09 ± 10.37 at fixed nodes (run 42284077960). Promoted the same evening with its recorded exceptions: speed 0.895 of S512r2's nps (below the 0.90 gate) and the endgame check, 351 of 900 misjudged against 249 (KQK 59 of 300), which the Syzygy slice in g3s2 is meant to fix (docs/nets.md). Its two network-dependent search checks were rewritten to hold for any evaluator (the promotion rule). nets/s512pp merged into phase-4 with its inference code (architectures 6-8) and trainer; S512r2 stays buildable and joins CI's `nets` job. Bench 13,909,380 / 831e5c9295839f87. **The labeller policy:** g3e stopped at a game boundary (4:38:18 PM EST, 48,577,036 positions) and sealed as its part; the generation continues as g3f, labelled by S512+PP from a fresh PGO build. **Item 7's** candidate must beat S512+PP. The web page still runs S512r2 until it is redeployed. Tests and measurements based on S512r2 (ProbCut's SPRT, batch 4's fifty-move measurement) keep their S512r2 base; whether to re-run any on S512+PP is the owner's call |
 | 2026-11-06 | **S512ppr2 promoted to the default network; the warm start becomes the standard retrain recipe (owner).** Item 7's retrain (S512+PP's architecture on g3s2 with the Syzygy endgame slice): the warm start from S512+PP at LR 0.0001 (mean best loss 0.01909453 on g3s2-val over 2 seeds) beat training from scratch (0.01951758) by about ten times the 4e-5 seed spread, so future retrains warm-start at LR 0.0001 with the usual tenfold drop. Its best seed, S512ppr2 (bake/s512ppr2 d56c2cf, S = 89, 2 of 311,296 link weights clamped), beat S512+PP at STC [0, 5], +20.11 ± 7.22 Elo (nElo +33.60 ± 12.04), H1 after 3,200 games (runs 42335141916, 42336446490), and misjudges 8 of the endgame check's 900 positions against S512+PP's 351. Promoted the same evening; S512+PP stays buildable and joins CI's `nets` job; the web page adds S512ppr2 as its default when it is next redeployed. Bench 14,626,377 / 9e43990217b0886d. **The labeller policy:** g3f stopped at a game boundary (11:50 PM EST) and sealed as its part; the generation continues as g3g, labelled by S512ppr2 from a fresh PGO build |
+| 2026-11-07 | **Phase 4 step 1: the measurement instrumentation (owner-approved; §5.7).** X1 (search and accumulator counters), X2 (in-game history magnitudes and the LMR history term's firing), X6 (the node-share fit) and X10 (the decision ledger's RFP and futility rows), built behind FORK_SEARCH_STATS with the `clang-stats` preset (CMakePresets.json only), Python drivers and analyses in `tools/measure/`; normal builds unchanged (bench 14,626,377 / 9e43990217b0886d). Every new name passed the four-engine screen before use (three generic matches: Keep, evaluations, measure). Replays: X2 and X10 on disjoint games, with the Syzygy 3-4-5 tables, at most 2 engine processes at below-normal priority, through jobctl (kind `measure`). |
 
 ## 7. Performance doctrine (governs every phase)
 
