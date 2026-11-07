@@ -3858,6 +3858,40 @@ current margin, with its wrong events / rows and a 95% interval over games.
   magnitude. The binned rates above (and the CSV of all rows, outside the
   repository) are the result to use; the fitted curves are not.
 
+**Results, idea 59 step 1** (2026-11-07; stats build d7de27b; 100 games
+of `s512ppr2-stc`, seed 20261110, disjoint from X2's, X6's and X10's;
+6,523 test-engine positions, at most 80 per game; 200k and 1M nodes).
+Computed evaluations within the margin of the nearest finite window bound:
+the share of that kind's evaluations, then the call rate per node.
+
+| Margin | Main, 200k | Quiescence, 200k | Main + quiescence per node, 200k | Main, 1M | Quiescence, 1M | Per node, 1M |
+|---|---|---|---|---|---|---|
+| 10 cp | 4.2% / 0.62% | 6.1% / 2.30% | 2.9% | 3.7% / 0.64% | 5.6% / 2.02% | 2.7% |
+| 25 cp | 10.1% / 1.48% | 14.8% / 5.58% | 7.1% | 8.9% / 1.52% | 13.6% / 4.90% | 6.4% |
+| 50 cp | 19.4% / 2.87% | 29.4% / 11.06% | 13.9% | 17.5% / 2.98% | 27.1% / 9.79% | 12.8% |
+| 100 cp | 34.8% / 5.14% | 51.9% / 19.54% | 24.7% | 32.4% / 5.52% | 49.2% / 17.79% | 23.3% |
+
+- Evaluations per node: 0.524 at 200k (main 0.147, quiescence 0.377) and
+  0.533 at 1M (0.171, 0.362), as X1 found. Median gap: main 172 cp (181 at
+  1M), quiescence 94 cp (100).
+- No finite bound at the site: main 0.9% (1.2% at 1M), quiescence 1.3%
+  (2.0%); one finite bound only: about 0% (the windows are zero-width
+  almost everywhere, or both mate-bounded).
+- Main search by depth (200k; within 25 cp; share of the band / call rate
+  per node): depth 1, 11.9% / 1.17%; depth 2, 8.5% / 0.21%; 3-4, 4.9% /
+  0.09%; 5-7, 2.4% / 0.01%; 8+, 0.9% / 0.00%. Depth 1 holds two thirds of
+  the main search's computed evaluations; deeper nodes sit far from their
+  windows (median gap 129 cp at depth 1, 544 cp at depth 8+).
+- Evaluations reused from the TT entry (not counted above) lie closer to
+  the window: main 20.9%, quiescence 48.6% within 25 cp at 200k, at 0.169
+  and 0.015 per node. A gate that also refines reused evaluations would
+  add up to 3.5% + 0.7% of nodes at 25 cp.
+- Against the idea's cost model (a 2-5% call rate of evaluations costs
+  under 5% of nps): only margins near 10 cp give 2-5% of evaluations
+  overall (main 4.2%, quiescence 6.1%); 25 cp already reaches 10-15%.
+  Two margins, as the owner asked, read off the table: e.g. m_main = 25 cp
+  with m_qs = 10 cp gives about 1.5% + 2.3% = 3.8% of nodes.
+
 ## 6. Decisions log
 
 | Date | Decision |
