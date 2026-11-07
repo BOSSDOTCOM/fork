@@ -4,7 +4,11 @@ Every SPRT of Phase 4, in the order run, rejections included (DESIGN.md
 §5.2, "Testing setup", and §5.3). Runs on the GitHub shards
 (`.github/workflows/sprt.yml`, 16 shards, stages of 1,600 games merged with
 `tools/cloud/sprt_merge.py`): fastchess 1.8.2-alpha, normalized Elo,
-pentanomial statistics, alpha = beta = 0.05, game pairs with colours
+pentanomial statistics, alpha = beta = 0.05 (from 2026-11-07, alpha and
+beta per entry: search features use design R, [0, 6] nElo, alpha 0.05,
+beta 0.20, cap 8 stages, futility stop after 2; each entry names its
+design, idea and try, and its result is **H1 accepted**, **H0 accepted**,
+**futility stop** or **capped**), game pairs with colours
 reversed, UHO_Lichess_4852_v1.epd (shuffled, seed 20261027; test openings
 only), one thread per engine, Syzygy 3-4-5 for both, update.sh builds
 (Ubuntu 22.04, g++ 11.4, x86-64-v3). STC 8+0.08 s with 16 MB Hash.

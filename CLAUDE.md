@@ -71,7 +71,11 @@ python -I bench/ab.py A/fork_micro B/fork_micro --a-variant baseline --a-commit 
 bash bench/experiment.sh clang NAME           # build FORK_EXPERIMENT=NAME and compare
 python -I tools/difftest/difftest.py --fork build/clang-release/fork   # vs python-chess
 python -I tools/fuzz/run_fuzz.py --target build/clang-fuzz/fuzz_fen --corpus fuzz/corpus/fen
-python -I tools/jobs/jobctl.py start github NAME -- bash tools/github/sprt_run.sh NAME BASE TEST ELO0 ELO1
+python -I tools/jobs/jobctl.py start github NAME -- bash tools/github/sprt_run.sh --kind search --idea ID NAME BASE TEST
+                                              # design R ([0, 6], beta 0.20, cap 8, futility after 2); --kind network: [0, 5];
+                                              # positional NAME BASE TEST ELO0 ELO1 as before (e.g. -3 0)
+python -I tools/jobs/jobctl.py start github NAME -- bash tools/github/h2h_run.sh NAME --const C --stages L \
+  --prefer A --prefer-reason "the current value" --idea ID A=COMMIT B=COMMIT [C=COMMIT]   # constant head-to-head
 python -I tools/jobs/jobctl.py stop NAME      # whole process tree, verified; also: status [NAME]
 python -I tools/jobs/ledger.py runs NAME      # each stage's GitHub run, as dispatched (~/fork-jobs/ledger.jsonl)
 ```

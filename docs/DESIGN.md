@@ -1210,6 +1210,36 @@ because update.sh refuses it.
   SPRT's commits (`tools/jobs/test_jobctl.py` and the driver's test check
   each rule; a planted root-only kill and a planted "newest run" rule both
   fail them).
+  **Since 2026-11-07 (owner; the think tank's decisions 2 and 3) it has
+  kinds**, each fixed in `design.json` before the first dispatch (a
+  restart with another design is refused): `--kind search` is design R,
+  [0, 6] nElo, alpha 0.05, beta 0.20, a cap of 8 stages at STC and 6 at
+  LTC (`--cap 4-6`; 40+0.4, 1,664 games and 64 MB per stage), and one
+  futility look after 2 stages: stop and reject if the nElo estimate of
+  the 2 stages' summed pentanomial (sprt_merge.py's `nelo`, the "nElo:"
+  figure) is below 0; `--kind network` keeps [0, 5] at alpha = beta = 0.05
+  with 13 STC or 6 LTC stages; `--kind fixed --cap N` plays exactly N
+  stages (head-to-head pairings). Every kind needs `--idea ID` (each
+  retrain is its own idea), and a search or network SPRT is a try of its
+  idea: at most two per idea and time control class (an LTC confirmation
+  of an STC pass is not a retry), a third only with `--owner-override
+  TEXT`, recorded verbatim (`ledger.py try` / `tries`,
+  ~/fork-jobs/tries.jsonl). `--origin N` starts on fresh openings,
+  `--first N` resumes. The outcome goes to the driver log and to a
+  `verdict` file: H1 accepted, H0 accepted, futility stop (a rejection),
+  capped (undecided at the cap: not passed) or complete. The positional
+  form (`NAME BASE TEST ELO0 ELO1 [FIRST [LAST]]`, e.g. non-regression
+  [-3, 0]) is unchanged, byte for byte. **Constants by head-to-head
+  selection**: `tools/github/h2h_run.sh` plays 2-3 candidate values (one
+  commit each) against each other on the same openings, one pairing or a
+  round robin of `--stages L` each, and `tools/cloud/h2h_pick.py` picks
+  the value (least-squares strengths; the declared `--prefer` value is
+  kept unless beaten by more than 0.5 e) and writes the constants table's
+  row, "head-to-head, N games, delta ± e", as Fork's own measurement; the
+  winner then gets its design R SPRT on fresh openings (`--origin O+L`).
+  Tests: `tools/github/test_sprt_run.sh` (66 checks), `test_h2h_run.sh`,
+  `tools/cloud/test_sprt_merge.py`, `test_h2h_pick.py`,
+  `tools/jobs/test_jobctl.py`.
 - **AWS EC2 c7a/c8a** (**unavailable until further notice**: owner,
   2026-11-05, the account is suspended; decisions log)
   (`tools/cloud/aws_spot_sprt.sh`): the `--arch`
