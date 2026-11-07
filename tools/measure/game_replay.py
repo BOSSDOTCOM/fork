@@ -17,7 +17,8 @@ each `bestmove` (the engine writes its report lines before it).
 
     game_replay.py games PGN_OR_DIR... OUT.jsonl --count N --seed S [--engine-name test] [--skip GAMES.jsonl ...]
     game_replay.py run FORK GAMES.jsonl OUTDIR --nodes N [--jobs 2] [--max-positions K] [--syzygy DIR]
-                   [--report counters,iterations,ledger] [--ledger-every 32] [--hash 16]
+                   [--report counters,iterations,ledger,refiner] [--ledger-every 32] [--hash 16]
+                   [--bench-expected REF]
 
 `games` picks N games by a seeded shuffle of every game in the PGNs (games
 listed in a --skip file are left out, so measurements use disjoint games)
@@ -29,7 +30,10 @@ move number, side, legal-move count, the PGN's depth for that move, the
 bestmove, the counter and histogram deltas, the iteration rows and the
 ledger rows. A game's file appears only when the game is finished (written
 to a temporary name, then renamed), so a stopped run resumes where it
-stopped. Engines run at below-normal priority: data generation comes first.
+stopped. The oracle (ideas.md 59 step 2) is not a stats build: `--report
+refiner` records each search's `info string refiner` counts (stdout, before
+bestmove), and `--bench-expected REF` names the bench reference to check
+instead of tests/bench-<net>.ref (the oracle's net line names its base). Engines run at below-normal priority: data generation comes first.
 Measurement settings (DESIGN.md §5.7): Hash 16 MB and the Syzygy 3-4-5
 tables, as in the SPRT games replayed; one search thread.
 """
@@ -123,6 +127,7 @@ class ReplayEngine:
         self.process = None
         self.err = None
         self.err_offset = 0
+        self.refiner = None  # the last search's `info string refiner` counts (oracle builds)
 
     def start(self):
         self.err = tempfile.NamedTemporaryFile('w+b', delete=False, suffix='.stderr')
@@ -164,7 +169,17 @@ class ReplayEngine:
         """Searches one position; returns the bestmove and the stderr written meanwhile."""
         self.send(f'position fen {fen}' + (' moves ' + ' '.join(moves) if moves else ''))
         self.send(f'go nodes {nodes}')
-        best = self.wait_for('bestmove').split()[1]
+        self.refiner = None
+        while True:
+            line = self.process.stdout.readline()
+            if not line:
+                raise RuntimeError("engine exited while waiting for 'bestmove'")
+            if line.startswith('info string refiner '):
+                tokens = line.split()
+                self.refiner = dict(zip(tokens[3::2], map(int, tokens[4::2])))
+            elif line.startswith('bestmove'):
+                break
+        best = line.split()[1]
         self.err.flush()
         with open(self.err.name, 'rb') as f:
             f.seek(self.err_offset)
@@ -238,6 +253,10 @@ def replay_one_game(fork, game, index, outdir, settings):
                 previous = dump
                 record['counters'] = {k: v for k, v in delta.items() if not k.startswith('hist:')}
                 record['hist'] = {k[5:]: v for k, v in delta.items() if k.startswith('hist:')}
+            if 'refiner' in settings['report']:
+                if engine.refiner is None:
+                    raise RuntimeError(f'game {game["id"]} ply {pos["ply"]}: no info string refiner line')
+                record['refiner'] = engine.refiner
             records.append(record)
     finally:
         engine.close()
@@ -287,6 +306,8 @@ def main(argv=None):
     r.add_argument('--ledger-every', type=int, default=32)
     r.add_argument('--hash', type=int, default=16)
     r.add_argument('--no-bench-check', action='store_true', help='tests only: skip the bench reference check')
+    r.add_argument('--bench-expected', type=Path, default=None,
+                   help='the bench reference to check (default tests/bench-<net>.ref)')
     a = parser.parse_args(argv)
 
     if a.command == 'games':
@@ -306,8 +327,9 @@ def main(argv=None):
     a.fork = os.path.abspath(a.fork)
     games = [json.loads(line) for line in a.games.read_text(encoding='utf-8').splitlines()]
     report = set(a.report.split(','))
-    if not report <= {'counters', 'iterations', 'ledger'}:
-        raise SystemExit(f'unknown --report entries: {sorted(report - {"counters", "iterations", "ledger"})}')
+    kinds = {'counters', 'iterations', 'ledger', 'refiner'}
+    if not report <= kinds:
+        raise SystemExit(f'unknown --report entries: {sorted(report - kinds)}')
     settings = {'nodes': a.nodes, 'max_positions': a.max_positions, 'syzygy': a.syzygy, 'report': sorted(report),
                 'ledger_every': a.ledger_every, 'hash': a.hash}
     a.outdir.mkdir(parents=True, exist_ok=True)
@@ -318,7 +340,8 @@ def main(argv=None):
         nodes = re.search(r'nodes (\d+)', bench).group(1)
         signature = re.search(r'signature ([0-9a-f]+)', bench).group(1)
         net = re.search(r'^net (\S+)', version, re.M)
-        ref_path = Path(__file__).resolve().parents[2] / 'tests' / (f'bench-{net.group(1)}.ref' if net else 'bench.ref')
+        ref_path = a.bench_expected or (
+            Path(__file__).resolve().parents[2] / 'tests' / (f'bench-{net.group(1)}.ref' if net else 'bench.ref'))
         ref = ref_path.read_text(encoding='utf-8')
         if f'nodes {nodes}' not in ref or f'signature {signature}' not in ref:
             raise SystemExit(f'bench {nodes} / {signature} does not match {ref_path.name}: not this commit\'s search')

@@ -9,6 +9,9 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#ifdef FORK_REFINER
+#include <cstdlib>
+#endif
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -62,6 +65,9 @@ void print_version() {
 #if defined(FORK_EVAL_NNUE)
             << "net " << FORK_NET_NAME
             << '\n'
+#endif
+#ifdef FORK_REFINER
+            << "refiner " << FORK_REFINER_NAME << '\n'
 #endif
 
             // For bench/ab_search.py's identity check (cmake/build_id.cmake).
@@ -292,7 +298,36 @@ static int run(int argc, char** argv) {
   if (cmd == "netcheck") return netcheck_main(argc, argv);
   if (cmd == "evalfens") return evalfens();
   if (cmd == "bench") {
+#ifdef FORK_REFINER
+    // The oracle (ideas.md 59): `fork bench [MAIN QUIESCE [lazy]]`, the gate's
+    // margins in cp (-1 to 255; -1: never), else the build's defaults; the
+    // gate's counts go to stderr.
+    forkeng::RefinerGate gate;
+    if (argc != 2 && argc != 4 && !(argc == 5 && std::string(argv[4]) == "lazy")) return usage();
+    if (argc >= 4) {
+      char* end = nullptr;
+      gate.margin_main = static_cast<int>(std::strtol(argv[2], &end, 10));
+      const bool main_ok = *end == '\0';
+      gate.margin_quiesce = static_cast<int>(std::strtol(argv[3], &end, 10));
+      if (!main_ok || *end != '\0' || gate.margin_main < -1 || gate.margin_main > 255 ||
+          gate.margin_quiesce < -1 || gate.margin_quiesce > 255)
+        return usage();
+      gate.lazy = argc == 5;
+    }
+    forkeng::RefinerTally tally;
+    const forkeng::SearchBenchResult r = forkeng::run_search_bench(gate, &tally);
+    std::fprintf(stderr,
+                 "refiner nodes %llu main_evals %llu main_calls %llu quiesce_evals %llu quiesce_calls %llu "
+                 "reused_near %llu shift_sum %lld abs_shift_sum %lld\n",
+                 static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(tally.main_evals),
+                 static_cast<unsigned long long>(tally.main_calls),
+                 static_cast<unsigned long long>(tally.quiesce_evals),
+                 static_cast<unsigned long long>(tally.quiesce_calls),
+                 static_cast<unsigned long long>(tally.reused_near), static_cast<long long>(tally.shift_sum),
+                 static_cast<long long>(tally.abs_shift_sum));
+#else
     const forkeng::SearchBenchResult r = forkeng::run_search_bench();
+#endif
     std::cout << "nodes " << r.nodes << '\n'
               << "signature " << hex16(r.signature) << '\n'
               << "nps "

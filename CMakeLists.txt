@@ -207,6 +207,40 @@ else()
   set(FORK_NET_ARCH 1)
 endif()
 
+# The Boundary Refiner's oracle (ideas.md 59, step 2; experiment branch
+# exp/oracle, never released): FORK_REFINER_NET names a second network,
+# consulted only where the gate fires (src/search/refiner_gate.hpp). Empty by
+# default, and then nothing below applies. The only pair supported is the
+# prototype's: FORK_NET a plain S-512 network (architecture 2, S512r2) and
+# the refiner an S512+X network (architecture 6). The build is compiled for
+# architecture 6 and reads the base as a plain net (net_file.cpp: its
+# exposure rows stay zero and are never added). FORK_REFINER_MARGIN_MAIN and
+# FORK_REFINER_MARGIN_QUIESCE are the gate's default margins in cp (the UCI
+# options' defaults and `fork bench`'s; -1: never), the owner's setting (a).
+set(FORK_REFINER_NET "" CACHE FILEPATH "Oracle builds only: the refiner network (ideas.md 59)")
+set(FORK_REFINER_MARGIN_MAIN 25 CACHE STRING "Oracle builds only: the gate's default main-search margin in cp")
+set(FORK_REFINER_MARGIN_QUIESCE 10 CACHE STRING "Oracle builds only: the gate's default quiescence margin in cp")
+if(FORK_REFINER_NET)
+  if(NOT FORK_EVALUATOR STREQUAL "nnue" OR NOT EXISTS ${FORK_REFINER_NET})
+    message(FATAL_ERROR "FORK_REFINER_NET needs FORK_EVALUATOR=nnue and an existing file (${FORK_REFINER_NET})")
+  endif()
+  file(READ ${FORK_REFINER_NET} fork_refiner_arch_hex OFFSET 12 LIMIT 4 HEX)
+  string(SUBSTRING "${fork_refiner_arch_hex}" 0 2 fork_refiner_arch_hex)
+  math(EXPR fork_refiner_arch_hex "0x${fork_refiner_arch_hex}")
+  if(NOT FORK_NET_ARCH EQUAL 2 OR NOT fork_refiner_arch_hex EQUAL 6)
+    message(FATAL_ERROR "FORK_REFINER_NET: the oracle needs an architecture-2 FORK_NET and an "
+                        "architecture-6 refiner (got ${FORK_NET_ARCH} and ${fork_refiner_arch_hex})")
+  endif()
+  set(FORK_NET_ARCH 6)
+  get_filename_component(fork_refiner_stem ${FORK_REFINER_NET} NAME_WE)
+  set(fork_refiner_source ${CMAKE_BINARY_DIR}/generated/refiner_net_data.cpp)
+  add_custom_command(OUTPUT ${fork_refiner_source}
+    COMMAND ${CMAKE_COMMAND} -DNET=${FORK_REFINER_NET} -DOUT=${fork_refiner_source} -DSYMBOL=refiner_net
+            -P ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    DEPENDS ${FORK_REFINER_NET} ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    COMMENT "Embedding the refiner network ${FORK_REFINER_NET}")
+endif()
+
 # Evaluation and search (src/eval/, src/search/ except the hash memory).
 add_library(forksearch STATIC
   src/eval/bootstrap_eval.cpp
@@ -261,6 +295,13 @@ target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH})
 if(FORK_SEARCH_STATS)
   target_compile_definitions(forknnue PUBLIC FORK_SEARCH_STATS)
 endif()
+# The oracle (ideas.md 59): public, so the search, the UCI layer and the tests
+# see the refiner's declarations and the second FeatureStack.
+if(FORK_REFINER_NET)
+  target_compile_definitions(forknnue PUBLIC FORK_REFINER
+    FORK_REFINER_MARGIN_MAIN=${FORK_REFINER_MARGIN_MAIN} FORK_REFINER_MARGIN_QUIESCE=${FORK_REFINER_MARGIN_QUIESCE})
+  target_sources(forksearch PRIVATE src/eval/nnue/refiner_net.cpp ${fork_refiner_source})
+endif()
 target_link_libraries(forknnue PUBLIC forkcore PRIVATE fork_pgo)
 
 # Self-play training data (src/datagen/; DESIGN.md §5.3, deliverable 2): the
@@ -308,6 +349,10 @@ target_compile_definitions(fork PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}"
 # fork_datagen's run manifest names the labelling network the same way, so
 # data labelled by different nets stays apart (owner, 2026-10-30).
 target_compile_definitions(fork_datagen PRIVATE FORK_NET_NAME="${fork_net_stem_for_version}")
+# The oracle's `fork version` also names its refiner (ideas.md 59).
+if(FORK_REFINER_NET)
+  target_compile_definitions(fork PRIVATE FORK_REFINER_NAME="${fork_refiner_stem}")
+endif()
 
 # The web page's entry points (src/web/; DESIGN.md §5.5): a synchronous
 # interface for one Web Worker, tested natively in fork_tests.
@@ -467,6 +512,9 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
   # The repository (tests/nnue/ data files read at run time).
   target_compile_definitions(fork_tests PRIVATE FORK_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+  if(FORK_REFINER_NET)
+    target_compile_definitions(fork_tests PRIVATE FORK_REFINER_NET="${FORK_REFINER_NET}")
+  endif()
 
   # The smallest 7-man Syzygy pair, KPPPPPvK (deliverable 7's 7-piece test;
   # KB tools.md §6.9): downloaded once into .cache/ and pinned by SHA-256,
@@ -567,6 +615,12 @@ if(FORK_BUILD_TESTS)
     add_test(NAME search_stats COMMAND fork_tests search_stats)
     set_tests_properties(search_stats PROPERTIES LABELS stats SKIP_RETURN_CODE 77)
   endif()
+  # The oracle's own suite (ideas.md 59), compiled only with FORK_REFINER_NET.
+  if(FORK_REFINER_NET)
+    target_sources(fork_tests PRIVATE tests/test_refiner.cpp)
+    add_test(NAME refiner COMMAND fork_tests refiner)
+    set_tests_properties(refiner PROPERTIES SKIP_RETURN_CODE 77)
+  endif()
   # Timing tests run alone, never beside another test (owner, 2026-10-26).
   set_tests_properties(uci_timing PROPERTIES RUN_SERIAL TRUE)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -654,6 +708,9 @@ if(FORK_BUILD_TESTS)
   get_filename_component(fork_net_name ${FORK_NET} NAME_WE)
   if(FORK_EVALUATOR STREQUAL "bootstrap")
     set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench.ref)
+  elseif(FORK_REFINER_NET)
+    # The oracle's bench, at the default margins (ideas.md 59).
+    set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench-${fork_net_name}-${fork_refiner_stem}.ref)
   else()
     set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench-${fork_net_name}.ref)
   endif()
@@ -662,6 +719,23 @@ if(FORK_BUILD_TESTS)
       -DFORK=$<TARGET_FILE:fork> -DCMD=bench
       -DREF=${fork_bench_ref}
       -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+  endif()
+  if(FORK_REFINER_NET)
+    # The oracle with the gate off is exactly its base network alone: the
+    # base's own bench, recorded by its architecture-2 build (refiner kept in
+    # step all the while). And the two refiner schedules give the same tree.
+    add_test(NAME refiner_off_bench COMMAND ${CMAKE_COMMAND}
+      -DFORK=$<TARGET_FILE:fork> -DCMD=bench "-DARGS=-1 -1"
+      -DREF=${CMAKE_SOURCE_DIR}/tests/bench-${fork_net_name}.ref
+      -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+    add_test(NAME refiner_lazy_bench COMMAND ${CMAKE_COMMAND}
+      -DFORK=$<TARGET_FILE:fork> -DCMD=bench
+      "-DARGS=${FORK_REFINER_MARGIN_MAIN} ${FORK_REFINER_MARGIN_QUIESCE} lazy"
+      -DREF=${fork_bench_ref}
+      -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+    # The refiner's inference reproduces its trainer reference.
+    add_test(NAME nnue_netcheck_refiner COMMAND fork netcheck
+      ${CMAKE_SOURCE_DIR}/tests/nnue/${fork_refiner_stem}.parity ${FORK_REFINER_NET})
   endif()
   add_test(NAME perft_bench_parity COMMAND ${CMAKE_COMMAND}
     -DFORK=$<TARGET_FILE:fork> -DCMD=perftbench

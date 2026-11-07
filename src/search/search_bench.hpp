@@ -19,6 +19,10 @@
 #include <span>
 #include <string_view>
 
+#ifdef FORK_REFINER
+#include "search/refiner_gate.hpp"
+#endif
+
 namespace forkeng {
 
 struct SearchBenchResult {
@@ -27,7 +31,13 @@ struct SearchBenchResult {
   double seconds;
 };
 
+#ifdef FORK_REFINER
+// The oracle (ideas.md 59): the same workload with the refiner gate set to
+// `gate`; `tally`, if given, gets the gate's counts summed over the positions.
+SearchBenchResult run_search_bench(const RefinerGate& gate = RefinerGate{}, RefinerTally* tally = nullptr);
+#else
 SearchBenchResult run_search_bench();
+#endif
 
 // The bench positions (for tests that search the same workload).
 std::span<const std::string_view> search_bench_fens();

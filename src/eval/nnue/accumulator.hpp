@@ -33,6 +33,9 @@
 // - Stats builds (FORK_SEARCH_STATS) also count the stack's work in a
 //   FeatureStackTally (DESIGN.md §5.7, X1); the counts only read the state,
 //   and normal builds have none.
+// - Oracle builds (FORK_REFINER, ideas.md 59) are architecture 6 and also
+//   evaluate a plain S-512 net read into that layout: its exposure rows are
+//   zero and never added, so it evaluates exactly as in its own build.
 #pragma once
 
 #include <cstdint>
@@ -167,6 +170,12 @@ class FeatureStack {
   }
   // The evaluation at `ply` of `pos` (the position the stack has reached).
   int evaluate(const NetFile& net, int ply, const Position& pos);
+#ifdef FORK_REFINER
+  // The oracle (ideas.md 59): the accumulators up to `ply` brought up to date
+  // as evaluate() does, without the output, so a second stack can be kept in
+  // step with the first.
+  void advance_to(const NetFile& net, int ply);
+#endif
 #ifdef FORK_SEARCH_STATS
   const FeatureStackTally& tally() const { return tally_; }
   void set_tally(const FeatureStackTally& t) { tally_ = t; }  // X10: undo a side search's counts

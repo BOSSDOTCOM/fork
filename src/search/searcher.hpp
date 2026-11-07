@@ -34,6 +34,7 @@
 #include "core/position.hpp"
 #include "search/move_selector.hpp"
 #include "search/quiet_history.hpp"
+#include "search/refiner_gate.hpp"
 #include "search/score_bounds.hpp"
 #include "search/trans_table.hpp"
 
@@ -421,14 +422,8 @@ constexpr int lmr_history_probe_shift(int order_score) { return order_score / Lm
 constexpr int GapBinsFine = 256;
 constexpr int GapBins = GapBinsFine + (4096 - GapBinsFine) / 64 + 1;
 constexpr int GapBands = 5;
-// The gap, or -1 when neither bound is finite.
-constexpr int window_gap(int eval, int alpha, int beta) {
-  const bool low = !is_tb_or_mate(alpha), high = !is_tb_or_mate(beta);
-  if (!low && !high) return -1;
-  const int to_alpha = eval > alpha ? eval - alpha : alpha - eval;
-  const int to_beta = eval > beta ? eval - beta : beta - eval;
-  return !low ? to_beta : !high ? to_alpha : to_alpha < to_beta ? to_alpha : to_beta;
-}
+// The gap itself is window_gap (search/refiner_gate.hpp), which the oracle's
+// gate shares (ideas.md 59 step 2).
 constexpr int window_gap_bin(int gap) {
   return gap < GapBinsFine ? gap : gap < 4096 ? GapBinsFine + (gap - GapBinsFine) / 64 : GapBins - 1;
 }
@@ -504,6 +499,13 @@ class Searcher {
   // [beta - 1, beta]), with no time limit; returns its fail-soft score.
   int probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop);
 
+#ifdef FORK_REFINER
+  // The oracle (ideas.md 59): the gate's settings, and what it did in the
+  // last search (reset when a search starts).
+  RefinerGate refiner_gate;
+  const RefinerTally& refiner_tally() const { return refiner_tally_; }
+#endif
+
  private:
   template <bool OnPv>
   int negamax(int alpha, int beta, int depth, int ply);
@@ -519,6 +521,11 @@ class Searcher {
   void play(int ply, Move m);
   void play_null(int ply);
   int eval_at(int ply);
+#ifdef FORK_REFINER
+  // A computed evaluation at a gated site: the base network's, replaced by
+  // the refiner's where the gate fires (counted in refiner_tally_).
+  int refined_eval_at(int ply, int alpha, int beta, int depth, bool quiesce);
+#endif
 
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
@@ -598,6 +605,13 @@ class Searcher {
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;
   FeatureStack features_;
+#endif
+#ifdef FORK_REFINER
+  // The refiner network's accumulators, pushed with every move beside the
+  // base's (eval/nnue/refiner_net.hpp).
+  const NetFile* refiner_net_;
+  FeatureStack refiner_features_;
+  RefinerTally refiner_tally_;
 #endif
 };
 

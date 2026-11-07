@@ -37,6 +37,9 @@
 //   (accumulator.cpp) and held to int16 only when added to the piece sums. So the
 //   integer arithmetic of every path (scalar and SIMD) never overflows, and
 //   all paths give identical results.
+// - Oracle builds (FORK_REFINER, ideas.md 59; architecture 6) also accept a
+//   plain S-512 file (architecture 2, 768 rows): inputs is then 768 and the
+//   exposure rows are zero.
 #pragma once
 
 #include <cstddef>

@@ -3892,6 +3892,50 @@ the share of that kind's evaluations, then the call rate per node.
   Two margins, as the owner asked, read off the table: e.g. m_main = 25 cp
   with m_qs = 10 cp gives about 1.5% + 2.3% = 3.8% of nodes.
 
+**Idea 59 step 2, the oracle** (owner's go-ahead, 2026-11-07; experiment
+branch exp/oracle, never merged unless it passes). S512r2 evaluates
+everywhere; S512+X (bake/s512x c62bb3b, `nets/s512x.fnet`, S = 89,
+matched to S512r2's mean |eval| when trained) replaces it at a computed
+evaluation where the gate fires. The comparison is the oracle against
+S512r2 alone at fixed nodes, whose reference is S512+X's +25.67 ± 10.26
+(run 42142711426): q = Elo / 25.67; kill below +8.6 at a call rate under
+10%.
+- Build: CMake `FORK_REFINER_NET` (empty by default: nothing changes). The
+  oracle is an architecture-6 build: S512+X's piece accumulator has
+  S512r2's shape and indexing, and its exposure rows are added only at
+  evaluation. So the base is read as a plain net into that layout
+  (net_file.cpp: exposure rows zero, never added), and both nets share one
+  inference. Every change outside the new files is under `FORK_REFINER` or
+  architecture 6; the default build's code is byte-identical (checked by
+  the `.text` hash, clang and gcc).
+- Both accumulators kept incrementally (the owner's pessimistic cost): a
+  second FeatureStack, pushed with every move and brought up to date
+  wherever the base's is (`RefinerLazy`: only where the gate fires; the
+  same tree).
+- Gate (src/search/refiner_gate.hpp): a predicate over the site's facts,
+  `GateKind::Window` first (step 1's `window_gap`, inclusive margins, one
+  for the main search and one for quiescence; -1 never), with room for a
+  feature-based detector. Sites: step 1's two (negamax after the TB probe,
+  quiescence stand-pat), computed evaluations only.
+- TT: it stores the value each node used (the refined one where refined),
+  so a revisit prunes on what the first visit used; reused evaluations are
+  not refined again (their near-window count is reported). Fork has no
+  improving flag or correction table that a mixed evaluation could reach.
+- Verification: `info string refiner nodes … main_evals … main_calls …
+  quiesce_evals … quiesce_calls … reused_near … shift_sum … abs_shift_sum`
+  before each bestmove (and on stderr after `fork bench [MAIN QUIESCE
+  [lazy]]`). With the gate off the oracle's bench is S512r2's, 14,180,299 /
+  4cf778ff753861f7 (refiner_off_bench); at 25/10 it is 14,291,439 /
+  8b8f3ff2ba7b3181 (tests/bench-s512r2-s512x.ref), with 5.2% of nodes
+  calling the refiner and a mean refinement of +10.0 cp (mean |·| 26.9 cp)
+  over the bench.
+
+| Setting (search constants of the experiment) | Value | Reason |
+|---|---|---|
+| Main-search margin, settings (a) and (b) | 25 cp | owner's setting from step 1: 10.1% of main computed evaluations, 1.48% of nodes at 200k |
+| Quiescence margin, (a) / (b) | 10 cp / 25 cp | owner's settings: 2.30% / 5.58% of nodes at 200k; (a) 3.8%, (b) 7.1% in all |
+| Option range | -1 to 255 | -1 never fires; 255 is the end of step 1's exact 1-cp bins |
+
 ## 6. Decisions log
 
 | Date | Decision |

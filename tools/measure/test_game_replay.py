@@ -46,6 +46,7 @@ for line in sys.stdin:
         sys.stderr.write(f'search_hist lmr_order {searches} 0 {2 * searches}\n')
         sys.stderr.write(f'iteration_trace 1|{searches}|1000|1000|0|5|5|0|1|20|1\n')
         sys.stderr.flush()
+        print(f'info string refiner nodes {nodes} main_evals {3 * searches} main_calls {searches}', flush=True)
         print('bestmove e2e4', flush=True)
     elif words[0] == 'quit':
         break
@@ -130,6 +131,18 @@ class GameReplayTests(unittest.TestCase):
         self.assertEqual(records[1]['pgn_depth'], 13)
         black = [json.loads(line) for line in (out / 'game-0001.jsonl').read_text(encoding='utf-8').splitlines()]
         self.assertEqual([r['ply'] for r in black], [1, 3])
+
+    def test_refiner_report(self):
+        # The oracle's counts (ideas.md 59 step 2): the last `info string
+        # refiner` line before each bestmove, as numbers.
+        games = gr.read_games([str(self.dir)])[:1]
+        out = self.dir / 'out'
+        settings = {'nodes': 100, 'max_positions': None, 'syzygy': None, 'report': ['refiner'],
+                    'ledger_every': 32, 'hash': 16}
+        self.assertEqual(gr.run_replay(self.fake_engine(), games, out, settings, 1), (1, 0))
+        records = [json.loads(line) for line in (out / 'game-0000.jsonl').read_text(encoding='utf-8').splitlines()]
+        self.assertEqual([r['refiner'] for r in records],
+                         [{'nodes': 100, 'main_evals': 3 * k, 'main_calls': k} for k in (1, 2, 3)])
 
     def test_resume(self):
         games = gr.read_games([str(self.dir)])[:2]

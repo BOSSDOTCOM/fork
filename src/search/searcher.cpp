@@ -9,6 +9,9 @@
 #include "core/material.hpp"
 #include "core/movegen.hpp"
 #include "eval/eval.hpp"
+#ifdef FORK_REFINER
+#include "eval/nnue/refiner_net.hpp"
+#endif
 #include "search/endgame_tables.hpp"
 #include "search/lmr_table.hpp"
 #include "search/see.hpp"
@@ -29,11 +32,17 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
 #endif
+#ifdef FORK_REFINER
+  refiner_net_ = &refiner_net();  // the same for the oracle's refiner
+#endif
 }
 
 [[gnu::always_inline]] inline void Searcher::play(int ply, Move m) {
 #if defined(FORK_EVAL_NNUE)
   features_.push_move(*net_, ply, *pos_, m);
+#endif
+#ifdef FORK_REFINER
+  refiner_features_.push_move(*refiner_net_, ply, *pos_, m);
 #endif
   (void)ply;
   pos_->make(m);
@@ -43,18 +52,41 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #if defined(FORK_EVAL_NNUE)
   features_.push_null(ply);
 #endif
+#ifdef FORK_REFINER
+  refiner_features_.push_null(ply);
+#endif
   (void)ply;
   pos_->make_null();
 }
 
 [[gnu::always_inline]] inline int Searcher::eval_at(int ply) {
-#if defined(FORK_EVAL_NNUE)
+#if defined(FORK_REFINER)
+  // The oracle keeps the refiner's accumulators in step with the base's
+  // (ideas.md 59: the pessimistic cost), unless the gate's lazy setting asks
+  // for them only where the gate fires.
+  const int base = features_.evaluate(*net_, ply, *pos_);
+  if (!refiner_gate.lazy) refiner_features_.advance_to(*refiner_net_, ply);
+  return base;
+#elif defined(FORK_EVAL_NNUE)
   return features_.evaluate(*net_, ply, *pos_);
 #else
   (void)ply;
   return static_eval(*pos_);
 #endif
 }
+
+#ifdef FORK_REFINER
+int Searcher::refined_eval_at(int ply, int alpha, int beta, int depth, bool quiesce) {
+  const int base = eval_at(ply);
+  ++(quiesce ? refiner_tally_.quiesce_evals : refiner_tally_.main_evals);
+  if (!gate_fires(refiner_gate, GateSite{*pos_, base, alpha, beta, depth, ply, quiesce})) return base;
+  ++(quiesce ? refiner_tally_.quiesce_calls : refiner_tally_.main_calls);
+  const int refined = refiner_features_.evaluate(*refiner_net_, ply, *pos_);
+  refiner_tally_.shift_sum += refined - base;
+  refiner_tally_.abs_shift_sum += refined > base ? refined - base : base - refined;
+  return refined;
+}
+#endif
 
 namespace {
 
@@ -254,7 +286,22 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
   }
 
+#ifdef FORK_REFINER
+  // The oracle (ideas.md 59): a computed evaluation may be refined; a reused
+  // one is kept as stored (the TT stores the value each node used), and
+  // counted when the gate would have fired on it.
+  if (in_check) {
+    f.static_eval = ScoreNone;
+  } else if (tt_hit && hit.eval != ScoreNone) {
+    f.static_eval = hit.eval;
+    refiner_tally_.reused_near +=
+        gate_fires(refiner_gate, GateSite{pos, hit.eval, alpha, beta, depth, ply, false});
+  } else {
+    f.static_eval = refined_eval_at(ply, alpha, beta, depth, false);
+  }
+#else
   f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
+#endif
   FORK_STAT(++(in_check                          ? counters.check_nodes_main
                : tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_main
                                                  : counters.evals_main));
@@ -736,7 +783,17 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     f.static_eval = ScoreNone;
     FORK_STAT(++counters.check_nodes_quiesce);
   } else {
+#ifdef FORK_REFINER
+    if (tt_hit && hit.eval != ScoreNone) {  // as in negamax
+      f.static_eval = hit.eval;
+      refiner_tally_.reused_near +=
+          gate_fires(refiner_gate, GateSite{pos, hit.eval, alpha, beta, 0, ply, true});
+    } else {
+      f.static_eval = refined_eval_at(ply, alpha, beta, 0, true);
+    }
+#else
     f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
+#endif
     FORK_STAT(++(tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_quiesce : counters.evals_quiesce));
 #ifdef FORK_SEARCH_STATS
     {  // Idea 59 step 1: the stand-pat evaluation's window gap.
@@ -934,6 +991,10 @@ int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::a
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);
 #endif
+#ifdef FORK_REFINER
+  refiner_features_.reset(*refiner_net_, pos);
+  refiner_tally_ = RefinerTally{};
+#endif
   return negamax<false>(beta - 1, beta, depth, 0);
 }
 
@@ -953,6 +1014,10 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
 
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);
+#endif
+#ifdef FORK_REFINER
+  refiner_features_.reset(*refiner_net_, pos);
+  refiner_tally_ = RefinerTally{};
 #endif
   tt_.advance_age();
   tt_.set_age_blend(switches.tt_age_blend);

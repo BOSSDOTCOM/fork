@@ -152,6 +152,13 @@ struct Fixture {
   TestHash store;
   std::unique_ptr<Searcher> searcher = std::make_unique<Searcher>(store.table);
   std::atomic<bool> stop{false};
+#ifdef FORK_REFINER
+  // The oracle's gate makes an evaluation depend on its window (ideas.md 59),
+  // so a search cannot equal minimax over one static evaluation: these tests
+  // search with the gate off, the refiner's accumulators still kept in step
+  // (tests/test_refiner.cpp tests the gate).
+  Fixture() { searcher->refiner_gate.margin_main = searcher->refiner_gate.margin_quiesce = -1; }
+#endif
 
   SearchResult search(Position& pos, const SearchQuota& limits) {
     return searcher->deliberate(pos, limits, stop, nullptr, nullptr);
@@ -426,6 +433,9 @@ TEST_CASE("search",
     TransTable table;
     table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
     auto searcher = std::make_unique<Searcher>(table);
+#ifdef FORK_REFINER
+    searcher->refiner_gate.margin_main = searcher->refiner_gate.margin_quiesce = -1;  // as in Fixture
+#endif
     const std::atomic<bool> stop{false};
     for (std::size_t i = 0; i < positions.size(); ++i) {
       Position& pos = positions[i];

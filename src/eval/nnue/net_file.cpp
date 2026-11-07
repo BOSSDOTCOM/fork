@@ -154,7 +154,16 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
   const std::uint8_t* h = bytes.data();
   if (std::memcmp(h, Magic, sizeof Magic) != 0) return error = "not a Fork net file", false;
   if (get_u32(h + 8) != NetFormatVersion) return error = "unknown format version", false;
+#ifdef FORK_REFINER
+  // The oracle (ideas.md 59, refiner_net.hpp): this architecture-6 build also
+  // reads its base network, a plain S-512 file (architecture 2, the piece rows
+  // only), whose payload has the same layout with fewer rows. Its exposure
+  // rows stay zero, and the evaluation never adds them (accumulator.cpp).
+  const bool plain = get_u32(h + 12) == 2 && get_u32(h + 16) == NetPieceSquares;
+  if (get_u32(h + 12) != static_cast<std::uint32_t>(NetArchitecture) && !plain)
+#else
   if (get_u32(h + 12) != static_cast<std::uint32_t>(NetArchitecture))
+#endif
     return error = "architecture " + std::to_string(get_u32(h + 12)) + ", this build reads " +
                    std::to_string(NetArchitecture),
            false;
@@ -195,7 +204,13 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
   const int expected_inputs = NetPieceSquares * out.region_count + (NetExposure ? NetExposureRows : 0) +
                               (NetContacts ? NetContactInputs + NetLinkInputs : 0) +
                               (NetLinks ? NetLinkInputs : 0);
+#ifdef FORK_REFINER
+  if (inputs != (plain ? NetPieceSquares : expected_inputs))
+    return error = "inputs do not match the region map", false;
+  for (int i = inputs * NetHidden; i < NetInputs * NetHidden; ++i) out.ft_weights[i] = 0;
+#else
   if (inputs != expected_inputs) return error = "inputs do not match the region map", false;
+#endif
   for (int i = 0; i < inputs * NetHidden; ++i) out.ft_weights[i] = c.i16();
   for (int i = 0; i < NetHidden; ++i) out.ft_bias[i] = c.i16();
 #if FORK_NET_ARCH == 1

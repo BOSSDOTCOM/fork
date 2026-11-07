@@ -13,6 +13,7 @@
 //   startpos, 1000 x (g1f3 g8f6 f3g1 f6g8) is 4000 legal plies back to the
 //   start placement: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4000 2001
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -192,6 +193,14 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
       "option name Threads type spin default 1 min 1 max 4096",
       "option name Move Overhead type spin default 100 min 0 max 10000",
       "option name SyzygyPath type string default <empty>",
+#ifdef FORK_REFINER
+      // The oracle's gate (ideas.md 59), at this build's default margins.
+      "option name RefinerMarginMain type spin default " + std::to_string(FORK_REFINER_MARGIN_MAIN) +
+          " min -1 max 255",
+      "option name RefinerMarginQuiesce type spin default " + std::to_string(FORK_REFINER_MARGIN_QUIESCE) +
+          " min -1 max 255",
+      "option name RefinerLazy type check default false",
+#endif
       "option name LogFile type string default <empty>",
   };
   CHECK_EQ(out.size(), options.size() + 3);
@@ -517,7 +526,12 @@ TEST_CASE("uci_protocol", "go arguments: every argument, combined, negative and 
   g.send("stop");
   CHECK(g.next("bestmove").has_value());
   CHECK(g.sync());
+#ifdef FORK_REFINER
+  // The oracle's searches each end with their `info string refiner` line.
+  CHECK_EQ(g.count("info string", mark) - g.count("info string refiner ", mark), 0);  // all of that was valid
+#else
   CHECK_EQ(g.count("info string", mark), 0);  // all of that was valid
+#endif
   mark = g.cursor;
   g.send("go wtime abc depth movetime 5 frobnicate");
   CHECK(g.next("bestmove").has_value());
@@ -982,8 +996,11 @@ TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
     const char* name;
     std::int64_t min, max;
   };
-  for (const Bound& b :
-       {Bound{"Threads", 1, 4096}, Bound{"Move Overhead", 0, 10000}, Bound{"Hash", 1, 4194304}}) {
+  for (const Bound& b : {
+#ifdef FORK_REFINER
+           Bound{"RefinerMarginMain", -1, 255}, Bound{"RefinerMarginQuiesce", -1, 255},
+#endif
+           Bound{"Threads", 1, 4096}, Bound{"Move Overhead", 0, 10000}, Bound{"Hash", 1, 4194304}}) {
     const std::string set = std::string("setoption name ") + b.name + " value ";
     for (std::int64_t v : {b.min, b.max}) {
       const std::size_t mark = g.cursor;
@@ -1174,5 +1191,41 @@ TEST_CASE("uci_options", "Clear Hash with a Hash change in the same batch still 
             "fresh engine " << want << " nodes, after Hash change + Clear Hash " << got);
   g.quit();
 }
+
+#ifdef FORK_REFINER
+// The oracle (ideas.md 59): each search ends with one `info string refiner`
+// line before its final info line and bestmove, counting the gate's work per
+// kind of evaluation; the margin options switch each kind's calls off.
+TEST_CASE("uci_options", "the refiner line counts the gate's calls per kind") {
+  Gui g;
+  CHECK(g.sync());
+  // nodes, main_evals, main_calls, quiesce_evals, quiesce_calls of one search.
+  auto search = [&](int main_margin, int quiesce_margin) {
+    g.send("setoption name RefinerMarginMain value " + std::to_string(main_margin));
+    g.send("setoption name RefinerMarginQuiesce value " + std::to_string(quiesce_margin));
+    g.send("position startpos moves e2e4 e7e5 g1f3 b8c6");
+    g.send("go depth 8");
+    const std::optional<std::string> line = g.next("info string refiner ");
+    CHECK(line.has_value());
+    CHECK(g.next("bestmove").has_value());
+    std::array<std::int64_t, 5> n{};
+    const char* keys[5] = {"nodes", "main_evals", "main_calls", "quiesce_evals", "quiesce_calls"};
+    for (int i = 0; i < 5; ++i) n[i] = info_number(line.value_or(""), keys[i]).value_or(-1);
+    return n;
+  };
+  const std::array<std::int64_t, 5> off = search(-1, -1);
+  CHECK(off[0] > 0 && off[1] > 0 && off[3] > 0);
+  CHECK_EQ(off[2], 0);
+  CHECK_EQ(off[4], 0);
+  const std::array<std::int64_t, 5> quiesce_only = search(-1, 25);
+  CHECK_EQ(quiesce_only[2], 0);
+  CHECK(quiesce_only[4] > 0 && quiesce_only[4] <= quiesce_only[3]);
+  const std::array<std::int64_t, 5> main_only = search(25, -1);
+  CHECK(main_only[2] > 0 && main_only[2] <= main_only[1]);
+  CHECK_EQ(main_only[4], 0);
+  g.check_transcript();
+  g.quit();
+}
+#endif
 
 }  // namespace forkeng::test

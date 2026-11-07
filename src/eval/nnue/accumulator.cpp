@@ -390,7 +390,14 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
     FORK_NET_ARCH == 8
 #if FORK_NET_ARCH == 6
   Accumulator summed;
+#ifdef FORK_REFINER
+  // The oracle's base network is a plain S-512 net in this layout (net_file.cpp):
+  // no exposure rows to add, and none of their cost.
+  const Accumulator& a =
+      net.inputs != NetPieceSquares && add_exposure_rows(net, acc, pos, summed) ? summed : acc;
+#else
   const Accumulator& a = add_exposure_rows(net, acc, pos, summed) ? summed : acc;
+#endif
 #elif FORK_NET_ARCH == 7
   Accumulator summed;
   add_contact_rows<Scalar>(net, acc, pos, summed);
@@ -797,5 +804,19 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
 #endif
   return evaluate_position(net, entries_[ply].acc, pos);
 }
+
+#ifdef FORK_REFINER
+void FeatureStack::advance_to(const NetFile& net, int ply) {
+  for (const Color perspective : {White, Black}) {
+    int base = ply;
+    while (!entries_[base].computed[perspective]) --base;  // ply 0 is always computed
+    for (int p = base + 1; p <= ply; ++p) {
+      advance_perspective(net, entries_[p - 1].acc, entries_[p].delta, perspective,
+                          entries_[p].frame[perspective], entries_[p].acc);
+      entries_[p].computed[perspective] = true;
+    }
+  }
+}
+#endif
 
 }  // namespace forkeng
