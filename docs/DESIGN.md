@@ -3706,6 +3706,29 @@ in its code comment, as the orchestrator asked on 2026-11-07):
 | X10 arm score clamp | +-2,000 cp, mate and tablebase arms flagged | only the side of beta matters; the clamp keeps the rows integer and short |
 | Replay processes | at most 2, below-normal priority, through jobctl (kind `measure`) | the machine is shared with data generation (orchestrator, 2026-11-07); node limits make results independent of load |
 
+**Results, X1** (2026-11-07; stats build 68c00b8, S512ppr2; bench in the
+cleared state, and in game from X2's replays of 100 games, 6,172 searches).
+
+| Number | Bench (46 positions) | In game, 200k nodes | In game, 1M nodes |
+|---|---|---|---|
+| Nodes | 14,626,377 | 1,230,631,040 | 6,149,834,610 |
+| Evaluations per node | 0.657 | 0.538 | 0.543 |
+| ... main / quiescence | 0.181 / 0.476 | 0.151 / 0.387 | 0.172 / 0.371 |
+| Quiescence share of nodes / of evaluations | 61.1% / 72.4% | 55.9% / 72.0% | 53.7% / 68.3% |
+| TT-eval hit rate, main / quiescence | 43.9% / 2.0% | 52.1% / 3.6% | 47.5% / 3.7% |
+| Pawn moves among moves made | 24.2% | 16.1% | 16.1% |
+| Rows per network update | 3.10 | 2.82 | 2.79 |
+| Refreshes per 1,000 updates (almost all king frame changes) | 11.2 | 16.2 | 16.6 |
+| Plies walked per evaluation | 1.17 | 1.21 | 1.20 |
+| Link-update share (S512+PP's pawn links) | 33.6% | 26.9% | 26.6% |
+| Pushes ever evaluated | 66.0% | 54.1% | 54.7% |
+
+Readings against the declared ones: evaluations per node 0.54-0.66, under
+the predicted 0.75-0.85 and under the 0.6 refutation line in game, so the
+prediction is refuted and evaluation skipping has a lower ceiling than
+assumed; quiescence evaluations are 68-72% of all evaluations, far above
+the 30% line, so the quiescence eval-avoidance ideas stay open.
+
 ## 6. Decisions log
 
 | Date | Decision |
