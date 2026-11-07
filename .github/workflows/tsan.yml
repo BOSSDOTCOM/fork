@@ -1,0 +1,60 @@
+# Fork TSan: the clang-tsan and gcc-tsan presets, every fast suite under
+# ThreadSanitizer with halt_on_error (.claude/rules/testing.md), bench parity
+# included. Called by ci.yml when threads, the TT or the UCI layer change
+# (.github/ci/changed-areas.sh), by nightly.yml every night on main, and
+# runnable on demand on any branch (owner, 2026-11-07); ci.yml's
+# tsan-threaded job runs the threaded suites alone on every code change.
+# TSan with S-512 takes about 87 minutes for gcc (clang about half) on a
+# typical runner, and up to about 1.8x that on a slow one.
+name: tsan
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# No concurrency group here: when called, the caller's group governs the run
+# (ci.yml cancels a superseded run, nightly.yml does not).
+
+jobs:
+  tsan:
+    name: Linux (${{ matrix.preset }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [clang-tsan, gcc-tsan]
+    env:
+      FORK_CLANG_CXX: clang++
+      FORK_GCC_CXX: g++
+      # A TSan report kills the engine and fails the test (.claude/rules/testing.md).
+      TSAN_OPTIONS: halt_on_error=1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          pkgs="ninja-build"
+          if apt-cache show libclang-rt-dev >/dev/null 2>&1; then pkgs="$pkgs libclang-rt-dev"; fi
+          sudo apt-get install -y -q $pkgs
+          # Sanitizer runtimes need the classic mmap randomization range.
+          sudo sysctl -w vm.mmap_rnd_bits=28
+          cmake --version | head -n 1; clang++ --version | head -n 1; g++ --version | head -n 1
+      - name: Cache test data (perft EPD suites, pinned SHA-256)
+        uses: actions/cache@v6
+        with:
+          path: .cache
+          key: epd-${{ hashFiles('CMakeLists.txt') }}
+      - name: Build
+        run: |
+          cmake --preset ${{ matrix.preset }}
+          cmake --build build/${{ matrix.preset }}
+      - name: Fast tests under TSan (bench parity; no_alloc, uci_oom, uci_hash_oom are not built)
+        env:
+          REQUIRE_NO_ALLOC: 0
+        run: bash .github/ci/run-tests.sh build/${{ matrix.preset }}
