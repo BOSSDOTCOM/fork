@@ -89,7 +89,7 @@ added; no CI job applies them automatically.
 | Scale | **S = 92, the scale it played its SPRT with** (owner, 2026-11-01: promoted with exactly the tested scale). Scale matching on the first 10,000 filtered positions of g2s1-val gave two values: matched to the current default S512, the SPRT's opponent, 92 (mean \|eval\| 226.39 against S512's 226.68 cp), the trainer's own S, so no rescale; matched to round 2's B0 control (seed 2, the bake-off plan's reference), 89 (B0's mean \|eval\| 219.04 cp). 92 was chosen for the SPRT because it keeps the evaluation at the scale the search's margins were tuned on, which is the purpose of matching (DESIGN.md §5.4, plan 2), and the pairing was against S512. 89 is untested: if it is preferred on principle, it gets its own SPRT before any change |
 | Bench | 17,904,298 nodes, signature 698205c2870d96a4 (tests/bench-s512r2.ref; search at 32bb1ff) |
 | SPRT | vs S512 (phase-4 6600af3), [0, 5], 8+0.08, GitHub shards, run 41349145950: **+151.35 +/- 12.50 Elo (nElo +233.38 +/- 17.02), H1 accepted** after 1,600 games (docs/history/phase-4/sprt-log.md) |
-| Status | The default network from 2026-11-01 (owner, after review) until S512+PP replaced it on 2026-11-06, and the labeller of generation 3 and of the cloud data generation until then (DESIGN.md §5.3, labeller policy); still buildable with `-DFORK_NET=nets/s512r2.fnet` (tests/bench-s512r2.ref: 14,180,299 / 4cf778ff753861f7 with today's search), checked in CI's `nets` job |
+| Status | **This experiment branch's (exp/oracle) default network since 2026-11-07**: the base of the oracle (ideas.md 59 step 2, DESIGN.md §5.7) and its screens' S512r2-alone engine. On phase-4: the default network from 2026-11-01 (owner, after review) until S512+PP replaced it on 2026-11-06, and the labeller of generation 3 and of the cloud data generation until then (DESIGN.md §5.3, labeller policy); still buildable with `-DFORK_NET=nets/s512r2.fnet` (tests/bench-s512r2.ref: 14,180,299 / 4cf778ff753861f7 with today's search), checked in CI's `nets` job |
 | Notes | One search test failed with S512r2 and was fixed in the test: the mate-confirmation test's "exact" search still had multi-cut on, which prunes, and missed two real mates in 7 plies that S512r2's search reported (4k3/8/1Q6/8/8/r7/8/1R2K3 w: the lichess tablebase gives DTM 7). The exact search now also switches off multi-cut, the negative extension and the no-move reduction. |
 
 ## S512+PP, S-512 with pawn links (2026-11-06)
@@ -124,7 +124,7 @@ added; no CI job applies them automatically.
 | Endgame check | tools/nnue/endgame_check.py, 900 positions: **8 misjudged (0.9%) against S512+PP's 351** (at the trained S = 92: KQK and KRK 0 of 600, KPK 8 of 300; S512+PP KQK 59, KRK 267, KPK 25) |
 | Tests | vs S512+PP (phase-4 b115e03): STC 8+0.08 [0, 5], runs 42335141916 and 42336446490: **+20.11 +/- 7.22 Elo (nElo +33.60 +/- 12.04), H1 accepted** after 3,200 games (docs/history/phase-4/sprt-log.md) |
 | Bench | 14,626,377 nodes, signature 9e43990217b0886d (tests/bench-s512ppr2.ref) |
-| Status | **The default network since 2026-11-06** (owner: promoted on its STC result), and the labeller of the data generation from generation 3's part g3g on (DESIGN.md §5.3, labeller policy) |
+| Status | **Phase-4's default network from 2026-11-06** (owner: promoted on its STC result; on exp/oracle the default is S512r2), and the labeller of the data generation from generation 3's part g3g on (DESIGN.md §5.3, labeller policy) |
 
 ## The bake-off entries in CI (2026-10-31)
 
