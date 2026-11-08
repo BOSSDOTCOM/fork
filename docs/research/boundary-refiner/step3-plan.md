@@ -364,6 +364,72 @@ labelling plan follows (to the owner first).
   first, then training at 100k, by the pinned engine with its hash and
   bench checked before the first label and after the last.
 
+**The window, measured (2026-11-08, 3:19:43-5:32:32 PM EST, 2 h 12 min
+49 s; data generation suspended in place by the owner; tools at bf70264,
+the job i59s3-window, results in ~/fork-measure/i59s3):**
+
+| Phase (10 processes) | Start - end (EST) | Length |
+|---|---|---|
+| 1. Determinism check | 3:19:44 - 3:20:23 PM | 39 s |
+| 2a. Validation replay (resumed after game 150) and site list | 3:20:23 - 3:25:21 PM | 4 min 58 s |
+| 2b. Test replay and site list | 3:25:21 - 3:31:07 PM | 5 min 46 s |
+| 2c. Training replay and site list | 3:31:07 - 4:06:53 PM | 35 min 46 s |
+| 3. Selections | 4:06:53 - 4:07:20 PM | 27 s |
+| 4. Labels (both engine checks included) | 4:07:20 - 5:32:32 PM | 1 h 25 min 12 s |
+
+- **Determinism: passed.** The pilot's first 20 games replayed by 10
+  processes equal its 2-process game files byte for byte (whole files).
+  The resumed validation replay left the pilot's 150 game files unchanged
+  (SHA-256 before and after) and validation's site list begins with the
+  pilot's 16,237 sites, ids included; the stats build's hash was the same
+  before and after the replays.
+- **Sites:**
+
+| Split | Games | Sites sampled | Within 80 cp | Selected (dropped) | Main / quiescence | n_eff at h = 25 / 10 cp |
+|---|---|---|---|---|---|---|
+| Validation, new | 450 (the pilot's 150 among them) | 49,347 | 16,472 | 7,000 (the pilot's 3,000 excluded, 2 duplicates) | 4,330 / 2,670 (38.1% quiescence) | 0.46 n |
+| Validation, the pilot's | 150 | 16,237 | 6,496 | 3,000 (the pilot's pick) | 1,835 / 1,165 (38.8%) | 0.47 n |
+| Test | 450 | 48,362 | 19,375 | 10,000 (3 duplicates) | 6,114 / 3,886 (38.9%) | 0.47 n |
+| Training | 3,000 | 2,825,463 | 1,122,981 | 1,000,000 (709 duplicates; none excluded) | 476,658 / 523,342 (**52.3%**) | 0.42 n |
+
+- **The training's quiescence h: 17 cp** (n_eff 0.500 n with the main
+  search at 25 cp; the rule declared before the selection). Validation and
+  test would give 15 and 14.
+- **Open item for the owner: the training split's stratum mix.** 52.3% of
+  its sites are quiescence sites against about 39% in the pilot, in
+  validation and in test: training sampled every 6,400th main-search and
+  every 7,700th quiescence site, 7.0 and 11.7 times as densely as the
+  pilot's 45,000 / 90,000, so its ratio of quiescence to main-search
+  sites is 1.10 against 0.62-0.64 in validation and test (1.7 times). Nothing is trained before the
+  owner decides (for example: per-stratum sample weights that restore the
+  validation mix, or subsampling, or leaving it).
+- **Labels (Syzygy 3-4-5; the pinned engine, SHA-256 17ab2b41...0b34,
+  bench 14,149,617 / 1cb0717f040c294d as referenced before the first label
+  and after the last).** Nodes per second are nominal (sites x the node
+  limit / wall time; deep.tsv does not record the nodes searched):
+
+| Labels | Sites | Nodes each | Wall time | Nominal nodes/s (10 workers) | Mate-flagged |
+|---|---|---|---|---|---|
+| The pilot's, again with the tables | 3,000 | 1M | 1 min 56 s | 25.9 M | 164 |
+| Validation, new | 7,000 | 1M | 4 min 28 s | 26.1 M | 387 |
+| Test | 10,000 | 1M | 6 min 50 s | 24.4 M | 560 |
+| Training | 1,000,000 | 100k | 71 min 48 s | 23.2 M | 42,662 (4.3%) |
+
+  In all, 1.2 x 10^11 nodes in 85 minutes, about 23.5 M nodes/s (about
+  2.35 M per worker; 2.87 M per worker with 2 workers beside data
+  generation). At 100k nodes a site's fixed costs (`ucinewgame`, the
+  `isready` round trip, the label's write) weigh more than at 1M.
+- **The pilot's labels with and without the tables.** Median depth 17 both;
+  2,138 of the 3,000 values identical. The 862 that changed lie in
+  positions of few pieces: 440 of 571 sites of 3-8 pieces, 368 of 569 of
+  9-12, 52 of 514 of 13-16, 2 of 881 of 17-24, none of 465 of 25 or more.
+  The two at 17 and 18 pieces (sites 8796 and 12882) were labelled again,
+  each alone in a fresh process at 1M nodes on the pinned engine: with the
+  tables each gives exactly the window's label (1,216 and 973), without
+  them exactly the old pilot label (1,193 and 1,245). So the labels do not
+  depend on the sites a worker searched before; the tables change them.
+  The table-less labels stay in pilot/n1m/deep-notables.tsv.
+
 ## 0. The design in brief
 
 1. S512ppr3 evaluates everywhere, unchanged. Where the gate fires (the base
