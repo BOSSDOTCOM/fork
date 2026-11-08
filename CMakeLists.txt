@@ -220,7 +220,9 @@ endif()
 # exposure rows stay zero and are never added). FORK_REFINER_MARGIN_MAIN and
 # FORK_REFINER_MARGIN_QUIESCE are the gate's default margins in cp (the UCI
 # options' defaults and `fork bench`'s; -1: never), the owner's setting (a).
-set(FORK_REFINER_NET "" CACHE FILEPATH "Oracle builds only: the refiner network (ideas.md 59)")
+# On this experiment branch's screen commit the oracle is the default build:
+# S512+X refines S512r2 (bake/s512x c62bb3b's network).
+set(FORK_REFINER_NET "${CMAKE_SOURCE_DIR}/nets/s512x.fnet" CACHE FILEPATH "Oracle builds only: the refiner network (ideas.md 59)")
 set(FORK_REFINER_MARGIN_MAIN 25 CACHE STRING "Oracle builds only: the gate's default main-search margin in cp")
 set(FORK_REFINER_MARGIN_QUIESCE 10 CACHE STRING "Oracle builds only: the gate's default quiescence margin in cp")
 if(FORK_REFINER_NET)
