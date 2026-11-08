@@ -420,5 +420,30 @@ class SpsaCalibrationTest(unittest.TestCase):
         self.assertAlmostEqual(c, math.sqrt(2), places=12)
         self.assertFalse(flag)
 
+        # The engine is started by its absolute path: Windows does not start a relative path written with
+        # forward slashes from the working folder (the first calibration job failed so, 2026-11-08).
+        tmp = tempfile.mkdtemp()
+        old_cwd, old_run = os.getcwd(), spsa_calibrate.subprocess.run
+        started = []
+
+        def fake_run(cmd, **kwargs):
+            started.append(cmd)
+            return subprocess.CompletedProcess(cmd, 0, stdout='', stderr='')
+        try:
+            os.chdir(tmp)
+            os.makedirs('eng')
+            Path('eng/fork.exe').write_bytes(b'')
+            Path('spec.json').write_text(json.dumps({'params': [{'name': 'RfpMargin', 'c': 6}]}), encoding='utf-8')
+            spsa_calibrate.subprocess.run = fake_run
+            with contextlib.redirect_stderr(io.StringIO()):
+                rc = spsa_calibrate.main(['--engine', 'eng/fork.exe', '--spec', 'spec.json', '--out', 'out.json'])
+            self.assertEqual(rc, 1)  # the fake has no options, so it stops after the first start
+            self.assertTrue(os.path.isabs(started[0][0]), started[0])
+            self.assertEqual(Path(started[0][0]), (Path(tmp) / 'eng' / 'fork.exe').resolve())
+        finally:
+            spsa_calibrate.subprocess.run = old_run
+            os.chdir(old_cwd)
+            shutil.rmtree(tmp, ignore_errors=True)
+
 if __name__ == '__main__':
     unittest.main()
