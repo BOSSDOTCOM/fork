@@ -354,6 +354,12 @@ added on 2026-10-24; ideas 1-12 predate them.
   implemented, game endings included. Round 2's snapshot includes g2b,
   since the SPRT passed before it. Whether generation 2's next parts
   switch to the split settings is the owner's call.
+  **Publication plan (owner, 2026-11-07):** once a prior-art search is done (is the split search, cheap
+  unsaved moves interleaved with expensive saved ones in self-play, already published under another name;
+  KataGo's playout-cap randomisation is the nearest known relative), write a reproduction guide in
+  docs/research/ (mechanism, evidence, implementation, settings, costs and failures), then a TalkChess
+  summary post and possibly an arXiv note, stating clearly that the idea came from an AI-assisted project.
+  Anything published outside the repository needs the owner's go-ahead at the time.
 
 ## 14. Auxiliary training targets
 
@@ -1892,7 +1898,14 @@ until measured; new names and constants go through the screens before use.
   used, or always store the base evaluation.
 - **phase:** Phase 4, after item 8a. **metric:** call rates (step 1), the
   fixed-node screen and nps (step 2), then the STC SPRT. **status:**
-  untested (plan only, owner, 2026-11-07). **runtime cost:** possible.
+  untested (plan only, owner, 2026-11-07); step 1 measured (call rates; measure/step1), step 2's oracle
+  screens running (setting (a) 25/10 cp: +29.82 +/- 9.78 at fixed nodes against S512r2, 3.81% of nodes
+  consulted; controls queued). **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
+  SPRTs, write a reproduction guide in docs/research/boundary-refiner/ (the mechanism; the evidence,
+  including the control split of window-gated refiner, bias-only and random gate; implementation details;
+  the refiner's training; failures and costs; settings), then a TalkChess summary post and possibly an
+  arXiv note, stating clearly that the idea came from an AI-assisted project. Anything published outside
+  the repository needs the owner's go-ahead at the time. **runtime cost:** possible.
   **earliest phase:** Phase 4.
 
 ## 60. Near-window extension
