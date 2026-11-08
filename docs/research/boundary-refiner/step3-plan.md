@@ -299,6 +299,64 @@ layer stays for the TCEC build. The price to beat is about 3.8 Elo at (a)
 3.8 + 5) = +8.8 Elo, with the price recomputed in the shard build. The
 labelling plan follows (to the owner first).
 
+**The labelling plan (owner-approved, 2026-11-08).**
+- **The split, a departure from 3.5:** by sealed shard, not by a CRC-32 of
+  the game id. Training: 3,000 games of g3i's shards w00-w04 (seed
+  20261109; 1,000,000 sites labelled at 100k nodes). Validation: g3i's
+  validation shard g3i-w05-val, the pilot's 150 games extended to 450 by
+  the same seeded shuffle (seed 20261108; the first 150 are the pilot's,
+  byte for byte), 10,000 sites at 1M: the pilot's 3,000 and 7,000 new.
+  Test: 450 games of another generation's validation shard, g3h-w05-val
+  (seed 20261110), 10,000 sites at 1M (3.5 asked for a different sealed
+  part's games; its 20,000 sites become 10,000 for validation and 10,000
+  for test, the same labelling total as 3.4's row). The shards are sealed
+  and disjoint by game, so no fold rule is needed.
+- **Deduplication (3.2), by the position** (the FEN without its move
+  counters: placement, side, castling, en passant): the first site by id
+  of each position within a selection; test's positions left out of
+  validation's new sites (and the pilot's 3,000 out of them too), and every
+  position of a validation or test game's sites left out of training.
+  near_window_sites.py `select --dedup --exclude` (706c724).
+- **Replay settings:** test and validation as the pilot (200,000 nodes a
+  move, sampling every 45,000th main-search and 90,000th quiescence site,
+  iteration rows; validation resumes the pilot's replay folder after its
+  150 games); training samples every 6,400th and 7,700th site without
+  iteration rows (the pilot's yield, 26.7 main-search and 16.9 quiescence
+  sites within 80 cp a game, scaled: about 1.16 M within 80 cp before
+  deduplication and exclusion). Window gap at most 80 cp, as the pilot.
+- **Decision weights per stratum (amends 3.7):** h = 25 cp at main-search
+  sites and 10 cp at quiescence sites, matching setting (a)'s margins.
+  n_eff is rechecked on the training split after selection and recorded
+  here. **On the pilot's sites it falls below idea 48's rule:** 0.47 n on
+  the pilot's 3,000 (0.47 on all its 6,496 within 80 cp), against 0.60 at
+  a single h = 25; with main search at 25, quiescence needs h = 13 (the
+  3,000) or 14 (the 6,496) for 0.5 n. 3.7's rule (h grows to the smallest
+  value that meets 0.5 n) is the owner's call at training; the labels do
+  not depend on it.
+- **The labels' protocol is the pilot's:** crucial_points.py `deep`
+  (1 thread, Hash 16, `ucinewgame` before each site) sets no Syzygy path,
+  so the labels search without tables, unlike 3.3's line; the pilot's
+  labels (and its budget decision) were made the same way.
+- **One window (owner change, 2026-11-08):** collection and labelling run
+  in one window on 10 processes while the owner suspends data generation
+  in place. First, **the determinism check, declared before it runs:** the
+  pilot's first 20 games are replayed with 10 processes into a fresh
+  folder and must equal the pilot's 2-process game files byte for byte
+  (every record: sites, counters, histograms, iteration rows, best moves);
+  any difference stops the window. A game's results cannot depend on the
+  process count: each game is replayed, in order, by its own engine process
+  (one search thread, Hash 16, a new process per game), every search stops
+  at a node count and never at a time, the site sampling counts
+  evaluations inside that process, the processes share only read-only
+  files (the engine, the tables), and the selection is a seeded shuffle
+  sorted by id. The resumed validation replay must leave the pilot's 150
+  game files unchanged (SHA-256 before and after), and validation's site
+  list must begin with the pilot's 16,237 sites, ids included. Then the
+  three replays and site lists, the selections, and the labels:
+  validation and test at 1M first, then training at 100k, by the pinned
+  engine with its hash and bench checked before the first label and after
+  the last.
+
 ## 0. The design in brief
 
 1. S512ppr3 evaluates everywhere, unchanged. Where the gate fires (the base
