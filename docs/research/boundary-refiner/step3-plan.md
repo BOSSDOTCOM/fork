@@ -1052,10 +1052,33 @@ reported beside it and selects nothing.
 - **Trainer:** fork-train (tools/train, on bullet's trainer crate) gains an
   architecture `refiner`, with AF-S's small layers as the precedent and
   S512+X's exposure inputs and factoriser reused. Whether bullet supports
-  frozen tensors and per-sample loss weights is **UNVERIFIED**; fallbacks:
+  frozen tensors and per-sample loss weights was UNVERIFIED; fallbacks:
   the base's tensors at learning rate 0 in their own group, and weights by
   resampling (each site drawn with probability proportional to its weight,
-  the same expected loss). A converter and Fork's independent references
+  the same expected loss). **Settled from
+  bullet's source at the pin** (da426a49, read 2026-11-08 in a temporary
+  folder, deleted after; ORIGINALITY.md): (i) **frozen tensors: not exposed,
+  but reachable exactly.** The model definition's backward lowering takes a
+  set of frozen weights (no gradient), but the pinned run loop (`train`,
+  `train_with_observer`) always passes an empty set and expects a gradient
+  buffer for every weight. Instead, `detach()` on the base's outputs (the
+  accumulator the refiner reads and the base evaluation; a copy with no
+  gradient) leaves the base's weights an exact zero gradient ("weights with
+  no path to the loss have zero gradient"), and `set_params_for_weight`
+  gives them decay 0 and a clip range holding their values: the pinned
+  AdamW update (weight x (1 - decay x lr); momentum and velocity from the
+  gradient; step = momentum / (sqrt(velocity) + 1e-8); weight - lr x step,
+  then the clip) then leaves each such weight bit for bit unchanged, its
+  momentum, velocity and step staying 0. That is the first fallback in
+  substance (learning rate 0 for the base), without a parameter group.
+  (ii) **Per-sample loss weights: no built-in, but expressible.** The graph
+  takes named per-sample dense inputs (fork-train's `target` is one) and
+  multiplies same-size nodes elementwise, so a weight input multiplies
+  each sample's squared error before the batch sum (gradients are averaged
+  over the batch, so weights of mean 1 keep the loss's scale); resampling
+  is not needed. That this product compiles for batched one-wide nodes is
+  UNVERIFIED until the refiner architecture's first build (the parity
+  chain); resampling stays the fallback if it does not. A converter and Fork's independent references
   (R-float, R-quant, R-int in tools/nnue) extend to the refiner, and the
   parity chain (trainer = R-float within tolerance, R-int = engine exactly)
   passes before any game, as for every network (DESIGN.md §5, "Step 0
