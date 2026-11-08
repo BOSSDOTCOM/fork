@@ -1855,9 +1855,24 @@ until measured; new names and constants go through the screens before use.
   measures q at each margin.
 - **literature:** cascades of classifiers (Viola and Jones, 2001) and
   conditional computation (Bengio, Leonard and Courville, 2013), where an
-  expensive model runs only on hard inputs; lazy evaluation in chess
-  engines (Chess Programming Wiki), here in the opposite direction
-  (UNVERIFIED as exact citations). Related Fork entries: idea 46's gated
+  expensive model runs only on hard inputs (both verified 2026-11-08:
+  Viola and Jones, CVPR 2001; Bengio, Léonard and Courville,
+  arXiv:1308.3432). **The window gate itself is classic lazy evaluation**
+  (Chess Programming Wiki, "Lazy Evaluation": the costly terms are
+  computed only when the cheap score lies near the window, and added to
+  it), the same rule, not its opposite (corrected 2026-11-08). The prior-art
+  search (2026-11-08; KB branch kb, docs/kb/research-boundary-refiner-prior-art.md)
+  also found the near-bound rationale argued on TalkChess (2017), a 2020
+  Stockfish proposal to choose its evaluation by the window (closed
+  untested), Stockfish's conditional second networks under other gates,
+  and decision-relevance arguments in the literature. What it did not find,
+  within the sources searched: a separately trained residual refiner on a
+  full NNUE base, consulted only within a small budget margin, trained on
+  the engine's own near-window positions with deep labels, sharing the
+  base accumulator; and a controlled test of where it is consulted (window
+  gate against a random gate at equal call rate, plus a bias-only
+  control). Any public text places idea 59 in the lazy and two-tier
+  evaluation family and claims only what the search did not find. Related Fork entries: idea 46's gated
   evaluation's oracle (the same family), idea 48 (the decision-focused
   view at training time), idea 50 (near-boundary margins).
 - **step 1 (measurement):** with the stats build (the step 1 tooling),
