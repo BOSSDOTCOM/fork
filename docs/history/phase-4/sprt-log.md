@@ -1020,3 +1020,55 @@ LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
   almost entirely below zero), so H1 (simplify it away) was not reached:
   check relief stays on. **Closed by the owner** (2026-11-06): check relief
   stays on, and the filler is not run further.
+
+### 2026-11-08 time management (think tank R8, idea tm-r8): head-to-head (a) against (b), then the design R SPRT of (b) against off (owner)
+
+- Variants behind two switches (tm/node-share c3780dc, switches off;
+  bench 14,149,617 / 1cb0717f040c294d): (a) stability only (tm/a ccdf814),
+  (b) stability plus the every-pass node share (tm/b 620cd05). The
+  constants are fitted on Fork's own X6 data; the stability cap is 72,
+  derived by the owner's declared rule after the cap 10 matched other
+  engines (constant screens and re-screen: ORIGINALITY.md on tm/node-share).
+- Head-to-head (owner, 2026-11-07: pick by head-to-head before the design
+  R SPRT, preferring (a) within the 0.5 e margin; decision 3), STC 8+0.08,
+  2 stages of 1,600 games on the same openings, job tm-h2h, runs
+  42488242225 and 42495448043: **b − a +22.75 ± 12.04 nElo**, 3,200 games,
+  Ptnml [23, 347, 763, 422, 45]: (b) picked (beyond the tie margin).
+- Design R SPRT (decision 2; [0, 6] nElo, alpha 0.05, beta 0.20, cap 8,
+  futility after 2 stages), STC, fresh openings from stage 2, job
+  tm-r8-stc, try 1 of 2:
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), (b) against off | 42503358810 (stage 2), 42504937998 (3) | 3,200 (no time losses, no abnormal ends) | **+18.69 ± 7.18** | +31.40 ± 12.04 | [37, 319, 738, 447, 59] | **H1 accepted** (LLR 4.52) after stage 3, 12:46 PM EST |
+
+- Predicted beforehand (UNVERIFIED model): +3 to +4 Elo at STC; the result
+  is far above it. Time management is on the LTC list: its LTC SPRT
+  (design R at 40+0.4, Hash 64, 1,664 games per stage, cap 6, fresh
+  openings from stage 4; job tm-r8-ltc) started at 1:24 PM EST (owner,
+  2026-11-08: adopt into phase-4 only after LTC passes). Time management
+  does not run in data generation (node-limited), so its adoption does not
+  touch the labeller.
+
+### 2026-11-08 idea 60 (near-window extension): head-to-head 10 against 25 cp, then the design R SPRT of 10 cp against off (owner): H0, retired
+
+- Build: idea60/extension 4f4ddf2 (switch off; bench 14,149,617);
+  candidates idea60/m10 e5fb07d and idea60/m25 f0d0efb. Node cost at equal
+  depth (job idea60-cost): +6.2% / +5.6% at 10 cp, +14.4% / +11.5% at 25 cp
+  (depths 12 / 14), both under the ~15% kill line. Constant screen passed
+  (ORIGINALITY.md on idea60/extension).
+- Head-to-head, STC, 2 stages of 1,600 games on the same openings, job
+  idea60-h2h, runs 42497021804 and 42498592679: **25 − 10 −3.24 ± 12.04
+  nElo**, 3,200 games, Ptnml [49, 396, 726, 382, 47]: 10 kept (the declared,
+  cheaper value).
+- Design R SPRT, STC, fresh openings from stage 2, job idea60-stc, try 1
+  of 2:
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), 10 cp against off | 42506706880 (stage 2), 42508251512 (3) | 3,200 (no time losses, no abnormal ends) | **−5.43 ± 7.25** | −9.01 ± 12.04 | [46, 425, 705, 381, 43] | **H0 accepted** (LLR −1.91) after stage 3, 1:24 PM EST |
+
+- By its kill criterion (ideas.md idea 60: the SPRT fails), **idea 60 is
+  retired**; the switch stays off on its branch, and nothing reaches
+  phase-4. Window-aware LMR (idea 61 part 5) no longer needs a combined
+  test with it.
