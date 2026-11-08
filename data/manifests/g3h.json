@@ -1,0 +1,99 @@
+{
+ "run": "g3h",
+ "generator": {
+  "tool": "fork_datagen (complete games of generation 3's run g3h, labelled by Fork 0.3.0-dev+a24d41f (s512ppr2), on 6 threads, stopped on -; sealed by the Control Center)",
+  "version": "0.3.0-dev+a24d41f (WSL clang PGO, clang 21.1.8)",
+  "evaluator": "nnue (s512ppr2)",
+  "arch": "native (Ryzen 7600X3D)"
+ },
+ "settings": {
+  "openings": "lichess-2016-09.epd",
+  "openings_count": 591871,
+  "positions_target": 255233534,
+  "nodes": 20000,
+  "threads": 6,
+  "seed": 20261113,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 50,
+  "unsaved_nodes": 4000,
+  "check_nodes": 2000
+ },
+ "openings": {
+  "file": "lichess-2016-09.epd",
+  "sha256": "0ae298e1c7c635606fcddb056ee08073aeed8f4db4de3f19b8ef721d4a72831b",
+  "positions": 591871,
+  "source": "lichess_db_standard_rated_2016-09.pgn.zst",
+  "source_sha256": "3a4d18db787db558083aacb7c27ab3588f0745c1baaca37846b3f0d8b9677db3"
+ },
+ "games": 397661,
+ "positions": 37108079,
+ "seconds": 22200,
+ "results": {
+  "white": 165495,
+  "draw": 74497,
+  "black": 157669
+ },
+ "ends": "not counted (the run was stopped, not finished)",
+ "part_end": "the machine went down at about 8:07 PM EST on 2026-11-07, ending g3h abruptly (each shard's tail zero-filled; the seal stops there, 4d062da); sealed as its own part (owner), the generation continues as the next part on 6 threads with lichess-2026-09.epd (the owner's saved setting; its trial load passed); generation 3's part g3h, started 2026-11-07 01:57:05 PM EST, stopped on -, on 6 threads (Control Center); every game verified (tools/datagen/verify_games.py with its manifest)",
+ "batches": [
+  [
+   {
+    "file": "g3h-w00.vf",
+    "worker": 0,
+    "games": 66132,
+    "positions": 6166020,
+    "bytes": 27044832,
+    "sha256": "1a4b230586e7e9a333ff87bc765c3acb1aae8df743fc13009ff01620faec010c"
+   },
+   {
+    "file": "g3h-w01.vf",
+    "worker": 1,
+    "games": 66669,
+    "positions": 6231266,
+    "bytes": 27325148,
+    "sha256": "2af3b4bd36e31f2229d0aa6c3e5d3f28a32460f89e316890ba13d596077b682f"
+   },
+   {
+    "file": "g3h-w02.vf",
+    "worker": 2,
+    "games": 65886,
+    "positions": 6143446,
+    "bytes": 26945680,
+    "sha256": "abadc806e8f2bd7d659659f7b9cc3ad8fe57dca1299e289e674dc542fe1b4eba"
+   },
+   {
+    "file": "g3h-w03.vf",
+    "worker": 3,
+    "games": 66112,
+    "positions": 6163139,
+    "bytes": 27032588,
+    "sha256": "cf38f02f81994ceb563699a8041191676a2a7872386774e5eb962a7297d5f6c3"
+   },
+   {
+    "file": "g3h-w04.vf",
+    "worker": 4,
+    "games": 66045,
+    "positions": 6176045,
+    "bytes": 27081800,
+    "sha256": "8790652e580ae11056f0b45131f8409aba4e19f7ee8d4789cc7de07593d974b0"
+   },
+   {
+    "file": "g3h-w05-val.vf",
+    "worker": 5,
+    "games": 66817,
+    "positions": 6228163,
+    "bytes": 27318064,
+    "sha256": "169a64cd75d4c1d254485a49185bd359399162532390fb6b1999137eedb0f256"
+   }
+  ]
+ ],
+ "positions_unsaved": 16922627
+}
