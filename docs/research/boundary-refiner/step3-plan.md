@@ -1160,6 +1160,30 @@ reported beside it and selects nothing.
     trainer, so the refiner's input equals the engine's bytes / 255 up to
     float rounding; (A), the plan's R1-avg float weights, would train the
     refiner on an input up to 7.5 byte units off the engine's.
+  - **Owner decision (2026-11-08): (B).** The frozen base is the engine
+    net's own integers read as floats (first layer int / 255, output
+    weights int / 64, output biases int / (255 x 64); the clamp included),
+    replacing this section's "S512ppr3's float weights (R1-avg)": on the
+    parity set its accumulator matches the engine's bytes at 446 of 446
+    positions (within 0.00003 byte units) and its evaluation lies within
+    0.998 cp, from the engine's integer truncation only, against (A)'s 7.50
+    byte units and 9.40 cp. The reason: the refiner trains on exactly the
+    bytes the engine feeds it. **The source:** nets/s512ppr3.fnet, SHA-256
+    ca3a259b6522109a36481d94785c725ab8af88af5d08d30b9fb369fa6c3fa8d5, Fork
+    checksum 5861c1a319ca267b (header offset 40; docs/nets.md); the same
+    bytes at 2b1c78b (the pinned labeller, whose build embeds FORK_NET's
+    default, this file; its bench as referenced) and at 2f0311b (the stats
+    build that logged the base evaluations), and the checksum the engine's
+    refiner reader binds the refiner to (refiner-zero.frnet). **The
+    conversion:** each first-layer integer divided by 255 and stored as an
+    f32 (bullet's layout is the file's: one input's 512 values together);
+    the trainer reads the net file through `--base-weights` (the option's
+    name kept: it takes the base's weights, now as the engine's integer
+    file). Its test: tools/nnue/test_nnue_tools.py
+    test_refiner_int_matches_float, the converted base's clipped
+    accumulator within 0.001 byte units of the engine's bytes on four
+    positions (exposed pieces and pawn links included) and R-float on it
+    within the rounding bound of R-int on the net file.
   A converter and Fork's independent references
   (R-float, R-quant, R-int in tools/nnue) extend to the refiner, and the
   parity chain (trainer = R-float within tolerance, R-int = engine exactly)
@@ -1182,9 +1206,8 @@ reported beside it and selects nothing.
   mu is not added back in the engine and its value is reported. The base
   sits in the trainer's graph, frozen: `detach()` on its outputs, decay 0
   and a clip range holding its weights (3.6, settled); its float weights
-  are item 8a's R1-avg (weights.bin, SHA-256 02215858...c8b37ecc3) or
-  the engine net's own integers read as floats: the owner's choice (3.6,
-  "The frozen base against the engine's S512ppr3").
+  are the engine net's own integers read as floats (owner, 2026-11-08:
+  3.6, "The frozen base against the engine's S512ppr3", (B)).
 - **Decision weighting (owner addition 4; idea 48 applied):**
   `w_i = exp(-g_i^2 / (2 h^2))`, g_i the site's window gap, h = 25 cp (the
   gate's margin), normalised to mean 1. Idea 48's variance rule applies:

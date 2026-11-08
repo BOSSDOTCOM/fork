@@ -247,6 +247,33 @@ class PipelineTests(unittest.TestCase):
                                                                            + r['row_weights'][(640 + f // 64) * l1 + j])],
                                                            64, 'i16')[0])
         self.assertEqual(len(rows), 664 * l1)
+        # The frozen base (owner, 2026-11-08: (B)): the engine net's own first layer read as floats (int / 255,
+        # each an f32), as the trainer loads it. Its clipped accumulator equals the engine's bytes / 255 up to
+        # float rounding, so R-float on boards and R-int on the net agree within the same bound.
+        net = models.unpack(arch, data[netformat.HEADER_BYTES:])
+        base = {'l0w': [models.to_f32(x / 255) for x in net['ftw']], 'l0b': [models.to_f32(x / 255) for x in net['ftb']]}
+        boards = [chess.Board(f) for f in ('r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+                                           '4k3/8/8/3n4/4P3/8/8/4K3 b - - 0 1',
+                                           '8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1',
+                                           'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1')]
+        head = [r['head_weights'][k * 2] for k in range(32)]
+        bound = scale * sum(abs(hk) * (1 + sum(abs(x) for x in middle[k])) for k, hk in enumerate(head)) / 255 + 1
+        # The entry layer reads only the side to move's half here, so the perspectives' order shows.
+        r = dict(r, entry_weights=[x * 3 if i < 512 * l1 else 0.0 for i, x in enumerate(r['entry_weights'])])
+        q = models.refiner_quantise(r)
+        for board in boards:
+            stm, ntm, _ = models.both_perspectives(arch, board)
+            unit = [models.clip(v) for v in models.column_sum(base['l0w'], 512, stm, base['l0b'])
+                    + models.column_sum(base['l0w'], 512, ntm, base['l0b'])]
+            floats = [v * 255 for v in unit]
+            pieces = [f for f in stm if f < arch.factor_start], [f for f in ntm if f < arch.factor_start]
+            a_s, a_n = (models.exposure_sum(net, arch, f, models.accumulate(net, arch, p)) for f, p in zip((stm, ntm), pieces))
+            ints = [min(max(x, 0), 255) for x in a_s + a_n]
+            self.assertLess(max(abs(a - b) for a, b in zip(floats, ints)), 1e-3, board.fen())
+            y = models.refiner_float(arch, base, r, board, 40, 8)
+            self.assertEqual(y, models.refiner_float(arch, None, r, board, 40, 8, acc=unit))  # the side to move first
+            c, _ = models.refiner_int(arch, net, scale, q, 20000, board, 40, 8)
+            self.assertLessEqual(abs(c - y[0] * scale), bound, board.fen())
 
     def test_refiner_export(self):
         # One line per labelled site: FEN | base | label | training weight | rows, folders in order.
