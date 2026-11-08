@@ -10,6 +10,7 @@ and show that each mutation fails the leg meant to catch it.
 """
 import contextlib
 import io
+import json
 import random
 import struct
 import sys
@@ -17,9 +18,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import chess
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import convert  # noqa: E402
+import models  # noqa: E402
 import netformat  # noqa: E402
 import reference  # noqa: E402
 import refiner  # noqa: E402
@@ -174,6 +178,53 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(base, 0x5861c1a319ca267b)  # S512ppr3's payload checksum (docs/nets.md)
         self.assertEqual(len(data) - 64, 16 * 1024 + 16 * 4 + 664 * 16 * 2 + 32 * 16 + 32 * 4 + 64 * 2 + 2 * 4)
         self.assertFalse(any(data[64:]))
+
+    def test_refiner_rows(self):
+        # Rows written out by hand from step3-plan.md 2.2. A black knight on d5 attacked by a white pawn
+        # (a lower class) is exposed; nothing else is.
+        repo = Path(__file__).resolve().parents[2]
+        net = (repo / 'nets/s512ppr3.fnet').read_bytes()
+        arch = models.arch_from_net('s512pp', net[netformat.HEADER_BYTES:])
+        phase_row = 640 + arch.table[1]  # one knight: phase 1
+        rows = lambda fen, base: models.refiner_rows(arch, chess.Board(fen), base, 8)  # noqa: E731
+        # White to move, king on e1 (no file flip): enemy (320) + knight (64) + d5 (35).
+        self.assertEqual(rows('4k3/8/8/3n4/4P3/8/8/4K3 w - - 0 1', 37), [320 + 64 + 35, phase_row, 648 + 8])
+        # Black to move, king on e8: own knight, d5 seen from Black is d4 (27).
+        self.assertEqual(rows('4k3/8/8/3n4/4P3/8/8/4K3 b - - 0 1', 37), [64 + 27, phase_row, 648 + 8])
+        # White's king on d1: files flipped, d5 becomes e5 (36).
+        self.assertEqual(rows('3k4/8/8/3n4/4P3/8/8/3K4 w - - 0 1', 37), [320 + 64 + 36, phase_row, 648 + 8])
+        # The evaluation's bins: clamped to [-1,000, 999], 125 cp each.
+        for base, b in ((-1500, 0), (-1000, 0), (-876, 0), (-875, 1), (0, 8), (999, 15), (2000, 15)):
+            self.assertEqual(rows('4k3/8/8/3n4/4P3/8/8/4K3 w - - 0 1', base)[-1], 648 + b)
+
+    def test_refiner_export(self):
+        # One line per labelled site: FEN | base | label | training weight | rows, folders in order.
+        repo = Path(__file__).resolve().parents[2]
+        net = repo / 'nets/s512ppr3.fnet'
+        arch = models.arch_from_net('s512pp', net.read_bytes()[netformat.HEADER_BYTES:])
+        fens = ['4k3/8/8/3n4/4P3/8/8/4K3 w - - 0 1', '3k4/8/8/3n4/4P3/8/8/3K4 b - - 4 9', chess.STARTING_FEN]
+        with tempfile.TemporaryDirectory() as tmp:
+            folders = []
+            for name, ids in (('a', (3, 5)), ('b', (2,))):
+                d = Path(tmp) / name
+                d.mkdir()
+                (d / 'sites.jsonl').write_text(''.join(json.dumps({'id': i, 'fen': fens[i % 3], 'eval': 10 * i - 25})
+                                                       + '\n' for i in (*ids, 8)), encoding='utf-8')
+                (d / 'deep.tsv').write_text(''.join(f'{i}\t{100 + i}\t{int(i == 5)}\t17\n' for i in ids),
+                                            encoding='utf-8')
+                (d / 'weights.tsv').write_text(''.join(f'{i}\t{0.5 * i if i != 5 else 0:.6f}\t{9:.6f}\n' for i in ids),
+                                               encoding='utf-8')
+                folders.append(str(d))
+            out = Path(tmp) / 'split.sites'
+            with contextlib.redirect_stdout(io.StringIO()):
+                refiner.main(['export', '--base', str(net), '--out', str(out), *folders])
+            lines = out.read_text(encoding='utf-8').splitlines()
+        expected = []
+        for i in (3, 5, 2):  # site 8 has no label: left out
+            rows = models.refiner_rows(arch, chess.Board(fens[i % 3]), 10 * i - 25, 8)
+            weight = f'{0.5 * i if i != 5 else 0:.6f}'
+            expected.append(f"{fens[i % 3]} | {10 * i - 25} | {100 + i} | {weight} | {' '.join(map(str, rows))}")
+        self.assertEqual(lines, expected)
 
 
 class FitScaleTests(unittest.TestCase):

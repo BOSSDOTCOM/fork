@@ -158,6 +158,25 @@ def bucket(arch, board):
     return 0
 
 
+def refiner_rows(arch, board, base_eval, buckets):
+    """The Boundary Refiner's active rows in architecture 1, in its file's
+    order (docs/research/boundary-refiner/step3-plan.md 2.2, written from
+    that text): the exposed pieces by XGR's rule from the side to move's view
+    only, 320 x (enemy) + 64 x (pawn..queen) + square in the side to move's
+    frame (ranks flipped for Black, files flipped so its king stands on
+    files e-h, as the base's features): 640 rows; then the base's phase
+    bucket (`buckets` rows, the base's own table); then the base evaluation
+    clamped to [-1,000, 999] cp in 16 bins of 125 cp."""
+    persp = board.turn
+    orient = (lambda s: s) if persp == chess.WHITE else (lambda s: s ^ 56)
+    flip = 7 if orient(board.king(persp)) % 8 < 4 else 0
+    rows = [320 * int(board.piece_at(sq).color != persp) + 64 * (board.piece_at(sq).piece_type - 1) + (orient(sq) ^ flip)
+            for sq in exposed_squares(board)]
+    rows.append(EXPOSURE_ROWS + bucket(arch, board))
+    rows.append(EXPOSURE_ROWS + buckets + (max(-1000, min(999, base_eval)) + 1000) // 125)
+    return sorted(rows)
+
+
 def both_perspectives(arch, board):
     exposed = exposed_squares(board) if arch.exposure else None
     return (features(arch, board, board.turn, exposed), features(arch, board, not board.turn, exposed),

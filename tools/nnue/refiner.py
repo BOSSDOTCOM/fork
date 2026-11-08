@@ -4,24 +4,40 @@
 in src/eval/nnue/refiner_file.hpp's header comment, and this writer follows
 that text, not the C++ code).
 
-For now one command: `zero` writes a refiner whose every weight and bias is
-zero, for the speed gate's identical-tree measurement (the plan's M1,
+`zero` writes a refiner whose every weight and bias is zero, for the speed gate's identical-tree measurement (the plan's M1,
 docs/research/boundary-refiner/step3-plan.md §4.5) and as the refiner
 build's test file. Its output scale S is the base network's own, its cap C is
 given (the committed test file uses 20,000, EvalLimit: no cap, so a zero
 correction comes from the zero weights alone), and its header binds it to
-the base network's payload checksum. The trained refiner's converter and
-references (R-float, R-quant, R-int) come later, here.
+the base network's payload checksum.
+
+`export` writes one split's labelled sites (each folder's sites.jsonl,
+deep.tsv and weights.tsv: tools/measure/crucial_points.py `deep`,
+deep_labels.py `weights`) as the trainer's .sites file, one line per site:
+
+    FEN | base | label | weight | rows
+
+base the site's logged static evaluation (the refiner's base, side to move's
+view, cp), label the deep label (cp), weight the training weight (0 for the
+mate-flagged labels and the table band, which the loss leaves out), rows the
+refiner's active rows in architecture 1 (models.refiner_rows, from the base
+network's phase table). The trainer centres the target itself (step3-plan.md
+3.7).
 
 usage: python -I tools/nnue/refiner.py zero --base nets/s512ppr3.fnet --arch 1 --l1 16
            --bound 64 --cap 20000 --out tests/nnue/refiner-zero.frnet
+       python -I tools/nnue/refiner.py export --base nets/s512ppr3.fnet --out train.sites DIR...
 """
 import argparse
+import json
 import struct
 import sys
 from pathlib import Path
 
+import chess
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import models  # noqa: E402
 import netformat  # noqa: E402
 
 REFINER_MAGIC = b'FORKRFN\0'
@@ -59,7 +75,39 @@ def main(argv=None):
     zero.add_argument('--bound', type=int, choices=(64, 32), required=True, help='the dense weights\' bound')
     zero.add_argument('--cap', type=int, required=True)
     zero.add_argument('--out', required=True)
+    export = sub.add_parser('export', help="a split's labelled sites as the trainer's .sites file")
+    export.add_argument('--base', required=True, help='the base network (.fnet): its phase table and bucket count')
+    export.add_argument('--out', required=True)
+    export.add_argument('dir', type=Path, nargs='+', help='folders with sites.jsonl, deep.tsv and weights.tsv')
     args = ap.parse_args(argv)
+    if args.command == 'export':
+        base = Path(args.base).read_bytes()
+        fields = netformat.header_fields(base)
+        name = {v: k for k, v in models.ARCH.items()}[fields['architecture']]
+        arch = models.arch_from_net(name, base[netformat.HEADER_BYTES:])
+        lines = weighted = active = 0
+        with open(args.out, 'w', encoding='utf-8', newline='\n') as f:
+            for folder in args.dir:
+                labels = {}
+                for line in (folder / 'deep.tsv').read_text(encoding='utf-8').splitlines():
+                    i, value, _mate, _depth = line.split('\t')
+                    labels[int(i)] = int(value)
+                weights = {}
+                for line in (folder / 'weights.tsv').read_text(encoding='utf-8').splitlines():
+                    i, training, _acceptance = line.split('\t')
+                    weights[int(i)] = training
+                for line in (folder / 'sites.jsonl').read_text(encoding='utf-8').splitlines():
+                    s = json.loads(line)
+                    if s['id'] not in labels:
+                        continue
+                    rows = models.refiner_rows(arch, chess.Board(s['fen']), s['eval'], fields['buckets'])
+                    f.write(f"{s['fen']} | {s['eval']} | {labels[s['id']]} | {weights[s['id']]} | "
+                            f"{' '.join(map(str, rows))}\n")
+                    lines += 1
+                    weighted += float(weights[s['id']]) > 0
+                    active += len(rows)
+        print(f'{args.out}: {lines} sites ({weighted} weighted), {active / max(lines, 1):.2f} active rows per site')
+        return 0
     if not 0 <= args.cap <= 20000:
         ap.error('--cap must lie in [0, 20000]')
     base = Path(args.base).read_bytes()
