@@ -66,21 +66,30 @@ import node_share_fit  # noqa: E402
 
 
 def read_sites(replay_dir):
-    """The sampled sites of a replay (with ids and games) and each stratum's sites per node."""
-    sites, counters = [], {}
-    for f in sorted(Path(replay_dir).glob('game-*.jsonl')):
+    """The sampled sites of a replay (with ids and games) and each stratum's sites per node.
+    The sites come one at a time, in file order (a training replay holds
+    millions, too many to hold at once); the counters are summed first, in a
+    pass of their own."""
+    files = sorted(Path(replay_dir).glob('game-*.jsonl'))
+    counters = {}
+    for f in files:
         for line in f.read_text(encoding='utf-8').splitlines():
-            record = json.loads(line)
-            for k, v in record.get('counters', {}).items():
+            for k, v in json.loads(line).get('counters', {}).items():
                 counters[k] = counters.get(k, 0) + v
-            for site in record.get('sites') or []:
-                site = dict(site, game=record['game'], search_ply=record['ply'], id=len(sites))
-                sites.append(site)
     nodes = counters['root_nodes'] + counters['main_nodes'] + counters['quiesce_nodes_pv'] + \
         counters['quiesce_nodes_non_pv']
     per_node = {'main': (counters['evals_main'] + counters['tt_eval_hits_main']) / nodes,
                 'quiescence': (counters['evals_quiesce'] + counters['tt_eval_hits_quiesce']) / nodes}
-    return sites, per_node
+
+    def sites():
+        count = 0
+        for f in files:
+            for line in f.read_text(encoding='utf-8').splitlines():
+                record = json.loads(line)
+                for site in record.get('sites') or []:
+                    yield dict(site, game=record['game'], search_ply=record['ply'], id=count)
+                    count += 1
+    return sites(), per_node
 
 
 def nearest_bound(value, alpha, beta):
@@ -294,13 +303,15 @@ def main(argv=None):
     if a.command == 'sites':
         sites, per_node = read_sites(a.replay)
         a.out.mkdir(parents=True, exist_ok=True)
+        count, finite, kinds = 0, 0, [0, 0]
         with open(a.out / 'sites.jsonl', 'w', encoding='utf-8') as f:
             for s in sites:
                 f.write(json.dumps(s, separators=(',', ':')) + '\n')
+                count += 1
+                finite += nearest_bound(s['eval'], s['alpha'], s['beta']) is not None
+                kinds[s['kind']] += 1
         (a.out / 'per_node.json').write_text(json.dumps(per_node) + '\n', encoding='utf-8')
-        finite = sum(1 for s in sites if nearest_bound(s['eval'], s['alpha'], s['beta']))
-        kinds = [sum(1 for s in sites if s['kind'] == k) for k in (0, 1)]
-        print(f'{len(sites)} sites (main {kinds[0]}, quiescence {kinds[1]}), {finite} with a finite bound; '
+        print(f'{count} sites (main {kinds[0]}, quiescence {kinds[1]}), {finite} with a finite bound; '
               f'sites per node {per_node}')
         return 0
 

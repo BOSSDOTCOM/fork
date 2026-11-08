@@ -99,13 +99,16 @@ def main(argv=None):
               f'{min(a.count, len(offsets))} picked (seed {a.seed}) into {a.out}; {plies} plies')
         return 0
 
-    sites = [json.loads(line) for line in a.sites.read_text(encoding='utf-8').splitlines()]
-    gap_of = {}
-    for site in sites:
-        near = crucial_points.nearest_bound(site['eval'], site['alpha'], site['beta'])
-        if near is not None:
-            gap_of[site['id']] = abs(site['eval'] - near[1])
-    near = [site for site in sites if site['id'] in gap_of and gap_of[site['id']] <= a.gap]
+    # Only the sites within GAP are kept in memory (a training replay has millions).
+    total, gap_of, near = 0, {}, []
+    with open(a.sites, encoding='utf-8') as f:
+        for line in f:
+            site = json.loads(line)
+            total += 1
+            bound = crucial_points.nearest_bound(site['eval'], site['alpha'], site['beta'])
+            if bound is not None and abs(site['eval'] - bound[1]) <= a.gap:
+                gap_of[site['id']] = abs(site['eval'] - bound[1])
+                near.append(site)
     key = lambda site: ' '.join(site['fen'].split()[:4])  # noqa: E731
     dropped = {}
     if a.exclude:
@@ -130,7 +133,7 @@ def main(argv=None):
                 f.write(json.dumps(site, separators=(',', ':')) + '\n')
     if dropped:
         print('dropped: ' + ', '.join(f'{v} {k}' for k, v in dropped.items()))
-    print(f'{len(sites)} sites, {len(near)} within {a.gap} cp; {len(picked)} picked (seed {a.seed}), '
+    print(f'{total} sites, {len(near)} within {a.gap} cp; {len(picked)} picked (seed {a.seed}), '
           f'{sum(gap_of[site["id"]] <= 25 for site in picked)} of them within 25 cp; '
           f'main {sum(site["kind"] == 0 for site in picked)}, quiescence {sum(site["kind"] == 1 for site in picked)}, '
           f'reused {sum(site["reused"] for site in picked)}')

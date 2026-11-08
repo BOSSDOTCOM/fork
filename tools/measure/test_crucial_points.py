@@ -4,6 +4,7 @@ conventions, features, ROC arithmetic and site reading.
 
     python -I -B -m unittest discover -s tools/measure -p 'test_*.py'
 """
+import collections.abc
 import contextlib
 import io
 import json
@@ -78,6 +79,7 @@ class CrucialPointsTests(unittest.TestCase):
                        {'game': 'g', 'ply': 2, 'counters': counters, 'sites': []}]
             (Path(d) / 'game-0000.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in records), encoding='utf-8')
             sites, per_node = cp.read_sites(d)
+            self.assertIsInstance(sites, collections.abc.Iterator)  # one at a time, never all held at once
             self.assertEqual([(s['id'], s['kind'], s['game']) for s in sites], [(0, 0, 'g'), (1, 1, 'g')])
             self.assertAlmostEqual(per_node['main'], 60 / 200)
             self.assertAlmostEqual(per_node['quiescence'], 80 / 200)
