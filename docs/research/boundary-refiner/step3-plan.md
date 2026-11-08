@@ -330,13 +330,20 @@ labelling plan follows (to the owner first).
   here. **On the pilot's sites it falls below idea 48's rule:** 0.47 n on
   the pilot's 3,000 (0.47 on all its 6,496 within 80 cp), against 0.60 at
   a single h = 25; with main search at 25, quiescence needs h = 13 (the
-  3,000) or 14 (the 6,496) for 0.5 n. 3.7's rule (h grows to the smallest
-  value that meets 0.5 n) is the owner's call at training; the labels do
-  not depend on it.
-- **The labels' protocol is the pilot's:** crucial_points.py `deep`
-  (1 thread, Hash 16, `ucinewgame` before each site) sets no Syzygy path,
-  so the labels search without tables, unlike 3.3's line; the pilot's
-  labels (and its budget decision) were made the same way.
+  3,000) or 14 (the 6,496) for 0.5 n. **Owner decision (2026-11-08,
+  declared before the training split is selected):** main search h = 25
+  cp; quiescence h = the smallest whole h giving n_eff >= 0.5 n on the
+  training split, computed after its selection (near_window_sites.py
+  `select` prints it, 29e6a25) and recorded here. The labels do not depend
+  on it.
+- **Labels with the tables (owner decision, 2026-11-08):** every label
+  searches with the Syzygy 3-4-5 tables, as 3.3 says (crucial_points.py
+  `deep --syzygy`, 29e6a25; the pilot's labels had been made without
+  them, the tool setting no path). The pilot's 3,000 validation sites are
+  labelled again at 1M with the tables in the same window, so every label
+  shares one protocol; their table-less labels are kept aside, renamed
+  (pilot/n1m/deep-notables.tsv). The budget pilot's 100k and 300k labels,
+  and its N = 100k, stay as measured without tables.
 - **One window (owner change, 2026-11-08):** collection and labelling run
   in one window on 10 processes while the owner suspends data generation
   in place. First, **the determinism check, declared before it runs:** the
@@ -353,9 +360,9 @@ labelling plan follows (to the owner first).
   game files unchanged (SHA-256 before and after), and validation's site
   list must begin with the pilot's 16,237 sites, ids included. Then the
   three replays and site lists, the selections, and the labels:
-  validation and test at 1M first, then training at 100k, by the pinned
-  engine with its hash and bench checked before the first label and after
-  the last.
+  validation (the pilot's 3,000 again, then the 7,000 new) and test at 1M
+  first, then training at 100k, by the pinned engine with its hash and
+  bench checked before the first label and after the last.
 
 ## 0. The design in brief
 
