@@ -119,6 +119,12 @@ struct SearchQuota {
 //   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
 //   internal iterative reduction). On since its STC SPRT passed (+21.45
 //   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
+// - use_near_window_extension: a main-search node at depth 1, out of check,
+//   whose static evaluation lies within NearWindowMargin of the nearest
+//   finite bound of its window (window_gap), is searched one ply deeper:
+//   at most once per line, and never inside a null move's verification
+//   search (ideas.md idea 60). Off: untested (built 2026-11-07 for its
+//   node-cost measurement, head-to-head margin and design R SPRT).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -148,7 +154,8 @@ struct SearchQuota {
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
-  X(use_no_move_reduction, UseNoMoveReduction, true)
+  X(use_no_move_reduction, UseNoMoveReduction, true)     \
+  X(use_near_window_extension, UseNearWindowExtension, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -201,6 +208,11 @@ struct PlyFrame {
   bool after_null = false;      // this node was reached by a null move (no second one in a row)
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
+  // The near-window extension is not available here (idea 60): this node or
+  // an ancestor took it (at most one per line), or the node lies in a null
+  // move's verification search. Set from the parent's frame at every
+  // main-search node.
+  bool near_window_taken = false;
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -313,6 +325,24 @@ struct SearchCounters {
   std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
   std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
   std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
+  // The near-window extension (idea 60), counted whether or not its switch
+  // is on (the gate is evaluated in shadow), for its node-cost measurement.
+  // Sites: depth-1 main-search nodes that reach the decision (out of check,
+  // not withheld, past reverse futility, not futile at depth 1). Gated: of
+  // those, within NearWindowMargin; reused: gated with the static eval taken
+  // from the TT entry; extended: searched one ply deeper; blocked: gated,
+  // but the extension was not available (taken on the line, or inside a
+  // null move's verification). Node sums: the subtrees from the decision on
+  // (stopped searches not counted), of all sites, of gated sites not
+  // extended, and of extended sites.
+  std::uint64_t near_window_sites = 0;
+  std::uint64_t near_window_gated = 0;
+  std::uint64_t near_window_gated_reused = 0;
+  std::uint64_t near_window_extensions = 0;
+  std::uint64_t near_window_blocked = 0;
+  std::uint64_t near_window_site_nodes = 0;
+  std::uint64_t near_window_gated_nodes = 0;
+  std::uint64_t near_window_extended_nodes = 0;
 };
 
 class Searcher {
@@ -347,6 +377,9 @@ class Searcher {
   // Tests only: one zero-window search of `pos` as a non-PV node (window
   // [beta - 1, beta]), with no time limit; returns its fail-soft score.
   int probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop);
+  // Tests only: the nodes the last search (deliberate or probe_zero_window)
+  // counted.
+  std::uint64_t last_node_count() const { return nodes_; }
 
  private:
   template <bool OnPv>
@@ -367,6 +400,11 @@ class Searcher {
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
   void record_cutoff(const PlyFrame& f, Move m, int depth);
+#ifdef FORK_SEARCH_STATS
+  // Adds a near-window site's subtree nodes to its counters (stats builds):
+  // kind 0 is no site, 1 a site, 2 a gated site not extended, 3 an extended one.
+  void tally_near_window(int kind, std::uint64_t subtree_nodes);
+#endif
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }

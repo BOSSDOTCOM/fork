@@ -4,16 +4,20 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <vector>
 
 #include "core/material.hpp"
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
+#include "eval/eval.hpp"
 #include "harness.hpp"
 #include "search/lmr_table.hpp"
 #include "search/quiet_history.hpp"
+#include "search/search_bench.hpp"
 #include "search/searcher.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng::test {
 
@@ -468,11 +472,169 @@ namespace forkeng::test {
 
 // Every tier-2 switch on (from the tier-2 review of 2026-10-31): a search
 // from the same state twice is identical, and the best move is legal.
+// The near-window extension (idea 60): a depth-1 node whose static
+// evaluation lies within NearWindowMargin of its window's nearest finite
+// bound is searched as a depth-2 node, at most once per line. A zero-window
+// probe of a bench position (search_bench_fens: the CPW perft suite and
+// Lichess CC0 positions) at depth 1, with beta set from the position's own
+// full evaluation (static_eval) so that the gap is exactly the margin, must
+// equal the same probe at depth 2 with the switch off, in score and nodes:
+// one ply deeper, and no second extension below it (the depth-2 oracle has
+// none). One centipawn further, the probe must equal the depth-1 search with
+// the switch off. Exact for any evaluator: at a gap of at most the margin,
+// neither reverse futility (80 cp per ply) nor futility fires at depth 1 or
+// 2, the null move needs depth 3, the tables probe from depth 1, and the TT
+// starts empty. The root's TT entry records the depth searched. Fault checks
+// (2026-11-07): with the extension removed, the gated probes equal the
+// depth-1 search instead (and the TT depth is 1); with the line limit
+// removed, gated probes differed from the depth-2 oracle (and the deep
+// searches of the next case ran away: the limit bounds them); with deliberate()
+// not clearing the root frame's flag, a search after an extended probe
+// differed from a fresh searcher's.
+TEST_CASE("pruning", "near-window extension: exactly one ply, within the margin only, once per line") {
+  CHECK(!SearchSwitches{}.use_near_window_extension);  // off: untested (idea 60)
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_near_window_extension = true;
+  SearchSwitches off;
+  off.use_near_window_extension = false;
+  const int m = NearWindowMargin;
+  struct Probe {
+    int score;
+    std::uint64_t nodes;
+    int stored_depth;  // the root's TT entry, -1 if none
+    bool operator==(const Probe&) const = default;
+  };
+  const auto probe = [&](const SearchSwitches& s, Position& pos, int beta, int depth) {
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    fx.searcher->switches = s;
+    const int score = fx.searcher->probe_zero_window(pos, beta, depth, fx.stop);
+    TtHit hit{};
+    const int stored = fx.table.fetch(pos.key(), hit) ? hit.depth : -1;
+    return Probe{score, fx.searcher->last_node_count(), stored};
+  };
+  int positions = 0, deeper_differs = 0;
+  for (std::string_view fen : search_bench_fens()) {
+    Position pos;
+    CHECK_MSG(pos.set_fen(fen), fen);
+    const int e = static_eval(pos);
+    if (pos.in_check() || std::abs(e) >= 1000) continue;
+    ++positions;
+    for (const int beta : {e + m + 1, e - m}) {  // window [beta - 1, beta]: the gap is m
+      const Probe extended = probe(on, pos, beta, 1);
+      const Probe deeper = probe(off, pos, beta, 2);
+      CHECK_MSG(extended == deeper, fen << " beta " << beta << ": score " << extended.score << " vs "
+                                        << deeper.score << ", nodes " << extended.nodes << " vs "
+                                        << deeper.nodes);
+      CHECK_MSG(extended.stored_depth == 2, fen << " beta " << beta << ": " << extended.stored_depth);
+      deeper_differs += probe(off, pos, beta, 1).nodes != deeper.nodes;
+    }
+    for (const int beta : {e + m + 2, e - m - 1}) {  // the gap is m + 1
+      const Probe plain = probe(on, pos, beta, 1);
+      CHECK_MSG(plain == probe(off, pos, beta, 1), fen << " beta " << beta);
+      CHECK_MSG(plain.stored_depth == 1, fen << " beta " << beta << ": " << plain.stored_depth);
+    }
+  }
+  CHECK_MSG(positions >= 30, positions);
+  CHECK(deeper_differs > 0);  // so the equality above is not met by depth 1 alone
+
+  // A search after an extended probe is a fresh searcher's: the root frame's
+  // flag is cleared (the probe's root is ply 0; a search's root is not
+  // searched by negamax).
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  const int e = static_eval(pos);
+  CHECK(probe(on, pos, e + 1, 1).stored_depth == 2);
+  PruningFixture fresh;
+  fresh.searcher->switches = on;
+  const int depth = Optimized ? 10 : 7;
+  CHECK_EQ(fx.search(kiwipete, depth).nodes, fresh.search(kiwipete, depth).nodes);
+}
+
+// With the extension on, mates are still found, the best move is legal, and
+// the tree changes (fault check: an extension that never fires leaves all
+// three trees as they are with the switch off).
+TEST_CASE("pruning", "near-window extension: still correct, and it changes the search") {
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_near_window_extension = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 12 : 8;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_near_window_extension = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the near-window extension left all three trees unchanged");
+}
+
+#ifdef FORK_TUNE
+// Tuning builds: the margin is a parameter, so both candidates (10 and 25
+// cp, the owner's grid) are testable in one binary, and it reaches the
+// search (fault check: a margin the gate does not read leaves the trees
+// equal).
+TEST_CASE("pruning", "near-window extension: the margin is a tuning parameter") {
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_near_window_extension = true;
+  const int depth = Optimized ? 10 : 7;
+  CHECK(set_param("NearWindowMargin", 10));
+  const std::vector<std::uint64_t> narrow = fx.tree_sizes(on, depth);
+  CHECK(set_param("NearWindowMargin", 25));
+  const std::vector<std::uint64_t> wide = fx.tree_sizes(on, depth);
+  CHECK(narrow != wide);
+  CHECK(set_param("NearWindowMargin", find_param("NearWindowMargin")->default_value));
+}
+#endif
+
+#ifdef FORK_SEARCH_STATS
+// Stats builds: the near-window counters. The gate is evaluated in shadow
+// with the switch off, which counts sites and gated nodes and extends
+// nothing; gated nodes inside a null move's verification search are blocked
+// even then (fault check: without the null-move exclusion, nothing is
+// blocked with the switch off). With the switch on, nodes are extended and
+// the subtree sums add up.
+TEST_CASE("pruning", "near-window extension: the stats counters") {
+  PruningFixture fx;
+  const int depth = Optimized ? 10 : 7;
+  SearchSwitches off;
+  off.use_near_window_extension = false;
+  fx.searcher->counters = SearchCounters{};
+  fx.tree_sizes(off, depth);
+  const SearchCounters a = fx.searcher->counters;
+  CHECK_EQ(a.near_window_extensions, 0u);
+  CHECK(a.near_window_gated > 0 && a.near_window_sites >= a.near_window_gated);
+  CHECK(a.near_window_gated >= a.near_window_gated_reused);
+  CHECK(a.near_window_blocked > 0);  // inside null-move verifications
+  CHECK_EQ(a.near_window_extended_nodes, 0u);
+  CHECK(a.near_window_site_nodes >= a.near_window_gated_nodes);
+  SearchSwitches on;
+  on.use_near_window_extension = true;
+  fx.searcher->counters = SearchCounters{};
+  fx.tree_sizes(on, depth);
+  const SearchCounters b = fx.searcher->counters;
+  CHECK(b.near_window_extensions > 0 && b.near_window_blocked > 0);
+  CHECK(b.near_window_gated >= b.near_window_extensions + b.near_window_blocked);
+  CHECK(b.near_window_sites >= b.near_window_gated);
+  CHECK(b.near_window_extended_nodes > 0);
+  CHECK(b.near_window_site_nodes >= b.near_window_gated_nodes + b.near_window_extended_nodes);
+}
+#endif
+
 TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   PruningFixture fx;
   SearchSwitches s;
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
+  s.use_near_window_extension = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

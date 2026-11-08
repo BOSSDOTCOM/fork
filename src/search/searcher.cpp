@@ -151,6 +151,15 @@ void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
 }
 
+#ifdef FORK_SEARCH_STATS
+void Searcher::tally_near_window(int kind, std::uint64_t subtree_nodes) {
+  if (kind == 0) return;
+  counters.near_window_site_nodes += subtree_nodes;
+  if (kind == 2) counters.near_window_gated_nodes += subtree_nodes;
+  if (kind == 3) counters.near_window_extended_nodes += subtree_nodes;
+}
+#endif
+
 void Searcher::update_pv(int ply, Move m) {
   PrincipalLine& line = pv_[ply];
   const PrincipalLine& child = pv_[ply + 1];
@@ -173,6 +182,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // it neither cuts on nor writes this node's TT entry, and skips the
   // node-level pruning, which would answer for the whole node.
   const bool withheld = !f.withheld_move.is_none();
+  // The near-window extension (idea 60) is available once per line, and not
+  // inside a null move's verification search, which never chooses a move.
+  f.near_window_taken = f.after_null || (ply > 0 && frames_[ply - 1].near_window_taken);
 
   // Draws: repetition (one earlier occurrence is enough inside the search),
   // insufficient material, and the 50-move rule unless this move is mate.
@@ -344,6 +356,48 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         FORK_STAT(++counters.negative_extensions);
       }
     }
+  }
+
+  // The near-window extension (idea 60; DESIGN.md, "Search constants",
+  // NearWindowMargin): a depth-1 node whose static evaluation lies within
+  // NearWindowMargin of the nearest finite bound of its window (window_gap,
+  // idea 59 step 1's measure) is searched one ply deeper instead of trusting
+  // that evaluation one ply from the horizon. The decision comes after the
+  // node-level pruning: reverse futility has already trusted a TT-refined
+  // eval far above beta, and a node futile at depth 1 (a TT-refined eval far
+  // below alpha) is not extended, so the extension only replaces trust in the
+  // static evaluation; the null move, the no-move reduction and the singular
+  // test keep the node's own depth. From here on the node is a depth-2 node:
+  // the move loop's pruning, its children, the history bonus and the TT
+  // entry's depth. At most once per line (near_window_taken). Stats builds
+  // evaluate the gate in shadow, with the switch off too.
+#ifdef FORK_SEARCH_STATS
+  const bool near_window_look = true;
+  int near_window_kind = 0;  // tally_near_window's kind
+  const std::uint64_t near_window_start = nodes_;
+#else
+  const bool near_window_look = switches.use_near_window_extension;
+#endif
+  if (near_window_look && depth == 1 && !in_check && !withheld &&
+      !(switches.use_futility && can_prune && !is_tb_or_mate(alpha) &&
+        prune_eval + FutilityOffset + FutilityGrowth <= alpha)) {  // futility's test at depth 1
+    const int gap = window_gap(f.static_eval, alpha, beta);
+    const bool in_margin = gap >= 0 && gap <= NearWindowMargin;
+    const bool extend = in_margin && switches.use_near_window_extension && !f.near_window_taken;
+    if (extend) {
+      depth = 2;
+      f.near_window_taken = true;
+    }
+#ifdef FORK_SEARCH_STATS
+    ++counters.near_window_sites;
+    near_window_kind = extend ? 3 : in_margin ? 2 : 1;
+    if (in_margin) {
+      ++counters.near_window_gated;
+      counters.near_window_gated_reused += tt_hit && hit.eval != ScoreNone;
+      counters.near_window_extensions += extend;
+      counters.near_window_blocked += !extend && f.near_window_taken;
+    }
+#endif
   }
 
   // The selector checks the TT move (a colliding entry's move may not be
@@ -525,6 +579,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // not (the guard above prevents it; this keeps the result right regardless).
   // Without its withheld move a node may have none left: it fails low, so the
   // withheld move counts as singular.
+  FORK_STAT(tally_near_window(near_window_kind, nodes_ - near_window_start));
   if (moves_seen == 0) return withheld ? alpha : in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
   best = std::clamp(best, table_floor, table_ceiling);
@@ -699,6 +754,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   stopped_ = false;
   unresolved_fail_high_ = NoMove;
   frames_[0].arrival = NoArrival;  // the root has none (the follow table's arrival at ply 1)
+  frames_[0].near_window_taken = false;  // a probe_zero_window root may have taken it
 
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);

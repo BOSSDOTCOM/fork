@@ -187,6 +187,17 @@ SearchBenchResult run_search_bench() {
                c.singular_tests
                    ? 100.0 * static_cast<double>(c.singular_extended) / static_cast<double>(c.singular_tests)
                    : 0.0);
+  std::fprintf(stderr,
+               "stats: near-window sites %llu, gated %llu (reused eval %llu), extended %llu, blocked %llu; "
+               "subtree nodes: sites %llu, gated not extended %llu, extended %llu\n",
+               static_cast<unsigned long long>(c.near_window_sites),
+               static_cast<unsigned long long>(c.near_window_gated),
+               static_cast<unsigned long long>(c.near_window_gated_reused),
+               static_cast<unsigned long long>(c.near_window_extensions),
+               static_cast<unsigned long long>(c.near_window_blocked),
+               static_cast<unsigned long long>(c.near_window_site_nodes),
+               static_cast<unsigned long long>(c.near_window_gated_nodes),
+               static_cast<unsigned long long>(c.near_window_extended_nodes));
   for (int d = 1; d < SearchCounters::CutoffDepths; ++d) {
     std::fprintf(stderr, "stats: quiet cutoffs at depth %d by quiet index:", d);
     for (int i = 0; i < SearchCounters::CutoffIndices; ++i)

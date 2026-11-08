@@ -1944,6 +1944,10 @@ until measured; new names and constants go through the screens before use.
   or the SPRT fails (H0 or the futility stop).
 - **phase:** Phase 4, after item 8a, before idea 59's step 3. **metric:**
   the measured node cost, the head-to-head pick, the design R SPRT (and LTC:
-  an extension, on the LTC-sensitive list). **status:** untested (plan only,
-  owner, 2026-11-07). **runtime cost:** possible (more nodes per move at
+  an extension, on the LTC-sensitive list). **status:** built behind its switch
+  `use_near_window_extension` (off; branch idea60/extension, 2026-11-07): the gate
+  on the static evaluation (step 1's window_gap), decided after reverse futility
+  and skipped at nodes futile at depth 1, null-move verification subtrees
+  excluded, `NearWindowMargin` 10 (head-to-head branches idea60/m10 and
+  idea60/m25); untested (no SPRT yet). **runtime cost:** possible (more nodes per move at
   equal depth; nps unchanged). **earliest phase:** Phase 4.
