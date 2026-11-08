@@ -2055,6 +2055,16 @@ until measured; new names and constants go through the screens before use.
   Linked follow-ups (the boundary controller, boundary distillation,
   conformal margins, closeness-weighted base training, site selection and
   the gate policy as an evolution target) are listed under idea 59.
+
+  **Independence from idea 59's cost gate** (owner, 2026-11-08): the
+  refiner-independent applications proceed whatever step 3's cost gate
+  decides: idea 60 (the near-window extension), window-aware LMR (part 5),
+  root-gap time management (part 6), window-gated tablebase probing (part
+  7), near-bound TT replacement (part 8), near-window data saving (part 9),
+  conformal margins (follow-up 3) and closeness-weighted base training
+  (follow-up 4). **If step 3 pauses**, part 1 (refiner-checked borderline
+  pruning) switches to a short verification-search variant: a near-threshold
+  prune is confirmed by a short search instead of a refiner call.
 - **basis:** idea 59's control split (2026-11-08, ideas.md idea 59): at
   equal call rate the window-gated refiner beat a random gate by about 22
   Elo at fixed nodes, and a constant shift lost, so a better evaluation
