@@ -123,8 +123,10 @@ struct SearchQuota {
 //   check) has a static evaluation within LmrWindowBand of alpha (the
 //   child's window_gap on its zero window) is reduced LmrWindowRelief ply
 //   less at nodes at least LmrWindowMinDepth deep, never below no reduction
-//   (ideas.md idea 61 part 5). Off:
-//   untested (built 2026-11-08 for its head-to-head band and design R SPRT).
+//   (ideas.md idea 61 part 5). On in this head-to-head candidate only
+//   (branches idea61/lmr-b25, -b50, -b10 and -b10d: the switch and the
+//   defaults of LmrWindowBand and LmrWindowMinDepth are all they change);
+//   untested.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -155,7 +157,7 @@ struct SearchQuota {
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
-  X(use_window_aware_lmr, UseWindowAwareLmr, false)
+  X(use_window_aware_lmr, UseWindowAwareLmr, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

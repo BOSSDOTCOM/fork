@@ -480,7 +480,7 @@ namespace forkeng::test {
 // The minimum depth (LmrWindowMinDepth, 0 by default: every depth) is
 // checked here at the build's default and in tuning builds at other values.
 TEST_CASE("pruning", "window-aware LMR: one ply less, within the band only") {
-  CHECK(!SearchSwitches{}.use_window_aware_lmr);  // off: untested (idea 61 part 5)
+  CHECK(SearchSwitches{}.use_window_aware_lmr);  // on: a head-to-head candidate (idea 61 part 5)
   CHECK_EQ(LmrWindowRelief, 1);
   const int b = LmrWindowBand;
   const int d = LmrWindowMinDepth;
