@@ -125,9 +125,10 @@ struct SearchQuota {
 //   (time_budget.hpp; §5.6 step 10, think tank R8): use_stability_time alone
 //   by best-move stability (variant a), both by stability and the best
 //   move's every-pass node share (variant b); use_share_time alone does
-//   nothing. Built for a head-to-head of (a) against (b), then the
-//   winner's SPRT (owner, 2026-11-07). Branch tm/b: variant (b) on by
-//   default, for the head-to-head only (tm/node-share has both off).
+//   nothing. (b) won the head-to-head against (a) and is on (both
+//   switches) since its SPRTs against off passed: STC +18.69 +/- 7.18 Elo
+//   after 3,200 games, LTC +10.23 +/- 5.14 Elo after 4,992 games, design R
+//   [0, 6]; 2026-11-08.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \

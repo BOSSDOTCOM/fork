@@ -1021,7 +1021,7 @@ LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
   check relief stays on. **Closed by the owner** (2026-11-06): check relief
   stays on, and the filler is not run further.
 
-### 2026-11-08 time management (think tank R8, idea tm-r8): head-to-head (a) against (b), then the design R SPRT of (b) against off (owner)
+### 2026-11-08 time management (think tank R8, idea tm-r8): head-to-head (a) against (b), then the design R SPRT of (b) against off (owner): H1 at STC and LTC, adopted
 
 - Variants behind two switches (tm/node-share c3780dc, switches off;
   bench 14,149,617 / 1cb0717f040c294d): (a) stability only (tm/a ccdf814),
@@ -1041,6 +1041,7 @@ LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
 | Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
 |---|---|---|---|---|---|---|
 | STC 8+0.08, design R [0, 6] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), (b) against off | 42503358810 (stage 2), 42504937998 (3) | 3,200 (no time losses, no abnormal ends) | **+18.69 ± 7.18** | +31.40 ± 12.04 | [37, 319, 738, 447, 59] | **H1 accepted** (LLR 4.52) after stage 3, 12:46 PM EST |
+| LTC 40+0.4, design R [0, 6], cap 6 (Hash 64, Syzygy 3-4-5, UHO book, seed 20261027, fresh openings from stage 4), (b) against off | 42509883303 (stage 4), 42516750821 (5), 42523612679 (6) | 4,992 (no time losses, no abnormal ends) | **+10.23 ± 5.14** | +19.22 ± 9.64 | [15, 561, 1214, 674, 32] | **H1 accepted** (LLR 4.02) after stage 6, 5:30 PM EST |
 
 - Predicted beforehand (UNVERIFIED model): +3 to +4 Elo at STC; the result
   is far above it. Time management is on the LTC list: its LTC SPRT
@@ -1049,6 +1050,10 @@ LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
   2026-11-08: adopt into phase-4 only after LTC passes). Time management
   does not run in data generation (node-limited), so its adoption does not
   touch the labeller.
+- **(b) adopted into phase-4** after the LTC pass (owner's rule of
+  2026-11-08): tm/b merged, `UseStabilityTime` and `UseShareTime` on by
+  default, both kept as switches until the Phase 4 re-validation; bench
+  unchanged (14,149,617 / 1cb0717f040c294d).
 
 ### 2026-11-08 idea 60 (near-window extension): head-to-head 10 against 25 cp, then the design R SPRT of 10 cp against off (owner): H0, retired
 
