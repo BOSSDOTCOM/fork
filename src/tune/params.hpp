@@ -28,7 +28,9 @@
 // X(name, default, lowest, highest, step), in groups: aspiration and the
 // iteration rule; reverse futility and the null move; endgame tables; late
 // move reductions and pruning; futility and SEE pruning; the singular test;
-// window-aware LMR's band (idea 61 part 5; DESIGN.md "Search constants");
+// window-aware LMR's band and minimum depth (idea 61 part 5; the band's range
+// covers the owner's variants 10, 25 and 50 cp, an exception to the
+// half-to-twice rule, DESIGN.md "Search constants");
 // history; the TT
 // victim policy; the time budget.
 #define FORK_SEARCH_PARAMS(X)             \
@@ -57,7 +59,9 @@
   X(SingularMinDepth, 6, 4, 12, 1)        \
   X(SingularEntrySlack, 3, 0, 6, 1)       \
   X(SingularMarginPerPly, 6, 3, 12, 1)    \
-  X(NoMoveReduceMinDepth, 8, 2, 10, 1)      X(LmrWindowBand, 25, 12, 50, 2)         \
+  X(NoMoveReduceMinDepth, 8, 2, 10, 1)    \
+  X(LmrWindowBand, 25, 6, 50, 2)          \
+  X(LmrWindowMinDepth, 0, 0, 12, 1)       \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 8, 1)              \

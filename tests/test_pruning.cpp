@@ -477,17 +477,21 @@ namespace forkeng::test {
 // the gap band + 1 relieves; without both the "already unreduced" test and
 // the cap at new_depth (with a one-ply relief either alone suffices), an
 // unreduced move is extended; with gap -1 counted, a mate alpha relieves.
+// The minimum depth (LmrWindowMinDepth, 0 by default: every depth) is
+// checked here at the build's default and in tuning builds at other values.
 TEST_CASE("pruning", "window-aware LMR: one ply less, within the band only") {
   CHECK(!SearchSwitches{}.use_window_aware_lmr);  // off: untested (idea 61 part 5)
   CHECK_EQ(LmrWindowRelief, 1);
   const int b = LmrWindowBand;
-  CHECK_EQ(window_relieved_depth(3, 6, 0), 4);
-  CHECK_EQ(window_relieved_depth(3, 6, b), 4);
-  CHECK_EQ(window_relieved_depth(3, 6, b + 1), 3);
-  CHECK_EQ(window_relieved_depth(3, 6, -1), 3);
-  CHECK_EQ(window_relieved_depth(1, 6, b), 2);
-  CHECK_EQ(window_relieved_depth(5, 6, 0), 6);  // to no reduction, never beyond
-  CHECK_EQ(window_relieved_depth(6, 6, 0), 6);  // nothing to relieve
+  const int d = LmrWindowMinDepth;
+  if (d > 0) CHECK_EQ(window_relieved_depth(3, 6, 0, d - 1), 3);  // shallower than the minimum
+  CHECK_EQ(window_relieved_depth(3, 6, 0, d), 4);
+  CHECK_EQ(window_relieved_depth(3, 6, b, d), 4);
+  CHECK_EQ(window_relieved_depth(3, 6, b + 1, d), 3);
+  CHECK_EQ(window_relieved_depth(3, 6, -1, d), 3);
+  CHECK_EQ(window_relieved_depth(1, 6, b, d), 2);
+  CHECK_EQ(window_relieved_depth(5, 6, 0, d), 6);  // to no reduction, never beyond
+  CHECK_EQ(window_relieved_depth(6, 6, 0, d), 6);  // nothing to relieve
   // The child's gap on its zero window [-alpha - 1, -alpha]: the distance of
   // the move's evaluation from alpha, and -1 for a mate or tablebase alpha.
   const int alpha = 40;
@@ -539,6 +543,31 @@ TEST_CASE("pruning", "window-aware LMR: the band is a tuning parameter") {
   CHECK(narrow != wide);
   CHECK(set_param("LmrWindowBand", find_param("LmrWindowBand")->default_value));
 }
+
+// Tuning builds: the minimum depth is a parameter too (the owner's variant 4,
+// band 10 cp at nodes at least D deep, D measured at 6, 8 and 10). Below D
+// nothing is relieved; from D on the relief applies; and it reaches the
+// search: at D = 6 the trees differ both from D = 0 and from the switch off
+// (fault check: a gate that ignores the depth relieves below D and leaves
+// the trees at D = 6 equal to D = 0's).
+TEST_CASE("pruning", "window-aware LMR: the minimum depth is a tuning parameter") {
+  CHECK_EQ(find_param("LmrWindowMinDepth")->default_value, 0);
+  CHECK(set_param("LmrWindowMinDepth", 8));
+  CHECK_EQ(window_relieved_depth(3, 6, 0, 7), 3);
+  CHECK_EQ(window_relieved_depth(3, 6, 0, 8), 4);
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_window_aware_lmr = true;
+  SearchSwitches off;
+  const int depth = Optimized ? 10 : 7;
+  CHECK(set_param("LmrWindowMinDepth", 6));
+  const std::vector<std::uint64_t> deep_only = fx.tree_sizes(on, depth);
+  CHECK(set_param("LmrWindowMinDepth", 0));
+  const std::vector<std::uint64_t> every_depth = fx.tree_sizes(on, depth);
+  CHECK(deep_only != every_depth);
+  CHECK(deep_only != fx.tree_sizes(off, depth));
+  CHECK(set_param("LmrWindowMinDepth", find_param("LmrWindowMinDepth")->default_value));
+}
 #endif
 
 #ifdef FORK_SEARCH_STATS
@@ -547,8 +576,8 @@ TEST_CASE("pruning", "window-aware LMR: the band is a tuning parameter") {
 // relieves nothing (the stats build's bench parity shows that the shadow
 // leaves the tree as it is: the lent value is the child's own).
 // With the switch on, every gated move is relieved (each site is a reduced
-// move), and the gated count is the bins up to the band (25 or 50 cp, the
-// head-to-head candidates, are both bin edges).
+// move), and the gated count is the bins up to the band (10, 25 and 50 cp,
+// the owner's variants, are all bin edges; at every depth by default).
 // The gap is measured from alpha on the right side: in positions where one
 // side leads (bench positions, search_bench_fens, whose static evaluation is
 // at least 300 cp either way, so alpha lies far from zero), reduced searches
@@ -576,7 +605,11 @@ TEST_CASE("pruning", "window-aware LMR: the stats counters") {
     CHECK(c.lmr_window_gated > 0);
     std::uint64_t within = 0;
     for (int i = 0; i <= band_bin; ++i) within += c.lmr_window_gap_bins[i];
-    CHECK_EQ(c.lmr_window_gated, within);
+    // With a minimum depth above LMR's own, only the deep sites are gated.
+    if (LmrWindowMinDepth <= LmrMinDepth)
+      CHECK_EQ(c.lmr_window_gated, within);
+    else
+      CHECK(c.lmr_window_gated <= within);
     CHECK_EQ(c.lmr_window_relieved, on ? c.lmr_window_gated : 0u);
     for (int i = 0; i < SearchCounters::LmrWindowBins; ++i)
       CHECK(c.lmr_window_research_bins[i] <= c.lmr_window_gap_bins[i]);

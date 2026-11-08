@@ -480,7 +480,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // Window-aware LMR (ideas.md idea 61 part 5; DESIGN.md "Search
         // constants", LmrWindowBand): a reduced move whose child's static
         // evaluation lies within LmrWindowBand of alpha is reduced one ply
-        // less (window_relieved_depth). The evaluation is the child's own:
+        // less (window_relieved_depth), at nodes at least LmrWindowMinDepth
+        // deep (0: at every depth). The evaluation is the child's own:
         // its TT entry's, or computed here and lent to the child
         // (PlyFrame::lent_eval), which then does not compute it again; the
         // gap is the child's window_gap on its zero window, so a mate or
@@ -502,11 +503,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
             lent = true;
           }
           const int gap = window_gap(child_eval, -alpha - 1, -alpha);
-          const int relieved = window_relieved_depth(reduced, new_depth, gap);
+          const int relieved = window_relieved_depth(reduced, new_depth, gap, depth);
 #ifdef FORK_SEARCH_STATS
           ++counters.lmr_window_sites;
           counters.lmr_window_reused += reused;
-          counters.lmr_window_gated += gap >= 0 && gap <= LmrWindowBand;
+          counters.lmr_window_gated += gap >= 0 && gap <= LmrWindowBand && depth >= LmrWindowMinDepth;
           counters.lmr_window_relieved += switches.use_window_aware_lmr && relieved != reduced;
           window_bin = gap < 0 ? SearchCounters::LmrWindowBins - 1 : SearchCounters::LmrWindowBins - 2;
           for (int i = 0; i < 4 && gap >= 0; ++i)

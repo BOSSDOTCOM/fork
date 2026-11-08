@@ -2088,6 +2088,11 @@ until measured; new names and constants go through the screens before use.
   searches beat alpha 6.1% (within 10 cp) down to 0.11% (beyond 100 cp) of
   the time. Bench cost at fixed depth +29.6% at 25 cp and +49.7% at 50, above
   the ~15% line, so M2 (the node cost at equal depth on game positions) comes
-  before any game. If idea 60 passes too, the two need a combined test.
-  Untested (no SPRT yet; the constant screen pending). **runtime cost:** possible
+  before any game, over the owner's four variants (2026-11-08): bands 25, 50
+  and 10 at every depth, and 10 at nodes at least D deep (`LmrWindowMinDepth`,
+  D = 6, 8 or 10 by a declared rule); the variants under the ~15% line go to
+  the head-to-head (none: back to the owner). Constant screen passed
+  (2026-11-08); nearest relative Stockfish 5f7348f0 (node eval vs alpha in its
+  LMR sum), credited at concept level. If idea 60 passes too, the two need a
+  combined test. Untested (no SPRT yet). **runtime cost:** possible
   (refiner calls at pruning sites). **earliest phase:** Phase 4.

@@ -84,13 +84,14 @@ FORK_TUNABLE_CONSTEXPR int reduction_for(int depth, int move) {
 // plies instead of `new_depth` is reduced LmrWindowRelief ply less when its
 // child's static evaluation lies within LmrWindowBand of alpha (`gap`, the
 // child's window_gap on its zero window; -1 when alpha is in the mate or
-// tablebase band, which never relieves), and never below no reduction.
-// The relief is the minimal unit of Fork's whole-ply depths, as
-// LmrCheckRelief's.
+// tablebase band, which never relieves), at a node of remaining `depth` at
+// least LmrWindowMinDepth (0: every depth LMR reduces at), and never below
+// no reduction. The relief is the minimal unit of Fork's whole-ply depths,
+// as LmrCheckRelief's.
 constexpr int LmrWindowRelief = 1;
 
-FORK_TUNABLE_CONSTEXPR int window_relieved_depth(int reduced, int new_depth, int gap) {
-  if (gap < 0 || gap > LmrWindowBand || reduced >= new_depth) return reduced;
+FORK_TUNABLE_CONSTEXPR int window_relieved_depth(int reduced, int new_depth, int gap, int depth) {
+  if (gap < 0 || gap > LmrWindowBand || depth < LmrWindowMinDepth || reduced >= new_depth) return reduced;
   return reduced + LmrWindowRelief < new_depth ? reduced + LmrWindowRelief : new_depth;
 }
 

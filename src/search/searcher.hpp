@@ -122,7 +122,8 @@ struct SearchQuota {
 // - use_window_aware_lmr: a reduced late quiet move whose child (not in
 //   check) has a static evaluation within LmrWindowBand of alpha (the
 //   child's window_gap on its zero window) is reduced LmrWindowRelief ply
-//   less, never below no reduction (ideas.md idea 61 part 5). Off:
+//   less at nodes at least LmrWindowMinDepth deep, never below no reduction
+//   (ideas.md idea 61 part 5). Off:
 //   untested (built 2026-11-08 for its head-to-head band and design R SPRT).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
@@ -153,7 +154,8 @@ struct SearchQuota {
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
-  X(use_no_move_reduction, UseNoMoveReduction, true)       X(use_window_aware_lmr, UseWindowAwareLmr, false)
+  X(use_no_move_reduction, UseNoMoveReduction, true)     \
+  X(use_window_aware_lmr, UseWindowAwareLmr, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -327,7 +329,8 @@ struct SearchCounters {
   // on (the gate is evaluated in shadow), for its first measurement (M1).
   // Sites: reduced late quiet moves whose child is not in check. Reused: of
   // those, the child's static evaluation came from its TT entry. Gated:
-  // within LmrWindowBand of alpha. Relieved: reduced one ply less (switch
+  // within LmrWindowBand of alpha, at a node at least LmrWindowMinDepth
+  // deep. Relieved: reduced one ply less (switch
   // on). The child's gap by bin (at most 10, 25, 50, 100 cp, beyond, and no
   // finite bound), and per bin the reduced searches (still reduced) that
   // beat alpha, which LMR then searches again at full depth.
