@@ -14,6 +14,12 @@ Bench node counts are printed for both sides. They must be equal for a pure
 speed change (`--same-nodes` enforces it); a deliverable that changes the
 search changes them by design, and then only nps is compared.
 
+`--a-args` and `--b-args` add arguments after `bench` for each side (a
+refiner build's `bench MAIN QUIESCE [reused]`, ideas.md 59): one binary can
+then be timed against itself with the refiner's gate off and on, the
+identical-tree method's purest form (the same code and layout; only the
+refiner's calls differ).
+
 Identity checks as in ab.py: each side's expected variant and commit must
 match what `fork version` reports ("variant ... | commit ... |",
 cmake/build_id.cmake), the SHA-256 of each file is re-checked before every
@@ -22,6 +28,7 @@ given (A/A noise runs).
 
 usage: python3 -I bench/ab_search.py A/fork B/fork --a-variant baseline --a-commit 1234abc
            --b-variant baseline --b-commit 5678def [--rounds 6] [--core 4] [--same-nodes] [--allow-identical]
+           [--a-args "-1 -1"] [--b-args "25 25"]
 """
 
 import argparse
@@ -55,9 +62,10 @@ def commit_matches(expected, actual):
 
 
 class Side:
-    def __init__(self, label, path, variant, commit):
+    def __init__(self, label, path, variant, commit, args=()):
         self.label, self.path = label, os.path.abspath(path)
         self.variant, self.commit = variant, commit
+        self.args = list(args)
         if not os.path.isfile(self.path):
             fail(f"{label}: no such file {self.path}")
         if len(commit.removesuffix("-dirty")) < 7:
@@ -81,7 +89,7 @@ class Side:
     def run(self, core):
         self.check_identity()
         pin = (lambda: os.sched_setaffinity(0, {core})) if hasattr(os, "sched_setaffinity") else None
-        out = subprocess.run([self.path, "bench"], capture_output=True, text=True, check=True,
+        out = subprocess.run([self.path, "bench", *self.args], capture_output=True, text=True, check=True,
                              preexec_fn=pin).stdout
         nodes = int(re.search(r"nodes (\d+)", out).group(1))
         nps = int(re.search(r"nps (\d+)", out).group(1))
@@ -101,11 +109,13 @@ def main():
     ap.add_argument("--same-nodes", action="store_true", help="fail unless both benches give the same nodes and signature")
     ap.add_argument("--rounds", type=int, default=6)
     ap.add_argument("--core", type=int, default=4)
+    ap.add_argument("--a-args", default="", help="arguments after `bench` for A (space-separated)")
+    ap.add_argument("--b-args", default="", help="arguments after `bench` for B (space-separated)")
     args = ap.parse_args()
-    sides = {"A": Side("A", args.a, args.a_variant, args.a_commit),
-             "B": Side("B", args.b, args.b_variant, args.b_commit)}
-    if sides["A"].sha == sides["B"].sha and not args.allow_identical:
-        fail("A and B are byte-identical files (pass --allow-identical for an A/A run)")
+    sides = {"A": Side("A", args.a, args.a_variant, args.a_commit, args.a_args.split()),
+             "B": Side("B", args.b, args.b_variant, args.b_commit, args.b_args.split())}
+    if sides["A"].sha == sides["B"].sha and sides["A"].args == sides["B"].args and not args.allow_identical:
+        fail("A and B are byte-identical files with the same arguments (pass --allow-identical for an A/A run)")
     reported = {k: s.check_identity() for k, s in sides.items()}
 
     nps = {"A": [], "B": []}
@@ -120,7 +130,8 @@ def main():
         fail(f"bench differs: A {bench['A']}, B {bench['B']}")
 
     for k, s in sides.items():
-        print(f"{k} = {s.path}\n    variant {s.variant} | commit {reported[k]} | sha256 {s.sha}\n"
+        print(f"{k} = {s.path}" + (f" bench {' '.join(s.args)}" if s.args else "") +
+              f"\n    variant {s.variant} | commit {reported[k]} | sha256 {s.sha}\n"
               f"    bench nodes {bench[k][0]} signature {bench[k][1]}")
     print(f"identity checked before the run and on all {2 * args.rounds} runs; "
           f"{args.rounds} interleaved rounds" + (f", core {args.core}" if hasattr(os, "sched_setaffinity") else ", not pinned"))
