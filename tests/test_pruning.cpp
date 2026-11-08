@@ -547,7 +547,8 @@ TEST_CASE("pruning", "window-aware LMR: the band is a tuning parameter") {
 // relieves nothing (the stats build's bench parity shows that the shadow
 // leaves the tree as it is: the lent value is the child's own).
 // With the switch on, every gated move is relieved (each site is a reduced
-// move), and the gated count is the bins up to the band (25 cp, a bin edge).
+// move), and the gated count is the bins up to the band (25 or 50 cp, the
+// head-to-head candidates, are both bin edges).
 // The gap is measured from alpha on the right side: in positions where one
 // side leads (bench positions, search_bench_fens, whose static evaluation is
 // at least 300 cp either way, so alpha lies far from zero), reduced searches
@@ -558,7 +559,10 @@ TEST_CASE("pruning", "window-aware LMR: the band is a tuning parameter") {
 TEST_CASE("pruning", "window-aware LMR: the stats counters") {
   PruningFixture fx;
   const int depth = Optimized ? 10 : 7;
-  CHECK_EQ(LmrWindowBand, SearchCounters::LmrWindowBinEdges[1]);
+  int band_bin = -1;  // the bin whose upper edge is the band
+  for (int i = 0; i < 4; ++i)
+    if (SearchCounters::LmrWindowBinEdges[i] == LmrWindowBand) band_bin = i;
+  CHECK_MSG(band_bin >= 0, LmrWindowBand);
   for (const bool on : {false, true}) {
     SearchSwitches s;
     s.use_window_aware_lmr = on;
@@ -570,7 +574,9 @@ TEST_CASE("pruning", "window-aware LMR: the stats counters") {
     CHECK_EQ(binned, c.lmr_window_sites);
     CHECK(c.lmr_window_sites > 0 && c.lmr_window_reused > 0 && c.lmr_window_reused < c.lmr_window_sites);
     CHECK(c.lmr_window_gated > 0);
-    CHECK_EQ(c.lmr_window_gated, c.lmr_window_gap_bins[0] + c.lmr_window_gap_bins[1]);
+    std::uint64_t within = 0;
+    for (int i = 0; i <= band_bin; ++i) within += c.lmr_window_gap_bins[i];
+    CHECK_EQ(c.lmr_window_gated, within);
     CHECK_EQ(c.lmr_window_relieved, on ? c.lmr_window_gated : 0u);
     for (int i = 0; i < SearchCounters::LmrWindowBins; ++i)
       CHECK(c.lmr_window_research_bins[i] <= c.lmr_window_gap_bins[i]);
