@@ -3834,6 +3834,36 @@ searches at 2M nodes, TT and history carried; 18,782 rows at depth >= 8,
   stability signal, which S1 held in reserve, deserves its own term; the
   score change adds almost nothing at depth >= 8.
 
+**X6's time-management curve** (2026-11-07; `tools/measure/tm_curve.py`
+on X6's runs; §5.6 step 10, R8, built behind switches on tm/node-share).
+The owner's two variants, (a) stability alone and (b) stability with the
+every-pass share, each as Fork's own logistic fit with depth added and
+divided by the depth-only fit (depth normalises, no signal of its own:
+owner, 2026-11-07), scaled by a mean-spend balance, floor 360 per mille:
+
+| Fit (depth >= 8, 18,782 rows) | Coefficients (logit) | AUC / out of sample |
+|---|---|---|
+| (a) stability + depth | 0.963763, −0.238696, −0.127705 | 0.763 / 0.763 |
+| (b) stability + share_all logit + depth | 0.868553, −0.204558, −0.177470, −0.132415 | 0.771 / 0.771 |
+| depth alone (the normaliser) | 0.567490, −0.211730 | 0.665 / 0.665 |
+| literal (a): stability alone | −0.319886, −0.273118 | 0.749 / 0.748 |
+| literal (b): stability + share_all logit | −0.433426, −0.246841, −0.150025 | 0.757 / 0.755 |
+
+- Depth cap 19 (the last depth with at least 1% of the rows).
+- Mean-spend balance (X6's 2,086 searches replayed with nodes as the clock
+  under the engine's stop rules, bisected so the mean spend equals the plain
+  soft limit's) at 100k / 250k / 500k-node soft budgets: (a) 1.087 / 1.068
+  / 1.083, mean **1.079**; (b) 1.042 / 1.017 / 1.052, mean **1.037**. The
+  literal fits drift with the budget: 1.157 / 1.313 / 1.522 (a) and 1.096 /
+  1.245 / 1.473 (b), which is why depth normalises.
+- At that balance the move at the stop equals the 2M-node final move more
+  often: at 250k, 0.854 plain, 0.875 (a), 0.874 (b) (in sample, not Elo; at
+  500k the variants reach the data's 2M-node end more often, which flatters
+  them).
+- Spearman ρ² of the scale against the label: 0.058 (a), 0.066 (b); by the
+  reading above (M5's table, interpolated, UNVERIFIED) about +3 to +4 Elo
+  at STC for either, declared before any game.
+
 **Results, X10** (2026-11-07; stats build 9e01f26; 120 games of
 `s512ppr2-stc`, seed 20261109, disjoint from X2's and X6's; 7,876
 test-engine searches at 200k nodes; 1 in 512 candidates sampled: 893,987
