@@ -6,8 +6,10 @@ labeller policy).
   (the default network and every adopted change: the tip of `branch`; a PGO build of it, or the previous
   part's own binary when no engine file changed since that binary's commit), the standing settings, the
   next unused local seed, and the rest of the generation's target (the previous part's target minus what it
-  generated). preflight() refuses while any data-generation job lives (either supervisor) or when the disk
-  margin (config.py) is not met.
+  generated). The openings are the previous part's, or the book chosen for the next parts with
+  set_next_openings() (next-openings.json in the state folder, its SHA-256 checked against its manifest in
+  the repo). preflight() refuses while any data-generation job lives (either supervisor), when the disk
+  margin (config.py) is not met, or when the openings' WSL copy is missing or hashes differently.
 - start(): writes the part's launch files into the state folder and starts `start_part.sh` through the WSL
   supervisor (jobctl.py start datagen NAME), then the watchdog (watchdog.py: keeps Windows awake and runs
   the auto-stop).
@@ -34,6 +36,7 @@ from runner import PROBE
 
 HERE = Path(__file__).resolve().parent
 LOCAL_SEED_LIMIT = 10 ** 12  # cloud seeds start 10^12 apart from every local run (DESIGN.md, 2026-10-30)
+NEXT_OPENINGS = 'next-openings.json'  # in the state folder: the openings book the next parts start from
 
 
 class Refused(Exception):
@@ -258,25 +261,35 @@ class GenerationControl:
             have = {x['name'] for x in f.get('files', [])}
             reuse_ok = {'fork', 'fork_datagen'} <= have
         openings = info.get('openings') or {}
-        ofile = openings.get('file') or st.get('openings')
-        osha = openings.get('sha256')
-        if not ofile:  # a copy's run json may not name them: the generation's last sealed part's openings
+        prev_ofile = openings.get('file') or st.get('openings')
+        prev_osha = openings.get('sha256')
+        if not prev_ofile:  # a copy's run json may not name them: the generation's last sealed part's openings
             same = [m for k, m in sealed.items() if P.part_key(k)[0] == gen]
             if not same:
                 raise Refused(f'no openings known for {last}')
             m = max(same, key=lambda m: P.part_key(m['run']))
-            ofile, osha = m['openings']['file'], m['openings']['sha256']
-        if not osha:
-            om = self.repo / 'data' / 'manifests' / f'openings-{Path(ofile).stem}.json'
-            try:
-                osha = json.loads(om.read_text(encoding='utf-8'))['output_sha256']
-            except (OSError, ValueError, KeyError):
-                raise Refused(f'no SHA-256 known for the openings {ofile}')
+            prev_ofile, prev_osha = m['openings']['file'], m['openings']['sha256']
+        openings = self.next_openings()  # the owner's choice for the next parts, if any
+        if openings:
+            om = self._openings_manifest(openings['file'])
+            if om['output_sha256'] != openings['sha256']:
+                raise Refused(f"{NEXT_OPENINGS} gives the SHA-256 {openings['sha256']} for {openings['file']}, its "
+                              f"manifest {om['output_sha256']}")
+            ofile, osha = openings['file'], openings['sha256']
+            osource = f"{NEXT_OPENINGS} (set {P.est(openings.get('set_at'))})"
+        else:  # the previous part's; its manifest must be in the repo (the seal reads it)
+            om = self._openings_manifest(prev_ofile)
+            if prev_osha and prev_osha != om['output_sha256']:
+                raise Refused(f"{last} used {prev_ofile} with the SHA-256 {prev_osha}, its manifest gives "
+                              f"{om['output_sha256']}")
+            ofile, osha, osource = prev_ofile, om['output_sha256'], f'previous part ({last})'
         standing = dict(self.cfg['standing'])
         settings = {**standing, 'threads': int(threads or self.cfg['threads']), 'seed': seed,
-                    'positions_target': target}
+                    'positions_target': target, 'openings': ofile}
         differs = {k: (st.get(k), v) for k, v in standing.items() if st.get(k) != v}
         name = P.next_part(last)
+        if ofile != prev_ofile:
+            differs['openings'] = (prev_ofile, ofile)
         return {
             'name': name, 'generation': gen, 'previous': last, 'previous_source': source,
             'previous_positions': info.get('positions'), 'previous_target': st.get('positions_target'),
@@ -285,9 +298,64 @@ class GenerationControl:
             'mode': 'reuse' if reuse_ok else 'build', 'engine_commit': prev_commit if reuse_ok else commit,
             'engine_changed': changed, 'reuse_dir': prev_dir if reuse_ok else None,
             'dir': f"{self.cfg['wsl_data']}/{P.part_dir(name)}", 'openings': ofile, 'openings_sha256': osha,
+            'openings_source': osource,
             'settings': settings, 'differs_from_previous': differs,
             'need_bytes': int(target * self.cfg['bytes_per_position']),
         }
+
+    def next_openings(self):
+        """The openings book chosen for the next parts ({file, sha256, set_at, reason}), or None: the previous
+        part's. A file that is there but unreadable refuses, never falling back to the old book."""
+        f = self.state / NEXT_OPENINGS
+        if not f.exists():
+            return None
+        try:
+            data = json.loads(f.read_text(encoding='utf-8'))
+        except (OSError, ValueError) as e:
+            raise Refused(f'{f} is unreadable ({e}); fix or clear it') from None
+        if not isinstance(data, dict) or not data.get('file') or not data.get('sha256'):
+            raise Refused(f'{f} does not name a file and its sha256; fix or clear it')
+        return data
+
+    def set_next_openings(self, file, sha256=None, reason=''):
+        """Chooses the openings book of the next parts (None: the previous part's again). The book needs its
+        manifest in the repo (data/manifests/openings-<name>.json) with this SHA-256; its WSL copy is checked
+        by the preflight."""
+        f = self.state / NEXT_OPENINGS
+        if file is None:
+            try:
+                f.unlink()
+            except FileNotFoundError:
+                pass
+            return None
+        if not file or any(c in file for c in '/\\') or '..' in file:
+            raise Refused(f'give the openings file by its name, not a path: {file!r}')
+        om = self._openings_manifest(file)
+        if not re.fullmatch(r'[0-9a-f]{64}', str(sha256 or '')):
+            raise Refused("give the openings' SHA-256 (64 hex digits) to check against their manifest")
+        if sha256 != om['output_sha256']:
+            raise Refused(f"the SHA-256 {sha256} is not the manifest's {om['output_sha256']} for {file}")
+        data = {'file': file, 'sha256': sha256, 'set_at': self.now(), 'reason': reason}
+        self.state.mkdir(parents=True, exist_ok=True)
+        tmp = self.state / (NEXT_OPENINGS + '.tmp')
+        tmp.write_text(json.dumps(data, indent=1, sort_keys=True), encoding='utf-8')
+        os.replace(tmp, f)
+        return data
+
+    def _openings_manifest(self, file):
+        """The repo's manifest of an openings book, which the seal needs too."""
+        f = self.repo / 'data' / 'manifests' / f'openings-{Path(file).stem}.json'
+        try:
+            om = json.loads(f.read_text(encoding='utf-8'))
+        except (OSError, ValueError) as e:
+            raise Refused(f'the openings {file} have no readable manifest {f.name} in the repo ({type(e).__name__}); '
+                          'commit it first (the seal needs it)') from None
+        if om.get('output') != file or not om.get('output_sha256') or not om.get('positions'):
+            raise Refused(f'{f.name} is not the manifest of {file} (output, output_sha256, positions)')
+        return om
+
+    def _wsl_openings_path(self, plan, home):
+        return f"{self.cfg['openings_wsl'].replace('~', home, 1)}/{plan['openings']}"
 
     def preflight(self, plan, probe):
         """The reasons a start is refused (none: it may start)."""
@@ -319,6 +387,13 @@ class GenerationControl:
                        f"sealed copy) plus the {gb(reserve)} margin")
         if self.read_state(plan['name'], 'part.json'):
             why.append(f"{plan['name']} was started before (state folder {self.part_state(plan['name'])})")
+        p = self._wsl_openings_path(plan, probe['home'])  # the file start_part.sh checks and fork_datagen reads
+        r = self.runner.read(self.wsl('sha256sum', p), timeout=300)
+        x = r.out.split()[0] if r.rc == 0 and r.out.split() else None
+        if x is None:
+            why.append(f"the openings {p} could not be hashed in WSL ({r.rc}): {(r.err or r.out).strip()[:200]}")
+        elif x != plan['openings_sha256']:
+            why.append(f"the openings {p} in WSL hash to {x}, the plan wants {plan['openings_sha256']}")
         return why
 
     # ------------------------------------------------------------ controls
@@ -339,7 +414,7 @@ class GenerationControl:
             'NET': plan['net'], 'WANT_NODES': plan['bench_nodes'], 'WANT_SIGNATURE': plan['bench_signature'],
             'CLONE': self.cfg['wsl_build_clone'].replace('~', home, 1),
             'BUILDS': f"{self.cfg['wsl_data'].replace('~', home, 1)}/{name}-builds/pgo",
-            'OPENINGS': f"{self.cfg['openings_wsl'].replace('~', home, 1)}/{plan['openings']}",
+            'OPENINGS': self._wsl_openings_path(plan, home),
             'OPENINGS_SHA256': plan['openings_sha256'], 'TABLES': self.cfg['tables_wsl'].replace('~', home, 1),
             'POSITIONS': st['positions_target'], 'NODES': st['nodes'], 'THREADS': st['threads'],
             'SEED': st['seed'], 'HASH_MB': st['hash_mb'], 'SHARD_MB': st['shard_mb'],

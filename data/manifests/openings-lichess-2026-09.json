@@ -1,0 +1,31 @@
+{
+  "tool": "tools/datagen/datagen_openings.py",
+  "tool_commit": "a143b3c88f9c8553dec3f52f0db19315058be88b",
+  "source": "lichess_db_standard_rated_2026-09.pgn.zst",
+  "source_sha256": "1de8eb64fed443f4be310c779e8d60a13bcfc6e3b104bcb39a018eb056edec89",
+  "settings": {
+    "seed": 20261028,
+    "min_rating": 2000,
+    "ply_min": 8,
+    "ply_max": 16,
+    "random_min": 2,
+    "random_max": 4,
+    "limit_games": 0
+  },
+  "filters": "rated standard games, no BOT title, both ratings >= min_rating; comments never read",
+  "stats": {
+    "games": 89616462,
+    "not_rated": 421322,
+    "not_standard": 0,
+    "bot": 434571,
+    "below_rating": 74485313,
+    "rating_pass": 14275256,
+    "too_short": 121386,
+    "game_over": 2106,
+    "duplicate": 208343,
+    "written": 13943421
+  },
+  "output": "lichess-2026-09.epd",
+  "output_sha256": "dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef",
+  "positions": 13943421
+}

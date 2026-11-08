@@ -17,7 +17,9 @@
 # decision 2): the kinds search, network and fixed with their bounds,
 # alpha/beta, caps and the futility stop after 2 stages; the declared
 # design cannot change on a restart; the two-try limit per idea and time
-# control class. Uses python3 (or $PYTHON) for the merge and the ledger.
+# control class. Since 2026-11-08: a transient gh failure (injected) of the
+# commit check, the conclusion or the download is retried, its message
+# logged; a lasting one still stops it. Uses python3 (or $PYTHON) for the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -52,7 +54,7 @@ drive() {  # label args...
   local label=$1
   shift
   FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data \
-    FORK_JOBS=${JOBS:-$tmp/$label/jobs} SPRT_UNSUPERVISED=${UNSUPERVISED-1} \
+    FORK_JOBS=${JOBS:-$tmp/$label/jobs} SPRT_UNSUPERVISED=${UNSUPERVISED-1} GH_TRIES=3 GH_RETRY_WAIT=0 \
     bash "$here/sprt_run.sh" "$label" "$@" >"$tmp/$label/out" 2>&1
   echo $? >"$tmp/$label/rc"
 }
@@ -249,6 +251,22 @@ check "tries: and named in the header" grep -q "idea t9 (try 3, owner override: 
 check "tries: three records" [ "$(wc -l <"$tries/tries.jsonl" | tr -d ' ')" = 3 ]
 TC=40+0.4 JOBS=$tries drive r-tries-d --kind search --idea t9 --cap 4 "$sha" "$sha"
 check "tries: an LTC test of the same idea is counted apart" [ "$(rc r-tries-d)" = 0 ]
+
+# 26-29: transient gh failures (2026-11-08: a download and a commit check failed within a minute while
+# GitHub was healthy) are retried: two injected failures each of the commit check, the conclusion and the
+# download, with three tries allowed, still decide the SPRT, and gh's message is in the driver's log.
+setup flaky 0 "$strong"
+for k in api conclusion download; do echo 2 >"$tmp/flaky/flaky.$k"; done
+drive flaky "$sha" "$sha" 0 5
+check "transient gh failures are retried: H1 exits 0" [ "$(rc flaky)" = 0 ]
+check "still one dispatch" [ "$(dispatches flaky)" = 1 ]
+check "gh's message is logged" grep -q "attempt 1 of 3 failed: fake gh: download: connection reset (injected)" "$tmp/flaky/data/flaky/driver.log"
+# 30-31: a lasting failure still stops it, unmerged.
+setup flakyall 0 "$strong"
+echo 9 >"$tmp/flakyall/flaky.download"
+drive flakyall "$sha" "$sha" 0 5
+check "a lasting download failure exits 1" [ "$(rc flakyall)" = 1 ]
+check "it is named, nothing merged" bash -c "grep -q \"run 501's download failed\" '$tmp/flakyall/out' && ! grep -q LLR '$tmp/flakyall/out'"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"

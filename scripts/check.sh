@@ -203,6 +203,21 @@ tool_tests() {  # python | all
     echo "tool tests: tools/datagen skipped (no python-chess or zstandard in $py)" >>"$log"
   fi
   bash scripts/update-test.sh >>"$log" 2>&1 || fail "tool tests: scripts/update-test.sh (update.sh clone mode)"
+  # 2026-11-07: run by `git rebase --exec` in a linked worktree, git's exported GIT_DIR (the worktree's git
+  # directory) reached the toy repositories' commands, which committed, branched, tagged and pushed in the
+  # real repository and its origin. The same setup with a decoy repository, its worktree and its origin: the
+  # test must leave both exactly as they were.
+  decoy=$(mktemp -d)
+  refs() { git -C "$decoy/r" for-each-ref --format='%(refname) %(objectname)'
+           git -C "$decoy/o.git" for-each-ref --format='%(refname) %(objectname)'; }
+  git -c init.defaultBranch=main init -q "$decoy/r" &&
+    git -C "$decoy/r" -c user.name=decoy -c user.email=decoy@example.invalid commit -q --allow-empty -m decoy &&
+    git clone -q --bare "$decoy/r" "$decoy/o.git" && git -C "$decoy/r" remote add origin "$decoy/o.git" &&
+    git -C "$decoy/r" worktree add -q "$decoy/w" -b wb && before=$(refs) &&
+    (cd "$decoy/w" && GIT_DIR="$decoy/r/.git/worktrees/w" bash "$OLDPWD/scripts/update-test.sh") >>"$log" 2>&1 &&
+    [ "$(refs)" = "$before" ] ||
+    { rm -rf "$decoy"; fail "tool tests: scripts/update-test.sh leaks into the repository in GIT_DIR"; }
+  rm -rf "$decoy"
   # The push gate (owner, 2026-11-05): a planted hit of each kind blocks the scan and the push.
   bash scripts/test_scan_push.sh >>"$log" 2>&1 || fail "tool tests: scripts/test_scan_push.sh (the push gate)"
   [ "$1" = all ] || return 0

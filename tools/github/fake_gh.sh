@@ -8,8 +8,19 @@
 # ptnml.<base>.<test> (the counts for runs of that pair, when present; head-to-head pairings).
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
+# flaky.<kind>: that many failures still to inject for api, conclusion or download (2026-11-08).
+flake() {
+  local f=$st/flaky.$1 n
+  [ -f "$f" ] || return 0
+  n=$(cat "$f")
+  [ "$n" -gt 0 ] || return 0
+  echo $((n - 1)) >"$f"
+  echo "fake gh: $1: connection reset (injected)" >&2
+  exit 1
+}
 case "$1 $2" in
   "api "*)
+    flake api
     grep -qx "${2##*/}" "$st/commits" ;;
   "run list")
     if [[ "$*" == *displayTitle* ]]; then
@@ -34,11 +45,13 @@ case "$1 $2" in
     echo $id >"$st/latest" ;;
   "run view")
     if [[ "$*" == *conclusion* ]]; then
+      flake conclusion
       if [ -f "$st/fail.$3" ]; then echo failure; else echo success; fi
     else
       echo completed
     fi ;;
   "run download")
+    flake download
     id=$3
     dir=${!#}  # the last argument, -D's
     . "$st/run.$id"

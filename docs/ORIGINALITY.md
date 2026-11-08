@@ -103,6 +103,7 @@ the date and the part of Fork it informed.
 | 2026-11-05 | Fork KB `docs/kb/search-techniques.md` §3.25 (T34 razoring), §3.19 (T24 quiet history pruning), §3.26 (T36 bad-capture futility), §3.30 (T52 fifty-move eval scaling), §3.33 (T55 the malus balance), §3.21 (T29 double extensions), §3.14 (T17 node types, T19 TT-PV), §3.11 (T12 pawn-structure history) and §3.29 (T51 upcoming-repetition detection: van Kervinck, "A fast software-based method for upcoming cycle detection in search trees", 2013 preprint; Pagh and Rodler, "Cuckoo Hashing", ESA 2001), all clean-room entries | Tier 2's fourth batch (branch tier2/batch4, switches off, placeholder constants): Fork's own forms and names (the horizon drop, the history skip, the bad capture stop, the clock damping, the malus scale, the double extension, the cut-node and PV-trace reductions, the structure history, the cycle draw). The return-move table's 8,192 slots equal the paper's figure: Fork's sizing rule (the smallest power of two with room for about twice its 3,668 keys, a two-slot cuckoo table's usual load) gives the same number, credited here; its key count is half the paper's 7,336 because a move and its reverse share a key, as the paper says. Name screens (two subagent batches, shallow clones of Stockfish, Ethereal, Berserk and Weiss, deleted after): no match except the generic words pawn_key, threatening, minors and rooks. |
 | 2026-11-05 | Fork KB `docs/kb/search-techniques.md` §3.34 (T56) and the owner's naming of the second threat set ("cheaper-attacker") | The cheaper-attacker threat set (use_cheaper_threats, tier2/batch3), measured against the any-attack set: Position::attack_tiers and ThreatSet are Fork's own. |
 | 2026-11-05 | Constant screen of LmrHistoryDivisor 24000 (originality-checker agent; shallow clones of Stockfish, Ethereal, Berserk and Weiss at their current code and every release tag, deleted after) | No match in any of the four; the value is the top of Fork's own pre-declared grid. |
+| 2026-11-07 | The Phase 4 think tank (docs/research/phase4-think-tank/): clean-room surveys written from public release notes, READMEs, documentation, papers, forum posts and commit or PR message text only, never engine source code, recording no other engine's constants (the Stockfish lineage; open-source NNUE engines, with Stormphrax at concept level per the owner's ruling of 2026-11-07; TCEC's public game archive, used for statistics only and deleted afterwards, no figure from it entering training data or constants); each file lists its sources with URLs. The literature cited in ideas.md 48-60 (decision-focused learning, RankNet, conformal prediction, TD(lambda) and TDLeaf, query by committee, mixtures of experts, AlphaZero-style policy priors, probabilistic and Bayesian game-tree search, test-time training, knowledge distillation, classifier cascades and conditional computation, singular extensions and extended futility pruning; Giraffe and a TalkChess discussion for idea 55; HARENN, an outside reference the owner saw, source not located), concepts only, each marked UNVERIFIED where cited from memory | Plans only (the think tank's ranked ideas, the owner's decisions in DESIGN.md §6, ideas 48-60); no code. |
 
 ## Resemblances found in review, and the clean-room fixes
 
@@ -388,6 +389,14 @@ Inputs (DESIGN.md §5.3; KB data-policy.md):
   small enough to test the tool quickly; a recent month is planned before
   generation 1 for more variety and better bot filtering (DESIGN.md
   §5.3, deliverable 1).
+- **Datagen openings: Lichess standard database, 2026-09** (CC0; 89.6 M
+  games, source SHA-256 1de8eb64...; book lichess-2026-09.epd, 13,943,421
+  positions, SHA-256 dab45c9f..., manifest
+  data/manifests/openings-lichess-2026-09.json; built by the same tool with
+  the same filters: moves and headers only, never comments, BOT games
+  dropped, both players rated 2000 or more). Adopted by the owner on
+  2026-11-07 for the part after g3h (at the next natural part boundary);
+  0.125% of its positions are also in the 2016-09 book.
 - **Labels**: Fork's own search (generation 0: the bootstrap evaluation),
   game results, Syzygy WDL.
 

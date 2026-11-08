@@ -37,12 +37,15 @@ SHARD = re.compile(r'^(?P<run>.+)-w(?P<worker>\d{2})-(?P<index>\d{4})\.vf$')
 def complete_games(data):
     """(end, games, positions, unsaved, results[black, draw, white]) over the complete games at the start of a
     viriformat shard: a game is a 32-byte packed board (its result at byte 30) followed by 4-byte records
-    (move, score) and a zero move that ends it."""
+    (move, score) and a zero move that ends it. A board with no pieces (zero occupancy) ends the complete games:
+    no real position has one, and a power loss leaves a shard's tail zero-filled (2026-11-07, g3h)."""
     usable = len(data) // 4 * 4
     w = memoryview(data)[:usable].cast('I')
     n, i, end, games, positions, unsaved = len(w), 0, 0, 0, 0, 0
     res = [0, 0, 0]
     while i + 8 <= n:
+        if not (w[i] | w[i + 1]):  # the occupancy bitboard, the board record's first 8 bytes
+            break
         j, p, u = i + 8, 0, 0
         closed = False
         while j < n:

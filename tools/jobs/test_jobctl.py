@@ -240,6 +240,13 @@ class Supervisor(unittest.TestCase):
                 self.assertEqual(jobctl.live(rec), [], state)
             rec['state'] = 'running'
             self.assertEqual(jobctl.live(rec), [other.pid])
+            # 2026-11-07: the machine went down while g3h ran, so its record still said "running"; after the
+            # reboot its recorded ids (463, 464) were reused and the next part's start was refused. A job that
+            # started before the last boot has no process left, whatever its record says.
+            rec['started'] = '2000-01-01T00:00:00+0000'
+            self.assertEqual(jobctl.live(rec), [])
+            rec['started'] = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+            self.assertEqual(jobctl.live(rec), [other.pid])
         finally:
             other.kill()
             other.wait()
