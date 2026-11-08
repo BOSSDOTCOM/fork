@@ -406,9 +406,9 @@ the job i59s3-window, results in ~/fork-measure/i59s3):**
   call mix at gate (a), not to the validation and test mix: **44.1% main
   search, 55.9% quiescence**, from the oracle's in-game call rates at (a),
   1.68% and 2.13% of nodes (1.68 / 3.81 and 2.13 / 3.81; section 1.1's row
-  "Oracle in-game call rates, 800k nodes, (a)"). The same weights apply to
-  the validation and test metrics of the offline acceptance checks (3.8),
-  the constant-shift baseline (A3) included. h stays 25 cp at main-search
+  "Oracle in-game call rates, 800k nodes, (a)"). (The acceptance metrics
+  first took the same weights; the owner's next decision, below, gives them
+  the deployment weighting instead.) h stays 25 cp at main-search
   sites and 17 cp at quiescence sites. **The normalisation, as the
   orchestrator reads "match the call mix" (recorded as that reading):**
   after the closeness kernel `exp(-g^2 / (2 h^2))`, each stratum gets one
@@ -426,9 +426,48 @@ the job i59s3-window, results in ~/fork-measure/i59s3):**
   The factors make each split's main-search share of the total weight
   0.4409 (checked). **With the factors, training's n_eff (0.468 n) falls
   below idea 48's 0.5 n line (A8, 3.8)**; it was 0.501 n with the kernel
-  alone. h stays as decided; whether A8 judges the kernel's n_eff or the
-  final one is open for the owner. Validation's and test's n_eff fall
-  further (0.39-0.40 n), their mix being about 61 / 39.
+  alone. h stays as decided; A8 is decided below (the kernel's n_eff).
+  Validation's and test's n_eff fall further (0.39-0.40 n), their mix
+  being about 61 / 39.
+- **A8 and the acceptance weighting (owner decisions, 2026-11-08,
+  recorded before any acceptance metric is computed).**
+  1. **A8 judges the n_eff of the closeness weights alone:** training's
+     0.501 n passes. The n_eff with the call-mix factors (0.468 n) is
+     reported beside it, for information.
+  2. **The acceptance metrics use deployment weighting:** only sites inside
+     gate (a)'s margins count (main-search sites within 25 cp of the
+     window, quiescence sites within 10 cp), weighted equally within each
+     kind, times the call-mix factor, so the two kinds' totals are 44.1 :
+     55.9 (1.68 : 2.13). The constant-shift baseline (A3) and every other
+     A-check use the same weighting. The training-objective version
+     (closeness x call mix, "The training mix" above) is reported beside
+     it for diagnosis only; acceptance is judged on the deployment
+     weighting alone.
+  3. 3.8's margins are setting (a)'s, 25 / 10 (the owner's decision
+     "step 3 proceeds at gate setting (a)", 2026-11-08, above); its earlier
+     "(25 / 25)" predated that decision.
+
+  On the labelled sites each split uses (mate-flagged labels and the table
+  band left out, as for the training weights):
+
+| Split | Inside gate (a): main search (<= 25 cp) | Quiescence (<= 10 cp) | Factor, main / quiescence | n_eff of the deployment weights |
+|---|---|---|---|---|
+| Validation (the pilot's 3,000 and the 7,000) | 2,096 (2,275 with the left-out labels) | **559** (604) | 0.559 / 2.655 | 1,534 of 2,655 (0.578 n) |
+| Test | 2,175 (2,343) | **582** (632) | 0.559 / 2.648 | 1,596 of 2,757 (0.579 n) |
+| Training (for reference) | 168,495 | 75,873 | 0.640 / 1.801 | 189,637 of 244,368 (0.776 n) |
+
+  **Flag: the quiescence counts are too small for a per-stratum NF of
+  P0's size.** The plan declares no resolution for 3.8's checks; as the
+  yardstick, P0's fixed + broken share of gated sites (277 of 919, 0.30)
+  and its NF (+0.029) give the smallest NF that reaches McNemar p < 0.01
+  (z 2.576) as 2.576 sqrt(0.30 / n): about 0.030 for test's 2,175
+  main-search sites, **0.058 for its 582 quiescence sites** (0.060 for
+  validation's 559), and 0.035 for the deployment-weighted whole (n_eff
+  1,596). An NF of P0's size (+0.03) is then resolvable in the main search
+  alone, not in quiescence alone, and only marginally in the weighted
+  whole. Resolving +0.03 in quiescence would take about 2,200 gated
+  quiescence sites, about four times the current count (more test sites
+  labelled from test/all's games, for example): for the owner.
 - **Labels (Syzygy 3-4-5; the pinned engine, SHA-256 17ab2b41...0b34,
   bench 14,149,617 / 1cb0717f040c294d as referenced before the first label
   and after the last).** Nodes per second are nominal (sites x the node
@@ -1079,7 +1118,9 @@ reported beside it and selects nothing.
 
 ### 3.8 Offline acceptance (declared before any training run)
 
-On the **test set** (3.5), at the gate's margins (25 / 25), per stratum
+On the **test set** (3.5), at the gate's margins (25 / 10: setting (a), the
+owner's decision of 2026-11-08, "step 3 proceeds at gate setting (a)"; the
+plan first said 25 / 25), per stratum
 and together. Definitions: a gated site is **fixed** when the base and the
 deep label lie on opposite sides of the nearest bound and the refined value
 lies on the deep label's side; **broken** when the base was on the deep
@@ -1095,14 +1136,17 @@ broken) / gated sites.
 | A5 explained variance of the win-probability residual at gated sites | reported, with a game-bootstrap interval | the regression's own score |
 | A6 the corrections | mean and abs mean at gated sites; the share at the cap (over 10% sends the cap back to 3.7) | catches a mean-shift refiner and a cap that binds too often |
 | A7 the endgame check (900 positions), correction applied everywhere | reported; the standing default's target is at most 15 misjudged | the refiner must not break the base's endgames where it is consulted |
-| A8 n_eff of the weighted arm | at least 0.5 n | idea 48's rule |
+| A8 n_eff of the weighted arm | at least 0.5 n, of the closeness weights alone (owner, 2026-11-08) | idea 48's rule |
 | Crucial-point set (SPRT games, relabelled) | NF reported only | test data by decision 6 |
 
-**Amended (owner, 2026-11-08):** every validation and test metric, the
-constant-shift baseline (A3) included, weights each site as the loss does
-(the closeness kernel times its stratum's factor, the labelling section's
-"The training mix"; the reading recorded there). A8's line meets 0.468 n
-with the factors (0.501 n with the kernel alone): open for the owner.
+**Amended (owner, 2026-11-08; the labelling section, "A8 and the
+acceptance weighting"):** every check, the constant-shift baseline (A3)
+included, uses deployment weighting: only the sites inside setting (a)'s
+margins (main search 25 cp, quiescence 10 cp), equal within each kind,
+times the call-mix factor (44.1 : 55.9). The training-objective weighting
+(closeness x call mix) is reported beside it for diagnosis only. A8 judges
+the n_eff of the closeness weights alone (training: 0.501 n, a pass); the
+n_eff with the call-mix factors (0.468 n) is reported for information.
 
 Kill at this stage: A2 or A3 fails, or q_off < 1/3. The result is recorded
 in ideas.md and step 3 stops before any game.
