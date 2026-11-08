@@ -224,8 +224,10 @@ tool_tests() {  # python | all
   for t in test_spot_quota test_aws_cleanup test_spot_watch test_aws_spot_datagen test_cost_guard; do
     PYTHON=$py bash "tools/cloud/$t.sh" >>"$log" 2>&1 || fail "tool tests: tools/cloud/$t.sh"
   done
-  # The GitHub SPSA shard with a fake fastchess (the options each side gets per draw, the failure states).
+  # The GitHub SPSA shard with a fake fastchess (the options each side gets per draw, the failure states),
+  # and the SPSA driver against a fake gh (its dispatch, attribution, refusal and resume rules; about 90 s).
   PYTHON=$py bash tools/github/test_spsa_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_spsa_shard.sh"
+  PYTHON=$py bash tools/github/test_spsa_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_spsa_run.sh"
 }
 
 native_full() {
