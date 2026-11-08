@@ -1184,6 +1184,16 @@ reported beside it and selects nothing.
     accumulator within 0.001 byte units of the engine's bytes on four
     positions (exposed pieces and pawn links included) and R-float on it
     within the rounding bound of R-int on the net file.
+  - **The trainer (lane E, E-c, 2026-11-08):** fork-train `--arch refiner`
+    (tools/train/src/main.rs; its header describes the graph, the data and
+    the loss). Its CPU build is bullet's mock runtime: it builds the graph,
+    loads the frozen base and lowers the training graph forward and
+    backward (the per-sample weight's product included: 3.6's last
+    UNVERIFIED point settled at the graph level), but it cannot evaluate or
+    train; those, and so the parity chain's trainer leg and A1's check at
+    superbatch 0, run only in the CUDA build (the Kaggle kernel, E-f). The
+    base it loads equals `int / 255` as an f32 at all 704,512 + 512 values
+    (checked against the reference's conversion).
   A converter and Fork's independent references
   (R-float, R-quant, R-int in tools/nnue) extend to the refiner, and the
   parity chain (trainer = R-float within tolerance, R-int = engine exactly)

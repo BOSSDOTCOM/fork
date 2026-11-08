@@ -37,6 +37,21 @@
 //!   (S512+PP; ideas.md 40; owner, 2026-11-06): 608 links after the 768
 //!   piece inputs, numbered as S512cl's in their own space; the output as
 //!   s512's.
+//! - refiner: the Boundary Refiner (ideas.md 59, step 3;
+//!   docs/research/boundary-refiner/step3-plan.md 2.2-2.5, 3.6-3.7) on
+//!   S512ppr3's frozen first layer, the engine net's own integers read as
+//!   floats (--base-weights NET.fnet: each int / 255; owner, 2026-11-08):
+//!   each perspective's 512 sums clipped to [0, 1] and detached (no gradient;
+//!   decay 0 and a wide clip keep them bit for bit), the side to move's first
+//!   -> 8, plus the active rows (640 exposure rows from the side to move's
+//!   view with their 10-row factoriser, 8 phase rows, 16 evaluation bins) ->
+//!   32 -> 2 heads (the correction, the confidence), clipped ReLU, the dense
+//!   weights clipped to [-1, 1]. Data: .sites files (tools/nnue/refiner.py
+//!   export), the sites of weight 0 left out. Loss: weight x (sigmoid(base /
+//!   S + correction) - sigmoid((label - mu) / S))^2, base the engine's
+//!   integer evaluation, mu the training file's weighted mean of label -
+//!   base (written to mu.txt; never added back in the engine). The
+//!   confidence head stays zero here (its pass is 3.7's second run).
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
@@ -49,6 +64,10 @@
 //!                       [--init-weights weights.bin] [options]
 //!   fork-train eval     --arch A [maps] (--checkpoint DIR | --weights weights.bin) --epd FILE --out FILE
 //!   fork-train loader   --data SHARD... [--positions N]   (decoding speed, one thread)
+//!   fork-train check    --arch refiner --base-weights NET.fnet --out DIR
+//!   fork-train train    --arch refiner --base-weights NET.fnet --sites FILE [--val-sites FILE] --out DIR
+//!                       --scale S [--superbatches 80 --lr 0.001 --lr-step 40 --patience 8 --batch 16384]
+//!   fork-train eval     --arch refiner --base-weights NET.fnet --weights weights.bin --sites FILE --out FILE
 //! --qat (train, eval, check; the S-512 family): quantization-aware training
 //! (ideas.md 44), the forward pass on the integer file's weight grid.
 //! [maps] are --regions (32 comma-separated region numbers) and --buckets (25
@@ -64,12 +83,14 @@ use std::{
     fs::{self, File},
     io::{BufRead, BufReader, Seek, Write},
     path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
 };
 
 use bullet_trainer::{
     model::{
-        DenseInput, ModelDefinition, ModelEvaluator, ModelInputs, ModelInputsMapper, ModelNode, ModelWeights,
-        SavedFormat, SparseInput,
+        DenseInput, InitSettings, ModelDefinition, ModelEvaluator, ModelInputs, ModelInputsMapper, ModelNode,
+        ModelWeights, SavedFormat, SparseInput,
     },
     optimiser::adam::{AdamW, AdamWParams},
     reader::{DataReader, ReadMapLoader},
@@ -102,6 +123,7 @@ enum Arch {
     S512x,
     S512cl,
     S512pp,
+    Refiner,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -147,6 +169,7 @@ impl Spec {
             "s512x" => Arch::S512x,
             "s512cl" => Arch::S512cl,
             "s512pp" => Arch::S512pp,
+            "refiner" => Arch::Refiner,
             other => panic!("unknown --arch {other}"),
         };
         let mut s = Spec {
@@ -193,6 +216,8 @@ impl Spec {
                 s.links = true;
                 s.picker = Picker::Phase;
             }
+            // The refiner's base inputs are S512+PP's; its own output picks no bucket.
+            Arch::Refiner => s.links = true,
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
         assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp), "--qat: the S-512 family only");
@@ -675,6 +700,7 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                 let out_b = ob.forward(hidden) + lin_b;
                 out_b + gate * (out_a - out_b)
             }
+            Arch::Refiner => unreachable!("the refiner builds its own graph (main)"),
         };
         let loss = output.sigmoid().squared_error(target).reduce_sum_batch();
         (Some(loss), vec![("output".to_string(), output)])
@@ -755,6 +781,8 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
             SavedFormat::id("obw").round().quantise::<i16>(64),
             SavedFormat::id("obb").round().quantise::<i32>(255 * 64),
         ],
+        // The refiner's file is written by tools/nnue/refiner.py convert.
+        Arch::Refiner => Vec::new(),
     }
 }
 
@@ -765,7 +793,7 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
 /// sums its exposure rows in 32 bits, so their size needs no bound).
 fn clipped(spec: &Spec) -> Vec<&'static str> {
     match spec.arch {
-        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp => vec![],
+        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::Refiner => vec![],
         Arch::H512 | Arch::AfS => vec!["l0w", "l0b"],
         Arch::Xgr512 => vec!["l0w", "l0b", "s0w", "s0b"],
     }
@@ -894,6 +922,54 @@ fn emit_shuffled<F: FnMut(&[ChessBoard]) -> bool>(buf: &mut Vec<ChessBoard>, rng
     false
 }
 
+/// One labelled site of a .sites file (tools/nnue/refiner.py export,
+/// "FEN | base | label | weight | rows"): the position, the engine's integer
+/// base evaluation and the deep label (cp, side to move's view), the training
+/// weight, and the refiner's active rows in its file's order (at most 32 in
+/// architecture 1; -1 ends a shorter list).
+#[derive(Clone, Copy)]
+struct SiteRecord(ChessBoard, i16, i16, f32, [i16; 32]);
+
+impl FromStr for SiteRecord {
+    type Err = String;
+    fn from_str(line: &str) -> Result<Self, Self::Err> {
+        let f: Vec<&str> = line.split(" | ").collect();
+        if f.len() != 5 {
+            return Err(format!("not a site line: {line}"));
+        }
+        let pos: ChessBoard = format!("{} | 0 | 0.0", f[0]).parse().map_err(|e| format!("{e:?}: {line}"))?;
+        let num = |x: &str| x.trim().parse::<i16>().map_err(|_| format!("bad number {x}: {line}"));
+        let mut rows = [-1i16; 32];
+        for (k, r) in f[4].split_whitespace().enumerate() {
+            *rows.get_mut(k).ok_or(format!("more than 32 rows: {line}"))? = num(r)?;
+        }
+        let weight = f[3].trim().parse::<f32>().map_err(|_| format!("bad weight: {line}"))?;
+        Ok(SiteRecord(pos, num(f[1])?, num(f[2])?, weight, rows))
+    }
+}
+
+/// The training sites, held in memory and served forever, each pass in a
+/// seeded shuffle (Fork's splitmix64), as the shard reader serves positions.
+#[derive(Clone)]
+struct SiteLoader(Arc<Vec<SiteRecord>>, u64);
+
+impl DataReader<SiteRecord> for SiteLoader {
+    fn read_chunks<F: FnMut(&[SiteRecord]) -> bool>(&self, _skip_count: usize, mut f: F) {
+        let mut rng = SplitMix(self.1);
+        let mut order: Vec<SiteRecord> = self.0.as_ref().clone();
+        loop {
+            for i in (1..order.len()).rev() {
+                order.swap(i, (rng.next() % (i as u64 + 1)) as usize);
+            }
+            for chunk in order.chunks(16384) {
+                if f(chunk) {
+                    return;
+                }
+            }
+        }
+    }
+}
+
 impl DataReader<ChessBoard> for ShardReader {
     fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _skip_count: usize, mut f: F) {
         let mut rng = SplitMix(self.seed);
@@ -1014,6 +1090,224 @@ fn main() {
     let needs_spec = !matches!(cmd.as_str(), "dump" | "stats" | "loader");
     let spec = if needs_spec { Spec::from_args(&a) } else { Spec::from_args(&Args(Vec::new())) };
     let ins = inputs(&spec);
+    if spec.arch == Arch::Refiner {
+        // The Boundary Refiner (the header): its own inputs, graph, data and loss.
+        let (n, h) = (spec.inputs(), spec.hidden);
+        let l1 = 8; // the entry layer's width: the 8-wide shape (step3-plan.md 4.5; owner, 2026-11-08)
+        let row_count = EXPOSURE_ROWS + EXPOSURE_FACTORS + 8 + 16; // then the phase rows and the evaluation bins
+        // The frozen base: the engine's net file (64-byte header, 128-byte map
+        // block, then the first layer i16 [inputs][hidden] and its biases i16
+        // [hidden]), each integer / 255, as bullet's weights records.
+        let net = fs::read(a.need("--base-weights")).expect("--base-weights");
+        let field = |at: usize| u32::from_le_bytes(net[at..at + 4].try_into().expect("header"));
+        assert!(net.len() > 64 + 128 + 2 * (n + 1) * h && &net[..8] == b"FORKNET\0", "--base-weights: not a Fork net file");
+        assert_eq!((field(12), field(16) as usize, field(20) as usize), (8, n, h), "--base-weights: an S512+PP net file");
+        let net_scale = field(32) as i32;
+        let at = 64 + 128;
+        let int16 = |i: usize| f32::from(i16::from_le_bytes([net[at + 2 * i], net[at + 2 * i + 1]]));
+        let mut base_file = Vec::new();
+        for (name, start, count) in [("l0w", 0, n * h), ("l0b", n * h, h)] {
+            base_file.extend_from_slice(name.as_bytes());
+            base_file.push(b'\n');
+            base_file.extend_from_slice(&(count as u64).to_le_bytes());
+            for i in start..start + count {
+                base_file.extend_from_slice(&(int16(i) / 255.0).to_le_bytes());
+            }
+        }
+        let rins = ModelInputs::default()
+            .add_sparse("stm", (n, 1), spec.max_active())
+            .add_sparse("ntm", (n, 1), spec.max_active())
+            .add_sparse("rows", (row_count, 1), 64)
+            .add_dense("target", (1, 1))
+            .add_dense("weight", (1, 1))
+            .add_dense("base", (1, 1));
+        let defn = ModelDefinition::build(&rins, move |builder, (((((stm, ntm), rows), target), weight), base)| {
+            let normal = |fan_in: usize| InitSettings::Normal { mean: 0.0, stdev: (2.0 / fan_in as f32).sqrt() };
+            let w0 = builder.new_weights("l0w", (h, n), InitSettings::Zeroed);
+            let b0 = builder.new_weights("l0b", (h, 1), InitSettings::Zeroed);
+            let x = (w0.matmul(stm) + b0).crelu().detach().concat((w0.matmul(ntm) + b0).crelu().detach());
+            let ew = builder.new_weights("entry_weights", (l1, 2 * h), normal(2 * h));
+            let eb = builder.new_weights("entry_bias", (l1, 1), InitSettings::Zeroed);
+            let rw = builder.new_weights("row_weights", (l1, row_count), InitSettings::Zeroed);
+            let a1 = (ew.matmul(x) + rw.matmul(rows) + eb).crelu();
+            let mw = builder.new_weights("middle_weights", (32, l1), normal(l1));
+            let mb = builder.new_weights("middle_bias", (32, 1), InitSettings::Zeroed);
+            let a2 = (mw.matmul(a1) + mb).crelu();
+            let hw = builder.new_weights("head_weights", (2, 32), InitSettings::Zeroed);
+            let hb = builder.new_weights("head_bias", (2, 1), InitSettings::Zeroed);
+            let y = hw.matmul(a2) + hb;
+            let loss = ((base + y.slice_rows(0, 1)).sigmoid().squared_error(target) * weight).reduce_sum_batch();
+            (Some(loss), vec![("output".to_string(), y)])
+        });
+        let mut weights = ModelWeights::new(&defn, a.num("--seed", 1));
+        weights.load_from(&base_file[..]).expect("base weights");
+        let read_sites = |path: &str, all: bool| -> Vec<SiteRecord> {
+            BufReader::new(File::open(path).unwrap_or_else(|_| panic!("cannot read {path}")))
+                .lines()
+                .map(|l| l.expect("line").parse::<SiteRecord>().unwrap_or_else(|e| panic!("{e}")))
+                .filter(|s| all || s.3 > 0.0)
+                .collect()
+        };
+        let scale: f32 = a.num("--scale", net_scale as f32);
+        assert_eq!(scale as i32, net_scale, "--scale differs from the base net's S");
+        let device = DefaultDevice::new(a.num("--device", 0)).expect("device");
+        let pool = HostPool::new(device.clone());
+        let mapper_for = |mu: f32| {
+            let sp = spec.clone();
+            ModelInputsMapper::build(&rins, move |s: &SiteRecord, _step: Step, (((((stm, ntm), rows), target), weight), base)| {
+                fill(&sp, &s.0, stm, ntm);
+                let mut k = 0;
+                for &r in s.4.iter().take_while(|&&r| r >= 0) {
+                    let r = r as usize;
+                    if r < EXPOSURE_ROWS {
+                        rows[k] = r as i32;
+                        rows[k + 1] = (EXPOSURE_ROWS + r / 64) as i32; // its own/enemy x type factoriser row
+                        k += 2;
+                    } else {
+                        rows[k] = (r + EXPOSURE_FACTORS) as i32;
+                        k += 1;
+                    }
+                }
+                if k < rows.len() {
+                    rows[k] = -1;
+                }
+                target[0] = 1.0 / (1.0 + (-(f32::from(s.2) - mu) / scale).exp());
+                weight[0] = s.3;
+                base[0] = f32::from(s.1) / scale;
+            })
+        };
+        match cmd.as_str() {
+            "check" => {
+                // The graph builds and the frozen base loads: the initial weights.
+                let out = PathBuf::from(a.need("--out"));
+                fs::create_dir_all(&out).expect("out");
+                weights.write_into(&mut File::create(out.join("weights.bin")).expect("weights.bin")).expect("write");
+                println!("refiner: base {n} x {h} (S {net_scale}), entry {l1}, rows {row_count}, middle 32, heads 2");
+                // The training graph (forward and backward, the per-sample weight
+                // included) lowers without a device; running it needs CUDA (Kaggle).
+                defn.lower_backward(&Default::default(), a.num("--batch", 16384), false, false).expect("backward graph");
+                println!("backward graph lowered at batch {}", a.num("--batch", 16384));
+            }
+            "train" => {
+                let sites = read_sites(a.need("--sites"), false);
+                let wsum: f64 = sites.iter().map(|s| f64::from(s.3)).sum();
+                let mu = sites.iter().map(|s| f64::from(s.3) * (f64::from(s.2) - f64::from(s.1))).sum::<f64>() / wsum;
+                let out = PathBuf::from(a.need("--out"));
+                fs::create_dir_all(&out).expect("out");
+                fs::write(out.join("mu.txt"), format!("{mu:.6}\n")).expect("mu.txt");
+                println!("{} training sites, weight {wsum:.1}; mu = {mu:.3} cp (the target is centred on it)", sites.len());
+                let rmap = mapper_for(mu as f32);
+                let val = a.get("--val-sites").map(|p| read_sites(p, false)).unwrap_or_default();
+                let mut opt = AdamW::new(defn, weights, device.clone(), AdamWParams::default()).expect("optimiser");
+                // The frozen base: no gradient reaches it (detach), and decay 0 and a
+                // clip wider than its values leave AdamW's update at zero.
+                for id in ["l0w", "l0b"] {
+                    opt.set_params_for_weight(id, AdamWParams { decay: 0.0, min_weight: -1000.0, max_weight: 1000.0, ..AdamWParams::default() });
+                }
+                // The dense weights' bound, |w| <= 1.0 (64 in the file; plan 2.5).
+                for id in ["entry_weights", "middle_weights"] {
+                    opt.set_params_for_weight(id, AdamWParams { min_weight: -1.0, max_weight: 1.0, ..AdamWParams::default() });
+                }
+                // Validation: the weighted loss on --val-sites, as training's.
+                macro_rules! validation_loss {
+                    ($opt:expr) => {{
+                        let mut evaluator = ModelEvaluator::new($opt.definition(), $opt.device()).expect("evaluator");
+                        evaluator.load_device_weights($opt.weights()).expect("weights");
+                        let (mut total, mut base_total, mut wv) = (0.0f64, 0.0f64, 0.0f64);
+                        for s in &val {
+                            let batch = rmap.map(&pool, std::slice::from_ref(s), Step::default(), 1).expect("map");
+                            let batch = batch.to_device(&device).expect("device");
+                            let y = evaluator.evaluate(&batch).expect("eval").get("output").expect("output").to_host().expect("host");
+                            let b = f64::from(s.1) / f64::from(scale);
+                            let t = 1.0 / (1.0 + (-(f64::from(s.2) - mu) / f64::from(scale)).exp());
+                            let p = 1.0 / (1.0 + (-(b + f64::from(y.f32()[0]))).exp());
+                            let w = f64::from(s.3);
+                            total += w * (p - t).powi(2);
+                            base_total += w * (1.0 / (1.0 + (-b).exp()) - t).powi(2);
+                            wv += w;
+                        }
+                        (total / wv, base_total / wv)
+                    }};
+                }
+                let patience: usize = a.num("--patience", 8);
+                let mut best: Option<(f64, usize)> = None;
+                if !val.is_empty() {
+                    // A1 (plan 3.8): with the correction head at zero the loss is the base's own.
+                    let (loss, base_loss) = validation_loss!(opt);
+                    fs::write(out.join("val.txt"), format!("0 {loss:.10}\n")).expect("val.txt");
+                    println!("superbatch 0 validation loss {loss:.10}, the base's own {base_loss:.10} (difference {:.2e})", loss - base_loss);
+                    best = Some((loss, 0));
+                }
+                let lr: f32 = a.num("--lr", 0.001);
+                let end: usize = a.num("--superbatches", 80);
+                let lr_step: usize = a.num("--lr-step", (end / 2).max(1));
+                let batch: usize = a.num("--batch", 16384);
+                let schedule = TrainingSchedule {
+                    steps: TrainingSteps {
+                        batch_size: batch,
+                        batches_per_superbatch: a.num("--batches", sites.len().div_ceil(batch)),
+                        start_superbatch: 1,
+                        end_superbatch: end,
+                    },
+                    lr_schedule: Box::new(move |step: Step| lr * 0.1f32.powi(((step.superbatch() - 1) / lr_step) as i32)),
+                    log_rate: 16,
+                    track_grad_norms: false,
+                };
+                let loader = ReadMapLoader::new(SiteLoader(Arc::new(sites), a.num("--seed", 1)), rmap.clone(), a.num("--threads", 3));
+                train(
+                    &mut opt,
+                    schedule,
+                    loader,
+                    |_, step, loss| println!("superbatch {} batch {} loss {loss}", step.superbatch(), step.batch()),
+                    |opt, step| {
+                        let sb = step.superbatch();
+                        let dir = out.join(format!("refiner-{sb}"));
+                        let state = dir.join("optimiser_state");
+                        fs::create_dir_all(&state).expect("checkpoint folder");
+                        opt.write_to_checkpoint(state.to_str().expect("path")).expect("write checkpoint");
+                        fs::write(dir.join("superbatch.txt"), format!("{sb}\n")).expect("superbatch.txt");
+                        if val.is_empty() {
+                            return;
+                        }
+                        let (loss, _) = validation_loss!(opt);
+                        let mut log = fs::OpenOptions::new().create(true).append(true).open(out.join("val.txt")).expect("val.txt");
+                        writeln!(log, "{sb} {loss:.10}").expect("val.txt");
+                        println!("superbatch {sb} validation loss {loss:.10}");
+                        if best.is_none_or(|(b, _)| loss < b) {
+                            best = Some((loss, sb));
+                        }
+                        let (b, bsb) = best.expect("best");
+                        if sb >= bsb + patience {
+                            fs::write(out.join("stopped-early.txt"), format!("best superbatch {bsb} loss {b:.10}\n"))
+                                .expect("stopped-early.txt");
+                            println!("stopping early: best superbatch {bsb}");
+                            std::process::exit(0);
+                        }
+                    },
+                )
+                .expect("train");
+            }
+            "eval" => {
+                // The trainer's float outputs for every site of --sites (the parity
+                // chain's trainer leg): the correction and the confidence heads, raw.
+                let sites = read_sites(a.need("--sites"), true);
+                let rmap = mapper_for(0.0);
+                let mut opt = AdamW::new(defn, weights, device.clone(), AdamWParams::default()).expect("optimiser");
+                opt.load_weights_from_file(a.need("--weights")).expect("weights");
+                let mut evaluator = ModelEvaluator::new(opt.definition(), opt.device()).expect("evaluator");
+                evaluator.load_device_weights(opt.weights()).expect("weights");
+                let mut out = File::create(a.need("--out")).expect("out");
+                for s in &sites {
+                    let batch = rmap.map(&pool, std::slice::from_ref(s), Step::default(), 1).expect("map");
+                    let batch = batch.to_device(&device).expect("device");
+                    let y = evaluator.evaluate(&batch).expect("eval").get("output").expect("output").to_host().expect("host");
+                    writeln!(out, "{} {}", y.f32()[0], y.f32()[1]).expect("write");
+                }
+            }
+            other => panic!("--arch refiner: check, train or eval, not {other}"),
+        }
+        return;
+    }
     match cmd.as_str() {
         "check" => {
             // The graph builds and the save list matches it: the quantized
