@@ -80,6 +80,13 @@ constexpr int TableNearDrawScore = 1;
 // DESIGN.md, "Search constants": the smallest step in whole plies, which is
 // the unit Fork's LMR table works in).
 constexpr int LmrCheckRelief = 1;
+#ifdef FORK_NODE_CLOCK
+// Test-only builds (CMake FORK_NODE_CLOCK, never released): the search's
+// clock reads its node count, this many nodes to the millisecond, so a timed
+// search is deterministic and two builds can be compared on it byte for byte
+// (DESIGN.md §5.6 step 10, the time-management switches' identity check).
+constexpr std::uint64_t NodeClockRate = 1000;
+#endif
 
 // The side has a piece other than pawns and its king (the null move's main
 // zugzwang guard: pawn endings are where passing is most often best).
@@ -100,8 +107,12 @@ int fifty_move_score(const Position& pos, bool in_check, int ply) {
 }  // namespace
 
 std::int64_t Searcher::elapsed_ms() const {
+#ifdef FORK_NODE_CLOCK
+  return static_cast<std::int64_t>(nodes_ / NodeClockRate);
+#else
   return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_)
       .count();
+#endif
 }
 
 bool Searcher::poll_limits() {
