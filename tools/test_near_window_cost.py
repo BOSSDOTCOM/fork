@@ -3,7 +3,9 @@
 sets are idea 60's by default and any tuning build's with --switch and
 --param (idea 61 part 5). Needs python-chess (imported by the tool)."""
 import io
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -47,6 +49,27 @@ class OptionNamesTest(unittest.TestCase):
                 near_window_cost.main()
             args = run.call_args.args[0]
             self.assertEqual((args.switch, args.param), want)
+            self.assertEqual(args.set, [])
+
+        # --set: every engine of a run sets the named options before its
+        # first search (a run on one short game, with a recording engine).
+        with tempfile.TemporaryDirectory() as folder:
+            games = Path(folder) / 'games.jsonl'
+            games.write_text(json.dumps({'id': 1, 'fen': '8/8/8/8/8/8/8/K6k w - - 0 1', 'colour': 'w',
+                                         'moves': ['a1a2', 'h1h2']}) + '\n', encoding='utf-8')
+            calls = []
+            engine = mock.Mock()
+            engine.send.side_effect = lambda line: calls.append(line)
+            engine.nodes_to_depth.side_effect = lambda *a: calls.append('search') or 100
+            argv = ['near_window_cost.py', 'run', 'fork', str(games), str(Path(folder) / 'out.jsonl'),
+                    '--depths', '3', '--margins', '10', '--jobs', '1', '--switch', 'UseWindowAwareLmr',
+                    '--param', 'LmrWindowBand', '--set', 'LmrWindowMinDepth=6', '--set', 'Hash=8']
+            with mock.patch.object(near_window_cost, 'Engine', return_value=engine) as made, \
+                    mock.patch.object(sys, 'argv', argv), mock.patch('builtins.print'):
+                near_window_cost.main()
+            self.assertEqual(made.call_args.args[3:], ('UseWindowAwareLmr', 'LmrWindowBand'))
+            self.assertEqual(calls[:2], ['setoption name LmrWindowMinDepth value 6', 'setoption name Hash value 8'])
+            self.assertEqual(calls[2:], ['search', 'search'])  # one position: "off" and m10
 
 
 if __name__ == '__main__':

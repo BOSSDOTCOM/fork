@@ -27,13 +27,16 @@ proxy), and two plies deeper (toward LTC).
 
     near_window_cost.py run FORK GAMES.jsonl OUT.jsonl --depths 9,11 [--margins 10,25] [--per-game 20]
                         [--jobs 2] [--hash 16] [--syzygy DIR] [--max-games N]
-                        [--switch UseNearWindowExtension] [--param NearWindowMargin]
+                        [--switch UseNearWindowExtension] [--param NearWindowMargin] [--set NAME=VALUE ...]
     near_window_cost.py report OUT.jsonl
 
 `--switch` and `--param` name the tuning build's switch and the parameter
 that --margins sets (2026-11-08, for idea 61 part 5's window-aware LMR:
 --switch UseWindowAwareLmr --param LmrWindowBand); the defaults are idea
-60's, so its runs are unchanged.
+60's, so its runs are unchanged. `--set NAME=VALUE` (repeatable) sets
+another option once per engine, before its first search, for every setting
+(e.g. --margins 10 --set LmrWindowMinDepth=6 for window-aware LMR's band at
+nodes at least 6 plies deep only; "off" is the switch off, unaffected).
 
 `run` writes one line per position (game, ply, nodes per setting and
 depth); a game's lines are appended when it is finished, and games already
@@ -149,6 +152,8 @@ def run(args):
     def work(chunk):
         engine = Engine(args.fork, args.hash, args.syzygy, args.switch, args.param)
         try:
+            for option, value in (item.split('=', 1) for item in args.set):
+                engine.send(f'setoption name {option} value {value}')
             for game in chunk:
                 rows = []
                 for ply, moves in own_positions(game, args.per_game):
@@ -220,6 +225,7 @@ def main():
     r.add_argument('--max-games', type=int, default=0)
     r.add_argument('--switch', default='UseNearWindowExtension')
     r.add_argument('--param', default='NearWindowMargin')
+    r.add_argument('--set', action='append', default=[])
     p = sub.add_parser('report')
     p.add_argument('out')
     args = parser.parse_args()
