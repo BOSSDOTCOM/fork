@@ -3909,6 +3909,48 @@ the share of that kind's evaluations, then the call rate per node.
   Two margins, as the owner asked, read off the table: e.g. m_main = 25 cp
   with m_qs = 10 cp gives about 1.5% + 2.3% = 3.8% of nodes.
 
+**Results, crucial-point ground truth** (2026-11-07; stats build 63a7275
+for the sites, the normal build for the deep values; 100 games of
+`s512ppr2-stc`, seed 20261111, disjoint from X2's, X6's, X10's and idea
+59's; 5,433 sites (2,673 main search, 2,760 quiescence; 5,368 with a
+finite bound), each searched to 1,000,000 nodes). **18.6% of sites are
+crucial** in both strata (498 main, 514 quiescence): the static evaluation
+and the deep value fall on opposite sides of the nearest finite bound.
+Sites per node: main 0.317, quiescence 0.397 (computed and reused). Recall
+of crucial sites at a call rate of 2 / 4 / 7 / 10% of nodes (a detector
+calling at random gets the call rate over the sites per node: 6 / 13 / 22
+/ 32% in the main search, 5 / 10 / 18 / 25% in quiescence); the logistic
+models are scored on the half of the games they were not fitted on.
+
+| Detector | Main search: recall at 2 / 4 / 7 / 10% (AUC) | Quiescence: recall at 2 / 4 / 7 / 10% (AUC) |
+|---|---|---|
+| Logistic: gap + all features + seeds | 0.20 / 0.34 / 0.51 / 0.62 (0.756) | 0.15 / 0.26 / 0.41 / 0.50 (0.723) |
+| Logistic: gap + features, no seeds | 0.20 / 0.34 / 0.50 / 0.60 (0.744) | 0.15 / 0.26 / 0.40 / 0.49 (0.715) |
+| Window gap alone | 0.17 / 0.30 / 0.45 / 0.52 (0.674) | 0.14 / 0.25 / 0.37 / 0.45 (0.663) |
+| Seed disagreement minus gap | 0.16 / 0.30 / 0.45 / 0.55 (0.686) | 0.12 / 0.22 / 0.37 / 0.47 (0.668) |
+| TT refinement \|refined - static\| | 0.19 / 0.34 / 0.44 / 0.50 (0.648) | (none in quiescence) |
+| Seed disagreement, scratch seeds | 0.11 / 0.16 / 0.28 / 0.37 (0.544) | 0.07 / 0.12 / 0.20 / 0.28 (0.521) |
+| Seed disagreement, default vs warm seed | 0.06 / 0.13 / 0.22 / 0.30 (0.484) | 0.05 / 0.11 / 0.18 / 0.25 (0.497) |
+| Hanging pieces | 0.05 / 0.11 / 0.21 / 0.30 (0.481) | 0.08 / 0.13 / 0.23 / 0.33 (0.568) |
+| Last move a capture | 0.09 / 0.19 / 0.29 / 0.38 (0.546) | 0.06 / 0.12 / 0.22 / 0.31 (0.552) |
+| Swing from the parent's evaluation | 0.12 / 0.19 / 0.26 / 0.35 (0.491) | 0.07 / 0.14 / 0.26 / 0.35 (0.534) |
+| Checking moves available | 0.06 / 0.09 / 0.18 / 0.26 (0.447) | 0.06 / 0.11 / 0.20 / 0.27 (0.509) |
+
+- Best detector in both strata: the logistic model on the window gap and
+  the simple features (with or without the seed disagreement, which adds
+  0.01-0.02 at most). It catches about 3.2x random at 2% of nodes in the
+  main search and 3.0x in quiescence, and about 1.9-2.0x at 10%.
+- The window gap alone is the best single signal (2.7-2.9x random at 2%).
+  In the main search the TT refinement (the TT score moving the static
+  evaluation) is as strong at 2-4% of nodes.
+- Seed disagreement alone is barely better than random (AUC 0.48-0.54):
+  two networks' disagreement does not locate the positions where the
+  default network is wrong about the bound.
+- For ideas 59 and 60 the gate is therefore the logistic model on the gap
+  and features, with its own threshold per stratum; even so, at 4% of
+  nodes per stratum it reaches only 34% (main) and 26% (quiescence) of the
+  crucial sites.
+
 ## 6. Decisions log
 
 | Date | Decision |
