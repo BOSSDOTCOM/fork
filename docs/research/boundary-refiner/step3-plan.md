@@ -1,7 +1,9 @@
 # Idea 59, step 3: the Boundary Refiner, trained and built (plan for the owner's review)
 
-Status: **plan only** (2026-11-08). Nothing here is built, trained or
-running, and no job was started for it. The base is phase-4 at d89814f;
+Status: **approved by the owner on 2026-11-08, with two amendments**
+(the next section). Written as a plan only: when it was approved, nothing
+here was built, trained or running, and no job had been started for it.
+The base is phase-4 at d89814f;
 the default network is S512ppr3 (bench 14,149,617 / 1cb0717f040c294d,
 tests/bench-s512ppr3.ref). The owner's requirements of 2026-11-08 and the
 six additions of the same day (docs/ideas.md idea 59, commit 0e99c31) are
@@ -17,6 +19,34 @@ The prior-art search for gated, boundary-specific refiners ran separately
 (kb-researcher; KB branch kb e96e314,
 docs/kb/research-boundary-refiner-prior-art.md; idea 59's literature line
 was corrected from it in d89814f). This plan does not repeat it.
+
+## Owner decision, 2026-11-08
+
+The owner approved this plan with two amendments; everything else stands as
+written, the recommendations of section 11 included.
+
+1. **The near-window residual's mean is verified, and the target is
+   centred.** The preview's mean of deep - static at near-window sites
+   (+123 cp, section 1.3) is checked in the offline pre-check P0 (section
+   5) before the pilot's labels are used: the sign and perspective
+   conventions of both values (side to move's view), mate- and
+   tablebase-adjacent scores (near, not only inside, the bands that 3.3
+   leaves out), and selection effects (for example, sites that were
+   selected by lying near the window of a search whose result then moved).
+   The training target is **centred**: its mean over the training split is
+   subtracted, so the refiner must learn position-specific corrections
+   rather than a shift. The exact form (the mean in cp or in the loss's
+   win-probability space, plain or weighted as the loss is) is fixed when
+   the trainer is built, and reported. Acceptance check A3 (beat a constant
+   shift, 3.8) stays.
+2. **Every name reused from exp/oracle is screened before reuse** (its
+   commits C1-C4: 0a40491, 56dacaf, d5bb138, 92aa87c), as every new name
+   is (section 7, DESIGN.md §8).
+
+**Order of work:** the zero-output speed A/B first (M1, section 4.5), then
+the 3,000-site labelling pilot (3.3); P0 runs before the pilot's labels are
+used. The speed A/B runs only in a quiet window the owner chooses (data
+generation shares the machine).
 
 ## 0. The design in brief
 
@@ -586,7 +616,9 @@ reported beside it and selects nothing.
 
 - **Loss:** `L = sum_i w_i [sigmoid((b_i + delta_i) / S) - sigmoid(d_i / S)]^2
   / sum_i w_i`, with S = 89, d the deep label, and `delta_i` capped at +-C
-  inside the graph, as the engine caps it.
+  inside the graph, as the engine caps it. **Amended (owner, 2026-11-08):**
+  the target is centred, its training-split mean subtracted (the section
+  "Owner decision, 2026-11-08").
 - **Decision weighting (owner addition 4; idea 48 applied):**
   `w_i = exp(-g_i^2 / (2 h^2))`, g_i the site's window gap, h = 25 cp (the
   gate's margin), normalised to mean 1. Idea 48's variance rule applies:
@@ -768,7 +800,7 @@ result. The SPRT log and ideas.md record every result, failures included.
 
 | # | Step | Lane | Pass | Kill |
 |---|---|---|---|---|
-| P0 | Pre-check, offline: on the crucial-point sites within 25 cp, NF of S512+X over S512ppr3 (both by R-int, crucial_points.py `seeds`), against NF of S512+X over S512r2 | L, about 1 h | information | none: a low ratio lowers the prior (the oracle's gain may have been S512r2's weakness), reported to the owner before E1 |
+| P0 | Pre-check, offline: on the crucial-point sites within 25 cp, NF of S512+X over S512ppr3 (both by R-int, crucial_points.py `seeds`), against NF of S512+X over S512r2; and (owner, 2026-11-08) the +123 cp mean of deep - static checked for sign and perspective, mate- and tablebase-adjacent scores and selection effects, before the pilot's labels are used | L, about 1 h | information | none: a low ratio lowers the prior (the oracle's gain may have been S512r2's weakness), reported to the owner before E1 |
 | E1 | Build the gate, the TT bit, the refiner's inference with a zero-output file (2.1-2.8) | E | every check (full CI, bench parity with the refiner off, equivalence tests, no_alloc) | none |
 | S1 | Speed gate, M1-M3 | L (quiet), G (X3) | the design line for some shape | every shape above 5% at (b) and at (a), and the lanes not approved: stop |
 | D1 | Logger, replay, label pilot, labelling (3.2-3.4) | L | the pilot's 90% agreement at some budget | none at 1M (the budget then is 1M) |
