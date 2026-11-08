@@ -1265,23 +1265,23 @@ TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
 // least the floor.
 TEST_CASE("time_budget", "the soft limit's scale follows Fork's fit of best-move changes") {
   const auto reference = [](TimeScaleVariant v, int stability, int depth, int share) {
-    const double s = std::clamp(stability, 1, 10), d = std::min(depth, 19);
+    const double s = std::clamp(stability, 1, 72), d = std::min(depth, 19);
     const auto sigma = [](double z) { return 1 / (1 + std::exp(-z)); };
     double z1 = 0, balance = 0;
     if (v == TimeScaleVariant::StabilityOnly) {
-      z1 = 0.963763 - 0.238696 * s - 0.127705 * d;
-      balance = 1.079;
+      z1 = 0.534912 - 0.207666 * s - 0.096556 * d;
+      balance = 1.030;
     } else {
       const double p = std::clamp(share, 5, 995) / 1000.0;
-      z1 = 0.868553 - 0.204558 * s - 0.177470 * std::log(p / (1 - p)) - 0.132415 * d;
-      balance = 1.037;
+      z1 = 0.474586 - 0.177596 * s - 0.185073 * std::log(p / (1 - p)) - 0.103338 * d;
+      balance = 0.996;
     }
     return std::max(360.0, 1000 * balance * sigma(z1) / sigma(0.567490 - 0.211730 * d));
   };
   int checked = 0, wrong = 0;
   std::ostringstream first;
   for (TimeScaleVariant v : {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
-    for (int stability = 1; stability <= 12; ++stability)
+    for (int stability : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 30, 50, 71, 72, 73, 100})
       for (int depth = 8; depth <= 40; ++depth)
         for (int share = 1; share <= 1000; share += v == TimeScaleVariant::StabilityOnly ? 333 : 1) {
           const double want = reference(v, stability, depth, share);
@@ -1295,10 +1295,11 @@ TEST_CASE("time_budget", "the soft limit's scale follows Fork's fit of best-move
   // Anchors (DESIGN.md §5.6 step 10's table): a changed best move extends,
   // a long-stable one shortens, a dominant every-pass share shortens more.
   const auto near = [](int got, int want) { return std::abs(got - want) <= 2; };
-  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityOnly, {10, 1, 0, 0}), 2252));
-  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityOnly, {12, 10, 0, 0}), 437));
-  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityAndShare, {12, 1, 995, 0}), 1140));
-  CHECK_EQ(soft_scale_permille(TimeScaleVariant::StabilityAndShare, {12, 10, 900, 0}), 360);  // the floor
+  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityOnly, {10, 1, 0, 0}), 2033));
+  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityOnly, {12, 10, 0, 0}), 531));
+  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityAndShare, {12, 1, 995, 0}), 1041));
+  CHECK(near(soft_scale_permille(TimeScaleVariant::StabilityAndShare, {12, 10, 900, 0}), 407));
+  CHECK_EQ(soft_scale_permille(TimeScaleVariant::StabilityOnly, {12, 20, 0, 0}), 360);  // the floor
 }
 
 TEST_CASE("time_budget", "the soft limit's scale: its shape, its neutral cases and its floor") {
@@ -1307,21 +1308,22 @@ TEST_CASE("time_budget", "the soft limit's scale: its shape, its neutral cases a
   for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare})
     for (int depth = 8; depth <= 30; ++depth)
       for (int share = 5; share <= 995; share += 10) {
-        for (int stability = 1; stability < 12; ++stability)  // more stability, no more time
+        for (int stability = 1; stability < 80; ++stability)  // more stability, no more time
           broken += soft_scale_permille(v, {depth, stability + 1, share, 0}) >
                     soft_scale_permille(v, {depth, stability, share, 0});
         if (v == StabilityAndShare && share + 10 <= 995)  // a larger share, no more time
           broken += soft_scale_permille(v, {depth, 3, share + 10, 0}) >
                     soft_scale_permille(v, {depth, 3, share, 0});
-        for (int stability = 1; stability <= 12; ++stability)
+        for (int stability = 1; stability <= 80; ++stability)
           broken += soft_scale_permille(v, {depth, stability, share, 0}) < 360;
       }
   CHECK_EQ(broken, 0);
-  // Stability-only ignores the share; the caps hold stability at 10 and depth at 19.
+  // Stability-only ignores the share; the caps hold stability at 72 and depth at 19.
   CHECK_EQ(soft_scale_permille(StabilityOnly, {12, 4, 5, 0}),
            soft_scale_permille(StabilityOnly, {12, 4, 995, 0}));
   for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare}) {
-    CHECK_EQ(soft_scale_permille(v, {12, 10, 500, 0}), soft_scale_permille(v, {12, 50, 500, 0}));
+    CHECK_EQ(soft_scale_permille(v, {8, 72, 5, 0}),
+             soft_scale_permille(v, {8, 100000, 5, 0}));  // no overflow past the cap
     CHECK_EQ(soft_scale_permille(v, {19, 3, 500, 0}), soft_scale_permille(v, {60, 3, 500, 0}));
     // Neutral: below depth 8 (no fit there), at mate and tablebase scores.
     for (int depth = 1; depth < 8; ++depth) CHECK_EQ(soft_scale_permille(v, {depth, 1, 500, 0}), 1000);
@@ -1335,8 +1337,8 @@ TEST_CASE("time_budget", "the soft limit's scale: its shape, its neutral cases a
 }
 
 TEST_CASE("time_budget", "a scaled soft limit stays within [1, hard] and leaves movetime alone") {
-  CHECK_EQ(scaled_soft_ms(1000, 4000, 437), 437);
-  CHECK_EQ(scaled_soft_ms(1000, 4000, 2252), 2252);
+  CHECK_EQ(scaled_soft_ms(1000, 4000, 531), 531);
+  CHECK_EQ(scaled_soft_ms(1000, 4000, 2033), 2033);
   CHECK_EQ(scaled_soft_ms(1000, 4000, 5384), 4000);  // never past the hard limit
   CHECK_EQ(scaled_soft_ms(1001, 4000, 999), 999);    // 1001 * 999 / 1000, rounded down
   CHECK_EQ(scaled_soft_ms(1, 4000, 360), 1);         // never below 1

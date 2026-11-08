@@ -86,23 +86,25 @@ namespace {
 // DESIGN.md §5.2 "Search constants", and awaits the originality-checker's
 // constant screen before its SPRT.
 // The fit's domain: X6 has no rows below depth 8 (its primary depth); 19 is
-// the last depth with at least 1% of the rows; stability is capped at 10 and
-// the share clipped to [5, 995] per mille, as X6 declared.
+// the last depth with at least 1% of the rows; the share is clipped to
+// [5, 995] per mille, as X6 declared. The stability cap is the 99th
+// percentile of the stability count over X6's rows at depth >= 8, the
+// smallest integer whose cumulative share reaches 99% (the owner's rule,
+// declared before it was computed, 2026-11-07).
 constexpr int TimeScaleMinDepth = 8;
 constexpr int TimeScaleMaxDepth = 19;
-constexpr int TimeScaleStabilityCap = 10;
+constexpr int TimeScaleStabilityCap = 72;
 constexpr int TimeScaleShareMin = 5;
 constexpr int TimeScaleShareMax = 995;
 // Never below 36% of the soft limit: at most two iterations short of it at
-// Fork's iteration growth of 5/3 ((3/5)^2 = 0.36). It is also the 1st
-// percentile of the stability-only scale over X6's rows, so it binds almost
-// only with the share.
+// Fork's iteration growth of 5/3 ((3/5)^2 = 0.36). It binds at about a
+// quarter of X6's rows (the long-stable ones), which the balance includes.
 constexpr int TimeScaleFloor = 360;
 // The mean-spend balance per variant, per mille: the factor that keeps the
 // mean spend equal to the plain soft limit's when X6's searches are replayed
 // with nodes as the clock, averaged over 100k, 250k and 500k-node budgets.
-constexpr int TimeScaleBalanceStability = 1079;
-constexpr int TimeScaleBalanceShare = 1037;
+constexpr int TimeScaleBalanceStability = 1030;
+constexpr int TimeScaleBalanceShare = 996;
 
 // Logistic fits of "the best move changes within the next two iterations",
 // coefficients in Q16 (x 65,536). StabilityFit and ShareFit give the chance
@@ -115,8 +117,8 @@ struct ChangeFit {
   std::int64_t per_logit;      // per unit of the share's logit
   std::int64_t per_ply;        // per ply of depth
 };
-constexpr ChangeFit StabilityFit{63161, -15643, 0, -8369};   // 0.963763, -0.238696, -, -0.127705
-constexpr ChangeFit ShareFit{56921, -13406, -11631, -8678};  // 0.868553, -0.204558, -0.177470, -0.132415
+constexpr ChangeFit StabilityFit{35056, -13610, 0, -6328};   // 0.534912, -0.207666, -, -0.096556
+constexpr ChangeFit ShareFit{31102, -11639, -12129, -6772};  // 0.474586, -0.177596, -0.185073, -0.103338
 constexpr ChangeFit DepthFit{37191, 0, 0, -13876};           // 0.567490, -, -, -0.211730
 
 // log2(x) in Q16 for x >= 1: the integer part from the highest set bit, then
