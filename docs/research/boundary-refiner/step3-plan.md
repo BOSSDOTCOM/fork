@@ -233,6 +233,24 @@ the training labels' budget is N = 100k nodes** (13.9 thread-hours for
 1 M sites, 6.9 h on 2 threads); validation and test sites stay at 1M. 172
 of the 3,000 1M labels are mates (5.7%).
 
+**Owner decision: step 3 continues with a cost gate (2026-11-08, declared
+before the second window).** The [-32, 32] bound and the AVX-512 VNNI entry
+layer are built on the 8-wide shape and measured in a second quiet window:
+x86-64-v3 builds judge the AVX2 path (what the GitHub SPRT shards run), the
+VNNI preset is measured separately (TCEC). **Labelling and training go on
+only if the AVX2 path's cost at the chosen gate setting is at most about
+3.5% of nps in game (a price of at most about 5 Elo at 1.5 Elo per 1%);
+otherwise step 3 pauses and the oracle's findings are kept.** The case
+being priced: P0's prior is about +16 Elo (S512+X's net flips over
+S512ppr3 are 0.38 of those over S512r2, applied to the oracle's +41.0; a
+rough reading), against the first window's 3.8% for the 8-wide shape at
+setting (a) and 6.3% at (b). If the gate passes: the 1 M training sites are
+labelled at 100k nodes (the pilot's pick by the plan's rule) on 10 threads
+while the owner suspends data generation in place (the labels are
+node-based, so threads do not change them), by the pinned engine with its
+hash and bench checked before the first label and after the last;
+validation and test sites stay at 1M.
+
 ## 0. The design in brief
 
 1. S512ppr3 evaluates everywhere, unchanged. Where the gate fires (the base
