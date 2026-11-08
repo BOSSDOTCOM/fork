@@ -2017,7 +2017,7 @@ until measured; new names and constants go through the screens before use.
   an extension, on the LTC-sensitive list). **status:** **rejected
   (2026-11-08): the design R SPRT of 10 cp against off failed (H0, −5.43 ±
   7.25 Elo, 3,200 games, try 1 of 2), so by the kill criterion idea 60 is
-  retired**; before it, the node cost passed (10 cp +6.2% / +5.6%) and the
+  retired**, with no second try (owner, 2026-11-08); before it, the node cost passed (10 cp +6.2% / +5.6%) and the
   head-to-head kept 10 cp (25 − 10 −3.24 ± 12.04 nElo); docs/history/phase-4/sprt-log.md.
   (Plan: owner, 2026-11-07.) **runtime cost:** possible (more nodes per move at
   equal depth; nps unchanged). **earliest phase:** Phase 4.
