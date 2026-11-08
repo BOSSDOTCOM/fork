@@ -2018,6 +2018,21 @@ until measured; new names and constants go through the screens before use.
      training data, and possibly the base net's).
   4. **Later, a gated move scorer** (idea 54's policy head), consulted only
      at nodes near the window.
+
+  **Further applications** (owner, 2026-11-08), each its own experiment,
+  after the refiner exists or sooner where none is needed:
+  5. **Window-aware LMR** (no refiner needed): reduce less when the move's
+     evaluation is near alpha; its constant by head-to-head selection.
+  6. **Root-gap time management:** extra time when the top two root moves
+     are near-tied; it complements the stability time management (R8).
+  7. **Window-gated tablebase probing** for TCEC's 7-man tables: probe
+     only near the window; measure the probe cost first.
+  8. **TT replacement favouring near-bound entries:** tested at a
+     TCEC-scaled hash (decision 23).
+  9. **Near-window oversampling in data generation's save decision.**
+
+  **Priority** (owner, 2026-11-08): borderline pruning (part 1) first, then
+  window-aware LMR (5), then root-gap time management (6), then the rest.
 - **basis:** idea 59's control split (2026-11-08, ideas.md idea 59): at
   equal call rate the window-gated refiner beat a random gate by about 22
   Elo at fixed nodes, and a constant shift lost, so a better evaluation
