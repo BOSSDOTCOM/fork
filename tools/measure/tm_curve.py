@@ -4,11 +4,15 @@
 Input: the same game_replay.py runs X6 used (`--report iterations` of a stats
 build, one `iteration_trace` row per finished iteration; DESIGN.md §5.7).
 Everything is Fork's own: X6's label (the best move changes within the next
-two iterations), its feature definitions (stability capped at 10, the
-every-pass share's logit clipped to [5, 995] per mille, rows at depth >= 8,
+two iterations), its feature definitions (stability, the every-pass share's logit clipped to [5, 995] per mille, rows at depth >= 8,
 mate and tablebase scores left out) and node_share_fit.py's IRLS fit.
 
 Printed (and written with --json):
+- the stability cap, by the owner's rule declared before it was computed
+  (2026-11-07): the 99th percentile of the stability count over the rows at
+  depth >= 8, the smallest integer whose cumulative share reaches 99% (it
+  replaces X6's cap of 10, which the constant screen found equal to other
+  engines' caps in the same role);
 - the logistic fits: stability alone and stability + share (the literal
   variants), the same with depth (the engine's numerators: variant (a)
   stability, variant (b) stability + share) and depth alone (the
@@ -40,7 +44,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import node_share_fit as nsf  # noqa: E402
 
 MIN_DEPTH = 8          # X6's primary depth
-STABILITY_CAP = 10     # X6's cap
 MATE_FLOOR = 29250     # TbWinScore - MaxPly (src/search/score_bounds.hpp), as X6
 HARD_OVER_SOFT = 4     # src/tune/params.hpp HardOverSoft
 GROWTH_THIRDS = 5      # src/tune/params.hpp IterationGrowthThirds
@@ -69,10 +72,22 @@ def main(argv=None):
     depth_cap = max(d for d, n in per_depth.items() if n >= 0.01 * len(rows))
     out['depth_cap'] = depth_cap
 
+    # The stability cap (the owner's rule, above).
+    counts = {}
+    for r in rows:
+        counts[r['stability']] = counts.get(r['stability'], 0) + 1
+    seen = 0
+    for value in sorted(counts):
+        seen += counts[value]
+        if seen >= 0.99 * len(rows):
+            stability_cap = value
+            break
+    out['stability_cap'] = stability_cap
+
     def features(r, model):
         f = [1.0]
         if 'stability' in model:
-            f.append(min(r['stability'], STABILITY_CAP))
+            f.append(min(r['stability'], stability_cap))
         if 'share' in model:
             f.append(nsf.share_logit(r['share_all']))
         if 'depth' in model:
@@ -100,7 +115,7 @@ def main(argv=None):
 
     def raw_ratio(variant, stability, share_all, depth):
         """The engine's scale before balance and floor."""
-        s, d = min(stability, STABILITY_CAP), min(depth, depth_cap)
+        s, d = min(stability, stability_cap), min(depth, depth_cap)
         if variant in ('a', 'b'):
             z0 = fits['depth'][0] + fits['depth'][1] * d
             c = fits[variant]
