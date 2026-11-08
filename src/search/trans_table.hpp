@@ -13,11 +13,11 @@
 //   low bits) with a whole byte for the age of the search that wrote it, the
 //   move, the score (node-relative for mates and tablebase results,
 //   score_bounds.hpp), the static eval, the depth, and a byte of flags: the
-//   bound and the TT-PV flag (T19). With 24 check bits a false match (another
-//   position's entry) is rare and its move is validated before use, but its
-//   score, bound and depth are used as they are: rare, not harmless (audit-1,
-//   A1 suspicion 9; Hyatt and Cozzie 2005, KB search-techniques.md T4, on how
-//   seldom such errors change the move played).
+//   bound, the TT-PV flag (T19) and the refined flag (the stored static eval
+//   is the Boundary Refiner's, ideas.md 59; never set without a refiner). With 24 check bits a false match
+//   (another position's entry) is rare and its move is validated before use, but its score, bound and depth
+//   are used as they are: rare, not harmless (audit-1, A1 suspicion 9; Hyatt and Cozzie 2005, KB
+//   search-techniques.md T4, on how seldom such errors change the move played).
 // - Replacement follows the KB's description (techniques.md, "Transposition
 //   table"): prefer deeper and current-search entries, replace stale ones.
 // - The bucket is chosen by a multiply-high range reduction of the full
@@ -54,12 +54,13 @@ struct TtEntry {
   std::int16_t score;
   std::int16_t eval;
   std::uint8_t depth;
-  std::uint8_t flags;  // bits 0-1 bound, bit 2 TT-PV
+  std::uint8_t flags;  // bits 0-1 bound, bit 2 TT-PV, bit 3 refined eval
 
   std::uint32_t key_check() const { return key_and_age >> 8; }
   int age() const { return key_and_age & 0xFF; }
   TtBound bound() const { return TtBound(flags & 3); }
   bool was_pv() const { return flags & 4; }
+  bool was_refined() const { return flags & 8; }
 };
 static_assert(sizeof(TtEntry) == 12);
 
@@ -79,6 +80,7 @@ struct TtHit {
   int depth;
   TtBound bound;
   bool was_pv;
+  bool refined;  // eval is the refined static evaluation (ideas.md 59)
 };
 
 // Whether a score with this bound settles a node searched with the window
@@ -130,8 +132,10 @@ class TransTable {
   }
   bool fetch(Key key, TtHit& hit) const;
   // `score` must already be node-relative (score_to_tt). Depth below 0 is
-  // stored as 0 (the quiescence search).
-  void deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv);
+  // stored as 0 (the quiescence search). `refined`: `eval` is the Boundary
+  // Refiner's refined value (ideas.md 59).
+  void deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv,
+               bool refined = false);
 
   // Per mille of a sample of entries written in the current search (UCI hashfull).
   int fill_permille() const;

@@ -67,6 +67,25 @@ TEST_CASE("tt", "deposit then fetch returns the entry; other keys miss; an unbou
   CHECK_EQ(unbound.fill_permille(), 0);
 }
 
+// Idea 59 step 3 (step3-plan.md §2.7): the refined flag rides in the flags
+// byte, is returned as stored, does not disturb the other flags, and is part
+// of the entry's digest (flipping only that bit makes the entry a miss).
+TEST_CASE("tt", "the refined flag is stored, returned and covered by the entry's check") {
+  TestTable t(1);
+  const Key key = 0x2468ace013579bdfULL;
+  TtHit hit{};
+  t.table.deposit(key, Move(12, 28, Quiet), 57, -13, 9, TtBound::Upper, false);
+  CHECK(t.table.fetch(key, hit) && !hit.refined && !hit.was_pv && hit.bound == TtBound::Upper);
+  t.table.deposit(key, Move(12, 28, Quiet), 57, -13, 9, TtBound::Lower, true, true);
+  CHECK(t.table.fetch(key, hit) && hit.refined && hit.was_pv && hit.bound == TtBound::Lower);
+  CHECK_EQ(hit.eval, -13);
+  CHECK(t.storage[0].entries[0].was_refined());
+  t.table.deposit(key, Move(12, 28, Quiet), 57, -13, 9, TtBound::Exact, true, false);
+  CHECK(t.table.fetch(key, hit) && !hit.refined && hit.was_pv && hit.bound == TtBound::Exact);
+  t.storage[0].entries[0].flags ^= 8;  // the refined bit alone, as a torn or corrupted entry
+  CHECK(!t.table.fetch(key, hit));
+}
+
 TEST_CASE("tt", "a bucket holds five positions; a sixth replaces the shallowest, then older searches first") {
   TestTable t(1);  // every key maps to bucket 0
   for (int i = 0; i < 5; ++i) t.table.deposit(Key(i + 1), NoMove, i, 0, 10 + i, TtBound::Exact, false);

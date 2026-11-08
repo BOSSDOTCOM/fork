@@ -83,13 +83,14 @@ bool TransTable::fetch(Key key, TtHit& hit) const {
   for (const TtEntry& slot : b.entries) {
     const TtEntry e = slot;  // one copy, then only the copy is read
     if (e.bound() == TtBound::None || e.key_check() != expected_check(e, check)) continue;
-    hit = {Move::from_raw(e.move), e.score, e.eval, e.depth, e.bound(), e.was_pv()};
+    hit = {Move::from_raw(e.move), e.score, e.eval, e.depth, e.bound(), e.was_pv(), e.was_refined()};
     return true;
   }
   return false;
 }
 
-void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv) {
+void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv,
+                         bool refined) {
   if (!count_) return;
 #ifdef FORK_SEARCH_STATS
   if (hold_writes_) return;  // a decision-ledger side search (X10)
@@ -139,7 +140,7 @@ void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtB
   e.score = static_cast<std::int16_t>(score);
   e.eval = static_cast<std::int16_t>(eval);
   e.depth = static_cast<std::uint8_t>(stored_depth);
-  e.flags = static_cast<std::uint8_t>(static_cast<int>(bound) | (pv ? 4 : 0));
+  e.flags = static_cast<std::uint8_t>(static_cast<int>(bound) | (pv ? 4 : 0) | (refined ? 8 : 0));
   e.key_and_age |= expected_check(e, check) << 8;
   *target = e;  // written whole
 }
