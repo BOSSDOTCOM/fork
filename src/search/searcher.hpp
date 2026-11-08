@@ -313,6 +313,11 @@ struct SearchCounters {
   std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
   std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
   std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
+  // The SPSA calibration's firing counts (tools/github/spsa_calibrate.py; DESIGN.md §5.2): one per margin
+  // whose own decisions no counter above isolates.
+  std::uint64_t aspiration_researches = 0;  // root searches repeated after an aspiration fail
+  std::uint64_t null_surplus_plies = 0;     // null-move reduction plies added for the eval surplus, summed
+  std::uint64_t quiet_see_prunes = 0;       // the quiet moves among see_prunes
 };
 
 class Searcher {

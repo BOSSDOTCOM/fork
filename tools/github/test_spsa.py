@@ -29,6 +29,7 @@ sys.path.insert(0, str(HERE))
 
 import fake_spsa_shard as fake  # noqa: E402
 import spsa  # noqa: E402
+import spsa_calibrate  # noqa: E402
 
 K = math.log(10) / 1600
 
@@ -377,6 +378,47 @@ class SpsaStateTest(unittest.TestCase):
         self.assertEqual((spec['total_pairs'], spec['iterations'] * spec['games']), (10400, 20800))
         self.assertAlmostEqual(spec['gain_end'], 0.0326, delta=1e-4)
 
+
+
+class SpsaCalibrationTest(unittest.TestCase):
+    def test_calibration_interpolates_target(self):
+        # The stats lines as src/search/search_bench.cpp prints them.
+        text = ('stats: cuts rfp 10 null 20; prunes lmp 30 futility 40 see 50\n'
+                'stats: aspiration re-searches 6, null-move surplus plies 7, quiet SEE prunes 8\n')
+        self.assertEqual(spsa_calibrate.parse_stats(text),
+                         {'rfp_cuts': 10, 'null_cuts': 20, 'lmp_prunes': 30, 'futility_prunes': 40, 'see_prunes': 50,
+                          'aspiration_researches': 6, 'null_surplus_plies': 7, 'quiet_see_prunes': 8})
+        with self.assertRaises(ValueError):
+            spsa_calibrate.parse_stats(text.splitlines()[0])
+        table = spsa.table_from_header((ROOT / 'src' / 'tune' / 'params.hpp').read_text(encoding='utf-8'))
+        self.assertEqual(set(spsa_calibrate.COUNTER_FOR_PARAM) - set(table), set())
+
+        # Counts linear in each value: rho(h) = slope * h, so log-linear interpolation is exact: c = target / slope.
+        def bench(settings):
+            v = {n: settings.get(n, table[n][0]) for n in table}
+            quiet = 3000
+            return {'rfp_cuts': 10000 * (1 - 0.1 / 9 * (v['RfpMargin'] - 80)),
+                    'futility_prunes': 5000 * (1 + 1e-5 * (v['FutilityGrowth'] - 70)),
+                    'lmp_prunes': 800 * (1 - 0.5 * (v['LmpQuietAllowance'] - 12)),
+                    'quiet_see_prunes': quiet,
+                    'see_prunes': quiet + 2000 * (1 + 0.1 / 12 * (v['CaptureSeeFloor'] - 100)),
+                    'null_cuts': 0, 'aspiration_researches': 100, 'null_surplus_plies': 400}
+        out = {e['name']: e for e in spsa_calibrate.calibrate(
+            ['RfpMargin', 'FutilityGrowth', 'LmpQuietAllowance', 'CaptureSeeFloor'], table, bench, 0.10)}
+        self.assertEqual((out['RfpMargin']['c'], out['RfpMargin']['insensitive']), (9.0, False))
+        self.assertEqual([row[0] for row in out['RfpMargin']['points']][:2], [6, 12])
+        self.assertEqual((out['CaptureSeeFloor']['c'], out['CaptureSeeFloor']['counter']),
+                         (12.0, 'see_prunes - quiet_see_prunes'))
+        self.assertEqual(out['LmpQuietAllowance']['c'], 1.0)  # 0.2 by the rule, raised to integer resolution
+        # FutilityGrowth barely moves its count: 8 steps cut to the range (35), flagged, capped at a quarter
+        # of the range.
+        self.assertEqual([row[0] for row in out['FutilityGrowth']['points']], [5, 10, 20, 35])
+        self.assertTrue(out['FutilityGrowth']['insensitive'])
+        self.assertEqual(out['FutilityGrowth']['c'], round((140 - 35) / 4, 1))
+        # Between bracketing points: log-linear interpolation.
+        c, flag = spsa_calibrate.calibrated_c([(1, 0.05), (2, 0.2)], 0.1)
+        self.assertAlmostEqual(c, math.sqrt(2), places=12)
+        self.assertFalse(flag)
 
 if __name__ == '__main__':
     unittest.main()

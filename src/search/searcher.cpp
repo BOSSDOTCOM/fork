@@ -259,6 +259,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (switches.use_nmp && can_prune_node && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
       prune_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
     const int surplus_plies = std::min((prune_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
+    FORK_STAT(counters.null_surplus_plies += static_cast<std::uint64_t>(surplus_plies));
     const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)
     play_null(ply);
@@ -404,6 +405,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #ifdef FORK_SEARCH_STATS
         counters.bad_captures_after_stop_pruned += bad_after_stop;
         ++counters.see_prunes;
+        if (quiet) ++counters.quiet_see_prunes;
 #endif
         continue;  // SEE pruning (T23)
       }
@@ -762,6 +764,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       score = search_root(alpha, beta, depth);
       if (stopped_) break;
       if (score > alpha && score < beta) break;
+      FORK_STAT(++counters.aspiration_researches);
       if (elapsed_ms() >= fail_report_ms) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
       // Only the failing side moves. The half-width grows by how far the
       // fail-soft score already is from the previous iteration's: at least
