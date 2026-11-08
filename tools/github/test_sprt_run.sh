@@ -13,7 +13,9 @@
 # supervisor it refuses; it takes its own run by title even when another
 # run was dispatched just after it; every dispatched run is in the ledger;
 # RUN_ID needs a ledger record; a stage folder the ledger does not record
-# stops it, unmerged. Uses python3 (or $PYTHON) for the merge and the
+# stops it, unmerged. Since 2026-11-08: a transient gh failure (injected) of
+# the commit check, the conclusion or the download is retried, its message
+# logged; a lasting one still stops it. Uses python3 (or $PYTHON) for the merge and the
 # ledger.
 #
 #   bash tools/github/test_sprt_run.sh
@@ -37,11 +39,22 @@ cat >"$tmp/gh" <<'EOF'
 # (the newest sprt run id), titles (each run's "ID TITLE", newest first),
 # intruder (if present, another run is dispatched right after each of
 # ours), commits (shas on GitHub), run.<id> (its inputs), fail.<id>,
-# foreign.<id>, ptnml (each shard's pentanomial counts).
+# foreign.<id>, ptnml (each shard's pentanomial counts), flaky.<kind> (that
+# many failures still to inject for api, conclusion or download).
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
+flake() {
+  local f=$st/flaky.$1 n
+  [ -f "$f" ] || return 0
+  n=$(cat "$f")
+  [ "$n" -gt 0 ] || return 0
+  echo $((n - 1)) >"$f"
+  echo "fake gh: $1: connection reset (injected)" >&2
+  exit 1
+}
 case "$1 $2" in
   "api "*)
+    flake api
     grep -qx "${2##*/}" "$st/commits" ;;
   "run list")
     if [[ "$*" == *displayTitle* ]]; then
@@ -66,11 +79,13 @@ case "$1 $2" in
     echo $id >"$st/latest" ;;
   "run view")
     if [[ "$*" == *conclusion* ]]; then
+      flake conclusion
       if [ -f "$st/fail.$3" ]; then echo failure; else echo success; fi
     else
       echo completed
     fi ;;
   "run download")
+    flake download
     id=$3
     dir=${!#}  # the last argument, -D's
     . "$st/run.$id"
@@ -105,7 +120,7 @@ drive() {  # label args...
   local label=$1
   shift
   FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data \
-    FORK_JOBS=$tmp/$label/jobs SPRT_UNSUPERVISED=${UNSUPERVISED-1} \
+    FORK_JOBS=$tmp/$label/jobs SPRT_UNSUPERVISED=${UNSUPERVISED-1} GH_TRIES=3 GH_RETRY_WAIT=0 \
     bash "$here/sprt_run.sh" "$label" "$@" >"$tmp/$label/out" 2>&1
   echo $? >"$tmp/$label/rc"
 }
@@ -204,6 +219,22 @@ cp "$tmp/undecided/data/undecided/s0/shard-0-0/result.json" "$tmp/stray/data/str
 drive stray "$sha" "$sha" 0 5 1 1
 check "an unrecorded stage folder exits 1" [ "$(rc stray)" = 1 ]
 check "the stray stage is named, nothing merged" bash -c "grep -q \"stage 0's results (run 400) are not in the ledger\" '$tmp/stray/out' && ! grep -q LLR '$tmp/stray/out'"
+
+# 26-29: transient gh failures (2026-11-08: a download and a commit check failed within a minute while
+# GitHub was healthy) are retried: two injected failures each of the commit check, the conclusion and the
+# download, with three tries allowed, still decide the SPRT, and gh's message is in the driver's log.
+setup flaky 0 "$strong"
+for k in api conclusion download; do echo 2 >"$tmp/flaky/flaky.$k"; done
+drive flaky "$sha" "$sha" 0 5
+check "transient gh failures are retried: H1 exits 0" [ "$(rc flaky)" = 0 ]
+check "still one dispatch" [ "$(dispatches flaky)" = 1 ]
+check "gh's message is logged" grep -q "attempt 1 of 3 failed: fake gh: download: connection reset (injected)" "$tmp/flaky/data/flaky/driver.log"
+# 30-31: a lasting failure still stops it, unmerged.
+setup flakyall 0 "$strong"
+echo 9 >"$tmp/flakyall/flaky.download"
+drive flakyall "$sha" "$sha" 0 5
+check "a lasting download failure exits 1" [ "$(rc flakyall)" = 1 ]
+check "it is named, nothing merged" bash -c "grep -q \"run 501's download failed\" '$tmp/flakyall/out' && ! grep -q LLR '$tmp/flakyall/out'"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"

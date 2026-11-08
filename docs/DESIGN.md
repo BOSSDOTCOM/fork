@@ -1203,7 +1203,12 @@ because update.sh refuses it.
   shard results whose meta names its own base, test and stage
   (2026-11-02, after a cancelled SPRT's local driver kept dispatching
   stages; `tools/github/test_sprt_run.sh` checks each rule with a fake gh).
-  **Since 2026-11-05 (owner) it runs only under the job supervisor**
+  Since 2026-11-08 its commit check, conclusion read and results download
+  retry a transient gh failure (`GH_TRIES`, default 5, `GH_RETRY_WAIT`
+  seconds apart, default 30; each failure's message in the driver's log)
+  and stop only on a lasting one: twice in one night a healthy run's
+  download, and once a commit check, failed and ended a screen, with gh's
+  message discarded. **Since 2026-11-05 (owner) it runs only under the job supervisor**
   (`tools/jobs/jobctl.py start github NAME -- bash tools/github/sprt_run.sh
   ...`: one job of type `github` at a time; `jobctl.py stop NAME` ends the
   driver's whole process tree and verifies none is left before it releases
