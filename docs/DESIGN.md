@@ -4073,14 +4073,31 @@ leaves the search exactly S512ppr3's while paying the whole per-call cost:
   quiescence sites, 8.40% of 14,149,617 nodes; of 443,232 reused
   evaluations the gate fires on, 315,402 were already refined when stored
   (M4); G1 adds 88,322 calls (0.62% of nodes).
-- **Measurements prepared, not run** (the speed A/B waits for a quiet window
-  the owner chooses): bench/ab_search.py gained `--a-args`/`--b-args`, so
-  one refiner binary can be timed against itself with the gate off and on;
-  fork_micro gained a call's parts (M2, for bench/ab.py), each labelled by
-  the function it times: exposed_pieces, danger_summary, refiner_pack,
-  refiner_rows, refiner_l1 (the entry layer), refiner_l2_heads (the middle
-  layer and heads), gate_fires (the test at every computed evaluation),
-  refiner_layers and refiner_call (pack, rows, layers).
+- **Measurement tooling:** bench/ab_search.py's `--a-args`/`--b-args` (one
+  refiner binary timed against itself, gate off and on); fork_micro's
+  parts of a call (M2), each labelled by the function it times;
+  tools/measure/refiner_speed.sh (build, run, profile, report).
+- **The speed gate S1, measured** (2026-11-08, a quiet window; Windows, not
+  pinned; plan section "Owner decision, 2026-11-08" for the method):
+
+  | Shape, setting | bench nps, gate off -> on | cost per call in the search | nps loss at the in-game rate | price, Elo [1.26-1.80 per 1%] | net against the oracle proxy | lines |
+  |---|---|---|---|---|---|---|
+  | entry 16, (b) 25/25 | -10.7% | 410 ns | 9.0% | 13.5 [11.4, 16.2] | +27.5 [+14.8, +39.6] | over 5% |
+  | entry 16, (a) 25/10 | -5.9% | 405 ns | 5.1% | 7.6 [6.4, 9.1] | +22.2 [+10.9, +33.2] | over 5% |
+  | entry 8, (b) | -7.5% | 278 ns | 6.3% | 9.5 [8.0, 11.4] | +31.5 [+19.6, +43.0] | over 5% |
+  | entry 8, (a) | -4.4% | 300 ns | 3.8% | 5.7 [4.8, 6.9] | +24.1 [+13.1, +34.8] | within 5%, over 3% |
+  | entry 16 + danger summary, (b) | -11.7% | 466 ns | 9.9% | 14.8 [12.5, 17.8] | +26.2 [+13.2, +38.5] | over 5% |
+  | entry 16 + danger summary, (a) | -7.4% | 520 ns | 6.4% | 9.6 [8.1, 11.5] | +20.2 [+8.5, +31.5] | over 5% |
+
+  A call's parts (entry 16): pack 23.8 ns, rows 22.3 (exposure 14.6),
+  **entry layer 246.2**, middle layer and heads 34.8, a whole call 337.0;
+  the gate's test 1.17 ns per computed evaluation; the danger summary 26.5;
+  the 8-wide entry layer 117.3, its call 208. G1 -0.7% (not significant);
+  the overhead without calls -2.8% (not significant); phase-4 against this
+  branch +0.1%. **The AVX2 entry layer is the bottleneck:** no shape meets
+  the 3% line; only entry 8 at setting (a) is within 5%. Next (owner): a
+  [-32, 32] dense-weight bound and an AVX-512 VNNI entry layer on the 8-wide
+  shape, the AVX2 path judged first.
 - **Tests:** the refiner suite (every build; the search's use in refiner
   builds), the TT flag's (tt) and advance_to's (nnue) cases, the refiner
   build's three benches, tools/nnue's zero-file test, and a fuzz target for

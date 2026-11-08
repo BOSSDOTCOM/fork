@@ -111,6 +111,63 @@ layer's four-unit hadd reduction resembled a common idiom and became one
 horizontal_sum per unit (AF-S's form); whether that costs speed is read in
 the quiet A/B.
 
+**The speed gate S1, measured (2026-11-08, quiet window 12:22-12:48 PM EST;
+tools/measure/refiner_speed.sh at 2b1c78b, results in ~/fork-measure/i59s3;
+Windows, the A/B not pinned to a core, residual load under one core; every
+binary's bench 14,149,617 / 1cb0717f040c294d):**
+
+| Shape, setting | bench nps, gate off -> on | cost per call in the search | nps loss at the in-game rate | price, Elo [1.26-1.80 per 1%] | net against the oracle proxy | lines |
+|---|---|---|---|---|---|---|
+| entry 16, (b) 25/25 | -10.7% | 410 ns | 9.0% | 13.5 [11.4, 16.2] | +27.5 [+14.8, +39.6] | over 5% |
+| entry 16, (a) 25/10 | -5.9% | 405 ns | 5.1% | 7.6 [6.4, 9.1] | +22.2 [+10.9, +33.2] | over 5% |
+| entry 8, (b) | -7.5% | 278 ns | 6.3% | 9.5 [8.0, 11.4] | +31.5 [+19.6, +43.0] | over 5% |
+| entry 8, (a) | -4.4% | 300 ns | 3.8% | 5.7 [4.8, 6.9] | +24.1 [+13.1, +34.8] | within 5%, over 3% |
+| entry 16 + danger summary, (b) | -11.7% | 466 ns | 9.9% | 14.8 [12.5, 17.8] | +26.2 [+13.2, +38.5] | over 5% |
+| entry 16 + danger summary, (a) | -7.4% | 520 ns | 6.4% | 9.6 [8.1, 11.5] | +20.2 [+8.5, +31.5] | over 5% |
+
+The bench calls the refiner at 8.40% of nodes at (b) and 4.47% at (a); the
+in-game rates are the oracle's S512r2 replays (6.97%, 3.81%). Other A/Bs:
+G1 -0.7% (not significant; +0.62% of nodes called); the overhead without
+calls (release against the refiner build with its gate off) -2.8% median,
+-1.7% best (not significant at the 3% threshold); the release build against
+the refiner build at its defaults -12.8%; phase-4 d89814f against this
+branch's release build +0.1% (none). A call's parts:
+
+| Part (ns per call, entry 16; A/A medians of 10 interleaved rounds) | ns |
+|---|---|
+| pack the clipped accumulator (refiner_pack) | 23.8 |
+| all rows (refiner_rows; the exposure pass alone, exposed_pieces, 14.6) | 22.3 |
+| **entry layer (refiner_l1)** | **246.2** |
+| middle layer and heads (refiner_l2_heads) | 34.8 |
+| a whole call (refiner_call: pack, rows, layers) | 337.0 |
+| the gate's test, per computed evaluation (gate_fires) | 1.17 |
+| the danger summary (danger_summary) | 26.5 |
+
+The 8-wide entry layer takes 117.3 ns (-52%), its whole call 208 ns
+(-38%). The danger summary adds 55% to the rows and 20% to a call (410 ns).
+In the search a call costs about 70 ns more than in fork_micro (cache
+pressure and bookkeeping, UNVERIFIED). perf in WSL (gate on): refiner_l1
+6.83% of samples, refiner_l2_heads 1.59%, refined_eval_at 1.13% (pack and
+rows inlined), exposed_pieces 0.77%. **The AVX2 entry layer is the
+bottleneck** (73% of a call, multiply-throughput bound): every shape misses
+the 3% design line, and only the 8-wide shape at setting (a) is within the
+5% hard line. Break-even against the oracle proxy: (b) 27.3% [17.2%,
+40.5%], (a) 19.9% [11.1%, 31.4%], a ceiling; F1's line (max(+8.6, price +
+5)) would ask about +18.5 Elo of entry 16 at (b), +14.5 of entry 8 at (b),
++10.7 of entry 8 at (a).
+
+**Owner decision after the A/B (2026-11-08):** build, on the 8-wide entry
+shape, (i) a dense-weight bound of [-32, 32] (two 8-bit multiply-add
+results then sum exactly in int16 before one widening, halving those
+widenings) and (ii) an AVX-512 VNNI entry layer; measure both in a second
+quiet window, judging the AVX2 path first (GitHub's SPRT shards run
+x86-64-v3, so the AVX2 cost is what the SPRT charges; VNNI matters for TCEC
+only once TCEC confirms VNNI support). The offline acceptance must show the
+[-32, 32] clip costs no judgement: refiners trained at +-64 and at +-32
+compared on the held-out near-window set (explained variance, flip accuracy
+at crucial sites, and A3, beating a constant shift). The refiner lanes stay
+untouched. Meanwhile the 3,000-site labelling pilot and P0 run.
+
 ## 0. The design in brief
 
 1. S512ppr3 evaluates everywhere, unchanged. Where the gate fires (the base
