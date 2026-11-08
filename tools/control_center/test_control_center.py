@@ -672,6 +672,11 @@ class Seal(unittest.TestCase):
         end, games, positions, unsaved, res = seal_part.complete_games(data)
         self.assertEqual((end, games, positions, unsaved, res), (len(game(2, 3)) + len(game(0, 2)), 2, 5, 1,
                                                                   [1, 0, 1]))
+        # A shard cut by a power loss (2026-11-07, g3h): its tail is zero-filled (the file had grown, its last
+        # blocks never reached the disk). Zeros would parse as empty games on an empty board; a real board
+        # always has pieces, so the first zero-occupancy board ends the complete games.
+        data = game(2, 3) + game(0, 2) + bytes(1048)
+        self.assertEqual(seal_part.complete_games(data)[:3], (len(game(2, 3)) + len(game(0, 2)), 2, 5))
 
     def test_real_g3d_copies(self):
         """Each shard of the sealed g3d copy holds exactly the games and positions its manifest lists (counts
