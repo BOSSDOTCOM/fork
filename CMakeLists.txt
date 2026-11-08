@@ -207,6 +207,39 @@ else()
   set(FORK_NET_ARCH 1)
 endif()
 
+# The Boundary Refiner (ideas.md 59, step 3; docs/research/boundary-refiner/
+# step3-plan.md): FORK_REFINER_NET names a refiner file (.frnet), compiled in
+# beside FORK_NET and consulted by the search only where its gate fires
+# (src/search/refiner_gate.hpp). Empty by default, and then the search and
+# the engine are exactly as without it. The refiner's inference is compiled
+# and tested in every build, shaped by the refiner file's header (its
+# architecture at byte 12, its entry layer's width at byte 16; 1 and 16
+# without a file). FORK_REFINER_MARGIN_MAIN and FORK_REFINER_MARGIN_QUIESCE
+# are the gate's default margins in cp (the UCI options' and `fork bench`'s
+# defaults; -1: never).
+set(FORK_REFINER_NET "" CACHE FILEPATH "Refiner builds only: the Boundary Refiner's file (ideas.md 59)")
+set(FORK_REFINER_MARGIN_MAIN 25 CACHE STRING "Refiner builds only: the gate's default main-search margin in cp")
+set(FORK_REFINER_MARGIN_QUIESCE 25 CACHE STRING "Refiner builds only: the gate's default quiescence margin in cp")
+set(FORK_REFINER_ARCH 1)
+set(FORK_REFINER_L1 16)
+if(FORK_REFINER_NET)
+  if(NOT FORK_EVALUATOR STREQUAL "nnue" OR NOT EXISTS ${FORK_REFINER_NET})
+    message(FATAL_ERROR "FORK_REFINER_NET needs FORK_EVALUATOR=nnue and an existing file (${FORK_REFINER_NET})")
+  endif()
+  file(READ ${FORK_REFINER_NET} fork_refiner_header_hex OFFSET 12 LIMIT 8 HEX)
+  string(SUBSTRING "${fork_refiner_header_hex}" 0 2 FORK_REFINER_ARCH)
+  math(EXPR FORK_REFINER_ARCH "0x${FORK_REFINER_ARCH}")
+  string(SUBSTRING "${fork_refiner_header_hex}" 8 2 FORK_REFINER_L1)
+  math(EXPR FORK_REFINER_L1 "0x${FORK_REFINER_L1}")
+  get_filename_component(fork_refiner_stem ${FORK_REFINER_NET} NAME_WE)
+  set(fork_refiner_source ${CMAKE_BINARY_DIR}/generated/embedded_refiner_data.cpp)
+  add_custom_command(OUTPUT ${fork_refiner_source}
+    COMMAND ${CMAKE_COMMAND} -DNET=${FORK_REFINER_NET} -DOUT=${fork_refiner_source} -DSYMBOL=embedded_refiner
+            -P ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    DEPENDS ${FORK_REFINER_NET} ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    COMMENT "Embedding the refiner ${FORK_REFINER_NET}")
+endif()
+
 # Evaluation and search (src/eval/, src/search/ except the hash memory).
 add_library(forksearch STATIC
   src/eval/bootstrap_eval.cpp
@@ -254,8 +287,20 @@ target_link_libraries(forkuci PUBLIC forksearch ${fork_threads} PRIVATE fork_pgo
 add_library(forknnue STATIC
   src/eval/nnue/accumulator.cpp
   src/eval/nnue/contacts.cpp
-  src/eval/nnue/net_file.cpp)
-target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH})
+  src/eval/nnue/danger_summary.cpp
+  src/eval/nnue/net_file.cpp
+  src/eval/nnue/refiner.cpp
+  src/eval/nnue/refiner_file.cpp)
+target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH}
+  FORK_REFINER_ARCH=${FORK_REFINER_ARCH} FORK_REFINER_L1=${FORK_REFINER_L1})
+# Refiner builds (ideas.md 59): public, so the search, the UCI layer and the
+# tests see the refiner's declarations; the embedded file and its loader go
+# with the search, beside the base network's.
+if(FORK_REFINER_NET)
+  target_compile_definitions(forknnue PUBLIC FORK_REFINER
+    FORK_REFINER_MARGIN_MAIN=${FORK_REFINER_MARGIN_MAIN} FORK_REFINER_MARGIN_QUIESCE=${FORK_REFINER_MARGIN_QUIESCE})
+  target_sources(forksearch PRIVATE src/eval/nnue/embedded_refiner.cpp ${fork_refiner_source})
+endif()
 # Stats builds count the feature stack's work too (DESIGN.md §5.7, X1); public,
 # so every user of accumulator.hpp sees the same FeatureStack layout.
 if(FORK_SEARCH_STATS)
@@ -308,6 +353,10 @@ target_compile_definitions(fork PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}"
 # fork_datagen's run manifest names the labelling network the same way, so
 # data labelled by different nets stays apart (owner, 2026-10-30).
 target_compile_definitions(fork_datagen PRIVATE FORK_NET_NAME="${fork_net_stem_for_version}")
+# A refiner build's `fork version` also names its refiner (ideas.md 59).
+if(FORK_REFINER_NET)
+  target_compile_definitions(fork PRIVATE FORK_REFINER_NAME="${fork_refiner_stem}")
+endif()
 
 # The web page's entry points (src/web/; DESIGN.md §5.5): a synchronous
 # interface for one Web Worker, tested natively in fork_tests.
@@ -340,7 +389,9 @@ add_executable(fork_hash_timing tools/hash_timing.cpp)
 target_link_libraries(fork_hash_timing PRIVATE forkuci)
 
 add_executable(fork_micro bench/micro.cpp)
-target_link_libraries(fork_micro PRIVATE forkcore)
+# The search library for the network (the Boundary Refiner's cases, ideas.md
+# 59: its parts on the embedded network's accumulators).
+target_link_libraries(fork_micro PRIVATE forkcore forksearch forknnue)
 # fork_micro reports its variant and commit so bench/ab.py can verify that it
 # compares the binaries it was told to (see cmake/build_id.cmake).
 set(FORK_BUILD_LABEL "" CACHE STRING "Variant name embedded in fork_micro (default: FORK_EXPERIMENT, else 'baseline')")
@@ -377,7 +428,7 @@ if(FORK_FUZZ)
   else()
     target_compile_options(fork_flags INTERFACE -fsanitize=fuzzer-no-link)
   endif()
-  foreach(target fuzz_fen fuzz_moves fuzz_uci fuzz_game_record)
+  foreach(target fuzz_fen fuzz_moves fuzz_uci fuzz_game_record fuzz_refiner_file)
     add_executable(${target} fuzz/${target}.cpp)
     target_link_libraries(${target} PRIVATE forkuci forkdatagen)
     target_include_directories(${target} PRIVATE ${CMAKE_SOURCE_DIR}/tests)  # uci_message.hpp
@@ -426,6 +477,7 @@ if(FORK_BUILD_TESTS)
     tests/test_params.cpp
     tests/test_datagen.cpp
     tests/test_nnue.cpp
+    tests/test_refiner.cpp
     tests/test_web.cpp)
   target_link_libraries(fork_tests PRIVATE forkuci forkdatagen forknnue forkweb)
   # The UCI suites drive the real engine binary over pipes.
@@ -556,7 +608,7 @@ if(FORK_BUILD_TESTS)
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
                 search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue
-                web)
+                refiner web)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
@@ -654,6 +706,9 @@ if(FORK_BUILD_TESTS)
   get_filename_component(fork_net_name ${FORK_NET} NAME_WE)
   if(FORK_EVALUATOR STREQUAL "bootstrap")
     set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench.ref)
+  elseif(FORK_REFINER_NET)
+    # A refiner build's bench, at the default margins (ideas.md 59).
+    set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench-${fork_net_name}-${fork_refiner_stem}.ref)
   else()
     set(fork_bench_ref ${CMAKE_SOURCE_DIR}/tests/bench-${fork_net_name}.ref)
   endif()
@@ -662,6 +717,22 @@ if(FORK_BUILD_TESTS)
       -DFORK=$<TARGET_FILE:fork> -DCMD=bench
       -DREF=${fork_bench_ref}
       -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+  endif()
+  if(FORK_REFINER_NET)
+    # With the gate off, a refiner build is exactly its base network alone:
+    # the base's own bench. And G1 (refining reused evaluations) at the
+    # default margins: for a zero-output refiner, the same bench again.
+    add_test(NAME refiner_off_bench COMMAND ${CMAKE_COMMAND}
+      -DFORK=$<TARGET_FILE:fork> -DCMD=bench "-DARGS=-1 -1"
+      -DREF=${CMAKE_SOURCE_DIR}/tests/bench-${fork_net_name}.ref
+      -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+    if(EXISTS ${fork_bench_ref})
+      add_test(NAME refiner_reused_bench COMMAND ${CMAKE_COMMAND}
+        -DFORK=$<TARGET_FILE:fork> -DCMD=bench
+        "-DARGS=${FORK_REFINER_MARGIN_MAIN} ${FORK_REFINER_MARGIN_QUIESCE} reused"
+        -DREF=${fork_bench_ref}
+        -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
+    endif()
   endif()
   add_test(NAME perft_bench_parity COMMAND ${CMAKE_COMMAND}
     -DFORK=$<TARGET_FILE:fork> -DCMD=perftbench

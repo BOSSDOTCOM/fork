@@ -98,6 +98,19 @@ screen):**
   (5%) stand, since a trained refiner keeps only part of the oracle's gain
   (F1's line, section 5).
 
+**XGR's exposure rule** (`exposed_pieces`, the refiner's exposure rows) was
+screened on 2026-11-08 (verdict: a note; no network input in the four
+engines flags each piece this way; related concepts credited):
+ORIGINALITY.md, the row "XGR's exposure rule and plane" (phase-4 395ce1a,
+cherry-picked onto idea59/step3).
+
+**The constant screen (2026-11-08)** found the widths 16 / 32 and the
+alternative 8 in other engines' layers and the safe-check buckets a near
+match by role; the owner kept them with credit (ORIGINALITY.md). The entry
+layer's four-unit hadd reduction resembled a common idiom and became one
+horizontal_sum per unit (AF-S's form); whether that costs speed is read in
+the quiet A/B.
+
 ## 0. The design in brief
 
 1. S512ppr3 evaluates everywhere, unchanged. Where the gate fires (the base

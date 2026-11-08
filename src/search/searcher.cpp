@@ -34,6 +34,9 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
 #endif
+#ifdef FORK_REFINER
+  refiner_ = &embedded_refiner();  // the same for the Boundary Refiner
+#endif
 }
 
 [[gnu::always_inline]] inline void Searcher::play(int ply, Move m) {
@@ -60,6 +63,55 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
   return static_eval(*pos_);
 #endif
 }
+
+#ifdef FORK_REFINER
+RefinerOutput Searcher::refine_at(int ply, int base_eval) {
+  RefinerInputs in;
+  pack_clipped(features_.advance_to(*net_, ply), pos_->side_to_move(), in.bytes);
+  in.row_count = refiner_rows(*net_, *pos_, base_eval, in.rows);
+#ifdef FORK_SEARCH_STATS
+  for (const std::uint8_t b : in.bytes) refiner_tally_.zero_bytes += b == 0;  // the plan's M3
+#endif
+  return run_refiner(*refiner_, in);
+}
+
+int Searcher::refined_eval_at(int ply, int alpha, int beta, int depth, bool quiesce, const TtHit* reused) {
+  PlyFrame& f = frames_[ply];
+  f.refined = false;
+  f.correction = f.confidence = 0;
+  int base;
+  if (reused) {
+    base = reused->eval;
+    const bool near = gate_fires(refiner_gate, GateSite{*pos_, base, alpha, beta, depth, ply, quiesce});
+    refiner_tally_.reused_near += near;
+    if (reused->refined) {
+      // Sticky (the plan's §2.7): a stored refined value is used as it is,
+      // whatever the window; its base was not kept.
+      refiner_tally_.reused_refined += near;
+      f.base_eval = ScoreNone;
+      f.refined = true;
+      return base;
+    }
+    f.base_eval = base;
+    if (!near || !refiner_gate.refine_reused) return base;
+    ++refiner_tally_.reused_calls;
+  } else {
+    base = eval_at(ply);
+    f.base_eval = base;
+    ++(quiesce ? refiner_tally_.quiesce_evals : refiner_tally_.main_evals);
+    if (!gate_fires(refiner_gate, GateSite{*pos_, base, alpha, beta, depth, ply, quiesce})) return base;
+    ++(quiesce ? refiner_tally_.quiesce_calls : refiner_tally_.main_calls);
+  }
+  const RefinerOutput out = refine_at(ply, base);
+  const int used = std::clamp(base + out.correction, -(EvalLimit - 1), EvalLimit - 1);
+  refiner_tally_.shift_sum += used - base;
+  refiner_tally_.abs_shift_sum += used > base ? used - base : base - used;
+  f.refined = true;
+  f.correction = out.correction;
+  f.confidence = out.confidence;
+  return used;
+}
+#endif
 
 namespace {
 
@@ -259,7 +311,19 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
   }
 
+#ifdef FORK_REFINER
+  // The Boundary Refiner's main-search site (ideas.md 59, the plan's §2.6).
+  if (in_check) {
+    f.static_eval = f.base_eval = ScoreNone;
+    f.refined = false;
+    f.correction = f.confidence = 0;
+  } else {
+    f.static_eval =
+        refined_eval_at(ply, alpha, beta, depth, false, tt_hit && hit.eval != ScoreNone ? &hit : nullptr);
+  }
+#else
   f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
+#endif
   FORK_STAT(++(in_check                          ? counters.check_nodes_main
                : tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_main
                                                  : counters.evals_main));
@@ -708,7 +772,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   best = std::clamp(best, table_floor, table_ceiling);
   if (switches.use_tt && !withheld) {
     const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
+#ifdef FORK_REFINER
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv, f.refined);
+#else
     tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
+#endif
   }
   return best;
 }
@@ -747,9 +815,20 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   int best = -ScoreInfinite;
   if (in_check) {
     f.static_eval = ScoreNone;
+#ifdef FORK_REFINER
+    f.base_eval = ScoreNone;
+    f.refined = false;
+    f.correction = f.confidence = 0;
+#endif
     FORK_STAT(++counters.check_nodes_quiesce);
   } else {
+#ifdef FORK_REFINER
+    // The Boundary Refiner's quiescence site, the stand pat (ideas.md 59).
+    f.static_eval =
+        refined_eval_at(ply, alpha, beta, 0, true, tt_hit && hit.eval != ScoreNone ? &hit : nullptr);
+#else
     f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
+#endif
     FORK_STAT(++(tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_quiesce : counters.evals_quiesce));
 #ifdef FORK_SEARCH_STATS
     // Crucial-point ground truth: a sampled quiescence evaluation site.
@@ -771,8 +850,13 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 #endif
     best = f.static_eval;
     if (best >= beta) {
-      if (switches.use_tt)
+      if (switches.use_tt) {
+#ifdef FORK_REFINER
+        tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv, f.refined);
+#else
         tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);
+#endif
+      }
       return best;
     }
     alpha = std::max(alpha, best);
@@ -811,7 +895,11 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   if (in_check && moves_searched == 0) return mated_score(ply);
   if (switches.use_tt) {
     const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
+#ifdef FORK_REFINER
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, OnPv, f.refined);
+#else
     tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, OnPv);
+#endif
   }
   return best;
 }
@@ -968,6 +1056,9 @@ int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::a
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);
 #endif
+#ifdef FORK_REFINER
+  refiner_tally_ = RefinerTally{};
+#endif
   return negamax<false>(beta - 1, beta, depth, 0);
 }
 
@@ -987,6 +1078,9 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
 
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);
+#endif
+#ifdef FORK_REFINER
+  refiner_tally_ = RefinerTally{};
 #endif
   tt_.advance_age();
   tt_.set_age_blend(switches.tt_age_blend);

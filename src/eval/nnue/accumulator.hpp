@@ -37,6 +37,10 @@
 
 #include <cstdint>
 
+#if defined(__AVX2__)
+#include <immintrin.h>
+#endif
+
 #include "core/position.hpp"
 #include "eval/nnue/net_file.hpp"
 #include "search/score_bounds.hpp"
@@ -60,6 +64,17 @@ struct Frame {
 };
 
 Frame frame_of(const NetFile& net, Color perspective, Square own_king);
+
+#if defined(__AVX2__)
+// The sum of an AVX2 register's eight int32 lanes: the last step of every
+// vector dot product here and of the Boundary Refiner's entry layer.
+[[maybe_unused]] inline std::int64_t horizontal_sum(__m256i v) {
+  const __m128i s = _mm_add_epi32(_mm256_castsi256_si128(v), _mm256_extracti128_si256(v, 1));
+  const __m128i s2 = _mm_add_epi32(s, _mm_shuffle_epi32(s, 0x4E));
+  const __m128i s3 = _mm_add_epi32(s2, _mm_shuffle_epi32(s2, 0xB1));
+  return _mm_cvtsi128_si32(s3);
+}
+#endif
 
 constexpr int feature_index(Color perspective, Piece piece, Square sq, Frame f = {}) {
   const Square seen = perspective == White ? sq : sq ^ 56;

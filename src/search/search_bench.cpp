@@ -100,7 +100,11 @@ std::uint64_t signature_mix(std::uint64_t signature, std::uint64_t value) {
 
 std::span<const std::string_view> search_bench_fens() { return BenchFens; }
 
+#ifdef FORK_REFINER
+SearchBenchResult run_search_bench(const RefinerGate& gate, RefinerTally* tally) {
+#else
 SearchBenchResult run_search_bench() {
+#endif
   SearchBenchResult r{0, 0, 0.0};
   // 16 MB of Hash, cleared before each position (a cleared search state).
   HashMemory table_memory;
@@ -113,6 +117,9 @@ SearchBenchResult run_search_bench() {
   TransTable table;
   table.bind_memory(table_memory.data(), table_memory.bytes());
   auto searcher = std::make_unique<Searcher>(table);
+#ifdef FORK_REFINER
+  searcher->refiner_gate = gate;
+#endif
   const std::atomic<bool> stop{false};
   SearchQuota limits;
   limits.depth = BenchDepth;
@@ -132,6 +139,21 @@ SearchBenchResult run_search_bench() {
     r.signature = signature_mix(r.signature, s.best.raw());
     r.signature = signature_mix(r.signature, static_cast<std::uint64_t>(static_cast<std::int64_t>(s.score)));
     r.signature = signature_mix(r.signature, static_cast<std::uint64_t>(s.depth));
+#ifdef FORK_REFINER
+    if (tally) {
+      const RefinerTally& t = searcher->refiner_tally();
+      tally->main_evals += t.main_evals;
+      tally->main_calls += t.main_calls;
+      tally->quiesce_evals += t.quiesce_evals;
+      tally->quiesce_calls += t.quiesce_calls;
+      tally->reused_near += t.reused_near;
+      tally->reused_refined += t.reused_refined;
+      tally->reused_calls += t.reused_calls;
+      tally->shift_sum += t.shift_sum;
+      tally->abs_shift_sum += t.abs_shift_sum;
+      tally->zero_bytes += t.zero_bytes;
+    }
+#endif
   }
   r.seconds = seconds;
 #ifdef FORK_SEARCH_STATS

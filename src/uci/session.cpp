@@ -206,6 +206,25 @@ void UciSession::declare_options() {
                       });
   }
 #endif
+#ifdef FORK_REFINER
+  // Refiner builds (ideas.md 59, step 3): the gate's margins in cp (-1:
+  // never) and G1, refining reused TT evaluations (search/refiner_gate.hpp).
+  options_.add_spin("RefinerMarginMain", searcher_->refiner_gate.margin_main, -1, 255,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->refiner_gate.margin_main = static_cast<int>(e.number);
+                      return true;
+                    });
+  options_.add_spin("RefinerMarginQuiesce", searcher_->refiner_gate.margin_quiesce, -1, 255,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->refiner_gate.margin_quiesce = static_cast<int>(e.number);
+                      return true;
+                    });
+  options_.add_check("RefineReused", searcher_->refiner_gate.refine_reused,
+                     [this](const OptionEntry& e, std::string&) {
+                       searcher_->refiner_gate.refine_reused = e.number != 0;
+                       return true;
+                     });
+#endif
   options_.add_string("LogFile", "", [this](const OptionEntry& e, std::string& message) {
     if (!config_.allow_files) {
       message = "LogFile: file access disabled";
@@ -603,6 +622,26 @@ void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
     const SearchResult r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer);
     best = r.best;
     picked = true;
+#ifdef FORK_REFINER
+    {
+      // The refiner's gate in this search (ideas.md 59). The last info line is
+      // repeated after it (repeat_if_interrupted), so the line before
+      // bestmove keeps the score.
+      const RefinerTally& t = searcher_->refiner_tally();
+      char tally[400];
+      const int n = std::snprintf(
+          tally, sizeof tally,
+          "info string refiner nodes %llu main_evals %llu main_calls %llu quiesce_evals %llu "
+          "quiesce_calls %llu reused_near %llu shift_sum %lld abs_shift_sum %lld reused_refined %llu "
+          "reused_calls %llu",
+          static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(t.main_evals),
+          static_cast<unsigned long long>(t.main_calls), static_cast<unsigned long long>(t.quiesce_evals),
+          static_cast<unsigned long long>(t.quiesce_calls), static_cast<unsigned long long>(t.reused_near),
+          static_cast<long long>(t.shift_sum), static_cast<long long>(t.abs_shift_sum),
+          static_cast<unsigned long long>(t.reused_refined), static_cast<unsigned long long>(t.reused_calls));
+      out_.send_line(std::string_view(tally, static_cast<std::size_t>(n)));
+    }
+#endif
     {
       // go infinite and go ponder never end by themselves.
       std::unique_lock<std::mutex> lock(signals_.mutex);

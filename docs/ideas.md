@@ -1938,7 +1938,13 @@ until measured; new names and constants go through the screens before use.
   confidence output; training weighted by closeness to the window, idea 48 applied here; a cap on the
   correction's size; features in the order exposure, a cheap bitboard danger summary, then threats only
   if they fit the speed budget), and a prior-art search for gated, boundary-specific evaluation
-  refiners before any public claim. **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
+  refiners before any public claim. **Step 3 (owner-approved plan, 2026-11-08;
+  docs/research/boundary-refiner/step3-plan.md, branch idea59/step3):** the zero-output speed build is
+  built (DESIGN.md §5.8): the refiner of the final shape on S512ppr3's accumulator behind
+  `FORK_REFINER_NET`, with a zero refiner whose bench equals S512ppr3's own, 14,149,617 /
+  1cb0717f040c294d, gate on, off and with G1; on the bench at 25/25 it is called at 8.40% of nodes. The
+  speed A/B (M1, M2) is prepared and waits for a quiet window; then the 3,000-site labelling pilot and
+  P0. **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
   SPRTs, write a reproduction guide in docs/research/boundary-refiner/ (the mechanism; the evidence,
   including the control split of window-gated refiner, bias-only and random gate; implementation details;
   the refiner's training; failures and costs; settings), then a TalkChess summary post and possibly an

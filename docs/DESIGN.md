@@ -2133,6 +2133,7 @@ and Weiss (results in ORIGINALITY.md).
 | Iteration growth | 5/3 | **Measured** on the bench (46 positions to depth 14, cumulative nodes): the work grows by a median factor of 1.66 per iteration at depths 8-14 (p75 1.96, p90 2.38). An iteration started at elapsed time t probably finishes near t · 5/3, so none starts when that passes the hard limit. |
 | `LmrCorrectionStrength` | 64 (of 64) | The evolvable LMR correction's scale in 1/64 steps: 64 applies a rule's correction as written, 0 switches it off, and the range 0-128 lets SPSA weaken or double it. A unit, not a tuned value; with the committed rule (0) it has no effect (deliverable 8c). |
 | `ScoreTrendLimit` (score-trend clamp) | ±1000 cp | The LMR context's root score trend is clamped to ten pawns: beyond that a change only says "decisive", and the clamp keeps any rule's integer arithmetic far from overflow (deliverable 8c). |
+| `FORK_REFINER_MARGIN_MAIN`, `FORK_REFINER_MARGIN_QUIESCE` (refiner builds only; ideas.md 59 step 3) | 25 cp, 25 cp | **Measured** in idea 59's step 2 (exp/oracle d5bb138): setting (b), the window gate at 25/25 cp, gained +41.01 +/- 9.97 Elo at fixed nodes against setting (a)'s +29.82 (25/10), at 6.97% of nodes consulted (run 42439918061; ideas.md idea 59). Step 1's distribution (measure/step1 b17e089) gave the call rates. The quiescence margin's head-to-head against 40 cp (H1) and the SPSA of both (R24) follow the plan (docs/research/boundary-refiner/step3-plan.md §2.6). The refiner's input encoding (16 evaluation bins of 125 cp over [-1,000, 999], the danger buckets) and shape (entry width 16, middle 32, 2 heads; dense weights within [-64, 64]) are justified in the plan's §2.2-2.5 and §8. Screened by the originality-checker on 2026-11-08 (ORIGINALITY.md, the row "Constant screen of idea 59 step 3's zero-output build"): the margins, bins and buckets no match but the safe checks' (a near match by role, kept with a note); the widths 16/32/8 match other engines' layer widths, kept by the owner with credit. |
 
 #### Owner's answers (2026-10-24)
 
@@ -4024,6 +4025,63 @@ models are scored on the half of the games they were not fitted on.
   and features, with its own threshold per stratum; even so, at 4% of
   nodes per stratum it reaches only 34% (main) and 26% (quiescence) of the
   crucial sites.
+
+### 5.8 Idea 59 step 3: the Boundary Refiner (owner-approved plan, 2026-11-08)
+
+The plan, its owner decision and its amendments:
+docs/research/boundary-refiner/step3-plan.md. This section records what is
+built.
+
+**The zero-output speed build (E1's core, for S1/M1; 2026-11-08).** The
+refiner of the plan's final shape, built so that a file of zero weights
+leaves the search exactly S512ppr3's while paying the whole per-call cost:
+- **Where it lives.** The inference is compiled and tested in every network
+  build: the file and its reader (src/eval/nnue/refiner_file.*), the
+  kernels and rows (refiner.*), the danger summary (danger_summary.*). The
+  search's use of it and the embedded file sit behind `FORK_REFINER`, set by
+  CMake `FORK_REFINER_NET` (empty by default: the release and TCEC builds
+  are unchanged). The file's header gives the shape (architecture 1, the
+  exposure rows, or 2, with the danger summary; entry width 16 or 8), read
+  by CMake like the base network's architecture.
+- **The gate** (src/search/refiner_gate.hpp; window_gap moved there from the
+  stats code): the window gate at the two step-1 sites, inclusive margins,
+  -1 never; UCI `RefinerMarginMain`, `RefinerMarginQuiesce` (defaults from
+  CMake, 25/25) and `RefineReused` (G1, off); `fork bench MAIN QUIESCE
+  [reused]`; an `info string refiner` line before bestmove.
+- **The call** (Searcher::refined_eval_at, refine_at): base evaluation,
+  gate, then the base accumulator at that ply (brought up to date by
+  FeatureStack::advance_to for a reused evaluation), clipped to bytes, the
+  rows (exposed pieces from the side to move's view; in architecture 2 the
+  danger summary; the phase bucket and the evaluation's bin), the layers,
+  and `clamp(base + clamp(correction, -C, C), -(EvalLimit - 1), EvalLimit -
+  1)` used. The TT stores the value used with a refined flag (bit 3 of the
+  flags byte, inside the entry's digest), and a stored refined value is used
+  as it is (the sticky rule). The ply frame keeps base_eval, refined,
+  correction and confidence (16 bytes more in refiner builds only; the
+  PlyFrame size guard records it).
+- **The zero refiner** tests/nnue/refiner-zero.frnet (tools/nnue/refiner.py
+  zero): every weight zero, S512ppr3's scale and checksum, the cap at
+  EvalLimit, so bench equality shows a zero output, not a zero cap. Its
+  refiner build's bench equals S512ppr3's own, 14,149,617 /
+  1cb0717f040c294d, with the gate on (25/25), off (-1 -1) and with G1
+  (tests bench_parity, refiner_off_bench, refiner_reused_bench). On the
+  bench at 25/25 the refiner is called at 241,812 main-search and 946,591
+  quiescence sites, 8.40% of 14,149,617 nodes; of 443,232 reused
+  evaluations the gate fires on, 315,402 were already refined when stored
+  (M4); G1 adds 88,322 calls (0.62% of nodes).
+- **Measurements prepared, not run** (the speed A/B waits for a quiet window
+  the owner chooses): bench/ab_search.py gained `--a-args`/`--b-args`, so
+  one refiner binary can be timed against itself with the gate off and on;
+  fork_micro gained a call's parts (M2, for bench/ab.py), each labelled by
+  the function it times: exposed_pieces, danger_summary, refiner_pack,
+  refiner_rows, refiner_l1 (the entry layer), refiner_l2_heads (the middle
+  layer and heads), gate_fires (the test at every computed evaluation),
+  refiner_layers and refiner_call (pack, rows, layers).
+- **Tests:** the refiner suite (every build; the search's use in refiner
+  builds), the TT flag's (tt) and advance_to's (nnue) cases, the refiner
+  build's three benches, tools/nnue's zero-file test, and a fuzz target for
+  the new reader (fuzz_refiner_file; seeds in fuzz/corpus/refiner_file).
+  The refiner build is not in CI yet (E1's full check adds it).
 
 ## 6. Decisions log
 

@@ -1,11 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Runs `fork <CMD>` (bench, the default, or perftbench) and compares its node
 # count and signature with the committed reference.
-# Usage: cmake -DFORK=<exe> [-DCMD=bench|perftbench] -DREF=<ref file> -P check_bench.cmake
+# Usage: cmake -DFORK=<exe> [-DCMD=bench|perftbench] [-DARGS="<arguments>"] -DREF=<ref file> -P check_bench.cmake
+# ARGS (space-separated) follow the command: a refiner build's `bench MAIN QUIESCE
+# [reused]` (ideas.md 59); without it the command runs as before.
 if(NOT CMD)
   set(CMD bench)
 endif()
-execute_process(COMMAND ${FORK} ${CMD}
+separate_arguments(args UNIX_COMMAND "${ARGS}")
+execute_process(COMMAND ${FORK} ${CMD} ${args}
   OUTPUT_VARIABLE out ERROR_VARIABLE err RESULT_VARIABLE rc)
 if(NOT rc EQUAL 0)
   message(FATAL_ERROR "fork ${CMD} failed (${rc}):\n${out}\n${err}")

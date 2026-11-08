@@ -453,9 +453,17 @@ TEST_CASE("search",
 // A guard, so a growing frame is a decision, not an accident. Decisions:
 // 2,688 B with tier 2's singular test and pair history (2026-10-31; the two
 // pair tables share one pointer to stay there), then 2,696 B with the take
-// history's pointer in the move selector (2026-10-31, tier 2 T11).
+// history's pointer in the move selector (2026-10-31, tier 2 T11). Refiner
+// builds only (ideas.md 59, step 3; step3-plan.md §2.7): 16 B more for the
+// refiner's per-ply fields (base_eval, refined, correction, confidence), the
+// release and TCEC builds unchanged.
+#ifdef FORK_REFINER
+static_assert(sizeof(PlyFrame) <= 2712,
+              "PlyFrame grew past 2,712 bytes in a refiner build (DESIGN.md §5.2, review 2 claim (e))");
+#else
 static_assert(sizeof(PlyFrame) <= 2696,
               "PlyFrame grew past 2,696 bytes (DESIGN.md §5.2, review 2 claim (e))");
+#endif
 
 // Audit-1 Q-7: the TT's bound checks at their edge (mutant M12: an upper
 // bound cut when s <= beta instead of s <= alpha). An upper bound u, stored

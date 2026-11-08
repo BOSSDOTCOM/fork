@@ -34,11 +34,15 @@
 #include "core/position.hpp"
 #include "search/move_selector.hpp"
 #include "search/quiet_history.hpp"
+#include "search/refiner_gate.hpp"
 #include "search/score_bounds.hpp"
 #include "search/trans_table.hpp"
 
 #if defined(FORK_EVAL_NNUE)
 #include "eval/nnue/accumulator.hpp"
+#endif
+#ifdef FORK_REFINER
+#include "eval/nnue/refiner.hpp"
 #endif
 
 namespace forkeng {
@@ -201,6 +205,17 @@ struct PlyFrame {
   bool after_null = false;      // this node was reached by a null move (no second one in a row)
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
+#ifdef FORK_REFINER
+  // The Boundary Refiner at this node's evaluation site (ideas.md 59; the
+  // plan's §2.7): the base network's evaluation (ScoreNone in check, or when
+  // the TT's stored value was already refined and its base is not kept),
+  // whether static_eval is refined, and the correction and confidence of a
+  // refiner call made here (0 otherwise).
+  int base_eval = ScoreNone;
+  bool refined = false;
+  int correction = 0;
+  int confidence = 0;
+#endif
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -421,14 +436,8 @@ constexpr int lmr_history_probe_shift(int order_score) { return order_score / Lm
 constexpr int GapBinsFine = 256;
 constexpr int GapBins = GapBinsFine + (4096 - GapBinsFine) / 64 + 1;
 constexpr int GapBands = 5;
-// The gap, or -1 when neither bound is finite.
-constexpr int window_gap(int eval, int alpha, int beta) {
-  const bool low = !is_tb_or_mate(alpha), high = !is_tb_or_mate(beta);
-  if (!low && !high) return -1;
-  const int to_alpha = eval > alpha ? eval - alpha : alpha - eval;
-  const int to_beta = eval > beta ? eval - beta : beta - eval;
-  return !low ? to_beta : !high ? to_alpha : to_alpha < to_beta ? to_alpha : to_beta;
-}
+// The gap itself is window_gap (search/refiner_gate.hpp), which the
+// Boundary Refiner's gate shares (ideas.md 59 step 3).
 constexpr int window_gap_bin(int gap) {
   return gap < GapBinsFine ? gap : gap < 4096 ? GapBinsFine + (gap - GapBinsFine) / 64 : GapBins - 1;
 }
@@ -504,6 +513,13 @@ class Searcher {
   // [beta - 1, beta]), with no time limit; returns its fail-soft score.
   int probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop);
 
+#ifdef FORK_REFINER
+  // The Boundary Refiner (ideas.md 59): the gate's settings, and what it did
+  // in the last search (reset when a search starts).
+  RefinerGate refiner_gate;
+  const RefinerTally& refiner_tally() const { return refiner_tally_; }
+#endif
+
  private:
   template <bool OnPv>
   int negamax(int alpha, int beta, int depth, int ply);
@@ -519,6 +535,19 @@ class Searcher {
   void play(int ply, Move m);
   void play_null(int ply);
   int eval_at(int ply);
+#ifdef FORK_REFINER
+  // The static evaluation at a gated site (negamax after the table probe and
+  // the quiescence stand pat, never in check): the base network's, computed
+  // here or reused from the TT (`reused`, else null), replaced by base +
+  // correction where the gate fires (on a reused one only with
+  // refine_reused, and never twice: a stored refined value is used as it
+  // is). Sets the frame's refiner fields and counts in refiner_tally_.
+  int refined_eval_at(int ply, int alpha, int beta, int depth, bool quiesce, const TtHit* reused);
+  // The refiner's output for the position at `ply` with base evaluation
+  // `base_eval`, whatever the window (idea 61 will call it at its own
+  // thresholds); brings the base accumulator at `ply` up to date if needed.
+  RefinerOutput refine_at(int ply, int base_eval);
+#endif
 
   bool poll_limits();  // true once the search must stop
   std::int64_t elapsed_ms() const;
@@ -608,6 +637,10 @@ class Searcher {
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;
   FeatureStack features_;
+#endif
+#ifdef FORK_REFINER
+  const RefinerFile* refiner_;
+  RefinerTally refiner_tally_;
 #endif
 };
 

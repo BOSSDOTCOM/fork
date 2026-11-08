@@ -35,6 +35,15 @@
 
 #include "core/movegen.hpp"
 #include "core/perft.hpp"
+#if defined(FORK_EVAL_NNUE)
+#include <array>
+#include <memory>
+
+#include "eval/eval.hpp"
+#include "eval/nnue/danger_summary.hpp"
+#include "eval/nnue/refiner.hpp"
+#include "search/refiner_gate.hpp"
+#endif
 
 using namespace forkeng;
 
@@ -295,6 +304,117 @@ static int run(int argc, char** argv) {
          return total_moves;
        }},
   };
+#if defined(FORK_EVAL_NNUE)
+  // The Boundary Refiner's parts (ideas.md 59, step 3; the plan's M2), per
+  // call, on the first 2,000 positions not in check with their accumulators
+  // computed beforehand, labelled by the function each one times: the
+  // exposure pass (exposed_pieces), the danger summary, packing the clipped
+  // accumulator (refiner_pack), all the rows (refiner_rows: the exposure pass
+  // and the rows' encoding, the danger summary in architecture 2, the
+  // context), the entry layer (refiner_l1), the middle layer and the heads
+  // (refiner_l2_heads), the gate's test (gate_fires; it runs at every
+  // computed evaluation, not only at calls), the layers together
+  // (refiner_layers), and a whole call (refiner_call: pack, rows, layers; the
+  // accumulator walk of a reused evaluation not included). The refiner
+  // build's embedded refiner, else one of zero weights: the integer kernels
+  // take the same time whatever the weights.
+  const NetFile& base_net = embedded_net();
+#ifdef FORK_REFINER
+  const RefinerFile& refiner_weights = embedded_refiner();
+#else
+  const auto zero_refiner = std::make_unique<RefinerFile>();
+  const RefinerFile& refiner_weights = *zero_refiner;
+#endif
+  std::vector<std::size_t> picked;
+  for (std::size_t i = 0; i < positions.size() && picked.size() < 2000; ++i)
+    if (!positions[i].in_check()) picked.push_back(i);
+  auto accumulators = std::make_unique<Accumulator[]>(picked.size());
+  auto inputs = std::make_unique<RefinerInputs[]>(picked.size());
+  std::vector<int> base_evals(picked.size());
+  for (std::size_t k = 0; k < picked.size(); ++k) {
+    const Position& p = positions[picked[k]];
+    accumulate_board(base_net, p, accumulators[k]);
+    base_evals[k] = evaluate_position(base_net, accumulators[k], p);
+    pack_clipped(accumulators[k], p.side_to_move(), inputs[k].bytes);
+    inputs[k].row_count = refiner_rows(base_net, p, base_evals[k], inputs[k].rows);
+  }
+  const auto calls = static_cast<std::uint64_t>(picked.size());
+  benches.push_back({"exposed_pieces", [&] {
+                       for (const std::size_t i : picked) sink = sink + exposed_pieces(positions[i]);
+                       return calls;
+                     }});
+  benches.push_back({"danger_summary", [&] {
+                       for (const std::size_t i : picked) {
+                         Bitboard exposed;
+                         const DangerSummary d = danger_summary(positions[i], exposed);
+                         sink = sink + exposed + static_cast<std::uint64_t>(d.safe_checks[White]);
+                       }
+                       return calls;
+                     }});
+  benches.push_back({"refiner_pack", [&] {
+                       alignas(64) std::uint8_t bytes[RefinerInputBytes];
+                       for (std::size_t k = 0; k < picked.size(); ++k) {
+                         pack_clipped(accumulators[k], positions[picked[k]].side_to_move(), bytes);
+                         sink = sink + bytes[k % RefinerInputBytes];
+                       }
+                       return calls;
+                     }});
+  benches.push_back({"refiner_rows", [&] {
+                       int rows[RefinerMaxActive];
+                       for (std::size_t k = 0; k < picked.size(); ++k)
+                         sink = sink + static_cast<std::uint64_t>(
+                                           refiner_rows(base_net, positions[picked[k]], base_evals[k], rows));
+                       return calls;
+                     }});
+  benches.push_back({"refiner_l1", [&] {
+                       alignas(32) std::int32_t sums[RefinerL1Width];
+                       for (std::size_t k = 0; k < picked.size(); ++k) {
+                         refiner_l1(refiner_weights, inputs[k], sums);
+                         sink = sink + static_cast<std::uint64_t>(sums[k % RefinerL1Width]);
+                       }
+                       return calls;
+                     }});
+  std::vector<std::array<std::int32_t, RefinerL1Width>> entry_sums(picked.size());
+  for (std::size_t k = 0; k < picked.size(); ++k)
+    refiner_l1(refiner_weights, inputs[k], entry_sums[k].data());
+  benches.push_back({"refiner_l2_heads", [&] {
+                       for (std::size_t k = 0; k < picked.size(); ++k) {
+                         const RefinerOutput o = refiner_l2_heads(refiner_weights, entry_sums[k].data());
+                         sink = sink + static_cast<std::uint64_t>(o.correction + o.confidence);
+                       }
+                       return calls;
+                     }});
+  // The gate's test at every evaluation site (computed ones, about 0.53 per
+  // node in game): a window around each base evaluation, half of them gated.
+  const RefinerGate gate{25, 25, false};
+  benches.push_back({"gate_fires", [&] {
+                       for (std::size_t k = 0; k < picked.size(); ++k) {
+                         const int e = base_evals[k], shift = k % 2 ? 10 : 60;
+                         sink =
+                             sink + gate_fires(gate, GateSite{positions[picked[k]], e, e - shift, e + shift,
+                                                              static_cast<int>(k % 8), 4, k % 3 == 0});
+                       }
+                       return calls;
+                     }});
+  benches.push_back({"refiner_layers", [&] {
+                       for (std::size_t k = 0; k < picked.size(); ++k) {
+                         const RefinerOutput o = run_refiner(refiner_weights, inputs[k]);
+                         sink = sink + static_cast<std::uint64_t>(o.correction + o.confidence);
+                       }
+                       return calls;
+                     }});
+  benches.push_back({"refiner_call", [&] {
+                       RefinerInputs in;
+                       for (std::size_t k = 0; k < picked.size(); ++k) {
+                         const Position& p = positions[picked[k]];
+                         pack_clipped(accumulators[k], p.side_to_move(), in.bytes);
+                         in.row_count = refiner_rows(base_net, p, base_evals[k], in.rows);
+                         const RefinerOutput o = run_refiner(refiner_weights, in);
+                         sink = sink + static_cast<std::uint64_t>(o.correction + o.confidence);
+                       }
+                       return calls;
+                     }});
+#endif
 
   std::map<std::string, Result> base;
   if (!compare.empty()) base = load(compare);

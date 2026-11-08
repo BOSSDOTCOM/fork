@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import convert  # noqa: E402
 import netformat  # noqa: E402
 import reference  # noqa: E402
+import refiner  # noqa: E402
 
 FENS = ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
         'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1',
@@ -152,6 +153,27 @@ class PipelineTests(unittest.TestCase):
         bad[100] ^= 1
         with self.assertRaises(ValueError):
             netformat.read_net(bytes(bad), self.desc)
+
+    def test_refiner_zero_file(self):
+        # The Boundary Refiner's committed zero file (ideas.md 59) is what
+        # refiner.py zero writes from the default network, byte for byte, and
+        # its header holds the fields refiner_file.hpp specifies.
+        repo = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'zero.frnet'
+            with contextlib.redirect_stdout(io.StringIO()):
+                refiner.main(['zero', '--base', str(repo / 'nets/s512ppr3.fnet'), '--arch', '1', '--l1', '16',
+                              '--cap', '20000', '--out', str(out)])
+            data = out.read_bytes()
+        self.assertEqual(data, (repo / 'tests/nnue/refiner-zero.frnet').read_bytes())
+        self.assertEqual(data[:8], b'FORKRFN\0')
+        version, arch, l1, l2, heads, scale, cap, pad = struct.unpack_from('<IIIIIiiI', data, 8)
+        self.assertEqual((version, arch, l1, l2, heads, scale, cap, pad), (1, 1, 16, 32, 2, 89, 20000, 0))
+        checksum, base = struct.unpack_from('<QQ', data, 40)
+        self.assertEqual(checksum, netformat.net_checksum(data[64:]))
+        self.assertEqual(base, 0x5861c1a319ca267b)  # S512ppr3's payload checksum (docs/nets.md)
+        self.assertEqual(len(data) - 64, 16 * 1024 + 16 * 4 + 664 * 16 * 2 + 32 * 16 + 32 * 4 + 64 * 2 + 2 * 4)
+        self.assertFalse(any(data[64:]))
 
 
 class FitScaleTests(unittest.TestCase):

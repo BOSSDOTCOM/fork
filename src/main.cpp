@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -26,6 +27,9 @@
 #include "eval/eval.hpp"
 #include "eval/nnue/accumulator.hpp"
 #include "eval/nnue/net_file.hpp"
+#ifdef FORK_REFINER
+#include "eval/nnue/refiner_file.hpp"
+#endif
 #include "search/endgame_tables.hpp"
 #include "search/search_bench.hpp"
 #include "uci/output.hpp"
@@ -61,6 +65,18 @@ void print_version() {
             << "evaluator " << FORK_EVALUATOR_NAME << '\n'
 #if defined(FORK_EVAL_NNUE)
             << "net " << FORK_NET_NAME
+            << '\n'
+#endif
+#ifdef FORK_REFINER
+            // The refiner and the base network it was trained on (its file's
+            // binding, checked against the embedded network when read).
+            << "refiner " << FORK_REFINER_NAME << " base " <<
+      [] {
+        char text[17];
+        std::snprintf(text, sizeof text, "%016llx",
+                      static_cast<unsigned long long>(forkeng::embedded_refiner().base_checksum));
+        return std::string(text);
+      }()
             << '\n'
 #endif
 
@@ -132,6 +148,10 @@ int usage() {
   std::cerr << "usage: fork perft <depth> [fen]\n"
                "       fork divide <depth> [fen]\n"
                "       fork bench        (the search bench)\n"
+#ifdef FORK_REFINER
+               "       fork bench MAIN QUIESCE [reused]   (refiner builds: the gate's margins in cp,\n"
+               "                                           -1 to 255, -1 never; reused: G1)\n"
+#endif
                "       fork perftbench   (the Phase 1 perft workload)\n"
                "       fork difftest   (stdin: fen|moves, see tools/difftest)\n"
                "       fork wdl <syzygy path>   (stdin: one fen per line; tools/check_syzygy.py)\n"
@@ -292,7 +312,41 @@ static int run(int argc, char** argv) {
   if (cmd == "netcheck") return netcheck_main(argc, argv);
   if (cmd == "evalfens") return evalfens();
   if (cmd == "bench") {
+#ifdef FORK_REFINER
+    // Refiner builds (ideas.md 59): `fork bench [MAIN QUIESCE [reused]]`, the
+    // gate's margins in cp, else the build's defaults; the gate's counts go
+    // to stderr.
+    forkeng::RefinerGate gate;
+    if (argc != 2 && argc != 4 && !(argc == 5 && std::string(argv[4]) == "reused")) return usage();
+    if (argc >= 4) {
+      char* end = nullptr;
+      gate.margin_main = static_cast<int>(std::strtol(argv[2], &end, 10));
+      const bool main_ok = end != argv[2] && *end == '\0';
+      gate.margin_quiesce = static_cast<int>(std::strtol(argv[3], &end, 10));
+      if (!main_ok || end == argv[3] || *end != '\0' || gate.margin_main < -1 || gate.margin_main > 255 ||
+          gate.margin_quiesce < -1 || gate.margin_quiesce > 255)
+        return usage();
+      gate.refine_reused = argc == 5;
+    }
+    forkeng::RefinerTally tally;
+    const forkeng::SearchBenchResult r = forkeng::run_search_bench(gate, &tally);
+    std::fprintf(stderr,
+                 "refiner nodes %llu main_evals %llu main_calls %llu quiesce_evals %llu quiesce_calls %llu "
+                 "reused_near %llu reused_refined %llu reused_calls %llu shift_sum %lld abs_shift_sum %lld\n",
+                 static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(tally.main_evals),
+                 static_cast<unsigned long long>(tally.main_calls),
+                 static_cast<unsigned long long>(tally.quiesce_evals),
+                 static_cast<unsigned long long>(tally.quiesce_calls),
+                 static_cast<unsigned long long>(tally.reused_near),
+                 static_cast<unsigned long long>(tally.reused_refined),
+                 static_cast<unsigned long long>(tally.reused_calls), static_cast<long long>(tally.shift_sum),
+                 static_cast<long long>(tally.abs_shift_sum));
+#ifdef FORK_SEARCH_STATS
+    std::fprintf(stderr, "refiner zero_bytes %llu\n", static_cast<unsigned long long>(tally.zero_bytes));
+#endif
+#else
     const forkeng::SearchBenchResult r = forkeng::run_search_bench();
+#endif
     std::cout << "nodes " << r.nodes << '\n'
               << "signature " << hex16(r.signature) << '\n'
               << "nps "

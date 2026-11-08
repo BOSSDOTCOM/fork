@@ -192,6 +192,14 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
       "option name Threads type spin default 1 min 1 max 4096",
       "option name Move Overhead type spin default 100 min 0 max 10000",
       "option name SyzygyPath type string default <empty>",
+#ifdef FORK_REFINER
+      // The Boundary Refiner's gate (ideas.md 59), at this build's default margins.
+      "option name RefinerMarginMain type spin default " + std::to_string(FORK_REFINER_MARGIN_MAIN) +
+          " min -1 max 255",
+      "option name RefinerMarginQuiesce type spin default " + std::to_string(FORK_REFINER_MARGIN_QUIESCE) +
+          " min -1 max 255",
+      "option name RefineReused type check default false",
+#endif
       "option name LogFile type string default <empty>",
   };
   CHECK_EQ(out.size(), options.size() + 3);
@@ -517,7 +525,12 @@ TEST_CASE("uci_protocol", "go arguments: every argument, combined, negative and 
   g.send("stop");
   CHECK(g.next("bestmove").has_value());
   CHECK(g.sync());
+#ifdef FORK_REFINER
+  // A refiner build's searches each end with their `info string refiner` line.
+  CHECK_EQ(g.count("info string", mark) - g.count("info string refiner ", mark), 0);  // all of that was valid
+#else
   CHECK_EQ(g.count("info string", mark), 0);  // all of that was valid
+#endif
   mark = g.cursor;
   g.send("go wtime abc depth movetime 5 frobnicate");
   CHECK(g.next("bestmove").has_value());
@@ -982,8 +995,11 @@ TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
     const char* name;
     std::int64_t min, max;
   };
-  for (const Bound& b :
-       {Bound{"Threads", 1, 4096}, Bound{"Move Overhead", 0, 10000}, Bound{"Hash", 1, 4194304}}) {
+  for (const Bound& b : {
+#ifdef FORK_REFINER
+           Bound{"RefinerMarginMain", -1, 255}, Bound{"RefinerMarginQuiesce", -1, 255},
+#endif
+           Bound{"Threads", 1, 4096}, Bound{"Move Overhead", 0, 10000}, Bound{"Hash", 1, 4194304}}) {
     const std::string set = std::string("setoption name ") + b.name + " value ";
     for (std::int64_t v : {b.min, b.max}) {
       const std::size_t mark = g.cursor;

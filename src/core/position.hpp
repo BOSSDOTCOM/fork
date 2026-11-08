@@ -108,6 +108,11 @@ class Position {
   }
 
   Bitboard attackers_to(Square s, Bitboard occ) const;  // both colors
+  // The pieces of `shields` that stand alone between `king` and a slider of
+  // `rook_sliders` (on a rank or file) or `bishop_sliders` (on a diagonal):
+  // pinned() and discoverers() for the side to move; public so that either
+  // side's pins can be counted (the Boundary Refiner's danger summary).
+  Bitboard lone_shields(Square king, Bitboard shields, Bitboard rook_sliders, Bitboard bishop_sliders) const;
   bool attacked_by(Color by, Square s, Bitboard occ) const;
 
   bool is_pseudo_legal(Move m) const;  // any 16-bit pattern is safe to pass
@@ -163,8 +168,7 @@ class Position {
   void remove(Square s);
   void toggle_keys(State& s, Piece p, Square sq) const;
   void refresh_check_info(State& s) const;  // checkers; pinned and discoverers unread
-  Bitboard lone_shields(Square king, Bitboard shields, Bitboard rook_sliders, Bitboard bishop_sliders) const;
-  bool ep_capture_legal(Square ep) const;  // for the side to move
+  bool ep_capture_legal(Square ep) const;   // for the side to move
   // True when material alone rules out a mate by side c (DESIGN.md 4.5).
   bool cannot_mate(Color c) const;
   void finish_setup();  // state from scratch after board setup

@@ -121,15 +121,6 @@ void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t
 }
 #endif
 
-#if defined(__AVX2__)
-[[maybe_unused]] std::int64_t horizontal_sum(__m256i v) {
-  const __m128i s = _mm_add_epi32(_mm256_castsi256_si128(v), _mm256_extracti128_si256(v, 1));
-  const __m128i s2 = _mm_add_epi32(s, _mm_shuffle_epi32(s, 0x4E));
-  const __m128i s3 = _mm_add_epi32(s2, _mm_shuffle_epi32(s2, 0xB1));
-  return _mm_cvtsi128_si32(s3);
-}
-#endif
-
 // One perspective's sums from scratch, in frame `f`, over the pieces
 // `for_each` names; also the side lanes (XGR).
 template <class ForEach>
