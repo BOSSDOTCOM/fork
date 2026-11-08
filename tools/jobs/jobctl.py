@@ -291,10 +291,37 @@ def own_pids(record):
     return sorted(pids - other_jobs_pids(record)) if pids else []
 
 
+def last_boot():
+    """The machine's last boot as epoch seconds, or None if it cannot be read."""
+    try:
+        if os.name == 'nt':
+            import ctypes
+            ticks = ctypes.windll.kernel32.GetTickCount64
+            ticks.restype = ctypes.c_ulonglong
+            return time.time() - ticks() / 1000
+        with open('/proc/stat') as f:
+            for line in f:
+                if line.startswith('btime '):
+                    return float(line.split()[1])
+    except (OSError, ValueError, AttributeError):
+        pass
+    return None
+
+
 def live(record):
     """The job's live processes, the keeper included. Once a job has ended or been stopped (its stop verified
     that none was left), its recorded keeper and command ids are not counted: a live process with one of them
-    is another process that reused the id (2026-11-06, in WSL)."""
+    is another process that reused the id (2026-11-06, in WSL). A job that started before the machine's last
+    boot has no process left whatever its record says: a crash leaves it "running", and its ids are reused
+    (2026-11-07, g3h in WSL)."""
+    try:
+        from datetime import datetime
+        started = datetime.strptime(record.get('started', ''), '%Y-%m-%dT%H:%M:%S%z').timestamp()
+    except (TypeError, ValueError, OverflowError, OSError):
+        started = None
+    boot = last_boot()
+    if started is not None and boot is not None and started < boot - 60:
+        return []
     pids = set(own_pids(record))
     if record.get('state') not in ('ended', 'stopped', 'failed'):
         for k in ('keeper', 'pid'):
