@@ -473,3 +473,89 @@ def r_int(arch, net, scale, board):
     g = min(max(s_s[0] + s_n[0], 0), QA)
     out = trunc_div(out_b * QA + g * (out_a - out_b), QA)
     return limit_eval(trunc_div(out * scale, QA * QB))
+
+
+# ---- the Boundary Refiner's references (step3-plan.md 2.3-2.5; lane E) ----
+#
+# The trainer's checkpoint holds the refiner's float tensors as bullet stores
+# matrices, column-major (one input's weights over the outputs together):
+# entry_weights [1,024 inputs][L1], row_weights [674 rows][L1] (640 exposure
+# rows, the 10-row factoriser (side x type), the phase rows and the 16
+# evaluation bins), middle_weights [L1][32], head_weights [32][2], and the
+# biases entry_bias [L1], middle_bias [32], head_bias [2]. The refiner file
+# (refiner_file.hpp) is output-major with the factoriser merged.
+
+REFINER_FACTORS = 10
+
+
+def refiner_float(arch, w, r, board, base_eval, buckets, acc=None):
+    """R-float: the refiner's float forward pass on the base's float
+    accumulator (weights.bin tensors w), clipped to [0, 1], the side to
+    move's first (or `acc`, those 1,024 clipped values, if given); the active
+    rows with their factoriser rows. Returns the two
+    heads' outputs: the correction in units of S (cp = y x S) and the
+    confidence in win probability."""
+    if acc is None:
+        stm, ntm, _ = both_perspectives(arch, board)
+        h = arch.hidden
+        acc = [clip(v) for v in column_sum(w['l0w'], h, stm, w['l0b']) + column_sum(w['l0w'], h, ntm, w['l0b'])]
+    x = acc
+    rows = refiner_rows(arch, board, base_eval, buckets)
+    active = [f if f < EXPOSURE_ROWS else f + REFINER_FACTORS for f in rows]
+    active += [EXPOSURE_ROWS + f // 64 for f in rows if f < EXPOSURE_ROWS]
+    l1 = len(r['entry_bias'])
+    a1 = [clip(v) for v in column_sum(r['row_weights'], l1, active, dense(r['entry_weights'], r['entry_bias'], x, l1))]
+    a2 = [clip(v) for v in dense(r['middle_weights'], r['middle_bias'], a1, 32)]
+    return dense(r['head_weights'], r['head_bias'], a2, 2)
+
+
+def refiner_quantise(r):
+    """R-quant: the refiner file's integer tensors from the trainer's float
+    ones, in the file's order and layout: each factoriser row added into the
+    exposure rows it shares (an f32 addition each) and dropped; weights times
+    64 and biases times 255 x 64, rounded half away from zero and
+    range-checked (quantise). Returns [(kind, values)]."""
+    l1 = len(r['entry_bias'])
+    n_in = len(r['entry_weights']) // l1
+    n_rows = len(r['row_weights']) // l1
+    row = lambda f: r['row_weights'][f * l1:(f + 1) * l1]  # noqa: E731
+    rows = [to_f32(a + b) for f in range(EXPOSURE_ROWS) for a, b in zip(row(f), row(EXPOSURE_ROWS + f // 64))]
+    rows += [v for f in range(EXPOSURE_ROWS + REFINER_FACTORS, n_rows) for v in row(f)]
+    entry = [r['entry_weights'][i * l1 + j] for j in range(l1) for i in range(n_in)]
+    middle = [r['middle_weights'][j * 32 + k] for k in range(32) for j in range(l1)]
+    head = [r['head_weights'][k * 2 + o] for o in range(2) for k in range(32)]
+    return [('i8', quantise(entry, QB, 'i8')), ('i32', quantise(r['entry_bias'], QA * QB, 'i32')),
+            ('i16', quantise(rows, QB, 'i16')), ('i8', quantise(middle, QB, 'i8')),
+            ('i32', quantise(r['middle_bias'], QA * QB, 'i32')), ('i16', quantise(head, QB, 'i16')),
+            ('i32', quantise(r['head_bias'], QA * QB, 'i32'))]
+
+
+def refiner_int(arch, net, scale, q, cap, board, base_eval, buckets, acc=None):
+    """R-int: Fork's integer refiner arithmetic (step3-plan.md 2.5) on the
+    file's tensors q (refiner_quantise's order) and the base net file's
+    accumulator: bytes clip(acc, 0, 255), the side to move's first (or `acc`,
+    those 1,024 bytes, if given); each
+    layer's sum (bias + dense part + 255 x the active rows) to
+    clamp(sum >> 6, 0, 255); the heads' sums y; the correction
+    clamp(y0 x S / (255 x 64), -cap, cap) and the confidence
+    clamp(y1 x 1000 / (255 x 64), 0, 1000), dividing toward zero."""
+    if acc is None:
+        stm, ntm, _ = both_perspectives(arch, board)
+        if arch.name in ('s512x', 's512cl', 's512pp'):
+            pieces = [f for f in stm if f < arch.factor_start], [f for f in ntm if f < arch.factor_start]
+            a_s, a_n = (exposure_sum(net, arch, f, accumulate(net, arch, p)) for f, p in zip((stm, ntm), pieces))
+        else:
+            a_s, a_n = accumulate(net, arch, stm), accumulate(net, arch, ntm)
+        acc = [min(max(x, 0), QA) for x in a_s + a_n]
+    v = acc
+    entry, entry_bias, rows, middle, middle_bias, head, head_bias = (t for _, t in q)
+    l1 = len(entry_bias)
+    active = refiner_rows(arch, board, base_eval, buckets)
+    s1 = [entry_bias[j] + sum(wi * vi for wi, vi in zip(entry[j * len(v):(j + 1) * len(v)], v))
+          + sum(QA * rows[f * l1 + j] for f in active) for j in range(l1)]
+    a1 = [min(max(x >> 6, 0), 255) for x in s1]
+    s2 = [middle_bias[k] + sum(middle[k * l1 + j] * a1[j] for j in range(l1)) for k in range(32)]
+    a2 = [min(max(x >> 6, 0), 255) for x in s2]
+    y = [head_bias[o] + sum(head[o * 32 + k] * a2[k] for k in range(32)) for o in range(2)]
+    return (max(-cap, min(cap, trunc_div(y[0] * scale, QA * QB))),
+            max(0, min(1000, trunc_div(y[1] * 1000, QA * QB))))

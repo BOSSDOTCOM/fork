@@ -197,6 +197,57 @@ class PipelineTests(unittest.TestCase):
         for base, b in ((-1500, 0), (-1000, 0), (-876, 0), (-875, 1), (0, 8), (999, 15), (2000, 15)):
             self.assertEqual(rows('4k3/8/8/3n4/4P3/8/8/4K3 w - - 0 1', base)[-1], 648 + b)
 
+    def test_refiner_int_matches_float(self):
+        # R-int against R-float on the same inputs (random bytes v and their floats v / 255) and a random
+        # refiner whose weights lie on the file's grid (multiples of 1/64; biases of 1/(255 x 64)), so the
+        # quantization is exact and the two differ only by the activations' rounding down (sum >> 6): each
+        # byte of L1 by less than 1, so L2's by less than 1 + sum |W2| / 64 units, and the correction by
+        # less than S x sum |H0| x that / (255 x 64) + 1 cp. A zero refiner gives (0, 0); the cap holds;
+        # the factoriser rows are merged into the rows they share.
+        repo = Path(__file__).resolve().parents[2]
+        data = (repo / 'nets/s512ppr3.fnet').read_bytes()
+        scale = netformat.header_fields(data)['scale']
+        arch = models.arch_from_net('s512pp', data[netformat.HEADER_BYTES:])
+        rng = random.Random(59)
+        l1 = 8
+        grid = lambda n, lo, hi, unit: [rng.randint(lo, hi) / unit for _ in range(n)]  # noqa: E731
+        # Sizes that keep L1 mostly unclipped and let the rows and the factoriser matter; the confidence head
+        # centred near 0.3 (300 thousandths).
+        r = {'entry_weights': grid(1024 * l1, -2, 2, 64), 'entry_bias': grid(l1, 4000, 12000, 255 * 64),
+             'row_weights': grid(674 * l1, -40, 40, 64), 'middle_weights': grid(l1 * 32, -16, 16, 64),
+             'middle_bias': grid(32, -3000, 3000, 255 * 64), 'head_weights': grid(64, -40, 40, 64),
+             'head_bias': grid(1, -1000, 1000, 255 * 64) + [4896 / (255 * 64)]}
+        q = models.refiner_quantise(r)
+        middle = [[r['middle_weights'][j * 32 + k] for j in range(l1)] for k in range(32)]
+        head = [r['head_weights'][k * 2] for k in range(32)]
+        self.assertLess(scale * sum(abs(hk) * (1 + sum(abs(x) for x in middle[k])) for k, hk in enumerate(head)) / 255 + 1,
+                        15)  # the correction's check below is a tight one
+        fens = ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', '4k3/8/8/3n4/4P3/8/8/4K3 b - - 0 1',
+                'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4']
+        changed = 0
+        for fen, base in zip(fens * 4, (20, -310, 75, 999, -1000, 400, -50, 0, 1500, -600, 125, 30)):
+            board = chess.Board(fen)
+            v = [rng.randint(0, 255) if rng.random() < 0.7 else 0 for _ in range(1024)]
+            y = models.refiner_float(arch, None, r, board, base, 8, acc=[x / 255 for x in v])
+            c, conf = models.refiner_int(arch, None, scale, q, 20000, board, base, 8, acc=v)
+            for o, (got, want, unit) in enumerate(((c, y[0] * scale, scale), (conf, max(0.0, min(1000.0, y[1] * 1000)), 1000))):
+                head = [r['head_weights'][k * 2 + o] for k in range(32)]
+                bound = unit * sum(abs(hk) * (1 + sum(abs(x) for x in middle[k])) for k, hk in enumerate(head)) / 255 + 1
+                self.assertLessEqual(abs(got - want), bound, (fen, base, o))
+            changed += c != 0
+            capped, _ = models.refiner_int(arch, None, scale, q, 3, board, base, 8, acc=v)
+            self.assertEqual(capped, max(-3, min(3, c)))
+        self.assertGreater(changed, 6)
+        zero = models.refiner_quantise({k: [0.0] * len(v) for k, v in r.items()})
+        self.assertEqual(models.refiner_int(arch, None, scale, zero, 20000, chess.Board(fens[0]), 20, 8, acc=[255] * 1024),
+                         (0, 0))
+        rows = q[2][1]
+        f, j = 421, 3  # an exposure row (enemy, 64 x 1 + ...) and its type row 640 + 421 // 64
+        self.assertEqual(rows[f * l1 + j], models.quantise([models.to_f32(r['row_weights'][f * l1 + j]
+                                                                           + r['row_weights'][(640 + f // 64) * l1 + j])],
+                                                           64, 'i16')[0])
+        self.assertEqual(len(rows), 664 * l1)
+
     def test_refiner_export(self):
         # One line per labelled site: FEN | base | label | training weight | rows, folders in order.
         repo = Path(__file__).resolve().parents[2]
