@@ -81,7 +81,18 @@ int Searcher::refined_eval_at(int ply, int alpha, int beta, int depth, bool quie
   ++(quiesce ? refiner_tally_.quiesce_evals : refiner_tally_.main_evals);
   if (!gate_fires(refiner_gate, GateSite{*pos_, base, alpha, beta, depth, ply, quiesce})) return base;
   ++(quiesce ? refiner_tally_.quiesce_calls : refiner_tally_.main_calls);
-  const int refined = refiner_features_.evaluate(*refiner_net_, ply, *pos_);
+  int refined;
+  if (refiner_gate.kind == GateKind::Shift) {
+    // The control without the refiner: the constant, its fraction of a cp
+    // spread over the sites by the key's hash (refiner_gate.hpp).
+    const int m = refiner_gate.shift_millicp;
+    const int whole = m >= 0 ? m / 1000 : -((999 - m) / 1000);
+    const int extra = static_cast<int>(splitmix_finalize(pos_->key()) % 1000) < m - 1000 * whole ? 1 : 0;
+    refined = std::clamp(base + whole + extra, -EvalLimit, EvalLimit);
+  } else {
+    ++refiner_tally_.consults;
+    refined = refiner_features_.evaluate(*refiner_net_, ply, *pos_);
+  }
   refiner_tally_.shift_sum += refined - base;
   refiner_tally_.abs_shift_sum += refined > base ? refined - base : base - refined;
   return refined;

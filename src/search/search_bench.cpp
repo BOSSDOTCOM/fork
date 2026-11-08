@@ -149,6 +149,7 @@ SearchBenchResult run_search_bench() {
       tally->reused_near += t.reused_near;
       tally->shift_sum += t.shift_sum;
       tally->abs_shift_sum += t.abs_shift_sum;
+      tally->consults += t.consults;
     }
 #endif
   }

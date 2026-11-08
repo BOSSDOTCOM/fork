@@ -3936,6 +3936,31 @@ S512r2 alone at fixed nodes, whose reference is S512+X's +25.67 ± 10.26
 | Quiescence margin, (a) / (b) | 10 cp / 25 cp | owner's settings: 2.30% / 5.58% of nodes at 200k; (a) 3.8%, (b) 7.1% in all |
 | Option range | -1 to 255 | -1 never fires; 255 is the end of step 1's exact 1-cp bins |
 
+**Idea 59 step 2, the two controls** (owner, 2026-11-07, after setting
+(a)'s fixed-node screen gave +29.82 ± 9.78, q about 1.16; before step 3).
+Two more gate kinds on the same build, each screened against S512r2 alone
+(C2) under the same fixed-node setup, selected by UCI options:
+- Shift (`RefinerGateKind` 1): setting (a)'s window gate (25 / 10 cp), the
+  base evaluation plus a constant instead of the refiner's, which is never
+  consulted. The constant is oracle-rates-a's mean refinement (refined
+  minus base, side to move, at the calls): 2,016,747,285 / 187,151,812 =
+  +10.776 cp, set as `RefinerShift` 10776 (thousandths of a cp): 10 cp,
+  one more at 776 sites per thousand, picked by the key's hash
+  (splitmix's output function), so the shifts average exactly that.
+- Hashed (`RefinerGateKind` 2): S512+X consulted at computed evaluations
+  sampled by the key's hash, whatever the window, at oracle-rates-a's
+  calls per computed evaluation: main 82,641,827 / 823,342,940 = 100,374
+  ppm (`RefinerSampleMain`), quiescence 104,509,985 / 1,793,107,938 =
+  58,284 ppm (`RefinerSampleQuiesce`); about 1.68% and 2.13% of nodes.
+- The tally counts the refiner evaluations made (`consults`): the calls,
+  except under Shift, none.
+
+| Setting (controls) | Value | Reason |
+|---|---|---|
+| Shift constant | 10,776 milli-cp | oracle-rates-a's measured mean refinement at (a)'s calls |
+| Hashed rates | 100,374 / 58,284 ppm | oracle-rates-a's calls per computed evaluation, main / quiescence |
+| Option ranges | shift -100,000 to 100,000 milli-cp; rates 0 to 1,000,000 ppm | wide enough for either sign and any rate |
+
 ## 6. Decisions log
 
 | Date | Decision |

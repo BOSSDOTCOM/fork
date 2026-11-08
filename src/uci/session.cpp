@@ -207,8 +207,15 @@ void UciSession::declare_options() {
   }
 #endif
 #ifdef FORK_REFINER
-  // The oracle (ideas.md 59; experiment builds only): the refiner gate's
-  // margins in cp (-1: never) and the refiner accumulators' schedule.
+  // The oracle (ideas.md 59; experiment builds only): the refiner gate's kind
+  // (0 window, 1 shift, 2 hashed: refiner_gate.hpp), its margins in cp (-1:
+  // never), the shift kind's constant in thousandths of a cp, the hashed
+  // kind's rates in parts per million, and the refiner accumulators' schedule.
+  options_.add_spin("RefinerGateKind", static_cast<int>(searcher_->refiner_gate.kind), 0, 2,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->refiner_gate.kind = static_cast<GateKind>(e.number);
+                      return true;
+                    });
   options_.add_spin("RefinerMarginMain", searcher_->refiner_gate.margin_main, -1, 255,
                     [this](const OptionEntry& e, std::string&) {
                       searcher_->refiner_gate.margin_main = static_cast<int>(e.number);
@@ -217,6 +224,21 @@ void UciSession::declare_options() {
   options_.add_spin("RefinerMarginQuiesce", searcher_->refiner_gate.margin_quiesce, -1, 255,
                     [this](const OptionEntry& e, std::string&) {
                       searcher_->refiner_gate.margin_quiesce = static_cast<int>(e.number);
+                      return true;
+                    });
+  options_.add_spin("RefinerShift", searcher_->refiner_gate.shift_millicp, -100000, 100000,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->refiner_gate.shift_millicp = static_cast<int>(e.number);
+                      return true;
+                    });
+  options_.add_spin("RefinerSampleMain", searcher_->refiner_gate.sample_main_ppm, 0, 1000000,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->refiner_gate.sample_main_ppm = static_cast<int>(e.number);
+                      return true;
+                    });
+  options_.add_spin("RefinerSampleQuiesce", searcher_->refiner_gate.sample_quiesce_ppm, 0, 1000000,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->refiner_gate.sample_quiesce_ppm = static_cast<int>(e.number);
                       return true;
                     });
   options_.add_check("RefinerLazy", searcher_->refiner_gate.lazy, [this](const OptionEntry& e, std::string&) {
@@ -630,11 +652,12 @@ void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
       const int n = std::snprintf(
           tally, sizeof tally,
           "info string refiner nodes %llu main_evals %llu main_calls %llu quiesce_evals %llu "
-          "quiesce_calls %llu reused_near %llu shift_sum %lld abs_shift_sum %lld",
+          "quiesce_calls %llu reused_near %llu shift_sum %lld abs_shift_sum %lld consults %llu",
           static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(t.main_evals),
           static_cast<unsigned long long>(t.main_calls), static_cast<unsigned long long>(t.quiesce_evals),
           static_cast<unsigned long long>(t.quiesce_calls), static_cast<unsigned long long>(t.reused_near),
-          static_cast<long long>(t.shift_sum), static_cast<long long>(t.abs_shift_sum));
+          static_cast<long long>(t.shift_sum), static_cast<long long>(t.abs_shift_sum),
+          static_cast<unsigned long long>(t.consults));
       out_.send_line(std::string_view(tally, static_cast<std::size_t>(n)));
     }
 #endif

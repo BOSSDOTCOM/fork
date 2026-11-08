@@ -31,12 +31,15 @@ LINES = [
 FAKE_ENGINE = r'''
 import sys
 searches = 0
+kind = 0
 for line in sys.stdin:
     words = line.split()
     if not words:
         continue
     if words[0] == 'uci':
         print('id name fake'); print('uciok', flush=True)
+    elif words[:3] == ['setoption', 'name', 'RefinerGateKind']:
+        kind = int(words[4])
     elif words[0] == 'isready':
         print('readyok', flush=True)
     elif words[0] == 'go':
@@ -46,7 +49,8 @@ for line in sys.stdin:
         sys.stderr.write(f'search_hist lmr_order {searches} 0 {2 * searches}\n')
         sys.stderr.write(f'iteration_trace 1|{searches}|1000|1000|0|5|5|0|1|20|1\n')
         sys.stderr.flush()
-        print(f'info string refiner nodes {nodes} main_evals {3 * searches} main_calls {searches}', flush=True)
+        print(f'info string refiner nodes {nodes} main_evals {3 * searches} main_calls {searches} kind {kind}',
+              flush=True)
         print('bestmove e2e4', flush=True)
     elif words[0] == 'quit':
         break
@@ -142,7 +146,13 @@ class GameReplayTests(unittest.TestCase):
         self.assertEqual(gr.run_replay(self.fake_engine(), games, out, settings, 1), (1, 0))
         records = [json.loads(line) for line in (out / 'game-0000.jsonl').read_text(encoding='utf-8').splitlines()]
         self.assertEqual([r['refiner'] for r in records],
-                         [{'nodes': 100, 'main_evals': 3 * k, 'main_calls': k} for k in (1, 2, 3)])
+                         [{'nodes': 100, 'main_evals': 3 * k, 'main_calls': k, 'kind': 0} for k in (1, 2, 3)])
+        # --setoption reaches the engine (the oracle's control kinds).
+        settings['setoption'] = [['RefinerGateKind', '2']]
+        out2 = self.dir / 'out2'
+        self.assertEqual(gr.run_replay(self.fake_engine(), games, out2, settings, 1), (1, 0))
+        records = [json.loads(line) for line in (out2 / 'game-0000.jsonl').read_text(encoding='utf-8').splitlines()]
+        self.assertEqual({r['refiner']['kind'] for r in records}, {2})
 
     def test_resume(self):
         games = gr.read_games([str(self.dir)])[:2]

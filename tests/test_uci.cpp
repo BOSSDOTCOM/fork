@@ -194,11 +194,15 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
       "option name Move Overhead type spin default 100 min 0 max 10000",
       "option name SyzygyPath type string default <empty>",
 #ifdef FORK_REFINER
-      // The oracle's gate (ideas.md 59), at this build's default margins.
+      // The oracle's gate (ideas.md 59): the window kind at this build's default margins.
+      "option name RefinerGateKind type spin default 0 min 0 max 2",
       "option name RefinerMarginMain type spin default " + std::to_string(FORK_REFINER_MARGIN_MAIN) +
           " min -1 max 255",
       "option name RefinerMarginQuiesce type spin default " + std::to_string(FORK_REFINER_MARGIN_QUIESCE) +
           " min -1 max 255",
+      "option name RefinerShift type spin default 0 min -100000 max 100000",
+      "option name RefinerSampleMain type spin default 0 min 0 max 1000000",
+      "option name RefinerSampleQuiesce type spin default 0 min 0 max 1000000",
       "option name RefinerLazy type check default false",
 #endif
       "option name LogFile type string default <empty>",
@@ -998,7 +1002,9 @@ TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
   };
   for (const Bound& b : {
 #ifdef FORK_REFINER
-           Bound{"RefinerMarginMain", -1, 255}, Bound{"RefinerMarginQuiesce", -1, 255},
+           Bound{"RefinerGateKind", 0, 2}, Bound{"RefinerMarginMain", -1, 255},
+           Bound{"RefinerMarginQuiesce", -1, 255}, Bound{"RefinerShift", -100000, 100000},
+           Bound{"RefinerSampleMain", 0, 1000000}, Bound{"RefinerSampleQuiesce", 0, 1000000},
 #endif
            Bound{"Threads", 1, 4096}, Bound{"Move Overhead", 0, 10000}, Bound{"Hash", 1, 4194304}}) {
     const std::string set = std::string("setoption name ") + b.name + " value ";
@@ -1199,7 +1205,7 @@ TEST_CASE("uci_options", "Clear Hash with a Hash change in the same batch still 
 TEST_CASE("uci_options", "the refiner line counts the gate's calls per kind") {
   Gui g;
   CHECK(g.sync());
-  // nodes, main_evals, main_calls, quiesce_evals, quiesce_calls of one search.
+  // nodes, main_evals, main_calls, quiesce_evals, quiesce_calls, consults of one search.
   auto search = [&](int main_margin, int quiesce_margin) {
     g.send("setoption name RefinerMarginMain value " + std::to_string(main_margin));
     g.send("setoption name RefinerMarginQuiesce value " + std::to_string(quiesce_margin));
@@ -1208,21 +1214,36 @@ TEST_CASE("uci_options", "the refiner line counts the gate's calls per kind") {
     const std::optional<std::string> line = g.next("info string refiner ");
     CHECK(line.has_value());
     CHECK(g.next("bestmove").has_value());
-    std::array<std::int64_t, 5> n{};
-    const char* keys[5] = {"nodes", "main_evals", "main_calls", "quiesce_evals", "quiesce_calls"};
-    for (int i = 0; i < 5; ++i) n[i] = info_number(line.value_or(""), keys[i]).value_or(-1);
+    std::array<std::int64_t, 6> n{};
+    const char* keys[6] = {"nodes", "main_evals", "main_calls", "quiesce_evals", "quiesce_calls", "consults"};
+    for (int i = 0; i < 6; ++i) n[i] = info_number(line.value_or(""), keys[i]).value_or(-1);
     return n;
   };
-  const std::array<std::int64_t, 5> off = search(-1, -1);
+  const std::array<std::int64_t, 6> off = search(-1, -1);
   CHECK(off[0] > 0 && off[1] > 0 && off[3] > 0);
   CHECK_EQ(off[2], 0);
   CHECK_EQ(off[4], 0);
-  const std::array<std::int64_t, 5> quiesce_only = search(-1, 25);
+  const std::array<std::int64_t, 6> quiesce_only = search(-1, 25);
   CHECK_EQ(quiesce_only[2], 0);
   CHECK(quiesce_only[4] > 0 && quiesce_only[4] <= quiesce_only[3]);
-  const std::array<std::int64_t, 5> main_only = search(25, -1);
+  const std::array<std::int64_t, 6> main_only = search(25, -1);
   CHECK(main_only[2] > 0 && main_only[2] <= main_only[1]);
   CHECK_EQ(main_only[4], 0);
+  CHECK_EQ(main_only[5], main_only[2]);  // every window call consults the refiner
+  // The controls (owner, 2026-11-07): the shift kind calls at the window's
+  // sites but never consults the refiner; the hashed kind consults at every
+  // call, the window's margins playing no part.
+  g.send("setoption name RefinerGateKind value 1");
+  g.send("setoption name RefinerShift value 10776");
+  const std::array<std::int64_t, 6> shifted = search(25, 10);
+  CHECK(shifted[2] > 0 && shifted[4] > 0);
+  CHECK_EQ(shifted[5], 0);
+  g.send("setoption name RefinerGateKind value 2");
+  g.send("setoption name RefinerSampleMain value 100374");
+  g.send("setoption name RefinerSampleQuiesce value 58284");
+  const std::array<std::int64_t, 6> hashed = search(-1, -1);
+  CHECK(hashed[2] > 0 && hashed[4] > 0);
+  CHECK_EQ(hashed[5], hashed[2] + hashed[4]);
   g.check_transcript();
   g.quit();
 }

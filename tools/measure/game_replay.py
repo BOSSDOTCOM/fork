@@ -18,7 +18,7 @@ each `bestmove` (the engine writes its report lines before it).
     game_replay.py games PGN_OR_DIR... OUT.jsonl --count N --seed S [--engine-name test] [--skip GAMES.jsonl ...]
     game_replay.py run FORK GAMES.jsonl OUTDIR --nodes N [--jobs 2] [--max-positions K] [--syzygy DIR]
                    [--report counters,iterations,ledger,refiner] [--ledger-every 32] [--hash 16]
-                   [--bench-expected REF]
+                   [--bench-expected REF] [--setoption NAME=VALUE ...]
 
 `games` picks N games by a seeded shuffle of every game in the PGNs (games
 listed in a --skip file are left out, so measurements use disjoint games)
@@ -33,7 +33,9 @@ to a temporary name, then renamed), so a stopped run resumes where it
 stopped. The oracle (ideas.md 59 step 2) is not a stats build: `--report
 refiner` records each search's `info string refiner` counts (stdout, before
 bestmove), and `--bench-expected REF` names the bench reference to check
-instead of tests/bench-<net>.ref (the oracle's net line names its base). Engines run at below-normal priority: data generation comes first.
+instead of tests/bench-<net>.ref (the oracle's net line names its base);
+`--setoption NAME=VALUE` (repeatable) sets an engine option after Hash,
+Threads and SyzygyPath (the oracle's gate kinds and rates). Engines run at below-normal priority: data generation comes first.
 Measurement settings (DESIGN.md §5.7): Hash 16 MB and the Syzygy 3-4-5
 tables, as in the SPRT games replayed; one search thread.
 """
@@ -223,6 +225,7 @@ def replay_one_game(fork, game, index, outdir, settings):
     options = [('Hash', settings['hash']), ('Threads', 1)]
     if settings.get('syzygy'):
         options.append(('SyzygyPath', settings['syzygy']))
+    options.extend((name, value) for name, value in settings.get('setoption', []))
     engine = ReplayEngine(fork, env, options)
     records = []
     try:
@@ -306,6 +309,8 @@ def main(argv=None):
     r.add_argument('--ledger-every', type=int, default=32)
     r.add_argument('--hash', type=int, default=16)
     r.add_argument('--no-bench-check', action='store_true', help='tests only: skip the bench reference check')
+    r.add_argument('--setoption', action='append', default=[], metavar='NAME=VALUE',
+                   help='an engine option to set (repeatable)')
     r.add_argument('--bench-expected', type=Path, default=None,
                    help='the bench reference to check (default tests/bench-<net>.ref)')
     a = parser.parse_args(argv)
@@ -332,6 +337,10 @@ def main(argv=None):
         raise SystemExit(f'unknown --report entries: {sorted(report - kinds)}')
     settings = {'nodes': a.nodes, 'max_positions': a.max_positions, 'syzygy': a.syzygy, 'report': sorted(report),
                 'ledger_every': a.ledger_every, 'hash': a.hash}
+    if a.setoption:
+        if not all('=' in o for o in a.setoption):
+            raise SystemExit('--setoption takes NAME=VALUE')
+        settings['setoption'] = [o.split('=', 1) for o in a.setoption]
     a.outdir.mkdir(parents=True, exist_ok=True)
     version = subprocess.run([a.fork, 'version'], capture_output=True, text=True, check=True).stdout
     manifest = {'settings': settings, 'games': str(a.games.name), 'count': len(games), 'version': version}

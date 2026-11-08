@@ -12,7 +12,9 @@
 //
 // Test positions: tests/nnue/parity.epd (its sources are cited in the file),
 // filtered at run time.
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
@@ -221,6 +223,156 @@ TEST_CASE("refiner", "a gated quiescence site uses the refiner's value, and the 
     CHECK_EQ(searcher->refiner_tally().quiesce_evals, 0u);
   }
   CHECK(tested >= 10);
+}
+
+// The controls (owner, 2026-11-07, after setting (a)'s screen).
+TEST_CASE("refiner", "the shift gate adds the measured mean at gated sites and never consults the refiner") {
+  auto parity_fens = [] {  // the parity file's positions (FEN before the bar)
+    std::vector<Position> out;
+    std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/parity.epd");
+    std::string line;
+    while (std::getline(in, line)) {
+      if (line.empty() || line[0] == '#') continue;
+      if (line.back() == '\r') line.pop_back();
+      Position pos;
+      if (pos.set_fen(line.substr(0, line.find('|')))) out.push_back(pos);
+    }
+    return out;
+  };
+  auto from_scratch = [](const NetFile& net, const Position& pos) {
+    Accumulator acc;
+    accumulate_board(net, pos, acc);
+    return evaluate_position(net, acc, pos);
+  };
+  std::vector<TtBucket> buckets(16384);
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  auto searcher = std::make_unique<Searcher>(table);
+  const std::atomic<bool> stop{false};
+  searcher->refiner_gate = RefinerGate{};  // quiescence margin 10 cp
+  searcher->refiner_gate.kind = GateKind::Shift;
+  searcher->refiner_gate.shift_millicp = 10776;  // oracle-rates-a's mean refinement
+  int tested = 0, plus_one = 0;
+  for (Position pos : parity_fens()) {
+    if (pos.in_check()) continue;  // a quiet position: the value is the stand-pat evaluation
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    bool quiet = legal.size() > 0;
+    for (const Move m : legal) quiet = quiet && !m.is_capture() && !m.is_promotion();
+    if (!quiet) continue;
+    ++tested;
+    const int base = from_scratch(embedded_net(), pos);
+    // 10 cp, and one more where the key's hash, modulo a thousand, is below 776.
+    const int shift = 10 + (splitmix_finalize(pos.key()) % 1000 < 776 ? 1 : 0);
+    plus_one += shift == 11;
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    CHECK_MSG(searcher->probe_zero_window(pos, base + 300, 0, stop) == base, pos.fen());  // far: no call
+    CHECK_EQ(searcher->refiner_tally().quiesce_calls, 0u);
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    CHECK_MSG(searcher->probe_zero_window(pos, base + 1, 0, stop) == base + shift, pos.fen());
+    CHECK_EQ(searcher->refiner_tally().quiesce_calls, 1u);
+    CHECK_EQ(searcher->refiner_tally().shift_sum, shift);
+    CHECK_EQ(searcher->refiner_tally().consults, 0u);
+  }
+  CHECK(tested >= 20);
+  CHECK(plus_one > 0 && plus_one < tested);
+  // A negative constant: its whole part rounds down and the fraction is added.
+  searcher->refiner_gate.shift_millicp = -10776;  // -11, plus 1 at 224 per mille
+  for (Position pos : parity_fens()) {
+    if (pos.in_check()) continue;
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    bool quiet = legal.size() > 0;
+    for (const Move m : legal) quiet = quiet && !m.is_capture() && !m.is_promotion();
+    if (!quiet) continue;
+    const int base = from_scratch(embedded_net(), pos);
+    const int shift = -11 + (splitmix_finalize(pos.key()) % 1000 < 224 ? 1 : 0);
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    CHECK_MSG(searcher->probe_zero_window(pos, base, 0, stop) == base + shift, pos.fen());  // gap 1 to alpha
+    CHECK_EQ(searcher->refiner_tally().consults, 0u);
+  }
+}
+
+TEST_CASE("refiner", "the hashed gate samples by position key at its rates, whatever the window") {
+  // Positions: the parity file's, and up to 24 random legal plies from each
+  // (a fixed seed).
+  std::vector<Position> positions;
+  {
+    std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/parity.epd");
+    std::string line;
+    std::uint64_t rng = 59;
+    while (std::getline(in, line)) {
+      if (line.empty() || line[0] == '#') continue;
+      if (line.back() == '\r') line.pop_back();
+      Position pos;
+      if (!pos.set_fen(line.substr(0, line.find('|')))) continue;
+      for (int ply = 0; ply < 24; ++ply) {
+        positions.push_back(pos);
+        MoveList legal;
+        generate<GenMode::Legal>(pos, legal);
+        if (legal.size() == 0) break;
+        pos.make(legal[splitmix_next(rng) % legal.size()]);
+      }
+    }
+  }
+  RefinerGate g;
+  g.kind = GateKind::Hashed;
+  g.sample_main_ppm = 100374;    // oracle-rates-a's calls per computed evaluation, main search
+  g.sample_quiesce_ppm = 58284;  // and quiescence
+  int fired_main = 0, fired_quiesce = 0;
+  for (const Position& pos : positions) {
+    const std::uint64_t h = splitmix_finalize(pos.key()) % 1000000;
+    for (const bool quiesce : {false, true}) {
+      const bool want = h < static_cast<std::uint64_t>(quiesce ? g.sample_quiesce_ppm : g.sample_main_ppm);
+      // On the window, far from it, with no finite bound: the same answer.
+      CHECK(gate_fires(g, GateSite{pos, 0, 0, 1, 3, 4, quiesce}) == want);
+      CHECK(gate_fires(g, GateSite{pos, 0, 900, 901, 3, 4, quiesce}) == want);
+      CHECK(gate_fires(g, GateSite{pos, 0, -ScoreInfinite, ScoreInfinite, 3, 4, quiesce}) == want);
+      (quiesce ? fired_quiesce : fired_main) += want;
+    }
+  }
+  const double n = static_cast<double>(positions.size());
+  CHECK(n > 5000);
+  CHECK_MSG(std::abs(fired_main / n - 0.100374) < 0.012, fired_main / n);
+  CHECK_MSG(std::abs(fired_quiesce / n - 0.058284) < 0.01, fired_quiesce / n);
+  g.sample_main_ppm = g.sample_quiesce_ppm = 0;  // a rate of zero never fires
+  for (const Position& pos : positions) CHECK(!gate_fires(g, GateSite{pos, 0, 0, 1, 3, 4, false}));
+
+  // In a search: a quiet position the hash selects is refined even far from
+  // the window, and one it does not select is not, even on the window.
+  auto from_scratch = [](const NetFile& net, const Position& pos) {
+    Accumulator acc;
+    accumulate_board(net, pos, acc);
+    return evaluate_position(net, acc, pos);
+  };
+  std::vector<TtBucket> buckets(16384);
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  auto searcher = std::make_unique<Searcher>(table);
+  const std::atomic<bool> stop{false};
+  searcher->refiner_gate.kind = GateKind::Hashed;
+  searcher->refiner_gate.sample_quiesce_ppm = 500000;
+  int selected = 0, skipped = 0;
+  for (Position& pos : positions) {
+    if (pos.in_check()) continue;
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    bool quiet = legal.size() > 0;
+    for (const Move m : legal) quiet = quiet && !m.is_capture() && !m.is_promotion();
+    if (!quiet) continue;
+    const int base = from_scratch(embedded_net(), pos);
+    const int refined = from_scratch(refiner_net(), pos);
+    if (refined == base || std::abs(refined - base) > 250) continue;
+    const bool chosen = splitmix_finalize(pos.key()) % 1000000 < 500000;
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    const int beta = chosen ? base + 400 : base + 1;  // chosen: far from the window; not: on it
+    const int got = searcher->probe_zero_window(pos, beta, 0, stop);
+    CHECK_MSG(got == (chosen ? refined : base), pos.fen() << (chosen ? " (chosen)" : " (not chosen)"));
+    CHECK_EQ(searcher->refiner_tally().consults, chosen ? 1u : 0u);
+    (chosen ? selected : skipped) += 1;
+    if (selected >= 20 && skipped >= 20) break;
+  }
+  CHECK(selected >= 10 && skipped >= 10);
 }
 
 }  // namespace forkeng::test

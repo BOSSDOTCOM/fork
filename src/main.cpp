@@ -318,13 +318,14 @@ static int run(int argc, char** argv) {
     const forkeng::SearchBenchResult r = forkeng::run_search_bench(gate, &tally);
     std::fprintf(stderr,
                  "refiner nodes %llu main_evals %llu main_calls %llu quiesce_evals %llu quiesce_calls %llu "
-                 "reused_near %llu shift_sum %lld abs_shift_sum %lld\n",
+                 "reused_near %llu shift_sum %lld abs_shift_sum %lld consults %llu\n",
                  static_cast<unsigned long long>(r.nodes), static_cast<unsigned long long>(tally.main_evals),
                  static_cast<unsigned long long>(tally.main_calls),
                  static_cast<unsigned long long>(tally.quiesce_evals),
                  static_cast<unsigned long long>(tally.quiesce_calls),
                  static_cast<unsigned long long>(tally.reused_near), static_cast<long long>(tally.shift_sum),
-                 static_cast<long long>(tally.abs_shift_sum));
+                 static_cast<long long>(tally.abs_shift_sum),
+                 static_cast<unsigned long long>(tally.consults));
 #else
     const forkeng::SearchBenchResult r = forkeng::run_search_bench();
 #endif
