@@ -4,6 +4,8 @@ conventions, features, ROC arithmetic and site reading.
 
     python -I -B -m unittest discover -s tools/measure -p 'test_*.py'
 """
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -87,6 +89,29 @@ class CrucialPointsTests(unittest.TestCase):
         self.assertEqual(row['fen'], 'r1bqkbnr/1p1p1ppp/p1n1p3/2p5/P3P3/2N2N2/1PPPBPPP/R1BQK2R b KQkq - 0 5')
         with self.assertRaises(ValueError):
             engine_lines.parse_eval_site_line('eval_site 1|0|2')
+
+    def test_deep_resume_ignores_a_partial_line(self):
+        # A stop can cut deep.tsv's last line short; the rerun must drop it
+        # (else the next label is appended to it) and keep every whole line,
+        # written with Windows line ends or not.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            site = {'id': 9, 'fen': chess.STARTING_FEN, 'eval': 10, 'alpha': 0, 'beta': 1}
+            (out / 'sites.jsonl').write_text(json.dumps(site) + '\n', encoding='utf-8')
+            (out / 'deep.tsv').write_bytes(b'3\t-41\t0\t14\r\n5\t20000\t1\t9\n7\t12')
+            with contextlib.redirect_stdout(io.StringIO()) as said:
+                # The engine is missing, so the run stops at its first engine call, after the resume.
+                with self.assertRaises(OSError):
+                    cp.main(['deep', str(out / 'missing-engine'), str(out)])
+            self.assertEqual((out / 'deep.tsv').read_text(encoding='utf-8'), '3\t-41\t0\t14\n5\t20000\t1\t9\n')
+            self.assertIn('1 incomplete line(s) dropped', said.getvalue())
+            # Whole lines only: nothing is rewritten.
+            before = (out / 'deep.tsv').read_bytes()
+            with contextlib.redirect_stdout(io.StringIO()) as said:
+                with self.assertRaises(OSError):
+                    cp.main(['deep', str(out / 'missing-engine'), str(out)])
+            self.assertEqual((out / 'deep.tsv').read_bytes(), before)
+            self.assertNotIn('dropped', said.getvalue())
 
 
 if __name__ == '__main__':

@@ -13,8 +13,9 @@ change a decision, per percent of nodes, as the gate for ideas 59 and 60.
    engine (a normal build, its bench checked against the reference first),
    one thread, Hash 16, `ucinewgame` before each, to N nodes (1,000,000);
    its last reported score is the site's deep value (side to move's view;
-   a mate is written as +-20,000 and flagged). Resumable; engines run at
-   below-normal priority.
+   a mate is written as +-20,000 and flagged). Resumable: a rerun searches
+   only the sites without a label, after dropping a last line cut short by
+   a stop; engines run at below-normal priority.
 3. `seeds`: each site's evaluation by other networks, through the
    repository's integer reference (tools/nnue/reference.py, R-int, which
    gives the engine's own values; the warm seed fails the engine's int16
@@ -305,6 +306,19 @@ def main(argv=None):
 
     sites = [json.loads(line) for line in (a.out / 'sites.jsonl').read_text(encoding='utf-8').splitlines()]
     if a.command == 'deep':
+        # Resume: a label counts only if its whole line was written (a stop can
+        # cut the last line short); incomplete lines are dropped first.
+        path = a.out / 'deep.tsv'
+        done = set()
+        if path.exists():
+            lines = path.read_text(encoding='utf-8').split('\n')
+            good = [line for line in lines[:-1] if re.fullmatch(r'\d+\t-?\d+\t[01]\t\d+', line)]
+            if len(good) != len(lines) - 1 or lines[-1]:
+                tmp = path.with_suffix('.tmp')
+                tmp.write_text(''.join(line + '\n' for line in good), encoding='utf-8')
+                tmp.replace(path)
+                print(f'deep.tsv: {len(lines) - 1 - len(good) + bool(lines[-1])} incomplete line(s) dropped', flush=True)
+            done = {int(line.split('\t')[0]) for line in good}
         engine = str(Path(a.engine).resolve())
         version = subprocess.run([engine, 'version'], capture_output=True, text=True, check=True).stdout
         bench = subprocess.run([engine, 'bench'], capture_output=True, text=True, check=True).stdout
@@ -314,10 +328,6 @@ def main(argv=None):
         signature = re.search(r'signature ([0-9a-f]+)', bench).group(1)
         if f'nodes {nodes}' not in ref or f'signature {signature}' not in ref:
             raise SystemExit(f'bench {nodes} / {signature} does not match the reference')
-        path = a.out / 'deep.tsv'
-        done = set()
-        if path.exists():
-            done = {int(line.split('\t')[0]) for line in path.read_text(encoding='utf-8').splitlines() if line}
         todo = [(s['id'], s['fen']) for s in sites
                 if s['id'] not in done and nearest_bound(s['eval'], s['alpha'], s['beta'])]
         print(f'{len(todo)} sites to search ({len(done)} done)', flush=True)
