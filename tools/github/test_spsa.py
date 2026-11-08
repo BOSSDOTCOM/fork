@@ -15,6 +15,7 @@ import json
 import math
 import os
 import random
+import re
 import shutil
 import subprocess
 import sys
@@ -324,6 +325,19 @@ class SpsaStateTest(unittest.TestCase):
         disp, res = self.results()
         with self.assertRaisesRegex(spsa.Refused, 'shard results'):
             spsa.verify_shards(disp, res[:1])
+
+    def test_build_flags_match_update_sh(self):
+        # The tuning build configures exactly as update.sh (TCEC's build) plus -DFORK_TUNE=ON.
+        def flags(path):
+            text = path.read_text(encoding='utf-8')
+            block = text[text.index('cmake -S'):]
+            block = block[:block.index('cmake --build')]
+            return {k: ('<var>' if v.lstrip('"').startswith('$') else v)
+                    for k, v in re.findall(r'-D(\w+)=("?[^\s\\]+)', block)}
+        update, tune = flags(ROOT / 'update.sh'), flags(HERE / 'spsa_build.sh')
+        self.assertEqual(update, {'CMAKE_CXX_COMPILER': '<var>', 'CMAKE_BUILD_TYPE': 'Release', 'FORK_ARCH': '<var>',
+                                  'FORK_BUILD_TESTS': 'OFF'})
+        self.assertEqual(tune, dict(update, FORK_TUNE='ON'))
 
     def test_spec_refuses_excluded_params(self):
         resolve = lambda raw: spsa.resolve_spec(raw, self.table, 'spsa-t', 'a' * 40)  # noqa: E731
