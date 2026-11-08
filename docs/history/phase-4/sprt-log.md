@@ -918,6 +918,81 @@ s512ppr2-stc, stage 1, run 42336446490:
   g3f was stopped and sealed, and the next part, g3g, is labelled by
   S512ppr2 (the labeller policy).
 
+### 2026-11-07 S512ppr3 (item 8a's retrain): fixed nodes against S512ppr2, then the STC SPRT (owner)
+
+- The owner's tie-break (2026-11-07, declared before any result; DESIGN.md
+  §6): item 8a's candidate by the declared rule, R1-avg, was 1.82e-5 below
+  S512ppr2 on g3s3-val's full set, short of the 2e-5 SPRT margin, so one
+  1,600-game fixed-node screen decides: the STC SPRT [0, 5] runs only if
+  the screen reaches +5 Elo or more. From now on retrain candidates are
+  gated by the fixed-node screen instead of the validation-loss margin.
+- Candidate: bake/s512ppr3 720fe7b (S512ppr2 retrained warm on g3s3 with
+  the standard recipe, seed 1, the mean of superbatches 331-360's float
+  weights; S = 89, 1 of 311,296 link weights clamped; bench 14,149,617,
+  signature 1cb0717f040c294d). Parity: quantization loss max 9.4 cp, p99
+  7.5 cp. Endgame check: 8 of 900 misjudged, as S512ppr2. The full
+  non-slow suite passes on it.
+- Base: 98cf000 (phase-4, S512ppr2; bench 14,626,377). Under the job
+  supervisor (jobs s512ppr3-fixednode, s512ppr3-stc, s512ppr3-stc-r).
+- The STC driver stopped when the machine crashed at about 8:07 PM EST,
+  just after it had dispatched stage 2 (run 42432793282); it was resumed at
+  8:13 PM as job s512ppr3-stc-r with RUN_ID for that stage (the run the
+  ledger already recorded for it), which it waited for and merged; no stage
+  was dispatched twice.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, 800,000 per move (600+6 clock that never binds, Hash 16, Syzygy 3-4-5, UHO book) | 42426868742 | 1,600 (no time losses, no abnormal ends) | +15.65 ± 9.26 | +28.80 ± 17.02 | [7, 161, 406, 205, 21] | above +5: the STC SPRT follows (7:28 PM EST) |
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027) | 42429984619 (stage 0), 42431412304 (1), 42432793282 (2), 42434196075 (3), 42435511074 (4) | 8,000 (no time losses, no abnormal ends) | **+7.12 ± 4.53** | +11.98 ± 7.61 | [100, 908, 1848, 1016, 128] | **H1 accepted** (LLR 3.14) after stage 4, 9:02 PM EST |
+
+The drivers' result blocks (jobs s512ppr3-fixednode, s512ppr3-stc and
+s512ppr3-stc-r):
+
+```
+s512ppr3-fixednode, stage 0, run 42426868742:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 15.65 +/- 9.26, nElo: 28.80 +/- 17.02
+    Ptnml(0-2): [7, 161, 406, 205, 21]
+    LLR: 1.74 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 0, run 42429984619:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 10.43 +/- 10.08, nElo: 17.63 +/- 17.02
+    Ptnml(0-2): [14, 189, 358, 213, 26]
+    LLR: 1.00 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 1, run 42431412304:
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 6.95 +/- 7.17, nElo: 11.67 +/- 12.04
+    Ptnml(0-2): [38, 373, 726, 413, 50]
+    LLR: 1.21 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 2, run 42432793282 (merged by the resumed driver, s512ppr3-stc-r):
+    Shards: 48 (done); pairs 2400, games 4800 (4800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 7.96 +/- 5.85, nElo: 13.38 +/- 9.83
+    Ptnml(0-2): [57, 547, 1105, 611, 80]
+    LLR: 2.16 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 3, run 42434196075:
+    Shards: 64 (done); pairs 3200, games 6400 (6400 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 7.28 +/- 5.08, nElo: 12.20 +/- 8.51
+    Ptnml(0-2): [80, 728, 1476, 810, 106]
+    LLR: 2.57 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 4, run 42435511074:
+    Shards: 80 (done); pairs 4000, games 8000 (8000 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 7.12 +/- 4.53, nElo: 11.98 +/- 7.61
+    Ptnml(0-2): [100, 908, 1848, 1016, 128]
+    LLR: 3.14 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- **Promoted (owner, 2026-11-07, about 9:05 PM EST): S512ppr3 is the
+  default network**; bench 14,149,617 / 1cb0717f040c294d. Generation 3's
+  part g3i ends at a game boundary and is sealed as its part, and the next
+  part, g3j, is labelled by S512ppr3 from a fresh PGO build (the labeller
+  policy).
+
 ### reval-no-check-relief (re-validation filler: check relief removed, [−3, 0]; undecided at the cap)
 
 - Base `684bac6` (phase-4: S512r2, IIR on), test `7d72dc5`
