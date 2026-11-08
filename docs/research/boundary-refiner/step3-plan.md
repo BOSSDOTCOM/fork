@@ -71,6 +71,33 @@ screen):**
   64) go through the originality-checker's constant screen before the
   commit that introduces them.
 
+**Owner's additions for the quiet-machine A/B (2026-11-08):**
+- **A call's breakdown,** each part in ns per call from fork_micro's
+  component cases through bench/ab.py (interleaved, repeated), and, where
+  useful, a sampling profile of the bench run: the accumulator read and
+  pack, the exposure features (the rows), the entry layer, the middle layer
+  and heads, and the overhead without calls (the gate's test, the TT flag).
+- **The fallback order if over budget,** base-preserving first: (a) a
+  faster exposure computation; (b) the narrower entry layer (8); (c) VNNI
+  (an AVX-512 VNNI path, which needs TCEC's VNNI answer before it can ship;
+  the AVX2 path must stay within budget on its own or be named as the
+  bottleneck). The refiner lanes in the base accumulator (2.9) only if
+  those fail, and only with the owner's approval. This replaces section
+  4.4's last item (setting (a) stays a gate-rate fallback, priced by the
+  same report).
+- **The report gives the nps cost** of the whole-search A/B at the real
+  gate rate (the bench's per-call cost scaled to the in-game call rate:
+  (b) 6.97%, (a) 3.81% of nodes, section 1.1) **beside the break-even
+  estimate:** the oracle's fixed-node gain against S512r2 as an upper-bound
+  proxy for what a trained refiner might keep ((b) +41.0 +/- 10.0, (a)
+  +29.8 +/- 9.8) against the speed price at 1.5 Elo per 1% of nps
+  (1.26-1.80), so the nps loss at which the expected gain is zero is
+  L* = G / k: (b) 27.3% [17.2%, 40.5%], (a) 19.9% [11.1%, 31.4%] [derived;
+  the interval pairs the gain's ends with the price's opposite ends]. The
+  break-even is a ceiling, not a target: the design line (3%) and hard line
+  (5%) stand, since a trained refiner keeps only part of the oracle's gain
+  (F1's line, section 5).
+
 ## 0. The design in brief
 
 1. S512ppr3 evaluates everywhere, unchanged. Where the gate fires (the base
@@ -792,7 +819,9 @@ minus the speed price; phase-a-evidence.md); keeping a third, about +9.
   try 1.
 - **If even the cheapest shape misses the 5% line:** setting (a) (its 3%
   budget is 244 ns), then the refiner lanes of 2.9 (an owner decision),
-  else stop.
+  else stop. *Replaced (owner, 2026-11-08):* faster exposure, then the
+  8-wide entry layer, then VNNI; the lanes last and only with the owner's
+  approval (the section "Owner decision, 2026-11-08").
 
 ### 4.5 What must be measured, and how
 
