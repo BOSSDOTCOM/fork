@@ -201,7 +201,12 @@ None of these is answered on any page opened on 2026-10-23.
    (Added 2026-10-25.) **Still UNVERIFIED** (2026-10-28): the AMD product
    and series pages opened for nnue-design.md list no instruction-set
    extensions. The owner keeps it on this list (2026-10-28); no Fork
-   design may depend on VNNI until TCEC answers.
+   design may depend on VNNI until TCEC answers. **Answered (owner,
+   2026-11-08): TCEC's hardware supports VNNI** (the owner's report of
+   TCEC's answer; the primary source, TCEC's message or page, is to be
+   cited here when available). Still open: the `-march` TCEC's build should
+   use, and the launcher question (a launcher choosing the binary at
+   startup; DESIGN.md §6, 2026-11-07 decision 9).
 
 Training-data questions (added 2026-10-24, background in
 [training-data.md](training-data.md) §5):
