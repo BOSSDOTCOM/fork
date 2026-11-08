@@ -565,7 +565,6 @@ int evaluate_position_scalar(const NetFile& net, const Accumulator& acc, const P
   return evaluate_with<true>(net, acc, pos);
 }
 
-#if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
 // Set-wise: each side's attacked squares, accumulated by attacker class
 // (pawns; + knights and bishops; + rooks; + queens; + the king), so a
 // piece's lowest enemy attacker class is read off the sets instead of each
@@ -597,7 +596,6 @@ Bitboard exposed_pieces(const Position& pos) {
   }
   return out;
 }
-#endif
 
 #if FORK_NET_ARCH == 1
 
@@ -796,6 +794,28 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
   if (std::memcmp(&check, &entries_[ply].acc, sizeof check) != 0) __builtin_trap();
 #endif
   return evaluate_position(net, entries_[ply].acc, pos);
+}
+
+const Accumulator& FeatureStack::advance_to(const NetFile& net, int ply) {
+#if FORK_NET_ARCH == 1
+  int base = ply;
+  while (!entries_[base].computed[White]) --base;  // ply 0 is always computed
+  for (int p = base + 1; p <= ply; ++p) {
+    advance_accumulator(net, entries_[p - 1].acc, entries_[p].delta, entries_[p].acc);
+    entries_[p].computed[White] = entries_[p].computed[Black] = true;
+  }
+#else
+  for (const Color perspective : {White, Black}) {
+    int base = ply;
+    while (!entries_[base].computed[perspective]) --base;  // ply 0 is always computed
+    for (int p = base + 1; p <= ply; ++p) {
+      advance_perspective(net, entries_[p - 1].acc, entries_[p].delta, perspective,
+                          entries_[p].frame[perspective], entries_[p].acc);
+      entries_[p].computed[perspective] = true;
+    }
+  }
+#endif
+  return entries_[ply].acc;
 }
 
 }  // namespace forkeng

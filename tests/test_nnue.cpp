@@ -74,7 +74,8 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
 #if FORK_NET_ARCH == 1
   for (auto& w : net->out_weights) w = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
   net->out_bias = uniform(rng, -100000, 100000);
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
+    FORK_NET_ARCH == 8
   for (auto& row : net->out_weights)
     for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -128, 128));
   for (auto& b : net->out_bias) b = uniform(rng, -100000, 100000);
@@ -253,6 +254,40 @@ TEST_CASE("nnue", "incremental updates equal refreshes along random games") {
     }
   }
   CHECK(checked > 300);
+}
+
+// The Boundary Refiner's walk (ideas.md 59, step 3): advance_to brings the
+// accumulators up to a ply as evaluate does, without the output, also where
+// evaluate was skipped for many plies (an evaluation reused from the TT).
+TEST_CASE("nnue", "advance_to gives the accumulator a refresh gives, along random games") {
+  auto net = random_net(5);
+  auto stack = std::make_unique<FeatureStack>();
+  auto fresh = std::make_unique<Accumulator>();
+  int checked = 0;
+  for (const auto& sp : perft_suite()) {
+    for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+      Position pos;
+      pos.set_fen(sp.fen);
+      stack->reset(*net, pos);
+      std::uint64_t rng = seed * 104729 + checked;
+      for (int ply = 0; ply < 60 && ply < MaxPly - 1; ++ply) {
+        if (splitmix_next(rng) % 5 == 0) {
+          accumulate_board(*net, pos, *fresh);
+          const Accumulator& walked = stack->advance_to(*net, ply);
+          CHECK_MSG(std::memcmp(walked.values, fresh->values, sizeof fresh->values) == 0,
+                    pos.fen() << " at ply " << ply);
+          ++checked;
+        }
+        MoveList legal;
+        generate<GenMode::Legal>(pos, legal);
+        if (legal.size() == 0) break;
+        const Move m = legal[splitmix_next(rng) % legal.size()];
+        stack->push_move(*net, ply, pos, m);
+        pos.make(m);
+      }
+    }
+  }
+  CHECK(checked > 100);
 }
 
 TEST_CASE("nnue", "every move kind's delta matches a refresh") {

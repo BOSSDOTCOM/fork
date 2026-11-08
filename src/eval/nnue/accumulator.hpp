@@ -113,12 +113,11 @@ void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* row
 void sum_rows_saturated_scalar(const std::int16_t* base, const std::int16_t* const* rows, int count,
                                std::int16_t* out);
 
-#if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
-// XGR's exposed pieces (S512+X's too): non-king pieces attacked by an enemy piece of a
+// XGR's exposed pieces (S512+X's too, and the Boundary Refiner's rows in
+// every architecture): non-king pieces attacked by an enemy piece of a
 // lower class (pawn < knight = bishop < rook < queen < king), or attacked
 // and not defended (pseudo-attacks on the occupancy).
 Bitboard exposed_pieces(const Position& pos);
-#endif
 
 // The feature stack's work, counted in stats builds (DESIGN.md §5.7, X1):
 // evaluations; moves and null moves pushed (lazily: most are never
@@ -167,6 +166,11 @@ class FeatureStack {
   }
   // The evaluation at `ply` of `pos` (the position the stack has reached).
   int evaluate(const NetFile& net, int ply, const Position& pos);
+  // The accumulators up to `ply` brought up to date as evaluate() does,
+  // without the output, and the one at `ply` (the Boundary Refiner reads it,
+  // ideas.md 59: at an evaluation already computed nothing is left to do; at
+  // one reused from the TT the walk evaluate() skipped is done here).
+  const Accumulator& advance_to(const NetFile& net, int ply);
 #ifdef FORK_SEARCH_STATS
   const FeatureStackTally& tally() const { return tally_; }
   void set_tally(const FeatureStackTally& t) { tally_ = t; }  // X10: undo a side search's counts
