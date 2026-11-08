@@ -1943,8 +1943,13 @@ until measured; new names and constants go through the screens before use.
   built (DESIGN.md §5.8): the refiner of the final shape on S512ppr3's accumulator behind
   `FORK_REFINER_NET`, with a zero refiner whose bench equals S512ppr3's own, 14,149,617 /
   1cb0717f040c294d, gate on, off and with G1; on the bench at 25/25 it is called at 8.40% of nodes. The
-  speed A/B (M1, M2) is prepared and waits for a quiet window; then the 3,000-site labelling pilot and
-  P0. **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
+  speed gate measured (2026-11-08): the AVX2 entry layer is the bottleneck, no shape meets the 3%
+  line (entry 16 at (b) 9.0% nps in game, entry 8 at (a) 3.8%); a [-32, 32] weight bound and a VNNI
+  path come next on the 8-wide shape. P0: S512+X's net flips over S512ppr3 are 0.38 of those over
+  S512r2 (+0.029 against +0.076), a lower prior; the +123 cp residual is real (perspective right,
+  not mates, not the window's selection: it lives in zero-window tree positions). The labelling pilot
+  picks N = 100k nodes (side agreement 0.942, residual correlation 0.987 with 1M at the gated sites).
+  **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
   SPRTs, write a reproduction guide in docs/research/boundary-refiner/ (the mechanism; the evidence,
   including the control split of window-gated refiner, bias-only and random gate; implementation details;
   the refiner's training; failures and costs; settings), then a TalkChess summary post and possibly an

@@ -171,6 +171,68 @@ compared on the held-out near-window set (explained variance, flip accuracy
 at crucial sites, and A3, beating a constant shift). The refiner lanes stay
 untouched. Meanwhile the 3,000-site labelling pilot and P0 run.
 
+**P0 and the labelling pilot (2026-11-08; measure jobs i59s3-p0-seeds,
+i59s3-pilot-replay2, i59s3-pilot-labels, 2 threads, one at a time; data in
+~/fork-measure/i59s3/p0 and /pilot; the scripts used are scratch tools, to
+be committed as the plan's D1 tools once their names are screened):**
+
+*P0 (i), the oracle's knowledge on the new base.* On the crucial-point sites
+(SPRT games, report only; 5,433 sites, deep values at 1M nodes by the
+2026-11-07 engine), each network evaluated by R-int: at the sites within
+25 cp of the base's own evaluation, S512+X over S512ppr3 fixes 152 and
+breaks 125 of 919 gated sites, net flips **+0.029** (McNemar z +1.62, not
+significant at p < 0.01), against **+0.076** over S512r2 (164 / 98 of 864,
+z +4.08): the ratio is **0.38**. Most of what S512+X knew that S512r2 did
+not, S512ppr3 knows already; the oracle's +41.0 is an optimistic prior for
+S512ppr3 (scaled by the ratio, about +16 [derived, a rough reading, not a
+measurement]). P0 informs, it does not kill.
+
+*P0 (ii), the residual's +123 cp mean* (deep - static at sites within
+25 cp; owner's amendment 1):
+- **Sign and perspective are right:** both values are the side to move's
+  at the site (the stats build's frame value and the deep search of the
+  site's FEN); the static evaluation correlates +0.90 with the side to
+  move's material, the deep value +0.69, the two +0.79; 12 of 4,948 sites
+  disagree in sign beyond +-300 cp.
+- **Mates and tables do not make it:** 420 of 5,368 deep values are mates
+  (44 of 898 within 25 cp; out of every mean here), none lies in the
+  tablebase band, 11 are decisive (|v| >= 2,000), 63 positions have at most
+  5 pieces; leaving those out moves the mean from +122.6 to +118.3 / +124.1.
+  The mean is heavy-tailed: the **median is +24.5**, the mean of
+  |r| <= 1,000 is +94.9, 68% of the residuals are positive.
+- **Selection: not the window's.** The residual grows away from the
+  window (median by gap band: 0-25 +24.5, 26-80 +43, 81-200 +89, 201-500
+  +142, over 500 +179 cp; means +123 to +241), so selecting sites near the
+  window shrinks it. It is a property of positions inside the tree, at
+  zero-window nodes (+124.8, n 838), reached by inferior moves whose
+  refutation the static evaluation does not see; at the open-window (PV)
+  sites it is +7.2 (n 16). On the pilot's own sites (below, 1M labels) the
+  same holds: within 25 cp +134.1 (median +34.5, n 1,064), PV sites +25.7
+  (median +4.0, n 29); sites from searches whose root score moved by more
+  than 30 cp over their last two iterations +150.9 (median +39.0, n 73),
+  from stable searches (<= 10 cp) +119.0 (median +26.0, n 766): a search
+  whose result moved adds a little, not the bulk.
+- **The centring** (decided): over the pilot's 80 cp set, decision-weighted
+  (h = 25 cp), the mean residual is +139.4 cp, +0.0875 in win probability
+  (S = 89); the training split's own mean replaces it at training. The
+  weights' n_eff is 0.60 n (idea 48's rule, at least 0.5 n: h = 25 stands).
+
+*The labelling pilot (3.3).* 150 validation games of the sealed part g3i
+(g3i-w05-val.vf, seed 20261108) replayed through the stats build at
+200,000 nodes per move (16,237 sites sampled, 6,496 within 80 cp); 3,000
+of those picked (seed 20261108; 1,129 within 25 cp; main 1,835,
+quiescence 1,165, reused 1,355) and labelled at 100k, 300k and 1M nodes by
+the pinned default engine (~/fork-measure/bin/fork-release-2b1c78b.exe,
+SHA-256 17ab2b41...0b34; hash and bench 14,149,617 / 1cb0717f040c294d
+checked before the first label and after the last). Median label depth 11,
+14 and 17. Against the 1M label at the gated sites (<= 25 cp): side
+agreement 0.942 at 100k, 0.964 at 300k; win-probability residual
+correlation 0.987 and 0.993; at the 1M-crucial sites (n 432) agreement
+0.910 and 0.956. **By the plan's rule (90% agreement, 0.8 correlation),
+the training labels' budget is N = 100k nodes** (13.9 thread-hours for
+1 M sites, 6.9 h on 2 threads); validation and test sites stay at 1M. 172
+of the 3,000 1M labels are mates (5.7%).
+
 ## 0. The design in brief
 
 1. S512ppr3 evaluates everywhere, unchanged. Where the gate fires (the base
