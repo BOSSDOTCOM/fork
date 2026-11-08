@@ -1520,3 +1520,29 @@ Prior-art search for idea 59. No engine repository was cloned and no engine sour
 | https://ar5iv.labs.arxiv.org/html/1905.13521 | arXiv HTML rendering of MPV-MCTS | 2026-11-08 | §2.12 method (leaf choice by visit count, value blend) |
 | https://arxiv.org/html/2606.01708v2 | arXiv HTML of the two-fidelity minimax paper | 2026-11-08 | §2.13 method |
 | Web searches (talkchess big net near window; cheap and expensive evaluation in game trees; MPV-MCTS; small net big net switch; YaneuraOu/Suisho; near-window residual; Lc0 two networks) | search result lists, leads only | 2026-11-08 | leads; no claim rests on a snippet |
+
+## Gauntlet reference: Stockfish and Clover 6.1 (competition.md section 5), 2026-11-08
+
+Opponent-binary rule: no engine repository was cloned or downloaded, and no source file was opened (Makefiles included). The only material read was GitHub API metadata, READMEs, licence text, release notes, Stockfish's documentation pages and CCRL pages. Scratch copies of these documents were kept in a temporary folder outside the repository and deleted before reporting.
+
+| URL | What it is | Date checked | Used for |
+|---|---|---|---|
+| https://api.github.com/repos/official-stockfish/Stockfish/releases/latest | API: latest release | 2026-11-08 | tag `sf_19`, name, publish date, not a pre-release |
+| https://api.github.com/repos/official-stockfish/Stockfish/releases (first 4) | API: release list | 2026-11-08 | the newer dev release is flagged pre-release |
+| https://api.github.com/repos/official-stockfish/Stockfish/releases/tags/sf_19 | API: release notes of Stockfish 19 | 2026-11-08 | universal binaries, net architecture remark, strict position validation |
+| https://api.github.com/repos/official-stockfish/Stockfish/git/ref/tags/sf_19 | API: tag ref | 2026-11-08 | lightweight tag, commit SHA |
+| https://api.github.com/repos/official-stockfish/Stockfish/commits/edb0d9db6731067ec50ce619ff372b463bc4dd5d | API: commit metadata | 2026-11-08 | message and date of the tagged commit |
+| https://api.github.com/repos/official-stockfish/Stockfish/contents/?ref=sf_19 | API: top-level listing at the tag (names only) | 2026-11-08 | location of README.md, Copying.txt, src |
+| https://api.github.com/repos/official-stockfish/Stockfish/license | API: licence field | 2026-11-08 | GPL-3.0 |
+| https://api.github.com/repos/official-stockfish/Stockfish/contents/Copying.txt?ref=sf_19 | Licence file at the tag | 2026-11-08 | GPL v3 text |
+| https://api.github.com/repos/official-stockfish/Stockfish/contents/README.md?ref=sf_19 | README at the tag | 2026-11-08 | build folder and example, embedded net, licence terms, Lc0 data note |
+| https://raw.githubusercontent.com/wiki/official-stockfish/Stockfish/Compiling-from-source.md | Stockfish wiki, compile page (master) | 2026-11-08 | make targets, arch list, Linux build, `make net` |
+| https://raw.githubusercontent.com/wiki/official-stockfish/Stockfish/UCI-&-Commands.md and the same with `%26` | old wiki page name | 2026-11-08 | FAILED (HTTP 404; the page was renamed) |
+| https://official-stockfish.github.io/docs/stockfish-wiki/UCI-&-Commands.html | docs site, old page name | 2026-11-08 | FAILED (HTTP 404) |
+| https://official-stockfish.github.io/docs/stockfish-wiki/UCI-Protocol-and-Stockfish-Commands.html | docs site, UCI page | 2026-11-08 | Threads, Ponder, Hash, MultiPV defaults; no book option; CRITICAL ERROR behaviour |
+| https://official-stockfish.github.io/docs/stockfish-wiki/{Compiling-from-source, Download-and-usage, Stockfish-FAQ, Advanced-topics, Useful-data, Developers}.html | docs site pages | 2026-11-08 | searched for where the net is downloaded from; nothing found (UNVERIFIED) |
+| https://computerchess.org.uk/ccrl/404/ (redirects to computerchess.org.uk/404/) | CCRL Blitz best-versions list, "Computed on November 7, 2026" | 2026-11-08 | list date; Stockfish 19 8CPU top entry |
+| https://computerchess.org.uk/ccrl/404/rating_list_all.html | CCRL Blitz complete list, "Computed on November 7, 2026" (curl, parsed locally, raw rows checked) | 2026-11-08 | Stockfish 19 64-bit 3792 +/-11 (3064 games); Clover 6.1 64-bit 3639 +/-10 (3385 games) |
+| https://api.github.com/repos/lucametehau/CloverEngine/git/ref/tags/v6.1 | API: tag ref | 2026-11-08 | lightweight, commit 20f8701a..., matches anchors.tsv |
+| https://api.github.com/repos/lucametehau/CloverEngine/releases/tags/v6.1 | API: release | 2026-11-08 | name, publish date, not a pre-release |
+| https://api.github.com/repos/lucametehau/CloverEngine/license | API: licence field | 2026-11-08 | GPL-3.0 |

@@ -1153,6 +1153,95 @@ Why not the others (checked 2026-11-02):
   Heimdall and the Rust or C# engines named in the Milestone C screen
   (Velvet, Viridithas, Tcheran, Clarity), plus every 8CPU-only entry.
 
+### Gauntlet reference: Stockfish (gap metric) and Clover 6.1 as standing anchor (owner, 2026-11-08)
+
+Verified 2026-11-08. The owner's brief: add Stockfish to the Elo gauntlet
+on GitHub's runners as an extra opponent. Its result is reported on its
+own as a "gap to Stockfish" figure and kept out of the anchor fit. Clover
+6.1 moves from alternate to standing anchor. Both are opponent binaries
+only: **OFF-LIMITS** for code, nets and anything they generate, **USE** as
+gauntlet opponents. Only these were opened: GitHub API metadata, the
+README, `Copying.txt` and the release notes at the tag, the Stockfish
+docs pages on compiling and UCI, and CCRL pages. No source file was read
+(the Makefile included), and nothing was cloned, downloaded or built.
+
+**Stockfish** (component: gauntlet tooling, `tools/gauntlet/`; Phase 4
+onward):
+- Latest official release on 2026-11-08: tag `sf_19`, release "Stockfish
+  19", published 2026-09-05 (GitHub API `releases/latest`). The only newer
+  release, `stockfish-dev-20261106-7cdd5e89`, is marked pre-release. The
+  tag is lightweight (the refs API reports object type `commit`), so it
+  points directly at commit `edb0d9db6731067ec50ce619ff372b463bc4dd5d`
+  (message "Stockfish 19", committed 2026-09-05).
+- Licence: **GPL-3.0**. At `sf_19`, `Copying.txt` is the GNU GPL version 3
+  text (674 lines, "Version 3, 29 June 2007"). The README's terms of use
+  say GPL v3, and the API reports `GPL-3.0`. The README also says its nets
+  are trained on Lc0 data (ODbL), which is one more reason the net is
+  off-limits to Fork.
+- Build (README at the tag; wiki page "Compiling-from-source"):
+  - The Makefile is in `src`. The general form is
+    `make target [ARCH=arch] [COMP=compiler] [COMPCXX=cxx]`.
+  - Targets: `build` (no PGO), `profile-build` (PGO, the README's
+    example), `net` ("Download the default nnue nets"), `strip`,
+    `install`, `clean` and `help`.
+  - Arches include `x86-64-avx2`, `x86-64-bmi2`, `x86-64-avxvnni`, the
+    AVX-512 variants and `x86-64-universal` (picks the best code path at
+    run time; the 19 release notes say the official binaries are now
+    universal).
+  - No arch is named x86-64-v3. The closest documented ones are
+    `x86-64-avx2` and `x86-64-bmi2`.
+  - Command for Fork's runner build: in `src`,
+    `make -j build ARCH=x86-64-avx2` (gcc is the default compiler).
+    `profile-build` is the documented faster alternative, at the cost of
+    a profiling run during the build.
+  - The wiki page tracks master, not the tag. Its arch list matches the
+    19 release notes.
+- Network:
+  - The docs say `make net` downloads the default net, and the README
+    says binary distributions have the net embedded. The wiki says a
+    build with embedding turned off loads the default net from the
+    working directory. The macOS and Android recipes run `make net` as a
+    separate step.
+  - No document opened says whether plain `make build` fetches the net by
+    itself, or from which URL: **UNVERIFIED**. The Stockfish row in the
+    table at the top of section 5 says the makefile fetches the nets. That
+    claim was not re-checked here, because reading the Makefile falls
+    outside the opponent-only rule.
+  - Safe recipe: run `make net` before `make build`, and log the
+    downloaded file's name and SHA-256. At run time, the EvalFile default
+    in the `uci` output names the embedded net.
+- UCI for single-threaded play (wiki "UCI Protocol and Stockfish
+  Commands"):
+  - Defaults: `Threads` 1, `Ponder` false, `Hash` 16 MB, `MultiPV` 1.
+  - No book option is documented (Stockfish has no book of its own).
+  - Set `option.Threads=1` explicitly, and give `Hash` the same value as
+    the other gauntlet engines.
+  - Since version 19, an invalid FEN, position or move makes the engine
+    print "info string CRITICAL ERROR" and exit. A runner bug therefore
+    shows up as a crash, not as a bad game.
+- CCRL Blitz 2'+1" complete list, "Computed on November 7, 2026"
+  (fetched 2026-11-08):
+  - Single CPU: **Stockfish 19 64-bit 3792 +11/-11, 3064 games**.
+  - The 8CPU entry is 3803 +22/-22 (629 games).
+  - Fork should expect to score almost nothing. With a score near zero,
+    the gap estimate's error is wide and lopsided, so treat it as a trend
+    figure, not a rating.
+
+**Clover 6.1** (standing anchor; build details in the section above):
+- Tag check (GitHub API only): in lucametehau/CloverEngine,
+  `refs/tags/v6.1` is lightweight, object type `commit`, SHA
+  `20f8701ae15d17eb9f24e8302da5940c13e120a3`. A string comparison with
+  the commit pinned in `tools/gauntlet/anchors.tsv` (main) matched
+  exactly. The "Clover 6.1" release was published 2023-12-12 and is not a
+  pre-release. Licence per the API: GPL-3.0.
+- CCRL Blitz complete list, "Computed on November 7, 2026":
+  **Clover 6.1 64-bit 3639 +10/-10, 3385 games**. That is the same rating
+  and game count as the October 31 list that `anchors.tsv` cites, so its
+  3639 is confirmed. (The Clover 6.1 64-bit 8CPU entry is 3688.)
+
+Sources: sources.md, section "Gauntlet reference: Stockfish and Clover
+6.1".
+
 ---
 
 ## 6. Rating-list entry procedures
