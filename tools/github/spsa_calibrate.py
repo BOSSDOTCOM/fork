@@ -118,6 +118,7 @@ def main(argv=None):
     ap.add_argument('--out', required=True)
     ap.add_argument('--target', type=float, default=0.10)
     a = ap.parse_args(argv)
+    a.engine = str(Path(a.engine).resolve())  # Windows starts a relative path only from PATH
     raw = spsa.read_json(a.spec)
     table = spsa.table_from_header((HERE.parents[1] / 'src' / 'tune' / 'params.hpp').read_text(encoding='utf-8'))
     names = [p['name'] for p in raw['params']]

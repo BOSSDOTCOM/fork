@@ -1,13 +1,13 @@
 {
  "params": [
-  {"name": "RfpMargin", "c": 6},
-  {"name": "FutilityOffset", "c": 8},
-  {"name": "FutilityGrowth", "c": 5},
-  {"name": "NullSurplusPerPly", "c": 23},
-  {"name": "AspirationHalfWidth", "c": 1},
-  {"name": "QuietSeeFloor", "c": 5},
-  {"name": "CaptureSeeFloor", "c": 8},
-  {"name": "LmpQuietAllowance", "c": 1}
+  {"name": "RfpMargin", "c": 15.0},
+  {"name": "FutilityOffset", "c": 18.2},
+  {"name": "FutilityGrowth", "c": 7.5},
+  {"name": "NullSurplusPerPly", "c": 7.8},
+  {"name": "AspirationHalfWidth", "c": 1.0},
+  {"name": "QuietSeeFloor", "c": 22.5},
+  {"name": "CaptureSeeFloor", "c": 28.0},
+  {"name": "LmpQuietAllowance", "c": 1.7}
  ],
  "fixed": {},
  "iterations": 13,

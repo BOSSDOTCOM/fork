@@ -1429,8 +1429,16 @@ on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
   changes its rule's firing count on the bench by 10% (1, 2, 4, 8 table
   steps, log-linear interpolation; insensitive rules flagged); three
   stats-only counters serve it (aspiration re-searches, null-move surplus
-  plies, quiet SEE prunes; bench unchanged). Until it has run,
-  `tools/github/spsa-r14.json` holds the table steps.
+  plies, quiet SEE prunes; bench unchanged). Run on e5dbaab
+  (2026-11-08, S512ppr3): c = RfpMargin 15.0, FutilityOffset 18.2,
+  FutilityGrowth 7.5, NullSurplusPerPly 7.8, AspirationHalfWidth 1.0,
+  QuietSeeFloor 22.5 (insensitive: 8.6% at 6 steps, so the range cap),
+  CaptureSeeFloor 28.0, LmpQuietAllowance 1.7, in
+  `tools/github/spsa-r14.json`; 2.5 to 4.5 times the table step for five
+  of them and a third of it for NullSurplusPerPly, so O3's refutation
+  ("every c within 30% of its step") does not hold. The SEE floors'
+  counts move in plateaus (SEE values are discrete: CaptureSeeFloor +8 and
+  +16 give the default's count exactly), so their c are coarse.
 - **Validation** (B7 O6; owner's defaults 2026-11-07): the tuned values are
   committed as new defaults (bench updated, the constants table rows citing
   the SPSA log and the SPRT, the originality screen before the commit);
