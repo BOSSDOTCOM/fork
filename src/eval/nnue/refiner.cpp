@@ -61,22 +61,53 @@ void refiner_l1(const RefinerFile& r, const RefinerInputs& in, std::int32_t* sum
 #endif
 
 // The entry layer's clipped ReLU, the middle layer, the heads and the
-// output's scaling (refiner_file.hpp's units); shared by every path.
+// output's scaling (refiner_file.hpp's units): the scalar reference, and on
+// AVX2 the vector path. The vector path computes the middle layer unit by
+// unit as the entry layer does (maddubs within the exactness bound, madd
+// with ones, horizontal_sum), and each head as the dot product of the middle
+// layer's bytes, widened to int16, with its int16 weights (madd,
+// horizontal_sum): integer sums of the same terms, so both paths give the
+// same values (refiner_file.hpp's bounds keep each one inside int32).
+template <bool Scalar>
 RefinerOutput refiner_l2_heads(const RefinerFile& r, const std::int32_t* sums) {
-  std::uint8_t a[RefinerL1Width];
+  alignas(16) std::uint8_t a[16] = {};  // the entry layer's activations; zero beyond RefinerL1Width
   for (int o = 0; o < RefinerL1Width; ++o)
     a[o] = static_cast<std::uint8_t>(std::clamp(sums[o] / NetQb, 0, NetQa));
-  std::uint8_t b[RefinerL2Width];
-  for (int m = 0; m < RefinerL2Width; ++m) {
-    std::int32_t s = r.middle_bias[m];
-    for (int o = 0; o < RefinerL1Width; ++o) s += a[o] * r.middle_weights[m][o];
-    b[m] = static_cast<std::uint8_t>(std::clamp(s / NetQb, 0, NetQa));
-  }
+  alignas(32) std::uint8_t b[RefinerL2Width];
   std::int64_t y[RefinerHeads];
-  for (int h = 0; h < RefinerHeads; ++h) {
-    std::int32_t s = r.head_bias[h];
-    for (int m = 0; m < RefinerL2Width; ++m) s += b[m] * r.head_weights[h][m];
-    y[h] = s;
+#if defined(__AVX2__)
+  if constexpr (!Scalar) {
+    static_assert(RefinerL1Width <= 16 && RefinerL2Width == 32, "the vector path's shapes");
+    const __m128i x = _mm_load_si128(reinterpret_cast<const __m128i*>(a));
+    const __m128i ones = _mm_set1_epi16(1);
+    for (int m = 0; m < RefinerL2Width; ++m) {
+      const auto* row = reinterpret_cast<const __m128i*>(r.middle_weights[m]);
+      const __m128i w = RefinerL1Width == 16 ? _mm_loadu_si128(row) : _mm_loadl_epi64(row);
+      const __m128i p = _mm_madd_epi16(_mm_maddubs_epi16(x, w), ones);
+      const auto s = static_cast<std::int32_t>(r.middle_bias[m] + horizontal_sum(_mm256_zextsi128_si256(p)));
+      b[m] = static_cast<std::uint8_t>(std::clamp(s / NetQb, 0, NetQa));
+    }
+    const __m256i lo = _mm256_cvtepu8_epi16(_mm_load_si128(reinterpret_cast<const __m128i*>(b)));
+    const __m256i hi = _mm256_cvtepu8_epi16(_mm_load_si128(reinterpret_cast<const __m128i*>(b + 16)));
+    for (int h = 0; h < RefinerHeads; ++h) {
+      const auto* w = reinterpret_cast<const __m256i*>(r.head_weights[h]);
+      const __m256i d = _mm256_add_epi32(_mm256_madd_epi16(lo, _mm256_load_si256(w)),
+                                         _mm256_madd_epi16(hi, _mm256_load_si256(w + 1)));
+      y[h] = r.head_bias[h] + horizontal_sum(d);
+    }
+  } else
+#endif
+  {
+    for (int m = 0; m < RefinerL2Width; ++m) {
+      std::int32_t s = r.middle_bias[m];
+      for (int o = 0; o < RefinerL1Width; ++o) s += a[o] * r.middle_weights[m][o];
+      b[m] = static_cast<std::uint8_t>(std::clamp(s / NetQb, 0, NetQa));
+    }
+    for (int h = 0; h < RefinerHeads; ++h) {
+      std::int32_t s = r.head_bias[h];
+      for (int m = 0; m < RefinerL2Width; ++m) s += b[m] * r.head_weights[h][m];
+      y[h] = s;
+    }
   }
   constexpr std::int64_t Unit = std::int64_t{NetQa} * NetQb;
   RefinerOutput out;
@@ -84,6 +115,9 @@ RefinerOutput refiner_l2_heads(const RefinerFile& r, const std::int32_t* sums) {
   out.confidence = static_cast<int>(std::clamp<std::int64_t>(y[1] * 1000 / Unit, 0, 1000));
   return out;
 }
+
+template RefinerOutput refiner_l2_heads<false>(const RefinerFile& r, const std::int32_t* sums);
+template RefinerOutput refiner_l2_heads<true>(const RefinerFile& r, const std::int32_t* sums);
 
 void pack_clipped_scalar(const Accumulator& acc, Color stm, std::uint8_t* out) {
   for (int half = 0; half < 2; ++half) {
@@ -158,7 +192,7 @@ RefinerOutput run_refiner(const RefinerFile& r, const RefinerInputs& in) {
 RefinerOutput run_refiner_scalar(const RefinerFile& r, const RefinerInputs& in) {
   alignas(32) std::int32_t sums[RefinerL1Width];
   refiner_l1_scalar(r, in, sums);
-  return refiner_l2_heads(r, sums);
+  return refiner_l2_heads<true>(r, sums);
 }
 
 }  // namespace forkeng

@@ -58,12 +58,15 @@ int refiner_rows(const NetFile& base, const Position& pos, int base_eval, int* r
 RefinerOutput run_refiner(const RefinerFile& r, const RefinerInputs& in);
 RefinerOutput run_refiner_scalar(const RefinerFile& r, const RefinerInputs& in);
 
-// run_refiner's two parts, public for fork_micro's per-part timing: the entry
-// layer's sums (units of QA x QB: bias, dense part, active rows; the build's
-// vector path, and its scalar reference), then the entry layer's clipped
-// ReLU, the middle layer, the heads and the output's scaling.
+// run_refiner's two parts, public for fork_micro's per-part timing and the
+// equivalence tests: the entry layer's sums (units of QA x QB: bias, dense
+// part, active rows; the build's vector path, and its scalar reference), then
+// the entry layer's clipped ReLU, the middle layer, the heads and the
+// output's scaling (the build's vector path, or with Scalar its scalar
+// reference; explicitly instantiated for both).
 void refiner_l1(const RefinerFile& r, const RefinerInputs& in, std::int32_t* sums);
 void refiner_l1_scalar(const RefinerFile& r, const RefinerInputs& in, std::int32_t* sums);
+template <bool Scalar = false>
 RefinerOutput refiner_l2_heads(const RefinerFile& r, const std::int32_t* sums);
 
 }  // namespace forkeng

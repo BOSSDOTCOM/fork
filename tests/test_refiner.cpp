@@ -108,6 +108,69 @@ TEST_CASE("refiner",
   }
 }
 
+// The middle layer and heads alone (DESIGN.md §7: the vector path beside its
+// scalar reference, bit for bit): random weights and entry sums, and the
+// bound's edge, where every activation is 255 and every middle weight +-64
+// (each 8-bit multiply-add pair at +-32,640) with biases that bring the
+// middle units back to chosen mid-range values, so a lost product shows.
+TEST_CASE("refiner", "refiner_l2_heads: the vector path equals the scalar one and a plain 64-bit reference") {
+  std::uint64_t rng = 67;
+  auto draw = [&](int span) { return static_cast<int>(splitmix_next(rng) % (2 * span + 1)) - span; };
+  auto plain = [](const RefinerFile& r, const std::int32_t* sums) {
+    std::int64_t a[RefinerL1Width], b[RefinerL2Width], y[RefinerHeads];
+    for (int o = 0; o < RefinerL1Width; ++o)
+      a[o] = sums[o] <= 0 ? 0 : std::min<std::int64_t>(sums[o] / 64, 255);
+    for (int m = 0; m < RefinerL2Width; ++m) {
+      std::int64_t s = r.middle_bias[m];
+      for (int o = 0; o < RefinerL1Width; ++o) s += a[o] * r.middle_weights[m][o];
+      b[m] = s <= 0 ? 0 : std::min<std::int64_t>(s / 64, 255);
+    }
+    for (int h = 0; h < RefinerHeads; ++h) {
+      std::int64_t s = r.head_bias[h];
+      for (int m = 0; m < RefinerL2Width; ++m) s += b[m] * r.head_weights[h][m];
+      y[h] = s;
+    }
+    RefinerOutput out;
+    out.correction = static_cast<int>(std::clamp<std::int64_t>(y[0] * r.scale / (255 * 64), -r.cap, r.cap));
+    out.confidence = static_cast<int>(std::clamp<std::int64_t>(y[1] * 1000 / (255 * 64), 0, 1000));
+    return out;
+  };
+  int compared = 0, nonzero = 0, edges = 0;
+  for (int round = 0; round < 400; ++round) {
+    auto r = std::make_unique<RefinerFile>();
+    std::int32_t sums[RefinerL1Width];
+    const bool edge = round % 4 == 0;
+    for (int m = 0; m < RefinerL2Width; ++m) {
+      std::int64_t dense = 0;
+      for (int o = 0; o < RefinerL1Width; ++o) {
+        r->middle_weights[m][o] =
+            static_cast<std::int8_t>(edge ? (splitmix_next(rng) % 2 ? 64 : -64) : draw(64));
+        dense += 255 * r->middle_weights[m][o];
+      }
+      // At the edge: the bias leaves the unit at a chosen value in [1, 254].
+      r->middle_bias[m] = edge ? static_cast<std::int32_t>(-dense + 64 * (1 + draw(126) + 127)) : draw(40000);
+    }
+    for (auto& unit : r->head_weights)
+      for (auto& w : unit) w = static_cast<std::int16_t>(draw(round % 3 == 0 ? 32767 : 300));
+    for (auto& b : r->head_bias) b = draw(100000);
+    r->scale = round % 3 == 0 ? 1 : 89;
+    r->cap = EvalLimit;
+    for (auto& s : sums) s = edge ? 255 * 64 + static_cast<int>(splitmix_next(rng) % 64) : draw(25000);
+    const RefinerOutput vec = refiner_l2_heads<false>(*r, sums), scalar = refiner_l2_heads<true>(*r, sums);
+    const RefinerOutput ref = plain(*r, sums);
+    CHECK_MSG(vec.correction == scalar.correction && vec.confidence == scalar.confidence,
+              "round " << round << ": " << vec.correction << "/" << vec.confidence << " vs "
+                       << scalar.correction << "/" << scalar.confidence);
+    CHECK_MSG(scalar.correction == ref.correction && scalar.confidence == ref.confidence, "round " << round);
+    ++compared;
+    nonzero += ref.correction != 0;
+    edges += edge;
+  }
+  CHECK_EQ(compared, 400);
+  CHECK_EQ(edges, 100);
+  CHECK_MSG(nonzero > 300, nonzero);
+}
+
 TEST_CASE("refiner",
           "run_refiner equals its scalar path and a plain 64-bit reference; the reader takes "
           "the writer's files and refuses every bad field") {

@@ -4059,6 +4059,10 @@ leaves the search exactly S512ppr3's while paying the whole per-call cost:
   as it is (the sticky rule). The ply frame keeps base_eval, refined,
   correction and confidence (16 bytes more in refiner builds only; the
   PlyFrame size guard records it).
+- **Vector paths:** the pack, the entry layer, and the middle layer with the
+  heads each have an AVX2 path beside its scalar reference (§7), equal bit
+  for bit on random and edge inputs (tests/test_refiner.cpp); AVX-512
+  builds use the AVX2 paths, and a VNNI path waits for TCEC's answer.
 - **The zero refiner** tests/nnue/refiner-zero.frnet (tools/nnue/refiner.py
   zero): every weight zero, S512ppr3's scale and checksum, the cap at
   EvalLimit, so bench equality shows a zero output, not a zero cap. Its
