@@ -8,10 +8,12 @@ import collections.abc
 import contextlib
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import chess
 
@@ -114,6 +116,33 @@ class CrucialPointsTests(unittest.TestCase):
                     cp.main(['deep', str(out / 'missing-engine'), str(out)])
             self.assertEqual((out / 'deep.tsv').read_bytes(), before)
             self.assertNotIn('dropped', said.getvalue())
+
+    def test_deep_sends_the_tables_path(self):
+        # The labels search with the Syzygy tables of --syzygy (plan 3.3): the engine receives SyzygyPath
+        # before its first search, and nothing without the option. The engine is a stand-in.
+        ref = (Path(__file__).resolve().parents[2] / 'tests' / 'bench-s512ppr3.ref').read_text(encoding='utf-8')
+        nodes = re.search(r'nodes (\d+)', ref).group(1)
+        signature = re.search(r'signature ([0-9a-f]+)', ref).group(1)
+        bench = f'nodes {nodes}\nsignature {signature}\n'
+        for extra, expected in ((['--syzygy', 'tables/3-4-5'], True), ([], False)):
+            with tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp)
+                site = {'id': 7, 'fen': chess.STARTING_FEN, 'eval': 10, 'alpha': 0, 'beta': 1}
+                (out / 'sites.jsonl').write_text(json.dumps(site) + '\n', encoding='utf-8')
+                engine = mock.MagicMock()
+                engine.stdout.readline.side_effect = ['uciok\n', 'readyok\n', 'info depth 3 score cp 25 nodes 9\n',
+                                                      'bestmove e2e4\n']
+                ran = lambda args, **_: mock.Mock(stdout='net s512ppr3\n' if args[1] == 'version' else bench)  # noqa: E731
+                with mock.patch.object(cp.subprocess, 'run', side_effect=ran), \
+                        mock.patch.object(cp.subprocess, 'Popen', return_value=engine), \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    cp.main(['deep', 'engine', str(out), '--nodes', '9', '--workers', '1', *extra])
+                sent = ''.join(call.args[0] for call in engine.stdin.write.call_args_list)
+                self.assertEqual((out / 'deep.tsv').read_text(encoding='utf-8'), '7\t25\t0\t3\n')
+            self.assertEqual('setoption name SyzygyPath value tables/3-4-5\n' in sent, expected)
+            self.assertEqual('SyzygyPath' in sent, expected)
+            if expected:
+                self.assertLess(sent.index('SyzygyPath'), sent.index('go nodes 9'))
 
 
 if __name__ == '__main__':

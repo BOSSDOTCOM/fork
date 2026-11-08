@@ -21,7 +21,9 @@ docs/research/boundary-refiner/step3-plan.md 3.1-3.3).
    position with validation or test). Also printed: the picked sites'
    effective number under the training's decision weights,
    exp(-gap^2 / (2 h^2)) with h = 25 cp at main-search sites and 10 cp at
-   quiescence sites (setting (a)'s margins).
+   quiescence sites (setting (a)'s margins), and the training's quiescence
+   h (owner, 2026-11-08): the smallest whole h (cp) whose weights give
+   n_eff >= 0.5 n with the main search at 25 cp.
 
     near_window_sites.py games SHARD.vf... OUT.jsonl --count N --seed S
     near_window_sites.py select ALL/sites.jsonl OUT... --gap 80 --count 3000 --seed S [--dedup]
@@ -142,6 +144,16 @@ def main(argv=None):
         n_eff = sum(weights) ** 2 / sum(w * w for w in weights)
         print(f'decision weights (h = 25 cp main search, 10 cp quiescence): n_eff {n_eff:.0f} of {len(weights)} '
               f'({n_eff / len(weights):.2f})')
+        main = [math.exp(-gap_of[site['id']] ** 2 / (2 * 25 ** 2)) for site in picked if site['kind'] == 0]
+        quiesce = [gap_of[site['id']] for site in picked if site['kind'] != 0]
+        for h in range(1, 201):
+            w = main + [math.exp(-g ** 2 / (2 * h ** 2)) for g in quiesce]
+            if sum(w) ** 2 / sum(x * x for x in w) >= 0.5 * len(w):
+                print(f'quiescence h for n_eff >= 0.5 n (main search 25 cp): {h} cp '
+                      f'(n_eff {sum(w) ** 2 / sum(x * x for x in w) / len(w):.3f} n)')
+                break
+        else:
+            print('quiescence h for n_eff >= 0.5 n (main search 25 cp): none up to 200 cp')
     return 0
 
 

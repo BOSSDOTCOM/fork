@@ -99,6 +99,17 @@ class NearWindowSitesTests(unittest.TestCase):
             n_eff = sum(w) ** 2 / sum(x * x for x in w)
             self.assertIn(f'n_eff {n_eff:.0f} of 2 ({n_eff / 2:.2f})', said)
 
+            # The training's quiescence h: one main-search site at gap 20 (weight m = exp(-0.32) at 25 cp)
+            # and three quiescence sites at gap 25 need exp(-312.5 / h^2) >= m (sqrt(48) - 6) / 6 for
+            # n_eff >= 2 of 4, so h >= 11.95: 12 (9 if the main search's h were 10).
+            more = [site(10, a, 21), site(11, b, 26, kind=1), site(12, c, 26, kind=1),
+                    site(13, '4k3/8/8/8/8/8/1P6/4K3 w - - 0 1', 26, kind=1)]
+            (tmp / 'all.jsonl').write_text(''.join(json.dumps(s) + '\n' for s in more), encoding='utf-8')
+            said = select()[1]
+            w = [math.exp(-20 ** 2 / (2 * 25 ** 2)), *[math.exp(-25 ** 2 / (2 * 12 ** 2))] * 3]
+            self.assertIn(f'quiescence h for n_eff >= 0.5 n (main search 25 cp): 12 cp '
+                          f'(n_eff {sum(w) ** 2 / sum(x * x for x in w) / 4:.3f} n)', said)
+
 
 if __name__ == '__main__':
     unittest.main()

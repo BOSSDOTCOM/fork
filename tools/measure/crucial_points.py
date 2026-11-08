@@ -11,7 +11,8 @@ change a decision, per percent of nodes, as the gate for ideas 59 and 60.
    stratum's sites per node from the run's counters.
 2. `deep`: every site with a finite window bound searched by the default
    engine (a normal build, its bench checked against the reference first),
-   one thread, Hash 16, `ucinewgame` before each, to N nodes (1,000,000);
+   one thread, Hash 16, `ucinewgame` before each, to N nodes (1,000,000),
+   with the Syzygy tables of --syzygy DIR (SyzygyPath; none without it);
    its last reported score is the site's deep value (side to move's view;
    a mate is written as +-20,000 and flagged). Resumable: a rerun searches
    only the sites without a label, after dropping a last line cut short by
@@ -206,8 +207,9 @@ def fit_detector(train, names):
     return beta, means, scales
 
 
-def deep_search_sites(engine, todo, out_path, nodes, workers):
-    """Searches each (id, fen) to `nodes` nodes; appends 'id<TAB>cp<TAB>mate<TAB>depth' lines."""
+def deep_search_sites(engine, todo, out_path, nodes, workers, syzygy=None):
+    """Searches each (id, fen) to `nodes` nodes (with the Syzygy tables in the
+    folder `syzygy`, if given); appends 'id<TAB>cp<TAB>mate<TAB>depth' lines."""
     jobs = queue.Queue()
     for item in todo:
         jobs.put(item)
@@ -237,6 +239,8 @@ def deep_search_sites(engine, todo, out_path, nodes, workers):
         read_until('uciok')
         send('setoption name Hash value 16')
         send('setoption name Threads value 1')
+        if syzygy:
+            send(f'setoption name SyzygyPath value {syzygy}')
         while True:
             try:
                 site_id, fen = jobs.get_nowait()
@@ -290,6 +294,7 @@ def main(argv=None):
     p.add_argument('out', type=Path)
     p.add_argument('--nodes', type=int, default=1000000)
     p.add_argument('--workers', type=int, default=2)
+    p.add_argument('--syzygy', default=None, help='the Syzygy tables folder (none if not given)')
     p = sub.add_parser('seeds')
     p.add_argument('out', type=Path)
     p.add_argument('name')
@@ -342,7 +347,7 @@ def main(argv=None):
         todo = [(s['id'], s['fen']) for s in sites
                 if s['id'] not in done and nearest_bound(s['eval'], s['alpha'], s['beta'])]
         print(f'{len(todo)} sites to search ({len(done)} done)', flush=True)
-        deep_search_sites(engine, todo, path, a.nodes, a.workers)
+        deep_search_sites(engine, todo, path, a.nodes, a.workers, a.syzygy)
         return 0
 
     if a.command == 'seeds':
