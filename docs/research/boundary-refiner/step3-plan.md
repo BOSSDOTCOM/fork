@@ -468,6 +468,30 @@ the job i59s3-window, results in ~/fork-measure/i59s3):**
   whole. Resolving +0.03 in quiescence would take about 2,200 gated
   quiescence sites, about four times the current count (more test sites
   labelled from test/all's games, for example): for the owner.
+- **The test set, enlarged about three times (owner decision, 2026-11-08;
+  recorded before the new sites are labelled).** So that the
+  deployment-weighted whole resolves about 0.02 (McNemar p < 0.01 at P0's
+  discordance), the test fold's games grow from 450 to 1,350: the same
+  shard (g3h-w05-val.vf), the same seeded shuffle (seed 20261110; its first
+  450 picks are the current games, checked byte for byte), replayed with
+  the pilot's settings into the same folder (the 450 game files unchanged,
+  SHA-256 before and after; the site list must begin with the current
+  48,362 sites), beside data generation on 3 processes at below-normal
+  priority (the owner accepted it; labels and replays are node-based).
+  20,000 new sites are picked by the same rule (window gap at most 80 cp,
+  deduplicated, seed 20261110), leaving out every position already
+  selected in any split (the pilot's 3,000, validation's 7,000, test's
+  10,000, training's 1,000,000), and labelled at 1M nodes with the tables
+  by the pinned engine, its hash and bench checked before and after
+  (folder test/n1m2; the test split is test/n1m and test/n1m2 together).
+  **Targets, from the current test set's rates** (2,175 main-search and 582
+  quiescence sites inside gate (a) per 10,000 picked): about 6,500 and
+  1,750 inside gate (a) of 30,000, a deployment-weighted n_eff of about
+  4,800, so the smallest NF reaching p < 0.01 becomes about 0.020 for the
+  weighted whole, 0.017 for the main search and 0.034 for quiescence
+  alone (2.576 sqrt(0.30 / n)). **The offline acceptance (O1) waits for
+  the enlarged test set.** The selection's real counts are recorded here
+  before the labels start.
 - **Labels (Syzygy 3-4-5; the pinned engine, SHA-256 17ab2b41...0b34,
   bench 14,149,617 / 1cb0717f040c294d as referenced before the first label
   and after the last).** Nodes per second are nominal (sites x the node
@@ -1092,7 +1116,16 @@ reported beside it and selects nothing.
   / sum_i w_i`, with S = 89, d the deep label, and `delta_i` capped at +-C
   inside the graph, as the engine caps it. **Amended (owner, 2026-11-08):**
   the target is centred, its training-split mean subtracted (the section
-  "Owner decision, 2026-11-08").
+  "Owner decision, 2026-11-08"). **The form (orchestrator, within the plan,
+  2026-11-08):** mu = the training-weighted mean of (deep - base) in cp over
+  the sites used (the weights of `deep_labels.py weights`); the target is
+  `sigmoid((d_i - mu) / S)` with S = 89, S512ppr3's output scale
+  (docs/nets.md, "S512ppr3": S = 89, matched to S512ppr2's mean |eval|);
+  mu is not added back in the engine and its value is reported. The base
+  sits in the trainer's graph, frozen: `detach()` on its outputs, decay 0
+  and a clip range holding its weights (3.6, settled); its float weights
+  are item 8a's R1-avg (weights.bin, SHA-256 02215858...c8b37ecc3),
+  checked against the engine's net before use.
 - **Decision weighting (owner addition 4; idea 48 applied):**
   `w_i = exp(-g_i^2 / (2 h^2))`, g_i the site's window gap, h = 25 cp (the
   gate's margin), normalised to mean 1. Idea 48's variance rule applies:
