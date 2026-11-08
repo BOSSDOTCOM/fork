@@ -1918,7 +1918,11 @@ until measured; new names and constants go through the screens before use.
   the size of the disagreement is not what pays; its position relative to the window is. Fixed-node
   results do not charge the second network's cost: the nps A/B awaits a quiet machine, and step 3's
   design (a shared accumulator) is what the cost claim rests on. **Next: step 3's design, for the
-  owner's review before building**, and a prior-art search for gated, boundary-specific evaluation
+  owner's review before building** (with the owner's 2026-11-08 additions: a head-to-head of a wider
+  quiescence margin and both margins SPSA-tunable; TT-reused evaluations considered in the gate; a
+  confidence output; training weighted by closeness to the window, idea 48 applied here; a cap on the
+  correction's size; features in the order exposure, a cheap bitboard danger summary, then threats only
+  if they fit the speed budget), and a prior-art search for gated, boundary-specific evaluation
   refiners before any public claim. **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
   SPRTs, write a reproduction guide in docs/research/boundary-refiner/ (the mechanism; the evidence,
   including the control split of window-gated refiner, bias-only and random gate; implementation details;
@@ -1979,3 +1983,48 @@ until measured; new names and constants go through the screens before use.
   an extension, on the LTC-sensitive list). **status:** untested (plan only,
   owner, 2026-11-07). **runtime cost:** possible (more nodes per move at
   equal depth; nps unchanged). **earliest phase:** Phase 4.
+
+## 61. Boundary-gated decisions
+
+- **type:** ELO (search; runtime cost possible).
+- **idea** (owner, 2026-11-08; plan only, after idea 59's refiner exists):
+  apply idea 59's window principle to the search's own decisions, spending
+  the refiner where a decision can flip. In order, each measured and
+  SPRT-tested on its own:
+  1. **Refiner-checked pruning:** when a prune's evaluation (reverse
+     futility, futility, razoring and the like) lies within a narrow band
+     of its threshold, consult the refiner before pruning, and prune only
+     if the refined evaluation still clears the threshold.
+  2. **Quiescence checks only near the window:** generate quiet checking
+     moves in quiescence only at nodes whose evaluation lies near the
+     window.
+  3. **Near-window deep labelling for training data:** spend the deep
+     labeller's budget on positions near the window (the refiner's own
+     training data, and possibly the base net's).
+  4. **Later, a gated move scorer** (idea 54's policy head), consulted only
+     at nodes near the window.
+- **basis:** idea 59's control split (2026-11-08, ideas.md idea 59): at
+  equal call rate the window-gated refiner beat a random gate by about 22
+  Elo at fixed nodes, and a constant shift lost, so a better evaluation
+  pays where a comparison with a bound can flip. A prune is such a
+  comparison (an evaluation plus a margin against alpha or beta), so the
+  same gate should find the prunes most likely to go wrong. The DESIGN
+  Focus note (2026-11-07) asks for exactly this kind of selectivity, and
+  the crucial-point ground truth (measure/step1, daca926: 18.6% of sampled
+  evaluation sites have the static evaluation and the deep value on
+  opposite sides of the nearest bound) is the measurement to reuse.
+- **first experiment (part 1):** with the stats build, count each prune
+  kind's firings whose evaluation lies within a band of its threshold, and
+  how often a deep search disagrees with the prune there (the crucial-site
+  method applied to prunes); then build refiner-checked pruning for the
+  kind with the most wrong prunes per refiner call, behind a switch, with
+  the band chosen by head-to-head selection.
+- **kill criterion:** per part: the part's design R SPRT fails (H0 or the
+  futility stop), or its node or nps cost eats the gain (the speed gate,
+  1.5 Elo per 1% nps). Part 1 is dropped before building if the
+  measurement finds wrong prunes near the threshold no more often than
+  elsewhere.
+- **phase:** Phase 4 or later, after idea 59's step 3 passes. **metric:**
+  wrong-prune rates near the threshold, then each part's SPRT. **status:**
+  untested (plan only, owner, 2026-11-08). **runtime cost:** possible
+  (refiner calls at pruning sites). **earliest phase:** Phase 4.
