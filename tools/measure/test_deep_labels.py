@@ -8,6 +8,7 @@ import contextlib
 import hashlib
 import io
 import json
+import math
 import sys
 import tempfile
 import unittest
@@ -63,6 +64,52 @@ class DeepLabelsTests(unittest.TestCase):
         # order (residual correlation -1), fail the 0.8 line.
         one_side = [20 + 10 * i for i in range(20)]
         self.assertIn('label budget N = n1m', run(one_side, one_side[::-1], one_side[::-1]))
+
+    def test_weights_match_the_call_mix(self):
+        # Sites against the zero window [0, 1]: a static evaluation e >= 1 has gap e - 1 to beta.
+        # Each entry: id -> (kind, static, label, mate flag).
+        split = {'a': {0: (0, 1, 50, 0), 1: (0, 31, 50, 0), 2: (1, 6, -40, 0), 3: (1, 21, 30, 0), 4: (0, 11, 20000, 1)},
+                 'b': {0: (1, 1, 10, 0), 7: (0, 26, -20, 0), 8: (1, 12, 5, 0), 9: (0, 3, 29300, 0)}}
+        with tempfile.TemporaryDirectory() as tmp:
+            folders = []
+            for name, sites in split.items():
+                folder = Path(tmp) / name
+                folder.mkdir()
+                (folder / 'sites.jsonl').write_text(''.join(
+                    json.dumps({'id': i, 'kind': k, 'eval': e, 'alpha': 0, 'beta': 1}) + '\n'
+                    for i, (k, e, _v, _m) in sites.items()), encoding='utf-8')
+                (folder / 'deep.tsv').write_text(''.join(f'{i}\t{v}\t{m}\t15\n' for i, (_k, _e, v, m) in sites.items()),
+                                                 encoding='utf-8')
+                folders.append(str(folder))
+            with contextlib.redirect_stdout(io.StringIO()) as said:
+                deep_labels.main(['weights', *folders])
+            w = {}
+            for name in split:
+                for line in (Path(tmp) / name / 'weights.tsv').read_text(encoding='utf-8').splitlines():
+                    i, t, u = line.split('\t')
+                    w[(name, int(i))] = (float(t), float(u))
+        self.assertEqual(sorted(w), sorted((n, i) for n in split for i in split[n]))
+        kind = {(n, i): split[n][i][0] for n, i in w}
+        used = [key for key in w if key not in (('a', 4), ('b', 9))]
+        self.assertEqual((w[('a', 4)], w[('b', 9)]), ((0.0, 0.0), (0.0, 0.0)))  # a mate, the table band
+        for column in (0, 1):
+            counted = [key for key in used if w[key][column] > 0]
+            total = sum(w[key][column] for key in counted)
+            # The kinds' totals 1.68 : 2.13 over the whole split, the weights averaging 1.
+            self.assertAlmostEqual(sum(w[key][column] for key in counted if kind[key] == 0) / total, 1.68 / 3.81, places=5)
+            self.assertAlmostEqual(total / len(counted), 1.0, places=5)
+        # Training: the closeness kernel within each kind (h = 25 cp main search, 17 cp quiescence).
+        self.assertAlmostEqual(w[('a', 1)][0] / w[('a', 0)][0], math.exp(-30 ** 2 / (2 * 25 ** 2)), places=4)
+        self.assertAlmostEqual(w[('a', 3)][0] / w[('b', 0)][0], math.exp(-20 ** 2 / (2 * 17 ** 2)), places=4)
+        # Acceptance: inside gate (a) only (25 / 10 cp, inclusive), equal within each kind.
+        self.assertEqual([w[key][1] for key in (('a', 1), ('a', 3), ('b', 8))], [0.0, 0.0, 0.0])
+        self.assertEqual(w[('a', 0)][1], w[('b', 7)][1])
+        self.assertEqual(w[('a', 2)][1], w[('b', 0)][1])
+        kernel = [math.exp(-g ** 2 / (2 * h ** 2)) for g, h in ((0, 25), (30, 25), (5, 17), (20, 17), (0, 17), (25, 25),
+                                                                (11, 17))]
+        self.assertIn(f'n_eff of the kernel alone (A8) '
+                      f'{sum(kernel) ** 2 / sum(x * x for x in kernel) / 7:.3f} n', said.getvalue())
+        self.assertIn('acceptance (inside gate (a), 25 / 10 cp): main 2, quiescence 2', said.getvalue())
 
 
 if __name__ == '__main__':

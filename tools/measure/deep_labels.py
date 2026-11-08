@@ -22,10 +22,26 @@ before the first label and after the last; a mismatch voids the labels.
    tables, selection by window gap and by kind of site) and, given the
    seeds s512ppr3, s512r2 and s512x, the net flips of S512+X over each base
    at the sites within 25 cp of that base's own evaluation.
+4. `weights`: the folders of one split (validation: the pilot's n1m and
+   val/n1m together) get each labelled site's training and acceptance
+   weights, written to weights.tsv in its folder as id<TAB>training<TAB>
+   acceptance (the plan's labelling section, "The training mix" and "A8 and
+   the acceptance weighting"; owner, 2026-11-08). Mate-flagged labels and
+   the table band (|label| >= 29,250) weigh 0 in both. Training: the
+   closeness kernel exp(-gap^2 / (2 h^2)), h = 25 cp at main-search sites
+   and 17 cp at quiescence sites, times one factor per kind that makes the
+   kinds' totals 1.68 : 2.13 (the oracle's call rates at gate (a), in % of
+   nodes), the weights averaging 1 over the sites used. Acceptance
+   (deployment weighting): 1 inside gate (a)'s margins (main search 25 cp,
+   quiescence 10 cp, inclusive), 0 outside, times one factor per kind for
+   the same 1.68 : 2.13 totals, averaging 1 over the sites inside. Prints
+   the counts, the factors and the n_eff: A8's (the kernel alone), with the
+   factors, and the acceptance weights'.
 
     deep_labels.py check ENGINE --sha256 HEX
     deep_labels.py budget PILOT_DIR
     deep_labels.py p0 DIR
+    deep_labels.py weights DIR...
 
 Win probability: sigmoid(cp / 89), S512ppr3's output scale (the plan's 3.7).
 """
@@ -64,6 +80,8 @@ def main(argv=None):
     b.add_argument('pilot', type=Path)
     p = sub.add_parser('p0', help="P0's checks on a crucial-point folder")
     p.add_argument('dir', type=Path)
+    w = sub.add_parser('weights', help="a split's training and acceptance weights (weights.tsv in each folder)")
+    w.add_argument('dir', type=Path, nargs='+')
     a = ap.parse_args(argv)
 
     wp = lambda cp: 1 / (1 + math.exp(-max(-4000, min(4000, cp)) / 89))  # noqa: E731
@@ -100,6 +118,54 @@ def main(argv=None):
         if got != want:
             raise SystemExit(f'{a.engine}: bench {got[0]} / {got[1]}, reference {want[0]} / {want[1]}: labels void')
         print(f'{a.engine.name}: SHA-256 {digest[:16]}..., bench {got[0]} / {got[1]} ({net}) as referenced')
+        return 0
+
+    if a.command == 'weights':
+        mix = {0: 1.68, 1: 2.13}  # gate (a)'s calls in % of nodes: main search, quiescence (plan 1.1)
+        bandwidth = {0: 25, 1: 17}  # cp (plan 3.7, amended)
+        margin = {0: 25, 1: 10}  # gate (a), cp
+        rows = []  # (folder, id, kind, gap, used)
+        for folder in a.dir:
+            labels = read_labels(folder / 'deep.tsv')
+            for line in (folder / 'sites.jsonl').read_text(encoding='utf-8').splitlines():
+                s = json.loads(line)
+                if s['id'] not in labels:
+                    continue
+                value, mate, _depth = labels[s['id']]
+                near = crucial_points.nearest_bound(s['eval'], s['alpha'], s['beta'])
+                used = near is not None and not mate and abs(value) < TB_FLOOR
+                rows.append((folder, s['id'], 1 if s['kind'] else 0, abs(s['eval'] - near[1]) if near else None, used))
+
+        def scaled(base):
+            # One factor per kind: the kinds' totals in mix's ratio, the weights averaging 1 where base > 0.
+            counted = sum(1 for b in base if b > 0)
+            totals = {k: sum(b for b, r in zip(base, rows) if r[2] == k) for k in (0, 1)}
+            if not all(totals.values()):
+                raise SystemExit(f'weights: a kind has no weight ({totals}); the call mix cannot be met')
+            factor = {k: mix[k] / sum(mix.values()) * counted / totals[k] for k in (0, 1)}
+            return [b * factor[r[2]] for b, r in zip(base, rows)], factor
+
+        n_eff = lambda ws: sum(x for x in ws if x > 0) ** 2 / sum(x * x for x in ws if x > 0)  # noqa: E731
+        kernel = [math.exp(-r[3] ** 2 / (2 * bandwidth[r[2]] ** 2)) if r[4] else 0.0 for r in rows]
+        inside = [1.0 if r[4] and r[3] <= margin[r[2]] else 0.0 for r in rows]
+        training, train_factor = scaled(kernel)
+        acceptance, accept_factor = scaled(inside)
+        for folder in a.dir:
+            with open(folder / 'weights.tsv', 'w', encoding='utf-8') as f:
+                for r, t, u in zip(rows, training, acceptance):
+                    if r[0] == folder:
+                        f.write(f'{r[1]}\t{t:.6f}\t{u:.6f}\n')
+        n_used = sum(1 for r in rows if r[4])
+        n_in = {k: sum(1 for r, u in zip(rows, inside) if u and r[2] == k) for k in (0, 1)}
+        print(f'{len(rows)} labelled sites in {len(a.dir)} folder(s); {n_used} used (mates and the table band out: '
+              f'{len(rows) - n_used}); main search {sum(1 for r in rows if r[4] and r[2] == 0)}, '
+              f'quiescence {sum(1 for r in rows if r[4] and r[2] == 1)}')
+        print(f'training (h = 25 / 17 cp, call mix 1.68 : 2.13): factors main {train_factor[0]:.3f}, quiescence '
+              f'{train_factor[1]:.3f}; n_eff of the kernel alone (A8) {n_eff(kernel) / n_used:.3f} n, with the '
+              f'factors {n_eff(training) / n_used:.3f} n')
+        print(f'acceptance (inside gate (a), 25 / 10 cp): main {n_in[0]}, quiescence {n_in[1]}; factors main '
+              f'{accept_factor[0]:.3f}, quiescence {accept_factor[1]:.3f}; n_eff {n_eff(acceptance):.0f} of '
+              f'{sum(n_in.values())} ({n_eff(acceptance) / sum(n_in.values()):.3f} n)')
         return 0
 
     if a.command == 'budget':
