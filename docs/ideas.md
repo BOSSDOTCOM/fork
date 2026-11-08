@@ -1949,5 +1949,7 @@ until measured; new names and constants go through the screens before use.
   on the static evaluation (step 1's window_gap), decided after reverse futility
   and skipped at nodes futile at depth 1, null-move verification subtrees
   excluded, `NearWindowMargin` 10 (head-to-head branches idea60/m10 and
-  idea60/m25); untested (no SPRT yet). **runtime cost:** possible (more nodes per move at
+  idea60/m25); constant screen passed (2026-11-08); node cost at equal depth
+  (1,998 X2 game positions, the real gate): 10 cp +6.2% / +5.6% (depths 12 / 14),
+  25 cp +14.4% / +11.5%, both under the kill line; untested (no SPRT yet). **runtime cost:** possible (more nodes per move at
   equal depth; nps unchanged). **earliest phase:** Phase 4.
