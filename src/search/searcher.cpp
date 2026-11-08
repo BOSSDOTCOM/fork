@@ -229,7 +229,20 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
   }
 
-  f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
+  // Without a TT evaluation, one the parent lent (window-aware LMR) is this
+  // node's own, computed one call earlier: debug builds check it.
+  if (in_check) {
+    f.static_eval = ScoreNone;
+  } else if (tt_hit && hit.eval != ScoreNone) {
+    f.static_eval = hit.eval;
+  } else if (f.lent_eval != ScoreNone) {
+    f.static_eval = f.lent_eval;
+#ifdef FORK_DEBUG
+    if (f.lent_eval != eval_at(ply)) __builtin_trap();
+#endif
+  } else {
+    f.static_eval = eval_at(ply);
+  }
   // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
   // score from a real search corrects the static estimate in the direction
   // its bound proves (a lower bound above it raises it, an upper bound below
@@ -425,6 +438,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       // (audit-1: the two switches were coupled).
       const int new_depth = depth - 1 + extension;
       int reduced = new_depth;
+      bool lent = false;  // the child's frame holds a lent evaluation (window-aware LMR)
+#ifdef FORK_SEARCH_STATS
+      int window_bin = -1;  // the child's gap bin at a window-aware LMR site
+#endif
       // Tier 2 step 0 (KB T16's in-check term): with use_lmr_in_check, late
       // quiet evasions are reduced like any late quiet move.
       if (switches.use_lmr && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove && quiet &&
@@ -460,6 +477,47 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         counters.lmr_rule_fires += rule != 0;
         counters.lmr_rule_changes += reduced != std::clamp(new_depth - base, 1, new_depth);
 #endif
+        // Window-aware LMR (ideas.md idea 61 part 5; DESIGN.md "Search
+        // constants", LmrWindowBand): a reduced move whose child's static
+        // evaluation lies within LmrWindowBand of alpha is reduced one ply
+        // less (window_relieved_depth). The evaluation is the child's own:
+        // its TT entry's, or computed here and lent to the child
+        // (PlyFrame::lent_eval), which then does not compute it again; the
+        // gap is the child's window_gap on its zero window, so a mate or
+        // tablebase alpha never relieves. A child in check has no static
+        // evaluation (the check relief covers it). Stats builds evaluate the
+        // gate in shadow, with the switch off too: the lent value is the
+        // child's own, so the tree is the same.
+#ifdef FORK_SEARCH_STATS
+        const bool window_look = true;
+#else
+        const bool window_look = switches.use_window_aware_lmr;
+#endif
+        if (window_look && reduced < new_depth && !pos.in_check()) {
+          TtHit child{};
+          const bool reused = switches.use_tt && tt_.fetch(pos.key(), child) && child.eval != ScoreNone;
+          const int child_eval = reused ? child.eval : eval_at(ply + 1);
+          if (!reused) {
+            frames_[ply + 1].lent_eval = child_eval;
+            lent = true;
+          }
+          const int gap = window_gap(child_eval, -alpha - 1, -alpha);
+          const int relieved = window_relieved_depth(reduced, new_depth, gap);
+#ifdef FORK_SEARCH_STATS
+          ++counters.lmr_window_sites;
+          counters.lmr_window_reused += reused;
+          counters.lmr_window_gated += gap >= 0 && gap <= LmrWindowBand;
+          counters.lmr_window_relieved += switches.use_window_aware_lmr && relieved != reduced;
+          window_bin = gap < 0 ? SearchCounters::LmrWindowBins - 1 : SearchCounters::LmrWindowBins - 2;
+          for (int i = 0; i < 4 && gap >= 0; ++i)
+            if (gap <= SearchCounters::LmrWindowBinEdges[i]) {
+              window_bin = i;
+              break;
+            }
+          ++counters.lmr_window_gap_bins[window_bin];
+#endif
+          if (switches.use_window_aware_lmr) reduced = relieved;
+        }
       }
       if (!switches.use_pvs && reduced == new_depth) {
         score = -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);  // plain alpha-beta
@@ -470,6 +528,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         counters.lmr_searches += reduced < new_depth;
         counters.lmr_plies_sum += static_cast<std::uint64_t>(new_depth - reduced);
         counters.lmr_researches += reduced < new_depth && score > alpha;
+        if (window_bin >= 0) counters.lmr_window_research_bins[window_bin] += reduced < new_depth && score > alpha;
 #endif
         // No re-search once the search has stopped: a stopped child returns 0,
         // which can beat alpha, and each call would still count a node past a
@@ -480,6 +539,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         if (!stopped_ && switches.use_pvs && OnPv && score > alpha && score < beta)
           score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
       }
+      if (lent) frames_[ply + 1].lent_eval = ScoreNone;  // this move's searches are done
     }
     pos.unmake(m);
     if (stopped_) return 0;

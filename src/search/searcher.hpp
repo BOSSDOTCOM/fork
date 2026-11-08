@@ -119,6 +119,11 @@ struct SearchQuota {
 //   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
 //   internal iterative reduction). On since its STC SPRT passed (+21.45
 //   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
+// - use_window_aware_lmr: a reduced late quiet move whose child (not in
+//   check) has a static evaluation within LmrWindowBand of alpha (the
+//   child's window_gap on its zero window) is reduced LmrWindowRelief ply
+//   less, never below no reduction (ideas.md idea 61 part 5). Off:
+//   untested (built 2026-11-08 for its head-to-head band and design R SPRT).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -148,7 +153,7 @@ struct SearchQuota {
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
-  X(use_no_move_reduction, UseNoMoveReduction, true)
+  X(use_no_move_reduction, UseNoMoveReduction, true)       X(use_window_aware_lmr, UseWindowAwareLmr, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -201,6 +206,11 @@ struct PlyFrame {
   bool after_null = false;      // this node was reached by a null move (no second one in a row)
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
+  // The static evaluation the parent already computed for this node
+  // (window-aware LMR, idea 61 part 5), taken when the TT entry has none, so
+  // the output layers do not run twice; ScoreNone when not lent. Set by the
+  // parent for one move's searches and cleared by it after them.
+  int lent_eval = ScoreNone;
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -313,6 +323,22 @@ struct SearchCounters {
   std::uint64_t multi_cut_cuts = 0;       // ... where another move also beat beta: the node failed high
   std::uint64_t negative_extensions = 0;  // ... where the TT move was searched one ply shallower
   std::uint64_t no_move_reductions = 0;   // nodes without a TT move searched one ply shallower (T26)
+  // Window-aware LMR (idea 61 part 5), counted whether or not its switch is
+  // on (the gate is evaluated in shadow), for its first measurement (M1).
+  // Sites: reduced late quiet moves whose child is not in check. Reused: of
+  // those, the child's static evaluation came from its TT entry. Gated:
+  // within LmrWindowBand of alpha. Relieved: reduced one ply less (switch
+  // on). The child's gap by bin (at most 10, 25, 50, 100 cp, beyond, and no
+  // finite bound), and per bin the reduced searches (still reduced) that
+  // beat alpha, which LMR then searches again at full depth.
+  static constexpr int LmrWindowBins = 6;
+  static constexpr int LmrWindowBinEdges[4] = {10, 25, 50, 100};
+  std::uint64_t lmr_window_sites = 0;
+  std::uint64_t lmr_window_reused = 0;
+  std::uint64_t lmr_window_gated = 0;
+  std::uint64_t lmr_window_relieved = 0;
+  std::uint64_t lmr_window_gap_bins[LmrWindowBins] = {};
+  std::uint64_t lmr_window_research_bins[LmrWindowBins] = {};
 };
 
 class Searcher {

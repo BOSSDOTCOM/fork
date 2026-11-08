@@ -79,6 +79,21 @@ FORK_TUNABLE_CONSTEXPR int reduction_for(int depth, int move) {
   return LmrPlies.plies[d][m];
 }
 
+// Window-aware LMR (ideas.md idea 61 part 5; DESIGN.md "Search constants",
+// LmrWindowBand and LmrWindowRelief): a late move searched at `reduced`
+// plies instead of `new_depth` is reduced LmrWindowRelief ply less when its
+// child's static evaluation lies within LmrWindowBand of alpha (`gap`, the
+// child's window_gap on its zero window; -1 when alpha is in the mate or
+// tablebase band, which never relieves), and never below no reduction.
+// The relief is the minimal unit of Fork's whole-ply depths, as
+// LmrCheckRelief's.
+constexpr int LmrWindowRelief = 1;
+
+FORK_TUNABLE_CONSTEXPR int window_relieved_depth(int reduced, int new_depth, int gap) {
+  if (gap < 0 || gap > LmrWindowBand || reduced >= new_depth) return reduced;
+  return reduced + LmrWindowRelief < new_depth ? reduced + LmrWindowRelief : new_depth;
+}
+
 // The heuristic-discovery loop's first evolvable region (ideas.md idea 23,
 // deliverable 8c; tools/evolve/): a correction in plies added to the table's
 // reduction, scaled by LmrCorrectionStrength / LmrCorrectionUnit (the

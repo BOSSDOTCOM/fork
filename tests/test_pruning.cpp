@@ -4,15 +4,18 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <vector>
 
 #include "core/material.hpp"
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
+#include "eval/eval.hpp"
 #include "harness.hpp"
 #include "search/lmr_table.hpp"
 #include "search/quiet_history.hpp"
+#include "search/search_bench.hpp"
 #include "search/searcher.hpp"
 
 namespace forkeng::test {
@@ -466,6 +469,136 @@ TEST_CASE("pruning", "game phase: all pieces 24, a pawn ending 0, rook and queen
 
 namespace forkeng::test {
 
+// Window-aware LMR (ideas.md idea 61 part 5): a reduced late move whose
+// child's static evaluation lies within LmrWindowBand of alpha (the child's
+// window_gap on its zero window) is reduced LmrWindowRelief ply less, never
+// below no reduction; a mate or tablebase alpha (gap -1) never relieves.
+// Fault checks (2026-11-08): with the band test widened by one centipawn,
+// the gap band + 1 relieves; without both the "already unreduced" test and
+// the cap at new_depth (with a one-ply relief either alone suffices), an
+// unreduced move is extended; with gap -1 counted, a mate alpha relieves.
+TEST_CASE("pruning", "window-aware LMR: one ply less, within the band only") {
+  CHECK(!SearchSwitches{}.use_window_aware_lmr);  // off: untested (idea 61 part 5)
+  CHECK_EQ(LmrWindowRelief, 1);
+  const int b = LmrWindowBand;
+  CHECK_EQ(window_relieved_depth(3, 6, 0), 4);
+  CHECK_EQ(window_relieved_depth(3, 6, b), 4);
+  CHECK_EQ(window_relieved_depth(3, 6, b + 1), 3);
+  CHECK_EQ(window_relieved_depth(3, 6, -1), 3);
+  CHECK_EQ(window_relieved_depth(1, 6, b), 2);
+  CHECK_EQ(window_relieved_depth(5, 6, 0), 6);  // to no reduction, never beyond
+  CHECK_EQ(window_relieved_depth(6, 6, 0), 6);  // nothing to relieve
+  // The child's gap on its zero window [-alpha - 1, -alpha]: the distance of
+  // the move's evaluation from alpha, and -1 for a mate or tablebase alpha.
+  const int alpha = 40;
+  CHECK_EQ(window_gap(-alpha - b, -alpha - 1, -alpha), b - 1);
+  CHECK_EQ(window_gap(-alpha + b, -alpha - 1, -alpha), b);
+  CHECK_EQ(window_gap(0, -mate_score(5) - 1, -mate_score(5)), -1);
+  CHECK_EQ(window_gap(0, -(TbWinScore - 9) - 1, -(TbWinScore - 9)), -1);
+}
+
+// With window-aware LMR on, mates are still found, the best move is legal,
+// and the tree changes (fault check: a relief that never fires leaves all
+// three trees as they are with the switch off). Debug builds also check that
+// every evaluation the parent lends equals the child's own (searcher.cpp;
+// fault checks: a lent value one centipawn off, or a lent value not cleared
+// after its move's searches, traps in the debug suites).
+TEST_CASE("pruning", "window-aware LMR: still correct, and it changes the search") {
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_window_aware_lmr = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 12 : 8;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_window_aware_lmr = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "window-aware LMR left all three trees unchanged");
+}
+
+#ifdef FORK_TUNE
+// Tuning builds: the band is a parameter, so both head-to-head candidates
+// (25 and 50 cp) are testable in one binary, and it reaches the search
+// (fault check: a band the gate does not read leaves the trees equal).
+TEST_CASE("pruning", "window-aware LMR: the band is a tuning parameter") {
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_window_aware_lmr = true;
+  const int depth = Optimized ? 10 : 7;
+  CHECK(set_param("LmrWindowBand", 25));
+  const std::vector<std::uint64_t> narrow = fx.tree_sizes(on, depth);
+  CHECK(set_param("LmrWindowBand", 50));
+  const std::vector<std::uint64_t> wide = fx.tree_sizes(on, depth);
+  CHECK(narrow != wide);
+  CHECK(set_param("LmrWindowBand", find_param("LmrWindowBand")->default_value));
+}
+#endif
+
+#ifdef FORK_SEARCH_STATS
+// Stats builds: the window-aware LMR counters. The gate is evaluated in
+// shadow with the switch off, which counts sites, gaps and gated moves and
+// relieves nothing (the stats build's bench parity shows that the shadow
+// leaves the tree as it is: the lent value is the child's own).
+// With the switch on, every gated move is relieved (each site is a reduced
+// move), and the gated count is the bins up to the band (25 cp, a bin edge).
+// The gap is measured from alpha on the right side: in positions where one
+// side leads (bench positions, search_bench_fens, whose static evaluation is
+// at least 300 cp either way, so alpha lies far from zero), reduced searches
+// of moves near alpha beat it more often than those of moves far from it
+// (fault checks: a gate whose gated count reads a wider band fails the
+// counts; a gap taken against -alpha instead of alpha fails the lopsided
+// positions' rates).
+TEST_CASE("pruning", "window-aware LMR: the stats counters") {
+  PruningFixture fx;
+  const int depth = Optimized ? 10 : 7;
+  CHECK_EQ(LmrWindowBand, SearchCounters::LmrWindowBinEdges[1]);
+  for (const bool on : {false, true}) {
+    SearchSwitches s;
+    s.use_window_aware_lmr = on;
+    fx.searcher->counters = SearchCounters{};
+    fx.tree_sizes(s, depth);
+    const SearchCounters c = fx.searcher->counters;
+    std::uint64_t binned = 0;
+    for (const std::uint64_t n : c.lmr_window_gap_bins) binned += n;
+    CHECK_EQ(binned, c.lmr_window_sites);
+    CHECK(c.lmr_window_sites > 0 && c.lmr_window_reused > 0 && c.lmr_window_reused < c.lmr_window_sites);
+    CHECK(c.lmr_window_gated > 0);
+    CHECK_EQ(c.lmr_window_gated, c.lmr_window_gap_bins[0] + c.lmr_window_gap_bins[1]);
+    CHECK_EQ(c.lmr_window_relieved, on ? c.lmr_window_gated : 0u);
+    for (int i = 0; i < SearchCounters::LmrWindowBins; ++i)
+      CHECK(c.lmr_window_research_bins[i] <= c.lmr_window_gap_bins[i]);
+    const auto rate = [&](int i) {
+      return static_cast<double>(c.lmr_window_research_bins[i]) / static_cast<double>(c.lmr_window_gap_bins[i]);
+    };
+    CHECK(c.lmr_window_gap_bins[0] > 0 && c.lmr_window_gap_bins[4] > 0);
+    CHECK_MSG(rate(0) > 2 * rate(4), "near alpha " << rate(0) << ", beyond 100 cp " << rate(4));
+  }
+  fx.searcher->switches = SearchSwitches{};
+  fx.searcher->counters = SearchCounters{};
+  int lopsided = 0;
+  for (std::string_view fen : search_bench_fens()) {
+    Position pos;
+    CHECK_MSG(pos.set_fen(fen), fen);
+    if (pos.in_check() || std::abs(static_eval(pos)) < 300) continue;
+    ++lopsided;
+    fx.search(fen, depth);
+  }
+  CHECK_MSG(lopsided >= 5, lopsided);
+  const SearchCounters u = fx.searcher->counters;
+  CHECK(u.lmr_window_gap_bins[0] > 0 && u.lmr_window_gap_bins[4] > 0);
+  const double near = static_cast<double>(u.lmr_window_research_bins[0]) / static_cast<double>(u.lmr_window_gap_bins[0]);
+  const double far = static_cast<double>(u.lmr_window_research_bins[4]) / static_cast<double>(u.lmr_window_gap_bins[4]);
+  CHECK_MSG(near > 2 * far, lopsided << " lopsided positions: near alpha " << near << ", beyond 100 cp " << far);
+}
+#endif
+
 // Every tier-2 switch on (from the tier-2 review of 2026-10-31): a search
 // from the same state twice is identical, and the best move is legal.
 TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
@@ -473,6 +606,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   SearchSwitches s;
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
+  s.use_window_aware_lmr = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

@@ -62,6 +62,18 @@ constexpr int score_from_tt(int s, int ply) {
   return s;
 }
 
+// The distance from an evaluation to the nearest finite bound of the window
+// [alpha, beta]; a bound in the mate or tablebase band does not count, and
+// -1 means neither bound is finite (idea 59 step 1's measure, DESIGN.md
+// §5.7 on branch measure/step1; the near-window extension's gate, idea 60).
+constexpr int window_gap(int eval, int alpha, int beta) {
+  const bool low = !is_tb_or_mate(alpha), high = !is_tb_or_mate(beta);
+  if (!low && !high) return -1;
+  const int to_alpha = eval > alpha ? eval - alpha : alpha - eval;
+  const int to_beta = eval > beta ? eval - beta : beta - eval;
+  return !low ? to_beta : !high ? to_alpha : to_alpha < to_beta ? to_alpha : to_beta;
+}
+
 // Moves to mate for UCI "score mate N": positive when we mate.
 constexpr int mate_in_moves(int s) { return s > 0 ? (MateScore - s + 1) / 2 : -(MateScore + s) / 2; }
 

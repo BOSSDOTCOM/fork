@@ -2078,5 +2078,16 @@ until measured; new names and constants go through the screens before use.
   elsewhere.
 - **phase:** Phase 4 or later, after idea 59's step 3 passes. **metric:**
   wrong-prune rates near the threshold, then each part's SPRT. **status:**
-  untested (plan only, owner, 2026-11-08). **runtime cost:** possible
+  untested (plan only, owner, 2026-11-08). **Part 5 built behind its switch**
+  `use_window_aware_lmr` (off; branch idea61/window-lmr, 2026-11-08): the
+  child's static evaluation against the child's zero window (window_gap),
+  one ply of relief within `LmrWindowBand` (25 cp; head-to-head branches
+  idea61/lmr-b25 and idea61/lmr-b50), no gate on checking children or a mate
+  or tablebase alpha, PV and non-PV nodes. M1 (stats bench): 10.9% of the
+  reduced moves within 25 cp of alpha, 24.4% within 50; their reduced
+  searches beat alpha 6.1% (within 10 cp) down to 0.11% (beyond 100 cp) of
+  the time. Bench cost at fixed depth +29.6% at 25 cp and +49.7% at 50, above
+  the ~15% line, so M2 (the node cost at equal depth on game positions) comes
+  before any game. If idea 60 passes too, the two need a combined test.
+  Untested (no SPRT yet; the constant screen pending). **runtime cost:** possible
   (refiner calls at pruning sites). **earliest phase:** Phase 4.

@@ -187,6 +187,18 @@ SearchBenchResult run_search_bench() {
                c.singular_tests
                    ? 100.0 * static_cast<double>(c.singular_extended) / static_cast<double>(c.singular_tests)
                    : 0.0);
+  std::fprintf(stderr, "stats: window-aware LMR sites %llu (reused eval %llu), gated %llu, relieved %llu\n",
+               static_cast<unsigned long long>(c.lmr_window_sites),
+               static_cast<unsigned long long>(c.lmr_window_reused),
+               static_cast<unsigned long long>(c.lmr_window_gated),
+               static_cast<unsigned long long>(c.lmr_window_relieved));
+  std::fprintf(stderr, "stats: window-aware LMR gap <=10, <=25, <=50, <=100, beyond, no finite bound:");
+  for (int i = 0; i < SearchCounters::LmrWindowBins; ++i)
+    std::fprintf(stderr, " %llu", static_cast<unsigned long long>(c.lmr_window_gap_bins[i]));
+  std::fprintf(stderr, "; reduced searches beating alpha:");
+  for (int i = 0; i < SearchCounters::LmrWindowBins; ++i)
+    std::fprintf(stderr, " %llu", static_cast<unsigned long long>(c.lmr_window_research_bins[i]));
+  std::fprintf(stderr, "\n");
   for (int d = 1; d < SearchCounters::CutoffDepths; ++d) {
     std::fprintf(stderr, "stats: quiet cutoffs at depth %d by quiet index:", d);
     for (int i = 0; i < SearchCounters::CutoffIndices; ++i)
