@@ -96,7 +96,10 @@ bool read_refiner_file(std::span<const std::uint8_t> bytes, RefinerFile& out, st
   if (scale < 1 || scale > 100000) return error = "output scale out of range", false;
   const auto cap = static_cast<std::int32_t>(get_u32(h + 32));
   if (cap < 0 || cap > EvalLimit) return error = "cap out of range", false;
-  if (get_u32(h + 36) != 0) return error = "nonzero reserved header bytes", false;
+  if (get_u32(h + 36) != static_cast<std::uint32_t>(RefinerDenseBound))
+    return error = "dense-weight bound " + std::to_string(get_u32(h + 36)) + ", this build reads " +
+                   std::to_string(RefinerDenseBound),
+           false;
   for (std::size_t i = 56; i < NetHeaderBytes; ++i)
     if (h[i] != 0) return error = "nonzero reserved header bytes", false;
   const std::span<const std::uint8_t> payload = bytes.subspan(NetHeaderBytes);
@@ -121,10 +124,12 @@ bool read_refiner_file(std::span<const std::uint8_t> bytes, RefinerFile& out, st
   out.base_checksum = get_u64(h + 48);
   auto in_bound = [](const auto& table) {
     return std::all_of(&table[0][0], &table[0][0] + sizeof table,
-                       [](std::int8_t v) { return v >= -NetQb && v <= NetQb; });
+                       [](std::int8_t v) { return v >= -RefinerDenseBound && v <= RefinerDenseBound; });
   };
   if (!in_bound(out.entry_weights) || !in_bound(out.middle_weights))
-    return error = "a dense weight outside [-64, 64]", false;
+    return error = "a dense weight outside [-" + std::to_string(RefinerDenseBound) + ", " +
+                   std::to_string(RefinerDenseBound) + "]",
+           false;
   if (!sums_in_range(out)) return error = "weights could overflow a layer's sum", false;
   return true;
 }
@@ -156,7 +161,7 @@ std::vector<std::uint8_t> write_refiner_file(const RefinerFile& r) {
   put_u32(out, static_cast<std::uint32_t>(RefinerHeads));
   put_u32(out, static_cast<std::uint32_t>(r.scale));
   put_u32(out, static_cast<std::uint32_t>(r.cap));
-  put_u32(out, 0);
+  put_u32(out, static_cast<std::uint32_t>(RefinerDenseBound));
   put_u64(out, net_checksum(payload));
   put_u64(out, r.base_checksum);
   out.resize(NetHeaderBytes, 0);

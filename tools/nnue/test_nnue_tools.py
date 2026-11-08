@@ -163,12 +163,12 @@ class PipelineTests(unittest.TestCase):
             out = Path(tmp) / 'zero.frnet'
             with contextlib.redirect_stdout(io.StringIO()):
                 refiner.main(['zero', '--base', str(repo / 'nets/s512ppr3.fnet'), '--arch', '1', '--l1', '16',
-                              '--cap', '20000', '--out', str(out)])
+                              '--bound', '64', '--cap', '20000', '--out', str(out)])
             data = out.read_bytes()
         self.assertEqual(data, (repo / 'tests/nnue/refiner-zero.frnet').read_bytes())
         self.assertEqual(data[:8], b'FORKRFN\0')
-        version, arch, l1, l2, heads, scale, cap, pad = struct.unpack_from('<IIIIIiiI', data, 8)
-        self.assertEqual((version, arch, l1, l2, heads, scale, cap, pad), (1, 1, 16, 32, 2, 89, 20000, 0))
+        version, arch, l1, l2, heads, scale, cap, bound = struct.unpack_from('<IIIIIiiI', data, 8)
+        self.assertEqual((version, arch, l1, l2, heads, scale, cap, bound), (2, 1, 16, 32, 2, 89, 20000, 64))
         checksum, base = struct.unpack_from('<QQ', data, 40)
         self.assertEqual(checksum, netformat.net_checksum(data[64:]))
         self.assertEqual(base, 0x5861c1a319ca267b)  # S512ppr3's payload checksum (docs/nets.md)

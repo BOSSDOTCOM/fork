@@ -213,8 +213,8 @@ endif()
 # (src/search/refiner_gate.hpp). Empty by default, and then the search and
 # the engine are exactly as without it. The refiner's inference is compiled
 # and tested in every build, shaped by the refiner file's header (its
-# architecture at byte 12, its entry layer's width at byte 16; 1 and 16
-# without a file). FORK_REFINER_MARGIN_MAIN and FORK_REFINER_MARGIN_QUIESCE
+# architecture at byte 12, its entry layer's width at byte 16, its dense-weight
+# bound at byte 36; 1, 16 and 64 without a file). FORK_REFINER_MARGIN_MAIN and FORK_REFINER_MARGIN_QUIESCE
 # are the gate's default margins in cp (the UCI options' and `fork bench`'s
 # defaults; -1: never).
 set(FORK_REFINER_NET "" CACHE FILEPATH "Refiner builds only: the Boundary Refiner's file (ideas.md 59)")
@@ -222,15 +222,18 @@ set(FORK_REFINER_MARGIN_MAIN 25 CACHE STRING "Refiner builds only: the gate's de
 set(FORK_REFINER_MARGIN_QUIESCE 25 CACHE STRING "Refiner builds only: the gate's default quiescence margin in cp")
 set(FORK_REFINER_ARCH 1)
 set(FORK_REFINER_L1 16)
+set(FORK_REFINER_BOUND 64)
 if(FORK_REFINER_NET)
   if(NOT FORK_EVALUATOR STREQUAL "nnue" OR NOT EXISTS ${FORK_REFINER_NET})
     message(FATAL_ERROR "FORK_REFINER_NET needs FORK_EVALUATOR=nnue and an existing file (${FORK_REFINER_NET})")
   endif()
-  file(READ ${FORK_REFINER_NET} fork_refiner_header_hex OFFSET 12 LIMIT 8 HEX)
+  file(READ ${FORK_REFINER_NET} fork_refiner_header_hex OFFSET 12 LIMIT 28 HEX)
   string(SUBSTRING "${fork_refiner_header_hex}" 0 2 FORK_REFINER_ARCH)
   math(EXPR FORK_REFINER_ARCH "0x${FORK_REFINER_ARCH}")
   string(SUBSTRING "${fork_refiner_header_hex}" 8 2 FORK_REFINER_L1)
   math(EXPR FORK_REFINER_L1 "0x${FORK_REFINER_L1}")
+  string(SUBSTRING "${fork_refiner_header_hex}" 48 2 FORK_REFINER_BOUND)
+  math(EXPR FORK_REFINER_BOUND "0x${FORK_REFINER_BOUND}")
   get_filename_component(fork_refiner_stem ${FORK_REFINER_NET} NAME_WE)
   set(fork_refiner_source ${CMAKE_BINARY_DIR}/generated/embedded_refiner_data.cpp)
   add_custom_command(OUTPUT ${fork_refiner_source}
@@ -292,7 +295,7 @@ add_library(forknnue STATIC
   src/eval/nnue/refiner.cpp
   src/eval/nnue/refiner_file.cpp)
 target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH}
-  FORK_REFINER_ARCH=${FORK_REFINER_ARCH} FORK_REFINER_L1=${FORK_REFINER_L1})
+  FORK_REFINER_ARCH=${FORK_REFINER_ARCH} FORK_REFINER_L1=${FORK_REFINER_L1} FORK_REFINER_BOUND=${FORK_REFINER_BOUND})
 # Refiner builds (ideas.md 59): public, so the search, the UCI layer and the
 # tests see the refiner's declarations; the embedded file and its loader go
 # with the search, beside the base network's.

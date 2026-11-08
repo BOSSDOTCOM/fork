@@ -108,6 +108,43 @@ TEST_CASE("refiner",
   }
 }
 
+// The entry layer at both dense-weight bounds (refiner_file.hpp), whatever
+// this build reads: refiner_l1<64> and refiner_l1<32> (the AVX2 paths, or
+// with AVX-512 VNNI the dpbusd path) against refiner_l1_scalar, on random
+// weights inside each bound and at its edge (every byte 255, every weight
+// +-the bound: the int16 sums at 32,640, one pair at 64, two at 32).
+TEST_CASE("refiner", "refiner_l1 at both bounds equals the scalar reference, the bound's edge included") {
+  std::uint64_t rng = 71;
+  auto draw = [&](int span) { return static_cast<int>(splitmix_next(rng) % (2 * span + 1)) - span; };
+  auto r = std::make_unique<RefinerFile>();
+  int compared = 0, mismatches = 0;
+  for (const int bound : {64, 32}) {
+    for (int round = 0; round < 60; ++round) {
+      const bool edge = round % 3 == 0;
+      for (auto& unit : r->entry_weights)
+        for (auto& w : unit)
+          w = static_cast<std::int8_t>(edge ? (splitmix_next(rng) % 2 ? bound : -bound) : draw(bound));
+      for (auto& b : r->entry_bias) b = draw(1000000);
+      for (auto& row : r->row_weights)
+        for (auto& w : row) w = NetQa * draw(200);
+      RefinerInputs in;
+      for (auto& v : in.bytes) v = edge ? std::uint8_t{255} : static_cast<std::uint8_t>(splitmix_next(rng));
+      in.row_count = static_cast<int>(splitmix_next(rng) % (RefinerMaxActive + 1));
+      for (int i = 0; i < in.row_count; ++i) in.rows[i] = static_cast<int>(splitmix_next(rng) % RefinerRows);
+      alignas(32) std::int32_t vec[RefinerL1Width], ref[RefinerL1Width];
+      if (bound == 64)
+        refiner_l1<64>(*r, in, vec);
+      else
+        refiner_l1<32>(*r, in, vec);
+      refiner_l1_scalar(*r, in, ref);
+      mismatches += std::memcmp(vec, ref, sizeof vec) != 0;
+      ++compared;
+    }
+  }
+  CHECK_EQ(compared, 120);
+  CHECK_EQ(mismatches, 0);
+}
+
 // The middle layer and heads alone (DESIGN.md §7: the vector path beside its
 // scalar reference, bit for bit): random weights and entry sums, and the
 // bound's edge, where every activation is 255 and every middle weight +-64
@@ -186,7 +223,7 @@ TEST_CASE("refiner",
     for (auto& rw : r->row_weights)
       for (auto& w : rw) w = NetQa * draw(row);
     for (auto& unit : r->middle_weights)
-      for (auto& w : unit) w = static_cast<std::int8_t>(draw(64));
+      for (auto& w : unit) w = static_cast<std::int8_t>(draw(RefinerDenseBound));
     for (auto& b : r->middle_bias) b = draw(20000);
     for (auto& unit : r->head_weights)
       for (auto& w : unit) w = static_cast<std::int16_t>(draw(300));
@@ -223,7 +260,7 @@ TEST_CASE("refiner",
   std::uint64_t rng = 61;
   int compared = 0, nonzero = 0;
   for (int round = 0; round < 120; ++round) {
-    const int dense = round % 3 == 0 ? 1 : round % 3 == 1 ? 4 : 64;
+    const int dense = round % 3 == 0 ? 1 : round % 3 == 1 ? 4 : RefinerDenseBound;
     const auto r = random_refiner(1000 + round, dense, round % 2 ? 40 : 4000);
     for (int k = 0; k < 4; ++k) {
       RefinerInputs in;
@@ -246,15 +283,16 @@ TEST_CASE("refiner",
   CHECK_EQ(compared, 480);
   CHECK_MSG(nonzero > 100, nonzero);  // the comparisons are not all of zeros
 
-  // The bound's edge: every byte 255 and every dense weight +-64, so each
-  // 8-bit multiply-add pair reaches +-32,640; a bias brings the entry sums
+  // The bound's edge: every byte 255 and every dense weight at +-the build's
+  // bound, so the 8-bit multiply-add sums reach +-32,640 (one pair at 64,
+  // two at 32); a bias brings the entry sums
   // back to an activation of 100, which the heads turn into a correction
   // that any lost product would change.
   auto edge = std::make_unique<RefinerFile>();
   for (int o = 0; o < RefinerL1Width; ++o) {
     const int sign = o % 2 ? -1 : 1;
-    for (auto& w : edge->entry_weights[o]) w = static_cast<std::int8_t>(64 * sign);
-    edge->entry_bias[o] = -sign * RefinerInputBytes * 255 * 64 + 64 * 100;
+    for (auto& w : edge->entry_weights[o]) w = static_cast<std::int8_t>(RefinerDenseBound * sign);
+    edge->entry_bias[o] = -sign * RefinerInputBytes * 255 * RefinerDenseBound + 64 * 100;
   }
   for (auto& unit : edge->middle_weights)
     for (auto& w : unit) w = 1;
@@ -288,7 +326,7 @@ TEST_CASE("refiner",
 
   // The reader against the writer, and every bad field.
   {
-    const auto r = random_refiner(77, 64, 300);
+    const auto r = random_refiner(77, RefinerDenseBound, 300);
     r->cap = 500;
     r->base_checksum = 0x0123456789abcdefULL;
     const std::vector<std::uint8_t> bytes = write_refiner_file(*r);
@@ -330,7 +368,8 @@ TEST_CASE("refiner",
     };
     refused({bytes.begin(), bytes.begin() + 40}, "shorter than a header");
     refused(patched(4, 0x0054454e), "not a Fork refiner file");  // "FORKNET": a net file's magic
-    refused(patched(8, 2), "unknown format version");
+    refused(patched(8, 1), "unknown format version");            // format version 1 (no bound field)
+    refused(patched(8, 3), "unknown format version");
     refused(patched(12, RefinerArchitecture == 1 ? 2 : 1), "refiner architecture");
     refused(patched(16, RefinerL1Width == 16 ? 8 : 16), "wrong layer sizes");
     refused(patched(20, 16), "wrong layer sizes");
@@ -339,7 +378,8 @@ TEST_CASE("refiner",
     refused(patched(28, 100001), "output scale out of range");
     refused(patched(32, static_cast<std::uint32_t>(-1)), "cap out of range");
     refused(patched(32, EvalLimit + 1), "cap out of range");
-    refused(patched(36, 1), "nonzero reserved header bytes");
+    refused(patched(36, RefinerDenseBound == 64 ? 32 : 64), "dense-weight bound");
+    refused(patched(36, 0), "dense-weight bound");  // format version 1's zero bytes
     refused(patched(60, 1), "nonzero reserved header bytes");
     {
       std::vector<std::uint8_t> b = bytes;
@@ -354,18 +394,20 @@ TEST_CASE("refiner",
     CHECK_MSG(read_refiner_file(patched(32, EvalLimit), *back, error), error);
     CHECK_MSG(read_refiner_file(patched(32, 0), *back, error), error);
 
-    // The dense weights' bound, [-64, 64] (two products of a byte and such a
-    // weight fit an int16 exactly): 64 and -64 pass, 65 and -65 do not.
-    for (const int w : {64, -64, 65, -65}) {
+    // The dense weights' bound (refiner_file.hpp: the 8-bit multiply-add's
+    // int16 sums stay exact): the bound and its negative pass, one more in
+    // magnitude does not.
+    for (const int w :
+         {RefinerDenseBound, -RefinerDenseBound, RefinerDenseBound + 1, -RefinerDenseBound - 1}) {
       for (int layer = 0; layer < 2; ++layer) {
         auto bad = std::make_unique<RefinerFile>(*r);
         (layer == 0 ? bad->entry_weights[RefinerL1Width - 1][7] : bad->middle_weights[5][3]) =
             static_cast<std::int8_t>(w);
         const std::vector<std::uint8_t> b = write_refiner_file(*bad);
-        if (w == 64 || w == -64)
+        if (w == RefinerDenseBound || w == -RefinerDenseBound)
           CHECK_MSG(read_refiner_file(b, *back, error), error);
         else
-          refused(b, "a dense weight outside [-64, 64]");
+          refused(b, "a dense weight outside [-");
       }
     }
 

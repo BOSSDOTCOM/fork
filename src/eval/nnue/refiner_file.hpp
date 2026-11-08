@@ -12,10 +12,11 @@
 // compiles and tests the inference).
 // Invariants:
 // - Little-endian. A 64-byte header: "FORKRFN" and a zero byte, the format
-//   version (u32, 1), the refiner architecture (u32: 1 the exposure rows, 2
+//   version (u32, 2), the refiner architecture (u32: 1 the exposure rows, 2
 //   the exposure rows and the danger summary), the entry layer's width (u32),
 //   the middle layer's width (u32), the head count (u32), the output scale S
-//   (i32), the cap C in cp (i32), 4 zero bytes, the payload checksum (u64,
+//   (i32), the cap C in cp (i32), the dense-weight bound (u32: 64 or 32;
+//   format version 1 had 4 zero bytes here), the payload checksum (u64,
 //   net_checksum, at a net file's offset 40), the base network's payload
 //   checksum (u64: the refiner reads that network's accumulator), 8 zero
 //   bytes.
@@ -28,8 +29,7 @@
 //   multiplied by QA when read, so they add into the same sums.
 // - The reader accepts a file only if every field matches what this build
 //   computes with, the checksum matches, every dense (i8) weight lies in
-//   [-QB, QB] (two products of a byte and such a weight sum exactly in int16,
-//   so the 8-bit multiply-add path equals the scalar one), and no layer's
+//   [-RefinerDenseBound, RefinerDenseBound], and no layer's
 //   worst-case sum (its bias, its dense part at the inputs' maximum, the
 //   largest RefinerMaxActive row values) leaves int32. The cap lies in
 //   [0, EvalLimit]. The scale S lies in [1, 100000], the range the net reader
@@ -51,15 +51,27 @@
 #ifndef FORK_REFINER_L1
 #define FORK_REFINER_L1 16
 #endif
+#ifndef FORK_REFINER_BOUND
+#define FORK_REFINER_BOUND 64
+#endif
 
 namespace forkeng {
 
 inline constexpr int RefinerArchitecture = FORK_REFINER_ARCH;
 static_assert(RefinerArchitecture == 1 || RefinerArchitecture == 2, "unknown refiner architecture");
-inline constexpr std::uint32_t RefinerFormatVersion = 1;
+inline constexpr std::uint32_t RefinerFormatVersion = 2;
 inline constexpr int RefinerL1Width = FORK_REFINER_L1;
 static_assert(RefinerL1Width == 8 || RefinerL1Width == 16, "the refiner's entry layer is 8 or 16 wide");
 inline constexpr int RefinerL2Width = 32;
+// The dense (i8) weights' bound, the file's and this build's (CMake reads it
+// from the header's byte 36, like the shape): the 8-bit multiply-add
+// (maddubs) sums two products of a byte (at most 255) and a weight into an
+// int16. At 64, one such pair is at most 2 x 255 x 64 = 32,640 <= 32,767,
+// exact; at 32 a pair is at most 16,320, so two pairs still sum to 32,640
+// in int16 before they are widened, which halves the widenings. VNNI's
+// dpbusd accumulates in int32 and needs neither.
+inline constexpr int RefinerDenseBound = FORK_REFINER_BOUND;
+static_assert(RefinerDenseBound == 64 || RefinerDenseBound == 32, "the dense-weight bound is 64 or 32");
 inline constexpr int RefinerHeads = 2;  // the correction and the confidence
 // Both perspectives' clipped accumulator values, side to move first.
 inline constexpr int RefinerInputBytes = 2 * NetHidden;

@@ -16,8 +16,6 @@
 
 namespace forkeng {
 
-static_assert(RefinerInputBytes % 32 == 0, "the AVX2 entry layer's blocking");
-
 // The entry layer's sums (units of QA x QB): the bias, the dense part over
 // the input bytes, the active rows. Integer sums of the same terms, so every
 // path gives the same values.
@@ -33,32 +31,58 @@ void refiner_l1_scalar(const RefinerFile& r, const RefinerInputs& in, std::int32
   }
 }
 
-#if defined(__AVX2__)
-// Each unit as AF-S's l1_sum (accumulator.cpp): maddubs adds two products of
-// a byte (at most 255) and a weight (|w| <= 64, the reader's bound) into an
-// int16 exactly (at most 32,640); madd with ones widens the pairs into int32
-// lanes; horizontal_sum adds the lanes.
+// The entry layer's vector paths, one unit at a time, each against
+// refiner_l1_scalar: with VNNI, dpbusd adds four products of a byte and a
+// weight into each int32 lane, exact for any i8 weights; on AVX2, maddubs
+// adds two products of a byte (at most 255) and a weight into an int16, and
+// madd with ones widens the pairs into int32 lanes. Bound 64: one maddubs
+// result is at most 2 x 255 x 64 = 32,640 <= 32,767, exact. Bound 32: one
+// result is at most 2 x 255 x 32 = 16,320, so two of them (four products)
+// still fit an int16 exactly, and one madd widens both: half the widenings.
+// horizontal_sum adds the lanes.
+static_assert(RefinerInputBytes % 64 == 0, "the entry layer's blocking");
+template <int Bound>
 void refiner_l1(const RefinerFile& r, const RefinerInputs& in, std::int32_t* sums) {
+  static_assert(Bound == 64 || Bound == 32, "the dense-weight bound is 64 or 32");
+#if defined(__AVX512VNNI__) && defined(__AVX512F__)
+  for (int o = 0; o < RefinerL1Width; ++o) {
+    __m512i acc = _mm512_setzero_si512();
+    for (int i = 0; i < RefinerInputBytes; i += 64)
+      acc = _mm512_dpbusd_epi32(acc, _mm512_load_si512(in.bytes + i),
+                                _mm512_load_si512(r.entry_weights[o] + i));
+    const __m256i folded = _mm256_add_epi32(_mm512_castsi512_si256(acc), _mm512_extracti64x4_epi64(acc, 1));
+    sums[o] = static_cast<std::int32_t>(horizontal_sum(folded)) + r.entry_bias[o];
+  }
+#elif defined(__AVX2__)
   const __m256i ones = _mm256_set1_epi16(1);
   for (int o = 0; o < RefinerL1Width; ++o) {
     __m256i acc = _mm256_setzero_si256();
-    for (int i = 0; i < RefinerInputBytes; i += 32) {
-      const __m256i x = _mm256_load_si256(reinterpret_cast<const __m256i*>(in.bytes + i));
-      const __m256i w = _mm256_load_si256(reinterpret_cast<const __m256i*>(r.entry_weights[o] + i));
-      acc = _mm256_add_epi32(acc, _mm256_madd_epi16(_mm256_maddubs_epi16(x, w), ones));
+    for (int i = 0; i < RefinerInputBytes; i += 64) {
+      const auto* x = reinterpret_cast<const __m256i*>(in.bytes + i);
+      const auto* w = reinterpret_cast<const __m256i*>(r.entry_weights[o] + i);
+      const __m256i lo = _mm256_maddubs_epi16(_mm256_load_si256(x), _mm256_load_si256(w));
+      const __m256i hi = _mm256_maddubs_epi16(_mm256_load_si256(x + 1), _mm256_load_si256(w + 1));
+      if constexpr (Bound == 32) {
+        acc = _mm256_add_epi32(acc, _mm256_madd_epi16(_mm256_add_epi16(lo, hi), ones));
+      } else {
+        acc =
+            _mm256_add_epi32(acc, _mm256_add_epi32(_mm256_madd_epi16(lo, ones), _mm256_madd_epi16(hi, ones)));
+      }
     }
     sums[o] = static_cast<std::int32_t>(horizontal_sum(acc)) + r.entry_bias[o];
   }
+#else
+  refiner_l1_scalar(r, in, sums);
+  return;
+#endif
   for (int k = 0; k < in.row_count; ++k) {
     const std::int32_t* row = r.row_weights[in.rows[k]];
     for (int o = 0; o < RefinerL1Width; ++o) sums[o] += row[o];
   }
 }
-#else
-void refiner_l1(const RefinerFile& r, const RefinerInputs& in, std::int32_t* sums) {
-  refiner_l1_scalar(r, in, sums);
-}
-#endif
+
+template void refiner_l1<64>(const RefinerFile& r, const RefinerInputs& in, std::int32_t* sums);
+template void refiner_l1<32>(const RefinerFile& r, const RefinerInputs& in, std::int32_t* sums);
 
 // The entry layer's clipped ReLU, the middle layer, the heads and the
 // output's scaling (refiner_file.hpp's units): the scalar reference, and on
@@ -185,7 +209,7 @@ int refiner_rows(const NetFile& base, const Position& pos, int base_eval, int* r
 
 RefinerOutput run_refiner(const RefinerFile& r, const RefinerInputs& in) {
   alignas(32) std::int32_t sums[RefinerL1Width];
-  refiner_l1(r, in, sums);
+  refiner_l1<RefinerDenseBound>(r, in, sums);
   return refiner_l2_heads(r, sums);
 }
 

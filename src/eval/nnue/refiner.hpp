@@ -18,8 +18,8 @@
 //   means the same thing whatever window finds it).
 // - Every SIMD path has its scalar reference here, always compiled, with the
 //   same results bit for bit (tests/test_refiner.cpp); refiner_file.hpp's
-//   bounds guarantee no overflow or saturation on any path. AVX-512 builds use
-//   the AVX2 path.
+//   bounds guarantee no overflow or saturation on any path. With AVX-512 VNNI
+//   the entry layer uses dpbusd; other AVX-512 builds use the AVX2 paths.
 // - A refiner whose weights are all zero outputs a zero correction and a zero
 //   confidence for every input.
 // - No allocation, no floating point.
@@ -64,6 +64,10 @@ RefinerOutput run_refiner_scalar(const RefinerFile& r, const RefinerInputs& in);
 // the entry layer's clipped ReLU, the middle layer, the heads and the
 // output's scaling (the build's vector path, or with Scalar its scalar
 // reference; explicitly instantiated for both).
+// refiner_l1's vector path depends on the weights' bound (refiner_file.hpp),
+// so both bounds are instantiated and tested in every build; run_refiner
+// uses this build's.
+template <int Bound = RefinerDenseBound>
 void refiner_l1(const RefinerFile& r, const RefinerInputs& in, std::int32_t* sums);
 void refiner_l1_scalar(const RefinerFile& r, const RefinerInputs& in, std::int32_t* sums);
 template <bool Scalar = false>

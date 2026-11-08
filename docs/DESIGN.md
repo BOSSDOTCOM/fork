@@ -4059,6 +4059,15 @@ leaves the search exactly S512ppr3's while paying the whole per-call cost:
   as it is (the sticky rule). The ply frame keeps base_eval, refined,
   correction and confidence (16 bytes more in refiner builds only; the
   PlyFrame size guard records it).
+- **The dense-weight bound** (format version 2, header byte 36; CMake
+  FORK_REFINER_BOUND, RefinerDenseBound): 64 or 32. At 32 the AVX2 entry
+  layer sums two 8-bit multiply-add results in int16 before one widening
+  (exact: 2 x 2 x 255 x 32 = 32,640), half the widenings; with AVX-512 VNNI
+  the entry layer uses dpbusd (int32 accumulation, any bound). Both bounds'
+  entry layers are tested against the scalar reference in every build (the
+  VNNI path in VNNI builds, the AVX2 paths in x86-64-v3 builds). The bound
+  32 passed the constant screen (2026-11-08; ORIGINALITY.md, with the shared
+  technique credited).
 - **Vector paths:** the pack, the entry layer, and the middle layer with the
   heads each have an AVX2 path beside its scalar reference (§7), equal bit
   for bit on random and edge inputs (tests/test_refiner.cpp); AVX-512
