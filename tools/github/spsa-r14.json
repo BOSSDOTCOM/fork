@@ -1,0 +1,27 @@
+{
+ "params": [
+  {"name": "RfpMargin", "c": 6},
+  {"name": "FutilityOffset", "c": 8},
+  {"name": "FutilityGrowth", "c": 5},
+  {"name": "NullSurplusPerPly", "c": 23},
+  {"name": "AspirationHalfWidth", "c": 1},
+  {"name": "QuietSeeFloor", "c": 5},
+  {"name": "CaptureSeeFloor", "c": 8},
+  {"name": "LmpQuietAllowance", "c": 1}
+ ],
+ "fixed": {},
+ "iterations": 13,
+ "games": 1600,
+ "shards": 16,
+ "draw_pairs": 1,
+ "tc": "8+0.08",
+ "hash": 16,
+ "loss_budget": 0.5,
+ "pair_sd": 0.21,
+ "gain_exponent": 0.602,
+ "stability_offset": 1040,
+ "clamp_c": 0.5,
+ "c_decay": 0.0,
+ "average_tail": 0.3,
+ "opening_reserve": 2000001
+}
