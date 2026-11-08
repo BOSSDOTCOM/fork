@@ -117,6 +117,11 @@ class TransTable {
   // against an inexact result while it is still deeper after losing
   // StaleDepthPerSearch plies per search of age.
   void set_keep_deeper(bool on) { keep_deeper_ = on; }
+#ifdef FORK_SEARCH_STATS
+  // Stats builds (DESIGN.md §5.7, X10): while held, deposit writes nothing,
+  // so the decision ledger's side searches leave the table as it was.
+  void set_hold_writes(bool on) { hold_writes_ = on; }
+#endif
 
   static std::size_t bucket_index(Key key, std::size_t bucket_count);
 
@@ -140,6 +145,9 @@ class TransTable {
   bool age_blend_ = false;
   bool keep_exact_ = false;
   bool keep_deeper_ = false;
+#ifdef FORK_SEARCH_STATS
+  bool hold_writes_ = false;
+#endif
 };
 
 }  // namespace forkeng

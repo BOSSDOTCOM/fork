@@ -30,6 +30,9 @@
 //   with mirroring, so do a position and its left-right mirror.
 // - An incrementally updated accumulator equals one computed from scratch.
 // - No allocation, no floating point.
+// - Stats builds (FORK_SEARCH_STATS) also count the stack's work in a
+//   FeatureStackTally (DESIGN.md §5.7, X1); the counts only read the state,
+//   and normal builds have none.
 #pragma once
 
 #include <cstdint>
@@ -117,6 +120,31 @@ void sum_rows_saturated_scalar(const std::int16_t* base, const std::int16_t* con
 Bitboard exposed_pieces(const Position& pos);
 #endif
 
+// The feature stack's work, counted in stats builds (DESIGN.md §5.7, X1):
+// evaluations; moves and null moves pushed (lazily: most are never
+// evaluated); perspective updates in the evaluation walk (B0's
+// both-at-once kernel counts two), the rows they subtract and add, and those
+// whose delta changed pawns (S512+PP's link rows); perspectives recomputed
+// from the board at a frame change and at a search's root; and the plies an
+// evaluation walks, the longer perspective's walk.
+struct FeatureStackTally {
+  std::uint64_t evaluations = 0;
+  std::uint64_t move_pushes = 0;
+  std::uint64_t null_pushes = 0;
+  std::uint64_t perspective_updates = 0;
+  std::uint64_t update_rows = 0;
+  std::uint64_t link_updates = 0;
+  std::uint64_t frame_refreshes = 0;
+  std::uint64_t root_refreshes = 0;
+  std::uint64_t walked_plies = 0;
+};
+
+#ifdef FORK_SEARCH_STATS
+// The rows a delta subtracts and adds for one perspective in frame `f`
+// (stats builds: the same columns advance_perspective uses).
+int delta_row_count(const NetFile& net, const FeatureDelta& d, Color perspective, Frame f);
+#endif
+
 // One accumulator per ply of a search: ply 0 is the root, computed from
 // scratch; the others are computed from their parent when first needed,
 // except a perspective whose frame the move changes, which is recomputed
@@ -128,6 +156,9 @@ class FeatureStack {
   void push_move(const NetFile& net, int ply, const Position& before, Move m);
   // Before a null move at `ply`: the child's accumulator is the parent's.
   void push_null(int ply) {
+#ifdef FORK_SEARCH_STATS
+    ++tally_.null_pushes;
+#endif
     Entry& e = entries_[ply + 1];
     e.delta = FeatureDelta{};
     e.frame[White] = entries_[ply].frame[White];
@@ -136,6 +167,10 @@ class FeatureStack {
   }
   // The evaluation at `ply` of `pos` (the position the stack has reached).
   int evaluate(const NetFile& net, int ply, const Position& pos);
+#ifdef FORK_SEARCH_STATS
+  const FeatureStackTally& tally() const { return tally_; }
+  void set_tally(const FeatureStackTally& t) { tally_ = t; }  // X10: undo a side search's counts
+#endif
 
  private:
   struct Entry {
@@ -145,6 +180,9 @@ class FeatureStack {
     bool computed[2] = {false, false};
   };
   Entry entries_[MaxPly + 1];
+#ifdef FORK_SEARCH_STATS
+  FeatureStackTally tally_;
+#endif
 };
 
 }  // namespace forkeng

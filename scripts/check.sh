@@ -199,6 +199,8 @@ tool_tests() {  # python | all
   if "$py" -I -c 'import chess, zstandard' >/dev/null 2>&1; then
     "$py" -I -B -m unittest discover -s tools/datagen -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/datagen"
     "$py" -I -B -m unittest discover -s tools/nnue -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/nnue"
+    # Phase 4 step 1's measurement tools (DESIGN.md §5.7); the game replay reads PGNs with python-chess.
+    "$py" -I -B -m unittest discover -s tools/measure -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/measure"
   else
     echo "tool tests: tools/datagen skipped (no python-chess or zstandard in $py)" >>"$log"
   fi
