@@ -275,6 +275,50 @@ class PipelineTests(unittest.TestCase):
             c, _ = models.refiner_int(arch, net, scale, q, 20000, board, 40, 8)
             self.assertLessEqual(abs(c - y[0] * scale), bound, board.fen())
 
+    def test_refiner_convert_round_trip(self):
+        # A trainer checkpoint's refiner tensors -> refiner.py convert -> the file: the header refiner_file.hpp
+        # specifies (the base's S and payload checksum), the payload R-quant's tensors packed in file order, so
+        # R-int on the file's tensors is R-int on R-quant's; a dense weight beyond the bound is refused.
+        repo = Path(__file__).resolve().parents[2]
+        net = repo / 'nets/s512ppr3.fnet'
+        rng = random.Random(7)
+        l1 = 8
+        shapes = {'entry_weights': 1024 * l1, 'entry_bias': l1, 'row_weights': 674 * l1, 'middle_weights': 32 * l1,
+                  'middle_bias': 32, 'head_weights': 64, 'head_bias': 2}
+        r = {k: [models.to_f32(rng.uniform(-0.9, 0.9)) for _ in range(n)] for k, n in shapes.items()}
+        floats = dict(r, l0w=[0.5] * 3, l0b=[0.25] * 2)  # the frozen base's tensors are in the checkpoint too
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / 'weights.bin').write_bytes(netformat.write_weights_bin(floats))
+            args = ['convert', '--weights', str(tmp / 'weights.bin'), '--base', str(net), '--arch', '1', '--l1', '8',
+                    '--bound', '64', '--cap', '300', '--out', str(tmp / 'r.frnet')]
+            with contextlib.redirect_stdout(io.StringIO()):
+                refiner.main(args)
+            data = (tmp / 'r.frnet').read_bytes()
+            bad = dict(floats, middle_weights=[1.2] + r['middle_weights'][1:])  # 76.8 at x 64
+            (tmp / 'weights.bin').write_bytes(netformat.write_weights_bin(bad))
+            with self.assertRaises(SystemExit):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    refiner.main(args)
+        self.assertEqual(data[:8], b'FORKRFN\0')
+        self.assertEqual(struct.unpack_from('<IIIIIiiI', data, 8), (2, 1, 8, 32, 2, 89, 300, 64))
+        checksum, base = struct.unpack_from('<QQ', data, 40)
+        self.assertEqual((checksum, base), (netformat.net_checksum(data[64:]), 0x5861c1a319ca267b))
+        q = models.refiner_quantise(r)
+        self.assertEqual(data[64:], models.pack(q))
+        self.assertEqual(len(data) - 64, 1024 * 8 + 8 * 4 + 664 * 8 * 2 + 32 * 8 + 32 * 4 + 64 * 2 + 2 * 4)
+        # The file's tensors read back in order give R-int the same output as R-quant's.
+        at, back = 64, []
+        for kind, values in q:
+            size = struct.calcsize('<' + models.CODES[kind])
+            back.append((kind, list(struct.unpack_from(f'<{len(values)}{models.CODES[kind]}', data, at))))
+            at += size * len(values)
+        arch = models.arch_from_net('s512pp', net.read_bytes()[netformat.HEADER_BYTES:])
+        board = chess.Board('4k3/8/8/3n4/4P3/8/8/4K3 b - - 0 1')
+        v = [rng.randint(0, 255) for _ in range(1024)]
+        self.assertEqual(models.refiner_int(arch, None, 89, back, 300, board, 50, 8, acc=v),
+                         models.refiner_int(arch, None, 89, q, 300, board, 50, 8, acc=v))
+
     def test_refiner_export(self):
         # One line per labelled site: FEN | base | label | training weight | rows, folders in order.
         repo = Path(__file__).resolve().parents[2]

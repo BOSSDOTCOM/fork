@@ -24,9 +24,18 @@ refiner's active rows in architecture 1 (models.refiner_rows, from the base
 network's phase table). The trainer centres the target itself (step3-plan.md
 3.7).
 
+`convert` writes a trained refiner's file from the trainer's float weights
+(fork-train --arch refiner's optimiser_state/weights.bin): the refiner
+tensors quantised by models.refiner_quantise (R-quant: the factoriser
+merged, weights x 64, biases x 255 x 64, rounded half away from zero), the
+dense weights checked against the bound, the header bound to the base
+network's payload checksum, its output scale the base's.
+
 usage: python -I tools/nnue/refiner.py zero --base nets/s512ppr3.fnet --arch 1 --l1 16
            --bound 64 --cap 20000 --out tests/nnue/refiner-zero.frnet
        python -I tools/nnue/refiner.py export --base nets/s512ppr3.fnet --out train.sites DIR...
+       python -I tools/nnue/refiner.py convert --weights weights.bin --base nets/s512ppr3.fnet --arch 1 --l1 8
+           --bound 64 --cap C --out refiner.frnet
 """
 import argparse
 import json
@@ -79,7 +88,40 @@ def main(argv=None):
     export.add_argument('--base', required=True, help='the base network (.fnet): its phase table and bucket count')
     export.add_argument('--out', required=True)
     export.add_argument('dir', type=Path, nargs='+', help='folders with sites.jsonl, deep.tsv and weights.tsv')
+    convert = sub.add_parser('convert', help="a trained refiner's file from the trainer's float weights")
+    convert.add_argument('--weights', required=True, help="fork-train --arch refiner's optimiser_state/weights.bin")
+    convert.add_argument('--base', required=True, help='the base network (.fnet) the refiner reads')
+    convert.add_argument('--arch', type=int, choices=(1,), required=True)
+    convert.add_argument('--l1', type=int, choices=(8, 16), required=True)
+    convert.add_argument('--bound', type=int, choices=(64, 32), required=True, help='the dense weights\' bound')
+    convert.add_argument('--cap', type=int, required=True)
+    convert.add_argument('--out', required=True)
     args = ap.parse_args(argv)
+    if args.command == 'convert':
+        if not 0 <= args.cap <= 20000:
+            ap.error('--cap must lie in [0, 20000]')
+        base = Path(args.base).read_bytes()
+        fields = netformat.header_fields(base)
+        (base_checksum,) = struct.unpack_from('<Q', base, 40)
+        floats = netformat.read_weights_bin(Path(args.weights).read_bytes())
+        names = ('entry_weights', 'entry_bias', 'row_weights', 'middle_weights', 'middle_bias', 'head_weights', 'head_bias')
+        r = {name: [models.to_f32(x) for x in floats[name]] for name in names}
+        rows = 640 + models.REFINER_FACTORS + max(fields['buckets'], 1) + 16
+        expected = {'entry_weights': args.l1 * 2 * fields['hidden'], 'entry_bias': args.l1, 'row_weights': rows * args.l1,
+                    'middle_weights': 32 * args.l1, 'middle_bias': 32, 'head_weights': 64, 'head_bias': 2}
+        for name, count in expected.items():
+            if len(r[name]) != count:
+                raise SystemExit(f'{name}: {len(r[name])} values, the shape needs {count}')
+        q = models.refiner_quantise(r)
+        for i in (0, 3):  # the dense (i8) layers
+            worst = max(abs(x) for x in q[i][1])
+            if worst > args.bound:
+                raise SystemExit(f'{names[i]}: a weight of {worst} outside the bound {args.bound}')
+        data = refiner_file(args.arch, args.l1, args.bound, fields['scale'], args.cap, base_checksum, models.pack(q))
+        Path(args.out).write_bytes(data)
+        print(f'{args.out}: {len(data)} bytes, architecture {args.arch}, entry width {args.l1}, bound {args.bound}, '
+              f'S {fields["scale"]}, cap {args.cap}, base {base_checksum:016x}')
+        return 0
     if args.command == 'export':
         base = Path(args.base).read_bytes()
         fields = netformat.header_fields(base)
