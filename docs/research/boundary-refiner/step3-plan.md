@@ -1102,7 +1102,53 @@ reported beside it and selects nothing.
   over the batch, so weights of mean 1 keep the loss's scale); resampling
   is not needed. That this product compiles for batched one-wide nodes is
   UNVERIFIED until the refiner architecture's first build (the parity
-  chain); resampling stays the fallback if it does not. A converter and Fork's independent references
+  chain); resampling stays the fallback if it does not.
+- **The frozen base against the engine's S512ppr3 (owner, 2026-11-08,
+  before E-c: "make the trainer's frozen base reproduce the engine's
+  S512ppr3 exactly, applying the same clamp to that link weight (-274)").**
+  Measured 2026-11-08 (R-float and R-int, tools/nnue/models.py; the
+  parity set tests/nnue/parity.epd, 446 positions; the engine's values are
+  R-int's, netcheck-exact on all 446, docs/nets.md):
+  - **The clamp.** R1-avg's first-layer weight at row 955 (link 187 of the
+    pawn links), unit 353, is -1.2503 (x 255 = -318.8, quantised -319);
+    the converter clamped it to -274 under the reader's 64-link bound
+    (docs/nets.md, S512ppr3, "Conversion"). With that one weight set to
+    -274 / 255, R1-avg's first layer quantises to the engine's exactly:
+    0 of 704,512 weights differ.
+  - **The link's reach.** Link 187 is active (in either perspective) at
+    27,559 of the 1,000,000 training sites (2.76%; 26,885 of the 937,645
+    used), 192 of test's 10,000 (184 of the 9,187 used) and 185 of
+    validation's 10,000 (178 of 9,180); the enlarged test set's new sites
+    are counted when they are selected.
+  - **(A) R1-avg's float weights with the clamp:** not exact. The clipped
+    accumulator (x 255) differs from the engine's bytes by up to 7.50 byte
+    units, and every one of the 446 positions has a byte that rounds
+    differently; the base evaluation differs by up to 9.40 cp (mean 2.31,
+    446 positions differ, 332 by 1 cp or more). The reason: every float
+    weight lies off the 1/255 grid the engine rounds it to (S512ppr3's
+    quantization loss, docs/nets.md); the clamp fixes one weight of
+    704,512.
+  - **(B) The engine net's own integers as floats** (first layer int /
+    255, output weights int / 64, output biases int / (255 x 64); the
+    clamp included): the clipped accumulator matches the engine's bytes to
+    0.00003 byte units (float rounding), no byte rounds differently at any
+    of the 446 positions; the base evaluation differs by at most 0.998 cp
+    (mean 0.507, none by 1 cp or more), the engine's own integer
+    truncations of its output (total / QA and x S / (QA x QB), toward
+    zero), which training does not use (below).
+  - **The target's base term is the engine's quantised evaluation:** the
+    logged static evaluation of each site (eval_site's `eval`: the integer
+    the gate's refinement receives, eval_at's or the TT's stored one) from
+    the stats build fork-stats-2f0311b (S512ppr3 embedded, bench as
+    referenced), written by `refiner.py export` as each line's base and fed
+    to the loss as a per-sample input; mu is the weighted mean of (deep
+    label - that base). The trainer's own float base supplies only the
+    refiner's accumulator input, never the base term.
+  - **Recommendation, stopped for the owner before E-c:** freeze (B) in the
+    trainer, so the refiner's input equals the engine's bytes / 255 up to
+    float rounding; (A), the plan's R1-avg float weights, would train the
+    refiner on an input up to 7.5 byte units off the engine's.
+  A converter and Fork's independent references
   (R-float, R-quant, R-int in tools/nnue) extend to the refiner, and the
   parity chain (trainer = R-float within tolerance, R-int = engine exactly)
   passes before any game, as for every network (DESIGN.md §5, "Step 0
@@ -1124,8 +1170,9 @@ reported beside it and selects nothing.
   mu is not added back in the engine and its value is reported. The base
   sits in the trainer's graph, frozen: `detach()` on its outputs, decay 0
   and a clip range holding its weights (3.6, settled); its float weights
-  are item 8a's R1-avg (weights.bin, SHA-256 02215858...c8b37ecc3),
-  checked against the engine's net before use.
+  are item 8a's R1-avg (weights.bin, SHA-256 02215858...c8b37ecc3) or
+  the engine net's own integers read as floats: the owner's choice (3.6,
+  "The frozen base against the engine's S512ppr3").
 - **Decision weighting (owner addition 4; idea 48 applied):**
   `w_i = exp(-g_i^2 / (2 h^2))`, g_i the site's window gap, h = 25 cp (the
   gate's margin), normalised to mean 1. Idea 48's variance rule applies:
