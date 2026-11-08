@@ -35,6 +35,7 @@
 #include "search/move_selector.hpp"
 #include "search/quiet_history.hpp"
 #include "search/score_bounds.hpp"
+#include "search/time_budget.hpp"
 #include "search/trans_table.hpp"
 
 #if defined(FORK_EVAL_NNUE)
@@ -119,6 +120,14 @@ struct SearchQuota {
 //   NoMoveReduceMinDepth deep, is searched one ply shallower (tier 2, T26,
 //   internal iterative reduction). On since its STC SPRT passed (+21.45
 //   +/- 5.98 Elo after 4,800 games, [0, 3]; 2026-11-02).
+// - use_stability_time, use_share_time: a timed search's soft limit is
+//   scaled after each finished iteration by soft_scale_permille
+//   (time_budget.hpp; §5.6 step 10, think tank R8): use_stability_time alone
+//   by best-move stability (variant a), both by stability and the best
+//   move's every-pass node share (variant b); use_share_time alone does
+//   nothing. Built for a head-to-head of (a) against (b), then the
+//   winner's SPRT (owner, 2026-11-07). Branch tm/b: variant (b) on by
+//   default, for the head-to-head only (tm/node-share has both off).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -148,7 +157,9 @@ struct SearchQuota {
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
-  X(use_no_move_reduction, UseNoMoveReduction, true)
+  X(use_no_move_reduction, UseNoMoveReduction, true)     \
+  X(use_stability_time, UseStabilityTime, true)          \
+  X(use_share_time, UseShareTime, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -208,8 +219,9 @@ struct PlyFrame {
 // the others keep their order (Fork's rule; the PV move is searched first).
 struct RootEntry {
   Move move;
-  std::uint64_t nodes = 0;  // nodes under this move in the current iteration's last pass
-  int share = 0;            // its per mille of the last finished iteration's nodes
+  std::uint64_t nodes = 0;             // nodes under this move in the current iteration's last pass
+  int share = 0;                       // its per mille of the last finished iteration's nodes
+  std::uint64_t nodes_all_passes = 0;  // nodes under it in every aspiration pass of the current iteration
 };
 
 // The moved piece's facts for the LMR context, from the position after a
@@ -348,6 +360,14 @@ class Searcher {
   // [beta - 1, beta]), with no time limit; returns its fail-soft score.
   int probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop);
 
+  // Tests only: moves the search's clock forward (called from a listener, on
+  // the search thread, between iterations); the last finished iteration's
+  // time-management signals (set before its report); and the soft limit the
+  // last soft check compared against.
+  void advance_clock(std::chrono::milliseconds by) { start_ -= by; }
+  const IterationSignals& time_signals() const { return time_signals_; }
+  std::int64_t last_soft_ms() const { return last_soft_ms_; }
+
  private:
   template <bool OnPv>
   int negamax(int alpha, int beta, int depth, int ply);
@@ -365,6 +385,9 @@ class Searcher {
   int eval_at(int ply);
 
   bool poll_limits();  // true once the search must stop
+  // The soft limit for this iteration's soft check: the planned one, or with
+  // use_stability_time scaled by the last finished iteration's signals.
+  std::int64_t soft_limit_now(const SearchQuota& limits) const;
   std::int64_t elapsed_ms() const;
   void record_cutoff(const PlyFrame& f, Move m, int depth);
   // The follow table's arrival at frame `f`: the move that led to the ply
@@ -412,6 +435,13 @@ class Searcher {
   // so the last line before bestmove names the move played.
   PrincipalLine finished_pv_;
   Move last_reported_ = NoMove;
+  // Time management (§5.6 step 10): finished iterations in a row with the
+  // same best move, that move, the last finished iteration's signals, and
+  // the soft limit last compared against.
+  int stable_iterations_ = 0;
+  Move stable_move_ = NoMove;
+  IterationSignals time_signals_;
+  std::int64_t last_soft_ms_ = -1;
 #ifdef FORK_SEARCH_STATS
   std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
 #endif
