@@ -5,7 +5,6 @@
   {"name": "FutilityGrowth", "c": 7.5},
   {"name": "NullSurplusPerPly", "c": 7.8},
   {"name": "AspirationHalfWidth", "c": 1.0},
-  {"name": "QuietSeeFloor", "c": 22.5},
   {"name": "CaptureSeeFloor", "c": 28.0},
   {"name": "LmpQuietAllowance", "c": 1.7}
  ],

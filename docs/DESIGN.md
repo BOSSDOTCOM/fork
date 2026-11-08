@@ -1381,7 +1381,7 @@ holds, which is why search decisions use no floating point (deliverable 6).
 
 #### SPSA on GitHub (owner, 2026-11-07; §6 decisions 4 and 5)
 
-The driver for the early SPSA of the eight eval-dependent margins (§5.6
+The driver for the early SPSA of the eval-dependent margins (§5.6
 step 11, R14) and the final retune by scaling class (step 19, R24), built
 on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
 §2.O4). One iteration is one run of `.github/workflows/spsa.yml`:
@@ -1439,6 +1439,11 @@ on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
   ("every c within 30% of its step") does not hold. The SEE floors'
   counts move in plateaus (SEE values are discrete: CaptureSeeFloor +8 and
   +16 give the default's count exactly), so their c are coarse.
+- **R14 tunes seven margins (owner, 2026-11-08):** QuietSeeFloor is left
+  out and keeps its value (60): its firing count moved 8.6% at the widest
+  test inside its range, below the 10% rule, and a parameter with nothing
+  to gain adds about 0.17 Elo of noise to a 20k-game SPSA (B7 rule 7). The
+  gain follows p = 7: gain_end = 0.0373 (0.0326 for eight).
 - **Validation** (B7 O6; owner's defaults 2026-11-07): the tuned values are
   committed as new defaults (bench updated, the constants table rows citing
   the SPSA log and the SPRT, the originality screen before the commit);

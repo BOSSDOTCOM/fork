@@ -369,14 +369,15 @@ class SpsaStateTest(unittest.TestCase):
             with self.assertRaises(spsa.Refused, msg=bad):
                 spsa.parse_params(bad)
 
-        # R14's committed spec resolves against this tree's table.
+        # R14's committed spec resolves against this tree's table: seven of the eight margins (owner,
+        # 2026-11-08: QuietSeeFloor, insensitive in the calibration, keeps its value).
         raw = json.loads((HERE / 'spsa-r14.json').read_text(encoding='utf-8'))
         spec = spsa.resolve_spec(raw, self.table, 'spsa-r14', 'a' * 40)
         self.assertEqual([p['name'] for p in spec['params']],
                          ['RfpMargin', 'FutilityOffset', 'FutilityGrowth', 'NullSurplusPerPly', 'AspirationHalfWidth',
-                          'QuietSeeFloor', 'CaptureSeeFloor', 'LmpQuietAllowance'])
+                          'CaptureSeeFloor', 'LmpQuietAllowance'])
         self.assertEqual((spec['total_pairs'], spec['iterations'] * spec['games']), (10400, 20800))
-        self.assertAlmostEqual(spec['gain_end'], 0.0326, delta=1e-4)
+        self.assertAlmostEqual(spec['gain_end'], 0.5 / (1.917 * 7), delta=1e-4)
 
 
 
