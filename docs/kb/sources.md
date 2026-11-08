@@ -1479,3 +1479,44 @@ Only the paper was opened (no engine or trainer source, and none of the paper's 
 | https://arxiv.org/html/2412.17948v1 | arXiv HTML rendering of v1 | 2026-11-06 | cross-check of the two margins and the distribution targets |
 | Fork repo, branch phase-4: src/datagen/self_play.hpp, tools/train/src/main.rs, tools/datagen/endgame_slice.py, docs/DESIGN.md §5.3 and §5.6, docs/ideas.md ideas 13, 45, 46 | Fork's own code and docs | 2026-11-06 | §3.2 pipeline facts, §3.1 plan context |
 | git grep over every local branch's docs/ and tools/, and this KB, for "better labels", "label filter", "label quality", "quiet position" | repo search | 2026-11-06 | §3.1: no written "better labels" experiment found |
+
+## Boundary Refiner prior art (research-boundary-refiner-prior-art.md), 2026-11-08
+
+Prior-art search for idea 59. No engine repository was cloned and no engine source file or pull-request diff was opened; Stockfish pull requests were read as prose (description, commit message, comments) through the GitHub REST API. Code inside comments or forum posts was skipped. Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| Fork repo, branch phase-4: docs/ideas.md idea 59 (and 60) | Fork's own idea and its step 2 results | 2026-11-08 | §1 summary of the idea being checked |
+| api.github.com/search/issues?q=repo:official-stockfish/Stockfish+is:pr+{smallnet, small net, dual nnue, big net, lazy eval, hybrid evaluation, classical eval imbalance, NNUEThreshold} (with and without is:merged) | PR searches (leads) | 2026-11-08 | finding the PRs below; is:merged returns nothing for Stockfish |
+| api.github.com/search/issues?q=repo:official-stockfish/Stockfish+{smallnet alpha, smallnet beta, "small net" alpha, "lazy" "alpha" "beta" eval, "reeval", "re-eval"} | issue and PR searches for a window-gated second net | 2026-11-08 | none found beyond 2.6; led to PR 966 |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/{966, 2912, 2916, 2993, 2994, 2995, 3011, 3035, 3107, 3146, 3499, 3503, 3780, 4771, 4898, 4910, 4915, 5037, 5083, 5238, 5244, 5252, 5271, 5279, 5323, 5501, 5674, 5677, 6796} | Stockfish PR descriptions | 2026-11-08 | §2.4-2.9 |
+| api.github.com/repos/official-stockfish/Stockfish/issues/{966, 2916, 2993, 2995}/comments | PR discussion comments | 2026-11-08 | §2.4 (TT remark), §2.5 (gate applies at any score), §2.6 (no test results) |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/{2995, 5238, 5271, 5279, 5674, 5160}/commits | commit messages only | 2026-11-08 | §2.6, §2.9; 5160 opened by mistake, not used |
+| api.github.com/repos/official-stockfish/Stockfish/pulls/1339 (+ comments, commits) | "Make staticEval independent of the search path" (2017) | 2026-11-08 | opened as a lead; about tempo and null-move evals, not used |
+| api.github.com/search/issues global PR searches: smallnet outside Stockfish, "dual net" chess, "lazy eval" nnue, "big net" alpha beta, "two nets" eval chess, smallnet window | GitHub-wide PR searches | 2026-11-08 | mostly unrelated or hobby repositories; nothing used |
+| https://stockfishchess.org/blog/2024/stockfish-16-1/ | Stockfish 16.1 release post (dated 2024-02-24) | 2026-11-08 | §2.9 dual NNUE description |
+| https://stockfishchess.org/blog/2024/stockfish-17/ | Stockfish 17 release post | 2026-11-08 | checked for the small net; nothing on its gate |
+| https://stockfishchess.org/blog/2020/stockfish-12/ | Stockfish 12 release post | 2026-11-08 | checked for the hybrid; not described there |
+| https://stockfishchess.org/blog/2021/stockfish-13/ and .../stockfish-14/ | release posts | 2026-11-08 | checked for the hybrid; nothing used |
+| https://www.chessprogramming.org/Lazy_Evaluation | CPW | 2026-11-08 | §2.1; forum links for §2.2-2.3 |
+| https://www.chessprogramming.org/Deep_Blue | CPW | 2026-11-08 | §2.10: no description of the evaluation stages |
+| https://www.chessprogramming.org/Stockfish_NNUE | CPW | 2026-11-08 | §2.5 "Hybrid" section |
+| https://www.chessprogramming.org/NNUE | CPW | 2026-11-08 | checked for dual-net or window gating; nothing used |
+| https://www.chessprogramming.org/Static_Evaluation_Correction_History | CPW | 2026-11-08 | §2.16 |
+| https://www.chessprogramming.org/Futility_Pruning | CPW | 2026-11-08 | §2.17 |
+| https://www.chessprogramming.org/YaneuraOu | CPW | 2026-11-08 | §2.18 |
+| https://www.chessprogramming.org/Suisho | CPW | 2026-11-08 | FAILED (HTTP 404, no page) |
+| https://talkchess.com/viewtopic.php?t=64674 | TalkChess, "Is expensive eval required for QS?" (2017) | 2026-11-08 | §2.2 |
+| https://talkchess.com/viewtopic.php?t=65047 | TalkChess, "adaptive lazy eval" (2017) | 2026-11-08 | §2.3 |
+| https://groups.google.com/g/lczero/c/EGcJSrZYLiw/m/netJ4S38CgAJ | LCZero group, "use multiple neural nets?" (Dec 2018) | 2026-11-08 | §2.11 |
+| https://doi.org/10.1016/S0004-3702(01)00129-1 | DOI redirect for "Deep Blue" (2002) | 2026-11-08 | redirect page only |
+| https://www.sciencedirect.com/science/article/pii/S0004370201001291 | publisher page, curl and WebFetch | 2026-11-08 | FAILED (HTTP 403); §2.10 UNVERIFIED |
+| https://api.elsevier.com/content/article/PII:S0004370201001291?httpAccept=text/plain | Elsevier text-mining link from Crossref | 2026-11-08 | FAILED (HTTP 400, invalid view); not retried |
+| https://api.crossref.org/works/{10.1016/S0004-3702(01)00129-1, 10.1016/0004-3702(91)90015-C, 10.1109/CVPR.2001.990517} | Crossref metadata | 2026-11-08 | citations for Deep Blue, Russell and Wefald, Viola and Jones (metadata only) |
+| https://export.arxiv.org/api/query?id_list=1905.13521,2103.11517,1308.3432,1603.08983,1709.01686 | arXiv API abstracts | 2026-11-08 | §2.12, §2.15; 2103.11517 (Dual MCTS) not relevant |
+| https://export.arxiv.org/api/query?id_list=2607.27871,2606.01708,1304.1133,2503.13178,2002.04335 | arXiv API abstracts | 2026-11-08 | §2.13, §2.14, §2.18; 2607.27871 and 2002.04335 general VOC, not used |
+| https://export.arxiv.org/api/query?search_query=... (cascade, lazy evaluation, expensive evaluation network, NNUE, metareasoning, value of computation, multi-fidelity tree search, two networks tree search) | arXiv keyword searches | 2026-11-08 | §2.18 |
+| https://arxiv.org/pdf/1905.13521v1 (WebFetch) | MPV-MCTS PDF | 2026-11-08 | FAILED (no text extracted); ar5iv used |
+| https://ar5iv.labs.arxiv.org/html/1905.13521 | arXiv HTML rendering of MPV-MCTS | 2026-11-08 | §2.12 method (leaf choice by visit count, value blend) |
+| https://arxiv.org/html/2606.01708v2 | arXiv HTML of the two-fidelity minimax paper | 2026-11-08 | §2.13 method |
+| Web searches (talkchess big net near window; cheap and expensive evaluation in game trees; MPV-MCTS; small net big net switch; YaneuraOu/Suisho; near-window residual; Lc0 two networks) | search result lists, leads only | 2026-11-08 | leads; no claim rests on a snippet |
