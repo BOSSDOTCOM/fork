@@ -60,8 +60,8 @@
   X(SingularEntrySlack, 3, 0, 6, 1)       \
   X(SingularMarginPerPly, 6, 3, 12, 1)    \
   X(NoMoveReduceMinDepth, 8, 2, 10, 1)    \
-  X(LmrWindowBand, 25, 6, 50, 2)          \
-  X(LmrWindowMinDepth, 0, 0, 12, 1)       \
+  X(LmrWindowBand, 10, 6, 50, 2)          \
+  X(LmrWindowMinDepth, 6, 0, 12, 1)       \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 8, 1)              \
