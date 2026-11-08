@@ -1379,6 +1379,76 @@ holds, which is why search decisions use no floating point (deliverable 6).
   phase-end fuzz rule applies to it, and to `fuzz_fen` and `fuzz_moves` if
   `src/core` changes.
 
+#### SPSA on GitHub (owner, 2026-11-07; §6 decisions 4 and 5)
+
+The driver for the early SPSA of the eight eval-dependent margins (§5.6
+step 11, R14) and the final retune by scaling class (step 19, R24), built
+on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
+§2.O4). One iteration is one run of `.github/workflows/spsa.yml`:
+- **Build:** `tools/github/spsa_build.sh` builds the tuned commit as a
+  tuning build (update.sh's configure line plus `-DFORK_TUNE=ON`, x86-64-v3,
+  gcc 11.4 on Ubuntu 22.04), checks the network's parity file, bench parity
+  against the reference of the network the binary names, and every
+  `FORK_SEARCH_PARAMS` row as a spin option; the binary is cached by the
+  commit's SHA, so only the first iteration builds.
+- **Shards:** `tools/github/spsa_shard.py` plays game pairs of the engine
+  against itself, every pair (a "draw"; `draw_pairs` > 1 groups pairs)
+  with its own perturbation: theta + c*signs against theta - c*signs,
+  Rademacher signs and random rounding of each value from the draw's
+  seed, SHA-256 of label, commit, stage, shard and index; SPRT conditions
+  (one thread, Hash, adjudication, both colours, Syzygy 3-4-5).
+- **Driver:** `tools/github/spsa_run.sh` under the job supervisor (type
+  github), with sprt_run.sh's rules: commit on GitHub, one run at a time,
+  the run found by its title, every run in the ledger (its params SHA-256 in
+  the note). `tools/github/spsa.py step` refuses a run whose shard results
+  differ from the dispatch in any meta field, opening range, sign or value
+  (recomputed from each draw's seed), and applies nothing; the state
+  (`~/fork-spsa/github/NAME/`) is written after the iteration's log line,
+  so a stop at any point resumes. A rewind abandons a pending stage; stage
+  indices, seeds and openings are never reused.
+- **Update rule** (B7 O2, in units of c): the gain sequences of Spall,
+  "Implementation of the simultaneous perturbation algorithm for stochastic
+  optimization", IEEE TAES 34(3):817-823, 1998, Sec. III-A Step 1:
+  a_k = a / (A + k + 1)^0.602 and c_k = c / (k + 1)^gamma, k counted from 0
+  (here over game pairs; c held fixed, gamma 0, as B7 simulated), A at most
+  10% of the iterations (Sec. III-B; R14: A = 1,040 of 10,400 pairs);
+  a scaled so the last pair's gain is gain_end = 16 eps k / (p sd^2), with
+  k = ln 10 / 1600, sd = 0.21 (the STC pair-score sd, A3 §2.5) and a
+  stationary-loss budget eps = 0.5 Elo (B7 §0: 0.0326 for p = 8); each
+  iteration's step clamped to 0.5 c; theta kept at least c inside its
+  range; the result is the mean of theta over the last 30% of the updates,
+  rounded; a parameter clamped in at least two thirds of the updates is
+  reported step-limited (B14).
+- **Never in SPSA:** the time-management parameters (the iteration rule and
+  the time budget, refused by name) and the eval scale (not a parameter).
+- **Openings:** the tuning reserve, lines 2,000,001 to 2,632,036 of the
+  shuffled UHO book, which no SPRT stage reaches (SPRTs play from line 1),
+  so the tune's openings are disjoint from every validation SPRT's.
+- **Perturbation sizes** (B7 O3): `tools/github/spsa_calibrate.py` on a
+  FORK_TUNE + FORK_SEARCH_STATS build sets each c so that default +- c
+  changes its rule's firing count on the bench by 10% (1, 2, 4, 8 table
+  steps, log-linear interpolation; insensitive rules flagged); three
+  stats-only counters serve it (aspiration re-searches, null-move surplus
+  plies, quiet SEE prunes; bench unchanged). Until it has run,
+  `tools/github/spsa-r14.json` holds the table steps.
+- **Validation** (B7 O6; owner's defaults 2026-11-07): the tuned values are
+  committed as new defaults (bench updated, the constants table rows citing
+  the SPSA log and the SPRT, the originality screen before the commit);
+  then an STC SPRT of release builds, tuned against default, [0, 5] nElo,
+  alpha = beta = 0.05, capped at 6 stages, counted as try 1 of idea `r14`
+  at STC; then an LTC sign guard of 3 fixed stages (40+0.4), passed if the
+  nElo estimate is above 0. No second-book check.
+- **Cost** (estimated, not yet run): an iteration of 1,600 STC games takes
+  about 15 min of runner time (19 with the build); R14 is 13 iterations
+  (20,800 games, about 3.3 h), plus about 1.2-1.9 h of STC validation and
+  about 3.75 h of LTC guard (UNVERIFIED LTC stage time): about 8.3-9 h.
+- **Tests:** `tools/github/test_spsa.py` (the update against the closed
+  form of a quadratic loss, Spall's formula, the clamps, rounding, seeds, a
+  noisy landscape, crash idempotency, resume, refusals, the build flags,
+  the calibration rule), `test_spsa_shard.sh` (a fake fastchess) and
+  `test_spsa_run.sh` (a fake gh), in check.sh's tool tests; each
+  fault-injected once.
+
 #### Queued experiments (run at Milestone B; results in ideas.md)
 
 1. **Legal vs pseudo-legal generation in search.** Fork generates fully
