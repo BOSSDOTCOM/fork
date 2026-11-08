@@ -48,6 +48,29 @@ the 3,000-site labelling pilot (3.3); P0 runs before the pilot's labels are
 used. The speed A/B runs only in a quiet window the owner chooses (data
 generation shares the machine).
 
+**Owner's answers on the zero-output build (2026-11-08, with the name
+screen):**
+- Centring: the mean is subtracted in training and **not added back** in
+  the engine (adding it back would be a constant shift, the bias-only
+  control that lost 14.56 Elo).
+- The dense weights' bound: |w| <= 64 (1.0 in float), exactness first;
+  the reader rejects larger dense weights and the trainer clips to match
+  (section 2.5, amended).
+- The sparse first layer is deferred entirely from this build (no sparse
+  experiment, no transposed weights); it returns to the owner, with an
+  originality-checker review, only if the speed budget needs it (sections
+  2.3, 4.2 and M1's variants read accordingly).
+- The build's layout: the refiner's inference (reader, kernels, rows, the
+  danger summary) is compiled and tested in every network build; the
+  search's use of it and the embedded refiner file sit behind
+  `FORK_REFINER`, set by CMake `FORK_REFINER_NET`; the committed zero
+  refiner has its cap at EvalLimit (20,000), so bench equality shows the
+  refiner really outputs zero rather than a cap of 0 hiding it.
+- The new search and refiner constants (the margins 25/25, the 16 bins of
+  125 cp, the danger buckets, the layer sizes 16/32/2 and the weight bound
+  64) go through the originality-checker's constant screen before the
+  commit that introduces them.
+
 ## 0. The design in brief
 
 1. S512ppr3 evaluates everywhere, unchanged. Where the gate fires (the base
@@ -287,15 +310,19 @@ of S512ppr3's clipped values are zero at the gated sites: measurement M3).
 
 ### 2.5 Quantization and integer arithmetic
 
-- Dense weights int8 at a scale of 64 (|w| <= 127/64, about 1.98 in float,
-  clipped in training); the input bytes are the clipped values at 255 per
-  1.0; so L1's sums are in units of 255 x 64 (QA x QB, bullet's convention
+- Dense weights int8 at a scale of 64, **bounded to [-64, 64], 1.0 in
+  float, clipped in training** (amended, owner, 2026-11-08: two products of a
+  byte, at most 255, and a weight are summed into an int16 by the 8-bit
+  multiply-add, exactly only while 2 x 255 x |w| <= 32,767; at 127 a pair
+  would reach 64,770 and saturate, so the bound keeps every path exact; the
+  reader rejects larger dense weights); the input bytes are the clipped
+  values at 255 per 1.0; so L1's sums are in units of 255 x 64 (QA x QB, bullet's convention
   that Fork keeps, credited in ORIGINALITY.md; not a tuned constant, so not
   screened: owner, 2026-10-28).
 - Rows stored int16 at a scale of 64 and multiplied by 255 when loaded (a
   row is an input fixed at 1.0), so they add into the same int32 sums.
 - Biases int32 at 255 x 64. Activations `clamp(sum >> 6, 0, 255)` as bytes.
-- Overflow: L1's dense part is at most 1,024 x 255 x 127 = 33,162,240 in
+- Overflow: L1's dense part is at most 1,024 x 255 x 64 = 16,711,680 in
   magnitude, far inside int32; the reader rejects a file whose bias plus
   dense bound plus its largest possible row sum (at most 30 exposure rows,
   as net_file.cpp's `MaxExposed`, plus the danger and context rows) can
