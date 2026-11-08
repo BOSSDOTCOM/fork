@@ -27,7 +27,13 @@ proxy), and two plies deeper (toward LTC).
 
     near_window_cost.py run FORK GAMES.jsonl OUT.jsonl --depths 9,11 [--margins 10,25] [--per-game 20]
                         [--jobs 2] [--hash 16] [--syzygy DIR] [--max-games N]
+                        [--switch UseNearWindowExtension] [--param NearWindowMargin]
     near_window_cost.py report OUT.jsonl
+
+`--switch` and `--param` name the tuning build's switch and the parameter
+that --margins sets (2026-11-08, for idea 61 part 5's window-aware LMR:
+--switch UseWindowAwareLmr --param LmrWindowBand); the defaults are idea
+60's, so its runs are unchanged.
 
 `run` writes one line per position (game, ply, nodes per setting and
 depth); a game's lines are appended when it is finished, and games already
@@ -54,7 +60,8 @@ KillLine = 0.15
 class Engine:
     """One engine process over UCI."""
 
-    def __init__(self, path, hash_mb, syzygy):
+    def __init__(self, path, hash_mb, syzygy, switch='UseNearWindowExtension', param='NearWindowMargin'):
+        self.switch, self.param = switch, param
         flags = getattr(subprocess, 'BELOW_NORMAL_PRIORITY_CLASS', 0)
         self.proc = subprocess.Popen([path], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL, text=True, bufsize=1, creationflags=flags)
@@ -80,11 +87,11 @@ class Engine:
                 return line
 
     def nodes_to_depth(self, fen, moves, depth, margin):
-        """Nodes of a fresh search to `depth`; margin None is the extension off."""
+        """Nodes of a fresh search to `depth`; margin None is the switch off."""
         self.send('ucinewgame')
-        self.send(f'setoption name UseNearWindowExtension value {"false" if margin is None else "true"}')
+        self.send(f'setoption name {self.switch} value {"false" if margin is None else "true"}')
         if margin is not None:
-            self.send(f'setoption name NearWindowMargin value {margin}')
+            self.send(f'setoption name {self.param} value {margin}')
         self.send('isready')
         self.wait_for('readyok')
         self.send(f'position fen {fen}' + (' moves ' + ' '.join(moves) if moves else ''))
@@ -140,7 +147,7 @@ def run(args):
     finished = [len(done)]
 
     def work(chunk):
-        engine = Engine(args.fork, args.hash, args.syzygy)
+        engine = Engine(args.fork, args.hash, args.syzygy, args.switch, args.param)
         try:
             for game in chunk:
                 rows = []
@@ -211,6 +218,8 @@ def main():
     r.add_argument('--hash', type=int, default=16)
     r.add_argument('--syzygy', default='')
     r.add_argument('--max-games', type=int, default=0)
+    r.add_argument('--switch', default='UseNearWindowExtension')
+    r.add_argument('--param', default='NearWindowMargin')
     p = sub.add_parser('report')
     p.add_argument('out')
     args = parser.parse_args()

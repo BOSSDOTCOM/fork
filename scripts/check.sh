@@ -199,6 +199,8 @@ tool_tests() {  # python | all
   if "$py" -I -c 'import chess, zstandard' >/dev/null 2>&1; then
     "$py" -I -B -m unittest discover -s tools/datagen -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/datagen"
     "$py" -I -B -m unittest discover -s tools/nnue -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/nnue"
+    "$py" -I -B -m unittest discover -s tools -p 'test_near_window_cost.py' >>"$log" 2>&1 \
+      || fail "tool tests: tools/near_window_cost.py"
   else
     echo "tool tests: tools/datagen skipped (no python-chess or zstandard in $py)" >>"$log"
   fi
