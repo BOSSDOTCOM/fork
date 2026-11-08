@@ -492,7 +492,7 @@ namespace forkeng::test {
 // not clearing the root frame's flag, a search after an extended probe
 // differed from a fresh searcher's.
 TEST_CASE("pruning", "near-window extension: exactly one ply, within the margin only, once per line") {
-  CHECK(!SearchSwitches{}.use_near_window_extension);  // off: untested (idea 60)
+  CHECK(SearchSwitches{}.use_near_window_extension);  // on: a head-to-head candidate (idea 60)
   PruningFixture fx;
   SearchSwitches on;
   on.use_near_window_extension = true;

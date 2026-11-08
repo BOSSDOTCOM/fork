@@ -123,8 +123,9 @@ struct SearchQuota {
 //   whose static evaluation lies within NearWindowMargin of the nearest
 //   finite bound of its window (window_gap), is searched one ply deeper:
 //   at most once per line, and never inside a null move's verification
-//   search (ideas.md idea 60). Off: untested (built 2026-11-07 for its
-//   node-cost measurement, head-to-head margin and design R SPRT).
+//   search (ideas.md idea 60). On in this head-to-head candidate only
+//   (branch idea60/m10 or idea60/m25: the switch and NearWindowMargin's
+//   default are all it changes); untested.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -155,7 +156,7 @@ struct SearchQuota {
   X(use_follow_history, UseFollowHistory, true)          \
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
-  X(use_near_window_extension, UseNearWindowExtension, false)
+  X(use_near_window_extension, UseNearWindowExtension, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
