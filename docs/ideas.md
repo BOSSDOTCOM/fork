@@ -1898,9 +1898,28 @@ until measured; new names and constants go through the screens before use.
   used, or always store the base evaluation.
 - **phase:** Phase 4, after item 8a. **metric:** call rates (step 1), the
   fixed-node screen and nps (step 2), then the STC SPRT. **status:**
-  untested (plan only, owner, 2026-11-07); step 1 measured (call rates; measure/step1), step 2's oracle
-  screens running (setting (a) 25/10 cp: +29.82 +/- 9.78 at fixed nodes against S512r2, 3.81% of nodes
-  consulted; controls queued). **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
+  untested (plan only, owner, 2026-11-07); step 1 measured (call rates; measure/step1). **Step 2
+  passed, and the control split confirms the mechanism (owner, 2026-11-08).** Fixed-node screens of
+  1,600 games, 800,000 nodes per move, against S512r2 alone (base 56dacaf; oracle and controls on
+  exp/oracle, d5bb138 and 92aa87c):
+
+  | setting | Elo | nElo | run |
+  |---|---|---|---|
+  | (a) window gate, main 25 / quiescence 10 cp, S512+X refines (3.81% of nodes consulted) | +29.82 +/- 9.78 | +52.21 | 42436884886 |
+  | (b) window gate, main 25 / quiescence 25 cp | +41.01 +/- 9.97 | +70.68 | 42439918061 |
+  | random gate at (a)'s call rate (key-hashed, 3.82% of nodes) | +7.60 +/- 9.93 | +13.04 | 42451958660 |
+  | bias only: (a)'s gate adding its mean refinement, +10.776 cp, S512+X never consulted | −14.56 +/- 9.96 | −24.92 | 42448595388 |
+
+  Both settings clear the kill line (+8.6) at a call rate far under 10%. At equal call rate the window
+  gate beats the random gate by about 22 Elo (about 3 standard errors), and the random gate's own gain
+  is inconclusive against zero: the gain comes from where the refiner is consulted. The bias-only
+  control loses, so the gain is not a calibration shift: it lives in the refiner's position-specific
+  corrections. The random sites' corrections are larger (mean |refinement| 36.9 cp against 25.6), so
+  the size of the disagreement is not what pays; its position relative to the window is. Fixed-node
+  results do not charge the second network's cost: the nps A/B awaits a quiet machine, and step 3's
+  design (a shared accumulator) is what the cost claim rests on. **Next: step 3's design, for the
+  owner's review before building**, and a prior-art search for gated, boundary-specific evaluation
+  refiners before any public claim. **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
   SPRTs, write a reproduction guide in docs/research/boundary-refiner/ (the mechanism; the evidence,
   including the control split of window-gated refiner, bias-only and random gate; implementation details;
   the refiner's training; failures and costs; settings), then a TalkChess summary post and possibly an
