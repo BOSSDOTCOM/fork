@@ -1406,6 +1406,22 @@ on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
   (`~/fork-spsa/github/NAME/`) is written after the iteration's log line,
   so a stop at any point resumes. A rewind abandons a pending stage; stage
   indices, seeds and openings are never reused.
+- **Trigger (owner, 2026-11-08):** GitHub dispatches a workflow by hand
+  only once its file is on the default branch, so the driver starts each
+  run by a push to the trigger branch `spsa-run` (SPSA_TRIGGER=push, the
+  default; workflow_dispatch stays for after the tooling reaches main). Each
+  push is one fresh request commit: its tree is the tooling branch's tree
+  (a snapshot, not its history) plus `.github/spsa-request.json` (the
+  stage's plan, the same ten values as the dispatch inputs), its message
+  the run's title ("spsa NAME COMMIT stage D"), its parent the remote's
+  spsa-run tip, or origin/phase-4's tip (fetched at push time) for the
+  first push, so tune/spsa's history stays unpublished and every push is a
+  fast-forward; nothing is ever force-pushed and no other branch is pushed.
+  The push gate (`scripts/scan-push.sh`) passes every request commit before
+  its push. The run is the one whose head commit is that request commit and
+  whose title matches (the ledger's note names the push); the workflow
+  refuses a pushed request whose commit is titled for another stage. A stop
+  after the push resumes by adopting that push's run.
 - **Update rule** (B7 O2, in units of c): the gain sequences of Spall,
   "Implementation of the simultaneous perturbation algorithm for stochastic
   optimization", IEEE TAES 34(3):817-823, 1998, Sec. III-A Step 1:

@@ -1,6 +1,8 @@
 # One SPSA iteration on GitHub-hosted runners (DESIGN.md §5.2, "SPSA on GitHub"; owner, 2026-11-07,
-# DESIGN.md §6 decisions 4 and 5). Manual only, dispatched by tools/github/spsa_run.sh, one run per
-# iteration: the tuning build (FORK_TUNE) of one commit, built once and then restored from the Actions cache
+# DESIGN.md §6 decisions 4 and 5). Started by tools/github/spsa_run.sh, one run per iteration, either by a
+# push to the trigger branch spsa-run (owner, 2026-11-08: GitHub dispatches a workflow by hand only once its
+# file is on the default branch), whose commit carries the stage in .github/spsa-request.json and is titled
+# like a dispatched run, or by workflow_dispatch with the same ten inputs: the tuning build (FORK_TUNE) of one commit, built once and then restored from the Actions cache
 # by its SHA (only theta changes between iterations); up to 16 shards, each playing game pairs of the engine
 # against itself, every pair with its own perturbation theta +- c*signs (tools/github/spsa_shard.py); a
 # merge job whose summary shows the run's gradient. The driver recomputes everything from the shard files.
@@ -8,10 +10,13 @@
 # the tuning reserve of the shuffled book (lines 2,000,001 on), which no SPRT reaches. Inputs reach the
 # shell only through environment variables.
 name: spsa
-# The run's title names its inputs, so the driver finds the run it dispatched by them (as sprt.yml).
-run-name: spsa ${{ inputs.label }} ${{ inputs.commit }} stage ${{ inputs.stage }}
+# The run's title names its inputs, so the driver finds the run it started by them (as sprt.yml); a pushed
+# request's commit message is the same title, and the driver also matches the run's head commit.
+run-name: ${{ github.event_name == 'push' && github.event.head_commit.message || format('spsa {0} {1} stage {2}', inputs.label, inputs.commit, inputs.stage) }}
 
 on:
+  push:
+    branches: [spsa-run]
   workflow_dispatch:
     inputs:
       commit: {description: "The tuned commit (full 40-hex SHA)", required: true}
@@ -41,6 +46,15 @@ jobs:
     timeout-minutes: 30
     outputs:
       shards: ${{ steps.plan.outputs.shards }}
+      commit: ${{ steps.request.outputs.commit }}
+      label: ${{ steps.request.outputs.label }}
+      stage: ${{ steps.request.outputs.stage }}
+      params: ${{ steps.request.outputs.params }}
+      games: ${{ steps.request.outputs.games }}
+      tc: ${{ steps.request.outputs.tc }}
+      hash: ${{ steps.request.outputs.hash }}
+      openings: ${{ steps.request.outputs.openings }}
+      draw_pairs: ${{ steps.request.outputs.draw_pairs }}
     steps:
       - name: "Toolchain (Ubuntu 22.04, gcc 11.4, CMake 3.22, as TCEC)"
         run: |
@@ -48,9 +62,12 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y -q build-essential cmake git ca-certificates python3 zstd
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
-      - name: Plan (every input checked)
-        id: plan
+      # A push carries its stage in the request file, and its commit must be titled for that stage.
+      - name: The stage (the dispatch inputs, or the pushed request file)
+        id: request
         env:
+          EVENT: ${{ github.event_name }}
+          MESSAGE: ${{ github.event.head_commit.message }}
           COMMIT: ${{ inputs.commit }}
           LABEL: ${{ inputs.label }}
           STAGE: ${{ inputs.stage }}
@@ -61,6 +78,37 @@ jobs:
           HASH_MB: ${{ inputs.hash }}
           OPENINGS: ${{ inputs.openings }}
           DRAW_PAIRS: ${{ inputs.draw_pairs }}
+        run: |
+          if [ "$EVENT" = push ]; then
+            python3 -I - .github/spsa-request.json "$MESSAGE" >request.env <<'EOF'
+          import json, sys
+          r = json.load(open(sys.argv[1]))
+          keys = ('commit', 'label', 'stage', 'params', 'games', 'shards', 'tc', 'hash', 'openings', 'draw_pairs')
+          values = {k: str(r[k]) for k in keys}
+          assert not any('\n' in v or '\r' in v for v in values.values()), 'a request value spans lines'
+          title = f"spsa {values['label']} {values['commit']} stage {values['stage']}"
+          assert sys.argv[2].strip() == title, f'the pushed commit is titled {sys.argv[2]!r}, not {title!r}'
+          for k in keys:
+              print(f'{k}={values[k]}')
+          EOF
+          else
+            printf '%s\n' "commit=$COMMIT" "label=$LABEL" "stage=$STAGE" "params=$PARAMS" "games=$GAMES" \
+              "shards=$SHARDS" "tc=$TC" "hash=$HASH_MB" "openings=$OPENINGS" "draw_pairs=$DRAW_PAIRS" >request.env
+          fi
+          cat request.env >>"$GITHUB_OUTPUT"
+      - name: Plan (every input checked)
+        id: plan
+        env:
+          COMMIT: ${{ steps.request.outputs.commit }}
+          LABEL: ${{ steps.request.outputs.label }}
+          STAGE: ${{ steps.request.outputs.stage }}
+          PARAMS: ${{ steps.request.outputs.params }}
+          GAMES: ${{ steps.request.outputs.games }}
+          SHARDS: ${{ steps.request.outputs.shards }}
+          TC: ${{ steps.request.outputs.tc }}
+          HASH_MB: ${{ steps.request.outputs.hash }}
+          OPENINGS: ${{ steps.request.outputs.openings }}
+          DRAW_PAIRS: ${{ steps.request.outputs.draw_pairs }}
         run: |
           git config --global --add safe.directory "$PWD"
           case "$STAGE$GAMES$SHARDS$HASH_MB$OPENINGS$DRAW_PAIRS" in *[!0-9]*) echo "stage, games, shards, hash, openings and draw_pairs must be numbers"; exit 1 ;; esac
@@ -77,17 +125,17 @@ jobs:
         id: cache
         with:
           path: engine
-          key: spsa-engine-${{ inputs.commit }}-x86-64-v3-gcc
+          key: spsa-engine-${{ steps.request.outputs.commit }}-x86-64-v3-gcc
       # Pinned, never update.sh's default: hosted runners may lack AVX-512.
       - name: Tuning build (FORK_TUNE, CXX=g++, x86-64-v3), its checks
         if: steps.cache.outputs.cache-hit != 'true'
         env:
           FORK_ARCH: x86-64-v3
-          COMMIT: ${{ inputs.commit }}
+          COMMIT: ${{ steps.request.outputs.commit }}
         run: CXX=g++ bash tools/github/spsa_build.sh . "$COMMIT" engine
       - name: The tuned options exist, theta +- c inside each range
         env:
-          PARAMS: ${{ inputs.params }}
+          PARAMS: ${{ steps.request.outputs.params }}
         run: |
           printf 'uci\nquit\n' | engine/fork | tr -d '\r' >options.txt
           python3 -I - "$PARAMS" options.txt <<'EOF'
@@ -146,15 +194,15 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
           SHARDS: ${{ strategy.job-total }}
-          COMMIT: ${{ inputs.commit }}
-          LABEL: ${{ inputs.label }}
-          STAGE: ${{ inputs.stage }}
-          PARAMS: ${{ inputs.params }}
-          GAMES: ${{ inputs.games }}
-          TC: ${{ inputs.tc }}
-          HASH_MB: ${{ inputs.hash }}
-          OPENINGS: ${{ inputs.openings }}
-          DRAW_PAIRS: ${{ inputs.draw_pairs }}
+          COMMIT: ${{ needs.build.outputs.commit }}
+          LABEL: ${{ needs.build.outputs.label }}
+          STAGE: ${{ needs.build.outputs.stage }}
+          PARAMS: ${{ needs.build.outputs.params }}
+          GAMES: ${{ needs.build.outputs.games }}
+          TC: ${{ needs.build.outputs.tc }}
+          HASH_MB: ${{ needs.build.outputs.hash }}
+          OPENINGS: ${{ needs.build.outputs.openings }}
+          DRAW_PAIRS: ${{ needs.build.outputs.draw_pairs }}
         run: |
           chmod +x engine/fork
           python3 -I tools/github/spsa_shard.py --engine engine/fork --fastchess "$RUNNER_TEMP/tools/fastchess" \
@@ -164,7 +212,7 @@ jobs:
             --out out --meta runner=github --meta "arch=$(sed -n 's/^arch=//p' engine/meta.env)"
       - uses: actions/upload-artifact@v4
         if: always()
-        with: {name: "spsa-${{ inputs.stage }}-${{ matrix.shard }}", path: out, retention-days: 30}
+        with: {name: "spsa-${{ needs.build.outputs.stage }}-${{ matrix.shard }}", path: out, retention-days: 30}
 
   merge:
     needs: [build, shard]
@@ -173,13 +221,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: {pattern: "spsa-${{ inputs.stage }}-*", path: shards}
+        with: {pattern: "spsa-${{ needs.build.outputs.stage }}-*", path: shards}
       - name: The iteration's gradient (for reading; the driver recomputes it)
         env:
-          LABEL: ${{ inputs.label }}
-          STAGE: ${{ inputs.stage }}
+          LABEL: ${{ needs.build.outputs.label }}
+          STAGE: ${{ needs.build.outputs.stage }}
         run: |
           python3 -I tools/github/spsa.py merge shards/*/result.json --json merged.json | tee summary.txt
           { echo "### SPSA $LABEL stage $STAGE"; echo; echo '```'; cat summary.txt; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
-        with: {name: "spsa-merged-${{ inputs.stage }}", path: "merged.json", retention-days: 90}
+        with: {name: "spsa-merged-${{ needs.build.outputs.stage }}", path: "merged.json", retention-days: 90}

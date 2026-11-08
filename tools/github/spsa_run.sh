@@ -15,6 +15,15 @@
 # and the ledger) adopts the one run titled for it that the ledger does not know, or dispatches it if
 # there is none.
 #
+# Two triggers (SPSA_TRIGGER): push (the default; owner, 2026-11-08: GitHub dispatches a workflow by hand
+# only once its file is on the default branch) pushes a request commit to the trigger branch spsa-run of
+# SPSA_PUSH_REMOTE (push_request below: the tooling branch's tree plus .github/spsa-request.json, on the
+# branch's previous tip, or on the remote's phase-4 tip for the first push; a fast-forward, never forced, and
+# only after scripts/scan-push.sh, the push gate, passes it), and the run is the one whose head commit is
+# that request commit and whose title matches; dispatch uses workflow_dispatch with the same inputs. A
+# restart with a recorded push (push_sha) and no recorded run adopts that commit's run, or pushes the same
+# commit again.
+#
 # Rules, as tools/github/sprt_run.sh's (2026-11-02 and 2026-11-05):
 # - it runs only under the job supervisor (tools/jobs/jobctl.py start github NAME -- ...), type github, so
 #   never beside an SPRT driver; started any other way it refuses;
@@ -33,10 +42,15 @@
 # is applied: the dry run is SPSA_STOP_AFTER=0), REF (the branch whose spsa.yml runs; default the current
 # branch), REPO (owner/name; default origin's), GH (the gh command; default gh), PYTHON (default the
 # repository's .venv, else python3), POLL (seconds between status checks, default 120), FORK_JOBS (the
-# supervisor's and the ledger's folder, default ~/fork-jobs), SPSA_UNSUPERVISED=1 (tests only).
+# supervisor's and the ledger's folder, default ~/fork-jobs), SPSA_TRIGGER (push or dispatch, default push),
+# SPSA_PUSH_REMOTE (the remote spsa-run is pushed to, default origin; REF is the tooling whose tree a request
+# commit carries), SPSA_UNSUPERVISED=1 (tests only; it then refuses to push to origin).
 #
 # Exit status: 0 finished (or stopped after SPSA_STOP_AFTER), 1 stopped by a rule above or an error.
 set -uo pipefail
+# Exported by git hooks and rebase --exec: they would point every git command (and the push) at another
+# repository than this clone.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here/../.."
 if [ $# -ne 1 ]; then
@@ -70,17 +84,49 @@ REF=${REF:-$(git rev-parse --abbrev-ref HEAD)}
 REPO=${REPO:-$(git remote get-url origin | sed -E 's#^(https://github\.com/|git@github\.com:)##; s#\.git$##')}
 "$GH" api "repos/$REPO/commits/$commit" --jq .sha >/dev/null 2>&1 || stop "commit $commit is not on GitHub ($REPO)"
 
+trigger=${SPSA_TRIGGER:-push}
+remote=${SPSA_PUSH_REMOTE:-origin}
+case $trigger in push | dispatch) ;; *) stop "SPSA_TRIGGER must be push or dispatch, not '$trigger'" ;; esac
+[ "$trigger" != push ] || [ "${SPSA_UNSUPERVISED:-}" != 1 ] || [ "$remote" != origin ] ||
+  stop "test mode (SPSA_UNSUPERVISED=1) never pushes to origin: set SPSA_PUSH_REMOTE"
+
 # Prints the number of runs not completed; anything but "0" (gh failing included) counts as busy.
 busy() { "$GH" run list -R "$REPO" -L 50 --json status --jq '[.[] | select(.status != "completed")] | length' 2>/dev/null; }
-# The newest spsa runs, "ID TITLE" per line.
-runs() { "$GH" run list -R "$REPO" -w spsa.yml -L 30 --json databaseId,displayTitle \
-  --jq '.[] | "\(.databaseId) \(.displayTitle)"' 2>/dev/null | tr -d '\r'; }
-# The runs titled $1, newer than $2, that the ledger does not know.
-titled() { runs | while read -r rid rtitle; do
-  [ "$rid" -gt "$2" ] && [ "$rtitle" = "$1" ] && ! ledger known "$rid" && echo "$rid"
+# The newest spsa runs, "ID HEAD_SHA TITLE" per line.
+runs() { "$GH" run list -R "$REPO" -w spsa.yml -L 30 --json databaseId,headSha,displayTitle \
+  --jq '.[] | "\(.databaseId) \(.headSha) \(.displayTitle)"' 2>/dev/null | tr -d '\r'; }
+# The runs titled $1, newer than $2 (and whose head commit is $3, if given) that the ledger does not know.
+titled() { runs | while read -r rid rsha rtitle; do
+  [ "$rid" -gt "$2" ] && [ "$rtitle" = "$1" ] && { [ -z "${3:-}" ] || [ "$rsha" = "$3" ]; } &&
+    ! ledger known "$rid" && echo "$rid"
 done; }
+# The request commit of a stage (the push trigger): the tooling branch's tree ($REF; a snapshot, not its
+# history) plus .github/spsa-request.json (the stage's dispatch.json), titled like a dispatched run, on the
+# remote's spsa-run tip, or on its phase-4 tip for the first push, so every push is a fast-forward. Built
+# with git's plumbing in a temporary index (the working tree and the real index are not touched); recorded
+# in the stage's push_sha before it is pushed.
+push_request() {  # stage folder, title -> prints the commit
+  local folder=$1 title=$2 parent tmpd tree blob sha rc
+  if git ls-remote --exit-code "$remote" refs/heads/spsa-run >/dev/null 2>&1; then
+    git fetch -q "$remote" refs/heads/spsa-run || return 1
+  else
+    git fetch -q "$remote" refs/heads/phase-4 || return 1
+  fi
+  parent=$(git rev-parse --verify FETCH_HEAD) || return 1
+  tmpd=$(mktemp -d)
+  GIT_INDEX_FILE=$tmpd/index git read-tree "$REF^{tree}" &&
+    blob=$(git hash-object -w "$folder/dispatch.json") &&
+    GIT_INDEX_FILE=$tmpd/index git update-index --add --cacheinfo "100644,$blob,.github/spsa-request.json" &&
+    tree=$(GIT_INDEX_FILE=$tmpd/index git write-tree)
+  rc=$?
+  rm -rf "$tmpd"
+  [ "$rc" = 0 ] || return 1
+  sha=$(git commit-tree "$tree" -p "$parent" -m "$title") || return 1
+  echo "$sha" >"$folder/push_sha"
+  echo "$sha"
+}
 
-say "commit $commit, ref $REF"
+say "commit $commit, ref $REF, trigger $trigger"
 while :; do
   if [ "$(field "$data/state.json" done)" = True ]; then
     say "finished"
@@ -97,6 +143,39 @@ while :; do
     ledger check "$name" "$stage" "$id" "$commit" "$commit" ||
       stop "stage $stage: run $id is not in the ledger as this SPSA's stage $stage"
     say "iteration $iteration, stage $stage: waiting for run $id (in the ledger)"
+  elif [ "$trigger" = push ]; then
+    sha=$(cat "$folder/push_sha" 2>/dev/null | tr -d '\r')
+    mine=
+    [ -n "$sha" ] && mine=$(titled "$title" 0 "$sha")
+    if [ -n "$mine" ]; then
+      [ "$(echo "$mine" | wc -l)" -eq 1 ] || stop "stage $stage: more than one unrecorded run of push $sha: $(echo $mine)"
+      id=$mine
+      ledger add "$name" "$stage" "$id" --base "$commit" --test "$commit" --source import \
+        --note "spsa iteration $iteration params sha256 $sum push $sha; adopted by its head commit after a restart" ||
+        stop "stage $stage: run $id: ledger refused it"
+      say "iteration $iteration, stage $stage: run $id of push $sha adopted (ledger, import)"
+    else
+      while [ "$(busy)" != 0 ]; do sleep "$POLL"; done
+      if [ -z "$sha" ]; then
+        sha=$(push_request "$folder" "$title") || stop "stage $stage: the request commit could not be built"
+      fi
+      bash scripts/scan-push.sh "$sha" >>"$data/driver.log" 2>&1 ||
+        stop "stage $stage: the push gate (scripts/scan-push.sh) blocks $sha"
+      git push -q "$remote" "$sha:refs/heads/spsa-run" >>"$data/driver.log" 2>&1 ||
+        stop "stage $stage: pushing $sha to $remote's spsa-run failed (never forced)"
+      for _ in $(seq 30); do
+        sleep $((POLL < 10 ? POLL : 10))
+        mine=$(titled "$title" 0 "$sha")
+        [ -n "$mine" ] && break
+      done
+      [ -n "$mine" ] || stop "stage $stage: no run of push $sha titled '$title'"
+      [ "$(echo "$mine" | wc -l)" -eq 1 ] || stop "stage $stage: more than one run of push $sha: $(echo $mine)"
+      id=$mine
+      ledger add "$name" "$stage" "$id" --base "$commit" --test "$commit" \
+        --note "spsa iteration $iteration params sha256 $sum push $sha" || stop "stage $stage: run $id: ledger refused it"
+      say "iteration $iteration, stage $stage: run $id of push $sha (ledger)"
+    fi
+    echo "$id" >"$folder/run_id"
   else
     mine=$(titled "$title" 0)
     if [ -n "$mine" ]; then

@@ -10,10 +10,19 @@
 # index; results naming another commit, or with a tampered draw, stop it with nothing applied; a commit
 # not on GitHub stops it before any dispatch; outside the supervisor it refuses; SPSA_STOP_AFTER then a
 # restart ends exactly as an uninterrupted run; a stage dispatched but not recorded (a stop between the
-# dispatch and the ledger) is adopted by its title, not dispatched again. Uses python (or $PYTHON).
+# dispatch and the ledger) is adopted by its title, not dispatched again. The push trigger (SPSA_TRIGGER
+# push) against a bare remote whose post-receive hook registers a run per push of spsa-run: the first push
+# sits on the remote's phase-4 tip and carries the tooling's tree (not its history) plus the request file,
+# the next fast-forwards; each run is attributed by its head commit past a same-titled intruder; a stop
+# after a push is resumed by adopting that push's run; the push gate blocks a hit; test mode never pushes to
+# origin; failed runs and refused results stop it; the pushed SPSA ends as the dispatched one. The tooling
+# runs from a throwaway repository in a temporary folder, so every commit and push stays there. Uses python
+# (or $PYTHON).
 #
 #   bash tools/github/test_spsa_run.sh
 set -uo pipefail
+# A git hook or a rebase --exec exports these; they would point the git commands below at another repository.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
 here=$(cd "$(dirname "$0")" && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -31,13 +40,27 @@ if [ -z "$py" ]; then
 fi
 [ -n "$py" ] || { echo "test_spsa_run.sh: no python found" >&2; exit 1; }
 export PYTHON=$py
-sha=$(git -C "$here" rev-parse HEAD)
+g() { git -c core.autocrlf=false -c init.defaultBranch=main "$@"; }
+# The tooling under test, committed in a throwaway repository: its commit is also the tuned commit.
+repo=$tmp/repo
+mkdir -p "$repo/tools/github" "$repo/tools/jobs" "$repo/scripts" "$repo/src/tune"
+cp "$here/spsa.py" "$here/spsa_run.sh" "$here/fake_spsa_shard.py" "$repo/tools/github/"
+cp "$here/../jobs/ledger.py" "$repo/tools/jobs/"
+cp "$here/../../scripts/scan-push.sh" "$repo/scripts/"
+cp "$here/../../src/tune/params.hpp" "$repo/src/tune/"
+g init -q "$repo"
+g -C "$repo" config user.name test
+g -C "$repo" config user.email test@example.invalid
+g -C "$repo" add -A && g -C "$repo" commit -q -m tooling
+sha=$(g -C "$repo" rev-parse HEAD)
+tools=$repo/tools/github
 
 cat >"$tmp/gh" <<'EOF'
 #!/usr/bin/env bash
 # The fake gh. State in $FAKE_GH: busy (runs still to report busy), latest (the newest run id), titles
-# (each run's "ID TITLE", newest first), intruder (if present, another run is dispatched right after each
-# of ours), commits (shas on GitHub), run.<id>.json (its inputs), fail.<id>, foreign.<id>, tamper.<id>,
+# (each run's "ID HEAD_SHA TITLE", newest first; pushes add theirs through the remote's post-receive hook),
+# stall (list no runs for that many more calls), intruder (if present, another run is started right after
+# each of ours), commits (shas on GitHub), run.<id>.json (its inputs), fail.<id>, foreign.<id>, tamper.<id>,
 # landscape.json (the synthetic optimum).
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
@@ -46,12 +69,14 @@ case "$1 $2" in
     grep -qx "${2##*/}" "$st/commits" ;;
   "run list")
     if [[ "$*" == *displayTitle* ]]; then
-      cat "$st/titles" 2>/dev/null
+      n=$(cat "$st/stall" 2>/dev/null || echo 0)
+      if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$st/stall"; else cat "$st/titles" 2>/dev/null; fi
     else
       n=$(cat "$st/busy")
       if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$st/busy"; echo 1; else echo 0; fi
     fi ;;
   "workflow run")
+    ref_sha=0000000000000000000000000000000000000000  # a dispatched run's head commit: the --ref branch's tip
     id=$(($(cat "$st/latest") + 1))
     echo "$id busy=$(cat "$st/busy") $*" >>"$st/dispatches"
     shift 2
@@ -60,11 +85,11 @@ case "$1 $2" in
     "$PYTHON" -I -c 'import json, sys; print(json.dumps(dict(a.split("=", 1) for a in sys.argv[2:])))' x "${args[@]}" \
       >"$st/run.$id.json"
     title=$("$PYTHON" -I -c 'import json, sys; d = json.load(open(sys.argv[1])); print("spsa", d["label"], d["commit"], "stage", d["stage"])' "$st/run.$id.json" | tr -d '\r')
-    { echo "$id $title"; cat "$st/titles" 2>/dev/null; } >"$st/titles.new"
+    { echo "$id $ref_sha $title"; cat "$st/titles" 2>/dev/null; } >"$st/titles.new"
     mv "$st/titles.new" "$st/titles"
     if [ -f "$st/intruder" ]; then  # someone else's run, newer than ours
       id=$((id + 1))
-      { echo "$id spsa spsa-other $title"; cat "$st/titles"; } >"$st/titles.new"
+      { echo "$id $ref_sha spsa spsa-other $title"; cat "$st/titles"; } >"$st/titles.new"
       mv "$st/titles.new" "$st/titles"
     fi
     echo $id >"$st/latest" ;;
@@ -116,15 +141,50 @@ setup() {  # label busy
   echo "$sha" >"$st/commits"
   cp "$tmp/landscape.json" "$st/"
   : >"$st/dispatches"
-  SPSA_DATA=$st/data "$py" -I "$here/spsa.py" init spsa-t --spec "$tmp/spec.json" --commit "$sha" >"$st/init" 2>&1
+  SPSA_DATA=$st/data "$py" -I "$tools/spsa.py" init spsa-t --spec "$tmp/spec.json" --commit "$sha" >"$st/init" 2>&1
 }
-drive() {  # label [env assignments...]
-  local label=$1
+drive() {  # label [env assignments...]; the dispatch trigger unless SPSA_TRIGGER=push is given
+  local label=$1 remote=()
   shift
-  env FAKE_GH="$tmp/$label" FAKE_SHARD="$here/fake_spsa_shard.py" GH="$tmp/gh" POLL=0 REPO=owner/fork REF=test \
-    SPSA_DATA="$tmp/$label/data" FORK_JOBS="$tmp/$label/jobs" SPSA_UNSUPERVISED="${UNSUPERVISED-1}" "$@" \
-    bash "$here/spsa_run.sh" spsa-t >"$tmp/$label/out" 2>&1
+  [ -d "$tmp/$label/remote.git" ] && remote=(SPSA_PUSH_REMOTE="$tmp/$label/remote.git")
+  env FAKE_GH="$tmp/$label" FAKE_SHARD="$tools/fake_spsa_shard.py" GH="$tmp/gh" POLL=0 REPO=owner/fork REF="$sha" \
+    SPSA_DATA="$tmp/$label/data" FORK_JOBS="$tmp/$label/jobs" SPSA_UNSUPERVISED="${UNSUPERVISED-1}" \
+    SPSA_TRIGGER=dispatch "${remote[@]}" "$@" bash "$tools/spsa_run.sh" spsa-t >"$tmp/$label/out" 2>&1
   echo $? >"$tmp/$label/rc"
+}
+# A bare remote for the push trigger: phase-4 holds one commit (an empty tree), and its post-receive hook
+# registers a run for each push of spsa-run: the pushed commit's message as the title, the commit as the
+# head, its request file as the inputs (and, with "intruder", a newer run of the same title and another head).
+setup_remote() {  # label
+  local st=$tmp/$1 base
+  g init -q --bare "$st/remote.git"
+  base=$(g -C "$repo" commit-tree "$(g -C "$repo" mktree </dev/null)" -m base)
+  g -C "$repo" push -q "$st/remote.git" "$base:refs/heads/phase-4"
+  echo "$base" >"$st/base"
+  cat >"$st/remote.git/hooks/post-receive" <<'EOF'
+#!/usr/bin/env bash
+st=$FAKE_GH
+while read -r old new ref; do
+  [ "$ref" = refs/heads/spsa-run ] || continue
+  id=$(($(cat "$st/latest") + 1))
+  echo "$id busy=$(cat "$st/busy") push $new" >>"$st/dispatches"
+  git show "$new:.github/spsa-request.json" >"$st/run.$id.json"
+  title=$(git log -1 --format=%s "$new")
+  { echo "$id $new $title"; cat "$st/titles" 2>/dev/null; } >"$st/titles.new"
+  mv "$st/titles.new" "$st/titles"
+  if [ -f "$st/intruder" ]; then
+    id=$((id + 1))
+    { echo "$id 1111111111111111111111111111111111111111 $title"; cat "$st/titles"; } >"$st/titles.new"
+    mv "$st/titles.new" "$st/titles"
+  fi
+  echo "$id" >"$st/latest"
+  git rev-parse "$new^" >>"$st/parents"
+done
+EOF
+  chmod +x "$st/remote.git/hooks/post-receive"
+}
+pushed() {  # label -> the remote's spsa-run tip, or nothing
+  g -C "$tmp/$1/remote.git" rev-parse -q --verify refs/heads/spsa-run 2>/dev/null
 }
 rc() { cat "$tmp/$1/rc"; }
 dispatches() { wc -l <"$tmp/$1/dispatches" | tr -d ' '; }
@@ -134,7 +194,7 @@ state() {  # label, python expression on the state s
 ledger() {  # label args...
   local label=$1
   shift
-  FORK_JOBS=$tmp/$label/jobs "$py" -I "$here/../jobs/ledger.py" "$@" | tr -d '\r'
+  FORK_JOBS=$tmp/$label/jobs "$py" -I "$repo/tools/jobs/ledger.py" "$@" | tr -d '\r'
 }
 
 # 1-7: a whole SPSA, after waiting for the busy runs.
@@ -163,7 +223,7 @@ check "a failed run exits 1, after one applied iteration" [ "$(rc failed)-$(stat
 check "the failure is named, with the rewind" grep -q "run 502 ended 'failure' (spsa.py rewind spsa-t --to 0" "$tmp/failed/out"
 drive failed
 check "restarted without a rewind it stops again, dispatching nothing" [ "$(rc failed)-$(dispatches failed)" = "1-2" ]
-SPSA_DATA=$tmp/failed/data "$py" -I "$here/spsa.py" rewind spsa-t --to 0 >/dev/null
+SPSA_DATA=$tmp/failed/data "$py" -I "$tools/spsa.py" rewind spsa-t --to 0 >/dev/null
 drive failed SPSA_STOP_AFTER=1
 check "after the rewind, iteration 1 is played as stage 2" [ "$(rc failed)-$(state failed "s['iteration'], s['burned']")" = "0-2 [1]" ]
 check "stage 2 dispatched with iteration 1's theta" bash -c "grep -q 'stage=2' '$tmp/failed/dispatches'"
@@ -197,12 +257,77 @@ check "the restart finishes with the uninterrupted run's state" cmp -s "$tmp/res
 
 # 22-23: stopped between the dispatch and the ledger: the run is adopted by its title, not dispatched again.
 setup adopt 0
-SPSA_DATA=$tmp/adopt/data "$py" -I "$here/spsa.py" dispatch spsa-t >"$tmp/adopt/plan"
+SPSA_DATA=$tmp/adopt/data "$py" -I "$tools/spsa.py" dispatch spsa-t >"$tmp/adopt/plan"
 FAKE_GH=$tmp/adopt PYTHON=$py "$tmp/gh" workflow run spsa.yml -R owner/fork --ref test \
   $(sed -n 's/^\(commit\|label\|stage\|params\|games\|shards\|tc\|hash\|openings\|draw_pairs\)=\(.*\)$/-f \1=\2/p' "$tmp/adopt/plan" | tr -d '\r')
 drive adopt SPSA_STOP_AFTER=0
 check "the planned stage's run is adopted (one dispatch in all)" [ "$(rc adopt)-$(dispatches adopt)-$(state adopt "s['iteration']")" = "0-1-1" ]
 check "the ledger records it as an import" grep -q '"source": "import"' "$tmp/adopt/jobs/ledger.jsonl"
+
+# 24-32: the push trigger. The first push (no spsa-run on the remote yet) sits on the remote's phase-4 tip,
+# the next fast-forwards; each carries the tooling's tree, not its history, plus the request file.
+setup push 0
+setup_remote push
+drive push SPSA_TRIGGER=push SPSA_STOP_AFTER=1
+check "push: two iterations, exit 0" [ "$(rc push)-$(state push "s['iteration']")" = "0-2" ]
+check "push: two pushes, no workflow dispatch" bash -c "[ \"\$(grep -c ' push ' '$tmp/push/dispatches')\" = 2 ] && ! grep -q 'workflow run' '$tmp/push/calls'"
+first=$(cat "$tmp/push/data/spsa-t/i0/push_sha" 2>/dev/null) second=$(cat "$tmp/push/data/spsa-t/i1/push_sha" 2>/dev/null)
+check "push: the first request commit's parent is the remote's phase-4 tip, the second's the first" \
+  [ "$(tr '\n' ' ' <"$tmp/push/parents")" = "$(cat "$tmp/push/base") $first " ]
+check "push: spsa-run's tip is stage 1's request commit, titled as a dispatched run" \
+  [ "$(pushed push)-$(g -C "$tmp/push/remote.git" log -1 --format=%s spsa-run)" = "$second-spsa spsa-t $sha stage 1" ]
+check "push: the request file is the stage's plan" bash -c "g() { git -C '$tmp/push/remote.git' \"\$@\"; }
+  g show spsa-run:.github/spsa-request.json | tr -d '\r' | grep -q '\"stage\": 1' &&
+  g show spsa-run:tools/github/spsa.py | cmp -s - '$tools/spsa.py'"
+check "push: the tooling's history is not pushed (its commit is absent from the remote)" \
+  bash -c "! git -C '$tmp/push/remote.git' cat-file -e '$sha^{commit}' 2>/dev/null"
+check "push: the ledger notes each run's push" bash -c "grep -q 'push $first\"' '$tmp/push/jobs/ledger.jsonl' && grep -q 'push $second\"' '$tmp/push/jobs/ledger.jsonl'"
+drive push SPSA_TRIGGER=push
+check "push: the pushed SPSA ends exactly as the dispatched one (test 1)" cmp -s "$tmp/push/data/spsa-t/state.json" "$tmp/full/data/spsa-t/state.json"
+check "push: six pushes in all, one linear history on spsa-run" \
+  [ "$(g -C "$tmp/push/remote.git" rev-list --count spsa-run)-$(grep -c ' push ' "$tmp/push/dispatches")" = "7-6" ]
+
+# 33-34: a newer run with the same title but another head commit: the driver takes the run of its push.
+setup pintruder 0
+setup_remote pintruder
+touch "$tmp/pintruder/intruder"
+drive pintruder SPSA_TRIGGER=push SPSA_STOP_AFTER=0
+check "push: with a same-titled intruder, the iteration completes" [ "$(rc pintruder)-$(state pintruder "s['iteration']")" = "0-1" ]
+check "push: it took the run of its push, 501, not the newer 502" [ "$(ledger pintruder runs spsa-t | awk '{print $1, $2}')" = "0 501" ]
+
+# 35-37: stopped after the push, before its run was seen: the restart adopts that push's run, pushing nothing.
+setup padopt 0
+setup_remote padopt
+echo 100 >"$tmp/padopt/stall"
+drive padopt SPSA_TRIGGER=push SPSA_STOP_AFTER=0
+check "push: no run seen after the push: exit 1, the push recorded" bash -c "[ '$(rc padopt)' = 1 ] && [ -s '$tmp/padopt/data/spsa-t/i0/push_sha' ]"
+rm -f "$tmp/padopt/stall"
+drive padopt SPSA_TRIGGER=push SPSA_STOP_AFTER=0
+check "push: the restart adopts the push's run (one push in all)" [ "$(rc padopt)-$(dispatches padopt)-$(state padopt "s['iteration']")" = "0-1-1" ]
+check "push: the ledger records it as an import, with its push" grep -q '"source": "import".*push [0-9a-f]\{40\}\|push [0-9a-f]\{40\}.*"source": "import"' "$tmp/padopt/jobs/ledger.jsonl"
+
+# 38-40: the push gate blocks a hit (a private pattern matching the request) before anything is pushed;
+# test mode never pushes to origin.
+setup pgate 0
+setup_remote pgate
+echo 'RfpMargin=' >"$tmp/pgate/patterns"
+drive pgate SPSA_TRIGGER=push FORK_SCAN_PATTERNS="$tmp/pgate/patterns"
+check "push: the push gate blocks a hit, nothing pushed" bash -c "[ '$(rc pgate)' = 1 ] && grep -q 'push gate' '$tmp/pgate/out' && [ -z '$(pushed pgate)' ]"
+setup porigin 0
+drive porigin SPSA_TRIGGER=push
+check "push: test mode refuses to push to origin" bash -c "[ '$(rc porigin)-$(dispatches porigin)' = 1-0 ] && grep -q 'never pushes to origin' '$tmp/porigin/out'"
+
+# 41-42: in push mode too, a failed run stops it, and refused results apply nothing.
+setup pfail 0
+setup_remote pfail
+touch "$tmp/pfail/fail.501"
+drive pfail SPSA_TRIGGER=push
+check "push: a failed run exits 1, naming the rewind" bash -c "[ '$(rc pfail)' = 1 ] && grep -q \"run 501 ended 'failure'\" '$tmp/pfail/out'"
+setup pforeign 0
+setup_remote pforeign
+touch "$tmp/pforeign/foreign.501"
+drive pforeign SPSA_TRIGGER=push
+check "push: another commit's results exit 1, nothing applied" [ "$(rc pforeign)-$(state pforeign "s['iteration']")" = "1-0" ]
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"

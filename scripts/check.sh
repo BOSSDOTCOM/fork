@@ -225,7 +225,7 @@ tool_tests() {  # python | all
     PYTHON=$py bash "tools/cloud/$t.sh" >>"$log" 2>&1 || fail "tool tests: tools/cloud/$t.sh"
   done
   # The GitHub SPSA shard with a fake fastchess (the options each side gets per draw, the failure states),
-  # and the SPSA driver against a fake gh (its dispatch, attribution, refusal and resume rules; about 90 s).
+  # and the SPSA driver against a fake gh and a local push remote (both triggers; about 2 min).
   PYTHON=$py bash tools/github/test_spsa_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_spsa_shard.sh"
   PYTHON=$py bash tools/github/test_spsa_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_spsa_run.sh"
 }
