@@ -4062,7 +4062,9 @@ leaves the search exactly S512ppr3's while paying the whole per-call cost:
 - **Vector paths:** the pack, the entry layer, and the middle layer with the
   heads each have an AVX2 path beside its scalar reference (§7), equal bit
   for bit on random and edge inputs (tests/test_refiner.cpp); AVX-512
-  builds use the AVX2 paths, and a VNNI path waits for TCEC's answer.
+  builds use the AVX2 paths. TCEC's hardware supports AVX-512 VNNI (owner,
+  2026-11-08), so a VNNI entry layer may ship in the TCEC build; the AVX2
+  path is still judged first, for the GitHub SPRTs.
 - **The zero refiner** tests/nnue/refiner-zero.frnet (tools/nnue/refiner.py
   zero): every weight zero, S512ppr3's scale and checksum, the cap at
   EvalLimit, so bench equality shows a zero output, not a zero cap. Its

@@ -161,8 +161,11 @@ shape, (i) a dense-weight bound of [-32, 32] (two 8-bit multiply-add
 results then sum exactly in int16 before one widening, halving those
 widenings) and (ii) an AVX-512 VNNI entry layer; measure both in a second
 quiet window, judging the AVX2 path first (GitHub's SPRT shards run
-x86-64-v3, so the AVX2 cost is what the SPRT charges; VNNI matters for TCEC
-only once TCEC confirms VNNI support). The offline acceptance must show the
+x86-64-v3, so the AVX2 cost is what the SPRT charges). **TCEC's hardware
+supports AVX-512 VNNI** (the owner, 2026-11-08; DESIGN.md §6, KB
+competition.md question 8): the VNNI path can ship in the TCEC build, with
+its scalar reference and an exactness test; the AVX2 path is still judged
+first, for the GitHub SPRTs. The offline acceptance must show the
 [-32, 32] clip costs no judgement: refiners trained at +-64 and at +-32
 compared on the held-out near-window set (explained variance, flip accuracy
 at crucial sites, and A3, beating a constant shift). The refiner lanes stay
@@ -426,9 +429,9 @@ of S512ppr3's clipped values are zero at the gated sites: measurement M3).
   leave int32, as `sums_in_range` does for the base.
 - SIMD: a scalar reference always compiled; AVX2 and AVX-512BW paths
   bit-identical to it, with equivalence tests on randomized and edge inputs
-  (.claude/rules/simd.md); a VNNI path only behind `FORK_VNNI`, since VNNI
-  stays out of the TCEC build until TCEC answers (DESIGN.md §6 2026-11-07,
-  decision 9).
+  (.claude/rules/simd.md); a VNNI path behind `FORK_VNNI` (amended,
+  2026-11-08: TCEC's hardware supports AVX-512 VNNI, so the path can ship
+  in the TCEC build; the AVX2 path is still what the GitHub SPRTs charge).
 
 ### 2.6 The gate
 
