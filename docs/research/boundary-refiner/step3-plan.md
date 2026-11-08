@@ -395,14 +395,40 @@ the job i59s3-window, results in ~/fork-measure/i59s3):**
 - **The training's quiescence h: 17 cp** (n_eff 0.500 n with the main
   search at 25 cp; the rule declared before the selection). Validation and
   test would give 15 and 14.
-- **Open item for the owner: the training split's stratum mix.** 52.3% of
-  its sites are quiescence sites against about 39% in the pilot, in
-  validation and in test: training sampled every 6,400th main-search and
+- **The training split's stratum mix** (the open item, closed below).
+  52.3% of its sites are quiescence sites against about 39% in the pilot,
+  in validation and in test: training sampled every 6,400th main-search and
   every 7,700th quiescence site, 7.0 and 11.7 times as densely as the
-  pilot's 45,000 / 90,000, so its ratio of quiescence to main-search
-  sites is 1.10 against 0.62-0.64 in validation and test (1.7 times). Nothing is trained before the
-  owner decides (for example: per-stratum sample weights that restore the
-  validation mix, or subsampling, or leaving it).
+  pilot's 45,000 / 90,000, so its ratio of quiescence to main-search sites
+  is 1.10 against 0.62-0.64 in validation and test (1.7 times).
+- **The training mix (owner decision, 2026-11-08; closes the open item).**
+  The loss weights main-search and quiescence sites to the refiner's real
+  call mix at gate (a), not to the validation and test mix: **44.1% main
+  search, 55.9% quiescence**, from the oracle's in-game call rates at (a),
+  1.68% and 2.13% of nodes (1.68 / 3.81 and 2.13 / 3.81; section 1.1's row
+  "Oracle in-game call rates, 800k nodes, (a)"). The same weights apply to
+  the validation and test metrics of the offline acceptance checks (3.8),
+  the constant-shift baseline (A3) included. h stays 25 cp at main-search
+  sites and 17 cp at quiescence sites. **The normalisation, as the
+  orchestrator reads "match the call mix" (recorded as that reading):**
+  after the closeness kernel `exp(-g^2 / (2 h^2))`, each stratum gets one
+  factor so that its total weight (kernel x factor) is in the ratio 1.68 :
+  2.13 in every split, the weights then averaging 1. On the labelled sites
+  each split uses (mate-flagged labels and the table band, |label| >=
+  29,250, left out as 3.3 says):
+
+| Split | Sites used (left out) | Main / quiescence | Kernel's main share | Factor, main / quiescence | n_eff, kernel only | n_eff, with the factors |
+|---|---|---|---|---|---|---|
+| Training | 937,645 (62,355) | 47.5% / 52.5% | 0.577 | 2.089 / 3.609 | 0.501 n | **0.468 n** |
+| Validation (the pilot's 3,000 and the 7,000) | 9,180 (820) | 61.4% / 38.6% | 0.707 | 1.623 / 4.972 | 0.526 n | **0.392 n** |
+| Test | 9,187 (813) | 60.9% / 39.1% | 0.704 | 1.587 / 4.790 | 0.535 n | **0.403 n** |
+
+  The factors make each split's main-search share of the total weight
+  0.4409 (checked). **With the factors, training's n_eff (0.468 n) falls
+  below idea 48's 0.5 n line (A8, 3.8)**; it was 0.501 n with the kernel
+  alone. h stays as decided; whether A8 judges the kernel's n_eff or the
+  final one is open for the owner. Validation's and test's n_eff fall
+  further (0.39-0.40 n), their mix being about 61 / 39.
 - **Labels (Syzygy 3-4-5; the pinned engine, SHA-256 17ab2b41...0b34,
   bench 14,149,617 / 1cb0717f040c294d as referenced before the first label
   and after the last).** Nodes per second are nominal (sites x the node
@@ -1014,7 +1040,11 @@ reported beside it and selects nothing.
   smallest value that meets it. **Offline check:** two arms at equal data,
   weighted (declared, the owner's request) and plain; the weighted arm stays
   unless the plain one's validation net flips at the gate (3.8) are higher
-  by more than the seed spread; n_eff reported.
+  by more than the seed spread; n_eff reported. **Amended (owner,
+  2026-11-08):** h = 25 cp at main-search sites and 17 cp at quiescence
+  sites (the smallest whole h giving n_eff >= 0.5 n on the training split),
+  and each stratum's total weight scaled to the refiner's call mix at gate
+  (a), 44.1 : 55.9 (the labelling section, "The training mix").
 - **Confidence (owner addition 3):** the second head predicts `e_i = |sigmoid(
   (b_i + delta_i) / S) - sigmoid(d_i / S)|`, trained on `w_i |e_i - c_i|`
   with `delta` held fixed (a second short run with everything else frozen,
@@ -1067,6 +1097,12 @@ broken) / gated sites.
 | A7 the endgame check (900 positions), correction applied everywhere | reported; the standing default's target is at most 15 misjudged | the refiner must not break the base's endgames where it is consulted |
 | A8 n_eff of the weighted arm | at least 0.5 n | idea 48's rule |
 | Crucial-point set (SPRT games, relabelled) | NF reported only | test data by decision 6 |
+
+**Amended (owner, 2026-11-08):** every validation and test metric, the
+constant-shift baseline (A3) included, weights each site as the loss does
+(the closeness kernel times its stratum's factor, the labelling section's
+"The training mix"; the reading recorded there). A8's line meets 0.468 n
+with the factors (0.501 n with the kernel alone): open for the owner.
 
 Kill at this stage: A2 or A3 fails, or q_off < 1/3. The result is recorded
 in ideas.md and step 3 stops before any game.
@@ -1309,6 +1345,8 @@ reason.
 | Weight scale 64, activation 255 | bullet's QA / QB convention | owner, 2026-10-28 | no (convention) |
 | Logging margin | 80 cp | covers 25, 40, the SPSA range and the kernel's tail | training setting |
 | Weight bandwidth h | 25 cp | the gate's margin; n_eff at least 0.5 n | training setting |
+| Weight bandwidth h, amended (owner, 2026-11-08) | main search 25 cp, quiescence 17 cp | 17: the smallest whole h giving n_eff >= 0.5 n on the training split (the window, measured) | training setting |
+| Stratum mix of the weights (owner, 2026-11-08) | 44.1% main search, 55.9% quiescence | the oracle's in-game call rates at (a), 1.68% and 2.13% of nodes (1.1) | training setting |
 | Label budget N | the pilot's pick of 100k, 300k, 1M | 90% side agreement with 1M (3.3) | measurement setting |
 | Sampling 1 in K | about 4 sites per stratum per search | independence over volume (3.2) | measurement setting |
 | Split | 90 / 10 by CRC-32 of the game id; a separate test part | crucial_points.py's fold rule | setting |
