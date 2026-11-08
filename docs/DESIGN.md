@@ -4059,6 +4059,27 @@ leaves the search exactly S512ppr3's while paying the whole per-call cost:
   as it is (the sticky rule). The ply frame keeps base_eval, refined,
   correction and confidence (16 bytes more in refiner builds only; the
   PlyFrame size guard records it).
+- **The second window** (2026-11-08; entry 8 at bounds 64 and 32, x86-64-v3
+  and VNNI builds):
+
+  | Build (entry 8) | Setting | bench nps, gate off -> on | cost per call in the search | nps loss in game | price, Elo [1.26-1.80 per 1%] | line |
+  |---|---|---|---|---|---|---|
+  | x86-64-v3, bound 64 | (a) 25/10 | -2.94% | 206 ns | **2.52%** | 3.8 [3.2, 4.5] | within 3% |
+  | x86-64-v3, bound 64 | (b) 25/25 | -5.55% | 215 ns | **4.65%** | 7.0 [5.9, 8.4] | within 5% |
+  | x86-64-v3, bound 32 | (a) | -3.20% | 226 ns | 2.74% | 4.1 [3.5, 4.9] | within 3% |
+  | x86-64-v3, bound 32 | (b) | -5.72% | 219 ns | 4.79% | 7.2 [6.0, 8.6] | within 5% |
+  | VNNI, bound 64 | (a) | -2.97% | 192 ns | 2.55% | 3.8 [3.2, 4.6] | within 3% |
+  | VNNI, bound 64 | (b) | -6.30% | 221 ns | 5.29% | 7.9 [6.7, 9.5] | over 5% |
+  | VNNI, bound 32 | (a) | -3.54% | 227 ns | 3.03% | 4.5 [3.8, 5.5] | within 3.5% |
+  | VNNI, bound 32 | (b) | -6.90% | 243 ns | 5.80% | 8.7 [7.3, 10.4] | over 5% |
+
+  Parts per call (v3, bound 64): pack 24.1 ns, rows 23.1, entry layer 79.8
+  (bound 32: 76.9; VNNI: 74.3), middle layer and heads 34.9, a whole call
+  173.0. Overhead without calls about -1% (not significant). The cost gate
+  (at most about 3.5% in game) passes on the x86-64-v3 builds at setting (a)
+  and fails at (b). **Owner decision:** step 3 proceeds at setting (a), 25 /
+  10 cp, with the bound +-64 (bound 32 kept, tested, unused); VNNI kept for
+  the TCEC build.
 - **The dense-weight bound** (format version 2, header byte 36; CMake
   FORK_REFINER_BOUND, RefinerDenseBound): 64 or 32. At 32 the AVX2 entry
   layer sums two 8-bit multiply-add results in int16 before one widening

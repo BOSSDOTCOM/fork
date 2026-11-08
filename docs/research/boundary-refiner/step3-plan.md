@@ -251,6 +251,54 @@ node-based, so threads do not change them), by the pinned engine with its
 hash and bench checked before the first label and after the last;
 validation and test sites stay at 1M.
 
+**The second window, measured (2026-11-08, 2:13-2:45 PM EST;
+tools/measure/refiner_speed.sh `second` at 5ea2ad1, results in
+~/fork-measure/i59s3/second; Windows, not pinned; every bench 14,149,617 /
+1cb0717f040c294d):**
+
+| Build (entry 8) | Setting | bench nps, gate off -> on | cost per call in the search | nps loss in game | price, Elo [1.26-1.80 per 1%] | line |
+|---|---|---|---|---|---|---|
+| x86-64-v3, bound 64 | (a) 25/10 | -2.94% | 206 ns | **2.52%** | 3.8 [3.2, 4.5] | within 3% |
+| x86-64-v3, bound 64 | (b) 25/25 | -5.55% | 215 ns | **4.65%** | 7.0 [5.9, 8.4] | within 5% |
+| x86-64-v3, bound 32 | (a) | -3.20% | 226 ns | 2.74% | 4.1 [3.5, 4.9] | within 3% |
+| x86-64-v3, bound 32 | (b) | -5.72% | 219 ns | 4.79% | 7.2 [6.0, 8.6] | within 5% |
+| VNNI, bound 64 | (a) | -2.97% | 192 ns | 2.55% | 3.8 [3.2, 4.6] | within 3% |
+| VNNI, bound 64 | (b) | -6.30% | 221 ns | 5.29% | 7.9 [6.7, 9.5] | over 5% |
+| VNNI, bound 32 | (a) | -3.54% | 227 ns | 3.03% | 4.5 [3.8, 5.5] | within 3.5% |
+| VNNI, bound 32 | (b) | -6.90% | 243 ns | 5.80% | 8.7 [7.3, 10.4] | over 5% |
+
+Each target's overhead without calls (its baseline against the refiner
+build with the gate off): x86-64-v3 -1.2%, VNNI -1.0% (neither significant);
+the whole price on the bench at 25/25 against each baseline: v3 -7.6% /
+-6.5% (bounds 64 / 32), VNNI -7.2% / -7.0%. A call's parts:
+
+| Part (ns per call, entry 8) | v3, bound 64 | v3, bound 32 | VNNI, bound 64 | VNNI, bound 32 |
+|---|---|---|---|---|
+| pack | 24.1 | 24.1 | 24.1 | 24.1 |
+| rows | 23.1 | 23.1 | 22.6 | 22.7 |
+| entry layer | 79.8 | 76.9 | 74.3 | 74.3 |
+| middle layer and heads | 34.9 | 34.9 | 37.3 | 37.1 |
+| a whole call | 173.0 | 170.2 | 167.0 | 166.5 |
+
+Bound 32 against 64 on the AVX2 path: the entry layer -3.9% (significant),
+the call -1.7% and the whole search nothing measurable; VNNI against AVX2:
+the entry layer -7.3%, the call -3.6%, the cost per call in the search about
+the same. The restructured AVX2 kernel (64 bytes a step, two independent
+products) took the 8-wide entry layer from 117 to 80 ns and the call in the
+search at (b) from 278 to 215 ns, more than the bound or VNNI. **The cost
+gate on the x86-64-v3 builds: passed at setting (a) (2.52% in game, 3.8 Elo),
+failed at (b) (4.65%).**
+
+**Owner decision (2026-11-08): step 3 proceeds at gate setting (a), main
+25 / quiescence 10 cp, with the dense-weight bound +-64.** Bound 32 stays in
+the code, tested but unused (it buys nothing measurable and would constrain
+training; the +-64 against +-32 offline check is dropped). The VNNI entry
+layer stays for the TCEC build. The price to beat is about 3.8 Elo at (a)
+(P0's prior there, the oracle's +29.8 at (a) times the ratio 0.38, is about
++11 Elo: a rough reading); the fixed-node screen F1's line becomes max(+8.6,
+3.8 + 5) = +8.8 Elo, with the price recomputed in the shard build. The
+labelling plan follows (to the owner first).
+
 ## 0. The design in brief
 
 1. S512ppr3 evaluates everywhere, unchanged. Where the gate fires (the base
