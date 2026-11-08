@@ -176,7 +176,7 @@ build_and_test() {  # preset, ctest filter args...
 }
 
 # The tooling's own tests (audit-1 U-15): standard-library Python suites
-# (sprt_merge and the book permutation, the evolve harness, pgn_summary, the job supervisor, the
+# (sprt_merge and the book permutation, the evolve harness, pgn_summary, the gauntlet report, the job supervisor, the
 # Control Center), plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
 # tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh with a fake gh (about 40 s).
 tool_tests() {  # python | all
@@ -188,6 +188,8 @@ tool_tests() {  # python | all
   "$py" -I -B -m unittest discover -s tools/cloud -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/cloud"
   "$py" -I -B -m unittest discover -s tools/evolve -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/evolve"
   "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
+  # The gauntlet's report (owner, 2026-11-08): the reference opponent kept out of Ordo's fit.
+  "$py" -I -B -m unittest discover -s tools/gauntlet -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/gauntlet"
   # The job supervisor and the run-ID ledger (owner, 2026-11-05): whole-tree stops, one lock per type.
   "$py" -I -B -m unittest discover -s tools/jobs -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/jobs"
   # The Fork Control Center (owner, 2026-11-06): its parsers on the real formats, the data-generation
