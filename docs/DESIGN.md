@@ -2128,6 +2128,15 @@ and Weiss (results in ORIGINALITY.md).
 | Iteration growth | 5/3 | **Measured** on the bench (46 positions to depth 14, cumulative nodes): the work grows by a median factor of 1.66 per iteration at depths 8-14 (p75 1.96, p90 2.38). An iteration started at elapsed time t probably finishes near t · 5/3, so none starts when that passes the hard limit. |
 | `LmrCorrectionStrength` | 64 (of 64) | The evolvable LMR correction's scale in 1/64 steps: 64 applies a rule's correction as written, 0 switches it off, and the range 0-128 lets SPSA weaken or double it. A unit, not a tuned value; with the committed rule (0) it has no effect (deliverable 8c). |
 | `ScoreTrendLimit` (score-trend clamp) | ±1000 cp | The LMR context's root score trend is clamped to ten pawns: beyond that a change only says "decisive", and the clamp keeps any rule's integer arithmetic far from overflow (deliverable 8c). |
+| `TimeScaleMinDepth` (switches `UseStabilityTime`, `UseShareTime`, off) | 8 | §5.6 step 10 (R8), a **placeholder from Fork's own fit** (X6, §5.7 on measure/step1: 18,782 iterations at depth >= 8 of 2,086 searches at 2M nodes in 60 of Fork's STC games; derived by tools/measure/tm_curve.py there). X6's declared primary depth: the fit has no rows below it, so the soft limit is not scaled there. Awaits the constant screen before its SPRT. |
+| `TimeScaleMaxDepth` | 19 | Placeholder, X6: the last depth holding at least 1% of the fit's rows (290 of 18,782; depth 20 has 171). Deeper iterations are scaled as depth 19. |
+| `TimeScaleStabilityCap` | 10 iterations | Placeholder, X6's declared stability cap (the fitted feature). |
+| `TimeScaleShareMin`, `TimeScaleShareMax` | 5, 995 per mille | Placeholder, X6's declared share clip (keeps the logit finite). |
+| `StabilityFit` (variant a) | logit 0.963763 − 0.238696·stability − 0.127705·depth (Q16 63161, −15643, −8369) | Placeholder, X6 rows: logistic fit of "the best move changes within the next two iterations" on stability and depth (AUC 0.763, out of sample 0.763). |
+| `ShareFit` (variant b) | logit 0.868553 − 0.204558·stability − 0.177470·logit(share_all) − 0.132415·depth (Q16 56921, −13406, −11631, −8678) | Placeholder, X6 rows, the same label on stability, the every-pass share's logit and depth (AUC 0.771, out of sample 0.771; the last-pass share predicts less, §5.7). |
+| `DepthFit` (normaliser) | logit 0.567490 − 0.211730·depth (Q16 37191, −13876) | Placeholder, X6 rows, the same label on depth alone. The scale is σ(fit)/σ(DepthFit): the iteration's change chance over the typical one at its depth. Depth normalises and is no signal of its own (owner, 2026-11-07): with the literal fits on stability (and share) alone, the balance needed to keep the mean spend drifts from 1.16 to 1.52 (a) and 1.10 to 1.47 (b) between 100k and 500k-node soft budgets, so an STC calibration would spend less at LTC; normalised, it stays at 1.07-1.09 (a) and 1.02-1.05 (b). Fallback (literal fits, kept documented): (a) σ(−0.319886 − 0.273118·s) / 0.1294, balance 1.313; (b) σ(−0.433426 − 0.246841·s − 0.150025·L) / 0.1294, balance 1.245 (both at 250k nodes; tm_curve.py prints all three budgets). |
+| `TimeScaleBalanceStability`, `TimeScaleBalanceShare` | 1079, 1037 per mille | Placeholders: the factor that keeps the mean spend equal to the plain soft limit's when X6's 2,086 searches are replayed with nodes as the clock (soft budget B, hard 4B, the engine's stop rules: the hard stop, the soft check, the forced-move stop, the iteration rule), the scale as the engine applies it (depth cap, floor), the mean of the balances at B = 100k, 250k and 500k nodes (a: 1.087, 1.068, 1.083; b: 1.042, 1.017, 1.052). At equal mean spend the move at the stop matched the 2M-node final move more often (250k: 0.854 plain, 0.875 a, 0.874 b; in sample, not Elo). Nodes as time is UNVERIFIED: the head-to-head's clocks confirm the spend. |
+| `TimeScaleFloor` | 360 per mille | Placeholder: at most two iterations short of the soft limit at Fork's iteration growth 5/3 (row "Iteration growth"): (3/5)² = 0.36. It is also the 1st percentile of variant (a)'s raw scale over X6's rows, so it binds almost only in (b). No upper bound: the hard limit caps the scaled soft limit, and the iteration rule already ends an extended search near 2.4 soft limits. |
 
 #### Owner's answers (2026-10-24)
 
@@ -3636,6 +3645,37 @@ Parked: idea 40's L3 root planner. ProbCut: no retest. Totals (UNVERIFIED):
 about 350 STC-equivalent GitHub stages and about 3-4 weeks; engineering
 days are the binding resource. The 2026-11-06 order is in git history
 (a24d41f).
+
+**Step 10, built behind switches (2026-11-07, branch tm/node-share; owner).**
+After each finished iteration of a timed search the soft check compares
+against `scaled_soft_ms(soft, hard, soft_scale_permille(...))`
+(src/search/time_budget.*): the soft limit times Fork's fitted chance that
+the best move changes within the next two iterations, over the typical
+chance at that depth, times a mean-spend balance, at least 360 per mille,
+never above the hard limit. Variant (a), `UseStabilityTime`: stability
+alone (finished iterations in a row with the same best move). Variant (b),
+`UseStabilityTime` and `UseShareTime`: stability and the best move's share
+of every aspiration pass's root nodes (`RootEntry::nodes_all_passes`; the
+LMR context's last-pass share is untouched). `UseShareTime` alone does
+nothing. Not scaled: below depth 8, mate and tablebase scores, `go
+movetime` (soft equal to hard), pondering, and every search without a soft
+limit (bench, data generation). Integer fixed point only. Both switches
+are off: bench is unchanged, and the switch-off identity was checked on
+timed searches with the node clock (`FORK_NODE_CLOCK`, a test-only CMake
+option: elapsed time = nodes / 1000 ms): the 46 bench positions under
+five conditions (8+0.08 and 60+0.6 clocks, movestogo 5, a 300 ms clock,
+movetime 200), 230 searches, gave output identical to the seam-only commit
+with the switches off and with `UseShareTime` alone (the two new option
+lines of the tuning build's `uci` reply aside); with (a) on, 122 of the 230
+searches changed, with (b) 129, and no movetime search. Constants:
+"Search constants" (all placeholders from X6, awaiting the constant
+screen). Prediction, recorded before any game: Spearman ρ² of the scale
+against the label 0.058 (a) and 0.066 (b), about +3 to +4 Elo at STC by
+§5.7's reading of M5's table (UNVERIFIED); R8's 0.5-2x method check
+applies. Next: the head-to-head of (a) against (b) (branches tm/a and
+tm/b; the declared value is (a)), then the winner under design R at STC
+and at LTC. Limit: at TCEC depths the normaliser holds at depth 19, where
+a stable move can shorten only to about 0.73 (Phase 5 owns the TCEC curve).
 
 ## 6. Decisions log
 
