@@ -492,6 +492,18 @@ the job i59s3-window, results in ~/fork-measure/i59s3):**
   alone (2.576 sqrt(0.30 / n)). **The offline acceptance (O1) waits for
   the enlarged test set.** The selection's real counts are recorded here
   before the labels start.
+  **The selection, measured (2026-11-08, 5:55-6:35 PM EST, job
+  i59s3-test2-collect; 3 processes beside data generation):** the 1,350
+  games replayed in 38 minutes (the 450 earlier game files unchanged, the
+  site list beginning with their 48,362 sites); 146,217 sites, 47,833
+  within 80 cp; 20,000 picked (10,001 left out as already selected, 3
+  duplicates; folder test/n1m2). Inside gate (a), before the labels: 4,561
+  main-search and 1,183 quiescence sites among the new ones, **6,904 and
+  1,815 with the first 10,000**; deployment-weighted n_eff 4,991, so the
+  smallest NF reaching p < 0.01 is **0.0200 for the weighted whole**,
+  0.0170 for the main search and 0.0331 for quiescence (the mate-flagged
+  labels and the table band, about 7% so far, leave after labelling). Link
+  187 (3.6) is active at 468 of the 20,000 new sites.
 - **Labels (Syzygy 3-4-5; the pinned engine, SHA-256 17ab2b41...0b34,
   bench 14,149,617 / 1cb0717f040c294d as referenced before the first label
   and after the last).** Nodes per second are nominal (sites x the node
