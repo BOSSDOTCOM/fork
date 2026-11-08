@@ -1945,6 +1945,25 @@ until measured; new names and constants go through the screens before use.
   arXiv note, stating clearly that the idea came from an AI-assisted project. Anything published outside
   the repository needs the owner's go-ahead at the time. **runtime cost:** possible.
   **earliest phase:** Phase 4.
+- **linked follow-ups** (owner, 2026-11-08; plan only, after step 3's first
+  results; each its own experiment, shared with idea 61's family):
+  1. **Boundary controller:** the refiner's confidence output routes each
+     near-window site to "use the correction" or "extend" (idea 60), from
+     the confidence and simple tactical signals.
+  2. **Boundary distillation:** label the refiner's training sites with
+     the big teacher (idea 58) instead of, or alongside, deep search.
+  3. **Conformal calibration** (idea 50) of the gate's and the prunes'
+     margins from the crucial-point error distribution (measure/step1,
+     daca926).
+  4. **Closeness-weighted training of the base net** (idea 48's
+     decision-focused loss), as step 3 does for the refiner.
+  5. **Site selection by nearness to the window plus seed disagreement**
+     (idea 52) for the refiner's labels. Evidence to weigh first: as a
+     crucial-point gate on its own, the seeds' disagreement was near random
+     (AUC 0.52-0.54, measure/step1), and idea 52 itself stands or falls by
+     item 8b's keep-or-drop rule.
+  6. **The gate policy as an idea 23 evolution target**, with a game-based
+     fitness (decision 19: never the label-and-sweep proxy).
 
 ## 60. Near-window extension
 
@@ -2033,6 +2052,9 @@ until measured; new names and constants go through the screens before use.
 
   **Priority** (owner, 2026-11-08): borderline pruning (part 1) first, then
   window-aware LMR (5), then root-gap time management (6), then the rest.
+  Linked follow-ups (the boundary controller, boundary distillation,
+  conformal margins, closeness-weighted base training, site selection and
+  the gate policy as an evolution target) are listed under idea 59.
 - **basis:** idea 59's control split (2026-11-08, ideas.md idea 59): at
   equal call rate the window-gated refiner beat a random gate by about 22
   Elo at fixed nodes, and a constant shift lost, so a better evaluation
