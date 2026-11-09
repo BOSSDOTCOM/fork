@@ -1,6 +1,6 @@
 # Retrain 8b: offline label-quality pre-tests, declared before any comparison
 
-Written 2026-11-09, 3:20 PM EST, before any comparison below was run. The
+Written 2026-11-09 and committed at 3:12 PM EST (7f8b55d), before any comparison below was run. The
 owner's request (2026-11-09, verbatim): "Offline label-quality pre-tests on
 held-out positions with deep labels: current score/result blend vs
 TD(lambda) labels at a few lambda values (idea 51; build the label tooling
