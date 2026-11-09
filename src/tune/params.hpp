@@ -62,7 +62,7 @@
   X(HistorySkipMaxDepth, 3, 1, 8, 1)          \
   X(HistorySkipPerPly, 2500, 250, 12000, 588) \
   X(BadCaptureStopMaxDepth, 4, 1, 8, 1)       \
-  X(BadCaptureStopMargin, 100, 25, 600, 29)   \
+  X(BadCaptureStopMargin, 200, 25, 600, 29)   \
   X(ClockDampingSpan, 200, 101, 1000, 45)     \
   X(MalusScalePercent, 75, 10, 300, 15)       \
   X(DoubleExtensionMargin, 30, 2, 240, 12)    \
