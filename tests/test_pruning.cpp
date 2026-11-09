@@ -498,13 +498,15 @@ TEST_CASE("pruning", "double extension: still correct, and it changes the search
 TEST_CASE("pruning", "cut-node and PV-trace reductions: still correct, and each changes the search") {
   PruningFixture fx;
   CHECK(!SearchSwitches{}.use_cut_node_lmr);  // off until measured
-  CHECK(!SearchSwitches{}.use_pv_trace_lmr);
+  CHECK(SearchSwitches{}.use_pv_trace_lmr);   // on in this head-to-head candidate (tier2/b4-pv-trace)
+  SearchSwitches off;
+  off.use_pv_trace_lmr = false;
   SearchSwitches cut;
   cut.use_cut_node_lmr = true;
-  fx.check_changes_search(cut, SearchSwitches{}, Optimized ? 10 : 7, "the cut-node reduction");
+  fx.check_changes_search(cut, off, Optimized ? 10 : 7, "the cut-node reduction");
   SearchSwitches trace;
   trace.use_pv_trace_lmr = true;
-  fx.check_changes_search(trace, SearchSwitches{}, Optimized ? 10 : 7, "the PV-trace relief");
+  fx.check_changes_search(trace, off, Optimized ? 10 : 7, "the PV-trace relief");
 }
 
 // The pawn-structure history (tier 2, T12): the entry a cutoff updates is

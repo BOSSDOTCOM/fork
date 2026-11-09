@@ -214,7 +214,7 @@ struct SearchQuota {
   X(use_malus_scale, UseMalusScale, false)               \
   X(use_double_extension, UseDoubleExtension, false)     \
   X(use_cut_node_lmr, UseCutNodeLmr, false)              \
-  X(use_pv_trace_lmr, UsePvTraceLmr, false)              \
+  X(use_pv_trace_lmr, UsePvTraceLmr, true)               \
   X(use_structure_history, UseStructureHistory, false)   \
   X(use_cycle_draw, UseCycleDraw, false)
 
