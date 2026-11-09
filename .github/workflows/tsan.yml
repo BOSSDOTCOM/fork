@@ -5,11 +5,20 @@
 # runnable on demand on any branch (owner, 2026-11-07); ci.yml's
 # tsan-threaded job runs the threaded suites alone on every code change.
 # TSan with S-512 takes about 87 minutes for gcc (clang about half) on a
-# typical runner, and up to about 1.8x that on a slow one.
+# typical runner, and up to about 1.8x that on a slow one. The `search` suite
+# alone took 10,296 s under gcc-tsan on 2026-11-09 and pushed the job past
+# 240 minutes, so ci.yml's call skips the two single-search suites (`search`,
+# `pruning`; input `skip`) and nightly.yml and a dispatch run every suite,
+# with a 360-minute limit (owner, 2026-11-09).
 name: tsan
 
 on:
   workflow_call:
+    inputs:
+      skip:
+        description: CTest regex of suites to leave out (empty runs every fast suite)
+        type: string
+        default: ''
   workflow_dispatch:
 
 permissions:
@@ -22,7 +31,7 @@ jobs:
   tsan:
     name: Linux (${{ matrix.preset }})
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
@@ -57,4 +66,7 @@ jobs:
       - name: Fast tests under TSan (bench parity; no_alloc, uci_oom, uci_hash_oom are not built)
         env:
           REQUIRE_NO_ALLOC: 0
-        run: bash .github/ci/run-tests.sh build/${{ matrix.preset }}
+          SKIP: ${{ inputs.skip }}
+        run: |
+          if [ -n "$SKIP" ]; then echo "Suites left out of this run: $SKIP"; fi
+          bash .github/ci/run-tests.sh build/${{ matrix.preset }} ${SKIP:+-E "$SKIP"}

@@ -15,7 +15,8 @@
 #   when move generation's files change, and nightly on main (nightly.yml);
 # - the full TSan suites (clang-tsan, gcc-tsan; .github/workflows/tsan.yml)
 #   only when threads, the TT or the UCI layer change, and nightly on main
-#   (owner, 2026-11-07).
+#   (owner, 2026-11-07); here without `search` and `pruning`, which run
+#   nightly (owner, 2026-11-09).
 # What changed decides which jobs run (the `changes` job,
 # .github/ci/changed-areas.sh): documentation alone skips every build job.
 # The one required check is `CI result`, which passes only if every job
@@ -654,6 +655,10 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.tsan == 'true') }}
     uses: ./.github/workflows/tsan.yml
+    # The single-search suites run nightly on main (owner, 2026-11-09): under
+    # gcc-tsan `search` alone takes about 3 hours.
+    with:
+      skip: '^(search|pruning)$'
 
   # The one required check (branch protection on main): every job above
   # passed, or was skipped by its own rule (code, tsan or movegen false).
