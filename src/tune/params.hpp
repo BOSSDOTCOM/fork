@@ -60,7 +60,7 @@
   X(HorizonDropMaxDepth, 4, 1, 8, 1)          \
   X(HorizonDropMargin, 250, 40, 800, 38)      \
   X(HistorySkipMaxDepth, 3, 1, 8, 1)          \
-  X(HistorySkipPerPly, 3000, 250, 12000, 588) \
+  X(HistorySkipPerPly, 5000, 250, 12000, 588) \
   X(BadCaptureStopMaxDepth, 4, 1, 8, 1)       \
   X(BadCaptureStopMargin, 150, 25, 600, 29)   \
   X(ClockDampingSpan, 200, 101, 1000, 45)     \
