@@ -3,11 +3,11 @@
  "draw_pairs": 1,
  "games": 1600,
  "hash": 16,
- "iteration": 3,
+ "iteration": 4,
  "label": "spsa-r14-m2",
- "openings": 2002401,
- "params": "RfpMargin=57.500:15.000,FutilityOffset=101.827:18.200,FutilityGrowth=63.243:7.500,NullSurplusPerPly=296.797:7.800,AspirationHalfWidth=11.882:1.000,CaptureSeeFloor=110.192:28.000,LmpQuietAllowance=10.039:1.700",
+ "openings": 2003201,
+ "params": "RfpMargin=55.000:15.000,FutilityOffset=102.580:18.200,FutilityGrowth=59.639:7.500,NullSurplusPerPly=299.860:7.800,AspirationHalfWidth=11.771:1.000,CaptureSeeFloor=110.676:28.000,LmpQuietAllowance=9.793:1.700",
  "shards": 16,
- "stage": 3,
+ "stage": 4,
  "tc": "8+0.08"
 }
