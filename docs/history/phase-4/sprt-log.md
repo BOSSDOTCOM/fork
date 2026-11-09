@@ -1077,3 +1077,28 @@ LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
   retired**; the switch stays off on its branch, and nothing reaches
   phase-4. Window-aware LMR (idea 61 part 5) no longer needs a combined
   test with it.
+
+### 2026-11-08 idea 61 part 5 (window-aware LMR): head-to-head of the minimum depth, then the design R SPRT of the pick against off (owner): futility stop, retired
+
+- Build: idea61/window-lmr e84827a (switch off; bench 14,149,617). M1 found
+  reductions near alpha beat alpha 58 times as often as reductions far from
+  it; M2's node cost at equal depth kept two 10 cp variants under the ~15%
+  kill line (+13.2% / +14.4% at every depth; +9.3% / +9.2% at depth >= 6,
+  D = 6 by the declared rule) and dropped 25 and 50 cp. Constant screens
+  passed (ORIGINALITY.md on idea61/window-lmr); a Stockfish relative
+  (5f7348f0) credited at concept level. Candidates idea61/lmr-b10d ce50ca4
+  (depth >= 6) and idea61/lmr-b10 720937c (every depth).
+- Head-to-head, STC, 2 stages of 1,600 games on the same openings, job
+  idea61-h2h, runs 42530631909 and 42532153075: **d0 − d6 −2.19 ± 12.04
+  nElo**, 3,200 games, Ptnml [51, 374, 754, 378, 43]: d6 kept (the declared,
+  cheaper value).
+- Design R SPRT, STC, fresh openings from stage 2, job idea61-stc, try 1
+  of 2:
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), d6 against off | 42533970705 (stage 2), 42535473794 (3) | 3,200 (no time losses, no abnormal ends) | **−2.93 ± 7.16** | −4.93 ± 12.04 | [37, 422, 719, 375, 47] | **futility stop** (nElo < 0 after 2 stages; LLR −1.26) after stage 3, 6:48 PM EST |
+
+- By its kill criterion (ideas.md idea 61: a part's SPRT fails, H0 or the
+  futility stop), **part 5 is retired**; the switch stays off on its
+  branch, and nothing reaches phase-4.

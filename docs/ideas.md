@@ -2092,5 +2092,9 @@ until measured; new names and constants go through the screens before use.
   elsewhere.
 - **phase:** Phase 4 or later, after idea 59's step 3 passes. **metric:**
   wrong-prune rates near the threshold, then each part's SPRT. **status:**
-  untested (plan only, owner, 2026-11-08). **runtime cost:** possible
-  (refiner calls at pruning sites). **earliest phase:** Phase 4.
+  untested (plan only, owner, 2026-11-08); **part 5 (window-aware LMR)
+  rejected (2026-11-08): the head-to-head kept the 10 cp band at depth >= 6
+  (d0 - d6 -2.19 +/- 12.04 nElo), and its design R SPRT against off stopped
+  for futility after stage 3 (-2.93 +/- 7.16 Elo, 3,200 games, try 1 of 2),
+  so by the kill criterion part 5 is retired**; docs/history/phase-4/sprt-log.md.
+  **runtime cost:** possible (refiner calls at pruning sites). **earliest phase:** Phase 4.
