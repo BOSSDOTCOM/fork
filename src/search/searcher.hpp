@@ -207,7 +207,7 @@ struct SearchQuota {
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
-  X(use_horizon_drop, UseHorizonDrop, false)             \
+  X(use_horizon_drop, UseHorizonDrop, true)              \
   X(use_history_skip, UseHistorySkip, false)             \
   X(use_bad_capture_stop, UseBadCaptureStop, false)      \
   X(use_clock_damping, UseClockDamping, false)           \

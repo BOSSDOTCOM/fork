@@ -58,7 +58,7 @@
   X(SingularMarginPerPly, 6, 3, 12, 1)        \
   X(NoMoveReduceMinDepth, 8, 2, 10, 1)        \
   X(HorizonDropMaxDepth, 4, 1, 8, 1)          \
-  X(HorizonDropMargin, 250, 40, 800, 38)      \
+  X(HorizonDropMargin, 260, 40, 800, 38)      \
   X(HistorySkipMaxDepth, 3, 1, 8, 1)          \
   X(HistorySkipPerPly, 2500, 250, 12000, 588) \
   X(BadCaptureStopMaxDepth, 4, 1, 8, 1)       \

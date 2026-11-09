@@ -429,10 +429,12 @@ TEST_CASE("pruning", "no-move reduction: still correct, and it changes the searc
 // Razoring, the horizon drop (tier 2, T34).
 TEST_CASE("pruning", "horizon drop: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_horizon_drop);  // off until measured
+  CHECK(SearchSwitches{}.use_horizon_drop);  // on in this head-to-head candidate (tier2/b4-horizon-drop)
+  SearchSwitches off;
+  off.use_horizon_drop = false;
   SearchSwitches on;
   on.use_horizon_drop = true;
-  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the horizon drop");
+  fx.check_changes_search(on, off, Optimized ? 10 : 7, "the horizon drop");
 }
 
 // Quiet history pruning, the history skip (tier 2, T24).
