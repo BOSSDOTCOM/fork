@@ -31,15 +31,28 @@ merged, weights x 64, biases x 255 x 64, rounded half away from zero), the
 dense weights checked against the bound, the header bound to the base
 network's payload checksum, its output scale the base's.
 
+`parity` runs the parity chain on a .sites file (step3-plan.md 3.6, "the
+parity chain"): R-int (models.refiner_int on REFINER's tensors and the base
+net) against ENGINE's `fork refine` output (a refiner build embedding
+REFINER), exactly, at every line; with --weights, R-quant: REFINER's payload
+equal to models.refiner_quantise of the trainer's float weights; with
+--weights and --trainer (fork-train --arch refiner eval's output on the same
+file), the trainer against R-float (the base: the net's integers / 255)
+within 0.0002 in each head's raw output (0.018 cp of correction at S = 89).
+Exit 1 on any failure.
+
 usage: python -I tools/nnue/refiner.py zero --base nets/s512ppr3.fnet --arch 1 --l1 16
            --bound 64 --cap 20000 --out tests/nnue/refiner-zero.frnet
        python -I tools/nnue/refiner.py export --base nets/s512ppr3.fnet --out train.sites DIR...
        python -I tools/nnue/refiner.py convert --weights weights.bin --base nets/s512ppr3.fnet --arch 1 --l1 8
            --bound 64 --cap C --out refiner.frnet
+       python -I tools/nnue/refiner.py parity ENGINE REFINER --base nets/s512ppr3.fnet --sites FILE.sites
+           [--weights weights.bin [--trainer eval.txt]]
 """
 import argparse
 import json
 import struct
+import subprocess
 import sys
 from pathlib import Path
 
@@ -96,7 +109,67 @@ def main(argv=None):
     convert.add_argument('--bound', type=int, choices=(64, 32), required=True, help='the dense weights\' bound')
     convert.add_argument('--cap', type=int, required=True)
     convert.add_argument('--out', required=True)
+    parity = sub.add_parser('parity', help='the parity chain on a .sites file')
+    parity.add_argument('engine', help='a refiner build of fork embedding REFINER')
+    parity.add_argument('refiner', type=Path, help='the refiner file (.frnet)')
+    parity.add_argument('--base', required=True, help='the base network (.fnet)')
+    parity.add_argument('--sites', required=True, type=Path)
+    parity.add_argument('--weights', help="the trainer's float weights (optimiser_state/weights.bin)")
+    parity.add_argument('--trainer', type=Path, help="fork-train --arch refiner eval's output on --sites")
     args = ap.parse_args(argv)
+    if args.command == 'parity':
+        base = Path(args.base).read_bytes()
+        fields = netformat.header_fields(base)
+        name = {v: k for k, v in models.ARCH.items()}[fields['architecture']]
+        arch = models.arch_from_net(name, base[netformat.HEADER_BYTES:])
+        net = models.unpack(arch, base[netformat.HEADER_BYTES:])
+        data = args.refiner.read_bytes()
+        version, rarch, l1, _l2, _heads, scale, cap, bound = struct.unpack_from('<IIIIIiiI', data, 8)
+        (base_checksum,) = struct.unpack_from('<QQ', data, 40)[1:]
+        fails = []
+        if (version, rarch) != (REFINER_VERSION, 1) or base_checksum != struct.unpack_from('<Q', base, 40)[0]:
+            fails.append(f'{args.refiner}: version {version}, architecture {rarch}, base {base_checksum:016x}')
+        q, at = [], netformat.HEADER_BYTES
+        for (_, count, size), kind in zip(payload_sizes(rarch, l1, fields['hidden'], max(fields['buckets'], 1)),
+                                          ('i8', 'i32', 'i16', 'i8', 'i32', 'i16', 'i32')):
+            q.append((kind, list(struct.unpack_from(f'<{count}{models.CODES[kind]}', data, at))))
+            at += count * size
+        lines = args.sites.read_text(encoding='utf-8').splitlines()
+        if args.weights:
+            floats = netformat.read_weights_bin(Path(args.weights).read_bytes())
+            r = {k: [models.to_f32(x) for x in floats[k]] for k in ('entry_weights', 'entry_bias', 'row_weights',
+                                                                     'middle_weights', 'middle_bias', 'head_weights',
+                                                                     'head_bias')}
+            if models.pack(models.refiner_quantise(r)) != data[netformat.HEADER_BYTES:]:
+                fails.append('R-quant: the refiner file is not the quantised weights')
+        engine = subprocess.run([args.engine, 'refine'], input='\n'.join(lines) + '\n', capture_output=True, text=True,
+                                check=True).stdout.split('\n')
+        mismatched = 0
+        for line, out in zip(lines, engine):
+            fen, base_eval = line.split(' | ')[:2]
+            want = models.refiner_int(arch, net, scale, q, cap, chess.Board(fen), int(base_eval), max(fields['buckets'], 1))
+            if out.split() != [str(want[0]), str(want[1])]:
+                mismatched += 1
+                if mismatched <= 3:
+                    fails.append(f'R-int {want} against the engine {out!r} at {fen}')
+        if len([o for o in engine if o]) != len(lines) or mismatched:
+            fails.append(f'engine leg: {mismatched} of {len(lines)} lines differ')
+        worst = 0.0
+        if args.weights and args.trainer:
+            w = {'l0w': [models.to_f32(x / models.QA) for x in net['ftw']], 'l0b': [models.to_f32(x / models.QA) for x in net['ftb']]}
+            trainer = [list(map(float, t.split())) for t in args.trainer.read_text(encoding='utf-8').splitlines()]
+            for line, t in zip(lines, trainer):
+                fen, base_eval = line.split(' | ')[:2]
+                y = models.refiner_float(arch, w, r, chess.Board(fen), int(base_eval), max(fields['buckets'], 1))
+                worst = max(worst, abs(y[0] - t[0]), abs(y[1] - t[1]))
+            if len(trainer) != len(lines) or worst > 0.0002:
+                fails.append(f'trainer leg: {len(trainer)} lines for {len(lines)}, worst difference {worst:.6f}')
+        print(f'parity on {len(lines)} sites: engine leg {len(lines) - mismatched} exact'
+              + (', R-quant checked' if args.weights else '')
+              + (f', trainer leg worst {worst:.6f}' if args.weights and args.trainer else ''))
+        for msg in fails:
+            print('FAIL', msg, file=sys.stderr)
+        return 1 if fails else 0
     if args.command == 'convert':
         if not 0 <= args.cap <= 20000:
             ap.error('--cap must lie in [0, 20000]')
