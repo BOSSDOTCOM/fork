@@ -49,8 +49,9 @@
 //!   weights clipped to [-1, 1]. Data: .sites files (tools/nnue/refiner.py
 //!   export), the sites of weight 0 left out. Loss: weight x (sigmoid(base /
 //!   S + correction) - sigmoid((label - mu) / S))^2, base the engine's
-//!   integer evaluation, mu the training file's weighted mean of label -
-//!   base (written to mu.txt; never added back in the engine). The
+//!   integer evaluation, mu the centring in the loss's win-probability space
+//!   (the m at which the weighted loss's best constant correction is zero;
+//!   the cp mean reported beside it; mu.txt; never added back). The
 //!   confidence head stays zero here (its pass is 3.7's second run).
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
@@ -95,7 +96,7 @@ use bullet_trainer::{
     },
     optimiser::adam::{AdamW, AdamWParams},
     reader::{DataReader, ReadMapLoader},
-    run::{train, DefaultDevice, HostPool, Step, TrainingSchedule, TrainingSteps},
+    run::{train, train_with_observer, DefaultDevice, HostPool, Step, TrainingEvent, TrainingSchedule, TrainingSteps},
 };
 use bulletformat::{BulletFormat, ChessBoard};
 use viriformat::dataformat::{Filter, Game};
@@ -1200,11 +1201,29 @@ fn main() {
             "train" => {
                 let sites = read_sites(a.need("--sites"), false);
                 let wsum: f64 = sites.iter().map(|s| f64::from(s.3)).sum();
-                let mu = sites.iter().map(|s| f64::from(s.3) * (f64::from(s.2) - f64::from(s.1))).sum::<f64>() / wsum;
+                // The centring (plan 3.7; its form fixed at the trainer, owner 2026-11-08): mu in the
+                // loss's win-probability space, weighted as the loss is: the m at which the weighted
+                // loss's best constant correction is zero, i.e. sum w (sig(b/S) - sig((d - m)/S))
+                // sig'(b/S) = 0, found by bisection (the sum grows with m). The first session's cp
+                // mean (reported beside it) left a constant of about -50 cp for the refiner to learn.
+                let sig = |x: f64| 1.0 / (1.0 + (-x).exp());
+                let mu_cp = sites.iter().map(|s| f64::from(s.3) * (f64::from(s.2) - f64::from(s.1))).sum::<f64>() / wsum;
+                let slope = |m: f64| {
+                    sites.iter().map(|s| {
+                        let p = sig(f64::from(s.1) / f64::from(scale));
+                        f64::from(s.3) * (p - sig((f64::from(s.2) - m) / f64::from(scale))) * p * (1.0 - p)
+                    }).sum::<f64>()
+                };
+                let (mut lo, mut hi) = (-2000.0f64, 2000.0f64);
+                for _ in 0..60 {
+                    let mid = 0.5 * (lo + hi);
+                    if slope(mid) < 0.0 { lo = mid } else { hi = mid }
+                }
+                let mu = 0.5 * (lo + hi);
                 let out = PathBuf::from(a.need("--out"));
                 fs::create_dir_all(&out).expect("out");
-                fs::write(out.join("mu.txt"), format!("{mu:.6}\n")).expect("mu.txt");
-                println!("{} training sites, weight {wsum:.1}; mu = {mu:.3} cp (the target is centred on it)", sites.len());
+                fs::write(out.join("mu.txt"), format!("{mu:.6}\n{mu_cp:.6}\n")).expect("mu.txt");
+                println!("{} training sites, weight {wsum:.1}; mu = {mu:.3} cp (win-probability form; the target is centred on it), the cp mean {mu_cp:.3}", sites.len());
                 let rmap = mapper_for(mu as f32);
                 let val = a.get("--val-sites").map(|p| read_sites(p, false)).unwrap_or_default();
                 let mut opt = AdamW::new(defn, weights, device.clone(), AdamWParams::default()).expect("optimiser");
@@ -1265,10 +1284,10 @@ fn main() {
                     },
                     lr_schedule: Box::new(move |step: Step| lr * 0.1f32.powi(((step.superbatch() - 1) / lr_step) as i32)),
                     log_rate: 16,
-                    track_grad_norms: false,
+                    track_grad_norms: true, // reported for the first batches (the gradient check)
                 };
                 let loader = ReadMapLoader::new(SiteLoader(Arc::new(sites), a.num("--seed", 1)), rmap.clone(), a.num("--threads", 3));
-                train(
+                train_with_observer(
                     &mut opt,
                     schedule,
                     loader,
@@ -1296,6 +1315,15 @@ fn main() {
                                 .expect("stopped-early.txt");
                             println!("stopping early: best superbatch {bsb}");
                             std::process::exit(0);
+                        }
+                    },
+                    // The gradient check: every weight's gradient norm at the first three batches.
+                    &mut |event: &TrainingEvent| {
+                        if let TrainingEvent::BatchCompleted { step, grad_norm: Some(norms), .. } = event {
+                            if step.superbatch() == 1 && step.batch() <= 3 {
+                                let list: Vec<String> = norms.iter().map(|(k, v)| format!("{k} {v:.3e}")).collect();
+                                println!("grad norms superbatch 1 batch {}: {}", step.batch(), list.join(", "));
+                            }
                         }
                     },
                 )

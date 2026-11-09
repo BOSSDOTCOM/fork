@@ -9,7 +9,11 @@ fork-train --arch refiner at COMMIT, built with CUDA; the frozen base is S512ppr
 Steps, in order; either check failing stops the session (fix the pipeline, not a try):
 1. The parity chain's trainer leg: fork-train eval on parity.sites with the synthetic refiner parity-weights.bin
    against R-float (tools/nnue/models.py refiner_float on the same base), every head within 0.0002.
-2. A1: superbatch 0's weighted validation loss (heads at zero) equal to the base's own within 1e-6.
+2. A1: superbatch 0's weighted validation loss (heads at zero) equal to the base's own within 1e-6. Then, added
+   after session 1 (whose runs learned one constant correction; orchestrator, 2026-11-08): the gradient check
+   (batch 2's gradient norms on the entry, row, middle and head weights all above zero) and the overfit test (10,000
+   training sites, 300 passes: the best loss on 2,000 of them at least 5% below their best constant correction's).
+   The trainer centres the target in the loss's win-probability space (the owner's listed option).
 3. Nine runs, LR 0.001 (AdamW), a tenfold drop at superbatch 40 of 80, one pass of the data per superbatch,
    batch 16,384, early stopping with patience 8 on the weighted validation loss (val.sites):
    - w1, w2: the weighted arm (closeness x call mix), seeds 1 and 2, cap 198 cp;
@@ -185,6 +189,41 @@ save()
 if rc or not m or abs(float(m.group(1)) - float(m.group(2))) > 1e-6:
     finish('A1: the initial validation loss is not the base\'s own within 1e-6')
 
+# 2b. Two gates added after session 1 (orchestrator, 2026-11-08), on 10,000 training sites (the first 10,000 of
+# weight above 0) trained for 300 passes (30 superbatches of 100 batches of 1,000) at LR 0.001, no drop, no early
+# stop, the first 2,000 of them as the validation: (i) the gradient check: after the first batch (the head starts at
+# zero, so batch 1's upstream gradients are zero by construction), batch 2's gradient norms on entry_weights,
+# row_weights, middle_weights and head_weights are all above zero; (ii) the overfit test: the best loss on those
+# 2,000 training sites is at least 5% below their best constant correction's loss (a grid of constants in cp).
+weighted = [x for x in open(inputs['train.sites'], encoding='utf-8') if float(x.split(' | ')[3]) > 0][:10000]
+open(f'{WORK}/overfit.sites', 'w').write(''.join(weighted))
+open(f'{WORK}/overfit-val.sites', 'w').write(''.join(weighted[:2000]))
+rc, out, secs = sh(f'{ft} train --arch refiner --base-weights {net} --sites {WORK}/overfit.sites '
+                   f'--val-sites {WORK}/overfit-val.sites --scale {SCALE} --cap {CAP} --seed 1 --superbatches 30 '
+                   f'--batches 100 --batch 1000 --lr {LR} --lr-step 1000 --patience 1000 --threads 2 --device 0 '
+                   f'--out {WORK}/overfit', env=env)
+open(f'{RESULT}/parity/overfit.log', 'w').write(out)
+norms = {}
+for g in re.finditer(r'grad norms superbatch 1 batch (\d+): (.*)', out):
+    norms[int(g.group(1))] = {k: float(v) for k, v in (kv.rsplit(' ', 1) for kv in g.group(2).split(', '))}
+over_val = [tuple(map(float, x.split())) for x in open(f'{WORK}/overfit/val.txt').read().splitlines()] \
+    if os.path.exists(f'{WORK}/overfit/val.txt') else []
+over_mu = float(open(f'{WORK}/overfit/mu.txt').read().split()[0]) if os.path.exists(f'{WORK}/overfit/mu.txt') else 0.0
+sig = lambda x: 1 / (1 + math.exp(-max(-60.0, min(60.0, x))))  # noqa: E731
+rows = [(int(p[1]), int(p[2]), float(p[3])) for p in (x.split(' | ') for x in weighted[:2000])]
+constant = min(sum(w * (sig((b + c) / SCALE) - sig((d - over_mu) / SCALE)) ** 2 for b, d, w in rows) /
+               sum(w for _, _, w in rows) for c in range(-300, 301, 5))
+trained = [v[1] for v in over_val if v[0] > 0 and math.isfinite(v[1])]
+summary['checks']['gradients'] = norms
+summary['checks']['overfit'] = {'rc': rc, 'seconds': secs, 'mu': over_mu, 'constant_loss': constant,
+                                'best_loss': min(trained) if trained else None, 'val': over_val}
+save()
+second = norms.get(2, {})
+if rc or not all(second.get(k, 0.0) > 0.0 for k in ('entry_weights', 'row_weights', 'middle_weights', 'head_weights')):
+    finish(f'the gradient check: batch 2 norms {second}')
+if not trained or min(trained) > 0.95 * constant:
+    finish(f'the overfit test: best {min(trained) if trained else None} against the best constant {constant}')
+
 # The plain arm's and the curve's files.
 with open(f'{WORK}/plain.sites', 'w') as f:
     for line in open(inputs['train.sites'], encoding='utf-8'):
@@ -227,9 +266,14 @@ def queue(device, runs):
         val = [tuple(map(float, x.split())) for x in open(f'{out_dir}/val.txt').read().splitlines()] \
             if os.path.exists(f'{out_dir}/val.txt') else []
         trained = [v for v in val if v[0] > 0]
-        best = min(trained, key=lambda v: v[1]) if trained else None
-        info = {'rc': rc, 'seconds': secs, 'sites': n, 'superbatches': len(trained), 'val': val,
-                'best': best and {'superbatch': int(best[0]), 'loss': best[1]}}
+        finite = [v for v in trained if math.isfinite(v[1])]
+        best = min(finite, key=lambda v: v[1]) if finite else None
+        mus = open(f'{out_dir}/mu.txt').read().split() if os.path.exists(f'{out_dir}/mu.txt') else []
+        grads = {}
+        for g in re.finditer(r'grad norms superbatch 1 batch (\d+): (.*)', out):
+            grads[int(g.group(1))] = {k: float(v) for k, v in (kv.rsplit(' ', 1) for kv in g.group(2).split(', '))}
+        info = {'rc': rc, 'seconds': secs, 'sites': n, 'superbatches': len(trained), 'not_finite': len(trained) - len(finite),
+                'val': val, 'mu': mus, 'gradients': grads, 'best': best and {'superbatch': int(best[0]), 'loss': best[1]}}
         if best:
             os.makedirs(f'{out_dir}/best', exist_ok=True)
             shutil.copy(f'{out_dir}/refiner-{int(best[0])}/optimiser_state/weights.bin', f'{out_dir}/best/weights.bin')
@@ -238,6 +282,13 @@ def queue(device, runs):
             rc2, out2, secs2 = sh(f'{ft} eval --arch refiner --base-weights {net} --weights {out_dir}/best/weights.bin '
                                   f'--sites {inputs["val.sites"]} --out {out_dir}/eval-val.txt --device {device}', env=env)
             info['eval'] = {'rc': rc2, 'seconds': secs2}
+            # The output's spread: the capped correction (cp) over the validation sites.
+            ys = [max(-a['cap'], min(a['cap'], float(x.split()[0]) * SCALE))
+                  for x in open(f'{out_dir}/eval-val.txt').read().splitlines()] if rc2 == 0 else []
+            if ys:
+                mean = sum(ys) / len(ys)
+                info['correction'] = {'mean': mean, 'sd': math.sqrt(sum((y - mean) ** 2 for y in ys) / len(ys)),
+                                      'min': min(ys), 'max': max(ys), 'at_cap': sum(abs(y) >= a['cap'] for y in ys)}
         json.dump({'run': run, **a, **info}, open(f'{out_dir}/run.json', 'w'), indent=1)
         with lock:
             summary['runs'][run] = info
@@ -311,4 +362,5 @@ try:
 except Exception:
     summary['analysis_error'] = traceback.format_exc()[-800:]
 save()
-print(json.dumps({k: summary[k] for k in ('checks', 'cap', 'gate_nf', 'curve', 'dropped')}, indent=1))
+shutil.rmtree(WORK, ignore_errors=True)  # the clone and the build: only result/ is the session's output
+print(json.dumps(summary, indent=1))

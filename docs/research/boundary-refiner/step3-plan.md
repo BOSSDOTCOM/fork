@@ -1213,6 +1213,30 @@ reported beside it and selects nothing.
     p2, w1-c480, l500k. The curve runs drop first (for a second session)
     if the measured rate would take the session past 4 T4 GPU-hours. The
     offline acceptance on test waits for the orchestrator's confirmation.
+  - **Session 1 (kernel fork-refiner version 1, 2026-11-08, 7:38-7:50 PM
+    EST): fix the pipeline, not a try (orchestrator).** The parity trainer
+    leg passed (worst 6.5e-7) and A1 passed (0.0534886454 both), but the
+    runs learned one constant correction: their best validation losses
+    (about 0.04763 for w1, w2, l250k, l500k) are what a constant -50 cp
+    gives (0.04774, computed locally), and the validation gate net flips
+    were -0.278 in every run and cap (a uniform move beyond every gap). The
+    centring in cp (mu 121.8 cp) left a best constant of about -50 cp in the
+    loss's win-probability space. **Changes for session 2:** (i) the
+    centring takes the owner's other listed form, in the loss's
+    win-probability space weighted as the loss is: mu is the m at which the
+    weighted loss's best constant correction is zero (64.35 cp on the
+    training split, computed locally; the constant-shift loss is then
+    lowest at 0); the trainer reports the cp mean beside it; (ii) two gates
+    before the runs (orchestrator): the gradient check (batch 2's gradient
+    norms on the entry, row, middle and head weights above zero; batch 1's
+    upstream gradients are zero by construction, the head starting at
+    zero) and the overfit test (10,000 training sites, 300 passes: the best
+    loss on 2,000 of them at least 5% below their best constant
+    correction's); (iii) every run reports its gradient norms, the
+    superbatches trained and the spread of its correction on validation;
+    the best checkpoint is chosen among finite losses only. A failing gate
+    stops the session and comes back to the orchestrator before any
+    change to the initialisation.
   - **The trainer (lane E, E-c, 2026-11-08):** fork-train `--arch refiner`
     (tools/train/src/main.rs; its header describes the graph, the data and
     the loss). Its CPU build is bullet's mock runtime: it builds the graph,
