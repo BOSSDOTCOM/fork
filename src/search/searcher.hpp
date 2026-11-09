@@ -167,7 +167,7 @@ struct SearchQuota {
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_stability_time, UseStabilityTime, true)          \
-  X(use_share_time, UseShareTime, true) X(use_root_gap_time, UseRootGapTime, false)
+  X(use_share_time, UseShareTime, true) X(use_root_gap_time, UseRootGapTime, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
