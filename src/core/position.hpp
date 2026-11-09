@@ -37,6 +37,10 @@ void init();
 struct State {
   // Hash and rule state.
   Key key;
+  // The pawns' part of key: the XOR of every pawn's piece-square key, so
+  // positions with the same pawns share it (tier 2, T12's pawn-structure
+  // history; KB search-techniques.md §3.11).
+  Key pawn_key;
   int castling;
   Square ep;  // NoSquare unless an ep capture is legal
   int halfmove;
@@ -87,6 +91,7 @@ class Position {
   int halfmove_clock() const { return state().halfmove; }
   int fullmove_number() const { return fullmove_; }
   Key key() const { return state().key; }
+  Key pawn_key() const { return state().pawn_key; }
 
   Bitboard checkers() const { return state().checkers; }
   bool in_check() const { return state().checkers != 0; }
@@ -134,6 +139,12 @@ class Position {
   int repetition_count()
       const;  // occurrences of this position since the last irreversible move, this one included
   bool insufficient_material() const;
+  // Whether the side to move has a reversible move back to a position seen
+  // earlier in the repetition window (since the last irreversible move or
+  // null move): an upcoming repetition, known without generating moves (tier
+  // 2, T51; core/return_moves.hpp). Inside the window one earlier occurrence
+  // is a draw (repetition_count's rule in the search), so so is the move.
+  bool has_return_move() const;
   bool fifty_move_reached() const { return state().halfmove >= 100; }
 
   std::string move_to_uci(Move m) const;

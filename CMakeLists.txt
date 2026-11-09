@@ -150,6 +150,7 @@ endif()
 add_library(forkcore STATIC
   src/core/bitboard.cpp
   src/core/zobrist.cpp
+  src/core/return_moves.cpp
   src/core/position.cpp
   src/core/movegen.cpp
   src/core/perft.cpp

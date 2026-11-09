@@ -8,6 +8,7 @@
 #include <charconv>
 
 #include "core/movegen.hpp"
+#include "core/return_moves.hpp"
 #include "core/zobrist.hpp"
 
 namespace forkeng {
@@ -48,6 +49,7 @@ void init() {
   static const bool once = [] {
     init_bitboards();
     zobrist::init();
+    return_moves::init();  // after the Zobrist keys it is built from
     return true;
   }();
   (void)once;
@@ -89,7 +91,11 @@ void Position::remove(Square s) {
   board_[s] = NoPiece;
 }
 
-void Position::toggle_keys(State& s, Piece p, Square sq) const { s.key ^= zobrist::piece_square[p][sq]; }
+void Position::toggle_keys(State& s, Piece p, Square sq) const {
+  const Key k = zobrist::piece_square[p][sq];
+  s.key ^= k;
+  if (kind_of(p) == Pawn) s.pawn_key ^= k;
+}
 
 Bitboard Position::attackers_to(Square s, Bitboard occ) const {
   return (pawn_attacks(Black, s) & pieces(White, Pawn)) | (pawn_attacks(White, s) & pieces(Black, Pawn)) |
@@ -158,6 +164,7 @@ bool Position::ep_capture_legal(Square ep) const {
 State Position::compute_state() const {
   State s = state();
   s.key = 0;
+  s.pawn_key = 0;
   for (Square sq = 0; sq < 64; ++sq)
     if (board_[sq] != NoPiece) toggle_keys(s, board_[sq], sq);
   if (side_ == Black) s.key ^= zobrist::side;
@@ -580,6 +587,36 @@ Key Position::predicted_key(Move m) const {
 
   int rights = s.castling & CastlingMask[from] & CastlingMask[to];
   return k ^ zobrist::castling[s.castling] ^ zobrist::castling[rights];
+}
+
+// The walk of van Kervinck's method (KB search-techniques.md §3.29): back
+// through the key history, at the positions an odd number of plies back
+// (where the other side was to move), within the repetition window. The
+// other side's moves on the way must have put its pieces back: the XOR of
+// their key changes (each less the side key) is 0, a filter read from the
+// key history alone. Then the two keys differ by one return move key; its
+// piece must be this side's and stand on one of its two squares with the
+// other empty, and the squares between them must be empty. The earlier
+// position occurred legally, so the move leaves no king in check.
+bool Position::has_return_move() const {
+  const int n = static_cast<int>(states_.size());
+  const int window = std::min({state().halfmove, state().game_span - 1, n - 1});
+  if (window < 3) return false;
+  const Key now = key();
+  // The other side's move from one ply back to here.
+  Key others = states_[n - 2].key ^ now ^ zobrist::side;
+  for (int back = 3; back <= window; back += 2) {
+    // Its move from `back` plies back to `back` - 1.
+    others ^= states_[n - 1 - back].key ^ states_[n - back].key ^ zobrist::side;
+    if (others != 0) continue;
+    const return_moves::Entry* e = return_moves::find(now ^ states_[n - 1 - back].key);
+    if (!e || side_of(e->piece) != side_) continue;
+    const bool on_a = piece_at(e->a) == e->piece, on_b = piece_at(e->b) == e->piece;
+    if (on_a == on_b || piece_at(on_a ? e->b : e->a) != NoPiece) continue;
+    if (between(e->a, e->b) & pieces()) continue;
+    return true;
+  }
+  return false;
 }
 
 int Position::repetition_count() const {

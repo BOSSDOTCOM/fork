@@ -30,43 +30,56 @@
 // move reductions and pruning; futility and SEE pruning; the singular test;
 // history; the TT
 // victim policy; the time budget.
-#define FORK_SEARCH_PARAMS(X)             \
-  X(AspirationMinDepth, 5, 2, 10, 1)      \
-  X(AspirationHalfWidth, 12, 6, 24, 1)    \
-  X(IterationGrowthThirds, 5, 3, 10, 1)   \
-  X(ForcedMoveFraction, 8, 4, 16, 1)      \
-  X(RfpMaxDepth, 6, 3, 12, 1)             \
-  X(RfpMargin, 80, 40, 160, 6)            \
-  X(NullMinDepth, 3, 1, 6, 1)             \
-  X(NullSurplusPerPly, 300, 150, 600, 23) \
-  X(NullSurplusPliesMax, 2, 0, 4, 1)      \
-  X(TableProbeMinDepth, 1, 1, 4, 1)       \
-  X(LmrMinDepth, 3, 1, 6, 1)              \
-  X(LmrMinMove, 4, 2, 8, 1)               \
-  X(LmrDivisorTenths, 45, 23, 90, 3)      \
-  X(LmrCorrectionStrength, 64, 0, 128, 6) \
-  X(LmpMaxDepth, 4, 2, 8, 1)              \
-  X(LmpQuietAllowance, 12, 6, 24, 1)      \
-  X(FutilityMaxDepth, 6, 3, 12, 1)        \
-  X(FutilityOffset, 100, 50, 200, 8)      \
-  X(FutilityGrowth, 70, 35, 140, 5)       \
-  X(SeePruneMaxDepth, 6, 3, 12, 1)        \
-  X(QuietSeeFloor, 60, 30, 120, 5)        \
-  X(CaptureSeeFloor, 100, 50, 200, 8)     \
-  X(SingularMinDepth, 6, 4, 12, 1)        \
-  X(SingularEntrySlack, 3, 0, 6, 1)       \
-  X(SingularMarginPerPly, 6, 3, 12, 1)    \
-  X(NoMoveReduceMinDepth, 8, 2, 10, 1)    \
-  X(HistoryBonusFactor, 25, 12, 50, 2)    \
-  X(HistoryBonusCap, 1250, 625, 2500, 94) \
-  X(ReplyWeight, 6, 0, 8, 1)              \
-  X(FollowWeight, 4, 0, 8, 1)             \
-  X(TakeWeight, 4, 0, 16, 1)              \
-  X(StaleDepthPerSearch, 2, 1, 4, 1)      \
-  X(AssumedMovesLeft, 30, 15, 60, 2)      \
-  X(MaxMovesToGo, 40, 20, 80, 3)          \
-  X(HardOverSoft, 4, 2, 8, 1)             \
-  X(ReserveDivisor, 10, 5, 20, 1)         \
+#define FORK_SEARCH_PARAMS(X)                 \
+  X(AspirationMinDepth, 5, 2, 10, 1)          \
+  X(AspirationHalfWidth, 12, 6, 24, 1)        \
+  X(IterationGrowthThirds, 5, 3, 10, 1)       \
+  X(ForcedMoveFraction, 8, 4, 16, 1)          \
+  X(RfpMaxDepth, 6, 3, 12, 1)                 \
+  X(RfpMargin, 80, 40, 160, 6)                \
+  X(NullMinDepth, 3, 1, 6, 1)                 \
+  X(NullSurplusPerPly, 300, 150, 600, 23)     \
+  X(NullSurplusPliesMax, 2, 0, 4, 1)          \
+  X(TableProbeMinDepth, 1, 1, 4, 1)           \
+  X(LmrMinDepth, 3, 1, 6, 1)                  \
+  X(LmrMinMove, 4, 2, 8, 1)                   \
+  X(LmrDivisorTenths, 45, 23, 90, 3)          \
+  X(LmrCorrectionStrength, 64, 0, 128, 6)     \
+  X(LmpMaxDepth, 4, 2, 8, 1)                  \
+  X(LmpQuietAllowance, 12, 6, 24, 1)          \
+  X(FutilityMaxDepth, 6, 3, 12, 1)            \
+  X(FutilityOffset, 100, 50, 200, 8)          \
+  X(FutilityGrowth, 70, 35, 140, 5)           \
+  X(SeePruneMaxDepth, 6, 3, 12, 1)            \
+  X(QuietSeeFloor, 60, 30, 120, 5)            \
+  X(CaptureSeeFloor, 100, 50, 200, 8)         \
+  X(SingularMinDepth, 6, 4, 12, 1)            \
+  X(SingularEntrySlack, 3, 0, 6, 1)           \
+  X(SingularMarginPerPly, 6, 3, 12, 1)        \
+  X(NoMoveReduceMinDepth, 8, 2, 10, 1)        \
+  X(HorizonDropMaxDepth, 4, 1, 8, 1)          \
+  X(HorizonDropMargin, 250, 40, 800, 38)      \
+  X(HistorySkipMaxDepth, 3, 1, 8, 1)          \
+  X(HistorySkipPerPly, 2500, 250, 12000, 588) \
+  X(BadCaptureStopMaxDepth, 4, 1, 8, 1)       \
+  X(BadCaptureStopMargin, 150, 25, 600, 29)   \
+  X(ClockDampingSpan, 200, 101, 1000, 45)     \
+  X(MalusScalePercent, 75, 10, 300, 15)       \
+  X(DoubleExtensionMargin, 30, 2, 240, 12)    \
+  X(DoubleExtensionsMax, 6, 1, 20, 1)         \
+  X(CutNodeLmrPlies, 1, 0, 3, 1)              \
+  X(PvTraceLmrPlies, 1, 0, 3, 1)              \
+  X(StructureHistoryWeight, 3, 0, 8, 1)       \
+  X(HistoryBonusFactor, 25, 12, 50, 2)        \
+  X(HistoryBonusCap, 1250, 625, 2500, 94)     \
+  X(ReplyWeight, 6, 0, 8, 1)                  \
+  X(FollowWeight, 4, 0, 8, 1)                 \
+  X(TakeWeight, 4, 0, 16, 1)                  \
+  X(StaleDepthPerSearch, 2, 1, 4, 1)          \
+  X(AssumedMovesLeft, 30, 15, 60, 2)          \
+  X(MaxMovesToGo, 40, 20, 80, 3)              \
+  X(HardOverSoft, 4, 2, 8, 1)                 \
+  X(ReserveDivisor, 10, 5, 20, 1)             \
   X(DangerZoneOverheads, 2, 1, 4, 1)
 
 // Functions that read a parameter are constexpr only where the parameter is

@@ -29,6 +29,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 #include "core/position.hpp"
@@ -129,6 +130,51 @@ struct SearchQuota {
 //   switches) since its SPRTs against off passed: STC +18.69 +/- 7.18 Elo
 //   after 3,200 games, LTC +10.23 +/- 5.14 Elo after 4,992 games, design R
 //   [0, 6]; 2026-11-08.
+// - use_horizon_drop: razoring (tier 2, T34): at a non-PV node at most
+//   HorizonDropMaxDepth deep whose pruning eval is HorizonDropMargin cp per
+//   ply or more below alpha, a zero-window quiescence search at alpha
+//   decides; if it fails low too, so does the node, with its score. Never a
+//   fail high, never a mate or tablebase score. Off until measured.
+// - use_history_skip: quiet history pruning (tier 2, T24): at a non-PV node
+//   at most HistorySkipMaxDepth deep, once a move has been searched, a
+//   quiet move whose ordering score (quiet_order_score) is below
+//   -HistorySkipPerPly x depth is skipped. Off until measured.
+// - use_bad_capture_stop: bad-capture futility (tier 2, T36): at a non-PV
+//   node at most BadCaptureStopMaxDepth deep whose pruning eval plus
+//   BadCaptureStopMargin cp per ply cannot reach alpha, the moves of the
+//   selector's bad-capture stage that do not give check are skipped. Off
+//   until measured.
+// - use_clock_damping: fifty-move eval scaling (tier 2, T52): the static
+//   eval the search consumes is scaled by (ClockDampingSpan - halfmove
+//   clock) / ClockDampingSpan (damp_for_clock); the TT keeps the raw eval.
+//   Off until measured.
+// - use_malus_scale: the history malus balance (tier 2, T55): the moves
+//   tried before a cutoff take MalusScalePercent per cent of the cutoff's
+//   bonus as their malus (butterfly, pair and take histories alike), not
+//   the whole bonus. Off until measured.
+// - use_double_extension: double extensions (tier 2, T29): with the
+//   singular extension, at a non-PV node, a TT move whose alternatives fail
+//   low DoubleExtensionMargin cp below the singular bar is searched two
+//   plies deeper, at most DoubleExtensionsMax times along one line
+//   (PlyFrame::line_extensions). Off until measured.
+// - use_cut_node_lmr: node types (tier 2, T17): each node gets an expected
+//   type from its parent (PlyFrame::expected_cut: a PV node's later children
+//   and an all node's children are expected cut nodes, a cut node's are
+//   expected all nodes), and at an expected cut node late quiet moves are
+//   reduced CutNodeLmrPlies more. Off until measured.
+// - use_pv_trace_lmr: TT-PV (tier 2, T19): a node searched as a PV node, or
+//   whose TT entry was stored by one, is on the PV trace; its late quiet
+//   moves are reduced PvTraceLmrPlies less, and its entry passes the flag
+//   on. Off until measured.
+// - use_structure_history: the pawn-structure history (tier 2, T12;
+//   quiet_history.hpp's StructureHistory, indexed by the pawn key): read in
+//   the quiet ordering score at StructureHistoryWeight / 4 and updated with
+//   the other quiet histories at a cutoff. Off until measured.
+// - use_cycle_draw: upcoming-repetition detection (tier 2, T51): a node
+//   whose side to move has a reversible move back to a position earlier in
+//   the repetition window (Position::has_return_move) is worth at least a
+//   draw: alpha rises to 0, or the node returns 0 when that reaches beta.
+//   No constant. Off until SPRTed.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -160,7 +206,17 @@ struct SearchQuota {
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_stability_time, UseStabilityTime, true)          \
-  X(use_share_time, UseShareTime, true)
+  X(use_share_time, UseShareTime, true)                  \
+  X(use_horizon_drop, UseHorizonDrop, false)             \
+  X(use_history_skip, UseHistorySkip, false)             \
+  X(use_bad_capture_stop, UseBadCaptureStop, false)      \
+  X(use_clock_damping, UseClockDamping, false)           \
+  X(use_malus_scale, UseMalusScale, false)               \
+  X(use_double_extension, UseDoubleExtension, false)     \
+  X(use_cut_node_lmr, UseCutNodeLmr, false)              \
+  X(use_pv_trace_lmr, UsePvTraceLmr, false)              \
+  X(use_structure_history, UseStructureHistory, false)   \
+  X(use_cycle_draw, UseCycleDraw, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -213,6 +269,8 @@ struct PlyFrame {
   bool after_null = false;      // this node was reached by a null move (no second one in a row)
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
+  std::int16_t line_extensions = 0;  // double extensions on the line from the root to here (T29)
+  bool expected_cut = false;         // expected to fail high (a cut node), from the parent (T17)
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -391,7 +449,12 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
   X(eval_gap_main_reuse_infinite)    \
   X(eval_gap_quiesce_reuse_infinite) \
   X(eval_gap_main_one_sided)         \
-  X(eval_gap_quiesce_one_sided)
+  X(eval_gap_quiesce_one_sided)      \
+  X(horizon_drops)                   \
+  X(history_skips)                   \
+  X(bad_capture_stops)               \
+  X(double_extensions)               \
+  X(cycle_draws)
 
 // X2's histogram bins (DESIGN.md §5.7; measurement settings, no search
 // effect). Sign-magnitude bins: the value 0 and the positive values fill the
@@ -503,6 +566,7 @@ class Searcher {
     history_.clear();
     for (PairHistory& table : pair_history_) table.clear();
     take_history_.clear();
+    structure_history_->clear();
   }
 
   // Tests only: the root move that failed high in the iteration the last
@@ -537,6 +601,7 @@ class Searcher {
   void play(int ply, Move m);
   void play_null(int ply);
   int eval_at(int ply);
+  int damp_for_clock(int eval) const;  // the static eval as the search uses it (T52)
 
   bool poll_limits();  // true once the search must stop
   // The soft limit for this iteration's soft check: the planned one, or with
@@ -569,6 +634,9 @@ class Searcher {
   QuietHistory history_;
   PairHistory pair_history_[2];  // tier 2, T10: the reply and follow tables (ReplyTable, FollowTable)
   TakeHistory take_history_;     // tier 2, T11
+  // Tier 2, T12: 768 KB, so on the heap (a searcher may be a member of
+  // another object); allocated with the searcher, never during a search.
+  std::unique_ptr<StructureHistory> structure_history_ = std::make_unique<StructureHistory>();
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;

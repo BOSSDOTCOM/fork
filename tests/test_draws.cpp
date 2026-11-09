@@ -4,12 +4,16 @@
 // clock.
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <initializer_list>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "core/movegen.hpp"
 #include "core/position.hpp"
+#include "core/return_moves.hpp"
+#include "core/splitmix.hpp"
 #include "harness.hpp"
 
 using namespace forkeng;
@@ -194,4 +198,106 @@ TEST_CASE("draws", "insufficient material across small material signatures") {
   }
   CHECK_EQ(checked, 28 * 28);
   CHECK_EQ(drawn, 19);
+}
+
+// Upcoming-repetition detection (tier 2, T51): the return move table holds
+// every reversible move of a knight, bishop, rook, queen or king of either
+// colour exactly once, against this test's own enumeration on an empty board
+// (offsets and rays walked here, not Fork's attack tables), and each entry is
+// found by its key with its piece and squares.
+TEST_CASE("draws", "return moves: the table holds every reversible move once") {
+  const auto on_board = [](int f, int r) { return f >= 0 && f < 8 && r >= 0 && r < 8; };
+  const int knight[8][2] = {{1, 2}, {2, 1}, {2, -1}, {1, -2}, {-1, -2}, {-2, -1}, {-2, 1}, {-1, 2}};
+  const int diagonal[4][2] = {{1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
+  const int straight[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+  int expected = 0;
+  for (Color c : {White, Black})
+    for (PieceType kind : {Knight, Bishop, Rook, Queen, King}) {
+      const Piece p = piece_of(c, kind);
+      for (Square a = 0; a < 64; ++a) {
+        std::vector<Square> to;
+        const int f = a % 8, r = a / 8;
+        if (kind == Knight)
+          for (const auto& d : knight)
+            if (on_board(f + d[0], r + d[1])) to.push_back(static_cast<Square>((r + d[1]) * 8 + f + d[0]));
+        if (kind == King)
+          for (int df = -1; df <= 1; ++df)
+            for (int dr = -1; dr <= 1; ++dr)
+              if ((df || dr) && on_board(f + df, r + dr))
+                to.push_back(static_cast<Square>((r + dr) * 8 + f + df));
+        const auto rays = [&](const int (&dirs)[4][2]) {
+          for (const auto& d : dirs)
+            for (int k = 1; on_board(f + k * d[0], r + k * d[1]); ++k)
+              to.push_back(static_cast<Square>((r + k * d[1]) * 8 + f + k * d[0]));
+        };
+        if (kind == Bishop || kind == Queen) rays(diagonal);
+        if (kind == Rook || kind == Queen) rays(straight);
+        for (Square b : to) {
+          if (b < a) continue;
+          ++expected;
+          const return_moves::Entry* e = return_moves::find(return_moves::return_move_key(p, a, b));
+          CHECK_MSG(e && e->piece == p && e->a == a && e->b == b,
+                    "piece " << int(p) << " " << int(a) << "-" << int(b));
+        }
+      }
+    }
+  CHECK_EQ(return_moves::stored(), expected);
+  CHECK(return_moves::stored() < return_moves::TableSize);
+}
+
+// has_return_move against the brute force of Fork's own repetition rule: the
+// side to move has a reversible move (no capture, pawn move, castling or
+// promotion) after which the position has occurred before in the window
+// (repetition_count() >= 2). Random games that mostly shuffle pieces, from
+// positions with every kind of piece; a knight's return in the opening as a
+// fixed case; and a king's step back after the castling rights were lost,
+// which does not return to the position with the rights.
+TEST_CASE("draws",
+          "return moves: an upcoming repetition is seen one move early, as the brute force sees it") {
+  Position pos;
+  for (const char* uci : {"g1f3", "g8f6", "f3g1"}) {
+    CHECK(!pos.has_return_move());
+    pos.make(pos.parse_uci(uci));
+  }
+  CHECK(pos.has_return_move());  // ...f6g8 returns to the start position
+  CHECK(pos.set_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"));
+  for (const char* uci : {"e1f1", "e8f8", "f1e1"}) pos.make(pos.parse_uci(uci));
+  CHECK(!pos.has_return_move());  // f8e8 would not bring back the castling rights
+
+  const auto brute = [](Position& p) {
+    MoveList moves;
+    generate<GenMode::Legal>(p, moves);
+    for (Move m : moves) {
+      if (m.is_capture() || m.is_promotion() || m.is_castle() || kind_of(p.piece_at(m.from())) == Pawn)
+        continue;
+      p.make(m);
+      const bool repeats = p.repetition_count() >= 2;
+      p.unmake(m);
+      if (repeats) return true;
+    }
+    return false;
+  };
+  std::uint64_t seed = 20261105;
+  int compared = 0, found = 0;
+  for (const char* fen : {"r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+                          "4k3/2q5/8/3n4/8/2B5/3R4/4K2N w - - 0 1", "8/3k4/8/2r5/8/4N3/3K4/6B1 b - - 7 60"}) {
+    for (int game = 0; game < 12; ++game) {
+      CHECK(pos.set_fen(fen));
+      for (int ply = 0; ply < 60; ++ply) {
+        const bool got = pos.has_return_move(), want = brute(pos);
+        CHECK_MSG(got == want, pos.fen() << ": has_return_move " << got << ", brute force " << want);
+        ++compared;
+        found += want;
+        MoveList moves, quiet;
+        generate<GenMode::Legal>(pos, moves);
+        if (moves.size() == 0) break;
+        for (Move m : moves)
+          if (!m.is_capture() && !m.is_promotion() && kind_of(pos.piece_at(m.from())) != Pawn) quiet.add(m);
+        const MoveList& from = quiet.size() > 0 && splitmix_next(seed) % 10 < 9 ? quiet : moves;
+        pos.make(from[splitmix_next(seed) % from.size()]);
+      }
+    }
+  }
+  CHECK(compared > 1000);
+  CHECK(found > 50);
 }

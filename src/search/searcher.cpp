@@ -61,6 +61,18 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #endif
 }
 
+// Fifty-move eval scaling (tier 2, T52; KB search-techniques.md §3.30), the
+// clock damping: with use_clock_damping the static eval the search consumes
+// (its pruning eval and the quiescence stand-pat) shrinks toward the draw
+// score as the halfmove clock grows, by (ClockDampingSpan - clock) /
+// ClockDampingSpan, so a side ahead prefers to reset the clock while its edge
+// lasts. The TT keeps the raw eval; search, mate and tablebase scores are
+// never damped. ScoreNone (in check) passes through.
+inline int Searcher::damp_for_clock(int eval) const {
+  if (!switches.use_clock_damping || eval == ScoreNone) return eval;
+  return eval * (ClockDampingSpan - pos_->halfmove_clock()) / ClockDampingSpan;
+}
+
 namespace {
 
 // Fork's own values, each justified in DESIGN.md §5.2 ("Search constants").
@@ -143,6 +155,10 @@ void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
 #endif
   const Position& here = *pos_;
   const int bonus = bonus_for_depth(depth);
+  // The malus balance (tier 2, T55; KB search-techniques.md §3.33): with
+  // use_malus_scale the moves tried before the cutoff take MalusScalePercent
+  // per cent of the bonus as their malus instead of the whole bonus.
+  const int malus = switches.use_malus_scale ? bonus * MalusScalePercent / 100 : bonus;
   // The take history (tier 2, T11): a capture that cuts gains the bonus, and
   // the captures tried before a quiet or capture cutoff take the malus (a
   // non-capture promotion's cutoff updates nothing).
@@ -154,25 +170,36 @@ void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
     if (m.is_capture()) take_history_.apply(slot(m), bonus);
     if (switches.use_history_malus)
       for (Move c : f.failed_moves)
-        if (c.is_capture()) take_history_.apply(slot(c), -bonus);
+        if (c.is_capture()) take_history_.apply(slot(c), -malus);
   }
   if (m.is_capture() || !switches.use_history) return;
   const Color us = here.side_to_move();
   history_.apply(us, m, bonus);
   if (switches.use_history_malus)
     for (Move q : f.failed_moves)
-      if (!q.is_capture()) history_.apply(us, q, -bonus);
+      if (!q.is_capture()) history_.apply(us, q, -malus);
   // The pair histories (tier 2, T10) take the same bonus and malus.
   const auto update = [&](PairHistory& table, int arrival) {
     const Position& pos = *pos_;
     table.apply(arrival, pair_slot(pos.piece_at(m.from()), m.to()), bonus);
     if (switches.use_history_malus)
       for (Move q : f.failed_moves)
-        if (!q.is_capture()) table.apply(arrival, pair_slot(pos.piece_at(q.from()), q.to()), -bonus);
+        if (!q.is_capture()) table.apply(arrival, pair_slot(pos.piece_at(q.from()), q.to()), -malus);
   };
   if (switches.use_reply_history && f.arrival != NoArrival) update(pair_history_[ReplyTable], f.arrival);
   const int follow = follow_arrival(f);
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
+  // The pawn-structure history (tier 2, T12) too, in the row of this node's
+  // pawn structure.
+  if (switches.use_structure_history) {
+    const Position& pos = *pos_;
+    const int row = structure_slot(pos.pawn_key());
+    structure_history_->apply(row, pair_slot(pos.piece_at(m.from()), m.to()), bonus);
+    if (switches.use_history_malus)
+      for (Move q : f.failed_moves)
+        if (!q.is_capture())
+          structure_history_->apply(row, pair_slot(pos.piece_at(q.from()), q.to()), -malus);
+  }
 }
 
 void Searcher::update_pv(int ply, Move m) {
@@ -226,6 +253,21 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     alpha = std::max(alpha, mated_score(ply));
     beta = std::min(beta, mate_score(ply + 1));
     if (alpha >= beta) return alpha;
+  }
+
+  // Upcoming repetition (tier 2, T51; KB search-techniques.md §3.29), the
+  // cycle draw: when the side to move has a reversible move back to a
+  // position earlier in the repetition window, the node is worth at least a
+  // draw. A draw at or above beta returns at once; otherwise alpha rises to
+  // it and the node's result is kept at or above it (the KB's fail-soft
+  // rule). Only worth asking while alpha is below the draw score. Not in a
+  // singular test's search, which leaves a move out.
+  int draw_floor = -ScoreInfinite;
+  if (switches.use_cycle_draw && ply > 0 && alpha < 0 && !withheld && pos.has_return_move()) {
+    FORK_STAT(++counters.cycle_draws);
+    if (beta <= 0) return 0;
+    alpha = 0;
+    draw_floor = 0;
   }
 
   // The TT: a cutoff at non-PV nodes when the entry is deep enough and its
@@ -298,7 +340,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // its bound proves (a lower bound above it raises it, an upper bound below
   // it lowers it, an exact score replaces it). Mate and tablebase scores are
   // left out; the TT keeps the raw static eval.
-  int prune_eval = f.static_eval;
+  int prune_eval = damp_for_clock(f.static_eval);
   if (switches.use_tt_eval_refine && tt_hit && !in_check) {
     const int s = score_from_tt(hit.score, ply);
     if (!is_tb_or_mate(s) &&
@@ -315,6 +357,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                     tt_hit, hit, OnPv);
 #endif
   const bool can_prune = !OnPv && !in_check;
+  // TT-PV (tier 2, T19; KB search-techniques.md §3.14), the PV trace: a node
+  // searched as a PV node now, or whose TT entry was stored by one, is on or
+  // near a critical line. With use_pv_trace_lmr its late quiets are reduced
+  // less, and it passes the flag on in the entry it stores.
+  const bool pv_trace = OnPv || (switches.use_pv_trace_lmr && tt_hit && hit.was_pv);
   const bool can_prune_node = can_prune && !withheld;
 
 #ifdef FORK_SEARCH_STATS
@@ -350,6 +397,24 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     return prune_eval;
   }
 
+  // Razoring (tier 2, T34; KB search-techniques.md §3.25), the horizon drop:
+  // a shallow non-PV node whose eval is so far below alpha that a margin
+  // growing with depth cannot close the gap drops into a zero-window
+  // quiescence search at alpha, which checks the one way back, a capture.
+  // If that fails low too, the node fails low with its score; otherwise the
+  // normal search goes on. It never fails high (the KB's TCEC pitfall) and
+  // never returns a mate or tablebase score. It runs before this ply's own
+  // move selection, whose frame the quiescence search uses.
+  if (switches.use_horizon_drop && can_prune_node && depth <= HorizonDropMaxDepth && !is_tb_or_mate(alpha) &&
+      prune_eval + HorizonDropMargin * depth <= alpha) {
+    const int score = quiesce<false>(alpha, alpha + 1, ply);
+    if (stopped_) return 0;
+    if (score <= alpha && !is_tb_or_mate(score)) {
+      FORK_STAT(++counters.horizon_drops);
+      return score;
+    }
+  }
+
   // Null move pruning (T13): if passing still fails high on a reduced
   // search, the node is taken to fail high.
   if (switches.use_nmp && can_prune_node && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
@@ -360,6 +425,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     play_null(ply);
     frames_[ply + 1].after_null = true;
     frames_[ply + 1].arrival = NoArrival;
+    frames_[ply + 1].expected_cut = !f.expected_cut;  // T17: passing should fail low below
+    frames_[ply + 1].line_extensions = f.line_extensions;
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
     frames_[ply + 1].after_null = false;
     pos.unmake_null();
@@ -430,6 +497,15 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           tested_move = hit.move;
           tested_extension = 1;
           FORK_STAT(++counters.singular_extended);
+          // Double extension (tier 2, T29; KB search-techniques.md §3.21): at a
+          // non-PV node, when the other moves fail low by DoubleExtensionMargin
+          // more, the TT move is searched two plies deeper instead, at most
+          // DoubleExtensionsMax times along one line.
+          if (switches.use_double_extension && !OnPv && score < bar - DoubleExtensionMargin &&
+              f.line_extensions < DoubleExtensionsMax) {
+            tested_extension = 2;
+            FORK_STAT(++counters.double_extensions);
+          }
         }
       } else if (!OnPv && switches.use_multi_cut && bar >= beta && !is_tb_or_mate(bar)) {
         FORK_STAT(++counters.multi_cut_cuts);
@@ -482,7 +558,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr,
       switches.use_history ? pair_history_ : nullptr, switches.use_reply_history ? f.arrival : NoArrival,
       switches.use_follow_history ? follow_arrival(f) : NoArrival,
-      switches.use_take_history ? &take_history_ : nullptr);
+      switches.use_take_history ? &take_history_ : nullptr,
+      switches.use_structure_history ? structure_history_.get() : nullptr);
   f.failed_moves.count = 0;
 
   const int alpha_start = alpha;
@@ -513,12 +590,33 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         f.selector.yielding_stage() == SelectorStage::BadCaptures && f.selector.quiets_stopped();
     counters.bad_captures_after_stop += bad_after_stop;
 #endif
+    // The quiet move's ordering score, for the history skip (tier 2, T24):
+    // read in the position before it, with the tables the selector uses; 0
+    // when the skip is off.
+    const int order_score =
+        quiet && switches.use_history_skip
+            ? quiet_order_score(pos, m, switches.use_history ? &history_ : nullptr,
+                                switches.use_history ? pair_history_ : nullptr,
+                                switches.use_reply_history ? f.arrival : NoArrival,
+                                switches.use_follow_history ? follow_arrival(f) : NoArrival,
+                                switches.use_structure_history ? structure_history_.get() : nullptr)
+            : 0;
     // Pruning: only once a move has been searched (so no node is pruned into
     // a false stalemate or mate) and while not already losing to a mate.
     if (moves_searched > 0 && best > -MateBandFloor) {
       if (lmp_node && quiet && quiets_searched >= LmpQuietAllowance + depth) {
         f.selector.stop_quiets();  // late move pruning (T21)
         FORK_STAT(++counters.lmp_prunes);
+        continue;
+      }
+      // Quiet history pruning (tier 2, T24; KB search-techniques.md §3.19),
+      // the history skip: at a shallow non-PV node a quiet move whose
+      // ordering score (the butterfly history and the weighted reply and
+      // follow tables, as the selector orders quiets) is below a threshold
+      // growing more negative with depth is skipped unsearched.
+      if (switches.use_history_skip && can_prune && quiet && depth <= HistorySkipMaxDepth &&
+          order_score < -HistorySkipPerPly * depth) {
+        FORK_STAT(++counters.history_skips);
         continue;
       }
 #ifdef FORK_SEARCH_STATS
@@ -530,6 +628,20 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                                               : counters.see_tests_other);
       }
 #endif
+      // Bad-capture futility (tier 2, T36; KB search-techniques.md §3.26), the
+      // bad capture stop: once the selector yields the deferred captures that
+      // lose material by SEE (and the under-promotions), at a shallow non-PV
+      // node whose eval plus a margin growing with depth still cannot reach
+      // alpha, each of them that does not give check is skipped. The node's
+      // fail-soft result keeps the bound a skipped move is presumed under, as
+      // futility pruning's does.
+      if (switches.use_bad_capture_stop && can_prune && depth <= BadCaptureStopMaxDepth &&
+          f.selector.yielding_stage() == SelectorStage::BadCaptures && !is_tb_or_mate(alpha) &&
+          prune_eval + BadCaptureStopMargin * depth <= alpha && !pos.gives_check(m)) {
+        best = std::max(best, prune_eval + BadCaptureStopMargin * depth);
+        FORK_STAT(++counters.bad_capture_stops);
+        continue;
+      }
       // A capture from the good-capture stage already has SEE >= 0, above
       // every (negative) threshold here, so it is not tested again (review
       // claim (c), 2026-10-26).
@@ -570,6 +682,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                                             m.is_en_passant() ? Pawn : kind_of(pos.piece_at(m.to()))))
             : 0;
 #endif
+    frames_[ply + 1].line_extensions = static_cast<std::int16_t>(f.line_extensions + (extension >= 2));
+    // Node types (tier 2, T17; KB search-techniques.md §3.14), the expected
+    // type of the child: a PV node's later children are expected cut nodes
+    // (its first is a PV node); a cut node's children are expected all nodes,
+    // and an all node's expected cut nodes, as in a minimal tree. A
+    // prediction only: nothing relies on it being right.
+    frames_[ply + 1].expected_cut = OnPv ? moves_searched > 0 : !f.expected_cut;
     play(ply, m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
@@ -614,7 +733,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // forcing line, so it is reduced less. The move is already made, so
         // "gives check" is the child's side to move being in check.
         const int relief = switches.use_lmr_check_relief && pos.in_check() ? LmrCheckRelief : 0;
-        reduced = std::clamp(new_depth - (base + correction - relief), 1, new_depth);
+        // Node types (T17): an expected cut node's late quiets are reduced
+        // CutNodeLmrPlies more; TT-PV (T19): a node on the PV trace's are
+        // reduced PvTraceLmrPlies less.
+        const int cut_extra = switches.use_cut_node_lmr && !OnPv && f.expected_cut ? CutNodeLmrPlies : 0;
+        const int trace_relief = switches.use_pv_trace_lmr && pv_trace ? PvTraceLmrPlies : 0;
+        reduced =
+            std::clamp(new_depth - (base + correction - relief + cut_extra - trace_relief), 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;
@@ -716,10 +841,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // withheld move counts as singular.
   if (moves_seen == 0) return withheld ? alpha : in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
-  best = std::clamp(best, table_floor, table_ceiling);
+  best = std::max(std::clamp(best, table_floor, table_ceiling), draw_floor);
   if (switches.use_tt && !withheld) {
     const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
-    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound,
+                switches.use_pv_trace_lmr ? pv_trace : OnPv);
   }
   return best;
 }
@@ -780,7 +906,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
         counters.eval_gap_quiesce_one_sided += is_tb_or_mate(alpha) != is_tb_or_mate(beta);
     }
 #endif
-    best = f.static_eval;
+    best = damp_for_clock(f.static_eval);
     if (best >= beta) {
       if (switches.use_tt)
         tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);
@@ -842,6 +968,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     branch_share_ = root_moves_[i].share;
     const std::uint64_t nodes_before = nodes_;
     frames_[1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
+    frames_[1].expected_cut = i > 0;  // the root's later moves: expected cut nodes (T17)
     play(0, m);
     int score;
     if (i == 0 || !switches.use_pvs) {
