@@ -1945,6 +1945,28 @@ until measured; new names and constants go through the screens before use.
   arXiv note, stating clearly that the idea came from an AI-assisted project. Anything published outside
   the repository needs the owner's go-ahead at the time. **runtime cost:** possible.
   **earliest phase:** Phase 4.
+- **step 3 outcome (owner, 2026-11-09): the shared-accumulator refiner hurt; step 3 closes, step 3b
+  parked.** Kernel v2 (idea59/step3 a9bbd88; the declared pick w2, cap 198, weighted arm, seed 2) cut
+  validation loss from 0.0426 to 0.0227 but failed the offline acceptance (gated net flips −0.007 on test;
+  a constant +122 cp shift scored +0.143, above the oracle's +0.079). By the owner's decision (2026-11-08)
+  the net-flip yardstick is not a kill gate, and fixed-node screens decided instead (1,600 games,
+  800,000 nodes per move, against S512ppr3 alone; gate main 25 / quiescence 10 cp):
+
+  | setting | Elo | nElo | run |
+  |---|---|---|---|
+  | f1a: refiner (shared accumulator), both gates (idea59/step3 05061ce) | −19.78 +/- 9.67 | −34.91 | 42574807031 |
+  | f1b: refiner, quiescence only (077d1c8) | −11.73 +/- 9.63 | −20.76 | 42589690181 |
+  | f1c: second opinion, blend (base + second) / 2 with the independent net s512pp-scratch-s1 (exp/oracle dcbe8fb) | +9.56 +/- 9.45 | +17.24 | 42594402144 |
+  | f1d: second opinion, replace by s512pp-scratch-s1 (ab1abce) | +3.47 +/- 9.34 | +6.33 | 42600420297 |
+
+  Both refiner screens are at or below 0, so the refiner line ends (no SPRT ran; the pre-approved STC
+  SPRTs needed a point estimate above 0). The independent-net screens match the pattern the
+  independence hypothesis (owner, 2026-11-08) predicted, with the blend ahead of the replacement, but f1c is
+  below the bar declared before the result (+10), so no step 3b plan is written. **Step 3b, parked as a
+  hypothesis to revisit when compute allows:** a small independent near-window net (widths 64 / 128),
+  blended with the base at gate fire with a tuned blend weight. The second network's nps cost (f1c and
+  f1d about 25-30% slower on bench, indicative) is not charged by fixed-node screens, which is part of
+  why the bar is set where it is. **status:** step 3 closed; step 3b parked.
 - **linked follow-ups** (owner, 2026-11-08; plan only, after step 3's first
   results; each its own experiment, shared with idea 61's family):
   1. **Boundary controller:** the refiner's confidence output routes each

@@ -29,6 +29,7 @@
 #include "engine_process.hpp"
 #include "harness.hpp"
 #include "search/hash_memory.hpp"
+#include "search/score_bounds.hpp"
 #include "search/time_budget.hpp"
 #include "suite.hpp"
 #include "uci/tokens.hpp"
@@ -611,11 +612,16 @@ TEST_CASE("uci_protocol", "the mate in 2 is reported within depth 6, after other
 // - bestmove comes no sooner than the soft limit after go was sent: before
 //   it, every finished iteration starts another (depth, mate and nodes do
 //   not limit this go);
-// - no iteration starts after the soft limit: every depth reported, except
-//   the deepest, was first reported (as an exact line; the engine's own
-//   clock, counted from go) before the soft limit. Without the soft check
-//   (mutant M57) iterations go on until the hard-limit rule (3/5 of the hard
-//   limit) or the hard limit itself.
+// - no iteration starts after the soft limit as time management can scale
+//   it (UseStabilityTime, UseShareTime): every depth reported, except the
+//   deepest, was first reported (as an exact line; the engine's own clock,
+//   counted from go) before the largest scaled soft limit the engine's rule
+//   allows. That bound is scaled_soft_ms at the largest factor
+//   soft_scale_permille gives at any depth (it is non-increasing in
+//   stability and share, so stability 1 and the smallest share give the
+//   largest), and never less than the plain soft limit. Without the soft
+//   check (mutant M57) iterations go on until the hard-limit rule (3/5 of
+//   the hard limit) or the hard limit itself.
 // The limits are plan_time's for White's clock and the default Move Overhead
 // of 100 ms: 2900 ms over 30 moves, soft 96 ms, hard 4 x 96 = 384 ms.
 TEST_CASE("uci_protocol", "a clock go: bestmove not before the soft limit, no iteration started after it") {
@@ -651,10 +657,16 @@ TEST_CASE("uci_protocol", "a clock go: bestmove not before the soft limit, no it
     CHECK(!first_seen.empty());
     std::int64_t deepest = 0;
     for (const auto& [depth, time] : first_seen) deepest = std::max(deepest, depth);
+    int widest = 1000;  // the largest soft-limit factor, per mille
+    for (const TimeScaleVariant variant : {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
+      for (int depth = 0; depth < MaxPly; ++depth)
+        widest = std::max(widest, soft_scale_permille(variant, {depth, 1, 1, 0}));
+    const std::int64_t bound = std::max(plan.soft_ms, scaled_soft_ms(plan.soft_ms, plan.hard_ms, widest));
     for (const auto& [depth, time] : first_seen)
-      CHECK_MSG(depth == deepest || time < plan.soft_ms, "depth " << depth << " finished at " << time
-                                                                  << " ms, past the soft limit, and depth "
-                                                                  << deepest << " still started");
+      CHECK_MSG(depth == deepest || time < bound, "depth " << depth << " finished at " << time
+                                                           << " ms, past the largest scaled soft limit ("
+                                                           << bound << " ms), and depth " << deepest
+                                                           << " still started");
   }
   g.check_transcript();
   g.quit();
