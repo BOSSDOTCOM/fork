@@ -2172,6 +2172,8 @@ and Weiss (results in ORIGINALITY.md).
 | `DepthFit` (normaliser) | logit 0.567490 − 0.211730·depth (Q16 37191, −13876) | Placeholder, X6 rows, the same label on depth alone. The scale is σ(fit)/σ(DepthFit): the iteration's change chance over the typical one at its depth. Depth normalises and is no signal of its own (owner, 2026-11-07): with the literal fits on stability (and share) alone, the balance needed to keep the mean spend drifts from 1.04 to 1.58 (a) and 1.01 to 1.46 (b) between 100k and 500k-node soft budgets, so an STC calibration would spend less at LTC; normalised, it stays at 0.99-1.08 (a) and 0.95-1.04 (b). Fallback (literal fits, kept documented; stability capped at 72): (a) σ(−0.455439 − 0.224471·s) / 0.1294, balance 1.216; (b) σ(−0.569350 − 0.199212·s − 0.173797·L) / 0.1294, balance 1.167 (both at 250k nodes; tm_curve.py prints all three budgets). |
 | `TimeScaleBalanceStability`, `TimeScaleBalanceShare` | 1030, 996 per mille | Placeholders: the factor that keeps the mean spend equal to the plain soft limit's when X6's 2,086 searches are replayed with nodes as the clock (soft budget B, hard 4B, the engine's stop rules: the hard stop, the soft check, the forced-move stop, the iteration rule), the scale as the engine applies it (stability and depth caps, floor), the mean of the balances at B = 100k, 250k and 500k nodes (a: 1.018, 0.988, 1.083; b: 0.996, 0.954, 1.038). At equal mean spend the move at the stop matched the 2M-node final move more often (250k: 0.854 plain, 0.873 a, 0.874 b; in sample, not Elo). Nodes as time is UNVERIFIED: the head-to-head's clocks confirm the spend. |
 | `TimeScaleFloor` | 360 per mille | Placeholder: at most two iterations short of the soft limit at Fork's iteration growth 5/3 (row "Iteration growth"): (3/5)² = 0.36. It binds at about a quarter of X6's rows (23% in a, 24% in b: the long-stable ones), and the balance is computed with it. No upper bound: the hard limit caps the scaled soft limit, and the iteration rule already ends an extended search near 2.4 soft limits. |
+| `RootGapBand` (switch `UseRootGapTime`, off; ideas.md idea 61 part 6) | 14 cp | **Placeholder, to be chosen by head-to-head** (candidates 7, 14, 28; range 7-28, step 1). Another root move within this many centipawns of the best one could overtake it at the next depth: 14 is the 75th percentile of the root score's change from one iteration to the next on Fork's bench positions (2026-11-09, 46 positions to depth 14 on S512ppr3, the 322 iterations at depth >= 8 with no mate score: median 6, p75 14, p90 29 cp), so a smaller gap is within the score's ordinary movement. Also the pre-filter: a last-pass fail-soft gap of this size or more rules the iteration out without a probe. The probe searches the other root moves at the iteration's own depth (no reduction constant: the score it compares with comes from that depth, and a half-depth probe, tried first, read the change of score with depth as a gap). |
+| `RootGapExtra` | 667 per mille | **Placeholder, to be chosen by head-to-head** (candidates 333, 667, 1000; range 333-1334, step 50). One more iteration at Fork's iteration growth 5/3 (row "Iteration growth"): a soft limit times 5/3 lets the search that would stop finish about one more depth, where the close pair can separate. It multiplies the stability scale and never passes the hard limit. |
 
 #### Owner's answers (2026-10-24)
 
@@ -3724,6 +3726,53 @@ rule (adopt into phase-4 only after LTC passes) tm/b was merged:
 switches until the Phase 4 re-validation. Bench is unchanged (bench has no
 soft limit), and data generation is node-limited, so the labeller is
 untouched.
+
+**Idea 61 part 6, root-gap time management, built behind a switch
+(2026-11-09, branch idea61/root-gap; owner: "build behind a switch with
+tests; constants by head-to-head later").** Extra soft-limit time when
+another root move is close to the best one. `UseRootGapTime` (off): after
+a finished iteration of a timed search whose soft limit can grow (not `go
+movetime`, not pondering, not bench or data generation), from depth 8
+(`TimeScaleMinDepth`), at a score that is not a mate or tablebase score,
+and only once elapsed time has passed the soft limit as the stability
+rule scales it (earlier the search goes on anyway), Fork asks whether
+another root move reaches the iteration's score less `RootGapBand`; if
+one does, the soft limit is multiplied by (1000 + `RootGapExtra`) / 1000
+(on top of the stability scale, never past the hard limit), and the next
+soft check asks again. The question is answered in two steps: (1) free, a
+pre-filter: search_root keeps the largest score any other root move
+returned in the iteration's last pass (fail-soft: exact for a move
+displaced as best, an upper bound otherwise); if that is already
+`RootGapBand` or more below the score, no move can be close; (2) a
+zero-window probe of the other root moves at the iteration's own depth
+on a window at score − `RootGapBand`, stopping at the first that reaches
+it (`Searcher::probe_root_gap`). The cheaper designs were measured and
+rejected: the fail-soft gap alone is 0 at the median iteration on the
+bench positions (317 iterations at depth >= 8, 46 positions to depth 14;
+85% below 6 cp), since the other moves' upper bounds sit at the window, so
+it would extend almost always; a half-depth probe (Fork's singular test
+depth) compared half-depth scores with the full-depth score and missed
+close pairs in the search test (the change of score with depth read as a
+gap). At the iteration's depth the iteration's TT entries answer at once
+for every move whose bound is already below the bar. Constants:
+"Search constants" (`RootGapBand` 14, `RootGapExtra` 667; placeholders
+for a head-to-head). Checks (2026-11-09): with the switch off, 230 timed
+searches on the node clock (`FORK_NODE_CLOCK`; the 46 bench positions
+under §5.6 step 10's five conditions) gave output identical to phase-4's
+d0e876b (the tuning build's `uci` option lines aside); with it on, 35 of
+the 184 searches with a growable soft limit went one or more iterations
+deeper (8+0.08: 8 of 46, 60+0.6: 13, movestogo 5: 12, a 300 ms clock: 2;
+movetime 200: none), no best move changed, and the node clock's spend rose
+by 12.9%, 18.3%, 16.7% and 3.9%; 111 probes ran, 48 found a close move,
+and the probes' own nodes were 14.6 M (the 63 that found none: 6.9 M,
+2.7% of the switched-off run's 254.6 M nodes). Bench is unchanged
+(14,149,617 / 1cb0717f040c294d): bench has no soft limit. The originality
+screen found a near match of the form in Stockfish 2.2 to 4 and DD (an
+early-stop root probe without the best move), credited in ORIGINALITY.md
+and flagged to the owner. Next (queued after batch 4, night items 60-62):
+the head-to-head of `RootGapBand` (7, 14, 28), then of `RootGapExtra`
+(333, 667, 1000) at the band picked, then the winner's design R SPRT
+against off at STC.
 
 ### 5.7 Phase 4 step 1: measurement instrumentation (owner-approved 2026-11-07)
 

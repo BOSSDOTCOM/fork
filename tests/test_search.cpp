@@ -11,6 +11,8 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -1457,5 +1459,174 @@ TEST_CASE("search", "time management: a changed best move searches longer, a sta
                                   << (extend ? ": no iteration to extend" : ": none to shorten"));
     }
   }
+}
+
+// Root-gap time (ideas.md idea 61 part 6): the factor from the iteration's
+// depth and score, the runner-up's fail-soft score and the probe's answer.
+// The expected values are written from the rule's statement (time_budget.hpp),
+// not from the function.
+TEST_CASE("time_budget", "root-gap time: extra time only for a reached probe within the band") {
+  const int extended = 1000 + RootGapExtra;
+  CHECK(RootGapExtra > 0);
+  int broken = 0;
+  for (int depth = 1; depth <= 70; ++depth)
+    for (int score : {-1500, -300, -1, 0, 1, 37, 900})
+      for (int gap = -5; gap <= 3 * RootGapBand; ++gap)
+        for (bool reached : {false, true}) {
+          const int want = depth >= 8 && gap < RootGapBand && reached ? extended : 1000;
+          broken += root_gap_permille(depth, score, score - gap, reached) != want;
+        }
+  CHECK_EQ(broken, 0);
+  // The edges: one below the band applies, the band itself does not; depth 8
+  // is the first depth.
+  CHECK_EQ(root_gap_permille(8, 50, 50 - (RootGapBand - 1), true), extended);
+  CHECK_EQ(root_gap_permille(8, 50, 50 - RootGapBand, true), 1000);
+  CHECK_EQ(root_gap_permille(7, 50, 50, true), 1000);
+  // Neutral: no runner-up (one root move), mate and tablebase scores, and a
+  // runner-up that is mated (far from any normal score).
+  CHECK_EQ(root_gap_permille(12, 0, -ScoreInfinite, true), 1000);
+  for (int score : {TbWinScore - MaxPly, -(TbWinScore - MaxPly), mate_score(5), -mate_score(5)})
+    CHECK_EQ(root_gap_permille(12, score, score, true), 1000);
+  CHECK_EQ(root_gap_permille(12, TbWinScore - MaxPly - 1, TbWinScore - MaxPly - 1, true), extended);
+  CHECK_EQ(root_gap_permille(12, 0, -mate_score(3), true), 1000);
+}
+
+namespace {
+// Root-gap time in the search: after the iteration at jump_depth, records the
+// time-management signals and moves the search's clock to jump_to_ms (just
+// past a plain soft limit); at the next iteration's report, records the
+// root-gap probe's answer and the soft limit compared against after
+// jump_depth (both are set after an iteration's report, so they are still
+// jump_depth's then).
+struct RootGapListener final : SearchListener {
+  Searcher* searcher = nullptr;
+  int jump_depth = 0;
+  std::int64_t jump_to_ms = 0;
+  IterationSignals signals;
+  int runner_up = 0;
+  bool reached = false;
+  std::int64_t soft = -1;
+  bool seen_next = false;
+  void on_iteration(const Position&, const IterationReport& r) override {
+    if (r.bound != 0) return;
+    if (r.depth == jump_depth) {
+      signals = searcher->time_signals();
+      runner_up = searcher->root_runner_up();
+      searcher->advance_clock(std::chrono::milliseconds{jump_to_ms - r.elapsed_ms});
+    } else if (r.depth == jump_depth + 1 && !seen_next) {
+      reached = searcher->root_gap_reached();
+      soft = searcher->last_soft_ms();
+      seen_next = true;
+    }
+  }
+};
+}  // namespace
+
+// Root-gap time in the search (idea 61 part 6): a soft limit of 100 s (hard
+// 400 s) and the clock moved to 100.001 s after iteration D = 10, so the
+// plain soft check stops there. The oracle asks the probe's question with
+// fresh searches (a new searcher and TT each), independently of the probe: a
+// full search to depth D (the best move and score), then one to depth D of
+// every other move (searchmoves: the best other score). Where that gap
+// is at most a quarter of RootGapBand (clearly close), the switched-on search
+// extends: it probes, finds another move near the best, raises the soft limit
+// by RootGapExtra and finishes D + 1, while the switched-off one stops at D.
+// Where the gap is at least four times RootGapBand (clearly far), the
+// switched-on search is the switched-off one: the soft limit stays 100 s and
+// it stops at D. Stability time is off in these runs, so the soft limit is
+// the root gap's alone; a last run with it on checks that the two factors
+// multiply. The first three positions of each kind in the bench list are
+// used (each kind must exist).
+TEST_CASE("search", "root-gap time: the soft limit grows only when another root move is close") {
+  constexpr int D = 10;
+  const std::atomic<bool> stop{false};
+  const auto oracle_gap = [&](std::string_view fen) -> std::optional<int> {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    const auto fresh = [&](int depth, const MoveList& moves) {  // a fresh searcher and TT each time
+      TestHash store;
+      auto searcher = std::make_unique<Searcher>(store.table);
+      SearchQuota limits;
+      limits.depth = depth;
+      limits.restrict_to = moves;
+      return searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+    };
+    const SearchResult full = fresh(D, MoveList{});
+    MoveList others, legal;
+    generate<GenMode::Legal>(pos, legal);
+    for (Move m : legal)
+      if (!(m == full.best)) others.add(m);
+    if (others.size() == 0 || is_tb_or_mate(full.score)) return std::nullopt;
+    const SearchResult second = fresh(D, others);
+    if (is_tb_or_mate(second.score)) return std::nullopt;
+    return full.score - second.score;
+  };
+  struct Run {
+    int depth;
+    RootGapListener seen;
+  };
+  const auto run = [&](std::string_view fen, bool gap_on, bool stability_on, std::int64_t jump_to) {
+    TestHash store;
+    auto searcher = std::make_unique<Searcher>(store.table);
+    searcher->switches.use_stability_time = stability_on;
+    searcher->switches.use_root_gap_time = gap_on;
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    SearchQuota limits;
+    limits.depth = D + 1;
+    limits.soft_ms = 100'000;
+    limits.hard_ms = 400'000;
+    Run r{0, {}};
+    r.seen.searcher = searcher.get();
+    r.seen.jump_depth = D;
+    r.seen.jump_to_ms = jump_to;
+    r.depth = searcher->deliberate(pos, limits, stop, nullptr, &r.seen).depth;
+    if (!r.seen.seen_next) {  // stopped after D: its values are the last ones
+      r.seen.reached = searcher->root_gap_reached();
+      r.seen.soft = searcher->last_soft_ms();
+    }
+    return r;
+  };
+  const std::int64_t extended_soft = scaled_soft_ms(100'000, 400'000, 1000 + RootGapExtra);
+  int close = 0, far = 0;
+  bool combined = false;
+  for (std::string_view fen : search_bench_fens()) {
+    if (close >= 3 && far >= 3) break;
+    const std::optional<int> gap = oracle_gap(fen);
+    if (!gap) continue;
+    const bool is_close = *gap * 4 <= RootGapBand, is_far = *gap >= 4 * RootGapBand;
+    if (!(is_close && close < 3) && !(is_far && far < 3)) continue;
+    const std::string where = std::string(fen) + ", oracle gap " + std::to_string(*gap);
+    const Run off = run(fen, false, false, 100'001);
+    const Run on = run(fen, true, false, 100'001);
+    CHECK_MSG(off.depth == D && off.seen.soft == 100'000, where << ": off reached " << off.depth);
+    CHECK_MSG(!off.seen.reached, where);
+    if (is_close) {
+      ++close;
+      CHECK_MSG(on.seen.reached && on.depth == D + 1 && on.seen.soft == extended_soft,
+                where << ": on reached " << on.depth << ", soft " << on.seen.soft << ", score "
+                      << on.seen.signals.score << ", runner-up " << on.seen.runner_up);
+      if (!combined) {
+        // With stability time on too, the two factors multiply. The searches
+        // are the same up to D (no probe runs before the clock jump), so the
+        // stability scale at D is the one computed from the run above, and
+        // the clock moves just past the soft limit it gives.
+        combined = true;
+        const int stability = soft_scale_permille(TimeScaleVariant::StabilityAndShare, on.seen.signals);
+        const std::int64_t plain = scaled_soft_ms(100'000, 400'000, stability);
+        const Run both = run(fen, true, true, plain + 1);
+        const int product = (stability * (1000 + RootGapExtra) + 500) / 1000;
+        CHECK_MSG(both.seen.signals.depth == D && both.seen.signals.score == on.seen.signals.score, where);
+        CHECK_MSG(both.seen.reached && both.depth == D + 1 &&
+                      both.seen.soft == scaled_soft_ms(100'000, 400'000, product),
+                  where << ": stability " << stability << ", soft " << both.seen.soft);
+      }
+    } else {
+      ++far;
+      CHECK_MSG(!on.seen.reached && on.depth == D && on.seen.soft == 100'000,
+                where << ": on reached " << on.depth << ", soft " << on.seen.soft);
+    }
+  }
+  CHECK_MSG(close >= 3 && far >= 3, "close " << close << ", far " << far);
 }
 }  // namespace forkeng::test

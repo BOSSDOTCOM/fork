@@ -836,7 +836,8 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   // The root node counts too, so a node limit reached here stops here, not
   // one node later in the first child (audit-1, A1 suspicion 8).
   if (poll_limits()) return best;
-  std::size_t best_index = 0;  // the move that last raised alpha
+  std::size_t best_index = 0;      // the move that last raised alpha
+  int runner_up = -ScoreInfinite;  // the largest score below the best one (root_gap_permille)
   for (std::size_t i = 0; i < root_count_; ++i) {
     const Move m = root_moves_[i].move;
     branch_share_ = root_moves_[i].share;
@@ -854,7 +855,12 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     root_moves_[i].nodes = nodes_ - nodes_before;
     root_moves_[i].nodes_all_passes += root_moves_[i].nodes;  // every pass's moves, before a stop returns
     if (stopped_) return best;
-    if (score > best) best = score;
+    if (score > best) {
+      runner_up = best;
+      best = score;
+    } else {
+      runner_up = std::max(runner_up, score);
+    }
     if (m == root_fail_high_ && score < beta) root_fail_high_ = NoMove;  // resolved by its re-search
     if (score > alpha) {
       best_index = i;
@@ -875,14 +881,50 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   const RootEntry front = root_moves_[best_index];
   for (std::size_t i = best_index; i > 0; --i) root_moves_[i] = root_moves_[i - 1];
   root_moves_[0] = front;
+  root_runner_up_ = runner_up;
   return best;
 }
 
 std::int64_t Searcher::soft_limit_now(const SearchQuota& limits) const {
-  if (!switches.use_stability_time) return limits.soft_ms;
-  const TimeScaleVariant variant =
-      switches.use_share_time ? TimeScaleVariant::StabilityAndShare : TimeScaleVariant::StabilityOnly;
-  return scaled_soft_ms(limits.soft_ms, limits.hard_ms, soft_scale_permille(variant, time_signals_));
+  if (!switches.use_stability_time && !switches.use_root_gap_time) return limits.soft_ms;
+  int permille = 1000;
+  if (switches.use_stability_time) {
+    const TimeScaleVariant variant =
+        switches.use_share_time ? TimeScaleVariant::StabilityAndShare : TimeScaleVariant::StabilityOnly;
+    permille = soft_scale_permille(variant, time_signals_);
+  }
+  // Root-gap time (idea 61 part 6) multiplies the stability scale, rounded
+  // to the nearest per mille; it is 1000 or more, so the product never
+  // falls below the stability scale's floor.
+  if (switches.use_root_gap_time)
+    permille = (permille * root_gap_permille(time_signals_.depth, time_signals_.score, root_runner_up_,
+                                             root_gap_reached_) +
+                500) /
+               1000;
+  return scaled_soft_ms(limits.soft_ms, limits.hard_ms, permille);
+}
+
+bool Searcher::probe_root_gap(int depth, int score) {
+  // The other root moves (the best one is in front after the iteration),
+  // each searched as search_root searches it, at the iteration's depth, on a
+  // zero window at the iteration's score less RootGapBand, until one reaches
+  // it. The same depth as the score compared against: the iteration's TT
+  // entries answer at once for a move whose last bound is already below the
+  // bar, and only a move whose bound lies between the bar and the score is
+  // searched again.
+  Position& pos = *pos_;
+  const int bar = score - RootGapBand;
+  for (std::size_t i = 1; i < root_count_; ++i) {
+    const Move m = root_moves_[i].move;
+    branch_share_ = root_moves_[i].share;
+    frames_[1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
+    play(0, m);
+    const int v = -negamax<false>(-bar, -bar + 1, depth - 1, 1);
+    pos.unmake(m);
+    if (stopped_) return false;
+    if (v >= bar) return true;
+  }
+  return false;
 }
 
 #ifdef FORK_SEARCH_STATS
@@ -1004,6 +1046,8 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   stable_iterations_ = 0;
   stable_move_ = NoMove;
   time_signals_ = {};
+  root_runner_up_ = -ScoreInfinite;
+  root_gap_reached_ = false;
   last_soft_ms_ = limits.soft_ms;
   frames_[0].arrival = NoArrival;  // the root has none (the follow table's arrival at ply 1)
 
@@ -1142,7 +1186,26 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
         mate_in_moves(score) <= limits.mate_moves)
       break;
     const bool timed = !(pondering && pondering->load(std::memory_order_relaxed));
+    root_gap_reached_ = false;
     last_soft_ms_ = soft_limit_now(limits);
+    // Root-gap time (idea 61 part 6): the probe runs only where its answer
+    // decides the soft check: a timed search whose soft limit can grow
+    // (movetime's cannot), at an iteration the rule applies to
+    // (root_gap_permille), once the soft limit without the extension has
+    // passed but the extended one has not. Earlier the search goes on either
+    // way, later it stops either way. A stop in the probe ends the search
+    // with this finished iteration's result.
+    if (switches.use_root_gap_time && timed && limits.soft_ms >= 0 && limits.soft_ms < limits.hard_ms &&
+        root_gap_permille(depth, score, root_runner_up_, true) > 1000 && elapsed_ms() >= last_soft_ms_) {
+      root_gap_reached_ = true;
+      if (elapsed_ms() < soft_limit_now(limits)) {
+        root_gap_reached_ = probe_root_gap(depth, score);
+        if (stopped_) break;
+      } else {
+        root_gap_reached_ = false;
+      }
+      last_soft_ms_ = soft_limit_now(limits);
+    }
     if (timed && limits.soft_ms >= 0 && elapsed_ms() >= last_soft_ms_) break;
     // With one root move (one legal move, one searchmoves move, or one the
     // tables keep) nothing the search finds can change the move: only the

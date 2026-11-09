@@ -2119,4 +2119,12 @@ until measured; new names and constants go through the screens before use.
   (d0 - d6 -2.19 +/- 12.04 nElo), and its design R SPRT against off stopped
   for futility after stage 3 (-2.93 +/- 7.16 Elo, 3,200 games, try 1 of 2),
   so by the kill criterion part 5 is retired**; docs/history/phase-4/sprt-log.md.
+  **Part 6 (root-gap time management) built behind `UseRootGapTime`
+  (off), 2026-11-09, branch idea61/root-gap** (DESIGN.md §5.6, after step
+  10): a fail-soft pre-filter, then a zero-window probe of the other root
+  moves at the iteration's depth, run only at the soft check's decision;
+  extra time when another move comes within `RootGapBand`. Constants are
+  placeholders (`RootGapBand` 14, `RootGapExtra` 667), to be chosen by
+  head-to-head; then its design R SPRT (night queue items 60-62, after
+  batch 4). Status: untested.
   **runtime cost:** possible (refiner calls at pruning sites). **earliest phase:** Phase 4.

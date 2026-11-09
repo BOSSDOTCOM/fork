@@ -192,6 +192,16 @@ int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signal
   return std::max(TimeScaleFloor, static_cast<int>((num + den / 2) / den));
 }
 
+int root_gap_permille(int depth, int score, int runner_up, bool reached) {
+  constexpr int Unchanged = 1000;
+  // The same depth gate as the stability scaling: shallower iterations take
+  // a negligible part of any soft limit. A mate or tablebase score's gap is
+  // a distance in plies, not a closeness of evaluation.
+  if (depth < TimeScaleMinDepth || runner_up <= -ScoreInfinite || is_tb_or_mate(score)) return Unchanged;
+  if (score - runner_up >= RootGapBand) return Unchanged;
+  return reached ? Unchanged + RootGapExtra : Unchanged;
+}
+
 std::int64_t scaled_soft_ms(std::int64_t soft_ms, std::int64_t hard_ms, int permille) {
   if (soft_ms < 0 || hard_ms < 0 || soft_ms >= hard_ms) return soft_ms;
   const std::int64_t p = std::max(permille, 0);
