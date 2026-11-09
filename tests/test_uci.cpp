@@ -609,9 +609,12 @@ TEST_CASE("uci_protocol", "the mate in 2 is reported within depth 6, after other
 
 // Audit-1 Q-1: a clock go ends between its soft and hard limits. Two bounds
 // that load cannot break falsely (a slow machine only makes times larger):
-// - bestmove comes no sooner than the soft limit after go was sent: before
-//   it, every finished iteration starts another (depth, mate and nodes do
-//   not limit this go);
+// - bestmove comes no sooner than the smallest soft limit time management
+//   can scale to after go was sent (scaled_soft_ms at the smallest factor
+//   soft_scale_permille gives at any depth: the most stable best move with
+//   the largest share; never more than the plain soft limit): before it,
+//   every finished iteration starts another (depth, mate and nodes do not
+//   limit this go);
 // - no iteration starts after the soft limit as time management can scale
 //   it (UseStabilityTime, UseShareTime): every depth reported, except the
 //   deepest, was first reported (as an exact line; the engine's own clock,
@@ -624,7 +627,7 @@ TEST_CASE("uci_protocol", "the mate in 2 is reported within depth 6, after other
 //   the hard limit) or the hard limit itself.
 // The limits are plan_time's for White's clock and the default Move Overhead
 // of 100 ms: 2900 ms over 30 moves, soft 96 ms, hard 4 x 96 = 384 ms.
-TEST_CASE("uci_protocol", "a clock go: bestmove not before the soft limit, no iteration started after it") {
+TEST_CASE("uci_protocol", "a clock go: bestmove not before the smallest scaled soft limit, no iteration started after the largest") {
   Gui g;
   g.send("position startpos");
   CHECK(g.sync());
@@ -642,7 +645,16 @@ TEST_CASE("uci_protocol", "a clock go: bestmove not before the soft limit, no it
   if (best) {
     const std::vector<OutputLine> all = g.engine.lines();
     const double ms = std::chrono::duration<double, std::milli>(all[*best].at - sent).count();
-    CHECK_MSG(ms >= static_cast<double>(plan.soft_ms), "bestmove after " << ms << " ms");
+    int narrowest = 1000;  // the smallest soft-limit factor, per mille
+    for (const TimeScaleVariant variant :
+         {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
+      for (int depth = 0; depth < MaxPly; ++depth)
+        narrowest = std::min(narrowest, soft_scale_permille(variant, {depth, MaxPly, 1000, 0}));
+    const std::int64_t earliest =
+        std::min(plan.soft_ms, scaled_soft_ms(plan.soft_ms, plan.hard_ms, narrowest));
+    CHECK_MSG(ms >= static_cast<double>(earliest), "bestmove after "
+                                                       << ms << " ms, before the smallest scaled soft limit ("
+                                                       << earliest << " ms)");
     std::vector<std::pair<std::int64_t, std::int64_t>>
         first_seen;  // (depth, time) of each depth's first exact line
     for (std::size_t i = mark; i < *best; ++i) {
@@ -658,15 +670,15 @@ TEST_CASE("uci_protocol", "a clock go: bestmove not before the soft limit, no it
     std::int64_t deepest = 0;
     for (const auto& [depth, time] : first_seen) deepest = std::max(deepest, depth);
     int widest = 1000;  // the largest soft-limit factor, per mille
-    for (const TimeScaleVariant variant : {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
+    for (const TimeScaleVariant variant :
+         {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
       for (int depth = 0; depth < MaxPly; ++depth)
         widest = std::max(widest, soft_scale_permille(variant, {depth, 1, 1, 0}));
     const std::int64_t bound = std::max(plan.soft_ms, scaled_soft_ms(plan.soft_ms, plan.hard_ms, widest));
     for (const auto& [depth, time] : first_seen)
-      CHECK_MSG(depth == deepest || time < bound, "depth " << depth << " finished at " << time
-                                                           << " ms, past the largest scaled soft limit ("
-                                                           << bound << " ms), and depth " << deepest
-                                                           << " still started");
+      CHECK_MSG(depth == deepest || time < bound,
+                "depth " << depth << " finished at " << time << " ms, past the largest scaled soft limit ("
+                         << bound << " ms), and depth " << deepest << " still started");
   }
   g.check_transcript();
   g.quit();
