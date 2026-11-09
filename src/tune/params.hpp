@@ -36,9 +36,9 @@
   X(IterationGrowthThirds, 5, 3, 10, 1)   \
   X(ForcedMoveFraction, 8, 4, 16, 1)      \
   X(RfpMaxDepth, 6, 3, 12, 1)             \
-  X(RfpMargin, 80, 40, 160, 6)            \
+  X(RfpMargin, 55, 40, 160, 6)            \
   X(NullMinDepth, 3, 1, 6, 1)             \
-  X(NullSurplusPerPly, 300, 150, 600, 23) \
+  X(NullSurplusPerPly, 301, 150, 600, 23) \
   X(NullSurplusPliesMax, 2, 0, 4, 1)      \
   X(TableProbeMinDepth, 1, 1, 4, 1)       \
   X(LmrMinDepth, 3, 1, 6, 1)              \
@@ -46,13 +46,13 @@
   X(LmrDivisorTenths, 45, 23, 90, 3)      \
   X(LmrCorrectionStrength, 64, 0, 128, 6) \
   X(LmpMaxDepth, 4, 2, 8, 1)              \
-  X(LmpQuietAllowance, 12, 6, 24, 1)      \
+  X(LmpQuietAllowance, 8, 6, 24, 1)       \
   X(FutilityMaxDepth, 6, 3, 12, 1)        \
-  X(FutilityOffset, 100, 50, 200, 8)      \
-  X(FutilityGrowth, 70, 35, 140, 5)       \
+  X(FutilityOffset, 86, 50, 200, 8)       \
+  X(FutilityGrowth, 50, 35, 140, 5)       \
   X(SeePruneMaxDepth, 6, 3, 12, 1)        \
   X(QuietSeeFloor, 60, 30, 120, 5)        \
-  X(CaptureSeeFloor, 100, 50, 200, 8)     \
+  X(CaptureSeeFloor, 118, 50, 200, 8)     \
   X(SingularMinDepth, 6, 4, 12, 1)        \
   X(SingularEntrySlack, 3, 0, 6, 1)       \
   X(SingularMarginPerPly, 6, 3, 12, 1)    \
