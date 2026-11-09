@@ -1237,6 +1237,63 @@ reported beside it and selects nothing.
     the best checkpoint is chosen among finite losses only. A failing gate
     stops the session and comes back to the orchestrator before any
     change to the initialisation.
+  - **Session 2 (kernel v2, 2026-11-08, 8:05-8:17 PM EST, a9bbd88).** The
+    checks and gates passed: the parity trainer leg (worst 6.5e-7), A1
+    (0.0426462548 both, mu 64.35 cp), the gradient check (batch 2's norms:
+    entry 8.4e-4, rows 3.6e-4, middle 3.5e-5, head 1.8e-3; batch 1's
+    upstream norms 0, as the zero head implies) and the overfit test (best
+    0.01245 against the best constant's 0.03794 on 2,000 of 10,000 training
+    sites). The runs learned position-specific corrections: validation
+    loss from 0.04265 (the base) to
+
+| Run | Best validation loss (superbatch) | Superbatches | Correction on validation: mean / sd / at the cap | Gate net flips (validation) |
+|---|---|---|---|---|
+| w1 (weighted, seed 1, cap 198) | 0.023067 (12) | 20 | +23.1 / 83.0 cp / 1,209 | -0.021 |
+| w2 (weighted, seed 2, cap 198) | **0.022726** (12) | 20 | +25.6 / 82.8 cp / 1,222 | -0.013 |
+| p1 (plain, seed 1) | 0.022856 (11) | 19 | +21.4 / 84.0 cp / 1,085 | -0.037 |
+| p2 (plain, seed 2) | 0.022608 (26) | 34 | +21.6 / 85.9 cp / 1,258 | -0.046 |
+| w1-c57 | 0.031428 (3) | 11 | +1.1 / 39.5 cp / 2,148 | -0.020 |
+| w1-c480 | 0.020192 (8) | 16 | +36.7 / 117.3 cp / 101 | -0.027 |
+| l125k / l250k / l500k | 0.024040 / 0.023732 / 0.023292 | 22 / 21 / 17 | | -0.047 / -0.021 / -0.022 |
+
+    (p1 and p2's losses are on their own targets, mu 72.2 cp.) **The cap,
+    by the declared rule: 198 cp** (scores 57: +0.0012, 198: +0.0655, 480:
+    +0.0488; 198 over 57 by 0.0643 against a standard error of 0.0109, 480
+    below 198). **The arm: weighted** (the plain arm's gate net flips are
+    lower, not higher). **The seed: w2**, the lower validation loss (the
+    owner's rule for networks). The learning curve flattens (125k to 1M:
+    0.02404, 0.02373, 0.02329, 0.02307); no growth to 2M (the rule's net
+    flips are negative). The confidence head was not trained (U0 does not
+    read it; its pass remains).
+  - **The offline acceptance on test (3.8; deployment weighting; w2 at cap
+    198, R-int's correction; 8,048 gated sites; run 2026-11-08 8:20 PM EST,
+    scratch tool accept_i59s3.py): failed.**
+
+| Check | Result | Line |
+|---|---|---|
+| A1 | passed in the kernel | |
+| A2 net flips, together | **-0.0069** (z -0.69, p 0.49) | > 0, p < 0.01: **fails** |
+| A2, main search / quiescence | -0.0604 (z -7.33) / +0.0353 (z +2.12, p 0.034) | |
+| A3, the literal constant (the mean residual, +122 cp) | the shift alone +0.1426 (z +14.3); refiner minus shift -0.1495 (z -13.0) | **fails** |
+| A3, reading (2): the refiner's own mean correction (+14 cp) | the shift alone +0.1277; refiner minus shift -0.1346 (z -11.8) | would fail |
+| A3, reading (3): zero | = A2, -0.0069 | would fail |
+| A4 q_off | -0.088 (the oracle, S512+X over S512r2 on the same sites gated by S512r2: +0.0786, z +8.5) | below 1/3: **kill** |
+| A5 explained variance of the win-probability residual | 0.159 [0.108, 0.207] (game bootstrap) | reported |
+| A6 corrections | mean +14.0 cp, abs mean 55.9, at the cap 10.1% | over 10%: the cap goes back to 3.7 |
+| A7 endgame check (900) | 17 misjudged (the base 8) | above the 15 target |
+| A8 n_eff (closeness, training) | 0.501 n | passes |
+
+    **Step 3's first try stops here, before any game** (3.8: "Kill at this
+    stage: A2 or A3 fails, or q_off < 1/3"; the overnight rule: a failure of
+    the refiner itself is a result, not a try). F1 does not run. Observed,
+    for the owner: on the same test sites a constant upward shift scores
+    high gate net flips (+122 cp: +0.143; the refiner's own +14 cp: +0.128),
+    higher than the oracle itself (+0.079), so the net-flip metric rewards
+    any upward shift at these sites (the residual's +123 cp, P0); the
+    centred refiner, which never adds that mean back (the owner's
+    decision), cannot gain from it, while it does explain 16% of the
+    residual's variance. Whether the offline gates measure game value is
+    the owner's question.
   - **The trainer (lane E, E-c, 2026-11-08):** fork-train `--arch refiner`
     (tools/train/src/main.rs; its header describes the graph, the data and
     the loss). Its CPU build is bullet's mock runtime: it builds the graph,
