@@ -217,6 +217,7 @@ add_library(forksearch STATIC
   src/search/move_selector.cpp
   src/search/searcher.cpp
   src/search/see.cpp
+  src/search/stats_report.cpp
   src/search/time_budget.cpp
   src/search/trans_table.cpp
   src/tune/params.cpp)
@@ -263,6 +264,11 @@ add_library(forknnue STATIC
   src/eval/nnue/contacts.cpp
   src/eval/nnue/net_file.cpp)
 target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH})
+# Stats builds count the feature stack's work too (DESIGN.md §5.7, X1); public,
+# so every user of accumulator.hpp sees the same FeatureStack layout.
+if(FORK_SEARCH_STATS)
+  target_compile_definitions(forknnue PUBLIC FORK_SEARCH_STATS)
+endif()
 target_link_libraries(forknnue PUBLIC forkcore PRIVATE fork_pgo)
 
 # Self-play training data (src/datagen/; DESIGN.md §5.3, deliverable 2): the
@@ -562,6 +568,13 @@ if(FORK_BUILD_TESTS)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
+  # The stats build's measurement counters (DESIGN.md §5.7): their own suite,
+  # compiled only with FORK_SEARCH_STATS (the clang-stats preset).
+  if(FORK_SEARCH_STATS)
+    target_sources(fork_tests PRIVATE tests/test_search_stats.cpp)
+    add_test(NAME search_stats COMMAND fork_tests search_stats)
+    set_tests_properties(search_stats PROPERTIES LABELS stats SKIP_RETURN_CODE 77)
+  endif()
   # Timing tests run alone, never beside another test (owner, 2026-10-26).
   set_tests_properties(uci_timing PROPERTIES RUN_SERIAL TRUE)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
