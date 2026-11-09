@@ -1555,6 +1555,16 @@ the screens before use.
   gold-set loss, the fixed-node screen, then the STC SPRT. **status:**
   untested (plan only, owner, 2026-11-07); overlaps the think tank's R37
   (n-step and lambda-return targets), which this entry supersedes.
+  **Label tooling built** (owner, 2026-11-09; no training):
+  tools/datagen/td_labels.py computes the labels from stored games
+  (`labels` writes a copy of a shard whose keepable scores are the TD
+  labels, for the unchanged trainer at --result-weight 0; `compare` scores
+  a lambda grid against deep labels). Its default sums from the record's
+  own score (k >= 0: lambda = 0 gives the stored score, lambda = 1 the
+  result); the formula above (k >= 1) is its --from-next. Only full-search
+  scores enter the chain: unsaved records and positions in check (searched
+  with check_nodes) are left out. lambda not chosen; retrain 8b's label
+  pre-tests are declared in docs/research/label-pretests/declaration-8b.md.
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 52. Ensemble-disagreement active learning
