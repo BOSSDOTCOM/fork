@@ -639,3 +639,8 @@ order.
 8. The research/conversion-defense findings were not available. They may
    change the case for this design (for example, if losses come mostly
    from collapses, not from slides).
+
+
+## Name and constant screen (2026-11-09, 6:25 PM EST)
+
+The originality-checker screened the names and constants listed above against Stockfish, Ethereal, Berserk and Weiss (shallow clones at their current heads, deleted afterwards; match / no match only): no specific match. The only hits are the ordinary English words "Always" and "members" in prose and comments. No score-driven time term in those engines uses 8, 16 or 32 as its span, 333, 667 or 1000 per mille as its extension, or depth 8 as its start (current heads only; older releases not checked).
