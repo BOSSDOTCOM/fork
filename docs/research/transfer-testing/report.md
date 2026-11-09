@@ -106,6 +106,14 @@ SE), and no single adoption can be resolved (segment B alone: 0.50, -0.34 to 1.4
 openings; Syzygy tables and adjudication in the SPRTs but not in the gauntlet; self-play inflation.
 Time management's gain at 10+0.1 is about +17.5 by interpolation (UNVERIFIED).
 
+**Which conditions matter for TCEC (owner's note, 2026-11-09).** The SPRTs' conditions resemble TCEC's
+more closely than the gauntlet's: TCEC plays from unbalanced, curated openings with tablebases available,
+as the SPRTs do (UHO openings, Syzygy 3-4-5, adjudication), while the gauntlet plays random balanced 8-ply
+openings without tables. A ratio below 1 therefore does not by itself mean the self-play gains are
+inflated for TCEC: part of the gap may be gains that show under TCEC-like conditions and not under the
+gauntlet's. The anchor check (§5) guards against self-play inflation; it does not replace the SPRTs as the
+measure of TCEC strength.
+
 ## 5. Anchor check (recommendation)
 
 The gap justifies a light step, not a check after every adoption.
