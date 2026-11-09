@@ -1597,6 +1597,17 @@ the screens before use.
   the standard arm by a meaningful margin (a fixed-node screen of +5 Elo or more, or a passing SPRT
   if it is screened), idea 52 is retired and the scratch-run rule dropped (saving its 2-4 hours per
   retrain); the result stays in the record either way.
+  **8b's data arm, being labelled** (owner's request, 2026-11-09: S512ppr3 against item 7's scratch
+  seed 1, the warm-against-scratch pair; tools/measure/committee_sites.py; record
+  docs/research/idea52/8b-sites.json): pool g3j's five training shards, 62,144,106 kept positions
+  (S512ppr3's labels; no other 8b pool is written down); D = |a - b| in cp from both builds' evalfens;
+  top 5% at D >= 61 cp (3,173,657 positions); 200,000 sites drawn uniformly from it, plus 2,000
+  controls from the rest; labels by the default engine at 200,000 nodes with the Syzygy tables (the
+  first experiment's depth). First check (about 1,900 sites, mates and table wins left out): the
+  default net's error on the sites over the controls' 2.91 plain, **1.42 matched for |eval|** (7 bins,
+  no interval), under the scratch pair's 1.69-1.71 on g3s3-val: the warm-against-scratch pair carries
+  a weaker signal on this first batch (UNVERIFIED until the full set). The arm's oversampling factor
+  is the 8b recipe's choice.
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 53. Pawn-structure-class output experts

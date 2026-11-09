@@ -1,0 +1,48 @@
+{
+ "what": "Idea 52's data arm for retrain 8b: the top-disagreement sites of S512ppr3 against item 7's from-scratch run (s512pp-scratch-s1), deep-labelled by the default engine (owner's request, 2026-11-09). Data stays outside the repository (~/fork-data/idea52-8b in WSL; sites, stats and this run's files mirrored to C:/Users/<user>/fork-data/idea52-8b).",
+ "tool": "tools/measure/committee_sites.py at 279b11d",
+ "pool": {
+  "part": "g3j (labelled by S512ppr3, the promoted labeller; the only sealed part since 8a with S512ppr3's labels: g3h and g3i carry S512ppr2's; the docs name no other 8b pool, so g3j by the request's default)",
+  "shards": {
+   "g3j-w00.vf": "5f08eec57e9f6884a92037d70b79a1b571be072a19b1278cb53ca93257fa5c03",
+   "g3j-w01.vf": "27020755bc2a2fac54f3b2d0673a038335496ac3f43faed4c6c3471134aa34cd",
+   "g3j-w02.vf": "13a43434d57296b9d0462f40d9b80687de4e55ae789a33d597bc34b0e4eb4336",
+   "g3j-w03.vf": "fee9e512df02ce156ade6d804856bc6ddf9badc705768cd6f7c183ade5a1fdde",
+   "g3j-w04.vf": "808417fd1bca528a8622210b53b40097f096661e129affcf97a175517f057030"
+  },
+  "left_out": "g3j-w05-val.vf (the validation shard)",
+  "kept_rule": "saved (score not 32767) and the trainer's filter: not in check, the move played not a capture or promotion, |score| <= 20,000",
+  "kept_positions": 62144106
+ },
+ "networks": {
+  "a": "s512ppr3 (the default; S = 89), embedded in fork-release-2ebacd8",
+  "b": "s512pp-scratch-s1 (item 7's scratch run, seed 1, S matched to 90; nets/s512pp-scratch-s1.fnet of exp/oracle dcbe8fb, sha256 769bffe2ca857b8a2f6e259afe003b470a97f3c68a90a5d14a13fa7e10946cb5), embedded in fork-scratch-s1-2ebacd8 (FORK_NET); netcheck 446 positions, 0 mismatches against tests/nnue/s512pp-scratch-s1.parity of dcbe8fb",
+  "evaluations": "fork evalfens of each build (the engines' integer values, side to move's view)"
+ },
+ "selection": {
+  "rule": "D = |a - b| in cp (idea 52 report's detector 'D in cp'); top set: D >= the D at rank ceil(0.05 n) from the top (the report's top 5%, ties included); sites: a seeded uniform draw of 200,000 from the top set, duplicate positions (first four FEN fields) dropped; controls: 2,000 drawn the same way from the rest",
+  "seed": 20261109,
+  "threshold_cp": 61,
+  "top_set": 3173657,
+  "d_cp": {"mean": 21.63, "median": 16, "p90": 47, "p95": 61, "p99": 103, "p999": 176, "max": 604},
+  "top_set_share_of_total_d": 0.2044,
+  "pearson_a_b": 0.995,
+  "sites_mean_d": 86.63,
+  "sites_mean_abs_eval_a": 487.45,
+  "controls_mean_abs_eval_a": 204.85,
+  "top_share_by_pieces": {"2-6": 0.0959, "7-12": 0.0913, "13-18": 0.0533, "19-24": 0.0349, "25-32": 0.0115}
+ },
+ "labels": {
+  "engine": "fork-release-2ebacd8: Fork 0.3.0-dev+2ebacd8 (phase-4), WSL clang-release (clang 21.1.8), net s512ppr3, bench 14,149,617 / 1cb0717f040c294d (= tests/bench-s512ppr3.ref; checked by the tool before the first label), sha256 fa8be62a1bfb554018d500c3c41425326028926d395b73afd0b8fec3cb9132aa",
+  "search": "one thread, Hash 16, ucinewgame before each, go nodes 200000 (ideas.md 52's first-experiment depth), Syzygy 3-4-5; the last reported score, side to move's view, a mate as +-20,000 and flagged",
+  "order": "the 2,000 controls first, then the sites in draw order (any prefix of the sites is a uniform sample of them)",
+  "job": "jobctl measure job idea52-8b-sites: wsl.exe -d Ubuntu -- nice -n 19 bash ~/fork-data/idea52-8b/job.sh (job.sh sha256 b555101a564f4ac2182fa8ee6165550389b4632c7e2ff4a03c1e57db8693adba)"
+ },
+ "files": {
+  "sites.jsonl": {"bytes": 43318860, "sha256": "a53c73b0d81bbe4589b8cdb49fc90d1bd454e17c1a8d6825f8425df1b97afbfc"},
+  "stats.json": {"bytes": 1163, "sha256": "b993c908ff82e646f42d70c5b35b4796412cd33ba1787b81073b3232e0bc8b79"},
+  "fork-release-2ebacd8": {"bytes": 4318792, "sha256": "fa8be62a1bfb554018d500c3c41425326028926d395b73afd0b8fec3cb9132aa"},
+  "fork-scratch-s1-2ebacd8": {"bytes": 4318776, "sha256": "a1a4e9b4c3a8de39c173cd6f1c2960961ec74b84dc9b1aad508e418c15011715"},
+  "labels.tsv": "pending (the job is running; its hash is added when it ends)"
+ }
+}
