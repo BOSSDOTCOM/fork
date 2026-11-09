@@ -351,7 +351,7 @@ TEST_CASE("pruning", "reply and follow tables: still correct, and each changes t
 // read or never updated leaves the tree as it is with the switch off).
 TEST_CASE("pruning", "take history: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(SearchSwitches{}.use_take_history);  // on since its SPRT (2026-11-01)
+  CHECK(!SearchSwitches{}.use_take_history);  // off: the base of its LTC confirmation (branch ltc/take-off)
   SearchSwitches on;
   on.use_take_history = true;
   fx.searcher->switches = on;

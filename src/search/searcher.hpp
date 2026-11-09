@@ -157,7 +157,7 @@ struct SearchQuota {
   X(use_negative_extension, UseNegativeExtension, false) \
   X(use_reply_history, UseReplyHistory, true)            \
   X(use_follow_history, UseFollowHistory, true)          \
-  X(use_take_history, UseTakeHistory, true)              \
+  X(use_take_history, UseTakeHistory, false)             \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)
