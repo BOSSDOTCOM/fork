@@ -28,6 +28,7 @@
 #include "eval/nnue/accumulator.hpp"
 #include "eval/nnue/net_file.hpp"
 #ifdef FORK_REFINER
+#include "eval/nnue/refiner.hpp"
 #include "eval/nnue/refiner_file.hpp"
 #endif
 #include "search/endgame_tables.hpp"
@@ -158,6 +159,10 @@ int usage() {
                "       fork netcheck <parity file> [net file]   (the network parity gate; without a\n"
                "                                                 net file, an nnue build's own network)\n"
                "       fork evalfens   (stdin: one fen per line; this build's static evaluation)\n"
+#ifdef FORK_REFINER
+               "       fork refine   (refiner builds; stdin: .sites lines, \"FEN | base | ...\"; the refiner's\n"
+               "                      correction and confidence per line)\n"
+#endif
                "       fork version\n";
   return 2;
 }
@@ -298,6 +303,38 @@ static int evalfens() {
   return 0;
 }
 
+#ifdef FORK_REFINER
+// The parity chain's engine leg (ideas.md 59, step 3; lane E): for each stdin
+// line "FEN | base | ..." (a .sites line, tools/nnue/refiner.py export), the
+// embedded refiner's output on that position, with the accumulator built from
+// scratch and the line's base evaluation for the rows' evaluation bin:
+// "correction confidence" per line, "invalid" for a line that does not parse.
+static int refine_command() {
+  const forkeng::NetFile& net = forkeng::embedded_net();
+  const forkeng::RefinerFile& refiner = forkeng::embedded_refiner();
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (line.empty()) continue;
+    const std::size_t bar = line.find(" | ");
+    forkeng::Position pos;
+    if (bar == std::string::npos || !pos.set_fen(line.substr(0, bar))) {
+      std::cout << "invalid\n";
+      continue;
+    }
+    const int base = std::atoi(line.c_str() + bar + 3);
+    forkeng::Accumulator acc;
+    forkeng::accumulate_board(net, pos, acc);
+    forkeng::RefinerInputs in;
+    forkeng::pack_clipped(acc, pos.side_to_move(), in.bytes);
+    in.row_count = forkeng::refiner_rows(net, pos, base, in.rows);
+    const forkeng::RefinerOutput out = forkeng::run_refiner(refiner, in);
+    std::cout << out.correction << ' ' << out.confidence << '\n';
+  }
+  return 0;
+}
+#endif
+
 static int run(int argc, char** argv) {
   forkeng::init();
   if (argc < 2) return uci_main();
@@ -311,6 +348,9 @@ static int run(int argc, char** argv) {
   if (cmd == "wdl") return argc == 3 ? wdl_dump(argv[2]) : usage();
   if (cmd == "netcheck") return netcheck_main(argc, argv);
   if (cmd == "evalfens") return evalfens();
+#ifdef FORK_REFINER
+  if (cmd == "refine") return refine_command();
+#endif
   if (cmd == "bench") {
 #ifdef FORK_REFINER
     // Refiner builds (ideas.md 59): `fork bench [MAIN QUIESCE [reused]]`, the
