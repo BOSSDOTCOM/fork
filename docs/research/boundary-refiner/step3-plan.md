@@ -1308,6 +1308,23 @@ reported beside it and selects nothing.
     the constant screen (ORIGINALITY.md) before the screens. The candidates'
     commits fully define the engines (CMake defaults, as step 2's oracle
     candidates did); the base is the commit before them, S512ppr3 alone.
+  - **Owner hypothesis (2026-11-08, about 9:10 PM EST), recorded before any
+    screen result:** "The oracle's gain came from an INDEPENDENT second
+    opinion blended near the window; the step 3 refiner shares the base
+    accumulator and so inherits the base's blind spots." Its test, with
+    existing nets and no training, queued after the two refiner screens:
+    base S512ppr3; a second opinion, an independently initialised net of
+    similar strength (not descended from S512ppr3's weights; the strongest
+    such net, its lineage and the reason recorded), scale-matched to
+    S512ppr3 (the nets' S, checked on a sample of evaluations), consulted at
+    gate (a) 25 / 10 through the exp/oracle gate code as step 2 used it, in
+    two variants: (c) blend, at a firing the mean of the base's and the
+    second net's evaluations (the owner's 1/2); (d) replace, the second
+    net's evaluation (step 2's oracle). Fixed nodes, 800,000 per move, 1,600
+    games each, against S512ppr3 alone. **The owner's rule:** if the blend
+    gains clearly, a small independent near-window net (its own small
+    accumulator) is planned as step 3b; if not, step 3 closes. No SPRT and
+    no adoption.
   - **The trainer (lane E, E-c, 2026-11-08):** fork-train `--arch refiner`
     (tools/train/src/main.rs; its header describes the graph, the data and
     the loss). Its CPU build is bullet's mock runtime: it builds the graph,
