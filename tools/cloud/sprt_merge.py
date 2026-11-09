@@ -26,8 +26,21 @@ more games before it is trusted.
 Looking at the sum only at stage boundaries, not after every pair, makes the
 test slightly conservative, never anti-conservative.
 
+A staged design (stage_decision, the merge's --played/--cap/--futility-after/
+--fixed): at each stage boundary, on the cumulative counts of the stages
+played so far, in this order: H1 or H0 by the LLR; then, only when exactly
+--futility-after stages have been played, a futility stop if the nElo
+estimate (nelo() of the summed counts, the "nElo:" figure) is below 0; then
+"capped" once --cap stages are played; else continue. --fixed plays exactly
+--cap stages and never decides on the LLR (head-to-head pairings). Design R
+for search features (owner, DESIGN.md §6 2026-11-07 decision 2): [0, 6],
+alpha 0.05, beta 0.20, cap 8, futility after 2 stages; the estimate's error
+after 2 stages of 1,600 games is 800 / (ln 10 sqrt 2) / sqrt(1600) = 6.14
+nElo.
+
     python3 tools/cloud/sprt_merge.py snapshot LOG OUT.json [--meta KEY=VALUE ...] [--status S]
-    python3 tools/cloud/sprt_merge.py merge SHARD.json ... --elo0 -3 --elo1 0 [--json OUT]
+    python3 tools/cloud/sprt_merge.py merge SHARD.json ... --elo0 -3 --elo1 0 [--alpha A --beta B] [--json OUT]
+        [--played N --cap N [--futility-after N] [--fixed]]
 """
 import argparse
 import json
@@ -81,6 +94,24 @@ def verdict(ptnml, nelo0, nelo1, alpha=0.05, beta=0.05):
     lower, upper = bounds(alpha, beta)
     value = llr(ptnml, nelo0, nelo1)
     return value, ('H1 accepted' if value >= upper else 'H0 accepted' if value <= lower else 'continue')
+
+
+def stage_decision(ptnml, nelo0, nelo1, alpha, beta, played, cap, futility_after=0, fixed=False):
+    """A staged design's decision after `played` stages: (decision, detail), the decision one of
+    'continue', 'H1 accepted', 'H0 accepted', 'futility stop', 'capped', 'complete' (module docstring)."""
+    if fixed:
+        if played >= cap:
+            return 'complete', f'complete ({played} of {cap} stages, fixed length)'
+        return 'continue', 'continue'
+    _, decision = verdict(ptnml, nelo0, nelo1, alpha, beta)
+    if decision != 'continue':
+        return decision, decision
+    estimate = nelo(ptnml)
+    if futility_after > 0 and played == futility_after and estimate < 0:
+        return 'futility stop', f'futility stop (nElo {estimate:.2f} < 0 after {played} stages)'
+    if played >= cap:
+        return 'capped', f'capped ({played} of {cap} stages, undecided)'
+    return 'continue', 'continue'
 
 
 _GAME = re.compile(r'^Finished game (\d+) \((\S+) vs (\S+)\): (1-0|0-1|1/2-1/2) \{(.*)\}')
@@ -212,6 +243,10 @@ def main(argv=None):
     m.add_argument('--alpha', type=float, default=0.05)
     m.add_argument('--beta', type=float, default=0.05)
     m.add_argument('--json')
+    m.add_argument('--played', type=int, help='stages played so far: adds the staged design\'s Verdict line')
+    m.add_argument('--cap', type=int, help='with --played: the design\'s cap in stages')
+    m.add_argument('--futility-after', type=int, default=0, help='with --played: the futility look (0: none)')
+    m.add_argument('--fixed', action='store_true', help='with --played: a fixed-length run, never decided')
     a = ap.parse_args(argv)
     if a.cmd == 'snapshot':
         with open(a.log, encoding='utf-8', errors='replace') as f:
@@ -230,10 +265,21 @@ def main(argv=None):
         print(f'no finished pairs in {len(shards)} shards: nothing to merge', file=sys.stderr)
         return 1
     print(report(merged, a.elo0, a.elo1, a.alpha, a.beta))
+    staged = None
+    if a.played is not None:
+        if a.cap is None:
+            print('--played needs --cap', file=sys.stderr)
+            return 1
+        staged = stage_decision(merged['ptnml'], a.elo0, a.elo1, a.alpha, a.beta, a.played, a.cap,
+                                a.futility_after, a.fixed)
+        print(f'Verdict: {staged[1]}')
     if a.json:
         value, decision = verdict(merged['ptnml'], a.elo0, a.elo1, a.alpha, a.beta)
         merged.update(elo0=a.elo0, elo1=a.elo1, llr=value, verdict=decision, nelo=nelo(merged['ptnml']),
                       elo=elo(moments(merged['ptnml'])[1]))
+        if staged is not None:
+            merged.update(decision=staged[0], decision_detail=staged[1], played=a.played, alpha=a.alpha,
+                          beta=a.beta)
         with open(a.json, 'w', encoding='utf-8') as f:
             json.dump(merged, f, indent=1)
     return 0

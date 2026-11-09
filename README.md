@@ -2,9 +2,53 @@
 
 Fork is a UCI chess engine in C++20, written to compete in TCEC (the Top
 Chess Engine Championship). Phase 1 (board representation, legal move
-generation, perft) and Phase 2 (the UCI protocol) are complete; Phase 3
-(search) is in progress, with a deliberately simple bootstrap evaluation
-until Phase 4 replaces it (docs/DESIGN.md).
+generation, perft), Phase 2 (the UCI protocol) and Phase 3 (search) are
+complete. Phase 4 (the evaluation network) is in progress: Fork evaluates
+with its own NNUE network, S512ppr3 (`nets/s512ppr3.fnet`, built into the
+binary), trained on Fork's own self-play games and a small share of
+endgame positions labelled by the Syzygy tablebases (docs/DESIGN.md).
+
+Phase 4's second milestone (2026-11-08) brings the S512+PP architecture
+(the S-512 network plus 608 pawn-link inputs, kept incrementally), and
+S512ppr3, its second retrain, as the default network (STC +7.12 ± 4.53 Elo against S512ppr2, its predecessor
+as default). It adds time management (b): the soft time limit scaled by
+best-move stability and the best move's share of the nodes, with
+constants fitted on Fork's own search data (STC +18.69 ± 7.18 Elo, LTC
++10.23 ± 5.14 Elo, against off). On the tooling side: a faster CI (a gate
+job classifies each change, documentation-only changes skip the build
+matrix, and one "CI result" job sums up the run), the design R test
+method for search changes (a futility stop, stage caps, a two-try limit
+per time control, and head-to-head selection of constants), and Phase 4 step
+1's measurement instrumentation (search counters, an iteration trace and
+a decision ledger for pruning, compiled only into the `clang-stats` build, with their
+analyses in `tools/measure/`).
+
+## Strength
+
+Fork's latest gauntlet (2026-11-08) rates it **3488.2 ± 20.4** (Ordo, on
+the CCRL Blitz scale). This is a rating on the CCRL Blitz scale from games
+on GitHub's runners, not a CCRL rating. How it was measured
+(`.github/workflows/gauntlet.yml`, run 42538371594):
+
+- Fork at commit 32c5517 (the S512ppr3 network, time management (b) and
+  every search feature adopted so far; bench signature 1cb0717f040c294d,
+  checked on the runner), built by `update.sh` with gcc 11.4 for
+  x86-64-v3;
+- 1,400 games, 200 against each of seven anchors built from their
+  official sources at pinned commits (`tools/gauntlet/anchors.tsv`):
+  Clover 6.1, Altair 7.0.0, Marvin 6.3.0, Laser 1.7, Winter 0.9,
+  Monolith 2.01 and Weiss 1.0;
+- 10 seconds plus 0.1 seconds per move, one thread, Fork's hash 16 MB,
+  200 random 8-ply openings each played with both colours;
+- shards of 100 games on 4-core runners, 3 games at a time; no time
+  forfeits;
+- Ordo 1.2.6 with the anchors fixed at their CCRL Blitz ratings.
+
+Fork scored 931.5 of 1,400 (67%). The same run played 400 games against
+Stockfish 19 as a reference, kept out of the Ordo fit: Fork scored 87 of
+400, a gap of **−222 Elo (95% interval −251 to −196)**. The per-anchor
+scores and the full record are in docs/DESIGN.md (decisions log,
+2026-11-08).
 
 ## AI-assisted development
 
@@ -44,6 +88,14 @@ code found in review and the clean-room rewrites that removed them.
   range reduction for the TT index; Shannon's material values; the Chess
   Programming Wiki's technique descriptions. The details and the test-only
   tools are in docs/ORIGINALITY.md.
+- **The network**: trained with **bullet** (jw1912/bullet, MIT), used as
+  a tool at a pinned commit (`tools/train`); no bullet code is in the
+  engine. Its training data are Fork's own self-play games, labelled by
+  Fork's own search, written in the **viriformat** file layout (Fork's own
+  reader and writer, from the format's README). The games start from
+  positions of the CC0 Lichess game export. Since S512ppr2 the data also
+  hold a small fixed share of random endgame positions of at most five
+  pieces, labelled by their Syzygy WDL (`tools/datagen/endgame_slice.py`).
 
 ## Building
 
@@ -54,7 +106,7 @@ gcc 11+ or clang 16+ (C++20).
 git clone https://github.com/BOSSDOTCOM/fork.git fork
 cd fork
 ./update.sh                       # builds build/tcec/fork and prints its path
-build/tcec/fork bench             # search bench: nodes and a signature (tests/bench.ref)
+build/tcec/fork bench             # search bench: nodes and a signature (tests/bench-s512ppr3.ref)
 ```
 
 `update.sh` builds the engine only (Release, `-O3 -g`, no tests, no
@@ -71,10 +123,13 @@ ctest --test-dir build/clang-release -LE slow --output-on-failure
 ```
 
 Continuous integration (`.github/workflows/ci.yml`) builds every push to
-main and every pull request (except docs-only changes) from a clean clone
-on TCEC's toolchain (an Ubuntu 22.04 container: gcc 11.4,
-g++-12, clang 16 and 19, CMake 3.22) and on current Ubuntu, and runs the
-fast tests and bench parity.
+main and every pull request from a clean clone on TCEC's toolchain (an
+Ubuntu 22.04 container: gcc 11.4, g++-12, clang 16 and 19, CMake 3.22), on
+current Ubuntu and on Windows. It runs every test suite, the sanitizers and
+bench parity; documentation-only changes skip the build jobs, and the
+longest suites (the full perft and TSan runs) run when the files they test
+change and nightly on main. One job, "CI result", passes only when every
+other job passed or was skipped by its own rule.
 
 Other commands: `fork perft <depth> [fen]`, `fork divide <depth> [fen]`,
 `fork perftbench` (the move-generation workload, tests/perft_bench.ref),

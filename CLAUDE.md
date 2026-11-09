@@ -34,14 +34,20 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
   pinned in `.github/ci/win-tools.sh`) with the gcc-debug full suite and the
   GCC smoke loop, TCEC's four compilers (ubuntu:22.04), and the slow suites
   as their own jobs: perft_epd_deep always, perft_epd_full (about 2 hours)
-  only when move generation's files change (`.github/ci/movegen-changed.sh`)
-  and nightly on main (`.github/workflows/nightly.yml`; owner, 2026-10-28;
-  the phase-end checklist still runs it). AVX-512 binaries
+  only when move generation's files change and nightly on main
+  (`.github/workflows/nightly.yml`; owner, 2026-10-28; the phase-end
+  checklist still runs it). The full TSan suites (`.github/workflows/tsan.yml`)
+  run only when threads, the TT or the UCI layer change, nightly on main, and
+  on demand; "TSan, threaded suites" runs on every code change (owner,
+  2026-11-07). The `changes` job (`.github/ci/changed-areas.sh`) decides what
+  runs: documentation alone skips every build job. AVX-512 binaries
   run under Intel SDE on runners without it. It runs on pushes to main and
-  audit-1 (docs-only pushes skipped) and on every pull request; a newer push
-  cancels the older run. Hosted runners are free for the public repo.
-  Branch protection on main requires every job green (a job skipped
-  by its condition counts as passed). Never push the local
+  audit-1 (docs-only pushes skipped) and on every pull request (docs-only
+  ones skip every build job); a newer push cancels the older run. Hosted
+  runners are free for the public repo. Branch protection on main requires
+  the one job `CI result`, which needs every other job and passes only if
+  each passed or was skipped by its own rule (once the owner switches main's
+  protection to it; until then every job by name). Never push the local
   backup bundles (`*.bundle`).
 - TCEC toolchain: WSL distro `Ubuntu-22.04` (gcc 11.4, g++-12, clang 16/19,
   CMake 3.22), set up by `scripts/tcec-toolchain-setup.sh`; runs as root.
@@ -71,7 +77,11 @@ python -I bench/ab.py A/fork_micro B/fork_micro --a-variant baseline --a-commit 
 bash bench/experiment.sh clang NAME           # build FORK_EXPERIMENT=NAME and compare
 python -I tools/difftest/difftest.py --fork build/clang-release/fork   # vs python-chess
 python -I tools/fuzz/run_fuzz.py --target build/clang-fuzz/fuzz_fen --corpus fuzz/corpus/fen
-python -I tools/jobs/jobctl.py start github NAME -- bash tools/github/sprt_run.sh NAME BASE TEST ELO0 ELO1
+python -I tools/jobs/jobctl.py start github NAME -- bash tools/github/sprt_run.sh --kind search --idea ID NAME BASE TEST
+                                              # design R ([0, 6], beta 0.20, cap 8, futility after 2); --kind network: [0, 5];
+                                              # positional NAME BASE TEST ELO0 ELO1 as before (e.g. -3 0)
+python -I tools/jobs/jobctl.py start github NAME -- bash tools/github/h2h_run.sh NAME --const C --stages L \
+  --prefer A --prefer-reason "the current value" --idea ID A=COMMIT B=COMMIT [C=COMMIT]   # constant head-to-head
 python -I tools/jobs/jobctl.py stop NAME      # whole process tree, verified; also: status [NAME]
 python -I tools/jobs/ledger.py runs NAME      # each stage's GitHub run, as dispatched (~/fork-jobs/ledger.jsonl)
 ```

@@ -315,4 +315,63 @@ TEST_CASE("ordering", "take history: it can reorder victims 2 pawns apart, never
   CHECK(ordered("4k3/8/8/r2p4/4P3/8/8/Q6K w - - 0 1", Rook));     // beyond it: never
 }
 
+// quiet_order_score (DESIGN.md §5.7, X2) is the selector's quiet score as
+// a function: with seeded random butterfly, reply and follow entries for
+// every quiet move, the selector yields each position's quiets in
+// non-increasing helper score, and hand-set entries give the documented sum,
+// clamped to int16 (ReplyWeight 6 / 4 takes three full entries past it).
+TEST_CASE("ordering", "quiet_order_score orders quiets as the selector does") {
+  auto pairs = std::make_unique<PairHistory[]>(2);
+  auto history = std::make_unique<QuietHistory>();
+  const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Knight), static_cast<Square>(42));
+  const int follow = pair_slot(static_cast<Piece>(White * 8 + Bishop), static_cast<Square>(19));
+  std::uint64_t seed = 20261107;
+  int checked = 0;
+  for (const PerftPosition& p : perft_suite()) {
+    Position pos;
+    CHECK(pos.set_fen(p.fen));
+    if (pos.in_check()) continue;
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    for (Move m : legal) {
+      const auto amount = [&] { return static_cast<int>(splitmix_next(seed) % 4001) - 2000; };
+      const int slot = pair_slot(pos.piece_at(m.from()), m.to());
+      history->apply(pos.side_to_move(), m, amount());
+      pairs[ReplyTable].apply(arrival, slot, amount());
+      pairs[FollowTable].apply(follow, slot, amount());
+    }
+    MoveSelector s;
+    s.start_main(pos, NoMove, history.get(), pairs.get(), arrival, follow);
+    int previous = INT16_MAX;
+    for (Move m : drain(s)) {
+      if (m.is_capture() || m.is_promotion()) continue;
+      const int score = quiet_order_score(pos, m, history.get(), pairs.get(), arrival, follow);
+      CHECK_MSG(score <= previous,
+                p.name << ": " << pos.move_to_uci(m) << " " << score << " after " << previous);
+      previous = score;
+      ++checked;
+    }
+  }
+  CHECK(checked > 50);
+  // Hand-set entries: 10,000 each (one bonus of HistoryMax from 0).
+  Position pos;
+  CHECK(pos.set_fen(perft_suite()[0].fen));
+  const Move m = pos.parse_uci("g1f3");
+  const int slot = pair_slot(pos.piece_at(m.from()), m.to());
+  auto fresh = std::make_unique<QuietHistory>();
+  auto fresh_pairs = std::make_unique<PairHistory[]>(2);
+  fresh->apply(White, m, HistoryMax);
+  CHECK_EQ(quiet_order_score(pos, m, fresh.get(), fresh_pairs.get(), NoArrival, NoArrival), HistoryMax);
+  fresh_pairs[ReplyTable].apply(arrival, slot, HistoryMax);
+  const int with_reply = std::min(HistoryMax + HistoryMax * ReplyWeight / 4, static_cast<int>(INT16_MAX));
+  CHECK_EQ(quiet_order_score(pos, m, fresh.get(), fresh_pairs.get(), arrival, NoArrival), with_reply);
+  fresh_pairs[FollowTable].apply(follow, slot, HistoryMax);
+  const int with_both = std::min(HistoryMax + HistoryMax * ReplyWeight / 4 + HistoryMax * FollowWeight / 4,
+                                 static_cast<int>(INT16_MAX));
+  CHECK_EQ(quiet_order_score(pos, m, fresh.get(), fresh_pairs.get(), arrival, follow), with_both);
+  CHECK_EQ(with_both, static_cast<int>(INT16_MAX));  // the clamp is reached
+  CHECK_EQ(quiet_order_score(pos, m, nullptr, fresh_pairs.get(), NoArrival, follow),
+           HistoryMax * FollowWeight / 4);
+}
+
 }  // namespace forkeng::test

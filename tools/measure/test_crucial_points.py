@@ -1,0 +1,93 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Tests of tools/measure/crucial_points.py: bounds, labels and their sign
+conventions, features, ROC arithmetic and site reading.
+
+    python -I -B -m unittest discover -s tools/measure -p 'test_*.py'
+"""
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+import chess
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import crucial_points as cp  # noqa: E402
+import engine_lines  # noqa: E402
+
+
+class CrucialPointsTests(unittest.TestCase):
+    def test_nearest_bound(self):
+        self.assertEqual(cp.nearest_bound(100, 50, 51), ('beta', 51))
+        self.assertEqual(cp.nearest_bound(10, 50, 200), ('alpha', 50))
+        self.assertEqual(cp.nearest_bound(10, -31000, 31000), None)
+        self.assertEqual(cp.nearest_bound(10, -29999, 29998), None)  # mate-distance bounds
+        self.assertEqual(cp.nearest_bound(10, -31000, 60), ('beta', 60))
+        self.assertEqual(cp.nearest_bound(10, 0, 31000), ('alpha', 0))
+
+    def test_crucial_label(self):
+        # Zero window [50, 51]: the nearest bound is beta (51) above 50.5, alpha (50) at or below 50.
+        self.assertEqual(cp.crucial_label(80, 30, 50, 51), 1)   # static fails high, deep fails low
+        self.assertEqual(cp.crucial_label(80, 51, 50, 51), 0)   # deep exactly at beta still fails high
+        self.assertEqual(cp.crucial_label(80, 60, 50, 51), 0)
+        self.assertEqual(cp.crucial_label(20, 90, 50, 51), 1)   # static fails low, deep fails high
+        self.assertEqual(cp.crucial_label(20, 50, 50, 51), 0)   # deep exactly at alpha still fails low
+        self.assertEqual(cp.crucial_label(20, 40, 50, 51), 0)
+        self.assertEqual(cp.crucial_label(20, 90, -31000, 31000), None)  # no finite bound: never crucial
+        # A wide window: only the nearer bound counts.
+        self.assertEqual(cp.crucial_label(190, 210, 0, 200), 1)
+        self.assertEqual(cp.crucial_label(190, -10, 0, 200), 0)  # crosses alpha, but beta is nearer
+
+    def test_site_features(self):
+        board = chess.Board()
+        for uci in ('e2e4', 'd7d5'):
+            board.push_uci(uci)
+        site = {'fen': board.fen(), 'eval': 30, 'alpha': 20, 'beta': 21, 'parent_eval': -10, 'prune_eval': 45,
+                'captured': 0, 'reused': 1, 'on_pv': 0, 'depth': 3}
+        f = cp.site_features(site)
+        self.assertEqual(f['gap'], 9)
+        self.assertEqual(f['hanging_own'], 1)    # e4: attacked by the d5 pawn, undefended
+        self.assertEqual(f['hanging_their'], 0)  # d5: attacked by a pawn, defended by the queen, a pawn itself
+        self.assertGreaterEqual(f['checks_available'], 1)  # Bb5+ (the d7 pawn has moved)
+        self.assertEqual(f['parent_swing'], 20)
+        self.assertEqual(f['refine_diff'], 15)
+
+    def test_roc_points(self):
+        points = cp.roc_points([5, 4, 4, 1], [1, 0, 1, 0], per_node=0.4)
+        self.assertEqual(points, [(0.0, 0.0), (0.1, 0.5), (0.30000000000000004, 1.0), (0.4, 1.0)])
+
+    def test_recall_at_rates(self):
+        points = [(0.0, 0.0), (0.1, 0.5), (0.3, 1.0)]
+        r = cp.recall_at_rates(points, (0.05, 0.1, 0.2, 0.5))
+        self.assertAlmostEqual(r[0.05], 0.25)
+        self.assertAlmostEqual(r[0.1], 0.5)
+        self.assertAlmostEqual(r[0.2], 0.75)
+        self.assertAlmostEqual(r[0.5], 1.0)
+
+    def test_read_sites(self):
+        with tempfile.TemporaryDirectory() as d:
+            site = {'kind': 0, 'reused': 0, 'alpha': 1, 'beta': 2, 'eval': 5, 'prune_eval': 5, 'depth': 2, 'ply': 4,
+                    'parent_eval': 0, 'tt_bound': 0, 'tt_depth': -1, 'captured': 0, 'on_pv': 0, 'fen': '8/8/8/8 w'}
+            counters = {'root_nodes': 1, 'main_nodes': 49, 'quiesce_nodes_pv': 0, 'quiesce_nodes_non_pv': 50,
+                        'evals_main': 20, 'tt_eval_hits_main': 10, 'evals_quiesce': 35, 'tt_eval_hits_quiesce': 5}
+            records = [{'game': 'g', 'ply': 0, 'counters': counters, 'sites': [site, dict(site, kind=1)]},
+                       {'game': 'g', 'ply': 2, 'counters': counters, 'sites': []}]
+            (Path(d) / 'game-0000.jsonl').write_text(''.join(json.dumps(r) + '\n' for r in records), encoding='utf-8')
+            sites, per_node = cp.read_sites(d)
+            self.assertEqual([(s['id'], s['kind'], s['game']) for s in sites], [(0, 0, 'g'), (1, 1, 'g')])
+            self.assertAlmostEqual(per_node['main'], 60 / 200)
+            self.assertAlmostEqual(per_node['quiescence'], 80 / 200)
+
+    def test_parse_eval_site_line(self):
+        row = engine_lines.parse_eval_site_line(
+            'eval_site 1|0|-11|-10|13|13|0|9|9|0|-1|0|0|r1bqkbnr/1p1p1ppp/p1n1p3/2p5/P3P3/2N2N2/1PPPBPPP/R1BQK2R b KQkq - 0 5\n')
+        self.assertEqual((row['kind'], row['alpha'], row['beta'], row['eval'], row['tt_depth']), (1, -11, -10, 13, -1))
+        self.assertEqual(row['fen'], 'r1bqkbnr/1p1p1ppp/p1n1p3/2p5/P3P3/2N2N2/1PPPBPPP/R1BQK2R b KQkq - 0 5')
+        with self.assertRaises(ValueError):
+            engine_lines.parse_eval_site_line('eval_site 1|0|2')
+
+
+if __name__ == '__main__':
+    unittest.main()

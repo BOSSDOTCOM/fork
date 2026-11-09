@@ -1220,6 +1220,36 @@ because update.sh refuses it.
   SPRT's commits (`tools/jobs/test_jobctl.py` and the driver's test check
   each rule; a planted root-only kill and a planted "newest run" rule both
   fail them).
+  **Since 2026-11-07 (owner; the think tank's decisions 2 and 3) it has
+  kinds**, each fixed in `design.json` before the first dispatch (a
+  restart with another design is refused): `--kind search` is design R,
+  [0, 6] nElo, alpha 0.05, beta 0.20, a cap of 8 stages at STC and 6 at
+  LTC (`--cap 4-6`; 40+0.4, 1,664 games and 64 MB per stage), and one
+  futility look after 2 stages: stop and reject if the nElo estimate of
+  the 2 stages' summed pentanomial (sprt_merge.py's `nelo`, the "nElo:"
+  figure) is below 0; `--kind network` keeps [0, 5] at alpha = beta = 0.05
+  with 13 STC or 6 LTC stages; `--kind fixed --cap N` plays exactly N
+  stages (head-to-head pairings). Every kind needs `--idea ID` (each
+  retrain is its own idea), and a search or network SPRT is a try of its
+  idea: at most two per idea and time control class (an LTC confirmation
+  of an STC pass is not a retry), a third only with `--owner-override
+  TEXT`, recorded verbatim (`ledger.py try` / `tries`,
+  ~/fork-jobs/tries.jsonl). `--origin N` starts on fresh openings,
+  `--first N` resumes. The outcome goes to the driver log and to a
+  `verdict` file: H1 accepted, H0 accepted, futility stop (a rejection),
+  capped (undecided at the cap: not passed) or complete. The positional
+  form (`NAME BASE TEST ELO0 ELO1 [FIRST [LAST]]`, e.g. non-regression
+  [-3, 0]) is unchanged, byte for byte. **Constants by head-to-head
+  selection**: `tools/github/h2h_run.sh` plays 2-3 candidate values (one
+  commit each) against each other on the same openings, one pairing or a
+  round robin of `--stages L` each, and `tools/cloud/h2h_pick.py` picks
+  the value (least-squares strengths; the declared `--prefer` value is
+  kept unless beaten by more than 0.5 e) and writes the constants table's
+  row, "head-to-head, N games, delta ± e", as Fork's own measurement; the
+  winner then gets its design R SPRT on fresh openings (`--origin O+L`).
+  Tests: `tools/github/test_sprt_run.sh` (66 checks), `test_h2h_run.sh`,
+  `tools/cloud/test_sprt_merge.py`, `test_h2h_pick.py`,
+  `tools/jobs/test_jobctl.py`.
 - **AWS EC2 c7a/c8a** (**unavailable until further notice**: owner,
   2026-11-05, the account is suspended; decisions log)
   (`tools/cloud/aws_spot_sprt.sh`): the `--arch`
@@ -3695,6 +3725,389 @@ switches until the Phase 4 re-validation. Bench is unchanged (bench has no
 soft limit), and data generation is node-limited, so the labeller is
 untouched.
 
+### 5.7 Phase 4 step 1: measurement instrumentation (owner-approved 2026-11-07)
+
+Decision (owner-approved 2026-11-07; recorded here rather than in §6 so the
+section merges cleanly): X1, X2, X6 and X10 built behind FORK_SEARCH_STATS,
+the `clang-stats` preset in CMakePresets.json only, drivers and analyses in
+`tools/measure/`; every new name screened against the four engines before
+use (three generic matches: Keep, evaluations, measure); X2 and X10 on
+disjoint games, with the Syzygy 3-4-5 tables; X10 at 1 in 512 (accepted by
+the orchestrator, 2026-11-07, see the settings table).
+
+The think tank's cheapest measurements (research/phase4-think-tank,
+phase-c-synthesis.md §2.2 and §2.4: X1, X2, X6, X10), built as
+measurement-only code. **Normal builds are unchanged:** every engine line is
+inside `#ifdef FORK_SEARCH_STATS` (or an always-compiled helper that no
+normal build calls), so each commit keeps bench (14,626,377 /
+9e43990217b0886d) on every preset, and the release presets' `.text` is
+compared before and after. The stats build itself must search the same
+tree: the preset `clang-stats` (CMakePresets.json only; not in build.sh or
+CI, orchestrator's ruling 2026-11-07) runs bench_parity and the
+`search_stats` suite (tests/test_search_stats.cpp, compiled only there).
+The engine reads its report switches from environment variables once, at
+start-up: `FORK_STATS_REPORT` (a cumulative counter dump after each search),
+`FORK_ITERATION_TRACE` (one line per finished iteration), `FORK_PRUNE_LEDGER`
+(the decision ledger's sampling rate). Line formats:
+`tools/measure/engine_lines.py`. No allocation or exceptions in the
+recursion, even in stats builds; the dump's lines are integers only.
+
+**X1, search and accumulator counters.** `SearchCounters` became one
+X-macro list, `FORK_SEARCH_COUNTERS`, so the dump cannot miss a counter
+(the earlier `stats:` lines of `fork bench` keep their text; the summary
+moved to `src/search/stats_report.cpp`). New: root and main-search nodes
+(with the quiescence nodes they sum to the node count), static evaluations
+computed, taken from the TT entry, or not needed (in check), in the main
+and quiescence searches and at the ply limit, and pawn moves among the
+moves made. The feature stack keeps a `FeatureStackTally` (stats builds
+only; `forknnue` gets the define too, so every user of accumulator.hpp sees
+one layout): evaluations, pushes, perspective updates, rows per update
+(`delta_row_count`, the same columns the update uses), link updates, frame
+and root refreshes, and the plies an evaluation walks. Report:
+`tools/measure/search_counters_report.py x1` on a stats bench's stderr
+(`FORK_STATS_REPORT=1 fork bench`) or on a replay folder (§X2).
+
+**X2, in-game history magnitudes.** History and the TT persist across a
+game's moves, while bench clears them per position, so the measurement
+replays Fork's own games: `tools/measure/game_replay.py` starts one engine
+per game, sends `ucinewgame` once, and searches every position where the
+SPRT PGN's "test" engine was to move, in order, with `go nodes N`
+(tools/drift_measure.py's method, rewritten). At each LMR site the stats
+build histograms the move's ordering score (`quiet_order_score`, the
+selector's formula as a function, the definition of branch
+sprt/lmr-history; a test on every preset checks it orders quiets as the
+selector does) and the raw butterfly, reply and follow entries; at late
+captures (every LMR gate but "quiet": R18's sites) the take entry. It
+counts where the LMR history term of sprt/lmr-history (the base reduction
+less the ordering score / 24,000) would act, on which side, and where it
+would change the reduction. Report: `search_counters_report.py x2` per
+game-move band against the stats bench, with the declared readings in its
+docstring.
+
+**X6, the node-share fit.** With `FORK_ITERATION_TRACE` the stats build
+prints one `iteration_trace` row per finished iteration: the best move, its
+per mille of the last aspiration pass's root nodes (the share the engine
+already computes) and of every pass's (`RootEntry::nodes_all_passes`), the
+largest other share, the nodes, the score, the passes, the root moves and
+the deepest ply. `tools/measure/node_share_fit.py` fits "the best move
+changes within the next two iterations" by logistic regression on the
+share's logit, stability, the score change and the depth, and reports AUC,
+the partial R² of the share and Spearman's rho², with the declared
+readings in its docstring.
+
+**X10, the decision ledger (RFP and futility rows).** With
+`FORK_PRUNE_LEDGER=N` the stats build samples 1 in N of the candidates of
+RFP and of futility (every condition but the margin) by the position's
+key (`key % N`, the key's low bits; the TT indexes by its high bits), and
+searches the sampled node again with that technique switched at that node
+only (`LedgerForce`, read through `FORK_STAT_GATE`, which is empty in
+normal builds): RFP off (wrong if that search fails low), futility on and
+off (wrong if on fails low and off fails high). The side search
+(`ledger_side_search`) is invisible to the real search: the node count, the
+limits (a static unlimited quota; the stop flag still ends it), the TT
+(`TransTable::set_hold_writes`), the histories (`record_cutoff` returns),
+the counters and the feature-stack tally are all restored, and bench with
+the ledger on equals bench.ref (tests; removing any one of the three
+guards fails them). Rows: `prune_ledger` lines; analysis:
+`tools/measure/prune_ledger_fit.py` (I1's probit with a tail floor, by
+depth, with the declared reading in its docstring).
+
+**Idea 59 step 1, evaluations near the window** (owner's request,
+2026-11-07, for the Boundary Refiner's gate). At each static evaluation the
+stats build records the gap between the evaluation and the nearest finite
+bound of the node's window (`window_gap`; a bound in the mate or tablebase
+band does not count, and a site with no finite bound is counted apart),
+separately for main-search and quiescence evaluations, for computed ones
+(the network runs) and ones reused from the TT entry, and for the main
+search by depth band. `search_counters_report.py gap` gives the share of
+evaluations within 10, 25, 50 and 100 cp and the call rate per node.
+
+**Crucial-point ground truth** (owner's request, 2026-11-07, the gate for
+ideas 59 and 60). With `FORK_EVAL_SITES=N,M` the stats build prints every
+Nth main-search and every Mth quiescence evaluation site (computed or
+reused from the TT; counter-based, deterministic) with its FEN, window,
+static and TT-refined evaluation, depth, ply, the parent's evaluation, the
+TT entry and the last move's capture flag (`print_eval_site`; the FEN is a
+string, built only at sampled sites, as FORK_SINGULAR_PROBE does).
+`tools/measure/crucial_points.py` deep-searches every site with a finite
+bound with the default engine, evaluates it with other networks (R-int),
+labels it crucial when the static evaluation and the deep value fall on
+opposite sides of the nearest finite bound, and scores detectors by recall
+against the call rate per node, main search and quiescence apart.
+
+**Measurement settings** (they change no play; each is recorded here and
+in its code comment, as the orchestrator asked on 2026-11-07):
+
+| Setting | Value | Reason |
+|---|---|---|
+| Counter dump | cumulative, per search | bench sums 46 positions in one searcher; a cumulative dump needs no reset, and the reader takes differences |
+| Table-value bins | 250, sign-magnitude, 82 bins | a fortieth of HistoryMax per side resolves the quantiles; sign-magnitude edges make shares at multiples of the width exact |
+| Ordering-score bins | 500, sign-magnitude, 132 bins | 24,000 (the term's divisor) is the 48th edge, so the share where the term acts is exact |
+| `LmrHistoryProbeDivisor` | 24,000 | the value sprt/lmr-history tested (7d94d93), the thing measured; the search never reads it |
+| X2 games | 100 from `~/fork-data/sprt/s512ppr2-stc` (seed 20261107), "test" engine's positions | the current default network's own STC games; 100 games give a game-level bootstrap |
+| X2 node budgets | 200,000 and 1,000,000 per move | 200k is the drift measurement's and the ledger proposal's STC proxy; 1M shows the drift toward LTC, where more nodes per move age history further |
+| Replay engine options | Hash 16, Threads 1, Syzygy 3-4-5 | as the replayed SPRT games were played (sprt.yml's default Hash, run_shard.sh's tables) |
+| X6 positions | 60 games (seed 20261108, disjoint from X2's), at most 35 test-engine positions each, about 2,100 | the think tank's 2,000 positions; consecutive positions of a game keep the in-game TT and history R8 would act in |
+| X6 node budget | 2,000,000 per move | the think tank's choice: deep enough (depth 18-22) that the depth >= 8 rows span the iterations where STC and LTC soft-limit decisions are taken |
+| X6 fit | depth >= 8 primary; share clipped to [0.005, 0.995]; stability capped at 10; score change clipped at 500 cp; ridge 1e-6 | the soft limit is never checked before depth 8 at STC; the clips keep the logit and log finite and stop rare extremes dominating; the ridge only guards a singular system |
+| X6 bootstrap | 300 rounds over games, seed 20261108 | each round refits the model twice per share definition in pure Python; 300 keeps that to minutes while the interval ends move by well under their width |
+| X10 sampling | 1 in 512 candidates (`FORK_PRUNE_LEDGER=512`) | the design's 1 in 32 (I1) was tried on bench first: 1 in 8 gave 578,079 rows and made bench 17x slower, so 1 in 32 would give about 10 M rows over the X10 games, far beyond I1's need of about 60,000 sampled nodes near the margin per depth; 1 in 512 gives enough (893,987 rows in the run). Correction after the run: the side searches cost only 0.8% extra nodes (about 14 per sampled candidate); the slowdown was the rows' unbuffered output, so the rate is set by the row count, not by the side searches (changed before any run, accepted by the orchestrator 2026-11-07; uniform sampling keeps every row's weight exact) |
+| X10 games and budget | 120 games (seed 20261109, disjoint from X2's and X6's), every test-engine position, 200,000 nodes | I1's cheapest first experiment (120 STC games at 200k) |
+| X10 gap bins | 20 cp for rates, 10 cp for the fit | 20 cp resolves the margin's neighbourhood (RFP's margin grows 80 cp per ply); the finer fit bins lose little to binning |
+| X10 bootstrap | 200 rounds for the margin rate, 50 for the fitted sigma, seed 20261109 | the sigma rounds each refit by Nelder-Mead in pure Python |
+| X10 arm score clamp | +-2,000 cp, mate and tablebase arms flagged | only the side of beta matters; the clamp keeps the rows integer and short |
+| Idea 59 gap bins | 1 cp to 255, 64 cp to 4,095, one overflow bin (317) | every margin up to 255 cp counts exactly (the owner's 10, 25, 50, 100 among them); the coarse bins keep the tail's shape |
+| Idea 59 window | the node's alpha and beta at the evaluation (main search: after mate distance pruning) | the window a gate would compare against at that moment; mate and tablebase bounds give no gate |
+| Idea 59 depth bands | 1, 2, 3-4, 5-7, 8+ | the pruning depths (1-6) apart from the deep nodes, each band with enough sites |
+| Idea 59 games and budgets | 100 games (seed 20261110, disjoint from X2's, X6's and X10's), the test engine's positions (at most 80 per game), 200,000 and 1,000,000 nodes | as X2's arms, so the call rates are comparable with X1's in-game evaluations per node |
+| Crucial-point sampling | every 140,000th main-search and every 170,000th quiescence site, 100 games (seed 20261111, disjoint from X2's, X6's, X10's and idea 59's), 200,000 nodes, at most 80 positions per game | about 3,000 sites per stratum; the smoke run's crucial rate of about 10% gives about 300 crucial sites each, enough for the ROC points at 2-10% of nodes |
+| Crucial-point deep value | 1,000,000 nodes, one thread, Hash 16, `ucinewgame` per site, the default engine (bench checked) | the owner's budget; a fresh hash per site keeps sites independent |
+| Seed networks | scratch seeds 1 and 2 and warm seed 2 of item 7's retrain, converted at S = 89, through R-int | the owner's choice; R-int gives the engine's values (checked: 50 of 50 equal for scratch seed 1), and the warm seed fails the engine's int16 load check |
+| Detector folds | two halves by a CRC-32 of the game id; logistic ridge 1e-3 on standardised features | each half is scored by the model fitted on the other; the ridge keeps rare features from separating |
+| Replay processes | at most 2, below-normal priority, through jobctl (kind `measure`) | the machine is shared with data generation (orchestrator, 2026-11-07); node limits make results independent of load |
+
+**Results, X1** (2026-11-07; stats build 68c00b8, S512ppr2; bench in the
+cleared state, and in game from X2's replays of 100 games, 6,172 searches).
+
+| Number | Bench (46 positions) | In game, 200k nodes | In game, 1M nodes |
+|---|---|---|---|
+| Nodes | 14,626,377 | 1,230,631,040 | 6,149,834,610 |
+| Evaluations per node | 0.657 | 0.538 | 0.543 |
+| ... main / quiescence | 0.181 / 0.476 | 0.151 / 0.387 | 0.172 / 0.371 |
+| Quiescence share of nodes / of evaluations | 61.1% / 72.4% | 55.9% / 72.0% | 53.7% / 68.3% |
+| TT-eval hit rate, main / quiescence | 43.9% / 2.0% | 52.1% / 3.6% | 47.5% / 3.7% |
+| Pawn moves among moves made | 24.2% | 16.1% | 16.1% |
+| Rows per network update | 3.10 | 2.82 | 2.79 |
+| Refreshes per 1,000 updates (almost all king frame changes) | 11.2 | 16.2 | 16.6 |
+| Plies walked per evaluation | 1.17 | 1.21 | 1.20 |
+| Link-update share (S512+PP's pawn links) | 33.6% | 26.9% | 26.6% |
+| Pushes ever evaluated | 66.0% | 54.1% | 54.7% |
+
+Readings against the declared ones: evaluations per node 0.54-0.66, under
+the predicted 0.75-0.85 and under the 0.6 refutation line in game, so the
+prediction is refuted and evaluation skipping has a lower ceiling than
+assumed; quiescence evaluations are 68-72% of all evaluations, far above
+the 30% line, so the quiescence eval-avoidance ideas stay open.
+
+**Results, X2** (2026-11-07; stats build 68c00b8; 100 games of
+`s512ppr2-stc`, seed 20261107, 6,172 test-engine searches per arm, Hash 16,
+Syzygy 3-4-5; median PGN depth of the replayed moves 15; the replays'
+own depths were not recorded in this run). Share of LMR sites where the
+LMR history term of sprt/lmr-history would act (|ordering score| >=
+24,000), with 95% intervals over games:
+
+| Game moves | 200k nodes | 1M nodes |
+|---|---|---|
+| 1-15 | 0.0015% [0.0010, 0.0020] | 0.0074% [0.0059, 0.0090] |
+| 16-29 | 0.0016% [0.0010, 0.0025] | 0.0065% [0.0053, 0.0078] |
+| 30-60 | 0.039% [0.006, 0.105] | 0.086% [0.021, 0.211] |
+| 61+ | 0.064% [0.014, 0.157] | 0.154% [0.066, 0.304] |
+| all | 0.032% [0.008, 0.069] | 0.075% [0.030, 0.140] |
+| bench (cleared per position) | 0.0019% | 0.0019% |
+
+- In game at moves 30-60 the share is 20.8x the bench's at 200k and 45.5x
+  at 1M: over the declared 5x line, so **history persistence is
+  confirmed** (R16's per-go scaling comes before R20 and R29). History
+  grows through a game: the butterfly entry's 95th percentile at LMR sites
+  rises from 1,875 (moves 1-15) to 4,375 (61+) at 200k and to 5,625 at 1M
+  (bench: 875); the take history at late captures sits near saturation in
+  game (median 6,875-8,375 of 10,000 at moves 30+; bench 375).
+- **B14's prediction is refuted:** it expected at least 85% of the term's
+  firings on the reduce-more side; essentially all are on the reduce-less
+  side (200k: 0 of the firings reduce more; 1M: 0.1%). Ordering scores
+  reach +24,000 (good moves with all three tables high) but almost never
+  -24,000.
+- The term acts at well under 0.2% of LMR sites in every band and changes
+  the reduction at about the same rate, so its firing alone is unlikely to
+  explain the -10.8 Elo (UNVERIFIED); the declared alternative, its cost
+  (the ordering score computed at every LMR site), is the next thing to
+  measure (its nps, not part of this step).
+
+**Results, X6** (2026-11-07; stats build 9e01f26; 60 games of
+`s512ppr2-stc`, seed 20261108, disjoint from X2's; 2,086 test-engine
+searches at 2M nodes, TT and history carried; 18,782 rows at depth >= 8,
+33,384 at every depth; 95% intervals over games, 300 rounds).
+
+| Depth >= 8 (primary) | `share` (last pass) | `share_all` (every pass) |
+|---|---|---|
+| AUC of the full model | 0.768 [0.748, 0.786] | 0.772 [0.753, 0.789] |
+| Out-of-sample AUC (2 folds by game) | 0.767 | 0.771 |
+| AUC of the share alone | 0.643 | 0.667 |
+| McFadden pseudo-R² | 0.138 | 0.142 |
+| Partial R² of the share | 0.0031 [0.0006, 0.0071] | 0.0077 [0.0040, 0.0130] |
+| Partial R² of stability / of the score change | 0.062 / 0.001 | 0.054 / 0.001 |
+| Spearman rho² of the share | 0.028 [0.019, 0.038] | 0.038 [0.028, 0.048] |
+
+- Base rate: the best move changes within two iterations at 12.9% of
+  depth >= 8 iterations (21.0% at every depth).
+- P(change) by `share_all` decile (depth >= 8), from the lowest share to
+  the highest: 0.229, 0.223, 0.192, 0.162, 0.130, 0.105, 0.088, 0.075,
+  0.057, 0.034 (shares below 22%: 0.229; above 95.5%: 0.034). By stability
+  quintile: 0.308 (1-2 iterations unchanged), 0.170, 0.098, 0.050, 0.021
+  (13 or more).
+- Declared reading: the primary definition is `share_all` (the higher
+  AUC); its rho² is 0.038, above the 0.03 kill line, so R8's share term
+  goes ahead to its SPRT, though narrowly (the interval reaches 0.028, and
+  the engine's existing last-pass `share` gives 0.028, under the line; R8
+  should use the every-pass share). M5's table puts rho²·CV² of about
+  0.04 near +3 Elo (interpolated, UNVERIFIED). Stability carries several
+  times the share's information (partial R² 0.054 against 0.008), so the
+  stability signal, which S1 held in reserve, deserves its own term; the
+  score change adds almost nothing at depth >= 8.
+
+**X6's time-management curve** (2026-11-07; `tools/measure/tm_curve.py`
+on X6's runs; §5.6 step 10, R8, built behind switches on tm/node-share).
+The owner's two variants, (a) stability alone and (b) stability with the
+every-pass share, each as Fork's own logistic fit with depth added and
+divided by the depth-only fit (depth normalises, no signal of its own:
+owner, 2026-11-07), scaled by a mean-spend balance, floor 360 per mille.
+**The stability cap** follows the owner's rule, declared before it was
+computed (2026-11-07): the 99th percentile of the stability count over
+the rows at depth >= 8, the smallest integer whose cumulative share
+reaches 99%: **72** (X6's first cap of 10 matched other engines' caps in
+role at the constant screen and was replaced; every fit below uses 72).
+
+| Fit (depth >= 8, 18,782 rows) | Coefficients (logit) | AUC / out of sample |
+|---|---|---|
+| (a) stability + depth | 0.534912, −0.207666, −0.096556 | 0.765 / 0.763 |
+| (b) stability + share_all logit + depth | 0.474586, −0.177596, −0.185073, −0.103338 | 0.771 / 0.770 |
+| depth alone (the normaliser) | 0.567490, −0.211730 | 0.665 / 0.665 |
+| literal (a): stability alone | −0.455439, −0.224471 | 0.757 / 0.756 |
+| literal (b): stability + share_all logit | −0.569350, −0.199212, −0.173797 | 0.764 / 0.763 |
+
+- Depth cap 19 (the last depth with at least 1% of the rows).
+- Mean-spend balance (X6's 2,086 searches replayed with nodes as the clock
+  under the engine's stop rules, bisected so the mean spend equals the plain
+  soft limit's) at 100k / 250k / 500k-node soft budgets: (a) 1.018 / 0.988
+  / 1.083, mean **1.030**; (b) 0.996 / 0.954 / 1.038, mean **0.996**. The
+  literal fits drift with the budget: 1.036 / 1.216 / 1.580 (a) and 1.013 /
+  1.167 / 1.463 (b), which is why depth normalises. The floor binds at
+  about a quarter of the rows (23% a, 24% b).
+- At that balance the move at the stop equals the 2M-node final move more
+  often: at 250k, 0.854 plain, 0.873 (a), 0.874 (b) (in sample, not Elo; at
+  500k the variants reach the data's 2M-node end more often, which flatters
+  them).
+- Spearman ρ² of the scale against the label: 0.069 (a), 0.074 (b); by the
+  reading above (M5's table, interpolated, UNVERIFIED) about +3 to +4 Elo
+  at STC for either, declared before any game.
+
+**Results, X10** (2026-11-07; stats build 9e01f26; 120 games of
+`s512ppr2-stc`, seed 20261109, disjoint from X2's and X6's; 7,876
+test-engine searches at 200k nodes; 1 in 512 candidates sampled: 893,987
+rows; the side searches took 0.8% extra nodes, about 14 per sampled
+candidate). Wrong rate = share of decisions where the prune is wrong (RFP:
+the node fails low with RFP off there; futility: the on arm fails low and
+the off arm fails high). "At the margin" = the 20 cp gap bin holding the
+current margin, with its wrong events / rows and a 95% interval over games.
+
+| Technique, depth | Margin | Prunes taken: wrong | Candidates not taken: wrong | At the margin |
+|---|---|---|---|---|
+| RFP 1 | 80 | 0.24% (609 / 255,215) | 5.5% | 0.49% (166 / 33,795) [0.37, 0.61] |
+| RFP 2 | 160 | 0.38% (232 / 61,457) | 5.0% | 0.72% (35 / 4,869) [0.41, 1.07] |
+| RFP 3 | 240 | 0.16% (49 / 30,745) | 3.7% | 0.12% (3 / 2,578) |
+| RFP 4 | 320 | 0.17% (25 / 14,690) | 3.2% | 0.09% (1 / 1,079) |
+| RFP 5 | 400 | 0.24% (15 / 6,371) | 2.8% | 0.24% (1 / 416) |
+| RFP 6 | 480 | 0.06% (2 / 3,488) | 3.4% | 0.60% (1 / 166) |
+| Futility 1 | 170 | 0.010% (3 / 29,460) | 5.7% | 0 / 2,797 |
+| Futility 2 | 240 | 0.024% (2 / 8,446) | 6.3% | 1 / 774 |
+| Futility 3 | 310 | 0.029% (1 / 3,443) | 3.3% | 0 / 354 |
+| Futility 4 | 380 | 0 / 2,048 | 3.4% | 0 / 166 |
+| Futility 5 | 450 | 0.17% (1 / 601) | 3.7% | 0 / 35 |
+| Futility 6 | 520 | 0 / 484 | 2.1% | 0 / 27 |
+
+- Declared reading (I1): the marginal RFP wrong rate falls at least 3x
+  from depth 1 to depth 5. Measured 2.0x (0.49% to 0.24%), but the depth-5
+  cell rests on one wrong event and every cell from depth 3 on has at
+  most three, so the prediction is **neither confirmed nor refuted**
+  (thin; I1 asked about 1,200 wrong events per depth, and only depth 1
+  has more than 100 at the margin). A run with more games, or one that
+  samples only near the margins, would settle it.
+- Futility's margins look conservative: the prunes it takes are wrong at
+  0.01-0.03% at depths 1-4, against 0.16-0.38% for RFP's, and no
+  margin-bin cell has more than one wrong event. That is evidence for
+  R14's ranges (room to lower futility's margins), not for any level.
+- I1's probit-with-floor model is poorly identified on these data: its
+  sigma is pinned only at RFP depth 1 (83 cp [75, 90]) and futility depths
+  1, 3 and 4 (247, 155, 105 cp); elsewhere the intervals span orders of
+  magnitude. The binned rates above (and the CSV of all rows, outside the
+  repository) are the result to use; the fitted curves are not.
+
+**Results, idea 59 step 1** (2026-11-07; stats build d7de27b; 100 games
+of `s512ppr2-stc`, seed 20261110, disjoint from X2's, X6's and X10's;
+6,523 test-engine positions, at most 80 per game; 200k and 1M nodes).
+Computed evaluations within the margin of the nearest finite window bound:
+the share of that kind's evaluations, then the call rate per node.
+
+| Margin | Main, 200k | Quiescence, 200k | Main + quiescence per node, 200k | Main, 1M | Quiescence, 1M | Per node, 1M |
+|---|---|---|---|---|---|---|
+| 10 cp | 4.2% / 0.62% | 6.1% / 2.30% | 2.9% | 3.7% / 0.64% | 5.6% / 2.02% | 2.7% |
+| 25 cp | 10.1% / 1.48% | 14.8% / 5.58% | 7.1% | 8.9% / 1.52% | 13.6% / 4.90% | 6.4% |
+| 50 cp | 19.4% / 2.87% | 29.4% / 11.06% | 13.9% | 17.5% / 2.98% | 27.1% / 9.79% | 12.8% |
+| 100 cp | 34.8% / 5.14% | 51.9% / 19.54% | 24.7% | 32.4% / 5.52% | 49.2% / 17.79% | 23.3% |
+
+- Evaluations per node: 0.524 at 200k (main 0.147, quiescence 0.377) and
+  0.533 at 1M (0.171, 0.362), as X1 found. Median gap: main 172 cp (181 at
+  1M), quiescence 94 cp (100).
+- No finite bound at the site: main 0.9% (1.2% at 1M), quiescence 1.3%
+  (2.0%); one finite bound only: about 0% (the windows are zero-width
+  almost everywhere, or both mate-bounded).
+- Main search by depth (200k; within 25 cp; share of the band / call rate
+  per node): depth 1, 11.9% / 1.17%; depth 2, 8.5% / 0.21%; 3-4, 4.9% /
+  0.09%; 5-7, 2.4% / 0.01%; 8+, 0.9% / 0.00%. Depth 1 holds two thirds of
+  the main search's computed evaluations; deeper nodes sit far from their
+  windows (median gap 129 cp at depth 1, 544 cp at depth 8+).
+- Evaluations reused from the TT entry (not counted above) lie closer to
+  the window: main 20.9%, quiescence 48.6% within 25 cp at 200k, at 0.169
+  and 0.015 per node. A gate that also refines reused evaluations would
+  add up to 3.5% + 0.7% of nodes at 25 cp.
+- Against the idea's cost model (a 2-5% call rate of evaluations costs
+  under 5% of nps): only margins near 10 cp give 2-5% of evaluations
+  overall (main 4.2%, quiescence 6.1%); 25 cp already reaches 10-15%.
+  Two margins, as the owner asked, read off the table: e.g. m_main = 25 cp
+  with m_qs = 10 cp gives about 1.5% + 2.3% = 3.8% of nodes.
+
+**Results, crucial-point ground truth** (2026-11-07; stats build 63a7275
+for the sites, the normal build for the deep values; 100 games of
+`s512ppr2-stc`, seed 20261111, disjoint from X2's, X6's, X10's and idea
+59's; 5,433 sites (2,673 main search, 2,760 quiescence; 5,368 with a
+finite bound), each searched to 1,000,000 nodes). **18.6% of sites are
+crucial** in both strata (498 main, 514 quiescence): the static evaluation
+and the deep value fall on opposite sides of the nearest finite bound.
+Sites per node: main 0.317, quiescence 0.397 (computed and reused). Recall
+of crucial sites at a call rate of 2 / 4 / 7 / 10% of nodes (a detector
+calling at random gets the call rate over the sites per node: 6 / 13 / 22
+/ 32% in the main search, 5 / 10 / 18 / 25% in quiescence); the logistic
+models are scored on the half of the games they were not fitted on.
+
+| Detector | Main search: recall at 2 / 4 / 7 / 10% (AUC) | Quiescence: recall at 2 / 4 / 7 / 10% (AUC) |
+|---|---|---|
+| Logistic: gap + all features + seeds | 0.20 / 0.34 / 0.51 / 0.62 (0.756) | 0.15 / 0.26 / 0.41 / 0.50 (0.723) |
+| Logistic: gap + features, no seeds | 0.20 / 0.34 / 0.50 / 0.60 (0.744) | 0.15 / 0.26 / 0.40 / 0.49 (0.715) |
+| Window gap alone | 0.17 / 0.30 / 0.45 / 0.52 (0.674) | 0.14 / 0.25 / 0.37 / 0.45 (0.663) |
+| Seed disagreement minus gap | 0.16 / 0.30 / 0.45 / 0.55 (0.686) | 0.12 / 0.22 / 0.37 / 0.47 (0.668) |
+| TT refinement \|refined - static\| | 0.19 / 0.34 / 0.44 / 0.50 (0.648) | (none in quiescence) |
+| Seed disagreement, scratch seeds | 0.11 / 0.16 / 0.28 / 0.37 (0.544) | 0.07 / 0.12 / 0.20 / 0.28 (0.521) |
+| Seed disagreement, default vs warm seed | 0.06 / 0.13 / 0.22 / 0.30 (0.484) | 0.05 / 0.11 / 0.18 / 0.25 (0.497) |
+| Hanging pieces | 0.05 / 0.11 / 0.21 / 0.30 (0.481) | 0.08 / 0.13 / 0.23 / 0.33 (0.568) |
+| Last move a capture | 0.09 / 0.19 / 0.29 / 0.38 (0.546) | 0.06 / 0.12 / 0.22 / 0.31 (0.552) |
+| Swing from the parent's evaluation | 0.12 / 0.19 / 0.26 / 0.35 (0.491) | 0.07 / 0.14 / 0.26 / 0.35 (0.534) |
+| Checking moves available | 0.06 / 0.09 / 0.18 / 0.26 (0.447) | 0.06 / 0.11 / 0.20 / 0.27 (0.509) |
+
+- Best detector in both strata: the logistic model on the window gap and
+  the simple features (with or without the seed disagreement, which adds
+  0.01-0.02 at most). It catches about 3.2x random at 2% of nodes in the
+  main search and 3.0x in quiescence, and about 1.9-2.0x at 10%.
+- The window gap alone is the best single signal (2.7-2.9x random at 2%).
+  In the main search the TT refinement (the TT score moving the static
+  evaluation) is as strong at 2-4% of nodes.
+- Seed disagreement alone is barely better than random (AUC 0.48-0.54):
+  two networks' disagreement does not locate the positions where the
+  default network is wrong about the bound.
+- For ideas 59 and 60 the gate is therefore the logistic model on the gap
+  and features, with its own threshold per stratum; even so, at 4% of
+  nodes per stratum it reaches only 34% (main) and 26% (quiescence) of the
+  crucial sites.
+
 ## 6. Decisions log
 
 | Date | Decision |
@@ -3795,6 +4208,7 @@ untouched.
 | 2026-11-07 | **g3g sealed; the 2026-09 book at the next natural part boundary (owner).** g3g's seal verified every game (1,191,355 games, 111,190,930 positions, 50,692,451 unsaved) at 1:53 PM EST; its manifest is data/manifests/g3g.json; g3h started at 1:57 PM EST on 6 threads (a24d41f, S512ppr2, seed 20261113, lichess-2016-09.epd). The think tank's R1 duplicate count refuted its premise: at ply 20 or less, 0.0034% of kept positions are duplicates (19 of 555,082 over one shard each of g2e, g3, g3e and g3f), because every game starts from a distinct book position plus 2-4 random plies (the book is played as a seeded permutation). The owner keeps decision 12's switch to lichess-2026-09.epd for breadth, **only at the next natural part boundary, with no special stop**; its openings manifest (data/manifests/openings-lichess-2026-09.json, SHA-256 dab45c9f...) is committed and both copies (Windows and WSL) match it; the Control Center gains a setting for the next part's book before that boundary. |
 | 2026-11-07 | **Ideas 48-60 recorded, plan only (owner).** A "novel NNUE ideas" group (48 decision-focused loss, 49 a pairwise ranking loss on sibling positions, 50 conformal pruning margins, 51 TD(lambda) targets, 52 ensemble-disagreement active learning, 53 pawn-structure-class output experts), scheduled after item 8a, first experiments in the order 51 and 52, then 53, then 50, each at equal data with a small net first; a "paradigm candidates" group (54 a shared-accumulator policy head, the first to prototype, after item 8a; 55 a learned reduction and pruning function; 56 probabilistic search with neural uncertainty; 57 in-game adaptation; 58 giant-teacher distillation), after the current order; and 59, the Boundary Refiner (a rich evaluation consulted only near the alpha-beta window; its refiner shares the base accumulator), after item 8a; and 60, a near-window extension at depth-1 frontier nodes (after item 8a, before idea 59's step 3). Each entry states its mechanism, its mathematical or literature basis, its first experiment and its kill criterion. |
 | 2026-11-07 | **Testing speed: the design R tooling's settings (owner).** Design R and the head-to-head selection (decisions 2 and 3) are built before other work, so every later search test uses them. Settings: the default LTC cap for search features is 6 LTC stages (a run may set 4-6); the two-try limit counts per time control (an LTC confirmation of an STC pass is not a retry); every SPRT carries an idea id, network tests included, and each retrain is its own idea (8a, 8b, ...: each trains on new data), so the limit applies to retesting the same network, never to the retrain loop; in a head-to-head selection the declared value wins unless another beats it by more than 0.5 e. **CI:** a gate job classifies each change; docs-only changes skip the build matrix (about 1 minute instead of about 154); the full TSan suites move to the nightly run and an opt-in dispatch input, and run on pull requests and pushes only when files touching threads, the TT or the UCI layer change (the searcher does not count); a small "TSan, threaded suites" job (the UCI, TT, datagen and web suites under TSan) stays required on every code change; one aggregate "CI result" job passes only when every job passed or was skipped by its own rule, and branch protection on main is switched to require it alone before the first pull request to main that runs the new workflow (phase-4 itself is not protected). A typical code PR's expected CI time falls from about 154 to about 50 minutes (the design's medians over ten runs; UNVERIFIED until measured). |
+| 2026-11-07 | **CI testing speed (owner).** ci.yml's new `changes` job (`.github/ci/changed-areas.sh`, tested by `.github/ci/changed-areas-test.sh`) lists the changed files once and decides what runs: documentation alone (docs/, any `*.md`, LICENSE) skips every build job on pull requests too (pushes keep their paths-ignore); the full TSan suites (`clang-tsan`, `gcc-tsan`, now the reusable `.github/workflows/tsan.yml`) run only when threads, the TT or the UCI layer change (src/uci/, src/main.cpp, src/datagen/, trans_table.\*, hash_memory.\*, their tests, the build files, the CI files, or any other source file using a threading primitive; not `searcher.*`), nightly on main beside perft_epd_full, and on demand (dispatch tsan.yml, or ci.yml with `force-tsan`; a manual run never runs them otherwise); a new job, **TSan, threaded suites**, runs uci_protocol, uci_options, uci_timing, tt, datagen and web under both TSan presets on every code change (no bench parity there: the full run has it). One job, **CI result**, needs every other job and passes only if each passed or was skipped by its own rule; main's branch protection will require it alone (switched by the owner before the first pull request to main that runs the new workflow). Expected wall time for a typical code PR: about 50 min instead of about 154 (gcc-tsan's median); docs-only about 1 min. |
 | 2026-11-07 | **Idea 52: the independent committee (owner).** The seed-disagreement check (docs/research/idea52/report.md): item 7's warm seeds, in effect one net, fail the 1.5 line (eval-matched error ratios 1.24-1.37); its scratch seeds, independently initialised, pass it (1.69-1.76 on three detectors, 1.49-1.50 on the fourth, unchanged with deep-search mates excluded), and the default net errs 1.6-1.7 times more on the positions they pick. Decided: (1) an independent pair's disagreement is a detector in the crucial-point measurement (the gate comparison for ideas 59 and 60); (2) **retrain 8b gets an idea-52 arm**: the top-disagreement positions from an independent pair, deep-labelled by the default engine and oversampled, against the standard arm at equal data (the same number of positions seen); (3) **every retrain from 8b on keeps one from-scratch run as the independent committee member** (about 2.2 T4 GPU-hours at the standard 360 superbatches). A cheap check first: whether a warm-against-scratch pair (the default against the scratch run) carries the same signal, since every retrain will have that pair. **Keep-or-drop rule, decided before 8b's result:** if 8b's disagreement arm does not beat the standard arm by a meaningful margin (a fixed-node screen of +5 Elo or more, or a passing SPRT if it is screened), idea 52 is retired and the scratch-run rule dropped (saving its 2-4 hours per retrain); the result stays in the record either way. |
 | 2026-11-07 | **Retrain candidates are gated by a fixed-node screen, not by validation loss (owner).** Item 8a's declared rule required the candidate's full validation-set loss to beat S512ppr2's by 2e-5; R1-avg (the average of R1's superbatches 331-360; every gate passed: S = 89, qloss 9.4 / 7.5 cp, the endgame check 8 of 900, netcheck 0 of 446) beat it by 1.82e-5, short by 1.8e-6 (the validation set, mostly g3s2-val, favours the baseline it selected). Declared before any result: a tie-break with one 1,600-game fixed-node screen of R1-avg against S512ppr2 (800,000 nodes per move each); the STC SPRT [0, 5] follows only at +5 Elo or more, otherwise 8a is recorded as below threshold and the next retrain is 8b. **From now on** a retrain's candidate is gated by that fixed-node screen (the same architecture, so no speed adjustment) instead of the offline validation-loss margin, since loss has proven an unreliable predictor (S512+PP gained +32.7 at STC with a flat loss). Also from 8a's arms: the cooldown branch did not beat R1's own average (4.8e-5 worse on the prefix window), and the anneal-only arm was worse than R1-avg on the full set. |
 | 2026-11-07 | **S512ppr3 promoted to the default network (owner, about 9:05 PM EST).** Item 8a's retrain (S512+PP's architecture on g3s3 = g3s2 + g3f + g3g, Kaggle fork-retrain-g3s3 v1 at 6053b51, every arm warm from S512ppr2's float weights, S = 92 in training): R1 and R2, the standard recipe (seeds 1, 2); CD, a cooldown branch from R1's superbatch 180 (1e-5, 3e-6, 1e-6 for 20/15/15 superbatches, the last 15 averaged); D1, anneal only (1e-5 for 60 superbatches). Full g3s3-val losses: S512ppr2 0.01968472, R1-best 0.01965562, R2-best 0.01972978, R1-avg 0.01966655, CD-avg 0.01977483, D1-final 0.01975487, D1-avg 0.01971097: **the cooldown branch and the anneal-only arm did not beat R1-avg**. By the declared rule R1-avg was the candidate (more than 1e-5 below R-best, R2's best checkpoint), 1.82e-5 below S512ppr2, short of the 2e-5 margin; the owner's tie-break, one fixed-node screen, **now replaces the loss margin** as the gate for retrain candidates (the row above). S512ppr3 (bake/s512ppr3 720fe7b: R1-avg at the matched S = 89, 1 of 311,296 link weights clamped; quantization loss max 9.4 cp, p99 7.5 cp; netcheck exact on 446; the endgame check 8 of 900, as S512ppr2) scored **+15.65 ± 9.26 Elo** (nElo +28.80 ± 17.02, ptnml [7, 161, 406, 205, 21]) at 800,000 nodes per move (run 42426868742), above the declared +5, then beat S512ppr2 at STC [0, 5], **+7.12 ± 4.53 Elo (nElo +11.98 ± 7.61), H1 accepted** after 5 stages, 8,000 games, LLR 3.14, ptnml [100, 908, 1848, 1016, 128] (runs 42429984619, 42431412304, 42432793282, 42434196075, 42435511074; the driver stopped in the machine's crash at about 8:07 PM EST after dispatching stage 2 and was resumed with RUN_ID for that stage; sprt-log). Promoted; S512ppr2 stays buildable and joins CI's `nets` job; the web page adds S512ppr3 as its default when it is next redeployed. Bench 14,149,617 / 1cb0717f040c294d. **The labeller policy:** g3i (started after the crash, labelled by S512ppr2) ends at a game boundary and is sealed as its part, and the generation continues as g3j, labelled by S512ppr3 from a fresh PGO build. The owner: switching g3i -> g3j today is an explicit exception to decision 24 (one part switch per day), because g3i's start was forced by the crash and the labeller policy calls for an immediate switch on a network promotion |
@@ -3805,6 +4219,7 @@ untouched.
 | 2026-11-08 | **The gauntlet's set of 2026-11-08: every anchor standing, and a gap to Stockfish (owner).** tools/gauntlet/anchors.tsv: Clover 6.1 (CCRL Blitz 3639, rechecked on the list of 2026-11-07) a standing anchor with the role `new` and no alternate (it built in the anchor job of runs 41465146207 and 42392526865 as Altair's alternate but never played, so not `continuity`); Marvin 6.3.0 and Altair 7.0.0 `continuity` (both built and played in those two runs), and Arcanum 2.8, Marvin's alternate, removed (its build failed in both): a failed build of any anchor now stops the run before any game. **Stockfish 19** (tag sf_19, edb0d9d, GPL-3.0), role `reference`: 400 games (all 200 openings, both colours, 4 shards), Threads 1 and Hash 16 MB as Fork's, built with `make net` then `make build ARCH=x86-64-avx2` (the network's file name and SHA-256 logged; whether `make build` alone fetches it is UNVERIFIED until the first run's log), **kept out of the Ordo fit** and reported apart as the gap to Stockfish: Fork's score, the implied Elo difference and its pentanomial 95% interval (tools/gauntlet/report.py, which now merges the shards and runs Ordo; its CCRL Blitz 3792 shown for context only); a failed build stops the run. A run plays 1,800 games: 1,400 in the fit (7 anchors x 200), 400 against Stockfish. Opponent binaries only (ORIGINALITY.md; KB competition.md §5). |
 | 2026-11-08 | **Gauntlet of the new default (S512ppr3 + time management (b)): Fork 3488.2 ± 20.4; gap to Stockfish 19 −222.4 (owner).** Run 42538371594 on phase-4 32c5517 (update.sh, gcc 11.4, x86-64-v3; bench signature 1cb0717f040c294d checked on the runner), 7:06-7:45 PM EST, every shard 100 of 100, no time forfeits; 200 random 8-ply openings, 10+0.1. Ordo, CCRL Blitz scale, 1,400 games against the seven standing anchors (931.5 points, 67%). Opponents' scores against Fork: Clover 6.1 (3639) 147.0 of 200, Altair 7.0.0 (3579) 121.5, Marvin 6.3.0 (3458) 86.0, Laser 1.7 (3292) 49.0, Winter 0.9 (3168) 30.0, Monolith 2.01 (3061) 19.0, Weiss 1.0 (2896) 16.0. The rating equals S512ppr2's 3488.2 of 2026-11-07 to the decimal by coincidence: on the six anchors both runs share, Fork scored 878.5 of 1,200 (73.2%) against 864.0 (72.0%), about +10 Elo by the logistic slope, within either run's error, while Clover, new to the fit, scored 74% against Fork (about 3460 implied from that pairing alone). **Gap to Stockfish 19** (sf_19, edb0d9db, net nn-1a298aa575a0 fetched by its make net; outside the fit): Fork 87 of 400 (21.8%), +49 =76 −275, **Elo −222.4, 95% interval −251.2 to −196.1** (pentanomial, 200 pairs, [75, 76, 49, 0, 0]: each of Fork's 49 wins is paired with a loss of the colour-reversed game); for comparison, Fork's fitted 3488 against Stockfish's CCRL 3792 is −304 on the list's conditions. Result: ~/fork-data/gauntlet/run-42538371594. |
 | 2026-11-09 | **Idea 59 step 3 closes; step 3b parked (owner).** Fixed-node screens (1,600 games, 800,000 nodes per move, against S512ppr3 alone, gate main 25 / quiescence 10 cp) replaced the net-flip yardstick as the deciding test (owner, 2026-11-08). The shared-accumulator refiner (kernel v2) hurt: both gates −19.78 ± 9.67 (run 42574807031), quiescence only −11.73 ± 9.63 (42589690181); both at or below 0, so the refiner line ends with no SPRT. An independent net (s512pp-scratch-s1) consulted at the gate: blend +9.56 ± 9.45 (42594402144), replace +3.47 ± 9.34 (42600420297), the pattern the independence hypothesis predicted, but below the +10 bar declared before the result. No step 3b plan is written; step 3b (a small independent near-window net, widths 64 / 128, blended with a tuned weight) is parked as a hypothesis to revisit when compute allows. ideas.md idea 59. |
+| 2026-11-09 | **The full TSan suites on a push or pull request leave out `search` and `pruning`; nightly runs them all (owner).** Milestone 2's CI run 42611572178 lost gcc-tsan to its 240-minute limit: `search` alone took 10,296 s under gcc-tsan, `pruning` 1,266 s, and every test that finished passed. ci.yml now calls tsan.yml with `skip: '^(search\|pruning)$'`; nightly.yml and a dispatch run every fast suite, and the job's limit is 360 minutes. Both suites are single-search tests; the threaded suites still run under TSan on every code change (tsan-threaded). |
 
 ## 7. Performance doctrine (governs every phase)
 
