@@ -3772,7 +3772,14 @@ early-stop root probe without the best move), credited in ORIGINALITY.md
 and flagged to the owner. Next (queued after batch 4, night items 60-62):
 the head-to-head of `RootGapBand` (7, 14, 28), then of `RootGapExtra`
 (333, 667, 1000) at the band picked, then the winner's design R SPRT
-against off at STC.
+against off at STC (i61-rg-band, i61-rg-extra, i61-rg-stc; idea 61.6).
+Each candidate is one commit on c14dc82 that switches `UseRootGapTime` on
+and sets the two values (branches idea61/rg-b7, rg-b14, rg-b28 and
+rg-bN-x333, rg-bN-x1000); the SPRT's off side is c14dc82 itself. Tests
+that check other time rules pin the switch off, and the UCI clock test's
+upper bound includes the root-gap factor when the switch is on by default,
+so turning it on for adoption breaks neither (checked with the default
+flipped: the search and uci_protocol suites pass).
 
 ### 5.7 Phase 4 step 1: measurement instrumentation (owner-approved 2026-11-07)
 
