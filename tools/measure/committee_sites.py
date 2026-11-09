@@ -38,7 +38,8 @@ most, deep-labelled by the default engine.
    id<TAB>cp<TAB>mate<TAB>depth to OUT/labels.tsv; resumable (a rerun drops
    a last line cut short and searches only the sites without a label).
 5. `check OUT`: the labelled controls against the labelled sites: the default
-   network's mean |eval - label| on each (mates left out), plain and with the
+   network's mean |eval - label| on each (decided labels left out: mates and
+   table wins, |cp| >= TABLE_BAND), plain and with the
    controls reweighted to the sites' |eval| distribution (the report's
    eval-size matching).
 6. `manifest OUT FILE...`: each file's size and SHA-256, as JSON.
@@ -66,6 +67,7 @@ from pathlib import Path
 UNSAVED_SCORE = 32767  # src/datagen/self_play.hpp: an unsaved position's record
 KEPT_MAX_SCORE = 20000  # tools/train/src/main.rs MAX_SCORE, the filter's max_eval
 MATE_LABEL = 20000      # a deep search's mate score, as crucial_points.py writes it
+TABLE_BAND = 29500 - 250  # src/search/score_bounds.hpp: TbWinScore - MaxPly, a table win's reported cp
 PIECE_CHARS = 'PNBRQK'
 # Castling rights as bits (K, Q, k, q) and the rights each square keeps when
 # a piece leaves or arrives there.
@@ -486,12 +488,12 @@ def _bin(v):
 
 def error_ratio(sites, controls, labels):
     """The default network's mean |eval - label| on the sites over the controls',
-    plain and matched (the controls reweighted to the sites' |eval| bins); mates left out."""
+    plain and matched (the controls reweighted to the sites' |eval| bins); decided labels (mates, table wins) left out."""
     def errors(group):
         out = []
         for s in group:
             lab = labels.get(s['id'])
-            if lab and not lab[1]:
+            if lab and not lab[1] and abs(lab[0]) < TABLE_BAND:
                 out.append((_bin(s['eval_a']), abs(s['eval_a'] - lab[0])))
         return out
 

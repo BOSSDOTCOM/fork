@@ -267,12 +267,13 @@ class CommitteeSitesTests(unittest.TestCase):
             run(nodes[:-1])
 
     def test_error_ratio(self):
-        sites = [{'id': 1, 'eval_a': 10}, {'id': 2, 'eval_a': 300}, {'id': 3, 'eval_a': 10}]
-        controls = [{'id': 4, 'eval_a': 10}, {'id': 5, 'eval_a': 300}, {'id': 6, 'eval_a': 300}]
+        sites = [{'id': 1, 'eval_a': 10}, {'id': 2, 'eval_a': 300}, {'id': 3, 'eval_a': 10}, {'id': 7, 'eval_a': 10}]
+        controls = [{'id': 4, 'eval_a': 10}, {'id': 5, 'eval_a': 300}, {'id': 6, 'eval_a': 300},
+                    {'id': 8, 'eval_a': 300}]
         labels = {1: (30, 0, 10), 2: (200, 0, 10), 3: (20000, 1, 9), 4: (20, 0, 10), 5: (280, 0, 10),
-                  6: (340, 0, 10)}
+                  6: (340, 0, 10), 7: (29497, 0, 30), 8: (-29250, 0, 30)}
         r = cs.error_ratio(sites, controls, labels)
-        # Site errors 20 and 100 (the mate left out); control errors 10, 20 and 40.
+        # Site errors 20 and 100 (the mate and the table win left out); control errors 10, 20 and 40.
         self.assertEqual((r['sites'], r['controls']), (2, 3))
         self.assertAlmostEqual(r['ratio'], round(60 / (70 / 3), 3))
         # Matched: the controls' bin means, 10 (|eval| 10) and 30 (|eval| 300), at the sites' bins.
