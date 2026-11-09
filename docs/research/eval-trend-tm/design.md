@@ -1,7 +1,7 @@
 # Eval-trend time management: design (docs only)
 
 Status: **design for the owner's review; nothing built, no job run.**
-Written 2026-11-09, 11:08 PM EST, on branch `research/eval-trend-tm` from
+Written 2026-11-09, about 6:10 PM EST, on branch `research/eval-trend-tm` from
 `phase-4` (cf9285a). Bench is unchanged by this document: 14,149,617 /
 1cb0717f040c294d.
 
