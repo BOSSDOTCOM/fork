@@ -504,6 +504,17 @@ the job i59s3-window, results in ~/fork-measure/i59s3):**
   0.0170 for the main search and 0.0331 for quiescence (the mate-flagged
   labels and the table band, about 7% so far, leave after labelling). Link
   187 (3.6) is active at 468 of the 20,000 new sites.
+  **Labelled (2026-11-08, 6:36-7:18 PM EST, job i59s3-test2-labels; 3
+  workers beside data generation, 1M nodes with the tables, the pinned
+  engine's hash and bench as referenced before and after; 7.9 M nominal
+  nodes/s):** the test split (test/n1m and test/n1m2, 30,000 sites) uses
+  27,475 (2,525 mate-flagged or in the table band left out). **Inside gate
+  (a): 6,376 main-search and 1,672 quiescence sites; deployment-weighted
+  n_eff 4,599 (0.571 n), so the smallest NF reaching p < 0.01 is 0.0208 for
+  the weighted whole**, 0.0177 for the main search and 0.0345 for
+  quiescence (P0's discordance 0.30; deep_labels.py weights, factors 0.557
+  / 2.691). The training-objective weights on it: factors 1.618 / 4.794,
+  n_eff 0.530 n (closeness alone) and 0.405 n (with the call mix).
 - **Labels (Syzygy 3-4-5; the pinned engine, SHA-256 17ab2b41...0b34,
   bench 14,149,617 / 1cb0717f040c294d as referenced before the first label
   and after the last).** Nodes per second are nominal (sites x the node
