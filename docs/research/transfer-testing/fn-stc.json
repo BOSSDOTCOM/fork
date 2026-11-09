@@ -1,0 +1,712 @@
+{
+ "pairs": [
+  {
+   "name": "S512 r1 vs B0 control",
+   "fn": 74.52,
+   "fn_hw": 12.1,
+   "stc": 43.66,
+   "stc_hw": 12.02,
+   "log2_local": -0.358,
+   "log2_insitu": -0.3022,
+   "nps_insitu": 0.811,
+   "verdict": "H1",
+   "runs": "41170753141 / 41125906800",
+   "raw_rule_fn_gt_0": true,
+   "raw_sign_ok": true
+  },
+  {
+   "name": "H-512 r1 vs B0 control",
+   "fn": 32.23,
+   "fn_hw": 12.03,
+   "stc": -24.36,
+   "stc_hw": 9.06,
+   "log2_local": -0.415,
+   "log2_insitu": -0.408,
+   "nps_insitu": 0.7537,
+   "verdict": "H0",
+   "runs": "41172824043 / stage A",
+   "raw_rule_fn_gt_0": true,
+   "raw_sign_ok": false
+  },
+  {
+   "name": "AF-S r1 vs B0 control",
+   "fn": 41.67,
+   "fn_hw": 12.01,
+   "stc": -48.52,
+   "stc_hw": 12.78,
+   "log2_local": -0.837,
+   "log2_insitu": -0.8052,
+   "nps_insitu": 0.5723,
+   "verdict": "H0",
+   "runs": "41174960498 / stage A",
+   "raw_rule_fn_gt_0": true,
+   "raw_sign_ok": false
+  },
+  {
+   "name": "XGR-512 r1 vs B0 control",
+   "fn": 52.07,
+   "fn_hw": 11.81,
+   "stc": -38.15,
+   "stc_hw": 13.03,
+   "log2_local": -1.059,
+   "log2_insitu": -0.8767,
+   "nps_insitu": 0.5446,
+   "verdict": "H0",
+   "runs": "41177610204 / stage A",
+   "raw_rule_fn_gt_0": true,
+   "raw_sign_ok": false
+  },
+  {
+   "name": "AF-S r2 vs S512r2",
+   "fn": 10.43,
+   "fn_hw": 10.36,
+   "stc": -55.85,
+   "stc_hw": 11.42,
+   "log2_local": -0.478,
+   "log2_insitu": -0.5275,
+   "nps_insitu": 0.6938,
+   "verdict": "H0",
+   "runs": "41390867039 / 41399769054",
+   "raw_rule_fn_gt_0": true,
+   "raw_sign_ok": false
+  },
+  {
+   "name": "XGR-512 r2 vs S512r2",
+   "fn": 30.7,
+   "fn_hw": 10.37,
+   "stc": -34.42,
+   "stc_hw": 11.88,
+   "log2_local": -0.642,
+   "log2_insitu": -0.4353,
+   "nps_insitu": 0.7395,
+   "verdict": "H0",
+   "runs": "41395484353 / 41402192712",
+   "raw_rule_fn_gt_0": true,
+   "raw_sign_ok": false
+  },
+  {
+   "name": "S512+X vs S512r2",
+   "fn": 25.67,
+   "fn_hw": 10.26,
+   "stc": -30.04,
+   "stc_hw": 10.82,
+   "log2_local": -0.29,
+   "log2_insitu": -0.4107,
+   "nps_insitu": 0.7523,
+   "verdict": "H0",
+   "runs": "42142711426 / s512x-vs-s512r2-stc",
+   "raw_rule_fn_gt_0": true,
+   "raw_sign_ok": false
+  },
+  {
+   "name": "S512+PP vs S512r2",
+   "fn": 46.09,
+   "fn_hw": 10.37,
+   "stc": 32.67,
+   "stc_hw": 10.48,
+   "log2_local": -0.16,
+   "log2_insitu": -0.1566,
+   "nps_insitu": 0.8972,
+   "verdict": "H1",
+   "runs": "42284077960 / 42294907752",
+   "raw_rule_fn_gt_0": true,
+   "raw_sign_ok": true
+  },
+  {
+   "name": "S512ppr3 vs S512ppr2",
+   "fn": 15.65,
+   "fn_hw": 9.26,
+   "stc": 7.12,
+   "stc_hw": 4.53,
+   "log2_local": 0.0,
+   "log2_insitu": -0.0012,
+   "nps_insitu": 0.9992,
+   "verdict": "H1",
+   "runs": "42426868742 / 42429984619..42435511074",
+   "raw_rule_fn_gt_0": true,
+   "raw_sign_ok": true
+  }
+ ],
+ "fits": {
+  "insitu: origin (a = 1)": {
+   "a": 1.0,
+   "a_se": 0.0,
+   "R": 118.3,
+   "R_se": 5.6,
+   "elo_per_1pct": 1.716,
+   "chi2": 11.06,
+   "dof": 8
+  },
+  "insitu: a * FN + R * x": {
+   "a": 1.011,
+   "a_se": 0.11,
+   "R": 119.0,
+   "R_se": 9.1,
+   "elo_per_1pct": 1.726,
+   "chi2": 11.05,
+   "dof": 7
+  },
+  "local: origin (a = 1)": {
+   "a": 1.0,
+   "a_se": 0.0,
+   "R": 105.7,
+   "R_se": 5.0,
+   "elo_per_1pct": 1.532,
+   "chi2": 27.1,
+   "dof": 8
+  },
+  "local: a * FN + R * x": {
+   "a": 0.982,
+   "a_se": 0.111,
+   "R": 104.6,
+   "R_se": 8.4,
+   "elo_per_1pct": 1.517,
+   "chi2": 27.08,
+   "dof": 7
+  }
+ },
+ "loo": {
+  "insitu: origin (a = 1)": {
+   "rows": [
+    {
+     "name": "S512 r1 vs B0 control",
+     "pred_stc": 38.6,
+     "stc": 43.66,
+     "resid": 5.1,
+     "sign_ok": true,
+     "fit_R": 119.0,
+     "fit_a": 1.0,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    },
+    {
+     "name": "H-512 r1 vs B0 control",
+     "pred_stc": -15.3,
+     "stc": -24.36,
+     "resid": -9.1,
+     "sign_ok": true,
+     "fit_R": 116.4,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "AF-S r1 vs B0 control",
+     "pred_stc": -55.3,
+     "stc": -48.52,
+     "resid": 6.8,
+     "sign_ok": true,
+     "fit_R": 120.5,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "XGR-512 r1 vs B0 control",
+     "pred_stc": -57.3,
+     "stc": -38.15,
+     "resid": 19.2,
+     "sign_ok": true,
+     "fit_R": 124.8,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "AF-S r2 vs S512r2",
+     "pred_stc": -51.4,
+     "stc": -55.85,
+     "resid": -4.5,
+     "sign_ok": true,
+     "fit_R": 117.2,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "XGR-512 r2 vs S512r2",
+     "pred_stc": -19.5,
+     "stc": -34.42,
+     "resid": -15.0,
+     "sign_ok": true,
+     "fit_R": 115.2,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512+X vs S512r2",
+     "pred_stc": -22.2,
+     "stc": -30.04,
+     "resid": -7.8,
+     "sign_ok": true,
+     "fit_R": 116.6,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512+PP vs S512r2",
+     "pred_stc": 27.5,
+     "stc": 32.67,
+     "resid": 5.2,
+     "sign_ok": true,
+     "fit_R": 118.8,
+     "fit_a": 1.0,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512ppr3 vs S512ppr2",
+     "pred_stc": 15.5,
+     "stc": 7.12,
+     "resid": -8.4,
+     "sign_ok": true,
+     "fit_R": 118.3,
+     "fit_a": 1.0,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    }
+   ],
+   "sign_agreement": 9,
+   "verdict_agreement": 9,
+   "rms_resid": 10.2,
+   "n": 9
+  },
+  "insitu: a * FN + R * x": {
+   "rows": [
+    {
+     "name": "S512 r1 vs B0 control",
+     "pred_stc": 34.7,
+     "stc": 43.66,
+     "resid": 8.9,
+     "sign_ok": true,
+     "fit_R": 115.0,
+     "fit_a": 0.932,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    },
+    {
+     "name": "H-512 r1 vs B0 control",
+     "pred_stc": -15.1,
+     "stc": -24.36,
+     "resid": -9.2,
+     "sign_ok": true,
+     "fit_R": 117.8,
+     "fit_a": 1.021,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "AF-S r1 vs B0 control",
+     "pred_stc": -55.6,
+     "stc": -48.52,
+     "resid": 7.1,
+     "sign_ok": true,
+     "fit_R": 122.0,
+     "fit_a": 1.022,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "XGR-512 r1 vs B0 control",
+     "pred_stc": -57.5,
+     "stc": -38.15,
+     "resid": 19.4,
+     "sign_ok": true,
+     "fit_R": 126.5,
+     "fit_a": 1.025,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "AF-S r2 vs S512r2",
+     "pred_stc": -51.1,
+     "stc": -55.85,
+     "resid": -4.8,
+     "sign_ok": true,
+     "fit_R": 116.3,
+     "fit_a": 0.988,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "XGR-512 r2 vs S512r2",
+     "pred_stc": -19.4,
+     "stc": -34.42,
+     "resid": -15.0,
+     "sign_ok": true,
+     "fit_R": 116.4,
+     "fit_a": 1.017,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512+X vs S512r2",
+     "pred_stc": -22.2,
+     "stc": -30.04,
+     "resid": -7.8,
+     "sign_ok": true,
+     "fit_R": 117.2,
+     "fit_a": 1.009,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512+PP vs S512r2",
+     "pred_stc": 26.0,
+     "stc": 32.67,
+     "resid": 6.7,
+     "sign_ok": true,
+     "fit_R": 116.3,
+     "fit_a": 0.96,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512ppr3 vs S512ppr2",
+     "pred_stc": 16.7,
+     "stc": 7.12,
+     "resid": -9.6,
+     "sign_ok": true,
+     "fit_R": 123.2,
+     "fit_a": 1.075,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    }
+   ],
+   "sign_agreement": 9,
+   "verdict_agreement": 9,
+   "rms_resid": 10.7,
+   "n": 9
+  },
+  "local: origin (a = 1)": {
+   "rows": [
+    {
+     "name": "S512 r1 vs B0 control",
+     "pred_stc": 36.4,
+     "stc": 43.66,
+     "resid": 7.3,
+     "sign_ok": true,
+     "fit_R": 106.6,
+     "fit_a": 1.0,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    },
+    {
+     "name": "H-512 r1 vs B0 control",
+     "pred_stc": -10.6,
+     "stc": -24.36,
+     "resid": -13.8,
+     "sign_ok": true,
+     "fit_R": 103.2,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "AF-S r1 vs B0 control",
+     "pred_stc": -46.3,
+     "stc": -48.52,
+     "resid": -2.2,
+     "sign_ok": true,
+     "fit_R": 105.1,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "XGR-512 r1 vs B0 control",
+     "pred_stc": -71.8,
+     "stc": -38.15,
+     "resid": 33.6,
+     "sign_ok": true,
+     "fit_R": 116.9,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "AF-S r2 vs S512r2",
+     "pred_stc": -38.4,
+     "stc": -55.85,
+     "resid": -17.4,
+     "sign_ok": true,
+     "fit_R": 102.2,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "XGR-512 r2 vs S512r2",
+     "pred_stc": -37.7,
+     "stc": -34.42,
+     "resid": 3.2,
+     "sign_ok": true,
+     "fit_R": 106.5,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512+X vs S512r2",
+     "pred_stc": -4.0,
+     "stc": -30.04,
+     "resid": -26.0,
+     "sign_ok": true,
+     "fit_R": 102.4,
+     "fit_a": 1.0,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512+PP vs S512r2",
+     "pred_stc": 29.1,
+     "stc": 32.67,
+     "resid": 3.5,
+     "sign_ok": true,
+     "fit_R": 105.9,
+     "fit_a": 1.0,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512ppr3 vs S512ppr2",
+     "pred_stc": 15.7,
+     "stc": 7.12,
+     "resid": -8.5,
+     "sign_ok": true,
+     "fit_R": 105.7,
+     "fit_a": 1.0,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    }
+   ],
+   "sign_agreement": 9,
+   "verdict_agreement": 9,
+   "rms_resid": 16.5,
+   "n": 9
+  },
+  "local: a * FN + R * x": {
+   "rows": [
+    {
+     "name": "S512 r1 vs B0 control",
+     "pred_stc": 27.6,
+     "stc": 43.66,
+     "resid": 16.1,
+     "sign_ok": true,
+     "fit_R": 98.2,
+     "fit_a": 0.842,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    },
+    {
+     "name": "H-512 r1 vs B0 control",
+     "pred_stc": -10.6,
+     "stc": -24.36,
+     "resid": -13.8,
+     "sign_ok": true,
+     "fit_R": 103.4,
+     "fit_a": 1.004,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "AF-S r1 vs B0 control",
+     "pred_stc": -46.1,
+     "stc": -48.52,
+     "resid": -2.5,
+     "sign_ok": true,
+     "fit_R": 103.8,
+     "fit_a": 0.979,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "XGR-512 r1 vs B0 control",
+     "pred_stc": -72.5,
+     "stc": -38.15,
+     "resid": 34.3,
+     "sign_ok": true,
+     "fit_R": 119.6,
+     "fit_a": 1.041,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "AF-S r2 vs S512r2",
+     "pred_stc": -36.7,
+     "stc": -55.85,
+     "resid": -19.2,
+     "sign_ok": true,
+     "fit_R": 96.7,
+     "fit_a": 0.913,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "XGR-512 r2 vs S512r2",
+     "pred_stc": -37.5,
+     "stc": -34.42,
+     "resid": 3.1,
+     "sign_ok": true,
+     "fit_R": 105.7,
+     "fit_a": 0.987,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512+X vs S512r2",
+     "pred_stc": -3.8,
+     "stc": -30.04,
+     "resid": -26.3,
+     "sign_ok": true,
+     "fit_R": 104.1,
+     "fit_a": 1.029,
+     "verdict": "H0",
+     "pred_pass": false,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512+PP vs S512r2",
+     "pred_stc": 26.7,
+     "stc": 32.67,
+     "resid": 6.0,
+     "sign_ok": true,
+     "fit_R": 102.2,
+     "fit_a": 0.934,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    },
+    {
+     "name": "S512ppr3 vs S512ppr2",
+     "pred_stc": 16.4,
+     "stc": 7.12,
+     "resid": -9.3,
+     "sign_ok": true,
+     "fit_R": 108.5,
+     "fit_a": 1.047,
+     "verdict": "H1",
+     "pred_pass": true,
+     "verdict_ok": true
+    }
+   ],
+   "sign_agreement": 9,
+   "verdict_agreement": 9,
+   "rms_resid": 17.7,
+   "n": 9
+  }
+ },
+ "no_stc": [
+  {
+   "name": "H-512 r2 vs S512r2",
+   "fn": -12.17,
+   "fn_hw": 10.58,
+   "nps_insitu": 0.8576,
+   "pred_stc_origin": -38.4,
+   "pred_stc_two_param": -38.7
+  },
+  {
+   "name": "idea 59 oracle (a), window gate 25/10",
+   "fn": 29.82,
+   "fn_hw": 9.78,
+   "nps_insitu": 0.7427,
+   "pred_stc_origin": -20.9,
+   "pred_stc_two_param": -20.9
+  },
+  {
+   "name": "idea 59 oracle (b), window gate 25/25",
+   "fn": 41.01,
+   "fn_hw": 9.97,
+   "nps_insitu": 0.7288,
+   "pred_stc_origin": -13.0,
+   "pred_stc_two_param": -12.9
+  },
+  {
+   "name": "idea 59 random gate",
+   "fn": 7.6,
+   "fn_hw": 9.93,
+   "nps_insitu": 0.7383,
+   "pred_stc_origin": -44.2,
+   "pred_stc_two_param": -44.4
+  },
+  {
+   "name": "idea 59 bias only",
+   "fn": -14.56,
+   "fn_hw": 9.96,
+   "nps_insitu": 0.7697,
+   "pred_stc_origin": -59.2,
+   "pred_stc_two_param": -59.7
+  },
+  {
+   "name": "idea 59 f1a refiner, both gates",
+   "fn": -19.78,
+   "fn_hw": 9.67,
+   "nps_insitu": 0.9191,
+   "pred_stc_origin": -34.2,
+   "pred_stc_two_param": -34.5
+  },
+  {
+   "name": "idea 59 f1b refiner, quiescence only",
+   "fn": -11.73,
+   "fn_hw": 9.63,
+   "nps_insitu": 0.9375,
+   "pred_stc_origin": -22.7,
+   "pred_stc_two_param": -22.9
+  },
+  {
+   "name": "idea 59 f1c blend with an independent net",
+   "fn": 9.56,
+   "fn_hw": 9.45,
+   "nps_insitu": 0.7367,
+   "pred_stc_origin": -42.6,
+   "pred_stc_two_param": -42.8
+  },
+  {
+   "name": "idea 59 f1d replace by an independent net",
+   "fn": 3.47,
+   "fn_hw": 9.34,
+   "nps_insitu": 0.7364,
+   "pred_stc_origin": -48.8,
+   "pred_stc_two_param": -49.0
+  }
+ ],
+ "raw_rule": {
+  "sign_agreement_fn_gt_0": 3,
+  "n": 9
+ }
+}
