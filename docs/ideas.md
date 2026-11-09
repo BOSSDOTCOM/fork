@@ -1608,6 +1608,12 @@ the screens before use.
   no interval), under the scratch pair's 1.69-1.71 on g3s3-val: the warm-against-scratch pair carries
   a weaker signal on this first batch (UNVERIFIED until the full set). The arm's oversampling factor
   is the 8b recipe's choice.
+  **Keep-or-drop rule for the arm** (owner, 2026-11-09, declared before the full set was checked):
+  when all 200,000 sites are labelled, `committee_sites.py check OUT --resamples 2000 --seed 20261109`
+  gives the matched ratio with its 95% percentile bootstrap interval (sites and controls each
+  resampled with replacement). If the whole interval lies below 1.5, the arm is dropped from 8b and
+  its data share goes to the control; otherwise (above 1.5 or straddling it) the arm stays in 8b,
+  whose +5 Elo keep-or-drop bar is the real decision.
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 53. Pawn-structure-class output experts

@@ -41,14 +41,17 @@ most, deep-labelled by the default engine.
    network's mean |eval - label| on each (decided labels left out: mates and
    table wins, |cp| >= TABLE_BAND), plain and with the
    controls reweighted to the sites' |eval| distribution (the report's
-   eval-size matching).
+   eval-size matching). With --resamples N, also the matched ratio's 95%
+   percentile bootstrap interval (N resamples, --seed; the sites and the
+   controls each drawn again with replacement, the matched ratio recomputed
+   in full from each draw), the interval of the owner's 2026-11-09 rule.
 6. `manifest OUT FILE...`: each file's size and SHA-256, as JSON.
 
     committee_sites.py positions SHARD OUT.tsv
     committee_sites.py select WORK OUT --shards NAME... [--top-share 0.05] [--count 200000]
                        [--control 2000] [--seed 20261109]
     committee_sites.py label ENGINE OUT [--nodes 200000] [--workers 2] [--syzygy DIR] [--limit N]
-    committee_sites.py check OUT
+    committee_sites.py check OUT [--resamples N] [--seed 20261109]
     committee_sites.py manifest OUT.json FILE...
 """
 import argparse
@@ -486,30 +489,58 @@ def _bin(v):
     return sum(1 for edge in ABS_EVAL_BINS[1:] if abs(v) >= edge)
 
 
+def _errors(group, labels):
+    """(|eval| bin, |eval - label|) of each labelled position whose label is not decided (a mate or a table win)."""
+    out = []
+    for s in group:
+        lab = labels.get(s['id'])
+        if lab and not lab[1] and abs(lab[0]) < TABLE_BAND:
+            out.append((_bin(s['eval_a']), abs(s['eval_a'] - lab[0])))
+    return out
+
+
+def _matched(es, ec):
+    """The sites' mean error over the controls' at the sites' |eval| bins (sites in a bin no control holds left
+    out), and the number of sites counted; None when no site is in a control's bin."""
+    total, count = {}, {}
+    for b, e in ec:
+        total[b] = total.get(b, 0) + e
+        count[b] = count.get(b, 0) + 1
+    covered = [(b, e) for b, e in es if b in count]
+    if not covered:
+        return None, 0
+    matched_control = sum(total[b] / count[b] for b, _ in covered) / len(covered)
+    return (sum(e for _, e in covered) / len(covered)) / matched_control, len(covered)
+
+
 def error_ratio(sites, controls, labels):
     """The default network's mean |eval - label| on the sites over the controls',
     plain and matched (the controls reweighted to the sites' |eval| bins); decided labels (mates, table wins) left out."""
-    def errors(group):
-        out = []
-        for s in group:
-            lab = labels.get(s['id'])
-            if lab and not lab[1] and abs(lab[0]) < TABLE_BAND:
-                out.append((_bin(s['eval_a']), abs(s['eval_a'] - lab[0])))
-        return out
-
-    es, ec = errors(sites), errors(controls)
+    es, ec = _errors(sites, labels), _errors(controls, labels)
     if not es or not ec:
         return None
     plain = (sum(e for _, e in es) / len(es)) / (sum(e for _, e in ec) / len(ec))
-    by_bin = {}
-    for b, e in ec:
-        by_bin.setdefault(b, []).append(e)
-    covered = [(b, e) for b, e in es if b in by_bin]
-    matched_control = sum(sum(by_bin[b]) / len(by_bin[b]) for b, _ in covered) / len(covered)
-    matched = (sum(e for _, e in covered) / len(covered)) / matched_control
+    matched, covered = _matched(es, ec)
     return {'sites': len(es), 'controls': len(ec), 'sites_mean_error_cp': round(sum(e for _, e in es) / len(es), 2),
             'controls_mean_error_cp': round(sum(e for _, e in ec) / len(ec), 2), 'ratio': round(plain, 3),
-            'ratio_matched': round(matched, 3), 'sites_in_matched_bins': len(covered)}
+            'ratio_matched': round(matched, 3), 'sites_in_matched_bins': covered}
+
+
+def matched_interval(sites, controls, labels, resamples, seed):
+    """The matched ratio's 95% percentile bootstrap interval: each resample draws the sites and the controls again
+    with replacement (separately) and recomputes the matched ratio from the draw; a draw with no site in a control's
+    bin is redrawn."""
+    es, ec = _errors(sites, labels), _errors(controls, labels)
+    rng = random.Random(seed)
+    values = []
+    while len(values) < resamples:
+        value, _ = _matched(rng.choices(es, k=len(es)), rng.choices(ec, k=len(ec)))
+        if value is not None:
+            values.append(value)
+    values.sort()
+    low = values[int(0.025 * resamples)]
+    high = values[min(resamples - 1, math.ceil(0.975 * resamples) - 1)]
+    return {'resamples': resamples, 'seed': seed, 'low': round(low, 3), 'high': round(high, 3)}
 
 
 def sha256_file(path):
@@ -543,6 +574,8 @@ def main(argv=None):
     p.add_argument('--limit', type=int, default=None, help='label only the first N sites of the file')
     p = sub.add_parser('check')
     p.add_argument('out', type=Path)
+    p.add_argument('--resamples', type=int, default=0)
+    p.add_argument('--seed', type=int, default=20261109)
     p = sub.add_parser('manifest')
     p.add_argument('out', type=Path)
     p.add_argument('files', type=Path, nargs='+')
@@ -590,7 +623,10 @@ def main(argv=None):
 
     # check
     labels = read_labels(a.out / 'labels.tsv')
-    result = error_ratio([s for s in rows if s['set'] == 'top'], [s for s in rows if s['set'] == 'control'], labels)
+    top, control = [s for s in rows if s['set'] == 'top'], [s for s in rows if s['set'] == 'control']
+    result = error_ratio(top, control, labels)
+    if result and a.resamples > 0:
+        result['ratio_matched_95'] = matched_interval(top, control, labels, a.resamples, a.seed)
     print(json.dumps(result))
     return 0 if result else 1
 

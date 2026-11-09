@@ -279,6 +279,23 @@ class CommitteeSitesTests(unittest.TestCase):
         # Matched: the controls' bin means, 10 (|eval| 10) and 30 (|eval| 300), at the sites' bins.
         self.assertAlmostEqual(r['ratio_matched'], round(60 / 20, 3))
 
+    def test_matched_interval(self):
+        # Two bins; every site errs 2x the controls of its bin, so every resample's matched ratio is 2.
+        sites = [{'id': k, 'eval_a': 10 if k % 2 else 300} for k in range(20)]
+        controls = [{'id': 100 + k, 'eval_a': 10 if k % 2 else 300} for k in range(20)]
+        labels = {s['id']: (s['eval_a'] + (20 if s['eval_a'] == 10 else 60), 0, 10) for s in sites}
+        labels.update({s['id']: (s['eval_a'] - (10 if s['eval_a'] == 10 else 30), 0, 10) for s in controls})
+        r = cs.matched_interval(sites, controls, labels, 200, 7)
+        self.assertEqual((r['low'], r['high'], r['resamples'], r['seed']), (2.0, 2.0, 200, 7))
+        # Noisy controls: the interval holds the point estimate, and the same seed gives the same interval.
+        rng = random.Random(3)
+        labels.update({s['id']: (s['eval_a'] + rng.randint(-40, 40), 0, 10) for s in controls})
+        point = cs.error_ratio(sites, controls, labels)['ratio_matched']
+        r = cs.matched_interval(sites, controls, labels, 400, 11)
+        self.assertLess(r['low'], point)
+        self.assertGreater(r['high'], point)
+        self.assertEqual(r, cs.matched_interval(sites, controls, labels, 400, 11))
+
     def test_positions_command(self):
         games = random_games(5, 4, 40)
         with tempfile.TemporaryDirectory() as t:
