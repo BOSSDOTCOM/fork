@@ -1332,6 +1332,20 @@ reported beside it and selects nothing.
     declared line: step 3b is planned only if the blend's (c) fixed-node
     point estimate is at least +10 Elo against S512ppr3 alone; below it,
     step 3 closes. The replace variant (d) is for comparison only.
+  - **The owner's pre-approval (2026-11-08, about 9:20 PM EST):** for each of
+    the two refiner screens, a point estimate above 0 starts its STC SPRT
+    against S512ppr3 alone automatically (sprt_run.sh --kind network, [0, 5],
+    13 stages at STC; the screen's commits; fresh openings, --origin 1;
+    ideas 59.3a for gate (a) and 59.3q for quiescence only, each try 1 of 2
+    by the ledger), and an STC H1 queues its LTC SPRT automatically (40+0.4,
+    Hash 64, 1,664 games per stage, 6 stages, --origin 14). Nothing is
+    adopted or merged. For the second-opinion screens no SPRT: if the
+    blend's estimate is at least +10 Elo, step 3b's plan is written (docs
+    only) for the owner's review. The night queue's items: 00-i59-f1a / f1b
+    (the screens), 01-i59-stc-a / q and 02-i59-ltc-a / q (each waits for its
+    prerequisite, settles without running when it is negative, records its
+    result; their prerequisite logic was tested offline with fake verdicts,
+    16 of 16 cases).
   - **The trainer (lane E, E-c, 2026-11-08):** fork-train `--arch refiner`
     (tools/train/src/main.rs; its header describes the graph, the data and
     the loss). Its CPU build is bullet's mock runtime: it builds the graph,
