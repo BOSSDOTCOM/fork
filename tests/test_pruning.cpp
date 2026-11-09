@@ -13,6 +13,7 @@
 #include "harness.hpp"
 #include "search/lmr_table.hpp"
 #include "search/quiet_history.hpp"
+#include "search/search_bench.hpp"
 #include "search/searcher.hpp"
 
 namespace forkeng::test {
@@ -53,6 +54,37 @@ struct PruningFixture {
     std::vector<std::uint64_t> nodes;
     for (std::string_view fen : Fens) nodes.push_back(search(fen, depth).nodes);
     return nodes;
+  }
+  // The same over the search bench's positions (search_bench_fens), for a
+  // technique that acts only now and then and may change none of the three
+  // trees above at a test's depth, though it changes the bench.
+  std::vector<std::uint64_t> bench_tree_sizes(const SearchSwitches& switches, int depth) {
+    searcher->switches = switches;
+    std::vector<std::uint64_t> nodes;
+    for (std::string_view fen : search_bench_fens()) nodes.push_back(search(fen, depth).nodes);
+    return nodes;
+  }
+  // The check every switched technique of tier 2's later batches gets: with
+  // `on`, the mates in one and three are still found and kiwipete's best
+  // move is legal, and `on` changes at least one of the three trees against
+  // `off`, or else one of the bench's at depth 10 (6 in a debug build), for
+  // a technique that acts rarely (fault check: a technique that never acts
+  // leaves them all as they are).
+  void check_changes_search(const SearchSwitches& on, const SearchSwitches& off, int depth,
+                            const char* what) {
+    searcher->switches = on;
+    CHECK_MSG(search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1), what);
+    CHECK_MSG(search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3), what);
+    const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+    Position pos;
+    CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    CHECK_MSG(legal.contains(search(kiwipete, depth).best), what);
+    const int bench_depth = Optimized ? 10 : 6;
+    CHECK_MSG(tree_sizes(on, depth) != tree_sizes(off, depth) ||
+                  bench_tree_sizes(on, bench_depth) != bench_tree_sizes(off, bench_depth),
+              what << " left every tree unchanged");
   }
 };
 
@@ -392,6 +424,122 @@ TEST_CASE("pruning", "no-move reduction: still correct, and it changes the searc
   off.use_no_move_reduction = false;
   CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
             "the no-move reduction left all three trees unchanged");
+}
+
+// Razoring, the horizon drop (tier 2, T34).
+TEST_CASE("pruning", "horizon drop: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_horizon_drop);  // off until measured
+  SearchSwitches on;
+  on.use_horizon_drop = true;
+  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the horizon drop");
+}
+
+// Quiet history pruning, the history skip (tier 2, T24).
+TEST_CASE("pruning", "history skip: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_history_skip);  // off until measured
+  SearchSwitches on;
+  on.use_history_skip = true;
+  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the history skip");
+}
+
+// Bad-capture futility, the bad capture stop (tier 2, T36).
+TEST_CASE("pruning", "bad capture stop: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_bad_capture_stop);  // off until measured
+  SearchSwitches on;
+  on.use_bad_capture_stop = true;
+  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the bad capture stop");
+}
+
+// Fifty-move eval scaling, the clock damping (tier 2, T52): a rook up with
+// the halfmove clock at 90 scores closer to the draw score with it than
+// without, still clearly winning, and at clock 0 the score is the same.
+TEST_CASE("pruning", "clock damping: a high halfmove clock pulls the score toward a draw") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_clock_damping);  // off until measured
+  SearchSwitches on;
+  on.use_clock_damping = true;
+  const auto score = [&](const SearchSwitches& s, std::string_view fen) {
+    fx.searcher->switches = s;
+    return fx.search(fen, 4).score;
+  };
+  const std::string_view late = "4k3/8/8/8/8/8/8/R3K3 w - - 90 80";
+  const int damped = score(on, late), plain = score(SearchSwitches{}, late);
+  CHECK_MSG(damped > 0 && damped < plain, "damped " << damped << ", plain " << plain);
+  const std::string_view fresh = "4k3/8/8/8/8/8/8/R3K3 w - - 0 80";
+  CHECK_EQ(score(on, fresh) > 0, true);
+  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the clock damping");
+}
+
+// The history malus balance (tier 2, T55).
+TEST_CASE("pruning", "malus scale: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_malus_scale);  // off until measured
+  SearchSwitches on;
+  on.use_malus_scale = true;
+  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the malus scale");
+}
+
+// Double extensions (tier 2, T29), with the singular extension on (the
+// default): deep enough that non-PV nodes reach the singular test's minimum
+// depth in a debug build too.
+TEST_CASE("pruning", "double extension: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_double_extension);  // off until measured
+  SearchSwitches on;
+  on.use_double_extension = true;
+  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 12 : 9, "the double extension");
+}
+
+// Node types (tier 2, T17), their LMR use, and TT-PV (T19), its LMR use and
+// the flag passed on: each switch alone changes the search.
+TEST_CASE("pruning", "cut-node and PV-trace reductions: still correct, and each changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_cut_node_lmr);  // off until measured
+  CHECK(!SearchSwitches{}.use_pv_trace_lmr);
+  SearchSwitches cut;
+  cut.use_cut_node_lmr = true;
+  fx.check_changes_search(cut, SearchSwitches{}, Optimized ? 10 : 7, "the cut-node reduction");
+  SearchSwitches trace;
+  trace.use_pv_trace_lmr = true;
+  fx.check_changes_search(trace, SearchSwitches{}, Optimized ? 10 : 7, "the PV-trace relief");
+}
+
+// The pawn-structure history (tier 2, T12): the entry a cutoff updates is
+// the one the ordering score reads back in a position with the same pawns,
+// and not in one with other pawns; and with it on the search changes.
+TEST_CASE("pruning", "structure history: keyed by the pawns, and it changes the search") {
+  Position a, b, c;
+  CHECK(a.set_fen("4k3/pp3ppp/8/8/8/8/PP3PPP/4K2R w K - 0 1"));
+  CHECK(b.set_fen("4k3/pp3ppp/8/8/8/8/PP3PPP/R3K3 w Q - 0 1"));   // same pawns, other pieces
+  CHECK(c.set_fen("4k3/pp3ppp/8/8/8/2P5/P4PPP/4K2R w K - 0 1"));  // other pawns
+  CHECK_EQ(a.pawn_key(), b.pawn_key());
+  CHECK(a.pawn_key() != c.pawn_key());
+  CHECK(structure_slot(a.pawn_key()) != structure_slot(c.pawn_key()));
+  const Move m = a.parse_uci("e1d1");
+  auto structure = std::make_unique<StructureHistory>();
+  structure->apply(structure_slot(a.pawn_key()), pair_slot(a.piece_at(m.from()), m.to()), 1000);
+  CHECK(quiet_order_score(b, b.parse_uci("e1d1"), nullptr, nullptr, NoArrival, NoArrival, structure.get()) >
+        0);
+  CHECK_EQ(quiet_order_score(c, c.parse_uci("e1d1"), nullptr, nullptr, NoArrival, NoArrival, structure.get()),
+           0);
+  CHECK_EQ(quiet_order_score(b, b.parse_uci("e1d1"), nullptr, nullptr, NoArrival, NoArrival, nullptr), 0);
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_structure_history);  // off until measured
+  SearchSwitches on;
+  on.use_structure_history = true;
+  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the structure history");
+}
+
+// Upcoming-repetition detection in the search (tier 2, T51).
+TEST_CASE("pruning", "cycle draw: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_cycle_draw);  // off until SPRTed
+  SearchSwitches on;
+  on.use_cycle_draw = true;
+  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the cycle draw");
 }
 
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery

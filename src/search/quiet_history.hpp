@@ -77,6 +77,37 @@ inline int take_slot(Piece moved, Square to, PieceType victim) {
   return pair_slot(moved, to) * 6 + victim;
 }
 
+// The pawn-structure history (tier 2, T12; KB search-techniques.md §3.11):
+// a quiet history indexed by the low StructureHistoryBits bits of the pawn
+// key (Position::pawn_key; structure_slot) and the move's pair slot (its
+// piece and destination), so it learns which moves suit a pawn structure
+// across the many positions that share it. 2^StructureHistoryBits x
+// PairSlots entries: 768 KB at 9 bits, so a searcher keeps it on the heap.
+constexpr int StructureHistoryBits = 9;
+inline int structure_slot(Key pawn_key) {
+  return static_cast<int>(pawn_key & ((Key{1} << StructureHistoryBits) - 1));
+}
+
+class StructureHistory {
+ public:
+  int value(int row, int slot) const { return table_[row][slot]; }
+
+  // As QuietHistory::apply.
+  void apply(int row, int slot, int amount) {
+    std::int16_t& v = table_[row][slot];
+    const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
+    v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
+  }
+
+  void clear() {
+    for (auto& row : table_)
+      for (std::int16_t& v : row) v = 0;
+  }
+
+ private:
+  std::int16_t table_[1 << StructureHistoryBits][PairSlots] = {};
+};
+
 class TakeHistory {
  public:
   int value(int slot) const {
