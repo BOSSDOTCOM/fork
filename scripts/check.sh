@@ -178,7 +178,7 @@ build_and_test() {  # preset, ctest filter args...
 # The tooling's own tests (audit-1 U-15): standard-library Python suites
 # (sprt_merge and the book permutation, the evolve harness, pgn_summary, the gauntlet report, the job supervisor, the
 # Control Center), plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
-# tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh with a fake gh (about 40 s).
+# tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh and h2h_run.sh with a fake gh (about 2 min).
 tool_tests() {  # python | all
   local py="" c
   for c in .venv/Scripts/python.exe .venv/bin/python python3 python; do
@@ -225,8 +225,10 @@ tool_tests() {  # python | all
   [ "$1" = all ] || return 0
   bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
   case $py in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; *) py=$(command -v "$py") ;; esac
-  # The GitHub SPRT driver against a fake gh (its wait, stop and commit-check rules).
+  # The GitHub SPRT driver against a fake gh (its wait, stop and commit-check rules; design R's kinds,
+  # futility stop, caps and the two-try limit), and the head-to-head driver on the same fake.
   PYTHON=$py bash tools/github/test_sprt_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_sprt_run.sh"
+  PYTHON=$py bash tools/github/test_h2h_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_h2h_run.sh"
   PYTHON=$py bash tools/cloud/test_run_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/cloud/test_run_shard.sh"
   # The Control Center's WSL launch script for a data-generation part, with stubs (Linux only).
   if [ "$(uname -s)" = Linux ]; then
