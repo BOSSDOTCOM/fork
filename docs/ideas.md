@@ -2120,3 +2120,71 @@ until measured; new names and constants go through the screens before use.
   for futility after stage 3 (-2.93 +/- 7.16 Elo, 3,200 games, try 1 of 2),
   so by the kill criterion part 5 is retired**; docs/history/phase-4/sprt-log.md.
   **runtime cost:** possible (refiner calls at pruning sites). **earliest phase:** Phase 4.
+
+## 62. Label depth at equal generation time
+
+- **type:** ELO (data generation; no runtime cost).
+- **idea** (owner, 2026-11-09): do fewer positions with deeper saved
+  searches (50,000 or 100,000 nodes) make a better network than more
+  positions at the standing 20,000, at equal generation CPU? Unsaved and
+  in-check searches stay at 4,000 and 2,000 nodes.
+- **design:** docs/research/labels-teacher/report.md §1 (branch
+  research/labels-teacher): three arms D20, D50, D100 side by side, 3
+  threads each for 40 hours (120 thread-hours each), Hash 1 / 3 / 5 MB, one
+  PGO build and one seed; predicted 36.2 M, 16.2 M and 8.5 M kept positions
+  (estimates from g3's node model); B0 small nets, two seeds per arm,
+  idea 13's recipe; seed-paired fixed-node stages (1,600 games each, 800,000
+  nodes per move).
+- **decision rule (declared in the design):** a deeper arm wins only at
+  +5 Elo or more against D20 with its 95% interval above 0 (pooled over
+  both seed pairs), then an STC network SPRT [0, 5]; otherwise 20k stays.
+  A pass is a recommendation; the setting change is the owner's.
+- **cost:** about 360 thread-hours, 3 T4 GPU-hours, 4-6 fixed-node stages,
+  about 3 days; about 47.7 M kept positions of production forgone (the arm
+  data stays usable).
+- **status:** **approved (owner, 2026-11-09): starts after retrain 8b
+  launches**, with a 30-minute rate probe first, then the arms as designed
+  under the declared rule. **runtime cost:** none. **earliest phase:**
+  Phase 4.
+
+## 63. Ensemble teacher
+
+- **type:** ELO (training data; no runtime cost in the TCEC binary).
+- **idea** (owner, 2026-11-09): label or relabel training data with the
+  averaged evaluation (with search) of 3-4 independently initialised S512
+  networks, against the same-network bias of labels made by the default
+  net alone (the bias idea 51's pre-test could not measure).
+- **design:** docs/research/labels-teacher/report.md §2: E3 = S512ppr3 and
+  item 7's two scratch seeds (no new GPU time); separate searches averaged
+  in win probability (no engine code) or one search on the averaged
+  evaluation (engine code later); staged: step 0 offline, step 2 small nets
+  at equal data against the default searching to equal total nodes, step 3
+  data generation. Compared with idea 58 in the design (cheaper at every
+  stage; both share the lineage's label bias).
+- **status:** **step 0 ordered (owner, 2026-11-09): run now, report before
+  any small nets**, including the TD pre-test's measured same-network bias.
+  Declared before any label in docs/research/labels-teacher/step0-declaration.md
+  (dc90302): golds by both scratch seeds at 1M nodes on idea 51's set H,
+  labels at 20k-100k on H and a new H2 (20,000 g3j-w05-val games), the gate
+  to step 2. **runtime cost:** none. **earliest phase:** Phase 4.
+
+## 64. Score-fall time extension
+
+- **type:** ELO (time management).
+- **idea** (owner, 2026-11-09): beside idea 61's root-gap time, extend the
+  soft limit when the root score fell over the last two finished
+  iterations.
+- **design:** docs/research/eval-trend-tm/design.md: fall = the drop over
+  two iterations from depth 8, mate and table scores excluded; an
+  extension factor up to ScoreFallExtra (placeholder 667 per mille) at
+  ScoreFallSpan (placeholder 16 cp), combined with root gap by the larger
+  of the two and multiplied onto time management (b); switch
+  UseScoreFallTime, off by default. Names and constants screened
+  (2026-11-09): no specific match. Fork's data: the signal is real, but an
+  equal-time replay showed no gain over (b) (expected 0 to +4 Elo at STC,
+  a judgement).
+- **status:** **parked (owner, 2026-11-09)**: the design and the screened
+  names are kept; implemented and queued only if GitHub is idle (test plan
+  in the design: head-to-heads of span and extra, then design R at STC and
+  LTC, after idea 61's items 60-62). **runtime cost:** none. **earliest
+  phase:** Phase 4.
