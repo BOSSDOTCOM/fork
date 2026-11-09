@@ -442,6 +442,11 @@ class Controls(unittest.TestCase):
         self.assertEqual((plan['mode'], plan['engine_commit']), ('build', self.world.commit))  # never reused
         with self.assertRaises(generation_control.Refused):
             self.ctl.plan(new_generation=0)
+        plan, _ = self.ctl.plan(threads=6, extend=276000000)  # the same generation continues
+        self.assertEqual((plan['name'], plan['previous'], plan['generation']), ('g3f', 'g3e', 3))
+        self.assertEqual(plan['settings']['positions_target'], 276000000)
+        with self.assertRaises(generation_control.Refused):
+            self.ctl.plan(new_generation=1, extend=1)
         self.assertEqual(self.controls(), [])
 
     def test_plan_new_generation_refused_before_the_target(self):

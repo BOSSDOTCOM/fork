@@ -184,21 +184,22 @@ class GenerationControl:
 
     # ------------------------------------------------------------ the next part
 
-    def plan(self, probe=None, threads=None, new_generation=None):
+    def plan(self, probe=None, threads=None, new_generation=None, extend=None):
         """(plan, probe): the next part, and a probe that also looked at the previous part's folder (its
         binaries, for reuse) and the new part's (which must be empty). new_generation (a positions target,
         the owner's decision) plans instead the first part of the next generation, once the current one has
         reached its target and its last part is sealed: always a fresh PGO build of the branch tip, and the
-        previous part's openings unless the next openings are set."""
+        previous part's openings unless the next openings are set. extend (a positions target, the owner's
+        decision) instead continues the current generation past its target with one more part."""
         probe = probe or self.probe()
-        plan = self._plan(probe, threads, new_generation)
+        plan = self._plan(probe, threads, new_generation, extend)
         folders = [plan['dir'], f"{self.cfg['wsl_data']}/{P.part_dir(plan['previous'])}"]
         if not all(f in (probe.get('folders') or {}) for f in folders):
             probe = self.probe(folders)
-            plan = self._plan(probe, threads, new_generation)
+            plan = self._plan(probe, threads, new_generation, extend)
         return plan, probe
 
-    def _plan(self, probe, threads=None, new_generation=None):
+    def _plan(self, probe, threads=None, new_generation=None, extend=None):
         sealed, snaps = self.sealed(), self.snapshots()
         names = set(sealed) | set(snaps)
         names |= {j['record']['name'] for j in probe.get('jobs', []) if j['record'].get('type') == 'datagen'
@@ -219,15 +220,18 @@ class GenerationControl:
             raise Refused(f'the last part, {last}, is neither sealed nor copied yet: stop and seal it first')
         st = info.get('settings', {})
         target = st.get('positions_target', 0) - info.get('positions', 0)
-        if new_generation is not None:
+        if new_generation is not None and extend is not None:
+            raise Refused('a new generation or an extension, not both')
+        grow = new_generation if new_generation is not None else extend
+        if grow is not None:
             if target > 0:
                 raise Refused(f'generation {gen} has {target:,} positions to go after {last}: its next part comes '
-                              'before a new generation')
+                              'first')
             if last not in sealed:
-                raise Refused(f'{last} is not sealed yet: seal it before a new generation starts')
-            if not isinstance(new_generation, int) or new_generation <= 0:
-                raise Refused(f'a new generation needs a positive positions target, not {new_generation!r}')
-            target = new_generation
+                raise Refused(f'{last} is not sealed yet: seal it first')
+            if not isinstance(grow, int) or grow <= 0:
+                raise Refused(f'a positive positions target is needed, not {grow!r}')
+            target = grow
         elif target <= 0:
             raise Refused(f'generation {gen} reached its target with {last}; a new generation is the owner\'s '
                           'decision')
