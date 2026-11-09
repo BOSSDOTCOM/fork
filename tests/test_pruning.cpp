@@ -438,10 +438,12 @@ TEST_CASE("pruning", "horizon drop: still correct, and it changes the search") {
 // Quiet history pruning, the history skip (tier 2, T24).
 TEST_CASE("pruning", "history skip: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_history_skip);  // off until measured
+  CHECK(SearchSwitches{}.use_history_skip);  // on in this head-to-head candidate (tier2/b4-history-skip)
+  SearchSwitches off;
+  off.use_history_skip = false;
   SearchSwitches on;
   on.use_history_skip = true;
-  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the history skip");
+  fx.check_changes_search(on, off, Optimized ? 10 : 7, "the history skip");
 }
 
 // Bad-capture futility, the bad capture stop (tier 2, T36).
