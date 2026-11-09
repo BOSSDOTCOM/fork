@@ -66,7 +66,8 @@
 //!   fork-train loader   --data SHARD... [--positions N]   (decoding speed, one thread)
 //!   fork-train check    --arch refiner --base-weights NET.fnet --out DIR
 //!   fork-train train    --arch refiner --base-weights NET.fnet --sites FILE [--val-sites FILE] --out DIR
-//!                       --scale S [--superbatches 80 --lr 0.001 --lr-step 40 --patience 8 --batch 16384]
+//!                       --scale S [--cap C] [--superbatches 80 --lr 0.001 --lr-step 40 --patience 8 --batch 16384]
+//!                       (--superbatches 0: the initial validation only)
 //!   fork-train eval     --arch refiner --base-weights NET.fnet --weights weights.bin --sites FILE --out FILE
 //! --qat (train, eval, check; the S-512 family): quantization-aware training
 //! (ideas.md 44), the forward pass on the integer file's weight grid.
@@ -1114,6 +1115,12 @@ fn main() {
                 base_file.extend_from_slice(&(int16(i) / 255.0).to_le_bytes());
             }
         }
+        // --cap C (cp): the correction capped at +-C inside the graph, as the engine
+        // caps it (plan 3.7), written with the clipped ReLU: 2c crelu(d / 2c + 1/2) - c,
+        // c = C / S. Without it the correction is not capped in training.
+        let scale: f32 = a.num("--scale", net_scale as f32);
+        assert_eq!(scale as i32, net_scale, "--scale differs from the base net's S");
+        let cap: Option<f32> = a.get("--cap").map(|v| v.parse::<f32>().expect("--cap") / scale);
         let rins = ModelInputs::default()
             .add_sparse("stm", (n, 1), spec.max_active())
             .add_sparse("ntm", (n, 1), spec.max_active())
@@ -1136,7 +1143,11 @@ fn main() {
             let hw = builder.new_weights("head_weights", (2, 32), InitSettings::Zeroed);
             let hb = builder.new_weights("head_bias", (2, 1), InitSettings::Zeroed);
             let y = hw.matmul(a2) + hb;
-            let loss = ((base + y.slice_rows(0, 1)).sigmoid().squared_error(target) * weight).reduce_sum_batch();
+            let correction = match cap {
+                Some(c) => (y.slice_rows(0, 1) * (0.5 / c) + 0.5).crelu() * (2.0 * c) - c,
+                None => y.slice_rows(0, 1),
+            };
+            let loss = ((base + correction).sigmoid().squared_error(target) * weight).reduce_sum_batch();
             (Some(loss), vec![("output".to_string(), y)])
         });
         let mut weights = ModelWeights::new(&defn, a.num("--seed", 1));
@@ -1148,8 +1159,6 @@ fn main() {
                 .filter(|s| all || s.3 > 0.0)
                 .collect()
         };
-        let scale: f32 = a.num("--scale", net_scale as f32);
-        assert_eq!(scale as i32, net_scale, "--scale differs from the base net's S");
         let device = DefaultDevice::new(a.num("--device", 0)).expect("device");
         let pool = HostPool::new(device.clone());
         let mapper_for = |mu: f32| {
@@ -1220,7 +1229,9 @@ fn main() {
                             let y = evaluator.evaluate(&batch).expect("eval").get("output").expect("output").to_host().expect("host");
                             let b = f64::from(s.1) / f64::from(scale);
                             let t = 1.0 / (1.0 + (-(f64::from(s.2) - mu) / f64::from(scale)).exp());
-                            let p = 1.0 / (1.0 + (-(b + f64::from(y.f32()[0]))).exp());
+                            let d = f64::from(y.f32()[0]);
+                            let d = cap.map_or(d, |c| d.clamp(-f64::from(c), f64::from(c)));
+                            let p = 1.0 / (1.0 + (-(b + d)).exp());
                             let w = f64::from(s.3);
                             total += w * (p - t).powi(2);
                             base_total += w * (1.0 / (1.0 + (-b).exp()) - t).powi(2);
@@ -1238,8 +1249,11 @@ fn main() {
                     println!("superbatch 0 validation loss {loss:.10}, the base's own {base_loss:.10} (difference {:.2e})", loss - base_loss);
                     best = Some((loss, 0));
                 }
-                let lr: f32 = a.num("--lr", 0.001);
                 let end: usize = a.num("--superbatches", 80);
+                if end == 0 {
+                    return; // --superbatches 0: the initial validation only (A1)
+                }
+                let lr: f32 = a.num("--lr", 0.001);
                 let lr_step: usize = a.num("--lr-step", (end / 2).max(1));
                 let batch: usize = a.num("--batch", 16384);
                 let schedule = TrainingSchedule {
