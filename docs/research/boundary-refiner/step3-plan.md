@@ -1294,6 +1294,20 @@ reported beside it and selects nothing.
     decision), cannot gain from it, while it does explain 16% of the
     residual's variance. Whether the offline gates measure game value is
     the owner's question.
+  - **Owner decision (2026-11-08, about 8:55 PM EST), recorded before any
+    further result:** "The offline net-flip yardstick is invalid as a kill
+    gate: it ranks a constant +122 cp shift above the oracle, while in games
+    the shift lost (-14.6) and the oracle won (+29.8). A3 and A4 are
+    replaced as kill gates by the fixed-node screen." Two screens, each
+    against S512ppr3 alone, 1,600 games at 800,000 nodes per move (step
+    2's setup): (1) the trained refiner as it is (w2, cap 198), gate (a)
+    25 / 10; (2) the same refiner gated to quiescence only (the main-search
+    gate off). **Go / no-go for each: a point estimate above 0 continues to
+    the STC SPRT after the owner's review; if both are at or below 0, step 3
+    ends. Neither is a try.** The cap 198 cp and the margins 25 / 10 passed
+    the constant screen (ORIGINALITY.md) before the screens. The candidates'
+    commits fully define the engines (CMake defaults, as step 2's oracle
+    candidates did); the base is the commit before them, S512ppr3 alone.
   - **The trainer (lane E, E-c, 2026-11-08):** fork-train `--arch refiner`
     (tools/train/src/main.rs; its header describes the graph, the data and
     the loss). Its CPU build is bullet's mock runtime: it builds the graph,
