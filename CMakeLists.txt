@@ -217,9 +217,9 @@ endif()
 # bound at byte 36; 1, 16 and 64 without a file). FORK_REFINER_MARGIN_MAIN and FORK_REFINER_MARGIN_QUIESCE
 # are the gate's default margins in cp (the UCI options' and `fork bench`'s
 # defaults; -1: never).
-set(FORK_REFINER_NET "" CACHE FILEPATH "Refiner builds only: the Boundary Refiner's file (ideas.md 59)")
+set(FORK_REFINER_NET "${CMAKE_SOURCE_DIR}/nets/refiner-w2.frnet" CACHE FILEPATH "Refiner builds only: the Boundary Refiner's file (ideas.md 59)")
 set(FORK_REFINER_MARGIN_MAIN 25 CACHE STRING "Refiner builds only: the gate's default main-search margin in cp")
-set(FORK_REFINER_MARGIN_QUIESCE 25 CACHE STRING "Refiner builds only: the gate's default quiescence margin in cp")
+set(FORK_REFINER_MARGIN_QUIESCE 10 CACHE STRING "Refiner builds only: the gate's default quiescence margin in cp")
 set(FORK_REFINER_ARCH 1)
 set(FORK_REFINER_L1 16)
 set(FORK_REFINER_BOUND 64)
