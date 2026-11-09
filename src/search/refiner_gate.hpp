@@ -58,7 +58,7 @@ enum class GateKind : std::uint8_t { Window, Shift, Hashed, Blend };
 // only where the gate fires, instead of beside the base's at every computed
 // evaluation (the same evaluations, so the same tree).
 struct RefinerGate {
-  GateKind kind = GateKind::Window;
+  GateKind kind = GateKind::Blend;
   int margin_main = FORK_REFINER_MARGIN_MAIN;  // cp; -1: never
   int margin_quiesce = FORK_REFINER_MARGIN_QUIESCE;
   // Shift: added to the base evaluation where the gate fires, in thousandths

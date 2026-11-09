@@ -195,7 +195,7 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
       "option name SyzygyPath type string default <empty>",
 #ifdef FORK_REFINER
       // The oracle's gate (ideas.md 59): the window kind at this build's default margins.
-      "option name RefinerGateKind type spin default 0 min 0 max 3",
+      "option name RefinerGateKind type spin default 3 min 0 max 3",
       "option name RefinerMarginMain type spin default " + std::to_string(FORK_REFINER_MARGIN_MAIN) +
           " min -1 max 255",
       "option name RefinerMarginQuiesce type spin default " + std::to_string(FORK_REFINER_MARGIN_QUIESCE) +
