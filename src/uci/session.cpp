@@ -208,10 +208,10 @@ void UciSession::declare_options() {
 #endif
 #ifdef FORK_REFINER
   // The oracle (ideas.md 59; experiment builds only): the refiner gate's kind
-  // (0 window, 1 shift, 2 hashed: refiner_gate.hpp), its margins in cp (-1:
+  // (0 window, 1 shift, 2 hashed, 3 blend: refiner_gate.hpp), its margins in cp (-1:
   // never), the shift kind's constant in thousandths of a cp, the hashed
   // kind's rates in parts per million, and the refiner accumulators' schedule.
-  options_.add_spin("RefinerGateKind", static_cast<int>(searcher_->refiner_gate.kind), 0, 2,
+  options_.add_spin("RefinerGateKind", static_cast<int>(searcher_->refiner_gate.kind), 0, 3,
                     [this](const OptionEntry& e, std::string&) {
                       searcher_->refiner_gate.kind = static_cast<GateKind>(e.number);
                       return true;

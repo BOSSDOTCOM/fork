@@ -195,7 +195,7 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
       "option name SyzygyPath type string default <empty>",
 #ifdef FORK_REFINER
       // The oracle's gate (ideas.md 59): the window kind at this build's default margins.
-      "option name RefinerGateKind type spin default 0 min 0 max 2",
+      "option name RefinerGateKind type spin default 0 min 0 max 3",
       "option name RefinerMarginMain type spin default " + std::to_string(FORK_REFINER_MARGIN_MAIN) +
           " min -1 max 255",
       "option name RefinerMarginQuiesce type spin default " + std::to_string(FORK_REFINER_MARGIN_QUIESCE) +
@@ -1002,7 +1002,7 @@ TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
   };
   for (const Bound& b : {
 #ifdef FORK_REFINER
-           Bound{"RefinerGateKind", 0, 2}, Bound{"RefinerMarginMain", -1, 255},
+           Bound{"RefinerGateKind", 0, 3}, Bound{"RefinerMarginMain", -1, 255},
            Bound{"RefinerMarginQuiesce", -1, 255}, Bound{"RefinerShift", -100000, 100000},
            Bound{"RefinerSampleMain", 0, 1000000}, Bound{"RefinerSampleQuiesce", 0, 1000000},
 #endif
@@ -1239,6 +1239,7 @@ TEST_CASE("uci_options", "the refiner line counts the gate's calls per kind") {
   CHECK(shifted[2] > 0 && shifted[4] > 0);
   CHECK_EQ(shifted[5], 0);
   g.send("setoption name RefinerGateKind value 2");
+  g.send("setoption name Clear Hash");  // the earlier searches' TT would leave too few evaluations to sample
   g.send("setoption name RefinerSampleMain value 100374");
   g.send("setoption name RefinerSampleQuiesce value 58284");
   const std::array<std::int64_t, 6> hashed = search(-1, -1);

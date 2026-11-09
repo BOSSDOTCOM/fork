@@ -222,7 +222,7 @@ endif()
 # options' defaults and `fork bench`'s; -1: never), the owner's setting (a).
 # Idea 59 step 3's second-opinion screens (2026-11-08): the base commit builds S512ppr3 alone (no refiner);
 # its test commits set FORK_REFINER_NET to item 7's scratch run (nets/s512pp-scratch-s1.fnet).
-set(FORK_REFINER_NET "" CACHE FILEPATH "Oracle builds only: the refiner network (ideas.md 59)")
+set(FORK_REFINER_NET "${CMAKE_SOURCE_DIR}/nets/s512pp-scratch-s1.fnet" CACHE FILEPATH "Oracle builds only: the refiner network (ideas.md 59)")
 set(FORK_REFINER_MARGIN_MAIN 25 CACHE STRING "Oracle builds only: the gate's default main-search margin in cp")
 set(FORK_REFINER_MARGIN_QUIESCE 10 CACHE STRING "Oracle builds only: the gate's default quiescence margin in cp")
 if(FORK_REFINER_NET)

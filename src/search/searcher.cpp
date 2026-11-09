@@ -92,6 +92,7 @@ int Searcher::refined_eval_at(int ply, int alpha, int beta, int depth, bool quie
   } else {
     ++refiner_tally_.consults;
     refined = refiner_features_.evaluate(*refiner_net_, ply, *pos_);
+    if (refiner_gate.kind == GateKind::Blend) refined = (base + refined) / 2;
   }
   refiner_tally_.shift_sum += refined - base;
   refiner_tally_.abs_shift_sum += refined > base ? refined - base : base - refined;

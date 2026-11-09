@@ -40,6 +40,7 @@ extern const std::size_t refiner_net_size;
 
 namespace forkeng::test {
 
+#if FORK_NET_ARCH == 6  // the prototype's pair: an S-512 base read plain inside an S512+X build
 TEST_CASE("refiner", "the reader takes a plain S-512 file into this layout, exposure rows zero") {
   // A net in this build's layout with small random weights (inside the
   // reader's bounds): `inputs` rows of them, the rest zero.
@@ -139,6 +140,16 @@ TEST_CASE("refiner", "the embedded refiner is FORK_REFINER_NET's file; the base 
   CHECK_EQ(refiner_net().inputs, NetPieceSquares + NetExposureRows);
   CHECK_EQ(embedded_net().inputs, NetPieceSquares);
 }
+#else  // two networks of one architecture (idea 59 step 3's second opinion): one layout, nothing read plain
+TEST_CASE("refiner", "the embedded refiner is FORK_REFINER_NET's file; the base is read plain") {
+  std::ifstream in(FORK_REFINER_NET, std::ios::binary);
+  const std::vector<unsigned char> file((std::istreambuf_iterator<char>(in)),
+                                        std::istreambuf_iterator<char>());
+  CHECK_EQ(file.size(), refiner_net_size);
+  CHECK(file.size() == refiner_net_size && std::memcmp(file.data(), refiner_net_bytes, file.size()) == 0);
+  CHECK_EQ(refiner_net().inputs, embedded_net().inputs);
+}
+#endif
 
 TEST_CASE("refiner", "the window gate at its edges") {
   const Position pos;
@@ -192,6 +203,7 @@ TEST_CASE("refiner", "a gated quiescence site uses the refiner's value, and the 
   auto searcher = std::make_unique<Searcher>(table);
   const std::atomic<bool> stop{false};
   searcher->refiner_gate = RefinerGate{};  // the build's margins: quiescence 10 cp
+  searcher->refiner_gate.kind = GateKind::Window;
   int tested = 0;
   for (Position pos : parity_fens()) {
     // A quiet position: no capture or promotion, not in check, so the
@@ -221,6 +233,12 @@ TEST_CASE("refiner", "a gated quiescence site uses the refiner's value, and the 
     CHECK_MSG(searcher->probe_zero_window(pos, base + 300, 0, stop) == refined, pos.fen());
     CHECK_EQ(searcher->refiner_tally().quiesce_calls, 0u);
     CHECK_EQ(searcher->refiner_tally().quiesce_evals, 0u);
+    // The blend kind (idea 59 step 3's second opinion): on the window, the mean of the two, toward zero.
+    searcher->refiner_gate.kind = GateKind::Blend;
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    CHECK_MSG(searcher->probe_zero_window(pos, base + 1, 0, stop) == (base + refined) / 2, pos.fen());
+    CHECK_EQ(searcher->refiner_tally().quiesce_calls, 1u);
+    searcher->refiner_gate.kind = GateKind::Window;
   }
   CHECK(tested >= 10);
 }

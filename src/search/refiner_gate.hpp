@@ -46,7 +46,9 @@ constexpr int window_gap(int eval, int alpha, int beta) {
 }
 
 #ifdef FORK_REFINER
-enum class GateKind : std::uint8_t { Window, Shift, Hashed };
+// Blend (idea 59 step 3's second opinion, the owner's test of 2026-11-08): the window gate, the
+// mean of the base's and the refiner's evaluations, (base + refiner) / 2 toward zero (the owner's 1/2).
+enum class GateKind : std::uint8_t { Window, Shift, Hashed, Blend };
 
 // The gate's settings (the UCI options RefinerGateKind, RefinerMarginMain,
 // RefinerMarginQuiesce, RefinerShift, RefinerSampleMain, RefinerSampleQuiesce
@@ -82,7 +84,8 @@ struct GateSite {
 inline bool gate_fires(const RefinerGate& g, const GateSite& s) {
   switch (g.kind) {
     case GateKind::Window:
-    case GateKind::Shift: {
+    case GateKind::Shift:
+    case GateKind::Blend: {
       const int margin = s.quiesce ? g.margin_quiesce : g.margin_main;
       const int gap = window_gap(s.base_eval, s.alpha, s.beta);
       return margin >= 0 && gap >= 0 && gap <= margin;
