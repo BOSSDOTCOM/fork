@@ -332,3 +332,8 @@ Scratch members are weaker than the warm lineage: on g3s2-val the scratch mean w
 - Whether a relabel at the generation's own N can reproduce stored scores exactly.
 - Every literature citation in §2.7 (concept-level, none opened).
 - No chess-specific prior-art search for ensemble labelling was done.
+
+
+## Name and constant screen (2026-11-09, 6:25 PM EST)
+
+The originality-checker screened the names listed in §2.8 (the time-management constants of the companion eval-trend design were screened in the same pass) against Stockfish, Ethereal, Berserk and Weiss (shallow clones at their current heads, deleted afterwards; match / no match only): no specific match. The only hits are the ordinary English words "Always" and "members" in prose and comments. No score-driven time term in those engines uses 8, 16 or 32 as its span, 333, 667 or 1000 per mille as its extension, or depth 8 as its start (current heads only; older releases not checked).
