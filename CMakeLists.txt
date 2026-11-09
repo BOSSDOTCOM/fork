@@ -189,7 +189,7 @@ set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
 # Experiment branch exp/oracle (ideas.md 59 step 2): the default network is
 # S512r2, the oracle's base, so this commit builds "S512r2 alone" for the
 # oracle's fixed-node screens (tests/bench-s512r2.ref).
-set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512r2.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512ppr3.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
 if(FORK_EVALUATOR STREQUAL "nnue")
   if(NOT EXISTS ${FORK_NET})
     message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")
@@ -215,14 +215,14 @@ endif()
 # consulted only where the gate fires (src/search/refiner_gate.hpp). Empty by
 # default, and then nothing below applies. The only pair supported is the
 # prototype's: FORK_NET a plain S-512 network (architecture 2, S512r2) and
-# the refiner an S512+X network (architecture 6). The build is compiled for
+# the refiner an S512+X network (architecture 6; or, idea 59 step 3, two networks of one architecture). The build is compiled for
 # architecture 6 and reads the base as a plain net (net_file.cpp: its
 # exposure rows stay zero and are never added). FORK_REFINER_MARGIN_MAIN and
 # FORK_REFINER_MARGIN_QUIESCE are the gate's default margins in cp (the UCI
 # options' defaults and `fork bench`'s; -1: never), the owner's setting (a).
-# On this experiment branch's screen commit the oracle is the default build:
-# S512+X refines S512r2 (bake/s512x c62bb3b's network).
-set(FORK_REFINER_NET "${CMAKE_SOURCE_DIR}/nets/s512x.fnet" CACHE FILEPATH "Oracle builds only: the refiner network (ideas.md 59)")
+# Idea 59 step 3's second-opinion screens (2026-11-08): the base commit builds S512ppr3 alone (no refiner);
+# its test commits set FORK_REFINER_NET to item 7's scratch run (nets/s512pp-scratch-s1.fnet).
+set(FORK_REFINER_NET "" CACHE FILEPATH "Oracle builds only: the refiner network (ideas.md 59)")
 set(FORK_REFINER_MARGIN_MAIN 25 CACHE STRING "Oracle builds only: the gate's default main-search margin in cp")
 set(FORK_REFINER_MARGIN_QUIESCE 10 CACHE STRING "Oracle builds only: the gate's default quiescence margin in cp")
 if(FORK_REFINER_NET)
@@ -232,11 +232,13 @@ if(FORK_REFINER_NET)
   file(READ ${FORK_REFINER_NET} fork_refiner_arch_hex OFFSET 12 LIMIT 4 HEX)
   string(SUBSTRING "${fork_refiner_arch_hex}" 0 2 fork_refiner_arch_hex)
   math(EXPR fork_refiner_arch_hex "0x${fork_refiner_arch_hex}")
-  if(NOT FORK_NET_ARCH EQUAL 2 OR NOT fork_refiner_arch_hex EQUAL 6)
-    message(FATAL_ERROR "FORK_REFINER_NET: the oracle needs an architecture-2 FORK_NET and an "
-                        "architecture-6 refiner (got ${FORK_NET_ARCH} and ${fork_refiner_arch_hex})")
+  # Two pairs: the prototype's (an architecture-2 base read as plain inside an architecture-6 build) and two
+  # networks of one architecture (idea 59 step 3's second opinion: S512ppr3 and item 7's scratch run, both 8).
+  if(NOT (FORK_NET_ARCH EQUAL 2 AND fork_refiner_arch_hex EQUAL 6) AND NOT FORK_NET_ARCH EQUAL fork_refiner_arch_hex)
+    message(FATAL_ERROR "FORK_REFINER_NET: the oracle needs an architecture-2 FORK_NET and an architecture-6 "
+                        "refiner, or two networks of one architecture (got ${FORK_NET_ARCH} and ${fork_refiner_arch_hex})")
   endif()
-  set(FORK_NET_ARCH 6)
+  set(FORK_NET_ARCH ${fork_refiner_arch_hex})
   get_filename_component(fork_refiner_stem ${FORK_REFINER_NET} NAME_WE)
   set(fork_refiner_source ${CMAKE_BINARY_DIR}/generated/refiner_net_data.cpp)
   add_custom_command(OUTPUT ${fork_refiner_source}
