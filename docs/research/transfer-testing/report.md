@@ -120,7 +120,7 @@ The gap justifies a light step, not a check after every adoption.
 
 - **Level 0, no extra games:** every gauntlet report shows its paired-by-opening gain over the previous
   gauntlet on the shared anchors (SD about 11 Elo) and the running transfer ratio. A `report.py` change,
-  not built.
+  built on 2026-11-09 (below, "Built: how to run").
 - **Level 1, major adoptions only:** a paired match of OLD and NEW Fork, each against Clover 6.1 and Altair
   7.0.0 on the same 200 openings.
   - **Major:** a claimed STC gain of +30 Elo or more, a new architecture, a time-management change, or
@@ -134,7 +134,7 @@ The gap justifies a light step, not a check after every adoption.
   - **Outcomes:** confirmed (lower 95% bound above 0), consistent, or flagged for the owner's review. It
     never reverts anything.
   - **Slot:** after adoption and the labeller switch, at the next idle slot. It needs a two-engine mode in
-    `gauntlet.yml`, not built.
+    `gauntlet.yml`, built on 2026-11-09 (below).
 
 Power by design:
 
@@ -153,6 +153,63 @@ minutes (Altair 18.5-20, Clover 17.5-19.5); builds 1-5 minutes; the 2026-11-08 g
 
 **Optional checks of the causes:** one gauntlet rerun with Syzygy for Fork; one network SPRT replayed on
 the gauntlet's balanced openings.
+
+### Built: how to run
+
+Built on 2026-11-09 (owner's decision of that day, item 5; branch `gauntlet/anchor-check`). Usage is also
+in the docstrings of `tools/gauntlet/report.py` and `.github/workflows/gauntlet.yml`.
+
+- **Method, both levels:** openings are identified by the game's FEN header; only (anchor, opening) cells
+  that both sides played count. The gain is the difference of two plain logistic fits of Fork's rating
+  with the anchors fixed at their CCRL Blitz ratings. This is the "plain logistic" column of §1.1, on the
+  same logistic Elo scale as the SPRTs' "Elo". The uncertainty is a bootstrap over openings: 4,000
+  resamples, seed 20261109, the same openings for both sides and every anchor.
+- **Level 0:** runs in every gauntlet. `tools/gauntlet/transfer.json` holds four things:
+  - `baseline`: the gauntlet run the transfer ratio starts from;
+  - `previous`: the last gauntlet run;
+  - `adopted`: each change adopted since the baseline, as `change`, `elo`, `ci95` (the half-width of its
+    95% interval) and `test`;
+  - `about`: what the file is for.
+
+  When the file is on the branch, the ordo job downloads both runs' `gauntlet-result` artifacts. The report
+  then adds two sections: the gain over the previous gauntlet (overall and per anchor) and the running
+  transfer ratio. If an artifact cannot be downloaded (they are kept 90 days; run 41465146207's expires on
+  2027-01-31), only its section is left out.
+
+  After each gauntlet, set `previous` to that run. Add every adopted change to `adopted` before the next
+  gauntlet: the starting list stops at 32c5517.
+
+  Locally:
+  `python -I tools/gauntlet/report.py --previous RUN_DIR --baseline RUN_DIR --adopted tools/gauntlet/transfer.json SHARDS TABLE OUT ORDO`.
+- **Level 1:** a dispatch of the gauntlet workflow with the `old` and `new` inputs. It plays 16 shards, each
+  against one anchor on 25 openings: OLD plays 50 games on them and NEW plays the same 50, and the order
+  alternates by shard. With the default anchors (Clover 6.1 and Altair 7.0.0) that makes 1,600 games. The
+  run takes about 20 minutes plus the builds. Start it on an idle queue (no SPRT, CI or web run going):
+
+  ```
+  gh workflow run gauntlet.yml -R BOSSDOTCOM/fork --ref BRANCH \
+    -f old=OLD_COMMIT -f new=NEW_COMMIT -f claim=CLAIMED_ELO [-f anchors="clover-6.1 altair-7.0.0"]
+  ```
+
+  BRANCH must carry the new workflow file (`gauntlet/anchor-check`, or `phase-4` once merged). The run's
+  title is `anchor check OLD NEW`. The job "Anchor check: NEW - OLD" puts the report in its summary and in
+  the `check-result` artifact. The report gives NEW - OLD per anchor and pooled, each with its bootstrap SD
+  and 95% interval, and one of three outcomes:
+  - **confirmed:** the pooled lower 95% bound is above 0;
+  - **consistent:** not confirmed, but the pooled gain is at least the claim minus 2 bootstrap SDs;
+  - **flagged for the owner's review:** anything else.
+
+  It never reverts anything. Without `old` and `new` (a push to `gauntlet-run`, or a dispatch without them),
+  the run is the gauntlet as before.
+- **Reproduction on the three gauntlets of §1.1** (level 0's code):
+  - Gains: A +38.03, B +13.92, A+B +51.95. These match the plain-logistic column (38.0 / 13.9 / 52.0), and
+    the per-anchor gains match §1.1 exactly.
+  - Paired SDs: 10.54 / 11.06 / 12.36, against the report's 10.5 / 11.0 / 12.2 (the same method with a
+    different random stream).
+  - Against the headline's Ordo per-run figures (42.4 / 13.0 / 55.4) the logistic gains are lower. Ordo
+    also fits a white advantage and a draw rate (`-W -D`).
+  - The running ratio from the starting `transfer.json` is 0.61 (95% interval 0.32-0.95), against the
+    headline's 0.65. The difference comes from the gain's model, not from the data.
 
 ## 6. Fixed-node screens as the first filter
 

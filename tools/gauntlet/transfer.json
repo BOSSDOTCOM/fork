@@ -1,0 +1,12 @@
+{
+  "about": "The anchor check's level 0 (tools/gauntlet/report.py; .github/workflows/gauntlet.yml downloads the gauntlet-result artifacts of the two runs named here, kept 90 days). previous: the last gauntlet, compared with the next one. baseline: the gauntlet the running transfer ratio starts from. adopted: every change adopted after the baseline's commit, with its self-play (SPRT) logistic Elo and ci95, the half-width of its 95% interval. After each gauntlet, set previous to it; add each adopted change. Starting values: docs/research/transfer-testing/report.md, sections 1.1 and 1.2.",
+  "baseline": {"run": 41465146207, "commit": "3902d00"},
+  "previous": {"run": 42538371594, "commit": "32c5517"},
+  "adopted": [
+    {"change": "S512+PP", "elo": 32.67, "ci95": 10.48, "test": "STC [0, 5], run 42294907752"},
+    {"change": "select_best in a register (5ba7d0d)", "elo": 6.0, "ci95": 1.1, "test": "no SPRT: +4.0% local nps priced at 1.5 Elo per 1% (5.0-7.2)"},
+    {"change": "S512ppr2", "elo": 20.11, "ci95": 7.22, "test": "STC [0, 5]"},
+    {"change": "S512ppr3", "elo": 7.12, "ci95": 4.53, "test": "STC [0, 5], 8,000 games"},
+    {"change": "Time management (b)", "elo": 18.69, "ci95": 7.18, "test": "STC design R"}
+  ]
+}

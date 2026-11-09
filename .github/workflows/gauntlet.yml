@@ -25,12 +25,41 @@
 # workflow by hand only once its file is on the default branch); one run at a
 # time, never beside the SPRT, CI or web runs (whoever starts it waits for an
 # idle queue).
+#
+# The anchor check (owner, 2026-11-09; docs/research/transfer-testing/report.md
+# §5, "Built: how to run"). Level 0, in every gauntlet: when
+# tools/gauntlet/transfer.json is on the branch, the ordo job downloads the
+# gauntlet-result artifacts of the runs it names ("previous" and "baseline")
+# and the report adds the paired-by-opening gain over the previous gauntlet
+# and the running transfer ratio since the baseline (tools/gauntlet/report.py;
+# an artifact that cannot be downloaded only leaves its part out). Level 1, a
+# dispatch with the inputs old and new: the two-engine mode, OLD and NEW Fork
+# each against the chosen anchors (default Clover 6.1 and Altair 7.0.0) on
+# openings 1-200, both colours, at the gauntlet's conditions; each shard plays
+# both versions on the same 25 openings (which plays first alternates by
+# shard), so the comparison is paired; a fixed sample (1,600 games with two
+# anchors), no sequential stop. Its report (report.py --check) gives NEW - OLD
+# per anchor and pooled with a paired bootstrap interval, and the outcome
+# against the input claim: confirmed, consistent or flagged for the owner's
+# review. It never reverts anything. Without old and new (a push, or a
+# dispatch without them) the run is the gauntlet, as before. Started by hand,
+# on an idle queue, from a branch that carries this file:
+#   gh workflow run gauntlet.yml -R BOSSDOTCOM/fork --ref BRANCH \
+#     -f old=OLD -f new=NEW -f claim=ELO [-f anchors="clover-6.1 altair-7.0.0"]
+# The run's title is "anchor check OLD NEW" (a gauntlet's stays GitHub's
+# default).
 name: gauntlet
+run-name: ${{ (inputs.old || inputs.new) && format('anchor check {0} {1}', inputs.old, inputs.new) || '' }}
 
 on:
   push:
     branches: [gauntlet-run]
   workflow_dispatch:
+    inputs:
+      old: {description: "Anchor check: OLD Fork commit (with new; both empty: the gauntlet)", required: false, default: ""}
+      new: {description: "Anchor check: NEW Fork commit", required: false, default: ""}
+      claim: {description: "Anchor check: NEW's claimed self-play gain over OLD (Elo)", required: false, default: ""}
+      anchors: {description: "Anchor check: anchor stems (tools/gauntlet/anchors.tsv)", required: false, default: "clover-6.1 altair-7.0.0"}
 
 permissions:
   contents: read
@@ -45,10 +74,13 @@ env:
   ORDO_COMMIT: 17eec774f2e4b9fdd2b1b38739f55ea221fb851a
   TC: "10+0.1"
   GAMES_PER_SHARD: "100"
+  CHECK_OPENINGS: "200"           # the anchor check: openings 1-200, each with both colours
+  CHECK_OPENINGS_PER_SHARD: "25"  # 50 games per version, 100 a shard (a gauntlet shard's length)
 
 jobs:
   fork:
     name: Build Fork (update.sh, gcc 11.4, x86-64-v3)
+    if: ${{ !inputs.old && !inputs.new }}
     runs-on: ubuntu-latest
     container: ubuntu:22.04
     timeout-minutes: 30
@@ -70,6 +102,7 @@ jobs:
 
   anchors:
     name: Build every anchor (choose alternates)
+    if: ${{ !inputs.old && !inputs.new }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     outputs:
@@ -152,27 +185,7 @@ jobs:
           # Options from the engine's own `uci` output: the listed ones it has,
           # any thread option at 1, any book switch off.
           printf 'uci\nquit\n' | timeout 20 "anchors/$STEM" > uci.txt || true
-          opts=$(python3 - "$listed" uci.txt <<'PY'
-          import re, sys
-          listed = [] if sys.argv[1] == '-' else sys.argv[1].split()
-          names = {}
-          for line in open(sys.argv[2], errors='replace'):
-              m = re.match(r'option name (.+?) type (\w+)', line.strip())
-              if m:
-                  names[m.group(1)] = m.group(2)
-          chosen = {}
-          for o in listed:
-              key, value = o[len('option.'):].split('=', 1)
-              if key in names:
-                  chosen[key] = value
-          for key, kind in names.items():
-              if re.fullmatch(r'(num)?_?threads', key, re.I):
-                  chosen.setdefault(key, '1')
-              if 'book' in key.lower() and kind == 'check':
-                  chosen.setdefault(key, 'false')
-          print(' '.join(f'option.{k}={v}' for k, v in chosen.items()))
-          PY
-          )
+          opts=$(python3 tools/gauntlet/uci_options.py "$listed" uci.txt)
           echo "options for $name: ${opts:-none}"
           mkdir -p out
           cpu=$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)
@@ -197,6 +210,9 @@ jobs:
     needs: games
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read  # the earlier gauntlets' artifacts (the anchor check, level 0)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -208,9 +224,23 @@ jobs:
           git -C ordo-src checkout -q FETCH_HEAD
           make -C ordo-src ordo >/dev/null 2>&1 ||
             make -C ordo-src ordo CFLAGS="-DNDEBUG -DMY_SEMAPHORES -flto -I myopt -I sysport -fcommon" >/dev/null
+      - name: Earlier gauntlets for the anchor check (the runs tools/gauntlet/transfer.json names)
+        if: hashFiles('tools/gauntlet/transfer.json') != ''
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          for kind in previous baseline; do
+            run=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1])).get(sys.argv[2], {}).get("run", ""))' \
+              tools/gauntlet/transfer.json "$kind")
+            case $run in '' | *[!0-9]*) echo "transfer.json names no $kind run"; continue ;; esac
+            gh run download "$run" -R "$GITHUB_REPOSITORY" -n gauntlet-result -D "earlier/$kind" ||
+              echo "::warning::the $kind gauntlet's result (run $run) could not be downloaded: its part of the anchor check is left out"
+          done
       - name: Ratings (the reference opponent apart)
         run: |
-          python3 -I tools/gauntlet/report.py shards tools/gauntlet/anchors.tsv . ./ordo-src/ordo >> "$GITHUB_STEP_SUMMARY"
+          set --
+          [ ! -f earlier/previous/gauntlet.pgn ] || set -- --previous earlier/previous
+          [ ! -f earlier/baseline/gauntlet.pgn ] || set -- "$@" --baseline earlier/baseline --adopted tools/gauntlet/transfer.json
+          python3 -I tools/gauntlet/report.py "$@" shards tools/gauntlet/anchors.tsv . ./ordo-src/ordo >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: gauntlet-result
@@ -220,4 +250,171 @@ jobs:
             anchors.csv
             ordo.txt
             reference.pgn
+            summary.md
+
+  # The anchor check, level 1 (the two-engine mode): only with the inputs old and new.
+  check-fork:
+    name: "Anchor check: build OLD and NEW Fork (update.sh, gcc 11.4, x86-64-v3)"
+    if: ${{ inputs.old || inputs.new }}
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    timeout-minutes: 40
+    outputs:
+      old_sha: ${{ steps.plan.outputs.old_sha }}
+      new_sha: ${{ steps.plan.outputs.new_sha }}
+    steps:
+      - name: "Toolchain (Ubuntu 22.04, gcc 11.4, CMake 3.22, as TCEC)"
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q build-essential cmake git ca-certificates python3
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Check the inputs
+        id: plan
+        env:
+          OLD: ${{ inputs.old }}
+          NEW: ${{ inputs.new }}
+          CLAIM: ${{ inputs.claim }}
+        run: |
+          git config --global --add safe.directory "$PWD"
+          [ -n "$OLD" ] && [ -n "$NEW" ] || { echo "the anchor check needs both old and new"; exit 1; }
+          echo "$CLAIM" | grep -Eq '^[+-]?[0-9]+([.][0-9]+)?$' || { echo "claim must be a number of Elo, not '$CLAIM'"; exit 1; }
+          echo "old_sha=$(git rev-parse --verify "$OLD^{commit}")" >>"$GITHUB_OUTPUT"
+          echo "new_sha=$(git rev-parse --verify "$NEW^{commit}")" >>"$GITHUB_OUTPUT"
+      # As the gauntlet's Fork: build_pair.sh checks each binary's target and
+      # its network against the parity file, and records its bench (nodes and
+      # signature) in meta.env, shown in the run's summary.
+      - name: Build both (OLD as base, NEW as test)
+        env:
+          FORK_ARCH: x86-64-v3
+          OLD_SHA: ${{ steps.plan.outputs.old_sha }}
+          NEW_SHA: ${{ steps.plan.outputs.new_sha }}
+        run: |
+          CXX=g++ bash tools/cloud/build_pair.sh . "$OLD_SHA" "$NEW_SHA" engines
+          { echo "### Anchor check: the builds (base = OLD, test = NEW)"; echo '```'; cat engines/meta.env; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with: {name: engines, path: engines, retention-days: 7}
+
+  check-anchors:
+    name: "Anchor check: build the chosen anchors"
+    if: ${{ inputs.old || inputs.new }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      shards: ${{ steps.plan.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential cmake clang
+      - name: Plan the shards; build each anchor (any failure stops the run)
+        id: plan
+        env: {ANCHORS: "${{ inputs.anchors }}"}
+        run: |
+          # shellcheck disable=SC2086
+          python3 -I - "$CHECK_OPENINGS" "$CHECK_OPENINGS_PER_SHARD" $ANCHORS <<'PY' >> "$GITHUB_OUTPUT"
+          import json, sys
+          total, per, stems = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3:]
+          rows = {r[1]: r for r in (l.rstrip('\n').split('\t') for l in open('tools/gauntlet/anchors.tsv'))
+                  if len(r) > 3 and not r[0].startswith('#')}
+          if not stems or len(set(stems)) != len(stems):
+              sys.exit(f'anchors: give one or more distinct stems, not {stems}')
+          for s in stems:
+              if s not in rows or rows[s][3] == 'reference':
+                  sys.exit(f'anchors: {s} is not an anchor in tools/gauntlet/anchors.tsv')
+          if total % per:
+              sys.exit('CHECK_OPENINGS must be a multiple of CHECK_OPENINGS_PER_SHARD')
+          print('shards=' + json.dumps([{'anchor': s, 'start': start} for s in stems for start in range(1, total + 1, per)]))
+          PY
+          for stem in $ANCHORS; do bash tools/gauntlet/build_anchor.sh "$stem" anchors || exit 1; done
+
+  check-games:
+    name: "Anchor check: ${{ matrix.anchor }} from opening ${{ matrix.start }}"
+    needs: [check-fork, check-anchors]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.check-anchors.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: engines, path: engines}
+      - name: Tools (pinned fastchess; python-chess for the openings)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q build-essential cmake clang
+          bash tools/cloud/fetch_tools.sh "$RUNNER_TEMP/tools"
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet chess==1.11.2
+      - name: Openings (the earlier gauntlets' 200, regenerated and checked)
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" -I tools/make_openings.py openings.epd --seed "$OPENINGS_SEED"
+          echo "$OPENINGS_SHA256  openings.epd" | sha256sum -c
+      - name: Build the anchor here (native for this runner)
+        run: bash tools/gauntlet/build_anchor.sh "${{ matrix.anchor }}" anchors
+      - name: Games (OLD and NEW on the same openings)
+        env:
+          STEM: ${{ matrix.anchor }}
+          START: ${{ matrix.start }}
+          OLD_SHA: ${{ needs.check-fork.outputs.old_sha }}
+          NEW_SHA: ${{ needs.check-fork.outputs.new_sha }}
+        run: |
+          chmod +x engines/base/fork engines/test/fork
+          IFS=$'\t' read -r name _ ccrl _ _ _ _ _ _ listed <<<"$(grep -v '^#' tools/gauntlet/anchors.tsv | awk -F'\t' -v s="$STEM" '$2 == s')"
+          printf 'uci\nquit\n' | timeout 20 "anchors/$STEM" > uci.txt || true
+          opts=$(python3 tools/gauntlet/uci_options.py "$listed" uci.txt)
+          echo "options for $name: ${opts:-none}"
+          # Which version plays first alternates from shard to shard, so a
+          # drift in a runner's speed during a shard favours neither.
+          if [ $(( (START - 1) / CHECK_OPENINGS_PER_SHARD % 2 )) = 0 ]; then order="old new"; else order="new old"; fi
+          games=$(( 2 * CHECK_OPENINGS_PER_SHARD ))
+          mkdir -p out
+          cpu=$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)
+          conc=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
+          echo "cpu=$cpu nproc=$(nproc) concurrency=$conc anchor=$name ccrl=$ccrl start=$START openings=$CHECK_OPENINGS_PER_SHARD order=$order old=$OLD_SHA new=$NEW_SHA options=${opts:-none}" | tee out/shard.txt
+          printf '"%s",%s\n' "$name" "$ccrl" > out/anchor.csv
+          for side in $order; do
+            bin=engines/base/fork
+            [ "$side" = old ] || bin=engines/test/fork
+            # shellcheck disable=SC2086
+            "$RUNNER_TEMP/tools/fastchess" -engine cmd="$bin" name=Fork option.Hash=16 \
+              -engine cmd="anchors/$STEM" name="$name" $opts \
+              -each tc="$TC" -openings file=openings.epd format=epd order=sequential start="$START" \
+              -rounds "$CHECK_OPENINGS_PER_SHARD" -repeat -concurrency "$conc" \
+              -pgnout file="out/$side.pgn" > "out/$side-fastchess.log" 2>&1 || true
+            played=$(grep -c '^\[Event ' "out/$side.pgn" || true)
+            echo "$side played=$played of $games" | tee -a out/shard.txt
+            [ "$played" = "$games" ] || { tail -n 20 "out/$side-fastchess.log"; exit 1; }
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: "check-${{ matrix.anchor }}-${{ matrix.start }}", path: out, retention-days: 90}
+
+  check-report:
+    name: "Anchor check: NEW - OLD"
+    needs: [check-fork, check-games]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {pattern: "check-*", path: shards}
+      - name: Report (paired by opening, bootstrap interval, outcome)
+        env:
+          CLAIM: ${{ inputs.claim }}
+          OLD_SHA: ${{ needs.check-fork.outputs.old_sha }}
+          NEW_SHA: ${{ needs.check-fork.outputs.new_sha }}
+        run: |
+          echo "OLD $OLD_SHA, NEW $NEW_SHA" >> "$GITHUB_STEP_SUMMARY"
+          python3 -I tools/gauntlet/report.py --check shards tools/gauntlet/anchors.tsv . "$CLAIM" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: check-result
+          retention-days: 90
+          path: |
+            old.pgn
+            new.pgn
             summary.md
