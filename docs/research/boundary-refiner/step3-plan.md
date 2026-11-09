@@ -1325,6 +1325,13 @@ reported beside it and selects nothing.
     gains clearly, a small independent near-window net (its own small
     accumulator) is planned as step 3b; if not, step 3 closes. No SPRT and
     no adoption.
+    **The owner's two additions (2026-11-08, about 9:15 PM EST), before any
+    result:** (1) the independent net is one of item 7's from-scratch runs
+    (no shared ancestry; warm-started nets such as S512+X share S512r2's and
+    are excluded): the strongest of them, its lineage recorded; (2) the
+    declared line: step 3b is planned only if the blend's (c) fixed-node
+    point estimate is at least +10 Elo against S512ppr3 alone; below it,
+    step 3 closes. The replace variant (d) is for comparison only.
   - **The trainer (lane E, E-c, 2026-11-08):** fork-train `--arch refiner`
     (tools/train/src/main.rs; its header describes the graph, the data and
     the loss). Its CPU build is bullet's mock runtime: it builds the graph,
