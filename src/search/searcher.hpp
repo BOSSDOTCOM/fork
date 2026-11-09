@@ -152,7 +152,7 @@ struct SearchQuota {
   X(use_tables, UseTables, true)                         \
   X(use_lmr_check_relief, UseLmrCheckRelief, true)       \
   X(use_lmr_in_check, UseLmrInCheck, true)               \
-  X(use_singular_extension, UseSingularExtension, true)  \
+  X(use_singular_extension, UseSingularExtension, false) \
   X(use_multi_cut, UseMultiCut, true)                    \
   X(use_negative_extension, UseNegativeExtension, false) \
   X(use_reply_history, UseReplyHistory, true)            \

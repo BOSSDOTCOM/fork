@@ -265,7 +265,7 @@ TEST_CASE("pruning",
   PruningFixture fx;
   // Singular extension and multi-cut on since their SPRTs (2026-10-31); the
   // negative extension off (its SPRT rejected it).
-  CHECK(SearchSwitches{}.use_singular_extension);
+  CHECK(!SearchSwitches{}.use_singular_extension);  // off: the base of its LTC confirmation (branch ltc/se-off)
   CHECK(SearchSwitches{}.use_multi_cut);
   CHECK(!SearchSwitches{}.use_negative_extension);
   static constexpr std::string_view Forcing[] = {
