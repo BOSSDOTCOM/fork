@@ -184,18 +184,21 @@ class GenerationControl:
 
     # ------------------------------------------------------------ the next part
 
-    def plan(self, probe=None, threads=None):
+    def plan(self, probe=None, threads=None, new_generation=None):
         """(plan, probe): the next part, and a probe that also looked at the previous part's folder (its
-        binaries, for reuse) and the new part's (which must be empty)."""
+        binaries, for reuse) and the new part's (which must be empty). new_generation (a positions target,
+        the owner's decision) plans instead the first part of the next generation, once the current one has
+        reached its target and its last part is sealed: always a fresh PGO build of the branch tip, and the
+        previous part's openings unless the next openings are set."""
         probe = probe or self.probe()
-        plan = self._plan(probe, threads)
+        plan = self._plan(probe, threads, new_generation)
         folders = [plan['dir'], f"{self.cfg['wsl_data']}/{P.part_dir(plan['previous'])}"]
         if not all(f in (probe.get('folders') or {}) for f in folders):
             probe = self.probe(folders)
-            plan = self._plan(probe, threads)
+            plan = self._plan(probe, threads, new_generation)
         return plan, probe
 
-    def _plan(self, probe, threads=None):
+    def _plan(self, probe, threads=None, new_generation=None):
         sealed, snaps = self.sealed(), self.snapshots()
         names = set(sealed) | set(snaps)
         names |= {j['record']['name'] for j in probe.get('jobs', []) if j['record'].get('type') == 'datagen'
@@ -216,7 +219,16 @@ class GenerationControl:
             raise Refused(f'the last part, {last}, is neither sealed nor copied yet: stop and seal it first')
         st = info.get('settings', {})
         target = st.get('positions_target', 0) - info.get('positions', 0)
-        if target <= 0:
+        if new_generation is not None:
+            if target > 0:
+                raise Refused(f'generation {gen} has {target:,} positions to go after {last}: its next part comes '
+                              'before a new generation')
+            if last not in sealed:
+                raise Refused(f'{last} is not sealed yet: seal it before a new generation starts')
+            if not isinstance(new_generation, int) or new_generation <= 0:
+                raise Refused(f'a new generation needs a positive positions target, not {new_generation!r}')
+            target = new_generation
+        elif target <= 0:
             raise Refused(f'generation {gen} reached its target with {last}; a new generation is the owner\'s '
                           'decision')
         seeds = [m.get('settings', {}).get('seed') for m in list(sealed.values()) + list(snaps.values())]
@@ -251,7 +263,7 @@ class GenerationControl:
         prev_commit = (re.search(r'\+([0-9a-f]{7,40})', version) or [None, None])[1]
         prev_net = P.net_of((info.get('generator') or {}).get('evaluator') or info.get('evaluator'))
         changed = True
-        if prev_commit and prev_net == net:
+        if prev_commit and prev_net == net and new_generation is None:  # a new generation always builds
             d = self.git('diff', '--quiet', prev_commit, commit, '--', *self.cfg['engine_paths'])
             changed = d.rc != 0  # 0: no engine file differs; 1: differs; anything else: unknown, so build
         prev_dir = f"{self.cfg['wsl_data']}/{P.part_dir(last)}"
@@ -287,7 +299,9 @@ class GenerationControl:
         settings = {**standing, 'threads': int(threads or self.cfg['threads']), 'seed': seed,
                     'positions_target': target, 'openings': ofile}
         differs = {k: (st.get(k), v) for k, v in standing.items() if st.get(k) != v}
-        name = P.next_part(last)
+        name = f'g{gen + 1}' if new_generation is not None else P.next_part(last)
+        if new_generation is not None:
+            gen += 1
         if ofile != prev_ofile:
             differs['openings'] = (prev_ofile, ofile)
         return {

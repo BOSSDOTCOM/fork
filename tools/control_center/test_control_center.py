@@ -422,6 +422,34 @@ class Controls(unittest.TestCase):
         self.assertEqual((plan['mode'], plan['engine_commit']), ('build', self.world.commit))
         self.assertEqual(self.controls(), [])
 
+    def test_plan_new_generation(self):
+        self.copy_g3e(positions=477173594)  # g3e reached generation 3's target
+        with self.assertRaises(generation_control.Refused) as e:
+            self.ctl.plan()
+        self.assertIn('a new generation is the owner', str(e.exception))
+        with self.assertRaises(generation_control.Refused) as e:
+            self.ctl.plan(new_generation=64000000)  # only a copy: not sealed yet
+        self.assertIn('not sealed', str(e.exception))
+        self.ctl.sealed = lambda: {'g3e': {'run': 'g3e', 'positions': 477173594, 'settings': {
+            'positions_target': 477173594, 'seed': 20261110, 'threads': 10, 'openings': 'lichess-2016-09.epd'},
+            'generator': {'version': '0.3.0-dev+684bac6', 'evaluator': 'nnue (s512r2)'}, 'openings': {}}}
+        self.world.folders['~/fork-data/gen3e'] = {'exists': True, 'files': [{'name': 'fork'}, {'name': 'fork_datagen'}]}
+        plan, _ = self.ctl.plan(threads=6, new_generation=64000000)
+        self.assertEqual((plan['name'], plan['previous'], plan['generation']), ('g4', 'g3e', 4))
+        self.assertEqual(plan['dir'], '~/fork-data/gen4')
+        self.assertEqual((plan['settings']['positions_target'], plan['settings']['threads'],
+                          plan['settings']['seed']), (64000000, 6, 20261111))
+        self.assertEqual((plan['mode'], plan['engine_commit']), ('build', self.world.commit))  # never reused
+        with self.assertRaises(generation_control.Refused):
+            self.ctl.plan(new_generation=0)
+        self.assertEqual(self.controls(), [])
+
+    def test_plan_new_generation_refused_before_the_target(self):
+        self.copy_g3e()
+        with self.assertRaises(generation_control.Refused) as e:
+            self.ctl.plan(new_generation=64000000)
+        self.assertIn('positions to go', str(e.exception))
+
     def test_plan_refuses_after_a_failed_seal(self):
         self.copy_g3e()
         self.ctl.write_state('g3e', 'seal-result.json', {'state': 'verify-failed', 'message': 'FAIL game 12'})
