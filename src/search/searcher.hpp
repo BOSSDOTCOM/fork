@@ -209,7 +209,7 @@ struct SearchQuota {
   X(use_share_time, UseShareTime, true)                  \
   X(use_horizon_drop, UseHorizonDrop, false)             \
   X(use_history_skip, UseHistorySkip, false)             \
-  X(use_bad_capture_stop, UseBadCaptureStop, false)      \
+  X(use_bad_capture_stop, UseBadCaptureStop, true)       \
   X(use_clock_damping, UseClockDamping, false)           \
   X(use_malus_scale, UseMalusScale, false)               \
   X(use_double_extension, UseDoubleExtension, false)     \

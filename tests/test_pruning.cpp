@@ -447,10 +447,13 @@ TEST_CASE("pruning", "history skip: still correct, and it changes the search") {
 // Bad-capture futility, the bad capture stop (tier 2, T36).
 TEST_CASE("pruning", "bad capture stop: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_bad_capture_stop);  // off until measured
+  CHECK(SearchSwitches{}
+            .use_bad_capture_stop);  // on in this head-to-head candidate (tier2/b4-bad-capture-stop)
+  SearchSwitches off;
+  off.use_bad_capture_stop = false;
   SearchSwitches on;
   on.use_bad_capture_stop = true;
-  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the bad capture stop");
+  fx.check_changes_search(on, off, Optimized ? 10 : 7, "the bad capture stop");
 }
 
 // Fifty-move eval scaling, the clock damping (tier 2, T52): a rook up with
