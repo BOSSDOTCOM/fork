@@ -1195,6 +1195,24 @@ reported beside it and selects nothing.
     accumulator within 0.001 byte units of the engine's bytes on four
     positions (exposed pieces and pawn links included) and R-float on it
     within the rounding bound of R-int on the net file.
+  - **The training session (orchestrator, within the plan, 2026-11-08):**
+    one Kaggle session (kernel fork-refiner, private dataset fork-i59s3:
+    train.sites, val.sites, test.sites, s512ppr3.fnet, parity.sites,
+    parity-weights.bin, val-windows.jsonl; 2 x T4), pinned to the pushed
+    commit. First the parity chain's trainer leg (fork-train eval on
+    parity.sites with a synthetic refiner against R-float, within 0.0002)
+    and A1 (superbatch 0's weighted validation loss equal to the base's own
+    within 1e-6); either failing stops the session (fix the pipeline, not a
+    try). Then nine runs (LR 0.001, AdamW, a tenfold drop at half of 80
+    superbatches of one pass each, patience 8, batch 16,384): the weighted
+    arm (closeness x call mix) seeds 1 and 2 (`w1`, `w2`), the plain arm
+    (weight 1 at every used site, mates and the table band out) seeds 1 and
+    2 (`p1`, `p2`), the cap candidates (`w1-c57`, `w1-c480`) and the learning
+    curve at 125k, 250k and 500k sites (`l125k`, `l250k`, `l500k`, seeded
+    subsets; 1M is `w1`). GPU 0: w1, p1, w1-c57, l125k, l250k; GPU 1: w2,
+    p2, w1-c480, l500k. The curve runs drop first (for a second session)
+    if the measured rate would take the session past 4 T4 GPU-hours. The
+    offline acceptance on test waits for the orchestrator's confirmation.
   - **The trainer (lane E, E-c, 2026-11-08):** fork-train `--arch refiner`
     (tools/train/src/main.rs; its header describes the graph, the data and
     the loss). Its CPU build is bullet's mock runtime: it builds the graph,
@@ -1274,6 +1292,31 @@ reported beside it and selects nothing.
   constant: its justification goes in the constants table and it goes
   through the originality-checker's constant screen before the commit
   that sets it.
+  **The procedure (orchestrator and owner, 2026-11-08, recorded before the
+  training session):** the candidates, from the training split's 341,137
+  sites within 25 cp (mate-flagged labels and the table band out), are
+  **57, 198 (declared) and 480 cp** (the 50th, 75th and 90th percentiles of
+  |deep - base|, the values at index floor(p x n) of the sorted list).
+  Because the cap sits inside the training graph (fork-train `--cap`), each
+  candidate is its own run: the weighted arm, seed 1, at 198 (`w1`), 57
+  (`w1-c57`) and 480 (`w1-c480`); every other run at 198. In the kernel,
+  each candidate's validation outputs (fork-train eval on val.sites with
+  its best checkpoint; the correction clamp(y x S, -C, C)) give, under
+  deployment weighting (the sites inside gate (a)'s margins, equal within a
+  kind, times the call-mix factor), three net flips against the deep
+  label's verdict (val-windows.jsonl): at the gate's nearest bound (from
+  the base; above means >= beta or > alpha, as crucial_points.py); at
+  reverse futility, the verdict `x - 80 >= beta` with x the logged
+  prune_eval (base), prune_eval + correction (refined) or the deep label;
+  at futility, `x + 100 + 70 <= alpha` (depth 1), with the same three x;
+  the last two at main-search sites only. A candidate's score is the sum of
+  the three. **The rule:** start at 57; 198 replaces it if its score is
+  higher by more than one standard error of the paired difference (the
+  per-site weighted difference of the two candidates' net-flip
+  contributions); then 480 replaces the current one by the same test.
+  **The chosen C still needs the originality-checker's constant screen**
+  (section 8: correction cap, screen yes) before any converted refiner is
+  committed to an engine build or used in a screen.
 
 ### 3.8 Offline acceptance (declared before any training run)
 
