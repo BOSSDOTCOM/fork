@@ -69,8 +69,8 @@ inline int take_slot(Piece moved, Square to, PieceType victim) { return pair_slo
 // key (Position::pawn_key; structure_slot) and the move's pair slot (its
 // piece and destination), so it learns which moves suit a pawn structure
 // across the many positions that share it. 2^StructureHistoryBits x
-// PairSlots entries: 768 KB at 9 bits, so a searcher keeps it on the heap.
-constexpr int StructureHistoryBits = 9;
+// PairSlots entries: 192 KB at 7 bits (768 KB at 9), so a searcher keeps it on the heap.
+constexpr int StructureHistoryBits = 7;
 inline int structure_slot(Key pawn_key) {
   return static_cast<int>(pawn_key & ((Key{1} << StructureHistoryBits) - 1));
 }

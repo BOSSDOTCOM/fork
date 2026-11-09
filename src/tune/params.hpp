@@ -69,7 +69,7 @@
   X(DoubleExtensionsMax, 6, 1, 20, 1)         \
   X(CutNodeLmrPlies, 1, 0, 3, 1)              \
   X(PvTraceLmrPlies, 1, 0, 3, 1)              \
-  X(StructureHistoryWeight, 3, 0, 8, 1)       \
+  X(StructureHistoryWeight, 4, 0, 8, 1)       \
   X(HistoryBonusFactor, 25, 12, 50, 2)        \
   X(HistoryBonusCap, 1250, 625, 2500, 94)     \
   X(ReplyWeight, 6, 0, 8, 1)                  \

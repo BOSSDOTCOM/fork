@@ -527,10 +527,12 @@ TEST_CASE("pruning", "structure history: keyed by the pawns, and it changes the 
            0);
   CHECK_EQ(quiet_order_score(b, b.parse_uci("e1d1"), nullptr, nullptr, NoArrival, NoArrival, nullptr), 0);
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_structure_history);  // off until measured
+  CHECK(SearchSwitches{}.use_structure_history);  // on in this head-to-head candidate (tier2/b4-structure)
+  SearchSwitches off;
+  off.use_structure_history = false;
   SearchSwitches on;
   on.use_structure_history = true;
-  fx.check_changes_search(on, SearchSwitches{}, Optimized ? 10 : 7, "the structure history");
+  fx.check_changes_search(on, off, Optimized ? 10 : 7, "the structure history");
 }
 
 // Upcoming-repetition detection in the search (tier 2, T51).
