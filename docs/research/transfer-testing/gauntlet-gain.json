@@ -1,0 +1,370 @@
+{
+ "anchors_shared": [
+  "Weiss 1.0",
+  "Monolith 2.01",
+  "Winter 0.9",
+  "Laser 1.7",
+  "Marvin 6.3.0",
+  "Altair 7.0.0"
+ ],
+ "games_checked": {
+  "r2": {
+   "Altair 7.0.0": 200,
+   "Laser 1.7": 200,
+   "Marvin 6.3.0": 200,
+   "Monolith 2.01": 200,
+   "Weiss 1.0": 200,
+   "Winter 0.9": 200
+  },
+  "ppr2": {
+   "Altair 7.0.0": 200,
+   "Laser 1.7": 200,
+   "Marvin 6.3.0": 200,
+   "Monolith 2.01": 200,
+   "Weiss 1.0": 200,
+   "Winter 0.9": 200
+  },
+  "ppr3tm": {
+   "Altair 7.0.0": 200,
+   "Clover 6.1": 200,
+   "Laser 1.7": 200,
+   "Marvin 6.3.0": 200,
+   "Monolith 2.01": 200,
+   "Weiss 1.0": 200,
+   "Winter 0.9": 200
+  }
+ },
+ "terminations": {
+  "r2": {
+   "normal": 1200
+  },
+  "ppr2": {
+   "normal": 1200
+  },
+  "ppr3tm": {
+   "normal": 1400
+  }
+ },
+ "fits": {
+  "r2": {
+   "fit_all_anchors": 3430.14,
+   "fit_shared_anchors": 3430.14,
+   "score_shared": 823.0,
+   "games_shared": 1200,
+   "per_anchor_score": {
+    "Weiss 1.0": 174.5,
+    "Monolith 2.01": 177.5,
+    "Winter 0.9": 164.0,
+    "Laser 1.7": 140.0,
+    "Marvin 6.3.0": 103.0,
+    "Altair 7.0.0": 64.0
+   }
+  },
+  "ppr2": {
+   "fit_all_anchors": 3468.18,
+   "fit_shared_anchors": 3468.18,
+   "score_shared": 864.0,
+   "games_shared": 1200,
+   "per_anchor_score": {
+    "Weiss 1.0": 179.5,
+    "Monolith 2.01": 177.5,
+    "Winter 0.9": 172.0,
+    "Laser 1.7": 150.0,
+    "Marvin 6.3.0": 115.5,
+    "Altair 7.0.0": 69.5
+   }
+  },
+  "ppr3tm": {
+   "fit_all_anchors": 3478.41,
+   "fit_shared_anchors": 3482.09,
+   "score_shared": 878.5,
+   "games_shared": 1200,
+   "per_anchor_score": {
+    "Weiss 1.0": 184.0,
+    "Monolith 2.01": 181.0,
+    "Winter 0.9": 170.0,
+    "Laser 1.7": 151.0,
+    "Marvin 6.3.0": 114.0,
+    "Altair 7.0.0": 78.5,
+    "Clover 6.1": 53.0
+   }
+  }
+ },
+ "per_anchor_elo_gain": {
+  "Weiss 1.0": {
+   "r2->ppr2": 42.8,
+   "ppr2->ppr3tm": 47.4,
+   "r2->ppr3tm": 90.2
+  },
+  "Monolith 2.01": {
+   "r2->ppr2": 0.0,
+   "ppr2->ppr3tm": 32.8,
+   "r2->ppr3tm": 32.8
+  },
+  "Winter 0.9": {
+   "r2->ppr2": 51.9,
+   "ppr2->ppr3tm": -14.0,
+   "r2->ppr3tm": 37.9
+  },
+  "Laser 1.7": {
+   "r2->ppr2": 43.7,
+   "ppr2->ppr3tm": 4.7,
+   "r2->ppr3tm": 48.3
+  },
+  "Marvin 6.3.0": {
+   "r2->ppr2": 43.9,
+   "ppr2->ppr3tm": -5.3,
+   "r2->ppr3tm": 38.5
+  },
+  "Altair 7.0.0": {
+   "r2->ppr2": 21.5,
+   "ppr2->ppr3tm": 33.6,
+   "r2->ppr3tm": 55.1
+  }
+ },
+ "pair_score_correlation_same_anchor_opening": {
+  "r2~ppr2": 0.304,
+  "ppr2~ppr3tm": 0.371,
+  "r2~ppr3tm": 0.256
+ },
+ "pair_sd": {
+  "r2": {
+   "Altair 7.0.0": {
+    "mean_pair": 0.64,
+    "sd_pair": 0.3962
+   },
+   "Laser 1.7": {
+    "mean_pair": 1.4,
+    "sd_pair": 0.4872
+   },
+   "Marvin 6.3.0": {
+    "mean_pair": 1.03,
+    "sd_pair": 0.3945
+   },
+   "Monolith 2.01": {
+    "mean_pair": 1.775,
+    "sd_pair": 0.3852
+   },
+   "Weiss 1.0": {
+    "mean_pair": 1.745,
+    "sd_pair": 0.3988
+   },
+   "Winter 0.9": {
+    "mean_pair": 1.64,
+    "sd_pair": 0.4149
+   }
+  },
+  "ppr2": {
+   "Altair 7.0.0": {
+    "mean_pair": 0.695,
+    "sd_pair": 0.382
+   },
+   "Laser 1.7": {
+    "mean_pair": 1.5,
+    "sd_pair": 0.4381
+   },
+   "Marvin 6.3.0": {
+    "mean_pair": 1.155,
+    "sd_pair": 0.4246
+   },
+   "Monolith 2.01": {
+    "mean_pair": 1.775,
+    "sd_pair": 0.3917
+   },
+   "Weiss 1.0": {
+    "mean_pair": 1.795,
+    "sd_pair": 0.3767
+   },
+   "Winter 0.9": {
+    "mean_pair": 1.72,
+    "sd_pair": 0.3848
+   }
+  },
+  "ppr3tm": {
+   "Altair 7.0.0": {
+    "mean_pair": 0.785,
+    "sd_pair": 0.3571
+   },
+   "Clover 6.1": {
+    "mean_pair": 0.53,
+    "sd_pair": 0.3611
+   },
+   "Laser 1.7": {
+    "mean_pair": 1.51,
+    "sd_pair": 0.4437
+   },
+   "Marvin 6.3.0": {
+    "mean_pair": 1.14,
+    "sd_pair": 0.4025
+   },
+   "Monolith 2.01": {
+    "mean_pair": 1.81,
+    "sd_pair": 0.3678
+   },
+   "Weiss 1.0": {
+    "mean_pair": 1.84,
+    "sd_pair": 0.3545
+   },
+   "Winter 0.9": {
+    "mean_pair": 1.7,
+    "sd_pair": 0.402
+   }
+  }
+ },
+ "pair_score_correlation_per_anchor": {
+  "Weiss 1.0": {
+   "r2~ppr2": 0.539,
+   "ppr2~ppr3tm": 0.641,
+   "r2~ppr3tm": 0.459
+  },
+  "Monolith 2.01": {
+   "r2~ppr2": 0.565,
+   "ppr2~ppr3tm": 0.489,
+   "r2~ppr3tm": 0.622
+  },
+  "Winter 0.9": {
+   "r2~ppr2": 0.343,
+   "ppr2~ppr3tm": 0.415,
+   "r2~ppr3tm": 0.27
+  },
+  "Laser 1.7": {
+   "r2~ppr2": 0.272,
+   "ppr2~ppr3tm": 0.494,
+   "r2~ppr3tm": 0.145
+  },
+  "Marvin 6.3.0": {
+   "r2~ppr2": -0.134,
+   "ppr2~ppr3tm": 0.034,
+   "r2~ppr3tm": 0.069
+  },
+  "Altair 7.0.0": {
+   "r2~ppr2": 0.302,
+   "ppr2~ppr3tm": 0.181,
+   "r2~ppr3tm": 0.054
+  }
+ },
+ "delta_method": {
+  "A: r2->ppr2": {
+   "point": 38.04,
+   "se_paired": 10.48,
+   "se_unpaired": 15.63
+  },
+  "B: ppr2->ppr3tm": {
+   "point": 13.91,
+   "se_paired": 11.11,
+   "se_unpaired": 17.4
+  },
+  "A+B: r2->ppr3tm": {
+   "point": 51.95,
+   "se_paired": 12.33,
+   "se_unpaired": 16.45
+  }
+ },
+ "bootstrap_paired": {
+  "A: r2->ppr2": {
+   "mean": 37.97,
+   "sd": 10.49,
+   "p2.5": 16.94,
+   "p97.5": 58.42
+  },
+  "B: ppr2->ppr3tm": {
+   "mean": 13.77,
+   "sd": 10.95,
+   "p2.5": -7.65,
+   "p97.5": 35.33
+  },
+  "A+B: r2->ppr3tm": {
+   "mean": 51.74,
+   "sd": 12.2,
+   "p2.5": 27.35,
+   "p97.5": 75.13
+  }
+ },
+ "bootstrap_unpaired": {
+  "A: r2->ppr2": {
+   "mean": 37.78,
+   "sd": 15.48,
+   "p2.5": 6.98,
+   "p97.5": 68.13
+  },
+  "B: ppr2->ppr3tm": {
+   "mean": 13.58,
+   "sd": 17.26,
+   "p2.5": -20.29,
+   "p97.5": 46.65
+  },
+  "A+B: r2->ppr3tm": {
+   "mean": 51.36,
+   "sd": 16.47,
+   "p2.5": 19.37,
+   "p97.5": 84.4
+  }
+ },
+ "bootstrap_reps": 4000,
+ "bootstrap_seed": 20261109,
+ "ordo_shared_anchors": {
+  "per_run_-W_-D": {
+   "r2 (run 41465146207, 3902d00)": 3445.8,
+   "ppr2 (run 42392526865, a24d41f)": 3488.2,
+   "ppr3tm (run 42538371594, 32c5517)": 3501.2
+  },
+  "joint_fit_-W_-D": {
+   "r2": 3446.0,
+   "ppr2": 3486.8,
+   "ppr3tm": 3501.9,
+   "white_adv": 132.83,
+   "draw_rate_equal": 0.2462
+  },
+  "ordo": "Ordo 1.2.6 (~/fork-tools/bin/ordo), anchors fixed at CCRL Blitz, Clover games removed from run 42538371594"
+ },
+ "ordo_like_three_outcome_fit": {
+  "r2": {
+   "all": {
+    "R": 3449.56,
+    "white_adv": 119.08,
+    "draw_param": 98.52,
+    "games": 1200
+   },
+   "shared": {
+    "R": 3449.56,
+    "white_adv": 119.08,
+    "draw_param": 98.52,
+    "games": 1200
+   }
+  },
+  "ppr2": {
+   "all": {
+    "R": 3491.48,
+    "white_adv": 136.49,
+    "draw_param": 95.55,
+    "games": 1200
+   },
+   "shared": {
+    "R": 3491.48,
+    "white_adv": 136.49,
+    "draw_param": 95.55,
+    "games": 1200
+   }
+  },
+  "ppr3tm": {
+   "all": {
+    "R": 3495.92,
+    "white_adv": 128.18,
+    "draw_param": 100.59,
+    "games": 1400
+   },
+   "shared": {
+    "R": 3508.93,
+    "white_adv": 130.99,
+    "draw_param": 97.15,
+    "games": 1200
+   }
+  },
+  "gain_shared": {
+   "r2->ppr2": 41.92,
+   "ppr2->ppr3tm": 17.45,
+   "r2->ppr3tm": 59.37
+  }
+ },
+ "note": "openings: 100 per anchor (openings 1-100 of the 200-opening file), both colours; simple fit = score-equation logistic, no colour or draw parameters"
+}
