@@ -1,0 +1,1 @@
+{"sites": 186941, "controls": 1977, "sites_mean_error_cp": 224.42, "controls_mean_error_cp": 76.81, "ratio": 2.922, "ratio_matched": 1.423, "sites_in_matched_bins": 186941, "ratio_matched_95": {"resamples": 2000, "seed": 20261109, "low": 1.263, "high": 1.619}}

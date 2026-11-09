@@ -1614,6 +1614,10 @@ the screens before use.
   resampled with replacement). If the whole interval lies below 1.5, the arm is dropped from 8b and
   its data share goes to the control; otherwise (above 1.5 or straddling it) the arm stays in 8b,
   whose +5 Elo keep-or-drop bar is the real decision.
+  **The full check (2026-11-09, 6:51 PM EST; 8b-check.json):** all 202,000 labels (SHA-256 7255a627...7baa);
+  186,941 sites and 1,977 controls undecided; ratio 2.92 plain, **1.42 matched, 95% [1.26, 1.62]**. The interval
+  straddles 1.5, so by the rule **the arm stays in 8b**. The signal is weaker than the scratch pair's 1.69-1.71 on
+  g3s3-val (the pair's interval lies below it), so 8b's +5 Elo bar is the decision.
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 53. Pawn-structure-class output experts

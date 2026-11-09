@@ -39,11 +39,12 @@
   "job": "jobctl measure job idea52-8b-sites: wsl.exe -d Ubuntu -- nice -n 19 bash ~/fork-data/idea52-8b/job.sh (job.sh sha256 b555101a564f4ac2182fa8ee6165550389b4632c7e2ff4a03c1e57db8693adba)"
  },
  "decision_rule": "the owner's rule, declared 2026-11-09 before the full set was checked: once the labelling job has labelled all 200,000 sites, `committee_sites.py check OUT --resamples 2000 --seed 20261109` gives the matched ratio (the default net's error on the sites over the controls', the controls reweighted to the sites' 7 |eval| bins, mates and table wins left out) with its 95% percentile bootstrap interval (the sites and the controls each drawn again with replacement); if the whole interval lies below 1.5 (its upper end under 1.5), the arm is dropped from 8b and its data share goes to the control; otherwise (the interval above 1.5 or straddling it) the arm stays in 8b, whose +5 Elo keep-or-drop bar is the real decision. If the job does not finish, the owner decides.",
+ "check": "committee_sites.py check OUT --resamples 2000 --seed 20261109 (e3b933b), 2026-11-09 6:51 PM EST: 186,941 sites and 1,977 controls with undecided labels; the default net's mean error 224.42 cp on the sites, 76.81 cp on the controls; ratio 2.922 plain, 1.423 matched for |eval|, 95% bootstrap interval [1.263, 1.619] (8b-check.json). The owner's rule: the interval straddles 1.5, so the arm stays in 8b (its +5 Elo keep-or-drop bar decides).",
  "files": {
   "sites.jsonl": {"bytes": 43318860, "sha256": "a53c73b0d81bbe4589b8cdb49fc90d1bd454e17c1a8d6825f8425df1b97afbfc"},
   "stats.json": {"bytes": 1163, "sha256": "b993c908ff82e646f42d70c5b35b4796412cd33ba1787b81073b3232e0bc8b79"},
   "fork-release-2ebacd8": {"bytes": 4318792, "sha256": "fa8be62a1bfb554018d500c3c41425326028926d395b73afd0b8fec3cb9132aa"},
   "fork-scratch-s1-2ebacd8": {"bytes": 4318776, "sha256": "a1a4e9b4c3a8de39c173cd6f1c2960961ec74b84dc9b1aad508e418c15011715"},
-  "labels.tsv": "pending (the job is running; its hash is added when it ends)"
+  "labels.tsv": {"bytes": 3262633, "sha256": "7255a6275ecdf743774a201d0aad75b4125fdae59f58f6a5547d040578e27baa", "rows": 202000, "job": "idea52-8b-sites ended 6:46 PM EST, exit 0"}
  }
 }
