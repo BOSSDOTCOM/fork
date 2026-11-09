@@ -1,0 +1,131 @@
+{
+ "run": "g3c",
+ "generator": {
+  "tool": "fork_datagen (complete games of generation 3's run g3c, its third part (the current default engine: phase-4 at 684bac6, S512r2 with IIR on), with the split search (idea 13), stopped on 2026-11-05 at 4:20:49 PM EST: local data generation drops to 6 threads while the tier-2 measurements run)",
+  "version": "0.3.0-dev+684bac6 (WSL clang PGO, clang 21.1.8)",
+  "evaluator": "nnue (s512r2)",
+  "arch": "native (Ryzen 7600X3D)"
+ },
+ "settings": {
+  "openings": "lichess-2016-09.epd",
+  "openings_count": 591871,
+  "positions_target": 498476421,
+  "nodes": 20000,
+  "threads": 10,
+  "seed": 20261108,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 50,
+  "unsaved_nodes": 4000,
+  "check_nodes": 2000
+ },
+ "openings": {
+  "file": "lichess-2016-09.epd",
+  "sha256": "0ae298e1c7c635606fcddb056ee08073aeed8f4db4de3f19b8ef721d4a72831b",
+  "positions": 591871,
+  "source": "lichess_db_standard_rated_2016-09.pgn.zst",
+  "source_sha256": "3a4d18db787db558083aacb7c27ab3588f0745c1baaca37846b3f0d8b9677db3"
+ },
+ "games": 32585,
+ "positions": 3060039,
+ "seconds": 1186.0,
+ "results": {
+  "white": 13550,
+  "draw": 6049,
+  "black": 12986
+ },
+ "ends": "not counted (the run was stopped, not finished)",
+ "part_end": "generation 3's third part (labelled by the default engine, phase-4 at 684bac6: S512r2, IIR on), stopped 2026-11-05 4:20:49 PM EST at a game boundary when local data generation dropped to 6 threads for the tier-2 measurements (owner); every game verified (tools/datagen/verify_games.py)",
+ "batches": [
+  [
+   {
+    "file": "g3c-w00.vf",
+    "worker": 0,
+    "games": 3233,
+    "positions": 306244,
+    "bytes": 1341364,
+    "sha256": "2303226cd33257db8de6424cbdbacf86c8e7a8a4c057243dfcb0e73c5a8d537d"
+   },
+   {
+    "file": "g3c-w01.vf",
+    "worker": 1,
+    "games": 3342,
+    "positions": 308453,
+    "bytes": 1354124,
+    "sha256": "924869682af3c26a77a9c1d4d9bcef9b1ac6d7c4bff019bdec16ed241fdc9f73"
+   },
+   {
+    "file": "g3c-w02.vf",
+    "worker": 2,
+    "games": 3268,
+    "positions": 304874,
+    "bytes": 1337144,
+    "sha256": "a6096b07760db1a6072360f81ca2e430cc86ed2b241bb0d262aa3b5ca8f97008"
+   },
+   {
+    "file": "g3c-w03.vf",
+    "worker": 3,
+    "games": 3245,
+    "positions": 307315,
+    "bytes": 1346080,
+    "sha256": "27c6dbd76c8e02c11c804a67a0bd23b623b7ad1fe79f949daf0f040e4361edfa"
+   },
+   {
+    "file": "g3c-w04.vf",
+    "worker": 4,
+    "games": 3260,
+    "positions": 304568,
+    "bytes": 1335632,
+    "sha256": "bf9bd68d4179f0f5c14643ebcf8923decbe9394aef0c665d8ef8f822645b0035"
+   },
+   {
+    "file": "g3c-w05.vf",
+    "worker": 5,
+    "games": 3289,
+    "positions": 306644,
+    "bytes": 1344980,
+    "sha256": "2df005a11bc9581c9b6bebe3b708cd3da711ffa9897df518f0074e2b032d18e3"
+   },
+   {
+    "file": "g3c-w06.vf",
+    "worker": 6,
+    "games": 3234,
+    "positions": 303430,
+    "bytes": 1330144,
+    "sha256": "94a59cecbdff86e1f104ce1298194620a68e3cf5021f28da2dac254d0e6dd10c"
+   },
+   {
+    "file": "g3c-w07.vf",
+    "worker": 7,
+    "games": 3257,
+    "positions": 307440,
+    "bytes": 1347012,
+    "sha256": "0759f9a4cc7ddb83e962abdafe39d445674b407944ce72ff7e1103e45689d6f9"
+   },
+   {
+    "file": "g3c-w08.vf",
+    "worker": 8,
+    "games": 3239,
+    "positions": 303240,
+    "bytes": 1329564,
+    "sha256": "ccc566f9af9342ba07fb1c9bdad8733a7854278c1d84b424457d604b4c40dc8d"
+   },
+   {
+    "file": "g3c-w09-val.vf",
+    "worker": 9,
+    "games": 3218,
+    "positions": 307831,
+    "bytes": 1347172,
+    "sha256": "809afe856ffd375e7bec1c74e01fc4ce8e98f3fcc76ee89d760926a4bde2bec6"
+   }
+  ]
+ ],
+ "positions_unsaved": 1394529
+}

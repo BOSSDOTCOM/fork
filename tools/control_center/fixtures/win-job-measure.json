@@ -1,0 +1,16 @@
+{
+ "command": [
+  "bash",
+  "C:/Users/user/AppData/Local/Temp/claude/scratch/clock-run.sh",
+  "2"
+ ],
+ "cwd": "C:\\Users\\user\\fork",
+ "id": "43c4c27e18d2403f",
+ "keeper": 41468,
+ "log": "C:\\Users\\user\\AppData\\Local\\Temp\\claude\\scratch\\t2m\\clock_damping.log",
+ "name": "clock-damping",
+ "pid": 7332,
+ "started": "2026-11-06T12:16:26-0500",
+ "state": "running",
+ "type": "measure"
+}

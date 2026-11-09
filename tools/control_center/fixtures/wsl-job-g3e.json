@@ -1,0 +1,16 @@
+{
+ "command": [
+  "bash",
+  "/mnt/c/Users/user/AppData/Local/Temp/claude/scratch/g3e-run.sh"
+ ],
+ "cwd": "/mnt/c/Users/user/fork",
+ "id": "a54a076b2dba4d4e",
+ "keeper": 461,
+ "log": "/home/user/fork-data/g3e-job.log",
+ "name": "g3e",
+ "pid": 462,
+ "session": 462,
+ "started": "2026-11-06T10:45:12-0500",
+ "state": "running",
+ "type": "datagen"
+}

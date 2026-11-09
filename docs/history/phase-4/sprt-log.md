@@ -4,7 +4,11 @@ Every SPRT of Phase 4, in the order run, rejections included (DESIGN.md
 §5.2, "Testing setup", and §5.3). Runs on the GitHub shards
 (`.github/workflows/sprt.yml`, 16 shards, stages of 1,600 games merged with
 `tools/cloud/sprt_merge.py`): fastchess 1.8.2-alpha, normalized Elo,
-pentanomial statistics, alpha = beta = 0.05, game pairs with colours
+pentanomial statistics, alpha = beta = 0.05 (from 2026-11-07, alpha and
+beta per entry: search features use design R, [0, 6] nElo, alpha 0.05,
+beta 0.20, cap 8 stages, futility stop after 2; each entry names its
+design, idea and try, and its result is **H1 accepted**, **H0 accepted**,
+**futility stop** or **capped**), game pairs with colours
 reversed, UHO_Lichess_4852_v1.epd (shuffled, seed 20261027; test openings
 only), one thread per engine, Syzygy 3-4-5 for both, update.sh builds
 (Ubuntu 22.04, g++ 11.4, x86-64-v3). STC 8+0.08 s with 16 MB Hash.
@@ -686,3 +690,419 @@ LLR: -3.16 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
   cost is the thing to cut before a retest; the S512cl design, which
   replaces it, is measured for speed before it trains (owner,
   2026-11-05).
+- **LTC candidate, low priority** (owner, 2026-11-05; §5.4's rule: it beat
+  S512r2 at fixed nodes and failed at STC): S512+X is recorded as an LTC /
+  TCEC-conditions candidate. Its priority is low: XGR-512 showed the same
+  pattern with a larger fixed-node gain (+30.70 ± 10.37) and failed at LTC
+  as well (ltc-r2xgr512-vs-s512r2: −30.56 ± 9.96, H0).
+
+### 2026-11-05 attribution audit of the evening's SPRT runs (owner)
+
+- Why: two SPRT drivers believed stopped kept running (stopping their
+  tool tasks ended only a wrapper shell), and the session reported the
+  check-relief filler's stage 7 (run 42140703160) as the rising-RFP SPRT's
+  stage 0. The owner asked for the job supervisor first (DESIGN.md
+  decisions, 2026-11-05) and then this audit.
+- Method: every run of sprt.yml created from 5:00 PM EST on, each
+  attributed by the inputs GitHub recorded for it (BASE, TEST and STAGE in
+  its build job's environment, TC and TEST_OPTS in its shard jobs, read
+  from the run's log), then compared with every driver log and with this
+  log. Each folder of merged results was checked too (16 shard results,
+  every one's meta naming its stage's base, test and stage). Every run
+  below is now in the run-ID ledger, imported with that evidence.
+
+| Run | Created (EST) | Base | Test | Stage | TC | Conclusion | Attributed to |
+|---|---|---|---|---|---|---|---|
+| 42119021732 | 5:09 PM | 684bac6 | cf614e0 | 2 | 8+0.08 | success | lmrh-24000-vs-base, stage 2 (as logged above) |
+| 42121703916 | 5:27 PM | 684bac6 | cf614e0 | 3 | 8+0.08 | success | lmrh-24000-vs-base, stage 3, H0 (as logged above) |
+| 42124558432 | 5:48 PM | 684bac6 | 7d72dc5 | 0 | 8+0.08 | success | reval-no-check-relief, stage 0 |
+| 42127059653 | 6:06 PM | 684bac6 | 7d72dc5 | 1 | 8+0.08 | success | reval-no-check-relief, stage 1 |
+| 42129326936 | 6:26 PM | 684bac6 | 7d72dc5 | 2 | 8+0.08 | success | reval-no-check-relief, stage 2 |
+| 42131787180 | 6:45 PM | 684bac6 | 7d72dc5 | 3 | 8+0.08 | success | reval-no-check-relief, stage 3 |
+| 42134041089 | 7:03 PM | 684bac6 | 7d72dc5 | 4 | 8+0.08 | success | reval-no-check-relief, stage 4 |
+| 42136314266 | 7:22 PM | 684bac6 | 7d72dc5 | 5 | 8+0.08 | success | reval-no-check-relief, stage 5 |
+| 42138562937 | 7:40 PM | 684bac6 | 7d72dc5 | 6 | 8+0.08 | success | reval-no-check-relief, stage 6 |
+| 42140703160 | 7:59 PM | 684bac6 | 7d72dc5 | 7 | 8+0.08 | success | reval-no-check-relief, stage 7 (**reported at the time as rising-RFP stage 0: wrong**) |
+| 42142711426 | 8:16 PM | 684bac6 | c62bb3b | 0 | 600+6, nodes=800000 | success | S512+X fixed-node match (as logged above) |
+| 42147267048 | 8:58 PM | 684bac6 | 7d72dc5 | 8 | 8+0.08 | success | reval-no-check-relief, stage 8 |
+| 42149140337 | 9:15 PM | 684bac6 | c62bb3b | 0 | 8+0.08 | success | s512x-vs-s512r2-stc, stage 0, H0 (as logged above) |
+| 42151218549 | 9:34 PM | 684bac6 | 7d72dc5 | 9 | 8+0.08 | cancelled | reval-no-check-relief, stage 9, cancelled at 9:39 PM so that PR #7's CI ran alone; not merged |
+
+- Corrections:
+  - **The rising-RFP SPRT (684bac6 against db6a238, [0, 3]) has not
+    played a game.** Its driver started at 7:53 PM, waited for an idle
+    GitHub and never dispatched; it was killed with the filler's driver.
+    No run of it exists.
+  - **The check-relief filler was not paused at 7:52 PM**: its driver kept
+    running and dispatched stages 6 to 9 (stage 9 cancelled). Stages 6, 7
+    and 8 are valid results of its own test and are kept.
+  - The milestone checklist (docs/history/phase-4/m1-checklist.md, PR #7)
+    quotes the filler after stage 5 (9,600 games), stale when written; its
+    standing is the stage 8 line below.
+- No result was merged into the wrong SPRT: every driver logged and merged
+  only its own runs (the merge's meta check), and the S512+X and
+  LMR-history results above stand.
+
+### 2026-11-06 rising-rfp-25-vs-base (tier 2, T18: the improving flag's RFP use)
+
+- Base `684bac6` (phase-4: S512r2, IIR on), test `db6a238` (branch
+  sprt/rising-rfp: the same with `use_rising_rfp` on and the measured
+  RfpRisingRelief 25; bench 13,348,788). Bounds [0, 3] nElo, 8+0.08, Hash
+  16 MB, Syzygy 3-4-5, GitHub shards, under the job supervisor (job
+  sprt-queue); base and test confirmed from the driver's log, every run in
+  the ledger.
+- Stages (Elo, nElo, LLR after each): 0 (run 42182458597) +2.61 ± 10.13,
+  +4.38 ± 17.02, 0.11; 1 (42184474127) −4.89 ± 6.95, −8.47 ± 12.04,
+  −0.79; 2 (42186645482) −3.76 ± 5.77, −6.41 ± 9.83, −0.94; 3
+  (42188861332) −4.29 ± 5.03, −7.26 ± 8.51, −1.39; 4 (42191066128) −5.43 ±
+  4.50, −9.18 ± 7.61, −2.12; 5 (42193358994) −4.96 ± 4.12, −8.36 ± 6.95,
+  −2.35; 6 (42195711045) −3.32 ± 3.84, −5.56 ± 6.43, −1.96; 7
+  (42197996963) −3.77 ± 3.59, −6.32 ± 6.02, −2.49; 8 (42200356838) −3.23 ±
+  3.39, −5.42 ± 5.67, −2.48; 9 (42202745022) −3.02 ± 3.20, −5.08 ± 5.38,
+  −2.62; 10 (42205083270) −3.10 ± 3.05, −5.22 ± 5.13, −2.94 (continue); 11
+  (42207392364) H0. Result: **H0 accepted** after stage 11:
+```
+Shards: 192 (done); pairs 9600, games 19200 (19200 finished, time losses 0, abnormal 0)
+Elo: -3.78 +/- 2.92, nElo: -6.37 +/- 4.91
+Ptnml(0-2): [279, 2405, 4409, 2260, 247]
+LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
+```
+- Not adopted: `use_rising_rfp` stays off. It agrees with its measurement,
+  where no relief beat "off" (relief 25 chosen, gain interval below zero).
+
+### ProbCut (tier 2, T31): queued after rising-RFP and the filler (owner, 2026-11-06)
+
+- The measurement (tools/tier2_measure.py, spec capture_probe.json,
+  declared 2026-11-05; 120 settings screened at 250,000 nodes, the best 6
+  with "off" at both budgets) chose d9-r5-m80 (CaptureProbeMinDepth 9,
+  CaptureProbeReduction 5, CaptureProbeMargin 80): fitness 0.7490 against
+  off 0.7539, gain −0.0049 [−0.0101, +0.0006]; **no setting's gain interval
+  lies above zero**, and the depth and reduction sit at the top edge of
+  their grids. No grid extension (owner).
+- **The SPRT decides** (STC, [0, 3]; owner): measurement scores below
+  "off" also preceded IIR's adoption (no depth beat "off" in its
+  measurement, then +21.45 ± 5.98 Elo at STC and +26.25 ± 6.65 at LTC), so a
+  score below "off" does not by itself predict the SPRT.
+- The constant screen (before the commit that sets the values) found the
+  margin 80 an exact same-role match (Ethereal 12.50-13.00's ProbCut
+  margin; also Xiphos); the reduction 5 matches as a literal only (Fork's
+  verification search is one ply deeper); the minimum depth 9 has no
+  same-role match. **The owner kept 80 with a credit note** (2026-11-06,
+  ORIGINALITY.md on tier2/batch3; no finer grid), and the test commit
+  follows.
+- The SPRT: base 684bac6 (S512r2), test 899c10b (sprt/probcut), [0, 3],
+  8+0.08, job sprt-probcut, started 4:35 PM EST on 2026-11-06, after
+  S512+PP's STC SPRT. **The owner's rule after S512+PP's promotion**
+  (2026-11-06): if it passes, a quick confirmation on S512+PP (the same
+  change on the new default, STC [0, 3], at most 2 stages) before it is
+  adopted; if it fails, no retest.
+- Stages 0-7: runs 42297962496, 42300440558, 42302881667, 42305269054,
+  42307539187, 42309763357, 42311908276, 42313931445 (ledger).
+- **Result (after stage 7, 7:04 PM EST): H0 accepted.** 12,800 games, Elo
+  −5.29 +/- 3.58, nElo −8.90 +/- 6.02, LLR −3.31 (−2.94, 2.94), Ptnml [198,
+  1611, 2937, 1496, 158]; no time losses. ProbCut (d9-r5-m80) stays off;
+  no retest (the owner's rule).
+
+### 2026-11-06 threat-set-cheaper-vs-base (tier 2, T56: threat-aware ordering): H0, rejected (stays off)
+
+- The measurement (threat_set.json, declared 2026-11-05): off 0.7539,
+  any-attack 0.7331 (gain −0.0208 [−0.0285, −0.0128]), cheaper-attacker
+  0.7377 (−0.0162 [−0.0237, −0.0087]): cheaper-attacker chosen; no gain
+  interval above zero, so the SPRT decides. No new constants.
+- Base `684bac6` (phase-4: S512r2, IIR on), test `541ea70` (branch
+  sprt/threat-set: `use_threat_buckets` and `use_cheaper_threats` on; bench
+  13,277,455, signature a2aa28300166a46d; the full non-slow suite passes).
+  Bounds [0, 3] nElo, 8+0.08, under the job supervisor (job sprt-threat),
+  started 9:47 AM EST; stage 0 is run 42237009121 (ledger). It took the
+  GitHub slot while ProbCut's test commit waits on the owner.
+- Stages 1-4: runs 42270364725, 42273143225, 42275889794, 42278631502
+  (stages 3-4 dispatched by a driver that outlived its job's stop; their
+  results are valid and in the ledger). Re-attached for stages 5-7 by job
+  sprt-threat2 (`RUN_ID`): runs 42281365784, 42289547143, 42292120505.
+- **Result (after stage 7, 4:11 PM EST): H0 accepted.** 12,800 games, Elo
+  −6.08 +/- 3.59, nElo −10.20 +/- 6.02, LLR −3.72 (−2.94, 2.94),
+  Ptnml [180, 1671, 2922, 1447, 180]; no time losses. The cheaper-attacker
+  threat set costs about 6 Elo at STC: `use_threat_buckets` and
+  `use_cheaper_threats` stay off. As with the measurement, both variants lost
+  to "off"; T56 is closed for this network (a later net may be re-tested only
+  as a new idea).
+
+### 2026-11-06 S512+PP R = 1: fixed nodes against S512r2, then the STC SPRT (owner)
+
+- The owner's rule (2026-11-06, DESIGN.md §5.6 item 7): the fixed-node
+  screen against S512r2 first; an STC SPRT only if it exceeds about +30
+  Elo; a pass makes S512+PP the architecture of item 7's retrain, and is
+  reported before any promotion.
+- Candidate: bake/s512pp 412b13f (S512+PP seed 2, S = 90, 2 of 311,296
+  link weights clamped; bench 13,909,380, signature 831e5c9295839f87).
+  Network-dependent search checks failing on it, logged in its commit:
+  the K+P v K promotion at depth 1, K+R v K at depth 3 scoring at most 0.
+  Endgame check: 351 of 900 misjudged against S512r2's 249 (KQK 59 of 300
+  against 0). Speed: 0.895 of S512r2's nps (identical-tree method, the
+  owner's recorded exception to the 0.90 gate; ideas.md idea 40).
+- Base: 684bac6 (phase-4, S512r2; bench 14,180,299). Both under the job
+  supervisor (jobs sprt-ppfixed, sprt-ppstc).
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, 800,000 per move (600+6 clock that never binds, Hash 16, Syzygy 3-4-5, UHO book) | 42284077960 | 1,600 (no time losses, no abnormal ends) | +46.09 ± 10.37 | +76.54 ± 17.02 | [16, 121, 339, 284, 40] | above +30: the STC SPRT follows |
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027) | 42294907752 (stage 0) | 1,600 (no time losses, no abnormal ends) | **+32.67 ± 10.48** | +53.37 ± 17.02 | [14, 154, 341, 250, 41] | **H1 accepted** (LLR 3.37) after stage 0, 4:33 PM EST |
+
+The driver's result blocks (jobs sprt-ppfixed and sprt-ppstc):
+
+```
+s512pp-r1-fixednode, stage 0, run 42284077960:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 46.09 +/- 10.37, nElo: 76.54 +/- 17.02
+    Ptnml(0-2): [16, 121, 339, 284, 40]
+s512pp-r1-stc, stage 0, run 42294907752:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 32.67 +/- 10.48, nElo: 53.37 +/- 17.02
+    Ptnml(0-2): [14, 154, 341, 250, 41]
+    LLR: 3.37 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- Unlike S512+X (+25.67 at fixed nodes, −30.04 at STC), most of S512+PP's
+  per-node gain survives its speed cost at a real clock.
+- **Consequence (the owner's pre-declared gate): item 7's retrain uses the
+  S512+PP architecture** (retrain_g3s2.py's ARCH = s512pp; the warm recipe
+  starts from this candidate's float weights).
+- Reported to the owner with what was open: the two failing search
+  checks, the weaker endgame check (KQK 59 of 300, which the Syzygy slice
+  in g3s2 is meant to fix) and the nps ratio below the 0.90 gate.
+- **Promoted (owner, 2026-11-06, the same evening): S512+PP is the default
+  network**, with the speed exception (0.895) and the endgame-check result
+  recorded (docs/nets.md); the two search checks rewritten to hold for any
+  evaluator (the promotion rule); bench 13,909,380 / 831e5c9295839f87.
+  Generation 3's part g3e was stopped and sealed, and the next part, g3f,
+  is labelled by S512+PP (the labeller policy). Item 7's candidate must
+  now beat S512+PP.
+
+### 2026-11-06 S512ppr2 (item 7's retrain): the STC SPRT against S512+PP (owner)
+
+- The owner's rule (2026-11-06, DESIGN.md §5.6 item 7): the better
+  recipe's best seed goes through parity, the endgame acceptance test and
+  its STC SPRT against S512+PP, the default; reported before any
+  promotion.
+- Candidate: bake/s512ppr2 d56c2cf (S512+PP retrained on g3s2 with the
+  Syzygy endgame slice: the warm recipe, seed 1, S = 89, 2 of 311,296 link
+  weights clamped; bench 14,626,377, signature 9e43990217b0886d). Recipes:
+  warm mean best loss 0.01909453, scratch 0.01951758 (resolved). Parity:
+  quantization loss max 7.9 cp, p99 6.1 cp. Endgame check: 8 of 900
+  misjudged against S512+PP's 351. The full non-slow suite passes on it.
+- Base: b115e03 (phase-4, S512+PP; bench 13,909,380). Under the job
+  supervisor (job sprt-ppr2).
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027) | 42335141916 (stage 0), 42336446490 (stage 1) | 3,200 (no time losses, no abnormal ends) | **+20.11 ± 7.22** | +33.60 ± 12.04 | [36, 323, 720, 462, 59] | **H1 accepted** (LLR 4.12) after stage 1, 11:18 PM EST |
+
+The driver's result blocks (job sprt-ppr2):
+
+```
+s512ppr2-stc, stage 0, run 42335141916:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 27.42 +/- 10.34, nElo: 45.36 +/- 17.02
+    Ptnml(0-2): [21, 143, 357, 247, 32]
+    LLR: 2.84 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr2-stc, stage 1, run 42336446490:
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 20.11 +/- 7.22, nElo: 33.60 +/- 12.04
+    Ptnml(0-2): [36, 323, 720, 462, 59]
+    LLR: 4.12 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- **Promoted (owner, 2026-11-06, the same evening): S512ppr2 is the
+  default network**; bench 14,626,377 / 9e43990217b0886d. The warm start
+  at LR 0.0001 becomes the standard retrain recipe. Generation 3's part
+  g3f was stopped and sealed, and the next part, g3g, is labelled by
+  S512ppr2 (the labeller policy).
+
+### 2026-11-07 S512ppr3 (item 8a's retrain): fixed nodes against S512ppr2, then the STC SPRT (owner)
+
+- The owner's tie-break (2026-11-07, declared before any result; DESIGN.md
+  §6): item 8a's candidate by the declared rule, R1-avg, was 1.82e-5 below
+  S512ppr2 on g3s3-val's full set, short of the 2e-5 SPRT margin, so one
+  1,600-game fixed-node screen decides: the STC SPRT [0, 5] runs only if
+  the screen reaches +5 Elo or more. From now on retrain candidates are
+  gated by the fixed-node screen instead of the validation-loss margin.
+- Candidate: bake/s512ppr3 720fe7b (S512ppr2 retrained warm on g3s3 with
+  the standard recipe, seed 1, the mean of superbatches 331-360's float
+  weights; S = 89, 1 of 311,296 link weights clamped; bench 14,149,617,
+  signature 1cb0717f040c294d). Parity: quantization loss max 9.4 cp, p99
+  7.5 cp. Endgame check: 8 of 900 misjudged, as S512ppr2. The full
+  non-slow suite passes on it.
+- Base: 98cf000 (phase-4, S512ppr2; bench 14,626,377). Under the job
+  supervisor (jobs s512ppr3-fixednode, s512ppr3-stc, s512ppr3-stc-r).
+- The STC driver stopped when the machine crashed at about 8:07 PM EST,
+  just after it had dispatched stage 2 (run 42432793282); it was resumed at
+  8:13 PM as job s512ppr3-stc-r with RUN_ID for that stage (the run the
+  ledger already recorded for it), which it waited for and merged; no stage
+  was dispatched twice.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, 800,000 per move (600+6 clock that never binds, Hash 16, Syzygy 3-4-5, UHO book) | 42426868742 | 1,600 (no time losses, no abnormal ends) | +15.65 ± 9.26 | +28.80 ± 17.02 | [7, 161, 406, 205, 21] | above +5: the STC SPRT follows (7:28 PM EST) |
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027) | 42429984619 (stage 0), 42431412304 (1), 42432793282 (2), 42434196075 (3), 42435511074 (4) | 8,000 (no time losses, no abnormal ends) | **+7.12 ± 4.53** | +11.98 ± 7.61 | [100, 908, 1848, 1016, 128] | **H1 accepted** (LLR 3.14) after stage 4, 9:02 PM EST |
+
+The drivers' result blocks (jobs s512ppr3-fixednode, s512ppr3-stc and
+s512ppr3-stc-r):
+
+```
+s512ppr3-fixednode, stage 0, run 42426868742:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 15.65 +/- 9.26, nElo: 28.80 +/- 17.02
+    Ptnml(0-2): [7, 161, 406, 205, 21]
+    LLR: 1.74 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 0, run 42429984619:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 10.43 +/- 10.08, nElo: 17.63 +/- 17.02
+    Ptnml(0-2): [14, 189, 358, 213, 26]
+    LLR: 1.00 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 1, run 42431412304:
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 6.95 +/- 7.17, nElo: 11.67 +/- 12.04
+    Ptnml(0-2): [38, 373, 726, 413, 50]
+    LLR: 1.21 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 2, run 42432793282 (merged by the resumed driver, s512ppr3-stc-r):
+    Shards: 48 (done); pairs 2400, games 4800 (4800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 7.96 +/- 5.85, nElo: 13.38 +/- 9.83
+    Ptnml(0-2): [57, 547, 1105, 611, 80]
+    LLR: 2.16 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 3, run 42434196075:
+    Shards: 64 (done); pairs 3200, games 6400 (6400 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 7.28 +/- 5.08, nElo: 12.20 +/- 8.51
+    Ptnml(0-2): [80, 728, 1476, 810, 106]
+    LLR: 2.57 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+s512ppr3-stc, stage 4, run 42435511074:
+    Shards: 80 (done); pairs 4000, games 8000 (8000 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 7.12 +/- 4.53, nElo: 11.98 +/- 7.61
+    Ptnml(0-2): [100, 908, 1848, 1016, 128]
+    LLR: 3.14 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- **Promoted (owner, 2026-11-07, about 9:05 PM EST): S512ppr3 is the
+  default network**; bench 14,149,617 / 1cb0717f040c294d. Generation 3's
+  part g3i ends at a game boundary and is sealed as its part, and the next
+  part, g3j, is labelled by S512ppr3 from a fresh PGO build (the labeller
+  policy).
+
+### reval-no-check-relief (re-validation filler: check relief removed, [−3, 0]; undecided at the cap)
+
+- Base `684bac6` (phase-4: S512r2, IIR on), test `7d72dc5`
+  (reval/no-check-relief: `use_lmr_check_relief` off; bench 13,846,386).
+  Non-regression bounds [−3, 0] nElo: H1 would mean the feature can be
+  simplified away. 8+0.08, Hash 16 MB, Syzygy 3-4-5, GitHub shards.
+- After each stage (runs above; Elo, nElo, LLR): 0 −2.61 ± 10.27, −4.32 ±
+  17.02, −0.11; 1 −2.06 ± 7.18, −3.46 ± 12.04, −0.16; 2 −3.91 ± 5.84,
+  −6.58 ± 9.83, −0.61; 3 −2.77 ± 5.09, −4.63 ± 8.51, −0.50; 4 −4.56 ±
+  4.58, −7.58 ± 7.61, −1.21; 5 −3.58 ± 4.17, −5.98 ± 6.95, −1.07; 6 −3.57 ±
+  3.86, −5.95 ± 6.43, −1.24; 7 −4.53 ± 3.61, −7.55 ± 6.02, −1.93; **8
+  (14,400 games) −3.86 ± 3.40, −6.44 ± 5.67, LLR −1.77: continue.**
+- Resumed at stage 9 under the job supervisor (job sprt-queue) after the
+  rising-RFP SPRT: 9 (run 42210007657) −2.89 ± 3.23, −4.82 ± 5.38, −1.32;
+  10 (42212271728) −2.37 ± 3.09, −3.94 ± 5.13, −1.07; 11 (42214489259)
+  −2.90 ± 2.97, −4.80 ± 4.91, −1.57; 12 (42216819947), the last stage.
+  Result: **undecided at the 12-stage cap** (20,800 games):
+```
+Shards: 208 (done); pairs 10400, games 20800 (20800 finished, time losses 1, abnormal 1)
+Elo: -3.16 +/- 2.86, nElo: -5.22 +/- 4.72
+Ptnml(0-2): [331, 2616, 4656, 2505, 292]
+LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+```
+- Removing check relief cost about 3 Elo (−3.16 ± 2.86, the interval
+  almost entirely below zero), so H1 (simplify it away) was not reached:
+  check relief stays on. **Closed by the owner** (2026-11-06): check relief
+  stays on, and the filler is not run further.
+
+### 2026-11-08 time management (think tank R8, idea tm-r8): head-to-head (a) against (b), then the design R SPRT of (b) against off (owner): H1 at STC and LTC, adopted
+
+- Variants behind two switches (tm/node-share c3780dc, switches off;
+  bench 14,149,617 / 1cb0717f040c294d): (a) stability only (tm/a ccdf814),
+  (b) stability plus the every-pass node share (tm/b 620cd05). The
+  constants are fitted on Fork's own X6 data; the stability cap is 72,
+  derived by the owner's declared rule after the cap 10 matched other
+  engines (constant screens and re-screen: ORIGINALITY.md on tm/node-share).
+- Head-to-head (owner, 2026-11-07: pick by head-to-head before the design
+  R SPRT, preferring (a) within the 0.5 e margin; decision 3), STC 8+0.08,
+  2 stages of 1,600 games on the same openings, job tm-h2h, runs
+  42488242225 and 42495448043: **b − a +22.75 ± 12.04 nElo**, 3,200 games,
+  Ptnml [23, 347, 763, 422, 45]: (b) picked (beyond the tie margin).
+- Design R SPRT (decision 2; [0, 6] nElo, alpha 0.05, beta 0.20, cap 8,
+  futility after 2 stages), STC, fresh openings from stage 2, job
+  tm-r8-stc, try 1 of 2:
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), (b) against off | 42503358810 (stage 2), 42504937998 (3) | 3,200 (no time losses, no abnormal ends) | **+18.69 ± 7.18** | +31.40 ± 12.04 | [37, 319, 738, 447, 59] | **H1 accepted** (LLR 4.52) after stage 3, 12:46 PM EST |
+| LTC 40+0.4, design R [0, 6], cap 6 (Hash 64, Syzygy 3-4-5, UHO book, seed 20261027, fresh openings from stage 4), (b) against off | 42509883303 (stage 4), 42516750821 (5), 42523612679 (6) | 4,992 (no time losses, no abnormal ends) | **+10.23 ± 5.14** | +19.22 ± 9.64 | [15, 561, 1214, 674, 32] | **H1 accepted** (LLR 4.02) after stage 6, 5:30 PM EST |
+
+- Predicted beforehand (UNVERIFIED model): +3 to +4 Elo at STC; the result
+  is far above it. Time management is on the LTC list: its LTC SPRT
+  (design R at 40+0.4, Hash 64, 1,664 games per stage, cap 6, fresh
+  openings from stage 4; job tm-r8-ltc) started at 1:24 PM EST (owner,
+  2026-11-08: adopt into phase-4 only after LTC passes). Time management
+  does not run in data generation (node-limited), so its adoption does not
+  touch the labeller.
+- **(b) adopted into phase-4** after the LTC pass (owner's rule of
+  2026-11-08): tm/b merged, `UseStabilityTime` and `UseShareTime` on by
+  default, both kept as switches until the Phase 4 re-validation; bench
+  unchanged (14,149,617 / 1cb0717f040c294d).
+
+### 2026-11-08 idea 60 (near-window extension): head-to-head 10 against 25 cp, then the design R SPRT of 10 cp against off (owner): H0, retired
+
+- Build: idea60/extension 4f4ddf2 (switch off; bench 14,149,617);
+  candidates idea60/m10 e5fb07d and idea60/m25 f0d0efb. Node cost at equal
+  depth (job idea60-cost): +6.2% / +5.6% at 10 cp, +14.4% / +11.5% at 25 cp
+  (depths 12 / 14), both under the ~15% kill line. Constant screen passed
+  (ORIGINALITY.md on idea60/extension).
+- Head-to-head, STC, 2 stages of 1,600 games on the same openings, job
+  idea60-h2h, runs 42497021804 and 42498592679: **25 − 10 −3.24 ± 12.04
+  nElo**, 3,200 games, Ptnml [49, 396, 726, 382, 47]: 10 kept (the declared,
+  cheaper value).
+- Design R SPRT, STC, fresh openings from stage 2, job idea60-stc, try 1
+  of 2:
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), 10 cp against off | 42506706880 (stage 2), 42508251512 (3) | 3,200 (no time losses, no abnormal ends) | **−5.43 ± 7.25** | −9.01 ± 12.04 | [46, 425, 705, 381, 43] | **H0 accepted** (LLR −1.91) after stage 3, 1:24 PM EST |
+
+- By its kill criterion (ideas.md idea 60: the SPRT fails), **idea 60 is
+  retired**; the switch stays off on its branch, and nothing reaches
+  phase-4. Window-aware LMR (idea 61 part 5) no longer needs a combined
+  test with it.
+
+### 2026-11-08 idea 61 part 5 (window-aware LMR): head-to-head of the minimum depth, then the design R SPRT of the pick against off (owner): futility stop, retired
+
+- Build: idea61/window-lmr e84827a (switch off; bench 14,149,617). M1 found
+  reductions near alpha beat alpha 58 times as often as reductions far from
+  it; M2's node cost at equal depth kept two 10 cp variants under the ~15%
+  kill line (+13.2% / +14.4% at every depth; +9.3% / +9.2% at depth >= 6,
+  D = 6 by the declared rule) and dropped 25 and 50 cp. Constant screens
+  passed (ORIGINALITY.md on idea61/window-lmr); a Stockfish relative
+  (5f7348f0) credited at concept level. Candidates idea61/lmr-b10d ce50ca4
+  (depth >= 6) and idea61/lmr-b10 720937c (every depth).
+- Head-to-head, STC, 2 stages of 1,600 games on the same openings, job
+  idea61-h2h, runs 42530631909 and 42532153075: **d0 − d6 −2.19 ± 12.04
+  nElo**, 3,200 games, Ptnml [51, 374, 754, 378, 43]: d6 kept (the declared,
+  cheaper value).
+- Design R SPRT, STC, fresh openings from stage 2, job idea61-stc, try 1
+  of 2:
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), d6 against off | 42533970705 (stage 2), 42535473794 (3) | 3,200 (no time losses, no abnormal ends) | **−2.93 ± 7.16** | −4.93 ± 12.04 | [37, 422, 719, 375, 47] | **futility stop** (nElo < 0 after 2 stages; LLR −1.26) after stage 3, 6:48 PM EST |
+
+- By its kill criterion (ideas.md idea 61: a part's SPRT fails, H0 or the
+  futility stop), **part 5 is retired**; the switch stays off on its
+  branch, and nothing reaches phase-4.

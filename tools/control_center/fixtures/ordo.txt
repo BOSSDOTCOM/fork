@@ -1,0 +1,13 @@
+
+   # PLAYER           :  RATING  ERROR  POINTS  PLAYED   (%)
+   1 Altair 7.0.0     :  3579.0   ----   136.0     200    68
+   2 Marvin 6.3.0     :  3458.0   ----    97.0     200    48
+   3 Fork             :  3445.8   21.6   823.0    1200    69
+   4 Laser 1.7        :  3292.0   ----    60.0     200    30
+   5 Winter 0.9       :  3168.0   ----    36.0     200    18
+   6 Monolith 2.01    :  3061.0   ----    22.5     200    11
+   7 Weiss 1.0        :  2896.0   ----    25.5     200    13
+
+White advantage = 123.94 +/- 10.82
+Draw rate (equal opponents) = 25.37 % +/- 1.80
+

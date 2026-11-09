@@ -16,7 +16,9 @@
 //   king 5) + the square seen from P (a1 = 0 ... h8 = 63, ranks flipped for
 //   Black). Mirrored architectures also flip the files (XOR 7) when P's own
 //   king stands on files a-d, and add 768 times the region of P's mirrored
-//   king square (a Frame). XGR's exposure inputs follow the piece rows.
+//   king square (a Frame). XGR's and S512+X's exposure inputs follow the
+//   piece rows. S512+PP's link inputs follow the piece rows in the same sums:
+//   a move changes them only when a pawn moves, is captured or promotes.
 // - A perspective's frame changes only when its own king moves across the
 //   d/e line or into another region; then that perspective is recomputed
 //   from the board, every other update is incremental.
@@ -28,6 +30,9 @@
 //   with mirroring, so do a position and its left-right mirror.
 // - An incrementally updated accumulator equals one computed from scratch.
 // - No allocation, no floating point.
+// - Stats builds (FORK_SEARCH_STATS) also count the stack's work in a
+//   FeatureStackTally (DESIGN.md §5.7, X1); the counts only read the state,
+//   and normal builds have none.
 #pragma once
 
 #include <cstdint>
@@ -67,6 +72,13 @@ struct FeatureDelta {
   int removed_count = 0, added_count = 0;
   Piece removed_piece[2], added_piece[2];
   Square removed_square[2], added_square[2];
+#if FORK_NET_ARCH == 8
+  // S512+PP's links change only when a pawn moves, is captured or promotes:
+  // then pawn_change is set and these hold each side's pawns before and
+  // after the move (left unset otherwise).
+  bool pawn_change = false;
+  Bitboard pawns_before[2] = {0, 0}, pawns_after[2] = {0, 0};
+#endif
 };
 
 // The delta of `m`, legal in `before`.
@@ -91,11 +103,46 @@ void advance_accumulator_scalar(const NetFile& net, const Accumulator& from, con
 int output_layer_scalar(const NetFile& net, const Accumulator& acc, Color stm);
 #endif
 
-#if FORK_NET_ARCH == 5
-// XGR's exposed pieces: non-king pieces attacked by an enemy piece of a
+// The added-rows kernel (S512cl's contact and link rows; compiled in every
+// build, for its equivalence test): out = base plus the `count` rows (each NetHidden
+// values), summed in 32 bits and held to the int16 range. The scalar
+// reference and the build's vector path (AVX-512 or AVX2 where compiled; the
+// scalar one otherwise) give the same values bit for bit.
+void sum_rows_saturated(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                        std::int16_t* out);
+void sum_rows_saturated_scalar(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                               std::int16_t* out);
+
+#if FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6
+// XGR's exposed pieces (S512+X's too): non-king pieces attacked by an enemy piece of a
 // lower class (pawn < knight = bishop < rook < queen < king), or attacked
 // and not defended (pseudo-attacks on the occupancy).
 Bitboard exposed_pieces(const Position& pos);
+#endif
+
+// The feature stack's work, counted in stats builds (DESIGN.md §5.7, X1):
+// evaluations; moves and null moves pushed (lazily: most are never
+// evaluated); perspective updates in the evaluation walk (B0's
+// both-at-once kernel counts two), the rows they subtract and add, and those
+// whose delta changed pawns (S512+PP's link rows); perspectives recomputed
+// from the board at a frame change and at a search's root; and the plies an
+// evaluation walks, the longer perspective's walk.
+struct FeatureStackTally {
+  std::uint64_t evaluations = 0;
+  std::uint64_t move_pushes = 0;
+  std::uint64_t null_pushes = 0;
+  std::uint64_t perspective_updates = 0;
+  std::uint64_t update_rows = 0;
+  std::uint64_t link_updates = 0;
+  std::uint64_t frame_refreshes = 0;
+  std::uint64_t root_refreshes = 0;
+  std::uint64_t walked_plies = 0;
+};
+
+#ifdef FORK_SEARCH_STATS
+// The rows a delta subtracts and adds for one perspective in frame `f`
+// (stats builds: the same columns advance_perspective uses).
+int delta_row_count(const NetFile& net, const FeatureDelta& d, Color perspective, Frame f);
 #endif
 
 // One accumulator per ply of a search: ply 0 is the root, computed from
@@ -109,6 +156,9 @@ class FeatureStack {
   void push_move(const NetFile& net, int ply, const Position& before, Move m);
   // Before a null move at `ply`: the child's accumulator is the parent's.
   void push_null(int ply) {
+#ifdef FORK_SEARCH_STATS
+    ++tally_.null_pushes;
+#endif
     Entry& e = entries_[ply + 1];
     e.delta = FeatureDelta{};
     e.frame[White] = entries_[ply].frame[White];
@@ -117,6 +167,10 @@ class FeatureStack {
   }
   // The evaluation at `ply` of `pos` (the position the stack has reached).
   int evaluate(const NetFile& net, int ply, const Position& pos);
+#ifdef FORK_SEARCH_STATS
+  const FeatureStackTally& tally() const { return tally_; }
+  void set_tally(const FeatureStackTally& t) { tally_ = t; }  // X10: undo a side search's counts
+#endif
 
  private:
   struct Entry {
@@ -126,6 +180,9 @@ class FeatureStack {
     bool computed[2] = {false, false};
   };
   Entry entries_[MaxPly + 1];
+#ifdef FORK_SEARCH_STATS
+  FeatureStackTally tally_;
+#endif
 };
 
 }  // namespace forkeng

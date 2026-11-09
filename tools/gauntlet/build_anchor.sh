@@ -5,7 +5,11 @@
 # answers `uci` with `uciok`. The anchor's source is fetched into a temporary
 # folder, built with the command the table gives, and deleted; only the binary
 # is kept (opponents are binaries only: DESIGN.md §1). The binary is the
-# largest executable file the build created.
+# largest executable file the build created. A make build may have several
+# steps separated by "; ", run in order (Stockfish: make net, then make
+# build). Every network file (*.nnue) in the source tree after the build is
+# logged with its SHA-256, and so is each line of the build log that names
+# one (whether a step fetched it).
 #
 #   tools/gauntlet/build_anchor.sh STEM OUTDIR     -> OUTDIR/STEM; exit 0, or 1 if it does not build
 set -uo pipefail
@@ -27,8 +31,14 @@ run_build() {  # extra make arguments...
       cmake -S "$tmp/src" -B "$tmp/build" -DCMAKE_BUILD_TYPE=Release >"$tmp/build.log" 2>&1 &&
         cmake --build "$tmp/build" --target "${build#cmake }" -j"$(nproc)" >>"$tmp/build.log" 2>&1 ;;
     make*)
-      # shellcheck disable=SC2086
-      (cd "$tmp/src/$sub" && make -j"$(nproc)" ${build#make} "$@" >"$tmp/build.log" 2>&1) ;;
+      : >"$tmp/build.log"
+      IFS=';' read -ra steps <<<"$build"
+      for step in "${steps[@]}"; do
+        step=${step# }
+        echo "== $step $*" >>"$tmp/build.log"
+        # shellcheck disable=SC2086
+        (cd "$tmp/src/$sub" && make -j"$(nproc)" ${step#make} "$@" >>"$tmp/build.log" 2>&1) || return 1
+      done ;;
     *) echo "$name: unknown build command '$build'" >&2; return 1 ;;
   esac
 }
@@ -44,6 +54,8 @@ fi
 bin=$(find "$tmp/src" "$tmp/build" -type f -perm -u+x -newer "$tmp/stamp" ! -name '*.sh' ! -name '*.o' \
   -printf '%s %p\n' 2>/dev/null | sort -rn | head -n 1 | cut -d' ' -f2-)
 [ -n "$bin" ] || { echo "$name: no binary found" >&2; exit 1; }
+grep -i -e '^== ' -e 'nnue' "$tmp/build.log" | sed "s/^/$name: build log: /"
+(cd "$tmp/src" && find . -type f -name '*.nnue' -exec sha256sum {} +) | sed "s/^/$name: network /"
 cp "$bin" "$out/$stem"
 printf 'uci\nquit\n' | timeout 20 "$out/$stem" | grep -q uciok || { echo "$name: no uciok" >&2; rm -f "$out/$stem"; exit 1; }
 echo "$name: built ($commit, $(sha256sum "$out/$stem" | cut -c1-16))"

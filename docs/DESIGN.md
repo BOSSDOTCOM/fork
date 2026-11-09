@@ -350,6 +350,11 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   step 0's spec is §5.3, steps 1-3 run on branch kb).
   - **Principle:** agents propose, build and review; training and SPRT
     decide. No architecture is chosen by argument alone.
+  - **Focus** (owner, 2026-11-07): prefer ideas that make Fork more
+    selective, spending computation and network capacity where decisions
+    actually flip (near-window evaluations, reductions and prunes that go
+    wrong), grounded in evidence from Fork's own search data. When choosing
+    what to try next, favor ideas of this kind.
   - **Step 0, a baseline network first** (owner, 2026-10-28): a simple,
     proven network shape, chosen in the Phase 4 spec, gets the whole
     pipeline working end to end (data generation, training, inference,
@@ -1198,6 +1203,53 @@ because update.sh refuses it.
   shard results whose meta names its own base, test and stage
   (2026-11-02, after a cancelled SPRT's local driver kept dispatching
   stages; `tools/github/test_sprt_run.sh` checks each rule with a fake gh).
+  Since 2026-11-08 its commit check, conclusion read and results download
+  retry a transient gh failure (`GH_TRIES`, default 5, `GH_RETRY_WAIT`
+  seconds apart, default 30; each failure's message in the driver's log)
+  and stop only on a lasting one: twice in one night a healthy run's
+  download, and once a commit check, failed and ended a screen, with gh's
+  message discarded. **Since 2026-11-05 (owner) it runs only under the job supervisor**
+  (`tools/jobs/jobctl.py start github NAME -- bash tools/github/sprt_run.sh
+  ...`: one job of type `github` at a time; `jobctl.py stop NAME` ends the
+  driver's whole process tree and verifies none is left before it releases
+  the lock), finds the run it dispatched by the run's title (sprt.yml's
+  `run-name`, "sprt BASE TEST stage N") among runs newer than the dispatch
+  and not yet recorded, records each run in the run-ID ledger
+  (`tools/jobs/ledger.py`, ~/fork-jobs/ledger.jsonl) with its inputs, and
+  merges a stage only if the ledger records that stage's run with this
+  SPRT's commits (`tools/jobs/test_jobctl.py` and the driver's test check
+  each rule; a planted root-only kill and a planted "newest run" rule both
+  fail them).
+  **Since 2026-11-07 (owner; the think tank's decisions 2 and 3) it has
+  kinds**, each fixed in `design.json` before the first dispatch (a
+  restart with another design is refused): `--kind search` is design R,
+  [0, 6] nElo, alpha 0.05, beta 0.20, a cap of 8 stages at STC and 6 at
+  LTC (`--cap 4-6`; 40+0.4, 1,664 games and 64 MB per stage), and one
+  futility look after 2 stages: stop and reject if the nElo estimate of
+  the 2 stages' summed pentanomial (sprt_merge.py's `nelo`, the "nElo:"
+  figure) is below 0; `--kind network` keeps [0, 5] at alpha = beta = 0.05
+  with 13 STC or 6 LTC stages; `--kind fixed --cap N` plays exactly N
+  stages (head-to-head pairings). Every kind needs `--idea ID` (each
+  retrain is its own idea), and a search or network SPRT is a try of its
+  idea: at most two per idea and time control class (an LTC confirmation
+  of an STC pass is not a retry), a third only with `--owner-override
+  TEXT`, recorded verbatim (`ledger.py try` / `tries`,
+  ~/fork-jobs/tries.jsonl). `--origin N` starts on fresh openings,
+  `--first N` resumes. The outcome goes to the driver log and to a
+  `verdict` file: H1 accepted, H0 accepted, futility stop (a rejection),
+  capped (undecided at the cap: not passed) or complete. The positional
+  form (`NAME BASE TEST ELO0 ELO1 [FIRST [LAST]]`, e.g. non-regression
+  [-3, 0]) is unchanged, byte for byte. **Constants by head-to-head
+  selection**: `tools/github/h2h_run.sh` plays 2-3 candidate values (one
+  commit each) against each other on the same openings, one pairing or a
+  round robin of `--stages L` each, and `tools/cloud/h2h_pick.py` picks
+  the value (least-squares strengths; the declared `--prefer` value is
+  kept unless beaten by more than 0.5 e) and writes the constants table's
+  row, "head-to-head, N games, delta ± e", as Fork's own measurement; the
+  winner then gets its design R SPRT on fresh openings (`--origin O+L`).
+  Tests: `tools/github/test_sprt_run.sh` (66 checks), `test_h2h_run.sh`,
+  `tools/cloud/test_sprt_merge.py`, `test_h2h_pick.py`,
+  `tools/jobs/test_jobctl.py`.
 - **AWS EC2 c7a/c8a** (**unavailable until further notice**: owner,
   2026-11-05, the account is suspended; decisions log)
   (`tools/cloud/aws_spot_sprt.sh`): the `--arch`
@@ -1285,14 +1337,38 @@ control results alone.
   all extensions (T27-T30, and T38-T41 if ever tried), IIR (T26), TT-PV
   uses in pruning and reductions (T19, T16's TT-PV adjustment), and capture
   history (T11; Weiss #428 failed STC and passed LTC).
-- **Everything else**: STC first. An STC pass is accepted for changes that
-  don't alter tree shape (ordering scores, speed, eval); a change to
-  pruning, reductions or extensions is also confirmed at LTC (KB tests
-  rule). **An STC failure gets an LTC retest before it is rejected**, and
-  the LTC result decides. One recorded exception (owner, 2026-10-27):
-  rv-failhigh (the root fail-high fix) was rejected on STC alone; its
-  question is reopened by the measurement plan of ideas.md idea 29.
+- **Everything else**: STC only (owner, 2026-11-06: LTC confirmations
+  only for the list above). The STC verdict decides: a pass is adopted, a
+  failure rejected, with no LTC confirmation or retest. Until 2026-11-06 a
+  change to pruning, reductions or extensions was also confirmed at LTC
+  and an STC failure was retested at LTC before rejection (one recorded
+  exception, owner, 2026-10-27: rv-failhigh, the root fail-high fix, was
+  rejected on STC alone; its question is reopened by ideas.md idea 29).
 - Every result, including rejections, goes in the SPRT log.
+
+**The streamlined standard (owner, 2026-11-06; for batch 4 and everything
+after it).**
+- **A search constant is chosen by a short SPRT ladder**, not by a
+  label-and-sweep measurement: 2-3 sensible values (each with its
+  reasoning recorded in the constants table; the placeholder may be one),
+  each a quick STC test of the feature at that value against the default
+  with the feature off (an SPRT on [0, 3] capped at 2 stages, 3,200 games;
+  one that reaches H0 sooner drops out); the value with the best Elo point
+  estimate is kept (within half the estimates' error bars of each other,
+  the more cautious one), then the feature's normal STC SPRT runs with it
+  on fresh openings. The ladder counts as Fork's own measurement for the
+  originality rule (non-negotiable 6; the constant screen still runs
+  before the commit that sets the value, matches recorded and credited as
+  before); final values are refined later by the SPSA retune. The
+  fifty-move scaling's label-and-sweep measurement, already running, is
+  finished; batch 4's other declared measurement specs are not run.
+- **No seed-noise matches**: the noise level is known (a net's seeds
+  differ by about 4e-5 in validation loss, docs/history/phase-4).
+- **The re-validation queue runs only as idle filler**: when GitHub would
+  otherwise sit idle, never ahead of new work.
+- **Kept as they are**: SPRTs; the parity chain and netcheck; the endgame
+  acceptance test; data verification before a part is sealed; the full CI
+  before any merge to main; the fixed-node screen for new networks.
 
 **Search bench** (replaces the perft bench as `fork bench` and in
 `tests/bench.ref`). It searches a fixed set of positions to a fixed depth,
@@ -1438,7 +1514,8 @@ holds, which is why search decisions use no floating point (deliverable 6).
      pre-push hook runs the same scan as a backstop,
      `scripts/test_scan_push.sh` shows a planted hit stops it);
    - `tools/github/sprt_run.sh`'s own rules (one run at a time, both commits
-     on GitHub, results matched to their stage).
+     on GitHub, results matched to their stage), started through the job
+     supervisor, every run of it in the run-ID ledger (owner, 2026-11-05).
 6. **Re-validation** (owner, 2026-10-25). Features interact: one that
    passed early can become redundant once later ones are in. So:
    - **No removal tests at the individual milestones** A, B and C.
@@ -2086,6 +2163,15 @@ and Weiss (results in ORIGINALITY.md).
 | Iteration growth | 5/3 | **Measured** on the bench (46 positions to depth 14, cumulative nodes): the work grows by a median factor of 1.66 per iteration at depths 8-14 (p75 1.96, p90 2.38). An iteration started at elapsed time t probably finishes near t · 5/3, so none starts when that passes the hard limit. |
 | `LmrCorrectionStrength` | 64 (of 64) | The evolvable LMR correction's scale in 1/64 steps: 64 applies a rule's correction as written, 0 switches it off, and the range 0-128 lets SPSA weaken or double it. A unit, not a tuned value; with the committed rule (0) it has no effect (deliverable 8c). |
 | `ScoreTrendLimit` (score-trend clamp) | ±1000 cp | The LMR context's root score trend is clamped to ten pawns: beyond that a change only says "decisive", and the clamp keeps any rule's integer arithmetic far from overflow (deliverable 8c). |
+| `TimeScaleMinDepth` (switches `UseStabilityTime`, `UseShareTime`, both on since 2026-11-08: variant b) | 8 | §5.6 step 10 (R8), a **placeholder from Fork's own fit** (X6, §5.7 on measure/step1: 18,782 iterations at depth >= 8 of 2,086 searches at 2M nodes in 60 of Fork's STC games; derived by tools/measure/tm_curve.py there). X6's declared primary depth: the fit has no rows below it, so the soft limit is not scaled there. The constant screen passed (ORIGINALITY.md, 2026-11-07). The rows below are adopted as one set with variant (b), whose SPRTs against off passed at STC (+18.69 ± 7.18 Elo) and LTC (+10.23 ± 5.14 Elo; 2026-11-08, SPRT log); no value was tuned on its own. |
+| `TimeScaleMaxDepth` | 19 | Placeholder, X6: the last depth holding at least 1% of the fit's rows (290 of 18,782; depth 20 has 171). Deeper iterations are scaled as depth 19. |
+| `TimeScaleStabilityCap` | 72 iterations | Placeholder, **derived by the owner's rule declared before it was computed** (2026-11-07): the 99th percentile of the stability count (iterations the best move stayed unchanged, X6's definition) over X6's 18,782 rows at depth >= 8, the smallest integer whose cumulative share reaches 99% (tm_curve.py prints it). It replaced X6's first cap of 10, which the constant screen found equal in role to other engines' stability caps and which had no data-based justification. Above about 15 iterations the floor binds anyway, so the cap mainly shapes the fit and keeps the fixed point in range. |
+| `TimeScaleShareMin`, `TimeScaleShareMax` | 5, 995 per mille | Placeholder, X6's declared share clip (keeps the logit finite). |
+| `StabilityFit` (variant a) | logit 0.534912 − 0.207666·stability − 0.096556·depth (Q16 35056, −13610, −6328) | Placeholder, X6 rows: logistic fit of "the best move changes within the next two iterations" on stability (capped at 72) and depth (AUC 0.765, out of sample 0.763). |
+| `ShareFit` (variant b) | logit 0.474586 − 0.177596·stability − 0.185073·logit(share_all) − 0.103338·depth (Q16 31102, −11639, −12129, −6772) | Placeholder, X6 rows, the same label on stability (capped at 72), the every-pass share's logit and depth (AUC 0.771, out of sample 0.770; the last-pass share predicts less, §5.7). |
+| `DepthFit` (normaliser) | logit 0.567490 − 0.211730·depth (Q16 37191, −13876) | Placeholder, X6 rows, the same label on depth alone. The scale is σ(fit)/σ(DepthFit): the iteration's change chance over the typical one at its depth. Depth normalises and is no signal of its own (owner, 2026-11-07): with the literal fits on stability (and share) alone, the balance needed to keep the mean spend drifts from 1.04 to 1.58 (a) and 1.01 to 1.46 (b) between 100k and 500k-node soft budgets, so an STC calibration would spend less at LTC; normalised, it stays at 0.99-1.08 (a) and 0.95-1.04 (b). Fallback (literal fits, kept documented; stability capped at 72): (a) σ(−0.455439 − 0.224471·s) / 0.1294, balance 1.216; (b) σ(−0.569350 − 0.199212·s − 0.173797·L) / 0.1294, balance 1.167 (both at 250k nodes; tm_curve.py prints all three budgets). |
+| `TimeScaleBalanceStability`, `TimeScaleBalanceShare` | 1030, 996 per mille | Placeholders: the factor that keeps the mean spend equal to the plain soft limit's when X6's 2,086 searches are replayed with nodes as the clock (soft budget B, hard 4B, the engine's stop rules: the hard stop, the soft check, the forced-move stop, the iteration rule), the scale as the engine applies it (stability and depth caps, floor), the mean of the balances at B = 100k, 250k and 500k nodes (a: 1.018, 0.988, 1.083; b: 0.996, 0.954, 1.038). At equal mean spend the move at the stop matched the 2M-node final move more often (250k: 0.854 plain, 0.873 a, 0.874 b; in sample, not Elo). Nodes as time is UNVERIFIED: the head-to-head's clocks confirm the spend. |
+| `TimeScaleFloor` | 360 per mille | Placeholder: at most two iterations short of the soft limit at Fork's iteration growth 5/3 (row "Iteration growth"): (3/5)² = 0.36. It binds at about a quarter of X6's rows (23% in a, 24% in b: the long-stable ones), and the balance is computed with it. No upper bound: the hard limit caps the scaled soft limit, and the iteration rule already ends an extended search near 2.4 soft limits. |
 
 #### Owner's answers (2026-10-24)
 
@@ -2209,7 +2295,10 @@ Copied as the Phase 4 outline requires; the KB keeps the evidence
 2. **Compute split.** Datagen on the owner's CPU (12 threads); training
    on Kaggle (free CUDA) first, rented CUDA only if Kaggle falls short.
    Colab is dropped (its FAQ bans chess training on free runtimes). The
-   local Radeon RX 580 is not supported.
+   local Radeon RX 580 is not supported. **A dedicated netcup server is
+   pinned as an option for later** (owner, 2026-11-06): recorded only;
+   nothing is rented or running. AWS is unavailable (account suspended,
+   2026-11-05).
 3. **Disk and storage.** A compact data format (a few bytes per position)
    regardless of disk. Kaggle Datasets holds the only copy of the
    training data; local shards are deleted once the Kaggle hash check
@@ -2494,6 +2583,15 @@ target linking the engine library, never part of the TCEC binary).
   are never merged into one manifest, so training can always tell which
   network labelled which positions. Generation 1 is the first instance:
   g1 (B0r1, ended by B0r2's promotion) and g1b (B0r2).
+- **Disk margin (standing; owner, 2026-11-06).** A part starts only when
+  the disk has room for it: its remaining target at the measured bytes
+  per recorded position (4.6, above g3d's measured 4.38), once on
+  WSL's disk and twice on C: (WSL's virtual disk grows on C:, and the
+  sealed complete-games copy goes there too), plus a 20 GB reserve on
+  each. The Fork Control Center (`tools/control_center/`, the only
+  place that starts or stops a part from a button) refuses a start below
+  it; the values are `bytes_per_position` and `disk_reserve_gb` in its
+  `config.py`. The same 20 GB is its low-disk warning.
 - **Tests**: a reader for the format (C++, used by the tests, the
   rescoring tool later, and a new fuzz target `fuzz_selfplay_record`
   under the phase-end fuzz rule) round-trips every written game; every
@@ -3183,11 +3281,76 @@ its 20,000-game cap counts as **not passed**: no promotion. The entry
 qualifies as both an LTC candidate (if it beat S512r2 at fixed nodes) and
 a retest candidate (an undecided result is within the error margin).
 
+**The speed gate for new input types (owner, 2026-11-05).** A network design that adds an input type (threat or contact inputs, pawn pairs, an exposure plane, any new feature set) must keep the engine at **0.90 or more of the current default's nodes per second** before training it is worth a Kaggle session (S512+PP, owner, 2026-11-06: trained at 0.90 or more, with 0.95 as the goal reported beside it; the gate is revisited after the speed-to-Elo measurement, idea 46, and final adoption is by SPRT as always). The measurement: a quiet machine (every other CPU job suspended), release builds of the same source tree differing only in the network, interleaved, the median ratio reported. **The identical-tree method is preferred whenever the tree can be held identical** (owner, 2026-11-06): the new layout's net built from the default's weights with every new-input weight zero, so it searches the default's tree exactly (bench nodes and signature equal), and plain interleaved bench rounds measure the cost alone. Otherwise (a synthetic net, whose weights change the tree) runs at a fixed time per position, not a bench time, since a synthetic net can explode the fixed-depth tree. Below 0.90 the design is optimized first: incremental updates on make and unmake instead of recomputing per evaluation, 8-bit weights where the trained weights' range allows, fewer redundant features. The reason: S512+X, 2.2% lower in validation loss and +25.67 ± 10.26 at fixed nodes, lost −30.04 ± 10.82 at STC at 0.818 of S512r2's speed (history/phase-4/sprt-log.md); XGR-512 before it, +30.70 at fixed nodes, failed at STC and LTC.
+
 **Not in this bake-off**: AF's small-layer activation sweep and XGR's two
 ablation nets (no X; buckets instead of G); judgement.md lists them as
 optional, the owner's five entries leave them out. XGR enters only if its
 exposure pre-test passes with the current net on generation-1 data
 (judgement.md §3).
+
+#### S512cl: S-512 with Fork's contact and pawn-link inputs (ideas.md 41; owner, 2026-11-05)
+
+Replaces the S512+X plan; **no exposure plane** (owner, 2026-11-05). Fork's
+own encoding, designed from the concepts in KB nnue-inputs.md §1-2 (no
+engine's indexing, layout or constants); branch nets/s512cl, built on
+nets/s512x's infrastructure (the trainer's add-on inputs, the warm start
+with new inputs at zero, the 32-bit row sums, the parity legs).
+Architecture id 7, name `s512cl`.
+- **Frame:** every square in a perspective's frame, the piece inputs' frame
+  (vertically flipped for Black, mirrored left-right when that side's king
+  is on files a-d), so every family mirrors alike (KB §2.6's pitfall).
+  Sides are relative (own, enemy); a class is side x 5 + kind (pawn,
+  knight, bishop, rook, queen). Kings take part in no contact or link.
+- **Contacts** (the threat inputs): one input per (attacker class, attacker
+  square, target square, victim class) for a piece that attacks another on
+  the current board (sliders stop at the first piece, pawns diagonally
+  forward), neither a king, not both pawns (the links take pawn contact).
+  **Fork's redundancy rule:** when two pieces attack each other one input
+  implies the other, and Fork keeps **the one whose attacker is the cheaper
+  piece** (pawn < knight = bishop < rook < queen), between pieces of one
+  kind the one whose attacker stands on the lower frame square. (The KB
+  reports one engine keeping the more valuable attacker; Fork's choice
+  keeps the "threatened by a lesser piece" direction, the one T56's cheaper
+  set uses too.) Mutual pairs arise only for one kind, a queen with a rook
+  on a line or a bishop on a diagonal, and a bishop or queen with a pawn
+  that attacks it back; so those combinations are left out of the index
+  space statically, with the others no position can activate (pawns on the
+  first or last rank).
+- **Links** (the pawn-pair inputs): one input per unordered pair of pawns,
+  of either side, on the same or adjacent files (KB §2.2's observation).
+- **Index space**, enumerated once in a fixed order that the engine, the
+  trainer and the Python reference each build themselves: contacts by
+  attacker class, attacker square, target square (ascending, over the
+  squares the attacker's kind reaches on an empty board) and victim class,
+  possible combinations only (**50,416**); links by the pair of pawn slots
+  (side x 48 + frame square - 8), the lower first (**1,488**). Inputs: the
+  768 piece rows, then the contacts, then the links: **52,672**.
+- **Net file:** version 2, as S-512's (feature weights i16 [inputs][512],
+  biases, output weights and biases; S-512's 8 phase-picked outputs), so
+  about 54 MB of feature weights. Storing the contact and link rows as int8
+  (KB §1.4 item 6) is a later option, with a training clip; **the file's size
+  in the public repository is a question for the owner before a trained
+  S512cl is committed**.
+- **Inference, first version:** the piece accumulator stays incremental; the
+  contact and link rows are found from the position and summed at
+  evaluation, in 32 bits from the piece accumulator, then held to int16
+  (exact: the activation clips to [0, QA]), as S512+X's exposure rows are.
+  The row-sum kernel has a scalar reference and AVX2 and AVX-512 paths with
+  an equivalence test (.claude/rules/simd.md). Incremental contact updates
+  (KB §1.5) and a cache of the links by pawn key are later speed steps,
+  each with bench unchanged.
+- **Parity:** the three implementations' feature lists are compared (the
+  trainer's `fork-train features` and the engine's against the reference),
+  on the parity positions and on data positions, then the network's
+  netcheck as for every architecture; planted faults must fail them.
+- **Training:** a warm start from S512r2's float weights with the 51,904 new
+  inputs appended as zero columns (so it starts at S512r2's exact output),
+  S512r3's settings and data (g2s1 + g3s1, 360 superbatches, S = 92, two
+  seeds), at most 392 active inputs per perspective (32 pieces, 240
+  contacts: at most eight per piece, 120 links).
+- **Tests** as the bake-off's entries: a fixed-node screen, then an STC SPRT
+  against the default network.
 
 ### 5.5 The public web page: Fork in the browser (owner, 2026-10-31; plan, not built)
 
@@ -3394,6 +3557,557 @@ outside Emscripten too); the Node runs above are the WASM tests. Whether
 CI gains an Emscripten job (cached SDK) is decided with the owner once the
 build exists.
 
+### 5.6 The Phase 4 checklist and its order (owner, 2026-11-06; the order approved the same day, item 7 changed; the order replaced on 2026-11-07 after the Phase 4 think tank)
+
+Everything Phase 4 still owes, nothing cut, each item with its status, kept
+current as items move (the decisions log records each owner decision once;
+this section is the running list). Estimates are rough wall-clock times
+(UNVERIFIED until run): GitHub's shards run one SPRT at a time (an STC SPRT
+up to 12 stages of about 18 minutes, so up to about 3.6 hours; an LTC SPRT
+up to 6 stages of 1,664 games at 40+0.4); Kaggle sessions run beside them;
+local CPU jobs run one heavy job at a time beside data generation.
+
+**The re-validation queue** (owner, 2026-11-06; recorded, not started):
+GitHub filler after the current SPRT queue (the threat set, ProbCut, the
+speed-to-Elo measurement), each STC on [0, 3] with S512r2 as the default,
+logged in the SPRT log as **network-era retests of bootstrap-era
+results**:
+1. B-4, the TT-refined quiescence stand-pat (reverted in 1e16853 after H0
+   at STC with the bootstrap evaluator, −4.11 ± 3.93 Elo; its code comes
+   back from 6c797e1 behind a switch).
+2. Keeping exact TT entries (`UseTtKeepExact`, off; inconclusive at its
+   cap, −0.6 ± 7.5 at 4,800 games, on [−3, 0]).
+3. B-3, the shallower fail-high re-search (b001d1e; reverted, inconclusive
+   at its cap on [0, 3]), retested alongside idea 29's measurement (how
+   often unconfirmed root fail highs hold; the owner confirmed this
+   reading, 2026-11-06).
+4. The root fail-high fix (f0a9caf; rejected at STC, −14.6 ± 10.8, reverted
+   in 1fb18f4; idea 29 reopens it).
+RfpMargin 40 (rejected in favour of 80 by its gauntlet data, idea 34) and
+every Phase 3 margin go to the SPSA retune instead of SPRTs.
+**Shrunk** (owner, 2026-11-07, think-tank decision 20): items 3 (B-3) and 4
+(the root fail-high fix) are dropped (a timed search reaches the soft
+check only after a completed iteration, so no root fail high is pending
+there); item 1 returns only as the stand-pat refined by main-search TT
+entries (R13, order step 12); item 2 only at a hash scaled to TCEC's
+pressure (X23), otherwise dropped. Idea 34 is retired as a standalone
+test (one point on the early SPSA's axis).
+
+**Network**
+
+| item | status (2026-11-06) |
+|---|---|
+| More data generations | g3 (500 M), g3b, g3c, g3d sealed; g3e sealed at S512+PP's promotion (517,947 games, 48,577,036 positions, S512r2's labels); g3f (S512+PP's labels, from 4:58 PM EST) stopped at a game boundary at S512ppr2's promotion (11:50 PM EST) and sealed as its part (data/manifests/g3f.json); **g3g labelled by S512ppr2** from a fresh PGO build of the promotion commit (the labeller policy). The snapshot g3s2 was built and item 7's retrain ran on it (below) **2026-11-07 (owner, think tank; DESIGN §6):** **g3g stopped at a game boundary at 12:16 PM EST on 2026-11-07 (owner: data generation cut from 10 to 6 threads), at 111,190,930 positions (50,692,451 unsaved) in 1,191,355 games of its 366,424,464 target, and sealed (seal-g3g); the generation continues as g3h on 6 threads** (seed 20261113, the same default engine, started by the chain g3h-chain once the seal succeeds), still from lichess-2016-09.epd: the switch to lichess-2026-09.epd (decision 12) waits for its duplicate count and an openings manifest, and comes at the next part boundary; search adoptions are bundled into at most one part switch per day (decision 24). |
+| Endgame slice and the standing acceptance test (idea 45) | **in g3s2** (10 files of 2,600,000 one-move games, about 2.1% of its positions); the retrained default S512ppr2 misjudges 8 of the 900 positions, against S512+PP's 351. Recorded from the start (owner, 2026-11-06; lifted from its hold): the Syzygy-labelled slice of at most 5 pieces goes into g3s2, and the 900-position check (tools/nnue/endgame_check.py) becomes the standing acceptance test for the retrained default (targets to be set); the KRK conversion test found 3 of 20 drawn by the fifty-move rule **2026-11-07 (owner, think tank; DESIGN §6):** the acceptance target is **at most 15 of 900 misjudged** (decision 10); idea 45 part 3 (conversion without tables) dropped; the check extended to 4-5-man classes (X19, report-only); the endgame-start slice (R32) deferred until item 8a's result (decision 17). |
+| S512+PP evidence (idea 40's L1 first step) | R = 1 (608 links), trained as the owner's recorded exception to the speed gate at 0.895: fixed-node screen against S512r2 **+46.09 ± 10.37** (run 42284077960), then the STC SPRT [0, 5] **H1 accepted, +32.67 ± 10.48** after 1,600 games (run 42294907752, 2026-11-06; sprt-log). **Item 7's retrain therefore uses the S512+PP architecture** (the owner's gate). **Promoted to the default network** (owner, 2026-11-06): bench 13,909,380 / 831e5c9295839f87; the speed exception (0.895) and the endgame check (351 of 900 misjudged against S512r2's 249) recorded in docs/nets.md. Replaced the same evening by item 7's retrain, S512ppr2 (below) |
+| Item 7's retrain (S512ppr2) | **Done; promoted to the default network** (owner, 2026-11-06). The S512+PP architecture on g3s2, two recipes with two seeds each (Kaggle fork-retrain-g3s2 v1): the warm start (from S512+PP's float weights, LR 0.0001, tenfold drop after superbatch 180) mean best loss 0.01909453 on g3s2-val, from scratch (0.001, the same drop) 0.01951758. **The recipe result: the warm start is better by 0.00042, about ten times the 4e-5 seed spread, so resolved; it is now the standard retrain recipe** (owner, 2026-11-06). The candidate, warm seed 1 (0.01908862) at the matched S = 89 with 2 of 311,296 link weights clamped: parity within S-512's limits (max 7.9 cp, p99 6.1 cp), the endgame check 8 of 900 misjudged (S512+PP 351), the STC SPRT [0, 5] against S512+PP **H1 accepted, +20.11 ± 7.22** after 3,200 games (runs 42335141916, 42336446490; sprt-log). Bench 14,626,377 / 9e43990217b0886d (docs/nets.md) |
+| Item 8, the retrain loop (8a, 8b, ...) | **8a done; S512ppr3 promoted to the default network** (owner, 2026-11-07): R1-avg (the standard recipe from S512ppr2, seed 1, the mean of superbatches 331-360; full g3s3-val loss 0.01966655 against S512ppr2's 0.01968472), S = 89, qloss 9.4 / 7.5 cp, the endgame check 8 of 900; the fixed-node tie-break **+15.65 ± 9.26** (run 42426868742), then the STC SPRT [0, 5] against S512ppr2 **H1 accepted, +7.12 ± 4.53** (nElo +11.98 ± 7.61) after 8,000 games (runs 42429984619 to 42435511074; sprt-log); bench 14,149,617 / 1cb0717f040c294d (docs/nets.md). The cooldown branch and the anneal-only arm did not beat R1-avg. Planned: **8a**: the retrain on g3s3 (g3s2 + g3f + g3g) as soon as g3g's seal, manifest and Kaggle upload are done (g3g sealed early on 2026-11-07, so 8a runs about a day sooner than planned, with about 0.4 of the planned g3g data: its prediction shrinks accordingly, UNVERIFIED), with the standard recipe as the control and the arms of docs/research/phase4-think-tank/phase-c-synthesis.md §5 (decision 10; order step 8); 8b, 8c each when about 150 M new kept positions from a promoted labeller exist (step 13). Idea 42 is no longer item 8 (decision 11). **From 8b** (owner, 2026-11-07): one idea-52 arm (the top-disagreement positions of an independent pair, deep-labelled and oversampled, at equal data), and every retrain keeps one from-scratch run as the independent committee member. **Candidate gate (owner, 2026-11-07):** a retrain's candidate goes to its STC SPRT on a fixed-node screen against the default (the same architecture, so no speed adjustment), not on an offline validation-loss margin |
+| Threat inputs (S512cl, idea 41) | **held by the speed gate** (0.195 of S512r2's nps, recomputed per evaluation); speed work in order: incremental updates, 8-bit rows with clipping-aware training, fewer features; its own update cost measured when its turn comes **2026-11-07 (owner, think tank; DESIGN §6):** **S512cl's speed work dropped** (decision 20: full-width contact rows cannot reach 0.90x by arithmetic, and its table would be DRAM-bound at TCEC); threat inputs parked. |
+| Idea 40's structure system | L1 (a pawn-and-king network cached by structure key): after S512+PP's evidence. L2 (tables): the pawn drift table's LTC was undecided (not adopted; the owner decides whether the further tables go ahead); the pawn-structure history is built in batch 4. L3 (root planner), L4 (teaching targets), L5 (proof set): planned; the two gates (near-tie frequency at the root, L1's signal against results) are measured first **2026-11-07 (owner, think tank; DESIGN §6):** **L1 and L2 dropped; L3 parked** (kept in ideas.md); L4 handled by the decisive-share pilot and the result-weight arm; L5 becomes the blind-spot suite (decision 20). |
+| QAT (idea 44) | `--qat` built; its validation plan written; not yet run (with the next training session) **2026-11-07 (owner, think tank; DESIGN §6):** the validation session is **retired** (decision 20); `--qat` stays for int8 designs; adaptive rounding of the output layer (R25) instead. |
+| Idea 46 (threat knowledge at low speed cost) | approved as ranked: the speed-to-Elo measurement first (after ProbCut), then the attack-map pricing and the residual study (cheap kill tests), then distillation from S512+X with auxiliary threat targets (one Kaggle session; a fixed-node screen, then STC), threat-class output heads, the gated evaluation's oracle, the danger vector, column-restricted exposure rows, the structure-keyed delta cache, threat-keyed correction tables, the stand-pat check **2026-11-07 (owner, think tank; DESIGN §6):** **distillation from S512+X dropped** (refuted) and the threat-keyed correction table dropped; threat inputs (ranks 3-5) parked; the residual study is redone against deep labels (X7); attack-map pricing folded into the zero-row build (X12); the speed-to-Elo measurement redesigned (decision 7). |
+| S512+X | an LTC candidate at low priority (+25.67 fixed nodes, H0 at STC at 0.818 nps) **2026-11-07 (owner, think tank; DESIGN §6):** **dropped as an LTC candidate**, AF-S likewise (decision 20: the speed price barely falls from STC to LTC). |
+
+**Search**
+
+| item | status (2026-11-06) |
+|---|---|
+| Tier 2, batch 3 | rising RFP: H0 (off). Threat-aware ordering (cheaper-attacker): **H0 (off)**, −6.08 ± 3.59 after 12,800 games (sprt-log). ProbCut (9 / 5 / 80): **H0 (off)**, −5.29 ± 3.58 after 12,800 games on S512r2 (sprt-log); no retest (the owner's rule after S512+PP's promotion) **2026-11-07 (owner, think tank; DESIGN §6):** ProbCut keeps its rule: no retest, at LTC either (decision 25). |
+| Tier 2, batch 4 | built behind switches with placeholders (tier2/batch4, bench unchanged): razoring, quiet history pruning, bad-capture futility, fifty-move eval scaling (a placeholder, ClockDampingSpan 200, its formula an exact Berserk match: measured first on a wide pre-declared grid not centred on the current values, the measured result kept and any remaining match credited; owner, 2026-11-06), the history malus balance, double extensions, node types with their LMR uses, the pawn-structure history, upcoming-repetition detection; each gets its constants from a short SPRT ladder, then its constant screen and STC SPRT (the streamlined standard, owner, 2026-11-06). **The fifty-move scaling's measurement is done (2026-11-06, on S512r2): every span lost to "off"** (best, ClockDampingSpan 800, gain −0.199 [−0.219, −0.179]; the loss shrinks toward "off" as the span grows), by about five times the interval's width, so the bias rule's SPRT of the best non-off setting does not apply: **it stays off, with no retest** (owner, 2026-11-06) **2026-11-07 (owner, think tank; DESIGN §6):** **redesigned** (decisions 2, 3, 20): design R SPRTs with head-to-head constants and at most two tries per idea, in order step 12's order; razoring and bad-capture futility demoted to SPSA dimensions or filler; the history malus balance becomes an SPSA parameter. |
+| Further correction tables | non-pawn per side, minor, continuation, threat, material: **deferred to the gated items, after the SPSA retune** (owner, 2026-11-06); the pawn drift table stays off (undecided at LTC) **2026-11-07 (owner, think tank; DESIGN §6):** the material, major and threat tables are **dropped** (decision 20); non-pawn (king-inclusive) and continuation keys get a passive ranking, then the best key at LTC (step 16). |
+| Continuation histories in LMR (idea 42) | planned (KB T58); measured and SPRTed like the LMR history term **2026-11-07 (owner, think tank; DESIGN §6):** **folded into the round-once LMR step** (R20) as its variant, run only if the centred history term passes (decision 11). |
+| Fractional depth (idea 43) | designed (plan only); a search refactor before the SPSA retune **2026-11-07 (owner, think tank; DESIGN §6):** **shrunk** to round-once LMR arithmetic (R20); the full refactor is out of Phase 4 and no longer precedes the SPSA retune (decision 20). |
+| The re-validation queue | recorded above; idle filler only, never ahead of new work (owner, 2026-11-06) **2026-11-07 (owner, think tank; DESIGN §6):** shrunk (above). |
+| The full re-validation (§5.2, Quality control 6) | owed at Phase 4's end: every search feature switched off in turn, SPRT [−3, 0]; switches folded into plain code only after it **2026-11-07 (owner, think tank; DESIGN §6):** **replaced by a factorial removal round** (R30, with the skeptic's four fixes; decision 6), order step 18; accepted: about a 23% chance of removing a +3 nElo feature. |
+| SPSA retune | owed: every eval-dependent margin and the Phase 3 margins (RfpMargin 40 among the candidates), at STC, then at LTC; after the search changes settle **2026-11-07 (owner, think tank; DESIGN §6):** **split** (decision 4): an early pass on the eight eval-dependent margins at STC (step 11) and a final retune by scaling class plus a VLTC spot check (step 19); time-management parameters and the eval scale never in SPSA. |
+| Time management: node share + best-move stability | **moved from Phase 5 into Phase 4** (owner, 2026-11-07, decision 1), order step 10, on the LTC list; base allocation, the time curve and a TCEC-ratio control stay in Phase 5 |
+| Cut-node negative extension (R40) | counts as a **new idea**, not a retest of the rejected negative extension (decision 26); at LTC in step 12; `use_negative_extension` stays until it is tested |
+
+**Speed**
+
+| item | status (2026-11-06) |
+|---|---|
+| The default engine's speed sprint | round 1: +4.0% (C4, committed 5ba7d0d); C1 parked for TCEC's x86-64-v4 builds; C2, C3 not kept. Round 2 (a refresh cache for mirror-frame changes −5.3%, a SIMD `select_best` +1.0%, both perspectives in one pass −0.6%, the last two together −0.2%): nothing kept (archive/sprint-candidates-2). Cumulative: +4.0% **2026-11-07 (owner, think tank; DESIGN §6):** C1 un-parked for the TCEC build and the native data-generation build (decision 9); speed sprint 3 at quiet windows under a 1% cycles-per-node rule, and a change slower locally is adopted if it is faster on the runners and in the TCEC build (decision 8); BOLT (idea 21) dropped, idea 36 closed (decision 20). |
+| The speed-to-Elo measurement | a throttled 0.5x test-only build, 2 STC stages plus 1 LTC stage, speed ratios measured in situ on the runners (decision 7), order step 9; the gate priced at 1.5 Elo per 1% nps until then (decision 8) |
+| The TCEC build | x86-64-v4 with C1's AVX-512BW output layer behind a startup CPU check, PGO by default with a fallback, the compiler by measurement; VNNI out until TCEC answers; to ask TCEC: a launcher, and VNNI on both servers (decision 9); the build matrix runs at g3g's seal (step 7) |
+
+**Idea 23**: the harness is built (tools/evolve/); the long run on the label-and-sweep
+proxy is replaced by a capped pilot with a game-based fitness (R38; owner, 2026-11-07, decision 19), order step 20.
+
+**Final steps**
+
+| item | status |
+|---|---|
+| LTC confirmations owed | **2026-11-08 (owner): three owed, queued after the SPSA early pass, one at a time: singular extension (T27, STC +14.12 ± 6.55), multi-cut (T28, STC +9.19 ± 4.62) and the take history (T11, STC +4.53 ± 2.99), each adopted on STC alone although on the straight-to-LTC list; each on against off at 40+0.4, non-regression bounds [−3, 0] (IIR's form). No LTC retest for the ungated negative extension (T30, H0 at STC); R40's gated form stays the planned new idea. Idea 59's screens take priority over the SPSA and these LTCs at stage boundaries.** Before 2026-11-08 this row read: none outstanding today (IIR confirmed); LTC confirmations only for the LTC-sensitive list (Testing setup; owner, 2026-11-06), so of the queued items only batch 4's double extensions and its TT-PV use go to LTC; the pawn drift table stays off (undecided at LTC; owner, 2026-11-06) **2026-11-07 (owner, think tank; DESIGN §6):** plus a VLTC spot check of the final retune's output (decision 21). |
+| Final gauntlet | after the last adoption (GitHub's gauntlet workflow, as milestone 1's) **2026-11-07 (owner, think tank; DESIGN §6):** plays the TCEC build (decision 9). S512ppr2's gauntlet: **3488.2 ± 22.2** (2026-11-07, run 42392526865; S512r2's was 3445.8 ± 21.6). |
+| Audit-2 and its fixes | not started (an audit in audit-1's form after the last search and network change) |
+| Phase-end checklist (CLAUDE.md), merge to main, tag `phase-4`, summary | at the end |
+
+**The order** (owner, 2026-11-07: replaces the 2026-11-06 order, whose
+items 1-3 and 7 were done; from the Phase 4 think tank,
+docs/research/phase4-think-tank/phase-c-synthesis.md §6, where the R and X
+identifiers are defined; estimates UNVERIFIED). Lanes: **G** GitHub (one
+run at a time), **K** Kaggle, **L** local CPU (shared with data generation,
+one heavy job at a time), **E** engineering. Stage = one STC stage of 1,600
+games; an LTC stage counts as 4.
+
+| # | step | lane | when / depends on | estimate |
+|---|---|---|---|---|
+| done | S512ppr2's gauntlet (3488.2 ± 22.2, run 42392526865) | G | 2026-11-07 | done |
+| 1 | Cheap measurements: search counters (X1), in-game history magnitudes and the LMR-history branch's nps (X2), the node-share fit (X6), the decision ledger's RFP and futility rows (X10); the 2026-09 book's duplicate count | L | now, on the threads freed by data generation's cut to 6 (owner, 2026-11-07), one at a time | 6-10 CPU-h |
+| 2 | Design R tooling (two tries per idea, head-to-head constants; X5) | E | now | 0.5 day |
+| 3 | The anneal attribution and the two-seed weight average (X4) | K, G | now | 0.5 GPU-h, 1 stage |
+| 4 | The tier-2 block check (X9), as filler | G | while GitHub is idle | 2 stages |
+| 5 | The deep relabel (X7), then the decisive-share pilot (X11) | L | after step 1 | about 3 h on 2 threads |
+| 6 | The throttle and zero-row build (X12); the runner speed A/B job (X3) | E, G | now | 1.5-2.5 days |
+| 7 | **g3g's seal**: done early (stopped 12:16 PM EST 2026-11-07; owner); g3h follows on 6 threads. The quiet-window work (the TCEC build matrix R11, C1 for data generation, the zero-row timings) moves to the next planned pause of data generation; the 2026-09 book at the next part boundary | L | a planned pause | 2-4 quiet hours |
+| 8 | **Item 8a** (the endgame gate at most 15 of 900), then the STC SPRT [0, 5]; the optional high-WDL branch. **Done** (2026-11-07): S512ppr3 (R1-avg) passed the fixed-node tie-break (+15.65 ± 9.26) and the STC SPRT (+7.12 ± 4.53, H1 after 8,000 games) and was promoted (owner); the high-WDL branch not run | K, G | after g3g's seal, manifest and upload: the evening of 2026-11-07 or 2026-11-08 | 5-7 GPU-h, 1-3 stages |
+| 9 | The throttled speed-to-Elo measurement (X8: 2 STC + 1 LTC stages) | G | after step 6 | about 6 stage-equivalents |
+| 10 | **Node-share time management + best-move stability** (R8). **Done** (2026-11-08): variant (b) beat (a) head to head (+22.75 ± 12.04 nElo) and passed design R against off at STC (+18.69 ± 7.18 Elo) and LTC (+10.23 ± 5.14 Elo); adopted into phase-4 (owner) | E, G | after the node-share fit (AUC at least 0.70) | 2 days, about 22 stage-equivalents |
+| 11 | The SPSA driver (X18), then the **early SPSA** of the eight margins (R14) | E, G | after the decision ledger's ranges | 2-3 days, about 29 stage-equivalents |
+| 12 | Search features under design R, adoptions bundled into one part switch per day: R7 → R20 → R4 → R6 → R12 → R16 → R15 → R17 → R10 → R18 → R13 → R29 → R21 → R22; at LTC: R41, R40 (a new idea), R28 | E, G | interleaved with steps 10-11 | about 40 GitHub-hours |
+| 13 | Retrains 8b and 8c by the cadence rule; **decide the endgame-start slice (R32) after 8a's result** | K, G | at least 150 M new kept positions | about 5 GPU-h each |
+| 14 | The network screen (searched loss X15, the output-expert probe R26, the family screen R36), then at most one input family | L, K, G | after steps 5-7 | 3-10 days |
+| 15 | Speed sprint 3 at quiet windows (R9, R19, R23; R31 on runner evidence) | E, L | after X1, X3, X13 | 4-6 days |
+| 16 | Correction tables: passive ranking, then the best key at LTC (R34) | L, G | after the early SPSA | about 24 stage-equivalents |
+| 17 | The structure-class calibration scale (R33: fitted on SPRT games, adopted on fresh games) | L, G | after 8a | 4-8 stages |
+| 18 | The factorial removal round (R30) | G | after step 12 | 22-32 stages |
+| 19 | The final retune by scaling class (R24) + a VLTC spot check | G | after step 18 | about 25 h |
+| 20 | Idea 23's capped pilot with a game-based fitness (R38) | L, G | after steps 12 and 19 | about 25 h local, 10-15 stages |
+| 21 | The close: the final gauntlet on the TCEC build, the deep-search sanitizer audit (X20), the extended endgame test (X19), audit-2 and its fixes, the phase-end checklist, merge to main, tag, summary; a note that every Phase 4 Elo figure is 1-thread | all | the end | 3-4 days |
+
+Parked: idea 40's L3 root planner. ProbCut: no retest. Totals (UNVERIFIED):
+about 350 STC-equivalent GitHub stages and about 3-4 weeks; engineering
+days are the binding resource. The 2026-11-06 order is in git history
+(a24d41f).
+
+**Step 10, built behind switches (2026-11-07, branch tm/node-share; owner).**
+After each finished iteration of a timed search the soft check compares
+against `scaled_soft_ms(soft, hard, soft_scale_permille(...))`
+(src/search/time_budget.*): the soft limit times Fork's fitted chance that
+the best move changes within the next two iterations, over the typical
+chance at that depth, times a mean-spend balance, at least 360 per mille,
+never above the hard limit. Variant (a), `UseStabilityTime`: stability
+alone (finished iterations in a row with the same best move). Variant (b),
+`UseStabilityTime` and `UseShareTime`: stability and the best move's share
+of every aspiration pass's root nodes (`RootEntry::nodes_all_passes`; the
+LMR context's last-pass share is untouched). `UseShareTime` alone does
+nothing. Not scaled: below depth 8, mate and tablebase scores, `go
+movetime` (soft equal to hard), pondering, and every search without a soft
+limit (bench, data generation). Integer fixed point only. Both switches
+are off: bench is unchanged, and the switch-off identity was checked on
+timed searches with the node clock (`FORK_NODE_CLOCK`, a test-only CMake
+option: elapsed time = nodes / 1000 ms): the 46 bench positions under
+five conditions (8+0.08 and 60+0.6 clocks, movestogo 5, a 300 ms clock,
+movetime 200), 230 searches, gave output identical to the seam-only commit
+with the switches off and with `UseShareTime` alone (the two new option
+lines of the tuning build's `uci` reply aside); with (a) on, 122 of the 230
+searches changed, with (b) 129, and no movetime search. Constants:
+"Search constants" (all placeholders from X6, awaiting the constant
+screen). Prediction, recorded before any game: Spearman ρ² of the scale
+against the label 0.069 (a) and 0.074 (b), about +3 to +4 Elo at STC by
+§5.7's reading of M5's table (UNVERIFIED); R8's 0.5-2x method check
+applies. Next: the head-to-head of (a) against (b) (branches tm/a and
+tm/b; the declared value is (a)), then the winner under design R at STC
+and at LTC. Limit: at TCEC depths the normaliser holds at depth 19 (Phase 5
+owns the TCEC curve). The constant screen passed every fitted value; the
+first stability cap (10) matched other engines' caps in role and was
+replaced by the cap derived from X6 by the owner's declared rule (72),
+with every coefficient and balance refitted.
+
+**Step 10, adopted (2026-11-08; owner).** The head-to-head picked (b)
+(+22.75 ± 12.04 nElo over (a), 3,200 games), and (b) against off passed
+design R at STC (+18.69 ± 7.18 Elo, 3,200 games) and at LTC 40+0.4 (+10.23
+± 5.14 Elo, 4,992 games, no time losses); Phase 4 SPRT log. By the owner's
+rule (adopt into phase-4 only after LTC passes) tm/b was merged:
+`UseStabilityTime` and `UseShareTime` now default to on, and both stay
+switches until the Phase 4 re-validation. Bench is unchanged (bench has no
+soft limit), and data generation is node-limited, so the labeller is
+untouched.
+
+### 5.7 Phase 4 step 1: measurement instrumentation (owner-approved 2026-11-07)
+
+Decision (owner-approved 2026-11-07; recorded here rather than in §6 so the
+section merges cleanly): X1, X2, X6 and X10 built behind FORK_SEARCH_STATS,
+the `clang-stats` preset in CMakePresets.json only, drivers and analyses in
+`tools/measure/`; every new name screened against the four engines before
+use (three generic matches: Keep, evaluations, measure); X2 and X10 on
+disjoint games, with the Syzygy 3-4-5 tables; X10 at 1 in 512 (accepted by
+the orchestrator, 2026-11-07, see the settings table).
+
+The think tank's cheapest measurements (research/phase4-think-tank,
+phase-c-synthesis.md §2.2 and §2.4: X1, X2, X6, X10), built as
+measurement-only code. **Normal builds are unchanged:** every engine line is
+inside `#ifdef FORK_SEARCH_STATS` (or an always-compiled helper that no
+normal build calls), so each commit keeps bench (14,626,377 /
+9e43990217b0886d) on every preset, and the release presets' `.text` is
+compared before and after. The stats build itself must search the same
+tree: the preset `clang-stats` (CMakePresets.json only; not in build.sh or
+CI, orchestrator's ruling 2026-11-07) runs bench_parity and the
+`search_stats` suite (tests/test_search_stats.cpp, compiled only there).
+The engine reads its report switches from environment variables once, at
+start-up: `FORK_STATS_REPORT` (a cumulative counter dump after each search),
+`FORK_ITERATION_TRACE` (one line per finished iteration), `FORK_PRUNE_LEDGER`
+(the decision ledger's sampling rate). Line formats:
+`tools/measure/engine_lines.py`. No allocation or exceptions in the
+recursion, even in stats builds; the dump's lines are integers only.
+
+**X1, search and accumulator counters.** `SearchCounters` became one
+X-macro list, `FORK_SEARCH_COUNTERS`, so the dump cannot miss a counter
+(the earlier `stats:` lines of `fork bench` keep their text; the summary
+moved to `src/search/stats_report.cpp`). New: root and main-search nodes
+(with the quiescence nodes they sum to the node count), static evaluations
+computed, taken from the TT entry, or not needed (in check), in the main
+and quiescence searches and at the ply limit, and pawn moves among the
+moves made. The feature stack keeps a `FeatureStackTally` (stats builds
+only; `forknnue` gets the define too, so every user of accumulator.hpp sees
+one layout): evaluations, pushes, perspective updates, rows per update
+(`delta_row_count`, the same columns the update uses), link updates, frame
+and root refreshes, and the plies an evaluation walks. Report:
+`tools/measure/search_counters_report.py x1` on a stats bench's stderr
+(`FORK_STATS_REPORT=1 fork bench`) or on a replay folder (§X2).
+
+**X2, in-game history magnitudes.** History and the TT persist across a
+game's moves, while bench clears them per position, so the measurement
+replays Fork's own games: `tools/measure/game_replay.py` starts one engine
+per game, sends `ucinewgame` once, and searches every position where the
+SPRT PGN's "test" engine was to move, in order, with `go nodes N`
+(tools/drift_measure.py's method, rewritten). At each LMR site the stats
+build histograms the move's ordering score (`quiet_order_score`, the
+selector's formula as a function, the definition of branch
+sprt/lmr-history; a test on every preset checks it orders quiets as the
+selector does) and the raw butterfly, reply and follow entries; at late
+captures (every LMR gate but "quiet": R18's sites) the take entry. It
+counts where the LMR history term of sprt/lmr-history (the base reduction
+less the ordering score / 24,000) would act, on which side, and where it
+would change the reduction. Report: `search_counters_report.py x2` per
+game-move band against the stats bench, with the declared readings in its
+docstring.
+
+**X6, the node-share fit.** With `FORK_ITERATION_TRACE` the stats build
+prints one `iteration_trace` row per finished iteration: the best move, its
+per mille of the last aspiration pass's root nodes (the share the engine
+already computes) and of every pass's (`RootEntry::nodes_all_passes`), the
+largest other share, the nodes, the score, the passes, the root moves and
+the deepest ply. `tools/measure/node_share_fit.py` fits "the best move
+changes within the next two iterations" by logistic regression on the
+share's logit, stability, the score change and the depth, and reports AUC,
+the partial R² of the share and Spearman's rho², with the declared
+readings in its docstring.
+
+**X10, the decision ledger (RFP and futility rows).** With
+`FORK_PRUNE_LEDGER=N` the stats build samples 1 in N of the candidates of
+RFP and of futility (every condition but the margin) by the position's
+key (`key % N`, the key's low bits; the TT indexes by its high bits), and
+searches the sampled node again with that technique switched at that node
+only (`LedgerForce`, read through `FORK_STAT_GATE`, which is empty in
+normal builds): RFP off (wrong if that search fails low), futility on and
+off (wrong if on fails low and off fails high). The side search
+(`ledger_side_search`) is invisible to the real search: the node count, the
+limits (a static unlimited quota; the stop flag still ends it), the TT
+(`TransTable::set_hold_writes`), the histories (`record_cutoff` returns),
+the counters and the feature-stack tally are all restored, and bench with
+the ledger on equals bench.ref (tests; removing any one of the three
+guards fails them). Rows: `prune_ledger` lines; analysis:
+`tools/measure/prune_ledger_fit.py` (I1's probit with a tail floor, by
+depth, with the declared reading in its docstring).
+
+**Idea 59 step 1, evaluations near the window** (owner's request,
+2026-11-07, for the Boundary Refiner's gate). At each static evaluation the
+stats build records the gap between the evaluation and the nearest finite
+bound of the node's window (`window_gap`; a bound in the mate or tablebase
+band does not count, and a site with no finite bound is counted apart),
+separately for main-search and quiescence evaluations, for computed ones
+(the network runs) and ones reused from the TT entry, and for the main
+search by depth band. `search_counters_report.py gap` gives the share of
+evaluations within 10, 25, 50 and 100 cp and the call rate per node.
+
+**Crucial-point ground truth** (owner's request, 2026-11-07, the gate for
+ideas 59 and 60). With `FORK_EVAL_SITES=N,M` the stats build prints every
+Nth main-search and every Mth quiescence evaluation site (computed or
+reused from the TT; counter-based, deterministic) with its FEN, window,
+static and TT-refined evaluation, depth, ply, the parent's evaluation, the
+TT entry and the last move's capture flag (`print_eval_site`; the FEN is a
+string, built only at sampled sites, as FORK_SINGULAR_PROBE does).
+`tools/measure/crucial_points.py` deep-searches every site with a finite
+bound with the default engine, evaluates it with other networks (R-int),
+labels it crucial when the static evaluation and the deep value fall on
+opposite sides of the nearest finite bound, and scores detectors by recall
+against the call rate per node, main search and quiescence apart.
+
+**Measurement settings** (they change no play; each is recorded here and
+in its code comment, as the orchestrator asked on 2026-11-07):
+
+| Setting | Value | Reason |
+|---|---|---|
+| Counter dump | cumulative, per search | bench sums 46 positions in one searcher; a cumulative dump needs no reset, and the reader takes differences |
+| Table-value bins | 250, sign-magnitude, 82 bins | a fortieth of HistoryMax per side resolves the quantiles; sign-magnitude edges make shares at multiples of the width exact |
+| Ordering-score bins | 500, sign-magnitude, 132 bins | 24,000 (the term's divisor) is the 48th edge, so the share where the term acts is exact |
+| `LmrHistoryProbeDivisor` | 24,000 | the value sprt/lmr-history tested (7d94d93), the thing measured; the search never reads it |
+| X2 games | 100 from `~/fork-data/sprt/s512ppr2-stc` (seed 20261107), "test" engine's positions | the current default network's own STC games; 100 games give a game-level bootstrap |
+| X2 node budgets | 200,000 and 1,000,000 per move | 200k is the drift measurement's and the ledger proposal's STC proxy; 1M shows the drift toward LTC, where more nodes per move age history further |
+| Replay engine options | Hash 16, Threads 1, Syzygy 3-4-5 | as the replayed SPRT games were played (sprt.yml's default Hash, run_shard.sh's tables) |
+| X6 positions | 60 games (seed 20261108, disjoint from X2's), at most 35 test-engine positions each, about 2,100 | the think tank's 2,000 positions; consecutive positions of a game keep the in-game TT and history R8 would act in |
+| X6 node budget | 2,000,000 per move | the think tank's choice: deep enough (depth 18-22) that the depth >= 8 rows span the iterations where STC and LTC soft-limit decisions are taken |
+| X6 fit | depth >= 8 primary; share clipped to [0.005, 0.995]; stability capped at 10; score change clipped at 500 cp; ridge 1e-6 | the soft limit is never checked before depth 8 at STC; the clips keep the logit and log finite and stop rare extremes dominating; the ridge only guards a singular system |
+| X6 bootstrap | 300 rounds over games, seed 20261108 | each round refits the model twice per share definition in pure Python; 300 keeps that to minutes while the interval ends move by well under their width |
+| X10 sampling | 1 in 512 candidates (`FORK_PRUNE_LEDGER=512`) | the design's 1 in 32 (I1) was tried on bench first: 1 in 8 gave 578,079 rows and made bench 17x slower, so 1 in 32 would give about 10 M rows over the X10 games, far beyond I1's need of about 60,000 sampled nodes near the margin per depth; 1 in 512 gives enough (893,987 rows in the run). Correction after the run: the side searches cost only 0.8% extra nodes (about 14 per sampled candidate); the slowdown was the rows' unbuffered output, so the rate is set by the row count, not by the side searches (changed before any run, accepted by the orchestrator 2026-11-07; uniform sampling keeps every row's weight exact) |
+| X10 games and budget | 120 games (seed 20261109, disjoint from X2's and X6's), every test-engine position, 200,000 nodes | I1's cheapest first experiment (120 STC games at 200k) |
+| X10 gap bins | 20 cp for rates, 10 cp for the fit | 20 cp resolves the margin's neighbourhood (RFP's margin grows 80 cp per ply); the finer fit bins lose little to binning |
+| X10 bootstrap | 200 rounds for the margin rate, 50 for the fitted sigma, seed 20261109 | the sigma rounds each refit by Nelder-Mead in pure Python |
+| X10 arm score clamp | +-2,000 cp, mate and tablebase arms flagged | only the side of beta matters; the clamp keeps the rows integer and short |
+| Idea 59 gap bins | 1 cp to 255, 64 cp to 4,095, one overflow bin (317) | every margin up to 255 cp counts exactly (the owner's 10, 25, 50, 100 among them); the coarse bins keep the tail's shape |
+| Idea 59 window | the node's alpha and beta at the evaluation (main search: after mate distance pruning) | the window a gate would compare against at that moment; mate and tablebase bounds give no gate |
+| Idea 59 depth bands | 1, 2, 3-4, 5-7, 8+ | the pruning depths (1-6) apart from the deep nodes, each band with enough sites |
+| Idea 59 games and budgets | 100 games (seed 20261110, disjoint from X2's, X6's and X10's), the test engine's positions (at most 80 per game), 200,000 and 1,000,000 nodes | as X2's arms, so the call rates are comparable with X1's in-game evaluations per node |
+| Crucial-point sampling | every 140,000th main-search and every 170,000th quiescence site, 100 games (seed 20261111, disjoint from X2's, X6's, X10's and idea 59's), 200,000 nodes, at most 80 positions per game | about 3,000 sites per stratum; the smoke run's crucial rate of about 10% gives about 300 crucial sites each, enough for the ROC points at 2-10% of nodes |
+| Crucial-point deep value | 1,000,000 nodes, one thread, Hash 16, `ucinewgame` per site, the default engine (bench checked) | the owner's budget; a fresh hash per site keeps sites independent |
+| Seed networks | scratch seeds 1 and 2 and warm seed 2 of item 7's retrain, converted at S = 89, through R-int | the owner's choice; R-int gives the engine's values (checked: 50 of 50 equal for scratch seed 1), and the warm seed fails the engine's int16 load check |
+| Detector folds | two halves by a CRC-32 of the game id; logistic ridge 1e-3 on standardised features | each half is scored by the model fitted on the other; the ridge keeps rare features from separating |
+| Replay processes | at most 2, below-normal priority, through jobctl (kind `measure`) | the machine is shared with data generation (orchestrator, 2026-11-07); node limits make results independent of load |
+
+**Results, X1** (2026-11-07; stats build 68c00b8, S512ppr2; bench in the
+cleared state, and in game from X2's replays of 100 games, 6,172 searches).
+
+| Number | Bench (46 positions) | In game, 200k nodes | In game, 1M nodes |
+|---|---|---|---|
+| Nodes | 14,626,377 | 1,230,631,040 | 6,149,834,610 |
+| Evaluations per node | 0.657 | 0.538 | 0.543 |
+| ... main / quiescence | 0.181 / 0.476 | 0.151 / 0.387 | 0.172 / 0.371 |
+| Quiescence share of nodes / of evaluations | 61.1% / 72.4% | 55.9% / 72.0% | 53.7% / 68.3% |
+| TT-eval hit rate, main / quiescence | 43.9% / 2.0% | 52.1% / 3.6% | 47.5% / 3.7% |
+| Pawn moves among moves made | 24.2% | 16.1% | 16.1% |
+| Rows per network update | 3.10 | 2.82 | 2.79 |
+| Refreshes per 1,000 updates (almost all king frame changes) | 11.2 | 16.2 | 16.6 |
+| Plies walked per evaluation | 1.17 | 1.21 | 1.20 |
+| Link-update share (S512+PP's pawn links) | 33.6% | 26.9% | 26.6% |
+| Pushes ever evaluated | 66.0% | 54.1% | 54.7% |
+
+Readings against the declared ones: evaluations per node 0.54-0.66, under
+the predicted 0.75-0.85 and under the 0.6 refutation line in game, so the
+prediction is refuted and evaluation skipping has a lower ceiling than
+assumed; quiescence evaluations are 68-72% of all evaluations, far above
+the 30% line, so the quiescence eval-avoidance ideas stay open.
+
+**Results, X2** (2026-11-07; stats build 68c00b8; 100 games of
+`s512ppr2-stc`, seed 20261107, 6,172 test-engine searches per arm, Hash 16,
+Syzygy 3-4-5; median PGN depth of the replayed moves 15; the replays'
+own depths were not recorded in this run). Share of LMR sites where the
+LMR history term of sprt/lmr-history would act (|ordering score| >=
+24,000), with 95% intervals over games:
+
+| Game moves | 200k nodes | 1M nodes |
+|---|---|---|
+| 1-15 | 0.0015% [0.0010, 0.0020] | 0.0074% [0.0059, 0.0090] |
+| 16-29 | 0.0016% [0.0010, 0.0025] | 0.0065% [0.0053, 0.0078] |
+| 30-60 | 0.039% [0.006, 0.105] | 0.086% [0.021, 0.211] |
+| 61+ | 0.064% [0.014, 0.157] | 0.154% [0.066, 0.304] |
+| all | 0.032% [0.008, 0.069] | 0.075% [0.030, 0.140] |
+| bench (cleared per position) | 0.0019% | 0.0019% |
+
+- In game at moves 30-60 the share is 20.8x the bench's at 200k and 45.5x
+  at 1M: over the declared 5x line, so **history persistence is
+  confirmed** (R16's per-go scaling comes before R20 and R29). History
+  grows through a game: the butterfly entry's 95th percentile at LMR sites
+  rises from 1,875 (moves 1-15) to 4,375 (61+) at 200k and to 5,625 at 1M
+  (bench: 875); the take history at late captures sits near saturation in
+  game (median 6,875-8,375 of 10,000 at moves 30+; bench 375).
+- **B14's prediction is refuted:** it expected at least 85% of the term's
+  firings on the reduce-more side; essentially all are on the reduce-less
+  side (200k: 0 of the firings reduce more; 1M: 0.1%). Ordering scores
+  reach +24,000 (good moves with all three tables high) but almost never
+  -24,000.
+- The term acts at well under 0.2% of LMR sites in every band and changes
+  the reduction at about the same rate, so its firing alone is unlikely to
+  explain the -10.8 Elo (UNVERIFIED); the declared alternative, its cost
+  (the ordering score computed at every LMR site), is the next thing to
+  measure (its nps, not part of this step).
+
+**Results, X6** (2026-11-07; stats build 9e01f26; 60 games of
+`s512ppr2-stc`, seed 20261108, disjoint from X2's; 2,086 test-engine
+searches at 2M nodes, TT and history carried; 18,782 rows at depth >= 8,
+33,384 at every depth; 95% intervals over games, 300 rounds).
+
+| Depth >= 8 (primary) | `share` (last pass) | `share_all` (every pass) |
+|---|---|---|
+| AUC of the full model | 0.768 [0.748, 0.786] | 0.772 [0.753, 0.789] |
+| Out-of-sample AUC (2 folds by game) | 0.767 | 0.771 |
+| AUC of the share alone | 0.643 | 0.667 |
+| McFadden pseudo-R² | 0.138 | 0.142 |
+| Partial R² of the share | 0.0031 [0.0006, 0.0071] | 0.0077 [0.0040, 0.0130] |
+| Partial R² of stability / of the score change | 0.062 / 0.001 | 0.054 / 0.001 |
+| Spearman rho² of the share | 0.028 [0.019, 0.038] | 0.038 [0.028, 0.048] |
+
+- Base rate: the best move changes within two iterations at 12.9% of
+  depth >= 8 iterations (21.0% at every depth).
+- P(change) by `share_all` decile (depth >= 8), from the lowest share to
+  the highest: 0.229, 0.223, 0.192, 0.162, 0.130, 0.105, 0.088, 0.075,
+  0.057, 0.034 (shares below 22%: 0.229; above 95.5%: 0.034). By stability
+  quintile: 0.308 (1-2 iterations unchanged), 0.170, 0.098, 0.050, 0.021
+  (13 or more).
+- Declared reading: the primary definition is `share_all` (the higher
+  AUC); its rho² is 0.038, above the 0.03 kill line, so R8's share term
+  goes ahead to its SPRT, though narrowly (the interval reaches 0.028, and
+  the engine's existing last-pass `share` gives 0.028, under the line; R8
+  should use the every-pass share). M5's table puts rho²·CV² of about
+  0.04 near +3 Elo (interpolated, UNVERIFIED). Stability carries several
+  times the share's information (partial R² 0.054 against 0.008), so the
+  stability signal, which S1 held in reserve, deserves its own term; the
+  score change adds almost nothing at depth >= 8.
+
+**X6's time-management curve** (2026-11-07; `tools/measure/tm_curve.py`
+on X6's runs; §5.6 step 10, R8, built behind switches on tm/node-share).
+The owner's two variants, (a) stability alone and (b) stability with the
+every-pass share, each as Fork's own logistic fit with depth added and
+divided by the depth-only fit (depth normalises, no signal of its own:
+owner, 2026-11-07), scaled by a mean-spend balance, floor 360 per mille.
+**The stability cap** follows the owner's rule, declared before it was
+computed (2026-11-07): the 99th percentile of the stability count over
+the rows at depth >= 8, the smallest integer whose cumulative share
+reaches 99%: **72** (X6's first cap of 10 matched other engines' caps in
+role at the constant screen and was replaced; every fit below uses 72).
+
+| Fit (depth >= 8, 18,782 rows) | Coefficients (logit) | AUC / out of sample |
+|---|---|---|
+| (a) stability + depth | 0.534912, −0.207666, −0.096556 | 0.765 / 0.763 |
+| (b) stability + share_all logit + depth | 0.474586, −0.177596, −0.185073, −0.103338 | 0.771 / 0.770 |
+| depth alone (the normaliser) | 0.567490, −0.211730 | 0.665 / 0.665 |
+| literal (a): stability alone | −0.455439, −0.224471 | 0.757 / 0.756 |
+| literal (b): stability + share_all logit | −0.569350, −0.199212, −0.173797 | 0.764 / 0.763 |
+
+- Depth cap 19 (the last depth with at least 1% of the rows).
+- Mean-spend balance (X6's 2,086 searches replayed with nodes as the clock
+  under the engine's stop rules, bisected so the mean spend equals the plain
+  soft limit's) at 100k / 250k / 500k-node soft budgets: (a) 1.018 / 0.988
+  / 1.083, mean **1.030**; (b) 0.996 / 0.954 / 1.038, mean **0.996**. The
+  literal fits drift with the budget: 1.036 / 1.216 / 1.580 (a) and 1.013 /
+  1.167 / 1.463 (b), which is why depth normalises. The floor binds at
+  about a quarter of the rows (23% a, 24% b).
+- At that balance the move at the stop equals the 2M-node final move more
+  often: at 250k, 0.854 plain, 0.873 (a), 0.874 (b) (in sample, not Elo; at
+  500k the variants reach the data's 2M-node end more often, which flatters
+  them).
+- Spearman ρ² of the scale against the label: 0.069 (a), 0.074 (b); by the
+  reading above (M5's table, interpolated, UNVERIFIED) about +3 to +4 Elo
+  at STC for either, declared before any game.
+
+**Results, X10** (2026-11-07; stats build 9e01f26; 120 games of
+`s512ppr2-stc`, seed 20261109, disjoint from X2's and X6's; 7,876
+test-engine searches at 200k nodes; 1 in 512 candidates sampled: 893,987
+rows; the side searches took 0.8% extra nodes, about 14 per sampled
+candidate). Wrong rate = share of decisions where the prune is wrong (RFP:
+the node fails low with RFP off there; futility: the on arm fails low and
+the off arm fails high). "At the margin" = the 20 cp gap bin holding the
+current margin, with its wrong events / rows and a 95% interval over games.
+
+| Technique, depth | Margin | Prunes taken: wrong | Candidates not taken: wrong | At the margin |
+|---|---|---|---|---|
+| RFP 1 | 80 | 0.24% (609 / 255,215) | 5.5% | 0.49% (166 / 33,795) [0.37, 0.61] |
+| RFP 2 | 160 | 0.38% (232 / 61,457) | 5.0% | 0.72% (35 / 4,869) [0.41, 1.07] |
+| RFP 3 | 240 | 0.16% (49 / 30,745) | 3.7% | 0.12% (3 / 2,578) |
+| RFP 4 | 320 | 0.17% (25 / 14,690) | 3.2% | 0.09% (1 / 1,079) |
+| RFP 5 | 400 | 0.24% (15 / 6,371) | 2.8% | 0.24% (1 / 416) |
+| RFP 6 | 480 | 0.06% (2 / 3,488) | 3.4% | 0.60% (1 / 166) |
+| Futility 1 | 170 | 0.010% (3 / 29,460) | 5.7% | 0 / 2,797 |
+| Futility 2 | 240 | 0.024% (2 / 8,446) | 6.3% | 1 / 774 |
+| Futility 3 | 310 | 0.029% (1 / 3,443) | 3.3% | 0 / 354 |
+| Futility 4 | 380 | 0 / 2,048 | 3.4% | 0 / 166 |
+| Futility 5 | 450 | 0.17% (1 / 601) | 3.7% | 0 / 35 |
+| Futility 6 | 520 | 0 / 484 | 2.1% | 0 / 27 |
+
+- Declared reading (I1): the marginal RFP wrong rate falls at least 3x
+  from depth 1 to depth 5. Measured 2.0x (0.49% to 0.24%), but the depth-5
+  cell rests on one wrong event and every cell from depth 3 on has at
+  most three, so the prediction is **neither confirmed nor refuted**
+  (thin; I1 asked about 1,200 wrong events per depth, and only depth 1
+  has more than 100 at the margin). A run with more games, or one that
+  samples only near the margins, would settle it.
+- Futility's margins look conservative: the prunes it takes are wrong at
+  0.01-0.03% at depths 1-4, against 0.16-0.38% for RFP's, and no
+  margin-bin cell has more than one wrong event. That is evidence for
+  R14's ranges (room to lower futility's margins), not for any level.
+- I1's probit-with-floor model is poorly identified on these data: its
+  sigma is pinned only at RFP depth 1 (83 cp [75, 90]) and futility depths
+  1, 3 and 4 (247, 155, 105 cp); elsewhere the intervals span orders of
+  magnitude. The binned rates above (and the CSV of all rows, outside the
+  repository) are the result to use; the fitted curves are not.
+
+**Results, idea 59 step 1** (2026-11-07; stats build d7de27b; 100 games
+of `s512ppr2-stc`, seed 20261110, disjoint from X2's, X6's and X10's;
+6,523 test-engine positions, at most 80 per game; 200k and 1M nodes).
+Computed evaluations within the margin of the nearest finite window bound:
+the share of that kind's evaluations, then the call rate per node.
+
+| Margin | Main, 200k | Quiescence, 200k | Main + quiescence per node, 200k | Main, 1M | Quiescence, 1M | Per node, 1M |
+|---|---|---|---|---|---|---|
+| 10 cp | 4.2% / 0.62% | 6.1% / 2.30% | 2.9% | 3.7% / 0.64% | 5.6% / 2.02% | 2.7% |
+| 25 cp | 10.1% / 1.48% | 14.8% / 5.58% | 7.1% | 8.9% / 1.52% | 13.6% / 4.90% | 6.4% |
+| 50 cp | 19.4% / 2.87% | 29.4% / 11.06% | 13.9% | 17.5% / 2.98% | 27.1% / 9.79% | 12.8% |
+| 100 cp | 34.8% / 5.14% | 51.9% / 19.54% | 24.7% | 32.4% / 5.52% | 49.2% / 17.79% | 23.3% |
+
+- Evaluations per node: 0.524 at 200k (main 0.147, quiescence 0.377) and
+  0.533 at 1M (0.171, 0.362), as X1 found. Median gap: main 172 cp (181 at
+  1M), quiescence 94 cp (100).
+- No finite bound at the site: main 0.9% (1.2% at 1M), quiescence 1.3%
+  (2.0%); one finite bound only: about 0% (the windows are zero-width
+  almost everywhere, or both mate-bounded).
+- Main search by depth (200k; within 25 cp; share of the band / call rate
+  per node): depth 1, 11.9% / 1.17%; depth 2, 8.5% / 0.21%; 3-4, 4.9% /
+  0.09%; 5-7, 2.4% / 0.01%; 8+, 0.9% / 0.00%. Depth 1 holds two thirds of
+  the main search's computed evaluations; deeper nodes sit far from their
+  windows (median gap 129 cp at depth 1, 544 cp at depth 8+).
+- Evaluations reused from the TT entry (not counted above) lie closer to
+  the window: main 20.9%, quiescence 48.6% within 25 cp at 200k, at 0.169
+  and 0.015 per node. A gate that also refines reused evaluations would
+  add up to 3.5% + 0.7% of nodes at 25 cp.
+- Against the idea's cost model (a 2-5% call rate of evaluations costs
+  under 5% of nps): only margins near 10 cp give 2-5% of evaluations
+  overall (main 4.2%, quiescence 6.1%); 25 cp already reaches 10-15%.
+  Two margins, as the owner asked, read off the table: e.g. m_main = 25 cp
+  with m_qs = 10 cp gives about 1.5% + 2.3% = 3.8% of nodes.
+
+**Results, crucial-point ground truth** (2026-11-07; stats build 63a7275
+for the sites, the normal build for the deep values; 100 games of
+`s512ppr2-stc`, seed 20261111, disjoint from X2's, X6's, X10's and idea
+59's; 5,433 sites (2,673 main search, 2,760 quiescence; 5,368 with a
+finite bound), each searched to 1,000,000 nodes). **18.6% of sites are
+crucial** in both strata (498 main, 514 quiescence): the static evaluation
+and the deep value fall on opposite sides of the nearest finite bound.
+Sites per node: main 0.317, quiescence 0.397 (computed and reused). Recall
+of crucial sites at a call rate of 2 / 4 / 7 / 10% of nodes (a detector
+calling at random gets the call rate over the sites per node: 6 / 13 / 22
+/ 32% in the main search, 5 / 10 / 18 / 25% in quiescence); the logistic
+models are scored on the half of the games they were not fitted on.
+
+| Detector | Main search: recall at 2 / 4 / 7 / 10% (AUC) | Quiescence: recall at 2 / 4 / 7 / 10% (AUC) |
+|---|---|---|
+| Logistic: gap + all features + seeds | 0.20 / 0.34 / 0.51 / 0.62 (0.756) | 0.15 / 0.26 / 0.41 / 0.50 (0.723) |
+| Logistic: gap + features, no seeds | 0.20 / 0.34 / 0.50 / 0.60 (0.744) | 0.15 / 0.26 / 0.40 / 0.49 (0.715) |
+| Window gap alone | 0.17 / 0.30 / 0.45 / 0.52 (0.674) | 0.14 / 0.25 / 0.37 / 0.45 (0.663) |
+| Seed disagreement minus gap | 0.16 / 0.30 / 0.45 / 0.55 (0.686) | 0.12 / 0.22 / 0.37 / 0.47 (0.668) |
+| TT refinement \|refined - static\| | 0.19 / 0.34 / 0.44 / 0.50 (0.648) | (none in quiescence) |
+| Seed disagreement, scratch seeds | 0.11 / 0.16 / 0.28 / 0.37 (0.544) | 0.07 / 0.12 / 0.20 / 0.28 (0.521) |
+| Seed disagreement, default vs warm seed | 0.06 / 0.13 / 0.22 / 0.30 (0.484) | 0.05 / 0.11 / 0.18 / 0.25 (0.497) |
+| Hanging pieces | 0.05 / 0.11 / 0.21 / 0.30 (0.481) | 0.08 / 0.13 / 0.23 / 0.33 (0.568) |
+| Last move a capture | 0.09 / 0.19 / 0.29 / 0.38 (0.546) | 0.06 / 0.12 / 0.22 / 0.31 (0.552) |
+| Swing from the parent's evaluation | 0.12 / 0.19 / 0.26 / 0.35 (0.491) | 0.07 / 0.14 / 0.26 / 0.35 (0.534) |
+| Checking moves available | 0.06 / 0.09 / 0.18 / 0.26 (0.447) | 0.06 / 0.11 / 0.20 / 0.27 (0.509) |
+
+- Best detector in both strata: the logistic model on the window gap and
+  the simple features (with or without the seed disagreement, which adds
+  0.01-0.02 at most). It catches about 3.2x random at 2% of nodes in the
+  main search and 3.0x in quiescence, and about 1.9-2.0x at 10%.
+- The window gap alone is the best single signal (2.7-2.9x random at 2%).
+  In the main search the TT refinement (the TT score moving the static
+  evaluation) is as strong at 2-4% of nodes.
+- Seed disagreement alone is barely better than random (AUC 0.48-0.54):
+  two networks' disagreement does not locate the positions where the
+  default network is wrong about the bound.
+- For ideas 59 and 60 the gate is therefore the logistic model on the gap
+  and features, with its own threshold per stratum; even so, at 4% of
+  nodes per stratum it reaches only 34% (main) and 26% (quiescence) of the
+  crucial sites.
+
 ## 6. Decisions log
 
 | Date | Decision |
@@ -3472,12 +4186,40 @@ build exists.
 | 2026-11-02 | **Gauntlet with the new anchor set: Fork 3445.8 ± 21.6 (Ordo, CCRL Blitz scale; owner).** Run 41465146207, Fork at 3902d00 (S512r2 and every tier-2 feature adopted so far, IIR included; update.sh, gcc 11.4, x86-64-v3), 1,200 games at 10+0.1, the earlier gauntlets' 200 openings, all 12 shards complete, every game ended normally. Anchors (owner, 2026-11-02): Weiss 1.0, Monolith 2.01, Winter 0.9, Laser 1.7, Marvin 6.3.0 (now standing) and, on trial, Altair 7.0.0 (CCRL Blitz 3579, MIT; proposed by the research agent, alternate Clover 6.1); Stash 19.0 and WyldChess 1.51 dropped. Every anchor built, Altair and Marvin included; no alternate was used. Fork scored 823.0/1200 (69%): Altair 64.0/200 (32.0%), Marvin 103.0 (51.5%), Laser 140.0 (70.0%), Winter 164.0 (82.0%), Monolith 177.5 (88.8%), Weiss 174.5 (87.2%). Ordo: white advantage 123.9 ± 10.8, draw rate between equal opponents 25.4% ± 1.8. Shards on AMD EPYC 7763 (5), EPYC 9V74 (4), Xeon 6973P-C (2) and EPYC 9V45 (1), 4 cores, 3 games at a time. The first GitHub gauntlet (a38a37d, 2026-10-31) gave 3315.6 ± 19.6 over two runs, before the singular extension, multi-cut, the reply, follow and take histories, IIR and S512r2; its anchor set differed (Stash and WyldChess in, Marvin and Altair out), so the 130-point difference is the change on two different scales, not a measured gain. As before, a rating in the CCRL Blitz scale from 10+0.1 games on these runners, not a CCRL rating. Results in ~/fork-data/gauntlet/run-41465146207. |
 | 2026-11-02 | **The LTC queue and the rest of tier 2 (owner).** LTC tests on GitHub's shards at 40+0.4, Hash 64 MB, x86-64-v3, 1,664-game stages to 9,984 games (the owner's 10,000 cap in whole stages without reusing an opening), in this order: XGR-512 against S512r2 (failed: H0, −30.56 ± 9.96 Elo after 1,664 games; SPRT log), the pawn drift table's SPRT on [0, 3] (T32's first table; straight to LTC per Testing setup), IIR on against off on non-regression bounds [−3, 0] (its LTC confirmation: a reduction adopted on an STC pass; base branch ltc/iir-off), then AF-S against S512r2. The x86-64-v4 half of the TCEC-conditions check waits for the 32-vCPU AWS quota. A passing entry is reported before anything else. **The pawn drift table:** the measurement's first choice sat at its grid's edge, so the owner had the grid extended toward slower learning (declared before its runs, same rule): 256/4 won and was kept with credit (Search constants; ORIGINALITY.md). **LMR history term (T16):** in the base reduction (the table's less the move's ordering history score / LmrHistoryDivisor), not in idea 23's evolvable slot, which stays at 0 so the long run evolves a residual on the improved formula; measured (tools/lmr_history_measure.py, declared before its runs) and SPRTed as usual. **The order after it** (owner's adoption of the inventory of 2026-11-02, each with its own measurement and SPRT): the improving flag one use at a time (RFP, LMP, LMR, the NMP gate); the further correction tables (non-pawn per side, minor, continuation) after the pawn table's LTC result; ProbCut; quiet history pruning; node types, then TT-PV uses; threat-aware move ordering (KB T56, written 2026-11-02); double extensions; fifty-move scaling; pawn-structure history; upcoming repetition; bad-capture futility; the malus balance; razoring; the threat and material correction tables. |
 | 2026-11-02 | **AF-S's LTC test dropped; XGR's parts become add-ons to S512r2; the Structure System planned (owner).** AF-S is **shelved, not tested at LTC**: it trailed XGR-512 at fixed nodes (+10.43 against +30.70) and at STC (−55.85 against −34.42), and XGR-512 failed at LTC (−30.56 ± 9.96, H0 after 1,664 games, run 41469160529; SPRT log), so the LTC queue after the pawn drift table is IIR on against off. AF-S stays a retest candidate after the post-network search retune (§5.4). **XGR's parts** (the exposure plane X, the phase gate G, the revision head R) are planned as add-ons to S512r2 (was S-512, 2026-10-31): the exposure plane first, after the current tier-2 queue, with its AVX-512 (x86-64-v4) LTC check when the 32-vCPU AWS quota allows. **The Structure System** (ideas.md idea 40): five layers (a pawns-and-kings network, the pawn correction table and pawn-structure history, a root-only structure planner, training targets, a strategic test set), plan only, built after the current tier-2 queue, behind two measurement gates. |
+| 2026-11-02 | **Generation 3's first snapshot g3s1; S512r3 and S512+X trained on Kaggle (owner).** Taken while every generator kept running (Kaggle and light local CPU only; the GitHub slot stays with the LTC queue): the local part g3 as a byte prefix of its running shards (2,299,291 games; each file checked with verify_games, two at a time, beside training: a failure discards the runs before any result is used) and every sealed cloud chunk of the 11 g3-aws runs (471 chunks, each checked against its manifest, verify_games-checked on its instance): 7,321,720 games, 373,842,515 saved positions, all labelled by S512r2 (data/manifests/g3s1.json); trained on together with g2s1 (988,611,737 saved positions). Validation g3s1-val.vf: 60 held-out games from each of the 12 generation-3 sources interleaved with g2s1-val.vf's 13 sources (1,500 games). **S512r3:** S-512's architecture warm-started from S512r2's float weights (a warm start keeps its net's S = 92 and S512r2's phase table), S512r2's settings otherwise (360 superbatches, the drop at 180, the lowest validation loss kept), seeds 1 and 2 (`tools/train/kaggle/retrain.py`). **S512+X** (XGR's exposure plane as an add-on, 2026-11-02 above): architecture 6, S-512 plus the 640 exposure rows and their 10-input factoriser, warm-started from S512r2's weights with the exposure inputs appended as zeros (so it starts at S512r2's exact output), the same settings and seeds; S-512's training rule (no first-layer clip: 608 of S512r2's first-layer weights exceed 0.99, so a clip would move the warm start), with Fork summing the exposure rows in 32 bits so their size needs no bound. Before training, each warm start must reproduce S512r2's validation loss on g2s1-val (0.01945765) and S512+X must pass `fork-train check` and the feature legs against the reference. The first session (2026-11-02) passed all of these (both warm starts at 0.01945765, 0 feature-leg differences on 446 and on 5,000 positions, 27 of 27 shard hashes) and then ended in an error before recording any run: most likely (UNVERIFIED: its logs could not be downloaded) the checkpoint pruning, which counted superbatch 0 and so could delete the best trained checkpoint; fixed, and the session rerun on 2026-11-05. Then the parity chain and scale matching (to S512r2); S512r3's SPRT against S512r2 queues for GitHub; S512+X is tested against whichever of S512r2 and S512r3 is the default then. |
 | 2026-11-02 | **The new nets' test order; the new search constants are placeholders (owner).** Each test takes the GitHub slot when it is free: (1) S512r3 against S512r2, STC SPRT on [0, 5], promoted if it passes; (2) S512+X against S512r3 (the same snapshot, warm start and settings, so the exposure plane is the only difference), a fixed-node screen first (the round-2 amendment's: 800,000 nodes per move for both, 1,600 games, an Elo point estimate above 0 proceeds), then an STC SPRT on [0, 5]; if it passes it becomes the default candidate, reviewed by the owner before any promotion. Web v2's build and deploy run only after these and the queued LTC tests leave a free slot. **Constants:** the values written with ProbCut, the improving flag's RFP use and threat-aware ordering (tier2/batch3) are placeholders only, the switches off: they likely come from memory of other engines (the constant screen found ProbCut's depth and reduction matching Berserk and Stockfish in the same role, its margin near Stockfish 18-19's, the relief near Igel's). Before any SPRT each is chosen by a measurement with a rule declared before its runs, on a grid spanning a wide range, not centered on the current value; the measured value is adopted and any remaining coincidence credited in ORIGINALITY.md, as with the singular extension. A placeholder is never shipped unmeasured. |
 | 2026-11-05 | **AWS unavailable until further notice: the account is suspended (owner).** The owner reported the AWS account suspended. The same day every AWS process was stopped and the cloud runner disabled: the relaunch watcher (running since 2026-11-01) was stopped, the local cloud settings file every launcher, watcher and report reads was renamed so none can start, a guard was added to the session's AWS scripts, and the daily credit report was cancelled; no AWS login or API call is made until the owner says otherwise. The relaunch log's last readable state (2026-11-02, 2:25 PM EST) showed no fork instance running in us-east-2, us-east-1 or us-west-2, each region's spot quota reading as allowing none from 11:31 AM that day; the login expired on 2026-11-03 at 9:31 AM EST, and from 2026-11-05 a new login was refused (AccessDenied on starting a device authorization), so whether any instance still runs is UNVERIFIED. **Data:** every uploaded chunk of the 19 cloud runs downloaded so far is held locally (each run's uploaded count in its boot log matches its local chunk manifests): generation 2, 8 runs, 507 chunks, 5,528,986 games and 507,219,344 positions, all in g2s1; generation 3, 11 runs, 471 chunks, 5,023,149 games and 471,203,685 positions, all in g3s1; both snapshots are also Kaggle datasets. Held only in S3, so lost while it is unreachable: seven generation-2 runs launched on 2026-11-01 between 9:24 AM and 3:24 PM EST, after the last generation-2 download ($4.29 of instance time; their chunk counts were never recorded, so their size is estimated from the downloaded runs' positions per dollar at about 180 to 270 million positions, 2.0 to 3.0 million games, UNVERIFIED). The other four launches with no local copy (two of generation 2, two of generation 3) wrote nothing to S3: each had ended before a download that copied every run of its generation there. Unaffected: the local generation-3 part g3, which finished at its 500 M target (5,334,231 games, 500,000,697 positions) on 2026-11-03 and was never uploaded, and the Kaggle training (its data are Kaggle datasets and its code comes from GitHub). Data generation continues on the local machine only; the plans that used AWS (x86-64-v4 LTC candidates, AWS SPRT shards) wait. |
 | 2026-11-05 | **The labeller policy covers the whole engine (owner).** Data generation always uses the current default engine, its network and every adopted search change, not only the default network (Labeller policy, §5.3 deliverable 2): a promoted network or an adopted search change ends the running part at a game boundary, the part is sealed, and the next part starts from a PGO build of the new default, bench-checked. **Generation 3's parts so far:** g3 (387f338: S512r2, IIR off) reached its 500 M target on 2026-11-03 and now has two verified copies besides WSL's (all of it on C:, and on Kaggle as fork-g3s1's prefix plus fork-g3rest, the games after it, each file checked to rebuild the original byte for byte). g3b started on 2026-11-05 at 3:48:50 PM EST with g3's own binary and settings (seed 20261107) and was stopped at 3:59:54 PM EST under this rule (16,265 games, 1,523,579 positions), since IIR, adopted on 2026-11-02 and confirmed at LTC on 2026-11-03, was missing from it. g3c started at 4:01:03 PM EST from a PGO build of phase-4 at 684bac6 (S512r2, IIR on; bench 14,180,299, signature 4cf778ff753861f7, as tests/bench-s512r2.ref), with g3's settings, seed 20261108 and the rest of the part's 500 M target, 498,476,421 positions; it was stopped at 4:20:49 PM EST (32,585 games, 3,060,039 positions) when the owner cut local data generation to 6 threads while the tier-2 measurements run (next row), and g3d continues with g3c's binary on 6 threads from 4:21:49 PM EST (seed 20261109, target 495,416,382), back to 10 threads as a new part once the measurement queue is empty. |
 | 2026-11-05 | **Tier 2 first; the measurement queue; the next batch; the network and search plans (owner).** Tier 2 has priority (the TCEC message and release drafts are skipped for now). **CPU:** local data generation runs on 6 threads while the measurements run (their searches are node-limited, so the load does not bias them), 10 again when the queue is empty, each change a new part under the labeller policy. **Measurement queue**, each with its rule declared before its data on a wide grid not centered on the placeholder, reusing the 25 M-node labels of the LMR measurement: (a) the LMR history term (measured: 24000 chosen, no divisor above "off"; its STC SPRT failed, H0 −10.81 ± 5.01 Elo, not adopted); (b) the improving flag's RFP use; (c) ProbCut's three constants; (d) threat-aware ordering's set, any attack against a cheaper attacker (tools/tier2_measure.py and its specs, tier2/batch3, committed before any run). **SPRTs** on GitHub one at a time as each measurement finishes, the network tests (S512r3) first when ready; when GitHub would sit idle, the re-validation's removal SPRTs as filler (LMR check relief, LMR on late quiet evasions; branches reval/no-check-relief, reval/no-lmr-in-check). **The next batch, built behind switches with placeholders** (tier2/batch4, bench unchanged, each with a test that fails when it is disabled and its names screened): quiet history pruning, node types with a TT-PV use, double extensions, fifty-move scaling, the pawn-structure history, upcoming-repetition detection, bad-capture futility, razoring and the malus balance; each gets its own measurement before any SPRT. **Plans** (kb-researcher's clean-room entries first, every source idea credited in ORIGINALITY.md): a new network architecture, S-512 with Fork's own threat inputs and pawn-pair inputs, **replacing the S512+X plan** (the S512+X runs already in the Kaggle session are kept as records but not tested), trained and tested like the bake-off entries (ideas.md 41; pawn-pair inputs as idea 40's first L1 step); continuation histories as the LMR history term's inputs (idea 42); fractional depth as a search refactor before the SPSA retune (idea 43); QAT in the training pipeline (idea 44). Batch 4's `pawn_key` overlaps tier2/drift's pawn structure key; whichever merges first keeps one key. |
 | 2026-11-05 | **The push gate, the SPRT checklist, S512+X as evidence (owner).** **Push gate:** the personal-data scan (`scripts/scan-push.sh`: every added line of every commit the remote lacks, for this machine's user name and home paths read at run time, a private patterns file outside the repository with the email and the cloud identifiers, and credential shapes) runs and passes as its own step before any push, and a hit blocks it; the pre-push hook runs the same scan as a backstop, and `scripts/test_scan_push.sh` (in the quick check) shows a planted hit of each kind stops both. It follows a slip: a scan and its push ran in one command, so the scan did not gate the push (its one hit was a bench signature's digits, nothing personal). **SPRT checklist** (Quality control 5): the test branch's full non-slow suite and the constant screen before committing constants, with the measured-constant, bench, name-screen and scan items. **S512+X:** when GitHub would otherwise sit idle, one fixed-node match of S512+X against S512r2 (800,000 nodes per move, 1,600 games), as evidence for the threat-input plan (ideas.md 41) only; S512+X is not a promotion candidate. **LMR history:** idea 42 (continuation histories in the term) is its follow-up, measured the same way. |
 | 2026-11-05 | **S512r3 is not tested; S512+X trains well (owner's rule for the decision).** Kaggle fork-retrain3 version 2 (commit ddd9c57, the checkpoint fix) completed all four runs on g2s1 + g3s1 (360 superbatches, warm-started from S512r2, S = 92). Validation loss on g3s1-val (its first 20,000 kept positions, the trainer's own measure, the same set for every net; the warm-start check's 0.01945765 was on g2s1-val): S512r2 0.01930359; **S512r3** seed 1 0.019348 (superbatch 302), seed 2 0.01933709 (284), both worse (the loss rose to 0.0211 at the first superbatch and never came back below the start); **S512+X** seed 1 0.01891247 (302), seed 2 0.01887023 (303), 2.0-2.2% lower. S512r3 seed 2 went through the chain (S = 90 matched to S512r2 on 4,000 g3s1-val positions; parity legs: trainer leg max 0.00015 cp, quantization loss mean 2.24 cp, max 10.55; netcheck 0 mismatches; bench 14,207,568), but two network-dependent tests failed on its candidate branch (at depth 1 in 4k3/1P6/8/8/8/8/8/4K3 w it plays e1f2, +177, instead of the promotion; the web test's eval threshold), so the SPRT checklist stopped it. **Endgame check** (tools/nnue/endgame_check.py, thresholds declared before the run: a won position misjudged below +100 cp, a lost one above -100, a drawn one beyond +-200; 900 quiet random KPK, KQK and KRK positions, verified with the Syzygy tables): S512r2 misjudges 249 (27.7%), S512r3 329 (36.6%); KQK S512r2 0 of 300, S512r3 41 (14.7% won, 12.7% lost); KRK both badly (S512r2 73-76%, S512r3 87-89%: the data adjudicates such endings by the tables, so the nets hardly see them; the tables cover them in play); KPK level. **The owner's rule** (worse on the like-for-like loss and clearly worse at endgames: skip it and record why) applies: S512r3 is not SPRTed and not promoted; S512r2 stays the default. The warm start at S512r2's learning rate is to be reconsidered before another retrain of the same architecture. S512+X runs its fixed-node evidence match when GitHub is idle (not a promotion candidate). |
+| 2026-11-05 | **S512+X: not promoted, an LTC candidate at low priority; the speed gate for new inputs (owner).** S512+X (seed 2, S = 89; bake/s512x c62bb3b) scored +25.67 ± 10.26 at fixed nodes (run 42142711426) and −30.04 ± 10.82 at STC (run 42149140337, H0 after stage 0) against S512r2, at 0.818 of its nps (a quiet 12-round A/B). By §5.4's rule (it beat S512r2 at fixed nodes and failed at STC) it is recorded as an **LTC / TCEC-conditions candidate**, at low priority: XGR-512, the same pattern with a larger fixed-node gain (+30.70), failed at LTC too (−30.56 ± 9.96, H0). S512r2 stays the default. New rule in §5.4: a new input type must keep 0.90 of the default's nps in a quiet fixed-time A/B before it trains; below that it is optimized first. Applied first to S512cl, measured before any Kaggle training. |
+| 2026-11-05 | **The job supervisor and the run-ID ledger (owner).** Two SPRT drivers believed stopped (their tool tasks were stopped, which ended only a wrapper shell) kept running: the check-relief filler dispatched stages 7-9 while the rising-RFP driver, waiting for an idle GitHub, never dispatched, and its stage 0 was reported from the filler's run. No result was merged into the wrong SPRT (the driver's meta check), but attribution and process control failed. Built before any SPRT resumes: `tools/jobs/jobctl.py` (one lock per job type; the whole process tree contained, in a Windows Job Object the command joins before it runs, or a POSIX session plus an environment marker; `stop` ends the tree, gently first, and verifies none is left before releasing the lock; the keeper lives until the whole tree has ended, so a descendant outliving its command is still stopped); `tools/jobs/ledger.py` (every dispatched run with its inputs; an after-the-fact attribution goes in as an import with its evidence); `sprt_run.sh` runs only under the supervisor, takes its run by sprt.yml's new run title, records it, and merges only ledger-recorded stages. Tests: tools/jobs/test_jobctl.py (7, Windows and WSL) and tools/github/test_sprt_run.sh (29 checks); planted faults (a root-only kill, the old newest-run rule) fail them. |
+| 2026-11-06 | **The reconciliation of two chats' instructions (owner).** Each decision recorded once, here. (1) **S512+PP's speed gate:** trained at 0.90 or more of the default's nps by the identical-tree method, 0.95 the goal reported beside it; revisited after the speed-to-Elo measurement (idea 46); final adoption by SPRT (§5.4). (2) **The speed gate's method:** the identical-tree method (bench rounds, every new-input weight zero) whenever the tree can be held identical; fixed time per position otherwise, e.g. synthetic nets (§5.4). (3) **The SPRT queue:** the threat set (running), then ProbCut (d9-r5-m80, STC [0, 3]; the margin 80 kept with credit, ORIGINALITY.md; the switch stays off until its SPRT passes), then the speed-to-Elo measurement. (4) **Docs-only pull requests** with green CI may be merged without asking (standing rule); PR #8's merge (0e7247b) ratified. (5) **Data generation:** g3e starts on 10 threads as soon as the quiet session of 2026-11-06 ends (the current default engine, the standing settings, a new seed), the measurement queue being empty. (6) **Idea 46's training experiment** (distillation and auxiliary targets): a fixed-node screen first, then STC, as for every new network (its rule 5 amended). (7) **Idea 46's order:** the speed-to-Elo measurement is first among its experiments, after the current SPRT queue. (8) **Performance-only settings** (S512+PP's cache size, prefetch depth): the higher median nps ratio wins, the smaller setting if the difference is within the 3% noise rule; declared before Part A's results were seen. Also: the AVX-512/VNNI output layer (speed sprint C1) is parked, not dropped (the SPRT shards build x86-64-v3 only), to be revisited for TCEC's x86-64-v4 builds; check relief stays on and the filler is closed (undecided at its cap: not passed, so the removal is not accepted). |
+| 2026-11-06 | **The re-validation queue and the Phase 4 checklist (owner).** Four network-era retests of bootstrap-era results, recorded as GitHub filler after the current SPRT queue, each STC [0, 3] with S512r2 as the default: B-4 (the TT-refined stand-pat), keeping exact TT entries, B-3 with idea 29, and the root fail-high fix; RfpMargin 40 and every Phase 3 margin go to the SPSA retune. The full Phase 4 checklist, each item's status and a proposed order are in §5.6 (the order awaits the owner's review). |
+| 2026-11-06 | **§5.6's order approved, with changes (owner).** Item 7: S512r3's non-improvement is diagnosed first on a shared validation set (warm start against from scratch; the current schedule against a longer one with a lower final LR), then the default is retrained with the winning recipe on the next snapshot, which includes the Syzygy endgame slice (idea 45, lifted from its hold), with the endgame acceptance test. The fifty-move scaling's formula, a placeholder, is measured on a wide grid not centred on it before its SPRT, the result kept and any remaining match credited. The further correction tables are deferred to the gated items, after the SPSA retune; the pawn drift table stays off. B-3 is retested alongside idea 29's measurement. |
+| 2026-11-06 | **Item 7 becomes the retrain itself (owner).** The separate S512r3 diagnosis is dropped (archived unrun). The default is retrained on g3s2 with the endgame slice, in the S512+PP architecture only if S512+PP passes an STC SPRT against S512r2, which runs only if its fixed-node screen exceeds about +30 Elo (a screen above zero but below +30: evidence for idea 40 and an LTC candidate, the retrain in plain S-512; clarified by the owner the same day), else plain S-512, never launched before that result; two recipes side by side, two seeds each: a warm start at 0.0001 then the usual drop, and from scratch on the current schedule, scored by the mean best loss on a shared validation set; the better recipe's best seed goes through parity, the endgame acceptance test and its SPRT against S512r2; the recipe result is recorded (§5.6, item 7). |
+| 2026-11-06 | **The Fork Control Center, and its decisions (owner).** A Windows desktop window (`tools/control_center/`, tkinter, no other dependencies; launched from a desktop shortcut) over the job supervisors, the SPRTs and GitHub runs, Kaggle training, the networks and gauntlets, the sealed data, the machine and §5.6; everything read-only except data generation: Start (the next part by the labeller policy, through the WSL supervisor), Stop & seal (`jobctl.py stop`, then a seal job that copies the complete games, runs `verify_games.py` and `upload_batch.py seal`, and keeps every file if verification fails), an optional auto-stop, and Windows kept awake while a part runs. Decided: (1) **the disk margin is policy** (§5.3 deliverable 2, "Disk margin"); (2) **the next part (after g3e) starts from a fresh PGO build of phase-4 including 5ba7d0d** (select_best's register change, +4.0% nps, bench identical), as the labeller policy requires for any adopted change, rather than g3e's 684bac6 binary; (3) its test suite joins `scripts/check.sh`'s tool tests (the Python suite in every mode, `test_start_part.sh` on Linux in "all"). A rehearsal re-sealed g3b from WSL into scratch folders with the real verify_games.py: every data field equal to data/manifests/g3b.json. Names screened (ORIGINALITY.md). |
+| 2026-11-06 | **Testing streamlined (owner; the new standard, Testing setup).** Search constants for batch 4 and everything after it are chosen by a short SPRT ladder (2-3 sensible values, quick STC tests capped at 2 stages, the best kept), then the feature's normal SPRT; the ladder counts as Fork's own measurement for the originality rule, SPSA refines later; the running fifty-move measurement is finished, batch 4's other declared measurement specs are not run. Seed-noise matches are dropped. The re-validation queue runs only as idle filler. LTC confirmations only for the LTC-sensitive list (Testing setup, "Straight to LTC"); for everything else the STC verdict decides. Kept: SPRTs, parity and netcheck, the endgame acceptance test, data verification before sealing, CI before merges to main, the fixed-node screen for new networks. |
+| 2026-11-06 | **S512+PP promoted to the default network (owner).** S512+PP R = 1 (bake/s512pp 412b13f, S = 90) beat S512r2 at STC, +32.67 ± 10.48 Elo, H1 after 1,600 games (run 42294907752), after +46.09 ± 10.37 at fixed nodes (run 42284077960). Promoted the same evening with its recorded exceptions: speed 0.895 of S512r2's nps (below the 0.90 gate) and the endgame check, 351 of 900 misjudged against 249 (KQK 59 of 300), which the Syzygy slice in g3s2 is meant to fix (docs/nets.md). Its two network-dependent search checks were rewritten to hold for any evaluator (the promotion rule). nets/s512pp merged into phase-4 with its inference code (architectures 6-8) and trainer; S512r2 stays buildable and joins CI's `nets` job. Bench 13,909,380 / 831e5c9295839f87. **The labeller policy:** g3e stopped at a game boundary (4:38:18 PM EST, 48,577,036 positions) and sealed as its part; the generation continues as g3f, labelled by S512+PP from a fresh PGO build. **Item 7's** candidate must beat S512+PP. The web page still runs S512r2 until it is redeployed. Tests and measurements based on S512r2 (ProbCut's SPRT, batch 4's fifty-move measurement) keep their S512r2 base; whether to re-run any on S512+PP is the owner's call |
+| 2026-11-06 | **S512ppr2 promoted to the default network; the warm start becomes the standard retrain recipe (owner).** Item 7's retrain (S512+PP's architecture on g3s2 with the Syzygy endgame slice): the warm start from S512+PP at LR 0.0001 (mean best loss 0.01909453 on g3s2-val over 2 seeds) beat training from scratch (0.01951758) by about ten times the 4e-5 seed spread, so future retrains warm-start at LR 0.0001 with the usual tenfold drop. Its best seed, S512ppr2 (bake/s512ppr2 d56c2cf, S = 89, 2 of 311,296 link weights clamped), beat S512+PP at STC [0, 5], +20.11 ± 7.22 Elo (nElo +33.60 ± 12.04), H1 after 3,200 games (runs 42335141916, 42336446490), and misjudges 8 of the endgame check's 900 positions against S512+PP's 351. Promoted the same evening; S512+PP stays buildable and joins CI's `nets` job; the web page adds S512ppr2 as its default when it is next redeployed. Bench 14,626,377 / 9e43990217b0886d. **The labeller policy:** g3f stopped at a game boundary (11:50 PM EST) and sealed as its part; the generation continues as g3g, labelled by S512ppr2 from a fresh PGO build |
+| 2026-11-07 | **The Phase 4 think tank's decisions (owner; docs/research/phase4-think-tank/, numbered as its synthesis §7).** (1) **Time management moves into Phase 4**, limited to node share plus best-move stability (R8), on the LTC list; base allocation, the time curve and a TCEC-ratio control stay in Phase 5; the resolution-aware soft stop is dropped (a timed search reaches the soft check only after a completed iteration). (2) **SPRT design R is the standard for search features**: [0, 6] nElo, alpha 0.05, beta 0.20, a cap of 8 stages, a futility stop after stage 2 (the same design at LTC, capped at 4-6 LTC stages); networks keep [0, 5]. Accepted risk: about 2% of truly null features adopted and about a third of +3 nElo features lost early, for about 60% fewer stages per test. **At most two tries per idea.** (3) **Constants by head-to-head selection** (value against value on the same games) instead of each-against-off ladders; the constants table records "head-to-head, N games, delta ± e" as Fork's own measurement; mini-SPSA once the driver exists. (4) **The SPSA retune is split**: an early pass on the eight eval-dependent margins at STC (R14), and a final retune by scaling class at the end (R24: shallow margins at STC, depth-scaling constants at LTC); time-management parameters never in an STC/LTC SPSA, the eval scale never in SPSA. (5) **Workflow changes approved**: the GitHub SPSA driver (a FORK_TUNE build input, per-pair options), per-shard options for the factorial screen, and a runner A/B speed job. (6) **The removal round becomes a factorial screen** (R30, with the skeptic's four fixes), replacing Quality control 6's per-feature [−3, 0] SPRTs; accepted: about a 23% chance of removing a +3 nElo feature, for a decision on every switch. (7) **The speed-to-Elo measurement** (§5.6 item 4) is a throttled 0.5x test-only build, 2 STC stages plus 1 LTC stage, with the speed ratio measured in situ on the runners, replacing the 0.85x time-odds design. (8) **The speed gate**: its ratio is measured in the shard build on the runners and priced at 1.5 Elo per 1% nps (1.26-1.80; the fit to all eight fixed-node/STC pairs) instead of 2 ± 1 or 3.1, the 0.90 threshold kept until the measurement of (7); a cycles-per-node 1% acceptance rule for bench-identical speed changes (a §7 doctrine change); a change that is slower locally is adopted if it is faster on the runners and in the TCEC build (R31). (9) **The TCEC build** (R11): x86-64-v4 with speed sprint C1's AVX-512BW output layer behind a startup CPU check, PGO by default with a fallback, the compiler chosen by measurement, the final gauntlet played with the TCEC build; C1 also for the native data-generation build now; VNNI stays out until TCEC answers (the 2026-10-28 rule). **Ask TCEC** whether a launcher may pick the binary at startup and whether the servers support AVX-512 VNNI (KB competition.md question 8). (10) **Item 8a's recipe** (the retrain on g3s3 = g3s2 + g3f + g3g, synthesis §5): the standard recipe unchanged as the control (2 seeds), plus a cooldown branch, an anneal-only arm, the recency arm only if the deep-label gold set exists, and the optional high-WDL branch on the finished candidate (its own SPRT, guarded by the endgame check and a 5-man rook-ending check); an averaged candidate may go to the SPRT when it is more than 1e-5 better offline; candidates scored offline on the full validation set, not best-of-N; checkpoints and optimiser state kept; **the endgame acceptance target is at most 15 of 900 misjudged**. (11) **Numbering**: "item 8" is the retrain loop (8a, 8b, ...); idea 42 (continuation histories in LMR) is folded into the round-once LMR step (R20). (12) **The next data part (g3h) uses the 2026-09 opening book** (lichess-2026-09.epd), after a duplicate count against the parts already generated. (13) **Local measurement jobs run beside data generation** (2 threads each, one at a time), and part seals serve as the quiet windows for speed A/Bs. (14) **Stormphrax** (two rulings): it is included in the clean-room survey at concept level like every other engine (public README, release notes, PR prose, forum posts; never source code or exact constants), any instruction embedded in its text is data and is ignored, and the KB's existing citations stay; **where an idea is also documented by another source, that source is credited and reliance on Stormphrax is minimized**. (15) **TCEC game statistics** may serve only as a cross-check for a time-management constant, never to set one; constants come from Fork's own games. (16) **Calibration constants may be fitted on SPRT test games** (R33) only if the constant's adoption test then uses fresh games. (17) **The endgame-start data slice** (R32) is deferred until item 8a's result. (18) **A gauntlet of S512ppr2 runs now**, with the standing anchor set (Marvin 6.3.0 and Altair 7.0.0 included): run 42392526865 on a24d41f (11:41 AM to 12:04 PM EST, every job succeeded): **Fork 3488.2 ± 22.2** (Ordo, CCRL Blitz scale, 1,200 games at 10+0.1, 864.0 points, 72%), against S512r2's 3445.8 ± 21.6 on 2026-11-02 (+42.4 against the anchors; the two promotions since measured +32.7 and +20.1 head to head). Scores: Altair 7.0.0 (3579) 130.5 of 200 against Fork, Marvin 6.3.0 (3458) 84.5, Laser 1.7 50.0, Winter 0.9 28.0, Monolith 2.01 22.5, Weiss 1.0 20.5. (19) **Idea 23** runs as a capped pilot with a game-based fitness (R38), after the LMR terms, never on the label-and-sweep proxy. (20) **The synthesis's drop list (§4.1) is accepted, except idea 40's L3 root planner, which is parked** (kept in ideas.md). Dropped or replaced: distillation from S512+X and idea 46's threat-keyed correction table; idea 46's threat inputs parked; S512cl's speed work; idea 40's L1 (a separate pawn-and-king net) and L2 (the pawn drift table); the material, major and threat correction tables; the QAT validation session (the `--qat` option stays); S512+X and AF-S as LTC candidates; idea 45 part 3; idea 47.1; idea 34 as a standalone test; ideas 10 and 11 (replaced by R33 and R32); BOLT (idea 21); idea 36 closed; the re-validation filler shrunk (B-3 and the root fail-high fix dropped, B-4 as R13's variant, keep-exact only at a TCEC-scaled hash); fractional depth shrunk to round-once LMR; batch 4 redesigned (razoring and bad-capture futility demoted, the history malus balance an SPSA parameter). (21) **A VLTC spot check** (120+1.2, 2 stages) of the final retune's output. (22) **Phase 6 guardrails as a standing rule** (H9): no new per-thread table above about 256 KB without a TCEC-footprint note, weight tables at most about 4 MB, new search state per-thread or explicitly shareable. (23) **TT-policy tests run at a hash scaled to TCEC's entries-per-node pressure.** (24) **Search adoptions are bundled into at most one data-generation part switch per day** (a labeller-policy refinement). (25) **ProbCut keeps its rule: no retest**, at LTC either. (26) **A negative extension gated to cut nodes, in sub-ply form (R40), counts as a new idea**, not a retest of the rejected ungated one; `use_negative_extension` stays until it is tested. The updated Phase 4 order was approved by the owner the same day and replaces §5.6's order table; §5.6 and ideas.md mark the dropped items. |
+| 2026-11-07 | **Data generation cut to 6 threads (owner).** g3g stopped at a game boundary at 12:16 PM EST (111,190,930 positions, 50,692,451 of them unsaved, in 1,191,355 games, of its 366,424,464 target) and sealed through the Control Center (cc_stop.py; seal job seal-g3g); the generation continues as g3h on 6 threads from the same default engine (a24d41f, S512ppr2, bench 14,626,377; seed 20261113), started by the queue job g3h-chain once the seal succeeds. The freed threads run the think tank's step 1 measurements. Item 8a moves forward to follow g3g's seal (§5.6 order step 8), with less new data than planned. g3h keeps lichess-2016-09.epd: decision 12's switch to the 2026-09 book needs its duplicate count and an openings manifest first, so it comes at the next part boundary. |
+| 2026-11-07 | **g3g sealed; the 2026-09 book at the next natural part boundary (owner).** g3g's seal verified every game (1,191,355 games, 111,190,930 positions, 50,692,451 unsaved) at 1:53 PM EST; its manifest is data/manifests/g3g.json; g3h started at 1:57 PM EST on 6 threads (a24d41f, S512ppr2, seed 20261113, lichess-2016-09.epd). The think tank's R1 duplicate count refuted its premise: at ply 20 or less, 0.0034% of kept positions are duplicates (19 of 555,082 over one shard each of g2e, g3, g3e and g3f), because every game starts from a distinct book position plus 2-4 random plies (the book is played as a seeded permutation). The owner keeps decision 12's switch to lichess-2026-09.epd for breadth, **only at the next natural part boundary, with no special stop**; its openings manifest (data/manifests/openings-lichess-2026-09.json, SHA-256 dab45c9f...) is committed and both copies (Windows and WSL) match it; the Control Center gains a setting for the next part's book before that boundary. |
+| 2026-11-07 | **Ideas 48-60 recorded, plan only (owner).** A "novel NNUE ideas" group (48 decision-focused loss, 49 a pairwise ranking loss on sibling positions, 50 conformal pruning margins, 51 TD(lambda) targets, 52 ensemble-disagreement active learning, 53 pawn-structure-class output experts), scheduled after item 8a, first experiments in the order 51 and 52, then 53, then 50, each at equal data with a small net first; a "paradigm candidates" group (54 a shared-accumulator policy head, the first to prototype, after item 8a; 55 a learned reduction and pruning function; 56 probabilistic search with neural uncertainty; 57 in-game adaptation; 58 giant-teacher distillation), after the current order; and 59, the Boundary Refiner (a rich evaluation consulted only near the alpha-beta window; its refiner shares the base accumulator), after item 8a; and 60, a near-window extension at depth-1 frontier nodes (after item 8a, before idea 59's step 3). Each entry states its mechanism, its mathematical or literature basis, its first experiment and its kill criterion. |
+| 2026-11-07 | **Testing speed: the design R tooling's settings (owner).** Design R and the head-to-head selection (decisions 2 and 3) are built before other work, so every later search test uses them. Settings: the default LTC cap for search features is 6 LTC stages (a run may set 4-6); the two-try limit counts per time control (an LTC confirmation of an STC pass is not a retry); every SPRT carries an idea id, network tests included, and each retrain is its own idea (8a, 8b, ...: each trains on new data), so the limit applies to retesting the same network, never to the retrain loop; in a head-to-head selection the declared value wins unless another beats it by more than 0.5 e. **CI:** a gate job classifies each change; docs-only changes skip the build matrix (about 1 minute instead of about 154); the full TSan suites move to the nightly run and an opt-in dispatch input, and run on pull requests and pushes only when files touching threads, the TT or the UCI layer change (the searcher does not count); a small "TSan, threaded suites" job (the UCI, TT, datagen and web suites under TSan) stays required on every code change; one aggregate "CI result" job passes only when every job passed or was skipped by its own rule, and branch protection on main is switched to require it alone before the first pull request to main that runs the new workflow (phase-4 itself is not protected). A typical code PR's expected CI time falls from about 154 to about 50 minutes (the design's medians over ten runs; UNVERIFIED until measured). |
+| 2026-11-07 | **CI testing speed (owner).** ci.yml's new `changes` job (`.github/ci/changed-areas.sh`, tested by `.github/ci/changed-areas-test.sh`) lists the changed files once and decides what runs: documentation alone (docs/, any `*.md`, LICENSE) skips every build job on pull requests too (pushes keep their paths-ignore); the full TSan suites (`clang-tsan`, `gcc-tsan`, now the reusable `.github/workflows/tsan.yml`) run only when threads, the TT or the UCI layer change (src/uci/, src/main.cpp, src/datagen/, trans_table.\*, hash_memory.\*, their tests, the build files, the CI files, or any other source file using a threading primitive; not `searcher.*`), nightly on main beside perft_epd_full, and on demand (dispatch tsan.yml, or ci.yml with `force-tsan`; a manual run never runs them otherwise); a new job, **TSan, threaded suites**, runs uci_protocol, uci_options, uci_timing, tt, datagen and web under both TSan presets on every code change (no bench parity there: the full run has it). One job, **CI result**, needs every other job and passes only if each passed or was skipped by its own rule; main's branch protection will require it alone (switched by the owner before the first pull request to main that runs the new workflow). Expected wall time for a typical code PR: about 50 min instead of about 154 (gcc-tsan's median); docs-only about 1 min. |
+| 2026-11-07 | **Idea 52: the independent committee (owner).** The seed-disagreement check (docs/research/idea52/report.md): item 7's warm seeds, in effect one net, fail the 1.5 line (eval-matched error ratios 1.24-1.37); its scratch seeds, independently initialised, pass it (1.69-1.76 on three detectors, 1.49-1.50 on the fourth, unchanged with deep-search mates excluded), and the default net errs 1.6-1.7 times more on the positions they pick. Decided: (1) an independent pair's disagreement is a detector in the crucial-point measurement (the gate comparison for ideas 59 and 60); (2) **retrain 8b gets an idea-52 arm**: the top-disagreement positions from an independent pair, deep-labelled by the default engine and oversampled, against the standard arm at equal data (the same number of positions seen); (3) **every retrain from 8b on keeps one from-scratch run as the independent committee member** (about 2.2 T4 GPU-hours at the standard 360 superbatches). A cheap check first: whether a warm-against-scratch pair (the default against the scratch run) carries the same signal, since every retrain will have that pair. **Keep-or-drop rule, decided before 8b's result:** if 8b's disagreement arm does not beat the standard arm by a meaningful margin (a fixed-node screen of +5 Elo or more, or a passing SPRT if it is screened), idea 52 is retired and the scratch-run rule dropped (saving its 2-4 hours per retrain); the result stays in the record either way. |
+| 2026-11-07 | **Retrain candidates are gated by a fixed-node screen, not by validation loss (owner).** Item 8a's declared rule required the candidate's full validation-set loss to beat S512ppr2's by 2e-5; R1-avg (the average of R1's superbatches 331-360; every gate passed: S = 89, qloss 9.4 / 7.5 cp, the endgame check 8 of 900, netcheck 0 of 446) beat it by 1.82e-5, short by 1.8e-6 (the validation set, mostly g3s2-val, favours the baseline it selected). Declared before any result: a tie-break with one 1,600-game fixed-node screen of R1-avg against S512ppr2 (800,000 nodes per move each); the STC SPRT [0, 5] follows only at +5 Elo or more, otherwise 8a is recorded as below threshold and the next retrain is 8b. **From now on** a retrain's candidate is gated by that fixed-node screen (the same architecture, so no speed adjustment) instead of the offline validation-loss margin, since loss has proven an unreliable predictor (S512+PP gained +32.7 at STC with a flat loss). Also from 8a's arms: the cooldown branch did not beat R1's own average (4.8e-5 worse on the prefix window), and the anneal-only arm was worse than R1-avg on the full set. |
+| 2026-11-07 | **S512ppr3 promoted to the default network (owner, about 9:05 PM EST).** Item 8a's retrain (S512+PP's architecture on g3s3 = g3s2 + g3f + g3g, Kaggle fork-retrain-g3s3 v1 at 6053b51, every arm warm from S512ppr2's float weights, S = 92 in training): R1 and R2, the standard recipe (seeds 1, 2); CD, a cooldown branch from R1's superbatch 180 (1e-5, 3e-6, 1e-6 for 20/15/15 superbatches, the last 15 averaged); D1, anneal only (1e-5 for 60 superbatches). Full g3s3-val losses: S512ppr2 0.01968472, R1-best 0.01965562, R2-best 0.01972978, R1-avg 0.01966655, CD-avg 0.01977483, D1-final 0.01975487, D1-avg 0.01971097: **the cooldown branch and the anneal-only arm did not beat R1-avg**. By the declared rule R1-avg was the candidate (more than 1e-5 below R-best, R2's best checkpoint), 1.82e-5 below S512ppr2, short of the 2e-5 margin; the owner's tie-break, one fixed-node screen, **now replaces the loss margin** as the gate for retrain candidates (the row above). S512ppr3 (bake/s512ppr3 720fe7b: R1-avg at the matched S = 89, 1 of 311,296 link weights clamped; quantization loss max 9.4 cp, p99 7.5 cp; netcheck exact on 446; the endgame check 8 of 900, as S512ppr2) scored **+15.65 ± 9.26 Elo** (nElo +28.80 ± 17.02, ptnml [7, 161, 406, 205, 21]) at 800,000 nodes per move (run 42426868742), above the declared +5, then beat S512ppr2 at STC [0, 5], **+7.12 ± 4.53 Elo (nElo +11.98 ± 7.61), H1 accepted** after 5 stages, 8,000 games, LLR 3.14, ptnml [100, 908, 1848, 1016, 128] (runs 42429984619, 42431412304, 42432793282, 42434196075, 42435511074; the driver stopped in the machine's crash at about 8:07 PM EST after dispatching stage 2 and was resumed with RUN_ID for that stage; sprt-log). Promoted; S512ppr2 stays buildable and joins CI's `nets` job; the web page adds S512ppr3 as its default when it is next redeployed. Bench 14,149,617 / 1cb0717f040c294d. **The labeller policy:** g3i (started after the crash, labelled by S512ppr2) ends at a game boundary and is sealed as its part, and the generation continues as g3j, labelled by S512ppr3 from a fresh PGO build. The owner: switching g3i -> g3j today is an explicit exception to decision 24 (one part switch per day), because g3i's start was forced by the crash and the labeller policy calls for an immediate switch on a network promotion |
+| 2026-11-07 | **Crucial-point ground truth; the window gap gates ideas 59 and 60 (owner).** On measure/step1 (daca926, its §5.7): 5,433 sampled evaluation sites from 100 of Fork's games, deep-searched at 1 M nodes; 18.6% are crucial (the static evaluation and the deep value on opposite sides of the nearest finite bound) in both strata. Recall at 4% of the nodes: a logistic model (the gap plus features) 0.34 in the main search and 0.26 in quiescence; the window gap alone 0.30 / 0.25; random 0.13 / 0.10; the seeds' disagreement is near random as a gate (AUC 0.52-0.54). The owner: idea 59's oracle screens and idea 60 use the window gap now; the logistic gate comes in only in idea 59's step 3 and idea 60's tuning, if their screens pass |
+| 2026-11-08 | **Idea 59's step 2 passed; the control split confirms the mechanism (owner).** Fixed-node screens (1,600 games, 800,000 nodes per move) against S512r2 alone: setting (a), window gate 25 / 10 cp with S512+X refining, +29.82 +/- 9.78 (3.81% of nodes consulted); setting (b), 25 / 25 cp, +41.01 +/- 9.97; a random gate at (a)'s call rate +7.60 +/- 9.93; bias only ((a)'s gate adding its mean refinement, S512+X never consulted) −14.56 +/- 9.96. The gain comes from where the refiner is consulted, not from a shift or from refining any 4% of nodes (ideas.md idea 59 has the runs). Next: step 3's design (a refiner sharing S512ppr3's accumulator, on-demand exposure features, trained on near-window positions from Fork's own search with deep labels from a pinned binary) for the owner's review before building, and a prior-art search before any public claim. Fixed-node gains do not charge the second network's cost; the nps claim waits for step 3's build, measured on a quiet machine. |
+| 2026-11-08 | **TCEC's hardware supports VNNI (owner).** The answer to KB competition.md question 8 (decision 9 of 2026-11-07 kept VNNI out until TCEC answered): the owner reports that TCEC's hardware supports AVX-512 VNNI (the primary source is to be cited in the KB when available). VNNI paths may now be built for the TCEC build, each with its scalar reference and an exactness test (§7); SPRTs on the GitHub shards still run x86-64-v3, so a VNNI speed gain is judged separately from the AVX2 path that the SPRTs charge (idea 59 step 3, owner 2026-11-08). Still open: the `-march` for TCEC's build and the launcher question. |
+| 2026-11-08 | **Time management variant (b) adopted (owner; §5.6 step 10, R8).** The soft limit scaled by best-move stability and the best move's every-pass node share (`UseStabilityTime` and `UseShareTime` on; constants from Fork's X6 fit, stability cap 72; Search constants) passed design R [0, 6] against off at STC (+18.69 ± 7.18 Elo, 3,200 games, H1) and at LTC 40+0.4, Hash 64 (+10.23 ± 5.14 Elo, nElo +19.22 ± 9.64, 4,992 games, H1 after stage 6, job tm-r8-ltc), and was merged into phase-4 by the owner's rule of the same day (adopt only after LTC passes). Variant (a) (tm/a, stability alone) lost the head-to-head and is not adopted. Both switches stay until the Phase 4 re-validation. Bench unchanged (14,149,617 / 1cb0717f040c294d); data generation is node-limited and unaffected. |
+| 2026-11-08 | **The gauntlet's set of 2026-11-08: every anchor standing, and a gap to Stockfish (owner).** tools/gauntlet/anchors.tsv: Clover 6.1 (CCRL Blitz 3639, rechecked on the list of 2026-11-07) a standing anchor with the role `new` and no alternate (it built in the anchor job of runs 41465146207 and 42392526865 as Altair's alternate but never played, so not `continuity`); Marvin 6.3.0 and Altair 7.0.0 `continuity` (both built and played in those two runs), and Arcanum 2.8, Marvin's alternate, removed (its build failed in both): a failed build of any anchor now stops the run before any game. **Stockfish 19** (tag sf_19, edb0d9d, GPL-3.0), role `reference`: 400 games (all 200 openings, both colours, 4 shards), Threads 1 and Hash 16 MB as Fork's, built with `make net` then `make build ARCH=x86-64-avx2` (the network's file name and SHA-256 logged; whether `make build` alone fetches it is UNVERIFIED until the first run's log), **kept out of the Ordo fit** and reported apart as the gap to Stockfish: Fork's score, the implied Elo difference and its pentanomial 95% interval (tools/gauntlet/report.py, which now merges the shards and runs Ordo; its CCRL Blitz 3792 shown for context only); a failed build stops the run. A run plays 1,800 games: 1,400 in the fit (7 anchors x 200), 400 against Stockfish. Opponent binaries only (ORIGINALITY.md; KB competition.md §5). |
+| 2026-11-08 | **Gauntlet of the new default (S512ppr3 + time management (b)): Fork 3488.2 ± 20.4; gap to Stockfish 19 −222.4 (owner).** Run 42538371594 on phase-4 32c5517 (update.sh, gcc 11.4, x86-64-v3; bench signature 1cb0717f040c294d checked on the runner), 7:06-7:45 PM EST, every shard 100 of 100, no time forfeits; 200 random 8-ply openings, 10+0.1. Ordo, CCRL Blitz scale, 1,400 games against the seven standing anchors (931.5 points, 67%). Opponents' scores against Fork: Clover 6.1 (3639) 147.0 of 200, Altair 7.0.0 (3579) 121.5, Marvin 6.3.0 (3458) 86.0, Laser 1.7 (3292) 49.0, Winter 0.9 (3168) 30.0, Monolith 2.01 (3061) 19.0, Weiss 1.0 (2896) 16.0. The rating equals S512ppr2's 3488.2 of 2026-11-07 to the decimal by coincidence: on the six anchors both runs share, Fork scored 878.5 of 1,200 (73.2%) against 864.0 (72.0%), about +10 Elo by the logistic slope, within either run's error, while Clover, new to the fit, scored 74% against Fork (about 3460 implied from that pairing alone). **Gap to Stockfish 19** (sf_19, edb0d9db, net nn-1a298aa575a0 fetched by its make net; outside the fit): Fork 87 of 400 (21.8%), +49 =76 −275, **Elo −222.4, 95% interval −251.2 to −196.1** (pentanomial, 200 pairs, [75, 76, 49, 0, 0]: each of Fork's 49 wins is paired with a loss of the colour-reversed game); for comparison, Fork's fitted 3488 against Stockfish's CCRL 3792 is −304 on the list's conditions. Result: ~/fork-data/gauntlet/run-42538371594. |
+| 2026-11-09 | **Idea 59 step 3 closes; step 3b parked (owner).** Fixed-node screens (1,600 games, 800,000 nodes per move, against S512ppr3 alone, gate main 25 / quiescence 10 cp) replaced the net-flip yardstick as the deciding test (owner, 2026-11-08). The shared-accumulator refiner (kernel v2) hurt: both gates −19.78 ± 9.67 (run 42574807031), quiescence only −11.73 ± 9.63 (42589690181); both at or below 0, so the refiner line ends with no SPRT. An independent net (s512pp-scratch-s1) consulted at the gate: blend +9.56 ± 9.45 (42594402144), replace +3.47 ± 9.34 (42600420297), the pattern the independence hypothesis predicted, but below the +10 bar declared before the result. No step 3b plan is written; step 3b (a small independent near-window net, widths 64 / 128, blended with a tuned weight) is parked as a hypothesis to revisit when compute allows. ideas.md idea 59. |
+| 2026-11-09 | **The full TSan suites on a push or pull request leave out `search` and `pruning`; nightly runs them all (owner).** Milestone 2's CI run 42611572178 lost gcc-tsan to its 240-minute limit: `search` alone took 10,296 s under gcc-tsan, `pruning` 1,266 s, and every test that finished passed. ci.yml now calls tsan.yml with `skip: '^(search\|pruning)$'`; nightly.yml and a dispatch run every fast suite, and the job's limit is 360 minutes. Both suites are single-search tests; the threaded suites still run under TSan on every code change (tsan-threaded). |
 
 ## 7. Performance doctrine (governs every phase)
 

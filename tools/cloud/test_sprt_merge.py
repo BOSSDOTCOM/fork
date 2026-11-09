@@ -212,5 +212,74 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(sm.pairs_from_games(log), [0, 1, 0, 1, 0])
 
 
+class TestStageDecision(unittest.TestCase):
+    """Design R (owner, DESIGN.md §6 2026-11-07 decision 2): [0, 6] nElo, alpha 0.05, beta 0.20, a cap
+    of 8 stages and one futility look after 2 stages (stop if the cumulative nElo estimate is below 0)."""
+    # Two stages of two shards of [6, 11, 20, 9, 4]: nElo -27.08, LLR on [0, 6] -0.60 (inside both bounds).
+    FUTILE = [24, 44, 80, 36, 16]
+    EVEN = [40, 80, 160, 80, 40]  # mean exactly 1/2: nElo 0
+    STRONG = [0, 0, 10, 40, 50]
+
+    def decide(self, ptnml, played, cap=8, futility_after=2, fixed=False):
+        return sm.stage_decision(ptnml, 0, 6, 0.05, 0.20, played, cap, futility_after, fixed)[0]
+
+    def test_design_r_bounds(self):
+        lower, upper = sm.bounds(0.05, 0.20)
+        self.assertAlmostEqual(lower, math.log(0.20 / 0.95), places=12)
+        self.assertAlmostEqual(upper, math.log(0.80 / 0.05), places=12)
+
+    def test_futility_at_two_stages(self):
+        lower, upper = sm.bounds(0.05, 0.20)
+        self.assertTrue(lower < sm.llr(self.FUTILE, 0, 6) < upper)  # the stop is futility's, not an H0
+        self.assertLess(sm.nelo(self.FUTILE), 0)
+        self.assertEqual(self.decide(self.FUTILE, 2), 'futility stop')
+        self.assertEqual(self.decide(self.FUTILE, 1), 'continue')  # one look only, at 2 stages
+        self.assertEqual(self.decide(self.FUTILE, 3), 'continue')
+        self.assertEqual(self.decide(self.FUTILE, 2, futility_after=0), 'continue')  # off
+        detail = sm.stage_decision(self.FUTILE, 0, 6, 0.05, 0.20, 2, 8, 2)[1]
+        self.assertEqual(detail, 'futility stop (nElo -27.08 < 0 after 2 stages)')
+
+    def test_futility_needs_negative(self):
+        self.assertEqual(sm.nelo(self.EVEN), 0.0)
+        self.assertEqual(self.decide(self.EVEN, 2), 'continue')
+
+    def test_llr_before_futility(self):
+        weak = [x * 8 for x in self.FUTILE]  # nElo still -27.08, LLR -4.8: below the lower bound
+        self.assertLess(sm.llr(weak, 0, 6), sm.bounds(0.05, 0.20)[0])
+        self.assertEqual(self.decide(weak, 2), 'H0 accepted')
+        self.assertEqual(self.decide(self.STRONG, 2), 'H1 accepted')
+
+    def test_capped(self):
+        self.assertEqual(self.decide(self.EVEN, 8), 'capped')
+        self.assertEqual(self.decide(self.EVEN, 7), 'continue')
+        detail = sm.stage_decision(self.EVEN, 0, 6, 0.05, 0.20, 8, 8, 2)[1]
+        self.assertEqual(detail, 'capped (8 of 8 stages, undecided)')
+
+    def test_fixed_ignores_llr(self):
+        self.assertEqual(self.decide(self.STRONG, 1, cap=2, futility_after=0, fixed=True), 'continue')
+        self.assertEqual(self.decide(self.STRONG, 2, cap=2, futility_after=0, fixed=True), 'complete')
+
+    def test_cli_verdict_line(self):
+        import contextlib
+        import io
+        import json
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / 'result.json'
+            f.write_text(json.dumps({'ptnml': self.FUTILE, 'meta': {}}), encoding='utf-8')
+            args = ['merge', str(f), '--elo0', '0', '--elo1', '6', '--alpha', '0.05', '--beta', '0.2']
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                sm.main(args + ['--played', '2', '--cap', '8', '--futility-after', '2'])
+            lines = out.getvalue().splitlines()
+            self.assertEqual(lines[-1], 'Verdict: futility stop (nElo -27.08 < 0 after 2 stages)')
+            self.assertIn('LLR: -0.60 (-1.56, 2.77) [0.00, 6.00] nElo: continue', lines[-2])
+            plain = io.StringIO()
+            with contextlib.redirect_stdout(plain):
+                sm.main(args)
+            self.assertNotIn('Verdict:', plain.getvalue())  # the format without --played is unchanged
+            self.assertEqual(plain.getvalue().splitlines(), lines[:-1])
+
+
 if __name__ == '__main__':
     unittest.main()

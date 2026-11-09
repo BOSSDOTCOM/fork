@@ -1,0 +1,59 @@
+    Shards: 144 (done); pairs 7200, games 14400 (14400 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -3.23 +/- 3.39, nElo: -5.42 +/- 5.67
+    Ptnml(0-2): [212, 1800, 3296, 1694, 198]
+    LLR: -2.48 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+2026-11-06 10:27 UTC rising-rfp-25-vs-base: stage 9: run 42202745022 dispatched (ledger)
+2026-11-06 10:45 UTC rising-rfp-25-vs-base: stage 9: run 42202745022 merged
+    Shards: 160 (done); pairs 8000, games 16000 (16000 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -3.02 +/- 3.20, nElo: -5.08 +/- 5.38
+    Ptnml(0-2): [231, 1994, 3665, 1903, 207]
+    LLR: -2.62 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+2026-11-06 10:45 UTC rising-rfp-25-vs-base: stage 10: run 42205083270 dispatched (ledger)
+2026-11-06 11:03 UTC rising-rfp-25-vs-base: stage 10: run 42205083270 merged
+    Shards: 176 (done); pairs 8800, games 17600 (17600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -3.10 +/- 3.05, nElo: -5.22 +/- 5.13
+    Ptnml(0-2): [254, 2189, 4045, 2084, 228]
+    LLR: -2.94 (-2.94, 2.94) [0.00, 3.00] nElo: continue
+2026-11-06 11:04 UTC rising-rfp-25-vs-base: stage 11: run 42207392364 dispatched (ledger)
+2026-11-06 11:24 UTC rising-rfp-25-vs-base: stage 11: run 42207392364 merged
+    Shards: 192 (done); pairs 9600, games 19200 (19200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -3.78 +/- 2.92, nElo: -6.37 +/- 4.91
+    Ptnml(0-2): [279, 2405, 4409, 2260, 247]
+    LLR: -3.76 (-2.94, 2.94) [0.00, 3.00] nElo: H0 accepted
+2026-11-06 11:24 UTC rising-rfp-25-vs-base: decided after stage 11
+rising-rfp exit 0
+2026-11-06 11:24 UTC reval-no-check-relief: base 684bac654a31ff2ad1e8a564ed7435968dedec8a, test 7d72dc54058bdbfd8de84c289dc5e778159e86a4, bounds [-3, 0], stages 9 to 12, ref phase-4
+2026-11-06 11:24 UTC reval-no-check-relief: stage 9: run 42210007657 dispatched (ledger)
+2026-11-06 11:42 UTC reval-no-check-relief: stage 9: run 42210007657 merged
+    Shards: 160 (done); pairs 8000, games 16000 (16000 finished, time losses 1, abnormal 1)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -2.89 +/- 3.23, nElo: -4.82 +/- 5.38
+    Ptnml(0-2): [235, 2017, 3611, 1920, 217]
+    LLR: -1.32 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+2026-11-06 11:43 UTC reval-no-check-relief: stage 10: run 42212271728 dispatched (ledger)
+2026-11-06 12:01 UTC reval-no-check-relief: stage 10: run 42212271728 merged
+    Shards: 176 (done); pairs 8800, games 17600 (17600 finished, time losses 1, abnormal 1)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -2.37 +/- 3.09, nElo: -3.94 +/- 5.13
+    Ptnml(0-2): [266, 2203, 3964, 2119, 248]
+    LLR: -1.07 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+2026-11-06 12:01 UTC reval-no-check-relief: stage 11: run 42214489259 dispatched (ledger)
+2026-11-06 12:19 UTC reval-no-check-relief: stage 11: run 42214489259 merged
+    Shards: 192 (done); pairs 9600, games 19200 (19200 finished, time losses 1, abnormal 1)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -2.90 +/- 2.97, nElo: -4.80 +/- 4.91
+    Ptnml(0-2): [293, 2423, 4309, 2301, 274]
+    LLR: -1.57 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+2026-11-06 12:19 UTC reval-no-check-relief: stage 12: run 42216819947 dispatched (ledger)
+2026-11-06 12:38 UTC reval-no-check-relief: stage 12: run 42216819947 merged
+    Shards: 208 (done); pairs 10400, games 20800 (20800 finished, time losses 1, abnormal 1)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -3.16 +/- 2.86, nElo: -5.22 +/- 4.72
+    Ptnml(0-2): [331, 2616, 4656, 2505, 292]
+    LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
+2026-11-06 12:38 UTC reval-no-check-relief: undecided after stage 12
+reval-no-check-relief exit 2

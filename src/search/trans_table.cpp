@@ -91,6 +91,9 @@ bool TransTable::fetch(Key key, TtHit& hit) const {
 
 void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv) {
   if (!count_) return;
+#ifdef FORK_SEARCH_STATS
+  if (hold_writes_) return;  // a decision-ledger side search (X10)
+#endif
   TtBucket& b = buckets_[bucket_index(key, count_)];
   const std::uint32_t check = key_check_of(key);
   const int stored_depth = std::clamp(depth, 0, 255);

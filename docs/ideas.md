@@ -211,6 +211,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   Revisit with Phase 6's threads (several State stacks per core) and Phase
   4's network, which change what the cache holds.
 - **status:** tested in Phase 3, rejected for now
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** layout changes only under the 1% cycles-per-node acceptance rule (X13), not as a standalone item.
 
 ## 10. Steer into TB-drawn 6-piece endings
 
@@ -229,6 +230,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   when played out, so a weaker form of the idea may survive; that is what
   the re-evaluation decides.
 - **status:** re-evaluate (TB adjudication removed from the current rules)
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** dropped from Phase 4: replaced by the structure-class calibration scale (R33, order step 17).
 
 ## 11. TB boundary training data
 
@@ -248,6 +250,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   engine-generated data, but log the tablebase source in ORIGINALITY.md
   before use.
 - **status:** re-evaluate (TB adjudication removed from the current rules)
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 17):** replaced by the depth-matched endgame-start slice (R32, starts of 8-16 pieces), deferred until item 8a's result.
 
 ## 12. Endgame conversion
 
@@ -351,6 +354,12 @@ added on 2026-10-24; ideas 1-12 predate them.
   implemented, game endings included. Round 2's snapshot includes g2b,
   since the SPRT passed before it. Whether generation 2's next parts
   switch to the split settings is the owner's call.
+  **Publication plan (owner, 2026-11-07):** once a prior-art search is done (is the split search, cheap
+  unsaved moves interleaved with expensive saved ones in self-play, already published under another name;
+  KataGo's playout-cap randomisation is the nearest known relative), write a reproduction guide in
+  docs/research/ (mechanism, evidence, implementation, settings, costs and failures), then a TalkChess
+  summary post and possibly an arXiv note, stating clearly that the idea came from an AI-assisted project.
+  Anything published outside the repository needs the owner's go-ahead at the time.
 
 ## 14. Auxiliary training targets
 
@@ -509,6 +518,7 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** none (layout only).
 - **earliest phase:** Phase 3 (any time a stable binary exists).
 - **status:** untested
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** dropped from Phase 4: TCEC's build host is unlikely to have the tools, and PGO takes most of the gain.
 
 ## 22. Mate-aware late move pruning and reductions
 
@@ -633,6 +643,7 @@ tuned by SPSA.
   gate, resume and pinning fixes are in (audit-1, merged 2026-10-28). The
   long run (40 generations) stays in **late Phase 4** (owner, 2026-10-28),
   after the first strong network and the search re-validation. Pilot scheduled
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 19):** the long run on the label-and-sweep proxy is replaced by a capped pilot with a game-based fitness (R38), after the LMR terms (§5.6 order step 20).
 - **Candidate region for the long run (owner, 2026-10-31):** a correction
   to the singular test's margin and depth (tier 2, T27), for example a
   dependence on the TT entry's depth deficit. The measured form (DESIGN.md
@@ -717,6 +728,7 @@ tuned by SPSA.
 - **runtime cost:** none (a multiply where the malus is applied).
 - **earliest phase:** Phase 3 (8b).
 - **status:** untested
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** becomes an SPSA parameter (the final retune by scaling class, R24), not an SPRT.
 
 ## 29. How often unconfirmed root fail highs hold
 
@@ -751,6 +763,7 @@ tuned by SPSA.
   after its SPRT reached the cap undecided, +0.65 ± 3.56 Elo; sprt-log.md
   b3-shallow-fh). The audit meant this measurement to come first; B-3 ran
   without it.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** B-3 and the root fail-high fix are dropped from the re-validation queue: a timed search reaches the soft check only after a completed iteration, so no root fail high is pending there.
 
 ## 30. Keeping a stale TT entry that is still deeper once aged
 
@@ -845,6 +858,7 @@ tuned by SPSA.
   owner's decision (sprt-log.md, history/phase-3/audit-1.md). **Revisit
   when the eval-dependent margins are retuned after Phase 4** (Quality
   control 6), with an SPRT.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** retired as a standalone test: RfpMargin is one point on the early SPSA's axis (R14, §5.6 order step 11).
 
 ## 35. The bootstrap eval calls insufficient_material twice
 
@@ -874,6 +888,7 @@ tuned by SPSA.
   (Performance doctrine).
 - **earliest phase:** Phase 3.
 - **status:** untested
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** closed: +1.0% in speed sprint round 2, not kept; C4 absorbed the gain.
 
 ## 37. A cache-friendlier MoveList and PlyFrame layout
 
@@ -887,6 +902,7 @@ tuned by SPSA.
 - **runtime cost:** none if it pays.
 - **earliest phase:** Phase 3.
 - **status:** untested
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** layout changes only under the 1% cycles-per-node acceptance rule (X13), not as a standalone item.
 
 ## 38. Phase-end fuzzing on GitHub
 
@@ -974,6 +990,43 @@ tuned by SPSA.
 - **earliest phase:** Phase 4 (the pawn structure key exists since
   2026-11-02, branch tier2/drift).
 - **status:** untested (planned 2026-11-02); L2's pawn table in progress.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** **L1 (the separate pawn-and-king network) and L2 (the pawn drift table) dropped; L3 (the root planner) parked**, kept here; L4 is handled by the decisive-share pilot and the result-weight arm (X11, R27); L5 becomes the blind-spot suite (X14).
+- **L1's first step, S512+PP: speed** (branch nets/s512pp, not pushed;
+  every number a quiet-machine median ratio to S512r2's nps by the
+  identical-tree method: release builds whose net is S512r2's weights with
+  every link weight zero, so bench is S512r2's 14180299, in interleaved
+  bench rounds with the order rotated each round; the gate to train is
+  0.90, the goal 0.95, DESIGN.md §5.4):
+  - the links in a 32-bit accumulator (cab0114) 0.666; **in the main int16
+    sums** (399a43b, with the 96-link bound) 0.787; plus the pawn-change
+    flag (4ef9172) 0.784 (16 rounds, 2026-11-06).
+  - **the changed-pair search in one tight pass** (9e04b4a: both sides'
+    partners in one loop, the side read branch-free, constexpr tables
+    with both orders of a pair): **0.818** (+4.3% over 4ef9172; 0.807 in a
+    second 12-round session). Kept.
+  - the pawn structure key in make/unmake (8851d34, tier2/drift's) 0.813;
+    **a cache of each structure's link sum** keyed by it and checked
+    against the pawns (1,024 slots of 1 KB per perspective and flip, per
+    thread): without refills 0.791 (19.7% hits: a miss left the subtree
+    uncached), with the parent's sum refilled on a miss 0.809 (61.7% hits
+    in bench), 4,096 slots 0.824 (71.4% hits). No gain over the tight pass
+    alone, so not kept (the owner's rule for the size: within the 3% noise
+    rule, the smaller); the TT stall (perf, `TtEntry::bound`) varied from 5
+    to 45 ns per node between repeated runs of the same build, with no
+    consistent difference between 1,024 and 4,096 slots (three runs each).
+    Archived on archive/s512pp-structure-cache.
+  - **prefetch at make-move** on the cache: the cache slots 0.798, the
+    piece rows 0.774, both 0.776: slower, not kept.
+  - **fewer pairs with the tight pass:** links only between pawns at most
+    one rank apart (R = 1) **0.895** (rounds 0.873-0.915), R = 2 0.859
+    (12 rounds; R = 1 without the tight pass 0.860). R = 1 is just below
+    the 0.90 gate; the full design is well below it. Earlier
+    (2026-11-05/06, before the tight pass): 8-bit link rows, constexpr
+    tables, the changes found at the push and their rows prefetched did
+    not help (archive/s512pp-speed-switches); perf stat put the extra cost
+    in instructions (the pair search about 200 per node), with branch
+    misses about 20% of the extra cycles.
+  - **not trained** (below the gate).
 
 ## 41. S-512 with Fork's own threat and pawn-pair inputs
 
@@ -994,7 +1047,14 @@ tuned by SPSA.
 - **sources:** Fork KB nnue-inputs.md §1-2 (kb 962f1ab, 5cd96c3) and the
   sources it lists (ORIGINALITY.md, 2026-11-05).
 - **earliest phase:** Phase 4.
-- **status:** untested (planned 2026-11-05).
+- **status:** built on nets/s512cl (uncommitted engine code; trainer and reference committed), **held by the speed gate** (DESIGN.md §5.4, owner, 2026-11-05): not trained until it keeps 0.90 of the default's nps.
+- **Speed, measured 2026-11-05** (quiet machine, every other CPU job suspended; release builds; a synthetic architecture-7 net, whose weights do not change the evaluation's cost):
+  - fixed time (`go movetime 10000`, 6 bench positions, interleaved, Hash 16, 1 thread): S512cl median 680,114 nps, S512r2 3,591,160; per position **0.195** (0.095 to 0.475). Nodes reached on the start position: 3,405,824 (depth 14, seldepth 45) against 22,959,373 (depth 20, seldepth 32, stopped at 6.3 s); the synthetic net also deepens the quiescence lines, but the nps gap is the evaluation's cost, not the tree.
+  - profile (perf, cpu-clock, Linux clang 21 RelWithDebInfo, the start position, 10 s): `sum_rows_saturated` 65.5%, `contact_inputs` with its helpers 16.2%: **82% of the time is the contact and link inputs, which are recomputed and summed from scratch at every evaluation**, not updated on make and unmake. S512r2's profile is led by its incremental accumulator update (17.6%) and the output layer (15.9%).
+  - per-move change (200 g3s1 games, 37,720 perspective updates): 5.48 contact and link inputs change per move on average (contacts 4.20, links 1.28; p99 14 and 11), against 26.5 active (p99 66); a frame change (full refresh) in 452 updates.
+  - storage: every first-layer row int16 (52,672 rows x 512 = 53.9 MB of the 53,953,760-byte file; the output layer 16 KB). Trained first-layer weights at scale 255 fit int8 for 98.1% (S512r2's piece rows) and 99.37% (S512+X's exposure rows, new inputs trained from zero; p99.9 215, max 471): 8-bit contact and link rows need clipping-aware training (QAT, idea 44) or a smaller scale; they would halve those rows to 26.6 MB.
+  - cache: S512r2's first layer is 786 KB (within one core's 1 MB L2 on this machine); S512cl's table is 53.9 MB (27.4 MB with int8 contact rows), within this Ryzen 7600X3D's 96 MB L3 but larger than the L3 of most CPUs (TCEC's hardware: UNVERIFIED here). Rows read per evaluation now: about 27 per perspective (27 KB each side); incremental: about 5.5 per perspective per move.
+  - **estimate, UNVERIFIED** (from the profile shares, not measured): incremental contact updates with the feature search reduced to the squares a move touches would bring S512cl to roughly 0.5-0.6 of S512r2's nps; the gate (0.90) leaves room for about 1-2 extra row updates per move, so the design also needs far fewer active inputs (or cheaper ones) to pass.
 
 ## 42. Continuation histories as inputs to the LMR history term
 
@@ -1018,6 +1078,7 @@ tuned by SPSA.
 - **sources:** Fork KB §3.36 (kb 5fac98e) and its sources (ORIGINALITY.md).
 - **earliest phase:** Phase 4.
 - **status:** untested (planned 2026-11-05).
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 11):** folded into the round-once LMR step (R20) as its variant, run only if the centred history term passes; no longer §5.6's item 8.
 
 ## 43. Fractional depth
 
@@ -1036,6 +1097,7 @@ tuned by SPSA.
 - **earliest phase:** Phase 4.
 - **status:** untested (planned 2026-11-05); design below (owner, 2026-11-05:
   plan only, no code yet).
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** shrunk to round-once LMR arithmetic (R20); the full refactor (level 2) is out of Phase 4 and no longer precedes the SPSA retune.
 - **Design** (Fork's own, from the KB entry's concepts):
   - **Unit:** depth is held in units of 1/64 ply (`OnePly = 64`): a power
     of two, fine enough for SPSA to move a reduction in small steps
@@ -1100,6 +1162,7 @@ tuned by SPSA.
   (ORIGINALITY.md).
 - **earliest phase:** Phase 4.
 - **status:** in progress: built behind an option, not yet run (2026-11-05).
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** the validation session is retired; `--qat` stays for int8 designs; adaptive rounding of the output layer (R25) instead.
 - **Built** (branch nets/s512cl, tools/train): `fork-train --qat` (train,
   eval, check; the S-512 family: S-512, H-512, S512+X, S512cl; refused for
   the others): the forward pass uses each weight and bias rounded to the
@@ -1126,7 +1189,7 @@ tuned by SPSA.
 ## 45. Simple endings: a tablebase-labelled data slice, a standing endgame check, conversion
 
 - **type:** ELO (the data slice), TOOLING (the check and the conversion test).
-- **idea** (owner, 2026-11-05; **on hold**, the owner, the same day): three parts.
+- **idea** (owner, 2026-11-05; put on hold the same day; **lifted 2026-11-06**: the slice and the acceptance test go with the next snapshot): three parts.
   1. **Endgame slice** for the next training snapshot: random legal
      positions of at most 5 pieces (KRK, KQK, KPK and the common 4-5 piece
      endings), labelled by their Syzygy WDL, a small fixed share of the
@@ -1167,4 +1230,893 @@ tuned by SPSA.
 - **related:** idea 11 (TB boundary data), idea 12 (endgame conversion).
 - **metric:** the endgame check's misjudged counts against targets (to be
   set), the conversion rate, then the net's promotion test.
-- **status:** on hold (owner, 2026-11-05).
+- **status:** in the next snapshot (owner, 2026-11-06: lifted from its hold): the slice goes into g3s2, and the check becomes the standing acceptance test for the retrained default (DESIGN.md §5.6, order item 7).
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 10):** the acceptance target is at most 15 of 900 misjudged; part 3 (conversion without tables) dropped; part 2 extended to 4-5-man classes (X19).
+
+## 46. Threat knowledge at a low speed cost: the design brainstorm
+
+- **type:** ELO (a family of network, training and search designs; nothing
+  built).
+- **idea** (owner, 2026-11-06; design only, stopped for the owner's
+  review): how to get XGR/S512+X-style threat knowledge into the
+  evaluation without S512+X's speed loss (fixed-node +25.67 ± 10.26 Elo,
+  STC −30.04 ± 10.82 at 0.818x nps). Four proposers with different briefs
+  (systems/CPU, ML/compression, chess knowledge, novelty) wrote 17 designs
+  from one brief of Fork's measured numbers; a judge merged and ranked
+  them. Clean room: concepts only, no engine source opened; every estimate
+  below is reasoned, not measured (UNVERIFIED until its experiment runs).
+- **the judge's checks** (the parts that change the plan):
+  - S512r2 is about 1,300 cycles per node (3.59 M nps at about 4.7 GHz,
+    the clock UNVERIFIED): the 0.90 gate allows about 145 extra cycles per
+    node, 0.95 about 70.
+  - **Finding threats costs more than summing them.** Switching off XGR's
+    set-wise exposure made it about 13% faster (§5.4), so finding exposed
+    pieces is near 150 cycles before any rows are summed. A per-node attack
+    map shared with move ordering saves less than it seems: most
+    evaluations are at quiescence stand-pat, where quiet ordering does not
+    run. Every "unshared" cost estimate should be read 0.03-0.06x worse
+    until measured.
+  - **The Elo value of speed is uncertain:** S512+X's swing gives about
+    3.1 Elo per 1% nps (2.2-3.9), the usual rule of thumb about 0.9
+    (UNVERIFIED for Fork). Plan with 2 ± 1 and measure it.
+  - **An evaluation that depends on the search window** (alpha, beta, a
+    pruning threshold) is not safe as proposed: the TT, the drift table's
+    residuals, the improving flag and re-searches all assume a position
+    has one static eval. Safe gates depend on the position only, or cache
+    the fuller evaluation once computed (a TT flag that only upgrades).
+  - A 1,600-game fixed-node match (about ±10 Elo) cannot screen designs
+    worth +3 to +8: those need a loss screen, then an STC SPRT.
+  - Column-restricted rows in the main accumulator break the loader's int16
+    bound (it assumes at most 32 piece features): it would have to be redone.
+  - 8-bit rows and additive low-rank factorization were argued out: S512+PP
+    showed the cost is instructions and row width, and an additive
+    factorization of attacker-victim weights reduces to per-square exposure
+    features.
+- **the designs, merged and ranked** (expected net Elo at STC per day of
+  effort; effort in days of build, training and testing):
+
+  | rank | design | proposers | effort | net STC Elo |
+  |---|---|---|---|---|
+  | 0 | the speed-Elo exchange rate (S512r2 against itself at 0.85x time) | judge | 0.5 + runners | enabler |
+  | 0 | price the attack map in fork_micro (tiers: pawn attacks; + knights and kings; full per-kind maps; exposure sets) and split S512+X's 18% into finding and summing | systems, judge | 1 | enabler |
+  | 0 | offline residual study: frozen S512r2's residuals against the labels, fitted by danger features and threat classes | chess knowledge, systems, novelty | 1-2 | kill test |
+  | 1 | **distillation from S512+X** (teacher-blended score labels, λ 0.25 or 0.5, and an arm weighting positions where teacher and S512r2 disagree) **plus auxiliary threat targets** (a training-only head predicting hanging pieces and king-zone attacks): one Kaggle session, no speed cost | ML, novelty | 5-7 | 0 to +5 |
+  | 2 | **threat-class output heads**: the head picked by phase x a cheap class (pawn and knight attacks on the mover's pieces), about 0.99x | systems, chess knowledge, novelty | 5-7 | 0 to +5 |
+  | 3 | **gated threat evaluation** (S512+X's plane only where a position-only gate fires; one net trained with the plane dropped half the time); its oracle first: both nets in one engine at fixed nodes, no training | ML, systems, novelty | 3-4 (oracle), 12-15 | −10 to +8 |
+  | 4 | **dense danger vector** into the last layer (counts of hanging and lower-attacked pieces, king-zone attackers, safe checks, restricted pieces), at the tier the attack-map pricing allows | chess knowledge, systems | 6-8 | −5 to +6 |
+  | 5 | **column-restricted exposure rows**: exposure inputs confined to 64 of the 512 columns, updated incrementally (alive only if the attack map is cheap; a separate narrow lane is dominated by it) | systems (the lane: ML, chess knowledge, novelty) | 10-12 | −8 to +8 |
+  | 6 | **pawn(+king)-keyed delta cache**, generalized from S512+PP's (after the cache's own measurement) | systems | 4-6 | 0 to +5 |
+  | 7 | **threat-keyed correction and volatility tables** (a residual table keyed by the threat configuration; error magnitude scaling the pruning margins); an offline replay first | chess knowledge, novelty | 4-6 | 0 to +4 |
+  | 8 | **stand-pat check under multiple threats** in quiescence (a new constant, measured on a wide grid) | chess knowledge | 4-6 | 0 to +4 |
+
+- **first experiments, with their rules** (declared here, before any run;
+  **approved by the owner as ranked, 2026-11-06, with the exchange rate
+  first among these experiments (after the current SPRT queue: the threat
+  set, then ProbCut), and every go/kill rule kept as written except rule
+  5's, amended by the owner the same day**; DESIGN.md decisions log,
+  2026-11-06):
+  1. Exchange rate: S512r2 against itself at 0.85x time, STC, about 4,000
+     games on GitHub's runners (about ±8 Elo). It sets every design's
+     go/kill; under 1.5 Elo per 1% nps, the 0.90 gate would be too strict
+     for designs with large judgment gains (the owner decides).
+  2. Attack-map pricing (quiet machine): full maps plus exposure sets ≤ 60
+     cycles keeps the dense vector and column-restricted rows alive; 60-120
+     keeps only pawn/knight-tier features and the gate; over 120 kills
+     every ungated slider-feature design; if finding is over 2/3 of
+     S512+X's cost, the separate lane is dropped.
+  3. Residual study (2-5 M held-out positions, frozen S512r2, WDL space):
+     ≥ 0.5% loss reduction at an affordable tier trains the dense vector or
+     the class heads there; 0.2-0.5% only the pawn-class heads (if ≥ 0.98x
+     on a synthetic A/B); under 0.2% kills the output-layer family. The
+     volatility table needs its top quintile of predicted uncertainty at
+     ≥ 2x the bottom quintile's mean |residual|.
+  4. Gate oracle (fixed nodes, both nets in one engine, 3,200 games):
+     policies PV only, band 50, band 100 and a position-only gate; go if one
+     keeps ≥ +15 with gate rate p x 18% + 3% ≤ 7%; the position-only gate is
+     preferred if within 3 Elo of the best; otherwise the gated design is
+     killed.
+  5. Distillation and auxiliary targets (one Kaggle session; the relabelling
+     by S512+X through jobctl): two seeds per arm; an arm is kept only if
+     both seeds beat both control seeds beyond the spread with ≥ 0.3% lower
+     loss on the original labels, then a fixed-node screen and an STC
+     SPRT on [0, 5], as for every new network (owner, 2026-11-06; the
+     judge's proposal to skip the screen, which cannot resolve gains of
+     this size, was not adopted).
+- **novelty** (the judge's view, low confidence, UNVERIFIED): possibly new
+  are threat-class head selection, a threat-configuration key for
+  correction tables, and confining an input family to a column subset of
+  the main accumulator (block-sparse layers are known ML, so at most a new
+  application). Not new: window-gated evaluation is classical lazy
+  evaluation; uncertainty-scaled margins are partly public; auxiliary
+  targets are standard multi-task learning.
+- **sources to credit** (ORIGINALITY.md when a design is built): Fork KB
+  nnue-inputs.md §1 and its sources (threat inputs in NNUE); Giraffe (M.
+  Lai, 2015; attack and defend maps as inputs); public NNUE descriptions
+  (phase and material output buckets, side paths into the output layer,
+  accumulator refresh caches); Stockfish's public description of switching
+  between a small and a big net by |eval|; correction history (public
+  descriptions, first source UNVERIFIED); Chessprogramming wiki (Lazy
+  Evaluation, Kogge-Stone Algorithm, SIMD and SWAR Techniques, Hyperbola
+  Quintessence, Pawn Hash Table, King Safety, Attack and Defend Maps,
+  Mobility, Trapped Pieces, Quiescence Search, Null Move, Botvinnik-Markoff
+  Extension); Intel's ISA documentation and Wojciech Muła's blog (GFNI);
+  KataGo (Wu 2019); Bucilua, Caruana and Niculescu-Mizil (2006); Hinton,
+  Vinyals and Dean (2015); Furlanello et al. (2018); Shrivastava et al.
+  (2016); Katharopoulos and Fleuret (2018); Jaderberg et al. (2016);
+  Caruana (1997); Vapnik and Vashist (2009); Srivastava et al. (2014); Yu
+  et al. (2018); Viola and Jones (2001); Teerapittayanon et al. (2016);
+  Graves (2016); Denton et al. (2014); Jaderberg, Vedaldi and Zisserman
+  (2014); Yuan and Lin (2006); Wen et al. (2016).
+- **related:** ideas 40, 41 (S512cl), 44 (QAT); S512+X and XGR-512
+  (DESIGN.md §5.4).
+- **phase:** Phase 4.
+- **metric:** each experiment's rule above; then SPRTs.
+- **status:** approved as ranked (owner, 2026-11-06); the exchange rate
+  runs first.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** distillation from S512+X dropped (refuted: the teacher is weaker than the default at fixed nodes) and the threat-keyed correction table dropped; threat inputs (ranks 3-5) parked; the residual study is redone against deep labels (X7); attack-map pricing folded into the zero-row build (X12); the stand-pat check only inside tail-risk-classed margins (R35); the speed-to-Elo measurement is the throttled 0.5x design (decision 7) and the gate is priced at 1.5 Elo per 1% nps (decision 8).
+
+## 47. The better-training plan: relabelled data and quieter positions
+
+- **type:** ELO.
+- **idea** (owner, 2026-11-06): later experiments on the training data
+  itself, each measured before any bulk change. Data generation meanwhile
+  continues as it is: g3f generates new data labelled by S512+PP, the
+  default since 2026-11-06, and nothing is relabelled now.
+  1. **Relabelling old data with a newer net.** Generation 1 first (labelled
+     by B0r1 and B0r2): rescore a sample of it with the current default and
+     test it against an equal amount of newly generated data, with a small
+     net (training cost of minutes, as B0's), before any bulk relabel.
+     Generation 0 (bootstrap-labelled) only if generation 1's test helps.
+     The test is declared before it runs: the same positions seen, two
+     seeds per arm, one shared validation set; a gain only if the relabelled
+     arm's mean loss is lower by more than the seed spread, then the usual
+     SPRT path for a net trained on it. Relabelling keeps strategy A+ (Fork
+     rescores its own data with its own nets, DESIGN.md §5.4 data decision
+     1); each relabelled part gets its own manifest naming its new labeller.
+  2. **Quiet-position selection** ("better labels"; KB
+     research-nnue-dataset-quiet-positions.md, a clean-room summary of arXiv
+     2412.17948): an offline pass marking positions whose static evaluation
+     is far from their quiescence value as unsaved (score 32767, which the
+     trainer already drops), written as derived shards with their own
+     manifests; sealed data is never changed. First the offline counts on a
+     wide pre-declared threshold grid (not centred on the paper's values:
+     no constant is taken from it), and how much the test overlaps the
+     capture-and-promotion filter; then training arms against the current
+     filter, two seeds each, equal positions seen; then the usual path. The
+     paper's second test (static evaluation against the label) is a
+     measurement of the labelling net's error, as idea 46's residual study,
+     not a filter; the Syzygy slice is exempt from both.
+- **why:** the labels are only as good as the net that searched them, and
+  the oldest data was labelled by the weakest evaluators; the paper claims
+  a gain from quieter data but measured no ablation of its filter, so both
+  ideas need Fork's own measurement.
+- **phase:** Phase 4 or later, after item 7's retrain.
+- **metric:** each experiment's declared rule above; then SPRTs.
+- **status:** recorded (owner, 2026-11-06); not started.
+  **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** 47.1 (relabelling generation 1 first) dropped: the recency arm (R3) asks the question that matters; 47.2 (the quiet filter) shrunk to its offline count, low priority.
+
+## Novel NNUE ideas (group, owner, 2026-11-07)
+
+Six training and evaluation ideas the owner recorded after the Phase 4
+think tank (docs/research/phase4-think-tank/), **plan only, scheduled after
+item 8a**. The order of first experiments (owner): **51 and 52 first**
+(training-only, cheap), then **53**, then **50**; 48 and 49 after them. Each
+is tested at equal data with a small net first (B0's size, 768 -> 256,
+training in minutes), then the usual path: parity, the fixed-node screen
+for a new network design, the STC SPRT. Every number below is a placeholder
+or a model prediction until measured; new names and constants go through
+the screens before use.
+
+## 48. Decision-focused loss: weight positions by search-decision sensitivity
+
+- **type:** ELO (training-only; no runtime cost).
+- **idea:** search uses the evaluation almost only through comparisons
+  with thresholds (alpha, beta and the pruning margins), so an error that
+  never flips a comparison costs nothing. Weight each training position by
+  how close its evaluation sat to a decision boundary in Fork's own
+  searches, instead of weighting all positions equally.
+- **math:** for a position whose evaluation e meets a threshold b, an error
+  delta flips the decision with probability about f(e - b) |delta|, where f
+  is the density of (e - b) near zero; the expected decision cost is
+  therefore about the sum over positions of w_i |delta_i| with w_i
+  proportional to a kernel K(|e_i - b_i| / h). The weighted loss puts the
+  net's capacity where decisions are made. The price is variance: with the
+  weights normalised to mean 1, the effective sample size is
+  n_eff = (sum w)^2 / sum w^2, which must stay at least half of n (else the
+  gain is eaten by noise). It also explains, in part, why validation loss
+  misranked S512+X and S512+PP (phase-a-evidence.md, A1 §2): plain loss
+  counts errors that search never sees.
+- **literature:** decision-focused or "predict-then-optimise" learning:
+  Elmachtoub and Grigas, "Smart 'Predict, then Optimize'" (Management
+  Science, 2022); Wilder, Dilkina and Tambe, "Melding the Data-Decisions
+  Pipeline" (AAAI 2019) (both UNVERIFIED as exact citations).
+- **first experiment:** offline. From the step 1 decision ledger (X10) and
+  a search-log sample, attach to held-out positions the distance to the
+  nearest bound or margin; score S512r2, S512+PP, S512ppr2 and S512+X with
+  the weighted loss and check whether it orders them as their SPRTs did
+  (where plain loss did not); report n_eff. Then a small-net pair at equal
+  data, plain against weighted.
+- **kill criterion:** the weighted loss does not rank the four nets in
+  SPRT order better than plain loss, or n_eff below 0.5 n, or the small
+  net's fixed-node result at or below zero.
+- **data need:** training positions carry no search-log bounds today:
+  either a datagen field (a data-format change) or an offline shallow
+  search per sampled position; costed before building.
+- **phase:** Phase 4, after item 8a. **metric:** the offline ranking test,
+  then the fixed-node screen and the STC SPRT. **status:** untested (plan
+  only, owner, 2026-11-07). **runtime cost:** none. **earliest phase:**
+  Phase 4.
+
+## 49. Pairwise ranking loss on sibling positions
+
+- **type:** ELO (training-only; no runtime cost).
+- **idea:** the move choice at a node depends on the order of its
+  children's values, which value regression does not enforce. Add a
+  ranking term over sibling positions (the children of one parent), ordered
+  by Fork's own deeper search, to the value loss.
+- **math:** a RankNet-style term, sum over sibling pairs (a above b) of
+  log(1 + exp(-s (v_a - v_b))), with s the logistic scale; its gradient is
+  largest for pairs the net orders wrongly or nearly ties, which are the
+  pairs whose order changes the move played. A small value error on a
+  close top-two pair costs a move; the same error on a lopsided pair costs
+  nothing, so the ranking term spends capacity where regression does not.
+  The total loss is L_value + mu L_rank with mu a placeholder set by a
+  two-point ladder.
+- **literature:** Burges et al., "Learning to Rank using Gradient Descent"
+  (ICML 2005, RankNet); the Bradley-Terry model (1952) (UNVERIFIED as exact
+  citations).
+- **first experiment:** sibling sets generated offline from Fork's data:
+  about 200,000 parents, up to 8 children each, labelled by a 20,000-node
+  search of the default (about 32 G nodes, roughly 6 CPU-hours at 1.5 M
+  nps per thread, UNVERIFIED); a small net with mu in {0, a placeholder},
+  scored by top-1 agreement with a deeper search on held-out parents, then
+  fixed-node games.
+- **kill criterion:** top-1 agreement improves by less than 1 point, or
+  the fixed-node result is at or below zero.
+- **phase:** Phase 4, after 48's order slot. **metric:** top-1 agreement,
+  then the fixed-node screen and the STC SPRT. **status:** untested (plan
+  only, owner, 2026-11-07). **runtime cost:** none. **earliest phase:**
+  Phase 4.
+
+## 50. Conformal pruning margins from an uncertainty estimate
+
+- **type:** ELO (search; runtime cost possible).
+- **idea:** give pruning margins a coverage guarantee: a small head (or a
+  cheap proxy) estimates each position's evaluation uncertainty u(x), and
+  each margin is u(x) times a quantile calibrated on held-out search data,
+  so the rate of wrong prunes is set directly rather than through fixed
+  centipawn margins (the owner's "revision-head style").
+- **math:** split conformal prediction. On a calibration set compute the
+  normalised scores r_i = (e_i - s_i) / u_i (static evaluation minus
+  search result, divided by the predicted uncertainty: how far the search
+  fell below the evaluation) and take q, the
+  ceil((n + 1)(1 - alpha)) / n empirical quantile; the margin m(x) = q u(x)
+  then gives P(s < e - m) at most alpha for an exchangeable new position.
+  It fits the think tank's margin model (phase-b-specialists.md, B11: the
+  optimal margin satisfies P(r < -m*) = lambda C_d / L_d): conformal sets
+  each depth's error rate alpha_d directly and adapts the margin to the
+  position through u(x), which is what the heavy tail (B11: 59-89% of
+  wrong depth-1 RFP prunes come from the tail) needs. Caveat: positions
+  met in search are not exchangeable with the calibration set, so the
+  guarantee is approximate and must be checked in the engine.
+- **literature:** Vovk, Gammerman and Shafer, "Algorithmic Learning in a
+  Random World" (2005); Lei et al., "Distribution-Free Predictive Inference
+  for Regression" (JASA 2018); Angelopoulos and Bates, "A Gentle
+  Introduction to Conformal Prediction" (2021) (UNVERIFIED as exact
+  citations).
+- **first experiment:** offline, from the decision ledger (X10): does u(x)
+  (first a free proxy: the TT-refined minus raw evaluation, the last
+  move's evaluation swing; then a trained uncertainty head) reduce wrong
+  prunes at an equal prune count? Then the head's cost, computed only at
+  pruning decisions.
+- **kill criterion:** fewer than 20% fewer wrong prunes at an equal prune
+  count offline (the think tank's I4 gate), or an nps cost above 1%
+  without a matching gain, or H0.
+- **phase:** Phase 4, after 53. **metric:** the offline wrong-prune
+  reduction, nps, then the STC SPRT (and LTC: a pruning change). **status:**
+  untested (plan only, owner, 2026-11-07). **runtime cost:** possible (an
+  extra output, or a proxy at pruning nodes). **earliest phase:** Phase 4.
+
+## 51. TD(lambda) targets from Fork's stored self-play games
+
+- **type:** ELO (training-only; no runtime cost).
+- **idea:** replace the score/result blend (result weight 0.5 since B0)
+  with lambda-weighted targets built from the later search scores stored
+  in the same game, ending in the result; compared with the current blend
+  at equal data.
+- **math:** the target for the position at ply t is
+  (1 - lambda) sum_{k >= 1} lambda^(k-1) sigma(s_{t+k} / S), with the game
+  result as the terminal value. Fork's measurements (phase-b-specialists.md,
+  B4 M2 and B12 W4): the result is shared by about 35 kept positions per
+  game, with a within-game correlation of 0.674, so a game carries only
+  about 1.5 independent result observations; the stored score 16-32 plies
+  later carries one half to two thirds of the result's information at
+  about a third of its noise. Averaging the later scores therefore cuts the
+  target's variance while keeping most of the information that only the
+  result brings. lambda is chosen by measurement, not guessed: the value
+  that minimises the target's error against the deep-label gold set (X7).
+  Caveats (B13): only the saved, full-search scores may enter (the split
+  search's cheap moves are not comparable), and the result's bias differs
+  by endgame class, so the decisive-share pilot (X11) runs first.
+- **literature:** Sutton, "Learning to Predict by the Methods of Temporal
+  Differences" (Machine Learning, 1988); Baxter, Tridgell and Weaver,
+  TDLeaf(lambda) in KnightCap (1998/2000); the KataGo paper's remark that
+  the outcome target is data-limited (Wu, 2019) (UNVERIFIED as exact
+  citations).
+- **first experiment:** the offline variance study (lambda against gold-set
+  error, CPU minutes once X7 exists); then a small net on the same
+  positions, the current blend against the TD(lambda) target, two seeds,
+  scored on the gold set and by fixed-node games. The trainer needs a
+  reader flag for the per-game later scores.
+- **kill criterion:** the TD arm's gold-set loss is not at least 2e-5
+  better than the blend's, or its fixed-node result is within plus or minus
+  4 Elo of the control (B12's kill rule), or the endgame check worsens.
+- **phase:** Phase 4, after item 8a (first among this group). **metric:**
+  gold-set loss, the fixed-node screen, then the STC SPRT. **status:**
+  untested (plan only, owner, 2026-11-07); overlaps the think tank's R37
+  (n-step and lambda-return targets), which this entry supersedes.
+  **runtime cost:** none. **earliest phase:** Phase 4.
+
+## 52. Ensemble-disagreement active learning
+
+- **type:** ELO (training-only; no runtime cost).
+- **idea:** each retrain already produces two seeds; the positions where
+  they disagree most are where the network is least sure. Oversample those
+  positions and give them deep labels.
+- **math:** query by committee: the disagreement D(x) = |v_1(x) - v_2(x)|
+  estimates the epistemic variance at x. Under a bias-variance view the
+  reducible error at x grows with Var_seed(v(x)); allocating extra labels
+  in proportion to its square root (Neyman allocation) minimises the total
+  variance for a fixed labelling budget. The gain depends on how
+  concentrated the disagreement is: if the top 5% of D hold no more error
+  than average, there is nothing to buy.
+- **literature:** Seung, Opper and Sompolinsky, "Query by Committee"
+  (COLT 1992); Settles, "Active Learning Literature Survey" (2009)
+  (UNVERIFIED as exact citations).
+- **first experiment:** CPU minutes: the item-7 warm seeds' float weights
+  (both kept in ~/fork-data/kaggle/g3s2-out/result/) score a held-out
+  sample; compare the error of the top-5% D positions against deep labels
+  (X7) with a random 5%. Then, if it passes, deep-label a top-D sample
+  (sized by CPU cost: 1 M positions at 1 M nodes is about 185 CPU-hours,
+  so start with 100,000-200,000 positions at 200,000 nodes) and train a
+  small net at equal data against a random-sample control.
+- **kill criterion:** the top-D positions' error is less than 1.5 times a
+  random sample's, or the small-net arm is not better than the random arm
+  by more than the seed spread.
+- **phase:** Phase 4, after item 8a (with 51). **metric:** the error
+  ratio, then gold-set loss, the fixed-node screen and the STC SPRT.
+  **status:** first step done (2026-11-07; docs/research/idea52/report.md): the **warm pair** (item 7's
+  warm seeds, in effect one net) fails the 1.5 line (eval-matched ratios 1.24-1.37); the **scratch pair**
+  (independent initialisations) passes it (eval-matched 1.69-1.76 on three detectors, 1.49-1.50 on the
+  fourth, unchanged with deep-search mates excluded), and the default net's own error is 1.6-1.7 times
+  higher on the positions the scratch pair picks. Next (owner): disagreement of an independent pair is a
+  detector in the crucial-point measurement, and **retrain 8b gets an idea-52 arm**: the top-disagreement
+  positions (from an independent pair) deep-labelled and oversampled against the standard arm at equal
+  data; every retrain from 8b on keeps one from-scratch run as the independent committee member.
+  **Keep-or-drop rule** (owner, decided before 8b's result): if 8b's disagreement arm does not beat
+  the standard arm by a meaningful margin (a fixed-node screen of +5 Elo or more, or a passing SPRT
+  if it is screened), idea 52 is retired and the scratch-run rule dropped (saving its 2-4 hours per
+  retrain); the result stays in the record either way.
+  **runtime cost:** none. **earliest phase:** Phase 4.
+
+## 53. Pawn-structure-class output experts
+
+- **type:** ELO (evaluation; runtime cost possible, expected near zero).
+- **idea:** Fork's 8 output heads are chosen by material phase. Choose (or
+  add) the head by pawn-structure class instead: a class id from a cached
+  pawn-structure key, looked up once per pawn configuration, so each class
+  gets its own readout of the same accumulator.
+- **math:** a mixture of experts on the output layer: the gain is the
+  variance of the optimal readout across classes, roughly
+  sum_c p_c ||w_c - w_bar||^2 in the accumulator's covariance metric, paid
+  for by fewer training positions per head (a class with share p_c sees
+  p_c of the data; at about 650 positions per first-layer weight there is
+  room). The cost is a table lookup by pawn key (pawn moves are 24.2% of
+  makes on bench, 16% in game, X1), cached, so the nps cost should be near zero; the class map
+  itself (hand classes such as open, closed, isolated queen's pawn,
+  symmetrical, or clusters of pawn features) is chosen by the probe below,
+  not guessed. Pawn links' success (S512+PP: +32.7 STC) is evidence that
+  pawn structure carries knowledge that search does not reach.
+- **literature:** Jacobs, Jordan, Nowlan and Hinton, "Adaptive Mixtures of
+  Local Experts" (Neural Computation, 1991); output buckets are common
+  NNUE practice (KB nnue-design.md); this gating is Fork's own (NOVEL as
+  far as the think tank found, UNVERIFIED). Same family as the think tank's
+  W2/R26 (output experts chosen by frozen-feature probes): this entry is one
+  of its candidate gatings.
+- **first experiment:** the CPU probe (W2's method): freeze S512ppr2's
+  first layer, fit per-class readouts for a few class maps against the
+  phase buckets on held-out data; train only the best map if it gains.
+  Fork's incremental pawn key exists as `Position::pawn_key` on
+  tier2/batch4 (not yet on phase-4); "pawn_structure_key" is the owner's
+  descriptive name, and any new name is screened before use.
+- **kill criterion:** the probe's validation gain is under 2e-5 for every
+  class map, or the fixed-node result is at or below zero, or nps falls by
+  more than 1%.
+- **phase:** Phase 4, after 51 and 52. **metric:** the probe gain, nps,
+  the fixed-node screen, then the STC SPRT. **status:** untested (plan
+  only, owner, 2026-11-07). **runtime cost:** possible (near zero
+  expected). **earliest phase:** Phase 4.
+
+## Paradigm candidates (group, owner, 2026-11-07)
+
+Five larger departures from Fork's present design, recorded by the owner
+after the Phase 4 think tank, **plan only, after the current Phase 4
+order**, except that **54 is the first to prototype, after item 8a**. Each
+starts with a cheap offline study and a kill criterion, before any engine
+change or SPRT. Every number below is a placeholder or a model prediction
+until measured; new names and constants go through the screens before use.
+
+## 54. Shared-accumulator policy head for move ordering, then reductions
+
+- **type:** ELO (search and evaluation; runtime cost possible).
+- **idea:** a small move-scoring head that reuses the NNUE accumulator
+  already computed at the node: it scores candidate moves for ordering
+  first, and only later informs reductions. Its cost per node and its
+  ordering quality (the first-move cutoff rate) are measured before any
+  SPRT.
+- **math:** alpha-beta's tree approaches the minimal tree (on the order of
+  b^(d/2) leaves, Knuth and Moore) only with good ordering; every cutoff found on
+  a later move costs the earlier siblings' subtrees. The trade, at the
+  think tank's rate of about 1.5 Elo per 1% nps (phase-a-evidence.md):
+  Elo is about 1.5 x (the percentage of nodes saved at equal depth minus
+  the percentage of nps lost). The head's cost is about one dot product of
+  the accumulator with a per-move vector for each move scored (512
+  multiply-adds), so roughly 15,000 per node if every quiet move is
+  scored; it must therefore be gated (deep nodes only, or nodes without a
+  TT move, where IIR already says ordering is weakest), which the think
+  tank's W8 proposed.
+- **literature:** policy priors in AlphaZero (Silver et al., Science 2018)
+  and Leela Chess Zero; Fork's own idea 16 (a tiny policy net, parked) and
+  the think tank's W8 (phase-b-specialists.md, B12) and its verdict (B14:
+  WEAK as a Phase 4 plan change; the synthesis listed it as not for Phase
+  4), which this entry now schedules as a prototype after item 8a.
+- **first experiment:** offline: train the head on Fork's data (the move
+  the search played is stored per position) and measure top-1 and top-3
+  agreement with the search's move on held-out positions; then a stats
+  build replay (the step 1 tooling, X1 and X2) recording, at gated nodes,
+  whether the head's first move is the eventual cutoff move, against the
+  current selector's first quiet, and the head's cost in cycles per node.
+- **kill criterion:** the predicted node saving at equal depth does not
+  exceed the measured nps cost (net Elo by the formula above at or below
+  zero), or the first-move cutoff rate at gated nodes improves by less
+  than 1 point.
+- **phase:** prototype after item 8a. **metric:** first-move cutoff rate,
+  node saving and cycles per node, then the STC SPRT (and LTC). **status:**
+  untested (plan only, owner, 2026-11-07). **runtime cost:** possible.
+  **earliest phase:** Phase 4.
+
+## 55. A learned reduction and pruning function
+
+- **type:** ELO (search; runtime cost possible).
+- **idea:** replace the hand-written reduction and pruning formulas (LMR's
+  table and adjustments, the futility and late-move pruning rules) with
+  one tiny model trained from search outcomes, an approach the owner saw
+  elsewhere under the name HARENN; it is the continuous counterpart of idea 23's evolutionary
+  search over heuristic rules.
+- **math:** a reduction is a bet: reducing a move saves the nodes of a
+  full-depth search and loses when the move would have raised alpha. With
+  p(x) the probability that the move matters, given features x (depth,
+  move index, history scores, the improving flag, node type, the eval's
+  distance to the bounds), the expected cost is about
+  p(x) L(depth) - (1 - p(x)) C(depth, r), so the optimal reduction falls as
+  p rises; a calibrated model of p (logistic regression first, a two-layer
+  net only if it pays) gives the whole family of rules at once. Training
+  labels come from the search itself: whether a reduced move later forced
+  a re-search, and the decision ledger's counterfactual searches (X10).
+- **literature:** an outside reference the owner saw, "HARENN" (source not located by
+  this session, UNVERIFIED); learned evaluation and probability-guided
+  search in Giraffe (Lai, arXiv 1509.01549, 2015); public discussion of a
+  small network predicting the reduction (TalkChess,
+  https://talkchess.com/viewtopic.php?p=825512, found by a web search on
+  2026-11-07; its content not read, UNVERIFIED) (concepts only).
+- **first experiment:** offline: log LMR decision features and their
+  outcomes in the stats build over the step 1 replays; fit the model and
+  compare its ranking of "moves that mattered" (AUC) with the ranking the
+  current formula implies.
+- **kill criterion:** the model's AUC beats the hand formula's by less than
+  0.02, or its cost per decision is not covered by the predicted saving.
+- **phase:** after the current Phase 4 order (and after idea 23's capped
+  pilot, which tests the same space by search). **metric:** offline AUC,
+  then the STC SPRT and LTC. **status:** untested (plan only, owner,
+  2026-11-07). **runtime cost:** possible. **earliest phase:** Phase 4.
+
+## 56. Probabilistic search with neural uncertainty
+
+- **type:** ELO (search; runtime cost possible).
+- **idea:** let search spend effort where the evaluation is uncertain,
+  in the line of Bayesian and probabilistic game-tree search: each node
+  carries a distribution (a mean and an uncertainty) instead of a point
+  value, and the uncertainty steers expansion, reductions and stopping.
+  It starts with an offline study of whether predicted uncertainty matches
+  the actual evaluation error.
+- **math:** with node values as distributions, the value of expanding a
+  node is the expected change in the root decision (the
+  value-of-computation view: Russell and Wefald); a node whose value is
+  certain is not worth expanding however close it is to the bounds. All of
+  it rests on one empirical premise: that the predicted uncertainty u(x)
+  ranks and scales the actual error |s(x) - e(x)| (deep search result minus
+  static evaluation). That premise is cheap to test and decides the rest.
+- **literature:** Palay, "Searching with Probabilities" (1985); Baum and
+  Smith, "A Bayesian Approach to Relevance in Game Playing" (Artificial
+  Intelligence, 1997); Russell and Wefald, "Do the Right Thing" (1991)
+  (UNVERIFIED as exact citations). It shares its uncertainty estimate with
+  ideas 50 (conformal margins) and 52 (seed disagreement).
+- **first experiment:** offline: on held-out positions with deep labels
+  (the think tank's X7), compare candidate uncertainty estimates (the two
+  seeds' disagreement, idea 52; an uncertainty head, idea 50; free proxies
+  such as the TT-refined minus raw evaluation) with the actual error:
+  Spearman correlation and a reliability diagram by decile.
+- **kill criterion:** Spearman correlation below 0.3 for every estimate,
+  or a reliability curve that is not monotone; then the whole family
+  stops.
+- **phase:** after the current Phase 4 order (the offline study may run
+  earlier, as it shares X7). **metric:** the calibration study, then the
+  design's own tests. **status:** untested (plan only, owner, 2026-11-07).
+  **runtime cost:** possible. **earliest phase:** Phase 4.
+
+## 57. In-game adaptation of a small part of the evaluation
+
+- **type:** ELO (search and evaluation; runtime cost possible).
+- **idea:** let a small adaptable part of the evaluation learn during a
+  game from Fork's own search results, extending correction history (an
+  additive term keyed by pawn structure) to, for example, a per-output-head
+  bias or a low-rank update of the output layer, trained online on the
+  residual (search result minus static evaluation) and decayed towards zero.
+- **math:** online gradient descent on a convex loss has regret growing
+  only as the square root of the number of updates (Zinkevich), so a small
+  linear correction can track a game's systematic bias; exponential decay
+  (rate eta, a placeholder) handles the drift as the game moves on. The
+  risk is noise: residuals are themselves noisy labels, so the update must
+  be small and its gain shown on later positions of the same game, never
+  on the positions it learned from. Determinism holds within a search
+  (the state resets at ucinewgame and per bench position); multi-threaded
+  search (Phase 6) needs per-thread or shared state by design.
+- **literature:** correction history (Chess Programming Wiki, "Static
+  Evaluation Correction History"); test-time training (Sun et al., ICML
+  2020); online convex optimisation (Zinkevich, ICML 2003) (UNVERIFIED as
+  exact citations). The think tank's correction-table ranking (R34) is the
+  nearest planned work.
+- **first experiment:** offline replay of Fork's own games: simulate the
+  online update on the recorded residuals and measure the residual
+  reduction on later positions of the same game, against no adaptation and
+  against the existing correction-table keys.
+- **kill criterion:** a residual reduction under 5% on held-out later
+  positions, or no gain over the best correction-table key.
+- **phase:** after the current Phase 4 order (after R34). **metric:** the
+  offline residual reduction, then the STC SPRT and LTC. **status:**
+  untested (plan only, owner, 2026-11-07). **runtime cost:** possible.
+  **earliest phase:** Phase 4.
+
+## 58. Giant-teacher distillation
+
+- **type:** ELO (training-only; no runtime cost).
+- **idea:** a large network (wider, deeper, with rich inputs such as
+  threats, far too slow for search) trained on Kaggle on Fork's own data
+  and used only to label data for the fast NNUE. The teacher is Fork's own
+  net on Fork's own data, so the data policy holds.
+- **math:** distillation transfers a teacher's function to a smaller
+  student (Hinton, Vinyals and Dean, 2015); it pays only if the teacher's
+  labels are closer to the truth than the labels Fork has now (20,000-node
+  searches of the current default). Two think-tank results bound it: the
+  distillation from S512+X was refuted because that teacher was weaker
+  than the default at fixed nodes (phase-b-specialists.md, B13), and
+  elsewhere relabelling with a net's static output instead of a search
+  lost about 3 Elo (B2). So the gate is the teacher's measured error
+  against deep labels, not its size; a teacher that also searches (its
+  evaluation inside a shallow search) is the stronger variant to test.
+- **literature:** Hinton, Vinyals and Dean, "Distilling the Knowledge in a
+  Neural Network" (2015); the think tank's T and B13 entries on teacher
+  labels (UNVERIFIED as exact citations).
+- **first experiment:** one Kaggle session: train a large network on g3s3
+  and compare its error on the deep-label gold set (X7) with the error of
+  the current 20,000-node search labels on the same positions; inference
+  throughput on a T4 sets the relabelling cost.
+- **kill criterion:** the teacher's gold-set error is not at least 10%
+  lower than the current labels' error (a placeholder margin, set before
+  the run), or a small student trained on teacher labels does not beat one
+  trained on search labels at equal data by more than the seed spread.
+- **phase:** after the current Phase 4 order. **metric:** gold-set error,
+  then the small-net test, the fixed-node screen and the STC SPRT.
+  **status:** untested (plan only, owner, 2026-11-07). **runtime cost:**
+  none. **earliest phase:** Phase 4.
+
+## 59. Boundary Refiner: a rich evaluation consulted only near the window
+
+- **type:** ELO (evaluation and search; runtime cost possible).
+- **idea** (owner, 2026-11-07; plan only, after item 8a): a fast base net
+  evaluates everywhere; a richer refiner net is consulted only when the
+  base evaluation lies within a margin of the current alpha-beta window,
+  and it predicts a correction to the base evaluation. The refiner is
+  trained specifically on near-window positions from Fork's own search
+  logs, deeply labelled.
+- **basis:** Fork's own evidence that rich inputs improve judgement but
+  lose on per-node cost: S512+X gained +25.67 and XGR-512 +30.70 at fixed
+  nodes, yet both lost at STC (−30.04 and −34.42), because each 1% of nps
+  is worth about 1.5 Elo at STC (the think tank's fit to all eight
+  fixed-node/STC pairs, phase-a-evidence.md). An evaluation error matters
+  only where it can flip a comparison with a bound (idea 48), so most of a
+  rich net's fixed-node gain should come from the few evaluations near the
+  window.
+- **cost model:** time per node is about t_base + r x t_refiner, with r
+  the refiner's call rate per node (the share of evaluations that call it,
+  times the evaluations per node: 0.54 in game, X1); the nps ratio is
+  1 / (1 + r x t_refiner / t_base). With S512+X's 0.818 as the price of
+  running the rich net at every node (about +22% time), a call rate of
+  2-5% of evaluations costs well under 5% of nps, if the refiner's
+  per-call cost is close to an incremental evaluation. That condition is
+  the crux: a refiner consulted only sometimes cannot keep its own
+  accumulator incrementally updated for free, and a refresh on demand
+  costs many incremental updates (X1: 3.10 rows per update against a
+  full refresh of every active feature). So the prototype measures the
+  real per-call cost, with the refiner's accumulator either updated
+  alongside the base one (a fixed cost per move) or refreshed lazily.
+  Fixed-node gain retained is about q x 25.7, where q is the share of
+  S512+X's gain that lives in the consulted evaluations: the experiment
+  measures q at each margin.
+- **literature:** cascades of classifiers (Viola and Jones, 2001) and
+  conditional computation (Bengio, Leonard and Courville, 2013), where an
+  expensive model runs only on hard inputs (both verified 2026-11-08:
+  Viola and Jones, CVPR 2001; Bengio, Léonard and Courville,
+  arXiv:1308.3432). **The window gate itself is classic lazy evaluation**
+  (Chess Programming Wiki, "Lazy Evaluation": the costly terms are
+  computed only when the cheap score lies near the window, and added to
+  it), the same rule, not its opposite (corrected 2026-11-08). The prior-art
+  search (2026-11-08; KB branch kb, docs/kb/research-boundary-refiner-prior-art.md)
+  also found the near-bound rationale argued on TalkChess (2017), a 2020
+  Stockfish proposal to choose its evaluation by the window (closed
+  untested), Stockfish's conditional second networks under other gates,
+  and decision-relevance arguments in the literature. What it did not find,
+  within the sources searched: a separately trained residual refiner on a
+  full NNUE base, consulted only within a small budget margin, trained on
+  the engine's own near-window positions with deep labels, sharing the
+  base accumulator; and a controlled test of where it is consulted (window
+  gate against a random gate at equal call rate, plus a bias-only
+  control). Any public text places idea 59 in the lazy and two-tier
+  evaluation family and claims only what the search did not find. Related Fork entries: idea 46's gated
+  evaluation's oracle (the same family), idea 48 (the decision-focused
+  view at training time), idea 50 (near-boundary margins).
+- **step 1 (measurement):** with the stats build (the step 1 tooling),
+  record the distribution of |base evaluation − nearest window bound| at
+  evaluation sites over the step 1 game replays, and report the call rates
+  for margins of 10, 25, 50 and 100 cp, **separately for quiescence
+  evaluations and main-search evaluations** (owner, 2026-11-07): X1 shows
+  quiescence holds 68-72% of evaluations in game, and the gate's margin
+  may need to differ between the two (two margins, m_main and m_qs, each a
+  placeholder set by this measurement). The cost model then reads
+  r = r_main + r_qs, each the share of evaluations inside its own margin.
+- **step 2 (oracle prototype, no training):** S512ppr2 everywhere, and
+  S512+X's evaluation (scale-matched to S512ppr2) only within the margin;
+  a fixed-node screen against S512ppr2 and the nps at 2-3 margins.
+  **Prediction (owner):** +10 to +20 Elo at fixed nodes, under 5% nps cost
+  at a 2-5% call rate. **Kill:** less than one third of S512+X's
+  fixed-node gain retained (below about +8.6) at a call rate under 10%.
+  **The oracle is a pessimistic test of the cost** (owner, 2026-11-07): it
+  runs two separate networks with two accumulators, so S512+X's
+  accumulator must be kept up to date (or refreshed) even at the nodes
+  where it is never consulted; step 3's design removes that cost, so step
+  2's nps figure is an upper bound on step 3's.
+- **step 3 (only if step 2 passes):** train a dedicated refiner (a
+  residual target, near-window positions, rich inputs including threats),
+  then the usual screens and the STC SPRT (and LTC). **Design: the refiner
+  shares the base net's accumulator** (owner, 2026-11-07): its input is the
+  base accumulator plus rich features (exposure and threats) computed on
+  demand only when the gate fires, feeding the refiner's own small layers,
+  so no second accumulator is ever updated. Its cost is then paid only per
+  call: the on-demand rich features (an attack-map pass over the board)
+  plus the small layers, and t_refiner in the cost model above is that
+  per-call cost alone. The rich features enter the small layers directly
+  (not a wide first layer), so they need no incremental update. **Watch:** TT
+  inconsistency from mixed evaluations: the same position can get a
+  different static evaluation depending on the window it was reached
+  with, which touches the TT's stored evaluation, the improving flag and
+  the correction tables; the prototype should store which evaluation was
+  used, or always store the base evaluation.
+- **phase:** Phase 4, after item 8a. **metric:** call rates (step 1), the
+  fixed-node screen and nps (step 2), then the STC SPRT. **status:**
+  untested (plan only, owner, 2026-11-07); step 1 measured (call rates; measure/step1). **Step 2
+  passed, and the control split confirms the mechanism (owner, 2026-11-08).** Fixed-node screens of
+  1,600 games, 800,000 nodes per move, against S512r2 alone (base 56dacaf; oracle and controls on
+  exp/oracle, d5bb138 and 92aa87c):
+
+  | setting | Elo | nElo | run |
+  |---|---|---|---|
+  | (a) window gate, main 25 / quiescence 10 cp, S512+X refines (3.81% of nodes consulted) | +29.82 +/- 9.78 | +52.21 | 42436884886 |
+  | (b) window gate, main 25 / quiescence 25 cp | +41.01 +/- 9.97 | +70.68 | 42439918061 |
+  | random gate at (a)'s call rate (key-hashed, 3.82% of nodes) | +7.60 +/- 9.93 | +13.04 | 42451958660 |
+  | bias only: (a)'s gate adding its mean refinement, +10.776 cp, S512+X never consulted | −14.56 +/- 9.96 | −24.92 | 42448595388 |
+
+  Both settings clear the kill line (+8.6) at a call rate far under 10%. At equal call rate the window
+  gate beats the random gate by about 22 Elo (about 3 standard errors), and the random gate's own gain
+  is inconclusive against zero: the gain comes from where the refiner is consulted. The bias-only
+  control loses, so the gain is not a calibration shift: it lives in the refiner's position-specific
+  corrections. The random sites' corrections are larger (mean |refinement| 36.9 cp against 25.6), so
+  the size of the disagreement is not what pays; its position relative to the window is. Fixed-node
+  results do not charge the second network's cost: the nps A/B awaits a quiet machine, and step 3's
+  design (a shared accumulator) is what the cost claim rests on. **Next: step 3's design, for the
+  owner's review before building** (with the owner's 2026-11-08 additions: a head-to-head of a wider
+  quiescence margin and both margins SPSA-tunable; TT-reused evaluations considered in the gate; a
+  confidence output; training weighted by closeness to the window, idea 48 applied here; a cap on the
+  correction's size; features in the order exposure, a cheap bitboard danger summary, then threats only
+  if they fit the speed budget), and a prior-art search for gated, boundary-specific evaluation
+  refiners before any public claim. **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
+  SPRTs, write a reproduction guide in docs/research/boundary-refiner/ (the mechanism; the evidence,
+  including the control split of window-gated refiner, bias-only and random gate; implementation details;
+  the refiner's training; failures and costs; settings), then a TalkChess summary post and possibly an
+  arXiv note, stating clearly that the idea came from an AI-assisted project. Anything published outside
+  the repository needs the owner's go-ahead at the time. **runtime cost:** possible.
+  **earliest phase:** Phase 4.
+- **step 3 outcome (owner, 2026-11-09): the shared-accumulator refiner hurt; step 3 closes, step 3b
+  parked.** Kernel v2 (idea59/step3 a9bbd88; the declared pick w2, cap 198, weighted arm, seed 2) cut
+  validation loss from 0.0426 to 0.0227 but failed the offline acceptance (gated net flips −0.007 on test;
+  a constant +122 cp shift scored +0.143, above the oracle's +0.079). By the owner's decision (2026-11-08)
+  the net-flip yardstick is not a kill gate, and fixed-node screens decided instead (1,600 games,
+  800,000 nodes per move, against S512ppr3 alone; gate main 25 / quiescence 10 cp):
+
+  | setting | Elo | nElo | run |
+  |---|---|---|---|
+  | f1a: refiner (shared accumulator), both gates (idea59/step3 05061ce) | −19.78 +/- 9.67 | −34.91 | 42574807031 |
+  | f1b: refiner, quiescence only (077d1c8) | −11.73 +/- 9.63 | −20.76 | 42589690181 |
+  | f1c: second opinion, blend (base + second) / 2 with the independent net s512pp-scratch-s1 (exp/oracle dcbe8fb) | +9.56 +/- 9.45 | +17.24 | 42594402144 |
+  | f1d: second opinion, replace by s512pp-scratch-s1 (ab1abce) | +3.47 +/- 9.34 | +6.33 | 42600420297 |
+
+  Both refiner screens are at or below 0, so the refiner line ends (no SPRT ran; the pre-approved STC
+  SPRTs needed a point estimate above 0). The independent-net screens match the pattern the
+  independence hypothesis (owner, 2026-11-08) predicted, with the blend ahead of the replacement, but f1c is
+  below the bar declared before the result (+10), so no step 3b plan is written. **Step 3b, parked as a
+  hypothesis to revisit when compute allows:** a small independent near-window net (widths 64 / 128),
+  blended with the base at gate fire with a tuned blend weight. The second network's nps cost (f1c and
+  f1d about 25-30% slower on bench, indicative) is not charged by fixed-node screens, which is part of
+  why the bar is set where it is. **status:** step 3 closed; step 3b parked.
+- **linked follow-ups** (owner, 2026-11-08; plan only, after step 3's first
+  results; each its own experiment, shared with idea 61's family):
+  1. **Boundary controller:** the refiner's confidence output routes each
+     near-window site to "use the correction" or "extend" (idea 60), from
+     the confidence and simple tactical signals.
+  2. **Boundary distillation:** label the refiner's training sites with
+     the big teacher (idea 58) instead of, or alongside, deep search.
+  3. **Conformal calibration** (idea 50) of the gate's and the prunes'
+     margins from the crucial-point error distribution (measure/step1,
+     daca926).
+  4. **Closeness-weighted training of the base net** (idea 48's
+     decision-focused loss), as step 3 does for the refiner.
+  5. **Site selection by nearness to the window plus seed disagreement**
+     (idea 52) for the refiner's labels. Evidence to weigh first: as a
+     crucial-point gate on its own, the seeds' disagreement was near random
+     (AUC 0.52-0.54, measure/step1), and idea 52 itself stands or falls by
+     item 8b's keep-or-drop rule.
+  6. **The gate policy as an idea 23 evolution target**, with a game-based
+     fitness (decision 19: never the label-and-sweep proxy).
+
+## 60. Near-window extension
+
+- **type:** ELO (search; runtime cost: nodes, not nps).
+- **idea** (owner, 2026-11-07; plan only; tested after item 8a, before idea
+  59's step 3): at frontier nodes (depth 1, main search only at first) whose
+  static evaluation lies within a narrow margin of the window, extend by one
+  ply instead of trusting the evaluation; at most one such extension per
+  line. It is complementary to idea 59: search verifies tactics, the
+  refiner improves judgement.
+- **basis:** a frontier node's result decides a comparison with a bound, and
+  an evaluation error flips that comparison with a probability that grows as
+  the evaluation nears the bound (idea 48's argument). Far from the window
+  the evaluation's error cannot change the outcome; near it, one more ply
+  turns a static guess into a short search, which resolves the tactical part
+  of the error (captures and threats one move deeper than quiescence sees).
+  Step 1 of idea 59 measured where those sites are (DESIGN.md §5.7 on
+  branch measure/step1): depth 1 holds about two thirds of main-search
+  computed evaluations, and 11.9% of depth-1 evaluations lie within 25 cp of
+  the nearest finite bound (1.17% of nodes); the main-search share within
+  10 cp is 4.2% overall. The limit of one extension per line bounds the
+  search growth, as for singular extensions, which Fork already has.
+- **node-cost model** (to be measured first): extending a depth-1 node
+  replaces its subtree by a depth-2 one, about b_eff times larger
+  (b_eff being the effective branching factor of a depth-1 subtree,
+  quiescence included), so the added nodes are about
+  f x (b_eff - 1) x s1, with f the share of depth-1 nodes extended and s1
+  the share of all nodes inside depth-1 subtrees. With rough placeholders
+  (b_eff about 3, s1 about 0.65; both UNVERIFIED), 25 cp
+  (f about 0.12) costs about 15% of nodes and 10 cp (f about 0.05) about
+  6%: so the kill line sits near the 25 cp margin, and the measurement
+  decides.
+- **literature:** extensions and their explosion control (Chess Programming
+  Wiki, "Extensions"; singular extensions, Anantharaman, Campbell and Hsu,
+  1990); frontier-node pruning, the opposite decision at the same nodes
+  (Heinz, "Extended Futility Pruning", ICCA Journal 1998) (UNVERIFIED as
+  exact citations). The gate itself is Fork's own (from idea 59's
+  measurement).
+- **first experiment:** from the step 1 tooling, the node cost at 10 and
+  25 cp: a stats-build replay counting, at each gated depth-1 site, the
+  nodes the depth-1 subtree took and the nodes a depth-2 search of the same
+  node takes (the decision ledger's side-search machinery, X10, can supply
+  the second); the 200k replay games of step 1. Then the margin by
+  head-to-head selection (decision 3; 10 against 25 cp, the declared value
+  the cheaper one), then a design R SPRT (decision 2) of the chosen margin
+  against off.
+- **kill criterion:** the node cost at the chosen margin above about 15%,
+  or the SPRT fails (H0 or the futility stop).
+- **phase:** Phase 4, after item 8a, before idea 59's step 3. **metric:**
+  the measured node cost, the head-to-head pick, the design R SPRT (and LTC:
+  an extension, on the LTC-sensitive list). **status:** **rejected
+  (2026-11-08): the design R SPRT of 10 cp against off failed (H0, −5.43 ±
+  7.25 Elo, 3,200 games, try 1 of 2), so by the kill criterion idea 60 is
+  retired**, with no second try (owner, 2026-11-08); before it, the node cost passed (10 cp +6.2% / +5.6%) and the
+  head-to-head kept 10 cp (25 − 10 −3.24 ± 12.04 nElo); docs/history/phase-4/sprt-log.md.
+  (Plan: owner, 2026-11-07.) **runtime cost:** possible (more nodes per move at
+  equal depth; nps unchanged). **earliest phase:** Phase 4.
+
+## 61. Boundary-gated decisions
+
+- **type:** ELO (search; runtime cost possible).
+- **idea** (owner, 2026-11-08; plan only, after idea 59's refiner exists):
+  apply idea 59's window principle to the search's own decisions, spending
+  the refiner where a decision can flip. In order, each measured and
+  SPRT-tested on its own:
+  1. **Refiner-checked pruning:** when a prune's evaluation (reverse
+     futility, futility, razoring and the like) lies within a narrow band
+     of its threshold, consult the refiner before pruning, and prune only
+     if the refined evaluation still clears the threshold.
+  2. **Quiescence checks only near the window:** generate quiet checking
+     moves in quiescence only at nodes whose evaluation lies near the
+     window.
+  3. **Near-window deep labelling for training data:** spend the deep
+     labeller's budget on positions near the window (the refiner's own
+     training data, and possibly the base net's).
+  4. **Later, a gated move scorer** (idea 54's policy head), consulted only
+     at nodes near the window.
+
+  **Further applications** (owner, 2026-11-08), each its own experiment,
+  after the refiner exists or sooner where none is needed:
+  5. **Window-aware LMR** (no refiner needed): reduce less when the move's
+     evaluation is near alpha; its constant by head-to-head selection.
+  6. **Root-gap time management:** extra time when the top two root moves
+     are near-tied; it complements the stability time management (R8).
+  7. **Window-gated tablebase probing** for TCEC's 7-man tables: probe
+     only near the window; measure the probe cost first.
+  8. **TT replacement favouring near-bound entries:** tested at a
+     TCEC-scaled hash (decision 23).
+  9. **Near-window oversampling in data generation's save decision.**
+
+  **Priority** (owner, 2026-11-08): borderline pruning (part 1) first, then
+  window-aware LMR (5), then root-gap time management (6), then the rest.
+  Linked follow-ups (the boundary controller, boundary distillation,
+  conformal margins, closeness-weighted base training, site selection and
+  the gate policy as an evolution target) are listed under idea 59.
+
+  **Independence from idea 59's cost gate** (owner, 2026-11-08): the
+  refiner-independent applications proceed whatever step 3's cost gate
+  decides: idea 60 (the near-window extension), window-aware LMR (part 5),
+  root-gap time management (part 6), window-gated tablebase probing (part
+  7), near-bound TT replacement (part 8), near-window data saving (part 9),
+  conformal margins (follow-up 3) and closeness-weighted base training
+  (follow-up 4). **If step 3 pauses**, part 1 (refiner-checked borderline
+  pruning) switches to a short verification-search variant: a near-threshold
+  prune is confirmed by a short search instead of a refiner call.
+- **basis:** idea 59's control split (2026-11-08, ideas.md idea 59): at
+  equal call rate the window-gated refiner beat a random gate by about 22
+  Elo at fixed nodes, and a constant shift lost, so a better evaluation
+  pays where a comparison with a bound can flip. A prune is such a
+  comparison (an evaluation plus a margin against alpha or beta), so the
+  same gate should find the prunes most likely to go wrong. The DESIGN
+  Focus note (2026-11-07) asks for exactly this kind of selectivity, and
+  the crucial-point ground truth (measure/step1, daca926: 18.6% of sampled
+  evaluation sites have the static evaluation and the deep value on
+  opposite sides of the nearest bound) is the measurement to reuse.
+- **first experiment (part 1):** with the stats build, count each prune
+  kind's firings whose evaluation lies within a band of its threshold, and
+  how often a deep search disagrees with the prune there (the crucial-site
+  method applied to prunes); then build refiner-checked pruning for the
+  kind with the most wrong prunes per refiner call, behind a switch, with
+  the band chosen by head-to-head selection.
+- **kill criterion:** per part: the part's design R SPRT fails (H0 or the
+  futility stop), or its node or nps cost eats the gain (the speed gate,
+  1.5 Elo per 1% nps). Part 1 is dropped before building if the
+  measurement finds wrong prunes near the threshold no more often than
+  elsewhere.
+- **phase:** Phase 4 or later, after idea 59's step 3 passes. **metric:**
+  wrong-prune rates near the threshold, then each part's SPRT. **status:**
+  untested (plan only, owner, 2026-11-08); **part 5 (window-aware LMR)
+  rejected (2026-11-08): the head-to-head kept the 10 cp band at depth >= 6
+  (d0 - d6 -2.19 +/- 12.04 nElo), and its design R SPRT against off stopped
+  for futility after stage 3 (-2.93 +/- 7.16 Elo, 3,200 games, try 1 of 2),
+  so by the kill criterion part 5 is retired**; docs/history/phase-4/sprt-log.md.
+  **runtime cost:** possible (refiner calls at pruning sites). **earliest phase:** Phase 4.

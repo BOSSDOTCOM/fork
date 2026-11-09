@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -150,6 +151,12 @@ FORK_WEB_EXPORT int fork_web_init(int hash_mb) {
   if (hash_mb < 1 || !e.memory.resize(static_cast<std::size_t>(hash_mb) << 20, report)) return 0;
   e.table.bind_memory(e.memory.data(), e.memory.bytes());
   e.searcher = std::make_unique<forkeng::Searcher>(e.table);
+  // The page shows finished iterations only (LineKeeper drops aspiration
+  // fails), so the search never reports fails here. A reported fail would
+  // also make a stopped search report its last finished iteration again
+  // (searcher.cpp), which reached the page as a repeated depth once a search
+  // ran past the fail-report delay: in the browser and in slow test builds.
+  e.searcher->fail_report_ms = std::numeric_limits<std::int64_t>::max();
   e.memory.clear(1);
   return e.pos.set_fen(forkeng::Position::StartFen) ? 1 : 0;
 }

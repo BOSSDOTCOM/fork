@@ -28,6 +28,7 @@ option(FORK_BUILD_TESTS "Build the test executable and CTest tests" ON)
 option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
 option(FORK_SEARCH_STATS "Debug counters in the search, printed by fork bench (never released)" OFF)
 option(FORK_TUNE "Tuning build: every search switch is a UCI option (SPRT and SPSA only, never released)" OFF)
+option(FORK_NODE_CLOCK "Test-only build: the search clock is its node count, so timed searches are deterministic (never released)" OFF)
 set(FORK_PGO "OFF" CACHE STRING "Profile-guided optimization stage: OFF, GEN, USE")
 set(FORK_PGO_DATA "" CACHE PATH "Profile directory (GEN) or merged profile file / directory (USE)")
 
@@ -175,15 +176,18 @@ target_compile_options(fathom PRIVATE -w)
 # no runtime interface and no indirect call in the search.
 # nnue is the default since B0 passed its SPRT against the bootstrap
 # evaluation (+486.85 +/- 32.07 Elo; DESIGN.md §5.3, deliverable 7; owner,
-# 2026-10-29). The network is nets/s512r2.fnet, S-512 retrained in round 2
-# of the bake-off, since it passed its SPRT against round 1's S-512
-# (+151.35 Elo, 2026-11-01; docs/nets.md; owner: promoted). nets/s512.fnet,
-# nets/b0r2.fnet, nets/b0r1.fnet and nets/b0.fnet stay buildable with
-# FORK_NET (tests/bench-s512.ref, tests/bench-b0r2.ref, tests/bench-b0r1.ref,
+# 2026-10-29). The network is nets/s512ppr3.fnet, S512+PP (S-512 plus pawn
+# links of rank limit 1, architecture 8) retrained warm from S512ppr2 on
+# g3s3 (item 8a), since it passed its STC SPRT against S512ppr2 (+7.12 Elo,
+# 2026-11-07; docs/nets.md; owner: promoted). nets/s512ppr2.fnet,
+# nets/s512pp.fnet, nets/s512r2.fnet, nets/s512.fnet, nets/b0r2.fnet,
+# nets/b0r1.fnet and nets/b0.fnet stay buildable with FORK_NET
+# (tests/bench-s512ppr2.ref, tests/bench-s512pp.ref, tests/bench-s512r2.ref,
+# tests/bench-s512.ref, tests/bench-b0r2.ref, tests/bench-b0r1.ref,
 # tests/bench-b0.ref), and so does bootstrap (tests/bench.ref).
 set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
-set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512r2.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512ppr3.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
 if(FORK_EVALUATOR STREQUAL "nnue")
   if(NOT EXISTS ${FORK_NET})
     message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")
@@ -213,6 +217,7 @@ add_library(forksearch STATIC
   src/search/move_selector.cpp
   src/search/searcher.cpp
   src/search/see.cpp
+  src/search/stats_report.cpp
   src/search/time_budget.cpp
   src/search/trans_table.cpp
   src/tune/params.cpp)
@@ -235,6 +240,13 @@ target_link_libraries(forksearch PUBLIC forkcore fathom ${fork_threads} PRIVATE 
 if(FORK_SEARCH_STATS)
   target_compile_definitions(forksearch PUBLIC FORK_SEARCH_STATS)
 endif()
+# The node clock (DESIGN.md §5.6 step 10): elapsed time is nodes / 1000 ms,
+# so two builds can be compared on timed searches byte for byte (the time
+# management switches' identity check). Never released; its tests are not
+# run (the wall-clock cases assume a real clock).
+if(FORK_NODE_CLOCK)
+  target_compile_definitions(forksearch PUBLIC FORK_NODE_CLOCK)
+endif()
 
 # The UCI front end (src/uci/): protocol loop, options, info output.
 add_library(forkuci STATIC
@@ -249,8 +261,14 @@ target_link_libraries(forkuci PUBLIC forksearch ${fork_threads} PRIVATE fork_pgo
 # FORK_EVALUATOR=nnue.
 add_library(forknnue STATIC
   src/eval/nnue/accumulator.cpp
+  src/eval/nnue/contacts.cpp
   src/eval/nnue/net_file.cpp)
 target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH})
+# Stats builds count the feature stack's work too (DESIGN.md §5.7, X1); public,
+# so every user of accumulator.hpp sees the same FeatureStack layout.
+if(FORK_SEARCH_STATS)
+  target_compile_definitions(forknnue PUBLIC FORK_SEARCH_STATS)
+endif()
 target_link_libraries(forknnue PUBLIC forkcore PRIVATE fork_pgo)
 
 # Self-play training data (src/datagen/; DESIGN.md §5.3, deliverable 2): the
@@ -455,6 +473,8 @@ if(FORK_BUILD_TESTS)
     endif()
   endforeach()
   target_compile_definitions(fork_tests PRIVATE FORK_EPD_DIR="${FORK_EPD_DIR}")
+  # The repository (tests/nnue/ data files read at run time).
+  target_compile_definitions(fork_tests PRIVATE FORK_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
   # The smallest 7-man Syzygy pair, KPPPPPvK (deliverable 7's 7-piece test;
   # KB tools.md §6.9): downloaded once into .cache/ and pinned by SHA-256,
@@ -548,6 +568,13 @@ if(FORK_BUILD_TESTS)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
+  # The stats build's measurement counters (DESIGN.md §5.7): their own suite,
+  # compiled only with FORK_SEARCH_STATS (the clang-stats preset).
+  if(FORK_SEARCH_STATS)
+    target_sources(fork_tests PRIVATE tests/test_search_stats.cpp)
+    add_test(NAME search_stats COMMAND fork_tests search_stats)
+    set_tests_properties(search_stats PROPERTIES LABELS stats SKIP_RETURN_CODE 77)
+  endif()
   # Timing tests run alone, never beside another test (owner, 2026-10-26).
   set_tests_properties(uci_timing PROPERTIES RUN_SERIAL TRUE)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")

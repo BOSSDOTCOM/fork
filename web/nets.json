@@ -1,6 +1,6 @@
 {
- "comment": "Fork's promoted evaluators for the page (DESIGN.md §5.5), oldest first. Every value below is copied from docs/nets.md and docs/history/phase-4/sprt-log.md (2026-11-02); the build (.github/workflows/web.yml) adds each module's file, size and SHA-256. scale is the output scale S the evaluation bar reads scores with (docs/nets.md); the bootstrap evaluation has none of its own, so it takes 134, the S with which B0's training read the bootstrap's labels (docs/nets.md, B0). Each validation loss is on its own data's held-out games, so losses on different data are not comparable.",
- "default": "s512r2",
+ "comment": "Fork's promoted evaluators for the page (DESIGN.md §5.5), oldest first. Every value below is copied from docs/nets.md and docs/history/phase-4/sprt-log.md (2026-11-07); the build (.github/workflows/web.yml) adds each module's file, size and SHA-256. scale is the output scale S the evaluation bar reads scores with (docs/nets.md); the bootstrap evaluation has none of its own, so it takes 134, the S with which B0's training read the bootstrap's labels (docs/nets.md, B0). Each validation loss is on its own data's held-out games, so losses on different data are not comparable.",
+ "default": "s512ppr3",
  "networks": [
   {
    "id": "bootstrap",
@@ -61,6 +61,36 @@
    "data": "generation-2 snapshot g2s1: 9,176,386 games, 614,769,222 saved positions labelled by S512",
    "validation_loss": "0.019458",
    "sprt": {"against": "S512", "elo": "+151.35 +/- 12.50", "games": 1600, "conditions": "[0, 5], 8+0.08", "run": "41349145950", "result": "H1 accepted"}
+  },
+  {
+   "id": "s512pp",
+   "name": "S512+PP",
+   "architecture": "S512's (768 mirrored -> 512 SCReLU -> 8 outputs by game phase) plus 608 pawn-link inputs, one per pair of pawns at most one rank apart",
+   "promoted": "2026-11-06",
+   "scale": 90,
+   "data": "generation-2 snapshot g2s1 and generation-3 snapshot g3s1: 16,498,106 games, 988,611,737 saved positions labelled by S512 and S512r2",
+   "validation_loss": "0.01929241",
+   "sprt": {"against": "S512r2", "elo": "+32.67 +/- 10.48", "games": 1600, "conditions": "[0, 5], 8+0.08", "run": "42294907752", "result": "H1 accepted"}
+  },
+  {
+   "id": "s512ppr2",
+   "name": "S512ppr2",
+   "architecture": "S512+PP's (S512's inputs plus 608 pawn-link inputs), retrained warm from S512+PP",
+   "promoted": "2026-11-06",
+   "scale": 89,
+   "data": "generation-3 snapshot g3s2: g2s1, g3s1 and every generation-3 part since (labelled by S512 and S512r2), with a Syzygy-labelled endgame slice of about 26 million positions; about 1.24 billion positions",
+   "validation_loss": "0.01908862",
+   "sprt": {"against": "S512+PP", "elo": "+20.11 +/- 7.22", "games": 3200, "conditions": "[0, 5], 8+0.08", "run": "42336446490", "result": "H1 accepted"}
+  },
+  {
+   "id": "s512ppr3",
+   "name": "S512ppr3",
+   "architecture": "S512+PP's (S512's inputs plus 608 pawn-link inputs), retrained warm from S512ppr2",
+   "promoted": "2026-11-07",
+   "scale": 89,
+   "data": "generation-3 snapshot g3s3: g3s2 plus the parts g3f and g3g (labelled by S512+PP and S512ppr2), with the Syzygy-labelled endgame slice; 101 training files",
+   "validation_loss": "0.01966655",
+   "sprt": {"against": "S512ppr2", "elo": "+7.12 +/- 4.53", "games": 8000, "conditions": "[0, 5], 8+0.08", "run": "42435511074", "result": "H1 accepted"}
   }
  ]
 }

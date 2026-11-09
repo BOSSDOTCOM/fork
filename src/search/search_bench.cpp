@@ -12,6 +12,7 @@
 
 #include "search/hash_memory.hpp"
 #include "search/searcher.hpp"
+#include "search/stats_report.hpp"
 
 namespace forkeng {
 
@@ -134,65 +135,11 @@ SearchBenchResult run_search_bench() {
   }
   r.seconds = seconds;
 #ifdef FORK_SEARCH_STATS
-  const SearchCounters& c = searcher->counters;
-  std::fprintf(
-      stderr, "stats: %llu beta cutoffs, %.1f%% on the first move, mean cutoff index %.4f\n",
-      static_cast<unsigned long long>(c.beta_cutoffs),
-      c.beta_cutoffs ? 100.0 * static_cast<double>(c.first_move_cutoffs) / static_cast<double>(c.beta_cutoffs)
-                     : 0.0,
-      c.beta_cutoffs ? static_cast<double>(c.cutoff_index_sum) / static_cast<double>(c.beta_cutoffs) : 0.0);
-  std::fprintf(stderr, "stats: %llu makes\n", static_cast<unsigned long long>(c.makes));
-  std::fprintf(stderr, "stats: cuts rfp %llu null %llu; prunes lmp %llu futility %llu see %llu\n",
-               static_cast<unsigned long long>(c.rfp_cuts), static_cast<unsigned long long>(c.null_cuts),
-               static_cast<unsigned long long>(c.lmp_prunes),
-               static_cast<unsigned long long>(c.futility_prunes),
-               static_cast<unsigned long long>(c.see_prunes));
-  std::fprintf(
-      stderr, "stats: %llu reduced searches, %llu re-searched at full depth (%.1f%%)\n",
-      static_cast<unsigned long long>(c.lmr_searches), static_cast<unsigned long long>(c.lmr_researches),
-      c.lmr_searches ? 100.0 * static_cast<double>(c.lmr_researches) / static_cast<double>(c.lmr_searches)
-                     : 0.0);
-  std::fprintf(
-      stderr, "stats: mean reduction %.3f plies\n",
-      c.lmr_searches ? static_cast<double>(c.lmr_plies_sum) / static_cast<double>(c.lmr_searches) : 0.0);
-  std::fprintf(stderr, "stats: LMR rule ran at %llu sites, fired at %llu, changed the reduction at %llu\n",
-               static_cast<unsigned long long>(c.lmr_rule_sites),
-               static_cast<unsigned long long>(c.lmr_rule_fires),
-               static_cast<unsigned long long>(c.lmr_rule_changes));
-  std::fprintf(stderr,
-               "stats: SEE pruning: good captures %llu (skipped), tested: bad captures %llu, quiets %llu, "
-               "other %llu\n",
-               static_cast<unsigned long long>(c.see_tests_good_captures),
-               static_cast<unsigned long long>(c.see_tests_bad_captures),
-               static_cast<unsigned long long>(c.see_tests_quiets),
-               static_cast<unsigned long long>(c.see_tests_other));
-  std::fprintf(stderr, "stats: bad captures after LMP stopped quiets %llu, of them SEE-pruned %llu\n",
-               static_cast<unsigned long long>(c.bad_captures_after_stop),
-               static_cast<unsigned long long>(c.bad_captures_after_stop_pruned));
-  std::fprintf(stderr, "stats: futile nodes %llu, quiets taken there %llu, searched %llu\n",
-               static_cast<unsigned long long>(c.futile_nodes),
-               static_cast<unsigned long long>(c.futile_quiets_taken),
-               static_cast<unsigned long long>(c.futile_quiets_searched));
-  std::fprintf(stderr, "stats: quiescence nodes PV %llu, non-PV %llu\n",
-               static_cast<unsigned long long>(c.quiesce_nodes_pv),
-               static_cast<unsigned long long>(c.quiesce_nodes_non_pv));
-  std::fprintf(stderr, "stats: multi-cut cuts %llu, negative extensions %llu\n",
-               static_cast<unsigned long long>(c.multi_cut_cuts),
-               static_cast<unsigned long long>(c.negative_extensions));
-  std::fprintf(stderr, "stats: nodes reduced for having no TT move %llu\n",
-               static_cast<unsigned long long>(c.no_move_reductions));
-  std::fprintf(stderr, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
-               static_cast<unsigned long long>(c.singular_tests),
-               static_cast<unsigned long long>(c.singular_extended),
-               c.singular_tests
-                   ? 100.0 * static_cast<double>(c.singular_extended) / static_cast<double>(c.singular_tests)
-                   : 0.0);
-  for (int d = 1; d < SearchCounters::CutoffDepths; ++d) {
-    std::fprintf(stderr, "stats: quiet cutoffs at depth %d by quiet index:", d);
-    for (int i = 0; i < SearchCounters::CutoffIndices; ++i)
-      std::fprintf(stderr, " %llu", static_cast<unsigned long long>(c.quiet_cutoff_index[d][i]));
-    std::fprintf(stderr, "\n");
-  }
+#if defined(FORK_EVAL_NNUE)
+  print_counter_summary(searcher->counters, &searcher->feature_tally(), stderr);
+#else
+  print_counter_summary(searcher->counters, nullptr, stderr);
+#endif
 #endif
   return r;
 }

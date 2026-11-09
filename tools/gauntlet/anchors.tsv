@@ -10,13 +10,27 @@
 # longer only for a run where Fork scores over about 70% against Laser 1.7).
 # Topple 0.8.1 and Seawall 20250322, the first set's alternates, left
 # with them: every anchor they could replace has since built on the runners.
+# The set of 2026-11-08 (owner): Clover 6.1 a standing anchor (no longer only
+# Altair's alternate; v6.1 tag commit and its 3639 rechecked on the CCRL
+# Blitz list of 2026-11-07, KB competition.md §5, "Gauntlet reference:
+# Stockfish (gap metric) and Clover 6.1 as standing anchor"), and Stockfish
+# 19 a reference opponent: 400 games, outside the rating fit. Marvin 6.3.0
+# and Altair 7.0.0 continuity anchors (owner, 2026-11-08): both built and
+# played in runs 41465146207 and 42392526865. Arcanum 2.8, Marvin's
+# alternate, removed: its build failed in both runs, and a continuity anchor
+# has no alternate.
 # Roles: continuity (built and played in an earlier gauntlet; a failed build
 # stops the run), new (replaced by its alternate if its build fails; if that
-# fails too, the run stops), trial (the same, but if neither builds the run
-# goes on without it), alternate:STEM (replaces the new or trial anchor STEM).
+# fails too, or it has none, the run stops), trial (the same, but if neither
+# builds the run goes on without it), alternate:STEM (replaces the new or
+# trial anchor STEM), reference (not an anchor: 400 games, every opening
+# with both colours, kept out of Ordo's fit and reported apart as the gap
+# to it, its CCRL Blitz rating for context only; tools/gauntlet/report.py;
+# a failed build stops the run).
 # Columns, tab-separated: name, file stem, CCRL Blitz, role, repository,
-# commit, build folder, build command ("make ARGS" or "cmake TARGET"), fallback
-# make arguments (or -), UCI options for fastchess (or -).
+# commit, build folder, build command ("make ARGS", several run in order
+# separated by "; ", or "cmake TARGET"), fallback make arguments (or -), UCI
+# options for fastchess (or -).
 Weiss 1.0	weiss-1.0	2896	continuity	https://github.com/TerjeKir/weiss.git	f44a4c654c67139ecbd5f3afd9da1ebe41241464	src	make	-	option.NoobBook=false option.Threads=1
 Monolith 2.01	monolith-2.01	3061	continuity	https://github.com/cimarronOST/Monolith.git	19b8a61f74b3bdcdc2708bae7012bf8aed65a8f4	Source	make COMP=g++	-	option.OwnBook=false option.Threads=1
 Winter 0.9	winter-0.9	3168	continuity	https://github.com/rosenthj/Winter.git	9e1af2584f7c5f992b70e7597f81c4c6032c8383	.	make	CC=g++	option.Threads=1
@@ -24,8 +38,7 @@ Laser 1.7	laser-1.7	3292	continuity	https://github.com/jeffreyan11/laser-chess-e
 # Marvin loads book.bin from its executable's folder when one is there;
 # only the binary is ever kept, so its repository's res/ folder never sits
 # beside it.
-Marvin 6.3.0	marvin-6.3.0	3458	new	https://github.com/bmdanielsson/marvin-chess.git	e87a148d611ddc3fcbcf0c7a0d16d6d0e76a5161	.	make	CC=gcc	-
-Arcanum 2.8	arcanum-2.8	3460	alternate:marvin-6.3.0	https://github.com/LarsAur/Arcanum.git	e1e95262d5226d6b3f5370fb556650785f9091ad	.	make release NAME=Arcanum VERSION=2.8	-	-
+Marvin 6.3.0	marvin-6.3.0	3458	continuity	https://github.com/bmdanielsson/marvin-chess.git	e87a148d611ddc3fcbcf0c7a0d16d6d0e76a5161	.	make	CC=gcc	-
 # The anchor above Marvin (owner, 2026-11-02: about 3,550-3,650, an unrelated
 # code base, GPL or MIT, official source, pinned), proposed by the research
 # agent of 2026-11-02 (KB competition.md §5, "Gauntlet anchor above Marvin
@@ -33,5 +46,18 @@ Arcanum 2.8	arcanum-2.8	3460	alternate:marvin-6.3.0	https://github.com/LarsAur/A
 # its network in the repository, trained on its own games), or Clover 6.1
 # (GPL-3.0) if Altair does not build. A trial until it has built on the
 # runners: neither build was tried before the first run.
-Altair 7.0.0	altair-7.0.0	3579	trial	https://github.com/Alex2262/AltairChessEngine.git	9b52e0e14963acf6409cc183fda01455d8059b7b	.	make	CXX=g++	option.Threads=1
-Clover 6.1	clover-6.1	3639	alternate:altair-7.0.0	https://github.com/lucametehau/CloverEngine.git	20f8701ae15d17eb9f24e8302da5940c13e120a3	src	make	CC=clang++	option.Threads=1
+# Clover 6.1 (owner, 2026-11-08) is a standing anchor in its own right: new,
+# with no alternate, so a failed build stops the run (before any game: every
+# anchor is built first), as a run without it would not be the owner's set.
+# Not continuity: as Altair's alternate it built in the anchor job of both
+# runs (41465146207, 42392526865) but has never played.
+Altair 7.0.0	altair-7.0.0	3579	continuity	https://github.com/Alex2262/AltairChessEngine.git	9b52e0e14963acf6409cc183fda01455d8059b7b	.	make	CXX=g++	option.Threads=1
+Clover 6.1	clover-6.1	3639	new	https://github.com/lucametehau/CloverEngine.git	20f8701ae15d17eb9f24e8302da5940c13e120a3	src	make	CC=clang++	option.Threads=1
+# The reference opponent (owner, 2026-11-08; KB competition.md §5, the
+# section named above): Stockfish 19, tag sf_19 (GPL-3.0; lightweight tag on
+# this commit), CCRL Blitz 3792 single-CPU on the list of 2026-11-07 (context
+# only). make net fetches its default network first; whether make build
+# alone would is UNVERIFIED (the build log lines naming .nnue files show it),
+# and the network's file name and SHA-256 are logged by build_anchor.sh.
+# Hash as Fork's (16 MB, also its documented default), one thread.
+Stockfish 19	stockfish-19	3792	reference	https://github.com/official-stockfish/Stockfish.git	edb0d9db6731067ec50ce619ff372b463bc4dd5d	src	make net; make build ARCH=x86-64-avx2	-	option.Threads=1 option.Hash=16

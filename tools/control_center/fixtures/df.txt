@@ -1,0 +1,2 @@
+Filesystem          1-blocks        Used     Available Capacity Mounted on
+/dev/sdd       1081101176832 18873438208 1007235383296       2% /

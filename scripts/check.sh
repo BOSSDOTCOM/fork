@@ -176,9 +176,9 @@ build_and_test() {  # preset, ctest filter args...
 }
 
 # The tooling's own tests (audit-1 U-15): standard-library Python suites
-# (sprt_merge and the book permutation, the evolve harness, pgn_summary),
-# plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
-# tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh with a fake gh (about 40 s).
+# (sprt_merge and the book permutation, the evolve harness, pgn_summary, the gauntlet report, the job supervisor, the
+# Control Center), plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
+# tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh and h2h_run.sh with a fake gh (about 2 min).
 tool_tests() {  # python | all
   local py="" c
   for c in .venv/Scripts/python.exe .venv/bin/python python3 python; do
@@ -188,23 +188,54 @@ tool_tests() {  # python | all
   "$py" -I -B -m unittest discover -s tools/cloud -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/cloud"
   "$py" -I -B -m unittest discover -s tools/evolve -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/evolve"
   "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
+  # The gauntlet's report (owner, 2026-11-08): the reference opponent kept out of Ordo's fit.
+  "$py" -I -B -m unittest discover -s tools/gauntlet -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/gauntlet"
+  # The job supervisor and the run-ID ledger (owner, 2026-11-05): whole-tree stops, one lock per type.
+  "$py" -I -B -m unittest discover -s tools/jobs -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/jobs"
+  # The Fork Control Center (owner, 2026-11-06): its parsers on the real formats, the data-generation
+  # controls against a simulated supervisor, the seal, and the read-only tabs under a write-blocking guard.
+  "$py" -I -B -m unittest discover -s tools/control_center -p 'test_*.py' >>"$log" 2>&1 \
+    || fail "tool tests: tools/control_center"
   # tools/datagen and tools/nnue need python-chess and zstandard (the
   # repository's .venv); the log says when they are missing and the suites are skipped.
   if "$py" -I -c 'import chess, zstandard' >/dev/null 2>&1; then
     "$py" -I -B -m unittest discover -s tools/datagen -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/datagen"
     "$py" -I -B -m unittest discover -s tools/nnue -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/nnue"
+    # Phase 4 step 1's measurement tools (DESIGN.md §5.7); the game replay reads PGNs with python-chess.
+    "$py" -I -B -m unittest discover -s tools/measure -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/measure"
   else
     echo "tool tests: tools/datagen skipped (no python-chess or zstandard in $py)" >>"$log"
   fi
   bash scripts/update-test.sh >>"$log" 2>&1 || fail "tool tests: scripts/update-test.sh (update.sh clone mode)"
+  # 2026-11-07: run by `git rebase --exec` in a linked worktree, git's exported GIT_DIR (the worktree's git
+  # directory) reached the toy repositories' commands, which committed, branched, tagged and pushed in the
+  # real repository and its origin. The same setup with a decoy repository, its worktree and its origin: the
+  # test must leave both exactly as they were.
+  decoy=$(mktemp -d)
+  refs() { git -C "$decoy/r" for-each-ref --format='%(refname) %(objectname)'
+           git -C "$decoy/o.git" for-each-ref --format='%(refname) %(objectname)'; }
+  git -c init.defaultBranch=main init -q "$decoy/r" &&
+    git -C "$decoy/r" -c user.name=decoy -c user.email=decoy@example.invalid commit -q --allow-empty -m decoy &&
+    git clone -q --bare "$decoy/r" "$decoy/o.git" && git -C "$decoy/r" remote add origin "$decoy/o.git" &&
+    git -C "$decoy/r" worktree add -q "$decoy/w" -b wb && before=$(refs) &&
+    (cd "$decoy/w" && GIT_DIR="$decoy/r/.git/worktrees/w" bash "$OLDPWD/scripts/update-test.sh") >>"$log" 2>&1 &&
+    [ "$(refs)" = "$before" ] ||
+    { rm -rf "$decoy"; fail "tool tests: scripts/update-test.sh leaks into the repository in GIT_DIR"; }
+  rm -rf "$decoy"
   # The push gate (owner, 2026-11-05): a planted hit of each kind blocks the scan and the push.
   bash scripts/test_scan_push.sh >>"$log" 2>&1 || fail "tool tests: scripts/test_scan_push.sh (the push gate)"
   [ "$1" = all ] || return 0
   bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
   case $py in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; *) py=$(command -v "$py") ;; esac
-  # The GitHub SPRT driver against a fake gh (its wait, stop and commit-check rules).
+  # The GitHub SPRT driver against a fake gh (its wait, stop and commit-check rules; design R's kinds,
+  # futility stop, caps and the two-try limit), and the head-to-head driver on the same fake.
   PYTHON=$py bash tools/github/test_sprt_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_sprt_run.sh"
+  PYTHON=$py bash tools/github/test_h2h_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_h2h_run.sh"
   PYTHON=$py bash tools/cloud/test_run_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/cloud/test_run_shard.sh"
+  # The Control Center's WSL launch script for a data-generation part, with stubs (Linux only).
+  if [ "$(uname -s)" = Linux ]; then
+    bash tools/control_center/test_start_part.sh >>"$log" 2>&1 || fail "tool tests: tools/control_center/test_start_part.sh"
+  fi
   # The cloud safeguards (owner, 2026-10-30): the spot quota check, the
   # cleanup of instances past their limit, a simulated spot interruption,
   # the data-generation fleet request.

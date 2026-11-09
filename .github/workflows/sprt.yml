@@ -14,13 +14,16 @@
 # each shard restores the same cache and verifies it again.
 # Inputs reach the shell only through environment variables.
 name: sprt
+# The run's title names its inputs, so a driver finds the run it dispatched by them, never as "the newest
+# sprt run" (tools/github/sprt_run.sh; owner, 2026-11-05: two drivers once read each other's runs).
+run-name: sprt ${{ inputs.base }} ${{ inputs.test }} stage ${{ inputs.stage }}
 
 on:
   workflow_dispatch:
     inputs:
       base: {description: "Base commit (or branch, tag)", required: true}
       test: {description: "Test commit (or branch, tag)", required: true}
-      bounds: {description: "nElo bounds 'elo0 elo1' (e.g. '-3 0' or '0 3')", required: true, default: "-3 0"}
+      bounds: {description: "nElo bounds 'elo0 elo1 [alpha beta]' (e.g. '-3 0'; design R '0 6 0.05 0.20')", required: true, default: "-3 0"}
       tc: {description: "Time control", required: true, default: "8+0.08"}
       hash: {description: "Hash MB", required: true, default: "16"}
       games: {description: "Games in this stage (all shards)", required: true, default: "1600"}
@@ -170,9 +173,11 @@ jobs:
           TEST: ${{ inputs.test }}
           TC: ${{ inputs.tc }}
         run: |
+          # "elo0 elo1 [alpha beta]": the driver sends alpha and beta for its kinds (design R's 0.05 / 0.20,
+          # tools/github/sprt_run.sh); without them 0.05 / 0.05, as before. The summary is this stage's alone.
           set -- $BOUNDS
           python3 tools/cloud/sprt_merge.py merge shards/*/result.json --elo0 "$1" --elo1 "$2" \
-            --json merged.json | tee summary.txt
+            --alpha "${3:-0.05}" --beta "${4:-0.05}" --json merged.json | tee summary.txt
           { echo "### SPRT stage $STAGE: $TEST vs $BASE, $TC"
             echo; echo '```'; cat summary.txt; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

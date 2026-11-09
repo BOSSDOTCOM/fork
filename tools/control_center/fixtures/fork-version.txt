@@ -1,0 +1,9 @@
+Fork 0.3.0-dev+684bac6
+compiler clang 21.1.8 (6ubuntu1)
+arch native
+build Release
+lto on
+sliders pext
+evaluator nnue
+net s512r2
+variant baseline | commit 684bac654a31ff2ad1e8a564ed7435968dedec8a |

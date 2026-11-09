@@ -17,6 +17,13 @@ namespace {
 constexpr char Magic[8] = {'F', 'O', 'R', 'K', 'N', 'E', 'T', 0};
 constexpr int MaxActivePieces = 32;
 constexpr int MaxExposed = 30;  // every piece but the kings
+// The most pawn links one position can hold. Any ranks apart (S512cl's
+// links): the largest sum over files of C(n, 2) + n * n(next file), for at
+// most 16 pawns and 6 per file, is 96 (4, 6 and 6 pawns on three adjacent
+// files), found by trying every distribution. At most one rank apart
+// (S512+PP's): a pawn's partners stand on the 8 squares around it, so 16
+// pawns hold at most 16 x 8 / 2 = 64 links.
+constexpr int MaxActiveLinks = NetLinkRanks == 1 ? 64 : 96;
 
 std::uint32_t get_u32(const std::uint8_t* p) {
   return std::uint32_t{p[0]} | std::uint32_t{p[1]} << 8 | std::uint32_t{p[2]} << 16 |
@@ -60,9 +67,10 @@ int largest(const std::int16_t* table, int width, int j, int from, int to) {
 bool first_layer_in_range(const std::int16_t* weights, const std::int16_t* bias, int width, int piece_rows,
                           int rows, std::string& error) {
   for (int j = 0; j < width; ++j) {
+    constexpr int MaxAdded = NetLinks ? MaxActiveLinks : MaxExposed;  // the rows after the piece rows
     const std::int64_t worst = std::abs(int{bias[j]}) +
                                MaxActivePieces * largest(weights, width, j, 0, piece_rows) +
-                               MaxExposed * largest(weights, width, j, piece_rows, rows);
+                               MaxAdded * largest(weights, width, j, piece_rows, rows);
     if (worst > std::numeric_limits<std::int16_t>::max()) {
       error = "first-layer unit " + std::to_string(j) + " can leave the int16 range";
       return false;
@@ -74,14 +82,19 @@ bool first_layer_in_range(const std::int16_t* weights, const std::int16_t* bias,
 // The overflow bounds of the header comment; false names the first broken one.
 bool sums_in_range(const NetFile& net, std::string& error) {
   const int piece_rows = NetPieceSquares * net.region_count;
-  if (!first_layer_in_range(net.ft_weights, net.ft_bias, NetHidden, piece_rows, net.inputs, error))
+  // S512+X and S512cl sum their added rows in 32 bits: only the piece rows are
+  // bounded. S512+PP keeps its link rows in the int16 accumulator, so they are
+  // bounded too (MaxActiveLinks of them).
+  const int bounded_rows = NetArchitecture == 6 || NetArchitecture == 7 ? piece_rows : net.inputs;
+  if (!first_layer_in_range(net.ft_weights, net.ft_bias, NetHidden, piece_rows, bounded_rows, error))
     return false;
 #if FORK_NET_ARCH == 1
   std::int64_t total = 0;
   for (int i = 0; i < 2 * NetHidden; ++i) total += std::abs(int{net.out_weights[i]});
   if (NetQa * total + std::abs(std::int64_t{net.out_bias}) > std::numeric_limits<std::int32_t>::max())
     return error = "the output layer can leave the int32 range", false;
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
   // Squared outputs: each product v * (v * w) needs |w| <= 128 so that v * w
   // stays in int16; the sums run in int64.
 #if FORK_NET_ARCH == 5
@@ -179,14 +192,16 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
       if (out.phase_table[p] >= NetBuckets || (p > 0 && out.phase_table[p] < out.phase_table[p - 1]))
         return error = "bad phase table", false;
   }
-  const int expected_inputs = NetPieceSquares * out.region_count + (NetExposure ? NetExposureRows : 0);
+  const int expected_inputs = NetPieceSquares * out.region_count + (NetExposure ? NetExposureRows : 0) +
+                              (NetContacts ? NetContactInputs + NetLinkInputs : 0) +
+                              (NetLinks ? NetLinkInputs : 0);
   if (inputs != expected_inputs) return error = "inputs do not match the region map", false;
   for (int i = 0; i < inputs * NetHidden; ++i) out.ft_weights[i] = c.i16();
   for (int i = 0; i < NetHidden; ++i) out.ft_bias[i] = c.i16();
 #if FORK_NET_ARCH == 1
   for (int i = 0; i < 2 * NetHidden; ++i) out.out_weights[i] = c.i16();
   out.out_bias = c.i32();
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
   for (auto& row : out.out_weights)
     for (auto& w : row) w = c.i16();
   for (auto& b : out.out_bias) b = c.i32();
@@ -239,7 +254,7 @@ std::vector<std::uint8_t> write_net_file(const NetFile& net) {
 #if FORK_NET_ARCH == 1
   for (int i = 0; i < 2 * NetHidden; ++i) put_i16(net.out_weights[i]);
   put_i32(net.out_bias);
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
   for (const auto& row : net.out_weights)
     for (const auto w : row) put_i16(w);
   for (const auto b : net.out_bias) put_i32(b);

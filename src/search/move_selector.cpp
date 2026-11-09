@@ -137,11 +137,17 @@ void MoveSelector::keep_quiet_checks() {
 
 // Partial selection sort: the best remaining move (the lowest current index
 // on ties) is swapped to next_. Deterministic, but the swaps mean equal
-// scores do not stay in generation order (review, deliverable 5).
+// scores do not stay in generation order (review, deliverable 5). The best
+// score so far is kept in a register, not reloaded from its index each step
+// (the same first maximum; +4.0% search nps, docs/history/phase-4/perf-log.md).
 std::size_t MoveSelector::select_best() {
   std::size_t best = next_;
+  int top_seen = scores_[next_];
   for (std::size_t j = next_ + 1; j < list_.size(); ++j)
-    if (scores_[j] > scores_[best]) best = j;
+    if (scores_[j] > top_seen) {
+      top_seen = scores_[j];
+      best = j;
+    }
   if (best != next_) {
     std::swap(list_.moves[next_], list_.moves[best]);
     std::swap(scores_[next_], scores_[best]);

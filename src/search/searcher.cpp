@@ -12,6 +12,7 @@
 #include "search/endgame_tables.hpp"
 #include "search/lmr_table.hpp"
 #include "search/see.hpp"
+#include "search/stats_report.hpp"
 #include "tune/params.hpp"
 
 namespace forkeng {
@@ -20,6 +21,15 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #ifdef FORK_SEARCH_STATS
   if (const char* every = std::getenv("FORK_SINGULAR_PROBE"))
     singular_probe_ = std::strtoull(every, nullptr, 10);
+  if (const char* report = std::getenv("FORK_STATS_REPORT")) report_counters_ = report[0] && report[0] != '0';
+  if (const char* trace = std::getenv("FORK_ITERATION_TRACE"))
+    trace_iterations_ = trace[0] && trace[0] != '0';
+  if (const char* every = std::getenv("FORK_PRUNE_LEDGER")) ledger_every_ = std::strtoull(every, nullptr, 10);
+  if (const char* sites = std::getenv("FORK_EVAL_SITES")) {
+    char* rest = nullptr;
+    eval_site_every_main_ = std::strtoull(sites, &rest, 10);
+    if (rest && *rest == ',') eval_site_every_quiesce_ = std::strtoull(rest + 1, nullptr, 10);
+  }
 #endif
 #if defined(FORK_EVAL_NNUE)
   net_ = &embedded_net();  // read now, so no search ever allocates for it
@@ -80,6 +90,13 @@ constexpr int TableNearDrawScore = 1;
 // DESIGN.md, "Search constants": the smallest step in whole plies, which is
 // the unit Fork's LMR table works in).
 constexpr int LmrCheckRelief = 1;
+#ifdef FORK_NODE_CLOCK
+// Test-only builds (CMake FORK_NODE_CLOCK, never released): the search's
+// clock reads its node count, this many nodes to the millisecond, so a timed
+// search is deterministic and two builds can be compared on it byte for byte
+// (DESIGN.md §5.6 step 10, the time-management switches' identity check).
+constexpr std::uint64_t NodeClockRate = 1000;
+#endif
 
 // The side has a piece other than pawns and its king (the null move's main
 // zugzwang guard: pawn endings are where passing is most often best).
@@ -100,8 +117,12 @@ int fifty_move_score(const Position& pos, bool in_check, int ply) {
 }  // namespace
 
 std::int64_t Searcher::elapsed_ms() const {
+#ifdef FORK_NODE_CLOCK
+  return static_cast<std::int64_t>(nodes_ / NodeClockRate);
+#else
   return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_)
       .count();
+#endif
 }
 
 bool Searcher::poll_limits() {
@@ -117,6 +138,9 @@ bool Searcher::poll_limits() {
 // A quiet move cut off: it gains a bonus that grows with depth, and the
 // quiet moves tried before it here lose as much (the malus).
 void Searcher::record_cutoff(const PlyFrame& f, Move m, int depth) {
+#ifdef FORK_SEARCH_STATS
+  if (ledger_active_) return;  // a decision-ledger side search leaves the histories as they were (X10)
+#endif
   const Position& here = *pos_;
   const int bonus = bonus_for_depth(depth);
   // The take history (tier 2, T11): a capture that cuts gains the bonus, and
@@ -161,9 +185,20 @@ void Searcher::update_pv(int ply, Move m) {
 
 template <bool OnPv>
 int Searcher::negamax(int alpha, int beta, int depth, int ply) {
+#ifdef FORK_SEARCH_STATS
+  // X10: the force of a decision-ledger side search applies to the node it
+  // re-enters (the first call at its ply) and to nothing below it.
+  LedgerForce force = LedgerForce::Keep;
+  if (ledger_force_ != LedgerForce::Keep && ply == ledger_force_ply_) {
+    force = ledger_force_;
+    ledger_force_ = LedgerForce::Keep;
+  }
+  const int ledger_entry_depth = depth;  // before the no-move reduction: a re-entry applies it once
+#endif
   if (depth <= 0 && switches.use_quiesce) return quiesce<OnPv>(alpha, beta, ply);
   pv_[ply].length = 0;
   ++nodes_;
+  FORK_STAT(++counters.main_nodes);
   if (poll_limits()) return 0;
   max_ply_reached_ = std::max(max_ply_reached_, ply);
   Position& pos = *pos_;
@@ -178,8 +213,14 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // insufficient material, and the 50-move rule unless this move is mate.
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
-  if (ply >= MaxPly) return in_check ? 0 : eval_at(ply);
-  if (depth <= 0) return eval_at(ply);  // only with the quiescence search switched off
+  if (ply >= MaxPly) {
+    FORK_STAT(counters.evals_horizon += !in_check);
+    return in_check ? 0 : eval_at(ply);
+  }
+  if (depth <= 0) {
+    FORK_STAT(++counters.evals_horizon);
+    return eval_at(ply);  // only with the quiescence search switched off
+  }
 
   if (switches.use_mate_distance) {
     alpha = std::max(alpha, mated_score(ply));
@@ -230,6 +271,28 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   }
 
   f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
+  FORK_STAT(++(in_check                          ? counters.check_nodes_main
+               : tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_main
+                                                 : counters.evals_main));
+#ifdef FORK_SEARCH_STATS
+  // Idea 59 step 1: the static evaluation's gap to the nearest finite bound
+  // of this node's window (after mate distance pruning), computed or reused.
+  if (!in_check) {
+    const bool reused = tt_hit && hit.eval != ScoreNone;
+    const int gap = window_gap(f.static_eval, alpha, beta);
+    const int band = gap_depth_band(depth);
+    if (gap < 0) {
+      ++(reused ? counters.eval_gap_main_reuse_infinite : counters.eval_gap_main_infinite);
+      if (!reused) ++counters.eval_gap_band_infinite[band];
+    } else if (reused) {
+      ++counters.eval_gap_main_reuse_bins[window_gap_bin(gap)];
+    } else {
+      ++counters.eval_gap_main_bins[window_gap_bin(gap)];
+      ++counters.eval_gap_band_bins[band][window_gap_bin(gap)];
+      counters.eval_gap_main_one_sided += is_tb_or_mate(alpha) != is_tb_or_mate(beta);
+    }
+  }
+#endif
   // The eval the pruning decisions use (review 2, claim (d); KB T50): a TT
   // score from a real search corrects the static estimate in the direction
   // its bound proves (a lower bound above it raises it, an upper bound below
@@ -243,13 +306,46 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
          (hit.bound == TtBound::Upper && s < prune_eval)))
       prune_eval = s;
   }
+#ifdef FORK_SEARCH_STATS
+  // Crucial-point ground truth: a sampled main-search evaluation site
+  // (computed or reused from the TT), with the window it was reached with.
+  if (!in_check && eval_site_every_main_ && !ledger_active_ &&
+      ++eval_site_seen_main_ % eval_site_every_main_ == 0)
+    print_eval_site(0, tt_hit && hit.eval != ScoreNone, alpha, beta, f.static_eval, prune_eval, depth, ply,
+                    tt_hit, hit, OnPv);
+#endif
   const bool can_prune = !OnPv && !in_check;
   const bool can_prune_node = can_prune && !withheld;
 
+#ifdef FORK_SEARCH_STATS
+  // X10, the decision ledger's RFP rows: at a sampled candidate (every
+  // condition but the margin), the node is also searched with RFP off here;
+  // a prune (taken, or one a smaller margin would take) is wrong when that
+  // search fails low. The real search goes on unchanged.
+  if (ledger_every_ && !ledger_active_ && switches.use_rfp && can_prune_node && depth <= RfpMaxDepth &&
+      !is_tb_or_mate(beta) && prune_eval >= beta) {
+    ++counters.ledger_rfp_candidates;
+    if (ledger_sampled(key)) {
+      const int saved_eval = f.static_eval;
+      std::uint64_t arm_nodes = 0;
+      const int arm = ledger_side_search(alpha, beta, depth, ply, LedgerForce::RfpOff, arm_nodes);
+      f.static_eval = saved_eval;
+      if (stopped_) return 0;
+      const int parent_eval = ply > 0 ? frames_[ply - 1].static_eval : ScoreNone;
+      std::fprintf(stderr, "prune_ledger rfp|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%llu|%d\n", depth, ply,
+                   prune_eval - beta, f.static_eval - beta, RfpMargin * depth,
+                   tt_hit ? static_cast<int>(hit.bound) : 0, tt_hit ? static_cast<int>(hit.depth) : -1,
+                   parent_eval != ScoreNone ? f.static_eval + parent_eval : ScoreNone, game_phase(pos),
+                   prune_eval - RfpMargin * depth >= beta ? 1 : 0, std::clamp(arm - beta, -2000, 2000),
+                   static_cast<unsigned long long>(arm_nodes), is_tb_or_mate(arm) ? 1 : 0);
+      ++counters.ledger_rows;
+    }
+  }
+#endif
   // Reverse futility pruning (T20): far enough above beta at shallow depth,
   // the node fails high without a search.
   if (switches.use_rfp && can_prune_node && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
-      prune_eval - RfpMargin * depth >= beta) {
+      prune_eval - RfpMargin * depth >= beta FORK_STAT_GATE(&&force != LedgerForce::RfpOff)) {
     FORK_STAT(++counters.rfp_cuts);
     return prune_eval;
   }
@@ -346,6 +442,40 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
   }
 
+#ifdef FORK_SEARCH_STATS
+  // X10, the decision ledger's futility rows: at a sampled candidate (every
+  // condition but the margin: the static estimate at or below alpha), the
+  // node is searched again with futility forced on and forced off here
+  // (both side searches, so both see the same TT); futility is wrong when
+  // the on arm fails low and the off arm fails high. Before the selector
+  // starts, so the re-entries cannot disturb this node's move loop.
+  if (ledger_every_ && !ledger_active_ && switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
+      !is_tb_or_mate(alpha) && prune_eval <= alpha) {
+    ++counters.ledger_futility_candidates;
+    if (ledger_sampled(key)) {
+      const int saved_eval = f.static_eval;
+      std::uint64_t on_nodes = 0, off_nodes = 0;
+      const int on =
+          ledger_side_search(alpha, beta, ledger_entry_depth, ply, LedgerForce::FutilityOn, on_nodes);
+      if (stopped_) return 0;
+      const int off =
+          ledger_side_search(alpha, beta, ledger_entry_depth, ply, LedgerForce::FutilityOff, off_nodes);
+      f.static_eval = saved_eval;
+      if (stopped_) return 0;
+      const int margin = FutilityOffset + FutilityGrowth * depth;
+      const int parent_eval = ply > 0 ? frames_[ply - 1].static_eval : ScoreNone;
+      std::fprintf(stderr, "prune_ledger futility|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%llu|%llu|%d\n", depth,
+                   ply, alpha - prune_eval, alpha - f.static_eval, margin,
+                   tt_hit ? static_cast<int>(hit.bound) : 0, tt_hit ? static_cast<int>(hit.depth) : -1,
+                   parent_eval != ScoreNone ? f.static_eval + parent_eval : ScoreNone, game_phase(pos),
+                   prune_eval + margin <= alpha ? 1 : 0, std::clamp(on - beta, -2000, 2000),
+                   std::clamp(off - beta, -2000, 2000), static_cast<unsigned long long>(on_nodes),
+                   static_cast<unsigned long long>(off_nodes),
+                   is_tb_or_mate(on) || is_tb_or_mate(off) ? 1 : 0);
+      ++counters.ledger_rows;
+    }
+  }
+#endif
   // The selector checks the TT move (a colliding entry's move may not be
   // legal here) before it is tried first; a withheld move is not tried.
   f.selector.start_main(
@@ -363,8 +493,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   int quiets_searched = 0;
   const bool lmp_node = switches.use_lmp && can_prune && depth <= LmpMaxDepth;
   const int futility_value = in_check ? 0 : prune_eval + FutilityOffset + FutilityGrowth * depth;
+  // (Stats builds: a decision-ledger side search may force the margin's
+  // test on or off at the node it re-enters, X10.)
   const bool futile_node = switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
-                           !is_tb_or_mate(alpha) && futility_value <= alpha;
+                           !is_tb_or_mate(alpha) &&
+                           (FORK_STAT_GATE(force == LedgerForce::FutilityOn    ? true
+                                           : force == LedgerForce::FutilityOff ? false
+                                                                               :) futility_value <= alpha);
   FORK_STAT(counters.futile_nodes += futile_node);
   bool quiet_checks_only = false;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
@@ -410,6 +545,31 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
     frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
+#ifdef FORK_SEARCH_STATS
+    counters.pawn_makes += kind_of(pos.piece_at(m.from())) == Pawn;
+    // X2 (DESIGN.md §5.7): the move's history values, read before it is made
+    // (as the selector and sprt/lmr-history's term read them). The ordering
+    // score uses the tables the selector uses; the raw entries are the
+    // tables' own (the follow and reply entries only with their arrivals).
+    const int stats_slot = pair_slot(pos.piece_at(m.from()), m.to());
+    const int stats_follow = follow_arrival(f);
+    const int stats_order_score =
+        quiet ? quiet_order_score(pos, m, switches.use_history ? &history_ : nullptr,
+                                  switches.use_history ? pair_history_ : nullptr,
+                                  switches.use_reply_history ? f.arrival : NoArrival,
+                                  switches.use_follow_history ? stats_follow : NoArrival)
+              : 0;
+    const int stats_quiet_value = quiet ? history_.value(pos.side_to_move(), m) : 0;
+    const int stats_reply_value =
+        quiet && f.arrival != NoArrival ? pair_history_[ReplyTable].value(f.arrival, stats_slot) : 0;
+    const int stats_follow_value =
+        quiet && stats_follow != NoArrival ? pair_history_[FollowTable].value(stats_follow, stats_slot) : 0;
+    const int stats_take_value =
+        m.is_capture()
+            ? take_history_.value(take_slot(pos.piece_at(m.from()), m.to(),
+                                            m.is_en_passant() ? Pawn : kind_of(pos.piece_at(m.to()))))
+            : 0;
+#endif
     play(ply, m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
@@ -459,8 +619,34 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;
         counters.lmr_rule_changes += reduced != std::clamp(new_depth - base, 1, new_depth);
+        // X2: the history values at this LMR site, and what the LMR history
+        // term (sprt/lmr-history: the base less the ordering score / 24,000)
+        // would do here. The correction is the same with that base: the
+        // committed rule returns 0 whatever its context.
+        ++counters.lmr_order_bins[order_score_bin(stats_order_score)];
+        ++counters.lmr_quiet_bins[table_value_bin(stats_quiet_value)];
+        if (f.arrival != NoArrival)
+          ++counters.lmr_reply_bins[table_value_bin(stats_reply_value)];
+        else
+          ++counters.lmr_reply_absent;
+        if (stats_follow != NoArrival)
+          ++counters.lmr_follow_bins[table_value_bin(stats_follow_value)];
+        else
+          ++counters.lmr_follow_absent;
+        const int shift = lmr_history_probe_shift(stats_order_score);
+        counters.lmr_history_fire_less += shift > 0;
+        counters.lmr_history_fire_more += shift < 0;
+        counters.lmr_history_changes +=
+            std::clamp(new_depth - (base - shift + correction - relief), 1, new_depth) != reduced;
 #endif
       }
+#ifdef FORK_SEARCH_STATS
+      // X2: a late capture (every LMR gate passed but "quiet"; R18's sites).
+      if (m.is_capture() && depth >= LmrMinDepth && moves_searched + 1 >= LmrMinMove) {
+        ++counters.late_capture_sites;
+        ++counters.late_take_bins[table_value_bin(stats_take_value)];
+      }
+#endif
       if (!switches.use_pvs && reduced == new_depth) {
         score = -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);  // plain alpha-beta
       } else {
@@ -519,7 +705,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // that do not give check (keep_quiet_checks above), so every quiet the
   // loop sees there is a checking one. The bound stays honest as if each
   // dropped quiet had been seen.
-  if (f.selector.quiets_filtered() > 0) best = std::max(best, futility_value);
+  if (f.selector.quiets_filtered() > 0)
+    best = std::max(best,
+                    FORK_STAT_GATE(force == LedgerForce::FutilityOn ? std::min(futility_value, alpha_start) :)
+                        futility_value);
   FORK_STAT(counters.futility_prunes += static_cast<std::uint64_t>(f.selector.quiets_filtered()));
   // No legal move is mate or stalemate; legal moves that were all pruned are
   // not (the guard above prevents it; this keeps the result right regardless).
@@ -552,7 +741,10 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 
   if (pos.repetition_count() >= 2 || pos.insufficient_material()) return 0;
   if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
-  if (ply >= MaxPly) return in_check ? 0 : eval_at(ply);
+  if (ply >= MaxPly) {
+    FORK_STAT(counters.evals_horizon += !in_check);
+    return in_check ? 0 : eval_at(ply);
+  }
 
   const Key key = pos.key();
   TtHit hit{};
@@ -566,8 +758,28 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   int best = -ScoreInfinite;
   if (in_check) {
     f.static_eval = ScoreNone;
+    FORK_STAT(++counters.check_nodes_quiesce);
   } else {
     f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
+    FORK_STAT(++(tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_quiesce : counters.evals_quiesce));
+#ifdef FORK_SEARCH_STATS
+    // Crucial-point ground truth: a sampled quiescence evaluation site.
+    if (eval_site_every_quiesce_ && !ledger_active_ &&
+        ++eval_site_seen_quiesce_ % eval_site_every_quiesce_ == 0)
+      print_eval_site(1, tt_hit && hit.eval != ScoreNone, alpha, beta, f.static_eval, f.static_eval, 0, ply,
+                      tt_hit, hit, OnPv);
+    {  // Idea 59 step 1: the stand-pat evaluation's window gap.
+      const bool reused = tt_hit && hit.eval != ScoreNone;
+      const int gap = window_gap(f.static_eval, alpha, beta);
+      if (gap < 0)
+        ++(reused ? counters.eval_gap_quiesce_reuse_infinite : counters.eval_gap_quiesce_infinite);
+      else
+        ++(reused ? counters.eval_gap_quiesce_reuse_bins
+                  : counters.eval_gap_quiesce_bins)[window_gap_bin(gap)];
+      if (!reused && gap >= 0)
+        counters.eval_gap_quiesce_one_sided += is_tb_or_mate(alpha) != is_tb_or_mate(beta);
+    }
+#endif
     best = f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)
@@ -587,6 +799,11 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   for (Move m; !(m = f.selector.take_next()).is_none();) {
     ++moves_searched;
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
+#ifdef FORK_SEARCH_STATS
+    const bool pawn_move = kind_of(pos.piece_at(m.from())) == Pawn;
+    counters.pawn_makes += pawn_move;
+    counters.pawn_makes_quiesce += pawn_move;
+#endif
     play(ply, m);
     FORK_STAT(++counters.makes);
     const int score = -quiesce<OnPv>(-beta, -alpha, ply + 1);
@@ -613,6 +830,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 int Searcher::search_root(int alpha, int beta, int depth) {
   Position& pos = *pos_;
   ++nodes_;
+  FORK_STAT(++counters.root_nodes);
   pv_[0].length = 0;
   int best = -ScoreInfinite;
   // The root node counts too, so a node limit reached here stops here, not
@@ -634,6 +852,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     }
     pos.unmake(m);
     root_moves_[i].nodes = nodes_ - nodes_before;
+    root_moves_[i].nodes_all_passes += root_moves_[i].nodes;  // every pass's moves, before a stop returns
     if (stopped_) return best;
     if (score > best) best = score;
     if (m == root_fail_high_ && score < beta) root_fail_high_ = NoMove;  // resolved by its re-search
@@ -658,6 +877,90 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   root_moves_[0] = front;
   return best;
 }
+
+std::int64_t Searcher::soft_limit_now(const SearchQuota& limits) const {
+  if (!switches.use_stability_time) return limits.soft_ms;
+  const TimeScaleVariant variant =
+      switches.use_share_time ? TimeScaleVariant::StabilityAndShare : TimeScaleVariant::StabilityOnly;
+  return scaled_soft_ms(limits.soft_ms, limits.hard_ms, soft_scale_permille(variant, time_signals_));
+}
+
+#ifdef FORK_SEARCH_STATS
+// X6 (DESIGN.md §5.7): after a finished iteration (its shares computed), the
+// best move (the front root move, as a raw 16-bit move), its per mille of
+// the last pass's nodes and of every pass's, the largest other root move's
+// per mille of the last pass, the last pass's and the whole iteration's
+// nodes, the score, the aspiration passes, the root moves and the deepest
+// ply. Integers only, no allocation.
+void Searcher::trace_iteration(int depth, int score, int passes, std::uint64_t iteration_nodes) const {
+  std::uint64_t last_pass = 0, all_passes = 0;
+  int runner_up = 0;
+  for (std::size_t i = 0; i < root_count_; ++i) {
+    last_pass += root_moves_[i].nodes;
+    all_passes += root_moves_[i].nodes_all_passes;
+    if (i > 0) runner_up = std::max(runner_up, root_moves_[i].share);
+  }
+  const std::uint64_t share_all = all_passes ? root_moves_[0].nodes_all_passes * 1000 / all_passes : 0;
+  std::fprintf(stderr, "iteration_trace %d|%u|%d|%llu|%d|%llu|%llu|%d|%d|%d|%d\n", depth,
+               static_cast<unsigned>(root_moves_[0].move.raw()), root_moves_[0].share,
+               static_cast<unsigned long long>(share_all), runner_up,
+               static_cast<unsigned long long>(last_pass), static_cast<unsigned long long>(iteration_nodes),
+               score, passes, static_cast<int>(root_count_), max_ply_reached_);
+}
+#endif
+
+#ifdef FORK_SEARCH_STATS
+// Crucial-point ground truth (DESIGN.md §5.7): the site's kind, whether
+// its evaluation was reused from the TT, the window, the static and the
+// TT-refined evaluation, the depth (0 in quiescence), the ply, the parent's
+// static evaluation (from the opponent's view; ScoreNone if none), the TT
+// entry's bound and depth, whether the move that led here captured, the PV
+// flag, and the FEN last. Integers except the FEN, which allocates a string:
+// stats builds only, at sampled sites only (as FORK_SINGULAR_PROBE does).
+void Searcher::print_eval_site(int kind, bool reused, int alpha, int beta, int eval, int prune_eval,
+                               int depth, int ply, bool tt_hit, const TtHit& hit, bool on_pv) const {
+  const int parent_eval = ply > 0 ? frames_[ply - 1].static_eval : ScoreNone;
+  std::fprintf(stderr, "eval_site %d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%d|%s\n", kind, reused ? 1 : 0, alpha,
+               beta, eval, prune_eval, depth, ply, parent_eval, tt_hit ? static_cast<int>(hit.bound) : 0,
+               tt_hit ? static_cast<int>(hit.depth) : -1, pos_->state().captured != NoPiece ? 1 : 0,
+               on_pv ? 1 : 0, pos_->fen().c_str());
+}
+
+int Searcher::ledger_side_search(int alpha, int beta, int depth, int ply, LedgerForce force,
+                                 std::uint64_t& side_nodes) {
+  // A side search must leave the real search exactly as it was: no node
+  // count, no node or time limit (the stop flag still ends it, and then the
+  // real search stops too), no TT write, no history update, no counter.
+  static const SearchQuota ledger_quota;  // no limits
+  ledger_saved_counters_ = counters;
+#if defined(FORK_EVAL_NNUE)
+  ledger_saved_tally_ = features_.tally();
+#endif
+  const std::uint64_t saved_nodes = nodes_, saved_hits = table_hits_;
+  const int saved_max_ply = max_ply_reached_;
+  const SearchQuota* saved_limits = limits_;
+  limits_ = &ledger_quota;
+  ledger_active_ = true;
+  tt_.set_hold_writes(true);
+  ledger_force_ = force;
+  ledger_force_ply_ = ply;
+  const int score = negamax<false>(alpha, beta, depth, ply);
+  ledger_force_ = LedgerForce::Keep;
+  tt_.set_hold_writes(false);
+  ledger_active_ = false;
+  limits_ = saved_limits;
+  side_nodes = nodes_ - saved_nodes;
+  nodes_ = saved_nodes;
+  table_hits_ = saved_hits;
+  max_ply_reached_ = saved_max_ply;
+  counters = ledger_saved_counters_;
+#if defined(FORK_EVAL_NNUE)
+  features_.set_tally(ledger_saved_tally_);
+#endif
+  counters.ledger_side_nodes += side_nodes;
+  return score;
+}
+#endif
 
 void Searcher::report_iteration(int depth, int score, int bound, const PrincipalLine& pv) {
   last_reported_ = pv.length ? pv.moves[0] : NoMove;
@@ -698,6 +1001,10 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   max_ply_reached_ = 0;
   stopped_ = false;
   unresolved_fail_high_ = NoMove;
+  stable_iterations_ = 0;
+  stable_move_ = NoMove;
+  time_signals_ = {};
+  last_soft_ms_ = limits.soft_ms;
   frames_[0].arrival = NoArrival;  // the root has none (the follow table's arrival at ply 1)
 
 #if defined(FORK_EVAL_NNUE)
@@ -748,9 +1055,16 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
 
   int previous = 0;
   for (int depth = 1; depth <= std::min(limits.depth, MaxPly - 1); ++depth) {
+#ifdef FORK_SEARCH_STATS
+    // X6: the passes and the iteration's nodes (every pass's nodes per root
+    // move are reset below, in every build: time management reads them).
+    int passes = 0;
+    const std::uint64_t iteration_start = nodes_;
+#endif
     iteration_best_ = NoMove;
     iteration_best_score_ = -ScoreInfinite;
     root_fail_high_ = NoMove;
+    for (std::size_t i = 0; i < root_count_; ++i) root_moves_[i].nodes_all_passes = 0;
     int delta = AspirationHalfWidth;
     int alpha = -ScoreInfinite, beta = ScoreInfinite;
     if (switches.use_aspiration && depth >= AspirationMinDepth && !is_tb_or_mate(previous)) {
@@ -760,6 +1074,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     int score;
     for (;;) {
       score = search_root(alpha, beta, depth);
+      FORK_STAT(++passes);
       if (stopped_) break;
       if (score > alpha && score < beta) break;
       if (elapsed_ms() >= fail_report_ms) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
@@ -808,12 +1123,27 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     result.score = score;
     result.depth = depth;
     finished_pv_ = pv_[0];
+    // Time management's signals (§5.6 step 10, X6's definitions): stability
+    // counts finished iterations in a row with this best move (1 for the
+    // first), and the share is the best move's per mille of every pass's
+    // nodes. Kept in every search (cheap); read only with use_stability_time.
+    stable_iterations_ = result.best == stable_move_ ? stable_iterations_ + 1 : 1;
+    stable_move_ = result.best;
+    std::uint64_t all_passes = 0;
+    for (std::size_t i = 0; i < root_count_; ++i) all_passes += root_moves_[i].nodes_all_passes;
+    time_signals_ = {depth, stable_iterations_,
+                     all_passes ? static_cast<int>(root_moves_[0].nodes_all_passes * 1000 / all_passes) : 0,
+                     score};
+#ifdef FORK_SEARCH_STATS
+    if (trace_iterations_) trace_iteration(depth, score, passes, nodes_ - iteration_start);
+#endif
     report_iteration(depth, score, 0, pv_[0]);
     if (limits.mate_moves > 0 && is_mate_score(score) && score > 0 &&
         mate_in_moves(score) <= limits.mate_moves)
       break;
     const bool timed = !(pondering && pondering->load(std::memory_order_relaxed));
-    if (timed && limits.soft_ms >= 0 && elapsed_ms() >= limits.soft_ms) break;
+    last_soft_ms_ = soft_limit_now(limits);
+    if (timed && limits.soft_ms >= 0 && elapsed_ms() >= last_soft_ms_) break;
     // With one root move (one legal move, one searchmoves move, or one the
     // tables keep) nothing the search finds can change the move: only the
     // reported score and the next move's TT and history gain from more
@@ -828,6 +1158,17 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     if (timed && limits.hard_ms >= 0 && elapsed_ms() * IterationGrowthThirds / 3 > limits.hard_ms) break;
   }
   result.nodes = nodes_;
+#ifdef FORK_SEARCH_STATS
+  // Phase 4 step 1 (DESIGN.md §5.7): cumulative counters after each search,
+  // for tools/measure/game_replay.py, which takes the differences.
+  if (report_counters_) {
+#if defined(FORK_EVAL_NNUE)
+    print_counter_dump(counters, &features_.tally(), stderr);
+#else
+    print_counter_dump(counters, nullptr, stderr);
+#endif
+  }
+#endif
   return result;
 }
 
