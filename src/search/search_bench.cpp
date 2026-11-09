@@ -147,6 +147,10 @@ SearchBenchResult run_search_bench() {
                static_cast<unsigned long long>(c.lmp_prunes),
                static_cast<unsigned long long>(c.futility_prunes),
                static_cast<unsigned long long>(c.see_prunes));
+  std::fprintf(stderr, "stats: aspiration re-searches %llu, null-move surplus plies %llu, quiet SEE prunes %llu\n",
+               static_cast<unsigned long long>(c.aspiration_researches),
+               static_cast<unsigned long long>(c.null_surplus_plies),
+               static_cast<unsigned long long>(c.quiet_see_prunes));
   std::fprintf(
       stderr, "stats: %llu reduced searches, %llu re-searched at full depth (%.1f%%)\n",
       static_cast<unsigned long long>(c.lmr_searches), static_cast<unsigned long long>(c.lmr_researches),

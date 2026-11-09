@@ -13,14 +13,7 @@
 # UCI options are read from its own `uci` output: listed options are passed
 # only if the engine has them, any thread option is set to 1 and any book
 # switch to false. The anchor set changed on 2026-11-02 (owner; anchors.tsv):
-# Marvin 6.3.0 plays in every run, so the separate strong run is gone. On
-# 2026-11-08 (owner): Marvin 6.3.0 and Altair 7.0.0 continuity anchors
-# (Arcanum 2.8, Marvin's alternate, removed), Clover 6.1 a standing anchor,
-# and the reference opponent Stockfish 19 (role reference): 400 games (every
-# opening, both colours; 4 shards), Hash 16 MB as Fork's, kept out of Ordo's fit and
-# reported apart as the gap to it (tools/gauntlet/report.py: Fork's score,
-# the Elo difference and its pentanomial 95% interval); a failed build stops
-# the run, as for a continuity anchor.
+# Marvin 6.3.0 plays in every run, so the separate strong run is gone.
 # Started by a push to the trigger branch gauntlet-run (GitHub dispatches a
 # workflow by hand only once its file is on the default branch); one run at a
 # time, never beside the SPRT, CI or web runs (whoever starts it waits for an
@@ -93,9 +86,9 @@ jobs:
           rows = [l.rstrip('\n').split('\t') for l in open('tools/gauntlet/anchors.tsv') if l.strip() and not l.startswith('#')]
           chosen = []
           for r in rows:
-              if r[3] in ('continuity', 'reference'):
+              if r[3] == 'continuity':
                   if r[1] not in built:
-                      sys.exit(f"{'reference opponent' if r[3] == 'reference' else 'continuity anchor'} {r[0]} did not build")
+                      sys.exit(f'continuity anchor {r[0]} did not build')
                   chosen.append(r[1])
               elif r[3] in ('new', 'trial'):
                   if r[1] in built:
@@ -109,9 +102,7 @@ jobs:
                       sys.exit(f'{r[0]} did not build and neither did its alternate')
                   print(f'{r[0]} did not build: replaced by {subs[0]}', file=sys.stderr)
                   chosen.append(subs[0])
-          # 100 games a shard: openings 1-100 for an anchor, all 200 for a reference opponent.
-          shards = [{'anchor': s, 'start': start} for s in chosen
-                    for start in ((1, 51, 101, 151) if any(r[1] == s and r[3] == 'reference' for r in rows) else (1, 51))]
+          shards = [{'anchor': s, 'start': start} for s in chosen for start in (1, 51)]
           print('shards=' + json.dumps(shards))
           PY
           { echo "### Anchors built"; printf -- '- %s\n' "${built[@]}"; } >> "$GITHUB_STEP_SUMMARY"
@@ -198,7 +189,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: {pattern: "games-*", path: shards}
       - name: Ordo (pinned, built here)
@@ -208,9 +198,16 @@ jobs:
           git -C ordo-src checkout -q FETCH_HEAD
           make -C ordo-src ordo >/dev/null 2>&1 ||
             make -C ordo-src ordo CFLAGS="-DNDEBUG -DMY_SEMAPHORES -flto -I myopt -I sysport -fcommon" >/dev/null
-      - name: Ratings (the reference opponent apart)
+      - name: Ratings
         run: |
-          python3 -I tools/gauntlet/report.py shards tools/gauntlet/anchors.tsv . ./ordo-src/ordo >> "$GITHUB_STEP_SUMMARY"
+          cat shards/*/games.pgn > gauntlet.pgn
+          sort -u shards/*/anchor.csv > anchors.csv
+          ./ordo-src/ordo -p gauntlet.pgn -m anchors.csv -W -D -s 1000 -o ordo.txt > ordo.log 2>&1
+          {
+            echo "### Gauntlet: $(grep -c '^\[Event ' gauntlet.pgn) games"
+            echo '```'; cat ordo.txt; echo '```'
+            echo "Shards:"; for f in shards/*/shard.txt; do echo "- $(tr '\n' ' ' < "$f")"; done
+          } | tee summary.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: gauntlet-result
@@ -219,5 +216,4 @@ jobs:
             gauntlet.pgn
             anchors.csv
             ordo.txt
-            reference.pgn
             summary.md

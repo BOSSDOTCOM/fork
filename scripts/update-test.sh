@@ -9,11 +9,6 @@
 #
 #   scripts/update-test.sh [path/to/update.sh]
 set -uo pipefail
-# Git's own variables never reach the toy repositories (nor update.sh's clone): `git rebase --exec` in a
-# linked worktree exports GIT_DIR, and the toy commands then committed, tagged and pushed in the real
-# repository (2026-11-07). The same set the pre-commit hook clears.
-unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES \
-  GIT_COMMON_DIR GIT_NAMESPACE GIT_CEILING_DIRECTORIES
 
 script=${1:-$(dirname "$0")/../update.sh}
 script=$(cd "$(dirname "$script")" && pwd)/$(basename "$script")

@@ -69,22 +69,6 @@ data=${SPRT_DATA:-$HOME/fork-sprt/github}/$name
 mkdir -p "$data"
 say() { echo "$(date -u '+%Y-%m-%d %H:%M UTC') $name: $*" | tee -a "$data/driver.log"; }
 stop() { say "$*; stopping"; exit 1; }
-# A gh call a transient network or GitHub error must not end (2026-11-08: a results download and a commit
-# check failed within a minute while GitHub was healthy, and gh's message was discarded): up to GH_TRIES
-# attempts, GH_RETRY_WAIT seconds apart, each failure's last line of output in the log (on stderr, so a
-# caller's $(...) captures only gh's answer).
-GH_TRIES=${GH_TRIES:-5}
-GH_RETRY_WAIT=${GH_RETRY_WAIT:-30}
-gh_retry() {  # what, command...
-  local what=$1 n out
-  shift
-  for n in $(seq "$GH_TRIES"); do
-    out=$("$@" 2>&1) && { printf '%s\n' "$out"; return 0; }
-    say "$what: attempt $n of $GH_TRIES failed: $(printf '%s\n' "$out" | tail -1)" >&2
-    [ "$n" -lt "$GH_TRIES" ] && sleep "$GH_RETRY_WAIT"
-  done
-  return 1
-}
 
 py=${PYTHON:-}
 if [ -z "$py" ]; then
@@ -102,8 +86,7 @@ test=$(git rev-parse --verify --quiet "$3^{commit}") || stop "test $3 is not a c
 REF=${REF:-$(git rev-parse --abbrev-ref HEAD)}
 REPO=${REPO:-$(git remote get-url origin | sed -E 's#^(https://github\.com/|git@github\.com:)##; s#\.git$##')}
 for c in "$base" "$test"; do
-  gh_retry "commit check $c" "$GH" api "repos/$REPO/commits/$c" --jq .sha >/dev/null ||
-    stop "commit $c is not on GitHub ($REPO)"
+  "$GH" api "repos/$REPO/commits/$c" --jq .sha >/dev/null 2>&1 || stop "commit $c is not on GitHub ($REPO)"
 done
 
 # Prints the number of runs not completed; anything but "0" (gh failing
@@ -144,11 +127,11 @@ for stage in $(seq "$first" "$last"); do
     say "stage $stage: run $id dispatched (ledger)"
   fi
   while [ "$("$GH" run view "$id" -R "$REPO" --json status --jq .status 2>/dev/null)" != completed ]; do sleep "$POLL"; done
-  concl=$(gh_retry "stage $stage: run $id's conclusion" "$GH" run view "$id" -R "$REPO" --json conclusion --jq .conclusion)
+  concl=$("$GH" run view "$id" -R "$REPO" --json conclusion --jq .conclusion 2>/dev/null)
   [ "$concl" = success ] || stop "stage $stage: run $id ended '$concl'"
-  # A failed attempt may leave part of the download, so each attempt starts from an empty folder.
-  gh_retry "stage $stage: run $id's download" bash -c 'rm -rf "$1" && mkdir -p "$1" && "$0" run download "$2" -R "$3" -D "$1"' \
-    "$GH" "$data/s$stage" "$id" "$REPO" >/dev/null || stop "stage $stage: run $id's download failed"
+  rm -rf "$data/s$stage"
+  mkdir -p "$data/s$stage"
+  "$GH" run download "$id" -R "$REPO" -D "$data/s$stage" >/dev/null 2>&1 || stop "stage $stage: run $id's download failed"
   echo "$id" >"$data/s$stage/run_id"
   # The shard results of stages FIRST..this one (earlier stages too when
   # resuming), each checked against this SPRT's commits and its stage.

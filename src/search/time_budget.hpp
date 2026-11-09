@@ -6,8 +6,6 @@
 // Purpose: turn the clock arguments of `go` and the Move Overhead option into
 // a soft limit (checked between iterations: no new iteration starts after it)
 // and a hard limit (polled during the search). Phase 5 replaces the formulas.
-// Also, behind the search's switches use_stability_time and use_share_time
-// (off), the soft limit's scaling after each finished iteration (below).
 // Invariants:
 // - Limits are milliseconds from the moment `go` was received; -1 means none.
 // - When both are set, 1 <= soft_ms <= hard_ms. With a clock, hard_ms leaves
@@ -37,32 +35,5 @@ struct ClockInput {
 };
 
 TimeBudget plan_time(const ClockInput& in);
-
-// The soft limit's scaling by best-move stability and the every-pass node
-// share (DESIGN.md §5.6 step 10, think tank R8; switches use_stability_time
-// and use_share_time, off by default). After each finished iteration of a
-// timed search, the soft check may use soft_ms scaled by
-// soft_scale_permille: Fork's fitted chance that the best move changes
-// within the next two iterations (X6, §5.7 on measure/step1), relative to
-// the typical chance at that depth, times a balance that keeps the mean
-// spend unchanged, never below a floor. Invariants:
-// - 1000 (unchanged) for Off, below depth TimeScaleMinDepth, for mate and
-//   tablebase scores, and for a share of 0 in StabilityAndShare.
-// - Integer fixed point only (deterministic on every compiler and libm);
-//   non-increasing in stability, and in the share for StabilityAndShare.
-// - scaled_soft_ms never scales a soft limit equal to its hard limit (go
-//   movetime), never returns more than hard_ms nor less than 1, and leaves a
-//   missing limit (-1) as it is.
-enum class TimeScaleVariant : std::uint8_t { Off, StabilityOnly, StabilityAndShare };
-
-struct IterationSignals {
-  int depth = 0;
-  int stability = 0;  // finished iterations in a row, ending at this one, with the same best move
-  int share_all = 0;  // the best move's per mille of the iteration's nodes over every aspiration pass
-  int score = 0;
-};
-
-int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signals);
-std::int64_t scaled_soft_ms(std::int64_t soft_ms, std::int64_t hard_ms, int permille);
 
 }  // namespace forkeng

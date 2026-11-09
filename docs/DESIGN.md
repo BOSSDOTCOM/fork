@@ -1203,12 +1203,7 @@ because update.sh refuses it.
   shard results whose meta names its own base, test and stage
   (2026-11-02, after a cancelled SPRT's local driver kept dispatching
   stages; `tools/github/test_sprt_run.sh` checks each rule with a fake gh).
-  Since 2026-11-08 its commit check, conclusion read and results download
-  retry a transient gh failure (`GH_TRIES`, default 5, `GH_RETRY_WAIT`
-  seconds apart, default 30; each failure's message in the driver's log)
-  and stop only on a lasting one: twice in one night a healthy run's
-  download, and once a commit check, failed and ended a screen, with gh's
-  message discarded. **Since 2026-11-05 (owner) it runs only under the job supervisor**
+  **Since 2026-11-05 (owner) it runs only under the job supervisor**
   (`tools/jobs/jobctl.py start github NAME -- bash tools/github/sprt_run.sh
   ...`: one job of type `github` at a time; `jobctl.py stop NAME` ends the
   driver's whole process tree and verifies none is left before it releases
@@ -1383,6 +1378,105 @@ holds, which is why search decisions use no floating point (deliverable 6).
   audit-1, D-16); the
   phase-end fuzz rule applies to it, and to `fuzz_fen` and `fuzz_moves` if
   `src/core` changes.
+
+#### SPSA on GitHub (owner, 2026-11-07; §6 decisions 4 and 5)
+
+The driver for the early SPSA of the eval-dependent margins (§5.6
+step 11, R14) and the final retune by scaling class (step 19, R24), built
+on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
+§2.O4). One iteration is one run of `.github/workflows/spsa.yml`:
+- **Build:** `tools/github/spsa_build.sh` builds the tuned commit as a
+  tuning build (update.sh's configure line plus `-DFORK_TUNE=ON`, x86-64-v3,
+  gcc 11.4 on Ubuntu 22.04), checks the network's parity file, bench parity
+  against the reference of the network the binary names, and every
+  `FORK_SEARCH_PARAMS` row as a spin option; the binary is cached by the
+  commit's SHA, so only the first iteration builds.
+- **Shards:** `tools/github/spsa_shard.py` plays game pairs of the engine
+  against itself, every pair (a "draw"; `draw_pairs` > 1 groups pairs)
+  with its own perturbation: theta + c*signs against theta - c*signs,
+  Rademacher signs and random rounding of each value from the draw's
+  seed, SHA-256 of label, commit, stage, shard and index; SPRT conditions
+  (one thread, Hash, adjudication, both colours, Syzygy 3-4-5).
+- **Driver:** `tools/github/spsa_run.sh` under the job supervisor (type
+  github), with sprt_run.sh's rules: commit on GitHub, one run at a time,
+  the run found by its title, every run in the ledger (its params SHA-256 in
+  the note). `tools/github/spsa.py step` refuses a run whose shard results
+  differ from the dispatch in any meta field, opening range, sign or value
+  (recomputed from each draw's seed), and applies nothing; the state
+  (`~/fork-spsa/github/NAME/`) is written after the iteration's log line,
+  so a stop at any point resumes. A rewind abandons a pending stage; stage
+  indices, seeds and openings are never reused.
+- **Trigger (owner, 2026-11-08):** GitHub dispatches a workflow by hand
+  only once its file is on the default branch, so the driver starts each
+  run by a push to the trigger branch `spsa-run` (SPSA_TRIGGER=push, the
+  default; workflow_dispatch stays for after the tooling reaches main). Each
+  push is one fresh request commit: its tree is the tooling branch's tree
+  (a snapshot, not its history) plus `.github/spsa-request.json` (the
+  stage's plan, the same ten values as the dispatch inputs), its message
+  the run's title ("spsa NAME COMMIT stage D"), its parent the remote's
+  spsa-run tip, or origin/phase-4's tip (fetched at push time) for the
+  first push, so tune/spsa's history stays unpublished and every push is a
+  fast-forward; nothing is ever force-pushed and no other branch is pushed.
+  The push gate (`scripts/scan-push.sh`) passes every request commit before
+  its push. The run is the one whose head commit is that request commit and
+  whose title matches (the ledger's note names the push); the workflow
+  refuses a pushed request whose commit is titled for another stage. A stop
+  after the push resumes by adopting that push's run.
+- **Update rule** (B7 O2, in units of c): the gain sequences of Spall,
+  "Implementation of the simultaneous perturbation algorithm for stochastic
+  optimization", IEEE TAES 34(3):817-823, 1998, Sec. III-A Step 1:
+  a_k = a / (A + k + 1)^0.602 and c_k = c / (k + 1)^gamma, k counted from 0
+  (here over game pairs; c held fixed, gamma 0, as B7 simulated), A at most
+  10% of the iterations (Sec. III-B; R14: A = 1,040 of 10,400 pairs);
+  a scaled so the last pair's gain is gain_end = 16 eps k / (p sd^2), with
+  k = ln 10 / 1600, sd = 0.21 (the STC pair-score sd, A3 §2.5) and a
+  stationary-loss budget eps = 0.5 Elo (B7 §0: 0.0326 for p = 8); each
+  iteration's step clamped to 0.5 c; theta kept at least c inside its
+  range; the result is the mean of theta over the last 30% of the updates,
+  rounded; a parameter clamped in at least two thirds of the updates is
+  reported step-limited (B14).
+- **Never in SPSA:** the time-management parameters (the iteration rule and
+  the time budget, refused by name) and the eval scale (not a parameter).
+- **Openings:** the tuning reserve, lines 2,000,001 to 2,632,036 of the
+  shuffled UHO book, which no SPRT stage reaches (SPRTs play from line 1),
+  so the tune's openings are disjoint from every validation SPRT's.
+- **Perturbation sizes** (B7 O3): `tools/github/spsa_calibrate.py` on a
+  FORK_TUNE + FORK_SEARCH_STATS build sets each c so that default +- c
+  changes its rule's firing count on the bench by 10% (1, 2, 4, 8 table
+  steps, log-linear interpolation; insensitive rules flagged); three
+  stats-only counters serve it (aspiration re-searches, null-move surplus
+  plies, quiet SEE prunes; bench unchanged). Run on e5dbaab
+  (2026-11-08, S512ppr3): c = RfpMargin 15.0, FutilityOffset 18.2,
+  FutilityGrowth 7.5, NullSurplusPerPly 7.8, AspirationHalfWidth 1.0,
+  QuietSeeFloor 22.5 (insensitive: 8.6% at 6 steps, so the range cap),
+  CaptureSeeFloor 28.0, LmpQuietAllowance 1.7, in
+  `tools/github/spsa-r14.json`; 2.5 to 4.5 times the table step for five
+  of them and a third of it for NullSurplusPerPly, so O3's refutation
+  ("every c within 30% of its step") does not hold. The SEE floors'
+  counts move in plateaus (SEE values are discrete: CaptureSeeFloor +8 and
+  +16 give the default's count exactly), so their c are coarse.
+- **R14 tunes seven margins (owner, 2026-11-08):** QuietSeeFloor is left
+  out and keeps its value (60): its firing count moved 8.6% at the widest
+  test inside its range, below the 10% rule, and a parameter with nothing
+  to gain adds about 0.17 Elo of noise to a 20k-game SPSA (B7 rule 7). The
+  gain follows p = 7: gain_end = 0.0373 (0.0326 for eight).
+- **Validation** (B7 O6; owner's defaults 2026-11-07): the tuned values are
+  committed as new defaults (bench updated, the constants table rows citing
+  the SPSA log and the SPRT, the originality screen before the commit);
+  then an STC SPRT of release builds, tuned against default, [0, 5] nElo,
+  alpha = beta = 0.05, capped at 6 stages, counted as try 1 of idea `r14`
+  at STC; then an LTC sign guard of 3 fixed stages (40+0.4), passed if the
+  nElo estimate is above 0. No second-book check.
+- **Cost** (estimated, not yet run): an iteration of 1,600 STC games takes
+  about 15 min of runner time (19 with the build); R14 is 13 iterations
+  (20,800 games, about 3.3 h), plus about 1.2-1.9 h of STC validation and
+  about 3.75 h of LTC guard (UNVERIFIED LTC stage time): about 8.3-9 h.
+- **Tests:** `tools/github/test_spsa.py` (the update against the closed
+  form of a quadratic loss, Spall's formula, the clamps, rounding, seeds, a
+  noisy landscape, crash idempotency, resume, refusals, the build flags,
+  the calibration rule), `test_spsa_shard.sh` (a fake fastchess) and
+  `test_spsa_run.sh` (a fake gh), in check.sh's tool tests; each
+  fault-injected once.
 
 #### Queued experiments (run at Milestone B; results in ideas.md)
 
@@ -2133,15 +2227,6 @@ and Weiss (results in ORIGINALITY.md).
 | Iteration growth | 5/3 | **Measured** on the bench (46 positions to depth 14, cumulative nodes): the work grows by a median factor of 1.66 per iteration at depths 8-14 (p75 1.96, p90 2.38). An iteration started at elapsed time t probably finishes near t · 5/3, so none starts when that passes the hard limit. |
 | `LmrCorrectionStrength` | 64 (of 64) | The evolvable LMR correction's scale in 1/64 steps: 64 applies a rule's correction as written, 0 switches it off, and the range 0-128 lets SPSA weaken or double it. A unit, not a tuned value; with the committed rule (0) it has no effect (deliverable 8c). |
 | `ScoreTrendLimit` (score-trend clamp) | ±1000 cp | The LMR context's root score trend is clamped to ten pawns: beyond that a change only says "decisive", and the clamp keeps any rule's integer arithmetic far from overflow (deliverable 8c). |
-| `TimeScaleMinDepth` (switches `UseStabilityTime`, `UseShareTime`, both on since 2026-11-08: variant b) | 8 | §5.6 step 10 (R8), a **placeholder from Fork's own fit** (X6, §5.7 on measure/step1: 18,782 iterations at depth >= 8 of 2,086 searches at 2M nodes in 60 of Fork's STC games; derived by tools/measure/tm_curve.py there). X6's declared primary depth: the fit has no rows below it, so the soft limit is not scaled there. The constant screen passed (ORIGINALITY.md, 2026-11-07). The rows below are adopted as one set with variant (b), whose SPRTs against off passed at STC (+18.69 ± 7.18 Elo) and LTC (+10.23 ± 5.14 Elo; 2026-11-08, SPRT log); no value was tuned on its own. |
-| `TimeScaleMaxDepth` | 19 | Placeholder, X6: the last depth holding at least 1% of the fit's rows (290 of 18,782; depth 20 has 171). Deeper iterations are scaled as depth 19. |
-| `TimeScaleStabilityCap` | 72 iterations | Placeholder, **derived by the owner's rule declared before it was computed** (2026-11-07): the 99th percentile of the stability count (iterations the best move stayed unchanged, X6's definition) over X6's 18,782 rows at depth >= 8, the smallest integer whose cumulative share reaches 99% (tm_curve.py prints it). It replaced X6's first cap of 10, which the constant screen found equal in role to other engines' stability caps and which had no data-based justification. Above about 15 iterations the floor binds anyway, so the cap mainly shapes the fit and keeps the fixed point in range. |
-| `TimeScaleShareMin`, `TimeScaleShareMax` | 5, 995 per mille | Placeholder, X6's declared share clip (keeps the logit finite). |
-| `StabilityFit` (variant a) | logit 0.534912 − 0.207666·stability − 0.096556·depth (Q16 35056, −13610, −6328) | Placeholder, X6 rows: logistic fit of "the best move changes within the next two iterations" on stability (capped at 72) and depth (AUC 0.765, out of sample 0.763). |
-| `ShareFit` (variant b) | logit 0.474586 − 0.177596·stability − 0.185073·logit(share_all) − 0.103338·depth (Q16 31102, −11639, −12129, −6772) | Placeholder, X6 rows, the same label on stability (capped at 72), the every-pass share's logit and depth (AUC 0.771, out of sample 0.770; the last-pass share predicts less, §5.7). |
-| `DepthFit` (normaliser) | logit 0.567490 − 0.211730·depth (Q16 37191, −13876) | Placeholder, X6 rows, the same label on depth alone. The scale is σ(fit)/σ(DepthFit): the iteration's change chance over the typical one at its depth. Depth normalises and is no signal of its own (owner, 2026-11-07): with the literal fits on stability (and share) alone, the balance needed to keep the mean spend drifts from 1.04 to 1.58 (a) and 1.01 to 1.46 (b) between 100k and 500k-node soft budgets, so an STC calibration would spend less at LTC; normalised, it stays at 0.99-1.08 (a) and 0.95-1.04 (b). Fallback (literal fits, kept documented; stability capped at 72): (a) σ(−0.455439 − 0.224471·s) / 0.1294, balance 1.216; (b) σ(−0.569350 − 0.199212·s − 0.173797·L) / 0.1294, balance 1.167 (both at 250k nodes; tm_curve.py prints all three budgets). |
-| `TimeScaleBalanceStability`, `TimeScaleBalanceShare` | 1030, 996 per mille | Placeholders: the factor that keeps the mean spend equal to the plain soft limit's when X6's 2,086 searches are replayed with nodes as the clock (soft budget B, hard 4B, the engine's stop rules: the hard stop, the soft check, the forced-move stop, the iteration rule), the scale as the engine applies it (stability and depth caps, floor), the mean of the balances at B = 100k, 250k and 500k nodes (a: 1.018, 0.988, 1.083; b: 0.996, 0.954, 1.038). At equal mean spend the move at the stop matched the 2M-node final move more often (250k: 0.854 plain, 0.873 a, 0.874 b; in sample, not Elo). Nodes as time is UNVERIFIED: the head-to-head's clocks confirm the spend. |
-| `TimeScaleFloor` | 360 per mille | Placeholder: at most two iterations short of the soft limit at Fork's iteration growth 5/3 (row "Iteration growth"): (3/5)² = 0.36. It binds at about a quarter of X6's rows (23% in a, 24% in b: the long-stable ones), and the balance is computed with it. No upper bound: the hard limit caps the scaled soft limit, and the iteration rule already ends an extended search near 2.4 soft limits. |
 
 #### Owner's answers (2026-10-24)
 
@@ -3608,7 +3693,7 @@ proxy is replaced by a capped pilot with a game-based fitness (R38; owner, 2026-
 
 | item | status |
 |---|---|
-| LTC confirmations owed | **2026-11-08 (owner): three owed, queued after the SPSA early pass, one at a time: singular extension (T27, STC +14.12 ± 6.55), multi-cut (T28, STC +9.19 ± 4.62) and the take history (T11, STC +4.53 ± 2.99), each adopted on STC alone although on the straight-to-LTC list; each on against off at 40+0.4, non-regression bounds [−3, 0] (IIR's form). No LTC retest for the ungated negative extension (T30, H0 at STC); R40's gated form stays the planned new idea. Idea 59's screens take priority over the SPSA and these LTCs at stage boundaries.** Before 2026-11-08 this row read: none outstanding today (IIR confirmed); LTC confirmations only for the LTC-sensitive list (Testing setup; owner, 2026-11-06), so of the queued items only batch 4's double extensions and its TT-PV use go to LTC; the pawn drift table stays off (undecided at LTC; owner, 2026-11-06) **2026-11-07 (owner, think tank; DESIGN §6):** plus a VLTC spot check of the final retune's output (decision 21). |
+| LTC confirmations owed | none outstanding today (IIR confirmed); LTC confirmations only for the LTC-sensitive list (Testing setup; owner, 2026-11-06), so of the queued items only batch 4's double extensions and its TT-PV use go to LTC; the pawn drift table stays off (undecided at LTC; owner, 2026-11-06) **2026-11-07 (owner, think tank; DESIGN §6):** plus a VLTC spot check of the final retune's output (decision 21). |
 | Final gauntlet | after the last adoption (GitHub's gauntlet workflow, as milestone 1's) **2026-11-07 (owner, think tank; DESIGN §6):** plays the TCEC build (decision 9). S512ppr2's gauntlet: **3488.2 ± 22.2** (2026-11-07, run 42392526865; S512r2's was 3445.8 ± 21.6). |
 | Audit-2 and its fixes | not started (an audit in audit-1's form after the last search and network change) |
 | Phase-end checklist (CLAUDE.md), merge to main, tag `phase-4`, summary | at the end |
@@ -3633,7 +3718,7 @@ games; an LTC stage counts as 4.
 | 7 | **g3g's seal**: done early (stopped 12:16 PM EST 2026-11-07; owner); g3h follows on 6 threads. The quiet-window work (the TCEC build matrix R11, C1 for data generation, the zero-row timings) moves to the next planned pause of data generation; the 2026-09 book at the next part boundary | L | a planned pause | 2-4 quiet hours |
 | 8 | **Item 8a** (the endgame gate at most 15 of 900), then the STC SPRT [0, 5]; the optional high-WDL branch. **Done** (2026-11-07): S512ppr3 (R1-avg) passed the fixed-node tie-break (+15.65 ± 9.26) and the STC SPRT (+7.12 ± 4.53, H1 after 8,000 games) and was promoted (owner); the high-WDL branch not run | K, G | after g3g's seal, manifest and upload: the evening of 2026-11-07 or 2026-11-08 | 5-7 GPU-h, 1-3 stages |
 | 9 | The throttled speed-to-Elo measurement (X8: 2 STC + 1 LTC stages) | G | after step 6 | about 6 stage-equivalents |
-| 10 | **Node-share time management + best-move stability** (R8). **Done** (2026-11-08): variant (b) beat (a) head to head (+22.75 ± 12.04 nElo) and passed design R against off at STC (+18.69 ± 7.18 Elo) and LTC (+10.23 ± 5.14 Elo); adopted into phase-4 (owner) | E, G | after the node-share fit (AUC at least 0.70) | 2 days, about 22 stage-equivalents |
+| 10 | **Node-share time management + best-move stability** (R8) | E, G | after the node-share fit (AUC at least 0.70) | 2 days, about 22 stage-equivalents |
 | 11 | The SPSA driver (X18), then the **early SPSA** of the eight margins (R14) | E, G | after the decision ledger's ranges | 2-3 days, about 29 stage-equivalents |
 | 12 | Search features under design R, adoptions bundled into one part switch per day: R7 → R20 → R4 → R6 → R12 → R16 → R15 → R17 → R10 → R18 → R13 → R29 → R21 → R22; at LTC: R41, R40 (a new idea), R28 | E, G | interleaved with steps 10-11 | about 40 GitHub-hours |
 | 13 | Retrains 8b and 8c by the cadence rule; **decide the endgame-start slice (R32) after 8a's result** | K, G | at least 150 M new kept positions | about 5 GPU-h each |
@@ -3650,50 +3735,6 @@ Parked: idea 40's L3 root planner. ProbCut: no retest. Totals (UNVERIFIED):
 about 350 STC-equivalent GitHub stages and about 3-4 weeks; engineering
 days are the binding resource. The 2026-11-06 order is in git history
 (a24d41f).
-
-**Step 10, built behind switches (2026-11-07, branch tm/node-share; owner).**
-After each finished iteration of a timed search the soft check compares
-against `scaled_soft_ms(soft, hard, soft_scale_permille(...))`
-(src/search/time_budget.*): the soft limit times Fork's fitted chance that
-the best move changes within the next two iterations, over the typical
-chance at that depth, times a mean-spend balance, at least 360 per mille,
-never above the hard limit. Variant (a), `UseStabilityTime`: stability
-alone (finished iterations in a row with the same best move). Variant (b),
-`UseStabilityTime` and `UseShareTime`: stability and the best move's share
-of every aspiration pass's root nodes (`RootEntry::nodes_all_passes`; the
-LMR context's last-pass share is untouched). `UseShareTime` alone does
-nothing. Not scaled: below depth 8, mate and tablebase scores, `go
-movetime` (soft equal to hard), pondering, and every search without a soft
-limit (bench, data generation). Integer fixed point only. Both switches
-are off: bench is unchanged, and the switch-off identity was checked on
-timed searches with the node clock (`FORK_NODE_CLOCK`, a test-only CMake
-option: elapsed time = nodes / 1000 ms): the 46 bench positions under
-five conditions (8+0.08 and 60+0.6 clocks, movestogo 5, a 300 ms clock,
-movetime 200), 230 searches, gave output identical to the seam-only commit
-with the switches off and with `UseShareTime` alone (the two new option
-lines of the tuning build's `uci` reply aside); with (a) on, 122 of the 230
-searches changed, with (b) 129, and no movetime search. Constants:
-"Search constants" (all placeholders from X6, awaiting the constant
-screen). Prediction, recorded before any game: Spearman ρ² of the scale
-against the label 0.069 (a) and 0.074 (b), about +3 to +4 Elo at STC by
-§5.7's reading of M5's table (UNVERIFIED); R8's 0.5-2x method check
-applies. Next: the head-to-head of (a) against (b) (branches tm/a and
-tm/b; the declared value is (a)), then the winner under design R at STC
-and at LTC. Limit: at TCEC depths the normaliser holds at depth 19 (Phase 5
-owns the TCEC curve). The constant screen passed every fitted value; the
-first stability cap (10) matched other engines' caps in role and was
-replaced by the cap derived from X6 by the owner's declared rule (72),
-with every coefficient and balance refitted.
-
-**Step 10, adopted (2026-11-08; owner).** The head-to-head picked (b)
-(+22.75 ± 12.04 nElo over (a), 3,200 games), and (b) against off passed
-design R at STC (+18.69 ± 7.18 Elo, 3,200 games) and at LTC 40+0.4 (+10.23
-± 5.14 Elo, 4,992 games, no time losses); Phase 4 SPRT log. By the owner's
-rule (adopt into phase-4 only after LTC passes) tm/b was merged:
-`UseStabilityTime` and `UseShareTime` now default to on, and both stay
-switches until the Phase 4 re-validation. Bench is unchanged (bench has no
-soft limit), and data generation is node-limited, so the labeller is
-untouched.
 
 ## 6. Decisions log
 
@@ -3799,11 +3840,6 @@ untouched.
 | 2026-11-07 | **Retrain candidates are gated by a fixed-node screen, not by validation loss (owner).** Item 8a's declared rule required the candidate's full validation-set loss to beat S512ppr2's by 2e-5; R1-avg (the average of R1's superbatches 331-360; every gate passed: S = 89, qloss 9.4 / 7.5 cp, the endgame check 8 of 900, netcheck 0 of 446) beat it by 1.82e-5, short by 1.8e-6 (the validation set, mostly g3s2-val, favours the baseline it selected). Declared before any result: a tie-break with one 1,600-game fixed-node screen of R1-avg against S512ppr2 (800,000 nodes per move each); the STC SPRT [0, 5] follows only at +5 Elo or more, otherwise 8a is recorded as below threshold and the next retrain is 8b. **From now on** a retrain's candidate is gated by that fixed-node screen (the same architecture, so no speed adjustment) instead of the offline validation-loss margin, since loss has proven an unreliable predictor (S512+PP gained +32.7 at STC with a flat loss). Also from 8a's arms: the cooldown branch did not beat R1's own average (4.8e-5 worse on the prefix window), and the anneal-only arm was worse than R1-avg on the full set. |
 | 2026-11-07 | **S512ppr3 promoted to the default network (owner, about 9:05 PM EST).** Item 8a's retrain (S512+PP's architecture on g3s3 = g3s2 + g3f + g3g, Kaggle fork-retrain-g3s3 v1 at 6053b51, every arm warm from S512ppr2's float weights, S = 92 in training): R1 and R2, the standard recipe (seeds 1, 2); CD, a cooldown branch from R1's superbatch 180 (1e-5, 3e-6, 1e-6 for 20/15/15 superbatches, the last 15 averaged); D1, anneal only (1e-5 for 60 superbatches). Full g3s3-val losses: S512ppr2 0.01968472, R1-best 0.01965562, R2-best 0.01972978, R1-avg 0.01966655, CD-avg 0.01977483, D1-final 0.01975487, D1-avg 0.01971097: **the cooldown branch and the anneal-only arm did not beat R1-avg**. By the declared rule R1-avg was the candidate (more than 1e-5 below R-best, R2's best checkpoint), 1.82e-5 below S512ppr2, short of the 2e-5 margin; the owner's tie-break, one fixed-node screen, **now replaces the loss margin** as the gate for retrain candidates (the row above). S512ppr3 (bake/s512ppr3 720fe7b: R1-avg at the matched S = 89, 1 of 311,296 link weights clamped; quantization loss max 9.4 cp, p99 7.5 cp; netcheck exact on 446; the endgame check 8 of 900, as S512ppr2) scored **+15.65 ± 9.26 Elo** (nElo +28.80 ± 17.02, ptnml [7, 161, 406, 205, 21]) at 800,000 nodes per move (run 42426868742), above the declared +5, then beat S512ppr2 at STC [0, 5], **+7.12 ± 4.53 Elo (nElo +11.98 ± 7.61), H1 accepted** after 5 stages, 8,000 games, LLR 3.14, ptnml [100, 908, 1848, 1016, 128] (runs 42429984619, 42431412304, 42432793282, 42434196075, 42435511074; the driver stopped in the machine's crash at about 8:07 PM EST after dispatching stage 2 and was resumed with RUN_ID for that stage; sprt-log). Promoted; S512ppr2 stays buildable and joins CI's `nets` job; the web page adds S512ppr3 as its default when it is next redeployed. Bench 14,149,617 / 1cb0717f040c294d. **The labeller policy:** g3i (started after the crash, labelled by S512ppr2) ends at a game boundary and is sealed as its part, and the generation continues as g3j, labelled by S512ppr3 from a fresh PGO build. The owner: switching g3i -> g3j today is an explicit exception to decision 24 (one part switch per day), because g3i's start was forced by the crash and the labeller policy calls for an immediate switch on a network promotion |
 | 2026-11-07 | **Crucial-point ground truth; the window gap gates ideas 59 and 60 (owner).** On measure/step1 (daca926, its §5.7): 5,433 sampled evaluation sites from 100 of Fork's games, deep-searched at 1 M nodes; 18.6% are crucial (the static evaluation and the deep value on opposite sides of the nearest finite bound) in both strata. Recall at 4% of the nodes: a logistic model (the gap plus features) 0.34 in the main search and 0.26 in quiescence; the window gap alone 0.30 / 0.25; random 0.13 / 0.10; the seeds' disagreement is near random as a gate (AUC 0.52-0.54). The owner: idea 59's oracle screens and idea 60 use the window gap now; the logistic gate comes in only in idea 59's step 3 and idea 60's tuning, if their screens pass |
-| 2026-11-08 | **Idea 59's step 2 passed; the control split confirms the mechanism (owner).** Fixed-node screens (1,600 games, 800,000 nodes per move) against S512r2 alone: setting (a), window gate 25 / 10 cp with S512+X refining, +29.82 +/- 9.78 (3.81% of nodes consulted); setting (b), 25 / 25 cp, +41.01 +/- 9.97; a random gate at (a)'s call rate +7.60 +/- 9.93; bias only ((a)'s gate adding its mean refinement, S512+X never consulted) −14.56 +/- 9.96. The gain comes from where the refiner is consulted, not from a shift or from refining any 4% of nodes (ideas.md idea 59 has the runs). Next: step 3's design (a refiner sharing S512ppr3's accumulator, on-demand exposure features, trained on near-window positions from Fork's own search with deep labels from a pinned binary) for the owner's review before building, and a prior-art search before any public claim. Fixed-node gains do not charge the second network's cost; the nps claim waits for step 3's build, measured on a quiet machine. |
-| 2026-11-08 | **TCEC's hardware supports VNNI (owner).** The answer to KB competition.md question 8 (decision 9 of 2026-11-07 kept VNNI out until TCEC answered): the owner reports that TCEC's hardware supports AVX-512 VNNI (the primary source is to be cited in the KB when available). VNNI paths may now be built for the TCEC build, each with its scalar reference and an exactness test (§7); SPRTs on the GitHub shards still run x86-64-v3, so a VNNI speed gain is judged separately from the AVX2 path that the SPRTs charge (idea 59 step 3, owner 2026-11-08). Still open: the `-march` for TCEC's build and the launcher question. |
-| 2026-11-08 | **Time management variant (b) adopted (owner; §5.6 step 10, R8).** The soft limit scaled by best-move stability and the best move's every-pass node share (`UseStabilityTime` and `UseShareTime` on; constants from Fork's X6 fit, stability cap 72; Search constants) passed design R [0, 6] against off at STC (+18.69 ± 7.18 Elo, 3,200 games, H1) and at LTC 40+0.4, Hash 64 (+10.23 ± 5.14 Elo, nElo +19.22 ± 9.64, 4,992 games, H1 after stage 6, job tm-r8-ltc), and was merged into phase-4 by the owner's rule of the same day (adopt only after LTC passes). Variant (a) (tm/a, stability alone) lost the head-to-head and is not adopted. Both switches stay until the Phase 4 re-validation. Bench unchanged (14,149,617 / 1cb0717f040c294d); data generation is node-limited and unaffected. |
-| 2026-11-08 | **The gauntlet's set of 2026-11-08: every anchor standing, and a gap to Stockfish (owner).** tools/gauntlet/anchors.tsv: Clover 6.1 (CCRL Blitz 3639, rechecked on the list of 2026-11-07) a standing anchor with the role `new` and no alternate (it built in the anchor job of runs 41465146207 and 42392526865 as Altair's alternate but never played, so not `continuity`); Marvin 6.3.0 and Altair 7.0.0 `continuity` (both built and played in those two runs), and Arcanum 2.8, Marvin's alternate, removed (its build failed in both): a failed build of any anchor now stops the run before any game. **Stockfish 19** (tag sf_19, edb0d9d, GPL-3.0), role `reference`: 400 games (all 200 openings, both colours, 4 shards), Threads 1 and Hash 16 MB as Fork's, built with `make net` then `make build ARCH=x86-64-avx2` (the network's file name and SHA-256 logged; whether `make build` alone fetches it is UNVERIFIED until the first run's log), **kept out of the Ordo fit** and reported apart as the gap to Stockfish: Fork's score, the implied Elo difference and its pentanomial 95% interval (tools/gauntlet/report.py, which now merges the shards and runs Ordo; its CCRL Blitz 3792 shown for context only); a failed build stops the run. A run plays 1,800 games: 1,400 in the fit (7 anchors x 200), 400 against Stockfish. Opponent binaries only (ORIGINALITY.md; KB competition.md §5). |
-| 2026-11-08 | **Gauntlet of the new default (S512ppr3 + time management (b)): Fork 3488.2 ± 20.4; gap to Stockfish 19 −222.4 (owner).** Run 42538371594 on phase-4 32c5517 (update.sh, gcc 11.4, x86-64-v3; bench signature 1cb0717f040c294d checked on the runner), 7:06-7:45 PM EST, every shard 100 of 100, no time forfeits; 200 random 8-ply openings, 10+0.1. Ordo, CCRL Blitz scale, 1,400 games against the seven standing anchors (931.5 points, 67%). Opponents' scores against Fork: Clover 6.1 (3639) 147.0 of 200, Altair 7.0.0 (3579) 121.5, Marvin 6.3.0 (3458) 86.0, Laser 1.7 (3292) 49.0, Winter 0.9 (3168) 30.0, Monolith 2.01 (3061) 19.0, Weiss 1.0 (2896) 16.0. The rating equals S512ppr2's 3488.2 of 2026-11-07 to the decimal by coincidence: on the six anchors both runs share, Fork scored 878.5 of 1,200 (73.2%) against 864.0 (72.0%), about +10 Elo by the logistic slope, within either run's error, while Clover, new to the fit, scored 74% against Fork (about 3460 implied from that pairing alone). **Gap to Stockfish 19** (sf_19, edb0d9db, net nn-1a298aa575a0 fetched by its make net; outside the fit): Fork 87 of 400 (21.8%), +49 =76 −275, **Elo −222.4, 95% interval −251.2 to −196.1** (pentanomial, 200 pairs, [75, 76, 49, 0, 0]: each of Fork's 49 wins is paired with a loss of the colour-reversed game); for comparison, Fork's fitted 3488 against Stockfish's CCRL 3792 is −304 on the list's conditions. Result: ~/fork-data/gauntlet/run-42538371594. |
 
 ## 7. Performance doctrine (governs every phase)
 

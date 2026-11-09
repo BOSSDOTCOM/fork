@@ -74,6 +74,9 @@ python -I tools/fuzz/run_fuzz.py --target build/clang-fuzz/fuzz_fen --corpus fuz
 python -I tools/jobs/jobctl.py start github NAME -- bash tools/github/sprt_run.sh NAME BASE TEST ELO0 ELO1
 python -I tools/jobs/jobctl.py stop NAME      # whole process tree, verified; also: status [NAME]
 python -I tools/jobs/ledger.py runs NAME      # each stage's GitHub run, as dispatched (~/fork-jobs/ledger.jsonl)
+python -I tools/github/spsa.py init NAME --spec tools/github/spsa-r14.json --commit SHA   # an SPSA (DESIGN.md §5.2)
+python -I tools/jobs/jobctl.py start github NAME -- bash tools/github/spsa_run.sh NAME   # one run per iteration
+python -I tools/github/spsa.py report NAME    # trajectories and final values (SPSA_STOP_AFTER=0: the dry run)
 ```
 
 Long-running jobs (SPRT, fixed-node and gauntlet drivers, data generation,

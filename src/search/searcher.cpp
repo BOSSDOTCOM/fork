@@ -80,13 +80,6 @@ constexpr int TableNearDrawScore = 1;
 // DESIGN.md, "Search constants": the smallest step in whole plies, which is
 // the unit Fork's LMR table works in).
 constexpr int LmrCheckRelief = 1;
-#ifdef FORK_NODE_CLOCK
-// Test-only builds (CMake FORK_NODE_CLOCK, never released): the search's
-// clock reads its node count, this many nodes to the millisecond, so a timed
-// search is deterministic and two builds can be compared on it byte for byte
-// (DESIGN.md §5.6 step 10, the time-management switches' identity check).
-constexpr std::uint64_t NodeClockRate = 1000;
-#endif
 
 // The side has a piece other than pawns and its king (the null move's main
 // zugzwang guard: pawn endings are where passing is most often best).
@@ -107,12 +100,8 @@ int fifty_move_score(const Position& pos, bool in_check, int ply) {
 }  // namespace
 
 std::int64_t Searcher::elapsed_ms() const {
-#ifdef FORK_NODE_CLOCK
-  return static_cast<std::int64_t>(nodes_ / NodeClockRate);
-#else
   return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start_)
       .count();
-#endif
 }
 
 bool Searcher::poll_limits() {
@@ -270,6 +259,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (switches.use_nmp && can_prune_node && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
       prune_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
     const int surplus_plies = std::min((prune_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
+    FORK_STAT(counters.null_surplus_plies += static_cast<std::uint64_t>(surplus_plies));
     const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)
     play_null(ply);
@@ -415,6 +405,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #ifdef FORK_SEARCH_STATS
         counters.bad_captures_after_stop_pruned += bad_after_stop;
         ++counters.see_prunes;
+        if (quiet) ++counters.quiet_see_prunes;
 #endif
         continue;  // SEE pruning (T23)
       }
@@ -645,7 +636,6 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     }
     pos.unmake(m);
     root_moves_[i].nodes = nodes_ - nodes_before;
-    root_moves_[i].nodes_all_passes += root_moves_[i].nodes;  // every pass's moves, before a stop returns
     if (stopped_) return best;
     if (score > best) best = score;
     if (m == root_fail_high_ && score < beta) root_fail_high_ = NoMove;  // resolved by its re-search
@@ -669,13 +659,6 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   for (std::size_t i = best_index; i > 0; --i) root_moves_[i] = root_moves_[i - 1];
   root_moves_[0] = front;
   return best;
-}
-
-std::int64_t Searcher::soft_limit_now(const SearchQuota& limits) const {
-  if (!switches.use_stability_time) return limits.soft_ms;
-  const TimeScaleVariant variant =
-      switches.use_share_time ? TimeScaleVariant::StabilityAndShare : TimeScaleVariant::StabilityOnly;
-  return scaled_soft_ms(limits.soft_ms, limits.hard_ms, soft_scale_permille(variant, time_signals_));
 }
 
 void Searcher::report_iteration(int depth, int score, int bound, const PrincipalLine& pv) {
@@ -717,10 +700,6 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   max_ply_reached_ = 0;
   stopped_ = false;
   unresolved_fail_high_ = NoMove;
-  stable_iterations_ = 0;
-  stable_move_ = NoMove;
-  time_signals_ = {};
-  last_soft_ms_ = limits.soft_ms;
   frames_[0].arrival = NoArrival;  // the root has none (the follow table's arrival at ply 1)
 
 #if defined(FORK_EVAL_NNUE)
@@ -774,7 +753,6 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     iteration_best_ = NoMove;
     iteration_best_score_ = -ScoreInfinite;
     root_fail_high_ = NoMove;
-    for (std::size_t i = 0; i < root_count_; ++i) root_moves_[i].nodes_all_passes = 0;
     int delta = AspirationHalfWidth;
     int alpha = -ScoreInfinite, beta = ScoreInfinite;
     if (switches.use_aspiration && depth >= AspirationMinDepth && !is_tb_or_mate(previous)) {
@@ -786,6 +764,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       score = search_root(alpha, beta, depth);
       if (stopped_) break;
       if (score > alpha && score < beta) break;
+      FORK_STAT(++counters.aspiration_researches);
       if (elapsed_ms() >= fail_report_ms) report_iteration(depth, score, score <= alpha ? -1 : 1, pv_[0]);
       // Only the failing side moves. The half-width grows by how far the
       // fail-soft score already is from the previous iteration's: at least
@@ -832,24 +811,12 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     result.score = score;
     result.depth = depth;
     finished_pv_ = pv_[0];
-    // Time management's signals (§5.6 step 10, X6's definitions): stability
-    // counts finished iterations in a row with this best move (1 for the
-    // first), and the share is the best move's per mille of every pass's
-    // nodes. Kept in every search (cheap); read only with use_stability_time.
-    stable_iterations_ = result.best == stable_move_ ? stable_iterations_ + 1 : 1;
-    stable_move_ = result.best;
-    std::uint64_t all_passes = 0;
-    for (std::size_t i = 0; i < root_count_; ++i) all_passes += root_moves_[i].nodes_all_passes;
-    time_signals_ = {depth, stable_iterations_,
-                     all_passes ? static_cast<int>(root_moves_[0].nodes_all_passes * 1000 / all_passes) : 0,
-                     score};
     report_iteration(depth, score, 0, pv_[0]);
     if (limits.mate_moves > 0 && is_mate_score(score) && score > 0 &&
         mate_in_moves(score) <= limits.mate_moves)
       break;
     const bool timed = !(pondering && pondering->load(std::memory_order_relaxed));
-    last_soft_ms_ = soft_limit_now(limits);
-    if (timed && limits.soft_ms >= 0 && elapsed_ms() >= last_soft_ms_) break;
+    if (timed && limits.soft_ms >= 0 && elapsed_ms() >= limits.soft_ms) break;
     // With one root move (one legal move, one searchmoves move, or one the
     // tables keep) nothing the search finds can change the move: only the
     // reported score and the next move's TT and history gain from more

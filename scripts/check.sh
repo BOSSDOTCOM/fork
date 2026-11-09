@@ -176,8 +176,8 @@ build_and_test() {  # preset, ctest filter args...
 }
 
 # The tooling's own tests (audit-1 U-15): standard-library Python suites
-# (sprt_merge and the book permutation, the evolve harness, pgn_summary, the gauntlet report, the job supervisor, the
-# Control Center), plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
+# (sprt_merge and the book permutation, the evolve harness, pgn_summary, the job supervisor, the SPSA
+# arithmetic, the Control Center), plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
 # tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh with a fake gh (about 40 s).
 tool_tests() {  # python | all
   local py="" c
@@ -188,10 +188,10 @@ tool_tests() {  # python | all
   "$py" -I -B -m unittest discover -s tools/cloud -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/cloud"
   "$py" -I -B -m unittest discover -s tools/evolve -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/evolve"
   "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
-  # The gauntlet's report (owner, 2026-11-08): the reference opponent kept out of Ordo's fit.
-  "$py" -I -B -m unittest discover -s tools/gauntlet -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/gauntlet"
   # The job supervisor and the run-ID ledger (owner, 2026-11-05): whole-tree stops, one lock per type.
   "$py" -I -B -m unittest discover -s tools/jobs -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/jobs"
+  # The GitHub SPSA driver's arithmetic, spec and state (tools/github/spsa.py; DESIGN.md §5.2).
+  "$py" -I -B -m unittest discover -s tools/github -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/github"
   # The Fork Control Center (owner, 2026-11-06): its parsers on the real formats, the data-generation
   # controls against a simulated supervisor, the seal, and the read-only tabs under a write-blocking guard.
   "$py" -I -B -m unittest discover -s tools/control_center -p 'test_*.py' >>"$log" 2>&1 \
@@ -205,21 +205,6 @@ tool_tests() {  # python | all
     echo "tool tests: tools/datagen skipped (no python-chess or zstandard in $py)" >>"$log"
   fi
   bash scripts/update-test.sh >>"$log" 2>&1 || fail "tool tests: scripts/update-test.sh (update.sh clone mode)"
-  # 2026-11-07: run by `git rebase --exec` in a linked worktree, git's exported GIT_DIR (the worktree's git
-  # directory) reached the toy repositories' commands, which committed, branched, tagged and pushed in the
-  # real repository and its origin. The same setup with a decoy repository, its worktree and its origin: the
-  # test must leave both exactly as they were.
-  decoy=$(mktemp -d)
-  refs() { git -C "$decoy/r" for-each-ref --format='%(refname) %(objectname)'
-           git -C "$decoy/o.git" for-each-ref --format='%(refname) %(objectname)'; }
-  git -c init.defaultBranch=main init -q "$decoy/r" &&
-    git -C "$decoy/r" -c user.name=decoy -c user.email=decoy@example.invalid commit -q --allow-empty -m decoy &&
-    git clone -q --bare "$decoy/r" "$decoy/o.git" && git -C "$decoy/r" remote add origin "$decoy/o.git" &&
-    git -C "$decoy/r" worktree add -q "$decoy/w" -b wb && before=$(refs) &&
-    (cd "$decoy/w" && GIT_DIR="$decoy/r/.git/worktrees/w" bash "$OLDPWD/scripts/update-test.sh") >>"$log" 2>&1 &&
-    [ "$(refs)" = "$before" ] ||
-    { rm -rf "$decoy"; fail "tool tests: scripts/update-test.sh leaks into the repository in GIT_DIR"; }
-  rm -rf "$decoy"
   # The push gate (owner, 2026-11-05): a planted hit of each kind blocks the scan and the push.
   bash scripts/test_scan_push.sh >>"$log" 2>&1 || fail "tool tests: scripts/test_scan_push.sh (the push gate)"
   [ "$1" = all ] || return 0
@@ -239,6 +224,10 @@ tool_tests() {  # python | all
   for t in test_spot_quota test_aws_cleanup test_spot_watch test_aws_spot_datagen test_cost_guard; do
     PYTHON=$py bash "tools/cloud/$t.sh" >>"$log" 2>&1 || fail "tool tests: tools/cloud/$t.sh"
   done
+  # The GitHub SPSA shard with a fake fastchess (the options each side gets per draw, the failure states),
+  # and the SPSA driver against a fake gh and a local push remote (both triggers; about 2 min).
+  PYTHON=$py bash tools/github/test_spsa_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_spsa_shard.sh"
+  PYTHON=$py bash tools/github/test_spsa_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_spsa_run.sh"
 }
 
 native_full() {

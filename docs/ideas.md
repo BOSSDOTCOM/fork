@@ -354,12 +354,6 @@ added on 2026-10-24; ideas 1-12 predate them.
   implemented, game endings included. Round 2's snapshot includes g2b,
   since the SPRT passed before it. Whether generation 2's next parts
   switch to the split settings is the owner's call.
-  **Publication plan (owner, 2026-11-07):** once a prior-art search is done (is the split search, cheap
-  unsaved moves interleaved with expensive saved ones in self-play, already published under another name;
-  KataGo's playout-cap randomisation is the nearest known relative), write a reproduction guide in
-  docs/research/ (mechanism, evidence, implementation, settings, costs and failures), then a TalkChess
-  summary post and possibly an arXiv note, stating clearly that the idea came from an AI-assisted project.
-  Anything published outside the repository needs the owner's go-ahead at the time.
 
 ## 14. Auxiliary training targets
 
@@ -1855,24 +1849,9 @@ until measured; new names and constants go through the screens before use.
   measures q at each margin.
 - **literature:** cascades of classifiers (Viola and Jones, 2001) and
   conditional computation (Bengio, Leonard and Courville, 2013), where an
-  expensive model runs only on hard inputs (both verified 2026-11-08:
-  Viola and Jones, CVPR 2001; Bengio, Léonard and Courville,
-  arXiv:1308.3432). **The window gate itself is classic lazy evaluation**
-  (Chess Programming Wiki, "Lazy Evaluation": the costly terms are
-  computed only when the cheap score lies near the window, and added to
-  it), the same rule, not its opposite (corrected 2026-11-08). The prior-art
-  search (2026-11-08; KB branch kb, docs/kb/research-boundary-refiner-prior-art.md)
-  also found the near-bound rationale argued on TalkChess (2017), a 2020
-  Stockfish proposal to choose its evaluation by the window (closed
-  untested), Stockfish's conditional second networks under other gates,
-  and decision-relevance arguments in the literature. What it did not find,
-  within the sources searched: a separately trained residual refiner on a
-  full NNUE base, consulted only within a small budget margin, trained on
-  the engine's own near-window positions with deep labels, sharing the
-  base accumulator; and a controlled test of where it is consulted (window
-  gate against a random gate at equal call rate, plus a bias-only
-  control). Any public text places idea 59 in the lazy and two-tier
-  evaluation family and claims only what the search did not find. Related Fork entries: idea 46's gated
+  expensive model runs only on hard inputs; lazy evaluation in chess
+  engines (Chess Programming Wiki), here in the opposite direction
+  (UNVERIFIED as exact citations). Related Fork entries: idea 46's gated
   evaluation's oracle (the same family), idea 48 (the decision-focused
   view at training time), idea 50 (near-boundary margins).
 - **step 1 (measurement):** with the stats build (the step 1 tooling),
@@ -1913,57 +1892,8 @@ until measured; new names and constants go through the screens before use.
   used, or always store the base evaluation.
 - **phase:** Phase 4, after item 8a. **metric:** call rates (step 1), the
   fixed-node screen and nps (step 2), then the STC SPRT. **status:**
-  untested (plan only, owner, 2026-11-07); step 1 measured (call rates; measure/step1). **Step 2
-  passed, and the control split confirms the mechanism (owner, 2026-11-08).** Fixed-node screens of
-  1,600 games, 800,000 nodes per move, against S512r2 alone (base 56dacaf; oracle and controls on
-  exp/oracle, d5bb138 and 92aa87c):
-
-  | setting | Elo | nElo | run |
-  |---|---|---|---|
-  | (a) window gate, main 25 / quiescence 10 cp, S512+X refines (3.81% of nodes consulted) | +29.82 +/- 9.78 | +52.21 | 42436884886 |
-  | (b) window gate, main 25 / quiescence 25 cp | +41.01 +/- 9.97 | +70.68 | 42439918061 |
-  | random gate at (a)'s call rate (key-hashed, 3.82% of nodes) | +7.60 +/- 9.93 | +13.04 | 42451958660 |
-  | bias only: (a)'s gate adding its mean refinement, +10.776 cp, S512+X never consulted | −14.56 +/- 9.96 | −24.92 | 42448595388 |
-
-  Both settings clear the kill line (+8.6) at a call rate far under 10%. At equal call rate the window
-  gate beats the random gate by about 22 Elo (about 3 standard errors), and the random gate's own gain
-  is inconclusive against zero: the gain comes from where the refiner is consulted. The bias-only
-  control loses, so the gain is not a calibration shift: it lives in the refiner's position-specific
-  corrections. The random sites' corrections are larger (mean |refinement| 36.9 cp against 25.6), so
-  the size of the disagreement is not what pays; its position relative to the window is. Fixed-node
-  results do not charge the second network's cost: the nps A/B awaits a quiet machine, and step 3's
-  design (a shared accumulator) is what the cost claim rests on. **Next: step 3's design, for the
-  owner's review before building** (with the owner's 2026-11-08 additions: a head-to-head of a wider
-  quiescence margin and both margins SPSA-tunable; TT-reused evaluations considered in the gate; a
-  confidence output; training weighted by closeness to the window, idea 48 applied here; a cap on the
-  correction's size; features in the order exposure, a cheap bitboard danger summary, then threats only
-  if they fit the speed budget), and a prior-art search for gated, boundary-specific evaluation
-  refiners before any public claim. **Publication plan (owner, 2026-11-07):** if step 3 passes its STC and LTC
-  SPRTs, write a reproduction guide in docs/research/boundary-refiner/ (the mechanism; the evidence,
-  including the control split of window-gated refiner, bias-only and random gate; implementation details;
-  the refiner's training; failures and costs; settings), then a TalkChess summary post and possibly an
-  arXiv note, stating clearly that the idea came from an AI-assisted project. Anything published outside
-  the repository needs the owner's go-ahead at the time. **runtime cost:** possible.
+  untested (plan only, owner, 2026-11-07). **runtime cost:** possible.
   **earliest phase:** Phase 4.
-- **linked follow-ups** (owner, 2026-11-08; plan only, after step 3's first
-  results; each its own experiment, shared with idea 61's family):
-  1. **Boundary controller:** the refiner's confidence output routes each
-     near-window site to "use the correction" or "extend" (idea 60), from
-     the confidence and simple tactical signals.
-  2. **Boundary distillation:** label the refiner's training sites with
-     the big teacher (idea 58) instead of, or alongside, deep search.
-  3. **Conformal calibration** (idea 50) of the gate's and the prunes'
-     margins from the crucial-point error distribution (measure/step1,
-     daca926).
-  4. **Closeness-weighted training of the base net** (idea 48's
-     decision-focused loss), as step 3 does for the refiner.
-  5. **Site selection by nearness to the window plus seed disagreement**
-     (idea 52) for the refiner's labels. Evidence to weigh first: as a
-     crucial-point gate on its own, the seeds' disagreement was near random
-     (AUC 0.52-0.54, measure/step1), and idea 52 itself stands or falls by
-     item 8b's keep-or-drop rule.
-  6. **The gate policy as an idea 23 evolution target**, with a game-based
-     fitness (decision 19: never the label-and-sweep proxy).
 
 ## 60. Near-window extension
 
@@ -2014,87 +1944,6 @@ until measured; new names and constants go through the screens before use.
   or the SPRT fails (H0 or the futility stop).
 - **phase:** Phase 4, after item 8a, before idea 59's step 3. **metric:**
   the measured node cost, the head-to-head pick, the design R SPRT (and LTC:
-  an extension, on the LTC-sensitive list). **status:** **rejected
-  (2026-11-08): the design R SPRT of 10 cp against off failed (H0, −5.43 ±
-  7.25 Elo, 3,200 games, try 1 of 2), so by the kill criterion idea 60 is
-  retired**, with no second try (owner, 2026-11-08); before it, the node cost passed (10 cp +6.2% / +5.6%) and the
-  head-to-head kept 10 cp (25 − 10 −3.24 ± 12.04 nElo); docs/history/phase-4/sprt-log.md.
-  (Plan: owner, 2026-11-07.) **runtime cost:** possible (more nodes per move at
+  an extension, on the LTC-sensitive list). **status:** untested (plan only,
+  owner, 2026-11-07). **runtime cost:** possible (more nodes per move at
   equal depth; nps unchanged). **earliest phase:** Phase 4.
-
-## 61. Boundary-gated decisions
-
-- **type:** ELO (search; runtime cost possible).
-- **idea** (owner, 2026-11-08; plan only, after idea 59's refiner exists):
-  apply idea 59's window principle to the search's own decisions, spending
-  the refiner where a decision can flip. In order, each measured and
-  SPRT-tested on its own:
-  1. **Refiner-checked pruning:** when a prune's evaluation (reverse
-     futility, futility, razoring and the like) lies within a narrow band
-     of its threshold, consult the refiner before pruning, and prune only
-     if the refined evaluation still clears the threshold.
-  2. **Quiescence checks only near the window:** generate quiet checking
-     moves in quiescence only at nodes whose evaluation lies near the
-     window.
-  3. **Near-window deep labelling for training data:** spend the deep
-     labeller's budget on positions near the window (the refiner's own
-     training data, and possibly the base net's).
-  4. **Later, a gated move scorer** (idea 54's policy head), consulted only
-     at nodes near the window.
-
-  **Further applications** (owner, 2026-11-08), each its own experiment,
-  after the refiner exists or sooner where none is needed:
-  5. **Window-aware LMR** (no refiner needed): reduce less when the move's
-     evaluation is near alpha; its constant by head-to-head selection.
-  6. **Root-gap time management:** extra time when the top two root moves
-     are near-tied; it complements the stability time management (R8).
-  7. **Window-gated tablebase probing** for TCEC's 7-man tables: probe
-     only near the window; measure the probe cost first.
-  8. **TT replacement favouring near-bound entries:** tested at a
-     TCEC-scaled hash (decision 23).
-  9. **Near-window oversampling in data generation's save decision.**
-
-  **Priority** (owner, 2026-11-08): borderline pruning (part 1) first, then
-  window-aware LMR (5), then root-gap time management (6), then the rest.
-  Linked follow-ups (the boundary controller, boundary distillation,
-  conformal margins, closeness-weighted base training, site selection and
-  the gate policy as an evolution target) are listed under idea 59.
-
-  **Independence from idea 59's cost gate** (owner, 2026-11-08): the
-  refiner-independent applications proceed whatever step 3's cost gate
-  decides: idea 60 (the near-window extension), window-aware LMR (part 5),
-  root-gap time management (part 6), window-gated tablebase probing (part
-  7), near-bound TT replacement (part 8), near-window data saving (part 9),
-  conformal margins (follow-up 3) and closeness-weighted base training
-  (follow-up 4). **If step 3 pauses**, part 1 (refiner-checked borderline
-  pruning) switches to a short verification-search variant: a near-threshold
-  prune is confirmed by a short search instead of a refiner call.
-- **basis:** idea 59's control split (2026-11-08, ideas.md idea 59): at
-  equal call rate the window-gated refiner beat a random gate by about 22
-  Elo at fixed nodes, and a constant shift lost, so a better evaluation
-  pays where a comparison with a bound can flip. A prune is such a
-  comparison (an evaluation plus a margin against alpha or beta), so the
-  same gate should find the prunes most likely to go wrong. The DESIGN
-  Focus note (2026-11-07) asks for exactly this kind of selectivity, and
-  the crucial-point ground truth (measure/step1, daca926: 18.6% of sampled
-  evaluation sites have the static evaluation and the deep value on
-  opposite sides of the nearest bound) is the measurement to reuse.
-- **first experiment (part 1):** with the stats build, count each prune
-  kind's firings whose evaluation lies within a band of its threshold, and
-  how often a deep search disagrees with the prune there (the crucial-site
-  method applied to prunes); then build refiner-checked pruning for the
-  kind with the most wrong prunes per refiner call, behind a switch, with
-  the band chosen by head-to-head selection.
-- **kill criterion:** per part: the part's design R SPRT fails (H0 or the
-  futility stop), or its node or nps cost eats the gain (the speed gate,
-  1.5 Elo per 1% nps). Part 1 is dropped before building if the
-  measurement finds wrong prunes near the threshold no more often than
-  elsewhere.
-- **phase:** Phase 4 or later, after idea 59's step 3 passes. **metric:**
-  wrong-prune rates near the threshold, then each part's SPRT. **status:**
-  untested (plan only, owner, 2026-11-08); **part 5 (window-aware LMR)
-  rejected (2026-11-08): the head-to-head kept the 10 cp band at depth >= 6
-  (d0 - d6 -2.19 +/- 12.04 nElo), and its design R SPRT against off stopped
-  for futility after stage 3 (-2.93 +/- 7.16 Elo, 3,200 games, try 1 of 2),
-  so by the kill criterion part 5 is retired**; docs/history/phase-4/sprt-log.md.
-  **runtime cost:** possible (refiner calls at pruning sites). **earliest phase:** Phase 4.

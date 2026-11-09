@@ -28,7 +28,6 @@ option(FORK_BUILD_TESTS "Build the test executable and CTest tests" ON)
 option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
 option(FORK_SEARCH_STATS "Debug counters in the search, printed by fork bench (never released)" OFF)
 option(FORK_TUNE "Tuning build: every search switch is a UCI option (SPRT and SPSA only, never released)" OFF)
-option(FORK_NODE_CLOCK "Test-only build: the search clock is its node count, so timed searches are deterministic (never released)" OFF)
 set(FORK_PGO "OFF" CACHE STRING "Profile-guided optimization stage: OFF, GEN, USE")
 set(FORK_PGO_DATA "" CACHE PATH "Profile directory (GEN) or merged profile file / directory (USE)")
 
@@ -238,13 +237,6 @@ endif()
 target_link_libraries(forksearch PUBLIC forkcore fathom ${fork_threads} PRIVATE fork_pgo)
 if(FORK_SEARCH_STATS)
   target_compile_definitions(forksearch PUBLIC FORK_SEARCH_STATS)
-endif()
-# The node clock (DESIGN.md §5.6 step 10): elapsed time is nodes / 1000 ms,
-# so two builds can be compared on timed searches byte for byte (the time
-# management switches' identity check). Never released; its tests are not
-# run (the wall-clock cases assume a real clock).
-if(FORK_NODE_CLOCK)
-  target_compile_definitions(forksearch PUBLIC FORK_NODE_CLOCK)
 endif()
 
 # The UCI front end (src/uci/): protocol loop, options, info output.

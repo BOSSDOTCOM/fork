@@ -1,0 +1,13 @@
+{
+ "commit": "32c551711915639d294189c1596cba680e0205e3",
+ "draw_pairs": 1,
+ "games": 1600,
+ "hash": 16,
+ "iteration": 0,
+ "label": "spsa-r14-m2",
+ "openings": 2000001,
+ "params": "RfpMargin=80.000:15.000,FutilityOffset=100.000:18.200,FutilityGrowth=70.000:7.500,NullSurplusPerPly=300.000:7.800,AspirationHalfWidth=12.000:1.000,CaptureSeeFloor=100.000:28.000,LmpQuietAllowance=12.000:1.700",
+ "shards": 16,
+ "stage": 0,
+ "tc": "8+0.08"
+}
