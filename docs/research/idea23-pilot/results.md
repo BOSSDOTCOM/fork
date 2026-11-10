@@ -4,6 +4,14 @@ The pilot declared in declaration.md (committed before any result, 1f22075),
 run on 2026-11-09 and 2026-11-10 (times EST). No SPRT was run; whether one
 follows is the owner's decision.
 
+## The owner's decision (2026-11-10, about 8:40 AM EST)
+
+**A null result.** The quiet ordering formula is near-optimal for this
+fitness, and the best candidate is within noise on both sets. Idea 23 is
+parked; the time-management formula stays noted as the next possible target,
+with no run planned (phase-4 22153a4: DESIGN.md decisions log, ideas.md 23).
+No SPRT.
+
 ## Summary
 
 - **No candidate beats the committed quiet ordering score beyond noise.** The
@@ -200,15 +208,30 @@ The only candidate whose generation-set interval lies above zero is #38
 
 ## The replay check
 
-(The full replay of the run from its log, every candidate compared, is
-running: job evolve-pilot-replay, started 7:32 AM EST on 2026-11-10. Its
-result is added here when it finishes.)
-
-The tiny run (2026-11-09, 1 generation x 2 candidates on 300 and 100
-positions, 22,091 tokens) replayed from its log reproduced every candidate
-exactly: the base, the calibration body and both proposals, with the same
-body, status, fitness and answers (SHA-256 of every position's nodes, move
-and score) on both sets.
+- **The pilot's full replay was stopped at the owner's decision before it
+  finished** (2026-11-10, about 9:00 AM EST, to free its CPU for other
+  work; job evolve-pilot-replay, started 7:32 AM, `orchestrator.py
+  --replay-from` with the replay plan of b58b065 and the pinned commit
+  1f22075 of d64e4e8). It got through generation 0 and the first two of
+  generation 1's eight requests, and was gating #6 when it stopped. **The
+  5 candidates it finished all matched the log exactly**: the base, both
+  calibration bodies, #4 and #5, each with the same body, status, fitness
+  and answers (SHA-256 of every position's nodes, move and score) on both
+  sets (the calibration bodies on the generation set, where they are
+  measured). 0 mismatches. Its self-check repeated the pilot's: 818,092,953
+  nodes on the 4,794 positions and 163,364,132 on the 940, the same digests,
+  0 positions differing, and the guard threshold came out at the same
+  75.35%. The other 40 candidates (#6-#45) were not replayed: their
+  reproducibility is **unverified**.
+- **The pre-pilot tiny live run's full replay** (2026-11-09: the run 10:06
+  to 10:42 PM EST, its replay 10:42 to 11:17 PM; 1 generation x 2
+  candidates on 300 and 100 positions, 22,091 tokens) **reproduced every
+  candidate exactly**: the base, the calibration body and both proposals,
+  with the same body, status, fitness and answers on both sets, and no agent
+  call whose role or prompt differed from the log.
+- The replay of a stopped and resumed run (the pilot's case) was tested with
+  fakes (test_quiet_order.py, b58b065): every candidate equal, no prompt
+  mismatch.
 
 ## Tokens and wall time
 
@@ -223,3 +246,5 @@ and score) on both sets.
 - Whether any of these combinations changes playing strength: no game was
   played (no SPRT without the owner).
 - The cost in speed of #35's extra branch was not measured.
+- That candidates #6-#45 reproduce exactly from the log: their full replay
+  was stopped by the owner before it reached them (above).
