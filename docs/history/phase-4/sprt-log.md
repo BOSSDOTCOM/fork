@@ -1106,3 +1106,21 @@ LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
 - By its kill criterion (ideas.md idea 61: a part's SPRT fails, H0 or the
   futility stop), **part 5 is retired**; the switch stays off on its
   branch, and nothing reaches phase-4.
+
+### 2026-11-09 the R14 SPSA's tuned values (idea r14-spsa): the STC design R SPRT against 32c5517 (owner): H1, adopted
+
+- spsa-r14-m2 (think tank decision 4's early pass, R14): seven margins at STC, 13 iterations, 10,400 pairs at 8+0.08 on
+  32c5517 (~/fork-spsa/github/spsa-r14-m2: report.txt, final.json). Final values (the mean of the last updates, rounded):
+  RfpMargin 80 -> 55 (pinned at the run's floor 40 + c, 15), FutilityOffset 100 -> 86, FutilityGrowth 70 -> 50,
+  NullSurplusPerPly 300 -> 301, CaptureSeeFloor 100 -> 118, LmpQuietAllowance 12 -> 8 (pinned at 6 + c, 1.7),
+  AspirationHalfWidth 12. Constant screens: no match (ORIGINALITY.md, 2026-11-09).
+- Test commit tune/spsa-r14-m2-final c59bd2b (32c5517 with the tuned defaults; bench 10,374,064 / 677c436fa145e07f), job
+  night queue item 20, try 1 of 2:
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6] (Hash 16, Syzygy 3-4-5, UHO book), tuned against 32c5517 | 42726060415 (stage 0) | 1,600 | **+37.93 ± 10.03** | +64.91 ± 17.02 | [9, 139, 358, 257, 37] | **H1** after 1 stage (LLR 4.92) |
+
+- **Adopted on phase-4 (owner, 2026-11-09)** as an explicit exception to the LTC-sensitive rule; bench
+  10,374,064 / 677c436fa145e07f. The LTC design R SPRT (item 21, origin 8) and the level 1 anchor check (item 22, claim +38) run
+  afterwards as non-blocking confirmations; a failure is reported to the owner, not reverted automatically.

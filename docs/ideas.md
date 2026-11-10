@@ -869,6 +869,7 @@ tuned by SPSA.
   when the eval-dependent margins are retuned after Phase 4** (Quality
   control 6), with an SPRT.
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** retired as a standalone test: RfpMargin is one point on the early SPSA's axis (R14, §5.6 order step 11).
+  **2026-11-09: tuned by the R14 SPSA and adopted (owner):** RfpMargin 55 within the set (STC design R +37.93 ± 10.03, H1; DESIGN.md decisions log); the final retune widens its lower bound to about 30.
 
 ## 35. The bootstrap eval calls insufficient_material twice
 
