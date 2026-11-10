@@ -1320,3 +1320,60 @@ The cw arm (cw on GPU 0, c2 on GPU 1, COMMIT 412934a) launches only if
 every check passes. The code is `cw_preflight.py verdict()`. Its test,
 `test_cw_kernels.py`, was rewritten first and failed on the old code; it
 now passes 5 of 5.
+
+### 14.9 The preflight's result under the revised rule (version 2, 2026-11-10, 1:37 to 1:44 PM EST): EQUAL passes, SPEED fails; the arm was not run
+
+Kernel fork-retrain-8b-cw-preflight, version 2. It ran on T4 x2, using
+device 0 only, for a session of 369.4 s. Every input check passed. The
+record is `preflight-2.json`. The verdict below is the kernel's own, and
+`verdict()` gives the same result when run locally on the five downloaded
+weight files.
+
+| Run | Seconds | Trained positions/s | Weights SHA-256 (first 16 hex) |
+|---|---|---|---|
+| old1 | 56.0 | 393,651 | 707b61203ea44800 |
+| old2 | 42.7 | 405,375 | 237aa908889a640b |
+| old3 | 42.4 | 404,750 | 74dce26f1544ec8a |
+| none | 42.8 | 404,316 | 0cabeb2a121451ac |
+| ones | 43.3 | 398,554 | e234a37397d59fef |
+| table | 43.3 | 396,926 | 8c3cf579f1f30071 |
+
+Every pair, as the rule compares them (every float of weights.bin, biases
+included):
+
+| Pair | Max | RMS | | Pair | Max | RMS |
+|---|---|---|---|---|---|---|
+| old1-old2 | 0.003071 | 5.17e-5 | | old2-ones | 0.002636 | 5.78e-5 |
+| old1-old3 | 0.003069 | 7.00e-5 | | old3-none | 0.003060 | 6.95e-5 |
+| old2-old3 | 0.002856 | 6.78e-5 | | old3-ones | 0.002860 | 6.91e-5 |
+| old1-none | 0.002865 | 5.86e-5 | | none-ones | 0.002770 | 5.59e-5 |
+| old1-ones | 0.002858 | 5.99e-5 | | each run against table | 0.021937 to 0.021950 | 2.42e-3 |
+| old2-none | 0.003061 | 5.94e-5 | | | | |
+
+- **Noise range** (the three old pairs): largest max 0.003071 (old1-old2),
+  largest RMS 7.00e-5 (old1-old3).
+- **EQUAL: passes.**
+  - none: max 0.002865 / 0.003061 / 0.003060 and RMS 5.86e-5 / 5.94e-5 /
+    6.95e-5 against old1 / old2 / old3. All are within the range.
+  - ones: max 0.002858 / 0.002636 / 0.002860 and RMS 5.99e-5 / 5.78e-5 /
+    6.91e-5. All are within the range.
+- **SPEED: fails.** The table run reached 396,926 positions/s against the
+  old runs' mean of 401,259. That is a ratio of **0.9892**, below 0.99.
+- **WEIGHTS ACT: passes.** The table run differs from old1 (RMS 2.42e-3,
+  35 times the noise).
+
+**Verdict: fail on SPEED, so the cw arm was not launched.**
+
+For the owner, the speed numbers themselves:
+
+- The three old runs alone spread from 393,651 to 405,375 positions/s,
+  2.9% apart. old1 ran first and took 56.0 s against about 42.5 s for the
+  others, which looks like a warm-up effect (UNVERIFIED).
+- The table run sits 0.11% below the 99% bar. It is 2.1% below old2 and
+  old3, and 0.8% above old1.
+- ones, which does every step of the table run with weights of 1, reached
+  0.993 of the old mean, and none 1.008.
+- In version 1 the table run was 1.011 of the old mean.
+
+On this sample the 1% speed rule sits inside the noise between identical
+runs. The owner decides whether to accept, change the speed rule, or rerun.

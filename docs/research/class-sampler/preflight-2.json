@@ -1,0 +1,163 @@
+{
+ "old": "320c0bee66da6958fb9507e17f9bdb4fc99178d7",
+ "new": "412934a4db5ef90cd5efa3c4dd2ae82297db346c",
+ "table": "docs/research/class-sampler/weights-r8b-c.txt",
+ "runs": {
+  "old1": {
+   "rc": 0,
+   "seconds": 56.0,
+   "progress_lines": 915,
+   "positions_per_second": 393651,
+   "command": "<work>/old/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-old1",
+   "weights": "<result>/old1.weights.bin",
+   "sha256": "707b61203ea448002b65a7ef58a5fec392e332ccf0c2abf7a5674dbd23caa44d"
+  },
+  "old2": {
+   "rc": 0,
+   "seconds": 42.7,
+   "progress_lines": 915,
+   "positions_per_second": 405375,
+   "command": "<work>/old/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-old2",
+   "weights": "<result>/old2.weights.bin",
+   "sha256": "237aa908889a640bfe7064a8dfe0be0d3076d90df084ed335ce17991f537a4bc"
+  },
+  "old3": {
+   "rc": 0,
+   "seconds": 42.4,
+   "progress_lines": 915,
+   "positions_per_second": 404750,
+   "command": "<work>/old/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-old3",
+   "weights": "<result>/old3.weights.bin",
+   "sha256": "74dce26f1544ec8a291aa4416df72c736b6eb5ec59ab11a0583a5021eaf16fc7"
+  },
+  "none": {
+   "rc": 0,
+   "seconds": 42.8,
+   "progress_lines": 915,
+   "positions_per_second": 404316,
+   "command": "<work>/fork/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-none",
+   "weights": "<result>/none.weights.bin",
+   "sha256": "0cabeb2a121451acc0d628b3584b6a221bb9e4bcaddf7ee6cc19185ef142f966"
+  },
+  "ones": {
+   "rc": 0,
+   "seconds": 43.3,
+   "progress_lines": 915,
+   "positions_per_second": 398554,
+   "command": "<work>/fork/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-ones --cell-weights <work>/ones.txt",
+   "weights": "<result>/ones.weights.bin",
+   "sha256": "e234a37397d59fefa67da400727a22593934174522460a6c75010a2046ce2e66"
+  },
+  "table": {
+   "rc": 0,
+   "seconds": 43.3,
+   "progress_lines": 915,
+   "positions_per_second": 396926,
+   "command": "<work>/fork/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-table --cell-weights <work>/fork/docs/research/class-sampler/weights-r8b-c.txt",
+   "weights": "<result>/table.weights.bin",
+   "sha256": "8c3cf579f1f300712c0a2011352708f6d379b9725c9df5bbd45b49ff459987db"
+  }
+ },
+ "gpu": "GPU 0: Tesla T4 (UUID: GPU-997b72d4-9d9f-2e32-a0bf-93c596f579ce)\nGPU 1: Tesla T4 (UUID: GPU-0c2bc92e-9382-5831-124d-b042c2eac0bb)",
+ "rustup": 0,
+ "heads": "412934a Data, docs: idea 69's final table on retrain 8b's arm c (SHA-256 4ac778ac...1b0a); design.md sections 11.4 and 14\n320c0be Data: retrain 8b's manifests (g4's seal and the derived inputs, all on Kaggle)",
+ "build_old": {
+  "rc": 0,
+  "seconds": 39.3,
+  "tail": ""
+ },
+ "build_new": {
+  "rc": 0,
+  "seconds": 38.2,
+  "tail": ""
+ },
+ "checks": {
+  "files": true,
+  "init": true,
+  "table": true,
+  "builds": true
+ },
+ "verdict": {
+  "deterministic": false,
+  "noise_max": 0.0030709095299243927,
+  "noise_rms": 7.000107387449537e-05,
+  "pairs": {
+   "old1-old2": {
+    "max": 0.0030709095299243927,
+    "rms": 5.164801051583534e-05
+   },
+   "old1-old3": {
+    "max": 0.003069266676902771,
+    "rms": 7.000107387449537e-05
+   },
+   "old1-none": {
+    "max": 0.002864748239517212,
+    "rms": 5.8582970849846705e-05
+   },
+   "old1-ones": {
+    "max": 0.002857521176338196,
+    "rms": 5.9918686563336014e-05
+   },
+   "old1-table": {
+    "max": 0.021946899592876434,
+    "rms": 0.002418853433766286
+   },
+   "old2-old3": {
+    "max": 0.002855941653251648,
+    "rms": 6.783045513963443e-05
+   },
+   "old2-none": {
+    "max": 0.0030613765120506287,
+    "rms": 5.941401026530562e-05
+   },
+   "old2-ones": {
+    "max": 0.002636358141899109,
+    "rms": 5.779188977339099e-05
+   },
+   "old2-table": {
+    "max": 0.021948330104351044,
+    "rms": 0.0024188893071753854
+   },
+   "old3-none": {
+    "max": 0.003059733659029007,
+    "rms": 6.946361072057864e-05
+   },
+   "old3-ones": {
+    "max": 0.0028599053621292114,
+    "rms": 6.906088410942211e-05
+   },
+   "old3-table": {
+    "max": 0.0219503715634346,
+    "rms": 0.0024187836869337224
+   },
+   "none-ones": {
+    "max": 0.002769686281681061,
+    "rms": 5.587972847775277e-05
+   },
+   "none-table": {
+    "max": 0.021945200860500336,
+    "rms": 0.0024188080481852546
+   },
+   "ones-table": {
+    "max": 0.021936796605587006,
+    "rms": 0.002418893481678394
+   }
+  },
+  "checks": {
+   "none": {
+    "max_ok": true,
+    "rms_ok": true
+   },
+   "ones": {
+    "max_ok": true,
+    "rms_ok": true
+   }
+  },
+  "equal": true,
+  "speed": false,
+  "table_acts": true,
+  "speed_ratio_table": 0.9892023100643309,
+  "pass": false
+ },
+ "session_seconds": 369.4
+}
