@@ -236,6 +236,16 @@ of item 7's two scratch seeds and their mean, which share no network with the
 labels. Its result goes here, as a dated addition, before 8b's results are
 read: _pending_.
 
+**Added 2026-11-09, 10:05 PM EST, before any 8b result:** measured, about
+zero. Step 0's independent golds (scratch-s1 and scratch-s2 at 1 M nodes on
+H) give bias = (candidate − control under S512ppr3's gold) − (the same under
+the independent gold mean): TD(0.8) +0.000020 [−0.000163, +0.000198], TD(0.9)
+−0.000015 [−0.000177, +0.000142], every interval containing 0, against
+differences of 0.003-0.009 (results-8b.md on idea51/td-labels 68d1527). The
+gold is not what made the stored-score-heavy labels look close; the other half
+of the caveat stands (every TD label leans on S512ppr3's 20,000-node game
+scores, and only games say whether a lower lambda trains better).
+
 ## 6. The endgame-start slice (R32): the owner's choice
 
 R32 (docs/research/phase4-think-tank/phase-c-synthesis.md: Fork self-play from
@@ -284,6 +294,27 @@ The commands after the seal (each also in ~/fork-data/8b/):
 
     python -I tools/jobs/jobctl.py start slice r8b-post -- bash ~/fork-data/8b/post-job.sh
     python -I tools/jobs/jobctl.py start upload r8b-upload-post -- bash ~/fork-data/8b/upload-post-job.sh
+
+## 8b. The launch (added 2026-11-09, 10:05 PM EST, before any 8b result)
+
+The owner pre-approved 8b for the night (about 9:35 PM EST) with the plan's
+recommended options taken for the open questions below (factor 16, `blend`,
+g3h and g3i in, H and H2 out, no c2, R32 deferred to 8c), and "if the kaggle
+quota (30hrs week) is reached then drop the least promising of the 5 runs
+until it fits". The quota (`kaggle quota`, CLI 2.2.5, at 9:44 PM EST): 27.04 h
+of 30 remaining (2.96 h used; it refreshes 2026-11-13 at 7 PM EST); five runs
+need about 7.2 h of T4 x2 wall time, at most about 14.3 h if counted per GPU,
+so all five run (the declared drop order, unused: scr, td90, i52; never c).
+
+Candidates' branches: bake/r8bc, bake/r8bi52, bake/r8btd80, bake/r8btd90 (the
+net names without separators, as the Control Center's parser requires), each
+from origin/phase-4's head at the time, which since 85253a2 carries the R14
+SPSA margins (bench 10,374,064 / 677c436fa145e07f with S512ppr3): the screens'
+base is that same commit, so each screen compares nets on one engine. A dry run
+of the branch script with S512ppr3's own net (rebuilt from 8a's R1-avg by the
+gate script, byte for byte nets/s512ppr3.fnet) gave that bench exactly. The
+screens and SPRTs run as the night queue's items 15-8b-a to 15-8b-i, in the
+order screens, SPRT(s), head-to-heads; nothing is promoted.
 
 ## 9. Open questions for the owner
 
