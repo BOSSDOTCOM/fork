@@ -305,9 +305,12 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** none.
 - **earliest phase:** Phase 4.
 - **sources:** David J. Wu, "Accelerating Self-Play Learning in Go"
-  (KataGo), arXiv:1902.10565 (title, author and abstract checked on
-  2026-10-24; that its full text describes playout cap randomization is
-  UNVERIFIED: the PDF could not be read here and ar5iv did not respond).
+  (KataGo), arXiv:1902.10565. Title, author and abstract checked on
+  2026-10-24; full text read on 2026-11-09 (v5 §3.1 "Playout Cap
+  Randomization"; v1 §6.1 "Playout Cap Oscillation"): on a random fraction
+  of turns a full search, capped at a large node count, is recorded for
+  training; the other turns use a much smaller cap and are not recorded
+  (KB research-idea13-prior-art.md §3.1).
 - **status:** experiment done, H1 accepted (2026-10-31); approved (owner, 2026-10-30;
   DESIGN.md decisions log): fork_datagen's split search (`--save-percent`,
   `--unsaved-nodes`, `--check-nodes`, off by default); arm A is generation
@@ -360,6 +363,11 @@ added on 2026-10-24; ideas 1-12 predate them.
   docs/research/ (mechanism, evidence, implementation, settings, costs and failures), then a TalkChess
   summary post and possibly an arXiv note, stating clearly that the idea came from an AI-assisted project.
   Anything published outside the repository needs the owner's go-ahead at the time.
+  **Prior-art search done (2026-11-09, KB docs/kb/research-idea13-prior-art.md):** the mechanism is KataGo's
+  playout cap randomization, already applied in AlphaZero-style chess (PeaZero PR 12, 2026-10-20, a gain of
+  +67.36 ± 18.53 at 8+0.08 on its OpenBench; Braun 2026, arXiv:2609.37447, not retained). No application to
+  alpha-beta NNUE data generation was found in the sources searched, so a write-up would present it as an
+  application with a measured result, not a new mechanism (the owner decides the publication plan).
 
 ## 14. Auxiliary training targets
 
@@ -378,8 +386,10 @@ added on 2026-10-24; ideas 1-12 predate them.
   size and speed).
 - **earliest phase:** Phase 4.
 - **sources:** KataGo (arXiv:1902.10565, as idea 13) is the motivating
-  example; which auxiliary targets it uses is UNVERIFIED for the same
-  reason.
+  example; its full text (read 2026-11-09 for idea 13's prior-art search)
+  adds an auxiliary target predicting the opponent's reply (§3.4), and its
+  §5.2 ablation (NoVAux) removes the ownership and score targets (KB
+  research-idea13-prior-art.md).
 - **status:** untested
 
 ## 15. Adversarial robustness testing
