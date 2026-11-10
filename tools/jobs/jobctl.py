@@ -15,9 +15,13 @@ generation, measurements) start and stop only through it.
   session of their own.
 - A job started from inside another job is not part of it (2026-11-06: stopping a chain job killed the SPRT
   job it had started): the keeper does not carry the caller's FORK_JOB_ID, and a job's processes exclude
-  every other running job's keeper and processes. On Windows those are also in the outer Job Object (a job
+  the keeper and processes of every running job started inside it (recorded as its child through 'parent',
+  the caller's FORK_JOB_ID, or started after it). On Windows those are also in the outer Job Object (a job
   started inside one nests in it), so a stop then ends the outer job's own processes one by one instead of
-  terminating the whole object.
+  terminating the whole object. The job it was started from is never excluded: its Job Object holds every
+  process of the inner one (2026-11-10: excluding it left a nested upload job with no process of its own,
+  so its stop ended nothing, and once its bash was killed by hand it reported none left while the upload
+  lived on).
 - `stop NAME` stops the whole tree, gently first (SIGTERM on POSIX: fork_datagen ends at a game boundary;
   on Windows the job is terminated), then verifies that no process of the job remains before it releases
   the lock; it exits 1, keeping the lock, if any process survived.
@@ -273,12 +277,40 @@ def keeper_env():
     return {k: v for k, v in os.environ.items() if k not in ('FORK_JOB_ID', 'FORK_JOB')}
 
 
+def started_at(record):
+    """The record's start as epoch seconds, or None."""
+    from datetime import datetime
+    try:
+        return datetime.strptime(record.get('started', ''), '%Y-%m-%dT%H:%M:%S%z').timestamp()
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
+
+
+def started_inside(other, record, by_id):
+    """Whether `other` was started from inside `record`'s job: its recorded parent chain (the FORK_JOB_ID it was
+    started under, kept since 2026-11-10) reaches `record`, or it started later. A job started inside another
+    always starts after it, so a job that started earlier is never inside this one: it may be the job this one
+    was started from, whose Job Object holds every process of this one (2026-11-10: subtracting it left a nested
+    upload job with no process of its own, and its stop ended nothing)."""
+    parent, seen = other.get('parent'), set()
+    while parent and parent not in seen:
+        if parent == record.get('id'):
+            return True
+        seen.add(parent)
+        parent = (by_id.get(parent) or {}).get('parent')
+    mine, theirs = started_at(record), started_at(other)
+    return mine is not None and theirs is not None and theirs > mine
+
+
 def other_jobs_pids(record):
-    """The keepers and processes of every other job that has not ended or stopped."""
+    """The keepers and processes of every job started inside this one that has not ended or stopped."""
+    records = [r for r in (read_json(path) for path in (root() / 'jobs').glob('*.json')) if r]
+    by_id = {r.get('id'): r for r in records}
     out = set()
-    for path in (root() / 'jobs').glob('*.json'):
-        other = read_json(path)
-        if not other or other.get('id') == record.get('id') or other.get('state') in ('ended', 'stopped', 'failed'):
+    for other in records:
+        if other.get('id') == record.get('id') or other.get('state') in ('ended', 'stopped', 'failed'):
+            continue
+        if not started_inside(other, record, by_id):
             continue
         out.update(job_pids(other))
         out.update(other[k] for k in ('keeper', 'pid') if other.get(k) and pid_alive(other[k]))
@@ -314,11 +346,7 @@ def live(record):
     is another process that reused the id (2026-11-06, in WSL). A job that started before the machine's last
     boot has no process left whatever its record says: a crash leaves it "running", and its ids are reused
     (2026-11-07, g3h in WSL)."""
-    try:
-        from datetime import datetime
-        started = datetime.strptime(record.get('started', ''), '%Y-%m-%dT%H:%M:%S%z').timestamp()
-    except (TypeError, ValueError, OverflowError, OSError):
-        started = None
+    started = started_at(record)
     boot = last_boot()
     if started is not None and boot is not None and started < boot - 60:
         return []
@@ -390,7 +418,7 @@ def cmd_start(argv):
     (root() / 'jobs').mkdir(parents=True, exist_ok=True)
     record = {'name': name, 'type': kind, 'id': uuid.uuid4().hex[:16], 'started': now(), 'command': cmd,
               'cwd': os.path.abspath(cwd or os.getcwd()), 'log': os.path.abspath(log or root() / 'jobs' / f'{name}.log'),
-              'state': 'starting'}
+              'state': 'starting', 'parent': os.environ.get('FORK_JOB_ID')}
     try:
         take_lock(kind, record)
     except RuntimeError as e:

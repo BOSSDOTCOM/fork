@@ -3,6 +3,9 @@
 - a stop ends the whole process tree: the command, its child, a grandchild whose parent has already exited
   (an orphan, what a killed wrapper leaves), and on POSIX a descendant that started a session of its own;
   the stop verifies none is left and releases the lock;
+- a job started inside another (the 8b chain's `jobctl start ... -- bash script` path) stops with its whole
+  tree, its orphans included once its bash is killed, and the outer job lives on; the job it was started from
+  is never counted as started inside it, old records (no 'parent') by their start times;
 - one lock per type: a second job of a type is refused while the first runs, another type is not;
 - a job that ends by itself releases its lock;
 - a lock whose job has no process left is reclaimed (and logged); one whose job lives is never taken;
@@ -16,6 +19,7 @@
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -228,6 +232,77 @@ class Supervisor(unittest.TestCase):
         self.assertEqual(self.lock('test')['name'], 'inner')
         self.assertEqual(self.ctl('stop', 'inner', '--grace', '1').returncode, 0)
         self.assertFalse(alive(rec['pid']))
+
+    def start_nested_upload(self):
+        """The 8b chain's launch path: an outer job runs a bash script that starts an inner job with
+        `jobctl start ... -- bash inner.sh`, and inner.sh runs Python as its last command but one (bash waits in
+        a child of its own for it, as upload-run.sh does). Returns the inner job's Python process id."""
+        bash = shutil.which('bash')
+        if not bash or 'system32' in bash.lower():
+            self.skipTest('no Git Bash or POSIX bash')
+        fwd = lambda p: str(p).replace('\\', '/')  # noqa: E731
+        child = self.root / 'child.py'
+        child.write_text('import os, sys, time\nopen(sys.argv[1], "w").write(str(os.getpid()))\ntime.sleep(600)\n',
+                         encoding='utf-8')
+        inner = self.root / 'inner.sh'
+        inner.write_text('"$1" -I "$2" "$3"\nrc=$?\necho "child exit $rc"\nexit $rc\n', encoding='utf-8', newline='\n')
+        outer = self.root / 'outer.sh'
+        outer.write_text('"$1" -I "$2" start upload inner -- "$3" "$4" "$1" "$5" "$6"\nsleep 600\n',
+                         encoding='utf-8', newline='\n')
+        self.pidfile = self.root / 'child-pid'
+        r = self.start('kaggle', 'outer', bash, fwd(outer), fwd(sys.executable), fwd(JOBCTL), fwd(bash), fwd(inner),
+                       fwd(child), fwd(self.pidfile))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.started.append('inner')
+        path = self.root / 'jobs' / 'jobs' / 'inner.json'
+        self.assertTrue(self.wait_for(lambda: path.exists() and self.record('inner').get('state') == 'running'
+                                      and self.pidfile.exists() and self.pidfile.read_text().strip()))
+        return int(self.pidfile.read_text())
+
+    def test_a_job_started_inside_another_stops_with_its_whole_tree(self):
+        # 2026-11-10: `stop r8b-upload-pre2-r3` (an upload job the r8b-chain3 job had started) ended nothing: on
+        # Windows the inner Job Object nests in the outer one, so every inner process was also "another job's".
+        child = self.start_nested_upload()
+        outer = jobctl.live(self.record('outer'))
+        self.assertIn(child, jobctl.live(self.record('inner')))
+        self.assertNotIn(child, outer)
+        r = self.ctl('stop', 'inner', '--grace', '2')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse(alive(child), f'pid {child} survived the stop')
+        self.assertEqual(self.record('inner')['state'], 'stopped')
+        self.assertEqual([p for p in outer if not alive(p)], [])  # the outer job is untouched
+        self.assertEqual(self.ctl('status', 'outer').returncode, 0)
+
+    def test_a_nested_jobs_orphans_are_found_after_its_command_dies(self):
+        # The same incident's second half: the job's bash was killed by hand, the next stop reported "processes
+        # none", and the bash child running the upload lived on (its parent gone, its Job Object's name gone).
+        child = self.start_nested_upload()
+        time.sleep(2.5)  # the keeper hands out the Job Object's handles once a second
+        rec = self.record('inner')
+        kill(rec['pid'])
+        self.assertTrue(self.wait_for(lambda: not alive(rec['pid'])))
+        time.sleep(1.5)
+        self.assertTrue(alive(child))
+        self.assertIn(child, jobctl.live(self.record('inner')))
+        self.assertEqual(self.ctl('status', 'inner').returncode, 0)
+        r = self.ctl('stop', 'inner', '--grace', '2')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertTrue(self.wait_for(lambda: not alive(child), 10), f'pid {child} survived the stop')
+
+    def test_which_jobs_count_as_started_inside(self):
+        # Records from before 'parent' was kept (jobs running across the fix) fall back to the start times.
+        outer = {'id': 'a', 'started': '2026-11-10T00:09:40-0500'}
+        old_inner = {'id': 'b', 'started': '2026-11-10T05:50:14-0500'}
+        same_second = {'id': 'c', 'started': outer['started']}
+        self.assertTrue(jobctl.started_inside(old_inner, outer, {}))
+        self.assertFalse(jobctl.started_inside(outer, old_inner, {}))  # the job it was started from
+        self.assertFalse(jobctl.started_inside(same_second, outer, {}))
+        child = dict(same_second, parent='a')  # a recorded parent settles a tie
+        grandchild = {'id': 'd', 'started': outer['started'], 'parent': 'c'}
+        self.assertTrue(jobctl.started_inside(child, outer, {}))
+        self.assertTrue(jobctl.started_inside(grandchild, outer, {'c': child}))
+        self.assertFalse(jobctl.started_inside(outer, child, {'c': child}))
+        self.assertFalse(jobctl.started_inside({'id': 'e', 'parent': 'e'}, outer, {'e': {'parent': 'e'}}))
 
     def test_a_finished_jobs_recorded_ids_are_not_its_processes(self):
         # 2026-11-06: a stopped WSL job's keeper and command ids (461, 462) were reused by short-lived
