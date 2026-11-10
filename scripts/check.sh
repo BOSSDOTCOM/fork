@@ -178,7 +178,8 @@ build_and_test() {  # preset, ctest filter args...
 # The tooling's own tests (audit-1 U-15): standard-library Python suites
 # (sprt_merge and the book permutation, the evolve harness, pgn_summary, the gauntlet report, the job supervisor, the
 # Control Center), plus the datagen openings tool where python-chess is installed, about 5 s; with "all", also the dry runs of tools/sprt.sh and
-# tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh, h2h_run.sh and tools/gauntlet/archive.sh with a fake gh (about 2 min).
+# tools/cloud/run_shard.sh with fake fastchess binaries and of tools/github/sprt_run.sh, h2h_run.sh and tools/gauntlet/archive.sh with a fake gh (about 2 min),
+# and on Windows the hooks' self-test.
 tool_tests() {  # python | all
   local py="" c
   for c in .venv/Scripts/python.exe .venv/bin/python python3 python; do
@@ -237,6 +238,11 @@ tool_tests() {  # python | all
   # The Control Center's WSL launch script for a data-generation part, with stubs (Linux only).
   if [ "$(uname -s)" = Linux ]; then
     bash tools/control_center/test_start_part.sh >>"$log" 2>&1 || fail "tool tests: tools/control_center/test_start_part.sh"
+  else
+    # The Claude Code hooks' self-test (audit-1 U-15: it ran in no check), Windows only like the hooks
+    # themselves (they call a bare `python`): its stand-in cases, about 8 s; the two cases that build
+    # (--no-build left out) stay a phase-end step.
+    bash .claude/hooks/test_hooks.sh --no-build >>"$log" 2>&1 || fail "tool tests: .claude/hooks/test_hooks.sh"
   fi
   # The cloud safeguards (owner, 2026-10-30): the spot quota check, the
   # cleanup of instances past their limit, a simulated spot interruption,
