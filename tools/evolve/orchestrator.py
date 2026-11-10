@@ -1029,6 +1029,10 @@ def main():
         source = Path(a.replay_from).expanduser()
         cfg = json.loads((source / 'config.json').read_text(encoding='utf-8'))
         cfg['budget'] = dict(cfg['budget'], hours=10 ** 6)  # wall time must not cut a replay short
+        # The logged run's pinned commit, not what its symbolic ref (HEAD) names today.
+        src = population.Population(str(source / 'population.sqlite'))
+        cfg['baseline_commit'] = src.get_meta('baseline_commit') or cfg['baseline_commit']
+        src.close()
         runner = gate.Runner(cfg['repo'], run_dir / 'work', jobs=cfg.get('jobs', 4), test_cache=cfg.get('test_cache'),
                              compilers=cfg.get('compilers') or [cfg['compiler']])
         kept, placeholders = replay_plan(source)
