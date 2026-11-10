@@ -1,0 +1,253 @@
+{
+ "run": "r8b-arms",
+ "note": "TD(0.8, 0.9) copies of g3j (td_labels.py labels, S = 92, each checked) and idea 52's arm (committee_sites.py arm)",
+ "totals": {
+  "games": 9455408,
+  "positions": 600563131,
+  "positions_unsaved": 275433757,
+  "positions_saved": 325129374,
+  "bytes": 2742647212
+ },
+ "batches": [
+  [
+   {
+    "file": "td80-g3j-w00.vf",
+    "games": 379606,
+    "positions": 35420702,
+    "positions_unsaved": 16149373,
+    "positions_saved": 19271329,
+    "bytes": 155348624,
+    "sha256": "e6e770124e5ccceafba9b73e1099dd1aad5506babaac4738c6a2ce8da1013d19"
+   },
+   {
+    "file": "td80-g3j-w01.vf",
+    "games": 379392,
+    "positions": 35420692,
+    "positions_unsaved": 16143205,
+    "positions_saved": 19277487,
+    "bytes": 155340880,
+    "sha256": "3b4b3e86acddf39a67326a2c987b45f99fd9edffe13a8e9a395e6e6efefcc793"
+   },
+   {
+    "file": "td80-g3j-w02.vf",
+    "games": 379712,
+    "positions": 35420697,
+    "positions_unsaved": 16148485,
+    "positions_saved": 19272212,
+    "bytes": 155352420,
+    "sha256": "2bdf86a95bf8ce7b24d01a9d408125b84d6adfb8ef8c0bb67457c7f3c4af4fbf"
+   },
+   {
+    "file": "td80-g3j-w03.vf",
+    "games": 379637,
+    "positions": 35420726,
+    "positions_unsaved": 16146715,
+    "positions_saved": 19274011,
+    "bytes": 155349836,
+    "sha256": "73dc5538b6fe986ff444f6c534d328225b4c232ba9b025729c1dc513287c548d"
+   },
+   {
+    "file": "td80-g3j-w04.vf",
+    "games": 379621,
+    "positions": 35420726,
+    "positions_unsaved": 16151719,
+    "positions_saved": 19269007,
+    "bytes": 155349260,
+    "sha256": "7fd4598c2904237f900416694ea9bb4571cc476710255e333dcb5e5609a0f42d"
+   },
+   {
+    "file": "td80-g4s1-g3j-w05-val-rest.vf",
+    "games": 354752,
+    "positions": 33100251,
+    "positions_unsaved": 15087633,
+    "positions_saved": 18012618,
+    "bytes": 145172076,
+    "sha256": "9a97240c495507530ec99c7369614f1fcd6b423a4dcb5690ed98ef16abd39d00"
+   },
+   {
+    "file": "td90-g3j-w00.vf",
+    "games": 379606,
+    "positions": 35420702,
+    "positions_unsaved": 16149373,
+    "positions_saved": 19271329,
+    "bytes": 155348624,
+    "sha256": "e5533a47aa777170864f4dae33e9ea91ac6540c8e437591a446f7c8d02126615"
+   },
+   {
+    "file": "td90-g3j-w01.vf",
+    "games": 379392,
+    "positions": 35420692,
+    "positions_unsaved": 16143205,
+    "positions_saved": 19277487,
+    "bytes": 155340880,
+    "sha256": "015ef5b75dc09c413089a0cb41e07a63239d49b2d0c12f9678d33e8daf38b9ed"
+   },
+   {
+    "file": "td90-g3j-w02.vf",
+    "games": 379712,
+    "positions": 35420697,
+    "positions_unsaved": 16148485,
+    "positions_saved": 19272212,
+    "bytes": 155352420,
+    "sha256": "e24dea12693abf231faf048364d12d788457be2b676c2f783078ba4990273057"
+   },
+   {
+    "file": "td90-g3j-w03.vf",
+    "games": 379637,
+    "positions": 35420726,
+    "positions_unsaved": 16146715,
+    "positions_saved": 19274011,
+    "bytes": 155349836,
+    "sha256": "3e420a412469390741bd2ad54607453af1185d1c65bdd501cb2280a82b14eb4e"
+   },
+   {
+    "file": "td90-g3j-w04.vf",
+    "games": 379621,
+    "positions": 35420726,
+    "positions_unsaved": 16151719,
+    "positions_saved": 19269007,
+    "bytes": 155349260,
+    "sha256": "ccde5bdf032790809b535708d99ae0f144279fceda24e6d7eaa91ab60634aa88"
+   },
+   {
+    "file": "td90-g4s1-g3j-w05-val-rest.vf",
+    "games": 354752,
+    "positions": 33100251,
+    "positions_unsaved": 15087633,
+    "positions_saved": 18012618,
+    "bytes": 145172076,
+    "sha256": "cc92f91e4dd5842e03b8476f4daa3cf065e4f57b81534303b4dd07f352b9f8f8"
+   },
+   {
+    "file": "i52-controls.vf",
+    "games": 2000,
+    "positions": 2000,
+    "positions_unsaved": 0,
+    "positions_saved": 2000,
+    "bytes": 80000,
+    "sha256": "d5ec07f4911d3e497c41d4d9453010386f5983f201463fdfb21a96984b330836"
+   },
+   {
+    "file": "i52-g3j-w00.vf",
+    "games": 379606,
+    "positions": 35420702,
+    "positions_unsaved": 16756865,
+    "positions_saved": 18663837,
+    "bytes": 155348624,
+    "sha256": "299496fe16d7e59cd9d6cb12193f84f369a0aa2014e32c4e2b9c46b066cbbe40"
+   },
+   {
+    "file": "i52-g3j-w01.vf",
+    "games": 379392,
+    "positions": 35420692,
+    "positions_unsaved": 16751227,
+    "positions_saved": 18669465,
+    "bytes": 155340880,
+    "sha256": "30b9c194dfb08d71fb45f4f919a8272716ea0ff21d10ad1ccc95d9637e2b8056"
+   },
+   {
+    "file": "i52-g3j-w02.vf",
+    "games": 379712,
+    "positions": 35420697,
+    "positions_unsaved": 16756779,
+    "positions_saved": 18663918,
+    "bytes": 155352420,
+    "sha256": "e2b269571b6997b6e37f01a626ff2127af61008181cff12182422d1845865e71"
+   },
+   {
+    "file": "i52-g3j-w03.vf",
+    "games": 379637,
+    "positions": 35420726,
+    "positions_unsaved": 16754489,
+    "positions_saved": 18666237,
+    "bytes": 155349836,
+    "sha256": "7144c2239c2f81bdee6e60472113e0607238748e0098abd7461d9ac970ca43fd"
+   },
+   {
+    "file": "i52-g3j-w04.vf",
+    "games": 379621,
+    "positions": 35420726,
+    "positions_unsaved": 16760137,
+    "positions_saved": 18660589,
+    "bytes": 155349260,
+    "sha256": "460a35653f06f684eb6a7d80f96e02298e6122bead26837d976b543668ac9a02"
+   },
+   {
+    "file": "i52-held.vf",
+    "games": 10000,
+    "positions": 10000,
+    "positions_unsaved": 0,
+    "positions_saved": 10000,
+    "bytes": 400000,
+    "sha256": "66d107efbf0f9d2d6a0ea2ce535c408c0fda3092a6cf06623569e484fd1a75c3"
+   },
+   {
+    "file": "i52-sites.vf",
+    "games": 3040000,
+    "positions": 3040000,
+    "positions_unsaved": 0,
+    "positions_saved": 3040000,
+    "bytes": 121600000,
+    "sha256": "05b24fe30296288534195f89560f57680062f1d1c8124fbc80b33e994a9b6390"
+   }
+  ]
+ ],
+ "arm": {
+  "what": "idea 52's arm for retrain 8b (committee_sites.py arm)",
+  "mode": "blend",
+  "scale": 92.0,
+  "factor": 16,
+  "seed": 20261109,
+  "drop_salt": 1322,
+  "sites": 200000,
+  "trained_sites": 190000,
+  "held_sites": 10000,
+  "controls": 2000,
+  "pool_kept": 62144106,
+  "dropped_extra": 2850000,
+  "copies": {
+   "i52-g3j-w00.vf": {
+    "dropped": 607492,
+    "source": "g3j-w00.vf",
+    "bytes": 155348624,
+    "sha256": "5f08eec57e9f6884a92037d70b79a1b571be072a19b1278cb53ca93257fa5c03",
+    "kept": 12427523
+   },
+   "i52-g3j-w01.vf": {
+    "dropped": 608022,
+    "source": "g3j-w01.vf",
+    "bytes": 155340880,
+    "sha256": "27020755bc2a2fac54f3b2d0673a038335496ac3f43faed4c6c3471134aa34cd",
+    "kept": 12430899
+   },
+   "i52-g3j-w02.vf": {
+    "dropped": 608294,
+    "source": "g3j-w02.vf",
+    "bytes": 155352420,
+    "sha256": "13a43434d57296b9d0462f40d9b80687de4e55ae789a33d597bc34b0e4eb4336",
+    "kept": 12427078
+   },
+   "i52-g3j-w03.vf": {
+    "dropped": 607774,
+    "source": "g3j-w03.vf",
+    "bytes": 155349836,
+    "sha256": "fee9e512df02ce156ade6d804856bc6ddf9badc705768cd6f7c183ade5a1fdde",
+    "kept": 12429587
+   },
+   "i52-g3j-w04.vf": {
+    "dropped": 608418,
+    "source": "g3j-w04.vf",
+    "bytes": 155349260,
+    "sha256": "808417fd1bca528a8622210b53b40097f096661e129affcf97a175517f057030",
+    "kept": 12429019
+   }
+  },
+  "table_labels_clamped": 7069,
+  "check": {
+   "copies_kept": 59104106,
+   "sites_kept": 3040000,
+   "pool_kept": 62144106,
+   "equal_data": true
+  }
+ }
+}
