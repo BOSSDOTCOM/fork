@@ -57,22 +57,39 @@ InputGroups = (('move', ('history', 'piece', 'threatened', 'attacks')),
                ('iteration', ('score_trend', 'branch_share')))
 _FIELD = re.compile(r'\bc\.([A-Za-z_]\w*)')
 
+# The ordering pilot's region (quiet_score.hpp, QuietScoreInputs `s`): the
+# grid's descriptors are the share of beta cutoffs by the first move, in
+# steps of half a percentage point, and the mean index of the cutting move,
+# in steps of 0.01 (Fork's bench: 84.6% and 0.358 at the R14 values); the
+# third axis is which history tables the body reads and whether it uses the
+# parameter table's weights or its own constants.
+FirstCutBin = 0.005
+CutIndexBin = 0.01
+OrderInputGroups = (('butterfly', ('butterfly',)), ('reply', ('reply', 'has_reply')),
+                    ('follow', ('follow', 'has_follow')), ('weights', ('reply_weight', 'follow_weight')))
+_ORDER_FIELD = re.compile(r'\bs\.([A-Za-z_]\w*)')
 
-def inputs_used(body):
-    """The input groups a region body reads, in InputGroups order, joined by '+' ('-' for none)."""
-    fields = set(_FIELD.findall(body))
-    return '+'.join(name for name, members in InputGroups if fields & set(members)) or '-'
+
+def inputs_used(body, region='lmr'):
+    """The input groups a region body reads, in the region's group order, joined by '+' ('-' for none)."""
+    pattern, groups = (_ORDER_FIELD, OrderInputGroups) if region == 'quiet_order' else (_FIELD, InputGroups)
+    fields = set(pattern.findall(body))
+    return '+'.join(name for name, members in groups if fields & set(members)) or '-'
 
 
-def cell_of(descriptors, body=''):
+def cell_of(descriptors, body='', region='lmr'):
+    if region == 'quiet_order':
+        first_share, cut_index = descriptors[:2]
+        return f'{int(first_share / FirstCutBin)}:{int(cut_index / CutIndexBin)}:{inputs_used(body, region)}'
     mean_reduction, research_share = descriptors[:2]
     return f'{int(mean_reduction / ReductionBin)}:{int(research_share / ResearchBin)}:{inputs_used(body)}'
 
 
 class Population:
-    def __init__(self, path):
+    def __init__(self, path, region='lmr'):
         self.db = sqlite3.connect(path)
         self.db.executescript(SCHEMA)
+        self.region = region
 
     def add(self, generation, island, agent, parent, mode, body, rationale):
         cur = self.db.execute(
@@ -115,7 +132,7 @@ class Population:
 
     def offer_elite(self, island, cid, descriptors, fitness):
         """Puts candidate `cid` in its cell if the cell is empty or it is fitter; True if it entered."""
-        cell = cell_of(descriptors, self.get(cid)['body'] or '')
+        cell = cell_of(descriptors, self.get(cid)['body'] or '', self.region)
         row = self.db.execute('SELECT fitness FROM elites WHERE island = ? AND cell = ?', (island, cell)).fetchone()
         if row is not None and row[0] >= fitness:
             return False

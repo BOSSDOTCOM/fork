@@ -14,8 +14,9 @@ A candidate passes only if, in order:
    (`-E`, the build's own compile commands) to the same text as the
    baseline's everywhere outside the region's body: whatever the lexer
    missed, a body cannot change any code outside itself;
-4. it builds: the baseline tree with the candidate's region body, Release,
-   tests on, the same flags as Fork's presets, with the configured compiler;
+4. those units compile (`-fsyntax-only`), then it builds: the baseline tree
+   with the candidate's region body, Release, tests on, the same flags as
+   Fork's presets;
 5. perft from the standard positions equals the baseline engine's;
 6. the correctness suites pass, among them the minimax oracle (the search
    equals plain minimax with pruning off: tests/test_search.cpp), the
@@ -23,10 +24,15 @@ A candidate passes only if, in order:
    allocation in the search); not bench parity, since a real candidate
    changes bench by design;
 7. it is deterministic: two bench runs give one signature.
-Steps 1-3 run before anything is built. Each step is a function of a
-`Runner`, so the unit tests replace builds and processes with fakes. The
-first failing step ends the gate.
+Steps 3-7 run with every configured compiler (two-compiler gating, owner,
+2026-11-09: TCEC's g++ 11.4 and clang++-19, which disagree on some constexpr
+bodies, audit-1 U-17): a candidate failing with either is refused, and the
+benches of all compilers must agree (the same nodes and signature, as
+bench_parity requires of every preset). Steps 1-3 run before anything is
+built. Each step is a function of a `Runner`, so the unit tests replace
+builds and processes with fakes. The first failing step ends the gate.
 """
+import copy
 import hashlib
 import json
 import os
@@ -251,6 +257,15 @@ def outside_lines(preprocessed, root, header, body_lines):
     entered at all."""
     root_norm = _norm_path(str(root)).rstrip('/')
     header_path = root_norm + '/' + header
+    # The tree's path as string literals spell it (__FILE__ in an assertion):
+    # with backslashes on Windows, escaped in the literal, and with slashes.
+    spellings = sorted({root_norm, str(root).rstrip('/\\'), str(root).rstrip('/\\').replace('\\', '\\\\')},
+                       key=len, reverse=True)
+
+    def strip_root(text):
+        for spelling in spellings:
+            text = text.replace(spelling, '<tree>')
+        return text
     lines, included = [], False
     current, number = '', 0
     for raw in preprocessed.split('\n'):
@@ -266,7 +281,7 @@ def outside_lines(preprocessed, root, header, body_lines):
             continue
         text = raw.strip()
         if text:
-            lines.append((current.replace(root_norm, '<tree>'), text.replace(root_norm, '<tree>')))
+            lines.append((current.replace(root_norm, '<tree>'), strip_root(text)))
     return lines, included
 
 
@@ -291,21 +306,24 @@ class Reference:
     """What every candidate is compared with, measured once on the baseline tree."""
     perft: list
     files: dict  # relative path -> SHA-256, every file of the baseline tree
-    units: dict  # each unit including the region's file -> its outside lines
+    units: dict  # per compiler (its index): each unit including the region's file -> its outside lines
 
 
-def make_reference(runner, region_name, tree, build, perft):
-    """The Reference from the built baseline tree: its files, and the
-    preprocessed text of every unit that includes the region's file."""
+def make_reference(runner, region_name, tree, perft):
+    """The Reference from the baseline tree, built with every compiler (each
+    in its own build folder): its files, and per compiler the preprocessed
+    text of every unit that includes the region's file."""
     path = regions.REGIONS[region_name]
     lines = body_lines(runner.read_file(tree, path), region_name)
     units = {}
-    for unit, text in runner.preprocess(build, None).items():
-        outside, included = outside_lines(text, tree, path, lines)
-        if included:
-            units[unit] = outside
-    if not units:
-        raise RuntimeError(f'no translation unit includes {path}: the preprocessed check would be empty')
+    for index, variant in enumerate(runner.variants()):
+        mine = units[index] = {}
+        for unit, text in variant.preprocess(Path(tree) / variant.build_name, None).items():
+            outside, included = outside_lines(text, tree, path, lines)
+            if included:
+                mine[unit] = outside
+        if not mine:
+            raise RuntimeError(f'no translation unit includes {path}: the preprocessed check would be empty')
     return Reference(list(perft) if perft is not None else None, runner.snapshot(tree), units)
 
 
@@ -315,12 +333,30 @@ class GateResult:
     step: str  # the step that failed, or 'done'
     detail: str = ''
     bench: dict = field(default_factory=dict)  # nodes and signature, when built
+    compiler: str = ''  # the compiler a failing step ran with ('' before any build)
+
+
+# The build targets the gate needs: the engine (perft, bench, the proxies),
+# the test runner and the counting-allocator test (SUITES); a stats build
+# needs the engine only. Building only these keeps a candidate's two builds
+# at about three minutes each at -j 2 instead of every tool of the tree.
+GateTargets = ('fork', 'fork_tests', 'fork_alloc_test')
+StatsTargets = ('fork',)
+# Targets that write generated headers a unit includes (build_id.hpp for
+# main.cpp and bench/micro.cpp): built before a candidate's units are
+# preprocessed, so `-E` sees the same headers as the baseline's built tree.
+GeneratedTargets = ('fork_build_id',)
 
 
 class Runner:
-    """The gate's actions on a real tree (Linux, WSL): build, perft, tests, bench."""
+    """The gate's actions on a real tree (Linux, WSL): build, perft, tests, bench.
 
-    def __init__(self, repo, work, jobs=4, timeout=1800, test_cache=None, compiler=None):
+    `compilers` lists the compilers every candidate must pass with (CMake's
+    CMAKE_CXX_COMPILER); the first builds in `build/` and is the one whose
+    engine is measured, the others in `build-1/`, `build-2/`... `variants()`
+    gives one Runner per compiler."""
+
+    def __init__(self, repo, work, jobs=4, timeout=1800, test_cache=None, compiler=None, compilers=None):
         self.repo = Path(repo)
         self.work = Path(work)
         self.jobs = jobs
@@ -329,7 +365,18 @@ class Runner:
         # pinned by SHA-256 in CMakeLists.txt), copied into each fresh tree so
         # no candidate downloads it again.
         self.test_cache = Path(test_cache).expanduser() if test_cache else None
-        self.compiler = compiler
+        self.compilers = list(compilers) if compilers else [compiler]
+        self.compiler = self.compilers[0]
+        self.build_name = 'build'
+
+    def variants(self):
+        """One Runner per compiler, each with its own build folder (the first's is `build`)."""
+        out = []
+        for index, compiler in enumerate(self.compilers):
+            v = copy.copy(self)
+            v.compiler, v.build_name = compiler, 'build' if index == 0 else f'build-{index}'
+            out.append(v)
+        return out
 
     def run(self, cmd, cwd=None, timeout=None):
         p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding='utf-8', errors='replace',
@@ -355,19 +402,20 @@ class Runner:
         return (Path(tree) / path).read_text(encoding='utf-8')
 
     def snapshot(self, tree):
-        """SHA-256 of every file in a tree, by relative path (build folders and the test cache left out)."""
+        """SHA-256 of every file in a tree, by relative path (the build folders, `build` and every
+        `build-*` of the compilers and the stats build, and the test cache left out)."""
         tree = Path(tree)
         out = {}
         for dirpath, dirnames, filenames in os.walk(tree):
             if Path(dirpath) == tree:
-                dirnames[:] = [d for d in dirnames if d not in ('build', 'build-stats', '.cache')]
+                dirnames[:] = [d for d in dirnames if d not in ('build', '.cache') and not d.startswith('build-')]
             for f in filenames:
                 p = Path(dirpath) / f
                 out[p.relative_to(tree).as_posix()] = hashlib.sha256(p.read_bytes()).hexdigest()
         return out
 
     def configure(self, tree, stats=False):
-        out = tree / ('build-stats' if stats else 'build')
+        out = Path(tree) / ('build-stats' if stats else self.build_name)
         flags = ['-DCMAKE_BUILD_TYPE=Release', '-DFORK_ARCH=x86-64-v3', '-G', 'Ninja',
                  '-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',
                  f'-DFORK_BUILD_TESTS={"OFF" if stats else "ON"}', f'-DFORK_SEARCH_STATS={"ON" if stats else "OFF"}']
@@ -376,10 +424,16 @@ class Runner:
         code, log = self.run(['cmake', '-S', str(tree), '-B', str(out)] + flags)
         return code == 0, log[-3000:], out
 
+    def generate(self, build):
+        """Builds the generated headers (GeneratedTargets) of a configured build; (ok, log)."""
+        code, log = self.run(['cmake', '--build', str(build), '--target', *GeneratedTargets])
+        return code == 0, log[-3000:]
+
     def build(self, tree, stats=False):
         ok, log, out = self.configure(tree, stats)
         if ok:
-            code, log = self.run(['cmake', '--build', str(out), '-j', str(self.jobs)])
+            code, log = self.run(['cmake', '--build', str(out), '-j', str(self.jobs), '--target',
+                                  *(StatsTargets if stats else GateTargets)])
             ok, log = code == 0, log[-3000:]
         return ok, log, out
 
@@ -397,6 +451,19 @@ class Runner:
         """{unit: `-E` output} for the C++ units of a configured build (relative
         to its tree) named in `units`, or all of them for None, each with its
         own compile command from compile_commands.json."""
+        return self._each_unit(build, units, '-E')
+
+    def syntax(self, build, units):
+        """'' if every unit named compiles (`-fsyntax-only`, its own compile
+        command: the same flags, so -Werror's warnings count), else the first
+        failure's unit and compiler output."""
+        try:
+            self._each_unit(build, units, '-fsyntax-only')
+        except RuntimeError as e:
+            return str(e)
+        return ''
+
+    def _each_unit(self, build, units, mode):
         build = Path(build)
         tree = build.parent
         entries = json.loads((build / 'compile_commands.json').read_text(encoding='utf-8'))
@@ -412,9 +479,9 @@ class Runner:
 
         def one(job):
             rel, e = job
-            code, out = self.run(preprocess_command(e), cwd=e['directory'])
+            code, out = self.run(preprocess_command(e, mode), cwd=e['directory'])
             if code != 0:
-                raise RuntimeError(f'preprocessing {rel} failed: {out[-500:]}')
+                raise RuntimeError(f'{"preprocessing" if mode == "-E" else "compiling"} {rel} failed: {out[-1500:]}')
             return rel, out
         with ThreadPoolExecutor(max(1, self.jobs)) as pool:
             return dict(pool.map(one, jobs))
@@ -429,14 +496,17 @@ class Runner:
         return lines
 
     def suites(self, build):
-        code, log = self.run(['ctest', '--test-dir', str(build), '--output-on-failure', '--no-tests=error', '-R',
-                              '^(' + '|'.join(SUITES) + ')$'])
+        code, log = self.run(['ctest', '--test-dir', str(build), '--output-on-failure', '--no-tests=error',
+                              '-j', str(self.jobs), '-R', '^(' + '|'.join(SUITES) + ')$'])
         return suites_passed(code, log), log[-3000:]
 
     def compiler_version(self):
-        """The first line of the configured compiler's --version (CMake's default when none is set)."""
-        code, out = self.run([self.compiler or 'c++', '--version'], timeout=60)
-        return out.split('\n')[0].strip() if code == 0 else f'unknown ({self.compiler or "c++"})'
+        """The first line of each configured compiler's --version (CMake's default when none is set), joined by '; '."""
+        out = []
+        for compiler in self.compilers:
+            code, text = self.run([compiler or 'c++', '--version'], timeout=60)
+            out.append(text.split('\n')[0].strip() if code == 0 else f'unknown ({compiler or "c++"})')
+        return '; '.join(out)
 
     def bench(self, engine):
         code, out = self.run([str(engine), 'bench'], timeout=600)
@@ -446,10 +516,10 @@ class Runner:
         return {'nodes': fields.get('nodes', '').strip(), 'signature': fields.get('signature', '').strip()}
 
 
-def preprocess_command(entry):
+def preprocess_command(entry, mode='-E'):
     """A compile_commands.json entry's command turned into `-E` to standard
-    output: its own compiler, defines, include paths and flags; no object
-    file, no dependency file."""
+    output (or `mode`, e.g. -fsyntax-only): its own compiler, defines, include
+    paths and flags; no object file, no dependency file."""
     args = list(entry['arguments']) if 'arguments' in entry else shlex.split(entry['command'])
     out, skip = [], False
     for a in args:
@@ -462,7 +532,7 @@ def preprocess_command(entry):
         if a in ('-c', '-MD', '-MMD') or (a.startswith('-o') and len(a) > 2):
             continue
         out.append(a)
-    return out + ['-E']
+    return out + [mode]
 
 
 # The correctness suites the gate runs (ctest names). A rename or a dropped
@@ -520,26 +590,46 @@ def run_gate(runner, commit, region_name, region_body, reference, tag):
             ok, why = False, 'the tree differs from the baseline outside the region: ' + ', '.join(changed[:10])
     if not ok:
         return GateResult(False, 'guard', why)
-    configured, log, build = runner.configure(tree)
-    if not configured:
-        return GateResult(False, 'build', log)
     lines = body_lines(real, region_name)
-    for unit, text in sorted(runner.preprocess(build, sorted(reference.units)).items()):
-        outside, included = outside_lines(text, tree, path, lines)
-        diff = first_difference(reference.units[unit], outside) if included else f'{path} is no longer included'
-        if diff:
-            return GateResult(False, 'preprocessed', f'{unit} changes outside the region: {diff}')
-    built, log, build = runner.build(tree)
-    if not built:
-        return GateResult(False, 'build', log)
-    engine = build / 'fork'
-    counts = runner.perft(engine)
-    if counts != reference.perft:
-        return GateResult(False, 'perft', f'{counts} != {reference.perft}')
-    passed, log = runner.suites(build)
-    if not passed:
-        return GateResult(False, 'suites', log)
-    first, second = runner.bench(engine), runner.bench(engine)
-    if not first or first != second:
-        return GateResult(False, 'determinism', f'{first} then {second}')
-    return GateResult(True, 'done', '', first)
+    variants = runner.variants()
+    # Every compiler's preprocessed units and their compilation first (a
+    # minute or two), then the builds and checks (several minutes each).
+    for index, variant in enumerate(variants):
+        name = variant.compiler or 'c++'
+        configured, log, build = variant.configure(tree)
+        if configured:
+            configured, log = variant.generate(build)
+        if not configured:
+            return GateResult(False, 'build', log, compiler=name)
+        units = sorted(reference.units[index])
+        for unit, text in sorted(variant.preprocess(build, units).items()):
+            outside, included = outside_lines(text, tree, path, lines)
+            diff = first_difference(reference.units[index][unit], outside) if included else \
+                f'{path} is no longer included'
+            if diff:
+                return GateResult(False, 'preprocessed', f'[{name}] {unit} changes outside the region: {diff}',
+                                  compiler=name)
+        failure = variant.syntax(build, units)
+        if failure:
+            return GateResult(False, 'build', f'[{name}] {failure}', compiler=name)
+    benches = []
+    for variant in variants:
+        name = variant.compiler or 'c++'
+        built, log, build = variant.build(tree)
+        if not built:
+            return GateResult(False, 'build', f'[{name}] {log}', compiler=name)
+        engine = build / 'fork'
+        counts = variant.perft(engine)
+        if counts != reference.perft:
+            return GateResult(False, 'perft', f'[{name}] {counts} != {reference.perft}', compiler=name)
+        passed, log = variant.suites(build)
+        if not passed:
+            return GateResult(False, 'suites', f'[{name}] {log}', compiler=name)
+        first, second = variant.bench(engine), variant.bench(engine)
+        if not first or first != second:
+            return GateResult(False, 'determinism', f'[{name}] {first} then {second}', compiler=name)
+        benches.append((name, first))
+    if any(bench != benches[0][1] for _, bench in benches):
+        return GateResult(False, 'determinism', 'the compilers disagree: ' +
+                          ', '.join(f'{name} {bench}' for name, bench in benches))
+    return GateResult(True, 'done', '', benches[0][1])

@@ -18,9 +18,11 @@ from dataclasses import dataclass
 BEGIN = '// FORK-EVOLVE-BEGIN '
 END = '// FORK-EVOLVE-END '
 
-# Registered regions: name -> the repository file holding it. The pilot
-# evolves the late move reduction correction only (deliverable 8c).
-REGIONS = {'lmr': 'src/search/lmr_table.hpp'}
+# Registered regions: name -> the repository file holding it. The first pilot
+# evolved the late move reduction correction (deliverable 8c); the ordering
+# pilot (owner, 2026-11-09) evolves how a quiet move's history entries combine
+# into its ordering score.
+REGIONS = {'lmr': 'src/search/lmr_table.hpp', 'quiet_order': 'src/search/quiet_score.hpp'}
 
 _NAME = re.compile(r'^[a-z][a-z0-9_]*$')
 

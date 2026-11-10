@@ -1,0 +1,76 @@
+{
+  "repo": null,
+  "baseline_commit": "HEAD",
+  "region": "quiet_order",
+  "fitness": "nodes",
+  "positions": "tools/evolve/positions.jsonl",
+  "positions_sample": 0,
+  "depth": 12,
+  "hash_mb": 16,
+  "proxy_nodes": 0,
+  "seed": 20261109,
+  "islands": [
+    "proposer_aggressive",
+    "proposer_cautious",
+    "explorer"
+  ],
+  "per_island": 3,
+  "full_share": 0.25,
+  "explorer_protected": 3,
+  "analyst_every": 3,
+  "reset_every": 4,
+  "critic_audit_share": 0.0,
+  "agent_retries": 3,
+  "agent_backoff_seconds": 60,
+  "promote_margin": 0.0,
+  "patience": 6,
+  "max_gate_failure_rate": 0.8,
+  "generations": 5,
+  "compilers": [
+    "g++",
+    "clang++-19"
+  ],
+  "compiler": "g++",
+  "jobs": 2,
+  "proxy_jobs": 2,
+  "test_cache": "~/fork-evolve/cache",
+  "guard": {
+    "tolerance_cp": 25,
+    "margin": 0.02,
+    "calibration": [
+      {
+        "name": "both weights one step down (reply 5, follow 3)",
+        "body": "  int score = s.butterfly;\n  if (s.has_reply) score += s.reply * (s.reply_weight - 1) / 4;\n  if (s.has_follow) score += s.follow * (s.follow_weight - 1) / 4;\n  return score;"
+      },
+      {
+        "name": "both weights one step up (reply 7, follow 5)",
+        "body": "  int score = s.butterfly;\n  if (s.has_reply) score += s.reply * (s.reply_weight + 1) / 4;\n  if (s.has_follow) score += s.follow * (s.follow_weight + 1) / 4;\n  return score;"
+      }
+    ]
+  },
+  "budget": {
+    "tokens": 10000000,
+    "candidates": 40,
+    "hours": 48
+  },
+  "match": {
+    "games": 0,
+    "tc": "4+0.04",
+    "concurrency": 2,
+    "elo_floor": 0,
+    "fastchess": "~/fork-tools/bin/fastchess",
+    "book": "~/fork-games/ma_openings.epd"
+  },
+  "agent": {
+    "launcher": [
+      "cmd.exe",
+      "/c",
+      "claude"
+    ],
+    "workdir": "/mnt/c/Users/Public/fork-agent",
+    "model": "sonnet",
+    "max_turns": 2,
+    "timeout": 900
+  },
+  "dashboard_mirror": "/mnt/c/Users/Public/fork-evolve"
+}

@@ -16,6 +16,7 @@ from a script (the dry run and the unit tests); CliAgent calls the Claude
 Code CLI (`claude -p`) and reads its token use. The orchestrator never
 starts a live loop without its explicit --live flag.
 """
+import hashlib
 import json
 import re
 import subprocess
@@ -53,13 +54,21 @@ _CONTEXT_ONLY_RULES = ('critic', 'analyst')
 _PROPOSER_PART = "## Fork's measurements"
 
 
-def prompt_for(role, **fields):
+def prompts_dir(region='lmr'):
+    """The prompts of a region: prompts/<region>/ when it exists (the ordering
+    pilot's quiet_order), else prompts/ (the LMR region's, the first)."""
+    own = PROMPTS / region
+    return own if region != 'lmr' and own.is_dir() else PROMPTS
+
+
+def prompt_for(role, region='lmr', **fields):
     """The role's prompt: the shared context (for the critic and the analyst,
     only its rules and the region), then the role's file, with {fields} filled in."""
-    context = (PROMPTS / 'context.md').read_text(encoding='utf-8')
+    folder = prompts_dir(region)
+    context = (folder / 'context.md').read_text(encoding='utf-8')
     if role in _CONTEXT_ONLY_RULES:
         context = context.split(_PROPOSER_PART)[0].rstrip() + '\n'
-    text = context + '\n\n' + (PROMPTS / f'{role}.md').read_text(encoding='utf-8')
+    text = context + '\n\n' + (folder / f'{role}.md').read_text(encoding='utf-8')
     for k, v in fields.items():
         text = text.replace('{' + k + '}', str(v))
     return text
@@ -131,6 +140,35 @@ class StubAgent:
         replies = self.script.get(role) or ['']
         text = replies.pop(0) if len(replies) > 1 else replies[0]
         return Reply(text, self.tokens)
+
+
+def prompt_digest(prompt):
+    return hashlib.sha256(prompt.encode('utf-8')).hexdigest()
+
+
+class ReplayAgent:
+    """The replies of a logged run (its replies.jsonl, written by the
+    orchestrator for every agent call), in order: a replayed run asks the same
+    roles the same prompts and gets the same replies, so every decision and
+    candidate repeats. A call whose role or prompt differs from the log's is
+    recorded in `mismatches` (the replay is then not faithful) and still
+    answered with the logged reply."""
+
+    def __init__(self, path):
+        with open(path, encoding='utf-8') as f:
+            self.calls = [json.loads(line) for line in f if line.strip()]
+        self.next = 0
+        self.mismatches = []
+
+    def ask(self, role, prompt):
+        if self.next >= len(self.calls):
+            raise RuntimeError(f'replay: no logged reply left for {role} (call {self.next + 1})')
+        call = self.calls[self.next]
+        self.next += 1
+        if call['role'] != role or call['prompt_sha256'] != prompt_digest(prompt):
+            self.mismatches.append({'call': self.next, 'role': role, 'logged_role': call['role'],
+                                    'prompt_matches': call['prompt_sha256'] == prompt_digest(prompt)})
+        return Reply(call['text'], call.get('tokens', 0), call.get('usage'))
 
 
 class CliAgent:

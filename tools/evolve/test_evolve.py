@@ -7,6 +7,7 @@ match parser, and one orchestrated generation with stub agents and fakes.
 
     python3 -m unittest discover -s tools/evolve -p 'test_*.py'
 """
+import copy
 import json
 import os
 import shutil
@@ -36,6 +37,16 @@ int lmr_correction(int c) {
 int after();
 """
 PATH = regions.REGIONS['lmr']
+# The ordering pilot's region, as the fake repository holds it.
+FILE_Q = """#pragma once
+struct QuietScoreInputs { int butterfly; int reply; int follow; bool has_reply; bool has_follow; };
+constexpr int quiet_score(const QuietScoreInputs& s) {
+  // FORK-EVOLVE-BEGIN quiet_order
+  return s.butterfly;
+  // FORK-EVOLVE-END quiet_order
+}
+"""
+PATH_Q = regions.REGIONS['quiet_order']
 
 
 class RegionTests(unittest.TestCase):
@@ -231,9 +242,9 @@ class StaticRuleTests(unittest.TestCase):
 
 # A preprocessed unit as `-E` writes it (line markers, comments gone), for
 # the fake runner: searcher.cpp's own lines around the included header.
-def fake_preprocessed(tree, header_text, leak=''):
+def fake_preprocessed(tree, header_text, leak='', path=PATH):
     root = Path(tree).as_posix()
-    text = f'# 1 "{root}/src/search/searcher.cpp"\nint before;\n# 1 "{root}/{PATH}" 1\n'
+    text = f'# 1 "{root}/src/search/searcher.cpp"\nint before;\n# 1 "{root}/{path}" 1\n'
     text += '\n'.join(line if not line.strip().startswith('//') else '' for line in header_text.split('\n'))
     return text + f'\n# 3 "{root}/src/search/searcher.cpp" 2\nint strength = {leak or "LmrCorrectionStrength"};\n'
 
@@ -242,26 +253,40 @@ class FakeRunner:
     """The gate's runner without builds: each step's answer is set by the test.
     Trees are real folders (the guard reads them back); preprocessing is faked."""
 
-    def __init__(self, work, built=True, perft=('a', 'b'), suites=True, benches=None):
+    def __init__(self, work, built=True, perft=('a', 'b'), suites=True, benches=None, compilers=('fake-c++',),
+                 fail=None):
         self.work = Path(work)
         self.built, self.perft_out, self.suites_ok = built, list(perft), suites
-        self.benches = list(benches or [{'nodes': '1', 'signature': 's'}] * 2)
+        self.benches = list(benches or [{'nodes': '1', 'signature': 's'}] * 2 * len(compilers))
         self.calls = []
         self.leak = ''  # what the fake preprocessor puts outside the region for a candidate tree
         self.write_hook = None  # (path, text) -> text, to fake a runner that writes something else
+        self.compilers = list(compilers)
+        self.compiler, self.build_name = self.compilers[0], 'build'
+        # {compiler: step}: the step ('syntax', 'build', 'perft', 'suites') that fails with that compiler
+        self.fail = dict(fail or {})
+
+    def variants(self):
+        out = []
+        for index, compiler in enumerate(self.compilers):
+            v = copy.copy(self)
+            v.compiler, v.build_name = compiler, 'build' if index == 0 else f'build-{index}'
+            out.append(v)
+        return out
 
     head = '0123456789abcdef0123456789abcdef01234567'  # what the fake repository's refs resolve to
+    path, file = PATH, FILE  # the region's file in the fake repository (OrderFakeRunner: the ordering region's)
 
     def resolve(self, ref):
         return self.head
 
     def read(self, commit, path):
-        return FILE
+        return self.file
 
     def tree(self, commit, files, name):
         self.calls.append(('tree', name))
         d = self.work / name
-        files = dict({PATH: FILE, 'src/search/searcher.cpp': '#include "search/lmr_table.hpp"\n'}, **files)
+        files = dict({self.path: self.file, 'src/search/searcher.cpp': f'#include "{self.path[4:]}"\n'}, **files)
         for path, text in files.items():
             (d / path).parent.mkdir(parents=True, exist_ok=True)
             (d / path).write_text(self.write_hook(path, text) if self.write_hook else text, encoding='utf-8',
@@ -276,25 +301,34 @@ class FakeRunner:
 
     def configure(self, tree, stats=False):
         self.calls.append(('configure',))
-        return True, 'log', tree / 'build'
+        return True, 'log', tree / self.build_name
+
+    def generate(self, build):
+        self.calls.append(('generate',))
+        return True, ''
+
+    def syntax(self, build, units):
+        self.calls.append(('syntax',))
+        return 'error: call to non-constexpr function' if self.fail.get(self.compiler) == 'syntax' else ''
 
     def preprocess(self, build, units):
         self.calls.append(('preprocess',))
         tree = Path(build).parent
         leak = self.leak if tree.name != 'baseline' else ''
-        return {'src/search/searcher.cpp': fake_preprocessed(tree, self.read_file(tree, PATH), leak)}
+        return {'src/search/searcher.cpp': fake_preprocessed(tree, self.read_file(tree, self.path), leak, self.path)}
 
     def build(self, tree, stats=False):
         self.calls.append(('build', stats))
-        return self.built, 'log', tree / ('build-stats' if stats else 'build')
+        built = self.built and self.fail.get(self.compiler) != 'build'
+        return built, 'log', tree / ('build-stats' if stats else self.build_name)
 
     def perft(self, engine):
         self.calls.append(('perft',))
-        return self.perft_out
+        return ['x'] if self.fail.get(self.compiler) == 'perft' else self.perft_out
 
     def suites(self, build):
         self.calls.append(('suites',))
-        return self.suites_ok, 'suite log'
+        return self.suites_ok and self.fail.get(self.compiler) != 'suites', 'suite log'
 
     def compiler_version(self):
         return 'fake c++ 1.0'
@@ -304,8 +338,13 @@ class FakeRunner:
         return self.benches.pop(0)
 
     def run(self, cmd, cwd=None, timeout=None):
-        return 0, ('stats: 100 reduced searches, 5 re-searched at full depth (5.0%)\nstats: mean reduction 1.500 plies\n'
+        return 0, ('stats: 1000 beta cutoffs, 84.6% on the first move, mean cutoff index 0.3579\n'
+                   'stats: 100 reduced searches, 5 re-searched at full depth (5.0%)\nstats: mean reduction 1.500 plies\n'
                    'stats: LMR rule ran at 200 sites, fired at 30, changed the reduction at 20\n')
+
+
+class OrderFakeRunner(FakeRunner):
+    path, file = PATH_Q, FILE_Q
 
 
 class GateTests(unittest.TestCase):
@@ -318,7 +357,7 @@ class GateTests(unittest.TestCase):
     def gate(self, body='  return 1;', setup=None, **kw):
         runner = FakeRunner(self.tmp.name, **kw)
         base = runner.tree('HEAD', {}, 'baseline')
-        reference = gate.make_reference(runner, 'lmr', base, base / 'build', ['a', 'b'])
+        reference = gate.make_reference(runner, 'lmr', base, ['a', 'b'])
         runner.calls = []
         if setup:
             setup(runner)
@@ -329,7 +368,8 @@ class GateTests(unittest.TestCase):
         self.assertTrue(result.passed)
         self.assertEqual(result.step, 'done')
         self.assertEqual([c[0] for c in runner.calls],
-                         ['tree', 'configure', 'preprocess', 'build', 'perft', 'suites', 'bench', 'bench'])
+                         ['tree', 'configure', 'generate', 'preprocess', 'syntax', 'build', 'perft', 'suites',
+                          'bench', 'bench'])
 
     def test_a_body_that_closes_its_function_stops_at_the_static_step(self):
         """The gate refuses it before writing a tree or building anything (owner, 2026-10-27)."""

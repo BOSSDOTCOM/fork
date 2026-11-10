@@ -2112,6 +2112,44 @@ Choices made while building, where the spec leaves a gap:
       the candidate is promoted and the test fails).
     - **On hold** (owner, 2026-10-27): the long run waits for the full
       engine audit (branch audit-1), which comes before idea 23 and tier 2.
+  - **The ordering pilot** (owner, 2026-11-09; branch evolve/ordering-pilot;
+    declared before any result in docs/research/idea23-pilot/declaration.md):
+    - **Region `quiet_order`** (`src/search/quiet_score.hpp`): the body of
+      `constexpr int quiet_score(const QuietScoreInputs&)`, the combination
+      of a quiet move's butterfly, reply and follow entries with ReplyWeight
+      and FollowWeight. `quiet_order_score` (move_selector.hpp) calls it and
+      clamps to int16, and `MoveSelector::score_quiets` calls
+      `quiet_order_score`, so there is one function; bench unchanged
+      (10,374,064 / 677c436fa145e07f). The committed formula's tests moved
+      to a suite of their own, `quiet_score`, which the gate leaves out;
+      `ordering` gained a static_assert that the body is a constant
+      expression without int overflow at every input extreme.
+    - **Two-compiler gating** (audit-1 U-17): `compilers` in the config
+      (g++ 11.4 and clang++-19 in WSL Ubuntu-22.04); the preprocessed
+      comparison, a `-fsyntax-only` compile of every unit that includes the
+      region, the build, perft, the suites and two benches run with each,
+      and the compilers' benches must agree. A body only clang accepts
+      (`std::div`, not constexpr in GCC 11's library) is refused by g++.
+      The gate builds only the engine and the two test programs it runs,
+      and builds the generated headers (`fork_build_id`) before
+      preprocessing, so main.cpp and bench/micro.cpp are compared like every
+      other unit.
+    - **Fitness mode `nodes`** (`depth_nodes.py`): nodes to depth 12 from a
+      fresh state (one thread, Hash 16 MB), the reduction against the
+      baseline with a paired bootstrap interval; the 940 held-out positions
+      for confirmation; the equivalence guard (same best move and score
+      within 25 cp, a share of the generation set at least the calibration
+      bodies' lowest less 0.02). The baseline is measured twice at the start
+      (the self-check). Grid descriptors: the first-move cutoff share and
+      the mean cutoff index from the stats bench.
+    - **Logs and replay:** candidates.jsonl (every candidate's source,
+      agent, verdicts, fitness, guard and answer digests), replies.jsonl
+      (every agent call's role, prompt digest and reply);
+      `--replay-from RUN` reruns a run with the logged replies and compares
+      every candidate; `--replay-candidates IDS` remeasures chosen ones.
+    - **End to end on Linux:** `tools/evolve/gate_e2e.py` builds the
+      baseline with both compilers and runs planted candidates through the
+      real gate.
 - **Performance gate.** `tools/perf_gate.sh` (A/B with `bench/ab_search.py`
   and a `perf` profile, in WSL; `tools/perf_symbols.py` names the addresses,
   as WSL's perf has no libelf); results in `docs/history/phase-3/perf-log.md`.
