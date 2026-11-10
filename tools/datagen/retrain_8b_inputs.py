@@ -354,19 +354,32 @@ def upload(a):
             time.sleep(60)
         else:
             raise SystemExit(f'{name}: not ready after 3 hours')
+        # File by file (2026-11-10: the whole-dataset download answered 404 for three of the five pre-seal
+        # datasets, ready and holding every file, while each file downloads alone; a dataset's zip is not what a
+        # kernel mounts).
         back = a.out / f'back-{a.stage}' / name
+        miss = []
+        for n in names:
+            shutil.rmtree(back, ignore_errors=True)
+            back.mkdir(parents=True)
+            for attempt in range(4):
+                rc, text = kaggle(a.kaggle_cli, 'datasets', 'download', dataset, '-f', n, '-p', str(back),
+                                  timeout=3600)
+                got = [p for p in back.rglob('*') if p.is_file()]
+                for z in [p for p in got if p.suffix == '.zip' and n.endswith('.vf')]:  # served zipped
+                    import zipfile
+                    with zipfile.ZipFile(z) as zf:
+                        zf.extractall(back)
+                    z.unlink()
+                got = {p.name: p for p in back.rglob('*') if p.is_file()}
+                if rc == 0 and n in got:
+                    break
+                time.sleep(60)
+            if n not in got or sha256(got[n]) != sha256(folder / n):
+                miss.append(n)
         shutil.rmtree(back, ignore_errors=True)
-        back.mkdir(parents=True)
-        for attempt in range(6):
-            rc, text = kaggle(a.kaggle_cli, 'datasets', 'download', dataset, '-p', str(back), '--unzip', timeout=7200)
-            if rc == 0:
-                break
-            time.sleep(300)
-        got = {p.name: p for p in back.rglob('*') if p.is_file()}
-        miss = [n for n in names if n not in got or sha256(got[n]) != sha256(folder / n)]
-        log(f'{name}: downloaded back, {len(names) - len(miss)} of {len(names)} files match')
+        log(f'{name}: downloaded back file by file, {len(names) - len(miss)} of {len(names)} files match')
         bad += miss
-        shutil.rmtree(back, ignore_errors=True)
     if bad:
         raise SystemExit(f'files that did not come back intact: {bad[:10]}')
     log(f'upload {a.stage}: every dataset on Kaggle and checked')
