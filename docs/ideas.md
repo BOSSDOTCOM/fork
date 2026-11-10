@@ -664,8 +664,9 @@ tuned by SPSA.
   candidates on the quiet ordering score (docs/research/idea23-pilot/, evolve/ordering-pilot 52a0fd6; 543,832 tokens
   of the 10 M cap; 0 gate failures, 0 guard refusals): the ordering formula is near-optimal for this fitness; the best
   candidate by the declared rule (#35: +0.39% nodes saved [-0.39, +1.19], held-out +1.43% [-0.33, +3.18], 85.6%
-  equivalent) is within noise on both sets, so nothing goes to an SPRT. The replay check's result is recorded in
-  results.md. **Idea 23 is parked again**; the time-management formula stays noted as the next possible target, **no
+  equivalent) is within noise on both sets, so nothing goes to an SPRT. **The full replay was stopped before it
+  finished by the owner's decision** (2026-11-10, about 9:00 AM EST, to free its CPU for the label-depth arms and the
+  fix 1+2 pilot); **the pre-pilot tiny live run's full replay had reproduced every candidate exactly** (2026-11-09). **Idea 23 is parked again**; the time-management formula stays noted as the next possible target, **no
   run planned**.
 - **Candidate region for the long run (owner, 2026-10-31):** a correction
   to the singular test's margin and depth (tier 2, T27), for example a
