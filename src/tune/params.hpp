@@ -13,7 +13,11 @@
 //   (tests/test_params.cpp).
 // - The defaults are justified in DESIGN.md §5.2 ("Search constants"); the
 //   ranges and steps follow the rule recorded there (they bound a tuner, they
-//   are never played as such).
+//   are never played as such), except eleven bounds widened past it for the
+//   final retune (owner, 2026-11-09; DESIGN.md §5.6 step 19): RfpMargin,
+//   LmpQuietAllowance, FutilityOffset, FutilityGrowth, SingularMarginPerPly,
+//   SingularMinDepth, LmrMinMove and LmpMaxDepth lower; NoMoveReduceMinDepth,
+//   ReplyWeight and NullSurplusPliesMax higher.
 // - A tuning build changes a value only through set_param, between searches
 //   (UCI setoption); nothing writes them during a search.
 // - Constants that are not tuned stay where they are, each with its reason in
@@ -36,30 +40,30 @@
   X(IterationGrowthThirds, 5, 3, 10, 1)   \
   X(ForcedMoveFraction, 8, 4, 16, 1)      \
   X(RfpMaxDepth, 6, 3, 12, 1)             \
-  X(RfpMargin, 55, 40, 160, 6)            \
+  X(RfpMargin, 55, 30, 160, 6)            \
   X(NullMinDepth, 3, 1, 6, 1)             \
   X(NullSurplusPerPly, 301, 150, 600, 23) \
-  X(NullSurplusPliesMax, 2, 0, 4, 1)      \
+  X(NullSurplusPliesMax, 2, 0, 6, 1)      \
   X(TableProbeMinDepth, 1, 1, 4, 1)       \
   X(LmrMinDepth, 3, 1, 6, 1)              \
-  X(LmrMinMove, 4, 2, 8, 1)               \
+  X(LmrMinMove, 4, 1, 8, 1)               \
   X(LmrDivisorTenths, 45, 23, 90, 3)      \
   X(LmrCorrectionStrength, 64, 0, 128, 6) \
-  X(LmpMaxDepth, 4, 2, 8, 1)              \
-  X(LmpQuietAllowance, 8, 6, 24, 1)       \
+  X(LmpMaxDepth, 4, 1, 8, 1)              \
+  X(LmpQuietAllowance, 8, 3, 24, 1)       \
   X(FutilityMaxDepth, 6, 3, 12, 1)        \
-  X(FutilityOffset, 86, 50, 200, 8)       \
-  X(FutilityGrowth, 50, 35, 140, 5)       \
+  X(FutilityOffset, 86, 30, 200, 8)       \
+  X(FutilityGrowth, 50, 25, 140, 5)       \
   X(SeePruneMaxDepth, 6, 3, 12, 1)        \
   X(QuietSeeFloor, 60, 30, 120, 5)        \
   X(CaptureSeeFloor, 118, 50, 200, 8)     \
-  X(SingularMinDepth, 6, 4, 12, 1)        \
+  X(SingularMinDepth, 6, 3, 12, 1)        \
   X(SingularEntrySlack, 3, 0, 6, 1)       \
-  X(SingularMarginPerPly, 6, 3, 12, 1)    \
-  X(NoMoveReduceMinDepth, 8, 2, 10, 1)    \
+  X(SingularMarginPerPly, 6, 2, 12, 1)    \
+  X(NoMoveReduceMinDepth, 8, 2, 16, 1)    \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
-  X(ReplyWeight, 6, 0, 8, 1)              \
+  X(ReplyWeight, 6, 0, 12, 1)             \
   X(FollowWeight, 4, 0, 8, 1)             \
   X(TakeWeight, 4, 0, 16, 1)              \
   X(StaleDepthPerSearch, 2, 1, 4, 1)      \

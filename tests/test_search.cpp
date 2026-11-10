@@ -11,6 +11,8 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -23,6 +25,7 @@
 #include "search/see.hpp"
 #include "search/time_budget.hpp"
 #include "suite.hpp"
+#include "tune/params.hpp"
 #include "uci/go_limits.hpp"
 #include "uci/session.hpp"
 #include "uci/tokens.hpp"
@@ -1458,4 +1461,69 @@ TEST_CASE("search", "time management: a changed best move searches longer, a sta
     }
   }
 }
+
+#ifdef FORK_TUNE
+// Tuning builds: the eleven ranges widened for the final retune (owner,
+// 2026-11-09; final-retune.md) searched at their new bounds, each alone and
+// all at once: every search completes with a legal move and a score inside
+// the score bounds. LmrMinMove 1 is the same search as 2 (same nodes, move
+// and score): the first move searched never takes the LMR path, so the
+// bound adds a value SPSA cannot tell from 2.
+TEST_CASE("search", "tuning build: the widened ranges search at their bounds") {
+  struct Bound {
+    const char* name;
+    int value;
+  };
+  const Bound bounds[] = {{"RfpMargin", 30},
+                          {"LmpQuietAllowance", 3},
+                          {"FutilityOffset", 30},
+                          {"FutilityGrowth", 25},
+                          {"SingularMarginPerPly", 2},
+                          {"SingularMinDepth", 3},
+                          {"NoMoveReduceMinDepth", 16},
+                          {"ReplyWeight", 12},
+                          {"NullSurplusPliesMax", 6},
+                          {"LmrMinMove", 1},
+                          {"LmpMaxDepth", 1}};
+  const std::string_view fens[] = {"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+                                   "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"};
+  const auto reset = [] {
+    for (const TuneParam& p : param_table()) CHECK(set_param(p.name, p.default_value));
+  };
+  const auto check_searches = [&](const std::string& what) {
+    for (std::string_view fen : fens) {
+      Fixture fx;
+      const SearchResult r = fx.search(fen, 7);
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      CHECK_MSG(legal.contains(r.best), what << ": " << fen);
+      CHECK_MSG(std::abs(r.score) <= MateScore && (is_tb_or_mate(r.score) || std::abs(r.score) <= EvalLimit),
+                what << ": " << fen << " score " << r.score);
+    }
+  };
+  for (const Bound& b : bounds) {
+    const TuneParam* p = find_param(b.name);
+    CHECK_MSG(p && (p->lowest == b.value || p->highest == b.value), b.name);
+    CHECK(set_param(b.name, b.value));
+    check_searches(b.name);
+    reset();
+  }
+  for (const Bound& b : bounds) CHECK(set_param(b.name, b.value));
+  check_searches("all at once");
+  reset();
+  // LmrMinMove 1 against 2.
+  SearchResult at[2];
+  for (int i = 0; i < 2; ++i) {
+    CHECK(set_param("LmrMinMove", i + 1));
+    Fixture fx;
+    at[i] = fx.search(fens[0], 8);
+  }
+  reset();
+  CHECK_EQ(at[0].nodes, at[1].nodes);
+  CHECK(at[0].best == at[1].best);
+  CHECK_EQ(at[0].score, at[1].score);
+}
+#endif
 }  // namespace forkeng::test

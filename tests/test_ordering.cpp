@@ -3,6 +3,7 @@
 // Move ordering (DESIGN.md §5.2, deliverable 5): the staged selector yields
 // exactly the right moves, and the history update stays bounded.
 #include <algorithm>
+#include <cstdint>
 #include <memory>
 #include <set>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "search/quiet_history.hpp"
 #include "search/see.hpp"
 #include "suite.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng::test {
 
@@ -373,5 +375,58 @@ TEST_CASE("ordering", "quiet_order_score orders quiets as the selector does") {
   CHECK_EQ(quiet_order_score(pos, m, nullptr, fresh_pairs.get(), NoArrival, follow),
            HistoryMax * FollowWeight / 4);
 }
+
+// The int16 headroom of the quiet score at the reply and follow weights'
+// highest values (owner, 2026-11-09: ReplyWeight's range widened to 12 after
+// this check; final-retune.md). The selector sums in int and clamps to int16
+// before the narrowing store, so the int sum must be exact: at most
+// HistoryMax * (4 + 12 + 8) / 4 = 60,000 in magnitude, far inside int.
+TEST_CASE("ordering", "the quiet score's sum is exact in int at the weights' highest") {
+  const int reply = find_param("ReplyWeight")->highest;
+  const int follow = find_param("FollowWeight")->highest;
+  CHECK(std::int64_t{HistoryMax} * std::max(reply, follow) <= INT32_MAX);   // each product
+  CHECK(std::int64_t{HistoryMax} * (4 + reply + follow) / 4 <= INT32_MAX);  // the sum
+  // One reply entry alone at the highest weight still fits int16 unclamped
+  // (30,000 at 12): only sums of tables reach the clamp.
+  CHECK(HistoryMax * reply / 4 <= INT16_MAX);
+}
+
+#ifdef FORK_TUNE
+// Tuning builds: with ReplyWeight and FollowWeight at their highest values,
+// the score is the exact sum clamped to [-INT16_MAX, INT16_MAX] for entries
+// at both limits, and the selector still orders quiets by it.
+TEST_CASE("ordering", "tuning build: the quiet score at the reply and follow weights' highest") {
+  const int reply = find_param("ReplyWeight")->highest;
+  const int follow = find_param("FollowWeight")->highest;
+  CHECK(set_param("ReplyWeight", reply));
+  CHECK(set_param("FollowWeight", follow));
+  CHECK_EQ(ReplyWeight, 12);
+  Position pos;
+  CHECK(pos.set_fen(perft_suite()[0].fen));
+  const Move m = pos.parse_uci("g1f3");
+  const int slot = pair_slot(pos.piece_at(m.from()), m.to());
+  const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Knight), static_cast<Square>(42));
+  const int follow_arrival = pair_slot(static_cast<Piece>(White * 8 + Bishop), static_cast<Square>(19));
+  for (const int sign : {1, -1}) {
+    auto history = std::make_unique<QuietHistory>();
+    auto pairs = std::make_unique<PairHistory[]>(2);
+    pairs[ReplyTable].apply(arrival, slot, sign * HistoryMax);
+    CHECK_EQ(quiet_order_score(pos, m, history.get(), pairs.get(), arrival, NoArrival),
+             sign * HistoryMax * reply / 4);  // 30,000: unclamped
+    history->apply(White, m, sign * HistoryMax);
+    pairs[FollowTable].apply(follow_arrival, slot, sign * HistoryMax);
+    const std::int64_t exact = std::int64_t{sign} * HistoryMax * (4 + reply + follow) / 4;
+    CHECK_EQ(quiet_order_score(pos, m, history.get(), pairs.get(), arrival, follow_arrival),
+             static_cast<int>(std::clamp<std::int64_t>(exact, -INT16_MAX, INT16_MAX)));
+    MoveSelector s;
+    s.start_main(pos, NoMove, history.get(), pairs.get(), arrival, follow_arrival);
+    // The start position has no captures: the saturated move comes first
+    // with the maximum score and last with the minimum.
+    const std::vector<Move> got = drain(s);
+    CHECK(!got.empty() && (sign > 0 ? got.front() : got.back()) == m);
+  }
+  for (const TuneParam& p : param_table()) CHECK(set_param(p.name, p.default_value));
+}
+#endif
 
 }  // namespace forkeng::test
