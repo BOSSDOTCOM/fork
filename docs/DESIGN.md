@@ -44,6 +44,16 @@ Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/histo
     the factorial removal round instead of a separate LTC confirmation).
   **When proposing a test, state the decision it can change and its cost**
   (CPU-h, GPU-h, GitHub stages or hours).
+- **Paths across Git Bash, PowerShell, Windows Python and WSL** (owner,
+  2026-11-10; a standing rule, after retrain 8b's chain handed a Windows
+  Python a `/c/...` path and silently wrote no ready file). One shared helper
+  converts paths between the four environments, and every job and chain
+  script uses it; a check fails if a script passes a Git Bash `/c/...` path to
+  a Windows program. Jobs are launched from PowerShell, never from Git Bash.
+- **No silent "done"** (owner, 2026-11-10; same incident). Every chain
+  verifies that its own final outputs exist and are valid (for example
+  `r8b-ready.json` present and parseable) before it reports done; otherwise
+  it reports failed and names the missing or invalid output.
 
 ## 2. Platform and toolchain
 
@@ -4319,6 +4329,7 @@ models are scored on the half of the games they were not fitted on.
 | 2026-11-10 | **A stop that plays the unfinished iteration's move reports that iteration's depth in the result (owner: decide and fix).** The last `info` line already gave that move's PV at the unfinished depth with its exact score (§5.2 deliverable 2), and `SearchResult.score` was already that score, but `SearchResult.depth` kept the last finished iteration, so the web result read "depth 7" beside depth 8's score and line (startpos 1. e4 at 21,000 nodes; the `web` test failed 8 vs 7 on the R14 batch-4 branches). Chosen: the result takes the unfinished iteration's depth (option b). Rejected: marking that line as a bound (the score is exact for the move played, a bound line must not be the last one, and the web page drops bound lines), and reporting it under the finished depth (it would label depth 8's score as depth 7). Bench is unchanged (depth-limited searches never stop); datagen and UCI read the depth only as "0: nothing finished", which still holds; the tests that need the finished depth read `time_signals().depth`. Branch fix/partial-iteration-report. |
 | 2026-11-10 | **Standing principle: test as efficiently as possible, not as little as possible (owner; §1 Ground rules).** Every reliability check stays; each test must be able to change a decision; the cheapest test that can decide comes first; tests stop early when decided; controls are reused and CI is bundled; GitHub, the CPU and the GPU are each kept busy with the next useful job; nothing is re-tested that another planned test already covers. **Every test proposal states the decision it can change and its cost.** |
 | 2026-11-10 | **Idea 69's cw arm launched on an owner exception to its declared speed check (owner).** Preflight v2 under the revised rule declared first (retrain/8b-cw 0499006, design.md 14.8; record 299cf32): **the correctness checks passed**: the new trainer with no table and with an all-ones table stayed within the GPU noise of three runs of the old trainer against each of them (max 0.003071, RMS 7.00e-5), and the cw table changes training (RMS 2.42e-3, about 35 times the noise). **The declared speed check failed** (the cw table run at 0.9892 of the old runs' mean trained positions per second, against 0.99; the three identical old runs spread 2.9%). **Owner exception: the speed check affects only training cost, not the result's validity** (the arms are compared at equal positions seen), so cw and c2 are launched. |
+| 2026-11-10 | **Two standing tooling rules (owner; §1 Ground rules), after retrain 8b's chain reported done with no ready file** (a Windows Python given a Git Bash `/c/...` path; the endgame check also crashed). (1) **One shared path helper** for Git Bash, PowerShell, Windows Python and WSL, used by every job and chain script, with a check that fails if a script passes a `/c/...` path to a Windows program; jobs are launched from PowerShell, never Git Bash. (2) **No silent done**: every chain verifies its final outputs exist and are valid before reporting done, else it reports failed naming the missing output. |
 
 ## 7. Performance doctrine (governs every phase)
 
