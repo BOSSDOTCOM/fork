@@ -158,7 +158,11 @@ the margin multiplier m of M4, the malus ratio of S8b, razoring and
 bad-capture futility as "off-equivalent" dimensions, the history malus
 balance of decision 20) needs new parameters in the table (code, names to
 screen); **owner decision** whether any is added before step 19. Without
-them, the pass tunes the table as it stands.
+them, the pass tunes the table as it stands. **2026-11-10 (owner): batch 4's
+horizon drop (razoring: HorizonDropMargin, HorizonDropMaxDepth) and bad-capture
+stop (BadCaptureStopMargin) are added as dimensions of the final retune's SPSA**
+(dropped as standalone tests; their switches and an off-equivalent range are
+set when step 19 is prepared, with the names and constants screened then).
 
 ### 3.2 Class (b): LTC pass
 
