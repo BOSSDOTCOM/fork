@@ -660,6 +660,18 @@ tuned by SPSA.
   and a **guard that search results stay equivalent** (on a check set: the same best move, and the score within a
   declared tolerance); the winner then plays a **design R SPRT**. **Runner-up target:** the time-management
   formula, with a game-based fitness (time-management parameters stay out of SPSA, think tank decision 4).
+  **Unparked for a capped pilot (owner, 2026-11-09; branch evolve/ordering-pilot):** prerequisites done the same
+  evening: the gate's Linux end-to-end run (tools/evolve/gate_e2e.py, WSL Ubuntu-22.04: every planted candidate
+  stopped where expected, both regions) and two-compiler gating (g++ 11.4 and clang++-19; a `std::div` body that
+  only clang accepts is refused). The harness retargeted (region `quiet_order`, src/search/quiet_score.hpp, bench
+  unchanged; fitness mode `nodes`: nodes to depth 12 on the 4,794 evolve positions, the 940 held-out, the
+  equivalence guard, the self-check, candidate and reply logs, replay), declared before any result in
+  docs/research/idea23-pilot/declaration.md (1f22075). **The pilot ran 2026-11-09 11:18 PM to 2026-11-10
+  7:31 AM EST** (5 generations x 8, 543,832 tokens of the 10,000,000 cap): no candidate beat the committed
+  combination beyond noise; the best by the declared rule (#35: the follow term 1.5x when the reply entry is
+  missing) saved +0.39% of the nodes [-0.39, +1.19] on the 4,794 positions and +1.43% [-0.33, +3.18] on the
+  940 held-out; the R14 weights look locally optimal (both neighbours need more nodes). Details, every
+  candidate and the replay check: docs/research/idea23-pilot/results.md. No SPRT without the owner's OK.
 - **Candidate region for the long run (owner, 2026-10-31):** a correction
   to the singular test's margin and depth (tier 2, T27), for example a
   dependence on the TT entry's depth deficit. The measured form (DESIGN.md
