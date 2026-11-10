@@ -43,8 +43,14 @@
 # cancelled, kept dispatching stages against a test commit that was no
 # longer on GitHub, beside other runs):
 # - both commits must be on GitHub before the first dispatch;
-# - one run at a time: a stage is dispatched only when no run of any
-#   workflow in the repository is queued or in progress;
+# - one SPRT stage at a time, within the runner capacity (owner, 2026-11-10,
+#   replacing "no run of any workflow in progress": a scheduled nightly's
+#   four-hour TSan job held every stage back): a stage is dispatched only
+#   when no other sprt run is queued or in progress and the jobs the other
+#   workflows' runs still hold leave room for its SHARDS shard jobs plus its
+#   build job within FORK_GH_JOBS concurrent jobs (20, the Free plan's limit
+#   for standard GitHub-hosted runners; docs.github.com, Actions limits); a
+#   run whose jobs are not listed yet counts as holding them all;
 # - it stops at the first stage whose run does not succeed;
 # - every shard result merged must name this SPRT's base and test commits
 #   and its own stage (result.json's meta), and the stage must have SHARDS
@@ -112,6 +118,7 @@ else
 fi
 GH=${GH:-gh}
 POLL=${POLL:-120}
+GH_JOBS=${FORK_GH_JOBS:-20}
 SHARDS=${SHARDS:-16}
 data=${SPRT_DATA:-$HOME/fork-sprt/github}/$name
 mkdir -p "$data"
@@ -244,7 +251,24 @@ fi
 
 # Prints the number of runs not completed; anything but "0" (gh failing
 # included) counts as busy.
-busy() { "$GH" run list -R "$REPO" -L 50 --json status --jq '[.[] | select(.status != "completed")] | length' 2>/dev/null; }
+# The runs not completed, "ID WORKFLOW" per line.
+pending() { "$GH" run list -R "$REPO" -L 50 --json databaseId,status,workflowName   --jq '.[] | select(.status != "completed") | "\(.databaseId) \(.workflowName)"' 2>/dev/null; }
+# Exit 0 when a stage can go now: no other sprt run pending, and room for SHARDS + 1 jobs beside what the other
+# runs still hold (their jobs not completed; a run with none listed yet counts as holding all GH_JOBS). Any gh
+# failure means "not now".
+room() {
+  local list rid wf n held=0
+  list=$(pending) || return 1
+  while read -r rid wf; do
+    [ -n "$rid" ] || continue
+    [ "$wf" = sprt ] && return 1
+    n=$("$GH" api "repos/$REPO/actions/runs/$rid/jobs?per_page=100"       --jq '[.jobs[] | select(.status != "completed")] | length' 2>/dev/null) || return 1
+    case $n in '' | *[!0-9]*) return 1 ;; esac
+    [ "$n" -gt 0 ] || n=$GH_JOBS
+    held=$((held + n))
+  done <<<"$list"
+  [ $((GH_JOBS - held)) -ge $((SHARDS + 1)) ]
+}
 # The newest sprt runs, "ID TITLE" per line.
 runs() { "$GH" run list -R "$REPO" -w sprt.yml -L 30 --json databaseId,displayTitle \
   --jq '.[] | "\(.databaseId) \(.displayTitle)"' 2>/dev/null; }
@@ -258,7 +282,7 @@ for stage in $(seq "$first" "$last"); do
       stop "stage $stage: RUN_ID $id is not in the ledger as this SPRT's stage $stage (ledger.py add --source import)"
     say "stage $stage: waiting for run $id (RUN_ID, in the ledger)"
   else
-    while [ "$(busy)" != 0 ]; do sleep "$POLL"; done
+    until room; do sleep "$POLL"; done
     before=$(runs | awk 'NR == 1 {print $1}')
     before=${before:-0}
     "$GH" workflow run sprt.yml -R "$REPO" --ref "$REF" -f base="$base" -f test="$test" -f bounds="$bounds" \

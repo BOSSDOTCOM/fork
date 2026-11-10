@@ -19,7 +19,11 @@
 # design cannot change on a restart; the two-try limit per idea and time
 # control class. Since 2026-11-08: a transient gh failure (injected) of the
 # commit check, the conclusion or the download is retried, its message
-# logged; a lasting one still stops it. Uses python3 (or $PYTHON) for the merge and the ledger.
+# logged; a lasting one still stops it. Since 2026-11-10 (owner: a scheduled
+# nightly no longer holds a stage back): a stage goes out beside other
+# workflows' runs when the jobs they still hold leave room for its shards and
+# build within FORK_GH_JOBS (20); a run whose jobs are not listed yet counts
+# as full; another sprt run still blocks. Uses python3 (or $PYTHON) for the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -77,6 +81,34 @@ check "one dispatch" [ "$(dispatches h1)" = 1 ]
 check "dispatched only after the busy runs finished" grep -q "^501 busy=0 " "$tmp/h1/dispatches"
 check "the merged verdict is logged" grep -q "H1 accepted" "$tmp/h1/data/h1/driver.log"
 check "the games and time losses are logged" grep -q "Shards: 2 (done); pairs 100, games 200 (200 finished, time losses 0" "$tmp/h1/data/h1/driver.log"
+
+# The capacity check (owner, 2026-11-10): a nightly holding one job does not
+# hold a stage back; a run holding 18 of the 20 jobs does until it drops to 17
+# (20 - 17 = 3 = 2 shards + the build); a run whose jobs are not listed yet
+# counts as full. FORK_GH_JOBS is 20 by default; a hang is cut at 30 s.
+drive_t() {  # label args... (as drive, with a time limit)
+  local label=$1
+  shift
+  FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data     FORK_JOBS=$tmp/$label/jobs SPRT_UNSUPERVISED=1 GH_TRIES=3 GH_RETRY_WAIT=0     timeout 30 bash "$here/sprt_run.sh" "$label" "$@" >"$tmp/$label/out" 2>&1
+  echo $? >"$tmp/$label/rc"
+}
+setup nightly 0 "$strong"
+echo "900 nightly 1" >"$tmp/nightly/active"
+drive_t nightly "$sha" "$sha" 0 5
+check "a nightly holding one job does not hold the stage back" [ "$(rc nightly)" = 0 ]
+check "dispatched beside the nightly" grep -q "^501 busy=0 jobs=1 " "$tmp/nightly/dispatches"
+setup full 0 "$strong"
+echo "901 ci 18" >"$tmp/full/active"
+: >"$tmp/full/drain"
+drive_t full "$sha" "$sha" 0 5
+check "a run holding 18 of 20 jobs waits, then the stage goes" [ "$(rc full)" = 0 ]
+# The fake lowers a run's count after each query: the query that saw 17 (3 free) leaves 16 at the dispatch; a
+# dispatch on the query that saw 18 would show 17.
+check "dispatched only when 3 jobs were free" grep -q "^501 busy=0 jobs=16 " "$tmp/full/dispatches"
+setup unlisted 0 "$strong"
+echo "902 ci 0" >"$tmp/unlisted/active"
+drive_t unlisted "$sha" "$sha" 0 5
+check "a run with no jobs listed yet counts as full: no dispatch" [ "$(dispatches unlisted)" = 0 ]
 
 # 4-6: undecided runs every stage in order, then exits 2.
 setup undecided 0 "$even"
