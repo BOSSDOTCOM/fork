@@ -1377,3 +1377,18 @@ For the owner, the speed numbers themselves:
 
 On this sample the 1% speed rule sits inside the noise between identical
 runs. The owner decides whether to accept, change the speed rule, or rerun.
+
+### 14.10 The owner's exception to the speed check (2026-11-10, about 3:00 PM EST; phase-4 de49403)
+
+The owner decided to launch cw and c2 now. Preflight version 2's
+correctness checks passed: EQUAL, and the weights act. The owner made an
+exception to the declared SPEED check (0.9892 against 0.99), recorded in
+the DESIGN.md decisions log on phase-4 as de49403. The check bears only on
+training cost, not on whether the result is valid. The arm runs exactly as
+staged:
+
+- cw on GPU 0 and c2 on GPU 1;
+- COMMIT 412934a4db5ef90cd5efa3c4dd2ae82297db346c;
+- TABLE_SHA256 4ac778ac45f59a06f3d605f3b718203f0564a495e04708476eaebedf06781b0a.
+
+The full run's trained positions per second are reported beside 8b's c.
