@@ -8,6 +8,10 @@ either quoted from a cited source or computed from the committed aggregates
 in `docs/research/conversion-defense/item5-data-gaps.json`. Section 8 gives
 each number's justification. Anything not checked is marked UNVERIFIED.
 
+**Added after the review (2026-11-10):** section 11, the owner's decision
+and the re-solved weights; section 12, the pre-arm checks and their
+results; section 13, what remains before the 8c arm.
+
 Sources:
 - the conversion-and-defense report, `docs/research/conversion-defense/report.md`
   on research/conversion-defense (be86410): item 5 and fix 4 in "Synthesis:
@@ -652,3 +656,344 @@ passing SPRT is the real evidence.
    section 7.
 9. **The keep rule:** +5 Elo head-to-head or a passing SPRT. Recommended
    as written; declare it before 8c's results.
+
+## 11. Owner decision 2026-11-10 (added after the review)
+
+Sections 1-10 are the design as reviewed (f235d27) and are left unchanged.
+The owner approved it at about 7:00 AM EST on 2026-11-10 (phase-4 a4ee674,
+DESIGN.md decisions log, ideas.md 69).
+
+### 11.1 The approved answers
+
+1. **Mechanism:** per-position loss weights (option (c)). Rejection
+   sampling stays the fallback.
+2. **Weights depend on the board only,** from the unmatched ratios.
+3. **Classes:** the material class alone, with no passer dimension.
+4. **Target shares:** all 7,378 deciding positions.
+5. **Small cells:** a cell with fewer than 50 deciding positions keeps
+   weight exactly 1.
+6. **Arms:** the class arm and ideas 66 and 68 run as separate arms against
+   one control.
+7. **Second control seed:** c2, if 8c's quota allows.
+8. **No validation-loss kill rule.** The per-class and weighted losses are
+   diagnostics only.
+9. **Keep rule, declared:** idea 69 is kept if cw-avg beats c-avg by **+5
+   Elo or more in the head-to-head screen** (1,600 games at 800,000 nodes),
+   or if cw-avg **passes an STC SPRT** `--kind network` [0, 5]. Otherwise
+   it is recorded as tested and dropped.
+
+**The one change:** the classes the report flagged for conversion failures
+are floored at **1.0 instead of 0.5**, and k is re-solved so the mean
+weight stays 1.
+
+### 11.2 How the owner's words are implemented
+
+The floor is applied **per position**, so the weight still depends on the
+board only. A position gets max(w, 1.0), with the caps still in force, if
+any of these hold:
+
+- **"Rook against minor pieces":** its material cell is R-vs-minors, at any
+  signature (Q-MG, Q-EG, noQ-MG, R+minor-EG).
+- **"Queen imbalances":** its cell is Q-imbalance, at any signature.
+- **"A piece against pawns":** its cell is **minor-EG, minor-up**. This is
+  the report's own name for the class:
+  - item 4 lists "minor-EG minor-up" with signed error −372 cp;
+  - the synthesis calls the same −372 "minor-piece endings with a piece
+    against pawns";
+  - item 3's drop points say "minor-piece endings ... a piece against
+    pawns".
+- **"One-wing structures, as the report classifies them":** its wing class
+  is one-wing. In the report's terms, a position is one-wing unless pawns
+  of either side stand on files a-c and also on files f-h. Positions with
+  no pawns, or with pawns only on one wing and the centre, count as
+  one-wing. Test 12.2 checks this reading: it reproduces the report's
+  counts for both wing classes exactly.
+
+In `tools/nnue/cell_weights.py` the rule is w = clip(k·r_c, low, 2), with
+low = 1.0 for a floored position and 0.5 otherwise. Small cells get exactly
+1. One bisection on k sets the mean weight over the training positions to
+1. This is the coordinator's rule (max(w, 1.0), then k re-solved), done in
+a single solve. I see no better reading, with one exception:
+
+- **Alternative reading, not adopted:** "a piece against pawns" could mean
+  every minor-up cell. That would also floor the report's two most
+  over-trained classes, Q-MG minor-up (ratio 0.52, 12.5% of training) and
+  R+minor-EG minor-up (0.22, 8.9%). The report calls those "a minor up"
+  and lists them as over-trained. Under that reading:
+  - k = 0.671 and E[w²] = 1.044;
+  - the distance to the deciding shares falls only from 0.259 to 0.240;
+  - Q-MG B-vs-N gets 1.42;
+  - most of the weighting is undone.
+
+  The owner can choose it instead (open question A).
+
+### 11.3 The re-solved weights
+
+**Training shares used:** a full count of every kept position in g3j
+w00-w04 (62,144,106 positions; the files' SHA-256 values match
+data/manifests/g3j.json), from `fork-train cells` (section 12). This is a
+stand-in. **8c's snapshot is not built yet, so it was not used.** The table
+is provisional until `cells` is rerun on 8c's training files (section 13).
+Deciding shares are item5-data-gaps.json's `matcls` "all deciding
+positions". The table is `docs/research/class-sampler/weights-g3j-provisional.txt`
+(SHA-256 e3afa6cb…909a), and its summary is `weights-g3j-provisional-summary.json`.
+
+| | With the owner's floors | Without (the reviewed rule) |
+|---|---|---|
+| k | **0.807** | 0.909 |
+| Mean weight | 1.000 | 1.000 |
+| E[w²] (Kish factor) | **1.132** (effective batch about 14,470 of 16,384) | 1.210 |
+| Distance, training to deciding | 0.259 → **0.146** | 0.259 → 0.087 |
+| Training positions raised to the floor of 1 | **20.5%** | – |
+| One-wing positions | 13.8% of training | 13.8% |
+
+The no-floor column reproduces the design's provisional section 3.4
+(k 0.912, E[w²] 1.213, distance 0.086). Those figures came from the
+report's 1-in-500 sample; these come from the full count.
+
+**Which weights moved:**
+
+- **Raised to 1 by the floor** (they were 0.50-0.72 before):
+  - every R-vs-minors cell below 1 (R+minor-EG R-vs-minors, 0.72);
+  - every Q-imbalance cell (Q-EG 0.61, Q-MG 0.69);
+  - minor-EG minor-up (0.50);
+  - **the one-wing positions of every cell whose weight was below 1**,
+    for example R+minor-EG minor-up (one-wing 2.45% of training: 0.50 → 1)
+    and R-EG pawn+-2+ (one-wing 1.02%: 0.57 → 1).
+- **Every other weight scales by 0.807 / 0.909 = 0.887,** because the floors
+  take mass that the other cells give up:
+  - Q-MG B-vs-N falls from 1.92 to 1.71, and Q-MG pawn+-1 from 1.66 to 1.47.
+  - **Q-MG level material** (the report's first-ranked gap) falls from
+    1.11 to **0.987** in its two-wing positions, slightly below 1.
+    noQ-MG B-vs-N falls from 1.12 to 0.993.
+  - Q-EG pawn+-1 falls from 2.00 (capped) to 1.985. Q-EG pawn+-2+ and Q-EG
+    B-vs-N stay at the cap of 2.
+- **Still floored at 0.5**, in their two-wing positions only:
+  - Q-MG minor-up (12.4% of training);
+  - R+minor-EG minor-up (6.5%);
+  - Q-MG other-imbalance (1.9%).
+
+**By signature** (training → weighted with floors, without floors; deciding):
+
+| Signature | Training | Weighted (with floors) | Weighted (without) | Deciding |
+|---|---|---|---|---|
+| Q-MG | 41.1% | 42.8% | 46.8% | 51.0% |
+| R+minor-EG | 25.0% | 22.2% | 20.0% | 17.3% |
+| Q-EG | 8.0% | 9.5% | 8.2% | 9.4% |
+| noQ-MG | 10.4% | 10.4% | 11.2% | 8.9% |
+| minor-EG | 7.9% | 7.6% | 6.5% | 6.0% |
+| R-EG | 7.1% | 6.9% | 7.0% | 7.0% |
+| pawn-EG | 0.5% | 0.5% | 0.5% | 0.3% |
+
+**What the owner should see:** the floors keep a large share of the
+training mix at weight 1 or more, so less weight is left to move. Q-MG
+rises by 1.7 points instead of 5.7. The arm is a weaker version of the
+reviewed idea (open question B).
+
+Per cell, for the 31 cells with at least 50 deciding positions. The
+training column shows two-wing / one-wing shares. In brackets: the rule
+that set each weight (k r, cap 2, floor 0.5, floor 1).
+
+| Cell | Training (two / one-wing) | Deciding (n) | Ratio | Weight, two-wing | Weight, one-wing | Without floors | Weighted share (without) |
+|---|---|---|---|---|---|---|---|
+| Q-MG, B-vs-N | 7.41% / 0.05% | 15.78% (1164) | 2.11 | 1.705 (k r) | 1.705 (k r) | 1.922 | 12.73% (14.35%) |
+| Q-MG, pawn+-1 | 5.27% / 0.03% | 9.68% (714) | 1.83 | 1.474 (k r) | 1.474 (k r) | 1.661 | 7.81% (8.80%) |
+| Q-MG, level | 7.62% / 0.03% | 9.35% (690) | 1.22 | 0.987 (k r) | 1.000 (floor 1) | 1.113 | 7.54% (8.50%) |
+| Q-MG, minor-up | 12.39% / 0.11% | 6.53% (482) | 0.52 | 0.500 (floor 0.5) | 1.000 (floor 1) | 0.500 | 6.31% (6.25%) |
+| R+minor-EG, R-vs-minors | 5.05% / 1.87% | 5.49% (405) | 0.79 | 1.000 (floor 1) | 1.000 (floor 1) | 0.722 | 6.92% (4.99%) |
+| Q-MG, R-vs-minors | 3.28% / 0.06% | 5.06% (373) | 1.52 | 1.223 (k r) | 1.223 (k r) | 1.379 | 4.08% (4.60%) |
+| R+minor-EG, B-vs-N | 2.61% / 0.53% | 4.49% (331) | 1.43 | 1.156 (k r) | 1.156 (k r) | 1.304 | 3.62% (4.08%) |
+| R-EG, pawn+-1 | 1.52% / 0.94% | 3.80% (280) | 1.54 | 1.245 (k r) | 1.245 (k r) | 1.404 | 3.07% (3.46%) |
+| noQ-MG, B-vs-N | 2.67% / 0.05% | 3.35% (247) | 1.23 | 0.993 (k r) | 1.000 (floor 1) | 1.120 | 2.70% (3.05%) |
+| Q-EG, Q-imbalance | 2.77% / 1.08% | 2.59% (191) | 0.67 | 1.000 (floor 1) | 1.000 (floor 1) | 0.611 | 3.85% (2.36%) |
+| minor-EG, B-vs-N | 1.25% / 0.54% | 2.51% (185) | 1.40 | 1.131 (k r) | 1.131 (k r) | 1.275 | 2.03% (2.28%) |
+| R+minor-EG, pawn+-1 | 1.34% / 0.34% | 2.48% (183) | 1.48 | 1.193 (k r) | 1.193 (k r) | 1.345 | 2.00% (2.26%) |
+| Q-MG, pawn+-2+ | 1.48% / 0.01% | 2.45% (181) | 1.64 | 1.322 (k r) | 1.322 (k r) | 1.491 | 1.98% (2.23%) |
+| noQ-MG, pawn+-1 | 1.53% / 0.03% | 2.33% (172) | 1.50 | 1.209 (k r) | 1.209 (k r) | 1.363 | 1.88% (2.12%) |
+| R+minor-EG, minor-up | 6.47% / 2.45% | 1.97% (145) | 0.22 | 0.500 (floor 0.5) | 1.000 (floor 1) | 0.500 | 5.69% (4.46%) |
+| Q-EG, pawn+-1 | 0.58% / 0.16% | 1.83% (135) | 2.46 | 1.985 (k r) | 1.985 (k r) | 2.000 | 1.48% (1.49%) |
+| R-EG, level | 0.95% / 0.49% | 1.50% (111) | 1.04 | 0.841 (k r) | 1.000 (floor 1) | 0.948 | 1.29% (1.36%) |
+| R-EG, pawn+-2+ | 1.33% / 1.02% | 1.48% (109) | 0.63 | 0.507 (k r) | 1.000 (floor 1) | 0.572 | 1.70% (1.35%) |
+| noQ-MG, level | 1.41% / 0.02% | 1.45% (107) | 1.01 | 0.817 (k r) | 1.000 (floor 1) | 0.921 | 1.17% (1.32%) |
+| minor-EG, pawn+-1 | 1.09% / 0.40% | 1.36% (100) | 0.91 | 0.735 (k r) | 1.000 (floor 1) | 0.828 | 1.20% (1.24%) |
+| Q-EG, pawn+-2+ | 0.42% / 0.10% | 1.29% (95) | 2.48 | 2.000 (cap 2) | 2.000 (cap 2) | 2.000 | 1.04% (1.04%) |
+| R+minor-EG, level | 0.93% / 0.19% | 1.21% (89) | 1.08 | 0.869 (k r) | 1.000 (floor 1) | 0.980 | 1.00% (1.10%) |
+| Q-MG, other-imbalance | 1.93% / 0.03% | 1.17% (86) | 0.60 | 0.500 (floor 0.5) | 1.000 (floor 1) | 0.543 | 1.00% (1.06%) |
+| R+minor-EG, pawn+-2+ | 0.93% / 0.21% | 1.08% (80) | 0.95 | 0.769 (k r) | 1.000 (floor 1) | 0.867 | 0.92% (0.98%) |
+| Q-MG, Q-imbalance | 1.34% / 0.03% | 1.04% (77) | 0.76 | 1.000 (floor 1) | 1.000 (floor 1) | 0.688 | 1.37% (0.95%) |
+| Q-EG, B-vs-N | 0.31% / 0.04% | 1.03% (76) | 2.90 | 2.000 (cap 2) | 2.000 (cap 2) | 2.000 | 0.71% (0.71%) |
+| minor-EG, minor-up | 1.92% / 0.86% | 0.85% (63) | 0.31 | 1.000 (floor 1) | 1.000 (floor 1) | 0.500 | 2.78% (1.39%) |
+| Q-EG, R-vs-minors | 0.50% / 0.07% | 0.83% (61) | 1.45 | 1.171 (k r) | 1.171 (k r) | 1.320 | 0.67% (0.75%) |
+| minor-EG, pawn+-2+ | 0.68% / 0.35% | 0.77% (57) | 0.74 | 0.599 (k r) | 1.000 (floor 1) | 0.676 | 0.76% (0.70%) |
+| Q-EG, level | 0.42% / 0.09% | 0.72% (53) | 1.41 | 1.134 (k r) | 1.134 (k r) | 1.278 | 0.58% (0.65%) |
+| Q-EG, minor-up | 0.73% / 0.18% | 0.70% (52) | 0.76 | 0.616 (k r) | 1.000 (floor 1) | 0.695 | 0.64% (0.64%) |
+| 11 small cells (n < 50; weight 1): R+minor-EG other-imbalance; noQ-MG R-vs-minors; noQ-MG minor-up; minor-EG level; noQ-MG pawn+-2+; Q-EG other-imbalance; pawn-EG pawn+-1; R-EG other-imbalance; noQ-MG other-imbalance; pawn-EG level; pawn-EG pawn+-2+ | 9.47% | 3.86% | - | 1.000 | 1.000 | 1.000 | 9.47% |
+
+## 12. The pre-arm checks (2026-11-10, 8:33 AM to 9:09 AM EST)
+
+All work is on branch research/class-sampler-checks. The long runs went
+through jobctl.py's measure slot at nice 19 with at most two workers
+(cs-checks, cs-checks2, cs-checks3, cs-sample136). Nothing was trained,
+nothing ran on Kaggle, and nothing was merged.
+
+**Implementation:**
+
+- `tools/train/src/main.rs`:
+  - `cell_and_wing`, or `board_and_cell` in the mapper: one pass over the
+    stored pieces that builds the board and counts the cell together;
+  - `CellTable`: every one of the 112 cell × wing entries must be listed
+    once, and each weight must be positive;
+  - `TrainRecord`: the board plus the exempt mark of its file;
+  - `--cell-weights FILE` and `--exempt NAME...` for `train`;
+  - a second dense input `weight`, with the loss
+    `(sigmoid(out).squared_error(target) * weight).reduce_sum_batch()`;
+  - the `cells` subcommand: counts, a dump for the oracle, the reader's
+    own stream with its weights, and a bench.
+- `tools/nnue/cell_oracle.py`: the independent oracle. A separate subagent
+  wrote it from the report's taxonomy text only, without opening the Rust
+  code.
+- `tools/nnue/cell_weights.py`: the solver and the stream check.
+- `tools/nnue/cell_cases.txt`: 17 constructed positions, shared by both
+  test suites.
+- `tools/nnue/test_cells.py`: the Python tests.
+- The name screen of the new names (a separate subagent; Stockfish,
+  Ethereal, Berserk and Weiss; clones deleted) found no match for any of
+  them.
+- Without `--cell-weights` every position's weight is 1, so the control
+  trains on the same loss as before (but see check 5).
+
+| # | Check (section 5) | Result |
+|---|---|---|
+| 1 | Class function on constructed positions; independent Python oracle | **Pass.** Rust: 6 of 6 tests pass, including the 17 constructed cases, a check that the fused board equals `Board::from_chessboard`, table parsing, and the exempt and no-table weight. With the cell function stubbed, 3 of 6 fail, which shows the tests can fail. Python: 6 of 6 pass, and the file failed (no solver module) before the solver was written. The oracle agrees on all 17 cases in both frames, and on every sampled g3j position (2 below) |
+| 2 | Item 5's exact per-cell counts on the report's g3j sample | **Pass, exactly:** all 42 cells and both wing classes (two-wing 107,056, one-wing 17,232), 124,288 positions. The oracle agrees on all 124,288. g3j w00-w04 hold 62,144,106 kept positions (12,427,523 / 12,430,899 / 12,427,078 / 12,429,587 / 12,429,019 per file), the same as idea 52's position lists and plan.md |
+| 3 | Realised weighted shares within 0.3 pp per cell, mean weight 1 ± 0.005, over one superbatch | **Pass.** 4,997,120 positions of the reader's own stream (interleaved, seed 1, the default 16,777,216-position buffer) over g3j w00-w04, with w04 as the exempt stand-in for a slice. Worst cell −0.051 pp (R-EG pawn+-1); mean weight 1.000519; all 999,705 exempt positions at weight exactly 1. The exempt share of the stream is 20.006%, against w04's 20.000% of the kept positions |
+| 4 | Determinism | **Pass on CPU:** a second stream run gave a byte-identical per-cell output, a second sample run a byte-identical dump of 124,288 positions, and the oracle gives the same classes |
+| 5 | An all-ones table reproduces the control exactly | **Not run: it needs a CUDA GPU** (UNVERIFIED). See below |
+| 6 | Throughput bound (the class at most 3% of the mapper's per-position work) | **Fails the declared bound:** +4.95% median over 9 alternated rounds (range +3.7% to +6.9%): 1,646.8 against 1,728.3 ns per position on one thread, 2,000,000 positions, s512pp. See below |
+
+**Check 2, how it passed.** A first attempt read "every 500th kept
+position, offset 137" as one index over all five files, 0-based. Its counts
+differed in every cell. But against the full population of 62.1 M kept
+positions, item 5's counts gave χ² = 26.2 on 41 degrees of freedom, and
+that first sample gave 34.6. Both look like random draws from one
+population, so the cell function was right and the sample was different.
+
+The report's own script (sample_train.sh, in that session's scratch
+folder) draws the sample **per file**, keeping 1-based line numbers n with
+n % 500 == 137 of idea 52's position lists. Those lists hold exactly the
+trainer's kept positions, file by file. Rerun that way
+(`cells --every 500 --offset 136` on each file), every count matches. This
+settles section 2.1's two UNVERIFIED details:
+
+- "rooks and minors" counts both sides together;
+- a lone rook against minors is R+minor-EG (or noQ-MG), R-vs-minors.
+
+**Check 5, why it was not run.** bullet without the `cuda` feature runs a
+mock device that "can't actually do anything": both the unchanged trainer
+and the new one stop at its GradientCalculationError on the first batch.
+No local GPU is CUDA-capable (this machine has a Radeon RX 580).
+
+What did run:
+
+- **The parameters are unchanged.** The graph with the weight input builds,
+  and `check` (s512pp, seed 1) writes initial weights byte-identical to the
+  unchanged trainer's (quantised.bin SHA-256 6376daa8…a743e, weights.bin
+  5dc2b7a9…57ae).
+- **The new path reaches the gradient step.** The weighted train path gets
+  as far as the unchanged one: the mock's gradient step.
+- **The loss is per position.** bullet's `squared_error` at the pin is
+  `(self - other) * (self - other)` per position, and `reduce_sum_batch`
+  sums the batch (crates/compiler/src/model/builder.rs). So with weight 1.0
+  every forward and backward value is multiplied by exactly 1.0. The run
+  should be bit-identical unless bullet's compiler orders the batch sum
+  differently for the larger graph (UNVERIFIED).
+
+**Kaggle preflight (proposed, a few GPU minutes; not launched).** Before the
+8c arm, in 8c's own session:
+
+1. Run the unchanged trainer (phase-4 without idea 69) and the new trainer
+   without `--cell-weights` for one superbatch of 20 batches, seed 1, on
+   the same files.
+2. Run the new trainer again with an all-ones table.
+3. Run the unchanged trainer a second time, to measure CUDA's run-to-run
+   determinism (UNVERIFIED).
+4. Compare `optimiser_state/weights.bin` byte for byte. If the new runs
+   differ from the unchanged one by more than two unchanged runs differ
+   from each other, stop and fall back to option (a).
+
+**Check 6, what the miss means.** The first version cost +32%, because it
+made three 64-square scans. One pass over the stored pieces cut that to
++10.8%. Building the board and counting the cell in that same pass cut it
+to the +4.95% above. This is still above the declared 3%.
+
+What matters is whether the loader stays ahead of the GPU:
+
+- Here the mapper, at 1.73 µs per position on each of its two threads,
+  gives about 1.16 M positions/s.
+- 8a trained at 232,400 positions/s on Kaggle.
+- The decoding thread (K17: 1.37 M raw positions/s on Kaggle) and the
+  mapper share the loader's thread in turn.
+
+So a GPU-hour cost is not expected, but it is **UNVERIFIED on Kaggle's
+CPUs**. I recommend replacing the 3% bound with the measure that counts:
+the arm's trained positions per second within 1% of the control's, as the
+kernel already records them (open question C).
+
+**The UNVERIFIED items of section 9:**
+
+- **Per-position `squared_error`:** resolved (check 5).
+- **CUDA determinism:** not resolvable here; the Kaggle preflight measures
+  it.
+- **The class cost:** measured (check 6).
+- **g4s1's kept count:** not counted. The snapshot's rest files and the
+  Syzygy slice are not on this machine, only the raw parts, so it stays
+  about 0.95 B (UNVERIFIED). `fork-train cells` prints the kept count of
+  any file list, so the same pass that fixes 8c's training shares (section
+  13) also gives 8c's kept count.
+
+The outputs are beside this document:
+
+- `g3j-cells.txt`: the full count;
+- `g3j-report-sample-cells.txt`: the report's sample;
+- `weights-g3j-provisional.txt`, with its summary;
+- `stream-check.json`;
+- `bench.txt`.
+
+They are aggregates only, with no positions.
+
+## 13. What remains before the arm
+
+1. **8c's training shares:** run `fork-train cells` on 8c's training files
+   with the exempt files left out (the slices, any oversampled-site file).
+   That is about 1.5 minutes of one thread per 62 M kept positions on this
+   machine (w04's 12.4 M took 18 s), so about 23 minutes for a snapshot of
+   0.95 B. Then
+   `cell_weights.py solve` gives the table, which is committed with its
+   SHA-256 before the launch. Locally if 8c's files are here before the
+   upload, otherwise as the kernel's first step.
+2. **The Kaggle preflight** of check 5, plus the positions-per-second
+   comparison of check 6.
+3. **8c's kernel:**
+   - the cw arm (the control's command plus `--cell-weights` and
+     `--exempt` with every slice file's name);
+   - the table's SHA-256 and the exempt list in its validity record;
+   - the trainer commit pinned.
+4. **The per-class validation scoring of section 7:** not built yet. It
+   needs an option for `train --superbatches 0` to report the loss per
+   cell and the weighted loss on the validation file.
+5. **The merge to phase-4:** not done. It waits for the owner.
+
+**Open questions for the owner (new):**
+
+- **A. "A piece against pawns":** minor-EG minor-up only (as implemented),
+  or every minor-up cell? Recommended: minor-EG minor-up, the report's own
+  name for it. The wider reading floors the two most over-trained classes
+  and undoes most of the weighting (11.2).
+- **B. The floors' cost.** With the floors, the distance only falls to
+  0.146 (0.087 without them). Q-MG level material, the first-ranked gap,
+  sits at 0.987, and Q-MG rises 1.7 points instead of 5.7. Recommended:
+  keep the floors as decided. The arm still tests the reviewed direction,
+  and if it passes, a later arm can test the floors themselves.
+- **C. The throughput gate:** replace the declared 3% CPU bound, which the
+  measured +4.95% misses, with "the arm's trained positions per second
+  within 1% of the control's" on Kaggle. Recommended: yes.
