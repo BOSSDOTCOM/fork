@@ -654,6 +654,12 @@ tuned by SPSA.
   long run (40 generations) stays in **late Phase 4** (owner, 2026-10-28),
   after the first strong network and the search re-validation. Pilot scheduled
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 19):** the long run on the label-and-sweep proxy is replaced by a capped pilot with a game-based fitness (R38), after the LMR terms (§5.6 order step 20).
+  **Restart plan (owner, 2026-11-09; plan only, still parked):** the first target is **the quiet move-ordering
+  score** (how the history tables combine: the butterfly, reply, follow and take terms and their weights), with
+  fitness = **nodes to a fixed depth on a large position set** (deterministic), a **held-out set** for confirmation,
+  and a **guard that search results stay equivalent** (on a check set: the same best move, and the score within a
+  declared tolerance); the winner then plays a **design R SPRT**. **Runner-up target:** the time-management
+  formula, with a game-based fitness (time-management parameters stay out of SPSA, think tank decision 4).
 - **Candidate region for the long run (owner, 2026-10-31):** a correction
   to the singular test's margin and depth (tier 2, T27), for example a
   dependence on the TT entry's depth deficit. The measured form (DESIGN.md
@@ -2260,3 +2266,19 @@ whose weaknesses and data gaps decide their targets and order.
 - **status:** untested (plan only, owner, 2026-11-09; after the
   conversion-and-defense results). **runtime cost:** none. **earliest
   phase:** Phase 4.
+
+## 68. Endgame slice v2 (ChessTB-labelled 6-7-piece positions)
+
+- **type:** ELO (training data).
+- **idea** (owner, 2026-11-09): random legal 6-7-piece (and selected 8-piece) positions in the material classes where
+  Fork errs most (rook endings, rook against a minor, queen endings and queen imbalances, piece against pawns),
+  labelled by ChessTB WDL, replacing half of the current 3-5-piece Syzygy slice so the slice stays 2% of a retrain.
+- **design:** docs/research/endgame-slice-v2/design.md (branch research/endgame-slice-v2); facts and the data-policy
+  line in the KB's chesstb.md (adopted, DESIGN.md training-data decision 1).
+- **decisions (owner, 2026-11-09):** budget R (about 97 GiB downloaded, 34.5 GiB peak); the arm in retrain 8c; the
+  pure-Python prober first, the C++ library only if labelling would exceed about a day; tables in WSL; the class shares
+  wait for the final conversion-and-defense numbers.
+- **keep rule (declared 2026-11-09, before any data):** v2 is kept if its arm's fixed-node screen interval is not
+  entirely below 0 AND the held-out 6-7-piece misjudgment falls by at least 25% against the control arm.
+- **status:** untested (designed; data generation after the conversion-and-defense results and before 8c).
+  **runtime cost:** none. **earliest phase:** Phase 4.
