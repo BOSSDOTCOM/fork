@@ -12,11 +12,13 @@ positions"), the ratio is r_c = d_c / t_c, and each (cell, wing) gets
                                            positions (below), else 0.5,
 
 with the scale k solved (bisection; the mean is non-decreasing in k) so that the mean weight over
-the training positions is exactly 1. The owner's floors (2026-11-10): the classes the report
-flagged for conversion failures, rook against minor pieces (every R-vs-minors cell), queen
-imbalances (every Q-imbalance cell), a piece against pawns (minor-EG|minor-up, the report's own
-name for it in items 3 and 4) and one-wing structures (every one-wing position), are floored at
-1.0 instead of 0.5. The weight depends only on the board.
+the training positions is exactly 1. The owner's floors (2026-11-10; narrowed at about 9:50 AM EST
+to the material classes): the classes the report flagged for conversion failures, rook against
+minor pieces (every R-vs-minors cell), queen imbalances (every Q-imbalance cell) and a piece
+against pawns (minor-EG|minor-up, the report's own name for it in items 3 and 4), are floored at
+1.0 instead of 0.5. One-wing structures are no longer floored, so both wing entries of a cell
+carry the same weight (the table keeps them apart for any later rule). The weight depends only
+on the board.
 
     python -I tools/nnue/cell_weights.py solve --deciding item5-data-gaps.json --counts COUNTS
         [--no-floors] [--min-n 50] [--out TABLE] [--summary JSON] [--markdown FILE]
@@ -42,8 +44,10 @@ DECIDING = 'all deciding positions'
 
 
 def floored(cell, wing):
-    """The owner's floor (2026-11-10): conversion-failure classes and one-wing structures."""
-    return wing == 'one-wing' or cell.split('|')[1] in FLAGGED_BALANCES or cell in FLAGGED_CELLS
+    """The owner's floor (2026-11-10, narrowed at about 9:50 AM EST): the conversion-failure
+    material classes, in both wing classes."""
+    del wing
+    return cell.split('|')[1] in FLAGGED_BALANCES or cell in FLAGGED_CELLS
 
 
 def read_counts(text):

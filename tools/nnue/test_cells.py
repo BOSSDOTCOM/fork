@@ -98,26 +98,38 @@ class SolverTest(unittest.TestCase):
         r = cell_weights.solve(self.counts, self.deciding, floors=True)
         t = r['table']
         self.assertAlmostEqual(self.mean(t), 1.0, places=9)
-        # One-wing positions and the flagged cells never go below 1.
-        self.assertGreaterEqual(t[('Q-MG|minor-up', 'one-wing')], 1.0)
+        # The owner's floors (2026-11-10, narrowed at 9:50 AM EST): the conversion-failure material
+        # cells only, every R-vs-minors and Q-imbalance cell and minor-EG|minor-up, in both wing
+        # classes; one-wing positions are not floored, so a cell has one weight.
+        self.assertTrue(cell_weights.floored('R+minor-EG|R-vs-minors', 'two-wing'))
+        self.assertTrue(cell_weights.floored('Q-MG|R-vs-minors', 'one-wing'))
+        self.assertTrue(cell_weights.floored('Q-EG|Q-imbalance', 'two-wing'))
+        self.assertTrue(cell_weights.floored('minor-EG|minor-up', 'two-wing'))
+        self.assertFalse(cell_weights.floored('Q-MG|level', 'one-wing'))
+        self.assertFalse(cell_weights.floored('Q-MG|minor-up', 'one-wing'))
+        self.assertFalse(cell_weights.floored('R+minor-EG|minor-up', 'two-wing'))
+        self.assertEqual(t[('Q-MG|minor-up', 'one-wing')], t[('Q-MG|minor-up', 'two-wing')])
         self.assertLess(t[('Q-MG|minor-up', 'two-wing')], 1.0)
         for c in CELLS:
             for w in cell_weights.WINGS:
                 if cell_weights.floored(c, w):
                     self.assertGreaterEqual(t[(c, w)], 1.0, (c, w))
-        self.assertTrue(cell_weights.floored('R+minor-EG|R-vs-minors', 'two-wing'))
-        self.assertTrue(cell_weights.floored('Q-EG|Q-imbalance', 'two-wing'))
-        self.assertTrue(cell_weights.floored('minor-EG|minor-up', 'two-wing'))
-        self.assertTrue(cell_weights.floored('Q-MG|level', 'one-wing'))
-        self.assertFalse(cell_weights.floored('Q-MG|minor-up', 'two-wing'))
-        # The floors cost the other cells weight: the scale falls.
-        self.assertLess(r['k'], cell_weights.solve(self.counts, self.deciding, floors=False)['k'])
+        # A floored cell whose ratio would weigh it below 1 is held at 1, and the floor costs the
+        # other cells weight: the scale falls.
+        counts = counts_of({('Q-MG|B-vs-N', 'two-wing'): 0.3, ('Q-MG|minor-up', 'two-wing'): 0.3,
+                            ('R+minor-EG|R-vs-minors', 'two-wing'): 0.4})
+        deciding = {'Q-MG|B-vs-N': (0.6, 600), 'Q-MG|minor-up': (0.2, 200), 'R+minor-EG|R-vs-minors': (0.2, 200)}
+        f, b = cell_weights.solve(counts, deciding, floors=True), cell_weights.solve(counts, deciding, floors=False)
+        self.assertLess(b['table'][('R+minor-EG|R-vs-minors', 'two-wing')], 1.0)
+        self.assertEqual(f['table'][('R+minor-EG|R-vs-minors', 'two-wing')], 1.0)
+        self.assertLess(f['k'], b['k'])
 
     def test_an_impossible_mean_is_refused(self):
         counts = counts_of({('Q-MG|B-vs-N', 'one-wing'): 1.0})
         with self.assertRaises(ValueError):
-            # Every position one-wing, so floored; a floor of 1.5 leaves no mean of 1.
-            cell_weights.solve(counts, {'Q-MG|B-vs-N': (1.0, 1000)}, floors=True, floor=1.5)
+            # Every position in a floored cell; a floor of 1.5 leaves no mean of 1.
+            counts = counts_of({('Q-MG|R-vs-minors', 'two-wing'): 1.0})
+            cell_weights.solve(counts, {'Q-MG|R-vs-minors': (1.0, 1000)}, floors=True, floor=1.5)
 
     def test_the_stream_check(self):
         r = cell_weights.solve(self.counts, self.deciding, floors=True)
