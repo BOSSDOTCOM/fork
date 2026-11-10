@@ -1016,7 +1016,7 @@ TEST_CASE("search", "a stop during a root fail high's re-search keeps the previo
       const Move pending = fx.searcher->unresolved_fail_high();
       if (pending.is_none() || r.depth == 0) continue;
       SearchQuota to_depth;
-      to_depth.depth = r.depth;
+      to_depth.depth = fx.searcher->time_signals().depth;  // the last finished iteration
       const Move previous_best = fresh_search(fen, to_depth).best;
       if (pending == previous_best) continue;
       ++distinct_fail_highs;
@@ -1127,7 +1127,8 @@ struct ReportLog final : SearchListener {
 // case above covers the other half of the rule; playing the unfinished
 // iteration's best whatever its score passed every test (mutant M24).
 // Node-limited searches over the bench positions stop at many points; the
-// last finished iteration is the first exact report at the result's depth.
+// last finished iteration is the first exact report at time_signals()'s depth
+// (the result's depth is the unfinished iteration's when it supplies the move).
 // At least one stop must play a new move, or the test proves nothing. That
 // is required of optimized builds only: node-limited searches are the same
 // in every build (bench parity), and the smaller sample debug builds can
@@ -1149,22 +1150,66 @@ TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored abo
       ReportLog log;
       const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
       if (r.depth == 0) continue;
+      const int finished_depth = fx.searcher->time_signals().depth;
       const auto finished = std::ranges::find_if(
-          log.entries, [&](const ReportLog::Entry& e) { return e.depth == r.depth && e.bound == 0; });
+          log.entries, [&](const ReportLog::Entry& e) { return e.depth == finished_depth && e.bound == 0; });
       CHECK_MSG(finished != log.entries.end(),
-                fen << " at " << nodes << " nodes: no report of depth " << r.depth);
+                fen << " at " << nodes << " nodes: no report of depth " << finished_depth);
       if (finished == log.entries.end() || r.best == finished->first) continue;
       ++switched;
       CHECK_MSG(r.score > finished->score, fen << " at " << nodes << " nodes: played "
                                                << pos.move_to_uci(r.best) << " at " << r.score << " over "
                                                << pos.move_to_uci(finished->first) << " at "
-                                               << finished->score << " (depth " << r.depth << ")");
+                                               << finished->score << " (depth " << finished_depth << ")");
     }
   }
   if (Optimized)
     CHECK_MSG(switched > 0, "no stop played a move other than the last finished iteration's");
   else if (switched == 0)
     NOTE("no stop in the debug sample played a new move; optimized builds require one");
+}
+
+// The result describes the move played (fix/partial-iteration-report,
+// 2026-11-10): its depth, score and move are those of the last reported line,
+// which is exact. When an unfinished iteration supplies the move, that line
+// has the unfinished iteration's depth (searcher.cpp, the stop rule), so the
+// result's depth is that iteration's too, one more than the last finished
+// iteration's (time_signals().depth). Before the fix the result kept the
+// finished depth beside the unfinished iteration's score (the web page
+// showed "depth 7" with depth 8's score and line). Node-limited searches over
+// the bench positions; at least one must take its move from an unfinished
+// iteration, or the test proves nothing (optimized builds only, as above).
+TEST_CASE("search", "after a stop, the result's depth, score and move are the last reported line's") {
+  Fixture fx;
+  int from_unfinished = 0;
+  const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
+  for (std::size_t i = 0; i < positions; ++i) {
+    const std::string_view fen = search_bench_fens()[i];
+    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
+      fx.store.clear();
+      fx.searcher->clear_history();
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      SearchQuota q;
+      q.nodes = nodes;
+      ReportLog log;
+      const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
+      if (r.depth == 0 || log.entries.empty()) continue;
+      const ReportLog::Entry& last = log.entries.back();
+      const int finished = fx.searcher->time_signals().depth;
+      CHECK_MSG(last.bound == 0 && last.depth == r.depth && last.score == r.score && last.first == r.best,
+                fen << " at " << nodes << " nodes: last line depth " << last.depth << " score " << last.score
+                    << " bound " << last.bound << " pv " << pos.move_to_uci(last.first) << ", result depth "
+                    << r.depth << " score " << r.score << " move " << pos.move_to_uci(r.best));
+      CHECK_MSG(r.depth == finished || r.depth == finished + 1,
+                fen << " at " << nodes << " nodes: result depth " << r.depth << ", finished " << finished);
+      if (r.depth == finished + 1) ++from_unfinished;
+    }
+  }
+  if (Optimized)
+    CHECK_MSG(from_unfinished > 0, "no stop took its move from an unfinished iteration");
+  else if (from_unfinished == 0)
+    NOTE("no stop in the debug sample played an unfinished iteration's move; optimized builds require one");
 }
 
 // Audit-1 V-4 (00bed14): no LMR or PVS re-search once the search has
