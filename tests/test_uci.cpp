@@ -30,8 +30,10 @@
 #include "harness.hpp"
 #include "search/hash_memory.hpp"
 #include "search/score_bounds.hpp"
+#include "search/searcher.hpp"
 #include "search/time_budget.hpp"
 #include "suite.hpp"
+#include "tune/params.hpp"
 #include "uci/tokens.hpp"
 #include "uci_message.hpp"
 
@@ -187,14 +189,27 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
   g.send("uci");
   CHECK(g.next("uciok").has_value());
   const std::vector<std::string> out = g.texts();
-  const std::vector<std::string> options = {
+  std::vector<std::string> options = {
       "option name Hash type spin default 16 min 1 max 4194304",
       "option name Clear Hash type button",
       "option name Threads type spin default 1 min 1 max 4096",
       "option name Move Overhead type spin default 100 min 0 max 10000",
       "option name SyzygyPath type string default <empty>",
-      "option name LogFile type string default <empty>",
   };
+#ifdef FORK_TUNE
+  // Tuning builds also declare every search switch as a check option and every
+  // search parameter as a spin option, before LogFile (src/uci/session.cpp).
+#define FORK_TEST_SWITCH(member, option, value)                                  \
+  options.push_back(std::string("option name " #option " type check default ") + \
+                    ((value) ? "true" : "false"));
+  FORK_SEARCH_SWITCHES(FORK_TEST_SWITCH)
+#undef FORK_TEST_SWITCH
+  for (const TuneParam& p : param_table())
+    options.push_back("option name " + std::string(p.name) + " type spin default " +
+                      std::to_string(p.default_value) + " min " + std::to_string(p.lowest) + " max " +
+                      std::to_string(p.highest));
+#endif
+  options.push_back("option name LogFile type string default <empty>");
   CHECK_EQ(out.size(), options.size() + 3);
   if (out.size() == options.size() + 3) {
     CHECK_MSG(starts_with(out[0], "id name Fork 0."), out[0]);
@@ -627,7 +642,9 @@ TEST_CASE("uci_protocol", "the mate in 2 is reported within depth 6, after other
 //   the hard limit) or the hard limit itself.
 // The limits are plan_time's for White's clock and the default Move Overhead
 // of 100 ms: 2900 ms over 30 moves, soft 96 ms, hard 4 x 96 = 384 ms.
-TEST_CASE("uci_protocol", "a clock go: bestmove not before the smallest scaled soft limit, no iteration started after the largest") {
+TEST_CASE("uci_protocol",
+          "a clock go: bestmove not before the smallest scaled soft limit, no iteration started after the "
+          "largest") {
   Gui g;
   g.send("position startpos");
   CHECK(g.sync());
@@ -1006,8 +1023,8 @@ TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
     const char* name;
     std::int64_t min, max;
   };
-  for (const OptionRange& b :
-       {OptionRange{"Threads", 1, 4096}, OptionRange{"Move Overhead", 0, 10000}, OptionRange{"Hash", 1, 4194304}}) {
+  for (const OptionRange& b : {OptionRange{"Threads", 1, 4096}, OptionRange{"Move Overhead", 0, 10000},
+                               OptionRange{"Hash", 1, 4194304}}) {
     const std::string set = std::string("setoption name ") + b.name + " value ";
     for (std::int64_t v : {b.min, b.max}) {
       const std::size_t mark = g.cursor;
