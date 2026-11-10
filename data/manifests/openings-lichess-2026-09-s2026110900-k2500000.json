@@ -1,0 +1,13 @@
+{
+ "tool": "docs/research/label-depth/ld_book.py",
+ "tool_commit": "6f02afa",
+ "derivation": "the openings lichess-2026-09.epd gives fork_datagen's games 0 .. 2,499,999 for --seed 2026110900, in the order that gives each of those games the same opening from this 2,500,000-line file; shards byte-identical to the full book's at D20's and D100's settings (docs/research/label-depth/probe.md); the label-depth arms only",
+ "seed": 2026110900,
+ "output": "lichess-2026-09-s2026110900-k2500000.epd",
+ "output_sha256": "f705366e5a3f4b803ce392f2b9da2f474e181bbcefecef0e0170e569ccdae736",
+ "output_bytes": 166354749,
+ "positions": 2500000,
+ "source": "lichess-2026-09.epd",
+ "source_sha256": "dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef",
+ "source_manifest": "openings-lichess-2026-09.json"
+}
