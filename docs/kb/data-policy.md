@@ -10,7 +10,8 @@ is in [training-data.md](training-data.md).
 
 1. **Labels come from Fork.** Every eval, score or search statistic used to
    train a Fork net comes from a Fork binary, with two exceptions: game
-   results, and Syzygy tablebase results (exact facts, not engine output).
+   results, Syzygy tablebase results and ChessTB tablebase results (exact facts, not engine output;
+   ChessTB adopted by the owner 2026-11-09).
 2. **Stockfish-touched data is OFF-LIMITS.** This covers any source whose
    labels, moves or position selection came from Stockfish (or is likely
    to have), and it holds whatever the license says or TCEC tolerates.
@@ -36,6 +37,7 @@ is in [training-data.md](training-data.md).
 |---|---|---|---|
 | Fork self-play (own search/eval labels) | labels, positions | **ALLOWED** | The NNUE Guideline standard; DESIGN.md Phase 4 |
 | Syzygy tablebases (WDL/DTZ) | labels for positions with 7 pieces or fewer, adjudication | **ALLOWED** | Exact retrograde results, no engine search; table-file license **UNVERIFIED** but they are universally distributed |
+| ChessTB tablebases (WDL/DTZ, CC0 1.0 data; chesstb.md) | labels for positions of up to 7 pieces and 8-piece positions with one opposing pawn pair, never in the engine | **ALLOWED** (owner, 2026-11-09) | Exact retrograde results, no engine search. Labels only (the score field from the WDL class alone); provenance per file (mirror, form, size, Xet hash, local SHA-256, prober at its pinned commit); verified against Syzygy where both exist; downloaded only, never committed, deleted after sealing; the online explorer for spot checks only. DTZ read by ChessTB's own convention, never as Syzygy DTZ |
 | Lichess standard game DB, moves and results (CC0) | datagen start positions, opening books | **ALLOWED** | Human moves, CC0; **strip `[%eval]` and drop BOT-account games** |
 | Lichess game positions rescored by Fork | positions | **ALLOWED** (grey area) | Labels are Fork's; how TCEC classifies it is **UNVERIFIED** (Discord question) |
 | Lichess game results as training labels | labels | **UNVERIFIED** | Human results are not engine data but not own data either; the TCEC view is not stated |

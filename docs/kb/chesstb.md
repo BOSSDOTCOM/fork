@@ -285,7 +285,7 @@ results; nothing here has been run.
 3. **Self-contained files**: each `full/` file is probed alone in an empty
    directory; any `MissingTableError` stops the run.
 
-## 8. Proposed data-policy line (not applied; for the owner)
+## 8. Data-policy line (proposed here; adopted by the owner 2026-11-09, data-policy.md and DESIGN.md training-data decision 1)
 
 Proposed text for the "Source status" table of
 [data-policy.md](data-policy.md), and for rule 1's list of exceptions in
