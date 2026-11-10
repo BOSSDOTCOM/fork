@@ -1597,3 +1597,32 @@ Prior-art search for idea 13 (the split search in data generation). No engine re
 | https://tadaoyamaoka.hatenablog.com/entry/2021/03/16/235251 | dlshogi blog post (policy distribution training, part 2) | 2026-11-09 | §5 (borrows KataGo §3.2, not PCR) |
 | https://github.com/yaneurao/YaneuraOu/wiki and the pages 評価関数の学習 and ふかうら王の学習 | YaneuraOu wiki (prose) | 2026-11-09 | §5 |
 | Web searches (leads only, never cited as evidence): "playout cap randomization" chess / arxiv self-play / NNUE talkchess; lc0 playout cap; Viridithas/Stormphrax/bullet datagen; dlshogi and YaneuraOu datagen (Japanese); tadaoyamaoka "Playout Cap Randomization"; talkchess datagen KataGo; fast/slow search unrecorded; "visit cap oscillation"; Björnsson et al. title; lczero.org training visits; Monty datagen | search engine | 2026-11-09 | leads to the pages above |
+
+## ChessTB (chesstb.md), 2026-11-09
+
+Owner's order of 2026-11-09 (ChessTB facts, a data-policy proposal, the endgame slice v2 design). Concepts and documentation only: no ChessTB source file and no prober module was opened, and no table file was downloaded (sizes come from directory listings and the bucket's file-list API). Documentation files were fetched with curl into a temporary folder outside the repository and deleted after. Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| https://github.com/noobpwnftw/chesstb | repository page (fetch tool summary) | 2026-11-09 | overview; superseded by the raw README below |
+| api.github.com/repos/noobpwnftw/chesstb; /languages; /commits | API: licence (Unlicense), created, pushed, homepage; language bytes; commit list (one commit, 73eeb2c) | 2026-11-09 | §1, §4 |
+| raw.githubusercontent.com/noobpwnftw/chesstb/master/README.md | README | 2026-11-09 | §1-§3, §6.1 (metrics, formats, sizes table, mirrors, shipping and full forms, case-sensitive names) |
+| raw.githubusercontent.com/noobpwnftw/chesstb/master/LICENSE.md | licence text (the Unlicense) | 2026-11-09 | §5 |
+| raw.githubusercontent.com/noobpwnftw/chesstb/master/CORRECTNESS.md | proof document; abstract and introduction read (prose) | 2026-11-09 | §1 (claims; C++17, about 34,500 lines) |
+| https://noobpwnftw.github.io/chesstb/ | project homepage | 2026-11-09 | §1 coverage, §5 public-domain statement, links to bucket, mirror, explorer |
+| https://noobpwnftw.github.io/chesstb/whatsnew.html | "What's new" page (8-piece Op1) | 2026-11-09 | §1, §4 (names src/probe/probe.h as the API header) |
+| https://noobpwnftw.github.io/chesstb/stats.html and /stats.json | statistics page and its data file (per-material W/D/L counts, sizes, longest wins; generated 2026-11-08) | 2026-11-09 | §3.2 note; the design's draw-share check |
+| https://chesstb.lichess.ovh/tables/ and /README.md | Lichess mirror index and README (CC0 1.0 statement, hf sync commands) | 2026-11-09 | §5, §6.1 |
+| https://chesstb.lichess.ovh/tables/{wdl,dtz,info,castling,full,full/wdl,info/dtz}/ | directory listings with sizes | 2026-11-09 | §3.1 cross-check (sizes equal to the bucket's), §6.1 (full/wdl entries are 0-byte placeholders) |
+| https://huggingface.co/buckets/chesstb/chesstb | bucket page and README (CC0 1.0 statement) | 2026-11-09 | §5, §6.1 (275 TB, 31,497 files) |
+| huggingface.co/api/buckets/chesstb/chesstb | API: bucket metadata (size in bytes, file count, CDN regions) | 2026-11-09 | §3.1, §6.1 |
+| huggingface.co/api/buckets/chesstb/chesstb/tree/{wdl, dtz, full/wdl, full/dtz} (all pages) and /tree/castling/wdl (first page) | API: file lists with size, Xet hash, upload time | 2026-11-09 | §3.1, §3.2, the design's budget |
+| https://huggingface.co/buckets/chesstb/chesstb/tree/full/wdl | bucket tree page (HTML) | 2026-11-09 | not used (the API above was used instead) |
+| huggingface.co/api/{datasets,models,spaces}?author=chesstb | API: the organisation's datasets (none), models (none), spaces (explorer) | 2026-11-09 | §6.1 |
+| https://chesstb-explorer.hf.space/ and /openapi.yaml | explorer page and its OpenAPI description | 2026-11-09 | §6.2 (endpoints, limits, errors, licence) |
+| POST https://chesstb-explorer.hf.space/probe (one KRK FEN) | one live probe, response headers read | 2026-11-09 | §6.2 (X-RateLimit-Limit 300, Retry-After 60) |
+| https://huggingface.co/spaces/chesstb/explorer/raw/main/README.md; huggingface.co/api/spaces/chesstb/explorer | Space README and metadata | 2026-11-09 | §6.2 (deployment source, licence, default limits, table sources) |
+| ftp://ftp.chessdb.cn/pub/chesstb/ (+ full/, wdl/ listings; public login from the README) | FTP mirror listings | 2026-11-09 | §6.1 (layout; one size spot check) |
+| api.github.com/repos/noobpwnftw/python-chess; /branches/add-chesstb-tablebases; /compare/master...add-chesstb-tablebases | API: fork metadata and licence (GPL-3.0), branch head 38c108e, changed file names and the README.rst change only (the prober module's diff was not read) | 2026-11-09 | §4 |
+| raw.githubusercontent.com/noobpwnftw/python-chess/38c108efd992538dc078750cba9fee30b9f030ce/docs/chesstb.rst | the fork's API documentation page | 2026-11-09 | §1 (DTZ encoding versus Syzygy), §4 (API, pure Python, legality precondition) |
+| https://tablebase.lichess.ovh/tables/standard/ and /bytes.tsv, /sha256 | Lichess Syzygy mirror index, size list, checksum list | 2026-11-09 | §3.1, §3.2 Syzygy comparison; §6.1 (no equivalent list for ChessTB) |
