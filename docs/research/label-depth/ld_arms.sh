@@ -21,9 +21,13 @@ BIN=$HOME/fork-data/ld-builds/pgo
 # lichess-2026-09.epd's openings for this seed's first 2.5 M games, in the order that gives each of those games
 # the full book's opening (ld_book.py; byte-identical shards checked by ld_book_check.sh), because each process
 # keeps its whole book in memory and three copies of the full book (1.4 GB each) do not fit WSL's 5.9 GB.
-OPENINGS=$HOME/fork-data/openings/lichess-2026-09-s2026110900-k2500000.epd
-OPENINGS_SHA256=f705366e5a3f4b803ce392f2b9da2f474e181bbcefecef0e0170e569ccdae736
-[ "$SEED" = 2026110900 ] || { echo "the openings file is built for seed 2026110900"; exit 2; }
+# One file per seed: segment 1 used 2026110900; the resume after memwatch's stop (2026-11-10) uses 2026110901.
+OPENINGS=$HOME/fork-data/openings/lichess-2026-09-s$SEED-k2500000.epd
+case $SEED in
+  2026110900) OPENINGS_SHA256=f705366e5a3f4b803ce392f2b9da2f474e181bbcefecef0e0170e569ccdae736 ;;
+  2026110901) OPENINGS_SHA256=da1c2dd85186c7e291cb73fb1c405b1fac4c329d96d75298ded57ae9ed090374 ;;
+  *) echo "no openings file is built for seed $SEED"; exit 2 ;;
+esac
 TABLES=$HOME/fork-tools/syzygy/3-4-5
 ENGINE_COMMIT=a4ee6740026118674d757b77a960e2d8b2c54abe
 NET=s512ppr3

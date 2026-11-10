@@ -134,3 +134,49 @@ and ld-d100; the targets are out of reach, and the 144,000 s limit stops all thr
 - `ld_book.py`, `ld_book_check.sh`: the reduced book and its byte-identity check.
 - `ld_stats.py`: per-arm statistics; `ld_sample.py`, `ld_depth.sh`: the depth sample.
 - `probe-stats.json`: ld_stats.py's output for the probe.
+
+## Stop and resume (2026-11-10)
+
+- **The stop.** At 12:46:20 PM EST memwatch stopped ld-arms: the owner's safety rule fired because Windows' free
+  memory stayed under 1 GB for 15 minutes (about 800 MB at the stop), while several agents were compiling at once.
+  The runner stopped all three arms together ("stopping every arm (a hangup or a closed output)"), and the shards'
+  last writes are from 12:46:20-24 PM. Segment 1 ran from 7:31:28 AM to 12:46:24 PM: **18,896 s** by the wall
+  clock (epochs 1794313888 to 1794332784), which agrees with the Windows clock. At the stop: D20 11.34 M records
+  (119,273 games), D50 4.96 M (51,785), D100 2.52 M (26,410), by fork_datagen's last progress lines.
+- **A clock note.** fork_datagen's own seconds (steady_clock) run about 5% ahead of the wall clock in this WSL
+  machine: its last line reads 19,920 s for those 18,896 s. The probe shows the same: D100's run json gives 2,375.7 s
+  inside a 2,276 s window. So the probe's records/s figures are about 4-5% low in absolute terms, the same for every
+  arm, which leaves the ratios unchanged. The limits use the wall clock (`date +%s`). The cause is UNVERIFIED.
+- **The resume.** fork_datagen has no game-index offset, so all three arms resumed together with **one new seed,
+  2026110901** (segment 2, job ld-arms2, `ld_arms.sh ld2 ~/fork-data/ld-arms2 2026110901 125104 ...`), for the
+  remaining **125,104 s** (144,000 - 18,896). Equal CPU per arm holds, because both segments ran the three arms at
+  the same moments. No game is replayed: game g's random plies and save decisions come from (seed, g), and the
+  openings from the seed's shuffle. Game i still opens alike in every arm within segment 2. Segment 2 reads
+  lichess-2026-09-s2026110901-k2500000.epd (ld_book.py; SHA-256
+  da1c2dd85186c7e291cb73fb1c405b1fac4c329d96d75298ded57ae9ed090374). Its shards are byte-identical to the full
+  book's at D20's settings (89 games, 9,293 positions) and D100's (29 games, 3,070 positions).
+- **Times.** Segment 2 started at 2:55:03 PM EST (epoch 1794340503) and ends at about **1:40 AM EST on
+  2026-11-12**.
+- **The seal** (ld_seal.py `arm ... --segment ... --segment ...`) makes each arm one part from both segments:
+  segment 1's files keep the names `<run>-wWW.vf` (worker 2 split into the held-out file and the rest), and
+  segment 2's become `<run>-s2-wWW.vf`. The manifest's openings are lichess-2026-09.epd, every game's opening
+  being the full book's for its segment's seed, and each segment's seed, file, times and counts go into
+  `settings.segments`.
+- **No replay, checked on the data** (ld_overlap.py, 2:58 PM EST, segment 2's first games against all of
+  segment 1). The start position is the viriformat start board, i.e. after the opening line and its random
+  plies. A game is identical when its start position and every move match. The book-line overlap is estimated
+  from the two seeds' shuffles over each segment's played game indices.
+
+  | arm | segment 1 games | segment 2 games so far | same start position | same start and first 8 moves | identical games | book line also used in segment 1 (estimate; expected by chance) |
+  |---|---|---|---|---|---|---|
+  | D20 | 119,282 | 1,578 | 0 | 0 | **0** | 21 (20.1) |
+  | D50 | 51,788 | 695 | 0 | 0 | **0** | 4 (3.8) |
+  | D100 | 26,412 | 372 | 0 | 0 | **0** | 3 (1.0) |
+
+  The games that share an opening line still start from different positions: the new seed's random plies make
+  them differ. Segment 1 has no repeated start position either: 119,282 distinct in D20. The seal repeats this
+  check over both whole segments (ld_seal.py) and refuses to seal if any game is identical to an earlier segment's.
+  Fault-injected: with the probe's data given as both segments, it found 2,939 of 2,939 games repeated and sealed
+  nothing.
+- **Pairing and workers:** both segments run 3 threads per arm, worker w playing games w, w + 3, ... of its segment;
+  within segment 2, game i has the same opening and random plies in every arm, as in segment 1.
