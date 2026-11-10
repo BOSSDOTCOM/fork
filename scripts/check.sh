@@ -227,6 +227,8 @@ tool_tests() {  # python | all
   bash scripts/test_scan_push.sh >>"$log" 2>&1 || fail "tool tests: scripts/test_scan_push.sh (the push gate)"
   [ "$1" = all ] || return 0
   bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
+  # audit-1 U-18: no ratings after a failed or short fastchess run, against a fake fastchess and ordo.
+  bash tools/test_elo_gauntlet.sh >>"$log" 2>&1 || fail "tool tests: tools/test_elo_gauntlet.sh"
   case $py in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; *) py=$(command -v "$py") ;; esac
   # The GitHub SPRT driver against a fake gh (its wait, stop and commit-check rules; design R's kinds,
   # futility stop, caps and the two-try limit), and the head-to-head driver on the same fake.
