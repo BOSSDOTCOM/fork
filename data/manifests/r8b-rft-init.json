@@ -1,0 +1,32 @@
+{
+ "run": "r8b-rft-init",
+ "note": "idea 70's warm starts: retrain 8b's four candidates' float weights (docs/research/retrain-8b/rft-plan.md section 1); dataset fork-r8b-rft-init",
+ "batches": [
+  [
+   {
+    "file": "r8b-c-avg.bin",
+    "bytes": 2852944,
+    "sha256": "162f3f4acf34ead2c921617e2bd64c6dcd4d5cba4bfb4b46937809fad3ceee25",
+    "source": "fork-retrain-8b v1 output result/avg-c/weights.bin (the window average, superbatches 331-360)"
+   },
+   {
+    "file": "r8b-i52-avg.bin",
+    "bytes": 2852944,
+    "sha256": "87976b596a13d08e8252d7148dbdc6a0458cd8d8148a4f401a011e99561d3056",
+    "source": "fork-retrain-8b v1 output result/avg-i52/weights.bin (the window average, superbatches 331-360)"
+   },
+   {
+    "file": "r8b-td80-avg.bin",
+    "bytes": 2852944,
+    "sha256": "0116a9e6c676323bb56a75233e543ef7f9268c51c33fddf77b4bf6e29259e4cc",
+    "source": "fork-retrain-8b v1 output result/avg-td80/weights.bin (the window average, superbatches 331-360)"
+   },
+   {
+    "file": "r8b-td90-avg.bin",
+    "bytes": 2852944,
+    "sha256": "b5ae40056f943d4407fef453f3034a52baddb9e441b7ba352772831904bfe7c1",
+    "source": "fork-retrain-8b v1 output result/avg-td90/weights.bin (the window average, superbatches 331-360)"
+   }
+  ]
+ ]
+}
