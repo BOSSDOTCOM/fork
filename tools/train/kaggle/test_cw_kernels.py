@@ -64,14 +64,25 @@ class PreflightTest(unittest.TestCase):
             # The table of ones changes the weights on a deterministic device: fail.
             v = pf.verdict(self.runs(d, {**dict.fromkeys(pf.RUNS, base), 'ones': moved, 'table': moved}, fast))
             self.assertFalse(v['pass'] or v['equal'])
-            # Not deterministic: old2 differs by 1e-3; none and ones within that: pass; beyond it: fail.
+            # Not deterministic (the owner's revised rule, design.md 14.8): the three old runs set the noise range,
+            # the largest RMS and the largest absolute difference over the three old pairs; none and ones must stay
+            # within both against each old run.
+            o2 = {'l0w': [0.5, -0.25, 0.126], 'l1w': [1.0]}     # 1e-3 from old1 in one weight
+            o3 = {'l0w': [0.5, -0.2495, 0.1255], 'l1w': [1.0]}  # 5e-4 in two weights
             near = {'l0w': [0.5, -0.25, 0.1255], 'l1w': [1.0]}
             far = {'l0w': [0.5, -0.25, 0.13], 'l1w': [1.0]}
-            w = {'old1': base, 'old2': moved, 'none': near, 'ones': near, 'table': far}
+            w = {'old1': base, 'old2': o2, 'old3': o3, 'none': near, 'ones': near, 'table': far}
             v = pf.verdict(self.runs(d, w, fast))
             self.assertTrue(v['equal'] and not v['deterministic'] and v['pass'], v)
+            self.assertEqual(set(v['pairs']), {f'{a}-{b}' for a, b in
+                                               __import__('itertools').combinations(pf.RUNS, 2)})
             v = pf.verdict(self.runs(d, {**w, 'ones': far}, fast))
             self.assertFalse(v['equal'] or v['pass'])
+            # Within the largest absolute difference but above the largest RMS (many small differences): fail.
+            spread = {'l0w': [0.5009, -0.2502, 0.1255], 'l1w': [1.0009]}
+            v = pf.verdict(self.runs(d, {**w, 'none': spread}, fast))
+            self.assertFalse(v['equal'], v)
+            self.assertTrue(v['checks']['none']['max_ok'] and not v['checks']['none']['rms_ok'], v['checks'])
             # The table run 1.1% slower than the old runs' mean: fail.
             v = pf.verdict(self.runs(d, {**dict.fromkeys(pf.RUNS, base), 'table': moved}, {**fast, 'table': 229800}))
             self.assertFalse(v['speed'] or v['pass'])

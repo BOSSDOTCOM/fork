@@ -1282,3 +1282,41 @@ them by RMS. The rule as declared compared a single noise draw (the maximum
 over one old pair) with another single draw, and that is what failed. The
 owner decides whether to accept the evidence or to rerun the preflight under
 a revised rule declared first.
+
+### 14.8 Preflight rule, revised by the owner 2026-11-10, declared before the rerun
+
+The owner decided at about 1:30 PM EST to rerun the preflight under this
+rule. It was written and pushed before version 2 of the kernel was pushed,
+and nothing else changes.
+
+**The runs:** the same commands as version 1, on device 0, one after
+another.
+
+| Runs | Trainer | Loss weights |
+|---|---|---|
+| old1, old2, old3 | 8b's (OLD 320c0be), three times: the noise range | – |
+| none | the new one (412934a) | none |
+| ones | the new one | a table of 112 ones |
+| table | the new one | the cw table (SHA-256 4ac778ac…1b0a) |
+
+**What is compared:** as in preflight-1, every float of each run's
+superbatch-3 `optimiser_state/weights.bin`. That is every tensor bullet
+saves, biases included (l0w, l0b, l1w, l1b).
+
+**The checks:**
+
+- **EQUAL.** The noise range is the largest RMS difference and the largest
+  absolute difference over the three old-vs-old pairs. For each of none
+  and ones, against **each** old run:
+  - (a) its RMS difference is at most the noise's largest RMS; and
+  - (b) its largest absolute difference is at most the noise's largest.
+
+  Both must hold for both runs.
+- **SPEED (unchanged):** the table run's trained positions per second are at
+  least 99% of the old runs' mean.
+- **WEIGHTS ACT (unchanged):** the table run differs from old1.
+
+The cw arm (cw on GPU 0, c2 on GPU 1, COMMIT 412934a) launches only if
+every check passes. The code is `cw_preflight.py verdict()`. Its test,
+`test_cw_kernels.py`, was rewritten first and failed on the old code; it
+now passes 5 of 5.

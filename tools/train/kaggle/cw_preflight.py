@@ -3,20 +3,23 @@
 """Idea 69's preflight before the cw arm (owner, 2026-11-10; docs/research/class-sampler/design.md sections 12-14), on
 Kaggle (GPU T4 x2, device 0 only). A few GPU minutes; its verdict decides whether the cw arm runs.
 
-The same short training run, five times, on one T4, one after the other: architecture s512pp warm from S512ppr3's float
+The same short training run, six times, on one T4, one after the other: architecture s512pp warm from S512ppr3's float
 weights, g3j-w00..w04 of fork-g3hij interleaved, seed 1, LR 0.0001, batch 16,384 x 305, 3 superbatches (about
 15 M positions), a 4,194,304-position shuffle buffer, 2 loader threads:
-- old1, old2: the trainer of retrain 8b's launch commit (OLD, the control's trainer), twice: CUDA's run-to-run
-  determinism;
+- old1, old2, old3: the trainer of retrain 8b's launch commit (OLD, the control's trainer), three times: CUDA's
+  run-to-run noise (version 1 found it not deterministic);
 - none: the new trainer (NEW) without --cell-weights (every loss weight 1);
 - ones: the new trainer with a table of 112 ones;
 - table: the new trainer with the cw arm's table (TABLE, checked against TABLE_SHA256).
 
-Verdict (declared before the run): EQUAL passes if none and ones reproduce old1's superbatch-3 float weights byte for
-byte; if old1 and old2 differ (CUDA not deterministic), none and ones must differ from old1 by no more than old2 does
-(the largest absolute difference of any weight). SPEED passes if table's trained positions per second (from the
-trainer's own progress lines, the first to the last) are at least 99% of the mean of old1 and old2. table must differ
-from old1 (the weights act). The cw arm runs only if EQUAL and SPEED pass.
+Verdict, the owner's revised rule (2026-11-10, design.md 14.8, declared before version 2 ran; version 1's rule compared
+one noise draw with another and failed by noise): the weights compared are every float of the superbatch-3 weights.bin,
+every tensor bullet saves (biases included), as in version 1. The noise range is the largest RMS difference and the
+largest absolute difference over the three old-vs-old pairs. EQUAL passes if, for each of none and ones, its RMS
+difference from EACH old run is at most the noise's RMS, and its largest absolute difference from each old run is at
+most the noise's largest. SPEED passes if table's trained positions per second (from the trainer's own progress lines,
+the first to the last) are at least 99% of the old runs' mean. table must differ from old1 (the weights act). The cw
+arm runs only if all three pass.
 
     python3 cw_preflight.py            # on Kaggle
     python cw_preflight.py --plan      # anywhere: the commands, with placeholder paths
@@ -45,7 +48,7 @@ BUFFER = 1 << 22
 FILES = ['g3j-w00.vf', 'g3j-w01.vf', 'g3j-w02.vf', 'g3j-w03.vf', 'g3j-w04.vf']
 INIT = {'weights': 's512ppr3-weights.bin',
         'sha256': '022158587653ba32d5830ce4f6a3b7e1a88283e7cb9e3c507936ad0c8b37ecc3'}
-RUNS = ['old1', 'old2', 'none', 'ones', 'table']
+RUNS = ['old1', 'old2', 'old3', 'none', 'ones', 'table']
 SPEED_RATIO = 0.99
 DATA = '/kaggle/input'
 WORK = '/kaggle/working/preflight'
@@ -86,11 +89,18 @@ def floats(path):
     return out
 
 
-def max_diff(a, b):
+def compare(a, b):
+    """The largest absolute difference and the root mean square difference over every float of two weights files
+    (every tensor bullet saves, biases included), as preflight-1 compared them."""
     fa, fb = floats(a), floats(b)
     if fa.keys() != fb.keys():
-        return float('inf')
-    return max(max(abs(x - y) for x, y in zip(fa[k], fb[k])) for k in fa)
+        return float('inf'), float('inf')
+    mx, ss, n = 0.0, 0.0, 0
+    for k in fa:
+        for x, y in zip(fa[k], fb[k]):
+            d = abs(x - y)
+            mx, ss, n = max(mx, d), ss + d * d, n + 1
+    return mx, (ss / n) ** 0.5
 
 
 def rate(lines):
@@ -110,21 +120,29 @@ def command(train, spec, files, init, out, extra=''):
 
 
 def verdict(rec):
-    """The declared rule (module docstring) on the runs' records."""
+    """The owner's revised rule (design.md 14.8, declared before the rerun) on the runs' records."""
     w = {r: rec[r].get('weights') for r in RUNS}
     if not all(w.values()):
         return {'equal': False, 'speed': False, 'pass': False, 'why': 'a run produced no superbatch-3 weights'}
-    same = {r: rec[r]['sha256'] == rec['old1']['sha256'] for r in RUNS}
-    noise = 0.0 if same['old2'] else max_diff(w['old1'], w['old2'])
-    diff = {r: 0.0 if same[r] else max_diff(w['old1'], w[r]) for r in ('none', 'ones', 'table')}
-    equal = all(same[r] or diff[r] <= noise for r in ('none', 'ones'))  # noise 0: byte for byte
-    base = [rec[r].get('positions_per_second') for r in ('old1', 'old2')]
-    speed_ok = all(base) and rec['table'].get('positions_per_second') is not None and \
-        rec['table']['positions_per_second'] >= SPEED_RATIO * sum(base) / 2
-    acts = not same['table']
-    return {'deterministic': same['old2'], 'old_noise': noise, 'max_diff_vs_old1': diff,
-            'bitwise_equal_to_old1': same, 'equal': equal, 'speed': bool(speed_ok), 'table_acts': acts,
-            'speed_ratio_table': (rec['table'].get('positions_per_second') or 0) / (sum(base) / 2) if all(base) else None,
+    pairs = {}
+    for i, a in enumerate(RUNS):
+        for b in RUNS[i + 1:]:
+            mx, rms = (0.0, 0.0) if rec[a]['sha256'] == rec[b]['sha256'] else compare(w[a], w[b])
+            pairs[f'{a}-{b}'] = {'max': mx, 'rms': rms}
+    olds = [r for r in RUNS if r.startswith('old')]
+    old_pairs = [pairs[f'{a}-{b}'] for i, a in enumerate(olds) for b in olds[i + 1:]]
+    noise_max, noise_rms = max(p['max'] for p in old_pairs), max(p['rms'] for p in old_pairs)
+    checks = {}
+    for r in ('none', 'ones'):
+        vs = [pairs[f'{o}-{r}'] for o in olds]
+        checks[r] = {'max_ok': all(p['max'] <= noise_max for p in vs), 'rms_ok': all(p['rms'] <= noise_rms for p in vs)}
+    equal = all(c['max_ok'] and c['rms_ok'] for c in checks.values())
+    base = [rec[r].get('positions_per_second') for r in olds]
+    speed_ok = all(base) and rec['table'].get('positions_per_second') is not None and         rec['table']['positions_per_second'] >= SPEED_RATIO * sum(base) / len(base)
+    acts = rec['table']['sha256'] != rec['old1']['sha256']
+    return {'deterministic': noise_max == 0.0, 'noise_max': noise_max, 'noise_rms': noise_rms, 'pairs': pairs,
+            'checks': checks, 'equal': equal, 'speed': bool(speed_ok), 'table_acts': acts,
+            'speed_ratio_table': (rec['table'].get('positions_per_second') or 0) / (sum(base) / len(base)) if all(base) else None,
             'pass': equal and bool(speed_ok) and acts}
 
 
@@ -169,7 +187,7 @@ def session():
     desc = json.load(open(f'{repo}/tools/nnue/{ARCH}.json'))
     spec = f'--arch {ARCH} --buckets ' + ','.join(map(str, desc['table']))
     files = [by_name[f] for f in FILES]
-    extra = {'old1': '', 'old2': '', 'none': '', 'ones': f'--cell-weights {WORK}/ones.txt',
+    extra = {'old1': '', 'old2': '', 'old3': '', 'none': '', 'ones': f'--cell-weights {WORK}/ones.txt',
              'table': f'--cell-weights {table}'}
     for run in RUNS:
         out_dir = f'{WORK}/run-{run}'
