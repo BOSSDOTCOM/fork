@@ -1546,3 +1546,54 @@ Opponent-binary rule: no engine repository was cloned or downloaded, and no sour
 | https://api.github.com/repos/lucametehau/CloverEngine/git/ref/tags/v6.1 | API: tag ref | 2026-11-08 | lightweight, commit 20f8701a..., matches anchors.tsv |
 | https://api.github.com/repos/lucametehau/CloverEngine/releases/tags/v6.1 | API: release | 2026-11-08 | name, publish date, not a pre-release |
 | https://api.github.com/repos/lucametehau/CloverEngine/license | API: licence field | 2026-11-08 | GPL-3.0 |
+
+## Idea 13 prior art (research-idea13-prior-art.md), 2026-11-09
+
+Prior-art search for idea 13 (the split search in data generation). No engine repository was cloned and no engine source file or diff was opened; GitHub pull requests and issues were read as prose through the GitHub REST API, READMEs and documentation as prose. Code or command lines inside comments, READMEs or posts were skipped. PDFs were downloaded to a temporary folder outside the repository, converted to text locally, and deleted after. Format: URL / ref | what | date | used for.
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| Fork repo, branch phase-4: docs/ideas.md idea 13; docs/DESIGN.md "Split search" paragraph and decisions-log row of 2026-10-30 | Fork's own idea, settings and results | 2026-11-09 | §1 summary |
+| https://arxiv.org/abs/1902.10565 | arXiv abstract page (metadata, submission history v1-v5) | 2026-11-09 | 3.1 dates and versions |
+| https://arxiv.org/pdf/1902.10565 | KataGo paper v5, full text (PDF, converted locally) | 2026-11-09 | 3.1 mechanism (§3.1), ablations (§5.2, Table 2), 4.6 (Appendix D) |
+| https://arxiv.org/pdf/1902.10565v1 | KataGo paper v1, full text (PDF, converted locally) | 2026-11-09 | 3.1 original name ("playout/visit cap oscillation", §6.1), no earlier source credited |
+| https://export.arxiv.org/api/query?id_list=2302.12359,2608.27757,2310.11305 | arXiv API: Go-Exploit, searchless-chess fine-tuning, MiniZero abstracts and authors | 2026-11-09 | 4.7, §5 |
+| https://export.arxiv.org/api/query?id_list=2001.09832,2111.00210,1911.08265 | arXiv API: Polygames, EfficientZero, MuZero abstracts | 2026-11-09 | §5 (nothing relevant) |
+| https://export.arxiv.org/api/query?id_list=2609.37447 and https://arxiv.org/html/2609.37447 | Braun 2026, abstract and HTML full text | 2026-11-09 | 3.2 (§4.1.2, not retained), 4.7 (§6.1) |
+| https://api2.openreview.net/notes?forum=bERaNdoegnO | OpenReview API (Gumbel paper, ID recalled) | 2026-11-09 | FAILED (HTTP 403) |
+| https://openreview.net/forum?id=bERaNdoegnO | OpenReview page | 2026-11-09 | FAILED (script shell only, no content) |
+| https://ebooks.iospress.nl/pdf/doi/10.3233/FAIA230279 | IOS Press landing page (HTML, not the PDF): Björnsson et al., ECAI 2023 | 2026-11-09 | 4.7 abstract, authors, pages, DOI; full text not reached |
+| api.github.com/repos/slcz/chess (redirects to slcz/alphazero-style-chess) and /readme | repository metadata and README | 2026-11-09 | 3.2 |
+| api.github.com/repos/slcz/alphazero-style-chess and /readme | repository metadata and README | 2026-11-09 | 3.2 |
+| api.github.com/repos/WGCodings/PeaZero, /readme, /pulls/12 | metadata, README, PR "pcr" description | 2026-11-09 | 3.2 |
+| https://openbench.wgcodings.com/test/636/ | OpenBench test page (PeaZero pcr vs master) | 2026-11-09 | 3.2 SPRT result confirmed |
+| api.github.com/repos/Ragu-123/nova-chess-rl and /readme | metadata and README | 2026-11-09 | 3.2 (claim, unclear) |
+| api.github.com/repos/adams-shaun/gorge/pulls/11 and the repository description | PR title and date only | 2026-11-09 | 3.3 |
+| https://news.ycombinator.com/item?id=23600875 | Hacker News comment thread (cgreerrun, jonath_laurent; June 2020) | 2026-11-09 | 3.3 |
+| api.github.com/search/issues?q=org:LeelaChessZero+{"playout cap", "playout cap randomization", "randomized visits", kldgain, katago, "visit cap", "fast search" training} | issue and PR searches (leads) | 2026-11-09 | 4.5; no PCR found |
+| api.github.com/repos/LeelaChessZero/lc0/pulls/721, /755 and their comments | Lc0 PRs (prose) | 2026-11-09 | 4.5 |
+| api.github.com/repos/LeelaChessZero/lc0/pulls/720; /issues/768 and comments | Lc0 PR (sub-game branching for temperature) and issue (resign Z; a comment quoting the KataGo paper) | 2026-11-09 | 4.5 (720: not related) |
+| api.github.com/search/issues?q=org:leela-zero+{"playout cap", katago playouts randomization} | search result lists only (titles not opened) | 2026-11-09 | §8 |
+| api.github.com/search/issues?q={"playout cap randomization" chess, NNUE, shogi} and org:lightvector "playout cap" chess | search result lists | 2026-11-09 | 3.3 leads |
+| api.github.com/search/issues?q=org:official-stockfish+{"playout cap", gensfen nodes "not written"}; repo:official-stockfish/Stockfish+{nonpv is:pr, gensfen_nonpv, "exploration_save_rate"}; repo:Sopel97/Stockfish nonpv; repo:nodchip/Stockfish nonpv | searches (leads) | 2026-11-09 | found nodchip PR 264 |
+| api.github.com/repos/nodchip/Stockfish/pulls/264 and comments | PR "Add gensfen_nonpv" (Sopel97, vondele, nodchip) | 2026-11-09 | 4.1 |
+| api.github.com/repos/official-stockfish/Stockfish/contents/docs?ref=tools; docs/generate_training_data.md and docs/generate_training_data_nonpv.md at ref tools | documentation (prose) | 2026-11-09 | 4.1, 4.2 |
+| https://talkchess.com/viewtopic.php?t=76964 | TalkChess "nnue-trainer" (Dart, Ferdy; March 2021) | 2026-11-09 | 4.4 |
+| https://talkchess.com/viewtopic.php?t=81330&start=10 | TalkChess "Games for Training NNUE?" page 2 (Grant, Maughan, Schröder, Stanback; January 2023) | 2026-11-09 | 4.3 |
+| https://talkchess.com/viewtopic.php?t=83343 | TalkChess "How do NNUEs self train?" | 2026-11-09 | §5 (nothing relevant) |
+| https://talkchess.com/viewtopic.php?t=83944 | TalkChess "Best practices for NNUE training data generation?" | 2026-11-09 | §5 (nothing relevant) |
+| https://talkchess.com/viewtopic.php?t=84811 | TalkChess "Generating original training data" | 2026-11-09 | §5 (nothing relevant) |
+| https://brainwagon.org/blog/2026_05_28_how_do_we_achieve_superhuman_performance | Mark VandeWettering's blog (checkers engine claudius) | 2026-11-09 | 4.8 |
+| https://www.chessprogramming.org/api.php?... (search queries) | CPW search API | 2026-11-09 | FAILED (redirect to chessprogramming.org, then HTTP 404; the wiki now uses a static title index) |
+| https://www.chessprogramming.org/index.php?search=... (two full-text searches) | CPW search page | 2026-11-09 | FAILED (HTTP 404) |
+| https://chessprogramming.org/search-index.json | CPW title index (page titles only) | 2026-11-09 | §5: no KataGo or playout page |
+| https://www.chessprogramming.org/KataGo | CPW page | 2026-11-09 | FAILED (HTTP 404: no such page) |
+| https://chessprogramming.org/{Main_Page, NNUE, Lazy_Evaluation} | CPW reachability check | 2026-11-09 | site reachable |
+| https://chessprogramming.org/{Leela_Chess_Zero, AlphaZero, Reinforcement_Learning, Training_an_nnue, David_J._Wu} | CPW pages | 2026-11-09 | §5 (David J. Wu cites the paper, no technique described); 3.1 |
+| api.github.com/repos/{cosmobobak/viridithas, Ciekce/Stormphrax, jw1912/bullet, official-monty/monty, official-stockfish/nnue-pytorch, jnlt3/marlinflow} and their /readme | metadata (licence) and READMEs | 2026-11-09 | §5 (nothing relevant) |
+| api.github.com/repos/official-monty/Monty/contents/crates/datagen (names only) | directory listing: no README | 2026-11-09 | §5 |
+| api.github.com/repos/chrisbutner/ChessCoach and /readme | metadata and README | 2026-11-09 | §5 |
+| https://tadaoyamaoka.hatenablog.com/search?q=Playout+Cap and ?q=KataGo | dlshogi author's blog searches | 2026-11-09 | §5 |
+| https://tadaoyamaoka.hatenablog.com/entry/2021/03/16/235251 | dlshogi blog post (policy distribution training, part 2) | 2026-11-09 | §5 (borrows KataGo §3.2, not PCR) |
+| https://github.com/yaneurao/YaneuraOu/wiki and the pages 評価関数の学習 and ふかうら王の学習 | YaneuraOu wiki (prose) | 2026-11-09 | §5 |
+| Web searches (leads only, never cited as evidence): "playout cap randomization" chess / arxiv self-play / NNUE talkchess; lc0 playout cap; Viridithas/Stormphrax/bullet datagen; dlshogi and YaneuraOu datagen (Japanese); tadaoyamaoka "Playout Cap Randomization"; talkchess datagen KataGo; fast/slow search unrecorded; "visit cap oscillation"; Björnsson et al. title; lczero.org training visits; Monty datagen | search engine | 2026-11-09 | leads to the pages above |
