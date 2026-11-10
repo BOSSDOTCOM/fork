@@ -102,13 +102,19 @@ class ReportTests(unittest.TestCase):
             self.assertLess(summary.index('### Gauntlet'), summary.index(f'- {sf}'))
             self.assertEqual(summary.count('cpu=test'), 3)
             # Without the anchor check's options the summary is exactly the one
-            # report.py wrote before them (origin/phase-4 8bf1280, on this fixture).
+            # report.py wrote before them (origin/phase-4 8bf1280, on this fixture),
+            # plus, deliberately (owner, 2026-11-09), each section's model line.
             self.assertEqual(summary, DEFAULT_SUMMARY)
 
 
 DEFAULT_SUMMARY = (
-    '### Gauntlet: 4 games\n```\nfake ordo: 4 games; players: Fork, Weiss 1.0\n```\n'
+    '### Gauntlet: 4 games\n'
+    'Model: the Ordo fit, the anchors fixed at their CCRL Blitz ratings (-m), the white advantage and the draw rate '
+    "fitted (-W -D), errors from 1,000 simulations (-s 1000) at Ordo's default 95%\n"
+    '```\nfake ordo: 4 games; players: Fork, Weiss 1.0\n```\n'
     '### Gap to the reference opponents (outside the Ordo fit)\n'
+    "- Model: plain logistic conversion of Fork's mean pair score, Elo = -400 log10(1/score - 1), no white advantage "
+    "or draw model; the SPRTs' logistic Elo scale; interval from the pentanomial game pairs\n"
     '- Stockfish 19 (CCRL Blitz 3792, for context only): Fork 1.5/8 (18.8%), +0 =3 -5; Elo -254.7, 95% interval '
     '-inf to -77.2 (pentanomial, 4 pairs, Ptnml(0-2) [2, 1, 1, 0, 0])\n'
     'Shards:\n'
@@ -249,6 +255,103 @@ class AnchorCheckTests(unittest.TestCase):
             self.assertLess(summary.index('### Anchor check: running'), summary.index('Shards:'))
             with self.assertRaises(SystemExit), contextlib.redirect_stdout(io.StringIO()):
                 report.main(['--baseline', str(t / 'baseline.pgn')] + args)
+
+    def test_archive_fallback(self):
+        # transfer.json names runs 7 (previous) and 8 (baseline). The runner's download folders are empty;
+        # the local archive holds run 7 only: the gain over it is read there, the transfer ratio is left out.
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Path(tmp)
+            (t / 'anchors.tsv').write_text(TABLE, encoding='utf-8')
+            (t / 'this.pgn').write_text(pgn(pairs('Weiss 1.0', [(1.0, 1.0), (1.0, 0.5)])), encoding='utf-8')
+            (t / 'transfer.json').write_text(json.dumps({'baseline': {'run': 8, 'commit': 'b'}, 'previous': {'run': 7},
+                                                         'adopted': [{'change': 'X', 'elo': 10.0, 'ci95': 2.0}]}),
+                                             encoding='utf-8')
+            (t / 'archive' / 'run-7').mkdir(parents=True)
+            (t / 'archive' / 'run-7' / 'gauntlet.pgn').write_text(pgn(pairs('Weiss 1.0', [(1.0, 0.0), (0.5, 0.5)])),
+                                                                  encoding='utf-8')
+            (t / 'remote').mkdir()
+
+            def level0(*opts):
+                out, err = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                    self.assertEqual(report.main(list(opts) + ['--level0', str(t / 'this.pgn'), str(t / 'anchors.tsv')]),
+                                     0)
+                return out.getvalue(), err.getvalue()
+
+            remote = ['--previous', str(t / 'remote' / 'previous'), '--baseline', str(t / 'remote' / 'baseline'),
+                      '--adopted', str(t / 'transfer.json')]
+            # Remote absent, local present: the previous run from the archive; the baseline left out.
+            out, err = level0(*remote, '--archive', str(t / 'archive'))
+            gain = -400 * math.log10(4 / 3.5 - 1) + 400 * math.log10(4 / 2 - 1)
+            self.assertIn(f'- On Weiss 1.0: {gain:+.1f} Elo', out)
+            self.assertIn(f'- Read from the local archive: {t / "archive" / "run-7"}', out)
+            self.assertNotIn('### Anchor check: running transfer ratio', out)
+            self.assertIn("- Anchor check, baseline gauntlet: left out (the baseline gauntlet's result (run 8) is not "
+                          f'available: nothing at {t / "remote" / "baseline"}; not in the archive ({t / "archive" / "run-8"})',
+                          out)
+            self.assertIn("report.py: warning: the baseline gauntlet's result (run 8)", err)
+            self.assertNotIn('previous', err)
+            # Without the options' paths, --archive alone finds the same.
+            self.assertEqual(level0('--adopted', str(t / 'transfer.json'), '--archive', str(t / 'archive'))[0],
+                             out.replace(f'nothing at {t / "remote" / "baseline"}; ', ''))
+            # Remote present: read there, no archive note, even with --archive.
+            (t / 'remote' / 'previous').mkdir()
+            (t / 'remote' / 'previous' / 'gauntlet.pgn').write_text(pgn(pairs('Weiss 1.0', [(0.5, 0.5), (0.5, 0.5)])),
+                                                                    encoding='utf-8')
+            out, _ = level0(*remote, '--archive', str(t / 'archive'))
+            self.assertIn(f'- On Weiss 1.0: {-400 * math.log10(4 / 3.5 - 1):+.1f} Elo', out)
+            self.assertNotIn('Read from the local archive', out)
+            # Both absent: no section, the warning in its place.
+            (t / 'remote' / 'previous' / 'gauntlet.pgn').unlink()
+            out, err = level0(*remote)
+            self.assertNotIn('### ', out)
+            self.assertIn("- Anchor check, previous gauntlet: left out (the previous gauntlet's result (run 7) is not "
+                          f'available: nothing at {t / "remote" / "previous"}; no archive given (--archive)', out)
+            self.assertEqual(err.count('report.py: warning:'), 2)
+            # --archive needs the run ids; --level0 needs an option.
+            for bad in (['--archive', str(t / 'archive')], []):
+                with self.assertRaises(SystemExit), contextlib.redirect_stdout(io.StringIO()):
+                    report.main(bad + ['--level0', str(t / 'this.pgn'), str(t / 'anchors.tsv')])
+
+    def test_every_elo_section_names_its_model(self):
+        # Each section's first line names its model: Ordo's fit for the rating table, the plain logistic
+        # formula for the gap to the reference and both levels of the anchor check.
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Path(tmp)
+            for d in ('shards', 'out', 'check', 'check-out'):
+                (t / d).mkdir()
+            (t / 'anchors.tsv').write_text(TABLE, encoding='utf-8')
+            (t / 'ordo.py').write_text(ORDO, encoding='utf-8')
+            games = pgn(pairs('Weiss 1.0', [(1.0, 0.5), (0.5, 0.5)]))
+            for folder, name, ccrl in (('games-weiss', 'Weiss 1.0', 2896), ('games-sf', 'Stockfish 19', 3792)):
+                (t / 'shards' / folder).mkdir()
+                (t / 'shards' / folder / 'games.pgn').write_text(games.replace('Weiss 1.0', name), encoding='utf-8')
+                (t / 'shards' / folder / 'anchor.csv').write_text(f'"{name}",{ccrl}\n', encoding='utf-8')
+                (t / 'shards' / folder / 'shard.txt').write_text('cpu=test\n', encoding='utf-8')
+            (t / 'old.pgn').write_text(pgn(pairs('Weiss 1.0', [(0.5, 0.5), (0.5, 0.0)])), encoding='utf-8')
+            (t / 'transfer.json').write_text(json.dumps({'adopted': [{'change': 'X', 'elo': 10.0, 'ci95': 2.0}]}),
+                                             encoding='utf-8')
+            (t / 'check' / 'c1').mkdir()
+            (t / 'check' / 'c1' / 'old.pgn').write_text(t.joinpath('old.pgn').read_text(encoding='utf-8'), encoding='utf-8')
+            (t / 'check' / 'c1' / 'new.pgn').write_text(games, encoding='utf-8')
+            (t / 'check' / 'c1' / 'shard.txt').write_text('cpu=test\n', encoding='utf-8')
+            with contextlib.redirect_stdout(io.StringIO()):
+                report.main(['--previous', str(t / 'old.pgn'), '--baseline', str(t / 'old.pgn'), '--adopted',
+                             str(t / 'transfer.json'), str(t / 'shards'), str(t / 'anchors.tsv'), str(t / 'out'),
+                             sys.executable, '-I', str(t / 'ordo.py')])
+                report.main(['--check', str(t / 'check'), str(t / 'anchors.tsv'), str(t / 'check-out'), '10'])
+            text = ((t / 'out' / 'summary.md').read_text(encoding='utf-8') + (t / 'check-out' / 'summary.md')
+                    .read_text(encoding='utf-8')).splitlines()
+            first = {line: text[i + 1] for i, line in enumerate(text) if line.startswith('### ')}
+            self.assertEqual(len(first), 5)
+            for heading, line in first.items():
+                model = 'Model: the Ordo fit' if heading.startswith('### Gauntlet') else 'Model: plain logistic'
+                self.assertTrue(line.lstrip('- ').startswith(model), (heading, line))
+            for heading in first:
+                self.assertTrue(heading.startswith(('### Gauntlet', '### Gap', '### Anchor check')), heading)
+            self.assertIn("no white advantage or draw model; the SPRTs' logistic Elo scale", first[next(
+                h for h in first if h.startswith('### Gap'))])
+            self.assertIn('(-W -D)', first['### Gauntlet: 4 games'])
 
     def test_level1_report(self):
         with tempfile.TemporaryDirectory() as tmp:

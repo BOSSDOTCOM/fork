@@ -181,6 +181,10 @@ in the docstrings of `tools/gauntlet/report.py` and `.github/workflows/gauntlet.
 
   Locally:
   `python -I tools/gauntlet/report.py --previous RUN_DIR --baseline RUN_DIR --adopted tools/gauntlet/transfer.json SHARDS TABLE OUT ORDO`.
+  Since 2026-11-09 (owner) every run is archived in `~/fork-data/gauntlet/run-ID` by
+  `tools/gauntlet/archive.sh`, and level 0 alone reads that archive:
+  `python -I tools/gauntlet/report.py --archive ~/fork-data/gauntlet --adopted tools/gauntlet/transfer.json --level0 ~/fork-data/gauntlet/run-ID tools/gauntlet/anchors.tsv`
+  (DESIGN.md §5.2, Testing setup).
 - **Level 1:** a dispatch of the gauntlet workflow with the `old` and `new` inputs. It plays 16 shards, each
   against one anchor on 25 openings: OLD plays 50 games on them and NEW plays the same 50, and the order
   alternates by shard. With the default anchors (Clover 6.1 and Altair 7.0.0) that makes 1,600 games. The

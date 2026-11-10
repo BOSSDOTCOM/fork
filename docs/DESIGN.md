@@ -1386,6 +1386,23 @@ after it).**
   acceptance test; data verification before a part is sealed; the full CI
   before any merge to main; the fixed-node screen for new networks.
 
+**A gauntlet's report step (owner, 2026-11-09).** When a run of
+`.github/workflows/gauntlet.yml` (a gauntlet or an anchor check) ends, the
+session that reports it first archives it: `tools/gauntlet/archive.sh
+RUN_ID` downloads every artifact into `~/fork-data/gauntlet/run-RUN_ID/`
+(the result at the top, each shard in a folder of its own), checks each
+zip against GitHub's digest, and writes and verifies `SHA256SUMS` and
+`meta.txt` (called again, it only re-verifies; a mismatch is an error,
+never an overwrite), so nothing depends on GitHub's 90-day expiry. The
+decisions-log row is written from that copy. If the ordo job could not
+download an earlier run, level 0 is rerun from the archive, before
+`transfer.json`'s `previous` moves on to the new run: `python -I
+tools/gauntlet/report.py --archive ~/fork-data/gauntlet --adopted
+tools/gauntlet/transfer.json --level0 ~/fork-data/gauntlet/run-RUN_ID
+tools/gauntlet/anchors.tsv`. Every report section that gives an Elo
+names its model: the Ordo fit (`-W -D`, anchored to CCRL Blitz) or the
+plain logistic fit (no white advantage or draw model; the SPRTs' scale).
+
 **Search bench** (replaces the perft bench as `fork bench` and in
 `tests/bench.ref`). It searches a fixed set of positions to a fixed depth,
 on one thread, with 16 MB of Hash, and clears the TT and histories before

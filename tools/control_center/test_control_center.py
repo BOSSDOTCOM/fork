@@ -970,6 +970,11 @@ class ReadOnlyTabs(unittest.TestCase):
         gaunt = t / 'gauntlet' / 'run-41465146207'
         gaunt.mkdir(parents=True)
         shutil.copy(FIX / 'ordo.txt', gaunt / 'ordo.txt')
+        # An archived run (tools/gauntlet/archive.sh) the decisions log does not name: dated by its meta.txt.
+        archived = t / 'gauntlet' / 'run-41238458381'
+        archived.mkdir()
+        shutil.copy(FIX / 'ordo.txt', archived / 'ordo.txt')
+        (archived / 'meta.txt').write_text('run\t41238458381\ncreated_at\t2026-10-31T20:20:38Z\n', encoding='utf-8')
         train = t / 'train' / 'pp-out' / 'result' / 's512pp-s1'
         train.mkdir(parents=True)
         shutil.copy(FIX / 'run.json', train / 'run.json')
@@ -1022,6 +1027,7 @@ class ReadOnlyTabs(unittest.TestCase):
             self.assertEqual(snap['kaggle'], {k['ref']: 'complete' for k in P.kaggle_list(fixture('kaggle-list.csv'))})
             self.assertEqual(snap['training_runs'][0]['arch'], 's512pp')
             self.assertIn(3445.8, [x['rating'] for x in snap['networks']['gauntlets']])
+            self.assertEqual([x['date'] for x in snap['networks']['gauntlets'] if x['run'] == 41238458381], ['2026-10-31'])
             data = {d['run']: d for d in snap['data']}
             self.assertEqual(data['g3d']['saved'], 18242788 - 8314854)
             self.assertIn('WSL ~/fork-data/gen3d', data['g3d']['where'])
