@@ -62,10 +62,12 @@ drive() {  # label args...
     bash "$here/sprt_run.sh" "$label" "$@" >"$tmp/$label/out" 2>&1
   echo $? >"$tmp/$label/rc"
 }
-ledger() {  # label args...
+. "$here/../jobs/paths.sh" || exit 1
+ledger() {  # label args...; the paths in the form $PYTHON takes (DESIGN.md section 1)
   local label=$1
   shift
-  FORK_JOBS=$tmp/$label/jobs "$PYTHON" -I "$here/../jobs/ledger.py" "$@"
+  FORK_JOBS=$(fork_path_for "$PYTHON" "$tmp/$label/jobs") \
+    "$PYTHON" -I "$(fork_path_for "$PYTHON" "$here/../jobs/ledger.py")" "$@"
 }
 rc() { cat "$tmp/$1/rc"; }
 dispatches() { wc -l <"$tmp/$1/dispatches" | tr -d ' '; }

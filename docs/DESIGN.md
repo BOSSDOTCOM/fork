@@ -50,10 +50,14 @@ Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/histo
   converts paths between the four environments, and every job and chain
   script uses it; a check fails if a script passes a Git Bash `/c/...` path to
   a Windows program. Jobs are launched from PowerShell, never from Git Bash.
+  The helper is `tools/jobs/paths.sh` (`fork_path`, `fork_path_for`, `fork_wsl`; its twin `paths.py`), the
+  check `tools/jobs/check_paths.py` (in the tool tests and the pre-commit hook; its header lists the rules
+  and the `# fork-paths: ok REASON` exception marker).
 - **No silent "done"** (owner, 2026-11-10; same incident). Every chain
   verifies that its own final outputs exist and are valid (for example
   `r8b-ready.json` present and parseable) before it reports done; otherwise
-  it reports failed and names the missing or invalid output.
+  it reports failed and names the missing or invalid output. The shared check is
+  `fork_require_outputs` / `fork_chain_done` in `tools/jobs/paths.sh` (`json:FILE` also parses it).
 
 ## 2. Platform and toolchain
 

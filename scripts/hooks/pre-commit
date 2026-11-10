@@ -24,6 +24,19 @@ set -uo pipefail
 root=$(git rev-parse --show-toplevel) || exit 1
 cd "$root" || exit 1
 
+# The path check (owner, 2026-11-10; DESIGN.md section 1): no job or chain script hands a Windows program a
+# Git Bash or WSL path (tools/jobs/check_paths.py, under a second, no build). It runs on every commit that
+# stages a shell script or the check itself, over the working tree's copy of the repository's job scripts.
+if [ -n "$(git diff --cached --name-only -- '*.sh' tools/jobs/check_paths.py)" ]; then
+  py=
+  for c in .venv/Scripts/python.exe .venv/bin/python python3 python; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c pass >/dev/null 2>&1; then py=$c; break; fi
+  done
+  [ -n "$py" ] || { echo "pre-commit: no Python for the path check (tools/jobs/check_paths.py)" >&2; exit 1; }
+  "$py" -I -B tools/jobs/check_paths.py >&2 ||
+    { echo "pre-commit: the path check failed, commit blocked (see tools/jobs/check_paths.py's header)" >&2; exit 1; }
+fi
+
 # The list as staged (a commit that edits it is judged by its new version).
 mapfile -t paths < <(git show :scripts/code-paths.txt 2>/dev/null | sed -e 's/#.*//' -e 's/[[:space:]]*$//' | grep .)
 [ "${#paths[@]}" -gt 0 ] || { echo "pre-commit: scripts/code-paths.txt is missing or empty" >&2; exit 1; }

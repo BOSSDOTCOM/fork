@@ -74,6 +74,10 @@ if [ -z "$py" ]; then
   done
 fi
 [ -n "$py" ] || stop "no Python for the pick"
+# The paths in the form $py takes (DESIGN.md section 1, one path helper): on Windows C:/..., which bash takes too.
+. "$here/../jobs/paths.sh" || stop "no tools/jobs/paths.sh"
+root=$(fork_path_for "$py" "$root") && data=$(fork_path_for "$py" "$data") ||
+  stop "cannot convert $root for $py"
 [ -n "${FORK_JOB:-}" ] || [ "${SPRT_UNSUPERVISED:-}" = 1 ] ||
   stop "not started by the job supervisor (tools/jobs/jobctl.py start github $name -- $0 ...)"
 
@@ -143,6 +147,10 @@ picked=$("$py" -I tools/cloud/h2h_pick.py "$data" "$root" 2>&1) || stop "the pic
 echo "$picked" | sed 's/^/    /' | tee -a "$data/driver.log"
 winner=$(sed -n 's/^winner: \([^ ]*\).*/\1/p' <<<"$picked")
 for i in "${!labels[@]}"; do [ "${labels[$i]}" != "$winner" ] || commit=${shas[$i]}; done
+# No silent done (DESIGN.md section 1): the pick's two files exist and pick.json parses, or the run failed.
+problems=$(fork_require_outputs json:"$data/pick.json" "$data/constants-line.md" 2>&1) ||
+  stop "the pick reported no valid outputs: $(printf '%s' "$problems" | paste -sd ';' -)"
+[ -n "$winner" ] && [ -n "${commit:-}" ] || stop "the pick named no winner among the labels"
 say "picked $winner (pick.json, constants-line.md); next, its design R SPRT against off on fresh openings:" \
   "tools/github/sprt_run.sh --kind search --idea $idea --origin $((origin + stages)) NAME OFF-COMMIT $commit"
 exit 0

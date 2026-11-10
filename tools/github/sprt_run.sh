@@ -148,6 +148,9 @@ if [ -z "$py" ]; then
   done
 fi
 [ -n "$py" ] || stop "no Python for the merge"
+# $data in the form $py takes (DESIGN.md section 1, one path helper): on Windows C:/..., which bash takes too.
+. tools/jobs/paths.sh || stop "no tools/jobs/paths.sh"
+data=$(fork_path_for "$py" "$data") || stop "cannot convert $data for $py"
 [ -n "${FORK_JOB:-}" ] || [ "${SPRT_UNSUPERVISED:-}" = 1 ] ||
   stop "not started by the job supervisor (tools/jobs/jobctl.py start github $name -- $0 ...)"
 ledger() { "$py" -I tools/jobs/ledger.py "$@"; }
