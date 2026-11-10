@@ -42,8 +42,8 @@ result/avg-<arm>/ (weights.bin, quantised.bin, parity-trainer-<arm>-avg.txt), th
 
     python3 retrain_8b.py                      # on Kaggle (the kernel runs it without arguments)
     python retrain_8b.py --plan                # anywhere: the settings and every stage's command; touches nothing
-    python retrain_8b.py --check-inputs DIR    # anywhere: the input checks and each arm's file list against
-                                               # DIR (the datasets' files, any layout), as the session runs them
+    python retrain_8b.py --check-inputs DIR... # anywhere: the input checks and each arm's file list against
+                                               # the datasets' folders (any layout), as the session runs them
 """
 import glob
 import hashlib
@@ -180,11 +180,12 @@ def plan():
           f'{VAL} (all and the prefix), {EVAL_ONLY[0]} and {EVAL_ONLY[1]}')
 
 
-def check_inputs(folder, repo):
-    """--check-inputs: the session's input checks against a local folder."""
-    found = glob.glob(f'{folder}/**/*.vf', recursive=True)
+def check_inputs(folders, repo):
+    """--check-inputs: the session's input checks against local folders (each dataset's files, as Kaggle mounts
+    them)."""
+    found = [p for f in folders for p in glob.glob(f'{f}/**/*.vf', recursive=True)]
     record, lists, by_name = resolve(found, sealed_files(repo))
-    init = glob.glob(f'{folder}/**/{INIT["weights"]}', recursive=True)
+    init = [p for f in folders for p in glob.glob(f'{f}/**/{INIT["weights"]}', recursive=True)]
     record['init_weights'] = {'found': len(init), 'sha256_ok': len(init) == 1 and sha256(init[0]) == INIT['sha256']}
     print(json.dumps(record, indent=1))
     for arm, names in lists.items():
@@ -456,7 +457,7 @@ if __name__ == '__main__':
         plan()
     elif '--check-inputs' in sys.argv:
         here = os.path.dirname(os.path.abspath(__file__))
-        sys.exit(check_inputs(sys.argv[sys.argv.index('--check-inputs') + 1], os.path.dirname(os.path.dirname(
+        sys.exit(check_inputs(sys.argv[sys.argv.index('--check-inputs') + 1:], os.path.dirname(os.path.dirname(
             os.path.dirname(here)))))
     elif not os.path.isdir(DATA):
         sys.exit(f'{DATA} not found: this script runs inside the Kaggle session (--plan, --check-inputs DIR)')
