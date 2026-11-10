@@ -14,6 +14,7 @@ worker <run>-w02.vf (the trainer validates on the first 20,000 kept positions of
         same file: the volume controls D20/50 and D20/100, design section 1.2)
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -21,8 +22,10 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[2] / 'tools' / 'datagen'))
-sys.path.insert(0, str(HERE.parents[2] / 'tools' / 'control_center'))
+# The repository whose tools are used (LD_TOOLS_REPO, for a copy of this script kept outside the repository).
+TOOLS = Path(os.environ.get('LD_TOOLS_REPO') or HERE.parents[2])
+sys.path.insert(0, str(TOOLS / 'tools' / 'datagen'))
+sys.path.insert(0, str(TOOLS / 'tools' / 'control_center'))
 import verify_games as V  # noqa: E402
 from seal_part import complete_games  # noqa: E402
 
@@ -95,14 +98,16 @@ def finish(run, out, repo, shards, totals, tool, settings, seconds, part_end, su
     }
     (out / f'{run}.json').write_text(json.dumps(manifest, indent=1) + '\n', newline='\n')
     py = sys.executable
-    rc = subprocess.call([py, '-I', str(repo / 'tools' / 'datagen' / 'verify_games.py'),
+    rc = subprocess.call([py, '-I', str(TOOLS / 'tools' / 'datagen' / 'verify_games.py'),
                           *[str(out / s['file']) for s in shards], '--manifest', str(out / f'{run}.json'),
                           '--table-pieces', '5'])
     if rc != 0:
         sys.exit(f'{run}: verification FAILED (exit {rc}); nothing sealed, files kept in {out}')
-    rc = subprocess.call([py, '-I', str(repo / 'tools' / 'datagen' / 'upload_batch.py'), 'seal',
-                          str(out / f'{run}.json'), '--openings-manifest',
-                          str(repo / 'data' / 'manifests' / OPENINGS_MANIFEST), '--part-end', part_end,
+    om = repo / 'data' / 'manifests' / OPENINGS_MANIFEST
+    if not om.exists():
+        om = HERE / OPENINGS_MANIFEST  # a copy beside this script (the main checkout's phase-4 lacks it)
+    rc = subprocess.call([py, '-I', str(TOOLS / 'tools' / 'datagen' / 'upload_batch.py'), 'seal',
+                          str(out / f'{run}.json'), '--openings-manifest', str(om), '--part-end', part_end,
                           '--out', str(repo / 'data' / 'manifests')])
     if rc != 0:
         sys.exit(f'{run}: upload_batch.py seal failed (exit {rc})')
