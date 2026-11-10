@@ -25,6 +25,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 
@@ -43,6 +44,10 @@ namespace forkeng {
 // and tests/test_ordering.cpp checks it orders quiets as the selector does.
 inline int quiet_order_score(const Position& pos, Move m, const QuietHistory* history,
                              const PairHistory* pairs, int arrival, int follow_arrival) {
+  // Without pair tables the arrivals are ignored, as MoveSelector::start_main
+  // drops them (a stats build with UseHistory off and the reply or follow
+  // history on passes arrivals with no tables).
+  if (!pairs) arrival = follow_arrival = NoArrival;
   int score = history ? history->value(pos.side_to_move(), m) : 0;
   if (arrival != NoArrival || follow_arrival != NoArrival) {
     const int slot = pair_slot(pos.piece_at(m.from()), m.to());

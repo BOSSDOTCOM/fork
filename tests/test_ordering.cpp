@@ -374,6 +374,11 @@ TEST_CASE("ordering", "quiet_order_score orders quiets as the selector does") {
   CHECK_EQ(with_both, static_cast<int>(INT16_MAX));  // the clamp is reached
   CHECK_EQ(quiet_order_score(pos, m, nullptr, fresh_pairs.get(), NoArrival, follow),
            HistoryMax * FollowWeight / 4);
+  // Without pair tables the arrivals are ignored, as MoveSelector::start_main
+  // drops them: a stats build with UseHistory off and the reply or follow
+  // history on passes arrivals with no tables (searcher.cpp's X2 read).
+  CHECK_EQ(quiet_order_score(pos, m, fresh.get(), nullptr, arrival, follow), HistoryMax);
+  CHECK_EQ(quiet_order_score(pos, m, nullptr, nullptr, arrival, NoArrival), 0);
 }
 
 // The int16 headroom of the quiet score at the reply and follow weights'
