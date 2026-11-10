@@ -1407,6 +1407,7 @@ TEST_CASE("search", "time management: a changed best move searches longer, a sta
     auto searcher = std::make_unique<Searcher>(store.table);
     searcher->switches.use_stability_time = stability_on;
     searcher->switches.use_share_time = share_on;
+    searcher->switches.use_root_gap_time = false;  // the stability scale alone (root gap: its own test)
     Position pos;
     CHECK(pos.set_fen(fen));
     SearchQuota limits;

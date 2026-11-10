@@ -637,7 +637,8 @@ TEST_CASE("uci_protocol", "the mate in 2 is reported within depth 6, after other
 //   allows. That bound is scaled_soft_ms at the largest factor
 //   soft_scale_permille gives at any depth (it is non-increasing in
 //   stability and share, so stability 1 and the smallest share give the
-//   largest), and never less than the plain soft limit. Without the soft
+//   largest), times root-gap time's factor when UseRootGapTime is on by
+//   default, and never less than the plain soft limit. Without the soft
 //   check (mutant M57) iterations go on until the hard-limit rule (3/5 of
 //   the hard limit) or the hard limit itself.
 // The limits are plan_time's for White's clock and the default Move Overhead
@@ -691,6 +692,9 @@ TEST_CASE("uci_protocol",
          {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
       for (int depth = 0; depth < MaxPly; ++depth)
         widest = std::max(widest, soft_scale_permille(variant, {depth, 1, 1, 0}));
+    // Root-gap time (idea 61 part 6) multiplies it by at most 1000 + RootGapExtra
+    // when the engine has that switch on by default.
+    if (SearchSwitches{}.use_root_gap_time) widest = (widest * (1000 + RootGapExtra) + 500) / 1000;
     const std::int64_t bound = std::max(plan.soft_ms, scaled_soft_ms(plan.soft_ms, plan.hard_ms, widest));
     for (const auto& [depth, time] : first_seen)
       CHECK_MSG(depth == deepest || time < bound,
