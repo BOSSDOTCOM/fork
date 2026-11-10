@@ -2343,6 +2343,9 @@ whose weaknesses and data gaps decide their targets and order.
   of the control's on Kaggle** (replacing the 3% CPU bound, which the
   CPU mapper missed at +4.95%). The trainer change merges only with the
   owner's OK.
+- **2026-11-10 (owner): the arm runs now as an extra retrain 8b arm
+  ("cw")**, on arm c's exact data, recipe and seed, after a Kaggle
+  preflight; compared against 8b's control by the keep rule above.
 - **test:** the 8c arm at equal positions against the control; per-class
   validation loss; fixed-node screen, STC SPRT [0, 5].
 - **status:** untested (design approved; pre-arm checks next, the arm in
