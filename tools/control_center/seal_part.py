@@ -178,6 +178,10 @@ def seal(req, here, wsl_version=None, verify=None, upload=None):
         cmd_settings, paths = P.datagen_args(req.get('cmdline') or [])
         settings.update(req.get('settings') or {})
         settings.update(cmd_settings)
+        # fork_datagen's own --tables wins. The first part of a generation has no earlier manifest to carry the
+        # tables over from (g4, 2026-11-09: verified as "no tables" and refused on its first table end).
+        if paths.get('tables') and P.tables_label(paths['tables']):
+            settings['tables'] = P.tables_label(paths['tables'])
         openings = os.path.basename(paths.get('openings') or settings.get('openings') or '')
         settings['openings'] = openings
         om_path = repo / 'data' / 'manifests' / f'openings-{Path(openings).stem}.json'

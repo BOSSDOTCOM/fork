@@ -123,6 +123,13 @@ def datagen_args(argv):
     return out, paths
 
 
+def tables_label(path):
+    """The manifests' name for a Syzygy folder named by its piece counts: '~/fork-tools/syzygy/3-4-5' gives
+    'syzygy 5-piece' (verify_games.py reads the count back); None for a folder without counts."""
+    counts = [int(x) for x in re.findall(r'\d+', str(path).rstrip('/').rsplit('/', 1)[-1])]
+    return f'syzygy {max(counts)}-piece' if counts else None
+
+
 def fork_version(text):
     """`fork version`: {'version': '0.3.0-dev+684bac6', 'commit': '684bac6', 'compiler': 'clang 21.1.8',
     'arch': 'native', 'net': 's512r2', 'evaluator': 'nnue'}."""

@@ -302,6 +302,8 @@ class GenerationControl:
         standing = dict(self.cfg['standing'])
         settings = {**standing, 'threads': int(threads or self.cfg['threads']), 'seed': seed,
                     'positions_target': target, 'openings': ofile}
+        if P.tables_label(self.cfg['tables_wsl']):  # the folder start_part.sh passes as --tables
+            settings['tables'] = P.tables_label(self.cfg['tables_wsl'])
         differs = {k: (st.get(k), v) for k, v in standing.items() if st.get(k) != v}
         name = f'g{gen + 1}' if new_generation is not None else P.next_part(last)
         if new_generation is not None:

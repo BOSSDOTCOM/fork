@@ -440,6 +440,7 @@ class Controls(unittest.TestCase):
         self.assertEqual((plan['settings']['positions_target'], plan['settings']['threads'],
                           plan['settings']['seed']), (64000000, 6, 20261111))
         self.assertEqual((plan['mode'], plan['engine_commit']), ('build', self.world.commit))  # never reused
+        self.assertEqual(plan['settings']['tables'], 'syzygy 5-piece')  # nothing earlier in generation 4 says it
         with self.assertRaises(generation_control.Refused):
             self.ctl.plan(new_generation=0)
         plan, _ = self.ctl.plan(threads=6, extend=276000000)  # the same generation continues
@@ -842,6 +843,41 @@ class Seal(unittest.TestCase):
         self.assertTrue(part_end.startswith('test reason; '))
         self.assertIn('every game verified', part_end)
         self.assertEqual(json.loads((self.here / 'seal-result.json').read_text())['state'], 'sealed')
+
+    def test_first_part_of_a_generation_verifies_with_its_tables(self):
+        """g4 (2026-11-09): the first part of a generation has no earlier manifest of its generation, so its
+        tables come from the plan's settings or fork_datagen's --tables, never "none" (verify_games.py
+        --table-pieces 0 refused g4 at its first table end)."""
+        seen = {}
+
+        def verify(argv):
+            seen['verify'] = [str(a) for a in argv]
+            return 0
+        self.req['cmdline'] = None
+        self.req['settings'] = {'openings': 'lichess-2016-09.epd', 'threads': 2, 'seed': 7, 'positions_target': 1000,
+                                'tables': 'syzygy 5-piece'}
+        rc = seal_part.seal(self.req, self.here, wsl_version=fixture('fork-version.txt'), verify=verify,
+                            upload=lambda a: 0)
+        self.assertEqual(rc, 0, (self.here / 'seal-result.json').read_text())
+        v = seen['verify']
+        self.assertEqual(v[v.index('--table-pieces') + 1], '5')
+        run = json.loads((Path(self.req['copies']) / 'g9b' / 'g9b.json').read_text())
+        self.assertEqual(run['settings']['tables'], 'syzygy 5-piece')
+
+    def test_first_part_takes_the_tables_from_the_command_line(self):
+        seen = {}
+        self.req['cmdline'] = G3E_CMDLINE[:5] + ['--threads', '2', '--seed', '7', '--positions', '1000',
+                                                 '--tables', '/home/user/fork-tools/syzygy/3-4-5']
+        rc = seal_part.seal(self.req, self.here, wsl_version=fixture('fork-version.txt'),
+                            verify=lambda a: seen.update(verify=[str(x) for x in a]) or 0, upload=lambda a: 0)
+        self.assertEqual(rc, 0, (self.here / 'seal-result.json').read_text())
+        v = seen['verify']
+        self.assertEqual(v[v.index('--table-pieces') + 1], '5')
+
+    def test_tables_label(self):
+        self.assertEqual(P.tables_label('~/fork-tools/syzygy/3-4-5'), 'syzygy 5-piece')
+        self.assertEqual(P.tables_label('/home/user/fork-tools/syzygy/3-4-5/'), 'syzygy 5-piece')
+        self.assertIsNone(P.tables_label('/home/user/tables'))
 
     def test_sealed_records_the_planned_openings_without_a_command_line(self):
         """After a sealed g9 on the Lichess 2016-09 openings, g9b planned on 2026-09 (13,943,421 positions,
