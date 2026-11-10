@@ -1542,7 +1542,11 @@ the screens before use.
   Differences" (Machine Learning, 1988); Baxter, Tridgell and Weaver,
   TDLeaf(lambda) in KnightCap (1998/2000); the KataGo paper's remark that
   the outcome target is data-limited (Wu, 2019) (UNVERIFIED as exact
-  citations).
+  citations). **Credit (owner, 2026-11-09):** KataGo's short-term value
+  targets (Wu, 2019: value targets built from the game's own later
+  evaluations over short horizons, beside the final outcome) are the
+  nearest relative of these TD(lambda) labels and are credited at concept
+  level (UNVERIFIED as an exact description of the paper).
 - **first experiment:** the offline variance study (lambda against gold-set
   error, CPU minutes once X7 exists); then a small net on the same
   positions, the current blend against the TD(lambda) target, two seeds,
@@ -2187,4 +2191,61 @@ until measured; new names and constants go through the screens before use.
   names are kept; implemented and queued only if GitHub is idle (test plan
   in the design: head-to-heads of span and extra, then design R at STC and
   LTC, after idea 61's items 60-62). **runtime cost:** none. **earliest
+  phase:** Phase 4.
+
+## Go-derived training ideas (owner, 2026-11-09)
+
+Three training ideas taken at concept level from KataGo (David J. Wu,
+"Accelerating Self-Play Learning in Go", arXiv:1902.10565, 2019; credited
+as the source; UNVERIFIED as exact descriptions of the paper). Plan only:
+each waits for the conversion-and-defense analysis
+(docs/research/conversion-defense/, branch research/conversion-defense),
+whose weaknesses and data gaps decide their targets and order.
+
+## 65. Auxiliary training targets, revisited
+
+- **type:** ELO (via the resulting net; training only).
+- **idea:** training-only output heads beside the evaluation, for example
+  the material balance some plies ahead, whether the game ends drawn, and
+  the change of the search's evaluation between iterations; the heads shape
+  the shared layers and are dropped from the inference net, so the shipped
+  net has the same size and speed. This revisits idea 14 (untested) with
+  targets chosen from the conversion-and-defense findings.
+- **test:** a retrain arm (equal data against the control in a retrain
+  round), screened per the testing rule; verify the shipped net is
+  identical in size and speed (file size, layer shapes, bench nps).
+- **needs:** the trainer's support for extra heads and the targets in the
+  data (material ahead and the result are in the game records; the
+  iteration change needs a datagen field).
+- **status:** untested (plan only, owner, 2026-11-09; after the
+  conversion-and-defense results). **runtime cost:** none. **earliest
+  phase:** Phase 4.
+
+## 66. Turning-point starts
+
+- **type:** ELO (data generation).
+- **idea:** start self-play games from positions where Fork's evaluation
+  swung, or where it failed to hold a worse position (the
+  conversion-and-defense analysis's turning points and defense failures,
+  from Fork's own games only), so the data covers the positions that
+  decide games; folded into the defense-data design.
+- **data policy:** the starting positions come from Fork's own games (its
+  self-play and SPRT games); positions from games against other engines
+  are analysed, never used as training data or starts.
+- **test:** a data arm at equal data in a retrain round, screened per the
+  testing rule.
+- **status:** untested (plan only, owner, 2026-11-09; after the
+  conversion-and-defense results). **runtime cost:** none. **earliest
+  phase:** Phase 4.
+
+## 67. Draw-probability head
+
+- **type:** ELO (via the resulting net; training only).
+- **idea:** a training-only head predicting the probability that the game
+  is drawn, so the shared layers learn which worse positions are holdable
+  (the defense failures); dropped at inference, no speed cost.
+- **test:** a retrain arm at equal data, screened per the testing rule;
+  report the head's calibration on held-out games.
+- **status:** untested (plan only, owner, 2026-11-09; after the
+  conversion-and-defense results). **runtime cost:** none. **earliest
   phase:** Phase 4.
