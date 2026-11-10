@@ -72,7 +72,7 @@
   X(HardOverSoft, 4, 2, 8, 1)             \
   X(ReserveDivisor, 10, 5, 20, 1)         \
   X(DangerZoneOverheads, 2, 1, 4, 1)      \
-  X(RootGapBand, 14, 7, 28, 1)            \
+  X(RootGapBand, 7, 7, 28, 1)            \
   X(RootGapExtra, 667, 333, 1334, 50)
 
 // Functions that read a parameter are constexpr only where the parameter is
