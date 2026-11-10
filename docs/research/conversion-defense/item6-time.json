@@ -1,0 +1,251 @@
+{
+ "Altair 7.0.0:loss": {
+  "baseline_median_same_buckets": 0.65,
+  "baseline_share_same_buckets": 0.299,
+  "ci": [
+   0.7948,
+   1.447
+  ],
+  "ci3": [
+   0.7422,
+   1.2075
+  ],
+  "median_ratio": 1.136,
+  "median_ratio3": 0.976,
+  "n": 43,
+  "share_above_mean": 0.5116,
+  "share_ci": [
+   0.3675,
+   0.6538
+  ]
+ },
+ "Altair 7.0.0:win": {
+  "baseline_median_same_buckets": 1.34,
+  "baseline_share_same_buckets": 0.4781,
+  "ci": [
+   0.4972,
+   0.8394
+  ],
+  "ci3": [
+   0.5278,
+   1.2675
+  ],
+  "median_ratio": 0.559,
+  "median_ratio3": 0.62,
+  "n": 20,
+  "share_above_mean": 0.25,
+  "share_ci": [
+   0.1119,
+   0.4687
+  ]
+ },
+ "Clover 6.1:loss": {
+  "baseline_median_same_buckets": 0.65,
+  "baseline_share_same_buckets": 0.3051,
+  "ci": [
+   0.4558,
+   0.814
+  ],
+  "ci3": [
+   0.6445,
+   0.892
+  ],
+  "median_ratio": 0.617,
+  "median_ratio3": 0.783,
+  "n": 67,
+  "share_above_mean": 0.3433,
+  "share_ci": [
+   0.2409,
+   0.4627
+  ]
+ },
+ "Clover 6.1:win": {
+  "baseline_median_same_buckets": 1.34,
+  "baseline_share_same_buckets": 0.606,
+  "ci": [
+   0.6795,
+   1.2914
+  ],
+  "ci3": [
+   0.6795,
+   1.1724
+  ],
+  "median_ratio": 0.832,
+  "median_ratio3": 0.832,
+  "n": 14,
+  "share_above_mean": 0.3571,
+  "share_ci": [
+   0.1634,
+   0.6124
+  ]
+ },
+ "Marvin 6.3.0:loss": {
+  "baseline_median_same_buckets": 0.65,
+  "baseline_share_same_buckets": 0.3391,
+  "ci": [
+   0.4612,
+   1.0991
+  ],
+  "ci3": [
+   0.5013,
+   1.0895
+  ],
+  "median_ratio": 0.646,
+  "median_ratio3": 0.74,
+  "n": 31,
+  "share_above_mean": 0.3226,
+  "share_ci": [
+   0.1857,
+   0.4986
+  ]
+ },
+ "Marvin 6.3.0:win": {
+  "baseline_median_same_buckets": 1.34,
+  "baseline_share_same_buckets": 0.4522,
+  "ci": [
+   0.4583,
+   0.841
+  ],
+  "ci3": [
+   0.6447,
+   0.852
+  ],
+  "median_ratio": 0.67,
+  "median_ratio3": 0.727,
+  "n": 23,
+  "share_above_mean": 0.1739,
+  "share_ci": [
+   0.0698,
+   0.3714
+  ]
+ },
+ "Stockfish 19:loss": {
+  "baseline_median_same_buckets": 0.65,
+  "baseline_share_same_buckets": 0.3245,
+  "ci": [
+   0.5698,
+   0.8369
+  ],
+  "ci3": [
+   0.7401,
+   0.8907
+  ],
+  "median_ratio": 0.692,
+  "median_ratio3": 0.821,
+  "n": 186,
+  "share_above_mean": 0.3871,
+  "share_ci": [
+   0.3201,
+   0.4587
+  ]
+ },
+ "Stockfish 19:win": {
+  "baseline_median_same_buckets": 1.34,
+  "baseline_share_same_buckets": 0.627,
+  "ci": [
+   0.6334,
+   0.8739
+  ],
+  "ci3": [
+   0.6334,
+   0.8739
+  ],
+  "median_ratio": 0.686,
+  "median_ratio3": 0.686,
+  "n": 31,
+  "share_above_mean": 0.1613,
+  "share_ci": [
+   0.0709,
+   0.3263
+  ]
+ },
+ "_note": "docs/research/conversion-defense/report.md (Method); labeller fork-release-2ebacd8, S512ppr3, bench 14,149,617 / 1cb0717f040c294d; gauntlet run 42538371594; SPRT idea60-stc + idea61-stc",
+ "all:loss": {
+  "baseline_median_same_buckets": 0.65,
+  "baseline_share_same_buckets": 0.3186,
+  "ci": [
+   0.6021,
+   0.8148
+  ],
+  "ci3": [
+   0.7465,
+   0.8849
+  ],
+  "median_ratio": 0.704,
+  "median_ratio3": 0.823,
+  "n": 327,
+  "share_above_mean": 0.3884,
+  "share_ci": [
+   0.3371,
+   0.4422
+  ]
+ },
+ "all:loss:by_class": {
+  "horizon": {
+   "ci": [
+    0.2861,
+    1.0991
+   ],
+   "median_ratio": 0.647,
+   "n": 13
+  },
+  "misjudgment (deep finds no hold)": {
+   "ci": [
+    0.3113,
+    0.5841
+   ],
+   "median_ratio": 0.43,
+   "n": 41
+  },
+  "seen": {
+   "ci": [
+    0.6829,
+    0.9813
+   ],
+   "median_ratio": 0.791,
+   "n": 212
+  }
+ },
+ "all:win": {
+  "baseline_median_same_buckets": 1.34,
+  "baseline_share_same_buckets": 0.5441,
+  "ci": [
+   0.6388,
+   0.7497
+  ],
+  "ci3": [
+   0.6646,
+   0.8211
+  ],
+  "median_ratio": 0.69,
+  "median_ratio3": 0.714,
+  "n": 88,
+  "share_above_mean": 0.2159,
+  "share_ci": [
+   0.1428,
+   0.3128
+  ]
+ },
+ "baseline": {
+  "m1-20": {
+   "median": 1.34,
+   "n": 28739,
+   "share_above_mean": 0.627
+  },
+  "m21-40": {
+   "median": 0.65,
+   "n": 34689,
+   "share_above_mean": 0.3331
+  },
+  "m41-60": {
+   "median": 0.411,
+   "n": 26380,
+   "share_above_mean": 0.172
+  },
+  "m61+": {
+   "median": 0.421,
+   "n": 26005,
+   "share_above_mean": 0.1142
+  }
+ }
+}

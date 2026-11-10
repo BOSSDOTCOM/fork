@@ -1,0 +1,6281 @@
+{
+ "_note": "docs/research/conversion-defense/report.md (Method); labeller fork-release-2ebacd8, S512ppr3, bench 14,149,617 / 1cb0717f040c294d; gauntlet run 42538371594; SPRT idea60-stc + idea61-stc",
+ "g_conv:core": {
+  "by_opp": {
+   "Altair 7.0.0": [
+    47,
+    2
+   ],
+   "Clover 6.1": [
+    33,
+    6
+   ],
+   "Marvin 6.3.0": [
+    85,
+    1
+   ],
+   "Stockfish 19": [
+    53,
+    5
+   ]
+  },
+  "by_start": {
+   "imb": [
+    {
+     "cat": "equal-pieces",
+     "ci": [
+      0.0265,
+      0.1078
+     ],
+     "fail": 7,
+     "n": 129,
+     "rate": 0.0543,
+     "share_fail": 0.5,
+     "share_ok": 0.598,
+     "small": false
+    },
+    {
+     "cat": "minor-up",
+     "ci": [
+      0.0258,
+      0.1986
+     ],
+     "fail": 3,
+     "n": 40,
+     "rate": 0.075,
+     "share_fail": 0.2143,
+     "share_ok": 0.1814,
+     "small": false
+    },
+    {
+     "cat": "B-vs-N",
+     "ci": [
+      0.0206,
+      0.2337
+     ],
+     "fail": 2,
+     "n": 27,
+     "rate": 0.0741,
+     "share_fail": 0.1429,
+     "share_ok": 0.1225,
+     "small": false
+    },
+    {
+     "cat": "R-vs-minors",
+     "ci": [
+      0.0149,
+      0.3539
+     ],
+     "fail": 1,
+     "n": 12,
+     "rate": 0.0833,
+     "share_fail": 0.0714,
+     "share_ok": 0.0539,
+     "small": false
+    },
+    {
+     "cat": "Q-imbalance",
+     "ci": [
+      0.0199,
+      0.435
+     ],
+     "fail": 1,
+     "n": 9,
+     "rate": 0.1111,
+     "share_fail": 0.0714,
+     "share_ok": 0.0392,
+     "small": true
+    },
+    {
+     "cat": "other-imbalance",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0049,
+     "small": true
+    }
+   ],
+   "matcls": [
+    {
+     "cat": "Q-MG|level",
+     "ci": [
+      0.0207,
+      0.1277
+     ],
+     "fail": 4,
+     "n": 76,
+     "rate": 0.0526,
+     "share_fail": 0.2857,
+     "share_ok": 0.3529,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|minor-up",
+     "ci": [
+      0.0055,
+      0.1574
+     ],
+     "fail": 1,
+     "n": 32,
+     "rate": 0.0312,
+     "share_fail": 0.0714,
+     "share_ok": 0.152,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn+",
+     "ci": [
+      0.0214,
+      0.2414
+     ],
+     "fail": 2,
+     "n": 26,
+     "rate": 0.0769,
+     "share_fail": 0.1429,
+     "share_ok": 0.1176,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|B-vs-N",
+     "ci": [
+      0.0433,
+      0.4224
+     ],
+     "fail": 2,
+     "n": 13,
+     "rate": 0.1538,
+     "share_fail": 0.1429,
+     "share_ok": 0.0539,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|Q-imbalance",
+     "ci": [
+      0.0257,
+      0.5131
+     ],
+     "fail": 1,
+     "n": 7,
+     "rate": 0.1429,
+     "share_fail": 0.0714,
+     "share_ok": 0.0294,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|pawn+",
+     "ci": [
+      0.0,
+      0.3543
+     ],
+     "fail": 0,
+     "n": 7,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0343,
+     "small": true
+    },
+    {
+     "cat": "R-EG|pawn+",
+     "ci": [
+      0.0,
+      0.3543
+     ],
+     "fail": 0,
+     "n": 7,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0343,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|B-vs-N",
+     "ci": [
+      0.0,
+      0.3903
+     ],
+     "fail": 0,
+     "n": 6,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0294,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|minor-up",
+     "ci": [
+      0.1176,
+      0.7693
+     ],
+     "fail": 2,
+     "n": 5,
+     "rate": 0.4,
+     "share_fail": 0.1429,
+     "share_ok": 0.0147,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|B-vs-N",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0245,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|R-vs-minors",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0245,
+     "small": true
+    },
+    {
+     "cat": "Q-MG|R-vs-minors",
+     "ci": [
+      0.0456,
+      0.6994
+     ],
+     "fail": 1,
+     "n": 4,
+     "rate": 0.25,
+     "share_fail": 0.0714,
+     "share_ok": 0.0147,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|level",
+     "ci": [
+      0.0,
+      0.4899
+     ],
+     "fail": 0,
+     "n": 4,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0196,
+     "small": true
+    },
+    {
+     "cat": "Q-MG|pawn-",
+     "ci": [
+      0.0,
+      0.5615
+     ],
+     "fail": 0,
+     "n": 3,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0147,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|Q-imbalance",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0098,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|R-vs-minors",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0098,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|pawn+",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0098,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|pawn+",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0098,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|minor-up",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0098,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|B-vs-N",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0098,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|R-vs-minors",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0049,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|other-imbalance",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0049,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|level",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0714,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|B-vs-N",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0049,
+     "small": true
+    },
+    {
+     "cat": "R-EG|level",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0049,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|minor-up",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0049,
+     "small": true
+    }
+   ],
+   "move": [
+    {
+     "cat": "m1-20",
+     "ci": [
+      0.0355,
+      0.1218
+     ],
+     "fail": 9,
+     "n": 135,
+     "rate": 0.0667,
+     "share_fail": 0.6429,
+     "share_ok": 0.6176,
+     "small": false
+    },
+    {
+     "cat": "m21-40",
+     "ci": [
+      0.0135,
+      0.1614
+     ],
+     "fail": 2,
+     "n": 41,
+     "rate": 0.0488,
+     "share_fail": 0.1429,
+     "share_ok": 0.1912,
+     "small": false
+    },
+    {
+     "cat": "m41-60",
+     "ci": [
+      0.0198,
+      0.2265
+     ],
+     "fail": 2,
+     "n": 28,
+     "rate": 0.0714,
+     "share_fail": 0.1429,
+     "share_ok": 0.1275,
+     "small": false
+    },
+    {
+     "cat": "m61+",
+     "ci": [
+      0.0127,
+      0.3147
+     ],
+     "fail": 1,
+     "n": 14,
+     "rate": 0.0714,
+     "share_fail": 0.0714,
+     "share_ok": 0.0637,
+     "small": false
+    }
+   ],
+   "opp_kings": [
+    {
+     "cat": "same-wing",
+     "ci": [
+      0.0333,
+      0.1028
+     ],
+     "fail": 11,
+     "n": 186,
+     "rate": 0.0591,
+     "share_fail": 0.7857,
+     "share_ok": 0.8578,
+     "small": false
+    },
+    {
+     "cat": "opp-wings",
+     "ci": [
+      0.0324,
+      0.2422
+     ],
+     "fail": 3,
+     "n": 32,
+     "rate": 0.0938,
+     "share_fail": 0.2143,
+     "share_ok": 0.1422,
+     "small": false
+    }
+   ],
+   "pawns": [
+    {
+     "cat": "p13-16",
+     "ci": [
+      0.0355,
+      0.1218
+     ],
+     "fail": 9,
+     "n": 135,
+     "rate": 0.0667,
+     "share_fail": 0.6429,
+     "share_ok": 0.6176,
+     "small": false
+    },
+    {
+     "cat": "p9-12",
+     "ci": [
+      0.0138,
+      0.165
+     ],
+     "fail": 2,
+     "n": 40,
+     "rate": 0.05,
+     "share_fail": 0.1429,
+     "share_ok": 0.1863,
+     "small": false
+    },
+    {
+     "cat": "p5-8",
+     "ci": [
+      0.0071,
+      0.1954
+     ],
+     "fail": 1,
+     "n": 25,
+     "rate": 0.04,
+     "share_fail": 0.0714,
+     "share_ok": 0.1176,
+     "small": false
+    },
+    {
+     "cat": "p0-4",
+     "ci": [
+      0.031,
+      0.328
+     ],
+     "fail": 2,
+     "n": 18,
+     "rate": 0.1111,
+     "share_fail": 0.1429,
+     "share_ok": 0.0784,
+     "small": false
+    }
+   ],
+   "phase": [
+    {
+     "cat": "P19-24",
+     "ci": [
+      0.0332,
+      0.1145
+     ],
+     "fail": 9,
+     "n": 144,
+     "rate": 0.0625,
+     "share_fail": 0.6429,
+     "share_ok": 0.6618,
+     "small": false
+    },
+    {
+     "cat": "P7-12",
+     "ci": [
+      0.0214,
+      0.2414
+     ],
+     "fail": 2,
+     "n": 26,
+     "rate": 0.0769,
+     "share_fail": 0.1429,
+     "share_ok": 0.1176,
+     "small": false
+    },
+    {
+     "cat": "P1-6",
+     "ci": [
+      0.0068,
+      0.1889
+     ],
+     "fail": 1,
+     "n": 26,
+     "rate": 0.0385,
+     "share_fail": 0.0714,
+     "share_ok": 0.1225,
+     "small": false
+    },
+    {
+     "cat": "P13-18",
+     "ci": [
+      0.0253,
+      0.2782
+     ],
+     "fail": 2,
+     "n": 22,
+     "rate": 0.0909,
+     "share_fail": 0.1429,
+     "share_ok": 0.098,
+     "small": false
+    }
+   ],
+   "sig": [
+    {
+     "cat": "Q-MG",
+     "ci": [
+      0.0386,
+      0.1182
+     ],
+     "fail": 11,
+     "n": 161,
+     "rate": 0.0683,
+     "share_fail": 0.7857,
+     "share_ok": 0.7353,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG",
+     "ci": [
+      0.0253,
+      0.2782
+     ],
+     "fail": 2,
+     "n": 22,
+     "rate": 0.0909,
+     "share_fail": 0.1429,
+     "share_ok": 0.098,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG",
+     "ci": [
+      -0.0,
+      0.2039
+     ],
+     "fail": 0,
+     "n": 15,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0735,
+     "small": false
+    },
+    {
+     "cat": "R-EG",
+     "ci": [
+      0.0,
+      0.3244
+     ],
+     "fail": 0,
+     "n": 8,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0392,
+     "small": true
+    },
+    {
+     "cat": "Q-EG",
+     "ci": [
+      0.0,
+      0.3903
+     ],
+     "fail": 0,
+     "n": 6,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0294,
+     "small": true
+    },
+    {
+     "cat": "minor-EG/multi/uneven",
+     "ci": [
+      0.0362,
+      0.6245
+     ],
+     "fail": 1,
+     "n": 5,
+     "rate": 0.2,
+     "share_fail": 0.0714,
+     "share_ok": 0.0196,
+     "small": true
+    },
+    {
+     "cat": "minor-EG/N-N",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0049,
+     "small": true
+    }
+   ],
+   "struct": [
+    {
+     "cat": "no-passer/two-wing",
+     "ci": [
+      0.0361,
+      0.1169
+     ],
+     "fail": 10,
+     "n": 152,
+     "rate": 0.0658,
+     "share_fail": 0.7143,
+     "share_ok": 0.6961,
+     "small": false
+    },
+    {
+     "cat": "own-passer/two-wing",
+     "ci": [
+      0.0232,
+      0.2585
+     ],
+     "fail": 2,
+     "n": 24,
+     "rate": 0.0833,
+     "share_fail": 0.1429,
+     "share_ok": 0.1078,
+     "small": false
+    },
+    {
+     "cat": "opp-passer/two-wing",
+     "ci": [
+      -0.0,
+      0.2039
+     ],
+     "fail": 0,
+     "n": 15,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0735,
+     "small": false
+    },
+    {
+     "cat": "both-passers/two-wing",
+     "ci": [
+      0.0,
+      0.2992
+     ],
+     "fail": 0,
+     "n": 9,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0441,
+     "small": true
+    },
+    {
+     "cat": "own-passer/one-wing",
+     "ci": [
+      0.0,
+      0.3244
+     ],
+     "fail": 0,
+     "n": 8,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0392,
+     "small": true
+    },
+    {
+     "cat": "no-passer/one-wing",
+     "ci": [
+      0.1176,
+      0.7693
+     ],
+     "fail": 2,
+     "n": 5,
+     "rate": 0.4,
+     "share_fail": 0.1429,
+     "share_ok": 0.0147,
+     "small": true
+    },
+    {
+     "cat": "both-passers/one-wing",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0245,
+     "small": true
+    }
+   ],
+   "tb": [
+    {
+     "cat": "no-tb",
+     "ci": [
+      0.0388,
+      0.1054
+     ],
+     "fail": 14,
+     "n": 217,
+     "rate": 0.0645,
+     "share_fail": 1.0,
+     "share_ok": 0.9951,
+     "small": false
+    },
+    {
+     "cat": "tb",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0049,
+     "small": true
+    }
+   ]
+  },
+  "drawn": 14,
+  "fail_ci": [
+   0.0386,
+   0.1049
+  ],
+  "fail_rate": 0.0642,
+  "failure_drop_points": {
+   "by": {
+    "imb": [
+     {
+      "cat": "equal-pieces",
+      "n": 5,
+      "share": 0.3571
+     },
+     {
+      "cat": "minor-up",
+      "n": 4,
+      "share": 0.2857
+     },
+     {
+      "cat": "R-vs-minors",
+      "n": 4,
+      "share": 0.2857
+     },
+     {
+      "cat": "B-vs-N",
+      "n": 1,
+      "share": 0.0714
+     }
+    ],
+    "matcls": [
+     {
+      "cat": "minor-EG|minor-up",
+      "n": 4,
+      "share": 0.2857
+     },
+     {
+      "cat": "R+minor-EG|R-vs-minors",
+      "n": 3,
+      "share": 0.2143
+     },
+     {
+      "cat": "Q-MG|R-vs-minors",
+      "n": 1,
+      "share": 0.0714
+     },
+     {
+      "cat": "Q-EG|level",
+      "n": 1,
+      "share": 0.0714
+     },
+     {
+      "cat": "R-EG|level",
+      "n": 1,
+      "share": 0.0714
+     },
+     {
+      "cat": "R+minor-EG|level",
+      "n": 1,
+      "share": 0.0714
+     },
+     {
+      "cat": "minor-EG|pawn+",
+      "n": 1,
+      "share": 0.0714
+     },
+     {
+      "cat": "Q-EG|pawn+",
+      "n": 1,
+      "share": 0.0714
+     },
+     {
+      "cat": "noQ-MG|B-vs-N",
+      "n": 1,
+      "share": 0.0714
+     }
+    ],
+    "move": [
+     {
+      "cat": "m61+",
+      "n": 8,
+      "share": 0.5714
+     },
+     {
+      "cat": "m41-60",
+      "n": 5,
+      "share": 0.3571
+     },
+     {
+      "cat": "m21-40",
+      "n": 1,
+      "share": 0.0714
+     }
+    ],
+    "opp_kings": [
+     {
+      "cat": "same-wing",
+      "n": 12,
+      "share": 0.8571
+     },
+     {
+      "cat": "opp-wings",
+      "n": 2,
+      "share": 0.1429
+     }
+    ],
+    "pawns": [
+     {
+      "cat": "p0-4",
+      "n": 8,
+      "share": 0.5714
+     },
+     {
+      "cat": "p5-8",
+      "n": 3,
+      "share": 0.2143
+     },
+     {
+      "cat": "p9-12",
+      "n": 2,
+      "share": 0.1429
+     },
+     {
+      "cat": "p13-16",
+      "n": 1,
+      "share": 0.0714
+     }
+    ],
+    "phase": [
+     {
+      "cat": "P1-6",
+      "n": 9,
+      "share": 0.6429
+     },
+     {
+      "cat": "P7-12",
+      "n": 4,
+      "share": 0.2857
+     },
+     {
+      "cat": "P13-18",
+      "n": 1,
+      "share": 0.0714
+     }
+    ],
+    "sig": [
+     {
+      "cat": "minor-EG/multi/uneven",
+      "n": 4,
+      "share": 0.2857
+     },
+     {
+      "cat": "R+minor-EG",
+      "n": 4,
+      "share": 0.2857
+     },
+     {
+      "cat": "Q-EG",
+      "n": 2,
+      "share": 0.1429
+     },
+     {
+      "cat": "Q-MG",
+      "n": 1,
+      "share": 0.0714
+     },
+     {
+      "cat": "R-EG",
+      "n": 1,
+      "share": 0.0714
+     },
+     {
+      "cat": "minor-EG/B-B same",
+      "n": 1,
+      "share": 0.0714
+     },
+     {
+      "cat": "noQ-MG",
+      "n": 1,
+      "share": 0.0714
+     }
+    ],
+    "struct": [
+     {
+      "cat": "no-passer/one-wing",
+      "n": 6,
+      "share": 0.4286
+     },
+     {
+      "cat": "both-passers/two-wing",
+      "n": 4,
+      "share": 0.2857
+     },
+     {
+      "cat": "own-passer/two-wing",
+      "n": 3,
+      "share": 0.2143
+     },
+     {
+      "cat": "opp-passer/one-wing",
+      "n": 1,
+      "share": 0.0714
+     }
+    ],
+    "tb": [
+     {
+      "cat": "no-tb",
+      "n": 9,
+      "share": 0.6429
+     },
+     {
+      "cat": "tb",
+      "n": 5,
+      "share": 0.3571
+     }
+    ]
+   },
+   "n_drops": 14,
+   "no_drop": 0
+  },
+  "lost": 0,
+  "n": 218,
+  "terms_of_failures": [
+   [
+    "Draw by fifty moves rule",
+    5
+   ],
+   [
+    "Draw by 3-fold repetition",
+    5
+   ],
+   [
+    "Draw by insufficient mating material",
+    3
+   ],
+   [
+    "Draw by stalemate",
+    1
+   ]
+  ],
+  "won": 204
+ },
+ "g_conv:other": {
+  "by_opp": {
+   "Laser 1.7": [
+    139,
+    1
+   ],
+   "Monolith 2.01": [
+    175,
+    1
+   ],
+   "Weiss 1.0": [
+    178,
+    0
+   ],
+   "Winter 0.9": [
+    158,
+    2
+   ]
+  },
+  "by_start": {
+   "imb": [
+    {
+     "cat": "equal-pieces",
+     "ci": [
+      -0.0,
+      0.0117
+     ],
+     "fail": 0,
+     "n": 324,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.5015,
+     "small": false
+    },
+    {
+     "cat": "B-vs-N",
+     "ci": [
+      0.0011,
+      0.0343
+     ],
+     "fail": 1,
+     "n": 161,
+     "rate": 0.0062,
+     "share_fail": 0.25,
+     "share_ok": 0.2477,
+     "small": false
+    },
+    {
+     "cat": "R-vs-minors",
+     "ci": [
+      0.0079,
+      0.0983
+     ],
+     "fail": 2,
+     "n": 70,
+     "rate": 0.0286,
+     "share_fail": 0.5,
+     "share_ok": 0.1053,
+     "small": false
+    },
+    {
+     "cat": "minor-up",
+     "ci": [
+      0.0,
+      0.0542
+     ],
+     "fail": 0,
+     "n": 67,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.1037,
+     "small": false
+    },
+    {
+     "cat": "Q-imbalance",
+     "ci": [
+      0.0094,
+      0.2464
+     ],
+     "fail": 1,
+     "n": 19,
+     "rate": 0.0526,
+     "share_fail": 0.25,
+     "share_ok": 0.0279,
+     "small": false
+    },
+    {
+     "cat": "other-imbalance",
+     "ci": [
+      0.0,
+      0.2992
+     ],
+     "fail": 0,
+     "n": 9,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0139,
+     "small": true
+    }
+   ],
+   "matcls": [
+    {
+     "cat": "Q-MG|level",
+     "ci": [
+      0.0,
+      0.0291
+     ],
+     "fail": 0,
+     "n": 128,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.1981,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|B-vs-N",
+     "ci": [
+      -0.0,
+      0.035
+     ],
+     "fail": 0,
+     "n": 106,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.1641,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn-",
+     "ci": [
+      0.0,
+      0.0527
+     ],
+     "fail": 0,
+     "n": 69,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.1068,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn+",
+     "ci": [
+      -0.0,
+      0.0575
+     ],
+     "fail": 0,
+     "n": 63,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0975,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|minor-up",
+     "ci": [
+      0.0,
+      0.0688
+     ],
+     "fail": 0,
+     "n": 52,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0805,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|R-vs-minors",
+     "ci": [
+      0.0,
+      0.0857
+     ],
+     "fail": 0,
+     "n": 41,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0635,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|B-vs-N",
+     "ci": [
+      0.0,
+      0.1487
+     ],
+     "fail": 0,
+     "n": 22,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0341,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|R-vs-minors",
+     "ci": [
+      0.0294,
+      0.3139
+     ],
+     "fail": 2,
+     "n": 19,
+     "rate": 0.1053,
+     "share_fail": 0.5,
+     "share_ok": 0.0263,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|B-vs-N",
+     "ci": [
+      -0.0,
+      0.2039
+     ],
+     "fail": 0,
+     "n": 15,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0232,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|level",
+     "ci": [
+      0.0,
+      0.2153
+     ],
+     "fail": 0,
+     "n": 14,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0217,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|Q-imbalance",
+     "ci": [
+      0.0,
+      0.2281
+     ],
+     "fail": 0,
+     "n": 13,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0201,
+     "small": false
+    },
+    {
+     "cat": "minor-EG|B-vs-N",
+     "ci": [
+      0.0137,
+      0.3331
+     ],
+     "fail": 1,
+     "n": 13,
+     "rate": 0.0769,
+     "share_fail": 0.25,
+     "share_ok": 0.0186,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|pawn+",
+     "ci": [
+      0.0,
+      0.2425
+     ],
+     "fail": 0,
+     "n": 12,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0186,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|minor-up",
+     "ci": [
+      0.0,
+      0.2992
+     ],
+     "fail": 0,
+     "n": 9,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0139,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|Q-imbalance",
+     "ci": [
+      0.0301,
+      0.5635
+     ],
+     "fail": 1,
+     "n": 6,
+     "rate": 0.1667,
+     "share_fail": 0.25,
+     "share_ok": 0.0077,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|level",
+     "ci": [
+      0.0,
+      0.3903
+     ],
+     "fail": 0,
+     "n": 6,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0093,
+     "small": true
+    },
+    {
+     "cat": "Q-MG|other-imbalance",
+     "ci": [
+      0.0,
+      0.3903
+     ],
+     "fail": 0,
+     "n": 6,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0093,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|minor-up",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0077,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|pawn+",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0077,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|B-vs-N",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0077,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|pawn-",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0077,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|R-vs-minors",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0077,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|R-vs-minors",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0077,
+     "small": true
+    },
+    {
+     "cat": "R-EG|pawn+",
+     "ci": [
+      0.0,
+      0.4899
+     ],
+     "fail": 0,
+     "n": 4,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0062,
+     "small": true
+    },
+    {
+     "cat": "R-EG|pawn-",
+     "ci": [
+      0.0,
+      0.4899
+     ],
+     "fail": 0,
+     "n": 4,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0062,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|pawn+",
+     "ci": [
+      0.0,
+      0.5615
+     ],
+     "fail": 0,
+     "n": 3,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0046,
+     "small": true
+    },
+    {
+     "cat": "R-EG|level",
+     "ci": [
+      0.0,
+      0.5615
+     ],
+     "fail": 0,
+     "n": 3,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0046,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|level",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0031,
+     "small": true
+    },
+    {
+     "cat": "pawn-EG|pawn+",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0031,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|pawn-",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0031,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|pawn-",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0031,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|other-imbalance",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0031,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|other-imbalance",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0015,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|minor-up",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0015,
+     "small": true
+    }
+   ],
+   "move": [
+    {
+     "cat": "m21-40",
+     "ci": [
+      0.0006,
+      0.0185
+     ],
+     "fail": 1,
+     "n": 302,
+     "rate": 0.0033,
+     "share_fail": 0.25,
+     "share_ok": 0.4659,
+     "small": false
+    },
+    {
+     "cat": "m1-20",
+     "ci": [
+      0.0,
+      0.0146
+     ],
+     "fail": 0,
+     "n": 260,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.4025,
+     "small": false
+    },
+    {
+     "cat": "m41-60",
+     "ci": [
+      0.0082,
+      0.1025
+     ],
+     "fail": 2,
+     "n": 67,
+     "rate": 0.0299,
+     "share_fail": 0.5,
+     "share_ok": 0.1006,
+     "small": false
+    },
+    {
+     "cat": "m61+",
+     "ci": [
+      0.0085,
+      0.2267
+     ],
+     "fail": 1,
+     "n": 21,
+     "rate": 0.0476,
+     "share_fail": 0.25,
+     "share_ok": 0.031,
+     "small": false
+    }
+   ],
+   "opp_kings": [
+    {
+     "cat": "same-wing",
+     "ci": [
+      0.0018,
+      0.0156
+     ],
+     "fail": 3,
+     "n": 561,
+     "rate": 0.0053,
+     "share_fail": 0.75,
+     "share_ok": 0.8638,
+     "small": false
+    },
+    {
+     "cat": "opp-wings",
+     "ci": [
+      0.002,
+      0.0609
+     ],
+     "fail": 1,
+     "n": 89,
+     "rate": 0.0112,
+     "share_fail": 0.25,
+     "share_ok": 0.1362,
+     "small": false
+    }
+   ],
+   "pawns": [
+    {
+     "cat": "p9-12",
+     "ci": [
+      0.0,
+      0.0132
+     ],
+     "fail": 0,
+     "n": 288,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.4458,
+     "small": false
+    },
+    {
+     "cat": "p13-16",
+     "ci": [
+      0.0,
+      0.0157
+     ],
+     "fail": 0,
+     "n": 241,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.3731,
+     "small": false
+    },
+    {
+     "cat": "p5-8",
+     "ci": [
+      0.0057,
+      0.0721
+     ],
+     "fail": 2,
+     "n": 97,
+     "rate": 0.0206,
+     "share_fail": 0.5,
+     "share_ok": 0.1471,
+     "small": false
+    },
+    {
+     "cat": "p0-4",
+     "ci": [
+      0.0232,
+      0.2585
+     ],
+     "fail": 2,
+     "n": 24,
+     "rate": 0.0833,
+     "share_fail": 0.5,
+     "share_ok": 0.0341,
+     "small": false
+    }
+   ],
+   "phase": [
+    {
+     "cat": "P19-24",
+     "ci": [
+      0.0,
+      0.0097
+     ],
+     "fail": 0,
+     "n": 392,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.6068,
+     "small": false
+    },
+    {
+     "cat": "P13-18",
+     "ci": [
+      0.0,
+      0.0347
+     ],
+     "fail": 0,
+     "n": 107,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.1656,
+     "small": false
+    },
+    {
+     "cat": "P7-12",
+     "ci": [
+      0.0019,
+      0.0584
+     ],
+     "fail": 1,
+     "n": 93,
+     "rate": 0.0108,
+     "share_fail": 0.25,
+     "share_ok": 0.1424,
+     "small": false
+    },
+    {
+     "cat": "P1-6",
+     "ci": [
+      0.0184,
+      0.1461
+     ],
+     "fail": 3,
+     "n": 56,
+     "rate": 0.0536,
+     "share_fail": 0.75,
+     "share_ok": 0.082,
+     "small": false
+    },
+    {
+     "cat": "P0",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0031,
+     "small": true
+    }
+   ],
+   "sig": [
+    {
+     "cat": "Q-MG",
+     "ci": [
+      0.0,
+      0.008
+     ],
+     "fail": 0,
+     "n": 478,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.7399,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG",
+     "ci": [
+      0.0,
+      0.0566
+     ],
+     "fail": 0,
+     "n": 64,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0991,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG",
+     "ci": [
+      0.0098,
+      0.1212
+     ],
+     "fail": 2,
+     "n": 56,
+     "rate": 0.0357,
+     "share_fail": 0.5,
+     "share_ok": 0.0836,
+     "small": false
+    },
+    {
+     "cat": "Q-EG",
+     "ci": [
+      0.0099,
+      0.2576
+     ],
+     "fail": 1,
+     "n": 18,
+     "rate": 0.0556,
+     "share_fail": 0.25,
+     "share_ok": 0.0263,
+     "small": false
+    },
+    {
+     "cat": "R-EG",
+     "ci": [
+      0.0,
+      0.2588
+     ],
+     "fail": 0,
+     "n": 11,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.017,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/multi/uneven",
+     "ci": [
+      0.0179,
+      0.4042
+     ],
+     "fail": 1,
+     "n": 10,
+     "rate": 0.1,
+     "share_fail": 0.25,
+     "share_ok": 0.0139,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/B-N",
+     "ci": [
+      0.0,
+      0.3903
+     ],
+     "fail": 0,
+     "n": 6,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0093,
+     "small": true
+    },
+    {
+     "cat": "minor-EG/N-N",
+     "ci": [
+      0.0,
+      0.4899
+     ],
+     "fail": 0,
+     "n": 4,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0062,
+     "small": true
+    },
+    {
+     "cat": "pawn-EG",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0031,
+     "small": true
+    },
+    {
+     "cat": "minor-EG/B-B same",
+     "ci": [
+      0.0,
+      0.7935
+     ],
+     "fail": 0,
+     "n": 1,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0015,
+     "small": true
+    }
+   ],
+   "struct": [
+    {
+     "cat": "no-passer/two-wing",
+     "ci": [
+      0.0026,
+      0.0221
+     ],
+     "fail": 3,
+     "n": 395,
+     "rate": 0.0076,
+     "share_fail": 0.75,
+     "share_ok": 0.6068,
+     "small": false
+    },
+    {
+     "cat": "both-passers/two-wing",
+     "ci": [
+      0.0,
+      0.0442
+     ],
+     "fail": 0,
+     "n": 83,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.1285,
+     "small": false
+    },
+    {
+     "cat": "own-passer/two-wing",
+     "ci": [
+      -0.0,
+      0.0464
+     ],
+     "fail": 0,
+     "n": 79,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.1223,
+     "small": false
+    },
+    {
+     "cat": "opp-passer/two-wing",
+     "ci": [
+      0.0,
+      0.0469
+     ],
+     "fail": 0,
+     "n": 78,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.1207,
+     "small": false
+    },
+    {
+     "cat": "no-passer/one-wing",
+     "ci": [
+      0.0,
+      0.3903
+     ],
+     "fail": 0,
+     "n": 6,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0093,
+     "small": true
+    },
+    {
+     "cat": "own-passer/one-wing",
+     "ci": [
+      -0.0,
+      0.4345
+     ],
+     "fail": 0,
+     "n": 5,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0077,
+     "small": true
+    },
+    {
+     "cat": "both-passers/one-wing",
+     "ci": [
+      0.0,
+      0.6576
+     ],
+     "fail": 0,
+     "n": 2,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0031,
+     "small": true
+    },
+    {
+     "cat": "opp-passer/one-wing",
+     "ci": [
+      0.0945,
+      0.9055
+     ],
+     "fail": 1,
+     "n": 2,
+     "rate": 0.5,
+     "share_fail": 0.25,
+     "share_ok": 0.0015,
+     "small": true
+    }
+   ],
+   "tb": [
+    {
+     "cat": "no-tb",
+     "ci": [
+      0.0016,
+      0.0136
+     ],
+     "fail": 3,
+     "n": 645,
+     "rate": 0.0047,
+     "share_fail": 0.75,
+     "share_ok": 0.9938,
+     "small": false
+    },
+    {
+     "cat": "tb",
+     "ci": [
+      0.0362,
+      0.6245
+     ],
+     "fail": 1,
+     "n": 5,
+     "rate": 0.2,
+     "share_fail": 0.25,
+     "share_ok": 0.0062,
+     "small": true
+    }
+   ]
+  },
+  "drawn": 4,
+  "fail_ci": [
+   0.0024,
+   0.0157
+  ],
+  "fail_rate": 0.0062,
+  "failure_drop_points": {
+   "by": {
+    "imb": [
+     {
+      "cat": "equal-pieces",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "Q-imbalance",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "minor-up",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "R-vs-minors",
+      "n": 1,
+      "share": 0.25
+     }
+    ],
+    "matcls": [
+     {
+      "cat": "minor-EG|pawn+",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "Q-EG|Q-imbalance",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "minor-EG|minor-up",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "R+minor-EG|R-vs-minors",
+      "n": 1,
+      "share": 0.25
+     }
+    ],
+    "move": [
+     {
+      "cat": "m61+",
+      "n": 4,
+      "share": 1.0
+     }
+    ],
+    "opp_kings": [
+     {
+      "cat": "same-wing",
+      "n": 4,
+      "share": 1.0
+     }
+    ],
+    "pawns": [
+     {
+      "cat": "p0-4",
+      "n": 3,
+      "share": 0.75
+     },
+     {
+      "cat": "p5-8",
+      "n": 1,
+      "share": 0.25
+     }
+    ],
+    "phase": [
+     {
+      "cat": "P1-6",
+      "n": 4,
+      "share": 1.0
+     }
+    ],
+    "sig": [
+     {
+      "cat": "minor-EG/B-B opp",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "Q-EG",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "minor-EG/multi/uneven",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "R+minor-EG",
+      "n": 1,
+      "share": 0.25
+     }
+    ],
+    "struct": [
+     {
+      "cat": "own-passer/two-wing",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "opp-passer/one-wing",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "no-passer/one-wing",
+      "n": 1,
+      "share": 0.25
+     },
+     {
+      "cat": "own-passer/one-wing",
+      "n": 1,
+      "share": 0.25
+     }
+    ],
+    "tb": [
+     {
+      "cat": "tb",
+      "n": 3,
+      "share": 0.75
+     },
+     {
+      "cat": "no-tb",
+      "n": 1,
+      "share": 0.25
+     }
+    ]
+   },
+   "n_drops": 4,
+   "no_drop": 0
+  },
+  "lost": 0,
+  "n": 650,
+  "terms_of_failures": [
+   [
+    "Draw by fifty moves rule",
+    2
+   ],
+   [
+    "Draw by 3-fold repetition",
+    1
+   ],
+   [
+    "Draw by insufficient mating material",
+    1
+   ]
+  ],
+  "won": 646
+ },
+ "g_def:core": {
+  "by_opp": {
+   "Altair 7.0.0": [
+    76,
+    72
+   ],
+   "Clover 6.1": [
+    99,
+    99
+   ],
+   "Marvin 6.3.0": [
+    45,
+    40
+   ],
+   "Stockfish 19": [
+    212,
+    211
+   ]
+  },
+  "by_start": {
+   "imb": [
+    {
+     "cat": "equal-pieces",
+     "ci": [
+      0.9414,
+      0.989
+     ],
+     "fail": 190,
+     "n": 195,
+     "rate": 0.9744,
+     "share_fail": 0.4502,
+     "share_ok": 0.5,
+     "small": false
+    },
+    {
+     "cat": "B-vs-N",
+     "ci": [
+      0.9307,
+      0.9946
+     ],
+     "fail": 99,
+     "n": 101,
+     "rate": 0.9802,
+     "share_fail": 0.2346,
+     "share_ok": 0.2,
+     "small": false
+    },
+    {
+     "cat": "minor-up",
+     "ci": [
+      0.8889,
+      0.9863
+     ],
+     "fail": 72,
+     "n": 75,
+     "rate": 0.96,
+     "share_fail": 0.1706,
+     "share_ok": 0.3,
+     "small": false
+    },
+    {
+     "cat": "R-vs-minors",
+     "ci": [
+      0.9143,
+      1.0
+     ],
+     "fail": 41,
+     "n": 41,
+     "rate": 1.0,
+     "share_fail": 0.0972,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "other-imbalance",
+     "ci": [
+      0.7412,
+      1.0
+     ],
+     "fail": 11,
+     "n": 11,
+     "rate": 1.0,
+     "share_fail": 0.0261,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "Q-imbalance",
+     "ci": [
+      0.7008,
+      1.0
+     ],
+     "fail": 9,
+     "n": 9,
+     "rate": 1.0,
+     "share_fail": 0.0213,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "matcls": [
+    {
+     "cat": "Q-MG|B-vs-N",
+     "ci": [
+      0.9102,
+      0.9928
+     ],
+     "fail": 75,
+     "n": 77,
+     "rate": 0.974,
+     "share_fail": 0.1777,
+     "share_ok": 0.2,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|minor-up",
+     "ci": [
+      0.8845,
+      0.9857
+     ],
+     "fail": 69,
+     "n": 72,
+     "rate": 0.9583,
+     "share_fail": 0.1635,
+     "share_ok": 0.3,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|level",
+     "ci": [
+      0.9003,
+      0.992
+     ],
+     "fail": 67,
+     "n": 69,
+     "rate": 0.971,
+     "share_fail": 0.1588,
+     "share_ok": 0.2,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn-",
+     "ci": [
+      0.8798,
+      0.9851
+     ],
+     "fail": 66,
+     "n": 69,
+     "rate": 0.9565,
+     "share_fail": 0.1564,
+     "share_ok": 0.3,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|R-vs-minors",
+     "ci": [
+      0.8713,
+      1.0
+     ],
+     "fail": 26,
+     "n": 26,
+     "rate": 1.0,
+     "share_fail": 0.0616,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn+",
+     "ci": [
+      0.8389,
+      1.0
+     ],
+     "fail": 20,
+     "n": 20,
+     "rate": 1.0,
+     "share_fail": 0.0474,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|R-vs-minors",
+     "ci": [
+      0.7847,
+      1.0
+     ],
+     "fail": 14,
+     "n": 14,
+     "rate": 1.0,
+     "share_fail": 0.0332,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|pawn-",
+     "ci": [
+      0.7008,
+      1.0
+     ],
+     "fail": 9,
+     "n": 9,
+     "rate": 1.0,
+     "share_fail": 0.0213,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|level",
+     "ci": [
+      0.7008,
+      1.0
+     ],
+     "fail": 9,
+     "n": 9,
+     "rate": 1.0,
+     "share_fail": 0.0213,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|B-vs-N",
+     "ci": [
+      0.7008,
+      1.0
+     ],
+     "fail": 9,
+     "n": 9,
+     "rate": 1.0,
+     "share_fail": 0.0213,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "Q-MG|other-imbalance",
+     "ci": [
+      0.6756,
+      1.0
+     ],
+     "fail": 8,
+     "n": 8,
+     "rate": 1.0,
+     "share_fail": 0.019,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|B-vs-N",
+     "ci": [
+      0.6756,
+      1.0
+     ],
+     "fail": 8,
+     "n": 8,
+     "rate": 1.0,
+     "share_fail": 0.019,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|B-vs-N",
+     "ci": [
+      0.6097,
+      1.0
+     ],
+     "fail": 6,
+     "n": 6,
+     "rate": 1.0,
+     "share_fail": 0.0142,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|Q-imbalance",
+     "ci": [
+      0.6097,
+      1.0
+     ],
+     "fail": 6,
+     "n": 6,
+     "rate": 1.0,
+     "share_fail": 0.0142,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|pawn-",
+     "ci": [
+      0.5101,
+      1.0
+     ],
+     "fail": 4,
+     "n": 4,
+     "rate": 1.0,
+     "share_fail": 0.0095,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|other-imbalance",
+     "ci": [
+      0.4385,
+      1.0
+     ],
+     "fail": 3,
+     "n": 3,
+     "rate": 1.0,
+     "share_fail": 0.0071,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|minor-up",
+     "ci": [
+      0.4385,
+      1.0
+     ],
+     "fail": 3,
+     "n": 3,
+     "rate": 1.0,
+     "share_fail": 0.0071,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "Q-MG|Q-imbalance",
+     "ci": [
+      0.4385,
+      1.0
+     ],
+     "fail": 3,
+     "n": 3,
+     "rate": 1.0,
+     "share_fail": 0.0071,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|pawn-",
+     "ci": [
+      0.4385,
+      1.0
+     ],
+     "fail": 3,
+     "n": 3,
+     "rate": 1.0,
+     "share_fail": 0.0071,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|pawn+",
+     "ci": [
+      0.3424,
+      1.0
+     ],
+     "fail": 2,
+     "n": 2,
+     "rate": 1.0,
+     "share_fail": 0.0047,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R-EG|pawn-",
+     "ci": [
+      0.3424,
+      1.0
+     ],
+     "fail": 2,
+     "n": 2,
+     "rate": 1.0,
+     "share_fail": 0.0047,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|pawn-",
+     "ci": [
+      0.3424,
+      1.0
+     ],
+     "fail": 2,
+     "n": 2,
+     "rate": 1.0,
+     "share_fail": 0.0047,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|R-vs-minors",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|B-vs-N",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|level",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R-EG|level",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|pawn+",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|level",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|level",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "pawn-EG|pawn-",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "move": [
+    {
+     "cat": "m21-40",
+     "ci": [
+      0.9321,
+      0.9853
+     ],
+     "fail": 182,
+     "n": 188,
+     "rate": 0.9681,
+     "share_fail": 0.4313,
+     "share_ok": 0.6,
+     "small": false
+    },
+    {
+     "cat": "m1-20",
+     "ci": [
+      0.9457,
+      0.9916
+     ],
+     "fail": 181,
+     "n": 185,
+     "rate": 0.9784,
+     "share_fail": 0.4289,
+     "share_ok": 0.4,
+     "small": false
+    },
+    {
+     "cat": "m41-60",
+     "ci": [
+      0.9229,
+      1.0
+     ],
+     "fail": 46,
+     "n": 46,
+     "rate": 1.0,
+     "share_fail": 0.109,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "m61+",
+     "ci": [
+      0.7719,
+      1.0
+     ],
+     "fail": 13,
+     "n": 13,
+     "rate": 1.0,
+     "share_fail": 0.0308,
+     "share_ok": 0.0,
+     "small": false
+    }
+   ],
+   "opp_kings": [
+    {
+     "cat": "same-wing",
+     "ci": [
+      0.9585,
+      0.9892
+     ],
+     "fail": 367,
+     "n": 375,
+     "rate": 0.9787,
+     "share_fail": 0.8697,
+     "share_ok": 0.8,
+     "small": false
+    },
+    {
+     "cat": "opp-wings",
+     "ci": [
+      0.8808,
+      0.9903
+     ],
+     "fail": 55,
+     "n": 57,
+     "rate": 0.9649,
+     "share_fail": 0.1303,
+     "share_ok": 0.2,
+     "small": false
+    }
+   ],
+   "pawns": [
+    {
+     "cat": "p9-12",
+     "ci": [
+      0.9443,
+      0.9913
+     ],
+     "fail": 176,
+     "n": 180,
+     "rate": 0.9778,
+     "share_fail": 0.4171,
+     "share_ok": 0.4,
+     "small": false
+    },
+    {
+     "cat": "p13-16",
+     "ci": [
+      0.9349,
+      0.9877
+     ],
+     "fail": 170,
+     "n": 175,
+     "rate": 0.9714,
+     "share_fail": 0.4028,
+     "share_ok": 0.5,
+     "small": false
+    },
+    {
+     "cat": "p5-8",
+     "ci": [
+      0.9213,
+      0.9974
+     ],
+     "fail": 67,
+     "n": 68,
+     "rate": 0.9853,
+     "share_fail": 0.1588,
+     "share_ok": 0.1,
+     "small": false
+    },
+    {
+     "cat": "p0-4",
+     "ci": [
+      0.7008,
+      1.0
+     ],
+     "fail": 9,
+     "n": 9,
+     "rate": 1.0,
+     "share_fail": 0.0213,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "phase": [
+    {
+     "cat": "P19-24",
+     "ci": [
+      0.9497,
+      0.9879
+     ],
+     "fail": 275,
+     "n": 282,
+     "rate": 0.9752,
+     "share_fail": 0.6517,
+     "share_ok": 0.7,
+     "small": false
+    },
+    {
+     "cat": "P13-18",
+     "ci": [
+      0.8747,
+      0.9844
+     ],
+     "fail": 63,
+     "n": 66,
+     "rate": 0.9545,
+     "share_fail": 0.1493,
+     "share_ok": 0.3,
+     "small": false
+    },
+    {
+     "cat": "P7-12",
+     "ci": [
+      0.9229,
+      1.0
+     ],
+     "fail": 46,
+     "n": 46,
+     "rate": 1.0,
+     "share_fail": 0.109,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "P1-6",
+     "ci": [
+      0.9059,
+      1.0
+     ],
+     "fail": 37,
+     "n": 37,
+     "rate": 1.0,
+     "share_fail": 0.0877,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "P0",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "sig": [
+    {
+     "cat": "Q-MG",
+     "ci": [
+      0.9473,
+      0.9841
+     ],
+     "fail": 334,
+     "n": 344,
+     "rate": 0.9709,
+     "share_fail": 0.7915,
+     "share_ok": 1.0,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG",
+     "ci": [
+      0.8985,
+      1.0
+     ],
+     "fail": 34,
+     "n": 34,
+     "rate": 1.0,
+     "share_fail": 0.0806,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG",
+     "ci": [
+      0.8794,
+      1.0
+     ],
+     "fail": 28,
+     "n": 28,
+     "rate": 1.0,
+     "share_fail": 0.0664,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "Q-EG",
+     "ci": [
+      0.7412,
+      1.0
+     ],
+     "fail": 11,
+     "n": 11,
+     "rate": 1.0,
+     "share_fail": 0.0261,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/multi/uneven",
+     "ci": [
+      0.5655,
+      1.0
+     ],
+     "fail": 5,
+     "n": 5,
+     "rate": 1.0,
+     "share_fail": 0.0118,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "minor-EG/B-N",
+     "ci": [
+      0.4385,
+      1.0
+     ],
+     "fail": 3,
+     "n": 3,
+     "rate": 1.0,
+     "share_fail": 0.0071,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R-EG",
+     "ci": [
+      0.4385,
+      1.0
+     ],
+     "fail": 3,
+     "n": 3,
+     "rate": 1.0,
+     "share_fail": 0.0071,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "minor-EG/B-B same",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "minor-EG/N-N",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "minor-EG/B-B opp",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "pawn-EG",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "struct": [
+    {
+     "cat": "no-passer/two-wing",
+     "ci": [
+      0.9551,
+      0.9916
+     ],
+     "fail": 251,
+     "n": 256,
+     "rate": 0.9805,
+     "share_fail": 0.5948,
+     "share_ok": 0.5,
+     "small": false
+    },
+    {
+     "cat": "opp-passer/two-wing",
+     "ci": [
+      0.8273,
+      0.9656
+     ],
+     "fail": 58,
+     "n": 63,
+     "rate": 0.9206,
+     "share_fail": 0.1374,
+     "share_ok": 0.5,
+     "small": false
+    },
+    {
+     "cat": "own-passer/two-wing",
+     "ci": [
+      0.9358,
+      1.0
+     ],
+     "fail": 56,
+     "n": 56,
+     "rate": 1.0,
+     "share_fail": 0.1327,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "both-passers/two-wing",
+     "ci": [
+      0.9286,
+      1.0
+     ],
+     "fail": 50,
+     "n": 50,
+     "rate": 1.0,
+     "share_fail": 0.1185,
+     "share_ok": 0.0,
+     "small": false
+    },
+    {
+     "cat": "own-passer/one-wing",
+     "ci": [
+      0.4385,
+      1.0
+     ],
+     "fail": 3,
+     "n": 3,
+     "rate": 1.0,
+     "share_fail": 0.0071,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "no-passer/one-wing",
+     "ci": [
+      0.3424,
+      1.0
+     ],
+     "fail": 2,
+     "n": 2,
+     "rate": 1.0,
+     "share_fail": 0.0047,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "opp-passer/one-wing",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "both-passers/one-wing",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.0024,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "tb": [
+    {
+     "cat": "no-tb",
+     "ci": [
+      0.9575,
+      0.9873
+     ],
+     "fail": 418,
+     "n": 428,
+     "rate": 0.9766,
+     "share_fail": 0.9905,
+     "share_ok": 1.0,
+     "small": false
+    },
+    {
+     "cat": "tb",
+     "ci": [
+      0.5101,
+      1.0
+     ],
+     "fail": 4,
+     "n": 4,
+     "rate": 1.0,
+     "share_fail": 0.0095,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ]
+  },
+  "drawn": 7,
+  "loss_ci": [
+   0.9579,
+   0.9874
+  ],
+  "loss_rate": 0.9769,
+  "lost": 422,
+  "n": 432,
+  "won": 3
+ },
+ "g_def:other": {
+  "by_opp": {
+   "Laser 1.7": [
+    31,
+    26
+   ],
+   "Monolith 2.01": [
+    20,
+    7
+   ],
+   "Weiss 1.0": [
+    15,
+    6
+   ],
+   "Winter 0.9": [
+    28,
+    11
+   ]
+  },
+  "by_start": {
+   "imb": [
+    {
+     "cat": "minor-up",
+     "ci": [
+      0.3892,
+      0.6749
+     ],
+     "fail": 23,
+     "n": 43,
+     "rate": 0.5349,
+     "share_fail": 0.46,
+     "share_ok": 0.4545,
+     "small": false
+    },
+    {
+     "cat": "equal-pieces",
+     "ci": [
+      0.3875,
+      0.6794
+     ],
+     "fail": 22,
+     "n": 41,
+     "rate": 0.5366,
+     "share_fail": 0.44,
+     "share_ok": 0.4318,
+     "small": false
+    },
+    {
+     "cat": "B-vs-N",
+     "ci": [
+      0.1876,
+      0.8124
+     ],
+     "fail": 3,
+     "n": 6,
+     "rate": 0.5,
+     "share_fail": 0.06,
+     "share_ok": 0.0682,
+     "small": true
+    },
+    {
+     "cat": "other-imbalance",
+     "ci": [
+      0.0945,
+      0.9055
+     ],
+     "fail": 1,
+     "n": 2,
+     "rate": 0.5,
+     "share_fail": 0.02,
+     "share_ok": 0.0227,
+     "small": true
+    },
+    {
+     "cat": "R-vs-minors",
+     "ci": [
+      0.0945,
+      0.9055
+     ],
+     "fail": 1,
+     "n": 2,
+     "rate": 0.5,
+     "share_fail": 0.02,
+     "share_ok": 0.0227,
+     "small": true
+    }
+   ],
+   "matcls": [
+    {
+     "cat": "Q-MG|minor-up",
+     "ci": [
+      0.3772,
+      0.6664
+     ],
+     "fail": 22,
+     "n": 42,
+     "rate": 0.5238,
+     "share_fail": 0.44,
+     "share_ok": 0.4545,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn-",
+     "ci": [
+      0.3484,
+      0.6803
+     ],
+     "fail": 16,
+     "n": 31,
+     "rate": 0.5161,
+     "share_fail": 0.32,
+     "share_ok": 0.3409,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|level",
+     "ci": [
+      0.3127,
+      0.8318
+     ],
+     "fail": 6,
+     "n": 10,
+     "rate": 0.6,
+     "share_fail": 0.12,
+     "share_ok": 0.0909,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|B-vs-N",
+     "ci": [
+      0.15,
+      0.85
+     ],
+     "fail": 2,
+     "n": 4,
+     "rate": 0.5,
+     "share_fail": 0.04,
+     "share_ok": 0.0455,
+     "small": true
+    },
+    {
+     "cat": "Q-MG|other-imbalance",
+     "ci": [
+      0.0945,
+      0.9055
+     ],
+     "fail": 1,
+     "n": 2,
+     "rate": 0.5,
+     "share_fail": 0.02,
+     "share_ok": 0.0227,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|B-vs-N",
+     "ci": [
+      0.0945,
+      0.9055
+     ],
+     "fail": 1,
+     "n": 2,
+     "rate": 0.5,
+     "share_fail": 0.02,
+     "share_ok": 0.0227,
+     "small": true
+    },
+    {
+     "cat": "Q-MG|R-vs-minors",
+     "ci": [
+      0.0945,
+      0.9055
+     ],
+     "fail": 1,
+     "n": 2,
+     "rate": 0.5,
+     "share_fail": 0.02,
+     "share_ok": 0.0227,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|minor-up",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.02,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "move": [
+    {
+     "cat": "m1-20",
+     "ci": [
+      0.3848,
+      0.6028
+     ],
+     "fail": 38,
+     "n": 77,
+     "rate": 0.4935,
+     "share_fail": 0.76,
+     "share_ok": 0.8864,
+     "small": false
+    },
+    {
+     "cat": "m21-40",
+     "ci": [
+      0.3876,
+      0.8366
+     ],
+     "fail": 9,
+     "n": 14,
+     "rate": 0.6429,
+     "share_fail": 0.18,
+     "share_ok": 0.1136,
+     "small": false
+    },
+    {
+     "cat": "m41-60",
+     "ci": [
+      0.3424,
+      1.0
+     ],
+     "fail": 2,
+     "n": 2,
+     "rate": 1.0,
+     "share_fail": 0.04,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "m61+",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.02,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "opp_kings": [
+    {
+     "cat": "same-wing",
+     "ci": [
+      0.4145,
+      0.6178
+     ],
+     "fail": 46,
+     "n": 89,
+     "rate": 0.5169,
+     "share_fail": 0.92,
+     "share_ok": 0.9773,
+     "small": false
+    },
+    {
+     "cat": "opp-wings",
+     "ci": [
+      0.3755,
+      0.9638
+     ],
+     "fail": 4,
+     "n": 5,
+     "rate": 0.8,
+     "share_fail": 0.08,
+     "share_ok": 0.0227,
+     "small": true
+    }
+   ],
+   "pawns": [
+    {
+     "cat": "p13-16",
+     "ci": [
+      0.3761,
+      0.5982
+     ],
+     "fail": 36,
+     "n": 74,
+     "rate": 0.4865,
+     "share_fail": 0.72,
+     "share_ok": 0.8636,
+     "small": false
+    },
+    {
+     "cat": "p9-12",
+     "ci": [
+      0.4805,
+      0.891
+     ],
+     "fail": 11,
+     "n": 15,
+     "rate": 0.7333,
+     "share_fail": 0.22,
+     "share_ok": 0.0909,
+     "small": false
+    },
+    {
+     "cat": "p5-8",
+     "ci": [
+      0.15,
+      0.85
+     ],
+     "fail": 2,
+     "n": 4,
+     "rate": 0.5,
+     "share_fail": 0.04,
+     "share_ok": 0.0455,
+     "small": true
+    },
+    {
+     "cat": "p0-4",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.02,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "phase": [
+    {
+     "cat": "P19-24",
+     "ci": [
+      0.4294,
+      0.6405
+     ],
+     "fail": 44,
+     "n": 82,
+     "rate": 0.5366,
+     "share_fail": 0.88,
+     "share_ok": 0.8636,
+     "small": false
+    },
+    {
+     "cat": "P13-18",
+     "ci": [
+      0.1682,
+      0.6873
+     ],
+     "fail": 4,
+     "n": 10,
+     "rate": 0.4,
+     "share_fail": 0.08,
+     "share_ok": 0.1364,
+     "small": false
+    },
+    {
+     "cat": "P7-12",
+     "ci": [
+      0.3424,
+      1.0
+     ],
+     "fail": 2,
+     "n": 2,
+     "rate": 1.0,
+     "share_fail": 0.04,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "sig": [
+    {
+     "cat": "Q-MG",
+     "ci": [
+      0.4259,
+      0.6268
+     ],
+     "fail": 48,
+     "n": 91,
+     "rate": 0.5275,
+     "share_fail": 0.96,
+     "share_ok": 0.9773,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG",
+     "ci": [
+      0.0945,
+      0.9055
+     ],
+     "fail": 1,
+     "n": 2,
+     "rate": 0.5,
+     "share_fail": 0.02,
+     "share_ok": 0.0227,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG",
+     "ci": [
+      0.2065,
+      1.0
+     ],
+     "fail": 1,
+     "n": 1,
+     "rate": 1.0,
+     "share_fail": 0.02,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "struct": [
+    {
+     "cat": "no-passer/two-wing",
+     "ci": [
+      0.4105,
+      0.6257
+     ],
+     "fail": 41,
+     "n": 79,
+     "rate": 0.519,
+     "share_fail": 0.82,
+     "share_ok": 0.8636,
+     "small": false
+    },
+    {
+     "cat": "opp-passer/two-wing",
+     "ci": [
+      0.1876,
+      0.8124
+     ],
+     "fail": 3,
+     "n": 6,
+     "rate": 0.5,
+     "share_fail": 0.06,
+     "share_ok": 0.0682,
+     "small": true
+    },
+    {
+     "cat": "own-passer/two-wing",
+     "ci": [
+      0.3,
+      0.9032
+     ],
+     "fail": 4,
+     "n": 6,
+     "rate": 0.6667,
+     "share_fail": 0.08,
+     "share_ok": 0.0455,
+     "small": true
+    },
+    {
+     "cat": "both-passers/two-wing",
+     "ci": [
+      0.2077,
+      0.9385
+     ],
+     "fail": 2,
+     "n": 3,
+     "rate": 0.6667,
+     "share_fail": 0.04,
+     "share_ok": 0.0227,
+     "small": true
+    }
+   ],
+   "tb": [
+    {
+     "cat": "no-tb",
+     "ci": [
+      0.4318,
+      0.6295
+     ],
+     "fail": 50,
+     "n": 94,
+     "rate": 0.5319,
+     "share_fail": 1.0,
+     "share_ok": 1.0,
+     "small": false
+    }
+   ]
+  },
+  "drawn": 17,
+  "loss_ci": [
+   0.4318,
+   0.6295
+  ],
+  "loss_rate": 0.5319,
+  "lost": 50,
+  "n": 94,
+  "won": 27
+ },
+ "s_conv:all": {
+  "by_start": {
+   "imb": [
+    {
+     "cat": "equal-pieces",
+     "ci": [
+      0.0089,
+      0.0211
+     ],
+     "fail": 20,
+     "n": 1460,
+     "rate": 0.0137,
+     "share_fail": 0.2778,
+     "share_ok": 0.4503,
+     "small": false
+    },
+    {
+     "cat": "B-vs-N",
+     "ci": [
+      0.0096,
+      0.026
+     ],
+     "fail": 15,
+     "n": 947,
+     "rate": 0.0158,
+     "share_fail": 0.2083,
+     "share_ok": 0.2914,
+     "small": false
+    },
+    {
+     "cat": "R-vs-minors",
+     "ci": [
+      0.0236,
+      0.061
+     ],
+     "fail": 16,
+     "n": 420,
+     "rate": 0.0381,
+     "share_fail": 0.2222,
+     "share_ok": 0.1263,
+     "small": false
+    },
+    {
+     "cat": "minor-up",
+     "ci": [
+      0.0395,
+      0.0982
+     ],
+     "fail": 17,
+     "n": 271,
+     "rate": 0.0627,
+     "share_fail": 0.2361,
+     "share_ok": 0.0794,
+     "small": false
+    },
+    {
+     "cat": "Q-imbalance",
+     "ci": [
+      0.0155,
+      0.0974
+     ],
+     "fail": 4,
+     "n": 101,
+     "rate": 0.0396,
+     "share_fail": 0.0556,
+     "share_ok": 0.0303,
+     "small": false
+    },
+    {
+     "cat": "other-imbalance",
+     "ci": [
+      0.0,
+      0.0513
+     ],
+     "fail": 0,
+     "n": 71,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0222,
+     "small": false
+    }
+   ],
+   "matcls": [
+    {
+     "cat": "Q-MG|B-vs-N",
+     "ci": [
+      0.0095,
+      0.0339
+     ],
+     "fail": 9,
+     "n": 499,
+     "rate": 0.018,
+     "share_fail": 0.125,
+     "share_ok": 0.1532,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|level",
+     "ci": [
+      0.0064,
+      0.0414
+     ],
+     "fail": 4,
+     "n": 244,
+     "rate": 0.0164,
+     "share_fail": 0.0556,
+     "share_ok": 0.075,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn+",
+     "ci": [
+      0.0,
+      0.0162
+     ],
+     "fail": 0,
+     "n": 233,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0729,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|R-vs-minors",
+     "ci": [
+      0.0243,
+      0.085
+     ],
+     "fail": 9,
+     "n": 196,
+     "rate": 0.0459,
+     "share_fail": 0.125,
+     "share_ok": 0.0585,
+     "small": false
+    },
+    {
+     "cat": "R-EG|pawn+",
+     "ci": [
+      0.0054,
+      0.0454
+     ],
+     "fail": 3,
+     "n": 190,
+     "rate": 0.0158,
+     "share_fail": 0.0417,
+     "share_ok": 0.0585,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|B-vs-N",
+     "ci": [
+      0.0057,
+      0.0476
+     ],
+     "fail": 3,
+     "n": 181,
+     "rate": 0.0166,
+     "share_fail": 0.0417,
+     "share_ok": 0.0557,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|R-vs-minors",
+     "ci": [
+      0.0088,
+      0.0567
+     ],
+     "fail": 4,
+     "n": 177,
+     "rate": 0.0226,
+     "share_fail": 0.0556,
+     "share_ok": 0.0541,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|minor-up",
+     "ci": [
+      0.0143,
+      0.0757
+     ],
+     "fail": 5,
+     "n": 150,
+     "rate": 0.0333,
+     "share_fail": 0.0694,
+     "share_ok": 0.0453,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|pawn+",
+     "ci": [
+      0.0041,
+      0.0532
+     ],
+     "fail": 2,
+     "n": 133,
+     "rate": 0.015,
+     "share_fail": 0.0278,
+     "share_ok": 0.041,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|B-vs-N",
+     "ci": [
+      0.0014,
+      0.0436
+     ],
+     "fail": 1,
+     "n": 126,
+     "rate": 0.0079,
+     "share_fail": 0.0139,
+     "share_ok": 0.0391,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn-",
+     "ci": [
+      0.0015,
+      0.0476
+     ],
+     "fail": 1,
+     "n": 115,
+     "rate": 0.0087,
+     "share_fail": 0.0139,
+     "share_ok": 0.0356,
+     "small": false
+    },
+    {
+     "cat": "minor-EG|B-vs-N",
+     "ci": [
+      0.0054,
+      0.0687
+     ],
+     "fail": 2,
+     "n": 102,
+     "rate": 0.0196,
+     "share_fail": 0.0278,
+     "share_ok": 0.0313,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|pawn+",
+     "ci": [
+      0.0054,
+      0.0687
+     ],
+     "fail": 2,
+     "n": 102,
+     "rate": 0.0196,
+     "share_fail": 0.0278,
+     "share_ok": 0.0313,
+     "small": false
+    },
+    {
+     "cat": "minor-EG|pawn+",
+     "ci": [
+      0.007,
+      0.0877
+     ],
+     "fail": 2,
+     "n": 79,
+     "rate": 0.0253,
+     "share_fail": 0.0278,
+     "share_ok": 0.0241,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|pawn+",
+     "ci": [
+      0.0133,
+      0.1084
+     ],
+     "fail": 3,
+     "n": 77,
+     "rate": 0.039,
+     "share_fail": 0.0417,
+     "share_ok": 0.0231,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|Q-imbalance",
+     "ci": [
+      0.0212,
+      0.1309
+     ],
+     "fail": 4,
+     "n": 74,
+     "rate": 0.0541,
+     "share_fail": 0.0556,
+     "share_ok": 0.0219,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|minor-up",
+     "ci": [
+      0.0169,
+      0.1349
+     ],
+     "fail": 3,
+     "n": 61,
+     "rate": 0.0492,
+     "share_fail": 0.0417,
+     "share_ok": 0.0181,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|level",
+     "ci": [
+      -0.0,
+      0.0602
+     ],
+     "fail": 0,
+     "n": 60,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0188,
+     "small": false
+    },
+    {
+     "cat": "R-EG|level",
+     "ci": [
+      0.0029,
+      0.0886
+     ],
+     "fail": 1,
+     "n": 60,
+     "rate": 0.0167,
+     "share_fail": 0.0139,
+     "share_ok": 0.0184,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|level",
+     "ci": [
+      -0.0,
+      0.0771
+     ],
+     "fail": 0,
+     "n": 46,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0144,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|B-vs-N",
+     "ci": [
+      0.0,
+      0.0897
+     ],
+     "fail": 0,
+     "n": 39,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0122,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|other-imbalance",
+     "ci": [
+      0.0,
+      0.0989
+     ],
+     "fail": 0,
+     "n": 35,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0109,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|level",
+     "ci": [
+      0.0055,
+      0.1574
+     ],
+     "fail": 1,
+     "n": 32,
+     "rate": 0.0312,
+     "share_fail": 0.0139,
+     "share_ok": 0.0097,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|Q-imbalance",
+     "ci": [
+      0.0,
+      0.1246
+     ],
+     "fail": 0,
+     "n": 27,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0084,
+     "small": false
+    },
+    {
+     "cat": "minor-EG|level",
+     "ci": [
+      0.0,
+      0.1332
+     ],
+     "fail": 0,
+     "n": 25,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0078,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|R-vs-minors",
+     "ci": [
+      0.0071,
+      0.1954
+     ],
+     "fail": 1,
+     "n": 25,
+     "rate": 0.04,
+     "share_fail": 0.0139,
+     "share_ok": 0.0075,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|minor-up",
+     "ci": [
+      0.0077,
+      0.2099
+     ],
+     "fail": 1,
+     "n": 23,
+     "rate": 0.0435,
+     "share_fail": 0.0139,
+     "share_ok": 0.0069,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|R-vs-minors",
+     "ci": [
+      0.0253,
+      0.2782
+     ],
+     "fail": 2,
+     "n": 22,
+     "rate": 0.0909,
+     "share_fail": 0.0278,
+     "share_ok": 0.0063,
+     "small": false
+    },
+    {
+     "cat": "minor-EG|minor-up",
+     "ci": [
+      0.1455,
+      0.519
+     ],
+     "fail": 6,
+     "n": 20,
+     "rate": 0.3,
+     "share_fail": 0.0833,
+     "share_ok": 0.0044,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|pawn-",
+     "ci": [
+      0.0099,
+      0.2576
+     ],
+     "fail": 1,
+     "n": 18,
+     "rate": 0.0556,
+     "share_fail": 0.0139,
+     "share_ok": 0.0053,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|minor-up",
+     "ci": [
+      0.0329,
+      0.3434
+     ],
+     "fail": 2,
+     "n": 17,
+     "rate": 0.1176,
+     "share_fail": 0.0278,
+     "share_ok": 0.0047,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|other-imbalance",
+     "ci": [
+      0.0,
+      0.1843
+     ],
+     "fail": 0,
+     "n": 17,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0053,
+     "small": false
+    },
+    {
+     "cat": "R-EG|pawn-",
+     "ci": [
+      0.0,
+      0.2425
+     ],
+     "fail": 0,
+     "n": 12,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0038,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|pawn-",
+     "ci": [
+      -0.0,
+      0.2775
+     ],
+     "fail": 0,
+     "n": 10,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0031,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|other-imbalance",
+     "ci": [
+      0.0,
+      0.2992
+     ],
+     "fail": 0,
+     "n": 9,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0028,
+     "small": true
+    },
+    {
+     "cat": "pawn-EG|level",
+     "ci": [
+      0.0,
+      0.2992
+     ],
+     "fail": 0,
+     "n": 9,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0028,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|pawn-",
+     "ci": [
+      0.0,
+      0.3543
+     ],
+     "fail": 0,
+     "n": 7,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0022,
+     "small": true
+    },
+    {
+     "cat": "noQ-MG|other-imbalance",
+     "ci": [
+      0.0,
+      0.3903
+     ],
+     "fail": 0,
+     "n": 6,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0019,
+     "small": true
+    },
+    {
+     "cat": "pawn-EG|pawn+",
+     "ci": [
+      0.0,
+      0.4899
+     ],
+     "fail": 0,
+     "n": 4,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0013,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|pawn-",
+     "ci": [
+      0.0,
+      0.4899
+     ],
+     "fail": 0,
+     "n": 4,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0013,
+     "small": true
+    },
+    {
+     "cat": "R-EG|other-imbalance",
+     "ci": [
+      0.0,
+      0.4899
+     ],
+     "fail": 0,
+     "n": 4,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0013,
+     "small": true
+    }
+   ],
+   "move": [
+    {
+     "cat": "m21-40",
+     "ci": [
+      0.0113,
+      0.024
+     ],
+     "fail": 26,
+     "n": 1579,
+     "rate": 0.0165,
+     "share_fail": 0.3611,
+     "share_ok": 0.4856,
+     "small": false
+    },
+    {
+     "cat": "m41-60",
+     "ci": [
+      0.0169,
+      0.035
+     ],
+     "fail": 28,
+     "n": 1150,
+     "rate": 0.0243,
+     "share_fail": 0.3889,
+     "share_ok": 0.3508,
+     "small": false
+    },
+    {
+     "cat": "m61+",
+     "ci": [
+      0.0242,
+      0.0624
+     ],
+     "fail": 16,
+     "n": 410,
+     "rate": 0.039,
+     "share_fail": 0.2222,
+     "share_ok": 0.1232,
+     "small": false
+    },
+    {
+     "cat": "m1-20",
+     "ci": [
+      0.0042,
+      0.054
+     ],
+     "fail": 2,
+     "n": 131,
+     "rate": 0.0153,
+     "share_fail": 0.0278,
+     "share_ok": 0.0403,
+     "small": false
+    }
+   ],
+   "opp_kings": [
+    {
+     "cat": "same-wing",
+     "ci": [
+      0.0193,
+      0.0312
+     ],
+     "fail": 65,
+     "n": 2645,
+     "rate": 0.0246,
+     "share_fail": 0.9028,
+     "share_ok": 0.8068,
+     "small": false
+    },
+    {
+     "cat": "opp-wings",
+     "ci": [
+      0.0054,
+      0.0229
+     ],
+     "fail": 7,
+     "n": 625,
+     "rate": 0.0112,
+     "share_fail": 0.0972,
+     "share_ok": 0.1932,
+     "small": false
+    }
+   ],
+   "pawns": [
+    {
+     "cat": "p9-12",
+     "ci": [
+      0.0105,
+      0.0234
+     ],
+     "fail": 23,
+     "n": 1466,
+     "rate": 0.0157,
+     "share_fail": 0.3194,
+     "share_ok": 0.4512,
+     "small": false
+    },
+    {
+     "cat": "p5-8",
+     "ci": [
+      0.0153,
+      0.0326
+     ],
+     "fail": 26,
+     "n": 1162,
+     "rate": 0.0224,
+     "share_fail": 0.3611,
+     "share_ok": 0.3552,
+     "small": false
+    },
+    {
+     "cat": "p0-4",
+     "ci": [
+      0.0349,
+      0.0848
+     ],
+     "fail": 18,
+     "n": 329,
+     "rate": 0.0547,
+     "share_fail": 0.25,
+     "share_ok": 0.0972,
+     "small": false
+    },
+    {
+     "cat": "p13-16",
+     "ci": [
+      0.0068,
+      0.0368
+     ],
+     "fail": 5,
+     "n": 313,
+     "rate": 0.016,
+     "share_fail": 0.0694,
+     "share_ok": 0.0963,
+     "small": false
+    }
+   ],
+   "phase": [
+    {
+     "cat": "P1-6",
+     "ci": [
+      0.0205,
+      0.0434
+     ],
+     "fail": 26,
+     "n": 871,
+     "rate": 0.0299,
+     "share_fail": 0.3611,
+     "share_ok": 0.2642,
+     "small": false
+    },
+    {
+     "cat": "P13-18",
+     "ci": [
+      0.0132,
+      0.0325
+     ],
+     "fail": 18,
+     "n": 868,
+     "rate": 0.0207,
+     "share_fail": 0.25,
+     "share_ok": 0.2658,
+     "small": false
+    },
+    {
+     "cat": "P7-12",
+     "ci": [
+      0.016,
+      0.0369
+     ],
+     "fail": 21,
+     "n": 863,
+     "rate": 0.0243,
+     "share_fail": 0.2917,
+     "share_ok": 0.2633,
+     "small": false
+    },
+    {
+     "cat": "P19-24",
+     "ci": [
+      0.0052,
+      0.0219
+     ],
+     "fail": 7,
+     "n": 655,
+     "rate": 0.0107,
+     "share_fail": 0.0972,
+     "share_ok": 0.2026,
+     "small": false
+    },
+    {
+     "cat": "P0",
+     "ci": [
+      0.0,
+      0.2281
+     ],
+     "fail": 0,
+     "n": 13,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0041,
+     "small": false
+    }
+   ],
+   "sig": [
+    {
+     "cat": "Q-MG",
+     "ci": [
+      0.0104,
+      0.0232
+     ],
+     "fail": 23,
+     "n": 1480,
+     "rate": 0.0155,
+     "share_fail": 0.3194,
+     "share_ok": 0.4556,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG",
+     "ci": [
+      0.0162,
+      0.041
+     ],
+     "fail": 17,
+     "n": 658,
+     "rate": 0.0258,
+     "share_fail": 0.2361,
+     "share_ok": 0.2004,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG",
+     "ci": [
+      0.0152,
+      0.0539
+     ],
+     "fail": 9,
+     "n": 312,
+     "rate": 0.0288,
+     "share_fail": 0.125,
+     "share_ok": 0.0947,
+     "small": false
+    },
+    {
+     "cat": "Q-EG",
+     "ci": [
+      0.0153,
+      0.0541
+     ],
+     "fail": 9,
+     "n": 311,
+     "rate": 0.0289,
+     "share_fail": 0.125,
+     "share_ok": 0.0944,
+     "small": false
+    },
+    {
+     "cat": "R-EG",
+     "ci": [
+      0.0059,
+      0.038
+     ],
+     "fail": 4,
+     "n": 266,
+     "rate": 0.015,
+     "share_fail": 0.0556,
+     "share_ok": 0.0819,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/B-N",
+     "ci": [
+      0.0,
+      0.0494
+     ],
+     "fail": 0,
+     "n": 74,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0231,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/multi/uneven",
+     "ci": [
+      0.0734,
+      0.2393
+     ],
+     "fail": 9,
+     "n": 66,
+     "rate": 0.1364,
+     "share_fail": 0.125,
+     "share_ok": 0.0178,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/N-N",
+     "ci": [
+      0.0,
+      0.0989
+     ],
+     "fail": 0,
+     "n": 35,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0109,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/B-B same",
+     "ci": [
+      0.0,
+      0.117
+     ],
+     "fail": 0,
+     "n": 29,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0091,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/B-B opp",
+     "ci": [
+      0.0068,
+      0.1889
+     ],
+     "fail": 1,
+     "n": 26,
+     "rate": 0.0385,
+     "share_fail": 0.0139,
+     "share_ok": 0.0078,
+     "small": false
+    },
+    {
+     "cat": "pawn-EG",
+     "ci": [
+      0.0,
+      0.2281
+     ],
+     "fail": 0,
+     "n": 13,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0041,
+     "small": false
+    }
+   ],
+   "struct": [
+    {
+     "cat": "no-passer/two-wing",
+     "ci": [
+      0.009,
+      0.0244
+     ],
+     "fail": 15,
+     "n": 1008,
+     "rate": 0.0149,
+     "share_fail": 0.2083,
+     "share_ok": 0.3105,
+     "small": false
+    },
+    {
+     "cat": "both-passers/two-wing",
+     "ci": [
+      0.0075,
+      0.0237
+     ],
+     "fail": 11,
+     "n": 825,
+     "rate": 0.0133,
+     "share_fail": 0.1528,
+     "share_ok": 0.2545,
+     "small": false
+    },
+    {
+     "cat": "own-passer/two-wing",
+     "ci": [
+      0.0141,
+      0.0348
+     ],
+     "fail": 18,
+     "n": 812,
+     "rate": 0.0222,
+     "share_fail": 0.25,
+     "share_ok": 0.2483,
+     "small": false
+    },
+    {
+     "cat": "opp-passer/two-wing",
+     "ci": [
+      0.0111,
+      0.0424
+     ],
+     "fail": 8,
+     "n": 367,
+     "rate": 0.0218,
+     "share_fail": 0.1111,
+     "share_ok": 0.1123,
+     "small": false
+    },
+    {
+     "cat": "own-passer/one-wing",
+     "ci": [
+      0.0155,
+      0.0974
+     ],
+     "fail": 4,
+     "n": 101,
+     "rate": 0.0396,
+     "share_fail": 0.0556,
+     "share_ok": 0.0303,
+     "small": false
+    },
+    {
+     "cat": "no-passer/one-wing",
+     "ci": [
+      0.0652,
+      0.2032
+     ],
+     "fail": 10,
+     "n": 85,
+     "rate": 0.1176,
+     "share_fail": 0.1389,
+     "share_ok": 0.0235,
+     "small": false
+    },
+    {
+     "cat": "both-passers/one-wing",
+     "ci": [
+      0.0036,
+      0.1069
+     ],
+     "fail": 1,
+     "n": 49,
+     "rate": 0.0204,
+     "share_fail": 0.0139,
+     "share_ok": 0.015,
+     "small": false
+    },
+    {
+     "cat": "opp-passer/one-wing",
+     "ci": [
+      0.0966,
+      0.419
+     ],
+     "fail": 5,
+     "n": 23,
+     "rate": 0.2174,
+     "share_fail": 0.0694,
+     "share_ok": 0.0056,
+     "small": false
+    }
+   ],
+   "tb": [
+    {
+     "cat": "no-tb",
+     "ci": [
+      0.0149,
+      0.0243
+     ],
+     "fail": 62,
+     "n": 3259,
+     "rate": 0.019,
+     "share_fail": 0.8611,
+     "share_ok": 0.9997,
+     "small": false
+    },
+    {
+     "cat": "tb",
+     "ci": [
+      0.6226,
+      0.9838
+     ],
+     "fail": 10,
+     "n": 11,
+     "rate": 0.9091,
+     "share_fail": 0.1389,
+     "share_ok": 0.0003,
+     "small": false
+    }
+   ]
+  },
+  "drawn": 72,
+  "fail_ci": [
+   0.0175,
+   0.0276
+  ],
+  "fail_rate": 0.022,
+  "failure_drop_points": {
+   "by": {
+    "imb": [
+     {
+      "cat": "equal-pieces",
+      "n": 24,
+      "share": 0.3333
+     },
+     {
+      "cat": "R-vs-minors",
+      "n": 18,
+      "share": 0.25
+     },
+     {
+      "cat": "minor-up",
+      "n": 12,
+      "share": 0.1667
+     },
+     {
+      "cat": "Q-imbalance",
+      "n": 10,
+      "share": 0.1389
+     },
+     {
+      "cat": "B-vs-N",
+      "n": 6,
+      "share": 0.0833
+     },
+     {
+      "cat": "other-imbalance",
+      "n": 2,
+      "share": 0.0278
+     }
+    ],
+    "matcls": [
+     {
+      "cat": "R+minor-EG|R-vs-minors",
+      "n": 16,
+      "share": 0.2222
+     },
+     {
+      "cat": "Q-EG|Q-imbalance",
+      "n": 10,
+      "share": 0.1389
+     },
+     {
+      "cat": "minor-EG|minor-up",
+      "n": 8,
+      "share": 0.1111
+     },
+     {
+      "cat": "minor-EG|pawn+",
+      "n": 7,
+      "share": 0.0972
+     },
+     {
+      "cat": "R-EG|pawn+",
+      "n": 6,
+      "share": 0.0833
+     },
+     {
+      "cat": "R+minor-EG|minor-up",
+      "n": 3,
+      "share": 0.0417
+     },
+     {
+      "cat": "R+minor-EG|B-vs-N",
+      "n": 3,
+      "share": 0.0417
+     },
+     {
+      "cat": "Q-EG|pawn+",
+      "n": 3,
+      "share": 0.0417
+     },
+     {
+      "cat": "R-EG|level",
+      "n": 3,
+      "share": 0.0417
+     },
+     {
+      "cat": "R+minor-EG|pawn+",
+      "n": 3,
+      "share": 0.0417
+     },
+     {
+      "cat": "minor-EG|B-vs-N",
+      "n": 2,
+      "share": 0.0278
+     },
+     {
+      "cat": "Q-EG|other-imbalance",
+      "n": 2,
+      "share": 0.0278
+     },
+     {
+      "cat": "Q-EG|B-vs-N",
+      "n": 1,
+      "share": 0.0139
+     },
+     {
+      "cat": "R+minor-EG|level",
+      "n": 1,
+      "share": 0.0139
+     },
+     {
+      "cat": "Q-EG|minor-up",
+      "n": 1,
+      "share": 0.0139
+     },
+     {
+      "cat": "pawn-EG|pawn+",
+      "n": 1,
+      "share": 0.0139
+     },
+     {
+      "cat": "Q-EG|R-vs-minors",
+      "n": 1,
+      "share": 0.0139
+     },
+     {
+      "cat": "Q-MG|R-vs-minors",
+      "n": 1,
+      "share": 0.0139
+     }
+    ],
+    "move": [
+     {
+      "cat": "m61+",
+      "n": 64,
+      "share": 0.8889
+     },
+     {
+      "cat": "m41-60",
+      "n": 7,
+      "share": 0.0972
+     },
+     {
+      "cat": "m21-40",
+      "n": 1,
+      "share": 0.0139
+     }
+    ],
+    "opp_kings": [
+     {
+      "cat": "same-wing",
+      "n": 60,
+      "share": 0.8333
+     },
+     {
+      "cat": "opp-wings",
+      "n": 12,
+      "share": 0.1667
+     }
+    ],
+    "pawns": [
+     {
+      "cat": "p0-4",
+      "n": 52,
+      "share": 0.7222
+     },
+     {
+      "cat": "p5-8",
+      "n": 16,
+      "share": 0.2222
+     },
+     {
+      "cat": "p9-12",
+      "n": 3,
+      "share": 0.0417
+     },
+     {
+      "cat": "p13-16",
+      "n": 1,
+      "share": 0.0139
+     }
+    ],
+    "phase": [
+     {
+      "cat": "P1-6",
+      "n": 51,
+      "share": 0.7083
+     },
+     {
+      "cat": "P7-12",
+      "n": 19,
+      "share": 0.2639
+     },
+     {
+      "cat": "P0",
+      "n": 1,
+      "share": 0.0139
+     },
+     {
+      "cat": "P13-18",
+      "n": 1,
+      "share": 0.0139
+     }
+    ],
+    "sig": [
+     {
+      "cat": "R+minor-EG",
+      "n": 26,
+      "share": 0.3611
+     },
+     {
+      "cat": "Q-EG",
+      "n": 18,
+      "share": 0.25
+     },
+     {
+      "cat": "R-EG",
+      "n": 9,
+      "share": 0.125
+     },
+     {
+      "cat": "minor-EG/multi/uneven",
+      "n": 8,
+      "share": 0.1111
+     },
+     {
+      "cat": "minor-EG/B-B opp",
+      "n": 5,
+      "share": 0.0694
+     },
+     {
+      "cat": "minor-EG/B-N",
+      "n": 2,
+      "share": 0.0278
+     },
+     {
+      "cat": "minor-EG/N-N",
+      "n": 1,
+      "share": 0.0139
+     },
+     {
+      "cat": "pawn-EG",
+      "n": 1,
+      "share": 0.0139
+     },
+     {
+      "cat": "Q-MG",
+      "n": 1,
+      "share": 0.0139
+     },
+     {
+      "cat": "minor-EG/B-B same",
+      "n": 1,
+      "share": 0.0139
+     }
+    ],
+    "struct": [
+     {
+      "cat": "no-passer/one-wing",
+      "n": 22,
+      "share": 0.3056
+     },
+     {
+      "cat": "own-passer/one-wing",
+      "n": 15,
+      "share": 0.2083
+     },
+     {
+      "cat": "both-passers/two-wing",
+      "n": 11,
+      "share": 0.1528
+     },
+     {
+      "cat": "own-passer/two-wing",
+      "n": 8,
+      "share": 0.1111
+     },
+     {
+      "cat": "opp-passer/one-wing",
+      "n": 7,
+      "share": 0.0972
+     },
+     {
+      "cat": "both-passers/one-wing",
+      "n": 4,
+      "share": 0.0556
+     },
+     {
+      "cat": "no-passer/two-wing",
+      "n": 4,
+      "share": 0.0556
+     },
+     {
+      "cat": "opp-passer/two-wing",
+      "n": 1,
+      "share": 0.0139
+     }
+    ],
+    "tb": [
+     {
+      "cat": "no-tb",
+      "n": 62,
+      "share": 0.8611
+     },
+     {
+      "cat": "tb",
+      "n": 10,
+      "share": 0.1389
+     }
+    ]
+   },
+   "n_drops": 72,
+   "no_drop": 0
+  },
+  "lost": 0,
+  "n": 3270,
+  "terms_of_failures": [
+   [
+    "Draw by 3-fold repetition",
+    28
+   ],
+   [
+    "Draw by fifty moves rule",
+    22
+   ],
+   [
+    "Draw by insufficient mating material",
+    12
+   ],
+   [
+    "Draw by adjudication",
+    9
+   ],
+   [
+    "Draw by stalemate",
+    1
+   ]
+  ],
+  "won": 3198
+ },
+ "s_def:all": {
+  "by_start": {
+   "imb": [
+    {
+     "cat": "equal-pieces",
+     "ci": [
+      0.8374,
+      0.8717
+     ],
+     "fail": 1384,
+     "n": 1618,
+     "rate": 0.8554,
+     "share_fail": 0.4536,
+     "share_ok": 0.439,
+     "small": false
+    },
+    {
+     "cat": "B-vs-N",
+     "ci": [
+      0.8373,
+      0.8769
+     ],
+     "fail": 1023,
+     "n": 1192,
+     "rate": 0.8582,
+     "share_fail": 0.3353,
+     "share_ok": 0.3171,
+     "small": false
+    },
+    {
+     "cat": "R-vs-minors",
+     "ci": [
+      0.8096,
+      0.8874
+     ],
+     "fail": 272,
+     "n": 319,
+     "rate": 0.8527,
+     "share_fail": 0.0892,
+     "share_ok": 0.0882,
+     "small": false
+    },
+    {
+     "cat": "minor-up",
+     "ci": [
+      0.7497,
+      0.8423
+     ],
+     "fail": 228,
+     "n": 285,
+     "rate": 0.8,
+     "share_fail": 0.0747,
+     "share_ok": 0.1069,
+     "small": false
+    },
+    {
+     "cat": "Q-imbalance",
+     "ci": [
+      0.7266,
+      0.8826
+     ],
+     "fail": 76,
+     "n": 93,
+     "rate": 0.8172,
+     "share_fail": 0.0249,
+     "share_ok": 0.0319,
+     "small": false
+    },
+    {
+     "cat": "other-imbalance",
+     "ci": [
+      0.7925,
+      0.9373
+     ],
+     "fail": 68,
+     "n": 77,
+     "rate": 0.8831,
+     "share_fail": 0.0223,
+     "share_ok": 0.0169,
+     "small": false
+    }
+   ],
+   "matcls": [
+    {
+     "cat": "Q-MG|B-vs-N",
+     "ci": [
+      0.8534,
+      0.8997
+     ],
+     "fail": 672,
+     "n": 765,
+     "rate": 0.8784,
+     "share_fail": 0.2203,
+     "share_ok": 0.1745,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|level",
+     "ci": [
+      0.8609,
+      0.9197
+     ],
+     "fail": 379,
+     "n": 424,
+     "rate": 0.8939,
+     "share_fail": 0.1242,
+     "share_ok": 0.0844,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn-",
+     "ci": [
+      0.844,
+      0.9075
+     ],
+     "fail": 357,
+     "n": 406,
+     "rate": 0.8793,
+     "share_fail": 0.117,
+     "share_ok": 0.0919,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|minor-up",
+     "ci": [
+      0.8309,
+      0.9223
+     ],
+     "fail": 168,
+     "n": 190,
+     "rate": 0.8842,
+     "share_fail": 0.0551,
+     "share_ok": 0.0413,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|B-vs-N",
+     "ci": [
+      0.7379,
+      0.8521
+     ],
+     "fail": 149,
+     "n": 186,
+     "rate": 0.8011,
+     "share_fail": 0.0488,
+     "share_ok": 0.0694,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|B-vs-N",
+     "ci": [
+      0.7558,
+      0.8745
+     ],
+     "fail": 130,
+     "n": 158,
+     "rate": 0.8228,
+     "share_fail": 0.0426,
+     "share_ok": 0.0525,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|R-vs-minors",
+     "ci": [
+      0.8239,
+      0.9253
+     ],
+     "fail": 137,
+     "n": 155,
+     "rate": 0.8839,
+     "share_fail": 0.0449,
+     "share_ok": 0.0338,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|pawn-",
+     "ci": [
+      0.7692,
+      0.8957
+     ],
+     "fail": 107,
+     "n": 127,
+     "rate": 0.8425,
+     "share_fail": 0.0351,
+     "share_ok": 0.0375,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|pawn+",
+     "ci": [
+      0.8881,
+      0.9724
+     ],
+     "fail": 117,
+     "n": 124,
+     "rate": 0.9435,
+     "share_fail": 0.0383,
+     "share_ok": 0.0131,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|R-vs-minors",
+     "ci": [
+      0.7511,
+      0.8846
+     ],
+     "fail": 101,
+     "n": 122,
+     "rate": 0.8279,
+     "share_fail": 0.0331,
+     "share_ok": 0.0394,
+     "small": false
+    },
+    {
+     "cat": "R-EG|pawn-",
+     "ci": [
+      0.6362,
+      0.81
+     ],
+     "fail": 71,
+     "n": 97,
+     "rate": 0.732,
+     "share_fail": 0.0233,
+     "share_ok": 0.0488,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|pawn-",
+     "ci": [
+      0.6968,
+      0.8621
+     ],
+     "fail": 72,
+     "n": 91,
+     "rate": 0.7912,
+     "share_fail": 0.0236,
+     "share_ok": 0.0356,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|level",
+     "ci": [
+      0.7059,
+      0.8696
+     ],
+     "fail": 72,
+     "n": 90,
+     "rate": 0.8,
+     "share_fail": 0.0236,
+     "share_ok": 0.0338,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|pawn-",
+     "ci": [
+      0.6456,
+      0.8556
+     ],
+     "fail": 46,
+     "n": 60,
+     "rate": 0.7667,
+     "share_fail": 0.0151,
+     "share_ok": 0.0263,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|level",
+     "ci": [
+      0.7219,
+      0.9131
+     ],
+     "fail": 47,
+     "n": 56,
+     "rate": 0.8393,
+     "share_fail": 0.0154,
+     "share_ok": 0.0169,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|other-imbalance",
+     "ci": [
+      0.8348,
+      0.979
+     ],
+     "fail": 46,
+     "n": 49,
+     "rate": 0.9388,
+     "share_fail": 0.0151,
+     "share_ok": 0.0056,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|Q-imbalance",
+     "ci": [
+      0.6864,
+      0.9002
+     ],
+     "fail": 40,
+     "n": 49,
+     "rate": 0.8163,
+     "share_fail": 0.0131,
+     "share_ok": 0.0169,
+     "small": false
+    },
+    {
+     "cat": "minor-EG|B-vs-N",
+     "ci": [
+      0.7576,
+      0.9427
+     ],
+     "fail": 43,
+     "n": 49,
+     "rate": 0.8776,
+     "share_fail": 0.0141,
+     "share_ok": 0.0113,
+     "small": false
+    },
+    {
+     "cat": "Q-MG|Q-imbalance",
+     "ci": [
+      0.6804,
+      0.9049
+     ],
+     "fail": 36,
+     "n": 44,
+     "rate": 0.8182,
+     "share_fail": 0.0118,
+     "share_ok": 0.015,
+     "small": false
+    },
+    {
+     "cat": "R-EG|level",
+     "ci": [
+      0.6079,
+      0.8701
+     ],
+     "fail": 29,
+     "n": 38,
+     "rate": 0.7632,
+     "share_fail": 0.0095,
+     "share_ok": 0.0169,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|minor-up",
+     "ci": [
+      0.5702,
+      0.846
+     ],
+     "fail": 27,
+     "n": 37,
+     "rate": 0.7297,
+     "share_fail": 0.0088,
+     "share_ok": 0.0188,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|B-vs-N",
+     "ci": [
+      0.6987,
+      0.9355
+     ],
+     "fail": 29,
+     "n": 34,
+     "rate": 0.8529,
+     "share_fail": 0.0095,
+     "share_ok": 0.0094,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|R-vs-minors",
+     "ci": [
+      0.6046,
+      0.8979
+     ],
+     "fail": 22,
+     "n": 28,
+     "rate": 0.7857,
+     "share_fail": 0.0072,
+     "share_ok": 0.0113,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|minor-up",
+     "ci": [
+      0.5152,
+      0.8415
+     ],
+     "fail": 19,
+     "n": 27,
+     "rate": 0.7037,
+     "share_fail": 0.0062,
+     "share_ok": 0.015,
+     "small": false
+    },
+    {
+     "cat": "minor-EG|pawn-",
+     "ci": [
+      0.5152,
+      0.8415
+     ],
+     "fail": 19,
+     "n": 27,
+     "rate": 0.7037,
+     "share_fail": 0.0062,
+     "share_ok": 0.015,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|pawn+",
+     "ci": [
+      0.6536,
+      0.9502
+     ],
+     "fail": 18,
+     "n": 21,
+     "rate": 0.8571,
+     "share_fail": 0.0059,
+     "share_ok": 0.0056,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|level",
+     "ci": [
+      0.6078,
+      0.9416
+     ],
+     "fail": 15,
+     "n": 18,
+     "rate": 0.8333,
+     "share_fail": 0.0049,
+     "share_ok": 0.0056,
+     "small": false
+    },
+    {
+     "cat": "minor-EG|minor-up",
+     "ci": [
+      0.0584,
+      0.3922
+     ],
+     "fail": 3,
+     "n": 18,
+     "rate": 0.1667,
+     "share_fail": 0.001,
+     "share_ok": 0.0281,
+     "small": false
+    },
+    {
+     "cat": "minor-EG|level",
+     "ci": [
+      0.5481,
+      0.9295
+     ],
+     "fail": 12,
+     "n": 15,
+     "rate": 0.8,
+     "share_fail": 0.0039,
+     "share_ok": 0.0056,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|R-vs-minors",
+     "ci": [
+      0.6006,
+      0.9599
+     ],
+     "fail": 12,
+     "n": 14,
+     "rate": 0.8571,
+     "share_fail": 0.0039,
+     "share_ok": 0.0038,
+     "small": false
+    },
+    {
+     "cat": "Q-EG|minor-up",
+     "ci": [
+      0.5776,
+      0.9567
+     ],
+     "fail": 11,
+     "n": 13,
+     "rate": 0.8462,
+     "share_fail": 0.0036,
+     "share_ok": 0.0038,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG|other-imbalance",
+     "ci": [
+      0.2801,
+      0.7873
+     ],
+     "fail": 6,
+     "n": 11,
+     "rate": 0.5455,
+     "share_fail": 0.002,
+     "share_ok": 0.0094,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG|other-imbalance",
+     "ci": [
+      0.565,
+      0.9801
+     ],
+     "fail": 8,
+     "n": 9,
+     "rate": 0.8889,
+     "share_fail": 0.0026,
+     "share_ok": 0.0019,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|other-imbalance",
+     "ci": [
+      0.6756,
+      1.0
+     ],
+     "fail": 8,
+     "n": 8,
+     "rate": 1.0,
+     "share_fail": 0.0026,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "Q-EG|pawn+",
+     "ci": [
+      0.5655,
+      1.0
+     ],
+     "fail": 5,
+     "n": 5,
+     "rate": 1.0,
+     "share_fail": 0.0016,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R-EG|pawn+",
+     "ci": [
+      0.5655,
+      1.0
+     ],
+     "fail": 5,
+     "n": 5,
+     "rate": 1.0,
+     "share_fail": 0.0016,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "R+minor-EG|pawn+",
+     "ci": [
+      0.5655,
+      1.0
+     ],
+     "fail": 5,
+     "n": 5,
+     "rate": 1.0,
+     "share_fail": 0.0016,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "pawn-EG|pawn-",
+     "ci": [
+      0.3006,
+      0.9544
+     ],
+     "fail": 3,
+     "n": 4,
+     "rate": 0.75,
+     "share_fail": 0.001,
+     "share_ok": 0.0019,
+     "small": true
+    },
+    {
+     "cat": "minor-EG|pawn+",
+     "ci": [
+      0.4385,
+      1.0
+     ],
+     "fail": 3,
+     "n": 3,
+     "rate": 1.0,
+     "share_fail": 0.001,
+     "share_ok": 0.0,
+     "small": true
+    },
+    {
+     "cat": "pawn-EG|level",
+     "ci": [
+      0.3424,
+      1.0
+     ],
+     "fail": 2,
+     "n": 2,
+     "rate": 1.0,
+     "share_fail": 0.0007,
+     "share_ok": 0.0,
+     "small": true
+    }
+   ],
+   "move": [
+    {
+     "cat": "m21-40",
+     "ci": [
+      0.8483,
+      0.8777
+     ],
+     "fail": 1812,
+     "n": 2098,
+     "rate": 0.8637,
+     "share_fail": 0.5939,
+     "share_ok": 0.5366,
+     "small": false
+    },
+    {
+     "cat": "m41-60",
+     "ci": [
+      0.7966,
+      0.8511
+     ],
+     "fail": 615,
+     "n": 745,
+     "rate": 0.8255,
+     "share_fail": 0.2016,
+     "share_ok": 0.2439,
+     "small": false
+    },
+    {
+     "cat": "m1-20",
+     "ci": [
+      0.8382,
+      0.8935
+     ],
+     "fail": 501,
+     "n": 577,
+     "rate": 0.8683,
+     "share_fail": 0.1642,
+     "share_ok": 0.1426,
+     "small": false
+    },
+    {
+     "cat": "m61+",
+     "ci": [
+      0.6785,
+      0.81
+     ],
+     "fail": 123,
+     "n": 164,
+     "rate": 0.75,
+     "share_fail": 0.0403,
+     "share_ok": 0.0769,
+     "small": false
+    }
+   ],
+   "opp_kings": [
+    {
+     "cat": "same-wing",
+     "ci": [
+      0.829,
+      0.8553
+     ],
+     "fail": 2483,
+     "n": 2947,
+     "rate": 0.8426,
+     "share_fail": 0.8138,
+     "share_ok": 0.8705,
+     "small": false
+    },
+    {
+     "cat": "opp-wings",
+     "ci": [
+      0.8652,
+      0.9135
+     ],
+     "fail": 568,
+     "n": 637,
+     "rate": 0.8917,
+     "share_fail": 0.1862,
+     "share_ok": 0.1295,
+     "small": false
+    }
+   ],
+   "pawns": [
+    {
+     "cat": "p9-12",
+     "ci": [
+      0.8398,
+      0.8715
+     ],
+     "fail": 1610,
+     "n": 1880,
+     "rate": 0.8564,
+     "share_fail": 0.5277,
+     "share_ok": 0.5066,
+     "small": false
+    },
+    {
+     "cat": "p13-16",
+     "ci": [
+      0.8698,
+      0.9128
+     ],
+     "fail": 711,
+     "n": 796,
+     "rate": 0.8932,
+     "share_fail": 0.233,
+     "share_ok": 0.1595,
+     "small": false
+    },
+    {
+     "cat": "p5-8",
+     "ci": [
+      0.8096,
+      0.8614
+     ],
+     "fail": 653,
+     "n": 780,
+     "rate": 0.8372,
+     "share_fail": 0.214,
+     "share_ok": 0.2383,
+     "small": false
+    },
+    {
+     "cat": "p0-4",
+     "ci": [
+      0.515,
+      0.6822
+     ],
+     "fail": 77,
+     "n": 128,
+     "rate": 0.6016,
+     "share_fail": 0.0252,
+     "share_ok": 0.0957,
+     "small": false
+    }
+   ],
+   "phase": [
+    {
+     "cat": "P19-24",
+     "ci": [
+      0.8758,
+      0.9094
+     ],
+     "fail": 1161,
+     "n": 1299,
+     "rate": 0.8938,
+     "share_fail": 0.3805,
+     "share_ok": 0.2589,
+     "small": false
+    },
+    {
+     "cat": "P13-18",
+     "ci": [
+      0.8485,
+      0.8905
+     ],
+     "fail": 857,
+     "n": 984,
+     "rate": 0.8709,
+     "share_fail": 0.2809,
+     "share_ok": 0.2383,
+     "small": false
+    },
+    {
+     "cat": "P7-12",
+     "ci": [
+      0.7802,
+      0.8341
+     ],
+     "fail": 659,
+     "n": 815,
+     "rate": 0.8086,
+     "share_fail": 0.216,
+     "share_ok": 0.2927,
+     "small": false
+    },
+    {
+     "cat": "P1-6",
+     "ci": [
+      0.729,
+      0.8042
+     ],
+     "fail": 369,
+     "n": 480,
+     "rate": 0.7688,
+     "share_fail": 0.1209,
+     "share_ok": 0.2083,
+     "small": false
+    },
+    {
+     "cat": "P0",
+     "ci": [
+      0.4365,
+      0.9699
+     ],
+     "fail": 5,
+     "n": 6,
+     "rate": 0.8333,
+     "share_fail": 0.0016,
+     "share_ok": 0.0019,
+     "small": true
+    }
+   ],
+   "sig": [
+    {
+     "cat": "Q-MG",
+     "ci": [
+      0.8723,
+      0.8991
+     ],
+     "fail": 1912,
+     "n": 2157,
+     "rate": 0.8864,
+     "share_fail": 0.6267,
+     "share_ok": 0.4597,
+     "small": false
+    },
+    {
+     "cat": "noQ-MG",
+     "ci": [
+      0.7724,
+      0.8413
+     ],
+     "fail": 403,
+     "n": 498,
+     "rate": 0.8092,
+     "share_fail": 0.1321,
+     "share_ok": 0.1782,
+     "small": false
+    },
+    {
+     "cat": "R+minor-EG",
+     "ci": [
+      0.7705,
+      0.8415
+     ],
+     "fail": 380,
+     "n": 470,
+     "rate": 0.8085,
+     "share_fail": 0.1245,
+     "share_ok": 0.1689,
+     "small": false
+    },
+    {
+     "cat": "Q-EG",
+     "ci": [
+      0.7675,
+      0.8721
+     ],
+     "fail": 166,
+     "n": 201,
+     "rate": 0.8259,
+     "share_fail": 0.0544,
+     "share_ok": 0.0657,
+     "small": false
+    },
+    {
+     "cat": "R-EG",
+     "ci": [
+      0.6722,
+      0.8144
+     ],
+     "fail": 105,
+     "n": 140,
+     "rate": 0.75,
+     "share_fail": 0.0344,
+     "share_ok": 0.0657,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/multi/uneven",
+     "ci": [
+      0.4708,
+      0.7297
+     ],
+     "fail": 31,
+     "n": 51,
+     "rate": 0.6078,
+     "share_fail": 0.0102,
+     "share_ok": 0.0375,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/B-N",
+     "ci": [
+      0.7643,
+      0.9686
+     ],
+     "fail": 30,
+     "n": 33,
+     "rate": 0.9091,
+     "share_fail": 0.0098,
+     "share_ok": 0.0056,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/N-N",
+     "ci": [
+      0.4535,
+      0.8828
+     ],
+     "fail": 10,
+     "n": 14,
+     "rate": 0.7143,
+     "share_fail": 0.0033,
+     "share_ok": 0.0075,
+     "small": false
+    },
+    {
+     "cat": "minor-EG/B-B same",
+     "ci": [
+      0.5291,
+      0.9776
+     ],
+     "fail": 7,
+     "n": 8,
+     "rate": 0.875,
+     "share_fail": 0.0023,
+     "share_ok": 0.0019,
+     "small": true
+    },
+    {
+     "cat": "pawn-EG",
+     "ci": [
+      0.4365,
+      0.9699
+     ],
+     "fail": 5,
+     "n": 6,
+     "rate": 0.8333,
+     "share_fail": 0.0016,
+     "share_ok": 0.0019,
+     "small": true
+    },
+    {
+     "cat": "minor-EG/B-B opp",
+     "ci": [
+      0.0968,
+      0.7
+     ],
+     "fail": 2,
+     "n": 6,
+     "rate": 0.3333,
+     "share_fail": 0.0007,
+     "share_ok": 0.0075,
+     "small": true
+    }
+   ],
+   "struct": [
+    {
+     "cat": "no-passer/two-wing",
+     "ci": [
+      0.8447,
+      0.8769
+     ],
+     "fail": 1519,
+     "n": 1763,
+     "rate": 0.8616,
+     "share_fail": 0.4979,
+     "share_ok": 0.4578,
+     "small": false
+    },
+    {
+     "cat": "opp-passer/two-wing",
+     "ci": [
+      0.8055,
+      0.8587
+     ],
+     "fail": 627,
+     "n": 752,
+     "rate": 0.8338,
+     "share_fail": 0.2055,
+     "share_ok": 0.2345,
+     "small": false
+    },
+    {
+     "cat": "both-passers/two-wing",
+     "ci": [
+      0.8556,
+      0.9091
+     ],
+     "fail": 485,
+     "n": 548,
+     "rate": 0.885,
+     "share_fail": 0.159,
+     "share_ok": 0.1182,
+     "small": false
+    },
+    {
+     "cat": "own-passer/two-wing",
+     "ci": [
+      0.8349,
+      0.9019
+     ],
+     "fail": 334,
+     "n": 383,
+     "rate": 0.8721,
+     "share_fail": 0.1095,
+     "share_ok": 0.0919,
+     "small": false
+    },
+    {
+     "cat": "no-passer/one-wing",
+     "ci": [
+      0.3527,
+      0.5996
+     ],
+     "fail": 28,
+     "n": 59,
+     "rate": 0.4746,
+     "share_fail": 0.0092,
+     "share_ok": 0.0582,
+     "small": false
+    },
+    {
+     "cat": "opp-passer/one-wing",
+     "ci": [
+      0.5974,
+      0.8379
+     ],
+     "fail": 36,
+     "n": 49,
+     "rate": 0.7347,
+     "share_fail": 0.0118,
+     "share_ok": 0.0244,
+     "small": false
+    },
+    {
+     "cat": "both-passers/one-wing",
+     "ci": [
+      0.5274,
+      0.9045
+     ],
+     "fail": 13,
+     "n": 17,
+     "rate": 0.7647,
+     "share_fail": 0.0043,
+     "share_ok": 0.0075,
+     "small": false
+    },
+    {
+     "cat": "own-passer/one-wing",
+     "ci": [
+      0.4237,
+      0.8732
+     ],
+     "fail": 9,
+     "n": 13,
+     "rate": 0.6923,
+     "share_fail": 0.0029,
+     "share_ok": 0.0075,
+     "small": false
+    }
+   ],
+   "tb": [
+    {
+     "cat": "no-tb",
+     "ci": [
+      0.8459,
+      0.8688
+     ],
+     "fail": 3051,
+     "n": 3557,
+     "rate": 0.8577,
+     "share_fail": 1.0,
+     "share_ok": 0.9493,
+     "small": false
+    },
+    {
+     "cat": "tb",
+     "ci": [
+      0.0,
+      0.1246
+     ],
+     "fail": 0,
+     "n": 27,
+     "rate": 0.0,
+     "share_fail": 0.0,
+     "share_ok": 0.0507,
+     "small": false
+    }
+   ]
+  },
+  "drawn": 523,
+  "loss_ci": [
+   0.8393,
+   0.8626
+  ],
+  "loss_rate": 0.8513,
+  "lost": 3051,
+  "n": 3584,
+  "won": 10
+ }
+}

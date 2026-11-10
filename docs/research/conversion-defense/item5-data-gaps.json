@@ -1,0 +1,5734 @@
+{
+ "_note": "docs/research/conversion-defense/report.md (Method); labeller fork-release-2ebacd8, S512ppr3, bench 14,149,617 / 1cb0717f040c294d; gauntlet run 42538371594; SPRT idea60-stc + idea61-stc",
+ "dims": {
+  "imb": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1251,
+      0.19
+     ],
+     "n": 74,
+     "ratio": 1.0,
+     "ratio_matched": 1.28,
+     "share": 0.1548
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.2281,
+      0.2574
+     ],
+     "n": 797,
+     "ratio": 1.57,
+     "ratio_matched": 2.01,
+     "share": 0.2425
+    },
+    "all deciding positions": {
+     "ci": [
+      0.2615,
+      0.2817
+     ],
+     "n": 2003,
+     "ratio": 1.75,
+     "ratio_matched": 2.25,
+     "share": 0.2715
+    },
+    "cat": "B-vs-N",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0382,
+      0.1519
+     ],
+     "n": 7,
+     "ratio": 0.5,
+     "ratio_matched": 0.64,
+     "share": 0.0778
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.3041,
+      0.3349
+     ],
+     "n": 1125,
+     "ratio": 2.06,
+     "ratio_matched": 2.64,
+     "share": 0.3193
+    },
+    "train_matched_n": 8118,
+    "train_matched_share": 0.12089,
+    "train_n": 19238,
+    "train_share": 0.15479
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.4078,
+      0.4967
+     ],
+     "n": 216,
+     "ratio": 1.34,
+     "ratio_matched": 1.94,
+     "share": 0.4519
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.4146,
+      0.4484
+     ],
+     "n": 1418,
+     "ratio": 1.28,
+     "ratio_matched": 1.85,
+     "share": 0.4314
+    },
+    "all deciding positions": {
+     "ci": [
+      0.4306,
+      0.4532
+     ],
+     "n": 3260,
+     "ratio": 1.31,
+     "ratio_matched": 1.89,
+     "share": 0.4419
+    },
+    "cat": "equal-pieces",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.2445,
+      0.4358
+     ],
+     "n": 30,
+     "ratio": 0.99,
+     "ratio_matched": 1.43,
+     "share": 0.3333
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.4366,
+      0.4695
+     ],
+     "n": 1596,
+     "ratio": 1.34,
+     "ratio_matched": 1.94,
+     "share": 0.453
+    },
+    "train_matched_n": 15677,
+    "train_matched_share": 0.23345,
+    "train_n": 41900,
+    "train_share": 0.33712
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1006,
+      0.1605
+     ],
+     "n": 61,
+     "ratio": 1.1,
+     "ratio_matched": 0.94,
+     "share": 0.1276
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1353,
+      0.1595
+     ],
+     "n": 483,
+     "ratio": 1.26,
+     "ratio_matched": 1.08,
+     "share": 0.1469
+    },
+    "all deciding positions": {
+     "ci": [
+      0.1122,
+      0.127
+     ],
+     "n": 881,
+     "ratio": 1.03,
+     "ratio_matched": 0.88,
+     "share": 0.1194
+    },
+    "cat": "R-vs-minors",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.1767,
+      0.3544
+     ],
+     "n": 23,
+     "ratio": 2.2,
+     "ratio_matched": 1.88,
+     "share": 0.2556
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0802,
+      0.099
+     ],
+     "n": 314,
+     "ratio": 0.77,
+     "ratio_matched": 0.66,
+     "share": 0.0891
+    },
+    "train_matched_n": 9135,
+    "train_matched_share": 0.13603,
+    "train_n": 14457,
+    "train_share": 0.11632
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0426,
+      0.0858
+     ],
+     "n": 29,
+     "ratio": 1.17,
+     "ratio_matched": 1.17,
+     "share": 0.0607
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.037,
+      0.051
+     ],
+     "n": 143,
+     "ratio": 0.84,
+     "ratio_matched": 0.84,
+     "share": 0.0435
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0323,
+      0.0408
+     ],
+     "n": 268,
+     "ratio": 0.7,
+     "ratio_matched": 0.7,
+     "share": 0.0363
+    },
+    "cat": "Q-imbalance",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0696,
+      0.2057
+     ],
+     "n": 11,
+     "ratio": 2.35,
+     "ratio_matched": 2.36,
+     "share": 0.1222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0196,
+      0.0297
+     ],
+     "n": 85,
+     "ratio": 0.46,
+     "ratio_matched": 0.47,
+     "share": 0.0241
+    },
+    "train_matched_n": 3482,
+    "train_matched_share": 0.05185,
+    "train_n": 6463,
+    "train_share": 0.052
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0191,
+      0.0511
+     ],
+     "n": 15,
+     "ratio": 0.54,
+     "ratio_matched": 0.53,
+     "share": 0.0314
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0212,
+      0.0322
+     ],
+     "n": 86,
+     "ratio": 0.45,
+     "ratio_matched": 0.44,
+     "share": 0.0262
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0215,
+      0.0286
+     ],
+     "n": 183,
+     "ratio": 0.43,
+     "ratio_matched": 0.42,
+     "share": 0.0248
+    },
+    "cat": "other-imbalance",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 0.39,
+     "ratio_matched": 0.38,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0183,
+      0.0282
+     ],
+     "n": 80,
+     "ratio": 0.39,
+     "ratio_matched": 0.39,
+     "share": 0.0227
+    },
+    "train_matched_n": 3958,
+    "train_matched_share": 0.05894,
+    "train_n": 7157,
+    "train_share": 0.05758
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1423,
+      0.2102
+     ],
+     "n": 83,
+     "ratio": 0.62,
+     "ratio_matched": 0.44,
+     "share": 0.1736
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0993,
+      0.1207
+     ],
+     "n": 360,
+     "ratio": 0.39,
+     "ratio_matched": 0.27,
+     "share": 0.1095
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0993,
+      0.1134
+     ],
+     "n": 783,
+     "ratio": 0.38,
+     "ratio_matched": 0.27,
+     "share": 0.1061
+    },
+    "cat": "minor-up",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.1214,
+      0.2818
+     ],
+     "n": 17,
+     "ratio": 0.67,
+     "ratio_matched": 0.47,
+     "share": 0.1889
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0826,
+      0.1017
+     ],
+     "n": 323,
+     "ratio": 0.32,
+     "ratio_matched": 0.23,
+     "share": 0.0917
+    },
+    "train_matched_n": 26784,
+    "train_matched_share": 0.39884,
+    "train_n": 35073,
+    "train_share": 0.28219
+   }
+  ],
+  "matcls": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0021,
+      0.0183
+     ],
+     "n": 3,
+     "ratio": 1.82,
+     "ratio_matched": 2.24,
+     "share": 0.0063
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0095,
+      0.0172
+     ],
+     "n": 42,
+     "ratio": 3.71,
+     "ratio_matched": 4.56,
+     "share": 0.0128
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0082,
+      0.0129
+     ],
+     "n": 76,
+     "ratio": 2.99,
+     "ratio_matched": 3.68,
+     "share": 0.0103
+    },
+    "cat": "Q-EG|B-vs-N",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 3.23,
+     "ratio_matched": 3.97,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.006,
+      0.0121
+     ],
+     "n": 30,
+     "ratio": 2.47,
+     "ratio_matched": 3.04,
+     "share": 0.0085
+    },
+    "train_matched_n": 188,
+    "train_matched_share": 0.0028,
+    "train_n": 428,
+    "train_share": 0.00344
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0033,
+      0.0213
+     ],
+     "n": 4,
+     "ratio": 1.68,
+     "ratio_matched": 1.13,
+     "share": 0.0084
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0196,
+      0.0302
+     ],
+     "n": 80,
+     "ratio": 4.89,
+     "ratio_matched": 3.3,
+     "share": 0.0243
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0105,
+      0.0157
+     ],
+     "n": 95,
+     "ratio": 2.59,
+     "ratio_matched": 1.74,
+     "share": 0.0129
+    },
+    "cat": "Q-EG|pawn+-2+",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 4.47,
+     "ratio_matched": 3.01,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0013,
+      0.0048
+     ],
+     "n": 9,
+     "ratio": 0.51,
+     "ratio_matched": 0.35,
+     "share": 0.0026
+    },
+    "train_matched_n": 496,
+    "train_matched_share": 0.00739,
+    "train_n": 618,
+    "train_share": 0.00497
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0021,
+      0.0183
+     ],
+     "n": 3,
+     "ratio": 0.86,
+     "ratio_matched": 1.11,
+     "share": 0.0063
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0212,
+      0.0322
+     ],
+     "n": 86,
+     "ratio": 3.57,
+     "ratio_matched": 4.62,
+     "share": 0.0262
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0155,
+      0.0216
+     ],
+     "n": 135,
+     "ratio": 2.5,
+     "ratio_matched": 3.23,
+     "share": 0.0183
+    },
+    "cat": "Q-EG|pawn+-1",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 3.03,
+     "ratio_matched": 3.93,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0093,
+      0.0167
+     ],
+     "n": 44,
+     "ratio": 1.7,
+     "ratio_matched": 2.21,
+     "share": 0.0125
+    },
+    "train_matched_n": 380,
+    "train_matched_share": 0.00566,
+    "train_n": 911,
+    "train_share": 0.00733
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0839,
+      0.1399
+     ],
+     "n": 52,
+     "ratio": 1.45,
+     "ratio_matched": 2.14,
+     "share": 0.1088
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1002,
+      0.1216
+     ],
+     "n": 363,
+     "ratio": 1.48,
+     "ratio_matched": 2.17,
+     "share": 0.1104
+    },
+    "all deciding positions": {
+     "ci": [
+      0.1496,
+      0.1663
+     ],
+     "n": 1164,
+     "ratio": 2.11,
+     "ratio_matched": 3.1,
+     "share": 0.1578
+    },
+    "cat": "Q-MG|B-vs-N",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1994,
+      0.2264
+     ],
+     "n": 749,
+     "ratio": 2.84,
+     "ratio_matched": 4.18,
+     "share": 0.2126
+    },
+    "train_matched_n": 3417,
+    "train_matched_share": 0.05088,
+    "train_n": 9298,
+    "train_share": 0.07481
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0693,
+      0.1213
+     ],
+     "n": 44,
+     "ratio": 1.75,
+     "ratio_matched": 2.43,
+     "share": 0.0921
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0489,
+      0.0647
+     ],
+     "n": 185,
+     "ratio": 1.07,
+     "ratio_matched": 1.49,
+     "share": 0.0563
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0902,
+      0.1037
+     ],
+     "n": 714,
+     "ratio": 1.84,
+     "ratio_matched": 2.56,
+     "share": 0.0968
+    },
+    "cat": "Q-MG|pawn+-1",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1267,
+      0.1494
+     ],
+     "n": 485,
+     "ratio": 2.62,
+     "ratio_matched": 3.64,
+     "share": 0.1377
+    },
+    "train_matched_n": 2539,
+    "train_matched_share": 0.03781,
+    "train_n": 6532,
+    "train_share": 0.05256
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0191,
+      0.0511
+     ],
+     "n": 15,
+     "ratio": 2.08,
+     "ratio_matched": 1.62,
+     "share": 0.0314
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0182,
+      0.0285
+     ],
+     "n": 75,
+     "ratio": 1.51,
+     "ratio_matched": 1.18,
+     "share": 0.0228
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0212,
+      0.0283
+     ],
+     "n": 181,
+     "ratio": 1.63,
+     "ratio_matched": 1.27,
+     "share": 0.0245
+    },
+    "cat": "Q-MG|pawn+-2+",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0211,
+      0.0316
+     ],
+     "n": 91,
+     "ratio": 1.71,
+     "ratio_matched": 1.34,
+     "share": 0.0258
+    },
+    "train_matched_n": 1297,
+    "train_matched_share": 0.01931,
+    "train_n": 1875,
+    "train_share": 0.01509
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0099,
+      0.0354
+     ],
+     "n": 9,
+     "ratio": 0.77,
+     "ratio_matched": 1.16,
+     "share": 0.0188
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0549,
+      0.0715
+     ],
+     "n": 206,
+     "ratio": 2.57,
+     "ratio_matched": 3.86,
+     "share": 0.0627
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0338,
+      0.0426
+     ],
+     "n": 280,
+     "ratio": 1.56,
+     "ratio_matched": 2.34,
+     "share": 0.038
+    },
+    "cat": "R-EG|pawn+-1",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0174,
+      0.1088
+     ],
+     "n": 4,
+     "ratio": 1.82,
+     "ratio_matched": 2.74,
+     "share": 0.0444
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0135,
+      0.0222
+     ],
+     "n": 61,
+     "ratio": 0.71,
+     "ratio_matched": 1.07,
+     "share": 0.0173
+    },
+    "train_matched_n": 1091,
+    "train_matched_share": 0.01625,
+    "train_n": 3031,
+    "train_share": 0.02439
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0021,
+      0.0183
+     ],
+     "n": 3,
+     "ratio": 0.41,
+     "ratio_matched": 0.49,
+     "share": 0.0063
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0105,
+      0.0186
+     ],
+     "n": 46,
+     "ratio": 0.92,
+     "ratio_matched": 1.1,
+     "share": 0.014
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0201,
+      0.027
+     ],
+     "n": 172,
+     "ratio": 1.53,
+     "ratio_matched": 1.83,
+     "share": 0.0233
+    },
+    "cat": "noQ-MG|pawn+-1",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0293,
+      0.0415
+     ],
+     "n": 123,
+     "ratio": 2.3,
+     "ratio_matched": 2.74,
+     "share": 0.0349
+    },
+    "train_matched_n": 857,
+    "train_matched_share": 0.01276,
+    "train_n": 1890,
+    "train_share": 0.01521
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0033,
+      0.0213
+     ],
+     "n": 4,
+     "ratio": 0.51,
+     "ratio_matched": 0.64,
+     "share": 0.0084
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0281,
+      0.0405
+     ],
+     "n": 111,
+     "ratio": 2.04,
+     "ratio_matched": 2.58,
+     "share": 0.0338
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0215,
+      0.0286
+     ],
+     "n": 183,
+     "ratio": 1.5,
+     "ratio_matched": 1.9,
+     "share": 0.0248
+    },
+    "cat": "R+minor-EG|pawn+-1",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 1.34,
+     "ratio_matched": 1.7,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0148,
+      0.0238
+     ],
+     "n": 66,
+     "ratio": 1.13,
+     "ratio_matched": 1.43,
+     "share": 0.0187
+    },
+    "train_matched_n": 878,
+    "train_matched_share": 0.01307,
+    "train_n": 2058,
+    "train_share": 0.01656
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0531,
+      0.1001
+     ],
+     "n": 35,
+     "ratio": 2.17,
+     "ratio_matched": 1.78,
+     "share": 0.0732
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0452,
+      0.0605
+     ],
+     "n": 172,
+     "ratio": 1.55,
+     "ratio_matched": 1.27,
+     "share": 0.0523
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0458,
+      0.0558
+     ],
+     "n": 373,
+     "ratio": 1.49,
+     "ratio_matched": 1.23,
+     "share": 0.0506
+    },
+    "cat": "Q-MG|R-vs-minors",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 0.66,
+     "ratio_matched": 0.54,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0401,
+      0.054
+     ],
+     "n": 164,
+     "ratio": 1.38,
+     "ratio_matched": 1.13,
+     "share": 0.0466
+    },
+    "train_matched_n": 2759,
+    "train_matched_share": 0.04108,
+    "train_n": 4203,
+    "train_share": 0.03382
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0011,
+      0.0151
+     ],
+     "n": 2,
+     "ratio": 0.86,
+     "ratio_matched": 2.55,
+     "share": 0.0042
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0074,
+      0.0144
+     ],
+     "n": 34,
+     "ratio": 2.12,
+     "ratio_matched": 6.31,
+     "share": 0.0103
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0055,
+      0.0094
+     ],
+     "n": 53,
+     "ratio": 1.47,
+     "ratio_matched": 4.39,
+     "share": 0.0072
+    },
+    "cat": "Q-EG|level",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 2.28,
+     "ratio_matched": 6.78,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0028,
+      0.0074
+     ],
+     "n": 16,
+     "ratio": 0.93,
+     "ratio_matched": 2.77,
+     "share": 0.0045
+    },
+    "train_matched_n": 110,
+    "train_matched_share": 0.00164,
+    "train_n": 607,
+    "train_share": 0.00488
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0045,
+      0.0243
+     ],
+     "n": 5,
+     "ratio": 1.85,
+     "ratio_matched": 1.65,
+     "share": 0.0105
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0095,
+      0.0172
+     ],
+     "n": 42,
+     "ratio": 2.26,
+     "ratio_matched": 2.01,
+     "share": 0.0128
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0064,
+      0.0106
+     ],
+     "n": 61,
+     "ratio": 1.46,
+     "ratio_matched": 1.3,
+     "share": 0.0083
+    },
+    "cat": "Q-EG|R-vs-minors",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 1.96,
+     "ratio_matched": 1.75,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0022,
+      0.0063
+     ],
+     "n": 13,
+     "ratio": 0.65,
+     "ratio_matched": 0.58,
+     "share": 0.0037
+    },
+    "train_matched_n": 427,
+    "train_matched_share": 0.00636,
+    "train_n": 704,
+    "train_share": 0.00566
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0099,
+      0.0354
+     ],
+     "n": 9,
+     "ratio": 0.61,
+     "ratio_matched": 0.66,
+     "share": 0.0188
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0475,
+      0.0631
+     ],
+     "n": 180,
+     "ratio": 1.76,
+     "ratio_matched": 1.91,
+     "share": 0.0548
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0404,
+      0.0498
+     ],
+     "n": 331,
+     "ratio": 1.44,
+     "ratio_matched": 1.56,
+     "share": 0.0449
+    },
+    "cat": "R+minor-EG|B-vs-N",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0114,
+      0.0935
+     ],
+     "n": 3,
+     "ratio": 1.07,
+     "ratio_matched": 1.16,
+     "share": 0.0333
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0335,
+      0.0464
+     ],
+     "n": 139,
+     "ratio": 1.27,
+     "ratio_matched": 1.37,
+     "share": 0.0395
+    },
+    "train_matched_n": 1927,
+    "train_matched_share": 0.0287,
+    "train_n": 3863,
+    "train_share": 0.03108
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0011,
+      0.0151
+     ],
+     "n": 2,
+     "ratio": 2.42,
+     "ratio_matched": 2.42,
+     "share": 0.0042
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0019,
+      0.006
+     ],
+     "n": 11,
+     "ratio": 1.93,
+     "ratio_matched": 1.94,
+     "share": 0.0033
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0015,
+      0.0039
+     ],
+     "n": 18,
+     "ratio": 1.41,
+     "ratio_matched": 1.41,
+     "share": 0.0024
+    },
+    "cat": "pawn-EG|pawn+-1",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 6.42,
+     "ratio_matched": 6.43,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0004,
+      0.0029
+     ],
+     "n": 4,
+     "ratio": 0.66,
+     "ratio_matched": 0.66,
+     "share": 0.0011
+    },
+    "train_matched_n": 116,
+    "train_matched_share": 0.00173,
+    "train_n": 215,
+    "train_share": 0.00173
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0045,
+      0.0243
+     ],
+     "n": 5,
+     "ratio": 0.58,
+     "ratio_matched": 0.69,
+     "share": 0.0105
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0331,
+      0.0464
+     ],
+     "n": 129,
+     "ratio": 2.19,
+     "ratio_matched": 2.57,
+     "share": 0.0392
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0217,
+      0.0289
+     ],
+     "n": 185,
+     "ratio": 1.4,
+     "ratio_matched": 1.64,
+     "share": 0.0251
+    },
+    "cat": "minor-EG|B-vs-N",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 1.24,
+     "ratio_matched": 1.46,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0105,
+      0.0183
+     ],
+     "n": 49,
+     "ratio": 0.78,
+     "ratio_matched": 0.91,
+     "share": 0.0139
+    },
+    "train_matched_n": 1024,
+    "train_matched_share": 0.01525,
+    "train_n": 2228,
+    "train_share": 0.01793
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1946,
+      0.2699
+     ],
+     "n": 110,
+     "ratio": 3.02,
+     "ratio_matched": 9.74,
+     "share": 0.2301
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0328,
+      0.0461
+     ],
+     "n": 128,
+     "ratio": 0.51,
+     "ratio_matched": 1.65,
+     "share": 0.0389
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0871,
+      0.1004
+     ],
+     "n": 690,
+     "ratio": 1.23,
+     "ratio_matched": 3.96,
+     "share": 0.0935
+    },
+    "cat": "Q-MG|level",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1177,
+      0.1397
+     ],
+     "n": 452,
+     "ratio": 1.68,
+     "ratio_matched": 5.43,
+     "share": 0.1283
+    },
+    "train_matched_n": 1587,
+    "train_matched_share": 0.02363,
+    "train_n": 9483,
+    "train_share": 0.0763
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0045,
+      0.0243
+     ],
+     "n": 5,
+     "ratio": 0.38,
+     "ratio_matched": 0.45,
+     "share": 0.0105
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0204,
+      0.0312
+     ],
+     "n": 83,
+     "ratio": 0.92,
+     "ratio_matched": 1.09,
+     "share": 0.0253
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0296,
+      0.0378
+     ],
+     "n": 247,
+     "ratio": 1.22,
+     "ratio_matched": 1.44,
+     "share": 0.0335
+    },
+    "cat": "noQ-MG|B-vs-N",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 0.4,
+     "ratio_matched": 0.48,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0385,
+      0.0522
+     ],
+     "n": 158,
+     "ratio": 1.63,
+     "ratio_matched": 1.93,
+     "share": 0.0448
+    },
+    "train_matched_n": 1562,
+    "train_matched_share": 0.02326,
+    "train_n": 3421,
+    "train_share": 0.02752
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 0.19,
+     "ratio_matched": 0.62,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0084,
+      0.0158
+     ],
+     "n": 38,
+     "ratio": 1.02,
+     "ratio_matched": 3.41,
+     "share": 0.0116
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0098,
+      0.0148
+     ],
+     "n": 89,
+     "ratio": 1.07,
+     "ratio_matched": 3.55,
+     "share": 0.0121
+    },
+    "cat": "R+minor-EG|level",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 1.97,
+     "ratio_matched": 6.55,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0103,
+      0.018
+     ],
+     "n": 48,
+     "ratio": 1.21,
+     "ratio_matched": 4.01,
+     "share": 0.0136
+    },
+    "train_matched_n": 228,
+    "train_matched_share": 0.0034,
+    "train_n": 1403,
+    "train_share": 0.01129
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0,
+      0.008
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0188,
+      0.0292
+     ],
+     "n": 77,
+     "ratio": 1.66,
+     "ratio_matched": 6.34,
+     "share": 0.0234
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0125,
+      0.0181
+     ],
+     "n": 111,
+     "ratio": 1.06,
+     "ratio_matched": 4.07,
+     "share": 0.015
+    },
+    "cat": "R-EG|level",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0174,
+      0.1088
+     ],
+     "n": 4,
+     "ratio": 3.14,
+     "ratio_matched": 12.03,
+     "share": 0.0444
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.006,
+      0.0121
+     ],
+     "n": 30,
+     "ratio": 0.6,
+     "ratio_matched": 2.31,
+     "share": 0.0085
+    },
+    "train_matched_n": 248,
+    "train_matched_share": 0.00369,
+    "train_n": 1759,
+    "train_share": 0.01415
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0071,
+      0.0299
+     ],
+     "n": 7,
+     "ratio": 1.01,
+     "ratio_matched": 3.31,
+     "share": 0.0146
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0037,
+      0.009
+     ],
+     "n": 19,
+     "ratio": 0.4,
+     "ratio_matched": 1.31,
+     "share": 0.0058
+    },
+    "all deciding positions": {
+     "ci": [
+      0.012,
+      0.0175
+     ],
+     "n": 107,
+     "ratio": 1.0,
+     "ratio_matched": 3.28,
+     "share": 0.0145
+    },
+    "cat": "noQ-MG|level",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0185,
+      0.0285
+     ],
+     "n": 81,
+     "ratio": 1.58,
+     "ratio_matched": 5.2,
+     "share": 0.023
+    },
+    "train_matched_n": 297,
+    "train_matched_share": 0.00442,
+    "train_n": 1806,
+    "train_share": 0.01453
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0,
+      0.008
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0153,
+      0.0248
+     ],
+     "n": 64,
+     "ratio": 1.71,
+     "ratio_matched": 1.08,
+     "share": 0.0195
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0087,
+      0.0135
+     ],
+     "n": 80,
+     "ratio": 0.95,
+     "ratio_matched": 0.6,
+     "share": 0.0108
+    },
+    "cat": "R+minor-EG|pawn+-2+",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 0.98,
+     "ratio_matched": 0.62,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0026,
+      0.007
+     ],
+     "n": 15,
+     "ratio": 0.37,
+     "ratio_matched": 0.24,
+     "share": 0.0043
+    },
+    "train_matched_n": 1212,
+    "train_matched_share": 0.01805,
+    "train_n": 1414,
+    "train_share": 0.01138
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0021,
+      0.0183
+     ],
+     "n": 3,
+     "ratio": 0.42,
+     "ratio_matched": 0.85,
+     "share": 0.0063
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0174,
+      0.0275
+     ],
+     "n": 72,
+     "ratio": 1.47,
+     "ratio_matched": 2.98,
+     "share": 0.0219
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0112,
+      0.0165
+     ],
+     "n": 100,
+     "ratio": 0.91,
+     "ratio_matched": 1.85,
+     "share": 0.0136
+    },
+    "cat": "minor-EG|pawn+-1",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0114,
+      0.0935
+     ],
+     "n": 3,
+     "ratio": 2.24,
+     "ratio_matched": 4.54,
+     "share": 0.0333
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0041,
+      0.0094
+     ],
+     "n": 22,
+     "ratio": 0.42,
+     "ratio_matched": 0.85,
+     "share": 0.0062
+    },
+    "train_matched_n": 493,
+    "train_matched_share": 0.00734,
+    "train_n": 1849,
+    "train_share": 0.01488
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 0.35,
+     "ratio_matched": 0.22,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0047,
+      0.0105
+     ],
+     "n": 23,
+     "ratio": 1.16,
+     "ratio_matched": 0.75,
+     "share": 0.007
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0036,
+      0.0069
+     ],
+     "n": 37,
+     "ratio": 0.83,
+     "ratio_matched": 0.53,
+     "share": 0.005
+    },
+    "cat": "noQ-MG|pawn+-2+",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0022,
+      0.0063
+     ],
+     "n": 13,
+     "ratio": 0.61,
+     "ratio_matched": 0.39,
+     "share": 0.0037
+    },
+    "train_matched_n": 630,
+    "train_matched_share": 0.00938,
+    "train_n": 752,
+    "train_share": 0.00605
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0033,
+      0.0213
+     ],
+     "n": 4,
+     "ratio": 1.18,
+     "ratio_matched": 0.94,
+     "share": 0.0084
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.003,
+      0.0079
+     ],
+     "n": 16,
+     "ratio": 0.69,
+     "ratio_matched": 0.55,
+     "share": 0.0049
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0042,
+      0.0077
+     ],
+     "n": 42,
+     "ratio": 0.8,
+     "ratio_matched": 0.64,
+     "share": 0.0057
+    },
+    "cat": "noQ-MG|R-vs-minors",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0041,
+      0.0094
+     ],
+     "n": 22,
+     "ratio": 0.88,
+     "ratio_matched": 0.7,
+     "share": 0.0062
+    },
+    "train_matched_n": 597,
+    "train_matched_share": 0.00889,
+    "train_n": 881,
+    "train_share": 0.00709
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0223,
+      0.0562
+     ],
+     "n": 17,
+     "ratio": 0.51,
+     "ratio_matched": 0.45,
+     "share": 0.0356
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0683,
+      0.0866
+     ],
+     "n": 253,
+     "ratio": 1.1,
+     "ratio_matched": 0.97,
+     "share": 0.077
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0499,
+      0.0603
+     ],
+     "n": 405,
+     "ratio": 0.79,
+     "ratio_matched": 0.69,
+     "share": 0.0549
+    },
+    "cat": "R+minor-EG|R-vs-minors",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.1487,
+      0.3185
+     ],
+     "n": 20,
+     "ratio": 3.19,
+     "ratio_matched": 2.79,
+     "share": 0.2222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0273,
+      0.039
+     ],
+     "n": 115,
+     "ratio": 0.47,
+     "ratio_matched": 0.41,
+     "share": 0.0326
+    },
+    "train_matched_n": 5352,
+    "train_matched_share": 0.0797,
+    "train_n": 8669,
+    "train_share": 0.06975
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0223,
+      0.0562
+     ],
+     "n": 17,
+     "ratio": 2.61,
+     "ratio_matched": 1.9,
+     "share": 0.0356
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0042,
+      0.0097
+     ],
+     "n": 21,
+     "ratio": 0.47,
+     "ratio_matched": 0.34,
+     "share": 0.0064
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0084,
+      0.013
+     ],
+     "n": 77,
+     "ratio": 0.77,
+     "ratio_matched": 0.56,
+     "share": 0.0104
+    },
+    "cat": "Q-MG|Q-imbalance",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0081,
+      0.0151
+     ],
+     "n": 39,
+     "ratio": 0.81,
+     "ratio_matched": 0.59,
+     "share": 0.0111
+    },
+    "train_matched_n": 1258,
+    "train_matched_share": 0.01873,
+    "train_n": 1693,
+    "train_share": 0.01362
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 1.46,
+     "ratio_matched": 2.99,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0006,
+      0.0036
+     ],
+     "n": 5,
+     "ratio": 1.06,
+     "ratio_matched": 2.17,
+     "share": 0.0015
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0005,
+      0.0021
+     ],
+     "n": 8,
+     "ratio": 0.76,
+     "ratio_matched": 1.55,
+     "share": 0.0011
+    },
+    "cat": "pawn-EG|level",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0002,
+      0.0021
+     ],
+     "n": 2,
+     "ratio": 0.4,
+     "ratio_matched": 0.81,
+     "share": 0.0006
+    },
+    "train_matched_n": 47,
+    "train_matched_share": 0.0007,
+    "train_n": 178,
+    "train_share": 0.00143
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0021,
+      0.0183
+     ],
+     "n": 3,
+     "ratio": 0.68,
+     "ratio_matched": 0.53,
+     "share": 0.0063
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0082,
+      0.0155
+     ],
+     "n": 37,
+     "ratio": 1.21,
+     "ratio_matched": 0.96,
+     "share": 0.0113
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0054,
+      0.0092
+     ],
+     "n": 52,
+     "ratio": 0.76,
+     "ratio_matched": 0.6,
+     "share": 0.007
+    },
+    "cat": "Q-EG|minor-up",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 1.2,
+     "ratio_matched": 0.94,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0017,
+      0.0056
+     ],
+     "n": 11,
+     "ratio": 0.34,
+     "ratio_matched": 0.27,
+     "share": 0.0031
+    },
+    "train_matched_n": 791,
+    "train_matched_share": 0.01178,
+    "train_n": 1153,
+    "train_share": 0.00928
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 0.2,
+     "ratio_matched": 0.17,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0105,
+      0.0186
+     ],
+     "n": 46,
+     "ratio": 1.35,
+     "ratio_matched": 1.15,
+     "share": 0.014
+    },
+    "all deciding positions": {
+     "ci": [
+      0.006,
+      0.01
+     ],
+     "n": 57,
+     "ratio": 0.75,
+     "ratio_matched": 0.64,
+     "share": 0.0077
+    },
+    "cat": "minor-EG|pawn+-2+",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0309,
+      0.1379
+     ],
+     "n": 6,
+     "ratio": 6.45,
+     "ratio_matched": 5.49,
+     "share": 0.0667
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0004,
+      0.0029
+     ],
+     "n": 4,
+     "ratio": 0.11,
+     "ratio_matched": 0.09,
+     "share": 0.0011
+    },
+    "train_matched_n": 816,
+    "train_matched_share": 0.01215,
+    "train_n": 1285,
+    "train_share": 0.01034
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 0.4,
+     "ratio_matched": 0.46,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0035,
+      0.0086
+     ],
+     "n": 18,
+     "ratio": 1.03,
+     "ratio_matched": 1.19,
+     "share": 0.0055
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0027,
+      0.0056
+     ],
+     "n": 29,
+     "ratio": 0.74,
+     "ratio_matched": 0.86,
+     "share": 0.0039
+    },
+    "cat": "Q-EG|other-imbalance",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 4.2,
+     "ratio_matched": 4.85,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0012,
+      0.0045
+     ],
+     "n": 8,
+     "ratio": 0.43,
+     "ratio_matched": 0.5,
+     "share": 0.0023
+    },
+    "train_matched_n": 308,
+    "train_matched_share": 0.00459,
+    "train_n": 658,
+    "train_share": 0.00529
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0144,
+      0.0434
+     ],
+     "n": 12,
+     "ratio": 0.65,
+     "ratio_matched": 0.76,
+     "share": 0.0251
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0312,
+      0.0441
+     ],
+     "n": 122,
+     "ratio": 0.97,
+     "ratio_matched": 1.12,
+     "share": 0.0371
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0225,
+      0.0298
+     ],
+     "n": 191,
+     "ratio": 0.67,
+     "ratio_matched": 0.78,
+     "share": 0.0259
+    },
+    "cat": "Q-EG|Q-imbalance",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0696,
+      0.2057
+     ],
+     "n": 11,
+     "ratio": 3.18,
+     "ratio_matched": 3.69,
+     "share": 0.1222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0098,
+      0.0174
+     ],
+     "n": 46,
+     "ratio": 0.34,
+     "ratio_matched": 0.39,
+     "share": 0.0131
+    },
+    "train_matched_n": 2224,
+    "train_matched_share": 0.03312,
+    "train_n": 4770,
+    "train_share": 0.03838
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0011,
+      0.0151
+     ],
+     "n": 2,
+     "ratio": 0.49,
+     "ratio_matched": 3.43,
+     "share": 0.0042
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0054,
+      0.0116
+     ],
+     "n": 26,
+     "ratio": 0.92,
+     "ratio_matched": 6.48,
+     "share": 0.0079
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0041,
+      0.0075
+     ],
+     "n": 41,
+     "ratio": 0.65,
+     "ratio_matched": 4.55,
+     "share": 0.0056
+    },
+    "cat": "minor-EG|level",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0022,
+      0.0063
+     ],
+     "n": 13,
+     "ratio": 0.43,
+     "ratio_matched": 3.02,
+     "share": 0.0037
+    },
+    "train_matched_n": 82,
+    "train_matched_share": 0.00122,
+    "train_n": 1063,
+    "train_share": 0.00855
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0033,
+      0.0213
+     ],
+     "n": 4,
+     "ratio": 0.35,
+     "ratio_matched": 0.25,
+     "share": 0.0084
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0212,
+      0.0322
+     ],
+     "n": 86,
+     "ratio": 1.08,
+     "ratio_matched": 0.79,
+     "share": 0.0262
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0123,
+      0.0178
+     ],
+     "n": 109,
+     "ratio": 0.61,
+     "ratio_matched": 0.44,
+     "share": 0.0148
+    },
+    "cat": "R-EG|pawn+-2+",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 0.92,
+     "ratio_matched": 0.67,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.003,
+      0.0077
+     ],
+     "n": 17,
+     "ratio": 0.2,
+     "ratio_matched": 0.15,
+     "share": 0.0048
+    },
+    "train_matched_n": 2230,
+    "train_matched_share": 0.03321,
+    "train_n": 3000,
+    "train_share": 0.02414
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0085,
+      0.0327
+     ],
+     "n": 8,
+     "ratio": 0.84,
+     "ratio_matched": 0.63,
+     "share": 0.0167
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0047,
+      0.0105
+     ],
+     "n": 23,
+     "ratio": 0.35,
+     "ratio_matched": 0.26,
+     "share": 0.007
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0094,
+      0.0144
+     ],
+     "n": 86,
+     "ratio": 0.58,
+     "ratio_matched": 0.44,
+     "share": 0.0117
+    },
+    "cat": "Q-MG|other-imbalance",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.012,
+      0.0203
+     ],
+     "n": 55,
+     "ratio": 0.78,
+     "ratio_matched": 0.59,
+     "share": 0.0156
+    },
+    "train_matched_n": 1792,
+    "train_matched_share": 0.02668,
+    "train_n": 2479,
+    "train_share": 0.01995
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1176,
+      0.181
+     ],
+     "n": 70,
+     "ratio": 1.17,
+     "ratio_matched": 0.72,
+     "share": 0.1464
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0399,
+      0.0543
+     ],
+     "n": 153,
+     "ratio": 0.37,
+     "ratio_matched": 0.23,
+     "share": 0.0465
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0599,
+      0.0712
+     ],
+     "n": 482,
+     "ratio": 0.52,
+     "ratio_matched": 0.32,
+     "share": 0.0653
+    },
+    "cat": "Q-MG|minor-up",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0654,
+      0.0826
+     ],
+     "n": 259,
+     "ratio": 0.59,
+     "ratio_matched": 0.36,
+     "share": 0.0735
+    },
+    "train_matched_n": 13720,
+    "train_matched_share": 0.20431,
+    "train_n": 15610,
+    "train_share": 0.1256
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 0.51,
+     "ratio_matched": 0.39,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0005,
+      0.0031
+     ],
+     "n": 4,
+     "ratio": 0.3,
+     "ratio_matched": 0.22,
+     "share": 0.0012
+    },
+    "all deciding positions": {
+     "ci": [
+      0.001,
+      0.003
+     ],
+     "n": 13,
+     "ratio": 0.43,
+     "ratio_matched": 0.33,
+     "share": 0.0018
+    },
+    "cat": "noQ-MG|other-imbalance",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0012,
+      0.0045
+     ],
+     "n": 8,
+     "ratio": 0.56,
+     "ratio_matched": 0.42,
+     "share": 0.0023
+    },
+    "train_matched_n": 364,
+    "train_matched_share": 0.00542,
+    "train_n": 505,
+    "train_share": 0.00406
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0045,
+      0.0243
+     ],
+     "n": 5,
+     "ratio": 0.38,
+     "ratio_matched": 0.4,
+     "share": 0.0105
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0095,
+      0.0172
+     ],
+     "n": 42,
+     "ratio": 0.46,
+     "ratio_matched": 0.48,
+     "share": 0.0128
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0067,
+      0.0109
+     ],
+     "n": 63,
+     "ratio": 0.31,
+     "ratio_matched": 0.32,
+     "share": 0.0085
+    },
+    "cat": "minor-EG|minor-up",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0864,
+      0.2316
+     ],
+     "n": 13,
+     "ratio": 5.2,
+     "ratio_matched": 5.46,
+     "share": 0.1444
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0003,
+      0.0025
+     ],
+     "n": 3,
+     "ratio": 0.03,
+     "ratio_matched": 0.03,
+     "share": 0.0009
+    },
+    "train_matched_n": 1778,
+    "train_matched_share": 0.02648,
+    "train_n": 3455,
+    "train_share": 0.0278
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 0.11,
+     "ratio_matched": 0.13,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0069,
+      0.0137
+     ],
+     "n": 32,
+     "ratio": 0.49,
+     "ratio_matched": 0.61,
+     "share": 0.0097
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0042,
+      0.0077
+     ],
+     "n": 42,
+     "ratio": 0.29,
+     "ratio_matched": 0.36,
+     "share": 0.0057
+    },
+    "cat": "R+minor-EG|other-imbalance",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0013,
+      0.0048
+     ],
+     "n": 9,
+     "ratio": 0.13,
+     "ratio_matched": 0.16,
+     "share": 0.0026
+    },
+    "train_matched_n": 1072,
+    "train_matched_share": 0.01596,
+    "train_n": 2476,
+    "train_share": 0.01992
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0045,
+      0.0243
+     ],
+     "n": 5,
+     "ratio": 0.12,
+     "ratio_matched": 0.1,
+     "share": 0.0105
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.029,
+      0.0415
+     ],
+     "n": 114,
+     "ratio": 0.38,
+     "ratio_matched": 0.32,
+     "share": 0.0347
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0167,
+      0.0231
+     ],
+     "n": 145,
+     "ratio": 0.22,
+     "ratio_matched": 0.18,
+     "share": 0.0197
+    },
+    "cat": "R+minor-EG|minor-up",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0114,
+      0.0935
+     ],
+     "n": 3,
+     "ratio": 0.37,
+     "ratio_matched": 0.3,
+     "share": 0.0333
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0044,
+      0.0098
+     ],
+     "n": 23,
+     "ratio": 0.07,
+     "ratio_matched": 0.06,
+     "share": 0.0065
+    },
+    "train_matched_n": 7382,
+    "train_matched_share": 0.10993,
+    "train_n": 11285,
+    "train_share": 0.0908
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0033,
+      0.0213
+     ],
+     "n": 4,
+     "ratio": 1.0,
+     "ratio_matched": 1.33,
+     "share": 0.0084
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0014,
+      0.0052
+     ],
+     "n": 9,
+     "ratio": 0.33,
+     "ratio_matched": 0.44,
+     "share": 0.0027
+    },
+    "all deciding positions": {
+     "ci": [
+      0.001,
+      0.003
+     ],
+     "n": 13,
+     "ratio": 0.21,
+     "ratio_matched": 0.28,
+     "share": 0.0018
+    },
+    "cat": "R-EG|other-imbalance",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0,
+      0.0011
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "train_matched_n": 422,
+    "train_matched_share": 0.00628,
+    "train_n": 1039,
+    "train_share": 0.00836
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0,
+      0.008
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0025,
+      0.0071
+     ],
+     "n": 14,
+     "ratio": 0.15,
+     "ratio_matched": 0.09,
+     "share": 0.0043
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0041,
+      0.0075
+     ],
+     "n": 41,
+     "ratio": 0.19,
+     "ratio_matched": 0.12,
+     "share": 0.0056
+    },
+    "cat": "noQ-MG|minor-up",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0053,
+      0.0111
+     ],
+     "n": 27,
+     "ratio": 0.27,
+     "ratio_matched": 0.17,
+     "share": 0.0077
+    },
+    "train_matched_n": 3113,
+    "train_matched_share": 0.04636,
+    "train_n": 3570,
+    "train_share": 0.02872
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0,
+      0.008
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      -0.0,
+      0.0012
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "all deciding positions": {
+     "ci": [
+      -0.0,
+      0.0005
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "cat": "pawn-EG|pawn+-2+",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0,
+      0.0011
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "train_matched_n": 43,
+    "train_matched_share": 0.00064,
+    "train_n": 171,
+    "train_share": 0.00138
+   }
+  ],
+  "passers": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1385,
+      0.2057
+     ],
+     "n": 81,
+     "ratio": 1.15,
+     "ratio_matched": 1.16,
+     "share": 0.1695
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.2929,
+      0.3245
+     ],
+     "n": 1014,
+     "ratio": 2.1,
+     "ratio_matched": 2.11,
+     "share": 0.3085
+    },
+    "all deciding positions": {
+     "ci": [
+      0.2163,
+      0.2354
+     ],
+     "n": 1665,
+     "ratio": 1.53,
+     "ratio_matched": 1.54,
+     "share": 0.2257
+    },
+    "cat": "both-passers",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.1395,
+      0.3063
+     ],
+     "n": 19,
+     "ratio": 1.44,
+     "ratio_matched": 1.44,
+     "share": 0.2111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1448,
+      0.1688
+     ],
+     "n": 551,
+     "ratio": 1.06,
+     "ratio_matched": 1.07,
+     "share": 0.1564
+    },
+    "train_matched_n": 9825,
+    "train_matched_share": 0.14631,
+    "train_n": 18279,
+    "train_share": 0.14707
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.2698,
+      0.3525
+     ],
+     "n": 148,
+     "ratio": 0.79,
+     "ratio_matched": 0.76,
+     "share": 0.3096
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.4454,
+      0.4795
+     ],
+     "n": 1520,
+     "ratio": 1.19,
+     "ratio_matched": 1.14,
+     "share": 0.4624
+    },
+    "all deciding positions": {
+     "ci": [
+      0.3735,
+      0.3957
+     ],
+     "n": 2837,
+     "ratio": 0.99,
+     "ratio_matched": 0.95,
+     "share": 0.3845
+    },
+    "cat": "one-side",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.3254,
+      0.5254
+     ],
+     "n": 38,
+     "ratio": 1.08,
+     "ratio_matched": 1.04,
+     "share": 0.4222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.3058,
+      0.3366
+     ],
+     "n": 1131,
+     "ratio": 0.82,
+     "ratio_matched": 0.79,
+     "share": 0.321
+    },
+    "train_matched_n": 27324,
+    "train_matched_share": 0.40689,
+    "train_n": 48415,
+    "train_share": 0.38954
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.4761,
+      0.5654
+     ],
+     "n": 249,
+     "ratio": 1.12,
+     "ratio_matched": 1.17,
+     "share": 0.5209
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.215,
+      0.2438
+     ],
+     "n": 753,
+     "ratio": 0.49,
+     "ratio_matched": 0.51,
+     "share": 0.2291
+    },
+    "all deciding positions": {
+     "ci": [
+      0.3787,
+      0.401
+     ],
+     "n": 2876,
+     "ratio": 0.84,
+     "ratio_matched": 0.87,
+     "share": 0.3898
+    },
+    "cat": "no-passer",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.2745,
+      0.4698
+     ],
+     "n": 33,
+     "ratio": 0.79,
+     "ratio_matched": 0.82,
+     "share": 0.3667
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.5061,
+      0.539
+     ],
+     "n": 1841,
+     "ratio": 1.13,
+     "ratio_matched": 1.17,
+     "share": 0.5226
+    },
+    "train_matched_n": 30005,
+    "train_matched_share": 0.44681,
+    "train_n": 57594,
+    "train_share": 0.46339
+   }
+  ],
+  "pawn_balance": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1138,
+      0.1764
+     ],
+     "n": 68,
+     "ratio": 1.07,
+     "ratio_matched": 1.5,
+     "share": 0.1423
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.2043,
+      0.2326
+     ],
+     "n": 717,
+     "ratio": 1.64,
+     "ratio_matched": 2.31,
+     "share": 0.2181
+    },
+    "all deciding positions": {
+     "ci": [
+      0.2079,
+      0.2267
+     ],
+     "n": 1602,
+     "ratio": 1.64,
+     "ratio_matched": 2.29,
+     "share": 0.2171
+    },
+    "cat": "pawn+-1",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0779,
+      0.2187
+     ],
+     "n": 12,
+     "ratio": 1.01,
+     "ratio_matched": 1.41,
+     "share": 0.1333
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.2149,
+      0.2427
+     ],
+     "n": 805,
+     "ratio": 1.72,
+     "ratio_matched": 2.41,
+     "share": 0.2285
+    },
+    "train_matched_n": 6354,
+    "train_matched_share": 0.09462,
+    "train_n": 16486,
+    "train_share": 0.13264
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.2202,
+      0.2983
+     ],
+     "n": 123,
+     "ratio": 1.96,
+     "ratio_matched": 6.65,
+     "share": 0.2573
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0897,
+      0.1102
+     ],
+     "n": 327,
+     "ratio": 0.76,
+     "ratio_matched": 2.57,
+     "share": 0.0995
+    },
+    "all deciding positions": {
+     "ci": [
+      0.141,
+      0.1573
+     ],
+     "n": 1099,
+     "ratio": 1.14,
+     "ratio_matched": 3.85,
+     "share": 0.149
+    },
+    "cat": "level",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0382,
+      0.1519
+     ],
+     "n": 7,
+     "ratio": 0.59,
+     "ratio_matched": 2.01,
+     "share": 0.0778
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1698,
+      0.1953
+     ],
+     "n": 642,
+     "ratio": 1.39,
+     "ratio_matched": 4.71,
+     "share": 0.1822
+    },
+    "train_matched_n": 2599,
+    "train_matched_share": 0.0387,
+    "train_n": 16299,
+    "train_share": 0.13114
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0357,
+      0.0761
+     ],
+     "n": 25,
+     "ratio": 0.71,
+     "ratio_matched": 0.52,
+     "share": 0.0523
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1034,
+      0.1251
+     ],
+     "n": 374,
+     "ratio": 1.55,
+     "ratio_matched": 1.14,
+     "share": 0.1138
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0699,
+      0.082
+     ],
+     "n": 559,
+     "ratio": 1.03,
+     "ratio_matched": 0.76,
+     "share": 0.0758
+    },
+    "cat": "pawn+-2+",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0696,
+      0.2057
+     ],
+     "n": 11,
+     "ratio": 1.67,
+     "ratio_matched": 1.22,
+     "share": 0.1222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0361,
+      0.0495
+     ],
+     "n": 149,
+     "ratio": 0.58,
+     "ratio_matched": 0.42,
+     "share": 0.0423
+    },
+    "train_matched_n": 6724,
+    "train_matched_share": 0.10013,
+    "train_n": 9115,
+    "train_share": 0.07334
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.5033,
+      0.5922
+     ],
+     "n": 262,
+     "ratio": 0.83,
+     "ratio_matched": 0.72,
+     "share": 0.5481
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.5516,
+      0.5854
+     ],
+     "n": 1869,
+     "ratio": 0.86,
+     "ratio_matched": 0.74,
+     "share": 0.5686
+    },
+    "all deciding positions": {
+     "ci": [
+      0.5468,
+      0.5694
+     ],
+     "n": 4118,
+     "ratio": 0.84,
+     "ratio_matched": 0.73,
+     "share": 0.5581
+    },
+    "cat": "pieces-unequal",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.5642,
+      0.7555
+     ],
+     "n": 60,
+     "ratio": 1.01,
+     "ratio_matched": 0.87,
+     "share": 0.6667
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.5305,
+      0.5634
+     ],
+     "n": 1927,
+     "ratio": 0.83,
+     "ratio_matched": 0.71,
+     "share": 0.547
+    },
+    "train_matched_n": 51477,
+    "train_matched_share": 0.76655,
+    "train_n": 82388,
+    "train_share": 0.66288
+   }
+  ],
+  "pawns": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.2979,
+      0.3825
+     ],
+     "n": 162,
+     "ratio": 1.0,
+     "ratio_matched": 0.91,
+     "share": 0.3389
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.3313,
+      0.3639
+     ],
+     "n": 1142,
+     "ratio": 1.03,
+     "ratio_matched": 0.93,
+     "share": 0.3474
+    },
+    "all deciding positions": {
+     "ci": [
+      0.4098,
+      0.4323
+     ],
+     "n": 3106,
+     "ratio": 1.24,
+     "ratio_matched": 1.13,
+     "share": 0.421
+    },
+    "cat": "p9-12",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.024,
+      0.1235
+     ],
+     "n": 5,
+     "ratio": 0.16,
+     "ratio_matched": 0.15,
+     "share": 0.0556
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.4936,
+      0.5266
+     ],
+     "n": 1797,
+     "ratio": 1.5,
+     "ratio_matched": 1.37,
+     "share": 0.5101
+    },
+    "train_matched_n": 25087,
+    "train_matched_share": 0.37357,
+    "train_n": 42124,
+    "train_share": 0.33892
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1674,
+      0.2391
+     ],
+     "n": 96,
+     "ratio": 0.76,
+     "ratio_matched": 0.76,
+     "share": 0.2008
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.3898,
+      0.4233
+     ],
+     "n": 1336,
+     "ratio": 1.54,
+     "ratio_matched": 1.54,
+     "share": 0.4064
+    },
+    "all deciding positions": {
+     "ci": [
+      0.2844,
+      0.3052
+     ],
+     "n": 2174,
+     "ratio": 1.12,
+     "ratio_matched": 1.12,
+     "share": 0.2947
+    },
+    "cat": "p5-8",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.1487,
+      0.3185
+     ],
+     "n": 20,
+     "ratio": 0.84,
+     "ratio_matched": 0.84,
+     "share": 0.2222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1919,
+      0.2186
+     ],
+     "n": 722,
+     "ratio": 0.78,
+     "ratio_matched": 0.78,
+     "share": 0.2049
+    },
+    "train_matched_n": 17741,
+    "train_matched_share": 0.26418,
+    "train_n": 32843,
+    "train_share": 0.26425
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.3465,
+      0.4335
+     ],
+     "n": 186,
+     "ratio": 1.72,
+     "ratio_matched": 1.83,
+     "share": 0.3891
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0351,
+      0.0487
+     ],
+     "n": 136,
+     "ratio": 0.18,
+     "ratio_matched": 0.19,
+     "share": 0.0414
+    },
+    "all deciding positions": {
+     "ci": [
+      0.1598,
+      0.1769
+     ],
+     "n": 1241,
+     "ratio": 0.74,
+     "ratio_matched": 0.79,
+     "share": 0.1682
+    },
+    "cat": "p13-16",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 0.1,
+     "ratio_matched": 0.1,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.2461,
+      0.275
+     ],
+     "n": 917,
+     "ratio": 1.15,
+     "ratio_matched": 1.22,
+     "share": 0.2603
+    },
+    "train_matched_n": 14297,
+    "train_matched_share": 0.2129,
+    "train_n": 28156,
+    "train_share": 0.22654
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0513,
+      0.0978
+     ],
+     "n": 34,
+     "ratio": 0.42,
+     "ratio_matched": 0.48,
+     "share": 0.0711
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1913,
+      0.2189
+     ],
+     "n": 673,
+     "ratio": 1.2,
+     "ratio_matched": 1.37,
+     "share": 0.2047
+    },
+    "all deciding positions": {
+     "ci": [
+      0.109,
+      0.1237
+     ],
+     "n": 857,
+     "ratio": 0.68,
+     "ratio_matched": 0.78,
+     "share": 0.1162
+    },
+    "cat": "p0-4",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.5987,
+      0.7849
+     ],
+     "n": 63,
+     "ratio": 4.11,
+     "ratio_matched": 4.69,
+     "share": 0.7
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0201,
+      0.0304
+     ],
+     "n": 87,
+     "ratio": 0.15,
+     "ratio_matched": 0.17,
+     "share": 0.0247
+    },
+    "train_matched_n": 10029,
+    "train_matched_share": 0.14934,
+    "train_n": 21165,
+    "train_share": 0.17029
+   }
+  ],
+  "phase": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1442,
+      0.2124
+     ],
+     "n": 84,
+     "ratio": 1.11,
+     "ratio_matched": 1.0,
+     "share": 0.1757
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.2109,
+      0.2394
+     ],
+     "n": 739,
+     "ratio": 1.42,
+     "ratio_matched": 1.28,
+     "share": 0.2248
+    },
+    "all deciding positions": {
+     "ci": [
+      0.2275,
+      0.2469
+     ],
+     "n": 1749,
+     "ratio": 1.5,
+     "ratio_matched": 1.35,
+     "share": 0.2371
+    },
+    "cat": "P13-18",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 0.14,
+     "ratio_matched": 0.13,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.248,
+      0.2771
+     ],
+     "n": 924,
+     "ratio": 1.66,
+     "ratio_matched": 1.49,
+     "share": 0.2623
+    },
+    "train_matched_n": 11816,
+    "train_matched_share": 0.17595,
+    "train_n": 19625,
+    "train_share": 0.1579
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.5201,
+      0.6086
+     ],
+     "n": 270,
+     "ratio": 1.97,
+     "ratio_matched": 1.99,
+     "share": 0.5649
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1115,
+      0.1339
+     ],
+     "n": 402,
+     "ratio": 0.43,
+     "ratio_matched": 0.43,
+     "share": 0.1223
+    },
+    "all deciding positions": {
+     "ci": [
+      0.2814,
+      0.3022
+     ],
+     "n": 2152,
+     "ratio": 1.02,
+     "ratio_matched": 1.03,
+     "share": 0.2917
+    },
+    "cat": "P19-24",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.4039,
+      0.4365
+     ],
+     "n": 1480,
+     "ratio": 1.47,
+     "ratio_matched": 1.48,
+     "share": 0.4201
+    },
+    "train_matched_n": 19038,
+    "train_matched_share": 0.2835,
+    "train_n": 35601,
+    "train_share": 0.28644
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1176,
+      0.181
+     ],
+     "n": 70,
+     "ratio": 0.62,
+     "ratio_matched": 0.58,
+     "share": 0.1464
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.2645,
+      0.2952
+     ],
+     "n": 919,
+     "ratio": 1.18,
+     "ratio_matched": 1.1,
+     "share": 0.2796
+    },
+    "all deciding positions": {
+     "ci": [
+      0.2235,
+      0.2428
+     ],
+     "n": 1719,
+     "ratio": 0.98,
+     "ratio_matched": 0.92,
+     "share": 0.233
+    },
+    "cat": "P7-12",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.1767,
+      0.3544
+     ],
+     "n": 23,
+     "ratio": 1.08,
+     "ratio_matched": 1.01,
+     "share": 0.2556
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1878,
+      0.2142
+     ],
+     "n": 707,
+     "ratio": 0.85,
+     "ratio_matched": 0.79,
+     "share": 0.2007
+    },
+    "train_matched_n": 17074,
+    "train_matched_share": 0.25425,
+    "train_n": 29502,
+    "train_share": 0.23737
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0021,
+      0.0183
+     ],
+     "n": 3,
+     "ratio": 1.38,
+     "ratio_matched": 2.05,
+     "share": 0.0063
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.003,
+      0.0079
+     ],
+     "n": 16,
+     "ratio": 1.07,
+     "ratio_matched": 1.59,
+     "share": 0.0049
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0024,
+      0.0052
+     ],
+     "n": 26,
+     "ratio": 0.78,
+     "ratio_matched": 1.15,
+     "share": 0.0035
+    },
+    "cat": "P0",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 2.45,
+     "ratio_matched": 3.62,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0008,
+      0.0037
+     ],
+     "n": 6,
+     "ratio": 0.38,
+     "ratio_matched": 0.56,
+     "share": 0.0017
+    },
+    "train_matched_n": 206,
+    "train_matched_share": 0.00307,
+    "train_n": 564,
+    "train_share": 0.00454
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0821,
+      0.1376
+     ],
+     "n": 51,
+     "ratio": 0.34,
+     "ratio_matched": 0.38,
+     "share": 0.1067
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.3521,
+      0.3851
+     ],
+     "n": 1211,
+     "ratio": 1.17,
+     "ratio_matched": 1.3,
+     "share": 0.3684
+    },
+    "all deciding positions": {
+     "ci": [
+      0.2252,
+      0.2446
+     ],
+     "n": 1732,
+     "ratio": 0.75,
+     "ratio_matched": 0.83,
+     "share": 0.2348
+    },
+    "cat": "P1-6",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.6104,
+      0.7946
+     ],
+     "n": 64,
+     "ratio": 2.27,
+     "ratio_matched": 2.51,
+     "share": 0.7111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1051,
+      0.1262
+     ],
+     "n": 406,
+     "ratio": 0.37,
+     "ratio_matched": 0.41,
+     "share": 0.1152
+    },
+    "train_matched_n": 19020,
+    "train_matched_share": 0.28323,
+    "train_n": 38996,
+    "train_share": 0.31376
+   }
+  ],
+  "sig": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0033,
+      0.0213
+     ],
+     "n": 4,
+     "ratio": 0.58,
+     "ratio_matched": 0.69,
+     "share": 0.0084
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0259,
+      0.0379
+     ],
+     "n": 103,
+     "ratio": 2.19,
+     "ratio_matched": 2.57,
+     "share": 0.0313
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0164,
+      0.0226
+     ],
+     "n": 142,
+     "ratio": 1.34,
+     "ratio_matched": 1.58,
+     "share": 0.0192
+    },
+    "cat": "minor-EG/B-N",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 1.55,
+     "ratio_matched": 1.82,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0067,
+      0.0131
+     ],
+     "n": 33,
+     "ratio": 0.65,
+     "ratio_matched": 0.77,
+     "share": 0.0094
+    },
+    "train_matched_n": 818,
+    "train_matched_share": 0.01218,
+    "train_n": 1782,
+    "train_share": 0.01434
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0021,
+      0.0183
+     ],
+     "n": 3,
+     "ratio": 1.11,
+     "ratio_matched": 1.53,
+     "share": 0.0063
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0095,
+      0.0172
+     ],
+     "n": 42,
+     "ratio": 2.26,
+     "ratio_matched": 3.12,
+     "share": 0.0128
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0057,
+      0.0097
+     ],
+     "n": 55,
+     "ratio": 1.32,
+     "ratio_matched": 1.82,
+     "share": 0.0075
+    },
+    "cat": "minor-EG/B-B same",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 3.92,
+     "ratio_matched": 5.43,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0012,
+      0.0045
+     ],
+     "n": 8,
+     "ratio": 0.4,
+     "ratio_matched": 0.55,
+     "share": 0.0023
+    },
+    "train_matched_n": 275,
+    "train_matched_share": 0.0041,
+    "train_n": 704,
+    "train_share": 0.00566
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.693,
+      0.7719
+     ],
+     "n": 351,
+     "ratio": 1.78,
+     "ratio_matched": 1.74,
+     "share": 0.7343
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.3247,
+      0.3571
+     ],
+     "n": 1120,
+     "ratio": 0.83,
+     "ratio_matched": 0.81,
+     "share": 0.3407
+    },
+    "all deciding positions": {
+     "ci": [
+      0.4992,
+      0.522
+     ],
+     "n": 3767,
+     "ratio": 1.24,
+     "ratio_matched": 1.21,
+     "share": 0.5106
+    },
+    "cat": "Q-MG",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0061,
+      0.0774
+     ],
+     "n": 2,
+     "ratio": 0.05,
+     "ratio_matched": 0.05,
+     "share": 0.0222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.6353,
+      0.6667
+     ],
+     "n": 2294,
+     "ratio": 1.58,
+     "ratio_matched": 1.54,
+     "share": 0.6511
+    },
+    "train_matched_n": 28369,
+    "train_matched_share": 0.42245,
+    "train_n": 51173,
+    "train_share": 0.41173
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0496,
+      0.0954
+     ],
+     "n": 33,
+     "ratio": 0.87,
+     "ratio_matched": 0.94,
+     "share": 0.069
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1288,
+      0.1525
+     ],
+     "n": 461,
+     "ratio": 1.77,
+     "ratio_matched": 1.91,
+     "share": 0.1402
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0873,
+      0.1007
+     ],
+     "n": 692,
+     "ratio": 1.18,
+     "ratio_matched": 1.28,
+     "share": 0.0938
+    },
+    "cat": "Q-EG",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.158,
+      0.3305
+     ],
+     "n": 21,
+     "ratio": 2.94,
+     "ratio_matched": 3.18,
+     "share": 0.2333
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0435,
+      0.058
+     ],
+     "n": 177,
+     "ratio": 0.63,
+     "ratio_matched": 0.69,
+     "share": 0.0502
+    },
+    "train_matched_n": 4924,
+    "train_matched_share": 0.07332,
+    "train_n": 9849,
+    "train_share": 0.07924
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0011,
+      0.0151
+     ],
+     "n": 2,
+     "ratio": 0.58,
+     "ratio_matched": 0.61,
+     "share": 0.0042
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0097,
+      0.0176
+     ],
+     "n": 43,
+     "ratio": 1.83,
+     "ratio_matched": 1.91,
+     "share": 0.0131
+    },
+    "all deciding positions": {
+     "ci": [
+      0.006,
+      0.01
+     ],
+     "n": 57,
+     "ratio": 1.08,
+     "ratio_matched": 1.13,
+     "share": 0.0077
+    },
+    "cat": "minor-EG/N-N",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 1.55,
+     "ratio_matched": 1.62,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0017,
+      0.0056
+     ],
+     "n": 11,
+     "ratio": 0.44,
+     "ratio_matched": 0.45,
+     "share": 0.0031
+    },
+    "train_matched_n": 461,
+    "train_matched_share": 0.00686,
+    "train_n": 890,
+    "train_share": 0.00716
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0223,
+      0.0562
+     ],
+     "n": 17,
+     "ratio": 0.5,
+     "ratio_matched": 0.6,
+     "share": 0.0356
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1045,
+      0.1264
+     ],
+     "n": 378,
+     "ratio": 1.62,
+     "ratio_matched": 1.94,
+     "share": 0.115
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0639,
+      0.0756
+     ],
+     "n": 513,
+     "ratio": 0.98,
+     "ratio_matched": 1.17,
+     "share": 0.0695
+    },
+    "cat": "R-EG",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0615,
+      0.1926
+     ],
+     "n": 10,
+     "ratio": 1.56,
+     "ratio_matched": 1.87,
+     "share": 0.1111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0255,
+      0.0369
+     ],
+     "n": 108,
+     "ratio": 0.43,
+     "ratio_matched": 0.52,
+     "share": 0.0307
+    },
+    "train_matched_n": 3991,
+    "train_matched_share": 0.05943,
+    "train_n": 8829,
+    "train_share": 0.07104
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0289,
+      0.0662
+     ],
+     "n": 21,
+     "ratio": 0.43,
+     "ratio_matched": 0.4,
+     "share": 0.0439
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0546,
+      0.0712
+     ],
+     "n": 205,
+     "ratio": 0.6,
+     "ratio_matched": 0.56,
+     "share": 0.0624
+    },
+    "all deciding positions": {
+     "ci": [
+      0.083,
+      0.096
+     ],
+     "n": 659,
+     "ratio": 0.87,
+     "ratio_matched": 0.81,
+     "share": 0.0893
+    },
+    "cat": "noQ-MG",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 0.11,
+     "ratio_matched": 0.1,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1122,
+      0.1339
+     ],
+     "n": 432,
+     "ratio": 1.19,
+     "ratio_matched": 1.11,
+     "share": 0.1226
+    },
+    "train_matched_n": 7420,
+    "train_matched_share": 0.11049,
+    "train_n": 12825,
+    "train_share": 0.10319
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0021,
+      0.0183
+     ],
+     "n": 3,
+     "ratio": 1.38,
+     "ratio_matched": 2.05,
+     "share": 0.0063
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.003,
+      0.0079
+     ],
+     "n": 16,
+     "ratio": 1.07,
+     "ratio_matched": 1.59,
+     "share": 0.0049
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0024,
+      0.0052
+     ],
+     "n": 26,
+     "ratio": 0.78,
+     "ratio_matched": 1.15,
+     "share": 0.0035
+    },
+    "cat": "pawn-EG",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 2.45,
+     "ratio_matched": 3.62,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0008,
+      0.0037
+     ],
+     "n": 6,
+     "ratio": 0.38,
+     "ratio_matched": 0.56,
+     "share": 0.0017
+    },
+    "train_matched_n": 206,
+    "train_matched_share": 0.00307,
+    "train_n": 564,
+    "train_share": 0.00454
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0567,
+      0.1049
+     ],
+     "n": 37,
+     "ratio": 0.31,
+     "ratio_matched": 0.29,
+     "share": 0.0774
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.2266,
+      0.2559
+     ],
+     "n": 792,
+     "ratio": 0.96,
+     "ratio_matched": 0.9,
+     "share": 0.2409
+    },
+    "all deciding positions": {
+     "ci": [
+      0.1644,
+      0.1816
+     ],
+     "n": 1275,
+     "ratio": 0.69,
+     "ratio_matched": 0.64,
+     "share": 0.1728
+    },
+    "cat": "R+minor-EG",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.2545,
+      0.4472
+     ],
+     "n": 31,
+     "ratio": 1.37,
+     "ratio_matched": 1.28,
+     "share": 0.3444
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.1076,
+      0.1289
+     ],
+     "n": 415,
+     "ratio": 0.47,
+     "ratio_matched": 0.44,
+     "share": 0.1178
+    },
+    "train_matched_n": 18051,
+    "train_matched_share": 0.2688,
+    "train_n": 31168,
+    "train_share": 0.25077
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0058,
+      0.0271
+     ],
+     "n": 6,
+     "ratio": 0.36,
+     "ratio_matched": 0.39,
+     "share": 0.0126
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0226,
+      0.0339
+     ],
+     "n": 91,
+     "ratio": 0.79,
+     "ratio_matched": 0.86,
+     "share": 0.0277
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0169,
+      0.0232
+     ],
+     "n": 146,
+     "ratio": 0.57,
+     "ratio_matched": 0.61,
+     "share": 0.0198
+    },
+    "cat": "minor-EG/multi/uneven",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0864,
+      0.2316
+     ],
+     "n": 13,
+     "ratio": 4.14,
+     "ratio_matched": 4.47,
+     "share": 0.1444
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0074,
+      0.0141
+     ],
+     "n": 36,
+     "ratio": 0.29,
+     "ratio_matched": 0.32,
+     "share": 0.0102
+    },
+    "train_matched_n": 2171,
+    "train_matched_share": 0.03233,
+    "train_n": 4333,
+    "train_share": 0.03486
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 0.12,
+     "ratio_matched": 0.3,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0079,
+      0.0151
+     ],
+     "n": 36,
+     "ratio": 0.63,
+     "ratio_matched": 1.57,
+     "share": 0.011
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0047,
+      0.0083
+     ],
+     "n": 46,
+     "ratio": 0.36,
+     "ratio_matched": 0.89,
+     "share": 0.0062
+    },
+    "cat": "minor-EG/B-B opp",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0309,
+      0.1379
+     ],
+     "n": 6,
+     "ratio": 3.82,
+     "ratio_matched": 9.57,
+     "share": 0.0667
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0003,
+      0.0025
+     ],
+     "n": 3,
+     "ratio": 0.05,
+     "ratio_matched": 0.12,
+     "share": 0.0009
+    },
+    "train_matched_n": 468,
+    "train_matched_share": 0.00697,
+    "train_n": 2171,
+    "train_share": 0.01747
+   }
+  ],
+  "sig_x_passers": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0478,
+      0.093
+     ],
+     "n": 32,
+     "ratio": 2.68,
+     "ratio_matched": 2.39,
+     "share": 0.0669
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0669,
+      0.085
+     ],
+     "n": 248,
+     "ratio": 3.02,
+     "ratio_matched": 2.7,
+     "share": 0.0754
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0615,
+      0.0729
+     ],
+     "n": 494,
+     "ratio": 2.68,
+     "ratio_matched": 2.39,
+     "share": 0.067
+    },
+    "cat": "Q-MG|both-passers",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 0.44,
+     "ratio_matched": 0.4,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0531,
+      0.0688
+     ],
+     "n": 213,
+     "ratio": 2.42,
+     "ratio_matched": 2.16,
+     "share": 0.0605
+    },
+    "train_matched_n": 1879,
+    "train_matched_share": 0.02798,
+    "train_n": 3107,
+    "train_share": 0.025
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0071,
+      0.0299
+     ],
+     "n": 7,
+     "ratio": 0.81,
+     "ratio_matched": 1.06,
+     "share": 0.0146
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0469,
+      0.0624
+     ],
+     "n": 178,
+     "ratio": 2.99,
+     "ratio_matched": 3.94,
+     "share": 0.0542
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0282,
+      0.0363
+     ],
+     "n": 236,
+     "ratio": 1.77,
+     "ratio_matched": 2.32,
+     "share": 0.032
+    },
+    "cat": "R-EG|both-passers",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0309,
+      0.1379
+     ],
+     "n": 6,
+     "ratio": 3.68,
+     "ratio_matched": 4.85,
+     "share": 0.0667
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0096,
+      0.017
+     ],
+     "n": 45,
+     "ratio": 0.7,
+     "ratio_matched": 0.93,
+     "share": 0.0128
+    },
+    "train_matched_n": 924,
+    "train_matched_share": 0.01376,
+    "train_n": 2252,
+    "train_share": 0.01812
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.1577,
+      0.228
+     ],
+     "n": 91,
+     "ratio": 1.84,
+     "ratio_matched": 1.59,
+     "share": 0.1904
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1344,
+      0.1585
+     ],
+     "n": 480,
+     "ratio": 1.41,
+     "ratio_matched": 1.22,
+     "share": 0.146
+    },
+    "all deciding positions": {
+     "ci": [
+      0.161,
+      0.1782
+     ],
+     "n": 1250,
+     "ratio": 1.63,
+     "ratio_matched": 1.41,
+     "share": 0.1694
+    },
+    "cat": "Q-MG|one-side",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.18,
+      0.2061
+     ],
+     "n": 679,
+     "ratio": 1.86,
+     "ratio_matched": 1.61,
+     "share": 0.1927
+    },
+    "train_matched_n": 8044,
+    "train_matched_share": 0.11978,
+    "train_n": 12890,
+    "train_share": 0.10371
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0175,
+      0.0486
+     ],
+     "n": 14,
+     "ratio": 1.67,
+     "ratio_matched": 1.9,
+     "share": 0.0293
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0356,
+      0.0494
+     ],
+     "n": 138,
+     "ratio": 2.39,
+     "ratio_matched": 2.73,
+     "share": 0.042
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0249,
+      0.0325
+     ],
+     "n": 210,
+     "ratio": 1.62,
+     "ratio_matched": 1.85,
+     "share": 0.0285
+    },
+    "cat": "Q-EG|both-passers",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.024,
+      0.1235
+     ],
+     "n": 5,
+     "ratio": 3.17,
+     "ratio_matched": 3.61,
+     "share": 0.0556
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0115,
+      0.0196
+     ],
+     "n": 53,
+     "ratio": 0.86,
+     "ratio_matched": 0.98,
+     "share": 0.015
+    },
+    "train_matched_n": 1034,
+    "train_matched_share": 0.0154,
+    "train_n": 2180,
+    "train_share": 0.01754
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0045,
+      0.0243
+     ],
+     "n": 5,
+     "ratio": 0.98,
+     "ratio_matched": 0.9,
+     "share": 0.0105
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0118,
+      0.0203
+     ],
+     "n": 51,
+     "ratio": 1.46,
+     "ratio_matched": 1.34,
+     "share": 0.0155
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0136,
+      0.0194
+     ],
+     "n": 120,
+     "ratio": 1.53,
+     "ratio_matched": 1.4,
+     "share": 0.0163
+    },
+    "cat": "noQ-MG|both-passers",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0143,
+      0.0231
+     ],
+     "n": 64,
+     "ratio": 1.71,
+     "ratio_matched": 1.56,
+     "share": 0.0182
+    },
+    "train_matched_n": 780,
+    "train_matched_share": 0.01162,
+    "train_n": 1324,
+    "train_share": 0.01065
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0,
+      0.008
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0012,
+      0.0048
+     ],
+     "n": 8,
+     "ratio": 2.4,
+     "ratio_matched": 3.14,
+     "share": 0.0024
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0007,
+      0.0025
+     ],
+     "n": 10,
+     "ratio": 1.34,
+     "ratio_matched": 1.75,
+     "share": 0.0014
+    },
+    "cat": "pawn-EG|both-passers",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 10.96,
+     "ratio_matched": 14.35,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0001,
+      0.0016
+     ],
+     "n": 1,
+     "ratio": 0.28,
+     "ratio_matched": 0.37,
+     "share": 0.0003
+    },
+    "train_matched_n": 52,
+    "train_matched_share": 0.00077,
+    "train_n": 126,
+    "train_share": 0.00101
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0223,
+      0.0562
+     ],
+     "n": 17,
+     "ratio": 0.89,
+     "ratio_matched": 0.94,
+     "share": 0.0356
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0652,
+      0.0831
+     ],
+     "n": 242,
+     "ratio": 1.83,
+     "ratio_matched": 1.95,
+     "share": 0.0736
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0428,
+      0.0525
+     ],
+     "n": 350,
+     "ratio": 1.18,
+     "ratio_matched": 1.26,
+     "share": 0.0474
+    },
+    "cat": "Q-EG|one-side",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0696,
+      0.2057
+     ],
+     "n": 11,
+     "ratio": 3.04,
+     "ratio_matched": 3.24,
+     "share": 0.1222
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0183,
+      0.0282
+     ],
+     "n": 80,
+     "ratio": 0.57,
+     "ratio_matched": 0.6,
+     "share": 0.0227
+    },
+    "train_matched_n": 2531,
+    "train_matched_share": 0.03769,
+    "train_n": 4992,
+    "train_share": 0.04016
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0058,
+      0.0271
+     ],
+     "n": 6,
+     "ratio": 0.74,
+     "ratio_matched": 0.95,
+     "share": 0.0126
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0276,
+      0.0398
+     ],
+     "n": 109,
+     "ratio": 1.95,
+     "ratio_matched": 2.5,
+     "share": 0.0332
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0171,
+      0.0235
+     ],
+     "n": 148,
+     "ratio": 1.18,
+     "ratio_matched": 1.51,
+     "share": 0.0201
+    },
+    "cat": "minor-EG|both-passers",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 0.65,
+     "ratio_matched": 0.84,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0064,
+      0.0128
+     ],
+     "n": 32,
+     "ratio": 0.53,
+     "ratio_matched": 0.69,
+     "share": 0.0091
+    },
+    "train_matched_n": 890,
+    "train_matched_share": 0.01325,
+    "train_n": 2115,
+    "train_share": 0.01702
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0223,
+      0.0562
+     ],
+     "n": 17,
+     "ratio": 0.62,
+     "ratio_matched": 0.56,
+     "share": 0.0356
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0767,
+      0.0959
+     ],
+     "n": 282,
+     "ratio": 1.49,
+     "ratio_matched": 1.35,
+     "share": 0.0858
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0554,
+      0.0663
+     ],
+     "n": 447,
+     "ratio": 1.05,
+     "ratio_matched": 0.95,
+     "share": 0.0606
+    },
+    "cat": "R+minor-EG|both-passers",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.024,
+      0.1235
+     ],
+     "n": 5,
+     "ratio": 0.96,
+     "ratio_matched": 0.87,
+     "share": 0.0556
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0346,
+      0.0476
+     ],
+     "n": 143,
+     "ratio": 0.7,
+     "ratio_matched": 0.64,
+     "share": 0.0406
+    },
+    "train_matched_n": 4266,
+    "train_matched_share": 0.06353,
+    "train_n": 7175,
+    "train_share": 0.05773
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0085,
+      0.0327
+     ],
+     "n": 8,
+     "ratio": 0.48,
+     "ratio_matched": 0.41,
+     "share": 0.0167
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0243,
+      0.0359
+     ],
+     "n": 97,
+     "ratio": 0.85,
+     "ratio_matched": 0.71,
+     "share": 0.0295
+    },
+    "all deciding positions": {
+     "ci": [
+      0.03,
+      0.0383
+     ],
+     "n": 250,
+     "ratio": 0.97,
+     "ratio_matched": 0.82,
+     "share": 0.0339
+    },
+    "cat": "noQ-MG|one-side",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 0.32,
+     "ratio_matched": 0.27,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0348,
+      0.0479
+     ],
+     "n": 144,
+     "ratio": 1.17,
+     "ratio_matched": 0.99,
+     "share": 0.0409
+    },
+    "train_matched_n": 2775,
+    "train_matched_share": 0.04132,
+    "train_n": 4331,
+    "train_share": 0.03485
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.4326,
+      0.5218
+     ],
+     "n": 228,
+     "ratio": 1.69,
+     "ratio_matched": 1.74,
+     "share": 0.477
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1086,
+      0.1308
+     ],
+     "n": 392,
+     "ratio": 0.42,
+     "ratio_matched": 0.43,
+     "share": 0.1193
+    },
+    "all deciding positions": {
+     "ci": [
+      0.2641,
+      0.2845
+     ],
+     "n": 2023,
+     "ratio": 0.97,
+     "ratio_matched": 1.0,
+     "share": 0.2742
+    },
+    "cat": "Q-MG|no-passer",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.002,
+      0.0603
+     ],
+     "n": 1,
+     "ratio": 0.04,
+     "ratio_matched": 0.04,
+     "share": 0.0111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.3819,
+      0.4142
+     ],
+     "n": 1402,
+     "ratio": 1.41,
+     "ratio_matched": 1.45,
+     "share": 0.398
+    },
+    "train_matched_n": 18446,
+    "train_matched_share": 0.27468,
+    "train_n": 35176,
+    "train_share": 0.28302
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0011,
+      0.0151
+     ],
+     "n": 2,
+     "ratio": 0.19,
+     "ratio_matched": 0.21,
+     "share": 0.0042
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0199,
+      0.0305
+     ],
+     "n": 81,
+     "ratio": 1.14,
+     "ratio_matched": 1.22,
+     "share": 0.0246
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0151,
+      0.0212
+     ],
+     "n": 132,
+     "ratio": 0.83,
+     "ratio_matched": 0.88,
+     "share": 0.0179
+    },
+    "cat": "Q-EG|no-passer",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.024,
+      0.1235
+     ],
+     "n": 5,
+     "ratio": 2.58,
+     "ratio_matched": 2.75,
+     "share": 0.0556
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0093,
+      0.0167
+     ],
+     "n": 44,
+     "ratio": 0.58,
+     "ratio_matched": 0.62,
+     "share": 0.0125
+    },
+    "train_matched_n": 1359,
+    "train_matched_share": 0.02024,
+    "train_n": 2677,
+    "train_share": 0.02154
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0099,
+      0.0354
+     ],
+     "n": 9,
+     "ratio": 0.5,
+     "ratio_matched": 0.47,
+     "share": 0.0188
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0424,
+      0.0572
+     ],
+     "n": 162,
+     "ratio": 1.32,
+     "ratio_matched": 1.24,
+     "share": 0.0493
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0259,
+      0.0337
+     ],
+     "n": 218,
+     "ratio": 0.79,
+     "ratio_matched": 0.75,
+     "share": 0.0295
+    },
+    "cat": "R-EG|one-side",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0174,
+      0.1088
+     ],
+     "n": 4,
+     "ratio": 1.19,
+     "ratio_matched": 1.12,
+     "share": 0.0444
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0091,
+      0.0164
+     ],
+     "n": 43,
+     "ratio": 0.33,
+     "ratio_matched": 0.31,
+     "share": 0.0122
+    },
+    "train_matched_n": 2662,
+    "train_matched_share": 0.03964,
+    "train_n": 4634,
+    "train_share": 0.03728
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 1.7,
+     "ratio_matched": 2.34,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0003,
+      0.0027
+     ],
+     "n": 3,
+     "ratio": 0.74,
+     "ratio_matched": 1.02,
+     "share": 0.0009
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0005,
+      0.002
+     ],
+     "n": 7,
+     "ratio": 0.77,
+     "ratio_matched": 1.06,
+     "share": 0.0009
+    },
+    "cat": "pawn-EG|no-passer",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0003,
+      0.0025
+     ],
+     "n": 3,
+     "ratio": 0.69,
+     "ratio_matched": 0.95,
+     "share": 0.0009
+    },
+    "train_matched_n": 60,
+    "train_matched_share": 0.00089,
+    "train_n": 153,
+    "train_share": 0.00123
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0033,
+      0.0213
+     ],
+     "n": 4,
+     "ratio": 0.43,
+     "ratio_matched": 0.65,
+     "share": 0.0084
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0123,
+      0.021
+     ],
+     "n": 53,
+     "ratio": 0.82,
+     "ratio_matched": 1.24,
+     "share": 0.0161
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0109,
+      0.0162
+     ],
+     "n": 98,
+     "ratio": 0.68,
+     "ratio_matched": 1.03,
+     "share": 0.0133
+    },
+    "cat": "minor-EG|no-passer",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0864,
+      0.2316
+     ],
+     "n": 13,
+     "ratio": 7.38,
+     "ratio_matched": 11.15,
+     "share": 0.1444
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0055,
+      0.0115
+     ],
+     "n": 28,
+     "ratio": 0.41,
+     "ratio_matched": 0.61,
+     "share": 0.0079
+    },
+    "train_matched_n": 870,
+    "train_matched_share": 0.01296,
+    "train_n": 2434,
+    "train_share": 0.01958
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0085,
+      0.0327
+     ],
+     "n": 8,
+     "ratio": 0.29,
+     "ratio_matched": 0.29,
+     "share": 0.0167
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0134,
+      0.0224
+     ],
+     "n": 57,
+     "ratio": 0.3,
+     "ratio_matched": 0.3,
+     "share": 0.0173
+    },
+    "all deciding positions": {
+     "ci": [
+      0.035,
+      0.0438
+     ],
+     "n": 289,
+     "ratio": 0.68,
+     "ratio_matched": 0.68,
+     "share": 0.0392
+    },
+    "cat": "noQ-MG|no-passer",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.056,
+      0.0721
+     ],
+     "n": 224,
+     "ratio": 1.1,
+     "ratio_matched": 1.1,
+     "share": 0.0636
+    },
+    "train_matched_n": 3865,
+    "train_matched_share": 0.05755,
+    "train_n": 7170,
+    "train_share": 0.05769
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0058,
+      0.0271
+     ],
+     "n": 6,
+     "ratio": 0.29,
+     "ratio_matched": 0.35,
+     "share": 0.0126
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0399,
+      0.0543
+     ],
+     "n": 153,
+     "ratio": 1.09,
+     "ratio_matched": 1.28,
+     "share": 0.0465
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0236,
+      0.0311
+     ],
+     "n": 200,
+     "ratio": 0.63,
+     "ratio_matched": 0.75,
+     "share": 0.0271
+    },
+    "cat": "minor-EG|one-side",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0615,
+      0.1926
+     ],
+     "n": 10,
+     "ratio": 2.59,
+     "ratio_matched": 3.07,
+     "share": 0.1111
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0062,
+      0.0125
+     ],
+     "n": 31,
+     "ratio": 0.21,
+     "ratio_matched": 0.24,
+     "share": 0.0088
+    },
+    "train_matched_n": 2433,
+    "train_matched_share": 0.03623,
+    "train_n": 5331,
+    "train_share": 0.04289
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0191,
+      0.0511
+     ],
+     "n": 15,
+     "ratio": 0.24,
+     "ratio_matched": 0.24,
+     "share": 0.0314
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.1054,
+      0.1273
+     ],
+     "n": 381,
+     "ratio": 0.9,
+     "ratio_matched": 0.89,
+     "share": 0.1159
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0701,
+      0.0822
+     ],
+     "n": 560,
+     "ratio": 0.59,
+     "ratio_matched": 0.58,
+     "share": 0.0759
+    },
+    "cat": "R+minor-EG|one-side",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0779,
+      0.2187
+     ],
+     "n": 12,
+     "ratio": 1.04,
+     "ratio_matched": 1.02,
+     "share": 0.1333
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0369,
+      0.0504
+     ],
+     "n": 152,
+     "ratio": 0.34,
+     "ratio_matched": 0.33,
+     "share": 0.0431
+    },
+    "train_matched_n": 8785,
+    "train_matched_share": 0.13082,
+    "train_n": 15952,
+    "train_share": 0.12835
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0045,
+      0.0243
+     ],
+     "n": 5,
+     "ratio": 0.16,
+     "ratio_matched": 0.14,
+     "share": 0.0105
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0331,
+      0.0464
+     ],
+     "n": 129,
+     "ratio": 0.61,
+     "ratio_matched": 0.53,
+     "share": 0.0392
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0323,
+      0.0408
+     ],
+     "n": 268,
+     "ratio": 0.56,
+     "ratio_matched": 0.49,
+     "share": 0.0363
+    },
+    "cat": "R+minor-EG|no-passer",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.095,
+      0.2443
+     ],
+     "n": 14,
+     "ratio": 2.4,
+     "ratio_matched": 2.09,
+     "share": 0.1556
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0286,
+      0.0406
+     ],
+     "n": 120,
+     "ratio": 0.53,
+     "ratio_matched": 0.46,
+     "share": 0.0341
+    },
+    "train_matched_n": 5000,
+    "train_matched_share": 0.07446,
+    "train_n": 8041,
+    "train_share": 0.0647
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0011,
+      0.0151
+     ],
+     "n": 2,
+     "ratio": 1.82,
+     "ratio_matched": 2.99,
+     "share": 0.0042
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0006,
+      0.0036
+     ],
+     "n": 5,
+     "ratio": 0.66,
+     "ratio_matched": 1.09,
+     "share": 0.0015
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0006,
+      0.0023
+     ],
+     "n": 9,
+     "ratio": 0.53,
+     "ratio_matched": 0.87,
+     "share": 0.0012
+    },
+    "cat": "pawn-EG|one-side",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0002,
+      0.0021
+     ],
+     "n": 2,
+     "ratio": 0.25,
+     "ratio_matched": 0.41,
+     "share": 0.0006
+    },
+    "train_matched_n": 94,
+    "train_matched_share": 0.0014,
+    "train_n": 285,
+    "train_share": 0.00229
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0004,
+      0.0118
+     ],
+     "n": 1,
+     "ratio": 0.13,
+     "ratio_matched": 0.35,
+     "share": 0.0021
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0084,
+      0.0158
+     ],
+     "n": 38,
+     "ratio": 0.74,
+     "ratio_matched": 1.92,
+     "share": 0.0116
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0062,
+      0.0103
+     ],
+     "n": 59,
+     "ratio": 0.51,
+     "ratio_matched": 1.33,
+     "share": 0.008
+    },
+    "cat": "R-EG|no-passer",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.0,
+      0.0409
+     ],
+     "n": 0,
+     "ratio": 0.0,
+     "ratio_matched": 0.0,
+     "share": 0.0
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0037,
+      0.0088
+     ],
+     "n": 20,
+     "ratio": 0.36,
+     "ratio_matched": 0.94,
+     "share": 0.0057
+    },
+    "train_matched_n": 405,
+    "train_matched_share": 0.00603,
+    "train_n": 1943,
+    "train_share": 0.01563
+   }
+  ],
+  "tb": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.9757,
+      0.9955
+     ],
+     "n": 473,
+     "ratio": 0.99,
+     "ratio_matched": 0.99,
+     "share": 0.9895
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.9932,
+      0.9977
+     ],
+     "n": 3274,
+     "ratio": 1.0,
+     "ratio_matched": 1.0,
+     "share": 0.996
+    },
+    "all deciding positions": {
+     "ci": [
+      0.9926,
+      0.996
+     ],
+     "n": 7338,
+     "ratio": 0.99,
+     "ratio_matched": 0.99,
+     "share": 0.9946
+    },
+    "cat": "no-tb",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.7059,
+      0.8696
+     ],
+     "n": 72,
+     "ratio": 0.8,
+     "ratio_matched": 0.8,
+     "share": 0.8
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.9971,
+      0.9996
+     ],
+     "n": 3519,
+     "ratio": 1.0,
+     "ratio_matched": 1.0,
+     "share": 0.9989
+    },
+    "train_matched_n": 67154,
+    "train_matched_share": 1.0,
+    "train_n": 124288,
+    "train_share": 1.0
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0045,
+      0.0243
+     ],
+     "n": 5,
+     "ratio": null,
+     "ratio_matched": null,
+     "share": 0.0105
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.0023,
+      0.0068
+     ],
+     "n": 13,
+     "ratio": null,
+     "ratio_matched": null,
+     "share": 0.004
+    },
+    "all deciding positions": {
+     "ci": [
+      0.004,
+      0.0074
+     ],
+     "n": 40,
+     "ratio": null,
+     "ratio_matched": null,
+     "share": 0.0054
+    },
+    "cat": "tb(<=5 men)",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.1304,
+      0.2941
+     ],
+     "n": 18,
+     "ratio": null,
+     "ratio_matched": null,
+     "share": 0.2
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0004,
+      0.0029
+     ],
+     "n": 4,
+     "ratio": null,
+     "ratio_matched": null,
+     "share": 0.0011
+    },
+    "train_matched_n": 0,
+    "train_matched_share": 0.0,
+    "train_n": 0,
+    "train_share": 0.0
+   }
+  ],
+  "wings": [
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.9239,
+      0.9643
+     ],
+     "n": 453,
+     "ratio": 1.1,
+     "ratio_matched": 1.08,
+     "share": 0.9477
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.8409,
+      0.865
+     ],
+     "n": 2805,
+     "ratio": 0.99,
+     "ratio_matched": 0.97,
+     "share": 0.8534
+    },
+    "all deciding positions": {
+     "ci": [
+      0.9041,
+      0.9171
+     ],
+     "n": 6720,
+     "ratio": 1.06,
+     "ratio_matched": 1.04,
+     "share": 0.9108
+    },
+    "cat": "two-wing",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.2644,
+      0.4585
+     ],
+     "n": 32,
+     "ratio": 0.41,
+     "ratio_matched": 0.4,
+     "share": 0.3556
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.9678,
+      0.9784
+     ],
+     "n": 3430,
+     "ratio": 1.13,
+     "ratio_matched": 1.11,
+     "share": 0.9736
+    },
+    "train_matched_n": 59080,
+    "train_matched_share": 0.87977,
+    "train_n": 107056,
+    "train_share": 0.86135
+   },
+   {
+    "G TP (core decisive, loser view)": {
+     "ci": [
+      0.0357,
+      0.0761
+     ],
+     "n": 25,
+     "ratio": 0.38,
+     "ratio_matched": 0.44,
+     "share": 0.0523
+    },
+    "S TP (decisive, loser view)": {
+     "ci": [
+      0.135,
+      0.1591
+     ],
+     "n": 482,
+     "ratio": 1.06,
+     "ratio_matched": 1.22,
+     "share": 0.1466
+    },
+    "all deciding positions": {
+     "ci": [
+      0.0829,
+      0.0959
+     ],
+     "n": 658,
+     "ratio": 0.64,
+     "ratio_matched": 0.74,
+     "share": 0.0892
+    },
+    "cat": "one-wing",
+    "conversion-failure drop points (G+S)": {
+     "ci": [
+      0.5415,
+      0.7356
+     ],
+     "n": 58,
+     "ratio": 4.65,
+     "ratio_matched": 5.36,
+     "share": 0.6444
+    },
+    "defense-loss window starts (G+S)": {
+     "ci": [
+      0.0216,
+      0.0322
+     ],
+     "n": 93,
+     "ratio": 0.19,
+     "ratio_matched": 0.22,
+     "share": 0.0264
+    },
+    "train_matched_n": 8074,
+    "train_matched_share": 0.12023,
+    "train_n": 17232,
+    "train_share": 0.13865
+   }
+  ]
+ },
+ "n_train": 124288,
+ "n_train_matched_100_600": 67154,
+ "sets": {
+  "G TP (core decisive, loser view)": 478,
+  "S TP (decisive, loser view)": 3287,
+  "all deciding positions": 7378,
+  "conversion-failure drop points (G+S)": 90,
+  "defense-loss window starts (G+S)": 3523
+ }
+}

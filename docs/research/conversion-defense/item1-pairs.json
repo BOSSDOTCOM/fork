@@ -1,0 +1,1122 @@
+{
+ "_note": "docs/research/conversion-defense/report.md (Method); labeller fork-release-2ebacd8, S512ppr3, bench 14,149,617 / 1cb0717f040c294d; gauntlet run 42538371594; SPRT idea60-stc + idea61-stc",
+ "bias_abs_median": 59.5,
+ "bias_dist": {
+  "balanced": 88,
+  "clear": 33,
+  "large": 36,
+  "slight": 43
+ },
+ "bias_white_mean": 99.0,
+ "n_openings": 200,
+ "per_opp": {
+  "Altair 7.0.0": {
+   "balanced": {
+    "D": 44,
+    "L": 40,
+    "W": 12,
+    "ci": [
+     0.2917,
+     0.4219
+    ],
+    "n": 96,
+    "score": 0.3542
+   },
+   "by_bias_class": {
+    "clear": {
+     "fav": {
+      "D": 5,
+      "L": 0,
+      "W": 11,
+      "ci": [
+       0.7188,
+       0.9375
+      ],
+      "n": 16,
+      "score": 0.8438
+     },
+     "unf": {
+      "D": 0,
+      "L": 16,
+      "W": 0,
+      "ci": [
+       0.0,
+       0.0
+      ],
+      "n": 16,
+      "score": 0.0
+     }
+    },
+    "large": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 15,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 15,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 0,
+      "L": 14,
+      "W": 1,
+      "ci": [
+       0.0,
+       0.2
+      ],
+      "n": 15,
+      "score": 0.0667
+     }
+    },
+    "slight": {
+     "fav": {
+      "D": 13,
+      "L": 1,
+      "W": 7,
+      "ci": [
+       0.5238,
+       0.7619
+      ],
+      "n": 21,
+      "score": 0.6429
+     },
+     "unf": {
+      "D": 3,
+      "L": 18,
+      "W": 0,
+      "ci": [
+       0.0,
+       0.1429
+      ],
+      "n": 21,
+      "score": 0.0714
+     }
+    }
+   },
+   "classes": {
+    "DD": 12,
+    "WL": 40,
+    "drew one, lost one": 37,
+    "lost both": 6,
+    "won both": 1,
+    "won one, drew one": 4
+   },
+   "classes_by_bias": {
+    "balanced": {
+     "DD": 10,
+     "WL": 9,
+     "drew one, lost one": 21,
+     "lost both": 5,
+     "won one, drew one": 3
+    },
+    "clear": {
+     "WL": 11,
+     "drew one, lost one": 5
+    },
+    "large": {
+     "WL": 14,
+     "won both": 1
+    },
+    "slight": {
+     "DD": 2,
+     "WL": 6,
+     "drew one, lost one": 11,
+     "lost both": 1,
+     "won one, drew one": 1
+    }
+   },
+   "favourable": {
+    "D": 18,
+    "L": 1,
+    "W": 33,
+    "ci": [
+     0.7308,
+     0.875
+    ],
+    "n": 52,
+    "score": 0.8077
+   },
+   "pairs": 100,
+   "unfavourable": {
+    "D": 3,
+    "L": 48,
+    "W": 1,
+    "ci": [
+     0.0096,
+     0.1058
+    ],
+    "n": 52,
+    "score": 0.0481
+   }
+  },
+  "Clover 6.1": {
+   "balanced": {
+    "D": 29,
+    "L": 66,
+    "W": 1,
+    "ci": [
+     0.1146,
+     0.2135
+    ],
+    "n": 96,
+    "score": 0.1615
+   },
+   "by_bias_class": {
+    "clear": {
+     "fav": {
+      "D": 7,
+      "L": 0,
+      "W": 9,
+      "ci": [
+       0.6562,
+       0.9062
+      ],
+      "n": 16,
+      "score": 0.7812
+     },
+     "unf": {
+      "D": 0,
+      "L": 16,
+      "W": 0,
+      "ci": [
+       0.0,
+       0.0
+      ],
+      "n": 16,
+      "score": 0.0
+     }
+    },
+    "large": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 15,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 15,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 0,
+      "L": 15,
+      "W": 0,
+      "ci": [
+       0.0,
+       0.0
+      ],
+      "n": 15,
+      "score": 0.0
+     }
+    },
+    "slight": {
+     "fav": {
+      "D": 16,
+      "L": 3,
+      "W": 2,
+      "ci": [
+       0.381,
+       0.5952
+      ],
+      "n": 21,
+      "score": 0.4762
+     },
+     "unf": {
+      "D": 0,
+      "L": 21,
+      "W": 0,
+      "ci": [
+       0.0,
+       0.0
+      ],
+      "n": 21,
+      "score": 0.0
+     }
+    }
+   },
+   "classes": {
+    "DD": 2,
+    "WL": 27,
+    "drew one, lost one": 48,
+    "lost both": 23
+   },
+   "classes_by_bias": {
+    "balanced": {
+     "DD": 2,
+     "WL": 1,
+     "drew one, lost one": 25,
+     "lost both": 20
+    },
+    "clear": {
+     "WL": 9,
+     "drew one, lost one": 7
+    },
+    "large": {
+     "WL": 15
+    },
+    "slight": {
+     "WL": 2,
+     "drew one, lost one": 16,
+     "lost both": 3
+    }
+   },
+   "favourable": {
+    "D": 23,
+    "L": 3,
+    "W": 26,
+    "ci": [
+     0.6346,
+     0.7981
+    ],
+    "n": 52,
+    "score": 0.7212
+   },
+   "pairs": 100,
+   "unfavourable": {
+    "D": 0,
+    "L": 52,
+    "W": 0,
+    "ci": [
+     0.0,
+     0.0
+    ],
+    "n": 52,
+    "score": 0.0
+   }
+  },
+  "Laser 1.7": {
+   "balanced": {
+    "D": 17,
+    "L": 5,
+    "W": 74,
+    "ci": [
+     0.8021,
+     0.9115
+    ],
+    "n": 96,
+    "score": 0.8594
+   },
+   "by_bias_class": {
+    "clear": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 16,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 16,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 1,
+      "L": 12,
+      "W": 3,
+      "ci": [
+       0.0625,
+       0.4375
+      ],
+      "n": 16,
+      "score": 0.2188
+     }
+    },
+    "large": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 15,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 15,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 0,
+      "L": 15,
+      "W": 0,
+      "ci": [
+       0.0,
+       0.0
+      ],
+      "n": 15,
+      "score": 0.0
+     }
+    },
+    "slight": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 21,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 21,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 6,
+      "L": 5,
+      "W": 10,
+      "ci": [
+       0.4524,
+       0.7857
+      ],
+      "n": 21,
+      "score": 0.619
+     }
+    }
+   },
+   "classes": {
+    "DD": 1,
+    "WL": 37,
+    "won both": 40,
+    "won one, drew one": 22
+   },
+   "classes_by_bias": {
+    "balanced": {
+     "DD": 1,
+     "WL": 5,
+     "won both": 27,
+     "won one, drew one": 15
+    },
+    "clear": {
+     "WL": 12,
+     "won both": 3,
+     "won one, drew one": 1
+    },
+    "large": {
+     "WL": 15
+    },
+    "slight": {
+     "WL": 5,
+     "won both": 10,
+     "won one, drew one": 6
+    }
+   },
+   "favourable": {
+    "D": 0,
+    "L": 0,
+    "W": 52,
+    "ci": [
+     1.0,
+     1.0
+    ],
+    "n": 52,
+    "score": 1.0
+   },
+   "pairs": 100,
+   "unfavourable": {
+    "D": 7,
+    "L": 32,
+    "W": 13,
+    "ci": [
+     0.2019,
+     0.4423
+    ],
+    "n": 52,
+    "score": 0.3173
+   }
+  },
+  "Marvin 6.3.0": {
+   "balanced": {
+    "D": 42,
+    "L": 20,
+    "W": 34,
+    "ci": [
+     0.5,
+     0.6458
+    ],
+    "n": 96,
+    "score": 0.5729
+   },
+   "by_bias_class": {
+    "clear": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 16,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 16,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 2,
+      "L": 13,
+      "W": 1,
+      "ci": [
+       0.0,
+       0.2812
+      ],
+      "n": 16,
+      "score": 0.125
+     }
+    },
+    "large": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 15,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 15,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 0,
+      "L": 14,
+      "W": 1,
+      "ci": [
+       0.0,
+       0.2
+      ],
+      "n": 15,
+      "score": 0.0667
+     }
+    },
+    "slight": {
+     "fav": {
+      "D": 4,
+      "L": 0,
+      "W": 17,
+      "ci": [
+       0.8095,
+       0.9762
+      ],
+      "n": 21,
+      "score": 0.9048
+     },
+     "unf": {
+      "D": 12,
+      "L": 9,
+      "W": 0,
+      "ci": [
+       0.1667,
+       0.381
+      ],
+      "n": 21,
+      "score": 0.2857
+     }
+    }
+   },
+   "classes": {
+    "DD": 12,
+    "WL": 43,
+    "drew one, lost one": 9,
+    "lost both": 2,
+    "won both": 7,
+    "won one, drew one": 27
+   },
+   "classes_by_bias": {
+    "balanced": {
+     "DD": 10,
+     "WL": 9,
+     "drew one, lost one": 7,
+     "lost both": 2,
+     "won both": 5,
+     "won one, drew one": 15
+    },
+    "clear": {
+     "WL": 13,
+     "won both": 1,
+     "won one, drew one": 2
+    },
+    "large": {
+     "WL": 14,
+     "won both": 1
+    },
+    "slight": {
+     "DD": 2,
+     "WL": 7,
+     "drew one, lost one": 2,
+     "won one, drew one": 10
+    }
+   },
+   "favourable": {
+    "D": 4,
+    "L": 0,
+    "W": 48,
+    "ci": [
+     0.9231,
+     0.9904
+    ],
+    "n": 52,
+    "score": 0.9615
+   },
+   "pairs": 100,
+   "unfavourable": {
+    "D": 14,
+    "L": 36,
+    "W": 2,
+    "ci": [
+     0.1058,
+     0.25
+    ],
+    "n": 52,
+    "score": 0.1731
+   }
+  },
+  "Monolith 2.01": {
+   "balanced": {
+    "D": 2,
+    "L": 0,
+    "W": 94,
+    "ci": [
+     0.974,
+     1.0
+    ],
+    "n": 96,
+    "score": 0.9896
+   },
+   "by_bias_class": {
+    "clear": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 16,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 16,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 4,
+      "L": 3,
+      "W": 9,
+      "ci": [
+       0.5,
+       0.875
+      ],
+      "n": 16,
+      "score": 0.6875
+     }
+    },
+    "large": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 15,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 15,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 1,
+      "L": 11,
+      "W": 3,
+      "ci": [
+       0.0333,
+       0.4333
+      ],
+      "n": 15,
+      "score": 0.2333
+     }
+    },
+    "slight": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 21,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 21,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 1,
+      "L": 1,
+      "W": 19,
+      "ci": [
+       0.8095,
+       1.0
+      ],
+      "n": 21,
+      "score": 0.9286
+     }
+    }
+   },
+   "classes": {
+    "WL": 15,
+    "won both": 77,
+    "won one, drew one": 8
+   },
+   "classes_by_bias": {
+    "balanced": {
+     "won both": 46,
+     "won one, drew one": 2
+    },
+    "clear": {
+     "WL": 3,
+     "won both": 9,
+     "won one, drew one": 4
+    },
+    "large": {
+     "WL": 11,
+     "won both": 3,
+     "won one, drew one": 1
+    },
+    "slight": {
+     "WL": 1,
+     "won both": 19,
+     "won one, drew one": 1
+    }
+   },
+   "favourable": {
+    "D": 0,
+    "L": 0,
+    "W": 52,
+    "ci": [
+     1.0,
+     1.0
+    ],
+    "n": 52,
+    "score": 1.0
+   },
+   "pairs": 100,
+   "unfavourable": {
+    "D": 6,
+    "L": 15,
+    "W": 31,
+    "ci": [
+     0.5288,
+     0.7788
+    ],
+    "n": 52,
+    "score": 0.6538
+   }
+  },
+  "Stockfish 19": {
+   "balanced": {
+    "D": 29,
+    "L": 146,
+    "W": 1,
+    "ci": [
+     0.0597,
+     0.1193
+    ],
+    "n": 176,
+    "score": 0.0881
+   },
+   "by_bias_class": {
+    "clear": {
+     "fav": {
+      "D": 15,
+      "L": 5,
+      "W": 13,
+      "ci": [
+       0.5,
+       0.7424
+      ],
+      "n": 33,
+      "score": 0.6212
+     },
+     "unf": {
+      "D": 0,
+      "L": 33,
+      "W": 0,
+      "ci": [
+       0.0,
+       0.0
+      ],
+      "n": 33,
+      "score": 0.0
+     }
+    },
+    "large": {
+     "fav": {
+      "D": 2,
+      "L": 0,
+      "W": 34,
+      "ci": [
+       0.9306,
+       1.0
+      ],
+      "n": 36,
+      "score": 0.9722
+     },
+     "unf": {
+      "D": 0,
+      "L": 36,
+      "W": 0,
+      "ci": [
+       0.0,
+       0.0
+      ],
+      "n": 36,
+      "score": 0.0
+     }
+    },
+    "slight": {
+     "fav": {
+      "D": 30,
+      "L": 12,
+      "W": 1,
+      "ci": [
+       0.2907,
+       0.4419
+      ],
+      "n": 43,
+      "score": 0.3721
+     },
+     "unf": {
+      "D": 0,
+      "L": 43,
+      "W": 0,
+      "ci": [
+       0.0,
+       0.0
+      ],
+      "n": 43,
+      "score": 0.0
+     }
+    }
+   },
+   "classes": {
+    "WL": 49,
+    "drew one, lost one": 76,
+    "lost both": 75
+   },
+   "classes_by_bias": {
+    "balanced": {
+     "WL": 1,
+     "drew one, lost one": 29,
+     "lost both": 58
+    },
+    "clear": {
+     "WL": 13,
+     "drew one, lost one": 15,
+     "lost both": 5
+    },
+    "large": {
+     "WL": 34,
+     "drew one, lost one": 2
+    },
+    "slight": {
+     "WL": 1,
+     "drew one, lost one": 30,
+     "lost both": 12
+    }
+   },
+   "favourable": {
+    "D": 47,
+    "L": 17,
+    "W": 48,
+    "ci": [
+     0.5714,
+     0.7009
+    ],
+    "n": 112,
+    "score": 0.6384
+   },
+   "pairs": 200,
+   "unfavourable": {
+    "D": 0,
+    "L": 112,
+    "W": 0,
+    "ci": [
+     0.0,
+     0.0
+    ],
+    "n": 112,
+    "score": 0.0
+   }
+  },
+  "Weiss 1.0": {
+   "balanced": {
+    "D": 1,
+    "L": 0,
+    "W": 95,
+    "ci": [
+     0.9844,
+     1.0
+    ],
+    "n": 96,
+    "score": 0.9948
+   },
+   "by_bias_class": {
+    "clear": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 16,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 16,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 2,
+      "L": 2,
+      "W": 12,
+      "ci": [
+       0.625,
+       0.9688
+      ],
+      "n": 16,
+      "score": 0.8125
+     }
+    },
+    "large": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 15,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 15,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 0,
+      "L": 12,
+      "W": 3,
+      "ci": [
+       0.0,
+       0.4
+      ],
+      "n": 15,
+      "score": 0.2
+     }
+    },
+    "slight": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 21,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 21,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 1,
+      "L": 0,
+      "W": 20,
+      "ci": [
+       0.9286,
+       1.0
+      ],
+      "n": 21,
+      "score": 0.9762
+     }
+    }
+   },
+   "classes": {
+    "WL": 14,
+    "won both": 82,
+    "won one, drew one": 4
+   },
+   "classes_by_bias": {
+    "balanced": {
+     "won both": 47,
+     "won one, drew one": 1
+    },
+    "clear": {
+     "WL": 2,
+     "won both": 12,
+     "won one, drew one": 2
+    },
+    "large": {
+     "WL": 12,
+     "won both": 3
+    },
+    "slight": {
+     "won both": 20,
+     "won one, drew one": 1
+    }
+   },
+   "favourable": {
+    "D": 0,
+    "L": 0,
+    "W": 52,
+    "ci": [
+     1.0,
+     1.0
+    ],
+    "n": 52,
+    "score": 1.0
+   },
+   "pairs": 100,
+   "unfavourable": {
+    "D": 3,
+    "L": 14,
+    "W": 35,
+    "ci": [
+     0.5769,
+     0.8173
+    ],
+    "n": 52,
+    "score": 0.7019
+   }
+  },
+  "Winter 0.9": {
+   "balanced": {
+    "D": 14,
+    "L": 2,
+    "W": 80,
+    "ci": [
+     0.8594,
+     0.9479
+    ],
+    "n": 96,
+    "score": 0.9062
+   },
+   "by_bias_class": {
+    "clear": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 16,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 16,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 5,
+      "L": 3,
+      "W": 8,
+      "ci": [
+       0.4688,
+       0.8438
+      ],
+      "n": 16,
+      "score": 0.6562
+     }
+    },
+    "large": {
+     "fav": {
+      "D": 0,
+      "L": 0,
+      "W": 15,
+      "ci": [
+       1.0,
+       1.0
+      ],
+      "n": 15,
+      "score": 1.0
+     },
+     "unf": {
+      "D": 2,
+      "L": 11,
+      "W": 2,
+      "ci": [
+       0.0333,
+       0.4
+      ],
+      "n": 15,
+      "score": 0.2
+     }
+    },
+    "slight": {
+     "fav": {
+      "D": 1,
+      "L": 0,
+      "W": 20,
+      "ci": [
+       0.9286,
+       1.0
+      ],
+      "n": 21,
+      "score": 0.9762
+     },
+     "unf": {
+      "D": 2,
+      "L": 2,
+      "W": 17,
+      "ci": [
+       0.6905,
+       0.9762
+      ],
+      "n": 21,
+      "score": 0.8571
+     }
+    }
+   },
+   "classes": {
+    "DD": 2,
+    "WL": 18,
+    "won both": 60,
+    "won one, drew one": 20
+   },
+   "classes_by_bias": {
+    "balanced": {
+     "DD": 2,
+     "WL": 2,
+     "won both": 34,
+     "won one, drew one": 10
+    },
+    "clear": {
+     "WL": 3,
+     "won both": 8,
+     "won one, drew one": 5
+    },
+    "large": {
+     "WL": 11,
+     "won both": 2,
+     "won one, drew one": 2
+    },
+    "slight": {
+     "WL": 2,
+     "won both": 16,
+     "won one, drew one": 3
+    }
+   },
+   "favourable": {
+    "D": 1,
+    "L": 0,
+    "W": 51,
+    "ci": [
+     0.9712,
+     1.0
+    ],
+    "n": 52,
+    "score": 0.9904
+   },
+   "pairs": 100,
+   "unfavourable": {
+    "D": 9,
+    "L": 16,
+    "W": 27,
+    "ci": [
+     0.4904,
+     0.7308
+    ],
+    "n": 52,
+    "score": 0.6058
+   }
+  }
+ },
+ "sf_wins_bias_from_fork_side": {
+  "median": 265,
+  "n": 49,
+  "share_fav_ge50": 0.9796
+ }
+}
