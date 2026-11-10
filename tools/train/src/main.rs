@@ -49,6 +49,12 @@
 //!                       [--init-weights weights.bin] [options]
 //!   fork-train eval     --arch A [maps] (--checkpoint DIR | --weights weights.bin) --epd FILE --out FILE
 //!   fork-train loader   --data SHARD... [--positions N]   (decoding speed, one thread)
+//!   fork-train cells    --data SHARD... [--every N --offset K --dump FILE]   (idea 69's cell counts)
+//!   fork-train cells    --stream N --data SHARD... [reader options] [--cell-weights FILE]
+//!   fork-train cells    --bench --arch A [maps] --data SHARD [--positions N --rounds R]
+//! Idea 69 (train, cells --stream): --cell-weights FILE gives each position the loss
+//! weight of its material cell and wing (CellTable); positions of the --exempt files
+//! (names of --data files: the slices) keep weight 1, as every position does without it.
 //! --qat (train, eval, check; the S-512 family): quantization-aware training
 //! (ideas.md 44), the forward pass on the integer file's weight grid.
 //! [maps] are --regions (32 comma-separated region numbers) and --buckets (25
@@ -606,7 +612,147 @@ fn bucket(spec: &Spec, b: &Board) -> usize {
     }
 }
 
-type Inputs = ModelInputs<(((SparseInput, SparseInput), SparseInput), DenseInput<f32>)>;
+// Idea 69's material cells (docs/research/class-sampler/design.md §2.1, from the
+// conversion-and-defense report's taxonomy): a signature and, for unequal pieces, the
+// imbalance, for equal pieces the pawn balance. Cell number = signature * 8 + second part.
+const SIGNATURE_NAMES: [&str; 7] = ["Q-MG", "Q-EG", "noQ-MG", "R+minor-EG", "R-EG", "minor-EG", "pawn-EG"];
+const BALANCE_NAMES: [&str; 8] =
+    ["Q-imbalance", "R-vs-minors", "minor-up", "other-imbalance", "B-vs-N", "level", "pawn+-1", "pawn+-2+"];
+const CELLS: usize = SIGNATURE_NAMES.len() * BALANCE_NAMES.len();
+const WING_NAMES: [&str; 2] = ["two-wing", "one-wing"];
+
+fn cell_name(cell: usize) -> String {
+    format!("{}|{}", SIGNATURE_NAMES[cell / BALANCE_NAMES.len()], BALANCE_NAMES[cell % BALANCE_NAMES.len()])
+}
+
+/// A position's material cell and whether it is one-wing, in one pass over its stored pieces
+/// (at most 32). The phase count is Fork's (Board::phase: knights and bishops 1, rooks 2, queens 4,
+/// capped at 24); "rooks and minors" means both are on the board (either side's). The wing
+/// class is the report's: two-wing when pawns (either side's) stand on files a-c and on files
+/// f-h, else one-wing (no pawns, or pawns on one wing and the centre only).
+fn cell_and_wing(pos: &ChessBoard) -> (usize, bool) {
+    board_and_cell(pos).1
+}
+
+/// Board::from_chessboard and cell_and_wing in one pass over the stored pieces (the mapper's
+/// path with --cell-weights).
+fn board_and_cell(pos: &ChessBoard) -> (Board, (usize, bool)) {
+    let mut b = Board { piece: [None; 64], count: 0 };
+    let mut n = [[0i32; 6]; 2]; // [side][kind]
+    let mut pawn_files = 0u32;
+    for (piece, square) in pos.into_iter() {
+        let (kind, side) = (usize::from(piece & 7), usize::from(piece & 8 != 0));
+        b.piece[usize::from(square)] = Some((kind, side));
+        b.count += 1;
+        n[side][kind] += 1;
+        if kind == 0 {
+            pawn_files |= 1 << (square % 8);
+        }
+    }
+    (b, cell_of_counts(&n, pawn_files))
+}
+
+/// The cell and the wing class from the piece counts ([side][kind]) and the files that hold a
+/// pawn (bit f for file f).
+fn cell_of_counts(n: &[[i32; 6]; 2], pawn_files: u32) -> (usize, bool) {
+    let minors = |s: usize| n[s][1] + n[s][2];
+    let (queens, rooks, all_minors) = (n[0][4] + n[1][4], n[0][3] + n[1][3], minors(0) + minors(1));
+    let phase = (all_minors + 2 * rooks + 4 * queens).min(FULL_PHASE as i32);
+    let signature = if queens > 0 {
+        if phase >= 13 { 0 } else { 1 }
+    } else if rooks > 0 && all_minors > 0 {
+        if phase >= 10 { 2 } else { 3 }
+    } else if rooks > 0 {
+        4
+    } else if all_minors > 0 {
+        5
+    } else {
+        6
+    };
+    let (dq, dr, dm) = (n[0][4] - n[1][4], n[0][3] - n[1][3], minors(0) - minors(1));
+    let second = if dq != 0 {
+        0
+    } else if dr != 0 && dm != 0 && (dr > 0) != (dm > 0) {
+        1
+    } else if dr == 0 && dm != 0 {
+        2
+    } else if dr != 0 {
+        3
+    } else if n[0][1] != n[1][1] {
+        4
+    } else {
+        match (n[0][0] - n[1][0]).abs() {
+            0 => 5,
+            1 => 6,
+            _ => 7,
+        }
+    };
+    let one_wing = !(pawn_files & 0b0000_0111 != 0 && pawn_files & 0b1110_0000 != 0);
+    (signature * BALANCE_NAMES.len() + second, one_wing)
+}
+
+/// Idea 69's loss weight of every (cell, wing), read from a text file of "cell wing weight"
+/// lines (# comments); every one of the 112 entries must be listed once.
+#[derive(Clone)]
+struct CellTable {
+    weight: Vec<[f32; 2]>,
+}
+
+impl CellTable {
+    fn parse(text: &str) -> Result<CellTable, String> {
+        let mut weight = vec![[f32::NAN; 2]; CELLS];
+        let mut seen = vec![[false; 2]; CELLS];
+        for (n, line) in text.lines().enumerate() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let f: Vec<&str> = line.split_whitespace().collect();
+            let [cell, wing, w] = f[..] else { return Err(format!("line {}: expected \"cell wing weight\"", n + 1)) };
+            let c = (0..CELLS).find(|&c| cell_name(c) == cell).ok_or(format!("line {}: unknown cell {cell}", n + 1))?;
+            let k = WING_NAMES.iter().position(|&x| x == wing).ok_or(format!("line {}: unknown wing {wing}", n + 1))?;
+            let w: f32 = w.parse().map_err(|_| format!("line {}: bad weight {w}", n + 1))?;
+            if !(w.is_finite() && w > 0.0) {
+                return Err(format!("line {}: weight {w} is not positive", n + 1));
+            }
+            if seen[c][k] {
+                return Err(format!("line {}: {cell} {wing} listed twice", n + 1));
+            }
+            seen[c][k] = true;
+            weight[c][k] = w;
+        }
+        if let Some(c) = (0..CELLS).find(|&c| !(seen[c][0] && seen[c][1])) {
+            return Err(format!("{} is missing a wing", cell_name(c)));
+        }
+        Ok(CellTable { weight })
+    }
+}
+
+/// A position's loss weight: 1 without a table and for an exempt file's positions.
+fn record_weight(table: Option<&CellTable>, pos: &ChessBoard, exempt: bool) -> f32 {
+    weighed_board(table, pos, exempt).1
+}
+
+/// The board of a position and its loss weight, as the mapper needs them: with a table and not
+/// exempt, both from one pass over the pieces (board_and_cell).
+fn weighed_board(table: Option<&CellTable>, pos: &ChessBoard, exempt: bool) -> (Board, f32) {
+    match table {
+        Some(t) if !exempt => {
+            let (b, (cell, one_wing)) = board_and_cell(pos);
+            (b, t.weight[cell][usize::from(one_wing)])
+        }
+        _ => (Board::from_chessboard(pos), 1.0),
+    }
+}
+
+/// A training position and whether its file is exempt from the cell weights (the slices).
+#[derive(Clone, Copy)]
+struct TrainRecord {
+    board: ChessBoard,
+    exempt: bool,
+}
+
+type Inputs = ModelInputs<((((SparseInput, SparseInput), SparseInput), DenseInput<f32>), DenseInput<f32>)>;
 
 fn inputs(spec: &Spec) -> Inputs {
     ModelInputs::default()
@@ -614,6 +760,7 @@ fn inputs(spec: &Spec) -> Inputs {
         .add_sparse("ntm", (spec.inputs(), 1), spec.max_active())
         .add_sparse("bucket", (spec.buckets, 1), 1)
         .add_dense("target", (1, 1))
+        .add_dense("weight", (1, 1))
 }
 
 /// Clipped values of the first half times those of the second half.
@@ -624,7 +771,7 @@ fn pairwise(x: ModelNode<'_>, width: usize) -> ModelNode<'_> {
 
 fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
     let s = spec.clone();
-    ModelDefinition::build(inputs, move |builder, (((stm, ntm), bucket), target)| {
+    ModelDefinition::build(inputs, move |builder, ((((stm, ntm), bucket), target), weight)| {
         let (n, h, nb) = (s.inputs(), s.hidden, s.buckets);
         let output = match s.arch {
             Arch::B0 => {
@@ -676,7 +823,9 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                 out_b + gate * (out_a - out_b)
             }
         };
-        let loss = output.sigmoid().squared_error(target).reduce_sum_batch();
+        // Each position's squared error times its loss weight (1 unless --cell-weights;
+        // idea 69), summed over the batch.
+        let loss = (output.sigmoid().squared_error(target) * weight).reduce_sum_batch();
         (Some(loss), vec![("output".to_string(), output)])
     })
 }
@@ -774,7 +923,10 @@ fn clipped(spec: &Spec) -> Vec<&'static str> {
 /// The inputs of one position, as the mapper fills them; returns the
 /// bucket.
 fn fill(spec: &Spec, pos: &ChessBoard, stm: &mut [i32], ntm: &mut [i32]) -> usize {
-    let b = Board::from_chessboard(pos);
+    fill_board(spec, &Board::from_chessboard(pos), stm, ntm)
+}
+
+fn fill_board(spec: &Spec, b: &Board, stm: &mut [i32], ntm: &mut [i32]) -> usize {
     let exposed = if spec.exposure { b.exposed() } else { 0 };
     for (persp, out) in [(0, &mut *stm), (1, &mut *ntm)] {
         let n = perspective_features(spec, &b, exposed, persp, out);
@@ -786,12 +938,21 @@ fn fill(spec: &Spec, pos: &ChessBoard, stm: &mut [i32], ntm: &mut [i32]) -> usiz
     bucket(spec, &b)
 }
 
-fn mapper(spec: &Spec, inputs: &Inputs, scale: f32, result_weight: f32) -> ModelInputsMapper<ChessBoard> {
+fn mapper(
+    spec: &Spec,
+    inputs: &Inputs,
+    scale: f32,
+    result_weight: f32,
+    table: Option<CellTable>,
+) -> ModelInputsMapper<TrainRecord> {
     let s = spec.clone();
-    ModelInputsMapper::build(inputs, move |pos: &ChessBoard, _step: Step, (((stm, ntm), bucket), target)| {
-        bucket[0] = fill(&s, pos, stm, ntm) as i32;
+    ModelInputsMapper::build(inputs, move |rec: &TrainRecord, _step: Step, ((((stm, ntm), bucket), target), weight)| {
+        let pos = &rec.board;
+        let (b, w) = weighed_board(table.as_ref(), pos, rec.exempt);
+        bucket[0] = fill_board(&s, &b, stm, ntm) as i32;
         let expected = 1.0 / (1.0 + (-f32::from(pos.score()) / scale).exp());
         target[0] = (1.0 - result_weight) * expected + result_weight * pos.result();
+        weight[0] = w;
     })
 }
 
@@ -818,10 +979,13 @@ fn filter() -> Filter {
 /// `interleave` (--interleave; owner, 2026-11-06: the endgame slice spread
 /// through the snapshot), each pass reads the files side by side instead,
 /// one game at a time from the file furthest behind in the share of its
-/// bytes read, so every file is spread evenly over the pass.
+/// bytes read, so every file is spread evenly over the pass. A position
+/// from a file marked in `exempt` carries the mark (idea 69: its loss weight
+/// stays 1).
 #[derive(Clone)]
 struct ShardReader {
     files: Vec<PathBuf>,
+    exempt: Vec<bool>,
     buffer: usize,
     seed: u64,
     interleave: bool,
@@ -881,7 +1045,7 @@ impl ShardReader {
 
 /// Shuffles `buf` with `rng` and hands it to `f` in chunks; true once `f`
 /// asks to stop.
-fn emit_shuffled<F: FnMut(&[ChessBoard]) -> bool>(buf: &mut Vec<ChessBoard>, rng: &mut SplitMix, f: &mut F) -> bool {
+fn emit_shuffled<T, F: FnMut(&[T]) -> bool>(buf: &mut Vec<T>, rng: &mut SplitMix, f: &mut F) -> bool {
     for i in (1..buf.len()).rev() {
         buf.swap(i, (rng.next() % (i as u64 + 1)) as usize);
     }
@@ -894,18 +1058,19 @@ fn emit_shuffled<F: FnMut(&[ChessBoard]) -> bool>(buf: &mut Vec<ChessBoard>, rng
     false
 }
 
-impl DataReader<ChessBoard> for ShardReader {
-    fn read_chunks<F: FnMut(&[ChessBoard]) -> bool>(&self, _skip_count: usize, mut f: F) {
+impl DataReader<TrainRecord> for ShardReader {
+    fn read_chunks<F: FnMut(&[TrainRecord]) -> bool>(&self, _skip_count: usize, mut f: F) {
         let mut rng = SplitMix(self.seed);
         let mut buf = Vec::with_capacity(self.buffer);
         let filter = filter();
         loop {
             if self.interleave {
                 let mut stop = false;
-                for_each_interleaved(&self.files, |_, game| {
+                for_each_interleaved(&self.files, |k, game| {
+                    let exempt = self.exempt[k];
                     game.splat_to_bulletformat(
-                        |b| {
-                            buf.push(b);
+                        |board| {
+                            buf.push(TrainRecord { board, exempt });
                             Ok(())
                         },
                         &filter,
@@ -924,15 +1089,15 @@ impl DataReader<ChessBoard> for ShardReader {
                 }
                 continue;
             }
-            for path in &self.files {
+            for (path, &exempt) in self.files.iter().zip(&self.exempt) {
                 let mut stop = false;
                 Self::for_each_game(path, |game| {
                     if stop {
                         return;
                     }
                     game.splat_to_bulletformat(
-                        |b| {
-                            buf.push(b);
+                        |board| {
+                            buf.push(TrainRecord { board, exempt });
                             Ok(())
                         },
                         &filter,
@@ -980,6 +1145,154 @@ fn pieces_text(b: &ChessBoard) -> String {
     pieces.join(" ")
 }
 
+/// `cells --data SHARD... [--every N --offset K] [--dump FILE]`: the (cell, wing) counts of
+/// the kept positions, files read in order; with --every, only kept positions whose index i
+/// (from 0 over all files) has i % N == K. --dump writes each counted position as
+/// "pieces | cell | wing" (for tools/nnue/cell_oracle.py).
+fn cells_count(a: &Args) {
+    let every: usize = a.num("--every", 1);
+    let offset: usize = a.num("--offset", 0);
+    let mut dump = a.get("--dump").map(|p| std::io::BufWriter::new(File::create(p).expect("--dump")));
+    let mut counts = vec![[0u64; 2]; CELLS];
+    let (mut kept, mut sampled) = (0usize, 0u64);
+    let filter = filter();
+    for f in a.all("--data") {
+        ShardReader::for_each_game(Path::new(&f), |game| {
+            game.splat_to_bulletformat(
+                |pos: ChessBoard| {
+                    if kept % every == offset {
+                        let (c, one) = cell_and_wing(&pos);
+                        let w = usize::from(one);
+                        counts[c][w] += 1;
+                        sampled += 1;
+                        if let Some(d) = dump.as_mut() {
+                            writeln!(d, "{} | {} | {}", pieces_text(&pos), cell_name(c), WING_NAMES[w]).expect("dump");
+                        }
+                    }
+                    kept += 1;
+                    Ok(())
+                },
+                &filter,
+            )
+            .expect("splat");
+        });
+    }
+    println!("kept {kept}");
+    println!("counted {sampled}");
+    for (c, n) in counts.iter().enumerate() {
+        println!("cell {} {} {}", cell_name(c), n[0], n[1]);
+    }
+}
+
+/// `cells --stream N --data SHARD... [--interleave --seed S --buffer B --exempt NAME...
+/// --cell-weights FILE]`: the first N positions of the training reader's own stream with the
+/// loss weight the mapper gives each one: counts and weight sums per (cell, wing) over the
+/// positions that are not exempt, and the exempt positions' weights.
+fn cells_stream(a: &Args) {
+    let limit: usize = a.num("--stream", 0);
+    let reader = shard_reader(a);
+    let table = cell_table(a);
+    let mut counts = vec![[0u64; 2]; CELLS];
+    let mut sums = vec![[0f64; 2]; CELLS];
+    let (mut seen, mut exempt, mut exempt_min, mut exempt_max) = (0usize, 0u64, f32::INFINITY, f32::NEG_INFINITY);
+    let (mut sum, mut sum2) = (0f64, 0f64);
+    reader.read_chunks(0, |chunk| {
+        for rec in chunk {
+            if seen == limit {
+                return true;
+            }
+            seen += 1;
+            let w = record_weight(table.as_ref(), &rec.board, rec.exempt);
+            if rec.exempt {
+                exempt += 1;
+                exempt_min = exempt_min.min(w);
+                exempt_max = exempt_max.max(w);
+                continue;
+            }
+            let (c, one) = cell_and_wing(&rec.board);
+            let k = usize::from(one);
+            counts[c][k] += 1;
+            sums[c][k] += f64::from(w);
+            sum += f64::from(w);
+            sum2 += f64::from(w) * f64::from(w);
+        }
+        seen == limit
+    });
+    let n = seen as u64 - exempt;
+    println!("positions {seen}");
+    println!("exempt {exempt} weight min {exempt_min} max {exempt_max}");
+    println!("weighted {n} mean {:.6} mean_square {:.6}", sum / n as f64, sum2 / n as f64);
+    for c in 0..CELLS {
+        println!("cell {} {} {} {:.3} {:.3}", cell_name(c), counts[c][0], counts[c][1], sums[c][0], sums[c][1]);
+    }
+}
+
+/// `cells --bench --arch A [maps] --data SHARD --positions N [--rounds R]`: the mapper's
+/// per-position work without and with idea 69's weight (board, inputs, bucket; then also the
+/// cell, the wing and the table lookup), alternated R times on the same positions in memory.
+fn cells_bench(spec: &Spec, a: &Args) {
+    let positions = read_positions(Path::new(a.need("--data")), a.num("--positions", 1_000_000));
+    let rounds: usize = a.num("--rounds", 5);
+    let ones: String = (0..CELLS).flat_map(|c| WING_NAMES.map(|w| format!("{} {w} 1\n", cell_name(c)))).collect();
+    let table = CellTable::parse(&ones).expect("table");
+    let (mut stm, mut ntm) = (vec![0i32; spec.max_active()], vec![0i32; spec.max_active()]);
+    let mut run = |weighted: bool| {
+        let start = std::time::Instant::now();
+        let mut acc = 0f32;
+        for pos in &positions {
+            // The mapper's two paths: without a table, and with one (weighed_board).
+            let (b, w) = weighed_board(if weighted { Some(&table) } else { None }, pos, false);
+            acc += fill_board(spec, &b, &mut stm, &mut ntm) as f32 + w;
+        }
+        std::hint::black_box(acc);
+        start.elapsed().as_secs_f64() * 1e9 / positions.len() as f64
+    };
+    let (mut plain, mut with) = (Vec::new(), Vec::new());
+    for _ in 0..rounds {
+        plain.push(run(false));
+        with.push(run(true));
+    }
+    let median = |v: &mut Vec<f64>| {
+        v.sort_by(f64::total_cmp);
+        v[v.len() / 2]
+    };
+    let ratios: Vec<String> = plain.iter().zip(&with).map(|(p, w)| format!("{:.4}", w / p)).collect();
+    println!("positions {} rounds {rounds}", positions.len());
+    println!("per-round ratio (with / without) {}", ratios.join(" "));
+    let (p, w) = (median(&mut plain), median(&mut with));
+    println!("median ns per position: without {p:.1}, with {w:.1}, ratio {:.4}", w / p);
+}
+
+/// The training reader of the command line: --data files, --exempt file names (idea 69:
+/// files whose positions keep loss weight 1; each name must match a --data file's name),
+/// --buffer, --seed, --interleave.
+fn shard_reader(a: &Args) -> ShardReader {
+    let files: Vec<PathBuf> = a.all("--data").into_iter().map(PathBuf::from).collect();
+    let names = a.all("--exempt");
+    let base = |p: &PathBuf| p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+    for n in &names {
+        assert!(files.iter().any(|p| &base(p) == n), "--exempt {n}: no --data file has that name");
+    }
+    let exempt = files.iter().map(|p| names.contains(&base(p))).collect();
+    ShardReader {
+        files,
+        exempt,
+        buffer: a.num("--buffer", 1 << 24),
+        seed: a.num("--seed", 1),
+        interleave: a.0.iter().any(|x| x == "--interleave"),
+    }
+}
+
+/// --cell-weights FILE (idea 69), checked whole before anything trains.
+fn cell_table(a: &Args) -> Option<CellTable> {
+    a.get("--cell-weights").map(|p| {
+        let text = fs::read_to_string(p).unwrap_or_else(|e| panic!("{p}: {e}"));
+        let t = CellTable::parse(&text).unwrap_or_else(|e| panic!("{p}: {e}"));
+        println!("using --cell-weights {p}; exempt files: {:?}", a.all("--exempt"));
+        t
+    })
+}
+
 struct Args(Vec<String>);
 impl Args {
     fn get(&self, key: &str) -> Option<&str> {
@@ -1011,7 +1324,8 @@ fn main() {
         std::process::exit(2);
     };
     let a = Args(argv);
-    let needs_spec = !matches!(cmd.as_str(), "dump" | "stats" | "loader");
+    let needs_spec = !matches!(cmd.as_str(), "dump" | "stats" | "loader")
+        && (cmd != "cells" || a.0.iter().any(|x| x == "--bench"));
     let spec = if needs_spec { Spec::from_args(&a) } else { Spec::from_args(&Args(Vec::new())) };
     let ins = inputs(&spec);
     match cmd.as_str() {
@@ -1140,12 +1454,8 @@ fn main() {
             let lr: f32 = a.num("--lr", 0.001);
             let lr_step: usize = a.num("--lr-step", 18);
             let out = PathBuf::from(a.need("--out"));
-            let reader = ShardReader {
-                files: a.all("--data").into_iter().map(PathBuf::from).collect(),
-                buffer: a.num("--buffer", 1 << 24),
-                seed: a.num("--seed", 1),
-                interleave: a.0.iter().any(|x| x == "--interleave"),
-            };
+            let reader = shard_reader(&a);
+            let table = cell_table(&a);
             let defn = definition(&spec, &ins);
             let weights = ModelWeights::new(&defn, a.num("--seed", 1));
             let device = DefaultDevice::new(a.num("--device", 0)).expect("device");
@@ -1157,7 +1467,7 @@ fn main() {
             let val: Vec<ChessBoard> =
                 a.get("--val").map(|p| read_positions(Path::new(p), a.num("--val-positions", 20_000))).unwrap_or_default();
             let patience: usize = a.num("--patience", 3);
-            let val_map = mapper(&spec, &ins, scale, result_weight);
+            let val_map = mapper(&spec, &ins, scale, result_weight, None);
             let mut best: Option<(f64, usize)> = None;
             if let Some(dir) = a.get("--resume") {
                 let state = Path::new(dir).join("optimiser_state");
@@ -1174,7 +1484,8 @@ fn main() {
                     evaluator.load_device_weights($opt.weights()).expect("weights");
                     let mut total = 0.0f64;
                     for pos in &val {
-                        let batch = val_map.map(&pool, std::slice::from_ref(pos), Step::default(), 1).expect("map");
+                        let rec = [TrainRecord { board: *pos, exempt: true }];
+                        let batch = val_map.map(&pool, &rec, Step::default(), 1).expect("map");
                         let expected = 1.0 / (1.0 + (-f32::from(pos.score()) / scale).exp());
                         let target = (1.0 - result_weight) * expected + result_weight * pos.result();
                         let batch = batch.to_device(&device).expect("device");
@@ -1215,7 +1526,7 @@ fn main() {
                 log_rate: 128,
                 track_grad_norms: false,
             };
-            let loader = ReadMapLoader::new(reader, mapper(&spec, &ins, scale, result_weight), a.num("--threads", 3));
+            let loader = ReadMapLoader::new(reader, mapper(&spec, &ins, scale, result_weight, table), a.num("--threads", 3));
             let net_id = a.get("--id").unwrap_or("b0").to_string();
             let saves = save_list(&spec);
             train(
@@ -1272,7 +1583,7 @@ fn main() {
             }
             let mut evaluator = ModelEvaluator::new(opt.definition(), opt.device()).expect("evaluator");
             evaluator.load_device_weights(opt.weights()).expect("weights");
-            let map = mapper(&spec, &ins, 1.0, 0.0);
+            let map = mapper(&spec, &ins, 1.0, 0.0, None);
             let pool = HostPool::new(device.clone());
             let mut out = File::create(a.need("--out")).expect("out");
             for line in BufReader::new(File::open(a.need("--epd")).expect("epd")).lines() {
@@ -1282,9 +1593,20 @@ fn main() {
                     continue;
                 }
                 let board: ChessBoard = format!("{fen} | 0 | 0.0").parse().expect("fen");
-                let batch = map.map(&pool, &[board], Step::default(), 1).expect("map").to_device(&device).expect("dev");
+                let rec = [TrainRecord { board, exempt: true }];
+                let batch = map.map(&pool, &rec, Step::default(), 1).expect("map").to_device(&device).expect("dev");
                 let raw = evaluator.evaluate(&batch).expect("eval").get("output").expect("output").to_host().expect("host").f32()[0];
                 writeln!(out, "{fen} | {raw}").expect("write");
+            }
+        }
+        "cells" => {
+            // Idea 69's pre-arm checks (docs/research/class-sampler/design.md §5).
+            if a.0.iter().any(|x| x == "--bench") {
+                cells_bench(&spec, &a);
+            } else if a.get("--stream").is_some() {
+                cells_stream(&a);
+            } else {
+                cells_count(&a);
             }
         }
         "loader" => {
@@ -1335,5 +1657,79 @@ mod interleave_tests {
         assert_eq!(interleave_next(&[0, 0], &[10, 10], &[false, false]), Some(0));
         assert_eq!(interleave_next(&[5, 0], &[10, 10], &[false, true]), Some(0));
         assert_eq!(interleave_next(&[5, 5], &[10, 10], &[true, true]), None);
+    }
+}
+
+#[cfg(test)]
+mod cell_tests {
+    use super::*;
+
+    /// tools/nnue/cell_cases.txt: constructed positions and their expected cell and wing,
+    /// shared with tools/nnue/test_cells.py (the independent Python oracle's test).
+    const CASES: &str = include_str!("../../nnue/cell_cases.txt");
+
+    fn board(fen: &str) -> ChessBoard {
+        format!("{fen} | 0 | 0.0").parse().expect("fen")
+    }
+
+    #[test]
+    fn the_constructed_positions_get_their_cells() {
+        let mut n = 0;
+        for line in CASES.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+            let f: Vec<&str> = line.split(" ; ").collect();
+            let pos = board(f[0]);
+            let (cell, one_wing) = cell_and_wing(&pos);
+            assert_eq!(cell_name(cell), f[1], "{}", f[0]);
+            assert_eq!(WING_NAMES[usize::from(one_wing)], f[2], "{}", f[0]);
+            // The mapper's fused path builds the same board as Board::from_chessboard.
+            let (fused, _) = board_and_cell(&pos);
+            let plain = Board::from_chessboard(&pos);
+            assert!(fused.piece == plain.piece && fused.count == plain.count, "{}", f[0]);
+            n += 1;
+        }
+        assert_eq!(n, 17);
+    }
+
+    fn table_text(skip: Option<(usize, usize)>, w: impl Fn(usize, usize) -> f32) -> String {
+        let mut out = String::new();
+        for c in 0..CELLS {
+            for k in 0..2 {
+                if skip != Some((c, k)) {
+                    out += &format!("{} {} {}\n", cell_name(c), WING_NAMES[k], w(c, k));
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_table_lists_every_cell_and_wing_once() {
+        assert!(CellTable::parse(&table_text(None, |_, _| 1.0)).is_ok());
+        assert!(CellTable::parse(&table_text(Some((7, 1)), |_, _| 1.0)).is_err());
+        let twice = table_text(None, |_, _| 1.0) + "Q-MG|level two-wing 1\n";
+        assert!(CellTable::parse(&twice).is_err());
+        assert!(CellTable::parse(&table_text(None, |c, _| if c == 3 { 0.0 } else { 1.0 })).is_err());
+        assert!(CellTable::parse(&(table_text(None, |_, _| 1.0) + "Q-MG|nothing two-wing 1\n")).is_err());
+    }
+
+    #[test]
+    fn the_weight_is_the_tables_unless_exempt_or_absent() {
+        let t = CellTable::parse(&table_text(None, |c, k| (100 + 10 * c + k) as f32 / 100.0)).unwrap();
+        // The start position: Q-MG|level (cell 5), two-wing.
+        let b = board("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+        assert_eq!(record_weight(Some(&t), &b, false), 150.0 / 100.0);
+        // Bare kings: pawn-EG|level (cell 53), one-wing.
+        let k = board("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
+        assert_eq!(record_weight(Some(&t), &k, false), 631.0 / 100.0);
+        assert_eq!(record_weight(Some(&t), &b, true), 1.0);
+        assert_eq!(record_weight(None, &b, false), 1.0);
+    }
+
+    #[test]
+    fn every_cell_name_is_distinct() {
+        let names: std::collections::HashSet<String> = (0..CELLS).map(cell_name).collect();
+        assert_eq!(names.len(), 56);
+        assert_eq!(cell_name(5), "Q-MG|level");
+        assert_eq!(cell_name(53), "pawn-EG|level");
     }
 }
