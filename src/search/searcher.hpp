@@ -179,10 +179,15 @@ struct SearchSwitches {
   bool tt_exact_depth = false;
 };
 
+// The move played with the score and depth of the search behind it: those of
+// the last reported line. That is the last finished iteration, or the
+// unfinished one when a stop takes its move (searcher.cpp, the stop rule;
+// then one more than time_signals().depth). depth is 0 only if no iteration
+// finished.
 struct SearchResult {
   Move best = NoMove;
   int score = 0;
-  int depth = 0;  // last finished iteration (0 if none finished)
+  int depth = 0;
   std::uint64_t nodes = 0;
 };
 
