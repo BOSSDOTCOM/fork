@@ -24,8 +24,14 @@
 //   (colour and type) and its destination square; a node reached by a null
 //   move, or the root, has no arrival and reads and updates nothing. Same
 //   scale, bounds and update as the butterfly history.
+// - Every index is in range: side 0-1; from- and to-squares 0-63 (Move masks
+//   them); a pair or take slot built from a real piece (colour and type), a
+//   square 0-63 and a victim type Pawn to King; an arrival a pair slot.
+//   Debug builds assert it at each read and update (<cassert>, compiled out
+//   by NDEBUG in release builds, so bench and speed are unchanged).
 #pragma once
 
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 
@@ -55,21 +61,32 @@ FORK_TUNABLE_CONSTEXPR int bonus_for_depth(int depth) {
 // destination square (for castling the encoded square, the rook's).
 constexpr int PairSlots = 2 * 6 * 64;
 constexpr int NoArrival = -1;
-inline int pair_slot(Piece moved, Square to) { return (side_of(moved) * 6 + kind_of(moved)) * 64 + to; }
+inline int pair_slot(Piece moved, Square to) {
+  assert(side_of(moved) <= Black && kind_of(moved) <= King && "pair slot: not a piece");
+  assert(to >= 0 && to < 64 && "pair slot: square out of range");
+  return (side_of(moved) * 6 + kind_of(moved)) * 64 + to;
+}
 
 // The take history (tier 2, T11; KB search-techniques.md §3.11): captures
 // scored by how often they cut in this tree, indexed by the moving piece
 // (colour and type), its destination and the captured piece's type (a pawn
 // for en passant). Same scale, bounds and update as the other histories.
 constexpr int TakeSlots = PairSlots * 6;
-inline int take_slot(Piece moved, Square to, PieceType victim) { return pair_slot(moved, to) * 6 + victim; }
+inline int take_slot(Piece moved, Square to, PieceType victim) {
+  assert(victim <= King && "take slot: victim is not a piece type");
+  return pair_slot(moved, to) * 6 + victim;
+}
 
 class TakeHistory {
  public:
-  int value(int slot) const { return table_[slot]; }
+  int value(int slot) const {
+    assert(slot >= 0 && slot < TakeSlots && "take history: slot out of range");
+    return table_[slot];
+  }
 
   // As QuietHistory::apply.
   void apply(int slot, int amount) {
+    assert(slot >= 0 && slot < TakeSlots && "take history: slot out of range");
     std::int16_t& v = table_[slot];
     const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
     v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
@@ -91,10 +108,16 @@ constexpr int FollowTable = 1;
 
 class PairHistory {
  public:
-  int value(int arrival, int slot) const { return table_[arrival][slot]; }
+  int value(int arrival, int slot) const {
+    assert(arrival >= 0 && arrival < PairSlots && "pair history: arrival out of range");
+    assert(slot >= 0 && slot < PairSlots && "pair history: slot out of range");
+    return table_[arrival][slot];
+  }
 
   // As QuietHistory::apply.
   void apply(int arrival, int slot, int amount) {
+    assert(arrival >= 0 && arrival < PairSlots && "pair history: arrival out of range");
+    assert(slot >= 0 && slot < PairSlots && "pair history: slot out of range");
     std::int16_t& v = table_[arrival][slot];
     const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
     v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
@@ -111,10 +134,14 @@ class PairHistory {
 
 class QuietHistory {
  public:
-  int value(Color side, Move m) const { return table_[side][m.from()][m.to()]; }
+  int value(Color side, Move m) const {
+    assert(side <= Black && "quiet history: side out of range");
+    return table_[side][m.from()][m.to()];
+  }
 
   // Moves the entry by `amount` (positive: bonus, negative: malus), self-limiting.
   void apply(Color side, Move m, int amount) {
+    assert(side <= Black && "quiet history: side out of range");
     std::int16_t& v = table_[side][m.from()][m.to()];
     const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
     v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
