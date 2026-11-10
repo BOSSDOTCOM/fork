@@ -19,8 +19,13 @@ and say which:
    inputs' ranges (entries in [-10000, 10000], weights 0-12 and 0-8; a
    product of three entries overflows), or it divides by something that can
    be zero.
-6. **Mode**: a residual proposal that is really a full replacement, or the
-   reverse.
+6. **Mode**: the proposal's MODE is not the mode its author was asked for,
+   or a residual proposal is really a full replacement. A full replacement
+   was asked for when the line below says so; it may change several things
+   at once and may reuse parts of the committed body, so that alone is not
+   a reason to reject it.
+
+The author was asked for: {requested} mode.
 
 The proposal:
 

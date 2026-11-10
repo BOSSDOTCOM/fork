@@ -421,8 +421,13 @@ class NodesLoopTests(unittest.TestCase):
         self.assertIn('Clean room', text)
         for field in ('{mode}', '{parents}', '{statistics}', '{history}', '{insights}'):
             self.assertNotIn(field, text)
-        critic = agents.prompt_for('critic', region='quiet_order', mode='full', rationale='R', body='B')
+        critic = agents.prompt_for('critic', region='quiet_order', mode='full', requested='full', rationale='R',
+                                   body='B')
         self.assertNotIn("Fork's measurements", critic)
+        # The pilot's first explorer proposal was rejected as "nothing indicates a full replacement was
+        # requested": the critic is told the mode its author was asked for.
+        self.assertIn('The author was asked for: full mode.', critic)
+        self.assertNotIn('{requested}', critic)
         repo = Path(__file__).resolve().parents[2]
         header = (repo / PATH_Q).read_text(encoding='utf-8')
         self.assertIn('constexpr int quiet_score(const QuietScoreInputs& s) {', header.split('\n'))

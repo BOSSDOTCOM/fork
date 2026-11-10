@@ -530,6 +530,7 @@ class Loop:
         self.step = 'critic'
         self.refresh(status=f'generation {g}: the critic reviews candidate {cid}')
         review = self.ask(g, 'critic', agents.prompt_for('critic', region=self.region, mode=proposal.mode,
+                                                         requested=mode,
                                                          rationale=proposal.rationale, body=proposal.body))
         self.budget.spend(tokens=review.tokens)
         self.say(g, 'agent_call', {'role': 'critic', 'tokens': review.tokens, 'usage': review.usage})
