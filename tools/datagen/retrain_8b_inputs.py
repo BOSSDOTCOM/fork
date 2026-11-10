@@ -337,7 +337,10 @@ def upload(a):
                   [n for n in names if n in want and sha256(folder / n) != want[n]]
         if unknown:
             raise SystemExit(f'{name}: files without a matching manifest entry: {unknown[:5]}')
-        if name in held:
+        # The list can miss a dataset (fork-g3hij, 2026-11-10); its status answers for it.
+        rc, st = kaggle(a.kaggle_cli, 'datasets', 'status', dataset, timeout=300)
+        if name in held or (rc == 0 and st.strip().splitlines() and st.strip().splitlines()[-1].strip() in
+                            ('ready', 'pending', 'running')):
             log(f'{name}: already on Kaggle, not uploaded again')
         else:
             (folder / 'dataset-metadata.json').write_text(json.dumps(
@@ -345,7 +348,7 @@ def upload(a):
                 indent=1) + '\n')
             rc, text = kaggle(a.kaggle_cli, 'datasets', 'create', '-p', str(folder), timeout=6 * 3600)
             log(f'{name}: create exit {rc}: {text.strip().splitlines()[-1] if text.strip() else ""}')
-            if rc:
+            if rc or 'error' in text.lower():
                 raise SystemExit(f'{name}: upload failed')
         for _ in range(180):
             rc, st = kaggle(a.kaggle_cli, 'datasets', 'status', dataset, timeout=300)
