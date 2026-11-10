@@ -1002,12 +1002,12 @@ TEST_CASE("uci_timing", "uci to uciok, first isready to readyok, stop to bestmov
 TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
   Gui g;
   CHECK(g.sync());
-  struct Bound {
+  struct OptionRange {
     const char* name;
     std::int64_t min, max;
   };
-  for (const Bound& b :
-       {Bound{"Threads", 1, 4096}, Bound{"Move Overhead", 0, 10000}, Bound{"Hash", 1, 4194304}}) {
+  for (const OptionRange& b :
+       {OptionRange{"Threads", 1, 4096}, OptionRange{"Move Overhead", 0, 10000}, OptionRange{"Hash", 1, 4194304}}) {
     const std::string set = std::string("setoption name ") + b.name + " value ";
     for (std::int64_t v : {b.min, b.max}) {
       const std::size_t mark = g.cursor;
