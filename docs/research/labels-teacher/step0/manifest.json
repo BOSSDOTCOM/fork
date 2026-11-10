@@ -1,0 +1,165 @@
+{
+ "declaration": "docs/research/labels-teacher/step0-declaration.md (dc90302)",
+ "tools": "eaa31fb (label_pretest.py deep for the searches; teacher_pretest.py for the tables)",
+ "engines": {
+  "S512ppr3": {
+   "file": "~/fork-measure/bin/fork-release-2b1c78b.exe",
+   "sha256": "17ab2b41b1b43adf42da9031f005c9d8c3d9b6eb656b798bf535939f765c0b34",
+   "bench": "14,149,617 / 1cb0717f040c294d",
+   "net": "s512ppr3 (header S = 89)"
+  },
+  "scratch-s1": {
+   "file": "~/fork-measure/bin/fork-release-2b1c78b-scratch-s1.exe",
+   "sha256": "e26436258e7fd0631a846283a17424ee414d94f62c1f9db533afafb62efc8389",
+   "bench": "15,793,636 / 22fb22319f919369",
+   "net_sha256": "769bffe2ca857b8a2f6e259afe003b470a97f3c68a90a5d14a13fa7e10946cb5",
+   "net": "s512pp-scratch-s1.fnet from dcbe8fb (header S = 90)",
+   "netcheck": "446 positions, 0 mismatches against dcbe8fb tests/nnue/s512pp-scratch-s1.parity"
+  },
+  "scratch-s2": {
+   "file": "~/fork-measure/bin/fork-release-2b1c78b-scratch-s2.exe",
+   "sha256": "a97c98dadd2cbfd861e177536692facd845e5ca6cec5c2d34b9feaacf57918eb",
+   "bench": "14,148,026 / e05c5663f82fce47",
+   "net_sha256": "5cd93409f1e0b3aa904b116f01c2f7f3bc31244220a683ef3e2d7cf21f036cc5",
+   "net": "s512pp-scratch-s2.fnet, item 7 Kaggle output (header S = 92)",
+   "netcheck": "446 positions, 0 mismatches against the s512pp-scratch-s2.parity beside it (SHA-256 a56e2406...1ddd1)"
+  }
+ },
+ "build": "2b1c78b, clang-release preset, -DFORK_NET=<net>, Windows (LLVM-MinGW clang 23.1.3), arch native, low priority",
+ "sites": {
+  "H": {
+   "file": "~/fork-measure/i51/held-out/sites.jsonl",
+   "sha256": "64862be3cd681611b239d24fb37a0f30c2307bad01c389f6a3b848ae9cf3ec52",
+   "sites": 5000,
+   "kept": 3131
+  },
+  "H2": {
+   "sample": "label_pretest.py sample g3j-w05-val.vf --games 20000 --seed 5203",
+   "sample_sha256": "d2721f1cc23d7c00a41ecacd8109c05379442c5f813a0f6959f2a98f9edb5a5b",
+   "dropped_games_in_H": 267,
+   "file": "~/fork-measure/teacher0/H2/sites.jsonl",
+   "sha256": "bc5198b46a0937814323cf4893416d39cda848f63956347628906e196ed148a8",
+   "sites": 19733,
+   "kept": 12368
+  },
+  "shard": {
+   "file": "g3j-w05-val.vf",
+   "sha256": "54c0cfaf12ae305ec830b2c5bcde0e658516c148f9ea8bbd8e5d1abd3eeed1e1"
+  }
+ },
+ "gold_S512ppr3_1m": {
+  "file": "~/fork-measure/i51/held-out/deep.tsv",
+  "sha256": "c012267c85fd9e95b2fe1d21826a2144a982549e252a441208e901ce9d6d76d8"
+ },
+ "labels": {
+  "H-ppr3-100k": {
+   "labels": 5000,
+   "sha256": "db37f6fe4d6ee63969c3de2b2a5f91ac341b4cfd600e7076380194606c376cc7",
+   "mate_flagged": 98
+  },
+  "H-ppr3-20k": {
+   "labels": 5000,
+   "sha256": "4deba97aeafa767d55400accf3309d3877d3fa4e7da4eed88cd632973392b556",
+   "mate_flagged": 65
+  },
+  "H-ppr3-50k": {
+   "labels": 5000,
+   "sha256": "a693c2d3c8d59bf64a6a2b9a45dab154a4e6769a1dfbbc6746afb41a62a07e92",
+   "mate_flagged": 79
+  },
+  "H-ppr3-60k": {
+   "labels": 5000,
+   "sha256": "21ac73230f59ba681e1eded5c490933a0e42a0233b916a76885a7274c097fc83",
+   "mate_flagged": 88
+  },
+  "H-ppr3-static": {
+   "labels": 5000,
+   "sha256": "0185df028e073d63f605cc1262648961ba4309e80e0a8caabdce1793bc389561",
+   "mate_flagged": 0
+  },
+  "H-s1-1m": {
+   "labels": 5000,
+   "sha256": "e85043a9d84cae8ceda548363da085b72c0be2d8f9d964d12dc8be993c728e86",
+   "mate_flagged": 172
+  },
+  "H-s1-20k": {
+   "labels": 5000,
+   "sha256": "14022047ab0fe52f88b95918d6953d723b2338f8d570cddac8acc82417e7c09a",
+   "mate_flagged": 64
+  },
+  "H-s1-static": {
+   "labels": 5000,
+   "sha256": "aea467a586eef5508c346b5a3b89108c8bfbbf55fac594301dcfc35b17becf76",
+   "mate_flagged": 0
+  },
+  "H-s2-1m": {
+   "labels": 5000,
+   "sha256": "82e668f8621325ec6eb66cb3b2104cedf804e9603fdfd1a9c8fa7cd59d8f853b",
+   "mate_flagged": 166
+  },
+  "H-s2-20k": {
+   "labels": 5000,
+   "sha256": "5bc3c5ffd40e2a206cc38d876cae9d0a415dd54db22b365a17f27d5cbad135b6",
+   "mate_flagged": 64
+  },
+  "H-s2-static": {
+   "labels": 5000,
+   "sha256": "01d031dd26edc20eed230b5341e0468f6d950beb7ae235fb5a910796fb1b59b1",
+   "mate_flagged": 0
+  },
+  "H2-ppr3-100k": {
+   "labels": 19733,
+   "sha256": "dac9233279d4a391a98ff320dddf97f48aab3f200b46eef841b06e597fc0fb6b",
+   "mate_flagged": 365
+  },
+  "H2-ppr3-20k": {
+   "labels": 19733,
+   "sha256": "d3bba5991197cbdaa84a21fc4f54400393edef31251cfd48371a150f49f947f7",
+   "mate_flagged": 240
+  },
+  "H2-ppr3-50k": {
+   "labels": 19733,
+   "sha256": "b439ff50cf234721684704eec77a9fc22473a544134d94ff2398cdad73243111",
+   "mate_flagged": 310
+  },
+  "H2-ppr3-60k": {
+   "labels": 19733,
+   "sha256": "aaac21d2f8f790597b47d88947f5c64fbe38eedacc082f51ac224bd8e44ede8c",
+   "mate_flagged": 330
+  },
+  "H2-ppr3-static": {
+   "labels": 19733,
+   "sha256": "ad7e715b0c836df1c9c77f06b86542b3028048b4ddd14e654fc95c2599030f9d",
+   "mate_flagged": 0
+  },
+  "H2-s1-20k": {
+   "labels": 19733,
+   "sha256": "8b002029855f4041ed920f54b1d712b350ebc7c646cb9ddcdbad6dc7778aea90",
+   "mate_flagged": 240
+  },
+  "H2-s1-static": {
+   "labels": 19733,
+   "sha256": "c5f5065fbc9f89f1a8f2cf38dd173103710bf40643132c92b163ecfe969ca57f",
+   "mate_flagged": 0
+  },
+  "H2-s2-20k": {
+   "labels": 19733,
+   "sha256": "a6d85c4883a9f5c6fbc439d2a9e9485b97378e83d86479ea354a2a3297f41fa0",
+   "mate_flagged": 238
+  },
+  "H2-s2-static": {
+   "labels": 19733,
+   "sha256": "c5c4185097513029bf6c64e4813c7f190274b932031279829a97af1de3635e6f",
+   "mate_flagged": 0
+  }
+ },
+ "job": {
+  "name": "teacher-step0",
+  "type": "measure",
+  "start": "2026-11-09 6:46:53 PM EST",
+  "end": "2026-11-09 8:13:18 PM EST",
+  "workers": 2,
+  "priority": "below normal",
+  "settings": "one thread, Hash 16, ucinewgame before each, Syzygy 3-4-5"
+ }
+}
