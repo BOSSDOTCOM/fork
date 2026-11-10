@@ -140,7 +140,16 @@ added; no CI job applies them automatically.
 | Endgame check | tools/nnue/endgame_check.py, 900 positions: **8 misjudged (0.9%), as S512ppr2** |
 | Tests | vs S512ppr2 (phase-4 98cf000): fixed nodes, 800,000 per move, run 42426868742: +15.65 +/- 9.26 Elo (nElo +28.80 +/- 17.02), 1,600 games, above the owner's +5 tie-break; then STC 8+0.08 [0, 5], runs 42429984619, 42431412304, 42432793282, 42434196075 and 42435511074: **+7.12 +/- 4.53 Elo (nElo +11.98 +/- 7.61), H1 accepted** after 8,000 games (docs/history/phase-4/sprt-log.md) |
 | Bench | 14,149,617 nodes, signature 1cb0717f040c294d (tests/bench-s512ppr3.ref) |
-| Status | **The default network since 2026-11-07** (owner: promoted on its STC result), and the labeller of the data generation from generation 3's part g3j on (DESIGN.md §5.3, labeller policy) |
+| Status | The default network on phase-4 from 2026-11-07 (owner: promoted on its STC result); on this candidate branch, the control the candidate is screened against. The labeller of the data generation from generation 3's part g3j on (DESIGN.md §5.3, labeller policy) |
+
+## r8bi52, a retrain 8b candidate (2026-11-10, candidate branch only)
+
+| Item | Value |
+|---|---|
+| File | `nets/r8bi52.fnet`, this candidate branch's default network (not promoted) |
+| Training | Retrain 8b's idea 52 arm: the control's recipe with 190,000 top-disagreement sites deep-labelled at 200,000 nodes, 16 times, replacing as many positions of g3j (docs/research/retrain-8b/plan.md, branch retrain/8b-prep) |
+| Bench | 10,014,076 nodes, signature 00f5966283892618 (tests/bench-r8bi52.ref) |
+| Status | **The default network since 2026-11-10 on this candidate branch only**, for retrain 8b's fixed-node screens against S512ppr3 (the default on phase-4); not promoted |
 
 ## The bake-off entries in CI (2026-10-31)
 
