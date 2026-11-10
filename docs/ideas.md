@@ -2359,3 +2359,29 @@ whose weaknesses and data gaps decide their targets and order.
   validation loss; fixed-node screen, STC SPRT [0, 5].
 - **status:** untested (design approved; pre-arm checks next, the arm in
   8c). **runtime cost:** none. **earliest phase:** Phase 4.
+
+## 70. Result fine-tune of the base net
+
+- **type:** ELO (training).
+- **idea** (owner, 2026-11-10; from the clean-room engine survey 2026-11,
+  concept level): fine-tune the base net with a 100% game-result target
+  (no search-score target) at a low learning rate, as Ethereal reports
+  (+42.7 STC / +35.6 LTC on its own net, one engine's self-report); several
+  engines report smaller gains from result-weighted final stages.
+- **plan:** right after retrain 8b's SPRT decides the base net, fine-tune
+  the winner (td90 or the control) on existing 8b data, two seeds; the
+  usual gates; a fixed-node screen against the base; an SPRT. Kaggle hours
+  reported to the owner before the launch.
+- **status:** untested (queued). **runtime cost:** none. **earliest
+  phase:** Phase 4.
+
+## 71. Feature-transformer weight decay
+
+- **type:** ELO (training).
+- **idea** (owner, 2026-11-10; engine survey 2026-11, concept level): weight
+  decay on the feature transformer's weights in the trainer, as Stockfish's
+  recent trainer change reports (+4.0 STC / +5.3 LTC there).
+- **plan:** a candidate arm for retrain 8c, at equal data against the
+  control; the testing rule's screen, then the STC SPRT.
+- **status:** untested (8c candidate). **runtime cost:** none. **earliest
+  phase:** Phase 4.

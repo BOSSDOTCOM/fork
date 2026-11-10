@@ -2386,6 +2386,13 @@ Copied as the Phase 4 outline requires; the KB keeps the evidence
    Syzygy where both exist, spot checks at 6-7 pieces); downloaded only,
    never committed, deleted after the slice is sealed; the online
    explorer for spot checks only, within its limits, never for labelling.
+   **Games against other engines are not Fork-pure data (owner,
+   2026-11-10):** in a game against another engine (for example
+   Stockfish), half the moves and the result come from the opponent, so
+   such positions and results are never part of Fork's training data; at
+   most a separate, labelled lineage, never mixed in silently, and only by
+   an owner decision. (Ethereal's adversarial data, kb survey 2026-11, is
+   the example.)
 2. **Compute split.** Datagen on the owner's CPU (12 threads); training
    on Kaggle (free CUDA) first, rented CUDA only if Kaggle falls short.
    Colab is dropped (its FAQ bans chess training on free runtimes). The
@@ -4334,6 +4341,7 @@ models are scored on the half of the games they were not fitted on.
 | 2026-11-10 | **Standing principle: test as efficiently as possible, not as little as possible (owner; §1 Ground rules).** Every reliability check stays; each test must be able to change a decision; the cheapest test that can decide comes first; tests stop early when decided; controls are reused and CI is bundled; GitHub, the CPU and the GPU are each kept busy with the next useful job; nothing is re-tested that another planned test already covers. **Every test proposal states the decision it can change and its cost.** |
 | 2026-11-10 | **Idea 69's cw arm launched on an owner exception to its declared speed check (owner).** Preflight v2 under the revised rule declared first (retrain/8b-cw 0499006, design.md 14.8; record 299cf32): **the correctness checks passed**: the new trainer with no table and with an all-ones table stayed within the GPU noise of three runs of the old trainer against each of them (max 0.003071, RMS 7.00e-5), and the cw table changes training (RMS 2.42e-3, about 35 times the noise). **The declared speed check failed** (the cw table run at 0.9892 of the old runs' mean trained positions per second, against 0.99; the three identical old runs spread 2.9%). **Owner exception: the speed check affects only training cost, not the result's validity** (the arms are compared at equal positions seen), so cw and c2 are launched. |
 | 2026-11-10 | **Two standing tooling rules (owner; §1 Ground rules), after retrain 8b's chain reported done with no ready file** (a Windows Python given a Git Bash `/c/...` path; the endgame check also crashed). (1) **One shared path helper** for Git Bash, PowerShell, Windows Python and WSL, used by every job and chain script, with a check that fails if a script passes a `/c/...` path to a Windows program; jobs are launched from PowerShell, never Git Bash. (2) **No silent done**: every chain verifies its final outputs exist and are valid before reporting done, else it reports failed naming the missing output. |
+| 2026-11-10 | **After the engine survey's first results (owner).** (1) **A "result fine-tune" experiment is queued right after 8b's SPRT decides the base net**: the winner (td90 or the control) fine-tuned with a 100% game-result target at a low learning rate (Ethereal's form, concept level; kb survey 2026-11), on existing 8b data, two seeds; then the usual gates, a fixed-node screen against the base and an SPRT; the Kaggle hours are reported to the owner before the launch (ideas.md 70). (2) **Feature-transformer weight decay is a candidate arm for retrain 8c** (Stockfish's recent trainer change, concept level; ideas.md 71). (3) **Games against other engines are not Fork-pure data** (training-data decision 1): half the moves and the result come from the opponent; at most a separate, labelled lineage. |
 
 ## 7. Performance doctrine (governs every phase)
 
