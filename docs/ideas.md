@@ -2260,6 +2260,17 @@ whose weaknesses and data gaps decide their targets and order.
 - **status:** untested (plan only, owner, 2026-11-09; after the
   conversion-and-defense results). **runtime cost:** none. **earliest
   phase:** Phase 4.
+- **2026-11-10 (owner; DESIGN.md decisions log):** approved as the
+  analysis's fixes 1 and 2, generated in one run: a **positional-advantage
+  slice** (queens on, equal pieces, level or one pawn apart, |label| 80-400
+  cp) and a **defense-start slice** (the side to move at -100 to -300,
+  queens on), both drawn from Fork's own datagen records and played out at
+  80,000 nodes with adjudication raised (report.md: 1,500 cp over 16
+  plies, no decided-opening cut). **A pilot first** (about 16 CPU-h); the
+  full slices (about 120 + 60 CPU-h) only if the pilot's rates and label
+  checks look right; then **arms in retrain 8c** (fixed-node screen, STC
+  SPRT [0, 5]). Fix 3 (R32's endgame-start slice, widened) waits for this
+  result.
 
 ## 67. Draw-probability head
 
@@ -2288,3 +2299,23 @@ whose weaknesses and data gaps decide their targets and order.
   entirely below 0 AND the held-out 6-7-piece misjudgment falls by at least 25% against the control arm.
 - **status:** untested (designed; data generation after the conversion-and-defense results and before 8c).
   **runtime cost:** none. **earliest phase:** Phase 4.
+
+## 69. Class-weighted sampling in the trainer
+
+- **type:** ELO (training).
+- **idea** (the conversion-and-defense analysis's fix 4, 2026-11-10): weight
+  each training position by its material and structure class so the
+  classes that decide games (queens-on middlegames with level material,
+  equal pieces with level pawns, queens-on bishop against knight, passers
+  on both sides) are seen more often, and the over-represented ones
+  (rook-and-minor endings a piece up, queens-on a minor up) less; weights
+  capped (report.md proposes 2x up and 0.5x down), normalised to equal
+  positions seen. No new data generation.
+- **evidence:** report.md item 5 (matched ratios 2.3-3.96 for the
+  under-trained classes, 0.18-0.64 for the over-trained ones).
+- **decision (owner, 2026-11-10):** a design review of the loader change
+  first, then an arm in retrain 8c.
+- **test:** the 8c arm at equal positions against the control; per-class
+  validation loss; fixed-node screen, STC SPRT [0, 5].
+- **status:** untested (design review next). **runtime cost:** none.
+  **earliest phase:** Phase 4.
