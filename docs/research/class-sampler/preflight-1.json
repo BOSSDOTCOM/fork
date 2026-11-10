@@ -1,0 +1,93 @@
+{
+ "old": "320c0bee66da6958fb9507e17f9bdb4fc99178d7",
+ "new": "412934a4db5ef90cd5efa3c4dd2ae82297db346c",
+ "table": "docs/research/class-sampler/weights-r8b-c.txt",
+ "runs": {
+  "old1": {
+   "rc": 0,
+   "seconds": 43.6,
+   "progress_lines": 915,
+   "positions_per_second": 442324,
+   "command": "<work>/old/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-old1",
+   "weights": "<result>/old1.weights.bin",
+   "sha256": "ee3728de709d2f70e6281e3cfd3519c84c6ff21c82f0105b1cfea8f61834d8a9"
+  },
+  "old2": {
+   "rc": 0,
+   "seconds": 39.1,
+   "progress_lines": 915,
+   "positions_per_second": 441748,
+   "command": "<work>/old/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-old2",
+   "weights": "<result>/old2.weights.bin",
+   "sha256": "dc98b96070d0196a074691f5de9f8e3bc68dd04a9e151366eff06d5b97bcbca5"
+  },
+  "none": {
+   "rc": 0,
+   "seconds": 39.6,
+   "progress_lines": 915,
+   "positions_per_second": 436684,
+   "command": "<work>/fork/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-none",
+   "weights": "<result>/none.weights.bin",
+   "sha256": "935035c91635a4fa6c7c0adb45a726ebf84ad28cf82fdf0204e177712174c225"
+  },
+  "ones": {
+   "rc": 0,
+   "seconds": 39.1,
+   "progress_lines": 915,
+   "positions_per_second": 443038,
+   "command": "<work>/fork/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-ones --cell-weights <work>/ones.txt",
+   "weights": "<result>/ones.weights.bin",
+   "sha256": "2230f2aae8068ce2391f1d3696f5b577a9c62b15696d3e01815ecc1a256496a5"
+  },
+  "table": {
+   "rc": 0,
+   "seconds": 38.6,
+   "progress_lines": 915,
+   "positions_per_second": 446766,
+   "command": "<work>/fork/tools/train/target/release/fork-train train --arch s512pp --buckets 0,0,0,0,1,1,2,2,3,3,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7 --data <data>/datasets/bossdotcom/fork-g3hij/g3j-w00.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w01.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w02.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w03.vf <data>/datasets/bossdotcom/fork-g3hij/g3j-w04.vf --start 1 --superbatches 3 --lr 0.0001 --lr-step 180 --seed 1 --patience 4 --scale 92 --result-weight 0.5 --batch 16384 --batches 305 --buffer 4194304 --interleave --threads 2 --init-weights <data>/datasets/bossdotcom/fork-g3hij/s512ppr3-weights.bin --device 0 --id p --out <work>/run-table --cell-weights <work>/fork/docs/research/class-sampler/weights-r8b-c.txt",
+   "weights": "<result>/table.weights.bin",
+   "sha256": "c7a25b4164eafb1a9f1bd110897f9036bd12130e5e014b0810189895958a8931"
+  }
+ },
+ "gpu": "GPU 0: Tesla T4 (UUID: GPU-f247cb75-1571-298d-973e-f1378766d8f5)\nGPU 1: Tesla T4 (UUID: GPU-0d97b188-48fa-9e64-ce18-00b7b94861a0)",
+ "rustup": 0,
+ "heads": "412934a Data, docs: idea 69's final table on retrain 8b's arm c (SHA-256 4ac778ac...1b0a); design.md sections 11.4 and 14\n320c0be Data: retrain 8b's manifests (g4's seal and the derived inputs, all on Kaggle)",
+ "build_old": {
+  "rc": 0,
+  "seconds": 36.7,
+  "tail": ""
+ },
+ "build_new": {
+  "rc": 0,
+  "seconds": 35.0,
+  "tail": ""
+ },
+ "checks": {
+  "files": true,
+  "init": true,
+  "table": true,
+  "builds": true
+ },
+ "verdict": {
+  "deterministic": false,
+  "old_noise": 0.002637520432472229,
+  "max_diff_vs_old1": {
+   "none": 0.0030572526156902313,
+   "ones": 0.002215243875980377,
+   "table": 0.021958857774734497
+  },
+  "bitwise_equal_to_old1": {
+   "old1": true,
+   "old2": false,
+   "none": false,
+   "ones": false,
+   "table": false
+  },
+  "equal": false,
+  "speed": true,
+  "table_acts": true,
+  "speed_ratio_table": 1.0107004859332724,
+  "pass": false
+ },
+ "session_seconds": 288.8
+}

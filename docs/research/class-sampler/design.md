@@ -1239,3 +1239,46 @@ Per cell, for the 31 cells with at least 50 deciding positions:
 | Q-EG, level | 0.47% | 0.72% (53) | 1.53 | 1.291 | k r | 1.391 | 1.244 / 1.244 | 0.61% |
 | Q-EG, minor-up | 0.85% | 0.70% (52) | 0.82 | 0.695 | k r | 0.749 | 0.669 / 1.000 | 0.59% |
 | 11 small cells (n < 50), weight 1: Q-EG other-imbalance; R+minor-EG other-imbalance; R-EG other-imbalance; minor-EG level; noQ-MG R-vs-minors; noQ-MG minor-up; noQ-MG other-imbalance; noQ-MG pawn+-2+; pawn-EG level; pawn-EG pawn+-1; pawn-EG pawn+-2+ | 9.40% | 3.86% | - | 1.000 | small | 1.000 | 1.000 / 1.000 | 9.40% |
+
+### 14.7 The preflight's result (2026-11-10, 1:11 to 1:16 PM EST): FAILED as declared; the arm was not run
+
+Kernel fork-retrain-8b-cw-preflight, version 1. It ran on T4 x2, using
+device 0 only, for a session of 288.8 s (GPU quota 9.08 h → 9.16 h). Both
+trainers built (36.7 s and 35.0 s), and every input check passed (files,
+warm start, table SHA-256). The record is `preflight-1.json`.
+
+| Run | Trained positions/s | Superbatch-3 weights, SHA-256 (first 16 hex) |
+|---|---|---|
+| old1 | 442,324 | ee3728de709d2f70 |
+| old2 | 441,748 | dc98b96070d0196a |
+| none | 436,684 | 935035c91635a4fa |
+| ones | 443,038 | 2230f2aae8068ce2 |
+| table | 446,766 | c7a25b4164eafb1a |
+
+- **CUDA is not deterministic run to run:** old1 and old2, the same trainer
+  and the same command, differ by at most 0.002638 in a weight.
+- **EQUAL fails on the declared rule:** none differs from old1 by at most
+  0.003057, above that noise (ones: 0.002215, within it).
+- **SPEED passes:** the table run reached 1.011 times the old runs' mean.
+- **The weights act:** the table run differs from old1 by at most 0.021959.
+
+The verdict fails, so **the cw arm was not launched.**
+
+All ten pairs, computed afterwards from the five downloaded weight files:
+
+| Pair | Max difference | RMS difference |
+|---|---|---|
+| old1-old2 | 0.002638 | 6.2e-5 |
+| old1-none | 0.003057 | 6.8e-5 |
+| old1-ones | 0.002215 | 6.1e-5 |
+| old2-none | 0.003348 | 7.1e-5 |
+| old2-ones | 0.002633 | 5.2e-5 |
+| none-ones | 0.003066 | 7.0e-5 |
+| each run against table | 0.021944 to 0.021963 | 2.42e-3 |
+
+old1, old2, none and ones look interchangeable: none-old2 is 0.003348, larger
+than old1's own pair. The table run is 35 times further from every one of
+them by RMS. The rule as declared compared a single noise draw (the maximum
+over one old pair) with another single draw, and that is what failed. The
+owner decides whether to accept the evidence or to rerun the preflight under
+a revised rule declared first.
