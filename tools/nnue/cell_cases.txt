@@ -1,0 +1,41 @@
+# Idea 69's material cells on constructed positions (docs/research/class-sampler/design.md §2.1 and its
+# owner-decision section). Each line: FEN ; cell ; wing. Every position below except the first was
+# constructed for this file from the definition (it is not taken from any source); the first is Fork's
+# own start position (src/core/position.hpp, StartFen). Read by tools/train/src/main.rs (cell_tests) and
+# tools/nnue/test_cells.py, so both implementations are held to the same expected classes.
+#
+# The phase count P = knights + bishops + 2 rooks + 4 queens over both sides, capped at 24. A wing is files
+# a-c or f-h; a position is two-wing when pawns (of either side) stand on both wings, else one-wing.
+rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 ; Q-MG|level ; two-wing
+# P = 13 with queens: Q-MG; only the minor count differs.
+r2qk3/7p/8/8/8/8/P7/R2QK1N1 w - - 0 1 ; Q-MG|minor-up ; two-wing
+# The same with Black to move: the class does not depend on the side to move.
+r2qk3/7p/8/8/8/8/P7/R2QK1N1 b - - 0 1 ; Q-MG|minor-up ; two-wing
+# P = 12 with queens: Q-EG; equal pieces, equal pawns.
+r2qk3/7p/8/8/8/8/P7/R2QK3 w - - 0 1 ; Q-EG|level ; two-wing
+# No queens, rooks and minors, P = 10: noQ-MG; equal counts, bishop against knight.
+r3k2r/5p2/8/3n4/8/8/2P5/R2BK2R w - - 0 1 ; noQ-MG|B-vs-N ; two-wing
+# P = 9: R+minor-EG; White a rook up and a minor down (opposite directions); pawns on d and e only.
+r3k3/3p4/2n2n2/8/8/8/4P3/R3K1NR w - - 0 1 ; R+minor-EG|R-vs-minors ; one-wing
+# The other direction: Black's rook against White's two minors.
+r3k3/8/8/8/8/8/8/2B1KN2 w - - 0 1 ; R+minor-EG|R-vs-minors ; one-wing
+# White a rook and a minor up (the same direction): other-imbalance.
+r3k3/8/2n5/8/8/8/8/R2NKN1R w - - 0 1 ; R+minor-EG|other-imbalance ; one-wing
+# Rooks only, one pawn apart, all pawns on files a-b.
+r3k3/p7/8/8/8/8/PP6/R3K3 w - - 0 1 ; R-EG|pawn+-1 ; one-wing
+# Rooks only, two pawns apart, pawns on a, b, g and h.
+r3k3/7p/8/8/8/8/PP4P1/R3K3 w - - 0 1 ; R-EG|pawn+-2+ ; two-wing
+# A piece against pawns: minors only, only the minor count differs.
+4k3/6pp/8/8/8/8/8/2B1K3 w - - 0 1 ; minor-EG|minor-up ; one-wing
+# Minors only, equal counts, bishop against knight, pawns on b and g.
+4k3/1p6/8/3n4/8/8/6P1/2B1K3 w - - 0 1 ; minor-EG|B-vs-N ; two-wing
+# Kings and pawns.
+4k3/8/8/8/8/8/4P3/4K3 w - - 0 1 ; pawn-EG|pawn+-1 ; one-wing
+# Bare kings: no pawns, so one-wing.
+4k3/8/8/8/8/8/8/4K3 w - - 0 1 ; pawn-EG|level ; one-wing
+# A queen against two rooks: Q-EG (P = 8), queen counts differ.
+r3k2r/8/8/8/8/8/8/3QK3 w - - 0 1 ; Q-EG|Q-imbalance ; one-wing
+# Two White queens (P above 24, capped): Q-MG, queen counts differ.
+rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNQ w - - 0 1 ; Q-MG|Q-imbalance ; two-wing
+# The start position without White's a and b pawns: two pawns apart.
+rnbqkbnr/pppppppp/8/8/8/8/2PPPPPP/RNBQKBNR w KQkq - 0 1 ; Q-MG|pawn+-2+ ; two-wing
