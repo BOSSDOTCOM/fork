@@ -129,6 +129,13 @@ struct SearchQuota {
 //   switches) since its SPRTs against off passed: STC +18.69 +/- 7.18 Elo
 //   after 3,200 games, LTC +10.23 +/- 5.14 Elo after 4,992 games, design R
 //   [0, 6]; 2026-11-08.
+// - use_root_gap_time: a timed search's soft limit is also multiplied by
+//   root_gap_permille (time_budget.hpp; ideas.md idea 61 part 6): extra time
+//   when another root move comes within RootGapBand of the best one, which a
+//   zero-window probe at the iteration's depth checks after it (only in a
+//   timed search with a soft limit below its hard limit, so bench, node-
+//   and depth-limited searches and go movetime never probe). Off: its
+//   constants are placeholders until a head-to-head chooses them.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -160,7 +167,7 @@ struct SearchQuota {
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_stability_time, UseStabilityTime, true)          \
-  X(use_share_time, UseShareTime, true)
+  X(use_share_time, UseShareTime, true) X(use_root_gap_time, UseRootGapTime, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -516,10 +523,13 @@ class Searcher {
 
   // Tests only: moves the search's clock forward (called from a listener, on
   // the search thread, between iterations); the last finished iteration's
-  // time-management signals (set before its report); and the soft limit the
-  // last soft check compared against.
+  // time-management signals (set before its report), its runner-up root
+  // score and the root-gap probe's answer (root_gap_permille's inputs); and
+  // the soft limit the last soft check compared against.
   void advance_clock(std::chrono::milliseconds by) { start_ -= by; }
   const IterationSignals& time_signals() const { return time_signals_; }
+  int root_runner_up() const { return root_runner_up_; }
+  bool root_gap_reached() const { return root_gap_reached_; }
   std::int64_t last_soft_ms() const { return last_soft_ms_; }
 
  private:
@@ -539,9 +549,15 @@ class Searcher {
   int eval_at(int ply);
 
   bool poll_limits();  // true once the search must stop
-  // The soft limit for this iteration's soft check: the planned one, or with
-  // use_stability_time scaled by the last finished iteration's signals.
+  // The soft limit for this iteration's soft check: the planned one, or
+  // scaled by the last finished iteration's signals with use_stability_time
+  // and by its root gap with use_root_gap_time (the two factors multiplied).
   std::int64_t soft_limit_now(const SearchQuota& limits) const;
+  // The root-gap probe (use_root_gap_time): after a finished iteration of
+  // `depth` with score `score` (its best move in front), whether some other
+  // root move reaches score - RootGapBand on a zero window at that depth.
+  // Its nodes count; it writes the TT and the histories as any search.
+  bool probe_root_gap(int depth, int score);
   std::int64_t elapsed_ms() const;
   void record_cutoff(const PlyFrame& f, Move m, int depth);
   // The follow table's arrival at frame `f`: the move that led to the ply
@@ -606,10 +622,15 @@ class Searcher {
   Move last_reported_ = NoMove;
   // Time management (§5.6 step 10): finished iterations in a row with the
   // same best move, that move, the last finished iteration's signals, and
-  // the soft limit last compared against.
+  // the soft limit last compared against. The runner-up root score is set
+  // by every completed root pass (the largest score of a root move other
+  // than the pass's best; -ScoreInfinite with one root move), so after a
+  // finished iteration it is that iteration's last pass's.
   int stable_iterations_ = 0;
   Move stable_move_ = NoMove;
   IterationSignals time_signals_;
+  int root_runner_up_ = -ScoreInfinite;
+  bool root_gap_reached_ = false;  // the last finished iteration's probe found another move near the best
   std::int64_t last_soft_ms_ = -1;
 #ifdef FORK_SEARCH_STATS
   std::uint64_t singular_probe_ = 0;  // FORK_SINGULAR_PROBE: print every Nth singular candidate
