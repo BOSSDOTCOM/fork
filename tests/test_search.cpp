@@ -145,11 +145,16 @@ struct TestHash {
 };
 
 // Switches for a search that must equal minimax: TT cutoffs only at their
-// own depth, and no pruning or reductions (they are not exact).
+// own depth, and no pruning, reductions or extensions (they are not exact).
+// The singular test's outcomes (extension, multi-cut, negative extension)
+// and the no-move reduction act only from depth SingularMinDepth and
+// NoMoveReduceMinDepth; they are switched off too, for the deeper exact
+// searches (the root-gap test at depth 8).
 SearchSwitches exact_switches() {
   SearchSwitches s;
   s.tt_exact_depth = true;
   s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = s.use_no_move_reduction = false;
   return s;
 }
 
@@ -1634,41 +1639,66 @@ struct RootGapListener final : SearchListener {
 }  // namespace
 
 // Root-gap time in the search (idea 61 part 6): a soft limit of 100 s (hard
-// 400 s) and the clock moved to 100.001 s after iteration D = 10, so the
-// plain soft check stops there. The oracle asks the probe's question with
-// fresh searches (a new searcher and TT each), independently of the probe: a
-// full search to depth D (the best move and score), then one to depth D of
-// every other move (searchmoves: the best other score). Where that gap
-// is at most a quarter of RootGapBand (clearly close), the switched-on search
-// extends: it probes, finds another move near the best, raises the soft limit
-// by RootGapExtra and finishes D + 1, while the switched-off one stops at D.
-// Where the gap is at least four times RootGapBand (clearly far), the
-// switched-on search is the switched-off one: the soft limit stays 100 s and
-// it stops at D. Stability time is off in these runs, so the soft limit is
-// the root gap's alone; a last run with it on checks that the two factors
-// multiply. The first three positions of each kind in the bench list are
-// used (each kind must exist).
+// 400 s) and the clock moved just past it after iteration D, so the plain
+// soft check stops there. The oracle asks the probe's question with fresh
+// searches (a new searcher and TT each), independently of the probe: a full
+// search to depth D (the best move and score), then one to depth D of every
+// other move (searchmoves: the best other score); the gap is the difference.
+//
+// Part 1, exact: with exact_switches every score the search returns, its TT
+// bounds included, is a true bound on the depth-D minimax value, so the
+// oracle's gap is exact (never negative) and so is the probe's zero-window
+// answer. The switched-on search must then extend (probe, raise the soft
+// limit by RootGapExtra, finish D + 1) exactly when the gap is below
+// RootGapBand, and stop at D with the soft limit unchanged when it is above
+// (at exactly RootGapBand either is right: the rule's own gate compares the
+// iteration's runner-up bound, which may lie above the second score). D = 8,
+// the first depth the rule applies to (TimeScaleMinDepth), and constructed
+// endgames where no repetition is in reach (checked first, as in the exact
+// tests above: a path-blind TT may carry a repetition draw across paths):
+// one king is walled in by a pawn cluster (black: Ka5, b6 and b4 against a4,
+// b3 and b5; or its colour mirror), so that side can only push its free
+// pawns, and the other side has nothing but its king and its pawns of the
+// wall (its king cannot break in: the walled king guards its two pawns). Each
+// band in the candidates' range (7 to 28) has positions on both sides (gaps
+// 0 to 4 and 39 to 87 at this writing); at least two of each are required.
+//
+// Part 2, the tuned search, far side only: D = 10, the first three bench
+// positions whose gap is at least four times RootGapBand at depths D - 1, D
+// and D + 1. There the switched-on search is the switched-off one. With
+// pruning, reductions and TT bounds from earlier aspiration passes, fresh
+// searches are no ground truth for the close side. After the R14 tuned
+// search, Kiwipete's restricted search scored 45 above the full one's best
+// at depth 10. At perft position 5, d7c8q and d7c8r transpose after d8c8 and
+// score alike in fresh searches, but in the iteration's own tree a lower
+// bound stored at d7c8r's child in an aspiration pass that failed low keeps
+// d7c8r at 320 against the best move's 366. Part 1 checks the close side.
+//
+// Stability time is off in these runs, so the soft limit is the root gap's
+// alone; a last run with it on, at part 1's first close position, checks that
+// the two factors multiply.
 TEST_CASE("search", "root-gap time: the soft limit grows only when another root move is close") {
-  constexpr int D = 10;
   const std::atomic<bool> stop{false};
-  const auto oracle_gap = [&](std::string_view fen) -> std::optional<int> {
+  const auto oracle_gap = [&](std::string_view fen, const SearchSwitches& switches,
+                              int depth) -> std::optional<int> {
     Position pos;
     CHECK(pos.set_fen(fen));
-    const auto fresh = [&](int depth, const MoveList& moves) {  // a fresh searcher and TT each time
+    const auto fresh = [&](const MoveList& moves) {  // a fresh searcher and TT each time
       TestHash store;
       auto searcher = std::make_unique<Searcher>(store.table);
+      searcher->switches = switches;
       SearchQuota limits;
       limits.depth = depth;
       limits.restrict_to = moves;
       return searcher->deliberate(pos, limits, stop, nullptr, nullptr);
     };
-    const SearchResult full = fresh(D, MoveList{});
+    const SearchResult full = fresh(MoveList{});
     MoveList others, legal;
     generate<GenMode::Legal>(pos, legal);
     for (Move m : legal)
       if (!(m == full.best)) others.add(m);
     if (others.size() == 0 || is_tb_or_mate(full.score)) return std::nullopt;
-    const SearchResult second = fresh(D, others);
+    const SearchResult second = fresh(others);
     if (is_tb_or_mate(second.score)) return std::nullopt;
     return full.score - second.score;
   };
@@ -1676,68 +1706,111 @@ TEST_CASE("search", "root-gap time: the soft limit grows only when another root 
     int depth;
     RootGapListener seen;
   };
-  const auto run = [&](std::string_view fen, bool gap_on, bool stability_on, std::int64_t jump_to) {
+  const auto run = [&](std::string_view fen, const SearchSwitches& switches, int d, bool gap_on,
+                       bool stability_on, std::int64_t jump_to) {
     TestHash store;
     auto searcher = std::make_unique<Searcher>(store.table);
+    searcher->switches = switches;
     searcher->switches.use_stability_time = stability_on;
     searcher->switches.use_root_gap_time = gap_on;
     Position pos;
     CHECK(pos.set_fen(fen));
     SearchQuota limits;
-    limits.depth = D + 1;
+    limits.depth = d + 1;
     limits.soft_ms = 100'000;
     limits.hard_ms = 400'000;
     Run r{0, {}};
     r.seen.searcher = searcher.get();
-    r.seen.jump_depth = D;
+    r.seen.jump_depth = d;
     r.seen.jump_to_ms = jump_to;
     r.depth = searcher->deliberate(pos, limits, stop, nullptr, &r.seen).depth;
-    if (!r.seen.seen_next) {  // stopped after D: its values are the last ones
+    if (!r.seen.seen_next) {  // stopped after d: its values are the last ones
       r.seen.reached = searcher->root_gap_reached();
       r.seen.soft = searcher->last_soft_ms();
     }
     return r;
   };
   const std::int64_t extended_soft = scaled_soft_ms(100'000, 400'000, 1000 + RootGapExtra);
-  int close = 0, far = 0;
-  bool combined = false;
-  for (std::string_view fen : search_bench_fens()) {
-    if (close >= 3 && far >= 3) break;
-    const std::optional<int> gap = oracle_gap(fen);
-    if (!gap) continue;
-    const bool is_close = *gap * 4 <= RootGapBand, is_far = *gap >= 4 * RootGapBand;
-    if (!(is_close && close < 3) && !(is_far && far < 3)) continue;
-    const std::string where = std::string(fen) + ", oracle gap " + std::to_string(*gap);
-    const Run off = run(fen, false, false, 100'001);
-    const Run on = run(fen, true, false, 100'001);
-    CHECK_MSG(off.depth == D && off.seen.soft == 100'000, where << ": off reached " << off.depth);
+  // The switched-off run stops at d with the plain soft limit and no probe.
+  const auto check_off = [&](std::string_view fen, const SearchSwitches& switches, int d,
+                             const std::string& where) {
+    const Run off = run(fen, switches, d, false, false, 100'001);
+    CHECK_MSG(off.depth == d && off.seen.soft == 100'000, where << ": off reached " << off.depth);
     CHECK_MSG(!off.seen.reached, where);
-    if (is_close) {
-      ++close;
-      CHECK_MSG(on.seen.reached && on.depth == D + 1 && on.seen.soft == extended_soft,
-                where << ": on reached " << on.depth << ", soft " << on.seen.soft << ", score "
-                      << on.seen.signals.score << ", runner-up " << on.seen.runner_up);
-      if (!combined) {
-        // With stability time on too, the two factors multiply. The searches
-        // are the same up to D (no probe runs before the clock jump), so the
-        // stability scale at D is the one computed from the run above, and
-        // the clock moves just past the soft limit it gives.
-        combined = true;
-        const int stability = soft_scale_permille(TimeScaleVariant::StabilityAndShare, on.seen.signals);
-        const std::int64_t plain = scaled_soft_ms(100'000, 400'000, stability);
-        const Run both = run(fen, true, true, plain + 1);
-        const int product = (stability * (1000 + RootGapExtra) + 500) / 1000;
-        CHECK_MSG(both.seen.signals.depth == D && both.seen.signals.score == on.seen.signals.score, where);
-        CHECK_MSG(both.seen.reached && both.depth == D + 1 &&
-                      both.seen.soft == scaled_soft_ms(100'000, 400'000, product),
-                  where << ": stability " << stability << ", soft " << both.seen.soft);
+  };
+
+  // Part 1, exact.
+  {
+    constexpr int D = 8;
+    const SearchSwitches exact = exact_switches();
+    int close = 0, far = 0;
+    bool combined = false;
+    for (std::string_view fen :
+         {"8/6pp/1p6/kP6/Pp6/1P6/8/3K4 w - - 0 1", "8/6pp/1p6/kP6/Pp6/1P6/8/3K4 b - - 0 1",
+          "3k4/8/1p6/pP6/Kp6/1P6/6PP/8 w - - 0 1", "3k4/8/1p6/pP6/Kp6/1P6/6PP/8 b - - 0 1",
+          "8/6pp/1p6/kP6/Pp6/1P6/5K2/8 w - - 0 1", "8/6pp/1p6/kP6/Pp6/1P6/5K2/8 b - - 0 1",
+          "8/7p/1p4p1/kP6/Pp6/1P6/8/4K3 w - - 0 1"}) {
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      CHECK_MSG(!repetition_in_tree(pos, D), fen << ": a repetition fits in depth " << D);
+      const std::optional<int> gap = oracle_gap(fen, exact, D);
+      if (!gap) continue;
+      const std::string where = std::string(fen) + ", exact, oracle gap " + std::to_string(*gap);
+      CHECK_MSG(*gap >= 0, where);  // a restricted exact search cannot beat the full one
+      if (*gap == RootGapBand) continue;
+      check_off(fen, exact, D, where);
+      const Run on = run(fen, exact, D, true, false, 100'001);
+      if (*gap < RootGapBand) {
+        ++close;
+        CHECK_MSG(on.seen.reached && on.depth == D + 1 && on.seen.soft == extended_soft,
+                  where << ": on reached " << on.depth << ", soft " << on.seen.soft << ", score "
+                        << on.seen.signals.score << ", runner-up " << on.seen.runner_up);
+        if (!combined) {
+          // With stability time on too, the two factors multiply. The
+          // searches are the same up to D (no probe runs before the clock
+          // jump), so the stability scale at D is the one computed from the
+          // run above, and the clock moves just past the soft limit it gives.
+          combined = true;
+          const int stability = soft_scale_permille(TimeScaleVariant::StabilityAndShare, on.seen.signals);
+          const std::int64_t plain = scaled_soft_ms(100'000, 400'000, stability);
+          const Run both = run(fen, exact, D, true, true, plain + 1);
+          const int product = (stability * (1000 + RootGapExtra) + 500) / 1000;
+          CHECK_MSG(both.seen.signals.depth == D && both.seen.signals.score == on.seen.signals.score, where);
+          CHECK_MSG(both.seen.reached && both.depth == D + 1 &&
+                        both.seen.soft == scaled_soft_ms(100'000, 400'000, product),
+                    where << ": stability " << stability << ", soft " << both.seen.soft);
+        }
+      } else {
+        ++far;
+        CHECK_MSG(!on.seen.reached && on.depth == D && on.seen.soft == 100'000,
+                  where << ": on reached " << on.depth << ", soft " << on.seen.soft);
       }
-    } else {
+    }
+    CHECK_MSG(close >= 2 && far >= 2, "exact: close " << close << ", far " << far);
+  }
+
+  // Part 2, the tuned search, far side only.
+  {
+    constexpr int D = 10;
+    const SearchSwitches tuned{};
+    int far = 0;
+    for (std::string_view fen : search_bench_fens()) {
+      if (far >= 3) break;
+      std::string where = std::string(fen) + ", oracle gaps";
+      bool is_far = true;
+      for (int depth = D - 1; depth <= D + 1 && is_far; ++depth) {
+        const std::optional<int> gap = oracle_gap(fen, tuned, depth);
+        is_far = gap && *gap >= 4 * RootGapBand;
+        if (gap) where += " " + std::to_string(*gap);
+      }
+      if (!is_far) continue;
       ++far;
+      check_off(fen, tuned, D, where);
+      const Run on = run(fen, tuned, D, true, false, 100'001);
       CHECK_MSG(!on.seen.reached && on.depth == D && on.seen.soft == 100'000,
                 where << ": on reached " << on.depth << ", soft " << on.seen.soft);
     }
+    CHECK_MSG(far >= 3, "tuned: far " << far);
   }
-  CHECK_MSG(close >= 3 && far >= 3, "close " << close << ", far " << far);
 }
 }  // namespace forkeng::test
