@@ -242,7 +242,7 @@ def pre(a):
            "validation shard held for the snapshot's validation file, idea 51's H and the teacher's H2 games kept "
            "out of g3j-w05-val's rest",
            {'held': [snapshot_parts.stats_of(p.name, p.read_bytes()) for p in sorted(splits.glob('*-held.vf'))],
-            'exclude': {Path(p).name: sha256(p) for p in a.exclude}})
+            'exclude': {f'{Path(p).parent.name}/{Path(p).name}': sha256(p) for p in a.exclude}})
     bl = sorted(blend.glob('bl-*.vf'))
     record('r8b-blend', bl, manifests,
            f'blend copies (W = {BLEND_WEIGHT}, S = {SCALE}) of every training file older than g3j, the slice '

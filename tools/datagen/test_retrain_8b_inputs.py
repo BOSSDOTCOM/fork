@@ -11,6 +11,7 @@ source that does not match its manifest stops the run.
 import hashlib
 import io
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -26,6 +27,9 @@ import committee_sites as cs  # noqa: E402
 import retrain_8b_inputs as r8  # noqa: E402
 import td_labels as td  # noqa: E402
 import test_td_labels as tt  # noqa: E402
+
+sys.path.insert(0, str(HERE.parent / 'train' / 'kaggle'))
+import retrain_8b as kernel  # noqa: E402 (the training kernel's input checks)
 
 U = tt.U
 LINES = ['e2e4 e7e5 g1f3 b8c6 f1c4 g8f6', 'd2d4 d7d5 c2c4 e7e6 b1c3 g8f6', 'g1f3 d7d5 g2g3 c8g4 f1g2 e7e6',
@@ -161,6 +165,30 @@ class PipelineTests(unittest.TestCase):
                              {'g4s1-g4-w01-val-rest.vf', 'g4s1-val.vf', 'bl-g4s1-val.vf', 'td80-g4-w00.vf',
                               'td90-g4-w00.vf', 'td80-g4s1-g4-w01-val-rest.vf', 'td90-g4s1-g4-w01-val-rest.vf'})
             self.assertEqual({p.name for p in (out / 'up-post').iterdir()}, {'fork-g4', 'fork-r8b-g4'})
+            # The kernel's input checks on what Kaggle would mount: 8a's datasets and the uploaded folders.
+            shutil.copy(tmp / 'g4.json', manifests / 'g4.json')
+            mounted = [str(p) for f in r8.OLD_FOLDERS for p in (kaggle / f).glob('*.vf')]
+            mounted += [str(p) for stage in ('up-pre', 'up-post') for p in (out / stage).glob('*/*.vf')]
+            sealed = {}
+            for m in kernel.MANIFESTS:
+                for b in json.loads((manifests / f'{m}.json').read_text(encoding='utf-8'))['batches']:
+                    for s in b:
+                        sealed[s['file']] = s['sha256']
+            record, lists, _ = kernel.resolve(mounted, sealed)
+            self.assertTrue(record['ok'], record)
+            n = len(lists['c'])
+            self.assertEqual(lists['scr'], lists['c'])
+            self.assertEqual((len(lists['td80']), len(lists['td90']), len(lists['i52'])), (n, n, n + 1))
+            self.assertEqual(record['slice_files'], ['slice1-01.vf'])
+            self.assertIn('slice1-01.vf', lists['td80'])
+            self.assertIn('td80-g4-w00.vf', lists['td80'])
+            self.assertIn('bl-g3h-w00.vf', lists['td90'])
+            self.assertIn('i52-g3j-w03.vf', lists['i52'])
+            self.assertNotIn('g3j-w03.vf', lists['i52'])
+            self.assertFalse([x for x in lists['c'] if x.endswith('-val.vf') or x.startswith(('bl-', 'td', 'i52'))])
+            # A file that is not what its manifest says fails the check.
+            sealed['g3e-w00.vf'] = '0' * 64
+            self.assertFalse(kernel.resolve(mounted, sealed)[0]['ok'])
 
     def test_a_wrong_source_stops_the_run(self):
         with tempfile.TemporaryDirectory() as t:

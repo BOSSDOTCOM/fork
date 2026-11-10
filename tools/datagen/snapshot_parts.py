@@ -138,7 +138,8 @@ def main(argv=None):
             write_atomic(a.out / names[1], rest)
             info = {'source': a.shard.name, 'source_sha256': hashlib.sha256(data).hexdigest(), 'held_games': a.games,
                     'excluded_games': dropped,
-                    'exclude_files': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in a.exclude},
+                    'exclude_files': {f'{p.parent.name}/{p.name}': hashlib.sha256(p.read_bytes()).hexdigest()
+                                      for p in a.exclude},
                     'held': stats_of(names[0], held), 'rest': stats_of(names[1], rest)}
             print(json.dumps(info))
             return 0
