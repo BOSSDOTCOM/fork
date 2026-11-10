@@ -6,6 +6,9 @@
 - a job started inside another (the 8b chain's `jobctl start ... -- bash script` path) stops with its whole
   tree, its orphans included once its bash is killed, and the outer job lives on; the job it was started from
   is never counted as started inside it, old records (no 'parent') by their start times;
+- on Windows with WSL, a `wsl.exe -d DISTRO -- ...` job's Linux processes stop with it in every running
+  distribution, one that ignores SIGHUP and SIGTERM included (a throwaway sleep with a unique marker); a sweep
+  that cannot look counts as a process left, and a stop of a record from before the marker says so;
 - one lock per type: a second job of a type is refused while the first runs, another type is not;
 - a job that ends by itself releases its lock;
 - a lock whose job has no process left is reclaimed (and logged); one whose job lives is never taken;
@@ -26,6 +29,7 @@ import tempfile
 import textwrap
 import time
 import unittest
+import uuid
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -64,6 +68,24 @@ ORPHAN = textwrap.dedent('''
     else:
         time.sleep(600)
     ''')
+
+
+def running_distros():
+    """The WSL distributions running now (none off Windows or without WSL); the WSL test starts none."""
+    if os.name != 'nt' or not shutil.which('wsl.exe'):
+        return []
+    try:
+        out = subprocess.run(['wsl.exe', '-l', '--running', '-q'], capture_output=True, timeout=60).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return [d.strip() for d in out.decode('utf-16-le', 'replace').replace('\0', '').splitlines() if d.strip()]
+
+
+def linux_pids(distro, marker):
+    """The distro's processes whose command line holds `sleep MARKER` (the [s] keeps pgrep's own shell out)."""
+    r = subprocess.run(['wsl.exe', '-d', distro, '-u', 'root', '-e', 'pgrep', '-f', f'[s]leep {marker}'],
+                       capture_output=True, text=True, timeout=60)
+    return [int(x) for x in r.stdout.split()]
 
 
 def alive(pid):
@@ -288,6 +310,55 @@ class Supervisor(unittest.TestCase):
         r = self.ctl('stop', 'inner', '--grace', '2')
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertTrue(self.wait_for(lambda: not alive(child), 10), f'pid {child} survived the stop')
+
+    def test_a_wsl_jobs_linux_processes_stop_with_it(self):
+        # 2026-11-10: a Windows stop of `jobctl start ... -- wsl.exe -d Ubuntu -- bash script.sh` ended wsl.exe
+        # only; the Linux side, outside every Windows Job Object, ran on. A plain sleep, and a shell that ignores
+        # SIGHUP and SIGTERM (so its sleep does too, and only SIGKILL ends it), each with a unique marker.
+        distros = running_distros()
+        if not distros:
+            self.skipTest('no running WSL distribution')
+        for distro in distros:
+            for linux in (['sleep', '{m}'], ['sh', '-c', "trap '' HUP TERM; sleep {m}; :"]):
+                with self.subTest(distro=distro, linux=linux[0]):
+                    marker = f'600.{uuid.uuid4().int % 10**9:09d}'
+                    name = f'wsl-{len(self.started)}'
+                    try:
+                        r = self.ctl('start', 'test', name, '--', 'wsl.exe', '-d', distro, '--',
+                                     *(a.format(m=marker) for a in linux))
+                        self.assertEqual(r.returncode, 0, r.stderr)
+                        self.started.append(name)
+                        self.assertTrue(self.wait_for(lambda: linux_pids(distro, marker), 60))
+                        r = self.ctl('stop', name, '--grace', '2')
+                        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                        self.assertTrue(self.wait_for(lambda: not linux_pids(distro, marker), 10),
+                                        f'{distro}: {linux_pids(distro, marker)} survived the stop')
+                    finally:
+                        subprocess.run(['wsl.exe', '-d', distro, '-u', 'root', '-e', 'pkill', '-KILL', '-f',
+                                        f'[s]leep {marker}'], capture_output=True, timeout=60)
+
+    @unittest.skipUnless(os.name == 'nt' and shutil.which('wsl.exe'), 'Windows with WSL')
+    def test_a_wsl_sweep_that_cannot_look_is_not_none_left(self):
+        saved = jobctl.wsl_running
+        jobctl.wsl_running = lambda: ['NoSuchDistro-forkjobtest']
+        try:
+            self.assertEqual(jobctl.wsl_pids({'id': 'feedfacefeedface', 'wslenv': True}),
+                             ['NoSuchDistro-forkjobtest:unknown'])
+            self.assertEqual(jobctl.wsl_pids({'id': 'feedfacefeedface'}), [])  # a record from before the marker
+        finally:
+            jobctl.wsl_running = saved
+        # A stop of such an old record says its Linux side was not checked.
+        jobs = self.root / 'jobs' / 'jobs'
+        jobs.mkdir(parents=True)
+        dead = subprocess.Popen([sys.executable, '-I', '-c', 'pass'])
+        dead.wait()
+        (jobs / 'old.json').write_text(json.dumps({'name': 'old', 'type': 'test', 'id': 'feedfacefeedface',
+                                                   'started': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                                                   'keeper': dead.pid, 'pid': dead.pid, 'state': 'running',
+                                                   'command': ['wsl.exe', '-d', 'Ubuntu', '--', 'true']}))
+        r = self.ctl('stop', 'old', '--grace', '0')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn('any it left in WSL were not checked', r.stdout)
 
     def test_which_jobs_count_as_started_inside(self):
         # Records from before 'parent' was kept (jobs running across the fix) fall back to the start times.

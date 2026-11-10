@@ -22,6 +22,9 @@ generation, measurements) start and stop only through it.
   process of the inner one (2026-11-10: excluding it left a nested upload job with no process of its own,
   so its stop ended nothing, and once its bash was killed by hand it reported none left while the upload
   lived on).
+- A Windows job's processes in WSL (wsl.exe starts them outside every Job Object; 2026-11-10: a stop ended
+  wsl.exe and the Linux side ran on) carry FORK_JOB_ID through WSLENV; `stop` finds them in every running
+  distribution, as root, sends SIGTERM, SIGKILL after the grace period, and counts them in its check.
 - `stop NAME` stops the whole tree, gently first (SIGTERM on POSIX: fork_datagen ends at a game boundary;
   on Windows the job is terminated), then verifies that no process of the job remains before it releases
   the lock; it exits 1, keeping the lock, if any process survived.
@@ -38,6 +41,7 @@ at a time), datagen, measure, test. $FORK_JOBS defaults to ~/fork-jobs.
 """
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -157,7 +161,7 @@ if WINDOWS:
         job = k32.CreateJobObjectW(None, job_object_name(record['id']))
         if not job:
             raise OSError(ctypes.get_last_error(), 'CreateJobObject')
-        env = dict(os.environ, FORK_JOB_ID=record['id'], FORK_JOB=record['name'])
+        env = dict(os.environ, FORK_JOB_ID=record['id'], FORK_JOB=record['name'], WSLENV=wslenv())
         p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, cwd=cwd, env=env,
                              creationflags=CREATE_SUSPENDED | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW)
         if not k32.AssignProcessToJobObject(job, int(p._handle)):
@@ -183,9 +187,67 @@ if WINDOWS:
                 given.add(pid)
             k32.CloseHandle(h)
 
+    def wslenv():
+        """The caller's WSLENV plus FORK_JOB_ID and FORK_JOB, so every Linux process wsl.exe starts for the job
+        carries the job's marker (WSL shares only the variables WSLENV names)."""
+        keep = [v for v in os.environ.get('WSLENV', '').split(':')
+                if v and v.split('/')[0] not in ('FORK_JOB_ID', 'FORK_JOB')]
+        return ':'.join(keep + ['FORK_JOB_ID', 'FORK_JOB'])
+
+    # Run as root in a distro: lists (and signals, unless $2 is 0) every live process whose environment holds
+    # FORK_JOB_ID=$1. The sweep's own processes do not carry it (wsl.exe runs with the keeper's environment).
+    WSL_SWEEP = ('for f in $(grep -lzxF "FORK_JOB_ID=$1" /proc/[0-9]*/environ 2>/dev/null); do p=${f#/proc/}; '
+                 'p=${p%/environ}; st=$(sed "s/.*) //" "/proc/$p/stat" 2>/dev/null | cut -d" " -f1); '
+                 '[ -n "$st" ] && [ "$st" != Z ] || continue; [ "$2" = 0 ] || kill -s "$2" "$p" 2>/dev/null; '
+                 'echo "$p"; done; echo sweep-done')
+
+    def wsl_running():
+        """The running WSL distributions (none without WSL). A distribution that is not running has no process."""
+        if not shutil.which('wsl.exe'):
+            return []
+        try:
+            out = subprocess.run(['wsl.exe', '-l', '--running', '-q'], capture_output=True, timeout=60,
+                                 env=keeper_env(), creationflags=CREATE_NO_WINDOW).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        return [d.strip() for d in out.decode('utf-16-le', 'replace').replace('\0', '').splitlines() if d.strip()]
+
+    def wsl_pids(record, sig='0'):
+        """The job's Linux processes in every running distribution, as 'DISTRO:PID', each sent `sig` first
+        unless it is 0. Only jobs started since 2026-11-10 ('wslenv' in the record) carry the marker. A sweep
+        that does not finish counts as 'DISTRO:unknown': a stop never reports none left without seeing."""
+        if not record.get('wslenv'):
+            return []
+        out = []
+        for distro in wsl_running():
+            try:
+                r = subprocess.run(['wsl.exe', '-d', distro, '-u', 'root', '-e', 'sh', '-c', WSL_SWEEP, 'sh',
+                                    record['id'], sig], capture_output=True, text=True, timeout=60,
+                                   env=keeper_env(), creationflags=CREATE_NO_WINDOW)
+                lines = r.stdout.split()
+            except (OSError, subprocess.TimeoutExpired):
+                lines = []
+            if 'sweep-done' not in lines:
+                out.append(f'{distro}:unknown')
+                continue
+            out += [f'{distro}:{x}' for x in lines if x.isdigit()]
+        return out
+
     def terminate(record, grace):
         """Terminates the Job Object, or, when other jobs' processes are in it (jobs started from inside this
-        one), this job's own processes one by one until none is left."""
+        one), this job's own processes one by one until none is left. Then the job's Linux processes: SIGTERM,
+        SIGKILL after the grace period (wsl.exe's end leaves a process that ignores SIGHUP running). Returns
+        the Linux processes signalled."""
+        terminate_windows(record, grace)
+        linux = wsl_pids(record, 'TERM')
+        if linux:
+            deadline = time.time() + grace
+            while time.time() < deadline and wsl_pids(record):
+                time.sleep(0.5)
+            wsl_pids(record, 'KILL')
+        return linux
+
+    def terminate_windows(record, grace):
         h = k32.OpenJobObjectW(JOB_ALL_ACCESS, False, job_object_name(record['id']))
         if not h:
             return
@@ -265,6 +327,10 @@ else:
         while time.time() < deadline and own_pids(record):
             time.sleep(0.2)
         send(signal.SIGKILL)
+        return []
+
+    def wsl_pids(record, sig='0'):
+        return []
 
     def spawn_keeper(args):
         return subprocess.Popen([sys.executable, '-I', os.path.abspath(__file__), '_keep', *args],
@@ -451,6 +517,8 @@ def cmd_keep(argv):
         write_json(job_path(name), record)
         return
     record.update(state='running', pid=p.pid)
+    if WINDOWS:
+        record['wslenv'] = True  # its Linux processes carry FORK_JOB_ID (wsl_pids)
     if not WINDOWS:
         record['session'] = p.pid  # the command leads its own session
     write_json(job_path(name), record)
@@ -485,12 +553,12 @@ def cmd_stop(argv):
     if record.get('state') == 'running':
         record.update(state='stopping')
         write_json(job_path(name), record)
-    terminate(record, grace)
+    before += terminate(record, grace) or []
     deadline = time.time() + max(5.0, grace)
-    left = live(record)
+    left = live(record) or wsl_pids(record)
     while left and time.time() < deadline:
         time.sleep(0.2)
-        left = live(record)
+        left = live(record) or wsl_pids(record)
     if left:
         event('stop-failed', name=name, id=record['id'], left=left)
         print(f'jobctl: job {name}: processes still alive after the stop: {left}; the lock is kept')
@@ -500,6 +568,10 @@ def cmd_stop(argv):
     release_lock(record['type'], record['id'])
     event('stop', name=name, id=record['id'], stopped=before)
     print(f'stopped {name}: {len(before)} process(es) ended, none left; lock {record["type"]} released')
+    if WINDOWS and not record.get('wslenv') and any(Path(a).name.lower() in ('wsl', 'wsl.exe')
+                                                     for a in record.get('command', [])):
+        print(f'jobctl: job {name} started before its Linux processes were tracked (2026-11-10): any it left '
+              f'in WSL were not checked')
 
 
 def cmd_status(argv):
