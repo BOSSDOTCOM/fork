@@ -660,6 +660,13 @@ tuned by SPSA.
   and a **guard that search results stay equivalent** (on a check set: the same best move, and the score within a
   declared tolerance); the winner then plays a **design R SPRT**. **Runner-up target:** the time-management
   formula, with a game-based fitness (time-management parameters stay out of SPSA, think tank decision 4).
+  **Ordering pilot, 2026-11-09/10: NULL RESULT (owner, 2026-11-10; DESIGN.md decisions log).** 5 generations x 8
+  candidates on the quiet ordering score (docs/research/idea23-pilot/, evolve/ordering-pilot 52a0fd6; 543,832 tokens
+  of the 10 M cap; 0 gate failures, 0 guard refusals): the ordering formula is near-optimal for this fitness; the best
+  candidate by the declared rule (#35: +0.39% nodes saved [-0.39, +1.19], held-out +1.43% [-0.33, +3.18], 85.6%
+  equivalent) is within noise on both sets, so nothing goes to an SPRT. The replay check's result is recorded in
+  results.md. **Idea 23 is parked again**; the time-management formula stays noted as the next possible target, **no
+  run planned**.
 - **Candidate region for the long run (owner, 2026-10-31):** a correction
   to the singular test's margin and depth (tier 2, T27), for example a
   dependence on the TT entry's depth deficit. The measured form (DESIGN.md
