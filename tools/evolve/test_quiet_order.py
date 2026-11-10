@@ -381,6 +381,54 @@ class NodesLoopTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual([r[0] for r in rows if not all(r[1:])], [3])
 
+    def test_replay_of_a_resumed_run(self):
+        """The pilot was stopped and resumed (twice, in generation 2): its log holds the calls
+        of the interrupted request, which the resumed run asked again. The replay leaves them
+        out and recreates the interrupted candidate, so ids, prompts and outcomes match."""
+        class Crash(BaseException):
+            pass
+
+        class DiesOnce(agents.StubAgent):
+            died = False
+
+            def ask(self, role, prompt):
+                reply = super().ask(role, prompt)
+                if role == 'critic' and len(self.asked) == 8 and not DiesOnce.died:  # generation 2's first critic
+                    DiesOnce.died = True
+                    raise Crash()
+                return reply
+        script = orchestrator.dry_run_agent('quiet_order').script
+        script = {role: replies * 2 for role, replies in script.items()}  # two generations' worth
+        fake = FakeDepth({'return s.butterfly + 0;': 101, AGGRESSIVE: 80})
+        loop = self.loop(fake, agent=DiesOnce(script))
+        loop.start()
+        loop.generation(1)
+        with self.assertRaises(Crash):
+            loop.generation(2)
+        loop.close()
+        resumed = orchestrator.Loop(nodes_cfg(self.tmp.name), Path(self.tmp.name) / 'run', DiesOnce(script),
+                                    BuildFails(Path(self.tmp.name) / 'run' / 'work'), resume=True)
+        self.loops.append(resumed)
+        resumed.run(2)
+        source = Path(self.tmp.name) / 'run'
+        kept, placeholders = orchestrator.replay_plan(source)
+        self.assertEqual(sorted(placeholders), [2])
+        self.assertTrue(placeholders[2][0]['status'].startswith('interrupted'))
+        logged = sum(1 for _ in (source / 'replies.jsonl').read_text(encoding='utf-8').splitlines())
+        self.assertEqual(len(kept), logged - 1)  # the interrupted request's proposal (its critic never answered)
+        replay = self.loop(fake, 'replay', agents.ReplayAgent(source / 'replies.jsonl', kept))
+        replay.placeholders = placeholders
+        replay.run(2)
+        self.assertEqual(replay.agent.mismatches, [])
+        rows, ok = orchestrator.compare_outcomes(orchestrator.candidate_outcomes(source / 'population.sqlite'),
+                                                 orchestrator.candidate_outcomes(Path(self.tmp.name) / 'replay' /
+                                                                                 'population.sqlite'))
+        self.assertTrue(ok, rows)
+        # Without the plan, the replay answers generation 2 with the interrupted request's calls.
+        naive = self.loop(fake, 'naive', agents.ReplayAgent(source / 'replies.jsonl'))
+        naive.run(2)
+        self.assertTrue(naive.agent.mismatches)
+
     def test_replay_notes_a_prompt_that_differs(self):
         self.run_logged()
         source = Path(self.tmp.name) / 'run'

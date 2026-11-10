@@ -154,9 +154,13 @@ class ReplayAgent:
     recorded in `mismatches` (the replay is then not faithful) and still
     answered with the logged reply."""
 
-    def __init__(self, path):
+    def __init__(self, path, keep=None):
+        """`keep`: the indices of the logged calls to answer with, in order (a resumed run's
+        log also holds the calls of requests a stop interrupted, which the run asked again:
+        orchestrator.replay_plan); all of them by default."""
         with open(path, encoding='utf-8') as f:
-            self.calls = [json.loads(line) for line in f if line.strip()]
+            calls = [json.loads(line) for line in f if line.strip()]
+        self.calls = calls if keep is None else [calls[i] for i in keep]
         self.next = 0
         self.mismatches = []
 

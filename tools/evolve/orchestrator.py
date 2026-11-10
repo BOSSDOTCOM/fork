@@ -465,6 +465,14 @@ class Loop:
         cfg = self.cfg
         requests = self.requests(g)
         counts = self.request_counts(g)
+        # A replay of a resumed run: the candidates its stops interrupted, recreated with the ids,
+        # fields and statuses they had, so every later id, seed and prompt is the logged run's.
+        for row in getattr(self, 'placeholders', {}).get(g, []):
+            cid = self.pop.add(row['generation'], row['island'], row['agent'], row['parent'], row['mode'],
+                               row['body'], row['rationale'])
+            if cid != row['id']:
+                raise RuntimeError(f'replay: interrupted candidate {row["id"]} would get id {cid}')
+            self.pop.update(cid, status=row['status'], critic=row['critic'])
         for index, (island, role, mode) in enumerate(requests):
             if index < first:
                 continue
@@ -874,6 +882,40 @@ def candidate_outcomes(database):
         pop.close()
 
 
+def replay_plan(source):
+    """(kept call indices, placeholders) for replaying the run in `source` from its log.
+
+    A stopped and resumed run asks an interrupted request again from the start, so its
+    replies.jsonl holds calls the finished run never used: the calls of a request that had
+    no request_done (or analyst) event before the next session began. Those are left out.
+    The candidates those requests created (status `interrupted: ...`) are recreated at the
+    start of their generation ({generation: [rows]}), so ids match."""
+    pop = population.Population(str(Path(source) / 'population.sqlite'))
+    try:
+        kept, open_calls, index = [], [], 0
+        for kind, in pop.db.execute('SELECT kind FROM events ORDER BY id'):
+            if kind == 'agent_call':
+                open_calls.append(index)
+                index += 1
+            elif kind in ('request_done', 'analyst'):
+                kept += open_calls
+                open_calls = []
+            elif kind == 'session':
+                open_calls = []
+        kept += open_calls
+        placeholders = {}
+        for cid, in pop.db.execute("SELECT id FROM candidates WHERE status LIKE 'interrupted%' ORDER BY id"):
+            row = pop.get(cid)
+            placeholders.setdefault(row['generation'], []).append(row)
+    finally:
+        pop.close()
+    with open(Path(source) / 'replies.jsonl', encoding='utf-8') as f:
+        logged = sum(1 for line in f if line.strip())
+    if logged != index:
+        raise RuntimeError(f'replay: {logged} logged replies but {index} agent_call events')
+    return kept, placeholders
+
+
 def compare_outcomes(logged, replayed, ids=None):
     """Rows (id, same body, same status, same fitness, same answers, same held-out answers) for the
     candidates `ids` (all of the logged run's by default) and whether every one matches."""
@@ -989,10 +1031,12 @@ def main():
         cfg['budget'] = dict(cfg['budget'], hours=10 ** 6)  # wall time must not cut a replay short
         runner = gate.Runner(cfg['repo'], run_dir / 'work', jobs=cfg.get('jobs', 4), test_cache=cfg.get('test_cache'),
                              compilers=cfg.get('compilers') or [cfg['compiler']])
+        kept, placeholders = replay_plan(source)
         try:
-            loop = Loop(cfg, run_dir, agents.ReplayAgent(source / 'replies.jsonl'), runner)
+            loop = Loop(cfg, run_dir, agents.ReplayAgent(source / 'replies.jsonl', kept), runner)
         except RunDirError as e:
             sys.exit(f'orchestrator: {e}')
+        loop.placeholders = placeholders
         if a.replay_candidates:
             ids = [int(x) for x in a.replay_candidates.split(',')]
             rows, ok = replay_candidates(loop, source, ids)
