@@ -1141,9 +1141,13 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       // lost -14.6 +/- 10.8 Elo at STC (owner, 2026-10-26; sprt-log.md
       // rv-failhigh), so the previous iteration's move is kept. The fail
       // high is still recorded (unresolved_fail_high, ideas.md idea 29).
+      // The result then takes this iteration's depth with its move and
+      // score, so it describes the same search as the last info line
+      // (time_signals() keeps the last finished iteration).
       if (!iteration_best_.is_none() && result.depth > 0 && iteration_best_score_ > previous) {
         result.best = iteration_best_;
         result.score = iteration_best_score_;
+        result.depth = depth;
         report_iteration(depth, iteration_best_score_, 0,
                          iteration_pv_);  // the last info names the move played
       }
