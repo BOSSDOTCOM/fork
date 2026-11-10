@@ -28,6 +28,22 @@ Status: **Phase 3 (search) closed 2026-10-28 (tag `phase-3`; summary: docs/histo
 - **No phase starts with a failing test.** Each phase ends with a commit, a
   summary, and a stop for go-ahead. A phase is signed off only when every
   build preset passes on **both Linux and Windows**.
+- **Test as efficiently as possible, not as little as possible** (owner,
+  2026-11-10; a standing principle). Every reliability check stays, but:
+  - each test must be able to change a decision: if no outcome would change
+    what is done next, it is not run;
+  - use the cheapest test that can decide (an offline gate, a fixed-node
+    screen, a short SPRT) before a dearer one;
+  - stop early when the result is decided (SPRT bounds, futility stops,
+    declared kill rules);
+  - reuse controls (one control arm or seed for several candidates) and
+    bundle CI (one full run covering several merged changes);
+  - keep GitHub, the CPU and the GPU each busy with the next useful job,
+    never idle while one is queued;
+  - do not re-test what another planned test already covers (for example
+    the factorial removal round instead of a separate LTC confirmation).
+  **When proposing a test, state the decision it can change and its cost**
+  (CPU-h, GPU-h, GitHub stages or hours).
 
 ## 2. Platform and toolchain
 
@@ -4301,6 +4317,7 @@ models are scored on the half of the games they were not fitted on.
 | 2026-11-10 | **Order after the label-depth arms (owner).** When the arms end and are sealed: **the full 12.5 M positional slice first** (only if its main pilot run passes), **then regular data generation (g4c) resumes** toward retrain 8c's threshold. The unattended chain is revised accordingly; a failed or unapproved slice does not block g4c. |
 | 2026-11-10 | **Batch 4 trimmed; item 32 dropped (owner).** Batch 4's branches (base tier2/b4 1d1e313) and idea 61's were built before R14's adoption (85253a2), so they would test the untuned search. (1) **Kept: cut-node (CutNodeLmrPlies head-to-head of 1 against 2, then design R at STC) and the structure history at weight 5** (design R at STC), both **rebased onto phase-4's head with their benches re-checked** (new branches, the old ones kept). (2) **History-skip dropped** (at 5000 per ply it changed 30 bench nodes of 14 M; the think tank's estimate +0.3, conditional on X2). (3) **Horizon-drop (razoring) and bad-capture-stop dropped as standalone tests and added as dimensions in the final retune's SPSA** (step 19; the think tank's demotion, synthesis §5 table), which needs their constants in the tuning table (code and names screened then). (4) **PV-trace (PvTraceLmrPlies 1) deferred to the end-of-phase re-validation.** (5) **Item 32, take history's LTC confirmation, dropped: the factorial removal round covers that switch.** Item 31 (multi-cut's LTC confirmation) finishes. Idea 61's root-gap branches are rebased the same way before their queue items run (coordinator's choice, to avoid testing a stale search). |
 | 2026-11-10 | **A stop that plays the unfinished iteration's move reports that iteration's depth in the result (owner: decide and fix).** The last `info` line already gave that move's PV at the unfinished depth with its exact score (§5.2 deliverable 2), and `SearchResult.score` was already that score, but `SearchResult.depth` kept the last finished iteration, so the web result read "depth 7" beside depth 8's score and line (startpos 1. e4 at 21,000 nodes; the `web` test failed 8 vs 7 on the R14 batch-4 branches). Chosen: the result takes the unfinished iteration's depth (option b). Rejected: marking that line as a bound (the score is exact for the move played, a bound line must not be the last one, and the web page drops bound lines), and reporting it under the finished depth (it would label depth 8's score as depth 7). Bench is unchanged (depth-limited searches never stop); datagen and UCI read the depth only as "0: nothing finished", which still holds; the tests that need the finished depth read `time_signals().depth`. Branch fix/partial-iteration-report. |
+| 2026-11-10 | **Standing principle: test as efficiently as possible, not as little as possible (owner; §1 Ground rules).** Every reliability check stays; each test must be able to change a decision; the cheapest test that can decide comes first; tests stop early when decided; controls are reused and CI is bundled; GitHub, the CPU and the GPU are each kept busy with the next useful job; nothing is re-tested that another planned test already covers. **Every test proposal states the decision it can change and its cost.** |
 
 ## 7. Performance doctrine (governs every phase)
 
