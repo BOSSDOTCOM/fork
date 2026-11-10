@@ -140,7 +140,16 @@ added; no CI job applies them automatically.
 | Endgame check | tools/nnue/endgame_check.py, 900 positions: **8 misjudged (0.9%), as S512ppr2** |
 | Tests | vs S512ppr2 (phase-4 98cf000): fixed nodes, 800,000 per move, run 42426868742: +15.65 +/- 9.26 Elo (nElo +28.80 +/- 17.02), 1,600 games, above the owner's +5 tie-break; then STC 8+0.08 [0, 5], runs 42429984619, 42431412304, 42432793282, 42434196075 and 42435511074: **+7.12 +/- 4.53 Elo (nElo +11.98 +/- 7.61), H1 accepted** after 8,000 games (docs/history/phase-4/sprt-log.md) |
 | Bench | 14,149,617 nodes, signature 1cb0717f040c294d (tests/bench-s512ppr3.ref) |
-| Status | **The default network since 2026-11-07** (owner: promoted on its STC result), and the labeller of the data generation from generation 3's part g3j on (DESIGN.md §5.3, labeller policy) |
+| Status | The default network on phase-4 from 2026-11-07 (owner: promoted on its STC result); on this candidate branch, the control the candidate is screened against. The labeller of the data generation from generation 3's part g3j on (DESIGN.md §5.3, labeller policy) |
+
+## r8btd80, a retrain 8b candidate (2026-11-10, candidate branch only)
+
+| Item | Value |
+|---|---|
+| File | `nets/r8btd80.fnet`, this candidate branch's default network (not promoted) |
+| Training | Retrain 8b's TD(0.8) arm: the control's recipe at result weight 0 on TD(0.8) labels of g3j and g4, the older data at the control's target (docs/research/retrain-8b/plan.md, branch retrain/8b-prep) |
+| Bench | 9,446,264 nodes, signature e702890290f97c3b (tests/bench-r8btd80.ref) |
+| Status | **The default network since 2026-11-10 on this candidate branch only**, for retrain 8b's fixed-node screens against S512ppr3 (the default on phase-4); not promoted |
 
 ## The bake-off entries in CI (2026-10-31)
 
