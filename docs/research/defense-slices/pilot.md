@@ -221,6 +221,77 @@ A slice that fails 3 or 5 is not recommended, whatever the rate.
 | Seeds | 20261110, 20261111 | the decision's date; the next for the gold draw |
 | Check thresholds | section 7 | each with its reason there |
 
-## Results
+## Results (2026-11-10; the gold half of the pilot only)
 
-(Added after the runs.)
+**What ran** (jobctl measure slot, Windows registry; times EST):
+- dp-build, 6:25-6:28 AM: the build of section 5 (bench 10,374,064 / 677c436fa145e07f).
+- dp-select, 6:36 AM: failed at shard w03 on a read error of the `\\wsl.localhost` share (nothing written but
+  the gold TSVs). dp-select2, 6:43-6:56 AM: the shards copied to a local folder, each matching g4.json's
+  SHA-256; the tool's move decoding equal to verify_games.py's legal-move matching on 28,000 moves (300 games
+  of w00); the gold draw identical to the first attempt's.
+- dp-gold, 6:56-8:33 AM: dp-gold-pos then dp-gold-def; bench unchanged afterwards.
+- dp-labels, 8:38-8:56 AM: 2,621 gold starts at 1,000,000 nodes (1,095 s, 0.43 CPU-h; bench checked before
+  and after).
+- **dp-main (dp-pos, dp-def) did not run.** The measure slot went to another session's jobs (cs-checks2 at
+  8:56 AM, then cs-count8b), a data-generation job took the datagen slot, and the queued start was stopped at
+  about 9:30 AM by the session's memory guard (1.5 of 15 GB free). **Every main-run result is UNVERIFIED**;
+  the checks below are evaluated on the gold runs, which apply the same rules to w09 (a random subset of the
+  same kind of starts), and the decision rule's "main runs" wording is not met.
+
+**Pools** (eligible positions / games with at least one): w00-w08 positional 986,534 / 194,167, defense
+1,546,011 / 344,103; w09 positional 110,613 / 21,622, defense 172,086 / 38,366. Drawn after removing
+repeated positions: 194,167 and 335,120 (pool), 21,622 and 37,372 (gold).
+
+| | dp-gold-pos | dp-gold-def |
+|---|---:|---:|
+| Games / positions | 1,230 / 120,079 | 1,391 / 120,026 |
+| CPU (user + sys) | 4,151 s | 4,172 s |
+| **Rate, CPU-h per million positions** | **9.60** | **9.66** |
+| Rate, wall x threads (wall from bash `time`) | 12.8 | 14.1 |
+| Nodes per position | 79,978 | 79,984 |
+| Mean positions per game; too long | 97.6; 0 | 86.3; 0 |
+| Ends (of written games): mate score / table / repetition / fifty / stalemate / score adjudication | 56.7% / 25.5% / 8.2% / 1.2% / 0.1% / 8.2% | 65.3% / 18.6% / 3.3% / 0.4% / 0 / 12.4% |
+| Results, start's side to move W / D / L | 41.4% / 18.2% / 40.4% | 0.4% / 6.0% / 93.6% |
+| Favoured side's score (positional) or defender's (defense) | 0.890 | 0.034 |
+| Same starts in g4's own games, favoured side or defender W / D / L | 74.4% / 18.1% / 7.5% | 2.4% / 11.1% / 86.4% |
+| Positions the trainer would keep | 70.9% | 70.8% |
+| Starts: mean phase; pawn difference (side to move) | 21.0; -1: 368, 0: 511, +1: 351 | 19.6; 0: 415, -1: 392, +1: 285, -2: 152, others 147 |
+
+fork_datagen's own clock reported 2,904.7 s and 3,209.8 s against bash's 2,762.6 s and 3,051.3 s real
+(not explained; the CPU figures are bash's).
+
+**The checks** (on the gold runs):
+1. (a) Rate 9.60 and 9.66 CPU-h per million, 0.92-0.93 times the estimate: **pass**. (b) The report's full
+   slices (30 M + 15 M) at 9.63 cost about 433 CPU-h, over 270: **fail as sized**, as section 6 expected.
+   The owner's 180 CPU-h buys about 18.7 M positions (12.5 M positional and 6.2 M defense at 2:1).
+2. Game length 97.6 and 86.3, nothing too long: **pass** for both.
+3. Positional: favoured side 0.890, draws 18.2%: **pass**. Defense: the defender scores 0.034 (below 0.5)
+   but holds only **6.4%** of the games (6.0% drawn, 0.4% won), below the declared 10%: **fail**.
+4. Score adjudication 8.2% and 12.4% of the written games, nothing too long: **pass** for both.
+5. The gate (gold labels at least 50 cp from 0; target at S 92, w 0.5; 2,000 resamples):
+
+   | Slice | n | Standard | Pilot | Pilot minus standard (95%) | Score part | Result part | Gold's own sigmoid term |
+   |---|---:|---:|---:|---:|---:|---:|---:|
+   | positional | 1,210 | 0.323 | 0.353 | **+0.030 [+0.021, +0.040]** | +0.004 | +0.056 | 0.325 |
+   | defense | 1,385 | 0.398 | 0.423 | **+0.025 [+0.020, +0.032]** | +0.005 | +0.046 | 0.392 |
+
+   **Pass** for both. Almost all of the gain is the result part (the playouts decide what g4's games
+   drew or let slip); the deeper first score adds little. The gold labels, from the same view: positional
+   805 at 100-299, 121 at 300 or more, 304 at -99 to 99; defense 1,068 at -100 to -299, 256 at -300 or less,
+   67 at -99 to 99.
+6. Integrity: verify_games.py with --manifest and --table-pieces 5 passed on both runs (ok: 1,230 games,
+   120,079 positions; ok: 1,391 games, 120,026 positions; 0 unsaved); `played` matched every game to one
+   start and none twice; the bench was unchanged after the runs: **pass** (the gold runs only).
+
+**Pool against the full slices**: at 97.6 positions a game, 30 M positional positions need about 307,000
+starts, more than w00-w08's 194,167 eligible games (g4b's records, or a second start per game, would be
+needed); the 12.5 M of the 180 CPU-h size need about 128,000. The defense slice's 15 M need about 174,000
+of 344,103.
+
+**Reading, for the owner.** The positional slice behaves as intended at the declared settings: real game
+ends, clear results, and less compressed targets than g4 gives the same positions. The defense slice also
+passes the gate, but its playouts confirm that a 20,000-node -100 to -300 with queens on is nearly always
+lost for Fork against itself at 80,000 nodes: 93.6% lost, against 86.4% in g4's own games from the same
+positions. The 1 M-node labels agree (1,324 of 1,391, 95%, stay at -100 or below). By the declared rule it is not recommended
+as designed. Whether a narrower band (nearer level) or the positional slice alone should carry the defense
+data is the owner's question; no new rule was tried.
