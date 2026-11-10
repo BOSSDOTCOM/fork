@@ -130,11 +130,10 @@ TEST_CASE("ordering", "the selector yields exactly the legal moves (main) and th
   CHECK(c.nodes > (Optimized ? 5000 : 100));
 }
 
-TEST_CASE("ordering", "a losing capture comes after the quiets; the best-history quiet comes first") {
+TEST_CASE("ordering", "a losing capture comes after the quiets") {
   // Constructed (legality checked by tools/check_search_positions.py): the
   // only capture is Nxd5, which the c6 pawn defends (SEE -200), so it is
-  // deferred to the end; e1f1 has the only non-zero history, so it leads the
-  // quiets and, with no good capture, comes first.
+  // deferred to the end, whatever the quiets' scores.
   Position pos;
   CHECK(pos.set_fen("4k3/8/2p5/3p3p/8/4N1Q1/8/4K3 w - - 0 1"));
   QuietHistory history;
@@ -143,16 +142,32 @@ TEST_CASE("ordering", "a losing capture comes after the quiets; the best-history
   s.start_main(pos, NoMove, &history);
   const std::vector<Move> got = drain(s);
   CHECK(!got.empty() && got.back() == pos.parse_uci("e3d5"));
+}
+
+// The committed combination of the history entries (quiet_score.hpp) has
+// its own suite, quiet_score: an evolved body (ideas.md idea 23) changes it
+// by design, so the evolve gate runs `ordering` and leaves `quiet_score` out.
+// In the position above, e1f1 has the only non-zero history, so it leads the
+// quiets and, with no good capture, comes first.
+TEST_CASE("quiet_score", "the best-history quiet comes first") {
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/2p5/3p3p/8/4N1Q1/8/4K3 w - - 0 1"));
+  QuietHistory history;
+  history.apply(White, pos.parse_uci("e1f1"), 1600);
+  MoveSelector s;
+  s.start_main(pos, NoMove, &history);
+  const std::vector<Move> got = drain(s);
   CHECK(!got.empty() && got.front() == pos.parse_uci("e1f1"));
 }
 
 // The pair history (tier 2, T10): every piece (colour and type) on every
 // square has its own slot in [0, PairSlots); the table stays within the
-// butterfly history's bounds for any update sequence; and the selector puts
-// a quiet move with a reply entry first after the move it is paired with,
-// and ignores the table at a node with no arrival (the root, after a null
-// move). Heap-allocated: the table is about 1.2 MB.
-TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quiets after the arrival only") {
+// butterfly history's bounds for any update sequence; and the selector
+// ignores the table at a node with no arrival (the root, after a null
+// move). Heap-allocated: the table is about 1.2 MB. That a reply or follow
+// entry puts its move first is the committed combination's (suite
+// quiet_score, below).
+TEST_CASE("ordering", "pair history: distinct slots, bounded, and read after the arrival only") {
   std::set<int> slots;
   for (Color c : {White, Black})
     for (int t = Pawn; t <= King; ++t)
@@ -189,19 +204,40 @@ TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quie
   CHECK(!reply.is_capture() && !reply.is_promotion() && plain.front() != reply);
   const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Pawn), static_cast<Square>(39));  // h5
   pairs[ReplyTable].apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
+  s.start_main(pos, NoMove, &history, pairs.get(), NoArrival);
+  CHECK(drain(s) == plain);
+  // The same entry in the follow table, ignored without the follow arrival.
+  pairs[ReplyTable].clear();
+  pairs[FollowTable].apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
+  s.start_main(pos, NoMove, &history, pairs.get(), arrival, NoArrival);
+  CHECK(drain(s) == plain);
+}
+
+// The committed combination: in the position of the case above, the quiet
+// move given the only reply entry (paired with a black pawn's arrival on h5)
+// comes first after that arrival, and so does the same entry in the follow
+// table after the follow arrival.
+TEST_CASE("quiet_score", "a reply or follow entry puts its quiet first after its arrival") {
+  auto pairs = std::make_unique<PairHistory[]>(2);
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/2p5/3p3p/8/4N1Q1/8/4K3 w - - 0 1"));
+  QuietHistory history;
+  MoveSelector s;
+  s.start_main(pos, NoMove, &history);
+  const std::vector<Move> plain = drain(s);
+  CHECK(plain.size() >= 3);
+  const Move reply = plain[plain.size() - 2];
+  CHECK(!reply.is_capture() && !reply.is_promotion() && plain.front() != reply);
+  const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Pawn), static_cast<Square>(39));  // h5
+  pairs[ReplyTable].apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
   s.start_main(pos, NoMove, &history, pairs.get(), arrival);
   const std::vector<Move> got = drain(s);
   CHECK(!got.empty() && got.front() == reply);
-  s.start_main(pos, NoMove, &history, pairs.get(), NoArrival);
-  CHECK(drain(s) == plain);
-  // The same entry in the follow table, read with the follow arrival only.
   pairs[ReplyTable].clear();
   pairs[FollowTable].apply(arrival, pair_slot(pos.piece_at(reply.from()), reply.to()), 1600);
   s.start_main(pos, NoMove, &history, pairs.get(), NoArrival, arrival);
   const std::vector<Move> followed = drain(s);
   CHECK(!followed.empty() && followed.front() == reply);
-  s.start_main(pos, NoMove, &history, pairs.get(), arrival, NoArrival);
-  CHECK(drain(s) == plain);
 }
 
 // The take history (tier 2, T11): distinct slots, bounded updates, and the
@@ -320,8 +356,7 @@ TEST_CASE("ordering", "take history: it can reorder victims 2 pawns apart, never
 // quiet_order_score (DESIGN.md §5.7, X2) is the selector's quiet score as
 // a function: with seeded random butterfly, reply and follow entries for
 // every quiet move, the selector yields each position's quiets in
-// non-increasing helper score, and hand-set entries give the documented sum,
-// clamped to int16 (ReplyWeight 6 / 4 takes three full entries past it).
+// non-increasing helper score, whatever quiet_score's body.
 TEST_CASE("ordering", "quiet_order_score orders quiets as the selector does") {
   auto pairs = std::make_unique<PairHistory[]>(2);
   auto history = std::make_unique<QuietHistory>();
@@ -355,7 +390,56 @@ TEST_CASE("ordering", "quiet_order_score orders quiets as the selector does") {
     }
   }
   CHECK(checked > 50);
-  // Hand-set entries: 10,000 each (one bonus of HistoryMax from 0).
+}
+
+// quiet_score's body may be replaced (ideas.md idea 23), but never by one
+// that is not a constant expression, or whose int arithmetic overflows, at
+// the inputs' extremes: every entry at -HistoryMax, 0 and HistoryMax, each
+// flag both ways, and every reply and follow weight in the parameter
+// table's ranges. Evaluated in a static_assert, so such a body does not
+// compile (signed overflow is not allowed in a constant expression); the
+// ranges are checked against the table at run time.
+constexpr int ReplyWeightHighest = 12;
+constexpr int FollowWeightHighest = 8;
+
+constexpr bool quiet_score_defined_at_extremes() {
+  constexpr int entries[] = {-HistoryMax, 0, HistoryMax};
+  int evaluated = 0;
+  for (int b : entries)
+    for (int r : entries)
+      for (int f : entries)
+        for (int flags = 0; flags < 4; ++flags)
+          for (int rw = 0; rw <= ReplyWeightHighest; ++rw)
+            for (int fw = 0; fw <= FollowWeightHighest; ++fw) {
+              const bool has_reply = (flags & 1) != 0, has_follow = (flags & 2) != 0;
+              const QuietScoreInputs in{.butterfly = b,
+                                        .reply = has_reply ? r : 0,
+                                        .follow = has_follow ? f : 0,
+                                        .has_reply = has_reply,
+                                        .has_follow = has_follow,
+                                        .reply_weight = rw,
+                                        .follow_weight = fw};
+              static_cast<void>(quiet_score(in));
+              ++evaluated;
+            }
+  return evaluated == 3 * 3 * 3 * 4 * (ReplyWeightHighest + 1) * (FollowWeightHighest + 1);
+}
+static_assert(quiet_score_defined_at_extremes());
+
+TEST_CASE("ordering", "quiet_score is a constant expression without overflow at its inputs' extremes") {
+  CHECK_EQ(find_param("ReplyWeight")->lowest, 0);
+  CHECK_EQ(find_param("ReplyWeight")->highest, ReplyWeightHighest);
+  CHECK_EQ(find_param("FollowWeight")->lowest, 0);
+  CHECK_EQ(find_param("FollowWeight")->highest, FollowWeightHighest);
+  CHECK(quiet_score_defined_at_extremes());
+}
+
+// The committed combination's documented sum on hand-set entries (10,000
+// each: one bonus of HistoryMax from 0), clamped to int16 by
+// quiet_order_score (ReplyWeight 6 / 4 takes three full entries past it).
+TEST_CASE("quiet_score", "hand-set entries give the documented sum, clamped to int16") {
+  const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Knight), static_cast<Square>(42));
+  const int follow = pair_slot(static_cast<Piece>(White * 8 + Bishop), static_cast<Square>(19));
   Position pos;
   CHECK(pos.set_fen(perft_suite()[0].fen));
   const Move m = pos.parse_uci("g1f3");
@@ -395,7 +479,7 @@ TEST_CASE("ordering", "the quiet score's sum is exact in int at the weights' hig
 // Tuning builds: with ReplyWeight and FollowWeight at their highest values,
 // the score is the exact sum clamped to [-INT16_MAX, INT16_MAX] for entries
 // at both limits, and the selector still orders quiets by it.
-TEST_CASE("ordering", "tuning build: the quiet score at the reply and follow weights' highest") {
+TEST_CASE("quiet_score", "tuning build: the quiet score at the reply and follow weights' highest") {
   const int reply = find_param("ReplyWeight")->highest;
   const int follow = find_param("FollowWeight")->highest;
   CHECK(set_param("ReplyWeight", reply));

@@ -11,7 +11,8 @@
 //   captures and queen promotions by most valuable victim and least valuable
 //   attacker, a capture that loses material by SEE being deferred when it
 //   comes up (SEE is computed only for the captures reached), then quiet
-//   moves by butterfly history (generation order without a history), then
+//   moves by quiet_order_score (their history entries combined by
+//   quiet_score, quiet_score.hpp; generation order without any), then
 //   the deferred bad captures and under-promotions, in the order deferred.
 // - In check (main search and quiescence): the TT move, then every evasion,
 //   captures first (by victim and attacker), then quiets by history.
@@ -30,29 +31,35 @@
 
 #include "core/position.hpp"
 #include "search/quiet_history.hpp"
+#include "search/quiet_score.hpp"
+#include "tune/params.hpp"
 
 namespace forkeng {
 
-// A quiet move's ordering score in `pos`: its butterfly history (0 without
-// one), plus with `pairs` its reply entry after `arrival` times ReplyWeight
-// / 4 and its follow entry after `follow_arrival` times FollowWeight / 4
-// (NoArrival leaves a table out), within int16: the formula of
-// MoveSelector::score_quiets, as a function (the definition of the branch
-// sprt/lmr-history, 7d94d93). Normal builds do not call it; stats builds
-// read the score the selector uses at each LMR site (DESIGN.md §5.7, X2),
-// and tests/test_ordering.cpp checks it orders quiets as the selector does.
+// A quiet move's ordering score in `pos`: quiet_score (quiet_score.hpp) of
+// its butterfly history (0 without one) and, with `pairs`, its reply entry
+// after `arrival` and its follow entry after `follow_arrival` (NoArrival
+// leaves a table out), with ReplyWeight and FollowWeight, clamped to int16.
+// MoveSelector::score_quiets scores every quiet move with it; stats builds
+// read it at each LMR site (DESIGN.md §5.7, X2); tests/test_ordering.cpp
+// checks it orders quiets as the selector does.
 inline int quiet_order_score(const Position& pos, Move m, const QuietHistory* history,
                              const PairHistory* pairs, int arrival, int follow_arrival) {
-  int score = history ? history->value(pos.side_to_move(), m) : 0;
-  if (arrival != NoArrival || follow_arrival != NoArrival) {
+  QuietScoreInputs in{.butterfly = history ? history->value(pos.side_to_move(), m) : 0,
+                      .reply = 0,
+                      .follow = 0,
+                      .has_reply = pairs != nullptr && arrival != NoArrival,
+                      .has_follow = pairs != nullptr && follow_arrival != NoArrival,
+                      .reply_weight = ReplyWeight,
+                      .follow_weight = FollowWeight};
+  if (in.has_reply || in.has_follow) {
     const int slot = pair_slot(pos.piece_at(m.from()), m.to());
-    if (arrival != NoArrival) score += pairs[ReplyTable].value(arrival, slot) * ReplyWeight / 4;
-    if (follow_arrival != NoArrival)
-      score += pairs[FollowTable].value(follow_arrival, slot) * FollowWeight / 4;
-    // Weights above one can take the sum past int16 at the extremes.
-    score = std::clamp(score, -INT16_MAX, INT16_MAX);
+    if (in.has_reply) in.reply = pairs[ReplyTable].value(arrival, slot);
+    if (in.has_follow) in.follow = pairs[FollowTable].value(follow_arrival, slot);
   }
-  return score;
+  // The selector's score array is int16; weights above one can take a sum
+  // past it at the extremes, and an evolved combination may return any int.
+  return std::clamp(quiet_score(in), -INT16_MAX, INT16_MAX);
 }
 
 enum class SelectorStage : std::uint8_t {
