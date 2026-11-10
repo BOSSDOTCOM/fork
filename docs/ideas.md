@@ -2333,6 +2333,16 @@ whose weaknesses and data gaps decide their targets and order.
   structures as the report classifies them) floored at 1.0 instead of
   0.5**, the scale re-solved to a mean weight of 1. **Keep rule (declared):
   +5 Elo head to head against the control, or a passing STC SPRT.**
+- **after the pre-arm checks (owner, 2026-11-10):** 4 checks pass (class
+  function, item 5's counts exactly, weighted shares, CPU determinism);
+  all-ones against the control needs CUDA (a Kaggle preflight); the
+  floors are **narrowed to the conversion-failure material classes**
+  (rook against minors, queen imbalances, a piece against pawns as
+  implemented: minor-EG with a minor up), **one-wing structures no
+  longer floored**; the speed gate is **trained positions/s within 1%
+  of the control's on Kaggle** (replacing the 3% CPU bound, which the
+  CPU mapper missed at +4.95%). The trainer change merges only with the
+  owner's OK.
 - **test:** the 8c arm at equal positions against the control; per-class
   validation loss; fixed-node screen, STC SPRT [0, 5].
 - **status:** untested (design approved; pre-arm checks next, the arm in
