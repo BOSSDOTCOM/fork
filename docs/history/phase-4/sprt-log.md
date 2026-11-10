@@ -1124,3 +1124,23 @@ LLR: -1.92 (-2.94, 2.94) [-3.00, 0.00] nElo: continue
 - **Adopted on phase-4 (owner, 2026-11-09)** as an explicit exception to the LTC-sensitive rule; bench
   10,374,064 / 677c436fa145e07f. The LTC design R SPRT (item 21, origin 8) and the level 1 anchor check (item 22, claim +38) run
   afterwards as non-blocking confirmations; a failure is reported to the owner, not reverted automatically.
+
+## LTC confirmations of 2026-11-09/10 (night queue items 21, 30, 31)
+
+LTC 40+0.4 on GitHub's shards (Hash 64 MB, x86-64-v3, Syzygy 3-4-5, UHO book), 1,664-game stages; the tuned
+values under design R at LTC, the two feature confirmations on non-regression bounds [-3, 0] (alpha = beta = 0.05).
+All three ran on the engine before R14's tuned values (test 32c5517 is the pre-R14 phase-4 engine), except item 21,
+whose test is the tuned engine.
+
+| Item | Test | Base | Runs | Games | Elo | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|---|---|
+| 21, spsa-r14-m2-ltc (design R at LTC, [0, 6], beta 0.20, origin 8) | R14's tuned values `c59bd2b` | `32c5517` | 42738433272 | 1,664 | **+29.93 ± 8.71** | +57.64 ± 16.69 | [4, 137, 418, 258, 15] | **H1** after 1 stage (LLR 4.52) |
+| 30, ltc-se-on-vs-off ([-3, 0]) | singular extension on `32c5517` | off `04a58ba` | 42715080880, 42750899342 | 3,328 | **+25.83 ± 6.38** | +48.00 ± 11.80 | [11, 310, 796, 515, 32] | **H1** after 2 stages (LLR 4.09) |
+| 31, ltc-mc-on-vs-off ([-3, 0]) | multi-cut on `32c5517` | off `1ba8c7f` | 42728467715, 42759625754, 42801683415, 42812800226, 42824839186, 42837701937 | 9,984 | **+6.65 ± 3.65** | +12.42 ± 6.82 | [49, 1126, 2466, 1287, 64] | **H1** after 6 stages (LLR 3.45) |
+
+- Item 21 confirms the adoption of R14's values (owner's exception, 2026-11-09) at LTC; item 22's anchor check
+  (gauntlet run 42747850201, claim +38) also confirmed them: pooled +28.7 (interval +10.4 to +45.9).
+- Item 31's stage 2 first ran as 42779796858, whose shard 2 died mid-run (a runner failure); the queue retried the
+  stage as 42801683415. Item 32 (take history's LTC confirmation) was dropped by the owner on 2026-11-10: the
+  factorial removal round covers that switch.
+
