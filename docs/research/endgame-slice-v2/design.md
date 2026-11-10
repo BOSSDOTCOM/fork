@@ -345,3 +345,22 @@ constant screens (match / no match, DESIGN.md §8) before use.
 7. The keep-or-drop rule in section 8, declared before any result?
 8. Confirm that the class shares, the one-wing bias and the C2/C3 sub-types
    wait for the final conversion-defense numbers under section 1's rule.
+
+## Owner's decisions (2026-11-09)
+
+The questions above are answered (DESIGN.md decisions log, 2026-11-09; ideas.md 68):
+
+- (a) The data-policy line is **adopted** (DESIGN.md training-data decision 1; KB data-policy.md).
+- (b) **Budget R** (about 97 GiB downloaded, 34.5 GiB peak disk, one table file at a time).
+- (c) **v2 replaces half of v1**: the slice stays 2% of a retrain's positions, half the 3-5-piece Syzygy slice and half
+  v2. Arm V is therefore the standard data with that mixed slice, against arm A with the current slice; the extra
+  self-play removal of the original arm V design no longer applies.
+- (d) The arm runs in **retrain 8c**.
+- (e) The **pure-Python prober first**, its rate measured on a 30-minute probe; ChessTB's C++ library is evaluated
+  only if labelling would exceed about one day.
+- (f) Tables are stored **in WSL** (case-sensitive file system).
+- (g) **Keep rule, declared before any data:** v2 is kept if its arm's fixed-node screen interval is not entirely
+  below 0 **and** the held-out 6-7-piece misjudgment falls by at least 25% against the control arm. This replaces the
+  keep rule proposed above.
+- (h) The class shares, the one-wing bias and the C2/C3 sub-types **wait for the final conversion-and-defense
+  numbers**.
