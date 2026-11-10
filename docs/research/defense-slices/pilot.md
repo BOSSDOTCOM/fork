@@ -295,3 +295,47 @@ lost for Fork against itself at 80,000 nodes: 93.6% lost, against 86.4% in g4's 
 positions. The 1 M-node labels agree (1,324 of 1,391, 95%, stay at -100 or below). By the declared rule it is not recommended
 as designed. Whether a narrower band (nearer level) or the positional slice alone should carry the defense
 data is the owner's question; no new rule was tried.
+
+## Owner's decision, and the positional main run (2026-11-10, afternoon)
+
+The owner, about 10:15 AM EST (phase-4 e0320ff): the positional slice is sized at **12.5 M positions** (about
+120 CPU-h); **the defense slice is dropped for 8c**, with no redesign now (a near-level band is revisited only if
+8c's positional arm shows defense still lacking); dp-pos runs now, and the full slice starts only if it passes,
+after the label-depth arms end. dp-def was never run.
+
+**dp-pos** (measure job, 9:57 AM to about 1:33 PM EST; 840,000 positions from the first 30,000 starts of the
+w00-w08 draw; the declared settings, 2 threads, nice 19): 8,612 games written, 840,098 positions; CPU 25,738 s
+(user 25,695.7, sys 42.4), real 12,981.8 s; bench 10,374,064 / 677c436fa145e07f after.
+
+| Check | dp-pos | Result |
+|---|---|---|
+| 1a rate | **8.51 CPU-h per million** (wall x threads 8.58), 0.82 times the estimate; 80,118 nodes a position | pass |
+| 1b budget | the owner's 12.5 M at 8.51: about 106 CPU-h, within the 120 set | pass (as resized) |
+| 2 game length | mean 97.5 positions a game; 3 of 8,615 games discarded as too long (0.03%) | pass |
+| 3 results | favoured side scores 0.902 (side to move W 44.8%, D 16.5%, L 38.7%); draws 16.5% | pass |
+| 4 ends (of written games) | mate score 55.6%, table 25.0%, repetition 9.0%, fifty moves 0.7%, stalemate 0.1%, **score adjudication 9.6%** | pass |
+| 5 gate | the declared gate is the gold set's (above): +0.030 [+0.021, +0.040]; diagnostic on dp-pos's own starts (g4's score sign in place of a gold label, not a declared test): standard 0.327, pilot 0.357, +0.030 | pass |
+| 6 integrity | verify_games.py --manifest --table-pieces 5: ok, 2 shards, 8,612 games, 840,098 positions, 0 unsaved (mate score 4,791, table 2,152, rules draw 843, score adjudication 826); every game from one start, none twice; bench unchanged | pass |
+
+Also: the trainer would keep 70.9% of the positions; the starts' mean phase is 21.0, pawn difference 0: 3,654,
++1: 2,465, -1: 2,493. The dp-pos rate is lower than the gold runs' (9.60) because the machine was less loaded.
+
+**The full slice, prepared and not started** (it starts from the night chain after the label-depth arms end,
+before g4c):
+- **Starts**: the w00-w08 draw (pool-positional.tsv: 194,167 starts, one per g4 game, gold excluded) in draw
+  order minus the 8,612 starts dp-pos wrote: **185,555 starts** (`~/fork-data/defense-pilot/slice/`
+  slice-positional.epd, SHA-256 9916041b...2d7f, and its TSV b4e72478...d74e). The 3 starts dp-pos discarded as too
+  long are not identifiable from its output and stay in; a replay is the same deterministic discard, never a
+  written duplicate.
+- **Pool sufficiency**: 12.5 M positions at 97.5 a game is about 128,200 games; 185,555 starts is 1.45 times that
+  (a repeat would need games under 67.4 positions on average, against 97.5 measured over 8,612 games). The
+  script's start check fails the slice if any start were played twice.
+- **The run**: `slice.sh` (`~/fork-data/defense-pilot/slice/slice.sh`): the binaries and the two tools checked by
+  SHA-256 (fixed copies of defense_starts.py at 6453796 and verify_games.py), bench before and after, fork_datagen
+  with the declared settings on **10 threads at nice 0**, 12,500,000 positions, then the shards copied to C: and
+  checked there with the Windows venv by verify_games.py (--manifest, --table-pieces 5) and `defense_starts.py
+  played`; only then the done file is written. Tested on a 3-start run (1 game, 94 positions: verified, matched,
+  done file written and valid), and on two failure cases (an existing done file stops it; a start list that does
+  not hold the game stops it before any done file).
+- **Size and time** (estimates): about 106 CPU-h at dp-pos's rate, about 130 thread-hours at g4's 10-thread rate,
+  so about 11-13 hours on 10 threads plus the checks (UNVERIFIED for 10 threads); about 55 MB of shards.
