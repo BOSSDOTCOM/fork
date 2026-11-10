@@ -26,6 +26,8 @@ check() {  # description, command...
   if "$@"; then echo "PASS  $what"; else echo "FAIL  $what"; failures=$((failures + 1)); fi
 }
 PYTHON=${PYTHON:-python3}
+# A relative path (check.sh passes .venv/Scripts/python.exe) would break inside the subshells that cd away.
+case $PYTHON in */*) PYTHON=$(cd "$(dirname "$PYTHON")" && pwd)/$(basename "$PYTHON") ;; esac
 
 mkdir -p "$tmp/bin"
 cat >"$tmp/bin/gh" <<'EOF'
