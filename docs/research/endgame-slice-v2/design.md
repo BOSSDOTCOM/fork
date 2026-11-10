@@ -364,3 +364,92 @@ The questions above are answered (DESIGN.md decisions log, 2026-11-09; ideas.md 
   keep rule proposed above.
 - (h) The class shares, the one-wing bias and the C2/C3 sub-types **wait for the final conversion-and-defense
   numbers**.
+
+## Owner decision 2026-11-10: class shares, one-wing bias, C2/C3 sub-types
+
+DESIGN.md decisions log, 2026-11-10 (d): v2's class shares are set from the conversion-and-defense
+analysis (docs/research/conversion-defense/report.md on research/conversion-defense, be86410), as decision
+(h) of 2026-11-09 left them. They are set by **section 1's declared re-weighting rule**, applied to the
+report's own sets. No position was generated for v2.
+
+**The sets** (report.md items 2, 3 and 5): the deciding positions are the report's 7,378 (478 gauntlet
+turning points, 3,287 SPRT turning points, 90 conversion-failure drop points, 3,523 defense-loss window
+starts); T is its 124,288-position training sample of g3j (every 500th kept position). The positions come
+from the analysis's working files; only these counts leave them (no FEN, no opponent evaluation).
+
+**The classes as counted.** Each class is the piece pattern of its section-3 materials, with pawns free
+(so the positions that lead into those materials count too):
+- C1: rooks only, equal in number (R v R, RR v RR);
+- C2: one side a single rook, the other a single minor piece, nothing else but pawns;
+- C3: a single queen against a single queen, against a rook and a minor, or against two rooks;
+- C4: one side a single piece (knight, bishop, rook or queen), the other side pawns only.
+
+**Derivation.** The rule: share proportional to the gap ratio (deciding share over T share), clipped to
+half and twice the equal share of 25%, renormalised; a class with fewer than 15 deciding positions keeps
+25%.
+
+| Class | Deciding (of 7,378) | T (of 124,288) | Gap ratio | Share by the rule |
+|---|---:|---:|---:|---:|
+| C1 rook endings | 541 (7.33%) | 7,790 (6.27%) | 1.170 | **30.4%** |
+| C2 rook against minor | 102 (1.38%) | 2,581 (2.08%) | 0.666 | **17.3%** |
+| C3 queen endings and queen imbalances | 120 (1.63%) | 1,794 (1.44%) | 1.127 | **29.3%** |
+| C4 piece against pawns | 99 (1.34%) | 1,892 (1.52%) | 0.881 | **23.0%** |
+
+Every class has at least 15 deciding positions and every share lies inside 12.5-50%, so no clip
+applies: each share is its ratio over the sum of the four (3.844).
+
+Checks on the choice (reported; they do not change the rule's output):
+- *The report's published categories* (item5-data-gaps.json, material classes) mapped onto the classes
+  (C1 = R-EG level, a pawn and two pawns apart; C2 = R+minor-EG rook against minors; C3 = Q-EG equal
+  pieces and Q-EG queen imbalance; C4 = minor-EG minor-up and R-EG other imbalance) give ratios 1.081,
+  0.787, 1.156, 0.285 and shares 31.3%, 22.8%, 33.5%, 12.5% (C4 clipped). The recount above is used
+  because those categories hold patterns outside the classes: minor-EG minor-up is mostly two minors
+  against one (3,455 positions of T, against 1,892 for a single piece against pawns), and R+minor-EG
+  rook against minors includes rook against two minors and rook and minor against minors.
+- *Matched ratios* (T restricted to |stored score| 100-600, item 5's addition after its declaration):
+  1.380, 0.657, 1.188, 1.234, shares 30.9%, 14.7%, 26.6%, 27.7%. C2 stays the smallest.
+- *Items 3 and 4*: conversion-failure drop points in the classes: C1 9, C2 3, C3 4, C4 6 (of 90; the
+  rest lie in materials v2 does not cover). S512ppr3's win-probability error on held-out g3j is largest
+  in rook endings (R-EG 0.053, signed -150 cp) and rook against minors (0.050, -130), then queen endings
+  (0.044; -291 cp, -356 with a queen imbalance) and a piece against pawns (0.030; -372 cp, mostly at
+  decided scores). SPRT defense-window loss rates: R-EG 75.0%, R+minor-EG 80.9%, Q-EG 82.6%. None of
+  these contradicts the rule's ordering, so the declared rule stands with no judgement override.
+
+**C2 sub-types.** Rook against bishop: 57 deciding, 1,664 in T (ratio 0.867). Rook against knight: 45
+deciding, 917 in T (1.24). The same rule over the two sub-types (equal share 50%, clip 25-100%) gives
+**rook against knight 59%, rook against bishop 41%** of C2. Each part is split over its section-3
+materials by the material weights (own-games frequency, 5% floor). Rook against two minors (16
+deciding, 1,022 in T, ratio 0.26) is under-represented among the deciding positions and is not added
+(it would also change budget R).
+
+**C3 sub-types.** Queen against queen: 115 deciding, 933 in T (ratio 1.84). Queen against rook and minor
+or two rooks: 5 deciding (rook and knight 5, rook and bishop 0, two rooks 0), 861 in T (ratio 0.087).
+By the rule's arithmetic the imbalances fall to the lower clip: **queen against queen 75%, queen
+imbalances 25%** of C3. The 15-position floor is not applied to this split. It guards ratios built on
+few positions, and this split rests on all 120 deciding C3 positions: T's shares predict about 58
+imbalances among them, and 5 occur. The imbalance quarter keeps the clip's minimum because S512ppr3's
+static evaluation is most compressed there (item 4: -356 cp in queen endings with a queen imbalance).
+Inside it the three imbalance kinds (rook and bishop, rook and knight, two rooks) share equally, since
+their counts (0 to 5) cannot rank them; then their materials split by the material weights.
+
+**One-wing bias: dropped.** The provisional half of section 4 is removed, and pawns are placed anywhere.
+Within the four classes the one-wing share (no pawn on files a-c or none on f-h, the report's
+definition) is 29.4% of the deciding positions (245 of 833 with pawns) against 38.6% of T (5,422 of
+14,054): ratio 0.76, by the same deciding-over-training principle as the class shares. Over all endgames
+(phase at most 12) it is 17.6% against 24.1% (0.73). Only the conversion-failure drop points lean
+one-wing (11 of 22 in the classes, 36 of 72 in all endgames), and Fork's defense loses less often on
+one wing (item 3: 47.5% against 86.2% for two wings without passers). Random placement already gives a
+one-wing share of 71% with 2 pawns, 46% with 3 and 28% with 4 (simulated, 200,000 placements each),
+around the deciding share, so no bias is needed to represent one-wing endings.
+
+**Summary for the implementing session.**
+- C1 30.4%.
+- C2 17.3%: rook against knight 59%, rook against bishop 41%.
+- C3 29.3%: queen against queen 75%; queen imbalances 25%, equal over rook and bishop, rook and knight,
+  and two rooks.
+- C4 23.0%.
+- No one-wing bias.
+- The 6/7-piece split, the 5% material floor and every other setting of sections 3-8 are unchanged.
+
+Constants introduced: the shares above (the declared rule's output) and the sub-type splits (the same
+rule). Nothing else.
