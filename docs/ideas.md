@@ -2315,7 +2315,17 @@ whose weaknesses and data gaps decide their targets and order.
   under-trained classes, 0.18-0.64 for the over-trained ones).
 - **decision (owner, 2026-11-10):** a design review of the loader change
   first, then an arm in retrain 8c.
+- **design review approved (owner, 2026-11-10; DESIGN.md decisions log):**
+  docs/research/class-sampler/design.md (research/class-sampler f235d27),
+  recommendations 1-9 as written (per-position loss weights, board-only,
+  material class alone, all deciding positions as the target, small cells
+  at 1, separate arms, a second control seed if the quota allows, no
+  validation-loss kill rule), **with the conversion-failure classes (rook
+  against minor pieces, queen imbalances, a piece against pawns, one-wing
+  structures as the report classifies them) floored at 1.0 instead of
+  0.5**, the scale re-solved to a mean weight of 1. **Keep rule (declared):
+  +5 Elo head to head against the control, or a passing STC SPRT.**
 - **test:** the 8c arm at equal positions against the control; per-class
   validation loss; fixed-node screen, STC SPRT [0, 5].
-- **status:** untested (design review next). **runtime cost:** none.
-  **earliest phase:** Phase 4.
+- **status:** untested (design approved; pre-arm checks next, the arm in
+  8c). **runtime cost:** none. **earliest phase:** Phase 4.
