@@ -2279,6 +2279,15 @@ whose weaknesses and data gaps decide their targets and order.
   checks look right; then **arms in retrain 8c** (fixed-node screen, STC
   SPRT [0, 5]). Fix 3 (R32's endgame-start slice, widened) waits for this
   result.
+- **pilot, gold half (2026-11-10; research/defense-slices 5e42e4a):**
+  9.6 CPU-h per million positions; the positional slice passed every
+  declared check (gate +0.030 [+0.021, +0.040]); the defense slice failed
+  check 3 (defenders hold 6.4%, minimum 10%). **Owner, 2026-11-10:** the
+  positional slice at 12.5 M positions (~120 CPU-h); **the defense slice
+  dropped for 8c**, no redesign now (a near-level band only if 8c's
+  positional arm shows defense still lacking); the positional main pilot
+  run first, the full slice only if it passes and after the label-depth
+  arms.
 
 ## 67. Draw-probability head
 
