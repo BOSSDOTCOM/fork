@@ -43,7 +43,7 @@ import traceback
 
 COMMIT = 'phase-4'          # replaced by the pushed commit's hash (the manifests, the new trainer, the table)
 TABLE = 'docs/research/class-sampler/weights-r8b-c.txt'
-TABLE_SHA256 = ''           # replaced by the committed table's SHA-256 before the push
+TABLE_SHA256 = '4ac778ac45f59a06f3d605f3b718203f0564a495e04708476eaebedf06781b0a'   # docs/research/class-sampler/weights-r8b-c.txt
 EXEMPT = ['g3s2-slice1-00-rest.vf'] + [f'slice1-0{i}.vf' for i in range(1, 10)]   # the Syzygy slice: weight 1
 ARCH = 's512pp'
 SCALE = 92                  # 8a's recipe (fit_scale.py on g3s3's mix: 88, inside 88-96); the TD labels use it too

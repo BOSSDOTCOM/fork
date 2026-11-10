@@ -8,9 +8,11 @@ either quoted from a cited source or computed from the committed aggregates
 in `docs/research/conversion-defense/item5-data-gaps.json`. Section 8 gives
 each number's justification. Anything not checked is marked UNVERIFIED.
 
-**Added after the review (2026-11-10):** section 11, the owner's decision
-and the re-solved weights; section 12, the pre-arm checks and their
-results; section 13, what remains before the 8c arm.
+**Added after the review (2026-11-10):** section 11, the owner's decisions
+and the re-solved weights (11.4: the narrowed floor); section 12, the
+pre-arm checks and their results; section 13, what remained before an 8c
+arm; section 14, the arm as an extra retrain 8b arm (with a second control
+seed), its final table, preflight, kernels, gates and keep rule.
 
 Sources:
 - the conversion-and-defense report, `docs/research/conversion-defense/report.md`
@@ -829,6 +831,51 @@ that set each weight (k r, cap 2, floor 0.5, floor 1).
 | Q-EG, minor-up | 0.73% / 0.18% | 0.70% (52) | 0.76 | 0.616 (k r) | 1.000 (floor 1) | 0.695 | 0.64% (0.64%) |
 | 11 small cells (n < 50; weight 1): R+minor-EG other-imbalance; noQ-MG R-vs-minors; noQ-MG minor-up; minor-EG level; noQ-MG pawn+-2+; Q-EG other-imbalance; pawn-EG pawn+-1; R-EG other-imbalance; noQ-MG other-imbalance; pawn-EG level; pawn-EG pawn+-2+ | 9.47% | 3.86% | - | 1.000 | 1.000 | 1.000 | 9.47% |
 
+### 11.4 Update: the owner's decisions on questions A-C (2026-11-10; phase-4 42db39a)
+
+- **A.** "A piece against pawns" stays as implemented: minor-EG minor-up
+  only.
+- **B. The floor is narrowed to the conversion-failure material classes:**
+  every R-vs-minors cell, every Q-imbalance cell, and minor-EG minor-up.
+  One-wing structures are removed from the floored list. A position's
+  weight is now a function of its material cell alone; the table keeps
+  both wing entries, set equal. k is re-solved for a mean weight of 1
+  (`cell_weights.floored`, research/class-sampler-checks cabe245).
+- **C.** The 3% CPU bound is replaced by "trained positions per second
+  within 1% of the control's", measured on Kaggle (section 14.2).
+
+**Re-solved on the g3j stand-in** (the same 62,144,106 positions as 11.3;
+the table in `weights-g3j-provisional.txt`, SHA-256 57588b2e…b895d):
+
+| | Narrowed floor (now) | No floor (as reviewed) | Old floor (with one-wing) |
+|---|---|---|---|
+| k | **0.838** | 0.909 | 0.807 |
+| E[w²] | **1.155** | 1.210 | 1.132 |
+| Distance, training to deciding | 0.259 → **0.131** | 0.259 → 0.087 | 0.259 → 0.146 |
+| Floored cells' share of training | **18.8%** (14.9% raised to 1) | – | 20.5% raised to 1 |
+| Q-MG level material (both wings) | **1.025** | 1.113 | 0.987 two-wing, 1.000 one-wing |
+| Q-MG weighted share (training 41.1%, deciding 51.0%) | **44.1%** | 46.8% | 42.8% |
+
+**Which cells moved against the reviewed rule:**
+
+- **Raised to 1 by the floor:**
+  - R+minor-EG R-vs-minors (0.72 before);
+  - Q-EG Q-imbalance (0.61);
+  - Q-MG Q-imbalance (0.69);
+  - minor-EG minor-up (0.50).
+- **Floored but already above 1, so unchanged:** Q-MG and Q-EG
+  R-vs-minors.
+- **Every other weight scales by 0.838 / 0.909 = 0.922:**
+  - Q-MG B-vs-N 1.92 → 1.77;
+  - Q-MG pawn+-1 1.66 → 1.53;
+  - Q-MG level material 1.11 → 1.03, now above 1 again;
+  - the minor-up cells of Q-MG and R+minor-EG stay at the floor of 0.5
+    in both wing classes.
+- **Against the old floor:** the one-wing positions of the down-weighted
+  cells are back at their cell's weight. For example R+minor-EG minor-up
+  one-wing goes from 1.0 to 0.5, and R-EG pawn+-2+ one-wing from 1.0 to
+  0.53.
+
 ## 12. The pre-arm checks (2026-11-10, 8:33 AM to 9:09 AM EST)
 
 All work is on branch research/class-sampler-checks. The long runs went
@@ -997,3 +1044,198 @@ They are aggregates only, with no positions.
 - **C. The throughput gate:** replace the declared 3% CPU bound, which the
   measured +4.95% misses, with "the arm's trained positions per second
   within 1% of the control's" on Kaggle. Recommended: yes.
+
+## 14. The arm as an extra retrain 8b arm (owner, 2026-11-10, about 9:20 AM EST)
+
+This replaces section 13's plan to wait for 8c. Idea 69's arm **cw** runs
+now, as an extra arm of retrain 8b. A second control seed **c2** runs
+beside it (approved recommendation 7). Everything is declared here before
+any result. Branch: **retrain/8b-cw**, made from 8b's launch commit 320c0be
+plus idea 69's trainer and tools. 8b's trainer at 320c0be is identical to
+phase-4's, so the arm's trainer is exactly 8b's plus idea 69's loss weights.
+
+### 14.1 The table, from arm c's own training files
+
+- **Files:** arm c's training files, resolved by 8b's own kernel code
+  (`resolve` at 320c0be) over the local copies of the 16 Kaggle datasets.
+  That gives 129 files: 119 weighted and 10 Syzygy slice files, which are
+  exempt.
+- **Count:** `fork-train cells` over the 119 weighted files. Each file's
+  SHA-256 was checked against the manifests.
+- **Solve:** `cell_weights.py solve` with item5-data-gaps.json's deciding
+  shares and the narrowed floor.
+
+The table is `docs/research/class-sampler/weights-r8b-c.txt`. Its results
+follow in 14.6.
+
+### 14.2 The preflight (`tools/train/kaggle/cw_preflight.py`, kernel fork-retrain-8b-cw-preflight)
+
+**When:** once 8b's session has ended, and only if `kaggle quota` leaves
+enough.
+
+**The runs:** five, one after another, all the same short training run on
+device 0. Each is s512pp warm from S512ppr3, on g3j-w00..w04 interleaved,
+seed 1, 3 superbatches of 305 × 16,384, with a 4,194,304-position buffer:
+
+| Run | Trainer | Loss weights |
+|---|---|---|
+| old1, old2 | 8b's (twice, for CUDA determinism) | – |
+| none | the new one | none |
+| ones | the new one | a table of 112 ones |
+| table | the new one | the cw table |
+
+**Verdict, declared:**
+
+- **EQUAL:** none and ones reproduce old1's superbatch-3 float weights byte
+  for byte. If old1 and old2 differ, none and ones may differ from old1 by
+  no more than old2 does (the largest absolute difference of any weight).
+- **SPEED** (the owner's rule C): the table run's trained positions per
+  second, from the trainer's own progress lines, are at least 99% of the
+  mean of old1 and old2.
+- **The weights act:** the table run differs from old1.
+
+If any of these fails, the arm does not run, and the failure is reported.
+
+### 14.3 The arms (`tools/train/kaggle/retrain_8b_cw.py`, kernel fork-retrain-8b-cw)
+
+The kernel is made from 8b's kernel by one script, so everything else is
+8b's: the 16 datasets, the input checks, the warm start, 360 superbatches
+(1,798,963,200 positions seen), the window average of superbatches
+331-360, and the offline step.
+
+- **cw, GPU 0:** arm c's exact recipe, files and order, plus
+  `--cell-weights weights-r8b-c.txt` and `--exempt` with the 10 slice
+  files. Before anything trains, the kernel checks the table's SHA-256 and
+  that the exempt list is exactly the arm's slice files. Its validity
+  record holds the table, its hash, the exempt list and the trainer commit.
+- **c2, GPU 1:** arm c exactly, with seed 2 (seed sets the data order; the
+  warm start fixes the weights). Not a candidate.
+- **Speed in the full runs:** the two arms run side by side, as 8b's arms
+  did, so cw's full-run positions per second can be compared with 8b's c.
+  That comparison is reported; the preflight's SPEED is the gate.
+- **Per-cell diagnostics:** the offline step also writes the per-cell
+  validation loss (`--val-cells`, unweighted and weighted) of S512ppr3,
+  cw-avg and c2-avg on all of g4s1-val.vf. Compare files with
+  `cell_weights.py compare`.
+
+### 14.4 Gates, bake and tests
+
+**Gates and bake:** `~/fork-data/8b-cw/after-cw.sh` (not committed: a local
+run script, as 8b's after.sh is). For cw and c2 it runs:
+
+1. the session's validity checks;
+2. 8b's integrity gates (`gates-cw.sh`, a copy of 8b's gates.sh);
+3. a bake from 8b's base commit (r8b-ready.json's), so r8bcw, r8bc2 and
+   r8bc share one engine: `bake/r8bcw`, and `bake/r8bc2` for the seed-noise
+   head-to-head only;
+4. `~/fork-jobs/night/state/r8bcw-ready.json`.
+
+**Tests:** the night queue runs these items after 8b's own, with their own
+names. They read r8b-ready.json only.
+
+| Item | Test | Name |
+|---|---|---|
+| 15-8b-j | r8bcw against S512ppr3, the fixed-node screen | r8b-fn-cw |
+| 15-8b-k | r8bcw against r8bc, the keep rule | r8b-h2h-cw |
+| 15-8b-l | the STC SPRT [0, 5] `--kind network` of r8bcw against r8bc, only on the declared route | r8b-stc-cw |
+| 15-8b-m | r8bc2 against r8bc, context | r8b-h2h-c2 |
+
+The screens are 1,600 games at 800,000 nodes per move, with 8b's
+settings.
+
+### 14.5 The keep rule (owner, declared before any result; `~/fork-jobs/night/r8bcw.sh`)
+
+**The estimate:** the logistic Elo point estimate on the last `Elo:` line of
+r8b-h2h-cw's driver.log, after its one stage: 1,600 games in 800
+colour-reversed pairs, all pooled.
+
+- **KEEP** at +5.00 or more.
+- **DROP** below 0.00.
+- **Between the two,** the STC SPRT [0, 5] of r8bcw against r8bc decides:
+  KEEP on H1, DROP on H0.
+
+r8b-h2h-c2 (c2 against c, the same games and reading) is **context only**.
+It is one draw of the seed spread of a head-to-head between two runs of one
+recipe, reported beside cw's. It changes neither the bar, nor the route,
+nor the verdict. Nothing is promoted; adoption is the owner's decision. cw
+stays outside 8b's best-candidate choice (items 15-8b-e/f).
+
+### 14.6 The final table (2026-11-10, 9:23 to 9:46 AM EST, measure job cs-count8b)
+
+**The count:**
+
+- Arm c's 119 weighted files hold **952,372,637** kept positions; its 10
+  slice files hold 25,999,940 (exempt).
+- That gives **arm c's kept count, 978,372,577**: the closest count of
+  g4s1's kept positions. Section 1.2's estimate was about 0.95 B.
+- All 129 files' SHA-256 values match the manifests (129 OK, 0 not OK).
+
+The counts are in `r8b-c-cells.txt`. The table is
+`weights-r8b-c.txt`, **SHA-256 4ac778ac45f59a06f3d605f3b718203f0564a495e04708476eaebedf06781b0a**,
+and both kernels check it. Its summary is `weights-r8b-c-summary.json`.
+
+| | Narrowed floor (the table) | No floor (as reviewed) | Old floor (with one-wing) |
+|---|---|---|---|
+| k | **0.846** | 0.911 | 0.815 |
+| E[w²] | **1.152** | 1.201 | 1.130 |
+| Distance, training to deciding | 0.253 → **0.126** | 0.253 → 0.087 | 0.253 → 0.141 |
+| Floored cells' share of training | **18.5%** (14.5% raised to 1) | – | – |
+| Q-MG level material (both wings) | **1.013** | 1.091 | 0.976 two-wing, 1.000 one-wing |
+| Q-MG weighted share (training 41.1%, deciding 51.0%) | **44.1%** | 46.8% | 42.8% |
+
+**Cells moved by the floor:**
+
+- Raised to 1:
+  - R+minor-EG R-vs-minors (0.70 without the floor);
+  - Q-EG Q-imbalance (0.67);
+  - Q-MG Q-imbalance (0.89);
+  - minor-EG minor-up (0.50).
+- Floored but above 1 anyway: Q-MG and Q-EG R-vs-minors.
+- Every other weight scales by 0.846 / 0.911 = 0.929:
+  - Q-MG B-vs-N 1.90 → 1.77;
+  - Q-MG pawn+-1 1.63 → 1.52;
+  - Q-MG level material 1.09 → 1.01;
+  - noQ-MG B-vs-N 1.06 → 0.985.
+- Unchanged at the cap of 2: Q-EG pawn+-1, Q-EG pawn+-2+ and Q-EG B-vs-N.
+- Unchanged at the floor of 0.5: Q-MG minor-up and R+minor-EG minor-up.
+
+**Against the g3j stand-in (11.4):** the shares agree within about 0.4
+point per cell. k is 0.846 against 0.838, and the distance after weighting
+0.126 against 0.131.
+
+Per cell, for the 31 cells with at least 50 deciding positions:
+
+| Cell | Training | Deciding (n) | Ratio | Weight (narrowed floor) | Rule | No floor | Old floor (two / one-wing) | Weighted share |
+|---|---|---|---|---|---|---|---|---|
+| Q-MG, B-vs-N | 7.56% | 15.78% (1164) | 2.09 | 1.767 | k r | 1.903 | 1.702 / 1.702 | 13.35% |
+| Q-MG, pawn+-1 | 5.41% | 9.68% (714) | 1.79 | 1.515 | k r | 1.631 | 1.459 / 1.459 | 8.19% |
+| Q-MG, level | 7.81% | 9.35% (690) | 1.20 | 1.013 | k r | 1.091 | 0.976 / 1.000 | 7.91% |
+| Q-MG, minor-up | 12.56% | 6.53% (482) | 0.52 | 0.500 | floor 0.5 | 0.500 | 0.500 / 1.000 | 6.28% |
+| R+minor-EG, R-vs-minors | 7.10% | 5.49% (405) | 0.77 | 1.000 | floor 1 | 0.704 | 1.000 / 1.000 | 7.10% |
+| Q-MG, R-vs-minors | 3.39% | 5.06% (373) | 1.49 | 1.263 | k r | 1.360 | 1.216 / 1.216 | 4.28% |
+| R+minor-EG, B-vs-N | 3.14% | 4.49% (331) | 1.43 | 1.209 | k r | 1.302 | 1.165 / 1.165 | 3.80% |
+| R-EG, pawn+-1 | 2.47% | 3.80% (280) | 1.54 | 1.302 | k r | 1.403 | 1.254 / 1.254 | 3.21% |
+| noQ-MG, B-vs-N | 2.88% | 3.35% (247) | 1.16 | 0.985 | k r | 1.061 | 0.948 / 1.000 | 2.83% |
+| Q-EG, Q-imbalance | 3.52% | 2.59% (191) | 0.73 | 1.000 | floor 1 | 0.670 | 1.000 / 1.000 | 3.52% |
+| minor-EG, B-vs-N | 1.76% | 2.51% (185) | 1.43 | 1.209 | k r | 1.302 | 1.164 / 1.164 | 2.12% |
+| R+minor-EG, pawn+-1 | 1.69% | 2.48% (183) | 1.47 | 1.245 | k r | 1.341 | 1.199 / 1.199 | 2.10% |
+| Q-MG, pawn+-2+ | 1.51% | 2.45% (181) | 1.62 | 1.369 | k r | 1.474 | 1.318 / 1.318 | 2.07% |
+| noQ-MG, pawn+-1 | 1.62% | 2.33% (172) | 1.44 | 1.220 | k r | 1.313 | 1.174 / 1.174 | 1.97% |
+| R+minor-EG, minor-up | 8.98% | 1.97% (145) | 0.22 | 0.500 | floor 0.5 | 0.500 | 0.500 / 1.000 | 4.49% |
+| Q-EG, pawn+-1 | 0.71% | 1.83% (135) | 2.59 | 2.000 | cap 2 | 2.000 | 2.000 / 2.000 | 1.41% |
+| R-EG, level | 1.44% | 1.50% (111) | 1.04 | 0.881 | k r | 0.949 | 0.849 / 1.000 | 1.27% |
+| R-EG, pawn+-2+ | 2.30% | 1.48% (109) | 0.64 | 0.545 | k r | 0.587 | 0.525 / 1.000 | 1.25% |
+| noQ-MG, level | 1.50% | 1.45% (107) | 0.97 | 0.818 | k r | 0.881 | 0.788 / 1.000 | 1.23% |
+| minor-EG, pawn+-1 | 1.53% | 1.36% (100) | 0.89 | 0.754 | k r | 0.812 | 0.726 / 1.000 | 1.15% |
+| Q-EG, pawn+-2+ | 0.51% | 1.29% (95) | 2.55 | 2.000 | cap 2 | 2.000 | 2.000 / 2.000 | 1.01% |
+| R+minor-EG, level | 1.13% | 1.21% (89) | 1.07 | 0.909 | k r | 0.979 | 0.876 / 1.000 | 1.02% |
+| Q-MG, other-imbalance | 1.79% | 1.17% (86) | 0.65 | 0.553 | k r | 0.596 | 0.533 / 1.000 | 0.99% |
+| R+minor-EG, pawn+-2+ | 1.15% | 1.08% (80) | 0.94 | 0.794 | k r | 0.855 | 0.765 / 1.000 | 0.91% |
+| Q-MG, Q-imbalance | 1.06% | 1.04% (77) | 0.98 | 1.000 | floor 1 | 0.892 | 1.000 / 1.000 | 1.06% |
+| Q-EG, B-vs-N | 0.34% | 1.03% (76) | 3.03 | 2.000 | cap 2 | 2.000 | 2.000 / 2.000 | 0.68% |
+| minor-EG, minor-up | 2.81% | 0.85% (63) | 0.30 | 1.000 | floor 1 | 0.500 | 1.000 / 1.000 | 2.81% |
+| Q-EG, R-vs-minors | 0.57% | 0.83% (61) | 1.46 | 1.232 | k r | 1.327 | 1.186 / 1.186 | 0.70% |
+| minor-EG, pawn+-2+ | 1.06% | 0.77% (57) | 0.73 | 0.615 | k r | 0.662 | 0.592 / 1.000 | 0.65% |
+| Q-EG, level | 0.47% | 0.72% (53) | 1.53 | 1.291 | k r | 1.391 | 1.244 / 1.244 | 0.61% |
+| Q-EG, minor-up | 0.85% | 0.70% (52) | 0.82 | 0.695 | k r | 0.749 | 0.669 / 1.000 | 0.59% |
+| 11 small cells (n < 50), weight 1: Q-EG other-imbalance; R+minor-EG other-imbalance; R-EG other-imbalance; minor-EG level; noQ-MG R-vs-minors; noQ-MG minor-up; noQ-MG other-imbalance; noQ-MG pawn+-2+; pawn-EG level; pawn-EG pawn+-1; pawn-EG pawn+-2+ | 9.40% | 3.86% | - | 1.000 | small | 1.000 | 1.000 / 1.000 | 9.40% |

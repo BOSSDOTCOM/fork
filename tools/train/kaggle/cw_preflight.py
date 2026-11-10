@@ -35,7 +35,7 @@ import time
 OLD = '320c0bee66da6958fb9507e17f9bdb4fc99178d7'   # retrain 8b's launch commit (its kernel built this trainer)
 NEW = 'phase-4'           # replaced by the pushed commit holding the new trainer and the table before the push
 TABLE = 'docs/research/class-sampler/weights-r8b-c.txt'
-TABLE_SHA256 = ''          # replaced by the committed table's SHA-256 before the push
+TABLE_SHA256 = '4ac778ac45f59a06f3d605f3b718203f0564a495e04708476eaebedf06781b0a'   # docs/research/class-sampler/weights-r8b-c.txt
 ARCH = 's512pp'
 SCALE = 92
 BATCH = 16384
