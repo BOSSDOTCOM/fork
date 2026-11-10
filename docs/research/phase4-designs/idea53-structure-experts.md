@@ -1,7 +1,8 @@
 # Idea 53: pawn-structure-class output experts (design, not adopted)
 
 Status: **design for the owner's review, 2026-11-09 (owner's order of the same
-day). Nothing here is adopted, queued or built.** Every constant below is
+day); one decision taken the same evening (below). Nothing here is queued or
+built.** Every constant below is
 either justified from a cited file or marked a placeholder to be set by
 measurement; names are listed at the end for the screens, which have not run.
 
@@ -13,6 +14,16 @@ src/eval/nnue/net_file.hpp (format version 2), src/core/material.hpp
 (`game_phase`), tools/nnue/s512pp.json, tools/train/src/main.rs (`Picker`,
 `bucket`); DESIGN.md Testing setup ("Which test a candidate gets", 2026-11-09)
 and the decisions log of 2026-11-09 (the speed price).
+
+**The owner's decision (2026-11-09, about 8 PM EST):** "Idea 53's 2e-5
+stop-loss and calibration's 30% offline kill become diagnostic only." So the
+probe's 2e-5 line is **reported, never a gate**: the probe still ranks the
+class maps and picks the one Stage B trains (a selection among candidates,
+not a pass/fail), and whether any map clears 2e-5 with its interval
+excluding 0 is reported with the ranking; if none does, the owner is told,
+and the idea still goes on to Stage B with the best-ranked map, whose
+fixed-node screen decides (the 2026-11-09 testing rule: offline metrics are
+diagnostics). §5.1 and §7 are amended accordingly.
 
 ## 1. What it is
 
@@ -199,6 +210,9 @@ heads), with a bootstrap interval resampling games.
   heads (if over 2e-5, the trained readout is under-converged: W2's side
   question, reported, not acted on here).
 
+**Settled (owner, 2026-11-09): diagnostic only.** The paragraph below is
+the question as it was put; the stop-loss it proposed is not used.
+
 **Owner decision (conflict in the records).** Idea 53's recorded kill
 criterion is "the probe's validation gain is under 2e-5 for every class
 map" (ideas.md, 2026-11-07). The testing rule of 2026-11-09 says offline
@@ -289,7 +303,7 @@ LTC confirmation.
 
 | stage | continue if | otherwise |
 |---|---|---|
-| A, probe | some map's held-out gain over M0 is at least 2e-5 with a bootstrap interval excluding 0 (stop-loss: owner to confirm, §5.1) | stop; idea 53 recorded as refuted at the probe (the phase gate already the right split for pawn classes) |
+| A, probe | always (owner, 2026-11-09: diagnostic only): the best-ranked map goes on; whether any map's held-out gain over M0 reaches 2e-5 with a bootstrap interval excluding 0 is reported | (no stop at the probe; a ranking with no map above 2e-5 is reported to the owner) |
 | speed | nps down at most 1% (bench/ab.py) | redesign the class computation once (a to b), else stop |
 | B, small nets | FN_adj of E against C above 0 | stop (a try of idea 53) |
 | C, full size | integrity checks pass | fix the conversion; not a strength decision |
@@ -319,7 +333,7 @@ Names: `pawn_class` (function), `PawnClassCount` (K), the class-map ids
 short name (e.g. "S512+PPE"), and any member holding the incremental class in
 the position state. Constants: K per map; the pawn-count edges 4 / 8; the ram
 edges 0 / 2; the island edge 2; the one-wing file split a-d / e-h; the phase
-merge of M10; the probe's 2 M held-out size and 2e-5 stop-loss (the latter
+merge of M10; the probe's 2 M held-out size and 2e-5 line (a diagnostic since 2026-11-09, owner; the latter
 from ideas.md 53); the small-net width 128; the fine-tune LR and length. All
 are placeholders or record values from ideas.md 53 / W2; none is taken from
 another engine.

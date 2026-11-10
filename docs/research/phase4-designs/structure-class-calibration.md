@@ -1,7 +1,7 @@
 # Structure-class calibration (R33): design, not adopted
 
-Status: **design for the owner's review, 2026-11-09. Nothing is adopted,
-queued or built.** §5.6 order step 17: "The structure-class calibration scale
+Status: **design for the owner's review, 2026-11-09; two decisions taken
+the same evening (below). Nothing is queued or built.** §5.6 order step 17: "The structure-class calibration scale
 (R33: fitted on SPRT games, adopted on fresh games)", after 8a (done).
 
 Sources read: DESIGN.md §5.6 (order step 17; ideas 10 and 11 replaced) and
@@ -10,6 +10,16 @@ policy); docs/research/phase4-think-tank/phase-c-synthesis.md R33 and
 phase-b-specialists.md C §0 (E1, E2, E3, E6) and C3, with B13's verdict;
 docs/ideas.md (ideas 10, 11, 50, 53); ~/fork-data/sprt/ (the stored SPRT
 folders, listed, not opened game by game).
+
+**The owner's decisions (2026-11-09, about 8 PM EST):** "Idea 53's 2e-5
+stop-loss and calibration's 30% offline kill become diagnostic only." and
+"Calibration uses design R". So: **step 1's 30% cut of the held-out
+category residual is reported, never a gate** (the fit and its
+cross-validation always go on to step 2; a cut under 30% is reported to the
+owner beside the fitted scales), and **the STC SPRT (step 4) and the LTC
+SPRT (step 5) are design R** (`--kind search`: [0, 6] nElo, alpha 0.05,
+beta 0.20, cap 8 STC stages / 4-6 LTC stages, the futility look after 2
+STC stages), not the network kind. §6 is amended accordingly.
 
 ## 1. What "structure-class calibration" refers to
 
@@ -151,7 +161,7 @@ game's opening reappears.
 
 | step | test | continue if | otherwise |
 |---|---|---|---|
-| 1 | offline fit and cross-validation (§4), no engine work | the held-out summed squared category residual falls by at least 30% (R33's kill line; C3 predicted at least 50%) | stop: the classes are wrong (R33 kill) |
+| 1 | offline fit and cross-validation (§4), no engine work | always (owner, 2026-11-09: diagnostic only); the held-out summed squared category residual's fall is reported against R33's 30% line (C3 predicted at least 50%) | (no stop here; a fall under 30% is reported to the owner) |
 | 2 | nps A/B (bench/ab.py, the class computed and the table at 1024 against the switch off) | under 1% slower | make the class incremental once, else stop |
 | 3 | fixed-node screen, speed-adjusted, against the switch off (1 stage, 800,000 nodes; testing rule: an evaluation-side candidate whose speed differs plays it first) | `FN + 118 log2(r) > 0` | stop (a try of idea r33) |
 | 4 | STC SPRT, design R ([0, 6], beta 0.2, cap 8, futility after 2), fresh openings | H1 | if H0 or the futility stop with an STC estimate above 0: one fixed 2-stage LTC estimate; if that is at or below +2 nElo, keep it off (C3's "within ±2" kill); if above, the owner decides |
@@ -159,11 +169,12 @@ game's opening reappears.
 
 Which SPRT kind: R33 changes the evaluation but is a switch-gated engine
 feature, so this design uses design R ("search features stay on design R");
-the network kind ([0, 5], alpha = beta = 0.05) is the alternative. **Owner
-decision.** Step 1's offline gate is R33's own recorded kill criterion; the
-testing rule of 2026-11-09 (offline metrics diagnostics only) was written for
-network candidates' validation loss, so this design keeps step 1 as a
-stop-loss; **owner to confirm** (the same question as idea 53's probe).
+the network kind ([0, 5], alpha = beta = 0.05) was the alternative.
+**Decided (owner, 2026-11-09): design R.** Step 1's offline gate was R33's
+own recorded kill criterion, and this design first kept it as a stop-loss;
+**decided (owner, 2026-11-09): diagnostic only**, as the testing rule of
+2026-11-09 has it for offline metrics (the same decision as idea 53's
+probe).
 
 **Refits:** at each later promotion, `s` is refitted on the new network's
 games and rides along with that network's own promotion SPRT (the network is
@@ -208,7 +219,8 @@ training scale S, a different thing). Constants: the eval band [50, 300) cp
 and the every-second-position sampling (C §0.1); the phase edges 44 / 20 in
 3-3-5-9 units (C §0.1); the pawn edges 4 / 8 and the cap 1.2 (C3); the one-wing
 split; `tau` (two candidates, placeholders); `n_min` (placeholder); the
-1024 denominator; the 30% kill line (R33). The fitted `S_k` values are
+1024 denominator; the 30% line (R33; a diagnostic since 2026-11-09,
+owner). The fitted `S_k` values are
 Fork's own measurements; C3 asks that the shrink strength go through the
 constant screen.
 

@@ -1,8 +1,56 @@
 # The final retune by scaling class (R24, order step 19), with RfpMargin's lower bound widened: design, not adopted
 
-Status: **design for the owner's review, 2026-11-09. Nothing is adopted,
-queued or built; no bound in src/tune/params.hpp is changed by this
-document.** §5.6 order step 19, after the factorial removal round (step 18).
+Status: **design for the owner's review, 2026-11-09; the owner's decisions
+of the same evening are recorded below.** §5.6 order step 19, after the
+factorial removal round (step 18).
+
+**The owner's decisions (2026-11-09, about 8 PM EST):** "Final retune:
+apply all ten lower-bound widenings plus RfpMargin's; make the SPSA report
+flag any parameter pinned at a bound." and "Calibration uses design R; the
+VLTC check uses a non-regression rule". Applied the same evening (branch
+retune/bounds-and-designs):
+- **The eleven ranges are widened in src/tune/params.hpp** (defaults and
+  steps unchanged, bench unchanged by the ranges): RfpMargin lowest 40 → 30,
+  LmpQuietAllowance 6 → 3, FutilityOffset 50 → 30, FutilityGrowth 35 → 25,
+  SingularMarginPerPly 3 → 2, SingularMinDepth 4 → 3, LmrMinMove 2 → 1,
+  LmpMaxDepth 2 → 1; NoMoveReduceMinDepth highest 10 → 16, ReplyWeight
+  8 → 12, NullSurplusPliesMax 4 → 6. RfpMargin's lowest is fixed at 30
+  (decision 3 below: the floor is then 30 + c, 45 at c = 15). The defaults
+  are phase-4's, R14's adopted values included (below).
+- **ReplyWeight's int16 headroom at 12: checked, no overflow.** The quiet
+  score (move_selector.cpp `score_quiets`, move_selector.hpp
+  `quiet_order_score`) sums in `int` and clamps to ±INT16_MAX before the
+  int16 store; every table entry stays within ±HistoryMax = 10,000
+  (quiet_history.hpp), so the sum is at most 10,000 × (4 + 12 + 8) / 4 =
+  60,000 in magnitude, exact in `int`. A reply entry alone at weight 12
+  reaches 30,000, still inside int16 without the clamp; sums of tables were
+  already clamped at the old highest values (ReplyWeight 8 with FollowWeight
+  8). Tests: tests/test_ordering.cpp (the sum's bound from the table's
+  highest values, every build; the scores at both limits with both weights
+  at their highest, tuning builds).
+- **The other bounds checked for hazards** (searcher.cpp): none breaks an
+  assumption; two notes. (1) **LmrMinMove 1 is the same search as 2**: the
+  first searched move takes the full-depth path, never the LMR branch
+  (`moves_searched + 1 >= LmrMinMove` is only tested from the second move
+  on), so the bound adds a value the SPSA cannot tell from 2 (a flat step,
+  harmless; a tuning-build test checks equal nodes, move and score at 1 and
+  2). (2) **SingularMinDepth 3** with SingularEntrySlack 3 admits a TT entry
+  of depth 0 (a quiescence entry with a move and a lower bound) to the
+  singular test at depth 3, searched at depth 1; the old ranges already
+  reached that (slack 6 at depth 6). NullSurplusPliesMax 6 gives null depths
+  at or below 0 more often, which the search already sends to the
+  quiescence search; LmpMaxDepth 1, LmpQuietAllowance 3 (at least 4 quiets at
+  depth 1), the margins at 30 / 25 / 2 per ply and NoMoveReduceMinDepth 16
+  are plain comparisons. A tuning-build test searches each widened bound
+  alone and all eleven at once (tests/test_search.cpp).
+- **The pinned-at-bound flag** is in `spsa.py report` (branch
+  tune/spsa-pinned, §3.3's tooling line).
+- **The VLTC check's rule** is the non-regression rule of §5 item 4.
+- **R14's tuned values were adopted on phase-4 the same evening (owner,
+  2026-11-09):** RfpMargin 55, FutilityOffset 86, FutilityGrowth 50,
+  CaptureSeeFloor 118, LmpQuietAllowance 8, NullSurplusPerPly 301, so the
+  starts in §3 are the code's defaults (decision 1 below is settled). Every
+  start lies inside its widened range.
 
 Sources read: DESIGN.md §5.6 (step 19 and its 2026-11-09 note), the
 decisions log (2026-11-07 decisions 4, 5, 21, 23; 2026-11-09 "RfpMargin's
@@ -81,24 +129,24 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | AspirationMinDepth | 5 | 2-10 | 1 | ? (>= 1) | 3 / 5 at c = 1 | ok at c = 1 |
 | AspirationHalfWidth | 12 | 6-24 | 1 | 1.0 | 6 / 12 | ok |
 | RfpMaxDepth | 6 | 3-12 | 1 | ? | 3 / 6 | ok at c = 1 |
-| **RfpMargin** | 55 | 40-160 | 6 | 15 | **1.0 (pinned)** / 7 | **lowest 30 (owner, 2026-11-09): floor 30 + c; at c = 15 the floor is 45.** Since c is recalibrated at step 19, the floor target (about 45) fixes lowest = 45 − c_new if c changes |
+| **RfpMargin** | 55 | 30-160 (was 40-160) | 6 | 15 | **1.0 (pinned)** / 7 | **lowest 30 (owner, 2026-11-09): floor 30 + c; at c = 15 the floor is 45.** Since c is recalibrated at step 19, the floor target (about 45) fixes lowest = 45 − c_new if c changes |
 | NullMinDepth | 3 | 1-6 | 1 | ? | 2 / 3 at c = 1 | **flag**; lowest is already the rule's floor for depths (1), so no widening; a pin is resolved by a head-to-head of 2 against 3 (design R tooling) |
 | NullSurplusPerPly | 301 | 150-600 | 23 | 7.8 | 19 / 38 | ok |
-| NullSurplusPliesMax | 2 | 0-4 | 1 | ? | 2 / 2 at c = 1 | **flag both sides**; lowest 0 is the counts' floor; proposal: highest 6 (beyond the rule's "twice", owner) |
+| NullSurplusPliesMax | 2 | 0-6 (was 0-4) | 1 | ? | 2 / 2 at c = 1 | **flag both sides**; lowest 0 is the counts' floor; highest 6 (beyond the rule's "twice"; **applied, owner 2026-11-09**) |
 | LmrMinDepth | 3 | 1-6 | 1 | ? | 2 / 3 | **flag**; lowest at the depth floor; head-to-head if pinned |
-| LmrMinMove | 4 | 2-8 | 1 | ? | 2 / 4 | **flag**; proposal: lowest 1 (the rule's half is 2; owner) |
+| LmrMinMove | 4 | 1-8 (was 2-8) | 1 | ? | 2 / 4 | **flag**; lowest 1 (the rule's half is 2; **applied, owner 2026-11-09**; 1 searches exactly as 2, see the status note) |
 | LmrCorrectionStrength | 64 | 0-128 | 6 | ? | wide | ok |
-| LmpMaxDepth | 4 | 2-8 | 1 | ? | 2 / 4 | **flag**; proposal: lowest 1 (owner) |
-| **LmpQuietAllowance** | 8 | 6-24 | 1 | 1.7 | **1.2 (pinned in R14 at 7.7)** / 9 | **proposal: lowest 3** (floor 4.7 at c = 1.7; the rule `quiets_searched >= LmpQuietAllowance + depth`, searcher.cpp, stays meaningful: at least 4 quiets at depth 1) |
+| LmpMaxDepth | 4 | 1-8 (was 2-8) | 1 | ? | 2 / 4 | **flag**; lowest 1 (**applied, owner 2026-11-09**) |
+| **LmpQuietAllowance** | 8 | 3-24 (was 6-24) | 1 | 1.7 | **1.2 (pinned in R14 at 7.7)** / 9 | **lowest 3, applied (owner, 2026-11-09)** (floor 4.7 at c = 1.7; the rule `quiets_searched >= LmpQuietAllowance + depth`, searcher.cpp, stays meaningful: at least 4 quiets at depth 1) |
 | FutilityMaxDepth | 6 | 3-12 | 1 | ? | 3 / 6 | ok |
-| **FutilityOffset** | 86 | 50-200 | 8 | 18.2 | **2.0 (still falling)** / 6.3 | **proposal: lowest 30** (floor 48 at c = 18.2) |
-| **FutilityGrowth** | 50 | 35-140 | 5 | 7.5 | **2.0 (still falling)** / 12 | **proposal: lowest 25** (floor 32.5) |
+| **FutilityOffset** | 86 | 30-200 (was 50-200) | 8 | 18.2 | **2.0 (still falling)** / 6.3 | **lowest 30, applied (owner, 2026-11-09)** (floor 48 at c = 18.2) |
+| **FutilityGrowth** | 50 | 25-140 (was 35-140) | 5 | 7.5 | **2.0 (still falling)** / 12 | **lowest 25, applied (owner, 2026-11-09)** (floor 32.5) |
 | SeePruneMaxDepth | 6 | 3-12 | 1 | ? | 3 / 6 | ok |
 | QuietSeeFloor | 60 | 30-120 | 5 | 22.5 (the range cap: insensitive, 8.6% at 6 steps) | 1.3 / 2.7 | **flag**; left out again (as in R14, by B7 rule 7) unless spsa_calibrate finds it sensitive on the post-round engine |
 | CaptureSeeFloor | 118 | 50-200 | 8 | 28 | 2.4 / 2.9 | marginal, ok |
 | HistoryBonusFactor | 25 | 12-50 | 2 | ? | 6.5 / 12.5 at c = 2 | ok |
 | HistoryBonusCap | 1250 | 625-2500 | 94 | ? | wide | ok (its range is tied to the history scale by tests/test_params.cpp) |
-| ReplyWeight | 6 | 0-8 | 1 | ? | 6 / **2** | **flag ceiling**; proposal: highest 12 (the rule's twice) after checking the int16 headroom of quiet-move scores (move_selector.cpp: `* ReplyWeight / 4`; UNVERIFIED that 12 fits) |
+| ReplyWeight | 6 | 0-12 (was 0-8) | 1 | ? | 6 / **2** | **flag ceiling**; highest 12 (the rule's twice), **applied (owner, 2026-11-09) after the int16 headroom check: no overflow** (the status note; tests/test_ordering.cpp) |
 | FollowWeight | 4 | 0-8 | 1 | ? | 4 / 4 | ok |
 | TakeWeight | 4 | 0-16 | 1 | ? | 4 / 12 | ok (capture scores are int16: move_selector.cpp line 83's bound) |
 
@@ -116,30 +164,37 @@ them, the pass tunes the table as it stands.
 
 | parameter | start | range now | step | c | room | flag and proposal |
 |---|---|---|---|---|---|---|
-| SingularMinDepth | 6 | 4-12 | 1 | ? | 2 / 6 | **flag**; proposal: lowest 3 (the rule's half) |
+| SingularMinDepth | 6 | 3-12 (was 4-12) | 1 | ? | 2 / 6 | **flag**; lowest 3 (the rule's half; **applied, owner 2026-11-09**) |
 | SingularEntrySlack | 3 | 0-6 | 1 | ? | 3 / 3 | ok at c = 1 |
-| **SingularMarginPerPly** | 6 | 3-12 | 1 | ? | 3 / 6 at c = 1; 1.5 at c = 2 | **flag**: O5 and R28 predict a lower margin at LTC (SE precision rises with depth, 0.91 at d6 to 0.97-0.98 at d7-12); proposal: lowest 2 |
-| NoMoveReduceMinDepth | 8 | 2-10 | 1 | ? | 6 / **2** | **flag ceiling**; proposal: highest 16 (the rule's twice) |
+| **SingularMarginPerPly** | 6 | 2-12 (was 3-12) | 1 | ? | 3 / 6 at c = 1; 1.5 at c = 2 | **flag**: O5 and R28 predict a lower margin at LTC (SE precision rises with depth, 0.91 at d6 to 0.97-0.98 at d7-12); lowest 2 (**applied, owner 2026-11-09**) |
+| NoMoveReduceMinDepth | 8 | 2-16 (was 2-10) | 1 | ? | 6 / **2** | **flag ceiling**; highest 16 (the rule's twice; **applied, owner 2026-11-09**) |
 | LmrDivisorTenths | 45 | 23-90 | 3 | ? | 7 / 15 steps | ok |
 
 p = 5 (6 with a double-extension limit if R28 is adopted).
 
 ### 3.3 Widening is a rule exception
 
-Every proposal above except RfpMargin's is **a proposal, not yet the
-owner's**. Each breaks DESIGN.md §5.2's "about half to twice the default"
+**All eleven widenings are the owner's (2026-11-09) and applied.** Each breaks DESIGN.md §5.2's "about half to twice the default"
 range rule as RfpMargin's does; the bounds are tuner limits only ("never
 played as such"), and changing them changes no played value (bench
 unchanged; tests/test_params.cpp needs only the default inside the range and
-the step within it). Keep each table step unchanged when widening, so c
-calibrated in table steps stays comparable (owner decision).
+the step within it). Each table step is kept unchanged, so c calibrated in
+table steps stays comparable.
 
 An alternative fix in the tool (perturbed values clipped at the bound while
 theta may reach it) biases the gradient near the bound; not recommended.
 
-**Tooling:** the report should also print "pinned at a bound" (theta at
-`lowest + c` or `highest − c` in at least a third of the updates), which would
-have caught LmpQuietAllowance (a small change to spsa.py's report; owner).
+**Tooling (built 2026-11-09, owner's decision; branch tune/spsa-pinned):**
+`spsa.py report` prints "pinned at a bound" for a parameter whose theta lies
+at its reachable floor `lowest + c` or ceiling `highest − c` (c of the next
+iteration, as the update clamps it; within c / 100, above the log's
+3-decimal rounding) in at least a third of the updates (rounded up), or in
+the last one; it names the side, the bound, the count and whether the last
+update is at it, and final.json lists the pins. The "step-limited" flag is
+kept. On spsa-r14-m2 it flags RfpMargin (floor 55, 10 of 13 updates, at the
+end) and LmpQuietAllowance (floor 7.7, 6 of 13, at the end), and not
+FutilityOffset (last 81.6, floor 68.2) or FutilityGrowth (lowest 49.1, floor
+42.5), which were falling but never reached their floors.
 
 ## 4. Iterations, games and gains
 
@@ -191,10 +246,25 @@ history (all set by Phase 3/4 ladders, never by SPSA).
    entering step 19, **120+1.2, 2 stages**, Hash 192-256 MB (a placeholder,
    scaling LTC's 64 MB with the time), fresh openings. sprt_run.sh's kinds
    accept only 8+0.08 and 40+0.4, so it runs in the positional form (stages
-   0-1). Declared rule: **pass if the 2-stage nElo estimate is above −1 SE**
-   (about −6 nElo at the 8.7 per-stage SE of a 1,600-game stage, 2 stages);
-   a fail goes to the owner with the option of reverting the LTC pass's values
-   first (the depth-sensitive ones). A VLTC stage is about 3 LTC stages of
+   0-1). **Declared rule: a non-regression rule (owner, 2026-11-09),**
+   replacing this design's "above −1 SE": **pass if the nElo estimate of the
+   2 stages' summed pentanomial (sprt_merge.py's `nelo`, the "nElo:"
+   figure) is at or above −3**, the lower edge of the Testing setup's
+   non-regression bounds [−3, 0]; the estimate is reported with its 95%
+   interval. Why this form: it reads the same edge as the non-regression
+   early-acceptance rule, but on the point estimate, because at 2 stages the
+   interval cannot clear −3 (its half-width is about 12 nElo: 17.02 / √2),
+   and a sequential [−3, 0] SPRT would need tens of VLTC stages (the LLR
+   drifts about 0.06 per stage at a true 0). Its operating points at the
+   2-stage SE of 6.1 nElo (8.68 / √2; my arithmetic, normal approximation):
+   P(pass) about 0.90 at a true +5, 0.69 at 0, 0.50 at −3, 0.31 at −6, 0.13
+   at −10. So a fail is a warning, not a verdict: it goes to the owner, with
+   two declared options, (a) revert the LTC pass's values (the
+   depth-sensitive ones) and keep the STC pass's, or (b) one extension by 2
+   more stages, judged once on the 4-stage sum by the same rule (SE 4.3).
+   The midpoint rule (pass if the LLR for [−3, 0] is positive, i.e. the
+   estimate above −1.5) was considered and not chosen: it fails a true 0 in
+   40% of checks. A VLTC stage is about 3 LTC stages of
    time (R24; LTC stages took 80-83 minutes in tm-r8-ltc, so about 4-4.2 hours,
    UNVERIFIED), near sprt.yml's 300-minute shard limit: split each stage into
    two half-stage runs of 800 games if the first one's shard times exceed 240
@@ -224,30 +294,46 @@ multi-cut, take history; queued 2026-11-08); and R14's own LTC sign guard.
 | **total** | **about 30-40 h** (R24 and the order: about 22-26 h plus validation and the VLTC check) | **about 93-121** |
 
 Engineering: the bounds change (params.hpp, a one-line edit per parameter,
-bench unchanged), two spec files, c calibration on the post-round engine
-(spsa_calibrate.py, minutes of local CPU), the pinned-at-bound report line.
+bench unchanged) and the pinned-at-bound report line, **both done
+2026-11-09**; still to do at step 19: two spec files and c calibration on the
+post-round engine (spsa_calibrate.py, minutes of local CPU). **The spec files
+(`spsa-r24-stc.json`, `spsa-r24-ltc.json`, placeholder names) are not
+written now:** their parameter lists depend on step 18's removals, their c
+values on the calibration of the post-round engine and their openings on the
+runs before them; when written, each `lowest` / `highest` is the table's
+(spsa.py refuses a spec bound outside the table's range, and by default
+takes the table's).
 
 ## 8. Decisions needed from the owner
 
 1. Confirm R14's adoption (its STC SPRT passed; LTC sign guard pending), so
-   the starts above hold.
+   the starts above hold. **Settled (owner, 2026-11-09): adopted on
+   phase-4.**
 2. The widenings beyond RfpMargin's: LmpQuietAllowance (lowest 3),
    FutilityOffset (30), FutilityGrowth (25), SingularMarginPerPly (2),
    SingularMinDepth (3), NoMoveReduceMinDepth (highest 16), ReplyWeight
    (highest 12, after a headroom check), NullSurplusPliesMax (highest 6),
-   LmrMinMove (lowest 1), LmpMaxDepth (lowest 1).
+   LmrMinMove (lowest 1), LmpMaxDepth (lowest 1). **Decided (owner,
+   2026-11-09): all applied**, ReplyWeight after its check (no overflow).
 3. RfpMargin's floor: lowest fixed at 30 (floor 30 + c), or lowest set to
-   45 − c once c is recalibrated (floor exactly 45).
+   45 − c once c is recalibrated (floor exactly 45). **Decided (owner,
+   2026-11-09): lowest 30, applied.**
 4. `LmrDivisorTenths` in the LTC pass (R24's explicit list) or the STC pass.
 5. The validation SPRT's design (design R as R14 ran, or [0, 5] at alpha =
    beta = 0.05 as the tune/spsa text says).
 6. Whether R24's new dimensions (shapes, multiplier, malus ratio, demoted
    batch-4 features) are added before step 19.
-7. The VLTC pass rule (above −1 SE) and its hash.
+7. The VLTC pass rule (above −1 SE) and its hash. **Rule decided (owner,
+   2026-11-09): a non-regression rule, defined in §5 item 4 (estimate at or
+   above −3 nElo); the hash is still open.** Decisions 4, 5 and 6 are still
+   open.
 
 ## 9. Names and constants for the screens (none screened yet)
 
-New bounds (lowest/highest values above); the spec names `spsa-r24-stc` and
+New bounds (lowest/highest values above; applied 2026-11-09, justified by
+the floor check of §3: each gives at least about one c of room below the
+start); the VLTC rule's −3 nElo threshold (the Testing setup's
+non-regression edge, not new); the pinned flag's c / 100 tolerance; the spec names `spsa-r24-stc` and
 `spsa-r24-ltc`; the LTC pair_sd 0.19-0.20 (Fork's own measurement, computed
 here); the VLTC hash; the iteration counts; the "pinned at a bound" one-third
 rule. Every tuned output value goes through the constant screen before its
@@ -269,7 +355,8 @@ used.
 - The LTC pair_sd at SPSA conditions (computed from two SPRTs' pentanomials,
   which include a real effect).
 - Whether a VLTC stage fits sprt.yml's 300-minute shard limit.
-- ReplyWeight's int16 headroom at 12.
+- ~~ReplyWeight's int16 headroom at 12.~~ Checked 2026-11-09: no overflow
+  (the status note; tests/test_ordering.cpp).
 - The size of the gain (R24: +1 to +5, central +3; the R14 result, +37.93 ±
   10.03 Elo at STC, suggests the early pass found much more than predicted,
   +2 to +7 for R14, so the remaining headroom is UNVERIFIED either way).

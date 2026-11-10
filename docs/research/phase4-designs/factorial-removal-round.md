@@ -1,7 +1,7 @@
 # The factorial removal round (R30 with the skeptic's four fixes): design, not adopted
 
-Status: **design for the owner's review, 2026-11-09. Nothing is adopted,
-queued or built.** It is §5.6 order step 18 (after step 12's search features),
+Status: **design for the owner's review, 2026-11-09; two of its decisions
+taken the same evening (below). Nothing is queued or built.** It is §5.6 order step 18 (after step 12's search features),
 the Phase 4 re-validation that replaces Quality control 6's per-feature
 [−3, 0] SPRTs (decisions log 2026-11-07, think tank decision 6).
 
@@ -13,6 +13,15 @@ phase-b-specialists.md ST5 and B14 §2.ST5 / §3.5; src/search/searcher.hpp
 (`FORK_SEARCH_SWITCHES` at phase-4 8af5e4f); docs/history/phase-4/sprt-log.md;
 tools/github/sprt_run.sh and .github/workflows/sprt.yml (one `test_opts` per
 run today).
+
+**The owner's decisions (2026-11-09, about 8 PM EST):** "Factorial removal
+threshold: "estimate <= 0"." and "build the factorial tooling when step 18
+comes up". So: **the removal rule is rule A** (§5.2: remove a switch whose
+estimate `v_j` is at or below 0 nElo, subject to the guard), the risk
+decision 6 accepted (about 23-24% of removing a +3 nElo feature at 16
+stages); and **the tooling of §3 (per-shard rows, the factorial and guard
+kinds, the row permutation, the design file, the fit script) is built when
+step 18 comes up**, not before. §8's decisions 2, 3, 4 and 6 are still open.
 
 ## 1. What decision 6 accepted
 
@@ -191,7 +200,8 @@ reconstruction; ST5 does not state the prior). With "estimate <= +1":
 | B: estimate <= +1 | 4.28 | 0.59 / 0.32 / 0.18 / 0.05 |
 | B | 3.49 | 0.61 / 0.28 / 0.13 / 0.02 |
 
-**Recommended: rule A** (it is the risk decision 6 accepted). An
+**Rule A, decided by the owner (2026-11-09)** (it is the risk decision 6
+accepted). An
 empirical-Bayes posterior mean across the k switches (ST2's shrinkage) is
 reported beside each estimate as a diagnostic; it does not change the rule.
 So per switch:
@@ -253,14 +263,16 @@ option plumbing (X18).
 ## 8. Decisions needed from the owner
 
 1. The removal threshold: rule A (estimate <= 0, the 23% figure) or R30's
-   wording (posterior mean <= +1, about 28-32% at our SEs).
+   wording (posterior mean <= +1, about 28-32% at our SEs). **Decided
+   (owner, 2026-11-09): rule A, "estimate <= 0".**
 2. `use_take_history`: out by the 1% triage rule (z about 2.96) or a factor
    as R30's candidate list says.
 3. `use_forced_move_stop`: out as time management, or a factor.
 4. The LTC guard for a removal set containing `UseTtEvalRefine` (or any
    LTC-listed switch).
 5. The tooling: per-shard rows, the factorial and guard kinds, the WLS
-   script (decision 5 approved per-shard options in principle).
+   script (decision 5 approved per-shard options in principle). **Decided
+   (owner, 2026-11-09): built when step 18 comes up.**
 6. Whether `tt_age_blend` is deleted at the fold-in.
 
 ## 9. Accepted risks (decision 6, and those this design adds)
@@ -281,7 +293,7 @@ Names: the kinds `factorial` and `guard`, the design file (e.g.
 `design-rows.json`), the fit script (e.g. `tools/github/factorial_fit.py`),
 any new metadata field (`row`). Constants: k = 8 and m = 3 (ST5's design),
 16-24 stages, the one-look rule (1 SE), the removal threshold 0 nElo (rule
-A) or +1 (rule B), the guard's [−6, 0], beta 0.2, cap 8 (B14), the pilot's
+A, the owner's choice on 2026-11-09), the guard's [−6, 0], beta 0.2, cap 8 (B14), the pilot's
 k = 4, m = 2, 1 stage (R30), the lack-of-fit 1% level, the control's 2.5 SE
 (R30). Statistics constants, none taken from an engine.
 

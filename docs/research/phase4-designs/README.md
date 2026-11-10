@@ -13,6 +13,15 @@ changed, and no name or constant here has been screened yet.
 | [factorial-removal-round.md](factorial-removal-round.md) | 18 (R30, decision 6) | which of 8 low-prior switches are removed, by a k = 8, m = 3 factorial with B14's four fixes | 21-43 STC stages (about 6-13 h) |
 | [final-retune.md](final-retune.md) | 19 (R24, decisions 4 and 21) | the STC and LTC SPSA passes by scaling class, the floor problem (RfpMargin and others), validation and the VLTC spot check | about 30-40 GitHub-hours |
 
+**The owner's decisions of 2026-11-09 (about 8 PM EST)** are recorded in
+each document and in DESIGN.md's decisions log: the final retune's eleven
+range widenings applied (src/tune/params.hpp) and a pinned-at-bound flag in
+`spsa.py report`; the factorial round removes at "estimate <= 0", its
+tooling built when step 18 comes up; idea 53's 2e-5 probe line and the
+calibration's 30% line are diagnostics only; the calibration's SPRTs are
+design R; the VLTC check uses a non-regression rule (final-retune.md §5).
+The recurring question below is settled by the third of these.
+
 Each document lists its decisions for the owner, its names and constants for
 the screens, and its unverified items. Two questions recur in more than one:
 - **Offline stop-losses against the 2026-11-09 testing rule** (offline
