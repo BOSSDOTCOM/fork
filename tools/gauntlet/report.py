@@ -11,8 +11,9 @@ is keyed by its shard, round and starting FEN). Its CCRL Blitz rating is
 shown for context only. Near a zero score the interval is wide and
 lopsided, and its lower end can be -inf.
 
-    python3 tools/gauntlet/report.py [--previous GAUNTLET] [--baseline GAUNTLET --adopted JSON]
-        SHARDS TABLE OUT ORDO [ORDO ARGS...]
+    python3 tools/gauntlet/report.py [--previous GAUNTLET] [--baseline GAUNTLET] [--adopted JSON]
+        [--archive DIR] SHARDS TABLE OUT ORDO [ORDO ARGS...]
+    python3 tools/gauntlet/report.py [the same options] --level0 GAUNTLET TABLE
     python3 tools/gauntlet/report.py --check SHARDS TABLE OUT CLAIM
 
 SHARDS holds one folder per shard (games.pgn, anchor.csv, shard.txt, as the
@@ -20,7 +21,18 @@ games job writes them); TABLE is tools/gauntlet/anchors.tsv; ORDO is the
 command that runs Ordo. OUT receives gauntlet.pgn and anchors.csv (Ordo's
 input: the anchors' games and ratings), ordo.txt, ordo.log, reference.pgn
 (the reference opponents' games) and summary.md, which is also printed.
-Without the options the output is exactly the gauntlet's report as before.
+
+Every section that gives an Elo names its model in its first line (owner,
+2026-11-09): the rating table is Ordo's fit (-W -D: the white advantage
+and the draw rate fitted; -m: the anchors fixed at their CCRL Blitz
+ratings; -s 1000); the gap to the reference and both levels of the anchor
+check use the plain logistic formula, with no white advantage or draw
+model, on the SPRTs' logistic Elo scale.
+
+Every gauntlet's artifacts are archived locally by tools/gauntlet/archive.sh
+(~/fork-data/gauntlet/run-ID: gauntlet-result's files at the top, each
+shard in a folder of its own name), so a run's result folder outlives
+GitHub's 90 days; level 0 reads that archive with --archive.
 
 The anchor check (docs/research/transfer-testing/report.md §5; owner,
 2026-11-09). Both levels measure a gain the same way: openings are
@@ -47,6 +59,20 @@ Level 0 (no extra games), options of the gauntlet report:
   interval; its "baseline" and "previous" name the runs the workflow
   downloads). The ratio's interval divides each bootstrap draw of the gain
   by a normal draw of the sum (SE = the root of the summed (ci95 / 1.96)^2).
+- --archive DIR (with --adopted): the local fallback. An earlier run whose
+  result is not where --previous or --baseline points (or that is not
+  given) is read from DIR/run-ID, ID the run transfer.json names
+  (tools/gauntlet/archive.sh's folder); the section says so. When neither
+  holds it, the section is left out with a line saying why (and a warning
+  on stderr).
+- --level0 GAUNTLET TABLE: only the level 0 sections, printed, for a
+  finished run's result folder (or merged PGN), no Ordo and no files
+  written. The local command when the runner could not download an
+  earlier run (before transfer.json's "previous" is moved on to this run):
+      tools/gauntlet/archive.sh RUN    (this run and the runs transfer.json names)
+      python -I tools/gauntlet/report.py --archive ~/fork-data/gauntlet \
+          --adopted tools/gauntlet/transfer.json \
+          --level0 ~/fork-data/gauntlet/run-RUN tools/gauntlet/anchors.tsv
 
 Level 1 (--check): the two-engine mode's report. SHARDS holds one folder per
 shard, each with old.pgn and new.pgn (OLD and NEW Fork against one anchor on
@@ -74,6 +100,14 @@ import sprt_merge as sm  # noqa: E402
 SEED = 20261109     # the date of the owner's decision; any fixed value would do
 RESAMPLES = 4000    # the transfer-testing report's count: its SDs move by about 1% between seeds
 POINTS = {'1-0': 1.0, '0-1': 0.0, '1/2-1/2': 0.5}
+ORDO_ARGS = ['-W', '-D', '-s', '1000']
+# Each section that gives an Elo names its model (owner, 2026-11-09). Ordo's options: its own -h text.
+ORDO_MODEL = ('Model: the Ordo fit, the anchors fixed at their CCRL Blitz ratings (-m), the white advantage and the '
+              'draw rate fitted (-W -D), errors from 1,000 simulations (-s 1000) at Ordo\'s default 95%')
+LOGISTIC_MODEL = ('Model: plain logistic fit, E = 1 / (1 + 10^(-diff/400)), the anchors fixed at their CCRL Blitz '
+                  'ratings, no white advantage or draw model (a draw counts half); the SPRTs\' logistic Elo scale')
+GAP_MODEL = ('Model: plain logistic conversion of Fork\'s mean pair score, Elo = -400 log10(1/score - 1), no white '
+             'advantage or draw model; the SPRTs\' logistic Elo scale; interval from the pentanomial game pairs')
 
 
 def headers(pgn):
@@ -224,18 +258,57 @@ def left_note(c):
     return ['- Not compared: ' + ', '.join(f'{a} ({why})' for a, why in sorted(c['left'].items()))] if c['left'] else []
 
 
-def read_gauntlet(path):
+def result_pgn(path):
+    """A gauntlet's merged PGN: PATH itself, or PATH/gauntlet.pgn for a result folder."""
     p = Path(path)
-    return (p / 'gauntlet.pgn' if p.is_dir() else p).read_text(encoding='utf-8', errors='replace')
+    return p / 'gauntlet.pgn' if p.is_dir() else p
 
 
-def level0(pgn, ratings, previous=None, baseline=None, adopted=None):
-    """The anchor check's level 0 section of the gauntlet report (a list of lines)."""
+def read_gauntlet(path):
+    return result_pgn(path).read_text(encoding='utf-8', errors='replace')
+
+
+def locate(kind, given, data, archive):
+    """Where level 0 reads the KIND ('previous' or 'baseline') gauntlet's result: GIVEN when it holds one,
+    else ARCHIVE/run-ID (tools/gauntlet/archive.sh's folder) for the run transfer.json (DATA) names. Returns
+    (path, None), (None, None) when the section is not asked for, or (None, why it is left out)."""
+    run = data.get(kind, {}).get('run')
+    if given is None and (archive is None or not run):
+        return None, None
+    if given is not None and result_pgn(given).is_file():
+        return given, None
+    local = Path(archive) / f'run-{run}' if archive is not None and run else None
+    if local is not None and (local / 'gauntlet.pgn').is_file():
+        return local, None
+    why = [f'nothing at {given}'] if given is not None else []
+    why.append(f'not in the archive ({local})' if local is not None else
+               'no archive given (--archive)' if run else 'transfer.json names no run')
+    return None, (f"the {kind} gauntlet's result" + (f' (run {run})' if run else '') + ' is not available: '
+                  + '; '.join(why) + ". Locally: tools/gauntlet/archive.sh RUN for each run, then report.py --archive "
+                  "~/fork-data/gauntlet --adopted tools/gauntlet/transfer.json --level0 ~/fork-data/gauntlet/run-THIS "
+                  "tools/gauntlet/anchors.tsv")
+
+
+def source_note(path, given):
+    return [] if path == given else [f'- Read from the local archive: {path}']
+
+
+def level0(pgn, ratings, previous=None, baseline=None, adopted=None, archive=None):
+    """The anchor check's level 0 section of the gauntlet report (a list of lines). A section whose earlier
+    gauntlet cannot be found (locate) is left out, with a line saying why (also on stderr)."""
     now = cells(pgn)
     lines = []
-    if previous is not None:
-        c = compare(cells(read_gauntlet(previous)), now, ratings, ('the previous run', 'this run'))
-        lines.append('### Anchor check: gain over the previous gauntlet')
+    data = json.loads(Path(adopted).read_text(encoding='utf-8')) if adopted is not None else {}
+    found = {}
+    for kind, given in (('previous', previous), ('baseline', baseline)):
+        found[kind], why = locate(kind, given, data, archive)
+        if why:
+            print(f'report.py: warning: {why}', file=sys.stderr)
+            lines.append(f'- Anchor check, {kind} gauntlet: left out ({why})')
+    if found['previous'] is not None:
+        c = compare(cells(read_gauntlet(found['previous'])), now, ratings, ('the previous run', 'this run'))
+        lines += ['### Anchor check: gain over the previous gauntlet', '- ' + LOGISTIC_MODEL]
+        lines += source_note(found['previous'], previous)
         if 'gain' not in c:
             lines += ['- No anchor and opening played in both runs.'] + left_note(c)
         else:
@@ -243,15 +316,16 @@ def level0(pgn, ratings, previous=None, baseline=None, adopted=None):
                       f'({method_note(c)})',
                       '- Per anchor: ' + '; '.join(f'{a} {signed(c["per_anchor"][a])} (SD {spread(c["per_draws"][a])[0]:.1f})'
                                                    for a in c['anchors'])] + left_note(c)
-    if baseline is not None:
-        data = json.loads(Path(adopted).read_text(encoding='utf-8'))
+    if found['baseline'] is not None:
         changes = data['adopted']
         total = sum(float(x['elo']) for x in changes)
         se = math.sqrt(sum((float(x['ci95']) / 1.96) ** 2 for x in changes))
-        c = compare(cells(read_gauntlet(baseline)), now, ratings, ('the baseline run', 'this run'))
+        c = compare(cells(read_gauntlet(found['baseline'])), now, ratings, ('the baseline run', 'this run'))
         base = data.get('baseline', {})
         lines.append('### Anchor check: running transfer ratio since the baseline gauntlet'
                      + (f' (run {base["run"]}, commit {base.get("commit", "?")})' if 'run' in base else ''))
+        lines += ['- ' + LOGISTIC_MODEL + '; the self-play sum is the SPRTs\' logistic Elo of each change']
+        lines += source_note(found['baseline'], baseline)
         lines.append(f'- Self-play: {len(changes)} adopted changes sum to {signed(total)} +/- {1.96 * se:.1f} Elo (95%): '
                      + '; '.join(f'{x["change"]} {signed(float(x["elo"]), 2)}' for x in changes))
         if 'gain' not in c:
@@ -296,7 +370,7 @@ def check(argv):
     (out / 'old.pgn').write_text(old, encoding='utf-8')
     (out / 'new.pgn').write_text(new, encoding='utf-8')
     c = compare(cells(old), cells(new), ratings)
-    lines = ['### Anchor check: NEW against OLD, paired by opening']
+    lines = ['### Anchor check: NEW against OLD, paired by opening', LOGISTIC_MODEL + '.']
     if 'gain' not in c:
         lines += ['No anchor and opening played by both sides: no result.'] + left_note(c)
     else:
@@ -338,12 +412,23 @@ def main(argv=None):
     if argv[:1] == ['--check']:
         return check(argv[1:])
     opts = {}
-    while argv[:1] and argv[0] in ('--previous', '--baseline', '--adopted'):
+    while argv[:1] and argv[0] in ('--previous', '--baseline', '--adopted', '--archive'):
         if len(argv) < 2:
             sys.exit(__doc__)
         opts[argv[0][2:]], argv = argv[1], argv[2:]
-    if ('baseline' in opts) != ('adopted' in opts):
-        sys.exit('report.py: --baseline and --adopted go together')
+    if 'baseline' in opts and 'adopted' not in opts:
+        sys.exit('report.py: --baseline needs --adopted')
+    if 'archive' in opts and 'adopted' not in opts:
+        sys.exit('report.py: --archive needs --adopted (transfer.json names the runs)')
+    if 'adopted' in opts and not {'baseline', 'archive'} & set(opts):
+        sys.exit('report.py: --adopted goes with --baseline or --archive')
+    if argv[:1] == ['--level0']:
+        if len(argv) != 3 or not opts:
+            sys.exit(__doc__)
+        lines = level0(read_gauntlet(argv[1]), read_ratings(argv[2]), opts.get('previous'), opts.get('baseline'),
+                       opts.get('adopted'), opts.get('archive'))
+        sys.stdout.write('\n'.join(lines) + '\n')
+        return 0
     if len(argv) < 4:
         sys.exit(__doc__)
     shards, table, out, ordo = argv[0], argv[1], Path(argv[2]), argv[3:]
@@ -362,16 +447,16 @@ def main(argv=None):
     (out / 'reference.pgn').write_text(''.join(p for k in sorted(games) if k[0] in reference for p in games[k]),
                                        encoding='utf-8')
     with open(out / 'ordo.log', 'w', encoding='utf-8') as log:
-        subprocess.run(ordo + ['-p', str(out / 'gauntlet.pgn'), '-m', str(out / 'anchors.csv'), '-W', '-D',
-                               '-s', '1000', '-o', str(out / 'ordo.txt')], stdout=log, stderr=subprocess.STDOUT,
-                       check=True)
-    lines = ['### Gauntlet: %d games' % len(re.findall(r'^\[Event ', pgn, re.M)), '```',
+        subprocess.run(ordo + ['-p', str(out / 'gauntlet.pgn'), '-m', str(out / 'anchors.csv')] + ORDO_ARGS
+                       + ['-o', str(out / 'ordo.txt')], stdout=log, stderr=subprocess.STDOUT, check=True)
+    lines = ['### Gauntlet: %d games' % len(re.findall(r'^\[Event ', pgn, re.M)), ORDO_MODEL, '```',
              (out / 'ordo.txt').read_text(encoding='utf-8').rstrip('\n'), '```']
     gaps = [gap(k[0], k[1], games[k]) for k in sorted(games) if k[0] in reference]
     if gaps:
-        lines += ['### Gap to the reference opponents (outside the Ordo fit)'] + gaps
+        lines += ['### Gap to the reference opponents (outside the Ordo fit)', '- ' + GAP_MODEL] + gaps
     if opts:
-        lines += level0(pgn, read_ratings(table), opts.get('previous'), opts.get('baseline'), opts.get('adopted'))
+        lines += level0(pgn, read_ratings(table), opts.get('previous'), opts.get('baseline'), opts.get('adopted'),
+                        opts.get('archive'))
     lines += ['Shards:'] + ['- ' + (f / 'shard.txt').read_text(encoding='utf-8').replace('\n', ' ') for f in folders]
     summary = '\n'.join(lines) + '\n'
     (out / 'summary.md').write_text(summary, encoding='utf-8')

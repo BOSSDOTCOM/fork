@@ -32,7 +32,9 @@
 # gauntlet-result artifacts of the runs it names ("previous" and "baseline")
 # and the report adds the paired-by-opening gain over the previous gauntlet
 # and the running transfer ratio since the baseline (tools/gauntlet/report.py;
-# an artifact that cannot be downloaded only leaves its part out). Level 1, a
+# an artifact that cannot be downloaded only leaves its part out, and the
+# warning gives the local command that reads the run's copy in the archive
+# tools/gauntlet/archive.sh keeps, ~/fork-data/gauntlet). Level 1, a
 # dispatch with the inputs old and new: the two-engine mode, OLD and NEW Fork
 # each against the chosen anchors (default Clover 6.1 and Altair 7.0.0) on
 # openings 1-200, both colours, at the gauntlet's conditions; each shard plays
@@ -233,13 +235,14 @@ jobs:
               tools/gauntlet/transfer.json "$kind")
             case $run in '' | *[!0-9]*) echo "transfer.json names no $kind run"; continue ;; esac
             gh run download "$run" -R "$GITHUB_REPOSITORY" -n gauntlet-result -D "earlier/$kind" ||
-              echo "::warning::the $kind gauntlet's result (run $run) could not be downloaded: its part of the anchor check is left out"
+              echo "::warning::the $kind gauntlet's result (run $run) could not be downloaded: its part of the anchor check is left out here. Its local copy is ~/fork-data/gauntlet/run-$run (tools/gauntlet/archive.sh). Locally, after tools/gauntlet/archive.sh $GITHUB_RUN_ID: python -I tools/gauntlet/report.py --archive ~/fork-data/gauntlet --adopted tools/gauntlet/transfer.json --level0 ~/fork-data/gauntlet/run-$GITHUB_RUN_ID tools/gauntlet/anchors.tsv"
           done
       - name: Ratings (the reference opponent apart)
         run: |
+          # A part whose earlier run is missing is left out by report.py, with a line saying why.
           set --
-          [ ! -f earlier/previous/gauntlet.pgn ] || set -- --previous earlier/previous
-          [ ! -f earlier/baseline/gauntlet.pgn ] || set -- "$@" --baseline earlier/baseline --adopted tools/gauntlet/transfer.json
+          [ ! -f tools/gauntlet/transfer.json ] ||
+            set -- --previous earlier/previous --baseline earlier/baseline --adopted tools/gauntlet/transfer.json
           python3 -I tools/gauntlet/report.py "$@" shards tools/gauntlet/anchors.tsv . ./ordo-src/ordo >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
