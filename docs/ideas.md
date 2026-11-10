@@ -2187,7 +2187,13 @@ until measured; new names and constants go through the screens before use.
   Declared before any label in docs/research/labels-teacher/step0-declaration.md
   (dc90302): golds by both scratch seeds at 1M nodes on idea 51's set H,
   labels at 20k-100k on H and a new H2 (20,000 g3j-w05-val games), the gate
-  to step 2. **runtime cost:** none. **earliest phase:** Phase 4.
+  to step 2. **Step 0 result (2026-11-09, 6:47-9:27 PM EST; docs/research/labels-teacher/step0-results.md,
+  branch research/labels-teacher 1721493): killed by the declared gate.** S512ppr3 searching 60k nodes beats E3
+  (three members at 20k each, equal total nodes) on both yardsticks: Y1 (Brier against results, 15,499 kept records)
+  E3 - 60k +0.001111 [+0.000858, +0.001362]; gold-mean Y2 (3,131) +0.000455 [+0.000300, +0.000620]; all three 1M golds
+  agree. Averaging helps against one 20k search, but by about a quarter of what three times the nodes on one net
+  buys. No small net is trained. The same run measured idea 51's same-network bias: about zero (results-8b.md,
+  idea51/td-labels 68d1527). **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 64. Score-fall time extension
 
