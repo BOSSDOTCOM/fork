@@ -1434,7 +1434,11 @@ on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
   iteration's step clamped to 0.5 c; theta kept at least c inside its
   range; the result is the mean of theta over the last 30% of the updates,
   rounded; a parameter clamped in at least two thirds of the updates is
-  reported step-limited (B14).
+  reported step-limited (B14), and one whose theta sits at its reachable
+  floor lowest + c or ceiling highest - c (within c / 100) in at least a
+  third of the updates, or at the last, is reported pinned at a bound
+  (owner, 2026-11-09: R14 pinned RfpMargin and LmpQuietAllowance; the range
+  is widened, final-retune.md).
 - **Never in SPSA:** the time-management parameters (the iteration rule and
   the time budget, refused by name) and the eval scale (not a parameter).
 - **Openings:** the tuning reserve, lines 2,000,001 to 2,632,036 of the

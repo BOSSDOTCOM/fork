@@ -170,6 +170,31 @@ class SpsaMathTest(unittest.TestCase):
         self.assertEqual(spsa.step_limited({'A': 8, 'B': 7, 'C': 12}, 12), ['A', 'C'])
         self.assertEqual(spsa.step_limited({'A': 9, 'B': 8}, 13), ['A'])
 
+    def test_pinned_at_bound_flag(self):
+        # Synthetic trajectories over 9 updates (a third: 3), c fixed: the reachable floor is lowest + c and
+        # the ceiling highest - c. F sits on its floor 3 times (flagged), G twice (not), H only at the last
+        # update (flagged, "at the end"), I at its ceiling 3 times, J near its floor but 0.05 c above it
+        # (not: it is free to move), K on its floor in 3 updates under a decaying c (the floor moves).
+        spec = {'c_decay': 0.0, 'params': [
+            {'name': 'F', 'lowest': 40, 'highest': 160, 'c': 15}, {'name': 'G', 'lowest': 6, 'highest': 24, 'c': 1.7},
+            {'name': 'H', 'lowest': 0, 'highest': 10, 'c': 2}, {'name': 'I', 'lowest': 0, 'highest': 8, 'c': 1},
+            {'name': 'J', 'lowest': 50, 'highest': 200, 'c': 18.2}]}
+        traj = {'F': [70, 60, 55, 55, 55, 60, 62, 63, 64], 'G': [9, 7.7, 7.7, 9, 9, 9, 9, 9, 9],
+                'H': [5, 5, 5, 5, 5, 5, 5, 3, 2], 'I': [5, 6, 7, 7, 7, 6, 5, 5, 5],
+                'J': [70, 69, 69.1, 69.1, 69.1, 69.1, 69.1, 69.1, 69.1]}
+        hist = [{'iteration': i, 'theta_after': {k: v[i] for k, v in traj.items()}} for i in range(9)]
+        self.assertEqual(spsa.pinned_at_bound(spec, hist),
+                         [('F', 'floor', 55, 3, False), ('H', 'floor', 2, 1, True), ('I', 'ceiling', 7, 3, False)])
+        self.assertEqual(spsa.pinned_at_bound(spec, []), [])
+        # A decaying c: the floor of update i is lowest + c / (i + 2)^gamma, theta clamped there as
+        # iteration_step does (rounded to 3 decimals, as the log keeps it).
+        decay = {'c_decay': 0.101, 'params': [{'name': 'K', 'lowest': 10, 'highest': 100, 'c': 8}]}
+        floors = [round(10 + 8 / (i + 2) ** 0.101, 3) for i in range(6)]
+        hist = [{'iteration': i, 'theta_after': {'K': floors[i] if i in (1, 2) else 30.0}} for i in range(6)]
+        self.assertEqual(spsa.pinned_at_bound(decay, hist), [('K', 'floor', floors[-1], 2, False)])
+        hist[2]['theta_after']['K'] = floors[2] + 0.5  # off the floor by 0.5 / 8 c: no longer at it
+        self.assertEqual(spsa.pinned_at_bound(decay, hist), [])
+
 R14_LIKE = {'params': [{'name': 'RfpMargin', 'c': 6}, {'name': 'FutilityOffset', 'c': 8}],
             'fixed': {}, 'iterations': 3, 'games': 64, 'shards': 2, 'draw_pairs': 1, 'tc': '8+0.08', 'hash': 16,
             'loss_budget': 0.5, 'pair_sd': 0.21, 'gain_exponent': 0.602, 'stability_offset': 9, 'clamp_c': 0.5,

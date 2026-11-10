@@ -30,7 +30,8 @@ of a_n c_i^2 (B7: the tuner works in units of c). With c fixed (c_decay 0, as B7
     spsa.py dispatch NAME          the inputs of the next run (key=value lines); writes i<stage>/dispatch.json
     spsa.py step NAME --stage D [--meta wall_minutes=M]
                                    verifies stage D's downloaded results and applies its update
-    spsa.py report NAME            every trajectory and the final values; writes final.json
+    spsa.py report NAME            every trajectory and the final values, flagging step-limited parameters
+                                   and parameters pinned at a bound; writes final.json
     spsa.py rewind NAME --to K     back to theta after iteration K (-1: the start); abandons a pending stage
     spsa.py merge FILE... [--json OUT]   a run's shard results summed (the workflow's summary)
 
@@ -215,6 +216,41 @@ def step_limited(clamp_counts, updates):
     them, not noise-limited."""
     need = math.ceil(2 * updates / 3)
     return sorted(k for k, v in clamp_counts.items() if updates and v >= need)
+
+
+# A theta is at a bound when it lies within this fraction of c of its reachable floor or ceiling. The clamp in
+# iteration_step puts theta exactly on the bound (up to the log's 3-decimal rounding), so any tolerance
+# above that rounding detects a pin; a hundredth of c (at least 0.01, as c >= 1) is one.
+PIN_TOLERANCE_C = 0.01
+
+
+def pinned_at_bound(spec, hist):
+    """Parameters pinned at a bound (final-retune.md §3.3, owner 2026-11-09): theta_after at the reachable
+    floor lowest + c or ceiling highest - c (c of the next iteration, as iteration_step clamps it; within
+    PIN_TOLERANCE_C * c) in at least a third of the updates, or in the last one. The floor or ceiling binds
+    there, not the gradient's noise, so the range hides where the parameter would go; the "step-limited" flag
+    (clamped steps) does not see this. [(name, 'floor' or 'ceiling', bound, updates at it, at the last), ...]
+    in spec order; a parameter at both bounds in different updates is listed for each."""
+    if not hist:
+        return []
+    need = math.ceil(len(hist) / 3)
+    out = []
+    for p in spec['params']:
+        name = p['name']
+        counts, last = {'floor': 0, 'ceiling': 0}, None
+        for h in hist:
+            c_next = c_at(spec, h['iteration'] + 1)[name]
+            theta, tol = h['theta_after'][name], PIN_TOLERANCE_C * c_next
+            side = ('floor' if theta <= p['lowest'] + c_next + tol
+                    else 'ceiling' if theta >= p['highest'] - c_next - tol else None)
+            if side:
+                counts[side] += 1
+            last = side
+        c_end = c_at(spec, hist[-1]['iteration'] + 1)[name]
+        for side, bound in (('floor', p['lowest'] + c_end), ('ceiling', p['highest'] - c_end)):
+            if counts[side] >= need or last == side:
+                out.append((name, side, round(bound, 3), counts[side], last == side))
+    return out
 
 
 # ------------------------------------------------------------------ the spec
@@ -538,10 +574,19 @@ def cmd_report(a):
               f'| {p["c"]:g} | {clamps[n]} | {traj} |')
     if limited:
         print(f'step-limited (clamped in at least 2/3 of the updates): {", ".join(limited)}')
+    pinned = pinned_at_bound(spec, hist)
+    if pinned:
+        items = [f'{n} ({side} {bound:g}, {count} of {len(hist)} updates{", at the end" if end else ""})'
+                 for n, side, bound, count, end in pinned]
+        print('pinned at a bound (theta at lowest + c or highest - c in at least 1/3 of the updates, or at the '
+              f'last; widen the range): {", ".join(items)}')
     write_json(data_dir(a.name) / 'final.json', {'label': spec['label'], 'commit': spec['commit'],
                                                   'iterations': len(hist), 'theta': theta,
                                                   'params': {k: round(v) for k, v in theta.items()},
-                                                  'clamped': clamps})
+                                                  'clamped': clamps,
+                                                  'pinned': [{'name': n, 'side': side, 'bound': bound,
+                                                              'updates': count, 'at_end': end}
+                                                             for n, side, bound, count, end in pinned]})
     return 0
 
 
