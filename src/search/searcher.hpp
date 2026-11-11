@@ -144,6 +144,13 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_pair_sum_update: the engine survey's D8: a cutoff's bonus and
+//   maluses move each pair table's entry (reply and follow) with the
+//   self-limiting term read from the move's entries in both tables summed
+//   (PairHistory::apply_from_sum), instead of from the entry alone, so the
+//   two tables approach the limit together. A table the node does not read
+//   (no arrival, or its switch off) is neither summed nor updated, so with
+//   one table the update is the usual one. No constant. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +184,8 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)          \
+  X(use_pair_sum_update, UsePairSumUpdate, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

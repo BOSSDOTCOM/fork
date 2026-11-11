@@ -23,7 +23,10 @@
 //   two plies back (the follow table). A move is a slot: its piece
 //   (colour and type) and its destination square; a node reached by a null
 //   move, or the root, has no arrival and reads and updates nothing. Same
-//   scale, bounds and update as the butterfly history.
+//   scale, bounds and update as the butterfly history; with the summed-base
+//   update (apply_from_sum, the engine survey's D8) the self-limiting term
+//   reads the move's entries in both tables together, and the result is
+//   clamped to the same bounds.
 // - Every index is in range: side 0-1; from- and to-squares 0-63 (Move masks
 //   them); a pair or take slot built from a real piece (colour and type), a
 //   square 0-63 and a victim type Pawn to King; an arrival a pair slot; a
@@ -122,6 +125,20 @@ class PairHistory {
     std::int16_t& v = table_[arrival][slot];
     const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
     v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
+  }
+
+  // The summed-base update (the engine survey's D8): as apply, but the
+  // self-limiting term reads `sum`, the move's entries in every pair table
+  // the search reads at its node taken together, instead of this entry
+  // alone, so the tables approach the limit jointly. The sum can lie beyond
+  // one entry's bound, so the result is clamped to [-HistoryMax, HistoryMax].
+  void apply_from_sum(int arrival, int slot, int amount, int sum) {
+    assert(arrival >= 0 && arrival < PairSlots && "pair history: arrival out of range");
+    assert(slot >= 0 && slot < PairSlots && "pair history: slot out of range");
+    std::int16_t& v = table_[arrival][slot];
+    const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
+    const int next = v + clamped - sum * std::abs(clamped) / HistoryMax;
+    v = static_cast<std::int16_t>(next > HistoryMax ? HistoryMax : next < -HistoryMax ? -HistoryMax : next);
   }
 
   void clear() {

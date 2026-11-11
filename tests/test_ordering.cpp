@@ -209,6 +209,43 @@ TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quie
   CHECK(drain(s) == plain);
 }
 
+// The summed-base update (the engine survey's D8), against hand-computed
+// values of v + b - sum * |b| / 10000: with the sum equal to the entry it is
+// the usual update; two entries already summing to the limit take no more
+// from a bonus, however small each is; a sum past the limit pulls an entry
+// back; and random updates of two entries by their sum stay within bounds.
+TEST_CASE("ordering", "pair history: the summed-base update (D8) by hand, and bounded") {
+  auto pairs = std::make_unique<PairHistory[]>(2);
+  PairHistory& reply = pairs[ReplyTable];
+  PairHistory& follow = pairs[FollowTable];
+  reply.apply(3, 7, 4000);
+  CHECK_EQ(reply.value(3, 7), 4000);
+  reply.apply_from_sum(3, 7, 1000, 4000);  // 4000 + 1000 - 4000 * 1000 / 10000
+  CHECK_EQ(reply.value(3, 7), 4600);
+  follow.apply(5, 7, 5400);
+  reply.apply_from_sum(3, 7, 1000, 10000);  // 4600 + 1000 - 10000 * 1000 / 10000: unchanged
+  CHECK_EQ(reply.value(3, 7), 4600);
+  reply.apply_from_sum(3, 7, 1000, 14000);  // 4600 + 1000 - 1400
+  CHECK_EQ(reply.value(3, 7), 4200);
+  reply.apply_from_sum(3, 7, -1250, -2000);  // 4200 - 1250 + 250
+  CHECK_EQ(reply.value(3, 7), 3200);
+  // The clamp: an entry at the limit with the other table far below it.
+  follow.apply_from_sum(5, 7, HistoryMax, -HistoryMax);  // 5400 + 10000 + 10000, clamped
+  CHECK_EQ(follow.value(5, 7), HistoryMax);
+  follow.apply_from_sum(5, 7, -HistoryMax, HistoryMax);  // 10000 - 10000 - 10000
+  CHECK_EQ(follow.value(5, 7), -HistoryMax);
+  std::uint64_t seed = 8;
+  for (int i = 0; i < 200000; ++i) {
+    const int amount = static_cast<int>(splitmix_next(seed) % 2501) - 1250;
+    const int sum = reply.value(3, 7) + follow.value(5, 7);
+    reply.apply_from_sum(3, 7, amount, sum);
+    follow.apply_from_sum(5, 7, amount, sum);
+    const int r = reply.value(3, 7), f = follow.value(5, 7);
+    CHECK_MSG(r >= -HistoryMax && r <= HistoryMax && f >= -HistoryMax && f <= HistoryMax,
+              "values " << r << ", " << f << " after amount " << amount);
+  }
+}
+
 // The take history (tier 2, T11): distinct slots, bounded updates, and the
 // selector orders two captures of the same victim by it instead of by the
 // attacker. Constructed position (checked with python-chess: legal, the
