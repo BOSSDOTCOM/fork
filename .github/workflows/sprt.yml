@@ -36,8 +36,11 @@ on:
 permissions:
   contents: read
 
+# One run at a time per SPRT (its base and test): its stages stay in order, while two SPRTs of different
+# commit pairs run side by side (owner, 2026-11-10 9:30 PM EST, GitHub Pro: two SPRT lanes; a single
+# group "sprt" held the second lane's run pending until the first finished).
 concurrency:
-  group: sprt
+  group: sprt-${{ inputs.base }}-${{ inputs.test }}
   cancel-in-progress: false
 
 jobs:
