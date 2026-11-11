@@ -219,9 +219,9 @@ for which engine and version this survey describes.
      from commit shape and tooling files. Fork's public repository would be
      labelled AI-generated; that matches its declared category.
 7. **Status counts** (comparison.md, 135 technique rows):
-   - 34 have;
+   - 35 have (J20, td90, moved from queued on 2026-11-10);
    - 13 tried, failed;
-   - 38 in progress or queued (35 queued, 3 in progress; Phase 6 items
+   - 37 in progress or queued (33 queued, 4 in progress; Phase 6 items
      included);
    - 1 parked;
    - 44 never tried (5 of them blocked by a missing prerequisite or Phase 6
@@ -236,6 +236,37 @@ for which engine and version this survey describes.
    - parked 1;
    - never tried 13;
    - excluded 1.
+
+## Owner corrections and follow-ups (2026-11-10)
+
+Recorded only; planning waits until the queue clears.
+1. **Corrections.** J20: td90 is TD(0.9) labels, retrain 8b's arm; it
+   passed STC (+12.17 ± 5.71) and is the default net. J10: 8b had no
+   old-data down-weighting arm. J3: idea 70 is prepared and approved (it
+   started on Kaggle at 6:50 PM EST from td90).
+2. **T56 against the common peer form (D5).** Fork's T56 is the common
+   form: the quiet (butterfly) history split into four buckets by whether
+   an enemy piece attacks the move's from-square and its to-square, read
+   and updated in the bucket of the position before the move
+   (`threat_bucket`, commits 2f6f4ac and 541ea70). Two sets of "attacked"
+   were declared (tools/tier2_measure/threat_set.json): **any enemy
+   attack**, the peers' form, and **an attack by a cheaper piece**. In the
+   declared measurement both lost to "off" (any attack −0.0208, cheaper
+   −0.0162); the cheaper set, the better of the two, was SPRTed and lost
+   (−6.08 ± 3.59). So the common form is not a new idea: it is T56's first
+   set, measured and beaten but never played in an SPRT. Differences from
+   some peers, UNVERIFIED per engine: Fork split only the butterfly table
+   (no continuation or capture history), and the measurement ran on
+   S512r2. T56 stays closed for this network; a later net may re-test it
+   only as a new idea (the existing rule).
+3. **B13, quiet history pruning:** untested in a firing form (the dropped
+   history-skip variant changed only 30 bench nodes); eligible for a test
+   with a threshold that actually fires.
+4. **H3, king buckets:** a bake-off round 3 candidate, since Fork's data
+   has roughly tripled since H-512.
+5. **R34, non-pawn correction tables:** a gateway item; its table
+   unblocks C15 (correction size in pruning) and E5 (correction update
+   rules).
 
 ## Items already queued from the survey (owner, 2026-11-10)
 
@@ -291,7 +322,6 @@ decision:
 - Torch's data and techniques (all second-hand);
 - Reckless's and Gaia's data after their early nets;
 - whether Integral's rated v8 net predates its Vine data;
-- the meaning of the 8b arm named "td90" (not defined in the files read);
 - whether pawnocchio's "chonker" relabels by static output or by search;
 - a few Fork code facts not checked here (pins in SEE, lazy accumulator
   updates, the NMP gate conditions).

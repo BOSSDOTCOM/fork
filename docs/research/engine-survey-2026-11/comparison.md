@@ -52,7 +52,7 @@ Coda and Incipit, Fritz and Ginkgo, Rebel and Chess System Tal.
 | B10 ⚑ | Opponent-worsening RFP | Raphael +6.4; Hobbes +3.5; Quanticade +1.85; Berserk +1.1 LTC; Starzix (title only) | new | **never tried** |
 | B11 ⚑ | History-scaled pruning margins (SEE, futility, LMP, qsearch SEE) | Ethereal SEE +7.0 / +2.3; Halogen +4.8; Reckless qsearch SEE +4.5 / +3.6; Raphael futility +3.3, LMP +2.0 LTC; Quanticade RFP +3.0; Tarnished futility +2.3 | new | **never tried** |
 | B12 ⚑ | Check-aware pruning: an LMP guard or no futility for checking quiets, also in qsearch | Reckless LMP guard +2.8 / **+9.5**; pawnocchio LMP +3.6 / **+9.0**, qsearch +5.5; Raphael +2.2, qsearch +5.2; Viridithas checks tactical in SEE pruning +3.1 STC | new | **never tried**. Fork relieves checking quiets in LMR only (check relief, +11.26 ± 5.54) |
-| B13 | Quiet history pruning | Tarnished +8.9; Halogen, Viridithas (S2); Gaia, Astra | S2 4 item 8, R29 | **never tried**: built on tier2/b4 as "history-skip", **dropped untested** (owner, 2026-11-10: 30 bench nodes changed) |
+| B13 | Quiet history pruning | Tarnished +8.9; Halogen, Viridithas (S2); Gaia, Astra | S2 4 item 8, R29 | **never tried in a firing form** (owner, 2026-11-10): built on tier2/b4 as "history-skip" and dropped untested; that variant changed only 30 bench nodes, so it hardly fired. Eligible for a test with a threshold that fires |
 | B14 | Bad-capture futility | Hobbes +6.5; Tarnished +2.6 | KB T36 | **queued**: a final-retune SPSA dimension (owner, 2026-11-10) |
 | B15 ⚑ | ProbCut and small (TT) ProbCut | Integral +13.4 LTC; pawnocchio +8.7 LTC; Halogen +5.0 / +6.3; Quanticade +5.5 at 60+0.6; Hobbes +5.3 / +3.7; Lizard evasion form +4.2; Raphael +3.5; Tcheran +3.6; JustBot +2.3; Alexandria 8.0 (b) | S1 7.3, S2 supplement | **tried, failed**: −5.29 ± 3.58 (H0); no retest, at LTC either (owner) |
 | B16 | Qsearch LMP (move-count pruning) | Raphael +5.1; Tarnished +4.1; Hobbes +3.3; Obsidian (commit title) | new | **never tried** |
@@ -91,7 +91,7 @@ Coda and Incipit, Fritz and Ginkgo, Rebel and Chess System Tal.
 | D2 | Continuation history, 1 and 2 plies | universal; Tarnished 2-ply +4.9 | KB T10 | **have**: reply table +11.46 ± 5.57, follow table +7.22 ± 3.92 |
 | D3 | Continuation history at 4 to 6 plies | Halogen +4.6; Hobbes +2.0 / +1.5; Alexandria 9.1, Astra (b) | new | **never tried** |
 | D4 | Capture history | Tarnished +7.1; Igel +2.9 / +7.0 | KB T11 | **have**: take history +4.53 ± 2.99 |
-| D5 ⚑ | Threat-indexed quiet history | Quanticade +11.4; PZChessBot +11.0 / +17.0; Cinder +10.2; Tcheran +9.3 LTC; Raphael +5.7; Integral +5.7; Halogen +5.15; Hobbes +4.7; Tarnished +4.0; Lizard +2.7; pawnocchio +2.5; Ethereal +2.3 / +2.9; Igel +1.75 / +2.85; Coda, ZigQueen, Renegade | KB T56 | **tried, failed**: cheaper-attacker threat set −6.08 ± 3.59 (H0); T56 closed for this network |
+| D5 ⚑ | Threat-indexed quiet history | Quanticade +11.4; PZChessBot +11.0 / +17.0; Cinder +10.2; Tcheran +9.3 LTC; Raphael +5.7; Integral +5.7; Halogen +5.15; Hobbes +4.7; Tarnished +4.0; Lizard +2.7; pawnocchio +2.5; Ethereal +2.3 / +2.9; Igel +1.75 / +2.85; Coda, ZigQueen, Renegade | KB T56 | **tried, failed**: T56 is the common form (the butterfly history in four buckets by whether an enemy piece attacks the from- and the to-square; see ranking.md 3.2). Any enemy attack, the peers' set: lost in the declared measurement, not SPRTed; cheaper-attacker set: −6.08 ± 3.59 (H0). T56 closed for this network |
 | D6 | Threat-aware capture history | Raphael +3.3 / +4.15; Ethereal +2.3 / +1.4; Motor +2.0; Renegade | new | **never tried** (UNVERIFIED whether T56's set also touched the take history) |
 | D7 ⚑ | Pawn-structure history | Reckless +4.4 / +2.1; Raphael +2.7 LTC; Igel +2.5 / +3.0; Tarnished +2.2; Devre +1.8; PZChessBot −0.5 / +3.9; Astra | KB T12, R21 | **queued**: structure history at weight 5, kept in the 2026-11-10 trim |
 | D8 ⚑ | Summed continuation score as each continuation table's update base | Hobbes +10.6; Tcheran +9.1; Tarnished +2.2 / +2.5; Integral +2.4 / +1.5; Quanticade +1.6 | new | **never tried** |
@@ -110,7 +110,7 @@ Coda and Incipit, Fritz and Ginkgo, Rebel and Chess System Tal.
 | # | Technique | Engines and reported gains | Prior | Fork's status |
 |---|---|---|---|---|
 | E1 ⚑ | Pawn correction table | Tcheran +21.8; Devre +20.5 (first table); Tarnished +20.0; Hobbes +12.6; Raphael +11.3; Motor +6; Titan +4.1; Berserk depth-weighted +3.2 LTC | S2 4.4 | **tried, failed**: the drift table −0.35 ± 3.72 at LTC, undecided at the 9,984-game cap; not adopted |
-| E2 ⚑ | Non-pawn correction tables | Tarnished +27.0; Tcheran +12.7; Devre +11.9; Hobbes +10.6; Raphael +6.6; Berserk +3.6 LTC; Quanticade +3.25; Lizard +2.6 | S1 7.1.e, S2 4.4, R34 | **queued**: R34, passive ranking then the best key at LTC (step 16) |
+| E2 ⚑ | Non-pawn correction tables | Tarnished +27.0; Tcheran +12.7; Devre +11.9; Hobbes +10.6; Raphael +6.6; Berserk +3.6 LTC; Quanticade +3.25; Lizard +2.6 | S1 7.1.e, S2 4.4, R34 | **queued**: R34, a **gateway item** (its table unblocks C15 and E5; (owner, 2026-11-10)), passive ranking then the best key at LTC (step 16) |
 | E3 ⚑ | Continuation correction tables | Hobbes +11.6, +10.6; Tcheran +8.2; Raphael +7.1, +1.85; Berserk +5.5 LTC; Devre +5.3; Cinder +3.0, +4.7, +2.2; Alexandria 4-ply +2.7; Stockfish 6-ply +1.4 / +1.1; PlentyChess +0.9 | S1 7.1.e, R34 | **queued**: R34 |
 | E4 ⚑ | Minor, major, material or threat correction tables | Tarnished minor +16.9, major +4.3; Tcheran major and minor +18.9, threat +9.3; Raphael major +6.8; PZChessBot material +5.2, threat +5.1; Devre material +4.1; Motor | S1 7.3 | **excluded**: dropped by the owner (think-tank decision 20) |
 | E5 ⚑ | Correction update rules: gravity, divide after summing, update on a losing-capture best move, update toward a draw on an upcoming repetition | Integral +6.3, +3.4 LTC; Hobbes +3.9, +4.9, +4.0, +4.6 LTC; Berserk +3.4 LTC; Tcheran +3.3; Viridithas +2.3 LTC; pawnocchio +2.2 LTC | new | **never tried**: depends on R34 producing a table |
@@ -150,7 +150,7 @@ Coda and Incipit, Fritz and Ginkgo, Rebel and Chess System Tal.
 |---|---|---|---|---|
 | H1 | Horizontal mirroring | Tarnished +28.2 LTC; Raphael +16.5; Tcheran +7.5; Minke | KB | **have**: S-512 family |
 | H2 | Material or phase output buckets | Raphael +12.7; Tcheran +9.9 | KB | **have**: 8 outputs picked by phase |
-| H3 ⚑ | King input buckets (with a factoriser, grown with data) | Raphael +25 to +33 per step early, then +8 to +10; Tarnished +8.8, +26.7, +15.8 LTC; Lizard +14.9 (+82 in DFRC with a factoriser); Titan +14.7 LTC; Motor +11; Alexandria doubled buckets +10.6 LTC; Tcheran +19.0 (with data), +2.95; Hobbes +2 to +7 per step; Minke, JustBot, PZChessBot | S2 N3 | **tried, failed**: H-512 (4 king regions and a factoriser) FN +32.23 but STC −24.36 (round 1); FN −12.17 (round 2) |
+| H3 ⚑ | King input buckets (with a factoriser, grown with data) | Raphael +25 to +33 per step early, then +8 to +10; Tarnished +8.8, +26.7, +15.8 LTC; Lizard +14.9 (+82 in DFRC with a factoriser); Titan +14.7 LTC; Motor +11; Alexandria doubled buckets +10.6 LTC; Tcheran +19.0 (with data), +2.95; Hobbes +2 to +7 per step; Minke, JustBot, PZChessBot | S2 N3 | **tried, failed**: H-512 (4 king regions and a factoriser) FN +32.23 but STC −24.36 (round 1); FN −12.17 (round 2). **Bake-off round 3 candidate** (owner, 2026-11-10): Fork's data has roughly tripled since H-512 |
 | H4 ⚑ | Multi-layer head after the accumulator | Integral +29.5 LTC; Obsidian 15 +27 LTC; Tarnished +20.7 LTC; Hobbes +20.3 LTC; Minke +17.9 LTC; PZChessBot +16.0 LTC; Tcheran +16.5; Horsie +13.7 LTC; Raphael +6.6 LTC (float first −4.6 STC); Quanticade +6.2 LTC (lost STC); pawnocchio +10 STC | S2 N8 | **tried, failed**: AF-S FN +41.67 / +10.43, STC −48.52 / −55.85 (speed, 32 cp quantization loss) |
 | H5 ⚑ | Dual activation in the head | Hobbes +16.5 LTC; Tcheran +7.2; Minke +6.0 LTC; pawnocchio +6.3 LTC; Tarnished +3.5 LTC; Raphael no gain | new | **never tried**: needs a multi-layer head (H4) |
 | H6 ⚑ | Pawn-pair inputs | Devre +24.1 LTC; ZigQueen +15 to +23; Alexandria TI→TI+PP +13.5 LTC; Integral +7.2 LTC; Berserk +1.9 LTC; pawnocchio (origin, bundle +30.3 LTC); Hobbes, Triumviratus, Gaia, Cinder, Coda | S2 | **have**: Fork's own 608 pawn links, FN +46.09 ± 10.37, STC +32.67 ± 10.48 |
@@ -177,14 +177,14 @@ Coda and Incipit, Fritz and Ginkgo, Rebel and Chess System Tal.
 |---|---|---|---|---|
 | J1 | Warm-start retrain from the previous net | Fork's own finding; common practice | — | **have**: the standard recipe (warm beat scratch by 0.00042 validation loss) |
 | J2 | Average the weights of the last checkpoints | Triumviratus final net; Stockfish SWA experiments (open) | S1 7.2.2 | **have**: R1-avg, S512ppr3 +7.12 ± 4.53 STC |
-| J3 ⚑ | Pure-result or result-heavy final fine-tune | Ethereal **+42.7 / +35.6**; Raphael +18.3, +3.5, +3.5; Berserk +11.7 LTC; Hobbes +5.4 LTC, newest data +8.9 LTC; Minke +8.1 LTC, +3.6 LTC; Halogen +6.9 LTC (0 STC); Tcheran +5.0; pawnocchio +4.2 LTC (STC H0); Tarnished +3.9; Seer 2.8 (b). Against: Viridithas −57 on recent data only; Hobbes's newest recipe ends at a low result weight (b) | S2 N2, R39 | **queued**: idea 70 after 8b; R39's high-WDL branch was not run in 8a |
+| J3 ⚑ | Pure-result or result-heavy final fine-tune | Ethereal **+42.7 / +35.6**; Raphael +18.3, +3.5, +3.5; Berserk +11.7 LTC; Hobbes +5.4 LTC, newest data +8.9 LTC; Minke +8.1 LTC, +3.6 LTC; Halogen +6.9 LTC (0 STC); Tcheran +5.0; pawnocchio +4.2 LTC (STC H0); Tarnished +3.9; Seer 2.8 (b). Against: Viridithas −57 on recent data only; Hobbes's newest recipe ends at a low result weight (b) | S2 N2, R39 | **in progress**: idea 70, prepared and approved (owner, 2026-11-10), from td90; R39's high-WDL branch was not run in 8a |
 | J4 | Result-weight ramp in the main stage | Halogen linear ramp +5.4 LTC (b); Raphael, Minke; against: Raphael −8.5, Tcheran −7.0 | S1 7.2.3, R27 | **queued**: R27's result-weight arm (Fork trains at a constant 0.5) |
 | J5 | Feature-transformer weight decay | Stockfish +4.0 / +5.3 | new | **queued**: idea 71 (8c arm) |
 | J6 | Activation or feature-transformer-output regularisation (L1 or sparsity loss) | Integral +5.2 LTC; Minke +5.0 / +3.7; Tcheran +16.0 (with 1 B more data); Coda (0.9.4), Cinder #1119, Raphael (light, with its sparse layer), Stormphrax (S2) | S2 | **never tried** |
 | J7 | Ranger optimiser | Tcheran +3.5; Integral +3.2 STC; Halogen beta change (b) +5.4 LTC | S2 | **never tried** |
 | J8 | Longer or deeper low-LR final stage | Raphael linear LR +4.8; Ethereal +2.6 / +2.2; Stockfish +0.6 / +1.8 | S1, R2 | **tried, failed**: 8a's cooldown branch and anneal-only arm did not beat R1-avg |
 | J9 | Fine-tune on the newest data only | pawnocchio +3.4 / +13.6 (4T LTC +19.3); Hobbes +6.65, +8.9 LTC (with a high result weight); against: Viridithas −57, −9.7 | S2 6 | **never tried** |
-| J10 | Purge or down-weight old data | Minke +11.8, +3.8 LTC; Viridithas (S2); Raphael, Lizard, RubiChess, Caissa (b) | S2 N1, R3 | **queued**: R3's half-weight arm (not run in 8a; UNVERIFIED whether 8b has it) |
+| J10 | Purge or down-weight old data | Minke +11.8, +3.8 LTC; Viridithas (S2); Raphael, Lizard, RubiChess, Caissa (b) | S2 N1, R3 | **queued**: R3's half-weight arm, run in neither 8a nor 8b (8b had no old-data down-weighting arm (owner, 2026-11-10)) |
 | J11 | Relabel with a larger own teacher | Devre transformer teacher +21.7; pawnocchio +4.7, +11.0, +4.0 LTC; Tarnished +3 to +4 LTC; PlentyChess "self-distillation" (b); against: Viridithas static-output relabels −3 | S2 N10 | **never tried**: idea 58 (plan only); the ensemble teacher (idea 63) killed at step 0 |
 | J12 | Relabel old data by search with each new net | Viridithas, RubiChess, rofChade, Igel, Revenge | S2 | **have**: decision A+ (rescoring with newer Fork nets) and the labeller policy |
 | J13 | SPSA of the net's last layer, or of the net in games | Berserk +17.2 LTC; Caissa 2.0 (b); Stockfish (no figure); RubiChess last-layer rescale +2 to +6 | S2 N4 | **never tried** |
@@ -194,7 +194,7 @@ Coda and Incipit, Fritz and Ginkgo, Rebel and Chess System Tal.
 | J17 | Random position skipping | Hobbes +8.9; Minke +5.3 FN; Raphael +2.4; Gaia | new | **have** in a different form: the split search saves a random share of positions (idea 13; UNVERIFIED that the effect is equivalent) |
 | J18 | Loss shape (power above 2, pessimistic skew) | Motor +24 (early); Halogen +3.2 LTC; Starzix, Cinder (no figure) | M5 | **never tried** (cross-entropy judged not for Phase 4) |
 | J19 | WDL or draw head; auxiliary heads | Lc0 (WDL since 2019), Seer, Stoofvlees | ideas 65, 67 | **queued**: plan only, after the conversion-and-defense results |
-| J20 | Value targets from the game's later search values (TD-style) | Lc0 (search-value and result blend); Seer 2.3 blend "far superior" | idea 51, R37 | **queued**: idea 51 (plan); 8b has a "td90" arm (definition not read: UNVERIFIED) |
+| J20 | Value targets from the game's later search values (TD-style) | Lc0 (search-value and result blend); Seer 2.3 blend "far superior" | idea 51, R37 | **have**: td90 is TD(0.9) labels, retrain 8b's arm (idea 51); STC +12.17 ± 5.71 against S512ppr3 (r8b-stc-1, 4,800 games), the default net since 2026-11-10 |
 
 ## K. Data generation and labels
 
@@ -228,9 +228,9 @@ counts as queued.
 
 | Status | Rows | Count |
 |---|---|---|
-| have | A1, A2, B1, B2, B18, C1, C2, C7, C14, D1, D2, D4, D16, F1, F2, F5, F6, F14, H1, H2, H6, I1, I5, J1, J2, J12, J17, K1, K3, K4, K6, L1, L2, L4 | 34 |
+| have | A1, A2, B1, B2, B18, C1, C2, C7, C14, D1, D2, D4, D16, F1, F2, F5, F6, F14, H1, H2, H6, I1, I5, J1, J2, J12, J17, K1, K3, K4, K6, L1, L2, L4, J20 | 35 |
 | tried, failed | B8, B15, B17, C3, C10, D5, E1, F8, H3, H4, H7, I2, J8 | 13 |
-| in progress or queued | B3, B4, B5, B9, B14, C4, C5, C8, C9, C11, C12, C13, C18, D7, D10, D11, D17, E2, E3, F7, F13, G1, G2, G3, G5, H8, I6, J3, J4, J5, J10, J14, J15, J19, J20, K2, K5, L3 | 38 |
+| in progress or queued | B3, B4, B5, B9, B14, C4, C5, C8, C9, C11, C12, C13, C18, D7, D10, D11, D17, E2, E3, F7, F13, G1, G2, G3, G5, H8, I6, J3, J4, J5, J10, J14, J15, J19, K2, K5, L3 | 37 |
 | parked | A3 | 1 |
 | never tried | A4, A5, A6, B6, B7, B10, B11, B12, B13, B16, B19, C6, C15, C16, C17, D3, D6, D8, D9, D12, D13, D14, D15, E5, F3, F4, F9, F10, F11, F12, G4, H5, H9, H10, I3, I4, J6, J7, J9, J11, J13, J16, J18, K7 | 44 |
 | excluded | A7, E4, H11, K8, K9 | 5 |

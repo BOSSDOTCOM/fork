@@ -93,7 +93,7 @@ cost.
 | 41 | B19 | Mate-seeking mode | Stockfish (matetrack, not Elo) | 1 | 3 | 3 | Idea 22 |
 | 42 | H9 | Material- or queen-routed input buckets | Triumviratus +10.3 (net alone); Stockfish (b) | 1 | 2 | 2 | Refresh cost, as H-512's king regions |
 | 43 | H10 | Separate endgame net | PZChessBot (early) | 1 | 1 | 1 | S1: do not build |
-| — | B13 | Quiet history pruning | — | — | — | — | Not ranked: dropped untested by the owner (2026-11-10) |
+| — | B13 | Quiet history pruning | Tarnished +8.9; 4 more engines | — | — | — | Not ranked yet: untested in a firing form (the dropped variant changed 30 bench nodes); eligible for a test with a threshold that fires (owner, 2026-11-10) |
 
 ## 3. Shared-idea flags
 
@@ -108,14 +108,14 @@ comparison.md):
 - **TT:** F3 (early eval-only write) and F4 (node-type cutoff gating).
 - **Evaluation scaling:** F10 (material scaling).
 - **Blocked by a missing prerequisite:** C15 and E5 (both need a correction
-  table), H5 and I3 (both need a multi-layer head), and G4 (Phase 6).
+  table; R34 is their **gateway item** (owner, 2026-11-10)), H5 and I3 (both need a multi-layer head), and G4 (Phase 6).
 
 ### 3.2 Shared ideas Fork tried and lost
 
 | Row | Idea | Peers | Fork | What the peers' record says about the gap | Recommendation |
 |---|---|---|---|---|---|
 | D5 | Threat-indexed quiet history | 15 or more engines, +1.75 to +17 | −6.08 ± 3.59 (cheaper-attacker buckets) | Most peers index by whether the from- and to-squares are attacked, a cheap boolean form. Fork's measured set lost to "off" in both variants | No retest of the quiet form on this net (T56's closure). The capture-history form (D6) is ranked separately; the owner rules whether it counts as new |
-| H3 | King input buckets | near-universal; grown with data | H-512: FN +32, STC −24 at about 0.5 B positions | Peers added buckets step by step as data grew, warm-started with a factoriser; several first tries failed on old data (Raphael) | Not before 8c. A warm-started bucket net (S2 N3) only with its refresh cost measured first; the think tank rated it WEAK |
+| H3 | King input buckets | near-universal; grown with data | H-512: FN +32, STC −24 at about 0.5 B positions; a bake-off round 3 candidate, the data having roughly tripled (owner, 2026-11-10) | Peers added buckets step by step as data grew, warm-started with a factoriser; several first tries failed on old data (Raphael) | Not before 8c. A warm-started bucket net (S2 N3) only with its refresh cost measured first; the think tank rated it WEAK |
 | H4 | Multi-layer head | near-universal in the top 30 | AF-S: FN +42 / +10, STC −49 / −56 (speed, 32 cp quantization loss) | Peers' heads became cheap with integer or QAT inference and sparse first-layer matmuls; Raphael's float-head first try also lost at STC | Only after QAT and int8 work exist; not in Phase 4 (think tank WEAK) |
 | H7 | Threat inputs | near-universal in the top 30 | XGR-512 and S512+X lost on speed (0.818 nps) | Peers took 30-36% speed losses and recovered them with incremental, lazy and SIMD updates, then widened the layer; the gains are LTC-heavy | Parked, as decided (S512cl dropped) |
 | B15 | ProbCut | 10 engines, several at LTC (Integral +13.4, pawnocchio +8.7, Halogen +6.3) | −5.29 ± 3.58 | Peers' LTC-heavy record matches S2's caution | The owner's no-retest rule stands; listed only for the record |
