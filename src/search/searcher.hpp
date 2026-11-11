@@ -137,6 +137,13 @@ struct SearchQuota {
 //   (CutNodeLmrPlies 1, the head-to-head's pick over 2): STC +6.02 +/- 3.67
 //   Elo after 11,200 games, LTC +9.75 +/- 5.14 Elo after 4,992 games, design
 //   R [0, 6]; 2026-11-11.
+// - use_capture_probe: ProbCut (tier 2, T31): at a non-PV node at least
+//   CaptureProbeMinDepth deep, a capture that holds CaptureProbeMargin above
+//   beta in a quiescence search and then in a search CaptureProbeReduction
+//   plies shallower than a normal child makes the node fail high. Off: its
+//   STC SPRT on S512r2 ended H0 (-5.29 +/- 3.58 Elo after 12,800 games,
+//   2026-11-06); one LTC-only design R test on the tuned search (owner,
+//   2026-11-11) decides it.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -169,7 +176,8 @@ struct SearchQuota {
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
-  X(use_cut_node_lmr, UseCutNodeLmr, true)
+  X(use_cut_node_lmr, UseCutNodeLmr, true)              \
+  X(use_capture_probe, UseCaptureProbe, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -329,7 +337,9 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
 //   sampling); singular tests run (their searches); those that found the TT
 //   move singular; those where another move also beat beta, so the node
 //   failed high (multi-cut); those where the TT move was searched one ply
-//   shallower; nodes without a TT move searched one ply shallower (T26).
+//   shallower; nodes without a TT move searched one ply shallower (T26);
+//   captures the capture probe searched and the nodes it made fail high
+//   (T31).
 // - Phase 4 step 1, X1 (DESIGN.md §5.7): nodes at the root and in the main
 //   search (with the quiescence nodes above they sum to the node count);
 //   static evaluations computed, taken from the TT entry instead, or not
@@ -380,6 +390,8 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
   X(multi_cut_cuts)                  \
   X(negative_extensions)             \
   X(no_move_reductions)              \
+  X(capture_probes)                  \
+  X(capture_probe_cuts)              \
   X(root_nodes)                      \
   X(main_nodes)                      \
   X(evals_main)                      \

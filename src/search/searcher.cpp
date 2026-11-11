@@ -75,7 +75,8 @@ namespace {
 // search; LMR (LmrMinDepth, LmrMinMove; the table in lmr_table.hpp); late
 // move pruning (LmpMaxDepth; LmpQuietAllowance + d quiets); futility
 // (FutilityMaxDepth; FutilityOffset + FutilityGrowth * depth); SEE pruning
-// (SeePruneMaxDepth; QuietSeeFloor and CaptureSeeFloor cp per ply). The
+// (SeePruneMaxDepth; QuietSeeFloor and CaptureSeeFloor cp per ply); ProbCut
+// (CaptureProbeMinDepth, CaptureProbeReduction, CaptureProbeMargin). The
 // margins are in the bootstrap evaluation's centipawns and are retuned after
 // Phase 4. These stay constants (not strength parameters):
 constexpr std::uint64_t StopCheckInterval = 1024;  // nodes between clock and stop-flag polls
@@ -368,6 +369,49 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     if (score >= beta) {
       FORK_STAT(++counters.null_cuts);
       return is_tb_or_mate(score) ? beta : score;  // a mate found after passing is not trusted
+    }
+  }
+
+  // ProbCut (tier 2, T31; KB search-techniques.md §3.22), the capture probe:
+  // at a non-PV node deep enough, a capture or queen promotion whose exchange
+  // could lift the pruning eval to a bar CaptureProbeMargin above beta is
+  // searched on a zero window at that bar, first by the quiescence search,
+  // then, if it holds there, CaptureProbeReduction plies shallower than a
+  // normal child. A capture that holds the bar with less depth predicts the
+  // full search failing high, so the node returns its score and stores it as
+  // a lower bound at the probe's depth. Skipped when the TT entry, at least
+  // that deep, already proves the node below the bar. It uses this ply's
+  // selector before the node's own move selection starts. Its children get
+  // the move loop's expected type for a non-PV node's child (T17).
+  if (switches.use_capture_probe && can_prune_node && depth >= CaptureProbeMinDepth && !is_tb_or_mate(beta)) {
+    const int bar = beta + CaptureProbeMargin;
+    const int probe_plies = depth - 1 - CaptureProbeReduction;
+    const bool proven_below = tt_hit && hit.depth >= probe_plies + 1 &&
+                              (hit.bound == TtBound::Upper || hit.bound == TtBound::Exact) &&
+                              score_from_tt(hit.score, ply) < bar;
+    if (!is_tb_or_mate(bar) && !proven_below) {
+      f.selector.start_quiesce(pos, tt_hit ? hit.move : NoMove, false, nullptr,
+                               switches.use_take_history ? &take_history_ : nullptr);
+      for (Move m; !(m = f.selector.take_next()).is_none();) {
+        if (!see_at_least(pos, m, bar - prune_eval)) continue;
+        FORK_STAT(++counters.capture_probes);
+        if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
+        frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
+        frames_[ply + 1].expected_cut = !f.expected_cut;
+        play(ply, m);
+        // Depth 0 is the quiescence search (or the static eval with it off).
+        int score = -negamax<false>(-bar, -bar + 1, 0, ply + 1);
+        if (!stopped_ && score >= bar) score = -negamax<false>(-bar, -bar + 1, probe_plies, ply + 1);
+        pos.unmake(m);
+        if (stopped_) return 0;
+        if (score >= bar) {
+          FORK_STAT(++counters.capture_probe_cuts);
+          if (switches.use_tt)
+            tt_.deposit(key, m, score_to_tt(score, ply), f.static_eval, probe_plies + 1, TtBound::Lower,
+                        false);
+          return score;
+        }
+      }
     }
   }
 

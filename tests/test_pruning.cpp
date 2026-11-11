@@ -10,6 +10,7 @@
 #include "core/material.hpp"
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
+#include "eval/eval.hpp"
 #include "harness.hpp"
 #include "search/lmr_table.hpp"
 #include "search/quiet_history.hpp"
@@ -419,6 +420,65 @@ TEST_CASE("pruning", "cut-node reduction: still correct, and it changes the sear
             "the cut-node reduction left all three trees unchanged");
 }
 
+// ProbCut, the capture probe (tier 2, T31): with it on, mates are still
+// found and the best move is legal, and it changes the tree (fault check: a
+// probe that never cuts leaves the tree as it is with the switch off). Deep
+// enough that non-PV nodes reach its minimum depth in a debug build too.
+TEST_CASE("pruning", "capture probe: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_capture_probe);  // off until its LTC test passes
+  SearchSwitches on;
+  on.use_capture_probe = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 8).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 8).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 12 : 9;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_capture_probe = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the capture probe left all three trees unchanged");
+}
+
+// The capture probe's cut itself, which the tree test above cannot see (the
+// probe's own searches change the tree even if it never cuts). White's rook
+// can take the undefended queen, with two pawns each left on the board
+// (constructed; checked by tools/check_search_positions.py). A zero-window
+// search at the probe's minimum depth (above RFP's depth limit; the no-move
+// reduction switched off in both arms, so the node keeps that depth) with
+// beta one above White's static eval, so the null move does not apply and
+// the queen's capture (SEE 900) passes the probe's SEE filter, stores the
+// node at the probe's depth, the depth less CaptureProbeReduction, as a lower
+// bound with the capture as its move; without the probe, at the node's own
+// depth.
+// Without the pawns S512r2 scored the bare rook ending after the capture at
+// about 0 cp, below the bar, and the probe rightly let the node be searched.
+TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the probe's depth") {
+  for (bool probe : {false, true}) {
+    PruningFixture fx;
+    SearchSwitches s;
+    s.use_capture_probe = probe;
+    s.use_no_move_reduction = false;
+    fx.searcher->switches = s;
+    Position pos;
+    CHECK(pos.set_fen("4k3/pp6/8/3q4/8/8/PP1R4/4K3 w - - 0 1"));
+    const int beta = static_eval(pos) + 1;
+    const int depth = CaptureProbeMinDepth;
+    const int score = fx.searcher->probe_zero_window(pos, beta, depth, fx.stop);
+    CHECK_MSG(score >= beta, "probe " << probe << ": beta " << beta << ", score " << score);
+    TtHit hit{};
+    CHECK(fx.table.fetch(pos.key(), hit));
+    CHECK_MSG(hit.depth == (probe ? depth - CaptureProbeReduction : depth),
+              "probe " << probe << ": depth " << hit.depth);
+    if (probe) CHECK(hit.move == pos.parse_uci("d2d5") && hit.bound == TtBound::Lower);
+  }
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -498,6 +558,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   SearchSwitches s;
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
+  s.use_capture_probe = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
