@@ -1146,7 +1146,9 @@ tuned by SPSA.
     base LMR reduction in units (the table's value without its final
     rounding; the KB's strongest evidence is fractional LMR); (2) the LMR
     adjustments as fractional amounts (the check relief, the cut-node and
-    PV-trace steps, idea 42's continuation terms); (3) the null move's depth;
+    PV-trace steps, idea 42's continuation terms; the cut-node step is
+    live at one whole ply since 2026-11-11, STC +6.02 ± 3.67 and LTC
+    +9.75 ± 5.14, so its fractional form is measured against that); (3) the null move's depth;
     (4) extensions (the singular extension's +1 as a measured fraction).
 - **Conversion plan, behaviour identical until each use is measured:**
   1. One refactor: negamax's depth and every child depth in units

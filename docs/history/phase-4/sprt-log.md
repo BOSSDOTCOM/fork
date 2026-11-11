@@ -1274,3 +1274,26 @@ The final stage's result block (r8b-rft-stc, stage 6, run 42988446282):
   running (stage 2, run 42991551149: +6.47 ± 9.17, 1,664 games; after stage 3, run 43002660790: +5.64 ± 6.32, 3,328
   games, LLR 1.25, continue); **pre-approved: adopt cut-node (1 ply) if its LTC confirmation passes; report if it
   fails.**
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| LTC 40+0.4, design R [0, 6], cap 6 (Hash 64, Syzygy 3-4-5, UHO book, seed 20261027, fresh openings from stage 2), cut-node (CutNodeLmrPlies 1) against off | 42991551149 (stage 2), 43002660790 (3), 43013618465 (4) | 4,992 (no time losses, no abnormal ends) | **+9.75 ± 5.14** | +18.28 ± 9.64 | [23, 537, 1250, 649, 37] | **H1 accepted** (LLR 3.79) after stage 4, 7:59 AM EST, 11-11 |
+
+The final stage's result block (b4-cut-node-ltc, stage 4, run 43013618465):
+
+```
+    Shards: 48 (done); pairs 2496, games 4992 (4992 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 9.75 +/- 5.14, nElo: 18.28 +/- 9.64
+    Ptnml(0-2): [23, 537, 1250, 649, 37]
+    LLR: 3.79 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Cut-node adopted (owner's pre-approval of 2026-11-11):** ported onto phase-4 b5f11ae alone (branch
+  adopt/cut-node), `UseCutNodeLmr` on with CutNodeLmrPlies 1, the switch kept until the Phase 4 re-validation.
+  Bench 9,942,973 / accfb975ccd6ccf5 (r8brft1; 10,708,227 / c5dfc0ec1923d3b0 with the switch off); with
+  S512ppr3 10,280,126 / 7db684469b226aa7, equal to the tested commit 6b4e407's.
+- **Batch 4 closed:** cut-node adopted (STC +6.02 ± 3.67, LTC +9.75 ± 5.14); the structure history not passed
+  (+2.93 ± 3.46, capped undecided), no retry; the others dropped, demoted or deferred as the decisions log
+  records (2026-11-10: history-skip dropped, razoring and bad-capture futility to the final retune's SPSA,
+  PV-trace to the re-validation).

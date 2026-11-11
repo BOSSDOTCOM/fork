@@ -360,6 +360,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     play_null(ply);
     frames_[ply + 1].after_null = true;
     frames_[ply + 1].arrival = NoArrival;
+    frames_[ply + 1].expected_cut = !f.expected_cut;  // T17: passing should fail low below
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
     frames_[ply + 1].after_null = false;
     pos.unmake_null();
@@ -570,6 +571,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                                             m.is_en_passant() ? Pawn : kind_of(pos.piece_at(m.to()))))
             : 0;
 #endif
+    // Node types (tier 2, T17; KB search-techniques.md §3.14), the expected
+    // type of the child: a PV node's later children are expected cut nodes
+    // (its first is a PV node); a cut node's children are expected all nodes,
+    // and an all node's expected cut nodes, as in a minimal tree. A
+    // prediction only: nothing relies on it being right.
+    frames_[ply + 1].expected_cut = OnPv ? moves_searched > 0 : !f.expected_cut;
     play(ply, m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
@@ -614,7 +621,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // forcing line, so it is reduced less. The move is already made, so
         // "gives check" is the child's side to move being in check.
         const int relief = switches.use_lmr_check_relief && pos.in_check() ? LmrCheckRelief : 0;
-        reduced = std::clamp(new_depth - (base + correction - relief), 1, new_depth);
+        // Node types (T17): an expected cut node's late quiets are reduced
+        // CutNodeLmrPlies more.
+        const int cut_extra = switches.use_cut_node_lmr && !OnPv && f.expected_cut ? CutNodeLmrPlies : 0;
+        reduced = std::clamp(new_depth - (base + correction - relief + cut_extra), 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;
@@ -842,6 +852,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     branch_share_ = root_moves_[i].share;
     const std::uint64_t nodes_before = nodes_;
     frames_[1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
+    frames_[1].expected_cut = i > 0;  // the root's later moves: expected cut nodes (T17)
     play(0, m);
     int score;
     if (i == 0 || !switches.use_pvs) {

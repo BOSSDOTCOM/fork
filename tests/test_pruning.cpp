@@ -394,6 +394,31 @@ TEST_CASE("pruning", "no-move reduction: still correct, and it changes the searc
             "the no-move reduction left all three trees unchanged");
 }
 
+// Node types and their LMR use, the cut-node reduction (tier 2, T17): with
+// it on, mates are still found and the best move is legal, and it changes
+// the tree (fault check: an expected type never set, or a reduction never
+// applied, leaves the tree as it is with the switch off).
+TEST_CASE("pruning", "cut-node reduction: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(SearchSwitches{}.use_cut_node_lmr);  // on since its SPRTs (2026-11-11)
+  SearchSwitches on;
+  on.use_cut_node_lmr = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_cut_node_lmr = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the cut-node reduction left all three trees unchanged");
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the

@@ -61,6 +61,7 @@
   X(SingularEntrySlack, 3, 0, 6, 1)       \
   X(SingularMarginPerPly, 6, 2, 12, 1)    \
   X(NoMoveReduceMinDepth, 8, 2, 16, 1)    \
+  X(CutNodeLmrPlies, 1, 0, 3, 1)          \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 12, 1)             \

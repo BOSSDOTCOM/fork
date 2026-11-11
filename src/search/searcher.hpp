@@ -129,6 +129,14 @@ struct SearchQuota {
 //   switches) since its SPRTs against off passed: STC +18.69 +/- 7.18 Elo
 //   after 3,200 games, LTC +10.23 +/- 5.14 Elo after 4,992 games, design R
 //   [0, 6]; 2026-11-08.
+// - use_cut_node_lmr: node types (tier 2, T17): each node gets an expected
+//   type from its parent (PlyFrame::expected_cut: a PV node's later children
+//   and an all node's children are expected cut nodes, a cut node's are
+//   expected all nodes), and at an expected cut node late quiet moves are
+//   reduced CutNodeLmrPlies more. On since its SPRTs against off passed
+//   (CutNodeLmrPlies 1, the head-to-head's pick over 2): STC +6.02 +/- 3.67
+//   Elo after 11,200 games, LTC +9.75 +/- 5.14 Elo after 4,992 games, design
+//   R [0, 6]; 2026-11-11.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -160,7 +168,8 @@ struct SearchQuota {
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_stability_time, UseStabilityTime, true)          \
-  X(use_share_time, UseShareTime, true)
+  X(use_share_time, UseShareTime, true)                  \
+  X(use_cut_node_lmr, UseCutNodeLmr, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -218,6 +227,7 @@ struct PlyFrame {
   bool after_null = false;      // this node was reached by a null move (no second one in a row)
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
+  bool expected_cut = false;    // expected to fail high (a cut node), from the parent (T17)
 };
 
 // Root moves are kept in search order: the initial capture order, then after
