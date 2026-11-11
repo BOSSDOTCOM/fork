@@ -1297,3 +1297,70 @@ The final stage's result block (b4-cut-node-ltc, stage 4, run 43013618465):
   (+2.93 ± 3.46, capped undecided), no retry; the others dropped, demoted or deferred as the decisions log
   records (2026-11-10: history-skip dropped, razoring and bad-capture futility to the final retune's SPSA,
   PV-trace to the re-validation).
+
+### 2026-11-11 idea 61 part 6 (root-gap time management): head-to-heads of the band and of the extra time, then the design R SPRT of the picks against off (owner): H0, dropped
+
+- Night queue items 60-62 (ledger idea 61.6), rebased onto phase-4 after R14 (decisions log, 2026-11-10). Off:
+  320e2f2 (switch off). RootGapBand candidates: b14 734e79c (the placeholder: the 75th percentile of the root
+  score's change per iteration on the bench), b7 8aac410, b28 eceaaa1. RootGapExtra candidates, at b7: x667 8aac410
+  (the placeholder: one more iteration at Fork's iteration growth 5/3), x333 00d6e61, x1000 1691620. Each
+  head-to-head a round robin, STC 8+0.08, 2 stages of 1,600 games per pairing on the same openings (9,600 games),
+  declared tie rule: the placeholder unless beaten by more than 0.5 e.
+- Band head-to-head (job i61-rg-band, from stage 0; runs 42981823066 and 42984092827 for b14-b7, 42986534047 and
+  42989248284 for b14-b28, 42991719425 and 42994331667 for b7-b28): **b7 − b14 +23.84 ± 12.04 nElo**, Ptnml
+  [36, 330, 758, 421, 55]; b28 − b14 −12.67 ± 12.04, [48, 397, 768, 349, 38]; b28 − b7 −13.59 ± 12.04, [43, 407,
+  760, 359, 31]. Least squares over the three pairings, against b14: b7 **+16.20 ± 9.83** nElo, b28 −5.03 ± 9.83:
+  **b7 picked** (beyond the tie margin), 4:38 AM EST.
+- Extra head-to-head (job i61-rg-extra, from stage 2; runs 42996954489 and 42999533555 for x667-x333, 43002464741
+  and 43005076924 for x667-x1000, 43007628981 and 43010212369 for x333-x1000): **x333 − x667 +5.71 ± 12.04 nElo**,
+  Ptnml [44, 367, 744, 404, 41]; x1000 − x667 −3.99 ± 12.04, [40, 372, 798, 349, 41]; x1000 − x333 −14.78 ±
+  12.04, [42, 412, 756, 362, 28]. Least squares, against x667: x333 **+7.41 ± 9.83** nElo, x1000 −5.68 ± 9.83:
+  **x333 picked** (beyond the tie margin), 6:32 AM EST.
+- Design R SPRT ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages), STC, fresh openings
+  from stage 4, job i61-rg-stc, try 1 of 2:
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), band b7 + extra x333 (00d6e61) against off (320e2f2) | 43012786722 (stage 4), 43015340549 (5) | 3,200 (no time losses, no abnormal ends) | **−4.89 ± 7.03** | −8.36 ± 12.04 | [46, 392, 762, 361, 39] | **H0 accepted** (LLR −1.81) after stage 5, 7:09 AM EST |
+
+- **Dropped (owner, 2026-11-11, about 3:30 PM EST):** no second try; part 6 is retired, its switch stays off on its
+  branch, and nothing reaches phase-4.
+
+### 2026-11-11 T56 any-attack (tier 2, threat-aware quiet ordering; idea 72): the design R SPRT against off at STC, then its LTC confirmation (owner): H1 at both, adopted
+
+- The any-attack set's first game test (the cheaper-attacker set's H0 of 2026-11-06 is above). Base tier2/threat-any
+  dc341d5 (the any-attack buckets ported onto phase-4 b787fba behind `use_threat_buckets`, off; r8btd90; bench
+  9,594,307 / 4eb36793548711d4); test sprt/threat-any bfbc1c8 (the same tree with the switch on; bench 9,236,850 /
+  0f723ee4c163a419). Jobs t56-any-stc and t56-any-ltc (ledger idea t56-any, try 1 of 2), design R ([0, 6] nElo,
+  alpha 0.05, beta 0.20, futility look after 2 stages), fresh openings from stage 3.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6], cap 8 (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), any-attack buckets against off | 43017939593 (stage 3), 43020606092 (4), 43023298002 (5), 43025985854 (6) | 6,400 (no time losses, no abnormal ends) | **+7.49 ± 4.89** | +13.04 ± 8.51 | [72, 706, 1502, 852, 68] | **H1 accepted** (LLR 3.19) after stage 6, 8:23 AM EST |
+| LTC 40+0.4, design R [0, 6], cap 6 (Hash 64, 1,664 games a stage, Syzygy 3-4-5, UHO book, seed 20261027), the same pair | 43029851342 (stage 3), 43068666654 (4), 43081871545 (5) | 4,992 (no time losses, no abnormal ends) | **+8.07 ± 5.15** | +15.12 ± 9.64 | [20, 563, 1227, 653, 33] | **H1 accepted** (LLR 3.01) after stage 5, 3:13 PM EST |
+
+- LTC by stage: stage 3 +4.18 ± 8.93; stage 4 alone +10.02, stage 5 alone +10.02 (Elo from each stage's own
+  pentanomial counts; after stage 4 the total was +7.10 ± 6.33, LLR 1.70).
+- **Stage 4's outage reruns:** runs 43042667430 (9:52 AM EST), 43048079900 (10:24 AM) and 43050144902 (10:37 AM)
+  each ended in failure about two minutes after dispatch, in the build job's toolchain step, before any game was
+  played (43042667430's log: "Could not resolve 'archive.ubuntu.com'", apt exit code 100; the other two logs were
+  not readable through the API when this was recorded, HTTP 502, so their cause rests on the driver's report:
+  UNVERIFIED). They are not results. The driver stopped after each and resumed stage 4 (resume of try 1); the
+  fourth dispatch, 43068666654 (12:29 PM EST), played the stage.
+
+The final stage's result block (t56-any-ltc, stage 5, run 43081871545):
+
+```
+    Shards: 48 (done); pairs 2496, games 4992 (4992 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 8.07 +/- 5.15, nElo: 15.12 +/- 9.64
+    Ptnml(0-2): [20, 563, 1227, 653, 33]
+    LLR: 3.01 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Adopted (owner's pre-approval of 2026-11-11, 8:35 AM EST: "T56 any-attack: pre-approved for adoption if its LTC
+  confirmation (item 64) passes"):** dc341d5's change ported onto phase-4 4470f24 alone (branch adopt/t56-any),
+  `UseThreatBuckets` on, the switch kept until the Phase 4 re-validation. Bench 10,166,167 / d874b380155a2e8c
+  (r8brft1; 9,942,973 / accfb975ccd6ccf5 with the switch off, equal to 4470f24's); with r8btd90 and cut-node off
+  9,236,850 / 0f723ee4c163a419, equal to the tested commit bfbc1c8's tests/bench-r8btd90.ref. Speed not measured
+  (bench/ab.py not run; UNVERIFIED).

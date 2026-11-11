@@ -109,6 +109,10 @@ class Position {
 
   Bitboard attackers_to(Square s, Bitboard occ) const;  // both colors
   bool attacked_by(Color by, Square s, Bitboard occ) const;
+  // Every square a piece of `by` attacks on the current board: the union of
+  // attacked_by over all squares, built in one pass (pawns set-wise, sliders
+  // stopped by the first piece of either colour). Tier 2, T56's threat set.
+  Bitboard attacked_squares(Color by) const;
 
   bool is_pseudo_legal(Move m) const;  // any 16-bit pattern is safe to pass
   bool is_legal(Move m) const;         // requires is_pseudo_legal(m)
