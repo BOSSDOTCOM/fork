@@ -66,7 +66,7 @@
   X(DriftWeightCap, 4, 2, 8, 1)           \
   X(DriftWeightTotal, 256, 128, 512, 19)  \
   X(DriftLimit, 300, 150, 600, 23)        \
-  X(PieceDriftShare, 64, 32, 128, 5)      \
+  X(PieceDriftShare, 32, 32, 128, 5)      \
   X(MinorDriftShare, 64, 32, 128, 5)      \
   X(MajorDriftShare, 64, 32, 128, 5)      \
   X(ThreatDriftShare, 64, 32, 128, 5)     \
