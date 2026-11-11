@@ -1197,3 +1197,80 @@ r8b-stc-1, stage 2, run 42922442883:
   (switching would confound that experiment); the positional slice and g4c use r8btd90.
 - Still open (plan §3 items 6 and 7, not decided by this promotion): the head-to-head screens of i52, td80 and td90
   against the control c (r8b-h2h-i52 running; the TD arms' queued), which decide ideas 51 and 52.
+
+### 2026-11-10/11 retrain 8b's head-to-heads against the control; idea 69's cw arm and the seed-noise run (owner)
+
+- Retrain 8b's plan §3 items 6 and 7 (declared before any result): each arm's keep rule is its head-to-head against
+  the control c (bake/r8bc 33da6a5) at the screens' settings (800,000 nodes per move, 600+6, Hash 16, Syzygy 3-4-5,
+  UHO book), 1,600 games: idea 51's TD arms are kept above +4 Elo, idea 52's arm at +5 or more (ideas.md 51, 52).
+  Idea 69's cw arm (bake/r8bcw 9fd957b: arm c's data, recipe and seed with the class weights; keep rule +5 head to
+  head against the control, or a passing STC SPRT) and the control's re-run with another seed, c2 (bake/r8bc2
+  38155d9), were added on 2026-11-10 (DESIGN.md §6). Jobs r8b-h2h-i52, r8b-h2h-td80, r8b-h2h-td90, r8b-fn-cw,
+  r8b-h2h-cw, r8b-stc-cw (`--kind network`, idea idea69, try 1 of 2) and r8b-h2h-c2.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, 800,000 per move, i52 against c | 42925024784 | 1,600 | −4.13 ± 9.60 | −7.32 ± 17.02 | [19, 192, 393, 181, 15] | head-to-head (7:19 PM EST, 11-10): not kept |
+| the same, td80 against c | 42930415181 | 1,600 | −0.87 ± 9.13 | −1.62 ± 17.02 | [14, 179, 415, 181, 11] | head-to-head (7:59 PM EST, 11-10): not kept |
+| the same, td90 against c | 42935666743 | 1,600 | **+4.13 ± 9.47** | +7.42 ± 17.02 | [13, 186, 383, 205, 13] | head-to-head (8:40 PM EST, 11-10): above +4, **TD(0.9) labels kept** |
+| the same, cw against S512ppr3 (c67fd26) | 42940727058 | 1,600 | +3.04 ± 9.74 | +5.31 ± 17.02 | [20, 177, 390, 195, 18] | screen (9:21 PM EST, 11-10) |
+| the same, cw against c | 42945518194 | 1,600 | +3.04 ± 9.25 | +5.60 ± 17.02 | [10, 185, 400, 191, 14] | head-to-head (10:00 PM EST, 11-10): below +5, so the STC SPRT decides |
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), cw against c | 42949849410 (stage 0), 42951964846 (1), 42954032939 (2), 42955981034 (3) | 6,400 (no time losses, no abnormal ends) | **−7.60 ± 4.91** | −13.18 ± 8.51 | [85, 819, 1510, 723, 63] | **H0 accepted** (LLR −4.16) after stage 3, 11:14 PM EST, 11-10: **idea 69 dropped** |
+| fixed nodes, 800,000 per move, c2 against c (seed noise) | 42958000486 | 1,600 | −6.08 ± 9.42 | −11.00 ± 17.02 | [16, 201, 388, 185, 10] | the control against itself on another seed (11:53 PM EST, 11-10) |
+
+- **Decided (owner, 2026-11-11, about 6:35 AM EST):** idea 69 dropped (cw H0 −7.60); TD(0.9) labels stay in the
+  standard retrain recipe (td90 against the control +4.13); i52 and td80 not kept; seed noise measured (c2 against
+  the control −6.08), so **every future retrain arm runs 2 seeds**.
+
+### 2026-11-11 r8brft1 (idea 70's result fine-tune of r8btd90): fixed-node screens of both seeds against r8btd90, then the STC SPRT (owner)
+
+- Idea 70 (docs/research/retrain-8b/rft-plan.md, branch retrain/8b-rft 43f6ecc, declared before any run): r8btd90's
+  window average fine-tuned at result weight 1.0, LR 1e-5 constant, 60 superbatches on g4s1, each seed's candidate
+  the mean of superbatches 46-60. Both seeds passed the gates (S = 88, netcheck exact on 446, quantization loss within
+  S-512's limits; the endgame check 7 of 900 for each, r8btd90 7; ~/fork-jobs/night/state/r8b-rft-ready.json).
+- Base: bake/r8btd90 115daad (engine c67fd26; bench 9,594,307 / 4eb36793548711d4). Candidates: bake/r8brft1 4da54db
+  (seed 1; bench 10,708,227 / c5dfc0ec1923d3b0) and bake/r8brft2 1ce98b2 (seed 2; bench 10,564,507 /
+  74fed831fcb1e0ed). Jobs r8b-rft-fn-rft1, r8b-rft-fn-rft2 and r8b-rft-stc (`--kind network`, idea result-finetune,
+  try 1 of 2).
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, 800,000 per move (600+6, Hash 16, Syzygy 3-4-5, UHO book), rft1 against r8btd90 | 42962187538 | 1,600 | **+7.17 ± 9.93** | +12.29 ± 17.02 | [14, 189, 372, 200, 25] | the higher screen: the STC SPRT follows (12:34 AM EST) |
+| the same, rft2 against r8btd90 | 42966665389 | 1,600 | +6.73 ± 9.44 | +12.14 ± 17.02 | [12, 181, 385, 208, 14] | screen (1:45 AM EST) |
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), rft1 against r8btd90 | 42974677403 (stage 0), 42976787971 (1), 42979050772 (2), 42981298644 (3), 42983543508 (4), 42985980827 (5), 42988446282 (6) | 11,200 (no time losses, no abnormal ends) | **+5.74 ± 3.81** | +9.69 ± 6.43 | [131, 1331, 2511, 1476, 151] | **H1 accepted** (LLR 3.34) after stage 6, 3:55 AM EST |
+
+The final stage's result block (r8b-rft-stc, stage 6, run 42988446282):
+
+```
+    Shards: 112 (done); pairs 5600, games 11200 (11200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 5.74 +/- 3.81, nElo: 9.69 +/- 6.43
+    Ptnml(0-2): [131, 1331, 2511, 1476, 151]
+    LLR: 3.34 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- **Promoted (owner, 2026-11-11, about 6:35 AM EST): r8brft1 is the default network**; bench 10,708,227 /
+  c5dfc0ec1923d3b0. The labeller policy (owner): the label-depth arms stay on S512ppr3 and the cloud slice on r8btd90
+  until each finishes; g4c and later parts use r8brft1.
+
+### 2026-11-10/11 batch 4 after R14: cut-node (R4) and the structure history (R21, weight 5), design R at STC (owner)
+
+- Base tier2/b4-r14 ff0c088 (batch 4 on phase-4 after R14, every switch off; S512ppr3, as batch 4 keeps its bases).
+  Cut-node's constant first, by a head-to-head of CutNodeLmrPlies 1 (6b4e407) against 2 (efefa4b), 2 stages of 1,600
+  games on the same openings (b4-cut-node-h2h, runs 42883612798 and 42886734291): **2 − 1 −5.33 ± 12.04 nElo**, 3,200
+  games, Ptnml [49, 388, 744, 381, 38]; declared tie rule: 1 (the smaller reduction) unless beaten by more than 0.5 e:
+  **1 kept**. Then each switch's design R SPRT ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2
+  stages; Hash 16, Syzygy 3-4-5, UHO book, seed 20261027): b4-cut-node-stc (idea r4-cut-node, try 1 of 2, fresh
+  openings from stage 2) and b4-structure-stc (tier2/b4-structure-r14 ec00954, StructureHistoryWeight 5; idea
+  r21-structure, try 1 of 2).
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6], cut-node (CutNodeLmrPlies 1) against off | 42948984895 (stage 2), 42951755956 (3), 42953826857 (4), 42955789912 (5), 42957784702 (6), 42959823164 (7), 42961813575 (8) | 11,200 (no time losses, no abnormal ends) | **+6.02 ± 3.67** | +10.55 ± 6.43 | [110, 1281, 2633, 1457, 119] | **H1** (LLR 4.20) after stage 8, 12:10 AM EST, 11-11 |
+| STC 8+0.08, design R [0, 6], the structure history (weight 5) against off | 42964043071 (stage 0), 42966088335 (1), 42968522278 (2), 42970581081 (3), 42972740255 (4), 42974917524 (5), 42977050811 (6), 42979311765 (7) | 12,800 (1 time loss, 1 abnormal end) | +2.93 ± 3.46 | +5.10 ± 6.02 | [148, 1482, 3021, 1612, 137] | **capped undecided** (8 of 8 stages, LLR 1.33), 2:45 AM EST, 11-11: not passed |
+
+- **Decided (owner, 2026-11-11, about 6:35 AM EST):** **no retry of structure** (its switch stays off). Cut-node:
+  its LTC confirmation b4-cut-node-ltc (40+0.4, Hash 64, design R [0, 6], cap 6, fresh openings from stage 2) is
+  running (stage 2, run 42991551149: +6.47 ± 9.17, 1,664 games; after stage 3, run 43002660790: +5.64 ± 6.32, 3,328
+  games, LLR 1.25, continue); **pre-approved: adopt cut-node (1 ply) if its LTC confirmation passes; report if it
+  fails.**

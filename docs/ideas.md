@@ -1593,6 +1593,14 @@ the screens before use.
   the control above +4 Elo, its endgame check not worse than the
   control's; both 7 of 900) is still pending: the td80 and td90
   head-to-heads against c are queued.
+  **2026-11-11: kept (owner): TD(0.9) labels stay in the standard retrain
+  recipe.** Head-to-heads against the control r8bc (800,000 nodes per
+  move, 1,600 games each): td90 +4.13 ± 9.47 (run 42935666743), above the
+  plan's +4 keep line, its endgame check 7 of 900 as the control's; td80
+  −0.87 ± 9.13 (42930415181), not kept. The measured seed noise (c2
+  against r8bc, −6.08 ± 9.42; idea 69) is as large as that margin, so
+  every future retrain arm runs 2 seeds (owner, 2026-11-11). r8btd90's
+  result fine-tune, r8brft1, is the default since 2026-11-11 (idea 70).
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 52. Ensemble-disagreement active learning
@@ -1638,6 +1646,10 @@ the screens before use.
   **2026-11-10, retrain 8b:** the i52 arm's fixed-node screen against S512ppr3 was +5.86 ± 9.13 (the
   control's +13.03 ± 9.37; the TD(0.9) arm, +17.39, was promoted); the keep rule's head-to-head against
   the control (r8b-h2h-i52) is running, so the idea is undecided.
+  **2026-11-11:** the head-to-head against the control r8bc was **−4.13 ± 9.60** (run 42925024784, 1,600
+  games at 800,000 nodes); **the i52 arm is not kept** (owner). It misses the keep-or-drop rule's +5 line,
+  so by that rule idea 52 is retired and the scratch-run rule dropped; that consequence is the declared
+  rule's, not yet confirmed by the owner (UNVERIFIED until then).
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 53. Pawn-structure-class output experts
@@ -2369,8 +2381,16 @@ whose weaknesses and data gaps decide their targets and order.
   preflight; compared against 8b's control by the keep rule above.
 - **test:** the 8c arm at equal positions against the control; per-class
   validation loss; fixed-node screen, STC SPRT [0, 5].
-- **status:** untested (design approved; pre-arm checks next, the arm in
-  8c). **runtime cost:** none. **earliest phase:** Phase 4.
+- **status:** **dropped (owner, 2026-11-11).** The cw arm (bake/r8bcw
+  9fd957b): fixed-node screen against S512ppr3 +3.04 ± 9.74 (run
+  42940727058), head-to-head against the control r8bc +3.04 ± 9.25
+  (42945518194), then its STC SPRT r8b-stc-cw [0, 5] against r8bc **H0
+  accepted, −7.60 ± 4.91 Elo** (nElo −13.18 ± 8.51) after 4 stages, 6,400
+  games, LLR −4.16 (runs 42949849410 to 42955981034; sprt-log). Its
+  second-seed control c2 (bake/r8bc2 38155d9) measured the seed noise:
+  c2 against r8bc −6.08 ± 9.42 (1,600 games at 800,000 nodes, run
+  42958000486), so **every future retrain arm runs 2 seeds** (owner,
+  2026-11-11). **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 70. Result fine-tune of the base net
 
@@ -2384,9 +2404,18 @@ whose weaknesses and data gaps decide their targets and order.
   the winner (td90 or the control) on existing 8b data, two seeds; the
   usual gates; a fixed-node screen against the base; an SPRT. Kaggle hours
   reported to the owner before the launch.
-- **status:** untested (queued). **2026-11-10:** 8b's SPRT decided the
-  base net: r8btd90 (the TD(0.9) arm, promoted), so the fine-tune starts
-  from it. **runtime cost:** none. **earliest phase:** Phase 4.
+- **status:** **adopted: r8brft1 is the default network (owner,
+  2026-11-11).** **2026-11-10:** 8b's SPRT decided the base net: r8btd90
+  (the TD(0.9) arm, promoted), so the fine-tune starts from it. The run
+  (docs/research/retrain-8b/rft-plan.md, branch retrain/8b-rft 43f6ecc):
+  r8btd90's window average, result weight 1.0, LR 1e-5 constant, 60
+  superbatches on g4s1, the mean of superbatches 46-60, seeds 1 and 2.
+  Fixed-node screens against r8btd90: seed 1 +7.17 ± 9.93 (run
+  42962187538), seed 2 +6.73 ± 9.44 (42966665389); seed 1's STC SPRT
+  [0, 5] against r8btd90 **H1 accepted, +5.74 ± 3.81 Elo** (nElo +9.69 ±
+  6.43) after 11,200 games (r8b-rft-stc; sprt-log); the endgame check 7
+  of 900. Bench 10,708,227 / c5dfc0ec1923d3b0 (docs/nets.md). **runtime
+  cost:** none. **earliest phase:** Phase 4.
 
 ## 71. Feature-transformer weight decay
 

@@ -1,6 +1,6 @@
 {
- "comment": "Fork's promoted evaluators for the page (DESIGN.md §5.5), oldest first. Every value below is copied from docs/nets.md and docs/history/phase-4/sprt-log.md (2026-11-10); the build (.github/workflows/web.yml) adds each module's file, size and SHA-256. scale is the output scale S the evaluation bar reads scores with (docs/nets.md); the bootstrap evaluation has none of its own, so it takes 134, the S with which B0's training read the bootstrap's labels (docs/nets.md, B0). Each validation loss is on its own data's held-out games, so losses on different data are not comparable.",
- "default": "r8btd90",
+ "comment": "Fork's promoted evaluators for the page (DESIGN.md §5.5), oldest first. Every value below is copied from docs/nets.md and docs/history/phase-4/sprt-log.md (2026-11-11); the build (.github/workflows/web.yml) adds each module's file, size and SHA-256. scale is the output scale S the evaluation bar reads scores with (docs/nets.md); the bootstrap evaluation has none of its own, so it takes 134, the S with which B0's training read the bootstrap's labels (docs/nets.md, B0). Each validation loss is on its own data's held-out games, so losses on different data are not comparable.",
+ "default": "r8brft1",
  "networks": [
   {
    "id": "bootstrap",
@@ -101,6 +101,16 @@
    "data": "generation-4 snapshot g4s1: g3s3 plus the parts g3h, g3i, g3j and g4 (labelled by S512ppr2 and S512ppr3), TD(0.9) targets on g3j and g4, with the Syzygy-labelled endgame slice",
    "validation_loss": "0.01980678",
    "sprt": {"against": "S512ppr3", "elo": "+12.17 +/- 5.71", "games": 4800, "conditions": "[0, 5], 8+0.08", "run": "42922442883", "result": "H1 accepted"}
+  },
+  {
+   "id": "r8brft1",
+   "name": "r8brft1",
+   "architecture": "S512+PP's (S512's inputs plus 608 pawn-link inputs), r8btd90 fine-tuned on the game result",
+   "promoted": "2026-11-11",
+   "scale": 88,
+   "data": "generation-4 snapshot g4s1, as r8btd90's, with the game result as the whole target (idea 70's result fine-tune, 60 superbatches at a learning rate of 1e-5)",
+   "validation_loss": "0.02007601",
+   "sprt": {"against": "r8btd90", "elo": "+5.74 +/- 3.81", "games": 11200, "conditions": "[0, 5], 8+0.08", "run": "42988446282", "result": "H1 accepted"}
   }
  ]
 }
