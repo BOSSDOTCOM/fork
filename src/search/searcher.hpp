@@ -190,7 +190,7 @@ struct SearchQuota {
   X(use_piece_drift, UsePieceDrift, false)               \
   X(use_minor_drift, UseMinorDrift, false)               \
   X(use_major_drift, UseMajorDrift, false)               \
-  X(use_threat_drift, UseThreatDrift, false)
+  X(use_threat_drift, UseThreatDrift, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
