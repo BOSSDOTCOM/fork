@@ -199,7 +199,9 @@ def cmd_pull(c, job):
     ip = need_ip(c)
     dst = paths.convert(c['staging'], 'wsl').rstrip('/') + f'/{job}/'
     wsl(c, 'mkdir', '-p', dst, check=True)
-    r = rsync(c, f"{c['ssh_user']}@{ip}:{OUT}/{job}/", dst)
+    # Not the slice's per-segment start lists (rebuilt from the PC's own list) nor the raw shards of a salvaged
+    # segment (the VM keeps them): only what the checks and the data need crosses the egress meter.
+    r = rsync(c, f"{c['ssh_user']}@{ip}:{OUT}/{job}/", dst, '--exclude=openings.epd', '--exclude=raw/')
     if r.returncode != 0:
         raise SystemExit(f'pull of {job} failed: {r.stderr.strip()[-500:]}')
     got = received_bytes(r.stdout) or 0

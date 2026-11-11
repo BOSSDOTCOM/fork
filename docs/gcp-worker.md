@@ -79,6 +79,14 @@ which resumes from its own files:
   most one game per thread is lost; no start is ever played twice (checked with `defense_starts.py played`);
 - the filler at chunk boundaries (`tools/cloud/cloud_datagen.sh`, chunks of 250,000 records, each verified and
   sealed on the VM before it counts); a new run name and seed base at each start.
+Tested end to end on the worker (2026-11-10): a 30,000-position slice item through the queue, the VM stopped
+(`gcp.py stop`, the same ACPI shutdown a preemption gives) after segment 0 had run about two minutes, then
+started: the worker recorded the interruption ("preempted", resume 1), slice_vm.py salvaged 243 complete games
+(23,663 positions), segment 1 (seed + 1) played 75 games from the 185,312 unplayed starts, both segments passed
+verify_games.py, `defense_starts.py played` matched all 318 games with no start twice, and `gcp.py finish`
+repeated the checks on the PC (the pull moved 154,752 bytes). The filler was smoke-tested on the worker with
+3,000-record chunks: five chunks verified and sealed on the VM, the sixth dropped at the stop (SIGTERM to its
+session), as designed; its outputs were then deleted.
 fork_datagen itself has no resume: a stopped run writes no manifest, and its last game is usually cut off.
 The salvage above needs no engine change. A true in-run resume would need fork_datagen to start worker w at a
 given game index (the game sequence is deterministic per seed); not needed for game-boundary resume.
