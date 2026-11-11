@@ -525,6 +525,28 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         FORK_STAT(++counters.lmp_prunes);
         continue;
       }
+      // Quiet history pruning (tier 2, T24; the engine survey's B13), the
+      // history skip: at a shallow non-PV node a quiet move whose ordering
+      // score (the butterfly history and the weighted reply and follow
+      // tables, as the selector orders quiets) is at or below a threshold growing
+      // more negative with depth is skipped unsearched.
+      // (T56: the move's threat bucket, as the selector read it.)
+      const auto order_score = [&] {
+        return quiet_order_score(pos, m, switches.use_history ? &history_ : nullptr,
+                                 switches.use_history ? pair_history_ : nullptr,
+                                 switches.use_reply_history ? f.arrival : NoArrival,
+                                 switches.use_follow_history ? follow_arrival(f) : NoArrival,
+                                 threat_bucket(f.selector.attacked_by_opponent(), m));
+      };
+#ifdef FORK_SEARCH_STATS
+      if (can_prune && quiet && depth < SearchCounters::HistorySkipSiteDepths)
+        ++counters.history_skip_site_bins[depth][skip_score_bin(order_score())];
+#endif
+      if (switches.use_history_skip && can_prune && quiet && depth <= HistorySkipMaxDepth &&
+          order_score() <= -HistorySkipPerPly * depth) {
+        FORK_STAT(++counters.history_skips);
+        continue;
+      }
 #ifdef FORK_SEARCH_STATS
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth) {
         const SelectorStage st = f.selector.yielding_stage();
