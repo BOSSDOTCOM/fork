@@ -469,7 +469,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // table is updated, by its own entry, so the tree equals the switch off.
 TEST_CASE("pruning", "summed pair update: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_pair_sum_update);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_pair_sum_update);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_pair_sum_update = true;
   fx.searcher->switches = on;
