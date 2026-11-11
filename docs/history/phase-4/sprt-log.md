@@ -1364,3 +1364,21 @@ The final stage's result block (t56-any-ltc, stage 5, run 43081871545):
   (r8brft1; 9,942,973 / accfb975ccd6ccf5 with the switch off, equal to 4470f24's); with r8btd90 and cut-node off
   9,236,850 / 0f723ee4c163a419, equal to the tested commit bfbc1c8's tests/bench-r8btd90.ref. Speed not measured
   (bench/ab.py not run; UNVERIFIED).
+
+### 2026-11-11 probcut-ltc (tier 2, T31, ProbCut d9-r5-m80): one LTC-only design R test on the tuned search (owner)
+
+- **Owner, 2026-11-11 3:10 PM EST:** "ProbCut: I lift the no-retest rule for ONE LTC-only design R test on the current default (tuned search); record it as LTC try 1 of 2. Start it now in the free lane." The no-retest rule after
+  probcut-d9r5m80-vs-base (above: H0 at STC on S512r2) is lifted for this
+  one test only.
+- Base `a40b1ff` (tier2/probcut-r2: phase-4 4470f24 with ProbCut ported
+  behind `use_capture_probe`, off; bench 9,942,973 / accfb975ccd6ccf5),
+  test `d145d40` (sprt/probcut-r2: the switch on; bench 9,903,350 /
+  95f7f190cf02d64e). Design R, `--kind search`: [0, 6] nElo, alpha 0.05, beta
+  0.20, 40+0.4, Hash 64, 1,664 games a stage, cap 6, futility look after
+  2 stages. Ledger idea `t31-probcut`, LTC try 1 of 2. Fresh openings
+  from stage 8 (openings 6,657 on; ProbCut's STC stages 0-7 played 1-6,400).
+  Night queue lane A, item 18-probcut-ltc; the driver started at 3:55 PM
+  EST. Both sides are the default at the owner's instruction (4470f24):
+  T56 any-attack, adopted at 3:43 PM EST (db0bb31), is in neither.
+- Stages: pending (runs by the ledger: `ledger.py runs probcut-ltc`).
+- **Result:** pending.

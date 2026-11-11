@@ -2472,3 +2472,29 @@ whose weaknesses and data gaps decide their targets and order.
   at adoption, bench/ab.py not run); the SPRT result is to be reported with
   its nps change (the 2026-10-24 rule).
 - **earliest phase:** Phase 4.
+
+## 73. ProbCut, the capture probe (tier 2, T31): one LTC test on the tuned search
+
+- **type:** ELO (search); flag `use_capture_probe` (off).
+- **idea** (KB search-techniques.md §3.22): at a non-PV node at least
+  CaptureProbeMinDepth deep, a capture whose SEE could lift the pruning
+  eval to beta + CaptureProbeMargin is searched on a zero window at that
+  bar, first by the quiescence search, then CaptureProbeReduction plies
+  shallower than a normal child; a capture that holds it makes the node
+  fail high.
+- **history:** built on tier2/batch3 (97f548c, 2026-11-02); its values
+  measured (capture_probe.json, d9-r5-m80; 5c9e755). STC SPRT on S512r2:
+  H0, −5.29 ± 3.58 Elo after 12,800 games (2026-11-06; sprt-log
+  "probcut-d9r5m80-vs-base"), then no retest by the owner's rule.
+- **status:** in progress. **Owner, 2026-11-11 3:10 PM EST: "ProbCut: I lift the no-retest rule for ONE LTC-only design R test on the current default (tuned search); record it as LTC try 1 of 2. Start it now in the free lane."**
+  Ported onto phase-4 4470f24 (r8brft1, R14, cut-node) behind the switch,
+  off (tier2/probcut-r2 a40b1ff, bench unchanged 9,942,973); test side
+  sprt/probcut-r2 d145d40 (bench 9,903,350 / 95f7f190cf02d64e). Design
+  R LTC SPRT `probcut-ltc` (ledger idea `t31-probcut`, LTC try 1 of 2;
+  fresh openings from stage 8), night queue lane A item 18, started 3:55
+  PM EST. T56 any-attack (adopted 3:43 PM EST, db0bb31) is in neither
+  side. No STC retest. An H1 goes to the owner; nothing is adopted before then.
+- **runtime cost:** possible (the probe's own searches at deep non-PV
+  nodes); the nps change is to be reported with the result (the
+  2026-10-24 rule; not measured yet, UNVERIFIED).
+- **earliest phase:** Phase 4.
