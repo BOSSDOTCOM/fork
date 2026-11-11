@@ -469,7 +469,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // updates the histories only, so with use_history off it does nothing.
 TEST_CASE("pruning", "prior-move credit: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_prior_move_credit);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_prior_move_credit);  // on in this head-to-head candidate
   SearchSwitches on;
   on.use_prior_move_credit = true;
   fx.searcher->switches = on;
