@@ -34,6 +34,14 @@ class EngineLinesTests(unittest.TestCase):
         self.assertEqual((fut['technique'], fut['on_minus_beta'], fut['off_minus_beta'], fut['off_nodes']),
                          ('futility', -1, 5, 180))
 
+    def test_drift_ledger_line(self):
+        row = el.parse_drift_ledger_line('drift_ledger rfp|12|-3|0|250\n')
+        self.assertEqual(row, {'technique': 'rfp', 'pieces': 12, 'minor': -3, 'major': 0, 'threat': 250})
+        self.assertEqual(el.parse_drift_ledger_line('drift_ledger futility|1|2|3|4')['technique'], 'futility')
+        for bad in ('drift_ledger rfp|1|2|3', 'drift_ledger lmr|1|2|3|4', 'prune_ledger rfp|1|2|3|4'):
+            with self.assertRaises(ValueError):
+                el.parse_drift_ledger_line(bad)
+
     def test_counter_delta(self):
         before = {'a': 1, 'h': [0, 2]}
         after = {'a': 4, 'h': [1, 2]}

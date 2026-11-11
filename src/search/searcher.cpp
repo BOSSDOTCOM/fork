@@ -25,6 +25,7 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
   if (const char* trace = std::getenv("FORK_ITERATION_TRACE"))
     trace_iterations_ = trace[0] && trace[0] != '0';
   if (const char* every = std::getenv("FORK_PRUNE_LEDGER")) ledger_every_ = std::strtoull(every, nullptr, 10);
+  if (const char* drift = std::getenv("FORK_DRIFT_REPORT")) drift_report_ = drift[0] && drift[0] != '0';
   if (const char* sites = std::getenv("FORK_EVAL_SITES")) {
     char* rest = nullptr;
     eval_site_every_main_ = std::strtoull(sites, &rest, 10);
@@ -40,7 +41,12 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #if defined(FORK_EVAL_NNUE)
   features_.push_move(*net_, ply, *pos_, m);
 #endif
-  (void)ply;
+  // The drift tables' material keys of the child, from this node's and the
+  // move, before the move changes the board (only while a table is in use).
+  if (drift_keys_live_) {
+    drift_keys_[ply + 1] = drift_keys_[ply];
+    advance_drift_keys(drift_keys_[ply + 1], *pos_, m);
+  }
   pos_->make(m);
 }
 
@@ -48,7 +54,7 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #if defined(FORK_EVAL_NNUE)
   features_.push_null(ply);
 #endif
-  (void)ply;
+  if (drift_keys_live_) drift_keys_[ply + 1] = drift_keys_[ply];  // a pass moves no piece
   pos_->make_null();
 }
 
@@ -90,6 +96,12 @@ constexpr int TableNearDrawScore = 1;
 // DESIGN.md, "Search constants": the smallest step in whole plies, which is
 // the unit Fork's LMR table works in).
 constexpr int LmrCheckRelief = 1;
+#ifdef FORK_SEARCH_STATS
+// The drift measurement's tail (stats builds; think tank I5's tail bins): a
+// learning node whose raw error is over 100 cp, a pawn: past the bulk of the
+// eval's error, where a pruning margin is most often crossed.
+constexpr int DriftTailError = 100;
+#endif
 #ifdef FORK_NODE_CLOCK
 // Test-only builds (CMake FORK_NODE_CLOCK, never released): the search's
 // clock reads its node count, this many nodes to the millisecond, so a timed
@@ -115,6 +127,94 @@ int fifty_move_score(const Position& pos, bool in_check, int ply) {
 }
 
 }  // namespace
+
+Searcher::DriftTerms Searcher::drift_terms(int ply) {
+  DriftTerms t;
+  const Position& pos = *pos_;
+  const Color side = pos.side_to_move();
+  const DriftKeys& k = drift_keys_[ply];
+  bool all = false;  // stats builds' measurement: every table
+#ifdef FORK_SEARCH_STATS
+  all = drift_report_;
+#endif
+  if (all || switches.use_piece_drift)
+    t.pieces = (piece_drift_[White].offset(side, k.pieces[White]) +
+                piece_drift_[Black].offset(side, k.pieces[Black])) /
+               2;
+  if (all || switches.use_minor_drift) t.minor = minor_drift_.offset(side, k.minors);
+  if (all || switches.use_major_drift) t.major = major_drift_.offset(side, k.majors);
+  if (all || switches.use_threat_drift) {
+    threat_keys_[ply] = threat_drift_key(pos);
+    t.threat = threat_drift_.offset(side, threat_keys_[ply]);
+  }
+  return t;
+}
+
+int Searcher::drift_estimate(int raw, const DriftTerms& t) const {
+  int sum = 0;
+  if (switches.use_piece_drift) sum += t.pieces * PieceDriftShare / DriftShareUnit;
+  if (switches.use_minor_drift) sum += t.minor * MinorDriftShare / DriftShareUnit;
+  if (switches.use_major_drift) sum += t.major * MajorDriftShare / DriftShareUnit;
+  if (switches.use_threat_drift) sum += t.threat * ThreatDriftShare / DriftShareUnit;
+  constexpr int Bound = TbWinScore - MaxPly - 1;  // the largest score is_tb_or_mate does not flag
+  return std::clamp(raw + sum, -Bound, Bound);
+}
+
+void Searcher::learn_drift(int ply, int error, int depth) {
+  const Color side = pos_->side_to_move();
+  bool all = false;
+#ifdef FORK_SEARCH_STATS
+  all = drift_report_;
+#endif
+  if (all || switches.use_piece_drift)
+    for (Color c : {White, Black}) piece_drift_[c].learn(side, drift_keys_[ply].pieces[c], error, depth);
+  if (all || switches.use_minor_drift) minor_drift_.learn(side, drift_keys_[ply].minors, error, depth);
+  if (all || switches.use_major_drift) major_drift_.learn(side, drift_keys_[ply].majors, error, depth);
+  if (all || switches.use_threat_drift) threat_drift_.learn(side, threat_keys_[ply], error, depth);
+}
+
+#ifdef FORK_SEARCH_STATS
+void Searcher::count_drift(int best, int raw, const DriftTerms& t, TtBound bound) {
+  // The error of an estimate against the result: for a bound, only the part
+  // the bound proves.
+  const auto error = [&](int e) {
+    const int gap = best - e;
+    return static_cast<std::uint64_t>(bound == TtBound::Exact   ? std::abs(gap)
+                                      : bound == TtBound::Lower ? std::max(gap, 0)
+                                                                : std::max(-gap, 0));
+  };
+  SearchCounters& c = counters;
+  const std::uint64_t raw_error = error(raw);
+  const bool tail = raw_error > static_cast<std::uint64_t>(DriftTailError);
+  ++c.drift_samples;
+  c.drift_error_raw += raw_error;
+  const auto add = [&](int term, std::uint64_t& full, std::uint64_t& tail_sum, std::uint64_t& half) {
+    const std::uint64_t e = error(raw + term);
+    full += e;
+    if (tail) tail_sum += e;
+    half += error(raw + term / 2);
+  };
+  add(t.pieces, c.drift_error_pieces, c.drift_tail_pieces, c.drift_half_pieces);
+  add(t.minor, c.drift_error_minor, c.drift_tail_minor, c.drift_half_minor);
+  add(t.major, c.drift_error_major, c.drift_tail_major, c.drift_half_major);
+  add(t.threat, c.drift_error_threat, c.drift_tail_threat, c.drift_half_threat);
+  if (tail) {
+    ++c.drift_tail_samples;
+    c.drift_tail_raw += raw_error;
+  }
+}
+
+// The pruning eval from the static estimate `estimate`, as negamax refines
+// it with the TT entry (the drift ledger re-derives it per table).
+int Searcher::refined_eval(int estimate, bool tt_hit, const TtHit& hit, int ply) const {
+  if (!switches.use_tt_eval_refine || !tt_hit) return estimate;
+  const int s = score_from_tt(hit.score, ply);
+  if (!is_tb_or_mate(s) && (hit.bound == TtBound::Exact || (hit.bound == TtBound::Lower && s > estimate) ||
+                            (hit.bound == TtBound::Upper && s < estimate)))
+    return s;
+  return estimate;
+}
+#endif
 
 std::int64_t Searcher::elapsed_ms() const {
 #ifdef FORK_NODE_CLOCK
@@ -300,8 +400,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // score from a real search corrects the static estimate in the direction
   // its bound proves (a lower bound above it raises it, an upper bound below
   // it lowers it, an exact score replaces it). Mate and tablebase scores are
-  // left out; the TT keeps the raw static eval.
-  int prune_eval = f.static_eval;
+  // left out; the TT keeps the raw static eval. The static estimate it
+  // starts from is the raw eval plus the switched-on drift terms (R34, E4).
+  DriftTerms drift{};
+  if (!in_check && drift_keys_live_) drift = drift_terms(ply);
+  const int estimate = in_check ? ScoreNone : drift_estimate(f.static_eval, drift);
+  int prune_eval = estimate;
   if (switches.use_tt_eval_refine && tt_hit && !in_check) {
     const int s = score_from_tt(hit.score, ply);
     if (!is_tb_or_mate(s) &&
@@ -325,8 +429,19 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // condition but the margin), the node is also searched with RFP off here;
   // a prune (taken, or one a smaller margin would take) is wrong when that
   // search fails low. The real search goes on unchanged.
+  // With FORK_DRIFT_REPORT a node is also a candidate where a drift table's
+  // estimate would make it one, and a `drift_ledger` line follows the row:
+  // each table's pruning eval minus beta (tools/measure/drift_rank.py).
+  const auto drift_prune_eval = [&](int term) {
+    return refined_eval(drift_estimate(f.static_eval + term, DriftTerms{}), tt_hit, hit, ply);
+  };
+  const auto drift_reaches = [&](auto&& test) {
+    return drift_report_ && !in_check &&
+           (test(drift_prune_eval(drift.pieces)) || test(drift_prune_eval(drift.minor)) ||
+            test(drift_prune_eval(drift.major)) || test(drift_prune_eval(drift.threat)));
+  };
   if (ledger_every_ && !ledger_active_ && switches.use_rfp && can_prune_node && depth <= RfpMaxDepth &&
-      !is_tb_or_mate(beta) && prune_eval >= beta) {
+      !is_tb_or_mate(beta) && (prune_eval >= beta || drift_reaches([&](int e) { return e >= beta; }))) {
     ++counters.ledger_rfp_candidates;
     if (ledger_sampled(key)) {
       const int saved_eval = f.static_eval;
@@ -341,6 +456,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                    parent_eval != ScoreNone ? f.static_eval + parent_eval : ScoreNone, game_phase(pos),
                    prune_eval - RfpMargin * depth >= beta ? 1 : 0, std::clamp(arm - beta, -2000, 2000),
                    static_cast<unsigned long long>(arm_nodes), is_tb_or_mate(arm) ? 1 : 0);
+      if (drift_report_)
+        std::fprintf(stderr, "drift_ledger rfp|%d|%d|%d|%d\n", drift_prune_eval(drift.pieces) - beta,
+                     drift_prune_eval(drift.minor) - beta, drift_prune_eval(drift.major) - beta,
+                     drift_prune_eval(drift.threat) - beta);
       ++counters.ledger_rows;
     }
   }
@@ -454,7 +573,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // the on arm fails low and the off arm fails high. Before the selector
   // starts, so the re-entries cannot disturb this node's move loop.
   if (ledger_every_ && !ledger_active_ && switches.use_futility && can_prune && depth <= FutilityMaxDepth &&
-      !is_tb_or_mate(alpha) && prune_eval <= alpha) {
+      !is_tb_or_mate(alpha) && (prune_eval <= alpha || drift_reaches([&](int e) { return e <= alpha; }))) {
     ++counters.ledger_futility_candidates;
     if (ledger_sampled(key)) {
       const int saved_eval = f.static_eval;
@@ -476,6 +595,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                    std::clamp(off - beta, -2000, 2000), static_cast<unsigned long long>(on_nodes),
                    static_cast<unsigned long long>(off_nodes),
                    is_tb_or_mate(on) || is_tb_or_mate(off) ? 1 : 0);
+      if (drift_report_)
+        std::fprintf(stderr, "drift_ledger futility|%d|%d|%d|%d\n", alpha - drift_prune_eval(drift.pieces),
+                     alpha - drift_prune_eval(drift.minor), alpha - drift_prune_eval(drift.major),
+                     alpha - drift_prune_eval(drift.threat));
       ++counters.ledger_rows;
     }
   }
@@ -733,10 +856,25 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (moves_seen == 0) return withheld ? alpha : in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
   best = std::clamp(best, table_floor, table_ceiling);
-  if (switches.use_tt && !withheld) {
-    const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
-    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
+  const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
+  // The drift tables learn from this node (R34, E4; the pawn drift table's
+  // rule, T32): out of check, not in a singular test's search (nor, in stats
+  // builds, a ledger side search), after a quiet best move or none (a
+  // capture's gain says little about the position's standing error), when
+  // the result is no mate or tablebase score and its bound shows the
+  // estimate erred the way the error points (a lower bound only proves the
+  // estimate too low, an upper bound only too high). Each learns the result
+  // less the raw eval.
+  if (drift_keys_live_ && !in_check && !withheld FORK_STAT_GATE(&&!ledger_active_) &&
+      (best_move.is_none() || (!best_move.is_capture() && !best_move.is_promotion())) &&
+      !is_tb_or_mate(best) &&
+      (bound == TtBound::Exact || (bound == TtBound::Lower && best > estimate) ||
+       (bound == TtBound::Upper && best < estimate))) {
+    FORK_STAT(if (drift_report_) count_drift(best, f.static_eval, drift, bound));
+    learn_drift(ply, best - f.static_eval, depth);
   }
+  if (switches.use_tt && !withheld)
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
   return best;
 }
 
@@ -796,7 +934,9 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
         counters.eval_gap_quiesce_one_sided += is_tb_or_mate(alpha) != is_tb_or_mate(beta);
     }
 #endif
-    best = f.static_eval;
+    // The stand-pat is the static estimate: the raw eval plus the
+    // switched-on drift terms (R34, E4); the TT keeps the raw eval.
+    best = drift_keys_live_ ? drift_estimate(f.static_eval, drift_terms(ply)) : f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)
         tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);
@@ -1000,6 +1140,8 @@ int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::a
   stopped_ = false;
   frames_[0].after_null = false;
   frames_[0].arrival = NoArrival;
+  drift_keys_live_ = drift_in_use();
+  if (drift_keys_live_) drift_keys_[0] = drift_keys(pos);
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);
 #endif
@@ -1022,7 +1164,9 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   stable_move_ = NoMove;
   time_signals_ = {};
   last_soft_ms_ = limits.soft_ms;
-  frames_[0].arrival = NoArrival;  // the root has none (the follow table's arrival at ply 1)
+  frames_[0].arrival = NoArrival;     // the root has none (the follow table's arrival at ply 1)
+  drift_keys_live_ = drift_in_use();  // the drift tables' keys, kept from here by play()
+  if (drift_keys_live_) drift_keys_[0] = drift_keys(pos);
 
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);
