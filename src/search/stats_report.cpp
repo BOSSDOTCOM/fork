@@ -58,6 +58,8 @@ void print_counter_summary(const SearchCounters& c, const FeatureStackTally* tal
                static_cast<unsigned long long>(c.negative_extensions));
   std::fprintf(out, "stats: nodes reduced for having no TT move %llu\n",
                static_cast<unsigned long long>(c.no_move_reductions));
+  std::fprintf(out, "stats: quiet moves the history skip dropped %llu\n",
+               static_cast<unsigned long long>(c.history_skips));
   std::fprintf(out, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
                static_cast<unsigned long long>(c.singular_tests),
                static_cast<unsigned long long>(c.singular_extended),
@@ -142,6 +144,12 @@ void print_counter_summary(const SearchCounters& c, const FeatureStackTally* tal
   bins_line("LMR reply history", c.lmr_reply_bins, TableBins);
   bins_line("LMR follow history", c.lmr_follow_bins, TableBins);
   bins_line("late capture take history", c.late_take_bins, TableBins);
+  // The history skip's sites (T24): ordering scores by remaining depth.
+  for (int d = 1; d < SearchCounters::HistorySkipSiteDepths; ++d) {
+    char name[48];
+    std::snprintf(name, sizeof name, "history skip sites at depth %d", d);
+    bins_line(name, c.history_skip_site_bins[d], SkipBins);
+  }
   // Idea 59 step 1: computed evaluations within 10, 25, 50 and 100 cp of the
   // nearest finite window bound (shares of all computed evaluations there).
   const auto within = [&](const char* name, const std::uint64_t* bins, std::uint64_t infinite) {
@@ -206,6 +214,12 @@ void print_counter_dump(const SearchCounters& c, const FeatureStackTally* tally,
                                             "eval_gap_band_5_7", "eval_gap_band_8_plus"};
   for (int b = 0; b < GapBands; ++b) hist_line(band_names[b], c.eval_gap_band_bins[b], GapBins);
   hist_line("eval_gap_band_infinite", c.eval_gap_band_infinite, GapBands);
+  // The history skip's sites (T24): ordering scores by remaining depth.
+  for (int d = 1; d < SearchCounters::HistorySkipSiteDepths; ++d) {
+    char name[32];
+    std::snprintf(name, sizeof name, "history_skip_site_d%d", d);
+    hist_line(name, c.history_skip_site_bins[d], SkipBins);
+  }
 }
 
 #else
