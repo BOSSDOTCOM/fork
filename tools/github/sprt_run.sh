@@ -47,9 +47,11 @@
 #   replacing "no run of any workflow in progress": a scheduled nightly's
 #   four-hour TSan job held every stage back): a stage is dispatched only
 #   when the jobs every other run still holds leave room for its SHARDS shard
-#   jobs plus its build job within FORK_GH_JOBS concurrent jobs (20 by default,
-#   the Free plan's limit for standard GitHub-hosted runners, 40 on Pro;
-#   docs.github.com, Actions limits). Other SPRTs' runs count like any run, so
+#   jobs plus its build job within FORK_GH_JOBS concurrent jobs (40 by default
+#   since 2026-11-11, owner: the Pro plan's limit for standard GitHub-hosted
+#   runners, 20 on Free; docs.github.com, Actions limits; by the check runs'
+#   start and end times, 40 jobs of this repo were in progress at once on
+#   2026-11-10 at 9:29 PM EST). Other SPRTs' runs count like any run, so
 #   two SPRT lanes run side by side (owner, 2026-11-10 9:30 PM EST, GitHub Pro);
 #   FORK_SPRT_SERIAL=1 restores "no other sprt run pending". Each run is still
 #   found by its exact title (base, test, stage) and the ledger. A
@@ -121,7 +123,7 @@ else
 fi
 GH=${GH:-gh}
 POLL=${POLL:-120}
-GH_JOBS=${FORK_GH_JOBS:-20}
+GH_JOBS=${FORK_GH_JOBS:-40}
 SHARDS=${SHARDS:-16}
 data=${SPRT_DATA:-$HOME/fork-sprt/github}/$name
 mkdir -p "$data"

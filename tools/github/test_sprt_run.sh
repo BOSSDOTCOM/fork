@@ -22,7 +22,7 @@
 # logged; a lasting one still stops it. Since 2026-11-10 (owner: a scheduled
 # nightly no longer holds a stage back): a stage goes out beside other
 # workflows' runs when the jobs they still hold leave room for its shards and
-# build within FORK_GH_JOBS (20); a run whose jobs are not listed yet counts
+# build within FORK_GH_JOBS (40 by default since 2026-11-11, 20 before); a run whose jobs are not listed yet counts
 # as full. Since 2026-11-10 9:30 PM (owner, GitHub Pro): another sprt run counts its jobs like any
 # other run instead of blocking (two SPRT lanes); FORK_SPRT_SERIAL=1 restores the block. Uses python3 (or $PYTHON) for the merge and the ledger.
 #
@@ -86,9 +86,10 @@ check "the merged verdict is logged" grep -q "H1 accepted" "$tmp/h1/data/h1/driv
 check "the games and time losses are logged" grep -q "Shards: 2 (done); pairs 100, games 200 (200 finished, time losses 0" "$tmp/h1/data/h1/driver.log"
 
 # The capacity check (owner, 2026-11-10): a nightly holding one job does not
-# hold a stage back; a run holding 18 of the 20 jobs does until it drops to 17
-# (20 - 17 = 3 = 2 shards + the build); a run whose jobs are not listed yet
-# counts as full. FORK_GH_JOBS is 20 by default; a hang is cut at 30 s.
+# hold a stage back; a run holding 38 of the 40 jobs does until it drops to 37
+# (40 - 37 = 3 = 2 shards + the build); a run whose jobs are not listed yet
+# counts as full. FORK_GH_JOBS is 40 by default (owner, 2026-11-11; 20 before);
+# a hang is cut at 30 s.
 drive_t() {  # label args... (as drive, with a time limit)
   local label=$1
   shift
@@ -101,13 +102,17 @@ drive_t nightly "$sha" "$sha" 0 5
 check "a nightly holding one job does not hold the stage back" [ "$(rc nightly)" = 0 ]
 check "dispatched beside the nightly" grep -q "^501 busy=0 jobs=1 " "$tmp/nightly/dispatches"
 setup full 0 "$strong"
-echo "901 ci 18" >"$tmp/full/active"
+echo "901 ci 38" >"$tmp/full/active"
 : >"$tmp/full/drain"
 drive_t full "$sha" "$sha" 0 5
-check "a run holding 18 of 20 jobs waits, then the stage goes" [ "$(rc full)" = 0 ]
-# The fake lowers a run's count after each query: the query that saw 17 (3 free) leaves 16 at the dispatch; a
-# dispatch on the query that saw 18 would show 17.
-check "dispatched only when 3 jobs were free" grep -q "^501 busy=0 jobs=16 " "$tmp/full/dispatches"
+check "a run holding 38 of 40 jobs waits, then the stage goes" [ "$(rc full)" = 0 ]
+# The fake lowers a run's count after each query: the query that saw 37 (3 free) leaves 36 at the dispatch; a
+# dispatch on the query that saw 38 would show 37.
+check "dispatched only when 3 jobs were free" grep -q "^501 busy=0 jobs=36 " "$tmp/full/dispatches"
+setup was20 0 "$strong"
+echo "906 ci 18" >"$tmp/was20/active"
+drive_t was20 "$sha" "$sha" 0 5
+check "the default is 40: a run holding 18 jobs (full under the old 20) does not hold the stage back" grep -q "^501 busy=0 jobs=18 " "$tmp/was20/dispatches"
 setup unlisted 0 "$strong"
 echo "902 ci 0" >"$tmp/unlisted/active"
 drive_t unlisted "$sha" "$sha" 0 5
@@ -118,11 +123,11 @@ drive_t lane2 "$sha" "$sha" 0 5
 check "another SPRT holding one job does not block: the stage goes beside it" [ "$(rc lane2)" = 0 ]
 check "dispatched beside the other SPRT" grep -q "^501 busy=0 jobs=1 " "$tmp/lane2/dispatches"
 setup lane2full 0 "$strong"
-echo "904 sprt 18" >"$tmp/lane2full/active"
+echo "904 sprt 38" >"$tmp/lane2full/active"
 : >"$tmp/lane2full/drain"
 drive_t lane2full "$sha" "$sha" 0 5
-check "another SPRT holding 18 of 20 jobs: waits for room, then goes" [ "$(rc lane2full)" = 0 ]
-check "dispatched beside it only when 3 jobs were free" grep -q "^501 busy=0 jobs=16 " "$tmp/lane2full/dispatches"
+check "another SPRT holding 38 of 40 jobs: waits for room, then goes" [ "$(rc lane2full)" = 0 ]
+check "dispatched beside it only when 3 jobs were free" grep -q "^501 busy=0 jobs=36 " "$tmp/lane2full/dispatches"
 setup serial 0 "$strong"
 echo "905 sprt 1" >"$tmp/serial/active"
 FORK_SPRT_SERIAL=1 drive_t serial "$sha" "$sha" 0 5
