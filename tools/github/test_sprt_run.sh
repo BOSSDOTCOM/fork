@@ -23,7 +23,8 @@
 # nightly no longer holds a stage back): a stage goes out beside other
 # workflows' runs when the jobs they still hold leave room for its shards and
 # build within FORK_GH_JOBS (20); a run whose jobs are not listed yet counts
-# as full; another sprt run still blocks. Uses python3 (or $PYTHON) for the merge and the ledger.
+# as full. Since 2026-11-10 9:30 PM (owner, GitHub Pro): another sprt run counts its jobs like any
+# other run instead of blocking (two SPRT lanes); FORK_SPRT_SERIAL=1 restores the block. Uses python3 (or $PYTHON) for the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -111,6 +112,21 @@ setup unlisted 0 "$strong"
 echo "902 ci 0" >"$tmp/unlisted/active"
 drive_t unlisted "$sha" "$sha" 0 5
 check "a run with no jobs listed yet counts as full: no dispatch" [ "$(dispatches unlisted)" = 0 ]
+setup lane2 0 "$strong"
+echo "903 sprt 1" >"$tmp/lane2/active"
+drive_t lane2 "$sha" "$sha" 0 5
+check "another SPRT holding one job does not block: the stage goes beside it" [ "$(rc lane2)" = 0 ]
+check "dispatched beside the other SPRT" grep -q "^501 busy=0 jobs=1 " "$tmp/lane2/dispatches"
+setup lane2full 0 "$strong"
+echo "904 sprt 18" >"$tmp/lane2full/active"
+: >"$tmp/lane2full/drain"
+drive_t lane2full "$sha" "$sha" 0 5
+check "another SPRT holding 18 of 20 jobs: waits for room, then goes" [ "$(rc lane2full)" = 0 ]
+check "dispatched beside it only when 3 jobs were free" grep -q "^501 busy=0 jobs=16 " "$tmp/lane2full/dispatches"
+setup serial 0 "$strong"
+echo "905 sprt 1" >"$tmp/serial/active"
+FORK_SPRT_SERIAL=1 drive_t serial "$sha" "$sha" 0 5
+check "FORK_SPRT_SERIAL=1: another SPRT pending blocks the dispatch" [ "$(dispatches serial)" = 0 ]
 
 # 4-6: undecided runs every stage in order, then exits 2.
 setup undecided 0 "$even"
