@@ -144,7 +144,33 @@ def last(p):
     except OSError:
         return ''
 w = json.load(open(W + '/state/worker.json'))
-out = {'worker': w, 'job': w.get('running'), 'now': time.time()}
+out = {'worker': w, 'job': w.get('running'), 'now': time.time(), 'builds': {}}
+for q in glob.glob(W + '/queue/*.json'):
+    try:
+        a = json.load(open(q))['argv']
+    except (OSError, ValueError, KeyError):
+        continue
+    for b in [x.rstrip('/') for x in a if x.startswith(W + '/builds/')]:
+        pins = {}
+        try:
+            for line in open(b + '/pins.txt'):
+                h, f = line.split()
+                pins[h] = f
+        except (OSError, ValueError):
+            pass
+        net = ''
+        try:
+            net = [l.split()[1] for l in open(b + '/version.txt') if l.startswith('net ')][0]
+        except (OSError, IndexError):
+            pass
+        hexa = lambda x: len(x) == 64 and all(c in '0123456789abcdef' for c in x)
+        # The binaries' pins only (the slice also pins its Python tools, which are not in pins.txt): the values
+        # of --pin-fork and --pin-datagen, or the hash right after the build folder (filler.sh's argument order).
+        given = [a[i + 1] for i, x in enumerate(a[:-1])
+                 if x in ('--pin-fork', '--pin-datagen') or (x.rstrip('/') == b and hexa(a[i + 1]))]
+        out['builds'][os.path.basename(q)[:-5]] = {
+            'dir': os.path.basename(b), 'net': net,
+            'pins': 'ok' if given and all(g in pins for g in given) else 'MISMATCH'}
 job = out['job']
 if job:
     item = json.load(open(f'{W}/queue/{job}.json'))
@@ -259,7 +285,11 @@ def cmd_sweep(c):
             age = p['now'] - time.mktime(time.strptime(w['at'][:19], '%Y-%m-%dT%H:%M:%S')) + time.timezone \
                 if w.get('at') else None
             for n, it in sorted(w.get('items', {}).items()):
-                print(f"  item {n}: class {it['class']}, {it['state']}, resumes {it['resumes']}")
+                b = (p.get('builds') or {}).get(n)
+                bs = f", build {b['dir']} (net {b['net'] or '?'}, pins {b['pins']})" if b else ''
+                print(f"  item {n}: class {it['class']}, {it['state']}, resumes {it['resumes']}{bs}")
+                if b and b['pins'] != 'ok':
+                    attention.append(f"item {n}: its pinned SHA-256s are not in {b['dir']}/pins.txt")
                 if it['state'] == 'failed':
                     attention.append(f'item {n} FAILED (see /opt/fork/state/items/{n}.failed)')
                 f = (c.get('finish') or {}).get(n)

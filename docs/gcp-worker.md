@@ -110,7 +110,9 @@ $0.0005; a million saved positions at the standard 50% save rate is about 8 MB, 
 
 - `gcp.py sweep` (for a sweep every 15 minutes, from PowerShell): one pass that restarts the VM if it is stopped
   while `wanted.json` says running (a preemption: spot VMs with the STOP action do not restart themselves),
-  reports new preemptions and failed items, prints the running job's positions, rate, ETA and last output time
+  reports new preemptions and failed items, shows each item's build folder with its network and whether the
+  item's binary pins are in that build's pins.txt (ATTENTION if not), prints the running job's positions, rate,
+  ETA and last output time
   (from fork_datagen's own log lines, read on the VM over one SSH call), and, for a job done on the VM whose PC
   check has not run, prints the exact `jobctl.py start gcpfinish ...` command that runs `gcp.py finish` under
   the PC's supervisor (the slice's PC checks take a while, so the sweep never runs them inline). Exit 1 with
