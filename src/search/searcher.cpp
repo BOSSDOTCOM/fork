@@ -638,7 +638,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // X2: the history values at this LMR site, and what the LMR history
         // term (sprt/lmr-history: the base less the ordering score / 24,000)
         // would do here. The correction is the same with that base: the
-        // committed rule returns 0 whatever its context.
+        // committed rule returns 0 whatever its context. The probe's
+        // reduction keeps every other term of the real one (check relief,
+        // the cut-node plies), so it differs only where the term fires.
         ++counters.lmr_order_bins[order_score_bin(stats_order_score)];
         ++counters.lmr_quiet_bins[table_value_bin(stats_quiet_value)];
         if (f.arrival != NoArrival)
@@ -653,7 +655,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         counters.lmr_history_fire_less += shift > 0;
         counters.lmr_history_fire_more += shift < 0;
         counters.lmr_history_changes +=
-            std::clamp(new_depth - (base - shift + correction - relief), 1, new_depth) != reduced;
+            std::clamp(new_depth - (base - shift + correction - relief + cut_extra), 1, new_depth) != reduced;
 #endif
       }
 #ifdef FORK_SEARCH_STATS
