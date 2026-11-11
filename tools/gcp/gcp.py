@@ -16,6 +16,10 @@ The queue: STATE/queue/NAME.json (tools/gcp/worker.py's item format).
 
     gcp.py status [--json]            the VM (gcloud describe: cheap, no SSH) and, when it runs, the worker's
                                       state and last events (one SSH); STATE/status.json
+    gcp.py sweep                      one pass for a 15-minute sweep: restarts the VM if it is stopped while
+                                      wanted running (a preemption), reports preemptions and failed items, and
+                                      prints the running job's positions, rate, ETA and last output time; exit 1
+                                      with ATTENTION lines when something needs a look
     gcp.py start | stop               start or stop the VM; the wanted state goes to STATE/wanted.json, which
                                       watch --restart follows
     gcp.py push                       mirror STATE/queue/ to the VM's queue (rsync --delete)
@@ -66,9 +70,10 @@ def state_dir(c):
     return d
 
 
-def run(argv, timeout=600, check=False):
+def run(argv, timeout=600, check=False, stdin_text=None):
     r = subprocess.run([str(a) for a in argv], capture_output=True, text=True, timeout=timeout,
-                       stdin=subprocess.DEVNULL, creationflags=NO_WINDOW)
+                       input=stdin_text, stdin=None if stdin_text is not None else subprocess.DEVNULL,
+                       creationflags=NO_WINDOW)
     if check and r.returncode != 0:
         raise SystemExit(f'failed ({r.returncode}): {" ".join(map(str, argv))[:200]}\n{r.stderr.strip()[-800:]}')
     return r
@@ -107,8 +112,8 @@ def preemptions(c, since=None):
         return []
 
 
-def wsl(c, *argv, timeout=600, check=False):
-    return run(['wsl.exe', '-d', c['distro'], '--exec', *argv], timeout=timeout, check=check)
+def wsl(c, *argv, timeout=600, check=False, stdin_text=None):
+    return run(['wsl.exe', '-d', c['distro'], '--exec', *argv], timeout=timeout, check=check, stdin_text=stdin_text)
 
 
 def ssh_opts(c):
@@ -117,8 +122,60 @@ def ssh_opts(c):
             '-o', 'ConnectTimeout=20']
 
 
-def ssh(c, ip, command, timeout=120, check=False):
-    return wsl(c, 'ssh', *ssh_opts(c), f"{c['ssh_user']}@{ip}", command, timeout=timeout, check=check)
+def ssh(c, ip, command, timeout=120, check=False, stdin_text=None):
+    return wsl(c, 'ssh', *ssh_opts(c), f"{c['ssh_user']}@{ip}", command, timeout=timeout, check=check,
+               stdin_text=stdin_text)
+
+
+# Runs on the VM (python3 -I -, read from standard input): the worker's state and the running job's progress as
+# one JSON line. Progress comes from fork_datagen's own log lines ("N s: G games, P positions, R positions/s"):
+# for the slice, finished segments' manifests plus the current segment's last line; for the filler, the sealed
+# chunks plus the current chunk's last line.
+PROGRESS = r'''
+import glob, json, os, re, time
+W = '/opt/fork'
+LINE = re.compile(r'(\d+) s: (\d+) games, (\d+) positions, (\d+) positions/s')
+def last(p):
+    try:
+        with open(p, 'rb') as f:
+            f.seek(0, 2); f.seek(max(0, f.tell() - 4096))
+            lines = [l for l in f.read().decode('utf-8', 'replace').splitlines() if l.strip()]
+        return lines[-1] if lines else ''
+    except OSError:
+        return ''
+w = json.load(open(W + '/state/worker.json'))
+out = {'worker': w, 'job': w.get('running'), 'now': time.time()}
+job = out['job']
+if job:
+    item = json.load(open(f'{W}/queue/{job}.json'))
+    argv = item['argv']
+    out['target'] = int(argv[argv.index('--positions') + 1]) if '--positions' in argv else None
+    logs, done = [], 0
+    if job.startswith('filler'):
+        sealed = glob.glob(f'{W}/out/filler/*/*/*-c[0-9][0-9][0-9][0-9].json')
+        for m in sealed:
+            try: done += json.load(open(m))['positions']
+            except (OSError, ValueError, KeyError): pass
+        out['chunks_sealed'] = len(sealed)
+        logs = glob.glob(f'{W}/work/filler/*/*/datagen.log')
+    else:
+        for seg in sorted(glob.glob(f'{W}/out/{job}/seg-*')):
+            k = seg.rsplit('-', 1)[1]
+            man = f'{seg}/{job}-s{k}.json'
+            if os.path.exists(man):
+                done += json.load(open(man))['positions']
+            else:
+                logs.append(f'{seg}/{job}-s{k}.log')
+    cur = max(logs, key=os.path.getmtime) if logs else None
+    m = LINE.search(last(cur)) if cur else None
+    out['positions'] = done + (int(m[3]) if m else 0)
+    out['rate'] = int(m[4]) if m else None
+    out['segment_seconds'] = int(m[1]) if m else None
+    files = [f for f in glob.glob(f'{W}/out/{job}/**', recursive=True) + logs if os.path.isfile(f)]
+    out['last_output'] = max((os.path.getmtime(f) for f in files), default=None)
+    out['log_tail'] = last(f'{W}/logs/{job}.log')
+print(json.dumps(out))
+'''
 
 
 def rsync(c, src, dst, *extra, timeout=7200):
@@ -164,6 +221,67 @@ def cmd_status(c, as_json=False):
         elif w:
             print(f"worker: {w}")
     return out
+
+
+def cmd_sweep(c):
+    """One pass for a periodic sweep (every 15 minutes): restarts the VM if it is stopped while wanted running
+    (a preemption), reports new preemptions and failed items, and prints the running job's progress. Exit 0 when
+    all is well, 1 when something needs a look (printed as ATTENTION lines)."""
+    sd = state_dir(c)
+    memo = json.loads((sd / 'sweep.json').read_text(encoding='utf-8')) if (sd / 'sweep.json').exists() else {}
+    wanted = (json.loads((sd / 'wanted.json').read_text(encoding='utf-8'))
+              if (sd / 'wanted.json').exists() else {}).get('wanted')
+    attention = []
+    d = describe(c)
+    pre = preemptions(c)
+    new = [t for t in pre if t > memo.get('last_preemption', '')]
+    for t in new:
+        attention.append(f'preempted at {t}')
+        alert(c, 'GCP worker preempted', f"{c['instance']} was preempted at {t}")
+    if new:
+        memo['last_preemption'] = new[-1]
+    if d['status'] in ('TERMINATED', 'STOPPED', 'SUSPENDED') and wanted == 'running':
+        r = gcloud(c, 'compute', 'instances', 'start', c['instance'], f"--zone={c['zone']}", check=False, timeout=600)
+        ok = r.returncode == 0
+        attention.append(f"VM was {d['status']}; restart {'requested: ok' if ok else 'FAILED: ' + r.stderr.strip()[-200:]}")
+        d = describe(c)
+    line = f"{est()} {c['instance']} ({d.get('machine_type')}, spot): {d['status']}, wanted {wanted}"
+    print(line)
+    if d['status'] == 'RUNNING' and d.get('ip'):
+        r = ssh(c, d['ip'], 'python3 -I -', stdin_text=PROGRESS, timeout=90)
+        try:
+            p = json.loads(r.stdout.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            p = None
+            attention.append(f"worker unreadable: {(r.stderr or r.stdout).strip()[-200:]}")
+        if p:
+            w = p['worker']
+            age = p['now'] - time.mktime(time.strptime(w['at'][:19], '%Y-%m-%dT%H:%M:%S')) + time.timezone \
+                if w.get('at') else None
+            for n, it in sorted(w.get('items', {}).items()):
+                print(f"  item {n}: class {it['class']}, {it['state']}, resumes {it['resumes']}")
+                if it['state'] == 'failed':
+                    attention.append(f'item {n} FAILED (see /opt/fork/state/items/{n}.failed)')
+            if age is not None and age > 180:
+                attention.append(f'worker.json is {age:.0f} s old (the worker service may be down)')
+            if p.get('job'):
+                pos, tgt, rate = p.get('positions') or 0, p.get('target'), p.get('rate')
+                eta = (f", ETA {est(time.time() + (tgt - pos) / rate)}" if tgt and rate and tgt > pos else '')
+                lo = p.get('last_output')
+                print(f"  running {p['job']}: {pos:,} positions{f' of {tgt:,}' if tgt else ''}"
+                      f"{f' ({100 * pos / tgt:.1f}%)' if tgt else ''}, {rate or '?'} positions/s now{eta}")
+                print(f"  last output {est(lo) if lo else 'none'}"
+                      f"{f' ({p["now"] - lo:.0f} s ago)' if lo else ''}; job log: {p.get('log_tail', '')[-160:]}")
+                if lo and p['now'] - lo > 900:
+                    attention.append(f"no output from {p['job']} for {p['now'] - lo:.0f} s")
+            elif not any(it['state'] in ('pending', 'running') for it in w.get('items', {}).values()):
+                attention.append('the VM is IDLE: nothing pending in its queue')
+    elif d['status'] != 'RUNNING' and wanted == 'running':
+        attention.append(f"VM is {d['status']}")
+    (sd / 'sweep.json').write_text(json.dumps(memo), encoding='utf-8')
+    for a in attention:
+        print(f'  ATTENTION: {a}')
+    return 1 if attention else 0
 
 
 def cmd_start_stop(c, what):
@@ -343,6 +461,8 @@ def main(argv):
     cmd, rest = argv[0], argv[1:]
     if cmd == 'status':
         cmd_status(c, '--json' in rest)
+    elif cmd == 'sweep':
+        return cmd_sweep(c)
     elif cmd in ('start', 'stop'):
         cmd_start_stop(c, cmd)
     elif cmd == 'push':
