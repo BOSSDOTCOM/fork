@@ -1650,8 +1650,8 @@ the screens before use.
   the control (r8b-h2h-i52) is running, so the idea is undecided.
   **2026-11-11:** the head-to-head against the control r8bc was **−4.13 ± 9.60** (run 42925024784, 1,600
   games at 800,000 nodes); **the i52 arm is not kept** (owner). It misses the keep-or-drop rule's +5 line,
-  so by that rule idea 52 is retired and the scratch-run rule dropped; that consequence is the declared
-  rule's, not yet confirmed by the owner (UNVERIFIED until then).
+  so by that rule idea 52 is retired and the scratch-run rule dropped. **Retired (owner, 2026-11-11, about
+  3:30 PM EST):** the owner confirmed the keep rule's consequence; the scratch-run rule is dropped.
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 53. Pawn-structure-class output experts
@@ -2174,6 +2174,13 @@ until measured; new names and constants go through the screens before use.
   (d0 - d6 -2.19 +/- 12.04 nElo), and its design R SPRT against off stopped
   for futility after stage 3 (-2.93 +/- 7.16 Elo, 3,200 games, try 1 of 2),
   so by the kill criterion part 5 is retired**; docs/history/phase-4/sprt-log.md.
+  **Part 6 (root-gap time management) dropped (owner, 2026-11-11):** the
+  head-to-heads picked RootGapBand b7 (+16.20 ± 9.83 nElo over the
+  placeholder b14) and RootGapExtra x333 (+7.41 ± 9.83 over the placeholder
+  x667), and the design R STC SPRT of the pair against off (i61-rg-stc, try
+  1 of 2) gave **H0, −4.89 ± 7.03 Elo** after 2 stages, 3,200 games (LLR
+  −1.81); the owner chose to drop it rather than retry. The switch stays off
+  on its branch, and nothing reaches phase-4.
   **runtime cost:** possible (refiner calls at pruning sites). **earliest phase:** Phase 4.
 
 ## 62. Label depth at equal generation time
@@ -2432,7 +2439,7 @@ whose weaknesses and data gaps decide their targets and order.
 
 ## 72. Threat-aware quiet ordering, the any-attack set (tier 2, T56)
 
-- **type:** ELO (search); flag `use_threat_buckets` (off).
+- **type:** ELO (search); flag `use_threat_buckets` (on since 2026-11-11).
 - **idea** (KB search-techniques.md §3.34, its first family): the butterfly
   history split into four buckets by whether an enemy piece attacks the
   quiet move's from-square and its to-square in the position before the
@@ -2452,8 +2459,16 @@ whose weaknesses and data gaps decide their targets and order.
   night queue item 63, after root-gap's items 60-62. Nothing is adopted
   before its verdict; an H1 goes to the owner (LTC next by the owner's
   rule). The cheaper-attacker set stays closed.
+  **2026-11-11: adopted.** STC t56-any-stc **H1, +7.49 ± 4.89 Elo** (nElo
+  +13.04 ± 8.51, 6,400 games, LLR 3.19); LTC t56-any-ltc (40+0.4) **H1,
+  +8.07 ± 5.15 Elo** (nElo +15.12 ± 9.64, 4,992 games, LLR 3.01); adopted
+  on the owner's pre-approval (2026-11-11) onto phase-4 4470f24 (branch
+  adopt/t56-any), `UseThreatBuckets` on, the switch kept until the Phase 4
+  re-validation; bench 10,166,167 / d874b380155a2e8c (r8brft1);
+  docs/history/phase-4/sprt-log.md.
 - **runtime cost:** possible (an attack map built once per node that
   reaches its quiets or a quiet cutoff; the butterfly table grows from
-  16 KB to 64 KB). Speed not yet measured (UNVERIFIED); the SPRT result is
-  to be reported with its nps change (the 2026-10-24 rule).
+  16 KB to 64 KB). Speed not yet measured (UNVERIFIED; still not measured
+  at adoption, bench/ab.py not run); the SPRT result is to be reported with
+  its nps change (the 2026-10-24 rule).
 - **earliest phase:** Phase 4.

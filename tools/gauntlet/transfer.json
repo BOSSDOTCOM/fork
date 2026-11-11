@@ -11,6 +11,7 @@
     {"change": "R14 SPSA tuned margins (spsa-r14-m2)", "elo": 37.93, "ci95": 10.03, "test": "STC design R [0, 6], run 42726060415, 1,600 games"},
     {"change": "r8btd90 (retrain 8b, TD(0.9) labels)", "elo": 12.17, "ci95": 5.71, "test": "r8b-stc-1: STC [0, 5], runs 42917050282-42922442883, 4,800 games"},
     {"change": "r8brft1 (idea 70, result fine-tune of td90)", "elo": 5.74, "ci95": 3.81, "test": "r8b-rft-stc: STC [0, 5], runs 42974677403-42988446282, 11,200 games"},
-    {"change": "cut-node (R4, 1 ply)", "elo": 6.02, "ci95": 3.67, "test": "b4-cut-node-stc: STC design R [0, 6], runs 42948984895-42961813575, 11,200 games", "ltc": "b4-cut-node-ltc: LTC 40+0.4 design R [0, 6], +9.75 +/- 5.14, runs 42991551149-43013618465, 4,992 games"}
+    {"change": "cut-node (R4, 1 ply)", "elo": 6.02, "ci95": 3.67, "test": "b4-cut-node-stc: STC design R [0, 6], runs 42948984895-42961813575, 11,200 games", "ltc": "b4-cut-node-ltc: LTC 40+0.4 design R [0, 6], +9.75 +/- 5.14, runs 42991551149-43013618465, 4,992 games"},
+    {"change": "T56 any-attack threat buckets", "elo": 7.49, "ci95": 4.89, "test": "t56-any-stc: STC design R [0, 6], runs 43017939593-43025985854, 6,400 games", "ltc": "t56-any-ltc: LTC 40+0.4 design R [0, 6], +8.07 +/- 5.15, runs 43029851342, 43068666654, 43081871545, 4,992 games"}
   ]
 }
