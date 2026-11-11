@@ -189,7 +189,7 @@ struct SearchQuota {
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_piece_drift, UsePieceDrift, false)               \
   X(use_minor_drift, UseMinorDrift, false)               \
-  X(use_major_drift, UseMajorDrift, false)               \
+  X(use_major_drift, UseMajorDrift, true)                \
   X(use_threat_drift, UseThreatDrift, false)
 
 struct SearchSwitches {
