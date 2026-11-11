@@ -284,6 +284,53 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
                                        << f.lmr_quiet_bins[TableBins / 2] << "/" << f.lmr_rule_sites);
 }
 
+// The history skip (T24): its sites' histogram bounds its firing count. Each
+// skip is a site at depth 1 to HistorySkipMaxDepth whose score is at or
+// below -HistorySkipPerPly x depth, so the count lies between the sites in
+// the bins wholly below that threshold and those up to its bin, and equals
+// the latter when the threshold is a multiple of the bin width. With the
+// switch off nothing is skipped, and the sites are counted all the same.
+TEST_CASE("search_stats", "history skip: skips match the sites' histogram") {
+  std::vector<TtBucket> buckets(16384);
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  const std::atomic<bool> stop{false};
+  SearchQuota limits;
+  limits.depth = 9;
+  for (bool on : {false, true}) {
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    auto searcher = std::make_unique<Searcher>(table);
+    searcher->switches.use_history_skip = on;
+    Position pos;
+    CHECK(pos.set_fen(perft_suite()[0].fen));
+    // A short game, history carried (larger history values than a cleared search).
+    for (int ply = 0; ply < 12; ++ply) {
+      const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+      CHECK(!r.best.is_none());
+      pos.make(r.best);
+    }
+    const SearchCounters& c = searcher->counters;
+    std::uint64_t lower = 0, upper = 0, sites = 0;
+    for (int d = 1; d <= HistorySkipMaxDepth && d < SearchCounters::HistorySkipSiteDepths; ++d) {
+      const int edge = skip_score_bin(-HistorySkipPerPly * d);
+      for (int b = 0; b < SkipBins; ++b) {
+        sites += c.history_skip_site_bins[d][b];
+        lower += b < edge ? c.history_skip_site_bins[d][b] : 0;
+        upper += b <= edge ? c.history_skip_site_bins[d][b] : 0;
+      }
+    }
+    CHECK(sites > 0);
+    if (!on) {
+      CHECK_EQ(c.history_skips, std::uint64_t{0});
+      continue;
+    }
+    CHECK_MSG(c.history_skips > 0, "the history skip never fired");
+    CHECK_MSG(lower <= c.history_skips && c.history_skips <= upper,
+              "skips " << c.history_skips << ", bins " << lower << " to " << upper);
+    if (HistorySkipPerPly % SkipBinWidth == 0) CHECK_EQ(c.history_skips, upper);
+  }
+}
+
 // X6: one trace row per finished iteration. The oracle for each row's best
 // move is a separate search to that row's depth from the same cleared
 // state (a search is deterministic, so its iterations repeat the longer

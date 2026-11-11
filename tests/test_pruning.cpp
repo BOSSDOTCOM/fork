@@ -419,6 +419,30 @@ TEST_CASE("pruning", "cut-node reduction: still correct, and it changes the sear
             "the cut-node reduction left all three trees unchanged");
 }
 
+// Quiet history pruning, the history skip (tier 2, T24): with it on, mates
+// are still found and the best move is legal, and it changes the tree
+// (fault check: a skip never taken leaves the trees as with the switch off).
+TEST_CASE("pruning", "history skip: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_history_skip);  // off until its SPRT
+  SearchSwitches on;
+  on.use_history_skip = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_history_skip = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the history skip left all three trees unchanged");
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -563,6 +587,35 @@ TEST_CASE("pruning", "X2 histogram bins and the LMR history probe shift") {
   CHECK_EQ(lmr_history_probe_shift(-23999), 0);
   CHECK_EQ(lmr_history_probe_shift(-24000), -1);
   CHECK_EQ(lmr_history_probe_shift(INT16_MAX), 1);
+}
+
+// The history skip's measurement bins (T24): monotone over every int16
+// value, and for every threshold -100j the bins at or below
+// skip_score_bin(-100j) count exactly the values at or below it (the
+// oracle: a direct count), as tools/tier2_measure/history_skip_rates.py
+// reads them.
+TEST_CASE("pruning", "history skip measurement bins split exactly at multiples of 100") {
+  std::vector<std::uint64_t> bins(SkipBins, 0);
+  int previous = -1;
+  for (int s = -INT16_MAX; s <= INT16_MAX; ++s) {
+    const int b = skip_score_bin(s);
+    CHECK(b >= 0 && b < SkipBins && b >= previous);
+    previous = b;
+    ++bins[b];
+  }
+  for (int threshold : {-100, -200, -1200, -9900, -32700}) {
+    std::uint64_t direct = 0, from_bins = 0;
+    for (int s = -INT16_MAX; s <= threshold; ++s) ++direct;
+    for (int b = 0; b <= skip_score_bin(threshold); ++b) from_bins += bins[b];
+    CHECK_MSG(from_bins == direct, "threshold " << threshold << ": " << from_bins << " vs " << direct);
+  }
+  CHECK_EQ(skip_score_bin(0), SkipBins / 2);
+  CHECK_EQ(skip_score_bin(99), SkipBins / 2);
+  CHECK_EQ(skip_score_bin(100), SkipBins / 2 + 1);
+  CHECK_EQ(skip_score_bin(-1), SkipBins / 2 - 1);
+  CHECK_EQ(skip_score_bin(-99), SkipBins / 2 - 1);
+  CHECK_EQ(skip_score_bin(-100), SkipBins / 2 - 2);
+  CHECK_EQ(skip_score_bin(INT16_MAX), SkipBins - 1);
 }
 
 // Idea 59 step 1's window gap (DESIGN.md §5.7): the distance to the nearer
