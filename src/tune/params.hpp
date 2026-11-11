@@ -64,6 +64,7 @@
   X(CutNodeLmrPlies, 1, 0, 3, 1)          \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
+  X(PriorCreditQuarters, 3, 0, 12, 1)     \
   X(ReplyWeight, 6, 0, 12, 1)             \
   X(FollowWeight, 4, 0, 8, 1)             \
   X(TakeWeight, 4, 0, 16, 1)              \
