@@ -187,7 +187,7 @@ target_compile_options(fathom PRIVATE -w)
 # tests/bench-b0.ref), and so does bootstrap (tests/bench.ref).
 set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
-set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512ppr3.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/r8brft1.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
 if(FORK_EVALUATOR STREQUAL "nnue")
   if(NOT EXISTS ${FORK_NET})
     message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")
