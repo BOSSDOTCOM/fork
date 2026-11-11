@@ -166,6 +166,28 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
     for (Move q : f.failed_moves)
       if (!q.is_capture()) history_.apply(us, q, -bonus, threat_bucket(attacked, q));
   // The pair histories (tier 2, T10) take the same bonus and malus.
+  if (switches.use_pair_sum_update) {
+    // D8: each table's self-limiting term reads the move's entries in both
+    // tables summed, both taken before either is updated.
+    const Position& pos = *pos_;
+    const int reply = switches.use_reply_history ? f.arrival : NoArrival;
+    const int follow = switches.use_follow_history ? follow_arrival(f) : NoArrival;
+    if (reply == NoArrival && follow == NoArrival) return;
+    PairHistory& reply_table = pair_history_[ReplyTable];
+    PairHistory& follow_table = pair_history_[FollowTable];
+    const auto update_both = [&](Move q, int amount) {
+      const int slot = pair_slot(pos.piece_at(q.from()), q.to());
+      const int sum = (reply != NoArrival ? reply_table.value(reply, slot) : 0) +
+                      (follow != NoArrival ? follow_table.value(follow, slot) : 0);
+      if (reply != NoArrival) reply_table.apply_from_sum(reply, slot, amount, sum);
+      if (follow != NoArrival) follow_table.apply_from_sum(follow, slot, amount, sum);
+    };
+    update_both(m, bonus);
+    if (switches.use_history_malus)
+      for (Move q : f.failed_moves)
+        if (!q.is_capture()) update_both(q, -bonus);
+    return;
+  }
   const auto update = [&](PairHistory& table, int arrival) {
     const Position& pos = *pos_;
     table.apply(arrival, pair_slot(pos.piece_at(m.from()), m.to()), bonus);

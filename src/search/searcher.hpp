@@ -155,6 +155,13 @@ struct SearchQuota {
 //   unresolved root fail high is never played either way. On since its STC
 //   SPRT against off passed (design R [0, 6]; adoption on that pass
 //   pre-approved by the owner, 2026-11-11; the result in the SPRT log).
+// - use_pair_sum_update: the engine survey's D8: a cutoff's bonus and
+//   maluses move each pair table's entry (reply and follow) with the
+//   self-limiting term read from the move's entries in both tables summed
+//   (PairHistory::apply_from_sum), instead of from the entry alone, so the
+//   two tables approach the limit together. A table the node does not read
+//   (no arrival, or its switch off) is neither summed nor updated, so with
+//   one table the update is the usual one. No constant. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -189,7 +196,8 @@ struct SearchQuota {
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_pair_sum_update, UsePairSumUpdate, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
