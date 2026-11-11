@@ -108,6 +108,18 @@ $0.0005; a million saved positions at the standard 50% save rate is about 8 MB, 
 
 ## Status and alerts
 
+- `gcp.py sweep` (for a sweep every 15 minutes, from PowerShell): one pass that restarts the VM if it is stopped
+  while `wanted.json` says running (a preemption: spot VMs with the STOP action do not restart themselves),
+  reports new preemptions and failed items, prints the running job's positions, rate, ETA and last output time
+  (from fork_datagen's own log lines, read on the VM over one SSH call), and, for a job done on the VM whose PC
+  check has not run, prints the exact `jobctl.py start gcpfinish ...` command that runs `gcp.py finish` under
+  the PC's supervisor (the slice's PC checks take a while, so the sweep never runs them inline). Exit 1 with
+  ATTENTION lines when something needs a look, an idle VM included.
+- Filler runs come home on demand: `gcp.py pull filler`, then in WSL, per run,
+  `PYTHON=~/fork-cloud-venv/bin/python bash tools/cloud/pull_datagen.sh --from ~/fork-data/gcp/filler/RUN --to OUT`
+  (every chunk's shards against its sealed manifest, every game replayed); a run still in progress has its
+  finished chunks only.
+
 - `gcp.py status`: the VM through `gcloud compute instances describe` (no SSH, nothing billed), and, when it
   runs, the worker's state and last events over one SSH call; also written to `~/fork-jobs/gcp/status.json`.
 - `gcp.py watch --restart --finish` (under the PC's job supervisor, type gcpwatch, started from PowerShell):

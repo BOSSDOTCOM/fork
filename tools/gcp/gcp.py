@@ -262,6 +262,13 @@ def cmd_sweep(c):
                 print(f"  item {n}: class {it['class']}, {it['state']}, resumes {it['resumes']}")
                 if it['state'] == 'failed':
                     attention.append(f'item {n} FAILED (see /opt/fork/state/items/{n}.failed)')
+                f = (c.get('finish') or {}).get(n)
+                if it['state'] == 'done' and f and not Path(f['done_file']).exists():
+                    me = Path(__file__).resolve()
+                    attention.append(
+                        f"item {n} is done on the VM, not yet pulled and checked on the PC; from PowerShell: "
+                        f"{sys.executable} -I {me.parents[1] / 'jobs' / 'jobctl.py'} start gcpfinish gcp-finish-{n} "
+                        f"-- {sys.executable} -I {me} finish {n}")
             if age is not None and age > 180:
                 attention.append(f'worker.json is {age:.0f} s old (the worker service may be down)')
             if p.get('job'):
