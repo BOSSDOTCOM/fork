@@ -260,19 +260,29 @@ fi
 # Prints the number of runs not completed; anything but "0" (gh failing
 # included) counts as busy.
 # The runs not completed, "ID WORKFLOW" per line.
-pending() { "$GH" run list -R "$REPO" -L 50 --json databaseId,status,workflowName   --jq '.[] | select(.status != "completed") | "\(.databaseId) \(.workflowName)"' 2>/dev/null; }
+pending() { "$GH" run list -R "$REPO" -L 50 --json databaseId,status,workflowName,createdAt   --jq '.[] | select(.status != "completed") | "\(.databaseId) \(.workflowName) \(.createdAt)"' 2>/dev/null; }
 # Exit 0 when a stage can go now: room for SHARDS + 1 jobs beside what the other
-# runs still hold (their jobs not completed; a run with none listed yet counts as holding all GH_JOBS). Any gh
-# failure means "not now".
+# runs still hold (their jobs not completed; a run with none listed yet counts as holding all GH_JOBS, unless it
+# was created more than GHOST_SECS (900) ago: a run that lists no job after 15 minutes is a ghost, not a run about to
+# start; 2026-11-11, GitHub's Actions outage left run 43098344274 "queued" with no jobs and uncancellable, and it held
+# every stage back). Any gh failure means "not now".
 room() {
   local list rid wf n held=0
   list=$(pending) || return 1
-  while read -r rid wf; do
+  while read -r rid wf created; do
     [ -n "$rid" ] || continue
     [ "$wf" = sprt ] && [ "${FORK_SPRT_SERIAL:-0}" = 1 ] && return 1
     n=$("$GH" api "repos/$REPO/actions/runs/$rid/jobs?per_page=100"       --jq '[.jobs[] | select(.status != "completed")] | length' 2>/dev/null) || return 1
     case $n in '' | *[!0-9]*) return 1 ;; esac
-    [ "$n" -gt 0 ] || n=$GH_JOBS
+    if [ "$n" -eq 0 ]; then
+      age=0
+      [ -n "${created:-}" ] && age=$(( $(date +%s) - $(date -d "$created" +%s 2>/dev/null || date +%s) ))
+      if [ "$age" -gt "${GHOST_SECS:-900}" ]; then
+        echo "capacity: run $rid ($wf) lists no jobs ${age} s after its creation: ignored as a ghost" >&2
+        continue
+      fi
+      n=$GH_JOBS
+    fi
     held=$((held + n))
   done <<<"$list"
   [ $((GH_JOBS - held)) -ge $((SHARDS + 1)) ]

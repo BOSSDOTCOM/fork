@@ -117,6 +117,15 @@ setup unlisted 0 "$strong"
 echo "902 ci 0" >"$tmp/unlisted/active"
 drive_t unlisted "$sha" "$sha" 0 5
 check "a run with no jobs listed yet counts as full: no dispatch" [ "$(dispatches unlisted)" = 0 ]
+setup ghost 0 "$strong"
+echo "907 gauntlet 0 2026-01-01T00:00:00Z" >"$tmp/ghost/active"
+drive_t ghost "$sha" "$sha" 0 5
+check "a run listing no jobs long after its creation is a ghost: the stage goes" [ "$(rc ghost)" = 0 ]
+check "the ghost is named in the log" grep -q "ignored as a ghost" "$tmp/ghost/out"
+setup fresh0 0 "$strong"
+echo "908 ci 0 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$tmp/fresh0/active"
+drive_t fresh0 "$sha" "$sha" 0 5
+check "a fresh run listing no jobs yet still counts as full: no dispatch" [ "$(dispatches fresh0)" = 0 ]
 setup lane2 0 "$strong"
 echo "903 sprt 1" >"$tmp/lane2/active"
 drive_t lane2 "$sha" "$sha" 0 5

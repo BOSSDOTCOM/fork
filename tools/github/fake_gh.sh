@@ -7,7 +7,8 @@
 # on GitHub), run.<id> (its inputs), fail.<id>, foreign.<id>, ptnml (each shard's pentanomial counts), and
 # ptnml.<base>.<test> (the counts for runs of that pair, when present; head-to-head pairings). Since 2026-11-10
 # (the driver's capacity check): busy runs are sprt runs; active holds other workflows' runs not completed, one
-# "ID WORKFLOW JOBS" per line (JOBS: their jobs not completed); with drain present each jobs query of a run
+# "ID WORKFLOW JOBS [CREATED]" per line (JOBS: their jobs not completed; CREATED an ISO time, for the
+# ghost-run rule of 2026-11-11); with drain present each jobs query of a run
 # lowers its count by one afterwards.
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
@@ -43,7 +44,7 @@ case "$1 $2" in
     else  # the runs not completed, "ID WORKFLOW"
       n=$(cat "$st/busy")
       if [ "$n" -gt 0 ]; then echo $((n - 1)) >"$st/busy"; echo "900 sprt"; fi
-      [ -f "$st/active" ] && awk '{print $1, $2}' "$st/active"
+      [ -f "$st/active" ] && awk '{print $1, $2, $4}' "$st/active"
       true
     fi ;;
   "workflow run")
