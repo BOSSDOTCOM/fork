@@ -2398,3 +2398,31 @@ whose weaknesses and data gaps decide their targets and order.
   control; the testing rule's screen, then the STC SPRT.
 - **status:** untested (8c candidate). **runtime cost:** none. **earliest
   phase:** Phase 4.
+
+## 72. Threat-aware quiet ordering, the any-attack set (tier 2, T56)
+
+- **type:** ELO (search); flag `use_threat_buckets` (off).
+- **idea** (KB search-techniques.md §3.34, its first family): the butterfly
+  history split into four buckets by whether an enemy piece attacks the
+  quiet move's from-square and its to-square in the position before the
+  move ("any enemy attack"); read and update use the same bucket.
+- **history:** built on tier2/batch3 (740c6cc, 2026-11-02) with a second
+  set, the cheaper-attacker set (2f6f4ac). The offline measurement
+  (tools/tier2_measure/threat_set.json, d5a6eb6) put both below off; the
+  cheaper set was SPRTed and rejected (H0, −6.08 ± 3.59 after 12,800
+  games, 2026-11-06; sprt-log "threat-set-cheaper-vs-base"). The
+  any-attack set was never game-tested.
+- **status:** untested; **first game test queued (owner, 2026-11-10):
+  "first game test, not a retest"**. The offline measurement is no longer
+  treated as decisive. Ported onto phase-4 b787fba (r8btd90) behind the
+  switch, off (tier2/threat-any dc341d5, bench unchanged 9,594,307); test
+  side sprt/threat-any bfbc1c8 (bench 9,236,850 / 0f723ee4c163a419).
+  Design R STC SPRT `t56-any-stc` (ledger idea `t56-any`, try 1 of 2),
+  night queue item 63, after root-gap's items 60-62. Nothing is adopted
+  before its verdict; an H1 goes to the owner (LTC next by the owner's
+  rule). The cheaper-attacker set stays closed.
+- **runtime cost:** possible (an attack map built once per node that
+  reaches its quiets or a quiet cutoff; the butterfly table grows from
+  16 KB to 64 KB). Speed not yet measured (UNVERIFIED); the SPRT result is
+  to be reported with its nps change (the 2026-10-24 rule).
+- **earliest phase:** Phase 4.
