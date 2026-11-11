@@ -14,6 +14,7 @@
 #include "search/lmr_table.hpp"
 #include "search/quiet_history.hpp"
 #include "search/searcher.hpp"
+#include "suite.hpp"
 
 namespace forkeng::test {
 
@@ -420,8 +421,13 @@ TEST_CASE("pruning", "cut-node reduction: still correct, and it changes the sear
 }
 
 // Quiet history pruning, the history skip (tier 2, T24): with it on, mates
-// are still found and the best move is legal, and it changes the tree
-// (fault check: a skip never taken leaves the trees as with the switch off).
+// are still found and the best move is legal, and it changes the search
+// (fault check: a skip never taken leaves the nodes as with the switch off).
+// The skip needs history that has grown over a game (a cleared searcher's
+// scores at the skip's sites stay within a few hundred of zero: the
+// measurement, tools/tier2_measure/history_skip.json), so the change is
+// checked on a 24-ply game from perft position 3 at depth 10, history
+// carried, in optimized builds only (too slow under the sanitizers).
 TEST_CASE("pruning", "history skip: still correct, and it changes the search") {
   PruningFixture fx;
   CHECK(!SearchSwitches{}.use_history_skip);  // off until its SPRT
@@ -431,16 +437,34 @@ TEST_CASE("pruning", "history skip: still correct, and it changes the search") {
   CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
-  const int depth = Optimized ? 10 : 7;
   Position pos;
   CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
-  CHECK(legal.contains(fx.search(kiwipete, depth).best));
-  SearchSwitches off;
-  off.use_history_skip = false;
-  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
-            "the history skip left all three trees unchanged");
+  CHECK(legal.contains(fx.search(kiwipete, Optimized ? 10 : 7).best));
+  if (!Optimized) return;
+  // Total nodes of the game's searches, each move legal.
+  const auto game_nodes = [&fx](bool skip) {
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    fx.searcher->switches.use_history_skip = skip;
+    Position game;
+    CHECK(game.set_fen(perft_suite()[2].fen));  // perft position 3
+    SearchQuota limits;
+    limits.depth = 10;
+    std::uint64_t nodes = 0;
+    for (int ply = 0; ply < 24; ++ply) {
+      MoveList moves;
+      generate<GenMode::Legal>(game, moves);
+      if (moves.size() == 0) break;
+      const SearchResult r = fx.searcher->deliberate(game, limits, fx.stop, nullptr, nullptr);
+      CHECK(moves.contains(r.best));
+      nodes += r.nodes;
+      game.make(r.best);
+    }
+    return nodes;
+  };
+  CHECK_MSG(game_nodes(true) != game_nodes(false), "the history skip left the game's searches unchanged");
 }
 
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery

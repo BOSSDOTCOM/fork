@@ -296,17 +296,19 @@ TEST_CASE("search_stats", "history skip: skips match the sites' histogram") {
   table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
   const std::atomic<bool> stop{false};
   SearchQuota limits;
-  limits.depth = 9;
+  limits.depth = 10;
   for (bool on : {false, true}) {
     std::fill(buckets.begin(), buckets.end(), TtBucket{});
     auto searcher = std::make_unique<Searcher>(table);
     searcher->switches.use_history_skip = on;
     Position pos;
-    CHECK(pos.set_fen(perft_suite()[0].fen));
-    // A short game, history carried (larger history values than a cleared search).
-    for (int ply = 0; ply < 12; ++ply) {
+    CHECK(pos.set_fen(perft_suite()[2].fen));
+    // A game, history carried: a cleared searcher's scores at the skip's
+    // sites stay near zero, and they grow over a game's searches (as in
+    // tests/test_pruning.cpp's history skip case).
+    for (int ply = 0; ply < 24; ++ply) {
       const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
-      CHECK(!r.best.is_none());
+      if (r.best.is_none()) break;
       pos.make(r.best);
     }
     const SearchCounters& c = searcher->counters;
