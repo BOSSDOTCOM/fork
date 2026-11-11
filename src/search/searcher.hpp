@@ -155,6 +155,14 @@ struct SearchQuota {
 //   unresolved root fail high is never played either way. On since its STC
 //   SPRT against off passed (design R [0, 6]; adoption on that pass
 //   pre-approved by the owner, 2026-11-11; the result in the SPRT log).
+// - use_prior_move_credit: the engine survey's D9: a main-search node where
+//   no move beat alpha (a fail low, not a singular test's search) credits
+//   the quiet move that led to it, the parent's move, which this result
+//   shows to hold: the move gains PriorCreditQuarters / 4 times the cutoff
+//   bonus at this node's depth in the parent's tables (the mover's
+//   butterfly history in the move's threat bucket, and the reply and
+//   follow tables after the parent's own arrivals), as a cutoff's bonus
+//   but with no maluses. Needs use_history. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -189,7 +197,8 @@ struct SearchQuota {
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_prior_move_credit, UsePriorMoveCredit, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -248,6 +257,12 @@ struct PlyFrame {
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
   bool expected_cut = false;    // expected to fail high (a cut node), from the parent (T17)
+  // The prior-move credit (the engine survey's D9): the quiet move that led
+  // here and its threat bucket at the parent (T56; 0 when not threat-aware).
+  // NoMove after a capture, a promotion or a null move, and at the root's
+  // children (the root orders its moves without the histories).
+  std::int8_t arrival_bucket = 0;
+  Move arrival_move = NoMove;
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -583,6 +598,9 @@ class Searcher {
   std::int64_t soft_limit_now(const SearchQuota& limits) const;
   std::int64_t elapsed_ms() const;
   void record_cutoff(PlyFrame& f, Move m, int depth);
+  // D9: the node at `ply` failed low at `depth`; its arrival move gains the
+  // prior-move credit in the parent's tables (use_prior_move_credit).
+  void credit_prior_move(int ply, int depth);
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }

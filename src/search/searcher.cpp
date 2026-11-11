@@ -178,6 +178,27 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
 }
 
+// The prior-move credit (the engine survey's D9): the node at `ply` failed
+// low, so the parent's quiet move that led here holds at least to `depth`;
+// it gains PriorCreditQuarters / 4 of the cutoff bonus at that depth in the
+// tables the parent's own cutoff would update, with no maluses. The mover is
+// the side not to move here.
+void Searcher::credit_prior_move(int ply, int depth) {
+#ifdef FORK_SEARCH_STATS
+  if (ledger_active_) return;  // a decision-ledger side search leaves the histories as they were (X10)
+#endif
+  const PlyFrame& f = frames_[ply];
+  const PlyFrame& parent = frames_[ply - 1];
+  const int amount = bonus_for_depth(depth) * PriorCreditQuarters / 4;
+  history_.apply(~pos_->side_to_move(), f.arrival_move, amount, f.arrival_bucket);
+  // f.arrival is the move's pair slot (set with arrival_move by the parent).
+  if (switches.use_reply_history && parent.arrival != NoArrival)
+    pair_history_[ReplyTable].apply(parent.arrival, f.arrival, amount);
+  const int follow = follow_arrival(parent);
+  if (switches.use_follow_history && follow != NoArrival)
+    pair_history_[FollowTable].apply(follow, f.arrival, amount);
+}
+
 void Searcher::update_pv(int ply, Move m) {
   PrincipalLine& line = pv_[ply];
   const PrincipalLine& child = pv_[ply + 1];
@@ -363,6 +384,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     play_null(ply);
     frames_[ply + 1].after_null = true;
     frames_[ply + 1].arrival = NoArrival;
+    frames_[ply + 1].arrival_move = NoMove;
     frames_[ply + 1].expected_cut = !f.expected_cut;  // T17: passing should fail low below
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
     frames_[ply + 1].after_null = false;
@@ -552,6 +574,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     // A quiet's threat bucket for the LMR context's history (T56): taken
     // here, on the board before the move (0 with use_threat_buckets off).
     const int bucket = quiet ? threat_bucket(f.selector.attacked_by_opponent(), m) : 0;
+    frames_[ply + 1].arrival_move = quiet ? m : NoMove;  // D9's prior move
+    frames_[ply + 1].arrival_bucket = static_cast<std::int8_t>(bucket);
 #ifdef FORK_SEARCH_STATS
     counters.pawn_makes += kind_of(pos.piece_at(m.from())) == Pawn;
     // X2 (DESIGN.md §5.7): the move's history values, read before it is made
@@ -734,6 +758,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // withheld move counts as singular.
   if (moves_seen == 0) return withheld ? alpha : in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
+  // The prior-move credit (D9): no move here beat alpha, so the parent's
+  // quiet move that led here holds (not in a singular test's search, which
+  // is meant to fail low).
+  if (switches.use_prior_move_credit && switches.use_history && !withheld && ply > 0 && best <= alpha_start &&
+      !f.arrival_move.is_none())
+    credit_prior_move(ply, depth);
   best = std::clamp(best, table_floor, table_ceiling);
   if (switches.use_tt && !withheld) {
     const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
@@ -860,7 +890,8 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     branch_share_ = root_moves_[i].share;
     const std::uint64_t nodes_before = nodes_;
     frames_[1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
-    frames_[1].expected_cut = i > 0;  // the root's later moves: expected cut nodes (T17)
+    frames_[1].arrival_move = NoMove;  // no prior-move credit for root moves (D9)
+    frames_[1].expected_cut = i > 0;   // the root's later moves: expected cut nodes (T17)
     play(0, m);
     int score;
     if (i == 0 || !switches.use_pvs) {
