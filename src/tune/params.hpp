@@ -63,7 +63,7 @@
   X(NoMoveReduceMinDepth, 8, 2, 16, 1)       \
   X(CutNodeLmrPlies, 1, 0, 3, 1)             \
   X(HistorySkipMaxDepth, 3, 1, 6, 1)         \
-  X(HistorySkipPerPly, 2300, 450, 4600, 208) \
+  X(HistorySkipPerPly, 900, 450, 4600, 208) \
   X(HistoryBonusFactor, 25, 12, 50, 2)       \
   X(HistoryBonusCap, 1250, 625, 2500, 94)    \
   X(ReplyWeight, 6, 0, 12, 1)                \
