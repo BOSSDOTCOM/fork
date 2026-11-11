@@ -69,7 +69,7 @@
   X(PieceDriftShare, 64, 32, 128, 5)      \
   X(MinorDriftShare, 64, 32, 128, 5)      \
   X(MajorDriftShare, 64, 32, 128, 5)      \
-  X(ThreatDriftShare, 64, 32, 128, 5)     \
+  X(ThreatDriftShare, 32, 32, 128, 5)     \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 12, 1)             \
