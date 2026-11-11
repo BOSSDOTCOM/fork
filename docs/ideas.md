@@ -2501,3 +2501,40 @@ whose weaknesses and data gaps decide their targets and order.
   nodes); the nps change is to be reported with the result (the
   2026-10-24 rule; not measured yet, UNVERIFIED).
 - **earliest phase:** Phase 4.
+
+## 74. Quiet history pruning, the history skip (tier 2, T24; survey B13)
+
+- **type:** ELO (search); flag `use_history_skip` (off).
+- **idea** (KB search-techniques.md §3.19; the engine survey's B13): at a
+  non-PV node out of check, at most `HistorySkipMaxDepth` (3) deep, once a
+  move has been searched and past late move pruning, a quiet move whose
+  ordering score (the butterfly history in its threat bucket plus the
+  weighted reply and follow tables) is at or below
+  -`HistorySkipPerPly` x depth is skipped unsearched.
+- **history:** built on tier2/b4 as "history-skip" (d2b086d, 2026-11-05) and
+  dropped untested on 2026-11-10: at 5000 per ply it changed 30 bench nodes
+  of 14 M. The bench clears history per position, where the eligible quiet
+  moves' scores stay within a few hundred of zero; in games, where history
+  carries over, such thresholds do fire.
+- **status:** **in progress (owner, 2026-11-11 3:10 PM EST: "Build quiet
+  history pruning (B13) with a threshold chosen to actually fire (quick
+  measurement first), then design R at STC").** Built on phase-4 b2e083e
+  (r8brft1, cut-node and T56 on) behind the switch, off: tier2/qhp-t56
+  c84722b, bench unchanged (10,166,167 / d874b380155a2e8c). Firing-rate
+  measurement (tools/tier2_measure/history_skip.json, rule declared before
+  its run; 48 replayed SPRT games, history carried, 200,000 nodes a
+  search): the values predicted to skip 5%, 10% and 20% of the eligible
+  quiet moves are 2000, 1300 and 700 per ply; switched on they skip 13.9%,
+  26.2% and 44.1% in the same replay (bench 11,081,805, 10,008,258 and
+  9,886,698). Test commits (switch on, children of c84722b):
+  sprt/qhp-t56-2000 c06d62b, sprt/qhp-t56-1300 f6397e0, sprt/qhp-t56-700
+  13d4d05. Lane B items 66 (qhp-h2h: round robin, 2 stages a pairing at
+  STC, 2000 kept on a tie) and 67 (qhp-stc: design R of the winner against
+  off on fresh openings from stage 2; ledger idea `qhp`, try 1). A first
+  build on 4470f24 (tier2/qhp 11ed51e; candidates 2300, 1600 and 900 on
+  sprt/qhp-2300, -1600, -900) was superseded before any game when T56's
+  threat buckets were adopted. Nothing is adopted before its verdict.
+- **runtime cost:** possible (the ordering score is computed for each
+  eligible quiet move at depths 1-3 when the switch is on); to be reported
+  with the SPRT result (the 2026-10-24 rule; UNVERIFIED until then).
+- **earliest phase:** Phase 4.
