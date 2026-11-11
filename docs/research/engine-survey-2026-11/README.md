@@ -224,9 +224,9 @@ for which engine and version this survey describes.
    - 37 in progress or queued (33 queued, 4 in progress; Phase 6 items
      included);
    - 1 parked;
-   - 44 never tried (5 of them blocked by a missing prerequisite or Phase 6
+   - 45 never tried (E4 reinstated from excluded on 2026-11-11) (5 of them blocked by a missing prerequisite or Phase 6
      scope, and one dropped untested by the owner);
-   - 5 excluded by an owner rule or out of scope.
+   - 4 excluded by an owner rule or out of scope.
 
    49 rows are shared ideas (four or more engines with measured gains).
    Of those, Fork:
@@ -267,6 +267,30 @@ Recorded only; planning waits until the queue clears.
 5. **R34, non-pawn correction tables:** a gateway item; its table
    unblocks C15 (correction size in pruning) and E5 (correction update
    rules).
+
+## Post-queue plan additions (owner, 2026-11-11)
+
+Recorded only; no runs until the queue clears.
+1. **Minor, major and threat correction tables (E4)** are reinstated as
+   candidates beside R34 (non-pawn tables, E2). Think-tank decision 20
+   excluded them without a test. Peers report: Tarnished minor +16.9,
+   major +4.3; Tcheran major and minor +18.9, threat +9.3; Raphael major
+   +6.8; PZChessBot threat +5.1 (self-reported).
+2. **Quiet history pruning (B13)** with a threshold that actually fires.
+   The dropped history-skip variant changed only 30 bench nodes.
+3. **ProbCut (B15): pending the owner's decision.** The owner is
+   considering lifting the no-retest rule for one LTC-only design R test on
+   the tuned search (after R14's SPSA). Its STC test on S512r2 was −5.29 ±
+   3.58 (H0, 12,800 games). Peers' strongest results are at LTC (Integral
+   +13.4, pawnocchio +8.7).
+4. **Bake-off round 3 / post-QAT candidates**, with what has changed since
+   each one failed:
+
+   | Candidate | How it failed | What has changed since |
+   |---|---|---|
+   | Threat inputs (H7) | XGR-512: FN +30.70, STC −34.42, LTC −30.56. S512+X: FN +25.67, STC −30.04 at 0.818x nps. Both lost on speed; S512cl parked | About three times the data. Storing the contact and link rows as int8 is designed (DESIGN.md, S512cl) but not built. The int8 path through `--qat` exists but its validation was never run (UNVERIFIED gain). Peers accept a 30-36% slowdown for LTC gains, but XGR-512 lost at LTC too, so speed must be recovered first |
+   | Multi-layer head (H4) | AF-S: FN +41.67 / +10.43, STC −48.52 / −55.85 (speed, and a 32 cp quantization loss) | `--qat` built (idea 44) for int8 designs, plus adaptive rounding of the output layer planned (R25); the QAT validation session was retired 2026-11-07, so its effect on the 32 cp loss is UNVERIFIED. About three times the data |
+   | King buckets (H3) | H-512 (4 king regions, factoriser): FN +32.23, STC −24.36 (round 1); FN −12.17 (round 2), at about 0.5 B positions | Data roughly tripled since H-512 (owner, 2026-11-10). Peers grew buckets with data and warm-started with a factoriser. The refresh cost still needs measuring first |
 
 ## Items already queued from the survey (owner, 2026-11-10)
 
