@@ -219,14 +219,16 @@ TEST_CASE("eval_drift", "the threat key equals one built from per-square attack 
   CHECK_EQ(threat_drift_key(a), threat_drift_key(b));
 }
 
-TEST_CASE("eval_drift", "each table's switch changes the tree when on; all off is the search as before") {
-  const SearchSwitches off;
-  CHECK(!off.use_piece_drift && !off.use_minor_drift && !off.use_major_drift && !off.use_threat_drift);
+TEST_CASE("eval_drift", "each table's switch changes the tree when on, alone") {
+  // Every table off (whatever the defaults: an SPRT test build turns one
+  // on); bench parity shows the defaults' search is phase-4's.
+  SearchSwitches off;
+  off.use_piece_drift = off.use_minor_drift = off.use_major_drift = off.use_threat_drift = false;
   constexpr int Depth = 8;
   const std::uint64_t base = searched_nodes(off, Depth);
   CHECK_EQ(searched_nodes(off, Depth), base);  // deterministic from clear tables
   for (int which = 0; which < 4; ++which) {
-    SearchSwitches on;
+    SearchSwitches on = off;
     (which == 0   ? on.use_piece_drift
      : which == 1 ? on.use_minor_drift
      : which == 2 ? on.use_major_drift
