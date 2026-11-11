@@ -47,11 +47,18 @@
 # dispatch without them) the run is the gauntlet, as before. Started by hand,
 # on an idle queue, from a branch that carries this file:
 #   gh workflow run gauntlet.yml -R BOSSDOTCOM/fork --ref BRANCH \
-#     -f old=OLD -f new=NEW -f claim=ELO [-f anchors="clover-6.1 altair-7.0.0"]
-# The run's title is "anchor check OLD NEW" (a gauntlet's stays GitHub's
-# default).
+#     -f old=OLD -f new=NEW -f claim=ELO [-f anchors="clover-6.1 altair-7.0.0"] [-f book=uho]
+# The input book (owner, 2026-11-11, the transfer diagnostic) chooses the
+# check's openings: empty (the default) for the gauntlet's balanced 8-ply
+# openings above; "uho" for the SPRTs' unbalanced book, fetched and checked
+# as the SPRT shards get it (tools/cloud/fetch_tools.sh: UHO_Lichess_4852_v1,
+# its fixed-seed shuffled copy, both SHA-256-pinned), its first
+# CHECK_OPENINGS lines in the shuffled order, each with both colours.
+# Nothing else changes (TC, games, anchors, the paired report).
+# The run's title is "anchor check OLD NEW", with " book BOOK" when the book
+# is set (a gauntlet's stays GitHub's default).
 name: gauntlet
-run-name: ${{ (inputs.old || inputs.new) && format('anchor check {0} {1}', inputs.old, inputs.new) || '' }}
+run-name: ${{ (inputs.old || inputs.new) && format('anchor check {0} {1}{2}', inputs.old, inputs.new, inputs.book && format(' book {0}', inputs.book) || '') || '' }}
 
 on:
   push:
@@ -62,6 +69,7 @@ on:
       new: {description: "Anchor check: NEW Fork commit", required: false, default: ""}
       claim: {description: "Anchor check: NEW's claimed self-play gain over OLD (Elo)", required: false, default: ""}
       anchors: {description: "Anchor check: anchor stems (tools/gauntlet/anchors.tsv)", required: false, default: "clover-6.1 altair-7.0.0"}
+      book: {description: "Anchor check: openings; empty = the balanced 8-ply ones, uho = the SPRTs' shuffled UHO book", required: false, default: ""}
 
 permissions:
   contents: read
@@ -278,9 +286,11 @@ jobs:
           OLD: ${{ inputs.old }}
           NEW: ${{ inputs.new }}
           CLAIM: ${{ inputs.claim }}
+          BOOK: ${{ inputs.book }}
         run: |
           git config --global --add safe.directory "$PWD"
           [ -n "$OLD" ] && [ -n "$NEW" ] || { echo "the anchor check needs both old and new"; exit 1; }
+          case $BOOK in '' | uho) ;; *) echo "book must be empty or uho, not '$BOOK'"; exit 1 ;; esac
           echo "$CLAIM" | grep -Eq '^[+-]?[0-9]+([.][0-9]+)?$' || { echo "claim must be a number of Elo, not '$CLAIM'"; exit 1; }
           echo "old_sha=$(git rev-parse --verify "$OLD^{commit}")" >>"$GITHUB_OUTPUT"
           echo "new_sha=$(git rev-parse --verify "$NEW^{commit}")" >>"$GITHUB_OUTPUT"
@@ -352,10 +362,20 @@ jobs:
           bash tools/cloud/fetch_tools.sh "$RUNNER_TEMP/tools"
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet chess==1.11.2
-      - name: Openings (the earlier gauntlets' 200, regenerated and checked)
+      - name: Openings (book empty, the earlier gauntlets' 200, regenerated and checked; uho, the SPRTs' shuffled book)
+        env: {BOOK: "${{ inputs.book }}"}
         run: |
-          "$RUNNER_TEMP/venv/bin/python" -I tools/make_openings.py openings.epd --seed "$OPENINGS_SEED"
-          echo "$OPENINGS_SHA256  openings.epd" | sha256sum -c
+          if [ "$BOOK" = uho ]; then
+            # fetch_tools.sh (the step above) fetched the book and its
+            # shuffled copy and checked both SHA-256s, as for the SPRT shards.
+            book="$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.shuffled-20261027.epd"
+            [ -s "$book" ] || { echo "no $book"; exit 1; }
+            echo "OPENINGS_FILE=$book" >> "$GITHUB_ENV"
+          else
+            "$RUNNER_TEMP/venv/bin/python" -I tools/make_openings.py openings.epd --seed "$OPENINGS_SEED"
+            echo "$OPENINGS_SHA256  openings.epd" | sha256sum -c
+            echo "OPENINGS_FILE=openings.epd" >> "$GITHUB_ENV"
+          fi
       - name: Build the anchor here (native for this runner)
         run: bash tools/gauntlet/build_anchor.sh "${{ matrix.anchor }}" anchors
       - name: Games (OLD and NEW on the same openings)
@@ -377,7 +397,7 @@ jobs:
           mkdir -p out
           cpu=$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)
           conc=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
-          echo "cpu=$cpu nproc=$(nproc) concurrency=$conc anchor=$name ccrl=$ccrl start=$START openings=$CHECK_OPENINGS_PER_SHARD order=$order old=$OLD_SHA new=$NEW_SHA options=${opts:-none}" | tee out/shard.txt
+          echo "cpu=$cpu nproc=$(nproc) concurrency=$conc anchor=$name ccrl=$ccrl start=$START openings=$CHECK_OPENINGS_PER_SHARD book=$(basename "$OPENINGS_FILE") order=$order old=$OLD_SHA new=$NEW_SHA options=${opts:-none}" | tee out/shard.txt
           printf '"%s",%s\n' "$name" "$ccrl" > out/anchor.csv
           for side in $order; do
             bin=engines/base/fork
@@ -385,7 +405,7 @@ jobs:
             # shellcheck disable=SC2086
             "$RUNNER_TEMP/tools/fastchess" -engine cmd="$bin" name=Fork option.Hash=16 \
               -engine cmd="anchors/$STEM" name="$name" $opts \
-              -each tc="$TC" -openings file=openings.epd format=epd order=sequential start="$START" \
+              -each tc="$TC" -openings file="$OPENINGS_FILE" format=epd order=sequential start="$START" \
               -rounds "$CHECK_OPENINGS_PER_SHARD" -repeat -concurrency "$conc" \
               -pgnout file="out/$side.pgn" > "out/$side-fastchess.log" 2>&1 || true
             played=$(grep -c '^\[Event ' "out/$side.pgn" || true)
@@ -410,8 +430,9 @@ jobs:
           CLAIM: ${{ inputs.claim }}
           OLD_SHA: ${{ needs.check-fork.outputs.old_sha }}
           NEW_SHA: ${{ needs.check-fork.outputs.new_sha }}
+          BOOK: ${{ inputs.book }}
         run: |
-          echo "OLD $OLD_SHA, NEW $NEW_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "OLD $OLD_SHA, NEW $NEW_SHA; openings: ${BOOK:-the balanced 8-ply ones}" >> "$GITHUB_STEP_SUMMARY"
           python3 -I tools/gauntlet/report.py --check shards tools/gauntlet/anchors.tsv . "$CLAIM" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
