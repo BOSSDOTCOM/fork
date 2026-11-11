@@ -2493,7 +2493,10 @@ whose weaknesses and data gaps decide their targets and order.
   R LTC SPRT `probcut-ltc` (ledger idea `t31-probcut`, LTC try 1 of 2;
   fresh openings from stage 8), night queue lane A item 18, started 3:55
   PM EST. T56 any-attack (adopted 3:43 PM EST, db0bb31) is in neither
-  side. No STC retest. An H1 goes to the owner; nothing is adopted before then.
+  side. **Moved (about 4:00 PM EST)** to db0bb31's engine with T56 on,
+  as `probcut-ltc2`: base tier2/probcut-r3 d47e479 (bench 10,166,167), test
+  sprt/probcut-r3 6d7ffb1 (bench 9,639,207 / 07f7ae19b9250f38); still LTC
+  try 1 of 2 (the first version was never dispatched). No STC retest. An H1 goes to the owner; nothing is adopted before then.
 - **runtime cost:** possible (the probe's own searches at deep non-PV
   nodes); the nps change is to be reported with the result (the
   2026-10-24 rule; not measured yet, UNVERIFIED).

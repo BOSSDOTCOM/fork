@@ -1365,7 +1365,7 @@ The final stage's result block (t56-any-ltc, stage 5, run 43081871545):
   9,236,850 / 0f723ee4c163a419, equal to the tested commit bfbc1c8's tests/bench-r8btd90.ref. Speed not measured
   (bench/ab.py not run; UNVERIFIED).
 
-### 2026-11-11 probcut-ltc (tier 2, T31, ProbCut d9-r5-m80): one LTC-only design R test on the tuned search (owner)
+### 2026-11-11 probcut-ltc2 (tier 2, T31, ProbCut d9-r5-m80): one LTC-only design R test on the tuned search (owner)
 
 - **Owner, 2026-11-11 3:10 PM EST:** "ProbCut: I lift the no-retest rule for ONE LTC-only design R test on the current default (tuned search); record it as LTC try 1 of 2. Start it now in the free lane." The no-retest rule after
   probcut-d9r5m80-vs-base (above: H0 at STC on S512r2) is lifted for this
@@ -1380,5 +1380,11 @@ The final stage's result block (t56-any-ltc, stage 5, run 43081871545):
   Night queue lane A, item 18-probcut-ltc; the driver started at 3:55 PM
   EST. Both sides are the default at the owner's instruction (4470f24):
   T56 any-attack, adopted at 3:43 PM EST (db0bb31), is in neither.
-- Stages: pending (runs by the ledger: `ledger.py runs probcut-ltc`).
+- **Moved to db0bb31's engine (T56 on) as probcut-ltc2:** the coordinator moved it (about 4:00 PM EST) because T56 any-attack was adopted at 3:43 PM EST (db0bb31), so "the current default" of the owner's exception includes T56; the first version (probcut-ltc, base a40b1ff / test d145d40 on 4470f24) was stopped before any stage was dispatched, so no try was spent. Base `d47e479`
+  (tier2/probcut-r3: phase-4 b4b048f, engine db0bb31, ProbCut off; bench 10,166,167 /
+  d874b380155a2e8c), test `6d7ffb1` (sprt/probcut-r3: on; bench 9,639,207 / 07f7ae19b9250f38).
+  Same idea t31-probcut (LTC try 1 of 2), same design, fresh openings from stage 8; lane A
+  item 18 rewritten for it and released at 4:17 PM EST. The base and test above (a40b1ff,
+  d145d40) were never dispatched.
+- Stages: pending (runs by the ledger: `ledger.py runs probcut-ltc2`).
 - **Result:** pending.
