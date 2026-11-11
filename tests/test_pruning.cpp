@@ -400,7 +400,7 @@ TEST_CASE("pruning", "no-move reduction: still correct, and it changes the searc
 // leaves the tree as it is with the switch off).
 TEST_CASE("pruning", "threat buckets: still correct, and they change the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_threat_buckets);  // off until SPRTed
+  CHECK(SearchSwitches{}.use_threat_buckets);  // on: its SPRT's test side
   SearchSwitches on;
   on.use_threat_buckets = true;
   fx.searcher->switches = on;
