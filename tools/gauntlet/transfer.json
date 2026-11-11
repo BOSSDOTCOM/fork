@@ -8,6 +8,7 @@
     {"change": "S512ppr2", "elo": 20.11, "ci95": 7.22, "test": "STC [0, 5]"},
     {"change": "S512ppr3", "elo": 7.12, "ci95": 4.53, "test": "STC [0, 5], 8,000 games"},
     {"change": "Time management (b)", "elo": 18.69, "ci95": 7.18, "test": "STC design R"},
-    {"change": "R14 SPSA tuned margins (spsa-r14-m2)", "elo": 37.93, "ci95": 10.03, "test": "STC design R [0, 6], run 42726060415, 1,600 games"}
+    {"change": "R14 SPSA tuned margins (spsa-r14-m2)", "elo": 37.93, "ci95": 10.03, "test": "STC design R [0, 6], run 42726060415, 1,600 games"},
+    {"change": "r8btd90 (retrain 8b, TD(0.9) labels)", "elo": 12.17, "ci95": 5.71, "test": "r8b-stc-1: STC [0, 5], runs 42917050282-42922442883, 4,800 games"}
   ]
 }

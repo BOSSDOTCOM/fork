@@ -176,18 +176,20 @@ target_compile_options(fathom PRIVATE -w)
 # no runtime interface and no indirect call in the search.
 # nnue is the default since B0 passed its SPRT against the bootstrap
 # evaluation (+486.85 +/- 32.07 Elo; DESIGN.md §5.3, deliverable 7; owner,
-# 2026-10-29). The network is nets/s512ppr3.fnet, S512+PP (S-512 plus pawn
-# links of rank limit 1, architecture 8) retrained warm from S512ppr2 on
-# g3s3 (item 8a), since it passed its STC SPRT against S512ppr2 (+7.12 Elo,
-# 2026-11-07; docs/nets.md; owner: promoted). nets/s512ppr2.fnet,
+# 2026-10-29). The network is nets/r8btd90.fnet, S512+PP (S-512 plus pawn
+# links of rank limit 1, architecture 8) retrained warm from S512ppr3 on
+# g4s1 with TD(0.9) labels on g3j and g4 (retrain 8b's td90 arm), since it
+# passed its STC SPRT against S512ppr3 (+12.17 Elo, 2026-11-10;
+# docs/nets.md; owner: promoted). nets/s512ppr3.fnet, nets/s512ppr2.fnet,
 # nets/s512pp.fnet, nets/s512r2.fnet, nets/s512.fnet, nets/b0r2.fnet,
 # nets/b0r1.fnet and nets/b0.fnet stay buildable with FORK_NET
-# (tests/bench-s512ppr2.ref, tests/bench-s512pp.ref, tests/bench-s512r2.ref,
-# tests/bench-s512.ref, tests/bench-b0r2.ref, tests/bench-b0r1.ref,
-# tests/bench-b0.ref), and so does bootstrap (tests/bench.ref).
+# (tests/bench-s512ppr3.ref, tests/bench-s512ppr2.ref,
+# tests/bench-s512pp.ref, tests/bench-s512r2.ref, tests/bench-s512.ref,
+# tests/bench-b0r2.ref, tests/bench-b0r1.ref, tests/bench-b0.ref), and so
+# does bootstrap (tests/bench.ref).
 set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
-set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/s512ppr3.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/r8btd90.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
 if(FORK_EVALUATOR STREQUAL "nnue")
   if(NOT EXISTS ${FORK_NET})
     message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")

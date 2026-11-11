@@ -1584,6 +1584,15 @@ the screens before use.
   gold-set loss, the fixed-node screen, then the STC SPRT. **status:**
   untested (plan only, owner, 2026-11-07); overlaps the think tank's R37
   (n-step and lambda-return targets), which this entry supersedes.
+  **2026-11-10: retrain 8b's TD(0.9) arm, r8btd90, is promoted to the
+  default network** (owner; its fixed-node screen against S512ppr3
+  +17.39 ± 9.71, the highest of 8b's four candidates; STC [0, 5]
+  +12.17 ± 5.71, H1 after 4,800 games; sprt-log, DESIGN.md §6). The
+  TD(0.8) arm screened −1.09 ± 9.30 against S512ppr3. The idea's own keep
+  rule (retrain 8b's plan §3 item 7: the TD arm's head-to-head against
+  the control above +4 Elo, its endgame check not worse than the
+  control's; both 7 of 900) is still pending: the td80 and td90
+  head-to-heads against c are queued.
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 52. Ensemble-disagreement active learning
@@ -1626,6 +1635,9 @@ the screens before use.
   the standard arm by a meaningful margin (a fixed-node screen of +5 Elo or more, or a passing SPRT
   if it is screened), idea 52 is retired and the scratch-run rule dropped (saving its 2-4 hours per
   retrain); the result stays in the record either way.
+  **2026-11-10, retrain 8b:** the i52 arm's fixed-node screen against S512ppr3 was +5.86 ± 9.13 (the
+  control's +13.03 ± 9.37; the TD(0.9) arm, +17.39, was promoted); the keep rule's head-to-head against
+  the control (r8b-h2h-i52) is running, so the idea is undecided.
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 53. Pawn-structure-class output experts
@@ -2372,8 +2384,9 @@ whose weaknesses and data gaps decide their targets and order.
   the winner (td90 or the control) on existing 8b data, two seeds; the
   usual gates; a fixed-node screen against the base; an SPRT. Kaggle hours
   reported to the owner before the launch.
-- **status:** untested (queued). **runtime cost:** none. **earliest
-  phase:** Phase 4.
+- **status:** untested (queued). **2026-11-10:** 8b's SPRT decided the
+  base net: r8btd90 (the TD(0.9) arm, promoted), so the fine-tune starts
+  from it. **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 71. Feature-transformer weight decay
 

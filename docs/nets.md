@@ -140,7 +140,23 @@ added; no CI job applies them automatically.
 | Endgame check | tools/nnue/endgame_check.py, 900 positions: **8 misjudged (0.9%), as S512ppr2** |
 | Tests | vs S512ppr2 (phase-4 98cf000): fixed nodes, 800,000 per move, run 42426868742: +15.65 +/- 9.26 Elo (nElo +28.80 +/- 17.02), 1,600 games, above the owner's +5 tie-break; then STC 8+0.08 [0, 5], runs 42429984619, 42431412304, 42432793282, 42434196075 and 42435511074: **+7.12 +/- 4.53 Elo (nElo +11.98 +/- 7.61), H1 accepted** after 8,000 games (docs/history/phase-4/sprt-log.md) |
 | Bench | 14,149,617 nodes, signature 1cb0717f040c294d (tests/bench-s512ppr3.ref) |
-| Status | **The default network since 2026-11-07** (owner: promoted on its STC result), and the labeller of the data generation from generation 3's part g3j on (DESIGN.md §5.3, labeller policy) |
+| Status | The default network from 2026-11-07 (owner: promoted on its STC result) until r8btd90 replaced it on 2026-11-10, and the labeller of generation 3's part g3j, generation 4's parts g4 and g4b, and the label-depth arms, which stay on it until they end (owner, 2026-11-10; DESIGN.md §5.3, labeller policy); retrain 8b started from its float weights. Still buildable with `-DFORK_NET=nets/s512ppr3.fnet` (tests/bench-s512ppr3.ref), checked in CI's `nets` job |
+
+## r8btd90, S512ppr3 retrained on g4s1 with TD(0.9) labels (retrain 8b, 2026-11-10)
+
+| Item | Value |
+|---|---|
+| File | `nets/r8btd90.fnet` (branch bake/r8btd90 115daad, the net that played its tests), 1,426,656 bytes, Fork checksum f7421c4bec5435d5, SHA-256 3d299a38db2fb48e0b0945b59839f53fa45918d2d24a67f76db93075ad27d08d |
+| Architecture | Architecture 8, as S512+PP, S512ppr2 and S512ppr3; S = 89 |
+| Data | g4s1 (docs/research/retrain-8b/plan.md §1 and its manifests, branch retrain/8b-prep 320c0be): g3s3 unchanged plus the sealed parts g3h, g3i (S512ppr2's labels), g3j and g4 (S512ppr3's), the Syzygy endgame slice kept; validation on g4s1-val (2,160 games) |
+| Training | Kaggle kernel fork-retrain-8b at 320c0be (retrain 8b, DESIGN.md §5.6 item 8; idea 51's TD(0.9) arm): the standard recipe from S512ppr3's float weights (LR 0.0001 dropped tenfold after 180, 360 superbatches, seed 1) at result weight 0, on TD(0.9) labels (td_labels.py, S = 92) of g3j's and g4's files, every older file read as its blend copy (the control's target); the network is the window average, the mean of superbatches 331-360's float weights. Full g4s1-val loss (a diagnostic only, plan §1): 0.01980678, against the control's average 0.01982635 and S512ppr3's 0.01988801 |
+| Scale | S = 89, matched to S512ppr3's mean \|eval\| on 4,000 g4s1-val positions (213.84 cp against 213.43) |
+| Conversion | 1 of 311,296 link weights clamped to its unit's allowance under the reader's 64-link bound (1 of 512 units over it); the unclamped net passes every leg with the same losses |
+| Parity (tests/nnue/r8btd90.parity, 446 positions) | trainer leg at most 0.00015 cp; netcheck exact on all 446; quantization loss max 10.6 cp, p99 9.1 cp, mean 2.7 cp (within S-512's 21 / 16 cp) |
+| Endgame check | tools/nnue/endgame_check.py, 900 positions: **7 misjudged (0.8%) against S512ppr3's 8** (KPK 7 of 300, KQK and KRK 0 of 600) |
+| Tests | vs S512ppr3 (phase-4 c67fd26): fixed nodes, 800,000 per move, run 42910703028: +17.39 +/- 9.71 Elo (nElo +30.53 +/- 17.02), 1,600 games, the highest of retrain 8b's four candidate screens; then STC 8+0.08 [0, 5], runs 42917050282, 42919747964 and 42922442883: **+12.17 +/- 5.71 Elo (nElo +20.96 +/- 9.83), H1 accepted** after 4,800 games (docs/history/phase-4/sprt-log.md) |
+| Bench | 9,594,307 nodes, signature 4eb36793548711d4 (tests/bench-r8btd90.ref) |
+| Status | **The default network since 2026-11-10** (owner: promoted on its STC result, about 6:45 PM EST), and the labeller of the positional slice and of the data generation from generation 4's part g4c on; the running label-depth arms stay on S512ppr3 until they end (DESIGN.md §5.3, labeller policy; §6, the decisions log) |
 
 ## The bake-off entries in CI (2026-10-31)
 

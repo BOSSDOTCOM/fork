@@ -1144,3 +1144,56 @@ whose test is the tuned engine.
   stage as 42801683415. Item 32 (take history's LTC confirmation) was dropped by the owner on 2026-11-10: the
   factorial removal round covers that switch.
 
+### 2026-11-10 r8btd90 (retrain 8b's TD(0.9) arm): fixed-node screens of 8b's candidates against S512ppr3, then the STC SPRT (owner)
+
+- Retrain 8b (docs/research/retrain-8b/plan.md §3, declared before any result; branch retrain/8b-prep): every
+  candidate is its arm's window average, gated (S = 89, netcheck exact on 446 positions, quantization loss within
+  S-512's limits; the endgame check reported: 7 of 900 misjudged for each of c, i52, td80 and td90, S512ppr3 8),
+  then screened against S512ppr3 at fixed nodes; the highest screen goes to the STC SPRT [0, 5] against S512ppr3.
+- Base: c67fd26 (phase-4, S512ppr3; bench 10,374,064 / 677c436fa145e07f). Candidates: bake/r8bc 33da6a5 (the
+  control), bake/r8bi52 4dddcc2 (idea 52's arm), bake/r8btd80 7af782f and bake/r8btd90 115daad (idea 51's TD(0.8)
+  and TD(0.9) arms; bench 9,594,307 / 4eb36793548711d4). Jobs r8b-fn-c, r8b-fn-i52, r8b-fn-td80, r8b-fn-td90 and
+  r8b-stc-1 (`--kind network`, idea retrain-8b, try 1 of 2).
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, 800,000 per move (600+6, Hash 16, Syzygy 3-4-5, UHO book), c against S512ppr3 | 42889810114 | 1,600 | +13.03 ± 9.37 | +23.70 ± 17.02 | [9, 175, 375, 229, 12] | screen (3:34 PM EST) |
+| the same, i52 against S512ppr3 | 42896624050 | 1,600 | +5.86 ± 9.13 | +10.93 ± 17.02 | [9, 181, 393, 208, 9] | screen (4:17 PM EST) |
+| the same, td80 against S512ppr3 | 42903541854 | 1,600 | −1.09 ± 9.30 | −1.99 ± 17.02 | [12, 194, 392, 191, 11] | screen (5:01 PM EST) |
+| the same, td90 against S512ppr3 | 42910703028 | 1,600 | +17.39 ± 9.71 | +30.53 ± 17.02 | [9, 174, 367, 228, 22] | the highest screen: the STC SPRT follows (5:42 PM EST) |
+| STC 8+0.08, [0, 5] (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), td90 against S512ppr3 | 42917050282 (stage 0), 42919747964 (1), 42922442883 (2) | 4,800 (no time losses, no abnormal ends) | **+12.17 ± 5.71** | +20.96 ± 9.83 | [61, 483, 1147, 645, 64] | **H1 accepted** (LLR 3.67) after stage 2, 6:38 PM EST |
+
+The drivers' result blocks:
+
+```
+r8b-fn-td90, stage 0, run 42910703028:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 17.39 +/- 9.71, nElo: 30.53 +/- 17.02
+    Ptnml(0-2): [9, 174, 367, 228, 22]
+    LLR: 1.86 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+r8b-stc-1, stage 0, run 42917050282:
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 8.47 +/- 9.54, nElo: 15.13 +/- 17.02
+    Ptnml(0-2): [16, 168, 393, 207, 16]
+    LLR: 0.84 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+r8b-stc-1, stage 1, run 42919747964:
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 10.64 +/- 7.00, nElo: 18.32 +/- 12.04
+    Ptnml(0-2): [43, 321, 775, 417, 44]
+    LLR: 2.10 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+r8b-stc-1, stage 2, run 42922442883:
+    Shards: 48 (done); pairs 2400, games 4800 (4800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 12.17 +/- 5.71, nElo: 20.96 +/- 9.83
+    Ptnml(0-2): [61, 483, 1147, 645, 64]
+    LLR: 3.67 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- **Promoted (owner, 2026-11-10, about 6:45 PM EST): r8btd90 is the default network**; bench 9,594,307 /
+  4eb36793548711d4. The labeller policy (owner): the running label-depth arms stay on S512ppr3 until they end
+  (switching would confound that experiment); the positional slice and g4c use r8btd90.
+- Still open (plan §3 items 6 and 7, not decided by this promotion): the head-to-head screens of i52, td80 and td90
+  against the control c (r8b-h2h-i52 running; the TD arms' queued), which decide ideas 51 and 52.
