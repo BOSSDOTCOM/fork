@@ -430,7 +430,7 @@ TEST_CASE("pruning", "cut-node reduction: still correct, and it changes the sear
 // carried, in optimized builds only (too slow under the sanitizers).
 TEST_CASE("pruning", "history skip: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_history_skip);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_history_skip);  // on in this head-to-head candidate
   SearchSwitches on;
   on.use_history_skip = true;
   fx.searcher->switches = on;
