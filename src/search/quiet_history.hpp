@@ -26,7 +26,8 @@
 //   scale, bounds and update as the butterfly history.
 // - Every index is in range: side 0-1; from- and to-squares 0-63 (Move masks
 //   them); a pair or take slot built from a real piece (colour and type), a
-//   square 0-63 and a victim type Pawn to King; an arrival a pair slot.
+//   square 0-63 and a victim type Pawn to King; an arrival a pair slot; a
+//   threat bucket 0-3.
 //   Debug builds assert it at each read and update (<cassert>, compiled out
 //   by NDEBUG in release builds, so bench and speed are unchanged).
 #pragma once
@@ -132,29 +133,45 @@ class PairHistory {
   std::int16_t table_[PairSlots][PairSlots] = {};
 };
 
+// Threat buckets (tier 2, T56; KB search-techniques.md §3.34, its first
+// family): the butterfly history is split by whether the opponent attacks
+// the move's from-square and its to-square in the position before the move,
+// so "move an attacked piece to a safe square" learns apart from the same
+// squares when nothing is attacked. Bucket 2 * (from attacked) + (to
+// attacked); with the switch off every move reads and updates bucket 0, the
+// table as it was. A castling move's to-square is its encoded rook square.
+constexpr int ThreatBuckets = 4;
+inline int threat_bucket(Bitboard attacked, Move m) {
+  return static_cast<int>(((attacked >> m.from()) & 1) * 2 + ((attacked >> m.to()) & 1));
+}
+
 class QuietHistory {
  public:
-  int value(Color side, Move m) const {
+  int value(Color side, Move m, int bucket = 0) const {
     assert(side <= Black && "quiet history: side out of range");
-    return table_[side][m.from()][m.to()];
+    assert(bucket >= 0 && bucket < ThreatBuckets && "quiet history: bucket out of range");
+    return table_[side][bucket][m.from()][m.to()];
   }
 
   // Moves the entry by `amount` (positive: bonus, negative: malus), self-limiting.
-  void apply(Color side, Move m, int amount) {
+  void apply(Color side, Move m, int amount, int bucket = 0) {
     assert(side <= Black && "quiet history: side out of range");
-    std::int16_t& v = table_[side][m.from()][m.to()];
+    assert(bucket >= 0 && bucket < ThreatBuckets && "quiet history: bucket out of range");
+    std::int16_t& v = table_[side][bucket][m.from()][m.to()];
     const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
     v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
   }
 
   void clear() {
     for (auto& side : table_)
-      for (auto& from : side)
-        for (std::int16_t& v : from) v = 0;
+      for (auto& bucket : side)
+        for (auto& from : bucket)
+          for (std::int16_t& v : from) v = 0;
   }
 
  private:
-  std::int16_t table_[2][64][64] = {};
+  // 64 KB: four buckets of the 16 KB butterfly table (T56's cost note).
+  std::int16_t table_[2][ThreatBuckets][64][64] = {};
 };
 
 }  // namespace forkeng

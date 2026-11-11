@@ -394,6 +394,49 @@ TEST_CASE("pruning", "no-move reduction: still correct, and it changes the searc
             "the no-move reduction left all three trees unchanged");
 }
 
+// The threat buckets of the butterfly history (tier 2, T56): with them on,
+// mates are still found and the best move is legal, and they change the
+// tree (fault check: a threat set never built, or buckets never read,
+// leaves the tree as it is with the switch off).
+TEST_CASE("pruning", "threat buckets: still correct, and they change the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_threat_buckets);  // off until SPRTed
+  SearchSwitches on;
+  on.use_threat_buckets = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_threat_buckets = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the threat buckets left all three trees unchanged");
+  // The search updates the bucket it reads: with the switch on its cutoffs
+  // write every bucket (an update left in bucket 0 would leave buckets 1-3
+  // empty while the selector and LMR read them); off, only bucket 0.
+  const auto written = [&](int bucket) {
+    int n = 0;
+    for (Color side : {White, Black})
+      for (Square from = 0; from < 64; ++from)
+        for (Square to = 0; to < 64; ++to)
+          n += fx.searcher->butterfly_view().value(side, Move(from, to, 0), bucket) != 0;
+    return n;
+  };
+  fx.searcher->switches = on;
+  fx.search(kiwipete, depth);
+  for (int b = 0; b < ThreatBuckets; ++b) CHECK_MSG(written(b) > 0, "bucket " << b);
+  fx.searcher->switches = off;
+  fx.search(kiwipete, depth);
+  CHECK(written(0) > 0);
+  for (int b = 1; b < ThreatBuckets; ++b) CHECK_MSG(written(b) == 0, "bucket " << b);
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -473,6 +516,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   SearchSwitches s;
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
+  s.use_threat_buckets = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

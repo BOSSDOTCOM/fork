@@ -129,6 +129,11 @@ struct SearchQuota {
 //   switches) since its SPRTs against off passed: STC +18.69 +/- 7.18 Elo
 //   after 3,200 games, LTC +10.23 +/- 5.14 Elo after 4,992 games, design R
 //   [0, 6]; 2026-11-08.
+// - use_threat_buckets: the butterfly history is read and updated in one of
+//   four buckets by whether the opponent attacks the quiet move's from- and
+//   to-square before the move (tier 2, T56's threat-indexed history, "any
+//   enemy attack"; quiet_history.hpp). Off: every move uses bucket 0, the
+//   table as before. Off until SPRTed.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -160,7 +165,8 @@ struct SearchQuota {
   X(use_take_history, UseTakeHistory, true)              \
   X(use_no_move_reduction, UseNoMoveReduction, true)     \
   X(use_stability_time, UseStabilityTime, true)          \
-  X(use_share_time, UseShareTime, true)
+  X(use_share_time, UseShareTime, true)                  \
+  X(use_threat_buckets, UseThreatBuckets, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -265,9 +271,10 @@ struct LmrMoveFacts {
 
 // The LMR context's history: the mover's entry for the move, read from the
 // position after the move, where the mover is the side not to move (b89185f:
-// it read the opponent's table; tests/test_pruning.cpp).
-inline int mover_history(const QuietHistory& history, const Position& after, Move m) {
-  return history.value(~after.side_to_move(), m);
+// it read the opponent's table; tests/test_pruning.cpp). `bucket` is the
+// move's threat bucket, taken before the move was made (T56; 0 when off).
+inline int mover_history(const QuietHistory& history, const Position& after, Move m, int bucket = 0) {
+  return history.value(~after.side_to_move(), m, bucket);
 }
 
 // Debug counters (DESIGN.md §5.2), compiled in only with the CMake option
@@ -509,6 +516,9 @@ class Searcher {
     for (PairHistory& table : pair_history_) table.clear();
     take_history_.clear();
   }
+  // Tests only: the butterfly history (the threat buckets' read and update
+  // checks, tier 2 T56).
+  const QuietHistory& butterfly_view() const { return history_; }
 
   // Tests only: the root move that failed high in the iteration the last
   // deliberate() stopped in and was not yet re-searched to an exact score
@@ -548,7 +558,7 @@ class Searcher {
   // use_stability_time scaled by the last finished iteration's signals.
   std::int64_t soft_limit_now(const SearchQuota& limits) const;
   std::int64_t elapsed_ms() const;
-  void record_cutoff(const PlyFrame& f, Move m, int depth);
+  void record_cutoff(PlyFrame& f, Move m, int depth);
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
