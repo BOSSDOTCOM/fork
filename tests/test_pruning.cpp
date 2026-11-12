@@ -494,7 +494,7 @@ TEST_CASE("pruning", "root-near history: still correct, and it changes the searc
 // does nothing.
 TEST_CASE("pruning", "shallow-cutoff skip: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_shallow_cut_skip);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_shallow_cut_skip);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_shallow_cut_skip = true;
   fx.searcher->switches = on;

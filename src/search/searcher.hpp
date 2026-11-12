@@ -188,7 +188,7 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_root_near_history, UseRootNearHistory, false)        \
-  X(use_shallow_cut_skip, UseShallowCutSkip, false)
+  X(use_shallow_cut_skip, UseShallowCutSkip, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
