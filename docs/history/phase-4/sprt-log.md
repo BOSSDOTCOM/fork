@@ -891,7 +891,8 @@ s512pp-r1-stc, stage 0, run 42294907752:
   weights clamped; bench 14,626,377, signature 9e43990217b0886d). Recipes:
   warm mean best loss 0.01909453, scratch 0.01951758 (resolved). Parity:
   quantization loss max 7.9 cp, p99 6.1 cp. Endgame check: 8 of 900
-  misjudged against S512+PP's 351. The full non-slow suite passes on it.
+  misjudged against S512+PP's 351 (a recall figure: 898 of the 900 are slice
+  positions; bug review T1, 2026-11-11). The full non-slow suite passes on it.
 - Base: b115e03 (phase-4, S512+PP; bench 13,909,380). Under the job
   supervisor (job sprt-ppr2).
 

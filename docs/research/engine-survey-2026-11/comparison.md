@@ -203,7 +203,7 @@ Coda and Incipit, Fritz and Ginkgo, Rebel and Chess System Tal.
 | K1 | Own self-play, iterated from a bootstrap or from zero | 24 of the 50 (provenance.md) | S2 | **have**: decision A+, chained to the bootstrap eval |
 | K2 ⚑ | Label budget raised in steps or mixed budgets | Ethereal +6 to +19 per step; Tcheran add-on +19.2; Raphael +7.8; Minke +8.0; Hobbes −0.9 STC / +2.6 LTC; Tarnished mixed fine-tune +6.5 to +6.9 LTC; Clover, Renegade | S2 | **in progress**: idea 62's label-depth arms |
 | K3 | Tablebase guidance, adjudication and rescoring | Lc0 rescoring; Integral Syzygy-guided; ZigQueen rescoring at 5 pieces or fewer; Seer retrograde start | KB | **have**: Syzygy WDL labels and adjudication at 5 pieces or fewer; ChessTB slice v2 queued (idea 68) |
-| K4 | Endgame slices or endgame-start self-play | Caissa +51 on an endgame book (S2) | S2 N6, R32 | **have**: the Syzygy endgame slice (8 of 900 misjudged); R32 queued |
+| K4 | Endgame slices or endgame-start self-play | Caissa +51 on an endgame book (S2) | S2 N6, R32 | **have**: the Syzygy endgame slice (8 of 900 misjudged on the recall check; 454-612 of 3,800 on the held-out one, bug review T1); R32 queued |
 | K5 | Start-position distribution | PlentyChess +13.2 (S2); random opening plies (PZChessBot, Tarnished, Motor) | S2 N5, R1 | **queued**: R1, the 2026-09 book |
 | K6 | Clear TT and history between data-generation games | Raphael +5.8 | new | **have**: `SelfPlayGame::play` clears both per game |
 | K7 | Blend of adjudicated and unadjudicated games | Halogen (the blend won) | new | **never tried** |

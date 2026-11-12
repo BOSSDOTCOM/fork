@@ -1259,6 +1259,7 @@ tuned by SPSA.
   set), the conversion rate, then the net's promotion test.
 - **status:** in the next snapshot (owner, 2026-11-06: lifted from its hold): the slice goes into g3s2, and the check becomes the standing acceptance test for the retrained default (DESIGN.md §5.6, order item 7).
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 10):** the acceptance target is at most 15 of 900 misjudged; part 3 (conversion without tables) dropped; part 2 extended to 4-5-man classes (X19).
+  **2026-11-11 (bug review T1; owner):** the check measures **recall**, not understanding: 898 of its 900 positions (509 in the single file slice1-01) are in the slice's files verbatim, because the slice draws half its positions from the same three endings by the same placement rule. The held-out check (tools/nnue/endgame_heldout.py, X19's 4-5-man classes) has 3,800 positions in 16 four-piece and 3 five-piece classes the slice cannot generate, with zero overlap with all 26 M slice positions; misjudged: S512r2 658, S512+PP 945, S512ppr2 454, S512ppr3 514, r8btd90 526, r8brft1 612 (docs/research/bug-review-followup-2026-11-11.md).
 
 ## 46. Threat knowledge at a low speed cost: the design brainstorm
 
