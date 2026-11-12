@@ -195,28 +195,33 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
 2. **Endgame reports, every candidate, never a gate** (owner 2026-11-11): the 900-position check (now **a held-out
    check** if the fresh slice excludes its positions; its earlier figures, 7-8 of 900, were recall, so 8c's numbers
    are not comparable with them and the 15-of-900 target needs re-reading, O2); **the 4-5-piece held-out check**
-   (endgame_heldout.py, 3,800; r8brft1 612) and **the 6-7-piece check** (heldout_67.py, 5,599; r8brft1 770), both
-   flagged above **1.15 times** the default's count (cursed wins and blessed losses drawn; 200 per material); the
-   8-12-piece deep check (heldout_deep.py, 1,337 classed; r8brft1 80) beside them. Paired discordant counts against
-   c for every arm (as 732 vs 770 was read).
+   (endgame_heldout.py, 3,800; r8brft1 612) and **the 6-7-piece check** (heldout_67.py, 5,599; r8brft1 770)
+   (cursed wins and blessed losses drawn; 200 per material); the 8-12-piece deep check (heldout_deep.py, 1,337
+   classed; r8brft1 80) beside them. Paired discordant counts against c for every arm (as 732 vs 770 was read).
+   **Every held-out count (4-5, 6-7, the 900 check and the 8-12 check) is reported, and flagged for the owner's
+   review when it is more than 15% worse than the base's; it is never a gate on screening or promotion** (owner,
+   2026-11-12, about 4:40 PM EST).
 3. **Fixed-node screens** (1,600 games at 800,000 nodes, one GitHub stage each, all competing candidates first;
    seed-paired and pooled to 3,200 games per arm, because c2 against c measured -6.08 +/- 9.42 of seed noise):
    - base arms against c: i80-sK vs c-sK, pos-sK vs c-sK, lam-sK vs c-sK (K = 1, 2): 6 stages; v2 and wd: 4 more;
-   - fine-tunes: rft-ep vs rft (2 stages), and rft-ep-lo vs rft-ep (2 stages, run only if rft-ep's held-out counts
-     improved but its screen did not, so that the stage can change the decision);
+   - fine-tunes: rft-ep vs rft (2 stages) and rft-ep-lo vs rft-ep (2 stages);
+   - **every arm that passes the integrity gates of item 1 (gates.sh's parity, netcheck and quantisation legs) gets
+     its fixed-node screen** (owner, 2026-11-12, about 4:40 PM EST);
    - the final candidate (the best base with the chosen fine-tune) against **r8brft1**: 2 stages (one per seed).
    About 12-16 stages in the first wave; validation loss decides nothing.
 4. **Keep rules** (owner's where given; proposed where not, O6):
    - idea 80: **killed if its head-to-head against c is at or below 0 on both seeds** (owner); kept as the data
      setting's input otherwise, adopted into the recipe at +5 pooled or a passing STC SPRT;
    - positional slice: stays in the standard snapshot only if it **wins its arm test** (cap rule); proposed bar:
-     pooled h2h of +5 or more vs c, or a passing STC SPRT (idea 69's bar), and no held-out check worse by more
-     than 1.15x;
-   - per-class lambda: proposed in idea 51's form: kept only if the pooled h2h vs c is above +4 and no held-out
-     check is worse;
+     pooled h2h of +5 or more vs c, or a passing STC SPRT (idea 69's bar);
+   - per-class lambda: proposed in idea 51's form: kept only if the pooled h2h vs c is above +4;
    - slice v2: as declared 2026-11-09 (FN interval not entirely below 0 AND held-out 6-7 down 25% vs c);
-   - fine-tune: rft-ep replaces rft as the standard fine-tune if its held-out 4-5 and 6-7 counts are both below
-     rft's (paired) and its h2h vs rft is not entirely below 0; rft-ep-lo replaces rft-ep under the same rule;
+   - fine-tune: rft-ep replaces rft as the standard fine-tune if its pooled h2h vs rft is not entirely below 0;
+     rft-ep-lo replaces rft-ep under the same rule;
+   - in every rule above, the held-out endgame counts are reported and flagged (more than 15% worse than the base),
+     never a condition (owner, 2026-11-12, about 4:40 PM EST; it replaces the held-out conditions first proposed
+     here for the positional slice, per-class lambda and the fine-tunes). Slice v2's rule is the owner's declaration
+     of 2026-11-09 and is left as declared for the owner to confirm;
    - wd: +5 pooled h2h or a passing STC SPRT.
 5. **Promotion:** the final candidate's better seed (higher FN screen against r8brft1) goes to the **STC SPRT,
    `--kind network`, [0, 5] Elo, alpha = beta = 0.05**, against r8brft1; if it fails, the other seed only if its
@@ -292,7 +297,8 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
 - **O4** Warm start: r8brft1's float weights (the recipe's "the default", recommended) or r8btd90's.
 - **O5** TD scope: TD(0.9) on S512ppr3-and-later parts, blend on older (8b's form, recommended), or on all parts.
 - **O6** Keep rules not yet declared: the positional slice (+5 pooled h2h or STC pass), per-class lambda (above +4),
-  the fine-tune variants (held-out counts down and h2h not below 0), wd (+5 or STC pass).
+  the fine-tune variants (h2h not entirely below 0; held-out counts reported and flagged only, as corrected by the
+  owner on 2026-11-12), wd (+5 or STC pass).
 - **O7** Use of the expiring 15.70 h: P1 (recommended), P2 (option).
 - **O8** Per-class lambda: run as declared (0.35 / 0.65 / 0.9), or a variant whose record-weighted mean stays near
   0.9 (keeps the probe's contrast without td80's shift); as declared is the default of this plan.
@@ -313,6 +319,12 @@ TD labels for the unsaved positions are computed for all included parts before l
 So: O2 the fresh slice replaces v1 (v1 kept if it is not ready); O5 TD(0.9) on S512ppr3-and-later parts, blend copies
 of the older; O6 the keep rules of section 5.4 as proposed; O8 per-class lambda as declared; O10 the validation
 positions found in training dropped.
+
+**Corrections by the owner (about 4:40 PM EST, the same day):** (1) the rft-ep-lo arm (eplo, LR 5e-6) stays in 8c;
+(2) held-out endgame counts (4-5, 6-7, the 900 check, the 8-12 check) are reported and flagged for the owner's review
+when more than 15% worse than the base, never a gate on screening or promotion, and every arm that passes the
+integrity gates (gates.sh: parity, netcheck, quantisation) gets its fixed-node screen; sections 5.2-5.4 and O6 are
+corrected to say so; (3) P2's skipped screen is recorded as skipped for low expected value (section 11).
 
 **The new values and their reasons** (constant screen by the coordinator's originality agent, 2026-11-12: no match
 in Stockfish, nnue-pytorch, Ethereal, Berserk, Weiss or bullet for either value or for the +-2,000 / 0 result code
@@ -394,10 +406,13 @@ ec576600... rftlo2).
 r8brft1's reproduce the recorded 526/612 and 732/770.) **Reading:** halving the LR moved the nets less from the
 base's blended target (0.0200 against 0.0201) at the same result-target loss, but did **not** reduce the endgame
 drift: 4-5 pieces 615 and 609 against 612 and 614 (5-piece 184 and 180 against 189 and 190), 6-7 pieces 783 and 782
-against 770 and 766. By the fine-tune keep rule of section 5.4 (both held-out counts below, paired), the lower LR
-does not replace 1e-5 whatever a head-to-head says, so no fixed-node screen was run (it could not change that
-decision) and no bake branch was made. The drift is evidently the result target on the endings, not the step size:
-the evidence for rft-ep (section 3) over a lower LR. Nothing is promoted; the result goes to the coordinator.
+against 770 and 766. Against the base r8btd90, by the owner's flag rule (more than 15% worse; section 5.2), both
+seeds are **flagged** on the 4-5-piece set (615 and 609 against 526: +16.9% and +15.8%; r8brft1's 612 is +16.3%)
+and not on the 6-7-piece set (783 and 782 against 732: +7.0% and +6.8%). No fixed-node screen was run and no bake
+branch was made: **skipped for low expected value** (the coordinator's call; the owner, about 4:40 PM EST: fine,
+not to be run now), not because a held-out count blocked it (held-out counts are never a gate). The drift is
+evidently the result target on the endings, not the step size: the evidence for rft-ep (section 3) over a lower LR.
+Nothing is promoted; the result went to the coordinator.
 
 ## 12. Idea 80's labels for the unsaved positions, part by part (written before launch, as the owner asked)
 
@@ -420,6 +435,40 @@ in chunks of 20,000 whole games (byte-identical to whole-file labelling, checked
 | pos1 | 12.5 M, **0 unsaved** | nothing to label: its td90- copy serves (A2's arm only) | - |
 | the endgame slice | one-move table games | not a TD part: unchanged in every arm | - |
 
+**Open for the owner** (asked 2026-11-12 through the coordinator): whether an unsaved record whose label reaches
+the trainer's limit stays unsaved (the choice made here, section 10: about 2.4% of the unsaved records, so the i80
+arm adds no record class the control drops) or is kept with its saturated target. The copies above follow the
+choice made here until he answers; the other choice needs only those records rewritten.
+
 The same job then writes the control's td90- copies of g4b, ld-d20/d50/d100 and pos1 (about 0.8 h). After the
 seal: g4c's and the filler parts' td90- and i80- copies (about 1.5 h together), and rft-ep's split copies of every
 control file (about 2.4 B records at 790,000 records/s: about 1 h of one core, plus the checks).
+
+## 13. The seal day (Friday 2026-11-13): the VM filler cut (O9, the coordinator's action) and the post-seal steps
+
+**The cut**, at g4c's stop (its target reached, about 11 AM-2 PM EST), not at the end of its seal's verification;
+PowerShell in the repository on the PC (the PC's queue is authoritative, docs/gcp-worker.md):
+1. `python -I tools/gcp/gcp.py status`: note the running filler run (the 75d53f0 run started at 1:52 PM EST on
+   2026-11-12, after the staleness audit) and its chunks.
+2. Withdraw the filler: move `~/fork-jobs/gcp/queue/filler-g4.json` to `~/fork-jobs/gcp/prepared/filler-g4.json`,
+   then `python -I tools/gcp/gcp.py push`. The worker stops it ("withdrawn from the queue": SIGTERM, then the
+   whole tree); only the chunk in progress is lost, every finished chunk being verified and sealed on the VM, so
+   the run ends at a chunk boundary, which is a game boundary.
+3. `python -I tools/gcp/gcp.py status` again: the event "stop filler-g4 withdrawn from the queue", nothing running;
+   `/opt/fork/out/filler/last-end.json` names the run and its chunk count.
+4. Bring the runs home: `python -I tools/gcp/gcp.py pull filler`, then in WSL for each run not yet pulled
+   (g4-gcp-20261111T191107Z and g4-gcp-20261112T041330Z, b5f11ae per the 11-11 records, UNVERIFIED here; and every
+   75d53f0 run): `nice -n 19 env PYTHON=~/fork-cloud-venv/bin/python bash tools/cloud/pull_datagen.sh --from
+   ~/fork-data/gcp/filler/RUN --to OUT` (every chunk against its sealed manifest, every game replayed). Each run is
+   sealed as its own part with its labeller's build named (section 1); their manifest names go into
+   retrain_8c.py's FILLER.
+5. Start the new run: move the item back to `~/fork-jobs/gcp/queue/`, then `python -I tools/gcp/gcp.py push`; the
+   worker starts it as a new run (a new run name GEN-gcp-<start time> and seed base, filler.sh). Change the item's
+   build and pin first only if the labeller changes. Confirm with `gcp.py status`.
+
+**After g4c's seal (about 2-5 PM EST):** the g4s2 validation split (`snapshot_parts.py hold`: 60 games of each new
+self-play part) and its blend copy; the td90- and i80- copies of g4c, the filler parts and every validation rest
+(section 12); the split (ep-) copies of every control file; the overlap checks (identical games across ld-d20/d50/
+d100, g4b and g4c; the zero-overlap rule against the held-out sets); manifests g4c, the filler parts, g4s2-pre,
+r8c-td, r8c-i80 and r8c-split committed; uploads with download-back checks; retrain_8c.py's COMMIT and FILLER set
+and `--check-inputs` run on the local folders; then session A1 after the 7:00 PM EST quota reset and the owner's go.
