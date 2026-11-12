@@ -67,7 +67,7 @@
   X(CaptureProbeReduction, 5, 2, 10, 1)   \
   X(CaptureProbeMargin, 80, 40, 160, 6)   \
   X(MaterialScaleFull, 32, 16, 62, 2)     \
-  X(MaterialScaleSlope, 10, 5, 20, 1)     \
+  X(MaterialScaleSlope, 5, 5, 20, 1)      \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 12, 1)             \

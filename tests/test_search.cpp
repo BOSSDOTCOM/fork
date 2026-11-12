@@ -149,6 +149,7 @@ SearchSwitches exact_switches() {
   SearchSwitches s;
   s.tt_exact_depth = true;
   s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  s.use_material_scale = false;  // minimax here scores the raw static evaluation
   return s;
 }
 
