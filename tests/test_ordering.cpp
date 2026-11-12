@@ -391,6 +391,105 @@ TEST_CASE("ordering", "quiet_order_score orders quiets as the selector does") {
   CHECK_EQ(quiet_order_score(pos, m, fresh.get(), nullptr, NoArrival, NoArrival), HistoryMax);
 }
 
+// The direct-check squares (the engine survey's D13), against an
+// independent oracle: for every quiet move other than castling in the perft
+// and edge positions (side to move not in check), the destination is one of
+// the moving piece's direct_check_targets exactly when, after the move is
+// made, the moved piece is among the attackers of the enemy king.
+TEST_CASE("ordering", "direct-check squares: equal to the moved piece attacking the king after the move") {
+  std::vector<std::string_view> fens;
+  for (const PerftPosition& p : perft_suite()) fens.push_back(p.fen);
+  for (const EdgePosition& p : edge_positions()) fens.push_back(p.fen);
+  int quiets = 0, direct = 0;
+  // Each position and every position one legal move from it.
+  const auto check_node = [&](Position& pos) {
+    if (pos.in_check()) return;
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    for (Move m : legal) {
+      if (m.is_capture() || m.is_promotion() || m.is_castle()) continue;
+      const bool predicted = (direct_check_targets(pos, kind_of(pos.piece_at(m.from()))) & bb(m.to())) != 0;
+      pos.make(m);
+      const Square king = pos.king_square(pos.side_to_move());
+      const bool actual = (pos.attackers_to(king, pos.pieces()) & bb(m.to())) != 0;
+      pos.unmake(m);
+      CHECK_MSG(predicted == actual, pos.fen() << " " << pos.move_to_uci(m) << ": predicted " << predicted);
+      ++quiets;
+      direct += actual;
+    }
+  };
+  for (std::string_view fen : fens) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    check_node(pos);
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    for (Move m : legal) {
+      pos.make(m);
+      check_node(pos);
+      pos.unmake(m);
+    }
+  }
+  CHECK_MSG(quiets > 5000 && direct > 100, quiets << " quiet moves, " << direct << " direct checks");
+}
+
+// The direct-check bonus in the selector (D13): with it, quiet_order_score
+// (given the same bonus) still orders quiets as the selector yields them; in
+// a constructed position (checked valid with python-chess, 2026-11-11: white
+// Ke1, Qd1, Nb1; black Ke8; white to move), with no history the quiet checks come
+// before every other quiet, and without the bonus they do not.
+TEST_CASE("ordering", "direct-check bonus: the selector puts quiet checks first, as quiet_order_score says") {
+  auto pairs = std::make_unique<PairHistory[]>(2);
+  auto history = std::make_unique<QuietHistory>();
+  const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Knight), static_cast<Square>(42));
+  std::uint64_t seed = 20261111;
+  const int bonus = DirectCheckBonus;  // the parameter the selector adds
+  int checked = 0;
+  for (const PerftPosition& p : perft_suite()) {
+    Position pos;
+    CHECK(pos.set_fen(p.fen));
+    if (pos.in_check()) continue;
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    for (Move m : legal) {
+      const auto amount = [&] { return static_cast<int>(splitmix_next(seed) % 4001) - 2000; };
+      history->apply(pos.side_to_move(), m, amount());
+      pairs[ReplyTable].apply(arrival, pair_slot(pos.piece_at(m.from()), m.to()), amount());
+    }
+    MoveSelector s;
+    s.start_main(pos, NoMove, history.get(), pairs.get(), arrival, NoArrival, nullptr, false, true);
+    int previous = INT16_MAX;
+    for (Move m : drain(s)) {
+      if (m.is_capture() || m.is_promotion()) continue;
+      const int score = quiet_order_score(pos, m, history.get(), pairs.get(), arrival, NoArrival, 0, bonus);
+      CHECK_MSG(score <= previous,
+                p.name << ": " << pos.move_to_uci(m) << " " << score << " after " << previous);
+      previous = score;
+      ++checked;
+    }
+  }
+  CHECK(checked > 50);
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/8/8/8/8/8/1N1QK3 w - - 0 1"));
+  QuietHistory empty;
+  const auto first_quiets = [&](bool with_bonus) {
+    MoveSelector s;
+    s.start_main(pos, NoMove, &empty, nullptr, NoArrival, NoArrival, nullptr, false, with_bonus);
+    return drain(s);
+  };
+  const std::vector<Move> with = first_quiets(true);
+  int checks = 0;
+  for (Move m : with) checks += pos.gives_check(m);
+  CHECK_EQ(checks, 5);  // python-chess: 22 quiet moves, 5 checks (Qa4, Qd7, Qd8, Qe2, Qh5), all direct
+  CHECK_EQ(static_cast<int>(with.size()), 22);
+  for (int i = 0; i < static_cast<int>(with.size()); ++i)
+    CHECK_MSG(pos.gives_check(with[i]) == (i < checks), pos.move_to_uci(with[i]) << " at " << i);
+  const std::vector<Move> without = first_quiets(false);
+  bool all_first = true;
+  for (int i = 0; i < checks; ++i) all_first = all_first && pos.gives_check(without[i]);
+  CHECK(!all_first);
+}
+
 // The threat set (tier 2, T56; KB §3.34's test plan): attacked_squares(by)
 // equals the single-square query attacked_by on every square, for both
 // colours, over the perft and edge positions of tests/suite.hpp.

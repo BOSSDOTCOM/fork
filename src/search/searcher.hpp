@@ -155,6 +155,10 @@ struct SearchQuota {
 //   unresolved root fail high is never played either way. On since its STC
 //   SPRT against off passed (design R [0, 6]; adoption on that pass
 //   pre-approved by the owner, 2026-11-11; the result in the SPRT log).
+// - use_check_order_bonus: the engine survey's D13: in the main search out
+//   of check, a quiet move (not castling) that gives direct check adds
+//   DirectCheckBonus to its ordering score (MoveSelector::start_main,
+//   direct_check_targets). Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -189,7 +193,8 @@ struct SearchQuota {
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_check_order_bonus, UseCheckOrderBonus, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
