@@ -14,6 +14,7 @@
 #include "harness.hpp"
 #include "search/lmr_table.hpp"
 #include "search/quiet_history.hpp"
+#include "search/search_bench.hpp"
 #include "search/searcher.hpp"
 
 namespace forkeng::test {
@@ -528,7 +529,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // changes the tree (fault check: a technique that never fires leaves the trees as with the switch off).
 TEST_CASE("pruning", "cut-node negative extension: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_cut_negative_extension);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_cut_negative_extension);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_cut_negative_extension = true;
   fx.searcher->switches = on;
@@ -543,8 +544,19 @@ TEST_CASE("pruning", "cut-node negative extension: still correct, and it changes
   CHECK(legal.contains(fx.search(kiwipete, depth).best));
   SearchSwitches off;
   off.use_cut_negative_extension = false;
-  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
-            "the cut-node negative extension left all three trees unchanged");
+  // In this test commit a quarter ply is paid only once a line owes four,
+  // which takes about four expected cut nodes deep enough for the singular
+  // test on one line: the three usual trees (and the bench positions at
+  // depth 10) stay unchanged, so the fault check searches the bench
+  // positions at the bench's depth, 13: their total nodes differ with it on.
+  const auto total = [&](const SearchSwitches& s) {
+    fx.searcher->switches = s;
+    std::uint64_t nodes = 0;
+    for (const std::string_view fen : search_bench_fens()) nodes += fx.search(fen, Optimized ? 13 : 6).nodes;
+    return nodes;
+  };
+  CHECK_MSG(total(on) != total(off),
+            "the cut-node negative extension left the bench positions' trees unchanged");
 }
 
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
