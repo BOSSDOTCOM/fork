@@ -2790,3 +2790,20 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
+
+## 131. The eval-gain extension (think tank R41)
+
+- **type:** ELO (search); flag `use_eval_gain_extension` (off).
+- **idea** (think tank R41's extension half; KB search-techniques.md T48, concept only): a late quiet move
+  reduced by at least `EvalGainMinReduction` (2) plies whose reduced search beats alpha is searched again one
+  ply deeper than normal when its static eval rose by at least `EvalGainMargin` (100 cp) over the node's: the
+  reduction ignored what the eval saw. R41's other half (one more ply of reduction when the eval collapsed,
+  which R41 put at STC) is not built.
+- **status:** **in progress (coordinator's build list, 2026-11-12: "R41, LTC only").** Built on phase-4
+  de7e0a3 behind the switch, off: branch tier2/r41-eval-gain, bench unchanged (9,639,207 / 07f7ae19b9250f38,
+  r8brft1). Test commits sprt/r41-eval-gain (100 cp) and sprt/r41-eval-gain-50 (the retry, 50 cp). Night items
+  93a (r41-eval-gain-ltc, design R at 40+0.4, ledger idea `r41-eval-gain`, try 1) and 93b
+  (r41-eval-gain-ltc-retry, 50 cp, only if 93a does not accept H1), gated until state/gate-e1.done. Nothing is
+  adopted before a verdict.
+- **runtime cost:** one comparison where a reduced search beats alpha, and one store per move with it on.
+- **earliest phase:** Phase 4.

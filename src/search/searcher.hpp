@@ -164,6 +164,11 @@ struct SearchQuota {
 //   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
 //   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
 //   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
+// - use_eval_gain_extension: a late quiet move reduced by at least
+//   EvalGainMinReduction plies whose reduced search beats alpha is searched
+//   again one ply deeper than normal when its static eval gain (the child's
+//   eval, negated, less the node's) is at least EvalGainMargin (think tank
+//   R41, the extension half). Off until its LTC SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -199,7 +204,8 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_eval_gain_extension, UseEvalGainExtension, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

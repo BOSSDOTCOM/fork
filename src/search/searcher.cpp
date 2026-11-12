@@ -627,6 +627,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     // and an all node's expected cut nodes, as in a minimal tree. A
     // prediction only: nothing relies on it being right.
     frames_[ply + 1].expected_cut = OnPv ? moves_searched > 0 : !f.expected_cut;
+    // R41: the child's eval is read after its search only if that search set
+    // it (a child that returns before evaluating leaves "none").
+    if (switches.use_eval_gain_extension) frames_[ply + 1].static_eval = ScoreNone;
     play(ply, m);
 #ifdef FORK_SEARCH_STATS
     ++counters.makes;
@@ -722,11 +725,23 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // No re-search once the search has stopped: a stopped child returns 0,
         // which can beat alpha, and each call would still count a node past a
         // node limit (found by the heuristic-discovery gate, 2026-10-27).
+        // Think tank R41, the eval-gain extension: a move reduced by at least
+        // EvalGainMinReduction plies whose reduced search beat alpha, and
+        // whose static eval rose by at least EvalGainMargin over this node's
+        // (the child's eval is from the opponent's side), is searched again
+        // one ply deeper than normal: the reduction ignored what the eval
+        // saw. Both evals are in the frames; a child in check has none.
+        int full_depth = new_depth;
+        if (switches.use_eval_gain_extension && !stopped_ && score > alpha &&
+            new_depth - reduced >= EvalGainMinReduction && f.static_eval != ScoreNone &&
+            frames_[ply + 1].static_eval != ScoreNone &&
+            -frames_[ply + 1].static_eval - f.static_eval >= EvalGainMargin)
+          ++full_depth;
         if (!stopped_ && score > alpha && reduced < new_depth)
-          score = switches.use_pvs ? -negamax<false>(-alpha - 1, -alpha, new_depth, ply + 1)
-                                   : -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);
+          score = switches.use_pvs ? -negamax<false>(-alpha - 1, -alpha, full_depth, ply + 1)
+                                   : -negamax<OnPv>(-beta, -alpha, full_depth, ply + 1);
         if (!stopped_ && switches.use_pvs && OnPv && score > alpha && score < beta)
-          score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
+          score = -negamax<true>(-beta, -alpha, full_depth, ply + 1);
       }
     }
     pos.unmake(m);
