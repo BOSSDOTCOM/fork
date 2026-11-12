@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // changes the tree (fault check: a technique that never fires leaves the trees as with the switch off).
 TEST_CASE("pruning", "cut-node negative extension: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_cut_negative_extension);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_cut_negative_extension);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_cut_negative_extension = true;
   fx.searcher->switches = on;
