@@ -1425,8 +1425,8 @@ TEST_CASE("time_budget", "deep_depth: the depth clamp at 60, the same scale up t
   // E2's case: a best move stable for 20 iterations at depth 30 is no longer held at the floor.
   CHECK_EQ(soft_scale_permille(StabilityAndShare, {30, 20, 500, 0}), 360);
   CHECK(soft_scale_permille(StabilityAndShare, {30, 20, 500, 0}, true) > 600);
-  // The switch is off by default.
-  CHECK(!SearchSwitches{}.use_deep_time_depth);
+  // On in this test commit (sprt/e2-time-depth).
+  CHECK(SearchSwitches{}.use_deep_time_depth);
 }
 
 TEST_CASE("time_budget", "a scaled soft limit stays within [1, hard] and leaves movetime alone") {
