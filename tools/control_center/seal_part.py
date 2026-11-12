@@ -156,6 +156,13 @@ def seal(req, here, wsl_version=None, verify=None, upload=None):
     out = Path(req['copies']) / name
     src = req.get('src') or str(config.wsl_unc(req['distro'], req['home'], req['dir']))
     try:
+        # A part restarted as segments (another binary, run NAME-sK, its own seed; listed in segments.json in the
+        # part's folder, 2026-11-12) is not sealed here yet: this seal reads one run and one binary, so it would
+        # seal the first segment alone.
+        if os.path.exists(os.path.join(src, 'segments.json')):
+            progress('failed', f"{req['dir']} holds segments.json: a part with segments needs the segment-aware "
+                               'seal; nothing was copied or sealed')
+            return 1
         if out.exists() and any(out.iterdir()):
             progress('failed', f'{out} already holds files; nothing was overwritten')
             return 1

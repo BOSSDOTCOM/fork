@@ -797,6 +797,17 @@ class Seal(unittest.TestCase):
         self.assertEqual((rc, uploads), (1, []))
         self.assertEqual(json.loads((self.here / 'seal-result.json').read_text())['state'], 'failed')
 
+    def test_a_part_with_segments_is_refused(self):
+        (self.src / 'segments.json').write_text('{"segments": []}')
+        uploads = []
+        rc = seal_part.seal(self.req, self.here, wsl_version=fixture('fork-version.txt'), verify=lambda a: 0,
+                            upload=uploads.append)
+        self.assertEqual((rc, uploads), (1, []))
+        res = json.loads((self.here / 'seal-result.json').read_text())
+        self.assertEqual(res['state'], 'failed')
+        self.assertIn('segments.json', res['message'])
+        self.assertFalse((Path(self.req['copies']) / 'g9b').exists())  # nothing copied
+
     def test_real_steps_run(self):
         """The default verify and seal steps start their scripts (fakes here that record their arguments)."""
         tools = self.repo / 'tools' / 'datagen'
