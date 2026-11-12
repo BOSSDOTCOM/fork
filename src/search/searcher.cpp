@@ -54,11 +54,17 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 
 [[gnu::always_inline]] inline int Searcher::eval_at(int ply) {
 #if defined(FORK_EVAL_NNUE)
-  return features_.evaluate(*net_, ply, *pos_);
+  const int e = features_.evaluate(*net_, ply, *pos_);
 #else
   (void)ply;
-  return static_eval(*pos_);
+  const int e = static_eval(*pos_);
 #endif
+  if (!switches.use_material_scale) return e;
+  // The engine survey's F10: below MaterialScaleFull pawn units of non-pawn
+  // material the evaluation shrinks by MaterialScaleSlope per mille per unit
+  // (integer, rounded toward zero, so symmetric between the sides).
+  const int permille = 1000 - MaterialScaleSlope * std::max(MaterialScaleFull - non_pawn_units(*pos_), 0);
+  return e * permille / 1000;
 }
 
 namespace {

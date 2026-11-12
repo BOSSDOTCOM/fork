@@ -164,6 +164,12 @@ struct SearchQuota {
 //   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
 //   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
 //   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
+// - use_material_scale: the static evaluation is scaled down as non-pawn
+//   material leaves the board: by MaterialScaleSlope per mille per pawn unit
+//   below MaterialScaleFull units (both sides; core/material.hpp's
+//   non_pawn_units), 1000 per mille at or above it (the engine survey's F10,
+//   the think tank's R33 in its simplest form). The search, the TT and the
+//   data generator's labeller all see the scaled value. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -199,7 +205,8 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_material_scale, UseMaterialScale, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

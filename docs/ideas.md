@@ -2790,3 +2790,22 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
+
+## 135. Material-scaled evaluation (the engine survey's F10, R33's first variant)
+
+- **type:** ELO (evaluation, in the search); flag `use_material_scale` (off).
+- **idea** (the survey's F10, ranked 6th; R33's simplest form, as the survey recommends): one scale on the static
+  evaluation from the non-pawn material left, 1 from `MaterialScaleFull` (32) pawn units up and falling by
+  `MaterialScaleSlope` (10) per mille per unit below it, both derived from the think tank's E1 conversion table
+  (DESIGN.md's rows).
+- **status:** **in progress (coordinator's build list, 2026-11-12: "F10, R-STC").** Built on phase-4 de7e0a3
+  behind the switch, off: branch tier2/f10-material-scale, bench unchanged (9,639,207 / 07f7ae19b9250f38,
+  r8brft1). Test commits sprt/f10-material-scale (slope 10) and sprt/f10-material-scale-5 (the retry, 5). Night
+  items 97a (f10-material-scale-stc, design R at STC, ledger idea `f10-material-scale`, try 1) and 97b
+  (f10-material-scale-retry, only if 97a does not accept H1), gated until state/gate-e1.done. **Adoption would
+  change the data generator's labels** (its search uses the scaled eval): it seals the current part (as any adopted search change) and rescales the endgame labels (a
+  labelling decision for the owner; DESIGN.md's row). Nothing is adopted before a verdict; R33's fitted
+  structure classes stay the follow-up.
+- **runtime cost:** four popcounts and a multiply per evaluation with it on; none off. Speed not measured
+  (UNVERIFIED; bench/ab.py not run).
+- **earliest phase:** Phase 4.

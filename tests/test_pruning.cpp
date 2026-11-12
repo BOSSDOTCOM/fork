@@ -522,6 +522,39 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
   }
 }
 
+// The engine survey's F10, the material-scaled evaluation: the static eval shrinks as non-pawn material
+// leaves the board. With it on, mates are still found and the best move is legal, and it changes the tree
+// (fault check: a technique that never fires leaves the trees as with the switch off).
+TEST_CASE("pruning", "material scale: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_material_scale);  // off until its SPRT
+  // non_pawn_units on constructed positions: the start (2 x (3 + 3 + 3 + 3 +
+  // 5 + 5 + 9) = 62), a pawn ending (0), one rook and one bishop each (16).
+  Position units;
+  CHECK(units.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
+  CHECK(non_pawn_units(units) == 62);
+  CHECK(units.set_fen("4k3/pp6/8/8/8/8/PP6/4K3 w - - 0 1"));
+  CHECK(non_pawn_units(units) == 0);
+  CHECK(units.set_fen("r3kb2/pp6/8/8/8/8/PP6/R3KB2 w - - 0 1"));
+  CHECK(non_pawn_units(units) == 16);
+  SearchSwitches on;
+  on.use_material_scale = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_material_scale = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the material scale left all three trees unchanged");
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -602,6 +635,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
   s.use_threat_buckets = s.use_capture_probe = true;
+  s.use_material_scale = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

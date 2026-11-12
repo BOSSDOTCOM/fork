@@ -14,6 +14,8 @@
 // - game_phase is in [0, FullPhase]: knights and bishops 1, rooks 2, queens
 //   4, so the starting position is FullPhase = 24 (capped there: promotions
 //   can add more); 0 is a pawn ending.
+// - non_pawn_units: both sides' knights, bishops, rooks and queens in pawn
+//   units of MaterialCp (3, 3, 5, 9), uncapped: 62 at the start.
 #pragma once
 
 #include "core/position.hpp"
@@ -33,6 +35,15 @@ inline int game_phase(const Position& pos) {
   int phase = 0;
   for (PieceType t : {Knight, Bishop, Rook, Queen}) phase += PhaseWeight[t] * popcount(pos.pieces(t));
   return phase < FullPhase ? phase : FullPhase;
+}
+
+// Both sides' non-pawn material in pawn units (the engine survey's F10, the
+// material-scaled evaluation, reads it; the think tank's phase classes use
+// the same units).
+inline int non_pawn_units(const Position& pos) {
+  int units = 0;
+  for (PieceType t : {Knight, Bishop, Rook, Queen}) units += MaterialCp[t] / 100 * popcount(pos.pieces(t));
+  return units;
 }
 
 }  // namespace forkeng
