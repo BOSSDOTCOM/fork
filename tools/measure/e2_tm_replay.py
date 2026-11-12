@@ -93,13 +93,15 @@ def fixed_exp2_neg(w):
 
 
 def scale_permille(stability, share_all, depth, score, clamp_depth=True, floor=FLOOR, balance=BALANCE_SHARE):
-    """soft_scale_permille(StabilityAndShare, ...); clamp_depth=False drops the depth clamp, floor=0 the floor."""
+    """soft_scale_permille(StabilityAndShare, ...); clamp_depth: True clamps at 19 (the engine), False not at all,
+    an integer clamps there; floor=0 drops the floor."""
     if depth < MIN_DEPTH or abs(score) >= TB_WIN - MAX_PLY:
         return 1000
     if share_all <= 0:
         return 1000
     s = min(max(stability, 1), STAB_CAP)
-    d = min(depth, MAX_DEPTH) if clamp_depth else depth
+    cap = MAX_DEPTH if clamp_depth is True else (clamp_depth or None)
+    d = min(depth, cap) if cap else depth
     z1 = SHARE_FIT[0] + SHARE_FIT[1] * s + SHARE_FIT[3] * d
     p = min(max(share_all, SHARE_MIN), SHARE_MAX)
     logit = cdiv((fixed_log2(p) - fixed_log2(1000 - p)) * LN2, 65536)
@@ -133,9 +135,10 @@ def replay(its, budget, rule, balance=BALANCE_SHARE):
         soft = budget
         floored = False
         if rule != 'plain':
-            p = scale_permille(stability, it['share_all'], it['depth'], it['score'], rule == 'engine', FLOOR, balance)
+            clamp = True if rule == 'engine' else (int(rule[3:]) if rule.startswith('cap') else False)
+            p = scale_permille(stability, it['share_all'], it['depth'], it['score'], clamp, FLOOR, balance)
             floored = p == FLOOR and scale_permille(stability, it['share_all'], it['depth'], it['score'],
-                                                    rule == 'engine', 0, balance) < FLOOR
+                                                    clamp, 0, balance) < FLOOR
             soft = scaled_soft(budget, hard, p)
         if spent >= soft:
             return spent, best, depth, floored
@@ -241,6 +244,7 @@ def main(argv=None):
     parser.add_argument('--rounds', type=int, default=1000)
     parser.add_argument('--seed', type=int, default=20261111)
     parser.add_argument('--self-test', action='store_true')
+    parser.add_argument('--caps', default='', help='also replay the scale clamped at each of these depths, e.g. 22,25,28')
     a = parser.parse_args(argv)
     if a.self_test:
         return self_test()
@@ -256,7 +260,7 @@ def main(argv=None):
         budget = limit // div
         plain = summarise(records, budget, 'plain')
         block = {'plain': {k: (sum(v) / len(v) if k == 'agree' else v) for k, v in plain.items()}}
-        for rule in ('engine', 'unclamped'):
+        for rule in ('engine', 'unclamped') + tuple(f'cap{c}' for c in a.caps.split(',') if c):
             s = summarise(records, budget, rule)
             block[rule] = {k: (sum(v) / len(v) if k == 'agree' else v) for k, v in s.items()}
             block[rule]['spend_over_plain'] = s['spend'] / plain['spend']
