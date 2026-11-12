@@ -219,15 +219,21 @@ above).
 | **SingularMarginPerPly** | 6 (the SPRT of 22 below ended H0) | **2-16** (was 2-12, before that 3-12) | 1 | ? | 4 / 10 at c = 1; 2 / 5 at c = 2 | **flag**: O5 and R28 predicted a lower margin at LTC (SE precision rose with depth on S512, 0.91 at d6 to 0.97-0.98 at d7-12); lowest 2 (**applied, owner 2026-11-09**). **2026-11-12: a class (b) dimension either way (owner)**; T27's rule 1 re-run on r8brft1 picks 22 (the note below), but 22 lost its SPRT against 6 (H0, −26.76 ± 9.93 Elo), so the range is **2-16 (the owner's decision, 2026-11-12, about 2:10 PM EST; applied)**, not the 2-44 planned before the result |
 | NoMoveReduceMinDepth | 8 | 2-16 (was 2-10) | 1 | ? | 6 / **2** | **flag ceiling**; highest 16 (the rule's twice; **applied, owner 2026-11-09**) |
 | LmrDivisorTenths | 45 | 23-90 | 3 | ? | 7 / 15 steps | ok |
-| CaptureProbeMinDepth | 9 | 4-18 | 1 | ? | 5 / 9 at c = 1 | ok (added 2026-11-11, ProbCut's adoption) |
-| CaptureProbeReduction | 5 | 2-10 | 1 | ? | 3 / 5 at c = 1 | ok (added 2026-11-11) |
-| CaptureProbeMargin | 80 | 40-160 | 6 | ? | 6.7 / 13.3 steps | ok (added 2026-11-11) |
+| CaptureProbeMinDepth | 9 | 4-18 | 1 | ? | 5 / 9 at c = 1 | ok (added 2026-11-11, ProbCut's adoption). **Set on S512r2 (2026-11-06), not re-measured on r8brft1, by the owner's decision (2026-11-12): unmeasured until this pass, LTC class** (the note below) |
+| CaptureProbeReduction | 5 | 2-10 | 1 | ? | 3 / 5 at c = 1 | ok (added 2026-11-11). Set on S512r2 (2026-11-06), not re-measured on r8brft1 (owner, 2026-11-12): LTC class |
+| CaptureProbeMargin | 80 | 40-160 | 6 | ? | 6.7 / 13.3 steps | ok (added 2026-11-11). Set on S512r2 (2026-11-06), not re-measured on r8brft1 (owner, 2026-11-12): LTC class |
 
 p = 8 (9 with a double-extension limit if R28 is adopted). **2026-11-11: ProbCut's three constants join this pass**
 on its adoption (the efficiency rule: a constant the final retune will tune is not tuned again before it). They are
 class (b): ProbCut acts only at depth 9 and beyond, its STC SPRT on S512r2 ended H0 and its LTC design R test on
 the tuned search passed (+9.40 ± 5.03 Elo; DESIGN.md "Search constants"), so STC is the wrong place to tune them.
 Ranges as in the parameter table (src/tune/params.hpp); c is set at step 19 by spsa_calibrate.py.
+**2026-11-12 (owner, about 2:10 PM EST): "ProbCut's constants stay unmeasured until the final retune (LTC
+class)."** The three values (9 / 5 / 80) were measured on S512r2 (2026-11-06, tools/tier2_measure.py, spec
+capture_probe) and adopted on r8brft1 by the LTC test above; they are not re-measured on r8brft1. The staleness
+audit's re-run of their measurement was withdrawn before it started (about 12 h of the cloud worker, the
+test-efficiency rule; docs/research/staleness-audit-2026-11-12.md §3). This pass is their first measurement on
+the current net; their ranges are unchanged.
 
 **2026-11-12 (owner, about 7:20 AM EST): `SingularMarginPerPly` stays a class (b) dimension of this pass either
 way.** Builder 3's C6 measurement (tier2/c6-singular-measure b71199d, on phase-4 32384e1's search and the current
