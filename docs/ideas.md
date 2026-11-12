@@ -2348,7 +2348,14 @@ whose weaknesses and data gaps decide their targets and order.
   wait for the final conversion-and-defense numbers.
 - **keep rule (declared 2026-11-09, before any data):** v2 is kept if its arm's fixed-node screen interval is not
   entirely below 0 AND the held-out 6-7-piece misjudgment falls by at least 25% against the control arm.
-- **status:** untested (designed; data generation after the conversion-and-defense results and before 8c).
+- **decisions (owner, 2026-11-11, about 10:50 PM EST):** the materials include queen against rook and minor endings
+  (KQvKRBP among them; budget R's KQvKRBP, KQvKRNP, KQPvKRB, KQPvKRN), the held-out 6-7-piece set's positions
+  excluded (tools/nnue/heldout_67.tsv, board and side to move; another seed than 2026111167). The held-out
+  6-7-piece check of the keep rule is that set (5,600 positions, 200 per material; a cursed win or blessed loss
+  counted drawn; reported with the 1.15 flag ratio, never a gate), and every 8c arm reports it beside the
+  4-5-piece check.
+- **status:** untested (designed; the prober installed and verified and the held-out set built 2026-11-11; data
+  generation after the conversion-and-defense results and before 8c).
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 69. Class-weighted sampling in the trainer
@@ -2429,7 +2436,14 @@ whose weaknesses and data gaps decide their targets and order.
   raised the held-out check's five-piece errors (queen against two minor
   pieces, tools/nnue/endgame_heldout.py) from 126 to 189 of 600 (r8btd90
   -> r8brft1; all classes 526 -> 612 of 3,800). **Future fine-tunes report
-  this set** (tools/nnue/gates.sh reports it for every candidate). **runtime
+  this set** (tools/nnue/gates.sh reports it for every candidate). **The
+  6-7-piece set (2026-11-11, tools/nnue/heldout_67.py)** shows the same step:
+  r8btd90 732 -> r8brft1 770 of 5,600 (58 to 20 discordant), mostly queen and
+  pawn against rook and minor. **8c arm (owner, 2026-11-11, about 10:50 PM
+  EST): a slice-preserving result fine-tune**, the endgame slice kept at its
+  normal weight during the fine-tune, **plus a lower-LR variant if the Kaggle
+  quota allows**; like every 8c arm it reports both held-out checks (4-5 and
+  6-7 pieces). **runtime
   cost:** none. **earliest phase:** Phase 4.
 
 ## 71. Feature-transformer weight decay

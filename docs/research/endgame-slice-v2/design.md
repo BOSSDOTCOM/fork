@@ -382,3 +382,15 @@ The questions above are answered (DESIGN.md decisions log, 2026-11-09; ideas.md 
   (endgame_check.py's quiet rule) plus section 4's "no promotion available", without the one-wing bias (it
   waits, item (h)), labelled by ChessTB WDL, seed 2026111167. **The slice generator must
   leave out every position of that file (board and side to move) and use another seed.**
+
+## Owner's decisions (2026-11-11, about 10:50 PM EST)
+
+- **Queen against rook and minor endings stay in the materials** (KQvKRBP among them: section 3's C3 holds
+  KQvKRBP, KQvKRNP, KQPvKRB and KQPvKRN in budget R), whatever the final class shares (item (h)). The held-out
+  6-7-piece check found them the shared blind spot of every net (KQvKRBP: 35-39 of its 41 won positions
+  misjudged) and the place where the result fine-tune lost most.
+- **The held-out set's positions are excluded** from the slice: every position of tools/nnue/heldout_67.tsv
+  (board and side to move, endgame_heldout.key), and a seed other than 2026111167.
+- **The held-out 6-7-piece check keeps the three choices made when it was built:** the 1.15 flag ratio (report
+  only, never a gate), a cursed win or blessed loss counted as drawn, 200 positions per material. It is the
+  check named by the keep rule (item (g)), and every 8c arm reports it beside the 4-5-piece check.
