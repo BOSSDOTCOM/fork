@@ -469,7 +469,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // with the technique it gates switched off.
 TEST_CASE("pruning", "node-type gates for the null move and the no-move reduction") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_nmp_expected_cut);  // off until their SPRTs
+  CHECK(SearchSwitches{}.use_nmp_expected_cut);  // on in this SPRT test commit
   CHECK(!SearchSwitches{}.use_typed_no_move_reduction);
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
   // Deep enough for the no-move reduction (NoMoveReduceMinDepth 8) to fire
