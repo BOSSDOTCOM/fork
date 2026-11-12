@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // off); with LMR off it does nothing.
 TEST_CASE("pruning", "bad-capture LMR: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_bad_capture_lmr);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_bad_capture_lmr);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_bad_capture_lmr = true;
   fx.searcher->switches = on;
