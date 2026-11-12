@@ -1609,3 +1609,43 @@ The final stage's result block (survey-d8-stc, stage 7, run 43216014186):
 - **Rule for future stacking checks (owner, same date):** compare against the sum of each item's gain at the
   check's own time control; if the batch includes LTC-only items, run the check at LTC or exclude those items
   from the comparison.
+
+### 2026-11-12 the direct-check ordering bonus (the engine survey's D13; idea 77): design R SPRT against off (owner): H1, adopted
+
+- The owner's order (2026-11-11, 3:10 PM EST): "the survey's top cheap techniques: D8 (summed continuation update),
+  D9 (failed-child prior-move bonus), D13 (direct-check ordering bonus), each design R at STC." Re-planned (about
+  7:45 PM EST): no head-to-head for a constant the final retune will tune; one SPRT at the natural value,
+  `DirectCheckBonus` 5000, one retry at 2500 if it fails. Lane B item 70a (survey-d13-stc), gated on E1 (gate-e1).
+  Base tier2/d13-check-order-e1 35209f0 (the bonus behind `use_check_order_bonus`, off, on adopt/e1 25623ab =
+  phase-4 784b1b0's engine with E1, no ProbCut, no history skip, no drift table, no D8; bench 10,166,167 /
+  d874b380155a2e8c); test sprt/d13-check-order-5000-e1 cc7b3bc (the switch on, 5000; 10,253,460 /
+  8f28bb6e1d52fa6e). STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed 20261027), r8brft1 on both sides; design R
+  ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages), from stage 0. Ledger idea
+  `d13-check-order`, try 1 (the retry, item 70b, not needed). Data: ~/fork-data/sprt/survey-d13-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **survey-d13-stc: D13 (5000) on against off, stages 0-5** | 43229400100 (0), 43232422086 (1), 43235937751 (2), 43240230646 (3), 43244234784 (4), 43247622236 (5) | 9,600 (no time losses, no abnormal ends) | **+5.50 ± 3.93** | +9.73 ± 6.95 | [93, 1082, 2306, 1218, 101] | **H1 accepted** (LLR 3.21) after stage 5, 10:44 AM EST 2026-11-12 |
+
+- By stage: after stage 0 +6.30 ± 9.48 (LLR 0.66); stage 1 +7.38 ± 6.74 (1.62); stage 2 +6.08 ± 5.48 (1.89);
+  stage 3 +5.75 ± 4.77 (2.31); stage 4 +4.30 ± 4.31 (1.83).
+
+The final stage's result block (survey-d13-stc, stage 5, run 43247622236):
+
+```
+    Shards: 96 (done); pairs 4800, games 9600 (9600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 5.50 +/- 3.93, nElo: 9.73 +/- 6.95
+    Ptnml(0-2): [93, 1082, 2306, 1218, 101]
+    LLR: 3.21 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Adopted (the owner's overnight pre-approval of 2026-11-11 for search items that pass their SPRT; an STC-only
+  item):** 35209f0's change with cc7b3bc's switch-on ported onto phase-4 85672d8 alone (branch adopt/d13; the
+  code lines equal the tested diff apart from the merge beside ProbCut's, the history skip's, the drift tables'
+  and D8's switch and parameter entries and comments), `UseCheckOrderBonus` on, `DirectCheckBonus` 5000, the
+  switch kept until the Phase 4 re-validation. Bench 9,118,607 / 208629aa15e140a9 (r8brft1). With D13 off 8,773,005 / 413d5ae2f1af08de, phase-4's;
+  with D13 on and ProbCut, the history skip, the minor drift table and D8 off (the tested base had none of them)
+  10,253,460 / 8f28bb6e1d52fa6e, byte for byte cc7b3bc's tests/bench-r8brft1.ref, so the port equals the tested code.
+  `DirectCheckBonus` joins the final retune's SPSA (class (a)). The history skip reads the ordering score
+  without the bonus (each kept as tested; UNVERIFIED whether the skip should see it). Speed: bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 85672d8, B = the port's build of this commit's engine code from the uncommitted tree on 85672d8, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps +1.2%, best -2.9%, under the 6.0% noise threshold: no significant difference (a price of that size is inside the noise, UNVERIFIED). The bench searches 3.9% more nodes (9,118,607 against 8,773,005).

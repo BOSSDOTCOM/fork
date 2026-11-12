@@ -17,6 +17,7 @@
     {"change": "E1 pass-best stop rule", "elo": 3.26, "ci95": 3.35, "test": "stop-rule-stc: STC design R [0, 6], runs 43128978493-43145414123, 12,800 games, capped undecided; adopted on stop-rule-nonreg: STC non-regression [-3, 0], +2.41 +/- 2.69, runs 43147600231-43173009038, 20,800 games, H1 (no sprt record: the STC was capped, not passed, and the non-regression design is not one of stopbias.DESIGNS)"},
     {"change": "Quiet history pruning (T24/B13, the history skip, 700 per ply)", "elo": 6.04, "ci95": 4.37, "test": "qhp-stc: STC design R [0, 6], runs 43182618097-43193266205, 8,000 games (700 picked by the head-to-head qhp-h2h)", "sprt": {"design": "search-stc", "stages": 5, "nelo": 10.52}},
     {"change": "Minor drift table (E4, MinorDriftShare 32/64)", "elo": 5.57, "ci95": 4.01, "test": "corr-minor-retry: STC design R [0, 6], runs 43197094411-43211912908, 9,600 games (try 2 of 2; try 1 at 64/64, corr-minor-stc, H0 -18.26 +/- 9.95)", "sprt": {"design": "search-stc", "stages": 6, "nelo": 9.66}},
-    {"change": "D8 summed pair-table update", "elo": 4.29, "ci95": 3.46, "test": "survey-d8-stc: STC design R [0, 6], runs 43196026493-43216014186, 12,800 games", "sprt": {"design": "search-stc", "stages": 8, "nelo": 7.47}}
+    {"change": "D8 summed pair-table update", "elo": 4.29, "ci95": 3.46, "test": "survey-d8-stc: STC design R [0, 6], runs 43196026493-43216014186, 12,800 games", "sprt": {"design": "search-stc", "stages": 8, "nelo": 7.47}},
+    {"change": "D13 direct-check ordering bonus (DirectCheckBonus 5000)", "elo": 5.50, "ci95": 3.93, "test": "survey-d13-stc: STC design R [0, 6], runs 43229400100-43247622236, 9,600 games", "sprt": {"design": "search-stc", "stages": 6, "nelo": 9.73}}
   ]
 }

@@ -192,6 +192,11 @@ struct SearchQuota {
 //   one table the update is the usual one. No constant. On since its STC
 //   SPRT against off passed: +4.29 +/- 3.46 Elo after 12,800 games, design
 //   R [0, 6]; 2026-11-12.
+// - use_check_order_bonus: the engine survey's D13: in the main search out
+//   of check, a quiet move (not castling) that gives direct check adds
+//   DirectCheckBonus to its ordering score (MoveSelector::start_main,
+//   direct_check_targets). On since its STC SPRT against off passed: +5.50
+//   +/- 3.93 Elo after 9,600 games, design R [0, 6]; 2026-11-12.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -233,7 +238,8 @@ struct SearchQuota {
   X(use_minor_drift, UseMinorDrift, true)                \
   X(use_major_drift, UseMajorDrift, false)               \
   X(use_threat_drift, UseThreatDrift, false)             \
-  X(use_pair_sum_update, UsePairSumUpdate, true)
+  X(use_pair_sum_update, UsePairSumUpdate, true)         \
+  X(use_check_order_bonus, UseCheckOrderBonus, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

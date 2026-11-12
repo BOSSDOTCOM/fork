@@ -2629,13 +2629,17 @@ whose weaknesses and data gaps decide their targets and order.
 
 ## 77. The direct-check ordering bonus (the engine survey's D13)
 
-- **type:** ELO (search); flag `use_check_order_bonus` (off).
+- **type:** ELO (search); flag `use_check_order_bonus` (on since 2026-11-12).
 - **idea** (the engine survey's D13, its rank 10; concept only): in the
   main search out of check, a quiet move (not castling) whose piece attacks
   the enemy king from its destination adds `DirectCheckBonus` to its
   ordering score; the direct-check squares per piece type are computed once
   per node when the quiets are scored (`direct_check_targets`).
-- **status:** **in progress (owner, 2026-11-11 3:10 PM EST, as idea 75).**
+- **status:** **adopted 2026-11-12** at `DirectCheckBonus` 5000 on its STC pass (survey-d13-stc, design R
+  [0, 6] against off: +5.50 ± 3.93 Elo, nElo +9.73 ± 6.95, H1 after 9,600 games; sprt-log), pre-approved by
+  the owner; ported onto phase-4 85672d8, bench 9,118,607 / 208629aa15e140a9 (DESIGN.md decisions log, 2026-11-12).
+  `DirectCheckBonus` is a class (a) dimension of the final retune's SPSA (final-retune.md §3.1). The retry
+  (item 70b, 2500) was not needed. History: (owner, 2026-11-11 3:10 PM EST, as idea 75.)
   Built on phase-4 784b1b0 behind the switch, off: tier2/d13-check-order
   ceb984a, bench unchanged. **Re-planned by the owner (about 7:45 PM EST;
   decisions log): no head-to-head for a constant the final retune will
@@ -2646,10 +2650,9 @@ whose weaknesses and data gaps decide their targets and order.
   10,246,388): item 70b, survey-d13-retry, try 2. If adopted,
   `DirectCheckBonus` becomes a dimension of the final retune's SPSA. Both
   gated until E1's SPRT. The 10000 commit (90338de, bench 9,776,602) stays
-  unused. Nothing is adopted before its verdict.
-- **runtime cost:** possible (four attack lookups per node that scores its
-  quiets, with the switch on); to be reported with the SPRT result (the
-  2026-10-24 rule; UNVERIFIED until then).
+  unused. Rebased onto E1 as tier2/d13-check-order-e1 35209f0 and sprt/d13-check-order-5000-e1 cc7b3bc
+  before it ran.
+- **runtime cost:** four attack lookups per node that scores its quiets. bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 85672d8, B = the port's build of this commit's engine code from the uncommitted tree on 85672d8, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps +1.2%, best -2.9%, under the 6.0% noise threshold: no significant difference (a price of that size is inside the noise, UNVERIFIED). The bench searches 3.9% more nodes (9,118,607 against 8,773,005).
 - **earliest phase:** Phase 4.
 
 ## 78. The drift tables: per-colour pieces (R34), minor, major and threat (E4)

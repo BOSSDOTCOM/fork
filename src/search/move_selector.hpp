@@ -12,7 +12,8 @@
 //   attacker, a capture that loses material by SEE being deferred when it
 //   comes up (SEE is computed only for the captures reached), then quiet
 //   moves by butterfly history (its threat bucket when threat-aware;
-//   generation order without a history), then
+//   generation order without a history; plus the direct-check bonus when
+//   one is given, D13), then
 //   the deferred bad captures and under-promotions, in the order deferred.
 // - In check (main search and quiescence): the TT move, then every evasion,
 //   captures first (by victim and attacker), then quiets by history.
@@ -35,6 +36,31 @@
 
 namespace forkeng {
 
+// The squares from which a piece of `type` belonging to the side to move
+// would attack the enemy king, on the board as it stands (the engine
+// survey's D13). A quiet move other than castling lands on one of them
+// exactly when it gives direct check: if its origin were the only piece
+// between its destination and the king, the piece would already be giving
+// check from there (Position::gives_check's argument).
+inline Bitboard direct_check_targets(const Position& pos, PieceType type) {
+  const Color them = ~pos.side_to_move();
+  const Square king = pos.king_square(them);
+  switch (type) {
+    case Pawn:
+      return pawn_attacks(them, king);
+    case Knight:
+      return knight_attacks(king);
+    case Bishop:
+      return bishop_attacks(king, pos.pieces());
+    case Rook:
+      return rook_attacks(king, pos.pieces());
+    case Queen:
+      return bishop_attacks(king, pos.pieces()) | rook_attacks(king, pos.pieces());
+    default:
+      return 0;
+  }
+}
+
 // A quiet move's ordering score in `pos`: its butterfly history (0 without
 // one), plus with `pairs` its reply entry after `arrival` times ReplyWeight
 // / 4 and its follow entry after `follow_arrival` times FollowWeight / 4
@@ -44,8 +70,11 @@ namespace forkeng {
 // read the score the selector uses at each LMR site (DESIGN.md §5.7, X2),
 // and tests/test_ordering.cpp checks it orders quiets as the selector does.
 // `bucket` is the move's threat bucket (tier 2, T56; 0 when not threat-aware).
+// A non-zero `check_bonus` (D13) is added when the move gives direct check
+// (not castling), and the sum is clamped to int16 again.
 inline int quiet_order_score(const Position& pos, Move m, const QuietHistory* history,
-                             const PairHistory* pairs, int arrival, int follow_arrival, int bucket = 0) {
+                             const PairHistory* pairs, int arrival, int follow_arrival, int bucket = 0,
+                             int check_bonus = 0) {
   // Without pair tables the arrivals are ignored, as MoveSelector::start_main
   // drops them (a stats build with UseHistory off and the reply or follow
   // history on passes arrivals with no tables).
@@ -59,6 +88,9 @@ inline int quiet_order_score(const Position& pos, Move m, const QuietHistory* hi
     // Weights above one can take the sum past int16 at the extremes.
     score = std::clamp(score, -INT16_MAX, INT16_MAX);
   }
+  if (check_bonus != 0 && !m.is_castle() &&
+      (direct_check_targets(pos, kind_of(pos.piece_at(m.from()))) & bb(m.to())))
+    score = std::clamp(score + check_bonus, -INT16_MAX, INT16_MAX);
   return score;
 }
 
@@ -91,9 +123,13 @@ class MoveSelector {
   // With `threat_aware` (tier 2, T56) quiets and quiet evasions read the
   // butterfly history's threat bucket (quiet_history.hpp) for the opponent's
   // attacks in this position; without it, bucket 0.
+  // With `check_bonus` (the engine survey's D13) DirectCheckBonus is added
+  // to the score of each quiet that gives direct check (quiet_order_score's
+  // rule); quiet evasions are unchanged.
   void start_main(const Position& pos, Move tt_move, const QuietHistory* history,
                   const PairHistory* pairs = nullptr, int arrival = NoArrival, int follow_arrival = NoArrival,
-                  const TakeHistory* take_history = nullptr, bool threat_aware = false);
+                  const TakeHistory* take_history = nullptr, bool threat_aware = false,
+                  bool check_bonus = false);
   // Quiescence search (all evasions when in check).
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
                      const TakeHistory* take_history = nullptr, bool threat_aware = false);
@@ -149,6 +185,7 @@ class MoveSelector {
   bool quiet_checks_only_ = false;
   bool threat_aware_ = false;
   bool attacked_known_ = false;
+  bool check_bonus_ = false;          // D13: direct-checking quiets add DirectCheckBonus
   std::int16_t quiets_filtered_ = 0;  // at most MaxMoves; int16 keeps the flags above within the padding
   Bitboard attacked_ = 0;
 
