@@ -468,7 +468,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // with the malus off it does nothing.
 TEST_CASE("pruning", "decayed malus: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_malus_decay);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_malus_decay);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_malus_decay = true;
   fx.searcher->switches = on;
