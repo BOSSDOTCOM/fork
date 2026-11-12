@@ -468,7 +468,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // with the switch off).
 TEST_CASE("pruning", "direct-check bonus: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_check_order_bonus);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_check_order_bonus);  // on in this head-to-head candidate
   SearchSwitches on;
   on.use_check_order_bonus = true;
   fx.searcher->switches = on;
