@@ -2815,3 +2815,21 @@ whose weaknesses and data gaps decide their targets and order.
   before any further use.
 - **runtime cost:** none in normal builds.
 - **earliest phase:** Phase 4.
+
+## 138. The cheap-refutation LMR (the engine survey's C16, its low tail)
+
+- **type:** ELO (search); flag `use_cheap_refutation_lmr` (off).
+- **idea** (the coordinator's decision, 2026-11-12, from idea 136's histogram): a late quiet move is reduced one
+  ply more when the count of searched fail highs one ply below is 0 (8.5% of the bench's LMR sites, where the
+  reduced search beat alpha at 0.23% against 0.89% over all sites): the node's earlier moves were refuted
+  cheaply. **Exploratory:** chosen after the histogram was known; one value (1 ply, no new constant), no retry.
+  Idea 137 (the opposite sign at counts of 3 or 4) stays a record: it relieved 58-71% of the LMR sites, +82%
+  bench nodes at 3, a near-global change LMR's table already prices; not queued (coordinator).
+- **status:** **in progress.** Built on tier2/c16-child-cutoffs (the measurement record, on phase-4 de7e0a3)
+  behind the switch, off: branch tier2/c16-cheap-refutation, bench unchanged (9,639,207 / 07f7ae19b9250f38,
+  r8brft1). Test commit sprt/c16-cheap-refutation. Night item 98a (c16-cheap-refutation-stc, design R at STC,
+  ledger idea `c16-cheap-refutation`, try 1), gated until state/gate-e1.done; an LTC only on a pass (a depth
+  change), not queued here. Nothing is adopted before a verdict.
+- **runtime cost:** a byte store per node and one increment per fail high, in every build. Speed not measured
+  (UNVERIFIED; bench/ab.py not run).
+- **earliest phase:** Phase 4.

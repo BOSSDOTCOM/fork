@@ -187,15 +187,13 @@ void Searcher::update_pv(int ply, Move m) {
   line.length = child.length + 1;
 }
 
-#ifdef FORK_SEARCH_STATS
 namespace {
-// C16's measurement: one more node at this frame's ply failed high
-// (saturating).
+// C16's count (ideas 136 and 138): one more node at this frame's ply failed
+// high (saturating). Kept in every build.
 inline void count_cutoff(PlyFrame& f) {
   if (f.child_cutoffs < 255) ++f.child_cutoffs;
 }
 }  // namespace
-#endif
 
 template <bool OnPv>
 int Searcher::negamax(int alpha, int beta, int depth, int ply) {
@@ -381,7 +379,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     if (stopped_) return 0;
     if (score >= beta) {
       FORK_STAT(++counters.null_cuts);
-      FORK_STAT(count_cutoff(f));                  // C16's measurement
+      count_cutoff(f);                             // C16's measurement
       return is_tb_or_mate(score) ? beta : score;  // a mate found after passing is not trusted
     }
   }
@@ -492,7 +490,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         }
       } else if (!OnPv && switches.use_multi_cut && bar >= beta && !is_tb_or_mate(bar)) {
         FORK_STAT(++counters.multi_cut_cuts);
-        FORK_STAT(count_cutoff(f));  // C16's measurement
+        count_cutoff(f);  // C16's measurement
         return bar;
       } else if (!OnPv && switches.use_negative_extension && s >= beta) {
         tested_move = hit.move;
@@ -544,9 +542,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       switches.use_follow_history ? follow_arrival(f) : NoArrival,
       switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets);
   f.failed_moves.count = 0;
-  // C16's measurement: the nodes two plies down count their fail highs from
-  // here on.
-  FORK_STAT(if (ply + 2 <= MaxPly) frames_[ply + 2].child_cutoffs = 0);
+  // C16's count: the nodes two plies down count their fail highs from here
+  // on.
+  if (ply + 2 <= MaxPly) frames_[ply + 2].child_cutoffs = 0;
 
   const int alpha_start = alpha;
   int best = -ScoreInfinite;
@@ -690,7 +688,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // Node types (T17): an expected cut node's late quiets are reduced
         // CutNodeLmrPlies more.
         const int cut_extra = switches.use_cut_node_lmr && !OnPv && f.expected_cut ? CutNodeLmrPlies : 0;
-        reduced = std::clamp(new_depth - (base + correction - relief + cut_extra), 1, new_depth);
+        // Idea 138 (C16's low tail): no node one ply below has failed high
+        // by a search, so this node's earlier moves were refuted cheaply, and
+        // its late quiets rarely beat alpha: they are reduced one ply more.
+        const int cheap_extra =
+            switches.use_cheap_refutation_lmr && frames_[ply + 1].child_cutoffs == 0 ? 1 : 0;
+        reduced =
+            std::clamp(new_depth - (base + correction - relief + cut_extra + cheap_extra), 1, new_depth);
         FORK_STAT(child_cutoff_bin =
                       std::min<int>(frames_[ply + 1].child_cutoffs, SearchCounters::ChildCutoffBins - 1));
 #ifdef FORK_SEARCH_STATS
@@ -717,7 +721,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         counters.lmr_history_fire_less += shift > 0;
         counters.lmr_history_fire_more += shift < 0;
         counters.lmr_history_changes +=
-            std::clamp(new_depth - (base - shift + correction - relief + cut_extra), 1, new_depth) != reduced;
+            std::clamp(new_depth - (base - shift + correction - relief + cut_extra + cheap_extra), 1,
+                       new_depth) != reduced;
 #endif
       }
 #ifdef FORK_SEARCH_STATS
@@ -763,7 +768,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         if (score >= beta) {
           if (quiet || m.is_capture()) record_cutoff(f, m, depth);
           // C16's measurement (a singular test's search is not the node's result).
-          FORK_STAT(if (!withheld) count_cutoff(f));
+          if (!withheld) count_cutoff(f);
 #ifdef FORK_SEARCH_STATS
           if (quiet && !OnPv && !in_check && depth < SearchCounters::CutoffDepths)
             ++counters.quiet_cutoff_index[depth]
@@ -922,8 +927,8 @@ int Searcher::search_root(int alpha, int beta, int depth) {
   // The root node counts too, so a node limit reached here stops here, not
   // one node later in the first child (audit-1, A1 suspicion 8).
   if (poll_limits()) return best;
-  std::size_t best_index = 0;               // the move that last raised alpha
-  FORK_STAT(frames_[2].child_cutoffs = 0);  // C16's measurement: two plies down count from here
+  std::size_t best_index = 0;    // the move that last raised alpha
+  frames_[2].child_cutoffs = 0;  // C16's measurement: two plies down count from here
   for (std::size_t i = 0; i < root_count_; ++i) {
     const Move m = root_moves_[i].move;
     branch_share_ = root_moves_[i].share;
