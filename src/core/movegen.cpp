@@ -49,13 +49,15 @@ void fill_moves(const Position& pos, MoveList& list) {
   const Bitboard checkers = pos.checkers();
 
   // King moves, tested with the king lifted off the board so it cannot hide
-  // behind itself on a checking ray.
+  // behind itself on a checking ray. Only the squares of the kinds generated
+  // are visited (the same moves in the same order as visiting every square
+  // and skipping the other kind).
   const Bitboard occ_no_king = occ ^ bb(own_king);
-  for (Bitboard b = king_attacks(own_king) & ~ours; b;) {
+  const Bitboard king_kinds = Captures && Quiets ? ~ours : Captures ? theirs : ~occ;
+  for (Bitboard b = king_attacks(own_king) & king_kinds; b;) {
     Square to = pop_lsb(b);
     bool capture = theirs & bb(to);
-    if ((capture ? Captures : Quiets) && !pos.attacked_by(them, to, occ_no_king))
-      list.add(Move(own_king, to, capture ? Capture : Quiet));
+    if (!pos.attacked_by(them, to, occ_no_king)) list.add(Move(own_king, to, capture ? Capture : Quiet));
   }
   if (has_multiple(checkers)) return;
 
@@ -74,7 +76,21 @@ void fill_moves(const Position& pos, MoveList& list) {
 
   const int up = forward(us);
   const Square ep = pos.ep_target();
-  for (Bitboard pawns = pos.pieces(us, Pawn); pawns;) {
+  Bitboard movers = pos.pieces(us, Pawn);
+  if constexpr (!Quiets) {
+    // Captures alone: only pawns that can add a move are visited, those on
+    // the seventh rank (promotions), those attacking a capture target and
+    // those beside the en passant square; the others add nothing below, so
+    // the moves and their order are unchanged. A pawn of ours attacks a
+    // square exactly when an enemy pawn standing there would attack the
+    // pawn's square (the shifts as in Position::attacked_squares).
+    const Bitboard seventh = us == White ? Rank1 << 48 : Rank1 << 8;
+    const Bitboard sources = us == White
+                                 ? ((capture_target >> 9) & ~FileH) | ((capture_target >> 7) & ~FileA)
+                                 : ((capture_target << 7) & ~FileH) | ((capture_target << 9) & ~FileA);
+    movers &= seventh | sources | (ep != NoSquare ? pawn_attacks(them, ep) : Bitboard{0});
+  }
+  for (Bitboard pawns = movers; pawns;) {
     Square from = pop_lsb(pawns);
     Bitboard allowed = (pinned & bb(from)) ? line(own_king, from) : ~Bitboard{0};
     bool promotes = rank_from(us, from) == 6;
