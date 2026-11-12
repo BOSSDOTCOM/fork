@@ -63,7 +63,7 @@
   X(SingularMarginPerPly, 6, 2, 12, 1)    \
   X(NoMoveReduceMinDepth, 8, 2, 16, 1)    \
   X(CutNodeLmrPlies, 1, 0, 3, 1)          \
-  X(ContestedCutoffThreshold, 3, 1, 6, 1) \
+  X(ContestedCutoffThreshold, 4, 1, 6, 1) \
   X(CaptureProbeMinDepth, 9, 4, 18, 1)    \
   X(CaptureProbeReduction, 5, 2, 10, 1)   \
   X(CaptureProbeMargin, 80, 40, 160, 6)   \
