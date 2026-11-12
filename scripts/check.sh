@@ -22,6 +22,12 @@
 #                            of every MinGW GCC preset's engine, then the
 #                            Linux check (below).
 #
+# While data generation runs on this machine (fork_datagen on Windows or in
+# WSL), every mode runs its tests with FORK_LOW_PRIORITY=1, so the timing
+# cases (uci_timing; stop and full run it, quick does not) report SKIPPED and
+# the check prints one line saying so; CI keeps them (owner, 2026-11-12;
+# datagen_running, below).
+#
 # Both platforms on every full check: on Windows, `full` copies the working
 # tree exactly as it is (tracked and untracked, non-ignored files) into
 # ~/fork-check inside WSL (distro FORK_WSL_DISTRO, default Ubuntu; the
@@ -154,6 +160,50 @@ check_jobs() {
   fi
 }
 
+# Data generation on this machine (owner, 2026-11-12: "Set FORK_LOW_PRIORITY=1
+# for local timing tests while data generation runs (CI keeps them)"): beside a
+# running fork_datagen the timing cases (uci_timing) measure the machine's
+# load, not Fork, so a local check then exports FORK_LOW_PRIORITY=1 before its
+# first test, and tests/test_uci.cpp reports them SKIPPED. Only that variable
+# is set: env.sh, already sourced, does not lower this check's priority or
+# its build jobs. Detected once per check, in under a second: on Windows a
+# fork_datagen.exe process (ps -W) or a fork_datagen process in the WSL distro
+# FORK_WSL_DISTRO (default Ubuntu; asked only while that distro runs, so the
+# check never starts it); on Linux, the WSL legs included, pgrep in this
+# system. Never on CI ($CI or $GITHUB_ACTIONS set), whatever else is set.
+# FORK_DATAGEN_RUNNING=1 or 0 replaces the detection (tests of this rule).
+datagen_running() {
+  local distro=${FORK_WSL_DISTRO:-Ubuntu} out
+  if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then return 1; fi
+  case ${FORK_DATAGEN_RUNNING:-} in 1) return 0 ;; 0) return 1 ;; esac
+  case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*)
+      # Whole outputs, then grep: under pipefail an early-exiting grep -q
+      # would fail the pipeline through the writer's SIGPIPE. ps -W shows a
+      # process started from Git Bash by its MSYS path, without .exe.
+      out=$(ps -W 2>/dev/null)
+      grep -qiE '[\/]fork_datagen(\.exe)?[[:space:]]*$' <<<"$out" && return 0
+      command -v wsl.exe >/dev/null 2>&1 || return 1
+      out=$(timeout 5 wsl.exe -l --running -q 2>/dev/null | tr -d '\0\r')
+      grep -qxF "$distro" <<<"$out" || return 1
+      MSYS_NO_PATHCONV=1 timeout 5 wsl.exe -d "$distro" --exec pgrep -x fork_datagen >/dev/null 2>&1
+      ;;
+    *) command -v pgrep >/dev/null 2>&1 && pgrep -x fork_datagen >/dev/null 2>&1 ;;
+  esac
+}
+
+# Exports FORK_LOW_PRIORITY=1 (and says so, on stderr: `full` captures
+# stdout) when data generation runs; nothing to do when it is already 1.
+# Called before every ctest pass, it detects only on the first.
+skip_timing_beside_datagen() {
+  [ -n "${datagen_checked:-}" ] && return 0
+  datagen_checked=1
+  [ "${FORK_LOW_PRIORITY:-}" = 1 ] && return 0
+  datagen_running || return 0
+  export FORK_LOW_PRIORITY=1
+  echo "fork check $mode: data generation running: timing tests skipped (FORK_LOW_PRIORITY=1)" >&2
+}
+
 # Every check configures with the tree's default evaluator and network:
 # without -U a cached FORK_EVALUATOR or FORK_NET outlives a change of the
 # default (B0 became the default on 2026-10-29, and the local check builds
@@ -172,6 +222,7 @@ build_and_test() {  # preset, ctest filter args...
 run_ctest() {  # preset, ctest filter args...
   local preset=$1
   shift
+  skip_timing_beside_datagen
   out=$(ctest --test-dir "build/$preset" --output-on-failure "$@" 2>&1)
   local status=$?
   echo "$out" >>"$log"
