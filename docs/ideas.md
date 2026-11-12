@@ -2714,3 +2714,25 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 87. Fail-firm returns (the engine survey's B3, think tank R7)
+
+- **type:** ELO (search); flags `use_firm_rfp`, `use_firm_stand_pat`,
+  `use_firm_fail_high` (off).
+- **idea** (the engine survey's B3; think tank R7, step 12's first; concept
+  only): a fail high returns beta plus `Firm*Quarters` / 4 of its surplus
+  over beta instead of the whole fail-soft score, at three sites: reverse
+  futility's return, the quiescence search's stand-pat cut, and a
+  main-search node whose move beat beta (the TT stores the same value).
+  Mate and tablebase scores are never pulled.
+- **status:** **built, queued (coordinator, 2026-11-11 night; owner's rules
+  of 2026-11-11: nat/retry).** Built on phase-4 26323e1 behind the three
+  switches, off, branch tier2/b3-firm; bench unchanged. Design R at STC of
+  each site at the natural value, 2 quarters (the midpoint), against the
+  switch-off commit, RFP first (night items 50a, then 50d stand-pat, 50f
+  fail high); one retry each at 1 quarter if the first is not H1 (50b,
+  50e, 50g). Gated behind state/gate-e1.done. A pass is adopted
+  (pre-approved) and the constant joins the final retune's SPSA
+  dimensions. Nothing is adopted before its verdict.
+- **runtime cost:** none expected (one multiply at a fail high).
+- **earliest phase:** Phase 4.

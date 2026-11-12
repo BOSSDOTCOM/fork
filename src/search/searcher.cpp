@@ -114,6 +114,16 @@ int fifty_move_score(const Position& pos, bool in_check, int ply) {
   return evasions.size() ? 0 : mated_score(ply);
 }
 
+// Fail-firm returns (the engine survey's B3, think tank R7): a fail-high
+// score at or above beta is pulled toward beta, keeping `quarters` / 4 of its
+// surplus over beta. The result is still at or above beta, so the node still
+// fails high, and it is a weaker (still valid) lower bound. Mate and
+// tablebase scores, on either side, are left as they are.
+constexpr int firm_return(int score, int beta, int quarters) {
+  if (is_tb_or_mate(score) || is_tb_or_mate(beta)) return score;
+  return beta + (score - beta) * quarters / 4;
+}
+
 }  // namespace
 
 std::int64_t Searcher::elapsed_ms() const {
@@ -350,7 +360,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (switches.use_rfp && can_prune_node && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
       prune_eval - RfpMargin * depth >= beta FORK_STAT_GATE(&&force != LedgerForce::RfpOff)) {
     FORK_STAT(++counters.rfp_cuts);
-    return prune_eval;
+    // B3 / R7: with use_firm_rfp the return keeps FirmRfpQuarters / 4 of the
+    // surplus over beta instead of all of it.
+    return switches.use_firm_rfp ? firm_return(prune_eval, beta, FirmRfpQuarters) : prune_eval;
   }
 
   // Null move pruning (T13): if passing still fails high on a reduced
@@ -734,6 +746,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // withheld move counts as singular.
   if (moves_seen == 0) return withheld ? alpha : in_check ? mated_score(ply) : 0;
   if (moves_searched == 0) return best;
+  // B3: with use_firm_fail_high a move's fail high returns (and stores)
+  // FirmFailHighQuarters / 4 of its surplus over beta.
+  if (switches.use_firm_fail_high && best >= beta) best = firm_return(best, beta, FirmFailHighQuarters);
   best = std::clamp(best, table_floor, table_ceiling);
   if (switches.use_tt && !withheld) {
     const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
@@ -800,6 +815,9 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 #endif
     best = f.static_eval;
     if (best >= beta) {
+      // B3: with use_firm_stand_pat the stand-pat cut returns (and stores)
+      // FirmStandPatQuarters / 4 of the eval's surplus over beta.
+      if (switches.use_firm_stand_pat) best = firm_return(best, beta, FirmStandPatQuarters);
       if (switches.use_tt)
         tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);
       return best;

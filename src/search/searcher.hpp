@@ -144,6 +144,14 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_firm_rfp, use_firm_stand_pat, use_firm_fail_high: fail-firm returns
+//   (the engine survey's B3, think tank R7): a fail high returns beta plus a
+//   share of its surplus over beta instead of all of it (FirmRfpQuarters,
+//   FirmStandPatQuarters, FirmFailHighQuarters quarters of it), at reverse
+//   futility's return, at the quiescence search's stand-pat cut and at a
+//   main-search node whose move beat beta, where the TT stores the same
+//   value. Mate and tablebase scores are never pulled. Off until their
+//   SPRTs (RFP's first).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +185,10 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)          \
+  X(use_firm_rfp, UseFirmRfp, false)                     \
+  X(use_firm_stand_pat, UseFirmStandPat, false)          \
+  X(use_firm_fail_high, UseFirmFailHigh, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

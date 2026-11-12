@@ -462,6 +462,41 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
   for (int b = 1; b < ThreatBuckets; ++b) CHECK_MSG(written(b) == 0, "bucket " << b);
 }
 
+// Fail-firm returns (the engine survey's B3, think tank R7): each of the
+// three switches on alone still finds mates and plays a legal move, and
+// changes the search (fault check: a pull never applied, or applied with the
+// switch's constant at 4 quarters, leaves the tree as it is with the switch
+// off). With reverse futility off, use_firm_rfp does nothing.
+TEST_CASE("pruning", "fail-firm returns: still correct, and each changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_firm_rfp);  // off until their SPRTs
+  CHECK(!SearchSwitches{}.use_firm_stand_pat);
+  CHECK(!SearchSwitches{}.use_firm_fail_high);
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  SearchSwitches off;  // explicitly off: a test commit turns one on by default
+  off.use_firm_rfp = off.use_firm_stand_pat = off.use_firm_fail_high = false;
+  for (int which = 0; which < 3; ++which) {
+    SearchSwitches on;
+    bool* flags[] = {&on.use_firm_rfp, &on.use_firm_stand_pat, &on.use_firm_fail_high};
+    *flags[which] = true;
+    fx.searcher->switches = on;
+    CHECK_MSG(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1), "switch " << which);
+    CHECK_MSG(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3), "switch " << which);
+    CHECK_MSG(legal.contains(fx.search(kiwipete, depth).best), "switch " << which);
+    CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+              "fail-firm switch " << which << " left all three trees unchanged");
+  }
+  SearchSwitches no_rfp_on, no_rfp_off;
+  no_rfp_on.use_firm_rfp = true;
+  no_rfp_on.use_rfp = no_rfp_off.use_rfp = false;
+  CHECK(fx.tree_sizes(no_rfp_on, depth) == fx.tree_sizes(no_rfp_off, depth));
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -542,6 +577,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
   s.use_threat_buckets = true;
+  s.use_firm_rfp = s.use_firm_stand_pat = s.use_firm_fail_high = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
