@@ -100,7 +100,8 @@ class LimitTests(unittest.TestCase):
         out, counts = td.relabel_shard(data, 0.0, 92.0)
         self.assertEqual(out, data)
         self.assertEqual(counts, {'games': 2, 'records': 7, 'relabelled': 5, 'unsaved': 1, 'in_check': 0,
-                                  'beyond_limit': 1, 'clamped': 1, 'one_move': 0})
+                                  'beyond_limit': 1, 'clamped': 1, 'one_move': 0, 'unsaved_labelled': 0,
+                                  'unsaved_decided': 0})
 
     def test_weights_sum_to_one(self):
         # A constant chain with the same terminal value is a fixed point of any lambda.
@@ -436,6 +437,141 @@ def self_play_like():
     moves = 'e2e4 e7e5 g1f3 b8c6 f1c4 g8f6 d2d3 f8c5 c2c3 d7d6'.split()
     scores = [30, -25, U, -40, 45, 21000, 50, U, 38, -36]
     return encode_game(chess.STARTING_FEN, moves, scores, 1)[0]
+
+
+class UnsavedLabelTests(unittest.TestCase):
+    """Idea 80, variant A (--label-unsaved; retrain 8c's i80 arm). Worked by
+    hand at S = 100, lambda = 0.5, z = 1/2 (a draw), scores [10, U, 300, U]
+    on 1. e4 e5 2. Nf3 Nc6 (no position in check, python-chess confirms):
+      U4 = z = 0.5
+      U3 (unsaved; the next chain value is z) = 0.5 * 0.5 + 0.5 * 0.5 = 0.5
+      U2 = 0.5 sigmoid(3) + 0.5 U3 = 0.5 * 0.952574127 + 0.25 = 0.726287063
+      U1 (unsaved; the next chain value is sigmoid(3)) = 0.5 * 0.952574127 + 0.5 * 0.726287063 = 0.839430595
+      U0 = 0.5 sigmoid(0.1) + 0.5 U1 = 0.5 * 0.524979187 + 0.5 * 0.839430595 = 0.682204891
+    Without the option records 1 and 3 have no label; the saved records'
+    labels are the same either way."""
+
+    MOVES = ['e2e4', 'e7e5', 'g1f3', 'b8c6']
+    SCORES = [10, U, 300, U]
+
+    def test_hand_worked(self):
+        base = td.td_targets(self.SCORES, 1, 0.5, 100.0)
+        got = [None if q is None else q[0] for q in td.td_pairs(self.SCORES, 1, 0.5, 100.0, label_unsaved=True)]
+        self.assertIsNone(base[1])
+        self.assertIsNone(base[3])
+        for g, want in zip(got, (0.682204891, 0.839430595, 0.726287063, 0.5)):
+            self.assertAlmostEqual(g, want, places=8)
+        self.assertEqual((got[0], got[2]), (base[0], base[2]))
+
+    def test_the_limits(self):
+        # lambda = 0: an unsaved record takes the next chain value; lambda = 1: the result.
+        zero = td.td_pairs(self.SCORES, 1, 0.0, 100.0, label_unsaved=True)
+        self.assertAlmostEqual(zero[1][0], sig(3.0), places=12)
+        self.assertAlmostEqual(zero[3][0], 0.5, places=12)
+        one = td.td_pairs([35, U, -20, U], 2, 1.0, 100.0, label_unsaved=True)
+        self.assertTrue(all(abs(q[0] - 1.0) < 1e-12 for q in one))
+
+    def test_shard_copy_and_its_check(self):
+        data = encode_game(chess.STARTING_FEN, self.MOVES, self.SCORES, 1)[0] + self_play_like()
+        out, counts = td.relabel_shard(data, 0.5, 100.0, label_unsaved=True)
+        self.assertEqual((counts['unsaved_labelled'], counts['unsaved']), (4, 0))
+        recs = list(td.split_games(out))[0][2]
+        # round(100 ln(0.839430595 / 0.160569405)) = round(165.40) = 165; record 3: 0.
+        self.assertEqual([sc for _, sc in recs][1::2], [165, 0])
+        self.assertEqual(td.check_copy(data, out, 'td', 0.5, 100.0, sample=1, label_unsaved=True)['bad'], [])
+        # The checker can fail: the same copy read without the option, a plain copy read with it, a wrong label.
+        self.assertNotEqual(td.check_copy(data, out, 'td', 0.5, 100.0, sample=1)['bad'], [])
+        plain, _ = td.relabel_shard(data, 0.5, 100.0)
+        self.assertNotEqual(td.check_copy(data, plain, 'td', 0.5, 100.0, sample=1, label_unsaved=True)['bad'], [])
+        wrong = bytearray(out)
+        wrong[32 + 4 + 2:32 + 4 + 4] = struct.pack('<h', 170)
+        self.assertNotEqual(td.check_copy(data, bytes(wrong), 'td', 0.5, 100.0, sample=1,
+                                          label_unsaved=True)['bad'], [])
+
+    def test_an_unsaved_position_in_check_stays_unsaved(self):
+        # 1. e4 f6 2. Qh5+ g6: record 3 (Black to move, in check) unsaved; record 1 unsaved, quiet.
+        data = encode_game(chess.STARTING_FEN, ['e2e4', 'f7f6', 'd1h5', 'g7g6'], [10, U, 300, U], 1)[0]
+        out, counts = td.relabel_shard(data, 0.5, 100.0, label_unsaved=True)
+        recs = list(td.split_games(out))[0][2]
+        self.assertEqual(recs[3][1], U)
+        self.assertNotEqual(recs[1][1], U)
+        self.assertEqual((counts['unsaved_labelled'], counts['unsaved']), (1, 1))
+        self.assertEqual(td.check_copy(data, out, 'td', 0.5, 100.0, sample=1, label_unsaved=True)['bad'], [])
+        bad = bytearray(out)
+        bad[32 + 3 * 4 + 2:32 + 3 * 4 + 4] = struct.pack('<h', 7)
+        self.assertNotEqual(td.check_copy(data, bytes(bad), 'td', 0.5, 100.0, sample=1,
+                                          label_unsaved=True)['bad'], [])
+
+    def test_a_label_saturated_by_a_mate_score_stays_unsaved(self):
+        # Fool's mate with record 2 (1. f3 e5 2. ?, White to move, not in check) unsaved before Black's mate score:
+        # its label is (0.1 sigmoid(-29990 / 92) + 0.9 * 0), about e^-326, which reaches -20,000: the trainer drops
+        # the saved mate score after it, so the record stays unsaved; record 1's label is not saturated.
+        data = encode_game(chess.STARTING_FEN, ['f2f3', 'e7e5', 'g2g4', 'd8h4'], [0, -100, U, -29990], 0)[0]
+        out, counts = td.relabel_shard(data, 0.9, 92.0, label_unsaved=True)
+        recs = list(td.split_games(out))[0][2]
+        self.assertEqual(recs[2][1], U)
+        self.assertEqual((counts['unsaved_decided'], counts['unsaved_labelled'], counts['clamped']), (1, 0, 0))
+        self.assertLess(abs(recs[0][1]), td.KEEP_LIMIT)
+        self.assertEqual(td.check_copy(data, out, 'td', 0.9, 92.0, sample=1, label_unsaved=True)['bad'], [])
+        clamped = bytearray(out)
+        clamped[32 + 2 * 4 + 2:32 + 2 * 4 + 4] = struct.pack('<h', -20000)
+        self.assertNotEqual(td.check_copy(data, bytes(clamped), 'td', 0.9, 92.0, sample=1,
+                                          label_unsaved=True)['bad'], [])
+
+    def test_one_move_games_and_refusals(self):
+        out, counts = td.relabel_shard(OneMoveGameTests.KRK, 0.9, 92.0, label_unsaved=True)
+        self.assertEqual(out, OneMoveGameTests.KRK)
+        with self.assertRaises(ValueError):
+            td.td_pairs(self.SCORES, 1, 0.5, 100.0, unsaved='drop', label_unsaved=True)
+        with self.assertRaises(ValueError):
+            td.relabel_shard(OneMoveGameTests.KRK, 0.9, 92.0, check_scores='keep', label_unsaved=True)
+
+
+class SplitTests(unittest.TestCase):
+    """`split` (retrain 8c's rft-ep): above 7 pieces a keepable score becomes the
+    result's code (+-2,000 / 0, White's view), at or below it is kept."""
+
+    def test_piece_counts_against_python_chess(self):
+        # Castling both ways, en passant, captures and promotions with capture.
+        games = [
+            ('r3k2r/1P6/8/3pP3/8/8/8/R3K2R w KQkq d6 0 1', ['e5d6', 'e8g8', 'b7a8q', 'g8g7', 'e1c1']),
+            ('r3k2r/1P6/8/3pP3/8/8/8/R3K2R w KQkq d6 0 1', ['b7a8n', 'e8g8', 'e1c1']),
+            (chess.STARTING_FEN, 'e2e4 d7d5 e4d5 d8d5 b1c3 d5a5 d2d4 c7c6 g1f3 c8g4 f1e2 e7e6 e1g1'.split()),
+        ]
+        for fen, moves in games:
+            data, _ = encode_game(fen, moves, [0] * len(moves), 1)
+            _, head, recs, _ = list(td.split_games(data))[0]
+            board = chess.Board(fen)
+            want = []
+            for m in moves:
+                want.append(len(board.piece_map()))
+                board.push_uci(m)
+            self.assertEqual(td.piece_counts(head, recs), want, fen)
+
+    def test_hand_worked(self):
+        # 8 pieces, then a capture to 7: record 0 (8 pieces, saved) to the result's code, record 1 (unsaved)
+        # unchanged, record 2 (7 pieces) kept, record 3 beyond the limit kept.
+        fen = '4k3/8/3p4/4P3/8/8/8/R2QK1NR w - - 0 1'
+        data, _ = encode_game(fen, ['e5d6', 'e8f8', 'a1a2', 'f8g8'], [40, U, 55, 25000], 0)
+        _, head, recs, _ = list(td.split_games(data))[0]
+        self.assertEqual(td.piece_counts(head, recs), [8, 7, 7, 7])
+        out, counts = td.split_shard(data)
+        self.assertEqual([sc for _, sc in list(td.split_games(out))[0][2]], [-2000, U, 55, 25000])
+        self.assertEqual((counts['to_result'], counts['kept_target'], counts['unsaved'], counts['beyond_limit']),
+                         (1, 1, 1, 1))
+        self.assertEqual(td.check_split(data, out, sample=1)['bad'], [])
+
+    def test_slice_games_unchanged_and_the_check_can_fail(self):
+        data = OneMoveGameTests.KRK + OneMoveGameTests.KPK_DRAW + self_play_like()
+        out, counts = td.split_shard(data)
+        self.assertEqual(out[:len(OneMoveGameTests.KRK) + len(OneMoveGameTests.KPK_DRAW)],
+                         OneMoveGameTests.KRK + OneMoveGameTests.KPK_DRAW)
+        self.assertEqual(counts['one_move'], 2)
+        recs = list(td.split_games(out))[2][2]
+        self.assertEqual([sc for _, sc in recs], [0, 0, U, 0, 0, 21000, 0, U, 0, 0])  # a draw, 32 pieces
+        self.assertEqual(td.check_split(data, out, sample=1)['bad'], [])
+        self.assertNotEqual(td.check_split(data, data, sample=1)['bad'], [])     # nothing split
+        self.assertNotEqual(td.check_split(data, out, max_pieces=32, sample=1)['bad'], [])  # another rule
 
 
 class InjectedFaultTests(unittest.TestCase):

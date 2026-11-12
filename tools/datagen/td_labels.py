@@ -29,7 +29,15 @@ Options:
   next saved score);
 - --unsaved drop: records outside the chain are removed before it is built
   (the steps count chain records only); the default `next` counts plies, a
-  ply outside the chain taking the next chain value.
+  ply outside the chain taking the next chain value;
+- --label-unsaved (idea 80, variant A; retrain 8c's i80 arm, owner
+  2026-11-12): `labels` also writes the label of each unsaved record whose
+  position is not in check (the same backward recursion, at its own ply, so
+  its G_t(0) is the next chain value), so the trainer keeps it like a saved
+  one; unsaved records in check stay unsaved, and so do those whose label
+  reaches the trainer's limit of +-20,000 (saturated by mate or table scores
+  after them, whose saved records the trainer drops). Needs --unsaved next
+  and --check-scores skip.
 Ends: z is the stored result for every kind of end (checkmate, the rules
 draws, the Syzygy table result at table entry, a mate score, the score
 adjudication; generation 3 adjudicates at 700 cp for 8 plies). The kind is
@@ -62,6 +70,18 @@ with no change to the trainer. No replay (every keepable score is rewritten;
 the trainer still drops the same records); the slice's one-move games are
 copied unchanged, as above.
 
+`split` (retrain 8c's rft-ep fine-tune, owner's decision O1 of 2026-11-12;
+the plan's section 3): a copy of a TD or blend copy in which every keepable
+score of a record with 8 or more pieces (kings included; --max-pieces 7) is
+replaced by the game result's code, +2,000 / 0 / -2,000 from White's view
+(the endgame slice's convention: its sigmoid at S = 92 is the result within
+1e-9), every record with 7 or fewer keeping the copy's own target, so a
+fine-tune at --result-weight 0 learns the result in the middlegame and keeps
+the base's targets in the endings (the held-out 4-5 and 6-7-piece checks
+regressed under the plain result fine-tune; 7 is TCEC's table limit). The
+piece count comes from an occupancy-only replay (piece_counts); the check
+recomputes it on sampled games with python-chess.
+
 `check` compares a copy with its original: the same boards, moves and
 terminators; scores changed only where a relabelling may change them; and
 on every --sample-th game each score recomputed by an independent formula
@@ -84,9 +104,10 @@ kind; with the score/result blend's error (1 - w) sigmoid(s_t / S) + w z at
 --blend w for reference. It chooses nothing.
 
     td_labels.py labels SHARD --out OUT.vf --lam L --scale S [--games N] [--from-next] [--unsaved next|drop]
-                        [--check-scores skip|keep]
+                        [--check-scores skip|keep] [--label-unsaved]
     td_labels.py blend SHARD --out OUT.vf --scale S [--weight W]
-    td_labels.py check ORIGINAL COPY --mode td|blend --scale S [--lam L] [--weight W] [--sample N]
+    td_labels.py split SHARD --out OUT.vf [--max-pieces 7]
+    td_labels.py check ORIGINAL COPY --mode td|blend|split --scale S [--lam L] [--weight W] [--sample N] [--label-unsaved]
     td_labels.py compare --sites DIR... --data DIR... --scale S [--grid L,L,...] [--blend W,...]
                          [--from-next] [--unsaved next|drop] [--check-scores skip|keep] [--json OUT.json]
 """
@@ -121,11 +142,16 @@ def win_pair(score, scale):
     return e / (1.0 + e), 1.0 / (1.0 + e)
 
 
-def td_pairs(scores, result, lam, scale, from_next=False, unsaved='next', skip=None):
+def td_pairs(scores, result, lam, scale, from_next=False, unsaved='next', skip=None, label_unsaved=False):
     """The White-view label of each record as a pair (T, 1 - T); None for a
     record outside the chain (unsaved, or flagged in `skip`: the positions in
     check). `scores` are the records' White-view scores, `result` the stored
-    result byte (0, 1, 2)."""
+    result byte (0, 1, 2). With label_unsaved (idea 80, variant A; needs
+    unsaved 'next'), an unsaved record not flagged in `skip` gets the label
+    the same recursion gives its ply (its G_t(0) is the next chain value), so
+    a position in check stays unlabelled."""
+    if label_unsaved and unsaved != 'next':
+        raise ValueError("label_unsaved needs unsaved 'next' (the plies are the steps)")
     if not 0.0 <= lam <= 1.0:
         raise ValueError(f'lambda {lam} outside [0, 1]')
     if unsaved not in ('next', 'drop'):
@@ -143,7 +169,7 @@ def td_pairs(scores, result, lam, scale, from_next=False, unsaved='next', skip=N
         if chain[t]:
             nv = win_pair(scores[t], scale)
         u = ((1.0 - lam) * nv[0] + lam * after[0], (1.0 - lam) * nv[1] + lam * after[1])
-        if chain[t]:
+        if chain[t] or (label_unsaved and scores[t] == UNSAVED and not (skip and skip[t])):
             out[t] = after if from_next else u
     return out
 
@@ -220,13 +246,22 @@ def settled_one_move(recs, result, scale):
     return abs(win_pair(recs[0][1], scale)[0] - WHITE_RESULT[result]) <= 1e-6
 
 
-def relabel_shard(data, lam, scale, games=None, from_next=False, unsaved='next', check_scores='skip'):
+def relabel_shard(data, lam, scale, games=None, from_next=False, unsaved='next', check_scores='skip',
+                  label_unsaved=False):
     """The shard (its first `games` games) with TD labels in place of the
     keepable chain scores, and the counts. A table-labelled one-move game
-    (settled_one_move: the endgame slice's) is copied unchanged."""
+    (settled_one_move: the endgame slice's) is copied unchanged. With
+    label_unsaved (idea 80), an unsaved record not in check carries its
+    label too ('unsaved_labelled'); an unsaved record in check stays unsaved
+    (needs check_scores 'skip', so the positions in check are known), and so
+    does one whose label reaches the trainer's limit ('unsaved_decided': a
+    label saturated by the mate or table scores after it, where the saved
+    records' own scores are beyond the limit and the trainer drops them)."""
+    if label_unsaved and check_scores != 'skip':
+        raise ValueError("label_unsaved needs check_scores 'skip' (positions in check stay unlabelled)")
     out = bytearray()
     counts = {'games': 0, 'records': 0, 'relabelled': 0, 'unsaved': 0, 'in_check': 0, 'beyond_limit': 0,
-              'clamped': 0, 'one_move': 0}
+              'clamped': 0, 'one_move': 0, 'unsaved_labelled': 0, 'unsaved_decided': 0}
     for start, head, recs, end in split_games(data, games):
         if head[30] > 2:
             raise vg.Bad(f'bad result byte at {start}')
@@ -238,10 +273,15 @@ def relabel_shard(data, lam, scale, games=None, from_next=False, unsaved='next',
             continue
         scores = [s for _, s in recs]
         skip = check_flags(head, recs) if check_scores == 'skip' else None
-        pairs = td_pairs(scores, head[30], lam, scale, from_next, unsaved, skip)
+        pairs = td_pairs(scores, head[30], lam, scale, from_next, unsaved, skip, label_unsaved)
         out += head
         for (code, s), p in zip(recs, pairs):
-            if s == UNSAVED:
+            if s == UNSAVED and p is not None and abs(pair_to_score(p, scale)) < KEEP_LIMIT:
+                s = pair_to_score(p, scale)
+                counts['unsaved_labelled'] += 1
+            elif s == UNSAVED and p is not None:
+                counts['unsaved_decided'] += 1
+            elif s == UNSAVED:
                 counts['unsaved'] += 1
             elif p is None:
                 counts['in_check'] += 1
@@ -301,6 +341,123 @@ def blend_shard(data, weight, scale):
     return bytes(out), counts
 
 
+RESULT_SCORE = (-2000, 0, 2000)  # the endgame slice's result code (endgame_slice.py SLICE_SCORE), by result byte
+SPLIT_MAX_PIECES = 7  # rft-ep: records with at most this many pieces keep their target (retrain 8c plan section 3)
+
+
+def piece_counts(head, recs):
+    """The number of pieces (kings included) on the board of each record, by
+    an occupancy-only replay (no move legality, no python-chess): a move to an
+    occupied square captures one piece, en passant (kind 1) one, castling
+    (kind 2, the king to its own rook) none."""
+    occ = int.from_bytes(head[0:8], 'little')
+    n = bin(occ).count('1')
+    out = []
+    for code, _s in recs:
+        out.append(n)
+        frm, to, kind = code & 63, code >> 6 & 63, code >> 14
+        if kind == 2:
+            rank = frm & 56
+            king_to, rook_to = (rank | 6, rank | 5) if (to & 7) > (frm & 7) else (rank | 2, rank | 3)
+            occ = (occ & ~(1 << frm) & ~(1 << to)) | (1 << king_to) | (1 << rook_to)
+            continue
+        if kind == 1:
+            occ &= ~(1 << ((frm & 56) | (to & 7)))
+            n -= 1
+        elif occ >> to & 1:
+            n -= 1
+        occ = (occ & ~(1 << frm)) | (1 << to)
+    return out
+
+
+def split_shard(data, max_pieces=SPLIT_MAX_PIECES):
+    """rft-ep's copy (retrain 8c, owner's decision O1 of 2026-11-12): every
+    keepable score (saved or idea 80's labelled, |s| <= 20,000) of a record
+    with more than `max_pieces` pieces replaced by the game result's code
+    (RESULT_SCORE, whose sigmoid at S = 92 is the result within 1e-9), every
+    other record unchanged, so a run at --result-weight 0 trains the result
+    on the larger positions and the copy's own target (a TD or blend copy's)
+    on the endings. Table-labelled one-move games are copied unchanged
+    (settled_one_move; their target is already the table's)."""
+    out = bytearray()
+    counts = {'games': 0, 'records': 0, 'to_result': 0, 'kept_target': 0, 'unsaved': 0, 'beyond_limit': 0,
+              'one_move': 0}
+    for start, head, recs, end in split_games(data):
+        result = head[30]
+        if result > 2:
+            raise vg.Bad(f'bad result byte at {start}')
+        counts['games'] += 1
+        counts['records'] += len(recs)
+        if len(recs) == 1 and recs[0][1] in RESULT_SCORE and recs[0][1] == RESULT_SCORE[result]:
+            out += data[start:end]
+            counts['one_move'] += 1
+            continue
+        out += head
+        for (code, sc), n in zip(recs, piece_counts(head, recs)):
+            if sc == UNSAVED:
+                counts['unsaved'] += 1
+            elif abs(sc) > KEEP_LIMIT:
+                counts['beyond_limit'] += 1
+            elif n > max_pieces:
+                sc = RESULT_SCORE[result]
+                counts['to_result'] += 1
+            else:
+                counts['kept_target'] += 1
+            out += struct.pack('<Hh', code, sc)
+        out += struct.pack('<Hh', 0, 0)
+    return bytes(out), counts
+
+
+def check_split(original, copy, max_pieces=SPLIT_MAX_PIECES, sample=100):
+    """A split copy against its original: the same boards, moves and
+    terminators; a record changed only from a keepable score to its game's
+    result code; on every `sample`-th game the piece count of each record
+    recomputed by a python-chess replay (independent of piece_counts) and
+    each record's score equal to the rule's."""
+    report = {'games': 0, 'records': 0, 'changed': 0, 'games_recomputed': 0, 'records_recomputed': 0, 'bad': []}
+
+    def bad(text):
+        if len(report['bad']) < 20:
+            report['bad'].append(text)
+
+    if len(original) != len(copy):
+        bad(f'length {len(copy)} against {len(original)}')
+        return report
+    try:
+        for k, ((s0, h0, r0, e0), (s1, h1, r1, e1)) in enumerate(
+                zip(split_games(original), split_games(copy), strict=True)):
+            report['games'] += 1
+            report['records'] += len(r0)
+            if (s0, e0) != (s1, e1) or h0 != h1 or [c for c, _ in r0] != [c for c, _ in r1]:
+                bad(f'game {k}: board, moves or length differ')
+                continue
+            code = RESULT_SCORE[h0[30]]
+            for t, ((_, a), (_, b)) in enumerate(zip(r0, r1)):
+                if a != b:
+                    report['changed'] += 1
+                    if a == UNSAVED or abs(a) > KEEP_LIMIT or b != code:
+                        bad(f'game {k} record {t}: {a} changed to {b}')
+            if sample <= 0 or k % sample:
+                continue
+            report['games_recomputed'] += 1
+            board, _ = vg.decode_board(h0)
+            for t, ((mc, a), (_, b)) in enumerate(zip(r0, r1)):
+                n = len(board.piece_map())
+                board.push(move_of(board, mc))
+                if len(r0) == 1 and a == code:
+                    want = a
+                elif a == UNSAVED or abs(a) > KEEP_LIMIT or n <= max_pieces:
+                    want = a
+                else:
+                    want = code
+                report['records_recomputed'] += 1
+                if b != want:
+                    bad(f'game {k} record {t}: {b}, the rule gives {want} ({n} pieces)')
+    except (ValueError, vg.Bad) as e:
+        bad(f'unreadable: {e}')
+    return report
+
+
 def forward_td_pair(scores, chain, result, lam, scale, t):
     """Record t's label by the forward view (the defining sum, not the
     backward recursion relabel_shard uses), for the copy check:
@@ -321,13 +478,16 @@ def forward_td_pair(scores, chain, result, lam, scale, t):
     return a + w * z[0], b + w * z[1]
 
 
-def check_copy(original, copy, mode, param, scale, sample=100, check_scores='skip'):
+def check_copy(original, copy, mode, param, scale, sample=100, check_scores='skip', label_unsaved=False):
     """A relabelled copy against its original. Every game: the same boards,
     moves and terminators; scores changed only on keepable records of games
     of two or more records, and within +-20,000 there. Every `sample`-th game
     (and its in-check records, by replay): each score equal, within 1, to the
     label recomputed independently (mode 'td': forward_td_pair at lambda =
-    param, the default definition; 'blend': blend_pair at W = param).
+    param, the default definition; 'blend': blend_pair at W = param). With
+    label_unsaved (mode 'td', idea 80) an unsaved record may change, and on
+    the sampled games each unsaved record not in check must equal its
+    forward-view label and each one in check must be unchanged.
     Returns the counts and the first problems found."""
     report = {'games': 0, 'records': 0, 'changed': 0, 'games_recomputed': 0, 'records_recomputed': 0,
               'max_difference': 0, 'bad': []}
@@ -351,10 +511,12 @@ def check_copy(original, copy, mode, param, scale, sample=100, check_scores='ski
                 if r0 != r1:
                     bad(f'game {k}: a table-labelled one-move game was changed')
                 continue
+            open_unsaved = mode == 'td' and label_unsaved
             for t, ((_, a), (_, b)) in enumerate(zip(r0, r1)):
                 if a != b:
                     report['changed'] += 1
-                    if a == UNSAVED or abs(a) > KEEP_LIMIT or abs(b) > KEEP_LIMIT:
+                    if (a == UNSAVED and not open_unsaved) or (a != UNSAVED and abs(a) > KEEP_LIMIT) \
+                            or abs(b) > KEEP_LIMIT:
                         bad(f'game {k} record {t}: {a} changed to {b}')
             if sample <= 0 or k % sample:
                 continue
@@ -363,6 +525,21 @@ def check_copy(original, copy, mode, param, scale, sample=100, check_scores='ski
             skip = check_flags(h0, r0) if mode == 'td' and check_scores == 'skip' else [False] * len(r0)
             chain = [a != UNSAVED and not skip[t] for t, a in enumerate(scores)]
             for t, ((_, a), (_, b)) in enumerate(zip(r0, r1)):
+                if open_unsaved and a == UNSAVED:
+                    if skip[t]:
+                        if b != a:
+                            bad(f'game {k} record {t}: unsaved in check, changed to {b}')
+                        continue
+                    want = pair_to_score(forward_td_pair(scores, chain, h0[30], param, scale, t), scale)
+                    report['records_recomputed'] += 1
+                    if b == UNSAVED:  # left unsaved only where the label reaches the limit (within the rounding)
+                        if abs(want) < KEEP_LIMIT - 1:
+                            bad(f'game {k} record {t}: unsaved left, recomputed {want}')
+                        continue
+                    report['max_difference'] = max(report['max_difference'], abs(b - want))
+                    if abs(b - want) > 1 or abs(b) >= KEEP_LIMIT:
+                        bad(f'game {k} record {t}: unsaved {b}, recomputed {want}')
+                    continue
                 if a == UNSAVED or abs(a) > KEEP_LIMIT:
                     continue
                 if mode == 'td':
@@ -588,6 +765,8 @@ def main(argv=None):
     lp.add_argument('--out', type=Path, required=True)
     lp.add_argument('--lam', type=float, required=True)
     lp.add_argument('--games', type=int, help='only the first N games')
+    lp.add_argument('--label-unsaved', action='store_true',
+                    help='idea 80: unsaved records not in check get their TD label too')
     cp_ = sub.choices['compare']
     cp_.add_argument('--sites', type=Path, nargs='+', required=True)
     cp_.add_argument('--data', type=Path, nargs='+', required=True)
@@ -600,15 +779,23 @@ def main(argv=None):
     bp.add_argument('--out', type=Path, required=True)
     bp.add_argument('--weight', type=float, default=0.5, help="the blend's result weight W")
     bp.add_argument('--scale', type=float, required=True, help="the trainer's --scale S")
+    sp = sub.add_parser('split', help="rft-ep's copy: the result's code above --max-pieces, the copy's own target "
+                                      'at or below')
+    sp.add_argument('shard', type=Path)
+    sp.add_argument('--out', type=Path, required=True)
+    sp.add_argument('--max-pieces', type=int, default=SPLIT_MAX_PIECES)
+    sp.add_argument('--scale', type=float, default=92.0, help='unused (kept for the common check)')
     kp = sub.add_parser('check', help='a copy against its original, labels recomputed on a sample of games')
     kp.add_argument('original', type=Path)
     kp.add_argument('copy', type=Path)
-    kp.add_argument('--mode', choices=('td', 'blend'), required=True)
+    kp.add_argument('--mode', choices=('td', 'blend', 'split'), required=True)
+    kp.add_argument('--max-pieces', type=int, default=SPLIT_MAX_PIECES, help='mode split')
     kp.add_argument('--lam', type=float, help='mode td: lambda')
     kp.add_argument('--weight', type=float, default=0.5, help='mode blend: W')
     kp.add_argument('--scale', type=float, required=True)
     kp.add_argument('--sample', type=int, default=100, help='recompute every N-th game (0: none)')
     kp.add_argument('--check-scores', choices=('skip', 'keep'), default='skip')
+    kp.add_argument('--label-unsaved', action='store_true', help='mode td: the copy labels unsaved records (idea 80)')
     a = ap.parse_args(argv)
     if a.scale <= 0:
         ap.error('--scale must be positive')
@@ -616,11 +803,12 @@ def main(argv=None):
     try:
         if a.command == 'labels':
             data = a.shard.read_bytes()
-            out, counts = relabel_shard(data, a.lam, a.scale, a.games, a.from_next, a.unsaved, a.check_scores)
+            out, counts = relabel_shard(data, a.lam, a.scale, a.games, a.from_next, a.unsaved, a.check_scores,
+                                        a.label_unsaved)
             write_atomic(a.out, out)
             info = {'source': a.shard.name, 'lambda': a.lam, 'scale': a.scale,
                     'from_next': a.from_next, 'unsaved_mode': a.unsaved, 'check_scores': a.check_scores,
-                    'games_limit': a.games,
+                    'label_unsaved': a.label_unsaved, 'games_limit': a.games,
                     'sha256': hashlib.sha256(out).hexdigest(), 'bytes': len(out), **counts,
                     'seconds': round(time.monotonic() - began, 1)}
             a.out.with_name(a.out.name + '.json').write_text(json.dumps(info, indent=1) + '\n')
@@ -635,12 +823,26 @@ def main(argv=None):
             a.out.with_name(a.out.name + '.json').write_text(json.dumps(info, indent=1) + '\n')
             print(json.dumps(info))
             return 0
+        if a.command == 'split':
+            out, counts = split_shard(a.shard.read_bytes(), a.max_pieces)
+            write_atomic(a.out, out)
+            info = {'source': a.shard.name, 'max_pieces': a.max_pieces,
+                    'sha256': hashlib.sha256(out).hexdigest(), 'bytes': len(out), **counts,
+                    'seconds': round(time.monotonic() - began, 1)}
+            a.out.with_name(a.out.name + '.json').write_text(json.dumps(info, indent=1) + '\n')
+            print(json.dumps(info))
+            return 0
+        if a.command == 'check' and a.mode == 'split':
+            report = check_split(a.original.read_bytes(), a.copy.read_bytes(), a.max_pieces, a.sample)
+            print(json.dumps({'original': a.original.name, 'copy': a.copy.name, 'mode': 'split',
+                              'max_pieces': a.max_pieces, **report, 'seconds': round(time.monotonic() - began, 1)}))
+            return 1 if report['bad'] else 0
         if a.command == 'check':
             if a.mode == 'td' and a.lam is None:
                 ap.error('--mode td needs --lam')
             param = a.lam if a.mode == 'td' else a.weight
             report = check_copy(a.original.read_bytes(), a.copy.read_bytes(), a.mode, param, a.scale, a.sample,
-                                a.check_scores)
+                                a.check_scores, a.label_unsaved)
             print(json.dumps({'original': a.original.name, 'copy': a.copy.name, 'mode': a.mode, 'param': param,
                               **report, 'seconds': round(time.monotonic() - began, 1)}))
             return 1 if report['bad'] else 0

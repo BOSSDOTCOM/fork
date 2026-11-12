@@ -1,0 +1,140 @@
+{
+ "run": "pos1",
+ "generator": {
+  "tool": "fork_datagen (the positional slice slice-pos-td90: complete games from the conversion-and-defense starts (tools/datagen defense_starts.py), every position saved at 80,000 nodes, labelled by r8btd90; run on the cloud VM, finished 2026-11-11 02:10 PM EST; sealed for retrain 8c as part pos1, its files renamed slice-pos-td90-s00-wNN-0000.vf to pos1-wNN.vf, bytes unchanged)",
+  "version": "0.3.0-dev+d807c57",
+  "evaluator": "nnue (r8btd90)",
+  "arch": "x86-64-v3",
+  "bench": "9594307:4eb36793548711d4",
+  "builds_sha256": {
+   "fork": "7fd9e1f8ca5e6fdfc9c9be7bd44e7e4751ec2eed9964c17b389cec9e53757e59",
+   "fork_datagen": "c6ad518786df32ed3aeadbdc28cd05bd05e0131d6f247494b9343284992c463b",
+   "bench": "9594307:4eb36793548711d4"
+  },
+  "tools_sha256": {
+   "defense_starts.py": "e253198264521026e3d0d3e44fd053777194184907949853b1e12997bf74a008",
+   "verify_games.py": "785144c1e28f575f80884389b888f8fb4be2af4112986a1ad3df8e94db6bd67d"
+  }
+ },
+ "settings": {
+  "openings": "slice-positional.epd",
+  "openings_count": 185555,
+  "positions_target": 12500000,
+  "nodes": 80000,
+  "threads": 8,
+  "seed": 20261110,
+  "hash_mb": 4,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 31000,
+  "max_plies": 500,
+  "random_min": 0,
+  "random_max": 0,
+  "adjudicate_cp": 1500,
+  "adjudicate_plies": 16,
+  "save_percent": 100,
+  "unsaved_nodes": 0,
+  "check_nodes": 0
+ },
+ "games": 128245,
+ "positions": 12500535,
+ "positions_unsaved": 0,
+ "seconds": 62496.8,
+ "results": {
+  "white": 59260,
+  "draw": 21309,
+  "black": 47676
+ },
+ "ends": {
+  "checkmate": 0,
+  "stalemate": 108,
+  "repetition": 11442,
+  "fifty_moves": 1046,
+  "insufficient_material": 0,
+  "table_result": 31891,
+  "mate_found": 71645,
+  "decided_opening": 0,
+  "too_long": 35,
+  "score_adjudicated": 12113
+ },
+ "verify": [
+  "seg-00: ok: 8 shards, 128245 games, 12500535 positions (0 unsaved); ends {\"mate score\": 71645, \"rules draw\": 12596, \"score adjudication\": 12113, \"table\": 31891}"
+ ],
+ "part_end": "finished (target reached); every game verified (verify_games.py, done.json)",
+ "batches": [
+  [
+   {
+    "file": "pos1-w00.vf",
+    "worker": 0,
+    "games": 16011,
+    "positions": 1562526,
+    "bytes": 6826500,
+    "sha256": "3b2ffbf3d6b4b5fb82cf4c4d9d09074823d45febf9447687a287d3790b7a4d0a",
+    "source_file": "slice-pos-td90-s00-w00-0000.vf"
+   },
+   {
+    "file": "pos1-w01.vf",
+    "worker": 1,
+    "games": 16022,
+    "positions": 1562538,
+    "bytes": 6826944,
+    "sha256": "3b6255a46d1359580c0d4fc73ea06a32ff0a54807ad33b0530db65f8d078d17b",
+    "source_file": "slice-pos-td90-s00-w01-0000.vf"
+   },
+   {
+    "file": "pos1-w02.vf",
+    "worker": 2,
+    "games": 16078,
+    "positions": 1562546,
+    "bytes": 6828992,
+    "sha256": "5851b582a8caa5c9be13ac3831e07f819508e8a348e0abb9f96d23f8a7622361",
+    "source_file": "slice-pos-td90-s00-w02-0000.vf"
+   },
+   {
+    "file": "pos1-w03.vf",
+    "worker": 3,
+    "games": 16040,
+    "positions": 1562590,
+    "bytes": 6827800,
+    "sha256": "1b8a1a06ab90ff5ae51be65b3dbb26e60a89f9de9c69f599acfcbc531b164e3c",
+    "source_file": "slice-pos-td90-s00-w03-0000.vf"
+   },
+   {
+    "file": "pos1-w04.vf",
+    "worker": 4,
+    "games": 15956,
+    "positions": 1562656,
+    "bytes": 6825040,
+    "sha256": "daa60d89f10131653c51e13caea06ae8298f6d6a130b5e30e5c6ac11339a5084",
+    "source_file": "slice-pos-td90-s00-w04-0000.vf"
+   },
+   {
+    "file": "pos1-w05.vf",
+    "worker": 5,
+    "games": 16016,
+    "positions": 1562500,
+    "bytes": 6826576,
+    "sha256": "523b58b6c125686f89cb0bd2cdc6a3f2c5bfcf175222f241f82fadf3d4f44035",
+    "source_file": "slice-pos-td90-s00-w05-0000.vf"
+   },
+   {
+    "file": "pos1-w06.vf",
+    "worker": 6,
+    "games": 16039,
+    "positions": 1562552,
+    "bytes": 6827612,
+    "sha256": "9d5139514cdb6bb738204fee1dcbdfd032bb5107ff2af95f4030051164ddadfd",
+    "source_file": "slice-pos-td90-s00-w06-0000.vf"
+   },
+   {
+    "file": "pos1-w07.vf",
+    "worker": 7,
+    "games": 16083,
+    "positions": 1562627,
+    "bytes": 6829496,
+    "sha256": "912ab5409c44b15b232c4ca84a456240cecee97ab03065ffc8405008f075bfdc",
+    "source_file": "slice-pos-td90-s00-w07-0000.vf"
+   }
+  ]
+ ]
+}
