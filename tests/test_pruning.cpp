@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // switch off); with the TT off it does nothing.
 TEST_CASE("pruning", "TT node-type gate: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_tt_node_gate);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_tt_node_gate);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_tt_node_gate = true;
   fx.searcher->switches = on;
