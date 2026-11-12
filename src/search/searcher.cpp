@@ -917,6 +917,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     root_moves_[i].nodes = nodes_ - nodes_before;
     root_moves_[i].nodes_all_passes += root_moves_[i].nodes;  // every pass's moves, before a stop returns
     if (stopped_) return best;
+    if (m == prior_best_) prior_best_searched_ = true;
     if (score > best) best = score;
     if (m == root_fail_high_ && score < beta) root_fail_high_ = NoMove;  // resolved by its re-search
     if (score > alpha) {
@@ -1128,6 +1129,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     iteration_best_ = NoMove;
     iteration_best_score_ = -ScoreInfinite;
     root_fail_high_ = NoMove;
+    prior_best_ = result.best;
     for (std::size_t i = 0; i < root_count_; ++i) root_moves_[i].nodes_all_passes = 0;
     int delta = AspirationHalfWidth;
     int alpha = -ScoreInfinite, beta = ScoreInfinite;
@@ -1137,6 +1139,11 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     }
     int score;
     for (;;) {
+      if (switches.use_pass_best_stop) {  // each pass's own best (E1)
+        iteration_best_ = NoMove;
+        iteration_best_score_ = -ScoreInfinite;
+      }
+      prior_best_searched_ = false;
       score = search_root(alpha, beta, depth);
       FORK_STAT(++passes);
       if (stopped_) break;
@@ -1164,7 +1171,14 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       // The result then takes this iteration's depth with its move and
       // score, so it describes the same search as the last info line
       // (time_signals() keeps the last finished iteration).
-      if (!iteration_best_.is_none() && result.depth > 0 && iteration_best_score_ > previous) {
+      // use_pass_best_stop (bug review 2026-11-11, E1): once the pass has
+      // searched the last finished iteration's best move again, its best
+      // exact move is that move or one that scored above it at this depth,
+      // so it is played whatever its score against the last iteration's;
+      // the iteration's best is then this pass's alone.
+      const bool prior_beaten = switches.use_pass_best_stop && prior_best_searched_;
+      if (!iteration_best_.is_none() && result.depth > 0 &&
+          (iteration_best_score_ > previous || prior_beaten)) {
         result.best = iteration_best_;
         result.score = iteration_best_score_;
         result.depth = depth;

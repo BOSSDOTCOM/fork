@@ -152,6 +152,18 @@ struct SearchQuota {
 //   2026-11-06); on since its one LTC-only design R test on the tuned search
 //   (owner, 2026-11-11) passed: +9.40 +/- 5.03 Elo after 4,992 games, design
 //   R [0, 6]; 2026-11-11.
+// - use_pass_best_stop: the stop rule for a search stopped mid-iteration
+//   (bug review 2026-11-11, E1; searcher.cpp, the stop rule). Off: a move
+//   from the unfinished iteration is played only if its exact score beats
+//   the last finished iteration's. On: also once the last finished
+//   iteration's best move has been searched again in the unfinished pass,
+//   whatever the score, since the pass's best exact move is then that move
+//   or one that scored above it at the new depth; the iteration's best is
+//   kept per aspiration pass, so an earlier pass cannot supply it. An
+//   unresolved root fail high is never played either way. Its STC design R
+//   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
+//   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
+//   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -186,7 +198,8 @@ struct SearchQuota {
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
-  X(use_capture_probe, UseCaptureProbe, true)
+  X(use_capture_probe, UseCaptureProbe, true)            \
+  X(use_pass_best_stop, UsePassBestStop, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -635,6 +648,10 @@ class Searcher {
   Move iteration_best_ = NoMove;
   int iteration_best_score_ = -ScoreInfinite;
   PrincipalLine iteration_pv_;
+  // The last finished iteration's best move, and whether the running
+  // aspiration pass has searched it to a score (use_pass_best_stop).
+  Move prior_best_ = NoMove;
+  bool prior_best_searched_ = false;
   // LMR context inputs kept by the search (lmr_table.hpp): the root score's
   // last change between iterations, and the share of the current root move.
   int score_trend_ = 0;
