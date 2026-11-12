@@ -2675,7 +2675,13 @@ whose weaknesses and data gaps decide their targets and order.
 - **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
 - **plan** (owner, 2026-11-11): its fixed-node oracle first, measuring **both accuracy and speed**: a narrow readout refitted on r8brft1's frozen first 256 columns, the band from |narrow - full|, then an FN screen of "narrow far, full near" (accuracy) and a synthetic half-width build on a quiet machine (speed). Kill: worse than -8 Elo at a band of 100 cp or less. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
-- **status:** candidate.
+- **status:** **probe (accuracy half) done; its fixed-node screen is to be built (owner, 2026-11-11, about
+  10:25 PM EST).** Offline (tools/measure/head_probes.py narrow on tools/probes-1111 b5143af; cloud VM): a narrow
+  readout refitted on r8brft1's frozen first 256 columns of each perspective (ridge, per bucket, to the full output;
+  320,000 positions of the label-depth arm D20, 80,000 held out): |narrow - full| median 31 cp, p90 83, p95 104,
+  p99 151; above 50 cp 29.5%, above 100 cp 5.6%, above 150 cp 1.0% (smaller in the low-material buckets 6-7: 3.1% and
+  1.7% above 100 cp). Gold error (S512ppr3 1M): full 0.00849, narrow 0.01366. So a band of about 100 cp is the
+  narrowest this untrained readout supports; the speed half was not measured.
 
 ## 80. Label the unsaved half (novel-ideas 2)
 
@@ -2702,7 +2708,14 @@ whose weaknesses and data gaps decide their targets and order.
 - **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
 - **plan** (owner, 2026-11-11): its **offline probe on the existing gold labels**: freeze r8brft1's first layer, refit the 8 heads on high-fidelity records, compare with the shipped heads on the 1M-node gold set (overall and by class), then one FN screen. Kill: no gold-set gain beyond the seed spread and an FN screen at or below 0. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
-- **status:** candidate.
+- **status:** **probe: gold half flat; its fixed-node screen runs (owner, 2026-11-11, about 10:25 PM EST: drop it if
+  that is flat too).** Offline probe (tools/measure/head_probes.py heads on tools/probes-1111 b5143af; cloud VM, about
+  20 CPU-minutes): r8brft1's first layer frozen, its 8 heads refitted (TD(0.9) labels, S = 88) on idea 62's
+  label-depth arms (first run, labeller S512ppr3, same openings: D20 against D100), 400,000 kept records per arm,
+  two seeds per arm (the two halves of the games). Squared win-probability error on idea 51's 3,131 records, S512ppr3
+  1M gold: shipped 0.008486; D100 seeds -0.000075 [-0.000205, +0.000051] and +0.000087; D20 seeds +0.000190 and
+  +0.000115; the independent golds agree; on idea 52's controls both D100 seeds are worse (+0.00026, +0.00027). No
+  gain beyond the seed spread (0.00016), in any material class.
 
 ## 83. Label super-resolution (novel-ideas 5)
 
@@ -2711,7 +2724,12 @@ whose weaknesses and data gaps decide their targets and order.
 - **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
 - **plan** (owner, 2026-11-11): its **offline probe on the existing gold labels** (idea 51's 3,131 positions and idea 52's 2,000 controls), cross-validated. Kill: squared error in win-probability space not at least 10% below the raw label's, or the slope on "search minus static" not clearly positive. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
-- **status:** candidate.
+- **status:** **killed (owner, 2026-11-11, about 10:25 PM EST).** Offline probe (tools/measure/label_probes.py
+  superres on tools/probes-1111 b5143af; PC, about 2 CPU-minutes): f = b1 s + b2 (s - e), 10-fold cross-validated,
+  on idea 51's 3,131 kept records against the S512ppr3 1M gold: squared win-probability error 0.00169 raw, 0.00162
+  corrected, a reduction of **3.7% [1.7, 6.1]** (10% needed); b2 = 0.026 [-0.019, 0.079], not clear of zero. With
+  band and class terms 4.0%; against the independent golds 5.0% and 6.2% (upper ends 7.1%, 8.4%); on idea 52's
+  2,000 controls (200k gold) 1.7% [-0.7, 4.1] with b2 0.068 [0.021, 0.119]. Both kill conditions hold.
 
 ## 84. Evaluator-diverse Lazy SMP (novel-ideas 6)
 
@@ -2729,7 +2747,18 @@ whose weaknesses and data gaps decide their targets and order.
 - **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
 - **plan** (owner, 2026-11-11): its **offline check**: the result-residual variogram by class and the per-class lambda that minimises error against the gold set. Kill: queens-on middlegames and endgames differ by less than 0.05 in best lambda. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
-- **status:** candidate.
+- **status:** **probe passed; an arm in retrain 8c (owner, 2026-11-11, about 10:25 PM EST).** Offline check
+  (tools/measure/label_probes.py tdclass on branch tools/probes-1111 b5143af; 2026-11-11, PC, about 4 CPU-minutes):
+  on idea 51's held-out set (3,131 kept records) the TD(lambda) label's error against the 1M golds is lowest at
+  lambda 0.35 for queens-on middlegames (a queen on, phase >= 13; 1,482 records; bootstrap mass 93% on 0.30-0.40)
+  and 0.65 for endgames (no queen, phase <= 9; 1,117 records; 63% on 0.60-0.70), on the mean of the two independent
+  golds (scratch-s1/s2; S512ppr3's gold: 0.35 and 0.60). The difference (0.30) passes the kill line (0.05). The
+  direction is the opposite of the proposal's (queens-on middlegames want the shorter horizon), and this yardstick
+  favours low lambda overall (its best over all records is 0.40, while TD(0.9) won in games), so the values are a
+  per-class contrast, not a recipe. The result-residual variogram (3,000 games of g3j-w05-val) grows about twice as
+  fast in queens-on middlegames (0.0184 at 32 plies) as in endgames (0.0095). **Arm (owner):** a per-class lambda TD
+  arm in retrain 8c: queens-on middlegames about 0.35, endgames about 0.65, every other record 0.9; two seeds,
+  beside the plain TD(0.9) control (same games and training steps).
 
 ## 86. Pawn-clocked context rows: bishop colour complexes (novel-ideas 8)
 
