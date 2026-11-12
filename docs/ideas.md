@@ -2920,3 +2920,38 @@ whose weaknesses and data gaps decide their targets and order.
 - **status:** candidate (plan).
 - **runtime cost:** none (data-generation side only).
 - **earliest phase:** Phase 4.
+
+## 157-161. Bake-off round 3 input candidates (owner, 2026-11-12)
+
+Recorded by the owner 2026-11-12, about 1:45 PM EST, as input candidates for bake-off round 3 (plan only). Novelty
+of each is **UNVERIFIED** pending a prior-art check. **Priority for round 3: ideas 157 and 159.** Each candidate
+gets its nps cost measured first, then the speed-adjusted fixed-node screen (the testing policy of 2026-11-09,
+DESIGN.md decisions log). Common fields: **type** ELO (network architecture); **phase** Phase 4, bake-off round 3;
+**metric** nps cost (bench/ab.py), then the speed-adjusted fixed-node screen, then the round's SPRT; **status**
+candidate (plan); **runtime cost** possible (each changes the network's inputs or output, so the nps change is
+reported with any result); **earliest phase** Phase 4.
+
+### 157. King-relative offset inputs (round 3 priority)
+
+- **idea:** encode each piece by its offset from each king (rather than, or beside, its absolute square), so the
+  inputs describe the position around each king; the king-side accumulators refresh when that king moves.
+
+### 158. King-zone piece-pair inputs
+
+- **idea:** extend the pawn-pair inputs to pairs of pieces that attack the enemy king's zone, so the network sees
+  coordinated attackers directly.
+
+### 159. Output experts by material-imbalance class (round 3 priority)
+
+- **idea:** choose the output layer's expert by a material-imbalance class (for example which side has the extra
+  minor, the exchange, the bishop pair) instead of by game phase alone.
+
+### 160. Fifty-move and repetition proximity inputs
+
+- **idea:** feed the output layer the fifty-move counter's distance to the limit and a repetition-proximity signal,
+  so drawish shuffles and approaching claims lower the evaluation's confidence.
+
+### 161. Passed-pawn race features
+
+- **idea:** features describing passed-pawn races (each passer's distance to promotion against the defending king's
+  distance, and whose move it is), for the endings where the network's 6-7-piece held-out errors concentrate.
