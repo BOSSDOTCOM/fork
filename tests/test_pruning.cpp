@@ -469,7 +469,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // bucket 0, so it does nothing.
 TEST_CASE("pruning", "threat-aware take history: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_threat_takes);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_threat_takes);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_threat_takes = true;
   fx.searcher->switches = on;
