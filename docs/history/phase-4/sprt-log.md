@@ -1411,3 +1411,5 @@ The final stage's result block (probcut-ltc2, stage 10, run 43129867831):
   07f7ae19b9250f38 (r8brft1), byte for byte the tested commit 6d7ffb1's tests/bench-r8brft1.ref, so the port equals
   the tested code; 10,166,167 / d874b380155a2e8c with the switch off, phase-4's. The constants 9 / 5 / 80 join the
   final retune's SPSA (class (b)). An LTC result only: ProbCut's one STC SPRT (on S512r2, above) ended H0.
+  The adopting commit was rebased onto phase-4 d33a4db before the push (e005049; no engine file changed between
+  a95e269 and d33a4db, so the bench checks stand). Speed (clang-release, Windows, the shared machine busy; A = phase-4 a95e269, B = the adopting commit e005049, r8brft1): bench/ab_search.py, 10 interleaved rounds, not pinned: median nps 2,043,662 against 2,034,450 (-0.5%), best 2,075,512 against 2,061,329 (-0.7%), under its 3.1% noise threshold, no significant difference; 12 further paired ABBA rounds: B/A nps 0.999, 95% interval 0.989 to 1.009 (t, 11 df). So no measurable nps price; the bench itself finishes in about 5% less time because it searches 5% fewer nodes.

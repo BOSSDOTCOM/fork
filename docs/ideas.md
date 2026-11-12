@@ -2523,9 +2523,7 @@ whose weaknesses and data gaps decide their targets and order.
   try 1 of 2 (the first version was never dispatched). No STC retest. An H1 goes to the owner; nothing is adopted
   before then (superseded by the overnight pre-approval of 2026-11-11 for search items that pass their SPRT and
   their LTC where required).
-- **runtime cost:** possible (the probe's own searches at deep non-PV
-  nodes); the nps change is to be reported with the result (the
-  2026-10-24 rule; not measured yet, UNVERIFIED).
+- **runtime cost:** none measurable (2026-11-11, after the adoption; clang-release, Windows, the shared machine busy; A = phase-4 a95e269, B = the adopting commit e005049, r8brft1): bench/ab_search.py, 10 interleaved rounds, not pinned: median nps 2,043,662 against 2,034,450 (-0.5%), best 2,075,512 against 2,061,329 (-0.7%), under its 3.1% noise threshold, no significant difference; 12 further paired ABBA rounds: B/A nps 0.999, 95% interval 0.989 to 1.009 (t, 11 df). So no measurable nps price; the bench itself finishes in about 5% less time because it searches 5% fewer nodes.
 - **earliest phase:** Phase 4.
 
 ## 74. Quiet history pruning, the history skip (tier 2, T24; survey B13)
