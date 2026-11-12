@@ -630,7 +630,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // Node types (T17): an expected cut node's late quiets are reduced
         // CutNodeLmrPlies more.
         const int cut_extra = switches.use_cut_node_lmr && !OnPv && f.expected_cut ? CutNodeLmrPlies : 0;
-        reduced = std::clamp(new_depth - (base + correction - relief + cut_extra), 1, new_depth);
+        // The TT-PV flag (W5): a non-PV node whose entry a PV node wrote.
+        const int pv_relief = switches.use_tt_pv_lmr && !OnPv && tt_hit && hit.was_pv ? TtPvLmrPlies : 0;
+        reduced = std::clamp(new_depth - (base + correction - relief - pv_relief + cut_extra), 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;
@@ -655,7 +657,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         counters.lmr_history_fire_less += shift > 0;
         counters.lmr_history_fire_more += shift < 0;
         counters.lmr_history_changes +=
-            std::clamp(new_depth - (base - shift + correction - relief + cut_extra), 1, new_depth) != reduced;
+            std::clamp(new_depth - (base - shift + correction - relief - pv_relief + cut_extra), 1, new_depth) !=
+            reduced;
 #endif
       }
 #ifdef FORK_SEARCH_STATS
