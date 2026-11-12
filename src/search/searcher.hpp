@@ -32,6 +32,7 @@
 #include <optional>
 
 #include "core/position.hpp"
+#include "search/lmr_table.hpp"
 #include "search/move_selector.hpp"
 #include "search/quiet_history.hpp"
 #include "search/score_bounds.hpp"
@@ -144,6 +145,14 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_centred_lmr_history: round-once LMR with a centred history term
+//   (think tank R20, the engine survey's C10 in its centred form): the
+//   reduction is summed in 64ths of a ply (lmr_table.hpp, LmrSixtyFourths)
+//   and rounded once, and a late quiet is reduced less (more) by its
+//   butterfly, reply and follow entries above (below) their running centres
+//   at LMR sites (HistoryCentre), weighted as the move ordering weights them,
+//   one ply per LmrHistoryPerPly. With no history term the reduction is the
+//   whole-ply one exactly. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +186,7 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)            X(use_centred_lmr_history, UseCentredLmrHistory, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -527,6 +536,7 @@ class Searcher {
     history_.clear();
     for (PairHistory& table : pair_history_) table.clear();
     take_history_.clear();
+    for (HistoryCentre& c : lmr_centres_) c = HistoryCentre{};
   }
   // Tests only: the butterfly history (the threat buckets' read and update
   // checks, tier 2 T56).
@@ -596,6 +606,9 @@ class Searcher {
   QuietHistory history_;
   PairHistory pair_history_[2];  // tier 2, T10: the reply and follow tables (ReplyTable, FollowTable)
   TakeHistory take_history_;     // tier 2, T11
+  // R20: the running centres of the butterfly, reply and follow entries at
+  // LMR sites (use_centred_lmr_history), cleared with the histories.
+  HistoryCentre lmr_centres_[3];
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;

@@ -630,7 +630,36 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // Node types (T17): an expected cut node's late quiets are reduced
         // CutNodeLmrPlies more.
         const int cut_extra = switches.use_cut_node_lmr && !OnPv && f.expected_cut ? CutNodeLmrPlies : 0;
-        reduced = std::clamp(new_depth - (base + correction - relief + cut_extra), 1, new_depth);
+        int plies = base + correction - relief + cut_extra;
+        if (switches.use_centred_lmr_history) {
+          // R20: every term in 64ths of a ply, rounded once. The history term
+          // reads the move's butterfly entry (the context's) and its reply and
+          // follow entries (the slot is the child's arrival, taken before the
+          // move), each less its running centre at LMR sites, weighted as the
+          // move ordering weights them; then each centre takes this value.
+          const int slot = frames_[ply + 1].arrival;
+          const int follow = follow_arrival(f);
+          const bool reply_read = switches.use_reply_history && f.arrival != NoArrival;
+          const bool follow_read = switches.use_follow_history && follow != NoArrival;
+          const int quiet_value = context.history;
+          const int reply_value = reply_read ? pair_history_[ReplyTable].value(f.arrival, slot) : 0;
+          const int follow_value = follow_read ? pair_history_[FollowTable].value(follow, slot) : 0;
+          int centred = quiet_value - lmr_centres_[0].centre();
+          if (reply_read) centred += (reply_value - lmr_centres_[1].centre()) * ReplyWeight / 4;
+          if (follow_read) centred += (follow_value - lmr_centres_[2].centre()) * FollowWeight / 4;
+#ifdef FORK_SEARCH_STATS
+          if (!ledger_active_)  // a decision-ledger side search leaves the centres as they were (X10)
+#endif
+          {
+            lmr_centres_[0].add(quiet_value);
+            if (reply_read) lmr_centres_[1].add(reply_value);
+            if (follow_read) lmr_centres_[2].add(follow_value);
+          }
+          plies = round_sixty_fourths(reduction_sixty_fourths(depth, moves_searched + 1) +
+                                      LmrFineUnit * (correction - relief + cut_extra) +
+                                      history_sixty_fourths(centred, LmrHistoryPerPly));
+        }
+        reduced = std::clamp(new_depth - plies, 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;

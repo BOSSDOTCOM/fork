@@ -1123,6 +1123,7 @@ tuned by SPSA.
 - **status:** untested (planned 2026-11-05); design below (owner, 2026-11-05:
   plan only, no code yet).
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** shrunk to round-once LMR arithmetic (R20); the full refactor (level 2) is out of Phase 4 and no longer precedes the SPSA retune.
+  **2026-11-11: built, queued** (R20, level 1 only): round-once LMR in 64ths of a ply with a centred history term behind `use_centred_lmr_history` (off; branch tier2/r20-centred-lmr), design R at STC then LTC (ledger idea `r20-centred-lmr`; `LmrHistoryPerPly` 10,000, retry 5,000).
 - **Design** (Fork's own, from the KB entry's concepts):
   - **Unit:** depth is held in units of 1/64 ply (`OnePly = 64`): a power
     of two, fine enough for SPSA to move a reduction in small steps
