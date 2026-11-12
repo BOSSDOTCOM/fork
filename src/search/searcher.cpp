@@ -369,7 +369,27 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     frames_[ply + 1].after_null = false;
     pos.unmake_null();
     if (stopped_) return 0;
-    if (score >= beta) {
+    // The engine survey's B6, null-move verification: deep enough, the fail
+    // high stands only if this node, searched again at the null search's
+    // depth on the same zero window with no null move here, fails high too
+    // (a zugzwang, where passing is the best move, fails that test). The
+    // re-search reuses this ply's frame, before the node's own move loop.
+    bool holds = score >= beta;
+    if (holds && switches.use_null_verification && depth >= NullVerifyMinDepth) {
+      FORK_STAT(const std::uint64_t verify_start = nodes_);
+      f.after_null = true;  // no null move at the re-search of this node
+      const int verified = negamax<false>(beta - 1, beta, null_depth, ply);
+      f.after_null = false;
+      if (stopped_) return 0;
+      holds = verified >= beta;
+#ifdef FORK_SEARCH_STATS
+      const int bin = std::min(depth, SearchCounters::VerifyDepths - 1);
+      ++counters.null_verify_runs[bin];
+      counters.null_verify_overturns[bin] += !holds;
+      counters.null_verify_nodes[bin] += nodes_ - verify_start;
+#endif
+    }
+    if (holds) {
       FORK_STAT(++counters.null_cuts);
       return is_tb_or_mate(score) ? beta : score;  // a mate found after passing is not trusted
     }

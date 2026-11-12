@@ -2790,3 +2790,19 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
+
+## 134. Null-move verification at depth (the engine survey's B6)
+
+- **type:** ELO / safety (search); flag `use_null_verification` (off).
+- **idea** (the survey's B6; verified null-move pruning, David-Tabibi and Netanyahu 2002, KB §5; the engineering
+  review's TCEC zugzwang hazard): from `NullVerifyMinDepth` (6, measured) a null-move fail high stands only if
+  the node, searched at the null depth without its own null move, fails high too.
+- **status:** **in progress (coordinator's build list, 2026-11-12: "B6, LTC (depth) only").** Built on phase-4
+  de7e0a3 behind the switch, off: branch tier2/b6-null-verify, bench unchanged (9,639,207 / 07f7ae19b9250f38,
+  r8brft1). The depth measured by a declared cost rule (DESIGN.md's row): 6, retry 10. Test commits
+  sprt/b6-null-verify (6) and sprt/b6-null-verify-10 (the retry). Night items 96a (b6-null-verify-ltc, design R
+  at 40+0.4, ledger idea `b6-null-verify`, try 1) and 96b (b6-null-verify-ltc-retry, only if 96a does not accept
+  H1), gated until state/gate-e1.done. No zugzwang test position with pieces was added (one would need a
+  tablebase-checked source; open). Nothing is adopted before a verdict.
+- **runtime cost:** about 0.8% more nodes on the bench with it on (the measurement); none off.
+- **earliest phase:** Phase 4.

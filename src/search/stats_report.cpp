@@ -61,6 +61,13 @@ void print_counter_summary(const SearchCounters& c, const FeatureStackTally* tal
   std::fprintf(out, "stats: capture probe: %llu captures searched, %llu nodes cut\n",
                static_cast<unsigned long long>(c.capture_probes),
                static_cast<unsigned long long>(c.capture_probe_cuts));
+  for (int d = 0; d < SearchCounters::VerifyDepths; ++d)
+    if (c.null_verify_runs[d])
+      std::fprintf(out, "stats: null verification at depth %d%s: runs %llu, overturned %llu, nodes %llu\n", d,
+                   d == SearchCounters::VerifyDepths - 1 ? "+" : "",
+                   static_cast<unsigned long long>(c.null_verify_runs[d]),
+                   static_cast<unsigned long long>(c.null_verify_overturns[d]),
+                   static_cast<unsigned long long>(c.null_verify_nodes[d]));
   std::fprintf(out, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
                static_cast<unsigned long long>(c.singular_tests),
                static_cast<unsigned long long>(c.singular_extended),

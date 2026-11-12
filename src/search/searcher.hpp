@@ -164,6 +164,12 @@ struct SearchQuota {
 //   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
 //   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
 //   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
+// - use_null_verification: a null-move fail high at depth NullVerifyMinDepth
+//   or more is kept only if this node itself, searched at the null search's
+//   depth on a zero window at beta with no null move at the node, fails high
+//   too; otherwise the node is searched normally (the engine survey's B6;
+//   verified null-move pruning, David-Tabibi and Netanyahu 2002, KB §5; the
+//   engineering review's zugzwang hazard at TCEC depths). Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -199,7 +205,8 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_null_verification, UseNullVerification, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -525,6 +532,13 @@ struct SearchCounters {
   std::uint64_t eval_gap_quiesce_reuse_bins[GapBins] = {};
   std::uint64_t eval_gap_band_bins[GapBands][GapBins] = {};
   std::uint64_t eval_gap_band_infinite[GapBands] = {};
+  // B6: null-move fail highs verified, those the verification overturned,
+  // and the verification searches' nodes, by remaining depth (the last bin
+  // pools the deeper ones).
+  static constexpr int VerifyDepths = 24;
+  std::uint64_t null_verify_runs[VerifyDepths] = {};
+  std::uint64_t null_verify_overturns[VerifyDepths] = {};
+  std::uint64_t null_verify_nodes[VerifyDepths] = {};
 };
 
 class Searcher {
