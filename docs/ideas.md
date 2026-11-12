@@ -3035,3 +3035,14 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
      alone).
   2. **Second target, for TCEC:** asynchronous 7-man tablebase probes: the search continues while a cold disk
      probe completes. Design only, after Lazy SMP.
+
+### 166. Register-tiled accumulator updates (speed sprint 3)
+
+- **type:** TOOLING (speed; bench identical). **phase:** Phase 4, speed sprint 3 (owner's order, 2026-11-12, about
+  3:35 PM EST). **idea:** the accumulator update loads each register tile of the parent's sums once, applies every
+  removed and added row, and stores it once, instead of a row loop per vector.
+- **metric:** instructions:u per bench, then nps by bench/ab_search.py in a quiet window. **result:** instructions
+  -31.4%; nps +14.7% median (x86-64-v3, WSL, core 4) and +5.4% (native AVX-512, Windows), both beyond the noise
+  threshold; bench 9,118,607 / 208629aa15e140a9 unchanged (docs/history/phase-4/perf-log.md, speed sprint 3).
+- **status:** adopted (b3b1f5c). **runtime cost:** a gain. **earliest phase:** Phase 4.
+
