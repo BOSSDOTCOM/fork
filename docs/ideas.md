@@ -2823,12 +2823,13 @@ whose weaknesses and data gaps decide their targets and order.
   ply below, read the way Fork's measurement found it: at least `ContestedCutoffThreshold` (3) of them mark a node
   whose refutations had to be searched, whose late quiets beat alpha four to five times as often as at a count
   of 0, so they are reduced one ply less.
-- **status:** **in progress.** Built on tier2/c16-child-cutoffs (the measurement record, on phase-4 de7e0a3)
-  behind the switch, off: branch tier2/c16-contested-lmr, bench unchanged (9,639,207 / 07f7ae19b9250f38,
-  r8brft1). Test commits sprt/c16-contested-lmr (3) and sprt/c16-contested-lmr-4 (the retry). Night items 98a
-  (c16-contested-lmr-stc, design R at STC, ledger idea `c16-contested-lmr`, try 1) and 98b
-  (c16-contested-lmr-retry, 4, only if 98a does not accept H1), gated until state/gate-e1.done; an LTC only on a
-  pass (a depth change), not queued here. Nothing is adopted before a verdict.
+- **status:** **a record, not queued (the coordinator, 2026-11-12).** Built on tier2/c16-child-cutoffs (the
+  measurement record, on phase-4 de7e0a3) behind the switch, off: branch tier2/c16-contested-lmr c697aa9, bench
+  unchanged (9,639,207 / 07f7ae19b9250f38, r8brft1). Test commits sprt/c16-contested-lmr 80ed708 (3; bench
+  17,525,603 / 26f216bc7d5333c7) and sprt/c16-contested-lmr-4 5f5f00c (4; 15,805,765 / 3579e93b5b9e2444): the
+  relief reaches 71% and 58% of the LMR sites, a near-global cut in LMR's reductions (+82% and +64% bench
+  nodes) that LMR's table already prices, so an SPRT could not change a decision cheaply. Idea 138, the
+  histogram's low tail, is tested instead.
 - **runtime cost:** a byte store per node and one increment per fail high, in every build. Speed not measured
   (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
