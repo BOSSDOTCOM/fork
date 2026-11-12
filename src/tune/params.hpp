@@ -42,7 +42,7 @@
   X(RfpMaxDepth, 6, 3, 12, 1)             \
   X(RfpMargin, 55, 30, 160, 6)            \
   X(FirmRfpQuarters, 2, 0, 4, 1)          \
-  X(FirmStandPatQuarters, 2, 0, 4, 1)     \
+  X(FirmStandPatQuarters, 1, 0, 4, 1)     \
   X(FirmFailHighQuarters, 2, 0, 4, 1)     \
   X(NullMinDepth, 3, 1, 6, 1)             \
   X(NullSurplusPerPly, 301, 150, 600, 23) \

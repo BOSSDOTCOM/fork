@@ -187,7 +187,7 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_firm_rfp, UseFirmRfp, false)                     \
-  X(use_firm_stand_pat, UseFirmStandPat, false)          \
+  X(use_firm_stand_pat, UseFirmStandPat, true)          \
   X(use_firm_fail_high, UseFirmFailHigh, false)
 
 struct SearchSwitches {
