@@ -38,6 +38,17 @@ paths:
   are normalized Elo, so the non-regression early-acceptance rule reads
   the "nElo: x +/- e" interval, never the logistic "Elo" one (DESIGN.md
   §5.2, Testing setup).
+- **Offline re-measurement rules set retune ranges only** (owner,
+  2026-11-12): a declared measurement rule (a label-and-sweep grid, a
+  cutoff-rate or accuracy proxy) re-run on a new net or search only
+  widens or sets the final retune's range for its constant. It never
+  gates a test and never picks a value by itself; games (SPRT, SPSA,
+  head-to-head) decide. Evidence: SingularMarginPerPly 22, T27's rule
+  re-run on r8brft1, lost to 6 by −26.76 ± 9.93 Elo (design R STC,
+  2026-11-12), and the staleness audit
+  (docs/research/staleness-audit-2026-11-12.md) found that in every case
+  where games or SPSA checked a rule's pick, the pick lost or the tuner
+  moved away (DESIGN.md §5.2, Testing setup).
 - **Run before claiming done:**
   - the full check: the CI matrix (`.github/workflows/ci.yml`) green on
     the pushed commit, or `scripts/check.sh full` on demand (pre-commit
