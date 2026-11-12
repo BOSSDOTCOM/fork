@@ -1,0 +1,1244 @@
+{
+ "measurement": "ProbCut (tier 2, T31): CaptureProbeMinDepth x CaptureProbeReduction x CaptureProbeMargin. Declared 2026-11-05 before any run: min depths 3, 4, 5, 7, 9; reductions 2-5; margins 50, 80, 130, 200, 320, 500 cp (geometric, about x1.6; the placeholders 6, 3 and 240 are not the grid's centres). 120 settings, each screened at 250,000 nodes; the best 6 by screening fitness go on to both budgets with \"off\". Ties go to the most cautious probe: the larger margin, then the larger min depth, then the smaller reduction. A reduction that leaves no plies at the shallowest probed nodes makes the second probe a quiescence search there, as the code does.",
+ "budgets": [
+  250000,
+  2500000
+ ],
+ "screen": {
+  "budget": 250000,
+  "keep": 6
+ },
+ "grid": {
+  "CaptureProbeMinDepth": [
+   3,
+   4,
+   5,
+   7,
+   9
+  ],
+  "CaptureProbeReduction": [
+   2,
+   3,
+   4,
+   5
+  ],
+  "CaptureProbeMargin": [
+   50,
+   80,
+   130,
+   200,
+   320,
+   500
+  ]
+ },
+ "settings": [
+  {
+   "id": "off",
+   "options": {
+    "UseCaptureProbe": false
+   }
+  },
+  {
+   "id": "d3-r2-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d3-r2-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d3-r2-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d3-r2-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d3-r2-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d3-r2-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d3-r3-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d3-r3-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d3-r3-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d3-r3-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d3-r3-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d3-r3-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d3-r4-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d3-r4-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d3-r4-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d3-r4-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d3-r4-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d3-r4-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d3-r5-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d3-r5-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d3-r5-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d3-r5-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d3-r5-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d3-r5-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 3,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d4-r2-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d4-r2-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d4-r2-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d4-r2-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d4-r2-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d4-r2-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d4-r3-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d4-r3-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d4-r3-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d4-r3-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d4-r3-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d4-r3-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d4-r4-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d4-r4-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d4-r4-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d4-r4-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d4-r4-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d4-r4-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d4-r5-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d4-r5-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d4-r5-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d4-r5-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d4-r5-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d4-r5-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 4,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d5-r2-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d5-r2-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d5-r2-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d5-r2-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d5-r2-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d5-r2-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d5-r3-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d5-r3-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d5-r3-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d5-r3-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d5-r3-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d5-r3-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d5-r4-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d5-r4-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d5-r4-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d5-r4-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d5-r4-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d5-r4-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d5-r5-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d5-r5-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d5-r5-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d5-r5-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d5-r5-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d5-r5-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 5,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d7-r2-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d7-r2-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d7-r2-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d7-r2-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d7-r2-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d7-r2-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d7-r3-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d7-r3-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d7-r3-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d7-r3-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d7-r3-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d7-r3-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d7-r4-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d7-r4-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d7-r4-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d7-r4-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d7-r4-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d7-r4-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d7-r5-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d7-r5-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d7-r5-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d7-r5-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d7-r5-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d7-r5-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 7,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d9-r2-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d9-r2-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d9-r2-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d9-r2-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d9-r2-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d9-r2-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 2,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d9-r3-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d9-r3-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d9-r3-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d9-r3-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d9-r3-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d9-r3-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 3,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d9-r4-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d9-r4-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d9-r4-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d9-r4-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d9-r4-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d9-r4-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 4,
+    "CaptureProbeMargin": 500
+   }
+  },
+  {
+   "id": "d9-r5-m50",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 50
+   }
+  },
+  {
+   "id": "d9-r5-m80",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 80
+   }
+  },
+  {
+   "id": "d9-r5-m130",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 130
+   }
+  },
+  {
+   "id": "d9-r5-m200",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 200
+   }
+  },
+  {
+   "id": "d9-r5-m320",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 320
+   }
+  },
+  {
+   "id": "d9-r5-m500",
+   "options": {
+    "UseCaptureProbe": true,
+    "CaptureProbeMinDepth": 9,
+    "CaptureProbeReduction": 5,
+    "CaptureProbeMargin": 500
+   }
+  }
+ ],
+ "tie_order": [
+  "d9-r2-m500",
+  "d9-r3-m500",
+  "d9-r4-m500",
+  "d9-r5-m500",
+  "d7-r2-m500",
+  "d7-r3-m500",
+  "d7-r4-m500",
+  "d7-r5-m500",
+  "d5-r2-m500",
+  "d5-r3-m500",
+  "d5-r4-m500",
+  "d5-r5-m500",
+  "d4-r2-m500",
+  "d4-r3-m500",
+  "d4-r4-m500",
+  "d4-r5-m500",
+  "d3-r2-m500",
+  "d3-r3-m500",
+  "d3-r4-m500",
+  "d3-r5-m500",
+  "d9-r2-m320",
+  "d9-r3-m320",
+  "d9-r4-m320",
+  "d9-r5-m320",
+  "d7-r2-m320",
+  "d7-r3-m320",
+  "d7-r4-m320",
+  "d7-r5-m320",
+  "d5-r2-m320",
+  "d5-r3-m320",
+  "d5-r4-m320",
+  "d5-r5-m320",
+  "d4-r2-m320",
+  "d4-r3-m320",
+  "d4-r4-m320",
+  "d4-r5-m320",
+  "d3-r2-m320",
+  "d3-r3-m320",
+  "d3-r4-m320",
+  "d3-r5-m320",
+  "d9-r2-m200",
+  "d9-r3-m200",
+  "d9-r4-m200",
+  "d9-r5-m200",
+  "d7-r2-m200",
+  "d7-r3-m200",
+  "d7-r4-m200",
+  "d7-r5-m200",
+  "d5-r2-m200",
+  "d5-r3-m200",
+  "d5-r4-m200",
+  "d5-r5-m200",
+  "d4-r2-m200",
+  "d4-r3-m200",
+  "d4-r4-m200",
+  "d4-r5-m200",
+  "d3-r2-m200",
+  "d3-r3-m200",
+  "d3-r4-m200",
+  "d3-r5-m200",
+  "d9-r2-m130",
+  "d9-r3-m130",
+  "d9-r4-m130",
+  "d9-r5-m130",
+  "d7-r2-m130",
+  "d7-r3-m130",
+  "d7-r4-m130",
+  "d7-r5-m130",
+  "d5-r2-m130",
+  "d5-r3-m130",
+  "d5-r4-m130",
+  "d5-r5-m130",
+  "d4-r2-m130",
+  "d4-r3-m130",
+  "d4-r4-m130",
+  "d4-r5-m130",
+  "d3-r2-m130",
+  "d3-r3-m130",
+  "d3-r4-m130",
+  "d3-r5-m130",
+  "d9-r2-m80",
+  "d9-r3-m80",
+  "d9-r4-m80",
+  "d9-r5-m80",
+  "d7-r2-m80",
+  "d7-r3-m80",
+  "d7-r4-m80",
+  "d7-r5-m80",
+  "d5-r2-m80",
+  "d5-r3-m80",
+  "d5-r4-m80",
+  "d5-r5-m80",
+  "d4-r2-m80",
+  "d4-r3-m80",
+  "d4-r4-m80",
+  "d4-r5-m80",
+  "d3-r2-m80",
+  "d3-r3-m80",
+  "d3-r4-m80",
+  "d3-r5-m80",
+  "d9-r2-m50",
+  "d9-r3-m50",
+  "d9-r4-m50",
+  "d9-r5-m50",
+  "d7-r2-m50",
+  "d7-r3-m50",
+  "d7-r4-m50",
+  "d7-r5-m50",
+  "d5-r2-m50",
+  "d5-r3-m50",
+  "d5-r4-m50",
+  "d5-r5-m50",
+  "d4-r2-m50",
+  "d4-r3-m50",
+  "d4-r4-m50",
+  "d4-r5-m50",
+  "d3-r2-m50",
+  "d3-r3-m50",
+  "d3-r4-m50",
+  "d3-r5-m50"
+ ]
+}
