@@ -164,6 +164,13 @@ struct SearchQuota {
 //   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
 //   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
 //   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
+// - use_cut_negative_extension: at an expected cut node (T17) where the
+//   singular test finds neither a singular TT move nor a multi-cut and the
+//   entry's score is at or above beta, the TT move is searched
+//   CutNegativeQuarters quarter plies shallower (think tank R40, the gated
+//   sub-ply form of T30). Depths are whole plies, so the fraction is owed by
+//   the line (PlyFrame::depth_debt) and a whole ply is taken once a line
+//   owes four quarters. Off until its LTC SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -199,7 +206,8 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_cut_negative_extension, UseCutNegativeExtension, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -258,6 +266,7 @@ struct PlyFrame {
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
   bool expected_cut = false;    // expected to fail high (a cut node), from the parent (T17)
+  std::uint8_t depth_debt = 0;  // quarter plies the line owes (R40), 0-3; always 0 with the switch off
 };
 
 // Root moves are kept in search order: the initial capture order, then after

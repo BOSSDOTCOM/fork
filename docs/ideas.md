@@ -2790,3 +2790,20 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
+
+## 132. The cut-node negative extension, sub-ply (think tank R40)
+
+- **type:** ELO (search); flag `use_cut_negative_extension` (off).
+- **idea** (think tank R40; KB search-techniques.md T30's cut-node form, concept only): the negative extension
+  (T30) only at expected cut nodes and by a fraction of a ply (`CutNegativeQuarters`, 2 = half a ply), owed by the
+  line (`PlyFrame::depth_debt`) and paid as a whole ply once four quarters are owed. The ungated whole-ply form
+  (`use_negative_extension`, off) lost at STC (−8.73 ± 4.98 Elo, H0); this is the gated sub-ply form R40 argued
+  is a different change.
+- **status:** **in progress (coordinator's build list, 2026-11-12: "R40, LTC only").** Built on phase-4 de7e0a3
+  behind the switch, off: branch tier2/r40-cut-negext, bench unchanged (9,639,207 / 07f7ae19b9250f38, r8brft1).
+  Test commits sprt/r40-cut-negext (half a ply) and sprt/r40-cut-negext-q1 (the retry, a quarter). Night items
+  94a (r40-cut-negext-ltc, design R at 40+0.4, ledger idea `r40-cut-negext`, try 1) and 94b
+  (r40-cut-negext-ltc-retry, a quarter ply, only if 94a does not accept H1), gated until state/gate-e1.done.
+  Nothing is adopted before a verdict; on H0 at both amounts `use_negative_extension` may join the removal round.
+- **runtime cost:** a byte store per child (the line's debt), and with it on a division per move.
+- **earliest phase:** Phase 4.

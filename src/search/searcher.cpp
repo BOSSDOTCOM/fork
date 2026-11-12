@@ -365,6 +365,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     frames_[ply + 1].after_null = true;
     frames_[ply + 1].arrival = NoArrival;
     frames_[ply + 1].expected_cut = !f.expected_cut;  // T17: passing should fail low below
+    frames_[ply + 1].depth_debt = f.depth_debt;       // R40: the line's debt (0 with it off)
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
     frames_[ply + 1].after_null = false;
     pos.unmake_null();
@@ -401,6 +402,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
         frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
         frames_[ply + 1].expected_cut = !f.expected_cut;
+        frames_[ply + 1].depth_debt = f.depth_debt;  // R40: the line's debt (0 with it off)
         play(ply, m);
         // Depth 0 is the quiescence search (or the static eval with it off).
         int score = -negamax<false>(-bar, -bar + 1, 0, ply + 1);
@@ -461,7 +463,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // extension).
   Move tested_move = NoMove;
   int tested_extension = 0;
-  if ((switches.use_singular_extension || switches.use_multi_cut || switches.use_negative_extension) &&
+  int tested_quarters = 0;  // R40: quarter plies the TT move owes
+  if ((switches.use_singular_extension || switches.use_multi_cut || switches.use_negative_extension ||
+       switches.use_cut_negative_extension) &&
       !withheld && ply > 0 && depth >= SingularMinDepth && tt_hit && !hit.move.is_none() &&
       (hit.bound == TtBound::Lower || hit.bound == TtBound::Exact) &&
       hit.depth >= depth - SingularEntrySlack) {
@@ -486,6 +490,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         tested_move = hit.move;
         tested_extension = -1;
         FORK_STAT(++counters.negative_extensions);
+      } else if (!OnPv && switches.use_cut_negative_extension && f.expected_cut && s >= beta) {
+        // Think tank R40: the same outcome at an expected cut node only, by
+        // a fraction of a ply (owed by the line; the move loop below).
+        tested_move = hit.move;
+        tested_quarters = CutNegativeQuarters;
       }
     }
   }
@@ -554,7 +563,15 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     if (m == f.withheld_move) continue;
     ++moves_seen;
     const bool quiet = !m.is_capture() && !m.is_promotion();
-    const int extension = m == tested_move ? tested_extension : 0;
+    int extension = m == tested_move ? tested_extension : 0;
+    // R40: the child owes this node's quarter plies plus the TT move's own;
+    // four quarters are paid as one ply less. With the switch off nothing is
+    // ever owed, so every depth_debt stays 0.
+    if (switches.use_cut_negative_extension) {
+      const int owed = f.depth_debt + (m == tested_move ? tested_quarters : 0);
+      extension -= owed / 4;
+      frames_[ply + 1].depth_debt = static_cast<std::uint8_t>(owed % 4);
+    }
 #ifdef FORK_SEARCH_STATS
     counters.futile_quiets_taken += futile_node && quiet;
     const bool bad_after_stop =
@@ -905,6 +922,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     const std::uint64_t nodes_before = nodes_;
     frames_[1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
     frames_[1].expected_cut = i > 0;  // the root's later moves: expected cut nodes (T17)
+    frames_[1].depth_debt = 0;        // R40: a root move's line owes nothing yet
     play(0, m);
     int score;
     if (i == 0 || !switches.use_pvs) {

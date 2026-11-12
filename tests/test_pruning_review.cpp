@@ -52,7 +52,8 @@ SearchSwitches no_pruning() {
   // S512r2 found two real mates in 7 plies (one confirmed by the lichess
   // tablebase, DTM 7) that this search missed at depth 8 (2026-11-01).
   s.use_multi_cut = s.use_negative_extension = s.use_no_move_reduction = false;
-  s.use_capture_probe = false;  // ProbCut prunes a node too (T31)
+  s.use_capture_probe = false;           // ProbCut prunes a node too (T31)
+  s.use_cut_negative_extension = false;  // it changes depth too
   return s;
 }
 
