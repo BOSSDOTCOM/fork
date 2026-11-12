@@ -98,6 +98,15 @@ class MoveSelector {
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
                      const TakeHistory* take_history = nullptr, bool threat_aware = false);
 
+  // The 4-ply table (the engine survey's D3; call after start_main, before
+  // the first take_next, with the `pairs` given there holding DistantTable):
+  // a quiet move's score also adds its DistantTable entry after the side's
+  // own move four plies up (`distant_arrival`), times DistantWeight / 4.
+  // NoArrival (start_main's reset) leaves the table out.
+  void set_distant_arrival(int distant_arrival) {
+    distant_arrival_ = static_cast<std::int16_t>(pair_history_ ? distant_arrival : NoArrival);
+  }
+
   // The next move, or NoMove when there are no more.
   Move take_next();
 
@@ -154,6 +163,9 @@ class MoveSelector {
 
   MoveList list_;                  // the stage's moves
   std::int16_t scores_[MaxMoves];  // every score fits (move_selector.cpp)
+  // D3's 4-ply arrival: here, in the two bytes of padding after the 323
+  // scores, so the frame keeps its 2,704-byte guard (tests/test_search.cpp).
+  std::int16_t distant_arrival_ = NoArrival;
   std::size_t next_ = 0;
   MoveList deferred_;  // bad captures and under-promotions, tried after the quiets
   std::size_t deferred_next_ = 0;

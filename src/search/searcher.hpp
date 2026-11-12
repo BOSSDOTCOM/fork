@@ -144,6 +144,11 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_distant_history: the 4-ply pair table (the engine survey's D3): a
+//   third pair table, after the side's own move four plies up (two of its
+//   moves back), read in the quiet order times DistantWeight / 4 and updated
+//   with the same bonus and malus as the reply and follow tables. Needs
+//   use_history. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +182,7 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)            X(use_distant_history, UseDistantHistory, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -574,6 +579,10 @@ class Searcher {
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
+  // The 4-ply table's arrival at frame `f` (D3): the side's own move four
+  // plies up, the arrival of frame f - 3 (none within three plies of the
+  // root, or after a null move there).
+  int distant_arrival(const PlyFrame& f) const { return &f - frames_ < 3 ? NoArrival : (&f - 3)->arrival; }
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
 #ifdef FORK_SEARCH_STATS
@@ -594,7 +603,9 @@ class Searcher {
 
   TransTable& tt_;
   QuietHistory history_;
-  PairHistory pair_history_[2];  // tier 2, T10: the reply and follow tables (ReplyTable, FollowTable)
+  // Tier 2, T10: the reply and follow tables (ReplyTable, FollowTable); D3:
+  // the 4-ply table (DistantTable).
+  PairHistory pair_history_[3];
   TakeHistory take_history_;     // tier 2, T11
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;

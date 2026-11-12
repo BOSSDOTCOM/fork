@@ -106,6 +106,9 @@ class TakeHistory {
 // guard, tests/test_search.cpp).
 constexpr int ReplyTable = 0;
 constexpr int FollowTable = 1;
+// The 4-ply table (the engine survey's D3): after the side's own move two of
+// its moves back (four plies up), when use_distant_history is on.
+constexpr int DistantTable = 2;
 
 class PairHistory {
  public:

@@ -481,11 +481,44 @@ TEST_CASE("ordering", "threat buckets: the selector orders quiets by the move's 
 // this check; final-retune.md). The selector sums in int and clamps to int16
 // before the narrowing store, so the int sum must be exact: at most
 // HistoryMax * (4 + 12 + 8) / 4 = 60,000 in magnitude, far inside int.
+// The 4-ply table (the engine survey's D3): a quiet move's DistantTable
+// entry after the distant arrival raises it only when the selector is given
+// that arrival (set_distant_arrival); start_main resets it to none. g1f3 has
+// a butterfly bonus of 1,000; b1a3's 4-ply entry of 4,000 counts 2,000 at
+// DistantWeight 2, so b1a3 leads only when the table is read.
+TEST_CASE("ordering", "4-ply table: it orders quiets only after its arrival is set") {
+  Position pos;
+  CHECK(pos.set_fen(perft_suite()[0].fen));  // the start position: quiets only
+  const Move m = pos.parse_uci("b1a3"), rival = pos.parse_uci("g1f3");
+  const int slot = pair_slot(pos.piece_at(m.from()), m.to());
+  const int distant = pair_slot(static_cast<Piece>(White * 8 + Knight), static_cast<Square>(21));
+  auto history = std::make_unique<QuietHistory>();
+  history->apply(White, rival, 1000);
+  auto pairs = std::make_unique<PairHistory[]>(3);
+  pairs[DistantTable].apply(distant, slot, 4000);
+  CHECK_EQ(pairs[DistantTable].value(distant, slot) * DistantWeight / 4, 2000);
+  MoveSelector s;
+  s.start_main(pos, NoMove, history.get(), pairs.get(), NoArrival, NoArrival);
+  s.set_distant_arrival(distant);
+  const std::vector<Move> on = drain(s);
+  CHECK(!on.empty() && on.front() == m);
+  s.start_main(pos, NoMove, history.get(), pairs.get(), NoArrival, NoArrival);
+  const std::vector<Move> off = drain(s);
+  s.start_main(pos, NoMove, history.get(), nullptr, NoArrival, NoArrival);
+  s.set_distant_arrival(distant);  // no pair tables: nothing to read
+  const std::vector<Move> none = drain(s);
+  CHECK(!none.empty() && none.front() == rival);
+  CHECK(off == none);  // without its arrival the table is not read
+  CHECK(!off.empty() && off.front() == rival);
+}
+
 TEST_CASE("ordering", "the quiet score's sum is exact in int at the weights' highest") {
   const int reply = find_param("ReplyWeight")->highest;
   const int follow = find_param("FollowWeight")->highest;
   CHECK(std::int64_t{HistoryMax} * std::max(reply, follow) <= INT32_MAX);   // each product
   CHECK(std::int64_t{HistoryMax} * (4 + reply + follow) / 4 <= INT32_MAX);  // the sum
+  const int distant = find_param("DistantWeight")->highest;                   // D3's 4-ply table too
+  CHECK(std::int64_t{HistoryMax} * (4 + reply + follow + distant) / 4 <= INT32_MAX);
   // One reply entry alone at the highest weight still fits int16 unclamped
   // (30,000 at 12): only sums of tables reach the clamp.
   CHECK(HistoryMax * reply / 4 <= INT16_MAX);

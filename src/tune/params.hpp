@@ -66,6 +66,7 @@
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 12, 1)             \
   X(FollowWeight, 4, 0, 8, 1)             \
+  X(DistantWeight, 2, 0, 8, 1)            \
   X(TakeWeight, 4, 0, 16, 1)              \
   X(StaleDepthPerSearch, 2, 1, 4, 1)      \
   X(AssumedMovesLeft, 30, 15, 60, 2)      \

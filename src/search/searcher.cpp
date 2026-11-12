@@ -176,6 +176,8 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   if (switches.use_reply_history && f.arrival != NoArrival) update(pair_history_[ReplyTable], f.arrival);
   const int follow = follow_arrival(f);
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
+  const int distant = distant_arrival(f);
+  if (switches.use_distant_history && distant != NoArrival) update(pair_history_[DistantTable], distant);
 }
 
 void Searcher::update_pv(int ply, Move m) {
@@ -487,6 +489,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       switches.use_history ? pair_history_ : nullptr, switches.use_reply_history ? f.arrival : NoArrival,
       switches.use_follow_history ? follow_arrival(f) : NoArrival,
       switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets);
+  if (switches.use_distant_history && switches.use_history) f.selector.set_distant_arrival(distant_arrival(f));
   f.failed_moves.count = 0;
 
   const int alpha_start = alpha;

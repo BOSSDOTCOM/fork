@@ -2719,3 +2719,20 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 94. The 4-ply pair table (the engine survey's D3)
+
+- **type:** ELO (search, ordering); flag `use_distant_history` (off).
+- **idea** (the engine survey's D3, its rank 20; concept only): a third
+  pair table, after the side's own move four plies up, read in the quiet
+  order times `DistantWeight` / 4 and updated as the reply and follow
+  tables are.
+- **status:** **built, queued (coordinator, 2026-11-11 night; R-STC).**
+  Built on phase-4 a95e269 behind the switch, off, branch
+  tier2/d3-distant-history; bench unchanged. Design R at STC at 2 quarters
+  against the switch-off commit (night item 57a), gated behind
+  state/gate-e1.done. The 6-ply form is not built. Nothing is adopted before
+  its verdict.
+- **runtime cost:** one more table read per scored quiet and update per
+  cutoff; 1.2 MB more per searcher; UNVERIFIED until the SPRT's nps report.
+- **earliest phase:** Phase 4.

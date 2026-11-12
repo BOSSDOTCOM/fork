@@ -48,6 +48,7 @@ void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHist
   pair_history_ = pairs;
   arrival_ = static_cast<std::int16_t>(pairs ? arrival : NoArrival);
   follow_arrival_ = static_cast<std::int16_t>(pairs ? follow_arrival : NoArrival);
+  distant_arrival_ = NoArrival;
   quiesce_ = false;
   see_filter_ = false;
   quiets_stopped_ = false;
@@ -99,11 +100,13 @@ void MoveSelector::score_quiets() {
   for (std::size_t i = 0; i < list_.size(); ++i) {
     const Move m = list_[i];
     int score = history_ ? history_->value(us, m, threat_bucket(attacked, m)) : 0;
-    if (arrival_ != NoArrival || follow_arrival_ != NoArrival) {
+    if (arrival_ != NoArrival || follow_arrival_ != NoArrival || distant_arrival_ != NoArrival) {
       const int slot = pair_slot(pos_->piece_at(m.from()), m.to());
       if (arrival_ != NoArrival) score += pair_history_[ReplyTable].value(arrival_, slot) * ReplyWeight / 4;
       if (follow_arrival_ != NoArrival)
         score += pair_history_[FollowTable].value(follow_arrival_, slot) * FollowWeight / 4;
+      if (distant_arrival_ != NoArrival)  // D3
+        score += pair_history_[DistantTable].value(distant_arrival_, slot) * DistantWeight / 4;
       // Weights above one can take the sum past int16 at the extremes.
       score = std::clamp(score, -INT16_MAX, INT16_MAX);
     }
