@@ -65,7 +65,7 @@
   X(CaptureProbeMinDepth, 9, 4, 18, 1)    \
   X(CaptureProbeReduction, 5, 2, 10, 1)   \
   X(CaptureProbeMargin, 80, 40, 160, 6)   \
-  X(QuiesceMoveCap, 3, 1, 6, 1)           \
+  X(QuiesceMoveCap, 2, 1, 6, 1)           \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 12, 1)             \
