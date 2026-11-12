@@ -368,6 +368,7 @@ added on 2026-10-24; ideas 1-12 predate them.
   +67.36 ± 18.53 at 8+0.08 on its OpenBench; Braun 2026, arXiv:2609.37447, not retained). No application to
   alpha-beta NNUE data generation was found in the sources searched, so a write-up would present it as an
   application with a measured result, not a new mechanism (the owner decides the publication plan).
+- **settings re-check (owner, 2026-11-12, about 1:30 PM EST: the split search's settings (the save share and the saved and unsaved node budgets) are re-checked whenever the data volume grows substantially, like other tuned values; the label-depth experiment's result (idea 62) and idea 80's 8c arm together decide the next settings (for example deeper saved labels and/or a higher save share if deeper labels win at equal CPU)).**
 
 ## 14. Auxiliary training targets
 
@@ -2221,6 +2222,7 @@ until measured; new names and constants go through the screens before use.
   launches**, with a 30-minute rate probe first, then the arms as designed
   under the declared rule. **runtime cost:** none. **earliest phase:**
   Phase 4.
+- **settings re-check (owner, 2026-11-12, about 1:30 PM EST: the split search's settings (the save share and the saved and unsaved node budgets) are re-checked whenever the data volume grows substantially, like other tuned values; the label-depth experiment's result (idea 62) and idea 80's 8c arm together decide the next settings (for example deeper saved labels and/or a higher save share if deeper labels win at equal CPU)).**
 
 ## 63. Ensemble teacher
 
@@ -2723,6 +2725,7 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **an arm in retrain 8c**, defined precisely (owner, 2026-11-11): the **same self-play games and the same number of training steps** as the control; the arm samples from saved plus unsaved (TD-labelled) positions, the control from saved positions only; **two seeds each**. Kill: head-to-head at or below 0 on both seeds. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+- **settings re-check (owner, 2026-11-12, about 1:30 PM EST: the split search's settings (the save share and the saved and unsaved node budgets) are re-checked whenever the data volume grows substantially, like other tuned values; the label-depth experiment's result (idea 62) and idea 80's 8c arm together decide the next settings (for example deeper saved labels and/or a higher save share if deeper labels win at equal CPU)).**
 
 ## 81. Colour-coherent split search (novel-ideas 3)
 
