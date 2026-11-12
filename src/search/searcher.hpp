@@ -164,6 +164,13 @@ struct SearchQuota {
 //   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
 //   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
 //   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
+// - use_root_lean: the root lean (the engine survey's F11, optimism). After
+//   RootLeanIterations finished iterations in a row with a root score at or
+//   above RootLeanThreshold, the search moves every evaluation it uses
+//   toward the root side by lean * |eval| / RootLeanScale, the lean
+//   being those scores' average capped at RootLeanCap; the TT keeps raw
+//   evaluations. Off until its SPRT, and it stays off in data generation's
+//   labeller whatever its SPRT gives (owner, 2026-11-12).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -199,7 +206,13 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)          \
+  X(use_root_lean, UseRootLean, false)
+
+// F11 (use_root_lean): finished iterations in a row with a good root score
+// before the root side counts as consistently ahead (DESIGN.md, "Search
+// constants").
+constexpr int RootLeanIterations = 3;
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -590,6 +603,7 @@ class Searcher {
   void play(int ply, Move m);
   void play_null(int ply);
   int eval_at(int ply);
+  int leaning(int eval) const;  // F11: an evaluation with the root side's lean
 
   bool poll_limits();  // true once the search must stop
   // The soft limit for this iteration's soft check: the planned one, or with
@@ -655,6 +669,14 @@ class Searcher {
   // LMR context inputs kept by the search (lmr_table.hpp): the root score's
   // last change between iterations, and the share of the current root move.
   int score_trend_ = 0;
+  // F11 (use_root_lean): the root side's lean (0: none), that side, and
+  // the last finished iterations' root scores at or above RootLeanThreshold
+  // (newest first; good_iterations_ of them in a row, at most
+  // RootLeanIterations).
+  int root_lean_ = 0;
+  Color root_lean_side_ = White;
+  int recent_good_[RootLeanIterations] = {};
+  int good_iterations_ = 0;
   int branch_share_ = 0;
   // The last finished iteration's PV, and the first move of the last line
   // reported: a stop after a reported fail repeats the finished iteration,

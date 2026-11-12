@@ -61,6 +61,16 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
 #endif
 }
 
+// The engine survey's F11: an evaluation from the side to move's view, moved
+// toward the root side by its lean (0 unless use_root_lean found the root
+// side consistently ahead): by lean * |eval| / RootLeanScale. The TT keeps
+// the raw evaluation; only the search's use of it moves.
+[[gnu::always_inline]] inline int Searcher::leaning(int eval) const {
+  if (root_lean_ == 0) return eval;
+  const int lift = root_lean_ * std::abs(eval) / RootLeanScale;
+  return pos_->side_to_move() == root_lean_side_ ? eval + lift : eval - lift;
+}
+
 namespace {
 
 // Fork's own values, each justified in DESIGN.md §5.2 ("Search constants").
@@ -219,11 +229,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
   if (ply >= MaxPly) {
     FORK_STAT(counters.evals_horizon += !in_check);
-    return in_check ? 0 : eval_at(ply);
+    return in_check ? 0 : leaning(eval_at(ply));
   }
   if (depth <= 0) {
     FORK_STAT(++counters.evals_horizon);
-    return eval_at(ply);  // only with the quiescence search switched off
+    return leaning(eval_at(ply));  // only with the quiescence search switched off
   }
 
   if (switches.use_mate_distance) {
@@ -302,7 +312,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // its bound proves (a lower bound above it raises it, an upper bound below
   // it lowers it, an exact score replaces it). Mate and tablebase scores are
   // left out; the TT keeps the raw static eval.
-  int prune_eval = f.static_eval;
+  int prune_eval = in_check ? f.static_eval : leaning(f.static_eval);  // F11 (raw: no lean)
   if (switches.use_tt_eval_refine && tt_hit && !in_check) {
     const int s = score_from_tt(hit.score, ply);
     if (!is_tb_or_mate(s) &&
@@ -805,7 +815,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   if (pos.fifty_move_reached()) return fifty_move_score(pos, in_check, ply);
   if (ply >= MaxPly) {
     FORK_STAT(counters.evals_horizon += !in_check);
-    return in_check ? 0 : eval_at(ply);
+    return in_check ? 0 : leaning(eval_at(ply));
   }
 
   const Key key = pos.key();
@@ -842,7 +852,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
         counters.eval_gap_quiesce_one_sided += is_tb_or_mate(alpha) != is_tb_or_mate(beta);
     }
 #endif
-    best = f.static_eval;
+    best = leaning(f.static_eval);  // F11 (raw: no lean)
     if (best >= beta) {
       if (switches.use_tt)
         tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);
@@ -1067,6 +1077,9 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   unresolved_fail_high_ = NoMove;
   stable_iterations_ = 0;
   stable_move_ = NoMove;
+  root_lean_ = 0;  // F11: none until enough good iterations
+  root_lean_side_ = pos.side_to_move();
+  good_iterations_ = 0;
   time_signals_ = {};
   last_soft_ms_ = limits.soft_ms;
   frames_[0].arrival = NoArrival;  // the root has none (the follow table's arrival at ply 1)
@@ -1201,6 +1214,25 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       root_moves_[i].share =
           iteration_nodes ? static_cast<int>(root_moves_[i].nodes * 1000 / iteration_nodes) : 0;
     previous = score;
+    // The engine survey's F11 (optimism), the root lean: after RootLeanIterations finished
+    // iterations in a row at or above RootLeanThreshold (no decisive score),
+    // the root side's lean is their average, at most RootLeanCap; any
+    // other iteration resets it.
+    if (switches.use_root_lean) {
+      if (score >= RootLeanThreshold && !is_tb_or_mate(score)) {
+        for (int i = RootLeanIterations - 1; i > 0; --i) recent_good_[i] = recent_good_[i - 1];
+        recent_good_[0] = score;
+        good_iterations_ = std::min(good_iterations_ + 1, RootLeanIterations);
+        if (good_iterations_ == RootLeanIterations) {
+          int sum = 0;
+          for (const int s : recent_good_) sum += s;
+          root_lean_ = std::min(sum / RootLeanIterations, RootLeanCap);
+        }
+      } else {
+        good_iterations_ = 0;
+        root_lean_ = 0;
+      }
+    }
     result.best = root_moves_[0].move;
     result.score = score;
     result.depth = depth;

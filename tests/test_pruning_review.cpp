@@ -53,6 +53,7 @@ SearchSwitches no_pruning() {
   // tablebase, DTM 7) that this search missed at depth 8 (2026-11-01).
   s.use_multi_cut = s.use_negative_extension = s.use_no_move_reduction = false;
   s.use_capture_probe = false;  // ProbCut prunes a node too (T31)
+  s.use_root_lean = false;  // it moves evaluations (F11)
   return s;
 }
 

@@ -2790,3 +2790,25 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
+
+## 143. The root lean, optimism (the engine survey's F11)
+
+- **type:** ELO (search); flag `use_root_lean` (off).
+- **idea** (the engine survey's F11, its rank 15; concept only): once the
+  root side has scored at least `RootLeanThreshold` for `RootLeanIterations`
+  finished iterations in a row, every evaluation the search uses moves
+  toward it by lean × |eval| / `RootLeanScale` (lean: those scores' average,
+  at most `RootLeanCap`); the TT keeps raw evaluations. The survey: Raphael
+  +5.9 LTC, pawnocchio +5.2 STC, PlentyChess +1.3 LTC (STC H0).
+- **status:** **in progress (owner, 2026-11-12 6:15 AM EST: builder 3's F11
+  design approved, LTC-first).** Built on phase-4 32384e1 behind the switch,
+  off: branch tier2/f11-root-lean, bench unchanged (9,639,207 /
+  07f7ae19b9250f38, r8brft1). Test commits sprt/f11-root-lean (scale 4000)
+  and sprt/f11-root-lean-2000 (the retry). Night items z70a
+  (f11-root-lean-ltc, design R at 40+0.4, ledger idea `f11-root-lean`, try
+  1) and z70b (the retry, try 2, only if z70a is not H1), after lane A's
+  STC items. Nothing is adopted before a verdict. **The switch stays off in
+  data generation's labeller whatever its SPRT gives (owner, 2026-11-12).**
+- **runtime cost:** none (one multiply per evaluation the search uses, only
+  while the lean is non-zero).
+- **earliest phase:** Phase 4.
