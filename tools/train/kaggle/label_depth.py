@@ -25,7 +25,7 @@ COMMIT = 'research/label-depth'   # replaced by the pushed commit's hash before 
 ARMS = {'d20': 'ld-d20', 'd50': 'ld-d50', 'd100': 'ld-d100', 'c50': 'ld-d20c50', 'c100': 'ld-d20c100'}
 VAL_RUN = {'d20': 'ld-d20', 'd50': 'ld-d50', 'd100': 'ld-d100', 'c50': 'ld-d20', 'c100': 'ld-d20'}
 RUNS = [(arm, seed) for arm in ARMS for seed in (1, 2)]
-SCALE = 0                   # fit_scale.py on ld-d20 (set before the push; 0 refuses to train)
+SCALE = 81                  # fit_scale.py on ld-d20's training files, 2 M positions (2026-11-12; 0 refuses to train)
 RESULT_WEIGHT = 0.5
 BATCH = 16384
 BATCHES = 305               # per superbatch: 5 M positions
@@ -68,7 +68,8 @@ ok = rc == 0 and SCALE > 0
 files = {}
 summary['hash_check'] = {}
 for run in sorted(set(ARMS.values())):
-    found = sorted(glob.glob(f'{DATA}/**/{run}-w*.vf', recursive=True))
+    # Both segments' files: RUN-wNN.vf (segment 1, its held-out RUN-wNN-val.vf) and RUN-s2-wNN.vf (segment 2).
+    found = sorted(glob.glob(f'{DATA}/**/{run}-*.vf', recursive=True))
     # The storage rule (DESIGN.md §5.3, deliverable 3): every mounted shard must match its sealed SHA-256.
     sealed = {s['file']: s['sha256'] for b in json.load(open(f'{repo}/data/manifests/{run}.json'))['batches']
               for s in b}
