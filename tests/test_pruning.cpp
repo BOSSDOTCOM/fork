@@ -470,7 +470,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 TEST_CASE("pruning", "improving flag in LMP and LMR: still correct, and each changes the search") {
   PruningFixture fx;
   CHECK(!SearchSwitches{}.use_improving_lmp);  // off until their SPRTs
-  CHECK(!SearchSwitches{}.use_improving_lmr);
+  CHECK(SearchSwitches{}.use_improving_lmr);  // on in this SPRT test commit
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
   const int depth = Optimized ? 10 : 7;
   Position pos;
