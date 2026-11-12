@@ -188,7 +188,7 @@ struct SearchQuota {
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_firm_rfp, UseFirmRfp, false)                     \
   X(use_firm_stand_pat, UseFirmStandPat, false)          \
-  X(use_firm_fail_high, UseFirmFailHigh, false)
+  X(use_firm_fail_high, UseFirmFailHigh, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

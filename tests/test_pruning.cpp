@@ -471,7 +471,7 @@ TEST_CASE("pruning", "fail-firm returns: still correct, and each changes the sea
   PruningFixture fx;
   CHECK(!SearchSwitches{}.use_firm_rfp);  // off until their SPRTs
   CHECK(!SearchSwitches{}.use_firm_stand_pat);
-  CHECK(!SearchSwitches{}.use_firm_fail_high);
+  CHECK(SearchSwitches{}.use_firm_fail_high);  // on in this SPRT test commit
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
   const int depth = Optimized ? 10 : 7;
   Position pos;
