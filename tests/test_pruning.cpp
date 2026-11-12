@@ -466,7 +466,11 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // ProbCut, the capture probe (tier 2, T31): with it on, mates are still
 // found and the best move is legal, and it changes the tree (fault check: a
 // probe that never cuts leaves the tree as it is with the switch off). Deep
-// enough that non-PV nodes reach its minimum depth in a debug build too.
+// enough that non-PV nodes reach its minimum depth in a debug build too: the
+// root's children are searched one ply shallower than the root, so the
+// depth is tied to CaptureProbeMinDepth and stays above it. A fixed debug
+// depth of 9, written when the minimum depth was 6, ran no probe at all once
+// the measured minimum depth 9 replaced it (5c9e755), so the trees were equal.
 TEST_CASE("pruning", "capture probe: still correct, and it changes the search") {
   PruningFixture fx;
   CHECK(SearchSwitches{}.use_capture_probe);  // on since its LTC SPRT passed
@@ -476,7 +480,7 @@ TEST_CASE("pruning", "capture probe: still correct, and it changes the search") 
   CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 8).score == mate_score(1));
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 8).score == mate_score(3));
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
-  const int depth = Optimized ? 12 : 9;
+  const int depth = CaptureProbeMinDepth + (Optimized ? 3 : 1);  // 12 and 10 at the default 9
   Position pos;
   CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
   MoveList legal;
