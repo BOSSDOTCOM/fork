@@ -144,6 +144,12 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_see_history_margin: the main search's SEE pruning floor for a quiet
+//   move moves by its ordering score (the engine survey's B11, its SEE
+//   margin first): QuietSeeFloor cp lower per SeeHistoryPerPly of score, so
+//   a quiet that has cut before may lose more material before it is pruned
+//   and one that has failed less (see_history_shift). Captures keep
+//   CaptureSeeFloor. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +183,8 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)          \
+  X(use_see_history_margin, UseSeeHistoryMargin, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -575,6 +582,10 @@ class Searcher {
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
   void update_pv(int ply, Move m);
+  // B11: the cp a quiet's SEE pruning floor is lowered by (raised if
+  // negative): its ordering score (quiet_order_score, the selector's) times
+  // QuietSeeFloor / SeeHistoryPerPly. `pos` before the move.
+  int see_history_shift(const Position& pos, PlyFrame& f, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
 #ifdef FORK_SEARCH_STATS
   // X6 (DESIGN.md §5.7): one `iteration_trace` line for a finished iteration.

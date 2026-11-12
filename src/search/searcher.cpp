@@ -178,6 +178,15 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
 }
 
+int Searcher::see_history_shift(const Position& pos, PlyFrame& f, Move m) {
+  const int score = quiet_order_score(pos, m, switches.use_history ? &history_ : nullptr,
+                                      switches.use_history ? pair_history_ : nullptr,
+                                      switches.use_reply_history ? f.arrival : NoArrival,
+                                      switches.use_follow_history ? follow_arrival(f) : NoArrival,
+                                      threat_bucket(f.selector.attacked_by_opponent(), m));
+  return score * QuietSeeFloor / SeeHistoryPerPly;
+}
+
 void Searcher::update_pv(int ply, Move m) {
   PrincipalLine& line = pv_[ply];
   const PrincipalLine& child = pv_[ply + 1];
@@ -537,9 +546,15 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       // A capture from the good-capture stage already has SEE >= 0, above
       // every (negative) threshold here, so it is not tested again (review
       // claim (c), 2026-10-26).
+      // B11: with use_see_history_margin a quiet's floor moves by its
+      // ordering score, QuietSeeFloor per SeeHistoryPerPly of it (lower for
+      // a quiet that has cut before, higher for one that has failed).
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth &&
           f.selector.yielding_stage() != SelectorStage::GoodCaptures &&
-          !see_at_least(pos, m, -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth)) {
+          !see_at_least(pos, m,
+                        quiet && switches.use_see_history_margin
+                            ? -QuietSeeFloor * depth - see_history_shift(pos, f, m)
+                            : -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth)) {
 #ifdef FORK_SEARCH_STATS
         counters.bad_captures_after_stop_pruned += bad_after_stop;
         ++counters.see_prunes;
