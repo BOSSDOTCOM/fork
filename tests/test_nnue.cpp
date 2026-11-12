@@ -50,7 +50,10 @@ int uniform(std::uint64_t& rng, int lo, int hi) {
 // Feature weights within +-400 and biases within +-2000 keep every
 // first-layer sum inside int16 (2000 + 62 x 400 < 32767); B0's output
 // weights within +-2000 keep its sum inside int32 (255 x 512 x 2000 < 2^31);
-// squared outputs need |w| <= 128.
+// squared outputs need |w| <= 128 and QA^2 times a bucket's sum of |w|
+// within int32, so their weights stay within +-30 but for one +128 and one
+// -128 per bucket (the edge values): at most 1,022 x 30 + 256 = 30,916, below
+// 2^31 / 255^2 = 33,025.
 std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   auto net = std::make_unique<NetFile>();
   std::uint64_t rng = seed;
@@ -75,8 +78,11 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   for (auto& w : net->out_weights) w = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
   net->out_bias = uniform(rng, -100000, 100000);
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
-  for (auto& row : net->out_weights)
-    for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -128, 128));
+  for (auto& row : net->out_weights) {
+    for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -30, 30));
+    row[uniform(rng, 0, NetHidden - 1)] = 128;
+    row[NetHidden + uniform(rng, 0, NetHidden - 1)] = -128;
+  }
   for (auto& b : net->out_bias) b = uniform(rng, -100000, 100000);
 #elif FORK_NET_ARCH == 4
   for (auto& stack : net->af1_weights)
@@ -97,8 +103,11 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   for (int f = 0; f < NetInputs; ++f)
     for (int k = 0; k < 3; ++k) net->side_weights[f][k] = static_cast<std::int16_t>(uniform(rng, -300, 300));
   for (int k = 0; k < 3; ++k) net->side_bias[k] = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
-  for (auto& row : net->expert_weights)
-    for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -128, 128));
+  for (auto& row : net->expert_weights) {
+    for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -30, 30));
+    row[uniform(rng, 0, NetHidden - 1)] = 128;
+    row[NetHidden + uniform(rng, 0, NetHidden - 1)] = -128;
+  }
   for (auto& b : net->expert_bias) b = uniform(rng, -100000, 100000);
 #endif
   net->scale = 400;
@@ -214,6 +223,33 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   auto wide = random_net(3);
   wide->out_weights[2][5] = 129;
   rejects(write_net_file(*wide), "an output weight beyond the squared output's bound");
+#endif
+#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+  // Bug review 2026-11-11, E3: every output weight within the |w| <= 128
+  // bound, but one bucket's QA^2 sum of |w| beyond int32, where the AVX2
+  // path's 32-bit lane sums could overflow (all 2H weights at 128: 255^2 x
+  // 1,024 x 128 = 8.5e9). The reader refuses it; one weight less than the
+  // bound's limit is accepted. 2^31 / 255^2 = 33,025.5, so a bucket summing
+  // to 33,025 fits (2,147,450,625) and 33,026 does not (2,147,515,650).
+#if FORK_NET_ARCH == 5
+  auto bucket = [](NetFile& n) -> auto& { return n.expert_weights[1]; };
+#else
+  auto bucket = [](NetFile& n) -> auto& { return n.out_weights[NetBuckets - 1]; };
+#endif
+  auto set_sum = [&](NetFile& n, int sum) {
+    auto& row = bucket(n);
+    for (auto& w : row) w = 0;
+    for (int i = 0; sum > 0; ++i, sum -= 128) row[i] = static_cast<std::int16_t>(std::min(sum, 128));
+  };
+  auto loud_out = random_net(3);
+  for (auto& w : bucket(*loud_out)) w = 128;
+  rejects(write_net_file(*loud_out), "a bucket whose squared sum can leave int32 (every weight 128)");
+  auto edge = random_net(3);
+  set_sum(*edge, 33026);
+  rejects(write_net_file(*edge), "a bucket at 255^2 x 33,026, one past int32");
+  set_sum(*edge, 33025);
+  CHECK_MSG(read_net_file(write_net_file(*edge), *back, error), "a bucket at 255^2 x 33,025: " << error);
 #endif
   if constexpr (NetPhasePicked) {
     auto unsorted = random_net(4);

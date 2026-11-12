@@ -174,9 +174,11 @@ std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm
 }
 
 #if defined(__AVX2__)
-// v * w is exact in 16 bits (|w| <= 128 is the loader's bound), and each
-// int32 lane adds 2 * 2H / 16 products of at most 8,323,200 (128 at H = 512),
-// far below the int32 limit, so the sum equals the scalar one.
+// v * w is exact in 16 bits (|w| <= 128 is the loader's bound). The lanes
+// and their final reduction add in int32: every partial sum is a sum of some
+// of the products v * v * w, so the loader's bound on QA^2 times the
+// bucket's sum of |w| (net_file.cpp, sums_in_range; bug review 2026-11-11,
+// E3) keeps each within int32, and the sum equals the scalar one.
 std::int64_t squared_sum(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
   const __m256i zero = _mm256_setzero_si256(), qa = _mm256_set1_epi16(NetQa);
   __m256i sum = _mm256_setzero_si256();

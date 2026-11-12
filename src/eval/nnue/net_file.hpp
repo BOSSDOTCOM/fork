@@ -31,8 +31,10 @@
 //   range: no first-layer unit's (or side lane's) |bias| + 32 * its largest
 //   |piece weight| (+ 30 * its largest |exposure weight|, XGR; + 64 * its
 //   largest |link weight|, S512+PP: the most links at its rank limit) exceeds the
-//   int16 range, and the output layers' worst cases stay within int32 (int64
-//   for the squared outputs' sums). S512+X's exposure rows and S512cl's
+//   int16 range, and the output layers' worst cases stay within int32 (the
+//   squared outputs: QA^2 times each bucket's sum of |w|, which bounds the
+//   AVX2 path's 32-bit lane sums; the scalar path sums in int64). S512+X's
+//   exposure rows and S512cl's
 //   contact and link rows need no bound: they are summed in 32 bits
 //   (accumulator.cpp) and held to int16 only when added to the piece sums. So the
 //   integer arithmetic of every path (scalar and SIMD) never overflows, and
