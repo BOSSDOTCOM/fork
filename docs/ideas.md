@@ -2570,9 +2570,7 @@ whose weaknesses and data gaps decide their targets and order.
   sprt/qhp-2300, -1600, -900) was superseded before any game when T56's
   threat buckets were adopted. Nothing is adopted before its verdict. The
   STC ran on commits rebased onto E1 (gate-e1; suffix -e1).
-- **runtime cost:** possible (the ordering score is computed for each
-  eligible quiet move at depths 1-3 when the switch is on); to be reported
-  with the SPRT result (the 2026-10-24 rule; UNVERIFIED until then).
+- **runtime cost:** measured after the adoption with bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 e79cbf7, B = the adopting commit 9d574d9 (built as 22ab719, before its rebases onto 32384e1 and 8cb60b8, which changed no engine code), r8brft1): 12 interleaved rounds, median nps 3,163,250 against 3,083,790 (-2.5%), best 3,213,989 against 3,175,134 (-1.2%), under the 3.7% noise threshold; 16 more rounds, median 2,900,246 against 2,815,540 (-2.9%), best 2,983,721 against 2,991,063 (+0.2%), under the 6.3% threshold. No significant difference in either; both medians lean 2.5-3% slower, so a small nps price (the ordering score computed for each eligible quiet move at depths 1-3) is possible but not resolved at this noise (UNVERIFIED). The bench searches 3.9% fewer nodes (9,263,568 against 9,639,207).
 - **earliest phase:** Phase 4.
 
 ## 75. The summed pair-table update (the engine survey's D8)

@@ -1488,4 +1488,6 @@ The final stage's result block (qhp-stc, stage 6, run 43193266205):
   9,263,568 / 881c326307a2ba8a (r8brft1). With the skip off 9,639,207 / 07f7ae19b9250f38, phase-4's; with the skip
   on and ProbCut off (the tested base had no ProbCut) 9,886,698 / 8e7db959846159f4, byte for byte 4701319's
   tests/bench-r8brft1.ref, so the port equals the tested code. `HistorySkipPerPly` 700 and `HistorySkipMaxDepth` 3
-  join the final retune's SPSA (class (a)).
+  join the final retune's SPSA (class (a)). Speed after the adopting commit 9d574d9 (built as 22ab719, before its rebases onto 32384e1 and 8cb60b8, which changed no engine code) (bench/ab_search.py, A =
+  e79cbf7): median nps -2.5% (12 rounds) and -2.9% (16 rounds), best -1.2% and +0.2%, each under its noise
+  threshold (3.7%, 6.3%): no significant difference; a small price is possible but not resolved (UNVERIFIED).
