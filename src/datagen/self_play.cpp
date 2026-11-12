@@ -110,7 +110,8 @@ SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer, 
       if (!saved) limits.nodes = config_.unsaved_nodes;
     }
 
-    table_.advance_age();
+    // deliberate() advances the table's age itself, once per search (bug
+    // review 2026-11-11, E5: a second advance here aged it twice per move).
     SearchResult s = searcher_.deliberate(pos, limits, stop_, nullptr, nullptr);
     nodes_spent_ += s.nodes;
     // deliberate() always returns a legal root move, but where the node limit
