@@ -187,7 +187,7 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_tt_cut_credit, UseTtCutCredit, false)            \
-  X(use_linear_bonus, UseLinearBonus, false)
+  X(use_linear_bonus, UseLinearBonus, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
