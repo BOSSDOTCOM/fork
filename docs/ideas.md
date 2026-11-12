@@ -2657,7 +2657,7 @@ whose weaknesses and data gaps decide their targets and order.
 - **type:** ELO (training data).
 - **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): the split search discards its unsaved records (45.5%); give them TD(lambda) targets from the next saved record (variant A, no new assumption; td_labels.py --from-next) or the PV-child score (variant B), in derived shards.
 - **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
-- **plan** (owner, 2026-11-11): **an arm in retrain 8c, two seeds, at equal compute** against the control (the owner chose equal compute over the proposal's equal samples). Kill: head-to-head at or below 0 on both seeds. No runs until the current queue clears its gates; offline probes use the cloud
+- **plan** (owner, 2026-11-11): **an arm in retrain 8c**, defined precisely (owner, 2026-11-11): the **same self-play games and the same number of training steps** as the control; the arm samples from saved plus unsaved (TD-labelled) positions, the control from saved positions only; **two seeds each**. Kill: head-to-head at or below 0 on both seeds. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
 
