@@ -468,7 +468,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // switch off). It is a history, so with use_history off it does nothing.
 TEST_CASE("pruning", "4-ply table: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_distant_history);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_distant_history);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_distant_history = true;
   fx.searcher->switches = on;
