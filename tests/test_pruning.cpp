@@ -506,7 +506,7 @@ TEST_CASE("pruning", "round-once LMR: 64ths round back to the whole-ply table, t
 // term is 0 and the round-once arithmetic gives the switch-off tree exactly.
 TEST_CASE("pruning", "centred LMR history: still correct, changes the search, round-once alone does not") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_centred_lmr_history);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_centred_lmr_history);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_centred_lmr_history = true;
   fx.searcher->switches = on;
