@@ -1614,7 +1614,9 @@ TEST_CASE("search", "time management: a changed best move searches longer, a sta
 
 #ifdef FORK_TUNE
 // Tuning builds: the eleven ranges widened for the final retune (owner,
-// 2026-11-09; final-retune.md) searched at their new bounds, each alone and
+// 2026-11-09; final-retune.md), and the three set on 2026-11-12
+// (AspirationHalfWidth's highest 40, FollowWeight's 16, MinorDriftShare's
+// lowest 16), searched at their new bounds, each alone and
 // all at once: every search completes with a legal move and a score inside
 // the score bounds. LmrMinMove 1 is the same search as 2 (same nodes, move
 // and score): the first move searched never takes the LMR path, so the
@@ -1634,7 +1636,10 @@ TEST_CASE("search", "tuning build: the widened ranges search at their bounds") {
                           {"ReplyWeight", 12},
                           {"NullSurplusPliesMax", 6},
                           {"LmrMinMove", 1},
-                          {"LmpMaxDepth", 1}};
+                          {"LmpMaxDepth", 1},
+                          {"AspirationHalfWidth", 40},
+                          {"FollowWeight", 16},
+                          {"MinorDriftShare", 16}};
   const std::string_view fens[] = {"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
                                    "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"};
   const auto reset = [] {

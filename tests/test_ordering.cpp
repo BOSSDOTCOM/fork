@@ -517,7 +517,8 @@ TEST_CASE("ordering", "threat buckets: the selector orders quiets by the move's 
 // highest values (owner, 2026-11-09: ReplyWeight's range widened to 12 after
 // this check; final-retune.md). The selector sums in int and clamps to int16
 // before the narrowing store, so the int sum must be exact: at most
-// HistoryMax * (4 + 12 + 8) / 4 = 60,000 in magnitude, far inside int.
+// HistoryMax * (4 + 12 + 16) / 4 = 80,000 in magnitude, far inside int
+// (FollowWeight's highest 16 since 2026-11-12).
 TEST_CASE("ordering", "the quiet score's sum is exact in int at the weights' highest") {
   const int reply = find_param("ReplyWeight")->highest;
   const int follow = find_param("FollowWeight")->highest;

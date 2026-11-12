@@ -127,7 +127,7 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | parameter | start | range now | step | c | room to floor / ceiling (in c) | flag and proposal |
 |---|---|---|---|---|---|---|
 | AspirationMinDepth | 5 | 2-10 | 1 | ? (>= 1) | 3 / 5 at c = 1 | ok at c = 1 |
-| AspirationHalfWidth | 12 | 6-24 | 1 | 1.0 | 6 / 12 | ok |
+| AspirationHalfWidth | 12 | **8-40 (was 6-24)** | 1 | 1.0 | 4 / 28 | ok; **range 8-40, the owner's decision (2026-11-12, about 8:50 AM EST, the staleness audit)**: the default stays 12 with no SPRT (R14's SPSA kept 12 within a range topped at 24, and game evidence outranks the audit's offline re-measure of 29); the range now holds the re-measured 29 well inside, so the SPSA can reach it |
 | RfpMaxDepth | 6 | 3-12 | 1 | ? | 3 / 6 | ok at c = 1 |
 | **RfpMargin** | 55 | 30-160 (was 40-160) | 6 | 15 | **1.0 (pinned)** / 7 | **lowest 30 (owner, 2026-11-09): floor 30 + c; at c = 15 the floor is 45.** Since c is recalibrated at step 19, the floor target (about 45) fixes lowest = 45 − c_new if c changes |
 | NullMinDepth | 3 | 1-6 | 1 | ? | 2 / 3 at c = 1 | **flag**; lowest is already the rule's floor for depths (1), so no widening; a pin is resolved by a head-to-head of 2 against 3 (design R tooling) |
@@ -146,12 +146,12 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | CaptureSeeFloor | 118 | 50-200 | 8 | 28 | 2.4 / 2.9 | marginal, ok |
 | HistoryBonusFactor | 25 | 12-50 | 2 | ? | 6.5 / 12.5 at c = 2 | ok |
 | HistoryBonusCap | 1250 | 625-2500 | 94 | ? | wide | ok (its range is tied to the history scale by tests/test_params.cpp) |
-| ReplyWeight | 6 | 0-12 (was 0-8) | 1 | ? | 6 / **2** | **flag ceiling**; highest 12 (the rule's twice), **applied (owner, 2026-11-09) after the int16 headroom check: no overflow** (the status note; tests/test_ordering.cpp) |
-| FollowWeight | 4 | 0-8 | 1 | ? | 4 / 4 | ok |
-| TakeWeight | 4 | 0-16 | 1 | ? | 4 / 12 | ok (capture scores are int16: move_selector.cpp line 83's bound) |
+| ReplyWeight | 6 | 0-12 (was 0-8) | 1 | ? | 6 / **2** | **flag ceiling**; highest 12 (the rule's twice), **applied (owner, 2026-11-09) after the int16 headroom check: no overflow** (the status note; tests/test_ordering.cpp). **2026-11-12 (owner, the staleness audit's re-measure 8):** the range already holds 8 strictly inside (4 steps below the ceiling), so it is unchanged; widening it would break the checked property that one reply entry alone fits int16 unclamped |
+| FollowWeight | 4 | **0-16 (was 0-8)** | 1 | ? | 4 / 12 | ok; **highest 16, the owner's decision (2026-11-12, about 8:50 AM EST, the staleness audit)**: the audit re-measured 8, the old ceiling; 16 is the ranges rule's twice of 8, so 8 lies strictly inside (the default stays 4). The int16 headroom (the status note) holds: HistoryMax × (4 + 12 + 16) / 4 = 80,000, exact in int and clamped before the store; one follow entry alone at 16 (40,000) reaches the clamp, which the selector applies to any sum with a pair table (tests/test_ordering.cpp) |
+| TakeWeight | 4 | 0-16 | 1 | ? | 4 / 12 | ok (capture scores are int16: move_selector.cpp line 83's bound). **2026-11-12 (owner, the staleness audit's re-measure 2):** 2 lies strictly inside, 2 steps above the floor 0, the weight's natural floor (a negative weight would invert the history), so the range is unchanged |
 | HistorySkipPerPly | 700 | 350-4000 | 183 | ? | 1.9 / 18 at c = 183 (one step) | **flag**: floor within 2c at one step (350 is the ranges rule's half of 700); the ceiling 4000, kept from the candidates' declared range, is beyond the rule's twice (1400): step 19's range check decides both (added 2026-11-12, the history skip's adoption) |
 | HistorySkipMaxDepth | 3 | 1-6 | 1 | ? | 2 / 3 at c = 1 | **flag**; lowest at the depth floor (added 2026-11-12; a placeholder never measured on its own, so this pass is its measurement) |
-| **MinorDriftShare** | 32 | 32-128 | 5 | ? | **0 (pinned at its floor)** / 19 at c = 5 (one step) | **flag floor**: 32 is the lowest of the range declared for the natural value 64; the ranges rule's half to twice of 32 is 16-64, so step 19's range check proposes lowest 16 (owner decision; added 2026-11-12, the minor drift table's adoption) |
+| MinorDriftShare | 32 | **16-64 (was 32-128)** | 5 | ? | 3.2 / 6.4 at c = 5 (one step) | ok; **range 16-64, the owner's decision (2026-11-12, about 8:45 AM EST)**: the ranges rule's half to twice of the adopted 32, centred on it, replacing the range declared for the natural value 64, whose floor 32 was (added 2026-11-12, the minor drift table's adoption) |
 | DriftLimit | 300 | 150-600 | 23 | ? | 6.5 / 13 at c = 23 (one step) | ok (added 2026-11-12 with the minor table; it applies to every drift table, so only the minor table's while the others are off) |
 
 p = 22 tuned parameters (23 with QuietSeeFloor), minus any parameter of a
@@ -231,7 +231,7 @@ is prepared, so the start and the measured value both lie well inside the range.
 
 ### 3.3 Widening is a rule exception
 
-**All eleven widenings are the owner's (2026-11-09) and applied.** Each breaks DESIGN.md §5.2's "about half to twice the default"
+**All eleven widenings are the owner's (2026-11-09) and applied**, and so are the three range changes of 2026-11-12 (§3.1: AspirationHalfWidth 8-40, FollowWeight 0-16, MinorDriftShare 16-64; the staleness audit and the minor table's adoption). Each breaks DESIGN.md §5.2's "about half to twice the default"
 range rule as RfpMargin's does; the bounds are tuner limits only ("never
 played as such"), and changing them changes no played value (bench
 unchanged; tests/test_params.cpp needs only the default inside the range and

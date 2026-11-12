@@ -17,7 +17,9 @@
 //   final retune (owner, 2026-11-09; DESIGN.md §5.6 step 19): RfpMargin,
 //   LmpQuietAllowance, FutilityOffset, FutilityGrowth, SingularMarginPerPly,
 //   SingularMinDepth, LmrMinMove and LmpMaxDepth lower; NoMoveReduceMinDepth,
-//   ReplyWeight and NullSurplusPliesMax higher.
+//   ReplyWeight and NullSurplusPliesMax higher; and three set by the owner
+//   on 2026-11-12 (final-retune.md section 3.1): AspirationHalfWidth 8-40,
+//   FollowWeight 0-16 and MinorDriftShare 16-64.
 // - A tuning build changes a value only through set_param, between searches
 //   (UCI setoption); nothing writes them during a search.
 // - Constants that are not tuned stay where they are, each with its reason in
@@ -36,7 +38,7 @@
 // (R34, E4); history; the TT victim policy; the time budget.
 #define FORK_SEARCH_PARAMS(X)               \
   X(AspirationMinDepth, 5, 2, 10, 1)        \
-  X(AspirationHalfWidth, 12, 6, 24, 1)      \
+  X(AspirationHalfWidth, 12, 8, 40, 1)      \
   X(IterationGrowthThirds, 5, 3, 10, 1)     \
   X(ForcedMoveFraction, 8, 4, 16, 1)        \
   X(RfpMaxDepth, 6, 3, 12, 1)               \
@@ -69,7 +71,7 @@
   X(DriftWeightTotal, 256, 128, 512, 19)    \
   X(DriftLimit, 300, 150, 600, 23)          \
   X(PieceDriftShare, 64, 32, 128, 5)        \
-  X(MinorDriftShare, 32, 32, 128, 5)        \
+  X(MinorDriftShare, 32, 16, 64, 5)         \
   X(MajorDriftShare, 64, 32, 128, 5)        \
   X(ThreatDriftShare, 64, 32, 128, 5)       \
   X(HistorySkipMaxDepth, 3, 1, 6, 1)        \
@@ -77,7 +79,7 @@
   X(HistoryBonusFactor, 25, 12, 50, 2)      \
   X(HistoryBonusCap, 1250, 625, 2500, 94)   \
   X(ReplyWeight, 6, 0, 12, 1)               \
-  X(FollowWeight, 4, 0, 8, 1)               \
+  X(FollowWeight, 4, 0, 16, 1)              \
   X(TakeWeight, 4, 0, 16, 1)                \
   X(StaleDepthPerSearch, 2, 1, 4, 1)        \
   X(AssumedMovesLeft, 30, 15, 60, 2)        \
