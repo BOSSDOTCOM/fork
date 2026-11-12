@@ -471,7 +471,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // Ng8 brings back the first position; Black takes it at every depth.
 TEST_CASE("pruning", "upcoming repetition: still correct, changes the search, a move back scores a draw") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_revisit_draw);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_revisit_draw);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_revisit_draw = true;
   fx.searcher->switches = on;
