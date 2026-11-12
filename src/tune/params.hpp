@@ -41,6 +41,7 @@
   X(ForcedMoveFraction, 8, 4, 16, 1)      \
   X(RfpMaxDepth, 6, 3, 12, 1)             \
   X(RfpMargin, 55, 30, 160, 6)            \
+  X(RfpWorseningQuarters, 2, 0, 4, 1)     \
   X(NullMinDepth, 3, 1, 6, 1)             \
   X(NullSurplusPerPly, 301, 150, 600, 23) \
   X(NullSurplusPliesMax, 2, 0, 6, 1)      \

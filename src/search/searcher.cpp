@@ -347,8 +347,17 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #endif
   // Reverse futility pruning (T20): far enough above beta at shallow depth,
   // the node fails high without a search.
+  // With use_rfp_opponent_trend (the engine survey's B10) the margin is
+  // RfpWorseningQuarters / 4 of a ply's margin smaller when the opponent is
+  // worsening: its static eval at the parent is below its own two plies
+  // earlier (both known, the earlier one below the root).
+  const bool rival_eval_dropped = switches.use_rfp_opponent_trend && ply >= 4 &&
+                                  frames_[ply - 1].static_eval != ScoreNone &&
+                                  frames_[ply - 3].static_eval != ScoreNone &&
+                                  frames_[ply - 1].static_eval < frames_[ply - 3].static_eval;
+  const int rfp_margin = RfpMargin * depth - (rival_eval_dropped ? RfpMargin * RfpWorseningQuarters / 4 : 0);
   if (switches.use_rfp && can_prune_node && depth <= RfpMaxDepth && !is_tb_or_mate(beta) &&
-      prune_eval - RfpMargin * depth >= beta FORK_STAT_GATE(&&force != LedgerForce::RfpOff)) {
+      prune_eval - rfp_margin >= beta FORK_STAT_GATE(&&force != LedgerForce::RfpOff)) {
     FORK_STAT(++counters.rfp_cuts);
     return prune_eval;
   }

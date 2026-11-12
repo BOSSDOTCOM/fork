@@ -2719,3 +2719,20 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 92. Opponent-worsening reverse futility (the engine survey's B10)
+
+- **type:** ELO (search, pruning); flag `use_rfp_opponent_trend` (off).
+- **idea** (the engine survey's B10, its rank 7; concept only): when the
+  opponent's static eval at the parent is below its own two plies earlier,
+  reverse futility's margin is `RfpWorseningQuarters` / 4 of one ply's
+  margin smaller.
+- **status:** **built, queued (coordinator, 2026-11-11 night; R-STC).**
+  Built on phase-4 a95e269 behind the switch, off, branch
+  tier2/b10-rfp-opponent-trend; bench unchanged. Design R at STC at 2
+  quarters (half a ply's margin) against the switch-off commit (night item
+  55a), gated behind state/gate-e1.done. The survey's kill rule: a second
+  H0 in the RFP trend family (after rising RFP's) closes it for Phase 4.
+  Nothing is adopted before its verdict.
+- **runtime cost:** none expected (two frame reads at RFP's candidates).
+- **earliest phase:** Phase 4.
