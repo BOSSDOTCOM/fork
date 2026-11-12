@@ -68,10 +68,26 @@ inline int pair_slot(Piece moved, Square to) {
   return (side_of(moved) * 6 + kind_of(moved)) * 64 + to;
 }
 
+// Threat buckets (tier 2, T56; KB search-techniques.md §3.34, its first
+// family): the butterfly history is split by whether the opponent attacks
+// the move's from-square and its to-square in the position before the move,
+// so "move an attacked piece to a safe square" learns apart from the same
+// squares when nothing is attacked. Bucket 2 * (from attacked) + (to
+// attacked); with the switch off every move reads and updates bucket 0, the
+// table as it was. A castling move's to-square is its encoded rook square.
+constexpr int ThreatBuckets = 4;
+inline int threat_bucket(Bitboard attacked, Move m) {
+  return static_cast<int>(((attacked >> m.from()) & 1) * 2 + ((attacked >> m.to()) & 1));
+}
+
 // The take history (tier 2, T11; KB search-techniques.md §3.11): captures
 // scored by how often they cut in this tree, indexed by the moving piece
 // (colour and type), its destination and the captured piece's type (a pawn
 // for en passant). Same scale, bounds and update as the other histories.
+// Threat-aware (the engine survey's D6): split by the capture's threat
+// bucket as the butterfly history is (whether the opponent attacks its from-
+// and to-square before it; the to-square attacked is a defended victim);
+// bucket 0 when not threat-aware, the table as before.
 constexpr int TakeSlots = PairSlots * 6;
 inline int take_slot(Piece moved, Square to, PieceType victim) {
   assert(victim <= King && "take slot: victim is not a piece type");
@@ -80,25 +96,29 @@ inline int take_slot(Piece moved, Square to, PieceType victim) {
 
 class TakeHistory {
  public:
-  int value(int slot) const {
+  int value(int slot, int bucket = 0) const {
     assert(slot >= 0 && slot < TakeSlots && "take history: slot out of range");
-    return table_[slot];
+    assert(bucket >= 0 && bucket < ThreatBuckets && "take history: bucket out of range");
+    return table_[bucket][slot];
   }
 
   // As QuietHistory::apply.
-  void apply(int slot, int amount) {
+  void apply(int slot, int amount, int bucket = 0) {
     assert(slot >= 0 && slot < TakeSlots && "take history: slot out of range");
-    std::int16_t& v = table_[slot];
+    assert(bucket >= 0 && bucket < ThreatBuckets && "take history: bucket out of range");
+    std::int16_t& v = table_[bucket][slot];
     const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
     v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
   }
 
   void clear() {
-    for (std::int16_t& v : table_) v = 0;
+    for (auto& bucket : table_)
+      for (std::int16_t& v : bucket) v = 0;
   }
 
  private:
-  std::int16_t table_[TakeSlots] = {};
+  // 36 KB: four buckets of the 9 KB table (D6).
+  std::int16_t table_[ThreatBuckets][TakeSlots] = {};
 };
 
 // The searcher keeps both pair tables in one array, so the move selector
@@ -132,18 +152,6 @@ class PairHistory {
  private:
   std::int16_t table_[PairSlots][PairSlots] = {};
 };
-
-// Threat buckets (tier 2, T56; KB search-techniques.md §3.34, its first
-// family): the butterfly history is split by whether the opponent attacks
-// the move's from-square and its to-square in the position before the move,
-// so "move an attacked piece to a safe square" learns apart from the same
-// squares when nothing is attacked. Bucket 2 * (from attacked) + (to
-// attacked); with the switch off every move reads and updates bucket 0, the
-// table as it was. A castling move's to-square is its encoded rook square.
-constexpr int ThreatBuckets = 4;
-inline int threat_bucket(Bitboard attacked, Move m) {
-  return static_cast<int>(((attacked >> m.from()) & 1) * 2 + ((attacked >> m.to()) & 1));
-}
 
 class QuietHistory {
  public:

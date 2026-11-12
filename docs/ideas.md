@@ -2719,3 +2719,21 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 93. Threat-aware take history (the engine survey's D6)
+
+- **type:** ELO (search, ordering); flag `use_threat_takes` (off).
+- **idea** (the engine survey's D6, its rank 13; concept only): the take
+  history is split by T56's threat bucket (whether the opponent attacks
+  the capture's from- and to-square before it), read in the capture
+  ordering of the main and quiescence searches and updated at cutoffs.
+- **status:** **built, queued (coordinator, 2026-11-11 night; R-STC; counts
+  as a new idea).** Built on phase-4 a95e269 behind the switch, off,
+  branch tier2/d6-threat-takes; bench unchanged. Design R at STC against
+  the switch-off commit (night item 56a), gated behind state/gate-e1.done.
+  Capture history (T11) is on the straight-to-LTC list: its LTC
+  confirmation is queued as night item 56f (conditional on 56a's H1).
+  Nothing is adopted before its verdict.
+- **runtime cost:** the threat set built at the capture stage (also in the
+  quiescence search); UNVERIFIED until the SPRT's nps report.
+- **earliest phase:** Phase 4.

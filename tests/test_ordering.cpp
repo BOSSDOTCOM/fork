@@ -299,6 +299,45 @@ namespace forkeng::test {
 // Constructed positions, checked with python-chess: legal, the only
 // captures are Qxa5 and exd5, both good captures (a5 undefended; d5
 // undefended, or defended by the rook so exd5 is an even trade).
+// Threat-aware take history (the engine survey's D6): the buckets are
+// independent entries, and with threat takes on (and threat-aware) the
+// selector reads each capture's own bucket. In the position of the test
+// above, Black's d5 pawn attacks e4, so exd5 is in bucket 2 (from-square
+// attacked) and Qxd5 in bucket 0. With exd5's bonus in bucket 2 and a
+// smaller one for Qxd5 in bucket 0, exd5 comes first with the buckets; both
+// read bucket 0 without them, where Qxd5 leads.
+TEST_CASE("ordering", "threat-aware take history: independent buckets, each capture reads its own") {
+  auto takes = std::make_unique<TakeHistory>();
+  takes->apply(1234, 1000, 3);
+  CHECK(takes->value(1234, 3) > 0);
+  for (int b = 0; b < 3; ++b) CHECK_EQ(takes->value(1234, b), 0);
+  CHECK_EQ(takes->value(1234), 0);  // the default bucket is 0
+  takes->clear();
+  CHECK_EQ(takes->value(1234, 3), 0);
+
+  Position pos;
+  CHECK(pos.set_fen("4k3/8/8/3p4/4P3/8/8/3QK3 w - - 0 1"));
+  const Move queen = pos.parse_uci("d1d5"), pawn = pos.parse_uci("e4d5");
+  const Bitboard attacked = pos.attacked_squares(Black);
+  CHECK_EQ(threat_bucket(attacked, pawn), 2);
+  CHECK_EQ(threat_bucket(attacked, queen), 0);
+  takes->apply(take_slot(pos.piece_at(pawn.from()), pawn.to(), Pawn), 1600, 2);
+  takes->apply(take_slot(pos.piece_at(queen.from()), queen.to(), Pawn), 1000, 0);
+  QuietHistory history;
+  MoveSelector s;
+  s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, takes.get(), true);
+  s.set_threat_takes(true);
+  const std::vector<Move> on = drain(s);
+  CHECK(on.size() >= 2 && on[0] == pawn && on[1] == queen);
+  s.start_main(pos, NoMove, &history, nullptr, NoArrival, NoArrival, takes.get(), true);
+  const std::vector<Move> off = drain(s);  // start_main resets threat takes to off
+  CHECK(off.size() >= 2 && off[0] == queen && off[1] == pawn);
+  s.start_quiesce(pos, NoMove, true, &history, takes.get(), true);
+  s.set_threat_takes(true);
+  const std::vector<Move> quiesce = drain(s);
+  CHECK(quiesce.size() == 2 && quiesce[0] == pawn);
+}
+
 TEST_CASE("ordering", "take history: it can reorder victims 2 pawns apart, never 4") {
   const auto ordered = [](std::string_view fen, PieceType big) {
     Position pos;

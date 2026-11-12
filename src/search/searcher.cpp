@@ -151,10 +151,12 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
       return take_slot(here.piece_at(c.from()), c.to(),
                        c.is_en_passant() ? Pawn : kind_of(here.piece_at(c.to())));
     };
-    if (m.is_capture()) take_history_.apply(slot(m), bonus);
+    // D6: each capture in its threat bucket (0 with use_threat_takes off).
+    const Bitboard attacked = switches.use_threat_takes ? f.selector.attacked_by_opponent() : 0;
+    if (m.is_capture()) take_history_.apply(slot(m), bonus, threat_bucket(attacked, m));
     if (switches.use_history_malus)
       for (Move c : f.failed_moves)
-        if (c.is_capture()) take_history_.apply(slot(c), -bonus);
+        if (c.is_capture()) take_history_.apply(slot(c), -bonus, threat_bucket(attacked, c));
   }
   if (m.is_capture() || !switches.use_history) return;
   const Color us = here.side_to_move();
@@ -487,6 +489,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       switches.use_history ? pair_history_ : nullptr, switches.use_reply_history ? f.arrival : NoArrival,
       switches.use_follow_history ? follow_arrival(f) : NoArrival,
       switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets);
+  f.selector.set_threat_takes(switches.use_threat_takes);
   f.failed_moves.count = 0;
 
   const int alpha_start = alpha;
@@ -811,6 +814,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   f.selector.start_quiesce(pos, tt_hit ? hit.move : NoMove, switches.use_see_quiesce,
                            switches.use_history ? &history_ : nullptr,
                            switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets);
+  f.selector.set_threat_takes(switches.use_threat_takes);
 
   Move best_move = NoMove;
   int moves_searched = 0;

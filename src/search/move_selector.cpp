@@ -44,6 +44,7 @@ void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHist
   history_ = history;
   take_history_ = take_history;
   threat_aware_ = threat_aware;
+  threat_takes_ = false;
   attacked_known_ = false;
   pair_history_ = pairs;
   arrival_ = static_cast<std::int16_t>(pairs ? arrival : NoArrival);
@@ -88,7 +89,8 @@ void MoveSelector::score_captures() {
     // rook capture after a pawn capture (tests/test_ordering.cpp).
     const PieceType victim = m.is_en_passant() ? Pawn : kind_of(pos_->piece_at(m.to()));
     const int promo = m.is_promotion() ? piece_value(m.promo_type()) : 0;
-    const int learned = take_history_->value(take_slot(pos_->piece_at(m.from()), m.to(), victim));
+    const int bucket = threat_takes_ ? threat_bucket(attacked_by_opponent(), m) : 0;  // D6
+    const int learned = take_history_->value(take_slot(pos_->piece_at(m.from()), m.to(), victim), bucket);
     scores_[i] = static_cast<std::int16_t>((piece_value(victim) + promo) * 8 + learned * TakeWeight / 32);
   }
 }

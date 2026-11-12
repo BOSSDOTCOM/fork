@@ -98,6 +98,13 @@ class MoveSelector {
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
                      const TakeHistory* take_history = nullptr, bool threat_aware = false);
 
+  // With `on` (the engine survey's D6; call after start_main or
+  // start_quiesce, before the first take_next) captures read the take
+  // history's threat bucket for the opponent's attacks in this position, as
+  // quiets read the butterfly history's; it needs `threat_aware` (else
+  // bucket 0).
+  void set_threat_takes(bool on) { threat_takes_ = on; }
+
   // The next move, or NoMove when there are no more.
   Move take_next();
 
@@ -148,6 +155,7 @@ class MoveSelector {
   bool quiets_stopped_ = false;
   bool quiet_checks_only_ = false;
   bool threat_aware_ = false;
+  bool threat_takes_ = false;
   bool attacked_known_ = false;
   std::int16_t quiets_filtered_ = 0;  // at most MaxMoves; int16 keeps the flags above within the padding
   Bitboard attacked_ = 0;
