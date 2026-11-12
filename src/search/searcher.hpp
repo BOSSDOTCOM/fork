@@ -144,6 +144,14 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_tt_cut_credit: a TT cutoff that fails high with a quiet TT move
+//   gives that move the cutoff bonus at the node's depth, in the tables a
+//   searched cutoff updates (think tank R15, the engine survey's D10;
+//   credit_tt_move). No maluses: no other move was tried. No constant. Off
+//   until its SPRT.
+// - use_linear_bonus: the history bonus of a cutoff is LinearBonusPerPly
+//   per ply of depth instead of HistoryBonusFactor / 2 per ply squared, with
+//   the same cap (R15, D11; linear_bonus_for_depth). Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +185,9 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)          \
+  X(use_tt_cut_credit, UseTtCutCredit, false)            \
+  X(use_linear_bonus, UseLinearBonus, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -571,6 +581,13 @@ class Searcher {
   std::int64_t soft_limit_now(const SearchQuota& limits) const;
   std::int64_t elapsed_ms() const;
   void record_cutoff(PlyFrame& f, Move m, int depth);
+  // The cutoff bonus for `depth`, quadratic or with use_linear_bonus linear.
+  int cutoff_bonus(int depth) const {
+    return switches.use_linear_bonus ? linear_bonus_for_depth(depth) : bonus_for_depth(depth);
+  }
+  // R15, D10: a TT cutoff's quiet move `m` (legal here) gains the cutoff
+  // bonus at `depth` in the butterfly history and the pair tables.
+  void credit_tt_move(const PlyFrame& f, Move m, int depth);
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }

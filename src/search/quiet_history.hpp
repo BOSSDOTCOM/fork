@@ -58,6 +58,13 @@ FORK_TUNABLE_CONSTEXPR int bonus_for_depth(int depth) {
   return quadratic > HistoryBonusCap ? HistoryBonusCap : quadratic;
 }
 
+// The linear bonus (think tank R15, the engine survey's D11; switch
+// use_linear_bonus): LinearBonusPerPly per ply of depth, with the same cap.
+FORK_TUNABLE_CONSTEXPR int linear_bonus_for_depth(int depth) {
+  const int linear = depth * LinearBonusPerPly;
+  return linear > HistoryBonusCap ? HistoryBonusCap : linear;
+}
+
 // A move's slot in the pair history: its piece (colour and type) and its
 // destination square (for castling the encoded square, the rook's).
 constexpr int PairSlots = 2 * 6 * 64;

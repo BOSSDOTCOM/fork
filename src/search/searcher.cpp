@@ -142,7 +142,7 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   if (ledger_active_) return;  // a decision-ledger side search leaves the histories as they were (X10)
 #endif
   const Position& here = *pos_;
-  const int bonus = bonus_for_depth(depth);
+  const int bonus = cutoff_bonus(depth);
   // The take history (tier 2, T11): a capture that cuts gains the bonus, and
   // the captures tried before a quiet or capture cutoff take the malus (a
   // non-capture promotion's cutoff updates nothing).
@@ -176,6 +176,22 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   if (switches.use_reply_history && f.arrival != NoArrival) update(pair_history_[ReplyTable], f.arrival);
   const int follow = follow_arrival(f);
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
+}
+
+void Searcher::credit_tt_move(const PlyFrame& f, Move m, int depth) {
+#ifdef FORK_SEARCH_STATS
+  if (ledger_active_) return;  // a decision-ledger side search leaves the histories as they were (X10)
+#endif
+  if (!switches.use_history) return;
+  const Position& pos = *pos_;
+  const int bonus = cutoff_bonus(depth);
+  // The node's selector has not started, so its threat set is built here.
+  const Bitboard attacked = switches.use_threat_buckets ? pos.attacked_squares(~pos.side_to_move()) : 0;
+  history_.apply(pos.side_to_move(), m, bonus, threat_bucket(attacked, m));
+  const int slot = pair_slot(pos.piece_at(m.from()), m.to());
+  if (switches.use_reply_history && f.arrival != NoArrival) pair_history_[ReplyTable].apply(f.arrival, slot, bonus);
+  const int follow = follow_arrival(f);
+  if (switches.use_follow_history && follow != NoArrival) pair_history_[FollowTable].apply(follow, slot, bonus);
 }
 
 void Searcher::update_pv(int ply, Move m) {
@@ -241,7 +257,14 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (tt_hit && !OnPv && !withheld) {
     const int s = score_from_tt(hit.score, ply);
     const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
-    if (deep_enough && bound_settles(hit.bound, s, alpha, beta)) return s;
+    if (deep_enough && bound_settles(hit.bound, s, alpha, beta)) {
+      // R15, D10: a fail high on the TT move credits it as a searched cutoff
+      // would (a quiet move, checked legal here: the entry may collide).
+      if (switches.use_tt_cut_credit && s >= beta && !hit.move.is_none() && !hit.move.is_capture() &&
+          !hit.move.is_promotion() && pos.is_pseudo_legal(hit.move) && pos.is_legal(hit.move))
+        credit_tt_move(f, hit.move, depth);
+      return s;
+    }
   }
 
   // A TT entry stores the static evaluation of its position (review 2, claim
