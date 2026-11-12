@@ -332,6 +332,43 @@ drive flakyall "$sha" "$sha" 0 5
 check "a lasting download failure exits 1" [ "$(rc flakyall)" = 1 ]
 check "it is named, nothing merged" bash -c "grep -q \"run 501's download failed\" '$tmp/flakyall/out' && ! grep -q LLR '$tmp/flakyall/out'"
 
+# Bug review 2026-11-11, T3 (owner, the same day): only complete shards are merged. A shard left "running" (its
+# final snapshot never written) or one pair short of its planned rounds in a green run stops the SPRT at that
+# stage, unmerged and undecided, before the next dispatch.
+setup partial 0 "$even"
+touch "$tmp/partial/partial.502"
+drive partial --kind search --idea p1 "$sha" "$sha"
+check "a partial shard: exit 1 after stage 1, no stage 2" [ "$(rc partial):$(dispatches partial)" = 1:2 ]
+check "a partial shard: the refusal names it" grep -q "stage 1: run 502's results were not merged: sprt_merge.py: merge refused: 1 of 4 shards incomplete: stage 1 shard 0 has status 'running', not 'done' (50 pairs)" "$tmp/partial/out"
+check "a partial shard: no verdict file, stage 1 unmerged" bash -c "[ ! -f '$tmp/partial/data/partial/verdict' ] && [ \$(grep -c 'merged$' '$tmp/partial/out') = 1 ]"
+setup short 0 "$strong"
+touch "$tmp/short/short.501"
+drive short "$sha" "$sha" 0 5
+check "a shard short of its pairs (custom kind): exit 1, nothing merged" bash -c "[ \$(cat '$tmp/short/rc') = 1 ] && ! grep -q LLR '$tmp/short/out'"
+check "a short shard is named" grep -q "stage 0 shard 0 has 50 pairs of 51 planned" "$tmp/short/out"
+
+# Bug review 2026-11-11, T6: the SPRT's name is in the run's title when REF's sprt.yml takes it, so another lane's
+# run of the same commits and stage, dispatched right after ours, is never taken.
+setup lanes 0 "$strong"
+touch "$tmp/lanes/twin"
+drive lanes "$sha" "$sha" 0 5
+check "two lanes, one commit pair: H1 exits 0" [ "$(rc lanes)" = 0 ]
+check "the name is dispatched" grep -q -- "-f name=lanes" "$tmp/lanes/dispatches"
+check "it took its own run 501 (titled with its name), not the other lane's 502" grep -q "stage 0: run 501 dispatched" "$tmp/lanes/out"
+check "the ledger records stage 0 as run 501" [ "$(ledger lanes runs lanes)" = "0 501 $sha $sha" ]
+# A ref whose sprt.yml predates the input: no name sent, the title as before (a driver from before the change
+# finds its runs the same way).
+setup noname 0 "$strong"
+touch "$tmp/noname/noname"
+drive noname "$sha" "$sha" 0 5
+check "an older sprt.yml: no name sent, H1 exits 0" bash -c "[ \$(cat '$tmp/noname/rc') = 0 ] && ! grep -q -- 'name=' '$tmp/noname/dispatches'"
+check "an older sprt.yml: the title without the name" grep -qx "501 sprt $sha $sha stage 0" "$tmp/noname/titles"
+# Without names, two lanes' runs look alike: the driver stops rather than guess (the hazard the name removes).
+setup twins 0 "$strong"
+touch "$tmp/twins/noname" "$tmp/twins/twin"
+drive twins "$sha" "$sha" 0 5
+check "an older sprt.yml and a twin run: stopped, not adopted" bash -c "[ \$(cat '$tmp/twins/rc') = 1 ] && grep -q 'more than one new run titled' '$tmp/twins/out'"
+
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"
   for d in "$tmp"/*/; do [ -f "$d/out" ] && { echo "--- $d"; tail -5 "$d/out"; }; done

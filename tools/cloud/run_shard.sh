@@ -119,4 +119,9 @@ case $status in
     tail -n 5 "$log" >&2
     exit 1
     ;;
+  done | interrupted) ;;
+  *)  # bug review 2026-11-11, T3: the final snapshot failed, leaving the last "running" one (or none)
+    echo "run_shard.sh: the final snapshot was not written (result.json status '${status:-none}')" >&2
+    exit 1
+    ;;
 esac

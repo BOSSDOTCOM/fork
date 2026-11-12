@@ -30,7 +30,8 @@ chmod +x "$tmp/bin/python3"
 export PATH="$tmp/bin:$PATH"
 
 # Fake fastchess: FAKE_FC=full (every pair asked for), crash (2 pairs, then
-# SIGSEGV), fail (2 pairs, then exit 1) or short (2 pairs, exit 0).
+# SIGSEGV), fail (2 pairs, then exit 1), short (2 pairs, exit 0) or slow (every
+# pair, then 3 seconds before exit 0, so a "running" snapshot is written).
 # Arguments go to $tmp/args.
 cat >"$tmp/fastchess" <<'EOF'
 #!/usr/bin/env bash
@@ -44,6 +45,7 @@ for k in $(seq 1 "$n"); do
   echo "Finished game $((2 * k)) (base vs test): 1/2-1/2 {Draw by 3-fold repetition}"
 done
 case ${FAKE_FC:-full} in
+  slow) sleep 3 ;;
   crash) kill -SEGV $$ ;;
   fail) exit 1 ;;
 esac
@@ -106,6 +108,15 @@ FAKE_FC=fail shard fail
 check "fastchess error: exit 1, failed" test "$status-$(status_of fail)" = 1-failed
 FAKE_FC=short shard short
 check "too few pairs: exit 1, short" test "$status-$(status_of short)" = 1-short
+
+# Bug review 2026-11-11, T3: a final snapshot that fails (here the python3 that would write "done") leaves the
+# last "running" one; the shard exits 1 instead of passing as green with a partial result.
+mkdir -p "$tmp/bin-nofinal"
+printf '#!/bin/sh\ncase "$*" in *"--status done"*) exit 1 ;; esac\nexec "%s" -B "$@"\n' "$py" >"$tmp/bin-nofinal/python3"
+chmod +x "$tmp/bin-nofinal/python3"
+PATH="$tmp/bin-nofinal:$PATH" FAKE_FC=slow shard nofinal
+check "a failed final snapshot: exit 1, result still running" test "$status-$(status_of nofinal)" = 1-running
+check "a failed final snapshot is named" grep -q "the final snapshot was not written (result.json status 'running')" "$tmp/nofinal.txt"
 
 echo "${failures} failure(s)"
 exit $((failures > 0))

@@ -199,6 +199,51 @@ class MergeTests(unittest.TestCase):
         self.assertIn('  stage 0 shard 0 (github): failed, pairs 2 of 50 planned, fastchess exit 139\n'
                       '  stage 0 shard 1 (github): done, pairs 9 of 50 planned\n', text)
 
+    # Bug review 2026-11-11, T3 (owner, the same day): only shards that are "done" with their planned pairs.
+    def test_incomplete_shards_are_named(self):
+        done = self.shard([1, 2, 3, 2, 2], stage='1', shard='3', rounds='10')
+        self.assertIsNone(sm.incomplete(done))
+        for status in ('running', 'short', 'failed', 'interrupted'):
+            self.assertIn(f"stage 1 shard 3 has status '{status}'", sm.incomplete(dict(done, status=status)))
+        self.assertIn('9 pairs of 10 planned', sm.incomplete(dict(done, ptnml=[1, 2, 3, 2, 1])))
+        self.assertIn('no planned rounds', sm.incomplete(self.shard([1, 2, 3, 2, 2])))
+
+    def test_merge_with_require_complete_refuses_a_partial_shard(self):
+        a = self.shard([1, 2, 3, 2, 2], stage='0', shard='0', rounds='10', opening_start='1')
+        b = self.shard([1, 2, 3, 2, 2], stage='0', shard='1', rounds='10', opening_start='11')
+        self.assertEqual(sm.merge([a, b], require_complete=True)['pairs'], 20)
+        running = dict(b, status='running')  # a final snapshot that was never written
+        with self.assertRaisesRegex(ValueError, "1 of 2 shards incomplete: stage 0 shard 1 has status 'running'"):
+            sm.merge([a, running], require_complete=True)
+        self.assertEqual(sm.merge([a, running])['pairs'], 20)  # the library default (h2h_pick, report) as before
+
+    def test_the_cli_refuses_partial_shards_unless_allowed(self):
+        import json
+        import os
+        import tempfile
+        from contextlib import redirect_stderr, redirect_stdout
+        from io import StringIO
+        a = self.shard([1, 2, 3, 2, 2], stage='0', shard='0', rounds='10', opening_start='1')
+        b = self.shard([1, 2, 3, 2, 1], stage='0', shard='1', rounds='10', opening_start='11')  # 9 of 10
+        with tempfile.TemporaryDirectory() as d:
+            paths = []
+            for i, s in enumerate((a, b)):
+                paths.append(os.path.join(d, f'{i}.json'))
+                with open(paths[-1], 'w', encoding='utf-8') as f:
+                    json.dump(s, f)
+            out, err = StringIO(), StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                rc = sm.main(['merge', *paths, '--elo0', '0', '--elo1', '5', '--played', '1', '--cap', '2'])
+            self.assertEqual(rc, 1)
+            self.assertIn('merge refused: 1 of 2 shards incomplete: stage 0 shard 1 has 9 pairs of 10 planned',
+                          err.getvalue())
+            self.assertNotIn('Verdict', out.getvalue())
+            out = StringIO()
+            with redirect_stdout(out), redirect_stderr(StringIO()):
+                rc = sm.main(['merge', *paths, '--elo0', '0', '--elo1', '5', '--allow-partial'])
+            self.assertEqual(rc, 0)
+            self.assertIn('pairs 19, games 38', out.getvalue())
+
     def test_pairs_count_only_when_both_games_are_done(self):
         # Concurrency finishes games out of order; game 6 is still running.
         log = '\n'.join([
@@ -266,7 +311,8 @@ class TestStageDecision(unittest.TestCase):
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             f = Path(d) / 'result.json'
-            f.write_text(json.dumps({'ptnml': self.FUTILE, 'meta': {}}), encoding='utf-8')
+            f.write_text(json.dumps({'ptnml': self.FUTILE, 'status': 'done', 'meta': {'rounds': '200'}}),
+                         encoding='utf-8')
             args = ['merge', str(f), '--elo0', '0', '--elo1', '6', '--alpha', '0.05', '--beta', '0.2']
             out = io.StringIO()
             with contextlib.redirect_stdout(out):

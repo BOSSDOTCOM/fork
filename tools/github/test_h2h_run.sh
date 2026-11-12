@@ -75,6 +75,8 @@ drive h-three "${decl[@]}" "40=$c40" "60=$c60" "80=$c80"
 check "three values: a round robin of 3 pairings, each stages 0 and 1" [ "$(rc h-three):$(stages h-three)" = "0:stage=0 stage=1 stage=0 stage=1 stage=0 stage=1 " ]
 check "three values: every pairing dispatched with its commits" bash -c \
   "grep -q 'base=$c40 -f test=$c60' '$tmp/h-three/dispatches' && grep -q 'base=$c40 -f test=$c80' '$tmp/h-three/dispatches' && grep -q 'base=$c60 -f test=$c80' '$tmp/h-three/dispatches'"
+check "three values: each pairing's runs carry its own name (bug review 2026-11-11, T6)" bash -c \
+  "grep -q 'name=h-three.40-60\$' '$tmp/h-three/dispatches' && grep -q 'name=h-three.40-80\$' '$tmp/h-three/dispatches' && grep -q 'name=h-three.60-80\$' '$tmp/h-three/dispatches' && grep -q \"stage 1 (h-three.60-80)\$\" '$tmp/h-three/titles'"
 check "three values: the strongest is picked" grep -q '"winner": "60"' "$tmp/h-three/data/h-three/pick.json"
 check "three values: the row says round robin and least squares" grep -q "values 40, 60, 80 in a round robin, 2 stages of 200 games per pairing on the same openings (1,200 games); 60 - 40 +96.36 +/- 27.80 nElo, 80 - 40 +0.00 +/- 27.80 nElo (least squares over the 3 pairings)" "$tmp/h-three/data/h-three/constants-line.md"
 

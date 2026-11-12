@@ -54,20 +54,26 @@
 #   2026-11-10 at 9:29 PM EST). Other SPRTs' runs count like any run, so
 #   two SPRT lanes run side by side (owner, 2026-11-10 9:30 PM EST, GitHub Pro);
 #   FORK_SPRT_SERIAL=1 restores "no other sprt run pending". Each run is still
-#   found by its exact title (base, test, stage) and the ledger. A
+#   found by its exact title (base, test, stage, NAME) and the ledger. A
 #   run whose jobs are not listed yet counts as holding them all;
 # - it stops at the first stage whose run does not succeed;
 # - every shard result merged must name this SPRT's base and test commits
 #   and its own stage (result.json's meta), and the stage must have SHARDS
-#   of them, so a run picked up by mistake is never merged.
+#   of them, so a run picked up by mistake is never merged;
+# - every shard merged must be complete, status "done" with every planned
+#   pair (bug review 2026-11-11, T3; tools/cloud/sprt_merge.py): a partial,
+#   failed or interrupted shard stops it, unmerged.
 # Rules (owner, 2026-11-05; two drivers believed stopped kept dispatching,
 # and one waited on the other's run):
 # - it runs only under the job supervisor (tools/jobs/jobctl.py start github
 #   NAME -- ...), which allows one job of type github at a time and stops a
 #   job's whole process tree; started any other way it refuses;
 # - it finds the run it dispatched by the run's title, which sprt.yml builds
-#   from its inputs ("sprt BASE TEST stage N"), among runs newer than the
-#   dispatch and not yet in the ledger, never as "the newest sprt run";
+#   from its inputs ("sprt BASE TEST stage N (NAME)"), among runs newer than
+#   the dispatch and not yet in the ledger, never as "the newest sprt run".
+#   The name (bug review 2026-11-11, T6) keeps two SPRTs of one commit pair
+#   apart; it is sent only when REF's sprt.yml takes the input name, else the
+#   title is "sprt BASE TEST stage N" as before;
 # - every dispatched run goes into the run-ID ledger (tools/jobs/ledger.py)
 #   with its inputs, and a stage's results are merged only if the ledger
 #   records that stage's run, with this SPRT's commits, and the stage's
@@ -301,12 +307,24 @@ for stage in $(seq "$first" "$last"); do
     say "stage $stage: waiting for run $id (RUN_ID, in the ledger)"
   else
     until room; do sleep "$POLL"; done
+    # The SPRT's name in the run's title (bug review 2026-11-11, T6): two SPRTs of one commit pair then never take
+    # each other's runs. Only when REF's sprt.yml takes the input name (an older one refuses it); otherwise, or
+    # if sprt.yml cannot be read, the title without it, as before.
+    with_name=()
+    if yml=$(gh_retry "stage $stage: sprt.yml at $REF" "$GH" workflow view sprt.yml -R "$REPO" --ref "$REF" --yaml); then
+      if printf '%s\n' "$yml" | grep -qE '^[[:space:]]+name:[[:space:]]*\{'; then
+        with_name=(-f name="$name")
+        title="$title ($name)"
+      fi
+    else
+      say "stage $stage: sprt.yml at $REF could not be read: the run title without the SPRT's name" >&2
+    fi
     before=$(runs | awk 'NR == 1 {print $1}')
     before=${before:-0}
     "$GH" workflow run sprt.yml -R "$REPO" --ref "$REF" -f base="$base" -f test="$test" -f bounds="$bounds" \
       -f tc="${TC:-8+0.08}" -f hash="${HASH:-16}" -f games="${GAMES:-1600}" -f shards="$SHARDS" -f stage="$stage" \
-      -f tables="${TABLES:-on}" -f test_opts="${TEST_OPTS:-}" -f base_opts="${BASE_OPTS:-}" >/dev/null 2>&1 ||
-      stop "stage $stage: dispatch failed"
+      -f tables="${TABLES:-on}" -f test_opts="${TEST_OPTS:-}" -f base_opts="${BASE_OPTS:-}" "${with_name[@]}" \
+      >/dev/null 2>&1 || stop "stage $stage: dispatch failed"
     id=
     for _ in $(seq 30); do
       sleep $((POLL < 10 ? POLL : 10))
@@ -361,13 +379,18 @@ EOF
   [ -z "$wrong" ] || stop "stage $stage: run $id's results are not this SPRT's (first: $(echo "$wrong" | head -1))"
   got=$(find "$data/s$stage" -name result.json | wc -l)
   [ "$got" -eq "$SHARDS" ] || stop "stage $stage: run $id gave $got shard results, not $SHARDS"
+  # The merge takes only complete shards ("done", every planned pair; bug review 2026-11-11, T3): a partial or
+  # failed shard makes it refuse, and the stage fails here, unmerged.
   if [ "$kind" = custom ]; then
-    merged=$("$py" -I tools/cloud/sprt_merge.py merge --elo0 "$elo0" --elo1 "$elo1" "${files[@]}" 2>&1 | tail -5)
+    staged=() keep=5
   else
     staged=(--alpha "$alpha" --beta "$beta" --played $((stage - origin + 1)) --cap "$cap" --futility-after "$futility_after")
     [ "$kind" != fixed ] || staged+=(--fixed)
-    merged=$("$py" -I tools/cloud/sprt_merge.py merge --elo0 "$elo0" --elo1 "$elo1" "${staged[@]}" "${files[@]}" 2>&1 | tail -6)
+    keep=6
   fi
+  merged=$("$py" -I tools/cloud/sprt_merge.py merge --elo0 "$elo0" --elo1 "$elo1" "${staged[@]}" "${files[@]}" 2>&1) ||
+    stop "stage $stage: run $id's results were not merged: $(printf '%s\n' "$merged" | tail -1)"
+  merged=$(printf '%s\n' "$merged" | tail -"$keep")
   say "stage $stage: run $id merged"
   echo "$merged" | sed 's/^/    /' | tee -a "$data/driver.log"
   if [ "$kind" = custom ]; then

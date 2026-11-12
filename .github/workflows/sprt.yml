@@ -15,8 +15,10 @@
 # Inputs reach the shell only through environment variables.
 name: sprt
 # The run's title names its inputs, so a driver finds the run it dispatched by them, never as "the newest
-# sprt run" (tools/github/sprt_run.sh; owner, 2026-11-05: two drivers once read each other's runs).
-run-name: sprt ${{ inputs.base }} ${{ inputs.test }} stage ${{ inputs.stage }}
+# sprt run" (tools/github/sprt_run.sh; owner, 2026-11-05: two drivers once read each other's runs). The SPRT's
+# name, when given, ends the title as " (NAME)", so two SPRTs of one commit pair never take each other's runs
+# (bug review 2026-11-11, T6); without it the title is as before.
+run-name: sprt ${{ inputs.base }} ${{ inputs.test }} stage ${{ inputs.stage }}${{ inputs.name != '' && format(' ({0})', inputs.name) || '' }}
 
 on:
   workflow_dispatch:
@@ -32,6 +34,7 @@ on:
       test_opts: {description: "fastchess options for the test engine (e.g. option.UseTables=false)", required: false, default: ""}
       base_opts: {description: "fastchess options for the base engine", required: false, default: ""}
       tables: {description: "Syzygy 3-4-5 for both engines: on or off", required: true, default: "on"}
+      name: {description: "The SPRT's name (the driver's NAME), in the run title only", required: false, default: ""}
 
 permissions:
   contents: read

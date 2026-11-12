@@ -36,7 +36,8 @@
 # tools/cloud/aws_cleanup.sh uses to terminate anything past its limit.
 # The instance profile (made by the owner) needs only s3:PutObject on the
 # bucket's prefix. Results: aws s3 cp --recursive s3://BUCKET/PREFIX/RUN dir,
-# then python3 tools/cloud/sprt_merge.py merge dir/*.json --elo0 E0 --elo1 E1.
+# then python3 tools/cloud/sprt_merge.py merge dir/*.json --elo0 E0 --elo1 E1 (with
+# --allow-partial to count an interrupted shard's finished pairs).
 set -euo pipefail
 repo_url=https://github.com/BOSSDOTCOM/fork.git
 games=5000 shards=1 stage=0 tc=8+0.08 hash=16 type=c7a.2xlarge region=${AWS_REGION:-us-east-1}

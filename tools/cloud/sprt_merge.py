@@ -40,7 +40,17 @@ nElo.
 
     python3 tools/cloud/sprt_merge.py snapshot LOG OUT.json [--meta KEY=VALUE ...] [--status S]
     python3 tools/cloud/sprt_merge.py merge SHARD.json ... --elo0 -3 --elo1 0 [--alpha A --beta B] [--json OUT]
-        [--played N --cap N [--futility-after N] [--fixed]]
+        [--played N --cap N [--futility-after N] [--fixed]] [--allow-partial]
+
+The merge takes only complete shards (bug review 2026-11-11, T3; owner, the
+same day): status "done" and every planned pair finished (pairs equal to
+meta.rounds). A shard still "running" (its final snapshot never written),
+"short", "failed" or "interrupted", or one without its planned rounds, makes
+the merge refuse with exit status 1, naming the shard, so a stage with a
+partial shard fails loudly instead of being counted. --allow-partial merges
+the finished pairs of such shards (an AWS spot shard stopped by an
+interruption keeps its finished pairs, tools/cloud/aws_spot_sprt.sh); the
+SPRT drivers never pass it.
 """
 import argparse
 import json
@@ -175,14 +185,36 @@ def final_status(status, pairs, meta):
     return status
 
 
-def merge(shards):
+def incomplete(shard):
+    """Why a shard is not complete (status "done" with every planned pair finished), or None if it is."""
+    meta = shard.get('meta', {})
+    where = f'stage {meta.get("stage", "?")} shard {meta.get("shard", "?")}'
+    status = shard.get('status', '?')
+    pairs = sum(shard['ptnml'])
+    if status != 'done':
+        return f"{where} has status {status!r}, not 'done' ({pairs} pairs)"
+    try:
+        planned = int(meta['rounds'])
+    except (KeyError, TypeError, ValueError):
+        return f'{where} records no planned rounds (meta.rounds {meta.get("rounds")!r})'
+    if pairs != planned:
+        return f'{where} has {pairs} pairs of {planned} planned'
+    return None
+
+
+def merge(shards, require_complete=False):
     """The summed counts; refuses shards of different tests (commits,
     conditions, tables on or off, opening book), or two shards whose opening
     ranges intersect (stages run with different games or shards values, or
     AWS shards beside GitHub ones, would otherwise replay openings). The
     test is identified by its commits and conditions, not by binary hashes:
     machines that build for themselves produce different bytes (debug info,
-    build paths)."""
+    build paths). With require_complete (the CLI's default), every shard must
+    be complete: incomplete() names the first reason it is not."""
+    if require_complete:
+        reasons = [r for r in (incomplete(s) for s in shards) if r]
+        if reasons:
+            raise ValueError(f'{len(reasons)} of {len(shards)} shards incomplete: ' + '; '.join(reasons))
     keys = ('base', 'test', 'tc', 'hash', 'base_opts', 'test_opts', 'tables', 'book_sha')
     first = shards[0].get('meta', {})
     for s in shards[1:]:
@@ -247,6 +279,8 @@ def main(argv=None):
     m.add_argument('--cap', type=int, help='with --played: the design\'s cap in stages')
     m.add_argument('--futility-after', type=int, default=0, help='with --played: the futility look (0: none)')
     m.add_argument('--fixed', action='store_true', help='with --played: a fixed-length run, never decided')
+    m.add_argument('--allow-partial', action='store_true',
+                   help='also merge the finished pairs of shards not done or short of their rounds (AWS spot)')
     a = ap.parse_args(argv)
     if a.cmd == 'snapshot':
         with open(a.log, encoding='utf-8', errors='replace') as f:
@@ -260,7 +294,11 @@ def main(argv=None):
     for path in a.files:
         with open(path, encoding='utf-8') as f:
             shards.append(json.load(f))
-    merged = merge(shards)
+    try:
+        merged = merge(shards, require_complete=not a.allow_partial)
+    except ValueError as e:
+        print(f'sprt_merge.py: merge refused: {e}', file=sys.stderr)
+        return 1
     if merged['pairs'] == 0:
         print(f'no finished pairs in {len(shards)} shards: nothing to merge', file=sys.stderr)
         return 1
