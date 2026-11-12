@@ -69,7 +69,7 @@ and the move played is a kept move. The cp thresholds are tools/nnue/endgame_che
     zugzwang_set.py find67 --cands CANDS.txt --source ... --work DIR --out FOUND67.tsv   (WSL's ChessTB venv)
     zugzwang_set.py select FOUND.tsv... --out PART.tsv [--per-material 24]
     zugzwang_set.py merge PART.tsv... --out tools/zugzwang/zugzwang_set.tsv
-    zugzwang_set.py published --html PAGE.html --out tools/zugzwang/published_cpw.tsv
+    zugzwang_set.py published --html PAGE.html --fetched DATE --out tools/zugzwang/published_cpw.tsv
     zugzwang_set.py verify SET.tsv --syzygy DIR                    (rows of 3-5 pieces)
     zugzwang_set.py verify67 SET.tsv --source ... --work DIR [--min-pieces 3]   (6-7, or all, on ChessTB)
     zugzwang_set.py run SET.tsv --engine NAME=EXE... --nodes N[,N...] --out RESULTS.jsonl
@@ -818,6 +818,7 @@ def main(argv=None):
     p.add_argument('--out', required=True)
     p = sub.add_parser('published')
     p.add_argument('--html', required=True, help='the saved CPW_URL page')
+    p.add_argument('--fetched', required=True, help='the date the page was fetched (YYYY-MM-DD)')
     p.add_argument('--out', required=True)
     p = sub.add_parser('verify')
     p.add_argument('set')
@@ -868,10 +869,12 @@ def main(argv=None):
     elif a.cmd == 'merge':
         merge(a.parts, a.out)
     elif a.cmd == 'published':
+        import hashlib
         rows = published_rows(a.html)
+        sha = hashlib.sha256(Path(a.html).read_bytes()).hexdigest()
         write_rows(rows, a.out, f'# published zugzwang positions: the EPD lines of {CPW_URL} (CC BY-SA 3.0), '
-                                'read by zugzwang_set.py published; bm converted to UCI in kept_moves; '
-                                'zugzwang claims not tablebase-checked')
+                                f'fetched {a.fetched} (page SHA-256 {sha}), read by zugzwang_set.py published; '
+                                'bm converted to UCI in kept_moves; zugzwang claims not tablebase-checked')
         print(f'{len(rows)} published positions')
     elif a.cmd == 'verify':
         tb, probe = syzygy_prober(a.syzygy)
