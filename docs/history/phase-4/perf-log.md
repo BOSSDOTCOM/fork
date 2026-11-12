@@ -118,6 +118,39 @@ because its old loop already had twice the lanes per row pass.
 scalar reference and the tests are unchanged. The tile sizes are coupled to
 the register files, and a static_assert stops the build if a future hidden
 size is not a multiple of a tile (768 on AVX-512, for example, needs a tile
-of 8 or 24, a one-line change). Speed under GCC (TCEC's gcc 11.4 and g++-12)
-is UNVERIFIED: measured with clang 21 only; CI's bench parity covers GCC's
-correctness.
+of 8 or 24, a one-line change). Speed under GCC: confirmed in window 2 below
+(gcc 11.4.0 through update.sh, +9.0% median, +7.8% best).
+
+### Speed sprint 3, window 2 (2026-11-12, 5:14-5:28 PM EST): the network candidates after nnue-fused
+
+Each candidate on its own branch on top of phase-4 46f2b1e (nnue-fused adopted), committed through the pre-commit
+check, not merged; bench/ab_search.py, 24 interleaved rounds, core 4, WSL, identity checked on every run,
+`--same-nodes` (bench identical within every pair); g4c suspended.
+
+| part | A | B | instructions:u per bench | nps median / best | verdict |
+|---|---|---|---|---|---|
+| GCC 11.4.0, update.sh, x86-64-v3 (Ubuntu-22.04): nnue-fused on TCEC's compiler | e6b2ac3 | 46f2b1e | | +9.0% / +7.8% (threshold 4.5%) | faster: the fused gain holds on GCC (clang +14.7%) |
+| I4: int8 feature-transformer rows (FORK_FT_INT8, net r8brft1i8 on both sides) | 46f2b1e int16 rows | b550b5b | 28,195,288,830 -> 31,479,184,599 (+11.6%) | -0.9% / -0.9% (threshold 3.0%; a clean rerun at 5:39-5:41 PM: the first run in the window was disturbed, threshold 36.5%) | no significant difference, below the owner's 3% bar: no SPRT, not adopted |
+| AVX-512 output layer (x86-64-v4) | 46f2b1e | 6e01c57 | 26,940,852,566 -> 25,860,277,956 (-4.0%) | +2.1% / +1.6% (threshold 3.0%) | no significant difference: not adopted |
+| the same with VNNI on both sides | 46f2b1e | 6e01c57 | 26,928,843,546 -> 25,872,282,013 (-3.9%) | +1.4% / +1.6% (threshold 3.0%) | no significant difference: not adopted |
+| frame changes refreshed lazily from per-frame snapshots (x86-64-v3) | 46f2b1e | b477ba2 | 29,390,082,350 -> 28,660,350,321 (-2.5%) | +1.1% / +1.1% (threshold 3.0%) | no significant difference: not adopted |
+| the lazy refresh without snapshots (measurement build) | 46f2b1e | b477ba2 + FORK_S3_NOSNAP | 29,390,082,350 -> 29,314,175,562 (-0.26%) | not run (below any threshold) | not adopted |
+| x86-64-v3 against native, both cmake/pgo.cmake clang PGO builds of 46f2b1e | v3 | native | | -1.5% / -1.4% for native (threshold 3.0%) | no significant difference: native is not faster |
+
+Bench was identical in every pair: 9,118,607 / 208629aa15e140a9 (r8brft1); 8,794,009 / 8ac56bcaac6e05ff on
+r8brft1i8 for the I4 part. The instruction counts fell for the AVX-512 output layer and the snapshot refresh, but
+neither moved nps beyond the noise; I4 added 11.6% instructions (the widen-and-multiply) and halving its rows'
+bytes did not pay on this CPU (1 MB L2, 96 MB L3; why is UNVERIFIED, not profiled). TCEC's EPYCs (less L3 per
+CCD, shared by many threads) could differ: UNVERIFIED, worth one re-measurement in the TCEC build matrix if the
+net grows. I4's quality gates on r8brft1i8 all passed (quantization loss max 17.7, p99 13.7, mean 3.6 cp against
+r8brft1's 10.7 / 8.4 / 2.4 and the limits 21 / 16; endgame 7 of 900 as r8brft1; held-out 4-5 piece 606 against
+612, 6-7 piece 786 against 770, both within the 1.15 flag), so a larger net that is bandwidth-bound could revisit
+it (tools/nnue/int8_rows.py and the FORK_FT_INT8 build stay on the unmerged branch speed3/nnue-i4).
+
+The PGO comparison answers which target the native builds (g4d's Control Center build, the play build) should
+use: x86-64-v3 is at least as fast as native for the fused head (native -1.5%, within the noise).
+
+The candidate branches are kept locally, not merged: speed3/nnue-i4 (b550b5b), speed3/nnue-avx512 (6e01c57: the
+AVX-512 output layer and a startup CPU check, src/core/cpu_gate.cpp, which refuses with a message a CPU without
+the instruction sets the build targets; a design for idea 163, whole-engine dispatch at main, is in the speed
+sprint report), speed3/nnue-refresh (b477ba2).

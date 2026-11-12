@@ -3044,5 +3044,44 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
 - **metric:** instructions:u per bench, then nps by bench/ab_search.py in a quiet window. **result:** instructions
   -31.4%; nps +14.7% median (x86-64-v3, WSL, core 4) and +5.4% (native AVX-512, Windows), both beyond the noise
   threshold; bench 9,118,607 / 208629aa15e140a9 unchanged (docs/history/phase-4/perf-log.md, speed sprint 3).
-- **status:** adopted (b3b1f5c). **runtime cost:** a gain. **earliest phase:** Phase 4.
+- **status:** adopted (46f2b1e on phase-4; developed as b3b1f5c). GCC 11.4 (update.sh, x86-64-v3): +9.0% median,
+  +7.8% best (window 2). **runtime cost:** a gain. **earliest phase:** Phase 4.
+
+### 167. Int8 feature-transformer rows (I4; speed sprint 3)
+
+- **type:** TOOLING (speed; changes the net's numbers, so an SPRT would decide). **idea:** the first layer's rows
+  stored as int8 with a per-unit multiplier, widened and multiplied when accumulated (FORK_FT_INT8), the net
+  re-quantized from the float weights by tools/nnue/int8_rows.py (r8brft1i8).
+- **result (2026-11-12):** every quality gate passed (loss max 17.7, p99 13.7, mean 3.6 cp; endgame and both
+  held-out checks within their flags), but nps -0.9% median and best against the int16 rows on the same net (bench
+  identical; instructions +11.6%): below the owner's 3% bar, so no SPRT (docs/history/phase-4/perf-log.md,
+  window 2). **status:** not adopted; the code stays on the unmerged branch speed3/nnue-i4 (b550b5b). Revisit only
+  if a larger net makes the update bandwidth-bound (and once on TCEC's EPYCs, UNVERIFIED).
+
+### 168. The output layer on AVX-512 (VNNI where compiled) and a startup CPU check (speed sprint 3)
+
+- **type:** TOOLING (speed; bench identical). **idea:** squared_sum on 32 lanes (C1's idea of 2026-11-06), for the
+  x86-64-v4 TCEC build; plus src/core/cpu_gate.cpp, a baseline-compiled constructor that refuses with a message a
+  CPU without the build's instruction sets (no dispatch: .claude/rules/simd.md).
+- **result (2026-11-12):** instructions -4.0% (-3.9% with VNNI), nps +2.1% / +1.6% (VNNI +1.4% / +1.6%), within the
+  3.0% threshold: no significant difference. **status:** not adopted (branch speed3/nnue-avx512, 6e01c57). The CPU
+  check is independent of the speed result and could be adopted on its own for the TCEC build (the owner's call).
+
+### 169. Frame changes refreshed lazily from per-frame snapshots (speed sprint 3)
+
+- **type:** TOOLING (speed; bench identical). **idea:** a frame change recomputes a perspective only when an
+  evaluation needs it, from the frame's snapshot plus the pieces and links that differ (the 2026-11-06 round's E1
+  was eager and lost 5.3%).
+- **result (2026-11-12):** instructions -2.5% (the lazy refresh alone -0.26%), nps +1.1% / +1.1%, within the 3.0%
+  threshold: no significant difference. **status:** not adopted (branch speed3/nnue-refresh, b477ba2).
+
+### 170. Build target of the native builds: x86-64-v3 against native (speed sprint 3)
+
+- **type:** TOOLING (build choice; bench identical). **question:** with the tiled update adopted, is the native
+  (AVX-512) build still the faster one for data generation (the Control Center's g4d build, cmake/pgo.cmake
+  ARCH=native) and the play build?
+- **result (2026-11-12, window 2):** the fused head 46f2b1e built by cmake/pgo.cmake (clang 21 PGO, WSL) for
+  x86-64-v3 and for native: native -1.5% median, -1.4% best against x86-64-v3, within the 3.0% threshold. So native
+  is not faster; x86-64-v3 is at least as fast on this machine. On TCEC's EPYCs UNVERIFIED (the TCEC build matrix).
+  **status:** measured; the build choice is the owner's.
 
