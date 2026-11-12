@@ -50,6 +50,10 @@ constexpr int DriftGrain = 128;
 // The shares (PieceDriftShare, ...) are in 1/DriftShareUnit of the learned
 // drift: the term a table adds is its drift * share / DriftShareUnit.
 constexpr int DriftShareUnit = 64;
+// The depth scale (switch use_drift_depth_scale): from this depth on the
+// switched-on terms apply whole; below it, at depth d (the quiescence search
+// at 0), (d + 1) / (DriftFullDepth + 1) of them.
+constexpr int DriftFullDepth = 3;
 
 class EvalDrift {
  public:

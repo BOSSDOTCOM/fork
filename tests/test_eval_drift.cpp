@@ -224,6 +224,7 @@ TEST_CASE("eval_drift", "each table's switch changes the tree when on, alone") {
   // on); bench parity shows the defaults' search is phase-4's.
   SearchSwitches off;
   off.use_piece_drift = off.use_minor_drift = off.use_major_drift = off.use_threat_drift = false;
+  off.use_drift_depth_scale = false;
   constexpr int Depth = 8;
   const std::uint64_t base = searched_nodes(off, Depth);
   CHECK_EQ(searched_nodes(off, Depth), base);  // deterministic from clear tables
@@ -237,6 +238,25 @@ TEST_CASE("eval_drift", "each table's switch changes the tree when on, alone") {
     CHECK_MSG(nodes != base, "table " << which << " on: " << nodes << " nodes, as with every table off");
     CHECK_EQ(searched_nodes(on, Depth), nodes);  // deterministic: the tables start empty after clear_history
   }
+}
+
+TEST_CASE("eval_drift", "the depth scale changes the tree only with a table on") {
+  SearchSwitches off;
+  off.use_piece_drift = off.use_minor_drift = off.use_major_drift = off.use_threat_drift = false;
+  off.use_drift_depth_scale = false;
+  constexpr int Depth = 8;
+  const std::uint64_t base = searched_nodes(off, Depth);
+  SearchSwitches scaled = off;
+  scaled.use_drift_depth_scale = true;
+  CHECK_EQ(searched_nodes(scaled, Depth), base);  // nothing to scale
+  SearchSwitches minor = off;
+  minor.use_minor_drift = true;
+  SearchSwitches minor_scaled = minor;
+  minor_scaled.use_drift_depth_scale = true;
+  const std::uint64_t whole = searched_nodes(minor, Depth);
+  const std::uint64_t part = searched_nodes(minor_scaled, Depth);
+  CHECK_MSG(part != whole, "the minor table scaled by depth: " << part << " nodes, as unscaled");
+  CHECK_EQ(searched_nodes(minor_scaled, Depth), part);
 }
 
 }  // namespace forkeng::test

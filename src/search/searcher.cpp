@@ -150,12 +150,14 @@ Searcher::DriftTerms Searcher::drift_terms(int ply) {
   return t;
 }
 
-int Searcher::drift_estimate(int raw, const DriftTerms& t) const {
+int Searcher::drift_estimate(int raw, const DriftTerms& t, int depth) const {
   int sum = 0;
   if (switches.use_piece_drift) sum += t.pieces * PieceDriftShare / DriftShareUnit;
   if (switches.use_minor_drift) sum += t.minor * MinorDriftShare / DriftShareUnit;
   if (switches.use_major_drift) sum += t.major * MajorDriftShare / DriftShareUnit;
   if (switches.use_threat_drift) sum += t.threat * ThreatDriftShare / DriftShareUnit;
+  if (switches.use_drift_depth_scale)  // rounded toward zero, as each term is
+    sum = sum * (std::clamp(depth, 0, DriftFullDepth) + 1) / (DriftFullDepth + 1);
   constexpr int Bound = TbWinScore - MaxPly - 1;  // the largest score is_tb_or_mate does not flag
   return std::clamp(raw + sum, -Bound, Bound);
 }
@@ -404,7 +406,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // starts from is the raw eval plus the switched-on drift terms (R34, E4).
   DriftTerms drift{};
   if (!in_check && drift_keys_live_) drift = drift_terms(ply);
-  const int estimate = in_check ? ScoreNone : drift_estimate(f.static_eval, drift);
+  const int estimate = in_check ? ScoreNone : drift_estimate(f.static_eval, drift, depth);
   int prune_eval = estimate;
   if (switches.use_tt_eval_refine && tt_hit && !in_check) {
     const int s = score_from_tt(hit.score, ply);
@@ -433,7 +435,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // estimate would make it one, and a `drift_ledger` line follows the row:
   // each table's pruning eval minus beta (tools/measure/drift_rank.py).
   const auto drift_prune_eval = [&](int term) {
-    return refined_eval(drift_estimate(f.static_eval + term, DriftTerms{}), tt_hit, hit, ply);
+    return refined_eval(drift_estimate(f.static_eval + term, DriftTerms{}, depth), tt_hit, hit, ply);
   };
   const auto drift_reaches = [&](auto&& test) {
     return drift_report_ && !in_check &&
@@ -937,8 +939,9 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     }
 #endif
     // The stand-pat is the static estimate: the raw eval plus the
-    // switched-on drift terms (R34, E4); the TT keeps the raw eval.
-    best = drift_keys_live_ ? drift_estimate(f.static_eval, drift_terms(ply)) : f.static_eval;
+    // switched-on drift terms (R34, E4; at depth 0 for the depth scale); the
+    // TT keeps the raw eval.
+    best = drift_keys_live_ ? drift_estimate(f.static_eval, drift_terms(ply), 0) : f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)
         tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);

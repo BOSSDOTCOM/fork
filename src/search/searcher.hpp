@@ -164,6 +164,14 @@ struct SearchQuota {
 //   table, each times its share (PieceDriftShare, ... / DriftShareUnit).
 //   The tables learn at the nodes whose result shows the estimate erred
 //   (negamax's end), only while switched on. Off until their SPRTs.
+// - use_drift_depth_scale: the switched-on drift terms' sum is scaled by
+//   depth before it is added: (min(depth, DriftFullDepth) + 1) /
+//   (DriftFullDepth + 1), the quiescence stand-pat at depth 0. The learning
+//   is unchanged. Offline (2026-11-12) the least-squares scale of a learned
+//   term against each node's own result rose with depth (about 0.1-0.2 in
+//   the quiescence search, 0.5-0.8 at depths 1-2, 1 at 3-5), and the whole
+//   term applied at the leaves fed back into what the tables learn. Off
+//   until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -202,7 +210,8 @@ struct SearchQuota {
   X(use_piece_drift, UsePieceDrift, false)               \
   X(use_minor_drift, UseMinorDrift, false)               \
   X(use_major_drift, UseMajorDrift, false)               \
-  X(use_threat_drift, UseThreatDrift, false)
+  X(use_threat_drift, UseThreatDrift, false)            \
+  X(use_drift_depth_scale, UseDriftDepthScale, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -619,13 +628,14 @@ class Searcher {
 
   // The drift tables (eval_drift.hpp): each table's term at the node at
   // `ply` (out of check), at its full share, in cp; the static estimate from
-  // the raw eval plus the switched-on terms, kept out of the tablebase and
-  // mate range; and the learning from a node's result.
+  // the raw eval plus the switched-on terms (scaled by `depth` with
+  // use_drift_depth_scale), kept out of the tablebase and mate range; and the
+  // learning from a node's result.
   struct DriftTerms {
     int pieces = 0, minor = 0, major = 0, threat = 0;
   };
   DriftTerms drift_terms(int ply);  // also sets threat_keys_[ply] when that table is read
-  int drift_estimate(int raw, const DriftTerms& terms) const;
+  int drift_estimate(int raw, const DriftTerms& terms, int depth) const;
   void learn_drift(int ply, int error, int depth);
   // A drift table is switched on (or, in stats builds, measured): play()
   // keeps the material keys, and the search computes the terms.
