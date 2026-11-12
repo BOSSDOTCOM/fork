@@ -752,8 +752,9 @@ TEST_CASE("uci_options", "setoption: case, spaces, unknown names, bad values") {
                            "setoption name SyzygyPath value <empty>", "setoption name Hash value 1"})
     g.send(good);
   CHECK(g.sync());
-  CHECK_EQ(g.count("info string", mark), 1);  // only the allocation report
+  CHECK_EQ(g.count("info string", mark), 2);  // the allocation report and Threads 4's notice
   CHECK_EQ(g.count("info string Hash 1 MB allocated", mark), 1);
+  CHECK_EQ(g.count("info string Threads 4 accepted: the search runs on one thread", mark), 1);
   mark = g.cursor;
   const std::vector<std::string> bad = {"setoption name Ponder value true",
                                         "setoption name Hash value 0",
@@ -769,6 +770,40 @@ TEST_CASE("uci_options", "setoption: case, spaces, unknown names, bad values") {
   CHECK(g.sync());
   CHECK_EQ(g.count("info string", mark), static_cast<int>(bad.size()));
   CHECK_EQ(g.count("info string Hash", mark), 3);  // the three rejected Hash values; no reallocation
+  g.check_transcript();
+  g.quit();
+}
+
+// Bug review 2026-11-11, E4: Threads is accepted but the search runs on one
+// thread, so a value above 1 says so (one info string per setoption; none
+// for 1), and Threads bounds the Hash clear's workers, Threads 1 included
+// (the clear used max(Threads, hardware threads)). 256 MB allows 128
+// workers. Fault-checked: without the notice, or with the old clear rule on
+// a machine with more than one hardware thread, this case fails.
+TEST_CASE("uci_options", "Threads: a value above 1 is reported as one search thread, and bounds the clear") {
+  Gui g;
+  CHECK(g.sync());
+  std::size_t mark = g.cursor;
+  g.send("setoption name Threads value 1");
+  g.send("setoption name Hash value 256");
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string Threads", mark), 0);
+  CHECK_EQ(g.count("info string Hash 256 MB allocated", mark), 1);
+  for (const std::string& line : g.texts(mark))
+    if (starts_with(line, "info string Hash 256 MB allocated and cleared in"))
+      CHECK_MSG(line.find(" by 1 threads") != std::string::npos, line);
+  mark = g.cursor;
+  g.send("setoption name Threads value 3");
+  g.send("setoption name Clear Hash");
+  g.send("setoption name Hash value 64");
+  CHECK(g.sync());
+  CHECK_EQ(g.count("info string Threads 3 accepted: the search runs on one thread", mark), 1);
+  for (const std::string& line : g.texts(mark))
+    if (starts_with(line, "info string Hash 64 MB allocated and cleared in"))
+      CHECK_MSG(line.find(" by 3 threads") != std::string::npos, line);
+  CHECK_EQ(g.count("info string Hash 64 MB allocated", mark), 1);
+  g.send("go depth 1");
+  CHECK(g.next("bestmove").has_value());
   g.check_transcript();
   g.quit();
 }
@@ -1030,9 +1065,11 @@ TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
       const std::size_t mark = g.cursor;
       g.send(set + std::to_string(v));
       CHECK(g.sync());
-      // Accepted: no complaint about the value (Hash reports its allocation).
+      // Accepted: no complaint about the value (Hash reports its allocation,
+      // Threads above 1 that the search runs on one thread).
       for (const std::string& line : g.texts(mark))
-        CHECK_MSG(line == "readyok" || starts_with(line, "info string Hash "),
+        CHECK_MSG(line == "readyok" || starts_with(line, "info string Hash ") ||
+                      starts_with(line, "info string Threads " + std::to_string(v) + " accepted: "),
                   b.name << ' ' << v << ": " << line);
     }
     for (std::int64_t v : {b.min - 1, b.max + 1}) {
