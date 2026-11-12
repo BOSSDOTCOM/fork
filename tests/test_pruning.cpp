@@ -507,6 +507,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
     SearchSwitches s;
     s.use_capture_probe = probe;
     s.use_no_move_reduction = false;
+    s.use_material_scale = false;  // its bar is set from the raw static evaluation
     fx.searcher->switches = s;
     Position pos;
     CHECK(pos.set_fen("4k3/pp6/8/3q4/8/8/PP1R4/4K3 w - - 0 1"));
@@ -527,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // (fault check: a technique that never fires leaves the trees as with the switch off).
 TEST_CASE("pruning", "material scale: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_material_scale);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_material_scale);  // on in this SPRT test commit
   // non_pawn_units on constructed positions: the start (2 x (3 + 3 + 3 + 3 +
   // 5 + 5 + 9) = 62), a pawn ending (0), one rook and one bishop each (16).
   Position units;
