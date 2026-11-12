@@ -46,7 +46,8 @@ and WSL ~/fork-data/gen4c/g4c.log (3:27 PM EST); the positional slice's done.jso
 6. **The fresh endgame slice does not exist yet; slice v2 does not exist yet.** No `slice2-*` file and no
    regenerated Syzygy slice on this machine or in WSL (bug-review follow-up; WSL ~/fork-data listing today).
    "The fresh endgame slice" is read as HANDOFF item 49: **v1's Syzygy 3-5-piece slice regenerated with new seeds
-   under the zero-overlap rule** (the 900-position check's positions and every held-out set excluded), replacing
+   under the zero-overlap rule** (every held-out set excluded; **the 900-position check's positions kept**, owner
+   2026-11-12 about 5:50 PM EST, so that check stays the integrity/recall gate), replacing
    v1 by the cap rule's "newer slices of a kind replace older ones" (owner decision O2). `endgame_slice.py generate`
    has no `--exclude` today (heldout_67.py has one); its generation rate is not recorded in anything read
    (UNVERIFIED; a rate probe first). Slice v2: designed, prober installed and verified (2026-11-11), shares set,
@@ -194,8 +195,9 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
    cp); tools/nnue/gates.sh on the clamped net (T2); **the integrity/recall gate**: at most 15 of the 900 positions
    of tools/nnue/endgame_check.py misjudged (gates.sh's "integrity/recall check" line; it catches missing or
    corrupted slice data; owner, 2026-11-12, about 5:00 PM EST: "the 900-position check stays a gate, relabeled an
-   integrity/recall check"). **Open point (flagged, risk 6):** O2's fresh slice excludes the 900 positions, so in 8c
-   the check would no longer be recall of slice positions; how 8c's nets score on it is UNVERIFIED.
+   integrity/recall check"). 8c's fresh slice keeps the 900 positions, so the gate stays a recall check (owner,
+   about 5:50 PM EST; risk 6 resolved); gates.sh enforces it in its exit status for slice-trained nets (every 8c arm:
+   the chain sets `SLICE_TRAINED=1`) and reports it only otherwise.
 2. **Endgame reports, every candidate, never a gate** (owner 2026-11-11; 2026-11-12): **the 4-5-piece held-out check**
    (endgame_heldout.py, 3,800; r8brft1 612) and **the 6-7-piece check** (heldout_67.py, 5,599; r8brft1 770)
    (cursed wins and blessed losses drawn; 200 per material); the 8-12-piece deep check (heldout_deep.py, 1,337
@@ -211,7 +213,8 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
    - base arms against c: i80-sK vs c-sK, pos-sK vs c-sK, lam-sK vs c-sK (K = 1, 2): 6 stages; v2 and wd: 4 more;
    - fine-tunes: rft-ep vs rft (2 stages) and rft-ep-lo vs rft-ep (2 stages);
    - **every arm that passes the integrity gates of item 1 (gates.sh's parity, netcheck and quantisation legs, and
-     the integrity/recall gate) gets its fixed-node screen** (owner, 2026-11-12, about 4:40 PM and 5:00 PM EST);
+     the integrity/recall gate, enforced by gates.sh with `SLICE_TRAINED=1`) gets its fixed-node screen** (owner,
+     2026-11-12, about 4:40 PM, 5:00 PM and 5:50 PM EST);
    - the final candidate (the best base with the chosen fine-tune) against **r8brft1**: 2 stages (one per seed).
    About 12-16 stages in the first wave; validation loss decides nothing.
 4. **Keep rules** (owner's where given; proposed where not, O6):
@@ -282,12 +285,10 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
    session B (A1 still runs rft and, if P2 did not, the plain rft at 5e-6).
 5. **Per-class lambda's expected value is low** (td80's -18 Elo gap to td90 in 8b), and it costs 2.18 h; kept in the
    owner's order, flagged.
-6. **The fresh slice changes the 900-check's meaning** (recall to held-out) if it excludes the check's positions
-   (O2): 8c's counts there may rise against past nets' 7-8 by construction, while the owner keeps the check a gate
-   (at most 15 of 900, the integrity/recall gate, 2026-11-12 about 5:00 PM EST). **Unresolved, flagged to the
-   coordinator:** with the exclusion, a count over 15 would not by itself show missing or corrupted slice data
-   (UNVERIFIED whether 8c's nets stay within 15); keeping the 900 positions in the fresh slice would keep the gate a
-   recall check. Read the 4-5 and 6-7 held-out sets for comparisons with r8brft1.
+6. **Resolved (owner, 2026-11-12, about 5:50 PM EST): the fresh slice keeps the 900-check's positions**, so the
+   check keeps its meaning (recall of slice positions) and stays the integrity/recall gate (at most 15 of 900,
+   enforced by gates.sh for slice-trained nets). Excluding them would have turned it into a held-out figure and made
+   a count over 15 ambiguous. Read the 4-5 and 6-7 held-out sets for comparisons with r8brft1.
 7. **Shared seeds in the label-depth arms:** identical games are counted and dropped before use.
 8. **The control competes un-fine-tuned against a fine-tuned default:** the base arms are compared against c, and
    only the fine-tuned final candidate plays r8brft1.
@@ -301,8 +302,9 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
   the lower LR 5e-6 (half). Both new values go to the constant screen.
 - **O2** "The fresh endgame slice" = v1 regenerated with new seeds and every held-out position (the 900 check's
   included) excluded, replacing v1 in every arm without its own arm test (recommended: same generator, size and
-  kind); the 15-of-900 acceptance target re-read as a held-out figure. (Superseded in part, 2026-11-12, about
-  5:00 PM EST: the 900-position check stays a gate, the integrity/recall gate at most 15 of 900; see risk 6.)
+  kind); the 15-of-900 acceptance target re-read as a held-out figure. **Amended by the owner (2026-11-12, about
+  5:50 PM EST): the fresh slice KEEPS the 900 endgame-check positions** (every held-out set is still excluded), so
+  the check stays the recall/integrity gate at most 15 of 900 (risk 6).
 - **O3** The label-depth data: d20, d50 and d100 in every arm as ordinary S512ppr3 parts at TD(0.9), c50/c100 out,
   identical games dropped (recommended; screen 1's -53.85 is a volume effect on small nets and does not bear on
   mixing; idea 62 keeps the setting decision).
@@ -346,6 +348,12 @@ misjudgments down >= 25% vs the control)." Sections 5.1-5.4, risk 6, O2, O6 and 
 to say so; the "base" of the 4:40 PM rule is read as the current default net (r8brft1), and the change against each
 run's warm start is reported beside it (phase-4's tools/nnue/gates.sh, `HELDOUT_WARM`).
 
+**The owner's decisions on the open points (about 5:50 PM EST, the same day):** (4) the fresh 8c endgame slice
+keeps the 900 endgame-check positions, so the check stays a recall/integrity gate (O2 amended, risk 6 resolved);
+(5) gates.sh enforces at most 15 of 900 in its exit status only for nets trained with the endgame slice, report-only
+otherwise (phase-4's gates.sh: the required `SLICE_TRAINED`, 1 for every 8c arm); (6) idea 80: TD labels at the
++-20,000 limit are left out, as the control drops saved mate scores (section 12).
+
 **The new values and their reasons** (constant screen by the coordinator's originality agent, 2026-11-12: no match
 in Stockfish, nnue-pytorch, Ethereal, Berserk, Weiss or bullet for either value or for the +-2,000 / 0 result code
 in that role; credited as Fork's own):
@@ -363,7 +371,7 @@ in that role; credited as Fork's own):
   searching positions in check with its check nodes; UNVERIFIED in the generator's code), and so does one whose
   label reaches the trainer's limit of +-20,000 (saturated by the mate or table scores after it, whose saved records
   the trainer drops: 50,798 of g4b-w00's 2,127,645 unsaved records, 2.4%, in a first probe; a definitional choice
-  made here so the i80 arm adds no record class the control lacks, flagged to the coordinator). The saved records'
+  made here so the i80 arm adds no record class the control lacks, confirmed by the owner 2026-11-12, about 5:50 PM EST). The saved records'
   labels equal the plain TD(0.9) copy's. `check --label-unsaved` recomputes the new labels by the forward view.
 - `tools/datagen/td_labels.py split` (rft-ep): the copy's keepable scores on records with 8 or more pieces replaced
   by the result code; the piece count from an occupancy-only replay, recomputed by python-chess in `check --mode
@@ -459,10 +467,10 @@ in chunks of 20,000 whole games (byte-identical to whole-file labelling, checked
 | pos1 | 12.5 M, **0 unsaved** | nothing to label: its td90- copy serves (A2's arm only) | - |
 | the endgame slice | one-move table games | not a TD part: unchanged in every arm | - |
 
-**Open for the owner** (asked 2026-11-12 through the coordinator): whether an unsaved record whose label reaches
-the trainer's limit stays unsaved (the choice made here, section 10: about 2.4% of the unsaved records, so the i80
-arm adds no record class the control drops) or is kept with its saturated target. The copies above follow the
-choice made here until he answers; the other choice needs only those records rewritten.
+**Decided by the owner (2026-11-12, about 5:50 PM EST, through the coordinator): TD labels at the +-20,000 limit
+are left out**, as the control drops saved mate scores: an unsaved record whose label reaches the trainer's limit
+stays unsaved (about 2.4% of the unsaved records), so the i80 arm adds no record class the control drops. This is
+the choice the copies above were already written with (section 10); nothing is rewritten.
 
 The same job then writes the control's td90- copies of g4b, ld-d20/d50/d100 and pos1 (about 0.8 h). After the
 seal: g4c's and the filler parts' td90- and i80- copies (about 1.5 h together), and rft-ep's split copies of every
