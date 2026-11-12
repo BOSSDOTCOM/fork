@@ -116,6 +116,55 @@ it still catches a net that lost the slice, but it is a recall gate. The gates s
 (docs/research/phase4-think-tank/) and the transfer-testing report quote "351 → 8" as written at the time; they
 were left as historical records.
 
+### T1 extension: does the drift reach positions beyond the tables? (owner, 2026-11-11, evening)
+
+The question: S512ppr2 454, S512ppr3 514, r8btd90 526, r8brft1 612 of the 3,800 held-out 4-5-piece positions;
+does the same drift show on 6-7-piece and on 8-12-piece positions?
+
+**6-7 pieces: not measured.** No 6-7-piece held-out set exists. The ChessTB WDL tables of endgame slice v2 (idea
+68) are downloaded in WSL (173 files, 104,248,957,736 bytes, finished 2026-11-10 1:13 AM EST), but no ChessTB
+prober is installed or committed (the download's summary names the planned one as "not run"), and the local
+Syzygy tables stop at 5 pieces. Building the set needs that prober first: a new third-party dependency, left
+for the owner's decision. (The file the evening's notes called heldout6 is the 4-5-piece run above, of six nets,
+not a 6-7-piece set.)
+
+**8-12 pieces** (tools/nnue/heldout_deep.py; its docstring holds the rules, declared before any label):
+- **positions:** 1,500 quiet 8-12-piece positions (300 per piece count), one per game, from rated human games of
+  the Lichess open database (2016-09, both players at least 2000, no BOT), seed 20261111;
+- **overlap with Fork's data:** an exact board-and-side match against 62 game files on this machine (the g4 and
+  label-depth shards: 4,220,571 games, 401,794,990 positions) found **one** position (lichess.org/mryUf4sh ply
+  98, in g4-w08-0000.vf and its two relabelled copies), left out (tools/nnue/heldout_deep_excluded.txt), so
+  **1,499** positions (9 pieces: 299);
+- **labels:** Fork's search with the default r8brft1 (bench 10,166,167 / d874b380155a2e8c), 10,000,000 nodes,
+  one thread, Hash 64 MB, Syzygy 3-4-5, a fresh game per position (job deep-labels, finished 8:54 PM EST; one
+  engine at a time from 8:17 PM); depth 18-249, median 26; 243 mate scores. Committed as tools/nnue/heldout_deep.tsv
+  (SHA-256 3129fa440d22bc0a...);
+- **scoring:** each net's static R-int against the label; 1,343 positions classed (502 winning, 212 level, 629
+  losing, from the side to move); misjudged by endgame_check.py's thresholds.
+
+| Pieces (classed) | r8brft1 | r8btd90 | S512ppr3 | S512ppr2 | S512+PP | S512r2 |
+|---|---|---|---|---|---|---|
+| 8 (285) | 21 | 20 | 23 | 19 | 25 | 28 |
+| 9 (266) | 13 | 13 | 11 | 12 | 14 | 12 |
+| 10 (270) | 11 | 10 | 10 | 10 | 9 | 10 |
+| 11 (258) | 18 | 16 | 16 | 16 | 16 | 15 |
+| 12 (264) | 17 | 17 | 17 | 16 | 17 | 17 |
+| **all (1,343)** | **80 (6.0%)** | 76 (5.7%) | 77 (5.7%) | **73 (5.4%)** | 81 (6.0%) | 82 (6.1%) |
+| mean \|static − label\| (±1000 cp) | 219.8 | 219.6 | 220.2 | 221.8 | 227.9 | 232.8 |
+
+Paired, position by position (positions one net misjudges and the other does not; two-sided sign test):
+r8brft1 against S512ppr2 12 to 5 (p = 0.14), against r8btd90 5 to 1 (p = 0.22), against S512ppr3 6 to 3
+(p = 0.51), against S512+PP 7 to 8 (p = 1.0).
+
+What it shows:
+- **The order of the 4-5-piece drift recurs (S512ppr2 lowest, r8brft1 highest of the four), but the gap is 7 of
+  1,343 positions (0.5 points) and no pair differs significantly.** The drift is not shown to reach 8-12-piece
+  positions; at this size it is not ruled out either.
+- The labels come from r8brft1's own search, which favours r8brft1; it still misjudges the most of the four.
+- The slice-trained nets gain nothing here over S512+PP (81) and S512r2 (82) on the misjudged count; the mean
+  difference is 6-13 cp lower for the slice-trained lineage.
+- Most errors are winning positions read as below +100 cp (57 of r8brft1's 80).
+
 ## T5. Scale matching
 
 The inputs each shipped net's gate used were found and the gate's numbers reproduced: tools/nnue/match_scale.py,
@@ -214,6 +263,9 @@ entry has one the section says the ratio is not corrected and understated.
   tools/nnue/endgame_check.py (refactor, output unchanged; its docstring states the recall finding).
 - tools/gauntlet/stopbias.py, tools/gauntlet/test_stopbias.py; tools/gauntlet/report.py (the stopping-bias
   lines), tools/gauntlet/test_report.py, tools/gauntlet/transfer.json (the "sprt" records).
+- The T1 extension: tools/nnue/heldout_deep.py, tools/nnue/test_heldout_deep.py, tools/nnue/heldout_deep.tsv
+  (the 1,499 labelled positions), tools/nnue/heldout_deep_excluded.txt (the one position found in Fork's data).
+  The paired sign test was a one-off over `check`'s rule and is not committed.
 - The T5 measurement script was a one-off (it reuses match_scale.py's position filter and models.r_int) and is
   not committed.
 
@@ -224,3 +276,6 @@ entry has one the section says the ratio is not corrected and understated.
 - The Kaggle copies of the slice files (not re-downloaded; the local files match g3s2's manifest).
 - The review's 56% share (not reproduced on the gates' inputs; 45-51% here).
 - The size of the selection bias in today's sum: only bracketed (median-unbiased and plug-in), not estimated.
+- The 6-7-piece held-out figure (no ChessTB prober installed; not measured).
+- Whether the 8-12-piece set overlaps Fork's older generations, the cloud shards or the Kaggle copies (only the
+  62 g4 and label-depth files on this machine were scanned).

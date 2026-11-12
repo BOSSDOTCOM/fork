@@ -2424,7 +2424,12 @@ whose weaknesses and data gaps decide their targets and order.
   42962187538), seed 2 +6.73 ± 9.44 (42966665389); seed 1's STC SPRT
   [0, 5] against r8btd90 **H1 accepted, +5.74 ± 3.81 Elo** (nElo +9.69 ±
   6.43) after 11,200 games (r8b-rft-stc; sprt-log); the endgame check 7
-  of 900. Bench 10,708,227 / c5dfc0ec1923d3b0 (docs/nets.md). **runtime
+  of 900. Bench 10,708,227 / c5dfc0ec1923d3b0 (docs/nets.md).
+  **2026-11-11 (owner, after the bug review's T1):** the result fine-tune
+  raised the held-out check's five-piece errors (queen against two minor
+  pieces, tools/nnue/endgame_heldout.py) from 126 to 189 of 600 (r8btd90
+  -> r8brft1; all classes 526 -> 612 of 3,800). **Future fine-tunes report
+  this set** (tools/nnue/gates.sh reports it for every candidate). **runtime
   cost:** none. **earliest phase:** Phase 4.
 
 ## 71. Feature-transformer weight decay

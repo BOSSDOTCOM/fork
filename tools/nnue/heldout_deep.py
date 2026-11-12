@@ -19,7 +19,8 @@ kept.
 **Overlap** (`overlap`): an exact board-and-side match (endgame_heldout.key) against Fork's game files (the
 viriformat .vf shards: the g4 and label-depth data on this machine), each game replayed from its header with the
 format's move codes (tools/datagen/verify_games.py: code_of), so every recorded position is compared. The
-endgame slice cannot hold any of these (it has at most 5 pieces).
+endgame slice cannot hold any of these (it has at most 5 pieces). A position found there is left out of the
+labelled set (`merge --exclude`), not replaced.
 
 **Labels** (`label`, declared 2026-11-11 before any label was computed): Fork's own search on each position, the
 current default's engine (the network r8brft1, bench 10,166,167 / d874b380155a2e8c), `go nodes 10,000,000` (NODES),
@@ -37,7 +38,7 @@ Also the mean absolute difference with both values clamped to +-1000 cp, over ev
     heldout_deep.py positions PGN.zst --sha256 HEX --out FILE.tsv [--per-count 300] [--seed 20261111]
     heldout_deep.py overlap FILE.tsv SHARD.vf... [--json OUT]
     heldout_deep.py label FILE.tsv --engine FORK --syzygy DIR --out PART.tsv [--part K --parts N] [--nodes N]
-    heldout_deep.py merge FILE.tsv PART.tsv... --out LABELLED.tsv
+    heldout_deep.py merge FILE.tsv PART.tsv... --out LABELLED.tsv [--exclude FENS.txt]
     heldout_deep.py check LABELLED.tsv NET[=LAYOUT]... [--json OUT]   (LAYOUT defaults to tools/nnue/s512pp.json)
 """
 import argparse
@@ -382,6 +383,7 @@ def main(argv=None):
     mg.add_argument('positions')
     mg.add_argument('parts', nargs='+')
     mg.add_argument('--out', required=True)
+    mg.add_argument('--exclude', help="FENs to leave out, one per line: the positions `overlap` found")
     c = sub.add_parser('check')
     c.add_argument('labelled')
     c.add_argument('nets', nargs='+')
@@ -417,6 +419,11 @@ def main(argv=None):
         label(rows, a.engine, a.syzygy, a.out, a.part, a.parts, a.nodes)
         return 0
     if a.cmd == 'merge':
+        if a.exclude:
+            drop = {line.strip() for line in Path(a.exclude).read_text(encoding='utf-8').splitlines()
+                    if line.strip() and not line.startswith('#')}
+            rows = [r for r in rows if r['fen'] not in drop]
+            print(f'{len(drop)} excluded (found in Fork\'s data by `overlap`)')
         got, missing = merge(rows, a.parts)
         write(got, a.out)
         print(f'{len(got)} labelled, {len(missing)} missing')

@@ -1,0 +1,4 @@
+# Positions of the 8-12-piece set found in Fork's own game data by `heldout_deep.py overlap` (2026-11-11: 62 g4 and
+# label-depth shards, 4,220,571 games, 401,794,990 positions): left out of tools/nnue/heldout_deep.tsv.
+# lichess.org/mryUf4sh ply 98; in g4-w08-0000.vf (and its td80 / td90 relabelled copies)
+4Q3/6pk/7p/3q4/8/7P/5PP1/6K1 w - - 5 50
