@@ -3,8 +3,11 @@
 """Tests of heldout_67.py (run in Fork's .venv, upstream python-chess; ChessTB itself is not needed): the committed
 file holds what the docstring declares (materials, counts, quiet legal positions, no repeats) and its positions are
 reproduced from the seed; the WDL reading (cursed and blessed are draws); the table-file and hash checks refuse a
-wrong file; the overlap scans find a planted position; the sign test and the report's flag."""
+wrong file; the overlap scans find a planted position; the sign test, the report's flag and its change line against
+the run's warm start."""
+import contextlib
 import hashlib
+import io
 import json
 import os
 import sys
@@ -97,6 +100,36 @@ class Rules(unittest.TestCase):
     def test_flag(self):
         self.assertTrue(h.flag_line('c', 116, 'r', 100)[1])
         self.assertFalse(h.flag_line('c', 115, 'r', 100)[1])
+
+    def test_report_gives_the_change_against_the_warm_start(self):
+        # Owner, 2026-11-12, about 5:00 PM EST: flagged against the current default, the change against the run's
+        # warm start reported for diagnosis. On every 40th position (both piece counts, every class), the warm
+        # start's count is its own `check` count, and without --warm-start the line says it was not reported.
+        nets = HERE.parent.parent / 'nets'
+        lines = [l for l in FILE.read_text(encoding='utf-8').splitlines() if l and not l.startswith('#')][::40]
+        with tempfile.TemporaryDirectory() as tmp:
+            sub, out = Path(tmp) / 'sub.tsv', Path(tmp) / 'r.json'
+            sub.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+            rows = h.read(sub)
+            want = {n: sum(v) for n, v in h.misjudged_vectors(rows, [str(nets / f'{n}.fnet')
+                                                                      for n in ('r8brft1', 'r8btd90')]).items()}
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                self.assertEqual(h.main(['report', str(sub), str(nets / 'r8brft1.fnet'), '--reference',
+                                         str(nets / 'r8brft1.fnet'), '--warm-start', str(nets / 'r8btd90.fnet'),
+                                         '--json', str(out)]), 0)
+            got = json.loads(out.read_text(encoding='utf-8'))
+            self.assertEqual((got['candidate_misjudged'], got['warm_start'], got['warm_start_misjudged'],
+                              got['warm_start_change']),
+                             (want['r8brft1'], 'r8btd90', want['r8btd90'], want['r8brft1'] - want['r8btd90']))
+            self.assertIn('held-out 6-7-piece check, change against the warm start r8btd90: r8brft1 '
+                          f"{want['r8brft1']} against {want['r8btd90']}", printed.getvalue().splitlines()[-1])
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                h.main(['report', str(sub), str(nets / 'r8brft1.fnet'), '--reference', str(nets / 'r8brft1.fnet'),
+                        '--json', str(out)])
+            self.assertIsNone(json.loads(out.read_text(encoding='utf-8'))['warm_start_change'])
+            self.assertTrue(printed.getvalue().splitlines()[-1].endswith('not reported (no warm-start net given)'))
 
     def test_spot_sample_is_stratified(self):
         rows = h.read(FILE)

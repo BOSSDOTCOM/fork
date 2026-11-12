@@ -3,8 +3,13 @@
 """Tests of endgame_heldout.py: its position key is the slice's own board bytes (endgame_slice.encode, decoded by
 verify_games.py's decoder), the overlap scan finds a planted position and counts material classes, the committed
 position file holds what its docstring says (classes outside the slice's generator, quiet, legal, no repeats,
-per-class counts), and the misjudged rule is endgame_check.py's."""
+per-class counts), the misjudged rule is endgame_check.py's, and the report's flag against the current default and
+its change line against the run's warm start (also wired into gates.sh)."""
+import contextlib
+import io
 import json
+import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -126,6 +131,8 @@ class Flag(unittest.TestCase):
 
     def test_report_flags_a_worse_net_and_exits_zero(self):
         # The fault case on real nets: S512+PP (945) against r8brft1 (612) is flagged; r8brft1 against itself not.
+        # The warm-start change (owner, 2026-11-12, about 5:00 PM EST): absent without --warm-start; with r8btd90,
+        # the net r8brft1's fine-tune started from, 612 against 526 is +86 (the recorded drift), reported unflagged.
         nets = HERE.parent.parent / 'nets'
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / 'r.json'
@@ -133,10 +140,87 @@ class Flag(unittest.TestCase):
                                       str(nets / 'r8brft1.fnet'), '--json', str(out)]), 0)
             got = json.loads(out.read_text(encoding='utf-8'))
             self.assertEqual((got['candidate_misjudged'], got['reference_misjudged'], got['flagged']), (945, 612, True))
-            self.assertEqual(eh.main(['report', str(FILE), str(nets / 'r8brft1.fnet'), '--reference',
-                                      str(nets / 'r8brft1.fnet'), '--json', str(out)]), 0)
+            self.assertEqual((got['warm_start'], got['warm_start_misjudged'], got['warm_start_change']),
+                             (None, None, None))
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                self.assertEqual(eh.main(['report', str(FILE), str(nets / 'r8brft1.fnet'), '--reference',
+                                          str(nets / 'r8brft1.fnet'), '--warm-start', str(nets / 'r8btd90.fnet'),
+                                          '--json', str(out)]), 0)
             got = json.loads(out.read_text(encoding='utf-8'))
             self.assertEqual((got['candidate_misjudged'], got['ratio'], got['flagged']), (612, 1.0, False))
+            self.assertEqual((got['warm_start'], got['warm_start_misjudged'], got['warm_start_change']),
+                             ('r8btd90', 526, 86))
+            self.assertIn('held-out endgame check, change against the warm start r8btd90: r8brft1 612 against 526, '
+                          '+86 (+16.3%); for diagnosis, not flagged', printed.getvalue().splitlines()[-1])
+
+    def test_warm_start_line(self):
+        self.assertEqual(eh.warm_start_line('held-out endgame check', 'cand', 600),
+                         'held-out endgame check, change against the warm start: not reported '
+                         '(no warm-start net given)')
+        self.assertIn('cand 500 against 526, -26 (-4.9%)', eh.warm_start_line('x', 'cand', 500, 'w', 526))
+        self.assertIn('+3 (no ratio: the warm start misjudges none)', eh.warm_start_line('x', 'cand', 3, 'w', 0))
+
+    def test_gates_passes_the_warm_start_to_both_held_out_reports(self):
+        # tools/nnue/gates.sh: HELDOUT_WARM becomes --warm-start on both reports, and both report lines are printed.
+        gates = (HERE / 'gates.sh').read_text(encoding='utf-8')
+        self.assertIn('warm=(--warm-start "$(p "$HELDOUT_WARM")=', gates)
+        for report in ('endgame_heldout.py" report', 'heldout_67.py" report'):
+            call = gates[gates.index(report):]
+            self.assertIn('${warm[@]+"${warm[@]}"}', call[:call.index('>"$W/')])
+        self.assertIn('tail -2 "$W/heldout.txt"', gates)
+        self.assertIn('tail -2 "$W/heldout67.txt"', gates)
+
+
+class RecallGate(unittest.TestCase):
+    """The integrity/recall gate (owner, 2026-11-12, about 5:50 PM EST): at most 15 of 900, enforced only for a net
+    trained with the endgame slice (SLICE_TRAINED=1), reported only otherwise (0); SLICE_TRAINED has no default."""
+
+    @staticmethod
+    def output(cand, control=7):
+        return (f'ending result positions  cand misjudged  control misjudged\n'
+                f'cand: {cand} of 900 misjudged ({cand / 9:.1f}%)\ncontrol: {control} of 900 misjudged (0.8%)\n')
+
+    def run_gate(self, text, slice_trained):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'endgame.txt'
+            path.write_text(text, encoding='utf-8')
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                rc = endgame_check.main(['endgame_check.py', 'gate', str(path), '--slice-trained', str(slice_trained)])
+            return rc, printed.getvalue().strip()
+
+    def test_enforced_for_a_slice_trained_net(self):
+        self.assertEqual(endgame_check.RECALL_LIMIT, 15)
+        rc, line = self.run_gate(self.output(15), 1)
+        self.assertEqual(rc, 0)
+        self.assertIn('cand 15 of 900 misjudged, at most 15: passed', line)
+        rc, line = self.run_gate(self.output(16), 1)  # the candidate's count, not the control's 7
+        self.assertEqual(rc, 1)
+        self.assertIn('cand 16 of 900 misjudged, at most 15: FAILED', line)
+        self.assertEqual(self.run_gate('endgame_check.py did not run\n', 1)[0], 1)  # no count: failed
+
+    def test_report_only_for_a_net_without_the_slice(self):
+        rc, line = self.run_gate(self.output(351), 0)  # S512+PP's count, trained before the slice
+        self.assertEqual(rc, 0)
+        self.assertIn('cand 351 of 900 misjudged (report only: not trained with the endgame slice', line)
+        self.assertEqual(self.run_gate('endgame_check.py did not run\n', 0)[0], 0)
+
+    def test_gates_requires_slice_trained_and_applies_the_gate(self):
+        # gates.sh stops before any work when SLICE_TRAINED is unset or not 0/1, and a failed gate fails the run.
+        env = {k: v for k, v in os.environ.items() if k != 'SLICE_TRAINED'}
+        for value in (None, '2', ''):
+            if value is not None:
+                env['SLICE_TRAINED'] = value
+            run = subprocess.run(['bash', 'gates.sh', 'n', 'd', 't', 'c', 'v', 'o'], cwd=HERE, env=env,
+                                 capture_output=True, text=True, timeout=60)
+            self.assertEqual(run.returncode, 2, value)
+            self.assertIn('set SLICE_TRAINED=1', run.stderr)
+        gates = (HERE / 'gates.sh').read_text(encoding='utf-8')
+        call = gates[gates.index('endgame_check.py" gate'):]
+        call = call[:call.index('cat "$W/recall.txt"')]
+        self.assertIn('--slice-trained "$SLICE_TRAINED" --limit "$MAX_RECALL"', call)
+        self.assertIn('|| gate "the integrity/recall gate', call)
 
 
 class B0(unittest.TestCase):

@@ -59,11 +59,15 @@ HTTP 429 (KB tools.md §6.9), answers cached for a restart.
     heldout_67.py overlap FILE.tsv [--slices VF...] [--shards VF...] [--train-list TRAIN.lst [--audit-exe EXE]]
                           [--json OUT]
     heldout_67.py check FILE.tsv NET[=LAYOUT]... [--json OUT] [--paired REFERENCE_STEM]
-    heldout_67.py report FILE.tsv CANDIDATE[=LAYOUT] --reference DEFAULT[=LAYOUT] [--json OUT]
+    heldout_67.py report FILE.tsv CANDIDATE[=LAYOUT] --reference DEFAULT[=LAYOUT] [--warm-start NET[=LAYOUT]]
+                     [--json OUT]
 
-`report` is the gate script's reported line (tools/nnue/gates.sh; never a gate, exit status 0 either way): both
-nets' counts, their ratio, and a flag for the owner's review above endgame_heldout.FLAG_RATIO (1.15), the same
-limit as the 4-5-piece check.
+`report` is the gate script's reported line (tools/nnue/gates.sh; never a gate on screening or promotion, exit
+status 0 either way): both nets' counts, their ratio, and a flag for the owner's review when the candidate is more
+than 15% worse than the current default, the net a promotion would replace (above endgame_heldout.FLAG_RATIO,
+1.15, the same limit as the 4-5-piece check). With --warm-start, a second line gives the candidate's change against
+the net its run warm-started from, for diagnosis only (owner, 2026-11-12, about 5:00 PM EST); without it, that line
+says the change was not reported.
 """
 import argparse
 import hashlib
@@ -508,7 +512,8 @@ def flag_line(cand, ct, ref, rt, limit=None):
     flagged = ratio > limit
     return (f'held-out 6-7-piece check: {cand} {ct} misjudged, the default {ref} {rt}, ratio {ratio:.3f}: '
             + (f"FLAG for the owner's review (a rise of more than {100 * (limit - 1):.0f}%)" if flagged
-               else f'within the flag limit ({limit:.2f})')), flagged
+               else f'within the flag limit ({limit:.2f}: flagged when more than '
+                    f'{100 * (limit - 1):.0f}% worse)')), flagged
 
 
 def main(argv=None):
@@ -552,6 +557,7 @@ def main(argv=None):
     r.add_argument('candidate')
     r.add_argument('--reference', required=True)
     r.add_argument('--flag-ratio', type=float, default=eh.FLAG_RATIO)
+    r.add_argument('--warm-start', help="the net the candidate's run warm-started from, NET[=LAYOUT] (diagnosis only)")
     r.add_argument('--json')
     a = ap.parse_args(argv)
     if a.cmd == 'generate':
@@ -584,13 +590,23 @@ def main(argv=None):
     ct = sum(vecs[cand])
     rt = sum(vecs[list(vecs)[-1]])
     line, flagged = flag_line(cand, ct, ref, rt, a.flag_ratio)
-    print_check(rows, vecs)
+    shown = {cand: vecs[cand], ref: vecs[list(vecs)[-1]]}
+    warm, wt = None, None
+    if a.warm_start:
+        (warm, wv), = misjudged_vectors(rows, [a.warm_start]).items()
+        warm = warm if warm not in shown else warm + ' (warm start)'
+        shown[warm] = wv
+        wt = sum(wv)
+    print_check(rows, shown)
     print(line)
+    print(eh.warm_start_line('held-out 6-7-piece check', cand, ct, warm, wt))
     if a.json:
         Path(a.json).write_text(json.dumps({'candidate': cand, 'candidate_misjudged': ct, 'reference': ref,
                                             'reference_misjudged': rt, 'positions': len(rows),
                                             'ratio': ct / rt if rt else None, 'flag_ratio': a.flag_ratio,
-                                            'flagged': flagged}, indent=1) + '\n', encoding='utf-8')
+                                            'flagged': flagged, 'warm_start': warm, 'warm_start_misjudged': wt,
+                                            'warm_start_change': None if warm is None else ct - wt},
+                                           indent=1) + '\n', encoding='utf-8')
     return 0
 
 

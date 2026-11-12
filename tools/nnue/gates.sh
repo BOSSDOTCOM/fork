@@ -11,18 +11,30 @@
 # positions for that match. Steps: convert at the trained scale (TRAINED_S, 92); match the scale to the
 # control's mean |eval| on 4,000 VAL positions; convert at the matched S; the unclamped net's legs; the link clamp
 # (tools/nnue/pp_bound.py) under the clamp-count limit, and its re-check (nothing left to clamp); the clamped
-# net's legs (its parity file); the scale re-match (reported); the endgame check against the control (reported);
-# the held-out endgame check against the current default (reported, flagged for the owner's review above 1.15
-# times the default's misjudged count; owner, 2026-11-11), and the held-out 6-7-piece check the same way
-# (tools/nnue/heldout_67.py); netcheck of the clamped net. Writes OUT/NAME/{cand.fnet,cand.parity,gates.json, the legs, endgame and netcheck
-# outputs}; exit 0 only if every gate passes:
+# net's legs (its parity file); the scale re-match (reported); the integrity/recall check (tools/nnue/endgame_check.py,
+# 900 positions, against the control; its gate, at most 15 of 900 misjudged, catches missing or corrupted slice
+# data: enforced for a net trained with the endgame slice, reported only for any other, SLICE_TRAINED below;
+# owner, 2026-11-12, about 5:50 PM EST); the held-out endgame check
+# (4-5 pieces) against the current default, the net a promotion would replace (reported, never a gate on screening
+# or promotion; flagged for the owner's review when more than 15% worse, above 1.15 times the default's misjudged
+# count; owner, 2026-11-11 and 2026-11-12), with the candidate's change against its run's warm-start net
+# (HELDOUT_WARM) reported beside it for diagnosis (owner, 2026-11-12, about 5:00 PM EST), and the held-out
+# 6-7-piece check the same way (tools/nnue/heldout_67.py); netcheck of the clamped net. Writes
+# OUT/NAME/{cand.fnet,cand.parity,gates.json, the legs, endgame and netcheck outputs}; exit 0 only if every gate
+# passes:
 # - the unclamped net: every leg passes (R-quant equals bullet's quantised.bin and the net file, R-float equals
 #   the trainer, the quantization loss within MAX_LOSS / P99_LOSS cp, max / p99);
 # - the clamp: at most MAX_CLAMPED link weights clamped; the clamped net has none left over the bound;
 # - the clamped net, the one shipped: the trainer leg and the quantization loss within MAX_LOSS / P99_LOSS; its
 #   only allowed failure is "Fork's net file differs from R-quant", and only when a weight was clamped (the
 #   clamped weights are exactly where it differs);
-# - netcheck exact on the clamped net's own parity file.
+# - netcheck exact on the clamped net's own parity file;
+# - with SLICE_TRAINED=1, the integrity/recall gate: at most MAX_RECALL (15) of the 900 misjudged.
+#
+# SLICE_TRAINED is required, 1 or 0, with no default: whether the candidate was trained with the endgame slice
+# is a fact of its training run, which the chain calling this script knows and the net file does not record, so
+# the chain states it (owner, 2026-11-12, about 5:50 PM EST: "prefer explicit over guessing"); unset or any other
+# value stops the script before any work (exit 2). 1: the gate is enforced; 0: the count is reported only.
 #
 # MAX_CLAMPED is 8 (owner's decision of 2026-11-11 asked for a small limit with a recorded reason): the link
 # weights clamped in every gate run on record were 0 to 5 of 311,296 (the shipped nets S512ppr2 2, S512ppr3,
@@ -32,13 +44,21 @@
 #
 # Environment: FORK_PYTHON (default the repository's .venv, else python3), FORK_BIN (the engine for netcheck,
 # default build/clang-release/fork[.exe]), FORK_SYZYGY (default ~/fork-data/syzygy/3-4-5), LAYOUT (default
-# tools/nnue/s512pp.json), TRAINED_S (92), MAX_LOSS (21), P99_LOSS (16), MAX_CLAMPED (8), HELDOUT_REF (the current
+# tools/nnue/s512pp.json), TRAINED_S (92), MAX_LOSS (21), P99_LOSS (16), MAX_CLAMPED (8), SLICE_TRAINED (required,
+# above), MAX_RECALL (15, endgame_check.RECALL_LIMIT), HELDOUT_REF (the current
 # default network for the held-out check, default nets/r8brft1.fnet: move it on with each promotion), CONTROL_LAYOUT
-# (the control's layout, default LAYOUT), HELDOUT_LAYOUT (HELDOUT_REF's, default tools/nnue/s512pp.json).
+# (the control's layout, default LAYOUT), HELDOUT_LAYOUT (HELDOUT_REF's, default tools/nnue/s512pp.json),
+# HELDOUT_WARM (the net the candidate's run warm-started from, for the held-out checks' change line; optional: if
+# unset, both lines say the change was not reported), HELDOUT_WARM_LAYOUT (HELDOUT_WARM's, default LAYOUT).
 # A candidate of another architecture than S512+PP (a B0 small net, the label-depth experiment, 2026-11-12) has no
 # link weights: the clamp and its re-check are skipped (0 clamped) and the shipped net is the one at the matched S.
 set -uo pipefail
 [ $# -eq 6 ] || { sed -n '7,7p' "$0" >&2; exit 2; }
+case ${SLICE_TRAINED:-} in
+  0|1) ;;
+  *) echo "gates.sh: set SLICE_TRAINED=1 (trained with the endgame slice: the 900-position gate applies) or 0" \
+       "(report only); it has no default" >&2; exit 2 ;;
+esac
 R=$(cd "$(dirname "$0")/../.." && pwd)
 . "$R/tools/jobs/paths.sh" || exit 2
 PY=${FORK_PYTHON:-}
@@ -51,6 +71,7 @@ fi
 BIN=${FORK_BIN:-$R/build/clang-release/fork}
 [ -x "$BIN" ] || [ ! -x "$BIN.exe" ] || BIN=$BIN.exe
 MAX_LOSS=${MAX_LOSS:-21} P99_LOSS=${P99_LOSS:-16} MAX_CLAMPED=${MAX_CLAMPED:-8} TRAINED_S=${TRAINED_S:-92}
+MAX_RECALL=${MAX_RECALL:-15}
 # Every path in the form the program it goes to takes (DESIGN.md section 1).
 p() { fork_path_for "$PY" "$1"; }
 NAME=$1
@@ -64,6 +85,9 @@ links=$("$PY" -I -c "import json,sys; print(int(json.load(open(sys.argv[1]))['ar
 SYZ=$(p "${FORK_SYZYGY:-$HOME/fork-data/syzygy/3-4-5}")
 T=$(p "$R/tools/nnue")
 HREF=$(p "${HELDOUT_REF:-$R/nets/r8brft1.fnet}")
+warm=()  # the held-out checks' warm-start argument, empty when HELDOUT_WARM is unset
+[ -z "${HELDOUT_WARM:-}" ] ||
+  warm=(--warm-start "$(p "$HELDOUT_WARM")=$(p "${HELDOUT_WARM_LAYOUT:-${LAYOUT:-$R/tools/nnue/s512pp.json}}")")
 rm -rf "$W"; mkdir -p "$W"
 WP=$(p "$W")
 fail=0
@@ -109,18 +133,26 @@ other=$(grep '^FAIL' "$W/legs-clamped.txt" | grep -vxF "$allowed")
 grep -q '"loss_max"' "$W/legs-clamped.txt" || gate "the clamped net's legs printed no losses"
 echo "scale re-match: $(match "$WP/cand.fnet")"
 nice "$PY" -I "$T/endgame_check.py" "$(p "$R")" "$SYZ" "$WP/cand.fnet=$L" "$CTRL=$CL" >"$W/endgame.txt" 2>&1
-echo "endgame check: $(tail -2 "$W/endgame.txt" | tr '\n' ' ')"
-# The held-out endgame check (owner, 2026-11-11; tools/nnue/endgame_heldout.py): reported, never a gate. The
-# candidate against the current default (HELDOUT_REF), both counted on the same 3,800 positions, flagged for the
-# owner's review above 1.15 times the default's count.
+echo "endgame check (900 positions): $(tail -2 "$W/endgame.txt" | tr '\n' ' ')"
+# The integrity/recall gate (owner, 2026-11-12, about 5:50 PM EST): enforced only for a slice-trained net.
+nice "$PY" -I "$T/endgame_check.py" gate "$WP/endgame.txt" --slice-trained "$SLICE_TRAINED" --limit "$MAX_RECALL" \
+  >"$W/recall.txt" 2>&1 || gate "the integrity/recall gate (recall.txt)"
+cat "$W/recall.txt"
+# The held-out endgame check (owner, 2026-11-11; tools/nnue/endgame_heldout.py): reported, never a gate on screening
+# or promotion. The candidate against the current default (HELDOUT_REF, the net a promotion would replace), both
+# counted on the same 3,800 positions, flagged for the owner's review when more than 15% worse (above 1.15 times
+# the default's count); then its change against the run's warm start (HELDOUT_WARM), for diagnosis (owner,
+# 2026-11-12, about 5:00 PM EST).
 nice "$PY" -I "$T/endgame_heldout.py" report "$T/endgame_heldout.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$HL" \
-  --json "$WP/heldout.json" >"$W/heldout.txt" 2>&1 || echo "held-out check: did not run (heldout.txt)"
-echo "$(tail -1 "$W/heldout.txt")"
+  ${warm[@]+"${warm[@]}"} --json "$WP/heldout.json" >"$W/heldout.txt" 2>&1 ||
+  echo "held-out check: did not run (heldout.txt)"
+tail -2 "$W/heldout.txt"
 # The held-out 6-7-piece check (owner, 2026-11-11; tools/nnue/heldout_67.py, ChessTB WDL labels): reported the same
 # way, never a gate, on its 5,599 positions.
 nice "$PY" -I "$T/heldout_67.py" report "$T/heldout_67.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$HL" \
-  --json "$WP/heldout67.json" >"$W/heldout67.txt" 2>&1 || echo "held-out 6-7-piece check: did not run (heldout67.txt)"
-echo "$(tail -1 "$W/heldout67.txt")"
+  ${warm[@]+"${warm[@]}"} --json "$WP/heldout67.json" >"$W/heldout67.txt" 2>&1 ||
+  echo "held-out 6-7-piece check: did not run (heldout67.txt)"
+tail -2 "$W/heldout67.txt"
 "$BIN" netcheck "$(fork_path_for "$BIN" "$W/cand.parity")" "$(fork_path_for "$BIN" "$W/cand.fnet")" >"$W/netcheck.txt" 2>&1 ||
   gate "netcheck (netcheck.txt)"
 echo "netcheck: $(tail -2 "$W/netcheck.txt" | tr '\n' ' ')"
@@ -140,7 +172,7 @@ except (OSError, ValueError):
     heldout67 = None
 json.dump({'scale': s, 'gates_failed': bool(fail), 'clamped': clamped, 'max_clamped': limit,
            'clamped_legs': stats[-1] if stats else None, 'endgame': open(f'{w}/endgame.txt').read()[-600:],
-           'heldout': heldout, 'heldout67': heldout67,
+           'recall': open(f'{w}/recall.txt').read().strip(), 'heldout': heldout, 'heldout67': heldout67,
            'netcheck': open(f'{w}/netcheck.txt').read()[-300:], 'legs': open(f'{w}/legs-clamped.txt').read()[-600:]},
           open(f'{w}/gates.json', 'w'), indent=1)
 EOF

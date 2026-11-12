@@ -31,11 +31,15 @@ default seed and size.
     endgame_heldout.py generate --tables DIR [--per-class 200] [--seed 20261111] --out FILE.tsv
     endgame_heldout.py overlap FILE.tsv SLICE.vf... [--old-check]
     endgame_heldout.py check FILE.tsv NET[=LAYOUT]... [--json OUT]   (LAYOUT defaults to tools/nnue/s512pp.json)
-    endgame_heldout.py report FILE.tsv CANDIDATE[=LAYOUT] --reference DEFAULT[=LAYOUT] [--flag-ratio 1.15] [--json OUT]
+    endgame_heldout.py report FILE.tsv CANDIDATE[=LAYOUT] --reference DEFAULT[=LAYOUT] [--flag-ratio 1.15]
+                       [--warm-start NET[=LAYOUT]] [--json OUT]
 
 `report` is the network-decision step (owner, 2026-11-11; tools/nnue/gates.sh runs it): both nets' counts, the
-ratio, and "FLAG for the owner's review" when the candidate misjudges more than 1.15 times the current default's
-count. It is reported, never a gate: the exit status is 0 either way.
+ratio, and "FLAG for the owner's review" when the candidate is more than 15% worse than the current default (it
+misjudges more than 1.15 times the default's count; the default is the net a promotion would replace). With
+--warm-start, a second line gives the candidate's change against the net its run warm-started from, for diagnosis
+only (owner, 2026-11-12, about 5:00 PM EST); without it, that line says the change was not reported. It is
+reported, never a gate on screening or promotion: the exit status is 0 either way.
 """
 import argparse
 import hashlib
@@ -53,7 +57,7 @@ import endgame_check  # noqa: E402
 
 SEED = 20261111
 PER_CLASS = 200
-FLAG_RATIO = 1.15  # owner, 2026-11-11: flag a candidate whose misjudged count rises more than 15% over the default's
+FLAG_RATIO = 1.15  # owner, 2026-11-11 and 2026-11-12: flag a candidate more than 15% worse than the current default
 CLASSES_4 = ['KQvKR', 'KQvKP', 'KRvKP', 'KRvKB', 'KRvKN', 'KPvKP', 'KQvKQ', 'KRvKR', 'KBvKP', 'KNvKP',
              'KBNvK', 'KBBvK', 'KNNvK', 'KBPvK', 'KNPvK', 'KPPvK']
 CLASSES_5 = ['KQvKBN', 'KQvKBB', 'KQvKNN']
@@ -236,8 +240,20 @@ def flag_line(cand, ct, ref, rt, limit=None):
     line = (f'held-out endgame check: {cand} {ct[0]} of {ct[1]} misjudged, the default {ref} {rt[0]} of {rt[1]}, '
             f'ratio {ratio:.3f}: ' + (f"FLAG for the owner's review (a rise of more than "
                                       f'{100 * (limit - 1):.0f}%)' if flagged else
-                                      f'within the flag limit ({limit:.2f})'))
+                                      f'within the flag limit ({limit:.2f}: flagged when more than '
+                                      f'{100 * (limit - 1):.0f}% worse)'))
     return line, flagged
+
+
+def warm_start_line(label, cand, ct, warm=None, wt=None):
+    """The diagnosis line beside the flag (owner, 2026-11-12, about 5:00 PM EST): the candidate's misjudged count
+    against the net its run warm-started from. Reported only: never flagged, never a gate."""
+    if warm is None:
+        return f'{label}, change against the warm start: not reported (no warm-start net given)'
+    change = ct - wt
+    share = f'{100 * change / wt:+.1f}%' if wt else 'no ratio: the warm start misjudges none'
+    return (f'{label}, change against the warm start {warm}: {cand} {ct} against {wt}, {change:+d} ({share}); '
+            'for diagnosis, not flagged')
 
 
 def print_check(res):
@@ -280,6 +296,7 @@ def main(argv=None):
     r.add_argument('candidate')
     r.add_argument('--reference', required=True, help='the current default net, NET[=LAYOUT]')
     r.add_argument('--flag-ratio', type=float, default=FLAG_RATIO)
+    r.add_argument('--warm-start', help="the net the candidate's run warm-started from, NET[=LAYOUT] (diagnosis only)")
     r.add_argument('--json')
     a = ap.parse_args(argv)
     if a.cmd == 'report':
@@ -289,14 +306,24 @@ def main(argv=None):
         ref = ref if ref != cand else ref + ' (reference)'
         ct, rt = totals(tc), totals(tr)
         line, flagged = flag_line(cand, ct, ref, rt, a.flag_ratio)
-        print_check({cand: tc, ref: tr})
+        shown = {cand: tc, ref: tr}
+        warm, wt = None, None
+        if a.warm_start:
+            (warm, tw), = check(rows, [a.warm_start]).items()
+            warm = warm if warm not in shown else warm + ' (warm start)'
+            shown[warm] = tw
+            wt = totals(tw)[0]
+        print_check(shown)
         print(line)
+        print(warm_start_line('held-out endgame check', cand, ct[0], warm, wt))
         if a.json:
             Path(a.json).write_text(json.dumps({'candidate': cand, 'candidate_misjudged': ct[0], 'reference': ref,
                                                 'reference_misjudged': rt[0], 'positions': ct[1],
                                                 'ratio': ct[0] / rt[0] if rt[0] else None,
-                                                'flag_ratio': a.flag_ratio, 'flagged': flagged}, indent=1) + '\n',
-                                    encoding='utf-8')
+                                                'flag_ratio': a.flag_ratio, 'flagged': flagged,
+                                                'warm_start': warm, 'warm_start_misjudged': wt,
+                                                'warm_start_change': None if warm is None else ct[0] - wt},
+                                               indent=1) + '\n', encoding='utf-8')
         return 0
     if a.cmd == 'generate':
         rows = generate(a.tables, a.per_class, a.seed)
