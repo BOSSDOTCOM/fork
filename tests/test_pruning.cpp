@@ -468,7 +468,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // with the TT off there is no flag to read, so the tree equals the switch off.
 TEST_CASE("pruning", "TT-PV LMR relief: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_tt_pv_lmr);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_tt_pv_lmr);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_tt_pv_lmr = true;
   fx.searcher->switches = on;
