@@ -172,7 +172,19 @@ added; no CI job applies them automatically.
 | Endgame check | tools/nnue/endgame_check.py, 900 positions: **7 misjudged (0.8%), as r8btd90** (recall of slice positions, bug review T1). Held-out check (tools/nnue/endgame_heldout.py, 3,800 positions; 2026-11-11): **612 misjudged against r8btd90's 526**, the most of the slice-trained nets (queen against two minor pieces 189 of 600, r8btd90 126): **the result fine-tune raised the held-out five-piece errors from 126 to 189**, and future fine-tunes report this set (owner, 2026-11-11; tools/nnue/gates.sh reports it for every candidate, flagged above 1.15 times the default's count). 8-12-piece deep-label check (tools/nnue/heldout_deep.py, human positions labelled by r8brft1's own 10M-node search; 1,343 classed): **80 misjudged, r8btd90 76, S512ppr3 77, S512ppr2 73, S512+PP 81**: the same order, no pair significant (r8brft1 against S512ppr2 12 to 5 discordant, p = 0.14; docs/research/bug-review-followup-2026-11-11.md). 6-7-piece held-out check (tools/nnue/heldout_67.py, 5,600 positions, ChessTB WDL): **770 misjudged against r8btd90 732, S512ppr3 723, S512ppr2 731**, significant (against S512ppr2 84 to 45 discordant, p = 0.0008; against r8btd90 58 to 20) |
 | Tests | vs r8btd90 (bake/r8btd90 115daad, engine c67fd26): fixed nodes, 800,000 per move, run 42962187538: +7.17 +/- 9.93 Elo (nElo +12.29 +/- 17.02), 1,600 games, the higher of the two seeds' screens; then STC 8+0.08 [0, 5], runs 42974677403, 42976787971, 42979050772, 42981298644, 42983543508, 42985980827 and 42988446282: **+5.74 +/- 3.81 Elo (nElo +9.69 +/- 6.43), H1 accepted** after 11,200 games (docs/history/phase-4/sprt-log.md) |
 | Bench | 10,708,227 nodes, signature c5dfc0ec1923d3b0 (tests/bench-r8brft1.ref), the same on the bake branch's engine (c67fd26) and on phase-4's at the promotion (20d83fa) |
-| Status | **The default network since 2026-11-11** (owner: promoted on its STC result, about 6:35 AM EST), and the labeller of the data generation from generation 4's part g4c on; the running label-depth arms stay on S512ppr3 and the cloud slice on r8btd90 until each finishes (DESIGN.md §5.3, labeller policy; §6, the decisions log) |
+| Status | The default network on phase-4 from 2026-11-11 (owner: promoted on its STC result, about 6:35 AM EST); on this candidate branch, the control the candidate is screened against; and the labeller of the data generation from generation 4's part g4c on; the running label-depth arms stay on S512ppr3 and the cloud slice on r8btd90 until each finishes (DESIGN.md §5.3, labeller policy; §6, the decisions log) |
+
+
+## i82d100, r8brft1 with its heads refitted on 100k-node labels (idea 82, 2026-11-11, candidate branch only)
+
+| Item | Value |
+|---|---|
+| File | `nets/i82d100.fnet`, this candidate branch's default network (not promoted) |
+| Training | Idea 82's offline probe (ideas.md 82; tools/measure/head_probes.py writenet on branch tools/probes-1111, seed 3): r8brft1's first layer frozen, its 8 output heads refitted from the shipped values by full-batch Adam on 200,021 kept records of idea 62's D100 label-depth arm (labeller S512ppr3 at 100,000 nodes), TD(0.9) labels at S = 88, early-stopped on a 10% hold-out; quantized to the output layer's integers, 12 weights clipped to the loader's 128 |
+| Parity (tests/nnue/i82d100.parity, 446 positions) | R-int only (tools/nnue/models.py), on r8brft1.parity's positions; netcheck exact on all 446; no trainer or float legs (the heads were not trained by the trainer) |
+| Gold | idea 51's 3,131 records, S512ppr3 1M gold: squared win-probability error 0.008446 against the shipped heads' 0.008486 (difference interval [-0.000170, +0.000085]); on idea 52's 2,000 controls (200k gold) 0.009217 against 0.008941 |
+| Bench | 10,184,134 nodes, signature 6fd92cbd8a20a982 (tests/bench-i82d100.ref) |
+| Status | **The default network since 2026-11-11 on this candidate branch only**, for idea 82's fixed-node screen against r8brft1; not promoted |
 
 ## The bake-off entries in CI (2026-10-31)
 
