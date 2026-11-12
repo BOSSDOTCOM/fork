@@ -193,7 +193,32 @@ std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm
   return s;
 }
 
-#if defined(__AVX2__)
+#if defined(__AVX512BW__)
+// The AVX2 path's arithmetic (below) on 32 lanes, in two independent sums
+// (the halves of each 64-value step), with VNNI's dpwssd as the
+// multiply-add and add where compiled. Every int32 lane and the final
+// reduction add some of the products v * v * w, so the loader's bound keeps
+// each within int32 as for the AVX2 path, and the sum equals the scalar one.
+std::int64_t squared_sum(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
+  const __m512i zero = _mm512_setzero_si512(), qa = _mm512_set1_epi16(NetQa);
+  __m512i sum[2] = {zero, zero};
+  for (int half = 0; half < 2; ++half) {
+    const std::int16_t* v = half == 0 ? stm : ntm;
+    const std::int16_t* wh = w + half * NetHidden;
+    for (int i = 0; i < NetHidden; i += 32) {
+      const __m512i x = _mm512_min_epi16(_mm512_max_epi16(_mm512_load_si512(v + i), zero), qa);
+      const __m512i t = _mm512_mullo_epi16(x, _mm512_load_si512(wh + i));
+      __m512i& s = sum[(i / 32) & 1];
+#if defined(__AVX512VNNI__)
+      s = _mm512_dpwssd_epi32(s, t, x);
+#else
+      s = _mm512_add_epi32(s, _mm512_madd_epi16(t, x));
+#endif
+    }
+  }
+  return _mm512_reduce_add_epi32(_mm512_add_epi32(sum[0], sum[1]));
+}
+#elif defined(__AVX2__)
 // v * w is exact in 16 bits (|w| <= 128 is the loader's bound). The lanes
 // and their final reduction add in int32: every partial sum is a sum of some
 // of the products v * v * w, so the loader's bound on QA^2 times the
