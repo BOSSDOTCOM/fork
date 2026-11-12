@@ -24,7 +24,11 @@
 # workflows' runs when the jobs they still hold leave room for its shards and
 # build within FORK_GH_JOBS (40 by default since 2026-11-11, 20 before); a run whose jobs are not listed yet counts
 # as full. Since 2026-11-10 9:30 PM (owner, GitHub Pro): another sprt run counts its jobs like any
-# other run instead of blocking (two SPRT lanes); FORK_SPRT_SERIAL=1 restores the block. Uses python3 (or $PYTHON) for the merge and the ledger.
+# other run instead of blocking (two SPRT lanes); FORK_SPRT_SERIAL=1 restores the block. Since 2026-11-12 (the
+# owner's rule of 2026-11-11: TT-policy tests at a pressure-matched Hash): --hash MB sets both engines' Hash for every
+# kind and is part of the declared design (a restart with another Hash is refused); a bad value or a differing HASH
+# is refused before any dispatch; without it the default (16; 64 at LTC) is unchanged. Uses python3 (or $PYTHON) for
+# the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -368,6 +372,40 @@ setup twins 0 "$strong"
 touch "$tmp/twins/noname" "$tmp/twins/twin"
 drive twins "$sha" "$sha" 0 5
 check "an older sprt.yml and a twin run: stopped, not adopted" bash -c "[ \$(cat '$tmp/twins/rc') = 1 ] && grep -q 'more than one new run titled' '$tmp/twins/out'"
+
+# The pressure-matched Hash (owner's rule, 2026-11-11: TT-policy tests run with a Hash matching TCEC's nodes per
+# move over TT entries): --hash MB sets both engines' Hash for every kind and is part of the declared design;
+# without it nothing changes.
+check "without --hash the STC default is unchanged: Hash 16" grep -q -- "-f hash=16 -f games=1600" "$tmp/r-h1/dispatches"
+check "without --hash the header does not name a Hash" bash -c "! grep -q -- '(--hash)' '$tmp/r-h1/out'"
+setup r-hash 0 "$strong"
+drive r-hash --kind search --idea h1 --hash 5 "$sha" "$sha"
+check "--hash 5: H1 exits 0 after one dispatch" [ "$(rc r-hash):$(dispatches r-hash)" = 0:1 ]
+check "--hash 5: dispatched as both engines' Hash" grep -q -- "-f hash=5 -f games=1600" "$tmp/r-hash/dispatches"
+check "--hash 5: recorded in design.json" grep -q '"hash": "5"' "$tmp/r-hash/data/r-hash/design.json"
+check "--hash 5: named in the header" grep -q "ref test, hash 5 MB (--hash), kind search, stc" "$tmp/r-hash/out"
+drive r-hash --kind search --idea h1 --hash 6 "$sha" "$sha"
+check "a restart with another --hash is refused before any dispatch" eval '[ "$(rc r-hash)" = 1 ] && [ "$(dispatches r-hash)" = 1 ] && grep -qF -- "hash '\''6'\'' differs from the declared design'\''s '\''5'\''" "$tmp/r-hash/out"'
+drive r-hash --kind search --idea h1 "$sha" "$sha"
+check "a restart without --hash (the default 16) is refused too" eval '[ "$(rc r-hash)" = 1 ] && [ "$(dispatches r-hash)" = 1 ] && grep -qF -- "hash '\''16'\'' differs from the declared design'\''s '\''5'\''" "$tmp/r-hash/out"'
+setup r-hash-ltc 0 "$strong"
+TC=40+0.4 drive r-hash-ltc --kind search --idea h2 --cap 4 --hash 22 "$sha" "$sha"
+check "LTC --hash 22: 1,664 games at Hash 22" eval '[ "$(rc r-hash-ltc)" = 0 ] && grep -q -- "tc=40+0.4 -f hash=22 -f games=1664" "$tmp/r-hash-ltc/dispatches" && grep -q "\"hash\": \"22\"" "$tmp/r-hash-ltc/data/r-hash-ltc/design.json"'
+setup r-hash-custom 0 "$strong"
+drive r-hash-custom --hash 9 "$sha" "$sha" 0 5
+check "custom kind --hash 9: dispatched as the Hash" eval '[ "$(rc r-hash-custom)" = 0 ] && grep -q -- "-f hash=9 -f games=1600" "$tmp/r-hash-custom/dispatches"'
+setup r-hash-env 0 "$strong"
+HASH=8 drive r-hash-env --kind search --idea h3 --hash 7 "$sha" "$sha"
+check "--hash 7 with HASH=8 is refused before any dispatch" eval '[ "$(rc r-hash-env)" = 1 ] && [ "$(dispatches r-hash-env)" = 0 ] && grep -qF -- "--hash 7 and HASH=8 differ" "$tmp/r-hash-env/out"'
+HASH=7 drive r-hash-env --kind search --idea h3 --hash 7 "$sha" "$sha"
+check "--hash 7 with HASH=7 runs at Hash 7" eval '[ "$(rc r-hash-env)" = 0 ] && grep -q -- "-f hash=7 -f games" "$tmp/r-hash-env/dispatches"'
+setup r-hash-bad 0 "$strong"
+for v in 0 08 12x -4 4194305 ''; do
+  drive r-hash-bad --kind search --idea h4 --hash "$v" "$sha" "$sha"
+  check "--hash '$v' is refused before any dispatch" eval '[ "$(rc r-hash-bad)" = 1 ] && [ "$(dispatches r-hash-bad)" = 0 ] && grep -qF -- "is not a whole number of MB from 1 to 4194304" "$tmp/r-hash-bad/out"'
+done
+drive r-hash-bad --kind search --idea h4 "$sha" "$sha" --hash
+check "--hash with no value is refused" eval '[ "$(rc r-hash-bad)" = 1 ] && [ "$(dispatches r-hash-bad)" = 0 ] && grep -qF -- "--hash needs a value" "$tmp/r-hash-bad/out"'
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"

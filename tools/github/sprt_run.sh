@@ -16,6 +16,9 @@
 #   --cap N      LTC search: 4-6 stages (default 6); fixed: the stages to play
 #   --origin N   the first stage index (default 0); later indices are new openings
 #   --first N    resume at stage N (default the origin)
+#   --hash MB    both engines' Hash, 1 to 4194304 MB (Fork's Hash option), every kind; default the
+#                HASH variable, else 16 (64 at LTC for the kinds); for TT-policy tests, the
+#                pressure-matched Hash (owner, 2026-11-11; DESIGN.md §6 that day)
 #   ELO0, ELO1   custom nElo bounds (e.g. -3 0 for non-regression); FIRST, LAST
 #                the stages to run, default 0 and 12 (13 stages of 1,600 games)
 #
@@ -35,7 +38,8 @@
 # A search or network SPRT is a try of its idea: at most two per idea and
 # time control class (tools/jobs/ledger.py try), a third only with
 # --owner-override. The design goes to $SPRT_DATA/NAME/design.json before the
-# first dispatch; a restart with any other design is refused. The verdict
+# first dispatch (its Hash included, so a restart with another --hash or HASH
+# is refused like any other change); a restart with any other design is refused. The verdict
 # goes to $SPRT_DATA/NAME/verdict: H1 accepted, H0 accepted, futility stop,
 # capped (undecided at the cap: not passed) or complete.
 #
@@ -81,7 +85,8 @@
 #   only for a run the ledger already records for that stage (a run
 #   attributed after the fact goes in with ledger.py add --source import).
 #
-# Environment: TC (default 8+0.08), HASH (16; 64 at LTC for the kinds),
+# Environment: TC (default 8+0.08), HASH (16; 64 at LTC for the kinds; --hash sets it, and refuses a HASH
+# that differs),
 # GAMES (1600 per stage; 1664 at LTC for the kinds), SHARDS (16), TABLES (on),
 # BASE_OPTS and TEST_OPTS (fastchess engine options, default none), REF (the
 # branch whose sprt.yml runs; default the current branch), REPO (owner/name;
@@ -98,11 +103,11 @@
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here/../.."
-kind=custom idea= override= have_override=0 opt_cap= origin=0 opt_first=
+kind=custom idea= override= have_override=0 opt_cap= origin=0 opt_first= hash_cli_mb= hash_cli_given=0
 pos=()
 while [ $# -gt 0 ]; do
   case $1 in
-    --kind | --idea | --owner-override | --cap | --origin | --first)
+    --kind | --idea | --owner-override | --cap | --origin | --first | --hash)
       [ $# -ge 2 ] || { echo "sprt_run.sh: $1 needs a value" >&2; exit 1; }
       case $1 in
         --kind) kind=$2 ;;
@@ -111,6 +116,7 @@ while [ $# -gt 0 ]; do
         --cap) opt_cap=$2 ;;
         --origin) origin=$2 ;;
         --first) opt_first=$2 ;;
+        --hash) hash_cli_mb=$2 hash_cli_given=1 ;;
       esac
       shift 2 ;;
     --*) echo "sprt_run.sh: unknown option $1" >&2; exit 1 ;;
@@ -119,7 +125,7 @@ while [ $# -gt 0 ]; do
 done
 set -- "${pos[@]}"
 if { [ "$kind" = custom ] && [ $# -lt 5 ]; } || [ $# -lt 3 ]; then
-  sed -n '7,20p' "$here/sprt_run.sh" >&2
+  sed -n '7,23p' "$here/sprt_run.sh" >&2
   exit 1
 fi
 if [ "$kind" = custom ]; then
@@ -135,6 +141,15 @@ data=${SPRT_DATA:-$HOME/fork-sprt/github}/$name
 mkdir -p "$data"
 say() { echo "$(date -u '+%Y-%m-%d %H:%M UTC') $name: $*" | tee -a "$data/driver.log"; }
 stop() { say "$*; stopping"; exit 1; }
+# --hash MB (owner, 2026-11-11: TT-policy tests at a pressure-matched Hash): a whole number of MB within Fork's
+# Hash option (1 to 4194304, src/uci/session.hpp), for both engines; it sets HASH, which the dispatch sends and
+# the kinds' design.json records.
+if [ "$hash_cli_given" = 1 ]; then
+  [[ $hash_cli_mb =~ ^[1-9][0-9]{0,6}$ ]] && [ "$hash_cli_mb" -le 4194304 ] ||
+    stop "--hash '$hash_cli_mb' is not a whole number of MB from 1 to 4194304 (Fork's Hash option)"
+  [ -z "${HASH:-}" ] || [ "$HASH" = "$hash_cli_mb" ] || stop "--hash $hash_cli_mb and HASH=$HASH differ"
+  HASH=$hash_cli_mb
+fi
 # A gh call a transient network or GitHub error must not end (2026-11-08: a results download and a commit
 # check failed within a minute while GitHub was healthy, and gh's message was discarded): up to GH_TRIES
 # attempts, GH_RETRY_WAIT seconds apart, each failure's last line of output in the log (on stderr, so a
@@ -241,6 +256,7 @@ for c in "$base" "$test"; do
 done
 
 header="base $base, test $test, bounds [$elo0, $elo1], stages $first to $last, ref $REF"
+[ "$hash_cli_given" = 0 ] || header="$header, hash $HASH MB (--hash)"
 bounds="$elo0 $elo1"
 if [ "$kind" != custom ]; then
   try_args=()
