@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // the trees as with the switch off).
 TEST_CASE("pruning", "null-move verification: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_null_verification);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_null_verification);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_null_verification = true;
   fx.searcher->switches = on;

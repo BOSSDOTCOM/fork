@@ -206,7 +206,7 @@ struct SearchQuota {
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
   X(use_pass_best_stop, UsePassBestStop, true)           \
-  X(use_null_verification, UseNullVerification, false)
+  X(use_null_verification, UseNullVerification, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
