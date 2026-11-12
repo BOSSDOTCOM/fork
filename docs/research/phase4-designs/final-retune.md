@@ -163,6 +163,16 @@ horizon drop (razoring: HorizonDropMargin, HorizonDropMaxDepth) and bad-capture
 stop (BadCaptureStopMargin) are added as dimensions of the final retune's SPSA**
 (dropped as standalone tests; their switches and an off-equivalent range are
 set when step 19 is prepared, with the names and constants screened then).
+**2026-11-11 (owner, about 7:45 PM EST): a constant the final retune will
+tune gets no head-to-head before it**: one design R SPRT at STC at its
+natural value against off, adopted if it passes (pre-approved), one retry
+at a second value if it fails (the two-try limit); head-to-heads stay only
+for constants that will not be retuned or values that differ in kind. So
+the engine survey's **PriorCreditQuarters** (D9, natural value 4 quarters,
+range 0-12, step 1 in the parameter table) and **DirectCheckBonus** (D13,
+natural value 5000, range 0-20000, step 1000) **become class (a)
+dimensions of this SPSA if they are adopted** (lane B items 69a/69b and
+70a/70b, gated behind E1). D8 (the summed pair update) has no constant.
 
 ### 3.2 Class (b): LTC pass
 

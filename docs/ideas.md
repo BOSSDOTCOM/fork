@@ -2575,16 +2575,19 @@ whose weaknesses and data gaps decide their targets and order.
   threat bucket, reply and follow), with no maluses.
 - **status:** **in progress (owner, 2026-11-11 3:10 PM EST, as idea 75).**
   Built on phase-4 784b1b0 behind the switch, off: tier2/d9-prior-credit
-  ef30f4f, bench unchanged. Candidates 1, 3 and 6 quarters (bench
-  9,560,037, 10,516,912 and 10,270,243): sprt/d9-prior-credit-1 37f8a43,
-  -3 39074b1, -6 bb59b7f. The first candidates, 2, 4 and 8 quarters, were
-  dropped before any game when the constant screen matched 1× and 2× to
-  Stockfish releases 7-15.1 (6 quarters is a near match to one case of
-  Stockfish 16.1, credited in ORIGINALITY.md). Lane B items 69a
-  (survey-d9-h2h: round robin, 2 stages a pairing at STC, 1 kept on a tie)
-  and 69b (survey-d9-stc: design R of the winner against off on fresh
-  openings from stage 2; ledger idea `d9-prior-credit`, try 1), gated
-  until E1's SPRT. Nothing is adopted before its verdict.
+  ef30f4f, bench unchanged. **Re-planned by the owner (about 7:35 and
+  7:45 PM EST; decisions log): no head-to-head for a constant the final
+  retune will tune.** Design R at STC at the natural value, **4 quarters**
+  (1× the cutoff bonus; sprt/d9-prior-credit-4 83fb64b, bench 9,946,948 /
+  9feddb70e3ad7ea6; it matches Stockfish releases 7-15.1 and is credited in
+  ORIGINALITY.md, not replaced): lane B item 69a, survey-d9-stc, ledger idea
+  `d9-prior-credit`, try 1. If it fails, one retry at **3 quarters**
+  (sprt/d9-prior-credit-3 39074b1, bench 10,516,912): item 69b,
+  survey-d9-retry, try 2. If adopted, `PriorCreditQuarters` becomes a
+  dimension of the final retune's SPSA. Both gated until E1's SPRT. The 1-
+  and 6-quarter commits (37f8a43, bb59b7f; bench 9,560,037 and 10,270,243)
+  stay unused; 6 quarters, a near match to one case of Stockfish 16.1, stays
+  credited. Nothing is adopted before its verdict.
 - **runtime cost:** none expected (one history update per fail-low node;
   UNVERIFIED until the SPRT's nps report).
 - **earliest phase:** Phase 4.
@@ -2599,12 +2602,16 @@ whose weaknesses and data gaps decide their targets and order.
   per node when the quiets are scored (`direct_check_targets`).
 - **status:** **in progress (owner, 2026-11-11 3:10 PM EST, as idea 75).**
   Built on phase-4 784b1b0 behind the switch, off: tier2/d13-check-order
-  ceb984a, bench unchanged. Candidates 2500, 5000 and 10000 (one history
-  table is ±10,000): sprt/d13-check-order-2500 006ae9c, -5000 5a99405, -10000 90338de; bench 10,246,388, 10,253,460 and 9,776,602. Lane B items 70a (survey-d13-h2h: round
-  robin, 2 stages a pairing at STC, 2500 kept on a tie) and 70b
-  (survey-d13-stc: design R of the winner against off on fresh openings
-  from stage 2; ledger idea `d13-check-order`, try 1), gated until E1's
-  SPRT. Nothing is adopted before its verdict.
+  ceb984a, bench unchanged. **Re-planned by the owner (about 7:45 PM EST;
+  decisions log): no head-to-head for a constant the final retune will
+  tune.** Design R at STC at the natural value, **5000**, half a history
+  table's range (sprt/d13-check-order-5000 5a99405, bench 10,253,460):
+  lane B item 70a, survey-d13-stc, ledger idea `d13-check-order`, try 1. If
+  it fails, one retry at **2500** (sprt/d13-check-order-2500 006ae9c, bench
+  10,246,388): item 70b, survey-d13-retry, try 2. If adopted,
+  `DirectCheckBonus` becomes a dimension of the final retune's SPSA. Both
+  gated until E1's SPRT. The 10000 commit (90338de, bench 9,776,602) stays
+  unused. Nothing is adopted before its verdict.
 - **runtime cost:** possible (four attack lookups per node that scores its
   quiets, with the switch on); to be reported with the SPRT result (the
   2026-10-24 rule; UNVERIFIED until then).
