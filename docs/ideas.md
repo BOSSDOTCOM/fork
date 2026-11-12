@@ -2642,3 +2642,75 @@ whose weaknesses and data gaps decide their targets and order.
   the threat key's two attack maps per evaluated node); to be measured with bench/ab.py and reported with
   the SPRT results (the 2026-10-24 rule; UNVERIFIED until then).
 - **earliest phase:** Phase 4.
+
+## 79. Nested-width evaluation (novel-ideas 1)
+
+- **type:** ELO (eval speed / network).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): one net whose first K hidden columns are a usable narrow evaluator (the narrow output a partial sum of the full one); far from the window use the narrow sum, near it finish the full net; the same machinery can make a wider net pay only near the window. Leans on idea 59's control split (near-window accuracy is what counts).
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): its fixed-node oracle first, measuring **both accuracy and speed**: a narrow readout refitted on r8brft1's frozen first 256 columns, the band from |narrow - full|, then an FN screen of "narrow far, full near" (accuracy) and a synthetic half-width build on a quiet machine (speed). Kill: worse than -8 Elo at a band of 100 cp or less. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+
+## 80. Label the unsaved half (novel-ideas 2)
+
+- **type:** ELO (training data).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): the split search discards its unsaved records (45.5%); give them TD(lambda) targets from the next saved record (variant A, no new assumption; td_labels.py --from-next) or the PV-child score (variant B), in derived shards.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): **an arm in retrain 8c, two seeds, at equal compute** against the control (the owner chose equal compute over the proposal's equal samples). Kill: head-to-head at or below 0 on both seeds. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+
+## 81. Colour-coherent split search (novel-ideas 3)
+
+- **type:** ELO (training data).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): in a share of games one colour searches 20,000 nodes every move and the other 4,000, so every position is labelled and Fork-pure games contain slow slides; a defender-favoured form.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): **parked** (owner): the strength gap biases game results (the result label mixes position merit and skill gap). No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+
+## 82. Multi-fidelity output heads (novel-ideas 4)
+
+- **type:** ELO (network training).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): tag each record with its label budget and pick the output head by phase and fidelity; ship only the high-fidelity heads (same size and speed).
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): its **offline probe on the existing gold labels**: freeze r8brft1's first layer, refit the 8 heads on high-fidelity records, compare with the shipped heads on the 1M-node gold set (overall and by class), then one FN screen. Kill: no gold-set gain beyond the seed spread and an FN screen at or below 0. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+
+## 83. Label super-resolution (novel-ideas 5)
+
+- **type:** ELO (training data).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): a small regression from what each record already has (stored score, static eval, their difference, band, class) to the deep label; rewrite labels offline and build TD targets on them.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): its **offline probe on the existing gold labels** (idea 51's 3,131 positions and idea 52's 2,000 controls), cross-validated. Kill: squared error in win-probability space not at least 10% below the raw label's, or the slope on "search minus static" not clearly positive. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+
+## 84. Evaluator-diverse Lazy SMP (novel-ideas 6)
+
+- **type:** ELO (parallel search).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): thread groups use different nets of one shape, sharing the TT's moves and bounds (a one-bit evaluator tag on stored evals), with a root vote; later a second net trained to be decorrelated from the first.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): **after minimal Lazy SMP (step 17a) exists**; keep the network pointer per searcher when 17a is built. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+
+## 85. Class-matched TD horizon (novel-ideas 7)
+
+- **type:** ELO (training labels).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): a lambda per phase bucket or material class instead of one 0.9, chosen from Fork's own data.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): its **offline check**: the result-residual variogram by class and the per-class lambda that minimises error against the gold set. Kill: queens-on middlegames and endgames differ by less than 0.05 in best lambda. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
+
+## 86. Pawn-clocked context rows: bishop colour complexes (novel-ideas 8)
+
+- **type:** ELO (network inputs).
+- **idea** (Fable's proposal, docs/research/novel-ideas-2026-11-11.md; recorded by the owner 2026-11-11): inputs pairing each pawn with which bishop colour complexes each side keeps (384 rows), changing only on pawn moves or bishop captures; a new member of the pawn-link family.
+- **novelty:** UNVERIFIED until a prior-art check (the proposal's citations are from memory).
+- **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
+  VM or idle CPU.
+- **status:** candidate.
