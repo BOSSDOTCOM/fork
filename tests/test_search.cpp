@@ -603,15 +603,19 @@ TEST_CASE("search", "finds mate in 1 and mate in 2, and stops early on go mate")
   // K+R v K, mate in 2 (and not in 1).
   r = fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 4);
   CHECK_EQ(r.score, mate_score(3));
-  // go mate 2 stops once the mate is found (depth 3: the quiescence search
-  // sees that the king has no evasion), well before depth 20.
+  // go mate 2 stops once the mate is found, well before depth 20. Mate in 2
+  // is 3 plies, so the earliest iteration that can prove it is depth 3 (the
+  // quiescence search sees that the king has no evasion); the evaluation's
+  // pruning may need up to two more iterations depending on the net (depth 4
+  // with a label-depth B0 net, 2026-11-12). The property tested is the early
+  // stop, not the iteration count.
   CHECK(pos.set_fen("k7/8/2K5/8/8/8/8/7R w - - 0 1"));
   SearchQuota limits;
   limits.depth = 20;
   limits.mate_moves = 2;
   r = fx.search(pos, limits);
   CHECK_EQ(r.score, mate_score(3));
-  CHECK_EQ(r.depth, 3);
+  CHECK_MSG(r.depth >= 3 && r.depth <= 5, "go mate 2 stopped at depth " << r.depth);
 }
 
 TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
