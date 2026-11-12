@@ -4,8 +4,9 @@
   (an orphan, what a killed wrapper leaves), and on POSIX a descendant that started a session of its own;
   the stop verifies none is left and releases the lock;
 - a job started inside another (the 8b chain's `jobctl start ... -- bash script` path) stops with its whole
-  tree, its orphans included once its bash is killed, and the outer job lives on; the job it was started from
-  is never counted as started inside it, old records (no 'parent') by their start times;
+  tree, its orphans included once its bash is killed, and the outer job lives on (its processes taken once
+  its `jobctl start` call has returned, a slow return included); the job it was started from is never counted
+  as started inside it, old records (no 'parent') by their start times;
 - on Windows with WSL, a `wsl.exe -d DISTRO -- ...` job's Linux processes stop with it in every running
   distribution, one that ignores SIGHUP and SIGTERM included (a throwaway sleep with a unique marker); a sweep
   that cannot look counts as a process left, and a stop of a record from before the marker says so;
@@ -15,6 +16,9 @@
 - a record's keeper and command ids count only while their processes are the recorded ones, by start time
   (bug review 2026-11-11, T8: a record left "running" whose ids were reused counted as live);
 - a stop that leaves a process alive exits 1 and keeps the lock (the termination stubbed out);
+- a record read, a record write and a lock release wait while another process's access blocks them (on Windows
+  a read fails during a rename over the file, a rename or a removal while it is open), and a write whose reader
+  outlasts the patience fails, leaving no temporary file;
 - the ledger: records, the last record per stage, exact checks of a stage's run and inputs, a run id
   refused for a second stage;
 - the two-try limit (tries.jsonl): two tries per idea and time control class, a third only with an owner
@@ -111,11 +115,15 @@ class Supervisor(unittest.TestCase):
         self.env = dict(os.environ, FORK_JOBS=str(self.root / 'jobs'))
         os.environ['FORK_JOBS'] = self.env['FORK_JOBS']
         self.started = []
+        self.readers = []
 
     def tearDown(self):
         for name in self.started:
             subprocess.run([sys.executable, '-I', str(JOBCTL), 'stop', name, '--grace', '1'], env=self.env,
                            capture_output=True)
+        for p in self.readers:  # hold_open's processes, before the folder whose files they hold goes
+            p.kill()
+            p.wait()
         self.tmp.cleanup()
 
     def ctl(self, *args):
@@ -128,12 +136,13 @@ class Supervisor(unittest.TestCase):
             self.started.append(name)
         return r
 
-    def record(self, name):
-        return json.loads((self.root / 'jobs' / 'jobs' / f'{name}.json').read_text(encoding='utf-8'))
+    def record(self, name):  # read as jobctl reads (a read meeting a rename over the file waits on Windows)
+        p = self.root / 'jobs' / 'jobs' / f'{name}.json'
+        return json.loads(jobctl.when_unblocked(lambda: p.read_text(encoding='utf-8')))
 
     def lock(self, kind):
         p = self.root / 'jobs' / 'locks' / f'{kind}.json'
-        return json.loads(p.read_text(encoding='utf-8')) if p.exists() else None
+        return json.loads(jobctl.when_unblocked(lambda: p.read_text(encoding='utf-8'))) if p.exists() else None
 
     def wait_for(self, cond, seconds=30):
         deadline = time.time() + seconds
@@ -257,10 +266,14 @@ class Supervisor(unittest.TestCase):
         self.assertEqual(self.ctl('stop', 'inner', '--grace', '1').returncode, 0)
         self.assertFalse(alive(rec['pid']))
 
-    def start_nested_upload(self):
+    def start_nested_upload(self, tail=0):
         """The 8b chain's launch path: an outer job runs a bash script that starts an inner job with
         `jobctl start ... -- bash inner.sh`, and inner.sh runs Python as its last command but one (bash waits in
-        a child of its own for it, as upload-run.sh does). Returns the inner job's Python process id."""
+        a child of its own for it, as upload-run.sh does). Returns the inner job's Python process id once the
+        outer job has settled: its `jobctl start` call has returned (with a further `tail` seconds of Python
+        after it: a launch path slowed by a loaded machine) and its long-lived waiter runs. Until then the outer
+        job also holds the start call's processes, which end by themselves (2026-11-12: a snapshot taken while
+        they lived failed "the outer job is untouched" under load)."""
         bash = shutil.which('bash')
         if not bash or 'system32' in bash.lower():
             self.skipTest('no Git Bash or POSIX bash')
@@ -271,16 +284,22 @@ class Supervisor(unittest.TestCase):
         inner = self.root / 'inner.sh'
         inner.write_text('"$1" -I "$2" "$3"\nrc=$?\necho "child exit $rc"\nexit $rc\n', encoding='utf-8', newline='\n')
         outer = self.root / 'outer.sh'
-        outer.write_text('"$1" -I "$2" start upload inner -- "$3" "$4" "$1" "$5" "$6"\nsleep 600\n',
-                         encoding='utf-8', newline='\n')
+        outer.write_text('"$1" -I "$2" start upload inner -- "$3" "$4" "$1" "$5" "$6"\n'
+                         '[ "$8" = 0 ] || "$1" -I -c "import time; time.sleep($8)"\n'
+                         '"$1" -I "$5" "$7"\n', encoding='utf-8', newline='\n')
         self.pidfile = self.root / 'child-pid'
+        self.outer_ready = self.root / 'outer-waiter-pid'  # written by the outer's waiter, after the start call
         r = self.start('kaggle', 'outer', bash, fwd(outer), fwd(sys.executable), fwd(JOBCTL), fwd(bash), fwd(inner),
-                       fwd(child), fwd(self.pidfile))
+                       fwd(child), fwd(self.pidfile), fwd(self.outer_ready), str(tail))
         self.assertEqual(r.returncode, 0, r.stderr)
         self.started.append('inner')
         path = self.root / 'jobs' / 'jobs' / 'inner.json'
+        written = lambda f: f.exists() and f.read_text().strip()  # noqa: E731
         self.assertTrue(self.wait_for(lambda: path.exists() and self.record('inner').get('state') == 'running'
-                                      and self.pidfile.exists() and self.pidfile.read_text().strip()))
+                                      and written(self.pidfile) and written(self.outer_ready), 30 + tail),
+                        f"inner {path.exists() and self.record('inner').get('state')}, child pid "
+                        f"{bool(written(self.pidfile))}, outer waiter {bool(written(self.outer_ready))}; outer log "
+                        f"{Path(self.record('outer')['log']).read_text(errors='replace')[-600:]!r}")
         return int(self.pidfile.read_text())
 
     def test_a_job_started_inside_another_stops_with_its_whole_tree(self):
@@ -295,6 +314,22 @@ class Supervisor(unittest.TestCase):
         self.assertFalse(alive(child), f'pid {child} survived the stop')
         self.assertEqual(self.record('inner')['state'], 'stopped')
         self.assertEqual([p for p in outer if not alive(p)], [])  # the outer job is untouched
+        self.assertEqual(self.ctl('status', 'outer').returncode, 0)
+
+    def test_the_outer_job_is_untouched_after_a_slow_nested_launch(self):
+        # 2026-11-12: under load the test above failed "the outer job is untouched" with a process of the outer
+        # job's `jobctl start` call, alive in the snapshot and ended by itself right after: the inner job ran
+        # before the call had returned. A 3-second tail after the call stands in for that load: the snapshot
+        # must hold only processes that live as long as the outer job.
+        child = self.start_nested_upload(tail=3)
+        outer = jobctl.live(self.record('outer'))
+        self.assertIn(child, jobctl.live(self.record('inner')))
+        r = self.ctl('stop', 'inner', '--grace', '2')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertFalse(alive(child), f'pid {child} survived the stop')
+        # Checked once the outer's waiter runs, so its start call's processes and the tail are surely gone.
+        self.assertTrue(self.wait_for(lambda: self.outer_ready.exists() and self.outer_ready.read_text().strip()))
+        self.assertEqual([p for p in outer if not alive(p)], [])
         self.assertEqual(self.ctl('status', 'outer').returncode, 0)
 
     def test_a_nested_jobs_orphans_are_found_after_its_command_dies(self):
@@ -434,6 +469,73 @@ class Supervisor(unittest.TestCase):
         for k in ('keeper', 'pid'):
             self.assertAlmostEqual(r[f'{k}_started'], jobctl.pid_started(r[k]), delta=jobctl.START_SLACK)
         self.assertIn(r['pid'], jobctl.live(r))
+
+    # Opens the file as Python's open() does (sharing read and write, not delete), or with no sharing at all (as
+    # a file under a rename is, for a moment, on Windows), then keeps it open.
+    HOLD = ('import sys, time\n'
+            'if sys.argv[3] == "shared":\n'
+            '    f = open(sys.argv[1])\n'
+            'else:\n'
+            '    import ctypes\n'
+            '    from ctypes import wintypes\n'
+            '    k = ctypes.WinDLL("kernel32", use_last_error=True)\n'
+            '    k.CreateFileW.restype = wintypes.HANDLE\n'
+            '    k.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,\n'
+            '                              wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]\n'
+            '    h = k.CreateFileW(sys.argv[1], 0x80000000, 0, None, 3, 0x80, None)\n'  # GENERIC_READ, OPEN_EXISTING
+            '    assert h and h != wintypes.HANDLE(-1).value, ctypes.get_last_error()\n'
+            'print("open", flush=True)\n'
+            'time.sleep(float(sys.argv[2]))\n')
+
+    def hold_open(self, path, seconds, sharing='shared'):
+        """A process that opens `path` and keeps it open `seconds`; returns once it has opened it. It runs the base
+        interpreter, so the process killed and waited for is the holder: a venv's python.exe is a stub whose Python
+        child holds the file, and under load the folder's removal once met the file still open after the stub's
+        kill."""
+        p = subprocess.Popen([getattr(sys, '_base_executable', sys.executable), '-I', '-c', self.HOLD, str(path),
+                              str(seconds), sharing], stdout=subprocess.PIPE, text=True)
+        self.readers.append(p)
+        self.assertEqual(p.stdout.readline().strip(), 'open')
+        p.stdout.close()
+        return p
+
+    def test_record_and_lock_files_wait_for_other_processes(self):
+        # 2026-11-12: on Windows a rename over or a removal of a file that another process has open fails, so a
+        # keeper's first record write that met start's polling read killed the keeper, and its job ran with no
+        # keeper recorded (a KeyError 'keeper' in test_stop_ends_the_tree_after_its_keeper_and_command_died, once
+        # in 14 suite runs); and a read that meets a rename over the file fails (a PermissionError in the nested
+        # stop test's own read, once in 3 runs), which read_json took for a missing record. Each now waits, up to
+        # FILE_PATIENCE seconds.
+        path = self.root / 'rec.json'
+        jobctl.write_json(path, {'state': 'starting'})
+        if os.name == 'nt':
+            reader = self.hold_open(path, 1, 'exclusive')
+            self.assertEqual(jobctl.read_json(path), {'state': 'starting'})
+            reader.wait()
+        reader = self.hold_open(path, 1)
+        jobctl.write_json(path, {'state': 'running'})
+        self.assertEqual(jobctl.read_json(path), {'state': 'running'})
+        reader.wait()
+        lock = jobctl.lock_path('test')
+        lock.parent.mkdir(parents=True)
+        lock.write_text(json.dumps({'name': 'held', 'id': 'feedfacefeedface'}))
+        reader = self.hold_open(lock, 1)
+        jobctl.release_lock('test', 'feedfacefeedface')
+        self.assertFalse(lock.exists())
+        reader.wait()
+        if os.name == 'nt':  # a reader that outlasts the patience: the write fails and leaves no temporary file
+            reader = self.hold_open(path, 30)
+            saved = jobctl.FILE_PATIENCE
+            jobctl.FILE_PATIENCE = 0.3
+            try:
+                with self.assertRaises(PermissionError):
+                    jobctl.write_json(path, {'state': 'ended'})
+            finally:
+                jobctl.FILE_PATIENCE = saved
+                reader.kill()
+                reader.wait()
+            self.assertEqual(jobctl.read_json(path), {'state': 'running'})
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ['jobs', 'rec.json'])
 
     def test_a_failed_stop_keeps_the_lock(self):
         sleep = [sys.executable, '-I', '-c', 'import time; time.sleep(600)']

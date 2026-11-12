@@ -28,7 +28,8 @@ generation, measurements) start and stop only through it.
 - `stop NAME` stops the whole tree, gently first (SIGTERM on POSIX: fork_datagen ends at a game boundary;
   on Windows the job is terminated), then verifies that no process of the job remains before it releases
   the lock; it exits 1, keeping the lock, if any process survived.
-- Each job's record ($FORK_JOBS/jobs/NAME.json) and events (start, end, stop, reclaim) in
+- Each job's record ($FORK_JOBS/jobs/NAME.json, written whole by a rename; on Windows a read, a rename and a
+  lock's removal each wait while another process's access blocks them) and events (start, end, stop, reclaim) in
   $FORK_JOBS/events.jsonl; the command's output goes to $FORK_JOBS/jobs/NAME.log unless --log names a file.
 
     jobctl.py start TYPE NAME [--log FILE] [--cwd DIR] -- COMMAND [ARG...]
@@ -76,18 +77,44 @@ def lock_path(kind):
     return root() / 'locks' / f'{kind}.json'
 
 
+FILE_PATIENCE = 10.0  # seconds: how long a read, a rename over or a removal of a record or lock waits for access
+
+
+def when_unblocked(action):
+    """Runs action() (a file's read, a rename over it, or its removal), retrying for up to FILE_PATIENCE seconds
+    while it fails for want of access. On Windows a rename over a file or its removal fails while any process has
+    it open, as every read does for a moment (2026-11-12: a keeper's first record write met start's polling read,
+    the keeper died, and its job ran with no keeper recorded), and a read fails while a rename over the file is
+    under way (the same day: a record read as missing, which would let a live job's lock be reclaimed or a
+    nested job's processes be counted as the outer job's)."""
+    deadline = time.monotonic() + FILE_PATIENCE
+    while True:
+        try:
+            return action()
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
+
+
 def read_json(path):
+    """The file's JSON, or None if it is missing, unreadable or not JSON."""
     try:
-        return json.loads(Path(path).read_text(encoding='utf-8'))
+        return json.loads(when_unblocked(lambda: Path(path).read_text(encoding='utf-8')))
     except (OSError, ValueError):
         return None
 
 
 def write_json(path, data):
+    """Writes the file whole: a temporary file of this process's own, then a rename over the old one."""
     path = Path(path)
-    tmp = path.with_suffix('.tmp')
+    tmp = path.with_name(f'{path.name}.{os.getpid()}.tmp')
     tmp.write_text(json.dumps(data, indent=1, sort_keys=True), encoding='utf-8')
-    os.replace(tmp, path)
+    try:
+        when_unblocked(lambda: os.replace(tmp, path))
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 # ---------------------------------------------------------------- the platform's process control
@@ -491,7 +518,7 @@ def take_lock(kind, record):
                 raise RuntimeError(f"type {kind} is held by job {held['name']} (started {held.get('started')}, "
                                    f"processes {live(holder)})")
             event('reclaim', type=kind, lock=held)
-            os.remove(path)
+            when_unblocked(lambda: os.remove(path))
             continue
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             json.dump({'name': record['name'], 'id': record['id'], 'started': record['started']}, f)
@@ -504,7 +531,7 @@ def release_lock(kind, job_id):
     path = lock_path(kind)
     held = read_json(path)
     if held and held.get('id') == job_id:
-        os.remove(path)
+        when_unblocked(lambda: os.remove(path))
 
 
 # ---------------------------------------------------------------- commands
