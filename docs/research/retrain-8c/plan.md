@@ -349,3 +349,77 @@ in that role; credited as Fork's own):
 7.1 s; split 790,000 records/s (td90-g4-w00, 6,400,034 records, 8.1 s), its check 7.9 s. The split of all of
 8c's c files (about 2.4 B records) is therefore about 51 minutes of one core plus about as much for the checks,
 not the 6 hours that section 6 and risk 4 assumed.
+
+## 11. P1 and P2, run on the expiring hours (2026-11-12)
+
+Quota before: 15.70 h left (14.30 used); after both sessions: 14.91 h left at 4:30 PM EST (0.79 h for the two
+sessions, which ran side by side: P2 42 minutes of wall time, P1 about 10; again consistent with charging by session
+wall time, fact 2).
+
+**P1, the preflight** (kernel fork-retrain-8c-preflight version 1, tools/train/kaggle/preflight_8c.py as committed in
+9167b22, pushed about 4:06 PM EST, done about 4:13 PM; 410 s in the session): **passed.**
+- 32 of 32 data sources attached and mounted in one kernel (every dataset of the account, fork-g4b and fork-pos1
+  new): Kaggle's limit is at least 32, so 8c's 25-33 sources fit (risk 2 retired up to 32).
+- 327 of 327 input files matched their manifests' SHA-256 (8b's 18 manifests, g4b, ld-d20/d50/d100, pos1); none
+  missing, duplicated or unresolved; hashing took 160 s.
+- The trainer built at phase-4 e6b2ac3 in 37 s; r8btd90's float weights reproduced their g4s1-val prefix loss
+  0.01938369 exactly; both runs' superbatch 0 equalled the session's reference on bl-g4s1-val.vf at result weight 0
+  (0.01938356).
+- Two runs side by side (seeds 1 and 2), 6 superbatches each on 164 files (12.46 GB: 8b's td90 arm plus raw g4b,
+  ld-d20/d50/d100 and pos1), exit 0, validation 0.0196-0.0197; superbatch laps of 16-36 s, **mean 21.5 s over
+  laps 2-5** (8b: 21.84 s per superbatch): the 2.18 h per 360-superbatch run stands for the larger file set.
+- fork-train stats on each new part: kept/saved 0.649 (g4b), 0.648, 0.65, 0.65 (ld-d20, d50, d100) and 0.71 (pos1,
+  every record saved), matching the 0.645 assumed in section 1. **Caveat:** the call passed repeated --data flags
+  and `stats` reads one --data list, so it counted the first file of each part only; every file was hashed, and
+  all 164 were in the training reader's list.
+
+**P2, the lower-LR fine-tune of r8btd90** (kernel fork-retrain-8b-rftlo version 1, pushed 3:47 PM EST: r8brft1's
+kernel, retrain/8b-rft 43f6ecc's retrain_8b_rft.py with COMMIT 43f6ecc and WINNER td90, changed only in the LR,
+1e-5 to 5e-6, and the arm names rftlo1/rftlo2; the same base (td90's window average), data (g4s1, arm c's 129
+files), seeds, 60 superbatches, result weight 1.0 and window 46-60). Session valid: the warm start reproduced
+0.01938369; both seeds' superbatch 0 = 0.05716782 = the reference at result weight 1.0; exit 0; 1,320 s per run;
+both windows quantised unchanged. Gates (tools/nnue/gates.sh, the scale matched to r8btd90: S = 88 for both, one
+link weight clamped each, netcheck exact on 446): **both passed** (cand.fnet SHA-256 6199d3c6... rftlo1,
+ec576600... rftlo2).
+
+| Net (all r8btd90 fine-tuned on g4s1 at result weight 1.0) | LR | g4s1-val full, blended target | full, result target | 900-check | held-out 4-5 (3,800) | of which 5-piece (600) | held-out 6-7 (5,599) |
+|---|---|---|---|---|---|---|---|
+| r8btd90 (the base) | - | 0.01980678 | 0.05823161 | 7 | 526 | 126 | 732 |
+| r8brft1 | 1e-5 | 0.02007601 | 0.05818876 | 7 | 612 | 189 | 770 |
+| r8brft2 | 1e-5 | (not read) | (not read) | 7 | 614 | 190 | 766 |
+| rftlo1 | 5e-6 | 0.02003944 | 0.05818586 | 8 | 615 | 184 | 783 |
+| rftlo2 | 5e-6 | 0.02003659 | 0.05818052 | 8 | 609 | 180 | 782 |
+
+(Held-out counts all from one run of each check over the five nets, 2026-11-12 about 4:40 PM EST; r8btd90's and
+r8brft1's reproduce the recorded 526/612 and 732/770.) **Reading:** halving the LR moved the nets less from the
+base's blended target (0.0200 against 0.0201) at the same result-target loss, but did **not** reduce the endgame
+drift: 4-5 pieces 615 and 609 against 612 and 614 (5-piece 184 and 180 against 189 and 190), 6-7 pieces 783 and 782
+against 770 and 766. By the fine-tune keep rule of section 5.4 (both held-out counts below, paired), the lower LR
+does not replace 1e-5 whatever a head-to-head says, so no fixed-node screen was run (it could not change that
+decision) and no bake branch was made. The drift is evidently the result target on the endings, not the step size:
+the evidence for rft-ep (section 3) over a lower LR. Nothing is promoted; the result goes to the coordinator.
+
+## 12. Idea 80's labels for the unsaved positions, part by part (written before launch, as the owner asked)
+
+Computed with tools-9167b22 (td_labels.py labels --label-unsaved, lambda 0.9, S = 92), one process, Idle priority,
+in chunks of 20,000 whole games (byte-identical to whole-file labelling, checked on g4b-w08), each chunk checked
+(every 100th game recomputed by the forward view); measured 70,000-74,000 records/s with the check beside g4c.
+
+| Part (S512ppr3 or later; in 8c's i80 arm) | Records | Status at 4:45 PM EST 2026-11-12 | Estimate (one core) |
+|---|---|---|---|
+| g4b (w00-w08; w09-val's rest at the seal step) | 41.9 M | computed and checked (about 50,800 decided per 4.66 M-record file stay unsaved) | done |
+| ld-d20 (6 training files) | 104.5 M | computing (job r8c-copies2) | about 25 min |
+| ld-d50 | 45.8 M | queued in the same job | about 11 min |
+| ld-d100 | 23.4 M | queued | about 6 min |
+| g4 (w00-w08 + g4s1-g4-w09-val-rest) | 64.0 M | queued | about 15 min |
+| g3j (w00-w04 + g4s1-g3j-w05-val-rest) | 212.5 M | queued | about 50 min |
+| VM filler g4-gcp-20261111T191107Z, g4-gcp-20261112T041330Z (b5f11ae) | 27.3 M, 33.6 M | to compute after their pull and seal | about 15 min |
+| VM filler, 75d53f0 run(s) | about 90-110 M at the cut | to compute after the cut (O9) and seal | about 25 min |
+| g4c | 229.5 M | to compute after its seal (Fri about 2-5 PM EST) | about 55 min |
+| the g4s2 validation rests of g4b, g4c, ld-*, filler | small | at the seal step (snapshot_parts.py hold first) | minutes |
+| pos1 | 12.5 M, **0 unsaved** | nothing to label: its td90- copy serves (A2's arm only) | - |
+| the endgame slice | one-move table games | not a TD part: unchanged in every arm | - |
+
+The same job then writes the control's td90- copies of g4b, ld-d20/d50/d100 and pos1 (about 0.8 h). After the
+seal: g4c's and the filler parts' td90- and i80- copies (about 1.5 h together), and rft-ep's split copies of every
+control file (about 2.4 B records at 790,000 records/s: about 1 h of one core, plus the checks).
