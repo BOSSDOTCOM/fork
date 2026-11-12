@@ -905,12 +905,25 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     const std::uint64_t nodes_before = nodes_;
     frames_[1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
     frames_[1].expected_cut = i > 0;  // the root's later moves: expected cut nodes (T17)
+    const bool quiet = !m.is_capture() && !m.is_promotion();
     play(0, m);
     int score;
     if (i == 0 || !switches.use_pvs) {
       score = -negamax<true>(-beta, -alpha, depth - 1, 1);
     } else {
-      score = -negamax<false>(-alpha - 1, -alpha, depth - 1, 1);
+      // Root reductions (bug review 2026-11-11 §3: later root moves were
+      // never reduced): with use_root_lmr a late quiet root move gets the LMR
+      // table's reduction, less LmrCheckRelief if it gives check, on a zero
+      // window first, and the full depth again if it beats alpha.
+      int reduced = depth - 1;
+      if (switches.use_root_lmr && switches.use_lmr && depth >= LmrMinDepth &&
+          static_cast<int>(i) + 1 >= LmrMinMove && quiet) {
+        const int relief = switches.use_lmr_check_relief && pos.in_check() ? LmrCheckRelief : 0;
+        reduced = std::clamp(depth - 1 - (reduction_for(depth, static_cast<int>(i) + 1) - relief), 1, depth - 1);
+      }
+      score = -negamax<false>(-alpha - 1, -alpha, reduced, 1);
+      if (!stopped_ && score > alpha && reduced < depth - 1)
+        score = -negamax<false>(-alpha - 1, -alpha, depth - 1, 1);
       if (!stopped_ && score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, 1);
     }
     pos.unmake(m);

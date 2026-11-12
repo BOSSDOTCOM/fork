@@ -2766,3 +2766,19 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 124. Root reductions (bug review 2026-11-11 §3)
+
+- **type:** ELO (search); flag `use_root_lmr` (off).
+- **idea** (bug review 2026-11-11 §3: "Root moves are never reduced"): late
+  quiet root moves get the LMR table's reduction (less the check relief),
+  with the usual full-depth re-search when they beat alpha.
+- **status:** **in progress (coordinator's overnight build list, 2026-11-12:
+  "Root reductions. R-STC + LTC (depth)").** Built on phase-4 ab70fa5
+  behind the switch, off: branch tier2/root-lmr, bench unchanged (9,639,207
+  / 07f7ae19b9250f38, r8brft1). Test commit sprt/root-lmr. Night items 64a
+  (root-lmr-stc, design R at STC, ledger idea `root-lmr`, try 1) and 64c
+  (root-lmr-ltc, design R at 40+0.4, only on an STC H1), gated until
+  state/gate-e1.done. Nothing is adopted before a verdict.
+- **runtime cost:** none (a few comparisons per root move).
+- **earliest phase:** Phase 4.
