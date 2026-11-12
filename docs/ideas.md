@@ -1474,6 +1474,7 @@ the screens before use.
   then the fixed-node screen and the STC SPRT. **status:** untested (plan
   only, owner, 2026-11-07). **runtime cost:** none. **earliest phase:**
   Phase 4.
+- **follow-up (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):** closeness-weighted training is one of the 8c retrain arms (idea 59's follow-up plan, item 3), beside near-window oversampling; two seeds each if the quota allows.
 
 ## 49. Pairwise ranking loss on sibling positions
 
@@ -2042,6 +2043,17 @@ until measured; new names and constants go through the screens before use.
      item 8b's keep-or-drop rule.
   6. **The gate policy as an idea 23 evolution target**, with a game-based
      fitness (decision 19: never the label-and-sweep proxy).
+- **follow-up plan (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):**
+  1. **Correction tables, window-gated variant** (idea 78): apply the correction fully when the corrected
+     eval is near alpha or beta (a gate margin like this idea's 25 cp), fading to zero far from the window;
+     tested alongside the depth-scaled share (tier2/corr-depth-scale), against the adopted minor@32 head,
+     with the same offline gate first.
+  2. **Idea 79's fixed-node screen** as queued (lane B item 92).
+  3. **Retrain 8c candidate arms** with near-window oversampling in data generation (within the 5%
+     targeted-data cap) and closeness-weighted training (idea 48); two seeds each if the GPU quota allows.
+  4. **Step 3b re-opened** (a small independent near-window net, built lazily when the gate fires) for
+     evaluation after bake-off round 3.
+  5. **Idea 84** stays after Lazy SMP.
 
 ## 60. Near-window extension
 
@@ -2686,6 +2698,7 @@ whose weaknesses and data gaps decide their targets and order.
   remain to be tested (the diagnosis recommends a depth-scaled term first; the owner decides).
 - **runtime cost:** the minor table on (its adoption, 2026-11-12): measured before the commit with bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 75d53f0, B = the port's build of this commit's engine code from the uncommitted tree on 75d53f0, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -2.0%, best -3.4%, under the 4.9% noise threshold: no significant difference; a small price (the material keys kept at each make, the table read at each estimate) is possible but not resolved at this noise (UNVERIFIED). The bench searches 1.1% more nodes (9,366,920 against 9,263,568). The threat key (two attack maps per node) is not measured (UNVERIFIED).
 - **earliest phase:** Phase 4.
+- **follow-up (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):** a window-gated variant (full correction near alpha/beta, fading to zero far from the window; idea 59's gate margin), tested alongside the depth-scaled share against the minor@32 head, offline gate first (idea 59's follow-up plan, item 1).
 
 ## 79. Nested-width evaluation (novel-ideas 1)
 
@@ -2758,6 +2771,7 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **after minimal Lazy SMP (step 17a) exists**; keep the network pointer per searcher when 17a is built. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+- **follow-up (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):** unchanged: after Lazy SMP (idea 59's follow-up plan, item 5).
 
 ## 85. Class-matched TD horizon (novel-ideas 7)
 
