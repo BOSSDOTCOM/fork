@@ -33,7 +33,10 @@
 # Environment: FORK_PYTHON (default the repository's .venv, else python3), FORK_BIN (the engine for netcheck,
 # default build/clang-release/fork[.exe]), FORK_SYZYGY (default ~/fork-data/syzygy/3-4-5), LAYOUT (default
 # tools/nnue/s512pp.json), TRAINED_S (92), MAX_LOSS (21), P99_LOSS (16), MAX_CLAMPED (8), HELDOUT_REF (the current
-# default network for the held-out check, default nets/r8brft1.fnet: move it on with each promotion).
+# default network for the held-out check, default nets/r8brft1.fnet: move it on with each promotion), CONTROL_LAYOUT
+# (the control's layout, default LAYOUT), HELDOUT_LAYOUT (HELDOUT_REF's, default tools/nnue/s512pp.json).
+# A candidate of another architecture than S512+PP (a B0 small net, the label-depth experiment, 2026-11-12) has no
+# link weights: the clamp and its re-check are skipped (0 clamped) and the shipped net is the one at the matched S.
 set -uo pipefail
 [ $# -eq 6 ] || { sed -n '7,7p' "$0" >&2; exit 2; }
 R=$(cd "$(dirname "$0")/../.." && pwd)
@@ -54,6 +57,10 @@ NAME=$1
 O=$(p "$2") TR=$(p "$3") CTRL=$(p "$4") VAL=$(p "$5")
 W=$6/$NAME
 L=$(p "${LAYOUT:-$R/tools/nnue/s512pp.json}")
+CL=$(p "${CONTROL_LAYOUT:-${LAYOUT:-$R/tools/nnue/s512pp.json}}")
+HL=$(p "${HELDOUT_LAYOUT:-$R/tools/nnue/s512pp.json}")
+links=$("$PY" -I -c "import json,sys; print(int(json.load(open(sys.argv[1]))['architecture'] == 8))" "$L" | tr -d '\r') ||
+  { echo "gates.sh: cannot read the layout $L" >&2; exit 2; }
 SYZ=$(p "${FORK_SYZYGY:-$HOME/fork-data/syzygy/3-4-5}")
 T=$(p "$R/tools/nnue")
 HREF=$(p "${HELDOUT_REF:-$R/nets/r8brft1.fnet}")
@@ -66,7 +73,7 @@ legs() {  # net parity-out output-file
     --epd "$(p "$R/tests/nnue/parity.epd")" --trainer "$TR" --layout "$L" --max-loss "$MAX_LOSS" \
     --p99-loss "$P99_LOSS" --out "$2" >"$3" 2>&1
 }
-match() { nice "$PY" -I "$T/match_scale.py" --control "$CTRL" --control-layout "$L" --net "$1" --layout "$L" \
+match() { nice "$PY" -I "$T/match_scale.py" --control "$CTRL" --control-layout "$CL" --net "$1" --layout "$L" \
   "$VAL" --positions 4000 2>&1 | tail -1; }
 echo "== $NAME"
 nice "$PY" -I "$T/convert.py" "$O/quantised.bin" "$WP/s$TRAINED_S.fnet" --scale "$TRAINED_S" --layout "$L" | tail -1 ||
@@ -78,14 +85,20 @@ nice "$PY" -I "$T/convert.py" "$O/quantised.bin" "$WP/s$S.fnet" --scale "$S" --l
   gate "conversion at $S"
 legs "$WP/s$S.fnet" "$WP/s$S.parity" "$W/legs-unclamped.txt" || gate "the unclamped net's legs (legs-unclamped.txt)"
 echo "unclamped S = $S: $(grep -v '^$' "$W/legs-unclamped.txt" | tail -3 | tr '\n' ' ')"
-nice "$PY" -I "$T/pp_bound.py" "$WP/s$S.fnet" --clamp "$WP/cand.fnet" --max-clamped "$MAX_CLAMPED" >"$W/clamp.txt" 2>&1 ||
-  gate "the clamp count (clamp.txt)"
-cat "$W/clamp.txt"
-clamped=$("$PY" -I -c "import json,sys; print(json.loads(sys.argv[1])['clamped'])" "$(tail -1 "$W/clamp.txt")" | tr -d '\r') ||
-  { echo "gates.sh: no clamp count"; exit 1; }
-nice "$PY" -I "$T/pp_bound.py" "$WP/cand.fnet" --max-clamped 0 >"$W/clamp-recheck.txt" 2>&1 ||
-  gate "the clamped net still has link weights over the bound (clamp-recheck.txt)"
-echo "clamped, bound re-check: $(head -1 "$W/clamp-recheck.txt")"
+if [ "$links" = 1 ]; then
+  nice "$PY" -I "$T/pp_bound.py" "$WP/s$S.fnet" --clamp "$WP/cand.fnet" --max-clamped "$MAX_CLAMPED" >"$W/clamp.txt" 2>&1 ||
+    gate "the clamp count (clamp.txt)"
+  cat "$W/clamp.txt"
+  clamped=$("$PY" -I -c "import json,sys; print(json.loads(sys.argv[1])['clamped'])" "$(tail -1 "$W/clamp.txt")" | tr -d '\r') ||
+    { echo "gates.sh: no clamp count"; exit 1; }
+  nice "$PY" -I "$T/pp_bound.py" "$WP/cand.fnet" --max-clamped 0 >"$W/clamp-recheck.txt" 2>&1 ||
+    gate "the clamped net still has link weights over the bound (clamp-recheck.txt)"
+  echo "clamped, bound re-check: $(head -1 "$W/clamp-recheck.txt")"
+else
+  cp "$W/s$S.fnet" "$W/cand.fnet" || { echo "gates.sh: cannot copy the net"; exit 1; }
+  clamped=0
+  echo "no link weights in this layout: nothing to clamp"
+fi
 legs "$WP/cand.fnet" "$WP/cand.parity" "$W/legs-clamped.txt"  # writes cand.parity, the shipped net's
 echo "clamped S = $S: $(grep -v '^$' "$W/legs-clamped.txt" | tail -3 | tr '\n' ' ')"
 allowed="FAIL quantization leg: Fork's net file differs from R-quant"
@@ -95,17 +108,17 @@ other=$(grep '^FAIL' "$W/legs-clamped.txt" | grep -vxF "$allowed")
   gate "the clamped net differs from R-quant with no weight clamped"
 grep -q '"loss_max"' "$W/legs-clamped.txt" || gate "the clamped net's legs printed no losses"
 echo "scale re-match: $(match "$WP/cand.fnet")"
-nice "$PY" -I "$T/endgame_check.py" "$(p "$R")" "$SYZ" "$WP/cand.fnet=$L" "$CTRL=$L" >"$W/endgame.txt" 2>&1
+nice "$PY" -I "$T/endgame_check.py" "$(p "$R")" "$SYZ" "$WP/cand.fnet=$L" "$CTRL=$CL" >"$W/endgame.txt" 2>&1
 echo "endgame check: $(tail -2 "$W/endgame.txt" | tr '\n' ' ')"
 # The held-out endgame check (owner, 2026-11-11; tools/nnue/endgame_heldout.py): reported, never a gate. The
 # candidate against the current default (HELDOUT_REF), both counted on the same 3,800 positions, flagged for the
 # owner's review above 1.15 times the default's count.
-nice "$PY" -I "$T/endgame_heldout.py" report "$T/endgame_heldout.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$L" \
+nice "$PY" -I "$T/endgame_heldout.py" report "$T/endgame_heldout.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$HL" \
   --json "$WP/heldout.json" >"$W/heldout.txt" 2>&1 || echo "held-out check: did not run (heldout.txt)"
 echo "$(tail -1 "$W/heldout.txt")"
 # The held-out 6-7-piece check (owner, 2026-11-11; tools/nnue/heldout_67.py, ChessTB WDL labels): reported the same
 # way, never a gate, on its 5,599 positions.
-nice "$PY" -I "$T/heldout_67.py" report "$T/heldout_67.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$L" \
+nice "$PY" -I "$T/heldout_67.py" report "$T/heldout_67.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$HL" \
   --json "$WP/heldout67.json" >"$W/heldout67.txt" 2>&1 || echo "held-out 6-7-piece check: did not run (heldout67.txt)"
 echo "$(tail -1 "$W/heldout67.txt")"
 "$BIN" netcheck "$(fork_path_for "$BIN" "$W/cand.parity")" "$(fork_path_for "$BIN" "$W/cand.fnet")" >"$W/netcheck.txt" 2>&1 ||

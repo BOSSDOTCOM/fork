@@ -139,6 +139,30 @@ class Flag(unittest.TestCase):
             self.assertEqual((got['candidate_misjudged'], got['ratio'], got['flagged']), (612, 1.0, False))
 
 
+class B0(unittest.TestCase):
+    def test_a_b0_net_is_evaluated_as_its_parity_file_says(self):
+        # The label-depth experiment's B0 candidates go through the same checks (2026-11-12): models.evaluator
+        # reads a version-1 net through reference.py; its values equal the R-int column of b0r2's parity file,
+        # which the engine's netcheck matches exactly.
+        import models
+        root = HERE.parent.parent
+        evaluate, scale = models.evaluator(str(root / 'nets' / 'b0r2.fnet'), str(HERE / 'b0.json'))
+        lines = [l for l in (root / 'tests' / 'nnue' / 'b0r2.parity').read_text(encoding='utf-8').splitlines()
+                 if '|' in l and not l.startswith(('#', '{'))][:12]
+        self.assertEqual(len(lines), 12)
+        for line in lines:
+            fen, _, value = line.rpartition('|')
+            self.assertEqual(evaluate(chess.Board(fen.strip())), int(value.split()[0]), fen)
+        self.assertEqual(scale, json.loads((root / 'tests' / 'nnue' / 'b0r2.parity').read_text(
+            encoding='utf-8').splitlines()[0])['scale'])
+
+    def test_report_runs_on_a_b0_candidate(self):
+        nets = HERE.parent.parent / 'nets'
+        rows = eh.read(FILE)[:40]
+        res = eh.check(rows, [f"{nets / 'b0r2.fnet'}={HERE / 'b0.json'}"])
+        self.assertEqual(sum(v[0] for v in res['b0r2'].values()), 40)
+
+
 class Rule(unittest.TestCase):
     def test_misjudged_rule_is_endgame_checks(self):
         self.assertTrue(endgame_check.misjudged('won', 99))

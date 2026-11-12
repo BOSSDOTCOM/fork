@@ -447,17 +447,11 @@ def overlap(rows, slices, shards, train_list=None, exe=None):
 def misjudged_vectors(rows, nets):
     """{net stem: [misjudged per position]}."""
     import models
-    import netformat
     out = {}
     for arg in nets:
         path, _, lay = arg.partition('=')
-        desc = netformat.layout(lay or str(HERE / 's512pp.json'))
-        data = Path(path).read_bytes()
-        arch = models.arch_from_net(desc['name'], data[netformat.HEADER_BYTES:])
-        net = models.unpack(arch, data[netformat.HEADER_BYTES:])
-        scale = netformat.header_fields(data)['scale']
-        out[Path(path).stem] = [endgame_check.misjudged(verdict(wdl), models.r_int(arch, net, scale, b))
-                                for _, _, wdl, b in rows]
+        evaluate, _ = models.evaluator(path, lay or str(HERE / 's512pp.json'))
+        out[Path(path).stem] = [endgame_check.misjudged(verdict(wdl), evaluate(b)) for _, _, wdl, b in rows]
     return out
 
 

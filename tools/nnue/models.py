@@ -454,3 +454,21 @@ def r_int(arch, net, scale, board):
     g = min(max(s_s[0] + s_n[0], 0), QA)
     out = trunc_div(out_b * QA + g * (out_a - out_b), QA)
     return limit_eval(trunc_div(out * scale, QA * QB))
+
+
+def evaluator(path, layout_path):
+    """(R-int of a python-chess board, the net's S) for a Fork net file of any architecture: B0 (id 1, a
+    version-1 file) through reference.py, every other id through this module (match_scale.py's rule, shared
+    by the endgame checks so a B0 candidate can be checked too)."""
+    from pathlib import Path
+    import netformat
+    import reference
+    desc = netformat.layout(layout_path)
+    data = Path(path).read_bytes()
+    scale = netformat.header_fields(data)['scale']
+    if desc['architecture'] == 1:
+        net = netformat.read_net(data, desc)
+        return (lambda board: reference.r_int(net, board)), scale
+    arch = arch_from_net(desc['name'], data[netformat.HEADER_BYTES:])
+    net = unpack(arch, data[netformat.HEADER_BYTES:])
+    return (lambda board: r_int(arch, net, scale, board)), scale

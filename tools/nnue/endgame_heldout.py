@@ -207,21 +207,16 @@ def overlap(check_rows, slice_paths, old_check=False):
 def check(rows, nets):
     """{net: {(class, result): [positions, misjudged]}} by endgame_check.py's rule."""
     import models
-    import netformat
     out = {}
     for arg in nets:
         path, _, lay = arg.partition('=')
-        desc = netformat.layout(lay or str(HERE / 's512pp.json'))
-        data = Path(path).read_bytes()
-        arch = models.arch_from_net(desc['name'], data[netformat.HEADER_BYTES:])
-        net = models.unpack(arch, data[netformat.HEADER_BYTES:])
-        scale = netformat.header_fields(data)['scale']
+        evaluate, _ = models.evaluator(path, lay or str(HERE / 's512pp.json'))
         t = {}
         for cls, wdl, b in rows:
             kind = endgame_check.verdict(wdl)
             cell = t.setdefault((cls, kind), [0, 0])
             cell[0] += 1
-            cell[1] += endgame_check.misjudged(kind, models.r_int(arch, net, scale, b))
+            cell[1] += endgame_check.misjudged(kind, evaluate(b))
         out[Path(path).stem] = t
     return out
 

@@ -61,16 +61,11 @@ def misjudged(kind, cp):
 
 def load(repo, arg):
     import models
-    import netformat
     path, _, layout = arg.partition('=')
-    desc = netformat.layout(layout or str(repo / 'tools/nnue/s512.json'))
-    data = Path(path).read_bytes()
-    arch = models.arch_from_net(desc['name'], data[netformat.HEADER_BYTES:])
-    return arch, models.unpack(arch, data[netformat.HEADER_BYTES:]), netformat.header_fields(data)['scale']
+    return models.evaluator(path, layout or str(repo / 'tools/nnue/s512.json'))[0]
 
 
 def main(argv):
-    import models
     repo = Path(argv[1])
     syzygy, nets = argv[2], argv[3:5]
     per_kind = int(argv[argv.index('--per-kind') + 1]) if '--per-kind' in argv else 300
@@ -79,8 +74,8 @@ def main(argv):
     totals = {}
     for name, b in positions(per_kind):
         kind = verdict(tb.probe_wdl(b))
-        for k, (arch, net, scale) in enumerate(loaded):
-            cp = models.r_int(arch, net, scale, b)
+        for k, evaluate in enumerate(loaded):
+            cp = evaluate(b)
             t = totals.setdefault((name, kind, k), [0, 0])
             t[0] += 1
             t[1] += misjudged(kind, cp)
