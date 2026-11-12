@@ -724,7 +724,13 @@ tuned by SPSA.
 - **metric:** SPRT [0, 3].
 - **runtime cost:** possible (a lookup per node).
 - **earliest phase:** Phase 3.
-- **status:** untested
+- **status:** **H0 at design R, 2026-11-12; the non-regression fallback queued** (sprt-log). Built as think
+  tank R12 / the engine survey's F7 behind `use_revisit_draw`, off, on phase-4 26323e1's engine (tier2/f7-revisit
+  718ad42; Fork's repetition rule as it stands, idea 31), test sprt/f7-revisit 778cbf5 (on; bench 9,524,186 /
+  b47d75ab53d667ce). f7-revisit-stc (design R [0, 6] at STC against off, lane B item 81a): H0 after stage 7,
+  −0.03 ± 3.48 Elo, nElo −0.05 ± 6.02, 12,800 games. Its estimate is not clearly negative, so item 81b
+  (the bug-fix fallback as used for E1: a non-regression SPRT, nElo [−3, 0], alpha = beta = 0.05, same commits,
+  fresh openings) runs next in lane B; not started at 2:15 PM EST. Nothing is adopted before the owner sees it.
 
 ## 27. Fifty-move-rule scaling of the evaluation in long endgames
 
@@ -2622,7 +2628,12 @@ whose weaknesses and data gaps decide their targets and order.
   `PriorCreditQuarters` / 4 of the cutoff bonus at the node's depth, in the
   tables the parent's own cutoff would update (butterfly in the move's
   threat bucket, reply and follow), with no maluses.
-- **status:** **in progress (owner, 2026-11-11 3:10 PM EST, as idea 75).**
+- **status:** **rejected 2026-11-12, both tries used** (design R [0, 6] at STC against off; sprt-log): 4
+  quarters H0 after stage 0 (survey-d9-stc: −11.95 ± 9.62 Elo, nElo −21.17 ± 17.02, 1,600 games), 3 quarters
+  a futility stop after 2 stages (survey-d9-retry: −1.95 ± 6.94, nElo −3.39 ± 12.04, 3,200 games). Both ran
+  rebased onto E1 (off tier2/d9-prior-credit-e1 54543fe; tests sprt/d9-prior-credit-4-e1 ab7e93f and
+  sprt/d9-prior-credit-3-e1 6c3c302). The switch stays off on its branch, nothing reaches phase-4, and
+  `PriorCreditQuarters` is not a final-retune dimension. History: (owner, 2026-11-11 3:10 PM EST, as idea 75.)
   Built on phase-4 784b1b0 behind the switch, off: tier2/d9-prior-credit
   ef30f4f, bench unchanged. **Re-planned by the owner (about 7:35 and
   7:45 PM EST; decisions log): no head-to-head for a constant the final
@@ -2638,7 +2649,7 @@ whose weaknesses and data gaps decide their targets and order.
   stay unused; 6 quarters, a near match to one case of Stockfish 16.1, stays
   credited. Nothing is adopted before its verdict.
 - **runtime cost:** none expected (one history update per fail-low node;
-  UNVERIFIED until the SPRT's nps report).
+  not measured: rejected before an adoption's nps check, UNVERIFIED).
 - **earliest phase:** Phase 4.
 
 ## 77. The direct-check ordering bonus (the engine survey's D13)
@@ -2696,8 +2707,12 @@ whose weaknesses and data gaps decide their targets and order.
   DESIGN.md decisions log, 2026-11-12). An offline diagnosis (2026-11-12) found a single table at share 64
   runs away (its applied term feeds the results it learns from) and stays bounded at 32. The owner's table
   rule: if several tables pass alone, only the best is adopted and the next-best is tested on top of it.
-  `MinorDriftShare` 32 and `DriftLimit` 300 join the final retune's SPSA (class (a)). Major and pieces
-  remain to be tested (the diagnosis recommends a depth-scaled term first; the owner decides).
+  `MinorDriftShare` 32 and `DriftLimit` 300 join the final retune's SPSA (class (a)). **Pieces 64 H1 alone
+  (corr-piece-stc, against tables off dd5db13: +7.86 ± 4.35 Elo, nElo +13.77 ± 7.61, 8,000 games; sprt-log),
+  not adopted alone:** minor 32 was already on phase-4, so by the table rule the pieces table goes on top of
+  it, and that stack failed its offline gate (see "stacking" below); `UsePieceDrift` stays off, the pieces
+  retry at 32 (item 19-corr-h) was not needed. The major table (items 19-corr-e and 19-corr-f) is not run:
+  dropped and paused pending the redesign (the diagnosis recommends a depth-scaled term first).
 - **runtime cost:** the minor table on (its adoption, 2026-11-12): measured before the commit with bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 75d53f0, B = the port's build of this commit's engine code from the uncommitted tree on 75d53f0, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -2.0%, best -3.4%, under the 4.9% noise threshold: no significant difference; a small price (the material keys kept at each make, the table read at each estimate) is possible but not resolved at this noise (UNVERIFIED). The bench searches 1.1% more nodes (9,366,920 against 9,263,568). The threat key (two attack maps per node) is not measured (UNVERIFIED).
 - **earliest phase:** Phase 4.
 - **follow-up (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):** a window-gated variant (full correction near alpha/beta, fading to zero far from the window; idea 59's gate margin), tested alongside the depth-scaled share against the minor@32 head, offline gate first (idea 59's follow-up plan, item 1).
@@ -2805,6 +2820,26 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 87. Fail-firm returns (the engine survey's B3, think tank R7)
+
+- **type:** ELO (search); flags `use_firm_rfp`, `use_firm_stand_pat`, `use_firm_fail_high` (off).
+- **idea** (the engine survey's B3; think tank R7, step 12's first; concept only): a fail high returns beta
+  plus `Firm*Quarters` / 4 of its surplus over beta instead of the whole fail-soft score, at three sites:
+  reverse futility's return, the quiescence search's stand-pat cut, and a main-search node whose move beat
+  beta (the TT stores the same value). Mate and tablebase scores are never pulled.
+- **status:** **reverse futility's site H0 at its natural value, 2026-11-12; its retry queued** (sprt-log).
+  Built on phase-4 26323e1 behind the three switches, off (tier2/b3-firm 9201f8f; bench unchanged; recorded
+  on that branch's ideas.md as idea 87, entered here with the result). Coordinator's overnight build list
+  (2026-11-11) under the owner's rules of 2026-11-11 (the SPRT at the natural value, one retry at 1 quarter
+  if it is not H1; a pass adopted, pre-approved, its constant joining the final retune's SPSA): RFP first
+  (night items 50a, 50b), then stand-pat (50d, 50e) and fail high (50f, 50g), gated behind E1's SPRT.
+  survey-b3-rfp-stc (`FirmRfpQuarters` 2, sprt/b3-firm-rfp-2 08c6b97, design R [0, 6] at STC against off):
+  **H0 after stage 4, −2.82 ± 4.49 Elo, nElo −4.79 ± 7.61, 8,000 games.** The retry (item 50b, 1 quarter,
+  sprt/b3-firm-rfp-1 3f94316, try 2) and the other two sites had not run at 2:15 PM EST. Nothing is adopted
+  before its verdict.
+- **runtime cost:** none expected (one multiply at a fail high).
+- **earliest phase:** Phase 4.
 
 ## 130. The pass-best stop rule (bug review 2026-11-11, E1)
 

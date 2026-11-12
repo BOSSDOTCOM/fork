@@ -1649,3 +1649,186 @@ The final stage's result block (survey-d13-stc, stage 5, run 43247622236):
   10,253,460 / 8f28bb6e1d52fa6e, byte for byte cc7b3bc's tests/bench-r8brft1.ref, so the port equals the tested code.
   `DirectCheckBonus` joins the final retune's SPSA (class (a)). The history skip reads the ordering score
   without the bonus (each kept as tested; UNVERIFIED whether the skip should see it). Speed: bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 85672d8, B = the port's build of this commit's engine code from the uncommitted tree on 85672d8, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps +1.2%, best -2.9%, under the 6.0% noise threshold: no significant difference (a price of that size is inside the noise, UNVERIFIED). The bench searches 3.9% more nodes (9,118,607 against 8,773,005).
+
+### 2026-11-12 the prior-move credit (the engine survey's D9; idea 76): design R SPRT at the natural value, then the retry (owner): H0, then a futility stop; rejected
+
+- The owner's order (2026-11-11, 3:10 PM EST; as D8 above) and the re-plan (about 7:45 PM EST): no head-to-head
+  for a constant the final retune will tune; one SPRT at the natural value, `PriorCreditQuarters` 4 (one cutoff
+  bonus at the node's depth), one retry at 3 quarters if it fails; adopted if it passes (pre-approved). Lane B
+  items 69a (survey-d9-stc) and 69b (survey-d9-retry), gated on E1 (gate-e1). Base tier2/d9-prior-credit-e1
+  54543fe (the credit behind `use_prior_move_credit`, off, on adopt/e1 25623ab = phase-4 784b1b0's engine with
+  E1, no ProbCut, no history skip, no drift table; bench 10,166,167 / d874b380155a2e8c); tests
+  sprt/d9-prior-credit-4-e1 ab7e93f (4 quarters; 9,946,948 / 9feddb70e3ad7ea6) and sprt/d9-prior-credit-3-e1
+  6c3c302 (3 quarters; 10,516,912 / 6f70b02f416d4523). STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed
+  20261027), r8brft1 on both sides; design R ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2
+  stages); try 1 from stage 0, try 2 on fresh openings from stage 1. Ledger idea `d9-prior-credit`, tries 1 and
+  2. Data: ~/fork-data/sprt/survey-d9-stc and survey-d9-retry.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| survey-d9-stc: 4 quarters against off (try 1), stage 0 | 43218877995 (0) | 1,600 (no time losses, no abnormal ends) | −11.95 ± 9.62 | −21.17 ± 17.02 | [20, 204, 407, 149, 20] | H0 accepted (LLR −1.92) after stage 0, 7:51 AM EST |
+| **survey-d9-retry: 3 quarters against off (try 2), stages 1-2** | 43221778723 (1), 43224719234 (2) | 3,200 (no time losses, no abnormal ends) | **−1.95 ± 6.94** | −3.39 ± 12.04 | [32, 408, 742, 382, 36] | **futility stop** (nElo −3.39 < 0 after 2 stages; LLR −1.02) after stage 2, 8:28 AM EST 2026-11-12; both tries used |
+
+- By stage (survey-d9-retry): after stage 1 −7.38 ± 10.12 (LLR −1.23).
+
+The final stage's result block (survey-d9-retry, stage 2, run 43224719234):
+
+```
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -1.95 +/- 6.94, nElo: -3.39 +/- 12.04
+    Ptnml(0-2): [32, 408, 742, 382, 36]
+    LLR: -1.02 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+```
+
+- **Rejected** (the two-try limit): `use_prior_move_credit` stays off on its branch, nothing reaches phase-4, and
+  `PriorCreditQuarters` is not a final-retune dimension.
+
+### 2026-11-12 fail-firm returns at reverse futility (the engine survey's B3, think tank R7; idea 87): design R SPRT at the natural value: H0; the retry not yet run
+
+- The coordinator's overnight build list (2026-11-11: "B3 / R7 - fail-firm (blended) returns: RFP first, then
+  stand-pat / fail-high. Shape: nat/retry") under the owner's rules of 2026-11-11 (the SPRT at the natural value,
+  one retry at 1 quarter if it fails; a pass adopted, pre-approved). Lane A item 50a (survey-b3-rfp-stc), gated on
+  E1 (gate-e1). Base tier2/b3-firm 9201f8f (the three sites behind `use_firm_rfp`, `use_firm_stand_pat` and
+  `use_firm_fail_high`, all off, on phase-4 26323e1's engine: no E1, ProbCut, history skip or drift table; bench
+  10,166,167 / d874b380155a2e8c); test sprt/b3-firm-rfp-2 08c6b97 (`use_firm_rfp` on, `FirmRfpQuarters` 2, the
+  midpoint; 9,433,481 / a5bc641703fee6d7). STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed 20261027), r8brft1 on
+  both sides; design R ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages), from stage 0.
+  Ledger idea `b3-firm-rfp`, try 1. Data: ~/fork-data/sprt/survey-b3-rfp-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **survey-b3-rfp-stc: reverse futility's firm return (2 quarters) against off (try 1), stages 0-4** | 43214602250 (0), 43217403466 (1), 43220281013 (2), 43223486903 (3), 43226480523 (4) | 8,000 (no time losses, no abnormal ends) | **−2.82 ± 4.49** | −4.79 ± 7.61 | [103, 1021, 1809, 972, 95] | **H0 accepted** (LLR −3.10) after stage 4, 8:39 AM EST 2026-11-12 |
+
+- By stage: after stage 0 +6.73 ± 9.93 (LLR 0.68); stage 1 +1.95 ± 7.06 (0.05); stage 2 +0.14 ± 5.75 (−0.66);
+  stage 3 −0.43 ± 5.03 (−1.19).
+
+The final stage's result block (survey-b3-rfp-stc, stage 4, run 43226480523):
+
+```
+    Shards: 80 (done); pairs 4000, games 8000 (8000 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -2.82 +/- 4.49, nElo: -4.79 +/- 7.61
+    Ptnml(0-2): [103, 1021, 1809, 972, 95]
+    LLR: -3.10 (-1.56, 2.77) [0.00, 6.00] nElo: H0 accepted
+```
+
+- Not adopted; `use_firm_rfp` stays off. The one retry, item 50b (survey-b3-rfp-retry: `FirmRfpQuarters` 1,
+  sprt/b3-firm-rfp-1 3f94316, bench 10,012,393 / d49f21c9a90f5c38, against the same off on fresh openings from
+  stage 5; try 2), had not run at 2:15 PM EST (no driver folder and no state file: lane A runs one item at a time
+  in name order, and earlier items have held it since); it gets its own section. The stand-pat and fail-high
+  sites (items 50d-50g) are queued after it.
+
+### 2026-11-12 the singular margin re-measured (tier 2, T27; `SingularMarginPerPly` 22 against 6): design R SPRT at STC (owner): H0, 6 stays
+
+- The owner's order (2026-11-12, about 7:20 AM EST): "Singular margin: queue one design R SPRT now,
+  SingularMarginPerPly 22 (T27's rule on the current net) vs 6, on phase-4's head, STC then LTC on a pass
+  (singular extensions gained most at LTC); pre-approved adoption on pass. Add the margin to the final retune's
+  dimensions either way." Builder 3's C6 measurement (tier2/c6-singular-measure b71199d, r8brft1) found T27's rule
+  1 now picks 22 cp per ply. Lane A item 15c (singular-margin-22-stc), gated on E1 (gate-e1). Base
+  tier2/singular-margin-22 = phase-4 75d53f0 (`SingularMarginPerPly` 6; ProbCut, E1 and B13 on; bench 9,263,568 /
+  881c326307a2ba8a); test sprt/singular-margin-22 7307f47 (22, range 2-44; 8,289,752 / d76ad0ceb27b306f). Value 22
+  screened (Stockfish, Ethereal, Berserk, Weiss): no match, 2026-11-12. STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO
+  book (seed 20261027), r8brft1 on both sides; design R ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look
+  after 2 stages), from stage 0. Ledger idea `singular-margin-22`, try 1. Data:
+  ~/fork-data/sprt/singular-margin-22-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **singular-margin-22-stc: 22 against 6, stage 0** | 43249368697 (0) | 1,600 (no time losses, no abnormal ends) | **−26.76 ± 9.93** | −46.06 ± 17.02 | [28, 243, 366, 150, 13] | **H0 accepted** (LLR −3.90) after stage 0, 10:59 AM EST 2026-11-12 |
+
+The final stage's result block (singular-margin-22-stc, stage 0, run 43249368697):
+
+```
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -26.76 +/- 9.93, nElo: -46.06 +/- 17.02
+    Ptnml(0-2): [28, 243, 366, 150, 13]
+    LLR: -3.90 (-1.56, 2.77) [0.00, 6.00] nElo: H0 accepted
+```
+
+- **6 stays.** The LTC (item 15d, singular-margin-22-ltc) was to run only on an STC H1, so it did not run (its
+  log, 11:00 AM EST: "the STC singular-margin-22-stc ended 'H0 accepted': no LTC"). The margin stays a
+  final-retune dimension (class (b)) as ordered; its range 2-16 is the owner's decision of about 2:10 PM EST
+  (DESIGN.md decisions log; final-retune.md §3.2), and this result is the staleness audit's evidence for the rule
+  that offline re-measurement rules set retune ranges only (docs/research/staleness-audit-2026-11-12.md).
+
+### 2026-11-12 the piece drift tables (tier 2: think tank R34; idea 78): design R SPRT against off (owner): H1, +7.86; not adopted alone, the stack folds into idea 59's redesign
+
+- The fourth of the drift tables' tests in the passive ranking's order, under the rules of the drift tables'
+  section above (share 64 first, one retry at 32 only if it fails, a pass adopted, pre-approved; the owner's table
+  rule: if several tables pass alone, only the best is adopted and the next-best is tested on top of it). Lane A
+  item 19-corr-g (corr-piece-stc), gated on E1 (gate-e1). Base tier2/corr-tables-e1 dd5db13 (every table off;
+  bench 10,166,167 / d874b380155a2e8c); test sprt/corr-piece-64-e1 768e5d7 (`UsePieceDrift` on, `PieceDriftShare`
+  64; 9,811,399 / c893e56f8e99e97a). STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed 20261027), r8brft1 on both
+  sides; design R ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages), from stage 0. Ledger
+  idea `r34-piece-drift`, try 1 (the retry at 32, item 19-corr-h, not needed). Data: ~/fork-data/sprt/corr-piece-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **corr-piece-stc: the piece tables at 64/64 against off (try 1), stages 0-4** | 43254091984 (0), 43257542504 (1), 43261689047 (2), 43268725090 (3), 43272352038 (4) | 8,000 (no time losses, no abnormal ends) | **+7.86 ± 4.35** | +13.77 ± 7.61 | [81, 882, 1904, 1041, 92] | **H1 accepted** (LLR 4.28) after stage 4, 1:01 PM EST 2026-11-12 |
+
+- By stage: after stage 0 +4.78 ± 9.63 (LLR 0.43); stage 1 +5.21 ± 6.83 (0.98); stage 2 +6.23 ± 5.54 (1.92);
+  stage 3 +5.10 ± 4.83 (1.91).
+
+The final stage's result block (corr-piece-stc, stage 4, run 43272352038):
+
+```
+    Shards: 80 (done); pairs 4000, games 8000 (8000 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 7.86 +/- 4.35, nElo: 13.77 +/- 7.61
+    Ptnml(0-2): [81, 882, 1904, 1041, 92]
+    LLR: 4.28 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Not adopted alone.** The minor table at 32 was already on phase-4 (adopted that morning), so under the table
+  rule the piece tables were next to be tested on top of it, after an offline gate of the combination (the shares
+  would sum to 96 of 64, the runaway the diagnosis had flagged). **The gate failed** (about 1:43 PM EST; the
+  report ~/fork-jobs/night/reviews/corrstack-gate-2026-11-12.txt, outside the repo): pieces 64 on minor 32
+  against the minor 32 head, search error +12.74 cp [+6.50, +19.11] and the minor table at the limit on 1.23% of
+  visits; pieces 32 on minor 32, +2.99 cp [+1.19, +5.09] and 0.24%. With the depth-scaled share both stacks tie
+  the head (pieces 64: +0.50 [−1.32, +2.45]; pieces 32: −0.06 [−1.27, +1.28]), the minor table at the limit on
+  about 0.013% of visits.
+- **The owner's decision (2026-11-12, about 2:05 PM EST):** no standalone stacking SPRT now; the stack folds into
+  idea 59's follow-up redesign (item 1): the depth-scaled (and window-gated) variant of minor 32 + pieces 32 (the
+  shares summing to 64) is tested against the minor 32 head when slots open. Rule: the offline gate is a safety
+  check only (it blocks runaway: worse error, or more than 0.1% of visits at the limit); a stack that passes it
+  goes to a design R SPRT, which decides adoption (DESIGN.md decisions log; ideas.md 78 and 59). `UsePieceDrift`
+  stays off on phase-4.
+
+### 2026-11-12 upcoming repetition (think tank R12, the engine survey's F7; idea 26): design R SPRT against off: H0; the non-regression fallback queued
+
+- Lane B item 81a (f7-revisit-stc; built by builder 2): upcoming repetition as a correctness change under Fork's
+  repetition rule as it stands (one earlier occurrence counts, before the root too; ideas.md idea 31). No
+  constant to tune (the table size is a credited natural value). R12 itself suggested non-regression bounds; the
+  coordinator's shape for this queue is design R [0, 6]. Base tier2/f7-revisit 718ad42 (`use_revisit_draw` off,
+  on phase-4 26323e1's engine: no E1, ProbCut, history skip or drift table; bench 10,166,167 / d874b380155a2e8c);
+  test sprt/f7-revisit 778cbf5 (the switch on; 9,524,186 / b47d75ab53d667ce). STC 8+0.08, Hash 16, Syzygy 3-4-5,
+  UHO book (seed 20261027), r8brft1 on both sides; design R ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility
+  look after 2 stages), from stage 0. Ledger idea `f7-revisit`, try 1. Data: ~/fork-data/sprt/f7-revisit-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **f7-revisit-stc: upcoming repetition on against off, stages 0-7** | 43256629088 (0), 43260045314 (1), 43265641314 (2), 43268982050 (3), 43272256853 (4), 43275457446 (5), 43278711403 (6), 43281990289 (7) | 12,800 (no time losses, no abnormal ends) | **−0.03 ± 3.48** | −0.05 ± 6.02 | [156, 1544, 2971, 1603, 126] | **H0 accepted** (LLR −1.94) after stage 7, 1:57 PM EST 2026-11-12 |
+
+- By stage: after stage 0 +1.74 ± 10.09 (LLR −0.01); stage 1 +6.41 ± 6.88 (1.31); stage 2 +4.27 ± 5.66 (1.05);
+  stage 3 +4.02 ± 4.96 (1.24); stage 4 +3.43 ± 4.38 (1.18); stage 5 +1.01 ± 4.01 (−0.59); stage 6 +0.93 ± 3.73
+  (−0.78).
+
+The final stage's result block (f7-revisit-stc, stage 7, run 43281990289):
+
+```
+    Shards: 128 (done); pairs 6400, games 12800 (12800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -0.03 +/- 3.48, nElo: -0.05 +/- 6.02
+    Ptnml(0-2): [156, 1544, 2971, 1603, 126]
+    LLR: -1.94 (-1.56, 2.77) [0.00, 6.00] nElo: H0 accepted
+```
+
+- Not adopted by this test; `use_revisit_draw` stays off. Item 81b (f7-revisit-nonreg; the owner's bug-fix
+  fallback as used for E1, set up by the coordinator on 2026-11-11, about 10:55 PM EST): a result other than H1
+  whose estimate is not clearly negative (above −2 Elo with its 95% interval reaching above 0, as here: −0.03,
+  upper bound +3.45) gets a non-regression SPRT, nElo [−3, 0], alpha = beta = 0.05, STC, the same commits, 13
+  stages on fresh openings from stage 8 (the driver's custom mode, not a try of the idea); it adopts nothing (the
+  result goes to the coordinator and the owner). Queued in lane B; not started at 2:15 PM EST. It gets its own
+  section.
