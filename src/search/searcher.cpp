@@ -859,6 +859,11 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   Move best_move = NoMove;
   int moves_searched = 0;
   for (Move m; !(m = f.selector.take_next()).is_none();) {
+    // The engine survey's B16: out of check, once QuiesceMoveCap moves have
+    // been searched the rest are pruned (they come in the selector's order,
+    // so they are the captures least likely to matter); the node's result is
+    // the best of the stand pat and the moves searched.
+    if (switches.use_quiesce_move_cap && !in_check && moves_searched >= QuiesceMoveCap) break;
     ++moves_searched;
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
 #ifdef FORK_SEARCH_STATS

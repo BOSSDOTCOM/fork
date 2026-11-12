@@ -2766,3 +2766,21 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 120. Move-count pruning in the quiescence search (the engine survey's B16)
+
+- **type:** ELO (search); flag `use_quiesce_move_cap` (off).
+- **idea** (the engine survey's B16, its rank 11; concept only): a
+  quiescence node out of check searches at most `QuiesceMoveCap` moves and
+  prunes the rest (the survey: Raphael +5.1, Tarnished +4.1, Hobbes +3.3, at
+  STC).
+- **status:** **in progress (coordinator's overnight build list, 2026-11-12:
+  "B16 - qsearch LMP. R-STC").** Built on phase-4 ab70fa5 behind the switch,
+  off: branch tier2/b16-qs-lmp, bench unchanged (9,639,207 /
+  07f7ae19b9250f38, r8brft1). Test commits sprt/b16-qs-lmp (cap 3, the
+  natural value) and sprt/b16-qs-lmp-2 (the retry). Night items 60a
+  (b16-qs-move-cap-stc, design R at STC, ledger idea `b16-qs-move-cap`,
+  try 1) and 60b (the retry, try 2, only if 60a is not H1), gated until
+  state/gate-e1.done. Nothing is adopted before a verdict.
+- **runtime cost:** none (one comparison per quiescence move).
+- **earliest phase:** Phase 4.
