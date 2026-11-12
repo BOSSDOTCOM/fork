@@ -2874,3 +2874,49 @@ whose weaknesses and data gaps decide their targets and order.
 - **not adopted (owner, same date):** Hooke-Jeeves pattern search, simulated annealing and genetic algorithms are
   not adopted for parameter tuning; SPSA (with idea 150's comparison), head-to-heads or idea 151 for small
   questions, and idea 152 for small eval add-ons cover the cases.
+
+## 153. Uncertainty-weighted label budget
+
+- **type:** ELO (training data). Recorded by the owner 2026-11-12, about 1:40 PM EST, as a candidate (plan only;
+  tested after the current batch, as a retrain arm).
+- **idea:** during data generation, end the saved-position search early when its best move is stable and extend it
+  when unstable, using the time manager's stability signal (TM (b)), at equal average nodes per saved position, so
+  the label budget goes where the label is least settled.
+- **phase:** Phase 4, after the current batch. **metric:** a data arm in a retrain against the standard settings at
+  equal CPU (the retrain's SPRT), with the held-out endgame checks reported.
+- **status:** candidate (plan).
+- **runtime cost:** none (data-generation side only).
+- **earliest phase:** Phase 4.
+
+## 154. SPRT-game harvesting
+
+- **type:** ELO (training data). Owner, 2026-11-12, about 1:40 PM EST: candidate, plan only.
+- **idea:** store the GitHub SPRT games (Fork against Fork, with each move's search score and the result) as an
+  additional data source, instead of discarding them after the verdict.
+- **phase:** Phase 4, after the current batch. **metric:** first the volume per day and its label quality (search
+  depth per move, the openings' overlap with generation's book); then a data arm in a retrain.
+- **status:** candidate (plan).
+- **runtime cost:** none (test side only; the SPRT workflow would have to keep the games and scores).
+- **earliest phase:** Phase 4.
+
+## 155. Surprise-guided saving
+
+- **type:** ELO (training data). Owner, 2026-11-12, about 1:40 PM EST: candidate, plan only.
+- **idea:** raise the save probability for positions where the static eval and the search score disagree by more
+  than a threshold, within the 5% targeted-data cap.
+- **phase:** Phase 4, after the current batch. **metric:** a data arm in a retrain against standard saving; the
+  threshold is measured before use (no value from memory).
+- **status:** candidate (plan).
+- **runtime cost:** none (data-generation side only).
+- **earliest phase:** Phase 4.
+
+## 156. PV harvest
+
+- **type:** ELO (training data). Owner, 2026-11-12, about 1:40 PM EST: candidate, plan only.
+- **idea:** label the positions along each saved search's principal variation with their own search scores (from
+  the same search), adding records at little extra cost; tested like idea 80 (the same games and the same number of
+  training steps as the control arm).
+- **phase:** Phase 4, after the current batch. **metric:** as idea 80's arm.
+- **status:** candidate (plan).
+- **runtime cost:** none (data-generation side only).
+- **earliest phase:** Phase 4.
