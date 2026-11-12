@@ -91,9 +91,13 @@ class MoveSelector {
   // With `threat_aware` (tier 2, T56) quiets and quiet evasions read the
   // butterfly history's threat bucket (quiet_history.hpp) for the opponent's
   // attacks in this position; without it, bucket 0.
+  // With `root_near` >= 0 (the engine survey's D15: the node's ply, below
+  // RootNearPlies) a quiet's score also adds its entry in the history's
+  // root-near table at that ply; evasions do not.
   void start_main(const Position& pos, Move tt_move, const QuietHistory* history,
                   const PairHistory* pairs = nullptr, int arrival = NoArrival, int follow_arrival = NoArrival,
-                  const TakeHistory* take_history = nullptr, bool threat_aware = false);
+                  const TakeHistory* take_history = nullptr, bool threat_aware = false,
+                  int root_near = -1);
   // Quiescence search (all evasions when in check).
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
                      const TakeHistory* take_history = nullptr, bool threat_aware = false);
@@ -149,6 +153,7 @@ class MoveSelector {
   bool quiet_checks_only_ = false;
   bool threat_aware_ = false;
   bool attacked_known_ = false;
+  std::int8_t root_near_ = -1;  // D15: the node's ply for the root-near table, or -1 (in the padding)
   std::int16_t quiets_filtered_ = 0;  // at most MaxMoves; int16 keeps the flags above within the padding
   Bitboard attacked_ = 0;
 

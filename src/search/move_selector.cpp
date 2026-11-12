@@ -39,8 +39,10 @@ bool is_under_promotion(Move m) { return m.is_promotion() && m.promo_type() != Q
 
 void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHistory* history,
                               const PairHistory* pairs, int arrival, int follow_arrival,
-                              const TakeHistory* take_history, bool threat_aware) {
+                              const TakeHistory* take_history, bool threat_aware,
+                              int root_near) {
   pos_ = &pos;
+  root_near_ = static_cast<std::int8_t>(root_near);
   history_ = history;
   take_history_ = take_history;
   threat_aware_ = threat_aware;
@@ -107,6 +109,8 @@ void MoveSelector::score_quiets() {
       // Weights above one can take the sum past int16 at the extremes.
       score = std::clamp(score, -INT16_MAX, INT16_MAX);
     }
+    if (root_near_ >= 0 && history_)
+      score = std::clamp(score + history_->root_near.value(root_near_, m), -INT16_MAX, INT16_MAX);
     scores_[i] = static_cast<std::int16_t>(score);
   }
 }

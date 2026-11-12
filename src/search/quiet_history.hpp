@@ -145,6 +145,39 @@ inline int threat_bucket(Bitboard attacked, Move m) {
   return static_cast<int>(((attacked >> m.from()) & 1) * 2 + ((attacked >> m.to()) & 1));
 }
 
+// The root-near history (the engine survey's D15; switch use_root_near_history):
+// quiet moves by from- and to-square at each of the first
+// RootNearPlies plies of a search, cleared when a search starts, so the
+// moves near the root, which every iteration searches again, learn from
+// this search alone. Same scale, bounds and update as the other histories.
+// A table size, so a constant, not a tuning parameter (DESIGN.md, "Search
+// constants").
+constexpr int RootNearPlies = 4;
+class RootNearHistory {
+ public:
+  int value(int ply, Move m) const {
+    assert(ply >= 0 && ply < RootNearPlies && "root-near history: ply out of range");
+    return table_[ply][m.from()][m.to()];
+  }
+
+  // As QuietHistory::apply.
+  void apply(int ply, Move m, int amount) {
+    assert(ply >= 0 && ply < RootNearPlies && "root-near history: ply out of range");
+    std::int16_t& v = table_[ply][m.from()][m.to()];
+    const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
+    v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
+  }
+
+  void clear() {
+    for (auto& plane : table_)
+      for (auto& row : plane)
+        for (std::int16_t& v : row) v = 0;
+  }
+
+ private:
+  std::int16_t table_[RootNearPlies][64][64] = {};
+};
+
 class QuietHistory {
  public:
   int value(Color side, Move m, int bucket = 0) const {
@@ -163,11 +196,18 @@ class QuietHistory {
   }
 
   void clear() {
+    root_near.clear();
     for (auto& side : table_)
       for (auto& bucket : side)
         for (auto& from : bucket)
           for (std::int16_t& v : from) v = 0;
   }
+
+  // The root-near history (the engine survey's D15; use_root_near_history)
+  // lives here, so the move selector reaches it through the history it
+  // already holds (the search stack's frame stays within its size guard);
+  // cleared with this table and when a search starts with the switch on.
+  RootNearHistory root_near;
 
  private:
   // 64 KB: four buckets of the 16 KB butterfly table (T56's cost note).

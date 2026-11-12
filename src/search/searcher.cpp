@@ -90,6 +90,9 @@ constexpr int TableNearDrawScore = 1;
 // DESIGN.md, "Search constants": the smallest step in whole plies, which is
 // the unit Fork's LMR table works in).
 constexpr int LmrCheckRelief = 1;
+// D15 (use_shallow_cut_skip): cutoffs at this depth or less update no history
+// (DESIGN.md, "Search constants": the shallowest main-search depth).
+constexpr int ShallowCutDepth = 1;
 #ifdef FORK_NODE_CLOCK
 // Test-only builds (CMake FORK_NODE_CLOCK, never released): the search's
 // clock reads its node count, this many nodes to the millisecond, so a timed
@@ -141,6 +144,8 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
 #ifdef FORK_SEARCH_STATS
   if (ledger_active_) return;  // a decision-ledger side search leaves the histories as they were (X10)
 #endif
+  // D15: no history update from a cutoff this shallow.
+  if (switches.use_shallow_cut_skip && depth <= ShallowCutDepth) return;
   const Position& here = *pos_;
   const int bonus = bonus_for_depth(depth);
   // The take history (tier 2, T11): a capture that cuts gains the bonus, and
@@ -176,6 +181,14 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   if (switches.use_reply_history && f.arrival != NoArrival) update(pair_history_[ReplyTable], f.arrival);
   const int follow = follow_arrival(f);
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
+  // D15: the root-near history at this node's ply, bonus and malus.
+  const int ply = static_cast<int>(&f - frames_);
+  if (switches.use_root_near_history && ply < RootNearPlies) {
+    history_.root_near.apply(ply, m, bonus);
+    if (switches.use_history_malus)
+      for (Move q : f.failed_moves)
+        if (!q.is_capture()) history_.root_near.apply(ply, q, -bonus);
+  }
 }
 
 void Searcher::update_pv(int ply, Move m) {
@@ -486,7 +499,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr,
       switches.use_history ? pair_history_ : nullptr, switches.use_reply_history ? f.arrival : NoArrival,
       switches.use_follow_history ? follow_arrival(f) : NoArrival,
-      switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets);
+      switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets,
+      switches.use_root_near_history && switches.use_history && ply < RootNearPlies ? ply : -1);
   f.failed_moves.count = 0;
 
   const int alpha_start = alpha;
@@ -1025,6 +1039,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   time_signals_ = {};
   last_soft_ms_ = limits.soft_ms;
   frames_[0].arrival = NoArrival;  // the root has none (the follow table's arrival at ply 1)
+  if (switches.use_root_near_history) history_.root_near.clear();  // D15: this search's low plies only
 
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);

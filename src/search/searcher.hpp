@@ -144,6 +144,15 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_root_near_history: the engine survey's D15, its first part: a quiet
+//   cutoff at one of the first RootNearPlies plies (not the root, whose
+//   moves are ordered by the root's own rule) also updates the root-near
+//   history at that ply, bonus and malus, and the selector there adds the
+//   move's entry to its quiet score. Cleared when a search starts. Off until
+//   its SPRT.
+// - use_shallow_cut_skip: D15's second part: a cutoff at depth
+//   ShallowCutDepth or less updates no history (no bonus, no malus, in any
+//   table): a one-ply cutoff says least about the move. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +186,9 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)          \
+  X(use_root_near_history, UseRootNearHistory, false)        \
+  X(use_shallow_cut_skip, UseShallowCutSkip, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
