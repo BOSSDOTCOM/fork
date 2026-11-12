@@ -377,7 +377,7 @@ The questions above are answered (DESIGN.md decisions log, 2026-11-09; ideas.md 
 - **Section 5.1, check 2, its Lichess half, passed** on the held-out set below: 300 positions (75 per class)
   against the Lichess tablebase API, 300 equal. The ChessTB explorer half was not run (the same generator as
   the local files; the slice's own positions still get check 2 when generated).
-- **Section 8's extended check exists:** tools/nnue/heldout_67.tsv, 5,600 positions, 200 per budget-R material
+- **Section 8's extended check exists:** tools/nnue/heldout_67.tsv, 5,600 positions (5,599 since the training-data audit excluded one found in training, 2026-11-11), 200 per budget-R material
   (the 4-5-piece held-out set's per-class count, instead of 300 per class), placed by the 4-5-piece set's rules
   (endgame_check.py's quiet rule) plus section 4's "no promotion available", without the one-wing bias (it
   waits, item (h)), labelled by ChessTB WDL, seed 2026111167. **The slice generator must

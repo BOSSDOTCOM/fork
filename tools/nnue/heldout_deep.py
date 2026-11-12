@@ -17,10 +17,13 @@ side to move) twice. Only the game moves are read (comments and any [%eval] neve
 kept.
 
 **Overlap** (`overlap`): an exact board-and-side match (endgame_heldout.key) against Fork's game files (the
-viriformat .vf shards: the g4 and label-depth data on this machine), each game replayed from its header with the
-format's move codes (tools/datagen/verify_games.py: code_of), so every recorded position is compared. The
-endgame slice cannot hold any of these (it has at most 5 pieces). A position found there is left out of the
-labelled set (`merge --exclude`), not replaced.
+viriformat .vf shards named), each game replayed from its header with the format's move codes
+(tools/datagen/verify_games.py: code_of), so every recorded position is compared; and, with `--train-list`,
+against **every training file** of the list (owner, 2026-11-11, after the training-data audit,
+docs/research/overlap-audit-2026-11-11.md: the first scan covered only g4 and the label-depth data and missed 6
+positions in older parts), matched by tools/overlap's fork_overlap_audit on placement and side to move. The
+endgame slice cannot hold any of these (it has at most 5 pieces). A position found is left out of the labelled
+set (`merge --exclude`, tools/nnue/heldout_deep_excluded.txt), not replaced.
 
 **Labels** (`label`, declared 2026-11-11 before any label was computed): Fork's own search on each position, the
 current default's engine (the network r8brft1, bench 10,166,167 / d874b380155a2e8c), `go nodes 10,000,000` (NODES),
@@ -36,7 +39,7 @@ as in endgame_check.py: a winning position below +100 cp, a losing one above -10
 Also the mean absolute difference with both values clamped to +-1000 cp, over every position.
 
     heldout_deep.py positions PGN.zst --sha256 HEX --out FILE.tsv [--per-count 300] [--seed 20261111]
-    heldout_deep.py overlap FILE.tsv SHARD.vf... [--json OUT]
+    heldout_deep.py overlap FILE.tsv [SHARD.vf...] [--train-list TRAIN.lst [--audit-exe EXE]] [--json OUT]
     heldout_deep.py label FILE.tsv --engine FORK --syzygy DIR --out PART.tsv [--part K --parts N] [--nodes N]
     heldout_deep.py merge FILE.tsv PART.tsv... --out LABELLED.tsv [--exclude FENS.txt]
     heldout_deep.py check LABELLED.tsv NET[=LAYOUT]... [--json OUT]   (LAYOUT defaults to tools/nnue/s512pp.json)
@@ -264,6 +267,14 @@ def overlap(rows, paths):
     return report, found
 
 
+def training_overlap(fens, train_list, exe=None):
+    """The positions found in every file of a training list (tools/overlap/overlap_audit.py positions_in_training):
+    the full snapshot, not only the shards named on the command line."""
+    sys.path.insert(0, str(HERE.parent / 'overlap'))
+    import overlap_audit
+    return overlap_audit.positions_in_training(fens, train_list, exe)
+
+
 # -------------------------------------------------------------------------------------------------------- labels
 def label(rows, engine, syzygy, out, part=0, parts=1, nodes=NODES, hash_mb=HASH_MB):
     """Fork's search on each of this part's positions (every parts-th row from part), appended to OUT as it goes;
@@ -369,7 +380,10 @@ def main(argv=None):
     p.add_argument('--seed', type=int, default=SEED)
     o = sub.add_parser('overlap')
     o.add_argument('positions')
-    o.add_argument('shards', nargs='+')
+    o.add_argument('shards', nargs='*')
+    o.add_argument('--train-list', help='every training file (tools/overlap/overlap_audit.py train-list), matched by '
+                   'fork_overlap_audit')
+    o.add_argument('--audit-exe', help='fork_overlap_audit (default build/overlap/, tools/overlap/build.sh)')
     o.add_argument('--json')
     lb = sub.add_parser('label')
     lb.add_argument('positions')
@@ -410,7 +424,15 @@ def main(argv=None):
         return 0
     rows = read(a.positions if a.cmd != 'check' else a.labelled)
     if a.cmd == 'overlap':
+        if not a.shards and not a.train_list:
+            sys.exit('overlap: give SHARD.vf files, --train-list, or both')
         rep, _ = overlap(rows, a.shards)
+        if a.train_list:
+            hits, totals = training_overlap([r['fen'] for r in rows], a.train_list, a.audit_exe)
+            rep['training'] = {**totals, 'found': [{'fen': f, 'groups': g} for _, f, g in hits]}
+            rep['found'] += len(hits)
+            for _, f, g in hits:
+                print(f'in training ({", ".join(g)}): {f}')
         print(json.dumps({k: v for k, v in rep.items() if k != 'files'}))
         if a.json:
             Path(a.json).write_text(json.dumps(rep, indent=1) + '\n', encoding='utf-8')

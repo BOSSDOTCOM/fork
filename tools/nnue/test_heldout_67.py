@@ -25,6 +25,7 @@ import heldout_deep as hd  # noqa: E402
 import verify_games as vg  # noqa: E402
 
 FILE = HERE / 'heldout_67.tsv'
+EXCLUDED = HERE / 'heldout_67_excluded.txt'
 
 
 class CommittedFile(unittest.TestCase):
@@ -38,8 +39,14 @@ class CommittedFile(unittest.TestCase):
         self.assertEqual(Counter(h.pieces(m) for m in h.MATERIALS), {6: 23, 7: 5})
 
     def test_counts_and_rules(self):
-        self.assertEqual(len(self.rows), h.PER_MATERIAL * len(h.MATERIALS))
-        self.assertEqual(Counter(m for _, m, _, _ in self.rows), {m: h.PER_MATERIAL for m in h.MATERIALS})
+        # generate's output without the positions found in Fork's training data (heldout_67_excluded.txt)
+        drop = h.excluded(EXCLUDED)
+        dropped = Counter(next(m for m in h.MATERIALS if eh.board_class(chess.Board(f)) ==
+                               eh.material_class(m.split('v'))) for f in drop)
+        self.assertEqual(len(self.rows), h.PER_MATERIAL * len(h.MATERIALS) - len(drop))
+        self.assertEqual(Counter(m for _, m, _, _ in self.rows),
+                         {m: h.PER_MATERIAL - dropped[m] for m in h.MATERIALS})
+        self.assertFalse(drop & {b.fen() for *_, b in self.rows})
         seen = set()
         for cls, material, wdl, b in self.rows:
             self.assertEqual(cls, h.CLASS_OF[material])
@@ -56,8 +63,10 @@ class CommittedFile(unittest.TestCase):
         by = {}
         for _, material, _, b in self.rows:
             by.setdefault(material, []).append(b.fen())
+        drop = h.excluded(EXCLUDED)
         for material in h.MATERIALS:
-            self.assertEqual([b.fen() for b in h.positions(material, 3)], by[material][:3], material)
+            kept = [b.fen() for b in h.positions(material, 4) if b.fen() not in drop][:3]
+            self.assertEqual(kept, by[material][:3], material)
 
 
 class Rules(unittest.TestCase):

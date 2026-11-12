@@ -37,7 +37,11 @@ imports chess.chesstb.
 - **Held out**: endgame slice v2 (not yet generated) must leave out every position of this file (design §4: "not
   in the held-out check set"; exact board and side to move, endgame_heldout.key) and use a seed other than SEED.
   `overlap` matches the file against the slice v1 files and Fork's self-play shards (every position of each game,
-  heldout_deep.scan restricted to 6-7 pieces).
+  heldout_deep.scan restricted to 6-7 pieces) and, with `--train-list`, against every training file of the list
+  (tools/overlap's fork_overlap_audit; owner, 2026-11-11, after the training-data audit,
+  docs/research/overlap-audit-2026-11-11.md, which found one position of this set in g3s2's self-play data). A
+  position found is left out (`generate --exclude`, tools/nnue/heldout_67_excluded.txt), not replaced, so the
+  committed file is generate's output without the excluded positions (5,599).
 
 **Verification before use** (design §5.1, check 1): `sample345` draws random legal 3-5-piece positions (any side to
 move, check allowed; every material of the Syzygy 3-4-5 directory, uniformly; either colour first) and labels them
@@ -48,10 +52,12 @@ independent generator) about a stratified sample of this file, one request at a 
 HTTP 429 (KB tools.md §6.9), answers cached for a restart.
 
     heldout_67.py generate --source DIR --plan PLAN.tsv --manifest MANIFEST.jsonl --work DIR --out FILE.tsv
+                           [--exclude FENS.txt]
     heldout_67.py sample345 --syzygy DIR --out FILE.tsv [--n 100000] [--seed 2026111135]
     heldout_67.py verify345 FILE.tsv --source DIR --plan PLAN.tsv --manifest MANIFEST.jsonl --work DIR
     heldout_67.py spot FILE.tsv --cache FILE.jsonl [--n 300]
-    heldout_67.py overlap FILE.tsv [--slices VF...] [--shards VF...] [--json OUT]
+    heldout_67.py overlap FILE.tsv [--slices VF...] [--shards VF...] [--train-list TRAIN.lst [--audit-exe EXE]]
+                          [--json OUT]
     heldout_67.py check FILE.tsv NET[=LAYOUT]... [--json OUT] [--paired REFERENCE_STEM]
     heldout_67.py report FILE.tsv CANDIDATE[=LAYOUT] --reference DEFAULT[=LAYOUT] [--json OUT]
 
@@ -231,7 +237,13 @@ def link_dir(work, name, files):
 
 
 # ------------------------------------------------------------------------------------------------------ generate
-def generate(source, plan, manifest, work, out, per_material=PER_MATERIAL, seed=SEED):
+def excluded(path):
+    """The FENs of an exclusion file (one per line, '#' comments): positions `overlap` found in Fork's data."""
+    return {line.strip() for line in Path(path).read_text(encoding='utf-8').splitlines()
+            if line.strip() and not line.startswith('#')} if path else set()
+
+
+def generate(source, plan, manifest, work, out, per_material=PER_MATERIAL, seed=SEED, exclude=None):
     """Every material's positions and labels; a material's rows go to work/parts/MATERIAL.tsv when it finishes,
     and a restart skips the materials already done."""
     import chess.chesstb
@@ -262,6 +274,10 @@ def generate(source, plan, manifest, work, out, per_material=PER_MATERIAL, seed=
     rows = []
     for material in MATERIALS:
         rows += (parts / f'{material}.tsv').read_text(encoding='utf-8').splitlines()
+    drop = excluded(exclude)
+    if drop:
+        rows = [r for r in rows if r.split('\t')[3] not in drop]
+        print(f'{len(drop)} excluded (found in Fork\'s data by `overlap`)', flush=True)
     Path(out).write_text('\n'.join([HEADER] + rows) + '\n', encoding='utf-8', newline='\n')
     print(f'{len(rows)} positions written to {out}', flush=True)
 
@@ -401,9 +417,13 @@ def spot(rows, cache, n=SPOT, pause=1.0):
 
 
 # ------------------------------------------------------------------------------------------------------ overlap
-def overlap(rows, slices, shards):
+def overlap(rows, slices, shards, train_list=None, exe=None):
     import heldout_deep as hd
     report = {}
+    if train_list:
+        hits, totals = hd.training_overlap([b.fen() for *_, b in rows], train_list, exe)
+        report['training'] = {**totals, 'found': len(hits),
+                              'found_positions': [{'fen': f, 'groups': g} for _, f, g in hits]}
     if slices:
         rep = eh.overlap([(cls, wdl, b) for cls, _, wdl, b in rows], slices)
         report['slices'] = {'files': rep['files'], 'found': rep['matches']['held-out']['found_in_any_file'],
@@ -418,7 +438,8 @@ def overlap(rows, slices, shards):
             hd.PIECES = saved
         report['shards'] = rep
     found = (report.get('slices', {}).get('found', 0) + len(report.get('slices', {}).get(
-        'held_out_classes_in_slice', {})) + report.get('shards', {}).get('found', 0))
+        'held_out_classes_in_slice', {})) + report.get('shards', {}).get('found', 0)
+             + report.get('training', {}).get('found', 0))
     return report, found
 
 
@@ -510,6 +531,7 @@ def main(argv=None):
     g.add_argument('--out', required=True)
     g.add_argument('--per-material', type=int, default=PER_MATERIAL)
     g.add_argument('--seed', type=int, default=SEED)
+    g.add_argument('--exclude', help="FENs to leave out, one per line: the positions `overlap` found")
     s = sub.add_parser('sample345')
     s.add_argument('--syzygy', required=True)
     s.add_argument('--out', required=True)
@@ -523,6 +545,8 @@ def main(argv=None):
     o.add_argument('positions')
     o.add_argument('--slices', nargs='*', default=[])
     o.add_argument('--shards', nargs='*', default=[])
+    o.add_argument('--train-list', help='every training file (tools/overlap/overlap_audit.py train-list)')
+    o.add_argument('--audit-exe', help='fork_overlap_audit (default build/overlap/, tools/overlap/build.sh)')
     o.add_argument('--json')
     c = sub.add_parser('check')
     c.add_argument('positions')
@@ -537,7 +561,7 @@ def main(argv=None):
     r.add_argument('--json')
     a = ap.parse_args(argv)
     if a.cmd == 'generate':
-        generate(a.source, a.plan, a.manifest, a.work, a.out, a.per_material, a.seed)
+        generate(a.source, a.plan, a.manifest, a.work, a.out, a.per_material, a.seed, a.exclude)
         return 0
     if a.cmd == 'sample345':
         sample345(a.syzygy, a.out, a.n, a.seed)
@@ -548,11 +572,12 @@ def main(argv=None):
     if a.cmd == 'spot':
         return spot(rows, a.cache, a.n)
     if a.cmd == 'overlap':
-        rep, found = overlap(rows, a.slices, a.shards)
+        rep, found = overlap(rows, a.slices, a.shards, a.train_list, a.audit_exe)
         if a.json:
             Path(a.json).write_text(json.dumps(rep, indent=1) + '\n', encoding='utf-8')
         print(json.dumps({'found': found, 'slices': {k: v for k, v in rep.get('slices', {}).items() if k != 'files'},
-                          'shards': {k: v for k, v in rep.get('shards', {}).items() if k != 'files'}}))
+                          'shards': {k: v for k, v in rep.get('shards', {}).items() if k != 'files'},
+                          'training': rep.get('training', {})}))
         return 1 if found else 0
     if a.cmd == 'check':
         vecs = misjudged_vectors(rows, a.nets)

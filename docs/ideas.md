@@ -2438,7 +2438,7 @@ whose weaknesses and data gaps decide their targets and order.
   -> r8brft1; all classes 526 -> 612 of 3,800). **Future fine-tunes report
   this set** (tools/nnue/gates.sh reports it for every candidate). **The
   6-7-piece set (2026-11-11, tools/nnue/heldout_67.py)** shows the same step:
-  r8btd90 732 -> r8brft1 770 of 5,600 (58 to 20 discordant), mostly queen and
+  r8btd90 732 -> r8brft1 770 of 5,599 (58 to 20 discordant), mostly queen and
   pawn against rook and minor. **8c arm (owner, 2026-11-11, about 10:50 PM
   EST): a slice-preserving result fine-tune**, the endgame slice kept at its
   normal weight during the fine-tune, **plus a lower-LR variant if the Kaggle

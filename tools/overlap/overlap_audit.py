@@ -57,6 +57,41 @@ def sha256(path):
     return h.hexdigest()
 
 
+def default_exe():
+    root = Path(__file__).resolve().parents[2]
+    exe = root / 'build' / 'overlap' / 'fork_overlap_audit'
+    return str(exe.with_suffix('.exe')) if os.name == 'nt' else str(exe)
+
+
+def positions_in_training(fens, train_list, exe=None):
+    """The held-out sets' overlap step (owner, 2026-11-11: zero overlap with every training file). Returns
+    (hits, totals): hits = [(index, fen, groups)] of the FENs whose placement and side to move (K0, the coarser key,
+    so the check is the stricter one) occur anywhere in TRAIN.lst's files, every record of every game compared by
+    fork_overlap_audit; totals = the files, games and positions scanned. Raises if the tool fails or a training file
+    is malformed or truncated."""
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        Path(d, 'set.fens').write_text('\n'.join(fens) + '\n', encoding='utf-8')
+        Path(d, 'q.lst').write_text(f'fen\theld\t{Path(d, "set.fens")}\n', encoding='utf-8')
+        prefix = str(Path(d, 'r'))
+        subprocess.run([exe or default_exe(), str(Path(d, 'q.lst')), train_list, prefix], check=True)
+        files = [l.rstrip('\n').split('\t') for l in open(prefix + '-files.tsv', encoding='utf-8')][1:]
+        bad = [f[1] for f in files if f[-1] or f[-2] != '0']
+        if bad:
+            raise RuntimeError(f'malformed or truncated training files: {bad}')
+        names = {int(b): g for b, g in (l.rstrip('\n').split('\t') for l in
+                                        list(open(prefix + '-groups.tsv', encoding='utf-8'))[1:])}
+        rows = [l.rstrip('\n').split('\t') for l in open(prefix + '-queries.tsv', encoding='utf-8')][1:]
+    hits = []
+    for i, (fen, r) in enumerate(zip(fens, rows)):
+        mask = int(r[10], 16)
+        if mask:
+            hits.append((i, fen, [names[b] for b in sorted(names) if mask >> b & 1]))
+    return hits, {'files': len(files), 'games': sum(int(f[3]) for f in files),
+                  'positions': sum(int(f[4]) for f in files)}
+
+
 def cmd_train_list(a):
     names = json.load(open(a.files_json))['files']
     records = manifest_records(a.manifests)

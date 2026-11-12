@@ -112,6 +112,27 @@ Validation against training (K1; "kept" = the validation file's kept positions):
   All 7 are in the training data of the nets now in use (s2). Neither check is a gate (they are reported in every
   network decision), so this does not block 8c. Before those checks are reported for 8c, the 7 positions should
   be removed from the sets, or the checks reported both with and without them. The FENs are above.
+
+  **Done the same night** (coordinator's decision under the owner's authorization, about 11:30 PM EST):
+  - The 7 positions are excluded:
+    - tools/nnue/heldout_deep_excluded.txt, applied by `merge --exclude`. The re-merged file equals the committed
+      one minus the six rows, byte for byte: 1,493 positions.
+    - tools/nnue/heldout_67_excluded.txt, applied by the new `generate --exclude` and dropped from the committed
+      file: 5,599 positions.
+  - Both tools' `overlap` now takes `--train-list TRAIN.lst`, which matches placement and side to move against
+    every training file through `overlap_audit.positions_in_training`. A check of the original 1,500 deep
+    positions against g4-w08 alone finds the known position there.
+  - A second pass over the same 165 training files (53,795,044 games, 2,616,345,336 records, none malformed or
+    truncated; job overlap-heldout, 11:34 PM to 11:59 PM EST) found **0 of 1,493, 0 of 5,599 and 0 of 3,800**.
+    That covers the cleaned 8-12-piece set, the cleaned 6-7-piece set and endgame_heldout.tsv, matched on K1 and
+    on K0.
+  - The six nets' checks were re-run on the cleaned files. No net misjudged any excluded position, so every
+    misjudged count and paired figure is unchanged:
+    - 6-7 pieces, of 5,599: r8brft1 770, r8btd90 732, S512ppr3 723, S512ppr2 731, S512+PP 828, S512r2 809.
+    - 8-12 pieces: 80, 76, 77, 73, 81 and 82 of 1,337 classed positions (1,343 before). The mean differences are
+      0.7-0.8 cp lower.
+
+    The nets.md rows and the bug-review follow-up were updated to match.
 - H and H2 overlap at about 1% at the position level. They were held out by game, as declared. A label study that
   needs positions unseen in training should drop those 291 positions.
 

@@ -104,7 +104,7 @@ nice "$PY" -I "$T/endgame_heldout.py" report "$T/endgame_heldout.tsv" "$WP/cand.
   --json "$WP/heldout.json" >"$W/heldout.txt" 2>&1 || echo "held-out check: did not run (heldout.txt)"
 echo "$(tail -1 "$W/heldout.txt")"
 # The held-out 6-7-piece check (owner, 2026-11-11; tools/nnue/heldout_67.py, ChessTB WDL labels): reported the same
-# way, never a gate, on its 5,600 positions.
+# way, never a gate, on its 5,599 positions.
 nice "$PY" -I "$T/heldout_67.py" report "$T/heldout_67.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$L" \
   --json "$WP/heldout67.json" >"$W/heldout67.txt" 2>&1 || echo "held-out 6-7-piece check: did not run (heldout67.txt)"
 echo "$(tail -1 "$W/heldout67.txt")"

@@ -155,16 +155,21 @@ night, tools/nnue/heldout_67.py, its docstring holding the rules, declared befor
   label-depth game files the 8-12-piece scan used (4,274,517 games, 406,992,954 positions as of tonight, every
   position of each game replayed).
 - **Scoring:** endgame_check.py's thresholds on each net's R-int; a cursed win or blessed loss counts as drawn.
+- **After the training-data audit (2026-11-11, docs/research/overlap-audit-2026-11-11.md):** a scan of every
+  training file (8b's 129, g4b, the label-depth data; 2.62 billion records) found one position of this set in
+  g3s2's self-play data (KQPPvKQ, `8/1Q6/8/5p2/8/5pq1/6k1/3K4 b - - 0 1`). It is left out
+  (tools/nnue/heldout_67_excluded.txt, `generate --exclude`), so the set has **5,599** positions; no net misjudged
+  it, so every count and paired figure below is unchanged (re-run on the cleaned file for the six nets).
 
 | Class (positions) | r8brft1 | r8btd90 | S512ppr3 | S512ppr2 | S512+PP | S512r2 |
 |---|---|---|---|---|---|---|
 | C1 rook endings (600) | 71 | 70 | 69 | 69 | 78 | 81 |
 | C2 rook against minor (1,400) | 68 | 65 | 65 | 63 | 83 | 82 |
-| C3 queen endings and imbalances (1,800) | 363 | 336 | 336 | 335 | 363 | 323 |
+| C3 queen endings and imbalances (1,799) | 363 | 336 | 336 | 335 | 363 | 323 |
 | C4 piece against pawns (1,800) | 268 | 261 | 253 | 264 | 304 | 323 |
-| 6-piece (4,600) | 622 | 586 | 586 | 587 | 673 | 636 |
+| 6-piece (4,599) | 622 | 586 | 586 | 587 | 673 | 636 |
 | 7-piece (1,000) | 148 | 146 | 137 | 144 | 155 | 173 |
-| **all (5,600)** | **770 (13.8%)** | 732 (13.1%) | 723 (12.9%) | **731 (13.1%)** | 828 (14.8%) | 809 (14.4%) |
+| **all (5,599)** | **770 (13.8%)** | 732 (13.1%) | 723 (12.9%) | **731 (13.1%)** | 828 (14.8%) | 809 (14.4%) |
 
 Paired, position by position (two-sided sign test on the discordant positions): r8brft1 against S512ppr2 84 to
 45 (p = 0.0008), against r8btd90 58 to 20 (p < 0.0001), against S512ppr3 72 to 25 (p < 0.0001), against S512+PP
@@ -192,31 +197,37 @@ What it shows:
 - **overlap with Fork's data:** an exact board-and-side match against 62 game files on this machine (the g4 and
   label-depth shards: 4,220,571 games, 401,794,990 positions) found **one** position (lichess.org/mryUf4sh ply
   98, in g4-w08-0000.vf and its two relabelled copies), left out (tools/nnue/heldout_deep_excluded.txt), so
-  **1,499** positions (9 pieces: 299);
+  **1,499** positions (9 pieces: 299); **after the training-data audit (2026-11-11,
+  docs/research/overlap-audit-2026-11-11.md)**, whose scan covered every training file (8b's 129, g4b, the
+  label-depth data), **six more** were found, all in g3s2's parts, and left out the same way: **1,493** positions
+  (8 pieces 296, 9 pieces 298, 10 pieces 299, 11 and 12 pieces 300 each);
 - **labels:** Fork's search with the default r8brft1 (bench 10,166,167 / d874b380155a2e8c), 10,000,000 nodes,
   one thread, Hash 64 MB, Syzygy 3-4-5, a fresh game per position (job deep-labels, finished 8:54 PM EST; one
   engine at a time from 8:17 PM); depth 18-249, median 26; 243 mate scores. Committed as tools/nnue/heldout_deep.tsv
   (SHA-256 3129fa440d22bc0a...);
-- **scoring:** each net's static R-int against the label; 1,343 positions classed (502 winning, 212 level, 629
-  losing, from the side to move); misjudged by endgame_check.py's thresholds.
+- **scoring:** each net's static R-int against the label; 1,337 positions classed (502 winning, 209 level, 626
+  losing, from the side to move; 1,343 before the six exclusions); misjudged by endgame_check.py's thresholds.
 
 | Pieces (classed) | r8brft1 | r8btd90 | S512ppr3 | S512ppr2 | S512+PP | S512r2 |
 |---|---|---|---|---|---|---|
-| 8 (285) | 21 | 20 | 23 | 19 | 25 | 28 |
-| 9 (266) | 13 | 13 | 11 | 12 | 14 | 12 |
-| 10 (270) | 11 | 10 | 10 | 10 | 9 | 10 |
+| 8 (281) | 21 | 20 | 23 | 19 | 25 | 28 |
+| 9 (265) | 13 | 13 | 11 | 12 | 14 | 12 |
+| 10 (269) | 11 | 10 | 10 | 10 | 9 | 10 |
 | 11 (258) | 18 | 16 | 16 | 16 | 16 | 15 |
 | 12 (264) | 17 | 17 | 17 | 16 | 17 | 17 |
-| **all (1,343)** | **80 (6.0%)** | 76 (5.7%) | 77 (5.7%) | **73 (5.4%)** | 81 (6.0%) | 82 (6.1%) |
-| mean \|static − label\| (±1000 cp) | 219.8 | 219.6 | 220.2 | 221.8 | 227.9 | 232.8 |
+| **all (1,337)** | **80 (6.0%)** | 76 (5.7%) | 77 (5.8%) | **73 (5.5%)** | 81 (6.1%) | 82 (6.1%) |
+| mean \|static − label\| (±1000 cp) | 219.0 | 218.8 | 219.4 | 221.0 | 227.2 | 232.0 |
 
 Paired, position by position (positions one net misjudges and the other does not; two-sided sign test):
 r8brft1 against S512ppr2 12 to 5 (p = 0.14), against r8btd90 5 to 1 (p = 0.22), against S512ppr3 6 to 3
 (p = 0.51), against S512+PP 7 to 8 (p = 1.0).
 
 What it shows:
+- (Re-run on the 1,493 positions after the audit's exclusions: no net misjudged any of the six, so the counts
+  and the paired figures are unchanged; the classed totals and the mean differences moved as shown, by at most
+  0.8 cp.)
 - **The order of the 4-5-piece drift recurs (S512ppr2 lowest, r8brft1 highest of the four), but the gap is 7 of
-  1,343 positions (0.5 points) and no pair differs significantly.** The drift is not shown to reach 8-12-piece
+  1,337 positions (0.5 points) and no pair differs significantly.** The drift is not shown to reach 8-12-piece
   positions; at this size it is not ruled out either.
 - The labels come from r8brft1's own search, which favours r8brft1; it still misjudges the most of the four.
 - The slice-trained nets gain nothing here over S512+PP (81) and S512r2 (82) on the misjudged count; the mean
@@ -322,7 +333,8 @@ entry has one the section says the ratio is not corrected and understated.
 - tools/gauntlet/stopbias.py, tools/gauntlet/test_stopbias.py; tools/gauntlet/report.py (the stopping-bias
   lines), tools/gauntlet/test_report.py, tools/gauntlet/transfer.json (the "sprt" records).
 - The T1 extension: tools/nnue/heldout_deep.py, tools/nnue/test_heldout_deep.py, tools/nnue/heldout_deep.tsv
-  (the 1,499 labelled positions), tools/nnue/heldout_deep_excluded.txt (the one position found in Fork's data).
+  (the 1,493 labelled positions since the audit), tools/nnue/heldout_deep_excluded.txt (the seven positions
+  found in Fork's data).
   The paired sign test was a one-off over `check`'s rule and is not committed.
 - The 6-7-piece set: tools/nnue/heldout_67.py, tools/nnue/test_heldout_67.py, tools/nnue/heldout_67.tsv (the
   5,600 labelled positions); tools/nnue/gates.sh reports it beside the 4-5-piece check (never a gate); the

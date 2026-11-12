@@ -1,0 +1,5 @@
+# Positions of the 6-7-piece set found in Fork's own training data: left out of tools/nnue/heldout_67.tsv
+# (`generate --exclude`), not replaced. Found by the training-data audit (2026-11-11; tools/overlap,
+# docs/research/overlap-audit-2026-11-11.md) in g3s2's parts (s2), so in every current net's training data.
+# KQPPvKQ, labelled won (2) for the side to move.
+8/1Q6/8/5p2/8/5pq1/6k1/3K4 b - - 0 1
