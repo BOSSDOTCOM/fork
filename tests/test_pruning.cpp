@@ -470,7 +470,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // table's contents). With the TT off it does nothing.
 TEST_CASE("pruning", "early eval write: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_early_eval_write);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_early_eval_write);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_early_eval_write = true;
   fx.searcher->switches = on;
