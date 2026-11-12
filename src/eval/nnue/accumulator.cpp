@@ -93,26 +93,46 @@ DeltaColumns columns_for(const NetFile& net, const FeatureDelta& d, Color perspe
   }
 }
 
+// The vector paths work in register tiles: a tile of the parent's sums is
+// loaded once, every removed and added row is applied to it, and it is
+// stored once (one pass per row over the tile, so a row's loop overhead is
+// paid once per tile, not once per vector). int16 addition wraps, so the
+// order of the rows cannot change the result, and the net file's bounds keep
+// the final sums in range: every path equals the scalar reference.
 #if defined(__AVX512BW__)
-// 32 int16 lanes per vector.
+// 32 int16 lanes per vector; the whole perspective (16 vectors at 512
+// hidden) fits one tile in AVX-512's 32 registers.
 void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
-  for (int i = 0; i < NetHidden; i += 32) {
-    __m512i x = _mm512_load_si512(src + i);
-    for (int k = 0; k < c.subs; ++k) x = _mm512_sub_epi16(x, _mm512_load_si512(c.sub[k] + i));
-    for (int k = 0; k < c.adds; ++k) x = _mm512_add_epi16(x, _mm512_load_si512(c.add[k] + i));
-    _mm512_store_si512(dst + i, x);
+  constexpr int Lanes = 32, Tile = NetHidden / Lanes < 16 ? NetHidden / Lanes : 16;
+  static_assert(NetHidden % (Lanes * Tile) == 0);
+  for (int i = 0; i < NetHidden; i += Lanes * Tile) {
+    __m512i x[Tile];
+    for (int t = 0; t < Tile; ++t) x[t] = _mm512_load_si512(src + i + Lanes * t);
+    for (int k = 0; k < c.subs; ++k)
+      for (int t = 0; t < Tile; ++t)
+        x[t] = _mm512_sub_epi16(x[t], _mm512_load_si512(c.sub[k] + i + Lanes * t));
+    for (int k = 0; k < c.adds; ++k)
+      for (int t = 0; t < Tile; ++t)
+        x[t] = _mm512_add_epi16(x[t], _mm512_load_si512(c.add[k] + i + Lanes * t));
+    for (int t = 0; t < Tile; ++t) _mm512_store_si512(dst + i + Lanes * t, x[t]);
   }
 }
 #elif defined(__AVX2__)
-// 16 int16 lanes per vector.
+// 16 int16 lanes per vector; tiles of 8 of AVX2's 16 registers.
 void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
-  for (int i = 0; i < NetHidden; i += 16) {
-    __m256i x = _mm256_load_si256(reinterpret_cast<const __m256i*>(src + i));
+  constexpr int Lanes = 16, Tile = 8;
+  static_assert(NetHidden % (Lanes * Tile) == 0);
+  const auto at = [](const std::int16_t* p) {
+    return _mm256_load_si256(reinterpret_cast<const __m256i*>(p));
+  };
+  for (int i = 0; i < NetHidden; i += Lanes * Tile) {
+    __m256i x[Tile];
+    for (int t = 0; t < Tile; ++t) x[t] = at(src + i + Lanes * t);
     for (int k = 0; k < c.subs; ++k)
-      x = _mm256_sub_epi16(x, _mm256_load_si256(reinterpret_cast<const __m256i*>(c.sub[k] + i)));
+      for (int t = 0; t < Tile; ++t) x[t] = _mm256_sub_epi16(x[t], at(c.sub[k] + i + Lanes * t));
     for (int k = 0; k < c.adds; ++k)
-      x = _mm256_add_epi16(x, _mm256_load_si256(reinterpret_cast<const __m256i*>(c.add[k] + i)));
-    _mm256_store_si256(reinterpret_cast<__m256i*>(dst + i), x);
+      for (int t = 0; t < Tile; ++t) x[t] = _mm256_add_epi16(x[t], at(c.add[k] + i + Lanes * t));
+    for (int t = 0; t < Tile; ++t) _mm256_store_si256(reinterpret_cast<__m256i*>(dst + i + Lanes * t), x[t]);
   }
 }
 #else
