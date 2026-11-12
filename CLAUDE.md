@@ -59,7 +59,7 @@ This file is context. Enforcement lives in hooks (`.claude/settings.json`,
 . scripts/env.sh                              # toolchain on PATH (Windows) / compilers (Linux)
 scripts/build.sh                              # all presets + PGO, summary table
 scripts/build.sh clang-release gcc-debug      # chosen presets
-scripts/check.sh quick                        # clang-release build + fast tests (the pre-commit hook, on the staged tree)
+scripts/check.sh quick                        # clang-release build + fast tests + the quick-search suites (the pre-commit hook, on the staged tree)
 scripts/check.sh stop                         # Stop hook: clang-release, all non-slow tests; skipped if code unchanged
 scripts/check.sh full                         # on demand (CI runs the full matrix): Windows presets + UCI smoke loop of every MinGW GCC preset,
                                               # then the same + gcc-debug on Linux (WSL),

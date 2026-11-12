@@ -570,6 +570,10 @@ if(FORK_BUILD_TESTS)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
+  # The search suites the pre-commit check runs too (owner, 2026-11-12; scripts/check.sh quick, ctest -L
+  # quick-search): whole suites, about 1.5 min together in clang-release. A label only: CI's -LE slow runs
+  # them as before, once each.
+  set_tests_properties(search pruning ordering see params tt time_budget draws PROPERTIES LABELS quick-search)
   # The stats build's measurement counters (DESIGN.md §5.7): their own suite,
   # compiled only with FORK_SEARCH_STATS (the clang-stats preset).
   if(FORK_SEARCH_STATS)

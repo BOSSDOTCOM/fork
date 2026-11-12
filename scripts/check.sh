@@ -5,7 +5,9 @@
 # (scripts/hooks/pre-commit).
 #
 #   scripts/check.sh quick   clang-release build + fast tests (post-edit hook),
-#                            plus the tooling's Python unit tests
+#                            plus the search suites (ctest label quick-search;
+#                            FORK_QUICK_SEARCH=0 skips them, as the post-edit
+#                            hook does) and the tooling's Python unit tests
 #   scripts/check.sh stop    clang-release build + every non-slow test,
 #                            including bench parity and no_alloc; this
 #                            platform only (Stop hook). Skipped when the code
@@ -162,6 +164,14 @@ build_and_test() {  # preset, ctest filter args...
   shift
   cmake --preset "$preset" -U FORK_EVALUATOR -U FORK_NET >>"$log" 2>&1 || fail "configure $preset"
   cmake --build "build/$preset" -j "$(check_jobs)" >>"$log" 2>&1 || fail "build $preset"
+  run_ctest "$preset" "$@"
+  echo "$out" | grep -qE 'Test +#[0-9]+: no_alloc \.+ +Passed' || fail "no_alloc did not run in $preset"
+}
+
+# One ctest pass over a built preset; sets $out to its output.
+run_ctest() {  # preset, ctest filter args...
+  local preset=$1
+  shift
   out=$(ctest --test-dir "build/$preset" --output-on-failure "$@" 2>&1)
   local status=$?
   echo "$out" >>"$log"
@@ -172,7 +182,6 @@ build_and_test() {  # preset, ctest filter args...
   if [ -f "$last" ] && grep -qE '^(SKIP|NOTE) ' "$last"; then
     grep -E '^(SKIP|NOTE) ' "$last" | sed "s/^/fork check $mode ($preset): /" >&2
   fi
-  echo "$out" | grep -qE 'Test +#[0-9]+: no_alloc \.+ +Passed' || fail "no_alloc did not run in $preset"
 }
 
 # The tooling's own tests (audit-1 U-15): standard-library Python suites
@@ -352,8 +361,16 @@ case "$mode" in
     ;;
   quick)
     build_and_test clang-release -R '^(magics|fen|zobrist_ep|perft_edge|pseudo_legal|no_alloc|bench_parity)$'
+    # The search suites (owner, 2026-11-12: switch-on commits had failed search and pruning cases that this
+    # check never ran): the tests labelled quick-search in CMakeLists.txt, about 1.5 min. The after-edit hook
+    # skips them (FORK_QUICK_SEARCH=0) to stay inside its time limit; the pre-commit hook runs them.
+    searched=""
+    if [ "${FORK_QUICK_SEARCH:-1}" != 0 ]; then
+      run_ctest clang-release -L '^quick-search$' --no-tests=error
+      searched=" the search suites and"
+    fi
     tool_tests python
-    echo "fork check quick: ok (with the tooling's Python tests)"
+    echo "fork check quick: ok (with$searched the tooling's Python tests)"
     ;;
   stop)
     mkdir -p build
