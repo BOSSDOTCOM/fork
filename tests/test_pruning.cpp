@@ -462,6 +462,46 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
   for (int b = 1; b < ThreatBuckets; ++b) CHECK_MSG(written(b) == 0, "bucket " << b);
 }
 
+// Node types gating null move pruning and the no-move reduction (the engine
+// survey's B5, think tank R6): each switch on alone still finds mates and
+// plays a legal move, and changes the search (fault check: a gate never
+// applied leaves the tree as it is with the switch off). Each does nothing
+// with the technique it gates switched off.
+TEST_CASE("pruning", "node-type gates for the null move and the no-move reduction") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_nmp_expected_cut);  // off until their SPRTs
+  CHECK(!SearchSwitches{}.use_typed_no_move_reduction);
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  // Deep enough for the no-move reduction (NoMoveReduceMinDepth 8) to fire
+  // below the root in a debug build too.
+  const int depth = Optimized ? 12 : 9;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  SearchSwitches off;  // explicitly off: a test commit turns one on by default
+  off.use_nmp_expected_cut = off.use_typed_no_move_reduction = false;
+  for (int which = 0; which < 2; ++which) {
+    SearchSwitches on;
+    bool* flags[] = {&on.use_nmp_expected_cut, &on.use_typed_no_move_reduction};
+    *flags[which] = true;
+    fx.searcher->switches = on;
+    CHECK_MSG(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1), "switch " << which);
+    CHECK_MSG(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3), "switch " << which);
+    CHECK_MSG(legal.contains(fx.search(kiwipete, depth).best), "switch " << which);
+    CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+              "node-type gate " << which << " left all three trees unchanged");
+  }
+  SearchSwitches nmp_gate_on, nmp_gate_off;
+  nmp_gate_on.use_nmp_expected_cut = true;
+  nmp_gate_on.use_nmp = nmp_gate_off.use_nmp = false;
+  CHECK(fx.tree_sizes(nmp_gate_on, depth) == fx.tree_sizes(nmp_gate_off, depth));
+  SearchSwitches iir_gate_on, iir_gate_off;
+  iir_gate_on.use_typed_no_move_reduction = true;
+  iir_gate_on.use_no_move_reduction = iir_gate_off.use_no_move_reduction = false;
+  CHECK(fx.tree_sizes(iir_gate_on, depth) == fx.tree_sizes(iir_gate_off, depth));
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -542,6 +582,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
   s.use_threat_buckets = true;
+  s.use_nmp_expected_cut = s.use_typed_no_move_reduction = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

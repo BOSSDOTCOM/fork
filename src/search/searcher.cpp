@@ -355,8 +355,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 
   // Null move pruning (T13): if passing still fails high on a reduced
   // search, the node is taken to fail high.
+  // With use_nmp_expected_cut (the engine survey's B5, think tank R6) only at
+  // an expected cut node: at an expected all node passing fails high only
+  // when the node type was predicted wrong, so the probe is mostly wasted.
   if (switches.use_nmp && can_prune_node && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
-      prune_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
+      prune_eval >= beta && (!switches.use_nmp_expected_cut || f.expected_cut) &&
+      has_non_pawn_material(pos, pos.side_to_move())) {
     const int surplus_plies = std::min((prune_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
     const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)
@@ -395,8 +399,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // for the next iteration. Every node type: Fork does not track expected
   // cut nodes. After the node-level pruning, whose decisions keep the
   // node's full depth.
+  // With use_typed_no_move_reduction (B5, R6) only at PV nodes and expected
+  // cut nodes: the reduction answers poor ordering, which matters where one
+  // move must be found, not at an expected all node, which searches them all.
   if (switches.use_no_move_reduction && !withheld && depth >= NoMoveReduceMinDepth &&
-      (!tt_hit || hit.move.is_none())) {
+      (!tt_hit || hit.move.is_none()) && (!switches.use_typed_no_move_reduction || OnPv || f.expected_cut)) {
     --depth;
     FORK_STAT(++counters.no_move_reductions);
   }

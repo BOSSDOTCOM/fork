@@ -2719,3 +2719,21 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 88. Node-type gates: the null move at expected cut nodes, the no-move reduction by node type (the engine survey's B5, think tank R6)
+
+- **type:** ELO (search); flags `use_nmp_expected_cut`,
+  `use_typed_no_move_reduction` (off).
+- **idea** (the engine survey's B5; think tank R6, step 12; concept only):
+  with T17's expected node types, null move pruning runs only at expected
+  cut nodes, and the no-move reduction (IIR, T26) only at PV nodes and
+  expected cut nodes.
+- **status:** **built, queued (coordinator, 2026-11-11 night).** Built on
+  phase-4 a95e269 behind the two switches, off, branch tier2/b5-node-gates;
+  bench unchanged. Design R at STC of each gate against the switch-off
+  commit (night items 51a, the null-move gate, and 51d, the no-move gate),
+  gated behind state/gate-e1.done. No constant. The no-move gate touches
+  IIR, on the straight-to-LTC list: an LTC confirmation is owed if its STC
+  passes. Nothing is adopted before its verdict.
+- **runtime cost:** none expected (a flag read).
+- **earliest phase:** Phase 4.

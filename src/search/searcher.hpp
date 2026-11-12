@@ -144,6 +144,11 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_nmp_expected_cut, use_typed_no_move_reduction: node types gate two
+//   node-level decisions (the engine survey's B5, think tank R6): null move
+//   pruning only at expected cut nodes (PlyFrame::expected_cut), and the
+//   no-move reduction (internal iterative reduction, T26) only at PV nodes
+//   and expected cut nodes. Off until their SPRTs.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +182,7 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)            X(use_nmp_expected_cut, UseNmpExpectedCut, false)        X(use_typed_no_move_reduction, UseTypedNoMoveReduction, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
