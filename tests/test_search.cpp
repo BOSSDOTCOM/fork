@@ -1006,30 +1006,37 @@ TEST_CASE("search", "a stop during a root fail high's re-search keeps the previo
     CHECK(pos.set_fen(fen));
     return fx.search(pos, q);
   };
-  int distinct_fail_highs = 0;
-  // The first bench positions are the perft suite (perft position 6 stopped
-  // at 4,991 nodes with g5f6 failed high and c3d5 the previous best).
-  for (std::size_t i = 0; i < search_bench_fens().size() && distinct_fail_highs < 3; ++i) {
-    const std::string_view fen = search_bench_fens()[i];
-    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
-      SearchQuota q;
-      q.nodes = nodes;
-      const SearchResult r = fresh_search(fen, q);
-      const Move pending = fx.searcher->unresolved_fail_high();
-      if (pending.is_none() || r.depth == 0) continue;
-      SearchQuota to_depth;
-      to_depth.depth = fx.searcher->time_signals().depth;  // the last finished iteration
-      const Move previous_best = fresh_search(fen, to_depth).best;
-      if (pending == previous_best) continue;
-      ++distinct_fail_highs;
-      Position pos;
-      CHECK(pos.set_fen(fen));
-      CHECK_MSG(r.best != pending, fen << " at " << nodes << " nodes: played the unconfirmed fail high "
-                                       << pos.move_to_uci(pending) << " (previous best "
-                                       << pos.move_to_uci(previous_best) << ")");
+  // Under both stop rules (use_pass_best_stop, bug review 2026-11-11 E1):
+  // the new rule takes a pass's best exact move, never a fail high.
+  for (const bool pass_best : {false, true}) {
+    fx.searcher->switches.use_pass_best_stop = pass_best;
+    int distinct_fail_highs = 0;
+    // The first bench positions are the perft suite (perft position 6 stopped
+    // at 4,991 nodes with g5f6 failed high and c3d5 the previous best).
+    for (std::size_t i = 0; i < search_bench_fens().size() && distinct_fail_highs < 3; ++i) {
+      const std::string_view fen = search_bench_fens()[i];
+      for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
+        SearchQuota q;
+        q.nodes = nodes;
+        const SearchResult r = fresh_search(fen, q);
+        const Move pending = fx.searcher->unresolved_fail_high();
+        if (pending.is_none() || r.depth == 0) continue;
+        SearchQuota to_depth;
+        to_depth.depth = fx.searcher->time_signals().depth;  // the last finished iteration
+        const Move previous_best = fresh_search(fen, to_depth).best;
+        if (pending == previous_best) continue;
+        ++distinct_fail_highs;
+        Position pos;
+        CHECK(pos.set_fen(fen));
+        CHECK_MSG(r.best != pending, fen << " at " << nodes << " nodes: played the unconfirmed fail high "
+                                         << pos.move_to_uci(pending) << " (previous best "
+                                         << pos.move_to_uci(previous_best) << ", pass-best rule "
+                                         << pass_best << ")");
+      }
     }
+    CHECK_MSG(distinct_fail_highs > 0,
+              "no search stopped with a distinct fail high unresolved (pass-best rule " << pass_best << ")");
   }
-  CHECK_MSG(distinct_fail_highs > 0, "no search stopped with a distinct fail high unresolved");
 }
 
 }  // namespace forkeng::test
@@ -1138,6 +1145,7 @@ struct ReportLog final : SearchListener {
 // 304081e, RfpMargin 40, so gcc-debug failed in CI).
 TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored above the last iteration") {
   Fixture fx;
+  fx.searcher->switches.use_pass_best_stop = false;  // the rule as it was; the next cases cover the switch
   int switched = 0;
   const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
   for (std::size_t i = 0; i < positions; ++i) {
@@ -1212,6 +1220,96 @@ TEST_CASE("search", "after a stop, the result's depth, score and move are the la
     CHECK_MSG(from_unfinished > 0, "no stop took its move from an unfinished iteration");
   else if (from_unfinished == 0)
     NOTE("no stop in the debug sample played an unfinished iteration's move; optimized builds require one");
+}
+
+// The pass-best stop rule (use_pass_best_stop; bug review 2026-11-11, E1).
+// A search stopped mid-iteration used to play an unfinished iteration's move
+// only if its exact score beat the last finished iteration's, so when the
+// previous best came back lower at the new depth and another move scored
+// above it in the same pass, the previous best was still played. With the
+// switch on, once the pass has searched the previous best again, the pass's
+// best exact move is played. The switch changes nothing before the stop, so
+// the same node-limited search runs under both rules and the two are
+// compared stop by stop over the bench positions:
+// - both searches are the same tree (same nodes, same last finished depth);
+// - with the switch on, the result is the last reported line, exact, at the
+//   finished depth or one more (as above);
+// - where the rules differ, either the old rule kept the last finished
+//   iteration's move and the new one plays a move reported exact at the
+//   unfinished depth (E1's case), or the old rule took an earlier pass's
+//   move (the new rule keeps each pass's best apart); at least one E1 case
+//   must have a new move at or below the finished score (the case the old
+//   rule threw away), in optimized builds, or the test proves nothing;
+// - the completed search to that depth (fresh tables, so it repeats the
+//   stopped search exactly up to the stop, then finishes the iteration) is
+//   the judge: its best move agrees with the new rule's move more often than
+//   with the old rule's.
+TEST_CASE("search", "the pass-best stop rule plays the pass's better exact move over the previous best") {
+  CHECK(!SearchSwitches{}.use_pass_best_stop);  // off until its SPRTs
+  Fixture fx;
+  auto fresh_search = [&](std::string_view fen, const SearchQuota& q, bool pass_best,
+                          SearchListener* listener) {
+    fx.store.clear();
+    fx.searcher->clear_history();
+    fx.searcher->switches.use_pass_best_stop = pass_best;
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    return fx.searcher->deliberate(pos, q, fx.stop, nullptr, listener);
+  };
+  int differ = 0, kept_lower = 0, earlier_pass = 0, judge_new = 0, judge_old = 0;
+  const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
+  for (std::size_t i = 0; i < positions; ++i) {
+    const std::string_view fen = search_bench_fens()[i];
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
+      SearchQuota q;
+      q.nodes = nodes;
+      ReportLog old_log, new_log;
+      const SearchResult was = fresh_search(fen, q, false, &old_log);
+      const int finished_depth = fx.searcher->time_signals().depth;
+      const SearchResult now = fresh_search(fen, q, true, &new_log);
+      CHECK_EQ(now.nodes, was.nodes);
+      CHECK_EQ(fx.searcher->time_signals().depth, finished_depth);
+      if (now.depth == 0 || new_log.entries.empty()) continue;
+      const ReportLog::Entry& last = new_log.entries.back();
+      CHECK_MSG(last.bound == 0 && last.depth == now.depth && last.score == now.score && last.first == now.best,
+                fen << " at " << nodes << " nodes: last line depth " << last.depth << " score " << last.score
+                    << " bound " << last.bound << ", result depth " << now.depth << " score " << now.score);
+      CHECK(now.depth == finished_depth || now.depth == finished_depth + 1);
+      if (now.best == was.best) continue;
+      ++differ;
+      const auto finished = std::ranges::find_if(old_log.entries, [&](const ReportLog::Entry& e) {
+        return e.depth == finished_depth && e.bound == 0;
+      });
+      CHECK(finished != old_log.entries.end());
+      if (finished == old_log.entries.end()) continue;
+      // E1's case: the old rule kept the last finished iteration's move, the
+      // new one plays an exact move of the unfinished iteration. Otherwise
+      // the old rule took an earlier pass's move, which the new rule no
+      // longer does (counted only).
+      if (was.best == finished->first && was.depth == finished_depth && now.depth == finished_depth + 1) {
+        if (now.score <= finished->score) ++kept_lower;
+      } else {
+        ++earlier_pass;
+      }
+      SearchQuota to_depth;
+      to_depth.depth = finished_depth + 1;
+      const Move judge = fresh_search(fen, to_depth, false, nullptr).best;
+      judge_new += judge == now.best;
+      judge_old += judge == was.best;
+    }
+  }
+  record_note("pass-best stop rule: " + std::to_string(differ) + " stops differ, " +
+              std::to_string(kept_lower) + " with the old rule keeping the previous best over a move at or " +
+              "below the finished score, " + std::to_string(earlier_pass) + " with the old rule taking an " +
+              "earlier pass's move; the completed iteration agrees with the new rule " +
+              std::to_string(judge_new) + " times, the old " + std::to_string(judge_old));
+  if (Optimized) {
+    CHECK_MSG(kept_lower > 0, "no stop where the old rule kept the previous best over a lower exact move");
+    CHECK_MSG(judge_new > judge_old,
+              "the completed iteration agrees with the new rule " << judge_new << " times, the old " << judge_old);
+  }
 }
 
 // Audit-1 V-4 (00bed14): no LMR or PVS re-search once the search has
