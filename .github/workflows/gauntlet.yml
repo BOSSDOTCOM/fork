@@ -57,8 +57,17 @@
 # Nothing else changes (TC, games, anchors, the paired report).
 # The run's title is "anchor check OLD NEW", with " book BOOK" when the book
 # is set (a gauntlet's stays GitHub's default).
+# The input match (owner, 2026-11-11, the decision audit) makes the check a
+# direct match: OLD plays NEW, no anchors, a stage of a fixed-length match.
+# Its value is the stage number (1-99, in the title, so a driver finds each
+# stage's run by it); every stage plays the same openings (book as above),
+# each with both colours, MATCH_PASSES times, one shard per pass and
+# CHECK_OPENINGS_PER_SHARD openings (which version fastchess lists first
+# alternates by pass); Hash 16 for both, at the gauntlet's TC; no report job
+# (the driver pairs the stages' games by opening). Title: "anchor check OLD
+# NEW match stage S", with the book's suffix.
 name: gauntlet
-run-name: ${{ (inputs.old || inputs.new) && format('anchor check {0} {1}{2}', inputs.old, inputs.new, inputs.book && format(' book {0}', inputs.book) || '') || '' }}
+run-name: ${{ (inputs.old || inputs.new) && format('anchor check {0} {1}{2}{3}', inputs.old, inputs.new, inputs.match != '' && format(' match stage {0}', inputs.match) || '', inputs.book && format(' book {0}', inputs.book) || '') || '' }}
 
 on:
   push:
@@ -70,6 +79,7 @@ on:
       claim: {description: "Anchor check: NEW's claimed self-play gain over OLD (Elo)", required: false, default: ""}
       anchors: {description: "Anchor check: anchor stems (tools/gauntlet/anchors.tsv)", required: false, default: "clover-6.1 altair-7.0.0"}
       book: {description: "Anchor check: openings; empty = the balanced 8-ply ones, uho = the SPRTs' shuffled UHO book", required: false, default: ""}
+      match: {description: "Anchor check: a stage number (1-99) = OLD plays NEW directly, no anchors; empty = against the anchors", required: false, default: ""}
 
 permissions:
   contents: read
@@ -86,6 +96,7 @@ env:
   GAMES_PER_SHARD: "100"
   CHECK_OPENINGS: "200"           # the anchor check: openings 1-200, each with both colours
   CHECK_OPENINGS_PER_SHARD: "25"  # 50 games per version, 100 a shard (a gauntlet shard's length)
+  MATCH_PASSES: "2"               # the match: each stage plays every opening, both colours, twice (800 games, 16 shards)
 
 jobs:
   fork:
@@ -273,6 +284,7 @@ jobs:
     outputs:
       old_sha: ${{ steps.plan.outputs.old_sha }}
       new_sha: ${{ steps.plan.outputs.new_sha }}
+      match_shards: ${{ steps.plan.outputs.match_shards }}
     steps:
       - name: "Toolchain (Ubuntu 22.04, gcc 11.4, CMake 3.22, as TCEC)"
         run: |
@@ -287,13 +299,19 @@ jobs:
           NEW: ${{ inputs.new }}
           CLAIM: ${{ inputs.claim }}
           BOOK: ${{ inputs.book }}
+          MATCH: ${{ inputs.match }}
         run: |
           git config --global --add safe.directory "$PWD"
           [ -n "$OLD" ] && [ -n "$NEW" ] || { echo "the anchor check needs both old and new"; exit 1; }
           case $BOOK in '' | uho) ;; *) echo "book must be empty or uho, not '$BOOK'"; exit 1 ;; esac
+          case $MATCH in '' | [1-9] | [1-9][0-9]) ;; *) echo "match must be empty or a stage number 1-99, not '$MATCH'"; exit 1 ;; esac
           echo "$CLAIM" | grep -Eq '^[+-]?[0-9]+([.][0-9]+)?$' || { echo "claim must be a number of Elo, not '$CLAIM'"; exit 1; }
           echo "old_sha=$(git rev-parse --verify "$OLD^{commit}")" >>"$GITHUB_OUTPUT"
           echo "new_sha=$(git rev-parse --verify "$NEW^{commit}")" >>"$GITHUB_OUTPUT"
+          # The match's shards: every CHECK_OPENINGS_PER_SHARD-opening slice of openings 1-CHECK_OPENINGS, once per pass.
+          python3 -I -c 'import json, sys; t, p, n = map(int, sys.argv[1:]); assert t % p == 0
+          print("match_shards=" + json.dumps([{"start": s, "pass": k} for k in range(1, n + 1) for s in range(1, t + 1, p)]))' \
+            "$CHECK_OPENINGS" "$CHECK_OPENINGS_PER_SHARD" "$MATCH_PASSES" >>"$GITHUB_OUTPUT"
       # As the gauntlet's Fork: build_pair.sh checks each binary's target and
       # its network against the parity file, and records its bench (nodes and
       # signature) in meta.env, shown in the run's summary.
@@ -310,7 +328,7 @@ jobs:
 
   check-anchors:
     name: "Anchor check: build the chosen anchors"
-    if: ${{ inputs.old || inputs.new }}
+    if: ${{ (inputs.old || inputs.new) && inputs.match == '' }}  # its games and report jobs are skipped with it
     runs-on: ubuntu-latest
     timeout-minutes: 60
     outputs:
@@ -442,3 +460,64 @@ jobs:
             old.pgn
             new.pgn
             summary.md
+
+  # The anchor check's match (the input match, a stage number): OLD plays NEW directly.
+  match-games:
+    name: "Match stage ${{ inputs.match }}: openings from ${{ matrix.start }}, pass ${{ matrix.pass }}"
+    needs: [check-fork]
+    if: ${{ inputs.match != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.check-fork.outputs.match_shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: engines, path: engines}
+      - name: Tools (pinned fastchess; python-chess for the openings)
+        run: |
+          bash tools/cloud/fetch_tools.sh "$RUNNER_TEMP/tools"
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet chess==1.11.2
+      - name: Openings (as the check's)
+        env: {BOOK: "${{ inputs.book }}"}
+        run: |
+          if [ "$BOOK" = uho ]; then
+            book="$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.shuffled-20261027.epd"
+            [ -s "$book" ] || { echo "no $book"; exit 1; }
+            echo "OPENINGS_FILE=$book" >> "$GITHUB_ENV"
+          else
+            "$RUNNER_TEMP/venv/bin/python" -I tools/make_openings.py openings.epd --seed "$OPENINGS_SEED"
+            echo "$OPENINGS_SHA256  openings.epd" | sha256sum -c
+            echo "OPENINGS_FILE=openings.epd" >> "$GITHUB_ENV"
+          fi
+      - name: Games (OLD against NEW)
+        env:
+          STAGE: ${{ inputs.match }}
+          START: ${{ matrix.start }}
+          PASS: ${{ matrix.pass }}
+          OLD_SHA: ${{ needs.check-fork.outputs.old_sha }}
+          NEW_SHA: ${{ needs.check-fork.outputs.new_sha }}
+        run: |
+          chmod +x engines/base/fork engines/test/fork
+          old=(-engine cmd=engines/base/fork name=OLD option.Hash=16)
+          new=(-engine cmd=engines/test/fork name=NEW option.Hash=16)
+          # Which version fastchess lists first alternates by pass.
+          if [ $((PASS % 2)) = 1 ]; then engines=("${old[@]}" "${new[@]}") first=OLD; else engines=("${new[@]}" "${old[@]}") first=NEW; fi
+          games=$(( 2 * CHECK_OPENINGS_PER_SHARD ))
+          mkdir -p out
+          cpu=$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)
+          conc=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
+          echo "cpu=$cpu nproc=$(nproc) concurrency=$conc stage=$STAGE start=$START openings=$CHECK_OPENINGS_PER_SHARD pass=$PASS listed_first=$first book=$(basename "$OPENINGS_FILE") old=$OLD_SHA new=$NEW_SHA" | tee out/shard.txt
+          "$RUNNER_TEMP/tools/fastchess" "${engines[@]}" \
+            -each tc="$TC" -openings file="$OPENINGS_FILE" format=epd order=sequential start="$START" \
+            -rounds "$CHECK_OPENINGS_PER_SHARD" -repeat -concurrency "$conc" \
+            -pgnout file=out/games.pgn > out/fastchess.log 2>&1 || true
+          played=$(grep -c '^\[Event ' out/games.pgn || true)
+          echo "played=$played of $games" | tee -a out/shard.txt
+          [ "$played" = "$games" ] || { tail -n 20 out/fastchess.log; exit 1; }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: "match-${{ inputs.match }}-${{ matrix.start }}-${{ matrix.pass }}", path: out, retention-days: 90}
