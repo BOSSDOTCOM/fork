@@ -361,7 +361,8 @@ The questions above are answered (DESIGN.md decisions log, 2026-11-09; ideas.md 
 - (f) Tables are stored **in WSL** (case-sensitive file system).
 - (g) **Keep rule, declared before any data:** v2 is kept if its arm's fixed-node screen interval is not entirely
   below 0 **and** the held-out 6-7-piece misjudgment falls by at least 25% against the control arm. This replaces the
-  keep rule proposed above.
+  keep rule proposed above. **Confirmed by the owner, 2026-11-12, about 5:00 PM EST** ("slice v2 keeps its declared
+  Nov 9 keep rule"): the arm's own keep rule, not a screening or promotion gate.
 - (h) The class shares, the one-wing bias and the C2/C3 sub-types **wait for the final conversion-and-defense
   numbers**.
 
@@ -392,5 +393,6 @@ The questions above are answered (DESIGN.md decisions log, 2026-11-09; ideas.md 
 - **The held-out set's positions are excluded** from the slice: every position of tools/nnue/heldout_67.tsv
   (board and side to move, endgame_heldout.key), and a seed other than 2026111167.
 - **The held-out 6-7-piece check keeps the three choices made when it was built:** the 1.15 flag ratio (report
-  only, never a gate), a cursed win or blessed loss counted as drawn, 200 positions per material. It is the
+  only, never a gate on screening or promotion; since 2026-11-12, owner: flagged when more than 15% worse than the
+  current default net, with the change against the run's warm start also reported), a cursed win or blessed loss counted as drawn, 200 positions per material. It is the
   check named by the keep rule (item (g)), and every 8c arm reports it beside the 4-5-piece check.

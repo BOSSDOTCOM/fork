@@ -1267,6 +1267,7 @@ tuned by SPSA.
 - **status:** in the next snapshot (owner, 2026-11-06: lifted from its hold): the slice goes into g3s2, and the check becomes the standing acceptance test for the retrained default (DESIGN.md §5.6, order item 7).
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 10):** the acceptance target is at most 15 of 900 misjudged; part 3 (conversion without tables) dropped; part 2 extended to 4-5-man classes (X19).
   **2026-11-11 (bug review T1; owner):** the check measures **recall**, not understanding: 898 of its 900 positions (509 in the single file slice1-01) are in the slice's files verbatim, because the slice draws half its positions from the same three endings by the same placement rule. The held-out check (tools/nnue/endgame_heldout.py, X19's 4-5-man classes) has 3,800 positions in 16 four-piece and 3 five-piece classes the slice cannot generate, with zero overlap with all 26 M slice positions; misjudged: S512r2 658, S512+PP 945, S512ppr2 454, S512ppr3 514, r8btd90 526, r8brft1 612 (docs/research/bug-review-followup-2026-11-11.md).
+  **2026-11-12 (owner, about 4:40 PM and 5:00 PM EST; DESIGN.md decisions log):** the 900-position check **stays a gate**, named the **integrity/recall gate** (at most 15 of 900 misjudged; it catches missing or corrupted slice data; about 5:50 PM EST: enforced by gates.sh's exit status for nets trained with the endgame slice, `SLICE_TRAINED=1`, reported only otherwise, and 8c's fresh slice keeps the 900 positions). The held-out checks (4-5, 6-7 and 8-12 pieces) are reported for every candidate and flagged for the owner's review when more than 15% worse than the **current default net** (what a promotion would replace), with each count's change against the run's warm start reported for diagnosis (tools/nnue/gates.sh); they are never a gate on screening or promotion.
 
 ## 46. Threat knowledge at a low speed cost: the design brainstorm
 
@@ -2372,8 +2373,13 @@ whose weaknesses and data gaps decide their targets and order.
   (KQvKRBP among them; budget R's KQvKRBP, KQvKRNP, KQPvKRB, KQPvKRN), the held-out 6-7-piece set's positions
   excluded (tools/nnue/heldout_67.tsv, board and side to move; another seed than 2026111167). The held-out
   6-7-piece check of the keep rule is that set (5,600 positions, 200 per material; a cursed win or blessed loss
-  counted drawn; reported with the 1.15 flag ratio, never a gate), and every 8c arm reports it beside the
-  4-5-piece check.
+  counted drawn; reported for every candidate and flagged when more than 15% worse than the current default net,
+  with the change against the run's warm start also reported, never a gate on screening or promotion), and every
+  8c arm reports it beside the 4-5-piece check.
+- **keep rule confirmed (owner, 2026-11-12, about 5:00 PM EST):** "slice v2 keeps its declared Nov 9 keep rule
+  (screen interval not entirely below 0 AND held-out 6-7 misjudgments down >= 25% vs the control)": the arm's own
+  keep rule, the one place a held-out count is a condition; it is not a screening or promotion gate (DESIGN.md
+  decisions log, 2026-11-12).
 - **status:** untested (designed; the prober installed and verified and the held-out set built 2026-11-11; data
   generation after the conversion-and-defense results and before 8c).
   **runtime cost:** none. **earliest phase:** Phase 4.
@@ -2456,7 +2462,9 @@ whose weaknesses and data gaps decide their targets and order.
   raised the held-out check's five-piece errors (queen against two minor
   pieces, tools/nnue/endgame_heldout.py) from 126 to 189 of 600 (r8btd90
   -> r8brft1; all classes 526 -> 612 of 3,800). **Future fine-tunes report
-  this set** (tools/nnue/gates.sh reports it for every candidate). **The
+  this set** (tools/nnue/gates.sh reports it for every candidate, flagged
+  when more than 15% worse than the current default and, since 2026-11-12,
+  with the change against the run's warm start). **The
   6-7-piece set (2026-11-11, tools/nnue/heldout_67.py)** shows the same step:
   r8btd90 732 -> r8brft1 770 of 5,599 (58 to 20 discordant), mostly queen and
   pawn against rook and minor. **8c arm (owner, 2026-11-11, about 10:50 PM
