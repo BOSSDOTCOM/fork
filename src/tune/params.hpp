@@ -41,7 +41,7 @@
   X(ForcedMoveFraction, 8, 4, 16, 1)      \
   X(RfpMaxDepth, 6, 3, 12, 1)             \
   X(RfpMargin, 55, 30, 160, 6)            \
-  X(FirmRfpQuarters, 2, 0, 4, 1)          \
+  X(FirmRfpQuarters, 1, 0, 4, 1)          \
   X(FirmStandPatQuarters, 2, 0, 4, 1)     \
   X(FirmFailHighQuarters, 2, 0, 4, 1)     \
   X(NullMinDepth, 3, 1, 6, 1)             \

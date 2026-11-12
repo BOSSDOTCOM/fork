@@ -469,7 +469,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // off). With reverse futility off, use_firm_rfp does nothing.
 TEST_CASE("pruning", "fail-firm returns: still correct, and each changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_firm_rfp);  // off until their SPRTs
+  CHECK(SearchSwitches{}.use_firm_rfp);  // on in this SPRT test commit
   CHECK(!SearchSwitches{}.use_firm_stand_pat);
   CHECK(!SearchSwitches{}.use_firm_fail_high);
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
