@@ -486,7 +486,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr,
       switches.use_history ? pair_history_ : nullptr, switches.use_reply_history ? f.arrival : NoArrival,
       switches.use_follow_history ? follow_arrival(f) : NoArrival,
-      switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets);
+      switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets,
+      switches.use_check_order_bonus);
   f.failed_moves.count = 0;
 
   const int alpha_start = alpha;
@@ -564,7 +565,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         quiet ? quiet_order_score(pos, m, switches.use_history ? &history_ : nullptr,
                                   switches.use_history ? pair_history_ : nullptr,
                                   switches.use_reply_history ? f.arrival : NoArrival,
-                                  switches.use_follow_history ? stats_follow : NoArrival, bucket)
+                                  switches.use_follow_history ? stats_follow : NoArrival, bucket,
+                                  switches.use_check_order_bonus ? DirectCheckBonus : 0)
               : 0;
     const int stats_quiet_value = quiet ? history_.value(pos.side_to_move(), m, bucket) : 0;
     const int stats_reply_value =
