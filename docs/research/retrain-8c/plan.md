@@ -191,22 +191,27 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
    reproduce their prefix loss on g4s2-val's blend copy; each arm's superbatch 0 equals that within 1e-6 (1e-5 on
    label copies); exit 0; window complete and quantised unchanged; the scale matched to r8brft1's mean |eval| on
    4,000 g4s2-val positions; the parity chain (trainer leg, netcheck exact on 446, quantisation loss within 21 / 16
-   cp); tools/nnue/gates.sh on the clamped net (T2).
-2. **Endgame reports, every candidate, never a gate** (owner 2026-11-11): the 900-position check (now **a held-out
-   check** if the fresh slice excludes its positions; its earlier figures, 7-8 of 900, were recall, so 8c's numbers
-   are not comparable with them and the 15-of-900 target needs re-reading, O2); **the 4-5-piece held-out check**
+   cp); tools/nnue/gates.sh on the clamped net (T2); **the integrity/recall gate**: at most 15 of the 900 positions
+   of tools/nnue/endgame_check.py misjudged (gates.sh's "integrity/recall check" line; it catches missing or
+   corrupted slice data; owner, 2026-11-12, about 5:00 PM EST: "the 900-position check stays a gate, relabeled an
+   integrity/recall check"). **Open point (flagged, risk 6):** O2's fresh slice excludes the 900 positions, so in 8c
+   the check would no longer be recall of slice positions; how 8c's nets score on it is UNVERIFIED.
+2. **Endgame reports, every candidate, never a gate** (owner 2026-11-11; 2026-11-12): **the 4-5-piece held-out check**
    (endgame_heldout.py, 3,800; r8brft1 612) and **the 6-7-piece check** (heldout_67.py, 5,599; r8brft1 770)
    (cursed wins and blessed losses drawn; 200 per material); the 8-12-piece deep check (heldout_deep.py, 1,337
    classed; r8brft1 80) beside them. Paired discordant counts against c for every arm (as 732 vs 770 was read).
-   **Every held-out count (4-5, 6-7, the 900 check and the 8-12 check) is reported, and flagged for the owner's
-   review when it is more than 15% worse than the base's; it is never a gate on screening or promotion** (owner,
-   2026-11-12, about 4:40 PM EST).
+   **Every held-out count (4-5, 6-7 and the 8-12 check) is reported, and flagged for the owner's review when it is
+   more than 15% worse than the current default net's (r8brft1 until a promotion: the net a promotion would
+   replace), with each count's change against the arm's own warm-start net also reported for diagnosis (r8btd90 for
+   the 360-superbatch arms, c's window average for the fine-tunes; gates.sh's `HELDOUT_WARM`); it is never a gate on
+   screening or promotion** (owner, 2026-11-12, about 4:40 PM and 5:00 PM EST). The 900-position check is not in
+   this list: it is the integrity/recall gate of item 1.
 3. **Fixed-node screens** (1,600 games at 800,000 nodes, one GitHub stage each, all competing candidates first;
    seed-paired and pooled to 3,200 games per arm, because c2 against c measured -6.08 +/- 9.42 of seed noise):
    - base arms against c: i80-sK vs c-sK, pos-sK vs c-sK, lam-sK vs c-sK (K = 1, 2): 6 stages; v2 and wd: 4 more;
    - fine-tunes: rft-ep vs rft (2 stages) and rft-ep-lo vs rft-ep (2 stages);
-   - **every arm that passes the integrity gates of item 1 (gates.sh's parity, netcheck and quantisation legs) gets
-     its fixed-node screen** (owner, 2026-11-12, about 4:40 PM EST);
+   - **every arm that passes the integrity gates of item 1 (gates.sh's parity, netcheck and quantisation legs, and
+     the integrity/recall gate) gets its fixed-node screen** (owner, 2026-11-12, about 4:40 PM and 5:00 PM EST);
    - the final candidate (the best base with the chosen fine-tune) against **r8brft1**: 2 stages (one per seed).
    About 12-16 stages in the first wave; validation loss decides nothing.
 4. **Keep rules** (owner's where given; proposed where not, O6):
@@ -215,13 +220,15 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
    - positional slice: stays in the standard snapshot only if it **wins its arm test** (cap rule); proposed bar:
      pooled h2h of +5 or more vs c, or a passing STC SPRT (idea 69's bar);
    - per-class lambda: proposed in idea 51's form: kept only if the pooled h2h vs c is above +4;
-   - slice v2: as declared 2026-11-09 (FN interval not entirely below 0 AND held-out 6-7 down 25% vs c);
+   - slice v2: its declared keep rule of 2026-11-09, kept by the owner (2026-11-12, about 5:00 PM EST): "screen
+     interval not entirely below 0 AND held-out 6-7 misjudgments down >= 25% vs the control" (the control is c);
    - fine-tune: rft-ep replaces rft as the standard fine-tune if its pooled h2h vs rft is not entirely below 0;
      rft-ep-lo replaces rft-ep under the same rule;
-   - in every rule above, the held-out endgame counts are reported and flagged (more than 15% worse than the base),
-     never a condition (owner, 2026-11-12, about 4:40 PM EST; it replaces the held-out conditions first proposed
-     here for the positional slice, per-class lambda and the fine-tunes). Slice v2's rule is the owner's declaration
-     of 2026-11-09 and is left as declared for the owner to confirm;
+   - in every other rule above, the held-out endgame counts are reported and flagged (more than 15% worse than the
+     current default net), never a condition (owner, 2026-11-12, about 4:40 PM EST; it replaces the held-out
+     conditions first proposed here for the positional slice, per-class lambda and the fine-tunes). Slice v2's rule,
+     the one held-out condition left, is the arm's own keep rule as declared on 2026-11-09 and confirmed at about
+     5:00 PM EST, not a screening or promotion gate;
    - wd: +5 pooled h2h or a passing STC SPRT.
 5. **Promotion:** the final candidate's better seed (higher FN screen against r8brft1) goes to the **STC SPRT,
    `--kind network`, [0, 5] Elo, alpha = beta = 0.05**, against r8brft1; if it fails, the other seed only if its
@@ -275,8 +282,12 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
    session B (A1 still runs rft and, if P2 did not, the plain rft at 5e-6).
 5. **Per-class lambda's expected value is low** (td80's -18 Elo gap to td90 in 8b), and it costs 2.18 h; kept in the
    owner's order, flagged.
-6. **The fresh slice changes the 900-check's meaning** (recall to held-out): 8c's counts there will rise against
-   past nets' 7-8 by construction; read the 4-5 and 6-7 held-out sets for comparisons with r8brft1.
+6. **The fresh slice changes the 900-check's meaning** (recall to held-out) if it excludes the check's positions
+   (O2): 8c's counts there may rise against past nets' 7-8 by construction, while the owner keeps the check a gate
+   (at most 15 of 900, the integrity/recall gate, 2026-11-12 about 5:00 PM EST). **Unresolved, flagged to the
+   coordinator:** with the exclusion, a count over 15 would not by itself show missing or corrupted slice data
+   (UNVERIFIED whether 8c's nets stay within 15); keeping the 900 positions in the fresh slice would keep the gate a
+   recall check. Read the 4-5 and 6-7 held-out sets for comparisons with r8brft1.
 7. **Shared seeds in the label-depth arms:** identical games are counted and dropped before use.
 8. **The control competes un-fine-tuned against a fine-tuned default:** the base arms are compared against c, and
    only the fine-tuned final candidate plays r8brft1.
@@ -290,15 +301,16 @@ data, idea 80, the fine-tune recipe) even if everything later slips. Splitting A
   the lower LR 5e-6 (half). Both new values go to the constant screen.
 - **O2** "The fresh endgame slice" = v1 regenerated with new seeds and every held-out position (the 900 check's
   included) excluded, replacing v1 in every arm without its own arm test (recommended: same generator, size and
-  kind); the 15-of-900 acceptance target re-read as a held-out figure.
+  kind); the 15-of-900 acceptance target re-read as a held-out figure. (Superseded in part, 2026-11-12, about
+  5:00 PM EST: the 900-position check stays a gate, the integrity/recall gate at most 15 of 900; see risk 6.)
 - **O3** The label-depth data: d20, d50 and d100 in every arm as ordinary S512ppr3 parts at TD(0.9), c50/c100 out,
   identical games dropped (recommended; screen 1's -53.85 is a volume effect on small nets and does not bear on
   mixing; idea 62 keeps the setting decision).
 - **O4** Warm start: r8brft1's float weights (the recipe's "the default", recommended) or r8btd90's.
 - **O5** TD scope: TD(0.9) on S512ppr3-and-later parts, blend on older (8b's form, recommended), or on all parts.
 - **O6** Keep rules not yet declared: the positional slice (+5 pooled h2h or STC pass), per-class lambda (above +4),
-  the fine-tune variants (h2h not entirely below 0; held-out counts reported and flagged only, as corrected by the
-  owner on 2026-11-12), wd (+5 or STC pass).
+  the fine-tune variants (h2h not entirely below 0; held-out counts reported and flagged only, against the current
+  default net, as corrected by the owner on 2026-11-12), wd (+5 or STC pass).
 - **O7** Use of the expiring 15.70 h: P1 (recommended), P2 (option).
 - **O8** Per-class lambda: run as declared (0.35 / 0.65 / 0.9), or a variant whose record-weighted mean stays near
   0.9 (keeps the probe's contrast without td80's shift); as declared is the default of this plan.
@@ -325,6 +337,14 @@ positions found in training dropped.
 when more than 15% worse than the base, never a gate on screening or promotion, and every arm that passes the
 integrity gates (gates.sh: parity, netcheck, quantisation) gets its fixed-node screen; sections 5.2-5.4 and O6 are
 corrected to say so; (3) P2's skipped screen is recorded as skipped for low expected value (section 11).
+
+**Further corrections by the owner (about 5:00 PM EST, the same day),** verbatim: (1) "the 900-position check stays
+a gate, relabeled an integrity/recall check (catches missing or corrupted slice data)"; (2) "gates.sh flags against
+the current default net (what a promotion would replace), and also reports the change vs each run's warm start for
+diagnosis"; (3) "slice v2 keeps its declared Nov 9 keep rule (screen interval not entirely below 0 AND held-out 6-7
+misjudgments down >= 25% vs the control)." Sections 5.1-5.4, risk 6, O2, O6 and section 11's reading are corrected
+to say so; the "base" of the 4:40 PM rule is read as the current default net (r8brft1), and the change against each
+run's warm start is reported beside it (phase-4's tools/nnue/gates.sh, `HELDOUT_WARM`).
 
 **The new values and their reasons** (constant screen by the coordinator's originality agent, 2026-11-12: no match
 in Stockfish, nnue-pytorch, Ethereal, Berserk, Weiss or bullet for either value or for the +-2,000 / 0 result code
@@ -408,7 +428,11 @@ base's blended target (0.0200 against 0.0201) at the same result-target loss, bu
 drift: 4-5 pieces 615 and 609 against 612 and 614 (5-piece 184 and 180 against 189 and 190), 6-7 pieces 783 and 782
 against 770 and 766. Against the base r8btd90, by the owner's flag rule (more than 15% worse; section 5.2), both
 seeds are **flagged** on the 4-5-piece set (615 and 609 against 526: +16.9% and +15.8%; r8brft1's 612 is +16.3%)
-and not on the 6-7-piece set (783 and 782 against 732: +7.0% and +6.8%). No fixed-node screen was run and no bake
+and not on the 6-7-piece set (783 and 782 against 732: +7.0% and +6.8%). **Re-read by the owner's 5:00 PM rule**
+(the flag against the current default r8brft1; the change against the warm start r8btd90 for diagnosis): neither
+seed is flagged (4-5 pieces 615 and 609 against 612, ratios 1.005 and 0.995; 6-7 pieces 783 and 782 against 770,
+1.017 and 1.016); the changes against r8btd90 are the percentages above (gates.sh with `HELDOUT_WARM` reproduced
+rftlo2's: 609 against 526, +15.8%; 782 against 732, +6.8%). No fixed-node screen was run and no bake
 branch was made: **skipped for low expected value** (the coordinator's call; the owner, about 4:40 PM EST: fine,
 not to be run now), not because a held-out count blocked it (held-out counts are never a gate). The drift is
 evidently the result target on the endings, not the step size: the evidence for rft-ep (section 3) over a lower LR.
