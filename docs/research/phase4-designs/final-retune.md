@@ -187,7 +187,7 @@ the skip acts only at depths 1-3 (the rows above), so p grows by 2.
 |---|---|---|---|---|---|---|
 | SingularMinDepth | 6 | 3-12 (was 4-12) | 1 | ? | 2 / 6 | **flag**; lowest 3 (the rule's half; **applied, owner 2026-11-09**) |
 | SingularEntrySlack | 3 | 0-6 | 1 | ? | 3 / 3 | ok at c = 1 |
-| **SingularMarginPerPly** | 6 | 2-12 (was 3-12) | 1 | ? | 3 / 6 at c = 1; 1.5 at c = 2 | **flag**: O5 and R28 predict a lower margin at LTC (SE precision rises with depth, 0.91 at d6 to 0.97-0.98 at d7-12); lowest 2 (**applied, owner 2026-11-09**) |
+| **SingularMarginPerPly** | 6 (22 if the SPRT below passes) | 2-12 (was 3-12); 2-44 on the SPRT's test commit | 1 | ? | 3 / 6 at c = 1; 1.5 at c = 2 | **flag**: O5 and R28 predicted a lower margin at LTC (SE precision rose with depth on S512, 0.91 at d6 to 0.97-0.98 at d7-12); lowest 2 (**applied, owner 2026-11-09**). **2026-11-12: a class (b) dimension either way (owner)**; T27's rule 1 re-run on r8brft1 now picks 22 (the note below), so the highest bound must reach past 22 whatever the SPRT says: step 19's range check sets highest 44 (the rule's twice of 22) |
 | NoMoveReduceMinDepth | 8 | 2-16 (was 2-10) | 1 | ? | 6 / **2** | **flag ceiling**; highest 16 (the rule's twice; **applied, owner 2026-11-09**) |
 | LmrDivisorTenths | 45 | 23-90 | 3 | ? | 7 / 15 steps | ok |
 | CaptureProbeMinDepth | 9 | 4-18 | 1 | ? | 5 / 9 at c = 1 | ok (added 2026-11-11, ProbCut's adoption) |
@@ -199,6 +199,17 @@ on its adoption (the efficiency rule: a constant the final retune will tune is n
 class (b): ProbCut acts only at depth 9 and beyond, its STC SPRT on S512r2 ended H0 and its LTC design R test on
 the tuned search passed (+9.40 ± 5.03 Elo; DESIGN.md "Search constants"), so STC is the wrong place to tune them.
 Ranges as in the parameter table (src/tune/params.hpp); c is set at step 19 by spsa_calibrate.py.
+
+**2026-11-12 (owner, about 7:20 AM EST): `SingularMarginPerPly` stays a class (b) dimension of this pass either
+way.** Builder 3's C6 measurement (tier2/c6-singular-measure b71199d, on phase-4 32384e1's search and the current
+net r8brft1; 5,600 nodes, 800 per depth 6-12) found that T27's own rule 1 now picks 22 cp per ply, against the
+6 it picked on S512 in October: at 22 every depth 6-12 keeps 0.92-1.00 of its flagged moves strictly best at full
+depth, at 20 depth 12 gives 0.88, at 6 depths 9-12 give 0.85-0.88. So the margin moved the other way from O5's and
+R28's prediction (the "lower at LTC" flag above is from the S512 data). The owner ordered one design R SPRT of 22
+against 6 on phase-4 75d53f0 (STC, then LTC 40+0.4 on a pass; adoption pre-approved on a pass; branches
+tier2/singular-margin-22 and sprt/singular-margin-22, lane A items 15c and 15d). Its start here is 22 if that SPRT
+passes, else 6; either way p stays 8 (it is already one of the 8) and the highest bound is raised to 44 when step 19
+is prepared, so the start and the measured value both lie well inside the range.
 
 ### 3.3 Widening is a rule exception
 
