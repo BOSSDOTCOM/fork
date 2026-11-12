@@ -2766,3 +2766,27 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 130. The pass-best stop rule (bug review 2026-11-11, E1)
+
+- **type:** ELO (search); flag `use_pass_best_stop` (on since 2026-11-12).
+- **idea** (docs/research/bug-review-2026-11-11.md, E1): when a search stops mid-iteration, the old rule played a
+  move of the unfinished iteration only if its exact score beat the last finished iteration's, so when the
+  previous best came back lower at the new depth and another move scored above it in the same pass, the previous
+  best was still played. With the switch on, once the unfinished aspiration pass has searched the last finished
+  iteration's best move again, that pass's best exact move is played whatever its score; the iteration's best is
+  kept per pass, so an earlier pass cannot supply it; an unresolved root fail high is never played (rv-failhigh's
+  rule, unchanged). It affects every node-limited search (data generation, fixed-node screens) and every
+  hard-limit stop; bench is unchanged (its searches finish every iteration).
+- **phase:** Phase 4 (bug review follow-up). **metric:** design R SPRT at STC against off.
+- **status:** built behind the switch on tier2/stop-rule 959cc32 (test side sprt/stop-rule d97e358; test_search's
+  pass-best case: on the bench positions' node-limited stops, 13 stops differ, all E1's case, and the completed
+  iteration agrees with the new rule in 13 of 13). STC stop-rule-stc (design R [0, 6]) **capped undecided, +3.26
+  ± 3.35 Elo** (12,800 games, LLR 1.82); under the owner's rule (2026-11-11: an undecided result with a
+  non-negative estimate gets one non-regression test) stop-rule-nonreg ([−3, 0]) **H1, +2.41 ± 2.69 Elo**
+  (20,800 games, LLR 2.96). **2026-11-12: adopted** onto phase-4 fa2ad80 (e5a073f), `UsePassBestStop` on, the
+  switch kept until the Phase 4 re-validation; bench 9,639,207 / 07f7ae19b9250f38 (r8brft1), unchanged;
+  docs/history/phase-4/sprt-log.md. Numbered 130, past the numbers the builders' branches use (87-129).
+- **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
+  measured (UNVERIFIED; bench/ab.py not run).
+- **earliest phase:** Phase 4.

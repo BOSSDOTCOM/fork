@@ -1413,3 +1413,29 @@ The final stage's result block (probcut-ltc2, stage 10, run 43129867831):
   final retune's SPSA (class (b)). An LTC result only: ProbCut's one STC SPRT (on S512r2, above) ended H0.
   The adopting commit was rebased onto phase-4 d33a4db before the push (e005049; no engine file changed between
   a95e269 and d33a4db, so the bench checks stand). Speed (clang-release, Windows, the shared machine busy; A = phase-4 a95e269, B = the adopting commit e005049, r8brft1): bench/ab_search.py, 10 interleaved rounds, not pinned: median nps 2,043,662 against 2,034,450 (-0.5%), best 2,075,512 against 2,061,329 (-0.7%), under its 3.1% noise threshold, no significant difference; 12 further paired ABBA rounds: B/A nps 0.999, 95% interval 0.989 to 1.009 (t, 11 df). So no measurable nps price; the bench itself finishes in about 5% less time because it searches 5% fewer nodes.
+
+### 2026-11-11/12 E1, the pass-best stop rule (bug review 2026-11-11; `use_pass_best_stop`): design R at STC, capped undecided, then a non-regression SPRT under the owner's rule: H1, adopted
+
+- The bug review's E1 (docs/research/bug-review-2026-11-11.md; the owner's decision of 2026-11-11, about 6:20 PM
+  EST): a search stopped mid-iteration played a move of the unfinished iteration only if its exact score beat the
+  last finished iteration's. Base tier2/stop-rule `959cc32` (phase-4 e63101a's engine, db0bb31, with the rule
+  built in behind `use_pass_best_stop`, off; r8brft1; bench 10,166,167 / d874b380155a2e8c); test sprt/stop-rule
+  `d97e358` (the same tree with the switch on; bench unchanged, as bench's searches finish their iterations).
+  Ledger idea `e1-stop-rule`. Night queue lane B item 66a (the STC), then the non-regression test.
+- **The owner's rule (2026-11-11, about 10:08 PM EST, as relayed by the coordinator):** an H0 or undecided result
+  with a non-negative estimate gets one non-regression test, and the change is adopted if it passes.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| stop-rule-stc: STC 8+0.08, design R [0, 6], alpha 0.05, beta 0.20, cap 8 (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), the pass-best stop rule against off, openings from stage 0 | 43128978493 (stage 0), 43131239890 (1), 43134456304 (2), 43136610415 (3), 43138984593 (4), 43141183185 (5), 43143339430 (6), 43145414123 (7) | 12,800 (no time losses, no abnormal ends) | **+3.26 ± 3.35** | +5.86 ± 6.02 | [118, 1436, 3184, 1532, 130] | **capped undecided** (LLR 1.82, bounds −1.56, 2.77) after stage 7, 10:20 PM EST |
+| stop-rule-nonreg: STC 8+0.08, non-regression [−3, 0] nElo, alpha = beta = 0.05 (LLR bounds ±2.94), the same pair, fresh openings from stage 8 (stages 8-20) | 43147600231 (stage 8), 43149673392 (9), 43151677185 (10), 43153770929 (11), 43155826893 (12), 43157820490 (13), 43159893398 (14), 43162227098 (15), 43164303623 (16), 43166409802 (17), 43168594883 (18), 43170827922 (19), 43173009038 (20) | 20,800 (no time losses, no abnormal ends) | **+2.41 ± 2.69** | +4.22 ± 4.72 | [215, 2413, 5033, 2491, 248] | **H1 accepted** (LLR 2.96) after stage 20, 2:26 AM EST 2026-11-12 |
+
+- stop-rule-stc by stage: after stage 6 +3.16 ± 3.55 (LLR 1.52). stop-rule-nonreg by stage: after stage 17 +1.95 ±
+  3.05 (LLR 1.97), stage 18 +2.74 ± 2.91 (2.77), stage 19 +2.55 ± 2.80 (2.86).
+- **Tooling gap:** the non-regression run used the driver's legacy custom-bounds mode, which wrote no verdict file;
+  the coordinator wrote `verdict` ("H1 accepted") from the driver log's last line (~/fork-data/sprt is
+  outside the repository; the driver log is the record).
+- **Adopted** under the owner's rule: commit e5a073f on phase-4 (the code of adopt/e1 25623ab, ported onto
+  fa2ad80), the switch on; bench unchanged (9,639,207 / 07f7ae19b9250f38 with r8brft1). The gated tests (quiet
+  history pruning, the drift tables, D8, D9, D13) were rebased onto the rule before they run ("later tests use the
+  corrected engine"; branches with the suffix -e1).
