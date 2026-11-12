@@ -164,6 +164,13 @@ struct SearchQuota {
 //   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
 //   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
 //   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
+// - use_history_skip: quiet history pruning (tier 2, T24; the engine
+//   survey's B13): at a non-PV node out of check, at most
+//   HistorySkipMaxDepth deep, once a move has been searched, a quiet move
+//   whose ordering score (quiet_order_score, as the selector orders quiets)
+//   is at or below -HistorySkipPerPly x depth is skipped unsearched. On since
+//   its STC SPRT against off passed: +6.04 +/- 4.37 Elo after 8,000 games,
+//   design R [0, 6]; 2026-11-12.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -199,7 +206,8 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_history_skip, UseHistorySkip, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -362,7 +370,7 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
 //   failed high (multi-cut); those where the TT move was searched one ply
 //   shallower; nodes without a TT move searched one ply shallower (T26);
 //   captures the capture probe searched and the nodes it made fail high
-//   (T31).
+//   (T31); quiet moves the history skip dropped (T24).
 // - Phase 4 step 1, X1 (DESIGN.md §5.7): nodes at the root and in the main
 //   search (with the quiescence nodes above they sum to the node count);
 //   static evaluations computed, taken from the TT entry instead, or not
@@ -415,6 +423,7 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
   X(no_move_reductions)              \
   X(capture_probes)                  \
   X(capture_probe_cuts)              \
+  X(history_skips)                   \
   X(root_nodes)                      \
   X(main_nodes)                      \
   X(evals_main)                      \
@@ -470,6 +479,16 @@ constexpr int order_score_bin(int s) {
 // counts where the term would act, and the search never reads it.
 constexpr int LmrHistoryProbeDivisor = 24000;
 constexpr int lmr_history_probe_shift(int order_score) { return order_score / LmrHistoryProbeDivisor; }
+// The history skip's measurement (T24, 2026-11-11; a measurement setting,
+// no search effect): ordering scores in the same sign-magnitude layout in
+// finer bins of 100, so a threshold of any multiple of 100 is counted
+// exactly (the bench's site scores lie mostly within +/-500); 656 bins.
+constexpr int SkipBinWidth = 100;
+constexpr int SkipBins = 2 * (INT16_MAX / SkipBinWidth + 1);
+constexpr int skip_score_bin(int s) {
+  const int b = s >= 0 ? SkipBins / 2 + s / SkipBinWidth : SkipBins / 2 - 1 - (-s) / SkipBinWidth;
+  return b < 0 ? 0 : b >= SkipBins ? SkipBins - 1 : b;
+}
 
 // Idea 59 step 1 (DESIGN.md §5.7; measurement settings, no search effect):
 // the gap between a static evaluation and the nearest finite bound of the
@@ -525,6 +544,14 @@ struct SearchCounters {
   std::uint64_t eval_gap_quiesce_reuse_bins[GapBins] = {};
   std::uint64_t eval_gap_band_bins[GapBands][GapBins] = {};
   std::uint64_t eval_gap_band_infinite[GapBands] = {};
+  // The history skip's measurement (T24, 2026-11-11): at every site where
+  // it could act under any depth limit up to HistorySkipSiteDepths - 1 (a
+  // non-PV node out of check, a quiet move after the first move searched,
+  // past late move pruning), the move's ordering score by remaining depth
+  // (index 0 unused) in skip_score_bin's bins, with the switch on or off;
+  // the skip's own count is history_skips.
+  static constexpr int HistorySkipSiteDepths = 7;
+  std::uint64_t history_skip_site_bins[HistorySkipSiteDepths][SkipBins] = {};
 };
 
 class Searcher {

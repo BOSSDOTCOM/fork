@@ -2528,7 +2528,7 @@ whose weaknesses and data gaps decide their targets and order.
 
 ## 74. Quiet history pruning, the history skip (tier 2, T24; survey B13)
 
-- **type:** ELO (search); flag `use_history_skip` (off).
+- **type:** ELO (search); flag `use_history_skip` (on since 2026-11-12).
 - **idea** (KB search-techniques.md §3.19; the engine survey's B13): at a
   non-PV node out of check, at most `HistorySkipMaxDepth` (3) deep, once a
   move has been searched and past late move pruning, a quiet move whose
@@ -2540,9 +2540,20 @@ whose weaknesses and data gaps decide their targets and order.
   of 14 M. The bench clears history per position, where the eligible quiet
   moves' scores stay within a few hundred of zero; in games, where history
   carries over, such thresholds do fire.
-- **status:** **in progress (owner, 2026-11-11 3:10 PM EST: "Build quiet
+- **status:** **adopted 2026-11-12** (the owner's overnight pre-approval for
+  search items that pass their SPRT): qhp-h2h picked **700 per ply** (1300 −
+  2000 +9.42 ± 9.83 nElo, 700 − 2000 +9.62 ± 9.83 nElo, 9,600 games, runs
+  43113474240 to 43125463839); qhp-stc (design R [0, 6] at STC, test
+  sprt/qhp-t56-700-e1 4701319 against off tier2/qhp-t56-e1 4cae4f4, both on
+  adopt/e1 25623ab) **H1, +6.04 ± 4.37 Elo** (nElo +10.52 ± 7.61, Ptnml [83,
+  899, 1917, 998, 103], LLR 2.99) after stages 2-6, 8,000 games (runs
+  43182618097 to 43193266205; 4:57 AM EST). Ported onto phase-4 (branch
+  adopt/qhp), `UseHistorySkip` on, the switch kept until the Phase 4
+  re-validation; `HistorySkipPerPly` 700 and `HistorySkipMaxDepth` 3 join the
+  final retune's SPSA (class (a)); decisions log and sprt-log. Before that:
+  **owner, 2026-11-11 3:10 PM EST: "Build quiet
   history pruning (B13) with a threshold chosen to actually fire (quick
-  measurement first), then design R at STC").** Built on phase-4 b2e083e
+  measurement first), then design R at STC".** Built on phase-4 b2e083e
   (r8brft1, cut-node and T56 on) behind the switch, off: tier2/qhp-t56
   c84722b, bench unchanged (10,166,167 / d874b380155a2e8c). Firing-rate
   measurement (tools/tier2_measure/history_skip.json, rule declared before
@@ -2557,7 +2568,8 @@ whose weaknesses and data gaps decide their targets and order.
   off on fresh openings from stage 2; ledger idea `qhp`, try 1). A first
   build on 4470f24 (tier2/qhp 11ed51e; candidates 2300, 1600 and 900 on
   sprt/qhp-2300, -1600, -900) was superseded before any game when T56's
-  threat buckets were adopted. Nothing is adopted before its verdict.
+  threat buckets were adopted. Nothing is adopted before its verdict. The
+  STC ran on commits rebased onto E1 (gate-e1; suffix -e1).
 - **runtime cost:** possible (the ordering score is computed for each
   eligible quiet move at depths 1-3 when the switch is on); to be reported
   with the SPRT result (the 2026-10-24 rule; UNVERIFIED until then).

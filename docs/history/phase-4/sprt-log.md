@@ -1439,3 +1439,53 @@ The final stage's result block (probcut-ltc2, stage 10, run 43129867831):
   fa2ad80), the switch on; bench unchanged (9,639,207 / 07f7ae19b9250f38 with r8brft1). The gated tests (quiet
   history pruning, the drift tables, D8, D9, D13) were rebased onto the rule before they run ("later tests use the
   corrected engine"; branches with the suffix -e1).
+
+### 2026-11-11/12 quiet history pruning (tier 2, T24; the engine survey's B13; idea 74): head-to-head of the threshold, then the design R SPRT of the pick against off (owner): H1, adopted
+
+- The owner's order (2026-11-11, 3:10 PM EST): "Build quiet history pruning (B13) with a threshold chosen to actually
+  fire (quick measurement first), then design R at STC." Candidates 2000, 1300 and 700 per ply by the firing-rate
+  measurement (tools/tier2_measure/history_skip.json; DESIGN.md "Search constants"). Ledger idea `qhp`, try 1.
+- **Head-to-head qhp-h2h** (lane B item 66; declared 5:38 PM EST, the tie rule: 2000, the most cautious, unless
+  beaten by more than 0.5 e): a round robin of 2 stages of 1,600 games a pairing on the same openings, STC 8+0.08,
+  test commits sprt/qhp-t56-2000 c06d62b, sprt/qhp-t56-1300 f6397e0 and sprt/qhp-t56-700 13d4d05 (children of
+  tier2/qhp-t56 c84722b, phase-4 b2e083e's engine, r8brft1):
+
+| Pairing | Runs | Games | Elo (95%) | nElo | Ptnml |
+|---|---|---|---|---|---|
+| 1300 against 2000 | 43113474240, 43115971883 | 3,200 | +2.71 ± 6.83 | +4.78 ± 12.04 | [32, 377, 755, 406, 30] |
+| 700 against 2000 | 43118461639, 43120846151 | 3,200 | +8.14 ± 6.88 | +14.26 ± 12.04 | [30, 355, 766, 408, 41] |
+| 700 against 1300 | 43123165165, 43125463839 | 3,200 | −2.50 ± 6.77 | −4.44 ± 12.04 | [33, 389, 776, 372, 30] |
+
+- Least squares over the three pairings: 1300 − 2000 +9.42 ± 9.83 nElo, 700 − 2000 +9.62 ± 9.83 nElo; **700 picked**
+  (7:30 PM EST; the tie rule not applied).
+- **qhp-stc** (lane B item 67): base tier2/qhp-t56-e1 4cae4f4 (the skip behind `use_history_skip`, off, on adopt/e1
+  25623ab = phase-4 26323e1 with E1; bench 10,166,167 / d874b380155a2e8c), test sprt/qhp-t56-700-e1 4701319 (the
+  same tree with the switch on and `HistorySkipPerPly` 700; bench 9,886,698 / 8e7db959846159f4), r8brft1 on both
+  sides; design R ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages), fresh openings from
+  stage 2. The gated tests' rebase onto E1 (gate-e1) moved it from 13d4d05 to 4701319.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| STC 8+0.08, design R [0, 6], cap 8 (Hash 16, Syzygy 3-4-5, UHO book, seed 20261027), the history skip at 700 per ply against off | 43182618097 (stage 2), 43185180728 (3), 43187763748 (4), 43190519934 (5), 43193266205 (6) | 8,000 (no time losses, no abnormal ends) | **+6.04 ± 4.37** | +10.52 ± 7.61 | [83, 899, 1917, 998, 103] | **H1 accepted** (LLR 2.99) after stage 6, 4:57 AM EST 2026-11-12 |
+
+- By stage: after stage 2 +0.43 ± 9.61 (LLR −0.18); stage 3 +6.52 ± 6.83 (1.35); stage 4 +7.02 ± 5.63 (2.21);
+  stage 5 +6.35 ± 4.90 (2.56).
+
+The final stage's result block (qhp-stc, stage 6, run 43193266205):
+
+```
+    Shards: 80 (done); pairs 4000, games 8000 (8000 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 6.04 +/- 4.37, nElo: 10.52 +/- 7.61
+    Ptnml(0-2): [83, 899, 1917, 998, 103]
+    LLR: 2.99 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Adopted (the owner's overnight pre-approval of 2026-11-11 for search items that pass their SPRT; held for the
+  CI fix before it is pushed):** 4cae4f4's change with 4701319's switch-on and 700 ported onto phase-4 e79cbf7
+  alone (branch adopt/qhp; the code lines equal the tested diff, apart from the parameter table's realignment beside
+  ProbCut's rows and merged comments), `UseHistorySkip` on, the switch kept until the Phase 4 re-validation. Bench
+  9,263,568 / 881c326307a2ba8a (r8brft1). With the skip off 9,639,207 / 07f7ae19b9250f38, phase-4's; with the skip
+  on and ProbCut off (the tested base had no ProbCut) 9,886,698 / 8e7db959846159f4, byte for byte 4701319's
+  tests/bench-r8brft1.ref, so the port equals the tested code. `HistorySkipPerPly` 700 and `HistorySkipMaxDepth` 3
+  join the final retune's SPSA (class (a)).

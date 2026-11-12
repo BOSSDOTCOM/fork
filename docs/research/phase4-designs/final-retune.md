@@ -149,6 +149,8 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | ReplyWeight | 6 | 0-12 (was 0-8) | 1 | ? | 6 / **2** | **flag ceiling**; highest 12 (the rule's twice), **applied (owner, 2026-11-09) after the int16 headroom check: no overflow** (the status note; tests/test_ordering.cpp) |
 | FollowWeight | 4 | 0-8 | 1 | ? | 4 / 4 | ok |
 | TakeWeight | 4 | 0-16 | 1 | ? | 4 / 12 | ok (capture scores are int16: move_selector.cpp line 83's bound) |
+| HistorySkipPerPly | 700 | 350-4000 | 183 | ? | 1.9 / 18 at c = 183 (one step) | **flag**: floor within 2c at one step (350 is the ranges rule's half of 700); the ceiling 4000, kept from the candidates' declared range, is beyond the rule's twice (1400): step 19's range check decides both (added 2026-11-12, the history skip's adoption) |
+| HistorySkipMaxDepth | 3 | 1-6 | 1 | ? | 2 / 3 at c = 1 | **flag**; lowest at the depth floor (added 2026-11-12; a placeholder never measured on its own, so this pass is its measurement) |
 
 p = 22 tuned parameters (23 with QuietSeeFloor), minus any parameter of a
 feature removed in step 18 (e.g. LMP's two if LMP is removed), plus the
@@ -173,6 +175,11 @@ range 0-12, step 1 in the parameter table) and **DirectCheckBonus** (D13,
 natural value 5000, range 0-20000, step 1000) **become class (a)
 dimensions of this SPSA if they are adopted** (lane B items 69a/69b and
 70a/70b, gated behind E1). D8 (the summed pair update) has no constant.
+**2026-11-12: quiet history pruning's two constants join this pass** on its
+adoption (the history skip, T24/B13; qhp-stc +6.04 ± 4.37 Elo at STC,
+design R [0, 6]; DESIGN.md "Search constants"): `HistorySkipPerPly` (700,
+the head-to-head's pick) and `HistorySkipMaxDepth` (3), class (a) because
+the skip acts only at depths 1-3 (the rows above), so p grows by 2.
 
 ### 3.2 Class (b): LTC pass
 
