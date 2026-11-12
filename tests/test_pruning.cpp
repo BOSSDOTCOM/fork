@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // off).
 TEST_CASE("pruning", "alpha-raise reduction: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_alpha_raise_reduction);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_alpha_raise_reduction);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_alpha_raise_reduction = true;
   fx.searcher->switches = on;
