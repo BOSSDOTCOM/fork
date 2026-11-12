@@ -1245,7 +1245,7 @@ TEST_CASE("search", "after a stop, the result's depth, score and move are the la
 //   the judge: its best move agrees with the new rule's move more often than
 //   with the old rule's.
 TEST_CASE("search", "the pass-best stop rule plays the pass's better exact move over the previous best") {
-  CHECK(!SearchSwitches{}.use_pass_best_stop);  // off until its SPRTs
+  CHECK(SearchSwitches{}.use_pass_best_stop);  // on: its SPRT's test side
   Fixture fx;
   auto fresh_search = [&](std::string_view fen, const SearchQuota& q, bool pass_best,
                           SearchListener* listener) {
