@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // the switch off).
 TEST_CASE("pruning", "pin-aware SEE: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_pin_aware_see);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_pin_aware_see);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_pin_aware_see = true;
   fx.searcher->switches = on;
