@@ -82,7 +82,7 @@ bool TransTable::fetch(Key key, TtHit& hit) const {
   const std::uint32_t check = key_check_of(key);
   for (const TtEntry& slot : b.entries) {
     const TtEntry e = slot;  // one copy, then only the copy is read
-    if (e.bound() == TtBound::None || e.key_check() != expected_check(e, check)) continue;
+    if (!e.holds_data() || e.key_check() != expected_check(e, check)) continue;
     hit = {Move::from_raw(e.move), e.score, e.eval, e.depth, e.bound(), e.was_pv()};
     return true;
   }
@@ -101,7 +101,7 @@ void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtB
   // This position's own entry, if it has one.
   TtEntry* own = nullptr;
   for (TtEntry& e : b.entries)
-    if (e.bound() != TtBound::None && e.key_check() == expected_check(e, check)) {
+    if (e.holds_data() && e.key_check() == expected_check(e, check)) {
       own = &e;
       break;
     }
@@ -125,7 +125,7 @@ void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtB
   } else {
     // An empty slot, else the slot least worth keeping (first on ties).
     for (TtEntry& e : b.entries) {
-      if (e.bound() == TtBound::None) {
+      if (!e.holds_data()) {
         target = &e;
         break;
       }
@@ -139,7 +139,8 @@ void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtB
   e.score = static_cast<std::int16_t>(score);
   e.eval = static_cast<std::int16_t>(eval);
   e.depth = static_cast<std::uint8_t>(stored_depth);
-  e.flags = static_cast<std::uint8_t>(static_cast<int>(bound) | (pv ? 4 : 0));
+  e.flags = static_cast<std::uint8_t>(static_cast<int>(bound) | (pv ? 4 : 0) |
+                                      (bound == TtBound::None ? EvalOnlyFlag : 0));
   e.key_and_age |= expected_check(e, check) << 8;
   *target = e;  // written whole
 }
@@ -149,7 +150,7 @@ int TransTable::fill_permille() const {
   if (!n) return 0;
   std::size_t used = 0;
   for (std::size_t i = 0; i < n; ++i)
-    for (const TtEntry& e : buckets_[i].entries) used += e.bound() != TtBound::None && e.age() == search_age_;
+    for (const TtEntry& e : buckets_[i].entries) used += e.holds_data() && e.age() == search_age_;
   return static_cast<int>(used * 1000 / (n * EntriesPerBucket));
 }
 

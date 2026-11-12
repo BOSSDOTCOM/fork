@@ -274,6 +274,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   }
 
   f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
+  // The early eval write (the engine survey's F3): a fresh static eval goes
+  // into an eval-only entry now, before any pruning can return without a
+  // TT write; the node's result replaces it later.
+  if (switches.use_early_eval_write && switches.use_tt && !tt_hit && !in_check && !withheld)
+    tt_.deposit(key, NoMove, 0, f.static_eval, 0, TtBound::None, OnPv);
   FORK_STAT(++(in_check                          ? counters.check_nodes_main
                : tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_main
                                                  : counters.evals_main));

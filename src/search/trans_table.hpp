@@ -36,6 +36,12 @@
 //   copies. Phase 6 must still make the accesses relaxed atomics (or
 //   equivalent) so concurrent reads are not undefined behaviour, and adds
 //   the torn-write stress test under TSan (DESIGN.md §5, Phase 6).
+// - An eval-only entry (the engine survey's F3, the early eval write): bound
+//   None with the EvalOnlyFlag bit, depth 0, no move, a score of 0 and the
+//   static eval. It holds data (an empty slot is bound None without the
+//   bit), fetch returns it with bound None, so it never settles a window and
+//   refines nothing, and any later result for the position replaces it. With
+//   the switch off nothing writes the bit, and the table is as before.
 #pragma once
 
 #include <cstddef>
@@ -54,13 +60,17 @@ struct TtEntry {
   std::int16_t score;
   std::int16_t eval;
   std::uint8_t depth;
-  std::uint8_t flags;  // bits 0-1 bound, bit 2 TT-PV
+  std::uint8_t flags;  // bits 0-1 bound, bit 2 TT-PV, bit 3 eval only (F3); bits 4-7 free
 
   std::uint32_t key_check() const { return key_and_age >> 8; }
   int age() const { return key_and_age & 0xFF; }
   TtBound bound() const { return TtBound(flags & 3); }
   bool was_pv() const { return flags & 4; }
+  // Holds a position: a bound, or an eval-only entry (F3).
+  bool holds_data() const { return (flags & 0xB) != 0; }
 };
+// The eval-only entry's flag bit (F3).
+constexpr std::uint8_t EvalOnlyFlag = 8;
 static_assert(sizeof(TtEntry) == 12);
 
 constexpr std::size_t EntriesPerBucket = 5;
@@ -131,7 +141,9 @@ class TransTable {
   }
   bool fetch(Key key, TtHit& hit) const;
   // `score` must already be node-relative (score_to_tt). Depth below 0 is
-  // stored as 0 (the quiescence search).
+  // stored as 0 (the quiescence search). Bound None writes an eval-only
+  // entry (F3: score 0, depth 0, no move; `eval` is what it keeps), under
+  // the same replacement rules as a depth-0 result.
   void deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv);
 
   // Per mille of a sample of entries written in the current search (UCI hashfull).

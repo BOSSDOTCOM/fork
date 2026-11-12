@@ -475,7 +475,7 @@ any of them, run the DESIGN.md §8 system-header collision check.
 | `generate<GenMode>` | movegen.hpp:23 | same function name, templated on the generation kind | G (CPW "Move Generation" vocabulary). The template-on-kind shape matches. | owner |
 | `generate_moves<...>` | movegen.cpp:43 (internal) | same function name in movegen | D (internal helper) | `fill_moves` / any |
 | `Captures` (GenMode enumerator, and a template parameter in movegen.cpp:10) | movegen.hpp:18 | an enumerator `Captures` in history code (different meaning) | G | none |
-| `pieces()` overload set: (), (c), (t), (c, t), (c, t1, t2) | position.hpp:62-68 | same name and the same overload shapes | G name (CPW calls them piece bitboards); the overload family matches | owner. Optional: split into distinct names such as `occupied()`, `side_bb(c)` |
+| `pieces()` overload set: (), (c), (t), (c, t), (c, t1, t2) | position.hpp:62-68 | same name and the same overload shapes | G name (CPW calls them piece bitboards); the overload family matches | owner. Optional: split into distinct names such as `holds_data()`, `side_bb(c)` |
 | `count(c, t)` | position.hpp:69 | `count` (a template there) | G | none |
 | `key()` | position.hpp:77 | same accessor | G (CPW "Zobrist Hashing": hash key) | none |
 | `fen()` | position.hpp:58 | same accessor | G | none |

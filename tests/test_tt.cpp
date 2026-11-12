@@ -103,6 +103,49 @@ TEST_CASE("tt",
   CHECK(t.table.fetch(key, hit));
 }
 
+// The early eval write (the engine survey's F3): an eval-only entry (bound
+// None) is a position the table holds: fetch returns it with its eval, bound
+// None, depth 0, no move, so it settles no window; it counts in hashfull;
+// any later result for the position replaces it; and it does not overwrite
+// a deeper entry of the current search. Fault check: an entry written with
+// bound None but without the eval-only bit reads as an empty slot.
+TEST_CASE("tt", "an eval-only entry: fetched with bound None, settles nothing, replaced by any result") {
+  TestTable t(64);
+  const Key key = 0x0f1e2d3c4b5a6978ULL;
+  t.table.deposit(key, NoMove, 0, -37, 0, TtBound::None, false);
+  TtHit hit{};
+  CHECK(t.table.fetch(key, hit));
+  CHECK_EQ(hit.eval, -37);
+  CHECK(hit.bound == TtBound::None);
+  CHECK_EQ(hit.depth, 0);
+  CHECK(hit.move.is_none());
+  for (int alpha : {-30000, -100, 0, 100})
+    CHECK(!bound_settles(hit.bound, score_from_tt(hit.score, 0), alpha, alpha + 1));
+  const TtEntry& e = t.storage[TransTable::bucket_index(key, 64)].entries[0];
+  CHECK(e.holds_data());
+  CHECK((e.flags & EvalOnlyFlag) != 0);
+  CHECK(t.table.fill_permille() > 0 || t.table.bucket_count() > 200);  // the sample is the first 200 buckets
+  t.table.deposit(key, Move(1, 2, Quiet), 25, -37, 0, TtBound::Upper, false);  // a quiescence result
+  CHECK(t.table.fetch(key, hit));
+  CHECK(hit.bound == TtBound::Upper);
+  CHECK_EQ(hit.score, 25);
+  CHECK(hit.move == Move(1, 2, Quiet));
+  // A deeper result of the current search is not overwritten by an
+  // eval-only write.
+  const Key other = key + 1;
+  t.table.deposit(other, Move(3, 4, Quiet), 10, 5, 7, TtBound::Lower, false);
+  t.table.deposit(other, NoMove, 0, 99, 0, TtBound::None, false);
+  CHECK(t.table.fetch(other, hit));
+  CHECK(hit.bound == TtBound::Lower);
+  CHECK_EQ(hit.eval, 5);
+  CHECK_EQ(hit.depth, 7);
+  // An all-zero entry is empty, and bound None alone holds no data.
+  TtEntry blank{};
+  CHECK(!blank.holds_data());
+  blank.flags = 4;  // the TT-PV bit alone
+  CHECK(!blank.holds_data());
+}
+
 // Owner, 2026-10-24: a torn write (Phase 6's shared table) must read as a
 // miss. Two writes of the same position are spliced at every 4-byte
 // boundary, as a reader racing a writer could see them.

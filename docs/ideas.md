@@ -2719,3 +2719,23 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 91. The early eval write (the engine survey's F3)
+
+- **type:** ELO (search, TT); flag `use_early_eval_write` (off).
+- **idea** (the engine survey's F3, its rank 4; concept only): a node that
+  computed a fresh static eval stores it at once in an eval-only TT entry
+  (bound None with a flag bit), before any pruning can return without a TT
+  write; the node's result replaces it later.
+- **status:** **built, queued (coordinator, 2026-11-11 night; R-STC).**
+  Built on phase-4 a95e269 behind the switch, off, branch
+  tier2/f3-early-eval-write; bench unchanged. Design R at STC against the
+  switch-off commit (night item 54a), gated behind state/gate-e1.done and
+  state/pressure-hash.done (TT-policy tests run with a pressure-matched
+  hash; owner, 2026-11-11). Takes bit 3 of the TT flags byte.
+  Phase 6's shared table keeps the state (its digest covers the flags).
+  Nothing is adopted before its verdict.
+- **runtime cost:** one extra TT write per node with a fresh eval (its
+  bucket already in cache from the probe); UNVERIFIED until the SPRT's nps
+  report.
+- **earliest phase:** Phase 4.
