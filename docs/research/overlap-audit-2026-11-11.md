@@ -92,7 +92,7 @@ Validation against training (K1; "kept" = the validation file's kept positions):
 |---|---|---|
 | endgame_heldout.tsv (4- and 5-piece) | **0 of 3,800** | none: the rule holds against every file, not just the slice |
 | heldout_67.tsv (6-7 pieces) | **1 of 5,600** | s2 (so in every current net's training): `8/1Q6/8/5p2/8/5pq1/6k1/3K4 b - -` (item 2355) |
-| heldout_deep (8-12 pieces) | **7 of 1,500** | s2 for 6 and s4 for 1; all in 8b's files. Items 618, 643, 901, 1054 (s4), 1094, 1210 and 1328. heldout_deep.py's own check found only 1 because it scanned g4 and the label-depth data, not the whole snapshot |
+| heldout_deep (8-12 pieces) | **7 of 1,500** | s2 for 6 and s4 for 1; all in 8b's files. Items 618, 643, 901, 1054 (s4), 1094, 1210 and 1328. heldout_deep.py's own check found only 1 (item 1054, in g4-w08) because it scanned g4 and the label-depth data, not the whole snapshot. The committed tools/nnue/heldout_deep.tsv (a95e269, 1,499 positions) leaves 1054 out (heldout_deep_excluded.txt). **The other 6 are still in it**: `8/8/p6P/P5p1/6P1/K1k5/2b5/8 w - -`, `8/8/5kp1/2R4p/r7/5KP1/5P2/8 b - -`, `8/8/p7/1p2k2p/1P4pP/P2K2P1/8/8 w - -`, `8/5p2/3Kp1p1/4P2p/5P1P/6k1/8/8 w - -`, `8/8/4p2R/r3k1pP/6P1/5K2/8/8 b - -`, `8/4k3/6p1/3Kp1P1/4P2p/7P/8/8 b - -` |
 | idea 51's H | 54 of 5,000 (1.08%) | 41 of them have 6-7 pieces; the games were held out, the positions recur as above |
 | the teacher's H2 | 237 of 20,000 (1.19%) | 193 have 6-7 pieces; same cause |
 | i52-held, i52-controls | 10,000 of 10,000 and 2,000 of 2,000 | by construction: the sites are positions of g3j-w00..w04, which arm c trained on with their own labels. Only the deep labels were held out. Idea 52 is retired |
@@ -104,12 +104,13 @@ Validation against training (K1; "kept" = the validation file's kept positions):
   for item 7, 8a, 8b and 8c's sealed inputs. Optional and cheap for 8c: drop the validation positions whose K1
   occurs in training (this tool's `-queries.tsv` lists them). Also optional: leave the slice's held games out of
   the validation file, since slice placements recur.
-- **The zero-overlap rule fails for two held-out sets, by 8 positions in all:**
-  - 7 of the 1,500 positions in the 8-12-piece set;
-  - 1 of the 5,600 positions in the 6-7-piece set.
+- **The zero-overlap rule fails for two held-out sets as committed (phase-4 e005049), by 7 positions in all:**
+  - 6 of the 1,499 positions in tools/nnue/heldout_deep.tsv (8-12 pieces);
+  - 1 of the 5,600 positions in tools/nnue/heldout_67.tsv (6-7 pieces; d33a4db, the same file by SHA-256 as the
+    one checked here).
 
-  All 8 are in the training data of the nets now in use. Neither check is a gate (they are reported in every
-  network decision), so this does not block 8c. Before those checks are reported for 8c, the 8 positions should
+  All 7 are in the training data of the nets now in use (s2). Neither check is a gate (they are reported in every
+  network decision), so this does not block 8c. Before those checks are reported for 8c, the 7 positions should
   be removed from the sets, or the checks reported both with and without them. The FENs are above.
 - H and H2 overlap at about 1% at the position level. They were held out by game, as declared. A label study that
   needs positions unseen in training should drop those 291 positions.
