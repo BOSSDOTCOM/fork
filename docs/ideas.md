@@ -2993,3 +2993,10 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
 - **novelty for chess engines:** UNVERIFIED (a prior-art check first).
 - **phase:** research, after SMP. **metric:** a prototype measured for nps before anything else; no further work
   unless it gains.
+- **targets (owner, 2026-11-12, about 2:10 PM EST; plan only):**
+  1. **First target, data generation:** one thread juggles several independent games, so a memory stall in one
+     game is filled by work on another. **Metric:** positions per hour at equal threads against today's
+     generator; the labels must be byte-identical per game (each game's records equal to the same game played
+     alone).
+  2. **Second target, for TCEC:** asynchronous 7-man tablebase probes: the search continues while a cold disk
+     probe completes. Design only, after Lazy SMP.
