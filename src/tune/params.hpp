@@ -59,7 +59,7 @@
   X(CaptureSeeFloor, 118, 50, 200, 8)       \
   X(SingularMinDepth, 6, 3, 12, 1)          \
   X(SingularEntrySlack, 3, 0, 6, 1)         \
-  X(SingularMarginPerPly, 6, 2, 12, 1)      \
+  X(SingularMarginPerPly, 22, 2, 44, 1)     \
   X(NoMoveReduceMinDepth, 8, 2, 16, 1)      \
   X(CutNodeLmrPlies, 1, 0, 3, 1)            \
   X(CaptureProbeMinDepth, 9, 4, 18, 1)      \
