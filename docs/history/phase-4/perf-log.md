@@ -154,3 +154,55 @@ The candidate branches are kept locally, not merged: speed3/nnue-i4 (b550b5b), s
 AVX-512 output layer and a startup CPU check, src/core/cpu_gate.cpp, which refuses with a message a CPU without
 the instruction sets the build targets; a design for idea 163, whole-engine dispatch at main, is in the speed
 sprint report), speed3/nnue-refresh (b477ba2).
+
+### Speed sprint 3, the search core (2026-11-12): captures generation adopted under the cycles-per-node rule
+
+**Profile** (phase-4 at e6b2ac3, r8brft1, `fork bench`, 1 thread; WSL clang 21.1.8, x86-64-v3 Release+LTO and a
+frame-pointer twin; perf `cycles:u` over 6 bench runs per build, pinned, ASLR off, 64,576 and 70,339 samples;
+addresses resolved with their inline frames; each sample charged to the first subsystem found from the leaf
+outward, so `attackers_to` under SEE counts as SEE; g4c running throughout, so shares, not speeds): network 47.6%,
+move selection 13.2%, TT 7.4% (its layout and atomics are left to step 17a's SMP design), move generation 7.3%
+(captures generation 4.1% inclusive), the negamax body 7.0%, SEE 4.8%, make/unmake 3.7%, the drift tables 2.6%,
+the quiescence body 1.9%, gives_check 0.7%, draw detection 0.6%. A cheaper gives_check is therefore capped below
+the 1% rule, and the quiet scoring is already lazy at stage level (quiets are generated and scored only when the
+selector reaches them; scoring per pick would change the order of equal scores).
+
+**Candidates** (each bench-identical by construction, on its own branch on phase-4 46f2b1e, through the
+pre-commit check):
+
+- **capgen** (speed3/capgen-skip 204c33a): the captures-only generation visits only the king squares of the kind
+  it generates, and only the pawns that can add a move (on the seventh rank, attacking a capture target, beside
+  the en passant square); the skipped squares and pawns added nothing and the rest keep their ascending order,
+  so every list is the same move for move.
+- **see** (speed3/see-xray f8e2289): `see_at_least` takes `attackers_to` once and at each later lookup looks up
+  only the last capturer's line again.
+
+**A/B** (quiet window 5:29-5:39 PM EST, g4c suspended; WSL, clang 21.1.8 Release+LTO; a scratch driver
+interleaving A B / B A rounds pinned to core 4, each `fork bench` under `perf stat -e cycles:u,instructions:u`,
+identity checked through bench/ab_search.py's own check (variant, commit, SHA-256) on every run, bench nodes and
+signature equal within every pair; the nps verdict is ab_search.py's rule, the cycles verdict the 1% rule with
+the same two estimators: median and best both beyond 1% or twice the round-to-round spread):
+
+| pair (20 rounds) | instructions:u per bench | cycles/node median / best | nps median / best | verdict |
+|---|---|---|---|---|
+| A/A, base 46f2b1e against its byte copy (8 rounds), x86-64-v3 | +0.000% | -0.46% / -0.07% (threshold 2.19%) | -0.73% / -0.30% | no difference (the harness's floor) |
+| capgen against base, x86-64-v3 | 29,388,081,772 -> 28,880,744,798 (-1.73%) | **+2.91% / +3.00% faster** (threshold 1.59%) | +2.70% / +3.09% (threshold 3.0%) | **faster by the cycles rule**; nps rule not met |
+| capgen against base, x86-64-v4 | 26,938,851,406 -> 26,473,215,112 (-1.73%) | **+2.40% / +2.30% faster** (threshold 1.54%) | +2.47% / +2.06% (threshold 3.0%) | **faster by the cycles rule**; nps rule not met |
+| capgen + see against capgen, x86-64-v3 | -0.06% | -0.09% / +0.05% (threshold 2.29%) | +0.04% / +0.13% | no difference: see adds nothing |
+| capgen + see against base, x86-64-v3 | -1.78% | +2.40% / +2.53% faster (threshold 1.82%) | +2.23% / +2.45% | faster by the cycles rule |
+| capgen + see against base, x86-64-v4 | -1.79% | +3.15% / +2.12% (threshold 3.47%) | +3.05% / +2.06% (threshold 3.56%) | no significant difference |
+
+Bench identical in every pair: 9,118,607 / 208629aa15e140a9 (r8brft1).
+
+**Adopted (owner, about 5:50 PM EST): capgen**, under the 1% cycles-per-node rule for bench-identical speed
+changes (DESIGN.md §6, 2026-11-07 decision 8; the think tank's X13): +2.9% cycles per node on x86-64-v3 and
++2.4% on x86-64-v4, beyond their noise thresholds; the nps rule's 3% floor was not met. **see is dropped**: it
+adds nothing on top of capgen (archived as archive/speed3-see-xray, and the pair as archive/speed3-see-capgen).
+The first SEE version, which updated its attacker set after every capture, cost +0.13% instructions: exchanges
+settled by the threshold tests paid for an update no lookup used.
+
+**Maintenance cost (non-negotiable 7): small.** About 15 lines in `fill_moves`: one mask for the king's squares
+and, in the captures-only mode, one pawn mask made of two shifts per side and the en passant neighbours, each
+with its comment. Legal generation is unchanged (its king mask stays `~ours`); the quiets-only mode gains only
+the king mask. The perft suites (perft_epd, perft_epd_deep, the mirror and edge suites), the difftest
+against python-chess and bench parity on every network and the bootstrap evaluation cover it.

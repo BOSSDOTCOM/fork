@@ -3094,3 +3094,20 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
   is not faster; x86-64-v3 is at least as fast on this machine. On TCEC's EPYCs UNVERIFIED (the TCEC build matrix).
   **status:** measured; the build choice is the owner's.
 
+
+### 171. Speed sprint 3, the search core: captures generation and SEE (speed sprint 3)
+
+- **type:** TOOLING (speed; bench identical). **phase:** Phase 4, speed sprint 3 (owner's order, 2026-11-12, about
+  3:15 PM EST). **profile (e6b2ac3):** move selection 13.2% of cycles, TT 7.4%, move generation 7.3%, SEE 4.8%,
+  make/unmake 3.7%, gives_check 0.7% (a cheaper one is capped below the 1% rule); quiet scoring is already lazy at
+  stage level.
+- **ideas:** (a) captures-only generation visiting only the king squares of the generated kind and the pawns that
+  can add a move; (b) SEE keeping its attacker set and looking up only the last capturer's line again.
+- **metric:** instructions:u per bench, then cycles per node and nps in a quiet window (20 interleaved rounds).
+  **result (2026-11-12, 5:29-5:39 PM EST):** (a) cycles per node +2.91% (x86-64-v3, threshold 1.59%) and +2.40%
+  (x86-64-v4, threshold 1.54%), nps +2.70% / +2.47%, instructions -1.73%; (b) on top of (a) -0.09%, instructions
+  -0.06%. Bench 9,118,607 / 208629aa15e140a9 unchanged (docs/history/phase-4/perf-log.md).
+- **status:** (a) adopted under the 1% cycles-per-node rule (owner, about 5:50 PM EST); (b) dropped
+  (archive/speed3-see-xray). TT observations (the key-check digest, about 1% of cycles, recomputed per slot on each
+  probe and deposit; cheaper only with a layout change) go to step 17a's design, not a separate change.
+  **runtime cost:** a gain. **earliest phase:** Phase 4.
