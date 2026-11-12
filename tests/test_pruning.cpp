@@ -468,7 +468,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // with the switch off); with late move pruning off it does nothing.
 TEST_CASE("pruning", "LMP check guard: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_lmp_check_guard);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_lmp_check_guard);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_lmp_check_guard = true;
   fx.searcher->switches = on;
