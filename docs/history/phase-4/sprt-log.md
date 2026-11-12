@@ -1584,3 +1584,28 @@ The final stage's result block (survey-d8-stc, stage 7, run 43216014186):
   minor drift table off (the tested base had none of them) 10,236,778 / 6338c0c3a941915a, byte for byte dd132c9's
   tests/bench-r8brft1.ref, so the port equals the tested code. No constant, so nothing joins the final retune's
   SPSA. Speed: bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 2c294d3, B = the port's build of this commit's engine code from the uncommitted tree on 2c294d3 plus the zugzwang tools, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -0.5%, best -0.4%, under the 3.0% noise threshold: no significant difference (a price of that size is inside the noise, UNVERIFIED). The bench searches 6.3% fewer nodes (8,773,005 against 9,366,920).
+
+### 2026-11-12 stacking check 1 (the owner's stacking safeguard): ProbCut + E1 + B13 together, design R at STC: H1, +6.30
+
+- The owner's safeguard (2026-11-12, about 6:20 AM EST): "after every 3 adoptions, queue one confirmation SPRT of
+  the new head vs the head before those 3 (design R, STC); report if the stack's combined gain is much below the
+  sum." Group 1 = ProbCut (e005049; LTC +9.40 ± 5.03), E1 (e5a073f; STC +3.26 ± 3.35, then non-regression H1) and
+  B13 quiet history pruning (9d574d9; STC +6.04 ± 4.37): sum +18.70. Lane A item 15a (stack-check-1-stc). OFF
+  d33a4db (phase-4 just before ProbCut's adoption; bench r8brft1 10,166,167 / d874b380155a2e8c), TEST 75d53f0
+  (phase-4 after B13; 9,263,568 / 881c326307a2ba8a). STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed 20261027),
+  r8brft1 on both sides; design R ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages), from
+  stage 0. Ledger idea `stack-check-1`. Data: ~/fork-data/sprt/stack-check-1-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **stack-check-1-stc: 75d53f0 against d33a4db, stages 0-4** | 43232197558 (0), 43235690079 (1), 43239285016 (2), 43242535923 (3), 43245915650 (4) | 8,000 (no time losses, no abnormal ends) | **+6.30 ± 4.40** | +10.89 ± 7.61 | [74, 943, 1850, 1030, 103] | **H1** (LLR 3.14) |
+
+- By stage: after stage 0 +8.47 ± 9.80 (LLR 0.93); stage 1 +4.34 ± 6.95 (0.72); stage 2 +2.90 ± 5.73 (0.47);
+  stage 3 +5.48 ± 4.96 (2.04).
+- **Reading (owner, 2026-11-12 10:45 AM EST; no follow-up):** against the raw sum (+18.70) the ratio is 0.34, but
+  ProbCut's gain was measured at LTC (it lost at STC originally), so an STC check undercounts it. Without it the
+  STC sum is about +9.3 (E1 +3.26, B13 +6.04) and the check's +6.30 is a ratio of about 0.68, within the usual
+  range (the decision audit's 0.62-0.80).
+- **Rule for future stacking checks (owner, same date):** compare against the sum of each item's gain at the
+  check's own time control; if the batch includes LTC-only items, run the check at LTC or exclude those items
+  from the comparison.
