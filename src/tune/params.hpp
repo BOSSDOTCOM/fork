@@ -17,9 +17,10 @@
 //   final retune (owner, 2026-11-09; DESIGN.md §5.6 step 19): RfpMargin,
 //   LmpQuietAllowance, FutilityOffset, FutilityGrowth, SingularMarginPerPly,
 //   SingularMinDepth, LmrMinMove and LmpMaxDepth lower; NoMoveReduceMinDepth,
-//   ReplyWeight and NullSurplusPliesMax higher; and three set by the owner
-//   on 2026-11-12 (final-retune.md section 3.1): AspirationHalfWidth 8-40,
-//   FollowWeight 0-16 and MinorDriftShare 16-64.
+//   ReplyWeight and NullSurplusPliesMax higher; and four set by the owner
+//   on 2026-11-12 (final-retune.md sections 3.1 and 3.2):
+//   AspirationHalfWidth 8-40, FollowWeight 0-16, MinorDriftShare 16-64 and
+//   SingularMarginPerPly 2-16.
 // - A tuning build changes a value only through set_param, between searches
 //   (UCI setoption); nothing writes them during a search.
 // - Constants that are not tuned stay where they are, each with its reason in
@@ -61,7 +62,7 @@
   X(CaptureSeeFloor, 118, 50, 200, 8)         \
   X(SingularMinDepth, 6, 3, 12, 1)            \
   X(SingularEntrySlack, 3, 0, 6, 1)           \
-  X(SingularMarginPerPly, 6, 2, 12, 1)        \
+  X(SingularMarginPerPly, 6, 2, 16, 1)        \
   X(NoMoveReduceMinDepth, 8, 2, 16, 1)        \
   X(CutNodeLmrPlies, 1, 0, 3, 1)              \
   X(CaptureProbeMinDepth, 9, 4, 18, 1)        \

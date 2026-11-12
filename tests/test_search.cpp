@@ -1620,8 +1620,9 @@ TEST_CASE("search", "time management: a changed best move searches longer, a sta
 // Tuning builds: the eleven ranges widened for the final retune (owner,
 // 2026-11-09; final-retune.md), and the four set on 2026-11-12
 // (AspirationHalfWidth's highest 40, FollowWeight's 16, MinorDriftShare's
-// lowest 16, and DirectCheckBonus's 2500-10000, narrowed from 0-20000 to the
-// ranges rule), searched at their new bounds, each alone and all at once:
+// lowest 16, SingularMarginPerPly's highest 16, and DirectCheckBonus's
+// 2500-10000, narrowed from 0-20000 to the ranges rule), searched at their
+// new bounds, each alone and all at once:
 // every search completes with a legal move and a score inside the score
 // bounds. LmrMinMove 1 is the same search as 2 (same nodes, move
 // and score): the first move searched never takes the LMR path, so the
@@ -1645,6 +1646,7 @@ TEST_CASE("search", "tuning build: the widened ranges search at their bounds") {
                           {"AspirationHalfWidth", 40},
                           {"FollowWeight", 16},
                           {"MinorDriftShare", 16},
+                          {"SingularMarginPerPly", 16},
                           {"DirectCheckBonus", 2500},
                           {"DirectCheckBonus", 10000}};
   const std::string_view fens[] = {"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

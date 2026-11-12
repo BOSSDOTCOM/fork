@@ -216,7 +216,7 @@ above).
 |---|---|---|---|---|---|---|
 | SingularMinDepth | 6 | 3-12 (was 4-12) | 1 | ? | 2 / 6 | **flag**; lowest 3 (the rule's half; **applied, owner 2026-11-09**) |
 | SingularEntrySlack | 3 | 0-6 | 1 | ? | 3 / 3 | ok at c = 1 |
-| **SingularMarginPerPly** | 6 (22 if the SPRT below passes) | 2-12 (was 3-12); 2-44 on the SPRT's test commit | 1 | ? | 3 / 6 at c = 1; 1.5 at c = 2 | **flag**: O5 and R28 predicted a lower margin at LTC (SE precision rose with depth on S512, 0.91 at d6 to 0.97-0.98 at d7-12); lowest 2 (**applied, owner 2026-11-09**). **2026-11-12: a class (b) dimension either way (owner)**; T27's rule 1 re-run on r8brft1 now picks 22 (the note below), so the highest bound must reach past 22 whatever the SPRT says: step 19's range check sets highest 44 (the rule's twice of 22) |
+| **SingularMarginPerPly** | 6 (the SPRT of 22 below ended H0) | **2-16** (was 2-12, before that 3-12) | 1 | ? | 4 / 10 at c = 1; 2 / 5 at c = 2 | **flag**: O5 and R28 predicted a lower margin at LTC (SE precision rose with depth on S512, 0.91 at d6 to 0.97-0.98 at d7-12); lowest 2 (**applied, owner 2026-11-09**). **2026-11-12: a class (b) dimension either way (owner)**; T27's rule 1 re-run on r8brft1 picks 22 (the note below), but 22 lost its SPRT against 6 (H0, −26.76 ± 9.93 Elo), so the range is **2-16 (the owner's decision, 2026-11-12, about 2:10 PM EST; applied)**, not the 2-44 planned before the result |
 | NoMoveReduceMinDepth | 8 | 2-16 (was 2-10) | 1 | ? | 6 / **2** | **flag ceiling**; highest 16 (the rule's twice; **applied, owner 2026-11-09**) |
 | LmrDivisorTenths | 45 | 23-90 | 3 | ? | 7 / 15 steps | ok |
 | CaptureProbeMinDepth | 9 | 4-18 | 1 | ? | 5 / 9 at c = 1 | ok (added 2026-11-11, ProbCut's adoption) |
@@ -236,13 +236,20 @@ net r8brft1; 5,600 nodes, 800 per depth 6-12) found that T27's own rule 1 now pi
 depth, at 20 depth 12 gives 0.88, at 6 depths 9-12 give 0.85-0.88. So the margin moved the other way from O5's and
 R28's prediction (the "lower at LTC" flag above is from the S512 data). The owner ordered one design R SPRT of 22
 against 6 on phase-4 75d53f0 (STC, then LTC 40+0.4 on a pass; adoption pre-approved on a pass; branches
-tier2/singular-margin-22 and sprt/singular-margin-22, lane A items 15c and 15d). Its start here is 22 if that SPRT
-passes, else 6; either way p stays 8 (it is already one of the 8) and the highest bound is raised to 44 when step 19
-is prepared, so the start and the measured value both lie well inside the range.
+tier2/singular-margin-22 and sprt/singular-margin-22, lane A items 15c and 15d). Its start here was to be 22 if that
+SPRT passed, else 6; either way p stays 8 (it is already one of the 8).
+
+**2026-11-12 (owner, about 2:10 PM EST): "SingularMarginPerPly final-retune range 2-16."** The SPRT of 22 against 6
+(design R, STC) ended **H0 after stage 0, −26.76 ± 9.93 Elo** (nElo about −46; the staleness audit,
+docs/research/staleness-audit-2026-11-12.md §4.1), so the start is 6, and the plan above to raise the highest bound
+to 44 (the ranges rule's twice of 22) is replaced: the range is **2-16** (default 6 and step 1 unchanged; applied in
+src/tune/params.hpp). The re-measured 22 is not a value games support, so the tuner's travel stays nearer 6 while
+still reaching past the old ceiling of 12; the audit found that T27's rule 1 is a precision-only criterion that
+does not track Elo (its §4.2). The tuning build's bounds case (tests/test_search.cpp) searches 16.
 
 ### 3.3 Widening is a rule exception
 
-**All eleven widenings are the owner's (2026-11-09) and applied**, and so are the three range changes of 2026-11-12 (§3.1: AspirationHalfWidth 8-40, FollowWeight 0-16, MinorDriftShare 16-64; the staleness audit and the minor table's adoption). Each breaks DESIGN.md §5.2's "about half to twice the default"
+**All eleven widenings are the owner's (2026-11-09) and applied**, and so are the four range changes of 2026-11-12 (§3.1: AspirationHalfWidth 8-40, FollowWeight 0-16, MinorDriftShare 16-64; §3.2: SingularMarginPerPly 2-16; the staleness audit and the minor table's adoption). Each breaks DESIGN.md §5.2's "about half to twice the default"
 range rule as RfpMargin's does; the bounds are tuner limits only ("never
 played as such"), and changing them changes no played value (bench
 unchanged; tests/test_params.cpp needs only the default inside the range and
