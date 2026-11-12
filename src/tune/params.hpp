@@ -57,7 +57,7 @@
   X(SeePruneMaxDepth, 6, 3, 12, 1)        \
   X(QuietSeeFloor, 60, 30, 120, 5)        \
   X(CaptureSeeFloor, 118, 50, 200, 8)     \
-  X(SeeHistoryPerPly, 10000, 5000, 20000, 750) \
+  X(SeeHistoryPerPly, 5000, 5000, 20000, 750) \
   X(SingularMinDepth, 6, 3, 12, 1)        \
   X(SingularEntrySlack, 3, 0, 6, 1)       \
   X(SingularMarginPerPly, 6, 2, 12, 1)    \
