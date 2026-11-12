@@ -74,6 +74,19 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
     for (int i = NetPieceSquares * NetHidden; i < (NetPieceSquares + NetLinkInputs) * NetHidden; ++i)
       net->ft_weights[i] = static_cast<std::int16_t>(uniform(rng, -150, 150));
   for (auto& b : net->ft_bias) b = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
+#ifdef FORK_FT_INT8
+  // The int8-row build reads only int8-row nets (net_file.hpp): each unit's
+  // weights become multiples of its multiplier (1 to 4 by unit) within +-127
+  // of it; no weight grows, so the bounds above still hold.
+  for (int j = 0; j < NetHidden; ++j) {
+    const int m = 1 + j % 4;
+    for (int f = 0; f < NetInputs; ++f) {
+      std::int16_t& w = net->ft_weights[f * NetHidden + j];
+      w = static_cast<std::int16_t>(m * std::clamp(w / m, -127, 127));
+    }
+  }
+  if (std::string error; !derive_int8_rows(*net, error)) std::abort();
+#endif
 #if FORK_NET_ARCH == 1
   for (auto& w : net->out_weights) w = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
   net->out_bias = uniform(rng, -100000, 100000);

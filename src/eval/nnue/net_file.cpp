@@ -244,8 +244,35 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
 #endif
   if (!c.ok || c.p != c.end) return error = "size " + std::to_string(bytes.size()) + " does not match", false;
   out.scale = scale;
+#ifdef FORK_FT_INT8
+  if (!derive_int8_rows(out, error)) return false;
+#endif
   return sums_in_range(out, error);
 }
+
+#ifdef FORK_FT_INT8
+bool derive_int8_rows(NetFile& net, std::string& error) {
+  for (int j = 0; j < NetHidden; ++j) {
+    int m = 1;
+    for (; m <= 8; ++m) {
+      bool fits = true;
+      for (int f = 0; f < net.inputs && fits; ++f) {
+        const int w = net.ft_weights[f * NetHidden + j];
+        fits = w % m == 0 && w / m >= -127 && w / m <= 127;
+      }
+      if (fits) break;
+    }
+    if (m > 8)
+      return error = "first-layer unit " + std::to_string(j) + " has no int8 multiplier (an int16-row net)",
+             false;
+    net.ft_unit_scale[j] = static_cast<std::int16_t>(m);
+    for (int f = 0; f < NetInputs; ++f)
+      net.ft_rows8[f * NetHidden + j] =
+          f < net.inputs ? static_cast<std::int8_t>(net.ft_weights[f * NetHidden + j] / m) : std::int8_t{0};
+  }
+  return true;
+}
+#endif
 
 std::vector<std::uint8_t> write_net_file(const NetFile& net) {
   std::vector<std::uint8_t> payload;

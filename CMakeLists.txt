@@ -27,6 +27,7 @@ option(FORK_LTO "Link-time optimization for optimized builds" ON)
 option(FORK_BUILD_TESTS "Build the test executable and CTest tests" ON)
 option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
 option(FORK_SEARCH_STATS "Debug counters in the search, printed by fork bench (never released)" OFF)
+option(FORK_FT_INT8 "Int8 feature-transformer rows (speed sprint 3, I4): needs a net from tools/nnue/int8_rows.py" OFF)
 option(FORK_TUNE "Tuning build: every search switch is a UCI option (SPRT and SPSA only, never released)" OFF)
 option(FORK_NODE_CLOCK "Test-only build: the search clock is its node count, so timed searches are deterministic (never released)" OFF)
 set(FORK_PGO "OFF" CACHE STRING "Profile-guided optimization stage: OFF, GEN, USE")
@@ -270,6 +271,11 @@ target_compile_definitions(forknnue PUBLIC FORK_NET_ARCH=${FORK_NET_ARCH})
 # so every user of accumulator.hpp sees the same FeatureStack layout.
 if(FORK_SEARCH_STATS)
   target_compile_definitions(forknnue PUBLIC FORK_SEARCH_STATS)
+endif()
+# The int8 first layer (speed sprint 3, I4): public, so every user of
+# net_file.hpp sees the same NetFile layout.
+if(FORK_FT_INT8)
+  target_compile_definitions(forknnue PUBLIC FORK_FT_INT8)
 endif()
 target_link_libraries(forknnue PUBLIC forkcore PRIVATE fork_pgo)
 

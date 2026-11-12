@@ -102,7 +102,7 @@ DeltaColumns columns_for(const NetFile& net, const FeatureDelta& d, Color perspe
 #if defined(__AVX512BW__)
 // 32 int16 lanes per vector; the whole perspective (16 vectors at 512
 // hidden) fits one tile in AVX-512's 32 registers.
-void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
+[[maybe_unused]] void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
   constexpr int Lanes = 32, Tile = NetHidden / Lanes < 16 ? NetHidden / Lanes : 16;
   static_assert(NetHidden % (Lanes * Tile) == 0);
   for (int i = 0; i < NetHidden; i += Lanes * Tile) {
@@ -119,7 +119,7 @@ void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t
 }
 #elif defined(__AVX2__)
 // 16 int16 lanes per vector; tiles of 8 of AVX2's 16 registers.
-void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
+[[maybe_unused]] void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
   constexpr int Lanes = 16, Tile = 8;
   static_assert(NetHidden % (Lanes * Tile) == 0);
   const auto at = [](const std::int16_t* p) {
@@ -136,9 +136,84 @@ void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t
   }
 }
 #else
-void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
+[[maybe_unused]] void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
   advance_values_scalar(src, c, dst);
 }
+#endif
+
+#ifdef FORK_FT_INT8
+// The int8-row update (FORK_FT_INT8): per lane, the removed and added int8
+// rows are summed in int16, then multiplied by the unit's multiplier and
+// added to the parent's sums. In int16 wrapping arithmetic src + m * (sum of
+// the rows) = src + the sum of m * row, and m * row is ft_weights' row, so
+// every path equals advance_values_scalar on ft_weights bit for bit.
+[[maybe_unused]] void advance_values_int8_scalar(const NetFile& net, const std::int16_t* src,
+                                                 const DeltaColumns& c, std::int16_t* dst) {
+  for (int i = 0; i < NetHidden; ++i) {
+    int x = 0;
+    for (int k = 0; k < c.subs; ++k) x -= net.ft_rows8[c.sub_rows[k] * NetHidden + i];
+    for (int k = 0; k < c.adds; ++k) x += net.ft_rows8[c.add_rows[k] * NetHidden + i];
+    dst[i] = static_cast<std::int16_t>(src[i] + x * net.ft_unit_scale[i]);
+  }
+}
+
+#if defined(__AVX512BW__)
+void advance_values_int8(const NetFile& net, const std::int16_t* src, const DeltaColumns& c,
+                         std::int16_t* dst) {
+  constexpr int Lanes = 32, Tile = NetHidden / Lanes < 16 ? NetHidden / Lanes : 16;
+  static_assert(NetHidden % (Lanes * Tile) == 0);
+  const auto row = [&](int r, int at) {
+    return _mm512_cvtepi8_epi16(
+        _mm256_load_si256(reinterpret_cast<const __m256i*>(net.ft_rows8 + r * NetHidden + at)));
+  };
+  for (int i = 0; i < NetHidden; i += Lanes * Tile) {
+    __m512i d[Tile];
+    for (int t = 0; t < Tile; ++t) d[t] = _mm512_setzero_si512();
+    for (int k = 0; k < c.subs; ++k)
+      for (int t = 0; t < Tile; ++t) d[t] = _mm512_sub_epi16(d[t], row(c.sub_rows[k], i + Lanes * t));
+    for (int k = 0; k < c.adds; ++k)
+      for (int t = 0; t < Tile; ++t) d[t] = _mm512_add_epi16(d[t], row(c.add_rows[k], i + Lanes * t));
+    for (int t = 0; t < Tile; ++t) {
+      const int at = i + Lanes * t;
+      _mm512_store_si512(
+          dst + at, _mm512_add_epi16(_mm512_load_si512(src + at),
+                                     _mm512_mullo_epi16(d[t], _mm512_load_si512(net.ft_unit_scale + at))));
+    }
+  }
+}
+#elif defined(__AVX2__)
+void advance_values_int8(const NetFile& net, const std::int16_t* src, const DeltaColumns& c,
+                         std::int16_t* dst) {
+  constexpr int Lanes = 16, Tile = 8;
+  static_assert(NetHidden % (Lanes * Tile) == 0);
+  const auto row = [&](int r, int at) {
+    return _mm256_cvtepi8_epi16(
+        _mm_load_si128(reinterpret_cast<const __m128i*>(net.ft_rows8 + r * NetHidden + at)));
+  };
+  const auto at16 = [](const std::int16_t* p) {
+    return _mm256_load_si256(reinterpret_cast<const __m256i*>(p));
+  };
+  for (int i = 0; i < NetHidden; i += Lanes * Tile) {
+    __m256i d[Tile];
+    for (int t = 0; t < Tile; ++t) d[t] = _mm256_setzero_si256();
+    for (int k = 0; k < c.subs; ++k)
+      for (int t = 0; t < Tile; ++t) d[t] = _mm256_sub_epi16(d[t], row(c.sub_rows[k], i + Lanes * t));
+    for (int k = 0; k < c.adds; ++k)
+      for (int t = 0; t < Tile; ++t) d[t] = _mm256_add_epi16(d[t], row(c.add_rows[k], i + Lanes * t));
+    for (int t = 0; t < Tile; ++t) {
+      const int at = i + Lanes * t;
+      _mm256_store_si256(
+          reinterpret_cast<__m256i*>(dst + at),
+          _mm256_add_epi16(at16(src + at), _mm256_mullo_epi16(d[t], at16(net.ft_unit_scale + at))));
+    }
+  }
+}
+#else
+void advance_values_int8(const NetFile& net, const std::int16_t* src, const DeltaColumns& c,
+                         std::int16_t* dst) {
+  advance_values_int8_scalar(net, src, c, dst);
+}
+#endif
 #endif
 
 #if defined(__AVX2__)
@@ -568,7 +643,11 @@ void accumulate_board(const NetFile& net, const Position& pos, Accumulator& out)
 void advance_perspective(const NetFile& net, const Accumulator& from, const FeatureDelta& d,
                          Color perspective, Frame frame, Accumulator& to) {
   const DeltaColumns c = columns_for(net, d, perspective, frame);
+#ifdef FORK_FT_INT8
+  advance_values_int8(net, from.values[perspective], c, to.values[perspective]);
+#else
   advance_values(from.values[perspective], c, to.values[perspective]);
+#endif
 #if FORK_NET_ARCH == 5
   for (int k = 0; k < 4; ++k) {
     int x = from.side[perspective][k];

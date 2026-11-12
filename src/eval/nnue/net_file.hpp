@@ -63,6 +63,14 @@ inline constexpr std::size_t NetPayloadBytes =
 struct NetFile {
   alignas(64) std::int16_t ft_weights[NetInputs * NetHidden];
   alignas(64) std::int16_t ft_bias[NetHidden];
+#ifdef FORK_FT_INT8
+  // The int8 first layer (FORK_FT_INT8, speed sprint 3's I4): every weight
+  // is its unit's multiplier times an int8, ft_weights[f * NetHidden + j] =
+  // ft_unit_scale[j] * ft_rows8[f * NetHidden + j] (derive_int8_rows); the
+  // incremental updates read these rows, half the bytes of ft_weights.
+  alignas(64) std::int8_t ft_rows8[NetInputs * NetHidden];
+  alignas(64) std::int16_t ft_unit_scale[NetHidden];
+#endif
 #if FORK_NET_ARCH == 1
   alignas(64) std::int16_t out_weights[2 * NetHidden];
   std::int32_t out_bias = 0;
@@ -93,6 +101,15 @@ struct NetFile {
 // Fork's checksum of a payload: its bytes in 8-byte little-endian words (the
 // last zero-padded), each mixed in with splitmix's output function.
 std::uint64_t net_checksum(std::span<const std::uint8_t> payload);
+
+#ifdef FORK_FT_INT8
+// Sets ft_rows8 and ft_unit_scale from ft_weights: each unit's multiplier is
+// the smallest m in 1 .. 8 that divides every one of its weights with each
+// quotient within +-127 (tools/nnue/int8_rows.py writes such nets; any valid
+// m gives the same sums). False, naming the unit in `error`, when a unit has
+// none: the net is not an int8-row net.
+bool derive_int8_rows(NetFile& net, std::string& error);
+#endif
 
 // Reads a whole net file into `out`. Returns false, with the reason in
 // `error`, unless every check above passes.
