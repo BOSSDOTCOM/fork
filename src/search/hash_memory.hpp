@@ -74,8 +74,9 @@ class HashMemory {
   std::size_t bytes_ = 0;
 };
 
-// How many threads clear `bytes`: max(threads option, hardware threads), but
-// at least 2 MiB per thread, and at least one.
+// How many threads clear `bytes`: the Threads option (so Threads 1 clears on
+// one thread; bug review 2026-11-11, E4: it was max(Threads, hardware
+// threads)), but at least 2 MiB per thread, and at least one.
 unsigned clear_workers(std::size_t bytes, std::int64_t threads_option);
 
 }  // namespace forkeng

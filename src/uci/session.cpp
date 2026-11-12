@@ -171,7 +171,15 @@ void UciSession::declare_options() {
                     [this](const OptionEntry&, std::string&) { return hash_pending_ = true; });
   options_.add_button("Clear Hash",
                       [this](const OptionEntry&, std::string&) { return clear_pending_ = true; });
-  options_.add_spin("Threads", 1, 1, config_.max_threads);
+  // The search runs on one thread whatever Threads says (bug review
+  // 2026-11-11, E4): a value above 1 is accepted, bounds the Hash clear's
+  // workers, and says so.
+  options_.add_spin("Threads", 1, 1, config_.max_threads, [](const OptionEntry& e, std::string& message) {
+    if (e.number > 1)
+      message = "Threads " + std::to_string(e.number) +
+                " accepted: the search runs on one thread; Threads sets only the Hash clear's threads";
+    return true;
+  });
   options_.add_spin("Move Overhead", 100, 0, 10000);
   options_.add_string("SyzygyPath", "", [this](const OptionEntry& e, std::string& message) {
     syzygy_path_ = e.text;

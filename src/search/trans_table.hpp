@@ -104,6 +104,7 @@ class TransTable {
 
   // Starts a new search: entries from earlier searches become stale.
   void advance_age() { ++search_age_; }
+  int age() const { return search_age_; }  // the current search's age (wraps at 256)
   // The victim policy (owner's experiment, 2026-10-26): off, every entry of
   // the current search outranks every stale one (then depth decides); on,
   // a slot is worth its depth minus StaleDepthPerSearch plies per search of

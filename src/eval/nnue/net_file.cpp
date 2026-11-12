@@ -96,7 +96,11 @@ bool sums_in_range(const NetFile& net, std::string& error) {
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
     FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
   // Squared outputs: each product v * (v * w) needs |w| <= 128 so that v * w
-  // stays in int16; the sums run in int64.
+  // stays in int16. The scalar sum runs in int64, but the AVX2 path adds its
+  // lanes in int32 (accumulator.cpp, squared_sum; bug review 2026-11-11, E3):
+  // every partial sum there is a sum of some of the products, each at most
+  // QA^2 |w| in size, so QA^2 times a bucket's sum of |w| within int32 keeps
+  // every one of them in range.
 #if FORK_NET_ARCH == 5
   const auto& outs = net.expert_weights;
   constexpr int Count = 2;
@@ -104,10 +108,16 @@ bool sums_in_range(const NetFile& net, std::string& error) {
   const auto& outs = net.out_weights;
   constexpr int Count = NetBuckets;
 #endif
-  for (int b = 0; b < Count; ++b)
-    for (int i = 0; i < 2 * NetHidden; ++i)
+  for (int b = 0; b < Count; ++b) {
+    std::int64_t total = 0;
+    for (int i = 0; i < 2 * NetHidden; ++i) {
       if (std::abs(int{outs[b][i]}) > std::numeric_limits<std::int16_t>::max() / NetQa)
         return error = "an output weight is too large for the squared output", false;
+      total += std::abs(int{outs[b][i]});
+    }
+    if (std::int64_t{NetQa} * NetQa * total > std::numeric_limits<std::int32_t>::max())
+      return error = "output bucket " + std::to_string(b) + "'s squared sum can leave the int32 range", false;
+  }
 #if FORK_NET_ARCH == 5
   std::int16_t side[NetInputs * 4];
   for (int f = 0; f < net.inputs; ++f)
