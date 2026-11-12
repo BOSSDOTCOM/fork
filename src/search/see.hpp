@@ -13,8 +13,11 @@
 // - A king captures only onto a square the other side no longer attacks.
 // - Promotions (Fork's rule): the move judged counts its promotion gain and
 //   puts the promoted piece on the square; later recaptures do not promote.
-// - Pins are ignored (a pinned piece may recapture); an experiment may change
-//   that (DESIGN.md §5.2).
+// - Pins are ignored (a pinned piece may recapture) unless `pin_aware` (the
+//   engine survey's F12, switch use_pin_aware_see): then a piece that alone
+//   shields its own king from an enemy slider, on the board before the move,
+//   recaptures only along that line, while a slider pinning that side's king
+//   is still on the board.
 // - Values: piece_value() of the evaluation (100/300/300/500/900).
 // - No allocation, no floating point; the move must be legal.
 #pragma once
@@ -24,7 +27,7 @@
 namespace forkeng {
 
 // The exchange's material result for the side making `m`, in centipawns.
-int see_value(const Position& pos, Move m);
+int see_value(const Position& pos, Move m, bool pin_aware = false);
 
 // Whether see_value(pos, m) >= threshold, decided as soon as the answer is
 // settled (second external review, claim (a), 2026-10-26): the side about to
@@ -35,8 +38,8 @@ int see_value(const Position& pos, Move m);
 // the square, after which the other side may stop: when that cannot cross
 // the threshold either, the answer is settled too (audit-1, P-3). Otherwise
 // the exchange goes on, and with no capture left the gain so far decides.
-// Equal to see_value(pos, m) >= threshold for every move and
+// Equal to see_value(pos, m, pin_aware) >= threshold for every move and
 // threshold (tests/test_see.cpp).
-bool see_at_least(const Position& pos, Move m, int threshold);
+bool see_at_least(const Position& pos, Move m, int threshold, bool pin_aware = false);
 
 }  // namespace forkeng

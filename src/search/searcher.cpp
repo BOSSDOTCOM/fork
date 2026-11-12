@@ -393,10 +393,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                               (hit.bound == TtBound::Upper || hit.bound == TtBound::Exact) &&
                               score_from_tt(hit.score, ply) < bar;
     if (!is_tb_or_mate(bar) && !proven_below) {
+      f.selector.set_pin_aware_see(switches.use_pin_aware_see);
       f.selector.start_quiesce(pos, tt_hit ? hit.move : NoMove, false, nullptr,
                                switches.use_take_history ? &take_history_ : nullptr);
       for (Move m; !(m = f.selector.take_next()).is_none();) {
-        if (!see_at_least(pos, m, bar - prune_eval)) continue;
+        if (!see_at_least(pos, m, bar - prune_eval, switches.use_pin_aware_see)) continue;
         FORK_STAT(++counters.capture_probes);
         if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
         frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
@@ -526,6 +527,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #endif
   // The selector checks the TT move (a colliding entry's move may not be
   // legal here) before it is tried first; a withheld move is not tried.
+  f.selector.set_pin_aware_see(switches.use_pin_aware_see);
   f.selector.start_main(
       pos, tt_hit && !withheld ? hit.move : NoMove, switches.use_history ? &history_ : nullptr,
       switches.use_history ? pair_history_ : nullptr, switches.use_reply_history ? f.arrival : NoArrival,
@@ -583,7 +585,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       // claim (c), 2026-10-26).
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth &&
           f.selector.yielding_stage() != SelectorStage::GoodCaptures &&
-          !see_at_least(pos, m, -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth)) {
+          !see_at_least(pos, m, -(quiet ? QuietSeeFloor : CaptureSeeFloor) * depth,
+                        switches.use_pin_aware_see)) {
 #ifdef FORK_SEARCH_STATS
         counters.bad_captures_after_stop_pruned += bad_after_stop;
         ++counters.see_prunes;
@@ -852,6 +855,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   }
   // Captures and queen promotions (under-promotions dropped, and with the SEE
   // filter captures that lose material), or every evasion in check.
+  f.selector.set_pin_aware_see(switches.use_pin_aware_see);
   f.selector.start_quiesce(pos, tt_hit ? hit.move : NoMove, switches.use_see_quiesce,
                            switches.use_history ? &history_ : nullptr,
                            switches.use_take_history ? &take_history_ : nullptr, switches.use_threat_buckets);

@@ -82,6 +82,11 @@ void compare_tree(Position& pos, int depth, int& compared) {
     for (const int t : {got - 1, got, got + 1, -1000, -500, -300, -100, -1, 0, 1, 100, 300, 500, 1000})
       CHECK_MSG(see_at_least(pos, m, t) == (got >= t),
                 pos.fen() << " " << pos.move_to_uci(m) << ": see " << got << ", threshold " << t);
+    // The pin-aware exchange (F12) keeps the same agreement.
+    const int pinned = see_value(pos, m, true);
+    for (const int t : {pinned - 1, pinned, pinned + 1, -500, -100, 0, 100, 500})
+      CHECK_MSG(see_at_least(pos, m, t, true) == (pinned >= t),
+                pos.fen() << " " << pos.move_to_uci(m) << ": pin-aware see " << pinned << ", threshold " << t);
   }
   if (depth == 0) return;
   for (Move m : list) {
@@ -145,6 +150,25 @@ TEST_CASE("see",
   CHECK(pos.set_fen("4k3/8/2p5/3p4/8/4N3/8/4K3 w - - 0 1"));
   const Move m = pos.parse_uci("e3d5");
   CHECK(see_at_least(pos, m, -200) && !see_at_least(pos, m, -199));
+}
+
+// The pin-aware exchange (the engine survey's F12): Rxd5 wins the pawn, and
+// the knight on e7 that attacks d5 is pinned to its king by the rook on e1
+// (tools/check_search_positions.py checks both facts with python-chess).
+// Pins ignored, the knight recaptures: 100 - 500 = -400. Pin-aware, it may
+// not: +100. With the pinner gone from the board (Re1 removed) the knight
+// recaptures in both.
+TEST_CASE("see", "pin-aware exchanges: a pinned piece recaptures only while its pin is gone") {
+  Position pos;
+  CHECK(pos.set_fen("4k3/4n3/8/3p4/8/8/8/3RR1K1 w - - 0 1"));
+  const Move m = pos.parse_uci("d1d5");
+  CHECK_EQ(see_value(pos, m), -400);
+  CHECK_EQ(see_value(pos, m, true), 100);
+  CHECK(see_at_least(pos, m, 100, true) && !see_at_least(pos, m, 101, true));
+  CHECK(!see_at_least(pos, m, 0));
+  CHECK(pos.set_fen("4k3/4n3/8/3p4/8/8/8/3R2K1 w - - 0 1"));
+  const Move free = pos.parse_uci("d1d5");
+  CHECK_EQ(see_value(pos, free, true), -400);
 }
 
 }  // namespace forkeng::test

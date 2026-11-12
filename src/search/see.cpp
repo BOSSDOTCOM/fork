@@ -8,11 +8,55 @@
 
 namespace forkeng {
 
+namespace {
+
+// The pins a pin-aware exchange respects (the engine survey's F12), from the
+// board before the move: per side, its pieces that alone shield its king from
+// an enemy slider, and the sliders that pin them.
+struct ExchangePins {
+  Bitboard shields[2] = {0, 0};
+  Bitboard pin_sources[2] = {0, 0};
+};
+
+ExchangePins exchange_pins(const Position& pos) {
+  ExchangePins p;
+  const Bitboard occ = pos.pieces();
+  for (const Color c : {White, Black}) {
+    const Square king = pos.king_square(c);
+    Bitboard sliders = (rook_attacks(king, 0) & pos.pieces(~c, Rook, Queen)) |
+                       (bishop_attacks(king, 0) & pos.pieces(~c, Bishop, Queen));
+    while (sliders) {
+      const Square s = pop_lsb(sliders);
+      const Bitboard blockers = between(king, s) & occ;
+      if (blockers && !has_multiple(blockers) && (blockers & pos.pieces(c))) {
+        p.shields[c] |= blockers;
+        p.pin_sources[c] |= bb(s);
+      }
+    }
+  }
+  return p;
+}
+
+// `side`'s attackers of `to` without its pinned pieces that would leave their
+// line to reach it, while a slider pinning that side is still in `occ`.
+Bitboard free_attackers(const Position& pos, const ExchangePins& p, Color side, Square to, Bitboard attackers,
+                        Bitboard occ) {
+  if (!(p.pin_sources[side] & occ)) return attackers;
+  const Square king = pos.king_square(side);
+  for (Bitboard held = attackers & p.shields[side]; held;) {
+    const Square s = pop_lsb(held);
+    if (!(line(king, s) & bb(to))) attackers ^= bb(s);
+  }
+  return attackers;
+}
+
+}  // namespace
+
 // The swap-list method (CPW "SEE - The Swap Algorithm"): record what each
 // capture in the sequence would swing if the exchange stopped right after it,
 // then walk back from the end, letting each side choose between stopping and
 // continuing.
-int see_value(const Position& pos, Move m) {
+int see_value(const Position& pos, Move m, bool pin_aware) {
   if (m.is_castle()) return 0;
   const Square from = m.from(), to = m.to();
   Bitboard occ = pos.pieces() ^ bb(from);
@@ -31,9 +75,11 @@ int see_value(const Position& pos, Move m) {
   }
 
   Color side = ~pos.side_to_move();
+  const ExchangePins pins = pin_aware ? exchange_pins(pos) : ExchangePins{};
   int d = 0;
   for (;;) {
-    const Bitboard attackers = pos.attackers_to(to, occ) & occ & pos.pieces(side);
+    Bitboard attackers = pos.attackers_to(to, occ) & occ & pos.pieces(side);
+    if (pin_aware) attackers = free_attackers(pos, pins, side, to, attackers, occ);
     if (!attackers) break;
     PieceType pt = Pawn;
     while (!(attackers & pos.pieces(pt))) pt = PieceType(pt + 1);
@@ -52,7 +98,7 @@ int see_value(const Position& pos, Move m) {
   return swing[0];
 }
 
-bool see_at_least(const Position& pos, Move m, int threshold) {
+bool see_at_least(const Position& pos, Move m, int threshold, bool pin_aware) {
   if (m.is_castle()) return 0 >= threshold;
   const Square from = m.from(), to = m.to();
   Bitboard occ = pos.pieces() ^ bb(from);
@@ -72,6 +118,8 @@ bool see_at_least(const Position& pos, Move m, int threshold) {
   }
   Color decider = ~pos.side_to_move();  // the opponent chooses first
   bool our_turn = false;
+  ExchangePins pins;  // computed at the first lookup that needs them (pin_aware only)
+  bool pins_ready = false;
   for (;;) {
     if (our_turn ? net_gain >= threshold : net_gain < threshold) return net_gain >= threshold;
     // One capture more changes the gain by at most the piece standing on the
@@ -79,7 +127,14 @@ bool see_at_least(const Position& pos, Move m, int threshold) {
     // cross the threshold, the answer is settled without a lookup (audit-1,
     // P-3; before the first lookup in 30.3% of calls).
     if (our_turn ? net_gain + standing < threshold : net_gain - standing >= threshold) return !our_turn;
-    const Bitboard attackers = pos.attackers_to(to, occ) & occ & pos.pieces(decider);
+    Bitboard attackers = pos.attackers_to(to, occ) & occ & pos.pieces(decider);
+    if (pin_aware && attackers) {
+      if (!pins_ready) {
+        pins = exchange_pins(pos);
+        pins_ready = true;
+      }
+      attackers = free_attackers(pos, pins, decider, to, attackers, occ);
+    }
     if (!attackers) return net_gain >= threshold;
     PieceType pt = Pawn;
     while (!(attackers & pos.pieces(pt))) pt = PieceType(pt + 1);

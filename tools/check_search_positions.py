@@ -97,6 +97,17 @@ for fen, uci in [('4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1', 'e4d5'), ('4k3/8/2p5/3p4/
                  ('4k3/8/8/8/8/8/8/4K2R w K - 0 1', 'e1g1')]:
     b = board_of(fen)
     check(chess.Move.from_uci(uci) in b.legal_moves, f'legal: {uci} in {fen}')
+# tests/test_see.cpp, the pin-aware exchange (F12): after Rxd5 the knight on
+# e7 attacks d5 but is pinned to its king by the rook on e1, so it may not
+# recapture, and nothing else of Black's attacks d5.
+b = board_of('4k3/4n3/8/3p4/8/8/8/3RR1K1 w - - 0 1')
+check(chess.Move.from_uci('d1d5') in b.legal_moves, 'pin position: Rxd5 legal')
+b.push(chess.Move.from_uci('d1d5'))
+check(b.is_pinned(chess.BLACK, chess.E7) and list(b.attackers(chess.BLACK, chess.D5)) == [chess.E7]
+      and not any(m.to_square == chess.D5 for m in b.legal_moves), 'pin position: the pinned knight cannot recapture')
+b = board_of('4k3/4n3/8/3p4/8/8/8/3R2K1 w - - 0 1')  # the same without the pinner
+b.push(chess.Move.from_uci('d1d5'))
+check(chess.Move.from_uci('e7d5') in b.legal_moves, 'pin position without the pinner: Nxd5 legal')
 # tests/test_ordering.cpp: the ordering position and its two moves.
 b = board_of('4k3/8/2p5/3p3p/8/4N1Q1/8/4K3 w - - 0 1')
 check(chess.Move.from_uci('e3d5') in b.legal_moves and chess.Move.from_uci('e1f1') in b.legal_moves

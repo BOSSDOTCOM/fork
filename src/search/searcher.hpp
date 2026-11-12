@@ -152,6 +152,10 @@ struct SearchQuota {
 //   2026-11-06); on since its one LTC-only design R test on the tuned search
 //   (owner, 2026-11-11) passed: +9.40 +/- 5.03 Elo after 4,992 games, design
 //   R [0, 6]; 2026-11-11.
+// - use_pin_aware_see: every SEE test of the search and its move selector
+//   respects pins (the engine survey's F12; see.hpp): a piece pinned to its
+//   own king recaptures only along the pin line while its pinner stands.
+//   Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -186,7 +190,8 @@ struct SearchQuota {
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
-  X(use_capture_probe, UseCaptureProbe, true)
+  X(use_capture_probe, UseCaptureProbe, true)            \
+  X(use_pin_aware_see, UsePinAwareSee, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

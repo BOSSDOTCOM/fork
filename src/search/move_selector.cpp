@@ -69,7 +69,7 @@ void MoveSelector::start_quiesce(const Position& pos, Move tt_move, bool see_fil
   if (!tt_move_.is_none() && !pos.in_check()) {
     const bool kind = tt_move_.is_capture() || tt_move_.is_promotion();
     const bool filtered = is_under_promotion(tt_move_) ||
-                          (see_filter && tt_move_.is_capture() && !see_at_least(pos, tt_move_, 0));
+                          (see_filter && tt_move_.is_capture() && !see_at_least(pos, tt_move_, 0, pin_aware_see_));
     if (!kind || filtered) tt_move_ = NoMove;
   }
 }
@@ -182,7 +182,7 @@ Move MoveSelector::take_next() {
         while (next_ < list_.size()) {
           const Move m = list_[select_best()];
           if (m == tt_move_) continue;
-          if (is_under_promotion(m) || (m.is_capture() && !see_at_least(*pos_, m, 0))) {
+          if (is_under_promotion(m) || (m.is_capture() && !see_at_least(*pos_, m, 0, pin_aware_see_))) {
             deferred_.add(m);
             continue;
           }
@@ -256,7 +256,7 @@ Move MoveSelector::take_next() {
         while (next_ < list_.size()) {
           const Move m = list_[select_best()];
           if (m == tt_move_ || is_under_promotion(m)) continue;
-          if (see_filter_ && m.is_capture() && !see_at_least(*pos_, m, 0)) continue;
+          if (see_filter_ && m.is_capture() && !see_at_least(*pos_, m, 0, pin_aware_see_)) continue;
           return m;
         }
         stage_ = SelectorStage::Done;

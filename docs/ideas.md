@@ -2766,3 +2766,23 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 129. Pin-aware SEE (the engine survey's F12)
+
+- **type:** ELO (search); flag `use_pin_aware_see` (off).
+- **idea** (the engine survey's F12, its rank 27; concept only): the static
+  exchange evaluation lets a piece pinned to its own king recapture only
+  along its pin line while the pinner stands (Fork's SEE ignored pins:
+  see.hpp's invariant). Tests: a constructed pin position (checked by
+  python-chess in tools/check_search_positions.py) and the pin-aware
+  see_at_least agreeing with see_value on every move of the perft suites
+  and random games.
+- **status:** **in progress (coordinator's overnight build list, 2026-11-12:
+  "F12 - pin-aware SEE. R-STC").** Built on phase-4 ab70fa5 behind the
+  switch, off: branch tier2/f12-pin-see, bench unchanged (9,639,207 /
+  07f7ae19b9250f38, r8brft1). Test commit sprt/f12-pin-see. Night item 69a
+  (f12-pin-see-stc, design R at STC, ledger idea `f12-pin-see`, try 1),
+  gated until state/gate-e1.done. Nothing is adopted before a verdict.
+- **runtime cost:** possible (pin lookups per SEE call; the SPRT's nps
+  report decides).
+- **earliest phase:** Phase 4.

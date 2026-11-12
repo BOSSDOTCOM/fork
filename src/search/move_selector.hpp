@@ -98,6 +98,11 @@ class MoveSelector {
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
                      const TakeHistory* take_history = nullptr, bool threat_aware = false);
 
+  // The selector's SEE tests respect pins (the engine survey's F12, switch
+  // use_pin_aware_see; see.hpp). Set before start_main or start_quiesce;
+  // they leave it as it is.
+  void set_pin_aware_see(bool on) { pin_aware_see_ = on; }
+
   // The next move, or NoMove when there are no more.
   Move take_next();
 
@@ -148,6 +153,7 @@ class MoveSelector {
   bool quiets_stopped_ = false;
   bool quiet_checks_only_ = false;
   bool threat_aware_ = false;
+  bool pin_aware_see_ = false;
   bool attacked_known_ = false;
   std::int16_t quiets_filtered_ = 0;  // at most MaxMoves; int16 keeps the flags above within the padding
   Bitboard attacked_ = 0;
