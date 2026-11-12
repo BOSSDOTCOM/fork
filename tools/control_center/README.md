@@ -17,8 +17,9 @@ the repository.
 
 1. **Data generation** (the only controls). *Start generating* plans the next part of the current
    generation (DESIGN.md §5.3 deliverable 2, the labeller policy): the next letter, the current default
-   engine (the tip of `phase-4` and its default network; a PGO build of it in WSL in `~/fork-cc-build`, or
-   the previous part's binary when no engine file changed since that binary's commit; bench-checked against
+   engine (the tip of `phase-4` and its default network; a PGO build of it for x86-64-v3 (`build_arch`; owner,
+   2026-11-12) in WSL in `~/fork-cc-build`, or the previous part's binary when no engine file changed since
+   that binary's commit and it was built for that target; bench-checked against
    `tests/bench-<net>.ref` either way), the standing settings, the next unused local seed and the rest of
    the generation's target, shows the plan for confirmation and starts it through the WSL supervisor
    (`jobctl.py start datagen NAME`). It refuses while any data-generation job lives or holds the lock (in

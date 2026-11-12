@@ -4,6 +4,8 @@
 # records its arguments, a fake pgrep, a temporary folder for everything. Checks:
 # - a running fork_datagen refuses the start (pgrep finds one), and the folder stays empty;
 # - a bench mismatch, a wrong network and a wrong commit each refuse it before fork_datagen runs;
+# - reused binaries of another target than ARCH (native) are not used: the script turns to a build of COMMIT
+#   (which fails here, the repository being fake) and fork_datagen does not run;
 # - a bad openings hash refuses it;
 # - the passing case copies the reused binaries and runs fork_datagen with exactly the standing settings.
 #     bash tools/control_center/test_start_part.sh
@@ -22,7 +24,7 @@ EOF
 cat >"$t/prev/fork" <<'EOF'
 #!/usr/bin/env bash
 case $1 in
-  version) printf 'Fork 0.3.0-dev+%s\ncompiler clang 21.1.8\narch native\nnet %s\n' "${STUB_COMMIT:-684bac6}" "${STUB_NET:-s512r2}";;
+  version) printf 'Fork 0.3.0-dev+%s\ncompiler clang 21.1.8\narch %s\nnet %s\n' "${STUB_COMMIT:-684bac6}" "${STUB_ARCH:-x86-64-v3}" "${STUB_NET:-s512r2}";;
   bench) printf 'nodes %s\nsignature 4cf778ff753861f7\nnps 1\n' "${STUB_NODES:-14180299}";;
 esac
 EOF
@@ -42,6 +44,7 @@ setup() {  # $1: the part's folder, $2: the openings hash
 NAME=g9f
 DIR=$1
 MODE=reuse
+ARCH=x86-64-v3
 REUSE_DIR=$t/prev
 REPO=/nonexistent
 BRANCH=phase-4
@@ -82,6 +85,8 @@ setup "$t/p3" "$sha"; rm -f "$t/args"; STUB_NET=b0r2 run; rc=$?
 check "refused on another network" "[ $rc -ne 0 ] && grep -q 'network is not s512r2' '$t/out' && [ ! -e '$t/args' ]"
 setup "$t/p4" "$sha"; rm -f "$t/args"; STUB_COMMIT=1111111 run; rc=$?
 check "refused on another commit" "[ $rc -ne 0 ] && grep -q 'not from 684bac6' '$t/out' && [ ! -e '$t/args' ]"
+setup "$t/p7" "$sha"; rm -f "$t/args"; STUB_ARCH=native run; rc=$?
+check "native binaries are rebuilt, not reused" "[ $rc -ne 0 ] && grep -q \"for 'native', not x86-64-v3: building\" '$t/out' && [ ! -e '$t/args' ]"
 setup "$t/p5" "0000000000000000000000000000000000000000000000000000000000000000"; rm -f "$t/args"; run; rc=$?
 check "refused on a bad openings hash" "[ $rc -ne 0 ] && [ ! -e '$t/args' ]"
 

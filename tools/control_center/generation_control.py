@@ -432,6 +432,7 @@ class GenerationControl:
             'REUSE_DIR': (plan['reuse_dir'] or '').replace('~', home, 1), 'REPO': config.to_wsl(self.repo),
             'BRANCH': plan['branch'], 'COMMIT': plan['commit'], 'ENGINE_COMMIT': plan['engine_commit'],
             'NET': plan['net'], 'WANT_NODES': plan['bench_nodes'], 'WANT_SIGNATURE': plan['bench_signature'],
+            'ARCH': self.cfg['build_arch'],
             'CLONE': self.cfg['wsl_build_clone'].replace('~', home, 1),
             'BUILDS': f"{self.cfg['wsl_data'].replace('~', home, 1)}/{name}-builds/pgo",
             'OPENINGS': self._wsl_openings_path(plan, home),

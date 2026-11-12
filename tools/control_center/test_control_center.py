@@ -517,7 +517,7 @@ class Controls(unittest.TestCase):
         for line in ('NAME=g3f', 'SEED=20261111', 'THREADS=6', f'POSITIONS={477173594 - 30000000}', 'MODE=reuse',
                      'REUSE_DIR=/home/user/fork-data/gen3e', 'DIR=/home/user/fork-data/gen3f', 'NODES=20000',
                      'SAVE_PERCENT=50', 'UNSAVED_NODES=4000', 'CHECK_NODES=2000', 'ADJ_CP=700', 'ADJ_PLIES=8',
-                     'WANT_NODES=14180299', 'WANT_SIGNATURE=4cf778ff753861f7', 'NET=s512r2'):
+                     'WANT_NODES=14180299', 'WANT_SIGNATURE=4cf778ff753861f7', 'NET=s512r2', 'ARCH=x86-64-v3'):
             self.assertIn(line + '\n', params)
         self.assertTrue((self.state / 'parts' / 'g3f' / 'start_part.sh').is_file())
         auto = self.ctl.read_state('g3f', 'autostop.json')
