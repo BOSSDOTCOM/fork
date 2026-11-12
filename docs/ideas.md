@@ -2766,3 +2766,20 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 125. The alpha-raise reduction (the engine survey's C17)
+
+- **type:** ELO (search); flag `use_alpha_raise_reduction` (off).
+- **idea** (the engine survey's C17, its rank 32; concept only): once a
+  move raises alpha at a node at least `LmrMinDepth` deep, the remaining
+  moves are searched one ply shallower (the survey: Hobbes +12.5 early).
+- **status:** **in progress (coordinator's overnight build list, 2026-11-12:
+  "C17 - alpha-raise reduction. R-STC + LTC (depth)").** Built on phase-4
+  ab70fa5 behind the switch, off: branch tier2/c17-alpha-raise, bench
+  unchanged (9,639,207 / 07f7ae19b9250f38, r8brft1). Test commit
+  sprt/c17-alpha-raise. Night items 65a (c17-alpha-raise-stc, design R at
+  STC, ledger idea `c17-alpha-raise`, try 1) and 65c (c17-alpha-raise-ltc,
+  design R at 40+0.4, only on an STC H1), gated until state/gate-e1.done.
+  Nothing is adopted before a verdict.
+- **runtime cost:** none (one comparison when alpha rises).
+- **earliest phase:** Phase 4.

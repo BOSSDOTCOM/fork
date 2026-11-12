@@ -539,6 +539,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   int moves_searched = 0;
   int moves_seen = 0;  // legal moves the selector yielded, searched or pruned
   int quiets_searched = 0;
+  bool alpha_raised = false;  // C17: the node's depth was lowered once alpha rose
   const bool lmp_node = switches.use_lmp && can_prune && depth <= LmpMaxDepth;
   const int futility_value = in_check ? 0 : prune_eval + FutilityOffset + FutilityGrowth * depth;
   // (Stats builds: a decision-ledger side search may force the margin's
@@ -751,6 +752,15 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           break;
         }
         alpha = score;
+        // The engine survey's C17, the alpha-raise reduction: once a move
+        // has raised alpha (only a PV node's window leaves room for that
+        // without a cutoff), the moves still to come are searched one ply
+        // shallower, at depths where LMR works. Once per node; the node's
+        // TT entry then records the lower depth its later moves had.
+        if (switches.use_alpha_raise_reduction && !alpha_raised && depth >= LmrMinDepth) {
+          --depth;
+          alpha_raised = true;
+        }
       }
     }
     if (quiet || m.is_capture()) f.failed_moves.add(m);
