@@ -2766,3 +2766,23 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 126. The re-search depth from the reduced result (think tank R10)
+
+- **type:** ELO (search); flag `use_research_depth` (off).
+- **idea** (think tank R10; the engine survey's C11): after an LMR search
+  beats alpha, re-search one ply deeper when it beat alpha by more than
+  `ResearchExtendMargin`, one ply shallower when by at most
+  `ResearchTrimMargin`.
+- **status:** **in progress (coordinator's overnight build list, 2026-11-12:
+  "R10 - post-LMR re-search depth from the reduced result. R-STC + LTC
+  (depth)").** Built on phase-4 ab70fa5 behind the switch, off: branch
+  tier2/r10-research-depth, bench unchanged (9,639,207 / 07f7ae19b9250f38,
+  r8brft1). Test commits sprt/r10-research-depth (55 / 12, the natural
+  values) and sprt/r10-research-depth-110 (the retry). Night items 66a
+  (r10-research-depth-stc, ledger idea `r10-research-depth`, try 1), 66b
+  (the retry, try 2, only if 66a is not H1) and 66c (the LTC at 40+0.4 of
+  whichever STC passed), gated until state/gate-e1.done. Nothing is adopted
+  before a verdict.
+- **runtime cost:** none (two comparisons per re-search).
+- **earliest phase:** Phase 4.

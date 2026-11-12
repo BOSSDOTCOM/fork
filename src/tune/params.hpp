@@ -49,6 +49,8 @@
   X(LmrMinMove, 4, 1, 8, 1)               \
   X(LmrDivisorTenths, 45, 23, 90, 3)      \
   X(LmrCorrectionStrength, 64, 0, 128, 6) \
+  X(ResearchExtendMargin, 55, 28, 110, 4) \
+  X(ResearchTrimMargin, 12, 6, 24, 1) \
   X(LmpMaxDepth, 4, 1, 8, 1)              \
   X(LmpQuietAllowance, 8, 3, 24, 1)       \
   X(FutilityMaxDepth, 6, 3, 12, 1)        \

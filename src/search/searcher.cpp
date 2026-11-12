@@ -722,9 +722,23 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // No re-search once the search has stopped: a stopped child returns 0,
         // which can beat alpha, and each call would still count a node past a
         // node limit (found by the heuristic-discovery gate, 2026-10-27).
-        if (!stopped_ && score > alpha && reduced < new_depth)
-          score = switches.use_pvs ? -negamax<false>(-alpha - 1, -alpha, new_depth, ply + 1)
-                                   : -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);
+        if (!stopped_ && score > alpha && reduced < new_depth) {
+          // Think tank R10: with use_research_depth the reduced result sets
+          // the re-search's depth: more than ResearchExtendMargin above alpha,
+          // one ply deeper than the full depth; at most ResearchTrimMargin
+          // above it, one ply shallower (never at or below the reduced depth,
+          // whose result stands then). The PV re-search below keeps new_depth.
+          int research = new_depth;
+          if (switches.use_research_depth) {
+            if (score > alpha + ResearchExtendMargin)
+              research = new_depth + 1;
+            else if (score <= alpha + ResearchTrimMargin)
+              research = std::max(new_depth - 1, reduced);
+          }
+          if (research > reduced)
+            score = switches.use_pvs ? -negamax<false>(-alpha - 1, -alpha, research, ply + 1)
+                                     : -negamax<OnPv>(-beta, -alpha, research, ply + 1);
+        }
         if (!stopped_ && switches.use_pvs && OnPv && score > alpha && score < beta)
           score = -negamax<true>(-beta, -alpha, new_depth, ply + 1);
       }
