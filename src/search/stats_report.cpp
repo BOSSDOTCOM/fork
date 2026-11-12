@@ -61,6 +61,12 @@ void print_counter_summary(const SearchCounters& c, const FeatureStackTally* tal
   std::fprintf(out, "stats: capture probe: %llu captures searched, %llu nodes cut\n",
                static_cast<unsigned long long>(c.capture_probes),
                static_cast<unsigned long long>(c.capture_probe_cuts));
+  std::fprintf(out, "stats: C16 LMR sites by child cutoff count (sites/beat alpha):");
+  for (int b = 0; b < SearchCounters::ChildCutoffBins; ++b)
+    std::fprintf(out, " %d%s:%llu/%llu", b, b == SearchCounters::ChildCutoffBins - 1 ? "+" : "",
+                 static_cast<unsigned long long>(c.child_cutoff_sites[b]),
+                 static_cast<unsigned long long>(c.child_cutoff_fail_highs[b]));
+  std::fprintf(out, "\n");
   std::fprintf(out, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
                static_cast<unsigned long long>(c.singular_tests),
                static_cast<unsigned long long>(c.singular_extended),

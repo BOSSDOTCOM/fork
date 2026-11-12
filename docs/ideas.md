@@ -2790,3 +2790,28 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
+
+## 136. The child fail-high count in LMR (the engine survey's C16): measured, its premise refuted
+
+- **type:** ELO (search); measurement only (no switch).
+- **idea** (the survey's C16; builder 3's design, the coordinator's build list of 2026-11-12): a per-ply count of
+  nodes that failed high (a move cutoff outside a singular test's search, a null-move fail high, a multi-cut;
+  `PlyFrame::child_cutoffs`, saturating), reset two plies down by each node before its move loop (the root
+  resets ply 2 per pass); LMR would reduce a late quiet one ply more when the count one ply below exceeds a
+  threshold, a high count marking an all node.
+- **measurement** (2026-11-12, the threshold rule declared before the data: the smallest count c whose pooled
+  beat-alpha rate above c is at most half the rate at count 0; none qualifying, C16 is not queued): a
+  FORK_SEARCH_STATS bench (r8brft1, depth 13; branch tier2/c16-child-cutoffs, the count and its histogram in
+  stats builds only), at every LMR site the count one ply below and whether the reduced search beat alpha. Sites
+  / beat alpha / rate: 0: 127,805 / 293 / 0.23%; 1: 144,950 / 544 / 0.38%; 2: 156,831 / 947 / 0.60%; 3: 195,093 /
+  1,920 / 0.98%; 4: 120,162 / 1,483 / 1.23%; 5: 93,502 / 1,176 / 1.26%; 6: 77,520 / 863 / 1.11%; 7 or more:
+  587,752 / 6,158 / 1.05%; all 1,503,615 / 13,384 / 0.89%. **The rate rises with the count** (pooled above any c,
+  4.2-4.8 times the rate at 0), so the rule finds no threshold and C16 as designed is **not queued**: it would
+  reduce exactly the moves likelier to beat alpha. A likely reason (INFERRED): a node reaching its LMR moves has
+  had every earlier child refuted; a count of 0 means those refutations came cheap (TT cutoffs, reverse
+  futility, quiescence, ProbCut: not counted), a high count that they had to be searched (a contested node).
+- **follow-ups:** the opposite sign is built as idea 137 (the coordinator's decision, 2026-11-12).
+  Recommendation for later: count every fail-high exit (TT cutoffs, reverse futility, ProbCut) and measure again
+  before any further use.
+- **runtime cost:** none in normal builds.
+- **earliest phase:** Phase 4.

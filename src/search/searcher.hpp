@@ -252,12 +252,14 @@ class SearchListener {
 // One ply of the search stack.
 struct PlyFrame {
   MoveSelector selector;
-  MoveList failed_moves;        // quiet moves and captures searched here without a cutoff (the maluses)
-  int static_eval;              // ScoreNone in check
-  bool after_null = false;      // this node was reached by a null move (no second one in a row)
-  Move withheld_move = NoMove;  // set while a singular test searches this node without that move
-  int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
-  bool expected_cut = false;    // expected to fail high (a cut node), from the parent (T17)
+  MoveList failed_moves;           // quiet moves and captures searched here without a cutoff (the maluses)
+  int static_eval;                 // ScoreNone in check
+  bool after_null = false;         // this node was reached by a null move (no second one in a row)
+  Move withheld_move = NoMove;     // set while a singular test searches this node without that move
+  int arrival = NoArrival;         // the pair-history slot of the move that led here (none after a null move)
+  bool expected_cut = false;       // expected to fail high (a cut node), from the parent (T17)
+  std::uint8_t child_cutoffs = 0;  // C16 (stats builds only): nodes at this ply that failed high since the
+                                   // node two plies up started its moves (saturating)
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -525,6 +527,13 @@ struct SearchCounters {
   std::uint64_t eval_gap_quiesce_reuse_bins[GapBins] = {};
   std::uint64_t eval_gap_band_bins[GapBands][GapBins] = {};
   std::uint64_t eval_gap_band_infinite[GapBands] = {};
+  // The engine survey's C16 (its measurement, ideas.md idea 136): LMR sites
+  // by the count of fail highs one ply below (PlyFrame::child_cutoffs; the
+  // last bin pools the larger counts), and those whose reduced search beat
+  // alpha.
+  static constexpr int ChildCutoffBins = 8;
+  std::uint64_t child_cutoff_sites[ChildCutoffBins] = {};
+  std::uint64_t child_cutoff_fail_highs[ChildCutoffBins] = {};
 };
 
 class Searcher {
