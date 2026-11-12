@@ -162,16 +162,25 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   // ordering read (0 with use_threat_buckets off).
   const Bitboard attacked = f.selector.attacked_by_opponent();
   history_.apply(us, m, bonus, threat_bucket(attacked, m));
+  // The engine survey's D12: with use_malus_decay each failed quiet's malus
+  // shrinks with the number of quiets that failed here, n:
+  // bonus * MalusDecayQuiets / (MalusDecayQuiets + n).
+  int malus = bonus;
+  if (switches.use_malus_decay) {
+    int failed_quiets = 0;
+    for (Move q : f.failed_moves) failed_quiets += !q.is_capture();
+    malus = bonus * MalusDecayQuiets / (MalusDecayQuiets + failed_quiets);
+  }
   if (switches.use_history_malus)
     for (Move q : f.failed_moves)
-      if (!q.is_capture()) history_.apply(us, q, -bonus, threat_bucket(attacked, q));
+      if (!q.is_capture()) history_.apply(us, q, -malus, threat_bucket(attacked, q));
   // The pair histories (tier 2, T10) take the same bonus and malus.
   const auto update = [&](PairHistory& table, int arrival) {
     const Position& pos = *pos_;
     table.apply(arrival, pair_slot(pos.piece_at(m.from()), m.to()), bonus);
     if (switches.use_history_malus)
       for (Move q : f.failed_moves)
-        if (!q.is_capture()) table.apply(arrival, pair_slot(pos.piece_at(q.from()), q.to()), -bonus);
+        if (!q.is_capture()) table.apply(arrival, pair_slot(pos.piece_at(q.from()), q.to()), -malus);
   };
   if (switches.use_reply_history && f.arrival != NoArrival) update(pair_history_[ReplyTable], f.arrival);
   const int follow = follow_arrival(f);
