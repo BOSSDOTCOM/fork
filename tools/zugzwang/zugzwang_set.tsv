@@ -1,0 +1,151 @@
+# zugzwang set: tools/zugzwang/zugzwang_set.py (generate, generate67, merge). wdl_stm: WDL of the position for the side to move; wdl_other_to_move: WDL of the same placement with the other side to move, for that side; kept_moves: the moves keeping the draw (D/L) or * (lost); ? unknown
+id	source	pieces	material	type	wdl_stm	wdl_other_to_move	kept_moves	fen
+z001	random-placement	4	KNPvK	D/L	0	-2	f2d1 f2d3 f2e4 f2g4 f2h1 f2h3	K7/P1k5/8/8/8/8/5N2/8 w - - 0 1
+z002	random-placement	4	KNPvK	D/L	0	-2	a3b1 a3b5 a3c2 a3c4	5k1K/7P/8/8/8/N7/8/8 w - - 0 1
+z003	random-placement	4	KNPvK	D/L	0	-2	b1a3 b1c3 b1d2	8/8/8/8/8/8/7p/1n3K1k b - - 0 1
+z004	random-placement	4	KNPvK	D/L	0	-2	d7b6 d7b8 d7c5 d7e5 d7f6 d7f8	8/3n4/8/8/8/8/p1K5/k7 b - - 0 1
+z005	random-placement	4	KNPvK	D/L	0	-2	h4f3 h4f5 h4g2 h4g6	5k1K/7P/8/8/7N/8/8/8 w - - 0 1
+z006	random-placement	4	KNPvK	D/L	0	-2	a3b1 a3b5 a3c2 a3c4	8/8/8/8/8/n7/5K1p/7k b - - 0 1
+z007	random-placement	4	KNPvK	D/L	0	-2	c4a3 c4a5 c4b2 c4b6 c4d2 c4d6 c4e3 c4e5	7K/5k1P/8/8/2N5/8/8/8 w - - 0 1
+z008	random-placement	4	KNPvK	D/L	0	-2	g7e6 g7e8 g7f5 g7h5	K7/P1k3N1/8/8/8/8/8/8 w - - 0 1
+z009	random-placement	4	KNPvK	D/L	0	-2	h1f2 h1g3	8/8/8/8/8/8/p1K5/k6n b - - 0 1
+z010	random-placement	4	KNPvK	D/L	0	-2	f6e5 f6e6 f6e7 f6f5 f6g5 f6g6 h7f8 h7g5	6k1/6PN/5K2/8/8/8/8/8 w - - 0 1
+z011	random-placement	5	KBNvKN	D/L	0	-2	d4b3 d4b5 d4c2 d4c6 d4e2 d4f3 d4f5 d5c5 d5c6 d5d6 d5e5 e6c8 e6d7 e6f5 e6f7 e6g4 e6g8 e6h3	8/8/4b2N/3k4/3n4/3K4/8/8 b - - 0 1
+z012	random-placement	5	KBNvKN	D/L	0	-2	c4a2 c4a6 c4b3 c4b5 c4d3 c4d5 c4e2 c4e6 c4f1 c4f7 c4g8 c8a7 c8b6 c8d6 c8e7 g3f3 g3f4 g3g4 g3h3 g3h4	2n5/8/8/8/N1b5/6k1/8/6K1 b - - 0 1
+z013	random-placement	5	KBNvKN	D/L	0	-2	b5a3 b5a7 b5c3 b5c7 b5d4 d6c6 d6d5 d6e5 e6a2 e6b3 e6c4 e6c8 e6d5 e6d7 e6f5 e6f7 e6g4 e6g8 e6h3	3K4/8/3kb3/1n6/N7/8/8/8 b - - 0 1
+z014	random-placement	5	KBNvKN	L/D	-2	0	*	4Bn2/8/7N/4K3/8/2k5/8/8 b - - 0 1
+z015	random-placement	5	KBNvKN	D/L	0	-2	a4b2 a4b6 a4c5 c3b3 c3b4 c3c4 c3d2 c3d3 h6c1 h6d2 h6e3 h6f4 h6f8 h6g5 h6g7	8/8/4n2B/8/N7/2K5/8/1k6 w - - 0 1
+z016	random-placement	5	KBNvKN	D/L	0	-2	g4e3 g4e5 g4f2 g4f6 g4h2 g5f4 g5f5 g5h4 g5h5 h6f8 h6g7	4n3/7k/7B/6K1/6N1/8/8/8 w - - 0 1
+z017	random-placement	5	KBNvKN	D/L	0	-2	c5a3 c5a7 c5b4 c5b6 c5d4 c5d6 c5e3 c5e7 c5f2 c5f8 c5g1 f6e5 f6e6 f6e7 f6f5 f6f7 f6g5 h3f2 h3f4 h3g1 h3g5	8/7K/5k2/2b5/8/7n/7N/8 b - - 0 1
+z018	random-placement	5	KBNvKN	L/D	-2	0	*	k7/8/K7/4nB2/8/8/3N4/8 b - - 0 1
+z019	random-placement	5	KBNvKN	L/D	-2	0	*	8/8/8/8/8/4k2b/8/1n1K3N w - - 0 1
+z020	random-placement	5	KBNvKN	D/L	0	-2	b7a5 b7c5 b7d6 b7d8 d3c2 d3d2 d3d4 d3e3 g4c8 g4d1 g4d7 g4e2 g4e6 g4f3 g4f5 g4h3 g4h5	8/1n6/8/8/1K4b1/3k2N1/8/8 b - - 0 1
+z021	random-placement	5	KBNvKN	L/D	-2	0	*	3k4/8/3K4/4N3/1n6/1B6/8/8 b - - 0 1
+z022	random-placement	5	KBNvKN	L/D	-2	0	*	5b2/7K/5k2/8/8/5N2/8/5n2 w - - 0 1
+z023	random-placement	5	KNPvKN	L/D	-2	0	*	8/8/8/1P6/n7/1N4K1/8/7k b - - 0 1
+z024	random-placement	5	KNPvKN	D/L	0	-2	c1a2 c1b3 c1d3 c1e2 c3b2 c3d2 c3d3 d4d5	8/8/8/1k6/3P4/2K5/8/n1N5 w - - 0 1
+z025	random-placement	5	KNPvKN	L/D	-2	0	*	1K6/N1P1n3/k7/8/8/8/8/8 b - - 0 1
+z026	random-placement	5	KNPvKN	L/D	-2	0	*	8/8/8/2P1k3/2KN4/8/8/2n5 b - - 0 1
+z027	random-placement	5	KNPvKN	D/L	0	-2	c2c1b c2c1n c2c1q c2c1r c4a3 c4a5 c4b2 c4b6 c4d2 c4d6 c4e3 c4e5 g2f3 g2h1 g2h2 g2h3	8/8/8/8/2n5/8/2p1N1k1/4K3 b - - 0 1
+z028	random-placement	5	KNPvKN	L/D	-2	0	*	5k2/2N5/2P2K2/8/8/5n2/8/8 b - - 0 1
+z029	random-placement	5	KNPvKN	L/D	-2	0	*	8/8/8/8/3n4/2N5/5K1p/7k b - - 0 1
+z030	random-placement	5	KNPvKN	L/D	-2	0	*	2n1k3/8/P1N1K3/8/8/8/8/8 b - - 0 1
+z031	random-placement	5	KNPvKN	D/L	0	-2	b6a5 b6a6 b6c5 b6c7 c4a3 c4a5 c4b2 c4d2 c4d6 c4e3 c4e5 d5d6	k7/n7/1K6/3P4/2N5/8/8/8 w - - 0 1
+z032	random-placement	5	KNPvKN	D/L	0	-2	b4a4 b4a5 b4c3 b4c5 d2b1 d2b3 d2c4 d2e4 d2f1 d2f3	8/8/3N4/8/1k6/3p4/K2n4/8 b - - 0 1
+z033	random-placement	5	KNPvKN	L/D	-2	0	*	8/4n1P1/8/7K/5k2/8/8/3N4 b - - 0 1
+z034	random-placement	5	KNPvKN	L/D	-2	0	*	8/7N/8/8/7k/6p1/8/4n2K w - - 0 1
+z035	random-placement	5	KQPvKQ	D/L	0	-2	e7a3 e7a7 e7b4 e7b7 e7c5 e7c7 e7d6 e7d7 e7e1 e7e2 e7e3 e7e4 e7e5 f6f5 h6h5	6QK/4q3/5p1k/8/8/8/8/8 b - - 0 1
+z036	random-placement	5	KQPvKQ	L/D	-2	0	*	4K3/8/8/4Q3/6k1/5q1p/8/8 w - - 0 1
+z037	random-placement	5	KQPvKQ	L/D	-2	0	*	8/8/6Q1/4k3/8/1q3PK1/8/8 b - - 0 1
+z038	fork-selfplay	6	KBPvKPP	D/L	0	-2	f4c1 f4d2 f4e3 f4g3 f4h6 h2h3 h2h4	8/7p/8/4Kp2/5Bk1/8/7P/8 w - - 0 1
+z039	fork-selfplay	6	KBPvKPP	D/L	0	-2	f2a7 f2b6 f2c5 f2d4 f2e1 f2e3 f2g3 g1h2	8/8/8/7k/7P/5p2/5Bp1/6K1 w - - 0 1
+z040	fork-selfplay	6	KBPvKPP	D/L	0	-2	c6c5 d5a2 d5b3 d5f7 d5g8 f3f4	8/8/2K5/1p1Bkp2/8/5P2/8/8 w - - 0 1
+z041	fork-selfplay	6	KBPvKPP	D/L	0	-2	e3a7 e3b6 e3c5 e3d4 e3f2 e3f4 e3g1 e3g5 e3h6 f1f2 f1g1	8/8/8/8/6p1/4B1Pp/2k5/5K2 w - - 0 1
+z042	fork-selfplay	6	KBPvKPP	D/L	0	-2	f1f2 g1a7 g1b6 g1c5 g1d4 g1e3 g1f2 g1h2	8/8/8/8/6p1/6Pp/8/3k1KB1 w - - 0 1
+z043	fork-selfplay	6	KBvKPPP	L/D	-2	0	*	3k4/3P4/2K5/8/P5P1/8/3b4/8 b - - 0 1
+z044	fork-selfplay	6	KBvKPPP	L/D	-2	0	*	3k4/8/2K5/3P4/P5P1/8/3b4/8 b - - 0 1
+z045	fork-selfplay	6	KNPvKPP	D/L	0	-2	a6a7 c8a7 c8b6 c8e7	2n5/8/k1K5/8/1Pp5/2P5/8/8 b - - 0 1
+z046	fork-selfplay	6	KNPvKPP	D/L	0	-2	d5b4 d5b6 d5c7 d5e7 f5f4 f6e5 f6e6 f6e7 f6f7 f6g7	8/8/5k2/1P1n1p1K/8/4P3/8/8 b - - 0 1
+z047	fork-selfplay	6	KNPvKPP	D/L	0	-2	b6a6 b6a7 b6b7 b6c6 b6c7 d6d5 e7c6 e7c8 e7f5 e7g6 e7g8	8/4n3/1k1p4/8/PP1K4/8/8/8 b - - 0 1
+z048	fork-selfplay	6	KNPvKPP	D/L	0	-2	a3a2 a3b2 a3b3 c7a8 c7b5 c7d5 c7e6 c7e8	8/2N5/1p6/k1p5/P7/K7/8/8 w - - 0 1
+z049	fork-selfplay	6	KNPvKPP	D/L	0	-2	a6b4 a6b8 a6c5 a6c7 f2e1 f2e2 f2f1 f2g1 f2g2	8/8/N7/8/2p1k2p/7P/5K2/8 w - - 0 1
+z050	fork-selfplay	6	KNPvKPP	D/L	0	-2	a2b4 a2c1 a2c3 f2e1 f2e2 f2f1 f2g1 f2g2	8/8/8/8/2p1k2p/7P/N4K2/8 w - - 0 1
+z051	fork-selfplay	6	KNPvKPP	D/L	0	-2	b7d6 b7d8 c8b8 c8d7 c8d8	2k5/1n6/1P6/p7/P1K5/8/8/8 b - - 0 1
+z052	fork-selfplay	6	KNPvKPP	D/L	0	-2	d5b4 d5b6 d5c3 d5c7 d5e3 d5e7 f4e3 f4e5 f4f3 f4g3 f6f5	8/8/5pK1/3n4/5kP1/5P2/8/8 b - - 0 1
+z053	fork-selfplay	6	KNPvKPP	D/L	0	-2	e6d5 e6d7 e6e7 e6f7 g8e7 g8f6 h7h5 h7h6	6n1/7p/4k3/4P1K1/5P2/8/8/8 b - - 0 1
+z054	fork-selfplay	6	KNPvKPP	D/L	0	-2	d5b4 d5b6 d5c3 d5c7 d5e3 d5e7 d5f6 e5d6 e5e4 e5e6 e5f6 f5f4	8/8/8/1P1nkp2/7K/4P3/8/8 b - - 0 1
+z055	fork-selfplay	6	KNPvKPP	D/L	0	-2	b7d6 d8c8 d8d7 d8e7 d8e8	3k4/1n6/1P6/p7/P2K4/8/8/8 b - - 0 1
+z056	fork-selfplay	6	KNPvKPP	D/L	0	-2	b1a3 b1c3 b1d2 d7c8 d7d8 d7e8	8/3k4/3P4/1p1K4/1P6/8/8/1n6 b - - 0 1
+z057	fork-selfplay	6	KNPvKPP	D/L	0	-2	f3e2 f3e3 f3e4 f3f2 f3g2 g3g4 h4f5 h4g2 h4g6	8/8/5p2/6kp/7N/5KP1/8/8 w - - 0 1
+z058	fork-selfplay	6	KNPvKPP	D/L	0	-2	d5d4 d5d6 e5c4 e5c6 e5d3 e5d7 e5f3 e5g4 e5g6 f7f6	8/5p2/8/3knKP1/6P1/8/8/8 b - - 0 1
+z059	fork-selfplay	6	KNPvKPP	D/L	0	-2	e5c4 e5c6 e5d3 e5d7 e5f3 e5f7 e6d5 e6d6 e6d7 e6e7 e6f7	8/8/4k3/4n1K1/6p1/6P1/5P2/8 b - - 0 1
+z060	fork-selfplay	6	KNPvKPP	D/L	0	-2	c2a1 c2a3 c2b4 c2e1 c2e3 f2e1 f2e2 f2f1 f2g1 f2g2	8/8/8/8/2p1k2p/7P/2N2K2/8 w - - 0 1
+z061	fork-selfplay	6	KNPvKPP	D/L	0	-2	f5d4 f5e3 f5g3 f5h4 f5h6 f7f6 g7f8 g7g8 g7h7 g7h8	8/3K1pk1/8/5nPP/8/8/8/8 b - - 0 1
+z062	fork-selfplay	6	KNPvKPP	D/L	0	-2	b7d6 b7d8 d7c8 d7d8 d7e7 d7e8	8/1n1k4/1P6/p2K4/P7/8/8/8 b - - 0 1
+z063	fork-selfplay	6	KNPvKPP	D/L	0	-2	d6c8 f5e5 f5e6 f5f6 f5g5 f5g6	8/2P5/3n4/5k2/7p/5K1P/8/8 b - - 0 1
+z064	fork-selfplay	6	KNPvKPP	D/L	0	-2	c4a5 c4b6 c4d2 c4d6 c4e5 e4d3 e4d5 e4e3 e4e5 e4f3 f5f4	8/8/8/1P3pK1/2n1k3/4P3/8/8 b - - 0 1
+z065	fork-selfplay	6	KNPvKPP	D/L	0	-2	c4c5 e3e2 e3f3 f2e4 f2h1	8/8/8/5kp1/2P5/4K3/5N1p/8 w - - 0 1
+z066	fork-selfplay	6	KNPvKPP	D/L	0	-2	d6b5 d6b7 d6c4 d6c8 d6e4 d6e8 d6f5 d6f7 g3g4 h4h3	8/8/1p1N3k/7p/7K/6P1/8/8 w - - 0 1
+z067	fork-selfplay	6	KNvKPPP	L/D	-2	0	*	8/8/8/5PkP/Pn2K3/8/8/8 b - - 0 1
+z068	fork-selfplay	6	KNvKPPP	L/D	-2	0	*	8/8/8/8/5p2/5k2/3Kp2p/7N w - - 0 1
+z069	fork-selfplay	6	KNvKPPP	L/D	-2	0	*	8/7k/5K1P/5PP1/8/5n2/8/8 b - - 0 1
+z070	fork-selfplay	6	KNvKPPP	L/D	-2	0	*	8/8/8/5p2/8/5k2/4p2p/4K2N w - - 0 1
+z071	fork-selfplay	6	KNvKPPP	L/D	-2	0	*	8/8/8/p3pk2/7p/2N2K2/8/8 w - - 0 1
+z072	fork-selfplay	6	KNvKPPP	L/D	-2	0	*	8/8/5p2/8/8/5k2/4pN1p/4K3 w - - 0 1
+z073	fork-selfplay	6	KQPvKRN	D/L	0	-2	a5a6 b2b1 b2b3 b2c1 b2c2 b6a7 b6b3 b6c5 b6c6 b6d6 b6e3 b6f2 b6f6 b6g1 b6g6 b6h6	2k5/2n5/1Q6/P7/r7/8/1K6/8 w - - 0 1
+z074	fork-selfplay	6	KQvKRRP	D/L	0	-2	e5a5 e5c5 e5e1 e5e2 e5e3 e5e4 e6e7 e6e8 g7f6 g7f7 g7g6 g7h6 g7h7	1Q6/6k1/4r3/4r1p1/6K1/8/8/8 b - - 0 1
+z075	fork-selfplay	6	KRPPvKR	L/D	-2	0	*	4k3/6R1/8/7p/5Kp1/7r/8/8 w - - 0 1
+z076	fork-selfplay	6	KRPPvKR	D/L	0	-2	f7e7 f7e8 f7f8 f7g7 f7g8 h2a2 h2b2 h2c2 h2d2 h2e2 h2f2 h2h3 h4h3	8/5k2/7R/8/7p/6p1/7r/6K1 b - - 0 1
+z077	fork-selfplay	6	KRPPvKR	D/L	0	-2	a5a6 a7a6 a7c7 a7d7 a7e7 a7f7 a7g7 a7h7 f2e1 f2e2 f2f1 f2g1 f2g2	1k6/R7/1P6/P7/8/1r6/5K2/8 w - - 0 1
+z078	fork-selfplay	6	KRPPvKR	D/L	0	-2	f2a2 f2b2 f2c2 f2d2 f2e2 f2g2 f2h2 f3e2 f3e3 f7f6 h6h5	8/5p2/7p/5K2/8/5k2/5r2/6R1 b - - 0 1
+z079	fork-selfplay	6	KRPPvKR	D/L	0	-2	f1e1 f1g1 h5h6 h7a7 h7b7 h7c7 h7d7 h7e7 h7f7 h7h6	6k1/7R/6P1/7P/8/8/7r/5K2 w - - 0 1
+z080	fork-selfplay	6	KRPPvKR	D/L	0	-2	a2a3 a2c2 a2d2 a2e2 a2f2 a2g2 a2h2 a4a3 e8d8 e8f8	4k3/R7/8/8/p7/1p6/r7/1K6 b - - 0 1
+z081	fork-selfplay	6	KRPPvKR	D/L	0	-2	a4a5 d3c4 d3e3 d4b4 d4c4 d4d7 d4d8 d4e4 d4g4 d4h4	8/8/8/4k3/P2R4/2PK4/r7/8 w - - 0 1
+z082	fork-selfplay	6	KRPPvKR	D/L	0	-2	a5a6 a7a6 a7c7 a7d7 a7e7 a7f7 a7g7 a7h7 d1c1 d1e1	1k6/R7/1P6/P7/8/8/1r6/3K4 w - - 0 1
+z083	fork-selfplay	6	KRPPvKR	D/L	0	-2	b1a1 b1c1 g5g6 h4h5 h6a6 h6b6 h6c6 h6d6 h6f6 h6h5 h6h7 h6h8	8/8/7R/5kP1/7P/8/7r/1K6 w - - 0 1
+z084	fork-selfplay	6	KRPPvKR	D/L	0	-2	e8d8 e8f8 h2a2 h2b2 h2c2 h2d2 h2e2 h2f2 h2h3 h4h3	4k3/6R1/8/8/7p/6p1/7r/6K1 b - - 0 1
+z085	fork-selfplay	6	KRPPvKR	D/L	0	-2	d7c7 d7c8 d7d8 d7e7 d7e8 h2a2 h2b2 h2c2 h2d2 h2e2 h2f2 h2h3 h4h3	8/3k4/7R/8/7p/6p1/7r/6K1 b - - 0 1
+z086	fork-selfplay	6	KRPPvKR	D/L	0	-2	e6e5 f6e7 f6f7 f6g6 f6g7 g2a2 g2b2 g2c2 g2d2 g2f2 g2h2 g4g3	8/8/4pk2/8/5Kp1/8/6r1/4R3 b - - 0 1
+z087	fork-selfplay	6	KRPPvKR	D/L	0	-2	f3f2 g4g2 g4g3 g4h4 g5f5 g5f6 g5g6	7R/8/8/6k1/4p1r1/4Kp2/8/8 b - - 0 1
+z088	fork-selfplay	6	KRPPvKR	D/L	0	-2	?	8/6kP/6Pr/8/8/6R1/6K1/8 w - - 0 1
+z089	fork-selfplay	6	KRPPvKR	D/L	0	-2	f8e8 f8g8 h2a2 h2b2 h2c2 h2d2 h2e2 h2f2 h2h3 h4h3	5k2/7R/8/8/7p/6p1/7r/6K1 b - - 0 1
+z090	fork-selfplay	6	KRPPvKR	D/L	0	-2	d2c1 d2c2 d2d1 d2e1 d2e2 h5h6 h7a7 h7b7 h7c7 h7d7 h7e7 h7f7 h7h6	6k1/7R/6P1/7P/8/7r/3K4/8 w - - 0 1
+z091	fork-selfplay	6	KRPPvKR	D/L	0	-2	c1b1 c1d1 g5g6 h4h5 h6a6 h6b6 h6c6 h6d6 h6f6 h6h5 h6h7 h6h8	8/8/7R/5kP1/7P/8/6r1/2K5 w - - 0 1
+z092	fork-selfplay	6	KRPPvKR	D/L	0	-2	e2d1 e2d2 e2e1 e2f1 e2f2 h5h6 h7a7 h7b7 h7c7 h7d7 h7e7 h7f7 h7h6	6k1/7R/6P1/7P/8/6r1/4K3/8 w - - 0 1
+z093	fork-selfplay	6	KRPPvKR	D/L	0	-2	a5a6 a7a6 a7c7 a7d7 a7e7 a7f7 a7g7 a7h7 e2d1 e2d2 e2e1 e2f1 e2f2	1k6/R7/1P6/P7/8/r7/4K3/8 w - - 0 1
+z094	fork-selfplay	6	KRPPvKR	D/L	0	-2	b5a4 b5a5 b5a6 b5b6 b5c6 d4a4 d4b4 d4c4 d4d5 d4d6 d4d7 d4d8 d4e4 d4f4 d4g4 d4h4	8/8/8/1kp5/3r4/2K5/3p4/3R4 b - - 0 1
+z095	fork-selfplay	6	KRPPvKR	D/L	0	-2	a5a6 a7a6 a7c7 a7d7 a7e7 a7f7 a7g7 a7h7 f1e1 f1g1	1k6/R7/1P6/P7/8/8/1r6/5K2 w - - 0 1
+z096	fork-selfplay	6	KRPPvKR	D/L	0	-2	a5a6 a5a7 a5a8 a5b5 a5c5 a5d5 a5e5 a5f5 e1d1 e1f1 g5g6	8/8/8/R5P1/P7/5k2/6r1/4K3 w - - 0 1
+z097	fork-selfplay	6	KRPPvKR	D/L	0	-2	a4a5 a6a5 a6a7 a6a8 a6c6 a6e6 a6f6 a6g6 a6h6 b5b6 e1d1 e1f1	8/8/R7/1Pk5/P7/8/r7/4K3 w - - 0 1
+z098	fork-selfplay	6	KRPPvKR	L/D	-2	0	*	8/1K1k4/2r5/R1P4P/8/8/8/8 b - - 0 1
+z099	fork-selfplay	6	KRPvKBP	D/L	0	-2	d5c4 d5c5 d5c6 d5d4 f3f4 g8a8 g8c8 g8d8 g8e8 g8f8 g8g2 g8g4 g8h8	6R1/8/5k2/3K1p2/8/5P2/7b/8 w - - 0 1
+z100	fork-selfplay	6	KRPvKBP	D/L	0	-2	b5b4 d5c5 d5c6 d5d4 d5d6 d5e4 d5e5 d5e6 f4a4 f4c4 f4d4 f4e4 f4f1 f4f2 f4f3 f4f5 f4f6 f4g4 f4h4	3B4/8/5P2/1p1k4/5r2/1K6/8/8 b - - 0 1
+z101	fork-selfplay	6	KRPvKBP	D/L	0	-2	b3a3 b3b1 b3b2 b3b5 b3b6 b3g3 b3h3 e6d6 e6d7 e6e7 e6f6 e6f7	8/8/1P2k3/B3p3/4K3/1r6/8/8 b - - 0 1
+z102	fork-selfplay	6	KRPvKBP	D/L	0	-2	d4a4 d4b4 d4c4 d4d1 d4d2 d4d3 d4d8 d4g4 d4h4	8/8/8/pB2K3/P2r4/2k5/8/8 b - - 0 1
+z103	fork-selfplay	6	KRPvKBP	D/L	0	-2	a3a1 a3a2 a3a4 a3a5 a3b3 a3c3 a3d3 a3h3 h5g6	3B4/8/7p/P6k/5K2/r7/8/8 b - - 0 1
+z104	fork-selfplay	6	KRPvKBP	D/L	0	-2	d5c4 d5c5 d5c6 d5d4 d5e4 g5g4 g8a8 g8c8 g8e8 g8f8 g8h8	6r1/2B5/7K/3k1Pp1/8/8/8/8 b - - 0 1
+z105	fork-selfplay	6	KRPvKBP	L/D	-2	0	*	8/4B3/2k2P2/1p6/1K6/5r2/8/8 w - - 0 1
+z106	fork-selfplay	6	KRPvKBP	L/D	-2	0	*	8/8/2K5/p2R4/Pb2k3/8/8/8 b - - 0 1
+z107	fork-selfplay	6	KRPvKBP	L/D	-2	0	*	8/3B4/4P3/4rp2/3K1k2/8/8/8 w - - 0 1
+z108	fork-selfplay	6	KRPvKNP	D/L	0	-2	c5b4 c5b5 c5b6 c5c4 c5c6 c5d6 f8a8 f8b8 f8c8 f8d8 f8e8 f8f3 f8f6 f8f7 f8g8 f8h8	5r2/8/8/2k5/4K3/3p1N2/3P4/8 b - - 0 1
+z109	fork-selfplay	6	KRPvKNP	L/D	-2	0	*	8/8/3n4/2kp3R/5K2/4P3/8/8 b - - 0 1
+z110	fork-selfplay	6	KRPvKNP	D/L	0	-2	c5b4 c5b5 c5b6 c5c4 c5c6 c5d5 c5d6 d8a8 d8b8 d8c8 d8d5 d8d6 d8d7 d8e8 d8f8 d8g8 d8h8	3r4/8/8/2k5/8/3pKN2/3P4/8 b - - 0 1
+z111	fork-selfplay	6	KRPvKRP	L/D	-2	0	*	8/8/2R5/3r4/7P/8/3p1K2/3k4 w - - 0 1
+z112	fork-selfplay	6	KRPvKRP	L/D	-2	0	*	8/6K1/4k1P1/7R/6rp/8/8/8 b - - 0 1
+z113	fork-selfplay	6	KRPvKRP	D/L	0	-2	b8a8 b8b2 b8b4 b8b6 b8b7 b8d8 b8e8 b8f8 b8g8 b8h8 c3b2 c3c2 c3d4 d3d4	1R6/8/8/3p4/k7/2KP4/8/3r4 w - - 0 1
+z114	fork-selfplay	6	KRPvKRP	D/L	0	-2	b8a8 b8b4 b8b5 b8b6 b8b7 b8c8 b8d8 b8e8	1R3K2/5P1k/8/8/8/1p2r3/8/8 w - - 0 1
+z115	fork-selfplay	6	KRPvKRP	D/L	0	-2	?	8/5k2/8/7K/7P/4R3/4p1r1/8 b - - 0 1
+z116	fork-selfplay	6	KRPvKRP	D/L	0	-2	c5c6 d5d1 d5d2 d5d4 d5d6 d5d7 d5d8 e3d2 e3e2 e3f2	8/8/4r3/2PR4/4p1k1/4K3/8/8 w - - 0 1
+z117	fork-selfplay	6	KRPvKRP	D/L	0	-2	e6d7 e6e7 e6f5 e6f7 h1a1 h1b1 h1c1 h1e1 h1f1 h1g1	8/8/4k3/4P3/3K4/8/3R3p/7r b - - 0 1
+z118	fork-selfplay	6	KRPvKRP	D/L	0	-2	d4a4 d4b4 d4c4 d4d1 d4d2 d4d5 d4d6 d4e4 d4f4 d4g4 d4h4	3K4/3P1k2/8/7p/3R4/2r5/8/8 w - - 0 1
+z119	fork-selfplay	6	KRPvKRP	D/L	0	-2	c3c2 c3d2 c3d3 c3d4 c4b4 c4d4 c4e4 c4f4 c4g4 c4h4 f5f4	8/8/8/R1P2p2/2r5/K1k5/8/8 b - - 0 1
+z120	fork-selfplay	6	KRvKBPP	L/D	-2	0	*	8/4k3/1P2P3/2K5/2B5/8/8/1r6 b - - 0 1
+z121	fork-selfplay	6	KRvKNPP	D/L	0	-2	b3b4 b3c3 c4a3 c4a5 c4b2 c4b6 c4d2 c4d6 c4e5 d3d2 e3e2	8/2R5/8/8/2n5/1k1pp3/8/4K3 b - - 0 1
+z122	fork-selfplay	6	KRvKNPP	L/D	-2	0	*	1k6/8/1PP1K3/3N4/8/8/3r4/8 b - - 0 1
+z123	fork-selfplay	7	KBPvKPPP	D/L	0	-2	e7a3 e7b4 e7c5 e7d6 e7f8 g3f2 g3f4 g3g2 g3h2	8/4bP2/8/7K/7p/6kP/6P1/8 b - - 0 1
+z124	fork-selfplay	7	KBPvKPPP	D/L	0	-2	d7a4 d7b5 d7c8 d7e6 d7e8 f2f3 f4e3 f4g3 f4g5	8/3B4/4p3/3k1p2/4pK2/8/5P2/8 w - - 0 1
+z125	fork-selfplay	7	KBPvKPPP	D/L	0	-2	c8a6 c8b7 c8e6 f2f3 f4e3 f4g3 f4g5	2B5/8/3kp3/5p2/4pK2/8/5P2/8 w - - 0 1
+z126	fork-selfplay	7	KRPPvKRP	D/L	0	-2	f5a5 f5b5 f5c5 f5d5 f5e5 f5f8 f5g5 f5h5	8/8/6k1/5R1p/4PP1K/5r2/8/8 w - - 0 1
+z127	fork-selfplay	7	KRPPvKRP	D/L	0	-2	a5a6 c4b3 c4b4 c4b5 c4d5 c5b5 c5c7 c5c8 c5d5 c5f5 c5g5 c5h5	8/8/4r3/P1R5/2Kp4/3Pk3/8/8 w - - 0 1
+z128	fork-selfplay	7	KRPPvKRP	D/L	0	-2	f5a5 f5b5 f5c5 f5d5 f5e5 f5f4 f5f6 f5f7 f5f8	8/8/8/5R2/5p1k/7P/6PK/5r2 w - - 0 1
+z129	fork-selfplay	7	KRPPvKRP	D/L	0	-2	d5d4 f4e5 f4f3 f4g3 f4g4 h1a1 h1b1 h1c1 h1d1 h1e1 h1f1 h1g1 h1h2 h1h3	8/8/8/3p1p1R/5k1P/3K4/8/7r b - - 0 1
+z130	fork-selfplay	7	KRPPvKRP	L/D	-2	0	*	8/8/2R1P3/8/3pr1p1/3k2K1/8/8 w - - 0 1
+z131	fork-selfplay	7	KRPPvKRP	L/D	-2	0	*	3k4/1R6/3P2K1/6P1/8/8/1p6/1r6 b - - 0 1
+z132	fork-selfplay	7	KRPPvKRP	D/L	0	-2	b4a4 b4b2 b4b3 b4b5 b4b6 b4b7 b4b8 c4c3 d3d4 d3e3 d3e4	8/8/8/8/1rp4p/3k3K/1P3R2/8 b - - 0 1
+z133	fork-selfplay	7	KRPPvKRP	D/L	0	-2	c7c8 c7e7 f5f4 g2g1 g2g3 g2h1 g2h2 g2h3 g4g3	8/2r5/2P5/5p2/2R3p1/8/4K1k1/8 b - - 0 1
+z134	fork-selfplay	7	KRPPvKRP	D/L	0	-2	c5b5 c5b6 e4e5 e6b6 e6c6 e6d6 e6f6	8/3k4/4Rp2/2KP4/r3P3/8/8/8 w - - 0 1
+z135	fork-selfplay	7	KRPPvKRP	L/D	-2	0	*	8/8/5k2/R7/5Pp1/p7/r7/7K w - - 0 1
+z136	fork-selfplay	7	KRPPvKRP	D/L	0	-2	b8a7 b8a8 b8c7 b8c8 f1a1 f1b1 f1c1 f1d1 f1f2 f1h1	1K6/1P6/5r2/k7/P7/8/5p2/5R2 w - - 0 1
+z137	fork-selfplay	7	KRPPvKRP	D/L	0	-2	c5a5 c5b5 c5c6 c5c7 c5c8 c5d5 c5g5 c5h5 e3d4 e3e4 e3f4 f2f3 f2f4	8/8/4k3/2R5/2P1p3/4K3/2r2P2/8 w - - 0 1
+z138	fork-selfplay	7	KRPPvKRP	D/L	0	-2	d3d2 f3e3 f3f1 f3f2 f3f4 f3f5 g5f4 g5f6 g5g4 g5h4 g5h5 g5h6	8/8/8/3R1Pk1/8/3p1r1p/7K/8 b - - 0 1
+z139	fork-selfplay	7	KRPPvKRP	D/L	0	-2	?	8/P6R/r2k1K2/8/7p/7P/8/8 w - - 0 1
+z140	fork-selfplay	7	KRPPvKRP	D/L	0	-2	a2a1 a2a3 a2a4 a2a5 a2a6 a2a7 a2b2 a2c2 a2d2 a2e2 a2g2 a2h2 c3b2 c3b3 c3b4 c3c2 c3d2 c3d3 c3d4 f3f2	R7/P7/8/8/2p5/2k2p2/r7/5K2 b - - 0 1
+z141	fork-selfplay	7	KRPPvKRP	L/D	-2	0	*	k7/P7/8/8/4p1K1/5r2/R4P2/8 b - - 0 1
+z142	fork-selfplay	7	KRPPvKRP	D/L	0	-2	a1b1 a1c1 a1d1 a1e1 a1f1 a1g1 a1h1 e7d7 e7d8 e7e8 e7f8	8/4k1p1/R5P1/8/8/1K6/p7/r7 b - - 0 1
+z143	fork-selfplay	7	KRPPvKRP	D/L	0	-2	c8a8 c8e8 c8h8 f3f2 g3f4 g3h3 g3h4	2r5/2PR4/8/8/6p1/5pk1/8/6K1 b - - 0 1
+z144	fork-selfplay	7	KRPPvKRP	D/L	0	-2	b7a8 b7b8 b7c8 f4f3 f6b6 f6c6 f6d6 f6e6 f6f5 f6f7 f6f8 f6g6 f6h6 g4g3	8/1k6/1P3r2/8/1R3pp1/8/5K2/8 b - - 0 1
+z145	fork-selfplay	7	KRPPvKRP	D/L	0	-2	d3d4 d5d6 d5e4 d5e5 d5e6 d7d6 d7d8 d7e7 d7f7 d7g7 d7h7	8/3R4/1k6/r1pK4/2P5/3P4/8/8 w - - 0 1
+z146	fork-selfplay	7	KRPPvKRP	L/D	-2	0	*	R7/P7/8/8/3p2p1/6k1/r7/4K3 w - - 0 1
+z147	fork-selfplay	7	KRPPvKRP	D/L	0	-2	g4a4 g4b4 g4c4 g4g3 g4h4 g6f7 g6g7 g6h6 g6h7	8/8/6k1/4K2p/6rP/8/6p1/6R1 b - - 0 1
+z148	fork-selfplay	7	KRPPvKRP	D/L	0	-2	a3a4 a3a5 a3a6 a3a7 a3c3 a3d3 a3e3 f2e1 f2e2 f2e3 f2f1 f2g1 f2g2 f2g3	R7/P7/8/8/1p6/r4p2/1K3k2/8 b - - 0 1
+z149	fork-selfplay	7	KRPPvKRP	L/D	-2	0	*	8/8/R5P1/2k5/2P5/2Kp2r1/8/8 b - - 0 1

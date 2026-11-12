@@ -317,6 +317,7 @@ jobs:
           ctest --test-dir build/clang-release -L python --output-on-failure
           .venv/bin/python -I -B -m unittest discover -s tools/datagen -p 'test_*.py'
           .venv/bin/python -I -B -m unittest discover -s tools/nnue -p 'test_*.py'
+          .venv/bin/python -I -B -m unittest discover -s tools/zugzwang -p 'test_*.py'
 
   linux-msan:
     name: Linux MSan (clang 21, libc++)
