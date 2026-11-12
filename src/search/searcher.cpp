@@ -52,6 +52,25 @@ Searcher::Searcher(TransTable& tt) : tt_(tt) {
   pos_->make_null();
 }
 
+// Idea 79's band (the owner's plan: a band of 100 cp or less; the offline
+// probe: the narrow readout is more than 100 cp from the full output at 5.6%
+// of positions, tools/measure/head_probes.py narrow).
+constexpr int NarrowFarBand = 100;
+
+int Searcher::eval_gated(int ply, int alpha, int beta) {
+  const int full = eval_at(ply);
+#if defined(FORK_EVAL_NNUE) && FORK_NET_ARCH == 8
+  if (switches.use_narrow_far) {
+    const int narrow = features_.narrow_readout(*net_, ply, *pos_);
+    if (window_gap(narrow, alpha, beta) > NarrowFarBand) return narrow;
+  }
+#else
+  (void)alpha;
+  (void)beta;
+#endif
+  return full;
+}
+
 [[gnu::always_inline]] inline int Searcher::eval_at(int ply) {
 #if defined(FORK_EVAL_NNUE)
   return features_.evaluate(*net_, ply, *pos_);
@@ -273,7 +292,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     }
   }
 
-  f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);
+  f.static_eval = in_check ? ScoreNone : tt_hit && hit.eval != ScoreNone ? hit.eval : eval_gated(ply, alpha, beta);
   FORK_STAT(++(in_check                          ? counters.check_nodes_main
                : tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_main
                                                  : counters.evals_main));
@@ -778,7 +797,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     f.static_eval = ScoreNone;
     FORK_STAT(++counters.check_nodes_quiesce);
   } else {
-    f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_at(ply);  // as in negamax
+    f.static_eval = tt_hit && hit.eval != ScoreNone ? hit.eval : eval_gated(ply, alpha, beta);  // as in negamax
     FORK_STAT(++(tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_quiesce : counters.evals_quiesce));
 #ifdef FORK_SEARCH_STATS
     // Crucial-point ground truth: a sampled quiescence evaluation site.

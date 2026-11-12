@@ -167,6 +167,13 @@ class FeatureStack {
   }
   // The evaluation at `ply` of `pos` (the position the stack has reached).
   int evaluate(const NetFile& net, int ply, const Position& pos);
+#if FORK_NET_ARCH == 8
+  // Idea 79's fixed-node oracle (switch use_narrow_far): a readout on the
+  // first half of each perspective's hidden columns (narrow_readout.inc,
+  // fitted to r8brft1 only), from the accumulator evaluate() left at `ply`.
+  // Scalar and slow: it measures accuracy at fixed nodes, not speed.
+  int narrow_readout(const NetFile& net, int ply, const Position& pos) const;
+#endif
 #ifdef FORK_SEARCH_STATS
   const FeatureStackTally& tally() const { return tally_; }
   void set_tally(const FeatureStackTally& t) { tally_ = t; }  // X10: undo a side search's counts

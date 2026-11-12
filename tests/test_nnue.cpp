@@ -768,4 +768,41 @@ TEST_CASE("nnue", "a move's link changes equal the difference of the full link l
   CHECK(changed > 500);
 }
 
+// Idea 79's narrow readout (narrow_readout.inc, fitted to r8brft1): the
+// engine's integer readout equals the Python reference's
+// (tools/measure/head_probes.py narrow --parity-from, the integer formula)
+// on the first 12 positions of tests/nnue/r8brft1.parity. Only with r8brft1
+// embedded (its start position evaluates to 18 there).
+#if FORK_NET_ARCH == 8
+TEST_CASE("nnue", "idea 79: the narrow readout equals the Python reference on r8brft1") {
+  Position start;
+  if (full_eval(embedded_net(), start) != 18) return;  // another network: the readout does not apply
+  struct Case {
+    const char* fen;
+    int narrow;
+  };
+  const Case cases[] = {
+      {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 12},
+      {"r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", -49},
+      {"8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1", 59},
+      {"r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1", 105},
+      {"rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8", 110},
+      {"r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", 2},
+      {"r2qkbnr/pp1bpppp/2np4/1B6/3pP3/2P2N2/PP3PPP/RNBQK2R w KQkq - 0 6", -14},
+      {"r2qk2r/pp3pp1/2ppbn1p/2b1p3/3nP3/2NPBNPP/PPP2PB1/R2Q1RK1 w kq - 2 10", 7},
+      {"r1bqkbnr/pppp1ppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQKB1R w KQkq - 0 4", -4},
+      {"rnbqk2r/ppppppbp/5np1/8/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4", 40},
+      {"rnbqkb1r/1p3ppp/p3pn2/2pp4/3P1P2/2P1PN2/PP4PP/RNBQKB1R w KQkq - 0 6", -1},
+      {"rnbqk2r/pppp1ppp/5n2/2b1p3/2B1P3/3P3P/PPP2PP1/RNBQK1NR b KQkq - 0 4", -10}};
+  auto stack = std::make_unique<FeatureStack>();
+  for (const Case& c : cases) {
+    Position pos;
+    CHECK(pos.set_fen(c.fen));
+    stack->reset(embedded_net(), pos);
+    (void)stack->evaluate(embedded_net(), 0, pos);
+    CHECK_EQ(stack->narrow_readout(embedded_net(), 0, pos), c.narrow);
+  }
+}
+#endif
+
 }  // namespace forkeng::test

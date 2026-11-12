@@ -800,4 +800,27 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
   return evaluate_position(net, entries_[ply].acc, pos);
 }
 
+#if FORK_NET_ARCH == 8
+namespace {
+#include "eval/nnue/narrow_readout.inc"
+}  // namespace
+
+int FeatureStack::narrow_readout(const NetFile& net, int ply, const Position& pos) const {
+  constexpr int Half = NetHidden / 2;
+  const Accumulator& a = entries_[ply].acc;
+  const Color stm = pos.side_to_move();
+  const int k = phase_bucket(net, pos);
+  std::int64_t s = 0;
+  for (int half = 0; half < 2; ++half) {
+    const std::int16_t* v = a.values[half == 0 ? stm : ~stm];
+    for (int i = 0; i < Half; ++i) {
+      const std::int64_t x = std::clamp<std::int32_t>(v[i], 0, NetQa);
+      s += x * x * NarrowReadoutWeights[k][half * Half + i];
+    }
+  }
+  const std::int64_t y = s / NetQa + NarrowReadoutBias[k];
+  return clamp_cp(y * net.scale / (NetQa * NetQb));
+}
+#endif
+
 }  // namespace forkeng

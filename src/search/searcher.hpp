@@ -129,6 +129,12 @@ struct SearchQuota {
 //   switches) since its SPRTs against off passed: STC +18.69 +/- 7.18 Elo
 //   after 3,200 games, LTC +10.23 +/- 5.14 Elo after 4,992 games, design R
 //   [0, 6]; 2026-11-08.
+// - use_narrow_far: idea 79's fixed-node oracle (an experiment, never a
+//   default): a static evaluation whose narrow readout (the first 256 hidden
+//   columns of each perspective, accumulator.hpp) lies more than
+//   NarrowFarBand from the nearest finite bound of the node's window is that
+//   readout; otherwise the full network's. The full accumulator is still
+//   computed, so it measures accuracy at fixed nodes only.
 // - use_cut_node_lmr: node types (tier 2, T17): each node gets an expected
 //   type from its parent (PlyFrame::expected_cut: a PV node's later children
 //   and an all node's children are expected cut nodes, a cut node's are
@@ -177,7 +183,7 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)            X(use_narrow_far, UseNarrowFar, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -564,6 +570,9 @@ class Searcher {
   void play(int ply, Move m);
   void play_null(int ply);
   int eval_at(int ply);
+  // eval_at, or with use_narrow_far idea 79's narrow readout when it lies
+  // more than NarrowFarBand from the nearest finite bound of the window.
+  int eval_gated(int ply, int alpha, int beta);
 
   bool poll_limits();  // true once the search must stop
   // The soft limit for this iteration's soft check: the planned one, or with
