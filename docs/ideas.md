@@ -2719,3 +2719,22 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 89. History ageing between searches (the engine survey's D17, think tank R16)
+
+- **type:** ELO (search); flag `use_history_ageing` (off).
+- **idea** (the engine survey's D17; think tank R16, step 12; concept
+  only): at the start of each search (each `go`) every history entry keeps
+  `HistoryKeepQuarters` / 4 of its value.
+- **status:** **built, queued (coordinator, 2026-11-11 night; owner's rules
+  of 2026-11-11: nat/retry).** Built on phase-4 a95e269 behind the switch,
+  off, branch tier2/d17-history-ageing; bench unchanged (and unchanged with
+  the switch on: each bench position starts from cleared histories). Design
+  R at STC at the natural value, 2 quarters (a half), against the
+  switch-off commit (night item 52a); one retry at 3 quarters if it is not
+  H1 (52b). Gated behind state/gate-e1.done. A pass is adopted
+  (pre-approved) and the constant joins the final retune's SPSA
+  dimensions. Nothing is adopted before its verdict.
+- **runtime cost:** one pass over the history tables (about 2.5 MB) per
+  search; UNVERIFIED until the SPRT's nps report.
+- **earliest phase:** Phase 4.

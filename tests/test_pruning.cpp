@@ -462,6 +462,52 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
   for (int b = 1; b < ThreatBuckets; ++b) CHECK_MSG(written(b) == 0, "bucket " << b);
 }
 
+// History ageing between searches (the engine survey's D17): with the switch
+// on, a second search after a first one, the histories not cleared between
+// them, still finds mates and plays a legal move, and differs from the same
+// pair of searches with the switch off (fault check: ageing never called
+// leaves it the same). A search after clear_history() is unchanged: ageing an
+// empty table changes nothing.
+TEST_CASE("pruning", "history ageing: still correct, and it changes a second search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_history_ageing);  // off until its SPRT
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  // Two searches in a row on one history (the TT cleared before each, so
+  // only the history carries over); returns the second's result.
+  const auto second = [&](const SearchSwitches& s) {
+    fx.searcher->switches = s;
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    Position pos;
+    CHECK(pos.set_fen(kiwipete));
+    SearchQuota limits;
+    limits.depth = depth;
+    fx.searcher->deliberate(pos, limits, fx.stop, nullptr, nullptr);
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    const Move next = pos.parse_uci("d5e6");  // the same game's next position
+    CHECK(!next.is_none());
+    pos.make(next);
+    return fx.searcher->deliberate(pos, limits, fx.stop, nullptr, nullptr);
+  };
+  SearchSwitches on, off;
+  on.use_history_ageing = true;
+  off.use_history_ageing = false;  // explicitly off: the test commit turns it on by default
+  const SearchResult a = second(on), b = second(off);
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  pos.make(pos.parse_uci("d5e6"));
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(a.best));
+  CHECK_MSG(a.nodes != b.nodes, "history ageing left the second search unchanged: " << a.nodes);
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  // After clear_history() the first search is the same as with the switch off.
+  CHECK(fx.tree_sizes(on, depth) == fx.tree_sizes(off, depth));
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -542,6 +588,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
   s.use_threat_buckets = true;
+  s.use_history_ageing = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
