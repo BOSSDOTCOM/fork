@@ -213,6 +213,8 @@ tool_tests() {  # python | all
     "$py" -I -B -m unittest discover -s tools/nnue -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/nnue"
     # Phase 4 step 1's measurement tools (DESIGN.md §5.7); the game replay reads PGNs with python-chess.
     "$py" -I -B -m unittest discover -s tools/measure -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/measure"
+    # The zugzwang set for B6 (2026-11-12): its rules, the game-file replay and the committed rows.
+    "$py" -I -B -m unittest discover -s tools/zugzwang -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/zugzwang"
   else
     echo "tool tests: tools/datagen skipped (no python-chess or zstandard in $py)" >>"$log"
   fi
