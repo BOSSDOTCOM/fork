@@ -197,6 +197,10 @@ struct SearchQuota {
 //   DirectCheckBonus to its ordering score (MoveSelector::start_main,
 //   direct_check_targets). On since its STC SPRT against off passed: +5.50
 //   +/- 3.93 Elo after 9,600 games, design R [0, 6]; 2026-11-12.
+// - use_skip_check_exempt: the history skip (use_history_skip) never skips
+//   a quiet move that gives direct check (gives_direct_check, D13's test);
+//   the skip's score has no D13 bonus, so without the exemption a check the
+//   selector put early can be skipped on bad history. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -239,7 +243,8 @@ struct SearchQuota {
   X(use_major_drift, UseMajorDrift, false)               \
   X(use_threat_drift, UseThreatDrift, false)             \
   X(use_pair_sum_update, UsePairSumUpdate, true)         \
-  X(use_check_order_bonus, UseCheckOrderBonus, true)
+  X(use_check_order_bonus, UseCheckOrderBonus, true)     \
+  X(use_skip_check_exempt, UseSkipCheckExempt, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -643,6 +648,9 @@ class Searcher {
   // Tests only: the butterfly history (the threat buckets' read and update
   // checks, tier 2 T56).
   const QuietHistory& butterfly_view() const { return history_; }
+  // Tests only: the butterfly history, to set entries (the history skip's
+  // exemption for checking quiets).
+  QuietHistory& butterfly_edit() { return history_; }
 
   // Tests only: the root move that failed high in the iteration the last
   // deliberate() stopped in and was not yet re-searched to an exact score

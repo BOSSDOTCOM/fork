@@ -720,7 +720,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       // score (the butterfly history and the weighted reply and follow
       // tables, as the selector orders quiets) is at or below a threshold growing
       // more negative with depth is skipped unsearched.
-      // (T56: the move's threat bucket, as the selector read it.)
+      // (T56: the move's threat bucket, as the selector read it.) With
+      // use_skip_check_exempt a quiet move that gives direct check (D13's
+      // test) is never skipped: the score has no D13 bonus, and the selector
+      // may have put the check early. Tested last, so only a move the skip
+      // would take pays for it.
       const auto order_score = [&] {
         return quiet_order_score(pos, m, switches.use_history ? &history_ : nullptr,
                                  switches.use_history ? pair_history_ : nullptr,
@@ -733,7 +737,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         ++counters.history_skip_site_bins[depth][skip_score_bin(order_score())];
 #endif
       if (switches.use_history_skip && can_prune && quiet && depth <= HistorySkipMaxDepth &&
-          order_score() <= -HistorySkipPerPly * depth) {
+          order_score() <= -HistorySkipPerPly * depth &&
+          !(switches.use_skip_check_exempt && gives_direct_check(pos, m))) {
         FORK_STAT(++counters.history_skips);
         continue;
       }

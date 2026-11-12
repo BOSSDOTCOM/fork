@@ -628,6 +628,42 @@ TEST_CASE("pruning", "direct-check bonus: still correct, and it changes the sear
             "the direct-check bonus left all three trees unchanged");
 }
 
+// The history skip's exemption for checking quiets (use_skip_check_exempt):
+// the only mate, Ra1-a8 (a quiet direct check), is given the worst butterfly
+// history in every threat bucket (-HistoryMax, far below the skip's
+// threshold at depths 1 to HistorySkipMaxDepth), so it is ordered after the
+// other quiets and the skip drops it unless the exemption is on. A
+// zero-window probe of the root (a non-PV node) at beta = mate in 1 finds
+// the mate at each of those depths with the exemption and fails low without
+// it (fault check: an exemption that never applies fails the first case).
+// Late move pruning and futility pruning are off so that only the skip can
+// drop the move. The position is the mate-in-1 case above.
+TEST_CASE("pruning", "history skip: a quiet direct check with bad history is exempt only with the switch") {
+  CHECK(!SearchSwitches{}.use_skip_check_exempt);  // off until its SPRT
+  PruningFixture fx;
+  const std::string_view fen = "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1";
+  const auto probe = [&](bool exempt, int depth) {
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    SearchSwitches s;
+    s.use_lmp = s.use_futility = false;
+    s.use_history_skip = true;
+    s.use_skip_check_exempt = exempt;
+    fx.searcher->switches = s;
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    const Move mate = pos.parse_uci("a1a8");
+    CHECK(!mate.is_none() && !mate.is_capture() && gives_direct_check(pos, mate));
+    for (int b = 0; b < ThreatBuckets; ++b) fx.searcher->butterfly_edit().apply(White, mate, -HistoryMax, b);
+    CHECK(fx.searcher->butterfly_view().value(White, mate, 0) <= -HistorySkipPerPly * HistorySkipMaxDepth);
+    return fx.searcher->probe_zero_window(pos, mate_score(1), depth, fx.stop);
+  };
+  for (int depth = 1; depth <= HistorySkipMaxDepth; ++depth) {
+    CHECK_MSG(probe(true, depth) >= mate_score(1), "depth " << depth << ": the exempt check was skipped");
+    CHECK_MSG(probe(false, depth) < mate_score(1), "depth " << depth << ": the check was not skipped");
+  }
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -709,7 +745,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
   s.use_threat_buckets = s.use_capture_probe = true;
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = true;
-  s.use_pair_sum_update = s.use_check_order_bonus = true;
+  s.use_pair_sum_update = s.use_check_order_bonus = s.use_skip_check_exempt = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
