@@ -67,7 +67,7 @@
   X(CaptureProbeReduction, 5, 2, 10, 1)     \
   X(CaptureProbeMargin, 80, 40, 160, 6)     \
   X(SingularKneeDepth, 12, 6, 24, 1)        \
-  X(MultiExtensionStepQuarters, 4, 2, 8, 1) \
+  X(MultiExtensionStepQuarters, 2, 2, 8, 1) \
   X(ExtensionBudgetDivisor, 4, 2, 8, 1)     \
   X(HistoryBonusFactor, 25, 12, 50, 2)      \
   X(HistoryBonusCap, 1250, 625, 2500, 94)   \
