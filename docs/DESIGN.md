@@ -1420,6 +1420,21 @@ after it).**
   acceptance test; data verification before a part is sealed; the full CI
   before any merge to main; the fixed-node screen for new networks.
 
+**Offline re-measurement rules set retune ranges only (owner, 2026-11-12;
+the staleness audit, docs/research/staleness-audit-2026-11-12.md §4.2).**
+A declared offline measurement rule (a label-and-sweep grid's quality per
+node, a flag precision, a cutoff-share bound, a bench percentile, an
+ordering index), re-run on a new network or search, only sets or widens
+its constant's final-retune range so that the range covers the new
+reading; it never gates a test and never picks a value by itself: games
+(an SPRT, a head-to-head or the SPSA) decide. The evidence: in every case
+where games or the SPSA checked a rule's pick, the pick lost or the tuner
+moved away from it; `SingularMarginPerPly` 22, T27's rule re-run on
+r8brft1, lost to 6 by 26.76 ± 9.93 Elo (design R STC, H0), and the
+quality-per-node rules ranked "off" above every setting for IIR and
+ProbCut, which then passed in games (IIR +21.45 STC and +26.25 LTC,
+ProbCut +9.40 LTC). Area rule: .claude/rules/testing.md.
+
 **A gauntlet's report step (owner, 2026-11-09).** When a run of
 `.github/workflows/gauntlet.yml` (a gauntlet or an anchor check) ends, the
 session that reports it first archives it: `tools/gauntlet/archive.sh
@@ -4406,6 +4421,7 @@ models are scored on the half of the games they were not fitted on.
 | 2026-11-12 | **The split search's settings are tuned values, re-checked as the data grows (owner, about 1:30 PM EST).** The save share (now 50%) and the saved and unsaved node budgets (20,000 and 4,000; idea 13, adopted 2026-10-31) are re-checked whenever the data volume grows substantially, like other tuned values. The label-depth experiment's result (idea 62) and idea 80's 8c arm (labelling the unsaved half) together decide the next settings, for example deeper saved labels and/or a higher save share if deeper labels win at equal CPU. Until then data generation keeps the current settings. |
 | 2026-11-12 | **Correction tables: the offline gate is a safety check, the SPRT decides (owner, about 2:05 PM EST).** Pieces@64 on top of the adopted minor@32 failed the offline gate (runaway: error +12.74 cp against the head, 1.23% of visits at the limit; pieces@32 on top +2.99 cp, 0.24%). No standalone stacking SPRT now: the stack folds into idea 59's follow-up redesign, where the depth-scaled (and window-gated) variant of minor@32 + pieces@32 (shares sum to 64) is tested against the minor@32 head when slots open. Rule: the offline gate only blocks runaway (worse error or more than 0.1% of visits at the limit); a stack that passes it goes to a design R SPRT, which decides adoption (ideas.md 78, 59). |
 | 2026-11-12 | **`SingularMarginPerPly`'s final-retune range 2-16 (owner, about 2:10 PM EST: "SingularMarginPerPly final-retune range 2-16."; range only, bench unchanged).** Was 2-12; default 6 and step 1 unchanged. T27's rule 1 re-run on r8brft1 picked 22, and 22 lost its design R STC SPRT against 6 (H0 after stage 0, −26.76 ± 9.93 Elo; the staleness audit, docs/research/staleness-audit-2026-11-12.md), so the 2-44 planned that morning (the ranges rule's twice of 22) is replaced. src/tune/params.hpp, final-retune.md §3.2 and §3.3, the constants table; the tuning build's bounds case (tests/test_search.cpp) searches 16. |
+| 2026-11-12 | **Offline re-measurement rules set retune ranges only; they never gate or pick values by themselves (owner, about 2:10 PM EST; Testing setup).** The staleness audit (docs/research/staleness-audit-2026-11-12.md, on phase-4 75d53f0 and r8brft1) re-ran every declared measurement rule and compared each pick that games or the SPSA had checked: none won. `SingularMarginPerPly` 22 (T27's rule 1 re-run) lost to 6, H0 after stage 0, −26.76 ± 9.93 Elo; the quality-per-node rules ranked "off" first for IIR (+21.45 STC, +26.25 LTC in games) and ProbCut (STC H0 −5.29 on S512r2, LTC +9.40), and their picks for the LMR history term, rising RFP and the threat set lost (5 of 5 wrong in sign or order); the 1% cutoff bounds (LMP allowance, RFP margin) were moved by the SPSA or lost in games; aspiration's p90 rule now says 29 where the SPSA kept 12. So a re-run reading justifies a range that covers it; it is neither a gate nor a pick. The area rule is in .claude/rules/testing.md (1f38e18). |
 
 ## 7. Performance doctrine (governs every phase)
 
