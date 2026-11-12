@@ -467,7 +467,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // does nothing.
 TEST_CASE("pruning", "root-near history: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_root_near_history);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_root_near_history);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_root_near_history = true;
   fx.searcher->switches = on;
