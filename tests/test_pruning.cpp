@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // with the quiescence search off it does nothing.
 TEST_CASE("pruning", "quiescence move cap: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_quiesce_move_cap);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_quiesce_move_cap);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_quiesce_move_cap = true;
   fx.searcher->switches = on;
