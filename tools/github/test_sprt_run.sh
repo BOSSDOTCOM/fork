@@ -27,7 +27,8 @@
 # other run instead of blocking (two SPRT lanes); FORK_SPRT_SERIAL=1 restores the block. Since 2026-11-12 (the
 # owner's rule of 2026-11-11: TT-policy tests at a pressure-matched Hash): --hash MB sets both engines' Hash for every
 # kind and is part of the declared design (a restart with another Hash is refused); a bad value or a differing HASH
-# is refused before any dispatch; without it the default (16; 64 at LTC) is unchanged. Uses python3 (or $PYTHON) for
+# is refused before any dispatch; without it the default (16; 64 at LTC) is unchanged. Since 2026-11-12 the custom
+# (positional) form writes the verdict file too: H1 accepted, H0 accepted, or capped at its last stage. Uses python3 (or $PYTHON) for
 # the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
@@ -153,6 +154,15 @@ check "undecided exits 2" [ "$(rc undecided)" = 2 ]
 check "three stages dispatched" [ "$(dispatches undecided)" = 3 ]
 check "stages 0, 1, 2 in order" [ "$(grep -o 'stage=[0-9]*' "$tmp/undecided/dispatches" | tr '\n' ' ')" = "stage=0 stage=1 stage=2 " ]
 check "bounds passed as given" grep -q "bounds=0 5" "$tmp/undecided/dispatches"
+check "custom, undecided at the last stage: the verdict file says capped" \
+  [ "$(cat "$tmp/undecided/data/undecided/verdict" 2>/dev/null)" = capped ]
+
+# The custom form writes the verdict file like the kinds (2026-11-12): H1 and H0 from the merge's LLR line.
+check "custom H1: the verdict file says H1 accepted" [ "$(cat "$tmp/h1/data/h1/verdict" 2>/dev/null)" = "H1 accepted" ]
+setup c-h0 0 '[25, 20, 5, 0, 0]'
+drive c-h0 "$sha" "$sha" -3 0
+check "custom H0 (LLR -5.14 on [-3, 0]) after two stages exits 0" eval '[ "$(rc c-h0)" = 0 ] && [ "$(dispatches c-h0)" = 2 ]'
+check "custom H0: the verdict file says H0 accepted" [ "$(cat "$tmp/c-h0/data/c-h0/verdict" 2>/dev/null)" = "H0 accepted" ]
 
 # 7-8: a failed run stops it.
 setup failed 0 "$even"

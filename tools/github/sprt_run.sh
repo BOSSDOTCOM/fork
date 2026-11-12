@@ -34,7 +34,8 @@
 #   pairings, tools/github/h2h_run.sh); not a try;
 # - custom (the positional bounds): alpha = beta = 0.05, stages FIRST to LAST,
 #   byte for byte the driver before 2026-11-07, so an SPRT started with it
-#   resumes unchanged.
+#   resumes unchanged, except that since 2026-11-12 it also writes the
+#   verdict file (H1 accepted, H0 accepted, or capped after stage LAST).
 # A search or network SPRT is a try of its idea: at most two per idea and
 # time control class (tools/jobs/ledger.py try), a third only with
 # --owner-override. The design goes to $SPRT_DATA/NAME/design.json before the
@@ -410,8 +411,12 @@ EOF
   say "stage $stage: run $id merged"
   echo "$merged" | sed 's/^/    /' | tee -a "$data/driver.log"
   if [ "$kind" = custom ]; then
-    case $(echo "$merged" | grep -E '^LLR:' | tail -1) in
+    # The verdict file like the kinds' (2026-11-12: queue items that require it failed on a decided custom SPRT).
+    llr=$(echo "$merged" | grep -E '^LLR:' | tail -1)
+    case $llr in
       *continue*) ;;
+      *"H1 accepted") echo "H1 accepted" >"$data/verdict"; say "decided after stage $stage: H1 accepted"; exit 0 ;;
+      *"H0 accepted") echo "H0 accepted" >"$data/verdict"; say "decided after stage $stage: H0 accepted"; exit 0 ;;
       *accepted*) say "decided after stage $stage"; exit 0 ;;
       *) stop "stage $stage: no LLR line in the merge" ;;
     esac
@@ -427,5 +432,6 @@ EOF
     *) stop "stage $stage: no Verdict line in the merge" ;;
   esac
 done
+[ "$kind" != custom ] || echo capped >"$data/verdict"
 say "undecided after stage $last"
 exit 2
