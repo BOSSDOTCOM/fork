@@ -469,7 +469,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // switch off.
 TEST_CASE("pruning", "history-scaled SEE margin: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_see_history_margin);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_see_history_margin);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_see_history_margin = true;
   fx.searcher->switches = on;
