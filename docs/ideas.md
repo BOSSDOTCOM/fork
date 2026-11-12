@@ -2766,3 +2766,23 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 128. TT cutoffs gated by node type (the engine survey's F4)
+
+- **type:** ELO (search, TT policy); flag `use_tt_node_gate` (off).
+- **idea** (the engine survey's F4, its rank 5; concept only): a TT cutoff
+  at a non-PV node only when the entry's score and the node's expected type
+  agree (fail highs at expected cut nodes, fail lows at expected all nodes).
+  The survey: Raphael +8.5, Hobbes +5.1 / +3.0, Halogen +2.3, Ethereal
+  +2.45 LTC (STC failed), Integral +1.7 LTC.
+- **status:** **in progress (coordinator's overnight build list, 2026-11-12:
+  "F4 - TT cutoffs gated by node type. R-STC + LTC; TT-policy test").**
+  Built on phase-4 ab70fa5 behind the switch, off, independently of B5's
+  switches: branch tier2/f4-tt-node-gate, bench unchanged (9,639,207 /
+  07f7ae19b9250f38, r8brft1). Test commit sprt/f4-tt-node-gate. Night items
+  68a (f4-tt-node-gate-stc, design R at STC, Hash 15 MB) and 68c
+  (f4-tt-node-gate-ltc, design R at 40+0.4, Hash 70 MB, only on an STC H1),
+  ledger idea `f4-tt-node-gate`, gated until state/gate-e1.done and
+  state/pressure-hash.done. Nothing is adopted before a verdict.
+- **runtime cost:** none (one comparison per TT hit).
+- **earliest phase:** Phase 4.

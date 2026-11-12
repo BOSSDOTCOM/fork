@@ -152,6 +152,11 @@ struct SearchQuota {
 //   2026-11-06); on since its one LTC-only design R test on the tuned search
 //   (owner, 2026-11-11) passed: +9.40 +/- 5.03 Elo after 4,992 games, design
 //   R [0, 6]; 2026-11-11.
+// - use_tt_node_gate: a main-search TT cutoff at a non-PV node also needs
+//   the entry's score to agree with the node's expected type (T17): a fail
+//   high only at an expected cut node, a fail low only at an expected all
+//   node (the engine survey's F4). The quiescence search's cutoffs are as
+//   before. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -186,7 +191,8 @@ struct SearchQuota {
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
-  X(use_capture_probe, UseCaptureProbe, true)
+  X(use_capture_probe, UseCaptureProbe, true)            \
+  X(use_tt_node_gate, UseTtNodeGate, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

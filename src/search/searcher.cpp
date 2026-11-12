@@ -242,7 +242,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   if (tt_hit && !OnPv && !withheld) {
     const int s = score_from_tt(hit.score, ply);
     const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
-    if (deep_enough && bound_settles(hit.bound, s, alpha, beta)) return s;
+    // The engine survey's F4: with use_tt_node_gate a cutoff also needs the
+    // score to agree with the node's expected type (T17): a fail high
+    // (s >= beta) only at an expected cut node, a fail low only at an
+    // expected all node. Otherwise the entry's move is still tried first.
+    const bool agrees = !switches.use_tt_node_gate || (s >= beta) == f.expected_cut;
+    if (deep_enough && agrees && bound_settles(hit.bound, s, alpha, beta)) return s;
   }
 
   // A TT entry stores the static evaluation of its position (review 2, claim
