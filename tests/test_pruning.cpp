@@ -469,7 +469,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // nothing.
 TEST_CASE("pruning", "opponent-worsening RFP: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_rfp_opponent_trend);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_rfp_opponent_trend);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_rfp_opponent_trend = true;
   fx.searcher->switches = on;
