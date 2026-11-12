@@ -2638,6 +2638,7 @@ whose weaknesses and data gaps decide their targets and order.
   order, night items 19-corr-a to 19-corr-h, gated on E1's fix and its SPRT. A later table is tested whatever an earlier one gives. Every table
   lost decision accuracy at futility rows in the passive run (C15, correction size in pruning, and E5,
   the update rules, are the follow-ups this unblocks).
+  **2026-11-12 offline diagnosis** (DESIGN.md decisions log, 2026-11-12): at share 64 the minor, threat and major tables run away to the 300 cp limit (the applied term feeds what they learn), which matches the losses of minor 64 and threat 64; at 32 and for the piece term they stay bounded, and minor 32 passed (H1, +5.57 ± 4.01) and is adopted. The terms carry information (root error against deep labels 81 -> 68-72 cp; RFP's wrong prunes −15 to −17% at equal volume), but most of the passive ranking's gain was the mean shift. The depth scale (`use_drift_depth_scale`, off, branch tier2/corr-depth-scale) removes the runaway; minor 64 scaled passes the offline gate against off (−2.10 cp [−3.64, −0.73]) but ties minor 32 (+0.36 [−1.11, +1.77]), so it is not tested; pieces 64 scaled fails it. 19e dropped, 19f and 19h paused, 19g runs.
 - **runtime cost:** possible (the material keys at each make while a table is on, a 256 KB table per key,
   the threat key's two attack maps per evaluated node); to be measured with bench/ab.py and reported with
   the SPRT results (the 2026-10-24 rule; UNVERIFIED until then).
