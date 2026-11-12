@@ -356,8 +356,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 
   // Null move pruning (T13): if passing still fails high on a reduced
   // search, the node is taken to fail high.
+  // The engine survey's B7, the null move's eval margin: with
+  // use_null_eval_margin the pruning eval must clear beta by NullEvalMargin,
+  // so no reduced search is spent where the eval is within noise of beta.
   if (switches.use_nmp && can_prune_node && depth >= NullMinDepth && !f.after_null && !is_tb_or_mate(beta) &&
-      prune_eval >= beta && has_non_pawn_material(pos, pos.side_to_move())) {
+      prune_eval >= beta + (switches.use_null_eval_margin ? NullEvalMargin : 0) &&
+      has_non_pawn_material(pos, pos.side_to_move())) {
     const int surplus_plies = std::min((prune_eval - beta) / NullSurplusPerPly, NullSurplusPliesMax);
     const int null_depth = depth / 2 - 1 - surplus_plies;                // 0 or less: the quiescence search
     if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_null_key());  // review 2, claim (c)

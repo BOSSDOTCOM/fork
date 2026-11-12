@@ -2766,3 +2766,24 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 121. The null move's eval margin (the engine survey's B7)
+
+- **type:** ELO (search); flag `use_null_eval_margin` (off).
+- **idea** (the engine survey's B7, its rank 16; concept only): the null
+  move is tried only when the pruning eval is at least `NullEvalMargin`
+  above beta (the survey: Hobbes +13.05 for a margin, Halogen +1.2 / +3.4).
+  B7's other half, TT-bound gates on RFP and the null move, is already
+  implied in Fork by `use_tt_eval_refine` (DESIGN.md's row), so it is not
+  built.
+- **status:** **in progress (coordinator's overnight build list, 2026-11-12:
+  "B7 - NMP and RFP gates from the TT bound; NMP eval margin. R-STC
+  (nat/retry for the margin)").** Built on phase-4 ab70fa5 behind the
+  switch, off: branch tier2/b7-null-margin, bench unchanged (9,639,207 /
+  07f7ae19b9250f38, r8brft1). Test commits sprt/b7-null-margin (12 cp, the
+  natural value) and sprt/b7-null-margin-24 (the retry). Night items 61a
+  (b7-null-margin-stc, design R at STC, ledger idea `b7-null-margin`, try 1)
+  and 61b (the retry, try 2, only if 61a is not H1), gated until
+  state/gate-e1.done. Nothing is adopted before a verdict.
+- **runtime cost:** none (one addition in the null move's condition).
+- **earliest phase:** Phase 4.
