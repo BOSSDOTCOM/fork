@@ -129,6 +129,11 @@ struct SearchQuota {
 //   switches) since its SPRTs against off passed: STC +18.69 +/- 7.18 Elo
 //   after 3,200 games, LTC +10.23 +/- 5.14 Elo after 4,992 games, design R
 //   [0, 6]; 2026-11-08.
+// - use_deep_time_depth: with use_stability_time, the scale's depth is
+//   clamped at 60, not 19 (time_budget.hpp; E2 of the bug review of
+//   2026-11-11: past depth 19 a stable best move got the 0.36 floor at any
+//   share, so deep searches spent less than their soft limit). Off until its
+//   LTC SPRT decides.
 // - use_cut_node_lmr: node types (tier 2, T17): each node gets an expected
 //   type from its parent (PlyFrame::expected_cut: a PV node's later children
 //   and an all node's children are expected cut nodes, a cut node's are
@@ -177,7 +182,7 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)            X(use_deep_time_depth, UseDeepTimeDepth, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

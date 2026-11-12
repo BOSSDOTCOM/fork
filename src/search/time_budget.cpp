@@ -93,6 +93,16 @@ namespace {
 // declared before it was computed, 2026-11-07).
 constexpr int TimeScaleMinDepth = 8;
 constexpr int TimeScaleMaxDepth = 19;
+// With deep_depth (switch use_deep_time_depth, E2 of the bug review of
+// 2026-11-11): the depth is clamped at 60 instead. Not a fitted or tuned
+// value: the clamp only keeps the fixed point in range (at depth 60, every
+// stability and share, fixed_exp2_neg's exponent stays under 28.2, inside its
+// 30, and every operand under 2^60). Beyond 19 the fits are extrapolated:
+// replayed with nodes as the clock on 720 searches of 96M nodes from 24 LTC
+// games (plain stops at depth 22-27; tools/measure/e2_tm_replay.py on
+// tools/probes-1111), the clamp at 19 spent 0.83 and 0.79 of the plain soft
+// limit at the two deepest budgets, the scale clamped at 60 0.97 and 0.96.
+constexpr int TimeScaleDeepMaxDepth = 60;
 constexpr int TimeScaleStabilityCap = 72;
 constexpr int TimeScaleShareMin = 5;
 constexpr int TimeScaleShareMax = 995;
@@ -165,7 +175,7 @@ std::uint64_t fixed_exp2_neg(std::int64_t w) {
 
 }  // namespace
 
-int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signals) {
+int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signals, bool deep_depth) {
   constexpr int Unchanged = 1000;
   constexpr std::uint64_t One = std::uint64_t{1} << 30;
   constexpr std::int64_t Log2E = 94548;  // log2(e) in Q16 (math)
@@ -175,7 +185,7 @@ int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signal
   const bool with_share = variant == TimeScaleVariant::StabilityAndShare;
   if (with_share && signals.share_all <= 0) return Unchanged;
   const std::int64_t s = std::clamp(signals.stability, 1, TimeScaleStabilityCap);
-  const std::int64_t d = std::min(signals.depth, TimeScaleMaxDepth);
+  const std::int64_t d = std::min(signals.depth, deep_depth ? TimeScaleDeepMaxDepth : TimeScaleMaxDepth);
   const ChangeFit& fit = with_share ? ShareFit : StabilityFit;
   std::int64_t z1 = fit.intercept + fit.per_iteration * s + fit.per_ply * d;
   if (with_share) {

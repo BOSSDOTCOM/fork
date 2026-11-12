@@ -279,3 +279,42 @@ entry has one the section says the ratio is not corrected and understated.
 - The 6-7-piece held-out figure (no ChessTB prober installed; not measured).
 - Whether the 8-12-piece set overlaps Fork's older generations, the cloud shards or the Kaggle copies (only the
   62 g4 and label-depth files on this machine were scanned).
+
+## E2. The time manager's depth clamp at long searches (2026-11-11, cloud VM)
+
+The owner's decisions (DESIGN.md §6, 2026-11-11): E2 joins the TCEC hazards, to be redesigned for deep searches
+and tested at VLTC; the check ran on the cloud VM ("in parallel, non-blocking"). The cheapest test that could
+decide whether the clamp hurts: replay long searches with nodes as the clock, as tools/measure/tm_curve.py
+replayed X6, and compare the shipped scale's spend with the plain soft limit's (the balance X6 set to 1 at
+100k-500k nodes). The rule was written before the result (after a 3-game smoke test): below 0.90 at budgets
+stopping 3+ plies past the clamp means an under-spend; then matched-spend agreement decides between fixing the
+clamp and switching the scale off at depth.
+
+- **Data.** phase-4 26323e1's clang-stats build on the VM (bench 10,166,167 / d874b380155a2e8c before and after),
+  `tools/measure/game_replay.py run --nodes 96000000 --report iterations --hash 256`, Syzygy 3-4-5, one thread, 30
+  test-engine positions from each of 24 games of the t56-any-ltc SPRT (40+0.4; game_replay.py `games --seed
+  20261111`, the first 24 of 48 to finish; the run was shortened at the coordinator's request): 720 searches,
+  final depth 29.9 on average. VM item e2-ltc, 8:54-11:13 PM EST.
+- **Replay** (tools/measure/e2_tm_replay.py on branch tools/probes-1111; the scale ported from
+  time_budget.cpp line by line, its self-test exact on the review's 84-value table): soft budget B, hard 4B, the
+  engine's stop rules; 95% intervals from 2,000 game resamples.
+
+| B (nodes) | plain stop depth | clamp 19 (shipped): spend / plain | clamp 60 | clamp 22 / 25 / 28 |
+|---|---|---|---|---|
+| 3M | 21.9 | 0.934 [0.869, 1.002] | 1.029 [0.962, 1.101] | 1.012 / 1.026 / 1.028 |
+| 6M | 23.8 | 0.910 [0.833, 0.986] | 1.032 [0.955, 1.119] | 0.985 / 1.017 / 1.029 |
+| 12M | 25.6 | 0.826 [0.748, 0.906] | 0.974 [0.896, 1.060] | 0.911 / 0.951 / 0.968 |
+| 24M | 27.2 | 0.789 [0.717, 0.859] | 0.956 [0.881, 1.034] | 0.859 / 0.921 / 0.950 |
+
+- **The scale still informs past depth 19.** Rebalanced to the plain spend, the shipped scale's move at the stop
+  agrees with the 96M-node final move more often than the plain rule's: +0.040 [+0.022, +0.058] at 12M, +0.043
+  [+0.025, +0.061] at 24M (+0.007 and +0.010 at 3M and 6M, not clear of zero). Agreement is in sample, not Elo.
+- **Calibration.** Rows with stability >= 12 change their best move at 0.34 of their depth band's rate at depths
+  20-23 and 24-27; the clamped scale (before its floor) predicts 0.29 and 0.21, the scale clamped at 60 0.37 and
+  0.41.
+- **Reading.** The clamp under-spends past depth 25, more with depth (the floor binds at 50-56% of the stops);
+  without it the spend returns to the plain limit's. Fix: the clamp extended to 60 (a fixed-point guard), as
+  `UseDeepTimeDepth` (DESIGN.md §5.2 "Search constants"), tested by a design R LTC SPRT. Limits: one thread and
+  final depths near 30; at TCEC's 40+ the scale is extrapolated further; E1's partial-iteration move is not
+  modelled.
+
