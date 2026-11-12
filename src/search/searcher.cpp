@@ -179,6 +179,26 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
 }
 
+#ifdef FORK_SEARCH_STATS
+// The history a TT move carries, for the singular test's stats probe (the
+// engine survey's C6 measurement, 2026-11-12): a quiet move's butterfly entry
+// in its threat bucket, a capture's take-history entry, 0 for a non-capture
+// promotion, a table switched off, or a move that is not pseudo-legal here (a
+// colliding entry's).
+int Searcher::entry_move_history(Move m) const {
+  const Position& pos = *pos_;
+  if (m.is_none() || !pos.is_pseudo_legal(m)) return 0;
+  if (m.is_capture()) {
+    if (!switches.use_take_history) return 0;
+    return take_history_.value(take_slot(pos.piece_at(m.from()), m.to(),
+                                         m.is_en_passant() ? Pawn : kind_of(pos.piece_at(m.to()))));
+  }
+  if (m.is_promotion() || !switches.use_history) return 0;
+  const Bitboard attacked = switches.use_threat_buckets ? pos.attacked_squares(~pos.side_to_move()) : 0;
+  return history_.value(pos.side_to_move(), m, threat_bucket(attacked, m));
+}
+#endif
+
 void Searcher::update_pv(int ply, Move m) {
   PrincipalLine& line = pv_[ply];
   const PrincipalLine& child = pv_[ply + 1];
@@ -423,13 +443,17 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // constants"): every Nth node where a singular test could run, under the
   // widest conditions considered, is printed for tools/singular_measure.py
   // (N from the environment variable FORK_SINGULAR_PROBE; unset or 0: none).
+  // The last two fields (the engine survey's C6, 2026-11-12): whether the
+  // entry was written at a PV node, and the TT move's history
+  // (entry_move_history).
   if (singular_probe_ > 0 && !withheld && ply > 0 && depth >= 4 && tt_hit && !hit.move.is_none() &&
       (hit.bound == TtBound::Lower || hit.bound == TtBound::Exact) && hit.depth >= depth - 4) {
     const int s = score_from_tt(hit.score, ply);
     if (!is_tb_or_mate(s) && ++counters.singular_candidates % singular_probe_ == 0)
-      std::fprintf(stderr, "singular_probe %s|%d|%s|%d|%d|%d|%d\n", pos.fen().c_str(), depth,
+      std::fprintf(stderr, "singular_probe %s|%d|%s|%d|%d|%d|%d|%d|%d\n", pos.fen().c_str(), depth,
                    pos.move_to_uci(hit.move).c_str(), s, static_cast<int>(hit.bound),
-                   static_cast<int>(hit.depth), OnPv ? 1 : 0);
+                   static_cast<int>(hit.depth), OnPv ? 1 : 0, hit.was_pv ? 1 : 0,
+                   entry_move_history(hit.move));
   }
 #endif
 

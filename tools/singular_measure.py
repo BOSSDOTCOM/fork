@@ -31,7 +31,29 @@ without evidence; a cell now needs 20 flagged samples to count at all):
 
     singular_measure.py collect STATS_FORK POSITIONS.jsonl OUT.txt [--count 60] [--depth 12]
     singular_measure.py search FORK PROBES.txt OUT.jsonl [--per-depth 60] [--seed 20261031]
-    singular_measure.py report OUT.jsonl
+                               [--pv-strata] [--min-depth D] [--max-depth D]
+    singular_measure.py report OUT.jsonl [--c6]
+
+The engine survey's C6 (2026-11-12): the probe lines gained two fields, the
+TT entry's PV flag (was_pv) and the TT move's history (Searcher::
+entry_move_history); --pv-strata samples --per-depth nodes per depth for
+each value of was_pv. `report --c6` adds two analyses, with rules declared
+before the data were seen (coordinator's brief of 2026-11-12, recorded in
+DESIGN.md's rows):
+- C6a, the TT-PV singular margin: rule 1 above applied to the was_pv = 1
+  samples alone (and, for the record, to was_pv = 0) gives the natural
+  value; the retry value is the smallest M at which every was_pv = 1 depth
+  cell from 6 to 12 has at least 20 flagged samples and at least 95% of them
+  still best, or the natural value plus 2 if that is the same or none.
+  If the natural value equals the current margin (6), C6a has no candidate.
+- C6b, the history-shifted bar: at the current margin (6 cp per ply), the
+  bar S - 6 d - h / k (h the TT move's history) for k in
+  {-400, -200, -100, -50, 50, 100, 200, 400}; a k passes when every depth
+  cell from 6 to 12 (all samples) has at least 20 flagged samples and at
+  least 90% of them still best; the natural value is the passing k that
+  flags the most samples at depths 6-12, ties to the larger |k|, and only if
+  it flags more than the unshifted bar does; the retry value is the passing
+  k with the next most flagged samples.
 """
 import argparse
 import json
@@ -113,15 +135,22 @@ def collect(a):
 def search(a):
     by_depth = defaultdict(list)
     for line in open(a.probes):
-        fen, depth, move, score, bound, entry_depth, on_pv = line.rstrip('\n').split('|')
-        by_depth[int(depth)].append({'fen': fen, 'depth': int(depth), 'move': move, 'score': int(score),
-                                     'bound': int(bound), 'entry_depth': int(entry_depth), 'on_pv': int(on_pv)})
+        f = line.rstrip('\n').split('|')
+        fen, depth, move, score, bound, entry_depth, on_pv = f[:7]
+        row = {'fen': fen, 'depth': int(depth), 'move': move, 'score': int(score), 'bound': int(bound),
+               'entry_depth': int(entry_depth), 'on_pv': int(on_pv)}
+        if len(f) >= 9:  # C6's fields
+            row['was_pv'], row['hist'] = int(f[7]), int(f[8])
+        if a.min_depth <= row['depth'] <= a.max_depth:
+            key = (row['depth'], row.get('was_pv', 0)) if a.pv_strata else (row['depth'], 0)
+            by_depth[key].append(row)
     rng = random.Random(a.seed)
     e = Engine(a.fork)
     done = 0
     with open(a.out, 'w', newline='\n') as out:
-        for depth in sorted(by_depth):
-            pool = by_depth[depth]
+        for key in sorted(by_depth):
+            depth = key[0]
+            pool = by_depth[key]
             rng.shuffle(pool)
             taken = 0
             for s in pool:
@@ -143,7 +172,7 @@ def search(a):
                 out.flush()
                 taken += 1
                 done += 1
-            print(f'depth {depth}: {taken} samples of {len(pool)} candidates', flush=True)
+            print(f'depth {depth} stratum {key[1]}: {taken} samples of {len(pool)} candidates', flush=True)
     e.close()
 
 
@@ -154,6 +183,8 @@ def report(a):
     by_depth = defaultdict(list)
     for r in rows:
         by_depth[r['depth']].append(r)
+    if a.c6:
+        c6_report(rows)
     for d in sorted(by_depth):
         e = sorted(abs(r['score'] - r['tt_half']) for r in by_depth[d])
         print(f'  depth {d:2d}: n {len(e):3d}, median {e[len(e) // 2]:4d}, p90 {e[int(0.9 * (len(e) - 1))]:4d}')
@@ -202,6 +233,65 @@ def report(a):
     print(f'rule 3, entry slack: {slack}')
 
 
+def c6_report(rows):
+    """The engine survey's C6 analyses (the rules in the module docstring)."""
+    current = 6
+    margins = list(range(0, 41, 2))
+
+    def best(r):
+        return r['tt_full'] > r['alt_full']
+
+    def cells(subset, flag):
+        out = {}
+        for d in range(6, 13):
+            f = [r for r in subset if r['depth'] == d and flag(r)]
+            out[d] = (len(f), sum(best(r) for r in f))
+        return out
+
+    def passes(c, share):
+        return all(n >= 20 and ok >= share * n for n, ok in c.values())
+
+    print('C6a, the TT-PV singular margin: per was_pv stratum, the smallest M passing at 90% (and at 95%)')
+    picks = {}
+    for pv in (1, 0):
+        subset = [r for r in rows if r.get('was_pv') == pv]
+        found = {}
+        for share in (0.90, 0.95):
+            found[share] = next((m for m in margins if passes(
+                cells(subset, lambda r, m=m: r['alt_half'] < r['score'] - m * r['depth']), share)), None)
+        picks[pv] = found
+        c = cells(subset, lambda r: r['alt_half'] < r['score'] - current * r['depth'])
+        print(f'  was_pv {pv}: {len(subset)} samples; at M {current}: ' +
+              ' '.join(f'{d}:{ok}/{n}' for d, (n, ok) in c.items()) +
+              f'; M at 90%: {found[0.90]}, at 95%: {found[0.95]}')
+    nat = picks[1][0.90]
+    if nat is None or nat == current:
+        print(f'  C6a: no candidate (the was_pv = 1 pick is {nat}, the current margin {current})')
+    else:
+        retry = picks[1][0.95]
+        if retry is None or retry == nat:
+            retry = nat + 2
+        print(f'  C6a: natural value {nat} cp per ply, retry {retry}')
+
+    print(f'C6b, the history-shifted bar at M {current}: flagged at depths 6-12 and whether every cell passes at 90%')
+    base_cells = cells(rows, lambda r: r['alt_half'] < r['score'] - current * r['depth'])
+    base_flagged = sum(n for n, _ in base_cells.values())
+    print(f'  unshifted: {base_flagged} flagged, passes {passes(base_cells, 0.90)}')
+    results = []
+    for k in (-400, -200, -100, -50, 50, 100, 200, 400):
+        c = cells(rows, lambda r, k=k: r['alt_half'] < r['score'] - current * r['depth'] - int(r['hist'] / k))
+        flagged = sum(n for n, _ in c.values())
+        ok = passes(c, 0.90)
+        results.append((k, flagged, ok))
+        print(f'  k {k:5d}: {flagged} flagged, passes {ok}; ' + ' '.join(f'{d}:{o}/{n}' for d, (n, o) in c.items()))
+    passing = sorted((r for r in results if r[2]), key=lambda r: (-r[1], -abs(r[0])))
+    if not passing or passing[0][1] <= base_flagged:
+        print('  C6b: no candidate (no passing k flags more than the unshifted bar)')
+    else:
+        retry = passing[1][0] if len(passing) > 1 else None
+        print(f'  C6b: natural value k {passing[0][0]}, retry {retry}')
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -217,8 +307,12 @@ def main():
     s.add_argument('out')
     s.add_argument('--per-depth', type=int, default=60)
     s.add_argument('--seed', type=int, default=20261031)
+    s.add_argument('--pv-strata', action='store_true')
+    s.add_argument('--min-depth', type=int, default=0)
+    s.add_argument('--max-depth', type=int, default=99)
     r = sub.add_parser('report')
     r.add_argument('results')
+    r.add_argument('--c6', action='store_true')
     a = ap.parse_args()
     {'collect': collect, 'search': search, 'report': report}[a.cmd](a)
 

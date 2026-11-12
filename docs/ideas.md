@@ -2790,3 +2790,25 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
+
+## 141. Singular refinements (the engine survey's C6): no candidate
+
+- **type:** ELO (search); no flag (nothing built past the measurement).
+- **idea** (the engine survey's C6, its rank 12; concept only): a TT-PV
+  singular margin (an entry written at a PV node gets its own margin per
+  ply) and a history-shifted singular bar (S − M·d − h/k, h the TT move's
+  history); the third refinement, a cutoff when the bar beats beta, is
+  Fork's multi-cut (T28).
+- **status:** **closed, no candidate (2026-11-12; owner's approval of the
+  plan 6:15 AM EST).** Measured with `tools/singular_measure.py` (probe
+  fields `was_pv` and the TT move's history, `--pv-strata`, `report --c6`),
+  rules declared before the data: run 2 (5,600 samples, 400 per depth 6-12
+  per `was_pv` stratum) found no TT-PV margin passing T27's rule on the
+  `was_pv` = 1 samples (0.78-0.89 still best at M 6) and no history
+  divisor passing at every depth; run 1 (80 per stratum) was too small.
+  Details and the side finding (T27's rule 1 now picks 22 cp per ply on the
+  current net, against the current 6; for the owner, nothing changed) in
+  DESIGN.md's decisions log, 2026-11-12. Branch tier2/c6-singular-measure
+  (tooling only, bench unchanged).
+- **runtime cost:** none (stats builds only).
+- **earliest phase:** Phase 4.

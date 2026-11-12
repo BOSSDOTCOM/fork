@@ -597,6 +597,9 @@ class Searcher {
   std::int64_t soft_limit_now(const SearchQuota& limits) const;
   std::int64_t elapsed_ms() const;
   void record_cutoff(PlyFrame& f, Move m, int depth);
+#ifdef FORK_SEARCH_STATS
+  int entry_move_history(Move m) const;  // C6's measurement: a TT move's history (searcher.cpp)
+#endif
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
