@@ -1137,11 +1137,20 @@ struct ReportLog final : SearchListener {
 // in every build (bench parity), and the smaller sample debug builds can
 // afford may hold no such stop (none in the first 6 positions after
 // 304081e, RfpMargin 40, so gcc-debug failed in CI).
+// With root reductions on (use_root_lmr, this SPRT test commit), a later root
+// move rarely overtakes the best within these node budgets, and the sample
+// held no stop that switched moves (2026-11-12): it is then also searched
+// with them off, where stops do switch, so the rule is exercised; every stop
+// in both passes is checked against it.
 TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored above the last iteration") {
   Fixture fx;
   int switched = 0;
   const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
+  const bool root_lmr = SearchSwitches{}.use_root_lmr;
+  for (int pass = 0; pass < (root_lmr ? 2 : 1); ++pass)
   for (std::size_t i = 0; i < positions; ++i) {
+    fx.searcher->switches = SearchSwitches{};
+    fx.searcher->switches.use_root_lmr = root_lmr && pass == 0;
     const std::string_view fen = search_bench_fens()[i];
     for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
       fx.store.clear();

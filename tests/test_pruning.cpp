@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // with LMR off they do nothing.
 TEST_CASE("pruning", "root reductions: still correct, and they change the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_root_lmr);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_root_lmr);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_root_lmr = true;
   fx.searcher->switches = on;
