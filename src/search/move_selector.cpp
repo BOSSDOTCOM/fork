@@ -140,6 +140,12 @@ void MoveSelector::keep_quiet_checks() {
   list_.count = kept;
 }
 
+void MoveSelector::drop_quiet_non_checks() {
+  const std::int16_t counted = quiets_filtered_;
+  keep_quiet_checks();
+  quiets_filtered_ = counted;
+}
+
 // Partial selection sort: the best remaining move (the lowest current index
 // on ties) is swapped to next_. Deterministic, but the swaps mean equal
 // scores do not stay in generation order (review, deliverable 5). The best

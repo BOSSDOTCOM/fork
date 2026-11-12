@@ -106,6 +106,10 @@ class MoveSelector {
   // Quiet moves not yet generated will be only the checking ones (futility
   // pruning, review claim (d)); quiets_filtered() counts the others dropped.
   void keep_quiet_checks();
+  // As keep_quiet_checks, but the quiets dropped are not counted in
+  // quiets_filtered() (late move pruning's check guard, the engine survey's
+  // B12: they are pruned, not futile, so they raise no bound).
+  void drop_quiet_non_checks();
   int quiets_filtered() const { return quiets_filtered_; }
   // The moves of the stage being yielded from (for a late quiet: the quiets
   // generated at this node).

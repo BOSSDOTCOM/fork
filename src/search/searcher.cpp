@@ -506,6 +506,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                                                                                :) futility_value <= alpha);
   FORK_STAT(counters.futile_nodes += futile_node);
   bool quiet_checks_only = false;
+  bool lmp_checks_only = false;  // B12: the selector keeps only checking quiets since LMP's count
   for (Move m; !(m = f.selector.take_next()).is_none();) {
     if (m == f.withheld_move) continue;
     ++moves_seen;
@@ -521,9 +522,21 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     // a false stalemate or mate) and while not already losing to a mate.
     if (moves_searched > 0 && best > -MateBandFloor) {
       if (lmp_node && quiet && quiets_searched >= LmpQuietAllowance + depth) {
-        f.selector.stop_quiets();  // late move pruning (T21)
-        FORK_STAT(++counters.lmp_prunes);
-        continue;
+        if (!switches.use_lmp_check_guard) {
+          f.selector.stop_quiets();  // late move pruning (T21)
+          FORK_STAT(++counters.lmp_prunes);
+          continue;
+        }
+        // B12: the checking quiets are searched; the others are dropped, this
+        // one here and the rest by the selector (once).
+        if (!lmp_checks_only) {
+          f.selector.drop_quiet_non_checks();
+          lmp_checks_only = true;
+        }
+        if (!pos.gives_check(m)) {
+          FORK_STAT(++counters.lmp_prunes);
+          continue;
+        }
       }
 #ifdef FORK_SEARCH_STATS
       if (switches.use_see_prune && can_prune && depth <= SeePruneMaxDepth) {

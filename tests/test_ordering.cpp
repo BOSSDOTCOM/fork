@@ -101,6 +101,32 @@ void check_node(Position& pos, const QuietHistory& history, std::uint64_t& seed,
   std::size_t noisy = 0;
   for (Move m : legal) noisy += pos.in_check() || m.is_capture() || m.is_promotion();
   CHECK_MSG(kept.size() == noisy, pos.fen() << ": " << kept.size() << " of " << noisy);
+  // drop_quiet_non_checks (late move pruning's check guard, the engine
+  // survey's B12), called after the first quiet is yielded (where late move
+  // pruning calls it): every later quiet gives check, every checking quiet
+  // and every capture and promotion still comes, and nothing is counted as
+  // filtered (the futility bound reads that count).
+  if (!pos.in_check()) {
+    MoveSelector g;
+    g.start_main(pos, NoMove, &history);
+    std::vector<Move> got;
+    Move m;
+    while (!(m = g.take_next()).is_none() && (m.is_capture() || m.is_promotion())) got.push_back(m);
+    if (!m.is_none()) {
+      got.push_back(m);  // the first quiet
+      g.drop_quiet_non_checks();
+      for (Move rest : drain(g)) {
+        CHECK_MSG(rest.is_capture() || rest.is_promotion() || pos.gives_check(rest), pos.fen());
+        got.push_back(rest);
+      }
+    }
+    CHECK_EQ(g.quiets_filtered(), 0);
+    std::size_t expected = 0;
+    for (Move l : legal) expected += l.is_capture() || l.is_promotion() || pos.gives_check(l);
+    const bool first_quiet_checks = !m.is_none() && pos.gives_check(m);
+    CHECK_MSG(got.size() == expected + (!m.is_none() && !first_quiet_checks ? 1 : 0),
+              pos.fen() << ": " << got.size() << " of " << expected);
+  }
   ++c.nodes;
 }
 
