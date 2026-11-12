@@ -2538,3 +2538,73 @@ whose weaknesses and data gaps decide their targets and order.
   eligible quiet move at depths 1-3 when the switch is on); to be reported
   with the SPRT result (the 2026-10-24 rule; UNVERIFIED until then).
 - **earliest phase:** Phase 4.
+
+## 75. The summed pair-table update (the engine survey's D8)
+
+- **type:** ELO (search); flag `use_pair_sum_update` (off).
+- **idea** (the engine survey's D8, its rank 1; concept only): a cutoff's
+  bonus and maluses move each pair-table entry (reply and follow) by the
+  usual self-limiting rule, but with the self-limiting term read from the
+  move's reply and follow entries summed instead of the entry alone, so the
+  two tables approach the limit together (`PairHistory::apply_from_sum`,
+  clamped to ±`HistoryMax`). A table the node does not read is neither
+  summed nor updated. No constant.
+- **status:** **in progress (owner, 2026-11-11 3:10 PM EST: "the survey's
+  top cheap techniques: D8 (summed continuation update), D9 (failed-child
+  prior-move bonus), D13 (direct-check ordering bonus), each design R at
+  STC").** Built on phase-4 784b1b0 behind the switch, off:
+  tier2/d8-pair-sum 55bb786, bench unchanged (10,166,167 /
+  d874b380155a2e8c). Test commit sprt/d8-pair-sum 8ffc602 (switch on; bench
+  10,236,778 / 6338c0c3a941915a). Lane B item 68 (survey-d8-stc: design R
+  at STC against off from stage 0; ledger idea `d8-pair-sum`, try 1),
+  gated until E1's SPRT (state/gate-e1.done; owner, about 6:40 PM EST).
+  Nothing is adopted before its verdict.
+- **runtime cost:** none expected (one extra table read per updated move at
+  a cutoff; UNVERIFIED until the SPRT's nps report).
+- **earliest phase:** Phase 4.
+
+## 76. The prior-move credit (the engine survey's D9)
+
+- **type:** ELO (search); flag `use_prior_move_credit` (off).
+- **idea** (the engine survey's D9, its rank 2; S1 item 8; concept only): a
+  main-search node where no move beat alpha (not a singular test's search)
+  credits the parent's quiet move that led to it with
+  `PriorCreditQuarters` / 4 of the cutoff bonus at the node's depth, in the
+  tables the parent's own cutoff would update (butterfly in the move's
+  threat bucket, reply and follow), with no maluses.
+- **status:** **in progress (owner, 2026-11-11 3:10 PM EST, as idea 75).**
+  Built on phase-4 784b1b0 behind the switch, off: tier2/d9-prior-credit
+  ef30f4f, bench unchanged. Candidates 1, 3 and 6 quarters (bench
+  9,560,037, 10,516,912 and 10,270,243): sprt/d9-prior-credit-1 37f8a43,
+  -3 39074b1, -6 bb59b7f. The first candidates, 2, 4 and 8 quarters, were
+  dropped before any game when the constant screen matched 1× and 2× to
+  Stockfish releases 7-15.1 (6 quarters is a near match to one case of
+  Stockfish 16.1, credited in ORIGINALITY.md). Lane B items 69a
+  (survey-d9-h2h: round robin, 2 stages a pairing at STC, 1 kept on a tie)
+  and 69b (survey-d9-stc: design R of the winner against off on fresh
+  openings from stage 2; ledger idea `d9-prior-credit`, try 1), gated
+  until E1's SPRT. Nothing is adopted before its verdict.
+- **runtime cost:** none expected (one history update per fail-low node;
+  UNVERIFIED until the SPRT's nps report).
+- **earliest phase:** Phase 4.
+
+## 77. The direct-check ordering bonus (the engine survey's D13)
+
+- **type:** ELO (search); flag `use_check_order_bonus` (off).
+- **idea** (the engine survey's D13, its rank 10; concept only): in the
+  main search out of check, a quiet move (not castling) whose piece attacks
+  the enemy king from its destination adds `DirectCheckBonus` to its
+  ordering score; the direct-check squares per piece type are computed once
+  per node when the quiets are scored (`direct_check_targets`).
+- **status:** **in progress (owner, 2026-11-11 3:10 PM EST, as idea 75).**
+  Built on phase-4 784b1b0 behind the switch, off: tier2/d13-check-order
+  ceb984a, bench unchanged. Candidates 2500, 5000 and 10000 (one history
+  table is ±10,000): sprt/d13-check-order-2500 006ae9c, -5000 5a99405, -10000 90338de; bench 10,246,388, 10,253,460 and 9,776,602. Lane B items 70a (survey-d13-h2h: round
+  robin, 2 stages a pairing at STC, 2500 kept on a tie) and 70b
+  (survey-d13-stc: design R of the winner against off on fresh openings
+  from stage 2; ledger idea `d13-check-order`, try 1), gated until E1's
+  SPRT. Nothing is adopted before its verdict.
+- **runtime cost:** possible (four attack lookups per node that scores its
+  quiets, with the switch on); to be reported with the SPRT result (the
+  2026-10-24 rule; UNVERIFIED until then).
+- **earliest phase:** Phase 4.
