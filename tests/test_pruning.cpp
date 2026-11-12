@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // off); with the null move off it does nothing.
 TEST_CASE("pruning", "null-move eval margin: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_null_eval_margin);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_null_eval_margin);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_null_eval_margin = true;
   fx.searcher->switches = on;

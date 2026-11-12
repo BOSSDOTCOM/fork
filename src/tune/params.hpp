@@ -44,7 +44,7 @@
   X(NullMinDepth, 3, 1, 6, 1)             \
   X(NullSurplusPerPly, 301, 150, 600, 23) \
   X(NullSurplusPliesMax, 2, 0, 6, 1)      \
-  X(NullEvalMargin, 12, 6, 24, 1)         \
+  X(NullEvalMargin, 24, 6, 24, 1)         \
   X(TableProbeMinDepth, 1, 1, 4, 1)       \
   X(LmrMinDepth, 3, 1, 6, 1)              \
   X(LmrMinMove, 4, 1, 8, 1)               \
