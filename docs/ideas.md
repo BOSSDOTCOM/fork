@@ -2045,7 +2045,7 @@ until measured; new names and constants go through the screens before use.
   6. **The gate policy as an idea 23 evolution target**, with a game-based
      fitness (decision 19: never the label-and-sweep proxy).
 - **follow-up plan (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):**
-  1. **Correction tables, window-gated variant** (idea 78): apply the correction fully when the corrected
+  1. **Correction tables, window-gated variant** (idea 78; since 2026-11-12 2:05 PM EST, of minor@32 + pieces@32, the shares summing to 64): apply the correction fully when the corrected
      eval is near alpha or beta (a gate margin like this idea's 25 cp), fading to zero far from the window;
      tested alongside the depth-scaled share (tier2/corr-depth-scale), against the adopted minor@32 head,
      with the same offline gate first.
@@ -2701,6 +2701,7 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** the minor table on (its adoption, 2026-11-12): measured before the commit with bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 75d53f0, B = the port's build of this commit's engine code from the uncommitted tree on 75d53f0, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -2.0%, best -3.4%, under the 4.9% noise threshold: no significant difference; a small price (the material keys kept at each make, the table read at each estimate) is possible but not resolved at this noise (UNVERIFIED). The bench searches 1.1% more nodes (9,366,920 against 9,263,568). The threat key (two attack maps per node) is not measured (UNVERIFIED).
 - **earliest phase:** Phase 4.
 - **follow-up (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):** a window-gated variant (full correction near alpha/beta, fading to zero far from the window; idea 59's gate margin), tested alongside the depth-scaled share against the minor@32 head, offline gate first (idea 59's follow-up plan, item 1).
+- **stacking (owner, 2026-11-12, about 2:05 PM EST):** pieces@64 passed alone (+7.86 ± 4.35 against tables off), but pieces@64 on top of minor@32 failed the offline gate (error +12.74 cp [+6.50, +19.11] against the head, the minor table at the limit on 1.23% of visits: the shares sum to 96 of 64), and pieces@32 on top failed too (+2.99 [+1.19, +5.09], 0.24%); with the depth scale both stacks tie the head at about 0.013% (~/fork-jobs/night/reviews/corrstack-gate-2026-11-12.txt, outside the repo). **No standalone stacking SPRT now:** the stack folds into idea 59's follow-up redesign (item 1): the depth-scaled (and window-gated) variant of minor@32 + pieces@32 (shares sum to 64) is tested against the minor@32 head when slots open. **Rule:** the offline gate is a safety check only (it blocks runaway: worse error or more than 0.1% of visits at the limit); a stack that passes it goes to a design R SPRT, which decides adoption.
 
 ## 79. Nested-width evaluation (novel-ideas 1)
 
