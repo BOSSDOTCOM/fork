@@ -164,6 +164,15 @@ struct SearchQuota {
 //   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
 //   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
 //   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
+// - use_multi_extension: the engine survey's C4 / think tank R28: (a) the
+//   singular margin is depth-concave, SingularMarginPerPly per ply up to
+//   SingularKneeDepth and half that per ply beyond it; (b) at a non-PV node
+//   a singular TT move whose withheld search fell a further step below the
+//   bar is searched two plies deeper, and three at twice that step (the
+//   step is MultiExtensionStepQuarters quarters of the node's singular
+//   margin); (c) the plies these add along one line (PlyFrame::extra_plies)
+//   stay within the iteration's depth / ExtensionBudgetDivisor. Off until
+//   its LTC SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -199,7 +208,8 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_multi_extension, UseMultiExtension, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -252,12 +262,13 @@ class SearchListener {
 // One ply of the search stack.
 struct PlyFrame {
   MoveSelector selector;
-  MoveList failed_moves;        // quiet moves and captures searched here without a cutoff (the maluses)
-  int static_eval;              // ScoreNone in check
-  bool after_null = false;      // this node was reached by a null move (no second one in a row)
-  Move withheld_move = NoMove;  // set while a singular test searches this node without that move
-  int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
-  bool expected_cut = false;    // expected to fail high (a cut node), from the parent (T17)
+  MoveList failed_moves;         // quiet moves and captures searched here without a cutoff (the maluses)
+  int static_eval;               // ScoreNone in check
+  bool after_null = false;       // this node was reached by a null move (no second one in a row)
+  Move withheld_move = NoMove;   // set while a singular test searches this node without that move
+  int arrival = NoArrival;       // the pair-history slot of the move that led here (none after a null move)
+  bool expected_cut = false;     // expected to fail high (a cut node), from the parent (T17)
+  std::uint8_t extra_plies = 0;  // plies of double and triple extensions on the line here (C4); 0 when off
 };
 
 // Root moves are kept in search order: the initial capture order, then after
@@ -634,6 +645,7 @@ class Searcher {
   bool stopped_ = false;
 
   PlyFrame frames_[MaxPly + 1];
+  int iteration_depth_ = 0;  // the current iteration's depth (C4's extension budget; 0 outside deliberate)
   PrincipalLine pv_[MaxPly + 1];
   RootEntry root_moves_[MaxMoves];
   // The iteration's root move that failed high and is not yet resolved by a

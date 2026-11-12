@@ -365,6 +365,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     frames_[ply + 1].after_null = true;
     frames_[ply + 1].arrival = NoArrival;
     frames_[ply + 1].expected_cut = !f.expected_cut;  // T17: passing should fail low below
+    frames_[ply + 1].extra_plies = f.extra_plies;     // C4: the line's extra plies (0 with it off)
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
     frames_[ply + 1].after_null = false;
     pos.unmake_null();
@@ -401,6 +402,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
         frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
         frames_[ply + 1].expected_cut = !f.expected_cut;
+        frames_[ply + 1].extra_plies = f.extra_plies;  // C4: the line's extra plies (0 with it off)
         play(ply, m);
         // Depth 0 is the quiescence search (or the static eval with it off).
         int score = -negamax<false>(-bar, -bar + 1, 0, ply + 1);
@@ -467,7 +469,15 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
       hit.depth >= depth - SingularEntrySlack) {
     const int s = score_from_tt(hit.score, ply);
     if (!is_tb_or_mate(s)) {
-      const int bar = s - SingularMarginPerPly * depth;
+      // C4 / R28: with use_multi_extension the margin is depth-concave,
+      // half as steep per ply beyond SingularKneeDepth (the top of the depths
+      // the margin was measured at), since the test's precision rose with
+      // depth there.
+      const int margin = switches.use_multi_extension && depth > SingularKneeDepth
+                             ? SingularMarginPerPly * SingularKneeDepth +
+                                   SingularMarginPerPly * (depth - SingularKneeDepth) / 2
+                             : SingularMarginPerPly * depth;
+      const int bar = s - margin;
       FORK_STAT(++counters.singular_tests);
       f.withheld_move = hit.move;
       const int score = negamax<false>(bar - 1, bar, depth / 2, ply);
@@ -478,6 +488,15 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           tested_move = hit.move;
           tested_extension = 1;
           FORK_STAT(++counters.singular_extended);
+          // C4 / R28: at a non-PV node, a withheld search a further step
+          // below the bar gives two plies, two steps three, within the line's
+          // budget of extra plies (a share of the iteration's depth).
+          if (switches.use_multi_extension && !OnPv) {
+            const int step = margin * MultiExtensionStepQuarters / 4;
+            const int extra = score < bar - 2 * step ? 2 : score < bar - step ? 1 : 0;
+            const int room = iteration_depth_ / ExtensionBudgetDivisor - f.extra_plies;
+            tested_extension += std::clamp(extra, 0, std::max(room, 0));
+          }
         }
       } else if (!OnPv && switches.use_multi_cut && bar >= beta && !is_tb_or_mate(bar)) {
         FORK_STAT(++counters.multi_cut_cuts);
@@ -555,6 +574,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     ++moves_seen;
     const bool quiet = !m.is_capture() && !m.is_promotion();
     const int extension = m == tested_move ? tested_extension : 0;
+    // C4: the line's extra plies (always 0 with use_multi_extension off).
+    if (switches.use_multi_extension)
+      frames_[ply + 1].extra_plies = static_cast<std::uint8_t>(f.extra_plies + std::max(extension - 1, 0));
 #ifdef FORK_SEARCH_STATS
     counters.futile_quiets_taken += futile_node && quiet;
     const bool bad_after_stop =
@@ -891,6 +913,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 
 int Searcher::search_root(int alpha, int beta, int depth) {
   Position& pos = *pos_;
+  iteration_depth_ = depth;  // C4's extension budget
   ++nodes_;
   FORK_STAT(++counters.root_nodes);
   pv_[0].length = 0;
@@ -905,6 +928,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     const std::uint64_t nodes_before = nodes_;
     frames_[1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
     frames_[1].expected_cut = i > 0;  // the root's later moves: expected cut nodes (T17)
+    frames_[1].extra_plies = 0;       // C4: a root move's line has none yet
     play(0, m);
     int score;
     if (i == 0 || !switches.use_pvs) {

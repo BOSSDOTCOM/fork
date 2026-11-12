@@ -2790,3 +2790,21 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
+
+## 133. Double and triple extensions with a depth-concave singular margin (the engine survey's C4, think tank R28)
+
+- **type:** ELO (search); flag `use_multi_extension` (off).
+- **idea** (the survey's C4, the think tank's R28; KB search-techniques.md T29, concept only): one switch for
+  three parts: the singular margin grows half as fast per ply beyond `SingularKneeDepth` (12); at non-PV nodes a
+  singular TT move gets two plies when the withheld search fell a further step below the bar, three at two steps
+  (`MultiExtensionStepQuarters` 4 = one singular margin per step); the extra plies along a line stay within the
+  iteration's depth / `ExtensionBudgetDivisor` (4).
+- **status:** **in progress (coordinator's build list, 2026-11-12: "C4 / R28, LTC only").** Built on phase-4
+  de7e0a3 behind the switch, off: branch tier2/c4-multi-ext, bench unchanged (9,639,207 / 07f7ae19b9250f38,
+  r8brft1). Test commits sprt/c4-multi-ext (step 4 quarters) and sprt/c4-multi-ext-q2 (the retry, 2 quarters).
+  Night items 95a (c4-multi-ext-ltc, design R at 40+0.4, ledger idea `c4-multi-ext`, try 1) and 95b
+  (c4-multi-ext-ltc-retry, only if 95a does not accept H1), gated until state/gate-e1.done. R28's deep precision
+  measurement (depths 12-20) was not run; the knee and slope are natural stand-ins (DESIGN.md's row). Nothing is
+  adopted before a verdict.
+- **runtime cost:** none measurable expected (a few integer operations per singular test, a byte store per child).
+- **earliest phase:** Phase 4.
