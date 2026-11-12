@@ -164,6 +164,12 @@ struct SearchQuota {
 //   SPRT against off was capped undecided (+3.26 +/- 3.35 Elo after 12,800
 //   games, [0, 6]); on since its non-regression SPRT then passed (+2.41 +/-
 //   2.69 Elo after 20,800 games, [-3, 0]; the owner's rule, 2026-11-12).
+// - use_contested_lmr_relief: a late quiet move is reduced one ply less when
+//   at least ContestedCutoffThreshold nodes one ply below this node failed
+//   high since the node above it started its moves (PlyFrame::child_cutoffs):
+//   the engine survey's C16 with the sign its measurement found (ideas.md
+//   ideas 136 and 137). The count is kept in every build; only its LMR use
+//   is switched. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -199,7 +205,8 @@ struct SearchQuota {
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
-  X(use_pass_best_stop, UsePassBestStop, true)
+  X(use_pass_best_stop, UsePassBestStop, true)           \
+  X(use_contested_lmr_relief, UseContestedLmrRelief, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -258,7 +265,7 @@ struct PlyFrame {
   Move withheld_move = NoMove;     // set while a singular test searches this node without that move
   int arrival = NoArrival;         // the pair-history slot of the move that led here (none after a null move)
   bool expected_cut = false;       // expected to fail high (a cut node), from the parent (T17)
-  std::uint8_t child_cutoffs = 0;  // C16 (stats builds only): nodes at this ply that failed high since the
+  std::uint8_t child_cutoffs = 0;  // C16: nodes at this ply that failed high since the
                                    // node two plies up started its moves (saturating)
 };
 

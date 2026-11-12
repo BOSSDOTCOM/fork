@@ -2815,3 +2815,20 @@ whose weaknesses and data gaps decide their targets and order.
   before any further use.
 - **runtime cost:** none in normal builds.
 - **earliest phase:** Phase 4.
+
+## 137. The contested-node LMR relief (the engine survey's C16 with its measured sign)
+
+- **type:** ELO (search); flag `use_contested_lmr_relief` (off).
+- **idea** (the coordinator's decision, 2026-11-12, from idea 136's histogram): C16's count of fail highs one
+  ply below, read the way Fork's measurement found it: at least `ContestedCutoffThreshold` (3) of them mark a node
+  whose refutations had to be searched, whose late quiets beat alpha four to five times as often as at a count
+  of 0, so they are reduced one ply less.
+- **status:** **in progress.** Built on tier2/c16-child-cutoffs (the measurement record, on phase-4 de7e0a3)
+  behind the switch, off: branch tier2/c16-contested-lmr, bench unchanged (9,639,207 / 07f7ae19b9250f38,
+  r8brft1). Test commits sprt/c16-contested-lmr (3) and sprt/c16-contested-lmr-4 (the retry). Night items 98a
+  (c16-contested-lmr-stc, design R at STC, ledger idea `c16-contested-lmr`, try 1) and 98b
+  (c16-contested-lmr-retry, 4, only if 98a does not accept H1), gated until state/gate-e1.done; an LTC only on a
+  pass (a depth change), not queued here. Nothing is adopted before a verdict.
+- **runtime cost:** a byte store per node and one increment per fail high, in every build. Speed not measured
+  (UNVERIFIED; bench/ab.py not run).
+- **earliest phase:** Phase 4.
