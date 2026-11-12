@@ -155,6 +155,22 @@ if WINDOWS:
         finally:
             k32.CloseHandle(h)
 
+    k32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+
+    def pid_started(pid):
+        """The process's creation time as epoch seconds, or None if it cannot be read."""
+        h = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return None
+        try:
+            times = [wintypes.FILETIME() for _ in range(4)]
+            if not k32.GetProcessTimes(h, *(ctypes.byref(t) for t in times)):
+                return None
+            ticks = (times[0].dwHighDateTime << 32) | times[0].dwLowDateTime  # 100 ns since 1601-01-01 UTC
+            return ticks / 1e7 - 11644473600
+        finally:
+            k32.CloseHandle(h)
+
     def launch(record, cmd, log, cwd):
         """Starts cmd suspended, puts it in a new Job Object, gives it an inheritable handle to the object, then
         lets it run. Returns (Popen, job handle)."""
@@ -309,6 +325,16 @@ else:
             return False
         return stat[stat.rindex(')') + 2:].split()[0] != 'Z'
 
+    def pid_started(pid):
+        """The process's start as epoch seconds (/proc/PID/stat field 22, clock ticks after boot), or None."""
+        try:
+            stat = Path(f'/proc/{pid}/stat').read_text()
+            ticks = int(stat[stat.rindex(')') + 2:].split()[19])
+        except (OSError, ValueError, IndexError):
+            return None
+        boot = last_boot()
+        return None if boot is None else boot + ticks / os.sysconf('SC_CLK_TCK')
+
     def launch(record, cmd, log, cwd):
         env = dict(os.environ, FORK_JOB_ID=record['id'], FORK_JOB=record['name'])
         p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, cwd=cwd, env=env,
@@ -352,6 +378,29 @@ def started_at(record):
         return None
 
 
+START_SLACK = 2.0   # seconds: a recorded process start against the live one's (Linux reads btime in whole seconds)
+START_WINDOW = 120  # seconds: a record without process starts; its keeper and command start this soon after it
+
+
+def recorded_alive(record, key):
+    """Whether the record's process `key` ('keeper' or 'pid') is alive and is the one the record names, not a
+    process that reused its id (bug review 2026-11-11, T8: a record left "running" counted as live by a reused
+    id). The process must have started when the keeper recorded (KEY_started, kept since 2026-11-11), or, for
+    an older record, within START_WINDOW seconds after the record's start; a start that cannot be read counts
+    as the recorded process, as before."""
+    pid = record.get(key)
+    if not pid or not pid_alive(pid):
+        return False
+    actual = pid_started(pid)
+    if actual is None:
+        return True
+    want = record.get(f'{key}_started')
+    if want is not None:
+        return abs(actual - float(want)) <= START_SLACK
+    started = started_at(record)
+    return started is None or started - START_SLACK <= actual <= started + START_WINDOW
+
+
 def started_inside(other, record, by_id):
     """Whether `other` was started from inside `record`'s job: its recorded parent chain (the FORK_JOB_ID it was
     started under, kept since 2026-11-10) reaches `record`, or it started later. A job started inside another
@@ -379,7 +428,7 @@ def other_jobs_pids(record):
         if not started_inside(other, record, by_id):
             continue
         out.update(job_pids(other))
-        out.update(other[k] for k in ('keeper', 'pid') if other.get(k) and pid_alive(other[k]))
+        out.update(other[k] for k in ('keeper', 'pid') if recorded_alive(other, k))
     return out
 
 
@@ -411,7 +460,8 @@ def live(record):
     that none was left), its recorded keeper and command ids are not counted: a live process with one of them
     is another process that reused the id (2026-11-06, in WSL). A job that started before the machine's last
     boot has no process left whatever its record says: a crash leaves it "running", and its ids are reused
-    (2026-11-07, g3h in WSL)."""
+    (2026-11-07, g3h in WSL). A recorded id counts only while its process is the one recorded (recorded_alive:
+    its start time; bug review 2026-11-11, T8)."""
     started = started_at(record)
     boot = last_boot()
     if started is not None and boot is not None and started < boot - 60:
@@ -419,7 +469,7 @@ def live(record):
     pids = set(own_pids(record))
     if record.get('state') not in ('ended', 'stopped', 'failed'):
         for k in ('keeper', 'pid'):
-            if record.get(k) and pid_alive(record[k]):
+            if recorded_alive(record, k):
                 pids.add(record[k])
     return sorted(pids)
 
@@ -509,6 +559,7 @@ def cmd_keep(argv):
     name = argv[0]
     record = read_json(job_path(name))
     record['keeper'] = os.getpid()
+    record['keeper_started'] = pid_started(record['keeper'])
     try:
         log = open(record['log'], 'ab')
         p, handle = launch(record, record['command'], log, record['cwd'])
@@ -516,7 +567,7 @@ def cmd_keep(argv):
         record.update(state='failed', error=f'{type(e).__name__}: {e}')
         write_json(job_path(name), record)
         return
-    record.update(state='running', pid=p.pid)
+    record.update(state='running', pid=p.pid, pid_started=pid_started(p.pid))
     if WINDOWS:
         record['wslenv'] = True  # its Linux processes carry FORK_JOB_ID (wsl_pids)
     if not WINDOWS:

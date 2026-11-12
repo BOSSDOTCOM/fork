@@ -12,6 +12,8 @@
 - one lock per type: a second job of a type is refused while the first runs, another type is not;
 - a job that ends by itself releases its lock;
 - a lock whose job has no process left is reclaimed (and logged); one whose job lives is never taken;
+- a record's keeper and command ids count only while their processes are the recorded ones, by start time
+  (bug review 2026-11-11, T8: a record left "running" whose ids were reused counted as live);
 - a stop that leaves a process alive exits 1 and keeps the lock (the termination stubbed out);
 - the ledger: records, the last record per stage, exact checks of a stage's run and inputs, a run id
   refused for a second stage;
@@ -396,6 +398,42 @@ class Supervisor(unittest.TestCase):
         finally:
             other.kill()
             other.wait()
+
+    def test_a_running_records_reused_ids_are_not_its_processes(self):
+        # Bug review 2026-11-11, T8: a record left "running" (its keeper killed, say) whose keeper and command ids
+        # were reused counted as live, so its type's lock was never reclaimed. The ids count only while their
+        # process is the one recorded: by its recorded start (records since the fix), else by a start within
+        # START_WINDOW seconds of the record's.
+        other = subprocess.Popen([sys.executable, '-I', '-c', 'import time; time.sleep(60)'])
+        try:
+            actual = jobctl.pid_started(other.pid)
+            self.assertIsNotNone(actual)
+            self.assertLess(abs(actual - time.time()), 30)
+            boot = jobctl.last_boot()
+            old = max(time.time() - 3600, (boot or 0) + 120)  # after the last boot, long before `other`
+            self.assertGreater(actual - old, jobctl.START_WINDOW)
+            rec = {'name': 'stale', 'type': 'test', 'id': 'feedfacefeedfac2', 'state': 'running',
+                   'keeper': other.pid, 'pid': other.pid,
+                   'started': time.strftime('%Y-%m-%dT%H:%M:%S%z', time.localtime(old))}
+            self.assertEqual(jobctl.live(rec), [], 'an older record: a process started after its window')
+            rec.update(keeper_started=actual, pid_started=actual)
+            self.assertEqual(jobctl.live(rec), [other.pid], 'the recorded starts match')
+            rec.update(keeper_started=actual - 10, pid_started=actual - 10)
+            self.assertEqual(jobctl.live(rec), [], 'a recorded start 10 s earlier: another process')
+            started = {'id': 'feedfacefeedfac3', 'started': rec['started'], 'state': 'running'}
+            self.assertNotIn(other.pid, jobctl.other_jobs_pids(started), 'nor counted as a nested job')
+        finally:
+            other.kill()
+            other.wait()
+
+    def test_a_started_job_records_its_process_starts(self):
+        sleep = [sys.executable, '-I', '-c', 'import time; time.sleep(600)']
+        self.assertEqual(self.start('test', 'starts', *sleep).returncode, 0)
+        self.assertTrue(self.wait_for(lambda: self.record('starts').get('state') == 'running'))
+        r = self.record('starts')
+        for k in ('keeper', 'pid'):
+            self.assertAlmostEqual(r[f'{k}_started'], jobctl.pid_started(r[k]), delta=jobctl.START_SLACK)
+        self.assertIn(r['pid'], jobctl.live(r))
 
     def test_a_failed_stop_keeps_the_lock(self):
         sleep = [sys.executable, '-I', '-c', 'import time; time.sleep(600)']
