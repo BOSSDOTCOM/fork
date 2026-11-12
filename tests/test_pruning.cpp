@@ -497,7 +497,7 @@ TEST_CASE("pruning", "TT-cutoff credit: still correct, and it changes the search
 // then, so that is off too).
 TEST_CASE("pruning", "linear history bonus: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_linear_bonus);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_linear_bonus);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_linear_bonus = true;
   fx.searcher->switches = on;
