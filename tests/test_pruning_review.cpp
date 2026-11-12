@@ -169,6 +169,7 @@ TEST_CASE("pruning", "tier 2, all switches on: stopped searches leave no state b
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
   s.use_threat_buckets = s.use_capture_probe = s.use_history_skip = true;
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = true;
+  s.use_pair_sum_update = true;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

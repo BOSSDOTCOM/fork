@@ -2575,7 +2575,7 @@ whose weaknesses and data gaps decide their targets and order.
 
 ## 75. The summed pair-table update (the engine survey's D8)
 
-- **type:** ELO (search); flag `use_pair_sum_update` (off).
+- **type:** ELO (search); flag `use_pair_sum_update` (on since 2026-11-12).
 - **idea** (the engine survey's D8, its rank 1; concept only): a cutoff's
   bonus and maluses move each pair-table entry (reply and follow) by the
   usual self-limiting rule, but with the self-limiting term read from the
@@ -2583,18 +2583,20 @@ whose weaknesses and data gaps decide their targets and order.
   two tables approach the limit together (`PairHistory::apply_from_sum`,
   clamped to ±`HistoryMax`). A table the node does not read is neither
   summed nor updated. No constant.
-- **status:** **in progress (owner, 2026-11-11 3:10 PM EST: "the survey's
+- **status:** **adopted 2026-11-12** on its STC pass (survey-d8-stc, design R [0, 6] against off:
+  +4.29 ± 3.46 Elo, nElo +7.47 ± 6.02, H1 after 12,800 games; sprt-log), pre-approved by the owner;
+  ported onto phase-4 2c294d3, bench 8,773,005 / 413d5ae2f1af08de (DESIGN.md decisions log, 2026-11-12). No
+  constant, so no SPSA dimension. History: (owner, 2026-11-11 3:10 PM EST: "the survey's
   top cheap techniques: D8 (summed continuation update), D9 (failed-child
   prior-move bonus), D13 (direct-check ordering bonus), each design R at
-  STC").** Built on phase-4 784b1b0 behind the switch, off:
+  STC"). Built on phase-4 784b1b0 behind the switch, off:
   tier2/d8-pair-sum 55bb786, bench unchanged (10,166,167 /
   d874b380155a2e8c). Test commit sprt/d8-pair-sum 8ffc602 (switch on; bench
   10,236,778 / 6338c0c3a941915a). Lane B item 68 (survey-d8-stc: design R
   at STC against off from stage 0; ledger idea `d8-pair-sum`, try 1),
   gated until E1's SPRT (state/gate-e1.done; owner, about 6:40 PM EST).
-  Nothing is adopted before its verdict.
-- **runtime cost:** none expected (one extra table read per updated move at
-  a cutoff; UNVERIFIED until the SPRT's nps report).
+  Rebased onto E1 as tier2/d8-pair-sum-e1 aa8dd0d and sprt/d8-pair-sum-e1 dd132c9 before it ran.
+- **runtime cost:** one extra table read per updated move at a cutoff. bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 2c294d3, B = the port's build of this commit's engine code from the uncommitted tree on 2c294d3 plus the zugzwang tools, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -0.5%, best -0.4%, under the 3.0% noise threshold: no significant difference (a price of that size is inside the noise, UNVERIFIED). The bench searches 6.3% fewer nodes (8,773,005 against 9,366,920).
 - **earliest phase:** Phase 4.
 
 ## 76. The prior-move credit (the engine survey's D9)

@@ -192,6 +192,12 @@ the offline diagnosis of 2026-11-12 half of the node visits where it is
 read were quiescence nodes and most others depths 1-2. So p grows by 2
 more. The learning weights (`DriftWeightCap`, `DriftWeightTotal`) stay out
 (E5's follow-up measures the update rule).
+**2026-11-12: D8, the summed pair-table update, adopted with no constant**
+(survey-d8-stc +4.29 ± 3.46 Elo at STC, design R [0, 6]; DESIGN.md
+"Search constants"), so p is unchanged. `ReplyWeight` and `FollowWeight`
+(class (a) above) are tuned with the rule in place. The int16 headroom
+check above still holds: `apply_from_sum` clamps each entry to
+±HistoryMax.
 
 ### 3.2 Class (b): LTC pass
 

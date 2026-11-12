@@ -1546,3 +1546,41 @@ The final stage's result block (corr-minor-retry, stage 13, run 43211912908):
   9,263,568 / 881c326307a2ba8a, phase-4's; with the minor table on and ProbCut and the history skip off
   (the tested base had neither) 9,633,320 / 2467c017a6bb6ec4, byte for byte 62b911f's tests/bench-r8brft1.ref, so the port equals
   the tested code. `MinorDriftShare` 32 and `DriftLimit` 300 join the final retune's SPSA (class (a)). Speed: measured before the commit with bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 75d53f0, B = the port's build of this commit's engine code from the uncommitted tree on 75d53f0, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -2.0%, best -3.4%, under the 4.9% noise threshold: no significant difference; a small price (the material keys kept at each make, the table read at each estimate) is possible but not resolved at this noise (UNVERIFIED). The bench searches 1.1% more nodes (9,366,920 against 9,263,568).
+
+### 2026-11-12 the summed pair-table update (the engine survey's D8; idea 75): design R SPRT against off (owner): H1, adopted
+
+- The owner's order (2026-11-11, 3:10 PM EST): "the survey's top cheap techniques: D8 (summed continuation update),
+  D9 (failed-child prior-move bonus), D13 (direct-check ordering bonus), each design R at STC." D8 has no constant,
+  so no head-to-head. Lane B item 68 (survey-d8-stc), gated on E1 (gate-e1). Base tier2/d8-pair-sum-e1 aa8dd0d (the
+  update behind `use_pair_sum_update`, off, on adopt/e1 25623ab = phase-4 784b1b0's engine with E1, no ProbCut, no
+  history skip, no drift table; bench 10,166,167 / d874b380155a2e8c); test sprt/d8-pair-sum-e1 dd132c9 (the switch
+  on; 10,236,778 / 6338c0c3a941915a). STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed 20261027), r8brft1 on both
+  sides; design R ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages), from stage 0. Ledger
+  idea `d8-pair-sum`, try 1. Data: ~/fork-data/sprt/survey-d8-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **survey-d8-stc: D8 on against off, stages 0-7** | 43196026493 (0), 43198826553 (1), 43201894676 (2), 43205178148 (3), 43207959370 (4), 43210641210 (5), 43213291041 (6), 43216014186 (7) | 12,800 (no time losses, no abnormal ends) | **+4.29 ± 3.46** | +7.47 ± 6.02 | [136, 1483, 3011, 1627, 143] | **H1 accepted** (LLR 2.84) after stage 7, 7:32 AM EST 2026-11-12 |
+
+- By stage: after stage 0 +1.09 ± 10.03 (LLR −0.09); stage 1 +2.06 ± 7.03 (0.08); stage 2 +1.52 ± 5.74 (−0.09);
+  stage 3 +1.90 ± 4.93 (0.09); stage 4 +1.65 ± 4.38 (−0.05); stage 5 +3.40 ± 4.00 (1.39); stage 6 +4.09 ± 3.70
+  (2.30).
+
+The final stage's result block (survey-d8-stc, stage 7, run 43216014186):
+
+```
+    Shards: 128 (done); pairs 6400, games 12800 (12800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 4.29 +/- 3.46, nElo: 7.47 +/- 6.02
+    Ptnml(0-2): [136, 1483, 3011, 1627, 143]
+    LLR: 2.84 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Adopted (the owner's overnight pre-approval of 2026-11-11 for search items that pass their SPRT; an STC-only
+  item):** aa8dd0d's change with dd132c9's switch-on ported onto phase-4 2c294d3 alone (branch adopt/d8; the code
+  lines equal the tested diff apart from the merge beside ProbCut's, the history skip's and the drift tables'
+  switch entries and comments), `UsePairSumUpdate` on, the switch kept until the Phase 4 re-validation. Bench
+  8,773,005 / 413d5ae2f1af08de (r8brft1). With D8 off 9,366,920 / 6d72bf03d34c65ec, phase-4's; with D8 on and ProbCut, the history skip and the
+  minor drift table off (the tested base had none of them) 10,236,778 / 6338c0c3a941915a, byte for byte dd132c9's
+  tests/bench-r8brft1.ref, so the port equals the tested code. No constant, so nothing joins the final retune's
+  SPSA. Speed: bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 2c294d3, B = the port's build of this commit's engine code from the uncommitted tree on 2c294d3 plus the zugzwang tools, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -0.5%, best -0.4%, under the 3.0% noise threshold: no significant difference (a price of that size is inside the noise, UNVERIFIED). The bench searches 6.3% fewer nodes (8,773,005 against 9,366,920).
