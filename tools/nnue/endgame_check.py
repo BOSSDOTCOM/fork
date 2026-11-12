@@ -6,6 +6,12 @@ to move) and evaluated by each net's integer evaluation (the reference's R-int, 
 the net's own scale). Declared before the run: a won position is misjudged below +100 cp, a lost one
 above -100 cp, a drawn one beyond +-200 cp.
 
+**What it measures (2026-11-11, bug review T1):** these 900 positions come from the population the Syzygy
+endgame slice (tools/datagen/endgame_slice.py, half of it KPK, KQK and KRK) trains on, and 898 of them are in
+the slice's ten files verbatim (509 in slice1-01 alone; tools/nnue/endgame_heldout.py overlap --old-check). Since
+g3s2 the result measures **recall** of slice positions, not generalisation; the held-out check is
+tools/nnue/endgame_heldout.py.
+
     endgame_check.py REPO SYZYGY_DIR NET_A[=LAYOUT] NET_B[=LAYOUT] [--per-kind 300]
 (LAYOUT defaults to tools/nnue/s512.json)
 """
@@ -13,31 +19,16 @@ import random
 import sys
 from pathlib import Path
 
-repo = Path(sys.argv[1])
-sys.path.insert(0, str(repo / 'tools/nnue'))
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
 import chess  # noqa: E402
 import chess.syzygy  # noqa: E402
-import models  # noqa: E402
-import netformat  # noqa: E402
 
-syzygy, nets = sys.argv[2], sys.argv[3:5]
-per_kind = int(sys.argv[sys.argv.index('--per-kind') + 1]) if '--per-kind' in sys.argv else 300
+KINDS = (('KPK', chess.PAWN), ('KQK', chess.QUEEN), ('KRK', chess.ROOK))
+SEED = 20261105
 
 
-def load(arg):
-    path, _, layout = arg.partition('=')
-    desc = netformat.layout(layout or str(repo / 'tools/nnue/s512.json'))
-    data = Path(path).read_bytes()
-    arch = models.arch_from_net(desc['name'], data[netformat.HEADER_BYTES:])
-    return arch, models.unpack(arch, data[netformat.HEADER_BYTES:]), netformat.header_fields(data)['scale']
-
-
-loaded = [load(p) for p in nets]
-rng = random.Random(20261105)
-tb = chess.syzygy.open_tablebase(syzygy)
-
-
-def random_position(extra):
+def random_position(rng, extra):
     while True:
         b = chess.Board(None)
         strong = rng.choice([chess.WHITE, chess.BLACK])
@@ -53,6 +44,13 @@ def random_position(extra):
         return b
 
 
+def positions(per_kind=300):
+    """The check's positions in order, as (ending, board): the same sequence the check has always drawn
+    (one generator seeded SEED, KPK then KQK then KRK)."""
+    rng = random.Random(SEED)
+    return [(name, random_position(rng, extra)) for name, extra in KINDS for _ in range(per_kind)]
+
+
 def verdict(wdl):
     return 'won' if wdl > 0 else 'lost' if wdl < 0 else 'drawn'
 
@@ -61,26 +59,46 @@ def misjudged(kind, cp):
     return cp < 100 if kind == 'won' else cp > -100 if kind == 'lost' else abs(cp) > 200
 
 
-totals = {}
-for name, extra in (('KPK', chess.PAWN), ('KQK', chess.QUEEN), ('KRK', chess.ROOK)):
-    for _ in range(per_kind):
-        b = random_position(extra)
+def load(repo, arg):
+    import models
+    import netformat
+    path, _, layout = arg.partition('=')
+    desc = netformat.layout(layout or str(repo / 'tools/nnue/s512.json'))
+    data = Path(path).read_bytes()
+    arch = models.arch_from_net(desc['name'], data[netformat.HEADER_BYTES:])
+    return arch, models.unpack(arch, data[netformat.HEADER_BYTES:]), netformat.header_fields(data)['scale']
+
+
+def main(argv):
+    import models
+    repo = Path(argv[1])
+    syzygy, nets = argv[2], argv[3:5]
+    per_kind = int(argv[argv.index('--per-kind') + 1]) if '--per-kind' in argv else 300
+    loaded = [load(repo, p) for p in nets]
+    tb = chess.syzygy.open_tablebase(syzygy)
+    totals = {}
+    for name, b in positions(per_kind):
         kind = verdict(tb.probe_wdl(b))
         for k, (arch, net, scale) in enumerate(loaded):
             cp = models.r_int(arch, net, scale, b)
             t = totals.setdefault((name, kind, k), [0, 0])
             t[0] += 1
             t[1] += misjudged(kind, cp)
-names = [Path(p.partition('=')[0]).stem for p in nets]
-print(f'{"ending":6} {"result":6} {"positions":>9}  ' + '  '.join(f'{n + " misjudged":>20}' for n in names))
-for name in ('KPK', 'KQK', 'KRK'):
-    for kind in ('won', 'drawn', 'lost'):
-        if (name, kind, 0) not in totals:
-            continue
-        n = totals[(name, kind, 0)][0]
-        cells = '  '.join(f'{totals[(name, kind, k)][1]:>9} ({100 * totals[(name, kind, k)][1] / n:5.1f}%)' for k in range(2))
-        print(f'{name:6} {kind:6} {n:>9}  {cells}')
-for k, n in enumerate(names):
-    bad = sum(v[1] for (e, r, kk), v in totals.items() if kk == k)
-    allp = sum(v[0] for (e, r, kk), v in totals.items() if kk == k)
-    print(f'{n}: {bad} of {allp} misjudged ({100 * bad / allp:.1f}%)')
+    names = [Path(p.partition('=')[0]).stem for p in nets]
+    print(f'{"ending":6} {"result":6} {"positions":>9}  ' + '  '.join(f'{n + " misjudged":>20}' for n in names))
+    for name, _ in KINDS:
+        for kind in ('won', 'drawn', 'lost'):
+            if (name, kind, 0) not in totals:
+                continue
+            n = totals[(name, kind, 0)][0]
+            cells = '  '.join(f'{totals[(name, kind, k)][1]:>9} ({100 * totals[(name, kind, k)][1] / n:5.1f}%)'
+                              for k in range(2))
+            print(f'{name:6} {kind:6} {n:>9}  {cells}')
+    for k, n in enumerate(names):
+        bad = sum(v[1] for (e, r, kk), v in totals.items() if kk == k)
+        allp = sum(v[0] for (e, r, kk), v in totals.items() if kk == k)
+        print(f'{n}: {bad} of {allp} misjudged ({100 * bad / allp:.1f}%)')
+
+
+if __name__ == '__main__':
+    main(sys.argv)
