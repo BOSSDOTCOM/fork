@@ -244,7 +244,7 @@ struct SearchQuota {
   X(use_threat_drift, UseThreatDrift, false)             \
   X(use_pair_sum_update, UsePairSumUpdate, true)         \
   X(use_check_order_bonus, UseCheckOrderBonus, true)     \
-  X(use_skip_check_exempt, UseSkipCheckExempt, false)
+  X(use_skip_check_exempt, UseSkipCheckExempt, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

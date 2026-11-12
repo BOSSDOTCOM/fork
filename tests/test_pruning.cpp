@@ -639,7 +639,7 @@ TEST_CASE("pruning", "direct-check bonus: still correct, and it changes the sear
 // Late move pruning and futility pruning are off so that only the skip can
 // drop the move. The position is the mate-in-1 case above.
 TEST_CASE("pruning", "history skip: a quiet direct check with bad history is exempt only with the switch") {
-  CHECK(!SearchSwitches{}.use_skip_check_exempt);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_skip_check_exempt);  // on in this SPRT test commit
   PruningFixture fx;
   const std::string_view fen = "6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1";
   const auto probe = [&](bool exempt, int depth) {
