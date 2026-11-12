@@ -59,6 +59,14 @@ Level 0 (no extra games), options of the gauntlet report:
   interval; its "baseline" and "previous" name the runs the workflow
   downloads). The ratio's interval divides each bootstrap draw of the gain
   by a normal draw of the sum (SE = the root of the summed (ci95 / 1.96)^2).
+  The sum is biased upward (bug review 2026-11-11, T4): each SPRT stopped
+  when its estimate was high, and only passes are adopted. An entry with
+  "sprt": {"design" (a key of stopbias.DESIGNS), "stages" (played),
+  "nelo" (at the stop)} is also summed at its median-unbiased estimate
+  (the stopping rule's share removed) and with the selection bias of a
+  passed test removed at that estimate (a plug-in sensitivity), each with
+  its ratio, and the section states the bias's size per design
+  (tools/gauntlet/stopbias.py). Entries without it count as recorded.
 - --archive DIR (with --adopted): the local fallback. An earlier run whose
   result is not where --previous or --baseline points (or that is not
   given) is read from DIR/run-ID, ID the run transfer.json names
@@ -94,8 +102,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'cloud'))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import sprt_merge as sm  # noqa: E402
+import stopbias  # noqa: E402
 
 SEED = 20261109     # the date of the owner's decision; any fixed value would do
 RESAMPLES = 4000    # the transfer-testing report's count: its SDs move by about 1% between seeds
@@ -339,10 +349,45 @@ def level0(pgn, ratings, previous=None, baseline=None, adopted=None, archive=Non
                 lines.append(f'- Transfer ratio {c["gain"] / total:.2f}, 95% interval {low:.2f} to {high:.2f} (each '
                              f'bootstrap draw of the anchor gain over a normal draw of the sum); gap '
                              f'{signed(c["gain"] - total)} +/- {math.hypot(spread(c["draws"])[0], se):.1f} Elo (1 SE)')
+                lines += stopping_bias_lines(changes, c, se)
             else:
                 lines.append('- Transfer ratio: not defined (the self-play sum is not above 0)')
             lines += left_note(c)
     return lines
+
+
+def stopping_bias_lines(changes, c, se):
+    """The transfer ratio's denominator corrected for the SPRT stop (bug review 2026-11-11, T4;
+    tools/gauntlet/stopbias.py): for each entry with an "sprt" record ({"design", "stages", "nelo"}), its Elo at
+    the median-unbiased estimate of its design and stop stage, and a plug-in sensitivity with the selection bias
+    of a passed test removed as well. Entries without one (a speed pricing) count as recorded."""
+    adjusted = [(x, stopbias.adjust(x)) for x in changes]
+    have = [x for x, a in adjusted if a]
+    if not have:
+        return ["- Stopping bias: not corrected (no transfer.json entry records its SPRT's design, stop stage and "
+                "nElo); the sum is biased upward, so the ratio is understated"]
+    out = []
+    for label, pick in (("median-unbiased at each SPRT's design and stop stage", 0),
+                        ('with the selection bias of a passed test also removed at that estimate (a plug-in '
+                         'sensitivity, not an unbiased estimate)', 1)):
+        total = sum(a[pick] if a else float(x['elo']) for x, a in adjusted)
+        if total <= 0:
+            out.append(f'- Self-play sum {label}: {signed(total)}; ratio not defined')
+            continue
+        rng = random.Random(SEED)
+        _, low, high = spread([g / rng.gauss(total, se) for g in c['draws']])
+        out.append(f'- Self-play sum {label}: {signed(total)} Elo, transfer ratio {c["gain"] / total:.2f}, 95% '
+                   f'interval {low:.2f} to {high:.2f}: '
+                   + '; '.join(f'{x["change"]} {signed(a[pick] if a else float(x["elo"]), 2)}' for x, a in adjusted))
+    designs = sorted({x['sprt']['design'] for x in have})
+    sizes = '; '.join(f'{d} ' + ', '.join(signed(stopbias.pass_bias(stopbias.DESIGNS[d], t)) for t in (3.0, 6.0, 9.0))
+                      for d in designs)
+    out.append(f"- Stopping bias (tools/gauntlet/stopbias.py, the designs' normal model; {len(have)} of "
+               f'{len(changes)} entries carry their SPRT): the recorded sum takes each estimate at the stop, so it is '
+               f'biased upward and the first ratio is understated. At a true effect of 3, 6 and 9 nElo, a passed '
+               f'test overstates it on average by {sizes} nElo; the median-unbiased estimate removes only the '
+               f"stopping rule's share of that, and the plug-in figure brackets the rest")
+    return out
 
 
 def outcome(gain, sd, low, claim):

@@ -212,6 +212,36 @@ class AnchorCheckTests(unittest.TestCase):
         self.assertNotEqual(a['draws'], report.compare(old, new, RATINGS, seed=report.SEED + 1, resamples=300)['draws'])
         self.assertEqual((report.SEED, report.RESAMPLES), (20261109, 4000))
 
+    def test_stopping_bias_lines(self):
+        # Two SPRT entries (design R after 4 stages, network after 1) and a speed pricing: the sums at the
+        # median-unbiased estimate and at the plug-in are stopbias.adjust's, the speed entry counted as recorded.
+        rng = random.Random(5)
+        old = pgn([('Altair 7.0.0', i, c, rng.choice((0.0, 0.5, 1.0))) for i in range(1, 31) for c in 'wb'])
+        new = pgn([('Altair 7.0.0', i, c, rng.choice((0.0, 0.5, 1.0, 1.0))) for i in range(1, 31) for c in 'wb'])
+        entries = [{'change': 'A', 'elo': 7.49, 'ci95': 4.89, 'sprt': {'design': 'search-stc', 'stages': 4, 'nelo': 13.04}},
+                   {'change': 'B', 'elo': 32.67, 'ci95': 10.48, 'sprt': {'design': 'network-stc', 'stages': 1,
+                                                                           'nelo': 53.37}},
+                   {'change': 'C', 'elo': 6.0, 'ci95': 1.1}]
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Path(tmp)
+            (t / 'base.pgn').write_text(old, encoding='utf-8')
+            (t / 'transfer.json').write_text(json.dumps({'baseline': {'run': 1}, 'adopted': entries}), encoding='utf-8')
+            with contextlib.redirect_stderr(io.StringIO()):
+                lines = report.level0(new, RATINGS, baseline=str(t / 'base.pgn'), adopted=str(t / 'transfer.json'))
+        text = '\n'.join(lines)
+        a, b = report.stopbias.adjust(entries[0]), report.stopbias.adjust(entries[1])
+        self.assertAlmostEqual(b[0], 32.67, delta=0.02)  # stage 1: the median-unbiased estimate is the estimate
+        mue = a[0] + b[0] + 6.0
+        plug = a[1] + b[1] + 6.0
+        self.assertIn(f"- Self-play sum median-unbiased at each SPRT's design and stop stage: {mue:+.1f} Elo", text)
+        self.assertIn(f'removed at that estimate (a plug-in sensitivity, not an unbiased estimate): {plug:+.1f} Elo',
+                      text)
+        self.assertIn(f'A {a[0]:+.2f}; B {b[0]:+.2f}; C +6.00', text)
+        self.assertIn('2 of 3 entries carry their SPRT', text)
+        self.assertIn('network-stc +', text)
+        self.assertLess(plug, mue)
+        self.assertLess(mue, 7.49 + 32.67 + 6.0)
+
     def test_outcomes(self):
         self.assertEqual(report.outcome(25.0, 10.0, 5.0, 30.0), 'confirmed')
         self.assertEqual(report.outcome(10.0, 10.0, -9.0, 30.0), 'consistent')      # 10 = 30 - 2 * 10
@@ -249,6 +279,7 @@ class AnchorCheckTests(unittest.TestCase):
             self.assertIn(f'- On Weiss 1.0: {prev:+.1f} Elo, bootstrap SD', summary)
             self.assertIn('adopted changes sum to +150.0 +/- 19.6 Elo (95%): X +100.00; Y +50.00', summary)
             self.assertIn(f'- Transfer ratio {base / 150:.2f}, 95% interval', summary)
+            self.assertIn("- Stopping bias: not corrected (no transfer.json entry records its SPRT's design", summary)
             self.assertIn('since the baseline gauntlet (run 1, commit abc)', summary)
             # Before the shard list; after it nothing else.
             self.assertLess(summary.index('### Anchor check: gain over'), summary.index('### Anchor check: running'))

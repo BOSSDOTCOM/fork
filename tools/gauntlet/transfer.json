@@ -1,17 +1,17 @@
 {
-  "about": "The anchor check's level 0 (tools/gauntlet/report.py; .github/workflows/gauntlet.yml downloads the gauntlet-result artifacts of the two runs named here, kept 90 days; tools/gauntlet/archive.sh keeps every run in ~/fork-data/gauntlet/run-ID, which report.py --archive reads). previous: the last gauntlet, compared with the next one. baseline: the gauntlet the running transfer ratio starts from. adopted: every change adopted after the baseline's commit, with its self-play (SPRT) logistic Elo and ci95, the half-width of its 95% interval. After each gauntlet, set previous to it; add each adopted change. Starting values: docs/research/transfer-testing/report.md, sections 1.1 and 1.2.",
+  "about": "The anchor check's level 0 (tools/gauntlet/report.py; .github/workflows/gauntlet.yml downloads the gauntlet-result artifacts of the two runs named here, kept 90 days; tools/gauntlet/archive.sh keeps every run in ~/fork-data/gauntlet/run-ID, which report.py --archive reads). previous: the last gauntlet, compared with the next one. baseline: the gauntlet the running transfer ratio starts from. adopted: every change adopted after the baseline's commit, with its self-play (SPRT) logistic Elo and ci95, the half-width of its 95% interval. After each gauntlet, set previous to it; add each adopted change. Starting values: docs/research/transfer-testing/report.md, sections 1.1 and 1.2. sprt (bug review T4, 2026-11-11): the adopting SPRT's design (a key of tools/gauntlet/stopbias.py DESIGNS), the stages it played and its nElo at the stop (docs/history/phase-4/sprt-log.md), for report.py's stopping-bias lines; give it for every SPRT-adopted change.",
   "baseline": {"run": 41465146207, "commit": "3902d00"},
   "previous": {"run": 43103327654, "commit": "db0bb31"},
   "adopted": [
-    {"change": "S512+PP", "elo": 32.67, "ci95": 10.48, "test": "STC [0, 5], run 42294907752"},
+    {"change": "S512+PP", "elo": 32.67, "ci95": 10.48, "test": "STC [0, 5], run 42294907752", "sprt": {"design": "network-stc", "stages": 1, "nelo": 53.37}},
     {"change": "select_best in a register (5ba7d0d)", "elo": 6.0, "ci95": 1.1, "test": "no SPRT: +4.0% local nps priced at 1.5 Elo per 1% (5.0-7.2)"},
-    {"change": "S512ppr2", "elo": 20.11, "ci95": 7.22, "test": "STC [0, 5]"},
-    {"change": "S512ppr3", "elo": 7.12, "ci95": 4.53, "test": "STC [0, 5], 8,000 games"},
-    {"change": "Time management (b)", "elo": 18.69, "ci95": 7.18, "test": "STC design R"},
-    {"change": "R14 SPSA tuned margins (spsa-r14-m2)", "elo": 37.93, "ci95": 10.03, "test": "STC design R [0, 6], run 42726060415, 1,600 games"},
-    {"change": "r8btd90 (retrain 8b, TD(0.9) labels)", "elo": 12.17, "ci95": 5.71, "test": "r8b-stc-1: STC [0, 5], runs 42917050282-42922442883, 4,800 games"},
-    {"change": "r8brft1 (idea 70, result fine-tune of td90)", "elo": 5.74, "ci95": 3.81, "test": "r8b-rft-stc: STC [0, 5], runs 42974677403-42988446282, 11,200 games"},
-    {"change": "cut-node (R4, 1 ply)", "elo": 6.02, "ci95": 3.67, "test": "b4-cut-node-stc: STC design R [0, 6], runs 42948984895-42961813575, 11,200 games", "ltc": "b4-cut-node-ltc: LTC 40+0.4 design R [0, 6], +9.75 +/- 5.14, runs 42991551149-43013618465, 4,992 games"},
-    {"change": "T56 any-attack threat buckets", "elo": 7.49, "ci95": 4.89, "test": "t56-any-stc: STC design R [0, 6], runs 43017939593-43025985854, 6,400 games", "ltc": "t56-any-ltc: LTC 40+0.4 design R [0, 6], +8.07 +/- 5.15, runs 43029851342, 43068666654, 43081871545, 4,992 games"}
+    {"change": "S512ppr2", "elo": 20.11, "ci95": 7.22, "test": "STC [0, 5]", "sprt": {"design": "network-stc", "stages": 2, "nelo": 33.60}},
+    {"change": "S512ppr3", "elo": 7.12, "ci95": 4.53, "test": "STC [0, 5], 8,000 games", "sprt": {"design": "network-stc", "stages": 5, "nelo": 11.98}},
+    {"change": "Time management (b)", "elo": 18.69, "ci95": 7.18, "test": "STC design R", "sprt": {"design": "search-stc", "stages": 2, "nelo": 31.40}},
+    {"change": "R14 SPSA tuned margins (spsa-r14-m2)", "elo": 37.93, "ci95": 10.03, "test": "STC design R [0, 6], run 42726060415, 1,600 games", "sprt": {"design": "search-stc", "stages": 1, "nelo": 64.91}},
+    {"change": "r8btd90 (retrain 8b, TD(0.9) labels)", "elo": 12.17, "ci95": 5.71, "test": "r8b-stc-1: STC [0, 5], runs 42917050282-42922442883, 4,800 games", "sprt": {"design": "network-stc", "stages": 3, "nelo": 20.96}},
+    {"change": "r8brft1 (idea 70, result fine-tune of td90)", "elo": 5.74, "ci95": 3.81, "test": "r8b-rft-stc: STC [0, 5], runs 42974677403-42988446282, 11,200 games", "sprt": {"design": "network-stc", "stages": 7, "nelo": 9.69}},
+    {"change": "cut-node (R4, 1 ply)", "elo": 6.02, "ci95": 3.67, "test": "b4-cut-node-stc: STC design R [0, 6], runs 42948984895-42961813575, 11,200 games", "ltc": "b4-cut-node-ltc: LTC 40+0.4 design R [0, 6], +9.75 +/- 5.14, runs 42991551149-43013618465, 4,992 games", "sprt": {"design": "search-stc", "stages": 7, "nelo": 10.55}},
+    {"change": "T56 any-attack threat buckets", "elo": 7.49, "ci95": 4.89, "test": "t56-any-stc: STC design R [0, 6], runs 43017939593-43025985854, 6,400 games", "ltc": "t56-any-ltc: LTC 40+0.4 design R [0, 6], +8.07 +/- 5.15, runs 43029851342, 43068666654, 43081871545, 4,992 games", "sprt": {"design": "search-stc", "stages": 4, "nelo": 13.04}}
   ]
 }
