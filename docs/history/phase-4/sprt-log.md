@@ -1832,3 +1832,27 @@ The final stage's result block (f7-revisit-stc, stage 7, run 43281990289):
   stages on fresh openings from stage 8 (the driver's custom mode, not a try of the idea); it adopts nothing (the
   result goes to the coordinator and the owner). Queued in lane B; not started at 2:15 PM EST. It gets its own
   section.
+
+### 2026-11-12 stacking check 2 (the owner's stacking safeguard): minor drift table + D8 + D13 together, design R at STC: H1, +7.86
+
+- Group 2 of the owner's safeguard (2026-11-12, about 6:20 AM EST): the minor drift table (2c294d3; STC +5.57 ±
+  4.01), D8 the summed pair-table update (3770a5f; STC +4.29 ± 3.46) and D13 the direct-check ordering bonus
+  (96ebfec; STC +5.50 ± 3.93): STC sum +15.36. All three are STC results, so the check runs at STC (the owner's rule
+  of 10:45 AM EST). Lane A item 15e (stack-check-2-stc). OFF ec4a4be (phase-4 just before the minor table's adoption;
+  engine = 75d53f0's, bench r8brft1 9,263,568 / 881c326307a2ba8a), TEST 96ebfec (phase-4 after D13; 9,118,607 /
+  208629aa15e140a9). STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed 20261027), r8brft1 on both sides; design R
+  ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages), from stage 0. Ledger idea
+  `stack-check-2`. Data: ~/fork-data/sprt/stack-check-2-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **stack-check-2-stc: 96ebfec against ec4a4be, stages 0-4** | 43275555142 (0), 43278798485 (1), 43282055382 (2), 43285216067 (3), 43288433711 (4) | 8,000 (no time losses, no abnormal ends) | **+7.86 ± 4.33** | +13.83 ± 7.61 | [71, 899, 1902, 1034, 94] | **H1** (LLR 4.31) |
+
+- By stage: after stage 0 +11.08 ± 9.51 (LLR 1.34); stage 1 +8.90 ± 6.83 (2.02); stage 2 +3.26 ± 5.58 (0.65);
+  stage 3 +5.59 ± 4.83 (2.18).
+- **Reading (owner, 2026-11-12 about 2:55 PM EST): accepted, no follow-up.** Against the STC sum (+15.36) the ratio
+  is 0.51, below the decision audit's 0.62-0.80, and the sum lies above the 95% interval (upper bound +12.2). The
+  overlap between D8 and D13 (both move ordering) is left to the factorial removal round, which tests every switch
+  on the full head. **Planning factor (owner):** for overlapping small search adoptions, estimate the combined gain
+  at about 0.5-0.6 times the sum of the separate SPRT claims. With stacking check 1 (+6.30), the session's six
+  adoptions measure about +14 Elo at STC directly.
