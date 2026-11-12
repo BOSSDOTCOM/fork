@@ -2955,3 +2955,40 @@ reported with any result); **earliest phase** Phase 4.
 
 - **idea:** features describing passed-pawn races (each passer's distance to promotion against the defending king's
   distance, and whose move it is), for the endings where the network's 6-7-piece held-out errors concentrate.
+
+## 162-165. Build and concurrency techniques (owner, 2026-11-12)
+
+Recorded by the owner 2026-11-12, about 2:00 PM EST (plan only). Common fields: **type** TOOLING (speed; no
+playing change, bench must stay identical), **metric** nps by bench/ab.py with bench unchanged (DESIGN.md §7),
+**status** candidate (plan), **runtime cost** none or a gain (each aims at speed), **earliest phase** Phase 4.
+
+### 162. Compile-time specialization of the kept switches
+
+- **idea:** at the Phase 4 close, once the re-validation decides which search switches stay, turn the kept switches
+  into compile-time constants (templates or constexpr) so the shipped search pays no runtime branch for them;
+  measured for nps.
+- **phase:** Phase 4 close (after the re-validation).
+
+### 163. Function multiversioning for the TCEC build
+
+- **idea:** one TCEC binary with AVX2, AVX-512 and VNNI paths chosen at startup (GCC/Clang `target_clones` or an
+  equivalent dispatch), answering the launcher question (DESIGN.md, the TCEC build row: "to ask TCEC: a launcher")
+  without relying on TCEC to pick a binary.
+- **phase:** Phase 4, before the TCEC build is fixed. **metric:** nps of each path against the matching
+  single-target build (no loss), and the same bench on every path.
+
+### 164. std::atomic_ref for lock-free TT access in Lazy SMP
+
+- **idea:** access the shared transposition table through `std::atomic_ref` (C++20) so concurrent reads and
+  writes are well defined without locks; this is already the first fix of the concurrency review
+  (~/fork-jobs/night/reviews/concurrency-review-2026-11-11.md, kept outside the repo).
+- **phase:** with Lazy SMP (step 17a). **metric:** TSan clean on the threaded suites, nps unchanged at one thread,
+  bench identical. Check first that libstdc++ 11 (TCEC's gcc 11.4) provides `std::atomic_ref` (UNVERIFIED).
+
+### 165. Coroutine interleaving to hide memory latency (research)
+
+- **idea:** C++20 coroutines interleave independent work on one thread (for example sibling subtrees, or batched
+  TT and NNUE fetches) so that one task's cache misses overlap another's computation.
+- **novelty for chess engines:** UNVERIFIED (a prior-art check first).
+- **phase:** research, after SMP. **metric:** a prototype measured for nps before anything else; no further work
+  unless it gains.
