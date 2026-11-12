@@ -2481,7 +2481,7 @@ whose weaknesses and data gaps decide their targets and order.
 
 ## 73. ProbCut, the capture probe (tier 2, T31): one LTC test on the tuned search
 
-- **type:** ELO (search); flag `use_capture_probe` (off).
+- **type:** ELO (search); flag `use_capture_probe` (on since 2026-11-11).
 - **idea** (KB search-techniques.md §3.22): at a non-PV node at least
   CaptureProbeMinDepth deep, a capture whose SEE could lift the pruning
   eval to beta + CaptureProbeMargin is searched on a zero window at that
@@ -2492,7 +2492,11 @@ whose weaknesses and data gaps decide their targets and order.
   measured (capture_probe.json, d9-r5-m80; 5c9e755). STC SPRT on S512r2:
   H0, −5.29 ± 3.58 Elo after 12,800 games (2026-11-06; sprt-log
   "probcut-d9r5m80-vs-base"), then no retest by the owner's rule.
-- **status:** in progress. **Owner, 2026-11-11 3:10 PM EST: "ProbCut: I lift the no-retest rule for ONE LTC-only design R test on the current default (tuned search); record it as LTC try 1 of 2. Start it now in the free lane."**
+- **status:** **adopted 2026-11-11** (pre-approved by the owner): probcut-ltc2 **H1, +9.40 ± 5.03 Elo**
+  (nElo +18.03 ± 9.64, Ptnml [24, 516, 1283, 647, 26], LLR 3.73) after stages 8-10, 4,992 games
+  (runs 43109070620, 43120086216, 43129867831; 9:08 PM EST). Ported onto phase-4 (branch adopt/probcut),
+  `UseCaptureProbe` on, the switch kept until the Phase 4 re-validation; the constants 9 / 5 / 80 join the
+  final retune's SPSA (class (b)); decisions log and sprt-log. Before that: **Owner, 2026-11-11 3:10 PM EST: "ProbCut: I lift the no-retest rule for ONE LTC-only design R test on the current default (tuned search); record it as LTC try 1 of 2. Start it now in the free lane."**
   Ported onto phase-4 4470f24 (r8brft1, R14, cut-node) behind the switch,
   off (tier2/probcut-r2 a40b1ff, bench unchanged 9,942,973); test side
   sprt/probcut-r2 d145d40 (bench 9,903,350 / 95f7f190cf02d64e). Design
@@ -2502,7 +2506,9 @@ whose weaknesses and data gaps decide their targets and order.
   side. **Moved (about 4:00 PM EST)** to db0bb31's engine with T56 on,
   as `probcut-ltc2`: base tier2/probcut-r3 d47e479 (bench 10,166,167), test
   sprt/probcut-r3 6d7ffb1 (bench 9,639,207 / 07f7ae19b9250f38); still LTC
-  try 1 of 2 (the first version was never dispatched). No STC retest. An H1 goes to the owner; nothing is adopted before then.
+  try 1 of 2 (the first version was never dispatched). No STC retest. An H1 goes to the owner; nothing is adopted
+  before then (superseded by the overnight pre-approval of 2026-11-11 for search items that pass their SPRT and
+  their LTC where required).
 - **runtime cost:** possible (the probe's own searches at deep non-PV
   nodes); the nps change is to be reported with the result (the
   2026-10-24 rule; not measured yet, UNVERIFIED).

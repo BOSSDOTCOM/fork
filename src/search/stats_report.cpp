@@ -58,6 +58,9 @@ void print_counter_summary(const SearchCounters& c, const FeatureStackTally* tal
                static_cast<unsigned long long>(c.negative_extensions));
   std::fprintf(out, "stats: nodes reduced for having no TT move %llu\n",
                static_cast<unsigned long long>(c.no_move_reductions));
+  std::fprintf(out, "stats: capture probe: %llu captures searched, %llu nodes cut\n",
+               static_cast<unsigned long long>(c.capture_probes),
+               static_cast<unsigned long long>(c.capture_probe_cuts));
   std::fprintf(out, "stats: singular tests %llu, TT move singular %llu (%.1f%%)\n",
                static_cast<unsigned long long>(c.singular_tests),
                static_cast<unsigned long long>(c.singular_extended),

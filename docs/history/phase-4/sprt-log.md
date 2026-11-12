@@ -1387,5 +1387,27 @@ The final stage's result block (t56-any-ltc, stage 5, run 43081871545):
   Same idea t31-probcut (LTC try 1 of 2), same design, fresh openings from stage 8; lane A
   item 18 rewritten for it and released at 4:17 PM EST. The base and test above (a40b1ff,
   d145d40) were never dispatched.
-- Stages: pending (runs by the ledger: `ledger.py runs probcut-ltc2`).
-- **Result:** pending.
+- Stages 8-10 (runs by the ledger: `ledger.py runs probcut-ltc2`):
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| LTC 40+0.4, design R [0, 6], cap 6 (Hash 64, 1,664 games a stage, Syzygy 3-4-5, UHO book, seed 20261027), ProbCut d9-r5-m80 (6d7ffb1) against off (d47e479), r8brft1 on both sides | 43109070620 (stage 8), 43120086216 (9), 43129867831 (10) | 4,992 (no time losses, no abnormal ends) | **+9.40 ± 5.03** | +18.03 ± 9.64 | [24, 516, 1283, 647, 26] | **H1 accepted** (LLR 3.73) after stage 10, 9:08 PM EST |
+
+- By stage: after stage 8 +3.76 ± 8.95 (LLR 0.33); after stage 9 +6.58 ± 6.21 (LLR 1.57).
+
+The final stage's result block (probcut-ltc2, stage 10, run 43129867831):
+
+```
+    Shards: 48 (done); pairs 2496, games 4992 (4992 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 9.40 +/- 5.03, nElo: 18.03 +/- 9.64
+    Ptnml(0-2): [24, 516, 1283, 647, 26]
+    LLR: 3.73 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Adopted (the owner's overnight pre-approval of 2026-11-11 for search items that pass their SPRT, and their
+  LTC where required):** d47e479's change ported onto phase-4 a95e269 alone (branch adopt/probcut; the code lines
+  equal d47e479's), `UseCaptureProbe` on, the switch kept until the Phase 4 re-validation. Bench 9,639,207 /
+  07f7ae19b9250f38 (r8brft1), byte for byte the tested commit 6d7ffb1's tests/bench-r8brft1.ref, so the port equals
+  the tested code; 10,166,167 / d874b380155a2e8c with the switch off, phase-4's. The constants 9 / 5 / 80 join the
+  final retune's SPSA (class (b)). An LTC result only: ProbCut's one STC SPRT (on S512r2, above) ended H0.

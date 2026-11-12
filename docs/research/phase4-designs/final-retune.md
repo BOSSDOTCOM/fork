@@ -183,8 +183,15 @@ dimensions of this SPSA if they are adopted** (lane B items 69a/69b and
 | **SingularMarginPerPly** | 6 | 2-12 (was 3-12) | 1 | ? | 3 / 6 at c = 1; 1.5 at c = 2 | **flag**: O5 and R28 predict a lower margin at LTC (SE precision rises with depth, 0.91 at d6 to 0.97-0.98 at d7-12); lowest 2 (**applied, owner 2026-11-09**) |
 | NoMoveReduceMinDepth | 8 | 2-16 (was 2-10) | 1 | ? | 6 / **2** | **flag ceiling**; highest 16 (the rule's twice; **applied, owner 2026-11-09**) |
 | LmrDivisorTenths | 45 | 23-90 | 3 | ? | 7 / 15 steps | ok |
+| CaptureProbeMinDepth | 9 | 4-18 | 1 | ? | 5 / 9 at c = 1 | ok (added 2026-11-11, ProbCut's adoption) |
+| CaptureProbeReduction | 5 | 2-10 | 1 | ? | 3 / 5 at c = 1 | ok (added 2026-11-11) |
+| CaptureProbeMargin | 80 | 40-160 | 6 | ? | 6.7 / 13.3 steps | ok (added 2026-11-11) |
 
-p = 5 (6 with a double-extension limit if R28 is adopted).
+p = 8 (9 with a double-extension limit if R28 is adopted). **2026-11-11: ProbCut's three constants join this pass**
+on its adoption (the efficiency rule: a constant the final retune will tune is not tuned again before it). They are
+class (b): ProbCut acts only at depth 9 and beyond, its STC SPRT on S512r2 ended H0 and its LTC design R test on
+the tuned search passed (+9.40 ± 5.03 Elo; DESIGN.md "Search constants"), so STC is the wrong place to tune them.
+Ranges as in the parameter table (src/tune/params.hpp); c is set at step 19 by spsa_calibrate.py.
 
 ### 3.3 Widening is a rule exception
 
