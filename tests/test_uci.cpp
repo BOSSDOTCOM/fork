@@ -940,17 +940,21 @@ TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
 // includes start-up; the first isready allocates and clears the default
 // 16 MB Hash. Each check takes the best of three fresh engines, so one
 // scheduler hiccup on this shared machine does not fail it; all three are
-// printed. Debug (sanitizer) builds are timed against ten times the limits.
+// printed. Debug and sanitizer builds are timed against ten times the
+// limits; that includes MSan, which is a Release build (scripts/msan.sh).
+// Under MSan, start-up (uci to uciok) takes about 3.3 times the instructions
+// of a release build and about 6.5 times its CPU time, mostly reading and
+// checksumming the network and building the ray tables (perf in WSL,
+// 2026-11-12). With the release limit it had no room left: CI run
+// 43233691535 failed at 54.7 / 57.1 / 51.4 ms.
 // The search looks at the stop flag every StopCheckInterval (1,024) nodes,
 // so a build that searches slowly enough takes longer than that to stop:
 // gcc-tsan with a network searches about 9,400 nodes/s (CI, 2026-10-29),
 // 109 ms per 1,024 nodes. The stop limit therefore grows to twice the time
 // the engine needs for 1,024 nodes at the slowest node rate it reports in
 // the three runs, capped at 1 s, and never falls below 10 ms (release) or
-// 100 ms (debug) (owner, 2026-10-29).
+// 100 ms (debug and sanitizer builds) (owner, 2026-10-29).
 namespace {
-
-constexpr double Slack = Optimized ? 1.0 : 10.0;
 
 // True in AddressSanitizer, ThreadSanitizer and MemorySanitizer builds (the
 // tests are built with the engine's flags): their shadow memory multiplies
@@ -966,6 +970,8 @@ constexpr bool SanitizedBuild = false;
 #else
 constexpr bool SanitizedBuild = false;
 #endif
+
+constexpr double Slack = (Optimized && !SanitizedBuild) ? 1.0 : 10.0;
 
 // While test games run (scripts/env.sh sets FORK_GAMES_RUNNING=1) or
 // development runs at low priority (FORK_LOW_PRIORITY=1), timings say nothing
