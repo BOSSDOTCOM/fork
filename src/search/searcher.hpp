@@ -207,7 +207,7 @@ struct SearchQuota {
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
   X(use_pass_best_stop, UsePassBestStop, true)          \
-  X(use_root_lean, UseRootLean, false)
+  X(use_root_lean, UseRootLean, true)
 
 // F11 (use_root_lean): finished iterations in a row with a good root score
 // before the root side counts as consistently ahead (DESIGN.md, "Search

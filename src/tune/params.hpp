@@ -67,7 +67,7 @@
   X(CaptureProbeMargin, 80, 40, 160, 6)   \
   X(RootLeanThreshold, 100, 50, 200, 8)   \
   X(RootLeanCap, 400, 200, 800, 30)       \
-  X(RootLeanScale, 4000, 2000, 8000, 300) \
+  X(RootLeanScale, 2000, 2000, 8000, 300) \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 12, 1)             \

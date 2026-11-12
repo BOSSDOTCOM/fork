@@ -531,7 +531,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // switch off).
 TEST_CASE("pruning", "root lean: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_root_lean);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_root_lean);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_root_lean = true;
   fx.searcher->switches = on;
