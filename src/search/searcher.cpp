@@ -91,6 +91,9 @@ constexpr int TableNearDrawScore = 1;
 // DESIGN.md, "Search constants": the smallest step in whole plies, which is
 // the unit Fork's LMR table works in).
 constexpr int LmrCheckRelief = 1;
+// A late bad capture (think tank R18) is reduced one ply less than a quiet
+// (DESIGN.md, "Search constants": the smallest step in whole plies, as above).
+constexpr int BadCaptureLmrRelief = 1;
 #ifdef FORK_NODE_CLOCK
 // Test-only builds (CMake FORK_NODE_CLOCK, never released): the search's
 // clock reads its node count, this many nodes to the millisecond, so a timed
@@ -596,6 +599,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     // A quiet's threat bucket for the LMR context's history (T56): taken
     // here, on the board before the move (0 with use_threat_buckets off).
     const int bucket = quiet ? threat_bucket(f.selector.attacked_by_opponent(), m) : 0;
+    const SelectorStage stage = f.selector.yielding_stage();  // the stage that yielded m (R18)
 #ifdef FORK_SEARCH_STATS
     counters.pawn_makes += kind_of(pos.piece_at(m.from())) == Pawn;
     // X2 (DESIGN.md §5.7): the move's history values, read before it is made
@@ -701,6 +705,15 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         counters.lmr_history_changes +=
             std::clamp(new_depth - (base - shift + correction - relief + cut_extra), 1, new_depth) != reduced;
 #endif
+      } else if (switches.use_bad_capture_lmr && switches.use_lmr && depth >= LmrMinDepth &&
+                 moves_searched + 1 >= LmrMinMove && !in_check && m.is_capture() &&
+                 stage == SelectorStage::BadCaptures) {
+        // Think tank R18: a late capture that loses material by SEE (the
+        // selector's bad-capture stage, ordered by the take history) is
+        // reduced too, BadCaptureLmrRelief plies less than the table's
+        // reduction for a quiet at the same depth and move number.
+        const int base = reduction_for(depth, moves_searched + 1);
+        reduced = std::clamp(new_depth - (base - BadCaptureLmrRelief), 1, new_depth);
       }
 #ifdef FORK_SEARCH_STATS
       // X2: a late capture (every LMR gate passed but "quiet"; R18's sites).

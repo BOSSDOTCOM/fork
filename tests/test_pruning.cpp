@@ -522,6 +522,34 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
   }
 }
 
+// LMR for late bad captures (think tank R18): with it on, mates are still
+// found and the best move is legal, and it changes the tree (fault check: a
+// capture reduction that never fires leaves the trees as with the switch
+// off); with LMR off it does nothing.
+TEST_CASE("pruning", "bad-capture LMR: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_bad_capture_lmr);  // off until its SPRT
+  SearchSwitches on;
+  on.use_bad_capture_lmr = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_bad_capture_lmr = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "bad-capture LMR left all three trees unchanged");
+  SearchSwitches no_lmr_on = on, no_lmr_off = off;
+  no_lmr_on.use_lmr = no_lmr_off.use_lmr = false;
+  CHECK(fx.tree_sizes(no_lmr_on, depth) == fx.tree_sizes(no_lmr_off, depth));
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -602,6 +630,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
   s.use_threat_buckets = s.use_capture_probe = true;
+  s.use_bad_capture_lmr = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

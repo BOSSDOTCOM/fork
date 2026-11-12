@@ -2766,3 +2766,21 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 123. LMR for late bad captures (think tank R18)
+
+- **type:** ELO (search); flag `use_bad_capture_lmr` (off).
+- **idea** (think tank R18; the engine survey's C13): late captures from
+  the selector's bad-capture stage get LMR, `BadCaptureLmrRelief` (1 ply)
+  less than a quiet's table reduction.
+- **status:** **in progress (coordinator's overnight build list, 2026-11-12:
+  "R18 - LMR for late and bad captures. R-STC").** Built on phase-4 ab70fa5
+  behind the switch, off: branch tier2/r18-capture-lmr, bench unchanged
+  (9,639,207 / 07f7ae19b9250f38, r8brft1). Test commit
+  sprt/r18-capture-lmr. Night item 63a (r18-bad-capture-lmr-stc, design R
+  at STC, ledger idea `r18-bad-capture-lmr`, try 1), gated until
+  state/gate-e1.done. Nothing is adopted before a verdict. R18's other
+  amount (the full quiet reduction) only if this passes.
+- **runtime cost:** none expected (one stage comparison per late move;
+  UNVERIFIED until the SPRT's nps report).
+- **earliest phase:** Phase 4.
