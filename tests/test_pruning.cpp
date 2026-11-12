@@ -528,7 +528,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // never fires leaves the trees as with the switch off).
 TEST_CASE("pruning", "contested-node LMR relief: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_contested_lmr_relief);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_contested_lmr_relief);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_contested_lmr_relief = true;
   fx.searcher->switches = on;
