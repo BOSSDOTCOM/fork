@@ -121,12 +121,70 @@ were left as historical records.
 The question: S512ppr2 454, S512ppr3 514, r8btd90 526, r8brft1 612 of the 3,800 held-out 4-5-piece positions;
 does the same drift show on 6-7-piece and on 8-12-piece positions?
 
-**6-7 pieces: not measured.** No 6-7-piece held-out set exists. The ChessTB WDL tables of endgame slice v2 (idea
-68) are downloaded in WSL (173 files, 104,248,957,736 bytes, finished 2026-11-10 1:13 AM EST), but no ChessTB
-prober is installed or committed (the download's summary names the planned one as "not run"), and the local
-Syzygy tables stop at 5 pieces. Building the set needs that prober first: a new third-party dependency, left
-for the owner's decision. (The file the evening's notes called heldout6 is the 4-5-piece run above, of six nets,
-not a 6-7-piece set.)
+**6-7 pieces** (owner's order, 2026-11-11 evening: install the ChessTB prober and build the set; done the same
+night, tools/nnue/heldout_67.py, its docstring holding the rules, declared before any label):
+- **The prober:** `chess.chesstb` of the python-chess fork noobpwnftw/python-chess at
+  38c108efd992538dc078750cba9fee30b9f030ce (GPL-3.0, pure Python) with python-lz4 4.4.5, in its own virtual
+  environment in WSL (`~/fork-tools/chesstb-venv`, Python 3.14; pip bootstrapped from its PyPI wheel, SHA-256
+  checked, since the distribution has no ensurepip). Fork's .venv and the engine are untouched (ORIGINALITY.md).
+- **Tables checked before use:** every file used (the 145 shipping 3-5-piece `wdl/` files and the 28 `full/wdl/`
+  files, 104,248,957,736 bytes) has the download plan's size and, recomputed now, the download manifest's
+  SHA-256.
+- **Verification (design §5.1, check 1):** 100,000 random legal 3-5-piece positions (every one of the 145
+  materials, uniformly; either colour first, either side to move, check allowed; seed 2026111135) labelled by
+  upstream python-chess's Syzygy prober on Fork's 3-4-5 tables, then probed by ChessTB on its shipping 3-5-piece
+  files alone: **100,000 of 100,000 agree in all five classes** (37,897 losses, 103 blessed losses, 26,346 draws,
+  60 cursed wins, 35,594 wins). The `full/` files decode by a different path (no dropped frames), so a second
+  check (design §5.1, check 2, run on the finished set): 300 of its positions (75 per class, seeded) against the
+  Lichess tablebase API (Syzygy, an independent generator; one request at a time, no HTTP 429 met): **300 of
+  300 agree** (245 six-piece, 55 seven-piece; 107 wins, 101 draws, 92 losses).
+- **Probe rate** (measured first): `full/` files cold 130-1,054 probes a second per material (the 37 GB
+  KRPPKRP 315/s), shipping 3-5-piece 490-15,000/s; labelling the whole set took seconds, hashing the files about
+  16 minutes. The two-hour bound did not limit the size.
+- **The set:** the 28 materials of slice v2's budget R (23 six-piece, 5 seven-piece; the design's classes C1-C4
+  for the report), **200 positions each (the 4-5-piece set's count), 5,600 in all**, committed as
+  tools/nnue/heldout_67.tsv (SHA-256 f5a12a38d815734a...). Placement as the 4-5-piece set (endgame_check.py's
+  rules: legal, not in check, no capture available, not over; first side's colour and side to move at random)
+  plus slice v2's quiet rule (no promotion available); one RNG per material from the seed 2026111167. Labels
+  from the side to move: 2,011 won, 1,765 drawn, 1,823 lost, and one cursed win (counted drawn here; the
+  4-5-piece set counted cursed wins as won).
+- **Held out:** the materials are slice v2's own, so the separation is by position: slice v2 (not generated; no
+  `slice2-*` file exists on this machine or in WSL) must leave out every position of this file and use another
+  seed (heldout_67.py's docstring; design §4 already requires it). Exact board-and-side match (`overlap`): **0 of the 5,600** in the eleven slice v1
+  files (28,599,940 records; their histogram has only 3- and 5-piece classes) and **0** in the same 62 g4 and
+  label-depth game files the 8-12-piece scan used (4,274,517 games, 406,992,954 positions as of tonight, every
+  position of each game replayed).
+- **Scoring:** endgame_check.py's thresholds on each net's R-int; a cursed win or blessed loss counts as drawn.
+
+| Class (positions) | r8brft1 | r8btd90 | S512ppr3 | S512ppr2 | S512+PP | S512r2 |
+|---|---|---|---|---|---|---|
+| C1 rook endings (600) | 71 | 70 | 69 | 69 | 78 | 81 |
+| C2 rook against minor (1,400) | 68 | 65 | 65 | 63 | 83 | 82 |
+| C3 queen endings and imbalances (1,800) | 363 | 336 | 336 | 335 | 363 | 323 |
+| C4 piece against pawns (1,800) | 268 | 261 | 253 | 264 | 304 | 323 |
+| 6-piece (4,600) | 622 | 586 | 586 | 587 | 673 | 636 |
+| 7-piece (1,000) | 148 | 146 | 137 | 144 | 155 | 173 |
+| **all (5,600)** | **770 (13.8%)** | 732 (13.1%) | 723 (12.9%) | **731 (13.1%)** | 828 (14.8%) | 809 (14.4%) |
+
+Paired, position by position (two-sided sign test on the discordant positions): r8brft1 against S512ppr2 84 to
+45 (p = 0.0008), against r8btd90 58 to 20 (p < 0.0001), against S512ppr3 72 to 25 (p < 0.0001), against S512+PP
+113 to 171 (p = 0.0007, r8brft1 better), against S512r2 164 to 203 (p = 0.047, r8brft1 better); S512ppr2
+against S512ppr3 43 to 35 (p = 0.43), against r8btd90 53 to 54 (p = 1.0).
+
+What it shows:
+- **The drift's last step shows at 6-7 pieces, significantly:** r8brft1 misjudges 770, its parent r8btd90 732;
+  the result fine-tune (idea 70) adds 38 misjudgments (58 to 20 discordant), most of them in C3 (363 against
+  336: queen and pawn against rook and minor, KQPvKRB and KQPvKRN, both won and lost positions).
+- **The earlier steps do not:** S512ppr2 731, S512ppr3 723, r8btd90 732, indistinguishable (43 to 35, 53 to 54).
+  At 4-5 pieces the same three were 454, 514 and 526; the drift there was spread over every step.
+- **The slice-trained lineage still beats the nets without the slice** (S512+PP 828, S512r2 809), most in C4
+  (piece against pawns: 253-268 against 304 and 323), although the slice holds no 6-7-piece position: the
+  3-5-piece slice generalises upwards here. In C3 S512r2 is the best of the six (323).
+- **Shared blind spots:** queen against rook, minor and pawn won by the queen side (KQvKRBP 35-39 of 41 won
+  positions misjudged, KQvKRNP 44-50 of 60, by every net) and KQPvKQP wins (30-38 of 50): the queen-imbalance
+  conservatism the conversion-defense analysis reported.
+
+(The file the evening's notes called heldout6 is the 4-5-piece run above, of six nets, not a 6-7-piece set.)
 
 **8-12 pieces** (tools/nnue/heldout_deep.py; its docstring holds the rules, declared before any label):
 - **positions:** 1,500 quiet 8-12-piece positions (300 per piece count), one per game, from rated human games of
@@ -266,6 +324,9 @@ entry has one the section says the ratio is not corrected and understated.
 - The T1 extension: tools/nnue/heldout_deep.py, tools/nnue/test_heldout_deep.py, tools/nnue/heldout_deep.tsv
   (the 1,499 labelled positions), tools/nnue/heldout_deep_excluded.txt (the one position found in Fork's data).
   The paired sign test was a one-off over `check`'s rule and is not committed.
+- The 6-7-piece set: tools/nnue/heldout_67.py, tools/nnue/test_heldout_67.py, tools/nnue/heldout_67.tsv (the
+  5,600 labelled positions); tools/nnue/gates.sh reports it beside the 4-5-piece check (never a gate); the
+  dependency in docs/ORIGINALITY.md. The six nets' check (`check --paired r8brft1`) is the tool's own command.
 - The T5 measurement script was a one-off (it reuses match_scale.py's position filter and models.r_int) and is
   not committed.
 
@@ -276,6 +337,9 @@ entry has one the section says the ratio is not corrected and understated.
 - The Kaggle copies of the slice files (not re-downloaded; the local files match g3s2's manifest).
 - The review's 56% share (not reproduced on the gates' inputs; 45-51% here).
 - The size of the selection bias in today's sum: only bracketed (median-unbiased and plug-in), not estimated.
-- The 6-7-piece held-out figure (no ChessTB prober installed; not measured).
+- The ChessTB generator's correctness at 6-7 pieces rests on the spot check above (the 3-5-piece check covers
+  the shipping files only) and on the project's written proof (KB chesstb.md, not checked).
+- Whether the 6-7-piece set overlaps Fork's older generations, the cloud shards or the Kaggle copies (the same
+  62 files and the eleven slice v1 files were scanned).
 - Whether the 8-12-piece set overlaps Fork's older generations, the cloud shards or the Kaggle copies (only the
   62 g4 and label-depth files on this machine were scanned).

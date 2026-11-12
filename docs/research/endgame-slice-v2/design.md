@@ -364,3 +364,21 @@ The questions above are answered (DESIGN.md decisions log, 2026-11-09; ideas.md 
   keep rule proposed above.
 - (h) The class shares, the one-wing bias and the C2/C3 sub-types **wait for the final conversion-and-defense
   numbers**.
+
+## Done before generation (2026-11-11, the owner's order of that evening)
+
+- **The prober is installed** (item (e)'s pure-Python route): the python-chess fork at 38c108e with python-lz4
+  4.4.5, in `~/fork-tools/chesstb-venv` in WSL (docs/ORIGINALITY.md). Measured rate on the `full/` files, cold:
+  130-1,054 probes a second per material, so labelling is not the bottleneck (item (e)'s one-day threshold is far
+  off).
+- **Section 5.1, check 1, passed:** 100,000 random legal 3-5-piece positions, all five classes equal between the
+  shipping ChessTB files and Fork's Syzygy 3-4-5 (docs/research/bug-review-followup-2026-11-11.md, T1 extension).
+  Every downloaded file's SHA-256 was recomputed and equals the manifest's.
+- **Section 5.1, check 2, its Lichess half, passed** on the held-out set below: 300 positions (75 per class)
+  against the Lichess tablebase API, 300 equal. The ChessTB explorer half was not run (the same generator as
+  the local files; the slice's own positions still get check 2 when generated).
+- **Section 8's extended check exists:** tools/nnue/heldout_67.tsv, 5,600 positions, 200 per budget-R material
+  (the 4-5-piece held-out set's per-class count, instead of 300 per class), placed by the 4-5-piece set's rules
+  (endgame_check.py's quiet rule) plus section 4's "no promotion available", without the one-wing bias (it
+  waits, item (h)), labelled by ChessTB WDL, seed 2026111167. **The slice generator must
+  leave out every position of that file (board and side to move) and use another seed.**

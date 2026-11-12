@@ -13,7 +13,8 @@
 # (tools/nnue/pp_bound.py) under the clamp-count limit, and its re-check (nothing left to clamp); the clamped
 # net's legs (its parity file); the scale re-match (reported); the endgame check against the control (reported);
 # the held-out endgame check against the current default (reported, flagged for the owner's review above 1.15
-# times the default's misjudged count; owner, 2026-11-11); netcheck of the clamped net. Writes OUT/NAME/{cand.fnet,cand.parity,gates.json, the legs, endgame and netcheck
+# times the default's misjudged count; owner, 2026-11-11), and the held-out 6-7-piece check the same way
+# (tools/nnue/heldout_67.py); netcheck of the clamped net. Writes OUT/NAME/{cand.fnet,cand.parity,gates.json, the legs, endgame and netcheck
 # outputs}; exit 0 only if every gate passes:
 # - the unclamped net: every leg passes (R-quant equals bullet's quantised.bin and the net file, R-float equals
 #   the trainer, the quantization loss within MAX_LOSS / P99_LOSS cp, max / p99);
@@ -102,6 +103,11 @@ echo "endgame check: $(tail -2 "$W/endgame.txt" | tr '\n' ' ')"
 nice "$PY" -I "$T/endgame_heldout.py" report "$T/endgame_heldout.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$L" \
   --json "$WP/heldout.json" >"$W/heldout.txt" 2>&1 || echo "held-out check: did not run (heldout.txt)"
 echo "$(tail -1 "$W/heldout.txt")"
+# The held-out 6-7-piece check (owner, 2026-11-11; tools/nnue/heldout_67.py, ChessTB WDL labels): reported the same
+# way, never a gate, on its 5,600 positions.
+nice "$PY" -I "$T/heldout_67.py" report "$T/heldout_67.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$L" \
+  --json "$WP/heldout67.json" >"$W/heldout67.txt" 2>&1 || echo "held-out 6-7-piece check: did not run (heldout67.txt)"
+echo "$(tail -1 "$W/heldout67.txt")"
 "$BIN" netcheck "$(fork_path_for "$BIN" "$W/cand.parity")" "$(fork_path_for "$BIN" "$W/cand.fnet")" >"$W/netcheck.txt" 2>&1 ||
   gate "netcheck (netcheck.txt)"
 echo "netcheck: $(tail -2 "$W/netcheck.txt" | tr '\n' ' ')"
@@ -115,9 +121,13 @@ try:
     heldout = json.load(open(f'{w}/heldout.json'))
 except (OSError, ValueError):
     heldout = None
+try:
+    heldout67 = json.load(open(f'{w}/heldout67.json'))
+except (OSError, ValueError):
+    heldout67 = None
 json.dump({'scale': s, 'gates_failed': bool(fail), 'clamped': clamped, 'max_clamped': limit,
            'clamped_legs': stats[-1] if stats else None, 'endgame': open(f'{w}/endgame.txt').read()[-600:],
-           'heldout': heldout,
+           'heldout': heldout, 'heldout67': heldout67,
            'netcheck': open(f'{w}/netcheck.txt').read()[-300:], 'legs': open(f'{w}/legs-clamped.txt').read()[-600:]},
           open(f'{w}/gates.json', 'w'), indent=1)
 EOF
