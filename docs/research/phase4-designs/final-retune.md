@@ -152,7 +152,7 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | HistorySkipPerPly | 700 | 350-4000 | 183 | ? | 1.9 / 18 at c = 183 (one step) | **flag**: floor within 2c at one step (350 is the ranges rule's half of 700); the ceiling 4000, kept from the candidates' declared range, is beyond the rule's twice (1400): step 19's range check decides both (added 2026-11-12, the history skip's adoption) |
 | HistorySkipMaxDepth | 3 | 1-6 | 1 | ? | 2 / 3 at c = 1 | **flag**; lowest at the depth floor (added 2026-11-12; a placeholder never measured on its own, so this pass is its measurement) |
 | MinorDriftShare | 32 | **16-64 (was 32-128)** | 5 | ? | 3.2 / 6.4 at c = 5 (one step) | ok; **range 16-64, the owner's decision (2026-11-12, about 8:45 AM EST)**: the ranges rule's half to twice of the adopted 32, centred on it, replacing the range declared for the natural value 64, whose floor 32 was (added 2026-11-12, the minor drift table's adoption) |
-| DirectCheckBonus | 5000 | 0-20000 | 1000 | ? | 5 / 15 at c = 1000 (one step) | ok at one step; **flag range**: 0-20000 (step 1000) as declared in the parameter table when D13 was re-planned (owner, 2026-11-11), wider than the ranges rule's half to twice (2500-10000, step 375), its floor 0 the off-equivalent; step 19's range check decides (added 2026-11-12, D13's adoption) |
+| DirectCheckBonus | 5000 | **2500-10000 (was 0-20000)** | **375 (was 1000)** | ? | 6.7 / 13.3 at c = 375 (one step) | ok; **range 2500-10000, the owner's decision (2026-11-12, about 12:50 PM EST: "DirectCheckBonus final-retune range 2500-10000")**: the ranges rule's half to twice of 5000, with the rule's step (a twentieth of the range, 375), replacing 0-20000 (step 1000), declared in the parameter table when D13 was re-planned (owner, 2026-11-11), whose floor 0 was the off-equivalent (added 2026-11-12, D13's adoption) |
 | DriftLimit | 300 | 150-600 | 23 | ? | 6.5 / 13 at c = 23 (one step) | ok (added 2026-11-12 with the minor table; it applies to every drift table, so only the minor table's while the others are off) |
 
 p = 22 tuned parameters (23 with QuietSeeFloor), minus any parameter of a
@@ -175,7 +175,8 @@ at a second value if it fails (the two-try limit); head-to-heads stay only
 for constants that will not be retuned or values that differ in kind. So
 the engine survey's **PriorCreditQuarters** (D9, natural value 4 quarters,
 range 0-12, step 1 in the parameter table) and **DirectCheckBonus** (D13,
-natural value 5000, range 0-20000, step 1000) **become class (a)
+natural value 5000, range 0-20000, step 1000; 2500-10000, step 375 since
+2026-11-12, the owner's decision, its row above) **become class (a)
 dimensions of this SPSA if they are adopted** (lane B items 69a/69b and
 70a/70b, gated behind E1). D8 (the summed pair update) has no constant.
 **2026-11-12: quiet history pruning's two constants join this pass** on its
@@ -205,7 +206,9 @@ check above still holds: `apply_from_sum` clamps each entry to
 class (a) as an ordering weight (its row above), so p grows by 1. The
 int16 headroom holds: the bonus is added after the history sum's clamp
 and the result is clamped to int16 again (move_selector.cpp,
-`quiet_order_score`), so any value in 0-20000 is safe.
+`quiet_order_score`), so any value is safe (its range 2500-10000, step
+375, the owner's decision of 2026-11-12, about 12:50 PM EST; its row
+above).
 
 ### 3.2 Class (b): LTC pass
 
