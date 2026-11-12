@@ -1002,6 +1002,11 @@ impl Args {
     fn need(&self, key: &str) -> &str {
         self.get(key).unwrap_or_else(|| panic!("missing {key}"))
     }
+    /// A switch that takes no value: present anywhere, the last argument included (bug review 2026-11-11, T9:
+    /// `get(key).is_some()` needed a word after it, so `dump ... --keep-all` at the end silently filtered).
+    fn flag(&self, key: &str) -> bool {
+        self.0.iter().any(|a| a == key)
+    }
 }
 
 fn main() {
@@ -1046,7 +1051,7 @@ fn main() {
             // Positions exactly as training sees them (side-to-move relative):
             // "piece:square ... | score | result" per kept position.
             let mut left: usize = a.num("--count", 1000);
-            let filter = if a.get("--keep-all").is_some() { Filter::UNRESTRICTED } else { filter() };
+            let filter = if a.flag("--keep-all") { Filter::UNRESTRICTED } else { filter() };
             let out = std::io::stdout();
             let mut out = out.lock();
             ShardReader::for_each_game(Path::new(a.need("--data")), |game| {
@@ -1305,6 +1310,26 @@ fn main() {
             eprintln!("unknown command {cmd}");
             std::process::exit(2);
         }
+    }
+}
+
+#[cfg(test)]
+mod args_tests {
+    use super::Args;
+
+    fn args(words: &[&str]) -> Args {
+        Args(words.iter().map(|w| w.to_string()).collect())
+    }
+
+    #[test]
+    fn a_switch_counts_wherever_it_stands() {
+        // Bug review 2026-11-11, T9: last, first or between options.
+        assert!(args(&["dump", "--data", "x.bin", "--keep-all"]).flag("--keep-all"));
+        assert!(args(&["dump", "--keep-all", "--data", "x.bin"]).flag("--keep-all"));
+        assert!(args(&["dump", "--data", "x.bin", "--keep-all", "--count", "5"]).flag("--keep-all"));
+        assert!(!args(&["dump", "--data", "x.bin", "--count", "5"]).flag("--keep-all"));
+        // What the old test, get(..).is_some(), gave for the last argument.
+        assert!(args(&["dump", "--data", "x.bin", "--keep-all"]).get("--keep-all").is_none());
     }
 }
 
