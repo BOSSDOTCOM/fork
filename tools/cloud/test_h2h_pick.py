@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Tests of the head-to-head picker (tools/cloud/h2h_pick.py; owner, DESIGN.md §6 2026-11-07 decision 3):
-each pairing's delta and error from its merged pentanomial, the least-squares strengths of three values
-against the closed form, the declared tie rule (0.5 e, owner 2026-11-07), the refusals (pairings on
-different openings, results of another commit) and the constants-table row.
+each pairing's delta and error from its merged pentanomial, the least-squares strengths of three and of
+four values against the closed form, the declared tie rule (0.5 e, owner 2026-11-07), the refusals
+(pairings on different openings, results of another commit) and the constants-table row.
 
     python3 -m unittest discover -s tools/cloud -p 'test_*.py'
 """
@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import h2h_pick as hp  # noqa: E402
 import sprt_merge as sm  # noqa: E402
 
-SHA = {'40': '4' * 40, '60': '6' * 40, '80': '8' * 40}
+SHA = {'20': '2' * 40, '40': '4' * 40, '60': '6' * 40, '80': '8' * 40}
 BETTER = [2, 6, 20, 14, 8]  # per shard: the test side clearly stronger
 EDGE = [4, 10, 20, 11, 5]   # per shard: a small edge (+13.83 nElo over 200 pairs, below 0.5 e)
 EVEN = [5, 10, 20, 10, 5]
@@ -101,6 +101,46 @@ def load_tests(loader, tests, pattern):
         t.assertEqual(pick['winner'], '60')
         t.assertAlmostEqual(pick['strengths']['60'][0], sm.nelo([4 * x for x in BETTER]), places=6)
         t.assertAlmostEqual(pick['strengths']['60'][1], 34.0505 * math.sqrt(2 / 3), places=2)
+
+    def test_four_values_closed_form():
+        # A full round robin of n values, equal-length pairings: s_X = (sum_Y d_XY - sum_Y d_PY) / n with
+        # d_XY = s_X - s_Y as measured (antisymmetric) and P the preferred value; each +/- e sqrt(2/n).
+        meas = {('A', 'B'): 7.3, ('A', 'C'): -2.1, ('A', 'D'): 11.8, ('B', 'C'): 4.4, ('B', 'D'): -6.5,
+                ('C', 'D'): 3.2}  # s_hi - s_lo, deliberately inconsistent
+        e, labels = 17.0, ['A', 'B', 'C', 'D']
+        d = {}
+        for (lo, hi), v in meas.items():
+            d[(hi, lo)], d[(lo, hi)] = v, -v
+        row = {x: sum(d[(x, y)] for y in labels if y != x) for x in labels}
+        for ref in ('A', 'C'):
+            s = hp.fit_strengths([(lo, hi, v, e) for (lo, hi), v in meas.items()], labels, ref)
+            for x in labels:
+                t.assertAlmostEqual(s[x][0], (row[x] - row[ref]) / 4, places=9)
+                t.assertAlmostEqual(s[x][1], 0.0 if x == ref else e * math.sqrt(2 / 4), places=9)
+        # Through main: four values, six pairings on the same openings; 60 beats the rest.
+        write('four.20-40', SHA['20'], SHA['40'], EVEN, run=1000)
+        write('four.20-60', SHA['20'], SHA['60'], BETTER, run=1010)
+        write('four.20-80', SHA['20'], SHA['80'], EVEN, run=1020)
+        write('four.40-60', SHA['40'], SHA['60'], BETTER, run=1030)
+        write('four.40-80', SHA['40'], SHA['80'], EVEN, run=1040)
+        write('four.60-80', SHA['60'], SHA['80'], list(reversed(BETTER)), run=1050)
+        declare('four', ['20', '40', '60', '80'], prefer='20')
+        rc, out = run_main('four')
+        t.assertEqual(rc, 0, out)
+        pick = json.loads((root / 'four' / 'pick.json').read_text(encoding='utf-8'))
+        t.assertEqual((pick['winner'], pick['tie_rule_applied']), ('60', False))
+        t.assertEqual(len(pick['pairings']), 6)
+        t.assertAlmostEqual(pick['strengths']['60'][0], sm.nelo([4 * x for x in BETTER]), places=6)
+        t.assertAlmostEqual(pick['strengths']['60'][1], 34.0505 * math.sqrt(2 / 4), places=2)
+        line = (root / 'four' / 'constants-line.md').read_text(encoding='utf-8')
+        t.assertIn('values 20, 40, 60, 80 in a round robin', line)
+        t.assertIn('(least squares over the 6 pairings)', line)
+        # The tie rule among four: the preferred value is kept against a leader within 0.5 e of it.
+        order = ['A', 'B', 'C', 'D']
+        t.assertEqual(hp.pick_winner({'A': (0.0, 0.0), 'B': (2.0, 10.0), 'C': (4.9, 10.0), 'D': (-1.0, 10.0)},
+                                     'A', 0.5, order), ('A', True))
+        t.assertEqual(hp.pick_winner({'A': (0.0, 0.0), 'B': (2.0, 10.0), 'C': (5.1, 10.0), 'D': (-1.0, 10.0)},
+                                     'A', 0.5, order), ('C', False))
 
     def test_tie_rule():
         order = ['A', 'B', 'C']

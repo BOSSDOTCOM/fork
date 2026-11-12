@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Head-to-head selection of a search constant's value (owner, DESIGN.md §6 2026-11-07 decision 3): two
-or three candidate values, each a commit, played against each other on the same openings by
-tools/github/h2h_run.sh (one pairing for two values, a round robin for three, every pairing the same
-declared stages); this script reads the pairings' shard results and picks the value.
+to four candidate values, each a commit, played against each other on the same openings by
+tools/github/h2h_run.sh (one pairing for two values, a round robin for three or four, every pairing the
+same declared stages); this script reads the pairings' shard results and picks the value.
 
 - Each pairing (base = the value listed first): its stages' result.json files, each checked against the
   pairing's commits and stage, merged with sprt_merge.merge; d = nElo of test against base, e = its 95%
@@ -12,7 +12,9 @@ declared stages); this script reads the pairings' shard results and picks the va
 - Strengths: weighted least squares of s_test - s_base = d over the pairings (weights 1 / (e / 1.96)^2),
   with the preferred value at 0; each value's half-width from the inverse normal matrix. For two values
   that is the pairing itself; for three equal-length pairings s_B = (2 d_AB + d_AC - d_BC) / 3 and
-  s_C = (d_AB + 2 d_AC + d_BC) / 3, each +/- e sqrt(2/3). nElo differences are treated as additive across
+  s_C = (d_AB + 2 d_AC + d_BC) / 3, each +/- e sqrt(2/3); for a full round robin of n values with
+  equal-length pairings, s_X = (sum over Y of d_XY - sum over Y of d_PY) / n with P the preferred value and
+  d_XY = s_X - s_Y as measured, each +/- e sqrt(2/n) (n = 4: six pairings). nElo differences are treated as additive across
   pairings, an approximation for the small differences between candidate values.
 - The pick: the largest strength; the declared tie rule (owner, 2026-11-07: 0.5 e, the 2026-11-06 ladder
   rule's "within half the error bars") keeps the preferred value (the current or the simpler one, named
@@ -81,7 +83,7 @@ def fit_strengths(pairs, labels, ref):
             b[i] += w * d * x[i]
             for j in range(k):
                 a[i][j] += w * x[i] * x[j]
-    # The inverse of the normal matrix (Gauss-Jordan; k is 1 or 2).
+    # The inverse of the normal matrix (Gauss-Jordan; k is 1 to 3).
     inv = [[float(i == j) for j in range(k)] for i in range(k)]
     m = [row[:] for row in a]
     for c in range(k):

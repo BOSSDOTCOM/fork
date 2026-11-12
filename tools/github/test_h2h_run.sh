@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Dry runs of tools/github/h2h_run.sh (head-to-head selection of a constant's value; owner, DESIGN.md §6
 # 2026-11-07 decision 3) against the fake gh (tools/github/fake_gh.sh), its pairings played by
-# sprt_run.sh --kind fixed: two values play one pairing and three a round robin, every pairing on the same
+# sprt_run.sh --kind fixed: two values play one pairing, three and four a round robin, every pairing on the same
 # stages (so the same openings); the stronger value is picked with its delta +/- e and a constants-table
 # row; an edge within the declared tie margin (0.5 e) keeps the preferred value; a rerun skips finished
 # pairings; a changed declaration, a failed run and bad arguments stop it before a pick. Uses python3 (or
@@ -20,6 +20,7 @@ check() {  # description, command...
   if "$@"; then echo "PASS  $what"; else echo "FAIL  $what"; failures=$((failures + 1)); fi
 }
 export PYTHON=${PYTHON:-python3}
+c20=$(git -C "$here" rev-parse HEAD~3)
 c40=$(git -C "$here" rev-parse HEAD~2)
 c60=$(git -C "$here" rev-parse HEAD~1)
 c80=$(git -C "$here" rev-parse HEAD)
@@ -36,7 +37,7 @@ setup() {  # label
   mkdir -p "$st"
   echo 0 >"$st/busy"
   echo 500 >"$st/latest"
-  printf '%s\n' "$c40" "$c60" "$c80" >"$st/commits"
+  printf '%s\n' "$c20" "$c40" "$c60" "$c80" >"$st/commits"
   echo "$even" >"$st/ptnml"
   : >"$st/dispatches"
 }
@@ -80,6 +81,27 @@ check "three values: each pairing's runs carry its own name (bug review 2026-11-
 check "three values: the strongest is picked" grep -q '"winner": "60"' "$tmp/h-three/data/h-three/pick.json"
 check "three values: the row says round robin and least squares" grep -q "values 40, 60, 80 in a round robin, 2 stages of 200 games per pairing on the same openings (1,200 games); 60 - 40 +96.36 +/- 27.80 nElo, 80 - 40 +0.00 +/- 27.80 nElo (least squares over the 3 pairings)" "$tmp/h-three/data/h-three/constants-line.md"
 
+setup h-four
+echo "$better" >"$tmp/h-four/ptnml.$c40.$c60"
+echo "$better" >"$tmp/h-four/ptnml.$c20.$c60"
+echo "$worse" >"$tmp/h-four/ptnml.$c60.$c80"
+decl4=(--const RfpTest --stages 2 --prefer 20 --prefer-reason "the most cautious" --idea rfp)
+drive h-four "${decl4[@]}" "20=$c20" "40=$c40" "60=$c60" "80=$c80"
+check "four values: a round robin of 6 pairings, each stages 0 and 1" [ "$(rc h-four):$(stages h-four)" = "0:stage=0 stage=1 stage=0 stage=1 stage=0 stage=1 stage=0 stage=1 stage=0 stage=1 stage=0 stage=1 " ]
+names_ok() {  # every pairing of the four values was dispatched under its own name
+  local p
+  for p in 20-40 20-60 20-80 40-60 40-80 60-80; do grep -q "name=h-four.$p\$" "$tmp/h-four/dispatches" || return 1; done
+}
+check "four values: every pairing dispatched under its own name" names_ok
+check "four values: the strongest is picked" grep -q '"winner": "60"' "$tmp/h-four/data/h-four/pick.json"
+check "four values: the row says round robin over 6 pairings (2,400 games)" grep -q "values 20, 40, 60, 80 in a round robin, 2 stages of 200 games per pairing on the same openings (2,400 games); .* (least squares over the 6 pairings)" "$tmp/h-four/data/h-four/constants-line.md"
+
+setup h-four-tie
+echo "$edge" >"$tmp/h-four-tie/ptnml.$c20.$c40"
+drive h-four-tie "${decl4[@]}" "20=$c20" "40=$c40" "60=$c60" "80=$c80"
+check "four values: an edge within 0.5 e keeps the preferred value" bash -c \
+  "[ \$(cat '$tmp/h-four-tie/rc') = 0 ] && grep -q '\"winner\": \"20\"' '$tmp/h-four-tie/data/h-four-tie/pick.json'"
+
 drive h-three "${decl[@]}" "40=$c40" "60=$c60" "80=$c80"
 check "a rerun skips the finished pairings and picks the same" bash -c \
   "[ \$(cat '$tmp/h-three/rc') = 0 ] && [ \$(wc -l <'$tmp/h-three/dispatches') = 6 ] && grep -q '\"winner\": \"60\"' '$tmp/h-three/data/h-three/pick.json'"
@@ -96,9 +118,9 @@ check "a failed run stops it before any pick" bash -c \
 
 setup h-refusals
 drive h-refusals "${decl[@]}" "40=$c40"
-check "one value is refused" bash -c "[ \$(cat '$tmp/h-refusals/rc') = 1 ] && grep -q 'takes 2 or 3 values' '$tmp/h-refusals/out'"
-drive h-refusals "${decl[@]}" "40=$c40" "60=$c60" "80=$c80" "99=$c80"
-check "four values are refused" bash -c "[ \$(cat '$tmp/h-refusals/rc') = 1 ] && grep -q 'takes 2 or 3 values' '$tmp/h-refusals/out'"
+check "one value is refused" bash -c "[ \$(cat '$tmp/h-refusals/rc') = 1 ] && grep -q 'takes 2 to 4 values' '$tmp/h-refusals/out'"
+drive h-refusals "${decl[@]}" "20=$c20" "40=$c40" "60=$c60" "80=$c80" "99=$c80"
+check "five values are refused" bash -c "[ \$(cat '$tmp/h-refusals/rc') = 1 ] && grep -q 'takes 2 to 4 values (LABEL=COMMIT), not 5' '$tmp/h-refusals/out'"
 drive h-refusals "${decl[@]}" "40=$c40" "60=$c40"
 check "two values on one commit are refused" bash -c "[ \$(cat '$tmp/h-refusals/rc') = 1 ] && grep -q 'the same commit' '$tmp/h-refusals/out'"
 drive h-refusals --const RfpTest --stages 2 --prefer 50 --prefer-reason "the current value" --idea rfp "40=$c40" "60=$c60"

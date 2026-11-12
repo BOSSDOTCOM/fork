@@ -1286,8 +1286,9 @@ because update.sh refuses it.
   capped (undecided at the cap: not passed) or complete. The positional
   form (`NAME BASE TEST ELO0 ELO1 [FIRST [LAST]]`, e.g. non-regression
   [-3, 0]) is unchanged, byte for byte. **Constants by head-to-head
-  selection**: `tools/github/h2h_run.sh` plays 2-3 candidate values (one
-  commit each) against each other on the same openings, one pairing or a
+  selection**: `tools/github/h2h_run.sh` plays 2-4 candidate values (one
+  commit each; four since 2026-11-11, owner: six pairings) against each
+  other on the same openings, one pairing or a
   round robin of `--stages L` each, and `tools/cloud/h2h_pick.py` picks
   the value (least-squares strengths; the declared `--prefer` value is
   kept unless beaten by more than 0.5 e) and writes the constants table's

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Head-to-head selection of a search constant's value on the GitHub shards (owner, DESIGN.md §6 2026-11-07
-# decision 3): two or three candidate values, each a commit that differs only in the constant, played
+# decision 3): two to four candidate values, each a commit that differs only in the constant, played
 # against each other on the same openings, and the value picked with its delta +/- e
 # (tools/cloud/h2h_pick.py), as a row for the Search constants table.
 #
 #   tools/github/h2h_run.sh NAME --const CONSTANT --stages L --prefer LABEL --prefer-reason TEXT --idea ID \
-#       [--tie-margin F] [--origin O] LABEL=COMMIT LABEL=COMMIT [LABEL=COMMIT]
+#       [--tie-margin F] [--origin O] LABEL=COMMIT LABEL=COMMIT [LABEL=COMMIT [LABEL=COMMIT]]
 #
 #   NAME             label: $SPRT_DATA/NAME holds declaration.json, driver.log, pick.json and
 #                    constants-line.md; pairing A-B's stages are the SPRT $SPRT_DATA/NAME.A-B
@@ -20,7 +20,8 @@
 #   LABEL=COMMIT     a candidate: the value as written in the table ([A-Za-z0-9._-], at most 16) and the
 #                    commit that sets it (on GitHub)
 #
-# Two values play one pairing (the first listed as base), three a round robin (A-B, A-C, B-C), each
+# Two values play one pairing (the first listed as base), three a round robin (A-B, A-C, B-C) and four a
+# round robin of six pairings (A-B, A-C, A-D, B-C, B-D, C-D; owner, 2026-11-11), each
 # through tools/github/sprt_run.sh --kind fixed --cap L --origin O, so with its rules (the supervisor, run
 # titles, the ledger, the meta and shard checks) and on the same stage indices, hence the same opening
 # lines. No pairing stops early. The declaration (the values, stages, preferred value, tie margin and
@@ -81,7 +82,7 @@ root=$(fork_path_for "$py" "$root") && data=$(fork_path_for "$py" "$data") ||
 [ -n "${FORK_JOB:-}" ] || [ "${SPRT_UNSUPERVISED:-}" = 1 ] ||
   stop "not started by the job supervisor (tools/jobs/jobctl.py start github $name -- $0 ...)"
 
-[ $# -ge 2 ] && [ $# -le 3 ] || stop "a head-to-head takes 2 or 3 values (LABEL=COMMIT), not $#"
+[ $# -ge 2 ] && [ $# -le 4 ] || stop "a head-to-head takes 2 to 4 values (LABEL=COMMIT), not $#"
 [[ $name =~ ^[A-Za-z0-9_-]+$ ]] || stop "NAME '$name' must be [A-Za-z0-9_-] (pairings are NAME.A-B)"
 [ -n "$const" ] || stop "--const names the constant"
 case $stages in 1 | 2 | 3 | 4) ;; *) stop "--stages takes 1 to 4 stages per pairing" ;; esac
