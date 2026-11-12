@@ -67,7 +67,7 @@
   X(ReplyWeight, 6, 0, 12, 1)               \
   X(FollowWeight, 4, 0, 8, 1)               \
   X(TakeWeight, 4, 0, 16, 1)                \
-  X(DirectCheckBonus, 5000, 0, 20000, 1000) \
+  X(DirectCheckBonus, 2500, 0, 20000, 1000) \
   X(StaleDepthPerSearch, 2, 1, 4, 1)        \
   X(AssumedMovesLeft, 30, 15, 60, 2)        \
   X(MaxMovesToGo, 40, 20, 80, 3)            \
