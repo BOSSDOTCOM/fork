@@ -2811,3 +2811,49 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
+
+## 150. RSPSA for the final retune: adaptive per-parameter step sizes
+
+- **type:** TOOLING (tuning method); no engine flag. Recorded by the owner's order of 2026-11-12, about 1:15 PM EST
+  (plan only, no runs now).
+- **idea:** RSPSA (SPSA with resilient, per-parameter step sizes: each parameter's step grows while its gradient
+  sign holds and shrinks when it flips) in place of one calibrated step schedule for every dimension. Implement it
+  in the SPSA driver (tools/github/spsa.py, branch tune/spsa) behind an option, then compare it with the calibrated
+  SPSA on a small parameter set before the final retune (docs/research/phase4-designs/final-retune.md) uses it.
+- **phase:** Phase 4, before the final retune. **metric:** on the same small parameter set and game budget,
+  RSPSA's final values against calibrated SPSA's, judged by an SPRT of the two tuned results (or of each against
+  the start), plus how often each run ends with parameters pinned at a range bound.
+- **status:** untested (plan). Sources: the RSPSA method's original description, to be fetched and logged in
+  docs/ORIGINALITY.md before implementation (not consulted yet; ideas only, never code).
+- **runtime cost:** none (tuning side only).
+- **earliest phase:** Phase 4.
+
+## 151. CLOP-style local quadratic fitting for 1-3 parameter questions
+
+- **type:** TOOLING (tuning method); no engine flag. Owner, 2026-11-12, about 1:15 PM EST (plan only, no runs).
+- **idea:** for a question about one to three parameters, fit a local quadratic model of the win rate to games
+  sampled across the parameter range (CLOP's approach: confidence-weighted local regression, sampling
+  concentrated where the model predicts the optimum) instead of a multi-candidate head-to-head between fixed
+  values. Fork's own implementation.
+- **phase:** Phase 4 or later. **metric:** on a past head-to-head question with a known answer, the fitted optimum
+  and its interval against the head-to-head's pick, for the same or fewer games.
+- **status:** untested (plan). Sources: CLOP's original paper, to be fetched and logged in docs/ORIGINALITY.md
+  before implementation (not consulted yet).
+- **runtime cost:** none (tuning side only).
+- **earliest phase:** Phase 4.
+
+## 152. Texel-style offline fitting for small handcrafted eval add-ons only
+
+- **type:** TOOLING (tuning method); no engine flag. Owner, 2026-11-12, about 1:15 PM EST (plan only, no runs).
+- **idea:** fit a small handcrafted term's weights offline by minimizing the prediction error of game results
+  (or labels) over recorded positions, Texel-style, only for small add-ons on top of the network: for example
+  F10's scale or a correction table's scale. Not for search constants and not for the network itself.
+- **phase:** when such an add-on needs a value. **metric:** the fitted value then gets the normal SPRT against
+  its current value.
+- **status:** untested (plan). Sources: the Texel tuning method's description, to be fetched and logged in
+  docs/ORIGINALITY.md before use (not consulted yet).
+- **runtime cost:** none (offline).
+- **earliest phase:** Phase 4.
+- **not adopted (owner, same date):** Hooke-Jeeves pattern search, simulated annealing and genetic algorithms are
+  not adopted for parameter tuning; SPSA (with idea 150's comparison), head-to-heads or idea 151 for small
+  questions, and idea 152 for small eval add-ons cover the cases.
