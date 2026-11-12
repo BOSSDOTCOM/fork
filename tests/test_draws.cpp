@@ -9,7 +9,12 @@
 #include <string_view>
 #include <vector>
 
+#include "core/bitboard.hpp"
+#include "core/movegen.hpp"
 #include "core/position.hpp"
+#include "core/revisit.hpp"
+#include "core/splitmix.hpp"
+#include "core/zobrist.hpp"
 #include "harness.hpp"
 
 using namespace forkeng;
@@ -194,4 +199,88 @@ TEST_CASE("draws", "insufficient material across small material signatures") {
   }
   CHECK_EQ(checked, 28 * 28);
   CHECK_EQ(drawn, 19);
+}
+
+// Upcoming repetition (think tank R12, the engine survey's F7): the
+// reversible-move table holds each knight, bishop, rook, queen and king move
+// between two squares once (both directions in one entry), counted here from
+// the attack tables on an empty board, and find() returns each by its key
+// change; key changes no move makes are not found.
+TEST_CASE("draws", "revisit table: every reversible piece move once, found by its key change") {
+  init();
+  // Each pair is reached from both ends, and both colours have the same
+  // pairs: the count for one colour from both ends is the table's size.
+  int expected = 0;
+  for (PieceType t : {Knight, Bishop, Rook, Queen, King})
+    for (Square a = 0; a < 64; ++a) expected += popcount(attacks(t, a, 0));
+  CHECK_EQ(revisit::stored(), expected);
+  CHECK(2 * revisit::stored() <= revisit::Slots);
+  int found = 0;
+  for (Color c : {White, Black})
+    for (PieceType t : {Knight, Bishop, Rook, Queen, King})
+      for (Square a = 0; a < 64; ++a)
+        for (Square b = 0; b < 64; ++b) {
+          if (!(attacks(t, a, 0) & bb(b))) continue;
+          const Piece p = piece_of(c, t);
+          const int slot =
+              revisit::find(zobrist::piece_square[p][a] ^ zobrist::piece_square[p][b] ^ zobrist::side);
+          CHECK_MSG(slot >= 0, "piece " << int(p) << " " << int(a) << "-" << int(b));
+          if (slot < 0) continue;
+          const revisit::Shuttle& m = revisit::moves[slot];
+          CHECK(m.piece == p && m.a == std::min(a, b) && m.b == std::max(a, b));
+          ++found;
+        }
+  CHECK_EQ(found, 2 * expected);
+  // Without the side key, or for a pawn, no entry.
+  CHECK_EQ(revisit::find(zobrist::piece_square[piece_of(White, Knight)][1] ^
+                         zobrist::piece_square[piece_of(White, Knight)][18]),
+           -1);
+  CHECK_EQ(revisit::find(zobrist::piece_square[piece_of(White, Pawn)][12] ^
+                         zobrist::piece_square[piece_of(White, Pawn)][20] ^ zobrist::side),
+           -1);
+  CHECK_EQ(revisit::find(0), -1);
+}
+
+// revisit_available against making every legal move: it is true exactly
+// when some legal move leads to a position the repetition rule counts
+// (repetition_count() >= 2 after it), over random games that mostly shuffle
+// pieces (so many positions repeat), from several starts, one with a null
+// move in its history.
+TEST_CASE("draws", "revisit_available equals some legal move reaching a repetition") {
+  static constexpr std::string_view Starts[] = {
+      Position::StartFen, "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "8/2k5/8/3r4/8/2N5/5K2/3Q4 w - - 0 1", "4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1"};
+  std::uint64_t seed = 31;
+  int positions = 0, available = 0;
+  for (std::string_view fen : Starts)
+    for (int game = 0; game < 40; ++game) {
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      if (game % 4 == 3) pos.make_null();
+      for (int ply = 0; ply < 80; ++ply) {
+        MoveList legal;
+        generate<GenMode::Legal>(pos, legal);
+        if (legal.size() == 0) break;
+        bool brute = false;
+        for (std::size_t i = 0; i < legal.size() && !brute; ++i) {
+          pos.make(legal[i]);
+          brute = pos.repetition_count() >= 2;
+          pos.unmake(legal[i]);
+        }
+        const bool fast = pos.revisit_available();
+        CHECK_MSG(fast == brute, pos.fen() << ": revisit_available " << fast << ", by making every move " << brute);
+        ++positions;
+        available += brute;
+        // Mostly a reversible piece move, so positions recur.
+        MoveList shuffles;
+        for (std::size_t i = 0; i < legal.size(); ++i)
+          if (!legal[i].is_capture() && !legal[i].is_promotion() && !legal[i].is_castle() &&
+              kind_of(pos.piece_at(legal[i].from())) != Pawn)
+            shuffles.add(legal[i]);
+        const bool shuffle = shuffles.size() > 0 && splitmix_next(seed) % 10 != 0;
+        const MoveList& from = shuffle ? shuffles : legal;
+        pos.make(from[splitmix_next(seed) % from.size()]);
+      }
+    }
+  CHECK_MSG(available > 500, "only " << available << " of " << positions << " positions had a move back");
 }

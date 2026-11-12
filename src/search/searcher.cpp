@@ -225,6 +225,15 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     return eval_at(ply);  // only with the quiescence search switched off
   }
 
+  // Upcoming repetition (R12, F7): a move back to an earlier position gives
+  // at least a draw here, as the child would score it.
+  int draw_floor = -ScoreInfinite;
+  if (switches.use_revisit_draw && !withheld && alpha < 0 && pos.revisit_available()) {
+    draw_floor = 0;
+    alpha = 0;
+    if (alpha >= beta) return alpha;
+  }
+
   if (switches.use_mate_distance) {
     alpha = std::max(alpha, mated_score(ply));
     beta = std::min(beta, mate_score(ply + 1));
@@ -733,6 +742,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // Without its withheld move a node may have none left: it fails low, so the
   // withheld move counts as singular.
   if (moves_seen == 0) return withheld ? alpha : in_check ? mated_score(ply) : 0;
+  best = std::max(best, draw_floor);  // R12: the move back was there, searched or not
   if (moves_searched == 0) return best;
   best = std::clamp(best, table_floor, table_ceiling);
   if (switches.use_tt && !withheld) {
@@ -762,6 +772,15 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   if (ply >= MaxPly) {
     FORK_STAT(counters.evals_horizon += !in_check);
     return in_check ? 0 : eval_at(ply);
+  }
+
+  // Upcoming repetition (R12, F7), as in negamax: the quiet move back is not
+  // searched here, but it is there.
+  int draw_floor = -ScoreInfinite;
+  if (switches.use_revisit_draw && alpha < 0 && pos.revisit_available()) {
+    draw_floor = 0;
+    alpha = 0;
+    if (alpha >= beta) return alpha;
   }
 
   const Key key = pos.key();
@@ -838,6 +857,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     }
   }
   if (in_check && moves_searched == 0) return mated_score(ply);
+  best = std::max(best, draw_floor);  // R12
   if (switches.use_tt) {
     const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
     tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, OnPv);

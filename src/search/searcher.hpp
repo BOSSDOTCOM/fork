@@ -144,6 +144,16 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_revisit_draw: upcoming repetition (think tank R12, the engine
+//   survey's F7): at a node below the root whose side to move has a move to
+//   a position that occurred earlier in the repetition window
+//   (Position::revisit_available), which the search would score as a
+//   repetition draw, alpha is raised to the draw score before the node is
+//   searched (it fails high at once if that reaches beta), and its result is
+//   at least the draw score. Not at a singular test's search (the move may
+//   be the one withheld). Fork's repetition rule as it stands: one earlier
+//   occurrence counts, before the root too (ideas.md idea 31). No constant.
+//   Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +187,7 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)            X(use_revisit_draw, UseRevisitDraw, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

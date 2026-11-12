@@ -138,6 +138,11 @@ class Position {
   int repetition_count()
       const;  // occurrences of this position since the last irreversible move, this one included
   bool insufficient_material() const;
+  // The side to move has a move (a knight, bishop, rook, queen or king move,
+  // no capture) to a position that occurred earlier in the repetition
+  // window, so it can reach a position the search scores as a repetition
+  // draw (think tank R12, the engine survey's F7; core/revisit.hpp).
+  bool revisit_available() const;
   bool fifty_move_reached() const { return state().halfmove >= 100; }
 
   std::string move_to_uci(Move m) const;

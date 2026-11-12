@@ -462,6 +462,48 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
   for (int b = 1; b < ThreatBuckets; ++b) CHECK_MSG(written(b) == 0, "bucket " << b);
 }
 
+// Upcoming repetition (R12, F7): with it on, mates are still found and the
+// best move is legal, and it changes the tree (fault check: a node that
+// never finds a move back leaves the tree as it is with the switch off). A
+// side far behind that can shuffle back to an earlier position scores the
+// draw: after Nf3 Nf6 Ng1, Black is a queen down (constructed: a second
+// White queen on d4 in place of the h-pawn, accepted by set_fen) and
+// Ng8 brings back the first position; Black takes it at every depth.
+TEST_CASE("pruning", "upcoming repetition: still correct, changes the search, a move back scores a draw") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_revisit_draw);  // off until its SPRT
+  SearchSwitches on;
+  on.use_revisit_draw = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_revisit_draw = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the upcoming-repetition check left all three trees unchanged");
+  for (int d : {1, 2, 4}) {
+    Position game;
+    CHECK(game.set_fen("rnbqkbnr/pppppppp/8/8/3Q4/8/PPPPPPP1/RNBQKBNR w KQkq - 0 1"));
+    for (const char* uci : {"g1f3", "g8f6", "f3g1"}) game.make(game.parse_uci(uci));
+    CHECK(game.revisit_available());
+    fx.searcher->switches = on;
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    SearchQuota limits;
+    limits.depth = d;
+    const SearchResult r = fx.searcher->deliberate(game, limits, fx.stop, nullptr, nullptr);
+    CHECK_MSG(r.score == 0 && r.best == game.parse_uci("f6g8"),
+              "depth " << d << ": score " << r.score << ", move " << game.move_to_uci(r.best));
+  }
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -542,6 +584,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
   s.use_threat_buckets = true;
+  s.use_revisit_draw = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

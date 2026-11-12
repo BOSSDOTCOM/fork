@@ -8,6 +8,7 @@
 #include <charconv>
 
 #include "core/movegen.hpp"
+#include "core/revisit.hpp"
 #include "core/zobrist.hpp"
 
 namespace forkeng {
@@ -48,6 +49,7 @@ void init() {
   static const bool once = [] {
     init_bitboards();
     zobrist::init();
+    revisit::init();  // from the keys just built
     return true;
   }();
   (void)once;
@@ -607,6 +609,34 @@ int Position::repetition_count() const {
   for (int back = 2; back <= window; back += 2)
     if (states_[n - 1 - back].key == k) ++count;
   return count;
+}
+
+bool Position::revisit_available() const {
+  // An earlier position one move away has the other side to move: it lies an
+  // odd number of plies back, at least three (one ply back is the position
+  // the opponent just left, which only the opponent's piece could restore).
+  // The same window as repetition_count: the child that move makes would
+  // find the position there.
+  const int n = static_cast<int>(states_.size());
+  const int window = std::min({state().halfmove, state().game_span - 1, n - 1});
+  if (window < 3) return false;
+  const Key k = key();
+  const Bitboard occupied = pieces();
+  for (int back = 3; back <= window; back += 2) {
+    const int slot = revisit::find(k ^ states_[n - 1 - back].key);
+    if (slot < 0) continue;
+    // The piece stands on one of the move's squares and the other is empty;
+    // it must be the side to move's, and the way between must be clear. The
+    // move is then legal: it makes a position that occurred with the other
+    // side to move, where this side's king was not attacked.
+    const revisit::Shuttle& s = revisit::moves[slot];
+    const bool on_a = piece_at(s.a) == s.piece;
+    const Square from = on_a ? s.a : s.b, to = on_a ? s.b : s.a;
+    if (piece_at(from) != s.piece || piece_at(to) != NoPiece || side_of(s.piece) != side_) continue;
+    if (between(from, to) & occupied) continue;
+    return true;
+  }
+  return false;
 }
 
 bool Position::cannot_mate(Color c) const {

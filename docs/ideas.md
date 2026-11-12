@@ -824,6 +824,7 @@ tuned by SPSA.
 - **runtime cost:** none measurable (the same history walk).
 - **earliest phase:** Phase 3.
 - **status:** untested
+  **2026-11-11:** upcoming repetition (think tank R12, survey F7; branch tier2/f7-revisit, switch `use_revisit_draw`, off) follows the rule as it stands (one earlier occurrence counts, before the root too), so it anticipates exactly the draws the search already scores; if this idea changes the rule, `Position::revisit_available` must count the same way (recommendation: decide this idea before F7 is adopted, or adopt F7 under the current rule and change both together).
 
 ## 32. Pruning guards for tablebase losses
 
