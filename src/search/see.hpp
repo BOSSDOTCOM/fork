@@ -8,7 +8,7 @@
 // Invariants:
 // - The sides alternately recapture on the square with their least valuable
 //   attacker; sliders behind a piece that leaves the line join the exchange
-//   (attackers are recomputed from the occupancy after each capture); either
+//   (after each capture the capturer's line is looked up again); either
 //   side may stop instead of recapturing; the move judged is forced.
 // - A king captures only onto a square the other side no longer attacks.
 // - Promotions (Fork's rule): the move judged counts its promotion gain and

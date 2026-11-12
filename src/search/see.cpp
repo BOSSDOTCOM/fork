@@ -72,6 +72,18 @@ bool see_at_least(const Position& pos, Move m, int threshold) {
   }
   Color decider = ~pos.side_to_move();  // the opponent chooses first
   bool our_turn = false;
+  // Every piece attacking `to` through `occ`, either side, taken at the first
+  // lookup and then kept up to date (speed sprint 3): pawn, knight and king
+  // attacks do not depend on the occupancy, and a capture uncovers only
+  // sliders on the capturer's own line to `to` (a pawn's and a bishop's
+  // diagonal, a rook's rank or file, either for a queen or a king), so at each
+  // later lookup only the last capturer's line is looked up again. Each
+  // lookup's set equals attackers_to(to, occ) & occ, as recomputing it would
+  // give. `pt` is the last capturer, NoPieceType before the first lookup.
+  Bitboard attackers = 0;
+  PieceType pt = NoPieceType;
+  const Bitboard diagonal_sliders = pos.pieces(Bishop) | pos.pieces(Queen);
+  const Bitboard straight_sliders = pos.pieces(Rook) | pos.pieces(Queen);
   for (;;) {
     if (our_turn ? net_gain >= threshold : net_gain < threshold) return net_gain >= threshold;
     // One capture more changes the gain by at most the piece standing on the
@@ -79,11 +91,19 @@ bool see_at_least(const Position& pos, Move m, int threshold) {
     // cross the threshold, the answer is settled without a lookup (audit-1,
     // P-3; before the first lookup in 30.3% of calls).
     if (our_turn ? net_gain + standing < threshold : net_gain - standing >= threshold) return !our_turn;
-    const Bitboard attackers = pos.attackers_to(to, occ) & occ & pos.pieces(decider);
-    if (!attackers) return net_gain >= threshold;
-    PieceType pt = Pawn;
-    while (!(attackers & pos.pieces(pt))) pt = PieceType(pt + 1);
-    const Square sq = lsb(attackers & pos.pieces(pt));
+    if (pt == NoPieceType) {
+      attackers = pos.attackers_to(to, occ) & occ;
+    } else {
+      attackers &= occ;
+      if (pt == Pawn || pt == Bishop || pt >= Queen)
+        attackers |= bishop_attacks(to, occ) & diagonal_sliders & occ;
+      if (pt >= Rook) attackers |= rook_attacks(to, occ) & straight_sliders & occ;
+    }
+    const Bitboard ours = attackers & pos.pieces(decider);
+    if (!ours) return net_gain >= threshold;
+    pt = Pawn;
+    while (!(ours & pos.pieces(pt))) pt = PieceType(pt + 1);
+    const Square sq = lsb(ours & pos.pieces(pt));
     // The king may only capture onto a square the other side no longer attacks.
     if (pt == King && (pos.attackers_to(to, occ ^ bb(sq)) & occ & pos.pieces(~decider)))
       return net_gain >= threshold;
