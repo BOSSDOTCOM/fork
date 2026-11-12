@@ -21,7 +21,8 @@
 //   a move changes them only when a pawn moves, is captured or promotes.
 // - A perspective's frame changes only when its own king moves across the
 //   d/e line or into another region; then that perspective is recomputed
-//   from the board, every other update is incremental.
+//   from the board (FeatureStack: from the frame's snapshot, by the
+//   difference of the boards), every other update is incremental.
 // - Every SIMD path has a scalar reference here, always compiled, with the
 //   same results bit for bit (tests/test_nnue.cpp); the net file's bounds
 //   (net_file.hpp) guarantee no overflow on any path.
@@ -146,9 +147,12 @@ int delta_row_count(const NetFile& net, const FeatureDelta& d, Color perspective
 #endif
 
 // One accumulator per ply of a search: ply 0 is the root, computed from
-// scratch; the others are computed from their parent when first needed,
-// except a perspective whose frame the move changes, which is recomputed
-// from the board at once.
+// scratch; the others are computed from their parent when first needed. A
+// perspective whose frame a move changes cannot be computed from its
+// parent: when an evaluation needs it (at that ply or below), the evaluated
+// ply's sums for that perspective come from the frame's snapshot instead,
+// the sums last computed from a board in that frame, brought to the current
+// board by the pieces (and links) that differ.
 class FeatureStack {
  public:
   void reset(const NetFile& net, const Position& root);
@@ -179,7 +183,24 @@ class FeatureStack {
     Frame frame[2];
     bool computed[2] = {false, false};
   };
+  // One perspective's sums in one frame, with the board they belong to (each
+  // colour's pieces by kind). reset() starts every snapshot as the empty
+  // board (the biases), so the first use adds every piece.
+  struct FrameSnapshot {
+    alignas(64) std::int16_t values[NetHidden];
+#if FORK_NET_ARCH == 5
+    std::int16_t side[4];
+#endif
+    Bitboard pieces[2][6];
+  };
+  static constexpr int SnapshotSlots = NetMirrored ? 2 * NetMaxRegions : 1;
+  static int snapshot_slot(Frame f) { return (f.flip != 0) + 2 * (f.offset / NetPieceSquares); }
+  // Sets `perspective`'s sums at `ply` from its frame's snapshot and `pos`
+  // (the position at `ply`), and the snapshot to them.
+  void refresh_from_snapshot(const NetFile& net, int ply, Color perspective, const Position& pos);
+
   Entry entries_[MaxPly + 1];
+  FrameSnapshot snapshots_[2][SnapshotSlots];
 #ifdef FORK_SEARCH_STATS
   FeatureStackTally tally_;
 #endif

@@ -291,6 +291,48 @@ TEST_CASE("nnue", "incremental updates equal refreshes along random games") {
   CHECK(checked > 300);
 }
 
+// FeatureStack's frame snapshots (a perspective whose frame changed taken
+// from the frame's last sums and the difference of the boards): a random
+// tree walk with backtracking, king moves favoured so frames change often
+// and a snapshot's board differs from the current one by several pieces and
+// pawn links, every evaluation against a refresh.
+TEST_CASE("nnue", "frame snapshots keep evaluations exact along a search tree") {
+  auto net = random_net(8);
+  auto stack = std::make_unique<FeatureStack>();
+  int checked = 0;
+  std::uint64_t rng = 2026;
+  for (const auto& sp : perft_suite()) {
+    Position pos;
+    pos.set_fen(sp.fen);
+    stack->reset(*net, pos);
+    const auto walk = [&](auto&& self, int ply, int depth) -> void {
+      if (splitmix_next(rng) % 2 == 0) {
+        CHECK_EQ(stack->evaluate(*net, ply, pos), full_eval(*net, pos));
+        ++checked;
+      }
+      if (depth == 0) return;
+      MoveList legal;
+      generate<GenMode::Legal>(pos, legal);
+      if (legal.size() == 0) return;
+      for (int child = 0; child < 3; ++child) {
+        Move m = legal[splitmix_next(rng) % legal.size()];
+        if (splitmix_next(rng) % 2 == 0)
+          for (Move k : legal)
+            if (kind_of(pos.piece_at(k.from())) == King && splitmix_next(rng) % 2 == 0) {
+              m = k;
+              break;
+            }
+        stack->push_move(*net, ply, pos, m);
+        pos.make(m);
+        self(self, ply + 1, depth - 1);
+        pos.unmake(m);
+      }
+    };
+    walk(walk, 0, 6);
+  }
+  CHECK(checked > 1000);
+}
+
 TEST_CASE("nnue", "every move kind's delta matches a refresh") {
   // Each legal move of each perft-suite position (castling, en passant,
   // promotions and capture-promotions among them), one step from a refresh,

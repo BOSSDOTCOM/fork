@@ -83,12 +83,14 @@ DeltaColumns columns_for(const NetFile& net, const FeatureDelta& d, Color perspe
   return c;
 }
 
-[[maybe_unused]] void advance_values_scalar(const std::int16_t* src, const DeltaColumns& c,
-                                            std::int16_t* dst) {
+// dst = src minus the `subs` rows `sub` plus the `adds` rows `add` (src and
+// dst may be the same sums).
+[[maybe_unused]] void advance_values_scalar(const std::int16_t* src, const std::int16_t* const* sub, int subs,
+                                            const std::int16_t* const* add, int adds, std::int16_t* dst) {
   for (int i = 0; i < NetHidden; ++i) {
     int x = src[i];
-    for (int k = 0; k < c.subs; ++k) x -= c.sub[k][i];
-    for (int k = 0; k < c.adds; ++k) x += c.add[k][i];
+    for (int k = 0; k < subs; ++k) x -= sub[k][i];
+    for (int k = 0; k < adds; ++k) x += add[k][i];
     dst[i] = static_cast<std::int16_t>(x);
   }
 }
@@ -102,24 +104,24 @@ DeltaColumns columns_for(const NetFile& net, const FeatureDelta& d, Color perspe
 #if defined(__AVX512BW__)
 // 32 int16 lanes per vector; the whole perspective (16 vectors at 512
 // hidden) fits one tile in AVX-512's 32 registers.
-void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
+void advance_values(const std::int16_t* src, const std::int16_t* const* sub, int subs,
+                    const std::int16_t* const* add, int adds, std::int16_t* dst) {
   constexpr int Lanes = 32, Tile = NetHidden / Lanes < 16 ? NetHidden / Lanes : 16;
   static_assert(NetHidden % (Lanes * Tile) == 0);
   for (int i = 0; i < NetHidden; i += Lanes * Tile) {
     __m512i x[Tile];
     for (int t = 0; t < Tile; ++t) x[t] = _mm512_load_si512(src + i + Lanes * t);
-    for (int k = 0; k < c.subs; ++k)
-      for (int t = 0; t < Tile; ++t)
-        x[t] = _mm512_sub_epi16(x[t], _mm512_load_si512(c.sub[k] + i + Lanes * t));
-    for (int k = 0; k < c.adds; ++k)
-      for (int t = 0; t < Tile; ++t)
-        x[t] = _mm512_add_epi16(x[t], _mm512_load_si512(c.add[k] + i + Lanes * t));
+    for (int k = 0; k < subs; ++k)
+      for (int t = 0; t < Tile; ++t) x[t] = _mm512_sub_epi16(x[t], _mm512_load_si512(sub[k] + i + Lanes * t));
+    for (int k = 0; k < adds; ++k)
+      for (int t = 0; t < Tile; ++t) x[t] = _mm512_add_epi16(x[t], _mm512_load_si512(add[k] + i + Lanes * t));
     for (int t = 0; t < Tile; ++t) _mm512_store_si512(dst + i + Lanes * t, x[t]);
   }
 }
 #elif defined(__AVX2__)
 // 16 int16 lanes per vector; tiles of 8 of AVX2's 16 registers.
-void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
+void advance_values(const std::int16_t* src, const std::int16_t* const* sub, int subs,
+                    const std::int16_t* const* add, int adds, std::int16_t* dst) {
   constexpr int Lanes = 16, Tile = 8;
   static_assert(NetHidden % (Lanes * Tile) == 0);
   const auto at = [](const std::int16_t* p) {
@@ -128,16 +130,17 @@ void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t
   for (int i = 0; i < NetHidden; i += Lanes * Tile) {
     __m256i x[Tile];
     for (int t = 0; t < Tile; ++t) x[t] = at(src + i + Lanes * t);
-    for (int k = 0; k < c.subs; ++k)
-      for (int t = 0; t < Tile; ++t) x[t] = _mm256_sub_epi16(x[t], at(c.sub[k] + i + Lanes * t));
-    for (int k = 0; k < c.adds; ++k)
-      for (int t = 0; t < Tile; ++t) x[t] = _mm256_add_epi16(x[t], at(c.add[k] + i + Lanes * t));
+    for (int k = 0; k < subs; ++k)
+      for (int t = 0; t < Tile; ++t) x[t] = _mm256_sub_epi16(x[t], at(sub[k] + i + Lanes * t));
+    for (int k = 0; k < adds; ++k)
+      for (int t = 0; t < Tile; ++t) x[t] = _mm256_add_epi16(x[t], at(add[k] + i + Lanes * t));
     for (int t = 0; t < Tile; ++t) _mm256_store_si256(reinterpret_cast<__m256i*>(dst + i + Lanes * t), x[t]);
   }
 }
 #else
-void advance_values(const std::int16_t* src, const DeltaColumns& c, std::int16_t* dst) {
-  advance_values_scalar(src, c, dst);
+void advance_values(const std::int16_t* src, const std::int16_t* const* sub, int subs,
+                    const std::int16_t* const* add, int adds, std::int16_t* dst) {
+  advance_values_scalar(src, sub, subs, add, adds, dst);
 }
 #endif
 
@@ -568,7 +571,7 @@ void accumulate_board(const NetFile& net, const Position& pos, Accumulator& out)
 void advance_perspective(const NetFile& net, const Accumulator& from, const FeatureDelta& d,
                          Color perspective, Frame frame, Accumulator& to) {
   const DeltaColumns c = columns_for(net, d, perspective, frame);
-  advance_values(from.values[perspective], c, to.values[perspective]);
+  advance_values(from.values[perspective], c.sub, c.subs, c.add, c.adds, to.values[perspective]);
 #if FORK_NET_ARCH == 5
   for (int k = 0; k < 4; ++k) {
     int x = from.side[perspective][k];
@@ -634,16 +637,18 @@ int scale_output(const NetFile& net, std::int32_t sum) {
 
 void advance_accumulator_scalar(const NetFile& net, const Accumulator& from, const FeatureDelta& d,
                                 Accumulator& to) {
-  for (const Color perspective : {White, Black})
-    advance_values_scalar(from.values[perspective], columns_for(net, d, perspective, Frame{}),
-                          to.values[perspective]);
+  for (const Color perspective : {White, Black}) {
+    const DeltaColumns c = columns_for(net, d, perspective, Frame{});
+    advance_values_scalar(from.values[perspective], c.sub, c.subs, c.add, c.adds, to.values[perspective]);
+  }
 }
 
 void advance_accumulator(const NetFile& net, const Accumulator& from, const FeatureDelta& d,
                          Accumulator& to) {
-  for (const Color perspective : {White, Black})
-    advance_values(from.values[perspective], columns_for(net, d, perspective, Frame{}),
-                   to.values[perspective]);
+  for (const Color perspective : {White, Black}) {
+    const DeltaColumns c = columns_for(net, d, perspective, Frame{});
+    advance_values(from.values[perspective], c.sub, c.subs, c.add, c.adds, to.values[perspective]);
+  }
 }
 
 int output_layer_scalar(const NetFile& net, const Accumulator& acc, Color stm) {
@@ -713,6 +718,94 @@ void FeatureStack::reset(const NetFile& net, const Position& root) {
     e.computed[perspective] = true;
   }
   accumulate_board(net, root, e.acc);
+  // Every snapshot starts as the empty board of this net.
+  for (auto& side : snapshots_)
+    for (FrameSnapshot& s : side) {
+      std::memcpy(s.values, net.ft_bias, sizeof s.values);
+#if FORK_NET_ARCH == 5
+      std::memcpy(s.side, net.side_bias, sizeof s.side);
+#endif
+      for (auto& by_kind : s.pieces)
+        for (Bitboard& b : by_kind) b = 0;
+    }
+}
+
+void FeatureStack::refresh_from_snapshot(const NetFile& net, int ply, Color perspective,
+                                         const Position& pos) {
+#ifdef FORK_SEARCH_STATS
+  ++tally_.frame_refreshes;
+#endif
+  Entry& e = entries_[ply];
+  const Frame f = e.frame[perspective];
+#ifdef FORK_S3_NOSNAP  // measurement only: the lazy refresh from the board, no snapshot
+  {
+    sum_perspective(
+        net, perspective, f,
+        [&](auto&& visit) {
+          for (Bitboard b = pos.pieces(); b;) {
+            const Square s = pop_lsb(b);
+            visit(pos.piece_at(s), s);
+          }
+        },
+        e.acc);
+#if FORK_NET_ARCH == 8
+    const Bitboard pawns[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
+    add_link_rows(net, pawns, perspective, f.flip, e.acc.values[perspective]);
+#endif
+    e.computed[perspective] = true;
+    return;
+  }
+#endif
+  FrameSnapshot& snap = snapshots_[perspective][snapshot_slot(f)];
+  // The piece rows that differ: at most 32 each way.
+  const std::int16_t* sub[32];
+  const std::int16_t* add[32];
+  int sub_rows[32], add_rows[32];
+  int subs = 0, adds = 0;
+  for (const Color c : {White, Black})
+    for (int k = Pawn; k <= King; ++k) {
+      const Piece p = piece_of(c, PieceType(k));
+      const Bitboard now = pos.pieces(c, PieceType(k)), then = snap.pieces[c][k];
+      for (Bitboard b = then & ~now; b;) {
+        sub_rows[subs] = feature_index(perspective, p, pop_lsb(b), f);
+        sub[subs] = column(net, sub_rows[subs]);
+        ++subs;
+      }
+      for (Bitboard b = now & ~then; b;) {
+        add_rows[adds] = feature_index(perspective, p, pop_lsb(b), f);
+        add[adds] = column(net, add_rows[adds]);
+        ++adds;
+      }
+    }
+  advance_values(snap.values, sub, subs, add, adds, snap.values);
+#if FORK_NET_ARCH == 5
+  for (int k = 0; k < 4; ++k) {
+    int x = snap.side[k];
+    for (int i = 0; i < subs; ++i) x -= net.side_weights[sub_rows[i]][k];
+    for (int i = 0; i < adds; ++i) x += net.side_weights[add_rows[i]][k];
+    snap.side[k] = static_cast<std::int16_t>(x);
+  }
+  std::memcpy(e.acc.side[perspective], snap.side, sizeof snap.side);
+#endif
+#if FORK_NET_ARCH == 8
+  // The links of the pawns that differ (the same difference as a move's).
+  const Bitboard before[2] = {snap.pieces[White][Pawn], snap.pieces[Black][Pawn]};
+  const Bitboard after[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
+  if (before[White] != after[White] || before[Black] != after[Black]) {
+    std::int32_t removed[LinkMaxActive], added[LinkMaxActive];
+    int nr = 0, na = 0;
+    link_changes(before, after, perspective, f.flip, removed, nr, added, na);
+    const std::int16_t* link_sub[LinkMaxActive];
+    const std::int16_t* link_add[LinkMaxActive];
+    for (int i = 0; i < nr; ++i) link_sub[i] = column(net, NetPieceSquares + removed[i]);
+    for (int i = 0; i < na; ++i) link_add[i] = column(net, NetPieceSquares + added[i]);
+    advance_values(snap.values, link_sub, nr, link_add, na, snap.values);
+  }
+#endif
+  for (const Color c : {White, Black})
+    for (int k = Pawn; k <= King; ++k) snap.pieces[c][k] = pos.pieces(c, PieceType(k));
+  std::memcpy(e.acc.values[perspective], snap.values, sizeof snap.values);
+  e.computed[perspective] = true;
 }
 
 void FeatureStack::push_move(const NetFile& net, int ply, const Position& before, Move m) {
@@ -728,39 +821,10 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
     e.frame[Black] = parent.frame[Black];
     const Color us = before.side_to_move();
     if (kind_of(before.piece_at(m.from())) == King) {
+      // The mover's frame may change: then the evaluation that first needs
+      // this perspective at this ply or below takes it from the snapshot.
       const Square to = m.is_castle() ? Position::castle_landing(m.from(), m.to()).king : m.to();
-      const Frame f = frame_of(net, us, to);
-      if (f != parent.frame[us]) {
-        // The mover's perspective sees a new frame: its sums from the board
-        // after the move (the parent's pieces with the delta applied).
-        e.frame[us] = f;
-        const FeatureDelta& d = e.delta;
-        sum_perspective(
-            net, us, f,
-            [&](auto&& visit) {
-              for (Bitboard b = before.pieces(); b;) {
-                const Square s = pop_lsb(b);
-                const Piece p = before.piece_at(s);
-                bool gone = false;
-                for (int i = 0; i < d.removed_count; ++i)
-                  gone |= d.removed_square[i] == s && d.removed_piece[i] == p;
-                if (!gone) visit(p, s);
-              }
-              for (int i = 0; i < d.added_count; ++i) visit(d.added_piece[i], d.added_square[i]);
-            },
-            e.acc);
-#if FORK_NET_ARCH == 8
-        // A king move that changes the frame changes no pawn, except a king
-        // capturing one.
-        const Bitboard pawns_now[2] = {d.pawn_change ? d.pawns_after[White] : before.pieces(White, Pawn),
-                                       d.pawn_change ? d.pawns_after[Black] : before.pieces(Black, Pawn)};
-        add_link_rows(net, pawns_now, us, f.flip, e.acc.values[us]);
-#endif
-        e.computed[us] = true;
-#ifdef FORK_SEARCH_STATS
-        ++tally_.frame_refreshes;
-#endif
-      }
+      e.frame[us] = frame_of(net, us, to);
     }
   }
 }
@@ -789,8 +853,18 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
 #endif
 #else
   for (const Color perspective : {White, Black}) {
+    // Back to the nearest computed ply (ply 0 always is), unless a ply on
+    // the way changed this perspective's frame: then this ply comes from
+    // the frame's snapshot.
     int base = ply;
-    while (!entries_[base].computed[perspective]) --base;  // ply 0 is always computed
+    while (!entries_[base].computed[perspective]) {
+      if (entries_[base].frame[perspective] != entries_[base - 1].frame[perspective]) {
+        refresh_from_snapshot(net, ply, perspective, pos);
+        base = ply;
+        break;
+      }
+      --base;
+    }
     for (int p = base + 1; p <= ply; ++p) {
       advance_perspective(net, entries_[p - 1].acc, entries_[p].delta, perspective,
                           entries_[p].frame[perspective], entries_[p].acc);
