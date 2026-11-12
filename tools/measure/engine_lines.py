@@ -14,6 +14,11 @@ variables read at start-up (src/search/searcher.cpp):
   `prune_ledger rfp|depth|ply|excess|static_excess|margin|tt_bound|tt_depth|swing|phase|fired|arm_minus_beta|arm_nodes|arm_mate`
   or
   `prune_ledger futility|depth|ply|deficit|static_deficit|margin|tt_bound|tt_depth|swing|phase|fired|on_minus_beta|off_minus_beta|on_nodes|off_nodes|arm_mate`;
+- FORK_DRIFT_REPORT (the drift tables' passive measurement, R34 and E4):
+  the drift counters in the counter dump, and with the ledger, after each
+  `prune_ledger` row, `drift_ledger rfp|pieces|minor|major|threat` (each
+  table's pruning eval minus beta) or `drift_ledger futility|...` (alpha
+  minus it);
 - FORK_EVAL_SITES=N,M: every Nth main-search and every Mth quiescence
   evaluation site,
   `eval_site kind|reused|alpha|beta|eval|prune_eval|depth|ply|parent_eval|tt_bound|tt_depth|captured|on_pv|FEN`
@@ -81,6 +86,28 @@ def parse_ledger_line(line):
         raise ValueError(f'prune_ledger {technique}: {len(values) - 1} fields, expected {len(names)}')
     row = dict(zip(names, (int(v) for v in values[1:])))
     row['technique'] = technique
+    return row
+
+
+DRIFT_TABLES = ('pieces', 'minor', 'major', 'threat')
+
+
+def parse_drift_ledger_line(line):
+    """One `drift_ledger` line (FORK_DRIFT_REPORT with the ledger: it follows
+    its `prune_ledger` row) -> {'technique', 'pieces', 'minor', 'major',
+    'threat'}: each drift table's pruning eval minus beta (rfp) or alpha
+    minus it (futility), the row's excess or deficit had that table's term
+    been applied."""
+    words = line.split()
+    if len(words) != 2 or words[0] != 'drift_ledger':
+        raise ValueError(f'not a drift_ledger line: {line[:60]!r}')
+    values = words[1].split('|')
+    if values[0] not in ('rfp', 'futility'):
+        raise ValueError(f'drift_ledger: unknown technique {values[0]!r}')
+    if len(values) - 1 != len(DRIFT_TABLES):
+        raise ValueError(f'drift_ledger: {len(values) - 1} fields, expected {len(DRIFT_TABLES)}')
+    row = dict(zip(DRIFT_TABLES, (int(v) for v in values[1:])))
+    row['technique'] = values[0]
     return row
 
 

@@ -32,8 +32,8 @@
 // X(name, default, lowest, highest, step), in groups: aspiration and the
 // iteration rule; reverse futility and the null move; endgame tables; late
 // move reductions and pruning; futility and SEE pruning; the singular test;
-// the no-move reduction, the cut-node reduction and ProbCut; history; the TT
-// victim policy; the time budget.
+// the no-move reduction, the cut-node reduction and ProbCut; the drift tables
+// (R34, E4); history; the TT victim policy; the time budget.
 #define FORK_SEARCH_PARAMS(X)               \
   X(AspirationMinDepth, 5, 2, 10, 1)        \
   X(AspirationHalfWidth, 12, 6, 24, 1)      \
@@ -65,6 +65,13 @@
   X(CaptureProbeMinDepth, 9, 4, 18, 1)      \
   X(CaptureProbeReduction, 5, 2, 10, 1)     \
   X(CaptureProbeMargin, 80, 40, 160, 6)     \
+  X(DriftWeightCap, 4, 2, 8, 1)             \
+  X(DriftWeightTotal, 256, 128, 512, 19)    \
+  X(DriftLimit, 300, 150, 600, 23)          \
+  X(PieceDriftShare, 64, 32, 128, 5)        \
+  X(MinorDriftShare, 32, 32, 128, 5)        \
+  X(MajorDriftShare, 64, 32, 128, 5)        \
+  X(ThreatDriftShare, 64, 32, 128, 5)       \
   X(HistorySkipMaxDepth, 3, 1, 6, 1)        \
   X(HistorySkipPerPly, 700, 350, 4000, 183) \
   X(HistoryBonusFactor, 25, 12, 50, 2)      \

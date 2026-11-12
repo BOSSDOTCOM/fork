@@ -144,11 +144,14 @@ struct TestHash {
 };
 
 // Switches for a search that must equal minimax: TT cutoffs only at their
-// own depth, and no pruning or reductions (they are not exact).
+// own depth, and no pruning or reductions (they are not exact). The drift
+// tables off too: they add their learned term to the quiescence stand-pat,
+// so a search with them on is not minimax on the raw eval.
 SearchSwitches exact_switches() {
   SearchSwitches s;
   s.tt_exact_depth = true;
   s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = false;
   return s;
 }
 

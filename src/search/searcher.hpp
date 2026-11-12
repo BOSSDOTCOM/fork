@@ -32,6 +32,7 @@
 #include <optional>
 
 #include "core/position.hpp"
+#include "search/eval_drift.hpp"
 #include "search/move_selector.hpp"
 #include "search/quiet_history.hpp"
 #include "search/score_bounds.hpp"
@@ -171,6 +172,17 @@ struct SearchQuota {
 //   is at or below -HistorySkipPerPly x depth is skipped unsearched. On since
 //   its STC SPRT against off passed: +6.04 +/- 4.37 Elo after 8,000 games,
 //   design R [0, 6]; 2026-11-12.
+// - use_piece_drift, use_minor_drift, use_major_drift, use_threat_drift: the
+//   eval the search estimates with (pruning, the quiescence stand-pat) is
+//   the raw eval plus each switched-on drift table's term (eval_drift.hpp;
+//   tier 2, think tank R34 and engine survey E4): the mean of the two
+//   colours' piece tables, the minor table, the major table, the threat
+//   table, each times its share (PieceDriftShare, ... / DriftShareUnit).
+//   The tables learn at the nodes whose result shows the estimate erred
+//   (negamax's end), only while switched on. The minor table is on, at
+//   MinorDriftShare 32/64, since its STC SPRT against off passed: +5.57 +/-
+//   4.01 Elo after 9,600 games, design R [0, 6]; 2026-11-12. The piece,
+//   major and threat tables stay off until their SPRTs.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -207,7 +219,11 @@ struct SearchQuota {
   X(use_threat_buckets, UseThreatBuckets, true)          \
   X(use_capture_probe, UseCaptureProbe, true)            \
   X(use_pass_best_stop, UsePassBestStop, true)           \
-  X(use_history_skip, UseHistorySkip, true)
+  X(use_history_skip, UseHistorySkip, true)              \
+  X(use_piece_drift, UsePieceDrift, false)               \
+  X(use_minor_drift, UseMinorDrift, true)                \
+  X(use_major_drift, UseMajorDrift, false)               \
+  X(use_threat_drift, UseThreatDrift, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -383,6 +399,13 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
 // - Idea 59 step 1: evaluation sites whose window has no finite bound (both
 //   in the mate or tablebase band), main and quiescence, computed and
 //   reused from the TT; computed ones with exactly one finite bound.
+// - The drift tables' passive measurement (FORK_DRIFT_REPORT in stats
+//   builds; R34's ranking, tools/measure/drift_rank.py): at every node where
+//   the tables learn, the samples, the summed error of the raw eval against
+//   the result (for a bound only the part the bound proves) and of the raw
+//   eval plus each table's term at its full and at half its share; the same
+//   (but the half share) over the tail samples, those whose raw error is
+//   over DriftTailError cp.
 // - X2: LMR sites whose node has no reply or no follow arrival (a null move
 //   or the root above), so those tables have no entry; late captures (every
 //   LMR gate passed but "quiet": R18's sites); and at LMR sites, where the
@@ -450,7 +473,23 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
   X(eval_gap_main_reuse_infinite)    \
   X(eval_gap_quiesce_reuse_infinite) \
   X(eval_gap_main_one_sided)         \
-  X(eval_gap_quiesce_one_sided)
+  X(eval_gap_quiesce_one_sided)      \
+  X(drift_samples)                   \
+  X(drift_error_raw)                 \
+  X(drift_tail_samples)              \
+  X(drift_tail_raw)                  \
+  X(drift_error_pieces)              \
+  X(drift_tail_pieces)               \
+  X(drift_half_pieces)               \
+  X(drift_error_minor)               \
+  X(drift_tail_minor)                \
+  X(drift_half_minor)                \
+  X(drift_error_major)               \
+  X(drift_tail_major)                \
+  X(drift_half_major)                \
+  X(drift_error_threat)              \
+  X(drift_tail_threat)               \
+  X(drift_half_threat)
 
 // X2's histogram bins (DESIGN.md §5.7; measurement settings, no search
 // effect). Sign-magnitude bins: the value 0 and the positive values fill the
@@ -580,6 +619,10 @@ class Searcher {
     history_.clear();
     for (PairHistory& table : pair_history_) table.clear();
     take_history_.clear();
+    for (EvalDrift& table : piece_drift_) table.clear();
+    minor_drift_.clear();
+    major_drift_.clear();
+    threat_drift_.clear();
   }
   // Tests only: the butterfly history (the threat buckets' read and update
   // checks, tier 2 T56).
@@ -618,6 +661,23 @@ class Searcher {
   void play_null(int ply);
   int eval_at(int ply);
 
+  // The drift tables (eval_drift.hpp): each table's term at the node at
+  // `ply` (out of check), at its full share, in cp; the static estimate from
+  // the raw eval plus the switched-on terms, kept out of the tablebase and
+  // mate range; and the learning from a node's result.
+  struct DriftTerms {
+    int pieces = 0, minor = 0, major = 0, threat = 0;
+  };
+  DriftTerms drift_terms(int ply);  // also sets threat_keys_[ply] when that table is read
+  int drift_estimate(int raw, const DriftTerms& terms) const;
+  void learn_drift(int ply, int error, int depth);
+  // A drift table is switched on (or, in stats builds, measured): play()
+  // keeps the material keys, and the search computes the terms.
+  bool drift_in_use() const {
+    return switches.use_piece_drift || switches.use_minor_drift || switches.use_major_drift ||
+           switches.use_threat_drift FORK_STAT_GATE(|| drift_report_);
+  }
+
   bool poll_limits();  // true once the search must stop
   // The soft limit for this iteration's soft check: the planned one, or with
   // use_stability_time scaled by the last finished iteration's signals.
@@ -643,12 +703,24 @@ class Searcher {
                        int ply, bool tt_hit, const TtHit& hit, bool on_pv) const;
   // X10: a decision at a position with this key is sampled (1 in ledger_every_).
   bool ledger_sampled(Key key) const { return key % ledger_every_ == 0; }
+  // The drift measurement (FORK_DRIFT_REPORT): one learning node's errors,
+  // raw and with each table's term (the drift counters); and the pruning
+  // eval negamax derives from a static estimate with the TT entry.
+  void count_drift(int best, int raw, const DriftTerms& terms, TtBound bound);
+  int refined_eval(int estimate, bool tt_hit, const TtHit& hit, int ply) const;
 #endif
 
   TransTable& tt_;
   QuietHistory history_;
   PairHistory pair_history_[2];  // tier 2, T10: the reply and follow tables (ReplyTable, FollowTable)
   TakeHistory take_history_;     // tier 2, T11
+  // The drift tables (R34, E4): the piece tables per colour, then the minor,
+  // major and threat tables.
+  EvalDrift piece_drift_[2];
+  EvalDrift minor_drift_;
+  EvalDrift major_drift_;
+  EvalDrift threat_drift_;
+  bool drift_keys_live_ = false;  // play() keeps drift_keys_ (drift_in_use at the search's start)
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;
@@ -661,6 +733,13 @@ class Searcher {
   bool stopped_ = false;
 
   PlyFrame frames_[MaxPly + 1];
+  // The drift tables' keys of each ply's position (eval_drift.hpp), beside
+  // the frames rather than in them (PlyFrame's size guard, tests/test_search.cpp):
+  // the material keys, kept by play() from the root's only while a table is
+  // in use, and the threat key, set where its term is read (drift_terms)
+  // and read where it learns, at the same node.
+  DriftKeys drift_keys_[MaxPly + 1];
+  Key threat_keys_[MaxPly + 1] = {};
   PrincipalLine pv_[MaxPly + 1];
   RootEntry root_moves_[MaxMoves];
   // The iteration's root move that failed high and is not yet resolved by a
@@ -704,6 +783,10 @@ class Searcher {
   // restores afterwards.
   std::uint64_t ledger_every_ = 0;
   bool ledger_active_ = false;
+  // FORK_DRIFT_REPORT: every drift table learns (none is applied) and is
+  // measured (the drift counters; with the ledger, a `drift_ledger` line
+  // after each `prune_ledger` row), so the search keeps its tree.
+  bool drift_report_ = false;
   // Crucial-point ground truth: FORK_EVAL_SITES=N,M samples every Nth
   // main-search and every Mth quiescence evaluation site (0: none).
   std::uint64_t eval_site_every_main_ = 0;

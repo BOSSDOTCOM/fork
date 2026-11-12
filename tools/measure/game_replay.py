@@ -17,7 +17,7 @@ each `bestmove` (the engine writes its report lines before it).
 
     game_replay.py games PGN_OR_DIR... OUT.jsonl --count N --seed S [--engine-name test] [--skip GAMES.jsonl ...]
     game_replay.py run FORK GAMES.jsonl OUTDIR --nodes N [--jobs 2] [--max-positions K] [--syzygy DIR]
-                   [--report counters,iterations,ledger,sites] [--ledger-every 32] [--sites N,M] [--hash 16]
+                   [--report counters,iterations,ledger,sites,drift] [--ledger-every 32] [--sites N,M] [--hash 16]
 
 `games` picks N games by a seeded shuffle of every game in the PGNs (games
 listed in a --skip file are left out, so measurements use disjoint games)
@@ -27,7 +27,8 @@ line, checked against tests/bench-<net>.ref: a mismatch aborts) and one
 OUTDIR/game-NNNN.jsonl per game, one record per search: the game, ply, game
 move number, side, legal-move count, the PGN's depth for that move, the
 bestmove, the counter and histogram deltas, the iteration rows and the
-ledger rows. A game's file appears only when the game is finished (written
+ledger rows (with --report drift, each row's `drift` values: the drift
+tables' passive measurement, FORK_DRIFT_REPORT). A game's file appears only when the game is finished (written
 to a temporary name, then renamed), so a stopped run resumes where it
 stopped. Engines run at below-normal priority: data generation comes first.
 Measurement settings (DESIGN.md §5.7): Hash 16 MB and the Syzygy 3-4-5
@@ -207,6 +208,8 @@ def replay_one_game(fork, game, index, outdir, settings):
         env['FORK_PRUNE_LEDGER'] = str(settings['ledger_every'])
     if 'sites' in settings['report']:
         env['FORK_EVAL_SITES'] = settings['sites']
+    if 'drift' in settings['report']:
+        env['FORK_DRIFT_REPORT'] = '1'
     options = [('Hash', settings['hash']), ('Threads', 1)]
     if settings.get('syzygy'):
         options.append(('SyzygyPath', settings['syzygy']))
@@ -234,6 +237,12 @@ def replay_one_game(fork, game, index, outdir, settings):
                         record['iterations'].append(engine_lines.parse_iteration_line(line))
                     elif line.startswith('prune_ledger '):
                         record['ledger'].append(engine_lines.parse_ledger_line(line))
+                    elif line.startswith('drift_ledger '):
+                        # The drift tables' values for the row just read (same technique).
+                        drift = engine_lines.parse_drift_ledger_line(line)
+                        if not record['ledger'] or 'drift' in record['ledger'][-1] or                                 record['ledger'][-1]['technique'] != drift['technique']:
+                            raise ValueError('a drift_ledger line without its prune_ledger row')
+                        record['ledger'][-1]['drift'] = {k: v for k, v in drift.items() if k != 'technique'}
                     elif line.startswith('eval_site '):
                         record['sites'].append(engine_lines.parse_eval_site_line(line))
                 except ValueError as e:
@@ -312,8 +321,9 @@ def main(argv=None):
     a.fork = os.path.abspath(a.fork)
     games = [json.loads(line) for line in a.games.read_text(encoding='utf-8').splitlines()]
     report = set(a.report.split(','))
-    if not report <= {'counters', 'iterations', 'ledger', 'sites'}:
-        raise SystemExit(f'unknown --report entries: {sorted(report - {"counters", "iterations", "ledger", "sites"})}')
+    known = {'counters', 'iterations', 'ledger', 'sites', 'drift'}
+    if not report <= known:
+        raise SystemExit(f'unknown --report entries: {sorted(report - known)}')
     settings = {'nodes': a.nodes, 'max_positions': a.max_positions, 'syzygy': a.syzygy, 'report': sorted(report),
                 'ledger_every': a.ledger_every, 'hash': a.hash, 'sites': a.sites}
     a.outdir.mkdir(parents=True, exist_ok=True)

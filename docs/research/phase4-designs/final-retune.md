@@ -151,6 +151,8 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | TakeWeight | 4 | 0-16 | 1 | ? | 4 / 12 | ok (capture scores are int16: move_selector.cpp line 83's bound) |
 | HistorySkipPerPly | 700 | 350-4000 | 183 | ? | 1.9 / 18 at c = 183 (one step) | **flag**: floor within 2c at one step (350 is the ranges rule's half of 700); the ceiling 4000, kept from the candidates' declared range, is beyond the rule's twice (1400): step 19's range check decides both (added 2026-11-12, the history skip's adoption) |
 | HistorySkipMaxDepth | 3 | 1-6 | 1 | ? | 2 / 3 at c = 1 | **flag**; lowest at the depth floor (added 2026-11-12; a placeholder never measured on its own, so this pass is its measurement) |
+| **MinorDriftShare** | 32 | 32-128 | 5 | ? | **0 (pinned at its floor)** / 19 at c = 5 (one step) | **flag floor**: 32 is the lowest of the range declared for the natural value 64; the ranges rule's half to twice of 32 is 16-64, so step 19's range check proposes lowest 16 (owner decision; added 2026-11-12, the minor drift table's adoption) |
+| DriftLimit | 300 | 150-600 | 23 | ? | 6.5 / 13 at c = 23 (one step) | ok (added 2026-11-12 with the minor table; it applies to every drift table, so only the minor table's while the others are off) |
 
 p = 22 tuned parameters (23 with QuietSeeFloor), minus any parameter of a
 feature removed in step 18 (e.g. LMP's two if LMP is removed), plus the
@@ -180,6 +182,16 @@ adoption (the history skip, T24/B13; qhp-stc +6.04 ± 4.37 Elo at STC,
 design R [0, 6]; DESIGN.md "Search constants"): `HistorySkipPerPly` (700,
 the head-to-head's pick) and `HistorySkipMaxDepth` (3), class (a) because
 the skip acts only at depths 1-3 (the rows above), so p grows by 2.
+**2026-11-12: the minor drift table's two constants join this pass** on
+its adoption (tier 2, E4; corr-minor-retry +5.57 ± 4.01 Elo at STC, design
+R [0, 6]; DESIGN.md "Search constants"): `MinorDriftShare` (32/64, the
+retry's share, the natural 64 having failed) and `DriftLimit` (300 cp, as
+shipped). Class (a): the term changes the eval the pruning steps (RFP,
+futility, the null move's gate) and the quiescence stand-pat use, and in
+the offline diagnosis of 2026-11-12 half of the node visits where it is
+read were quiescence nodes and most others depths 1-2. So p grows by 2
+more. The learning weights (`DriftWeightCap`, `DriftWeightTotal`) stay out
+(E5's follow-up measures the update rule).
 
 ### 3.2 Class (b): LTC pass
 

@@ -426,6 +426,7 @@ if(FORK_BUILD_TESTS)
     tests/test_see.cpp
     tests/test_tt.cpp
     tests/test_ordering.cpp
+    tests/test_eval_drift.cpp
     tests/test_pruning.cpp
     tests/test_endgame_tables.cpp
     tests/test_pruning_review.cpp
@@ -565,7 +566,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue
+                search see ordering eval_drift pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue
                 web)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)

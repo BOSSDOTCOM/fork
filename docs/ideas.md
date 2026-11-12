@@ -2653,7 +2653,7 @@ whose weaknesses and data gaps decide their targets and order.
 ## 78. The drift tables: per-colour pieces (R34), minor, major and threat (E4)
 
 - **type:** ELO (search); flags `use_piece_drift`, `use_minor_drift`, `use_major_drift`, `use_threat_drift`
-  (all off).
+  (`use_minor_drift` on since 2026-11-12, the others off).
 - **idea** (KB search-techniques.md §3.23, static evaluation correction history; the think tank's R34, the
   engine survey's E2 and E4): learn, per key and side to move, how far search results land from the raw
   static eval, and add that drift to the eval pruning and the quiescence stand-pat use. The pawn drift
@@ -2662,7 +2662,7 @@ whose weaknesses and data gaps decide their targets and order.
 - **history:** the pawn key (E1) was tried as the drift table: −0.35 ± 3.72 at LTC, undecided (not
   adopted). E4 was dropped by think-tank decision 20 without a test and reinstated by the owner
   (2026-11-11).
-- **status:** in progress (2026-11-11). Built on tier2/corr-tables (201277c, 2992817; bench unchanged).
+- **status:** **the minor table adopted 2026-11-12 at `MinorDriftShare` 32/64**; the others in progress. Built on tier2/corr-tables (201277c, 2992817; bench unchanged).
   Passive ranking (decision accuracy at X10's RFP and futility rows, 200,000 nodes, 120 games): threat
   +17.95, minor +14.44, major +9.82, pieces +7.51 per 1,000 rows (DESIGN.md decisions log, 2026-11-11).
   The ranking only orders the tests (owner): each table gets a design R STC SPRT against off at its
@@ -2671,9 +2671,15 @@ whose weaknesses and data gaps decide their targets and order.
   order, night items 19-corr-a to 19-corr-h, gated on E1's fix and its SPRT. A later table is tested whatever an earlier one gives. Every table
   lost decision accuracy at futility rows in the passive run (C15, correction size in pruning, and E5,
   the update rules, are the follow-ups this unblocks).
-- **runtime cost:** possible (the material keys at each make while a table is on, a 256 KB table per key,
-  the threat key's two attack maps per evaluated node); to be measured with bench/ab.py and reported with
-  the SPRT results (the 2026-10-24 rule; UNVERIFIED until then).
+  **Results (2026-11-12, design R STC against off tier2/corr-tables-e1 dd5db13; sprt-log):** threat 64 H0
+  (−10.53 ± 6.95 Elo, 3,200 games), threat 32 H0 (−7.38 ± 7.01, 3,200; both tries used), minor 64 H0
+  (−18.26 ± 9.95, 1,600), **minor 32 H1 (+5.57 ± 4.01, 9,600 games), adopted** on phase-4 (pre-approved;
+  DESIGN.md decisions log, 2026-11-12). An offline diagnosis (2026-11-12) found a single table at share 64
+  runs away (its applied term feeds the results it learns from) and stays bounded at 32. The owner's table
+  rule: if several tables pass alone, only the best is adopted and the next-best is tested on top of it.
+  `MinorDriftShare` 32 and `DriftLimit` 300 join the final retune's SPSA (class (a)). Major and pieces
+  remain to be tested (the diagnosis recommends a depth-scaled term first; the owner decides).
+- **runtime cost:** the minor table on (its adoption, 2026-11-12): measured before the commit with bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 75d53f0, B = the port's build of this commit's engine code from the uncommitted tree on 75d53f0, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -2.0%, best -3.4%, under the 4.9% noise threshold: no significant difference; a small price (the material keys kept at each make, the table read at each estimate) is possible but not resolved at this noise (UNVERIFIED). The bench searches 1.1% more nodes (9,366,920 against 9,263,568). The threat key (two attack maps per node) is not measured (UNVERIFIED).
 - **earliest phase:** Phase 4.
 
 ## 79. Nested-width evaluation (novel-ideas 1)

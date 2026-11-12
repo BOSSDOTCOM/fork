@@ -1491,3 +1491,58 @@ The final stage's result block (qhp-stc, stage 6, run 43193266205):
   join the final retune's SPSA (class (a)). Speed after the adopting commit 9d574d9 (built as 22ab719, before its rebases onto 32384e1 and 8cb60b8, which changed no engine code) (bench/ab_search.py, A =
   e79cbf7): median nps -2.5% (12 rounds) and -2.9% (16 rounds), best -1.2% and +0.2%, each under its noise
   threshold (3.7%, 6.3%): no significant difference; a small price is possible but not resolved (UNVERIFIED).
+
+### 2026-11-12 the drift tables (tier 2: think tank R34, engine survey E4; idea 78): design R SPRTs of each table against off in the passive ranking's order (owner): threat H0 twice, minor H0 at 64 then H1 at 32, adopted
+
+- The owner's order (2026-11-11): each table a design R STC SPRT against off at its share's natural value 64 and,
+  only if that fails, one retry at 32 (try 2), in the passive ranking's order (threat, minor, major, pieces), no
+  head-to-head (the shares are final-retune SPSA dimensions), a pass adopted (pre-approved). Night queue lane A
+  items 19-corr-a to 19-corr-d so far, gated on E1 (gate-e1). Base tier2/corr-tables-e1 dd5db13 for every test
+  (the four tables behind their switches, all off, on adopt/e1 25623ab = phase-4 26323e1 with E1, no ProbCut, no
+  history skip; bench 10,166,167 / d874b380155a2e8c); each test commit is the base plus one switch on and, for
+  a retry, its share at 32 (bench with r8brft1): threat 64 sprt/corr-threat-64-e1 c125860 (10,031,831 /
+  9234d2e322dcfdcd), threat 32 sprt/corr-threat-32-e1 ef0e207 (9,333,289 / a358efa270cbccb7), minor 64
+  sprt/corr-minor-64-e1 8f4c748 (9,450,299 / b09db81dc93c2d97), minor 32 sprt/corr-minor-32-e1 62b911f (9,633,320
+  / 2467c017a6bb6ec4). STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed 20261027), r8brft1 on both sides; design R
+  ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages). Ledger ideas e4-threat-drift and
+  e4-minor-drift. Data: ~/fork-data/sprt/corr-*.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| corr-threat-stc: the threat table at 64/64 against off (try 1), stages 0-1 | 43182768879 (stage 0), 43186154908 (1) | 3,200 (no time losses, no abnormal ends) | −10.53 ± 6.95 | −18.27 ± 12.04 | [38, 433, 753, 340, 36] | H0 accepted (LLR −3.38) after stage 1, 4:08 AM EST |
+| corr-threat-retry: the threat table at 32/64 against off (try 2), stages 8-9 | 43188815709 (8), 43191589635 (9) | 3,200 | −7.38 ± 7.01 | −12.69 ± 12.04 | [41, 421, 736, 369, 33] | H0 accepted (LLR −2.50) after stage 9, 4:45 AM EST; both tries used |
+| corr-minor-stc: the minor table at 64/64 against off (try 1), stage 0 | 43194342325 (0) | 1,600 | −18.26 ± 9.95 | −31.31 ± 17.02 | [32, 208, 386, 160, 14] | H0 accepted (LLR −2.73) after stage 0, 5:04 AM EST |
+| **corr-minor-retry: the minor table at 32/64 against off (try 2), stages 8-13** | 43197094411 (8), 43199888833 (9), 43202617289 (10), 43205316293 (11), 43209264753 (12), 43211912908 (13) | 9,600 (no time losses, no abnormal ends) | **+5.57 ± 4.01** | +9.66 ± 6.95 | [105, 1081, 2295, 1193, 126] | **H1 accepted** (LLR 3.18) after stage 13, 7:04 AM EST 2026-11-12 |
+
+- By stage (corr-minor-retry): after stage 8 +5.43 ± 9.77 (LLR 0.51); stage 9 +4.99 ± 6.89 (0.91); stage 10 +5.14
+  ± 5.62 (1.43); stage 11 +4.13 ± 4.87 (1.34); stage 12 +4.26 ± 4.37 (1.75). corr-threat-stc after stage 0 −9.56
+  ± 9.97 (−1.54); corr-threat-retry after stage 8 −0.22 ± 9.88 (−0.27).
+- The offline diagnosis (2026-11-12, 6:20-7:05 AM EST, while the retry ran; not committed: 40 of the r8b-rft-stc
+  games replayed at 200,000 nodes against 1,000,000-node labels, a scratch stats build): at share 64 a single
+  table's term runs away (the applied term enters the subtree results it then learns from; minor 64: mean term
+  44.9 cp, 3.0% of node visits at the 300 cp limit, search error +23.7 cp [+14.5, +34.2] against the labels;
+  threat 64 +17.8 cp), which orders the two H0s at 64; at 32 the term stays bounded (minor 32: mean 17.5 cp,
+  0.016% at the limit) and the search error improves (minor 32 −2.5 cp [−4.5, −0.8]; threat 32 −1.4 cp [−3.3,
+  +0.4], so its H0 is not explained by accuracy: the threat key's two attack maps per node are its likely cost,
+  UNVERIFIED, not measured).
+
+The final stage's result block (corr-minor-retry, stage 13, run 43211912908):
+
+```
+    Shards: 96 (done); pairs 4800, games 9600 (9600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 5.57 +/- 4.01, nElo: 9.66 +/- 6.95
+    Ptnml(0-2): [105, 1081, 2295, 1193, 126]
+    LLR: 3.18 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Adopted (the owner's overnight pre-approval of 2026-11-11 for search items that pass their SPRT; the owner's
+  table rule: if several tables pass alone, only the best is adopted and the next-best is tested on top of it;
+  minor 32 is the first to pass):** dd5db13's drift tables (relative to 25623ab) with 62b911f's switch-on and share
+  ported onto phase-4 75d53f0 alone (branch adopt/corr-minor; the code lines equal the tested diff apart from the
+  parameter table's and the switch list's realignment beside ProbCut's and the history skip's rows and merged
+  comments; tests added), `UseMinorDrift` on at `MinorDriftShare` 32, the piece, major and threat tables present
+  and off, every switch kept until the Phase 4 re-validation. Bench 9,366,920 / 6d72bf03d34c65ec (r8brft1). With every table off
+  9,263,568 / 881c326307a2ba8a, phase-4's; with the minor table on and ProbCut and the history skip off
+  (the tested base had neither) 9,633,320 / 2467c017a6bb6ec4, byte for byte 62b911f's tests/bench-r8brft1.ref, so the port equals
+  the tested code. `MinorDriftShare` 32 and `DriftLimit` 300 join the final retune's SPSA (class (a)). Speed: measured before the commit with bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 75d53f0, B = the port's build of this commit's engine code from the uncommitted tree on 75d53f0, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -2.0%, best -3.4%, under the 4.9% noise threshold: no significant difference; a small price (the material keys kept at each make, the table read at each estimate) is possible but not resolved at this noise (UNVERIFIED). The bench searches 1.1% more nodes (9,366,920 against 9,263,568).
