@@ -529,7 +529,7 @@ TEST_CASE("pruning", "capture probe: a winning capture cuts the node at the prob
 // the trees as with the switch off).
 TEST_CASE("pruning", "eval-gain extension: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_eval_gain_extension);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_eval_gain_extension);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_eval_gain_extension = true;
   fx.searcher->switches = on;

@@ -66,7 +66,7 @@
   X(CaptureProbeMinDepth, 9, 4, 18, 1)    \
   X(CaptureProbeReduction, 5, 2, 10, 1)   \
   X(CaptureProbeMargin, 80, 40, 160, 6)   \
-  X(EvalGainMargin, 100, 50, 200, 8)      \
+  X(EvalGainMargin, 50, 50, 200, 8)       \
   X(EvalGainMinReduction, 2, 1, 4, 1)     \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
