@@ -144,6 +144,17 @@ struct SearchQuota {
 //   table as before. On since its SPRTs against off passed: STC +7.49 +/-
 //   4.89 Elo after 6,400 games, LTC +8.07 +/- 5.15 Elo after 4,992 games,
 //   design R [0, 6]; 2026-11-11.
+// - use_pass_best_stop: the stop rule for a search stopped mid-iteration
+//   (bug review 2026-11-11, E1; searcher.cpp, the stop rule). Off: a move
+//   from the unfinished iteration is played only if its exact score beats
+//   the last finished iteration's. On: also once the last finished
+//   iteration's best move has been searched again in the unfinished pass,
+//   whatever the score, since the pass's best exact move is then that move
+//   or one that scored above it at the new depth; the iteration's best is
+//   kept per aspiration pass, so an earlier pass cannot supply it. An
+//   unresolved root fail high is never played either way. On since its STC
+//   SPRT against off passed (design R [0, 6]; adoption on that pass
+//   pre-approved by the owner, 2026-11-11; the result in the SPRT log).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -177,7 +188,8 @@ struct SearchQuota {
   X(use_stability_time, UseStabilityTime, true)          \
   X(use_share_time, UseShareTime, true)                  \
   X(use_cut_node_lmr, UseCutNodeLmr, true)               \
-  X(use_threat_buckets, UseThreatBuckets, true)
+  X(use_threat_buckets, UseThreatBuckets, true)          \
+  X(use_pass_best_stop, UsePassBestStop, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -622,6 +634,10 @@ class Searcher {
   Move iteration_best_ = NoMove;
   int iteration_best_score_ = -ScoreInfinite;
   PrincipalLine iteration_pv_;
+  // The last finished iteration's best move, and whether the running
+  // aspiration pass has searched it to a score (use_pass_best_stop).
+  Move prior_best_ = NoMove;
+  bool prior_best_searched_ = false;
   // LMR context inputs kept by the search (lmr_table.hpp): the root score's
   // last change between iterations, and the share of the current root move.
   int score_trend_ = 0;
