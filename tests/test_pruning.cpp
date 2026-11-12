@@ -468,7 +468,7 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
 // as it is with the switch off); with use_history off it does nothing.
 TEST_CASE("pruning", "TT-cutoff credit: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_tt_cut_credit);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_tt_cut_credit);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_tt_cut_credit = true;
   fx.searcher->switches = on;
