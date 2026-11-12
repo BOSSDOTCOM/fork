@@ -462,6 +462,44 @@ TEST_CASE("pruning", "threat buckets: still correct, and they change the search"
   for (int b = 1; b < ThreatBuckets; ++b) CHECK_MSG(written(b) == 0, "bucket " << b);
 }
 
+// The improving flag in late move pruning and LMR (the engine survey's B9,
+// think tank R17): each switch on alone still finds mates and plays a legal
+// move, and changes the search (fault check: the flag never set, or its
+// term never applied, leaves the tree as it is with the switch off). Each
+// does nothing with the technique it adjusts switched off.
+TEST_CASE("pruning", "improving flag in LMP and LMR: still correct, and each changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_improving_lmp);  // off until their SPRTs
+  CHECK(!SearchSwitches{}.use_improving_lmr);
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  SearchSwitches off;  // explicitly off: a test commit turns one on by default
+  off.use_improving_lmp = off.use_improving_lmr = false;
+  for (int which = 0; which < 2; ++which) {
+    SearchSwitches on;
+    bool* flags[] = {&on.use_improving_lmp, &on.use_improving_lmr};
+    *flags[which] = true;
+    fx.searcher->switches = on;
+    CHECK_MSG(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1), "switch " << which);
+    CHECK_MSG(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3), "switch " << which);
+    CHECK_MSG(legal.contains(fx.search(kiwipete, depth).best), "switch " << which);
+    CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+              "improving switch " << which << " left all three trees unchanged");
+  }
+  SearchSwitches lmp_on, lmp_off;
+  lmp_on.use_improving_lmp = true;
+  lmp_on.use_lmp = lmp_off.use_lmp = false;
+  CHECK(fx.tree_sizes(lmp_on, depth) == fx.tree_sizes(lmp_off, depth));
+  SearchSwitches lmr_on, lmr_off;
+  lmr_on.use_improving_lmr = true;
+  lmr_on.use_lmr = lmr_off.use_lmr = false;
+  CHECK(fx.tree_sizes(lmr_on, depth) == fx.tree_sizes(lmr_off, depth));
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -542,6 +580,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = true;
   s.use_reply_history = s.use_follow_history = s.use_take_history = s.use_no_move_reduction = true;
   s.use_threat_buckets = true;
+  s.use_improving_lmp = s.use_improving_lmr = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

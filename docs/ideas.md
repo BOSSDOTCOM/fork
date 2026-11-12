@@ -2719,3 +2719,22 @@ whose weaknesses and data gaps decide their targets and order.
 - **plan** (owner, 2026-11-11): **parked for bake-off round 3** (owner), inside R36's family screen. No runs until the current queue clears its gates; offline probes use the cloud
   VM or idle CPU.
 - **status:** candidate.
+
+## 90. The improving flag in late move pruning and LMR (the engine survey's B9, think tank R17)
+
+- **type:** ELO (search); flags `use_improving_lmp`, `use_improving_lmr`
+  (off).
+- **idea** (the engine survey's B9; think tank R17, step 12; concept only):
+  a node is improving when its pruning eval is above the same side's two
+  plies up (four when that node was in check). LMP's quiet allowance is
+  scaled by (8 ± `LmpImprovingEighths`) / 8 by the flag; LMR reduces late
+  quiets `LmrNotImprovingPlies` more at a node that is not improving.
+- **status:** **built, queued (coordinator, 2026-11-11 night; R-STC).**
+  Built on phase-4 a95e269 behind the two switches, off, branch
+  tier2/b9-improving; bench unchanged. Design R at STC of each use against
+  the switch-off commit, LMP first (night item 53a), then LMR (53d). Gated
+  behind state/gate-e1.done. R17's kill rule: two H0s among the LMP and LMR
+  uses drop the flag. Nothing is adopted before its verdict.
+- **runtime cost:** one frame store per node, and a comparison with a
+  switch on; UNVERIFIED until the SPRTs' nps reports.
+- **earliest phase:** Phase 4.

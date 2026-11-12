@@ -51,6 +51,7 @@
   X(LmrCorrectionStrength, 64, 0, 128, 6) \
   X(LmpMaxDepth, 4, 1, 8, 1)              \
   X(LmpQuietAllowance, 8, 3, 24, 1)       \
+  X(LmpImprovingEighths, 1, 0, 4, 1)      \
   X(FutilityMaxDepth, 6, 3, 12, 1)        \
   X(FutilityOffset, 86, 30, 200, 8)       \
   X(FutilityGrowth, 50, 25, 140, 5)       \
@@ -62,6 +63,7 @@
   X(SingularMarginPerPly, 6, 2, 12, 1)    \
   X(NoMoveReduceMinDepth, 8, 2, 16, 1)    \
   X(CutNodeLmrPlies, 1, 0, 3, 1)          \
+  X(LmrNotImprovingPlies, 1, 0, 3, 1)     \
   X(HistoryBonusFactor, 25, 12, 50, 2)    \
   X(HistoryBonusCap, 1250, 625, 2500, 94) \
   X(ReplyWeight, 6, 0, 12, 1)             \
