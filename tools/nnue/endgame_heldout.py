@@ -31,6 +31,11 @@ default seed and size.
     endgame_heldout.py generate --tables DIR [--per-class 200] [--seed 20261111] --out FILE.tsv
     endgame_heldout.py overlap FILE.tsv SLICE.vf... [--old-check]
     endgame_heldout.py check FILE.tsv NET[=LAYOUT]... [--json OUT]   (LAYOUT defaults to tools/nnue/s512pp.json)
+    endgame_heldout.py report FILE.tsv CANDIDATE[=LAYOUT] --reference DEFAULT[=LAYOUT] [--flag-ratio 1.15] [--json OUT]
+
+`report` is the network-decision step (owner, 2026-11-11; tools/nnue/gates.sh runs it): both nets' counts, the
+ratio, and "FLAG for the owner's review" when the candidate misjudges more than 1.15 times the current default's
+count. It is reported, never a gate: the exit status is 0 either way.
 """
 import argparse
 import hashlib
@@ -48,6 +53,7 @@ import endgame_check  # noqa: E402
 
 SEED = 20261111
 PER_CLASS = 200
+FLAG_RATIO = 1.15  # owner, 2026-11-11: flag a candidate whose misjudged count rises more than 15% over the default's
 CLASSES_4 = ['KQvKR', 'KQvKP', 'KRvKP', 'KRvKB', 'KRvKN', 'KPvKP', 'KQvKQ', 'KRvKR', 'KBvKP', 'KNvKP',
              'KBNvK', 'KBBvK', 'KNNvK', 'KBPvK', 'KNPvK', 'KPPvK']
 CLASSES_5 = ['KQvKBN', 'KQvKBB', 'KQvKNN']
@@ -220,6 +226,25 @@ def check(rows, nets):
     return out
 
 
+def totals(table):
+    """(misjudged, positions) of one net's check table."""
+    return sum(v[1] for v in table.values()), sum(v[0] for v in table.values())
+
+
+def flag_line(cand, ct, ref, rt, limit=None):
+    """The gate report's line (owner, 2026-11-11: reported in every network decision, not a gate): both counts,
+    their ratio, and a flag for the owner's review when the candidate misjudges more than `limit` times the
+    current default's count (a rise of more than 15%)."""
+    limit = FLAG_RATIO if limit is None else limit
+    ratio = ct[0] / rt[0] if rt[0] else float('inf') if ct[0] else 1.0
+    flagged = ratio > limit
+    line = (f'held-out endgame check: {cand} {ct[0]} of {ct[1]} misjudged, the default {ref} {rt[0]} of {rt[1]}, '
+            f'ratio {ratio:.3f}: ' + (f"FLAG for the owner's review (a rise of more than "
+                                      f'{100 * (limit - 1):.0f}%)' if flagged else
+                                      f'within the flag limit ({limit:.2f})'))
+    return line, flagged
+
+
 def print_check(res):
     names = list(res)
     first = res[names[0]]
@@ -255,7 +280,29 @@ def main(argv=None):
     c.add_argument('positions')
     c.add_argument('nets', nargs='+')
     c.add_argument('--json')
+    r = sub.add_parser('report', help="a candidate against the current default, flagged above FLAG_RATIO")
+    r.add_argument('positions')
+    r.add_argument('candidate')
+    r.add_argument('--reference', required=True, help='the current default net, NET[=LAYOUT]')
+    r.add_argument('--flag-ratio', type=float, default=FLAG_RATIO)
+    r.add_argument('--json')
     a = ap.parse_args(argv)
+    if a.cmd == 'report':
+        rows = read(a.positions)
+        (cand, tc), = check(rows, [a.candidate]).items()
+        (ref, tr), = check(rows, [a.reference]).items()
+        ref = ref if ref != cand else ref + ' (reference)'
+        ct, rt = totals(tc), totals(tr)
+        line, flagged = flag_line(cand, ct, ref, rt, a.flag_ratio)
+        print_check({cand: tc, ref: tr})
+        print(line)
+        if a.json:
+            Path(a.json).write_text(json.dumps({'candidate': cand, 'candidate_misjudged': ct[0], 'reference': ref,
+                                                'reference_misjudged': rt[0], 'positions': ct[1],
+                                                'ratio': ct[0] / rt[0] if rt[0] else None,
+                                                'flag_ratio': a.flag_ratio, 'flagged': flagged}, indent=1) + '\n',
+                                    encoding='utf-8')
+        return 0
     if a.cmd == 'generate':
         rows = generate(a.tables, a.per_class, a.seed)
         write(rows, a.out)

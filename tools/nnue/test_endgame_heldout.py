@@ -4,6 +4,7 @@
 verify_games.py's decoder), the overlap scan finds a planted position and counts material classes, the committed
 position file holds what its docstring says (classes outside the slice's generator, quiet, legal, no repeats,
 per-class counts), and the misjudged rule is endgame_check.py's."""
+import json
 import sys
 import tempfile
 import unittest
@@ -105,6 +106,37 @@ class CommittedFile(unittest.TestCase):
             self.assertNotIn(eh.material_class(cls.split('v')), basic)
         self.assertTrue(all(len(c) - 1 == 4 for c in eh.CLASSES_4))
         self.assertTrue(all(len(c) - 1 == 5 for c in eh.CLASSES_5))
+
+
+class Flag(unittest.TestCase):
+    def test_flag_limit(self):
+        # Owner, 2026-11-11: flagged when the candidate's count rises more than 15% over the default's.
+        self.assertEqual(eh.FLAG_RATIO, 1.15)
+        line, flagged = eh.flag_line('cand', (704, 3800), 'r8brft1', (612, 3800))  # 704 / 612 = 1.1503
+        self.assertTrue(flagged)
+        self.assertIn('cand 704 of 3800', line)
+        self.assertIn('r8brft1 612 of 3800', line)
+        self.assertIn('ratio 1.150', line)
+        self.assertIn("FLAG for the owner's review", line)
+        line, flagged = eh.flag_line('cand', (703, 3800), 'r8brft1', (612, 3800))  # 1.1487
+        self.assertFalse(flagged)
+        self.assertIn('within the flag limit', line)
+        self.assertTrue(eh.flag_line('cand', (1, 10), 'ref', (0, 10))[1])
+        self.assertFalse(eh.flag_line('cand', (0, 10), 'ref', (0, 10))[1])
+
+    def test_report_flags_a_worse_net_and_exits_zero(self):
+        # The fault case on real nets: S512+PP (945) against r8brft1 (612) is flagged; r8brft1 against itself not.
+        nets = HERE.parent.parent / 'nets'
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'r.json'
+            self.assertEqual(eh.main(['report', str(FILE), str(nets / 's512pp.fnet'), '--reference',
+                                      str(nets / 'r8brft1.fnet'), '--json', str(out)]), 0)
+            got = json.loads(out.read_text(encoding='utf-8'))
+            self.assertEqual((got['candidate_misjudged'], got['reference_misjudged'], got['flagged']), (945, 612, True))
+            self.assertEqual(eh.main(['report', str(FILE), str(nets / 'r8brft1.fnet'), '--reference',
+                                      str(nets / 'r8brft1.fnet'), '--json', str(out)]), 0)
+            got = json.loads(out.read_text(encoding='utf-8'))
+            self.assertEqual((got['candidate_misjudged'], got['ratio'], got['flagged']), (612, 1.0, False))
 
 
 class Rule(unittest.TestCase):

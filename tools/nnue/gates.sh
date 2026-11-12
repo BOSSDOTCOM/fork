@@ -12,7 +12,8 @@
 # control's mean |eval| on 4,000 VAL positions; convert at the matched S; the unclamped net's legs; the link clamp
 # (tools/nnue/pp_bound.py) under the clamp-count limit, and its re-check (nothing left to clamp); the clamped
 # net's legs (its parity file); the scale re-match (reported); the endgame check against the control (reported);
-# netcheck of the clamped net. Writes OUT/NAME/{cand.fnet,cand.parity,gates.json, the legs, endgame and netcheck
+# the held-out endgame check against the current default (reported, flagged for the owner's review above 1.15
+# times the default's misjudged count; owner, 2026-11-11); netcheck of the clamped net. Writes OUT/NAME/{cand.fnet,cand.parity,gates.json, the legs, endgame and netcheck
 # outputs}; exit 0 only if every gate passes:
 # - the unclamped net: every leg passes (R-quant equals bullet's quantised.bin and the net file, R-float equals
 #   the trainer, the quantization loss within MAX_LOSS / P99_LOSS cp, max / p99);
@@ -30,7 +31,8 @@
 #
 # Environment: FORK_PYTHON (default the repository's .venv, else python3), FORK_BIN (the engine for netcheck,
 # default build/clang-release/fork[.exe]), FORK_SYZYGY (default ~/fork-data/syzygy/3-4-5), LAYOUT (default
-# tools/nnue/s512pp.json), TRAINED_S (92), MAX_LOSS (21), P99_LOSS (16), MAX_CLAMPED (8).
+# tools/nnue/s512pp.json), TRAINED_S (92), MAX_LOSS (21), P99_LOSS (16), MAX_CLAMPED (8), HELDOUT_REF (the current
+# default network for the held-out check, default nets/r8brft1.fnet: move it on with each promotion).
 set -uo pipefail
 [ $# -eq 6 ] || { sed -n '7,7p' "$0" >&2; exit 2; }
 R=$(cd "$(dirname "$0")/../.." && pwd)
@@ -53,6 +55,7 @@ W=$6/$NAME
 L=$(p "${LAYOUT:-$R/tools/nnue/s512pp.json}")
 SYZ=$(p "${FORK_SYZYGY:-$HOME/fork-data/syzygy/3-4-5}")
 T=$(p "$R/tools/nnue")
+HREF=$(p "${HELDOUT_REF:-$R/nets/r8brft1.fnet}")
 rm -rf "$W"; mkdir -p "$W"
 WP=$(p "$W")
 fail=0
@@ -93,6 +96,12 @@ grep -q '"loss_max"' "$W/legs-clamped.txt" || gate "the clamped net's legs print
 echo "scale re-match: $(match "$WP/cand.fnet")"
 nice "$PY" -I "$T/endgame_check.py" "$(p "$R")" "$SYZ" "$WP/cand.fnet=$L" "$CTRL=$L" >"$W/endgame.txt" 2>&1
 echo "endgame check: $(tail -2 "$W/endgame.txt" | tr '\n' ' ')"
+# The held-out endgame check (owner, 2026-11-11; tools/nnue/endgame_heldout.py): reported, never a gate. The
+# candidate against the current default (HELDOUT_REF), both counted on the same 3,800 positions, flagged for the
+# owner's review above 1.15 times the default's count.
+nice "$PY" -I "$T/endgame_heldout.py" report "$T/endgame_heldout.tsv" "$WP/cand.fnet=$L" --reference "$HREF=$L" \
+  --json "$WP/heldout.json" >"$W/heldout.txt" 2>&1 || echo "held-out check: did not run (heldout.txt)"
+echo "$(tail -1 "$W/heldout.txt")"
 "$BIN" netcheck "$(fork_path_for "$BIN" "$W/cand.parity")" "$(fork_path_for "$BIN" "$W/cand.fnet")" >"$W/netcheck.txt" 2>&1 ||
   gate "netcheck (netcheck.txt)"
 echo "netcheck: $(tail -2 "$W/netcheck.txt" | tr '\n' ' ')"
@@ -102,8 +111,13 @@ echo "cand.fnet sha256 $(sha256sum "$W/cand.fnet" | cut -c1-64)"
 import json, sys
 w, s, fail, clamped, limit = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5])
 stats = [json.loads(x) for x in open(f'{w}/legs-clamped.txt') if x.startswith('{')]
+try:
+    heldout = json.load(open(f'{w}/heldout.json'))
+except (OSError, ValueError):
+    heldout = None
 json.dump({'scale': s, 'gates_failed': bool(fail), 'clamped': clamped, 'max_clamped': limit,
            'clamped_legs': stats[-1] if stats else None, 'endgame': open(f'{w}/endgame.txt').read()[-600:],
+           'heldout': heldout,
            'netcheck': open(f'{w}/netcheck.txt').read()[-300:], 'legs': open(f'{w}/legs-clamped.txt').read()[-600:]},
           open(f'{w}/gates.json', 'w'), indent=1)
 EOF
