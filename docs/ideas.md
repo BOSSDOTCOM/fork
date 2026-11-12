@@ -3072,8 +3072,9 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
   x86-64-v4 TCEC build; plus src/core/cpu_gate.cpp, a baseline-compiled constructor that refuses with a message a
   CPU without the build's instruction sets (no dispatch: .claude/rules/simd.md).
 - **result (2026-11-12):** instructions -4.0% (-3.9% with VNNI), nps +2.1% / +1.6% (VNNI +1.4% / +1.6%), within the
-  3.0% threshold: no significant difference. **status:** not adopted (branch speed3/nnue-avx512, 6e01c57). The CPU
-  check is independent of the speed result and could be adopted on its own for the TCEC build (the owner's call).
+  3.0% threshold: no significant difference. **status:** the output layer not adopted (archive/speed3-nnue-avx512,
+  6e01c57); the CPU check adopted on its own (owner, 2026-11-12, about 5:50 PM EST): src/core/cpu_gate.cpp and its
+  ctest cpu_gate_refusal on phase-4, without the output layer.
 
 ### 169. Frame changes refreshed lazily from per-frame snapshots (speed sprint 3)
 

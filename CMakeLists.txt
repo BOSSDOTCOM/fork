@@ -310,6 +310,24 @@ set_source_files_properties(src/uci/version.cpp PROPERTIES COMPILE_DEFINITIONS "
 
 add_executable(fork src/main.cpp)
 target_link_libraries(fork PRIVATE forkuci forknnue fork_pgo)
+# The startup CPU check (src/core/cpu_gate.cpp): compiled for baseline x86-64
+# without LTO, so it runs on any x86-64 CPU and refuses, with a message, one
+# that lacks what FORK_ARCH (and FORK_VNNI) compiled the rest for. A native
+# build checks nothing; WebAssembly has none.
+if(NOT EMSCRIPTEN)
+  target_sources(fork PRIVATE src/core/cpu_gate.cpp)
+  set(fork_cpu_needs "")
+  if(FORK_ARCH STREQUAL "x86-64-v3")
+    list(APPEND fork_cpu_needs FORK_CPU_NEEDS_V3)
+  elseif(FORK_ARCH STREQUAL "x86-64-v4")
+    list(APPEND fork_cpu_needs FORK_CPU_NEEDS_V4)
+  endif()
+  if(FORK_VNNI)
+    list(APPEND fork_cpu_needs FORK_CPU_NEEDS_VNNI)
+  endif()
+  set_source_files_properties(src/core/cpu_gate.cpp PROPERTIES
+    COMPILE_OPTIONS "-march=x86-64;-mno-avx;-fno-lto" COMPILE_DEFINITIONS "${fork_cpu_needs}")
+endif()
 # `fork version` names the evaluator and, for nnue, the network (its file's
 # stem): the SPRT tools use it for the game gate (tools/cloud/build_pair.sh).
 get_filename_component(fork_net_stem_for_version ${FORK_NET} NAME_WE)
@@ -699,6 +717,14 @@ if(FORK_BUILD_TESTS)
   endif()
 
   # `fork version` says whether this build has LTO (audit-1, P-6).
+  # The startup CPU check's refusal path, forced: it must print its message
+  # and stop before `version` prints anything.
+  if(NOT EMSCRIPTEN)
+    add_test(NAME cpu_gate_refusal COMMAND fork version)
+    set_tests_properties(cpu_gate_refusal PROPERTIES ENVIRONMENT FORK_CPU_GATE_TEST=fail
+      PASS_REGULAR_EXPRESSION "needs CPU features this machine lacks.*forced by FORK_CPU_GATE_TEST"
+      FAIL_REGULAR_EXPRESSION "variant")
+  endif()
   add_test(NAME version_lto COMMAND fork version)
   if(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
     set_tests_properties(version_lto PROPERTIES PASS_REGULAR_EXPRESSION "\nlto on[\r\n]")
