@@ -251,6 +251,14 @@ tool_tests() {  # python | all
   "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
   # The CalibratedScore display (owner, 2026-11-12): every harness that plays or searches with Fork sets it off.
   "$py" -I -B tools/check_score_display_off.py . >>"$log" 2>&1 || fail "tool tests: tools/check_score_display_off.py"
+  # Branch workflows too (owner, 2026-11-13): its workflow rule (every workflow that plays games runs
+  # .github/ci/score-display-check.sh); the dispatchers' guard, tools/jobs/score_display_guard.py, is tested with
+  # tools/jobs below.
+  "$py" -I -B -m unittest discover -s tools -p 'test_check_score_display_off.py' >>"$log" 2>&1 ||
+    fail "tool tests: tools/test_check_score_display_off.py"
+  # The cloud worker's guard (tools/gcp/worker.py): a build with the option runs only from a checkout that forces it off.
+  "$py" -I -B -m unittest discover -s tools/gcp -p 'test_worker.py' -k ScoreDisplayTest >>"$log" 2>&1 ||
+    fail "tool tests: tools/gcp/test_worker.py (ScoreDisplayTest)"
   # The gauntlet's report (owner, 2026-11-08): the reference opponent kept out of Ordo's fit.
   "$py" -I -B -m unittest discover -s tools/gauntlet -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/gauntlet"
   # The job supervisor and the run-ID ledger (owner, 2026-11-05): whole-tree stops, one lock per type.
@@ -290,10 +298,11 @@ tool_tests() {  # python | all
   # The push gate (owner, 2026-11-05): a planted hit of each kind blocks the scan and the push.
   bash scripts/test_scan_push.sh >>"$log" 2>&1 || fail "tool tests: scripts/test_scan_push.sh (the push gate)"
   [ "$1" = all ] || return 0
-  bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
+  case $py in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; *) py=$(command -v "$py") ;; esac
+  # tools/sprt.sh runs the CalibratedScore guard (tools/jobs/score_display_guard.py) with $PYTHON.
+  PYTHON=$py bash tools/test_sprt.sh >>"$log" 2>&1 || fail "tool tests: tools/test_sprt.sh"
   # audit-1 U-18: no ratings after a failed or short fastchess run, against a fake fastchess and ordo.
   bash tools/test_elo_gauntlet.sh >>"$log" 2>&1 || fail "tool tests: tools/test_elo_gauntlet.sh"
-  case $py in */*) py=$(cd "$(dirname "$py")" && pwd)/$(basename "$py") ;; *) py=$(command -v "$py") ;; esac
   # The GitHub SPRT driver against a fake gh (its wait, stop and commit-check rules; design R's kinds,
   # futility stop, caps and the two-try limit), and the head-to-head driver on the same fake.
   PYTHON=$py bash tools/github/test_sprt_run.sh >>"$log" 2>&1 || fail "tool tests: tools/github/test_sprt_run.sh"

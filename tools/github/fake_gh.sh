@@ -15,7 +15,8 @@
 # "workflow view" shows no name input, and a dispatch with it is refused as GitHub does); twin (if present:
 # another lane's run of the same commits and stage, named other-lane, is dispatched right after each of ours);
 # partial.<id> (that run's shard 0 is left "running") and short.<id> (its shard 0 has one pair fewer than its
-# planned rounds).
+# planned rounds). Since 2026-11-13 (CalibratedScore off in every harness): ref.<name> holds the commit the
+# ref <name> points to (the driver checks REF's commit before each dispatch).
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
 # flaky.<kind>: that many failures still to inject for api, conclusion or download (2026-11-08).
@@ -42,7 +43,8 @@ case "$1 $2" in
         echo "${n:-0}" ;;
       *)
         flake api
-        grep -qx "${2##*/}" "$st/commits" ;;
+        # ref.<name>: the commit a ref (the driver's REF) points to, printed as gh --jq .sha prints it.
+        if [ -f "$st/ref.${2##*/}" ]; then cat "$st/ref.${2##*/}"; else grep -qx "${2##*/}" "$st/commits"; fi ;;
     esac ;;
   "run list")
     if [[ "$*" == *displayTitle* ]]; then

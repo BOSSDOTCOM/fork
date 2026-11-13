@@ -118,6 +118,10 @@ jobs:
           git config --global --add safe.directory "$PWD"
           head=$(git rev-parse HEAD)
           CXX=g++ bash tools/cloud/build_pair.sh . "$head" "$head" engines
+      # CalibratedScore (owner, 2026-11-13): if the engine has the option (default on), this ref's harness must set it
+      # off (tools/check_score_display_off.py), or the run stops before any game.
+      - name: CalibratedScore forced off by this harness (if the engine has the option)
+        run: bash .github/ci/score-display-check.sh engines/base/fork
       - uses: actions/upload-artifact@v4
         with: {name: fork, path: engines/base/fork, retention-days: 7}
 
@@ -323,6 +327,11 @@ jobs:
         run: |
           CXX=g++ bash tools/cloud/build_pair.sh . "$OLD_SHA" "$NEW_SHA" engines
           { echo "### Anchor check: the builds (base = OLD, test = NEW)"; echo '```'; cat engines/meta.env; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
+      # CalibratedScore (owner, 2026-11-13): if OLD or NEW has the option (default on), this ref's harness must set it
+      # off (tools/check_score_display_off.py), or the run stops before any game; a ref older than the option is
+      # refused by the dispatcher (tools/jobs/score_display_guard.py).
+      - name: CalibratedScore forced off by this harness (if the engines have the option)
+        run: bash .github/ci/score-display-check.sh engines/base/fork engines/test/fork
       - uses: actions/upload-artifact@v4
         with: {name: engines, path: engines, retention-days: 7}
 

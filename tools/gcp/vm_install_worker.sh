@@ -17,6 +17,21 @@ commit=${1:?usage: vm_install_worker.sh TOOLS_COMMIT [--no-start]}
 W=${FORK_WORKER_ROOT:-/opt/fork}
 [ -d "$W/src/.git" ] || { echo "vm_install_worker.sh: run vm_setup.sh first ($W/src missing)" >&2; exit 1; }
 git -C "$W/src" fetch -q origin '+refs/heads/*:refs/remotes/origin/*'
+# CalibratedScore (owner, 2026-11-13): a tools commit that does not force the option off is refused, before the
+# checkout, while any build here has it (tools/jobs/score_display_guard.py, beside this script).
+guard=$(cd "$(dirname "$0")/.." && pwd)/jobs/score_display_guard.py
+[ -f "$guard" ] || { echo "vm_install_worker.sh: no $guard" >&2; exit 1; }
+builds=()
+for env in "$W"/builds/*/build.env; do
+  [ -f "$env" ] || continue
+  c=$(sed -n 's/^commit=//p' "$env")
+  [ -n "$c" ] || { echo "vm_install_worker.sh: $env names no commit" >&2; exit 1; }
+  builds+=("$c")
+done
+if ((${#builds[@]})); then
+  python3 -I -B "$guard" --repo "$W/src" --ref "$commit" "${builds[@]}" ||
+    { echo "vm_install_worker.sh: tools commit $commit refused (above); nothing changed" >&2; exit 1; }
+fi
 if [ -d "$W/tools/.git" ] || [ -f "$W/tools/.git" ]; then
   git -C "$W/tools" checkout -q --detach "$commit"
 else

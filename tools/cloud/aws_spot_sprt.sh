@@ -67,6 +67,17 @@ test=$(git -C "$here" rev-parse --verify "$test^{commit}")
 # The scripts the instance runs come from this checkout's commit (it and the
 # two commits must be pushed: the instance clones the public repository).
 tools=$(git -C "$here" rev-parse HEAD)
+# CalibratedScore (owner, 2026-11-13): if BASE or TEST has the option (default on), the tools commit the instances
+# run (run_shard.sh) must force it off (tools/jobs/score_display_guard.py), or nothing is launched.
+py=${PYTHON:-}
+if [ -z "$py" ]; then
+  for c in python3 python; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c pass >/dev/null 2>&1; then py=$c; break; fi
+  done
+fi
+[ -n "$py" ] || { echo "aws_spot_sprt.sh: no Python for tools/jobs/score_display_guard.py (set PYTHON)" >&2; exit 2; }
+guard=$(cd "$here" && "$py" -I -B tools/jobs/score_display_guard.py --repo . --ref "$tools" "$base" "$test" 2>&1) ||
+  { echo "aws_spot_sprt.sh: $guard" >&2; exit 2; }
 per=$(( (games + 2 * shards - 1) / (2 * shards) * 2 ))
 run=sprt-$(date -u +%Y%m%dT%H%M%SZ)-${test:0:7}-vs-${base:0:7}
 

@@ -28,7 +28,10 @@
 # owner's rule of 2026-11-11: TT-policy tests at a pressure-matched Hash): --hash MB sets both engines' Hash for every
 # kind and is part of the declared design (a restart with another Hash is refused); a bad value or a differing HASH
 # is refused before any dispatch; without it the default (16; 64 at LTC) is unchanged. Since 2026-11-12 the custom
-# (positional) form writes the verdict file too: H1 accepted, H0 accepted, or capped at its last stage. Uses python3 (or $PYTHON) for
+# (positional) form writes the verdict file too: H1 accepted, H0 accepted, or capped at its last stage. Since 2026-11-13 (owner:
+# CalibratedScore off in every harness, branch workflows included): a REF older than c7a61ea (no
+# tools/check_score_display_off.py) is refused before any dispatch when an engine has the option, and allowed when
+# neither has it. Uses python3 (or $PYTHON) for
 # the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
@@ -57,6 +60,7 @@ setup() {  # label busy ptnml
   echo "$2" >"$st/busy"
   echo 500 >"$st/latest"
   echo "$sha" >"$st/commits"
+  echo "$sha" >"$st/ref.test"  # REF (test) points to this repository's HEAD, which forces CalibratedScore off
   echo "$3" >"$st/ptnml"
   : >"$st/dispatches"
 }
@@ -416,6 +420,33 @@ for v in 0 08 12x -4 4194305 ''; do
 done
 drive r-hash-bad --kind search --idea h4 "$sha" "$sha" --hash
 check "--hash with no value is refused" eval '[ "$(rc r-hash-bad)" = 1 ] && [ "$(dispatches r-hash-bad)" = 0 ] && grep -qF -- "--hash needs a value" "$tmp/r-hash-bad/out"'
+
+# CalibratedScore (owner, 2026-11-13): sprt.yml and its tools come from REF, the engines from BASE and TEST. REF at
+# c7a61ea's parent has no tools/check_score_display_off.py, so it would play HEAD (which has the option, default on)
+# with the option on: refused before any dispatch. With both engines from before c7a61ea it is allowed. Needs
+# c7a61ea's parent in this clone (a shallow clone skips these checks).
+pre=$(git -C "$here" rev-parse --verify --quiet c7a61ea987595b7de3b105098b27e7360a73763f^)
+if [ -n "$pre" ]; then
+  setup oldref 0 "$strong"
+  echo "$pre" >"$tmp/oldref/ref.test"
+  drive oldref "$sha" "$sha" 0 5
+  check "a REF older than CalibratedScore with an engine that has it: refused before any dispatch" eval \
+    '[ "$(rc oldref)" = 1 ] && [ "$(dispatches oldref)" = 0 ] && grep -q "REF test ($pre): score_display_guard: refused" "$tmp/oldref/out"'
+  setup oldboth 0 "$strong"
+  echo "$pre" >"$tmp/oldboth/ref.test"
+  echo "$pre" >>"$tmp/oldboth/commits"
+  drive oldboth "$pre" "$pre" 0 5
+  check "the same REF with both engines older than the option: allowed (H1 after one stage)" eval \
+    '[ "$(rc oldboth)" = 0 ] && [ "$(dispatches oldboth)" = 1 ] && grep -q "no engine has CalibratedScore" "$tmp/oldboth/out"'
+  setup oldtest 0 "$strong"
+  echo "$pre" >"$tmp/oldtest/ref.test"
+  echo "$pre" >>"$tmp/oldtest/commits"
+  drive oldtest "$pre" "$sha" 0 5
+  check "the same REF with only the test engine newer: refused" eval '[ "$(rc oldtest)" = 1 ] && [ "$(dispatches oldtest)" = 0 ]'
+  check "a REF that forces it off is checked and named in the log" grep -q "REF test ($sha): score_display_guard: allowed: harness" "$tmp/h1/out"
+else
+  echo "SKIP  CalibratedScore REF checks: c7a61ea's parent is not in this clone"
+fi
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"

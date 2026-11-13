@@ -12,11 +12,19 @@ This check walks the tracked files under tools/, scripts/, bench/ and .github/ a
 launches an engine: a fastchess command (`-engine` with `cmd=`), or a UCI handshake (waiting for `uciok`,
 python-chess's `popen_uci`, or writing `uci` and waiting for `readyok`). Each one must set the option off
 (`option.CalibratedScore=false` for fastchess, `setoption name CalibratedScore value false` or python-chess's
-`{'CalibratedScore': False}` over UCI), or be listed in EXEMPT with the reason it cannot read a Fork score.
+`{'CalibratedScore': False}` over UCI, or the pair `('CalibratedScore', 'false')` a setoption loop sends), or be
+listed in EXEMPT with the reason it cannot read a Fork score.
 Builds without the option are unaffected: fastchess 1.8.2 warns "doesn't have option" and plays on (checked
 2026-11-12 with the pinned release), and Fork answers an unknown setoption with one info string.
 
-    check_score_display_off.py [REPO]     exit 0 if every launcher is covered, 1 with the list otherwise
+Workflows (owner, 2026-11-13: "make every harness force the option off by default, including branch workflows"):
+every workflow under .github/workflows that plays games with Fork (it names fastchess, cutechess, run_shard.sh,
+elo_gauntlet.sh or tools/sprt.sh) must also run .github/ci/score-display-check.sh on the engines it built, before
+its games: if an engine advertises CalibratedScore, that step runs this check on the run's own harness and stops
+the run if it fails. A later branch's workflow thereby checks itself; a branch older than this rule cannot, which is
+why every dispatcher also calls tools/jobs/score_display_guard.py before it dispatches.
+
+    check_score_display_off.py [REPO]     exit 0 if every launcher and workflow is covered, 1 with the list otherwise
 """
 import re
 import subprocess
@@ -27,8 +35,12 @@ ROOTS = ('tools/', 'scripts/', 'bench/', '.github/')
 LAUNCH = [re.compile(r'-engine\b[^\n]*cmd='), re.compile(r"'-engine',\s*f?'cmd="), re.compile(r'\buciok\b'),
           re.compile(r'popen_uci'), re.compile(r"['\"]uci\\n")]
 OFF = [re.compile(r'option\.CalibratedScore=false'), re.compile(r'setoption name CalibratedScore value false'),
-       re.compile(r"\{'CalibratedScore': False\}")]
+       re.compile(r"\{'CalibratedScore': False\}"),
+       # a (name, value) pair fed to a setoption loop (tools/nnue/uho_diag.py, 2026-11-13)
+       re.compile(r"\(\s*['\"]CalibratedScore['\"]\s*,\s*['\"]false['\"]\s*\)")]
 EXEMPT = {
+    '.github/ci/score-display-check.sh': "reads each built engine's option list (uci, quit): no search, no score; it "
+                                         'runs this check when an engine has the option',
     '.github/workflows/ci.yml': "counts the tuning build's option lines (uci, quit): no search, no score",
     'scripts/uci-smoke.sh': 'sends only uci, isready and quit: no search, no score',
     'tools/gauntlet/build_anchor.sh': 'checks an anchor engine answers uciok; never runs Fork',
@@ -38,6 +50,11 @@ EXEMPT = {
                                          'tools/measure/game_replay.py',
     'tools/check_score_display_off.py': 'this check',
 }
+
+WORKFLOWS = '.github/workflows/'
+PLAYS = [re.compile(r'\bfastchess\b'), re.compile(r'\bcutechess'), re.compile(r'\brun_shard\.sh\b'),
+         re.compile(r'\belo_gauntlet\.sh\b'), re.compile(r'\btools/sprt\.sh\b')]
+BELT = re.compile(r'^\s*(?:run:\s*)?bash \.github/ci/score-display-check\.sh\s+\S', re.M)
 
 
 def tracked(repo):
@@ -60,17 +77,36 @@ def launchers(repo):
     return found
 
 
+def workflows_without_belt(repo):
+    """The workflows that play games with Fork but never run .github/ci/score-display-check.sh."""
+    found = []
+    for f in tracked(repo):
+        if not f.startswith(WORKFLOWS) or Path(f).suffix not in ('.yml', '.yaml'):
+            continue
+        try:
+            text = (repo / f).read_text(encoding='utf-8')
+        except (UnicodeDecodeError, FileNotFoundError, IsADirectoryError):
+            continue
+        if any(r.search(text) for r in PLAYS) and not BELT.search(text):
+            found.append(f)
+    return found
+
+
 def main():
     repo = Path(sys.argv[1] if len(sys.argv) > 1 else Path(__file__).resolve().parents[1])
     missing = [f for f, off in launchers(repo) if not off and f not in EXEMPT]
     stale = [f for f in EXEMPT if not (repo / f).exists()]
+    unbelted = workflows_without_belt(repo)
     for f in missing:
         print(f'check_score_display_off: {f} launches an engine without setting CalibratedScore off', file=sys.stderr)
     for f in stale:
         print(f'check_score_display_off: EXEMPT lists {f}, which does not exist', file=sys.stderr)
-    if missing or stale:
+    for f in unbelted:
+        print(f'check_score_display_off: {f} plays games with Fork but never runs .github/ci/score-display-check.sh '
+              'on the engines it built', file=sys.stderr)
+    if missing or stale or unbelted:
         return 1
-    print(f'check_score_display_off: ok ({len(launchers(repo))} launchers, {len(EXEMPT)} exempt)')
+    print(f'check_score_display_off: ok ({len(launchers(repo))} launchers, {len(EXEMPT)} exempt; workflows checked)')
     return 0
 
 

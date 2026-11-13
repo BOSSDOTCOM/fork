@@ -38,6 +38,7 @@ setup() {  # label
   echo 0 >"$st/busy"
   echo 500 >"$st/latest"
   printf '%s\n' "$c20" "$c40" "$c60" "$c80" >"$st/commits"
+  git -C "$here" rev-parse HEAD >"$st/ref.test"  # REF (test): this repository's HEAD (sprt_run.sh checks it)
   echo "$even" >"$st/ptnml"
   : >"$st/dispatches"
 }

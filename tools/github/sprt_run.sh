@@ -85,6 +85,11 @@
 #   folder holds that run's download (s<stage>/run_id); RUN_ID is accepted
 #   only for a run the ledger already records for that stage (a run
 #   attributed after the fact goes in with ledger.py add --source import).
+# Rule (owner, 2026-11-13: CalibratedScore off in every harness, branch workflows included):
+# - before each dispatch, REF's commit on GitHub must force CalibratedScore off if BASE or TEST has the
+#   option (tools/jobs/score_display_guard.py: REF holds tools/check_score_display_off.py and it passes on
+#   REF's tree). sprt.yml and its tools come from REF while the engines are built from BASE and TEST, so a
+#   ref older than c7a61ea would play a new engine with the option on; such a dispatch is refused.
 #
 # Environment: TC (default 8+0.08), HASH (16; 64 at LTC for the kinds; --hash sets it, and refuses a HASH
 # that differs),
@@ -310,6 +315,23 @@ room() {
   done <<<"$list"
   [ $((GH_JOBS - held)) -ge $((SHARDS + 1)) ]
 }
+# CalibratedScore (owner, 2026-11-13; the rule in the header): REF's commit on GitHub, fetched if this clone lacks
+# it, must force the option off when BASE or TEST has it. Checked before each dispatch (REF may move between
+# stages); a commit already checked is not checked again.
+ref_checked=
+guard_ref() {
+  local sha why
+  sha=$(gh_retry "REF $REF's commit" "$GH" api "repos/$REPO/commits/$REF" --jq .sha) || stop "REF $REF is not on GitHub ($REPO)"
+  sha=$(printf '%s\n' "$sha" | tail -1)
+  [[ $sha =~ ^[0-9a-f]{40}$ ]] || stop "REF $REF: GitHub gave no commit ('$sha')"
+  [ "$sha" = "$ref_checked" ] && return 0
+  git cat-file -e "$sha^{commit}" 2>/dev/null || git fetch -q origin "$sha" >/dev/null 2>&1 ||
+    stop "REF $REF's commit $sha is not in this clone and could not be fetched"
+  why=$("$py" -I -B tools/jobs/score_display_guard.py --repo . --ref "$sha" "$base" "$test" 2>&1) ||
+    stop "REF $REF ($sha): $(printf '%s\n' "$why" | tail -1)"
+  say "REF $REF ($sha): $(printf '%s\n' "$why" | tail -1)"
+  ref_checked=$sha
+}
 # The newest sprt runs, "ID TITLE" per line.
 runs() { "$GH" run list -R "$REPO" -w sprt.yml -L 30 --json databaseId,displayTitle \
   --jq '.[] | "\(.databaseId) \(.displayTitle)"' 2>/dev/null; }
@@ -324,6 +346,7 @@ for stage in $(seq "$first" "$last"); do
     say "stage $stage: waiting for run $id (RUN_ID, in the ledger)"
   else
     until room; do sleep "$POLL"; done
+    guard_ref
     # The SPRT's name in the run's title (bug review 2026-11-11, T6): two SPRTs of one commit pair then never take
     # each other's runs. Only when REF's sprt.yml takes the input name (an older one refuses it); otherwise, or
     # if sprt.yml cannot be read, the title without it, as before.

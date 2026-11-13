@@ -92,6 +92,12 @@ jobs:
           BASE_SHA: ${{ steps.plan.outputs.base_sha }}
           TEST_SHA: ${{ steps.plan.outputs.test_sha }}
         run: CXX=g++ bash tools/cloud/build_pair.sh . "$BASE_SHA" "$TEST_SHA" engines
+      # CalibratedScore (owner, 2026-11-13): if either engine has the option (default on), this ref's harness (the
+      # shards' tools/cloud/run_shard.sh and the rest) must set it off (tools/check_score_display_off.py), or the
+      # run stops before any game; a ref older than the option is refused by the dispatcher
+      # (tools/jobs/score_display_guard.py), since its own copy of this file has no such step.
+      - name: CalibratedScore forced off by this harness (if the engines have the option)
+        run: bash .github/ci/score-display-check.sh engines/base/fork engines/test/fork
       - uses: actions/upload-artifact@v4
         with: {name: engines, path: engines, retention-days: 7}
 

@@ -6,6 +6,7 @@
 import importlib
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -114,6 +115,72 @@ class WorkerTest(unittest.TestCase):
         self.assertEqual(json.loads((self.root / 'state' / 'items' / 'a-slice.resumes').read_text())['count'], 1)
         self.assertEqual(self.status()['running'], 'a-slice')
         self.w.jobctl_cmd('stop', 'a-slice', '--grace', '1')
+
+
+class ScoreDisplayTest(unittest.TestCase):
+    """The worker's CalibratedScore guard (owner, 2026-11-13), on any platform: an item running a build whose commit
+    has the option starts only from a tools checkout that forces it off. Uses this repository's history (skipped
+    without c7a61ea's parent)."""
+    ADOPTED = 'c7a61ea987595b7de3b105098b27e7360a73763f'
+
+    def setUp(self):
+        self.repo = HERE.parents[1]
+        self.pre = subprocess.run(['git', '-C', str(self.repo), 'rev-parse', '--verify', '--quiet', self.ADOPTED + '^'],
+                                  capture_output=True, text=True).stdout.strip()
+        if not self.pre:
+            self.skipTest("c7a61ea's parent is not in this clone")
+        self.head = subprocess.run(['git', '-C', str(self.repo), 'rev-parse', 'HEAD'], capture_output=True,
+                                   text=True).stdout.strip()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        os.environ['FORK_WORKER_ROOT'] = str(self.root)
+        os.environ['FORK_JOBS'] = str(self.root / 'jobs')
+        sys.path.insert(0, str(HERE))
+        import worker
+        self.w = importlib.reload(worker)
+        self.w.GUARD_REPO = self.repo
+        self.old_tools = self.root / 'old-tools'  # a checkout without tools/check_score_display_off.py
+        self.old_tools.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def item(self, commit):
+        b = self.root / 'builds' / 'b1'
+        b.mkdir(parents=True, exist_ok=True)
+        if commit:
+            (b / 'build.env').write_text(f'commit={commit}\narch=x86-64-v3\n')
+        return {'name': 'b-label', 'argv': ['python3', 'label.py', '--engine', str(self.root / 'builds') + '/b1/fork']}
+
+    def test_build_with_the_option_and_an_old_checkout_refused(self):
+        self.w.TOOLS_TREE = self.old_tools
+        why = self.w.score_display_refusal(self.item(self.head))
+        self.assertIsNotNone(why)
+        self.assertIn('refused', why)
+
+    def test_build_with_the_option_and_this_checkout_allowed(self):
+        self.w.TOOLS_TREE = self.repo
+        self.assertIsNone(self.w.score_display_refusal(self.item(self.head)))
+
+    def test_build_without_the_option_allowed_anywhere(self):
+        self.w.TOOLS_TREE = self.old_tools
+        self.assertIsNone(self.w.score_display_refusal(self.item(self.pre)))
+
+    def test_build_without_build_env_refused(self):
+        self.w.TOOLS_TREE = self.repo
+        self.assertIn('no build.env commit', self.w.score_display_refusal(self.item(None)))
+
+    def test_item_without_a_build_needs_nothing(self):
+        self.w.TOOLS_TREE = self.old_tools
+        self.assertIsNone(self.w.score_display_refusal({'name': 'x', 'argv': ['bash', '-c', 'true']}))
+
+    def test_refused_item_is_failed_without_starting(self):
+        self.w.TOOLS_TREE = self.old_tools
+        (self.root / 'state' / 'items').mkdir(parents=True)
+        self.assertFalse(self.w.start(dict(self.item(self.head), type='tb', **{'class': 'b'})))
+        failed = json.loads((self.root / 'state' / 'items' / 'b-label.failed').read_text())
+        self.assertIn('CalibratedScore', failed['why'])
+        self.assertFalse((self.root / 'jobs').exists())
 
 
 if __name__ == '__main__':

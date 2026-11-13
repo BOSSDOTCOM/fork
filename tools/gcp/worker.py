@@ -23,6 +23,9 @@ tools/gcp/gcp.py push replaces the folder's contents). An item:
 - a running item that is "preemptible" (the filler) is stopped (jobctl stop: SIGTERM, then the whole tree)
   when a more urgent item is available; it resumes later. An item removed from the queue while it runs is
   stopped the same way ("withdrawn").
+- CalibratedScore (owner, 2026-11-13): an item whose argv names a build under $W/builds/ starts only if the build's
+  commit (its build.env) lacks the option or this tools checkout forces it off (tools/jobs/score_display_guard.py);
+  otherwise it is failed with the reason, before any process starts.
 - $W/state/worker.json (rewritten every pass) and $W/state/events.jsonl (appended) are what the PC reads.
 
     python3 -I worker.py run [--interval 30]     the service's loop
@@ -46,6 +49,9 @@ import paths  # noqa: E402
 QUEUE, STATE = W / 'queue', W / 'state'
 ITEMS = STATE / 'items'
 JOBCTL = HERE.parent / 'jobs' / 'jobctl.py'
+GUARD = HERE.parent / 'jobs' / 'score_display_guard.py'
+TOOLS_TREE = HERE.parents[1]  # the worker's tools checkout ($W/tools, a worktree of $W/src)
+GUARD_REPO = TOOLS_TREE  # resolves the builds' commits (the same objects as $W/src)
 CLASSES = ('a', 'b', 'c')
 
 
@@ -168,8 +174,42 @@ def finish(name, item):
         jobctl.write_json(jobctl.job_path(name), r)
 
 
+def score_display_refusal(item):
+    """None if the item may start, else why not (owner, 2026-11-13: CalibratedScore off in every harness). An item
+    whose argv names a build under $W/builds/ runs that build with this worker's tools checkout; if the build's commit
+    (its build.env) has the option, the checkout must force it off (tools/jobs/score_display_guard.py --tree)."""
+    prefix = str(W / 'builds') + '/'
+    commits = []
+    for a in map(str, item['argv']):
+        if not a.startswith(prefix):
+            continue
+        build = W / 'builds' / a[len(prefix):].split('/')[0]
+        env = read_text(build / 'build.env')
+        commit = next((ln[7:].strip() for ln in env.splitlines() if ln.startswith('commit=')), '')
+        if not commit:
+            return f'{build} has no build.env commit: cannot tell whether it has CalibratedScore'
+        commits.append(commit)
+    if not commits:
+        return None
+    r = subprocess.run([sys.executable, '-I', '-B', str(GUARD), '--repo', str(GUARD_REPO), '--tree', str(TOOLS_TREE),
+                        *sorted(set(commits))], capture_output=True, text=True)
+    return None if r.returncode == 0 else (r.stdout + r.stderr).strip()[-400:] or f'the guard exited {r.returncode}'
+
+
+def read_text(path):
+    try:
+        return Path(path).read_text(encoding='utf-8')
+    except OSError:
+        return ''
+
+
 def start(item):
     name = item['name']
+    why = score_display_refusal(item)
+    if why:
+        write_json(ITEMS / f'{name}.failed', {'at': now(), 'why': f'CalibratedScore: {why}'})
+        event('failed', name=name, why=f'CalibratedScore: {why}')
+        return False
     log = W / 'logs' / f'{name}.log'
     log.parent.mkdir(parents=True, exist_ok=True)
     rc, out = jobctl_cmd('start', item['type'], name, '--log', str(log), '--cwd', str(W), '--', *item['argv'])
