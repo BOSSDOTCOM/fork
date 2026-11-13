@@ -457,6 +457,8 @@ committed (they stay in `~/fork-data/uho-diag`, outside the repository;
 the tool reads them by path). Only the positions and the scores in the PGN
 comments are read; nothing of Stockfish's code or network is involved.
 
+**Analysis oracle: Stockfish 19 release binary** (owner's file `stockfish-windows-x86-64-universal.exe`, `uci` id "Stockfish 19", SHA-256 45bc8e4969147db9c2eb533810637994619bff0eacc81ccfd9854394901bcbd0, 103,046,300 bytes; owner, 2026-11-13). Run locally, read-only and never copied, as a second judge in the major-trade diagnostic (fork-jobs/night/reviews/major-trades-2026-11-13.md on the dev machine): `go nodes 2000000 searchmoves` on positions from the UHO/SF19 gauntlet games, one thread at below-normal priority. Its scores are diagnostic only: never training data, never labels, never a gate, never committed. No Stockfish source or network file was opened or extracted.
+
 ## Operations tooling (not linked into Fork)
 
 **Fork Control Center** (`tools/control_center/`, branch tools/control-center, 2026-11-06): a Windows
