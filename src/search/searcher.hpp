@@ -295,7 +295,7 @@ struct SearchQuota {
   X(use_improving_lmp, UseImprovingLmp, true)            \
   X(use_improving_lmr, UseImprovingLmr, true)            \
   X(use_centred_lmr_history, UseCentredLmrHistory, true) \
-  X(use_lmr_history_inputs, UseLmrHistoryInputs, false)
+  X(use_lmr_history_inputs, UseLmrHistoryInputs, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

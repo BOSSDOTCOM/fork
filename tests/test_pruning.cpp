@@ -845,7 +845,7 @@ TEST_CASE("pruning", "LMR history inputs: a table's weighted share by hand and a
 TEST_CASE("pruning",
           "LMR history inputs: still correct, change R20's tree, equal R20 without the deeper input") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_lmr_history_inputs);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_lmr_history_inputs);  // on at the SPRT test commit
   SearchSwitches r20;
   r20.use_centred_lmr_history = true;
   r20.use_lmr_history_inputs = false;
