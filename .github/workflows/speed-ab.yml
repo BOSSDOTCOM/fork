@@ -1,0 +1,301 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# The runner A/B speed test (owner, 2026-11-13; think tank decision 5 of 2026-11-07, DESIGN.md §6;
+# docs/history/phase-4/perf-log.md, speed sprint 4): two commits of this repository, built the way
+# the SPRT builds them (update.sh, Ubuntu 22.04, gcc 11.4, CXX=g++, a pinned target, never native),
+# timed on 1-4 hosted runners at once.
+#
+# - build: builds A and B once (one build per distinct commit; A = B gives an A/A run on one
+#   binary), checks each binary's target and identity (`fork version`: the commit it was built
+#   from, clean) and **bench identity** (nodes and signature equal): a run whose benches differ is
+#   refused unless the input allow-bench-diff says otherwise, and is then judged by nps only.
+# - ab (one job per runner): the same two binaries, interleaved A B / B A rounds of `fork bench`
+#   pinned to the runner's last core through bench/ab_search.py (identity on every run, SHA-256,
+#   --same-nodes), its nps rule (median and best both beyond max(3%, twice the spread)), plus
+#   cycles and instructions per bench from `perf stat` if the runner's VM exposes hardware counters
+#   (detected on each runner; the summary says when not), judged by the 1% cycles-per-node rule.
+# - summary: tools/cloud/speed_ab_merge.py pools the runners (each scaled to its own median) into
+#   one verdict line; the raw results are the artifact speed-ab-results.
+#
+# The tools come from the workflow's own commit (main when dispatched), never from A or B: the
+# workflow and the scripts it calls change together, and the engines are used only through
+# `fork version` and `fork bench`, so A and B may be any commits since Phase 3 (phase-4 included)
+# however far main lags. workflow_dispatch needs this file on the default branch.
+#
+# A pull request that changes this file or its tools runs a self-test instead: the tools' unit
+# tests, then an A/A run of the pull request's head (2 runners, 3 rounds), which must end in a
+# verdict line. Inputs reach the shell only through environment variables.
+name: speed-ab
+run-name: >-
+  ${{ github.event_name == 'pull_request' && format('speed-ab self-test (PR #{0})', github.event.pull_request.number)
+  || format('speed-ab {0} {1} {2}{3}', inputs.a, inputs.b, inputs.arch, inputs.name != '' && format(' ({0})', inputs.name) || '') }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      a: {description: "A commit (SHA, branch or tag): the base", required: true}
+      b: {description: "B commit (SHA, branch or tag): the candidate", required: true}
+      arch:
+        description: "FORK_ARCH for both builds (x86-64-v4 needs AVX-512 on every runner)"
+        type: choice
+        options: [x86-64-v3, x86-64-v4]
+        default: x86-64-v3
+      rounds: {description: "Interleaved rounds per runner (2-100; each round is one A and one B bench)", required: true, default: "20"}
+      runners:
+        description: "Runners, each its own A/B on its own CPU"
+        type: choice
+        options: ["1", "2", "3", "4"]
+        default: "4"
+      allow-bench-diff:
+        description: "Allow benches that differ (a search A/B, judged by nps only)"
+        type: boolean
+        default: false
+      name: {description: "A label, at the end of the run title only", required: false, default: ""}
+  pull_request:
+    paths:
+      - .github/workflows/speed-ab.yml
+      - bench/ab_search.py
+      - tools/cloud/speed_ab_merge.py
+      - tools/cloud/test_speed_ab.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    speed-ab-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)
+    || format('{0}-{1}-{2}', inputs.a, inputs.b, inputs.arch) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash  # -e and pipefail, also in the build container
+
+jobs:
+  build:
+    if: github.repository == 'BOSSDOTCOM/fork'
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    timeout-minutes: 45
+    outputs:
+      a_sha: ${{ steps.plan.outputs.a_sha }}
+      b_sha: ${{ steps.plan.outputs.b_sha }}
+      same_commit: ${{ steps.plan.outputs.same_commit }}
+      runners: ${{ steps.plan.outputs.runners }}
+      runner_count: ${{ steps.plan.outputs.runner_count }}
+      rounds: ${{ steps.plan.outputs.rounds }}
+      a_variant: ${{ steps.build.outputs.a_variant }}
+      b_variant: ${{ steps.build.outputs.b_variant }}
+    steps:
+      - name: "Toolchain (Ubuntu 22.04, gcc 11.4, CMake 3.22, as TCEC and the SPRT builds)"
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q build-essential cmake git ca-certificates python3
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: The tools' tests (bench/ab_search.py, tools/cloud/speed_ab_merge.py)
+        run: python3 -I -B -m unittest discover -s tools/cloud -p 'test_speed_ab*.py' -v
+      - name: Plan
+        id: plan
+        env:
+          A: ${{ inputs.a || github.event.pull_request.head.sha }}
+          B: ${{ inputs.b || github.event.pull_request.head.sha }}
+          ARCH: ${{ inputs.arch || 'x86-64-v3' }}
+          ROUNDS: ${{ inputs.rounds || '3' }}
+          RUNNERS: ${{ inputs.runners || '2' }}
+        run: |
+          git config --global --add safe.directory '*'
+          fail() { echo "::error::$*"; exit 1; }
+          case "$ARCH" in x86-64-v3 | x86-64-v4) ;; *) fail "arch must be x86-64-v3 or x86-64-v4 (never native)" ;; esac
+          case "$ROUNDS" in '' | *[!0-9]*) fail "rounds must be a number" ;; esac
+          case "$RUNNERS" in 1 | 2 | 3 | 4) ;; *) fail "runners must be 1-4" ;; esac
+          [ "$ROUNDS" -ge 2 ] && [ "$ROUNDS" -le 100 ] || fail "rounds must be 2-100"
+          # A branch name is read as origin's branch (the checkout has no local branches), anything
+          # else as a tag or commit, as update.sh does.
+          resolve() { git rev-parse -q --verify "refs/remotes/origin/$1^{commit}" || git rev-parse -q --verify "$1^{commit}"; }
+          a_sha=$(resolve "$A") || fail "cannot resolve A '$A' to a commit"
+          b_sha=$(resolve "$B") || fail "cannot resolve B '$B' to a commit"
+          echo "A $A = $a_sha"
+          echo "B $B = $b_sha"
+          {
+            echo "a_sha=$a_sha"
+            echo "b_sha=$b_sha"
+            echo "same_commit=$([ "$a_sha" = "$b_sha" ] && echo true || echo false)"
+            echo "runners=[$(seq -s, 1 "$RUNNERS")]"
+            echo "runner_count=$RUNNERS"
+            echo "rounds=$ROUNDS"
+            echo "arch=$ARCH"
+          } >>"$GITHUB_OUTPUT"
+      - name: Build A and B (update.sh, CXX=g++), check identity and bench
+        id: build
+        env:
+          FORK_ARCH: ${{ steps.plan.outputs.arch }}
+          A_SHA: ${{ steps.plan.outputs.a_sha }}
+          B_SHA: ${{ steps.plan.outputs.b_sha }}
+          ALLOW_BENCH_DIFF: ${{ inputs.allow-bench-diff && 'true' || 'false' }}
+        run: |
+          fail() { echo "::error::$*"; exit 1; }
+          export FORK_ARCH
+          mkdir -p engines/a engines/b
+          # A worktree, not an export: the build records the commit it came from (cmake/build_id.cmake),
+          # which bench/ab_search.py checks against the expected one on every run.
+          build() {
+            local src="$RUNNER_TEMP/src-$1"
+            git worktree add -q --detach "$src" "$1"
+            (cd "$src" && CXX=g++ ./update.sh) >"engines/build-$1.log" 2>&1 ||
+              { tail -n 40 "engines/build-$1.log"; fail "the build of $1 failed"; }
+          }
+          build "$A_SHA"
+          cp "$RUNNER_TEMP/src-$A_SHA/build/tcec/fork" engines/a/fork
+          if [ "$B_SHA" = "$A_SHA" ]; then
+            cp engines/a/fork engines/b/fork  # A/A: the same bytes
+          else
+            build "$B_SHA"
+            cp "$RUNNER_TEMP/src-$B_SHA/build/tcec/fork" engines/b/fork
+          fi
+          # bench needs the target's instructions; x86-64-v4's AVX-512 may be missing on this runner.
+          can_run=true
+          if [ "$FORK_ARCH" = x86-64-v4 ]; then
+            for f in avx512f avx512bw avx512cd avx512dq avx512vl; do grep -qw "$f" /proc/cpuinfo || can_run=false; done
+          fi
+          : >engines/meta.env
+          for s in a b; do
+            sha_var=${s^^}_SHA
+            v=$(engines/$s/fork version | tr -d '\r')
+            echo "$v" | sed "s/^/$s: /"
+            [ "$(sed -n 's/^arch //p' <<<"$v")" = "$FORK_ARCH" ] || fail "$s does not report arch $FORK_ARCH"
+            variant=$(sed -n 's/^variant \([^ ]*\) | commit [^ ]* |$/\1/p' <<<"$v")
+            commit=$(sed -n 's/^variant [^ ]* | commit \([^ ]*\) |$/\1/p' <<<"$v")
+            [ "$commit" = "${!sha_var}" ] || fail "$s reports commit '$commit', not ${!sha_var} (a dirty or unidentified build)"
+            echo "${s}_variant=$variant" >>"$GITHUB_OUTPUT"
+            echo "${s}_sha=$commit" >>engines/meta.env
+            echo "${s}_variant=$variant" >>engines/meta.env
+            echo "${s}_arch=$FORK_ARCH" >>engines/meta.env
+            if [ "$can_run" = true ]; then
+              engines/$s/fork bench | head -n 2 | sed "s/^/${s}_/; s/ /=/" >>engines/meta.env
+            fi
+          done
+          cat engines/meta.env
+          if [ "$can_run" = true ]; then
+            . engines/meta.env
+            if [ "$a_nodes $a_signature" = "$b_nodes $b_signature" ]; then
+              echo "Bench identical: $a_nodes / $a_signature" | tee -a "$GITHUB_STEP_SUMMARY"
+            elif [ "$ALLOW_BENCH_DIFF" = true ]; then
+              echo "Bench differs (allowed: a search A/B, judged by nps only): A $a_nodes / $a_signature, B $b_nodes / $b_signature" |
+                tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              fail "bench differs: A $a_nodes / $a_signature, B $b_nodes / $b_signature. A speed A/B needs bench-identical builds; set allow-bench-diff for a search A/B (judged by nps only)"
+            fi
+          else
+            echo "This build runner lacks AVX-512: bench identity is checked on the runners (--same-nodes)" |
+              tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engines
+          path: |
+            engines/a/fork
+            engines/b/fork
+            engines/meta.env
+            engines/build-*.log
+          retention-days: 7
+
+  ab:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ${{ fromJSON(needs.build.outputs.runners) }}
+    steps:
+      - uses: actions/checkout@v4  # the tools, at the workflow's own commit
+      - uses: actions/download-artifact@v4
+        with: {name: engines, path: engines}
+      - name: The runner
+        id: cpu
+        env:
+          ARCH: ${{ inputs.arch || 'x86-64-v3' }}
+        run: |
+          lscpu | grep -E '^(Model name|CPU\(s\)|Thread\(s\) per core|L2|L3)' || true
+          echo "model=$(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | head -n 1)" >>"$GITHUB_OUTPUT"
+          if [ "$ARCH" = x86-64-v4 ]; then
+            for f in avx512f avx512bw avx512cd avx512dq avx512vl; do
+              grep -qw "$f" /proc/cpuinfo || { echo "::error::x86-64-v4 needs $f, which this runner lacks"; exit 1; }
+            done
+          fi
+      # perf needs the kernel's tools package and a VM that passes the PMU through (UNVERIFIED for
+      # GitHub's Azure VMs): a probe with both events must count, else the run is nps only.
+      - name: Hardware counters (perf stat cycles:u, instructions:u)
+        id: counters
+        run: |
+          perf=off
+          if sudo sysctl -q -w kernel.perf_event_paranoid=1 && sudo timeout 300 apt-get update -q >/dev/null &&
+             sudo timeout 300 apt-get install -y -q linux-tools-common "linux-tools-$(uname -r)" >/dev/null; then
+            probe=$(mktemp)
+            if perf stat -x, -e cycles:u,instructions:u -o "$probe" -- true; then
+              cat "$probe"
+              python3 -I -c 'import sys; sys.path.insert(0, "bench"); import ab_search; print(ab_search.parse_perf_csv(open(sys.argv[1]).read()))' "$probe" &&
+                perf=on
+            fi
+          fi
+          echo "hardware counters: $perf"
+          echo "perf=$perf" >>"$GITHUB_OUTPUT"
+      - name: Interleaved A/B (bench/ab_search.py)
+        env:
+          A_SHA: ${{ needs.build.outputs.a_sha }}
+          B_SHA: ${{ needs.build.outputs.b_sha }}
+          A_VARIANT: ${{ needs.build.outputs.a_variant }}
+          B_VARIANT: ${{ needs.build.outputs.b_variant }}
+          ROUNDS: ${{ needs.build.outputs.rounds }}
+          SAME_COMMIT: ${{ needs.build.outputs.same_commit }}
+          ALLOW_BENCH_DIFF: ${{ inputs.allow-bench-diff && 'true' || 'false' }}
+          PERF: ${{ steps.counters.outputs.perf }}
+          RUNNER_N: ${{ matrix.runner }}
+          MODEL: ${{ steps.cpu.outputs.model }}
+        run: |
+          chmod +x engines/a/fork engines/b/fork
+          extra=()
+          [ "$ALLOW_BENCH_DIFF" = true ] || extra+=(--same-nodes)
+          [ "$SAME_COMMIT" = true ] && extra+=(--allow-identical)
+          [ "$PERF" = on ] && extra+=(--perf)
+          mkdir -p out
+          cp engines/meta.env out/
+          python3 -I bench/ab_search.py engines/a/fork engines/b/fork \
+            --a-variant "$A_VARIANT" --a-commit "$A_SHA" --b-variant "$B_VARIANT" --b-commit "$B_SHA" \
+            --rounds "$ROUNDS" --core "$(( $(nproc) - 1 ))" "${extra[@]}" \
+            --label "runner $RUNNER_N" --json out/result.json | tee out/ab.txt
+          {
+            echo "### Runner $RUNNER_N: $MODEL"
+            echo; echo '```'; cat out/ab.txt; echo '```'
+            [ "$PERF" = on ] || echo "No hardware counters on this runner: nps only."
+          } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: "result-${{ matrix.runner }}", path: out, retention-days: 90}
+
+  summary:
+    needs: [build, ab]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {pattern: "result-*", path: results}
+      - name: Verdict (tools/cloud/speed_ab_merge.py)
+        env:
+          RUNNERS: ${{ needs.build.outputs.runner_count }}
+        run: |
+          shopt -s nullglob
+          files=(results/*/result.json)
+          [ ${#files[@]} -gt 0 ] || { echo "::error::no runner reported a result"; exit 1; }
+          rc=0
+          python3 -I tools/cloud/speed_ab_merge.py "${files[@]}" --json results/merged.json \
+            --expect-runners "$RUNNERS" >results/summary.md || rc=$?
+          cat results/summary.md | tee -a "$GITHUB_STEP_SUMMARY"
+          verdict=$(grep '^verdict: ' results/summary.md || true)
+          [ -n "$verdict" ] || { echo "::error::the merge printed no verdict"; exit 1; }
+          echo "::notice title=speed-ab::$verdict"
+          exit "$rc"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: speed-ab-results, path: results, retention-days: 90}
