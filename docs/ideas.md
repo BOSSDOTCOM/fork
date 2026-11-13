@@ -2870,6 +2870,18 @@ whose weaknesses and data gaps decide their targets and order.
   search. bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 1b5a482, B = the port's build of this commit's engine code from the uncommitted tree on 1b5a482, r8brft1; identity checked on all 24 runs, `--same-nodes`): 12 interleaved rounds, median nps +0.9%, best +2.5%, under the 3.0% noise threshold: no significant difference. The bench pays one ageing pass per position (each position is its own search, on cleared tables), so the pass's price is inside that measurement; the bench's nodes are unchanged.
 - **earliest phase:** Phase 4.
 
+## 90. The improving flag in late move pruning and LMR (the engine survey's B9, think tank R17)
+
+- **type:** ELO (search); flags `use_improving_lmp` (on since 2026-11-13), `use_improving_lmr` (off).
+- **idea** (the engine survey's B9; think tank R17, step 12; concept only):
+  a node is improving when its pruning eval is above the same side's two
+  plies up (four when that node was in check). LMP's quiet allowance is
+  scaled by (8 ± `LmpImprovingEighths`) / 8 by the flag; LMR reduces late
+  quiets `LmrNotImprovingPlies` more at a node that is not improving.
+- **status:** **the LMP use adopted 2026-11-13** at `LmpImprovingEighths` 1 on its STC pass (survey-b9-lmp-stc, design R [0, 6] against off: +6.82 ± 4.37 Elo, nElo +11.87 ± 7.61, H1 after 8,000 games; sprt-log), pre-approved by the owner's rule; ported onto phase-4 254841c, bench 9,430,886 / 647c5ee9a57cae18 (DESIGN.md decisions log, 2026-11-13). `LmpImprovingEighths` is a class (a) dimension of the final retune's SPSA (final-retune.md §3.1). **The LMR use is under test** (survey-b9-lmr-stc, night item 53d, against the same off 74e485a), its switch off until its own verdict. R17's kill rule (two H0s among the two uses drop the flag) no longer applies to the LMP use. History: built on phase-4 a95e269 behind the two switches, off, branch tier2/b9-improving 74e485a (coordinator, 2026-11-11 night; R-STC; recorded on that branch's ideas.md as idea 90, entered here with the result); test side sprt/b9-improving-lmp 3273148; night item 53a, gated behind state/gate-e1.done.
+- **runtime cost:** one frame store per node, and a comparison with a switch on. bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked on all 24 runs), A = 254841c, B = the port: median nps -2.1%, best -1.7%, under the 3.0% noise threshold, so no significant difference.
+- **earliest phase:** Phase 4.
+
 ## 130. The pass-best stop rule (bug review 2026-11-11, E1)
 
 - **type:** ELO (search); flag `use_pass_best_stop` (on since 2026-11-12).

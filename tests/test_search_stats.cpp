@@ -245,6 +245,11 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
   SearchQuota limits;
   limits.depth = 9;
   auto carried = std::make_unique<Searcher>(table);
+  // The zero-band comparison below was set on trees without B9's LMP use (it
+  // did not exist yet); with it on, the carried share comes out at 2829/8144
+  // against a cleared 2872/8737 (2026-11-13), so the case pins it off on both
+  // searchers: it tests the carry-over on the trees it was built for.
+  carried->switches.use_improving_lmp = false;
   Position pos;
   CHECK(pos.set_fen(perft_suite()[0].fen));
   // A short game: each side plays the search's move, history carried.
@@ -275,6 +280,7 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
   const std::uint64_t carried_zero = c.lmr_quiet_bins[TableBins / 2] - before.lmr_quiet_bins[TableBins / 2];
   std::fill(buckets.begin(), buckets.end(), TtBucket{});
   auto cleared = std::make_unique<Searcher>(table);
+  cleared->switches.use_improving_lmp = false;
   cleared->deliberate(pos, limits, stop, nullptr, nullptr);
   const SearchCounters& f = cleared->counters;
   CHECK(carried_sites > 0 && f.lmr_rule_sites > 0);

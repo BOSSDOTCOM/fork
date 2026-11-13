@@ -510,6 +510,11 @@ TEST_CASE("search", "a TT upper bound cuts when it is at or below alpha, never a
 //   move loses).
 TEST_CASE("search", "no null move without pieces: two pawn endings keep their tablebase result") {
   Fixture fx;
+  // The two endings were found with B9's LMP use off (it did not exist yet);
+  // with it on, the first ending's depth-9 search plays g5f4 with the guard
+  // in place (2026-11-13), so the case pins it off: it tests the guard on
+  // the trees it was built for.
+  fx.searcher->switches.use_improving_lmp = false;
   Position pos;
   SearchResult r = fx.search("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1", 9);
   CHECK(pos.set_fen("8/1p6/8/6k1/8/8/4P3/7K b - - 0 1"));

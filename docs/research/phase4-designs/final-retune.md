@@ -155,6 +155,7 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | DirectCheckBonus | 5000 | **2500-10000 (was 0-20000)** | **375 (was 1000)** | ? | 6.7 / 13.3 at c = 375 (one step) | ok; **range 2500-10000, the owner's decision (2026-11-12, about 12:50 PM EST: "DirectCheckBonus final-retune range 2500-10000")**: the ranges rule's half to twice of 5000, with the rule's step (a twentieth of the range, 375), replacing 0-20000 (step 1000), declared in the parameter table when D13 was re-planned (owner, 2026-11-11), whose floor 0 was the off-equivalent (added 2026-11-12, D13's adoption) |
 | DriftLimit | 300 | 150-600 | 23 | ? | 6.5 / 13 at c = 23 (one step) | ok (added 2026-11-12 with the minor table; it applies to every drift table, so only the minor table's while the others are off) |
 | HistoryKeepQuarters | 2 | 0-4 | 1 | ? | 2 / 2 at c = 1 (one step) | **flag**: within 2c of both bounds at one step; the range is the whole form (0 clears the tables at every search, 4 is no ageing), so a finer search needs a new unit (eighths, a new parameter: the owner's decision at step 19) (added 2026-11-12, D17's adoption) |
+| LmpImprovingEighths | 1 | 0-4 | 1 | ? | 1 / 3 at c = 1 (one step) | **flag**: floor within 2c at one step; 0 is the off-equivalent (the allowance unscaled) and 4 the largest scaling (a half more at an improving node, a half less at one that is not), so a finer search needs a new unit (sixteenths, a new parameter: the owner's decision at step 19) (added 2026-11-13, B9's LMP adoption) |
 
 p = 22 tuned parameters (23 with QuietSeeFloor), minus any parameter of a
 feature removed in step 18 (e.g. LMP's two if LMP is removed), plus the
@@ -224,6 +225,16 @@ between searches, not near the horizon: how much a search learns before
 the next one ages it grows with the time per move, so its STC optimum may
 not hold at LTC or TCEC's time control (UNVERIFIED; an LTC check of the
 SPSA's value is the owner's decision at step 19).
+**2026-11-13: B9's `LmpImprovingEighths` joins this pass** on the LMP
+use's adoption (the improving flag in late move pruning at its natural
+value, 1 eighth; survey-b9-lmp-stc +6.82 ± 4.37 Elo at STC, design R
+[0, 6]; DESIGN.md "Search constants"), class (a) as LMP's (depths 1-4;
+its row above), so p grows by 1. `LmpQuietAllowance` and `LmpMaxDepth`
+are tuned with the scaling in place: at `LmpQuietAllowance`'s floor 3
+the allowance at depth 1 is (3 + 1) × 7/8 = 3 quiets at a node that is
+not improving (rounded down), so the rule stays meaningful.
+`LmrNotImprovingPlies` (the LMR use, off, under its own SPRT) joins only
+if that use is adopted.
 
 ### 3.2 Class (b): LTC pass
 

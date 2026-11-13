@@ -446,6 +446,17 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
 #endif
   const bool can_prune = !OnPv && !in_check;
   const bool can_prune_node = can_prune && !withheld;
+  // The improving flag (the engine survey's B9, think tank R17): the pruning
+  // eval is above the same side's two plies up, or four plies up when that
+  // node was in check; not improving in check or when neither is known.
+  f.pruning_eval = static_cast<std::int16_t>(in_check ? ScoreNone : prune_eval);
+  bool improving = false;
+  if (!in_check && (switches.use_improving_lmp || switches.use_improving_lmr)) {
+    const int earlier = ply >= 2 && frames_[ply - 2].pruning_eval != ScoreNone ? frames_[ply - 2].pruning_eval
+                        : ply >= 4                                         ? frames_[ply - 4].pruning_eval
+                                                                           : ScoreNone;
+    improving = earlier != ScoreNone && prune_eval > earlier;
+  }
 
 #ifdef FORK_SEARCH_STATS
   // X10, the decision ledger's RFP rows: at a sampled candidate (every
@@ -686,6 +697,12 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   int moves_seen = 0;  // legal moves the selector yielded, searched or pruned
   int quiets_searched = 0;
   const bool lmp_node = switches.use_lmp && can_prune && depth <= LmpMaxDepth;
+  // B9: with use_improving_lmp the allowance is scaled up at an improving
+  // node and down at one that is not, by LmpImprovingEighths / 8.
+  const int lmp_allowance =
+      switches.use_improving_lmp
+          ? (LmpQuietAllowance + depth) * (8 + (improving ? LmpImprovingEighths : -LmpImprovingEighths)) / 8
+          : LmpQuietAllowance + depth;
   const int futility_value = in_check ? 0 : prune_eval + FutilityOffset + FutilityGrowth * depth;
   // (Stats builds: a decision-ledger side search may force the margin's
   // test on or off at the node it re-enters, X10.)
@@ -710,7 +727,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     // Pruning: only once a move has been searched (so no node is pruned into
     // a false stalemate or mate) and while not already losing to a mate.
     if (moves_searched > 0 && best > -MateBandFloor) {
-      if (lmp_node && quiet && quiets_searched >= LmpQuietAllowance + depth) {
+      if (lmp_node && quiet && quiets_searched >= lmp_allowance) {
         f.selector.stop_quiets();  // late move pruning (T21)
         FORK_STAT(++counters.lmp_prunes);
         continue;
@@ -848,7 +865,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // Node types (T17): an expected cut node's late quiets are reduced
         // CutNodeLmrPlies more.
         const int cut_extra = switches.use_cut_node_lmr && !OnPv && f.expected_cut ? CutNodeLmrPlies : 0;
-        reduced = std::clamp(new_depth - (base + correction - relief + cut_extra), 1, new_depth);
+        // B9: at a node that is not improving, late quiets are reduced
+        // LmrNotImprovingPlies more (use_improving_lmr; never in check).
+        const int trend_extra = switches.use_improving_lmr && !in_check && !improving ? LmrNotImprovingPlies : 0;
+        reduced = std::clamp(new_depth - (base + correction - relief + cut_extra + trend_extra), 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;
@@ -1262,8 +1282,9 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   stable_move_ = NoMove;
   time_signals_ = {};
   last_soft_ms_ = limits.soft_ms;
-  frames_[0].arrival = NoArrival;     // the root has none (the follow table's arrival at ply 1)
-  drift_keys_live_ = drift_in_use();  // the drift tables' keys, kept from here by play()
+  frames_[0].arrival = NoArrival;       // the root has none (the follow table's arrival at ply 1)
+  frames_[0].pruning_eval = ScoreNone;  // the root sets none (B9's improving flag at plies 2 and 4)
+  drift_keys_live_ = drift_in_use();    // the drift tables' keys, kept from here by play()
   if (drift_keys_live_) drift_keys_[0] = drift_keys(pos);
 
 #if defined(FORK_EVAL_NNUE)

@@ -211,6 +211,17 @@ struct SearchQuota {
 //   learned fades instead of persisting unchanged. On since its STC SPRT
 //   against off passed: +5.71 +/- 3.77 Elo after 11,200 games, design R
 //   [0, 6]; 2026-11-12.
+// - use_improving_lmp, use_improving_lmr: the improving flag (the engine
+//   survey's B9, think tank R17): a node is improving when its pruning eval
+//   (prune_eval, the TT-refined static eval RFP uses) is above the same
+//   side's two plies up (four plies up when that node was in check; not
+//   improving when neither is known). use_improving_lmp scales late move
+//   pruning's quiet allowance by (8 + LmpImprovingEighths) / 8 at an
+//   improving node and (8 - LmpImprovingEighths) / 8 at one that is not;
+//   use_improving_lmr reduces late quiets LmrNotImprovingPlies more at a node
+//   that is not improving. use_improving_lmp is on since its STC SPRT
+//   against off passed: +6.82 +/- 4.37 Elo after 8,000 games, design R
+//   [0, 6]; 2026-11-13. use_improving_lmr stays off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -255,7 +266,9 @@ struct SearchQuota {
   X(use_pair_sum_update, UsePairSumUpdate, true)         \
   X(use_check_order_bonus, UseCheckOrderBonus, true)     \
   X(use_skip_check_exempt, UseSkipCheckExempt, true)     \
-  X(use_history_ageing, UseHistoryAgeing, true)
+  X(use_history_ageing, UseHistoryAgeing, true)          \
+  X(use_improving_lmp, UseImprovingLmp, true)            \
+  X(use_improving_lmr, UseImprovingLmr, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -314,6 +327,11 @@ struct PlyFrame {
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
   bool expected_cut = false;    // expected to fail high (a cut node), from the parent (T17)
+  // The improving flag (B9): this node's pruning eval (ScoreNone in check,
+  // and in the quiescence search, which never sets it). 16 bits, in the
+  // padding after expected_cut, so the frame keeps its 2,704-byte guard
+  // (every score and ScoreNone fit).
+  std::int16_t pruning_eval = ScoreNone;
 };
 
 // Root moves are kept in search order: the initial capture order, then after
