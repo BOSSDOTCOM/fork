@@ -30,8 +30,16 @@ seed stream (seeded; reproducible). tools/datagen/verify_games.py checks
 the files like any self-play shard (--table-pieces 5 accepts a game ending
 at a table position).
 
+Held-out positions (retrain 8c's fresh slice, plan O2: the zero-overlap rule):
+`--exclude FILE...` names position files (tools/nnue/endgame_heldout.tsv,
+heldout_67.tsv, heldout_deep.tsv: tab-separated lines, '#' comments, one
+field a FEN) whose positions (board and side to move) are never written.
+A drawn position found there is skipped before the move is drawn, so with no
+hit the output is byte for byte the output without --exclude.
+
     endgame_slice.py signatures SHARD... --games N --out SIGS.json
     endgame_slice.py generate --tables DIR --signatures SIGS.json --positions N --out FILE.vf [--seed S]
+        [--exclude FILE...]
 """
 import argparse
 import json
@@ -130,8 +138,28 @@ def encode(board, move, result_white, score_white):
     return head + struct.pack('<Hh', vg.code_of(board, move), score_white) + struct.pack('<Hh', 0, 0)
 
 
-def generate(tables, sigs, n, seed):
-    """`n` labelled one-move games (bytes), the per-WDL counts and the per-signature counts."""
+def position_key(board):
+    return board.board_fen() + ('w' if board.turn else 'b')
+
+
+def excluded_keys(paths):
+    """The (board, side to move) keys of every FEN in the position files `paths`: the first tab-separated field of
+    each non-comment line that parses as a FEN with a board of eight ranks."""
+    keys = set()
+    for path in paths or ():
+        for line in Path(path).read_text(encoding='utf-8').splitlines():
+            if not line.strip() or line.startswith('#'):
+                continue
+            fen = next((f for f in line.split('\t') if f.count('/') == 7 and ' ' in f.strip()), None)
+            if fen is None:
+                raise ValueError(f'{path}: no FEN in line {line[:80]!r}')
+            keys.add(position_key(chess.Board(fen)))
+    return keys
+
+
+def generate(tables, sigs, n, seed, exclude=frozenset(), skipped=None):
+    """`n` labelled one-move games (bytes), the per-WDL counts and the per-signature counts. Positions whose key is
+    in `exclude` are never written (counted in the Counter `skipped`, if given)."""
     rng = random.Random(seed)
     own = sorted(sigs.items())
     total = sum(c for _, c in own)
@@ -155,8 +183,12 @@ def generate(tables, sigs, n, seed):
                 board.pop()
             if not quiet:
                 continue
-            key = board.board_fen() + ('w' if board.turn else 'b')
+            key = position_key(board)
             if key in seen:
+                continue
+            if key in exclude:
+                if skipped is not None:
+                    skipped[key] += 1
                 continue
             w = tb.probe_wdl(board)
             seen.add(key)
@@ -181,6 +213,7 @@ def main(argv=None):
     g.add_argument('--positions', type=int, required=True)
     g.add_argument('--out', required=True)
     g.add_argument('--seed', type=int, default=20261106)
+    g.add_argument('--exclude', nargs='+', default=[], help='position files (FEN per line) never to write')
     a = ap.parse_args(argv)
     if a.cmd == 'signatures':
         seen, games = count_signatures(a.shards, a.games)
@@ -189,8 +222,13 @@ def main(argv=None):
         print(f'{games} games, {sum(seen.values())} reached table entry, {len(seen)} signatures')
         return 0
     sigs = json.loads(Path(a.signatures).read_text(encoding='utf-8'))['at_table_entry']
-    data, wdl, made = generate(a.tables, sigs, a.positions, a.seed)
+    exclude = excluded_keys(a.exclude)
+    skipped = Counter()
+    data, wdl, made = generate(a.tables, sigs, a.positions, a.seed, exclude, skipped)
     Path(a.out).write_bytes(data)
+    if a.exclude:
+        print(f'excluded: {len(exclude)} positions from {len(a.exclude)} files; {sum(skipped.values())} draws of '
+              f'{len(skipped)} of them skipped')
     print(f'{a.positions} positions ({dict(wdl)}), {len(made)} signatures, most common {made.most_common(5)}')
     return 0
 
