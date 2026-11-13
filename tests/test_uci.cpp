@@ -1267,7 +1267,8 @@ TEST_CASE("uci_options", "Clear Hash with a Hash change in the same batch still 
 // 2026-11-12): display only. The mapping itself: mate and tablebase scores
 // unchanged, every other score scaled by DisplayTargetScale /
 // DisplayFittedScale and kept below the tablebase band, monotonic and odd.
-TEST_CASE("uci_options", "CalibratedScore: the shown score's mapping (mates and tables unchanged, order kept)") {
+TEST_CASE("uci_options",
+          "CalibratedScore: the shown score's mapping (mates and tables unchanged, order kept)") {
   CHECK_EQ(calibrated_display_score(0), 0);
   CHECK_EQ(calibrated_display_score(DisplayFittedScale), DisplayTargetScale);
   CHECK_EQ(calibrated_display_score(-DisplayFittedScale), -DisplayTargetScale);
@@ -1301,7 +1302,10 @@ std::vector<std::string> scored_search(Gui& g, const std::string& position, cons
   CHECK(g.sync());
   const std::size_t mark = g.cursor;
   g.send(go);
-  CHECK(g.next("bestmove").has_value());
+  // A sanitizer build searches far slower (gcc-tsan about 9,400 nodes/s, the
+  // note above): it gets a shallower search (the caller) and a longer wait
+  // (CI run 43417188774 timed out at the default under gcc-tsan).
+  CHECK(g.next("bestmove", SanitizedBuild ? 120000ms : Patience).has_value());
   std::vector<std::string> out;
   for (const std::string& line : g.texts(mark))
     if ((starts_with(line, "info ") && line.find(" score ") != std::string::npos) ||
@@ -1339,11 +1343,13 @@ TEST_CASE("uci_options", "CalibratedScore: on and off search the same; only cent
   int changed = 0;
   for (std::size_t i = 1; i <= 4; ++i) {
     const std::string position = "position fen " + std::string(perft_suite()[i].fen);
-    const std::vector<std::string> off = scored_search(g, position, "go depth 9", false);
-    const std::vector<std::string> on = scored_search(g, position, "go depth 9", true);
+    const std::string go = SanitizedBuild ? "go depth 6" : "go depth 9";
+    const std::vector<std::string> off = scored_search(g, position, go, false);
+    const std::vector<std::string> on = scored_search(g, position, go, true);
     CHECK_EQ(on.size(), off.size());
     for (std::size_t j = 0; j < std::min(on.size(), off.size()); ++j) {
-      CHECK_MSG(comparable(on[j], false) == comparable(off[j], true), "on: '" << on[j] << "' off: '" << off[j] << "'");
+      CHECK_MSG(comparable(on[j], false) == comparable(off[j], true),
+                "on: '" << on[j] << "' off: '" << off[j] << "'");
       changed += comparable(on[j], false) != comparable(off[j], false);
     }
   }

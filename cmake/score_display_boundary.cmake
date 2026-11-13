@@ -6,6 +6,10 @@
 # data-generation, web or core file may reach it, so fork_datagen's output and
 # every search are the same whatever the option says.
 # Usage: cmake -DSOURCE_DIR=<repo> -P score_display_boundary.cmake
+# Script mode sets no policies, so if(... IN_LIST ...) needs CMP0057 set here:
+# without it CMake 3.22 (the TCEC toolchain's floor) refuses the operator
+# (CI run 43417188774).
+cmake_policy(SET CMP0057 NEW)
 set(allowed "src/uci/score_display.hpp;src/uci/session.cpp")
 set(tokens "score_display.hpp;calibrated_display_score;DisplayFittedScale;DisplayTargetScale;CalibratedScore")
 file(GLOB_RECURSE sources RELATIVE ${SOURCE_DIR} ${SOURCE_DIR}/src/*.cpp ${SOURCE_DIR}/src/*.hpp
