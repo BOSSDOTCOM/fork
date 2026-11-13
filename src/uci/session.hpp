@@ -113,10 +113,11 @@ class UciSession {
 
   void stop_search();  // stops and joins the running search, if any
   bool search_running();
-  void search_main(Position pos, SearchQuota limits, bool waits);  // the search thread
+  // the search thread; `calibrated`: the score display option as it was at the go
+  void search_main(Position pos, SearchQuota limits, bool waits, bool calibrated);
   // The last info line when no iteration was reported (none finished, or
   // no legal move), in a fixed buffer.
-  void report_unfinished(const Position& pos, const SearchResult& r, std::int64_t elapsed_ms);
+  void report_unfinished(const Position& pos, const SearchResult& r, std::int64_t elapsed_ms, bool calibrated);
   // Answers a go when memory has run out (review 2026-10-24): fixed buffers,
   // `best` or, if not `known`, the first legal move.
   void answer_without_memory(const Position& pos, Move best, bool known) noexcept;

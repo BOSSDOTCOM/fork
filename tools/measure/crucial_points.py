@@ -225,6 +225,7 @@ def deep_search_sites(engine, todo, out_path, nodes, workers):
 
         send('uci')
         read_until('uciok')
+        send('setoption name CalibratedScore value false')  # raw scores (the display calibration off)
         send('setoption name Hash value 16')
         send('setoption name Threads value 1')
         while True:

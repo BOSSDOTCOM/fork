@@ -139,6 +139,7 @@ class ReplayEngine:
                 pass
         self.send('uci')
         self.wait_for('uciok')
+        self.send('setoption name CalibratedScore value false')  # raw scores (the display calibration off)
         for name, value in self.options:
             self.send(f'setoption name {name} value {value}')
         self.send('isready')

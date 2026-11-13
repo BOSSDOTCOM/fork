@@ -289,6 +289,8 @@ def label(rows, engine, syzygy, out, part=0, parts=1, nodes=NODES, hash_mb=HASH_
         chess.engine.SimpleEngine.popen_uci(['nice', '-n', '10', engine])
     try:
         eng.configure({'Threads': 1, 'Hash': hash_mb, 'SyzygyPath': syzygy})
+        if 'CalibratedScore' in eng.options:  # raw labels (the display calibration off); older builds lack it
+            eng.configure({'CalibratedScore': False})
         for r in mine:
             b = chess.Board(r['fen'])
             info = eng.analyse(b, chess.engine.Limit(nodes=nodes), game=object())

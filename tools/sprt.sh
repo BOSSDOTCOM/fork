@@ -189,7 +189,7 @@ fc_status=0
 "$fastchess" \
   -engine cmd="$test_exe" name=test ${TEST_OPTS:-} \
   -engine cmd="$base_exe" name=base ${BASE_OPTS:-} \
-  -each tc="$tc" option.Hash="$hash" option.Threads=1 "${each_tb[@]}" \
+  -each tc="$tc" option.Hash="$hash" option.Threads=1 option.CalibratedScore=false "${each_tb[@]}" \
   -openings file="$book" format=epd order=random -srand "$seed" \
   -repeat -rounds $((MAX_GAMES / 2)) -concurrency "${CONCURRENCY:-10}" \
   -sprt elo0="$elo0" elo1="$elo1" alpha=0.05 beta=0.05 model=normalized \

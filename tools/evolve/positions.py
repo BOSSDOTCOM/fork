@@ -66,6 +66,7 @@ class Uci:
                                   bufsize=1)
         self.send('uci')
         self.until('uciok')
+        self.send('setoption name CalibratedScore value false')  # raw scores (the display calibration off)
         for name, value in options.items():
             self.send(f'setoption name {name} value {value}')
         self.ready()

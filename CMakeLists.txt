@@ -696,6 +696,10 @@ if(FORK_BUILD_TESTS)
       -DREF=${fork_bench_ref}
       -P ${CMAKE_SOURCE_DIR}/cmake/check_bench.cmake)
   endif()
+  # The CalibratedScore display stays at the UCI printer (owner, 2026-11-12):
+  # no search, evaluation or data-generation source may name it.
+  add_test(NAME score_display_boundary COMMAND ${CMAKE_COMMAND}
+    -DSOURCE_DIR=${CMAKE_SOURCE_DIR} -P ${CMAKE_SOURCE_DIR}/cmake/score_display_boundary.cmake)
   add_test(NAME perft_bench_parity COMMAND ${CMAKE_COMMAND}
     -DFORK=$<TARGET_FILE:fork> -DCMD=perftbench
     -DREF=${CMAKE_SOURCE_DIR}/tests/perft_bench.ref

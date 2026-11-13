@@ -40,7 +40,7 @@ def main():
     a = ap.parse_args()
     fens = [l.strip() for l in open(a.epd) if l.strip() and not l.startswith('#')]
     proc = subprocess.Popen([str(Path(a.fork).resolve())], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
-    proc.stdin.write(f'uci\nsetoption name Hash value {a.hash_mb}\nisready\n')
+    proc.stdin.write(f'uci\nsetoption name CalibratedScore value false\nsetoption name Hash value {a.hash_mb}\nisready\n')
     proc.stdin.flush()
     for line in proc.stdout:
         if line.strip() == 'readyok':

@@ -3146,3 +3146,19 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
   (archive/speed3-see-xray). TT observations (the key-check digest, about 1% of cycles, recomputed per slot on each
   probe and deposit; cheaper only with a layout change) go to step 17a's design, not a separate change.
   **runtime cost:** a gain. **earliest phase:** Phase 4.
+
+### 172. CalibratedScore: the reported score on the network's scale (the unbalanced-position calibration)
+
+- **type:** TOOLING (display only; bench identical). **phase:** Phase 4 (owner's order, 2026-11-12, about 10:45 PM
+  EST: measure Fork's eval against results on balanced and UHO starts; follow-up by a declared rule).
+- **metric:** logistic scale k of E[score] = 1 / (1 + exp(-(s + b) / k)) by data set, band residuals, queens on/off;
+  ~/fork-data/calib-1112 (method.md declared first, results.md). **result:** search k 56-69 cp against r8brft1's
+  S = 88 (scale), not larger on UHO starts (reverse), no band beyond 0.03 (no shape), queens on much steeper (R4):
+  branch (c).
+- **status:** **adopted 2026-11-13** (owner: "adopt CalibratedScore (display-only; off in all harnesses, datagen and labeling tools, never used inside search)"): the UCI option `CalibratedScore`
+  (default on) shows N x 88 / 67; mates, tablebase scores, bounds and pv unchanged; off in every harness and
+  labelling tool (tools/check_score_display_off.py), never in the search (CTest score_display_boundary). The data
+  side (b): arm Q, the queens-on unequal-material slice, prepared on branch slice/pos-x and gate-passed (+0.029
+  [+0.022, +0.036]), launch at g4c's seal; arm A (1,500 x 16 adjudication) waits for its count on g4c (provisional
+  on g1b: +10.1% positions); arm U (unbalanced starts) not supported. **runtime cost:** none (one multiply per info
+  line). **earliest phase:** Phase 4.

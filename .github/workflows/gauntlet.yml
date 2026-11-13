@@ -213,7 +213,7 @@ jobs:
           conc=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
           echo "cpu=$cpu nproc=$(nproc) concurrency=$conc anchor=$name ccrl=$ccrl start=$START options=${opts:-none}" | tee out/shard.txt
           # shellcheck disable=SC2086
-          "$RUNNER_TEMP/tools/fastchess" -engine cmd=fork/fork name=Fork option.Hash=16 \
+          "$RUNNER_TEMP/tools/fastchess" -engine cmd=fork/fork name=Fork option.Hash=16 option.CalibratedScore=false \
             -engine cmd="anchors/$STEM" name="$name" $opts \
             -each tc="$TC" -openings file=openings.epd format=epd order=sequential start="$START" \
             -rounds $((GAMES_PER_SHARD / 2)) -repeat -concurrency "$conc" \
@@ -421,7 +421,7 @@ jobs:
             bin=engines/base/fork
             [ "$side" = old ] || bin=engines/test/fork
             # shellcheck disable=SC2086
-            "$RUNNER_TEMP/tools/fastchess" -engine cmd="$bin" name=Fork option.Hash=16 \
+            "$RUNNER_TEMP/tools/fastchess" -engine cmd="$bin" name=Fork option.Hash=16 option.CalibratedScore=false \
               -engine cmd="anchors/$STEM" name="$name" $opts \
               -each tc="$TC" -openings file="$OPENINGS_FILE" format=epd order=sequential start="$START" \
               -rounds "$CHECK_OPENINGS_PER_SHARD" -repeat -concurrency "$conc" \
@@ -502,8 +502,8 @@ jobs:
           NEW_SHA: ${{ needs.check-fork.outputs.new_sha }}
         run: |
           chmod +x engines/base/fork engines/test/fork
-          old=(-engine cmd=engines/base/fork name=OLD option.Hash=16)
-          new=(-engine cmd=engines/test/fork name=NEW option.Hash=16)
+          old=(-engine cmd=engines/base/fork name=OLD option.Hash=16 option.CalibratedScore=false)
+          new=(-engine cmd=engines/test/fork name=NEW option.Hash=16 option.CalibratedScore=false)
           # Which version fastchess lists first alternates by pass.
           if [ $((PASS % 2)) = 1 ]; then engines=("${old[@]}" "${new[@]}") first=OLD; else engines=("${new[@]}" "${old[@]}") first=NEW; fi
           games=$(( 2 * CHECK_OPENINGS_PER_SHARD ))

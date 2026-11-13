@@ -50,6 +50,7 @@ class Engine:
                                   text=True, bufsize=1, env=env)
         self.send('uci')
         self.wait('uciok')
+        self.send('setoption name CalibratedScore value false')  # raw scores (the display calibration off)
         self.send('setoption name Threads value 1')
         self.send('setoption name Hash value 16')
 

@@ -84,7 +84,7 @@ snap() {  # status
 cd "$out" || exit 1  # fastchess writes its config.json autosave here
 # shellcheck disable=SC2086
 "$fastchess" -engine cmd="$test" name=test $test_opts -engine cmd="$base" name=base $base_opts \
-  -each tc="$tc" option.Hash="$hash" option.Threads=1 "${each_tb[@]}" \
+  -each tc="$tc" option.Hash="$hash" option.Threads=1 option.CalibratedScore=false "${each_tb[@]}" \
   -openings file="$book" format=epd order=sequential start="$start" \
   -repeat -rounds "$rounds" -concurrency "$conc" \
   -resign movecount=5 score=1000 twosided=true -draw movenumber=40 movecount=10 score=10 \

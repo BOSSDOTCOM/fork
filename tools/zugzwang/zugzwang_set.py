@@ -597,6 +597,7 @@ class Engine:
                                   creationflags=flags)
         self.send('uci')
         self.wait('uciok')
+        self.send('setoption name CalibratedScore value false')  # raw scores (the display calibration off)
         for k, v in options.items():
             self.send(f'setoption name {k} value {v}')
         self.ready()

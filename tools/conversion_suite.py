@@ -37,6 +37,7 @@ class Engine:
         self.p = subprocess.Popen([path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
         self.send('uci')
         self.until('uciok')
+        self.send('setoption name CalibratedScore value false')  # raw scores (the display calibration off)
         self.send(f'setoption name SyzygyPath value {syzygy}')
         self.send('isready')
         self.until('readyok')

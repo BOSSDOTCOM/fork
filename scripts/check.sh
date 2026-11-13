@@ -249,6 +249,8 @@ tool_tests() {  # python | all
   "$py" -I -B -m unittest discover -s tools/cloud -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/cloud"
   "$py" -I -B -m unittest discover -s tools/evolve -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/evolve"
   "$py" -I -B -m unittest discover -s tools -p 'test_pgn_summary.py' >>"$log" 2>&1 || fail "tool tests: tools/pgn_summary.py"
+  # The CalibratedScore display (owner, 2026-11-12): every harness that plays or searches with Fork sets it off.
+  "$py" -I -B tools/check_score_display_off.py . >>"$log" 2>&1 || fail "tool tests: tools/check_score_display_off.py"
   # The gauntlet's report (owner, 2026-11-08): the reference opponent kept out of Ordo's fit.
   "$py" -I -B -m unittest discover -s tools/gauntlet -p 'test_*.py' >>"$log" 2>&1 || fail "tool tests: tools/gauntlet"
   # The job supervisor and the run-ID ledger (owner, 2026-11-05): whole-tree stops, one lock per type.
