@@ -3240,6 +3240,16 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
   traded in 0.15: **no excess trade preference measured**, so the queens part of the explanation lives in the
   evaluation's level (both sides of it), not in a trade-seeking choice. The r8b nets differ by at most 3-4 cp on
   this benchmark. Run per arm in retrain 8c (post_a1.sh uhodiag, report only), arm Q and the per-class lambda arm.
+  **Piece trades (owner, 2026-11-13 ~4:47 PM EST: "add a per-piece-type trade rate"; the hypothesis: Fork trades
+  active pieces too readily, rooks and minors, especially queenless with a small edge):** the set ptrade (931
+  positions, side to move +20 to +100 cp by SF19, a rook-rook, knight-knight, bishop-bishop or bishop-knight trade
+  available by capture, offer or the game line; queenless and queens-on apart; S: SF19 to move, F: Fork to move)
+  and per-class rates of the search's line against the reference. Baselines (any class, net / reference, n):
+  queenless S 0.11-0.14 / 0.10 (110), queens-on S 0.08-0.09 / 0.09 (300), queenless F 0.17-0.20 / 0.20 (221),
+  queens-on F 0.13-0.16 / 0.15 (300), for r8brft1, r8btd90, r8bep1 and r8bep2; no class differs by more than its
+  small counts allow (rook captures queenless S, n = 8: 0.50-0.57 against SF19's 0.38). On the same positions a
+  100k-node search trades about as often as SF19 chose to; a small excess shows only in queenless S (+0.01 to
+  +0.04, n = 110, within noise). The per-trade judging is the trade analysis's (~/fork-data/trade-1113).
 
 ### 174. Speed sprint 4: huge pages for the network and the Searcher (R19), and the pair tables' colour fold
 

@@ -31,12 +31,24 @@ that move. Material counts pawn 1, knight 3, bishop 3, rook 5, queen 9.
   and subset (seeded), FENs unique, at most 300 per subset. `game_trade`: whether the game's line traded queens.
   A line trades queens when both queens are off the board within its first 3 plies (the mover's move and two
   more); a line of one move that captures the queen with the queen counts when a recapture is legal.
+- **ptrade** (UHO and balanced games; owner, 2026-11-13 ~4:47 PM EST: does Fork trade active pieces too readily?):
+  positions with no queen (`qstate` ql) or one queen each (qon) where the side to move is ahead by +20 to +100 cp
+  on SF's score (subsets S and F as in qtrade) and a piece-for-piece trade of a class is available (`avail`,
+  class:kind): R (rook for rook), N (knight for knight), B (bishop for bishop), BN (bishop for knight either way).
+  Kinds: `cap`, a capture of the class with a legal recapture on that square; `offer`, a knight, bishop or rook
+  move to a square where an enemy piece of a matching class can legally take it and the mover can legally
+  recapture; `line`, the game's line traded that class. At most 2 per game, subset and queen state (seeded), FENs
+  unique, at most 300 per subset and queen state. `game_trade`: the class the game's line traded, or '-'. A line
+  trades a class when, at the first of its first 3 plies after which both sides have lost a knight, bishop, rook
+  or queen, each has lost exactly one and the pair is that class; a one-move line counts when it is a class
+  capture with a legal recapture.
 
 `run` measures one net: the static evaluation on adv and levelql (from the tool's sign convention: adv from the
 advantaged side, levelql from Fork's side), from a Fork binary (`fork evalfens`) or, for a net file alone,
 tools/nnue/reference.py's integer evaluation (R-int, the engine's static evaluation exactly: tests/nnue parity); with
-a binary, a fixed-node search (Threads 1, Hash 16, CalibratedScore off, ucinewgame before each position) on all three
-sets, whose score is reported like the static one and whose principal variation decides the trade on qtrade. With
+a binary, a fixed-node search (Threads 1, Hash 16, CalibratedScore off, ucinewgame before each position) on every
+set, whose score is reported like the static one and whose principal variation decides the trade on qtrade and
+ptrade (per class and group, net / reference rates with counts). With
 both a net and a binary, the binary's static evaluation must equal the net's R-int on every position (the binary
 carries that net). Values are raw cp (pawn units = cp / 100) next to SF19's.
 
@@ -67,11 +79,15 @@ LEVEL_PER_GAME, LEVEL_CAP = 2, 300
 TRADE_LO, TRADE_HI = 30, 100   # "slightly ahead" by SF, side to move's view
 TRADE_PER_GAME, TRADE_CAP = 2, 300
 TRADE_PLIES = 3
+PTRADE_LO, PTRADE_HI = 20, 100  # "a small edge" by SF (owner, 2026-11-13 ~4:47 PM EST), side to move's view
+PTRADE_PER_GAME, PTRADE_CAP = 2, 300   # per game, subset and queen state; cap per subset and queen state
+PIECE_CLASSES = ('R', 'N', 'B', 'BN')  # rook for rook, knight for knight, bishop for bishop, bishop for knight
 SCORE_RE = re.compile(r'^\s*([+-]?)(M?)(\d+(?:\.\d+)?)/(\d+)')
 FIELDS = {
     'adv': ['fen', 'side', 'sf_cp', 'sf_mean_cp', 'game_cp', 'source', 'game'],
     'levelql': ['fen', 'side', 'sf_cp', 'game_cp', 'source', 'game', 'ply'],
     'qtrade': ['fen', 'subset', 'sf_cp', 'avail', 'game_trade', 'source', 'game', 'ply'],
+    'ptrade': ['fen', 'subset', 'qstate', 'sf_cp', 'avail', 'game_trade', 'source', 'game', 'ply'],
 }
 
 
@@ -147,6 +163,110 @@ def trade_available(board):
     if any(queen_offer(board, m) for m in moves):
         return 'offer'
     return None
+
+
+LETTER = {chess.KNIGHT: 'N', chess.BISHOP: 'B', chess.ROOK: 'R'}
+
+
+def pair_class(a, b):
+    """The trade class of one piece type for another: 'R', 'N', 'B', 'BN' (either way round), else None."""
+    if a not in LETTER or b not in LETTER:
+        return None
+    if a == b:
+        return LETTER[a]
+    return 'BN' if {a, b} == {chess.BISHOP, chess.KNIGHT} else None
+
+
+def piece_counts(board, color):
+    return {pt: len(board.pieces(pt, color)) for pt in (chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN)}
+
+
+def recapture_legal(board, square):
+    """The side to move has a legal capture on `square` (attackers first, then legality)."""
+    for frm in board.attackers(board.turn, square):
+        if board.is_legal(chess.Move(frm, square)) or board.is_legal(chess.Move(frm, square, chess.QUEEN)):
+            return True
+    return False
+
+
+def capture_class(board, move):
+    """`move` takes a piece of a trade class with a piece of that class, and a recapture is legal: the class."""
+    piece, target = board.piece_at(move.from_square), board.piece_at(move.to_square)
+    if not (piece and target and piece.color == board.turn and target.color != board.turn):
+        return None
+    c = pair_class(piece.piece_type, target.piece_type)
+    if c is None or not board.is_legal(move):
+        return None
+    b = board.copy(stack=False)
+    b.push(move)
+    return c if recapture_legal(b, move.to_square) else None
+
+
+def offer_classes(board, move):
+    """The classes `move` offers: it puts a knight, bishop or rook where an enemy piece of a matching class can
+    legally take it, and the mover can then legally recapture."""
+    piece = board.piece_at(move.from_square)
+    if not piece or piece.piece_type not in LETTER or not board.is_legal(move):
+        return set()
+    b = board.copy(stack=False)
+    b.push(move)
+    out = set()
+    for frm in b.attackers(b.turn, move.to_square):
+        c = pair_class(piece.piece_type, b.piece_type_at(frm))
+        take = chess.Move(frm, move.to_square)
+        if c is None or c in out or not b.is_legal(take):
+            continue
+        b2 = b.copy(stack=False)
+        b2.push(take)
+        if recapture_legal(b2, move.to_square):
+            out.add(c)
+    return out
+
+
+def piece_trades_available(board):
+    """{class: 'cap' or 'offer'} for the trades the side to move can start (a capture beats an offer)."""
+    out = {}
+    for m in board.legal_moves:
+        p = board.piece_type_at(m.from_square)
+        if p not in LETTER:
+            continue
+        c = capture_class(board, m)
+        if c:
+            out[c] = 'cap'
+        for c in offer_classes(board, m):
+            out.setdefault(c, 'offer')
+    return out
+
+
+def line_piece_trade(board, moves, plies=TRADE_PLIES):
+    """The class a line trades: at the first of its first `plies` plies after which both sides have lost a knight,
+    bishop, rook or queen, each side has lost exactly one and the pair is a class; or a one-move line that is a
+    class capture with a legal recapture. Else None."""
+    if not moves:
+        return None
+    start = {c: piece_counts(board, c) for c in (chess.WHITE, chess.BLACK)}
+    b = board.copy(stack=False)
+    for m in moves[:plies]:
+        if not b.is_legal(m):
+            break
+        b.push(m)
+        lost = {}
+        for c in (chess.WHITE, chess.BLACK):
+            now = piece_counts(b, c)
+            lost[c] = [pt for pt, n in start[c].items() for _ in range(max(0, n - now[pt]))]
+        if lost[chess.WHITE] and lost[chess.BLACK]:
+            if len(lost[chess.WHITE]) == 1 and len(lost[chess.BLACK]) == 1:
+                return pair_class(lost[chess.WHITE][0], lost[chess.BLACK][0])
+            return None
+    if len(moves) == 1:
+        return capture_class(board, moves[0])
+    return None
+
+
+def queen_state(board):
+    """'ql' (no queen on the board), 'qon' (one queen each) or None."""
+    w, b = queens(board, chess.WHITE), queens(board, chess.BLACK)
+    return 'ql' if w == b == 0 else 'qon' if w == b == 1 else None
 
 
 def level_queenless(board, prev_move, move, sf_cp):
@@ -326,6 +446,60 @@ def build_qtrade(games, seed):
     return cap(pools['S'], TRADE_CAP, seed, 'qtradeS') + cap(pools['F'], TRADE_CAP, seed, 'qtradeF')
 
 
+def format_avail(avail):
+    return ','.join(f'{c}:{avail[c]}' for c in PIECE_CLASSES if c in avail)
+
+
+def parse_avail(text):
+    return dict(x.split(':') for x in text.split(',') if x)
+
+
+def build_ptrade(games, seed):
+    keys = [(s, q) for s in ('S', 'F') for q in ('ql', 'qon')]
+    pools = {k: [] for k in keys}
+    seen = set()
+    for g in games:
+        pl = g['plies']
+        cands = {k: [] for k in keys}
+        for i, p in enumerate(pl):
+            b = p['board']
+            qs = queen_state(b)
+            if qs is None:
+                continue
+            if p['fork_moves']:
+                if i == 0 or pl[i - 1]['cp'] is None:
+                    continue
+                sub, sf = 'F', -pl[i - 1]['cp']
+            else:
+                if p['cp'] is None:
+                    continue
+                sub, sf = 'S', p['cp']
+            if not PTRADE_LO <= sf <= PTRADE_HI:
+                continue
+            traded = line_piece_trade(b, [q['move'] for q in pl[i:i + TRADE_PLIES]])
+            avail = piece_trades_available(b)
+            if traded and traded not in avail:
+                avail[traded] = 'line'
+            if not avail:
+                continue
+            cands[(sub, qs)].append({'fen': b.fen(), 'subset': sub, 'qstate': qs, 'sf_cp': sf,
+                                     'avail': format_avail(avail), 'game_trade': traded or '-',
+                                     'source': g['source'], 'game': g['game'], 'ply': i})
+        for k in keys:
+            rng = game_rng(seed, 'ptrade' + ''.join(k), g['game'])
+            rng.shuffle(cands[k])
+            taken = 0
+            for c in cands[k]:
+                if taken == PTRADE_PER_GAME:
+                    break
+                if c['fen'] in seen:
+                    continue
+                seen.add(c['fen'])
+                pools[k].append(c)
+                taken += 1
+    return [r for k in keys for r in cap(pools[k], PTRADE_CAP, seed, 'ptrade' + ''.join(k))]
+
+
 def write_tsv(path, kind, rows):
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write('\t'.join(FIELDS[kind]) + '\n')
@@ -348,11 +522,14 @@ def cmd_sets(a):
     out.mkdir(parents=True, exist_ok=True)
     uho, bal = read_games(a.uho, 'uho'), read_games(a.bal, 'bal')
     adv, skipped = build_adv(uho)
-    sets = {'adv': adv, 'levelql': build_levelql(uho + bal, a.seed), 'qtrade': build_qtrade(uho + bal, a.seed)}
+    sets = {'adv': adv, 'levelql': build_levelql(uho + bal, a.seed), 'qtrade': build_qtrade(uho + bal, a.seed),
+            'ptrade': build_ptrade(uho + bal, a.seed)}
     man = {'seed': a.seed, 'games': {'uho': len(uho), 'bal': len(bal)}, 'adv_skipped': len(skipped),
            'rules': {'level_window_cp': LEVEL_WINDOW, 'level_per_game': LEVEL_PER_GAME, 'level_cap': LEVEL_CAP,
                      'trade_band_cp': [TRADE_LO, TRADE_HI], 'trade_per_game': TRADE_PER_GAME,
-                     'trade_cap_per_subset': TRADE_CAP, 'trade_plies': TRADE_PLIES},
+                     'trade_cap_per_subset': TRADE_CAP, 'trade_plies': TRADE_PLIES,
+                     'ptrade_band_cp': [PTRADE_LO, PTRADE_HI], 'ptrade_per_game': PTRADE_PER_GAME,
+                     'ptrade_cap_per_subset_and_queen_state': PTRADE_CAP, 'ptrade_classes': list(PIECE_CLASSES)},
            'sources': {str(p.relative_to(Path(d).parent)).replace('\\', '/'): sha256(p)
                        for d in (a.uho, a.bal) for p in sorted(Path(d).glob('*/games.pgn'))},
            'sets': {}}
@@ -367,6 +544,13 @@ def cmd_sets(a):
             info['game_trade'] = {s: sum(r['subset'] == s and r['game_trade'] for r in rows) for s in ('S', 'F')}
         if kind == 'levelql':
             info['by_source'] = {s: sum(r['source'] == s for r in rows) for s in ('uho', 'bal')}
+        if kind == 'ptrade':
+            groups = {f'{s}_{q}': [r for r in rows if r['subset'] == s and r['qstate'] == q]
+                      for s in ('S', 'F') for q in ('ql', 'qon')}
+            info['groups'] = {k: {'n': len(g), 'avail': {c: sum(c in parse_avail(r['avail']) for r in g)
+                                                         for c in PIECE_CLASSES},
+                                  'game_trade': {c: sum(r['game_trade'] == c for r in g) for c in PIECE_CLASSES}}
+                              for k, g in groups.items()}
         man['sets'][kind] = info
     (out / 'manifest.json').write_text(json.dumps(man, indent=1) + '\n', encoding='utf-8')
     for kind, info in man['sets'].items():
@@ -503,11 +687,12 @@ def compare(fork_vals, sf_vals):
 
 def cmd_run(a):
     sets = Path(a.sets)
-    adv, lev, qt = (read_tsv(sets / f'{k}.tsv') for k in ('adv', 'levelql', 'qtrade'))
     man = json.loads((sets / 'manifest.json').read_text(encoding='utf-8'))
-    for k, rows in (('adv', adv), ('levelql', lev), ('qtrade', qt)):
+    for k in man['sets']:
         if sha256(sets / f'{k}.tsv') != man['sets'][k]['sha256']:
             raise SystemExit(f'uho_diag: {k}.tsv does not match manifest.json')
+    adv, lev, qt = (read_tsv(sets / f'{k}.tsv') for k in ('adv', 'levelql', 'qtrade'))
+    pt = read_tsv(sets / 'ptrade.tsv') if 'ptrade' in man['sets'] else []
     if not a.net and not a.bin:
         raise SystemExit('uho_diag: give --net, --bin or both')
     fens = [r['fen'] for r in adv + lev]
@@ -543,6 +728,7 @@ def cmd_run(a):
             for r in qt:
                 score, pv = eng.search(r['fen'], a.nodes)
                 per.append((r, int(line_trades(chess.Board(r['fen']), pv)), score))
+            pper = [(r, line_piece_trade(chess.Board(r['fen']), eng.search(r['fen'], a.nodes)[1])) for r in pt]
         finally:
             eng.close()
         qres = {}
@@ -558,10 +744,39 @@ def cmd_run(a):
                     'agree': round(sum(t == int(r['game_trade']) for r, t, _ in rows) / n, 3),
                     'search_cp_median': st.median(s for _, _, s in rows)}
         srch['qtrade'] = qres
+        if pt:
+            srch['ptrade'] = ptrade_rates(pper)
         res['search'] = srch
     Path(a.out).write_text(json.dumps(res, indent=1) + '\n', encoding='utf-8')
     print(line(res))
     return 0
+
+
+def ptrade_rates(per):
+    """Per group (subset S or F, queen state ql, qon or all) and class: among the positions where the class is
+    available (`n`; `n_cap` where by a capture), the share whose search line trades that class (`net`, `net_cap`)
+    and whose game line did (`ref`, `ref_cap`: SF19's choice in S, Fork's in-game choice in F); `any`: every
+    position, a trade of any class."""
+    out = {}
+    for sub in ('S', 'F'):
+        for qs in ('ql', 'qon', 'all'):
+            rows = [(r, t) for r, t in per if r['subset'] == sub and (qs == 'all' or r['qstate'] == qs)]
+            if not rows:
+                continue
+            n = len(rows)
+            grp = {'any': {'n': n, 'net': round(sum(t is not None for _, t in rows) / n, 3),
+                           'ref': round(sum(r['game_trade'] != '-' for r, _ in rows) / n, 3)}}
+            for c in PIECE_CLASSES:
+                av = [(r, t) for r, t in rows if c in parse_avail(r['avail'])]
+                cp = [(r, t) for r, t in av if parse_avail(r['avail'])[c] == 'cap']
+                d = {'n': len(av), 'n_cap': len(cp)}
+                for tag, sel in (('', av), ('_cap', cp)):
+                    if sel:
+                        d['net' + tag] = round(sum(t == c for _, t in sel) / len(sel), 3)
+                        d['ref' + tag] = round(sum(r['game_trade'] == c for r, _ in sel) / len(sel), 3)
+                grp[c] = d
+            out[f'{sub}_{qs}'] = grp
+    return out
 
 
 def line(res):
@@ -575,6 +790,10 @@ def line(res):
                 f"{r['levelql']['fork']['median']:+}; qtrade S {q['S_all']['net_trade']:.2f} vs SF "
                 f"{q['S_all']['sf_trade']:.2f} (qxq {q['S_qxq']['net_trade']:.2f} vs {q['S_qxq']['sf_trade']:.2f}), "
                 f"F {q['F_all']['net_trade']:.2f} vs Fork-game {q['F_all']['fork_game_trade']:.2f}")
+        if 'ptrade' in r:
+            out += '; ptrade any ' + ', '.join(
+                f"{g} {r['ptrade'][g]['any']['net']:.2f} vs {r['ptrade'][g]['any']['ref']:.2f}"
+                for g in ('S_ql', 'S_qon', 'F_ql', 'F_qon') if g in r['ptrade'])
     return out + ' (cp, raw)'
 
 
@@ -603,6 +822,25 @@ def cmd_table(a):
         print(f"\nSF19 medians: adv {s['adv']['sf']['median']:+} cp ({s['adv']['sf_pawns_median']:+} pawns), "
               f"levelql {s['levelql']['sf']['median']:+} cp. Values are raw cp, from the advantaged side (adv) and "
               f"Fork's side (levelql); trade = share of qtrade positions whose line trades queens.")
+    prow = [r for r in rows if 'ptrade' in (r.get('search') or {})]
+    if prow:
+        print("\nPiece trades (ptrade): share of positions where the class is available whose search line trades it, "
+              "net / reference (n); reference = SF19's own choice in S (SF to move), Fork's in-game choice in F "
+              "(Fork to move); ql = queenless, qon = queens on; 'cap' = only where a capture starts the trade.\n")
+        head = ['net', 'group', 'any'] + list(PIECE_CLASSES) + [f'{c} cap' for c in PIECE_CLASSES]
+        print('| ' + ' | '.join(head) + ' |')
+        print('|' + '---|' * len(head))
+        for r in prow:
+            for g in ('S_ql', 'S_qon', 'F_ql', 'F_qon'):
+                d = r['search']['ptrade'].get(g)
+                if not d:
+                    continue
+                cells = [r['name'], g, f"{d['any']['net']:.2f} / {d['any']['ref']:.2f} ({d['any']['n']})"]
+                for tag, nk in (('', 'n'), ('_cap', 'n_cap')):
+                    for c in PIECE_CLASSES:
+                        x = d[c]
+                        cells.append(f"{x['net' + tag]:.2f} / {x['ref' + tag]:.2f} ({x[nk]})" if x[nk] else '-')
+                print('| ' + ' | '.join(cells) + ' |')
     return 0
 
 

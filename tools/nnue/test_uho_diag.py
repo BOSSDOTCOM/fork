@@ -182,5 +182,95 @@ class SignNormalisation(unittest.TestCase):
         self.assertIsNone(u.comment_cp(''))
 
 
+# Lines for the piece-trade detector, each reached by legal moves (the knight and bishop ones were found by a random
+# search over legal lines with python-chess, 2026-11-13).
+ROOKS = ('a4', 'a5', 'Ra3', 'Ra6', 'Rb3', 'Rb6')           # White to move: Rxb6, recaptured by c7xb6
+SPANISH = ('e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6')         # White to move: Bxc6, recaptured by a pawn
+KNIGHTS = ('g3', 'Nf6', 'e4', 'Nxe4', 'Bh3', 'd6', 'Nc3')  # Black to move: Nxc3, recaptured by a pawn
+BISHOPS = ('d4', 'h6', 'b3', 'a5', 'Ba3', 'e5')           # White to move: Bxf8, recaptured by the king
+KNIGHT_OFFER = ('b4', 'Nc6', 'g3', 'Ne5')                  # White to move: Nf3 offers the knights
+LOOSE_BISHOP = ('g3', 'b6', 'Bg2', 'Bb7')                  # White to move: Bxb7 cannot be recaptured
+
+
+class PieceTrades(unittest.TestCase):
+    def test_pair_classes(self):
+        self.assertEqual(u.pair_class(chess.ROOK, chess.ROOK), 'R')
+        self.assertEqual(u.pair_class(chess.KNIGHT, chess.BISHOP), 'BN')
+        self.assertEqual(u.pair_class(chess.BISHOP, chess.KNIGHT), 'BN')
+        self.assertIsNone(u.pair_class(chess.ROOK, chess.KNIGHT))
+        self.assertIsNone(u.pair_class(chess.QUEEN, chess.QUEEN))
+
+    def test_captures_with_recapture(self):
+        for line, san, cls in ((ROOKS, 'Rxb6', 'R'), (SPANISH, 'Bxc6', 'BN'), (KNIGHTS, 'Nxc3', 'N'),
+                               (BISHOPS, 'Bxf8', 'B')):
+            b = play(*line)
+            self.assertEqual(u.capture_class(b, b.parse_san(san)), cls, san)
+            self.assertEqual(u.piece_trades_available(b).get(cls), 'cap', san)
+            self.assertEqual(u.line_piece_trade(b, [b.parse_san(san)]), cls, san)  # one-move line
+
+    def test_capture_without_recapture(self):
+        b = play(*LOOSE_BISHOP)
+        m = b.parse_san('Bxb7')
+        self.assertIsNone(u.capture_class(b, m))
+        self.assertNotEqual(u.piece_trades_available(b).get('B'), 'cap')
+        self.assertIsNone(u.line_piece_trade(b, [m]))
+
+    def test_lines(self):
+        b = play(*ROOKS)
+        self.assertEqual(u.line_piece_trade(b, moves(b, 'Rxb6', 'cxb6')), 'R')
+        self.assertEqual(u.line_piece_trade(b, moves(b, 'Rxb6', 'cxb6', 'Nc3')), 'R')
+        self.assertIsNone(u.line_piece_trade(b, moves(b, 'Rxb6', 'Nc6', 'Nc3')))  # a rook won, not traded
+        self.assertIsNone(u.line_piece_trade(b, moves(b, 'Nc3', 'Nc6', 'e3')))
+        b = play(*SPANISH)
+        self.assertEqual(u.line_piece_trade(b, moves(b, 'Bxc6', 'dxc6')), 'BN')
+        b = play(*BISHOPS)
+        self.assertEqual(u.line_piece_trade(b, moves(b, 'Bxf8', 'Kxf8')), 'B')
+        b = play(*CENTRE, 'Qf3')  # a queen trade is not a piece-class trade
+        self.assertIsNone(u.line_piece_trade(b, moves(b, 'Qxf3', 'Nxf3')))
+
+    def test_offer(self):
+        b = play(*KNIGHT_OFFER)
+        m = b.parse_san('Nf3')
+        self.assertIsNone(u.capture_class(b, m))
+        self.assertEqual(u.offer_classes(b, m), {'N'})
+        self.assertEqual(u.piece_trades_available(b).get('N'), 'offer')
+        self.assertEqual(u.line_piece_trade(b, moves(b, 'Nf3', 'Nxf3+', 'exf3')), 'N')
+
+    def test_queen_state(self):
+        self.assertEqual(u.queen_state(chess.Board()), 'qon')
+        self.assertEqual(u.queen_state(play(*QUEENLESS)), 'ql')
+        self.assertIsNone(u.queen_state(play(*CENTRE, 'Qf3', 'Qxf3')))
+
+    def test_set_row_and_sign(self):
+        # Fork White; SF's -0.50 at ...Rb6 (Black's view) is White's +50 when Fork is to play Rxb6 (subset F)
+        line = list(ROOKS) + ['Rxb6', 'cxb6', 'Nc3']
+        comments = ['0.00/10 0.1s'] * len(line)
+        comments[5] = '-0.50/10 0.1s'
+        with tempfile.TemporaryDirectory() as d:
+            shard = Path(d) / 'shard-1'
+            shard.mkdir()
+            write_game(shard / 'games.pgn', True, list(zip(line, comments)))
+            rows = u.build_ptrade(u.read_games(d, 'uho'), u.SEED)
+        self.assertEqual(len(rows), 1)
+        r = rows[0]
+        self.assertEqual((r['subset'], r['qstate'], r['sf_cp'], r['game_trade'], r['ply']), ('F', 'qon', 50, 'R', 6))
+        self.assertEqual(u.parse_avail(r['avail'])['R'], 'cap')
+
+    def test_rates(self):
+        rows = [{'subset': 'S', 'qstate': 'ql', 'avail': 'R:cap,BN:offer', 'game_trade': 'R'},
+                {'subset': 'S', 'qstate': 'ql', 'avail': 'R:offer', 'game_trade': '-'},
+                {'subset': 'S', 'qstate': 'qon', 'avail': 'BN:cap', 'game_trade': '-'},
+                {'subset': 'F', 'qstate': 'ql', 'avail': 'N:line', 'game_trade': 'N'}]
+        out = u.ptrade_rates(list(zip(rows, ['R', 'R', 'BN', None])))
+        sq = out['S_ql']
+        self.assertEqual(sq['any'], {'n': 2, 'net': 1.0, 'ref': 0.5})
+        self.assertEqual(sq['R'], {'n': 2, 'n_cap': 1, 'net': 1.0, 'ref': 0.5, 'net_cap': 1.0, 'ref_cap': 1.0})
+        self.assertEqual(sq['BN'], {'n': 1, 'n_cap': 0, 'net': 0.0, 'ref': 0.0})
+        self.assertEqual(out['S_all']['BN']['n'], 2)
+        self.assertEqual(out['S_qon']['BN'], {'n': 1, 'n_cap': 1, 'net': 1.0, 'ref': 0.0, 'net_cap': 1.0,
+                                             'ref_cap': 0.0})
+        self.assertEqual(out['F_ql']['N'], {'n': 1, 'n_cap': 0, 'net': 0.0, 'ref': 1.0})
+
+
 if __name__ == '__main__':
     unittest.main()
