@@ -100,6 +100,12 @@ class TakeHistory {
     for (std::int16_t& v : table_) v = 0;
   }
 
+  // History ageing (the engine survey's D17): every entry keeps
+  // keep_quarters / 4 of its value (rounded toward zero).
+  void age(int keep_quarters) {
+    for (std::int16_t& v : table_) v = static_cast<std::int16_t>(v * keep_quarters / 4);
+  }
+
  private:
   std::int16_t table_[TakeSlots] = {};
 };
@@ -146,6 +152,12 @@ class PairHistory {
       for (std::int16_t& v : row) v = 0;
   }
 
+  // As TakeHistory::age.
+  void age(int keep_quarters) {
+    for (auto& row : table_)
+      for (std::int16_t& v : row) v = static_cast<std::int16_t>(v * keep_quarters / 4);
+  }
+
  private:
   std::int16_t table_[PairSlots][PairSlots] = {};
 };
@@ -184,6 +196,14 @@ class QuietHistory {
       for (auto& bucket : side)
         for (auto& from : bucket)
           for (std::int16_t& v : from) v = 0;
+  }
+
+  // As TakeHistory::age.
+  void age(int keep_quarters) {
+    for (auto& side : table_)
+      for (auto& bucket : side)
+        for (auto& from : bucket)
+          for (std::int16_t& v : from) v = static_cast<std::int16_t>(v * keep_quarters / 4);
   }
 
  private:

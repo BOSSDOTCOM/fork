@@ -578,6 +578,40 @@ TEST_CASE("ordering", "threat buckets: from and to bits, all four reached, indep
   CHECK_EQ(history->value(White, m), 0);  // the default bucket is 0
 }
 
+// History ageing (the engine survey's D17): each table's age keeps
+// keep_quarters / 4 of every entry, rounded toward zero, on both signs;
+// 4 quarters leaves it as it was and 0 clears it.
+TEST_CASE("ordering", "history ageing: every table keeps its quarters of each entry") {
+  Position pos;
+  CHECK(pos.set_fen(perft_suite()[1].fen));  // kiwipete
+  const Move m = pos.parse_uci("c3b1"), n = pos.parse_uci("a2a3");
+  auto quiet = std::make_unique<QuietHistory>();
+  auto pairs = std::make_unique<PairHistory[]>(2);
+  auto takes = std::make_unique<TakeHistory>();
+  quiet->apply(White, m, 1001, 3);
+  quiet->apply(Black, n, -999);
+  pairs[FollowTable].apply(100, 200, 1001);
+  takes->apply(300, -999);
+  const int q = quiet->value(White, m, 3), r = quiet->value(Black, n), p = pairs[FollowTable].value(100, 200),
+            t = takes->value(300);
+  CHECK(q > 0 && r < 0 && p > 0 && t < 0);
+  quiet->age(4);
+  pairs[FollowTable].age(4);
+  takes->age(4);
+  CHECK(quiet->value(White, m, 3) == q && quiet->value(Black, n) == r);
+  CHECK(pairs[FollowTable].value(100, 200) == p && takes->value(300) == t);
+  quiet->age(3);
+  pairs[FollowTable].age(2);
+  takes->age(1);
+  CHECK_EQ(quiet->value(White, m, 3), q * 3 / 4);
+  CHECK_EQ(quiet->value(Black, n), r * 3 / 4);  // toward zero: -749 for -999
+  CHECK_EQ(pairs[FollowTable].value(100, 200), p / 2);
+  CHECK_EQ(takes->value(300), t / 4);
+  CHECK_EQ(quiet->value(White, m, 0), 0);  // an empty entry stays empty
+  quiet->age(0);
+  CHECK_EQ(quiet->value(White, m, 3), 0);
+}
+
 // The selector reads the threat bucket only when threat-aware: in kiwipete
 // the knight on c3, attacked by the b4 pawn, has a bonus for c3b1 in that
 // move's bucket, and another quiet has a smaller bonus in bucket 0. With

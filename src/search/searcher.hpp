@@ -204,6 +204,13 @@ struct SearchQuota {
 //   non-regression SPRT [-3, 0] against off passed: +2.86 +/- 2.77 Elo
 //   after 19,200 games (its design R [0, 6] STC capped undecided at +2.80
 //   +/- 3.43); 2026-11-12.
+// - use_history_ageing: history ageing between searches (the engine
+//   survey's D17, think tank R16): at the start of each search (each `go`)
+//   every history entry (butterfly, reply, follow, take) keeps
+//   HistoryKeepQuarters / 4 of its value, so what earlier moves' searches
+//   learned fades instead of persisting unchanged. On since its STC SPRT
+//   against off passed: +5.71 +/- 3.77 Elo after 11,200 games, design R
+//   [0, 6]; 2026-11-12.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -247,7 +254,8 @@ struct SearchQuota {
   X(use_threat_drift, UseThreatDrift, false)             \
   X(use_pair_sum_update, UsePairSumUpdate, true)         \
   X(use_check_order_bonus, UseCheckOrderBonus, true)     \
-  X(use_skip_check_exempt, UseSkipCheckExempt, true)
+  X(use_skip_check_exempt, UseSkipCheckExempt, true)     \
+  X(use_history_ageing, UseHistoryAgeing, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -647,6 +655,14 @@ class Searcher {
     minor_drift_.clear();
     major_drift_.clear();
     threat_drift_.clear();
+  }
+  // History ageing (D17): every history entry keeps HistoryKeepQuarters / 4
+  // of its value; deliberate() calls it at each search's start with
+  // use_history_ageing.
+  void age_histories() {
+    history_.age(HistoryKeepQuarters);
+    for (PairHistory& table : pair_history_) table.age(HistoryKeepQuarters);
+    take_history_.age(HistoryKeepQuarters);
   }
   // Tests only: the butterfly history (the threat buckets' read and update
   // checks, tier 2 T56).

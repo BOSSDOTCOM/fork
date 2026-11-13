@@ -2850,6 +2850,26 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** none expected (one multiply at a fail high).
 - **earliest phase:** Phase 4.
 
+## 89. History ageing between searches (the engine survey's D17, think tank R16)
+
+- **type:** ELO (search); flag `use_history_ageing` (on since 2026-11-12).
+- **idea** (the engine survey's D17; think tank R16, step 12; concept
+  only): at the start of each search (each `go`) every history entry keeps
+  `HistoryKeepQuarters` / 4 of its value.
+- **status:** **adopted 2026-11-12** at `HistoryKeepQuarters` 2 on its STC pass (survey-d17-stc, design R
+  [0, 6] against off: +5.71 ± 3.77 Elo, nElo +9.74 ± 6.43, H1 after 11,200 games; sprt-log), pre-approved by
+  the owner's rule of 2026-11-11; ported onto phase-4 1b5a482, bench 9,443,408 / 6d421599a985f97c, unchanged
+  (DESIGN.md decisions log, 2026-11-12). `HistoryKeepQuarters` is a class (a) dimension of the final
+  retune's SPSA (final-retune.md §3.1). The retry (item 52b, 3 quarters) was not needed. History: built on
+  phase-4 a95e269 behind the switch, off, branch tier2/d17-history-ageing 94999a9 (coordinator, 2026-11-11
+  night; owner's rules of 2026-11-11: nat/retry; recorded on that branch's ideas.md as idea 89, entered here
+  with the result); test side sprt/d17-history-ageing-2 ee3a6c7; night item 52a, gated behind
+  state/gate-e1.done. The drift tables, added to phase-4 since, are not aged (UNVERIFIED whether they
+  should be).
+- **runtime cost:** one pass over the history tables (about 2.4 MB, nearly all the two pair tables) per
+  search. bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 1b5a482, B = the port's build of this commit's engine code from the uncommitted tree on 1b5a482, r8brft1; identity checked on all 24 runs, `--same-nodes`): 12 interleaved rounds, median nps +0.9%, best +2.5%, under the 3.0% noise threshold: no significant difference. The bench pays one ageing pass per position (each position is its own search, on cleared tables), so the pass's price is inside that measurement; the bench's nodes are unchanged.
+- **earliest phase:** Phase 4.
+
 ## 130. The pass-best stop rule (bug review 2026-11-11, E1)
 
 - **type:** ELO (search); flag `use_pass_best_stop` (on since 2026-11-12).

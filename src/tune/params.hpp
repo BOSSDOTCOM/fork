@@ -79,6 +79,7 @@
   X(HistorySkipPerPly, 700, 350, 4000, 183)   \
   X(HistoryBonusFactor, 25, 12, 50, 2)        \
   X(HistoryBonusCap, 1250, 625, 2500, 94)     \
+  X(HistoryKeepQuarters, 2, 0, 4, 1)          \
   X(ReplyWeight, 6, 0, 12, 1)                 \
   X(FollowWeight, 4, 0, 16, 1)                \
   X(TakeWeight, 4, 0, 16, 1)                  \

@@ -1896,3 +1896,36 @@ The final stage's result block (skip-check-exempt-nonreg, stage 19, run 43356312
   6d421599a985f97c (r8brft1), byte for byte cb66f9b's tests/bench-r8brft1.ref; with the exemption off 9,118,607 /
   208629aa15e140a9, phase-4's, so the port equals the tested code. Every other reference re-pinned from its own
   build. Speed: bench/ab_search.py (clang-release, Windows, not pinned; A = phase-4 016d952, B = the port's build of this commit's engine code from the uncommitted tree on 016d952, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -0.1%, best +0.2%, under the 3.0% noise threshold: no significant difference. The bench searches 3.6% more nodes (9,443,408 against 9,118,607).
+
+### 2026-11-12 history ageing between searches (the engine survey's D17, think tank R16; idea 89; night queue item 52a): design R SPRT against off (owner's rule): H1, adopted
+
+- The owner's rule (2026-11-11, about 7:45 PM EST): a constant the final retune will tune gets one design R SPRT
+  at its natural value, adopted if it passes (pre-approved), one retry at a second value if it fails. The
+  coordinator's overnight build list (2026-11-11), item 3: "D17 / R16 - history ageing between searches.
+  nat/retry." Base tier2/d17-history-ageing `94999a9` (phase-4 a95e269's engine with the ageing built in behind
+  `use_history_ageing`, off); test sprt/d17-history-ageing-2 `ee3a6c7` (the switch on, `HistoryKeepQuarters` 2);
+  bench 10,166,167 / d874b380155a2e8c on both (each bench position starts from cleared histories). STC 8+0.08,
+  Hash 16, Syzygy 3-4-5, UHO book (seed 20261027), r8brft1 on both sides; design R ([0, 6] nElo, alpha 0.05,
+  beta 0.20, cap 8, futility look after 2 stages), from stage 0. Ledger idea `d17-history-ageing`, try 1 of 2
+  (the retry, item 52b at 3 quarters, not needed). Gated behind state/gate-e1.done; started 9:15 PM EST. Data:
+  ~/fork-data/sprt/survey-d17-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **survey-d17-stc: D17 (2 quarters) on against off, stages 0-6** | 43350847538 (0), 43353063962 (1), 43355155758 (2), 43357245468 (3), 43359342771 (4), 43361375711 (5), 43363398879 (6) | 11,200 (no time losses, no abnormal ends) | **+5.71 ± 3.77** | +9.74 ± 6.43 | [132, 1278, 2626, 1402, 162] | **H1 accepted** (LLR 3.75) after stage 6, 11:25 PM EST 2026-11-12 |
+
+- By stage: after stage 0 +13.90 ± 9.82 (LLR 1.68); stage 1 +11.51 ± 6.91 (2.72); stage 2 +4.99 ± 5.71 (1.33);
+  stage 3 +3.04 ± 4.98 (0.70); stage 4 +4.43 ± 4.45 (1.82); stage 5 +4.63 ± 4.08 (2.33). Verdict file: "H1
+  accepted".
+
+The final stage's result block (survey-d17-stc, stage 6, run 43363398879):
+
+```
+    Shards: 112 (done); pairs 5600, games 11200 (11200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 5.71 +/- 3.77, nElo: 9.74 +/- 6.43
+    Ptnml(0-2): [132, 1278, 2626, 1402, 162]
+    LLR: 3.75 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Adopted (the owner's pre-approval, rule of 2026-11-11; an STC-only item):** 94999a9's change (relative to a95e269) with ee3a6c7's switch-on onto phase-4 1b5a482 alone (branch adopt/d17): the tables' `age` (QuietHistory, PairHistory, TakeHistory), `Searcher::age_histories` and its call at each search's start in `deliberate` (after the TT's age advance), the switch `UseHistoryAgeing` (now on), `HistoryKeepQuarters` 2 in the parameter table (after `HistoryBonusCap`, range 0-4, step 1) and the tests; the code lines equal ee3a6c7's diff against a95e269 apart from the switch list's and the parameter table's merge beside the entries adopted since (ProbCut, E1, the history skip, the drift tables, D8, D13, the exemption; ee3a6c7's switch entry, which sat on `UseThreatBuckets`' line, has its own line) and the comments (the switch's comment, the default checks' comments); both tier-2 all-switches cases (test_pruning, test_pruning_review) list it. The same tables are aged as tested: the butterfly history (every threat bucket), reply, follow and take. The drift tables (eval_drift.hpp, added since the tested base) are not aged; whether they should be is not measured (UNVERIFIED; a follow-up for the owner). `UseHistoryAgeing` on, `HistoryKeepQuarters` 2, the switch kept until the Phase 4 re-validation. **Bench equivalence** (clang-release, Windows, r8brft1): with the ageing on, 9,443,408 / 6d421599a985f97c, phase-4 1b5a482's; with it off (a build with the switch's default flipped), the same 9,443,408 / 6d421599a985f97c. Each bench position starts from cleared histories, so ageing them changes nothing, as on the tested pair (both 10,166,167 / d874b380155a2e8c); the port's tests check that it changes a second search and that a first search after `clear_history()` equals the switch-off one. No bench reference changes. `HistoryKeepQuarters` joins the final retune's SPSA (class (a)). Speed: bench/ab_search.py (clang-release, Windows, not pinned, the shared machine busy; A = phase-4 1b5a482, B = the port's build of this commit's engine code from the uncommitted tree on 1b5a482, r8brft1; identity checked on all 24 runs, `--same-nodes`): 12 interleaved rounds, median nps +0.9%, best +2.5%, under the 3.0% noise threshold: no significant difference. The bench pays one ageing pass per position (each position is its own search, on cleared tables), so the pass's price is inside that measurement; the bench's nodes are unchanged.

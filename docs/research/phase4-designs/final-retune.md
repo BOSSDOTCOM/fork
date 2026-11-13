@@ -154,6 +154,7 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | MinorDriftShare | 32 | **16-64 (was 32-128)** | 5 | ? | 3.2 / 6.4 at c = 5 (one step) | ok; **range 16-64, the owner's decision (2026-11-12, about 8:45 AM EST)**: the ranges rule's half to twice of the adopted 32, centred on it, replacing the range declared for the natural value 64, whose floor 32 was (added 2026-11-12, the minor drift table's adoption) |
 | DirectCheckBonus | 5000 | **2500-10000 (was 0-20000)** | **375 (was 1000)** | ? | 6.7 / 13.3 at c = 375 (one step) | ok; **range 2500-10000, the owner's decision (2026-11-12, about 12:50 PM EST: "DirectCheckBonus final-retune range 2500-10000")**: the ranges rule's half to twice of 5000, with the rule's step (a twentieth of the range, 375), replacing 0-20000 (step 1000), declared in the parameter table when D13 was re-planned (owner, 2026-11-11), whose floor 0 was the off-equivalent (added 2026-11-12, D13's adoption) |
 | DriftLimit | 300 | 150-600 | 23 | ? | 6.5 / 13 at c = 23 (one step) | ok (added 2026-11-12 with the minor table; it applies to every drift table, so only the minor table's while the others are off) |
+| HistoryKeepQuarters | 2 | 0-4 | 1 | ? | 2 / 2 at c = 1 (one step) | **flag**: within 2c of both bounds at one step; the range is the whole form (0 clears the tables at every search, 4 is no ageing), so a finer search needs a new unit (eighths, a new parameter: the owner's decision at step 19) (added 2026-11-12, D17's adoption) |
 
 p = 22 tuned parameters (23 with QuietSeeFloor), minus any parameter of a
 feature removed in step 18 (e.g. LMP's two if LMP is removed), plus the
@@ -214,6 +215,15 @@ with no constant** (`UseSkipCheckExempt`; skip-check-exempt-nonreg H1,
 +2.86 ± 2.77 Elo at STC, [−3, 0]; DESIGN.md "Search constants"), so p is
 unchanged. `HistorySkipPerPly` and `HistorySkipMaxDepth` (class (a)
 above) are tuned with the exemption in place.
+**2026-11-12: D17's `HistoryKeepQuarters` joins this pass** on its
+adoption (history ageing between searches at its natural value, 2
+quarters; survey-d17-stc +5.71 ± 3.77 Elo at STC, design R [0, 6];
+DESIGN.md "Search constants"), class (a) as a history weight (its row
+above), so p grows by 1. Unlike the other class (a) constants it acts
+between searches, not near the horizon: how much a search learns before
+the next one ages it grows with the time per move, so its STC optimum may
+not hold at LTC or TCEC's time control (UNVERIFIED; an LTC check of the
+SPSA's value is the owner's decision at step 19).
 
 ### 3.2 Class (b): LTC pass
 
