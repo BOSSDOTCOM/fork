@@ -869,8 +869,40 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // LmrNotImprovingPlies more (use_improving_lmr; never in check).
         const int trend_extra =
             switches.use_improving_lmr && !in_check && !improving ? LmrNotImprovingPlies : 0;
-        reduced =
-            std::clamp(new_depth - (base + correction - relief + cut_extra + trend_extra), 1, new_depth);
+        int plies = base + correction - relief + cut_extra + trend_extra;
+        if (switches.use_centred_lmr_history) {
+          // R20: every term in 64ths of a ply, rounded once. The history term
+          // reads the move's butterfly entry (the context's) and its reply and
+          // follow entries (the slot is the child's arrival, taken before the
+          // move), each less its running centre at LMR sites, weighted as the
+          // move ordering weights them; then each centre takes this value.
+          // The whole-ply terms (correction, check relief, cut-node plies,
+          // B9's not-improving plies) enter as whole multiples of 64, so each
+          // moves the rounded reduction by exactly its own plies, as it does
+          // with the switch off.
+          const int slot = frames_[ply + 1].arrival;
+          const int follow = follow_arrival(f);
+          const bool reply_read = switches.use_reply_history && f.arrival != NoArrival;
+          const bool follow_read = switches.use_follow_history && follow != NoArrival;
+          const int quiet_value = context.history;
+          const int reply_value = reply_read ? pair_history_[ReplyTable].value(f.arrival, slot) : 0;
+          const int follow_value = follow_read ? pair_history_[FollowTable].value(follow, slot) : 0;
+          int centred = quiet_value - lmr_centres_[0].centre();
+          if (reply_read) centred += (reply_value - lmr_centres_[1].centre()) * ReplyWeight / 4;
+          if (follow_read) centred += (follow_value - lmr_centres_[2].centre()) * FollowWeight / 4;
+#ifdef FORK_SEARCH_STATS
+          if (!ledger_active_)  // a decision-ledger side search leaves the centres as they were (X10)
+#endif
+          {
+            lmr_centres_[0].add(quiet_value);
+            if (reply_read) lmr_centres_[1].add(reply_value);
+            if (follow_read) lmr_centres_[2].add(follow_value);
+          }
+          plies = round_sixty_fourths(reduction_sixty_fourths(depth, moves_searched + 1) +
+                                      LmrFineUnit * (correction - relief + cut_extra + trend_extra) +
+                                      history_sixty_fourths(centred, LmrHistoryPerPly));
+        }
+        reduced = std::clamp(new_depth - plies, 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;
@@ -880,8 +912,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // would do here. The correction is the same with that base: the
         // committed rule returns 0 whatever its context. The probe's
         // reduction keeps every other term of the real one (check relief,
-        // the cut-node plies, B9's not-improving plies), so it differs only
-        // where the term fires.
+        // the cut-node plies, B9's not-improving plies, R20's centred term
+        // and its rounding: the probe's shift is whole plies, so taking it
+        // from the rounded sum equals adding it before the rounding), so it
+        // differs only where the term fires.
         ++counters.lmr_order_bins[order_score_bin(stats_order_score)];
         ++counters.lmr_quiet_bins[table_value_bin(stats_quiet_value)];
         if (f.arrival != NoArrival)
@@ -895,9 +929,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         const int shift = lmr_history_probe_shift(stats_order_score);
         counters.lmr_history_fire_less += shift > 0;
         counters.lmr_history_fire_more += shift < 0;
-        counters.lmr_history_changes +=
-            std::clamp(new_depth - (base - shift + correction - relief + cut_extra + trend_extra), 1,
-                       new_depth) != reduced;
+        counters.lmr_history_changes += std::clamp(new_depth - (plies - shift), 1, new_depth) != reduced;
 #endif
       }
 #ifdef FORK_SEARCH_STATS

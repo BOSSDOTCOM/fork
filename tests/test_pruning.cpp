@@ -748,6 +748,73 @@ TEST_CASE("pruning", "improving flag in LMP and LMR: still correct, and each cha
   CHECK(fx.tree_sizes(lmr_on, depth) == fx.tree_sizes(lmr_off, depth));
 }
 
+// Round-once LMR (think tank R20): the table in 64ths of a ply rounds back
+// to the whole-ply table at every entry, with any whole number of plies
+// added (so with no sub-ply term the search is unchanged); each entry lies
+// within half a ply of the whole one and within a ply of the real-valued
+// shape; the history term and the running centre by hand.
+TEST_CASE("pruning", "round-once LMR: 64ths round back to the whole-ply table, the term and centre by hand") {
+  for (int d = 1; d < LmrMaxDepth; ++d)
+    for (int m = 1; m < LmrMaxMove; ++m) {
+      const int fine = reduction_sixty_fourths(d, m), whole = reduction_for(d, m);
+      CHECK_MSG(fine >= 64 * whole - 32 && fine <= 64 * whole + 31, "d " << d << " m " << m << ": " << fine);
+      const double shape = std::log2(d) * std::log2(m) / 4.5;
+      CHECK_MSG(std::fabs(fine / 64.0 - shape) < 1.0, "d " << d << " m " << m << ": " << fine);
+      for (int k = -4; k <= 4; ++k)
+        CHECK_MSG(round_sixty_fourths(fine + 64 * k) == whole + k, "d " << d << " m " << m << " k " << k);
+    }
+  // Out-of-range arguments are clamped as reduction_for clamps them.
+  CHECK_EQ(reduction_sixty_fourths(200, 200), reduction_sixty_fourths(LmrMaxDepth - 1, LmrMaxMove - 1));
+  CHECK_EQ(reduction_sixty_fourths(0, 0), 0);
+  // The term: -centred * 64 / per_ply, truncated toward zero.
+  CHECK_EQ(history_sixty_fourths(0, 10000), 0);
+  CHECK_EQ(history_sixty_fourths(10000, 10000), -64);
+  CHECK_EQ(history_sixty_fourths(-5000, 10000), 32);
+  CHECK_EQ(history_sixty_fourths(156, 10000), 0);   // -0.998: under a 64th
+  CHECK_EQ(history_sixty_fourths(-157, 10000), 1);  // +1.005
+  CHECK_EQ(history_sixty_fourths(30000, 5000), -384);
+  // The centre: 0 at the start, then it follows a steady input (an
+  // exponential average: within 1% after 5 x 1024 values from 0), both signs.
+  HistoryCentre c;
+  CHECK_EQ(c.centre(), 0);
+  for (int i = 0; i < 5 * 1024; ++i) c.add(4000);
+  CHECK_MSG(c.centre() >= 3960 && c.centre() <= 4000, c.centre());
+  for (int i = 0; i < 8 * 1024; ++i) c.add(-2500);  // from about 4,000: within 0.1 cp per cp of the step
+  CHECK_MSG(c.centre() >= -2505 && c.centre() <= -2495, c.centre());
+  for (int i = 0; i < 20 * 1024; ++i) c.add(i % 2 ? HistoryMax : -HistoryMax);
+  CHECK_MSG(c.centre() >= -HistoryMax && c.centre() <= HistoryMax, c.centre());
+}
+
+// The centred LMR history term (R20): with it on, mates are still found and
+// the best move is legal, and it changes the tree (fault check: a term that
+// is always 0 leaves the tree as it is with the switch off). With every
+// history table left at zero (use_history off: no cutoff updates them) the
+// term is 0 and the round-once arithmetic gives the switch-off tree exactly
+// (B9's not-improving plies on in both: a whole-ply term in the 64ths sum).
+TEST_CASE("pruning", "centred LMR history: still correct, changes the search, round-once alone does not") {
+  PruningFixture fx;
+  CHECK(SearchSwitches{}.use_centred_lmr_history);  // on since its SPRTs
+  SearchSwitches on;
+  on.use_centred_lmr_history = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_centred_lmr_history = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the centred LMR history term left all three trees unchanged");
+  SearchSwitches no_history_on = on, no_history_off = off;
+  no_history_on.use_history = no_history_off.use_history = false;
+  CHECK(fx.tree_sizes(no_history_on, depth) == fx.tree_sizes(no_history_off, depth));
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -831,6 +898,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = true;
   s.use_pair_sum_update = s.use_check_order_bonus = s.use_skip_check_exempt = true;
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
+  s.use_centred_lmr_history = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

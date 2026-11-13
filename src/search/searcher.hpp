@@ -33,6 +33,7 @@
 
 #include "core/position.hpp"
 #include "search/eval_drift.hpp"
+#include "search/lmr_table.hpp"
 #include "search/move_selector.hpp"
 #include "search/quiet_history.hpp"
 #include "search/score_bounds.hpp"
@@ -224,6 +225,19 @@ struct SearchQuota {
 //   [0, 6]; 2026-11-13. use_improving_lmr is on since its own STC SPRT
 //   against off (the LMP use off on both sides) passed: +12.71 +/- 7.00 Elo
 //   after 3,200 games, design R [0, 6]; 2026-11-13.
+// - use_centred_lmr_history: round-once LMR with a centred history term
+//   (think tank R20, the engine survey's C10 in its centred form): the
+//   reduction is summed in 64ths of a ply (lmr_table.hpp, LmrSixtyFourths)
+//   and rounded once, and a late quiet is reduced less (more) by its
+//   butterfly, reply and follow entries above (below) their running centres
+//   at LMR sites (HistoryCentre), weighted as the move ordering weights them,
+//   one ply per LmrHistoryPerPly. With no history term the reduction is the
+//   whole-ply one exactly; the whole-ply terms (B9's not-improving plies
+//   among them) enter the sum as whole multiples of 64, so each moves the
+//   rounded reduction by exactly its own plies. On since its SPRTs against
+//   off (LmrHistoryPerPly 10,000) passed: STC +8.04 +/- 4.04 Elo after
+//   9,600 games, LTC +6.21 +/- 4.35 Elo after 6,656 games, design R [0, 6];
+//   2026-11-13.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -270,7 +284,8 @@ struct SearchQuota {
   X(use_skip_check_exempt, UseSkipCheckExempt, true)     \
   X(use_history_ageing, UseHistoryAgeing, true)          \
   X(use_improving_lmp, UseImprovingLmp, true)            \
-  X(use_improving_lmr, UseImprovingLmr, true)
+  X(use_improving_lmr, UseImprovingLmr, true)            \
+  X(use_centred_lmr_history, UseCentredLmrHistory, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -675,6 +690,7 @@ class Searcher {
     minor_drift_.clear();
     major_drift_.clear();
     threat_drift_.clear();
+    for (HistoryCentre& c : lmr_centres_) c = HistoryCentre{};
   }
   // History ageing (D17): every history entry keeps HistoryKeepQuarters / 4
   // of its value; deliberate() calls it at each search's start with
@@ -784,6 +800,11 @@ class Searcher {
   EvalDrift major_drift_;
   EvalDrift threat_drift_;
   bool drift_keys_live_ = false;  // play() keeps drift_keys_ (drift_in_use at the search's start)
+  // R20: the running centres of the butterfly, reply and follow entries at
+  // LMR sites (use_centred_lmr_history), cleared with the histories. D17's
+  // ageing leaves them as they are: they follow the aged tables within a
+  // few thousand LMR sites (HistoryCentre::Shift).
+  HistoryCentre lmr_centres_[3];
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;

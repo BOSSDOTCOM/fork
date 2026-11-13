@@ -1111,6 +1111,7 @@ tuned by SPSA.
 - **earliest phase:** Phase 4.
 - **status:** untested (planned 2026-11-05).
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 11):** folded into the round-once LMR step (R20) as its variant, run only if the centred history term passes; no longer §5.6's item 8.
+  **2026-11-13:** the centred term passed (R20 adopted at STC and LTC; idea 43), so this variant's condition is met; not built or queued (the owner's call). R20's term already reads the reply and follow entries (the one-ply and two-ply continuations).
 
 ## 43. Fractional depth
 
@@ -1130,6 +1131,7 @@ tuned by SPSA.
 - **status:** untested (planned 2026-11-05); design below (owner, 2026-11-05:
   plan only, no code yet).
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 20):** shrunk to round-once LMR arithmetic (R20); the full refactor (level 2) is out of Phase 4 and no longer precedes the SPSA retune.
+  **2026-11-13: R20 adopted** (level 1: round-once LMR in 64ths of a ply with the centred history term, `use_centred_lmr_history` on, `LmrHistoryPerPly` 10,000): design R against off passed at STC (+8.04 ± 4.04 Elo, nElo +13.84 ± 6.95, H1 after 9,600 games) and at LTC 40+0.4 (+6.21 ± 4.35 Elo, nElo +11.94 ± 8.35, H1 after 6,656 games; sprt-log), pre-approved by the owner; ported onto phase-4 1449010 with B9's not-improving ply as a whole multiple of 64 in the sum; bench 6,426,679 / 4c4375887f835cc7 (DESIGN.md decisions log, 2026-11-13). Speed (bench/ab_search.py, A = 1449010): median nps +0.9%, best +0.5%, under the 3.0% noise threshold, so no significant difference (identity checked on all 24 runs). `LmrHistoryPerPly` is a class (a) dimension of the final retune.
 - **Design** (Fork's own, from the KB entry's concepts):
   - **Unit:** depth is held in units of 1/64 ply (`OnePly = 64`): a power
     of two, fine enough for SPSA to move a reduction in small steps

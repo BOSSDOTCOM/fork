@@ -248,8 +248,11 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
   // The zero-band comparison below was set on trees without B9's LMP use (it
   // did not exist yet); with it on, the carried share comes out at 2829/8144
   // against a cleared 2872/8737 (2026-11-13), so the case pins it off on both
-  // searchers: it tests the carry-over on the trees it was built for.
+  // searchers: it tests the carry-over on the trees it was built for. R20's
+  // centred LMR history term (2026-11-13) flips it the same way (carried
+  // 1948/7260 against cleared 1988/8936), so it is pinned off too.
   carried->switches.use_improving_lmp = false;
+  carried->switches.use_centred_lmr_history = false;
   Position pos;
   CHECK(pos.set_fen(perft_suite()[0].fen));
   // A short game: each side plays the search's move, history carried.
@@ -281,6 +284,7 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
   std::fill(buckets.begin(), buckets.end(), TtBucket{});
   auto cleared = std::make_unique<Searcher>(table);
   cleared->switches.use_improving_lmp = false;
+  cleared->switches.use_centred_lmr_history = false;
   cleared->deliberate(pos, limits, stop, nullptr, nullptr);
   const SearchCounters& f = cleared->counters;
   CHECK(carried_sites > 0 && f.lmr_rule_sites > 0);
@@ -288,6 +292,15 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
                 static_cast<double>(f.lmr_quiet_bins[TableBins / 2]) / static_cast<double>(f.lmr_rule_sites),
             "zero-band share carried " << carried_zero << "/" << carried_sites << ", cleared "
                                        << f.lmr_quiet_bins[TableBins / 2] << "/" << f.lmr_rule_sites);
+  // The probe with the default switches (R20's rounded sum and B9's ply
+  // included, which the pins above leave out): its changes still need a
+  // firing (fault check: a probe that recomputes the whole-ply sum fails
+  // here with R20 on).
+  auto defaults = std::make_unique<Searcher>(table);
+  defaults->deliberate(pos, limits, stop, nullptr, nullptr);
+  const SearchCounters& d = defaults->counters;
+  CHECK(d.lmr_rule_sites > 0);
+  CHECK(d.lmr_history_changes <= d.lmr_history_fire_less + d.lmr_history_fire_more);
 }
 
 // The history skip (T24): its sites' histogram bounds its firing count. Each

@@ -1989,3 +1989,56 @@ The final stage's result block (survey-b9-lmr-stc, stage 1, run 43377962512):
 ```
 
 - **Adopted (the owner's pre-approval; an STC-only item):** phase-4 17717a8 already carried both uses (B9's LMP adoption ported 74e485a's change, the LMR use off, `LmrNotImprovingPlies` 1 in the parameter table); this adoption (branch adopt/b9-lmr) only turns `UseImprovingLmr` on, the same one-line switch-on as d3b3930's against 74e485a, and updates test_pruning's B9 default checks (both uses on). Stats builds only: X2's LMR history probe now keeps B9's not-improving plies in its counterfactual reduction, as its comment says it keeps every other term of the real one (search_stats X2's check that the probe's changes need a firing failed without it with the use on; d3b3930 had the same omission; no release-build change). Tested without the LMP use (off on both sides), it is adopted on top of it under the one-at-a-time rule; the stacking check that follows covers the interaction. R17's kill rule (two H0s among the LMP and LMR uses drop the flag) no longer applies. `UseImprovingLmr` on, `LmrNotImprovingPlies` 1, the switches kept until the Phase 4 re-validation. **Bench equivalence** (clang-release, Windows, r8brft1): with the LMR use off, 9,430,886 / 647c5ee9a57cae18, phase-4 17717a8's; with it on and the LMP use, ProbCut, E1, the history skip, the minor drift table, D8, D13, the exemption and D17 off (the tested base had none of them), 7,186,034 / debc7162447eb810, byte for byte d3b3930's tests/bench-r8brft1.ref, so the port equals the tested code. **Bench changes (intended):** 6,238,381 / 8d4a17943d604c99 with r8brft1 (33.9% fewer nodes than 9,430,886); every other reference re-pinned from its own build. `LmrNotImprovingPlies` joins the final retune's SPSA (class (a)). Tests: clang-release (Windows): every non-slow test passes (34 of 34, eval and uci_timing skipped as usual, bench_parity included; the search suite re-run after the stats probe's fix, 27 of 27); clang-debug: ordering (17 cases), pruning (33) and search (27) pass; clang-stats: search_stats passes (11 cases) with the probe's fix (X2 failed without it, the check that the probe's changes need a firing). No new pin: the two cases that pin the LMP use off (test_search's null-move zugzwang-guard case and search_stats X2's zero-band carry-over comparison) pass with the LMR use on, so neither pins it. Speed: bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked on all 24 runs), A = 17717a8, B = the port: median nps +0.5%, best +0.3%, under the 3.0% noise threshold, so no significant difference.
+
+### 2026-11-12/13 round-once LMR with a centred history term (think tank R20, the engine survey's C10 in its centred form; ideas 43 and 42; night queue items 80a and 80c): design R at STC, then its LTC confirmation (owner): H1 at both, adopted
+
+- The owner's rule of 2026-11-11 ("R-STC, then LTC"; one design R SPRT at the natural value, one retry at 5,000
+  if it fails). Base tier2/r20-centred-lmr `0f48efb` (phase-4 26323e1's engine with the term built in behind
+  `use_centred_lmr_history`, off; bench 10,166,167 / d874b380155a2e8c); test sprt/r20-centred-lmr `ea2075e` (the
+  switch on, `LmrHistoryPerPly` 10,000; bench 11,073,869 / b5af8584ce121128). r8brft1 on both sides, Syzygy 3-4-5,
+  UHO book (seed 20261027); design R ([0, 6] nElo, alpha 0.05, beta 0.20, futility look after 2 stages), from
+  stage 0. Ledger idea `r20-centred-lmr`, try 1 of 2 (the LTC its own class). Data: ~/fork-data/sprt/
+  r20-centred-lmr-stc and r20-centred-lmr-ltc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **r20-centred-lmr-stc: STC 8+0.08, design R [0, 6], cap 8 (Hash 16), R20 at 10,000 against off, stages 0-5** | 43313118399 (0), 43316120035 (1), 43319070317 (2), 43321951687 (3), 43324744028 (4), 43327533834 (5) | 9,600 (no time losses, no abnormal ends) | **+8.04 ± 4.04** | +13.84 ± 6.95 | [103, 1073, 2252, 1243, 129] | **H1 accepted** (LLR 5.17) after stage 5, 6:35 PM EST 2026-11-12 |
+| **r20-centred-lmr-ltc: LTC 40+0.4, design R [0, 6], cap 6 (Hash 64, 1,664 games a stage), the same pair, stages 0-3** | 43358461914 (0), 43367513386 (1), 43377038348 (2), 43386556188 (3) | 6,656 (no time losses, no abnormal ends) | **+6.21 ± 4.35** | +11.94 ± 8.35 | [35, 706, 1725, 829, 33] | **H1 accepted** (LLR 2.96) after stage 3, 3:54 AM EST 2026-11-13 |
+
+- STC by stage (cumulative): stage 0 +5.43 ± 9.75 (nElo +9.48 ± 17.02, LLR 0.52, Ptnml [13, 191, 374, 202, 20]);
+  stage 1 +7.71 ± 6.96 (LLR 1.64); stage 2 +5.14 ± 5.62 (LLR 1.43); stage 3 +4.89 ± 4.91 (LLR 1.74); stage 4
+  +5.65 ± 4.41 (LLR 2.69); stage 5 +8.04 ± 4.04 (LLR 5.17). Verdict: "H1 accepted".
+- **STC stage 0's failed first dispatch:** run 43253236046 (10:56 AM EST 2026-11-12) ended in failure: one of its
+  19 jobs, shard 9, failed in its tools step (the pinned fastchess release and book); the driver stopped, and the
+  resume at 4:27 PM EST re-ran stage 0 as run 43313118399. Not a result.
+- LTC by stage (cumulative): stage 0 +7.73 ± 8.83 (nElo +14.61 ± 16.69, LLR 0.96, Ptnml [10, 178, 416, 221, 7]);
+  stage 1 +7.20 ± 6.14 (LLR 1.79); stage 2 +6.54 ± 5.01 (LLR 2.38); stage 3 +6.21 ± 4.35 (LLR 2.96). Verdict: "H1
+  accepted".
+
+The final stages' result blocks (r20-centred-lmr-stc, stage 5, run 43327533834; r20-centred-lmr-ltc, stage 3, run
+43386556188):
+
+```
+    Shards: 96 (done); pairs 4800, games 9600 (9600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 8.04 +/- 4.04, nElo: 13.84 +/- 6.95
+    Ptnml(0-2): [103, 1073, 2252, 1243, 129]
+    LLR: 5.17 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+```
+    Shards: 64 (done); pairs 3328, games 6656 (6656 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 6.21 +/- 4.35, nElo: 11.94 +/- 8.35
+    Ptnml(0-2): [35, 706, 1725, 829, 33]
+    LLR: 2.96 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Adopted (the owner's pre-approval of 2026-11-11, "R-STC, then LTC"):** 0f48efb's change (relative to 26323e1)
+  onto phase-4 1449010 alone (branch adopt/r20-lmr), `UseCentredLmrHistory` on (ea2075e's switch-on),
+  `LmrHistoryPerPly` 10,000 (after `LmrNotImprovingPlies` in the parameter table, range 5,000-20,000, step 750),
+  the centres cleared with the histories beside the drift tables, test_pruning's two R20 cases (the default check
+  now on) and the tier-2 all-switches line. **How it combines with B9's LMR use** (adopted after R20's base, 1449010): the whole-ply sum is the table plus the correction, less check relief, plus the cut-node and B9's not-improving plies; with R20 on the same whole-ply terms (B9's among them) enter the 64ths sum as whole multiples of 64 beside the 64ths table and the centred history term, and the sum is rounded once. A whole number of plies added before the rounding moves the result by exactly that many plies, so each feature acts as it was tested: B9 adds its ply to R20's rounded reduction, R20 rounds its table and term with every other term in place. With every history table at zero the tree equals the switch-off tree (test_pruning, with B9 on). D17's ageing leaves R20's running centres as they are (the centres are cleared only with the histories, as tested); they follow the aged tables within a few thousand LMR sites (an untested interaction, as is B9 with R20; the stacking check that follows covers them). Stats builds only: X2's LMR history probe (FORK_SEARCH_STATS) now takes its shift from the real reduction's sum (R20's rounded one when on), so it keeps R20's term and rounding as it keeps every other term; ea2075e's probe recomputed the whole-ply sum (no release-build change). **Bench equivalence** (clang-release, Windows, r8brft1): with R20 off, 6,238,381 / 8d4a17943d604c99, phase-4 1449010's; with it on and ProbCut, E1, the history skip, the minor drift table, D8, D13, the exemption, D17 and B9's LMP and LMR uses off (the tested base had none of them), 11,073,869 / b5af8584ce121128, byte for byte ea2075e's tests/bench-r8brft1.ref, so the port equals the tested code. **Bench changes (intended):** 6,426,679 / 4c4375887f835cc7 with r8brft1 (3.0% more nodes than 6,238,381); every other reference re-pinned from its own build.
+  `LmrHistoryPerPly` joins the final retune's SPSA (class (a)). Tests: clang-release (Windows): every non-slow test passes (34 of 34, eval and uci_timing skipped as usual, bench_parity included); clang-debug: ordering (17 cases), pruning (35, R20's two new) and search (27) pass; clang-stats: search_stats passes (11 cases). **One case flipped with R20 on and is pinned:** search_stats X2's zero-band carry-over comparison (carried 1948/7260 against cleared 1988/8936 with R20 on), the tree-shape comparison B9's LMP use already pins off; it tests the history carry-over between searches, not strength, so R20 is pinned off on both of its searchers with a comment in the B9 pin's style. Because that pin takes R20 out of the case's probe check, the case now also runs the probe check on a default-switches search (R20 and B9 on): fault check, with ea2075e's whole-ply probe that check fails, with the port's it passes. No other case flipped (test_search's null-move zugzwang-guard case, which pins the LMP use off, passes). Speed:
+  bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked), A = 1449010,
+  B = the port: median nps +0.9%, best +0.5%, under the 3.0% noise threshold, so no significant difference (identity checked on all 24 runs).
