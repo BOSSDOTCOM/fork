@@ -66,8 +66,24 @@
 # alternates by pass); Hash 16 for both, at the gauntlet's TC; no report job
 # (the driver pairs the stages' games by opening). Title: "anchor check OLD
 # NEW match stage S", with the book's suffix.
+#
+# The gauntlet's own inputs (owner, 2026-11-13: a gauntlet of phase-4's head
+# on balanced and on UHO openings no SPRT uses), for a dispatch without old
+# and new. commit: the Fork commit to build and rate (default the ref's
+# head), so the workflow can come from another branch than the engine; the
+# report's tools/gauntlet/transfer.json is that commit's, the record of what
+# it adopted. book: empty for the balanced 8-ply openings above, or
+# uho-reserved for 200 lines of the SPRTs' shuffled UHO book that no SPRT
+# plays (lines 2,631,816-2,632,015, extracted and checked by
+# tools/gauntlet/reserved_openings.py, which records why they are unused);
+# every anchor plays openings 1-100 of them and the reference opponent all
+# 200, both colours, as on the balanced book. A UHO gauntlet's Ordo rating is
+# on other openings than the CCRL list's and the earlier gauntlets', so its
+# report leaves out the anchor check's level 0 (no earlier run shares its
+# openings). The run's title is "gauntlet COMMIT", with " book BOOK" when the
+# book is set, when either input is given (otherwise GitHub's default).
 name: gauntlet
-run-name: ${{ (inputs.old || inputs.new) && format('anchor check {0} {1}{2}{3}', inputs.old, inputs.new, inputs.match != '' && format(' match stage {0}', inputs.match) || '', inputs.book && format(' book {0}', inputs.book) || '') || '' }}
+run-name: ${{ (inputs.old || inputs.new) && format('anchor check {0} {1}{2}{3}', inputs.old, inputs.new, inputs.match != '' && format(' match stage {0}', inputs.match) || '', inputs.book && format(' book {0}', inputs.book) || '') || (inputs.commit || inputs.book) && format('gauntlet {0}{1}', inputs.commit, inputs.book && format(' book {0}', inputs.book) || '') || '' }}
 
 on:
   push:
@@ -78,8 +94,9 @@ on:
       new: {description: "Anchor check: NEW Fork commit", required: false, default: ""}
       claim: {description: "Anchor check: NEW's claimed self-play gain over OLD (Elo)", required: false, default: ""}
       anchors: {description: "Anchor check: anchor stems (tools/gauntlet/anchors.tsv)", required: false, default: "clover-6.1 altair-7.0.0"}
-      book: {description: "Anchor check: openings; empty = the balanced 8-ply ones, uho = the SPRTs' shuffled UHO book", required: false, default: ""}
+      book: {description: "Openings; empty = the balanced 8-ply ones; anchor check: uho = the SPRTs' shuffled UHO book; gauntlet: uho-reserved = its 200 lines no SPRT plays", required: false, default: ""}
       match: {description: "Anchor check: a stage number (1-99) = OLD plays NEW directly, no anchors; empty = against the anchors", required: false, default: ""}
+      commit: {description: "Gauntlet: the Fork commit to build and rate (default the ref's head)", required: false, default: ""}
 
 permissions:
   contents: read
@@ -105,6 +122,8 @@ jobs:
     runs-on: ubuntu-latest
     container: ubuntu:22.04
     timeout-minutes: 30
+    outputs:
+      commit: ${{ steps.build.outputs.commit }}
     steps:
       - name: "Toolchain (Ubuntu 22.04, gcc 11.4, CMake 3.22, as TCEC)"
         run: |
@@ -113,11 +132,18 @@ jobs:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
       - name: Build
-        env: {FORK_ARCH: x86-64-v3}
+        id: build
+        env:
+          FORK_ARCH: x86-64-v3
+          COMMIT: ${{ inputs.commit }}
+          BOOK: ${{ inputs.book }}
         run: |
           git config --global --add safe.directory "$PWD"
-          head=$(git rev-parse HEAD)
+          case $BOOK in '' | uho-reserved) ;; *) echo "a gauntlet's book must be empty or uho-reserved, not '$BOOK'"; exit 1 ;; esac
+          head=$(git rev-parse --verify "${COMMIT:-HEAD}^{commit}") || { echo "commit '$COMMIT' not found"; exit 1; }
+          echo "commit=$head" >>"$GITHUB_OUTPUT"
           CXX=g++ bash tools/cloud/build_pair.sh . "$head" "$head" engines
+          { echo "### Fork $head (book: ${BOOK:-the balanced 8-ply openings})"; echo '```'; cat engines/meta.env; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with: {name: fork, path: engines/base/fork, retention-days: 7}
 
@@ -190,16 +216,23 @@ jobs:
           bash tools/cloud/fetch_tools.sh "$RUNNER_TEMP/tools"
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install --quiet chess==1.11.2
-      - name: Openings (the earlier gauntlets' 200, regenerated and checked)
+      - name: Openings (book empty, the earlier gauntlets' 200, regenerated and checked; uho-reserved, the UHO lines no SPRT plays)
+        env: {BOOK: "${{ inputs.book }}"}
         run: |
-          "$RUNNER_TEMP/venv/bin/python" -I tools/make_openings.py openings.epd --seed "$OPENINGS_SEED"
-          echo "$OPENINGS_SHA256  openings.epd" | sha256sum -c
+          if [ "$BOOK" = uho-reserved ]; then
+            # fetch_tools.sh (the step above) fetched the shuffled book and checked its SHA-256.
+            python3 -I tools/gauntlet/reserved_openings.py "$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.shuffled-20261027.epd" openings.epd
+          else
+            "$RUNNER_TEMP/venv/bin/python" -I tools/make_openings.py openings.epd --seed "$OPENINGS_SEED"
+            echo "$OPENINGS_SHA256  openings.epd" | sha256sum -c
+          fi
       - name: Build the anchor here (native for this runner)
         run: bash tools/gauntlet/build_anchor.sh "${{ matrix.anchor }}" anchors
       - name: Games
         env:
           STEM: ${{ matrix.anchor }}
           START: ${{ matrix.start }}
+          BOOK: ${{ inputs.book }}
         run: |
           chmod +x fork/fork
           IFS=$'\t' read -r name _ ccrl _ _ _ _ _ _ listed <<<"$(grep -v '^#' tools/gauntlet/anchors.tsv | awk -F'\t' -v s="$STEM" '$2 == s')"
@@ -211,7 +244,7 @@ jobs:
           mkdir -p out
           cpu=$(lscpu | sed -n 's/^Model name: *//p' | head -n 1)
           conc=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
-          echo "cpu=$cpu nproc=$(nproc) concurrency=$conc anchor=$name ccrl=$ccrl start=$START options=${opts:-none}" | tee out/shard.txt
+          echo "cpu=$cpu nproc=$(nproc) concurrency=$conc anchor=$name ccrl=$ccrl start=$START book=${BOOK:-balanced} options=${opts:-none}" | tee out/shard.txt
           # shellcheck disable=SC2086
           "$RUNNER_TEMP/tools/fastchess" -engine cmd=fork/fork name=Fork option.Hash=16 option.CalibratedScore=false \
             -engine cmd="anchors/$STEM" name="$name" $opts \
@@ -228,7 +261,7 @@ jobs:
 
   ordo:
     name: Ordo (anchored to CCRL Blitz)
-    needs: games
+    needs: [fork, games]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -236,8 +269,20 @@ jobs:
       actions: read  # the earlier gauntlets' artifacts (the anchor check, level 0)
     steps:
       - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
       - uses: actions/download-artifact@v4
         with: {pattern: "games-*", path: shards}
+      - name: The rated commit's tools/gauntlet/transfer.json (none for a UHO gauntlet)
+        env:
+          COMMIT: ${{ needs.fork.outputs.commit }}
+          BOOK: ${{ inputs.book }}
+        run: |
+          rm -f tools/gauntlet/transfer.json
+          if [ -n "$BOOK" ]; then
+            echo "book $BOOK: no earlier gauntlet shares its openings, so the anchor check's level 0 is left out" >>"$GITHUB_STEP_SUMMARY"
+          elif git cat-file -e "$COMMIT:tools/gauntlet/transfer.json" 2>/dev/null; then
+            git show "$COMMIT:tools/gauntlet/transfer.json" >tools/gauntlet/transfer.json
+          fi
       - name: Ordo (pinned, built here)
         run: |
           git init -q ordo-src
