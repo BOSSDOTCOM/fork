@@ -887,9 +887,23 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           const int quiet_value = context.history;
           const int reply_value = reply_read ? pair_history_[ReplyTable].value(f.arrival, slot) : 0;
           const int follow_value = follow_read ? pair_history_[FollowTable].value(follow, slot) : 0;
-          int centred = quiet_value - lmr_centres_[0].centre();
-          if (reply_read) centred += (reply_value - lmr_centres_[1].centre()) * ReplyWeight / 4;
-          if (follow_read) centred += (follow_value - lmr_centres_[2].centre()) * FollowWeight / 4;
+          // Idea 42 (use_lmr_history_inputs): each table at its own weight
+          // instead of the ordering's, and a fourth input, the follow table
+          // read at the side's own move four plies back, with its own centre.
+          const bool inputs = switches.use_lmr_history_inputs;
+          const int deep = inputs && switches.use_follow_history ? four_ply_arrival(f) : NoArrival;
+          const bool deep_read = deep != NoArrival;
+          const int deep_value = deep_read ? pair_history_[FollowTable].value(deep, slot) : 0;
+          int centred =
+              weighted_centred(quiet_value, lmr_centres_[0].centre(), inputs ? LmrQuietQuarters : 4);
+          if (reply_read)
+            centred += weighted_centred(reply_value, lmr_centres_[1].centre(),
+                                        inputs ? LmrReplyQuarters : ReplyWeight);
+          if (follow_read)
+            centred += weighted_centred(follow_value, lmr_centres_[2].centre(),
+                                        inputs ? LmrFollowQuarters : FollowWeight);
+          if (deep_read)
+            centred += weighted_centred(deep_value, lmr_centres_[3].centre(), LmrFourPlyQuarters);
 #ifdef FORK_SEARCH_STATS
           if (!ledger_active_)  // a decision-ledger side search leaves the centres as they were (X10)
 #endif
@@ -897,6 +911,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
             lmr_centres_[0].add(quiet_value);
             if (reply_read) lmr_centres_[1].add(reply_value);
             if (follow_read) lmr_centres_[2].add(follow_value);
+            if (deep_read) lmr_centres_[3].add(deep_value);
           }
           plies = round_sixty_fourths(reduction_sixty_fourths(depth, moves_searched + 1) +
                                       LmrFineUnit * (correction - relief + cut_extra + trend_extra) +
@@ -913,9 +928,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // committed rule returns 0 whatever its context. The probe's
         // reduction keeps every other term of the real one (check relief,
         // the cut-node plies, B9's not-improving plies, R20's centred term
-        // and its rounding: the probe's shift is whole plies, so taking it
-        // from the rounded sum equals adding it before the rounding), so it
-        // differs only where the term fires.
+        // with idea 42's inputs, and its rounding: the probe's shift is
+        // whole plies, so taking it from the rounded sum equals adding it
+        // before the rounding), so it differs only where the term fires.
         ++counters.lmr_order_bins[order_score_bin(stats_order_score)];
         ++counters.lmr_quiet_bins[table_value_bin(stats_quiet_value)];
         if (f.arrival != NoArrival)

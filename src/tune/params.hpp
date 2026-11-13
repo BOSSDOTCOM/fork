@@ -68,6 +68,10 @@
   X(CutNodeLmrPlies, 1, 0, 3, 1)               \
   X(LmrNotImprovingPlies, 1, 0, 3, 1)          \
   X(LmrHistoryPerPly, 10000, 5000, 20000, 750) \
+  X(LmrQuietQuarters, 4, 0, 8, 1)              \
+  X(LmrReplyQuarters, 6, 0, 12, 1)             \
+  X(LmrFollowQuarters, 4, 0, 8, 1)             \
+  X(LmrFourPlyQuarters, 2, 0, 4, 1)            \
   X(CaptureProbeMinDepth, 9, 4, 18, 1)         \
   X(CaptureProbeReduction, 5, 2, 10, 1)        \
   X(CaptureProbeMargin, 80, 40, 160, 6)        \

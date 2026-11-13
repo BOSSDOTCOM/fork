@@ -815,6 +815,68 @@ TEST_CASE("pruning", "centred LMR history: still correct, changes the search, ro
   CHECK(fx.tree_sizes(no_history_on, depth) == fx.tree_sizes(no_history_off, depth));
 }
 
+// Idea 42 (R20's variant): one table's weighted share by hand, and against
+// R20's own expression (value less centre, times the ordering's weight in
+// quarters, over 4; the butterfly unweighted) over a grid of values, centres
+// and weights, both signs.
+TEST_CASE("pruning", "LMR history inputs: a table's weighted share by hand and against R20's expression") {
+  CHECK_EQ(weighted_centred(0, 0, 4), 0);
+  CHECK_EQ(weighted_centred(3000, 1000, 4), 2000);
+  CHECK_EQ(weighted_centred(3000, 1000, 6), 3000);
+  CHECK_EQ(weighted_centred(3001, 1000, 2), 1000);    // 4002 / 4, truncated
+  CHECK_EQ(weighted_centred(-3001, 1000, 2), -2000);  // -8002 / 4 toward zero
+  CHECK_EQ(weighted_centred(-7, 0, 6), -10);          // -42 / 4 toward zero
+  CHECK_EQ(weighted_centred(HistoryMax, -HistoryMax, 12), 60000);
+  CHECK_EQ(weighted_centred(1234, 1234, 12), 0);
+  for (int value = -HistoryMax; value <= HistoryMax; value += 457)
+    for (int centre = -HistoryMax; centre <= HistoryMax; centre += 613) {
+      CHECK_MSG(weighted_centred(value, centre, 4) == value - centre, value << " " << centre);
+      for (int quarters = 0; quarters <= 16; ++quarters)
+        CHECK_MSG(weighted_centred(value, centre, quarters) == (value - centre) * quarters / 4,
+                  value << " " << centre << " " << quarters);
+    }
+}
+
+// Idea 42 in the search: with R20 on, the variant still finds mates and a
+// legal best move, and it changes the tree (fault check: a variant that adds
+// nothing leaves R20's tree). With the follow table off there is no deeper
+// input, and the per-table weights at their defaults are the ordering's, so
+// the tree is R20's exactly; with R20 off the variant does nothing.
+TEST_CASE("pruning",
+          "LMR history inputs: still correct, change R20's tree, equal R20 without the deeper input") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_lmr_history_inputs);  // off until its SPRT
+  SearchSwitches r20;
+  r20.use_centred_lmr_history = true;
+  r20.use_lmr_history_inputs = false;
+  SearchSwitches on = r20;
+  on.use_lmr_history_inputs = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  // The deeper input is a small share of the sum (half the follow table's
+  // weight, rounded once with the rest), so a debug build's depth 7 left all
+  // three trees as R20's (2026-11-13): this check searches deeper there.
+  const int changed_depth = Optimized ? 10 : 9;
+  CHECK_MSG(fx.tree_sizes(on, changed_depth) != fx.tree_sizes(r20, changed_depth),
+            "the LMR history inputs left all three trees as R20's");
+  if (LmrQuietQuarters == 4 && LmrReplyQuarters == ReplyWeight && LmrFollowQuarters == FollowWeight) {
+    SearchSwitches no_follow_on = on, no_follow_r20 = r20;
+    no_follow_on.use_follow_history = no_follow_r20.use_follow_history = false;
+    CHECK(fx.tree_sizes(no_follow_on, depth) == fx.tree_sizes(no_follow_r20, depth));
+  }
+  SearchSwitches alone = on, none = r20;
+  alone.use_centred_lmr_history = none.use_centred_lmr_history = false;
+  CHECK(fx.tree_sizes(alone, depth) == fx.tree_sizes(none, depth));
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -898,7 +960,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = true;
   s.use_pair_sum_update = s.use_check_order_bonus = s.use_skip_check_exempt = true;
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
-  s.use_centred_lmr_history = true;
+  s.use_centred_lmr_history = s.use_lmr_history_inputs = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

@@ -238,6 +238,15 @@ struct SearchQuota {
 //   off (LmrHistoryPerPly 10,000) passed: STC +8.04 +/- 4.04 Elo after
 //   9,600 games, LTC +6.21 +/- 4.35 Elo after 6,656 games, design R [0, 6];
 //   2026-11-13.
+// - use_lmr_history_inputs (idea 42, R20's variant; acts only with
+//   use_centred_lmr_history on): each table enters R20's centred sum with
+//   its own weight in quarters (LmrQuietQuarters, LmrReplyQuarters,
+//   LmrFollowQuarters) instead of the move ordering's, and a deeper input
+//   joins them: the follow table read at the side's own move four plies
+//   back (four_ply_arrival), less its own running centre, times
+//   LmrFourPlyQuarters / 4. At the defaults the three weights are the
+//   ordering's (4, ReplyWeight 6, FollowWeight 4), so with
+//   LmrFourPlyQuarters 0 the tree is R20's exactly; no new history table.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -285,7 +294,8 @@ struct SearchQuota {
   X(use_history_ageing, UseHistoryAgeing, true)          \
   X(use_improving_lmp, UseImprovingLmp, true)            \
   X(use_improving_lmr, UseImprovingLmr, true)            \
-  X(use_centred_lmr_history, UseCentredLmrHistory, true)
+  X(use_centred_lmr_history, UseCentredLmrHistory, true) \
+  X(use_lmr_history_inputs, UseLmrHistoryInputs, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -766,6 +776,10 @@ class Searcher {
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }
+  // Idea 42's deeper input: the side's own move four plies before a move
+  // made at frame `f` (the move that led to the frame three back), or
+  // NoArrival within three plies of the root or after a null move.
+  int four_ply_arrival(const PlyFrame& f) const { return &f - frames_ < 3 ? NoArrival : (&f - 3)->arrival; }
   void update_pv(int ply, Move m);
   void report_iteration(int depth, int score, int bound, const PrincipalLine& pv);
 #ifdef FORK_SEARCH_STATS
@@ -803,8 +817,9 @@ class Searcher {
   // R20: the running centres of the butterfly, reply and follow entries at
   // LMR sites (use_centred_lmr_history), cleared with the histories. D17's
   // ageing leaves them as they are: they follow the aged tables within a
-  // few thousand LMR sites (HistoryCentre::Shift).
-  HistoryCentre lmr_centres_[3];
+  // few thousand LMR sites (HistoryCentre::Shift). The fourth is idea 42's
+  // deeper input's (use_lmr_history_inputs).
+  HistoryCentre lmr_centres_[4];
   Position* pos_ = nullptr;
   const SearchQuota* limits_ = nullptr;
   const std::atomic<bool>* stop_ = nullptr;

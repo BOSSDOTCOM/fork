@@ -133,6 +133,17 @@ constexpr int history_sixty_fourths(int centred, int per_ply) {
   return static_cast<int>(-std::int64_t{centred} * LmrFineUnit / per_ply);
 }
 
+// Idea 42 (switch use_lmr_history_inputs): one table's share of R20's
+// centred sum, its value less its running centre times its own weight in
+// quarters, truncated toward zero as the ordering's weights are. At 4
+// quarters it is the difference itself, so the butterfly at 4 and the reply
+// and follow tables at ReplyWeight and FollowWeight give R20's sum exactly.
+// Values and centres lie within [-HistoryMax, HistoryMax], so it cannot
+// overflow at any weight in the parameter table's ranges.
+constexpr int weighted_centred(int value, int centre, int quarters) {
+  return (value - centre) * quarters / 4;
+}
+
 // A running centre for one history table's values at LMR sites (R20): an
 // exponential moving average over about 2^Shift sites, kept as the sum
 // 2^Shift * centre, so centring the term on it keeps the term's mean near

@@ -1112,6 +1112,7 @@ tuned by SPSA.
 - **status:** untested (planned 2026-11-05).
   **2026-11-07 (owner, Phase 4 think tank; DESIGN.md §6, decision 11):** folded into the round-once LMR step (R20) as its variant, run only if the centred history term passes; no longer §5.6's item 8.
   **2026-11-13:** the centred term passed (R20 adopted at STC and LTC; idea 43), so this variant's condition is met; not built or queued (the owner's call). R20's term already reads the reply and follow entries (the one-ply and two-ply continuations).
+  **2026-11-13 (owner, about 6:15 AM EST: "queue idea 42's test"):** built as R20's variant behind `UseLmrHistoryInputs` (off on tier2/i42-cont-inputs, bench unchanged; on at sprt/i42-cont-inputs): each table at its own weight in quarters (`LmrQuietQuarters` 4, `LmrReplyQuarters` 6, `LmrFollowQuarters` 4, the ordering's, so R20's sum exactly) plus a deeper input, the follow table read at the side's own move four plies back with its own running centre at `LmrFourPlyQuarters` 2 (no new table). With the deeper input at 0 the tree is R20's (bench 6,426,679 equal). No offline measurement (games decide, 2026-11-12). Queued as lane B item 89a, design R at STC against off, ledger idea `i42-cont-inputs`, try 1. Status: untested.
 
 ## 43. Fractional depth
 
