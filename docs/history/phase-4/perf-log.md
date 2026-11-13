@@ -206,3 +206,72 @@ and, in the captures-only mode, one pawn mask made of two shifts per side and th
 with its comment. Legal generation is unchanged (its king mask stays `~ours`); the quiets-only mode gains only
 the king mask. The perft suites (perft_epd, perft_epd_deep, the mirror and edge suites), the difftest
 against python-chess and bench parity on every network and the bootstrap evaluation cover it.
+
+## Speed sprint 4 (2026-11-13, the owner's order of about 11:20 AM EST): huge pages (R19) and the pair tables' colour fold
+
+**Setup.** Each candidate against the same base, phase-4 49494bb (r8brft1; bench 6,426,679 / 4c4375887f835cc7), WSL
+Ubuntu, clang 21.1.8, Release + LTO, x86-64-v3; a scratch driver interleaving A B / B A rounds pinned to core 4,
+each `fork bench` under `perf stat -e cycles:u,instructions:u`, identity checked through bench/ab_search.py's own
+check (variant, commit, SHA-256) on every run. **The PC was loaded throughout** (g4c's 10 data-generation threads
+and other agents' work on 12 hardware threads; no quiet window was authorised): nps varied by a factor of two
+within one A/B (medians 0.58 M to 1.2 M against about 3.4 M in sprint 3's quiet window), so the nps rule's noise
+thresholds were 24-43% and only cycles per node (thresholds 2.5-4.1%) and instructions can decide. Rules as in
+sprint 3: nps by ab_search.py's (3% or twice the spread), cycles per node by the 1% rule (DESIGN.md §6,
+2026-11-07 decision 8).
+
+**What existed.** On Linux the TT was already one 2 MiB-aligned block with `madvise(MADV_HUGEPAGE)` (hash_memory.cpp;
+WSL's kernel 6.18 runs transparent huge pages in `madvise` mode, and bench's 16 MB table was 16,384 kB of
+AnonHugePages). The network is not in file-backed .rodata as R19's write-up assumed: `embedded_net()` parses the
+embedded bytes into a heap `NetFile` once, so the weights the search reads sit on ordinary 4 KB heap pages.
+Windows large pages need SeLockMemoryPrivilege, which this account does not hold (`whoami /priv` lists no
+SeLockMemoryPrivilege), so a Windows path could be built but not measured here: not built.
+
+| candidate (16 rounds each) | instructions:u per bench | cycles/node median / best | nps median / best | verdict |
+|---|---|---|---|---|
+| upper bound with no code change: the same binary with `GLIBC_TUNABLES=glibc.malloc.hugetlb=1` (12 rounds; it gave huge pages to part of the Searcher only, AnonHugePages 16 -> 20 MB) | -0.015% | +0.10% / +0.86% faster (threshold 1.33%) | -2.4% / -6.2% (threshold 8.7%) | no difference |
+| **R19**: the `NetFile` and the `Searcher` (its histories, pair tables, drift tables, frames) each in their own 2 MiB-aligned, `MADV_HUGEPAGE` block, sized up to whole 2 MiB pages (AnonHugePages 16 -> 24 MB) | -0.030% | **-0.13% / -0.07%** (threshold 4.11%) | +0.45% / -11.8% (threshold 43.0%) | **no difference: not adopted** |
+| **colour fold**: each pair table 384 x 768 instead of 768 x 768 (below) | **+0.312%** | **-0.29% / -0.78%** (threshold 2.45%) | -0.71% / +16.4% (threshold 24.5%) | **no difference: not adopted under the speed rule** |
+
+Bench identical in every pair (6,426,679 / 4c4375887f835cc7).
+
+**R19's mechanism worked; it did not pay.** perf's generic TLB events (3 runs each, per node; on this AMD CPU
+`dTLB-loads` and `dTLB-load-misses` are taken to be L1 DTLB misses and L2 DTLB misses, the mapping UNVERIFIED):
+base 23.6 L1 misses and 0.78 page walks, R19 17.7 and 0.60. The six fewer L1 misses per node hit the L2 TLB and
+cost nothing measurable in cycles (about 2,150 cycles per node under this load). R19's kill rule (under 1% of
+cycles in both the 16 MB and 4 GB regimes) is met in the 16 MB regime; the 4 GB regime cannot run on this PC (about
+1-2 GB of memory available) and stays unmeasured. On Zen 4 (3,072 L2 DTLB entries) a 4 GB table on 2 MiB pages
+needs 2,048 entries, so that is where the net's and the Searcher's 4 KB pages would start to compete: the case for
+a runner (16 GB) or TCEC-class re-measurement, not for adoption now. Archived as archive/speed4-r19-hugepages
+(the build-flag prototype: `FORK_S4_NET`, `FORK_S4_SEARCHER`).
+
+**The colour fold** (the concurrency review of 2026-11-11, A5): at a node the arrival's colour follows from the
+slot's (the opponent's move for the reply table, the side's own for the follow table), so a row per arrival piece
+type and square (`pair_row`) and a column per full slot hold every value the 768 x 768 table held, in half the
+memory: 1.125 MiB instead of 2.25 MiB per searcher (about 0.56 GB less at 512 threads). The bytes touched per node
+are the same (a row's used half is still 384 contiguous entries), so it saves memory, not cache; the fold's
+compare-and-subtract per read and update adds 0.31% instructions, and cycles show no difference either way.
+Tests: a 1:1 map of each pairing onto the folded table and 400,000 random updates, summed-base updates and
+ageings against an unfolded 768 x 768 oracle (tests/test_ordering.cpp), and a debug-build check that each table
+keeps one pairing (same or opposite colours) until it is cleared, which the search and pruning suites passed in a
+gcc Debug build (so every search path, R20's LMR reads, the X2 probe's reads and D8's summed update, keeps the
+rule); idea 42's 4-ply follow read (branch sprt/i42-cont-inputs) is a same-colour read and needs no change. Not a
+speed gain, so not adopted under the speed rule; archived as archive/speed4-pair-fold, ready if the owner wants
+the memory (a memory change, not a speed one; the review's own advice was to measure per-thread nps at TCEC-class
+thread counts before shrinking anything).
+
+**Runner measurement: not done.** No workflow exists for an A/B on GitHub's runners (ci.yml, nightly.yml and
+tsan.yml check, sprt.yml and gauntlet.yml play games); the smallest one is a dispatchable `speed-ab.yml` (a matrix
+of up to 4 runners, each building A and B and running bench/ab_search.py with `--same-nodes`, plus perf stat if
+the runner's VM exposes the PMU, UNVERIFIED for Azure's), proposed to the owner. A dispatchable workflow must be
+on the default branch.
+
+**Commits.** Both candidates sit on archive tags, each on 49494bb: archive/speed4-pair-fold (41e5e2b) and
+archive/speed4-r19-hugepages (2f076e5). The pre-commit check skipped both (another session's check was running;
+"no pass recorded"); the fold's tests ran in a gcc Debug build in WSL (ordering, search, pruning and bench parity
+passed), and both release builds gave bench 6,426,679 / 4c4375887f835cc7. Names screened (2026-11-13: `PairRows`,
+`pair_row`, `check_colours`, `pairing_`, `Unpaired`, `proto_block_allocate`, `proto_block_free`, `proto_round`,
+`FORK_S4_NET`, `FORK_S4_SEARCHER`): no match in Stockfish, Ethereal, Berserk or Weiss.
+
+**Maintenance cost (non-negotiable 7):** R19 would add a second allocation path (a class-level operator new for
+the Searcher, placement new for the network); the fold adds one constexpr function and a debug-only check. Neither
+is adopted.

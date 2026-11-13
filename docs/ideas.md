@@ -491,7 +491,9 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **runtime cost:** none in the search (allocation only); possible risk in
   allocation failure paths, which must keep the fallback.
 - **earliest phase:** Phase 3 (the TT exists).
-- **status:** untested
+- **status:** untested (explicit pages). Speed sprint 4 (2026-11-13) measured the transparent-huge-page side
+  for the network and the Searcher (think tank R19): no difference at 16 MB Hash; the 4 GB regime unmeasured
+  (idea 174; archive/speed4-r19-hugepages).
 
 ## 20. AVX-512 VNNI for Phase 4 inference
 
@@ -3182,3 +3184,20 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
   [+0.022, +0.036]), launch at g4c's seal; arm A (1,500 x 16 adjudication) waits for its count on g4c (provisional
   on g1b: +10.1% positions); arm U (unbalanced starts) not supported. **runtime cost:** none (one multiply per info
   line). **earliest phase:** Phase 4.
+
+### 174. Speed sprint 4: huge pages for the network and the Searcher (R19), and the pair tables' colour fold
+
+- **type:** TOOLING (speed and memory; bench identical). **phase:** Phase 4 (owner's order, 2026-11-13, about
+  11:20 AM EST: "R19 huge pages for the TT and net" and "fold the reply/follow tables").
+- **ideas:** (a) R19: the TT already uses 2 MiB-aligned `madvise` blocks on Linux; put the parsed network
+  (a heap `NetFile`, not .rodata) and the Searcher on such blocks too; Windows large pages need
+  SeLockMemoryPrivilege, which this PC's account lacks (not built). (b) The colour fold (the concurrency review of
+  2026-11-11, A5): each pair table keeps a row per arrival piece type and square, half the memory, the same values.
+- **metric:** cycles:u per node and instructions:u per bench (the 1% rule), nps (ab_search.py's rule), 16
+  interleaved rounds against phase-4 49494bb on a loaded PC. **result:** (a) cycles per node -0.13% / -0.07%
+  (threshold 4.11%), L1 DTLB misses per node 23.6 -> 17.7; (b) cycles per node -0.29% / -0.78% (threshold 2.45%),
+  instructions +0.31%. Bench 6,426,679 / 4c4375887f835cc7 unchanged (docs/history/phase-4/perf-log.md).
+- **status:** neither adopted under the speed rule. (a) archive/speed4-r19-hugepages: worth re-measuring at a
+  large Hash on a runner or TCEC-class machine. (b) archive/speed4-pair-fold: a memory change (1.125 MiB less
+  per searcher), the owner's decision. No runner A/B workflow exists; a minimal one is proposed to the owner.
+  **runtime cost:** none measurable. **earliest phase:** Phase 4.
