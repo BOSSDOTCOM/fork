@@ -45,6 +45,15 @@ result weight (computed in the queue) within 1e-6 (1e-5 on copies). Validation l
 Layout: result/<arm>/ (best/, ck-*/, window/, val.txt, train.log, run.json, files.json), result/avg-<arm>/
 (weights.bin, quantised.bin, parity-trainer-<arm>-avg.txt), the summary result/retrain.json.
 
+Smoke mode (owner, 2026-11-13, about 2:55 PM EST: a smoke run of the kernel as it will be pushed, before g4c's
+seal): SMOKE = True, set only in the smoke run's kernel copy, shrinks the sizes and nothing else: the originals are
+SMOKE_ORIGINALS (one file of each kind: an older part read as its blend copy, a TD part, a filler part and a filler
+rest, the fresh slice) with their derived files, plus SMOKE_ALSO (files that must stay untrained: v1's slice, a filler
+-val source); the manifests not sealed yet are skipped; validation is g4s1-val.vf and its blend copy (g4s2-val is
+made at the seal); 8 batches a superbatch; 4 superbatches (LR drop after 2, window 3-4) for c and i80, 3 (window
+2-3) for the fine-tunes. Every check, the in-session split, every arm, the averages, quantisation and the offline
+scores run as in the real session. With SMOKE = False (the default) nothing differs from the kernel without it.
+
     python3 retrain_8c.py                      # on Kaggle
     python retrain_8c.py --plan                # anywhere: the settings and every arm's command; touches nothing
     python retrain_8c.py --check-inputs DIR... # anywhere: the input checks and each arm's file list
@@ -78,6 +87,10 @@ MANIFESTS = (['g2s1', 'g3s1', 'g3b', 'g3c', 'g3d', 'g3e', 'g3s2', 'g3f', 'g3g', 
              + ['g4s2-pre', 'r8c-td', 'r8c-i80', 'r8c-post'])                             # 8c's derived files
 VAL = 'g4s2-val.vf'
 VAL_BLEND = 'bl-g4s2-val.vf'
+SMOKE = False               # the smoke run's kernel copy only (module note); False: the real session
+SMOKE_ORIGINALS = ['g3b-w00.vf', 'g4b-w00.vf', 'g4-gcp-20261112T213623Z-w00.vf',
+                   'g4s2-g4-gcp-20261112T185227Z-w02-val-rest.vf', 'slice1b-00.vf']
+SMOKE_ALSO = ['slice1-01.vf', 'g4-gcp-20261112T185227Z-w02-val.vf']   # mounted, never trained
 VAL_8B = 'g4s1-val.vf'
 # The parts labelled by S512ppr3 or later (their files and their validation rests): TD(0.9) copies, i80 copies.
 TD_PARTS = ('g3j-', 'g4-', 'g4s1-g3j-', 'g4s1-g4-', 'g4b-', 'ld-d20-', 'ld-d50-', 'ld-d100-', 'g4c-',
@@ -97,6 +110,11 @@ TD_START_TOLERANCE = 1e-5
 NO_DROP = 10 ** 6           # an --lr-step no run reaches: a constant LR (8a's kernel)
 BASE_SETTINGS = {'superbatches': 360, 'lr_step': 180, 'window': (331, 360), 'keep': (180, 360)}
 FINE_TUNE_SETTINGS = {'superbatches': 60, 'lr_step': NO_DROP, 'window': (46, 60), 'keep': (60,)}
+if SMOKE:
+    BATCHES = 8
+    BASE_SETTINGS = {'superbatches': 4, 'lr_step': 2, 'window': (3, 4), 'keep': (2, 4)}
+    FINE_TUNE_SETTINGS = {'superbatches': 3, 'lr_step': NO_DROP, 'window': (2, 3), 'keep': (3,)}
+    VAL, VAL_BLEND = VAL_8B, 'bl-g4s1-val.vf'
 ARMS = {}
 for k in (1, 2):
     ARMS[f'c{k}'] = {**BASE_SETTINGS, 'files': 'control', 'init': 'td90', 'lr': 1e-4, 'result_weight': 0.0,
@@ -185,9 +203,20 @@ def resolve(found, sealed, hashes=True):
     return record, lists, by_name
 
 
+def smoke_subset(found, sealed):
+    """The smoke run's inputs: the mounted paths and sealed entries of SMOKE_ORIGINALS, their control and i80
+    copies, SMOKE_ALSO and the validation files (the ep- copies are made in the session)."""
+    need = set(SMOKE_ORIGINALS) | set(SMOKE_ALSO) | {VAL, VAL_BLEND, INIT['val']}
+    for kind in ('control', 'i80'):
+        need |= set(arm_files(kind, SMOKE_ORIGINALS))
+    return ([p for p in found if os.path.basename(p) in need], {n: h for n, h in sealed.items() if n in need})
+
+
 def sealed_files(repo):
     sealed = {}
     for m in MANIFESTS:
+        if SMOKE and not os.path.exists(f'{repo}/data/manifests/{m}.json'):
+            continue
         for b in json.load(open(f'{repo}/data/manifests/{m}.json'))['batches']:
             for s in b:
                 sealed[s['file']] = s['sha256']
@@ -220,7 +249,10 @@ def plan():
 def check_inputs(folders, repo):
     """--check-inputs: the session's input checks against local folders (each dataset's files)."""
     found = [p for f in folders for p in glob.glob(f'{f}/**/*.vf', recursive=True)]
-    record, lists, by_name = resolve(found, sealed_files(repo))
+    sealed = sealed_files(repo)
+    if SMOKE:
+        found, sealed = smoke_subset(found, sealed)
+    record, lists, by_name = resolve(found, sealed)
     init = [p for f in folders for p in glob.glob(f'{f}/**/{INIT["weights"]}', recursive=True)]
     record['init_weights'] = {'found': len(init), 'sha256_ok': len(init) == 1 and sha256(init[0]) == INIT['sha256']}
     print(json.dumps(record, indent=1))
@@ -275,7 +307,7 @@ def session():
     home = os.path.expanduser('~')
     env = {'PATH': f"{home}/.cargo/bin:{os.environ['PATH']}", 'CUDA_PATH': '/usr/local/cuda',
            'RUSTFLAGS': '-L /usr/local/nvidia/lib64'}
-    settings = {'commit': COMMIT, 'arch': ARCH, 'arms': ARMS, 'queues': QUEUES, 'scale': SCALE, 'batch': BATCH,
+    settings = {'commit': COMMIT, 'smoke': SMOKE, 'arch': ARCH, 'arms': ARMS, 'queues': QUEUES, 'scale': SCALE, 'batch': BATCH,
                 'batches': BATCHES, 'val_positions': VAL_POSITIONS, 'manifests': MANIFESTS, 'init': INIT,
                 'filler': FILLER}
     summary = {'settings': settings, 'checks': {}, 'runs': {}, 'offline': {}, 'tune_refs': {}}
@@ -297,7 +329,10 @@ def session():
     train = f'{repo}/tools/train/target/release/fork-train'
     desc = json.load(open(f'{repo}/tools/nnue/{ARCH}.json')) if built else {'table': []}
     spec = f'--arch {ARCH} --buckets ' + ','.join(map(str, desc['table']))
-    record, lists, by_name = resolve(glob.glob(f'{DATA}/**/*.vf', recursive=True), sealed_files(repo))
+    found, sealed = glob.glob(f'{DATA}/**/*.vf', recursive=True), sealed_files(repo)
+    if SMOKE:
+        found, sealed = smoke_subset(found, sealed)
+    record, lists, by_name = resolve(found, sealed)
     summary['inputs'] = record
     init = glob.glob(f'{DATA}/**/{INIT["weights"]}', recursive=True)
     init_ok = len(init) == 1 and sha256(init[0]) == INIT['sha256']

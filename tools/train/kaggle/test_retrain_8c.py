@@ -95,6 +95,51 @@ class SettingTests(unittest.TestCase):
             self.assertIn(prefix, k.TD_PARTS)
         self.assertEqual(k.ARMS['c1']['superbatches'] * k.BATCHES, k.ARMS['i801']['superbatches'] * k.BATCHES)
 
+    def test_smoke_mode_is_off_and_changes_nothing(self):
+        # The real session's settings (the module as committed: SMOKE off).
+        self.assertFalse(k.SMOKE)
+        self.assertEqual((k.BATCHES, k.VAL, k.VAL_BLEND), (305, 'g4s2-val.vf', 'bl-g4s2-val.vf'))
+        self.assertEqual(k.BASE_SETTINGS, {'superbatches': 360, 'lr_step': 180, 'window': (331, 360),
+                                           'keep': (180, 360)})
+        self.assertEqual(k.FINE_TUNE_SETTINGS['superbatches'], 60)
+
+    def test_smoke_mode_shrinks_sizes_only(self):
+        # The smoke copy (one exact replacement) keeps the arms, queues and file rules; only sizes and the
+        # validation files change.
+        import importlib.util
+        src = Path(k.__file__).read_text(encoding='utf-8')
+        self.assertEqual(src.count('\nSMOKE = False '), 1)
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d, 'retrain_8c_smoke.py')
+            path.write_text(src.replace('\nSMOKE = False ', '\nSMOKE = True ', 1), encoding='utf-8')
+            spec = importlib.util.spec_from_file_location('retrain_8c_smoke', path)
+            m = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(m)
+        self.assertTrue(m.SMOKE)
+        self.assertEqual(m.QUEUES, k.QUEUES)
+        self.assertEqual(set(m.ARMS), set(k.ARMS))
+        for arm, a in k.ARMS.items():
+            b = m.ARMS[arm]
+            self.assertEqual({x: a[x] for x in ('files', 'init', 'lr', 'result_weight', 'seed')},
+                             {x: b[x] for x in ('files', 'init', 'lr', 'result_weight', 'seed')})
+        self.assertEqual((m.BATCHES, m.ARMS['c1']['superbatches'], m.ARMS['ep1']['superbatches']), (8, 4, 3))
+        self.assertEqual((m.VAL, m.VAL_BLEND), ('g4s1-val.vf', 'bl-g4s1-val.vf'))
+        names = set(m.SMOKE_ORIGINALS + m.SMOKE_ALSO + ['g4s1-val.vf', 'bl-g4s1-val.vf', 'other.vf'])
+        for kind in ('control', 'i80'):
+            names |= set(m.arm_files(kind, m.SMOKE_ORIGINALS))
+        with tempfile.TemporaryDirectory() as d:
+            for n in names:
+                Path(d, n).write_bytes(b'x')
+            found, sealed = m.smoke_subset([os.path.join(d, n) for n in names], {n: 'h' for n in names})
+            self.assertNotIn(os.path.join(d, 'other.vf'), found)
+            record, lists, _ = m.resolve(found, sealed, hashes=False)
+        self.assertTrue(record['ok'], record)
+        self.assertEqual(lists['rft1'], sorted(m.SMOKE_ORIGINALS))                 # v1 slice, -val source out
+        self.assertEqual(record['slice_files'], ['slice1b-00.vf'])
+        self.assertEqual(lists['c1'], ['bl-g3b-w00.vf', 'td90-g4-gcp-20261112T213623Z-w00.vf',
+                                       'td90-g4b-w00.vf', 'td90-g4s2-g4-gcp-20261112T185227Z-w02-val-rest.vf',
+                                       'slice1b-00.vf'])
+
     def test_the_split_is_made_in_the_session(self):
         self.assertNotIn('r8c-split', k.MANIFESTS)                                    # no upload of ep- copies
         self.assertIn('slice1b', k.MANIFESTS)
