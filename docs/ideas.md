@@ -3233,23 +3233,31 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
   `tools/nnue/uho_diag.py` measures it per net on fixed sets from those games (test data only, outside the repo;
   ORIGINALITY.md): adv (200 advantaged starts; SF19 median +97.5 cp), levelql (272 level queenless positions; SF19
   0), qtrade (528 slightly-ahead positions with a queen trade available). Baselines (raw cp, medians; static /
-  100k-node search): r8brft1 adv +40 / +50 (ratio to SF 0.42 / 0.51), levelql +28 / +15; r8btd90 +37 / +46,
-  +25 / +15.5; r8bep1 +40 / +49, +27 / +14; r8bep2 +40.5 / +50, +28 / +14.5; static only: s512ppr3 +39.5, +28;
-  s512 +33.5, +20; b0r2 +33, +18.5. Queen trades when slightly ahead: every r8b net's search trades in 0.07-0.08 of
-  SF-to-move positions where SF19 traded in 0.06, and in 0.14-0.15 of Fork-to-move positions where Fork's game
-  traded in 0.15: **no excess trade preference measured**, so the queens part of the explanation lives in the
-  evaluation's level (both sides of it), not in a trade-seeking choice. The r8b nets differ by at most 3-4 cp on
-  this benchmark. Run per arm in retrain 8c (post_a1.sh uhodiag, report only), arm Q and the per-class lambda arm.
+  100k-node search; the sets as regenerated after the game-id fix, see below): r8brft1 adv +40 / +50 (ratio to SF
+  0.42 / 0.51), levelql +24 / +17.5; r8btd90 +37 / +46, +22.5 / +16.5; r8bep1 +40 / +49, +23.5 / +16.5; r8bep2
+  +40.5 / +50, +24 / +15; the 8c-early nets r8ec1 +37 / +47, +24 / +18.5 and r8ei801 +37.5 / +46, +23 / +16;
+  static only: s512ppr3 +39.5, +25; s512 +33.5, +22; b0r2 +33, +18. Queen trades when slightly ahead: every net's
+  search trades in 0.08-0.09 of SF-to-move positions where SF19 traded in 0.05, and in 0.11-0.14 of Fork-to-move
+  positions where Fork's game traded in 0.12: **no clear excess trade preference**, so the queens part of the
+  explanation lives in the evaluation's level (both sides of it), not in a trade-seeking choice. The nets differ by
+  at most 3-4 cp on this benchmark. Run per arm in retrain 8c (post_a1.sh uhodiag, report only), arm Q and the
+  per-class lambda arm.
   **Piece trades (owner, 2026-11-13 ~4:47 PM EST: "add a per-piece-type trade rate"; the hypothesis: Fork trades
   active pieces too readily, rooks and minors, especially queenless with a small edge):** the set ptrade (931
   positions, side to move +20 to +100 cp by SF19, a rook-rook, knight-knight, bishop-bishop or bishop-knight trade
   available by capture, offer or the game line; queenless and queens-on apart; S: SF19 to move, F: Fork to move)
   and per-class rates of the search's line against the reference. Baselines (any class, net / reference, n):
-  queenless S 0.11-0.14 / 0.10 (110), queens-on S 0.08-0.09 / 0.09 (300), queenless F 0.17-0.20 / 0.20 (221),
-  queens-on F 0.13-0.16 / 0.15 (300), for r8brft1, r8btd90, r8bep1 and r8bep2; no class differs by more than its
-  small counts allow (rook captures queenless S, n = 8: 0.50-0.57 against SF19's 0.38). On the same positions a
-  100k-node search trades about as often as SF19 chose to; a small excess shows only in queenless S (+0.01 to
-  +0.04, n = 110, within noise). The per-trade judging is the trade analysis's (~/fork-data/trade-1113).
+  queenless S 0.08-0.14 / 0.07 (110), queens-on S 0.07-0.09 / 0.10 (300), queenless F 0.14-0.17 / 0.17 (221),
+  queens-on F 0.16-0.17 / 0.16 (300), for r8brft1, r8btd90, r8bep1, r8bep2, r8ec1 and r8ei801. The only excess is
+  queenless with SF to move: any class +0.01 (r8brft1) to +0.07 (r8btd90), mostly bishop for knight (0.05-0.12
+  against 0.05 of 74; by capture 0.10-0.26 against 0.05 of 19); 110 positions, so within or near noise. On the same
+  positions a 100k-node search otherwise trades about as often as SF19 chose to. **Game-id fix (2026-11-13
+  evening, found by the trade analysis):** fastchess repeats a pair's Round number, so ids built from the Round
+  collided between a pair's two games (100 games, 50 distinct Rounds per PGN), which shared their per-game seed;
+  the id now carries Fork's colour and the game's number, all four sets were regenerated (counts unchanged) and
+  every baseline re-run. The resample alone moved r8brft1's levelql static median from +28 to +24 and its queenless
+  S any-class rate from 0.11 / 0.10 to 0.08 / 0.07: differences of that size between nets are noise. The
+  per-trade judging is the trade analysis's (~/fork-data/trade-1113).
 
 ### 174. Speed sprint 4: huge pages for the network and the Searcher (R19), and the pair tables' colour fold
 

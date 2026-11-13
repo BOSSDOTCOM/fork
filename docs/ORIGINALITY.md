@@ -447,7 +447,10 @@ Inputs (DESIGN.md §5.3; KB data-policy.md):
 **Not training data: the UHO/SF19 diagnostic sets** (owner, 2026-11-13;
 `tools/nnue/uho_diag.py`). Four fixed position sets (adv 200, levelql 272,
 qtrade 528, and since the owner's request of 2026-11-13 ~4:47 PM EST
-ptrade 931 positions; seed 20261113; SHA-256s in the sets' manifest.json)
+ptrade 931 positions; seed 20261113; regenerated the same evening after a
+game-id fix, since fastchess repeats a pair's Round number: adv a1d4308d...,
+levelql c4cc3a1e..., qtrade 146f9a22..., ptrade f37a6364...; full SHA-256s
+in the sets' manifest.json)
 are extracted from the 800 gauntlet games Fork 117d26a played against
 Stockfish 19 (GitHub runs 43492072142, UHO book, and 43492038248, balanced
 book), with Stockfish's PGN scores as the reference values. They are

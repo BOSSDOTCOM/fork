@@ -153,7 +153,7 @@ class SignNormalisation(unittest.TestCase):
         r = rows[0]
         # Fork had Black in game 2: SF (White) said -0.60 there, Black's +60; Fork's own first score +0.20 (Black's)
         self.assertEqual((r['side'], r['sf_cp'], r['sf_mean_cp'], r['game_cp']), ('b', 60, 65.0, 20))
-        self.assertEqual(r['game'], 'uho/shard-1/2')
+        self.assertEqual(r['game'], 'uho/shard-1/r2b-2')
 
     def test_levelql_from_forks_side(self):
         line = list(QUEENLESS) + ['Nc6', 'Bc4', 'Nf6', 'Nc3']
@@ -167,6 +167,19 @@ class SignNormalisation(unittest.TestCase):
             write_game(shard / 'games.pgn', True, list(zip(line, comments)))
             rows = u.build_levelql(u.read_games(d, 'bal'), u.SEED)
         self.assertEqual([(r['ply'], r['sf_cp'], r['game_cp']) for r in rows], [(9, -5, 25)])
+
+    def test_game_ids_unique_with_repeated_round(self):
+        # fastchess gives a pair's two games (colours reversed) the same Round; their ids, and so their per-game
+        # seeds, must still differ
+        with tempfile.TemporaryDirectory() as d:
+            shard = Path(d) / 'shard-1'
+            shard.mkdir()
+            write_game(shard / 'games.pgn', True, [('e4', '+0.30/10 0.1s'), ('e5', '-0.80/10 0.1s')], 7)
+            write_game(shard / 'games.pgn', False, [('e4', '+0.90/10 0.1s'), ('e5', '-0.40/10 0.1s')], 7)
+            games = u.read_games(d, 'uho')
+        ids = [g['game'] for g in games]
+        self.assertEqual(ids, ['uho/shard-1/r7w-1', 'uho/shard-1/r7b-2'])
+        self.assertNotEqual(u.game_rng(1, 'x', ids[0]).random(), u.game_rng(1, 'x', ids[1]).random())
 
     def test_oriented_values(self):
         black_to_move = play('e4').fen()

@@ -294,14 +294,18 @@ def to_side(stm_cp, board, side):
 # ---------- sets ----------
 
 def read_games(folder, tag):
-    """Every game of every games.pgn under folder, as dicts: the per-ply boards, moves and comment scores."""
+    """Every game of every games.pgn under folder, as dicts: the per-ply boards, moves and comment scores. A game's id
+    is tag/shard/r<Round><Fork's colour w|b>-<its number in the PGN>: fastchess gives a pair's two games (colours
+    reversed) the same Round, so the Round alone is not unique."""
     out = []
     for pgn in sorted(Path(folder).glob('*/games.pgn')):
         with open(pgn, encoding='utf-8') as f:
+            index = 0
             while True:
                 g = chess.pgn.read_game(f)
                 if g is None:
                     break
+                index += 1
                 h = g.headers
                 if 'Fork' not in (h['White'], h['Black']):
                     continue
@@ -312,7 +316,8 @@ def read_games(folder, tag):
                     plies.append({'board': b.copy(stack=False), 'move': nd.move, 'cp': comment_cp(nd.comment),
                                   'fork_moves': b.turn == fork})
                     b.push(nd.move)
-                out.append({'source': tag, 'game': f'{tag}/{pgn.parent.name}/{h["Round"]}',
+                colour = 'w' if fork == chess.WHITE else 'b'
+                out.append({'source': tag, 'game': f'{tag}/{pgn.parent.name}/r{h["Round"]}{colour}-{index}',
                             'fen': h.get('FEN') or g.board().fen(),
                             'fork': fork, 'plies': plies})
     return out
