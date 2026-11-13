@@ -358,6 +358,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // bound points the right way; otherwise its move is tried first. Moves come
   // from the legal generator, so a colliding entry's move is never played
   // unless it is legal here.
+#ifdef FORK_DATAGEN_INTERLEAVE
+  if (pause_fn_) pause_fn_(pause_arg_);  // the bucket's prefetch is in flight
+#endif
   const Key key = pos.key();
   TtHit hit{};
   const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
@@ -1053,6 +1056,9 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     return in_check ? 0 : eval_at(ply);
   }
 
+#ifdef FORK_DATAGEN_INTERLEAVE
+  if (pause_fn_) pause_fn_(pause_arg_);  // the bucket's prefetch is in flight
+#endif
   const Key key = pos.key();
   TtHit hit{};
   const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);

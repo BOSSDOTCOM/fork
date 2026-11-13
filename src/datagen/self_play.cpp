@@ -60,6 +60,9 @@ std::unique_ptr<SelfPlayGame> SelfPlayGame::create(const SelfPlayConfig& config,
 
 SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer, std::uint64_t save_seed) {
   memory_.clear(1);
+#ifdef FORK_DATAGEN_INTERLEAVE
+  abandoned_ = false;
+#endif
   unsaved_ = 0;
   nodes_spent_ = 0;
   std::uint64_t save_stream = save_seed;
@@ -79,6 +82,9 @@ SelfPlayOutcome SelfPlayGame::play(const Position& opening, GameWriter& writer, 
   };
 
   for (int ply = 0;; ++ply) {
+#ifdef FORK_DATAGEN_INTERLEAVE
+    if (abandoned_) return SelfPlayOutcome{GameEnd::TooLong, GameResult::Draw, false};  // never committed
+#endif
     const Color us = pos.side_to_move();
     MoveList legal;
     generate<GenMode::Legal>(pos, legal);

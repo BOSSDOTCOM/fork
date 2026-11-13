@@ -3078,6 +3078,36 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
      alone).
   2. **Second target, for TCEC:** asynchronous 7-man tablebase probes: the search continues while a cold disk
      probe completes. Design only, after Lazy SMP.
+- **first target, prototype (owner's order, 2026-11-13, about 11:20 AM EST; branch proto/datagen-interleave, not
+  merged):** `fork_datagen --interleave K` in a build with `FORK_DATAGEN_INTERLEAVE` (Linux x86-64 only; the engine
+  and the default fork_datagen compile as before). Each worker thread runs K game slots, each with its own player
+  (1 MB table and histories), writer and an 8 MB stack mapped once (src/datagen/game_fibers.cpp: a System V context
+  switch saving rbx, rbp, r12-r15 and rsp, per the psABI). The search calls a pause hook just before each node's TT
+  read (negamax and quiesce), while the bucket its parent prefetched is in flight, and the hook switches to the next
+  slot. A finer grain than a node needs the recursive search made resumable; a coarser grain (per search, per move,
+  per root move) cannot overlap one game's miss with another's work at all, so it can only add cache pollution.
+  Stackless C++20 coroutines were rejected: every negamax and quiesce frame would become a coroutine frame (an
+  allocation or arena slot per node) and the whole recursion would be rewritten. Finished games are committed in
+  the worker's game order, so the shards are byte for byte those of today's worker, not only game by game: a game
+  is a pure function of its opening, settings and save seed (table and histories cleared per game; the table's age
+  enters only through equality, 8-bit differences and a key check where it cancels; checked on today's binary:
+  all 44 games of a 3-thread run equal the same games of a 1-thread run).
+- **identity (2026-11-13):** the datagen_interleave test (cmake/datagen_interleave.cmake: --interleave 3 and 8
+  against 1, 2 threads, g4c's settings at 2,000 nodes) passes, and fails on each of two injected faults (games
+  committed in finishing order; one game per worker given a wrong save seed). Against the base binary
+  (49494bb), every run of the A/B wrote the same shards (SHA-256 3d89b103263b1cd4 for all 12 runs).
+- **measurement (2026-11-13, 11:53 AM-12:34 PM EST; WSL, clang 21.1.8, native, Release; g4c running on 10 of 12
+  threads, so 2 threads per side; g4c's settings with the first 20,000 openings of its file; 40,132 positions per
+  run, 3 rounds in rotated order):** positions per hour, corrected for the games played past a worker's end
+  (nodes discarded / nodes committed): base 847,555 median (816,366-914,116); K=2 740,958 (-12.6%); K=4 688,393
+  (-18.8%); K=8 606,442 (-28.4%). No variant gained in any round; base's own spread was about 12%. perf stat,
+  1 thread, the same 90,276,996 nodes, two rounds: instructions per node +3.4% at K=4, cycles per node +26 to
+  +31%, L1d misses +40 to +46%, last-level misses +136 to +140%, branch misses +46%. The switch is cheap; K games
+  multiply the per-thread working set (peak RSS about 4.5 MB per added game slot, against a 1 MB L2), and hiding
+  one prefetched TT line per node does not pay for the misses that adds. Not run on GitHub's runners (no
+  fork_datagen A/B workflow exists; a draft awaits the owner's decision).
+- **status:** prototype measured, **not adopted** for g4d (a loss at every K on this CPU). Revisit only for a CPU
+  whose memory latency dominates (the runners' or TCEC's EPYCs, UNVERIFIED) or with far smaller per-game state.
 
 ### 166. Register-tiled accumulator updates (speed sprint 3)
 

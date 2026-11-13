@@ -29,6 +29,7 @@ option(FORK_FUZZ "Build libFuzzer targets (clang only)" OFF)
 option(FORK_SEARCH_STATS "Debug counters in the search, printed by fork bench (never released)" OFF)
 option(FORK_TUNE "Tuning build: every search switch is a UCI option (SPRT and SPSA only, never released)" OFF)
 option(FORK_NODE_CLOCK "Test-only build: the search clock is its node count, so timed searches are deterministic (never released)" OFF)
+option(FORK_DATAGEN_INTERLEAVE "Prototype: fork_datagen --interleave K, K games per worker thread (ideas.md idea 165; Linux x86-64, never released)" OFF)
 set(FORK_PGO "OFF" CACHE STRING "Profile-guided optimization stage: OFF, GEN, USE")
 set(FORK_PGO_DATA "" CACHE PATH "Profile directory (GEN) or merged profile file / directory (USE)")
 
@@ -280,6 +281,17 @@ add_library(forkdatagen STATIC
   src/datagen/game_record.cpp
   src/datagen/self_play.cpp)
 target_link_libraries(forkdatagen PUBLIC forksearch PRIVATE fork_pgo)
+# The interleaving prototype (ideas.md idea 165): a pause point in the search
+# and stackful game slots in fork_datagen. Its context switch is written for
+# x86-64 System V, and the sanitizers would need every switch announced.
+if(FORK_DATAGEN_INTERLEAVE)
+  if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64" OR FORK_SANITIZE
+     OR FORK_TSAN OR FORK_FUZZ)
+    message(FATAL_ERROR "FORK_DATAGEN_INTERLEAVE needs Linux x86-64 and no sanitizers")
+  endif()
+  target_compile_definitions(forksearch PUBLIC FORK_DATAGEN_INTERLEAVE)
+  target_sources(forkdatagen PRIVATE src/datagen/game_fibers.cpp)
+endif()
 add_executable(fork_datagen src/datagen/datagen_main.cpp)
 target_link_libraries(fork_datagen PRIVATE forkdatagen forkuci)
 target_compile_definitions(fork_datagen PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}")
@@ -639,6 +651,14 @@ if(FORK_BUILD_TESTS)
       set(test_python ${candidate})
     endif()
   endforeach()
+  # The interleaving prototype (ideas.md idea 165): --interleave K writes
+  # exactly --interleave 1's shards, game for game.
+  if(FORK_DATAGEN_INTERLEAVE)
+    add_test(NAME datagen_interleave COMMAND ${CMAKE_COMMAND}
+      -DDATAGEN=$<TARGET_FILE:fork_datagen> -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+      -DWORK=${CMAKE_BINARY_DIR}/datagen_interleave -DTABLES=${FORK_SYZYGY345_DIR}
+      -P ${CMAKE_SOURCE_DIR}/cmake/datagen_interleave.cmake)
+  endif()
   if(test_python)
     add_test(NAME difftest_short
              COMMAND ${test_python} -I ${CMAKE_SOURCE_DIR}/tools/difftest/difftest.py

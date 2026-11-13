@@ -16,6 +16,11 @@
 // share of --positions. A game that ends before any position is recorded
 // is not written.
 //
+// --interleave K (K > 1 only in FORK_DATAGEN_INTERLEAVE builds, a prototype
+// of ideas.md idea 165) plays a worker's games K at a time on its one
+// thread, switching game at every search node, and commits them in the same
+// order: the shards are byte for byte those of --interleave 1.
+//
 // Outputs in --out: <run>-wWW-KKKK.vf shards (viriformat, game_record.hpp),
 // rotated once a shard reaches --shard-mb, and <run>.json: the settings,
 // build identity, per-shard counts and the run's statistics. SHA-256s are
@@ -25,8 +30,10 @@
 #include <cinttypes>
 #include <cstdio>
 #include <fstream>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -34,6 +41,9 @@
 #include "core/movegen.hpp"
 #include "core/splitmix.hpp"
 #include "datagen/self_play.hpp"
+#ifdef FORK_DATAGEN_INTERLEAVE
+#include "datagen/game_fibers.hpp"
+#endif
 #include "search/endgame_tables.hpp"
 #include "uci/session.hpp"
 
@@ -44,6 +54,7 @@ struct Options {
   std::string openings, out_dir, run = "run", tables;
   std::uint64_t positions = 0, nodes = 0, seed = 1;
   int threads = 1;
+  int interleave = 1;  // games per worker thread (FORK_DATAGEN_INTERLEAVE builds)
   std::size_t hash_mb = 16, shard_mb = 1024;
   int decided_cp = 400, max_plies = 500;
   int random_min = 2, random_max = 4;
@@ -73,7 +84,8 @@ int usage() {
                "         [--tables PATH] [--decided-cp CP] [--max-plies P]\n"
                "         [--random-min N] [--random-max N]\n"
                "         [--adjudicate-cp CP --adjudicate-plies N]\n"
-               "         [--save-percent P --unsaved-nodes N] [--check-nodes N]\n");
+               "         [--save-percent P --unsaved-nodes N] [--check-nodes N]\n"
+               "         [--interleave K]   (K > 1 only in FORK_DATAGEN_INTERLEAVE builds)\n");
   return 2;
 }
 
@@ -99,6 +111,8 @@ bool parse(int argc, char** argv, Options& o) {
         o.seed = std::stoull(v);
       else if (a == "--threads")
         o.threads = std::stoi(v);
+      else if (a == "--interleave")
+        o.interleave = std::stoi(v);
       else if (a == "--hash-mb")
         o.hash_mb = std::stoull(v);
       else if (a == "--shard-mb")
@@ -131,7 +145,11 @@ bool parse(int argc, char** argv, Options& o) {
          o.hash_mb > 0 && o.shard_mb > 0 && o.max_plies > 0 && 0 <= o.random_min &&
          o.random_min <= o.random_max && o.adjudicate_cp >= 0 && o.adjudicate_plies >= 0 &&
          (o.adjudicate_plies == 0 || o.adjudicate_cp > 0) && 1 <= o.save_percent && o.save_percent <= 100 &&
-         (o.save_percent == 100 || o.unsaved_nodes > 0);
+         (o.save_percent == 100 || o.unsaved_nodes > 0) && 1 <= o.interleave && o.interleave <= 64
+#ifndef FORK_DATAGEN_INTERLEAVE
+         && o.interleave == 1
+#endif
+      ;
 }
 
 std::string shard_name(const Options& o, int worker, int index) {
@@ -140,8 +158,7 @@ std::string shard_name(const Options& o, int worker, int index) {
   return o.run + buf;
 }
 
-void run_worker(const Options& o, int worker, const std::vector<std::string>& openings,
-                const std::vector<std::uint32_t>& order, Totals& totals, std::atomic<bool>& failed) {
+SelfPlayConfig player_config(const Options& o) {
   SelfPlayConfig config;
   config.nodes = o.nodes;
   config.hash_bytes = o.hash_mb << 20;
@@ -152,79 +169,261 @@ void run_worker(const Options& o, int worker, const std::vector<std::string>& op
   config.save_percent = o.save_percent;
   config.unsaved_nodes = o.unsaved_nodes;
   config.check_nodes = o.check_nodes;
+  return config;
+}
+
+// Game g's start: its opening with the random plies played; returns the
+// split search's save seed for the game.
+std::uint64_t game_start(const Options& o, const std::vector<std::string>& openings,
+                         const std::vector<std::uint32_t>& order, std::uint64_t g, Position& opening) {
+  // FENs, not Positions, are kept: every Position reserves its state
+  // history (about 57 KB), too much for millions of openings.
+  opening.set_fen(openings[order[g % order.size()]]);  // checked when loaded
+  std::uint64_t stream = splitmix_finalize(o.seed ^ splitmix_finalize(g + 1));
+  const std::uint64_t save_seed = splitmix_finalize(stream);  // the split's own stream for game g
+  const int plies =
+      o.random_min +
+      static_cast<int>(splitmix_next(stream) % static_cast<std::uint64_t>(o.random_max - o.random_min + 1));
+  for (int i = 0; i < plies; ++i) {
+    MoveList legal;
+    generate<GenMode::Legal>(opening, legal);
+    if (legal.size() == 0) break;
+    opening.make(legal[splitmix_next(stream) % legal.size()]);
+  }
+  return save_seed;
+}
+
+// One worker's shard files and counts. Games are committed in the worker's
+// game order; the worker stops after the game that brings it to its share
+// of positions (or once any worker failed).
+class WorkerShards {
+ public:
+  WorkerShards(const Options& o, int worker, Totals& totals, std::atomic<bool>& failed)
+      : o_(o),
+        worker_(worker),
+        totals_(totals),
+        failed_(failed),
+        quota_((o.positions + static_cast<std::uint64_t>(o.threads) - 1) / o.threads) {}
+
+  bool done() const { return written_ >= quota_ || failed_; }
+
+  // Counts the next game in order, and writes it if it was written with at
+  // least one position.
+  void commit(const SelfPlayOutcome& outcome, std::span<const std::uint8_t> bytes, int positions, int unsaved,
+              std::uint64_t nodes_spent) {
+    totals_.nodes_spent += nodes_spent;
+    {
+      std::lock_guard lock(totals_.mutex);
+      ++totals_.ends[static_cast<int>(outcome.end)];
+      if (outcome.written) ++totals_.results[static_cast<int>(outcome.result)];
+    }
+    if (!outcome.written || positions == 0) return;
+    if (!file_.is_open()) {
+      shard_ = ShardInfo{shard_name(o_, worker_, shard_index_++), worker_};
+      file_.open(o_.out_dir + "/" + shard_.file, std::ios::binary | std::ios::trunc);
+      if (!file_) {
+        std::fprintf(stderr, "worker %d: cannot create %s\n", worker_, shard_.file.c_str());
+        failed_ = true;
+        return;
+      }
+    }
+    file_.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    file_.flush();
+    if (!file_) {
+      std::fprintf(stderr, "worker %d: write failed on %s\n", worker_, shard_.file.c_str());
+      failed_ = true;
+      file_.close();  // not listed: a failed shard is not reported as written
+      return;
+    }
+    shard_.games += 1;
+    shard_.positions += static_cast<std::uint64_t>(positions);
+    shard_.bytes += bytes.size();
+    written_ += static_cast<std::uint64_t>(positions);
+    totals_.games += 1;
+    totals_.positions += static_cast<std::uint64_t>(positions);
+    totals_.unsaved += static_cast<std::uint64_t>(unsaved);
+    if (shard_.bytes >= (o_.shard_mb << 20)) close();
+  }
+
+  void close() {
+    if (!file_.is_open()) return;
+    file_.close();
+    if (shard_.games) {
+      std::lock_guard lock(totals_.mutex);
+      totals_.shards.push_back(shard_);
+    }
+  }
+
+ private:
+  const Options& o_;
+  int worker_;
+  Totals& totals_;
+  std::atomic<bool>& failed_;
+  std::uint64_t quota_, written_ = 0;
+  ShardInfo shard_;
+  std::ofstream file_;
+  int shard_index_ = 0;
+};
+
+// Worker w of T plays games w, w + T, w + 2T, ... one at a time.
+void run_worker(const Options& o, int worker, const std::vector<std::string>& openings,
+                const std::vector<std::uint32_t>& order, Totals& totals, std::atomic<bool>& failed) {
   std::string report;
-  auto player = SelfPlayGame::create(config, report);
+  auto player = SelfPlayGame::create(player_config(o), report);
   if (!player) {
     std::fprintf(stderr, "worker %d: %s\n", worker, report.c_str());
     failed = true;
     return;
   }
-  const std::uint64_t quota = (o.positions + static_cast<std::uint64_t>(o.threads) - 1) / o.threads;
+  WorkerShards shards(o, worker, totals, failed);
   GameWriter writer;
-  ShardInfo shard;
-  std::ofstream file;
-  int shard_index = 0;
-  auto close_shard = [&] {
-    if (!file.is_open()) return;
-    file.close();
-    if (shard.games) {
-      std::lock_guard lock(totals.mutex);
-      totals.shards.push_back(shard);
-    }
-  };
-  std::uint64_t written = 0;
-  for (std::uint64_t g = static_cast<std::uint64_t>(worker); written < quota && !failed; g += o.threads) {
-    // FENs, not Positions, are kept: every Position reserves its state
-    // history (about 57 KB), too much for millions of openings.
+  for (std::uint64_t g = static_cast<std::uint64_t>(worker); !shards.done(); g += o.threads) {
     Position opening;
-    opening.set_fen(openings[order[g % order.size()]]);  // checked when loaded
-    std::uint64_t stream = splitmix_finalize(o.seed ^ splitmix_finalize(g + 1));
-    const std::uint64_t save_seed = splitmix_finalize(stream);  // the split's own stream for game g
-    const int plies =
-        o.random_min +
-        static_cast<int>(splitmix_next(stream) % static_cast<std::uint64_t>(o.random_max - o.random_min + 1));
-    for (int i = 0; i < plies; ++i) {
-      MoveList legal;
-      generate<GenMode::Legal>(opening, legal);
-      if (legal.size() == 0) break;
-      opening.make(legal[splitmix_next(stream) % legal.size()]);
-    }
+    const std::uint64_t save_seed = game_start(o, openings, order, g, opening);
     const SelfPlayOutcome outcome = player->play(opening, writer, save_seed);
-    totals.nodes_spent += player->nodes_spent();
-    {
-      std::lock_guard lock(totals.mutex);
-      ++totals.ends[static_cast<int>(outcome.end)];
-      if (outcome.written) ++totals.results[static_cast<int>(outcome.result)];
+    shards.commit(outcome, writer.bytes(), writer.positions(), player->unsaved_positions(),
+                  player->nodes_spent());
+  }
+  shards.close();
+}
+
+#ifdef FORK_DATAGEN_INTERLEAVE
+// The interleaved worker (--interleave K; ideas.md idea 165, prototype):
+// the same games as run_worker, played K at a time on one thread, each in a
+// slot with its own player (table and history), writer and stack. At every
+// search node's pause point the running game hands the thread to the next
+// slot in a ring. A finished game waits until every earlier game of the
+// worker is committed, so the shards are byte for byte run_worker's: each
+// game is a pure function of its opening, settings and save seed (the table
+// and the history are cleared before every game; the table's age is used
+// only through equality and 8-bit differences, which a shifted start does
+// not change).
+struct InterleavedWorker;
+
+struct GameSlot {
+  InterleavedWorker* owner = nullptr;
+  std::unique_ptr<SelfPlayGame> player;
+  GameWriter writer;
+  FiberStack stack;
+  void* sp = nullptr;        // the stack pointer saved while switched out
+  GameSlot* next = nullptr;  // the next slot still playing (a ring)
+  bool playing = false;
+};
+
+struct FinishedGame {
+  SelfPlayOutcome outcome{};
+  std::vector<std::uint8_t> bytes;
+  int positions = 0, unsaved = 0;
+  std::uint64_t nodes_spent = 0;
+};
+
+struct InterleavedWorker {
+  const Options& o;
+  const std::vector<std::string>& openings;
+  const std::vector<std::uint32_t>& order;
+  int worker;
+  WorkerShards& shards;
+  std::vector<std::unique_ptr<GameSlot>> slots;
+  std::map<std::uint64_t, FinishedGame> finished;  // by the worker's game number
+  std::uint64_t next_game = 0, next_commit = 0;
+  void* main_sp = nullptr;
+  int live = 0;
+  // Games played past the worker's end and never committed, and their nodes
+  // (the cost of finishing K games at a time; reported on stderr).
+  std::uint64_t discarded_games = 0, discarded_nodes = 0;
+
+  // Commits every finished game that is next in order; once the worker is
+  // done, asks the games still in flight to stop (none of them will be
+  // committed) and forgets the finished ones waiting.
+  void commit_ready() {
+    for (auto it = finished.find(next_commit); it != finished.end() && !shards.done();
+         it = finished.find(next_commit)) {
+      const FinishedGame& f = it->second;
+      shards.commit(f.outcome, f.bytes, f.positions, f.unsaved, f.nodes_spent);
+      finished.erase(it);
+      ++next_commit;
     }
-    if (!outcome.written || writer.positions() == 0) continue;
-    if (!file.is_open()) {
-      shard = ShardInfo{shard_name(o, worker, shard_index++), worker};
-      file.open(o.out_dir + "/" + shard.file, std::ios::binary | std::ios::trunc);
-      if (!file) {
-        std::fprintf(stderr, "worker %d: cannot create %s\n", worker, shard.file.c_str());
-        failed = true;
-        return;
-      }
+    if (!shards.done()) return;
+    for (const auto& [n, f] : finished) {
+      ++discarded_games;
+      discarded_nodes += f.nodes_spent;
     }
-    const auto bytes = writer.bytes();
-    file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-    file.flush();
-    if (!file) {
-      std::fprintf(stderr, "worker %d: write failed on %s\n", worker, shard.file.c_str());
+    finished.clear();
+    for (const auto& s : slots)
+      if (s->playing) s->player->abandon();
+  }
+};
+
+void pause_game(void* arg) {
+  GameSlot* s = static_cast<GameSlot*>(arg);
+  if (s->next != s) forkeng_fiber_switch(&s->sp, s->next->sp);
+}
+
+void play_slot(void* arg) {
+  GameSlot& s = *static_cast<GameSlot*>(arg);
+  InterleavedWorker& w = *s.owner;
+  while (!w.shards.done()) {
+    const std::uint64_t n = w.next_game++;
+    Position opening;
+    const std::uint64_t save_seed = game_start(
+        w.o, w.openings, w.order,
+        static_cast<std::uint64_t>(w.worker) + n * static_cast<std::uint64_t>(w.o.threads), opening);
+    s.playing = true;
+    const SelfPlayOutcome outcome = s.player->play(opening, s.writer, save_seed);
+    s.playing = false;
+    if (w.shards.done()) {  // abandoned, or past the worker's end: never committed
+      ++w.discarded_games;
+      w.discarded_nodes += s.player->nodes_spent();
+      break;
+    }
+    FinishedGame& f = w.finished[n];
+    f.outcome = outcome;
+    if (outcome.written) f.bytes.assign(s.writer.bytes().begin(), s.writer.bytes().end());
+    f.positions = s.writer.positions();
+    f.unsaved = s.player->unsaved_positions();
+    f.nodes_spent = s.player->nodes_spent();
+    w.commit_ready();
+  }
+  // Leave the ring for good; the last slot out resumes the worker's thread.
+  if (--w.live == 0) forkeng_fiber_switch(&s.sp, w.main_sp);
+  GameSlot* before = s.next;
+  while (before->next != &s) before = before->next;
+  before->next = s.next;
+  forkeng_fiber_switch(&s.sp, s.next->sp);
+}
+
+void run_worker_interleaved(const Options& o, int worker, const std::vector<std::string>& openings,
+                            const std::vector<std::uint32_t>& order, Totals& totals,
+                            std::atomic<bool>& failed) {
+  WorkerShards shards(o, worker, totals, failed);
+  InterleavedWorker w{o, openings, order, worker, shards, {}, {}, 0, 0, nullptr, 0, 0, 0};
+  for (int k = 0; k < o.interleave; ++k) {
+    auto s = std::make_unique<GameSlot>();
+    std::string report;
+    s->owner = &w;
+    s->player = SelfPlayGame::create(player_config(o), report);
+    if (!s->player) {
+      std::fprintf(stderr, "worker %d: %s\n", worker, report.c_str());
       failed = true;
       return;
     }
-    shard.games += 1;
-    shard.positions += static_cast<std::uint64_t>(writer.positions());
-    shard.bytes += bytes.size();
-    written += static_cast<std::uint64_t>(writer.positions());
-    totals.games += 1;
-    totals.positions += static_cast<std::uint64_t>(writer.positions());
-    totals.unsaved += static_cast<std::uint64_t>(player->unsaved_positions());
-    if (shard.bytes >= (o.shard_mb << 20)) close_shard();
+    if (!s->stack.map(FiberStackBytes)) {
+      std::fprintf(stderr, "worker %d: cannot map a game's stack\n", worker);
+      failed = true;
+      return;
+    }
+    s->sp = s->stack.prepare(play_slot, s.get());
+    s->player->set_pause(pause_game, s.get());
+    w.slots.push_back(std::move(s));
   }
-  close_shard();
+  for (std::size_t k = 0; k < w.slots.size(); ++k) w.slots[k]->next = w.slots[(k + 1) % w.slots.size()].get();
+  w.live = o.interleave;
+  forkeng_fiber_switch(&w.main_sp, w.slots[0]->sp);  // returns once every slot has left the ring
+  shards.close();
+  std::fprintf(stderr, "worker %d: discarded %" PRIu64 " games past its end (%" PRIu64 " nodes)\n", worker,
+               w.discarded_games, w.discarded_nodes);
 }
+#endif
 
 void write_manifest(const Options& o, const Totals& t, double seconds, std::size_t opening_count) {
   std::ofstream f(o.out_dir + "/" + o.run + ".json", std::ios::trunc);
@@ -245,7 +444,9 @@ void write_manifest(const Options& o, const Totals& t, double seconds, std::size
     << ", \"random_min\": " << o.random_min << ", \"random_max\": " << o.random_max
     << ", \"adjudicate_cp\": " << o.adjudicate_cp << ", \"adjudicate_plies\": " << o.adjudicate_plies
     << ", \"save_percent\": " << o.save_percent << ", \"unsaved_nodes\": " << o.unsaved_nodes
-    << ", \"check_nodes\": " << o.check_nodes << "},\n"
+    << ", \"check_nodes\": " << o.check_nodes;
+  if (o.interleave > 1) f << ", \"interleave\": " << o.interleave;
+  f << "},\n"
     << "  \"games\": " << t.games.load() << ",\n  \"positions\": " << t.positions.load() << ",\n"
     << "  \"positions_unsaved\": " << t.unsaved.load() << ",\n  \"nodes_spent\": " << t.nodes_spent.load()
     << ",\n"
@@ -305,9 +506,13 @@ int run(int argc, char** argv) {
   std::atomic<bool> failed{false};
   const auto start = std::chrono::steady_clock::now();
   std::vector<std::thread> workers;
+  auto worker_main = run_worker;
+#ifdef FORK_DATAGEN_INTERLEAVE
+  if (o.interleave > 1) worker_main = run_worker_interleaved;
+#endif
   for (int w = 0; w < o.threads; ++w)
-    workers.emplace_back(run_worker, std::cref(o), w, std::cref(openings), std::cref(order), std::ref(totals),
-                         std::ref(failed));
+    workers.emplace_back(worker_main, std::cref(o), w, std::cref(openings), std::cref(order),
+                         std::ref(totals), std::ref(failed));
   std::atomic<bool> done{false};
   std::thread progress([&] {
     auto next = start + std::chrono::seconds(30);

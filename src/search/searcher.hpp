@@ -673,6 +673,19 @@ class Searcher {
   // Aspiration fails are reported (as upperbound or lowerbound lines) only
   // once a search has run this long; tests set 0 to see every fail.
   std::int64_t fail_report_ms = 1000;
+#ifdef FORK_DATAGEN_INTERLEAVE
+  // fork_datagen's interleaved workers (ideas.md idea 165, prototype; built
+  // only with FORK_DATAGEN_INTERLEAVE, never in the engine): `fn(arg)` runs
+  // at every node just before its TT read, while the bucket its parent
+  // prefetched is still on its way, and may run other games' searches on
+  // this thread before it returns. It must leave this searcher untouched.
+  // Null (the default): no pause.
+  using PauseFn = void (*)(void*);
+  void set_pause(PauseFn fn, void* arg) {
+    pause_fn_ = fn;
+    pause_arg_ = arg;
+  }
+#endif
 #ifdef FORK_SEARCH_STATS
   SearchCounters counters;
 #if defined(FORK_EVAL_NNUE)
@@ -887,6 +900,10 @@ class Searcher {
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;
   FeatureStack features_;
+#endif
+#ifdef FORK_DATAGEN_INTERLEAVE
+  PauseFn pause_fn_ = nullptr;
+  void* pause_arg_ = nullptr;
 #endif
 };
 

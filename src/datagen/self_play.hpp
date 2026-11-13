@@ -113,6 +113,14 @@ class SelfPlayGame {
   std::uint64_t nodes_spent() const { return nodes_spent_; }
   // The table's search age: one step per search (tests).
   int table_age() const { return table_.age(); }
+#ifdef FORK_DATAGEN_INTERLEAVE
+  // fork_datagen's interleaved workers (FORK_DATAGEN_INTERLEAVE only): the
+  // search's pause point (Searcher::set_pause), and a request that the game
+  // being played stop before its next move, returning an unwritten game
+  // (one the run will not commit). play() clears the request when it starts.
+  void set_pause(Searcher::PauseFn fn, void* arg) { searcher_.set_pause(fn, arg); }
+  void abandon() { abandoned_ = true; }
+#endif
 
  private:
   explicit SelfPlayGame(const SelfPlayConfig& config) : config_(config), searcher_(table_) {}
@@ -124,6 +132,9 @@ class SelfPlayGame {
   std::atomic<bool> stop_{false};
   int unsaved_ = 0;
   std::uint64_t nodes_spent_ = 0;
+#ifdef FORK_DATAGEN_INTERLEAVE
+  bool abandoned_ = false;
+#endif
 };
 
 }  // namespace forkeng
