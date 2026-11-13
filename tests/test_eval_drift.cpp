@@ -243,10 +243,10 @@ TEST_CASE("eval_drift", "each table's switch changes the tree when on, alone") {
 TEST_CASE("eval_drift", "the minor table is on by default, the others off") {
   const SearchSwitches defaults;
   CHECK(defaults.use_minor_drift);  // on since its STC SPRT passed at MinorDriftShare 32/64
-  CHECK(!defaults.use_piece_drift);
+  CHECK(defaults.use_piece_drift);  // SPRT test build (idea 59 follow-up 1): pieces@32 on top of minor@32
   CHECK(!defaults.use_major_drift);
   CHECK(!defaults.use_threat_drift);
-  CHECK(!defaults.use_drift_depth_scale);  // off until their SPRTs (idea 59's follow-up 1)
+  CHECK(defaults.use_drift_depth_scale);  // SPRT test build
   CHECK(!defaults.use_drift_window_gate);
 }
 
