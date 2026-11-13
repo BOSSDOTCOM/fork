@@ -1306,9 +1306,15 @@ std::vector<std::string> scored_search(Gui& g, const std::string& position, cons
   // note above): it gets a shallower search (the caller) and a longer wait
   // (CI run 43417188774 timed out at the default under gcc-tsan).
   CHECK(g.next("bestmove", SanitizedBuild ? 120000ms : Patience).has_value());
+  // Bound lines (lowerbound / upperbound) are printed only once the search has
+  // run for a while, so how many appear depends on the machine's speed, not on
+  // the tree: under SDE one side crossed that time and printed one more (CI run
+  // 43422600919, same nodes on both sides). They are left out; the exact lines
+  // and the bestmove are compared.
   std::vector<std::string> out;
   for (const std::string& line : g.texts(mark))
-    if ((starts_with(line, "info ") && line.find(" score ") != std::string::npos) ||
+    if ((starts_with(line, "info ") && line.find(" score ") != std::string::npos &&
+         line.find(" lowerbound") == std::string::npos && line.find(" upperbound") == std::string::npos) ||
         starts_with(line, "bestmove"))
       out.push_back(line);
   return out;
