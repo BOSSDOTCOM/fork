@@ -249,14 +249,14 @@ struct SearchQuota {
   X(use_capture_probe, UseCaptureProbe, true)            \
   X(use_pass_best_stop, UsePassBestStop, true)           \
   X(use_history_skip, UseHistorySkip, true)              \
-  X(use_piece_drift, UsePieceDrift, false)               \
+  X(use_piece_drift, UsePieceDrift, true)                \
   X(use_minor_drift, UseMinorDrift, true)                \
   X(use_major_drift, UseMajorDrift, false)               \
   X(use_threat_drift, UseThreatDrift, false)             \
   X(use_pair_sum_update, UsePairSumUpdate, true)         \
   X(use_check_order_bonus, UseCheckOrderBonus, true)     \
-  X(use_drift_depth_scale, UseDriftDepthScale, false)    \
-  X(use_drift_window_gate, UseDriftWindowGate, false)
+  X(use_drift_depth_scale, UseDriftDepthScale, true)     \
+  X(use_drift_window_gate, UseDriftWindowGate, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
