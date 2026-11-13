@@ -493,7 +493,8 @@ added on 2026-10-24; ideas 1-12 predate them.
 - **earliest phase:** Phase 3 (the TT exists).
 - **status:** untested (explicit pages). Speed sprint 4 (2026-11-13) measured the transparent-huge-page side
   for the network and the Searcher (think tank R19): no difference at 16 MB Hash; the 4 GB regime unmeasured
-  (idea 174; archive/speed4-r19-hugepages).
+  (idea 174; archive/speed4-r19-hugepages). The 4 GB+ and TCEC-size (262144 MB) regimes are on the TCEC hardware
+  test plan (owner, 2026-11-13; docs/research/tcec-hardware-test-plan.md entry 1).
 
 ## 20. AVX-512 VNNI for Phase 4 inference
 
@@ -3235,4 +3236,8 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
 - **status:** neither adopted under the speed rule. (a) archive/speed4-r19-hugepages: worth re-measuring at a
   large Hash on a runner or TCEC-class machine. (b) archive/speed4-pair-fold: a memory change (1.125 MiB less
   per searcher), the owner's decision. No runner A/B workflow exists; a minimal one is proposed to the owner.
+  **Owner, 2026-11-13 (about 12:40 PM EST):** (a) goes on the TCEC hardware test plan at a TCEC-sized Hash (4 GB+
+  and 262144 MB); (b) the tag is kept, revisited in step 17a (Lazy SMP) and measured in the TCEC hardware session
+  (docs/research/tcec-hardware-test-plan.md entries 1 and 2); the runner A/B workflow is built (speed-ab.yml, PR #11
+  to main).
   **runtime cost:** none measurable. **earliest phase:** Phase 4.
