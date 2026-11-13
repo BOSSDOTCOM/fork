@@ -574,6 +574,64 @@ class SplitTests(unittest.TestCase):
         self.assertNotEqual(td.check_split(data, out, max_pieces=32, sample=1)['bad'], [])  # another rule
 
 
+class ClassLambdaTests(unittest.TestCase):
+    """Idea 85 (retrain 8c's lam arm): lambda by the record's material class."""
+    GAMES = [
+        # Castling both ways, en passant, a promotion to a queen with capture, a rook promotion, piece captures.
+        ('r3k2r/1P6/8/3pP3/8/8/8/R3K2R w KQkq d6 0 1', ['e5d6', 'e8g8', 'b7a8q', 'g8g7', 'e1c1']),
+        ('r3k2r/1P6/8/3pP3/8/8/8/R3K2R w KQkq d6 0 1', ['b7a8n', 'e8g8', 'e1c1']),
+        ('8/1P5k/8/8/8/8/8/4K3 w - - 0 1', ['b7b8r', 'h7g6', 'b8b6']),
+        (chess.STARTING_FEN, 'e2e4 d7d5 e4d5 d8d5 b1c3 d5a5 d2d4 c7c6 g1f3 c8g4 f1e2 e7e6 e1g1 a5h5'.split()),
+        # A queen trade into an ending: Q-MG, then noQ-MG, then EG.
+        ('3qk3/8/8/8/8/8/8/R2QK2R w - - 0 1', ['d1d8', 'e8d8', 'a1a8', 'd8e7', 'a8a7']),
+    ]
+
+    def test_classes_against_python_chess(self):
+        # Fails on any replay slip (a capture, castling or promotion mis-tracked): the classes come from boards.
+        for fen, moves in self.GAMES:
+            data, _ = encode_game(fen, moves, [0] * len(moves), 1)
+            _, head, recs, _ = list(td.split_games(data))[0]
+            board = chess.Board(fen)
+            want = []
+            for m in moves:
+                want.append(td.board_class(board))
+                board.push_uci(m)
+            self.assertEqual(td.material_classes(head, recs), want, fen)
+
+    def test_the_class_rule(self):
+        self.assertEqual(td.board_class(chess.Board()), 'Q-MG')                               # phase 24
+        self.assertEqual(td.board_class(chess.Board('4k3/8/8/8/8/8/3Q4/R3K3 w - - 0 1')), 'Q-EG')   # 6
+        self.assertEqual(td.board_class(chess.Board('r3k2r/8/8/8/8/8/8/RN2K1NR w - - 0 1')), 'noQ-MG')  # 10
+        self.assertEqual(td.board_class(chess.Board('r3k2r/8/8/8/8/8/8/R3K1NR w - - 0 1')), 'EG')  # 9
+        self.assertEqual(td.board_class(chess.Board('rn2k1nr/8/8/8/8/8/8/RB1QK3 w - - 0 1')), 'Q-MG')  # 13
+        self.assertEqual(td.board_class(chess.Board('rn2k1nr/8/8/8/8/8/8/R2QK3 w - - 0 1')), 'Q-EG')  # 12
+
+    def test_per_record_lambda_recursion_equals_the_forward_view(self):
+        scores = [35, U, -20, U, 80, 300, U, -50]
+        lams = [0.35, 0.9, 0.65, 0.35, 0.9, 0.65, 0.9, 0.35]
+        chain = [s != U for s in scores]
+        for result in (0, 1, 2):
+            got = td.td_pairs(scores, result, lams, 92.0, label_unsaved=True)
+            for t in range(len(scores)):
+                want = td.forward_td_pair(scores, chain, result, lams, 92.0, t)
+                self.assertAlmostEqual(got[t][0], want[0], places=12)
+        # A constant list is the scalar.
+        self.assertEqual(td.td_pairs(scores, 2, [0.9] * 8, 92.0), td.td_pairs(scores, 2, 0.9, 92.0))
+
+    def test_copy_and_its_check(self):
+        data = b''.join(encode_game(f, m, [(-1) ** i * 37 * i for i in range(len(m))], 2)[0] for f, m in self.GAMES)
+        plain, _ = td.relabel_shard(data, 0.9, 92.0)
+        same, _ = td.relabel_shard(data, 0.9, 92.0, lam_by_class={'Q-MG': 0.9, 'EG': 0.9})
+        self.assertEqual(plain, same)                                    # a table of 0.9 is TD(0.9)
+        lam, _ = td.relabel_shard(data, 0.9, 92.0, lam_by_class=td.LAM_BY_CLASS)
+        self.assertNotEqual(lam, plain)
+        self.assertEqual(td.check_copy(data, lam, 'td', 0.9, 92.0, sample=1, lam_by_class=td.LAM_BY_CLASS)['bad'], [])
+        # The check fails on the wrong copy either way round.
+        self.assertNotEqual(td.check_copy(data, plain, 'td', 0.9, 92.0, sample=1,
+                                          lam_by_class=td.LAM_BY_CLASS)['bad'], [])
+        self.assertNotEqual(td.check_copy(data, lam, 'td', 0.9, 92.0, sample=1)['bad'], [])
+
+
 class InjectedFaultTests(unittest.TestCase):
     """The limit check must fail on a broken label function."""
 

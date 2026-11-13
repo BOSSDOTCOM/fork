@@ -104,10 +104,12 @@ kind; with the score/result blend's error (1 - w) sigmoid(s_t / S) + w z at
 --blend w for reference. It chooses nothing.
 
     td_labels.py labels SHARD --out OUT.vf --lam L --scale S [--games N] [--from-next] [--unsaved next|drop]
+        [--lam-by-class]   (idea 85: lambda by the record's material class, LAM_BY_CLASS; --lam for the others)
                         [--check-scores skip|keep] [--label-unsaved]
     td_labels.py blend SHARD --out OUT.vf --scale S [--weight W]
     td_labels.py split SHARD --out OUT.vf [--max-pieces 7]
     td_labels.py check ORIGINAL COPY --mode td|blend|split --scale S [--lam L] [--weight W] [--sample N] [--label-unsaved]
+        [--lam-by-class]
     td_labels.py compare --sites DIR... --data DIR... --scale S [--grid L,L,...] [--blend W,...]
                          [--from-next] [--unsaved next|drop] [--check-scores skip|keep] [--json OUT.json]
 """
@@ -149,11 +151,16 @@ def td_pairs(scores, result, lam, scale, from_next=False, unsaved='next', skip=N
     result byte (0, 1, 2). With label_unsaved (idea 80, variant A; needs
     unsaved 'next'), an unsaved record not flagged in `skip` gets the label
     the same recursion gives its ply (its G_t(0) is the next chain value), so
-    a position in check stays unlabelled."""
+    a position in check stays unlabelled. `lam` is one lambda or one per
+    record (idea 85: the step at record t uses lambda_t)."""
     if label_unsaved and unsaved != 'next':
         raise ValueError("label_unsaved needs unsaved 'next' (the plies are the steps)")
-    if not 0.0 <= lam <= 1.0:
-        raise ValueError(f'lambda {lam} outside [0, 1]')
+    lams = list(lam) if isinstance(lam, (list, tuple)) else [lam] * len(scores)
+    if len(lams) != len(scores):
+        raise ValueError(f'{len(lams)} lambdas for {len(scores)} records')
+    for x in lams:
+        if not 0.0 <= x <= 1.0:
+            raise ValueError(f'lambda {x} outside [0, 1]')
     if unsaved not in ('next', 'drop'):
         raise ValueError(f'unsaved mode {unsaved!r}')
     z = WHITE_RESULT[result]
@@ -168,7 +175,8 @@ def td_pairs(scores, result, lam, scale, from_next=False, unsaved='next', skip=N
         after = u
         if chain[t]:
             nv = win_pair(scores[t], scale)
-        u = ((1.0 - lam) * nv[0] + lam * after[0], (1.0 - lam) * nv[1] + lam * after[1])
+        lt = lams[t]
+        u = ((1.0 - lt) * nv[0] + lt * after[0], (1.0 - lt) * nv[1] + lt * after[1])
         if chain[t] or (label_unsaved and scores[t] == UNSAVED and not (skip and skip[t])):
             out[t] = after if from_next else u
     return out
@@ -246,8 +254,74 @@ def settled_one_move(recs, result, scale):
     return abs(win_pair(recs[0][1], scale)[0] - WHITE_RESULT[result]) <= 1e-6
 
 
+# Idea 85 (retrain 8c's lam arm, plan section 2 arm 5, O8 as declared): the TD horizon by material class, the classes
+# exactly tools/measure/label_probes.py's (tools/probes-1111): phase units N = B = 1, R = 2, Q = 4 over both sides;
+# Q-MG a queen on and phase >= 13, Q-EG a queen on and phase <= 12, noQ-MG no queen and phase >= 10, EG no queen and
+# phase <= 9. Q-MG and EG take these lambdas (the probe's best against the 1 M-node golds), the others --lam (0.9).
+LAM_BY_CLASS = {'Q-MG': 0.35, 'EG': 0.65}
+PHASE_UNITS = {1: 1, 2: 1, 3: 2, 4: 4}  # the header's piece codes N 1, B 2, R 3 (6, a castling rook, read as 3), Q 4
+
+
+def class_of(phase, queen):
+    if queen:
+        return 'Q-MG' if phase >= 13 else 'Q-EG'
+    return 'noQ-MG' if phase >= 10 else 'EG'
+
+
+def material_classes(head, recs):
+    """The material class of each record's position, by a typed replay of the
+    packed board (no move legality, no python-chess): a move to an occupied
+    square captures what stands there, en passant (kind 1) a pawn, castling
+    (kind 2, the king to its own rook) nothing, a promotion (kind 3) puts its
+    piece (N, B, R, Q by code >> 12 & 3) on the target square."""
+    occ = int.from_bytes(head[0:8], 'little')
+    kind, k = [-1] * 64, 0  # the header's piece codes (P 0, N 1, B 2, R 3, Q 4, K 5), -1 for an empty square
+    for sq in range(64):
+        if occ >> sq & 1:
+            c = (head[8 + k // 2] >> (4 * (k % 2))) & 7
+            kind[sq] = 3 if c == 6 else c
+            k += 1
+    phase = sum(PHASE_UNITS.get(c, 0) for c in kind)
+    queens = kind.count(4)
+    out = []
+    for code, _s in recs:
+        out.append(class_of(phase, queens > 0))
+        frm, to, promo, mk = code & 63, code >> 6 & 63, code >> 12 & 3, code >> 14
+        if mk == 2:
+            rank = frm & 56
+            king_to, rook_to = (rank | 6, rank | 5) if (to & 7) > (frm & 7) else (rank | 2, rank | 3)
+            king, rook = kind[frm], kind[to]
+            kind[frm] = kind[to] = -1
+            kind[king_to], kind[rook_to] = king, rook
+            continue
+        if mk == 1:
+            kind[(frm & 56) | (to & 7)] = -1
+        elif kind[to] >= 0:
+            phase -= PHASE_UNITS.get(kind[to], 0)
+            queens -= kind[to] == 4
+        moving = kind[frm]
+        kind[frm] = -1
+        if mk == 3:
+            moving = promo + 1  # N 1, B 2, R 3, Q 4
+            phase += PHASE_UNITS[moving]
+            queens += moving == 4
+        kind[to] = moving
+    return out
+
+
+def board_class(board):
+    """A python-chess board's material class (the independent count for the checks)."""
+    phase = sum(len(board.pieces(t, c)) * u for t, u in ((chess.KNIGHT, 1), (chess.BISHOP, 1), (chess.ROOK, 2),
+                                                         (chess.QUEEN, 4)) for c in (chess.WHITE, chess.BLACK))
+    return class_of(phase, bool(board.queens))
+
+
+def class_lambdas(classes, lam, by_class):
+    return [by_class.get(c, lam) for c in classes]
+
+
 def relabel_shard(data, lam, scale, games=None, from_next=False, unsaved='next', check_scores='skip',
-                  label_unsaved=False):
+                  label_unsaved=False, lam_by_class=None):
     """The shard (its first `games` games) with TD labels in place of the
     keepable chain scores, and the counts. A table-labelled one-move game
     (settled_one_move: the endgame slice's) is copied unchanged. With
@@ -273,7 +347,8 @@ def relabel_shard(data, lam, scale, games=None, from_next=False, unsaved='next',
             continue
         scores = [s for _, s in recs]
         skip = check_flags(head, recs) if check_scores == 'skip' else None
-        pairs = td_pairs(scores, head[30], lam, scale, from_next, unsaved, skip, label_unsaved)
+        lams = class_lambdas(material_classes(head, recs), lam, lam_by_class) if lam_by_class else lam
+        pairs = td_pairs(scores, head[30], lams, scale, from_next, unsaved, skip, label_unsaved)
         out += head
         for (code, s), p in zip(recs, pairs):
             if s == UNSAVED and p is not None and abs(pair_to_score(p, scale)) < KEEP_LIMIT:
@@ -462,23 +537,28 @@ def forward_td_pair(scores, chain, result, lam, scale, t):
     """Record t's label by the forward view (the defining sum, not the
     backward recursion relabel_shard uses), for the copy check:
     (1 - lambda) sum_n lambda^n G_t(n) + lambda^(N - t) z, G_t(n) the pair of
-    the first chain record j >= t + n, or z past the last."""
+    the first chain record j >= t + n, or z past the last. With one lambda per
+    record (idea 85) the n-th weight is lambda_t ... lambda_(t+n-1) (1 - lambda_(t+n))
+    and the result's lambda_t ... lambda_(N-1)."""
     n_rec = len(scores)
+    lams = list(lam) if isinstance(lam, (list, tuple)) else [lam] * n_rec
     z = (WHITE_RESULT[result], 1.0 - WHITE_RESULT[result])
     nxt = [None] * (n_rec + 1)
     nxt[n_rec] = z
     for j in range(n_rec - 1, -1, -1):
         nxt[j] = win_pair(scores[j], scale) if chain[j] else nxt[j + 1]
     a = b = 0.0
+    prod = 1.0
     for n in range(n_rec - t):
-        w = (1.0 - lam) * lam ** n
+        w = prod * (1.0 - lams[t + n])
         a += w * nxt[t + n][0]
         b += w * nxt[t + n][1]
-    w = lam ** (n_rec - t)
-    return a + w * z[0], b + w * z[1]
+        prod *= lams[t + n]
+    return a + prod * z[0], b + prod * z[1]
 
 
-def check_copy(original, copy, mode, param, scale, sample=100, check_scores='skip', label_unsaved=False):
+def check_copy(original, copy, mode, param, scale, sample=100, check_scores='skip', label_unsaved=False,
+               lam_by_class=None):
     """A relabelled copy against its original. Every game: the same boards,
     moves and terminators; scores changed only on keepable records of games
     of two or more records, and within +-20,000 there. Every `sample`-th game
@@ -487,7 +567,10 @@ def check_copy(original, copy, mode, param, scale, sample=100, check_scores='ski
     param, the default definition; 'blend': blend_pair at W = param). With
     label_unsaved (mode 'td', idea 80) an unsaved record may change, and on
     the sampled games each unsaved record not in check must equal its
-    forward-view label and each one in check must be unchanged.
+    forward-view label and each one in check must be unchanged. With
+    lam_by_class (mode 'td', idea 85) each sampled record's lambda comes from
+    its class counted on a python-chess replay (board_class), independent of
+    material_classes.
     Returns the counts and the first problems found."""
     report = {'games': 0, 'records': 0, 'changed': 0, 'games_recomputed': 0, 'records_recomputed': 0,
               'max_difference': 0, 'bad': []}
@@ -524,13 +607,22 @@ def check_copy(original, copy, mode, param, scale, sample=100, check_scores='ski
             scores = [a for _, a in r0]
             skip = check_flags(h0, r0) if mode == 'td' and check_scores == 'skip' else [False] * len(r0)
             chain = [a != UNSAVED and not skip[t] for t, a in enumerate(scores)]
+            if mode == 'td' and lam_by_class:
+                board, _ = vg.decode_board(h0)
+                classes = []
+                for code, _a in r0:
+                    classes.append(board_class(board))
+                    board.push(move_of(board, code))
+                param_t = class_lambdas(classes, param, lam_by_class)
+            else:
+                param_t = param
             for t, ((_, a), (_, b)) in enumerate(zip(r0, r1)):
                 if open_unsaved and a == UNSAVED:
                     if skip[t]:
                         if b != a:
                             bad(f'game {k} record {t}: unsaved in check, changed to {b}')
                         continue
-                    want = pair_to_score(forward_td_pair(scores, chain, h0[30], param, scale, t), scale)
+                    want = pair_to_score(forward_td_pair(scores, chain, h0[30], param_t, scale, t), scale)
                     report['records_recomputed'] += 1
                     if b == UNSAVED:  # left unsaved only where the label reaches the limit (within the rounding)
                         if abs(want) < KEEP_LIMIT - 1:
@@ -547,7 +639,7 @@ def check_copy(original, copy, mode, param, scale, sample=100, check_scores='ski
                         if a != b:
                             bad(f'game {k} record {t}: in check, changed {a} to {b}')
                         continue
-                    want = pair_to_score(forward_td_pair(scores, chain, h0[30], param, scale, t), scale)
+                    want = pair_to_score(forward_td_pair(scores, chain, h0[30], param_t, scale, t), scale)
                 else:
                     want = pair_to_score(blend_pair(a, h0[30], param, scale), scale)
                 report['records_recomputed'] += 1
@@ -767,6 +859,8 @@ def main(argv=None):
     lp.add_argument('--games', type=int, help='only the first N games')
     lp.add_argument('--label-unsaved', action='store_true',
                     help='idea 80: unsaved records not in check get their TD label too')
+    lp.add_argument('--lam-by-class', action='store_true',
+                    help='idea 85: lambda by material class (LAM_BY_CLASS), --lam for the other classes')
     cp_ = sub.choices['compare']
     cp_.add_argument('--sites', type=Path, nargs='+', required=True)
     cp_.add_argument('--data', type=Path, nargs='+', required=True)
@@ -796,6 +890,7 @@ def main(argv=None):
     kp.add_argument('--sample', type=int, default=100, help='recompute every N-th game (0: none)')
     kp.add_argument('--check-scores', choices=('skip', 'keep'), default='skip')
     kp.add_argument('--label-unsaved', action='store_true', help='mode td: the copy labels unsaved records (idea 80)')
+    kp.add_argument('--lam-by-class', action='store_true', help='mode td: the copy uses LAM_BY_CLASS (idea 85)')
     a = ap.parse_args(argv)
     if a.scale <= 0:
         ap.error('--scale must be positive')
@@ -803,12 +898,13 @@ def main(argv=None):
     try:
         if a.command == 'labels':
             data = a.shard.read_bytes()
+            by_class = LAM_BY_CLASS if a.lam_by_class else None
             out, counts = relabel_shard(data, a.lam, a.scale, a.games, a.from_next, a.unsaved, a.check_scores,
-                                        a.label_unsaved)
+                                        a.label_unsaved, by_class)
             write_atomic(a.out, out)
             info = {'source': a.shard.name, 'lambda': a.lam, 'scale': a.scale,
                     'from_next': a.from_next, 'unsaved_mode': a.unsaved, 'check_scores': a.check_scores,
-                    'label_unsaved': a.label_unsaved, 'games_limit': a.games,
+                    'label_unsaved': a.label_unsaved, 'lam_by_class': by_class, 'games_limit': a.games,
                     'sha256': hashlib.sha256(out).hexdigest(), 'bytes': len(out), **counts,
                     'seconds': round(time.monotonic() - began, 1)}
             a.out.with_name(a.out.name + '.json').write_text(json.dumps(info, indent=1) + '\n')
@@ -842,7 +938,7 @@ def main(argv=None):
                 ap.error('--mode td needs --lam')
             param = a.lam if a.mode == 'td' else a.weight
             report = check_copy(a.original.read_bytes(), a.copy.read_bytes(), a.mode, param, a.scale, a.sample,
-                                a.check_scores, a.label_unsaved)
+                                a.check_scores, a.label_unsaved, LAM_BY_CLASS if a.lam_by_class else None)
             print(json.dumps({'original': a.original.name, 'copy': a.copy.name, 'mode': a.mode, 'param': param,
                               **report, 'seconds': round(time.monotonic() - began, 1)}))
             return 1 if report['bad'] else 0
