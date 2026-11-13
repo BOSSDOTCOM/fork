@@ -2558,6 +2558,13 @@ whose weaknesses and data gaps decide their targets and order.
   their LTC where required).
 - **runtime cost:** none measurable (2026-11-11, after the adoption; clang-release, Windows, the shared machine busy; A = phase-4 a95e269, B = the adopting commit e005049, r8brft1): bench/ab_search.py, 10 interleaved rounds, not pinned: median nps 2,043,662 against 2,034,450 (-0.5%), best 2,075,512 against 2,061,329 (-0.7%), under its 3.1% noise threshold, no significant difference; 12 further paired ABBA rounds: B/A nps 0.999, 95% interval 0.989 to 1.009 (t, 11 df). So no measurable nps price; the bench itself finishes in about 5% less time because it searches 5% fewer nodes.
 - **earliest phase:** Phase 4.
+- **over-pruning check (2026-11-13):** a tactical-suite comparison (Arasan's wacnew and ecmgcp, 483 positions,
+  test data only) of phase-4 929f114 against d33a4db found no broad over-pruning (335 vs 334 at 100k nodes, 412
+  vs 409 at 1M, 434 vs 441 at 2 s; none significant), but with `UseCaptureProbe` off the head solves
+  significantly more (350, 429, 456: p 0.0026, 0.0033, 0.0002); on the 18 positions the head newly failed at
+  two or more limits, ProbCut off solved all 18 at about a seventh of the nodes. **Owner (2026-11-13, about
+  2:00 PM EST): keep ProbCut; widen `CaptureProbeMargin`'s final-retune range toward more conservative values
+  (60-200, was 40-160); flag ProbCut as a priority switch in the removal round, tested at LTC.**
 
 ## 74. Quiet history pruning, the history skip (tier 2, T24; survey B13)
 

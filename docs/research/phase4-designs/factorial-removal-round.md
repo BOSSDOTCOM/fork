@@ -223,6 +223,14 @@ So per switch:
   LTC. Proposal: if the removal set contains such a switch, the guard is
   repeated at LTC 40+0.4 (the same bounds, cap 4-6 LTC stages); a keep needs
   no LTC test (keeping is the safe direction). Owner decision (§8).
+- **Priority switch: `UseCaptureProbe` (ProbCut), tested at LTC (owner, 2026-11-13, about 2:00 PM EST).** The over-pruning check
+  found no broad over-pruning (phase-4 929f114 solves the WAC and ECM suites as d33a4db does, 1-2 plies
+  deeper), but the tactical misses concentrate in ProbCut: with it off the head solves significantly more
+  (483 positions: 350 vs 335 at 100k nodes, 429 vs 412 at 1M, 456 vs 434 at 2 s), while it passed its LTC
+  games (+9.40 ± 5.03 Elo). ProbCut is kept for now; in this round it is flagged as a priority switch and its
+  removal is tested at LTC 40+0.4 whatever the STC screen shows. The 18 positions the head newly failed are a
+  ready diagnostic set for ProbCut variants (~/fork-jobs/tactics/ on the dev machine, not
+  committed; the suites are Arasan's wacnew and ecmgcp, ORIGINALITY.md).
 
 ### 5.4 After the round
 

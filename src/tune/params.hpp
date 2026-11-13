@@ -71,7 +71,7 @@
   X(LmrHistoryPerPly, 10000, 5000, 20000, 750) \
   X(CaptureProbeMinDepth, 9, 4, 18, 1)         \
   X(CaptureProbeReduction, 5, 2, 10, 1)        \
-  X(CaptureProbeMargin, 80, 40, 160, 6)        \
+  X(CaptureProbeMargin, 80, 60, 200, 6)        \
   X(QuiesceMoveCap, 2, 1, 6, 1)                \
   X(DriftWeightCap, 4, 2, 8, 1)                \
   X(DriftWeightTotal, 256, 128, 512, 19)       \
