@@ -27,6 +27,14 @@
 //   update (apply_from_sum, the engine survey's D8) the self-limiting term
 //   reads the move's entries in both tables together, and the result is
 //   clamped to the same bounds.
+// - The colour fold (speed sprint 4, the concurrency review of 2026-11-11):
+//   at a node the arrival's colour follows from the slot's (the opponent's
+//   move for the reply table, the side's own for the follow table), so each
+//   table keeps a row per arrival piece type and square only (pair_row) and
+//   a column per slot: half of the full 768 x 768 table, every entry the
+//   one the full table would hold. This needs one rule: a table pairs its
+//   arrivals and slots always with the same colours or always with
+//   opposite ones; debug builds assert it at each read and update.
 // - Every index is in range: side 0-1; from- and to-squares 0-63 (Move masks
 //   them); a pair or take slot built from a real piece (colour and type), a
 //   square 0-63 and a victim type Pawn to King; an arrival a pair slot; a
@@ -110,6 +118,12 @@ class TakeHistory {
   std::int16_t table_[TakeSlots] = {};
 };
 
+// The colour fold: a pair table's row is its arrival's piece type and
+// square without the colour (a black piece's slots are the upper half,
+// pair_slot), and its column the full slot.
+constexpr int PairRows = PairSlots / 2;
+constexpr int pair_row(int arrival) { return arrival >= PairRows ? arrival - PairRows : arrival; }
+
 // The searcher keeps both pair tables in one array, so the move selector
 // holds a single pointer (the search stack's frame stays within its size
 // guard, tests/test_search.cpp).
@@ -121,14 +135,16 @@ class PairHistory {
   int value(int arrival, int slot) const {
     assert(arrival >= 0 && arrival < PairSlots && "pair history: arrival out of range");
     assert(slot >= 0 && slot < PairSlots && "pair history: slot out of range");
-    return table_[arrival][slot];
+    check_colours(arrival, slot);
+    return table_[pair_row(arrival)][slot];
   }
 
   // As QuietHistory::apply.
   void apply(int arrival, int slot, int amount) {
     assert(arrival >= 0 && arrival < PairSlots && "pair history: arrival out of range");
     assert(slot >= 0 && slot < PairSlots && "pair history: slot out of range");
-    std::int16_t& v = table_[arrival][slot];
+    check_colours(arrival, slot);
+    std::int16_t& v = table_[pair_row(arrival)][slot];
     const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
     v = static_cast<std::int16_t>(v + clamped - v * std::abs(clamped) / HistoryMax);
   }
@@ -141,7 +157,8 @@ class PairHistory {
   void apply_from_sum(int arrival, int slot, int amount, int sum) {
     assert(arrival >= 0 && arrival < PairSlots && "pair history: arrival out of range");
     assert(slot >= 0 && slot < PairSlots && "pair history: slot out of range");
-    std::int16_t& v = table_[arrival][slot];
+    check_colours(arrival, slot);
+    std::int16_t& v = table_[pair_row(arrival)][slot];
     const int clamped = amount > HistoryMax ? HistoryMax : amount < -HistoryMax ? -HistoryMax : amount;
     const int next = v + clamped - sum * std::abs(clamped) / HistoryMax;
     v = static_cast<std::int16_t>(next > HistoryMax ? HistoryMax : next < -HistoryMax ? -HistoryMax : next);
@@ -150,6 +167,9 @@ class PairHistory {
   void clear() {
     for (auto& row : table_)
       for (std::int16_t& v : row) v = 0;
+#ifndef NDEBUG
+    pairing_ = Unpaired;
+#endif
   }
 
   // As TakeHistory::age.
@@ -159,7 +179,22 @@ class PairHistory {
   }
 
  private:
-  std::int16_t table_[PairSlots][PairSlots] = {};
+#ifndef NDEBUG
+  // The colour fold's rule (debug builds): the first read or update fixes
+  // whether this table pairs same or opposite colours, until clear().
+  static constexpr int Unpaired = -1;
+  mutable int pairing_ = Unpaired;
+  void check_colours(int arrival, int slot) const {
+    const int opposite = (arrival >= PairRows) != (slot >= PairRows);
+    if (pairing_ == Unpaired) pairing_ = opposite;
+    assert(pairing_ == opposite && "pair history: arrival and slot colours break the table's pairing");
+  }
+#else
+  void check_colours(int, int) const {}
+#endif
+
+  // 576 KiB: PairRows rows of PairSlots int16 entries.
+  std::int16_t table_[PairRows][PairSlots] = {};
 };
 
 // Threat buckets (tier 2, T56; KB search-techniques.md §3.34, its first

@@ -4,6 +4,7 @@
 // exactly the right moves, and the history update stays bounded.
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <set>
 #include <vector>
@@ -156,7 +157,7 @@ TEST_CASE("ordering", "a losing capture comes after the quiets; the best-history
 // butterfly history's bounds for any update sequence; and the selector puts
 // a quiet move with a reply entry first after the move it is paired with,
 // and ignores the table at a node with no arrival (the root, after a null
-// move). Heap-allocated: the table is about 1.2 MB.
+// move). Heap-allocated: the table is about 0.6 MB.
 TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quiets after the arrival only") {
   std::set<int> slots;
   for (Color c : {White, Black})
@@ -172,12 +173,12 @@ TEST_CASE("ordering", "pair history: distinct slots, bounded, and it orders quie
   std::uint64_t seed = 11;
   for (int i = 0; i < 200000; ++i) {
     const int amount = static_cast<int>(splitmix_next(seed) % (2 * HistoryMax + 1)) - HistoryMax;
-    pairs[ReplyTable].apply(100, 200, amount);
-    const int v = pairs[ReplyTable].value(100, 200);
+    pairs[ReplyTable].apply(100, 600, amount);  // a white arrival, a black slot
+    const int v = pairs[ReplyTable].value(100, 600);
     CHECK_MSG(v >= -HistoryMax && v <= HistoryMax, "value " << v << " after amount " << amount);
   }
   pairs[ReplyTable].clear();
-  CHECK_EQ(pairs[ReplyTable].value(100, 200), 0);
+  CHECK_EQ(pairs[ReplyTable].value(100, 600), 0);
 
   // The position of the case above, without its history. Without the pair
   // table the quiets come in generation order and the deferred losing
@@ -243,6 +244,76 @@ TEST_CASE("ordering", "pair history: the summed-base update (D8) by hand, and bo
     const int r = reply.value(3, 7), f = follow.value(5, 7);
     CHECK_MSG(r >= -HistoryMax && r <= HistoryMax && f >= -HistoryMax && f <= HistoryMax,
               "values " << r << ", " << f << " after amount " << amount);
+  }
+}
+
+// The colour fold (speed sprint 4): within one pairing (the follow table's
+// same colours, the reply table's opposite ones) every (arrival, slot) pair
+// has its own entry of the folded table, and the pairs cover it exactly; and
+// a random sequence of updates, summed-base updates and ageings, over both
+// colours of arrivals, leaves every pair holding what an unfolded 768 x 768
+// table updated by the rules as written in quiet_history.hpp holds.
+TEST_CASE("ordering", "pair history: the colour fold maps each pairing 1:1 and keeps every value") {
+  constexpr int Half = PairSlots / 2;  // a black piece's slots are the upper half
+  for (const bool opposite : {false, true}) {
+    const auto paired = [opposite](int arrival, int slot) { return ((arrival >= Half) != (slot >= Half)) == opposite; };
+    std::vector<char> seen(static_cast<std::size_t>(PairRows) * PairSlots, 0);
+    int pairs_seen = 0, collisions = 0, out_of_range = 0;
+    for (int arrival = 0; arrival < PairSlots; ++arrival)
+      for (int slot = 0; slot < PairSlots; ++slot) {
+        if (!paired(arrival, slot)) continue;
+        const int row = pair_row(arrival);
+        if (row < 0 || row >= PairRows) {
+          ++out_of_range;
+          continue;
+        }
+        collisions += seen[static_cast<std::size_t>(row) * PairSlots + slot]++ != 0;
+        ++pairs_seen;
+      }
+    CHECK_EQ(out_of_range, 0);
+    CHECK_EQ(collisions, 0);
+    CHECK_EQ(pairs_seen, PairRows * PairSlots);
+
+    // The oracle: the unfolded table, updated by the rules as written (v + b
+    // - v * |b| / HistoryMax; the summed base's v + b - sum * |b| /
+    // HistoryMax, clamped; ageing by quarters, toward zero).
+    std::vector<int> full(static_cast<std::size_t>(PairSlots) * PairSlots, 0);
+    auto folded = std::make_unique<PairHistory>();
+    std::uint64_t seed = opposite ? 41 : 42;
+    const auto pick = [&seed](int n) { return static_cast<int>(splitmix_next(seed) % static_cast<unsigned>(n)); };
+    for (int i = 1; i <= 400000; ++i) {
+      if (i % 50000 == 0) {
+        const int keep = 1 + pick(4);
+        folded->age(keep);
+        for (int& e : full) e = e * keep / 4;
+        continue;
+      }
+      // Few rows, each with both colours of its arrival, so a fold that
+      // mixed colours would make two pairs share an entry.
+      const int arrival = pick(4) * 64 + pick(3) + (pick(2) ? Half : 0);
+      int slot = pick(PairSlots);
+      if (!paired(arrival, slot)) slot = slot >= Half ? slot - Half : slot + Half;
+      int& v = full[static_cast<std::size_t>(arrival) * PairSlots + slot];
+      const int amount = pick(2 * HistoryMax + 1) - HistoryMax;
+      if (pick(2)) {
+        folded->apply(arrival, slot, amount);
+        v = v + amount - v * std::abs(amount) / HistoryMax;
+      } else {
+        const int sum = pick(4 * HistoryMax + 1) - 2 * HistoryMax;
+        folded->apply_from_sum(arrival, slot, amount, sum);
+        v = std::clamp(v + amount - sum * std::abs(amount) / HistoryMax, -HistoryMax, HistoryMax);
+      }
+    }
+    int differ = 0, nonzero = 0;
+    for (int arrival = 0; arrival < PairSlots; ++arrival)
+      for (int slot = 0; slot < PairSlots; ++slot) {
+        if (!paired(arrival, slot)) continue;
+        const int want = full[static_cast<std::size_t>(arrival) * PairSlots + slot];
+        differ += folded->value(arrival, slot) != want;
+        nonzero += want != 0;
+      }
+    CHECK_EQ(differ, 0);
+    CHECK(nonzero > 1000);  // the sequence reached many entries, not a few
   }
 }
 
