@@ -443,6 +443,18 @@ Inputs (DESIGN.md §5.3; KB data-policy.md):
 - **Labels**: Fork's own search (generation 0: the bootstrap evaluation),
   game results, Syzygy WDL.
 
+**Not training data: the UHO/SF19 diagnostic sets** (owner, 2026-11-13;
+`tools/nnue/uho_diag.py`). Three fixed position sets (adv 200, levelql 272,
+qtrade 528 positions; seed 20261113; SHA-256s in the sets' manifest.json)
+are extracted from the 800 gauntlet games Fork 117d26a played against
+Stockfish 19 (GitHub runs 43492072142, UHO book, and 43492038248, balanced
+book), with Stockfish's PGN scores as the reference values. They are
+another engine's output, so they are test data only: a per-net diagnostic
+report, never a training input, never a label, never a gate, and never
+committed (they stay in `~/fork-data/uho-diag`, outside the repository;
+the tool reads them by path). Only the positions and the scores in the PGN
+comments are read; nothing of Stockfish's code or network is involved.
+
 ## Operations tooling (not linked into Fork)
 
 **Fork Control Center** (`tools/control_center/`, branch tools/control-center, 2026-11-06): a Windows

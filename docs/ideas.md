@@ -3227,6 +3227,19 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
   [+0.022, +0.036]), launch at g4c's seal; arm A (1,500 x 16 adjudication) waits for its count on g4c (provisional
   on g1b: +10.1% positions); arm U (unbalanced starts) not supported. **runtime cost:** none (one multiply per info
   line). **earliest phase:** Phase 4.
+- **note (owner, 2026-11-13 ~4:20 PM EST): the leading explanation for the UHO conversion failures** against SF19
+  (0 wins from 200 advantaged UHO starts; the UHO/SF19 analysis of 2026-11-13) is a **two-sided misjudgment:
+  queens-on edges underrated, level queenless positions overrated.** The diagnostic benchmark
+  `tools/nnue/uho_diag.py` measures it per net on fixed sets from those games (test data only, outside the repo;
+  ORIGINALITY.md): adv (200 advantaged starts; SF19 median +97.5 cp), levelql (272 level queenless positions; SF19
+  0), qtrade (528 slightly-ahead positions with a queen trade available). Baselines (raw cp, medians; static /
+  100k-node search): r8brft1 adv +40 / +50 (ratio to SF 0.42 / 0.51), levelql +28 / +15; r8btd90 +37 / +46,
+  +25 / +15.5; r8bep1 +40 / +49, +27 / +14; r8bep2 +40.5 / +50, +28 / +14.5; static only: s512ppr3 +39.5, +28;
+  s512 +33.5, +20; b0r2 +33, +18.5. Queen trades when slightly ahead: every r8b net's search trades in 0.07-0.08 of
+  SF-to-move positions where SF19 traded in 0.06, and in 0.14-0.15 of Fork-to-move positions where Fork's game
+  traded in 0.15: **no excess trade preference measured**, so the queens part of the explanation lives in the
+  evaluation's level (both sides of it), not in a trade-seeking choice. The r8b nets differ by at most 3-4 cp on
+  this benchmark. Run per arm in retrain 8c (post_a1.sh uhodiag, report only), arm Q and the per-class lambda arm.
 
 ### 174. Speed sprint 4: huge pages for the network and the Searcher (R19), and the pair tables' colour fold
 
