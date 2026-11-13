@@ -1,0 +1,566 @@
+{
+ "run": "r8c-i80",
+ "note": "retrain 8c, idea 80: i80- copies (td_labels.py labels --label-unsaved, lambda 0.9, S = 92; labels at the +-20,000 limit left out, owner 2026-11-12; tools retrain/8c-prep 9167b22; chunks of 20,000 games, each checked) of g3j, g4, g4b, ld-d20/d50/d100, the g4s1 and g4s2 rests and the VM filler parts' training files (pre-seal)",
+ "totals": {
+  "games": 6012356,
+  "positions": 566780182,
+  "positions_unsaved": 6352291,
+  "positions_saved": 560427891,
+  "bytes": 2483565544
+ },
+ "batches": [
+  [
+   {
+    "file": "i80-g3j-w00.vf",
+    "games": 379606,
+    "positions": 35420702,
+    "positions_unsaved": 401469,
+    "positions_saved": 35019233,
+    "bytes": 155348624,
+    "sha256": "6bee5db8c850c2c72ead4dfb1d6292795122e1ab67f39e3960cc02ff7036cd63"
+   },
+   {
+    "file": "i80-g3j-w01.vf",
+    "games": 379392,
+    "positions": 35420692,
+    "positions_unsaved": 400765,
+    "positions_saved": 35019927,
+    "bytes": 155340880,
+    "sha256": "ce162baf40e42de02cdec1e2cbc8c3b86cfe21c46299c451c915b9aee090a977"
+   },
+   {
+    "file": "i80-g3j-w02.vf",
+    "games": 379712,
+    "positions": 35420697,
+    "positions_unsaved": 401976,
+    "positions_saved": 35018721,
+    "bytes": 155352420,
+    "sha256": "4f6c5543f5c9cc37fd728f5c3836645624562752ba8c53c0cc0f8e904f1ec8cb"
+   },
+   {
+    "file": "i80-g3j-w03.vf",
+    "games": 379637,
+    "positions": 35420726,
+    "positions_unsaved": 398760,
+    "positions_saved": 35021966,
+    "bytes": 155349836,
+    "sha256": "8ada2f25c36b5ab545bcb323abb9c34fcf61cdf1d31297a2166e17b680354350"
+   },
+   {
+    "file": "i80-g3j-w04.vf",
+    "games": 379621,
+    "positions": 35420726,
+    "positions_unsaved": 402288,
+    "positions_saved": 35018438,
+    "bytes": 155349260,
+    "sha256": "accfa5f5422877499fc43a9e63cdb5f61ac3bb66b6821d5ee61a2b103454c1c9"
+   },
+   {
+    "file": "i80-g4s1-g3j-w05-val-rest.vf",
+    "games": 354752,
+    "positions": 33100251,
+    "positions_unsaved": 376614,
+    "positions_saved": 32723637,
+    "bytes": 145172076,
+    "sha256": "7034b599f2158fdd1e39694516805e742d8bd7cdf5b97e775ef06379a8e3d144"
+   },
+   {
+    "file": "i80-g4-w00.vf",
+    "games": 68795,
+    "positions": 6400034,
+    "positions_unsaved": 72402,
+    "positions_saved": 6327632,
+    "bytes": 28076756,
+    "sha256": "3760efa35bbb8c95a2c0428848dd7433d7a1e3bac8f37eb3121308f6a3cca570"
+   },
+   {
+    "file": "i80-g4-w01.vf",
+    "games": 68514,
+    "positions": 6400061,
+    "positions_unsaved": 72228,
+    "positions_saved": 6327833,
+    "bytes": 28066748,
+    "sha256": "3b511cd5ff7bdf7a0ff1dbb5c5cec8da8382c5e487c3e99c8ba821bb2e6681b4"
+   },
+   {
+    "file": "i80-g4-w02.vf",
+    "games": 68847,
+    "positions": 6400018,
+    "positions_unsaved": 72400,
+    "positions_saved": 6327618,
+    "bytes": 28078564,
+    "sha256": "c491f2276598ae2097f1724a9edad2c5088ef9d3404cca676c12d027365a4278"
+   },
+   {
+    "file": "i80-g4-w03.vf",
+    "games": 68685,
+    "positions": 6400023,
+    "positions_unsaved": 72494,
+    "positions_saved": 6327529,
+    "bytes": 28072752,
+    "sha256": "e90f425b2d3ea713be046e54fda5a3d029814abbc4aa2310c87f014b81683eb4"
+   },
+   {
+    "file": "i80-g4-w04.vf",
+    "games": 68663,
+    "positions": 6400114,
+    "positions_unsaved": 71581,
+    "positions_saved": 6328533,
+    "bytes": 28072324,
+    "sha256": "4e7caa70a199ff815e7b405e0dbafb3860bed0d8fd292fabff7a8c24ea0d604f"
+   },
+   {
+    "file": "i80-g4-w05.vf",
+    "games": 68560,
+    "positions": 6400058,
+    "positions_unsaved": 71968,
+    "positions_saved": 6328090,
+    "bytes": 28068392,
+    "sha256": "1c003f7bb2579fe01f506d0717b669acef39a6966527f5ba133d193584217b38"
+   },
+   {
+    "file": "i80-g4-w06.vf",
+    "games": 68661,
+    "positions": 6400080,
+    "positions_unsaved": 72556,
+    "positions_saved": 6327524,
+    "bytes": 28072116,
+    "sha256": "ab4fd4b03731d01aec30e87b5a282c269a3649fb17d53c1105da41683305db60"
+   },
+   {
+    "file": "i80-g4-w07.vf",
+    "games": 68682,
+    "positions": 6400035,
+    "positions_unsaved": 71962,
+    "positions_saved": 6328073,
+    "bytes": 28072692,
+    "sha256": "d269825eddcec025e3b080a9c50e61f06969e87e10765255e2c325e5e42bc054"
+   },
+   {
+    "file": "i80-g4-w08.vf",
+    "games": 68526,
+    "positions": 6400115,
+    "positions_unsaved": 72455,
+    "positions_saved": 6327660,
+    "bytes": 28067396,
+    "sha256": "187e648edfaa39b98638ae645e8ebe1b143726bdd11080380573fbeb45c3aad9"
+   },
+   {
+    "file": "i80-g4s1-g4-w09-val-rest.vf",
+    "games": 68489,
+    "positions": 6394914,
+    "positions_unsaved": 72816,
+    "positions_saved": 6322098,
+    "bytes": 28045260,
+    "sha256": "f2784a9e8f4340a8950e7939c722f6a2b10918bca5b8cddb06164f10004efb32"
+   },
+   {
+    "file": "i80-g4b-w00.vf",
+    "games": 49079,
+    "positions": 4664430,
+    "positions_unsaved": 50798,
+    "positions_saved": 4613632,
+    "bytes": 20424564,
+    "sha256": "b03fe602f75ea2d4ec113183ffc7cbdbd3a287249337eba6f824332b7d4a66cb"
+   },
+   {
+    "file": "i80-g4b-w01.vf",
+    "games": 49181,
+    "positions": 4656125,
+    "positions_unsaved": 51353,
+    "positions_saved": 4604772,
+    "bytes": 20395016,
+    "sha256": "b632b437b88491d4bdfba296a96324c686e551c2819d27b68c7f8cd29bd0dca9"
+   },
+   {
+    "file": "i80-g4b-w02.vf",
+    "games": 49000,
+    "positions": 4652056,
+    "positions_unsaved": 50630,
+    "positions_saved": 4601426,
+    "bytes": 20372224,
+    "sha256": "18a8ff12fc680b7f7c96bc30454456d33220d7edbd682000cf3d3151b2d3a544"
+   },
+   {
+    "file": "i80-g4b-w03.vf",
+    "games": 48918,
+    "positions": 4646304,
+    "positions_unsaved": 50765,
+    "positions_saved": 4595539,
+    "bytes": 20346264,
+    "sha256": "1504c13550f394d236b993913b3b304157f5102e66620a9da69f322f12f45c1d"
+   },
+   {
+    "file": "i80-g4b-w04.vf",
+    "games": 48825,
+    "positions": 4627396,
+    "positions_unsaved": 49856,
+    "positions_saved": 4577540,
+    "bytes": 20267284,
+    "sha256": "2fded79430fddf19a05392c3f0d7ee6f5cb47feeb0955120f27eb8c3b0ed7984"
+   },
+   {
+    "file": "i80-g4b-w05.vf",
+    "games": 48979,
+    "positions": 4657330,
+    "positions_unsaved": 50927,
+    "positions_saved": 4606403,
+    "bytes": 20392564,
+    "sha256": "f12f96499b334f4056fae1de8e39a1868f290e4070f8c29eda3d2ac74fcc3012"
+   },
+   {
+    "file": "i80-g4b-w06.vf",
+    "games": 49136,
+    "positions": 4663627,
+    "positions_unsaved": 50562,
+    "positions_saved": 4613065,
+    "bytes": 20423404,
+    "sha256": "4c41681e223a17f91529359c10721625e2f23b14f12353697bfdf625b880f908"
+   },
+   {
+    "file": "i80-g4b-w07.vf",
+    "games": 49023,
+    "positions": 4651680,
+    "positions_unsaved": 50833,
+    "positions_saved": 4600847,
+    "bytes": 20371548,
+    "sha256": "16befb40367cbd962edb6594f47e177ec40877865d03506c20ff66d1c04d4f22"
+   },
+   {
+    "file": "i80-g4b-w08.vf",
+    "games": 49063,
+    "positions": 4649723,
+    "positions_unsaved": 50995,
+    "positions_saved": 4598728,
+    "bytes": 20365160,
+    "sha256": "289da34172152c6cdf0a0e3d593394b3f745b28d138b262181cbfd93be15c294"
+   },
+   {
+    "file": "i80-ld-d100-s2-w00.vf",
+    "games": 72703,
+    "positions": 6953830,
+    "positions_unsaved": 82163,
+    "positions_saved": 6871667,
+    "bytes": 30432628,
+    "sha256": "87995746dbe9dc9824015053bb3043cc7c11a244500cec0d05f07504d7bdb0a5"
+   },
+   {
+    "file": "i80-ld-d100-s2-w01.vf",
+    "games": 73235,
+    "positions": 6991257,
+    "positions_unsaved": 82499,
+    "positions_saved": 6908758,
+    "bytes": 30601488,
+    "sha256": "04734e424dad47594fdb77bae3da1a1eb66849560574549dabee251cfac2d08c"
+   },
+   {
+    "file": "i80-ld-d100-s2-w02.vf",
+    "games": 72967,
+    "positions": 6978644,
+    "positions_unsaved": 82589,
+    "positions_saved": 6896055,
+    "bytes": 30541388,
+    "sha256": "e6692cf7439042fecbadce0d02f180bd3706edd9972a77a5b979a31c5039d49a"
+   },
+   {
+    "file": "i80-ld-d100-w00.vf",
+    "games": 8896,
+    "positions": 847953,
+    "positions_unsaved": 10075,
+    "positions_saved": 837878,
+    "bytes": 3712068,
+    "sha256": "66e73626dda79b25df6c75603581745864ee00c522c48cda802e8bd4db791b86"
+   },
+   {
+    "file": "i80-ld-d100-w01.vf",
+    "games": 8700,
+    "positions": 827332,
+    "positions_unsaved": 10297,
+    "positions_saved": 817035,
+    "bytes": 3622528,
+    "sha256": "1b11f25c2894ddf72e78d6a0c7b142f135fdf48e11f140715f9292ed62e18b07"
+   },
+   {
+    "file": "i80-ld-d100-w02.vf",
+    "games": 8092,
+    "positions": 769754,
+    "positions_unsaved": 8700,
+    "positions_saved": 761054,
+    "bytes": 3370328,
+    "sha256": "4bb89618691b23a66de0ae13c4b1565fdaa5d057f1d419859f2f68ce4fedb786"
+   },
+   {
+    "file": "i80-ld-d20-s2-w00.vf",
+    "games": 327658,
+    "positions": 31111178,
+    "positions_unsaved": 341077,
+    "positions_saved": 30770101,
+    "bytes": 136240400,
+    "sha256": "84a7cbffe0b0e663d067d904a3b7d29d9dc143b3d6d9f2d000bbb0896f5126f5"
+   },
+   {
+    "file": "i80-ld-d20-s2-w01.vf",
+    "games": 327966,
+    "positions": 31140792,
+    "positions_unsaved": 340874,
+    "positions_saved": 30799918,
+    "bytes": 136369944,
+    "sha256": "471fa7a107b4012348c511a5bbf0716c9acd224e1e24bfd6f4e4215804ae8ce1"
+   },
+   {
+    "file": "i80-ld-d20-s2-w02.vf",
+    "games": 326752,
+    "positions": 31030075,
+    "positions_unsaved": 339950,
+    "positions_saved": 30690125,
+    "bytes": 135883372,
+    "sha256": "816d94107fd9af5b925083f6f811a3a3307477b8e336ea6914e682d14cef9233"
+   },
+   {
+    "file": "i80-ld-d20-w00.vf",
+    "games": 39807,
+    "positions": 3786956,
+    "positions_unsaved": 41388,
+    "positions_saved": 3745568,
+    "bytes": 16580876,
+    "sha256": "a5d61c68576efb49d2532090a98429bf8f29b9b578f42e4a69ddacfbbaf4fb9f"
+   },
+   {
+    "file": "i80-ld-d20-w01.vf",
+    "games": 39237,
+    "positions": 3734870,
+    "positions_unsaved": 41007,
+    "positions_saved": 3693863,
+    "bytes": 16352012,
+    "sha256": "3fdc3ab3ea062177d2ccb3a075e07b0a41c6b683f2e63a3753090880f1064e62"
+   },
+   {
+    "file": "i80-ld-d20-w02.vf",
+    "games": 39492,
+    "positions": 3744003,
+    "positions_unsaved": 40903,
+    "positions_saved": 3703100,
+    "bytes": 16397724,
+    "sha256": "ead1326b94a4dd32029088e7a05d3806f9a4fd2654867b487a6294dc8d55aef1"
+   },
+   {
+    "file": "i80-ld-d50-s2-w00.vf",
+    "games": 141749,
+    "positions": 13607103,
+    "positions_unsaved": 156041,
+    "positions_saved": 13451062,
+    "bytes": 59531376,
+    "sha256": "85cbb619e38731e791e986b5c79c712bffbe98e94babd7a35046fc0766ba5daf"
+   },
+   {
+    "file": "i80-ld-d50-s2-w01.vf",
+    "games": 142527,
+    "positions": 13661107,
+    "positions_unsaved": 154108,
+    "positions_saved": 13506999,
+    "bytes": 59775400,
+    "sha256": "da648f385b6e4869cad24633bbea98862daedafca7c39e61aaec49f05dcc7ea0"
+   },
+   {
+    "file": "i80-ld-d50-s2-w02.vf",
+    "games": 142572,
+    "positions": 13675233,
+    "positions_unsaved": 155542,
+    "positions_saved": 13519691,
+    "bytes": 59833524,
+    "sha256": "74f6e468b3fe54c7b21a416536e6ba6d4ed1427800f8d286063c60a0c725cf32"
+   },
+   {
+    "file": "i80-ld-d50-w00.vf",
+    "games": 17346,
+    "positions": 1659853,
+    "positions_unsaved": 19059,
+    "positions_saved": 1640794,
+    "bytes": 7263868,
+    "sha256": "b9967ac50bbc88ad04d3c77b2e052334b68920d0b4b6f5d45380a1797c833682"
+   },
+   {
+    "file": "i80-ld-d50-w01.vf",
+    "games": 17298,
+    "positions": 1656181,
+    "positions_unsaved": 18971,
+    "positions_saved": 1637210,
+    "bytes": 7247452,
+    "sha256": "64a0f5392c5aa58aa6bcd806529af487ac6d93ce88aaa2db9a1e02be47af79ba"
+   },
+   {
+    "file": "i80-ld-d50-w02.vf",
+    "games": 16422,
+    "positions": 1578592,
+    "positions_unsaved": 18220,
+    "positions_saved": 1560372,
+    "bytes": 6905560,
+    "sha256": "a1afd404401a364b7c6a8771b51fc13899c513d230efef3fe4af159a4c0d72ea"
+   },
+   {
+    "file": "i80-g4s2-g4-gcp-20261111T191107Z-w03-val-rest.vf",
+    "games": 2574,
+    "positions": 245123,
+    "positions_unsaved": 2790,
+    "positions_saved": 242333,
+    "bytes": 1073156,
+    "sha256": "1875cbedc79a2d258c320f16f7b53bd86fbdcf5ddf018a3de91f1cb6be5fa08e"
+   },
+   {
+    "file": "i80-g4s2-g4-gcp-20261112T041330Z-w04-val-rest.vf",
+    "games": 2537,
+    "positions": 244902,
+    "positions_unsaved": 2876,
+    "positions_saved": 242026,
+    "bytes": 1070940,
+    "sha256": "0c343b9b13573dd965f91f85e65abd535f3f4b3d0f306252f4a409ec97388ad4"
+   },
+   {
+    "file": "i80-g4s2-g4-gcp-20261112T185227Z-w02-val-rest.vf",
+    "games": 2525,
+    "positions": 244641,
+    "positions_unsaved": 2621,
+    "positions_saved": 242020,
+    "bytes": 1069464,
+    "sha256": "4217f5b10faee7696b4d8a942013ce424b7219d9c77646db5bc1e19510145e75"
+   },
+   {
+    "file": "i80-g4s2-g4b-w09-val-rest.vf",
+    "games": 49028,
+    "positions": 4649517,
+    "positions_unsaved": 49915,
+    "positions_saved": 4599602,
+    "bytes": 20363076,
+    "sha256": "b0ba43ec57f1360cfd351c0334367250d44cbc33c264273cec493806909d7b49"
+   },
+   {
+    "file": "i80-g4s2-ld-d100-w02-val-rest.vf",
+    "games": 664,
+    "positions": 64653,
+    "positions_unsaved": 677,
+    "positions_saved": 63976,
+    "bytes": 282516,
+    "sha256": "5f2b189c27cad300d8de3ee8e1b460e29d606d99385321740f0fc90c5b3e6005"
+   },
+   {
+    "file": "i80-g4s2-ld-d20-w02-val-rest.vf",
+    "games": 686,
+    "positions": 65668,
+    "positions_unsaved": 809,
+    "positions_saved": 64859,
+    "bytes": 287368,
+    "sha256": "ed1cd5a4da0c8f438174485a602119d1f3e1dd9a3aa9275e38dc1177dd385ed9"
+   },
+   {
+    "file": "i80-g4s2-ld-d50-w02-val-rest.vf",
+    "games": 662,
+    "positions": 64432,
+    "positions_unsaved": 654,
+    "positions_saved": 63778,
+    "bytes": 281560,
+    "sha256": "5a936606f2db512f0680ed0683ec08dea9c7f40917556585262cdee1857bbcb5"
+   }
+  ],
+  [
+   {
+    "file": "i80-g4-gcp-20261111T191107Z-w00.vf",
+    "games": 94745,
+    "positions": 9015951,
+    "positions_unsaved": 99855,
+    "positions_saved": 8916096,
+    "bytes": 39474624,
+    "sha256": "f31a8cd156611365dbe1c4d55e564d4033a4ce31dff67675edacdd8c980ffc1a"
+   },
+   {
+    "file": "i80-g4-gcp-20261111T191107Z-w01.vf",
+    "games": 95194,
+    "positions": 9016006,
+    "positions_unsaved": 100028,
+    "positions_saved": 8915978,
+    "bytes": 39491008,
+    "sha256": "0fa52f3a7bc48fffe80eb3dd269349c71f6edb780f717987d7e928d1e30149de"
+   },
+   {
+    "file": "i80-g4-gcp-20261111T191107Z-w02.vf",
+    "games": 94925,
+    "positions": 9016352,
+    "positions_unsaved": 100366,
+    "positions_saved": 8915986,
+    "bytes": 39482708,
+    "sha256": "6f769cabeed5d3b860548aa47d7c0282496b182e54ddab51091fd42e4c8eb753"
+   },
+   {
+    "file": "i80-g4-gcp-20261112T041330Z-w00.vf",
+    "games": 89832,
+    "positions": 8514771,
+    "positions_unsaved": 93267,
+    "positions_saved": 8421504,
+    "bytes": 37293036,
+    "sha256": "83342406fccb585a99cb0f86780d9110d73d032a180e736fe244acb50b71c9ae"
+   },
+   {
+    "file": "i80-g4-gcp-20261112T041330Z-w01.vf",
+    "games": 86828,
+    "positions": 8265389,
+    "positions_unsaved": 90450,
+    "positions_saved": 8174939,
+    "bytes": 36187364,
+    "sha256": "02bfd0c72d8b9e72aeaff1220284542908e1f990738c92f22d4518abf0382cd3"
+   },
+   {
+    "file": "i80-g4-gcp-20261112T041330Z-w02.vf",
+    "games": 86858,
+    "positions": 8264555,
+    "positions_unsaved": 91361,
+    "positions_saved": 8173194,
+    "bytes": 36185108,
+    "sha256": "e7fa05c7b49df7da6ad48b46c83a95c395e6401be0c4ffb22e64b70e158ea9c0"
+   },
+   {
+    "file": "i80-g4-gcp-20261112T041330Z-w03.vf",
+    "games": 86963,
+    "positions": 8265122,
+    "positions_unsaved": 91417,
+    "positions_saved": 8173705,
+    "bytes": 36191156,
+    "sha256": "e6b0a0394349b1102a8187a825209f37e4e237c12494f6acf65f460ef066b730"
+   },
+   {
+    "file": "i80-g4-gcp-20261112T185227Z-w00.vf",
+    "games": 54750,
+    "positions": 5259734,
+    "positions_unsaved": 57986,
+    "positions_saved": 5201748,
+    "bytes": 23009936,
+    "sha256": "c69f31d7b5479ece79cba6b70822c48936c8ca9983b7c8d0917858d9adfc2a94"
+   },
+   {
+    "file": "i80-g4-gcp-20261112T185227Z-w01.vf",
+    "games": 54631,
+    "positions": 5259789,
+    "positions_unsaved": 56945,
+    "positions_saved": 5202844,
+    "bytes": 23005872,
+    "sha256": "5327e1aced82a007173dad0dfae0f8da9ce62e5dcb8c9276e26c53450622c0e4"
+   },
+   {
+    "file": "i80-g4-gcp-20261112T213623Z-w00.vf",
+    "games": 2609,
+    "positions": 250700,
+    "positions_unsaved": 2749,
+    "positions_saved": 247951,
+    "bytes": 1096724,
+    "sha256": "d0df13b9d328bf0b99d63c8fea8e794d7d984a1a51e733e48305d5470b8934f6"
+   },
+   {
+    "file": "i80-g4-gcp-20261112T214053Z-w00.vf",
+    "games": 2580,
+    "positions": 250247,
+    "positions_unsaved": 2609,
+    "positions_saved": 247638,
+    "bytes": 1093868,
+    "sha256": "457e88b6fa456a3457d008382c89e181feb3ccc30c62418ba9e2bc9b4e2db8ea"
+   }
+  ]
+ ]
+}
