@@ -3120,6 +3120,21 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
      alone).
   2. **Second target, for TCEC:** asynchronous 7-man tablebase probes: the search continues while a cold disk
      probe completes. Design only, after Lazy SMP.
+- **result, first target (2026-11-13; prototype branch proto/datagen-interleave 90789c3, kept unmerged as a
+  record):** **correct but slower; not adopted.** One worker thread held K game slots and switched stackfully at
+  each node's TT read (behind the CMake option `FORK_DATAGEN_INTERLEAVE`, off by default). Output was
+  byte-identical to today's generator, whole shards included (a test that failed on both injected faults).
+  Positions per hour against today at 2 threads (WSL, g4c's settings, 3 rotated rounds; today's own spread about
+  12%): K=2 -12.6%, K=4 -18.8%, K=8 -28.4%. Per node (perf stat, 1 thread, K=4): instructions +3.4%, cycles
+  +26-31%, last-level cache misses +136-140%, L1d misses +40-46%. The switch is cheap; the loss is the working
+  set: each game slot brings its own TT, histories and stack (peak RSS about +4.5 MB per slot) against a 1 MB L2
+  per core, so hiding one prefetched TT line per node cannot pay for the misses the extra games cause. A server
+  CPU with higher memory latency and more threads sharing L3 (EPYC) is expected to lose more, not less. No
+  runner measurement (owner, 2026-11-13: not needed).
+- **lesson for any future coroutine or interleaving work (owner, 2026-11-13):** interleave only tasks that share
+  most of their working set (for example batched TT/NNUE lookups within one search, or sibling work on the same
+  tables), never independent games or searches, whose separate state multiplies the working set. The second
+  target (asynchronous tablebase probes within one search) fits this rule; the first did not.
 
 ### 166. Register-tiled accumulator updates (speed sprint 3)
 
