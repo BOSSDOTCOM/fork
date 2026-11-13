@@ -710,6 +710,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_threat_buckets = s.use_capture_probe = true;
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = true;
   s.use_pair_sum_update = s.use_check_order_bonus = true;
+  s.use_drift_depth_scale = s.use_drift_window_gate = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

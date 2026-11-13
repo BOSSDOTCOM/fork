@@ -224,6 +224,7 @@ TEST_CASE("eval_drift", "each table's switch changes the tree when on, alone") {
   // on); bench parity shows the defaults' search is phase-4's.
   SearchSwitches off;
   off.use_piece_drift = off.use_minor_drift = off.use_major_drift = off.use_threat_drift = false;
+  off.use_drift_depth_scale = off.use_drift_window_gate = false;
   constexpr int Depth = 8;
   const std::uint64_t base = searched_nodes(off, Depth);
   CHECK_EQ(searched_nodes(off, Depth), base);  // deterministic from clear tables
@@ -245,6 +246,47 @@ TEST_CASE("eval_drift", "the minor table is on by default, the others off") {
   CHECK(!defaults.use_piece_drift);
   CHECK(!defaults.use_major_drift);
   CHECK(!defaults.use_threat_drift);
+  CHECK(!defaults.use_drift_depth_scale);  // off until their SPRTs (idea 59's follow-up 1)
+  CHECK(!defaults.use_drift_window_gate);
+}
+
+// The depth scale and the window gate change only how much of the
+// switched-on terms the estimate takes: with every table off they leave the
+// tree alone, and with the minor table on each changes it, alone and on top
+// of the other.
+TEST_CASE("eval_drift", "the depth scale and the window gate change the tree only with a table on") {
+  SearchSwitches off;
+  off.use_piece_drift = off.use_minor_drift = off.use_major_drift = off.use_threat_drift = false;
+  off.use_drift_depth_scale = off.use_drift_window_gate = false;
+  constexpr int Depth = 8;
+  const std::uint64_t base = searched_nodes(off, Depth);
+  SearchSwitches both_off_tables = off;
+  both_off_tables.use_drift_depth_scale = both_off_tables.use_drift_window_gate = true;
+  CHECK_EQ(searched_nodes(both_off_tables, Depth), base);  // nothing to scale or gate
+
+  SearchSwitches minor = off;
+  minor.use_minor_drift = true;
+  const std::uint64_t whole = searched_nodes(minor, Depth);
+  SearchSwitches scaled = minor, gated = minor, scaled_gated = minor;
+  scaled.use_drift_depth_scale = true;
+  gated.use_drift_window_gate = true;
+  scaled_gated.use_drift_depth_scale = scaled_gated.use_drift_window_gate = true;
+  const std::uint64_t s = searched_nodes(scaled, Depth);
+  const std::uint64_t g = searched_nodes(gated, Depth);
+  const std::uint64_t sg = searched_nodes(scaled_gated, Depth);
+  CHECK_MSG(s != whole, "the minor table scaled by depth: " << s << " nodes, as unscaled");
+  CHECK_MSG(g != whole, "the minor table gated by the window: " << g << " nodes, as ungated");
+  CHECK_MSG(sg != s, "the gate on the depth-scaled minor table: " << sg << " nodes, as without it");
+  CHECK_EQ(searched_nodes(scaled_gated, Depth), sg);  // deterministic
+
+  // The two-table stack the SPRTs test (pieces and minor, shares summing to
+  // 64 in the test builds): the gate changes it too.
+  SearchSwitches stack = scaled;
+  stack.use_piece_drift = true;
+  SearchSwitches stack_gated = stack;
+  stack_gated.use_drift_window_gate = true;
+  const std::uint64_t st = searched_nodes(stack, Depth);
+  CHECK_MSG(searched_nodes(stack_gated, Depth) != st, "the gate on the depth-scaled stack: as without it");
 }
 
 }  // namespace forkeng::test

@@ -50,6 +50,16 @@ constexpr int DriftGrain = 128;
 // The shares (PieceDriftShare, ...) are in 1/DriftShareUnit of the learned
 // drift: the term a table adds is its drift * share / DriftShareUnit.
 constexpr int DriftShareUnit = 64;
+// The depth scale (switch use_drift_depth_scale): from this depth on the
+// switched-on terms apply whole; below it, at depth d (the quiescence search
+// at 0), (d + 1) / (DriftFullDepth + 1) of them.
+constexpr int DriftFullDepth = 3;
+// The window gate (switch use_drift_window_gate; idea 59's gate margin):
+// the (depth-scaled) sum applies whole while the estimate it gives lies
+// within DriftWindowMargin cp of the window's nearer finite bound, and
+// fades linearly to nothing over the next DriftWindowFade cp.
+constexpr int DriftWindowMargin = 25;
+constexpr int DriftWindowFade = 25;
 
 class EvalDrift {
  public:
