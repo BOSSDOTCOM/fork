@@ -97,8 +97,13 @@ constexpr LmrSixtyFourths make_lmr_sixty_fourths(int divisor_tenths, const LmrTa
 
 #ifdef FORK_TUNE
 // Tuning builds: rebuilt by set_param (src/tune/params.cpp) when a value changes.
+// Each initialiser reads only the parameters (constant-initialised, so set
+// before any dynamic initialisation) and never the other table: LLVM-MinGW
+// clang with LTO runs these inline variables' initialisers in reverse order
+// (reproduced 2026-11-13), and LmrFine built from a still-zero LmrPlies left
+// every 64ths entry at 31 until a setoption rebuilt it (tests/test_pruning.cpp).
 inline LmrTable LmrPlies = make_lmr_table(LmrDivisorTenths);
-inline LmrSixtyFourths LmrFine = make_lmr_sixty_fourths(LmrDivisorTenths, LmrPlies);
+inline LmrSixtyFourths LmrFine = make_lmr_sixty_fourths(LmrDivisorTenths, make_lmr_table(LmrDivisorTenths));
 inline void rebuild_lmr_table() {
   LmrPlies = make_lmr_table(LmrDivisorTenths);
   LmrFine = make_lmr_sixty_fourths(LmrDivisorTenths, LmrPlies);

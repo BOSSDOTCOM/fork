@@ -89,6 +89,27 @@ TEST_CASE("pruning", "LMR table: integer log shape, monotone, zero at depth or m
   CHECK_EQ(checksum, std::uint64_t{12482488978459601924ULL});
 }
 
+// The tables the search reads at startup, before any setoption, are the ones
+// the parameters give. In a tuning build they are dynamically initialised
+// variables; the LLVM-MinGW clang tuning build once filled the 64ths table
+// from a whole-ply table that was still all zeros (every fine entry 31, so
+// round-once LMR never reduced; bench 14,927,773 for 6,064,962) until a
+// setoption rebuilt them. This suite runs in its own process and sets no
+// parameter, so it sees the startup state.
+TEST_CASE("pruning", "LMR tables at startup equal freshly built ones (static initialisation order)") {
+  const LmrTable whole = make_lmr_table(LmrDivisorTenths);
+  const LmrSixtyFourths fine = make_lmr_sixty_fourths(LmrDivisorTenths, whole);
+  int whole_differ = 0, fine_differ = 0;
+  for (int d = 0; d < LmrMaxDepth; ++d)
+    for (int m = 0; m < LmrMaxMove; ++m) {
+      whole_differ += LmrPlies.plies[d][m] != whole.plies[d][m];
+      fine_differ += LmrFine.fine[d][m] != fine.fine[d][m];
+    }
+  CHECK_MSG(whole_differ == 0, whole_differ << " whole-ply entries differ");
+  CHECK_MSG(fine_differ == 0, fine_differ << " 64ths entries differ, e.g. (20, 20): " << LmrFine.fine[20][20]
+                                          << " for " << fine.fine[20][20]);
+}
+
 TEST_CASE("pruning", "a side with only quiet moves is never pruned into a stalemate score") {
   // Constructed (checked with python-chess, tools/check_search_positions.py):
   // Black has only king moves and is far behind, and is neither mated nor

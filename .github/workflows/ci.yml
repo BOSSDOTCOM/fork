@@ -484,6 +484,19 @@ jobs:
         run: |
           . .github/ci/win-tools.sh env
           bash .github/ci/run-tests.sh build/${{ matrix.preset }}
+      - name: Tuning build (FORK_TUNE), bench parity and its startup LMR tables
+        # The Linux tuning-build job cannot catch this: LLVM-MinGW clang with
+        # LTO ran two inline variables' dynamic initialisers in reverse order
+        # (2026-11-13; the LMR 64ths table was built from a zero whole-ply
+        # table), which ELF builds do not do.
+        if: matrix.preset == 'clang-release'
+        run: |
+          . .github/ci/win-tools.sh env
+          cmake --preset clang-release -B build/tune -DFORK_TUNE=ON
+          cmake --build build/tune --target fork fork_tests
+          bash .github/ci/bench-parity.sh build/tune/fork.exe
+          build/tune/fork_tests.exe pruning
+          build/tune/fork_tests.exe params
 
   windows-gcc-smoke:
     name: Windows GCC UCI smoke (debug, release, v3, avx512, nopext)
