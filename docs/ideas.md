@@ -2884,6 +2884,26 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** one frame store per node, and a comparison with a switch on. bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked on all 24 runs), A = 254841c, B = the port: median nps -2.1%, best -1.7%, under the 3.0% noise threshold, so no significant difference. The LMR use: bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked on all 24 runs), A = 17717a8, B = the port: median nps +0.5%, best +0.3%, under the 3.0% noise threshold, so no significant difference.
 - **earliest phase:** Phase 4.
 
+## 173. The linear history bonus (the engine survey's D11, think tank R15)
+
+- **type:** ELO (search); flag `use_linear_bonus` (on since 2026-11-13).
+- **idea** (the engine survey's D11; think tank R15, step 12; concept only): a cutoff's history bonus
+  and maluses grow linearly with depth, `LinearBonusPerPly` per ply, with the quadratic bonus's cap
+  (`HistoryBonusCap`, reached at the same depth 10), so shallow and middle-depth cutoffs weigh more.
+- **status:** **adopted 2026-11-13** at `LinearBonusPerPly` 125 on its STC pass (d11-linear-bonus-stc,
+  design R [0, 6] against off: +8.98 ± 5.70 Elo, nElo +15.50 ± 9.83, H1 after 4,800 games; sprt-log),
+  pre-approved by the owner (2026-11-11: one SPRT at the natural value); ported onto phase-4 49494bb, bench
+  6,624,814 / 8aa09aa2e1ed5ede (DESIGN.md decisions log, 2026-11-13). `LinearBonusPerPly` is a class (a) dimension of
+  the final retune's SPSA (final-retune.md §3.1); `HistoryBonusFactor` is inert while the switch is on.
+  The retry (item 82e, 250) was not needed. History: built on phase-4 26323e1 (a95e269) behind the
+  switch, off, with R15's other half, D10 (the TT-cutoff credit), on tier2/d10-d11-history-bonus 23e579e
+  (coordinator, 2026-11-11 night); test side sprt/d11-linear-bonus f289442 (night item 82d, gated behind
+  state/gate-e1.done). **D10 rejected 2026-11-13** (d10-tt-cut-credit-stc, test sprt/d10-tt-cut-credit 2355168 against the
+  same off 23e579e: a futility stop after stage 1, −2.93 ± 6.97 Elo, nElo −5.06 ± 12.04, 3,200 games, runs
+  43438699344 and 43442565958); its code is not ported. Numbered 173, past the last entry.
+- **runtime cost:** none expected (a multiply in place of a square per cutoff). bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, the shared machine busy; identity checked on all 24 runs), A = 49494bb, B = the port: median nps -2.9%, best -2.6%, under the run's 8.9% noise threshold, so no significant difference (the two search different trees: 6,426,679 against 6,624,814 bench nodes; the code change itself is one multiply in place of a square per cutoff).
+- **earliest phase:** Phase 4.
+
 ## 130. The pass-best stop rule (bug review 2026-11-11, E1)
 
 - **type:** ELO (search); flag `use_pass_best_stop` (on since 2026-11-12).

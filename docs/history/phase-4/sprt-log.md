@@ -2042,3 +2042,40 @@ The final stages' result blocks (r20-centred-lmr-stc, stage 5, run 43327533834; 
   `LmrHistoryPerPly` joins the final retune's SPSA (class (a)). Tests: clang-release (Windows): every non-slow test passes (34 of 34, eval and uci_timing skipped as usual, bench_parity included); clang-debug: ordering (17 cases), pruning (35, R20's two new) and search (27) pass; clang-stats: search_stats passes (11 cases). **One case flipped with R20 on and is pinned:** search_stats X2's zero-band carry-over comparison (carried 1948/7260 against cleared 1988/8936 with R20 on), the tree-shape comparison B9's LMP use already pins off; it tests the history carry-over between searches, not strength, so R20 is pinned off on both of its searchers with a comment in the B9 pin's style. Because that pin takes R20 out of the case's probe check, the case now also runs the probe check on a default-switches search (R20 and B9 on): fault check, with ea2075e's whole-ply probe that check fails, with the port's it passes. No other case flipped (test_search's null-move zugzwang-guard case, which pins the LMP use off, passes). Speed:
   bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked), A = 1449010,
   B = the port: median nps +0.9%, best +0.5%, under the 3.0% noise threshold, so no significant difference (identity checked on all 24 runs).
+
+### 2026-11-13 the linear history bonus (think tank R15, the engine survey's D11; idea 173; night queue item 82d): design R SPRT against off (owner's rule): H1, adopted
+
+- The owner's rule of 2026-11-11 (one design R SPRT at the natural value, one retry at 250 if it fails).
+  Base tier2/d10-d11-history-bonus `23e579e` (phase-4 26323e1's engine with D10 and D11 built in behind
+  `use_tt_cut_credit` and `use_linear_bonus`, both off; bench 10,166,167 / d874b380155a2e8c); test
+  sprt/d11-linear-bonus `f289442` (`use_linear_bonus` on, `LinearBonusPerPly` 125; bench 10,094,473 /
+  ef51ee8677008fc9). STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed 20261027), r8brft1 on both sides;
+  design R ([0, 6] nElo, alpha 0.05, beta 0.20, cap 8, futility look after 2 stages), from stage 0. Ledger
+  idea `d11-linear-bonus`, try 1 of 2. Started 9:44 AM EST 2026-11-13. Data:
+  ~/fork-data/sprt/d11-linear-bonus-stc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **d11-linear-bonus-stc: D11 (125 per ply) on against off, stages 0-2** | 43445560313 (0), 43448609701 (1), 43451798490 (2) | 4,800 (no time losses, no abnormal ends) | **+8.98 ± 5.70** | +15.50 ± 9.83 | [52, 527, 1129, 629, 63] | **H1 accepted** (LLR 2.98) after stage 2, 10:40 AM EST 2026-11-13 |
+
+- By stage (cumulative): stage 0 +4.13 ± 9.75 (nElo +7.21 ± 17.02, LLR 0.33, Ptnml [14, 193, 371, 204,
+  18]); stage 1 +10.43 ± 7.01 (nElo +17.91 ± 12.04, LLR 2.37, Ptnml [32, 355, 744, 423, 46]); stage 2
+  +8.98 ± 5.70 (LLR 2.98). Verdict: "H1 accepted". The retry (item 82e, 250) was not needed.
+
+The final stage's result block (d11-linear-bonus-stc, stage 2, run 43451798490):
+
+```
+    Shards: 48 (done); pairs 2400, games 4800 (4800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 8.98 +/- 5.70, nElo: 15.50 +/- 9.83
+    Ptnml(0-2): [52, 527, 1129, 629, 63]
+    LLR: 2.98 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+```
+
+- **Adopted (the owner's pre-approval of 2026-11-11; an STC-only item):** 23e579e's D11 change (relative
+  to a95e269) with f289442's switch-on onto phase-4 49494bb alone (branch adopt/d11-linear-bonus):
+  `linear_bonus_for_depth`, `Searcher::cutoff_bonus`, `record_cutoff`'s bonus from it, `UseLinearBonus` on,
+  `LinearBonusPerPly` 125 (after `HistoryBonusCap` in the parameter table, range 63-250, step 9) and the
+  tests. D10, the TT-cutoff credit built on the same branch, was rejected by its own SPRT (d10-tt-cut-credit-stc, design R [0, 6] at STC: a futility stop after stage 1, −2.93 ± 6.97 Elo, nElo −5.06 ± 12.04, 3,200 games, runs 43438699344 and 43442565958; 9:43 AM EST 2026-11-13), and its code (`credit_tt_move`, `UseTtCutCredit`, the hook at negamax's TT cutoff, its test case) is left out of the port: it is separable (D11 needs only `cutoff_bonus` and `linear_bonus_for_depth`). **Where it sits:** the amount is chosen once per cutoff, at the top of `record_cutoff` (`cutoff_bonus`), upstream of every update there, as tested: the take history's bonus and maluses, the butterfly history's (in each move's threat bucket), and the reply and follow tables' through D8's summed update (`apply_from_sum`, adopted after D11's base), which takes the same amount and changes only how the self-limiting term is read; with D8 off the per-table update takes it as tested. D17's ageing (between searches) and R20's running centres (read at LMR sites) act on the tables after the fact: the larger shallow bonuses change the values R20's centres average (expected: the centres track the tables, so they follow the new level), and D17 ages whatever the tables hold. With the switch on, `HistoryBonusFactor` is unused (the quadratic form acts only with it off). D11 with D8, D17 and R20 are untested interactions; the stacking check that follows covers them. **Bench equivalence** (clang-release, Windows, r8brft1): with D11 off, 6,426,679 / 4c4375887f835cc7, phase-4 49494bb's; with it on and ProbCut, E1, the history skip, the minor drift table, D8, D13, the exemption, D17, B9's LMP and LMR uses and R20 off (the tested base had none of them), 10,094,473 / ef51ee8677008fc9, byte for byte f289442's tests/bench-r8brft1.ref, so the port equals the tested code. **Bench changes (intended):** 6,624,814 / 8aa09aa2e1ed5ede with r8brft1
+  (3.1% more nodes than 6,426,679); every other reference re-pinned from its own build: r8brft1 6,624,814 / 8aa09aa2e1ed5ede, r8btd90 6,507,578 / f1341e0b7679434f, s512ppr3 5,934,598 / 221bd291928c6cbb, s512ppr2 6,394,813 / 4cc9a431ada3abc6, s512pp 6,208,556 / f5ff3ac5acc985cb, s512r2 6,389,101 / 0c1861c08d8fe9a7, s512 7,123,960 / 59ecec177aa280c5, b0r2 6,120,433 / 20ca2e0787687d5b, b0r1 8,454,928 / bbd38dd6faf99c06, b0 8,642,836 / 31bd06ed24aacd35, g1h512 7,573,662 / f1abca86a28d06c0, g1afs 10,240,723 / 14ab66c7d758a467, g1xgr 6,995,720 / 273b628a995b219e, bootstrap (tests/bench.ref) 7,845,471 / 3ac9efbd4358c117.
+  `LinearBonusPerPly` joins the final retune's SPSA (class (a)). Tests: clang-release (Windows): every non-slow test passes (35 of 35 with -j1, eval and uci_timing skipped as usual, bench_parity included); clang-debug: ordering (17 cases), pruning (36, D11's new case) and search (27) pass; clang-stats: search_stats passes (11 cases). No case flipped with D11 on, so no new pin (the existing B9 and R20 pins, test_search's null-move zugzwang-guard case and search_stats X2's zero-band carry-over comparison, pass unchanged). Speed: bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, the shared machine busy; identity checked on all 24 runs), A = 49494bb, B = the port: median nps -2.9%, best -2.6%, under the run's 8.9% noise threshold, so no significant difference (the two search different trees: 6,426,679 against 6,624,814 bench nodes; the code change itself is one multiply in place of a square per cutoff).

@@ -144,7 +144,7 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | SeePruneMaxDepth | 6 | 3-12 | 1 | ? | 3 / 6 | ok |
 | QuietSeeFloor | 60 | 30-120 | 5 | 22.5 (the range cap: insensitive, 8.6% at 6 steps) | 1.3 / 2.7 | **flag**; left out again (as in R14, by B7 rule 7) unless spsa_calibrate finds it sensitive on the post-round engine |
 | CaptureSeeFloor | 118 | 50-200 | 8 | 28 | 2.4 / 2.9 | marginal, ok |
-| HistoryBonusFactor | 25 | 12-50 | 2 | ? | 6.5 / 12.5 at c = 2 | ok |
+| HistoryBonusFactor | 25 | 12-50 | 2 | ? | 6.5 / 12.5 at c = 2 | **inert while `UseLinearBonus` is on** (D11, adopted 2026-11-13: the bonus is `LinearBonusPerPly` per ply, so the quadratic factor is not read); proposed to leave out of the pass while the switch is on (the owner's decision at step 19) |
 | HistoryBonusCap | 1250 | 625-2500 | 94 | ? | wide | ok (its range is tied to the history scale by tests/test_params.cpp) |
 | ReplyWeight | 6 | 0-12 (was 0-8) | 1 | ? | 6 / **2** | **flag ceiling**; highest 12 (the rule's twice), **applied (owner, 2026-11-09) after the int16 headroom check: no overflow** (the status note; tests/test_ordering.cpp). **2026-11-12 (owner, the staleness audit's re-measure 8):** the range already holds 8 strictly inside (4 steps below the ceiling), so it is unchanged; widening it would break the checked property that one reply entry alone fits int16 unclamped |
 | FollowWeight | 4 | **0-16 (was 0-8)** | 1 | ? | 4 / 12 | ok; **highest 16, the owner's decision (2026-11-12, about 8:50 AM EST, the staleness audit)**: the audit re-measured 8, the old ceiling; 16 is the ranges rule's twice of 8, so 8 lies strictly inside (the default stays 4). The int16 headroom (the status note) holds: HistoryMax × (4 + 12 + 16) / 4 = 80,000, exact in int and clamped before the store; one follow entry alone at 16 (40,000) reaches the clamp, which the selector applies to any sum with a pair table (tests/test_ordering.cpp) |
@@ -157,6 +157,7 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | HistoryKeepQuarters | 2 | 0-4 | 1 | ? | 2 / 2 at c = 1 (one step) | **flag**: within 2c of both bounds at one step; the range is the whole form (0 clears the tables at every search, 4 is no ageing), so a finer search needs a new unit (eighths, a new parameter: the owner's decision at step 19) (added 2026-11-12, D17's adoption) |
 | LmpImprovingEighths | 1 | 0-4 | 1 | ? | 1 / 3 at c = 1 (one step) | **flag**: floor within 2c at one step; 0 is the off-equivalent (the allowance unscaled) and 4 the largest scaling (a half more at an improving node, a half less at one that is not), so a finer search needs a new unit (sixteenths, a new parameter: the owner's decision at step 19) (added 2026-11-13, B9's LMP adoption) |
 | LmrNotImprovingPlies | 1 | 0-3 | 1 | ? | 1 / 2 at c = 1 (one step) | **flag**: within 2c of both bounds at one step; 0 is the off-equivalent (no extra reduction) and the range is whole plies, as `CutNodeLmrPlies`, so a finer search needs a sub-ply unit (a new parameter: the owner's decision at step 19) (added 2026-11-13, B9's LMR adoption) |
+| LinearBonusPerPly | 125 | 63-250 | 9 | ? | 6.9 / 13.9 at c = 9 (one step) | ok (the ranges rule's half to twice of the natural value, as declared with the switch; with `HistoryBonusCap` 1,250 the cap is reached at depth 10 at 125, at depth 5 at the ceiling 250 and at depth 20 at the floor 63) (added 2026-11-13, D11's adoption) |
 
 p = 22 tuned parameters (23 with QuietSeeFloor), minus any parameter of a
 feature removed in step 18 (e.g. LMP's two if LMP is removed), plus the
@@ -241,6 +242,14 @@ use's adoption (late quiets reduced one more ply at a node that is not
 improving, the natural value 1; survey-b9-lmr-stc +12.71 ± 7.00 Elo at
 STC, design R [0, 6]; DESIGN.md "Search constants"), class (a) as one of
 LMR's non-divisor terms (§2; its row above), so p grows by 1.
+**2026-11-13: D11's `LinearBonusPerPly` joins this pass** on the
+adoption of the linear history bonus (the natural value 125 per ply;
+d11-linear-bonus-stc +8.98 ± 5.70 Elo at STC, design R [0, 6];
+DESIGN.md "Search constants"), class (a) as a history weight (its row
+above), so p grows by 1. `HistoryBonusFactor` is not read while
+`UseLinearBonus` is on (its row above): leaving it out would keep p as
+it was (the owner's decision at step 19). `HistoryBonusCap` still caps
+the linear bonus and stays a dimension.
 **2026-11-13: R20's `LmrHistoryPerPly` joins the final retune** on the
 adoption of round-once LMR with the centred history term (think tank
 R20, the natural value 10,000 history units per ply; r20-centred-lmr-stc

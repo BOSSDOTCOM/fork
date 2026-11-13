@@ -238,6 +238,14 @@ struct SearchQuota {
 //   off (LmrHistoryPerPly 10,000) passed: STC +8.04 +/- 4.04 Elo after
 //   9,600 games, LTC +6.21 +/- 4.35 Elo after 6,656 games, design R [0, 6];
 //   2026-11-13.
+// - use_linear_bonus: the linear history bonus (think tank R15, the engine
+//   survey's D11): a cutoff's history bonus and maluses are LinearBonusPerPly
+//   per ply of depth instead of HistoryBonusFactor / 2 per ply squared, with
+//   the same cap (linear_bonus_for_depth, Searcher::cutoff_bonus). The amount
+//   feeds every table record_cutoff updates (take, butterfly, and the pair
+//   tables through use_pair_sum_update's summed update); R20's centres read
+//   the tables it fills. On since its STC SPRT against off passed: +8.98 +/-
+//   5.70 Elo after 4,800 games, design R [0, 6]; 2026-11-13.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -285,7 +293,8 @@ struct SearchQuota {
   X(use_history_ageing, UseHistoryAgeing, true)          \
   X(use_improving_lmp, UseImprovingLmp, true)            \
   X(use_improving_lmr, UseImprovingLmr, true)            \
-  X(use_centred_lmr_history, UseCentredLmrHistory, true)
+  X(use_centred_lmr_history, UseCentredLmrHistory, true) \
+  X(use_linear_bonus, UseLinearBonus, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -763,6 +772,10 @@ class Searcher {
   std::int64_t soft_limit_now(const SearchQuota& limits) const;
   std::int64_t elapsed_ms() const;
   void record_cutoff(PlyFrame& f, Move m, int depth);
+  // The cutoff bonus for `depth`, quadratic or with use_linear_bonus linear.
+  int cutoff_bonus(int depth) const {
+    return switches.use_linear_bonus ? linear_bonus_for_depth(depth) : bonus_for_depth(depth);
+  }
   // The follow table's arrival at frame `f`: the move that led to the ply
   // above, the side's own previous move (none at the root's children).
   int follow_arrival(const PlyFrame& f) const { return &f == frames_ ? NoArrival : (&f - 1)->arrival; }

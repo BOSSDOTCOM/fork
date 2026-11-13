@@ -319,6 +319,14 @@ TEST_CASE("ordering",
   }
   for (int d = 1; d < 40; ++d) CHECK(bonus_for_depth(d + 1) >= bonus_for_depth(d));
   CHECK_EQ(bonus_for_depth(100), HistoryBonusCap);
+  // The linear bonus (R15, D11): LinearBonusPerPly per ply, the same cap,
+  // never decreasing.
+  for (int d = 1; d < 40; ++d) {
+    CHECK(linear_bonus_for_depth(d + 1) >= linear_bonus_for_depth(d));
+    const int expected = d * LinearBonusPerPly < HistoryBonusCap ? d * LinearBonusPerPly : HistoryBonusCap;
+    CHECK_EQ(linear_bonus_for_depth(d), expected);
+  }
+  CHECK_EQ(linear_bonus_for_depth(100), HistoryBonusCap);
   h.clear();
   CHECK_EQ(h.value(White, m), 0);
 }

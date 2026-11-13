@@ -243,7 +243,9 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   if (ledger_active_) return;  // a decision-ledger side search leaves the histories as they were (X10)
 #endif
   const Position& here = *pos_;
-  const int bonus = bonus_for_depth(depth);
+  // D11 (use_linear_bonus) chooses the amount; every table below (take,
+  // butterfly, and the pair tables, D8's summed update included) takes it.
+  const int bonus = cutoff_bonus(depth);
   // The take history (tier 2, T11): a capture that cuts gains the bonus, and
   // the captures tried before a quiet or capture cutoff take the malus (a
   // non-capture promotion's cutoff updates nothing).
