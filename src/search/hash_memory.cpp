@@ -64,6 +64,10 @@ void os_free(std::byte* p, std::size_t bytes) {
 
 }  // namespace
 
+static std::size_t proto_round(std::size_t bytes) { return (bytes + PageAlign - 1) / PageAlign * PageAlign; }
+std::byte* proto_block_allocate(std::size_t bytes) { return os_allocate(proto_round(bytes)); }
+void proto_block_free(std::byte* p, std::size_t bytes) { os_free(p, proto_round(bytes)); }
+
 std::size_t available_memory() {
 #ifdef _WIN32
   MEMORYSTATUSEX status{};

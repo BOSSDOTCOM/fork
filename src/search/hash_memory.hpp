@@ -74,6 +74,11 @@ class HashMemory {
   std::size_t bytes_ = 0;
 };
 
+// PROTOTYPE (speed sprint 4, R19): a block straight from the OS, sized up to
+// whole 2 MiB pages, 2 MiB aligned and madvised on Linux; nullptr if refused.
+std::byte* proto_block_allocate(std::size_t bytes);
+void proto_block_free(std::byte* p, std::size_t bytes);
+
 // How many threads clear `bytes`: the Threads option (so Threads 1 clears on
 // one thread; bug review 2026-11-11, E4: it was max(Threads, hardware
 // threads)), but at least 2 MiB per thread, and at least one.

@@ -8,6 +8,8 @@
 #include <string>
 
 #include "eval/eval.hpp"
+#include <new>
+#include "search/hash_memory.hpp"
 
 namespace forkeng {
 
@@ -21,7 +23,11 @@ const NetFile& embedded_net() {
   // search; kept for the whole process. An invalid embedded network is a
   // build error, so the engine stops at once rather than play with it.
   static const NetFile* const net = [] {
+#ifdef FORK_S4_NET
+    auto* n = new (proto_block_allocate(sizeof(NetFile))) NetFile;
+#else
     auto* n = new NetFile;
+#endif
     std::string error;
     if (!read_net_file(std::span(embedded_net_bytes, embedded_net_size), *n, error)) {
       std::fprintf(stderr, "fork: the embedded network is invalid: %s\n", error.c_str());

@@ -33,6 +33,8 @@
 
 #include "core/position.hpp"
 #include "search/eval_drift.hpp"
+#include "search/hash_memory.hpp"
+#include <new>
 #include "search/lmr_table.hpp"
 #include "search/move_selector.hpp"
 #include "search/quiet_history.hpp"
@@ -663,6 +665,14 @@ struct SearchCounters {
 class Searcher {
  public:
   explicit Searcher(TransTable& tt);
+#ifdef FORK_S4_SEARCHER
+  static void* operator new(std::size_t n) {
+    void* p = proto_block_allocate(n);
+    if (!p) throw std::bad_alloc();
+    return p;
+  }
+  static void operator delete(void* p, std::size_t n) { proto_block_free(static_cast<std::byte*>(p), n); }
+#endif
 
   // Searches `pos` (restored on return) until a limit is reached or `stop`
   // becomes true. While `pondering` is true, time limits do not apply.
