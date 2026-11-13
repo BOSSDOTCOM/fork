@@ -157,7 +157,6 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | HistoryKeepQuarters | 2 | 0-4 | 1 | ? | 2 / 2 at c = 1 (one step) | **flag**: within 2c of both bounds at one step; the range is the whole form (0 clears the tables at every search, 4 is no ageing), so a finer search needs a new unit (eighths, a new parameter: the owner's decision at step 19) (added 2026-11-12, D17's adoption) |
 | LmpImprovingEighths | 1 | 0-4 | 1 | ? | 1 / 3 at c = 1 (one step) | **flag**: floor within 2c at one step; 0 is the off-equivalent (the allowance unscaled) and 4 the largest scaling (a half more at an improving node, a half less at one that is not), so a finer search needs a new unit (sixteenths, a new parameter: the owner's decision at step 19) (added 2026-11-13, B9's LMP adoption) |
 | LmrNotImprovingPlies | 1 | 0-3 | 1 | ? | 1 / 2 at c = 1 (one step) | **flag**: within 2c of both bounds at one step; 0 is the off-equivalent (no extra reduction) and the range is whole plies, as `CutNodeLmrPlies`, so a finer search needs a sub-ply unit (a new parameter: the owner's decision at step 19) (added 2026-11-13, B9's LMR adoption) |
-| LmrHistoryPerPly | 10000 | 5000-20000 | 750 | ? | 6.7 / 13.3 at c = 750 (one step) | ok (the ranges rule's half to twice of the natural value, as declared with the term); a larger value weakens the term (20,000: half a ply per `HistoryMax` of centred history), a smaller one strengthens it (added 2026-11-13, R20's adoption) |
 
 p = 22 tuned parameters (23 with QuietSeeFloor), minus any parameter of a
 feature removed in step 18 (e.g. LMP's two if LMP is removed), plus the
@@ -242,15 +241,18 @@ use's adoption (late quiets reduced one more ply at a node that is not
 improving, the natural value 1; survey-b9-lmr-stc +12.71 ± 7.00 Elo at
 STC, design R [0, 6]; DESIGN.md "Search constants"), class (a) as one of
 LMR's non-divisor terms (§2; its row above), so p grows by 1.
-**2026-11-13: R20's `LmrHistoryPerPly` joins this pass** on the
+**2026-11-13: R20's `LmrHistoryPerPly` joins the final retune** on the
 adoption of round-once LMR with the centred history term (think tank
 R20, the natural value 10,000 history units per ply; r20-centred-lmr-stc
 +8.04 ± 4.04 Elo at STC and r20-centred-lmr-ltc +6.21 ± 4.35 Elo at LTC
-40+0.4, design R [0, 6]; DESIGN.md "Search constants"), class (a) as a
-history weight and one of LMR's non-divisor terms (§2; its row above),
-so p grows by 1. Its LTC result lies inside the STC's interval, so the
-games show no depth scaling that would make it class (b) (an LTC check
-of the SPSA's value is the owner's decision at step 19). The term is
+40+0.4, design R [0, 6]; DESIGN.md "Search constants"), a history weight
+and one of LMR's non-divisor terms (§2; its row in §3.2).
+Its LTC result lies inside the STC's interval, so the
+games show no depth scaling that would make it class (b) by the rule;
+**the owner placed it in class (b), the LTC pass, on 2026-11-13 (about
+6:15 AM EST: "R20's constant in the final retune's LTC class")**, so it
+is tuned at LTC with ProbCut's constants (§3.2) and class (a)'s p does
+not grow by it. The term is
 summed in 64ths of a ply before LMR's one rounding, so it already
 moves the reduction in sub-ply steps; `HistoryCentre::Shift` (10) and
 the 64ths unit are structural and stay out.
@@ -267,8 +269,9 @@ the 64ths unit are structural and stay out.
 | CaptureProbeMinDepth | 9 | 4-18 | 1 | ? | 5 / 9 at c = 1 | ok (added 2026-11-11, ProbCut's adoption). **Set on S512r2 (2026-11-06), not re-measured on r8brft1, by the owner's decision (2026-11-12): unmeasured until this pass, LTC class** (the note below) |
 | CaptureProbeReduction | 5 | 2-10 | 1 | ? | 3 / 5 at c = 1 | ok (added 2026-11-11). Set on S512r2 (2026-11-06), not re-measured on r8brft1 (owner, 2026-11-12): LTC class |
 | CaptureProbeMargin | 80 | 40-160 | 6 | ? | 6.7 / 13.3 steps | ok (added 2026-11-11). Set on S512r2 (2026-11-06), not re-measured on r8brft1 (owner, 2026-11-12): LTC class |
+| LmrHistoryPerPly | 10000 | 5000-20000 | 750 | ? | 6.7 / 13.3 at c = 750 (one step) | ok (the ranges rule's half to twice of the natural value, as declared with the term); a larger value weakens the term (20,000: half a ply per `HistoryMax` of centred history), a smaller one strengthens it (added 2026-11-13, R20's adoption). **LTC class by the owner's decision (2026-11-13, about 6:15 AM EST)** (the note below) |
 
-p = 8 (9 with a double-extension limit if R28 is adopted). **2026-11-11: ProbCut's three constants join this pass**
+p = 9 with R20's `LmrHistoryPerPly` (owner, 2026-11-13; 10 with a double-extension limit if R28 is adopted). **2026-11-11: ProbCut's three constants join this pass**
 on its adoption (the efficiency rule: a constant the final retune will tune is not tuned again before it). They are
 class (b): ProbCut acts only at depth 9 and beyond, its STC SPRT on S512r2 ended H0 and its LTC design R test on
 the tuned search passed (+9.40 ± 5.03 Elo; DESIGN.md "Search constants"), so STC is the wrong place to tune them.
