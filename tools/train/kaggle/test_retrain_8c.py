@@ -17,20 +17,24 @@ import retrain_8c as k  # noqa: E402
 
 ORIGINALS = ['g2s1-w00.vf', 'g3h-w00.vf', 'g3j-w00.vf', 'g4-w00.vf', 'g4s1-g3j-w05-val-rest.vf', 'g4b-w00.vf',
              'ld-d20-s2-w00.vf', 'ld-d50-w00.vf', 'ld-d100-w01.vf', 'g4c-w03.vf', 'g4s2-g4c-w09-val-rest.vf',
-             'slice1-01.vf', 'g3s2-slice1-00-rest.vf']
+             'slice1b-00.vf', 'slice1b-09.vf', 'g4-gcp-20261111T191107Z-w00.vf',
+             'g4s2-g4-gcp-20261111T191107Z-w03-val-rest.vf', 'g4-gcp-20261112T213623Z-w00.vf']
 NOT_TRAINED = ['g4s2-val.vf', 'bl-g4s2-val.vf', 'g4s1-val.vf', 'pos1-w00.vf', 'ld-d20c50-w00.vf',
-               'i52-held.vf', 'i52-controls.vf', 'ld-d20-w02-val.vf']
+               'i52-held.vf', 'i52-controls.vf', 'ld-d20-w02-val.vf', 'slice1-01.vf', 'g3s2-slice1-00-rest.vf',
+               'g4-gcp-20261111T191107Z-w03-val.vf']
 
 
 class ArmFileTests(unittest.TestCase):
     def test_control(self):
         got = dict(zip(ORIGINALS, k.arm_files('control', ORIGINALS)))
         for n in ('g3j-w00.vf', 'g4-w00.vf', 'g4s1-g3j-w05-val-rest.vf', 'g4b-w00.vf', 'ld-d20-s2-w00.vf',
-                  'ld-d50-w00.vf', 'ld-d100-w01.vf', 'g4c-w03.vf', 'g4s2-g4c-w09-val-rest.vf'):
+                  'ld-d50-w00.vf', 'ld-d100-w01.vf', 'g4c-w03.vf', 'g4s2-g4c-w09-val-rest.vf',
+                  'g4-gcp-20261111T191107Z-w00.vf', 'g4s2-g4-gcp-20261111T191107Z-w03-val-rest.vf',
+                  'g4-gcp-20261112T213623Z-w00.vf'):
             self.assertEqual(got[n], f'td90-{n}')
         for n in ('g2s1-w00.vf', 'g3h-w00.vf'):
             self.assertEqual(got[n], f'bl-{n}')
-        for n in ('slice1-01.vf', 'g3s2-slice1-00-rest.vf'):
+        for n in ('slice1b-00.vf', 'slice1b-09.vf'):
             self.assertEqual(got[n], n)
 
     def test_i80_differs_from_the_control_on_the_td_parts_only(self):
@@ -51,7 +55,7 @@ class ArmFileTests(unittest.TestCase):
     def test_resolve_keeps_the_a1_originals_only(self):
         with tempfile.TemporaryDirectory() as d:
             names = set(ORIGINALS + NOT_TRAINED)
-            for kind in ('control', 'i80', 'ep'):
+            for kind in ('control', 'i80'):          # ep- copies are made in the session, never mounted
                 names |= set(k.arm_files(kind, ORIGINALS))
             for n in names:
                 Path(d, n).write_bytes(b'x')
@@ -60,8 +64,13 @@ class ArmFileTests(unittest.TestCase):
             self.assertTrue(record['ok'], record)
             self.assertEqual(lists['rft1'], sorted(ORIGINALS))
             self.assertEqual(lists['c1'], [k.control_name(n) for n in sorted(ORIGINALS)])
-            for bad in ('pos1-w00.vf', 'ld-d20c50-w00.vf', 'i52-held.vf'):
-                self.assertNotIn(bad, lists['rft1'])
+            for bad in ('pos1-w00.vf', 'ld-d20c50-w00.vf', 'i52-held.vf', 'slice1-01.vf', 'g3s2-slice1-00-rest.vf',
+                        'g4-gcp-20261111T191107Z-w03-val.vf'):
+                self.assertNotIn(bad, lists['rft1'])          # v1's slice and a filler -val source: mounted, not trained
+                self.assertNotIn(bad, lists['c1'])
+            self.assertEqual(record['slice_files'], ['slice1b-00.vf', 'slice1b-09.vf'])
+            self.assertEqual(lists['ep1'], [n if k.is_slice(n) else f'ep-{n}' for n in lists['c1']])
+            self.assertEqual(record['unresolved'], {})
             # The check can fail: a missing i80 copy, an unsealed file.
             gone = [os.path.join(d, n) for n in names if n != 'i80-g4c-w03.vf']
             record, _, _ = k.resolve(gone, sealed, hashes=False)
@@ -85,6 +94,13 @@ class SettingTests(unittest.TestCase):
         for prefix in ('ld-d20-', 'ld-d50-', 'ld-d100-'):                            # O3: label depth in every arm
             self.assertIn(prefix, k.TD_PARTS)
         self.assertEqual(k.ARMS['c1']['superbatches'] * k.BATCHES, k.ARMS['i801']['superbatches'] * k.BATCHES)
+
+    def test_the_split_is_made_in_the_session(self):
+        self.assertNotIn('r8c-split', k.MANIFESTS)                                    # no upload of ep- copies
+        self.assertIn('slice1b', k.MANIFESTS)
+        self.assertEqual(k.split_source('ep-td90-g4c-w03.vf'), 'td90-g4c-w03.vf')
+        self.assertEqual(k.split_source('td90-g4c-w03.vf'), 'td90-g4c-w03.vf')
+        self.assertEqual(k.SPLIT_MAX_PIECES, 7)                                       # O1
 
 
 if __name__ == '__main__':

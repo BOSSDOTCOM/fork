@@ -27,6 +27,15 @@ Arms (declared in the plan before any result; two seeds each, seed K on GPU K - 
   - eploK (rft-ep-lo): epK at LR 5e-6.
 Queues: GPU K - 1 runs cK, then (cK-avg made in the queue) rftK, epK, eploK, then i80K.
 
+The ep- copies are made in this session, not uploaded (as the 8c preview's kernel fork-retrain-8b-rftep made them
+on 2026-11-12: 119 files, 2.38 B records, 44 minutes on 4 CPUs): before training, td_labels.py split --max-pieces 7
+at COMMIT of every control file but the slice, each checked against its source by td_labels.py check --mode split
+(every 100th game recounted by python-chess). A failed split stops only the ep and eplo arms; c, rft and i80 run.
+
+The endgame slice is the fresh slice slice1b (plan O2, owner 2026-11-12: v1 regenerated with new seeds, the held-out
+sets excluded, the 900 endgame-check positions kept); v1's files (slice1-*, g3s2-slice1-00-rest) are mounted with
+fork-g3s2 but trained by no arm (NOT_A1).
+
 Validity (blocking; summary['validity']): every input matches its manifest and every arm's list resolves;
 r8btd90's weights reproduce their own g4s1-val prefix loss of 8b's session (0.01938369, result weight 0.5) within
 1e-6; cK's and i80K's superbatch 0 equal r8btd90's loss on bl-g4s2-val.vf at result weight 0 (computed here)
@@ -59,18 +68,25 @@ BATCH = 16384
 BATCHES = 305
 VAL_POSITIONS = 20000       # the per-superbatch monitoring prefix
 ALL_POSITIONS = 10 ** 9     # offline scoring: every kept position of a file
-FILLER = []                 # the VM filler parts' manifest names, set at their seals (plan section 1)
+# The VM filler parts' manifest names (plan section 1; each run its own part): the five runs finished before
+# g4c's seal; the run cut at the seal (O9) is added at the seal.
+FILLER = ['g4-gcp-20261111T191107Z', 'g4-gcp-20261112T041330Z', 'g4-gcp-20261112T185227Z',
+          'g4-gcp-20261112T213623Z', 'g4-gcp-20261112T214053Z']
 MANIFESTS = (['g2s1', 'g3s1', 'g3b', 'g3c', 'g3d', 'g3e', 'g3s2', 'g3f', 'g3g', 'g3s3',     # item 8a's inputs
               'g3h', 'g3i', 'g3j', 'g4', 'g4s1-pre', 'r8b-blend', 'r8b-arms', 'r8b-g4',   # 8b's
-              'g4b', 'ld-d20', 'ld-d50', 'ld-d100', 'g4c'] + FILLER                       # the parts since
-             + ['g4s2-pre', 'r8c-td', 'r8c-i80', 'r8c-split'])                            # 8c's derived files
+              'g4b', 'ld-d20', 'ld-d50', 'ld-d100', 'g4c', 'slice1b'] + FILLER            # the parts since
+             + ['g4s2-pre', 'r8c-td', 'r8c-i80', 'r8c-post'])                             # 8c's derived files
 VAL = 'g4s2-val.vf'
 VAL_BLEND = 'bl-g4s2-val.vf'
 VAL_8B = 'g4s1-val.vf'
 # The parts labelled by S512ppr3 or later (their files and their validation rests): TD(0.9) copies, i80 copies.
 TD_PARTS = ('g3j-', 'g4-', 'g4s1-g3j-', 'g4s1-g4-', 'g4b-', 'ld-d20-', 'ld-d50-', 'ld-d100-', 'g4c-',
             'g4s2-g4b-', 'g4s2-g4c-', 'g4s2-ld-') + tuple(f'{f}-' for f in FILLER) + tuple(f'g4s2-{f}-' for f in FILLER)
-NOT_A1 = ('pos1-', 'ld-d20c50-', 'ld-d20c100-')   # not this session's data (the positional slice is A2's arm)
+NOT_A1 = ('pos1-', 'ld-d20c50-', 'ld-d20c100-',   # not this session's data (the positional slice is A2's arm)
+          'slice1-', 'g3s2-slice1-')               # v1's slice: replaced by slice1b (O2)
+SPLIT_MAX_PIECES = 7        # rft-ep (plan section 3; constant screen passed 2026-11-12)
+SPLIT_SAMPLE = 100          # td_labels.py check: python-chess recount on every 100th game (its default)
+CHESS = 'chess==1.11.2'     # python-chess for td_labels.py (the repository's .venv version; the preview's)
 EVAL_ONLY = ['i52-held.vf', 'i52-controls.vf']       # never trained (idea 52's, retired; no longer scored)
 # r8btd90's float weights (8b's td90 window average, dataset fork-r8b-rft-init), checked by reproducing their own
 # g4s1-val prefix loss of 8b's session.
@@ -112,6 +128,11 @@ def is_slice(name):
     return 'slice' in name
 
 
+def split_source(name):
+    """The mounted file an ep- copy is made from in the session (the name itself for any other)."""
+    return name[3:] if name.startswith('ep-') else name
+
+
 def is_derived(name):
     return name.startswith(('bl-', 'i52-', 'i80-', 'ep-')) or \
         (name.startswith('td') and name[2:4].isdigit() and name[4] == '-')
@@ -151,12 +172,13 @@ def resolve(found, sealed, hashes=True):
     for arm, a in ARMS.items():
         names = arm_files(a['files'], base)
         lists[arm] = names
-        unresolved[arm] = [n for n in names if n not in by_name] + ([a['val']] if a['val'] not in by_name else [])
+        unresolved[arm] = [n for n in names if split_source(n) not in by_name] + \
+            ([a['val']] if a['val'] not in by_name else [])
     record = {'mounted': len(by_name), 'sealed': len(sealed), 'mismatches': mismatch, 'missing': missing,
               'names_twice': twice, 'unresolved': {k: v for k, v in unresolved.items() if v},
               'files_per_arm': {k: len(v) for k, v in lists.items()},
-              'bytes_per_arm': {k: sum(os.path.getsize(by_name[n]) for n in v if n in by_name)
-                                for k, v in lists.items()},
+              'bytes_per_arm': {k: sum(os.path.getsize(by_name[split_source(n)]) for n in v
+                                       if split_source(n) in by_name) for k, v in lists.items()},
               'slice_files': sorted(n for n in base if is_slice(n)),
               'td_parts': sorted(n for n in base if n.startswith(TD_PARTS))}
     record['ok'] = not (mismatch or missing or twice or record['unresolved']) and bool(base)
@@ -310,6 +332,87 @@ def session():
         ok = c['ok']
         save()
 
+    def make_split():
+        """rft-ep's copies, made here (no upload; the 8c preview kernel's step): td_labels.py split --max-pieces
+        SPLIT_MAX_PIECES of every control file but the slice, each checked against its source by td_labels.py check
+        --mode split; the copies join by_name as ep-<source>. Returns (folder or None, record)."""
+        srcs = sorted({split_source(n) for arm in ARMS for n in lists[arm] if n.startswith('ep-')},
+                      key=lambda n: (-os.path.getsize(by_name[n]), n))
+        need = sum(os.path.getsize(by_name[n]) for n in srcs)
+        free = {}
+        for d in ('/tmp', '/kaggle/working'):
+            try:
+                free[d] = shutil.disk_usage(d).free
+            except OSError:
+                pass
+        root = max(free, key=free.get)
+        mem = 0
+        for line in open('/proc/meminfo'):
+            if line.startswith('MemAvailable:'):
+                mem = int(line.split()[1]) * 1024
+        largest = os.path.getsize(by_name[srcs[0]]) if srcs else 1
+        workers = max(1, min(os.cpu_count() or 1, mem // (4 * largest)))
+        rec = {'files': len(srcs), 'bytes': need, 'free': free, 'root': root, 'mem_available': mem,
+               'cpus': os.cpu_count(), 'workers': workers, 'max_pieces': SPLIT_MAX_PIECES, 'sample': SPLIT_SAMPLE}
+        rc, out, _ = sh(f'python3 -m pip install -q {CHESS} && python3 --version')
+        rec['pip'] = {'rc': rc, 'tail': out[-300:]}
+        if rc or not srcs or free[root] < need * 1.2:
+            rec['ok'] = False
+            return None, rec
+        dest = f'{root}/ep-split'
+        shutil.rmtree(dest, ignore_errors=True)
+        os.makedirs(dest)
+        tool = f'{repo}/tools/datagen/td_labels.py'
+        began = time.time()
+
+        def last_json(text):
+            for line in reversed(text.strip().splitlines()):
+                try:
+                    return json.loads(line)
+                except ValueError:
+                    continue
+            return None
+
+        def one(n):
+            path = f'{dest}/ep-{n}'
+            rc1, o1, s1 = sh(f'python3 {tool} split {by_name[n]} --out {path} --max-pieces {SPLIT_MAX_PIECES}')
+            made = last_json(o1) if rc1 == 0 else None
+            rc2, o2, s2 = (1, '', 0)
+            if made:
+                rc2, o2, s2 = sh(f'python3 {tool} check {by_name[n]} {path} --mode split --scale {SCALE} '
+                                 f'--max-pieces {SPLIT_MAX_PIECES} --sample {SPLIT_SAMPLE}')
+            checked = last_json(o2) if rc2 == 0 else None
+            r = {'split_rc': rc1, 'check_rc': rc2, 'seconds': [s1, s2],
+                 'split': {k: made.get(k) for k in ('sha256', 'bytes', 'games', 'records', 'to_result', 'kept_target',
+                                                    'unsaved', 'beyond_limit', 'one_move')} if made else None,
+                 'check': {k: checked.get(k) for k in ('games', 'records', 'changed', 'games_recomputed',
+                                                       'records_recomputed', 'bad')} if checked else None}
+            r['ok'] = bool(made and checked and not checked['bad'] and
+                           os.path.getsize(path) == os.path.getsize(by_name[n]))
+            if not r['ok']:
+                r['tail'] = (o1[-300:] + ' | ' + o2[-300:])
+            return n, r
+
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(workers) as ex:
+            per_file = dict(ex.map(one, srcs))
+        rec['seconds'] = round(time.time() - began, 1)
+        rec['per_file'] = per_file
+        rec['totals'] = {k: sum((r['split'] or {}).get(k) or 0 for r in per_file.values())
+                         for k in ('records', 'to_result', 'kept_target', 'unsaved', 'beyond_limit', 'one_move')}
+        rec['failed'] = sorted(n for n, r in per_file.items() if not r['ok'])
+        rec['ok'] = not rec['failed'] and len(per_file) == len(srcs)
+        if rec['ok']:
+            for n in srcs:
+                by_name[f'ep-{n}'] = f'{dest}/ep-{n}'
+        return dest, rec
+
+    split_root, split_ok = None, False
+    if ok:
+        split_root, summary['split'] = make_split()
+        split_ok = summary['split']['ok']
+        save()
+
     def checkpoints(arm, out_dir):
         done = {}
         for d in glob.glob(f'{out_dir}/s512pp-{arm}-*'):
@@ -360,6 +463,8 @@ def session():
 
     def run_arm(arm, device):
         a = ARMS[arm]
+        if a['files'] == 'ep' and not split_ok:
+            return {'arm': arm, 'error': 'the in-session split failed (summary["split"]): not run'}
         if a['init'] == 'td90':
             start = init[0]
         else:
@@ -465,7 +570,7 @@ def session():
         v = {'superbatch_0': starts, 'references': refs, 'tolerance': tol,
              'per_arm': {arm: starts[arm] is not None and refs[arm] is not None and
                          abs(starts[arm] - refs[arm]) <= tol[arm] for arm in ARMS},
-             'inputs_ok': summary['inputs']['ok'],
+             'inputs_ok': summary['inputs']['ok'], 'split_ok': split_ok,
              'runs_ok': {arm: summary['runs'].get(arm, {}).get('rc') == 0 for arm in ARMS}}
         v['ok'] = all(v['per_arm'].values())
         v['candidates'] = {f'{arm}-avg': {'full': (summary['offline'].get(f'{arm}-avg') or {}).get('full', {}).get('loss'),
@@ -485,6 +590,8 @@ def session():
     finally:
         shutil.rmtree(repo, ignore_errors=True)
         shutil.rmtree(WORK, ignore_errors=True)
+        if split_root:
+            shutil.rmtree(split_root, ignore_errors=True)
     save()
     print(json.dumps(summary, indent=1))
 
