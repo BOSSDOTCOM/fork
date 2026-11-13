@@ -867,8 +867,10 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         const int cut_extra = switches.use_cut_node_lmr && !OnPv && f.expected_cut ? CutNodeLmrPlies : 0;
         // B9: at a node that is not improving, late quiets are reduced
         // LmrNotImprovingPlies more (use_improving_lmr; never in check).
-        const int trend_extra = switches.use_improving_lmr && !in_check && !improving ? LmrNotImprovingPlies : 0;
-        reduced = std::clamp(new_depth - (base + correction - relief + cut_extra + trend_extra), 1, new_depth);
+        const int trend_extra =
+            switches.use_improving_lmr && !in_check && !improving ? LmrNotImprovingPlies : 0;
+        reduced =
+            std::clamp(new_depth - (base + correction - relief + cut_extra + trend_extra), 1, new_depth);
 #ifdef FORK_SEARCH_STATS
         ++counters.lmr_rule_sites;
         counters.lmr_rule_fires += rule != 0;
@@ -878,7 +880,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // would do here. The correction is the same with that base: the
         // committed rule returns 0 whatever its context. The probe's
         // reduction keeps every other term of the real one (check relief,
-        // the cut-node plies), so it differs only where the term fires.
+        // the cut-node plies, B9's not-improving plies), so it differs only
+        // where the term fires.
         ++counters.lmr_order_bins[order_score_bin(stats_order_score)];
         ++counters.lmr_quiet_bins[table_value_bin(stats_quiet_value)];
         if (f.arrival != NoArrival)
@@ -893,7 +896,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         counters.lmr_history_fire_less += shift > 0;
         counters.lmr_history_fire_more += shift < 0;
         counters.lmr_history_changes +=
-            std::clamp(new_depth - (base - shift + correction - relief + cut_extra), 1, new_depth) != reduced;
+            std::clamp(new_depth - (base - shift + correction - relief + cut_extra + trend_extra), 1,
+                       new_depth) != reduced;
 #endif
       }
 #ifdef FORK_SEARCH_STATS

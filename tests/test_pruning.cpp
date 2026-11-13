@@ -717,15 +717,15 @@ TEST_CASE("pruning", "history ageing: still correct, and it changes a second sea
 // does nothing with the technique it adjusts switched off.
 TEST_CASE("pruning", "improving flag in LMP and LMR: still correct, and each changes the search") {
   PruningFixture fx;
-  CHECK(SearchSwitches{}.use_improving_lmp);   // on since its SPRT
-  CHECK(!SearchSwitches{}.use_improving_lmr);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_improving_lmp);  // on since its SPRT
+  CHECK(SearchSwitches{}.use_improving_lmr);  // on since its SPRT
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
   const int depth = Optimized ? 10 : 7;
   Position pos;
   CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
-  SearchSwitches off;  // explicitly off: the LMP use is on by default
+  SearchSwitches off;  // explicitly off: both uses are on by default
   off.use_improving_lmp = off.use_improving_lmr = false;
   for (int which = 0; which < 2; ++which) {
     SearchSwitches on = off;

@@ -221,7 +221,9 @@ struct SearchQuota {
 //   use_improving_lmr reduces late quiets LmrNotImprovingPlies more at a node
 //   that is not improving. use_improving_lmp is on since its STC SPRT
 //   against off passed: +6.82 +/- 4.37 Elo after 8,000 games, design R
-//   [0, 6]; 2026-11-13. use_improving_lmr stays off until its SPRT.
+//   [0, 6]; 2026-11-13. use_improving_lmr is on since its own STC SPRT
+//   against off (the LMP use off on both sides) passed: +12.71 +/- 7.00 Elo
+//   after 3,200 games, design R [0, 6]; 2026-11-13.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -268,7 +270,7 @@ struct SearchQuota {
   X(use_skip_check_exempt, UseSkipCheckExempt, true)     \
   X(use_history_ageing, UseHistoryAgeing, true)          \
   X(use_improving_lmp, UseImprovingLmp, true)            \
-  X(use_improving_lmr, UseImprovingLmr, false)
+  X(use_improving_lmr, UseImprovingLmr, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
