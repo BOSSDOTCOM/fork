@@ -845,6 +845,34 @@ TEST_CASE("pruning", "linear history bonus: still correct, and it changes the se
   CHECK(fx.tree_sizes(no_history_on, depth) == fx.tree_sizes(no_history_off, depth));
 }
 
+// The quiescence move cap (the engine survey's B16): with it on, mates are
+// still found and the best move is legal, and it changes the tree (fault
+// check: a cap that never fires leaves the trees as with the switch off);
+// with the quiescence search off it does nothing.
+TEST_CASE("pruning", "quiescence move cap: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(SearchSwitches{}.use_quiesce_move_cap);  // on since its SPRT
+  SearchSwitches on;
+  on.use_quiesce_move_cap = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_quiesce_move_cap = false;  // explicitly off: it is on by default
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the quiescence move cap left all three trees unchanged");
+  SearchSwitches no_quiesce_on = on, no_quiesce_off = off;
+  no_quiesce_on.use_quiesce = no_quiesce_off.use_quiesce = false;
+  CHECK(fx.tree_sizes(no_quiesce_on, depth) == fx.tree_sizes(no_quiesce_off, depth));
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -928,7 +956,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = true;
   s.use_pair_sum_update = s.use_check_order_bonus = s.use_skip_check_exempt = true;
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
-  s.use_centred_lmr_history = s.use_linear_bonus = true;
+  s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

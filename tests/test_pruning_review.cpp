@@ -52,8 +52,9 @@ SearchSwitches no_pruning() {
   // S512r2 found two real mates in 7 plies (one confirmed by the lichess
   // tablebase, DTM 7) that this search missed at depth 8 (2026-11-01).
   s.use_multi_cut = s.use_negative_extension = s.use_no_move_reduction = false;
-  s.use_capture_probe = false;  // ProbCut prunes a node too (T31)
-  s.use_history_skip = false;   // the history skip prunes moves (T24)
+  s.use_capture_probe = false;     // ProbCut prunes a node too (T31)
+  s.use_history_skip = false;      // the history skip prunes moves (T24)
+  s.use_quiesce_move_cap = false;  // the quiescence move cap prunes moves (B16)
   return s;
 }
 
@@ -171,7 +172,7 @@ TEST_CASE("pruning", "tier 2, all switches on: stopped searches leave no state b
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = true;
   s.use_pair_sum_update = s.use_check_order_bonus = s.use_skip_check_exempt = true;
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
-  s.use_centred_lmr_history = s.use_linear_bonus = true;
+  s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

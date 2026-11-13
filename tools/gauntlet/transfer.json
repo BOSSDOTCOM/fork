@@ -24,6 +24,7 @@
     {"change": "B9 improving flag in LMP (LmpImprovingEighths 1)", "elo": 6.82, "ci95": 4.37, "test": "survey-b9-lmp-stc: STC design R [0, 6], runs 43365482176-43373575905, 8,000 games", "sprt": {"design": "search-stc", "stages": 5, "nelo": 11.87}},
     {"change": "B9 improving flag in LMR (LmrNotImprovingPlies 1)", "elo": 12.71, "ci95": 7.0, "test": "survey-b9-lmr-stc: STC design R [0, 6], runs 43375821546-43377962512, 3,200 games", "sprt": {"design": "search-stc", "stages": 2, "nelo": 21.88}},
     {"change": "R20 round-once LMR with a centred history term (LmrHistoryPerPly 10000)", "elo": 6.21, "ci95": 4.35, "test": "r20-centred-lmr-ltc: LTC 40+0.4 design R [0, 6], runs 43358461914-43386556188, 6,656 games", "stc": "r20-centred-lmr-stc: STC design R [0, 6], +8.04 +/- 4.04, runs 43313118399-43327533834, 9,600 games", "sprt": {"design": "search-ltc", "stages": 4, "nelo": 11.94}},
-    {"change": "D11 linear history bonus (LinearBonusPerPly 125)", "elo": 8.98, "ci95": 5.7, "test": "d11-linear-bonus-stc: STC design R [0, 6], runs 43445560313-43451798490, 4,800 games", "sprt": {"design": "search-stc", "stages": 3, "nelo": 15.5}}
+    {"change": "D11 linear history bonus (LinearBonusPerPly 125)", "elo": 8.98, "ci95": 5.7, "test": "d11-linear-bonus-stc: STC design R [0, 6], runs 43445560313-43451798490, 4,800 games", "sprt": {"design": "search-stc", "stages": 3, "nelo": 15.5}},
+    {"change": "B16 quiescence move cap (QuiesceMoveCap 2)", "elo": 8.9, "ci95": 5.56, "test": "b16-qs-move-cap-retry: STC design R [0, 6], runs 43447742059-43454049003, 4,800 games", "first": "b16-qs-move-cap-stc: QuiesceMoveCap 3, futility stop, -0.22 +/- 6.92, runs 43441749955-43444719077, 3,200 games", "sprt": {"design": "search-stc", "stages": 3, "nelo": 15.75}}
   ]
 }

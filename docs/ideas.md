@@ -2886,6 +2886,26 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** one frame store per node, and a comparison with a switch on. bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked on all 24 runs), A = 254841c, B = the port: median nps -2.1%, best -1.7%, under the 3.0% noise threshold, so no significant difference. The LMR use: bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, identity checked on all 24 runs), A = 17717a8, B = the port: median nps +0.5%, best +0.3%, under the 3.0% noise threshold, so no significant difference.
 - **earliest phase:** Phase 4.
 
+## 120. Move-count pruning in the quiescence search (the engine survey's B16)
+
+- **type:** ELO (search); flag `use_quiesce_move_cap` (on since 2026-11-13).
+- **idea** (the engine survey's B16, its rank 11; concept only): a quiescence node out of check searches
+  at most `QuiesceMoveCap` moves and prunes the rest (the survey: Raphael +5.1, Tarnished +4.1, Hobbes
+  +3.3, at STC).
+- **status:** **adopted 2026-11-13** at `QuiesceMoveCap` 2, the retry value, on its STC pass
+  (b16-qs-move-cap-retry, design R [0, 6] against off: +8.90 ± 5.56 Elo, nElo +15.75 ± 9.83, H1 after
+  4,800 games; sprt-log), pre-approved by the owner's rule (2026-11-11: one SPRT at the natural value,
+  one retry at a second value if it fails); the first try at the natural value 3 (b16-qs-move-cap-stc)
+  stopped for futility after 3,200 games (−0.22 ± 6.92 Elo, nElo −0.38 ± 12.04). Ported onto phase-4
+  929f114, bench 6,064,962 / ad41c57a026bb021 (DESIGN.md decisions log, 2026-11-13). `QuiesceMoveCap` is a class (a)
+  dimension of the final retune's SPSA (final-retune.md §3.1). History: the coordinator's overnight build
+  list, 2026-11-12 ("B16 - qsearch LMP. R-STC"); built on phase-4 ab70fa5 behind the switch, off, on
+  tier2/b16-qs-lmp af8f35c (bench 9,639,207 / 07f7ae19b9250f38, r8brft1); test commits sprt/b16-qs-lmp
+  a03b0db (3) and sprt/b16-qs-lmp-2 73dd82f (2); night items 60a and 60b (ledger idea `b16-qs-move-cap`,
+  tries 1 and 2), gated behind state/gate-e1.done.
+- **runtime cost:** one comparison per quiescence move; fewer quiescence nodes. bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, the shared machine busy; identity checked on all 24 runs), A = 929f114, B = the port: median nps +5.1%, best -1.5%, under the run's 15.8% noise threshold, so no significant difference (the two search different trees: 6,624,814 against 6,064,962 bench nodes; the code change itself is one comparison per quiescence move).
+- **earliest phase:** Phase 4.
+
 ## 173. The linear history bonus (the engine survey's D11, think tank R15)
 
 - **type:** ELO (search); flag `use_linear_bonus` (on since 2026-11-13).

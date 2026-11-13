@@ -246,6 +246,12 @@ struct SearchQuota {
 //   tables through use_pair_sum_update's summed update); R20's centres read
 //   the tables it fills. On since its STC SPRT against off passed: +8.98 +/-
 //   5.70 Elo after 4,800 games, design R [0, 6]; 2026-11-13.
+// - use_quiesce_move_cap: a quiescence node out of check searches at most
+//   QuiesceMoveCap moves (the selector's order) and prunes the rest; in check
+//   every evasion is searched (the engine survey's B16, move-count pruning in
+//   the quiescence search). On since its STC SPRT against off passed at the
+//   retry value QuiesceMoveCap 2 (3 had stopped for futility): +8.90 +/- 5.56
+//   Elo after 4,800 games, design R [0, 6]; 2026-11-13.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -294,7 +300,8 @@ struct SearchQuota {
   X(use_improving_lmp, UseImprovingLmp, true)            \
   X(use_improving_lmr, UseImprovingLmr, true)            \
   X(use_centred_lmr_history, UseCentredLmrHistory, true) \
-  X(use_linear_bonus, UseLinearBonus, true)
+  X(use_linear_bonus, UseLinearBonus, true)              \
+  X(use_quiesce_move_cap, UseQuiesceMoveCap, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

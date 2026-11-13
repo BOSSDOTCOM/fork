@@ -158,6 +158,7 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | LmpImprovingEighths | 1 | 0-4 | 1 | ? | 1 / 3 at c = 1 (one step) | **flag**: floor within 2c at one step; 0 is the off-equivalent (the allowance unscaled) and 4 the largest scaling (a half more at an improving node, a half less at one that is not), so a finer search needs a new unit (sixteenths, a new parameter: the owner's decision at step 19) (added 2026-11-13, B9's LMP adoption) |
 | LmrNotImprovingPlies | 1 | 0-3 | 1 | ? | 1 / 2 at c = 1 (one step) | **flag**: within 2c of both bounds at one step; 0 is the off-equivalent (no extra reduction) and the range is whole plies, as `CutNodeLmrPlies`, so a finer search needs a sub-ply unit (a new parameter: the owner's decision at step 19) (added 2026-11-13, B9's LMR adoption) |
 | LinearBonusPerPly | 125 | 63-250 | 9 | ? | 6.9 / 13.9 at c = 9 (one step) | ok (the ranges rule's half to twice of the natural value, as declared with the switch; with `HistoryBonusCap` 1,250 the cap is reached at depth 10 at 125, at depth 5 at the ceiling 250 and at depth 20 at the floor 63) (added 2026-11-13, D11's adoption) |
+| QuiesceMoveCap | 2 | 1-6 | 1 | ? | 1 / 4 at c = 1 (one step) | **flag**: floor within 2c at one step; 1 is the smallest cap that searches a capture (0 would be the stand pat alone, another form) and the range is whole moves, so a finer search needs another unit (the owner's decision at step 19); the ceiling 6, declared with the switch around the natural value 3, is beyond the ranges rule's twice of 2 (4) and stays (added 2026-11-13, B16's adoption) |
 
 p = 22 tuned parameters (23 with QuietSeeFloor), minus any parameter of a
 feature removed in step 18 (e.g. LMP's two if LMP is removed), plus the
@@ -250,6 +251,12 @@ above), so p grows by 1. `HistoryBonusFactor` is not read while
 `UseLinearBonus` is on (its row above): leaving it out would keep p as
 it was (the owner's decision at step 19). `HistoryBonusCap` still caps
 the linear bonus and stays a dimension.
+**2026-11-13: B16's `QuiesceMoveCap` joins this pass** on the
+adoption of the quiescence move cap at its retry value 2 (the natural
+value 3 stopped for futility; b16-qs-move-cap-retry +8.90 ± 5.56 Elo at
+STC, design R [0, 6]; DESIGN.md "Search constants"), class (a) as a
+horizon pruning count (it acts only in the quiescence search, at the
+horizon; its row above), so p grows by 1.
 **2026-11-13: R20's `LmrHistoryPerPly` joins the final retune** on the
 adoption of round-once LMR with the centred history term (think tank
 R20, the natural value 10,000 history units per ply; r20-centred-lmr-stc
