@@ -1856,3 +1856,43 @@ The final stage's result block (f7-revisit-stc, stage 7, run 43281990289):
   on the full head. **Planning factor (owner):** for overlapping small search adoptions, estimate the combined gain
   at about 0.5-0.6 times the sum of the separate SPRT claims. With stacking check 1 (+6.30), the session's six
   adoptions measure about +14 Elo at STC directly.
+
+### 2026-11-12 the history skip's exemption for checking quiets (B13 with D13; idea 74; night queue items 71 and 71b): design R at STC, capped undecided, then a non-regression SPRT (owner): H1, adopted
+
+- The owner's order (2026-11-12, about 12:50 PM EST): "exempt quiet checking moves from B13's history skip; test as
+  one small design R SPRT, pre-approved on pass." Base tier2/skip-check-exempt `5cd267c` (phase-4 96ebfec's engine
+  with the exemption built in behind `use_skip_check_exempt`, off; bench 9,118,607 / 208629aa15e140a9); test
+  sprt/skip-check-exempt `cb66f9b` (the switch on; 9,443,408 / 6d421599a985f97c). STC 8+0.08, Hash 16, Syzygy
+  3-4-5, UHO book (seed 20261027), r8brft1 on both sides. Ledger idea `skip-check-exempt`, try 1 of 2. Data:
+  ~/fork-data/sprt/skip-check-exempt-stc and ~/fork-data/sprt/skip-check-exempt-nonreg.
+- **The owner's order after the cap (about 4:50 PM EST):** "run one non-regression SPRT [-3, 0] ... adopt on a pass
+  (pre-approved), drop if it fails."
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| skip-check-exempt-stc: STC 8+0.08, design R [0, 6], alpha 0.05, beta 0.20, cap 8, futility look after 2 stages, the exemption on against off, openings from stage 0 | 43285168897 (stage 0), 43288399518 (1), 43291592716 (2), 43294739213 (3), 43297872580 (4), 43300997867 (5), 43304142044 (6), 43307235492 (7) | 12,800 (no time losses, no abnormal ends) | **+2.80 ± 3.43** | +4.90 ± 6.02 | [136, 1494, 3030, 1611, 129] | **capped undecided** (LLR 1.21, bounds −1.56, 2.77) after stage 7, 4:27 PM EST |
+| skip-check-exempt-nonreg: STC 8+0.08, non-regression [−3, 0] nElo, alpha = beta = 0.05 (LLR bounds ±2.94), the same pair, fresh openings from stage 8 (stages 8-20) | 43330489013 (stage 8), 43333017715 (9), 43335574422 (10), 43338054287 (11), 43340523805 (12), 43342950697 (13), 43345340105 (14), 43347608667 (15), 43349839281 (16), 43352110384 (17), 43354250164 (18), 43356312529 (19) | 19,200 (no time losses, no abnormal ends) | **+2.86 ± 2.77** | +5.08 ± 4.91 | [167, 2274, 4587, 2378, 194] | **H1 accepted** (LLR 3.14) after stage 19, 10:21 PM EST |
+
+- skip-check-exempt-stc by stage: after stage 0 +1.95 ± 9.85 (LLR 0.03); stage 1 +2.28 ± 6.89 (0.16); stage 2
+  +1.52 ± 5.69 (−0.09); stage 3 +3.15 ± 4.86 (0.80); stage 4 +2.91 ± 4.34 (0.84); stage 5 +2.71 ± 3.98 (0.83);
+  stage 6 +3.10 ± 3.68 (1.35). skip-check-exempt-nonreg by stage: after stage 8 +4.99 ± 9.93 (0.40); stage 9
+  +2.06 ± 6.94 (0.40); stage 10 +1.66 ± 5.62 (0.53); stage 11 +3.20 ± 4.83 (1.14); stage 12 +2.78 ± 4.32 (1.27);
+  stage 13 +3.11 ± 3.92 (1.67); stage 14 +2.89 ± 3.63 (1.84); stage 15 +1.66 ± 3.40 (1.41); stage 16 +2.22 ± 3.21
+  (1.94); stage 17 +2.08 ± 3.04 (2.06); stage 18 +2.57 ± 2.89 (2.65). Verdict files: "capped" and "H1 accepted".
+
+The final stage's result block (skip-check-exempt-nonreg, stage 19, run 43356312529):
+
+```
+    Shards: 192 (done); pairs 9600, games 19200 (19200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 2.86 +/- 2.77, nElo: 5.08 +/- 4.91
+    Ptnml(0-2): [167, 2274, 4587, 2378, 194]
+    LLR: 3.14 (-2.94, 2.94) [-3.00, 0.00] nElo: H1 accepted
+```
+
+- **Adopted (the owner's pre-approval of about 4:50 PM EST):** 5cd267c's change with cb66f9b's switch-on ported onto
+  phase-4 016d952 alone (branch adopt/skip-check-exempt; the code lines equal the tested diff apart from two
+  comments), `UseSkipCheckExempt` on, the switch kept until the Phase 4 re-validation. Bench 9,443,408 /
+  6d421599a985f97c (r8brft1), byte for byte cb66f9b's tests/bench-r8brft1.ref; with the exemption off 9,118,607 /
+  208629aa15e140a9, phase-4's, so the port equals the tested code. Every other reference re-pinned from its own
+  build. Speed: bench/ab_search.py (clang-release, Windows, not pinned; A = phase-4 016d952, B = the port's build of this commit's engine code from the uncommitted tree on 016d952, r8brft1; identity checked on all 24 runs): 12 interleaved rounds, median nps -0.1%, best +0.2%, under the 3.0% noise threshold: no significant difference. The bench searches 3.6% more nodes (9,443,408 against 9,118,607).

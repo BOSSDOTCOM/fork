@@ -209,6 +209,11 @@ and the result is clamped to int16 again (move_selector.cpp,
 `quiet_order_score`), so any value is safe (its range 2500-10000, step
 375, the owner's decision of 2026-11-12, about 12:50 PM EST; its row
 above).
+**2026-11-12: the history skip's exemption for checking quiets adopted
+with no constant** (`UseSkipCheckExempt`; skip-check-exempt-nonreg H1,
++2.86 ± 2.77 Elo at STC, [−3, 0]; DESIGN.md "Search constants"), so p is
+unchanged. `HistorySkipPerPly` and `HistorySkipMaxDepth` (class (a)
+above) are tuned with the exemption in place.
 
 ### 3.2 Class (b): LTC pass
 

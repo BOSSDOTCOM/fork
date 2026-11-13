@@ -301,6 +301,9 @@ TEST_CASE("search_stats", "history skip: skips match the sites' histogram") {
     std::fill(buckets.begin(), buckets.end(), TtBucket{});
     auto searcher = std::make_unique<Searcher>(table);
     searcher->switches.use_history_skip = on;
+    // Every site below the threshold is skipped only without the exemption
+    // for checking quiets (use_skip_check_exempt), so it is off here.
+    searcher->switches.use_skip_check_exempt = false;
     Position pos;
     CHECK(pos.set_fen(perft_suite()[2].fen));
     // A game, history carried: a cleared searcher's scores at the skip's

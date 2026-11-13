@@ -61,6 +61,14 @@ inline Bitboard direct_check_targets(const Position& pos, PieceType type) {
   }
 }
 
+// Whether quiet move `m` (not castling) gives direct check in `pos`, the
+// board before the move: D13's test, read move by move (the selector reads
+// direct_check_targets once per piece type per node instead), also used by
+// the history skip's exemption for checking quiets (use_skip_check_exempt).
+inline bool gives_direct_check(const Position& pos, Move m) {
+  return !m.is_castle() && (direct_check_targets(pos, kind_of(pos.piece_at(m.from()))) & bb(m.to())) != 0;
+}
+
 // A quiet move's ordering score in `pos`: its butterfly history (0 without
 // one), plus with `pairs` its reply entry after `arrival` times ReplyWeight
 // / 4 and its follow entry after `follow_arrival` times FollowWeight / 4
@@ -88,8 +96,7 @@ inline int quiet_order_score(const Position& pos, Move m, const QuietHistory* hi
     // Weights above one can take the sum past int16 at the extremes.
     score = std::clamp(score, -INT16_MAX, INT16_MAX);
   }
-  if (check_bonus != 0 && !m.is_castle() &&
-      (direct_check_targets(pos, kind_of(pos.piece_at(m.from()))) & bb(m.to())))
+  if (check_bonus != 0 && gives_direct_check(pos, m))
     score = std::clamp(score + check_bonus, -INT16_MAX, INT16_MAX);
   return score;
 }
