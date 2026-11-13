@@ -1,0 +1,105 @@
+{
+ "run": "slice1b",
+ "note": "retrain 8c's fresh endgame slice (plan O2, owner 2026-11-12): endgame_slice.py generate (retrain/8c-prep 8847fe8) with v1's signatures.json (g3-w00's first 60,000 games), 10 files of 2,600,000 positions, seeds 2026111300 + k (k = file number; v1 used 20261106-20261115), --exclude endgame_heldout.tsv heldout_67.tsv heldout_deep.tsv (0 draws skipped), the 900 endgame-check positions not excluded (kept: the integrity/recall gate); each file verified by verify_games.py --table-pieces 5; replaces v1's slice1 in every 8c arm",
+ "totals": {
+  "games": 26000000,
+  "positions": 26000000,
+  "positions_unsaved": 0,
+  "positions_saved": 26000000,
+  "bytes": 1040000000
+ },
+ "batches": [
+  [
+   {
+    "file": "slice1b-00.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "6846355b8bf9dce70f34efb63ff4b4458366984ad1243214dc0cbd709fd859cd"
+   },
+   {
+    "file": "slice1b-01.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "2a434ba653a9375682f5e917dd911cca223891739b766f761ceb845c6b30e66b"
+   },
+   {
+    "file": "slice1b-02.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "4cdfa897ee2208b6c2beeebf40f9067ad647585e967bdb04fd0ed17649efa87b"
+   },
+   {
+    "file": "slice1b-03.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "d4a4389cd29820926dd3935de84f4d892e9271289f6719da03de61945b7611e8"
+   },
+   {
+    "file": "slice1b-04.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "1eee15875b91eb4a66773ddc947665173c2cfe78fcabcbe07a6923b799fb0334"
+   },
+   {
+    "file": "slice1b-05.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "852b1d1103c82fdd8701aeec44975db1d5cca92b9d52cd91b32e993a86dbfb14"
+   },
+   {
+    "file": "slice1b-06.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "19c54f60b474ca3611401b816ac6d762ac14af6014f92e1eb55510e83898b186"
+   },
+   {
+    "file": "slice1b-07.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "1a3415461d9dc6040003db1d726d4f0a7b93083a091d53a7aa08b92cd143f1de"
+   },
+   {
+    "file": "slice1b-08.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "8d3390654bf9a19d692b500de0dce50fcb34f83ea4ca88717b4295ed3ba989e5"
+   },
+   {
+    "file": "slice1b-09.vf",
+    "games": 2600000,
+    "positions": 2600000,
+    "positions_unsaved": 0,
+    "positions_saved": 2600000,
+    "bytes": 104000000,
+    "sha256": "ad98c0a3e9f2537b0ef3c990827a081ce9cd73623945183064b5d8df57afd797"
+   }
+  ]
+ ]
+}
