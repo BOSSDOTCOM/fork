@@ -3361,12 +3361,14 @@ proposal are placeholders, screened before use.
   data pass. **Idea 175 and option (a) (H512+PP, king regions) are alternatives on one body** (their tables
   multiply), not additions. **status:** candidate (plan).
 
+- **2026-11-14 (owner): killed** by its declared rules: residual study 0.006% for all tier A states (largest 0.032%) against the 0.5% line; speed 0.905-0.913 against 0.95 (the state finder costs about 7-8%); no further finder work. Finding: pawn-relation states (attacked by an enemy pawn, defended by an own pawn, rook file state, king shield class, passed pawn) explain almost none of r8brft1's residual (all tier A states together 0.006% of residual variance held out, 0.107% pooled over squares; the largest single state 0.032%), so the queens-on misjudgment is not missing pawn-structure knowledge; consistent with idea 180's finding that the score-to-result scale varies mainly by phase bucket. Report docs/research/idea175-screens.md; prototype on local branch proto/i175-state-rows (unpushed). **status:** killed.
 ### 176. Split-clone columns by queen state (proposal idea 2)
 - **idea:** E of the 512 hidden columns kept in two copies (queens on / queens off), the rest shared; a position
   still evaluates 512 columns; warm start by a function-preserving column permutation with equal copies.
 - **plan (owner):** only its per-column utilisation count by output bucket (CPU) now, folded into idea 175's data
   pass; no build. **status:** candidate (plan).
 
+- **2026-11-14 (owner): parked**: r8brft1 already specialises 74 hidden columns to queens-on positions (used 4x or more with queens on; 162 at 2x; 5 the other way at 4x; no dead column), the proposal's stated risk. **status:** parked.
 ### 177. Banded first layer (proposal idea 3)
 - **idea:** each piece family writes to a band of hidden-layer sectors (structured sparsity), cutting update work.
 - **status:** **parked** (owner, 2026-11-14).
