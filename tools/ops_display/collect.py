@@ -57,8 +57,8 @@ class Collector:
         self.git_log = git_log              # callable(repo, branch) -> text of `git log`, or None (no adoptions)
         self.cache = fsread.Cache(clock)
         self.last, self.state, self.errors = {}, {}, {}
-        self.net = {'runs': {}, 'kaggle': {}}          # filled by net.Poller; read here
-        self.wanted = {'runs': [], 'kaggle': []}       # what the poller should look at
+        self.net = {'runs': {}, 'kaggle': {'sessions': []}}            # filled by net.Poller; read here
+        self.wanted = {'runs': [], 'kaggle': {'watch': False, 'named': []}}   # what the poller should look at
         self._jobcache = {}
         self._cpu_prev = None
         self.hist = {'cpu': deque(maxlen=120), 'avail': deque(maxlen=120), 'commit': deque(maxlen=120)}
@@ -598,26 +598,25 @@ class Collector:
                 dec = self._json(j(self.p.state, n), R.ld_decision)
                 if dec:
                     others.append({'state': 'nominal', 'name': n[:-len('-decision.json')] + ' decision', 'text': dec['verdict'], 'at': mt})
-        known = set()                                      # the kernels that were really pushed from this machine
-        for n, d, _, _ in fsread.listdir(j(self.p.data, 'kaggle')):
-            if d:
-                kid = self._json(j(self.p.data, 'kaggle', n, 'kernel-metadata.json'), R.kernel_id)
-                if kid:
-                    known.add(kid)
-        prep, refs = [], []
+        # A Kaggle session may be running when a running job is a Kaggle job or its log names a kernel. That
+        # only switches the poll on; which kernels are asked about comes from Kaggle's own list (net.py).
+        prep, named, watch = [], [], False
         for r in (self.state.get('jobs') or {}).get('running', []):
             kind = (r['type'] or '') + ' ' + r['name']
-            if re.search(r'kaggle|train|chain|upload|copies|smoke|fetch', kind) and not (r.get('lock') or '').startswith('github'):
-                if (r['type'] or '').startswith('github'):
-                    continue
+            if (r.get('lock') or '').startswith('github') or (r['type'] or '').startswith('github'):
+                continue
+            refs = R.kernel_refs(self._tail(j(self.p.jobs, 'jobs', r['name'] + '.log'), 6000))
+            if refs or re.search(r'kaggle|train|chain|upload|copies|smoke|fetch', kind):
                 prep.append({'name': r['name'], 'type': r['type'], 'started': r['started'], 'live': r['live']})
-                if 'kaggle' in kind:
-                    named = [x for x in R.kernel_refs(self._tail(j(self.p.jobs, 'jobs', r['name'] + '.log'), 6000)) if x in known]
-                    refs += named[-1:]
-        self.wanted['kaggle'] = list(dict.fromkeys(refs))
-        sessions = [{'ref': ref.split('/', 1)[-1], **self.net['kaggle'][ref]} for ref in self.wanted['kaggle'] if ref in self.net['kaggle']]
+            if refs or 'kaggle' in kind:
+                watch = True
+                named += refs
+        self.wanted['kaggle'] = {'watch': watch, 'named': list(dict.fromkeys(named))}
+        k = self.net.get('kaggle') or {}
+        sessions = [{'ref': s['ref'].split('/', 1)[-1], 'state': s['state'], 'last_run': s['last_run'], 'at': s['at'], 'error': s['error']}
+                    for s in k.get('sessions') or []]
         return {'default': default, 'retrains': retrains[:6], 'quota': quota, 'others': others, 'prep': prep,
-                'sessions': sessions, 'watching': len(self.wanted['kaggle'])}
+                'sessions': sessions, 'watching': watch, 'kaggle_error': k.get('error')}
 
     def _retrain(self, top, stem, sdir, nets, idx, default, now):
         j = os.path.join

@@ -391,7 +391,8 @@ function renderTraining() {
     h("div", { class: "bar" }, h("i", { style: `width:${(q.used / q.total) * 100}%` }))));
   const rest = [];
   for (const p of T.prep || []) rest.push(light(p.live === false ? "attention" : "active"), h("span", { title: `job ${p.name}, type ${p.type}` }, `Job ${p.name}`, h("span", { class: "dim" }, ` · running since ${when(p.started)}`)));
-  for (const s of T.sessions || []) rest.push(light(s.state === "RUNNING" ? "active" : s.state ? "nominal" : "attention"), h("span", {}, `Kaggle session ${s.ref}`, h("span", { class: "dim" }, ` · ${s.state ? s.state.toLowerCase() : "state not read: " + s.error}, checked ${when(s.at)}`)));
+  for (const s of T.sessions || []) rest.push(light(s.state === "RUNNING" ? "active" : s.state ? "nominal" : "attention"), h("span", {}, `Kaggle session ${s.ref}`, h("span", { class: "dim" }, ` · ${s.state ? s.state.toLowerCase().replace(/_/g, " ") : "state not read: " + s.error}` + (s.last_run ? `, started ${when(s.last_run)}` : "") + `, checked ${when(s.at)}`)));
+  if (T.kaggle_error) rest.push(light("attention"), h("span", {}, "Kaggle could not be asked", h("span", { class: "dim" }, ` · ${T.kaggle_error}`)));
   for (const x of (T.retrains || []).slice(1)) rest.push(light("nominal"), h("span", {}, `Retrain ${x.title}`, h("span", { class: "dim" }, ` · ${x.nets} nets, last change ${when(x.updated)}` + (x.arms.some((a) => a.promoted) ? ", holds the default net" : ""))));
   for (const x of T.others || []) rest.push(light(x.state), h("span", {}, x.name, h("span", { class: "dim" }, ` · ${x.text}, ${when(x.at)}`)));
   if (rest.length) out.push(sect("Sessions, jobs and earlier retrains"), h("div", { class: "list" }, rest));

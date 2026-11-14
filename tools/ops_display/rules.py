@@ -208,6 +208,10 @@ def alerts(snap, cfg=None):
             add('attention', f"heldout:{r['id']}", f"Retrain {r['title']}: {len(flagged)} arm(s) flagged on a held-out endgame check",
                 'Over 15% more misjudged positions than the default net; reported, not a gate. Arms: ' + ', '.join(flagged) + '.',
                 r['gates_at'], 'gates.json')
+    for s in tr.get('sessions') or []:
+        if s['state'] and s['state'] not in ('RUNNING', 'QUEUED', 'COMPLETE') and s['last_run'] and now - s['last_run'] < 12 * 3600:
+            add('attention', f"kaggle:{s['ref']}:{int(s['last_run'])}", f"A Kaggle session did not complete: {s['ref']}",
+                f"Its state is {s['state'].lower().replace('_', ' ')}; it started {est(s['last_run'], now)}.", s['at'], 'Kaggle')
     q = tr.get('quota')
     if q:
         if q['left'] < cfg['quota_hours']:
@@ -265,13 +269,14 @@ def situation(snap):
     live = [s for s in sessions if s.get('state') in ('RUNNING', 'QUEUED')]
     q = tr.get('quota')
     nodes.append({'id': 'kaggle', 'col': 3, 'name': 'Kaggle training', 'state': 'active' if live else 'idle',
-                  'word': f"{len(live)} session(s) running" if live else ('job running' if tr.get('watching') else 'no session'),
+                  'word': f"{len(live)} session{'s' if len(live) != 1 else ''} running" if live else ('no session running' if tr.get('watching') else 'no session'),
                   'big': f"{q['left']:.1f} h left" if q else 'quota unknown',
-                  'small': (f"GPU quota of {q['total']:.0f} h, as of {est(q['at'], now)}" if q else 'no session log found')
+                  'small': (f"GPU quota of {q['total']:.0f} h, as of {est(q['at'], now)}" + (', before the sessions now running' if live else '')
+                            if q else 'no session log found')
                   + (f". In preparation: {', '.join(p['name'] for p in tr['prep'][:2])}" if tr.get('prep') else ''),
                   'focus': 3, 'until': None})
     edges.append(['data', 'kaggle', 'active' if live else 'idle'])
-    said.append('a Kaggle session is running' if live else 'Kaggle is idle')
+    said.append((f'{len(live)} Kaggle sessions are running' if len(live) > 1 else 'a Kaggle session is running') if live else 'Kaggle is idle')
     queue = snap.get('queue') or []
     kinds = {}
     for it in queue:

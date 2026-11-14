@@ -669,15 +669,27 @@ def kaggle_status(text):
 def kernel_refs(text):
     """Kaggle kernel references ('owner/fork-...') named in a text, in order of first appearance. A piece of
     a file path ('C:/Users/name/fork-data/x') is not a reference: the match must stand alone, with no path
-    character before or after it. The collector further polls only references it also finds as the id of a
-    kernel-metadata.json (the first version of this reader took a path for a kernel, 2026-11-14)."""
+    character before or after it. These names are only a hint that a session may be running: what the display
+    asks Kaggle about is taken from Kaggle's own list (kaggle_list), never from log text (the first version of
+    this reader took a path for a kernel and sent it, 2026-11-14)."""
     return list(dict.fromkeys(re.findall(r'(?<![\w/\\:.~-])([A-Za-z0-9_-]+/fork-[A-Za-z0-9_-]+)(?![\w/\\.-])', text or '')))
 
 
-def kernel_id(d):
-    """The kernel a kernel-metadata.json was pushed as ('owner/name'), or None."""
-    v = d.get('id') if isinstance(d, dict) else None
-    return v if isinstance(v, str) and re.match(r'^[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$', v) else None
+def kaggle_list(text):
+    """`kaggle kernels list --mine --sort-by dateRun --csv` -> [{ref, title, last_run}], newest run first.
+    last_run is the kernel's lastRunTime (UTC) as epoch seconds, or None."""
+    lines = [l for l in (text or '').splitlines() if l.strip()]
+    if not lines or not lines[0].startswith('ref'):
+        return []
+    import csv
+    out = []
+    for row in csv.DictReader(lines):
+        ref = (row.get('ref') or '').strip()
+        if not re.match(r'^[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$', ref):
+            continue
+        m = re.match(r'^(\d{4}-\d\d-\d\d) (\d\d:\d\d:\d\d)', (row.get('lastRunTime') or '').strip())
+        out.append({'ref': ref, 'title': (row.get('title') or '')[:80], 'last_run': iso(f'{m.group(1)}T{m.group(2)}+00:00') if m else None})
+    return out
 
 
 def uho_run(d):

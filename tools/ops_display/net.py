@@ -4,7 +4,9 @@
   GitHub, every 2 minutes, only for the runs a lane is waiting on: the run's jobs (how many shards have
   finished), and, when the run carries per-shard progress artifacts, their pentanomial counts, from which
   the collector shows a combined result labelled "preliminary";
-  Kaggle, every 5 minutes, only while a session job is running: the session's state.
+  Kaggle, every 5 minutes, only while a session may be running (a running job is a Kaggle job or its log
+  names a kernel): the account's recent kernels from Kaggle's own list, then the state of those run in the
+  last 12 hours. A kernel seen finished is not asked about again until it runs again.
 
 Both go through procs.run (read-only commands only). Results are kept in memory; nothing is written.
 
@@ -124,6 +126,7 @@ class Poller:
         self.shard_every = 240     # seconds between two downloads for one shard
         self._last = {'gh': -1e9, 'kaggle': -1e9}
         self._held = {}            # run id -> {(stage, shard): record}
+        self._ended = {}           # (kernel, its last run time) -> the state it ended in
         self.thread = None
 
     def poll_github(self, now):
@@ -163,15 +166,37 @@ class Poller:
             self._seen.clear()
 
     def poll_kaggle(self, now):
-        out = {}
-        for ref in list(self.c.wanted.get('kaggle') or [])[:3]:
-            rc, text, err = self.execute([self.kaggle, 'kernels', 'status', ref], timeout=60)
-            state = R.kaggle_status(text) if rc == 0 else None
-            out[ref] = {'state': state, 'at': now, 'error': None if state else fsread.scrub(err or 'no state in the answer')[:120]}
-            self.status['kaggle'] = 'ok' if state else f'failed: {out[ref]["error"]}'
-        if not self.c.wanted.get('kaggle'):
-            self.status['kaggle'] = 'idle: no session job is running'
-        self.c.net['kaggle'] = out
+        w = self.c.wanted.get('kaggle') or {}
+        if not w.get('watch'):
+            self.status['kaggle'] = 'idle: no Kaggle job is running'
+            self.c.net['kaggle'] = {'sessions': [], 'at': now, 'error': None}
+            return
+        rc, text, err = self.execute([self.kaggle] + procs.KAGGLE_LIST, timeout=60)
+        rows = R.kaggle_list(text) if rc == 0 else []
+        if not rows:
+            self.status['kaggle'] = 'failed: ' + (fsread.scrub(err)[:120] if err else 'the kernel list could not be read')
+            self.c.net['kaggle'] = dict(self.c.net.get('kaggle') or {'sessions': []}, error=self.status['kaggle'], at=now)
+            return
+        named = set(w.get('named') or [])
+        recent = [r for r in rows if r['ref'] in named or (r['last_run'] and now - r['last_run'] < 12 * 3600)][:4]
+        sessions = []
+        for r in recent:
+            key = (r['ref'], r['last_run'])
+            state = self._ended.get(key)
+            error = None
+            if state is None:
+                rc, text, err = self.execute([self.kaggle, 'kernels', 'status', r['ref']], timeout=60)
+                state = R.kaggle_status(text) if rc == 0 else None
+                if state is None:
+                    error = fsread.scrub(err or 'no state in the answer')[:120]
+                elif state not in ('RUNNING', 'QUEUED'):
+                    self._ended[key] = state                   # finished: not asked again until it runs again
+            sessions.append({'ref': r['ref'], 'state': state, 'last_run': r['last_run'], 'at': now, 'error': error})
+        if len(self._ended) > 200:
+            self._ended.clear()
+        live = sum(1 for s in sessions if s['state'] in ('RUNNING', 'QUEUED'))
+        self.status['kaggle'] = f'ok, {live} running of {len(sessions)} recent'
+        self.c.net['kaggle'] = {'sessions': sessions, 'at': now, 'error': None}
 
     def step(self):
         now = self.clock()

@@ -644,19 +644,40 @@ class ReadOnly(WithWorld):
 
 
 class KaggleWatch(WithWorld):
-    def test_only_a_kernel_that_was_really_pushed_is_ever_polled(self):
+    def test_a_session_is_looked_for_whenever_a_running_job_points_at_kaggle(self):
         w = self.w
-        w.job('r8c-gpu-queue', 'kagglequeue')
-        log = os.path.join(w.paths.jobs, 'jobs', 'r8c-gpu-queue.log')
-        w.put(log, 'reading C:/Users/someone/fork-data/8c/gpu-queue.txt\nwaiting for someone/fork-data and owner/fork-unknown\n')
         c = w.collector()
         w.snap(c)
-        self.assertEqual(c.wanted['kaggle'], [])                        # a path piece and an unknown name: nothing is polled
-        w.put(os.path.join(w.paths.data, 'kaggle', 'k-a2', 'kernel-metadata.json'), json.dumps({'id': 'owner/fork-retrain-8c-a2', 'enable_gpu': True}))
-        w.put(log, 'pushed owner/fork-retrain-8c-a2; polling every 300 s\n')
+        self.assertEqual(c.wanted['kaggle'], {'watch': False, 'named': []})        # no Kaggle job: Kaggle is not asked
+        w.job('r3-chain', 'r3chain')                                                # a chain with no "kaggle" in its name or type,
+        w.put(os.path.join(w.paths.jobs, 'jobs', 'r3-chain.log'),                   # polling two kernels that were pushed by hand
+              'reading C:/Users/someone/fork-data/8c/gpu-queue.txt\npolling owner/fork-bakeoff-r3 and owner/fork-bakeoff-r3-xl every 300 s\n')
+        w.clock[0] += 31
+        s = w.snap(c)
+        self.assertEqual(c.wanted['kaggle'], {'watch': True, 'named': ['owner/fork-bakeoff-r3', 'owner/fork-bakeoff-r3-xl']})
+        self.assertIn('r3-chain', [p['name'] for p in s['training']['prep']])
+        os.remove(os.path.join(w.paths.jobs, 'jobs', 'r3-chain.json'))
+        w.job('r8c-gpu-queue', 'kagglequeue')                                       # a Kaggle job that names no kernel yet
         w.clock[0] += 31
         w.snap(c)
-        self.assertEqual(c.wanted['kaggle'], ['owner/fork-retrain-8c-a2'])
+        self.assertEqual(c.wanted['kaggle'], {'watch': True, 'named': []})
+
+    def test_sessions_reported_by_kaggle_reach_the_page_and_the_situation(self):
+        w = self.w
+        w.job('r3-chain', 'r3chain')
+        w.put(os.path.join(w.paths.jobs, 'jobs', 'r3-chain.log'), 'polling owner/fork-bakeoff-r3\n')
+        c = w.collector()
+        w.snap(c)
+        c.net['kaggle'] = {'sessions': [{'ref': 'owner/fork-bakeoff-r3', 'state': 'RUNNING', 'last_run': NOW - 3600, 'at': NOW, 'error': None},
+                                        {'ref': 'owner/fork-bakeoff-r3-xl', 'state': 'ERROR', 'last_run': NOW - 3600, 'at': NOW, 'error': None}],
+                           'at': NOW, 'error': None}
+        w.clock[0] += 31
+        s = w.snap(c)
+        self.assertEqual([(x['ref'], x['state']) for x in s['training']['sessions']], [('fork-bakeoff-r3', 'RUNNING'), ('fork-bakeoff-r3-xl', 'ERROR')])
+        node = next(n for n in s['situation']['nodes'] if n['id'] == 'kaggle')
+        self.assertEqual((node['state'], node['word']), ('active', '1 session running'))
+        self.assertIn(['data', 'kaggle', 'active'], s['situation']['edges'])
+        self.assertTrue(any(a['id'].startswith('kaggle:fork-bakeoff-r3-xl') and a['tier'] == 'attention' for a in s['alerts']))
 
 
 class Privacy(WithWorld):
@@ -698,12 +719,15 @@ class Commands(unittest.TestCase):
               ['C:/x/gh.exe', 'api', 'repos/OWNER/fork/actions/runs/43620446592/jobs?per_page=100'],
               ['gh', 'api', 'repos/OWNER/fork/actions/runs/43620446592/artifacts?per_page=100'],
               ['gh', 'api', 'repos/OWNER/fork/actions/artifacts/123/zip'],
-              ['C:/repo/.venv/Scripts/kaggle.exe', 'kernels', 'status', 'owner/fork-retrain-8c-a1']]
+              ['C:/repo/.venv/Scripts/kaggle.exe', 'kernels', 'status', 'owner/fork-retrain-8c-a1'],
+              ['kaggle', 'kernels', 'list', '--mine', '--sort-by', 'dateRun', '--page-size', '10', '--csv']]
         bad = [['git', '-C', 'C:/repo', 'push'], ['git', '-C', 'C:/repo', 'log', '--output=x'], ['git', 'log'], ['git', '-C', 'r', 'reset', '--hard'],
                ['gh', 'api', '-X', 'POST', 'repos/OWNER/fork/actions/runs/1/cancel'], ['gh', 'api', 'repos/OWNER/fork/actions/runs/1/cancel'],
                ['gh', 'api', 'repos/OWNER/fork/actions/runs/1/rerun'], ['gh', 'run', 'cancel', '1'], ['gh', 'workflow', 'run', 'sprt.yml'],
                ['gh', 'api', 'repos/OWNER/fork/actions/runs/1/jobs', '--method', 'DELETE'], ['gh', 'api', 'repos/OWNER/fork/dispatches'],
                ['kaggle', 'kernels', 'push', '-p', 'x'], ['kaggle', 'kernels', 'status', 'owner/k', '--extra'], ['kaggle', 'datasets', 'list'],
+               ['kaggle', 'kernels', 'list', '--mine'], ['kaggle', 'kernels', 'list', '--mine', '--sort-by', 'dateRun', '--page-size', '10', '--csv', '-p', 'x'],
+               ['kaggle', 'kernels', 'status', 'someone/fork-data/8c'], ['kaggle', 'kernels', 'output', 'owner/k'], ['kaggle', 'kernels', 'delete', 'owner/k'],
                ['wsl.exe', '-e', 'true'], ['powershell.exe', '-Command', 'x'], ['bash', 'x.sh'], ['python', 'jobctl.py', 'stop', 'x'], [], 'gh api x',
                ['gcloud', 'compute', 'instances', 'list']]
         for a in ok:
@@ -782,21 +806,29 @@ class Network(unittest.TestCase):
         def execute(argv, timeout=30, binary=False):
             self.assertTrue(procs.allowed(argv), argv)
             calls.append(argv[-1])
-            if argv[1] == 'kernels':
-                return 0, 'owner/fork-retrain has status "KernelWorkerStatus.RUNNING"', ''
+            if argv[1:3] == ['kernels', 'list']:
+                return 0, ('ref,title,author,lastRunTime,totalVotes\n\nowner/fork-retrain,fork-retrain,OWNER,2026-11-14 17:35:00.000000,0\n\n'
+                           'owner/fork-done,fork-done,OWNER,2026-11-14 12:00:00.000000,0\n\nowner/fork-old,fork-old,OWNER,2026-11-01 12:00:00.000000,0\n'), ''
+            if argv[1:3] == ['kernels', 'status']:
+                kstatus.append(argv[3])
+                return 0, f'{argv[3]} has status "KernelWorkerStatus.{"RUNNING" if argv[3].endswith("retrain") else "COMPLETE"}"', ''
             if argv[-1].endswith('/jobs?per_page=100'):
                 return 0, json.dumps({'jobs': [{'name': 'shard (0)', 'status': 'in_progress'}]}), ''
             if argv[-1].endswith('/artifacts?per_page=100'):
                 return 0, json.dumps({'artifacts': [{'id': 7, 'name': 'progress-5-0', 'updated_at': 'b'}, {'id': 8, 'name': 'progress-5-1', 'updated_at': 'b'}]}), ''
             return 0, _zip(rec) if argv[-1].endswith('/7/zip') else b'broken', ''
-        c = type('C', (), {'wanted': {'runs': [777], 'kaggle': ['owner/fork-retrain']}, 'net': {'runs': {}, 'kaggle': {}}})()
-        t = [1000.0]
+        kstatus = []
+        c = type('C', (), {'wanted': {'runs': [777], 'kaggle': {'watch': True, 'named': ['someone/fork-data', 'owner/fork-done']}},
+                           'net': {'runs': {}, 'kaggle': {}}})()
+        t = [R.iso('2026-11-14T18:35:00+00:00')]
         p = net.Poller(c, 'repo', 'OWNER/fork', execute=execute, clock=lambda: t[0], gh='gh', kaggle='kaggle')
         p.step()
         self.assertEqual(c.net['runs'][777]['shards'], {'total': 1, 'done': 0, 'running': 1, 'queued': 0, 'failed': 0})
         self.assertEqual(c.net['runs'][777]['progress']['games'], 90)          # the broken artifact is skipped, the good one used
         self.assertIn('unreadable', c.net['runs'][777]['error'])
-        self.assertEqual(c.net['kaggle']['owner/fork-retrain']['state'], 'RUNNING')
+        self.assertEqual([(s['ref'], s['state']) for s in c.net['kaggle']['sessions']],
+                         [('owner/fork-retrain', 'RUNNING'), ('owner/fork-done', 'COMPLETE')])   # from Kaggle's list; the old kernel is left out
+        self.assertEqual(sorted(kstatus), ['owner/fork-done', 'owner/fork-retrain'])   # a name that only a log held was never sent
         n = len(calls)
         p.step()                                                                # nothing is due yet
         self.assertEqual(len(calls), n)
@@ -804,12 +836,17 @@ class Network(unittest.TestCase):
         p.step()
         self.assertEqual(sum(1 for x in calls if x.endswith('/zip')), 2)        # an artifact is downloaded once
         self.assertEqual(c.net['runs'][777]['progress']['games'], 90)           # and its record is kept between polls
-        c.wanted = {'runs': [], 'kaggle': []}
         t[0] += 400
         p.step()
-        self.assertEqual((p.status['gh'], p.status['kaggle']), ('idle: no live run', 'idle: no session job is running'))
+        self.assertEqual(kstatus.count('owner/fork-done'), 1)                   # a finished session is not asked about again
+        self.assertEqual(kstatus.count('owner/fork-retrain'), 2)                # the running one is asked at each 5-minute poll
+        c.wanted = {'runs': [], 'kaggle': {'watch': False, 'named': []}}
+        t[0] += 400
+        p.step()
+        self.assertEqual((p.status['gh'], p.status['kaggle']), ('idle: no live run', 'idle: no Kaggle job is running'))
+        self.assertEqual(c.net['kaggle']['sessions'], [])
         p.execute = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('boom'))
-        c.wanted = {'runs': [1], 'kaggle': ['a/fork-b']}
+        c.wanted = {'runs': [1], 'kaggle': {'watch': True, 'named': []}}
         t[0] += 400
         p.step()                                                                # a failing tool never ends the poller
         self.assertTrue(p.status['gh'].startswith('failed'))

@@ -103,7 +103,7 @@ serve.py    127.0.0.1, GET only: the page and /snapshot            web/      ind
 | Adoptions | `git log` subjects "adopted on its/their ... pass" (one read-only `git log` when the branch head moves), `tools/gauntlet/transfer.json` | |
 | Stacking checks, speed | `sprt/stack-check-*`, the item logs' claimed sum; `perf-log.md` rows | no speed series exists |
 | Retrains | every `~/fork-data/<x>/*gate*/<net>/gates.json`; beside it `bakes.txt`, `fetch*.log` (session end, quota); `uho-diag/runs/<net>.json`; the tests named after a net | arms are the nets' names without the seed digit |
-| Kaggle session | `kaggle kernels status` every 5 minutes, only for a kernel named in a running Kaggle job's log AND found as the `id` of a `kernel-metadata.json` under `~/fork-data/kaggle` | |
+| Kaggle session | every 5 minutes, only while a running job is a Kaggle job or its log names a kernel: `kaggle kernels list --mine` (the account's recent kernels, from Kaggle itself), then `kaggle kernels status` for those run in the last 12 hours; a kernel seen finished is not asked about again | a session with no local job at all is not seen |
 | PC generation | the old app's `watchdog.json`, `parts/<part>/part.json`, `seal-result.json`; the part's log through the WSL share, gated | never between 1:20 and 2:30 AM EST |
 | Totals, labellers | `data/manifests/*.json` and `~/fork-data/*/filler/parts/*.json`; cuts and snapshots are not counted | |
 | Cloud VM | `~/fork-jobs/gcp/status.json` (the address in it is never read out), `wanted.json`, `egress.jsonl`, three rates of `gcp.json` | positions are an estimate from the last complete run |
@@ -135,8 +135,9 @@ Thresholds are data (`rules.py` DEFAULTS, overridden by `rules.json`).
   rules and the server's refresh under an audit hook that fails on any write or process start, and compares
   the folder trees before and after.
 - **Processes.** `procs.py` is the one place a process starts, and only for: `git -C REPO log ...`,
-  `gh api repos/.../actions/runs/N/jobs|artifacts` and `.../artifacts/N/zip` (GET), `kaggle kernels status
-  OWNER/KERNEL`. Anything else raises before a process exists; a test tries 21 refused commands. With
+  `gh api repos/.../actions/runs/N/jobs|artifacts` and `.../artifacts/N/zip` (GET), `kaggle kernels list
+  --mine ...` (fixed arguments) and `kaggle kernels status OWNER/KERNEL`. Anything else raises before a
+  process exists; a test tries 26 refused commands. With
   `--open` the browser is opened once.
 - **File sharing, as measured.** A file is opened with read, write and delete sharing, so production can
   append to it, delete it or rename it away while the display reads. Windows still refuses to *replace* a
@@ -155,7 +156,9 @@ Thresholds are data (`rules.py` DEFAULTS, overridden by `rules.json`).
 - **One mistake made and fixed while building (2026-11-14):** the first Kaggle reader took a piece of a file
   path in a job log for a kernel name, so the display asked Kaggle for the status of a kernel that does not
   exist, twice; the name it sent was the Windows account name followed by `/fork-data`. Kaggle refused both.
-  Since then a name is polled only if it is also the id of a kernel that was pushed from this machine.
+  Since then no name sent to Kaggle comes from log text: the display asks only about kernels that Kaggle's
+  own list of the account returns. (A first fix, a kernel-metadata check, missed two sessions pushed by hand
+  and polled by a chain with no "kaggle" in its name; the production session reported it the same day.)
 
 ## 8. For the production session
 

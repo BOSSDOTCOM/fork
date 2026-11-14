@@ -3,6 +3,7 @@
 
   git -C REPO log ...                      (adoption commits; GIT_OPTIONAL_LOCKS=0, so git takes no lock)
   gh api repos/OWNER/NAME/actions/...      (GET only: a run's jobs, its artifact list, one artifact's zip)
+  kaggle kernels list --mine --sort-by dateRun --page-size 10 --csv   (the account's recent kernels)
   kaggle kernels status OWNER/KERNEL       (a session's state)
 
 Anything else raises PermissionError before a process exists. No shell, no stdin, a timeout on every call,
@@ -18,6 +19,7 @@ import fsread
 CREATE_NO_WINDOW = 0x08000000
 _GH_PATH = re.compile(r'^repos/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/actions/(runs/\d+/(jobs|artifacts)(\?per_page=\d+)?|artifacts/\d+/zip)$')
 _KERNEL = re.compile(r'^[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$')
+KAGGLE_LIST = ['kernels', 'list', '--mine', '--sort-by', 'dateRun', '--page-size', '10', '--csv']
 _WRITE_FLAGS = ('-X', '--method', '-f', '-F', '--field', '--raw-field', '--input', '--output', '-o', '--exec', '--upload-pack')
 
 
@@ -36,6 +38,8 @@ def allowed(argv):
     if prog == 'gh':
         return len(args) == 2 and args[0] == 'api' and bool(_GH_PATH.match(args[1]))
     if prog == 'kaggle':
+        if args == KAGGLE_LIST:
+            return True
         return len(args) == 3 and args[:2] == ['kernels', 'status'] and bool(_KERNEL.match(args[2]))
     return False
 

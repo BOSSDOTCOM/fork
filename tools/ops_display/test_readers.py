@@ -381,9 +381,13 @@ class Training(unittest.TestCase):
                      '~/fork-data/kaggle', '/home/someone/fork-data', 'someone/fork-data/8c', 'see someone/fork-data.'):
             self.assertEqual(R.kernel_refs(path), [], path)             # a piece of a path is never a kernel
         self.assertEqual(R.kernel_refs('status of "owner/fork-retrain-8c-a1": RUNNING'), ['owner/fork-retrain-8c-a1'])
-        self.assertEqual(R.kernel_id({'id': 'owner/fork-retrain-8c-a1', 'enable_gpu': True}), 'owner/fork-retrain-8c-a1')
-        for bad in ({}, {'id': 5}, {'id': 'no-slash'}, {'id': 'a/b/c'}, None, []):
-            self.assertIsNone(R.kernel_id(bad))
+        k = R.kaggle_list(fixture('kaggle-list.csv'))                   # the CLI's own output, blank lines and all
+        self.assertEqual([x['ref'] for x in k], ['owner/fork-s512pp', 'owner/fork-retrain3', 'owner/fork-round2c', 'owner/fork-round2b'])
+        self.assertEqual(k[0]['last_run'], R.iso('2026-11-06T16:32:21+00:00'))
+        self.assertEqual(R.kaggle_list('ref,title,author,lastRunTime,totalVotes\nC:/Users/someone/fork-data,x,y,z,0\nowner/ok,t,a,not a time,0\n'),
+                         [{'ref': 'owner/ok', 'title': 't', 'last_run': None}])
+        for bad in ('', None, '403 Forbidden', 'No kernels found', '\x00\xff'):
+            self.assertEqual(R.kaggle_list(bad), [])
 
     def test_session_record_and_arms(self):
         r = R.retrain_json(fjson('retrain.json'))
@@ -535,7 +539,7 @@ class Robustness(unittest.TestCase):
 
     TEXT = [R.driver_log, R.queue_log, R.item_log, R.item_comment, R.survey_codes, R.ideas_md, R.default_net, R.nets_md,
             R.ordo, R.gauntlet_meta, R.gauntlet_summary, R.adoptions, R.stack_sum, R.perf_log, R.decisions, R.gates_txt,
-            R.bakes_txt, R.results_txt, R.fetch_log, R.kaggle_status, R.kernel_refs, R.datagen_log, R.filler_ok,
+            R.bakes_txt, R.results_txt, R.fetch_log, R.kaggle_status, R.kernel_refs, R.kaggle_list, R.datagen_log, R.filler_ok,
             R.arms_log, R.freezewatch, R.wslcache, R.memwatch, R.chain_items_folder, R.anchor_check, R.lane_marker,
             lambda t: R.events(t), lambda t: R.ledger(t), lambda t: R.tries(t), lambda t: R.egress(t),
             lambda t: R.compile_waits(t, '2026-11-13')]
