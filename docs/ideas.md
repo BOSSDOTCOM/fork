@@ -680,6 +680,8 @@ tuned by SPSA.
   (ORIGINALITY.md); an evolved correction is one route to a form of Fork's
   own.
 
+- **2026-11-14 (owner): the revamp** (docs/research/idea23-revamp-2026-11-14.md) is recorded and placed as a **final pre-TCEC polish step**, after Lazy SMP, the removal round, the final retune and the TCEC fixes; traces from the final engine under TCEC-like conditions (many threads, long TC; ideally during the rented-hardware dry run); no engineering until then. Decisions: target order time management, then row-choice states, then the calibration layer only if idea 180 gains; simulator coefficient fitting approved for the time-management target only (candidates; games decide); the 12-arm one-stage screen batch with three predicted-loser arms approved; E2's clamp fix included in the simulator once its LTC decides; the stage-0 simulator validation reported before tokens or GitHub time are spent.
+
 ## 24. TT victim policy under real table pressure
 
 - **type:** ELO (switch `tt_age_blend`, UCI `UseTtAgeBlend` in tuning builds)
