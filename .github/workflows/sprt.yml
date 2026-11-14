@@ -13,6 +13,10 @@
 # (tools/cloud/fetch_tables.sh), and the cache keeps them for the next run;
 # each shard restores the same cache and verifies it again.
 # Inputs reach the shell only through environment variables.
+# Each shard also uploads its running counts for display only (owner, 2026-11-14), as the artifact
+# progress-STAGE-SHARD, replaced as games finish and final when the shard ends (tools/cloud/shard_progress.py,
+# docs/research/shard-progress.md); the merge (shard-* artifacts) and the driver (result.json files) never
+# read it, and tools/cloud/test_shard_progress.sh checks the results are byte for byte the same without it.
 name: sprt
 # The run's title names its inputs, so a driver finds the run it dispatched by them, never as "the newest
 # sprt run" (tools/github/sprt_run.sh; owner, 2026-11-05: two drivers once read each other's runs). The SPRT's
@@ -144,6 +148,35 @@ jobs:
       - name: Syzygy 3-4-5 (verified; downloaded only if the cache missed)
         if: inputs.tables == 'on'
         run: bash tools/cloud/fetch_tables.sh syzygy-345
+      # Progress for display only (owner, 2026-11-14; docs/research/shard-progress.md): a background watcher
+      # reads out/fastchess.log while the games run and uploads its counts as the artifact progress-STAGE-SHARD
+      # (replaced each time) every PROGRESS_EVERY_GAMES finished games, or every PROGRESS_EVERY_SECONDS when a
+      # game finished since the last upload (tools/cloud/shard_progress.py). It writes only under
+      # $RUNNER_TEMP/shard-progress, never in out/; the Games step, the shard-* artifact and the merge are as
+      # before, and nothing reads progress-* but the display. Its steps never fail the shard.
+      - name: Progress uploads in the background (display only)
+        continue-on-error: true
+        uses: ./.github/actions/start-detached
+        env:
+          PROGRESS_NAME: progress-${{ inputs.stage }}-${{ matrix.shard }}
+          PROGRESS_EVERY_GAMES: "100"
+          PROGRESS_EVERY_SECONDS: "300"
+          SPRT_NAME: ${{ inputs.name }}
+          STAGE: ${{ inputs.stage }}
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ strategy.job-total }}
+          GAMES: ${{ needs.build.outputs.per_shard }}
+          BASE_SHA: ${{ needs.build.outputs.base_sha }}
+          TEST_SHA: ${{ needs.build.outputs.test_sha }}
+        with:
+          log: ${{ runner.temp }}/shard-progress.log
+          command: >-
+            python3 tools/cloud/shard_progress.py watch --log out/fastchess.log --dir "$RUNNER_TEMP/shard-progress"
+            --name "$PROGRESS_NAME" --upload "bash tools/cloud/progress_upload.sh"
+            --every-games "$PROGRESS_EVERY_GAMES" --every-seconds "$PROGRESS_EVERY_SECONDS"
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" --sprt-name "$SPRT_NAME"
+            --stage "$STAGE" --shard "$SHARD" --shards "$SHARDS" --games-planned "$GAMES"
+            --base "$BASE_SHA" --test "$TEST_SHA"
       - name: Games
         env:
           SHARD: ${{ matrix.shard }}
@@ -168,6 +201,34 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with: {name: "shard-${{ inputs.stage }}-${{ matrix.shard }}", path: out, retention-days: 30}
+      # The watcher stopped (after any upload in flight) and the final record, with the shard's status from
+      # out/result.json (read only), uploaded under the same name. Display only, never fails the shard.
+      - name: Progress, final record (display only)
+        if: always()
+        continue-on-error: true
+        env:
+          SPRT_NAME: ${{ inputs.name }}
+          STAGE: ${{ inputs.stage }}
+          SHARD: ${{ matrix.shard }}
+          SHARDS: ${{ strategy.job-total }}
+          GAMES: ${{ needs.build.outputs.per_shard }}
+          BASE_SHA: ${{ needs.build.outputs.base_sha }}
+          TEST_SHA: ${{ needs.build.outputs.test_sha }}
+        run: |
+          python3 tools/cloud/shard_progress.py finish --log out/fastchess.log --dir "$RUNNER_TEMP/shard-progress" \
+            --result out/result.json --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --sprt-name "$SPRT_NAME" --stage "$STAGE" --shard "$SHARD" --shards "$SHARDS" --games-planned "$GAMES" \
+            --base "$BASE_SHA" --test "$TEST_SHA"
+          cat "$RUNNER_TEMP/shard-progress.log" 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        continue-on-error: true
+        with:
+          name: progress-${{ inputs.stage }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/shard-progress/progress.json
+          overwrite: true
+          retention-days: 3
+          if-no-files-found: ignore
 
   merge:
     needs: [build, shard]

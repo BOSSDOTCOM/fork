@@ -113,6 +113,17 @@ case "$1 $2" in
           "hash": "16", "base_opts": "", "test_opts": "", "tables": "3-4-5", "book_sha": "x",
           "opening_start": "$start", "opening_end": "$((start + 49))", "rounds": "$rounds"}}
 JSON
+      # progress (if present): the shard's progress artifact too (tools/cloud/shard_progress.py; 2026-11-14), as
+      # a real run's download holds it beside shard-*; the file progress.name, if present, names its file (fault injection; default progress.json).
+      if [ -f "$st/progress" ]; then
+        mkdir -p "$dir/progress-$stage-$k"
+        cat >"$dir/progress-$stage-$k/$(cat "$st/progress.name" 2>/dev/null || echo progress.json)" <<JSON
+{"format": "fork-shard-progress/1", "state": "final", "shard_status": "$status", "upload_seq": 3,
+ "run_id": $id, "stage": $stage, "shard": $k, "shards": $SHARDS, "base": "$base", "test": "$test",
+ "games_planned": 100, "pairs_planned": 50, "games_finished": 100, "pairs_finished": 50, "ptnml": $(cat "$ptnml"),
+ "wdl": {"wins": 0, "draws": 0, "losses": 0}, "time_losses": 0, "abnormal": 0}
+JSON
+      fi
     done ;;
   *) echo "fake gh: unexpected $*" >&2; exit 1 ;;
 esac

@@ -318,6 +318,24 @@ jobs:
           .venv/bin/python -I -B -m unittest discover -s tools/datagen -p 'test_*.py'
           .venv/bin/python -I -B -m unittest discover -s tools/nnue -p 'test_*.py'
           .venv/bin/python -I -B -m unittest discover -s tools/zugzwang -p 'test_*.py'
+      # The SPRT shards' progress uploads (owner, 2026-11-14: display only, no effect on games or verdicts):
+      # the progress parser against a real shard's log, then the same shard played with and without the
+      # watcher, results byte for byte (tools/cloud/test_shard_progress.sh): fake games, then real fixed-node
+      # games of this build with the pinned fastchess and book (tools/cloud/fetch_tools.sh, cached).
+      - name: Cache the match tools (pinned fastchess and book)
+        uses: actions/cache@v6
+        with:
+          path: ~/match-tools
+          key: match-tools-${{ hashFiles('tools/cloud/fetch_tools.sh') }}
+      - name: Shard progress uploads change no result (byte identity)
+        run: |
+          .venv/bin/python -I -B -m unittest discover -s tools/cloud -p 'test_shard_progress.py'
+          bash tools/cloud/fetch_tools.sh ~/match-tools
+          PYTHON="$PWD/.venv/bin/python" bash tools/cloud/test_shard_progress.sh
+          # CalibratedScore off in every harness (owner, 2026-11-13); run_shard.sh sets it off for fastchess.
+          bash .github/ci/score-display-check.sh build/clang-release/fork
+          PYTHON="$PWD/.venv/bin/python" bash tools/cloud/test_shard_progress.sh --real build/clang-release/fork \
+            ~/match-tools/fastchess ~/match-tools/UHO_Lichess_4852_v1.epd
 
   linux-msan:
     name: Linux MSan (clang 21, libc++)
