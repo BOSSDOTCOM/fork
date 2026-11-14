@@ -69,11 +69,12 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
                 (NetContacts ? NetContactInputs + NetLinkInputs : 0) + (NetLinks ? NetLinkInputs : 0);
   for (auto& w : net->ft_weights) w = static_cast<std::int16_t>(uniform(rng, -400, 400));
   // S512+PP's link rows sit in the same int16 sums, up to 64 at once, after
-  // the piece rows (H512+PP: after every region's): within +-150 (2000 + 32 x
-  // 400 + 64 x 150 < 32767). Each region's piece rows are drawn on their own,
-  // so every region differs.
+  // the piece rows (H512+PP: after every region's; S512+PPXL: after the
+  // exposure rows, which stay within +-400, summed in 32 bits): within +-150
+  // (2000 + 32 x 400 + 64 x 150 < 32767). Each region's piece rows are drawn
+  // on their own, so every region differs.
   if constexpr (NetLinks) {
-    const int first = NetPieceSquares * net->region_count;
+    const int first = NetPieceSquares * net->region_count + (NetExposure ? NetExposureRows : 0);
     for (int i = first * NetHidden; i < (first + NetLinkInputs) * NetHidden; ++i)
       net->ft_weights[i] = static_cast<std::int16_t>(uniform(rng, -150, 150));
   }
@@ -82,7 +83,7 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   for (auto& w : net->out_weights) w = static_cast<std::int16_t>(uniform(rng, -2000, 2000));
   net->out_bias = uniform(rng, -100000, 100000);
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
   for (auto& row : net->out_weights) {
     for (auto& w : row) w = static_cast<std::int16_t>(uniform(rng, -30, 30));
     row[uniform(rng, 0, NetHidden - 1)] = 128;
@@ -217,8 +218,20 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   // is near the test bound 400, and 32 x 300 + 64 x 400 = 35,200 already
   // exceeds 32,767.
   auto linked = random_net(4);
-  linked->ft_weights[(NetPieceSquares * linked->region_count + 500) * NetHidden + 3] = 400;
+  const int first_link = NetPieceSquares * linked->region_count + (NetExposure ? NetExposureRows : 0);
+  linked->ft_weights[(first_link + 500) * NetHidden + 3] = 400;
   rejects(write_net_file(*linked), "a link weight that 64 links would take beyond int16");
+#endif
+#if FORK_NET_ARCH == 10
+  // S512+PPXL's exposure rows are summed in 32 bits, so the reader bounds
+  // only the piece and link rows: an exposure weight of 20,000 (the last
+  // exposure row) is accepted, the same weight in the first link row refused.
+  auto exposed_big = random_net(4);
+  exposed_big->ft_weights[(first_link - 1) * NetHidden + 3] = 20000;
+  CHECK_MSG(read_net_file(write_net_file(*exposed_big), *back, error), "a large exposure weight: " << error);
+  auto link_big = random_net(4);
+  link_big->ft_weights[first_link * NetHidden + 3] = 20000;
+  rejects(write_net_file(*link_big), "a large weight in the first link row");
 #endif
 #if FORK_NET_ARCH == 9
   // The piece bound ranges over every region's rows: one weight of the last
@@ -243,7 +256,7 @@ TEST_CASE("nnue", "net files round-trip and the reader rejects bad ones") {
   rejects(write_net_file(*wide), "an output weight beyond the squared output's bound");
 #endif
 #if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
-    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
   // Bug review 2026-11-11, E3: every output weight within the |w| <= 128
   // bound, but one bucket's QA^2 sum of |w| beyond int32, where the AVX2
   // path's 32-bit lane sums could overflow (all 2H weights at 128: 255^2 x
@@ -455,6 +468,190 @@ TEST_CASE("nnue", "H512+PP's evaluation equals the obvious reference along rando
 }
 #endif
 
+#if FORK_NET_ARCH == 10
+// S512+PPXL's evaluation the obvious way, an oracle independent of
+// accumulate_board, feature_index, frame_of and exposed_lower: per
+// perspective, the bias, each piece's row, each pawn link's row (after the
+// 768 piece rows and the 640 exposure rows) and each exposed piece's
+// exposure row (exposed_lower_reference's set, square by square; 768 + 320 x
+// [enemy] + 64 x type + the perspective's square), summed in 64 bits,
+// clipped to [0, QA], then the squared output of the phase's bucket. `beyond`
+// counts the units whose sum leaves int16.
+namespace {
+
+int s512ppxl_reference(const NetFile& net, const Position& pos, int* beyond = nullptr) {
+  const Bitboard exposed = exposed_lower_reference(pos);
+  const Color stm = pos.side_to_move();
+  const int bucket = net.phase_table[game_phase(pos)];
+  std::int64_t total = 0;
+  for (int half = 0; half < 2; ++half) {
+    const Color persp = half == 0 ? stm : ~stm;
+    const int vertical = persp == White ? 0 : 56;  // Black sees the board upside down
+    const int files = (pos.king_square(persp) ^ vertical) % 8 < 4 ? 7 : 0;  // own king on files a-d: mirrored
+    std::vector<int> rows;
+    for (Bitboard b = pos.pieces(); b;) {
+      const Square s = pop_lsb(b);
+      const Piece p = pos.piece_at(s);
+      const int seen = (s ^ vertical) ^ files;
+      rows.push_back(384 * (side_of(p) != persp) + 64 * kind_of(p) + seen);
+      if (exposed & (Bitboard{1} << s))
+        rows.push_back(768 + 320 * (side_of(p) != persp) + 64 * kind_of(p) + seen);
+    }
+    std::int32_t links[LinkMaxActive];
+    const int n = link_inputs(pos.pieces(White, Pawn), pos.pieces(Black, Pawn), persp, files, links);
+    for (int k = 0; k < n; ++k) rows.push_back(768 + 640 + links[k]);
+    int out_of_range = 0;
+    for (int i = 0; i < NetHidden; ++i) {
+      std::int64_t v = net.ft_bias[i];
+      for (const int r : rows) v += net.ft_weights[r * NetHidden + i];
+      out_of_range += v < -32768 || v > 32767;
+      const std::int64_t x = std::clamp<std::int64_t>(v, 0, NetQa);
+      total += x * x * net.out_weights[bucket][half * NetHidden + i];
+    }
+    if (beyond) *beyond += out_of_range;
+  }
+  const std::int64_t y = total / NetQa + net.out_bias[bucket];
+  return static_cast<int>(std::clamp<std::int64_t>(y * net.scale / (std::int64_t{NetQa} * NetQb),
+                                                   -(EvalLimit - 1), EvalLimit - 1));
+}
+
+}  // namespace
+
+TEST_CASE("nnue", "S512+PPXL's exposure rule is the lower-class half") {
+  // Worked by hand (a1 = 0 ... h8 = 63). 4k3/8/3p4/4N3/8/1q6/2B5/4K2R: the
+  // knight on e5 is attacked by the pawn on d6 (exposed though a pawn is the
+  // only attacker class below it); the queen on b3 by the bishop on c2
+  // (exposed); the bishop on c2 only by the queen, a higher class (not
+  // exposed, though undefended: the dropped half of XGR's rule); the rook on
+  // h1 by nothing; the pawn never.
+  // 6k1/8/5b2/8/3R4/8/8/3qQ1K1: the rook on d4 is attacked by the bishop on
+  // f6 (exposed); the black queen on d1 by the rook on d4 (exposed); the
+  // white queen on e1 only by the queen on d1, the same class (not exposed);
+  // the bishop on f6 by nothing.
+  const struct {
+    const char* fen;
+    Bitboard want;
+  } cases[] = {
+      {"4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1", (Bitboard{1} << 36) | (Bitboard{1} << 17)},
+      {"6k1/8/5b2/8/3R4/8/8/3qQ1K1 w - - 0 1", (Bitboard{1} << 27) | (Bitboard{1} << 3)},
+      {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 0},
+  };
+  for (const auto& c : cases) {
+    Position pos;
+    CHECK(pos.set_fen(c.fen));
+    CHECK_MSG(exposed_lower_reference(pos) == c.want, c.fen);
+    CHECK_MSG(exposed_lower(pos) == c.want, c.fen);
+  }
+}
+
+TEST_CASE("nnue", "S512+PPXL's exposed set matches the square-by-square reference along random games") {
+  int checked = 0, nonempty = 0;
+  for (const auto& sp : perft_suite()) {
+    for (std::uint64_t seed = 1; seed <= 4; ++seed) {
+      Position pos;
+      pos.set_fen(sp.fen);
+      std::uint64_t rng = seed * 4099 + checked;
+      for (int ply = 0; ply < 100; ++ply) {
+        const Bitboard want = exposed_lower_reference(pos);
+        CHECK_MSG(exposed_lower(pos) == want, pos.fen());
+        CHECK_MSG(!(want & (pos.pieces(Pawn) | pos.pieces(King))), pos.fen());
+        nonempty += want != 0;
+        ++checked;
+        MoveList legal;
+        generate<GenMode::Legal>(pos, legal);
+        if (legal.size() == 0) break;
+        pos.make(legal[splitmix_next(rng) % legal.size()]);
+      }
+    }
+  }
+  CHECK(checked > 1000);
+  CHECK(nonempty > 200);
+}
+
+// The exposed sets of the 446 parity positions (tests/nnue/parity.epd) equal
+// the Python reference's, computed on python-chess's attack sets
+// (tests/nnue/s512ppxl-exposed.txt, written by `tools/nnue/reference.py
+// exposed --epd tests/nnue/parity.epd --layout tools/nnue/s512ppxl.json`):
+// the engine's half of the feature parity with the trainer, whose half is
+// the feature leg against the same reference.
+TEST_CASE("nnue", "S512+PPXL's exposed sets equal the Python reference's") {
+  std::ifstream in(std::string(FORK_SOURCE_DIR) + "/tests/nnue/s512ppxl-exposed.txt");
+  CHECK_MSG(in.good(), "tests/nnue/s512ppxl-exposed.txt is missing");
+  int compared = 0, nonempty = 0;
+  for (std::string line; std::getline(in, line);) {
+    const std::size_t a = line.find('|');
+    if (a == std::string::npos) continue;
+    Position pos;
+    CHECK_MSG(pos.set_fen(line.substr(0, a)), line.substr(0, a));
+    Bitboard want = 0;
+    std::istringstream is(line.substr(a + 1));
+    for (int s; is >> s;) want |= Bitboard{1} << s;
+    CHECK_MSG(exposed_lower(pos) == want, line.substr(0, a));
+    CHECK_MSG(exposed_lower_reference(pos) == want, line.substr(0, a));
+    nonempty += want != 0;
+    ++compared;
+  }
+  CHECK_EQ(compared, 446);
+  CHECK(nonempty > 50);
+}
+
+TEST_CASE("nnue", "S512+PPXL's evaluation equals the obvious reference along random games") {
+  // Ordinary weights (exposure rows within +-400), then exposure rows of up to
+  // +-20,000 per unit, so a few exposed pieces take a unit's sum past int16:
+  // the reader accepts them (the exposure rows are not bounded) and the 32-bit
+  // sums give the 64-bit reference's values. The stack's incremental
+  // evaluations equal the reference too.
+  for (const bool large : {false, true}) {
+    auto net = random_net(16);
+    std::uint64_t rng = 2026111402;
+    if (large)
+      for (int f = NetPieceSquares; f < NetPieceSquares + NetExposureRows; ++f)
+        for (int i = 0; i < NetHidden; ++i)
+          net->ft_weights[f * NetHidden + i] = static_cast<std::int16_t>(uniform(rng, -20000, 20000));
+    auto back = std::make_unique<NetFile>();
+    std::string error;
+    CHECK_MSG(read_net_file(write_net_file(*net), *back, error), error);
+    auto stack = std::make_unique<FeatureStack>();
+    int checked = 0, exposed = 0, beyond = 0;
+    for (const auto& sp : perft_suite()) {
+      for (std::uint64_t seed = 1; seed <= 3; ++seed) {
+        Position pos;
+        pos.set_fen(sp.fen);
+        stack->reset(*back, pos);
+        std::uint64_t game = seed * 7907 + checked;
+        for (int ply = 0; ply < std::min(80, MaxPly - 1); ++ply) {
+          int units = 0;
+          const int want = s512ppxl_reference(*back, pos, &units);
+          CHECK_MSG(full_eval(*back, pos) == want, pos.fen());
+          CHECK_MSG(evaluate_position_scalar(
+                        *back,
+                        [&] {
+                          Accumulator acc;
+                          accumulate_board(*back, pos, acc);
+                          return acc;
+                        }(),
+                        pos) == want,
+                    pos.fen());
+          CHECK_MSG(stack->evaluate(*back, ply, pos) == want, pos.fen());
+          exposed += exposed_lower_reference(pos) != 0;
+          beyond += units > 0;
+          ++checked;
+          MoveList legal;
+          generate<GenMode::Legal>(pos, legal);
+          if (legal.size() == 0) break;
+          const Move m = legal[splitmix_next(game) % legal.size()];
+          stack->push_move(*back, ply, pos, m);
+          pos.make(m);
+        }
+      }
+    }
+    CHECK(checked > 1000);
+    CHECK(exposed > 200);
+    if (large) CHECK(beyond > 20);  // positions where some unit's sum left int16
+  }
+}
+#endif
+
 // FeatureStack along a search tree: a random walk with backtracking, king
 // moves favoured so frames change often (in H512+PP a frame's snapshot is
 // then several pieces and pawn links away from the board it is brought to),
@@ -475,6 +672,8 @@ TEST_CASE("nnue", "frame changes keep evaluations exact along a search tree") {
         CHECK_MSG(got == full_eval(*net, pos), pos.fen());
 #if FORK_NET_ARCH == 9
         CHECK_MSG(got == h512pp_reference(*net, pos), pos.fen());
+#elif FORK_NET_ARCH == 10
+        CHECK_MSG(got == s512ppxl_reference(*net, pos), pos.fen());
 #endif
         ++checked;
       }

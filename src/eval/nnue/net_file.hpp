@@ -19,7 +19,7 @@
 // - Version 2 payload (tools/nnue/models.py): a 128-byte map block (32
 //   region bytes for the mirrored own-king cell rank * 4 + file - 4, 25
 //   phase-table bytes, zeros), the feature weights and biases as above, then
-//   per architecture: 2, 3, 6, 7, 8, 9: output weights i16 [8][2H], biases i32 [8];
+//   per architecture: 2, 3, 6, 7, 8, 9, 10: output weights i16 [8][2H], biases i32 [8];
 //   4: L1 i8 [8][16][H], biases i32 [8][16], L2 i16 [8][32][16], biases i32
 //   [8][32], L3 i16 [8][32], biases i32 [8], the output output_multiplier i64;
 //   5: side weights i16 [inputs][3], side biases i16 [3], two experts' i16
@@ -30,12 +30,12 @@
 //   computes with, the checksum matches, and the weights keep every sum in
 //   range: no first-layer unit's (or side lane's) |bias| + 32 * its largest
 //   |piece weight| (over every region's piece rows; + 30 * its largest
-//   |exposure weight|, XGR; + 64 * its largest |link weight|, S512+PP and
-//   H512+PP: the most links at their rank limit) exceeds the
+//   |exposure weight|, XGR; + 64 * its largest |link weight|, S512+PP,
+//   H512+PP and S512+PPXL: the most links at their rank limit) exceeds the
 //   int16 range, and the output layers' worst cases stay within int32 (the
 //   squared outputs: QA^2 times each bucket's sum of |w|, which bounds the
 //   AVX2 path's 32-bit lane sums; the scalar path sums in int64). S512+X's
-//   exposure rows and S512cl's
+//   and S512+PPXL's exposure rows and S512cl's
 //   contact and link rows need no bound: they are summed in 32 bits
 //   (accumulator.cpp) and held to int16 only when added to the piece sums. So the
 //   integer arithmetic of every path (scalar and SIMD) never overflows, and
@@ -68,7 +68,7 @@ struct NetFile {
   alignas(64) std::int16_t out_weights[2 * NetHidden];
   std::int32_t out_bias = 0;
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
   alignas(64) std::int16_t out_weights[NetBuckets][2 * NetHidden];
   std::int32_t out_bias[NetBuckets] = {};
 #elif FORK_NET_ARCH == 4

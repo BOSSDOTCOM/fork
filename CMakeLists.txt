@@ -190,7 +190,10 @@ target_compile_options(fathom PRIVATE -w)
 # nets/r8brft1kr4.fnet is H512+PP's test net (architecture 9, bake-off round
 # 3's option a): r8brft1 with its piece rows copied into each of the four
 # king regions (tools/nnue/extend_weights.py --arch h512pp), so its bench,
-# tests/bench-r8brft1kr4.ref, is r8brft1's.
+# tests/bench-r8brft1kr4.ref, is r8brft1's. nets/r8brft1xl.fnet is
+# S512+PPXL's (architecture 10, the x_lower arm): r8brft1 with 640 zero
+# exposure rows between its piece rows and its links (extend_weights.py --arch
+# s512ppxl), so its bench, tests/bench-r8brft1xl.ref, is r8brft1's too.
 set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
 set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/r8brft1.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")

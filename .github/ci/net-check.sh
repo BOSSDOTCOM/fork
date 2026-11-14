@@ -12,8 +12,10 @@
 # With NET_SUITE set (a fork_tests suite name, e.g. nnue), the build also
 # makes fork_tests (fetching its test data at configure) and runs that suite:
 # for an architecture whose own test cases no other job compiles (H512+PP,
-# architecture 9: its region map, its reference and its frame snapshots, in
-# tests/test_nnue.cpp, on random networks of that architecture).
+# architecture 9: its region map, its reference and its frame snapshots;
+# S512+PPXL, architecture 10: its exposure rule, its reference and the
+# exposed sets of the parity positions; in tests/test_nnue.cpp, on random
+# networks of that architecture).
 #
 #   [NET_SUITE=SUITE] .github/ci/net-check.sh NET [BUILD_DIR]
 set -euo pipefail
