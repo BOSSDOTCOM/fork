@@ -1162,31 +1162,42 @@ TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored abo
   fx.searcher->switches.use_pass_best_stop = false;  // the rule as it was; the next cases cover the switch
   int switched = 0;
   const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
-  for (std::size_t i = 0; i < positions; ++i) {
-    const std::string_view fen = search_bench_fens()[i];
-    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
-      fx.store.clear();
-      fx.searcher->clear_history();
-      Position pos;
-      CHECK(pos.set_fen(fen));
-      SearchQuota q;
-      q.nodes = nodes;
-      ReportLog log;
-      const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
-      if (r.depth == 0) continue;
-      const int finished_depth = fx.searcher->time_signals().depth;
-      const auto finished = std::ranges::find_if(
-          log.entries, [&](const ReportLog::Entry& e) { return e.depth == finished_depth && e.bound == 0; });
-      CHECK_MSG(finished != log.entries.end(),
-                fen << " at " << nodes << " nodes: no report of depth " << finished_depth);
-      if (finished == log.entries.end() || r.best == finished->first) continue;
-      ++switched;
-      CHECK_MSG(r.score > finished->score, fen << " at " << nodes << " nodes: played "
-                                               << pos.move_to_uci(r.best) << " at " << r.score << " over "
-                                               << pos.move_to_uci(finished->first) << " at "
-                                               << finished->score << " (depth " << finished_depth << ")");
+  // One node-limited search per budget in [first, last]; until_switch ends the
+  // sample at the first stop that plays a new move.
+  const auto sample = [&](std::uint64_t first, std::uint64_t last, std::uint64_t step, bool until_switch) {
+    for (std::size_t i = 0; i < positions; ++i) {
+      const std::string_view fen = search_bench_fens()[i];
+      for (std::uint64_t nodes = first; nodes <= last; nodes += step) {
+        fx.store.clear();
+        fx.searcher->clear_history();
+        Position pos;
+        CHECK(pos.set_fen(fen));
+        SearchQuota q;
+        q.nodes = nodes;
+        ReportLog log;
+        const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
+        if (r.depth == 0) continue;
+        const int finished_depth = fx.searcher->time_signals().depth;
+        const auto finished = std::ranges::find_if(
+            log.entries, [&](const ReportLog::Entry& e) { return e.depth == finished_depth && e.bound == 0; });
+        CHECK_MSG(finished != log.entries.end(),
+                  fen << " at " << nodes << " nodes: no report of depth " << finished_depth);
+        if (finished == log.entries.end() || r.best == finished->first) continue;
+        ++switched;
+        CHECK_MSG(r.score > finished->score, fen << " at " << nodes << " nodes: played "
+                                                 << pos.move_to_uci(r.best) << " at " << r.score << " over "
+                                                 << pos.move_to_uci(finished->first) << " at "
+                                                 << finished->score << " (depth " << finished_depth << ")");
+        if (until_switch) return;
+      }
     }
-  }
+  };
+  sample(2000, Optimized ? 30000u : 12000u, 997, false);
+  // Whether 2,000-30,000 nodes holds a stop that plays a new move depends on
+  // the network: retrain 8c's r8crft1 held none (2026-11-14). Optimized builds
+  // then search larger budgets until one does, so the rule is still exercised
+  // (the sample above is unchanged for every net that switches in it).
+  if (Optimized && switched == 0) sample(31000, 200000, 4001, true);
   if (Optimized)
     CHECK_MSG(switched > 0, "no stop played a move other than the last finished iteration's");
   else if (switched == 0)
