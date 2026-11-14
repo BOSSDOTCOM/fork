@@ -58,7 +58,9 @@ if(FORK_VNNI)
   target_compile_options(fork_flags INTERFACE -mavx512vnni)
 endif()
 # A/B experiments (Part C): -DFORK_EXPERIMENT=NAME defines FORK_EXP_NAME.
-set(FORK_EXPERIMENT "" CACHE STRING "Optimization experiment to enable (A/B builds only)")
+# Idea 182's runner A/B (speed-ab.yml builds through update.sh, which passes no CMake options): this
+# branch only, never merged, turns the move-delta experiment on by default.
+set(FORK_EXPERIMENT "MOVE_DELTA" CACHE STRING "Optimization experiment to enable (A/B builds only)")
 if(FORK_EXPERIMENT)
   target_compile_definitions(fork_flags INTERFACE FORK_EXP_${FORK_EXPERIMENT})
 endif()
