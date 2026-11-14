@@ -45,6 +45,12 @@ result weight (computed in the queue) within 1e-6 (1e-5 on copies). Validation l
 Layout: result/<arm>/ (best/, ck-*/, window/, val.txt, train.log, run.json, files.json), result/avg-<arm>/
 (weights.bin, quantised.bin, parity-trainer-<arm>-avg.txt), the summary result/retrain.json.
 
+Arm sets (owner, 2026-11-13, about 8:30 PM EST: idea 80's arm in its own session, launched with A1's other arms, to
+shorten A1's wall time): ARM_SET = 'all' (the default: every arm, as before), 'main' (c, rft, ep and eplo on both
+GPUs) or 'i80' (i801 and i802 only), set only in a kernel copy by one exact replacement (make_kernel.py --arms). The
+other arms are dropped from ARMS and QUEUES before anything runs; every remaining arm's settings, file list, checks and
+outputs are the 'all' kernel's. The in-session split runs only when an ep arm is in the set.
+
 Smoke mode (owner, 2026-11-13, about 2:55 PM EST: a smoke run of the kernel as it will be pushed, before g4c's
 seal): SMOKE = True, set only in the smoke run's kernel copy, shrinks the sizes and nothing else: the originals are
 SMOKE_ORIGINALS (one file of each kind: an older part read as its blend copy, a TD part, a filler part and a filler
@@ -128,6 +134,11 @@ for k in (1, 2):
     ARMS[f'eplo{k}'] = {**FINE_TUNE_SETTINGS, 'files': 'ep', 'init': f'c{k}', 'lr': 5e-6, 'result_weight': 0.0,
                         'val': VAL_BLEND, 'seed': k}
 QUEUES = [['c1', 'rft1', 'ep1', 'eplo1', 'i801'], ['c2', 'rft2', 'ep2', 'eplo2', 'i802']]
+ARM_SET = 'all'             # a kernel copy only (module note): 'all', 'main' or 'i80'
+ARM_SETS = {'all': None, 'main': ('c', 'rft', 'ep', 'eplo'), 'i80': ('i80',)}
+if ARM_SETS[ARM_SET]:
+    QUEUES = [[a for a in q if a.rstrip('12') in ARM_SETS[ARM_SET]] for q in QUEUES]
+    ARMS = {a: v for a, v in ARMS.items() if a.rstrip('12') in ARM_SETS[ARM_SET]}
 CANDIDATES = list(ARMS)
 DATA = '/kaggle/input'
 WORK = '/kaggle/working/retrain'
@@ -307,7 +318,7 @@ def session():
     home = os.path.expanduser('~')
     env = {'PATH': f"{home}/.cargo/bin:{os.environ['PATH']}", 'CUDA_PATH': '/usr/local/cuda',
            'RUSTFLAGS': '-L /usr/local/nvidia/lib64'}
-    settings = {'commit': COMMIT, 'smoke': SMOKE, 'arch': ARCH, 'arms': ARMS, 'queues': QUEUES, 'scale': SCALE, 'batch': BATCH,
+    settings = {'commit': COMMIT, 'smoke': SMOKE, 'arm_set': ARM_SET, 'arch': ARCH, 'arms': ARMS, 'queues': QUEUES, 'scale': SCALE, 'batch': BATCH,
                 'batches': BATCHES, 'val_positions': VAL_POSITIONS, 'manifests': MANIFESTS, 'init': INIT,
                 'filler': FILLER}
     summary = {'settings': settings, 'checks': {}, 'runs': {}, 'offline': {}, 'tune_refs': {}}
@@ -443,7 +454,7 @@ def session():
         return dest, rec
 
     split_root, split_ok = None, False
-    if ok:
+    if ok and any(a['files'] == 'ep' for a in ARMS.values()):
         split_root, summary['split'] = make_split()
         split_ok = summary['split']['ok']
         save()

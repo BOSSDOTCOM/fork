@@ -140,6 +140,32 @@ class SettingTests(unittest.TestCase):
                                        'td90-g4b-w00.vf', 'td90-g4s2-g4-gcp-20261112T185227Z-w02-val-rest.vf',
                                        'slice1b-00.vf'])
 
+    def test_arm_sets_split_the_arms_only(self):
+        # 'all' is the kernel as before; 'main' and 'i80' keep exactly their arms' settings and queue order.
+        import importlib.util
+        src = Path(k.__file__).read_text(encoding='utf-8')
+        self.assertEqual(k.ARM_SET, 'all')
+        self.assertEqual(src.count("\nARM_SET = 'all' "), 1)
+        mods = {}
+        for name in ('main', 'i80'):
+            with tempfile.TemporaryDirectory() as d:
+                path = Path(d, f'retrain_8c_{name}.py')
+                path.write_text(src.replace("\nARM_SET = 'all' ", f"\nARM_SET = '{name}' ", 1), encoding='utf-8')
+                spec = importlib.util.spec_from_file_location(f'retrain_8c_{name}', path)
+                m = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(m)
+                mods[name] = m
+        main, i80 = mods['main'], mods['i80']
+        self.assertEqual(main.QUEUES, [['c1', 'rft1', 'ep1', 'eplo1'], ['c2', 'rft2', 'ep2', 'eplo2']])
+        self.assertEqual(i80.QUEUES, [['i801'], ['i802']])
+        self.assertEqual(set(main.ARMS) | set(i80.ARMS), set(k.ARMS))
+        self.assertFalse(set(main.ARMS) & set(i80.ARMS))
+        for m in (main, i80):
+            for arm, a in m.ARMS.items():
+                self.assertEqual(a, k.ARMS[arm])
+            self.assertEqual(m.CANDIDATES, list(m.ARMS))
+            self.assertEqual(m.MANIFESTS, k.MANIFESTS)
+
     def test_the_split_is_made_in_the_session(self):
         self.assertNotIn('r8c-split', k.MANIFESTS)                                    # no upload of ep- copies
         self.assertIn('slice1b', k.MANIFESTS)
