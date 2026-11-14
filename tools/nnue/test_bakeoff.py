@@ -281,6 +281,54 @@ class Features(unittest.TestCase):
         self.assertNotIn(chess.H1, exposed)
 
 
+class CombinedLayout(unittest.TestCase):
+    """Links and contacts beside a piece factoriser or the exposure plane
+    (bake-off round 3's options (a) and (c)): their inputs start after those
+    blocks and survive the merge (they started on top of them before
+    2026-11-14). The block sizes are summed here, apart from models.py."""
+
+    COMBINATIONS = ((True, False), (False, True), (True, True))
+
+    def combined(self, name, factoriser, exposure):
+        arch = models.Arch(name, regions=REGIONS if factoriser else None, table=PHASE)
+        arch.factoriser, arch.exposure = factoriser, exposure
+        start = (models.PIECE_SQUARES * arch.region_count + (models.PIECE_SQUARES if factoriser else 0)
+                 + (models.EXPOSURE_ROWS + 10 if exposure else 0))
+        saved = models.PIECE_SQUARES * arch.region_count + (models.EXPOSURE_ROWS if exposure else 0)
+        return arch, start, saved
+
+    def test_links_and_contacts_follow_the_merged_blocks(self):
+        for name in ('s512pp', 's512cl'):
+            plain = models.Arch(name, table=PHASE)
+            for factoriser, exposure in self.COMBINATIONS:
+                arch, start, saved = self.combined(name, factoriser, exposure)
+                for fen in FENS:
+                    board = chess.Board(fen)
+                    exposed = models.exposed_squares(board) if exposure else None
+                    for persp in chess.COLORS:
+                        own = [f - models.PIECE_SQUARES for f in models.features(plain, board, persp)
+                               if f >= models.PIECE_SQUARES]
+                        got = models.features(arch, board, persp, exposed)
+                        label = f'{name} factoriser {factoriser} exposure {exposure}: {fen}'
+                        self.assertEqual([f for f in got if f >= start], [start + i for i in own], label)
+                        self.assertEqual(len(got), len([f for f in got if f < start]) + len(own), label)
+                        # Each lands on its own row of the saved file.
+                        self.assertEqual([models.merged_index(arch, start + i) for i in own],
+                                         [saved + i for i in own], label)
+
+    def test_the_merge_keeps_the_link_and_contact_columns(self):
+        rows = 2
+        for name in ('s512pp', 's512cl'):
+            for factoriser, exposure in self.COMBINATIONS:
+                arch, start, saved = self.combined(name, factoriser, exposure)
+                tail = arch.saved_inputs - saved
+                w = [float(i) for i in range(rows * (start + tail))]
+                merged = models.merge(arch, w, rows)
+                label = f'{name} factoriser {factoriser} exposure {exposure}'
+                self.assertEqual(len(merged), rows * arch.saved_inputs, label)
+                self.assertEqual(merged[rows * saved:], w[rows * start:], label)
+
+
 class FitMaps(unittest.TestCase):
     def test_regions_merge_to_the_threshold(self):
         kings = [0] * 32

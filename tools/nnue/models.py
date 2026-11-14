@@ -94,7 +94,10 @@ class Arch:
 
     @property
     def contact_start(self):
-        return self.factor_start
+        """After the piece, factoriser and exposure blocks (the exposure
+        plane's 640 rows and 10 factorisers); before 2026-11-14 it was
+        factor_start, on top of a factoriser or exposure block."""
+        return self.exposure_start + (EXPOSURE_ROWS + 10 if self.exposure else 0)
 
     @property
     def link_start(self):
@@ -166,9 +169,12 @@ def both_perspectives(arch, board):
 
 def merged_index(arch, f):
     """The saved row an active training input lands on after the merge, or
-    None for a factoriser input."""
-    if f < arch.factor_start or arch.contacts or arch.links:
+    None for a factoriser input. Contacts and links keep their order, after
+    the merged piece and exposure rows."""
+    if f < arch.factor_start:
         return f
+    if f >= arch.contact_start:
+        return arch.factor_start + (EXPOSURE_ROWS if arch.exposure else 0) + (f - arch.contact_start)
     if arch.exposure and arch.exposure_start <= f < arch.exposure_start + EXPOSURE_ROWS:
         return arch.factor_start + (f - arch.exposure_start)
     return None
@@ -258,7 +264,8 @@ def quantise(values, factor, kind):
 
 def merge(arch, w, rows):
     """A first-layer weight with each factoriser column added to the
-    columns it serves (f32 sums), the factoriser columns dropped."""
+    columns it serves (f32 sums), the factoriser columns dropped; the
+    contact and link columns follow unchanged."""
     def col(c):
         return w[c * rows:(c + 1) * rows]
     out = []
@@ -272,6 +279,7 @@ def merge(arch, w, rows):
             own, kind = e // 320, (e % 320) // 64
             a, b = col(x0 + e), col(x0 + EXPOSURE_ROWS + 5 * own + kind)
             out.extend(to_f32(x + y) for x, y in zip(a, b))
+    out.extend(w[arch.contact_start * rows:])
     return out
 
 
