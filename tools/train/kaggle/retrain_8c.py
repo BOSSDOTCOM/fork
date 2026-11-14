@@ -192,6 +192,17 @@ def split_source(name):
     return name[3:] if name.startswith(('ep-', 'px-')) else name
 
 
+def probe_file(lists, by_name):
+    """The placeholder --data file of the scoring and quantisation calls (any mounted file serves: superbatch 0 and a
+    zero-LR step train nothing): the first queued arm's first list entry, read through split_source, so an ep- or px-
+    copy made later in the session gives its mounted source (the A2q smoke of 2026-11-14 stopped on 'px-bl-g3b-w00.vf'
+    here). For c1 (the 'all' and 'main' sets) and i801 this is the same file as before."""
+    for n in lists[QUEUES[0][0]]:
+        if split_source(n) in by_name:
+            return by_name[split_source(n)]
+    raise KeyError(f'no mounted file in {QUEUES[0][0]}\'s list')
+
+
 def is_derived(name):
     return name.startswith(('bl-', 'i52-', 'i80-', 'ep-', 'lam-', 'px-')) or \
         (name.startswith('td') and name[2:4].isdigit() and name[4] == '-')
@@ -387,7 +398,7 @@ def session():
     summary['init_weights'] = {'found': len(init), 'sha256_ok': init_ok}
     ok = built and record['ok'] and init_ok and INIT['val'] in by_name
     save()
-    any_file = by_name[lists[QUEUES[0][0]][0]] if ok else None  # the first queued arm's first file (any file serves)
+    any_file = probe_file(lists, by_name) if ok else None
 
     def score(weights, val, positions, out_dir, result_weight=0.5, device=0):
         """A float weights file's loss on a file (superbatch 0 of a --superbatches 0 run)."""

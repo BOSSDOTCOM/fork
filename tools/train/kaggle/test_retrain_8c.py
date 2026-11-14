@@ -210,6 +210,36 @@ class SettingTests(unittest.TestCase):
         self.assertTrue(m.is_derived('lam-g4b-w00.vf') and m.is_derived('px-td90-g4b-w00.vf'))
         self.assertEqual(k.ARMS.keys(), {f'{x}{s}' for x in ('c', 'i80', 'rft', 'ep', 'eplo') for s in (1, 2)})
 
+    def test_the_probe_file_exists_before_the_session_copies(self):
+        # fork-retrain-8c-smoke-a2q v1 (2026-11-14) stopped with KeyError 'px-bl-g3b-w00.vf': the placeholder file was the
+        # first queued arm's first list entry, a px- copy the session makes only later. Every arm set's probe must be a
+        # mounted file (the copies' sources), and for c1 the file used before.
+        import importlib.util
+        src = Path(k.__file__).read_text(encoding='utf-8')
+        for name in ('all', 'main', 'i80', 'qon', 'lam'):
+            with tempfile.TemporaryDirectory() as d:
+                path = Path(d, f'retrain_8c_p{name}.py')
+                path.write_text(src.replace("\nARM_SET = 'all' ", f"\nARM_SET = '{name}' ", 1), encoding='utf-8')
+                spec = importlib.util.spec_from_file_location(f'retrain_8c_p{name}', path)
+                m = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(m)
+                names = set(ORIGINALS) | set(m.QON_FILES)
+                for kind in ('control', 'i80', 'lam'):
+                    names |= set(m.arm_files(kind, ORIGINALS))
+                for n in names:
+                    Path(d, n).write_bytes(b'x')
+                record, lists, by_name = m.resolve([os.path.join(d, n) for n in names], {n: 'h' for n in names},
+                                                   hashes=False)
+                probe = m.probe_file(lists, by_name)
+                self.assertTrue(os.path.exists(probe), (name, probe))
+                first = lists[m.QUEUES[0][0]][0]
+                self.assertEqual(os.path.basename(probe), m.split_source(first), name)
+                if name in ('all', 'main'):
+                    self.assertEqual(probe, by_name[lists['c1'][0]])           # unchanged for A1
+                if name == 'qon':
+                    self.assertTrue(first.startswith('px-'))
+                    self.assertNotIn(first, by_name)                           # the v1 failure: not mounted
+
     def test_the_split_is_made_in_the_session(self):
         self.assertNotIn('r8c-split', k.MANIFESTS)                                    # no upload of ep- copies
         self.assertIn('slice1b', k.MANIFESTS)
