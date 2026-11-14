@@ -46,7 +46,24 @@ class ArmTests(unittest.TestCase):
         self.assertEqual((kr['superbatches'], kr['lr'], kr['lr_step'], kr['window'], kr['result_weight'], kr['val'],
                           kr['seed']), (360, 1e-4, 180, (331, 360), 0.0, 'bl-g4s2-val.vf', 1))
         self.assertEqual(k.QUEUES, [['kr1'], ['pp1']])
-        self.assertEqual((k.SCALE, k.BATCH, k.BATCHES, k.SMOKE, k.ARM_SET), (92, 16384, 305, False, 'all'))
+        self.assertEqual((k.SCALE, k.BATCH, k.BATCHES, k.SMOKE, k.ARM_SET), (92, 16384, 305, False, 'A'))
+
+    def test_session_x_runs_xl1_alone_with_the_same_recipe(self):
+        # x_lower (owner, 2026-11-14): one seed, alone in its session, compared against session A's pp1, so the same
+        # recipe, data and warm-start source. The kernel copy's one replacement, as make_kernel.py makes it.
+        src = (HERE / 'bakeoff_r3.py').read_text(encoding='utf-8')
+        old = "\nARM_SET = 'A' "
+        self.assertEqual(src.count(old), 1)
+        x = {'__name__': 'bakeoff_r3_x'}
+        exec(compile(src.replace(old, "\nARM_SET = 'X' ", 1), 'bakeoff_r3_x.py', 'exec'), x)
+        self.assertEqual(x['QUEUES'], [['xl1']])
+        self.assertEqual(sorted(x['ARMS']), ['xl1'])
+        xl, pp = x['ARMS']['xl1'], k.ARMS['pp1']
+        self.assertEqual((xl['arch'], xl['init']), ('s512ppxl', 'exposure'))
+        rest = lambda a: {f: v for f, v in a.items() if f not in ('arch', 'init')}  # noqa: E731
+        self.assertEqual(rest(xl), rest(pp))
+        self.assertEqual(x['WARM_STARTS']['exposure'], ('s512ppxl', 'exposure_net'))
+        self.assertEqual(x['SOURCE'], k.SOURCE)
 
     def test_the_source_is_r8brft1s_float_weights(self):
         # r8brft1's window average (fork-retrain-8b-rft v1, avg-rft1/weights.bin), SHA-256 checked on this machine
@@ -111,9 +128,9 @@ class IdentityProbeTests(unittest.TestCase):
         Path(path).write_bytes(netformat.write_quantised({t['name']: saved[t['name']][1] for t in desc['quantised']},
                                                          desc))
 
-    def probe(self, d, source_q, warm_q):
+    def probe(self, d, source_q, warm_q, arch='h512pp', lay_out='regioned_net'):
         script = Path(d, 'identity.py')
-        script.write_text(k.identity_probe(str(NNUE), str(source_q), str(warm_q)))
+        script.write_text(k.identity_probe(str(NNUE), str(source_q), str(warm_q), arch, lay_out))
         out = subprocess.run([sys.executable, '-I', str(script)], capture_output=True, text=True)
         return out.stdout.strip()
 
@@ -135,6 +152,15 @@ class IdentityProbeTests(unittest.TestCase):
             warm['l0w'][2 * 768 * 512 + 7] = 0.05  # one region-2 weight off zero
             self.quantised(kr, warm, wq)
             self.assertEqual(self.probe(d, sq, wq), 'False')
+            # x_lower's warm start: the exposure inputs zero (S512+PPXL, extend_weights.exposure_net).
+            xl = models.Arch('s512ppxl', table=table)
+            xwarm = netformat.read_weights_bin(extend_weights.exposure_weights(netformat.write_weights_bin(w)))
+            xq = Path(d, 'xl.bin')
+            self.quantised(xl, xwarm, xq)
+            self.assertEqual(self.probe(d, sq, xq, 's512ppxl', 'exposure_net'), 'True')
+            xwarm['l0w'][768 * 512 + 3] = 0.05  # one exposure weight off zero
+            self.quantised(xl, xwarm, xq)
+            self.assertEqual(self.probe(d, sq, xq, 's512ppxl', 'exposure_net'), 'False')
 
 
 if __name__ == '__main__':
