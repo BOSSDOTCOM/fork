@@ -37,6 +37,15 @@
 //!   (S512+PP; ideas.md 40; owner, 2026-11-06): 608 links after the 768
 //!   piece inputs, numbered as S512cl's in their own space; the output as
 //!   s512's.
+//! - h512pp: s512pp's piece inputs copied per own-king region (bake-off
+//!   round 3's option a, H512+PP; owner, 2026-11-14) with h512's shared
+//!   factoriser, the 608 links after the region and factoriser rows, shared
+//!   by every region; the map M4 (XGR's fixed regions: e1; f1-h1; rank 2;
+//!   ranks 3-8) unless --regions names another; no first-layer clip, as
+//!   s512pp (a warm start from an s512pp net, tools/nnue/extend_weights.py
+//!   --arch h512pp: regions zero, the factoriser the source's piece rows);
+//!   saved as region + factoriser per region, then the links; the output as
+//!   s512's.
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
@@ -102,6 +111,7 @@ enum Arch {
     S512x,
     S512cl,
     S512pp,
+    H512pp,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -147,6 +157,7 @@ impl Spec {
             "s512x" => Arch::S512x,
             "s512cl" => Arch::S512cl,
             "s512pp" => Arch::S512pp,
+            "h512pp" => Arch::H512pp,
             other => panic!("unknown --arch {other}"),
         };
         let mut s = Spec {
@@ -193,9 +204,18 @@ impl Spec {
                 s.links = true;
                 s.picker = Picker::Phase;
             }
+            Arch::H512pp => {
+                match a.get("--regions") {
+                    Some(text) => s.regions.copy_from_slice(&parse_list(text, 32, "--regions")),
+                    None => s.regions = XGR_REGIONS,
+                }
+                s.factoriser = true;
+                s.links = true;
+                s.picker = Picker::Phase;
+            }
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
-        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp), "--qat: the S-512 family only");
+        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp), "--qat: the S-512 family only");
         match s.picker {
             Picker::None => {}
             Picker::Phase => s.table = parse_list(a.need("--buckets"), FULL_PHASE + 1, "--buckets"),
@@ -633,7 +653,7 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                 let l1 = builder.new_affine("l1", 2 * h, 1);
                 l1.forward(l0.forward(stm).crelu().concat(l0.forward(ntm).crelu()))
             }
-            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp => {
+            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp => {
                 let l0 = builder.new_affine("l0", n, h);
                 let l1 = builder.new_affine("l1", 2 * h, nb);
                 if s.qat {
@@ -732,7 +752,7 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
             SavedFormat::id("l1w").round().quantise::<i16>(64),
             SavedFormat::id("l1b").round().quantise::<i32>(255 * 64),
         ],
-        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp => vec![
+        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp => vec![
             first_layer(spec, "l0w", h).round().quantise::<i16>(255),
             SavedFormat::id("l0b").round().quantise::<i16>(255),
             SavedFormat::id("l1w").transpose().round().quantise::<i16>(64),
@@ -765,10 +785,13 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
 /// each, so a merged weight stays within 1.98 (judgement.md §1.1, §4); every
 /// other tensor at bullet's default +-1.98. S512x and S512cl keep S-512's rule (no
 /// first-layer clip: a warm start from S512r2 must not move its weights; Fork
-/// sums its exposure rows in 32 bits, so their size needs no bound).
+/// sums its exposure rows in 32 bits, so their size needs no bound). H512+PP too:
+/// its warm start puts an S512+PP net's piece rows in the factoriser, and a clip
+/// at 0.99 would move the ones beyond it at step 0 (the int16 bound of the saved
+/// rows is the converter's and the reader's, tools/nnue/pp_bound.py).
 fn clipped(spec: &Spec) -> Vec<&'static str> {
     match spec.arch {
-        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp => vec![],
+        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp => vec![],
         Arch::H512 | Arch::AfS => vec!["l0w", "l0b"],
         Arch::Xgr512 => vec!["l0w", "l0b", "s0w", "s0b"],
     }
@@ -1458,6 +1481,72 @@ mod layout_tests {
                 assert_eq!(&merged[merged.len() - kept..], &v[first..first + kept], "{arch} factoriser {factoriser} exposure {exposure}");
             }
         }
+    }
+
+    /// Kiwipete after Kf1 (Black to move): White's king in region 1 (f1), Black's in region 0 (e8, its e1).
+    const KIWIPETE_KF1: &str = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4K1R b kq - 1 1";
+
+    fn h512pp() -> Spec {
+        let words = ["--arch", "h512pp", "--buckets", BUCKETS];
+        Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()))
+    }
+
+    #[test]
+    fn h512pps_layout_puts_the_links_after_the_regions_and_the_factoriser() {
+        // H512+PP (bake-off round 3's option a): the map M4 by default (e1 | f1-h1 | rank 2 | ranks 3-8,
+        // written out here), 4 x 768 region inputs, the 768-input factoriser, then the 608 links.
+        let s = h512pp();
+        let mut m4 = [3u8; 32];
+        m4[..8].copy_from_slice(&[0, 1, 1, 1, 2, 2, 2, 2]);
+        assert_eq!(s.regions, m4);
+        assert_eq!((s.region_count, s.factor_start(), s.link_start()), (4, 3072, 3840));
+        assert_eq!((s.inputs(), s.saved_inputs(), s.max_active()), (4448, 3680, 128));
+        assert!(s.factoriser && s.links && !s.exposure && !s.contacts);
+        assert!(clipped(&s).is_empty(), "no first-layer clip: the warm start's factoriser is an S512+PP net's piece rows");
+        // Against S512+PP's own inputs: each piece once in its own king's region block and once in the
+        // factoriser, each link 3,840 on. Perspective 0 is the side to move.
+        let pp = with("s512pp", false, false);
+        for (fen, regions) in [(FENS[1], [0usize, 0]), (KIWIPETE_KF1, [0, 1])] {
+            for persp in 0..2 {
+                let plain = features(&pp, fen, persp);
+                let links: Vec<usize> = plain.iter().filter(|&&i| i >= 768).map(|i| i - 768).collect();
+                assert!(!links.is_empty());
+                let mut want: Vec<usize> = Vec::new();
+                for &i in plain.iter().filter(|&&i| i < 768) {
+                    want.push(768 * regions[persp] + i);
+                    want.push(3072 + i);
+                }
+                want.extend(links.iter().map(|l| 3840 + l));
+                want.sort_unstable();
+                let mut got = features(&s, fen, persp);
+                got.sort_unstable();
+                assert_eq!(got, want, "{fen}, perspective {persp}");
+            }
+        }
+    }
+
+    #[test]
+    fn h512pps_merge_adds_the_factoriser_to_every_region_and_keeps_the_links() {
+        let s = h512pp();
+        let rows = 2;
+        let v: Vec<f32> = (0..rows * s.inputs()).map(|i| i as f32).collect();
+        let merged = merge_factors(&s, rows, &v);
+        assert_eq!(merged.len(), rows * 3680);
+        for r in 0..4 {
+            for f in [0usize, 383, 767] {
+                for i in 0..rows {
+                    assert_eq!(merged[rows * (768 * r + f) + i], v[rows * (768 * r + f) + i] + v[rows * (3072 + f) + i]);
+                }
+            }
+        }
+        assert_eq!(&merged[rows * 3072..], &v[rows * 3840..]);
+    }
+
+    #[test]
+    fn h512pp_takes_another_map_when_given() {
+        let words = ["--arch", "h512pp", "--buckets", BUCKETS, "--regions", REGIONS];
+        let s = Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()));
+        assert_eq!(s.regions.to_vec(), parse_list(REGIONS, 32, "--regions"));
     }
 
     #[test]
