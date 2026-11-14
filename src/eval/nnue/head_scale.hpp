@@ -19,10 +19,17 @@
 // - Default builds use the unit table (every m = 4096): their evaluations,
 //   bench and search are unchanged. FORK_EXPERIMENT=HEAD_SCALE selects the
 //   fitted table (its bench differs by design).
+// - **Candidate commit (branch exp/i180-head-scale only):** the fitted table
+//   is switched on below for every build, for the fixed-node screen against
+//   r8brft1; tests/bench-r8brft1.ref holds this build's bench.
 // - No floating point: the table is integers fixed at build time.
 #pragma once
 
 #include <cstdint>
+
+#ifndef FORK_EXP_HEAD_SCALE
+#define FORK_EXP_HEAD_SCALE
+#endif
 
 namespace forkeng {
 
