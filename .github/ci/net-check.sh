@@ -9,19 +9,32 @@
 # A missing parity file or bench reference fails the check rather than
 # skipping it.
 #
-#   .github/ci/net-check.sh NET [BUILD_DIR]
+# With NET_SUITE set (a fork_tests suite name, e.g. nnue), the build also
+# makes fork_tests (fetching its test data at configure) and runs that suite:
+# for an architecture whose own test cases no other job compiles (H512+PP,
+# architecture 9: its region map, its reference and its frame snapshots, in
+# tests/test_nnue.cpp, on random networks of that architecture).
+#
+#   [NET_SUITE=SUITE] .github/ci/net-check.sh NET [BUILD_DIR]
 set -euo pipefail
 net=${1:?usage: net-check.sh NET [BUILD_DIR]}
 root=$(cd "$(dirname "$0")/../.." && pwd)
 build=${2:-$root/build/net-$net}
+suite=${NET_SUITE:-}
 for f in "nets/$net.fnet" "tests/nnue/$net.parity" "tests/bench-$net.ref"; do
   [ -f "$root/$f" ] || { echo "::error::$f is missing"; exit 1; }
 done
 cd "$root"
-cmake --preset clang-release -B "$build" -DFORK_BUILD_TESTS=OFF -DFORK_NET="$root/nets/$net.fnet" >/dev/null
+tests=OFF
+[ -z "$suite" ] || tests=ON
+cmake --preset clang-release -B "$build" -DFORK_BUILD_TESTS=$tests -DFORK_NET="$root/nets/$net.fnet" >/dev/null
 cmake --build "$build" --target fork
 fork=$build/fork
 named=$("$fork" version | tr -d '\r' | sed -n 's/^net //p')
 [ "$named" = "$net" ] || { echo "::error::fork version names the network '$named', not '$net'"; exit 1; }
 "$fork" netcheck "$root/tests/nnue/$net.parity"
 bash "$root/.github/ci/bench-parity.sh" "$fork"
+if [ -n "$suite" ]; then
+  cmake --build "$build" --target fork_tests
+  "$build/fork_tests" "$suite"
+fi

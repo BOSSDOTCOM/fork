@@ -83,8 +83,10 @@ bool first_layer_in_range(const std::int16_t* weights, const std::int16_t* bias,
 bool sums_in_range(const NetFile& net, std::string& error) {
   const int piece_rows = NetPieceSquares * net.region_count;
   // S512+X and S512cl sum their added rows in 32 bits: only the piece rows are
-  // bounded. S512+PP keeps its link rows in the int16 accumulator, so they are
-  // bounded too (MaxActiveLinks of them).
+  // bounded. S512+PP and H512+PP keep their link rows in the int16 accumulator,
+  // so they are bounded too (MaxActiveLinks of them). A regioned net's piece
+  // bound takes the largest weight over every region's rows (a perspective
+  // uses one region's at a time, so this is safe, if loose).
   const int bounded_rows = NetArchitecture == 6 || NetArchitecture == 7 ? piece_rows : net.inputs;
   if (!first_layer_in_range(net.ft_weights, net.ft_bias, NetHidden, piece_rows, bounded_rows, error))
     return false;
@@ -94,7 +96,7 @@ bool sums_in_range(const NetFile& net, std::string& error) {
   if (NetQa * total + std::abs(std::int64_t{net.out_bias}) > std::numeric_limits<std::int32_t>::max())
     return error = "the output layer can leave the int32 range", false;
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
-    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
   // Squared outputs: each product v * (v * w) needs |w| <= 128 so that v * w
   // stays in int16. The scalar sum runs in int64, but the AVX2 path adds its
   // lanes in int32 (accumulator.cpp, squared_sum; bug review 2026-11-11, E3):
@@ -211,7 +213,8 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
 #if FORK_NET_ARCH == 1
   for (int i = 0; i < 2 * NetHidden; ++i) out.out_weights[i] = c.i16();
   out.out_bias = c.i32();
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
   for (auto& row : out.out_weights)
     for (auto& w : row) w = c.i16();
   for (auto& b : out.out_bias) b = c.i32();
@@ -264,7 +267,8 @@ std::vector<std::uint8_t> write_net_file(const NetFile& net) {
 #if FORK_NET_ARCH == 1
   for (int i = 0; i < 2 * NetHidden; ++i) put_i16(net.out_weights[i]);
   put_i32(net.out_bias);
-#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+#elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
   for (const auto& row : net.out_weights)
     for (const auto w : row) put_i16(w);
   for (const auto b : net.out_bias) put_i32(b);

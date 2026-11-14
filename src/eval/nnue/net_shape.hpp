@@ -24,7 +24,12 @@
 //   the pawn-link inputs only (owner, 2026-11-05; idea 40's first L1 step),
 //   of pawns at most one rank apart (NetLinkRanks; owner, 2026-11-06), kept
 //   incrementally in the main int16 sums (net_file.cpp's bound of 64 links),
-//   S-512's output.
+//   S-512's output. 9 H512+PP (bake-off round 3's option a; owner,
+//   2026-11-14): S512+PP with its 768 piece inputs copied per own-king region
+//   (at most 4: the net file's 32-entry map of the mirrored own-king cell,
+//   as H-512's), the 608 link inputs shared after all the region rows; a
+//   perspective whose frame changes is refreshed lazily from that frame's
+//   snapshot (accumulator.hpp, FeatureStack).
 // - QA = 255, QB = 64 (bullet's quantization convention; ORIGINALITY.md).
 #pragma once
 
@@ -32,17 +37,20 @@
 #define FORK_NET_ARCH 1
 #endif
 
+// The architectures that keep S512+PP's pawn links in the int16 sums.
+#define FORK_NET_LINKS (FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9)
+
 namespace forkeng {
 
 inline constexpr int NetArchitecture = FORK_NET_ARCH;
-static_assert(NetArchitecture >= 1 && NetArchitecture <= 8, "unknown network architecture");
+static_assert(NetArchitecture >= 1 && NetArchitecture <= 9, "unknown network architecture");
 
 inline constexpr int NetQa = 255;
 inline constexpr int NetQb = 64;
 inline constexpr int NetPieceSquares = 768;  // 2 colours x 6 piece types x 64 squares
 inline constexpr int NetHidden = NetArchitecture == 1 ? 256 : 512;
 inline constexpr bool NetMirrored = NetArchitecture != 1;
-inline constexpr bool NetRegioned = NetArchitecture >= 3 && NetArchitecture <= 5;
+inline constexpr bool NetRegioned = (NetArchitecture >= 3 && NetArchitecture <= 5) || NetArchitecture == 9;
 inline constexpr int NetMaxRegions = NetRegioned ? 4 : 1;
 inline constexpr bool NetExposure = NetArchitecture == 5 || NetArchitecture == 6;
 inline constexpr int NetExposureRows = 640;  // own/enemy x 5 non-king types x 64 squares
@@ -52,8 +60,8 @@ inline constexpr bool NetContacts = NetArchitecture == 7;
 inline constexpr int NetContactInputs = 50416;
 // The links' rank limit: two pawns on the same or adjacent files form a link
 // when their ranks are at most this far apart (S512cl: any, 7; S512+PP: 1,
-// owner, 2026-11-06, its measured speed step, ideas.md 40).
-inline constexpr int NetLinkRanks = NetArchitecture == 8 ? 1 : 7;
+// owner, 2026-11-06, its measured speed step, ideas.md 40; H512+PP's too).
+inline constexpr int NetLinkRanks = FORK_NET_LINKS ? 1 : 7;
 // Whether pawns on frame squares a and b (8 .. 55) form a link.
 constexpr bool link_squares(int a, int b) {
   const int df = (a & 7) - (b & 7), dr = (a >> 3) - (b >> 3);
@@ -68,15 +76,16 @@ constexpr int link_space() {
   return n;
 }
 inline constexpr int NetLinkInputs = link_space();
-// S512+PP's pawn-link inputs, right after the piece rows.
-inline constexpr bool NetLinks = NetArchitecture == 8;
+// S512+PP's pawn-link inputs, right after the piece rows (H512+PP: after
+// every region's piece rows).
+inline constexpr bool NetLinks = FORK_NET_LINKS;
 inline constexpr int NetMaxInputs = NetPieceSquares * NetMaxRegions + (NetExposure ? NetExposureRows : 0) +
                                     (NetContacts ? NetContactInputs + NetLinkInputs : 0) +
                                     (NetLinks ? NetLinkInputs : 0);
 // Outputs (or layer stacks) picked by the game phase through a 25-entry table.
-inline constexpr bool NetPhasePicked =
-    (NetArchitecture >= 2 && NetArchitecture <= 4) || NetArchitecture == 6 || NetArchitecture == 7 ||
-    NetArchitecture == 8;
+inline constexpr bool NetPhasePicked = (NetArchitecture >= 2 && NetArchitecture <= 4) ||
+                                       NetArchitecture == 6 || NetArchitecture == 7 || NetArchitecture == 8 ||
+                                       NetArchitecture == 9;
 inline constexpr int NetBuckets = NetPhasePicked ? 8 : 1;
 inline constexpr int NetSideLanes = NetArchitecture == 5 ? 3 : 0;
 // AF-S's body.

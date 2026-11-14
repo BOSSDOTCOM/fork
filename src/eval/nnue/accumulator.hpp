@@ -17,11 +17,14 @@
 //   Black). Mirrored architectures also flip the files (XOR 7) when P's own
 //   king stands on files a-d, and add 768 times the region of P's mirrored
 //   king square (a Frame). XGR's and S512+X's exposure inputs follow the
-//   piece rows. S512+PP's link inputs follow the piece rows in the same sums:
-//   a move changes them only when a pawn moves, is captured or promotes.
+//   piece rows. S512+PP's link inputs follow the piece rows in the same sums
+//   (H512+PP's follow every region's piece rows): a move changes them only
+//   when a pawn moves, is captured or promotes.
 // - A perspective's frame changes only when its own king moves across the
 //   d/e line or into another region; then that perspective is recomputed
-//   from the board, every other update is incremental.
+//   from the board (H512+PP: lazily, from that frame's snapshot, by the
+//   difference of the boards; FeatureStack), every other update is
+//   incremental.
 // - Every SIMD path has a scalar reference here, always compiled, with the
 //   same results bit for bit (tests/test_nnue.cpp); the net file's bounds
 //   (net_file.hpp) guarantee no overflow on any path.
@@ -72,8 +75,8 @@ struct FeatureDelta {
   int removed_count = 0, added_count = 0;
   Piece removed_piece[2], added_piece[2];
   Square removed_square[2], added_square[2];
-#if FORK_NET_ARCH == 8
-  // S512+PP's links change only when a pawn moves, is captured or promotes:
+#if FORK_NET_LINKS
+  // S512+PP's (and H512+PP's) links change only when a pawn moves, is captured or promotes:
   // then pawn_change is set and these hold each side's pawns before and
   // after the move (left unset otherwise).
   bool pawn_change = false;
@@ -125,8 +128,10 @@ Bitboard exposed_pieces(const Position& pos);
 // evaluated); perspective updates in the evaluation walk (B0's
 // both-at-once kernel counts two), the rows they subtract and add, and those
 // whose delta changed pawns (S512+PP's link rows); perspectives recomputed
-// from the board at a frame change and at a search's root; and the plies an
-// evaluation walks, the longer perspective's walk.
+// from the board at a frame change (H512+PP: refreshed from a snapshot at an
+// evaluation, once per evaluation that needs it) and at a search's root; the
+// plies an evaluation walks, the longer perspective's walk; and the king
+// moves pushed.
 struct FeatureStackTally {
   std::uint64_t evaluations = 0;
   std::uint64_t move_pushes = 0;
@@ -137,6 +142,7 @@ struct FeatureStackTally {
   std::uint64_t frame_refreshes = 0;
   std::uint64_t root_refreshes = 0;
   std::uint64_t walked_plies = 0;
+  std::uint64_t king_pushes = 0;
 };
 
 #ifdef FORK_SEARCH_STATS
@@ -147,8 +153,14 @@ int delta_row_count(const NetFile& net, const FeatureDelta& d, Color perspective
 
 // One accumulator per ply of a search: ply 0 is the root, computed from
 // scratch; the others are computed from their parent when first needed,
-// except a perspective whose frame the move changes, which is recomputed
-// from the board at once.
+// except a perspective whose frame the move changes. That one is recomputed
+// from the board at once, or in H512+PP, whose king regions make frame
+// changes several times as frequent, lazily: when an evaluation needs that
+// perspective at that ply or below, the evaluated ply's sums for it come
+// from the frame's snapshot (the sums last computed in that frame, with the
+// board they belong to), brought to the current board by the pieces and
+// links that differ, and the snapshot takes the new sums. Children never
+// evaluated cost nothing.
 class FeatureStack {
  public:
   void reset(const NetFile& net, const Position& root);
@@ -179,6 +191,23 @@ class FeatureStack {
     Frame frame[2];
     bool computed[2] = {false, false};
   };
+#if FORK_NET_ARCH == 9
+  // One perspective's sums in one frame, with the board they belong to (each
+  // colour's pieces by kind). reset() starts every snapshot as the empty
+  // board (the biases), so its first use adds every piece and link.
+  struct FrameSnapshot {
+    alignas(64) std::int16_t values[NetHidden];
+    Bitboard pieces[2][6];
+  };
+  // A slot per file flip and region of one perspective.
+  static constexpr int SnapshotSlots = 2 * NetMaxRegions;
+  static int snapshot_slot(Frame f) { return (f.flip != 0) + 2 * (f.offset / NetPieceSquares); }
+  // Sets `perspective`'s sums at `ply` from its frame's snapshot and `pos`
+  // (the position at `ply`), and the snapshot to them.
+  void refresh_from_snapshot(const NetFile& net, int ply, Color perspective, const Position& pos);
+
+  FrameSnapshot snapshots_[2][SnapshotSlots];
+#endif
   Entry entries_[MaxPly + 1];
 #ifdef FORK_SEARCH_STATS
   FeatureStackTally tally_;

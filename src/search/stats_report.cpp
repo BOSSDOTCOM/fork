@@ -112,13 +112,14 @@ void print_counter_summary(const SearchCounters& c, const FeatureStackTally* tal
         out,
         "stats: network evaluations %llu, perspective updates %llu, rows per update %.3f, refreshes "
         "per 1,000 updates %.3f (root %llu, frame %llu), plies walked per evaluation %.3f, link-update "
-        "share %.1f%%, pushes %llu (null %llu)\n",
+        "share %.1f%%, pushes %llu (null %llu, king %llu)\n",
         static_cast<unsigned long long>(t.evaluations),
         static_cast<unsigned long long>(t.perspective_updates), ratio(t.update_rows, t.perspective_updates),
         1000.0 * ratio(t.frame_refreshes + t.root_refreshes, t.perspective_updates),
         static_cast<unsigned long long>(t.root_refreshes), static_cast<unsigned long long>(t.frame_refreshes),
         ratio(t.walked_plies, t.evaluations), 100.0 * ratio(t.link_updates, t.perspective_updates),
-        static_cast<unsigned long long>(t.move_pushes), static_cast<unsigned long long>(t.null_pushes));
+        static_cast<unsigned long long>(t.move_pushes), static_cast<unsigned long long>(t.null_pushes),
+        static_cast<unsigned long long>(t.king_pushes));
   }
 #else
   (void)tally;
@@ -185,13 +186,13 @@ void print_counter_dump(const SearchCounters& c, const FeatureStackTally* tally,
     std::fprintf(
         out,
         " evaluations=%llu move_pushes=%llu null_pushes=%llu perspective_updates=%llu update_rows=%llu "
-        "link_updates=%llu frame_refreshes=%llu root_refreshes=%llu walked_plies=%llu",
+        "link_updates=%llu frame_refreshes=%llu root_refreshes=%llu walked_plies=%llu king_pushes=%llu",
         static_cast<unsigned long long>(t.evaluations), static_cast<unsigned long long>(t.move_pushes),
         static_cast<unsigned long long>(t.null_pushes),
         static_cast<unsigned long long>(t.perspective_updates),
         static_cast<unsigned long long>(t.update_rows), static_cast<unsigned long long>(t.link_updates),
         static_cast<unsigned long long>(t.frame_refreshes), static_cast<unsigned long long>(t.root_refreshes),
-        static_cast<unsigned long long>(t.walked_plies));
+        static_cast<unsigned long long>(t.walked_plies), static_cast<unsigned long long>(t.king_pushes));
   }
 #else
   (void)tally;

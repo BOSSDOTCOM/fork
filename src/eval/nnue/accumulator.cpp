@@ -24,8 +24,17 @@ int clamp_cp(std::int64_t cp) {
   return static_cast<int>(std::clamp<std::int64_t>(cp, -(EvalLimit - 1), EvalLimit - 1));
 }
 
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
 bool pawns_changed(const FeatureDelta& d) { return d.pawn_change; }
+
+// The first link row: after the piece rows (H512+PP: after every region's;
+// S512+PP's is the constant 768).
+int link_start(const NetFile& net) {
+  if constexpr (NetRegioned)
+    return NetPieceSquares * net.region_count;
+  else
+    return NetPieceSquares;
+}
 
 // S512+PP: adds one perspective's link rows (from the two sides' pawns, in
 // frame `flip`) to its sums.
@@ -34,7 +43,7 @@ void add_link_rows(const NetFile& net, const Bitboard (&pawns)[2], Color perspec
   std::int32_t inputs[LinkMaxActive];
   const int n = link_inputs(pawns[White], pawns[Black], perspective, flip, inputs);
   for (int k = 0; k < n; ++k) {
-    const std::int16_t* w = column(net, NetPieceSquares + inputs[k]);
+    const std::int16_t* w = column(net, link_start(net) + inputs[k]);
     for (int i = 0; i < NetHidden; ++i) v[i] = static_cast<std::int16_t>(v[i] + w[i]);
   }
 }
@@ -63,18 +72,18 @@ DeltaColumns columns_for(const NetFile& net, const FeatureDelta& d, Color perspe
     c.add[c.adds] = column(net, c.add_rows[c.adds]);
     ++c.adds;
   }
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
   if (pawns_changed(d)) {
     std::int32_t removed[LinkMaxActive], added[LinkMaxActive];
     int nr = 0, na = 0;
     link_changes(d.pawns_before, d.pawns_after, perspective, f.flip, removed, nr, added, na);
     for (int i = 0; i < nr; ++i) {
-      c.sub_rows[c.subs] = NetPieceSquares + removed[i];
+      c.sub_rows[c.subs] = link_start(net) + removed[i];
       c.sub[c.subs] = column(net, c.sub_rows[c.subs]);
       ++c.subs;
     }
     for (int i = 0; i < na; ++i) {
-      c.add_rows[c.adds] = NetPieceSquares + added[i];
+      c.add_rows[c.adds] = link_start(net) + added[i];
       c.add[c.adds] = column(net, c.add_rows[c.adds]);
       ++c.adds;
     }
@@ -178,7 +187,7 @@ void sum_perspective(const NetFile& net, Color perspective, Frame f, ForEach for
 }
 
 #if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
-    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
 // sum over both halves (side to move first) of v * (v * w), v the clipped
 // value: S-512's and H-512's output, and each of XGR's experts.
 std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
@@ -409,7 +418,7 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
   return Scalar ? output_layer_scalar(net, acc, pos.side_to_move())
                 : output_layer(net, acc, pos.side_to_move());
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
 #if FORK_NET_ARCH == 6
   Accumulator summed;
   const Accumulator& a = add_exposure_rows(net, acc, pos, summed) ? summed : acc;
@@ -522,7 +531,7 @@ FeatureDelta delta_for_move(const Position& before, Move m) {
     remove(before.piece_at(captured), captured);
   }
   add(m.is_promotion() ? piece_of(us, m.promo_type()) : mover, to);
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
   // Castling moves no pawn; otherwise the mover or the captured piece may be one.
   const bool captured_pawn = d.removed_count == 2 && kind_of(d.removed_piece[1]) == Pawn;
   if (kind_of(mover) == Pawn || captured_pawn) {
@@ -558,7 +567,7 @@ void accumulate_board(const NetFile& net, const Position& pos, Accumulator& out)
           }
         },
         out);
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
     const Bitboard pawns[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
     add_link_rows(net, pawns, perspective, f.flip, out.values[perspective]);
 #endif
@@ -713,7 +722,63 @@ void FeatureStack::reset(const NetFile& net, const Position& root) {
     e.computed[perspective] = true;
   }
   accumulate_board(net, root, e.acc);
+#if FORK_NET_ARCH == 9
+  // Every snapshot starts as the empty board of this net.
+  for (auto& side : snapshots_)
+    for (FrameSnapshot& s : side) {
+      std::memcpy(s.values, net.ft_bias, sizeof s.values);
+      for (auto& by_kind : s.pieces)
+        for (Bitboard& b : by_kind) b = 0;
+    }
+#endif
 }
+
+#if FORK_NET_ARCH == 9
+void FeatureStack::refresh_from_snapshot(const NetFile& net, int ply, Color perspective,
+                                         const Position& pos) {
+#ifdef FORK_SEARCH_STATS
+  ++tally_.frame_refreshes;
+#endif
+  Entry& e = entries_[ply];
+  const Frame f = e.frame[perspective];
+  FrameSnapshot& snap = snapshots_[perspective][snapshot_slot(f)];
+  // The rows of the pieces that differ (at most 32 each way), then the links
+  // of the pawns that differ (link_changes holds for any two pawn sets: the
+  // links of a pawn that left or arrived, at most 64 each way at the links'
+  // rank limit): at most 96 rows each way, within DeltaColumns' room.
+  static_assert(DeltaColumns::Room >= 32 + 64);
+  DeltaColumns c;
+  for (const Color side : {White, Black})
+    for (int k = Pawn; k <= King; ++k) {
+      const Piece p = piece_of(side, PieceType(k));
+      const Bitboard now = pos.pieces(side, PieceType(k)), then = snap.pieces[side][k];
+      for (Bitboard b = then & ~now; b;) {
+        c.sub_rows[c.subs] = feature_index(perspective, p, pop_lsb(b), f);
+        c.sub[c.subs] = column(net, c.sub_rows[c.subs]);
+        ++c.subs;
+      }
+      for (Bitboard b = now & ~then; b;) {
+        c.add_rows[c.adds] = feature_index(perspective, p, pop_lsb(b), f);
+        c.add[c.adds] = column(net, c.add_rows[c.adds]);
+        ++c.adds;
+      }
+    }
+  const Bitboard pawns_then[2] = {snap.pieces[White][Pawn], snap.pieces[Black][Pawn]};
+  const Bitboard pawns_now[2] = {pos.pieces(White, Pawn), pos.pieces(Black, Pawn)};
+  if (pawns_then[White] != pawns_now[White] || pawns_then[Black] != pawns_now[Black]) {
+    std::int32_t removed[LinkMaxActive], added[LinkMaxActive];
+    int nr = 0, na = 0;
+    link_changes(pawns_then, pawns_now, perspective, f.flip, removed, nr, added, na);
+    for (int i = 0; i < nr; ++i) c.sub[c.subs++] = column(net, link_start(net) + removed[i]);
+    for (int i = 0; i < na; ++i) c.add[c.adds++] = column(net, link_start(net) + added[i]);
+  }
+  advance_values(snap.values, c, snap.values);
+  for (const Color side : {White, Black})
+    for (int k = Pawn; k <= King; ++k) snap.pieces[side][k] = pos.pieces(side, PieceType(k));
+  std::memcpy(e.acc.values[perspective], snap.values, sizeof snap.values);
+  e.computed[perspective] = true;
+}
+#endif
 
 void FeatureStack::push_move(const NetFile& net, int ply, const Position& before, Move m) {
 #ifdef FORK_SEARCH_STATS
@@ -728,8 +793,16 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
     e.frame[Black] = parent.frame[Black];
     const Color us = before.side_to_move();
     if (kind_of(before.piece_at(m.from())) == King) {
+#ifdef FORK_SEARCH_STATS
+      ++tally_.king_pushes;
+#endif
       const Square to = m.is_castle() ? Position::castle_landing(m.from(), m.to()).king : m.to();
       const Frame f = frame_of(net, us, to);
+#if FORK_NET_ARCH == 9
+      // The mover's frame may change: then the first evaluation that needs
+      // this perspective at this ply or below takes it from the snapshot.
+      e.frame[us] = f;
+#else
       if (f != parent.frame[us]) {
         // The mover's perspective sees a new frame: its sums from the board
         // after the move (the parent's pieces with the delta applied).
@@ -749,7 +822,7 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
               for (int i = 0; i < d.added_count; ++i) visit(d.added_piece[i], d.added_square[i]);
             },
             e.acc);
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
         // A king move that changes the frame changes no pawn, except a king
         // capturing one.
         const Bitboard pawns_now[2] = {d.pawn_change ? d.pawns_after[White] : before.pieces(White, Pawn),
@@ -761,6 +834,7 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
         ++tally_.frame_refreshes;
 #endif
       }
+#endif
     }
   }
 }
@@ -790,7 +864,21 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
 #else
   for (const Color perspective : {White, Black}) {
     int base = ply;
+#if FORK_NET_ARCH == 9
+    // Back to the nearest computed ply (ply 0 always is), unless a ply on the
+    // way changed this perspective's frame: then the evaluated ply comes from
+    // the frame's snapshot (the plies between stay uncomputed).
+    while (!entries_[base].computed[perspective]) {
+      if (entries_[base].frame[perspective] != entries_[base - 1].frame[perspective]) {
+        refresh_from_snapshot(net, ply, perspective, pos);
+        base = ply;
+        break;
+      }
+      --base;
+    }
+#else
     while (!entries_[base].computed[perspective]) --base;  // ply 0 is always computed
+#endif
     for (int p = base + 1; p <= ply; ++p) {
       advance_perspective(net, entries_[p - 1].acc, entries_[p].delta, perspective,
                           entries_[p].frame[perspective], entries_[p].acc);
@@ -799,7 +887,7 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
       ++tally_.perspective_updates;
       tally_.update_rows += static_cast<std::uint64_t>(
           delta_row_count(net, entries_[p].delta, perspective, entries_[p].frame[perspective]));
-#if FORK_NET_ARCH == 8
+#if FORK_NET_LINKS
       tally_.link_updates += pawns_changed(entries_[p].delta);
 #endif
 #endif

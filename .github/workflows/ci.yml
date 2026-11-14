@@ -565,17 +565,24 @@ jobs:
   # default until r8brft1's (2026-11-11), each checked against its parity
   # file
   # (netcheck) and its bench reference. Light on purpose: a clang release
-  # build of `fork` only, no tests and no test data.
+  # build of `fork` only, no tests and no test data; except r8brft1kr4,
+  # H512+PP's test net (architecture 9, bake-off round 3's option a: r8brft1
+  # with its piece rows copied into every king region, so its bench is
+  # r8brft1's; tools/nnue/extend_weights.py), whose job also runs the nnue
+  # suite, the only place architecture 9's own test cases are compiled.
   nets:
     name: Network ${{ matrix.net }}
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        net: [r8btd90, s512ppr3, s512ppr2, s512pp, s512r2, s512, b0r2, g1h512, g1afs, g1xgr]
+        net: [r8brft1kr4, r8btd90, s512ppr3, s512ppr2, s512pp, s512r2, s512, b0r2, g1h512, g1afs, g1xgr]
+        include:
+          - net: r8brft1kr4
+            suite: nnue
     env:
       FORK_CLANG_CXX: clang++
     steps:
@@ -587,6 +594,8 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y -q ninja-build
       - name: Build with the network, netcheck and bench parity
+        env:
+          NET_SUITE: ${{ matrix.suite }}
         run: bash .github/ci/net-check.sh ${{ matrix.net }}
 
   slow:
