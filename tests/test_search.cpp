@@ -154,6 +154,13 @@ SearchSwitches exact_switches() {
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = false;
   s.use_quiesce_move_cap = false;  // not exact either
   s.use_root_lmr = false;          // not exact either
+  // The history skip (tier 2, T24, on since 2026-11-12) prunes a quiet move on
+  // its history at depths 1-3, so it is not exact either: left on, it skipped
+  // a refuting king move once a network's evaluations had left that move with
+  // bad history (2026-11-14: the zero-window case below in KRK, 443 against
+  // 442, with bake-off round 3's x_lower smoke net, as architecture 10 and
+  // with its weights as S512+PP alike).
+  s.use_history_skip = false;
   return s;
 }
 
@@ -360,9 +367,10 @@ TEST_CASE("search", "known: with a repetition in reach, TT cutoffs may differ sl
 // a valid bound of the exact value. Betas lie around the exact value and, in
 // the mate positions (test_search.cpp's mates, checked by
 // tools/check_search_positions.py), on the mate scores, where mate distance
-// pruning binds.
-TEST_CASE("search",
-          "zero-window probes agree with a zero-window reference, mate bands included (TT shared)") {
+// pruning binds. With `keep_history` the move-ordering history is not cleared
+// between positions (as in games, and as passes > 1 repeat the whole list),
+// so whatever reads it (the history skip, ordering) sees grown tables.
+void check_zero_window_probes(bool keep_history, int passes) {
   Fixture fx;
   struct Probed {
     std::string_view fen;
@@ -382,41 +390,60 @@ TEST_CASE("search",
                                "6k1/5ppp/8/8/8/8/8/R5K1 b - - 0 1"})
     positions.push_back({fen, 3});
   int probes = 0, mate_band = 0;
-  for (const Probed& p : positions) {
-    Position pos;
-    CHECK(pos.set_fen(p.fen));
-    if (p.small)
-      CHECK_MSG(!repetition_in_tree(pos, p.depth), p.fen << ": a repetition fits in depth " << p.depth);
-    fx.store.clear();
-    fx.searcher->clear_history();
-    fx.searcher->switches = exact_switches();
-    SearchQuota limits;
-    limits.depth = p.depth;
-    const int full = fx.search(pos, limits).score;  // fills the TT with PV and non-PV entries
-    for (int d = 1; d <= p.depth; ++d) {
-      const int value = reference_minimax(pos, d, 0);
-      if (d == p.depth) CHECK_MSG(full == value, p.fen << ": full window " << full << " vs " << value);
-      std::vector<int> betas;
-      for (int offset : {-300, -40, -1, 0, 1, 40, 300}) betas.push_back(value + offset);
-      for (int n = 1; n <= 5; ++n) {
-        betas.push_back(mate_score(n));
-        betas.push_back(mated_score(n));
-        betas.push_back(mated_score(n) + 1);
-      }
-      for (int beta : betas) {
-        beta = std::clamp(beta, -ScoreInfinite + 1, ScoreInfinite);
-        const int s = fx.searcher->probe_zero_window(pos, beta, d, fx.stop);
-        const int ref = reference_alphabeta(pos, d, 0, beta - 1, beta, true);
-        ++probes;
-        mate_band += is_mate_score(beta);
-        CHECK_MSG((s >= beta) == (ref >= beta),
-                  p.fen << " depth " << d << " beta " << beta << ": probe " << s << ", reference " << ref);
-        CHECK_MSG(s >= beta ? value >= s : value <= s,
-                  p.fen << " depth " << d << " beta " << beta << ": fail-soft " << s << ", exact " << value);
+  fx.searcher->clear_history();
+  for (int pass = 0; pass < passes; ++pass)
+    for (const Probed& p : positions) {
+      Position pos;
+      CHECK(pos.set_fen(p.fen));
+      if (p.small)
+        CHECK_MSG(!repetition_in_tree(pos, p.depth), p.fen << ": a repetition fits in depth " << p.depth);
+      fx.store.clear();
+      if (!keep_history) fx.searcher->clear_history();
+      fx.searcher->switches = exact_switches();
+      SearchQuota limits;
+      limits.depth = p.depth;
+      const int full = fx.search(pos, limits).score;  // fills the TT with PV and non-PV entries
+      for (int d = 1; d <= p.depth; ++d) {
+        const int value = reference_minimax(pos, d, 0);
+        if (d == p.depth) CHECK_MSG(full == value, p.fen << ": full window " << full << " vs " << value);
+        std::vector<int> betas;
+        for (int offset : {-300, -40, -1, 0, 1, 40, 300}) betas.push_back(value + offset);
+        for (int n = 1; n <= 5; ++n) {
+          betas.push_back(mate_score(n));
+          betas.push_back(mated_score(n));
+          betas.push_back(mated_score(n) + 1);
+        }
+        for (int beta : betas) {
+          beta = std::clamp(beta, -ScoreInfinite + 1, ScoreInfinite);
+          const int s = fx.searcher->probe_zero_window(pos, beta, d, fx.stop);
+          const int ref = reference_alphabeta(pos, d, 0, beta - 1, beta, true);
+          ++probes;
+          mate_band += is_mate_score(beta);
+          CHECK_MSG((s >= beta) == (ref >= beta),
+                    p.fen << " depth " << d << " beta " << beta << ": probe " << s << ", reference " << ref);
+          CHECK_MSG(s >= beta ? value >= s : value <= s, p.fen << " depth " << d << " beta " << beta
+                                                               << ": fail-soft " << s << ", exact " << value);
+        }
       }
     }
-  }
   CHECK(probes > 0 && mate_band > 0);
+}
+
+TEST_CASE("search",
+          "zero-window probes agree with a zero-window reference, mate bands included (TT shared)") {
+  check_zero_window_probes(false, 1);
+}
+
+// The same with the history kept across positions and passes: exact_switches()
+// must switch off every rule that prunes on the history (the history skip).
+// With it left on, a probe failed high one centipawn above the exact value in
+// KRK (8/8/3k4/8/8/3K4/8/R7 w, depth 2: 443 against 442) once a network's
+// evaluations had left a refuting king move with bad history (bake-off round
+// 3's x_lower smoke net, 2026-11-14, and its weights as S512+PP: this case and
+// the one above fail with either). The default network never reaches such a
+// history in these positions, so with it both pass either way.
+TEST_CASE("search", "zero-window probes stay exact with the history of earlier searches kept") {
+  check_zero_window_probes(true, 2);
 }
 
 // Audit-1 Q-10 (DESIGN.md §5.2's tiny-hash stress test): every search
@@ -1178,8 +1205,9 @@ TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored abo
         const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
         if (r.depth == 0) continue;
         const int finished_depth = fx.searcher->time_signals().depth;
-        const auto finished = std::ranges::find_if(
-            log.entries, [&](const ReportLog::Entry& e) { return e.depth == finished_depth && e.bound == 0; });
+        const auto finished = std::ranges::find_if(log.entries, [&](const ReportLog::Entry& e) {
+          return e.depth == finished_depth && e.bound == 0;
+        });
         CHECK_MSG(finished != log.entries.end(),
                   fen << " at " << nodes << " nodes: no report of depth " << finished_depth);
         if (finished == log.entries.end() || r.best == finished->first) continue;
