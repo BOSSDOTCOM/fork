@@ -13,6 +13,7 @@
 #include "core/material.hpp"
 #include "eval/eval_scale.hpp"
 #include "eval/nnue/contacts.hpp"
+#include "eval/nnue/head_scale.hpp"
 
 namespace forkeng {
 
@@ -472,6 +473,8 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
   const std::int64_t s = Scalar ? squared_sum_scalar(a.values[stm], a.values[~stm], net.out_weights[k])
                                 : squared_sum(a.values[stm], a.values[~stm], net.out_weights[k]);
   const std::int64_t y = s / NetQa + net.out_bias[k];
+  if constexpr (HeadScaleActive)
+    return clamp_cp(scaled_head_cp(y, net.scale, HeadScaleTable[k][pos.pieces(Queen) != 0], NetQa, NetQb));
   return clamp_cp(y * net.scale / (NetQa * NetQb));
 #elif FORK_NET_ARCH == 4
   return af_output<Scalar>(net, acc, pos);

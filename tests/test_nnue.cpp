@@ -27,6 +27,7 @@
 #include "eval/eval_scale.hpp"
 #include "eval/nnue/accumulator.hpp"
 #include "eval/nnue/contacts.hpp"
+#include "eval/nnue/head_scale.hpp"
 #include "eval/nnue/net_file.hpp"
 #include "harness.hpp"
 #include "suite.hpp"
@@ -795,6 +796,37 @@ TEST_CASE("nnue", "a position and its colour mirror evaluate the same") {
     }
   }
   CHECK(checked > 100);
+}
+
+// ideas.md 180 step 2 (head_scale.hpp): the unit multiplier is exactly the
+// unscaled output, and other multipliers scale it exactly, each checked
+// against the scaling written another way (a factor of 2 in the numerator, a
+// factor of 2 in the denominator).
+TEST_CASE("nnue", "the head scale's unit multiplier is the unscaled output, and it scales exactly") {
+  std::uint64_t rng = 180;
+  int checked = 0;
+  const std::int64_t qq = std::int64_t{NetQa} * NetQb;
+  for (const std::int32_t scale : {1, 87, 88, 100000}) {
+    for (int i = 0; i < 4000; ++i) {
+      std::int64_t y = uniform(rng, -(1 << 24) + 1, (1 << 24) - 1);
+      if (i == 0) y = (1 << 24) - 1;
+      if (i == 1) y = -(1 << 24) + 1;
+      if (i == 2) y = 0;
+      if (i == 3) y = -1;
+      CHECK_EQ(scaled_head_cp(y, scale, HeadScaleOne, NetQa, NetQb), y * scale / qq);
+      CHECK_EQ(scaled_head_cp(y, scale, 2 * HeadScaleOne, NetQa, NetQb), 2 * y * scale / qq);
+      CHECK_EQ(scaled_head_cp(y, scale, HeadScaleOne / 2, NetQa, NetQb), y * scale / (2 * qq));
+      ++checked;
+    }
+  }
+  CHECK(checked == 16000);
+  // Default builds carry the unit table; the experiment's factors stay within
+  // its declared rails, [0.70, 1.40].
+  for (const auto& bucket : HeadScaleTable)
+    for (const std::int32_t m : bucket) {
+      if (!HeadScaleActive) CHECK_EQ(m, HeadScaleOne);
+      CHECK(m >= HeadScaleOne * 7 / 10 && m <= HeadScaleOne * 14 / 10);
+    }
 }
 
 TEST_CASE("nnue", "mirrored networks evaluate a position and its left-right mirror the same") {

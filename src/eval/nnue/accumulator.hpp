@@ -33,6 +33,9 @@
 // - The evaluation is from the side to move's view, in centipawns, clamped
 //   inside +-EvalLimit. A position and its colour mirror evaluate the same;
 //   with mirroring, so do a position and its left-right mirror.
+// - The phase-picked outputs take head_scale.hpp's multiplier for their
+//   bucket and queen state: the unit in default builds (no change), the
+//   fitted table under FORK_EXPERIMENT=HEAD_SCALE (ideas.md 180).
 // - An incrementally updated accumulator equals one computed from scratch.
 // - No allocation, no floating point.
 // - Stats builds (FORK_SEARCH_STATS) also count the stack's work in a
