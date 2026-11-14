@@ -252,6 +252,14 @@ struct SearchQuota {
 //   the quiescence search). On since its STC SPRT against off passed at the
 //   retry value QuiesceMoveCap 2 (3 had stopped for futility): +8.90 +/- 5.56
 //   Elo after 4,800 games, design R [0, 6]; 2026-11-13.
+// - use_root_lmr: late quiet root moves are reduced by the LMR table (less
+//   the check relief), then searched again at full depth if they beat alpha
+//   (bug review 2026-11-11 §3: root moves were never reduced). Needs use_lmr
+//   and use_pvs. The whole-ply table entry only, as tested: no context
+//   correction, cut-node or not-improving plies, and no R20 history term.
+//   On since its SPRTs against off passed: STC +17.71 +/- 6.74 Elo after
+//   3,200 games, LTC +14.94 +/- 6.24 Elo after 3,328 games, design R
+//   [0, 6]; 2026-11-13.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -301,7 +309,8 @@ struct SearchQuota {
   X(use_improving_lmr, UseImprovingLmr, true)            \
   X(use_centred_lmr_history, UseCentredLmrHistory, true) \
   X(use_linear_bonus, UseLinearBonus, true)              \
-  X(use_quiesce_move_cap, UseQuiesceMoveCap, true)
+  X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
+  X(use_root_lmr, UseRootLmr, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

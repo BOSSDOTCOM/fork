@@ -399,8 +399,14 @@ TEST_CASE("pruning", "take history: still correct, and it changes the search") {
 TEST_CASE("pruning", "no-move reduction: still correct, and it changes the search") {
   PruningFixture fx;
   CHECK(SearchSwitches{}.use_no_move_reduction);  // on since its SPRT (2026-11-02)
+  // The tree check below was set on trees without root reductions (they did
+  // not exist yet); with them on, the debug build's three depth-9 trees come
+  // out the same with the reduction on and off (2026-11-13; the release
+  // build's depth-12 trees still differ), so the case pins them off: it tests
+  // the reduction on the trees it was built for.
   SearchSwitches on;
   on.use_no_move_reduction = true;
+  on.use_root_lmr = false;
   fx.searcher->switches = on;
   CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
@@ -413,6 +419,7 @@ TEST_CASE("pruning", "no-move reduction: still correct, and it changes the searc
   CHECK(legal.contains(fx.search(kiwipete, depth).best));
   SearchSwitches off;
   off.use_no_move_reduction = false;
+  off.use_root_lmr = false;
   CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
             "the no-move reduction left all three trees unchanged");
 }
@@ -815,8 +822,14 @@ TEST_CASE("pruning", "round-once LMR: 64ths round back to the whole-ply table, t
 TEST_CASE("pruning", "centred LMR history: still correct, changes the search, round-once alone does not") {
   PruningFixture fx;
   CHECK(SearchSwitches{}.use_centred_lmr_history);  // on since its SPRTs
+  // The tree check below was set on trees without root reductions (adopted
+  // after R20); with them on, the debug build's three depth-7 trees come out
+  // the same with the term on and off (2026-11-13; the release build's
+  // depth-10 trees still differ), so the case pins them off: it tests the
+  // term on the trees it was built for.
   SearchSwitches on;
   on.use_centred_lmr_history = true;
+  on.use_root_lmr = false;
   fx.searcher->switches = on;
   CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
@@ -829,6 +842,7 @@ TEST_CASE("pruning", "centred LMR history: still correct, changes the search, ro
   CHECK(legal.contains(fx.search(kiwipete, depth).best));
   SearchSwitches off;
   off.use_centred_lmr_history = false;
+  off.use_root_lmr = false;
   CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
             "the centred LMR history term left all three trees unchanged");
   SearchSwitches no_history_on = on, no_history_off = off;
@@ -892,6 +906,34 @@ TEST_CASE("pruning", "quiescence move cap: still correct, and it changes the sea
   SearchSwitches no_quiesce_on = on, no_quiesce_off = off;
   no_quiesce_on.use_quiesce = no_quiesce_off.use_quiesce = false;
   CHECK(fx.tree_sizes(no_quiesce_on, depth) == fx.tree_sizes(no_quiesce_off, depth));
+}
+
+// Root reductions (bug review 2026-11-11 §3): with them on, mates are still
+// found and the best move is legal, and they change the tree (fault check: a
+// root reduction that never fires leaves the trees as with the switch off);
+// with LMR off they do nothing.
+TEST_CASE("pruning", "root reductions: still correct, and they change the search") {
+  PruningFixture fx;
+  CHECK(SearchSwitches{}.use_root_lmr);  // on since its SPRTs
+  SearchSwitches on;
+  on.use_root_lmr = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_root_lmr = false;  // explicitly off: it is on by default
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "root reductions left all three trees unchanged");
+  SearchSwitches no_lmr_on = on, no_lmr_off = off;
+  no_lmr_on.use_lmr = no_lmr_off.use_lmr = false;
+  CHECK(fx.tree_sizes(no_lmr_on, depth) == fx.tree_sizes(no_lmr_off, depth));
 }
 
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
@@ -978,6 +1020,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_pair_sum_update = s.use_check_order_bonus = s.use_skip_check_exempt = true;
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
   s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
+  s.use_root_lmr = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

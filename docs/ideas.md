@@ -2914,6 +2914,24 @@ whose weaknesses and data gaps decide their targets and order.
 - **runtime cost:** one comparison per quiescence move; fewer quiescence nodes. bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned, the shared machine busy; identity checked on all 24 runs), A = 929f114, B = the port: median nps +5.1%, best -1.5%, under the run's 15.8% noise threshold, so no significant difference (the two search different trees: 6,624,814 against 6,064,962 bench nodes; the code change itself is one comparison per quiescence move).
 - **earliest phase:** Phase 4.
 
+## 124. Root reductions (bug review 2026-11-11 §3)
+
+- **type:** ELO (search); flag `use_root_lmr` (on since 2026-11-13).
+- **idea** (bug review 2026-11-11 §3: "Root moves are never reduced"): late
+  quiet root moves get the LMR table's reduction (less the check relief),
+  with the usual full-depth re-search when they beat alpha.
+- **status:** **adopted 2026-11-13** on its STC and LTC passes (design R [0, 6] against off; sprt-log):
+  root-lmr-stc +17.71 ± 6.74 Elo (nElo +31.68 ± 12.04, H1 after 3,200 games) and root-lmr-ltc (40+0.4)
+  +14.94 ± 6.24 Elo (nElo +28.29 ± 11.80, H1 after 3,328 games), pre-approved by the owner (2026-11-13:
+  "pre-approved adoptions as before (incl. root LMR on an LTC pass)"). Ported onto phase-4 bbc19c5, bench
+  5,386,021 / 5ecd49d976e215e1 (DESIGN.md decisions log, 2026-11-13). No constant, so no final-retune
+  dimension. History: the coordinator's overnight build list, 2026-11-12 ("Root reductions. R-STC + LTC
+  (depth)"); built on phase-4 ab70fa5 behind the switch, off, on tier2/root-lmr 350ea3a (bench 9,639,207 /
+  07f7ae19b9250f38, r8brft1); test commit sprt/root-lmr b56adb9; night items 64a and 64c (ledger idea
+  `root-lmr`), gated behind state/gate-e1.done.
+- **runtime cost:** a few comparisons per root move; fewer nodes (bench 11.2% fewer). Speed: bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned; identity checked on all 24 runs), A = bbc19c5, B = the port: median nps -1.5%, best -2.0%, under the run's 3.0% noise threshold, so no significant difference (the two search different trees: 6,064,962 against 5,386,021 bench nodes; the code change itself is a few comparisons per root move).
+- **earliest phase:** Phase 4.
+
 ## 173. The linear history bonus (the engine survey's D11, think tank R15)
 
 - **type:** ELO (search); flag `use_linear_bonus` (on since 2026-11-13).

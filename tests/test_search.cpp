@@ -153,6 +153,7 @@ SearchSwitches exact_switches() {
   s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = false;
   s.use_quiesce_move_cap = false;  // not exact either
+  s.use_root_lmr = false;          // not exact either
   return s;
 }
 
