@@ -267,6 +267,11 @@ tool_tests() {  # python | all
   # controls against a simulated supervisor, the seal, and the read-only tabs under a write-blocking guard.
   "$py" -I -B -m unittest discover -s tools/control_center -p 'test_*.py' >>"$log" 2>&1 \
     || fail "tool tests: tools/control_center"
+  # The Fork Operations Display (owner, 2026-11-14): its readers on the real formats (missing, truncated and
+  # corrupt files included), discovery, the alerts, and the display-only guarantee: a guard that fails on any
+  # write or process start, and the allow-list of its read-only commands.
+  "$py" -I -B -m unittest discover -s tools/ops_display -p 'test_*.py' >>"$log" 2>&1 \
+    || fail "tool tests: tools/ops_display"
   # tools/datagen and tools/nnue need python-chess and zstandard (the
   # repository's .venv); the log says when they are missing and the suites are skipped.
   if "$py" -I -c 'import chess, zstandard' >/dev/null 2>&1; then
