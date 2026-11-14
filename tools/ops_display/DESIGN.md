@@ -72,8 +72,9 @@ serve.py    127.0.0.1, GET only: the page and /snapshot            web/      ind
 - The page asks for `/snapshot` every 2 seconds; the server refreshes it every 2 seconds.
 - Cadence: machine 2 s; jobs and lanes 5 s; data 10 s; tests, training 30 s; overview 60 s. A file is read
   only when its size or modified time changed.
-- Cost, measured against the live files: the sections together 4.1 ms per second; each snapshot 2.9 ms. The
-  first pass (every job record and test folder once) takes about 3 s.
+- Cost, measured beside production on 2026-11-14: 0.55% of one core in steady state (1.33 s of CPU in 240 s)
+  and 30 MB of memory; 809 sources watched. The first pass (every job record and test folder once) takes
+  about 3 s.
 - `readers.py`, `rules.py` and the page reload themselves when their files change; a version that fails to
   load leaves the previous one running and raises an alert. `collect.py` and `serve.py` need a restart.
 - `rules.json` beside `rules.py` (optional) overrides the alert thresholds; it is re-read on change.
@@ -163,7 +164,7 @@ The display works without these; each line says what it shows until then.
 | Addition | Until then | State |
 |---|---|---|
 | Per-lane current-item marker (`state/current-<LANE>.txt`) | the first runnable item in name order | **done by the production session, 2026-11-14; read by the display** |
-| Per-shard progress artifacts for preliminary results | stage-end results only | proposed format below; not built |
+| Per-shard progress artifacts for preliminary results | stage-end results only | ordered by the owner 2026-11-14 about 1:01 PM EST; the production session builds it and documents its names and schema. The display's reader follows the proposal below until that schema exists, then is matched to it |
 | The cloud watcher stores the positions and rate it already fetches | an estimate from the last complete run | open |
 | The watchdog adds positions and rate to its heartbeat file | the gated read of the part's log in WSL | open |
 | A periodic speed measurement appended to a file | milestones from the performance log | open |
