@@ -286,6 +286,25 @@ def item_log(text):
     return {'sprt': sprt, 'waiting': 'gated: waits for' in low or 'not ready' in low, 'last_line': last[:240]}
 
 
+def lane_marker(text):
+    """A lane's current-item marker (state/current-<LANE>.txt, KEY=VALUE lines, written by the queue runner or
+    by its bridging watcher since 2026-11-14): {lane, state: running|idle|stopped, item, started, drivers[],
+    source, updated}. None when the text is not a marker (no lane or no state line)."""
+    kv = {}
+    for line in (text or '').splitlines():
+        k, sep, v = line.partition('=')
+        if sep and re.match(r'^[a-z_]+$', k.strip()):
+            kv[k.strip()] = v.strip()
+    if not kv.get('lane') or kv.get('state') not in ('running', 'idle', 'stopped'):
+        return None
+    epoch = lambda k: num(kv[k]) if kv.get(k) else None  # noqa: E731
+    return {'lane': kv['lane'], 'state': kv['state'], 'item': kv.get('item') or None,
+            'started': epoch('started_epoch') or est_stamp(kv.get('started', '')),
+            'since': est_stamp(kv.get('since', '')), 'drivers': [d for d in re.split(r'[,\s]+', kv.get('drivers', '')) if d],
+            'source': kv.get('source') or 'chain', 'updated': epoch('updated_epoch') or est_stamp(kv.get('updated', '')),
+            'last_item': kv.get('last_item') or None, 'last_exit': kv.get('last_exit') or None}
+
+
 def item_kind(key):
     """The plain kind of a queue item or test from its name: STC, LTC, retry, screen, ..."""
     kinds = []
@@ -303,7 +322,7 @@ def item_kind(key):
 
 def item_title(key, sprt=None, codes=None, ideas=None):
     """A readable name for a queue item or test, made from the name alone plus the survey's code table and
-    the ideas list: {title, about}. 'z70a-f11-root-lean-ltc' -> title 'Root lean', about 'F11: Optimism ...'."""
+    the ideas list: {title, about}. 'z70a-f11-root-lean-ltc' -> title 'F11 root lean', about 'Optimism ...'."""
     name = sprt or key
     base = _PREFIX.sub('', name)
     while _SUFFIX.search(base):
@@ -312,19 +331,18 @@ def item_title(key, sprt=None, codes=None, ideas=None):
         left, right = base.split('-vs-', 1)
         left = re.sub(r'^.*?(?:-fn-|^fn-)', '', left)
         return {'title': f'{left} against {right}'.replace('-', ' '), 'about': 'net against net'}
+    if '-promo' in base:
+        return {'title': base.split('-promo')[0] + ' promotion test', 'about': 'net against the default net'}
     parts = base.split('-')
-    about = None
     code = parts[0]
     if codes and len(parts) > 1 and code.upper() in codes:
-        about = f'{code.upper()}: {codes[code.upper()]}'
-        parts = parts[1:]
-    else:
-        m = re.match(r'^(?:i|idea)(\d+)$', code)
-        if m and ideas and int(m.group(1)) in ideas:
-            about = f'idea {m.group(1)}: {ideas[int(m.group(1))]}'
-            parts = parts[1:] or [f'idea {m.group(1)}']
+        return {'title': f'{code.upper()} ' + ' '.join(parts[1:]), 'about': codes[code.upper()]}
+    m = re.match(r'^(?:i|idea)(\d+)$', code)
+    if m and ideas and int(m.group(1)) in ideas:
+        rest = ' '.join(parts[1:])
+        return {'title': f'Idea {m.group(1)}' + (f' {rest}' if rest else ''), 'about': ideas[int(m.group(1))]}
     title = ' '.join(parts)
-    return {'title': title[:1].upper() + title[1:], 'about': about}
+    return {'title': title[:1].upper() + title[1:], 'about': None}
 
 
 def item_comment(script):
@@ -496,12 +514,25 @@ def gauntlet_summary(md):
     return out
 
 
+def anchor_check(md):
+    """An anchor check's summary.md -> {outcome: confirmed|consistent|flagged, gain, lo, hi}, or None."""
+    text = (md or '').translate(MINUS)
+    o = re.search(r'\*\*Outcome: (confirmed|consistent|flagged)', text)
+    p = re.search(r'^\| Pooled \|[^|]*\|[^|]*\| ([+-]?[\d.]+) \| [\d.]+ \| ([+-]?[\d.]+) to ([+-]?[\d.]+) \|', text, re.M)
+    if not o or not p:
+        return None
+    return {'outcome': o.group(1), 'gain': float(p.group(1)), 'lo': float(p.group(2)), 'hi': float(p.group(3))}
+
+
 def transfer(d):
-    """tools/gauntlet/transfer.json -> adopted changes [{change, elo, err, test}]."""
+    """tools/gauntlet/transfer.json -> adopted changes [{change, elo, err, test, tests}]. tests holds every
+    test the entry names (its adopting test, and an earlier STC or first try recorded beside it)."""
     if not isinstance(d, dict) or not isinstance(d.get('adopted'), list):
         raise ValueError('transfer.json has no adopted list')
+    name = lambda v: str(v).split(':')[0].strip()[:60]  # noqa: E731
     return [{'change': str(a.get('change', ''))[:120], 'elo': num(a.get('elo')), 'err': num(a.get('ci95')),
-             'test': str(a.get('test', '')).split(':')[0][:60]} for a in d['adopted'] if isinstance(a, dict)]
+             'test': name(a.get('test', '')), 'tests': [name(a[k]) for k in ('test', 'stc', 'ltc', 'first') if a.get(k)]}
+            for a in d['adopted'] if isinstance(a, dict)]
 
 
 _ADOPT = re.compile(r'^(\S+) (\d{4}-\d\d-\d\d) (?:Search|UCI|NNUE|Eval|Engine|Time): (.*? adopted on (?:its|their) .*)$')
@@ -635,8 +666,17 @@ def kaggle_status(text):
 
 
 def kernel_refs(text):
-    """Kaggle kernel references ('owner/fork-...') named in a text, in order of first appearance."""
-    return list(dict.fromkeys(re.findall(r'\b([A-Za-z0-9_-]+/fork-[A-Za-z0-9_-]+)\b', text or '')))
+    """Kaggle kernel references ('owner/fork-...') named in a text, in order of first appearance. A piece of
+    a file path ('C:/Users/name/fork-data/x') is not a reference: the match must stand alone, with no path
+    character before or after it. The collector further polls only references it also finds as the id of a
+    kernel-metadata.json (the first version of this reader took a path for a kernel, 2026-11-14)."""
+    return list(dict.fromkeys(re.findall(r'(?<![\w/\\:.~-])([A-Za-z0-9_-]+/fork-[A-Za-z0-9_-]+)(?![\w/\\.-])', text or '')))
+
+
+def kernel_id(d):
+    """The kernel a kernel-metadata.json was pushed as ('owner/name'), or None."""
+    v = d.get('id') if isinstance(d, dict) else None
+    return v if isinstance(v, str) and re.match(r'^[A-Za-z0-9_-]+/[A-Za-z0-9_-]+$', v) else None
 
 
 def uho_run(d):
@@ -741,8 +781,9 @@ def labeller(evaluator):
 
 def manifest(d):
     """A data manifest reduced: {run, labeller, games, positions, unsaved, part_end, is_part}; None for a
-    snapshot (no generator). is_part is false for cuts (a part_end that says 'not a part'), which are subsets
-    of a part and must not be added to totals."""
+    dataset manifest (no generator). is_part is false for cuts (a part_end that says 'not a part') and for
+    snapshots of a running run (the tool text says so): both are subsets of a part and must not be added to
+    totals."""
     if not isinstance(d, dict):
         raise ValueError('manifest is not an object')
     if 'generator' not in d:
@@ -753,7 +794,9 @@ def manifest(d):
     end = str(d.get('part_end', ''))
     return {'run': d.get('run'), 'labeller': labeller(gen.get('evaluator')), 'games': d.get('games', totals.get('games')),
             'positions': pos, 'unsaved': d.get('positions_unsaved', totals.get('positions_unsaved')),
-            'part_end': end[:160], 'is_part': isinstance(d.get('settings'), dict) and not end.startswith('not a part')}
+            'part_end': end[:160],
+            'is_part': (isinstance(d.get('settings'), dict) and not end.startswith('not a part')
+                        and not re.search(r'\bsnapshot\b|^cut of\b', str(gen.get('tool', '')).lower()))}
 
 
 def gcp_status(d):

@@ -3,10 +3,15 @@
 
 Rules this module keeps (DESIGN.md section 9):
   * nothing is ever opened for writing; there is no write, rename, delete or mkdir here;
-  * on Windows a file is opened with read, write AND delete sharing, so a production script that
-    replaces or removes the file while it is open here does not fail (jobctl replaces job records
-    by rename; a keeper died on a blocked rename on 2026-11-12);
-  * files are read whole (small ones) or by their tail, and closed at once;
+  * on Windows a file is opened with read, write AND delete sharing, so a production script can
+    append to it, remove it or rename it away while it is open here;
+  * sharing does NOT cover one case: Windows refuses to replace a file by rename while anyone has
+    it open (measured; test_display.py). jobctl replaces job records that way and, since a keeper
+    died on a blocked rename on 2026-11-12, retries a refusal every 10 ms for 10 seconds. A read by
+    the display can therefore cost jobctl one retry, never a failure. To keep even that rare, a file
+    is read whole in one call (or its tail) and closed at once, a job record is read only when it
+    changed and only after it has been still for half a second (collect.py), and nothing here ever
+    polls a file in a loop;
   * a source is re-read only when its size or modified time changed; a failed read keeps the last
     good value and marks the source, so one bad file never blanks the screen.
 """
@@ -122,12 +127,29 @@ _HOME = re.compile(r'''(?ix)
     (?: (?:[a-z]:[\\/]+ | /[a-z]/ | /mnt/[a-z]/ ) users [\\/]+ [^\\/\s"'<>|:*?]+     # Windows home, three spellings
       | (?:[\\/]{2}wsl(?:\.localhost|\$)[\\/]+[^\\/\s"']+)? [\\/]home[\\/]+ [^\\/\s"'<>|:*?]+ )   # a WSL home
 ''')
-_IP = re.compile(r'\b(?:\d{1,3}\.){3}\d{1,3}\b')
+_IP = re.compile(r'(?<![\d.])\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(?![\d.])')
+PRIVATE = set()          # account names that must never be shown, wherever they stand (the home folders' names)
+
+
+def private(name):
+    """Register an account name (a home folder's name) to be removed from everything the display shows."""
+    if isinstance(name, str) and len(name) >= 3 and re.match(r'^[\w.-]+$', name):
+        PRIVATE.add(name)
+
+
+private(os.path.basename(os.path.expanduser('~')))
 
 
 def scrub(text):
-    """Text safe to show: every home folder becomes ~ (no user name), every IPv4 address is removed."""
-    text = _HOME.sub('~', text)
+    """Text safe to show: every home folder becomes ~ (no user name), every IPv4 address is removed, and an
+    account name registered with private() is removed wherever else it stands (a tool's error text can quote
+    it outside any path)."""
+    low = text.lower()
+    if 'users' in low or 'home' in low:                    # the cheap test first: this runs on every snapshot
+        text = _HOME.sub('~', text)
+    for name in PRIVATE:
+        if name in text:
+            text = re.sub(r'(?<![\w.-])' + re.escape(name) + r'(?![\w-])', '[user]', text)
     return _IP.sub(lambda m: m.group(0) if m.group(0).startswith('127.') else '[address]', text)
 
 

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fork Operations Display</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div id="stale" role="alert"></div>
+
+<div id="strip">
+  <div id="health" tabindex="0" title="The overall state is the worst state of any alert"></div>
+  <div><span class="lbl">Default net</span><div class="row"><span class="big num" id="s-net"></span></div><span class="sub" id="s-net-sub"></span></div>
+  <div><span class="lbl">Rating, CCRL Blitz scale</span><div class="row"><span class="big num" id="s-rating"></span><span id="s-rating-spark"></span></div><span class="sub" id="s-rating-sub"></span></div>
+  <div><span class="lbl" id="s-gap-lbl">Gap to the reference engine</span><div class="row"><span class="big num" id="s-gap"></span><span id="s-gap-spark"></span></div><span class="sub" id="s-gap-sub"></span></div>
+  <div><span class="lbl">Adopted in the last 7 days</span><div class="row"><span class="big num" id="s-adopt"></span><span class="daybars" id="s-adopt-days"></span></div><span class="sub" id="s-adopt-sub"></span></div>
+  <div><span class="lbl">Engine</span><div class="row"><span class="big num" id="s-commit"></span></div><span class="sub" id="s-commit-sub"></span></div>
+  <div id="tools"><span class="sub" id="s-display">display only: this screen starts, stops and changes nothing</span><span class="sub"><button id="b-help" title="Keys (?)">? keys</button> <button id="b-src" title="Sources and their state (S)">sources</button> <button id="b-theme" title="Dark or light (T)">theme</button></span></div>
+  <div id="clock"><span class="big num" id="c-time"></span><span class="sub" id="c-date"></span></div>
+</div>
+
+<div id="main">
+  <section class="panel" id="p-test" data-key="2">
+    <header><span class="key">2</span><h2>Testing</h2><span class="age" id="age-test"></span></header>
+    <div class="body"><div class="focusgrid">
+      <div id="t-col1"></div>
+      <div id="t-col2" class="detail"></div>
+      <div id="t-col3"></div>
+    </div></div>
+  </section>
+  <section class="panel" id="p-sit" data-key="1">
+    <header><span class="key">1</span><h2>Situation</h2><span class="age" id="age-sit"></span></header>
+    <div class="body"><div id="now"></div><div id="topo"><svg aria-hidden="true"></svg></div></div>
+  </section>
+  <section class="panel" id="p-alert" data-key="6">
+    <header><span class="key">6</span><h2>Alerts</h2><span class="age" id="age-alert"></span></header>
+    <div class="body" id="alerts" style="gap:0"></div>
+  </section>
+  <section class="panel" id="p-prog" data-key="7">
+    <header><span class="key">7</span><h2>Progress over time</h2><span class="age" id="age-prog"></span></header>
+    <div class="body">
+      <div class="rowline"><span id="prog-title">Gauntlet rating with its 95% interval</span><span class="faint">balanced-book gauntlets only</span></div>
+      <div class="chart" id="ch-rating"><svg></svg><div class="tip"></div></div>
+      <div class="detail" id="prog-detail"></div>
+    </div>
+  </section>
+  <section class="panel" id="p-train" data-key="3">
+    <header><span class="key">3</span><h2>Training</h2><span class="age" id="age-train"></span></header>
+    <div class="body" id="train"></div>
+  </section>
+  <section class="panel" id="p-data" data-key="4">
+    <header><span class="key">4</span><h2>Data</h2><span class="age" id="age-data"></span></header>
+    <div class="body" id="data"></div>
+  </section>
+  <section class="panel" id="p-mach" data-key="5">
+    <header><span class="key">5</span><h2>Machine</h2><span class="age">live, every 2 s</span></header>
+    <div class="body" id="mach"></div>
+  </section>
+</div>
+
+<div id="ticker"><span class="lbl">Events</span><div class="run" id="tick-run"></div></div>
+
+<div class="overlay" id="help">
+  <h3>Keys</h3>
+  <p><kbd>1</kbd> to <kbd>7</kbd> focus a panel (or click its header) &nbsp; <kbd>Esc</kbd> back to the full screen<br>
+     <kbd>T</kbd> dark or light &nbsp; <kbd>S</kbd> sources and their state &nbsp; <kbd>?</kbd> this note</p>
+  <h3>What this screen is</h3>
+  <p>A display. It reads the job files, logs and reports and shows them; it has no control that starts, stops or changes anything, and it writes no file.</p>
+  <p>"Seen" on an alert dims it in this window only, until the page is reloaded.</p>
+  <p>Times are EST. Hover a name for its internal name (queue item, test, job, file).</p>
+</div>
+<div class="overlay" id="sources"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

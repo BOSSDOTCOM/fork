@@ -1,0 +1,181 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""The display's two network polls, on their own thread so a slow answer never delays the file readers:
+
+  GitHub, every 2 minutes, only for the runs a lane is waiting on: the run's jobs (how many shards have
+  finished), and, when the run carries per-shard progress artifacts, their pentanomial counts, from which
+  the collector shows a combined result labelled "preliminary";
+  Kaggle, every 5 minutes, only while a session job is running: the session's state.
+
+Both go through procs.run (read-only commands only). Results are kept in memory; nothing is written.
+
+Progress artifacts (proposed to the production session, DESIGN.md section 8; none exist yet): an artifact
+named progress-<stage>-<shard> holding progress.json = {"sprt", "stage", "shard", "ptnml": [5 counts],
+"finished_games", "at"}. The newest artifact per shard is used. Until a run has them, `progress` is None and
+the display shows stage-end results only."""
+import io
+import json
+import re
+import threading
+import time
+import zipfile
+
+import fsread
+import procs
+import readers as R
+
+_PROGRESS_NAME = re.compile(r'^progress-(\d+)-(\d+)')
+
+
+def repo_slug(git_config):
+    """'OWNER/NAME' from a .git/config text's origin URL on github.com, or None."""
+    m = re.search(r'url\s*=\s*\S*github\.com[:/]([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+?)(?:\.git)?\s*$', git_config or '', re.M)
+    return f'{m.group(1)}/{m.group(2)}' if m else None
+
+
+def shard_counts(jobs_json):
+    """A run's jobs API answer -> {total, done, running, queued, failed} over its shard jobs (every job when
+    none is named like a shard)."""
+    try:
+        jobs = json.loads(jobs_json).get('jobs')
+    except (ValueError, AttributeError):
+        return None
+    if not isinstance(jobs, list) or not jobs:
+        return None
+    shard = [j for j in jobs if isinstance(j, dict) and re.search(r'shard|play|games', str(j.get('name', '')), re.I)] or \
+            [j for j in jobs if isinstance(j, dict)]
+    out = {'total': len(shard), 'done': 0, 'running': 0, 'queued': 0, 'failed': 0}
+    for j in shard:
+        if j.get('status') == 'completed':
+            out['done'] += 1
+            if j.get('conclusion') not in ('success', 'skipped', None):
+                out['failed'] += 1
+        elif j.get('status') == 'in_progress':
+            out['running'] += 1
+        else:
+            out['queued'] += 1
+    return out
+
+
+def progress_artifacts(artifacts_json):
+    """The newest progress artifact per (stage, shard): [{id, stage, shard}]."""
+    try:
+        arts = json.loads(artifacts_json).get('artifacts')
+    except (ValueError, AttributeError):
+        return []
+    best = {}
+    for a in arts if isinstance(arts, list) else []:
+        m = _PROGRESS_NAME.match(str(a.get('name', ''))) if isinstance(a, dict) else None
+        if not m or a.get('expired') or not isinstance(a.get('id'), int):
+            continue
+        key = (int(m.group(1)), int(m.group(2)))
+        stamp = str(a.get('updated_at') or a.get('created_at') or '')
+        if key not in best or stamp >= best[key][0]:
+            best[key] = (stamp, a['id'])
+    return [{'id': v[1], 'stage': k[0], 'shard': k[1]} for k, v in sorted(best.items())]
+
+
+def read_progress_zip(data):
+    """A progress artifact's zip (bytes, read in memory) -> readers.shard_progress of its progress.json.
+    Raises ValueError when the zip or its record is not as proposed."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            name = next((n for n in z.namelist() if n.endswith('progress.json')), None)
+            if name is None or z.getinfo(name).file_size > 65536:
+                raise ValueError('no small progress.json in the artifact')
+            return R.shard_progress(json.loads(z.read(name).decode('utf-8', 'replace')))
+    except (zipfile.BadZipFile, KeyError, UnicodeError) as e:
+        raise ValueError(f'unreadable progress artifact: {type(e).__name__}') from e
+
+
+def combine(records, stage):
+    """Shard records of one stage -> {ptnml, games, shards, at}, or None when there is none."""
+    recs = [r for r in records if r['stage'] == stage]
+    if not recs:
+        return None
+    import stats
+    return {'ptnml': stats.add([r['ptnml'] for r in recs]), 'games': sum(r['games'] for r in recs),
+            'shards': len(recs), 'at': max((r['at'] or 0) for r in recs) or None}
+
+
+class Poller:
+    """Fills collector.net from collector.wanted, on its own daemon thread (start()); stop() ends it."""
+
+    def __init__(self, collector, repo, slug, gh_every=120, kaggle_every=300, execute=procs.run, clock=time.time,
+                 gh=None, kaggle=None):
+        self.c, self.repo, self.slug = collector, repo, slug
+        self.gh_every, self.kaggle_every, self.execute, self.clock = gh_every, kaggle_every, execute, clock
+        self.stopping = threading.Event()
+        self.gh = gh or procs.find('gh')
+        self.kaggle = kaggle or procs.find('kaggle', repo)
+        self.status = {'gh': 'not polled yet' if self.gh and slug else 'off: gh or the repository name was not found',
+                       'kaggle': 'not polled yet' if self.kaggle else 'off: the Kaggle tool was not found'}
+        self._seen = {}            # artifact id -> parsed record (an artifact never changes once uploaded)
+        self._last = {'gh': -1e9, 'kaggle': -1e9}
+        self.thread = None
+
+    def poll_github(self, now):
+        runs = {}
+        for run_id in list(self.c.wanted.get('runs') or [])[:4]:
+            rc, out, err = self.execute([self.gh, 'api', f'repos/{self.slug}/actions/runs/{int(run_id)}/jobs?per_page=100'], timeout=40)
+            if rc != 0:
+                self.status['gh'] = f'failed: {err or rc}'
+                continue
+            entry = {'shards': shard_counts(out), 'progress': None, 'at': now, 'error': None}
+            rc, out, err = self.execute([self.gh, 'api', f'repos/{self.slug}/actions/runs/{int(run_id)}/artifacts?per_page=100'], timeout=40)
+            recs = []
+            for a in progress_artifacts(out) if rc == 0 else []:
+                if a['id'] not in self._seen:
+                    rc2, data, _ = self.execute([self.gh, 'api', f'repos/{self.slug}/actions/artifacts/{a["id"]}/zip'], timeout=40, binary=True)
+                    try:
+                        self._seen[a['id']] = read_progress_zip(data) if rc2 == 0 else None
+                    except ValueError as e:
+                        self._seen[a['id']] = None
+                        entry['error'] = str(e)[:120]
+                if self._seen.get(a['id']):
+                    recs.append(self._seen[a['id']])
+            if recs:
+                entry['progress'] = combine(recs, max(r['stage'] for r in recs))
+            runs[run_id] = entry
+            self.status['gh'] = f'ok, {len(runs)} run(s)'
+        if not self.c.wanted.get('runs'):
+            self.status['gh'] = 'idle: no live run'
+        self.c.net['runs'] = runs
+        if len(self._seen) > 4000:
+            self._seen.clear()
+
+    def poll_kaggle(self, now):
+        out = {}
+        for ref in list(self.c.wanted.get('kaggle') or [])[:3]:
+            rc, text, err = self.execute([self.kaggle, 'kernels', 'status', ref], timeout=60)
+            state = R.kaggle_status(text) if rc == 0 else None
+            out[ref] = {'state': state, 'at': now, 'error': None if state else fsread.scrub(err or 'no state in the answer')[:120]}
+            self.status['kaggle'] = 'ok' if state else f'failed: {out[ref]["error"]}'
+        if not self.c.wanted.get('kaggle'):
+            self.status['kaggle'] = 'idle: no session job is running'
+        self.c.net['kaggle'] = out
+
+    def step(self):
+        now = self.clock()
+        if self.gh and self.slug and now - self._last['gh'] >= self.gh_every:
+            self._last['gh'] = now
+            try:
+                self.poll_github(now)
+            except Exception as e:  # noqa: BLE001  a poll must never end the thread
+                self.status['gh'] = f'failed: {type(e).__name__}'
+        if self.kaggle and now - self._last['kaggle'] >= self.kaggle_every:
+            self._last['kaggle'] = now
+            try:
+                self.poll_kaggle(now)
+            except Exception as e:  # noqa: BLE001
+                self.status['kaggle'] = f'failed: {type(e).__name__}'
+
+    def _loop(self):
+        while not self.stopping.wait(5):
+            self.step()
+
+    def start(self):
+        self.thread = threading.Thread(target=self._loop, daemon=True, name='ops-display-net')
+        self.thread.start()
+
+    def stop(self):
+        self.stopping.set()

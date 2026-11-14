@@ -190,6 +190,18 @@ class Queue(unittest.TestCase):
         self.assertTrue(g['waiting'])
         self.assertEqual(R.item_log(''), {'sprt': None, 'waiting': False, 'last_line': ''})
 
+    def test_lane_marker(self):
+        m = R.lane_marker(fixture('lane-marker-running.txt'))
+        self.assertEqual((m['lane'], m['state'], m['item'], m['drivers'], m['source']),
+                         ('B', 'running', '15-r8c-c-cbest-promo-stc', ['r8cc2-promo-stc'], 'watcher'))
+        self.assertEqual((m['started'], m['updated']), (1794680240, 1794681753))
+        i = R.lane_marker(fixture('lane-marker-idle.txt'))
+        self.assertEqual((i['state'], i['item'], i['drivers'], i['since']), ('idle', None, ['f11-root-lean-ltc'], R.est_stamp('2026-11-14 01:26:56 PM EST')))
+        chain = R.lane_marker('lane=A\nstate=running\nitem=z70a-f11-root-lean-ltc\nstarted=2026-11-14 01:17:20 PM EST\n')
+        self.assertEqual((chain['source'], chain['started'], chain['drivers']), ('chain', R.est_stamp('2026-11-14 01:17:20 PM EST'), []))
+        for bad in ('', None, 'lane=A\n', 'state=running\n', 'lane=A\nstate=dancing\n', '\x00\xff', 'lane=A\nstate=runn'):
+            self.assertIsNone(R.lane_marker(bad), bad)
+
     def test_item_kind_and_title(self):
         self.assertEqual(R.item_kind('z70a-f11-root-lean-ltc'), 'LTC')
         self.assertEqual(R.item_kind('z70b-f11-root-lean-retry'), 'retry')
@@ -204,9 +216,10 @@ class Queue(unittest.TestCase):
         self.assertEqual(ideas[124], 'Root reductions')
         self.assertEqual(ideas[157], 'King-relative offset inputs')
         t = R.item_title('96c-b6-null-verify-nonreg', None, codes, ideas)
-        self.assertEqual((t['title'], t['about']), ('Null verify', 'B6: NMP verification search'))
+        self.assertEqual((t['title'], t['about']), ('B6 null verify', 'NMP verification search'))
         t = R.item_title('89a-i42-cont-inputs-stc', None, codes, ideas)
-        self.assertEqual((t['title'], t['about']), ('Cont inputs', 'idea 42: Continuation histories as inputs to the LMR history term'))
+        self.assertEqual((t['title'], t['about']), ('Idea 42 cont inputs', 'Continuation histories as inputs to the LMR history term'))
+        self.assertEqual(R.item_title('15-r8c-c-cbest-promo-stc', 'r8cc2-promo-stc')['title'], 'r8cc2 promotion test')
         t = R.item_title('01-r8c-cc1-vs-r8brft1', 'r8c-fn-r8cc1-vs-r8brft1', codes, ideas)
         self.assertEqual(t['title'], 'r8cc1 against r8brft1')
         t = R.item_title('a-brand-new-kind-of-item')
@@ -278,10 +291,20 @@ class Overview(unittest.TestCase):
         inf = R.gauntlet_summary('- Stockfish 19 (CCRL Blitz 3792, x): Fork 1/400; Elo -900.0, 95% interval -inf to -700.0 (p)')
         self.assertEqual((inf['reference']['lo'], inf['reference']['hi']), (None, -700.0))
 
+    def test_anchor_check(self):
+        md = ('| Pooled | 294/800 (36.8%) | 291/800 (36.4%) | -2.8 | 8.3 | -18.6 to +13.7 |\n\n'
+              "**Outcome: flagged for the owner's review.** Confirmed: the lower 95% bound is above 0.\n")
+        self.assertEqual(R.anchor_check(md), {'outcome': 'flagged', 'gain': -2.8, 'lo': -18.6, 'hi': 13.7})
+        ok = '| Pooled | 248.5/800 (31.1%) | 277.5/800 (34.7%) | +28.7 | 9.0 | +10.4 to +45.9 |\n**Outcome: confirmed.** x\n'
+        self.assertEqual(R.anchor_check(ok)['outcome'], 'confirmed')
+        self.assertIsNone(R.anchor_check('**Outcome: confirmed.**'))
+        self.assertIsNone(R.anchor_check(''))
+
     def test_adoptions(self):
         t = R.transfer(fjson('transfer.json'))
         root = next(x for x in t if x['change'].startswith('Root reductions'))
         self.assertEqual((root['elo'], root['err'], root['test']), (14.94, 6.24, 'root-lmr-ltc'))
+        self.assertEqual(root['tests'], ['root-lmr-ltc', 'root-lmr-stc'])    # its earlier STC pass counts as adopted too
         with self.assertRaises(ValueError):
             R.transfer({'adopted': 'no'})
         log = ('a86ddcc 2026-11-13 Search: root reductions adopted on their STC and LTC passes, pre-approved by the owner\n'
@@ -354,6 +377,13 @@ class Training(unittest.TestCase):
         self.assertIsNone(R.kaggle_status('403 Forbidden'))
         self.assertEqual(R.kernel_refs('push owner/fork-retrain-8c-a1 then owner/fork-retrain-8c-a1 and owner/fork-x'),
                          ['owner/fork-retrain-8c-a1', 'owner/fork-x'])
+        for path in ('C:/Users/someone/fork-data/8c/gpu-queue.txt', 'C:\\Users\\someone/fork-data', '/c/Users/someone/fork-jobs/x',
+                     '~/fork-data/kaggle', '/home/someone/fork-data', 'someone/fork-data/8c', 'see someone/fork-data.'):
+            self.assertEqual(R.kernel_refs(path), [], path)             # a piece of a path is never a kernel
+        self.assertEqual(R.kernel_refs('status of "owner/fork-retrain-8c-a1": RUNNING'), ['owner/fork-retrain-8c-a1'])
+        self.assertEqual(R.kernel_id({'id': 'owner/fork-retrain-8c-a1', 'enable_gpu': True}), 'owner/fork-retrain-8c-a1')
+        for bad in ({}, {'id': 5}, {'id': 'no-slash'}, {'id': 'a/b/c'}, None, []):
+            self.assertIsNone(R.kernel_id(bad))
 
     def test_session_record_and_arms(self):
         r = R.retrain_json(fjson('retrain.json'))
@@ -404,6 +434,9 @@ class Data(unittest.TestCase):
         cut = R.manifest(fjson('manifest-cut.json'))
         self.assertEqual((cut['labeller'], cut['is_part']), ('s512ppr3', False))    # a cut is never added to totals
         self.assertIsNone(R.manifest(fjson('manifest-snapshot.json')))
+        running = fjson('manifest-part.json')
+        running['generator']['tool'] = 'fork_datagen (snapshot of complete games of a running run)'
+        self.assertFalse(R.manifest(running)['is_part'])     # an old-style snapshot: a subset of its part
         f = R.manifest(fjson('manifest-filler.json'))
         self.assertEqual((f['labeller'], f['positions']), ('r8brft1', 106192556))
         with self.assertRaises(ValueError):
@@ -495,7 +528,7 @@ class Robustness(unittest.TestCase):
     TEXT = [R.driver_log, R.queue_log, R.item_log, R.item_comment, R.survey_codes, R.ideas_md, R.default_net, R.nets_md,
             R.ordo, R.gauntlet_meta, R.gauntlet_summary, R.adoptions, R.stack_sum, R.perf_log, R.decisions, R.gates_txt,
             R.bakes_txt, R.results_txt, R.fetch_log, R.kaggle_status, R.kernel_refs, R.datagen_log, R.filler_ok,
-            R.arms_log, R.freezewatch, R.wslcache, R.memwatch, R.chain_items_folder,
+            R.arms_log, R.freezewatch, R.wslcache, R.memwatch, R.chain_items_folder, R.anchor_check, R.lane_marker,
             lambda t: R.events(t), lambda t: R.ledger(t), lambda t: R.tries(t), lambda t: R.egress(t),
             lambda t: R.compile_waits(t, '2026-11-13')]
 
