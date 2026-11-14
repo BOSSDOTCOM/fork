@@ -17,7 +17,6 @@
 #include "search/search_bench.hpp"
 #include "search/time_budget.hpp"
 #include "tune/params.hpp"
-#include "uci/score_display.hpp"
 
 namespace forkeng {
 
@@ -62,12 +61,10 @@ void write_move_text(Move m, char (&text)[8]) {
 }
 
 // Writes the info lines of a search into a fixed buffer: no allocation
-// while the search runs (DESIGN.md §5.2, hot-path rules). With `calibrated`
-// (the CalibratedScore option) a centipawn score is shown on the network's
-// scale (uci/score_display.hpp); mate and tablebase scores are unchanged.
+// while the search runs (DESIGN.md §5.2, hot-path rules).
 class InfoWriter final : public SearchListener {
  public:
-  InfoWriter(OutputChannel& out, bool calibrated) : out_(out), calibrated_(calibrated) {}
+  explicit InfoWriter(OutputChannel& out) : out_(out) {}
   void on_iteration(const Position&, const IterationReport& r) override {
     char* const line = line_;
     const std::uint64_t ms = static_cast<std::uint64_t>(std::max<std::int64_t>(r.elapsed_ms, 0));
@@ -77,7 +74,7 @@ class InfoWriter final : public SearchListener {
         line, sizeof line_,
         "info depth %d seldepth %d score %s %d%s nodes %llu nps %llu hashfull %d tbhits %llu time %llu",
         r.depth, std::max(r.max_ply_reached, 1), mate ? "mate" : "cp",
-        mate ? mate_in_moves(r.score) : calibrated_ ? calibrated_display_score(r.score) : r.score,
+        mate ? mate_in_moves(r.score) : r.score,
         r.bound > 0   ? " lowerbound"
         : r.bound < 0 ? " upperbound"
                       : "",
@@ -100,7 +97,6 @@ class InfoWriter final : public SearchListener {
 
  private:
   OutputChannel& out_;
-  bool calibrated_;
   char line_[4096];
   std::size_t length_ = 0;
   std::uint64_t sent_after_ = 0;
@@ -185,11 +181,6 @@ void UciSession::declare_options() {
     return true;
   });
   options_.add_spin("Move Overhead", 100, 0, 10000);
-  // Display only (uci/score_display.hpp): the reported centipawn score on
-  // the network's scale, fitted to Fork's own games. Search, bench and play
-  // are the same either way; test harnesses whose adjudication reads the
-  // score set it false (DESIGN.md §5.1, "Options").
-  options_.add_check("CalibratedScore", true);
   options_.add_string("SyzygyPath", "", [this](const OptionEntry& e, std::string& message) {
     syzygy_path_ = e.text;
     tables_pending_ = config_.allow_files;
@@ -538,7 +529,6 @@ void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first)
   SearchQuota limits = quota_for_go(go, root_.side_to_move(), options_.number("Move Overhead"));
   limits.go_received = go_time;
   const bool infinite = go.infinite;
-  const bool calibrated = options_.number("CalibratedScore") != 0;  // read here, on the session's thread
   {
     std::scoped_lock lock(signals_.mutex);
     signals_.stop = !config_.use_threads;  // no thread: nothing could stop it later
@@ -548,12 +538,12 @@ void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first)
   stop_flag_.store(!config_.use_threads);
   pondering_.store(go.ponder && config_.use_threads);
   if (!config_.use_threads) {
-    search_main(root_, limits, infinite, calibrated);
+    search_main(root_, limits, infinite);
     go_answered_ = true;
     return;
   }
   try {
-    search_thread_ = std::thread(&UciSession::search_main, this, root_, limits, infinite, calibrated);
+    search_thread_ = std::thread(&UciSession::search_main, this, root_, limits, infinite);
   } catch (...) {
     // No thread (std::system_error) or no memory for its copy of the
     // position: answer at once on this thread, without allocating, so the go
@@ -612,12 +602,12 @@ SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhea
   return l;
 }
 
-void UciSession::search_main(Position pos, SearchQuota limits, bool infinite, bool calibrated) {
+void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
   const auto start = std::chrono::steady_clock::now();
   Move best = NoMove;
   bool picked = false;
   try {
-    InfoWriter writer(out_, calibrated);
+    InfoWriter writer(out_);
     const SearchResult r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer);
     best = r.best;
     picked = true;
@@ -627,7 +617,7 @@ void UciSession::search_main(Position pos, SearchQuota limits, bool infinite, bo
       signals_.wake.wait(lock, [&] { return signals_.stop || (!infinite && !signals_.ponder); });
     }
     if (r.depth == 0)
-      report_unfinished(pos, r, ms_since(start), calibrated);
+      report_unfinished(pos, r, ms_since(start));
     else
       writer.repeat_if_interrupted();
     char move[8];
@@ -646,8 +636,7 @@ void UciSession::search_main(Position pos, SearchQuota limits, bool infinite, bo
 
 // The last info line when no iteration finished (stopped early, or no legal
 // move), from fixed buffers.
-void UciSession::report_unfinished(const Position& pos, const SearchResult& r, std::int64_t elapsed_ms,
-                                   bool calibrated) {
+void UciSession::report_unfinished(const Position& pos, const SearchResult& r, std::int64_t elapsed_ms) {
   const std::uint64_t ms = static_cast<std::uint64_t>(std::max<std::int64_t>(elapsed_ms, 0));
   const std::uint64_t nps = r.nodes * 1000 / std::max<std::uint64_t>(ms, 1);
   char line[160];
@@ -662,10 +651,7 @@ void UciSession::report_unfinished(const Position& pos, const SearchResult& r, s
     write_move_text(r.best, move);
     n = std::snprintf(line, sizeof line,
                       "info depth 0 seldepth 1 score cp %d nodes %llu nps %llu time %llu pv %s",
-                      pos.in_check()  ? 0
-                      : calibrated ? calibrated_display_score(static_eval(pos))
-                                   : static_eval(pos),
-                      static_cast<unsigned long long>(r.nodes),
+                      pos.in_check() ? 0 : static_eval(pos), static_cast<unsigned long long>(r.nodes),
                       static_cast<unsigned long long>(nps), static_cast<unsigned long long>(ms), move);
   }
   out_.send_line(std::string_view(line, static_cast<std::size_t>(n)));

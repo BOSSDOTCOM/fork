@@ -6,11 +6,11 @@
 #
 #   bash .github/ci/score-display-check.sh ENGINE...
 #
-# If any ENGINE advertises the CalibratedScore option (Fork since c7a61ea, default on: it changes the centipawn
-# numbers fastchess adjudicates on), the harness this run uses, this checkout's tools/, scripts/, bench/ and
-# .github/, must pass tools/check_score_display_off.py (every launcher sets the option off); otherwise the run
-# stops here. An engine without the option needs nothing. tools/check_score_display_off.py fails on a workflow
-# that plays games without this step. PYTHON: default python3.
+# If any ENGINE advertises the CalibratedScore option (Fork from c7a61ea until its removal on 2026-11-13, default
+# on: it changes the centipawn numbers fastchess adjudicates on), the harness this run uses, this checkout's tools/,
+# scripts/, bench/ and .github/, must pass tools/check_score_display_off.py (every launcher sets the option off);
+# otherwise the run stops here. An engine without the option needs nothing. tools/check_score_display_off.py fails
+# on a workflow that plays games without this step. PYTHON: default python3.
 set -uo pipefail
 py=${PYTHON:-python3}
 [ $# -ge 1 ] || { echo "usage: score-display-check.sh ENGINE..." >&2; exit 2; }

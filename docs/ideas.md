@@ -3220,7 +3220,13 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
   ~/fork-data/calib-1112 (method.md declared first, results.md). **result:** search k 56-69 cp against r8brft1's
   S = 88 (scale), not larger on UHO starts (reverse), no band beyond 0.03 (no shape), queens on much steeper (R4):
   branch (c).
-- **status:** **adopted 2026-11-13** (owner: "adopt CalibratedScore (display-only; off in all harnesses, datagen and labeling tools, never used inside search)"): the UCI option `CalibratedScore`
+- **status:** **adopted 2026-11-13, removed the same day by the owner** (about 7:10 PM EST: "get rid of the cosmetic
+  eval thing that was added, it may cause confusion in the future no need for it": confusion risk, no need). Fork
+  prints the search's own score again; the harness flags and guard stay until no build from c7a61ea up to the
+  removal is played (DESIGN.md decisions log, 2026-11-13). The TCEC hazard "reported-score calibration" is open
+  again: before any TCEC entry, re-check with tools/nnue/uho_diag.py's numbers for the then-default net whether raw
+  scores could trigger TCEC's eval-based adjudication early, and decide then (owner, 2026-11-13). The measurement
+  below stands. Was, as adopted (owner: "adopt CalibratedScore (display-only; off in all harnesses, datagen and labeling tools, never used inside search)"): the UCI option `CalibratedScore`
   (default on) shows N x 88 / 67; mates, tablebase scores, bounds and pv unchanged; off in every harness and
   labelling tool (tools/check_score_display_off.py), never in the search (CTest score_display_boundary). The data
   side (b): arm Q, the queens-on unequal-material slice, prepared on branch slice/pos-x and gate-passed (+0.029

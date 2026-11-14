@@ -2,8 +2,10 @@
 
 """Every harness that plays or searches with Fork sets CalibratedScore off (owner, 2026-11-12).
 
-Fork's CalibratedScore option (src/uci/score_display.hpp, default on for GUIs and TCEC) changes only the
-centipawn number in its info lines. Anything that reads those numbers must see Fork's raw scores: fastchess's
+Fork's CalibratedScore option (c7a61ea, default on; removed by the owner on 2026-11-13) changed only the
+centipawn number in its info lines. Builds from c7a61ea up to the removal still carry it and stay in play, so this
+check, the flags it enforces and tools/jobs/score_display_guard.py stay until none of them is played any more
+(DESIGN.md decisions log, 2026-11-13; a follow-up). Anything that reads those numbers must see Fork's raw scores: fastchess's
 resign and draw adjudication in SPRT, head-to-head, fixed-node, gauntlet, anchor-check and decision-audit games
 (an engine with the option on and one without would be adjudicated asymmetrically), and every tool that labels,
 measures or analyses positions from Fork's search scores.

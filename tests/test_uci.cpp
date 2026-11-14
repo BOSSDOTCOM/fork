@@ -12,14 +12,15 @@
 //   where e1e3 is illegal
 //   startpos, 1000 x (g1f3 g8f6 f3g1 f6g8) is 4000 legal plies back to the
 //   start placement: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 4000 2001
-//   4k3/8/8/8/8/8/3r4/3QK3 w - - 0 1   KQKR, White to move: valid, not in check, 13 legal
-//   moves (python-chess 1.11.2, 2026-11-12); Kxd2 or Qxd2 enters KQvK, in the 3-4-5 test tables
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -36,7 +37,6 @@
 #include "search/time_budget.hpp"
 #include "suite.hpp"
 #include "tune/params.hpp"
-#include "uci/score_display.hpp"
 #include "uci/tokens.hpp"
 #include "uci_message.hpp"
 
@@ -197,7 +197,6 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
       "option name Clear Hash type button",
       "option name Threads type spin default 1 min 1 max 4096",
       "option name Move Overhead type spin default 100 min 0 max 10000",
-      "option name CalibratedScore type check default true",
       "option name SyzygyPath type string default <empty>",
   };
 #ifdef FORK_TUNE
@@ -1263,127 +1262,42 @@ TEST_CASE("uci_options", "Clear Hash with a Hash change in the same batch still 
   g.quit();
 }
 
-// The CalibratedScore option (uci/score_display.hpp; the calibration report of
-// 2026-11-12): display only. The mapping itself: mate and tablebase scores
-// unchanged, every other score scaled by DisplayTargetScale /
-// DisplayFittedScale and kept below the tablebase band, monotonic and odd.
-TEST_CASE("uci_options",
-          "CalibratedScore: the shown score's mapping (mates and tables unchanged, order kept)") {
-  CHECK_EQ(calibrated_display_score(0), 0);
-  CHECK_EQ(calibrated_display_score(DisplayFittedScale), DisplayTargetScale);
-  CHECK_EQ(calibrated_display_score(-DisplayFittedScale), -DisplayTargetScale);
-  CHECK_EQ(calibrated_display_score(100), 131);    // 100 * 88 / 67 = 131.3
-  CHECK_EQ(calibrated_display_score(-250), -328);  // 250 * 88 / 67 = 328.4
-  CHECK_EQ(calibrated_display_score(1000), 1313);  // 1000 * 88 / 67 = 1313.4
-  const int band = TbWinScore - MaxPly;            // the lowest tablebase win
-  for (int s = band; s <= ScoreInfinite; ++s) {
-    CHECK_EQ(calibrated_display_score(s), s);    // tablebase wins and mates: unchanged
-    CHECK_EQ(calibrated_display_score(-s), -s);  // and their losses
-  }
-  int previous = calibrated_display_score(-ScoreInfinite);
-  for (int s = -ScoreInfinite + 1; s <= ScoreInfinite; ++s) {
-    const int shown = calibrated_display_score(s);
-    CHECK_MSG(shown >= previous, "not monotonic at " << s);
-    CHECK_EQ(calibrated_display_score(-s), -shown);
-    if (std::abs(s) < band) CHECK_MSG(std::abs(shown) < band, s << " reaches the tablebase band: " << shown);
-    previous = shown;
-  }
-}
+// The info line's score is the search's own, as computed (the owner,
+// 2026-11-13, removed CalibratedScore, a display-only rescaling of it): a
+// fresh engine's go depth 6 on Kiwipete reports, at depth 6, the score and
+// nodes of the same search run here from an empty table of the default Hash
+// (16 MB) and an empty history. The score is checked to be one a rescaling
+// would have changed (|score| >= 2, below the tablebase band).
+TEST_CASE("uci_options", "info score cp is the search's own score, not rescaled") {
+  constexpr int Depth = 6;
+  std::vector<TtBucket> buckets(hash_bytes_for_mb(16) / sizeof(TtBucket));
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  auto searcher = std::make_unique<Searcher>(table);
+  const std::atomic<bool> stop{false};
+  SearchQuota limits;
+  limits.depth = Depth;
+  Position pos;
+  CHECK(pos.set_fen(perft_suite()[1].fen));  // Kiwipete
+  const SearchResult direct = searcher->deliberate(pos, limits, stop, nullptr, nullptr);
+  CHECK_MSG(std::abs(direct.score) >= 2 && std::abs(direct.score) < TbWinScore - MaxPly,
+            "score " << direct.score << ": a rescaling could not be told apart");
 
-namespace {
-
-// Every scored info line and the bestmove of one search from a fresh state
-// (ucinewgame), with CalibratedScore set as given.
-std::vector<std::string> scored_search(Gui& g, const std::string& position, const std::string& go,
-                                       bool calibrated) {
-  g.send(std::string("setoption name CalibratedScore value ") + (calibrated ? "true" : "false"));
-  g.send("ucinewgame");
-  g.send(position);
-  CHECK(g.sync());
-  const std::size_t mark = g.cursor;
-  g.send(go);
-  // A sanitizer build searches far slower (gcc-tsan about 9,400 nodes/s, the
-  // note above): it gets a shallower search (the caller) and a longer wait
-  // (CI run 43417188774 timed out at the default under gcc-tsan).
-  CHECK(g.next("bestmove", SanitizedBuild ? 120000ms : Patience).has_value());
-  // Bound lines (lowerbound / upperbound) are printed only once the search has
-  // run for a while, so how many appear depends on the machine's speed, not on
-  // the tree: under SDE one side crossed that time and printed one more (CI run
-  // 43422600919, same nodes on both sides). They are left out; the exact lines
-  // and the bestmove are compared.
-  std::vector<std::string> out;
-  for (const std::string& line : g.texts(mark))
-    if ((starts_with(line, "info ") && line.find(" score ") != std::string::npos &&
-         line.find(" lowerbound") == std::string::npos && line.find(" upperbound") == std::string::npos) ||
-        starts_with(line, "bestmove"))
-      out.push_back(line);
-  return out;
-}
-
-// The line without its time and nps (they differ between runs); with
-// `calibrate`, its `score cp N` replaced by the calibrated N.
-std::string comparable(const std::string& line, bool calibrate) {
-  const std::vector<LineToken> t = split_tokens(line);
-  std::string out;
-  for (std::size_t i = 0; i < t.size(); ++i) {
-    if (t[i].text == "time" || t[i].text == "nps") {
-      ++i;
-      continue;
-    }
-    std::string word(t[i].text);
-    if (calibrate && i >= 2 && t[i - 2].text == "score" && t[i - 1].text == "cp")
-      word = std::to_string(calibrated_display_score(static_cast<int>(parse_int64(t[i].text).value_or(0))));
-    (out += out.empty() ? "" : " ") += word;
-  }
-  return out;
-}
-
-}  // namespace
-
-// On and off search the same tree (same depths, nodes, bounds, pv and
-// bestmove); only the centipawn number differs, by the mapping above. Mate
-// and tablebase scores read the same either way.
-TEST_CASE("uci_options", "CalibratedScore: on and off search the same; only centipawn scores change") {
   Gui g;
-  CHECK(g.sync());
-  int changed = 0;
-  for (std::size_t i = 1; i <= 4; ++i) {
-    const std::string position = "position fen " + std::string(perft_suite()[i].fen);
-    const std::string go = SanitizedBuild ? "go depth 6" : "go depth 9";
-    const std::vector<std::string> off = scored_search(g, position, go, false);
-    const std::vector<std::string> on = scored_search(g, position, go, true);
-    CHECK_EQ(on.size(), off.size());
-    for (std::size_t j = 0; j < std::min(on.size(), off.size()); ++j) {
-      CHECK_MSG(comparable(on[j], false) == comparable(off[j], true),
-                "on: '" << on[j] << "' off: '" << off[j] << "'");
-      changed += comparable(on[j], false) != comparable(off[j], false);
-    }
-  }
-  CHECK_MSG(changed > 0, "no score changed: the option did nothing");
-  // A mate: the same score mate line either way.
-  for (bool calibrated : {false, true}) {
-    const std::vector<std::string> out =
-        scored_search(g, "position fen 6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", "go depth 5", calibrated);
-    CHECK_MSG(out.size() >= 2 && out[out.size() - 2].find(" score mate 1 ") != std::string::npos,
-              (out.size() >= 2 ? out[out.size() - 2] : std::string("no info line")));
-  }
-  // A tablebase win (a capture into KQK, the 3-4-5 test tables): the same cp number either way.
-  g.send(std::string("setoption name SyzygyPath value ") + FORK_SYZYGY345_DIR);
-  CHECK(g.sync());
-  const std::string kqk = "position fen 4k3/8/8/8/8/8/3r4/3QK3 w - - 0 1";
-  const std::vector<std::string> tb_off = scored_search(g, kqk, "go depth 4", false);
-  const std::vector<std::string> tb_on = scored_search(g, kqk, "go depth 4", true);
-  CHECK_EQ(tb_on.size(), tb_off.size());
-  bool tb_seen = false;
-  for (std::size_t j = 0; j < std::min(tb_on.size(), tb_off.size()); ++j) {
-    CHECK_EQ(comparable(tb_on[j], false), comparable(tb_off[j], true));
-    const std::optional<std::int64_t> cp = info_number(tb_off[j], "cp");
-    if (cp && *cp >= TbWinScore - MaxPly && *cp < MateBandFloor) {
-      tb_seen = true;
-      CHECK_EQ(info_number(tb_on[j], "cp").value_or(0), *cp);  // the tablebase win, shown as it is
-    }
-  }
-  CHECK_MSG(tb_seen, "no tablebase win score in the KQK search: " << (tb_off.empty() ? "" : tb_off[0]));
+  g.send("position fen " + std::string(perft_suite()[1].fen));
+  const std::size_t mark = g.cursor;
+  g.send("go depth " + std::to_string(Depth));
+  CHECK(g.next("bestmove").has_value());
+  std::string last;
+  for (const std::string& line : g.texts(mark))
+    if (starts_with(line, "info depth " + std::to_string(Depth) + " ") &&
+        line.find(" lowerbound") == std::string::npos && line.find(" upperbound") == std::string::npos)
+      last = line;
+  CHECK_MSG(
+      info_number(last, "nodes") == std::optional<std::int64_t>(static_cast<std::int64_t>(direct.nodes)),
+      "not the same search: '" << last << "', direct nodes " << direct.nodes);
+  CHECK_MSG(info_number(last, "cp") == std::optional<std::int64_t>(direct.score),
+            "reported '" << last << "', the search's score " << direct.score);
   g.check_transcript();
   g.quit();
 }

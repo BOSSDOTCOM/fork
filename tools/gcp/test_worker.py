@@ -120,7 +120,7 @@ class WorkerTest(unittest.TestCase):
 class ScoreDisplayTest(unittest.TestCase):
     """The worker's CalibratedScore guard (owner, 2026-11-13), on any platform: an item running a build whose commit
     has the option starts only from a tools checkout that forces it off. Uses this repository's history (skipped
-    without c7a61ea's parent)."""
+    without c7a61ea's parent): c7a61ea's build has the option (HEAD's no longer does: removed 2026-11-13)."""
     ADOPTED = 'c7a61ea987595b7de3b105098b27e7360a73763f'
 
     def setUp(self):
@@ -129,8 +129,6 @@ class ScoreDisplayTest(unittest.TestCase):
                                   capture_output=True, text=True).stdout.strip()
         if not self.pre:
             self.skipTest("c7a61ea's parent is not in this clone")
-        self.head = subprocess.run(['git', '-C', str(self.repo), 'rev-parse', 'HEAD'], capture_output=True,
-                                   text=True).stdout.strip()
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         os.environ['FORK_WORKER_ROOT'] = str(self.root)
@@ -154,13 +152,13 @@ class ScoreDisplayTest(unittest.TestCase):
 
     def test_build_with_the_option_and_an_old_checkout_refused(self):
         self.w.TOOLS_TREE = self.old_tools
-        why = self.w.score_display_refusal(self.item(self.head))
+        why = self.w.score_display_refusal(self.item(self.ADOPTED))
         self.assertIsNotNone(why)
         self.assertIn('refused', why)
 
     def test_build_with_the_option_and_this_checkout_allowed(self):
         self.w.TOOLS_TREE = self.repo
-        self.assertIsNone(self.w.score_display_refusal(self.item(self.head)))
+        self.assertIsNone(self.w.score_display_refusal(self.item(self.ADOPTED)))
 
     def test_build_without_the_option_allowed_anywhere(self):
         self.w.TOOLS_TREE = self.old_tools
@@ -177,7 +175,7 @@ class ScoreDisplayTest(unittest.TestCase):
     def test_refused_item_is_failed_without_starting(self):
         self.w.TOOLS_TREE = self.old_tools
         (self.root / 'state' / 'items').mkdir(parents=True)
-        self.assertFalse(self.w.start(dict(self.item(self.head), type='tb', **{'class': 'b'})))
+        self.assertFalse(self.w.start(dict(self.item(self.ADOPTED), type='tb', **{'class': 'b'})))
         failed = json.loads((self.root / 'state' / 'items' / 'b-label.failed').read_text())
         self.assertIn('CalibratedScore', failed['why'])
         self.assertFalse((self.root / 'jobs').exists())

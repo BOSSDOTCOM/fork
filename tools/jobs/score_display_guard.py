@@ -2,16 +2,19 @@
 """The dispatch-side guard of the CalibratedScore rule (owner, 2026-11-13: "make every harness force the option off by
 default, including branch workflows, with a test").
 
-Fork's CalibratedScore option (c7a61ea, default on) changes the centipawn number in its info lines, so every harness
-sets it off (tools/check_score_display_off.py). A harness from a branch or checkout older than c7a61ea does not, yet it
+Fork's CalibratedScore option (c7a61ea, default on) changed the centipawn number in its info lines, so every harness
+sets it off (tools/check_score_display_off.py). The owner removed the option on 2026-11-13 (about 7:10 PM EST); engines
+built from c7a61ea up to the removal commit still carry it and stay in play, so this guard stays until none of them
+is played any more (DESIGN.md decisions log, 2026-11-13). A harness from a branch or checkout older than c7a61ea does not, yet it
 can still be pointed at a newer engine: a workflow dispatched with --ref OLD_BRANCH builds the engines from its inputs
 but runs OLD_BRANCH's tools. Every dispatcher calls this guard first:
 
     score_display_guard.py [--repo DIR] (--ref REV | --tree DIR) ENGINE...
 
-ENGINE: the engine commits to be played. One "has the option" if it descends from c7a61ea (git merge-base) or its
-src/ names CalibratedScore (a branch that carries the option without the adopting commit). If none has it, the run
-is allowed whatever the harness. Otherwise the harness must force it off: its tree holds
+ENGINE: the engine commits to be played. One "has the option" if its src/ names CalibratedScore (git grep): the
+option's declaration is the only place src/ ever named it, so this holds from c7a61ea up to the removal and on any
+branch that carries it, and not after the removal (descent from c7a61ea alone no longer means the option; until the
+removal it was a second test). If none has it, the run is allowed whatever the harness. Otherwise the harness must force it off: its tree holds
 tools/check_score_display_off.py (none before c7a61ea) and that checker, the harness's own, passes on the harness's
 tree. --ref REV: the commit the harness runs from (a workflow's ref, a cloud instance's tools commit); its tracked
 files under the checker's ROOTS are exported to a temporary repository (git archive) and the checker runs there.
@@ -29,7 +32,6 @@ import sys
 import tempfile
 from pathlib import Path
 
-ADOPTED = 'c7a61ea987595b7de3b105098b27e7360a73763f'  # UCI: CalibratedScore adopted (2026-11-13)
 CHECKER = 'tools/check_score_display_off.py'
 DEFAULT_ROOTS = ('tools/', 'scripts/', 'bench/', '.github/')
 # Every git call names its repository with -C: a GIT_DIR, GIT_WORK_TREE or GIT_INDEX_FILE exported by a hook or a
@@ -61,14 +63,8 @@ def commit_of(repo, rev):
     return r.stdout.strip() if r.returncode == 0 else None
 
 
-def has_option(repo, commit, adopted):
-    """True if the engine at COMMIT has the CalibratedScore option (descends from ADOPTED, or its src/ names it)."""
-    if commit_of(repo, adopted):
-        r = git(repo, 'merge-base', '--is-ancestor', adopted, commit, check=False)
-        if r.returncode == 0:
-            return True
-        if r.returncode != 1:
-            raise RuntimeError(f'git merge-base --is-ancestor {adopted[:12]} {commit[:12]}: {r.stderr.strip()}')
+def has_option(repo, commit):
+    """True if the engine at COMMIT has the CalibratedScore option: its src/ names it (removed 2026-11-13)."""
     r = git(repo, 'grep', '-q', '-F', 'CalibratedScore', commit, '--', 'src', check=False)
     if r.returncode not in (0, 1):
         raise RuntimeError(f'git grep in {commit[:12]}: {r.stderr.strip()}')
@@ -138,7 +134,6 @@ def main(argv=None):
     where = ap.add_mutually_exclusive_group(required=True)
     where.add_argument('--ref', help='the commit (or ref) the harness runs from')
     where.add_argument('--tree', help='a checkout the harness runs from as it is')
-    ap.add_argument('--adopted', default=ADOPTED, help=argparse.SUPPRESS)  # tests: a toy repository's adopting commit
     ap.add_argument('engines', nargs='+', metavar='ENGINE')
     a = ap.parse_args(argv)
     say = lambda msg: print(f'score_display_guard: {msg}')  # noqa: E731
@@ -149,10 +144,10 @@ def main(argv=None):
             if not c:
                 print(f'score_display_guard: engine {e} is not a commit in {a.repo}', file=sys.stderr)
                 return 2
-            if has_option(a.repo, c, a.adopted):
+            if has_option(a.repo, c):
                 with_option.append(c)
         if not with_option:
-            say('allowed: no engine has CalibratedScore (none descends from c7a61ea)')
+            say('allowed: no engine has CalibratedScore (no src/ names it)')
             return 0
         engines = ', '.join(c[:12] for c in with_option)
         if a.ref is not None:

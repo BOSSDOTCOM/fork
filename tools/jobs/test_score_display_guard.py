@@ -5,11 +5,13 @@ workflows included). A toy repository stands in for Fork's history:
     P  before the option: src without it, a launcher without the off flag, no checker
     A  the option adopted: src names it, the launcher sets it off, the harness's checker (a toy one)
     B  after A: the launcher loses its off flag (the checker is there and fails)
-    C  after A: src no longer names the option (it still descends from A)
+    C  after A: src no longer names the option (it still descends from A): the removal, which has no option
     X  a side branch from P that carries the option without A (src names it)
 
-and one case runs on this repository itself when c7a61ea's parent is present (a pre-c7a61ea ref refused with HEAD's
-engine; c7a61ea itself accepted; both pre-c7a61ea allowed). Run by scripts/check.sh (tools/jobs):
+and one case runs on this repository itself when c7a61ea's parent is present (a pre-c7a61ea ref refused with
+c7a61ea's engine; c7a61ea itself accepted; both pre-c7a61ea allowed). The option was removed on 2026-11-13 (owner),
+so "has the option" is "src names it", not descent from c7a61ea, and HEAD's engine no longer stands for one that has
+it. Run by scripts/check.sh (tools/jobs):
 
     python -I -m unittest discover -s tools/jobs -p 'test_*.py'
 """
@@ -84,10 +86,8 @@ class GuardTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def guard(self, *args, repo=None, adopted=None):
+    def guard(self, *args, repo=None):
         argv = [sys.executable, '-I', '-B', str(GUARD), '--repo', str(repo or self.repo)]
-        if adopted is not False:
-            argv += ['--adopted', adopted or self.A]
         # Its own temporary folder, so a guard running beside these tests cannot look like a leftover.
         tmp = str(self.scratch)
         r = subprocess.run(argv + list(args), capture_output=True, text=True,
@@ -115,8 +115,13 @@ class GuardTest(unittest.TestCase):
         self.assertEqual(rc, 1, out)
         self.assertIn('sprt.sh launches an engine without setting CalibratedScore off', out)
 
-    def test_descendant_of_the_adopting_commit_counts_without_the_name(self):
+    def test_descendant_of_the_adopting_commit_without_the_name_has_no_option(self):
+        # The removal (2026-11-13): C descends from A but its src no longer names the option, so any harness may
+        # play it, an old one included.
         rc, out = self.guard('--ref', self.P, self.C)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('no engine has CalibratedScore', out)
+        rc, out = self.guard('--ref', self.P, self.C, self.A)  # with one that has it: refused again
         self.assertEqual(rc, 1, out)
 
     def test_the_option_without_the_adopting_commit_counts(self):
@@ -149,15 +154,38 @@ class GuardTest(unittest.TestCase):
                              capture_output=True, text=True).stdout.strip()
         if not pre:
             self.skipTest("c7a61ea's parent is not in this clone")
-        # The adopting commit as the accepting harness: its own checker passes on its tree (HEAD's may be mid-fix).
-        head = git(REPO, 'rev-parse', 'HEAD')
-        rc, out = self.guard('--ref', pre, head, repo=REPO, adopted=False)
+        # c7a61ea's engine has the option (HEAD's no longer does: removed 2026-11-13). The adopting commit as the
+        # accepting harness: its own checker passes on its tree (HEAD's may be mid-fix).
+        rc, out = self.guard('--ref', pre, REAL_ADOPTED, repo=REPO)
         self.assertEqual(rc, 1, out)
-        rc, out = self.guard('--ref', REAL_ADOPTED, head, repo=REPO, adopted=False)
+        rc, out = self.guard('--ref', REAL_ADOPTED, REAL_ADOPTED, repo=REPO)
         self.assertEqual(rc, 0, out)
         self.assertIn('check_score_display_off: ok', out)
-        rc, out = self.guard('--ref', pre, pre, repo=REPO, adopted=False)
+        rc, out = self.guard('--ref', pre, pre, repo=REPO)
         self.assertEqual(rc, 0, out)
+
+    def test_real_descendant_without_the_name_has_no_option(self):
+        # The removal (owner, 2026-11-13) on the real history: a commit whose parent is c7a61ea and whose tree is
+        # c7a61ea's parent's (src without the option) is played from that pre-c7a61ea harness: allowed, as the
+        # removal commit's engine will be. Built in a throwaway repository that borrows this one's objects; this
+        # repository is not written to. Fails under the earlier detection (descent from c7a61ea).
+        pre = subprocess.run(['git', '-C', str(REPO), 'rev-parse', '--verify', '--quiet', REAL_ADOPTED + '^'],
+                             capture_output=True, text=True).stdout.strip()
+        if not pre:
+            self.skipTest("c7a61ea's parent is not in this clone")
+        objects = subprocess.run(['git', '-C', str(REPO), 'rev-parse', '--path-format=absolute', '--git-path',
+                                  'objects'], capture_output=True, text=True, check=True).stdout.strip()
+        borrow = Path(self.tmp.name) / 'borrow'
+        borrow.mkdir()
+        git(borrow, 'init', '-q')
+        (borrow / '.git' / 'objects' / 'info').mkdir(parents=True, exist_ok=True)
+        (borrow / '.git' / 'objects' / 'info' / 'alternates').write_bytes((objects + '\n').encode())
+        removed = git(borrow, 'commit-tree', f'{pre}^{{tree}}', '-p', REAL_ADOPTED, '-m', 'toy removal')
+        rc, out = self.guard('--ref', pre, removed, repo=borrow)
+        self.assertEqual(rc, 0, out)
+        self.assertIn('no engine has CalibratedScore', out)
+        rc, out = self.guard('--ref', pre, removed, REAL_ADOPTED, repo=borrow)
+        self.assertEqual(rc, 1, out)
 
 
 if __name__ == '__main__':

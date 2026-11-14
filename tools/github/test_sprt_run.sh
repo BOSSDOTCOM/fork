@@ -31,7 +31,7 @@
 # (positional) form writes the verdict file too: H1 accepted, H0 accepted, or capped at its last stage. Since 2026-11-13 (owner:
 # CalibratedScore off in every harness, branch workflows included): a REF older than c7a61ea (no
 # tools/check_score_display_off.py) is refused before any dispatch when an engine has the option, and allowed when
-# neither has it. Uses python3 (or $PYTHON) for
+# neither has it (the option was removed the same day; c7a61ea's engine stands in for one that has it). Uses python3 (or $PYTHON) for
 # the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
@@ -422,28 +422,33 @@ drive r-hash-bad --kind search --idea h4 "$sha" "$sha" --hash
 check "--hash with no value is refused" eval '[ "$(rc r-hash-bad)" = 1 ] && [ "$(dispatches r-hash-bad)" = 0 ] && grep -qF -- "--hash needs a value" "$tmp/r-hash-bad/out"'
 
 # CalibratedScore (owner, 2026-11-13): sprt.yml and its tools come from REF, the engines from BASE and TEST. REF at
-# c7a61ea's parent has no tools/check_score_display_off.py, so it would play HEAD (which has the option, default on)
-# with the option on: refused before any dispatch. With both engines from before c7a61ea it is allowed. Needs
-# c7a61ea's parent in this clone (a shallow clone skips these checks).
-pre=$(git -C "$here" rev-parse --verify --quiet c7a61ea987595b7de3b105098b27e7360a73763f^)
+# c7a61ea's parent has no tools/check_score_display_off.py, so it would play c7a61ea's engine (which has the option,
+# default on) with the option on: refused before any dispatch. With both engines from before c7a61ea it is allowed.
+# The option was removed the same day (owner, about 7:10 PM EST), so HEAD's engine no longer has it: the engine with
+# the option is c7a61ea itself, not HEAD. Needs c7a61ea in this clone (a shallow clone skips these checks).
+adopted=c7a61ea987595b7de3b105098b27e7360a73763f
+pre=$(git -C "$here" rev-parse --verify --quiet $adopted^)
 if [ -n "$pre" ]; then
   setup oldref 0 "$strong"
   echo "$pre" >"$tmp/oldref/ref.test"
-  drive oldref "$sha" "$sha" 0 5
-  check "a REF older than CalibratedScore with an engine that has it: refused before any dispatch" eval \
-    '[ "$(rc oldref)" = 1 ] && [ "$(dispatches oldref)" = 0 ] && grep -q "REF test ($pre): score_display_guard: refused" "$tmp/oldref/out"'
+  echo "$adopted" >>"$tmp/oldref/commits"
+  drive oldref "$adopted" "$adopted" 0 5
+  check "a REF older than CalibratedScore with an engine that has it: refused before any dispatch" eval     '[ "$(rc oldref)" = 1 ] && [ "$(dispatches oldref)" = 0 ] && grep -q "REF test ($pre): score_display_guard: refused" "$tmp/oldref/out"'
   setup oldboth 0 "$strong"
   echo "$pre" >"$tmp/oldboth/ref.test"
   echo "$pre" >>"$tmp/oldboth/commits"
   drive oldboth "$pre" "$pre" 0 5
-  check "the same REF with both engines older than the option: allowed (H1 after one stage)" eval \
-    '[ "$(rc oldboth)" = 0 ] && [ "$(dispatches oldboth)" = 1 ] && grep -q "no engine has CalibratedScore" "$tmp/oldboth/out"'
+  check "the same REF with both engines older than the option: allowed (H1 after one stage)" eval     '[ "$(rc oldboth)" = 0 ] && [ "$(dispatches oldboth)" = 1 ] && grep -q "no engine has CalibratedScore" "$tmp/oldboth/out"'
   setup oldtest 0 "$strong"
   echo "$pre" >"$tmp/oldtest/ref.test"
-  echo "$pre" >>"$tmp/oldtest/commits"
-  drive oldtest "$pre" "$sha" 0 5
-  check "the same REF with only the test engine newer: refused" eval '[ "$(rc oldtest)" = 1 ] && [ "$(dispatches oldtest)" = 0 ]'
-  check "a REF that forces it off is checked and named in the log" grep -q "REF test ($sha): score_display_guard: allowed: harness" "$tmp/h1/out"
+  printf '%s
+' "$pre" "$adopted" >>"$tmp/oldtest/commits"
+  drive oldtest "$pre" "$adopted" 0 5
+  check "the same REF with only the test engine having the option: refused" eval '[ "$(rc oldtest)" = 1 ] && [ "$(dispatches oldtest)" = 0 ]'
+  setup newref 0 "$strong"
+  echo "$adopted" >>"$tmp/newref/commits"
+  drive newref "$adopted" "$adopted" 0 5
+  check "a REF that forces it off (HEAD) is checked and named in the log" eval     '[ "$(rc newref)" = 0 ] && grep -q "REF test ($sha): score_display_guard: allowed: harness" "$tmp/newref/out"'
 else
   echo "SKIP  CalibratedScore REF checks: c7a61ea's parent is not in this clone"
 fi
