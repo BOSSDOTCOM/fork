@@ -17,7 +17,9 @@ Arms (seed 1 each, side by side, one T4 each; the same seed, so both read the da
 - xl1, x_lower, S512+PPXL (architecture 10: S512+PP plus the exposure plane's lower-class half): warm from SOURCE laid
   out by extend_weights.py --arch s512ppxl (the exposure inputs and their factoriser zero); its own session (X), one
   seed, compared against session A's pp1 (owner, 2026-11-14: the same recipe, data and warm start).
-Sessions (ARM_SET): A = kr1 (GPU 0) beside pp1 (GPU 1); X = xl1 alone (GPU 0).
+- xl2, x_lower's second seed: xl1's settings with seed 2 (owner's rule, 2026-11-14: a second seed only if xl1's
+  fixed-node result against pp1 lands between about +5 and +20; it landed at +17.60 +/- 8.69), its own session X2.
+Sessions (ARM_SET): A = kr1 (GPU 0) beside pp1 (GPU 1); X = xl1 alone (GPU 0); X2 = xl2 alone (GPU 0).
 Recipe (8c's control arm c): retrain 8c's control files (TD(0.9) copies of the parts labelled by S512ppr3 or later, blend
 copies of the older parts, the fresh endgame slice slice1b unchanged), --result-weight 0, AdamW, LR 1e-4 dropped
 tenfold after superbatch 180, 360 superbatches of 305 x 16,384 positions, S = 92, read interleaved; the candidate is
@@ -54,7 +56,8 @@ Layout: result/<arm>/ (best/, ck-*/, window/, val.txt, train.log, run.json, file
 file, <init>-quantised.bin, and their parity-trainer files: the trainer leg of the warm start), the summary
 result/bakeoff_r3.json.
 
-Arm sets: ARM_SET = 'A' (kr1 and pp1), 'X' (xl1), 'kr' or 'pp' (one arm of A), set in a kernel copy by one exact
+Arm sets: ARM_SET = 'A' (kr1 and pp1), 'X' (xl1), 'X2' (xl2), 'kr' or 'pp' (one arm of A), set in a kernel copy by
+one exact
 replacement, as 8c's.
 Smoke mode: SMOKE = True, in a kernel copy only, shrinks the sizes and nothing else (8c's smoke set of originals, 4
 full-size superbatches with the drop after 2 and the window 3-4, the offline scores on the 20,000-position prefix):
@@ -122,14 +125,15 @@ if SMOKE:
     ALL_POSITIONS = VAL_POSITIONS
 ARMS = {'kr1': {**BASE_SETTINGS, 'arch': 'h512pp', 'init': 'regioned', 'seed': 1},
         'pp1': {**BASE_SETTINGS, 'arch': 's512pp', 'init': 'source', 'seed': 1},
-        'xl1': {**BASE_SETTINGS, 'arch': 's512ppxl', 'init': 'exposure', 'seed': 1}}
+        'xl1': {**BASE_SETTINGS, 'arch': 's512ppxl', 'init': 'exposure', 'seed': 1},
+        'xl2': {**BASE_SETTINGS, 'arch': 's512ppxl', 'init': 'exposure', 'seed': 2}}
 # The warm starts laid out from SOURCE in the session: (architecture, extend_weights.py's net-file function that
 # lays SOURCE's quantised net out the same way, for the quantised identity).
 WARM_STARTS = {'regioned': ('h512pp', 'regioned_net'), 'exposure': ('s512ppxl', 'exposure_net')}
 # The sessions (module note): A = kr1 and its same-recipe control pp1, one GPU each; X = xl1 alone (x_lower, owner
 # 2026-11-14: compared against session A's control); kr and pp one arm of A each.
-ARM_SET = 'A'               # a kernel copy only (module note): 'A', 'X', 'kr' or 'pp'
-ARM_SETS = {'A': [['kr1'], ['pp1']], 'X': [['xl1']], 'kr': [['kr1']], 'pp': [['pp1']]}
+ARM_SET = 'A'               # a kernel copy only (module note): 'A', 'X', 'X2', 'kr' or 'pp'
+ARM_SETS = {'A': [['kr1'], ['pp1']], 'X': [['xl1']], 'X2': [['xl2']], 'kr': [['kr1']], 'pp': [['pp1']]}
 QUEUES = ARM_SETS[ARM_SET]
 ARMS = {a: v for a, v in ARMS.items() if any(a in q for q in QUEUES)}
 DATA = '/kaggle/input'

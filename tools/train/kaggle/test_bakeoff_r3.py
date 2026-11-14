@@ -65,6 +65,21 @@ class ArmTests(unittest.TestCase):
         self.assertEqual(x['WARM_STARTS']['exposure'], ('s512ppxl', 'exposure_net'))
         self.assertEqual(x['SOURCE'], k.SOURCE)
 
+    def test_session_x2_runs_xl2_alone_as_xl1_but_its_seed(self):
+        # x_lower's second seed (owner's rule, 2026-11-14): xl1's recipe, data and warm start, seed 2.
+        src = (HERE / 'bakeoff_r3.py').read_text(encoding='utf-8')
+        old = "\nARM_SET = 'A' "
+        x = {'__name__': 'bakeoff_r3_x2'}
+        exec(compile(src.replace(old, "\nARM_SET = 'X2' ", 1), 'bakeoff_r3_x2.py', 'exec'), x)
+        self.assertEqual(x['QUEUES'], [['xl2']])
+        self.assertEqual(sorted(x['ARMS']), ['xl2'])
+        x1 = {'__name__': 'bakeoff_r3_x'}
+        exec(compile(src.replace(old, "\nARM_SET = 'X' ", 1), 'bakeoff_r3_x.py', 'exec'), x1)
+        xl2, xl1 = x['ARMS']['xl2'], x1['ARMS']['xl1']
+        self.assertEqual((xl2['seed'], xl1['seed']), (2, 1))
+        self.assertEqual({f: v for f, v in xl2.items() if f != 'seed'}, {f: v for f, v in xl1.items() if f != 'seed'})
+        self.assertEqual(x['SOURCE'], k.SOURCE)
+
     def test_the_source_is_r8ceplo2s_float_weights(self):
         # Owner, 2026-11-14 ~5:55 PM EST: r8ceplo2 is round 3's warm-start source from then on. Its window average
         # (retrain 8c A1's avg-eplo2/weights.bin), SHA-256 checked on this machine 2026-11-14; quantised and
