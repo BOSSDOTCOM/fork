@@ -215,10 +215,12 @@ impl Spec {
     fn exposure_start(&self) -> usize {
         self.factor_start() + if self.factoriser { PIECE_SQUARES } else { 0 }
     }
-    /// First contact input, first link input (S512cl: right after the
-    /// piece inputs).
+    /// First contact input, first link input: after the piece, factoriser
+    /// and exposure blocks (S512cl, S512+PP: right after the piece inputs).
+    /// They started at factor_start() before 2026-11-14, on top of a
+    /// factoriser or exposure block when combined with one.
     fn contact_start(&self) -> usize {
-        self.factor_start()
+        self.exposure_start() + if self.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 }
     }
     fn link_start(&self) -> usize {
         self.contact_start() + if self.contacts { contact_tables().contacts } else { 0 }
@@ -231,8 +233,7 @@ impl Spec {
         if self.links { rank_links().links } else { 0 }
     }
     fn inputs(&self) -> usize {
-        self.exposure_start() + if self.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 } + self.contact_inputs()
-            + self.pp_link_inputs()
+        self.contact_start() + self.contact_inputs() + self.pp_link_inputs()
     }
     /// At most 8 contacts per non-king piece (8 rays or knight squares) and
     /// a link per pair of the 16 pawns.
@@ -685,7 +686,8 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
 /// stores it) with its factoriser inputs added into the inputs they share
 /// (an f32 addition each, KB bullet-internals.md §1.5) and dropped; an
 /// architecture without the piece factoriser keeps its piece inputs as they
-/// are.
+/// are. The contact and link inputs follow unchanged (before 2026-11-14 the
+/// merge dropped them).
 fn merge_factors(spec: &Spec, rows: usize, v: &[f32]) -> Vec<f32> {
     let col = |c: usize| &v[c * rows..(c + 1) * rows];
     let mut out = Vec::with_capacity(rows * spec.saved_inputs());
@@ -707,6 +709,7 @@ fn merge_factors(spec: &Spec, rows: usize, v: &[f32]) -> Vec<f32> {
             out.extend(a.iter().zip(b).map(|(x, y)| x + y));
         }
     }
+    out.extend_from_slice(&v[spec.contact_start() * rows..spec.inputs() * rows]);
     out
 }
 
@@ -1360,5 +1363,116 @@ mod interleave_tests {
         assert_eq!(interleave_next(&[0, 0], &[10, 10], &[false, false]), Some(0));
         assert_eq!(interleave_next(&[5, 0], &[10, 10], &[false, true]), Some(0));
         assert_eq!(interleave_next(&[5, 5], &[10, 10], &[true, true]), None);
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+
+    // The start position and Kiwipete, as tests/suite.hpp holds them (the
+    // CPW perft suite).
+    const FENS: [&str; 2] = [
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+    ];
+    // Any valid maps (tools/nnue/test_bakeoff.py's REGIONS and PHASE).
+    const REGIONS: &str = "0,1,2,2,1,1,2,2,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3";
+    const BUCKETS: &str = "0,0,0,0,1,1,1,2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7";
+
+    /// `arch` with the piece factoriser (over REGIONS) and the exposure
+    /// plane switched on as asked: the combinations bake-off round 3 plans.
+    fn with(arch: &str, factoriser: bool, exposure: bool) -> Spec {
+        let words = ["--arch", arch, "--buckets", BUCKETS, "--regions", REGIONS];
+        let mut s = Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()));
+        if factoriser {
+            s.regions.copy_from_slice(&parse_list(REGIONS, 32, "--regions"));
+            s.region_count = 4;
+            s.factoriser = true;
+        }
+        s.exposure = exposure;
+        s
+    }
+
+    /// The training layout's blocks in order, summed from their sizes: the
+    /// first input after the piece, factoriser and exposure blocks.
+    fn after_merged_blocks(s: &Spec) -> usize {
+        PIECE_SQUARES * s.region_count
+            + if s.factoriser { PIECE_SQUARES } else { 0 }
+            + if s.exposure { EXPOSURE_ROWS + EXPOSURE_FACTORS } else { 0 }
+    }
+
+    fn features(s: &Spec, fen: &str, persp: usize) -> Vec<usize> {
+        let pos: ChessBoard = format!("{fen} | 0 | 0.0").parse().expect("fen");
+        let b = Board::from_chessboard(&pos);
+        let exposed = if s.exposure { b.exposed() } else { 0 };
+        let mut out = vec![-1i32; s.max_active()];
+        let n = perspective_features(s, &b, exposed, persp, &mut out);
+        out[..n].iter().map(|&i| i as usize).collect()
+    }
+
+    const COMBINATIONS: [(bool, bool); 3] = [(true, false), (false, true), (true, true)];
+
+    #[test]
+    fn link_and_contact_inputs_follow_the_factoriser_and_exposure_blocks() {
+        for arch in ["s512pp", "s512cl"] {
+            let plain = with(arch, false, false);
+            for (factoriser, exposure) in COMBINATIONS {
+                let s = with(arch, factoriser, exposure);
+                let start = after_merged_blocks(&s);
+                assert_eq!(s.inputs(), start + s.contact_inputs() + s.pp_link_inputs(), "{arch} {factoriser} {exposure}");
+                for fen in FENS {
+                    for persp in 0..2 {
+                        // The plain architecture's contact and link inputs,
+                        // as numbers within their blocks (after its 768 piece
+                        // inputs, one per piece).
+                        let pieces = Board::from_chessboard(&format!("{fen} | 0 | 0.0").parse().unwrap()).count;
+                        let own: Vec<usize> = features(&plain, fen, persp)[pieces..].iter().map(|i| i - PIECE_SQUARES).collect();
+                        assert!(!own.is_empty(), "{fen}: no links to place");
+                        let got = features(&s, fen, persp);
+                        let (head, tail) = got.split_at(got.len() - own.len());
+                        let want: Vec<usize> = own.iter().map(|i| start + i).collect();
+                        assert_eq!(tail, &want[..], "{arch} factoriser {factoriser} exposure {exposure}: {fen}, perspective {persp}");
+                        assert!(head.iter().all(|&i| i < start), "{arch}: a piece, factoriser or exposure input past its blocks");
+                        assert!(tail.iter().all(|&i| i < s.inputs()));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn merging_the_factorisers_keeps_the_link_and_contact_rows() {
+        let rows = 2;
+        for arch in ["s512pp", "s512cl"] {
+            for (factoriser, exposure) in COMBINATIONS {
+                let s = with(arch, factoriser, exposure);
+                // Each weight its own index: every column distinct.
+                let v: Vec<f32> = (0..rows * s.inputs()).map(|i| i as f32).collect();
+                let merged = merge_factors(&s, rows, &v);
+                assert_eq!(merged.len(), rows * s.saved_inputs(), "{arch} factoriser {factoriser} exposure {exposure}");
+                // The contact and link columns, unchanged and in order, after
+                // the merged piece and exposure rows.
+                let kept = rows * (s.contact_inputs() + s.pp_link_inputs());
+                let first = rows * after_merged_blocks(&s);
+                assert_eq!(&merged[merged.len() - kept..], &v[first..first + kept], "{arch} factoriser {factoriser} exposure {exposure}");
+            }
+        }
+    }
+
+    #[test]
+    fn architecture_8s_layout_is_unchanged() {
+        // S512+PP (architecture 8): 768 piece inputs, then its 608 links;
+        // nothing merged when saved.
+        let s = with("s512pp", false, false);
+        assert_eq!((s.factor_start(), s.link_start(), s.pp_link_inputs()), (768, 768, 608));
+        assert_eq!((s.inputs(), s.saved_inputs()), (1376, 1376));
+        assert!(!s.factoriser && !s.exposure && !s.contacts);
+        for fen in FENS {
+            for persp in 0..2 {
+                let got = features(&s, fen, persp);
+                assert!(got.iter().all(|&i| i < 1376));
+            }
+        }
     }
 }
