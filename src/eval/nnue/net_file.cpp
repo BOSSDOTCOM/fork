@@ -247,8 +247,31 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
 #endif
   if (!c.ok || c.p != c.end) return error = "size " + std::to_string(bytes.size()) + " does not match", false;
   out.scale = scale;
-  return sums_in_range(out, error);
+  if (!sums_in_range(out, error)) return false;
+#if FORK_MOVE_DELTA
+  fill_step_rows(out);
+#endif
+  return true;
 }
+
+#if FORK_MOVE_DELTA
+void fill_step_rows(NetFile& net) {
+  // The feature rows of S512+PP's pieces (accumulator.hpp, feature_index): 384
+  // per colour block, 64 per kind, then the square as the frame sees it.
+  for (int enemy = 0; enemy < 2; ++enemy)
+    for (int kind = Knight; kind <= King; ++kind) {
+      const int block = 384 * enemy + 64 * kind;
+      for (int from = 0; from < 64; ++from)
+        for (Bitboard b = StepGeometry.reach[kind - Knight][from]; b; b &= b - 1) {
+          const int to = std::countr_zero(b);
+          const std::int16_t* w_from = net.ft_weights + (block + from) * NetHidden;
+          const std::int16_t* w_to = net.ft_weights + (block + to) * NetHidden;
+          std::int16_t* out = net.step_rows + step_row(enemy != 0, kind, from, to) * NetHidden;
+          for (int i = 0; i < NetHidden; ++i) out[i] = static_cast<std::int16_t>(w_to[i] - w_from[i]);
+        }
+    }
+}
+#endif
 
 std::vector<std::uint8_t> write_net_file(const NetFile& net) {
   std::vector<std::uint8_t> payload;

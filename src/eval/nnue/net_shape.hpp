@@ -40,6 +40,20 @@
 // The architectures that keep S512+PP's pawn links in the int16 sums.
 #define FORK_NET_LINKS (FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9)
 
+// Move-delta rows (ideas.md 182; an A/B experiment, FORK_EXPERIMENT=MOVE_DELTA,
+// off by default): a non-pawn piece's move applies one precomputed row, its
+// row on the destination minus its row on the origin (net_file.hpp,
+// step_rows). S512+PP only: with king regions the table would be four times
+// larger.
+#if defined(FORK_EXP_MOVE_DELTA)
+#if FORK_NET_ARCH != 8
+#error "FORK_EXPERIMENT=MOVE_DELTA is built for S512+PP (architecture 8) only"
+#endif
+#define FORK_MOVE_DELTA 1
+#else
+#define FORK_MOVE_DELTA 0
+#endif
+
 namespace forkeng {
 
 inline constexpr int NetArchitecture = FORK_NET_ARCH;

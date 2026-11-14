@@ -12,6 +12,7 @@
 // Test positions: the CPW perft suite (tests/suite.hpp, cited there) and
 // random legal games from it.
 #include <algorithm>
+#include <bit>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
@@ -116,6 +117,9 @@ std::unique_ptr<NetFile> random_net(std::uint64_t seed) {
   for (auto& b : net->expert_bias) b = uniform(rng, -100000, 100000);
 #endif
   net->scale = 400;
+#if FORK_MOVE_DELTA
+  fill_step_rows(*net);
+#endif
   return net;
 }
 
@@ -345,6 +349,102 @@ TEST_CASE("nnue", "every move kind's delta matches a refresh") {
   }
   CHECK(stepped > 100);
 }
+
+#if FORK_MOVE_DELTA
+TEST_CASE("nnue", "every step row is its piece's destination row minus its origin row") {
+  // Move-delta rows (ideas.md 182). The oracle for the steps is core's
+  // empty-board attacks (the walking slider attacks, not the step layout's own
+  // geometry); each step's row must be the difference of the two feature rows
+  // feature_index gives, and the steps must use every row exactly once.
+  auto net = random_net(7);
+  std::vector<int> used(StepRows, 0);
+  int steps = 0;
+  bool rows_match = true;
+  for (const Color side : {White, Black})
+    for (int kind = Knight; kind <= King; ++kind)
+      for (Square from = 0; from < 64; ++from) {
+        const Bitboard reach = kind == Knight   ? knight_attacks(from)
+                               : kind == Bishop ? bishop_attacks_by_walk(from, 0)
+                               : kind == Rook   ? rook_attacks_by_walk(from, 0)
+                               : kind == Queen
+                                   ? bishop_attacks_by_walk(from, 0) | rook_attacks_by_walk(from, 0)
+                                   : king_attacks(from);
+        for (Bitboard b = reach; b; b &= b - 1) {
+          const Square to = std::countr_zero(b);
+          const Piece p = piece_of(side, PieceType(kind));
+          const int row = step_row(side != White, kind, from, to);
+          CHECK(row >= 0 && row < StepRows);
+          if (row < 0 || row >= StepRows) continue;
+          ++used[row];
+          ++steps;
+          const std::int16_t* w_to = net->ft_weights + feature_index(White, p, to) * NetHidden;
+          const std::int16_t* w_from = net->ft_weights + feature_index(White, p, from) * NetHidden;
+          for (int i = 0; i < NetHidden; ++i)
+            rows_match &=
+                net->step_rows[row * NetHidden + i] == static_cast<std::int16_t>(w_to[i] - w_from[i]);
+        }
+      }
+  CHECK_EQ(steps, StepRows);
+  CHECK(std::all_of(used.begin(), used.end(), [](int n) { return n == 1; }));
+  CHECK(rows_match);
+}
+
+TEST_CASE("nnue", "step rows keep every move's sums exact at the reader's largest piece weights") {
+  // Every piece weight at +-1,023, the most the reader's bound allows with no
+  // links (32 x 1,023 = 32,736), signs mixed so the step rows reach +-2,046;
+  // the network goes through the file reader, which fills the step rows.
+  // Each legal move along random games, one step from a refresh, for every
+  // perspective whose frame it leaves unchanged (castling and pawn moves keep
+  // their piece rows; the others take step rows).
+  auto loud = random_net(8);
+  for (int row = 0; row < NetPieceSquares; ++row)
+    for (int i = 0; i < NetHidden; ++i)
+      loud->ft_weights[row * NetHidden + i] =
+          static_cast<std::int16_t>(((row * 7 + i) % 3 == 0) ? 1023 : -1023);
+  for (int row = NetPieceSquares; row < loud->inputs; ++row)
+    for (int i = 0; i < NetHidden; ++i) loud->ft_weights[row * NetHidden + i] = 0;
+  for (auto& b : loud->ft_bias) b = 0;
+  auto net = std::make_unique<NetFile>();
+  std::string error;
+  CHECK_MSG(read_net_file(write_net_file(*loud), *net, error), error);
+  int stepped = 0, by_step = 0;
+  for (const auto& sp : perft_suite()) {
+    for (std::uint64_t seed = 1; seed <= 3; ++seed) {
+      Position pos;
+      pos.set_fen(sp.fen);
+      std::uint64_t rng = seed * 104729 + static_cast<std::uint64_t>(stepped);
+      for (int ply = 0; ply < 40; ++ply) {
+        MoveList legal;
+        generate<GenMode::Legal>(pos, legal);
+        if (legal.size() == 0) break;
+        Accumulator root, child, fresh;
+        accumulate_board(*net, pos, root);
+        for (Move m : legal) {
+          const FeatureDelta d = delta_for_move(pos, m);
+          by_step += d.piece_step;
+          const Frame before[2] = {frame_of(*net, White, pos.king_square(White)),
+                                   frame_of(*net, Black, pos.king_square(Black))};
+          pos.make(m);
+          accumulate_board(*net, pos, fresh);
+          for (const Color perspective : {White, Black}) {
+            if (frame_of(*net, perspective, pos.king_square(perspective)) != before[perspective]) continue;
+            advance_perspective(*net, root, d, perspective, before[perspective], child);
+            CHECK_MSG(std::memcmp(child.values[perspective], fresh.values[perspective],
+                                  sizeof fresh.values[0]) == 0,
+                      pos.fen());
+            ++stepped;
+          }
+          pos.unmake(m);
+        }
+        const Move m = legal[splitmix_next(rng) % legal.size()];
+        pos.make(m);
+      }
+    }
+  }
+  CHECK(stepped > 40000);  // 44,623 at this commit
+  CHECK(by_step > 15000);  // 17,380
+}
+#endif
 
 #if FORK_NET_ARCH == 9
 // H512+PP's evaluation the obvious way, an oracle independent of

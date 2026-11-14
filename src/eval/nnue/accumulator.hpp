@@ -32,6 +32,9 @@
 //   inside +-EvalLimit. A position and its colour mirror evaluate the same;
 //   with mirroring, so do a position and its left-right mirror.
 // - An incrementally updated accumulator equals one computed from scratch.
+// - Move-delta builds (FORK_MOVE_DELTA) apply a non-pawn piece's move as one
+//   step row (net_file.hpp) in place of its two piece rows; the sums are the
+//   same bit for bit.
 // - No allocation, no floating point.
 // - Stats builds (FORK_SEARCH_STATS) also count the stack's work in a
 //   FeatureStackTally (DESIGN.md §5.7, X1); the counts only read the state,
@@ -81,6 +84,12 @@ struct FeatureDelta {
   // after the move (left unset otherwise).
   bool pawn_change = false;
   Bitboard pawns_before[2] = {0, 0}, pawns_after[2] = {0, 0};
+#endif
+#if FORK_MOVE_DELTA
+  // Set for a non-pawn piece's move other than castling: removed_piece[0] on
+  // removed_square[0] and added_piece[0] on added_square[0] are that piece's
+  // origin and destination, applied as its one step row (ideas.md 182).
+  bool piece_step = false;
 #endif
 };
 

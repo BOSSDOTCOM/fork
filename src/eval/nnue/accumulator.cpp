@@ -62,12 +62,25 @@ struct DeltaColumns {
 
 DeltaColumns columns_for(const NetFile& net, const FeatureDelta& d, Color perspective, Frame f) {
   DeltaColumns c;
-  for (int i = 0; i < d.removed_count; ++i) {
+  int first = 0;  // the first removed and added piece not yet applied
+#if FORK_MOVE_DELTA
+  if (d.piece_step) {
+    // The mover's step row, in place of its two rows (add_rows is read only
+    // by XGR, which has no step rows).
+    const Piece p = d.added_piece[0];
+    const int seen = (perspective == White ? 0 : 56) ^ f.flip;
+    c.add[c.adds++] = net.step_rows + step_row(side_of(p) != perspective, kind_of(p),
+                                               d.removed_square[0] ^ seen, d.added_square[0] ^ seen) *
+                                          NetHidden;
+    first = 1;
+  }
+#endif
+  for (int i = first; i < d.removed_count; ++i) {
     c.sub_rows[c.subs] = feature_index(perspective, d.removed_piece[i], d.removed_square[i], f);
     c.sub[c.subs] = column(net, c.sub_rows[c.subs]);
     ++c.subs;
   }
-  for (int i = 0; i < d.added_count; ++i) {
+  for (int i = first; i < d.added_count; ++i) {
     c.add_rows[c.adds] = feature_index(perspective, d.added_piece[i], d.added_square[i], f);
     c.add[c.adds] = column(net, c.add_rows[c.adds]);
     ++c.adds;
@@ -531,6 +544,9 @@ FeatureDelta delta_for_move(const Position& before, Move m) {
     remove(before.piece_at(captured), captured);
   }
   add(m.is_promotion() ? piece_of(us, m.promo_type()) : mover, to);
+#if FORK_MOVE_DELTA
+  d.piece_step = kind_of(mover) != Pawn;
+#endif
 #if FORK_NET_LINKS
   // Castling moves no pawn; otherwise the mover or the captured piece may be one.
   const bool captured_pawn = d.removed_count == 2 && kind_of(d.removed_piece[1]) == Pawn;

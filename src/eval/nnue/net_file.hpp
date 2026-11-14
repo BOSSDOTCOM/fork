@@ -40,14 +40,20 @@
 //   (accumulator.cpp) and held to int16 only when added to the piece sums. So the
 //   integer arithmetic of every path (scalar and SIMD) never overflows, and
 //   all paths give identical results.
+// - Move-delta builds (FORK_MOVE_DELTA, ideas.md 182) also hold the step rows,
+//   made from the feature weights by fill_step_rows: read_net_file calls it
+//   on every file it accepts, and code that sets the weights itself (the
+//   tests' random networks) calls it after.
 #pragma once
 
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
 #include <vector>
 
+#include "core/types.hpp"
 #include "eval/nnue/net_shape.hpp"
 
 namespace forkeng {
@@ -61,9 +67,68 @@ inline constexpr std::size_t NetPayloadBytes =
     2 * (std::size_t{NetInputs} * NetHidden + NetHidden + 2 * NetHidden) + 4;
 #endif
 
+#if FORK_MOVE_DELTA
+// Move-delta rows (ideas.md 182): one row per step a non-pawn piece can make
+// on an empty board, in a perspective's frame (squares as feature_index sees
+// them). Both flips of a frame (ranks for Black, files when mirrored) keep a
+// step a step of the same piece, so a move's step row in any frame is the
+// row of its origin and destination as that frame sees them. Rows run by
+// colour block (own, enemy), then by kind (knight .. king), origin and
+// destination (ascending).
+struct StepLayout {
+  Bitboard reach[5][64] = {};       // [kind - Knight][origin]: the destinations
+  std::uint16_t first[5][64] = {};  // the origin's first row within a colour block
+  int per_colour = 0;               // rows per colour block
+};
+
+constexpr StepLayout make_step_layout() {
+  StepLayout s;
+  for (int from = 0; from < 64; ++from)
+    for (int to = 0; to < 64; ++to) {
+      const int df = (to & 7) - (from & 7), dr = (to >> 3) - (from >> 3);
+      const int af = df < 0 ? -df : df, ar = dr < 0 ? -dr : dr;
+      const bool diagonal = af == ar && af > 0, straight = (af == 0) != (ar == 0);
+      const Bitboard b = Bitboard{1} << to;
+      if ((af == 1 && ar == 2) || (af == 2 && ar == 1)) s.reach[0][from] |= b;  // knight
+      if (diagonal) s.reach[1][from] |= b;                                      // bishop
+      if (straight) s.reach[2][from] |= b;                                      // rook
+      if (diagonal || straight) s.reach[3][from] |= b;                          // queen
+      if (af <= 1 && ar <= 1 && af + ar > 0) s.reach[4][from] |= b;             // king
+    }
+  int next = 0;
+  for (int k = 0; k < 5; ++k)
+    for (int from = 0; from < 64; ++from) {
+      s.first[k][from] = static_cast<std::uint16_t>(next);
+      next += std::popcount(s.reach[k][from]);
+    }
+  s.per_colour = next;
+  return s;
+}
+
+inline constexpr StepLayout StepGeometry = make_step_layout();
+inline constexpr int StepRows = 2 * StepGeometry.per_colour;
+
+// The step row of a `kind` piece (Knight .. King; `enemy` when it is not the
+// perspective's colour) from `from` to `to`, both as the frame sees them; the
+// step must be one of reach's.
+constexpr int step_row(bool enemy, int kind, int from, int to) {
+  const int k = kind - Knight;
+  return (enemy ? StepGeometry.per_colour : 0) + StepGeometry.first[k][from] +
+         std::popcount(StepGeometry.reach[k][from] & ((Bitboard{1} << to) - 1));
+}
+#endif
+
 struct NetFile {
   alignas(64) std::int16_t ft_weights[NetInputs * NetHidden];
   alignas(64) std::int16_t ft_bias[NetHidden];
+#if FORK_MOVE_DELTA
+  // Each step row: the piece's feature row on the destination minus its row
+  // on the origin (fill_step_rows, from ft_weights). Every piece weight is
+  // within +-1,023 (the reader's bound above: 32 x 1,024 > 32,767), so each
+  // difference fits int16; and int16 sums wrap, so applying the difference equals
+  // subtracting one row and adding the other bit for bit in any case.
+  alignas(64) std::int16_t step_rows[StepRows * NetHidden];
+#endif
 #if FORK_NET_ARCH == 1
   alignas(64) std::int16_t out_weights[2 * NetHidden];
   std::int32_t out_bias = 0;
@@ -102,5 +167,10 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
 
 // The file for `net` (tests; the trainer's files come from convert.py).
 std::vector<std::uint8_t> write_net_file(const NetFile& net);
+
+#if FORK_MOVE_DELTA
+// Sets net.step_rows from net.ft_weights (the piece rows).
+void fill_step_rows(NetFile& net);
+#endif
 
 }  // namespace forkeng
