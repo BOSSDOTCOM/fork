@@ -172,6 +172,33 @@ class SettingTests(unittest.TestCase):
         for arm in k.ARMS:
             self.assertFalse(any(f"'{arm}'" in line for line in body), arm)
 
+    def test_arm_set_q_adds_the_slice_copies_to_the_control(self):
+        # Arm Q (2026-11-14): qn1 = c1's files + each td90-posx1 copy once, qo1 = + each copy POSX_OVERSAMPLE times;
+        # c1's settings otherwise; the raw posx1 files trained by no arm.
+        import importlib.util
+        src = Path(k.__file__).read_text(encoding='utf-8')
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d, 'retrain_8c_q.py')
+            path.write_text(src.replace("\nARM_SET = 'all' ", "\nARM_SET = 'q' ", 1), encoding='utf-8')
+            spec = importlib.util.spec_from_file_location('retrain_8c_q', path)
+            q = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(q)
+        self.assertEqual(q.QUEUES, [['qn1'], ['qo1']])
+        self.assertEqual(set(q.ARMS), {'qn1', 'qo1'})
+        control = k.arm_files('control', ORIGINALS)
+        self.assertEqual(q.arm_files('qn', ORIGINALS), control + q.POSX)
+        self.assertEqual(q.arm_files('qo', ORIGINALS), control + q.POSX * 4)
+        self.assertEqual(len(q.POSX), 8)
+        for arm in ('qn1', 'qo1'):
+            want = dict(k.ARMS['c1'])
+            got = dict(q.ARMS[arm])
+            self.assertEqual(got.pop('files'), arm[:2])
+            want.pop('files')
+            self.assertEqual(got, want)
+        self.assertTrue('posx1-w00.vf'.startswith(k.NOT_A1))
+        self.assertIn('posx1', k.MANIFESTS)
+        self.assertIn('posx1-td', k.MANIFESTS)
+
     def test_the_split_is_made_in_the_session(self):
         self.assertNotIn('r8c-split', k.MANIFESTS)                                    # no upload of ep- copies
         self.assertIn('slice1b', k.MANIFESTS)

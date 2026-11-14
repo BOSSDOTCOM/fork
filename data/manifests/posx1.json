@@ -1,0 +1,140 @@
+{
+ "run": "posx1",
+ "generator": {
+  "tool": "fork_datagen (arm Q of the unbalanced-position calibration, ~/fork-data/calib-1112/design-b.md: the queens-on unequal-material slice slice-pos-x-r8: complete games from 311,740 unequal starts drawn by tools/datagen/defense_starts.py (branch slice/pos-x 2776e7c) from g4c-w00/w01, every position saved at 80,000 nodes, labelled by r8brft1; run on the cloud VM, 2026-11-13 6:20 PM to 2026-11-14 11:44 AM EST; sealed for arm Q as part posx1, its files renamed slice-pos-x-r8-s00-wNN-0000.vf to posx1-wNN.vf, bytes unchanged)",
+  "version": "0.3.0-dev+2a63cea",
+  "evaluator": "nnue (r8brft1)",
+  "arch": "x86-64-v3",
+  "bench": "9263568:881c326307a2ba8a",
+  "builds_sha256": {
+   "fork": "10528b24e4cea2421565c84b6017aa511219a3f66305321aeae1e0cd299dd9f8",
+   "fork_datagen": "21bac94da96857d7d8819f999d1699fad2f21be0b9fbb6987f2286ce4106e358",
+   "bench": "9263568:881c326307a2ba8a"
+  },
+  "tools_sha256": {
+   "defense_starts.py": "a23fdbc02b419e4964cd5cbd6cf7d80e6688dea11e21f099a74986ebf66b4a66",
+   "verify_games.py": "785144c1e28f575f80884389b888f8fb4be2af4112986a1ad3df8e94db6bd67d"
+  }
+ },
+ "settings": {
+  "openings": "slice-unequal.epd",
+  "openings_count": 311740,
+  "positions_target": 12500000,
+  "nodes": 80000,
+  "threads": 8,
+  "seed": 20261113,
+  "hash_mb": 4,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 31000,
+  "max_plies": 500,
+  "random_min": 0,
+  "random_max": 0,
+  "adjudicate_cp": 1500,
+  "adjudicate_plies": 16,
+  "save_percent": 100,
+  "unsaved_nodes": 0,
+  "check_nodes": 0
+ },
+ "games": 145919,
+ "positions": 12500564,
+ "positions_unsaved": 0,
+ "seconds": 62703.8,
+ "results": {
+  "white": 67853,
+  "draw": 12103,
+  "black": 65963
+ },
+ "ends": {
+  "checkmate": 0,
+  "stalemate": 66,
+  "repetition": 6709,
+  "fifty_moves": 564,
+  "insufficient_material": 0,
+  "table_result": 26367,
+  "mate_found": 92185,
+  "decided_opening": 0,
+  "too_long": 18,
+  "score_adjudicated": 20028
+ },
+ "verify": [
+  "seg-00: ok: 8 shards, 145919 games, 12500564 positions (0 unsaved); ends {\"mate score\": 92185, \"rules draw\": 7339, \"score adjudication\": 20028, \"table\": 26367}"
+ ],
+ "part_end": "finished (target reached); every game verified (verify_games.py, done.json; gcp.py finish on the PC)",
+ "batches": [
+  [
+   {
+    "file": "posx1-w00.vf",
+    "worker": 0,
+    "games": 18257,
+    "positions": 1562539,
+    "bytes": 6907408,
+    "sha256": "b738e2d8015f3eccb6ce98b67d34c504521083e4ae7e9bc85d888820f357612d",
+    "source_file": "slice-pos-x-r8-s00-w00-0000.vf"
+   },
+   {
+    "file": "posx1-w01.vf",
+    "worker": 1,
+    "games": 18188,
+    "positions": 1562502,
+    "bytes": 6904776,
+    "sha256": "7019f6b045e9291c413b663978c6bb0e3f011377fa5b43bb872fad33bf08eba8",
+    "source_file": "slice-pos-x-r8-s00-w01-0000.vf"
+   },
+   {
+    "file": "posx1-w02.vf",
+    "worker": 2,
+    "games": 18265,
+    "positions": 1562596,
+    "bytes": 6907924,
+    "sha256": "c08a36c803a29ce38ff0cddc96419066be2f64e862ebcfb7f1d4fbe82fb1c5c6",
+    "source_file": "slice-pos-x-r8-s00-w02-0000.vf"
+   },
+   {
+    "file": "posx1-w03.vf",
+    "worker": 3,
+    "games": 18265,
+    "positions": 1562651,
+    "bytes": 6908144,
+    "sha256": "208294f5fe0a2b551a6b3725faca2a0894065f241d8491737fdefda2ee68fda7",
+    "source_file": "slice-pos-x-r8-s00-w03-0000.vf"
+   },
+   {
+    "file": "posx1-w04.vf",
+    "worker": 4,
+    "games": 18204,
+    "positions": 1562594,
+    "bytes": 6905720,
+    "sha256": "5c70c018c74729fdd7a2467d3522d35418f7bfa5caa166ef659e6ecb21292a7d",
+    "source_file": "slice-pos-x-r8-s00-w04-0000.vf"
+   },
+   {
+    "file": "posx1-w05.vf",
+    "worker": 5,
+    "games": 18208,
+    "positions": 1562598,
+    "bytes": 6905880,
+    "sha256": "cf44223dde83fe932bf89ecc2b1052f0b01d8efb4c4c539578298786a7a8d2fb",
+    "source_file": "slice-pos-x-r8-s00-w05-0000.vf"
+   },
+   {
+    "file": "posx1-w06.vf",
+    "worker": 6,
+    "games": 18306,
+    "positions": 1562521,
+    "bytes": 6909100,
+    "sha256": "f3fbc129f1504453f9d7b2cf000ace535b2c4b605788a08e599f811e92eacc2e",
+    "source_file": "slice-pos-x-r8-s00-w06-0000.vf"
+   },
+   {
+    "file": "posx1-w07.vf",
+    "worker": 7,
+    "games": 18226,
+    "positions": 1562563,
+    "bytes": 6906388,
+    "sha256": "4920f193e3cf61627fd05bc003e750b4eede71dbfb1ed2d97264cebcf26ad39c",
+    "source_file": "slice-pos-x-r8-s00-w07-0000.vf"
+   }
+  ]
+ ]
+}

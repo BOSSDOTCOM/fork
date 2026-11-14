@@ -1,0 +1,87 @@
+{
+ "run": "posx1-td",
+ "note": "arm Q: td90- copies of posx1 (td_labels.py labels, lambda 0.9, S = 92; tools retrain/8c-prep 9167b22, as retrain 8c's copies; chunks of 20,000 games, each checked)",
+ "totals": {
+  "games": 145919,
+  "positions": 12500564,
+  "positions_unsaved": 0,
+  "positions_saved": 12500564,
+  "bytes": 55255340
+ },
+ "batches": [
+  [
+   {
+    "file": "td90-posx1-w00.vf",
+    "games": 18257,
+    "positions": 1562539,
+    "positions_unsaved": 0,
+    "positions_saved": 1562539,
+    "bytes": 6907408,
+    "sha256": "4f248725b189d0e6cc4d54e392043fcff3c2030bf5d5bd928db3c82bf121f377"
+   },
+   {
+    "file": "td90-posx1-w01.vf",
+    "games": 18188,
+    "positions": 1562502,
+    "positions_unsaved": 0,
+    "positions_saved": 1562502,
+    "bytes": 6904776,
+    "sha256": "5a5bc33d9d3b339d323830ac60cbb202227dbe506e239fdb14e240af74a6d130"
+   },
+   {
+    "file": "td90-posx1-w02.vf",
+    "games": 18265,
+    "positions": 1562596,
+    "positions_unsaved": 0,
+    "positions_saved": 1562596,
+    "bytes": 6907924,
+    "sha256": "34fc44980927058f150ac9344a3505cafb0b6723db01214d2915997dfc39f9d8"
+   },
+   {
+    "file": "td90-posx1-w03.vf",
+    "games": 18265,
+    "positions": 1562651,
+    "positions_unsaved": 0,
+    "positions_saved": 1562651,
+    "bytes": 6908144,
+    "sha256": "98d39394ef00404c0be79410a467fcc2e21635b458bdcfae9e1fa3154d645b81"
+   },
+   {
+    "file": "td90-posx1-w04.vf",
+    "games": 18204,
+    "positions": 1562594,
+    "positions_unsaved": 0,
+    "positions_saved": 1562594,
+    "bytes": 6905720,
+    "sha256": "d59aaf4f484610b765022c2e2e97de119393ea95df97c586bdeef7c2dc9c7527"
+   },
+   {
+    "file": "td90-posx1-w05.vf",
+    "games": 18208,
+    "positions": 1562598,
+    "positions_unsaved": 0,
+    "positions_saved": 1562598,
+    "bytes": 6905880,
+    "sha256": "dbb20881ed966bea3391ca725fe02e555659c7db9102b66215d428486f696308"
+   },
+   {
+    "file": "td90-posx1-w06.vf",
+    "games": 18306,
+    "positions": 1562521,
+    "positions_unsaved": 0,
+    "positions_saved": 1562521,
+    "bytes": 6909100,
+    "sha256": "6cb22015ff7dd13f67d40dd41b7d99509dcda1c13f4c1bab360b43a755077929"
+   },
+   {
+    "file": "td90-posx1-w07.vf",
+    "games": 18226,
+    "positions": 1562563,
+    "positions_unsaved": 0,
+    "positions_saved": 1562563,
+    "bytes": 6906388,
+    "sha256": "d05b00936ac785276702da4c14933ce8f589ce65356dd8d5e710c8225d5064f1"
+   }
+  ]
+ ]
+}

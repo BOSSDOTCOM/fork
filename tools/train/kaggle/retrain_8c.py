@@ -51,6 +51,18 @@ GPUs) or 'i80' (i801 and i802 only), set only in a kernel copy by one exact repl
 other arms are dropped from ARMS and QUEUES before anything runs; every remaining arm's settings, file list, checks and
 outputs are the 'all' kernel's. The in-session split runs only when an ep arm is in the set.
 
+Arm set 'q' (arm Q of the unbalanced-position calibration's follow-up; owner, 2026-11-14 about 12:00 PM EST: "arm
+Q's two arms (natural share, oversampled)"; ~/fork-data/calib-1112/design-b.md): the slice posx1 (queens-on
+advantages with unequal material, 80-400 cp, played at 80,000 nodes with the 1,500 cp x 16 adjudication on the cloud
+worker, 12,500,000 positions; data/manifests/posx1.json) read as its TD(0.9) copies (td90-posx1-*, posx1-td.json),
+added to the control's exact files (c1's recipe, warm from r8btd90, seed 1, 360 superbatches): qn1 adds each copy
+once (its natural share, 0.69% of the control's saved positions), qo1 adds each copy POSX_OVERSAMPLE times (the
+trainer opens a file listed k times as k readers, so the slice is read k times a pass: 2.8%; with the fresh endgame
+slice the targeted share stays under the plan's 5% cap). Both compare with A1's c1 at the same steps (the pool grows
+by the slice: no self-play is removed, unlike A2's pos arm). QUEUES: qn1 on GPU 0, qo1 on GPU 1. The raw posx1 files
+are mounted but trained by no arm (NOT_A1). In every other arm set nothing changes, but the posx1 manifests are
+sealed inputs, so a kernel built from this branch mounts fork-posx1.
+
 Smoke mode (owner, 2026-11-13, about 2:55 PM EST: a smoke run of the kernel as it will be pushed, before g4c's
 seal): SMOKE = True, set only in the smoke run's kernel copy, shrinks the sizes and nothing else: the originals are
 SMOKE_ORIGINALS (one file of each kind: an older part read as its blend copy, a TD part, a filler part and a filler
@@ -90,7 +102,11 @@ FILLER = ['g4-gcp-20261111T191107Z', 'g4-gcp-20261112T041330Z', 'g4-gcp-20261112
 MANIFESTS = (['g2s1', 'g3s1', 'g3b', 'g3c', 'g3d', 'g3e', 'g3s2', 'g3f', 'g3g', 'g3s3',     # item 8a's inputs
               'g3h', 'g3i', 'g3j', 'g4', 'g4s1-pre', 'r8b-blend', 'r8b-arms', 'r8b-g4',   # 8b's
               'g4b', 'ld-d20', 'ld-d50', 'ld-d100', 'g4c', 'slice1b'] + FILLER            # the parts since
-             + ['g4s2-pre', 'g4s2-post', 'r8c-td', 'r8c-i80', 'r8c-post'])                             # 8c's derived files
+             + ['g4s2-pre', 'g4s2-post', 'r8c-td', 'r8c-i80', 'r8c-post']                              # 8c's derived files
+             + ['posx1', 'posx1-td'])                                                     # arm Q's slice and copies
+# Arm Q (arm set 'q'): the slice's TD(0.9) copies and the oversampled arm's factor (module note).
+POSX = [f'td90-posx1-w0{w}.vf' for w in range(8)]
+POSX_OVERSAMPLE = 4
 VAL = 'g4s2-val.vf'
 VAL_BLEND = 'bl-g4s2-val.vf'
 SMOKE = False               # the smoke run's kernel copy only (module note); False: the real session
@@ -101,7 +117,7 @@ VAL_8B = 'g4s1-val.vf'
 # The parts labelled by S512ppr3 or later (their files and their validation rests): TD(0.9) copies, i80 copies.
 TD_PARTS = ('g3j-', 'g4-', 'g4s1-g3j-', 'g4s1-g4-', 'g4b-', 'ld-d20-', 'ld-d50-', 'ld-d100-', 'g4c-',
             'g4s2-g4b-', 'g4s2-g4c-', 'g4s2-ld-') + tuple(f'{f}-' for f in FILLER) + tuple(f'g4s2-{f}-' for f in FILLER)
-NOT_A1 = ('pos1-', 'ld-d20c50-', 'ld-d20c100-',   # not this session's data (the positional slice is A2's arm)
+NOT_A1 = ('pos1-', 'posx1-', 'ld-d20c50-', 'ld-d20c100-',   # not this session's data (pos1: A2; posx1's raw files)
           'slice1-', 'g3s2-slice1-')               # v1's slice: replaced by slice1b (O2)
 SPLIT_MAX_PIECES = 7        # rft-ep (plan section 3; constant screen passed 2026-11-12)
 SPLIT_SAMPLE = 100          # td_labels.py check: python-chess recount on every 100th game (its default)
@@ -134,9 +150,13 @@ for k in (1, 2):
     ARMS[f'eplo{k}'] = {**FINE_TUNE_SETTINGS, 'files': 'ep', 'init': f'c{k}', 'lr': 5e-6, 'result_weight': 0.0,
                         'val': VAL_BLEND, 'seed': k}
 QUEUES = [['c1', 'rft1', 'ep1', 'eplo1', 'i801'], ['c2', 'rft2', 'ep2', 'eplo2', 'i802']]
-ARM_SET = 'all'             # a kernel copy only (module note): 'all', 'main' or 'i80'
-ARM_SETS = {'all': None, 'main': ('c', 'rft', 'ep', 'eplo'), 'i80': ('i80',)}
-if ARM_SETS[ARM_SET]:
+ARM_SET = 'all'             # a kernel copy only (module note): 'all', 'main', 'i80' or 'q'
+ARM_SETS = {'all': None, 'main': ('c', 'rft', 'ep', 'eplo'), 'i80': ('i80',), 'q': ()}
+if ARM_SET == 'q':
+    ARMS = {f'q{kind}1': {**BASE_SETTINGS, 'files': f'q{kind}', 'init': 'td90', 'lr': 1e-4, 'result_weight': 0.0,
+                          'val': VAL_BLEND, 'seed': 1} for kind in ('n', 'o')}
+    QUEUES = [['qn1'], ['qo1']]
+elif ARM_SETS[ARM_SET]:
     QUEUES = [[a for a in q if a.rstrip('12') in ARM_SETS[ARM_SET]] for q in QUEUES]
     ARMS = {a: v for a, v in ARMS.items() if a.rstrip('12') in ARM_SETS[ARM_SET]}
 CANDIDATES = list(ARMS)
@@ -182,6 +202,10 @@ def arm_files(kind, base):
         return [f'i80-{n}' if n.startswith(TD_PARTS) and not is_slice(n) else control_name(n) for n in base]
     if kind == 'ep':
         return [n if is_slice(n) else f'ep-{control_name(n)}' for n in base]
+    if kind == 'qn':
+        return [control_name(n) for n in base] + POSX
+    if kind == 'qo':
+        return [control_name(n) for n in base] + POSX * POSX_OVERSAMPLE
     raise ValueError(kind)
 
 
@@ -220,6 +244,7 @@ def smoke_subset(found, sealed):
     need = set(SMOKE_ORIGINALS) | set(SMOKE_ALSO) | {VAL, VAL_BLEND, INIT['val']}
     for kind in ('control', 'i80'):
         need |= set(arm_files(kind, SMOKE_ORIGINALS))
+    need |= set(POSX) | {f'posx1-w0{w}.vf' for w in range(8)}  # sealed inputs (MANIFESTS), mounted by fork-posx1
     return ([p for p in found if os.path.basename(p) in need], {n: h for n, h in sealed.items() if n in need})
 
 
