@@ -84,13 +84,13 @@ BATCHES = 305
 VAL_POSITIONS = 20000       # the per-superbatch monitoring prefix
 ALL_POSITIONS = 10 ** 9     # offline scoring: every kept position of a file
 # The VM filler parts' manifest names (plan section 1; each run its own part): the five runs finished before
-# g4c's seal; the run cut at the seal (O9) is added at the seal.
+# g4c's seal, and the run cut at g4c's seal (O9), 2026-11-13 5:49 PM EST (424 chunks).
 FILLER = ['g4-gcp-20261111T191107Z', 'g4-gcp-20261112T041330Z', 'g4-gcp-20261112T185227Z',
-          'g4-gcp-20261112T213623Z', 'g4-gcp-20261112T214053Z']
+          'g4-gcp-20261112T213623Z', 'g4-gcp-20261112T214053Z', 'g4-gcp-20261112T214524Z']
 MANIFESTS = (['g2s1', 'g3s1', 'g3b', 'g3c', 'g3d', 'g3e', 'g3s2', 'g3f', 'g3g', 'g3s3',     # item 8a's inputs
               'g3h', 'g3i', 'g3j', 'g4', 'g4s1-pre', 'r8b-blend', 'r8b-arms', 'r8b-g4',   # 8b's
               'g4b', 'ld-d20', 'ld-d50', 'ld-d100', 'g4c', 'slice1b'] + FILLER            # the parts since
-             + ['g4s2-pre', 'r8c-td', 'r8c-i80', 'r8c-post'])                             # 8c's derived files
+             + ['g4s2-pre', 'g4s2-post', 'r8c-td', 'r8c-i80', 'r8c-post'])                             # 8c's derived files
 VAL = 'g4s2-val.vf'
 VAL_BLEND = 'bl-g4s2-val.vf'
 SMOKE = False               # the smoke run's kernel copy only (module note); False: the real session
