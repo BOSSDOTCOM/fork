@@ -8,7 +8,9 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <string>
@@ -143,24 +145,102 @@ struct TestHash {
   void clear() { std::fill(buckets.begin(), buckets.end(), TtBucket{}); }
 };
 
-// Switches for a search that must equal minimax: TT cutoffs only at their
-// own depth, and no pruning or reductions (they are not exact). The drift
-// tables off too: they add their learned term to the quiescence stand-pat,
-// so a search with them on is not minimax on the raw eval.
+// Switches for a search that must equal minimax at its nominal depth (the
+// references above): TT cutoffs only at their own depth, and every technique
+// whose decision reads the evaluation's values (against a margin, a bar or an
+// earlier ply's eval) or the search's history (history tables, the TT's
+// contents) to prune, reduce or extend switched off. Such a technique stays
+// exact only while the default network's numbers keep it from firing in
+// these positions, which another network need not do (2026-11-14: the
+// history skip, below; owner, 2026-11-14: every such switch off, and the
+// exact cases also run with a second network, further down). Every switch
+// of SearchSwitches, and why it is off or kept:
+//
+// Off: prunes, reduces or extends on a value or history test.
+//   use_rfp                 RFP: eval - margin x depth >= beta cuts the node.
+//   use_nmp                 the null move: on eval >= beta, a reduced search
+//                           after passing cuts the node.
+//   use_capture_probe       ProbCut: a capture holding beta + margin in a
+//                           shallower search cuts the node (from depth 9).
+//   use_singular_extension  the singular test (the TT entry's score less a
+//                           margin, searched at half depth without the TT
+//                           move) extends the TT move a ply past the nominal
+//                           depth (from depth 6 at ply > 0, so from root
+//                           depth 7: the depth-10 case below).
+//   use_multi_cut           the same test returns its bar as the node's score.
+//   use_negative_extension  the same test searches the TT move a ply
+//                           shallower (off by default; pinned off here).
+//   use_no_move_reduction   IIR: a node without a TT move (what the TT holds)
+//                           is searched a ply shallower (from depth 8).
+//   use_lmr, use_root_lmr   late quiets searched shallower.
+//   use_lmr_check_relief, use_lmr_in_check, use_cut_node_lmr,
+//   use_improving_lmr, use_centred_lmr_history
+//                           LMR's terms (checks, node types, the improving
+//                           flag from earlier plies' evals, the history's
+//                           centred term): inert with LMR off, off too so a
+//                           variant turning LMR on cannot bring them along.
+//   use_lmp, use_improving_lmp
+//                           late move pruning and its eval-trend allowance.
+//   use_futility            futility: eval + margin <= alpha drops quiets.
+//   use_see_prune           main-search SEE pruning (a threshold growing with
+//                           depth, which the references do not apply).
+//   use_history_skip        the history skip: a quiet whose ordering score
+//                           is at or below -700 x depth is dropped (depths
+//                           1-3). Left on, it dropped a refuting king move in
+//                           KRK once a network's evaluations had left that
+//                           move with bad history (2026-11-14: the
+//                           zero-window case below, 443 against 442, with
+//                           bake-off round 3's x_lower smoke net, as
+//                           architecture 10 and as S512+PP alike).
+//   use_skip_check_exempt   the history skip's exemption: inert with it off.
+//   use_quiesce_move_cap    the quiescence search stops after N moves.
+//   use_piece_drift, use_minor_drift, use_major_drift, use_threat_drift
+//                           learned terms added to the stand-pat and the
+//                           pruning eval: not minimax on the raw eval.
+//   use_tt_eval_refine      the pruning eval moved by the TT entry's score:
+//                           read only by the pruning above (all off); off so
+//                           a variant turning one on starts from the raw eval.
+//   use_tables              Syzygy probes: exact, but the references know no
+//                           tables (off whatever another suite has loaded).
+// Kept: nothing a minimax value depends on.
+//   use_tt (tt_exact_depth) a cutoff only on an entry of the node's own depth
+//                           whose bound settles the window: minimax where no
+//                           repetition is in reach (each case checks that).
+//   use_pvs, use_aspiration zero or narrow windows, re-searched on a fail:
+//                           the value is the same (the cases vary both).
+//   use_mate_distance       prunes only what cannot beat the mate bounds.
+//   use_quiesce, use_see_quiesce
+//                           the references' own horizon (captures and queen
+//                           promotions, SEE-losing captures skipped).
+//   use_history, use_history_malus, use_reply_history, use_follow_history,
+//   use_take_history, use_threat_buckets, use_check_order_bonus,
+//   use_pair_sum_update, use_history_ageing, use_linear_bonus
+//                           move ordering and its tables: alpha-beta's value
+//                           does not depend on the order. Kept on, so the
+//                           probes run on real orderings and grown histories.
+//   tt_age_blend, tt_keep_exact, use_tt_keep_deeper
+//                           which entry a full bucket keeps: with exact-depth
+//                           cutoffs every entry kept is a true bound.
+//   use_stability_time, use_share_time, use_deep_time_depth,
+//   use_forced_move_stop, use_pass_best_stop
+//                           timed or stopped searches only; these have a
+//                           depth limit and no stop.
 SearchSwitches exact_switches() {
   SearchSwitches s;
   s.tt_exact_depth = true;
-  s.use_rfp = s.use_nmp = s.use_lmr = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  s.use_rfp = s.use_nmp = s.use_capture_probe = false;
+  s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = false;
+  s.use_no_move_reduction = false;
+  s.use_lmr = s.use_root_lmr = false;
+  s.use_lmr_check_relief = s.use_lmr_in_check = s.use_cut_node_lmr = false;
+  s.use_improving_lmr = s.use_centred_lmr_history = false;
+  s.use_lmp = s.use_improving_lmp = false;
+  s.use_futility = s.use_see_prune = false;
+  s.use_history_skip = s.use_skip_check_exempt = false;
+  s.use_quiesce_move_cap = false;
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = false;
-  s.use_quiesce_move_cap = false;  // not exact either
-  s.use_root_lmr = false;          // not exact either
-  // The history skip (tier 2, T24, on since 2026-11-12) prunes a quiet move on
-  // its history at depths 1-3, so it is not exact either: left on, it skipped
-  // a refuting king move once a network's evaluations had left that move with
-  // bad history (2026-11-14: the zero-window case below in KRK, 443 against
-  // 442, with bake-off round 3's x_lower smoke net, as architecture 10 and
-  // with its weights as S512+PP alike).
-  s.use_history_skip = false;
+  s.use_tt_eval_refine = false;
+  s.use_tables = false;
   return s;
 }
 
@@ -221,8 +301,9 @@ TEST_CASE("search", "the search bench's perft-suite FENs equal the cited suite")
     CHECK_MSG(search_bench_fens()[i] == suite[i].fen, suite[i].name << ": " << search_bench_fens()[i]);
 }
 
-TEST_CASE("search",
-          "root score equals plain minimax: PVS, aspiration, mate distance pruning, TT on and off") {
+namespace {
+
+void check_root_oracle() {
   Fixture fx;
   // With the quiescence search the reference grows fast: depth 3 (2 in debug
   // builds), and depth 1 for the variant without the SEE filter, whose
@@ -256,6 +337,13 @@ TEST_CASE("search",
   CHECK(compared >= 108);
 }
 
+}  // namespace
+
+TEST_CASE("search",
+          "root score equals plain minimax: PVS, aspiration, mate distance pruning, TT on and off") {
+  check_root_oracle();
+}
+
 // Endgames transpose a lot, so the TT really cuts here (counted below).
 // Exactness is claimed only where no repetition is in reach (a path-blind
 // TT may carry a repetition draw across paths: the next test case), and the
@@ -286,10 +374,7 @@ std::vector<DepthCase> repetition_free_cases() {
   return out;
 }
 
-}  // namespace
-
-TEST_CASE("search",
-          "TT cutoffs at exact depth equal plain minimax on small endgames, no repetition in reach") {
+void check_exact_depth_endgames() {
   Fixture fx;
   std::uint64_t first_nodes = 0, again_nodes = 0;
   for (const DepthCase& c : repetition_free_cases()) {
@@ -322,6 +407,13 @@ TEST_CASE("search",
   }
   CHECK_MSG(again_nodes < first_nodes,
             again_nodes << " nodes over the filled TT, " << first_nodes << " before");
+}
+
+}  // namespace
+
+TEST_CASE("search",
+          "TT cutoffs at exact depth equal plain minimax on small endgames, no repetition in reach") {
+  check_exact_depth_endgames();
 }
 
 // The known path-dependent case, tolerated (owner, 2026-10-29): in KRK at
@@ -441,10 +533,162 @@ TEST_CASE("search",
 // evaluations had left a refuting king move with bad history (bake-off round
 // 3's x_lower smoke net, 2026-11-14, and its weights as S512+PP: this case and
 // the one above fail with either). The default network never reaches such a
-// history in these positions, so with it both pass either way.
+// history in these positions, so with it both pass either way; s512ppr3 does
+// (the second-network case below).
 TEST_CASE("search", "zero-window probes stay exact with the history of earlier searches kept") {
   check_zero_window_probes(true, 2);
 }
+
+// The locked endgames deeper (owner, 2026-11-14): the cases above stop at
+// root depth 6, where the singular test (SingularMinDepth 6, at ply > 0, so
+// from root depth 7), the no-move reduction (from depth 8) and multi-cut
+// never run, so an exact_switches() that left them on still passed. Here the
+// locked endgames above (no capture on either side, every move of the walled
+// side irreversible) are searched to depth 10 (cheap: few moves), equal to
+// minimax there, and probed on zero windows around the exact value at every
+// depth from 7, over the TT the search filled and over an empty one (no TT
+// move: the no-move reduction's nodes). Each of the singular extension,
+// multi-cut, the no-move reduction and the negative extension, left on alone,
+// fails probes here, with either network of the case below (2026-11-14; e.g.
+// the singular extension in 8/6pp/1p6/kP6/Pp6/1P6/8/3K4 w at depth 9, beta
+// -120: the probe fails high at -48 where the exact value is -121). ProbCut needs a capture,
+// which these positions lack: its switch is off by reasoning only. The
+// locked endgame with White's rook holds a repetition from depth 8
+// (repetition_in_tree) and is left out; the other three are checked for one
+// to depth 10.
+namespace {
+
+void check_deep_locked_endgames() {
+  const int deepest = 10;
+  Fixture fx;
+  // The locked endgames (after the four plain ones) but the last, White's
+  // rook's.
+  const std::vector<DepthCase> all = repetition_free_cases();
+  CHECK(all.size() == 8);
+  int positions = 0, probes = 0;
+  for (std::size_t i = 4; i + 1 < all.size(); ++i) {
+    const DepthCase& c = all[i];
+    Position pos;
+    CHECK(pos.set_fen(c.fen));
+    CHECK_MSG(!repetition_in_tree(pos, deepest), c.fen << ": a repetition fits in depth " << deepest);
+    ++positions;
+    fx.store.clear();
+    fx.searcher->switches = exact_switches();
+    SearchQuota limits;
+    limits.depth = deepest;
+    const int full = fx.search(pos, limits).score;
+    for (int d = 7; d <= deepest; ++d) {
+      const int value = reference_minimax(pos, d, 0);
+      if (d == deepest) CHECK_MSG(full == value, c.fen << ": depth " << d << ": " << full << " vs " << value);
+      for (bool empty_tt : {false, true})
+        for (int offset : {-40, -1, 0, 1, 40}) {
+          const int beta = value + offset;
+          if (empty_tt) fx.store.clear();
+          const int s = fx.searcher->probe_zero_window(pos, beta, d, fx.stop);
+          const int ref = reference_alphabeta(pos, d, 0, beta - 1, beta, true);
+          ++probes;
+          CHECK_MSG((s >= beta) == (ref >= beta), c.fen << " depth " << d << " beta " << beta << " empty TT "
+                                                        << empty_tt << ": probe " << s << ", reference "
+                                                        << ref);
+          CHECK_MSG(s >= beta ? value >= s : value <= s, c.fen << " depth " << d << " beta " << beta
+                                                               << ": fail-soft " << s << ", exact " << value);
+        }
+    }
+  }
+  CHECK_MSG(positions == 3 && probes == 3 * 4 * 10, positions << " positions, " << probes << " probes");
+}
+
+}  // namespace
+
+TEST_CASE("search", "the locked endgames stay exact to depth 10, where the singular test and multi-cut run") {
+  check_deep_locked_endgames();
+}
+
+#if defined(FORK_EVAL_NNUE)
+// The exact cases with a second network (owner, 2026-11-14): a technique
+// left on that reads the evaluation's values or the history they produce can
+// pass with one network and fail with another, so the exact cases (all but
+// the tiny-TT one, whose exact part is the root oracle's on fewer buckets)
+// run again with another committed network of this build's architecture.
+// With the default build that is s512ppr3 (S512+PP, the default network
+// until 2026-11-10: r8btd90 was retrained from it and r8brft1 fine-tuned from
+// r8btd90, docs/nets.md), whose evaluations differ from r8brft1's on most of
+// the cases' positions (checked below). With the history skip left on,
+// s512ppr3 fails the zero-window probes in KRK (8/8/3k4/8/8/3K4/8/R7 w,
+// depth 2: 373 against 372) where the default network passes (2026-11-14).
+// A build whose architecture has no other committed network skips the case;
+// the bootstrap evaluation has no network to swap and does not compile it.
+namespace {
+
+// The searcher and static_eval(), which the references call, both read
+// embedded_net(): one NetFile, allocated (not const) on its first use. A
+// NetSwap copies another network's weights into it for its lifetime and the
+// embedded weights back at its end (writing through const_cast is defined:
+// the object itself is not const). Single-threaded cases only. A search reads
+// the weights from its root (FeatureStack::reset) and the TT keeps static
+// evaluations, so each fixture is made, with an empty TT, under the swap.
+class NetSwap {
+ public:
+  explicit NetSwap(const NetFile& other) : saved_(std::make_unique<NetFile>(embedded_net())) {
+    live() = other;
+  }
+  ~NetSwap() { live() = *saved_; }
+  NetSwap(const NetSwap&) = delete;
+  NetSwap& operator=(const NetSwap&) = delete;
+
+ private:
+  static NetFile& live() { return const_cast<NetFile&>(embedded_net()); }
+  std::unique_ptr<NetFile> saved_;
+};
+
+// The first committed network (nets/NAME.fnet, in this order) that this
+// build reads (its architecture) and that is not the embedded one; null if
+// none is.
+std::unique_ptr<NetFile> second_network(std::string& name) {
+  for (std::string_view candidate :
+       {"s512ppr3", "r8btd90", "s512ppr2", "s512pp", "r8brft1", "s512r2", "s512", "b0r2", "b0r1", "b0"}) {
+    std::ifstream in(std::string(FORK_SOURCE_DIR) + "/nets/" + std::string(candidate) + ".fnet",
+                     std::ios::binary);
+    if (!in) continue;
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                          std::istreambuf_iterator<char>());
+    auto net = std::make_unique<NetFile>();
+    std::string error;
+    if (!read_net_file(bytes, *net, error) || write_net_file(*net) == write_net_file(embedded_net()))
+      continue;
+    name = candidate;
+    return net;
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+TEST_CASE("search", "the exact searches stay exact with a second network") {
+  std::string name;
+  const std::unique_ptr<NetFile> net = second_network(name);
+  if (!net) SKIP("no committed network of this build's architecture besides the embedded one");
+  // A different evaluation, checked: the networks disagree on most of the
+  // positions the cases search.
+  std::vector<Position> sample = oracle_positions();
+  for (const DepthCase& c : repetition_free_cases()) {
+    Position pos;
+    CHECK(pos.set_fen(c.fen));
+    sample.push_back(pos);
+  }
+  std::vector<int> embedded;
+  for (const Position& pos : sample) embedded.push_back(static_eval(pos));
+  const NetSwap swap(*net);
+  std::size_t differ = 0;
+  for (std::size_t i = 0; i < sample.size(); ++i) differ += static_eval(sample[i]) != embedded[i];
+  CHECK_MSG(differ * 4 >= sample.size() * 3,
+            name << " evaluates " << differ << " of " << sample.size() << " positions differently");
+  check_root_oracle();
+  check_exact_depth_endgames();
+  check_zero_window_probes(true, 1);
+  check_deep_locked_endgames();
+}
+#endif
 
 // Audit-1 Q-10 (DESIGN.md §5.2's tiny-hash stress test): every search
 // fixture used 16,384 buckets, so the TT's replacement under heavy pressure
