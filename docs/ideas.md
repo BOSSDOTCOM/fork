@@ -2357,6 +2357,7 @@ whose weaknesses and data gaps decide their targets and order.
   positional arm shows defense still lacking); the positional main pilot
   run first, the full slice only if it passes and after the label-depth
   arms.
+- **2026-11-14 (finding, idea 180):** the queens-on understatement behind the positional-advantage slice and arm Q was measured on pooled data; split by phase bucket it is largely phase mix (see idea 180). The combined queens-on arm (owner's trim, same day) still tests the data directly; read its result with this in mind.
 
 ## 67. Draw-probability head
 
@@ -3362,6 +3363,7 @@ proposal are placeholders, screened before use.
   (and phase) from Fork's own calibration fit (an edit of the net file); a fixed-node screen vs r8brft1 plus the
   UHO/SF19 diagnostic; **reported to the owner before any label work.** **status:** candidate (plan).
 
+- **2026-11-14 (owner): step 2's finding:** the score-to-result scale varies mainly by output phase bucket, not by queen state: in Fork's own STC games the logistic scale k falls from 106.9 cp in bucket 0 to 55.4 cp in bucket 7 (LTC 116.9 to 51.9; flat at 69-74 cp in 20,000-node data games); within a bucket the queens-on/off split is small and mixed (b3 on 70.0 vs off 66.2; b4 on 61.9 vs off 65.0); the pooled 'queens on 59.6 vs off 74.1 cp' was largely phase mix, because queenless positions sit in the low buckets (idea 180 step 2's fit, 2026-11-14: g4c 1.21 M positions, the calib-1112 STC 2.64 M and LTC 0.43 M SPRT positions; report docs/research/idea180-step2.md on branch exp/i180-head-scale). **Order:** the phase-only net-file edit (r8brft1hs, S 104, heads scaled by bucket; bench 4,913,609 / ba18170f0bf15ae7) is screened first against r8brft1 at fixed nodes with the UHO/SF19 diagnostic, as soon as retrain 8c is decided; the per-(bucket, queen state) multiplier (exp/i180-head-scale) only if the edit gains, after a quiet speed re-measure.
 ### 181. Bound-supervised targets (proposal idea 7)
 - **idea:** one-sided targets from the root-move bounds a saved search already proves (a TreeStrap-style use of
   stored searches); needs a datagen sidecar.
