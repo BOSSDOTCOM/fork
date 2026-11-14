@@ -1,0 +1,9 @@
+2026-11-14 06:37 AM EST r8c-fn-r8cep1-vs-r8crft1: Elo: 1.74 +/- 9.21, nElo: 3.21 +/- 17.02
+2026-11-14 07:19 AM EST r8c-fn-r8cep2-vs-r8crft2: Elo: -5.21 +/- 8.53, nElo: -10.41 +/- 17.02
+2026-11-14 08:02 AM EST r8c-fn-r8ceplo1-vs-r8cep1: Elo: -6.30 +/- 8.79, nElo: -12.20 +/- 17.02
+2026-11-14 08:45 AM EST r8c-fn-r8ceplo2-vs-r8cep2: Elo: -4.99 +/- 8.96, nElo: -9.50 +/- 17.02
+2026-11-14 09:30 AM EST r8c-fn-r8ci801-vs-r8cc1: Elo: -4.34 +/- 9.11, nElo: -8.12 +/- 17.02
+2026-11-14 10:14 AM EST r8c-fn-r8ci802-vs-r8cc2: Elo: 2.39 +/- 9.00, nElo: 4.52 +/- 17.02
+2026-11-14 11:45 AM EST r8c-fn-r8ceplo1-vs-r8cc1: Elo: -3.04 +/- 8.91, nElo: -5.81 +/- 17.02
+2026-11-14 12:32 PM EST r8c-fn-r8ceplo2-vs-r8cc2: Elo: 13.47 +/- 9.14, nElo: 25.13 +/- 17.02
+2026-11-14 01:03 PM EST r8c-fn-r8cc1-vs-r8brft1: Elo: -2.39 +/- 9.02, nElo: -4.51 +/- 17.02

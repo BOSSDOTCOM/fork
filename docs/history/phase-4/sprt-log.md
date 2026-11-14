@@ -2168,3 +2168,105 @@ The final stages' result blocks (root-lmr-stc, stage 1, run 43518644286; root-lm
 
 - **Adopted (the owner's pre-approval of 2026-11-13, "incl. root LMR on an LTC pass"):** 350ea3a's change (relative to ab70fa5) with b56adb9's switch-on onto phase-4 bbc19c5: the reduction in `search_root`, the switch `UseRootLmr` (now on), test_pruning's root-reductions case (the default check now on), both tier-2 all-switches cases (test_pruning, test_pruning_review), and the exact searches without it (test_search's `exact_switches`, as tested; test_pruning_review's `no_pruning`, explicit beside B16's line, though its LMR off already disables it). **Where it sits:** at the root only, as tested: a root move after the first, quiet (no capture, no promotion), with its index + 1 at least `LmrMinMove` and the iteration at least `LmrMinDepth` deep, is searched first on the zero window at depth − 1 − (`reduction_for`(depth, index + 1) − the check relief), clamped to [1, depth − 1]; if it beats alpha, again at depth − 1, then on the full window as before. It reads the whole-ply LMR table only, as tested: no context correction, no cut-node or B9 not-improving plies, no R20 term (R20's 64ths sum and B9's trend act at negamax's LMR sites, unchanged), and the stats builds' X2 LMR probe counts negamax's sites only, so it is unchanged and consistent. The features adopted after the tested base act below the root as before; E1's stop rule reads the prior best, which starts each iteration at the front of the root list (index 0, never reduced; each fail high by another move in the iteration moves it one place down, so it can be reduced only after three). Root reductions with E1, the history skip, the drift table, D8, D13, the exemption, D17, B9, R20, D11 and B16 are untested interactions; the stacking check that follows covers them. **Bench equivalence** (clang-release, Windows, r8brft1): with root reductions off, 6,064,962 / ad41c57a026bb021, phase-4 bbc19c5's; with them on and E1, the history skip, the minor drift table, D8, D13, the exemption, D17, B9's LMP and LMR uses, R20, D11 and B16 off (the tested base had none of them), 8,027,262 / 64ebc879047d0f81, byte for byte b56adb9's tests/bench-r8brft1.ref, so the port equals the tested code. **Bench changes (intended):** 5,386,021 / 5ecd49d976e215e1 with r8brft1 (11.2% fewer nodes than 6,064,962); every other reference re-pinned from its own build: r8brft1 5,386,021 / 5ecd49d976e215e1, r8btd90 4,619,875 / 68a40958fbaa68e8, s512ppr3 5,523,049 / 33aef6053819c6ee, s512ppr2 5,452,220 / 315e0a1db6a03f58, s512pp 5,050,928 / b1d0dbdd3c16abb9, s512r2 5,459,937 / 46a8c6dadb814346, s512 5,950,378 / a0e4fc978e92d22e, b0r2 5,595,179 / 45629cd5bff0f66d, b0r1 6,218,212 / ae4736a58ae80503, b0 6,324,164 / 2826a930919b4264, g1h512 6,165,109 / 94e3c3998e5bb79f, g1afs 6,821,100 / 9df4f01b998bbcec, g1xgr 5,406,787 / f35bf4822e75c8a5, bootstrap (tests/bench.ref) 6,346,280 / 8f3a36882ad22dc7.
   No final-retune dimension (no constant). Tests: clang-release (Windows): every non-slow test passes (34 of 34 with -j1, eval skipped as usual, uci_timing and bench_parity included), and the pruning suite again after the pins (39 cases); clang-debug: ordering (17 cases), pruning (39, the root-reductions case new) and search (27) pass; clang-stats: search_stats passes (11 cases). **Two cases flipped with root reductions on, both debug-only tree checks, and are pinned:** test_pruning's no-move reduction case (its three depth-9 debug trees came out the same with IIR on and off) and R20's centred-history case (its three depth-7 debug trees the same with the term on and off); both are fault checks that a technique changes the search, not strength checks, and the release build's deeper trees (depths 12 and 10) still differ with root reductions on. Root reductions are pinned off on both sides of each comparison, with a comment in the B9 pin's style; with the pins the debug pruning suite passes (39 cases, 0 failures). No other case flipped (the existing B9 and R20 pins pass unchanged; test_search's stop-rule case, for which b56adb9 added a second pass with root reductions off, passes here without it, so that change is not ported). Speed: bench/ab_search.py (clang-release, Windows, 12 interleaved rounds, not pinned; identity checked on all 24 runs), A = bbc19c5, B = the port: median nps -1.5%, best -2.0%, under the run's 3.0% noise threshold, so no significant difference (the two search different trees: 6,064,962 against 5,386,021 bench nodes; the code change itself is a few comparisons per root move).
+
+### 2026-11-14 the time scale's deep-depth clamp (bug review 2026-11-11, E2; idea 185; night lane A item z26-e2-clamp-ltc): design R at LTC, capped undecided; adopted under the non-regression standard (owner)
+
+- The owner's decision of 2026-11-11 (about 10:25 PM EST): record the clamp's under-spend as a TCEC fix behind a
+  switch, tested by a design R LTC SPRT (LTC only: the clamp binds only past depth 19). Base tier2/e2-time-depth
+  `e7ec553` (origin/phase-4 a95e269's engine with `use_deep_time_depth` built in, off; bench 10,166,167 /
+  d874b380155a2e8c); test sprt/e2-time-depth `e4fa310` (the switch on; bench the same: time management only).
+  r8brft1 on both sides, Syzygy 3-4-5, UHO book (seed 20261027); design R ([0, 6] nElo, alpha 0.05, beta 0.20,
+  cap 6, futility look after 2 stages), from stage 0. Ledger idea `e2-time-depth`, try 1 of 2. Data:
+  ~/fork-data/sprt/e2-time-depth-ltc.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| **e2-time-depth-ltc: LTC 40+0.4, design R [0, 6], cap 6 (Hash 64, 1,664 games a stage), `UseDeepTimeDepth` on against off, stages 0-5** | 43577728887 (0), 43583934747 (1), 43590181242 (2), 43596523599 (3), 43603275739 (4), 43610249077 (5) | 9,984 (no time losses, no abnormal ends) | **+2.16 ± 3.47** | +4.24 ± 6.82 | [38, 1113, 2626, 1179, 36] | **capped undecided** (LLR 0.61, bounds −1.56, 2.77) after 6 of 6 stages, 11:48 AM EST 2026-11-14 |
+
+- By stage (cumulative): stage 0 +0.63 ± 8.34 (nElo +1.25 ± 16.69, LLR −0.14); stage 1 +1.88 ± 5.95 (nElo +3.73
+  ± 11.80, LLR 0.12); stage 2 +0.70 ± 4.87 (nElo +1.38 ± 9.64, LLR −0.40); stage 3 +0.89 ± 4.24 (nElo +1.75 ±
+  8.35, LLR −0.41); stage 4 +2.17 ± 3.81 (nElo +4.26 ± 7.47, LLR 0.52); stage 5 +2.16 ± 3.47 (LLR 0.61).
+  Verdict: "capped (6 of 6 stages, undecided)".
+
+The final stage's result block (stage 5, run 43610249077):
+
+```
+    Shards: 96 (done); pairs 4992, games 9984 (9984 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 2.16 +/- 3.47, nElo: 4.24 +/- 6.82
+    Ptnml(0-2): [38, 1113, 2626, 1179, 36]
+    LLR: 0.61 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: capped (6 of 6 stages, undecided)
+```
+
+- **Adopted under the non-regression standard, not on a pass (owner, 2026-11-14, about 12:20 PM EST):** "E2
+  (depth-19 time-clamp fix): adopt under the non-regression standard (TCEC-depth fix; its capped LTC result
+  +2.16 +- 3.47 has a 95% lower bound above -3), with records noting why. Include it in idea 23's simulator
+  when that work starts." The SPRT did not accept H1 on [0, 6]; the adoption reads the capped result's 95%
+  intervals: lower bounds −1.31 Elo and −2.58 nElo, both above −3, the non-regression SPRTs' bound ([−3, 0]
+  nElo). No separate non-regression SPRT was run. Ported onto phase-4 89dc994 (branch adopt/e2-time-depth):
+  e7ec553's change (relative to a95e269) with e4fa310's switch-on; source lines equal e4fa310's change apart
+  from comments and the switch list's neighbour. Bench unchanged, 5,386,021 / 5ecd49d976e215e1 (r8brft1), with
+  the switch on (clang-release) and with it off and on (a FORK_TUNE build); no reference changes. No
+  final-retune dimension (`TimeScaleDeepMaxDepth` 60 is a guard, not a tuned value). The switch stays until the
+  Phase 4 re-validation.
+
+### 2026-11-14 retrain 8c session A1: fixed-node screens, the plain control's promotion SPRT (stopped), then r8ceplo2's STC SPRT against r8brft1 (owner): H1, promoted
+
+- Retrain 8c A1 (docs/research/retrain-8c/plan.md, branch retrain/8c-prep; Kaggle fork-retrain-8c-a1 at 178f16b):
+  the control c (g4s2, warm from r8btd90's float weights, the standard recipe, window average of superbatches
+  331-360), idea 80's arm i80, and on each control's window average the fine-tunes rft (r8brft1's recipe), rft-ep
+  (the result target only on records with 8 or more pieces) and rft-ep-lo (rft-ep at LR 5e-6); seeds 1 and 2 each.
+  Every candidate passed tools/nnue/gates.sh (SLICE_TRAINED=1). The decision rules were written before any result
+  (~/fork-data/8c/a1-decision-rules.md; the outcomes in a1-decision-record.md). Bakes: r8cc1 a71dd2d, r8cc2
+  e8f3eca, r8ci801 33c0ac7, r8ci802 421a2a3, r8crft1 6e364c4, r8crft2 01d021d, r8cep1 76067e4, r8cep2 8b6e74f,
+  r8ceplo1 c04a0d4, r8ceplo2 29b4d28 (each phase-4 b49d6f5's engine with its own default net). Fixed-node screens:
+  800,000 nodes per move, 1,600 games, one stage each (seed K on stage K-1's openings); the SPRTs `--kind network`,
+  [0, 5], alpha = beta = 0.05, cap 13, idea retrain-8c, STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed
+  20261027), OFF = phase-4 b49d6f5 (r8brft1). Data: ~/fork-data/sprt/r8c-fn-* and r8cc2-promo-stc,
+  r8ceplo2-promo-stc. Times EST.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, rft-ep seed 1 (r8cep1) against rft seed 1 (r8crft1) | 43587622663 | 1,600 | +1.74 ± 9.21 | +3.21 ± 17.02 | [10, 193, 383, 207, 7] | screen (6:36 AM) |
+| the same, r8cep2 against r8crft2 | 43590885808 | 1,600 | −5.21 ± 8.53 | −10.41 ± 17.02 | [6, 191, 428, 171, 4] | screen (7:19 AM); pooled with seed 1 −1.74 ± 6.28 [−8.01, +4.54]: **rft-ep replaces rft** (upper end above 0) |
+| the same, rft-ep-lo seed 1 (r8ceplo1) against r8cep1 | 43594279849 | 1,600 | −6.30 ± 8.79 | −12.20 ± 17.02 | [9, 195, 418, 172, 6] | screen (8:02 AM) |
+| the same, r8ceplo2 against r8cep2 | 43597753849 | 1,600 | −4.99 ± 8.96 | −9.50 ± 17.02 | [6, 210, 390, 189, 5] | screen (8:45 AM); pooled −5.65 ± 6.27 [−11.92, +0.62]: **rft-ep-lo replaces rft-ep** (upper end above 0 by 0.62) |
+| the same, r8ci801 against r8cc1 | 43601354862 | 1,600 | −4.34 ± 9.11 | −8.12 ± 17.02 | [9, 204, 393, 186, 8] | screen (9:30 AM) |
+| the same, r8ci802 against r8cc2 | 43605178639 | 1,600 | +2.39 ± 9.00 | +4.52 ± 17.02 | [2, 204, 383, 203, 8] | screen (10:14 AM); idea 80 not killed (above 0 on seed 2), **not adopted** (pooled −0.98 ± 6.40, not above 0; owner) |
+| the same, r8ceplo1 against r8cc1 | 43613018556 | 1,600 | −3.04 ± 8.91 | −5.81 ± 17.02 | [9, 190, 416, 176, 9] | screen (11:45 AM) |
+| the same, r8ceplo2 against r8cc2 | 43617323018 | 1,600 | **+13.47 ± 9.14** | +25.13 ± 17.02 | [3, 178, 387, 218, 14] | screen (12:32 PM); pooled +5.21 ± 6.39 [−1.17, +11.60] (nElo +9.82), mean of seeds +5.21: candidate control + rft-ep-lo by the rule, then **the plain control by the owner's safeguard** (not clearly positive) |
+| the same, r8cc1 against r8brft1 | 43620446592 | 1,600 | −2.39 ± 9.02 | −4.51 ± 17.02 | [13, 186, 405, 191, 5] | the control's final screen (1:03 PM) |
+| the same, r8cc2 against r8brft1 | 43621641763 | 1,600 | −0.65 ± 9.30 | −1.19 ± 17.02 | [17, 182, 395, 199, 7] | the control's final screen (1:17 PM): the better seed, c2 |
+| r8cc2-promo-stc: STC [0, 5], r8cc2 (e8f3eca) against r8brft1 | 43625787512 (stage 0), 43627546232 (1), 43629418447 (2) | 4,800 (no time losses, no abnormal ends) | −0.80 ± 5.26 | −1.49 ± 9.83 | [29, 585, 1176, 588, 22] | **stopped by the owner** after stage 2 (LLR +0.25, −0.09, −0.79 by stage; about 2:20 PM); not promoted |
+| **r8ceplo2-promo-stc: STC [0, 5], r8ceplo2 (29b4d28) against r8brft1** | 43632268487 (stage 0), 43634542473 (1), 43636232270 (2), 43637881329 (3), 43639519074 (4), 43641166102 (5), 43643208644 (6), 43644837732 (7) | 12,800 (no time losses, no abnormal ends) | **+5.48 ± 3.32** | +9.94 ± 6.02 | [87, 1490, 3054, 1672, 97] | **H1 accepted** (LLR 3.95) after stage 7, 5:12 PM |
+
+- By stage (r8ceplo2-promo-stc, cumulative): stage 0 +10.86 ± 9.48 (LLR 1.13); stage 1 +3.37 ± 6.70 (0.47);
+  stage 2 +0.43 ± 5.51 (−0.34); stage 3 +2.50 ± 4.77 (0.52); stage 4 +2.13 ± 4.26 (0.43); stage 5 +4.16 ± 3.85
+  (1.99); stage 6 +4.59 ± 3.56 (2.69); stage 7 +5.48 ± 3.32 (3.95). Started 2:19 PM (try 2 of 2 of idea
+  retrain-8c).
+
+The final stage's result block (r8ceplo2-promo-stc, stage 7, run 43644837732):
+
+```
+    Shards: 128 (done); pairs 6400, games 12800 (12800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 5.48 +/- 3.32, nElo: 9.94 +/- 6.02
+    Ptnml(0-2): [87, 1490, 3054, 1672, 97]
+    LLR: 3.95 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- **The decisions (owner, 2026-11-14):** the promotion safeguard (about 12:55-1:00 PM): the direct head-to-head
+  rft-ep-lo against the control (+5.21 [−1.17, +11.60]) is not clearly positive, so the plain control went to the
+  promotion SPRT instead (r8cc2, the better final screen). The fallback (about 1:25 PM): "8c: if the control's SPRT
+  trends toward H0 (or ends H0), queue an STC SPRT [0, 5] of the fine-tuned candidate (control + rft-ep-lo, seed 2,
+  r8ceplo2) vs r8brft1 immediately (both are fine-tuned nets: like for like); promotion pre-approved on H1 with
+  gates passing and no held-out flag." The switch (about 2:20 PM): "if the plain control's SPRT vs r8brft1 is
+  trending toward H0 (LLR clearly negative), stop it and record; then run an STC SPRT [0, 5] of the fine-tuned
+  candidate r8ceplo2 vs r8brft1 (like for like), promotion pre-approved on H1 with gates passing and no held-out
+  flag." Asked with r8cc2-promo-stc's numbers after 3 stages (LLR −0.79), the owner chose to stop it.
+- **Promoted on the pre-approval: r8ceplo2 is the default network** (H1; gates.sh exit 0 with SLICE_TRAINED=1;
+  held-out ratios against r8brft1 0.86, 525 against 612 of 3,800 at 4-5 pieces, and 0.98, 756 against 770 of 5,599
+  at 6-7 pieces, neither above 1.15); bench 5,403,414 / 34c916638218aa11. The labeller switch to r8ceplo2 is
+  pending under the one-switch-per-day rule: the next data generation part (g4d) and the cloud VM's next run; no
+  running generator is switched.

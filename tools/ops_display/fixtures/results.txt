@@ -1,0 +1,3 @@
+2026-11-13 10:23 PM EST r8ei801 against r8ec1 at 800,000 nodes per move, 1,600 games (stage 0's openings): Elo: -1.74 +/- 9.19, nElo: -3.22 +/- 17.02 (i80-early-fn-i801; the [0, 5] LLR ignored; nothing promoted, the owner decides)
+2026-11-13 11:06 PM EST r8ei802 against r8ec2 at 800,000 nodes per move, 1,600 games (stage 1's openings): Elo: 5.65 +/- 9.10, nElo: 10.56 +/- 17.02 (i80-early-fn-i802; the [0, 5] LLR ignored; nothing promoted, the owner decides)
+2026-11-13 11:49 PM EST r8elong1 against r8ec1 at 800,000 nodes per move, 1,600 games (stage 2's openings): Elo: -0.43 +/- 9.44, nElo: -0.78 +/- 17.02 (long-pilot-fn-long1; the [0, 5] LLR ignored; nothing promoted, the owner decides)

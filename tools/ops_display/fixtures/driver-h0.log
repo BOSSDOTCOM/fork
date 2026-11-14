@@ -1,0 +1,18 @@
+2026-11-14 15:14 UTC d15-shallow-skip-stc: base 00ba3ed1f99ad9845610d91eb27f00ddaae0663f, test ecf935dbc0e7063afffca408eb56f024f799a3a8, bounds [0, 6], stages 0 to 7, ref phase-4, kind search, stc, alpha 0.05, beta 0.20, cap 8, futility after 2 stages, idea d15-shallow-skip (try 1 of 2)
+2026-11-14 15:21 UTC d15-shallow-skip-stc: stage 0: run 43609716165 dispatched (ledger)
+2026-11-14 15:39 UTC d15-shallow-skip-stc: stage 0: run 43609716165 merged
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -9.12 +/- 9.99, nElo: -15.56 +/- 17.02
+    Ptnml(0-2): [25, 209, 362, 191, 13]
+    LLR: -1.48 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-14 15:39 UTC d15-shallow-skip-stc: stage 1: run 43611366236 dispatched (ledger)
+2026-11-14 15:58 UTC d15-shallow-skip-stc: stage 1: run 43611366236 merged
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -6.62 +/- 7.12, nElo: -11.20 +/- 12.04
+    Ptnml(0-2): [43, 426, 716, 379, 36]
+    LLR: -2.26 (-1.56, 2.77) [0.00, 6.00] nElo: H0 accepted
+    Verdict: H0 accepted
+2026-11-14 15:58 UTC d15-shallow-skip-stc: decided after stage 1: H0 accepted

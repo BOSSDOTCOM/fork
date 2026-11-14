@@ -680,6 +680,9 @@ tuned by SPSA.
   (ORIGINALITY.md); an evolved correction is one route to a form of Fork's
   own.
 
+- **2026-11-14 (owner): the revamp** (docs/research/idea23-revamp-2026-11-14.md) is recorded and placed as a **final pre-TCEC polish step**, after Lazy SMP, the removal round, the final retune and the TCEC fixes; traces from the final engine under TCEC-like conditions (many threads, long TC; ideally during the rented-hardware dry run); no engineering until then. Decisions: target order time management, then row-choice states, then the calibration layer only if idea 180 gains; simulator coefficient fitting approved for the time-management target only (candidates; games decide); the 12-arm one-stage screen batch with three predicted-loser arms approved; E2's clamp fix included in the simulator once its LTC decides; the stage-0 simulator validation reported before tokens or GitHub time are spent.
+- **2026-11-14 (owner, about 12:20 PM EST): E2 adopted** (`UseDeepTimeDepth` on, the time scale's depth clamped at 60, not 19; idea 185) under the non-regression standard, its LTC capped undecided at +2.16 ± 3.47 Elo; "Include it in idea 23's simulator when that work starts": the simulator's time-management model uses the clamp at 60 (the engine's rule since the adoption).
+
 ## 24. TT victim policy under real table pressure
 
 - **type:** ELO (switch `tt_age_blend`, UCI `UseTtAgeBlend` in tuning builds)
@@ -1617,7 +1620,8 @@ the screens before use.
   −0.87 ± 9.13 (42930415181), not kept. The measured seed noise (c2
   against r8bc, −6.08 ± 9.42; idea 69) is as large as that margin, so
   every future retrain arm runs 2 seeds (owner, 2026-11-11). r8btd90's
-  result fine-tune, r8brft1, is the default since 2026-11-11 (idea 70).
+  result fine-tune, r8brft1, was the default from 2026-11-11 to 2026-11-14
+  (idea 70; r8ceplo2 since).
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 52. Ensemble-disagreement active learning
@@ -2355,6 +2359,7 @@ whose weaknesses and data gaps decide their targets and order.
   positional arm shows defense still lacking); the positional main pilot
   run first, the full slice only if it passes and after the label-depth
   arms.
+- **2026-11-14 (finding, idea 180):** the queens-on understatement behind the positional-advantage slice and arm Q was measured on pooled data; split by phase bucket it is largely phase mix (see idea 180). The combined queens-on arm (owner's trim, same day) still tests the data directly; read its result with this in mind.
 
 ## 67. Draw-probability head
 
@@ -2459,8 +2464,9 @@ whose weaknesses and data gaps decide their targets and order.
   the winner (td90 or the control) on existing 8b data, two seeds; the
   usual gates; a fixed-node screen against the base; an SPRT. Kaggle hours
   reported to the owner before the launch.
-- **status:** **adopted: r8brft1 is the default network (owner,
-  2026-11-11).** **2026-11-10:** 8b's SPRT decided the base net: r8btd90
+- **status:** **adopted: r8brft1 was the default network from 2026-11-11
+  (owner); its endgame-preserving form (rft-ep-lo) gave r8ceplo2, the
+  default since 2026-11-14 (below).** **2026-11-10:** 8b's SPRT decided the base net: r8btd90
   (the TD(0.9) arm, promoted), so the fine-tune starts from it. The run
   (docs/research/retrain-8b/rft-plan.md, branch retrain/8b-rft 43f6ecc):
   r8btd90's window average, result weight 1.0, LR 1e-5 constant, 60
@@ -2483,7 +2489,26 @@ whose weaknesses and data gaps decide their targets and order.
   EST): a slice-preserving result fine-tune**, the endgame slice kept at its
   normal weight during the fine-tune, **plus a lower-LR variant if the Kaggle
   quota allows**; like every 8c arm it reports both held-out checks (4-5 and
-  6-7 pieces). **runtime
+  6-7 pieces). **2026-11-14: the endgame-preserving variant adopted; r8ceplo2
+  is the default network (owner's pre-approval on H1, gates and no held-out
+  flag).** Retrain 8c A1 (docs/research/retrain-8c/plan.md, branch
+  retrain/8c-prep): rft-ep (the result target only on records with 8 or more
+  pieces, the base's own target on 7 or fewer, the slices at their WDL) and
+  rft-ep-lo (rft-ep at LR 5e-6) on the control's window averages; by the
+  declared rules rft-ep replaced rft (pooled −1.74 [−8.01, +4.54]) and
+  rft-ep-lo replaced rft-ep (−5.65 [−11.92, +0.62]); rft-ep-lo against the
+  control pooled +5.21 ± 6.39 [−1.17, +11.60] (seed 2 +13.47 ± 9.14). The
+  plain control's promotion SPRT (r8cc2-promo-stc) was stopped by the owner
+  at LLR −0.79 after 3 stages (−0.80 ± 5.26); the fine-tuned seed 2,
+  r8ceplo2, then beat r8brft1 (itself a result fine-tune: like for like) at
+  STC [0, 5]: **H1 accepted, +5.48 ± 3.32 Elo** (nElo +9.94 ± 6.02) after
+  12,800 games (r8ceplo2-promo-stc; sprt-log), with held-out ratios against
+  r8brft1 of 0.86 (4-5 pieces, 525 against 612 of 3,800) and 0.98 (6-7
+  pieces, 756 against 770 of 5,599). The endgame-preserving fine-tune
+  (rft-ep-lo) stays in the standard recipe until a main-training fix (the
+  per-class lambda, idea 180) replaces it; the plain variants (rft, rft-ep)
+  stay dropped (owner, 2026-11-14). Bench 5,403,414 / 34c916638218aa11
+  (docs/nets.md). **runtime
   cost:** none. **earliest phase:** Phase 4.
 
 ## 71. Feature-transformer weight decay
@@ -2983,6 +3008,31 @@ whose weaknesses and data gaps decide their targets and order.
   measured (UNVERIFIED; bench/ab.py not run).
 - **earliest phase:** Phase 4.
 
+## 185. The time scale's deep-depth clamp (bug review 2026-11-11, E2)
+
+- **type:** ELO (time management, a TCEC-depth fix); flag `use_deep_time_depth` (on since 2026-11-14).
+- **idea** (docs/research/bug-review-2026-11-11.md, E2; bug-review-followup-2026-11-11.md, E2): the soft limit's
+  scale (time management variant b) clamped the depth at 19, the end of X6's fit, so past depth 19 a stable best
+  move got the 0.36 floor at any share and deep searches spent less than their soft limit (the cloud replay of
+  720 searches of 96M nodes from 24 LTC games: 0.83 and 0.79 of the plain soft limit at the two deepest budgets).
+  With the switch the depth is clamped at 60 (`TimeScaleDeepMaxDepth`, a fixed-point guard, not a tuned value),
+  and the spend returns to 0.96-1.03. Identical up to depth 19; bench unchanged (its searches are depth-limited).
+- **phase:** Phase 4 (bug review follow-up; a TCEC hazard). **metric:** design R SPRT at LTC against off (LTC only,
+  owner, 2026-11-11).
+- **status:** **adopted 2026-11-14 under the non-regression standard (owner), not on a pass.** e2-time-depth-ltc
+  (40+0.4, Hash 64, [0, 6] nElo, cap 6; test sprt/e2-time-depth e4fa310 against off tier2/e2-time-depth e7ec553,
+  r8brft1) was **capped undecided after 6 of 6 stages at +2.16 ± 3.47 Elo** (nElo +4.24 ± 6.82, Ptnml [38, 1113,
+  2626, 1179, 36], LLR 0.61, 9,984 games, no time losses; runs 43577728887 to 43610249077; sprt-log). The owner
+  (about 12:20 PM EST): "E2 (depth-19 time-clamp fix): adopt under the non-regression standard (TCEC-depth fix;
+  its capped LTC result +2.16 +- 3.47 has a 95% lower bound above -3), with records noting why. Include it in
+  idea 23's simulator when that work starts." The lower bounds, −1.31 Elo and −2.58 nElo, are above −3, the
+  non-regression bound; no separate non-regression SPRT was run. Ported onto phase-4 89dc994 (branch
+  adopt/e2-time-depth), bench 5,386,021 / 5ecd49d976e215e1 (r8brft1), unchanged (DESIGN.md decisions log,
+  2026-11-14). No final-retune dimension (a guard, not tuned). Goes into idea 23's simulator when that work
+  starts. Numbered 185, after Fable's network ideas (175-184).
+- **runtime cost:** none (one comparison per finished iteration). Speed not measured (bench/ab.py not run).
+- **earliest phase:** Phase 4.
+
 ## 150. RSPSA for the final retune: adaptive per-parameter step sizes
 
 - **type:** TOOLING (tuning method); no engine flag. Recorded by the owner's order of 2026-11-12, about 1:15 PM EST
@@ -3332,12 +3382,14 @@ proposal are placeholders, screened before use.
   data pass. **Idea 175 and option (a) (H512+PP, king regions) are alternatives on one body** (their tables
   multiply), not additions. **status:** candidate (plan).
 
+- **2026-11-14 (owner): killed** by its declared rules: residual study 0.006% for all tier A states (largest 0.032%) against the 0.5% line; speed 0.905-0.913 against 0.95 (the state finder costs about 7-8%); no further finder work. Finding: pawn-relation states (attacked by an enemy pawn, defended by an own pawn, rook file state, king shield class, passed pawn) explain almost none of r8brft1's residual (all tier A states together 0.006% of residual variance held out, 0.107% pooled over squares; the largest single state 0.032%), so the queens-on misjudgment is not missing pawn-structure knowledge; consistent with idea 180's finding that the score-to-result scale varies mainly by phase bucket. Report docs/research/idea175-screens.md; prototype on local branch proto/i175-state-rows (unpushed). **status:** killed.
 ### 176. Split-clone columns by queen state (proposal idea 2)
 - **idea:** E of the 512 hidden columns kept in two copies (queens on / queens off), the rest shared; a position
   still evaluates 512 columns; warm start by a function-preserving column permutation with equal copies.
 - **plan (owner):** only its per-column utilisation count by output bucket (CPU) now, folded into idea 175's data
   pass; no build. **status:** candidate (plan).
 
+- **2026-11-14 (owner): parked**: r8brft1 already specialises 74 hidden columns to queens-on positions (used 4x or more with queens on; 162 at 2x; 5 the other way at 4x; no dead column), the proposal's stated risk. **status:** parked.
 ### 177. Banded first layer (proposal idea 3)
 - **idea:** each piece family writes to a band of hidden-layer sectors (structured sparsity), cutting update work.
 - **status:** **parked** (owner, 2026-11-14).
@@ -3360,6 +3412,7 @@ proposal are placeholders, screened before use.
   (and phase) from Fork's own calibration fit (an edit of the net file); a fixed-node screen vs r8brft1 plus the
   UHO/SF19 diagnostic; **reported to the owner before any label work.** **status:** candidate (plan).
 
+- **2026-11-14 (owner): step 2's finding:** the score-to-result scale varies mainly by output phase bucket, not by queen state: in Fork's own STC games the logistic scale k falls from 106.9 cp in bucket 0 to 55.4 cp in bucket 7 (LTC 116.9 to 51.9; flat at 69-74 cp in 20,000-node data games); within a bucket the queens-on/off split is small and mixed (b3 on 70.0 vs off 66.2; b4 on 61.9 vs off 65.0); the pooled 'queens on 59.6 vs off 74.1 cp' was largely phase mix, because queenless positions sit in the low buckets (idea 180 step 2's fit, 2026-11-14: g4c 1.21 M positions, the calib-1112 STC 2.64 M and LTC 0.43 M SPRT positions; report docs/research/idea180-step2.md on branch exp/i180-head-scale). **Order:** the phase-only net-file edit (r8brft1hs, S 104, heads scaled by bucket; bench 4,913,609 / ba18170f0bf15ae7) is screened first against r8brft1 at fixed nodes with the UHO/SF19 diagnostic, as soon as retrain 8c is decided; the per-(bucket, queen state) multiplier (exp/i180-head-scale) only if the edit gains, after a quiet speed re-measure.
 ### 181. Bound-supervised targets (proposal idea 7)
 - **idea:** one-sided targets from the root-move bounds a saved search already proves (a TreeStrap-style use of
   stored searches); needs a datagen sidecar.

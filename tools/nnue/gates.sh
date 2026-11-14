@@ -46,7 +46,7 @@
 # default build/clang-release/fork[.exe]), FORK_SYZYGY (default ~/fork-data/syzygy/3-4-5), LAYOUT (default
 # tools/nnue/s512pp.json), TRAINED_S (92), MAX_LOSS (21), P99_LOSS (16), MAX_CLAMPED (8), SLICE_TRAINED (required,
 # above), MAX_RECALL (15, endgame_check.RECALL_LIMIT), HELDOUT_REF (the current
-# default network for the held-out check, default nets/r8brft1.fnet: move it on with each promotion), CONTROL_LAYOUT
+# default network for the held-out check, default nets/r8ceplo2.fnet: move it on with each promotion), CONTROL_LAYOUT
 # (the control's layout, default LAYOUT), HELDOUT_LAYOUT (HELDOUT_REF's, default tools/nnue/s512pp.json),
 # HELDOUT_WARM (the net the candidate's run warm-started from, for the held-out checks' change line; optional: if
 # unset, both lines say the change was not reported), HELDOUT_WARM_LAYOUT (HELDOUT_WARM's, default LAYOUT).
@@ -86,7 +86,7 @@ links=$("$PY" -I -c "import json,sys; print(int(json.load(open(sys.argv[1]))['ar
   { echo "gates.sh: cannot read the layout $L" >&2; exit 2; }
 SYZ=$(p "${FORK_SYZYGY:-$HOME/fork-data/syzygy/3-4-5}")
 T=$(p "$R/tools/nnue")
-HREF=$(p "${HELDOUT_REF:-$R/nets/r8brft1.fnet}")
+HREF=$(p "${HELDOUT_REF:-$R/nets/r8ceplo2.fnet}")
 warm=()  # the held-out checks' warm-start argument, empty when HELDOUT_WARM is unset
 [ -z "${HELDOUT_WARM:-}" ] ||
   warm=(--warm-start "$(p "$HELDOUT_WARM")=$(p "${HELDOUT_WARM_LAYOUT:-${LAYOUT:-$R/tools/nnue/s512pp.json}}")")

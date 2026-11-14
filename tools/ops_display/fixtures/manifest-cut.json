@@ -1,0 +1,79 @@
+{
+ "run": "ld-d20c50",
+ "generator": {
+  "tool": "cut of ld-d20: each training file's first games until its kept positions reach ld-d50's same file (the label-depth volume control); labelled by Fork 0.3.0-dev+a4ee674 (s512ppr3)",
+  "version": "0.3.0-dev+a4ee674 (WSL clang PGO, clang 21.1.8)",
+  "evaluator": "nnue (s512ppr3)",
+  "arch": "native"
+ },
+ "settings": {
+  "openings": "lichess-2026-09.epd",
+  "openings_count": 13943421,
+  "positions_target": 999000000,
+  "nodes": 20000,
+  "threads": 3,
+  "seed": 2026110900,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 50,
+  "unsaved_nodes": 4000,
+  "check_nodes": 2000,
+  "wall_limit_seconds": 144000,
+  "openings_note": "each segment read a 2.5 M-line file (ld_book.py) giving every game the opening the full lichess-2026-09.epd gives it for that segment's seed",
+  "segments": [
+   {
+    "segment": 1,
+    "run": "ld-d20",
+    "seed": 2026110900,
+    "openings_file": "lichess-2026-09-s2026110900-k2500000.epd",
+    "started": "2026-11-10 07:31:28 AM EST",
+    "stopped": "2026-11-10 12:46:24 PM EST",
+    "seconds": 18896.0,
+    "games": 119282,
+    "positions": 11337168,
+    "unsaved": 5176001,
+    "kept": 3996850,
+    "games_repeating_an_earlier_segment": 0
+   }
+  ],
+  "cut_of": "ld-d20",
+  "cut_to": "ld-d50"
+ },
+ "openings": {
+  "file": "lichess-2026-09.epd",
+  "sha256": "dab45c9fd723f3958ed57ab844f6bcdf586a67c71fb6029e9cd5488a7ceca8ef",
+  "positions": 13943421,
+  "source": "lichess_db_standard_rated_2026-09.pgn.zst",
+  "source_sha256": "1de8eb64fed443f4be310c779e8d60a13bcfc6e3b104bcb39a018eb056edec89"
+ },
+ "games": 486095,
+ "positions": 46136449,
+ "seconds": null,
+ "results": {
+  "white": 199810,
+  "draw": 95941,
+  "black": 190344
+ },
+ "ends": "not counted (the run was stopped, not finished)",
+ "part_end": "not a part: the label-depth volume control ld-d20c50, ld-d20's first games per training file cut to ld-d50's kept counts (design section 1.2; for interpretation only); every game verified (tools/datagen/verify_games.py with its manifest)",
+ "batches": [
+  [
+   {
+    "file": "ld-d20c50-s2-w00.vf",
+    "worker": 0,
+    "games": 144263,
+    "positions": 13699584,
+    "bytes": 59991804,
+    "sha256": "ee3afb2dd23b5e51d8a8043cdbc046f5755fe90babe8ed507135973e7cf2fef2"
+   }
+  ]
+ ],
+ "positions_unsaved": 21057730
+}

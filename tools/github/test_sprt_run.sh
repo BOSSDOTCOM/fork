@@ -161,6 +161,20 @@ check "bounds passed as given" grep -q "bounds=0 5" "$tmp/undecided/dispatches"
 check "custom, undecided at the last stage: the verdict file says capped" \
   [ "$(cat "$tmp/undecided/data/undecided/verdict" 2>/dev/null)" = capped ]
 
+# The shards' progress artifacts (2026-11-14, display only): the same SPRT with progress-STAGE-SHARD/progress.json
+# beside every shard-* folder in the downloads merges and decides exactly as without them.
+setup undecidedp 0 "$even"
+touch "$tmp/undecidedp/progress"
+drive undecidedp "$sha" "$sha" 0 5 0 2
+merged_lines() { grep '^    ' "$tmp/$1/data/$1/driver.log"; }
+check "progress artifacts: they are in the downloads" \
+  [ "$(find "$tmp/undecidedp/data/undecidedp" -name progress.json | wc -l)" = 6 ]
+check "progress artifacts: the same exit, dispatches and verdict" \
+  [ "$(rc undecidedp) $(dispatches undecidedp) $(cat "$tmp/undecidedp/data/undecidedp/verdict")" = \
+    "$(rc undecided) $(dispatches undecided) $(cat "$tmp/undecided/data/undecided/verdict")" ]
+check "progress artifacts: every merged result logged byte for byte as without them" \
+  eval '[ -n "$(merged_lines undecided)" ] && [ "$(merged_lines undecidedp)" = "$(merged_lines undecided)" ]'
+
 # The custom form writes the verdict file like the kinds (2026-11-12): H1 and H0 from the merge's LLR line.
 check "custom H1: the verdict file says H1 accepted" [ "$(cat "$tmp/h1/data/h1/verdict" 2>/dev/null)" = "H1 accepted" ]
 setup c-h0 0 '[25, 20, 5, 0, 0]'

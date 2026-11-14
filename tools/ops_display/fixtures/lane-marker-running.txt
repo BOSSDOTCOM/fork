@@ -1,0 +1,11 @@
+lane=B
+state=running
+item=15-r8c-c-cbest-promo-stc
+started=2026-11-14 01:17:20 PM EST
+started_epoch=1794680240
+item_pid=28892
+chain_pid=30528
+drivers=r8cc2-promo-stc
+source=watcher
+updated=2026-11-14 01:42:33 PM EST
+updated_epoch=1794681753

@@ -1,0 +1,33 @@
+{
+ "state": "sealed",
+ "steps": [
+  {
+   "state": "copying",
+   "message": "complete games from /home/user/fork-data/gen4c to C:\\Users\\user\\fork-data\\kaggle\\g4c",
+   "at": 1794610075.0307195
+  },
+  {
+   "state": "copied",
+   "message": "10 shards, 2,383,060 games, 229,475,885 positions (104,639,325 unsaved); 0 bytes of unfinished games dropped",
+   "at": 1794610113.4169211
+  },
+  {
+   "state": "verifying",
+   "message": "verify_games.py on 10 shards (below-normal priority)",
+   "at": 1794610113.6845987
+  },
+  {
+   "state": "verified",
+   "message": "every game of g4c verified: ok: 10 shards, 2383060 games, 229475885 positions (104639325 unsaved); ends {\"mate score\": 589639, \"repetition before the record\": 2, \"rules draw\": 289490, \"score adjudicat",
+   "at": 1794624547.0351024
+  },
+  {
+   "state": "sealed",
+   "message": "g4c sealed: C:\\Users\\user\\fork\\data\\manifests\\g4c.json (2,383,060 games, 229,475,885 positions); commit the manifest on phase-4",
+   "at": 1794624549.6193244
+  }
+ ],
+ "message": "g4c sealed: C:\\Users\\user\\fork\\data\\manifests\\g4c.json (2,383,060 games, 229,475,885 positions); commit the manifest on phase-4",
+ "at": 1794624549.6193244,
+ "manifest": "C:\\Users\\user\\fork\\data\\manifests\\g4c.json"
+}

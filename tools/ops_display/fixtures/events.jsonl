@@ -1,0 +1,30 @@
+{"at": "2026-11-13T20:39:12-0500", "event": "stop", "id": "161987eb8fb74c32", "name": "r8c-smoke-i80", "stopped": []}
+{"at": "2026-11-13T20:39:12-0500", "command": ["bash", "C:/Users/user/fork-data/8c/smoke_i80_chain.sh"], "event": "start", "id": "345ea501246a4212", "name": "r8c-smoke-i80b", "pid": 7420, "type": "kagglesmoke"}
+{"at": "2026-11-13T20:41:45-0500", "event": "end", "exit_code": 0, "id": "415216a343d440cd", "name": "r8e-uho2"}
+{"at": "2026-11-13T20:43:11-0500", "event": "end", "exit_code": 0, "id": "7583820645ef4b1b", "name": "r8c-a1-pre"}
+{"at": "2026-11-13T20:45:02-0500", "event": "end", "exit_code": 1, "id": "345ea501246a4212", "name": "r8c-smoke-i80b"}
+{"at": "2026-11-13T21:49:10-0500", "event": "end", "exit_code": 0, "id": "c216295395ce425e", "name": "seal-g4c"}
+{"at": "2026-11-13T21:49:24-0500", "command": ["bash", "C:/Users/user/fork-data/8c/finish_a1_post.sh"], "event": "start", "id": "2237aa7d51414020", "name": "r8c-a1-post", "pid": 2076, "type": "a1post"}
+{"at": "2026-11-13T21:49:31-0500", "event": "end", "exit_code": 0, "id": "2237aa7d51414020", "name": "r8c-a1-post"}
+{"at": "2026-11-13T21:50:16-0500", "event": "end", "exit_code": 0, "id": "781737c052df4617", "name": "q-seal-check"}
+{"at": "2026-11-13T21:50:19-0500", "command": ["bash", "C:/Users/user/fork-data/8c/a1_chain.sh"], "event": "start", "id": "797f2369f0724aa6", "name": "r8c-a1-chain", "pid": 32876, "type": "a1chain"}
+{"at": "2026-11-13T21:53:35-0500", "command": ["bash", "C:/Users/user/fork-data/8c/install_items.sh"], "event": "start", "id": "bfb989cc74854e55", "name": "r8c-a1-items", "pid": 6232, "type": "a1items"}
+{"at": "2026-11-14T03:47:50-0500", "event": "end", "exit_code": 0, "id": "797f2369f0724aa6", "name": "r8c-a1-chain"}
+{"at": "2026-11-14T03:49:50-0500", "event": "end", "exit_code": 0, "id": "bfb989cc74854e55", "name": "r8c-a1-items"}
+{"at": "2026-11-14T04:02:32-0500", "command": ["bash", "C:/Users/user/fork-data/8c/rebake_rft1.sh"], "event": "start", "id": "9f6011ee52bd4862", "name": "r8c-rebake-rft1", "pid": 30300, "type": "build"}
+{"at": "2026-11-14T04:08:34-0500", "event": "end", "exit_code": 0, "id": "9f6011ee52bd4862", "name": "r8c-rebake-rft1"}
+{"at": "2026-11-14T12:01:41-0500", "command": ["bash", "C:/Users/user/fork-data/8c/lam_post.sh"], "event": "start", "id": "bdc3491e9b694985", "name": "r8c-lam-post", "pid": 18728, "type": "copies"}
+{"at": "2026-11-14T12:03:18-0500", "command": ["C:\\Users\\user\\fork\\.venv\\Scripts\\python.exe", "-I", "C:\\Users\\user\\fork\\tools\\gcp\\gcp.py", "finish", "slice-pos-x-r8"], "event": "start", "id": "4776a5bdb8474832", "name": "gcp-finish-slice-pos-x-r8", "pid": 33472, "type": "gcpfinish"}
+{"at": "2026-11-14T12:08:24-0500", "command": ["bash", "C:/Users/user/fork-data/8c/a2/count.sh"], "event": "start", "id": "b801dec4d53141b1", "name": "r8c-a2-count", "pid": 24716, "type": "overlap"}
+{"at": "2026-11-14T12:16:04-0500", "event": "end", "exit_code": 0, "id": "4776a5bdb8474832", "name": "gcp-finish-slice-pos-x-r8"}
+{"at": "2026-11-14T12:16:44-0500", "command": ["C:\\Users\\user\\fork\\.venv\\Scripts\\python.exe", "-I", "C:\\Users\\user\\fork-data\\calib-1112\\posx\\q_part.py"], "event": "start", "id": "06cb5429516c42b1", "name": "q-part", "pid": 3640, "type": "posx"}
+{"at": "2026-11-14T12:19:11-0500", "event": "end", "exit_code": 0, "id": "06cb5429516c42b1", "name": "q-part"}
+{"at": "2026-11-14T12:19:29-0500", "command": ["C:\\Users\\user\\fork\\.venv\\Scripts\\python.exe", "-I", "C:\\Users\\user\\fork-data\\calib-1112\\posx\\upload.py", "push", "fork-posx1"], "event": "start", "id": "77340a5702db42e5", "name": "q-upload", "pid": 35272, "type": "posx"}
+{"at": "2026-11-14T12:20:14-0500", "event": "end", "exit_code": 1, "id": "77340a5702db42e5", "name": "q-upload"}
+{"at": "2026-11-14T12:23:20-0500", "command": ["C:\\Users\\user\\fork\\.venv\\Scripts\\python.exe", "-I", "C:\\Users\\user\\fork-data\\calib-1112\\posx\\upload.py", "push", "fork-posx1"], "event": "start", "id": "e70a5357b50d4da1", "name": "q-upload2", "pid": 19204, "type": "posx"}
+{"at": "2026-11-14T12:24:11-0500", "event": "end", "exit_code": 0, "id": "e70a5357b50d4da1", "name": "q-upload2"}
+{"at": "2026-11-14T12:27:37-0500", "event": "end", "exit_code": 0, "id": "b801dec4d53141b1", "name": "r8c-a2-count"}
+{"at": "2026-11-14T12:42:58-0500", "event": "end", "exit_code": 0, "id": "bdc3491e9b694985", "name": "r8c-lam-post"}
+{"at": "2026-11-14T12:43:18-0500", "command": ["bash", "C:/Users/user/fork-data/8c/a2-stage.sh"], "event": "start", "id": "cb8775e14f1d43ab", "name": "r8c-a2-upload", "pid": 32636, "type": "upload"}
+{"at": "2026-11-14T12:52:55-0500", "event": "end", "exit_code": 0, "id": "cb8775e14f1d43ab", "name": "r8c-a2-upload"}
+{"at": "2026-11-14T12:53:33-0500", "command": ["bash", "C:/Users/user/fork-data/8c/gpu_queue.sh"], "event": "start", "id": "18bacb42a148461d", "name": "r8c-gpu-queue", "pid": 40052, "type": "kagglequeue"}

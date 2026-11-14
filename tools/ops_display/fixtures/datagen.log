@@ -1,0 +1,7 @@
+Syzygy: tables up to 5 pieces
+30 s: 862 games, 80399 positions, 2678 positions/s
+60 s: 1759 games, 163103 positions, 2717 positions/s
+90 s: 2594 games, 243273 positions, 2701 positions/s
+12180 s: 316887 games, 29716486 positions, 2440 positions/s
+12210 s: 317605 games, 29784295 positions, 2439 positions/s
+12240 s: 318299 games, 29852407 positions, 2439 positions/s
