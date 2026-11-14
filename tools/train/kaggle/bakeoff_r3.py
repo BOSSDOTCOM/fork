@@ -4,7 +4,9 @@
 with a factoriser, the pawn links shared after the region rows) trained beside its same-recipe control (S512+PP,
 architecture 8), on Kaggle (GPU T4 x2). The owner's decisions of 2026-11-14 (DESIGN.md decisions log, "Bake-off round
 3: the king-input designs measured and decided"): train (a) only; M4; screen it against a same-recipe control trained
-alongside it; warm-start from 8c's winner once promoted, r8brft1 otherwise. Written from retrain 8c's kernel
+alongside it; warm-start from 8c's winner once promoted, r8brft1 otherwise (8c's winner r8ceplo2, the default
+since 2026-11-14, is SOURCE for all round 3 training from then on: owner, ~5:55 PM EST). Written from retrain 8c's
+kernel
 (tools/train/kaggle/retrain_8c.py on retrain/8c-prep, its session A1's control arm c): the same data, recipe, input
 checks, window averages, quantisation and offline files; the arms differ only in the architecture and its warm start.
 
@@ -22,10 +24,16 @@ tenfold after superbatch 180, 360 superbatches of 305 x 16,384 positions, S = 92
 the window average, the mean of superbatches 331-360's float weights, quantised by the trainer. No fine-tune here: the
 two arms are compared like for like (a fine-tune of either, as 8c chooses one, is a later session).
 
-SOURCE (the owner's decision 6): r8brft1's float weights (retrain 8b's result fine-tune, its rft1 window average:
-Kaggle kernel fork-retrain-8b-rft version 1's avg-rft1/weights.bin), to be uploaded as the dataset named in SOURCE; if
-retrain 8c's winner is promoted first, SOURCE becomes that arm's window average (its avg-<arm>/weights.bin) by one edit
-of SOURCE (name, file, SHA-256). Either is an S512+PP net's float weights.
+SOURCE (the owner's decision 6, and his order of 2026-11-14 ~5:55 PM EST: "set the warm-start source for all future
+round 3 training to r8ceplo2, using its float weights from 8c's A1 outputs"): r8ceplo2's float window average (retrain
+8c session A1's arm eplo2, its avg-eplo2/weights.bin), the file r8ceplo2-avg.bin of the dataset fork-r3-init-8c.
+Checked before use (2026-11-14): those weights, quantised (bullet's save list, and the reference's redo of it: the
+same bytes) and converted at r8ceplo2's S = 87 with its one link weight clamped (tools/nnue/pp_bound.py), are
+nets/r8ceplo2.fnet byte for byte (SHA-256 f4634cec...7d49f5a), and a build with them gives r8ceplo2's bench (5,403,414
+/ 34c916638218aa11) with netcheck exact on tests/nnue/r8ceplo2.parity. Before that, SOURCE was r8brft1's float weights
+(fork-retrain-8b-rft v1's avg-rft1/weights.bin, dataset fork-r3-kr4-init: round 3's first sessions were launched from
+r8ceplo2 by an explicit --source). Another source is one edit of SOURCE (name, file, SHA-256, dataset); it must be an
+S512+PP net's float weights.
 
 Validity (blocking; summary['validity']):
 - every input matches its manifest and both arms' lists resolve (and are the same list);
@@ -97,10 +105,10 @@ SMOKE = False               # the smoke run's kernel copy only (module note); Fa
 SMOKE_ORIGINALS = ['g3b-w00.vf', 'g4b-w00.vf', 'g4-gcp-20261112T213623Z-w00.vf',
                    'g4s2-g4-gcp-20261112T185227Z-w02-val-rest.vf', 'slice1b-00.vf']
 CHESS = 'chess==1.11.2'     # python-chess for tools/nnue (models.py imports it); the repository's .venv version
-# The source net's float weights (module note): r8brft1's until 8c's winner is promoted.
-SOURCE = {'name': 'r8brft1', 'weights': 'r8brft1-avg.bin',
-          'sha256': '2d70ebccb6e6eb7d192faea0e16bee5c1aa2169c0346f3791e5d6bb27ae1dba1',
-          'dataset': 'fork-r3-kr4-init'}
+# The source net's float weights (module note): r8ceplo2's (8c's winner, the default since 2026-11-14).
+SOURCE = {'name': 'r8ceplo2', 'weights': 'r8ceplo2-avg.bin',
+          'sha256': '4118015e47ca596a966ee29821a43ae613155af9b0c9a95913d6fc81e06f3539',
+          'dataset': 'fork-r3-init-8c'}
 WARM_TOLERANCE = 1e-6       # the warm start's float identity (the same sums, zeros added)
 START_TOLERANCE = 1e-5      # an arm's superbatch 0 against the reference (8c's on label copies)
 BASE_SETTINGS = {'superbatches': 360, 'lr': 1e-4, 'lr_step': 180, 'window': (331, 360), 'keep': (180, 360),

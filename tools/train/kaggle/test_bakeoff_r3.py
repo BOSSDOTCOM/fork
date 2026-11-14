@@ -65,11 +65,13 @@ class ArmTests(unittest.TestCase):
         self.assertEqual(x['WARM_STARTS']['exposure'], ('s512ppxl', 'exposure_net'))
         self.assertEqual(x['SOURCE'], k.SOURCE)
 
-    def test_the_source_is_r8brft1s_float_weights(self):
-        # r8brft1's window average (fork-retrain-8b-rft v1, avg-rft1/weights.bin), SHA-256 checked on this machine
-        # 2026-11-14 (its quantised layers are nets/r8brft1.fnet's but its one clamped link weight).
-        self.assertEqual(k.SOURCE['name'], 'r8brft1')
-        self.assertEqual(k.SOURCE['sha256'], '2d70ebccb6e6eb7d192faea0e16bee5c1aa2169c0346f3791e5d6bb27ae1dba1')
+    def test_the_source_is_r8ceplo2s_float_weights(self):
+        # Owner, 2026-11-14 ~5:55 PM EST: r8ceplo2 is round 3's warm-start source from then on. Its window average
+        # (retrain 8c A1's avg-eplo2/weights.bin), SHA-256 checked on this machine 2026-11-14; quantised and
+        # converted at S = 87 with its one link clamp it is nets/r8ceplo2.fnet byte for byte.
+        self.assertEqual((k.SOURCE['name'], k.SOURCE['weights'], k.SOURCE['dataset']),
+                         ('r8ceplo2', 'r8ceplo2-avg.bin', 'fork-r3-init-8c'))
+        self.assertEqual(k.SOURCE['sha256'], '4118015e47ca596a966ee29821a43ae613155af9b0c9a95913d6fc81e06f3539')
 
     def test_command(self):
         args = k.stage_args('kr1', 'V')

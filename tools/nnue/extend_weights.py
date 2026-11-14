@@ -16,8 +16,9 @@ file's bytes (its first layer has about 27 M values); S512+PP's (ideas.md
 40) with its links of rank limit 1 only.
 
 H512+PP's warm start (bake-off round 3's option a, architecture 9; owner,
-2026-11-14), from an S512+PP net (r8brft1 first; the next default's when
-one is promoted): S512+PP's piece inputs copied per own-king region of the
+2026-11-14), from an S512+PP net (r8ceplo2's, the default, for all round 3
+training from 2026-11-14 ~5:55 PM EST: owner; r8brft1 before): S512+PP's
+piece inputs copied per own-king region of the
 map M4 (models.XGR_REGIONS), the links shared after the region rows. Two
 forms, whose evaluations are the source's exactly:
 - from S512+PP's float weights (weights.bin), the trainer's warm start
@@ -37,8 +38,8 @@ The source's kind is read from its first bytes (a Fork net file starts with
 FORKNET).
 
 S512+PPXL's warm start (bake-off round 3's x_lower arm, architecture 10;
-owner, 2026-11-14), from an S512+PP net the same way (r8brft1 first; 8c's
-winner when promoted), with the exposure plane's inputs at zero, so its
+owner, 2026-11-14), from an S512+PP net the same way (r8ceplo2's from
+2026-11-14 ~5:55 PM EST; r8brft1 before), with the exposure plane's inputs at zero, so its
 evaluations are the source's exactly:
 - from S512+PP's float weights (weights.bin), the trainer's warm start
   (tools/train --arch s512ppxl --init-weights): the 640 exposure inputs and
