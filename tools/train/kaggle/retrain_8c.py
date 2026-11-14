@@ -504,6 +504,8 @@ def session():
     split_root, split_ok = None, False
     if ok and any(a['files'] == 'ep' for a in ARMS.values()):
         split_root, summary['split'] = make_split()
+        split_ok = summary['split']['ok']
+        save()
 
     def make_drop():
         """The qon arm's px- copies, made here: td_labels.py drop of every self-play control file (the slice and
@@ -515,7 +517,10 @@ def session():
         rec = {'files': len(srcs), 'targets_file': QON_TARGETS, 'target_total': sum(targets.get(n, 0) for n in srcs),
                'missing_targets': sorted(n for n in srcs if n not in targets)}
         root = max(('/tmp', '/kaggle/working'), key=lambda d: shutil.disk_usage(d).free if os.path.isdir(d) else -1)
-        if rec['missing_targets'] or not srcs:
+        # td_labels.py imports python-chess; make_split installs it, but a qon session has no ep arm.
+        rc, out, _ = sh(f'python3 -m pip install -q {CHESS} && python3 --version')
+        rec['pip'] = {'rc': rc, 'tail': out[-300:]}
+        if rc or rec['missing_targets'] or not srcs:
             rec['ok'] = False
             return None, rec
         dest = f'{root}/px-drop'
@@ -566,8 +571,6 @@ def session():
     if ok and any(a['files'] == 'qon' for a in ARMS.values()):
         drop_root, summary['drop'] = make_drop()
         drop_ok = summary['drop']['ok']
-        save()
-        split_ok = summary['split']['ok']
         save()
 
     def checkpoints(arm, out_dir):

@@ -240,6 +240,29 @@ class SettingTests(unittest.TestCase):
                     self.assertTrue(first.startswith('px-'))
                     self.assertNotIn(first, by_name)                           # the v1 failure: not mounted
 
+    def test_the_split_and_drop_results_are_read_in_their_own_blocks(self):
+        # f406fd9 left "split_ok = summary['split']['ok']" after the drop block: the ep arms of an 'all'/'main' session
+        # would have been skipped (split_ok never set) and a qon session would stop on summary['split']. Each result is
+        # read right after its own step, inside its own `if`.
+        lines = Path(k.__file__).read_text(encoding='utf-8').splitlines()
+        for step, flag in (("summary['split'] = make_split()", "split_ok = summary['split']['ok']"),
+                           ("summary['drop'] = make_drop()", "drop_ok = summary['drop']['ok']")):
+            at = [i for i, line in enumerate(lines) if line.strip().endswith(step)]
+            reads = [i for i, line in enumerate(lines) if line.strip() == flag]
+            self.assertEqual(len(at), 1, step)
+            self.assertEqual(reads, [at[0] + 1], flag)
+            self.assertEqual(lines[at[0] + 1][:8], ' ' * 8)
+            self.assertTrue(lines[at[0] - 1].strip().startswith('if ok and any('), step)
+
+    def test_every_session_step_that_runs_td_labels_installs_python_chess(self):
+        # td_labels.py imports python-chess, which Kaggle's image lacks: make_split and make_drop must each install it
+        # (the qon session runs make_drop without make_split). Fails on the kernel before 2026-11-14's fix.
+        src = Path(k.__file__).read_text(encoding='utf-8')
+        for fn in ('def make_split', 'def make_drop'):
+            body = src[src.index(fn):]
+            body = body[:body.index('\n    def ', 1)] if '\n    def ' in body[1:] else body
+            self.assertIn('pip install -q {CHESS}', body, fn)
+
     def test_the_split_is_made_in_the_session(self):
         self.assertNotIn('r8c-split', k.MANIFESTS)                                    # no upload of ep- copies
         self.assertIn('slice1b', k.MANIFESTS)

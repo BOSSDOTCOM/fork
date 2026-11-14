@@ -656,6 +656,28 @@ class DropTests(unittest.TestCase):
         self.assertEqual(td.drop_games(data, 10, 'x.vf')[0], out)
         self.assertNotEqual(td.drop_games(data, 10, 'y.vf')[0], out)
 
+    def test_streaming_passes_give_the_same_copy(self):
+        # The two-pass drop chooses and writes exactly what the one-pass form did (a reference written here).
+        data = self.games()
+        games = list(td.split_games(data))
+        chosen, removed = set(), 0
+        for g in td.drop_order('x.vf', len(games)):
+            if removed >= 10:
+                break
+            _s, head, recs, _e = games[g]
+            saved = sum(1 for _c, sc in recs if sc != U)
+            if saved == 0 or (len(recs) == 1 and recs[0][1] in td.RESULT_SCORE and recs[0][1] == td.RESULT_SCORE[head[30]]):
+                continue
+            chosen.add(g)
+            removed += saved
+        ref = bytearray()
+        for g, (start, head, recs, end) in enumerate(games):
+            if g not in chosen:
+                ref += data[start:end]
+                continue
+            ref += head + b''.join(struct.pack('<Hh', c, U) for c, _sc in recs) + struct.pack('<Hh', 0, 0)
+        self.assertEqual(td.drop_games(data, 10, 'x.vf')[0], bytes(ref))
+
     def test_the_check_fails_on_wrong_copies(self):
         data = self.games()
         out, _ = td.drop_games(data, 10, 'x.vf')

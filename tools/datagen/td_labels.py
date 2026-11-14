@@ -500,20 +500,24 @@ def drop_games(data, target, name):
     from every self-play file", 8b's i52 way): whole games, tried in drop_order(name), get every record's score set
     to the unsaved marker (the trainer drops them) until at least `target` saved records are gone. Games without a
     saved record and table-settled one-move games are never chosen. Returns (bytes, counts)."""
-    games = list(split_games(data))
-    order = drop_order(name, len(games))
+    # Two streaming passes (a file's games are never all held as record lists: the largest control file has 132 M
+    # records): each game's saved count (0 for a game that may not be chosen), then the copy.
+    saved_of, records = [], 0
+    for _s, head, recs, _e in split_games(data):
+        records += len(recs)
+        saved = sum(1 for _c, sc in recs if sc != UNSAVED)
+        one_move = len(recs) == 1 and recs[0][1] in RESULT_SCORE and recs[0][1] == RESULT_SCORE[head[30]]
+        saved_of.append(0 if one_move else saved)
     chosen, removed = set(), 0
-    for g in order:
+    for g in drop_order(name, len(saved_of)):
         if removed >= target:
             break
-        _s, head, recs, _e = games[g]
-        saved = sum(1 for _c, sc in recs if sc != UNSAVED)
-        if saved == 0 or (len(recs) == 1 and recs[0][1] in RESULT_SCORE and recs[0][1] == RESULT_SCORE[head[30]]):
+        if saved_of[g] == 0:
             continue
         chosen.add(g)
-        removed += saved
+        removed += saved_of[g]
     out = bytearray()
-    for g, (start, head, recs, end) in enumerate(games):
+    for g, (start, head, recs, end) in enumerate(split_games(data)):
         if g not in chosen:
             out += data[start:end]
             continue
@@ -521,7 +525,7 @@ def drop_games(data, target, name):
         for code, _sc in recs:
             out += struct.pack('<Hh', code, UNSAVED)
         out += struct.pack('<Hh', 0, 0)
-    counts = {'games': len(games), 'records': sum(len(r) for _s, _h, r, _e in games), 'target': target,
+    counts = {'games': len(saved_of), 'records': records, 'target': target,
               'games_dropped': len(chosen), 'saved_dropped': removed}
     return bytes(out), counts
 
