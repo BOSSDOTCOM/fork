@@ -108,6 +108,8 @@ kind; with the score/result blend's error (1 - w) sigmoid(s_t / S) + w z at
                         [--check-scores skip|keep] [--label-unsaved]
     td_labels.py blend SHARD --out OUT.vf --scale S [--weight W]
     td_labels.py split SHARD --out OUT.vf [--max-pieces 7]
+    td_labels.py drop SHARD --out OUT.vf --target N   (retrain 8c's pos arm: whole games' saved records unsaved)
+    td_labels.py check ORIGINAL COPY --mode drop --target N
     td_labels.py check ORIGINAL COPY --mode td|blend|split --scale S [--lam L] [--weight W] [--sample N] [--label-unsaved]
         [--lam-by-class]
     td_labels.py compare --sites DIR... --data DIR... --scale S [--grid L,L,...] [--blend W,...]
@@ -481,6 +483,80 @@ def split_shard(data, max_pieces=SPLIT_MAX_PIECES):
             out += struct.pack('<Hh', code, sc)
         out += struct.pack('<Hh', 0, 0)
     return bytes(out), counts
+
+
+def drop_order(name, n):
+    """The order in which a file's games are tried for removal: a permutation of range(n) seeded by the file's name
+    (SHA-256 of "r8c-pos:" + name), so each file's choice is reproducible and independent of the others."""
+    import random
+    rng = random.Random(int.from_bytes(hashlib.sha256(f'r8c-pos:{name}'.encode()).digest()[:8], 'little'))
+    order = list(range(n))
+    rng.shuffle(order)
+    return order
+
+
+def drop_games(data, target, name):
+    """Retrain 8c's pos arm (plan section 2, arm 3: "12.5 M saved self-play positions removed by whole games evenly
+    from every self-play file", 8b's i52 way): whole games, tried in drop_order(name), get every record's score set
+    to the unsaved marker (the trainer drops them) until at least `target` saved records are gone. Games without a
+    saved record and table-settled one-move games are never chosen. Returns (bytes, counts)."""
+    games = list(split_games(data))
+    order = drop_order(name, len(games))
+    chosen, removed = set(), 0
+    for g in order:
+        if removed >= target:
+            break
+        _s, head, recs, _e = games[g]
+        saved = sum(1 for _c, sc in recs if sc != UNSAVED)
+        if saved == 0 or (len(recs) == 1 and recs[0][1] in RESULT_SCORE and recs[0][1] == RESULT_SCORE[head[30]]):
+            continue
+        chosen.add(g)
+        removed += saved
+    out = bytearray()
+    for g, (start, head, recs, end) in enumerate(games):
+        if g not in chosen:
+            out += data[start:end]
+            continue
+        out += head
+        for code, _sc in recs:
+            out += struct.pack('<Hh', code, UNSAVED)
+        out += struct.pack('<Hh', 0, 0)
+    counts = {'games': len(games), 'records': sum(len(r) for _s, _h, r, _e in games), 'target': target,
+              'games_dropped': len(chosen), 'saved_dropped': removed}
+    return bytes(out), counts
+
+
+def check_drop(original, copy, target):
+    """A drop copy against its original: the same boards, moves and lengths; every game either unchanged or all its
+    records unsaved where the original had at least one saved record (a whole game); the saved records removed at
+    least `target` and fewer than `target` plus the largest dropped game's saved count (the last game chosen)."""
+    report = {'games': 0, 'games_dropped': 0, 'saved_dropped': 0, 'bad': []}
+    if len(original) != len(copy):
+        report['bad'].append(f'length {len(copy)} against {len(original)}')
+        return report
+    largest = 0
+    for k, ((s0, h0, r0, e0), (s1, h1, r1, e1)) in enumerate(zip(split_games(original), split_games(copy),
+                                                                 strict=True)):
+        report['games'] += 1
+        if (s0, e0) != (s1, e1) or h0 != h1 or [c for c, _ in r0] != [c for c, _ in r1]:
+            report['bad'].append(f'game {k}: board, moves or length differ')
+            continue
+        if r0 == r1:
+            continue
+        saved = sum(1 for _c, sc in r0 if sc != UNSAVED)
+        if any(sc != UNSAVED for _c, sc in r1) or saved == 0:
+            report['bad'].append(f'game {k}: changed but not a whole saved game made unsaved')
+            continue
+        report['games_dropped'] += 1
+        report['saved_dropped'] += saved
+        largest = max(largest, saved)
+    n = report['saved_dropped']
+    if report['games_dropped'] and not (target <= n < target + largest):
+        report['bad'].append(f'{n} saved records removed for a target of {target} (largest game {largest})')
+    if not report['games_dropped'] and target > 0:
+        report['bad'].append(f'nothing removed for a target of {target}')
+    report['bad'] = report['bad'][:20]
+    return report
 
 
 def check_split(original, copy, max_pieces=SPLIT_MAX_PIECES, sample=100):
@@ -879,10 +955,17 @@ def main(argv=None):
     sp.add_argument('--out', type=Path, required=True)
     sp.add_argument('--max-pieces', type=int, default=SPLIT_MAX_PIECES)
     sp.add_argument('--scale', type=float, default=92.0, help='unused (kept for the common check)')
+    dp = sub.add_parser('drop', help="retrain 8c's pos arm: whole games' saved records made unsaved, at least --target")
+    dp.add_argument('shard', type=Path)
+    dp.add_argument('--out', type=Path, required=True)
+    dp.add_argument('--target', type=int, required=True)
+    dp.add_argument('--name', help="the name seeding the game order (default: the shard's file name)")
+    dp.add_argument('--scale', type=float, default=92.0, help='unused (kept for the common check)')
     kp = sub.add_parser('check', help='a copy against its original, labels recomputed on a sample of games')
     kp.add_argument('original', type=Path)
     kp.add_argument('copy', type=Path)
-    kp.add_argument('--mode', choices=('td', 'blend', 'split'), required=True)
+    kp.add_argument('--mode', choices=('td', 'blend', 'split', 'drop'), required=True)
+    kp.add_argument('--target', type=int, help='mode drop: the saved records to remove')
     kp.add_argument('--max-pieces', type=int, default=SPLIT_MAX_PIECES, help='mode split')
     kp.add_argument('--lam', type=float, help='mode td: lambda')
     kp.add_argument('--weight', type=float, default=0.5, help='mode blend: W')
@@ -928,6 +1011,22 @@ def main(argv=None):
             a.out.with_name(a.out.name + '.json').write_text(json.dumps(info, indent=1) + '\n')
             print(json.dumps(info))
             return 0
+        if a.command == 'drop':
+            out, counts = drop_games(a.shard.read_bytes(), a.target, a.name or a.shard.name)
+            write_atomic(a.out, out)
+            info = {'source': a.shard.name, 'name': a.name or a.shard.name,
+                    'sha256': hashlib.sha256(out).hexdigest(), 'bytes': len(out), **counts,
+                    'seconds': round(time.monotonic() - began, 1)}
+            a.out.with_name(a.out.name + '.json').write_text(json.dumps(info, indent=1) + '\n')
+            print(json.dumps(info))
+            return 0
+        if a.command == 'check' and a.mode == 'drop':
+            if a.target is None:
+                ap.error('--mode drop needs --target')
+            report = check_drop(a.original.read_bytes(), a.copy.read_bytes(), a.target)
+            print(json.dumps({'original': a.original.name, 'copy': a.copy.name, 'mode': 'drop', 'target': a.target,
+                              **report, 'seconds': round(time.monotonic() - began, 1)}))
+            return 1 if report['bad'] else 0
         if a.command == 'check' and a.mode == 'split':
             report = check_split(a.original.read_bytes(), a.copy.read_bytes(), a.max_pieces, a.sample)
             print(json.dumps({'original': a.original.name, 'copy': a.copy.name, 'mode': 'split',

@@ -51,6 +51,20 @@ GPUs) or 'i80' (i801 and i802 only), set only in a kernel copy by one exact repl
 other arms are dropped from ARMS and QUEUES before anything runs; every remaining arm's settings, file list, checks and
 outputs are the 'all' kernel's. The in-session split runs only when an ep arm is in the set.
 
+Session A2 (plan section 2 arm 5, and the owner's re-plan of 2026-11-14, about 12:30 PM EST: the positional-slice
+arm and arm Q's arms become one combined queens-on arm), two more base arms, each against c's recipe and warm start
+(r8btd90, 360 superbatches, seeds 1 and 2), in two sessions:
+- ARM_SET = 'qon' (fork-retrain-8c-a2q; GPU K - 1 runs qonK): the combined queens-on slice: c's files plus the
+  TD(0.9) copies of pos1 and of arm Q's slice (QON_FILES), each listed QON_REPEATS times (the trainer opens a file
+  once per listing, so each copy is read QON_REPEATS times a pass), with as many saved self-play records removed as
+  the copies add (QON_REPEATS x their saved records), by whole games, from every self-play control file in
+  proportion to its saved records (QON_TARGETS, computed from the files' counts; td_labels.py drop: the unsaved
+  marker, made in the session as px- copies, each checked by td_labels.py check --mode drop), so the arm's total
+  equals the control's;
+- ARM_SET = 'lam' (fork-retrain-8c-a2l; GPU K - 1 runs lamK): idea 85's class-matched TD horizon: c's files with
+  every TD part read as its lam- copy (td_labels.py --lam-by-class: Q-MG 0.35, EG 0.65, the rest 0.9).
+Their manifests: A1's without r8c-i80, plus (qon) pos1, pos1-td, posx1, posx1-td or (lam) r8c-lam, r8c-lam-post.
+
 Smoke mode (owner, 2026-11-13, about 2:55 PM EST: a smoke run of the kernel as it will be pushed, before g4c's
 seal): SMOKE = True, set only in the smoke run's kernel copy, shrinks the sizes and nothing else: the originals are
 SMOKE_ORIGINALS (one file of each kind: an older part read as its blend copy, a TD part, a filler part and a filler
@@ -102,7 +116,8 @@ VAL_8B = 'g4s1-val.vf'
 TD_PARTS = ('g3j-', 'g4-', 'g4s1-g3j-', 'g4s1-g4-', 'g4b-', 'ld-d20-', 'ld-d50-', 'ld-d100-', 'g4c-',
             'g4s2-g4b-', 'g4s2-g4c-', 'g4s2-ld-') + tuple(f'{f}-' for f in FILLER) + tuple(f'g4s2-{f}-' for f in FILLER)
 NOT_A1 = ('pos1-', 'ld-d20c50-', 'ld-d20c100-',   # not this session's data (the positional slice is A2's arm)
-          'slice1-', 'g3s2-slice1-')               # v1's slice: replaced by slice1b (O2)
+          'slice1-', 'g3s2-slice1-',               # v1's slice: replaced by slice1b (O2)
+          'posx1-')                                 # arm Q's raw slice (A2's qon arm reads its td90- copies)
 SPLIT_MAX_PIECES = 7        # rft-ep (plan section 3; constant screen passed 2026-11-12)
 SPLIT_SAMPLE = 100          # td_labels.py check: python-chess recount on every 100th game (its default)
 CHESS = 'chess==1.11.2'     # python-chess for td_labels.py (the repository's .venv version; the preview's)
@@ -134,11 +149,26 @@ for k in (1, 2):
     ARMS[f'eplo{k}'] = {**FINE_TUNE_SETTINGS, 'files': 'ep', 'init': f'c{k}', 'lr': 5e-6, 'result_weight': 0.0,
                         'val': VAL_BLEND, 'seed': k}
 QUEUES = [['c1', 'rft1', 'ep1', 'eplo1', 'i801'], ['c2', 'rft2', 'ep2', 'eplo2', 'i802']]
-ARM_SET = 'all'             # a kernel copy only (module note): 'all', 'main' or 'i80'
-ARM_SETS = {'all': None, 'main': ('c', 'rft', 'ep', 'eplo'), 'i80': ('i80',)}
+ARM_SET = 'all'             # a kernel copy only (module note): 'all', 'main', 'i80', 'qon' or 'lam'
+ARM_SETS = {'all': None, 'main': ('c', 'rft', 'ep', 'eplo'), 'i80': ('i80',), 'qon': None, 'lam': None}
 if ARM_SETS[ARM_SET]:
     QUEUES = [[a for a in q if a.rstrip('12') in ARM_SETS[ARM_SET]] for q in QUEUES]
     ARMS = {a: v for a, v in ARMS.items() if a.rstrip('12') in ARM_SETS[ARM_SET]}
+# The queens-on slice's TD(0.9) copies: pos1's eight (manifest pos1-td) and arm Q's posx1 eight (posx1-td).
+QON_FILES = [f'td90-pos1-w0{w}.vf' for w in range(8)] + [f'td90-posx1-w0{w}.vf' for w in range(8)]
+# Each read twice a pass (the 5% cap on the saved basis, the plan's: control 1,816,586,665 saved, the endgame slice
+# 26,000,000; 2 x 25,001,099 = 50,002,198 more is 4.18% with the slice, 3 x would be 5.56%; coordinator, 2026-11-14).
+QON_REPEATS = 2
+QON_TARGETS = 'tools/train/kaggle/r8c_qon_targets.json'  # per control file: the saved records its px- copy removes
+if ARM_SET in ('qon', 'lam'):
+    A2_ARMS = {}
+    for k in (1, 2):
+        A2_ARMS[f'{ARM_SET}{k}'] = {**BASE_SETTINGS, 'files': ARM_SET, 'init': 'td90', 'lr': 1e-4,
+                                    'result_weight': 0.0, 'val': VAL_BLEND, 'seed': k}
+    ARMS = A2_ARMS
+    QUEUES = [[f'{ARM_SET}{k}'] for k in (1, 2)]
+    MANIFESTS = [m for m in MANIFESTS if m != 'r8c-i80'] + (['pos1', 'pos1-td', 'posx1', 'posx1-td']
+                                                            if ARM_SET == 'qon' else ['r8c-lam', 'r8c-lam-post'])
 CANDIDATES = list(ARMS)
 DATA = '/kaggle/input'
 WORK = '/kaggle/working/retrain'
@@ -158,12 +188,12 @@ def is_slice(name):
 
 
 def split_source(name):
-    """The mounted file an ep- copy is made from in the session (the name itself for any other)."""
-    return name[3:] if name.startswith('ep-') else name
+    """The mounted file an ep- or px- copy is made from in the session (the name itself for any other)."""
+    return name[3:] if name.startswith(('ep-', 'px-')) else name
 
 
 def is_derived(name):
-    return name.startswith(('bl-', 'i52-', 'i80-', 'ep-')) or \
+    return name.startswith(('bl-', 'i52-', 'i80-', 'ep-', 'lam-', 'px-')) or \
         (name.startswith('td') and name[2:4].isdigit() and name[4] == '-')
 
 
@@ -182,6 +212,10 @@ def arm_files(kind, base):
         return [f'i80-{n}' if n.startswith(TD_PARTS) and not is_slice(n) else control_name(n) for n in base]
     if kind == 'ep':
         return [n if is_slice(n) else f'ep-{control_name(n)}' for n in base]
+    if kind == 'lam':
+        return [f'lam-{n}' if n.startswith(TD_PARTS) and not is_slice(n) else control_name(n) for n in base]
+    if kind == 'qon':
+        return [n if is_slice(n) else f'px-{control_name(n)}' for n in base] + QON_FILES * QON_REPEATS
     raise ValueError(kind)
 
 
@@ -218,8 +252,11 @@ def smoke_subset(found, sealed):
     """The smoke run's inputs: the mounted paths and sealed entries of SMOKE_ORIGINALS, their control and i80
     copies, SMOKE_ALSO and the validation files (the ep- copies are made in the session)."""
     need = set(SMOKE_ORIGINALS) | set(SMOKE_ALSO) | {VAL, VAL_BLEND, INIT['val']}
-    for kind in ('control', 'i80'):
+    kinds = ('control', 'i80') + (('lam',) if any(a['files'] == 'lam' for a in ARMS.values()) else ())
+    for kind in kinds:
         need |= set(arm_files(kind, SMOKE_ORIGINALS))
+    if any(a['files'] == 'qon' for a in ARMS.values()):
+        need |= set(QON_FILES)
     return ([p for p in found if os.path.basename(p) in need], {n: h for n, h in sealed.items() if n in need})
 
 
@@ -456,6 +493,69 @@ def session():
     split_root, split_ok = None, False
     if ok and any(a['files'] == 'ep' for a in ARMS.values()):
         split_root, summary['split'] = make_split()
+
+    def make_drop():
+        """The qon arm's px- copies, made here: td_labels.py drop of every self-play control file (the slice and
+        the queens-on copies excepted) by its QON_TARGETS count, each checked by td_labels.py check --mode drop; the
+        copies join by_name as px-<source>. Returns (folder or None, record)."""
+        targets = json.load(open(f'{repo}/{QON_TARGETS}'))['targets']
+        srcs = sorted({split_source(n) for arm in ARMS for n in lists[arm] if n.startswith('px-')},
+                      key=lambda n: (-os.path.getsize(by_name[n]), n))
+        rec = {'files': len(srcs), 'targets_file': QON_TARGETS, 'target_total': sum(targets.get(n, 0) for n in srcs),
+               'missing_targets': sorted(n for n in srcs if n not in targets)}
+        root = max(('/tmp', '/kaggle/working'), key=lambda d: shutil.disk_usage(d).free if os.path.isdir(d) else -1)
+        if rec['missing_targets'] or not srcs:
+            rec['ok'] = False
+            return None, rec
+        dest = f'{root}/px-drop'
+        shutil.rmtree(dest, ignore_errors=True)
+        os.makedirs(dest)
+        tool = f'{repo}/tools/datagen/td_labels.py'
+        began = time.time()
+
+        def last_json(text):
+            for line in reversed(text.strip().splitlines()):
+                try:
+                    return json.loads(line)
+                except ValueError:
+                    continue
+            return None
+
+        def one(n):
+            path = f'{dest}/px-{n}'
+            rc1, o1, s1 = sh(f'python3 {tool} drop {by_name[n]} --out {path} --target {targets[n]} --name {n}')
+            made = last_json(o1) if rc1 == 0 else None
+            rc2, o2, s2 = (1, '', 0)
+            if made:
+                rc2, o2, s2 = sh(f'python3 {tool} check {by_name[n]} {path} --mode drop --target {targets[n]} '
+                                 f'--scale {SCALE}')
+            checked = last_json(o2) if rc2 == 0 else None
+            r = {'rc': [rc1, rc2], 'seconds': [s1, s2], 'target': targets[n],
+                 'saved_dropped': (made or {}).get('saved_dropped'), 'games_dropped': (made or {}).get('games_dropped'),
+                 'check_bad': (checked or {}).get('bad')}
+            r['ok'] = bool(made and checked and not checked['bad'] and os.path.getsize(path) == os.path.getsize(by_name[n]))
+            if not r['ok']:
+                r['tail'] = o1[-300:] + ' | ' + o2[-300:]
+            return n, r
+
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max(1, min(os.cpu_count() or 1, 4))) as ex:
+            per_file = dict(ex.map(one, srcs))
+        rec['seconds'] = round(time.time() - began, 1)
+        rec['per_file'] = per_file
+        rec['saved_dropped'] = sum(r['saved_dropped'] or 0 for r in per_file.values())
+        rec['failed'] = sorted(n for n, r in per_file.items() if not r['ok'])
+        rec['ok'] = not rec['failed'] and len(per_file) == len(srcs)
+        if rec['ok']:
+            for n in srcs:
+                by_name[f'px-{n}'] = f'{dest}/px-{n}'
+        return dest, rec
+
+    drop_root, drop_ok = None, False
+    if ok and any(a['files'] == 'qon' for a in ARMS.values()):
+        drop_root, summary['drop'] = make_drop()
+        drop_ok = summary['drop']['ok']
+        save()
         split_ok = summary['split']['ok']
         save()
 
@@ -511,6 +611,8 @@ def session():
         a = ARMS[arm]
         if a['files'] == 'ep' and not split_ok:
             return {'arm': arm, 'error': 'the in-session split failed (summary["split"]): not run'}
+        if a['files'] == 'qon' and not drop_ok:
+            return {'arm': arm, 'error': 'the in-session drop failed (summary["drop"]): not run'}
         if a['init'] == 'td90':
             start = init[0]
         else:
@@ -616,7 +718,7 @@ def session():
         v = {'superbatch_0': starts, 'references': refs, 'tolerance': tol,
              'per_arm': {arm: starts[arm] is not None and refs[arm] is not None and
                          abs(starts[arm] - refs[arm]) <= tol[arm] for arm in ARMS},
-             'inputs_ok': summary['inputs']['ok'], 'split_ok': split_ok,
+             'inputs_ok': summary['inputs']['ok'], 'split_ok': split_ok, 'drop_ok': drop_ok,
              'runs_ok': {arm: summary['runs'].get(arm, {}).get('rc') == 0 for arm in ARMS}}
         v['ok'] = all(v['per_arm'].values())
         v['candidates'] = {f'{arm}-avg': {'full': (summary['offline'].get(f'{arm}-avg') or {}).get('full', {}).get('loss'),
@@ -638,6 +740,8 @@ def session():
         shutil.rmtree(WORK, ignore_errors=True)
         if split_root:
             shutil.rmtree(split_root, ignore_errors=True)
+        if drop_root:
+            shutil.rmtree(drop_root, ignore_errors=True)
     save()
     print(json.dumps(summary, indent=1))
 

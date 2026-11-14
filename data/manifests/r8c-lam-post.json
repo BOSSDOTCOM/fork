@@ -1,0 +1,213 @@
+{
+ "run": "r8c-lam-post",
+ "note": "retrain 8c A2's lam arm: lam- copies (td_labels.py labels --lam-by-class, tools ad669e5; chunks of 20,000 games, each checked) of g4c's training shards and rest and of the cut filler run's training files and rest",
+ "totals": {
+  "games": 3486029,
+  "positions": 335656874,
+  "positions_unsaved": 153057493,
+  "positions_saved": 182599381,
+  "bytes": 1468124540
+ },
+ "batches": [
+  [
+   {
+    "file": "lam-g4c-w00.vf",
+    "games": 238161,
+    "positions": 22947630,
+    "positions_unsaved": 10458910,
+    "positions_saved": 12488720,
+    "bytes": 100364316,
+    "sha256": "c86027a20495724ba052e039814c30d426da954e578e23dc1433dc7e91514452"
+   },
+   {
+    "file": "lam-g4c-w01.vf",
+    "games": 238452,
+    "positions": 22947545,
+    "positions_unsaved": 10467342,
+    "positions_saved": 12480203,
+    "bytes": 100374452,
+    "sha256": "0a6f88e9b8dcee4967e3da79f7f9fd0228043ad8c189f1a27eb4c9a99082a819"
+   },
+   {
+    "file": "lam-g4c-w02.vf",
+    "games": 238370,
+    "positions": 22947645,
+    "positions_unsaved": 10469486,
+    "positions_saved": 12478159,
+    "bytes": 100371900,
+    "sha256": "07d092deb0c77d614dada9890ee2cf1d59d99ee99c6e14f6df77dc90f8c5325e"
+   },
+   {
+    "file": "lam-g4c-w03.vf",
+    "games": 238240,
+    "positions": 22947617,
+    "positions_unsaved": 10462478,
+    "positions_saved": 12485139,
+    "bytes": 100367108,
+    "sha256": "b3affb05434a64238f3e3a6b4e743472e8a24f8d0964baf77b2c7508e390f10f"
+   },
+   {
+    "file": "lam-g4c-w04.vf",
+    "games": 238075,
+    "positions": 22947565,
+    "positions_unsaved": 10463317,
+    "positions_saved": 12484248,
+    "bytes": 100360960,
+    "sha256": "dad50d78ad1df4f5d31b2ac90218cb055ef5244a863fe58068e8482490d87495"
+   },
+   {
+    "file": "lam-g4c-w05.vf",
+    "games": 238192,
+    "positions": 22947553,
+    "positions_unsaved": 10466678,
+    "positions_saved": 12480875,
+    "bytes": 100365124,
+    "sha256": "1c10987635079a0c1a83abe8df24f2f21700cd01433b15ac8e4f515ec6aadf35"
+   },
+   {
+    "file": "lam-g4c-w06.vf",
+    "games": 238633,
+    "positions": 22947540,
+    "positions_unsaved": 10464288,
+    "positions_saved": 12483252,
+    "bytes": 100380948,
+    "sha256": "807c9fe9eeec566961a3a1e0e67eaf1473e3ee533e89396be40620633e35c7c3"
+   },
+   {
+    "file": "lam-g4c-w07.vf",
+    "games": 238410,
+    "positions": 22947645,
+    "positions_unsaved": 10460264,
+    "positions_saved": 12487381,
+    "bytes": 100373340,
+    "sha256": "f1ac64416285599f610636a2d34499f44fec1842f4d12aef698dbdc611035d3d"
+   },
+   {
+    "file": "lam-g4c-w08.vf",
+    "games": 238387,
+    "positions": 22947582,
+    "positions_unsaved": 10464883,
+    "positions_saved": 12482699,
+    "bytes": 100372260,
+    "sha256": "5e02e0b7fd7957c724206fd56631021f02299d4f46798f524120bd072cd5ec45"
+   },
+   {
+    "file": "lam-g4s2-g4c-w09-val-rest.vf",
+    "games": 238080,
+    "positions": 22941654,
+    "positions_unsaved": 10458974,
+    "positions_saved": 12482680,
+    "bytes": 100337496,
+    "sha256": "b344c37c170efb3b5638e3899401486cda1aab134c5b9fd2600f17c16065f263"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w00.vf",
+    "games": 101417,
+    "positions": 9767344,
+    "positions_unsaved": 4455044,
+    "positions_saved": 5312300,
+    "bytes": 42720388,
+    "sha256": "fbc81d514261b5e30164e9203da6143a272b3d90238097db2d266967ad9741c2"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w01.vf",
+    "games": 101472,
+    "positions": 9766929,
+    "positions_unsaved": 4452614,
+    "positions_saved": 5314315,
+    "bytes": 42720708,
+    "sha256": "4c8bd34dbe4f2b42d1b2ad3857bfa29f86eaae14135f5dd36c56ed5dfcb5373e"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w02.vf",
+    "games": 101288,
+    "positions": 9769691,
+    "positions_unsaved": 4452671,
+    "positions_saved": 5317020,
+    "bytes": 42725132,
+    "sha256": "3531d66477fdf8652c59282a4cf223432580846298a999a9ef0c1caff224936c"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w03.vf",
+    "games": 101282,
+    "positions": 9766980,
+    "positions_unsaved": 4451753,
+    "positions_saved": 5315227,
+    "bytes": 42714072,
+    "sha256": "c88292be023685dcf958ca785e25fd0a5b60ec3dadc38b80c62fac4dbd46f7e1"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w04.vf",
+    "games": 101552,
+    "positions": 9767115,
+    "positions_unsaved": 4455827,
+    "positions_saved": 5311288,
+    "bytes": 42724332,
+    "sha256": "af9525b07741a54f0b47fd3c942dcfa01c3a445ec766a6eef701a217b6ea211c"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w05.vf",
+    "games": 99019,
+    "positions": 9517215,
+    "positions_unsaved": 4338907,
+    "positions_saved": 5178308,
+    "bytes": 41633544,
+    "sha256": "ed50ce3d6a191967be0b756e25e9022811c9b2228d5205b27b622a34add0cdef"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w06.vf",
+    "games": 98795,
+    "positions": 9516642,
+    "positions_unsaved": 4337100,
+    "positions_saved": 5179542,
+    "bytes": 41623188,
+    "sha256": "f226bb861e7af4a307285714f078b3c846201f376e51cf901d42b7d372296988"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w07.vf",
+    "games": 98985,
+    "positions": 9518024,
+    "positions_unsaved": 4341552,
+    "positions_saved": 5176472,
+    "bytes": 41635556,
+    "sha256": "4a072aa4bfc59b937cd3320a32c56a08985ea0982f9b545405b72ce609f5d692"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w08.vf",
+    "games": 98879,
+    "positions": 9517800,
+    "positions_unsaved": 4340763,
+    "positions_saved": 5177037,
+    "bytes": 41630844,
+    "sha256": "cedf369966471400e5d22768fe8b536b7bbc404dd4422e43db6c5a51350941b1"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w09.vf",
+    "games": 98960,
+    "positions": 9516865,
+    "positions_unsaved": 4342955,
+    "positions_saved": 5173910,
+    "bytes": 41630020,
+    "sha256": "3e0b349c08fc1f812bc173913a6269d2f1321470213c5a6356a9d64063b97d98"
+   },
+   {
+    "file": "lam-g4-gcp-20261112T214524Z-w10.vf",
+    "games": 98812,
+    "positions": 9517513,
+    "positions_unsaved": 4340176,
+    "positions_saved": 5177337,
+    "bytes": 41627284,
+    "sha256": "575b8c64a0a0af609f10324d52d8734a64efc70a61997824ecf0acab67cb950c"
+   },
+   {
+    "file": "lam-g4s2-g4-gcp-20261112T214524Z-w11-val-rest.vf",
+    "games": 2568,
+    "positions": 244780,
+    "positions_unsaved": 111511,
+    "positions_saved": 133269,
+    "bytes": 1071568,
+    "sha256": "49c984059f3e5d5139020a5cb452624ab317ae82b12862aa1e01798eda2319a6"
+   }
+  ]
+ ]
+}

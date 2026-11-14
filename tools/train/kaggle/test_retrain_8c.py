@@ -172,6 +172,44 @@ class SettingTests(unittest.TestCase):
         for arm in k.ARMS:
             self.assertFalse(any(f"'{arm}'" in line for line in body), arm)
 
+    def test_a2_arm_sets(self):
+        # Session A2 (re-planned 2026-11-14): qonK and lamK, each c's settings, seed and warm start.
+        import importlib.util
+        src = Path(k.__file__).read_text(encoding='utf-8')
+        mods = {}
+        for name in ('qon', 'lam'):
+            with tempfile.TemporaryDirectory() as d:
+                path = Path(d, f'retrain_8c_{name}.py')
+                path.write_text(src.replace("\nARM_SET = 'all' ", f"\nARM_SET = '{name}' ", 1), encoding='utf-8')
+                spec = importlib.util.spec_from_file_location(f'retrain_8c_{name}', path)
+                m = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(m)
+                mods[name] = m
+        for name, m in mods.items():
+            self.assertEqual(m.QUEUES, [[f'{name}1'], [f'{name}2']])
+            for kk in (1, 2):
+                a = dict(m.ARMS[f'{name}{kk}'])
+                c = dict(k.ARMS[f'c{kk}'])
+                self.assertEqual(a.pop('files'), name)
+                c.pop('files')
+                self.assertEqual(a, c)                                       # c's recipe, seed and warm start
+            self.assertNotIn('r8c-i80', m.MANIFESTS)
+        for man in ('pos1', 'pos1-td', 'posx1', 'posx1-td'):
+            self.assertIn(man, mods['qon'].MANIFESTS)
+        self.assertEqual(mods['qon'].QON_REPEATS, 2)
+        self.assertIn('r8c-lam-post', mods['lam'].MANIFESTS)
+        m = mods['qon']
+        lam = dict(zip(ORIGINALS, m.arm_files('lam', ORIGINALS)))
+        ctl = dict(zip(ORIGINALS, k.arm_files('control', ORIGINALS)))
+        for o in ORIGINALS:
+            self.assertEqual(lam[o], f'lam-{o}' if ctl[o].startswith('td90-') else ctl[o])
+        qon = m.arm_files('qon', ORIGINALS)
+        self.assertEqual(qon[:len(ORIGINALS)], [n if k.is_slice(n) else f'px-{n}' for n in k.arm_files('control', ORIGINALS)])
+        self.assertEqual(qon[len(ORIGINALS):], m.QON_FILES * m.QON_REPEATS)
+        self.assertEqual(m.split_source('px-td90-g4c-w03.vf'), 'td90-g4c-w03.vf')
+        self.assertTrue(m.is_derived('lam-g4b-w00.vf') and m.is_derived('px-td90-g4b-w00.vf'))
+        self.assertEqual(k.ARMS.keys(), {f'{x}{s}' for x in ('c', 'i80', 'rft', 'ep', 'eplo') for s in (1, 2)})
+
     def test_the_split_is_made_in_the_session(self):
         self.assertNotIn('r8c-split', k.MANIFESTS)                                    # no upload of ep- copies
         self.assertIn('slice1b', k.MANIFESTS)

@@ -632,6 +632,39 @@ class ClassLambdaTests(unittest.TestCase):
         self.assertNotEqual(td.check_copy(data, lam, 'td', 0.9, 92.0, sample=1)['bad'], [])
 
 
+class DropTests(unittest.TestCase):
+    """`drop` (retrain 8c's pos arm): whole saved games made unsaved until a target of saved records is reached."""
+
+    def games(self):
+        data = b''
+        for i in range(30):
+            scores = [10 * i, U, -5, 7 + i] if i % 3 else [U, U, U, U]   # every third game has no saved record
+            data += encode_game(chess.STARTING_FEN, ['e2e4', 'e7e5', 'g1f3', 'b8c6'], scores, 1)[0]
+        return data + OneMoveGameTests.KRK
+
+    def test_whole_games_until_the_target(self):
+        data = self.games()
+        out, c = td.drop_games(data, 10, 'x.vf')
+        self.assertEqual(len(out), len(data))
+        self.assertGreaterEqual(c['saved_dropped'], 10)
+        self.assertLess(c['saved_dropped'], 10 + 3)                       # each chosen game has 3 saved records
+        self.assertEqual(c['games_dropped'], 4)
+        self.assertEqual(td.check_drop(data, out, 10)['bad'], [])
+        # The slice's one-move table game and the games with nothing saved are never chosen.
+        self.assertEqual(out[-len(OneMoveGameTests.KRK):], OneMoveGameTests.KRK)
+        # Reproducible by name; another name chooses other games.
+        self.assertEqual(td.drop_games(data, 10, 'x.vf')[0], out)
+        self.assertNotEqual(td.drop_games(data, 10, 'y.vf')[0], out)
+
+    def test_the_check_fails_on_wrong_copies(self):
+        data = self.games()
+        out, _ = td.drop_games(data, 10, 'x.vf')
+        self.assertNotEqual(td.check_drop(data, data, 10)['bad'], [])           # nothing removed
+        self.assertNotEqual(td.check_drop(data, out, 40)['bad'], [])            # too few for the target
+        self.assertNotEqual(td.check_drop(data, out, 2)['bad'], [])             # far more than the target
+        self.assertNotEqual(td.check_drop(out, data, 0)['bad'], [])            # unsaved records restored
+
+
 class InjectedFaultTests(unittest.TestCase):
     """The limit check must fail on a broken label function."""
 
