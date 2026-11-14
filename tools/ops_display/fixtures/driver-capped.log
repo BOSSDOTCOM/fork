@@ -1,0 +1,66 @@
+2026-11-14 06:22 UTC f12-pin-see-stc: base 2b1e111eef3df22052dc2f662d7f15c46abf842c, test 80b70bd0fa1eb17176b294d335e60be6e6f3678c, bounds [0, 6], stages 0 to 7, ref phase-4, kind search, stc, alpha 0.05, beta 0.20, cap 8, futility after 2 stages, idea f12-pin-see (try 1 of 2)
+2026-11-14 06:22 UTC f12-pin-see-stc: stage 0: run 43566002366 dispatched (ledger)
+2026-11-14 06:40 UTC f12-pin-see-stc: stage 0: run 43566002366 merged
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 2.17 +/- 9.58, nElo: 3.86 +/- 17.02
+    Ptnml(0-2): [17, 182, 390, 196, 15]
+    LLR: 0.07 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-14 06:41 UTC f12-pin-see-stc: stage 1: run 43567517325 dispatched (ledger)
+2026-11-14 06:59 UTC f12-pin-see-stc: stage 1: run 43567517325 merged
+    Shards: 32 (done); pairs 1600, games 3200 (3200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 3.80 +/- 7.02, nElo: 6.52 +/- 12.04
+    Ptnml(0-2): [34, 378, 753, 389, 46]
+    LLR: 0.56 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-14 06:59 UTC f12-pin-see-stc: stage 2: run 43568931975 dispatched (ledger)
+2026-11-14 07:17 UTC f12-pin-see-stc: stage 2: run 43568931975 merged
+    Shards: 48 (done); pairs 2400, games 4800 (4800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 1.59 +/- 5.69, nElo: 2.75 +/- 9.83
+    Ptnml(0-2): [49, 581, 1134, 571, 65]
+    LLR: -0.06 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-14 07:18 UTC f12-pin-see-stc: stage 3: run 43570427674 dispatched (ledger)
+2026-11-14 07:36 UTC f12-pin-see-stc: stage 3: run 43570427674 merged
+    Shards: 64 (done); pairs 3200, games 6400 (6400 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -0.43 +/- 4.90, nElo: -0.75 +/- 8.51
+    Ptnml(0-2): [66, 787, 1517, 749, 81]
+    LLR: -1.19 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-14 07:36 UTC f12-pin-see-stc: stage 4: run 43571888218 dispatched (ledger)
+2026-11-14 07:54 UTC f12-pin-see-stc: stage 4: run 43571888218 merged
+    Shards: 80 (done); pairs 4000, games 8000 (8000 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 1.30 +/- 4.37, nElo: 2.27 +/- 7.61
+    Ptnml(0-2): [76, 975, 1894, 953, 102]
+    LLR: -0.29 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-14 07:55 UTC f12-pin-see-stc: stage 5: run 43573308219 dispatched (ledger)
+2026-11-14 08:13 UTC f12-pin-see-stc: stage 5: run 43573308219 merged
+    Shards: 96 (done); pairs 4800, games 9600 (9600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 1.45 +/- 4.02, nElo: 2.50 +/- 6.95
+    Ptnml(0-2): [104, 1153, 2261, 1163, 119]
+    LLR: -0.24 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-14 08:13 UTC f12-pin-see-stc: stage 6: run 43574781298 dispatched (ledger)
+2026-11-14 08:32 UTC f12-pin-see-stc: stage 6: run 43574781298 merged
+    Shards: 112 (done); pairs 5600, games 11200 (11200 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 0.84 +/- 3.73, nElo: 1.45 +/- 6.43
+    Ptnml(0-2): [124, 1359, 2617, 1366, 134]
+    LLR: -0.87 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-14 08:32 UTC f12-pin-see-stc: stage 7: run 43576284240 dispatched (ledger)
+2026-11-14 08:50 UTC f12-pin-see-stc: stage 7: run 43576284240 merged
+    Shards: 128 (done); pairs 6400, games 12800 (12800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 1.44 +/- 3.48, nElo: 2.49 +/- 6.02
+    Ptnml(0-2): [138, 1548, 2986, 1579, 149]
+    LLR: -0.32 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: capped (8 of 8 stages, undecided)
+2026-11-14 08:50 UTC f12-pin-see-stc: undecided after stage 7: capped (8 of 8 stages, undecided), not passed

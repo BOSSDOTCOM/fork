@@ -1,0 +1,190 @@
+{
+ "at": "2026-11-14 01:08:46 PM EST",
+ "vm": {
+  "status": "RUNNING",
+  "ip": "203.0.113.7",
+  "machine_type": "c2d-highcpu-8",
+  "last_start": "2026-11-10T17:38:13.329-08:00",
+  "last_stop": "2026-11-10T17:37:40.735-08:00",
+  "provisioning": "SPOT",
+  "termination_action": "STOP"
+ },
+ "worker": {
+  "at": "2026-11-14T18:08:39+0000",
+  "bad_items": [],
+  "boot": 1794361098.0,
+  "items": {
+   "filler-g4": {
+    "class": "c",
+    "resumes": 0,
+    "state": "running"
+   },
+   "slice-pos-td90": {
+    "class": "a",
+    "resumes": 0,
+    "state": "done"
+   },
+   "slice-pos-x-r8": {
+    "class": "a",
+    "resumes": 0,
+    "state": "done"
+   },
+   "stale-a-nomove": {
+    "class": "b",
+    "resumes": 0,
+    "state": "done"
+   }
+  },
+  "running": "filler-g4"
+ },
+ "events": [
+  {
+   "at": "2026-11-11T19:11:07+0000",
+   "event": "done",
+   "name": "slice-pos-td90",
+   "outputs": [
+    "json:/opt/fork/out/slice-pos-td90/done.json"
+   ]
+  },
+  {
+   "at": "2026-11-11T19:11:07+0000",
+   "cls": "c",
+   "event": "start",
+   "name": "filler-g4",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-12T01:54:18+0000",
+   "event": "stop",
+   "name": "filler-g4",
+   "ok": true,
+   "out": "stopped filler-g4: 4 process(es) ended, none left; lock datagen released",
+   "why": "yields to e2-ltc (class b)"
+  },
+  {
+   "at": "2026-11-12T01:54:18+0000",
+   "cls": "b",
+   "event": "start",
+   "name": "e2-ltc",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-12T04:13:30+0000",
+   "event": "stop",
+   "name": "e2-ltc",
+   "ok": true,
+   "out": "stopped e2-ltc: 11 process(es) ended, none left; lock measure released",
+   "why": "withdrawn from the queue"
+  },
+  {
+   "at": "2026-11-12T04:13:30+0000",
+   "cls": "c",
+   "event": "start",
+   "name": "filler-g4",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-12T12:26:15+0000",
+   "event": "stop",
+   "name": "filler-g4",
+   "ok": true,
+   "out": "stopped filler-g4: 4 process(es) ended, none left; lock datagen released",
+   "why": "yields to stale-a-nomove (class b)"
+  },
+  {
+   "at": "2026-11-12T12:26:16+0000",
+   "cls": "b",
+   "event": "start",
+   "name": "stale-a-nomove",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-12T18:52:27+0000",
+   "event": "done",
+   "name": "stale-a-nomove",
+   "outputs": [
+    "json:/opt/fork/out/stale-nomove/done.json",
+    "/opt/fork/out/stale-nomove/report.txt"
+   ]
+  },
+  {
+   "at": "2026-11-12T18:52:27+0000",
+   "cls": "c",
+   "event": "start",
+   "name": "filler-g4",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-12T21:36:23+0000",
+   "cls": "c",
+   "event": "start",
+   "name": "filler-g4",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-12T21:40:53+0000",
+   "cls": "c",
+   "event": "start",
+   "name": "filler-g4",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-12T21:45:24+0000",
+   "cls": "c",
+   "event": "start",
+   "name": "filler-g4",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-13T06:36:35+0000",
+   "boot": 1794361098.0,
+   "event": "worker-start",
+   "pid": 257799
+  },
+  {
+   "at": "2026-11-13T22:49:11+0000",
+   "event": "stop",
+   "name": "filler-g4",
+   "ok": true,
+   "out": "stopped filler-g4: 4 process(es) ended, none left; lock datagen released",
+   "why": "withdrawn from the queue"
+  },
+  {
+   "at": "2026-11-13T22:52:41+0000",
+   "cls": "c",
+   "event": "start",
+   "name": "filler-g4",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-13T23:20:17+0000",
+   "event": "stop",
+   "name": "filler-g4",
+   "ok": true,
+   "out": "stopped filler-g4: 4 process(es) ended, none left; lock datagen released",
+   "why": "yields to slice-pos-x-r8 (class a)"
+  },
+  {
+   "at": "2026-11-13T23:20:17+0000",
+   "cls": "a",
+   "event": "start",
+   "name": "slice-pos-x-r8",
+   "resumes": 0
+  },
+  {
+   "at": "2026-11-14T16:55:57+0000",
+   "event": "done",
+   "name": "slice-pos-x-r8",
+   "outputs": [
+    "json:/opt/fork/out/slice-pos-x-r8/done.json"
+   ]
+  },
+  {
+   "at": "2026-11-14T16:55:57+0000",
+   "cls": "c",
+   "event": "start",
+   "name": "filler-g4",
+   "resumes": 0
+  }
+ ]
+}

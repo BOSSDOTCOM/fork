@@ -1,0 +1,9 @@
+2026-11-14 17:16 UTC r8c-fn-r8cc1-vs-r8brft1: base b49d6f5dece2c8c434b24aef03c1208fa678b316, test a71dd2daf4aa854346ab9f7e73c42cc7a321c4ca, bounds [0, 5], stages 0 to 0, ref phase-4
+2026-11-14 17:19 UTC r8c-fn-r8cc1-vs-r8brft1: stage 0: run 43620446592 dispatched (ledger)
+2026-11-14 18:03 UTC r8c-fn-r8cc1-vs-r8brft1: stage 0: run 43620446592 merged
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -2.39 +/- 9.02, nElo: -4.51 +/- 17.02
+    Ptnml(0-2): [13, 186, 405, 191, 5]
+    LLR: -0.46 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+2026-11-14 18:03 UTC r8c-fn-r8cc1-vs-r8brft1: undecided after stage 0

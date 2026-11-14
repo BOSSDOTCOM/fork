@@ -1,0 +1,234 @@
+{
+ "settings": {
+  "commit": "178f16b0b08d97d0aeaeac7fb25405ea41f6bc40",
+  "arms": {
+   "c1": {
+    "superbatches": 360,
+    "lr_step": 180,
+    "window": [
+     331,
+     360
+    ],
+    "keep": [
+     180,
+     360
+    ],
+    "files": "control",
+    "init": "td90",
+    "lr": 0.0001,
+    "result_weight": 0.0,
+    "val": "bl-g4s2-val.vf",
+    "seed": 1
+   },
+   "rft1": {
+    "superbatches": 60,
+    "lr_step": 1000000,
+    "window": [
+     46,
+     60
+    ],
+    "keep": [
+     60
+    ],
+    "files": "originals",
+    "init": "c1",
+    "lr": 1e-05,
+    "result_weight": 1.0,
+    "val": "g4s2-val.vf",
+    "seed": 1
+   },
+   "ep1": {
+    "superbatches": 60,
+    "lr_step": 1000000,
+    "window": [
+     46,
+     60
+    ],
+    "keep": [
+     60
+    ],
+    "files": "ep",
+    "init": "c1",
+    "lr": 1e-05,
+    "result_weight": 0.0,
+    "val": "bl-g4s2-val.vf",
+    "seed": 1
+   },
+   "eplo1": {
+    "superbatches": 60,
+    "lr_step": 1000000,
+    "window": [
+     46,
+     60
+    ],
+    "keep": [
+     60
+    ],
+    "files": "ep",
+    "init": "c1",
+    "lr": 5e-06,
+    "result_weight": 0.0,
+    "val": "bl-g4s2-val.vf",
+    "seed": 1
+   },
+   "c2": {
+    "superbatches": 360,
+    "lr_step": 180,
+    "window": [
+     331,
+     360
+    ],
+    "keep": [
+     180,
+     360
+    ],
+    "files": "control",
+    "init": "td90",
+    "lr": 0.0001,
+    "result_weight": 0.0,
+    "val": "bl-g4s2-val.vf",
+    "seed": 2
+   },
+   "rft2": {
+    "superbatches": 60,
+    "lr_step": 1000000,
+    "window": [
+     46,
+     60
+    ],
+    "keep": [
+     60
+    ],
+    "files": "originals",
+    "init": "c2",
+    "lr": 1e-05,
+    "result_weight": 1.0,
+    "val": "g4s2-val.vf",
+    "seed": 2
+   },
+   "ep2": {
+    "superbatches": 60,
+    "lr_step": 1000000,
+    "window": [
+     46,
+     60
+    ],
+    "keep": [
+     60
+    ],
+    "files": "ep",
+    "init": "c2",
+    "lr": 1e-05,
+    "result_weight": 0.0,
+    "val": "bl-g4s2-val.vf",
+    "seed": 2
+   },
+   "eplo2": {
+    "superbatches": 60,
+    "lr_step": 1000000,
+    "window": [
+     46,
+     60
+    ],
+    "keep": [
+     60
+    ],
+    "files": "ep",
+    "init": "c2",
+    "lr": 5e-06,
+    "result_weight": 0.0,
+    "val": "bl-g4s2-val.vf",
+    "seed": 2
+   }
+  }
+ },
+ "validity": {
+  "superbatch_0": {
+   "c1": 0.01998619,
+   "rft1": 0.05883703,
+   "ep1": 0.02002965,
+   "eplo1": 0.02002965,
+   "c2": 0.01998619,
+   "rft2": 0.05882588,
+   "ep2": 0.02002383,
+   "eplo2": 0.02002383
+  },
+  "references": {
+   "c1": 0.01998619,
+   "rft1": 0.05883703,
+   "ep1": 0.02002965,
+   "eplo1": 0.02002965,
+   "c2": 0.01998619,
+   "rft2": 0.05882588,
+   "ep2": 0.02002383,
+   "eplo2": 0.02002383
+  },
+  "tolerance": {
+   "c1": 1e-05,
+   "rft1": 1e-06,
+   "ep1": 1e-05,
+   "eplo1": 1e-05,
+   "c2": 1e-05,
+   "rft2": 1e-06,
+   "ep2": 1e-05,
+   "eplo2": 1e-05
+  },
+  "per_arm": {
+   "c1": true,
+   "rft1": true,
+   "ep1": true,
+   "eplo1": true,
+   "c2": true,
+   "rft2": true,
+   "ep2": true,
+   "eplo2": true
+  },
+  "inputs_ok": true,
+  "split_ok": true,
+  "runs_ok": {
+   "c1": true,
+   "rft1": true,
+   "ep1": true,
+   "eplo1": true,
+   "c2": true,
+   "rft2": true,
+   "ep2": true,
+   "eplo2": true
+  },
+  "ok": true,
+  "candidates": {
+   "c1-avg": {
+    "full": 0.01956826,
+    "quantised": true
+   },
+   "rft1-avg": {
+    "full": 0.01982257,
+    "quantised": true
+   },
+   "ep1-avg": {
+    "full": 0.01972504,
+    "quantised": true
+   },
+   "eplo1-avg": {
+    "full": 0.0197003,
+    "quantised": true
+   },
+   "c2-avg": {
+    "full": 0.0195636,
+    "quantised": true
+   },
+   "rft2-avg": {
+    "full": 0.0198185,
+    "quantised": true
+   },
+   "ep2-avg": {
+    "full": 0.01972073,
+    "quantised": true
+   },
+   "eplo2-avg": {
+    "full": 0.01969502,
+    "quantised": true
+   }
+  }
+ }
+}

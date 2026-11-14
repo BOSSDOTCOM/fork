@@ -1,0 +1,4 @@
+2026-11-14 16:48 UTC f11-root-lean-ltc: base 0a49342dc83b1a0b8f93b9a4230e363db57eb350, test e2b42d5c060f420bdf1244d11af6155461a51a09, bounds [0, 6], stages 0 to 5, ref phase-4, kind search, ltc, alpha 0.05, beta 0.20, cap 6, futility after 2 stages, idea f11-root-lean (try 1 of 2)
+2026-11-14 16:56 UTC f11-root-lean-ltc: stage 0: run 43618349304 dispatched (ledger)
+2026-11-14 18:04 UTC f11-root-lean-ltc: base 0a49342dc83b1a0b8f93b9a4230e363db57eb350, test e2b42d5c060f420bdf1244d11af6155461a51a09, bounds [0, 6], stages 0 to 5, ref phase-4, kind search, ltc, alpha 0.05, beta 0.20, cap 6, futility after 2 stages, idea f11-root-lean (resume of try 1)
+2026-11-14 18:08 UTC f11-root-lean-ltc: stage 0: run 43624890824 dispatched (ledger)

@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fork Operations Display (mockup)</title>
+<style>
+/* Layout idea: a fixed operations grid. Status strip on top, the pipeline "situation" in the centre,
+   testing down the left, alerts and history on the right, training / data / machine along the bottom,
+   an event ticker at the foot. Colour is used for state only; data marks are drawn in ink. */
+:root {
+  color-scheme: dark;
+  --bg: #0a0e12;
+  --panel: #12171c;
+  --panel-2: #181e25;
+  --rule: #252d36;
+  --rule-2: #36414c;
+  --ink: #e9eef2;
+  --ink-2: #aab4bd;
+  --ink-3: #74808b;
+  --nominal: #52bfb9;
+  --active: #5981e0;
+  --attention: #e5c226;
+  --failure: #f53f2d;
+  --idle: #5f6b76;
+  --on-failure: #ffffff;
+  --font-label: "Bahnschrift", "DIN Alternate", "Segoe UI", system-ui, sans-serif;
+  --font-num: "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", monospace;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #e6eaed;
+  --panel: #f6f7f8;
+  --panel-2: #ffffff;
+  --rule: #d2d8dd;
+  --rule-2: #b3bcc4;
+  --ink: #10161b;
+  --ink-2: #414c56;
+  --ink-3: #6c7882;
+  --nominal: #14938d;
+  --active: #2c47b7;
+  --attention: #df911a;
+  --failure: #b7191c;
+  --idle: #8a949d;
+  --on-failure: #ffffff;
+}
+* { box-sizing: border-box; }
+html { height: 100%; font-size: clamp(10px, 0.635vw, 24px); }
+body {
+  height: 100%; margin: 0; background: var(--bg); color: var(--ink);
+  font-family: var(--font-label); font-stretch: 92%; font-size: 1rem; line-height: 1.3;
+  display: grid; grid-template-rows: auto 1fr auto; gap: 0.35rem; padding: 0.35rem; overflow: hidden;
+}
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; font-stretch: 100%; letter-spacing: -0.01em; }
+.lbl { font-size: 0.8rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3); }
+.dim { color: var(--ink-2); }
+.faint { color: var(--ink-3); }
+.sim { text-decoration: underline dotted var(--ink-3); text-underline-offset: 0.2em; }
+button { font: inherit; color: inherit; background: none; border: 1px solid var(--rule-2); padding: 0.15rem 0.5rem; cursor: pointer; }
+button:hover { border-color: var(--ink-2); }
+:focus-visible { outline: 2px solid var(--active); outline-offset: 1px; }
+
+/* status lights: shape and colour together, so state never rests on colour alone */
+.light { display: inline-block; width: 0.72em; height: 0.72em; flex: none; background: currentColor; vertical-align: baseline; }
+.light.nominal { color: var(--nominal); border-radius: 50%; }
+.light.active { color: var(--active); border-radius: 50%; box-shadow: 0 0 0 0.16em var(--panel), 0 0 0 0.28em currentColor; }
+.light.attention { color: var(--attention); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.light.failure { color: var(--failure); }
+.light.idle { color: var(--idle); background: none; border: 0.14em solid currentColor; border-radius: 50%; }
+.st-nominal { color: var(--nominal); } .st-active { color: var(--active); }
+.st-attention { color: var(--attention); } .st-failure { color: var(--failure); } .st-idle { color: var(--idle); }
+
+/* ---------- status strip ---------- */
+#strip { display: grid; grid-template-columns: auto repeat(5, auto) 1fr auto; align-items: stretch; background: var(--panel); border: 1px solid var(--rule); }
+#strip > div { padding: 0.35rem 0.9rem; border-right: 1px solid var(--rule); display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+#strip .big { font-size: 1.75rem; line-height: 1.05; white-space: nowrap; }
+#strip .sub { font-size: 0.8rem; color: var(--ink-3); white-space: nowrap; }
+#health { flex-direction: row !important; align-items: center; gap: 0.6rem; min-width: 13rem; }
+#health .word { font-size: 1.5rem; letter-spacing: 0.08em; font-weight: 600; }
+#health.failure { background: var(--failure); color: var(--on-failure); }
+#health.failure .light { color: var(--on-failure); animation: pulse 2s ease-in-out infinite; }
+#health.failure .sub { color: var(--on-failure); opacity: 0.85; }
+@keyframes pulse { 50% { opacity: 0.25; } }
+#strip .row { display: flex; align-items: baseline; gap: 0.5rem; }
+#mock { border-right: none !important; align-items: flex-end; text-align: right; }
+#clock { border-right: none !important; align-items: flex-end; }
+.daybars { display: flex; align-items: flex-end; gap: 2px; height: 1.5rem; }
+.daybars i { width: 0.45rem; background: var(--ink-2); display: block; border-radius: 1px 1px 0 0; }
+.daybars i.zero { height: 1px !important; background: var(--rule-2); }
+
+/* ---------- main grid ---------- */
+#main { display: grid; gap: 0.35rem; min-height: 0; position: relative;
+  grid-template-columns: repeat(24, 1fr); grid-template-rows: 30fr 35fr 35fr;
+  grid-template-areas:
+   "t t t t t t s s s s s s s s s s a a a a a a a a"
+   "t t t t t t s s s s s s s s s s p p p p p p p p"
+   "t t t t t t r r r r r r r r d d d d d m m m m m"; }
+.panel { background: var(--panel); border: 1px solid var(--rule); min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.panel > header { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0.6rem; border-bottom: 1px solid var(--rule); cursor: pointer; user-select: none; flex: none; }
+.panel > header:hover { background: var(--panel-2); }
+.panel > header .key { font-family: var(--font-num); font-size: 0.75rem; color: var(--ink-3); border: 1px solid var(--rule-2); padding: 0 0.3rem; }
+.panel > header h2 { margin: 0; font-size: 0.9rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+.panel > header .age { margin-left: auto; font-size: 0.78rem; color: var(--ink-3); }
+.panel > .body { flex: 1; min-height: 0; padding: 0.5rem 0.6rem; overflow: hidden; display: flex; flex-direction: column; gap: 0.5rem; }
+#p-test { grid-area: t; } #p-sit { grid-area: s; } #p-alert { grid-area: a; } #p-prog { grid-area: p; }
+#p-train { grid-area: r; } #p-data { grid-area: d; } #p-mach { grid-area: m; }
+#main.focus .panel { display: none; }
+#main.focus .panel.focused { display: flex; grid-area: 1 / 1 / -1 / -1; }
+.detail { display: none; }
+.focused .detail { display: block; }
+.focused .compact-only { display: none; }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 0; width: 100%; }
+.sect { display: flex; align-items: baseline; gap: 0.5rem; }
+.sect .lbl { flex: none; }
+.sect .fill { flex: 1; border-top: 1px solid var(--rule); transform: translateY(-0.25em); }
+
+/* ---------- testing ---------- */
+.lane { border: 1px solid var(--rule); background: var(--panel-2); padding: 0.45rem 0.55rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.lane.failure { border-color: var(--failure); }
+.lane .top { display: flex; align-items: baseline; gap: 0.45rem; }
+.lane .name { font-size: 1.12rem; font-weight: 600; line-height: 1.15; }
+.lane .tag { font-size: 0.75rem; color: var(--ink-3); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.lane .meta { font-size: 0.82rem; color: var(--ink-2); }
+.kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
+.kv > div { min-width: 0; }
+.kv .v { font-size: 1.35rem; line-height: 1.1; white-space: nowrap; }
+.kv .v small { font-size: 0.8rem; color: var(--ink-2); }
+.llr { position: relative; height: 2.5rem; }
+.llr .track { position: absolute; left: 0; right: 0; top: 0.95rem; height: 0.45rem; background: var(--rule); }
+.llr .fill { position: absolute; top: 0.95rem; height: 0.45rem; background: var(--ink-2); }
+.llr .zero { position: absolute; top: 0.7rem; height: 0.95rem; width: 1px; background: var(--ink-3); }
+.llr .mark { position: absolute; top: 0.55rem; height: 1.25rem; width: 3px; background: var(--ink); transform: translateX(-1px); }
+.llr .cap { position: absolute; top: 0; font-size: 0.72rem; color: var(--ink-3); white-space: nowrap; }
+.llr .val { position: absolute; top: 1.6rem; font-size: 0.82rem; transform: translateX(-50%); white-space: nowrap; }
+.bar { height: 0.4rem; background: var(--rule); position: relative; }
+.bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink-2); display: block; }
+.bar.act > i { background: var(--active); }
+.rowline { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; font-size: 0.85rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th { text-align: left; font-weight: 400; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); padding: 0.1rem 0.3rem 0.2rem 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+td { padding: 0.17rem 0.3rem 0.17rem 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+td.r, th.r { text-align: right; padding-right: 0; padding-left: 0.3rem; }
+td.nw { white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+.q { display: grid; grid-template-columns: auto 1fr auto; gap: 0.1rem 0.5rem; font-size: 0.86rem; align-items: baseline; }
+.q .n { color: var(--ink-3); font-family: var(--font-num); font-size: 0.75rem; }
+.q .k { color: var(--ink-3); font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
+.q .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focusgrid { display: contents; }
+.focused .focusgrid { display: grid; grid-template-columns: 30fr 40fr 30fr; gap: 1rem; flex: 1; min-height: 0; }
+.focused .focusgrid > div { display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; min-height: 0; }
+.focusgrid > div { display: contents; }
+.focusgrid > div.detail { display: none; }
+.focused .focusgrid > div.detail { display: flex; }
+#p-test:not(.focused) .q > :nth-child(n+19) { display: none; }
+#p-test:not(.focused) #t-col3 table tr:nth-child(n+10) { display: none; }
+span.detail { display: none; }
+.focused span.detail { display: inline; }
+.chart { position: relative; flex: 1; min-height: 6rem; }
+.chart svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.chart text { font-family: var(--font-num); font-size: 0.72rem; fill: var(--ink-3); }
+.chart text.lab { font-family: var(--font-label); fill: var(--ink-2); }
+.tip { position: absolute; pointer-events: none; background: var(--panel-2); border: 1px solid var(--rule-2); padding: 0.3rem 0.5rem; font-size: 0.82rem; white-space: nowrap; z-index: 5; display: none; }
+.tip b { font-family: var(--font-num); font-weight: 600; }
+
+/* ---------- situation ---------- */
+#now { font-size: 1.15rem; line-height: 1.3; text-wrap: balance; }
+#topo { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: 1fr 1fr; gap: 1.4rem 1.9rem; padding: 0.4rem 0.9rem 2rem; }
+#topo svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#topo svg path { fill: none; stroke: var(--rule-2); stroke-width: 1.5; }
+#topo svg path.active { stroke: var(--active); stroke-dasharray: 5 6; animation: flow 1.6s linear infinite; }
+#topo svg path.failure { stroke: var(--failure); }
+#topo svg text { font-family: var(--font-label); font-size: 0.75rem; fill: var(--ink-3); }
+@keyframes flow { to { stroke-dashoffset: -22; } }
+.node { position: relative; z-index: 1; background: var(--panel-2); border: 1px solid var(--rule-2); padding: 0.5rem 0.6rem; display: flex; flex-direction: column; gap: 0.15rem; align-self: center; min-width: 0; }
+.node.failure { border-color: var(--failure); }
+.node.active { border-color: var(--active); }
+.node .h { display: flex; align-items: baseline; gap: 0.4rem; font-weight: 600; font-size: 1.05rem; line-height: 1.15; }
+.node .state { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.node .n1 { font-size: 1.7rem; line-height: 1.15; white-space: nowrap; }
+.node .n2 { font-size: 0.88rem; color: var(--ink-2); line-height: 1.25; }
+.span2 { grid-row: span 2; }
+
+/* ---------- alerts ---------- */
+.alert { display: grid; grid-template-columns: auto 1fr auto; gap: 0.1rem 0.5rem; align-items: baseline; padding: 0.22rem 0; border-bottom: 1px solid var(--rule); font-size: 0.9rem; }
+.alert:last-child { border-bottom: none; }
+.alert .what { font-weight: 600; }
+.alert .why { grid-column: 2 / 4; font-size: 0.8rem; color: var(--ink-2); }
+.alert .when { font-size: 0.75rem; color: var(--ink-3); white-space: nowrap; }
+.alert.critical { background: color-mix(in srgb, var(--failure) 14%, transparent); border-left: 0.3rem solid var(--failure); padding-left: 0.45rem; }
+.alert.seen .what { font-weight: 400; color: var(--ink-2); }
+.alert button { font-size: 0.72rem; padding: 0 0.35rem; color: var(--ink-3); }
+
+/* ---------- training ---------- */
+.pipe { display: grid; grid-template-columns: 7.4rem repeat(9, 1fr) 10.5rem; align-items: center; font-size: 0.82rem; }
+.pipe > * { padding: 0.16rem 0.15rem; border-bottom: 1px solid var(--rule); min-height: 1.5rem; display: flex; align-items: center; }
+.pipe .hd { font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--ink-3); justify-content: center; text-align: center; line-height: 1.1; min-height: 2rem; }
+.pipe .hd:first-child { justify-content: flex-start; }
+.pipe .c { justify-content: center; }
+.pipe .arm { font-weight: 600; gap: 0.3rem; }
+.pipe .res { justify-content: flex-end; white-space: nowrap; }
+.cell { width: 0.7rem; height: 0.7rem; display: block; }
+.cell.done { background: var(--nominal); border-radius: 50%; }
+.cell.run { background: var(--active); border-radius: 50%; box-shadow: 0 0 0 0.14em var(--panel), 0 0 0 0.26em var(--active); }
+.cell.wait { border: 0.13em solid var(--idle); border-radius: 50%; }
+.cell.flag { background: var(--attention); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.cell.none { width: 0.5rem; height: 1px; background: var(--rule-2); }
+.meter { display: grid; grid-template-columns: 1fr auto; gap: 0.1rem 0.5rem; align-items: center; font-size: 0.85rem; }
+.meter .bar { grid-column: 1 / 3; }
+
+/* ---------- data / machine ---------- */
+.rank { display: grid; grid-template-columns: 5.2rem 1fr 3.6rem; gap: 0.12rem 0.4rem; align-items: center; font-size: 0.8rem; }
+.rank .b { height: 0.55rem; background: var(--ink-2); border-radius: 0 2px 2px 0; }
+.rank .b.cur { background: var(--ink); }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 0.9rem; }
+.tile .v { font-size: 1.45rem; line-height: 1.1; display: flex; align-items: baseline; gap: 0.4rem; white-space: nowrap; }
+.tile .v small { font-size: 0.8rem; color: var(--ink-2); }
+.tile .s { font-size: 0.78rem; color: var(--ink-2); }
+.spark { width: 4.5rem; height: 1.3rem; flex: none; }
+.spark path.l { fill: none; stroke: var(--ink-2); stroke-width: 1.5; }
+.spark path.a { fill: var(--ink-2); opacity: 0.12; stroke: none; }
+.spark circle { fill: var(--ink); }
+.list { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.5rem; font-size: 0.84rem; align-items: baseline; }
+
+/* ---------- ticker ---------- */
+#ticker { background: var(--panel); border: 1px solid var(--rule); display: flex; align-items: center; overflow: hidden; white-space: nowrap; font-size: 0.9rem; }
+#ticker .lbl { padding: 0.25rem 0.7rem; border-right: 1px solid var(--rule); flex: none; background: var(--panel); z-index: 1; }
+#ticker .run { display: inline-flex; gap: 2.2rem; padding-left: 1rem; animation: tick 90s linear infinite; }
+#ticker:hover .run { animation-play-state: paused; }
+#ticker .ev { display: inline-flex; align-items: baseline; gap: 0.45rem; }
+#ticker .ev .tm { color: var(--ink-3); font-size: 0.8rem; }
+@keyframes tick { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* ---------- help ---------- */
+#help { position: fixed; right: 0.6rem; top: 3.6rem; width: 30rem; background: var(--panel-2); border: 1px solid var(--rule-2); padding: 0.8rem 1rem; z-index: 20; display: none; font-size: 0.9rem; }
+#help.open { display: block; }
+#help h3 { margin: 0 0 0.4rem; font-size: 0.9rem; letter-spacing: 0.1em; text-transform: uppercase; }
+#help kbd { font-family: var(--font-num); border: 1px solid var(--rule-2); padding: 0 0.3rem; font-size: 0.8rem; }
+#help p { margin: 0.35rem 0; color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) { #topo svg path.active, #ticker .run, #health.failure .light { animation: none; } }
+</style>
+</head>
+<body>
+
+<div id="strip">
+  <div id="health" tabindex="0" title="Overall state is the worst state of any alert"></div>
+  <div><span class="lbl">Default net</span><div class="row"><span class="big num" id="s-net"></span></div><span class="sub" id="s-net-sub"></span></div>
+  <div><span class="lbl">Rating, CCRL Blitz scale</span><div class="row"><span class="big num" id="s-rating"></span><span id="s-rating-spark"></span></div><span class="sub" id="s-rating-sub"></span></div>
+  <div><span class="lbl">Gap to Stockfish 19</span><div class="row"><span class="big num" id="s-gap"></span><span id="s-gap-spark"></span></div><span class="sub" id="s-gap-sub"></span></div>
+  <div><span class="lbl">Adopted this week</span><div class="row"><span class="big num" id="s-adopt"></span><span class="daybars" id="s-adopt-days"></span></div><span class="sub" id="s-adopt-sub"></span></div>
+  <div><span class="lbl">Engine</span><div class="row"><span class="big num" id="s-commit"></span></div><span class="sub" id="s-commit-sub"></span></div>
+  <div id="mock"><span class="lbl">Mockup</span><span class="sub">snapshot of Sat Nov 14, 12:35 PM EST; dotted figures are simulated</span><span class="sub"><button id="b-help" title="Keys and notes (?)">? keys</button> <button id="b-theme" title="Switch theme (T)">theme</button> <button id="b-demo" title="Simulate a critical alert (D)">simulate critical</button></span></div>
+  <div id="clock"><span class="big num" id="c-time"></span><span class="sub" id="c-date"></span></div>
+</div>
+
+<div id="main">
+  <section class="panel" id="p-test" data-key="2">
+    <header><span class="key">2</span><h2>Testing</h2><span class="age" id="age-test"></span></header>
+    <div class="body"><div class="focusgrid">
+      <div id="t-col1"></div>
+      <div id="t-col2" class="detail"></div>
+      <div id="t-col3"></div>
+    </div></div>
+  </section>
+
+  <section class="panel" id="p-sit" data-key="1">
+    <header><span class="key">1</span><h2>Situation</h2><span class="age">live</span></header>
+    <div class="body"><div id="now"></div><div id="topo"><svg aria-hidden="true"></svg></div></div>
+  </section>
+
+  <section class="panel" id="p-alert" data-key="6">
+    <header><span class="key">6</span><h2>Alerts</h2><span class="age" id="age-alert"></span></header>
+    <div class="body" id="alerts" style="gap:0; overflow:auto"></div>
+  </section>
+
+  <section class="panel" id="p-prog" data-key="7">
+    <header><span class="key">7</span><h2>Progress over time</h2><span class="age">gauntlet of Nov 13, 2:25 PM</span></header>
+    <div class="body">
+      <div class="rowline"><span>Gauntlet rating with 95% interval, against Stockfish 19 (3792)</span><span class="faint">balanced-book gauntlets only</span></div>
+      <div class="chart" id="ch-rating"><svg></svg><div class="tip"></div></div>
+      <div class="detail" id="prog-detail"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="p-train" data-key="3">
+    <header><span class="key">3</span><h2>Training</h2><span class="age" id="age-train"></span></header>
+    <div class="body" id="train"></div>
+  </section>
+
+  <section class="panel" id="p-data" data-key="4">
+    <header><span class="key">4</span><h2>Data</h2><span class="age">VM status 2 min ago</span></header>
+    <div class="body" id="data"></div>
+  </section>
+
+  <section class="panel" id="p-mach" data-key="5">
+    <header><span class="key">5</span><h2>Machine</h2><span class="age">live, 2 s</span></header>
+    <div class="body" id="mach"></div>
+  </section>
+</div>
+
+<div id="ticker"><span class="lbl">Events</span><div class="run" id="tick-run"></div></div>
+
+<div id="help">
+  <h3>Keys</h3>
+  <p><kbd>1</kbd> to <kbd>7</kbd> focus a panel (or click its header) &nbsp; <kbd>Esc</kbd> back to the full screen<br>
+     <kbd>T</kbd> dark / light &nbsp; <kbd>D</kbd> simulate a critical alert &nbsp; <kbd>?</kbd> this note</p>
+  <h3>About this mockup</h3>
+  <p>Figures are a real snapshot read from the job files, logs and reports on Sat Nov 14 at 12:35 PM EST. Figures with a dotted underline are simulated, because nothing records them yet (CPU load, shard progress inside a GitHub run, sparkline history).</p>
+  <p>Lane B really ran a second screen at that moment. It replays this morning's capture-evaluation test at its fifth stage instead, so the display of a running SPRT can be judged.</p>
+  <p>The dashboard only displays. It has no control that starts, stops or changes anything; "seen" on an alert only dims it on this screen.</p>
+</div>
+
+<script>
+"use strict";
+// One snapshot object, in the shape the dashboard's server would send. The page renders from it and then
+// updates values in place; nothing is rebuilt on a refresh.
+const S = {
+  now: new Date("2026-11-14T12:35:00-05:00"),
+  overview: {
+    net: "r8brft1", netSince: "default since Nov 11", commit: "5dc29ea", branch: "phase-4",
+    rating: 3553.7, ratingErr: 22.0, ratingWhen: "gauntlet of Nov 13, 1,400 games, 7 anchors",
+    gap: -184.0, gapLo: -209.7, gapHi: -160.0, gapSeries: [-222.4, -201.4, -184.0],
+    adopted: 16, adoptedNets: 1, days: [["Sun 8", 0], ["Mon 9", 0], ["Tue 10", 1], ["Wed 11", 2], ["Thu 12", 6], ["Fri 13", 7], ["Sat 14", 0]],
+  },
+  lanes: [
+    { id: "A", state: "active", kind: "Fixed-node screen", name: "Retrain 8c control net (seed 1) against the default net",
+      internal: "queue item 01-r8c-cc1-vs-r8brft1 / test r8c-fn-r8cc1-vs-r8brft1 / GitHub run 43620446592",
+      meta: "800,000 nodes per move, 1,600 games, one stage. A screen reports its Elo when the stage ends.",
+      stage: "Stage 1 of 1", since: "12:19 PM", eta: new Date("2026-11-14T13:04:00-05:00"), typical: "43 to 47 min per stage",
+      shards: [9, 16], games: [0, 1600] },
+    { id: "B", state: "active", kind: "STC SPRT", name: "Pin-aware capture evaluation (survey F12)",
+      internal: "queue item 69a-f12-pin-see-stc / test f12-pin-see-stc / replayed from this morning",
+      meta: "8+0.08 s, accept above 6 nElo, reject at 0; stops early if nElo is below 0 after stage 2.",
+      stage: "Stage 6 of 8", since: "12:26 PM", eta: new Date("2026-11-14T12:44:30-05:00"), typical: "18 to 19 min per stage",
+      shards: [7, 16], games: [8000, 12800],
+      elo: 1.30, eloErr: 4.37, nelo: 2.27, neloErr: 7.61, llr: -0.29, lo: -1.56, hi: 2.77,
+      stages: [
+        { n: 1, at: "1:22 AM", min: 18, games: 1600, elo: 2.17, err: 9.58, llr: 0.07, pt: [17, 182, 390, 196, 15] },
+        { n: 2, at: "1:41 AM", min: 18, games: 3200, elo: 3.80, err: 7.02, llr: 0.56, pt: [34, 378, 753, 389, 46] },
+        { n: 3, at: "1:59 AM", min: 18, games: 4800, elo: 1.59, err: 5.69, llr: -0.06, pt: [49, 581, 1134, 571, 65] },
+        { n: 4, at: "2:18 AM", min: 18, games: 6400, elo: -0.43, err: 4.90, llr: -1.19, pt: [66, 787, 1517, 749, 81] },
+        { n: 5, at: "2:36 AM", min: 18, games: 8000, elo: 1.30, err: 4.37, llr: -0.29, pt: [76, 975, 1894, 953, 102] },
+      ] },
+  ],
+  queue: [
+    ["A", "Retrain 8c candidate (seed 1) against the default net", "screen", "01-r8c-eplo1-vs-r8brft1"],
+    ["A", "Root lean, an optimism term at the root (survey F11)", "LTC", "z70a-f11-root-lean-ltc"],
+    ["A", "Root lean, second value if the first fails", "LTC retry", "z70b-f11-root-lean-retry"],
+    ["B", "Retrain 8c candidate (seed 2) against the default net", "screen", "15-r8c-b-eplo2-vs-r8brft1"],
+    ["B", "Depth-scaled piece drift table (idea 59)", "STC", "88a-i59-ds-stc"],
+    ["B", "Window-gated piece drift table (idea 59)", "STC", "88c-i59-wg-stc"],
+    ["B", "Continuation histories in the reduction formula (idea 42)", "STC", "89a-i42-cont-inputs-stc"],
+    ["B", "Null-move verification at depth (survey B6)", "non-regression", "96c-b6-null-verify-nonreg"],
+    ["B", "Material-scaled evaluation (survey F10)", "STC", "97a-f10-material-scale-stc"],
+  ],
+  queueMore: 6,
+  verdicts: [
+    ["12:32 PM", "screen", "8c candidate 2 against control 2", "+13.5", "9.1", "1,600", "info", "Screen finished", "r8c-fn-r8ceplo2-vs-r8cc2"],
+    ["11:48 AM", "LTC", "Time scale's depth clamp (E2)", "+2.2", "3.5", "9,984", "idle", "Capped: undecided at the game limit, not passed", "e2-time-depth-ltc"],
+    ["11:45 AM", "screen", "8c candidate 1 against control 1", "−3.0", "8.9", "1,600", "info", "Screen finished", "r8c-fn-r8ceplo1-vs-r8cc1"],
+    ["10:58 AM", "STC", "Shallow skip (D15)", "−6.6", "7.1", "3,200", "idle", "Rejected: no gain shown", "d15-shallow-skip-stc"],
+    ["10:14 AM", "screen", "8c idea-80 arm 2 against control 2", "+2.4", "9.0", "1,600", "info", "Screen finished", "r8c-fn-r8ci802-vs-r8cc2"],
+    ["9:30 AM", "screen", "8c idea-80 arm 1 against control 1", "−4.3", "9.1", "1,600", "info", "Screen finished", "r8c-fn-r8ci801-vs-r8cc1"],
+    ["5:56 AM", "STC", "Root-near ordering (D15)", "−0.1", "3.7", "11,200", "idle", "Rejected: no gain shown", "d15-root-near-stc"],
+    ["3:46 AM", "STC", "Malus decay, second value (D12)", "−25.7", "10.0", "1,600", "idle", "Rejected: no gain shown", "d12-malus-decay-retry"],
+    ["Fri 8:20 PM", "LTC", "Root reductions", "+14.9", "6.2", "3,328", "nominal", "Passed and adopted", "root-lmr-ltc"],
+  ],
+  alerts: [
+    { tier: "attention", what: "A long test ended without a verdict", why: "Root lean (F11) at long time control: the queue logged it done at 12:16 PM, but its run has no result. It was displaced by the retrain screens.", when: "12:16 PM", id: "z70a-f11-root-lean-ltc" },
+    { tier: "attention", what: "Memory is tight: commit charge 89%", why: "1.66 GB available; peak 92.7% at 11:59 AM. The memory watch acts below 1 GB free for 15 minutes.", when: "12:29 PM", id: "freezewatch heartbeat" },
+    { tier: "attention", what: "The PC is not generating data", why: "Part g4c reached its target Fri 5:40 PM and was sealed 9:49 PM. No part is running or planned.", when: "Fri 5:40 PM", id: "watchdog.json, g4c" },
+    { tier: "attention", what: "An anchor check is flagged for review", why: "Nov 12 check measured −2.8 Elo (−18.6 to +13.7) against +19.0 claimed.", when: "Thu Nov 12", id: "gauntlet run 43249283275" },
+    { tier: "info", what: "Upload step failed once, then passed", why: "q-upload exited 1 at 12:20 PM; the retry passed at 12:24 PM.", when: "12:24 PM", id: "jobs q-upload, q-upload2", seen: true },
+    { tier: "info", what: "Compile lock is lifted", why: "Waits on Nov 13 passed 1,800 s, so builds run without the lock.", when: "Fri 11:50 AM", id: "compile.lock.lifted", seen: true },
+  ],
+  critical: { tier: "critical", what: "Lane B stopped: GitHub run failed", why: "Stage 6 run ended with 'failure'. The lane is idle with 12 items queued. SIMULATED for this mockup.", when: "12:35 PM", id: "f12-pin-see-stc driver.log: '; stopping'" },
+  rating: [
+    { d: "Oct 31", x: 0, r: 3325.9, e: 27.4, net: "", note: "6 anchors" },
+    { d: "Oct 31", x: 0.35, r: 3305.3, e: 27.9, net: "", note: "6 anchors" },
+    { d: "Nov 2", x: 2, r: 3445.8, e: 21.6, net: "S512r2", note: "new anchor set", mark: "anchor set changed" },
+    { d: "Nov 7", x: 7, r: 3488.2, e: 22.2, net: "S512ppr2", note: "" },
+    { d: "Nov 8", x: 8.3, r: 3488.2, e: 20.4, net: "S512ppr3", note: "7 anchors, Stockfish added", gap: -222.4, mark: "anchor added" },
+    { d: "Nov 11", x: 11, r: 3510.5, e: 20.5, net: "r8brft1", note: "", gap: -201.4 },
+    { d: "Nov 13", x: 13, r: 3553.7, e: 22.0, net: "r8brft1", note: "", gap: -184.0 },
+  ],
+  stack: [["Check 1, Nov 12", 18.70, 6.30, 4.40], ["Check 2, Nov 12", 15.36, 7.86, 4.33], ["Check 3, Nov 13", 28.04, 8.83, 5.62], ["Check 4, Nov 13", 43.63, 37.27, 9.56]],
+  speed: [["Nov 12", "+14.7%", "register-tiled accumulator updates"], ["Nov 12", "+9.0%", "fused network layers (GCC)"], ["Nov 6", "+4.0%", "speed sprint 1"]],
+  train: {
+    kaggle: "No session running", quotaLeft: 22.86, quotaTotal: 30, quotaNote: "as of 2:39 AM, 10 h ago; resets Fri Nov 20, 7:00 PM",
+    title: "Retrain 8c, session A1: 5 arms, 2 seeds each",
+    stages: ["Session", "Valid", "Gates", "Held-out", "Bake", "UHO check", "Screens", "Against default", "SPRT"],
+    arms: [
+      ["control", "c", ["done", "done", "done", "done", "done", "done", "done", "run", "wait"], "on lanes A and B now", "nets r8cc1, r8cc2: the plain retrain"],
+      ["result fine-tune", "rft", ["done", "done", "done", "done", "done", "done", "done", "none", "none"], "base of ep", "nets r8crft1, r8crft2; held-out 1.01 and 1.04 of the default's misjudged count, under the 1.15 flag"],
+      ["endgame slice", "ep", ["done", "done", "done", "done", "done", "done", "done", "none", "none"], "+1.7, −5.2 vs rft", "nets r8cep1, r8cep2"],
+      ["endgame, low rate", "eplo", ["done", "done", "done", "done", "done", "done", "done", "wait", "wait"], "−3.0, +13.5 vs control", "nets r8ceplo1, r8ceplo2: the chosen candidate beside the control"],
+      ["idea 80", "i80", ["done", "done", "done", "done", "done", "done", "done", "none", "none"], "−4.3, +2.4 vs control", "nets r8ci801, r8ci802"],
+    ],
+    others: [
+      ["active", "Retrain 8c, session A2 (queens-on arm)", "preparing data since 12:01 PM"],
+      ["nominal", "Retrain 8e early test", "done Nov 13, report only"],
+      ["nominal", "Label-depth arms (50k, 100k nodes)", "decided Nov 12: 20k nodes stays"],
+    ],
+  },
+  data: {
+    pc: { state: "idle", line: "Idle since Fri 5:40 PM", part: "g4c", pos: "229.5 M", seal: "sealed Fri 9:49 PM" },
+    vm: { state: "active", line: "Generating since 11:55 AM", rate: "4.2 M", verified: "178.3 M", chunks: 712, unpulled: "2.8 M", cost: "$10.60" },
+    labellers: [["bootstrap", 130.6], ["B0r1", 171.3], ["b0r2", 28.7], ["s512", 335.7], ["s512r2", 571.4], ["s512pp", 62.2], ["s512ppr2", 153.9], ["s512ppr3", 497.0], ["r8brft1", 420.3]],
+    total: "2.37 B",
+  },
+  mach: {
+    cpu: 41, cpuHist: [38, 44, 52, 47, 35, 33, 41, 58, 49, 37, 36, 41],
+    avail: 1.66, availHist: [3.4, 3.1, 2.9, 2.9, 2.2, 1.4, 0.9, 1.9, 1.5, 1.4, 2.2, 1.66],
+    commit: 89, commitHist: [78, 80, 83, 85.1, 88, 92.7, 91, 87, 90, 91, 86, 89],
+    wsl: 212, wslLimit: 1536,
+    jobs: ["night-queue (lane A)", "night-queue-b (lane B)", "gcp-watch2 (VM watcher)", "memwatch3", "freezewatch", "wsl-cache-drop2", "r8c-lam-post (8c A2 data)"],
+  },
+  ticker: [
+    ["12:35 PM", "idle", "WSL cache dropped: 1,717 to 212 MB; Windows free 1.43 to 2.2 GB"],
+    ["12:32 PM", "nominal", "Screen finished: 8c candidate 2 against control 2, +13.5 ± 9.1 Elo over 1,600 games"],
+    ["12:32 PM", "active", "Lane B started: 8c control (seed 2) against the default net"],
+    ["12:27 PM", "nominal", "Job ended: 8c A2 position count (exit 0)"],
+    ["12:24 PM", "nominal", "Upload retry passed"],
+    ["12:20 PM", "attention", "Upload step failed (exit 1)"],
+    ["12:19 PM", "active", "Lane A started: 8c control (seed 1) against the default net"],
+    ["12:16 PM", "nominal", "Cloud slice checked on the PC: 12.5 M positions"],
+    ["11:55 AM", "active", "Cloud VM started the filler run"],
+    ["11:48 AM", "idle", "Capped: time scale's depth clamp (E2), +2.2 ± 3.5 Elo after 9,984 games, not passed"],
+    ["10:58 AM", "idle", "Rejected: shallow skip (D15), −6.6 ± 7.1 Elo after 3,200 games"],
+  ],
+};
+
+// ---------- helpers ----------
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v; else e.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return e;
+}
+const light = (st) => h("span", { class: "light " + st, role: "img", "aria-label": st });
+const NS = "http://www.w3.org/2000/svg";
+function svg(tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  if (text != null) e.textContent = text;
+  return e;
+}
+const sg = (v, d = 1) => (v < 0 ? "−" : "+") + Math.abs(v).toFixed(d);
+function spark(vals, sim) {
+  const w = 72, ht = 20, lo = Math.min(...vals), hi = Math.max(...vals), sp = hi - lo || 1;
+  const pts = vals.map((v, i) => [2 + i * (w - 6) / (vals.length - 1), 3 + (ht - 6) * (1 - (v - lo) / sp)]);
+  const line = "M" + pts.map((p) => p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" L");
+  const s = svg("svg", { class: "spark", viewBox: `0 0 ${w} ${ht}`, role: "img", "aria-label": "trend" });
+  s.append(svg("path", { class: "a", d: line + ` L${pts.at(-1)[0]} ${ht} L${pts[0][0]} ${ht} Z` }), svg("path", { class: "l", d: line }),
+    svg("circle", { cx: pts.at(-1)[0], cy: pts.at(-1)[1], r: 2.4 }));
+  if (sim) s.append(svg("title", {}, "simulated history in this mockup"));
+  return s;
+}
+const fmtClock = (d) => d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit", second: "2-digit" });
+function countdown(to, now) {
+  const s = Math.round((to - now) / 1000);
+  if (s <= 0) return "due now";
+  const m = Math.floor(s / 60), r = s % 60;
+  return (m >= 60 ? Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0") : m) + ":" + String(r).padStart(2, "0");
+}
+const hm = (d) => d.toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
+
+// ---------- strip ----------
+function renderStrip() {
+  const o = S.overview;
+  $("#s-net").textContent = o.net; $("#s-net-sub").textContent = o.netSince;
+  $("#s-rating").replaceChildren(o.rating.toFixed(1), h("small", { class: "dim", style: "font-size:0.55em" }, " ± " + o.ratingErr.toFixed(1)));
+  $("#s-rating-spark").replaceChildren(spark(S.rating.slice(2).map((p) => p.r)));
+  $("#s-rating-sub").textContent = o.ratingWhen;
+  $("#s-gap").textContent = sg(o.gap) + " Elo";
+  $("#s-gap-spark").replaceChildren(spark(o.gapSeries));
+  $("#s-gap-sub").textContent = `95% interval ${sg(o.gapLo)} to ${sg(o.gapHi)}; was ${sg(o.gapSeries[0])} on Nov 8`;
+  $("#s-adopt").textContent = o.adopted;
+  const mx = Math.max(...o.days.map((d) => d[1]));
+  $("#s-adopt-days").replaceChildren(...o.days.map(([d, n]) => h("i", { class: n ? "" : "zero", style: `height:${(n / mx) * 100}%`, title: `${d}: ${n} adopted` })));
+  $("#s-adopt-sub").textContent = `search changes, plus ${o.adoptedNets} net promoted (Nov 11)`;
+  $("#s-commit").textContent = o.commit; $("#s-commit-sub").textContent = "branch " + o.branch;
+}
+function renderHealth() {
+  const list = alertsNow(), crit = list.filter((a) => a.tier === "critical").length, att = list.filter((a) => a.tier === "attention" && !a.seen).length;
+  const st = crit ? "failure" : att ? "attention" : "nominal";
+  const el = $("#health"); el.className = st === "failure" ? "failure" : "";
+  el.replaceChildren(h("span", { style: "font-size:1.6rem; display:flex" }, light(st)),
+    h("div", {}, h("div", { class: "word" + (st === "failure" ? "" : " st-" + st) }, crit ? "CRITICAL" : att ? "ATTENTION" : "NOMINAL"),
+      h("div", { class: "sub" }, crit ? `${crit} critical, ${att} to review` : att ? `${att} items to review, none critical` : "all jobs running as planned")));
+}
+
+// ---------- testing ----------
+function llrBar(L) {
+  const span = L.hi - L.lo, pos = (v) => ((v - L.lo) / span) * 100;
+  const z = pos(0), m = pos(L.llr);
+  return h("div", { class: "llr", title: "Log-likelihood ratio: the test stops when it reaches either end" },
+    h("span", { class: "cap", style: "left:0" }, "reject at " + sg(L.lo, 2)),
+    h("span", { class: "cap", style: "right:0" }, "accept at " + sg(L.hi, 2)),
+    h("div", { class: "track" }),
+    h("div", { class: "fill", style: `left:${Math.min(z, m)}%; width:${Math.abs(m - z)}%` }),
+    h("div", { class: "zero", style: `left:${z}%` }),
+    h("div", { class: "mark", style: `left:${m}%` }),
+    h("span", { class: "val num", style: `left:${Math.max(8, Math.min(92, m))}%` }, "LLR " + sg(L.llr, 2)));
+}
+function laneCard(L) {
+  const failed = demo && L.id === "B";
+  const c = h("div", { class: "lane" + (failed ? " failure" : ""), title: L.internal });
+  c.append(h("div", { class: "top" }, light(failed ? "failure" : L.state), h("span", { class: "tag" }, `Lane ${L.id} · ${L.kind}`),
+    h("span", { class: "tag", style: "margin-left:auto" }, failed ? "stopped" : L.stage)));
+  c.append(h("div", { class: "name" }, L.name));
+  c.append(h("div", { class: "meta compact-only" }, L.meta));
+  const kv = h("div", { class: "kv" });
+  if (L.elo != null) {
+    kv.append(h("div", {}, h("div", { class: "lbl" }, "Elo, 95% interval"), h("div", { class: "v num" }, sg(L.elo, 2), h("small", {}, " ± " + L.eloErr.toFixed(2)))),
+      h("div", {}, h("div", { class: "lbl" }, "Games"), h("div", { class: "v num" }, L.games[0].toLocaleString(), h("small", {}, " of " + L.games[1].toLocaleString()))));
+  } else {
+    kv.append(h("div", {}, h("div", { class: "lbl" }, "Elo"), h("div", { class: "v num dim" }, "pending")),
+      h("div", {}, h("div", { class: "lbl" }, "Games"), h("div", { class: "v num" }, L.games[1].toLocaleString(), h("small", {}, " in this stage"))));
+  }
+  kv.append(h("div", {}, h("div", { class: "lbl" }, failed ? "Stopped" : "Next result in"), h("div", { class: "v num", "data-eta": failed ? "" : L.id }, failed ? "12:35 PM" : "")));
+  c.append(kv);
+  if (L.llr != null) c.append(llrBar(L));
+  c.append(h("div", { class: "rowline" }, h("span", { class: "dim" }, failed ? "GitHub run ended with 'failure'" : `Running since ${L.since}; ${L.typical}`),
+    h("span", { class: "num sim", "data-shards": L.id, title: "shard jobs finished in the GitHub run (simulated in this mockup)" }, `${L.shards[0]} of ${L.shards[1]} shards`)));
+  c.append(h("div", { class: "bar" + (failed ? "" : " act") }, h("i", { "data-shardbar": L.id, style: `width:${(L.shards[0] / L.shards[1]) * 100}%` })));
+  return c;
+}
+function renderTesting() {
+  const c1 = $("#t-col1"), c2 = $("#t-col2"), c3 = $("#t-col3");
+  const B0 = S.lanes[1];
+  const facts = [["Decision rule", "accept at +6 nElo, reject at 0; 5% false accepts, 20% false rejects"], ["Early stop", "after stage 2 if nElo is below 0"],
+    ["Time control", "8 s + 0.08 s per move, 16 MB hash"], ["Stage", "1,600 games in 16 shards; at most 8 stages (12,800 games)"],
+    ["Openings", "UHO Lichess 4852 v1, shuffled, seed 20261027"], ["Tablebases", "3 to 5 pieces, both engines"],
+    ["Engines", "base 2b1e111, test 80b70bd"], ["Idea", "f12-pin-see, try 1 of 2"], ["Latest end", "1:22 PM if it runs to the game limit"]];
+  const fl = h("div", { class: "list" }, ...facts.flatMap(([k, v]) => [h("span", { class: "lbl" }, k), h("span", {}, v)]));
+  c1.replaceChildren(...S.lanes.map(laneCard), h("div", { class: "detail" }, h("div", { class: "sect", style: "margin:0.4rem 0" }, h("span", { class: "lbl" }, "Lane B: how this test is run"), h("span", { class: "fill" })), fl));
+  // queue
+  const q = h("div", { class: "q" });
+  S.queue.forEach(([lane, t, k, internal], i) => q.append(h("span", { class: "n" }, lane), h("span", { class: "t", title: internal }, t), h("span", { class: "k" }, k)));
+  const qsec = [h("div", { class: "sect" }, h("span", { class: "lbl" }, "Queue ahead"), h("span", { class: "fill" }), h("span", { class: "lbl num" }, "3 on A, 12 on B")), q,
+    h("div", { class: "faint", style: "font-size:0.8rem" }, h("span", { class: "compact-only" }, `and ${S.queueMore + 3} more`), h("span", { class: "detail" }, `and ${S.queueMore} more`), " on lane B, long time control last")];
+  // verdicts
+  const tb = h("table", {}, h("tr", {}, h("th", {}, "Ended"), h("th", {}, "Test"), h("th", { class: "r" }, "Elo ± 95%"), h("th", { class: "detail-col r" }, "")));
+  for (const v of S.verdicts) {
+    const st = v[6] === "info" ? "idle" : v[6];
+    tb.append(h("tr", { title: v[8] },
+      h("td", { class: "nw faint num" }, v[0]),
+      h("td", {}, h("div", {}, v[2]), h("div", { class: "faint", style: "font-size:0.78rem; display:flex; gap:0.35rem; align-items:baseline" }, light(st), `${v[7]} · ${v[1]} · ${v[5]} games`)),
+      h("td", { class: "r nw num" }, v[3], h("span", { class: "dim" }, " ± " + v[4]))));
+  }
+  const vsec = [h("div", { class: "sect" }, h("span", { class: "lbl" }, "Recent verdicts"), h("span", { class: "fill" }), h("span", { class: "lbl" }, "last 24 h")), tb];
+  c3.replaceChildren(...qsec, ...vsec);
+  // focus detail: lane B's SPRT in depth
+  const B = S.lanes[1];
+  c2.replaceChildren(
+    h("div", { class: "sect" }, h("span", { class: "lbl" }, "Lane B in detail: likelihood ratio by stage"), h("span", { class: "fill" })),
+    h("div", { class: "chart", id: "ch-llr", style: "min-height:11rem" }, svg("svg"), h("div", { class: "tip" })),
+    h("div", { class: "sect" }, h("span", { class: "lbl" }, "Elo with 95% interval by stage"), h("span", { class: "fill" })),
+    h("div", { class: "chart", id: "ch-elo", style: "min-height:11rem" }, svg("svg"), h("div", { class: "tip" })),
+    h("div", { class: "sect" }, h("span", { class: "lbl" }, "Game pairs by score (0, ½, 1, 1½, 2 points)"), h("span", { class: "fill" })),
+    h("div", { class: "chart", id: "ch-pt", style: "min-height:6rem; flex:0.6" }, svg("svg"), h("div", { class: "tip" })),
+    (() => { const t = h("table", {}, h("tr", {}, ...["Stage", "Merged", "Minutes", "Games", "Elo ± 95%", "LLR"].map((x, i) => h("th", { class: i > 1 ? "r" : "" }, x))));
+      for (const s of B.stages) t.append(h("tr", {}, h("td", { class: "num" }, s.n), h("td", { class: "num faint" }, s.at), h("td", { class: "r num" }, s.min), h("td", { class: "r num" }, s.games.toLocaleString()),
+        h("td", { class: "r num" }, sg(s.elo, 2), h("span", { class: "dim" }, " ± " + s.err.toFixed(2))), h("td", { class: "r num" }, sg(s.llr, 2))));
+      return t; })());
+}
+
+// ---------- charts ----------
+function frame(el, pad) {
+  const s = $("svg", el), w = el.clientWidth, ht = el.clientHeight; s.replaceChildren(); s.setAttribute("viewBox", `0 0 ${w} ${ht}`);
+  return { s, w, ht, x0: pad.l, x1: w - pad.r, y0: pad.t, y1: ht - pad.b };
+}
+const cssv = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function tipFor(el, pts, html) {
+  const tip = $(".tip", el);
+  el.onpointermove = (ev) => {
+    const r = el.getBoundingClientRect(), x = ev.clientX - r.left; let best = pts[0];
+    for (const p of pts) if (Math.abs(p.px - x) < Math.abs(best.px - x)) best = p;
+    tip.replaceChildren(...html(best)); tip.style.display = "block";
+    tip.style.left = Math.min(best.px + 10, r.width - tip.offsetWidth - 4) + "px"; tip.style.top = Math.max(0, best.py - tip.offsetHeight - 8) + "px";
+  };
+  el.onpointerleave = () => { tip.style.display = "none"; };
+}
+function drawRating() {
+  const el = $("#ch-rating"); if (!el.clientWidth) return;
+  const f = frame(el, { l: 40, r: 64, t: 8, b: 20 }), ink = cssv("--ink"), ink2 = cssv("--ink-2"), ink3 = cssv("--ink-3"), rule = cssv("--rule"), panel = cssv("--panel");
+  const X = (x) => f.x0 + (x / 13.6) * (f.x1 - f.x0), Y = (v) => f.y1 - ((v - 3250) / (3820 - 3250)) * (f.y1 - f.y0);
+  for (const g of [3300, 3400, 3500, 3600, 3700, 3800]) { f.s.append(svg("line", { x1: f.x0, x2: f.x1, y1: Y(g), y2: Y(g), stroke: rule, "stroke-width": 1 }), svg("text", { x: f.x0 - 6, y: Y(g) + 3, "text-anchor": "end" }, g)); }
+  for (const [x, t] of [[0, "Oct 31"], [2, "Nov 2"], [7, "Nov 7"], [11, "Nov 11"], [13, "Nov 13"]]) f.s.append(svg("text", { x: X(x), y: f.ht - 5, "text-anchor": "middle" }, t));
+  // Stockfish reference
+  f.s.append(svg("line", { x1: f.x0, x2: f.x1, y1: Y(3792), y2: Y(3792), stroke: ink3, "stroke-width": 1.5 }), svg("text", { class: "lab", x: f.x1 + 6, y: Y(3792) + 3 }, "Stockfish 19"));
+  // anchor-set changes: the rating scale shifts there, so the line is broken
+  for (const p of S.rating.filter((p) => p.mark)) { f.s.append(svg("line", { x1: X(p.x) - 9, x2: X(p.x) - 9, y1: f.y0, y2: f.y1, stroke: rule, "stroke-width": 1 }), svg("text", { x: X(p.x) - 5, y: f.y0 + 9 }, p.mark)); }
+  const segs = [S.rating.slice(0, 2), S.rating.slice(2, 4), S.rating.slice(4)];
+  for (const sgm of segs) f.s.append(svg("path", { d: "M" + sgm.map((p) => X(p.x) + " " + Y(p.r)).join(" L"), fill: "none", stroke: ink2, "stroke-width": 2, "stroke-linejoin": "round" }));
+  const pts = [];
+  for (const p of S.rating) {
+    f.s.append(svg("line", { x1: X(p.x), x2: X(p.x), y1: Y(p.r - p.e), y2: Y(p.r + p.e), stroke: ink2, "stroke-width": 1 }),
+      svg("circle", { cx: X(p.x), cy: Y(p.r), r: 4, fill: ink, stroke: panel, "stroke-width": 2 }));
+    pts.push({ px: X(p.x), py: Y(p.r), p });
+  }
+  const last = S.rating.at(-1);
+  f.s.append(svg("text", { class: "lab", x: X(last.x) + 8, y: Y(last.r) + 3, style: `fill:${ink}` }, "Fork " + last.r.toFixed(1)));
+  // gap bracket at the last point
+  f.s.append(svg("line", { x1: X(last.x), x2: X(last.x), y1: Y(last.r + last.e) - 4, y2: Y(3792) + 3, stroke: ink3, "stroke-width": 1 }),
+    svg("text", { class: "lab", x: X(last.x) + 8, y: (Y(last.r) + Y(3792)) / 2 + 3 }, "gap " + sg(last.gap)));
+  tipFor(el, pts, ({ p }) => [h("div", {}, h("b", {}, p.r.toFixed(1) + " ± " + p.e.toFixed(1)), " Elo"), h("div", { class: "dim" }, `${p.d}${p.net ? ", net " + p.net : ""}${p.note ? ", " + p.note : ""}`),
+    p.gap != null ? h("div", { class: "dim" }, "gap to Stockfish 19: " + sg(p.gap)) : null].filter(Boolean));
+}
+function drawLlr() {
+  const el = $("#ch-llr"); if (!el || !el.clientWidth) return;
+  const B = S.lanes[1], f = frame(el, { l: 44, r: 70, t: 10, b: 20 }), ink = cssv("--ink"), ink2 = cssv("--ink-2"), ink3 = cssv("--ink-3"), rule = cssv("--rule"), panel = cssv("--panel");
+  const X = (n) => f.x0 + (n / 8) * (f.x1 - f.x0), Y = (v) => f.y1 - ((v + 1.9) / (3.1 + 1.9)) * (f.y1 - f.y0);
+  for (let n = 0; n <= 8; n++) f.s.append(svg("text", { x: X(n), y: f.ht - 5, "text-anchor": "middle" }, n ? "stage " + n : "start"));
+  for (const [v, t, st] of [[B.hi, "accept " + sg(B.hi, 2), 1.5], [0, "0", 1], [B.lo, "reject " + sg(B.lo, 2), 1.5]]) {
+    f.s.append(svg("line", { x1: f.x0, x2: f.x1, y1: Y(v), y2: Y(v), stroke: v ? ink3 : rule, "stroke-width": st }), svg("text", { class: "lab", x: f.x1 + 6, y: Y(v) + 3 }, t));
+  }
+  const all = [{ n: 0, llr: 0 }, ...B.stages];
+  f.s.append(svg("path", { d: "M" + all.map((s) => X(s.n) + " " + Y(s.llr)).join(" L"), fill: "none", stroke: ink2, "stroke-width": 2, "stroke-linejoin": "round" }));
+  const pts = [];
+  for (const s of B.stages) { f.s.append(svg("circle", { cx: X(s.n), cy: Y(s.llr), r: 4, fill: ink, stroke: panel, "stroke-width": 2 })); pts.push({ px: X(s.n), py: Y(s.llr), s }); }
+  const l = B.stages.at(-1); f.s.append(svg("text", { class: "lab", x: X(l.n) + 8, y: Y(l.llr) - 6, style: `fill:${ink}` }, "LLR " + sg(l.llr, 2)));
+  f.s.append(svg("text", { x: X(6), y: f.y0 + 8, "text-anchor": "middle" }, "running"), svg("line", { x1: X(5), x2: X(6), y1: Y(l.llr), y2: Y(l.llr), stroke: cssv("--active"), "stroke-width": 2, "stroke-dasharray": "3 4" }));
+  tipFor(el, pts, ({ s }) => [h("div", {}, "LLR ", h("b", {}, sg(s.llr, 2))), h("div", { class: "dim" }, `after stage ${s.n}, ${s.games.toLocaleString()} games, merged ${s.at}`)]);
+}
+function drawElo() {
+  const el = $("#ch-elo"); if (!el || !el.clientWidth) return;
+  const B = S.lanes[1], f = frame(el, { l: 44, r: 70, t: 10, b: 20 }), ink = cssv("--ink"), ink2 = cssv("--ink-2"), ink3 = cssv("--ink-3"), rule = cssv("--rule"), panel = cssv("--panel");
+  const X = (n) => f.x0 + (n / 8) * (f.x1 - f.x0), Y = (v) => f.y1 - ((v + 10) / 24) * (f.y1 - f.y0);
+  for (let n = 1; n <= 8; n++) f.s.append(svg("text", { x: X(n), y: f.ht - 5, "text-anchor": "middle" }, "stage " + n));
+  for (const g of [-10, -5, 0, 5, 10]) f.s.append(svg("line", { x1: f.x0, x2: f.x1, y1: Y(g), y2: Y(g), stroke: g ? rule : ink3, "stroke-width": 1 }), svg("text", { x: f.x0 - 6, y: Y(g) + 3, "text-anchor": "end" }, sg(g, 0)));
+  const pts = [];
+  for (const s of B.stages) {
+    f.s.append(svg("line", { x1: X(s.n), x2: X(s.n), y1: Y(Math.max(-10, s.elo - s.err)), y2: Y(Math.min(14, s.elo + s.err)), stroke: ink2, "stroke-width": 2 }),
+      svg("circle", { cx: X(s.n), cy: Y(s.elo), r: 4, fill: ink, stroke: panel, "stroke-width": 2 }));
+    pts.push({ px: X(s.n), py: Y(s.elo), s });
+  }
+  const l = B.stages.at(-1); f.s.append(svg("text", { class: "lab", x: X(l.n) + 8, y: Y(l.elo) + 3, style: `fill:${ink}` }, sg(l.elo, 2) + " ± " + l.err.toFixed(2)));
+  tipFor(el, pts, ({ s }) => [h("div", {}, h("b", {}, sg(s.elo, 2) + " ± " + s.err.toFixed(2)), " Elo"), h("div", { class: "dim" }, `after stage ${s.n}, ${s.games.toLocaleString()} games`)]);
+}
+function drawPt() {
+  const el = $("#ch-pt"); if (!el || !el.clientWidth) return;
+  const pt = S.lanes[1].stages.at(-1).pt, f = frame(el, { l: 44, r: 70, t: 14, b: 20 }), ink2 = cssv("--ink-2"), rule = cssv("--rule"), mx = Math.max(...pt), names = ["0", "½", "1", "1½", "2"];
+  const bw = Math.min(24, (f.x1 - f.x0) / 5 - 2), pts = [];
+  f.s.append(svg("line", { x1: f.x0, x2: f.x1, y1: f.y1, y2: f.y1, stroke: rule }));
+  pt.forEach((v, i) => {
+    const cx = f.x0 + ((i + 0.5) / 5) * (f.x1 - f.x0), hh = (v / mx) * (f.y1 - f.y0);
+    f.s.append(svg("path", { d: `M${cx - bw / 2} ${f.y1} v${-hh + 3} q0 -3 3 -3 h${bw - 6} q3 0 3 3 v${hh - 3} Z`, fill: ink2 }),
+      svg("text", { x: cx, y: f.y1 - hh - 4, "text-anchor": "middle" }, v.toLocaleString()), svg("text", { x: cx, y: f.ht - 5, "text-anchor": "middle" }, names[i]));
+    pts.push({ px: cx, py: f.y1 - hh, v, n: names[i] });
+  });
+  tipFor(el, pts, (p) => [h("div", {}, h("b", {}, p.v.toLocaleString()), " pairs"), h("div", { class: "dim" }, `scored ${p.n} of 2 points for the test engine`)]);
+}
+function drawAll() { drawRating(); drawLlr(); drawElo(); drawPt(); drawEdges(); }
+
+// ---------- situation ----------
+const NODES = [
+  { id: "pc", col: 1, row: 1, name: "PC data generation", st: "idle", state: "idle", n1: "idle 19 h", n2: "last part g4c: 229.5 M positions, sealed Fri 9:49 PM", key: 4, tip: "WSL fork_datagen; watchdog.json" },
+  { id: "vm", col: 1, row: 2, name: "Cloud VM generation", st: "active", state: "generating", n1: "~4.2 M / h", n2: "positions, estimated; filler run since 11:55 AM", key: 4, tip: "gcp/status.json: fork-worker-1 RUNNING, filler-g4" },
+  { id: "data", col: 2, row: 1, span: 2, name: "Training data", st: "nominal", state: "sealed", n1: "2.37 B", n2: "positions sealed; 420 M of them labelled by the current net", key: 4, tip: "data/manifests and the cloud run records" },
+  { id: "kaggle", col: 3, row: 1, name: "Kaggle training", st: "idle", state: "no session", n1: "22.9 h left", n2: "GPU quota of 30 h, as of 2:39 AM. Next: 8c session A2", key: 3, tip: "chain job records and fetch logs" },
+  { id: "ideas", col: 3, row: 2, name: "Search ideas", st: "nominal", state: "queued", n1: "13 waiting", n2: "tests: 5 short, 7 long time control, 1 non-regression", key: 2, tip: "night/items and items-b" },
+  { id: "la", col: 4, row: 1, name: "GitHub lane A", st: "active", state: "screening", n1: "", n2: "to the result: 8c control (seed 1) against the default net", key: 2, tip: "night-queue" },
+  { id: "lb", col: 4, row: 2, name: "GitHub lane B", st: "active", state: "testing", n1: "", n2: "to the next result: capture evaluation test, stage 6 of 8", key: 2, tip: "night-queue-b" },
+  { id: "eng", col: 5, row: 1, name: "Engine", st: "nominal", state: "phase-4 at 5dc29ea", n1: "r8brft1", n2: "default net; 16 search changes adopted this week", key: 7, tip: "CMakeLists.txt default net; git log" },
+  { id: "gaunt", col: 5, row: 2, name: "Gauntlet", st: "nominal", state: "last Nov 13", n1: "3553.7", n2: "± 22.0 Elo; −184 to Stockfish 19", key: 7, tip: "fork-data/gauntlet/run-*/ordo.txt" },
+];
+const EDGES = [["pc", "data", "idle"], ["vm", "data", "active"], ["data", "kaggle", "idle"], ["kaggle", "la", "active"], ["kaggle", "lb", "active"],
+  ["ideas", "la", "idle"], ["ideas", "lb", "active"], ["la", "eng", "idle"], ["lb", "eng", "idle"], ["eng", "gaunt", "idle"]];
+function renderSituation() {
+  $("#now").textContent = demo
+    ? "Lane B has stopped on a failed GitHub run and is idle with 12 tests queued. Lane A is screening retrain 8c's control net; the cloud VM is generating data; the PC and Kaggle are idle."
+    : "Both GitHub lanes are testing: lane A screens retrain 8c's control net against the default net, lane B runs a search test. The cloud VM is generating data. The PC generator and Kaggle are idle.";
+  const topo = $("#topo"); topo.querySelectorAll(".node").forEach((n) => n.remove());
+  for (const n of NODES) {
+    const st = demo && n.id === "lb" ? "failure" : n.st;
+    const el = h("div", { class: "node " + (st === "active" || st === "failure" ? st : "") + (n.span ? " span2" : ""), id: "n-" + n.id, style: `grid-column:${n.col}; grid-row:${n.row}${n.span ? " / span 2" : ""}`, title: n.tip, tabindex: 0, "data-key": n.key },
+      h("div", { class: "h" }, light(st), n.name),
+      h("div", { class: "state st-" + st }, demo && n.id === "lb" ? "stopped" : n.state),
+      h("div", { class: "n1 num", "data-node": n.id }, n.n1),
+      h("div", { class: "n2" }, demo && n.id === "lb" ? "GitHub run failed at stage 6; 12 tests queued" : n.n2));
+    el.addEventListener("click", () => focusPanel(String(n.key)));
+    topo.append(el);
+  }
+}
+function drawEdges() {
+  const topo = $("#topo"), s = $("svg", topo), R = topo.getBoundingClientRect(); if (!R.width) return;
+  s.replaceChildren(); s.setAttribute("viewBox", `0 0 ${R.width} ${R.height}`);
+  const box = (id) => { const r = $("#n-" + id).getBoundingClientRect(); return { l: r.left - R.left, r: r.right - R.left, t: r.top - R.top, b: r.bottom - R.top, cy: (r.top + r.bottom) / 2 - R.top, cx: (r.left + r.right) / 2 - R.left }; };
+  for (const [a, b, st, label] of EDGES) {
+    const A = box(a), B = box(b), state = demo && (a === "lb" || b === "lb") ? (b === "lb" ? "failure" : "idle") : st;
+    if (a === "eng" && b === "gaunt") { s.append(svg("path", { class: state, d: `M${A.cx} ${A.b} L${B.cx} ${B.t}` })); continue; }
+    const mx = (A.r + B.l) / 2;
+    s.append(svg("path", { class: state, d: `M${A.r} ${A.cy} C${mx} ${A.cy} ${mx} ${B.cy} ${B.l} ${B.cy}` }));
+    if (label) s.append(svg("text", { x: mx, y: (A.cy + B.cy) / 2 - 6, "text-anchor": "middle" }, label));
+  }
+  // the loop back: the engine's default net labels the next data
+  const E = box("eng"), P = box("pc"), V = box("vm"), y = R.height - 12, x = 6;
+  s.append(svg("path", { class: "idle", d: `M${E.r} ${E.cy} h14 V${y} H${x} V${P.cy} H${P.l}` }), svg("path", { class: "active", d: `M${x} ${V.cy} H${V.l}` }),
+    svg("text", { x: R.width / 2, y: y - 5, "text-anchor": "middle" }, "the default net labels new data (labeller r8brft1)"));
+}
+
+// ---------- alerts ----------
+let demo = false;
+const alertsNow = () => (demo ? [S.critical, ...S.alerts] : S.alerts);
+function renderAlerts() {
+  const list = alertsNow();
+  $("#age-alert").textContent = `${list.filter((a) => a.tier === "critical").length} critical · ${list.filter((a) => a.tier === "attention" && !a.seen).length} to review`;
+  $("#alerts").replaceChildren(...list.map((a) => {
+    const st = a.tier === "critical" ? "failure" : a.tier === "attention" ? "attention" : "idle";
+    const row = h("div", { class: "alert " + a.tier + (a.seen ? " seen" : ""), title: "source: " + a.id },
+      light(st), h("span", { class: "what" }, a.what), h("span", { class: "when num" }, a.when, " "),
+      h("span", { class: "why" }, a.why));
+    if (a.tier === "attention" && !a.seen) {
+      const b = h("button", { title: "Dims this item on this screen only. It changes nothing in the pipeline." }, "seen");
+      b.addEventListener("click", (e) => { e.stopPropagation(); a.seen = true; renderAlerts(); renderHealth(); });
+      row.querySelector(".when").append(b);
+    }
+    return row;
+  }));
+}
+
+// ---------- training ----------
+function renderTraining() {
+  const T = S.train;
+  $("#age-train").textContent = "Kaggle: " + T.kaggle.toLowerCase();
+  const head = h("div", { class: "rowline" }, h("span", { style: "font-weight:600; font-size:0.95rem" }, T.title),
+    h("span", { class: "dim" }, "candidate chosen 12:32 PM: control and low-rate endgame"));
+  const g = h("div", { class: "pipe" }, h("div", { class: "hd" }, "Arm"), ...T.stages.map((s) => h("div", { class: "hd" }, s)), h("div", { class: "hd", style: "justify-content:flex-end" }, "Screen Elo"));
+  for (const [name, code, cells, res, tip] of T.arms) {
+    g.append(h("div", { class: "arm", title: tip }, name), ...cells.map((c, i) => h("div", { class: "c", title: `${T.stages[i]}: ${{ done: "passed for both seeds", run: "running now", wait: "waiting", none: "not planned for this arm", flag: "flagged" }[c]}` }, h("span", { class: "cell " + c }))),
+      h("div", { class: "res num" }, res));
+  }
+  const legend = h("div", { class: "rowline faint", style: "font-size:0.76rem; justify-content:flex-start; gap:0.9rem" },
+    ...[["done", "passed"], ["run", "running"], ["wait", "waiting"], ["flag", "flagged"], ["none", "not planned"]].map(([c, t]) => h("span", { style: "display:inline-flex; gap:0.3rem; align-items:center" }, h("span", { class: "cell " + c }), t)),
+    h("span", { style: "margin-left:auto" }, "Promotion follows a passed SPRT, clean gates and no held-out flag"));
+  const quota = h("div", { class: "meter" }, h("span", {}, "Kaggle GPU quota: ", h("span", { class: "num" }, T.quotaLeft.toFixed(1) + " h left"), " of 30 h"), h("span", { class: "faint", style: "font-size:0.78rem" }, T.quotaNote),
+    h("div", { class: "bar" }, h("i", { style: `width:${((T.quotaTotal - T.quotaLeft) / T.quotaTotal) * 100}%` })));
+  const others = h("div", { class: "list" }, ...T.others.flatMap(([st, n, s]) => [light(st), h("span", {}, n, h("span", { class: "dim" }, " · " + s))]));
+  $("#train").replaceChildren(head, g, legend, h("hr"), quota, h("div", { class: "sect" }, h("span", { class: "lbl" }, "Other retrains and arms"), h("span", { class: "fill" })), others);
+}
+
+// ---------- data ----------
+function renderData() {
+  const D = S.data, mx = Math.max(...D.labellers.map((l) => l[1]));
+  const gen = h("div", { class: "list" },
+    light(D.vm.state), h("span", {}, h("b", {}, "Cloud VM "), D.vm.line, h("div", { class: "dim" }, h("span", { class: "num" }, "~" + D.vm.rate), " positions / h (estimate); ", h("span", { class: "num" }, D.vm.verified), ` verified on the PC in ${D.vm.chunks} chunks; about `, h("span", { class: "num" }, D.vm.unpulled), " not yet pulled; cost about ", h("span", { class: "num" }, D.vm.cost), " since Nov 10")),
+    light(D.pc.state), h("span", {}, h("b", {}, "PC "), D.pc.line, h("div", { class: "dim" }, `last part ${D.pc.part}: `, h("span", { class: "num" }, D.pc.pos), ` positions, ${D.pc.seal}`)));
+  const rk = h("div", { class: "rank" });
+  D.labellers.forEach(([n, v], i) => rk.append(h("span", { class: i === D.labellers.length - 1 ? "" : "dim", title: "labeller net " + n }, n), h("span", {}, h("span", { class: "b" + (i === D.labellers.length - 1 ? " cur" : ""), style: `display:block; width:${(v / mx) * 100}%`, title: `${v} M positions labelled by ${n}` })), h("span", { class: "num", style: "text-align:right" }, v.toFixed(1) + " M")));
+  $("#data").replaceChildren(gen, h("div", { class: "sect" }, h("span", { class: "lbl" }, "Positions by labeller, oldest first"), h("span", { class: "fill" }), h("span", { class: "lbl num" }, D.total + " total")), rk);
+}
+
+// ---------- machine ----------
+function renderMachine() {
+  const M = S.mach;
+  const tile = (label, id, v, unit, hist, sub, sim) => h("div", { class: "tile" }, h("div", { class: "lbl" }, label),
+    h("div", { class: "v num" }, h("span", { id, class: sim ? "sim" : "" }, v), h("small", {}, unit), spark(hist, true)), h("div", { class: "s" }, sub));
+  const tiles = h("div", { class: "tiles" },
+    tile("CPU load", "m-cpu", M.cpu, "%", M.cpuHist, "12 threads; last hour", true),
+    tile("Memory available", "m-avail", M.avail.toFixed(2), "GB", M.availHist, "of 15 GB; watch acts below 1 GB"),
+    tile("Commit charge", "m-commit", M.commit, "%", M.commitHist, "peak 92.7% at 11:59 AM"),
+    tile("WSL cache", "m-wsl", M.wsl, "MB", [900, 1300, 1690, 307, 800, 1200, 1508, 1717, 212], "dropped 12:35 PM; limit 1,536 MB"));
+  const facts = h("div", { class: "list" },
+    light("nominal"), h("span", {}, "Freeze monitor: ", h("span", { class: "num" }, "0"), " stalls since Thu 4:26 PM"),
+    light("nominal"), h("span", {}, "Memory watch: no action since it started Wed 8:24 PM"),
+    light("idle"), h("span", {}, "Compile lock: lifted since Fri 11:50 AM"),
+    light("active"), h("span", {}, "Speed measurement lock: held by the idea 175 prototype agent since 12:24 PM"),
+    light("active"), h("span", { title: M.jobs.join("\n") }, h("span", { class: "num" }, M.jobs.length), " supervised jobs running: 2 lanes, 4 watchers, 1 data step"));
+  $("#mach").replaceChildren(tiles, h("hr"), facts);
+}
+
+// ---------- ticker ----------
+function renderTicker() {
+  const mk = () => S.ticker.map(([t, st, text]) => h("span", { class: "ev" }, h("span", { class: "tm num" }, t), light(st), text));
+  $("#tick-run").replaceChildren(...mk(), ...mk());
+}
+
+// ---------- live behaviour ----------
+const started = Date.now();
+function tick() {
+  const now = new Date(S.now.getTime() + (Date.now() - started));
+  $("#c-time").textContent = fmtClock(now) + " EST";
+  $("#c-date").textContent = now.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric" }) + " · updated 1 s ago";
+  for (const L of S.lanes) {
+    const e = document.querySelector(`[data-eta="${L.id}"]`); if (e) e.textContent = countdown(L.eta, now);
+    const n = document.querySelector(`[data-node="${L.id === "A" ? "la" : "lb"}"]`); if (n) n.textContent = demo && L.id === "B" ? "stopped" : countdown(L.eta, now);
+  }
+  $("#age-test").textContent = "driver logs read " + (Math.floor((Date.now() - started) / 1000) % 5) + " s ago";
+}
+function drift() {  // simulated small changes, applied in place
+  const M = S.mach; M.cpu = Math.max(18, Math.min(92, M.cpu + Math.round((Math.random() - 0.5) * 9)));
+  const c = $("#m-cpu"); if (c) c.textContent = M.cpu;
+  for (const L of S.lanes) if (L.shards[0] < L.shards[1] && Math.random() < 0.25) {
+    L.shards[0]++; const t = document.querySelector(`[data-shards="${L.id}"]`), b = document.querySelector(`[data-shardbar="${L.id}"]`);
+    if (t) t.textContent = `${L.shards[0]} of ${L.shards[1]} shards`; if (b) b.style.width = (L.shards[0] / L.shards[1]) * 100 + "%";
+  }
+}
+
+// ---------- focus, theme, keys ----------
+function focusPanel(key) {
+  const main = $("#main"), p = document.querySelector(`.panel[data-key="${key}"]`);
+  document.querySelectorAll(".panel.focused").forEach((x) => x.classList.remove("focused"));
+  if (p && !(main.dataset.focus === key)) { main.classList.add("focus"); p.classList.add("focused"); main.dataset.focus = key; }
+  else { main.classList.remove("focus"); delete main.dataset.focus; }
+  requestAnimationFrame(drawAll);
+}
+function setTheme(t) { document.documentElement.dataset.theme = t; requestAnimationFrame(drawAll); }
+function setDemo(on) { demo = on; renderHealth(); renderAlerts(); renderTesting(); renderSituation(); tick(); requestAnimationFrame(drawAll); $("#b-demo").textContent = on ? "end simulation" : "simulate critical"; }
+function renderProgDetail() {
+  const st = h("table", {}, h("tr", {}, ...["Stacking check", "Sum of separate tests", "Measured together", "Share kept"].map((x, i) => h("th", { class: i ? "r" : "" }, x))));
+  for (const [n, sum, got, e] of S.stack) st.append(h("tr", {}, h("td", {}, n), h("td", { class: "r num" }, sg(sum, 2)), h("td", { class: "r num" }, sg(got, 2), h("span", { class: "dim" }, " ± " + e.toFixed(2))), h("td", { class: "r num" }, (got / sum).toFixed(2))));
+  const sp = h("table", {}, h("tr", {}, ...["Speed milestones", "Change", "What"].map((x) => h("th", {}, x))));
+  for (const [d, c, w] of S.speed) sp.append(h("tr", {}, h("td", { class: "num faint" }, d), h("td", { class: "num" }, c), h("td", {}, w)));
+  $("#prog-detail").replaceChildren(h("div", { style: "display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-top:0.6rem" }, h("div", {}, st), h("div", {}, sp,
+    h("div", { class: "faint", style: "font-size:0.8rem; margin-top:0.4rem" }, "No regular speed measurement exists yet; these come from the performance log."))));
+}
+document.querySelectorAll(".panel > header").forEach((hd) => hd.addEventListener("click", () => focusPanel(hd.parentElement.dataset.key)));
+$("#b-theme").addEventListener("click", () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"));
+$("#b-demo").addEventListener("click", () => setDemo(!demo));
+$("#b-help").addEventListener("click", () => $("#help").classList.toggle("open"));
+document.addEventListener("keydown", (e) => {
+  if (e.key >= "1" && e.key <= "7") focusPanel(e.key);
+  else if (e.key === "Escape") { if ($("#main").dataset.focus) focusPanel($("#main").dataset.focus); $("#help").classList.remove("open"); }
+  else if (e.key === "t" || e.key === "T") $("#b-theme").click();
+  else if (e.key === "d" || e.key === "D") $("#b-demo").click();
+  else if (e.key === "?") $("#b-help").click();
+});
+window.addEventListener("resize", () => requestAnimationFrame(drawAll));
+
+renderStrip(); renderTesting(); renderSituation(); renderAlerts(); renderTraining(); renderData(); renderMachine(); renderTicker(); renderProgDetail(); renderHealth(); tick();
+// URL switches, so each state can be opened directly: #focus=2  #theme=light  #demo
+const hash = location.hash;
+if (/theme=light/.test(hash)) setTheme("light");
+if (/demo/.test(hash)) setDemo(true);
+const fm = /focus=(\d)/.exec(hash); if (fm) focusPanel(fm[1]);
+requestAnimationFrame(drawAll);
+setInterval(tick, 1000); setInterval(drift, 5000);
+</script>
+</body>
+</html>

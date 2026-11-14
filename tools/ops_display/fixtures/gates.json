@@ -1,0 +1,44 @@
+{
+ "scale": 89,
+ "gates_failed": false,
+ "clamped": 1,
+ "max_clamped": 8,
+ "clamped_legs": {
+  "positions": 446,
+  "loss_max": 9.471,
+  "loss_p99": 7.194,
+  "loss_mean": 2.25,
+  "trainer_positions": 446,
+  "trainer_max_diff_cp": 0.00019
+ },
+ "endgame": "ending result positions        cand misjudged     r8brft1 misjudged\nKPK    won          116          6 (  5.2%)          4 (  3.4%)\nKPK    drawn         92          0 (  0.0%)          0 (  0.0%)\nKPK    lost          92          3 (  3.3%)          3 (  3.3%)\nKQK    won          150          0 (  0.0%)          0 (  0.0%)\nKQK    lost         150          0 (  0.0%)          0 (  0.0%)\nKRK    won  ",
+ "recall": "integrity/recall gate: cand 9 of 900 misjudged, at most 15: passed (trained with the endgame slice, SLICE_TRAINED=1)",
+ "heldout": {
+  "candidate": "cand",
+  "candidate_misjudged": 514,
+  "reference": "r8brft1",
+  "reference_misjudged": 612,
+  "positions": 3800,
+  "ratio": 0.8398692810457516,
+  "flag_ratio": 1.15,
+  "flagged": false,
+  "warm_start": "cand (warm start)",
+  "warm_start_misjudged": 526,
+  "warm_start_change": -12
+ },
+ "heldout67": {
+  "candidate": "cand",
+  "candidate_misjudged": 738,
+  "reference": "r8brft1",
+  "reference_misjudged": 770,
+  "positions": 5599,
+  "ratio": 0.9584415584415584,
+  "flag_ratio": 1.15,
+  "flagged": false,
+  "warm_start": "cand (warm start)",
+  "warm_start_misjudged": 732,
+  "warm_start_change": 6
+ },
+ "netcheck": "netcheck: 446 positions, 0 mismatches (arch native)\n",
+ "legs": "FAIL quantization leg: Fork's net file differs from R-quant\n{\"positions\": 446, \"loss_max\": 9.471, \"loss_p99\": 7.194, \"loss_mean\": 2.25, \"trainer_positions\": 446, \"trainer_max_diff_cp\": 0.00019}\n"
+}

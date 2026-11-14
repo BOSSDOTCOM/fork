@@ -1,0 +1,396 @@
+{
+ "name": "r8cc1",
+ "net": "C:/Users/user/fork-data/8c/a1-gates/r8cc1/cand.fnet",
+ "net_sha256": "182a3dba6f4ec50ac872c8b8fbb635579e0400df8dc29b3b3ddadc5d856cee73",
+ "bin": "C:/Users/user/fork-data/8c/wt-bake-r8cc1/build/clang-release/fork.exe",
+ "sets_sha256": {
+  "adv": "a1d4308da6bc989c5383d052b5d18656de9ef046769ec46c37c6eb20c689a04f",
+  "levelql": "c4cc3a1e44eb1579df8eac7a1779494af03a4a178a6decf42a6f70d7fb11063e",
+  "qtrade": "146f9a220f3fdf435695fba8b6883ed84a0d03c748e8ab8d5d7828f9efa7c3e6",
+  "ptrade": "f37a6364c8cb297217b088df427a264dad4e591bc90cc766ef68d3dab3c355ea"
+ },
+ "nodes": 100000,
+ "net_scale": 89,
+ "bin_version": "Fork 0.3.0-dev+b49d6f5 | arch native | net r8cc1",
+ "identity": "binary static eval == reference R-int on all 472 positions",
+ "static": {
+  "adv": {
+   "fork": {
+    "n": 200,
+    "median": 38.0,
+    "mean": 38.0,
+    "p25": 26.25,
+    "p75": 53.75
+   },
+   "sf": {
+    "n": 200,
+    "median": 97.5,
+    "mean": 96.6,
+    "p25": 88.0,
+    "p75": 106.0
+   },
+   "fork_minus_sf": {
+    "n": 200,
+    "median": -57.5,
+    "mean": -58.6,
+    "p25": -76.0,
+    "p75": -40.25
+   },
+   "median_ratio": 0.402,
+   "fork_pawns_median": 0.38,
+   "sf_pawns_median": 0.97,
+   "share_fork_above_25": 0.76,
+   "share_fork_below_minus25": 0.04
+  },
+  "levelql": {
+   "fork": {
+    "n": 272,
+    "median": 24.0,
+    "mean": 23.5,
+    "p25": 4.25,
+    "p75": 46.0
+   },
+   "sf": {
+    "n": 272,
+    "median": 0.0,
+    "mean": 0.3,
+    "p25": 0.0,
+    "p75": 0.0
+   },
+   "fork_minus_sf": {
+    "n": 272,
+    "median": 24.0,
+    "mean": 23.2,
+    "p25": 3.25,
+    "p75": 46.0
+   },
+   "median_ratio": 2.438,
+   "fork_pawns_median": 0.24,
+   "sf_pawns_median": 0.0,
+   "share_fork_above_25": 0.471,
+   "share_fork_below_minus25": 0.077
+  }
+ },
+ "search": {
+  "adv": {
+   "fork": {
+    "n": 200,
+    "median": 45.5,
+    "mean": 46.3,
+    "p25": 36.0,
+    "p75": 56.0
+   },
+   "sf": {
+    "n": 200,
+    "median": 97.5,
+    "mean": 96.6,
+    "p25": 88.0,
+    "p75": 106.0
+   },
+   "fork_minus_sf": {
+    "n": 200,
+    "median": -50.0,
+    "mean": -50.3,
+    "p25": -61.0,
+    "p75": -40.0
+   },
+   "median_ratio": 0.484,
+   "fork_pawns_median": 0.46,
+   "sf_pawns_median": 0.97,
+   "share_fork_above_25": 0.925,
+   "share_fork_below_minus25": 0.0
+  },
+  "levelql": {
+   "fork": {
+    "n": 272,
+    "median": 16.0,
+    "mean": 18.5,
+    "p25": 0.0,
+    "p75": 35.75
+   },
+   "sf": {
+    "n": 272,
+    "median": 0.0,
+    "mean": 0.3,
+    "p25": 0.0,
+    "p75": 0.0
+   },
+   "fork_minus_sf": {
+    "n": 272,
+    "median": 15.0,
+    "mean": 18.2,
+    "p25": 0.0,
+    "p75": 35.0
+   },
+   "median_ratio": 5.0,
+   "fork_pawns_median": 0.16,
+   "sf_pawns_median": 0.0,
+   "share_fork_above_25": 0.379,
+   "share_fork_below_minus25": 0.044
+  },
+  "qtrade": {
+   "S_all": {
+    "n": 228,
+    "net_trade": 0.07,
+    "sf_trade": 0.053,
+    "agree": 0.965,
+    "search_cp_median": 25.0
+   },
+   "S_qxq": {
+    "n": 15,
+    "net_trade": 0.4,
+    "sf_trade": 0.4,
+    "agree": 1.0,
+    "search_cp_median": 42
+   },
+   "F_all": {
+    "n": 300,
+    "net_trade": 0.103,
+    "fork_game_trade": 0.123,
+    "agree": 0.967,
+    "search_cp_median": 56.0
+   },
+   "F_qxq": {
+    "n": 38,
+    "net_trade": 0.5,
+    "fork_game_trade": 0.579,
+    "agree": 0.868,
+    "search_cp_median": 61.0
+   }
+  },
+  "ptrade": {
+   "S_ql": {
+    "any": {
+     "n": 110,
+     "net": 0.118,
+     "ref": 0.073
+    },
+    "R": {
+     "n": 37,
+     "n_cap": 4,
+     "net": 0.0,
+     "ref": 0.0,
+     "net_cap": 0.0,
+     "ref_cap": 0.0
+    },
+    "N": {
+     "n": 29,
+     "n_cap": 0,
+     "net": 0.103,
+     "ref": 0.069
+    },
+    "B": {
+     "n": 31,
+     "n_cap": 3,
+     "net": 0.065,
+     "ref": 0.065,
+     "net_cap": 0.333,
+     "ref_cap": 0.0
+    },
+    "BN": {
+     "n": 74,
+     "n_cap": 19,
+     "net": 0.108,
+     "ref": 0.054,
+     "net_cap": 0.158,
+     "ref_cap": 0.053
+    }
+   },
+   "S_qon": {
+    "any": {
+     "n": 300,
+     "net": 0.093,
+     "ref": 0.097
+    },
+    "R": {
+     "n": 49,
+     "n_cap": 7,
+     "net": 0.122,
+     "ref": 0.122,
+     "net_cap": 0.714,
+     "ref_cap": 0.714
+    },
+    "N": {
+     "n": 144,
+     "n_cap": 11,
+     "net": 0.049,
+     "ref": 0.042,
+     "net_cap": 0.273,
+     "ref_cap": 0.273
+    },
+    "B": {
+     "n": 80,
+     "n_cap": 5,
+     "net": 0.05,
+     "ref": 0.025,
+     "net_cap": 0.6,
+     "ref_cap": 0.4
+    },
+    "BN": {
+     "n": 219,
+     "n_cap": 65,
+     "net": 0.046,
+     "ref": 0.068,
+     "net_cap": 0.138,
+     "ref_cap": 0.154
+    }
+   },
+   "S_all": {
+    "any": {
+     "n": 410,
+     "net": 0.1,
+     "ref": 0.09
+    },
+    "R": {
+     "n": 86,
+     "n_cap": 11,
+     "net": 0.07,
+     "ref": 0.07,
+     "net_cap": 0.455,
+     "ref_cap": 0.455
+    },
+    "N": {
+     "n": 173,
+     "n_cap": 11,
+     "net": 0.058,
+     "ref": 0.046,
+     "net_cap": 0.273,
+     "ref_cap": 0.273
+    },
+    "B": {
+     "n": 111,
+     "n_cap": 8,
+     "net": 0.054,
+     "ref": 0.036,
+     "net_cap": 0.5,
+     "ref_cap": 0.25
+    },
+    "BN": {
+     "n": 293,
+     "n_cap": 84,
+     "net": 0.061,
+     "ref": 0.065,
+     "net_cap": 0.143,
+     "ref_cap": 0.131
+    }
+   },
+   "F_ql": {
+    "any": {
+     "n": 221,
+     "net": 0.167,
+     "ref": 0.172
+    },
+    "R": {
+     "n": 86,
+     "n_cap": 19,
+     "net": 0.209,
+     "ref": 0.186,
+     "net_cap": 0.737,
+     "ref_cap": 0.632
+    },
+    "N": {
+     "n": 59,
+     "n_cap": 6,
+     "net": 0.068,
+     "ref": 0.102,
+     "net_cap": 0.5,
+     "ref_cap": 0.667
+    },
+    "B": {
+     "n": 54,
+     "n_cap": 5,
+     "net": 0.037,
+     "ref": 0.074,
+     "net_cap": 0.0,
+     "ref_cap": 0.2
+    },
+    "BN": {
+     "n": 133,
+     "n_cap": 37,
+     "net": 0.09,
+     "ref": 0.09,
+     "net_cap": 0.189,
+     "ref_cap": 0.135
+    }
+   },
+   "F_qon": {
+    "any": {
+     "n": 300,
+     "net": 0.167,
+     "ref": 0.157
+    },
+    "R": {
+     "n": 27,
+     "n_cap": 3,
+     "net": 0.111,
+     "ref": 0.074,
+     "net_cap": 1.0,
+     "ref_cap": 0.667
+    },
+    "N": {
+     "n": 157,
+     "n_cap": 28,
+     "net": 0.108,
+     "ref": 0.096,
+     "net_cap": 0.393,
+     "ref_cap": 0.464
+    },
+    "B": {
+     "n": 105,
+     "n_cap": 15,
+     "net": 0.095,
+     "ref": 0.124,
+     "net_cap": 0.667,
+     "ref_cap": 0.8
+    },
+    "BN": {
+     "n": 228,
+     "n_cap": 62,
+     "net": 0.088,
+     "ref": 0.075,
+     "net_cap": 0.226,
+     "ref_cap": 0.177
+    }
+   },
+   "F_all": {
+    "any": {
+     "n": 521,
+     "net": 0.167,
+     "ref": 0.163
+    },
+    "R": {
+     "n": 113,
+     "n_cap": 22,
+     "net": 0.186,
+     "ref": 0.159,
+     "net_cap": 0.773,
+     "ref_cap": 0.636
+    },
+    "N": {
+     "n": 216,
+     "n_cap": 34,
+     "net": 0.097,
+     "ref": 0.097,
+     "net_cap": 0.412,
+     "ref_cap": 0.5
+    },
+    "B": {
+     "n": 159,
+     "n_cap": 20,
+     "net": 0.075,
+     "ref": 0.107,
+     "net_cap": 0.5,
+     "ref_cap": 0.65
+    },
+    "BN": {
+     "n": 361,
+     "n_cap": 99,
+     "net": 0.089,
+     "ref": 0.08,
+     "net_cap": 0.212,
+     "ref_cap": 0.162
+    }
+   }
+  }
+ }
+}

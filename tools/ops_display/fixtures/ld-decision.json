@@ -1,0 +1,17 @@
+{
+ "pooled": {
+  "d50": {
+   "elo": -55.74,
+   "half_95": 8.18,
+   "qualifies": false
+  },
+  "d100": {
+   "elo": -191.14,
+   "half_95": 9.88,
+   "qualifies": false
+  }
+ },
+ "rule": "a deeper arm wins only at >= +5 Elo pooled with its 95% interval above 0; both: the higher; else 20k stays",
+ "winner": null,
+ "verdict": "20k stays (no deeper arm qualifies)"
+}
