@@ -612,10 +612,11 @@ TEST_CASE("search", "the locked endgames stay exact to depth 10, where the singu
 // run again with another committed network of this build's architecture.
 // With the default build that is s512ppr3 (S512+PP, the default network
 // until 2026-11-10: r8btd90 was retrained from it and r8brft1 fine-tuned from
-// r8btd90, docs/nets.md), whose evaluations differ from r8brft1's on most of
-// the cases' positions (checked below). With the history skip left on,
-// s512ppr3 fails the zero-window probes in KRK (8/8/3k4/8/8/3K4/8/R7 w,
-// depth 2: 373 against 372) where the default network passes (2026-11-14).
+// r8btd90, docs/nets.md), whose evaluations differ from the default
+// network's (r8ceplo2 since 2026-11-14, r8brft1 before) on most of the
+// cases' positions (checked below). With the history skip left on, s512ppr3
+// fails the zero-window probes in KRK (8/8/3k4/8/8/3K4/8/R7 w, depth 2: 373
+// against 372) where the default network then, r8brft1, passes (2026-11-14).
 // A build whose architecture has no other committed network skips the case;
 // the bootstrap evaluation has no network to swap and does not compile it.
 namespace {

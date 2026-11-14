@@ -2210,3 +2210,63 @@ The final stage's result block (stage 5, run 43610249077):
   the switch on (clang-release) and with it off and on (a FORK_TUNE build); no reference changes. No
   final-retune dimension (`TimeScaleDeepMaxDepth` 60 is a guard, not a tuned value). The switch stays until the
   Phase 4 re-validation.
+
+### 2026-11-14 retrain 8c session A1: fixed-node screens, the plain control's promotion SPRT (stopped), then r8ceplo2's STC SPRT against r8brft1 (owner): H1, promoted
+
+- Retrain 8c A1 (docs/research/retrain-8c/plan.md, branch retrain/8c-prep; Kaggle fork-retrain-8c-a1 at 178f16b):
+  the control c (g4s2, warm from r8btd90's float weights, the standard recipe, window average of superbatches
+  331-360), idea 80's arm i80, and on each control's window average the fine-tunes rft (r8brft1's recipe), rft-ep
+  (the result target only on records with 8 or more pieces) and rft-ep-lo (rft-ep at LR 5e-6); seeds 1 and 2 each.
+  Every candidate passed tools/nnue/gates.sh (SLICE_TRAINED=1). The decision rules were written before any result
+  (~/fork-data/8c/a1-decision-rules.md; the outcomes in a1-decision-record.md). Bakes: r8cc1 a71dd2d, r8cc2
+  e8f3eca, r8ci801 33c0ac7, r8ci802 421a2a3, r8crft1 6e364c4, r8crft2 01d021d, r8cep1 76067e4, r8cep2 8b6e74f,
+  r8ceplo1 c04a0d4, r8ceplo2 29b4d28 (each phase-4 b49d6f5's engine with its own default net). Fixed-node screens:
+  800,000 nodes per move, 1,600 games, one stage each (seed K on stage K-1's openings); the SPRTs `--kind network`,
+  [0, 5], alpha = beta = 0.05, cap 13, idea retrain-8c, STC 8+0.08, Hash 16, Syzygy 3-4-5, UHO book (seed
+  20261027), OFF = phase-4 b49d6f5 (r8brft1). Data: ~/fork-data/sprt/r8c-fn-* and r8cc2-promo-stc,
+  r8ceplo2-promo-stc. Times EST.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, rft-ep seed 1 (r8cep1) against rft seed 1 (r8crft1) | 43587622663 | 1,600 | +1.74 ± 9.21 | +3.21 ± 17.02 | [10, 193, 383, 207, 7] | screen (6:36 AM) |
+| the same, r8cep2 against r8crft2 | 43590885808 | 1,600 | −5.21 ± 8.53 | −10.41 ± 17.02 | [6, 191, 428, 171, 4] | screen (7:19 AM); pooled with seed 1 −1.74 ± 6.28 [−8.01, +4.54]: **rft-ep replaces rft** (upper end above 0) |
+| the same, rft-ep-lo seed 1 (r8ceplo1) against r8cep1 | 43594279849 | 1,600 | −6.30 ± 8.79 | −12.20 ± 17.02 | [9, 195, 418, 172, 6] | screen (8:02 AM) |
+| the same, r8ceplo2 against r8cep2 | 43597753849 | 1,600 | −4.99 ± 8.96 | −9.50 ± 17.02 | [6, 210, 390, 189, 5] | screen (8:45 AM); pooled −5.65 ± 6.27 [−11.92, +0.62]: **rft-ep-lo replaces rft-ep** (upper end above 0 by 0.62) |
+| the same, r8ci801 against r8cc1 | 43601354862 | 1,600 | −4.34 ± 9.11 | −8.12 ± 17.02 | [9, 204, 393, 186, 8] | screen (9:30 AM) |
+| the same, r8ci802 against r8cc2 | 43605178639 | 1,600 | +2.39 ± 9.00 | +4.52 ± 17.02 | [2, 204, 383, 203, 8] | screen (10:14 AM); idea 80 not killed (above 0 on seed 2), **not adopted** (pooled −0.98 ± 6.40, not above 0; owner) |
+| the same, r8ceplo1 against r8cc1 | 43613018556 | 1,600 | −3.04 ± 8.91 | −5.81 ± 17.02 | [9, 190, 416, 176, 9] | screen (11:45 AM) |
+| the same, r8ceplo2 against r8cc2 | 43617323018 | 1,600 | **+13.47 ± 9.14** | +25.13 ± 17.02 | [3, 178, 387, 218, 14] | screen (12:32 PM); pooled +5.21 ± 6.39 [−1.17, +11.60] (nElo +9.82), mean of seeds +5.21: candidate control + rft-ep-lo by the rule, then **the plain control by the owner's safeguard** (not clearly positive) |
+| the same, r8cc1 against r8brft1 | 43620446592 | 1,600 | −2.39 ± 9.02 | −4.51 ± 17.02 | [13, 186, 405, 191, 5] | the control's final screen (1:03 PM) |
+| the same, r8cc2 against r8brft1 | 43621641763 | 1,600 | −0.65 ± 9.30 | −1.19 ± 17.02 | [17, 182, 395, 199, 7] | the control's final screen (1:17 PM): the better seed, c2 |
+| r8cc2-promo-stc: STC [0, 5], r8cc2 (e8f3eca) against r8brft1 | 43625787512 (stage 0), 43627546232 (1), 43629418447 (2) | 4,800 (no time losses, no abnormal ends) | −0.80 ± 5.26 | −1.49 ± 9.83 | [29, 585, 1176, 588, 22] | **stopped by the owner** after stage 2 (LLR +0.25, −0.09, −0.79 by stage; about 2:20 PM); not promoted |
+| **r8ceplo2-promo-stc: STC [0, 5], r8ceplo2 (29b4d28) against r8brft1** | 43632268487 (stage 0), 43634542473 (1), 43636232270 (2), 43637881329 (3), 43639519074 (4), 43641166102 (5), 43643208644 (6), 43644837732 (7) | 12,800 (no time losses, no abnormal ends) | **+5.48 ± 3.32** | +9.94 ± 6.02 | [87, 1490, 3054, 1672, 97] | **H1 accepted** (LLR 3.95) after stage 7, 5:12 PM |
+
+- By stage (r8ceplo2-promo-stc, cumulative): stage 0 +10.86 ± 9.48 (LLR 1.13); stage 1 +3.37 ± 6.70 (0.47);
+  stage 2 +0.43 ± 5.51 (−0.34); stage 3 +2.50 ± 4.77 (0.52); stage 4 +2.13 ± 4.26 (0.43); stage 5 +4.16 ± 3.85
+  (1.99); stage 6 +4.59 ± 3.56 (2.69); stage 7 +5.48 ± 3.32 (3.95). Started 2:19 PM (try 2 of 2 of idea
+  retrain-8c).
+
+The final stage's result block (r8ceplo2-promo-stc, stage 7, run 43644837732):
+
+```
+    Shards: 128 (done); pairs 6400, games 12800 (12800 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 5.48 +/- 3.32, nElo: 9.94 +/- 6.02
+    Ptnml(0-2): [87, 1490, 3054, 1672, 97]
+    LLR: 3.95 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- **The decisions (owner, 2026-11-14):** the promotion safeguard (about 12:55-1:00 PM): the direct head-to-head
+  rft-ep-lo against the control (+5.21 [−1.17, +11.60]) is not clearly positive, so the plain control went to the
+  promotion SPRT instead (r8cc2, the better final screen). The fallback (about 1:25 PM): "8c: if the control's SPRT
+  trends toward H0 (or ends H0), queue an STC SPRT [0, 5] of the fine-tuned candidate (control + rft-ep-lo, seed 2,
+  r8ceplo2) vs r8brft1 immediately (both are fine-tuned nets: like for like); promotion pre-approved on H1 with
+  gates passing and no held-out flag." The switch (about 2:20 PM): "if the plain control's SPRT vs r8brft1 is
+  trending toward H0 (LLR clearly negative), stop it and record; then run an STC SPRT [0, 5] of the fine-tuned
+  candidate r8ceplo2 vs r8brft1 (like for like), promotion pre-approved on H1 with gates passing and no held-out
+  flag." Asked with r8cc2-promo-stc's numbers after 3 stages (LLR −0.79), the owner chose to stop it.
+- **Promoted on the pre-approval: r8ceplo2 is the default network** (H1; gates.sh exit 0 with SLICE_TRAINED=1;
+  held-out ratios against r8brft1 0.86, 525 against 612 of 3,800 at 4-5 pieces, and 0.98, 756 against 770 of 5,599
+  at 6-7 pieces, neither above 1.15); bench 5,403,414 / 34c916638218aa11. The labeller switch to r8ceplo2 is
+  pending under the one-switch-per-day rule: the next data generation part (g4d) and the cloud VM's next run; no
+  running generator is switched.

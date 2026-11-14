@@ -1620,7 +1620,8 @@ the screens before use.
   −0.87 ± 9.13 (42930415181), not kept. The measured seed noise (c2
   against r8bc, −6.08 ± 9.42; idea 69) is as large as that margin, so
   every future retrain arm runs 2 seeds (owner, 2026-11-11). r8btd90's
-  result fine-tune, r8brft1, is the default since 2026-11-11 (idea 70).
+  result fine-tune, r8brft1, was the default from 2026-11-11 to 2026-11-14
+  (idea 70; r8ceplo2 since).
   **runtime cost:** none. **earliest phase:** Phase 4.
 
 ## 52. Ensemble-disagreement active learning
@@ -2463,8 +2464,9 @@ whose weaknesses and data gaps decide their targets and order.
   the winner (td90 or the control) on existing 8b data, two seeds; the
   usual gates; a fixed-node screen against the base; an SPRT. Kaggle hours
   reported to the owner before the launch.
-- **status:** **adopted: r8brft1 is the default network (owner,
-  2026-11-11).** **2026-11-10:** 8b's SPRT decided the base net: r8btd90
+- **status:** **adopted: r8brft1 was the default network from 2026-11-11
+  (owner); its endgame-preserving form (rft-ep-lo) gave r8ceplo2, the
+  default since 2026-11-14 (below).** **2026-11-10:** 8b's SPRT decided the base net: r8btd90
   (the TD(0.9) arm, promoted), so the fine-tune starts from it. The run
   (docs/research/retrain-8b/rft-plan.md, branch retrain/8b-rft 43f6ecc):
   r8btd90's window average, result weight 1.0, LR 1e-5 constant, 60
@@ -2487,7 +2489,26 @@ whose weaknesses and data gaps decide their targets and order.
   EST): a slice-preserving result fine-tune**, the endgame slice kept at its
   normal weight during the fine-tune, **plus a lower-LR variant if the Kaggle
   quota allows**; like every 8c arm it reports both held-out checks (4-5 and
-  6-7 pieces). **runtime
+  6-7 pieces). **2026-11-14: the endgame-preserving variant adopted; r8ceplo2
+  is the default network (owner's pre-approval on H1, gates and no held-out
+  flag).** Retrain 8c A1 (docs/research/retrain-8c/plan.md, branch
+  retrain/8c-prep): rft-ep (the result target only on records with 8 or more
+  pieces, the base's own target on 7 or fewer, the slices at their WDL) and
+  rft-ep-lo (rft-ep at LR 5e-6) on the control's window averages; by the
+  declared rules rft-ep replaced rft (pooled −1.74 [−8.01, +4.54]) and
+  rft-ep-lo replaced rft-ep (−5.65 [−11.92, +0.62]); rft-ep-lo against the
+  control pooled +5.21 ± 6.39 [−1.17, +11.60] (seed 2 +13.47 ± 9.14). The
+  plain control's promotion SPRT (r8cc2-promo-stc) was stopped by the owner
+  at LLR −0.79 after 3 stages (−0.80 ± 5.26); the fine-tuned seed 2,
+  r8ceplo2, then beat r8brft1 (itself a result fine-tune: like for like) at
+  STC [0, 5]: **H1 accepted, +5.48 ± 3.32 Elo** (nElo +9.94 ± 6.02) after
+  12,800 games (r8ceplo2-promo-stc; sprt-log), with held-out ratios against
+  r8brft1 of 0.86 (4-5 pieces, 525 against 612 of 3,800) and 0.98 (6-7
+  pieces, 756 against 770 of 5,599). The endgame-preserving fine-tune
+  (rft-ep-lo) stays in the standard recipe until a main-training fix (the
+  per-class lambda, idea 180) replaces it; the plain variants (rft, rft-ep)
+  stay dropped (owner, 2026-11-14). Bench 5,403,414 / 34c916638218aa11
+  (docs/nets.md). **runtime
   cost:** none. **earliest phase:** Phase 4.
 
 ## 71. Feature-transformer weight decay
