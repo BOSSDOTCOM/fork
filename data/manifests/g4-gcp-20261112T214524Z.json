@@ -1,0 +1,202 @@
+{
+ "run": "g4-gcp-20261112T214524Z",
+ "kind": "gcp filler run (VM fork-worker-1), sealed as its own part for retrain 8c",
+ "generator": {
+  "tool": "fork_datagen",
+  "version": "0.3.0-dev+2a63cea",
+  "evaluator": "nnue (r8brft1)",
+  "arch": "x86-64-v3"
+ },
+ "settings": {
+  "openings": "lichess-2026-09.epd",
+  "openings_count": 13943421,
+  "positions_target": 250000,
+  "nodes": 20000,
+  "threads": 8,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 50,
+  "unsaved_nodes": 4000,
+  "check_nodes": 2000
+ },
+ "chunks": 424,
+ "chunk_seeds": [
+  101794519924000,
+  101794519924423
+ ],
+ "note": "chunks verified by tools/cloud/pull_datagen.sh (retrain/8c-prep 8847fe8); shards concatenated in chunk order (w00..w07 within a chunk); the last chunk is the -val file (60-game validation hold); the other chunks in 11 training files",
+ "totals": {
+  "games": 1103089,
+  "positions": 106192556,
+  "positions_unsaved": 48423462,
+  "positions_saved": 57769094,
+  "bytes": 464481428
+ },
+ "batches": [
+  [
+   {
+    "file": "g4-gcp-20261112T214524Z-w00.vf",
+    "games": 101417,
+    "positions": 9767344,
+    "positions_unsaved": 4455044,
+    "positions_saved": 5312300,
+    "bytes": 42720388,
+    "sha256": "60b62cd198a890f40f9ea996a1ccb48f19efdc241d361864c26acd46823f1606",
+    "chunks": [
+     "c0000",
+     "c0038"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w01.vf",
+    "games": 101472,
+    "positions": 9766929,
+    "positions_unsaved": 4452614,
+    "positions_saved": 5314315,
+    "bytes": 42720708,
+    "sha256": "5182143ac3145980742e4449b27004ad75e58f52d6b221cecdd90a12bbf7d031",
+    "chunks": [
+     "c0039",
+     "c0077"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w02.vf",
+    "games": 101288,
+    "positions": 9769691,
+    "positions_unsaved": 4452671,
+    "positions_saved": 5317020,
+    "bytes": 42725132,
+    "sha256": "a030901d785d4063624bff22acea1ed06c0962a9d64a88106e1a179f40ed784f",
+    "chunks": [
+     "c0078",
+     "c0116"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w03.vf",
+    "games": 101282,
+    "positions": 9766980,
+    "positions_unsaved": 4451753,
+    "positions_saved": 5315227,
+    "bytes": 42714072,
+    "sha256": "905f74e218cd913349963acc6f4222fb318e64ad502d741c17c306c3a3ec9483",
+    "chunks": [
+     "c0117",
+     "c0155"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w04.vf",
+    "games": 101552,
+    "positions": 9767115,
+    "positions_unsaved": 4455827,
+    "positions_saved": 5311288,
+    "bytes": 42724332,
+    "sha256": "be192febe5bf572e0def011ae59af406f41288935d0c94a224cae8bca7024718",
+    "chunks": [
+     "c0156",
+     "c0194"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w05.vf",
+    "games": 99019,
+    "positions": 9517215,
+    "positions_unsaved": 4338907,
+    "positions_saved": 5178308,
+    "bytes": 41633544,
+    "sha256": "c2ab92b7201d7b7efcf7075c0dff20440e3e6674185ca09e475d92a20c7c4874",
+    "chunks": [
+     "c0195",
+     "c0232"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w06.vf",
+    "games": 98795,
+    "positions": 9516642,
+    "positions_unsaved": 4337100,
+    "positions_saved": 5179542,
+    "bytes": 41623188,
+    "sha256": "b945716f939da767b9c6ba6247f5d8b5112a41b2edc426bccb5c15ff32ca13b2",
+    "chunks": [
+     "c0233",
+     "c0270"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w07.vf",
+    "games": 98985,
+    "positions": 9518024,
+    "positions_unsaved": 4341552,
+    "positions_saved": 5176472,
+    "bytes": 41635556,
+    "sha256": "00b0a2732c415642b58d00151b01e1b9cdab4fd47c2070974be6a7eac605eefe",
+    "chunks": [
+     "c0271",
+     "c0308"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w08.vf",
+    "games": 98879,
+    "positions": 9517800,
+    "positions_unsaved": 4340763,
+    "positions_saved": 5177037,
+    "bytes": 41630844,
+    "sha256": "b832bf5203ac822fc254d6872bddd239e0fbc78c4d72d75e0f399025e37c7e20",
+    "chunks": [
+     "c0309",
+     "c0346"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w09.vf",
+    "games": 98960,
+    "positions": 9516865,
+    "positions_unsaved": 4342955,
+    "positions_saved": 5173910,
+    "bytes": 41630020,
+    "sha256": "b1021440484a4a7e70c927f06c239953b569db7b4fa24b35da7ea03cb1a33fd4",
+    "chunks": [
+     "c0347",
+     "c0384"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w10.vf",
+    "games": 98812,
+    "positions": 9517513,
+    "positions_unsaved": 4340176,
+    "positions_saved": 5177337,
+    "bytes": 41627284,
+    "sha256": "c374c55b820492aa274c08aa08fad7672863d4cafb9ae3ad17c42ea6d3b51e4a",
+    "chunks": [
+     "c0385",
+     "c0422"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T214524Z-w11-val.vf",
+    "games": 2628,
+    "positions": 250438,
+    "positions_unsaved": 114100,
+    "positions_saved": 136338,
+    "bytes": 1096360,
+    "sha256": "a651895387f522b58a23b745b4c91c18f826f8b36130a20a232f494f10dc4095",
+    "chunks": [
+     "c0423",
+     "c0423"
+    ]
+   }
+  ]
+ ]
+}

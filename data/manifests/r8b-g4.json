@@ -1,0 +1,222 @@
+{
+ "run": "r8b-g4",
+ "note": "g4's rest, g4s1-val.vf (g3s3-val's 32 streams and 4 held sources), its blend copy (the TD arms' validation), the TD copies of g4 (retrain_8b_inputs.py post)",
+ "totals": {
+  "games": 1445653,
+  "positions": 134771896,
+  "positions_unsaved": 61421454,
+  "positions_saved": 73350442,
+  "bytes": 591131092
+ },
+ "batches": [
+  [
+   {
+    "file": "g4s1-g4-w09-val-rest.vf",
+    "games": 68489,
+    "positions": 6394914,
+    "positions_unsaved": 2918048,
+    "positions_saved": 3476866,
+    "bytes": 28045260,
+    "sha256": "0c607a674de5905ab55373716945204534e01c71d64cd7ec1e43ea5b42a4e272"
+   },
+   {
+    "file": "g4s1-val.vf",
+    "games": 2160,
+    "positions": 193039,
+    "positions_unsaved": 65648,
+    "positions_saved": 127391,
+    "bytes": 849916,
+    "sha256": "b6a8bef616c5ed0c03b3bb77c965810146fb19b13312b2b1b617f9085a21a643"
+   },
+   {
+    "file": "bl-g4s1-val.vf",
+    "games": 2160,
+    "positions": 193039,
+    "positions_unsaved": 65648,
+    "positions_saved": 127391,
+    "bytes": 849916,
+    "sha256": "5ea5be3b0c9328908d7428afb74b23609836841b9e3070ea06b8c7c3bb71b888"
+   },
+   {
+    "file": "td80-g4-w00.vf",
+    "games": 68795,
+    "positions": 6400034,
+    "positions_unsaved": 2919196,
+    "positions_saved": 3480838,
+    "bytes": 28076756,
+    "sha256": "44950e0fe48739914cd51f1b7334ae24f47a115417fb454165513511e2fed89d"
+   },
+   {
+    "file": "td80-g4-w01.vf",
+    "games": 68514,
+    "positions": 6400061,
+    "positions_unsaved": 2916765,
+    "positions_saved": 3483296,
+    "bytes": 28066748,
+    "sha256": "848d30983eabb58f2165fd78ed783439df1c355f6573ed8c7ed6b203ca72e2dd"
+   },
+   {
+    "file": "td80-g4-w02.vf",
+    "games": 68847,
+    "positions": 6400018,
+    "positions_unsaved": 2920827,
+    "positions_saved": 3479191,
+    "bytes": 28078564,
+    "sha256": "9628dcea916607419e232a148ff55533a9cfc1273b1f078ee49b338fa4c5abdd"
+   },
+   {
+    "file": "td80-g4-w03.vf",
+    "games": 68685,
+    "positions": 6400023,
+    "positions_unsaved": 2917547,
+    "positions_saved": 3482476,
+    "bytes": 28072752,
+    "sha256": "d8785e8bf8facff4aca985c69cc85978ae568b4a7d17b82e0af5a66c1717d0de"
+   },
+   {
+    "file": "td80-g4-w04.vf",
+    "games": 68663,
+    "positions": 6400114,
+    "positions_unsaved": 2919631,
+    "positions_saved": 3480483,
+    "bytes": 28072324,
+    "sha256": "d600d03e1cb7e532541d70155bcd1faed7d2573ee4db982e2f426c4b5c053883"
+   },
+   {
+    "file": "td80-g4-w05.vf",
+    "games": 68560,
+    "positions": 6400058,
+    "positions_unsaved": 2920384,
+    "positions_saved": 3479674,
+    "bytes": 28068392,
+    "sha256": "6a00010e75cbf80d9335bc92c1db17a9fa13118e26d1a839e7777663e60e5650"
+   },
+   {
+    "file": "td80-g4-w06.vf",
+    "games": 68661,
+    "positions": 6400080,
+    "positions_unsaved": 2919748,
+    "positions_saved": 3480332,
+    "bytes": 28072116,
+    "sha256": "b97db1de62786c7a73a23d0bf0e82284a4ed2cf791d683051a13c5a2745e9e7b"
+   },
+   {
+    "file": "td80-g4-w07.vf",
+    "games": 68682,
+    "positions": 6400035,
+    "positions_unsaved": 2917444,
+    "positions_saved": 3482591,
+    "bytes": 28072692,
+    "sha256": "824acce53618da9b261bee8113fdb426b593e0ee8bc35aec95686d966ae20495"
+   },
+   {
+    "file": "td80-g4-w08.vf",
+    "games": 68526,
+    "positions": 6400115,
+    "positions_unsaved": 2916465,
+    "positions_saved": 3483650,
+    "bytes": 28067396,
+    "sha256": "784bc7f80d7df91812b596a868c6649305d6debe3dcf0c78227e5b70ab72615f"
+   },
+   {
+    "file": "td80-g4s1-g4-w09-val-rest.vf",
+    "games": 68489,
+    "positions": 6394914,
+    "positions_unsaved": 2918048,
+    "positions_saved": 3476866,
+    "bytes": 28045260,
+    "sha256": "05b5ec34b924f61c82617cc374868c3f4dcd50d7883ce634772b571f393807b4"
+   },
+   {
+    "file": "td90-g4-w00.vf",
+    "games": 68795,
+    "positions": 6400034,
+    "positions_unsaved": 2919196,
+    "positions_saved": 3480838,
+    "bytes": 28076756,
+    "sha256": "bb542f314b6375072b424d1164b9302b2feb7acd3f7efad10e176e7d3ef693e8"
+   },
+   {
+    "file": "td90-g4-w01.vf",
+    "games": 68514,
+    "positions": 6400061,
+    "positions_unsaved": 2916765,
+    "positions_saved": 3483296,
+    "bytes": 28066748,
+    "sha256": "bbbae108fa2bc4b2bdfb04e19e849f2395324eed69425ac8c298ffbe1aafaefc"
+   },
+   {
+    "file": "td90-g4-w02.vf",
+    "games": 68847,
+    "positions": 6400018,
+    "positions_unsaved": 2920827,
+    "positions_saved": 3479191,
+    "bytes": 28078564,
+    "sha256": "857f7f066ccdf59f9ab7d1dde828f04c7bd44c2c42999b570e01eafffba2d37e"
+   },
+   {
+    "file": "td90-g4-w03.vf",
+    "games": 68685,
+    "positions": 6400023,
+    "positions_unsaved": 2917547,
+    "positions_saved": 3482476,
+    "bytes": 28072752,
+    "sha256": "fd17b7bdb25a4094e6571977bdda4ac6146431680d81d448327753c8d717abf8"
+   },
+   {
+    "file": "td90-g4-w04.vf",
+    "games": 68663,
+    "positions": 6400114,
+    "positions_unsaved": 2919631,
+    "positions_saved": 3480483,
+    "bytes": 28072324,
+    "sha256": "65970a0cd6dc9f4b6f9c504c2b386542962d3a7d5087133f51faefd08e1e4bdf"
+   },
+   {
+    "file": "td90-g4-w05.vf",
+    "games": 68560,
+    "positions": 6400058,
+    "positions_unsaved": 2920384,
+    "positions_saved": 3479674,
+    "bytes": 28068392,
+    "sha256": "e62edb65a4503e250637e73c5e5f88d3db0bb549d9293ffaaf11b11ee88e7a45"
+   },
+   {
+    "file": "td90-g4-w06.vf",
+    "games": 68661,
+    "positions": 6400080,
+    "positions_unsaved": 2919748,
+    "positions_saved": 3480332,
+    "bytes": 28072116,
+    "sha256": "d7b8d7310091c6bd4ecc77f593f8987b1ff815db9fff0aaaa3e1cdbab08472a1"
+   },
+   {
+    "file": "td90-g4-w07.vf",
+    "games": 68682,
+    "positions": 6400035,
+    "positions_unsaved": 2917444,
+    "positions_saved": 3482591,
+    "bytes": 28072692,
+    "sha256": "a9edd285472f5da6ba06c5837bbce4c2d3c370b9328964c06d9fa00fa98580bd"
+   },
+   {
+    "file": "td90-g4-w08.vf",
+    "games": 68526,
+    "positions": 6400115,
+    "positions_unsaved": 2916465,
+    "positions_saved": 3483650,
+    "bytes": 28067396,
+    "sha256": "258a6a811af6c96cc3dd0d7cd637ea52106505080c51f432bdd6c45873f8457c"
+   },
+   {
+    "file": "td90-g4s1-g4-w09-val-rest.vf",
+    "games": 68489,
+    "positions": 6394914,
+    "positions_unsaved": 2918048,
+    "positions_saved": 3476866,
+    "bytes": 28045260,
+    "sha256": "70c6f84c590797288e579dc451b48f1b47917999563e5fb1d80401870c4ad9ad"
+   }
+  ]
+ ]
+}

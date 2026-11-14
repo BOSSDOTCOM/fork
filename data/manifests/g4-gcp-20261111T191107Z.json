@@ -1,0 +1,98 @@
+{
+ "run": "g4-gcp-20261111T191107Z",
+ "kind": "gcp filler run (VM fork-worker-1), sealed as its own part for retrain 8c",
+ "generator": {
+  "tool": "fork_datagen",
+  "version": "0.3.0-dev+b5f11ae",
+  "evaluator": "nnue (r8brft1)",
+  "arch": "x86-64-v3"
+ },
+ "settings": {
+  "openings": "lichess-2026-09.epd",
+  "openings_count": 13943421,
+  "positions_target": 250000,
+  "nodes": 20000,
+  "threads": 8,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 50,
+  "unsaved_nodes": 4000,
+  "check_nodes": 2000
+ },
+ "chunks": 109,
+ "chunk_seeds": [
+  101794424267000,
+  101794424267108
+ ],
+ "note": "chunks verified by tools/cloud/pull_datagen.sh (retrain/8c-prep 8847fe8); shards concatenated in chunk order (w00..w07 within a chunk); the last chunk is the -val file (60-game validation hold); the other chunks in 3 training files",
+ "totals": {
+  "games": 287498,
+  "positions": 27298843,
+  "positions_unsaved": 12453766,
+  "positions_saved": 14845077,
+  "bytes": 119545300
+ },
+ "batches": [
+  [
+   {
+    "file": "g4-gcp-20261111T191107Z-w00.vf",
+    "games": 94745,
+    "positions": 9015951,
+    "positions_unsaved": 4112813,
+    "positions_saved": 4903138,
+    "bytes": 39474624,
+    "sha256": "b8907ba3f2732b964f537be652550487064f7220576bac3f2db1323baf8f60f0",
+    "chunks": [
+     "c0000",
+     "c0035"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261111T191107Z-w01.vf",
+    "games": 95194,
+    "positions": 9016006,
+    "positions_unsaved": 4111498,
+    "positions_saved": 4904508,
+    "bytes": 39491008,
+    "sha256": "ab1d3315b0f29ccee27c5c3f5c6639454ecdd39d0c517ffe1b95eb7233be6391",
+    "chunks": [
+     "c0036",
+     "c0071"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261111T191107Z-w02.vf",
+    "games": 94925,
+    "positions": 9016352,
+    "positions_unsaved": 4114420,
+    "positions_saved": 4901932,
+    "bytes": 39482708,
+    "sha256": "011482a707de78a8265ac69f3ca6b68f797a08b777d08cce391bc4e7833c01d9",
+    "chunks": [
+     "c0072",
+     "c0107"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261111T191107Z-w03-val.vf",
+    "games": 2634,
+    "positions": 250534,
+    "positions_unsaved": 115035,
+    "positions_saved": 135499,
+    "bytes": 1096960,
+    "sha256": "9956a296f7cbfd5ad3aa17ba328ff3a865d96ac06d5bb1e741105390231327fd",
+    "chunks": [
+     "c0108",
+     "c0108"
+    ]
+   }
+  ]
+ ]
+}

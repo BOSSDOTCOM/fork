@@ -1,0 +1,33 @@
+{
+ "run": "g4s2-post",
+ "note": "retrain 8c's g4s2 training rests made at g4c's seal: g4c-w09-val and the cut filler run's -val file after their first 60 games (snapshot_parts.py hold, prefix g4s2)",
+ "totals": {
+  "games": 240648,
+  "positions": 23186434,
+  "positions_unsaved": 10570485,
+  "positions_saved": 12615949,
+  "bytes": 101409064
+ },
+ "batches": [
+  [
+   {
+    "file": "g4s2-g4c-w09-val-rest.vf",
+    "games": 238080,
+    "positions": 22941654,
+    "positions_unsaved": 10458974,
+    "positions_saved": 12482680,
+    "bytes": 100337496,
+    "sha256": "3fd5fcef7382c40a23cdf55941b4bffc1494fd82af8aec4daf688aa934feafeb"
+   },
+   {
+    "file": "g4s2-g4-gcp-20261112T214524Z-w11-val-rest.vf",
+    "games": 2568,
+    "positions": 244780,
+    "positions_unsaved": 111511,
+    "positions_saved": 133269,
+    "bytes": 1071568,
+    "sha256": "d66226644c53aa949b34b285345f74cda7ef750f7dea57e66839f622abd3e630"
+   }
+  ]
+ ]
+}

@@ -1,0 +1,85 @@
+{
+ "run": "g4-gcp-20261112T185227Z",
+ "kind": "gcp filler run (VM fork-worker-1), sealed as its own part for retrain 8c",
+ "generator": {
+  "tool": "fork_datagen",
+  "version": "0.3.0-dev+75d53f0",
+  "evaluator": "nnue (r8brft1)",
+  "arch": "x86-64-v3"
+ },
+ "settings": {
+  "openings": "lichess-2026-09.epd",
+  "openings_count": 13943421,
+  "positions_target": 250000,
+  "nodes": 20000,
+  "threads": 8,
+  "hash_mb": 1,
+  "shard_mb": 1024,
+  "tables": "syzygy 5-piece",
+  "decided_cp": 400,
+  "max_plies": 500,
+  "random_min": 2,
+  "random_max": 4,
+  "adjudicate_cp": 700,
+  "adjudicate_plies": 8,
+  "save_percent": 50,
+  "unsaved_nodes": 4000,
+  "check_nodes": 2000
+ },
+ "chunks": 43,
+ "chunk_seeds": [
+  101794509547000,
+  101794509547042
+ ],
+ "note": "chunks verified by tools/cloud/pull_datagen.sh (retrain/8c-prep 8847fe8); shards concatenated in chunk order (w00..w07 within a chunk); the last chunk is the -val file (60-game validation hold); the other chunks in 2 training files",
+ "totals": {
+  "games": 111966,
+  "positions": 10769713,
+  "positions_unsaved": 4909960,
+  "positions_saved": 5859753,
+  "bytes": 47109628
+ },
+ "batches": [
+  [
+   {
+    "file": "g4-gcp-20261112T185227Z-w00.vf",
+    "games": 54750,
+    "positions": 5259734,
+    "positions_unsaved": 2398072,
+    "positions_saved": 2861662,
+    "bytes": 23009936,
+    "sha256": "e2a82db1a412efa9267b11a0cbb35a0585a4313b0b0ea8970caa8b73538039a0",
+    "chunks": [
+     "c0000",
+     "c0020"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T185227Z-w01.vf",
+    "games": 54631,
+    "positions": 5259789,
+    "positions_unsaved": 2397672,
+    "positions_saved": 2862117,
+    "bytes": 23005872,
+    "sha256": "5d3ce247d2aa253a1e33f10c0aaea1c33a55c70171ce40aa1f33c934ea8edc4c",
+    "chunks": [
+     "c0021",
+     "c0041"
+    ]
+   },
+   {
+    "file": "g4-gcp-20261112T185227Z-w02-val.vf",
+    "games": 2585,
+    "positions": 250190,
+    "positions_unsaved": 114216,
+    "positions_saved": 135974,
+    "bytes": 1093820,
+    "sha256": "34cdab388cfedacfe08093df731c941d44c379546ee0c11462b8fd6d682f9a9b",
+    "chunks": [
+     "c0042",
+     "c0042"
+    ]
+   }
+  ]
+ ]
+}
