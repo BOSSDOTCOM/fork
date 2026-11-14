@@ -1,0 +1,22 @@
+{
+ "alpha": "0.05",
+ "base": "2b1e111eef3df22052dc2f662d7f15c46abf842c",
+ "base_opts": "",
+ "beta": "0.20",
+ "cap": "8",
+ "declared_at": "2026-11-14T01:22:10-0500",
+ "elo0": "0",
+ "elo1": "6",
+ "futility_after": "2",
+ "games": "1600",
+ "hash": "16",
+ "idea": "f12-pin-see",
+ "kind": "search",
+ "origin": "0",
+ "shards": "16",
+ "tables": "on",
+ "tc": "8+0.08",
+ "tc_class": "stc",
+ "test": "80b70bd0fa1eb17176b294d335e60be6e6f3678c",
+ "test_opts": ""
+}

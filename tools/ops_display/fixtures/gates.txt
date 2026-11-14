@@ -1,0 +1,10 @@
+i801 exit=0 flags=0
+i802 exit=0 flags=0
+c1 exit=0 flags=0
+c2 exit=0 flags=0
+ep1 exit=0 flags=0
+ep2 exit=0 flags=0
+eplo1 exit=0 flags=0
+eplo2 exit=0 flags=0
+rft1 exit=0 flags=0
+rft2 exit=0 flags=0

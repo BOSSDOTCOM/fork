@@ -1,0 +1,18 @@
+2026-11-13 22:40 UTC root-lmr-ltc: base 350ea3ab82a39451141e4c54582b0a79f07860d8, test b56adb9ced2a34eac30d7c43489c29885048fd05, bounds [0, 6], stages 0 to 5, ref phase-4, kind search, ltc, alpha 0.05, beta 0.20, cap 6, futility after 2 stages, idea root-lmr (try 1 of 2)
+2026-11-13 22:40 UTC root-lmr-ltc: stage 0: run 43521188039 dispatched (ledger)
+2026-11-14 00:01 UTC root-lmr-ltc: stage 0: run 43521188039 merged
+    Shards: 16 (done); pairs 832, games 1664 (1664 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 18.18 +/- 9.01, nElo: 33.75 +/- 16.69
+    Ptnml(0-2): [5, 173, 398, 242, 14]
+    LLR: 2.54 (-1.56, 2.77) [0.00, 6.00] nElo: continue
+    Verdict: continue
+2026-11-14 00:01 UTC root-lmr-ltc: stage 1: run 43531310147 dispatched (ledger)
+2026-11-14 01:20 UTC root-lmr-ltc: stage 1: run 43531310147 merged
+    Shards: 32 (done); pairs 1664, games 3328 (3328 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 14.94 +/- 6.24, nElo: 28.29 +/- 11.80
+    Ptnml(0-2): [12, 343, 818, 472, 19]
+    LLR: 4.18 (-1.56, 2.77) [0.00, 6.00] nElo: H1 accepted
+    Verdict: H1 accepted
+2026-11-14 01:20 UTC root-lmr-ltc: decided after stage 1: H1 accepted

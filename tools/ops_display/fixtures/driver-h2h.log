@@ -1,0 +1,8 @@
+2026-11-08 14:07 UTC tm-variant: head-to-head of UseShareTime: values a b, 2 stage(s) per pairing from stage 0, prefer a (the simpler value (owner: prefer (a) within the margin)), tie margin 0.5 e, idea tm-r8
+2026-11-08 14:07 UTC tm-variant: pairing tm-variant.a-b: a (base) against b (test)
+    a vs b: b - a +22.75 +/- 12.04 nElo, 3,200 games, Ptnml(0-2): [23, 347, 763, 422, 45]
+    a: +0.00 +/- 0.00 nElo against a
+    b: +22.75 +/- 12.04 nElo against a
+    winner: b
+    | `UseShareTime` | b | **Head-to-head** (2026-11-08, h2h tm-variant, runs 42488242225, 42495448043): values a, b, 2 stages of 1,600 games on the same openings (3,200 games); b - a +22.75 +/- 12.04 nElo; declared tie rule: a (the simpler value (owner: prefer (a) within the margin)) unless beaten by more than 0.5 e. Fork's own measurement (DESIGN.md �6, 2026-11-07 decision 3). |
+2026-11-08 15:52 UTC tm-variant: picked b (pick.json, constants-line.md); next, its design R SPRT against off on fresh openings: tools/github/sprt_run.sh --kind search --idea tm-r8 --origin 2 NAME OFF-COMMIT 620cd058059e56c5399fc78037620568877072fd

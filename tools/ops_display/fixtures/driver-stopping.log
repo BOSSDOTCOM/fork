@@ -1,0 +1,12 @@
+2026-11-09 05:16 UTC i59-f1a-fixednode: base fcc1298de7c77f873efb3017e395bd6e43274b78, test 05061cef5c54d55752467f2da6d439823ef55f01, bounds [0, 5], stages 0 to 0, ref phase-4
+2026-11-09 05:16 UTC i59-f1a-fixednode: stage 0: run 42566321026 dispatched (ledger)
+2026-11-09 06:02 UTC i59-f1a-fixednode: stage 0: run 42566321026 ended 'failure'; stopping
+2026-11-09 06:43 UTC i59-f1a-fixednode: base fcc1298de7c77f873efb3017e395bd6e43274b78, test 05061cef5c54d55752467f2da6d439823ef55f01, bounds [0, 5], stages 0 to 0, ref phase-4
+2026-11-09 06:43 UTC i59-f1a-fixednode: stage 0: run 42574807031 dispatched (ledger)
+2026-11-09 07:26 UTC i59-f1a-fixednode: stage 0: run 42574807031 merged
+    Shards: 16 (done); pairs 800, games 1600 (1600 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: -19.78 +/- 9.67, nElo: -34.91 +/- 17.02
+    Ptnml(0-2): [25, 221, 385, 158, 11]
+    LLR: -2.48 (-2.94, 2.94) [0.00, 5.00] nElo: continue
+2026-11-09 07:26 UTC i59-f1a-fixednode: undecided after stage 0
