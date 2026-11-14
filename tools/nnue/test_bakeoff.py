@@ -24,6 +24,7 @@ import chess
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import contacts  # noqa: E402
 import convert  # noqa: E402
 import extend_weights  # noqa: E402
 import fit_maps  # noqa: E402
@@ -50,7 +51,7 @@ def description(name):
 
 
 def training_inputs(arch):
-    return arch.exposure_start + (models.EXPOSURE_ROWS + 10 if arch.exposure else 0)
+    return arch.link_start + (contacts.link_count(arch.link_ranks) if arch.links else 0)
 
 
 def synthetic_weights(arch, seed):
@@ -62,7 +63,7 @@ def synthetic_weights(arch, seed):
     def r(count, lim):
         return [models.to_f32(rng.uniform(-lim, lim)) for _ in range(count)]
     w = {'l0w': r(n * h, 0.06), 'l0b': r(h, 0.3)}
-    if arch.name in ('s512', 'h512', 's512x'):
+    if arch.name in ('s512', 'h512', 's512x', 's512pp', 'h512pp'):
         w.update(l1w=r(8 * 2 * h, 0.5), l1b=r(8, 0.2))
     elif arch.name == 'afs':
         w.update(l1w=r(128 * h, 0.5), l1b=r(128, 0.3), l2w=r(256 * 16, 0.6), l2b=r(256, 0.3),
@@ -327,6 +328,161 @@ class CombinedLayout(unittest.TestCase):
                 label = f'{name} factoriser {factoriser} exposure {exposure}'
                 self.assertEqual(len(merged), rows * arch.saved_inputs, label)
                 self.assertEqual(merged[rows * saved:], w[rows * start:], label)
+
+
+class RegionedLinks(unittest.TestCase):
+    """H512+PP (architecture 9, bake-off round 3's option a): S512+PP's piece
+    inputs per own-king region of the map M4, H-512's factoriser, the links
+    shared after the region rows; and its warm start from an S512+PP net
+    (extend_weights.py), float and integer."""
+
+    M4 = [0, 1, 1, 1] + [2] * 4 + [3] * 24  # e1 | f1-h1 | rank 2 | ranks 3-8, written out apart from models.py
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.tmp = Path(self.dir.name)
+        self.pp = models.Arch('s512pp', table=PHASE)
+        self.kr = models.Arch('h512pp', table=PHASE)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def net_of(self, arch, w, scale=107):
+        """Fork's file for float weights `w` as the trainer saves them (bullet's quantised.bin, converted)."""
+        desc = {'name': arch.name, 'architecture': arch.id, 'inputs': arch.saved_inputs, 'hidden': 512,
+                'qa': 255, 'qb': 64, 'regions': arch.regions if arch.name == 'h512pp' else None,
+                'table': arch.table,
+                'quantised': [{'name': 'l0w', 'rows': 512, 'cols': arch.saved_inputs, 'type': 'i16', 'factor': 255},
+                              {'name': 'l0b', 'rows': 512, 'cols': 1, 'type': 'i16', 'factor': 255},
+                              {'name': 'l1w', 'rows': 8, 'cols': 1024, 'type': 'i16', 'factor': 64},
+                              {'name': 'l1b', 'rows': 8, 'cols': 1, 'type': 'i32', 'factor': 16320}]}
+        _, qbin = bullet_files(arch, desc, w)
+        return convert.convert(qbin, desc, scale)
+
+    def test_the_layout(self):
+        self.assertEqual(self.kr.regions, self.M4)
+        self.assertEqual((self.kr.id, self.kr.region_count, self.kr.factor_start, self.kr.link_start),
+                         (9, 4, 3072, 3840))
+        self.assertEqual(self.kr.saved_inputs, 3072 + 608)
+        self.assertEqual(training_inputs(self.kr), 3840 + 608)
+        desc = json.loads((HERE / 'h512pp.json').read_text(encoding='utf-8'))
+        self.assertEqual((desc['architecture'], desc['inputs'], desc['regions']), (9, 3680, self.M4))
+        self.assertEqual(desc['table'], json.loads((HERE / 's512pp.json').read_text(encoding='utf-8'))['table'])
+
+    def test_features_take_the_own_kings_region_and_the_factoriser(self):
+        # Kiwipete: both kings on e1 / e8 (region 0); after Kf1 White's is in
+        # region 1 (f1), Black's still in region 0.
+        kf1 = 'r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4K1R b kq - 1 1'
+        for fen, white_region in ((FENS[1], 0), (kf1, 1)):
+            board = chess.Board(fen)
+            for persp in chess.COLORS:
+                plain = models.features(self.pp, board, persp)
+                pieces = [f for f in plain if f < 768]
+                links = [f - 768 for f in plain if f >= 768]
+                region = white_region if persp == chess.WHITE else 0
+                want = sorted([768 * region + f for f in pieces] + [3072 + f for f in pieces] +
+                              [3840 + i for i in links])
+                self.assertEqual(models.features(self.kr, board, persp), want, f'{fen} {persp}')
+                self.assertTrue(links, fen)
+
+    def test_the_merge_adds_the_factoriser_to_every_region_and_keeps_the_links(self):
+        rows = 2
+        w = [float(i) for i in range(rows * training_inputs(self.kr))]
+        merged = models.merge(self.kr, w, rows)
+        self.assertEqual(len(merged), rows * 3680)
+        for r in range(4):
+            for f in (0, 383, 767):
+                got = merged[rows * (768 * r + f):rows * (768 * r + f + 1)]
+                want = [w[rows * (768 * r + f) + i] + w[rows * (3072 + f) + i] for i in range(rows)]
+                self.assertEqual(got, want, (r, f))
+        self.assertEqual(merged[rows * 3072:], w[rows * 3840:])
+
+    def test_legs_pass(self):
+        bake = Bakeoff('test_every_architecture_passes_its_legs')
+        bake.setUp()
+        try:
+            self.assertEqual(description('h512pp')['regions'], self.M4)
+            rc, stats = bake.legs('h512pp')
+        finally:
+            bake.tearDown()
+        self.assertEqual(rc, 0)
+        self.assertEqual(stats['positions'], len(FENS))
+        self.assertLess(stats['loss_max'], 30, stats)
+
+    def test_the_float_warm_start_evaluates_as_its_source_and_saves_its_rows_in_every_region(self):
+        w = synthetic_weights(self.pp, 11)
+        wk = netformat.read_weights_bin(extend_weights.regioned_weights(netformat.write_weights_bin(w)))
+        self.assertEqual(len(wk['l0w']), (3840 + 608) * 512)
+        self.assertTrue(all(x == 0.0 for x in wk['l0w'][:3072 * 512]))
+        self.assertEqual(wk['l0w'][3072 * 512:], w['l0w'])
+        for k in ('l0b', 'l1w', 'l1b'):
+            self.assertEqual(wk[k], w[k])
+        for fen in FENS:
+            board = chess.Board(fen)
+            self.assertEqual(models.r_float(self.kr, wk, board), models.r_float(self.pp, w, board), fen)
+        # Saved by the trainer (each region = region + factoriser) and converted, it is the integer expansion
+        # of the source's own file, byte for byte.
+        self.assertEqual(self.net_of(self.kr, wk), extend_weights.regioned_net(self.net_of(self.pp, w)))
+        with self.assertRaises(ValueError):  # already regioned
+            extend_weights.regioned_weights(netformat.write_weights_bin(wk))
+
+    def test_the_integer_expansion_evaluates_as_its_source(self):
+        source = self.net_of(self.pp, synthetic_weights(self.pp, 12))
+        out = extend_weights.regioned_net(source)
+        head, src_head = netformat.header_fields(out), netformat.header_fields(source)
+        self.assertEqual((head['architecture'], head['inputs'], head['scale'], head['buckets']),
+                         (9, 3680, src_head['scale'], src_head['buckets']))
+        self.assertEqual(len(out), 64 + 128 + 3680 * 1024 + 1024 + 8 * 1024 * 2 + 32)
+        kr = models.arch_from_net('h512pp', out[64:])
+        self.assertEqual((kr.regions, kr.table), (self.M4, PHASE))
+        net, src = models.unpack(kr, out[64:]), models.unpack(self.pp, source[64:])
+        perturbed = extend_weights.regioned_net(source, perturb=3)
+        pnet = models.unpack(kr, perturbed[64:])
+        first = list(src['ftw'][:768 * 512])
+        self.assertEqual(list(pnet['ftw'][:768 * 512]), first)  # region 0 kept
+        for r in (1, 2, 3):
+            block = list(pnet['ftw'][768 * 512 * r:768 * 512 * (r + 1)])
+            self.assertNotEqual(block, first, r)
+            self.assertTrue(all(abs(x) <= abs(y) for x, y in zip(block, first)), r)
+        differs = 0
+        for fen in FENS + ['r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R4K1R b kq - 1 1']:
+            board = chess.Board(fen)
+            self.assertEqual(models.r_int(kr, net, 107, board), models.r_int(self.pp, src, 107, board), fen)
+            differs += models.r_int(kr, pnet, 107, board) != models.r_int(self.pp, src, 107, board)
+        self.assertGreater(differs, 0)  # a king off e1 / e8 reads a perturbed region
+        with self.assertRaises(ValueError):
+            extend_weights.regioned_net(out)  # not an S512+PP file
+
+    def test_the_link_clamp_reads_every_regions_piece_rows(self):
+        import pp_bound
+        source = bytearray(self.net_of(self.pp, synthetic_weights(self.pp, 13)))
+        out = bytearray(extend_weights.regioned_net(bytes(source)))
+        _, over8, clamped8, allow8 = pp_bound.bound(source)
+        w, over9, clamped9, allow9 = pp_bound.bound(out)
+        self.assertEqual((over9, clamped9, allow9), (over8, clamped8, allow8))  # equal regions, equal bound
+        at, h = pp_bound.WEIGHTS_AT, 512
+
+        def put(row, unit, value):
+            struct.pack_into('<h', out, at + 2 * (row * h + unit), value)
+        # Unit 7: a region-3 piece weight of 900 leaves (32767 - |bias| - 28,800) // 64 for the links; a link
+        # weight of 200 is over it and is clamped. Unit 9: a piece weight of 1,100 alone breaks the bound.
+        put(768 * 3 + 50, 7, 900)
+        put(3072 + 10, 7, 200)
+        put(768 * 2 + 5, 9, 1100)
+        w, over, clamped, allow = pp_bound.bound(out)
+        self.assertEqual(allow[7], (32767 - abs(struct.unpack_from('<h', out, at + 2 * (3680 * h + 7))[0]) - 28800)
+                         // 64)
+        self.assertEqual(w[(3072 + 10) * h + 7], allow[7])
+        self.assertLess(allow[9], 0)
+        self.assertEqual(pp_bound.piece_bound_units(allow), 1)
+        self.assertEqual([w[r * h + 9] for r in range(3072, 3680)],
+                         [struct.unpack_from('<h', out, at + 2 * (r * h + 9))[0] for r in range(3072, 3680)])
+
+    def test_the_committed_test_net_is_r8brft1_expanded(self):
+        # nets/r8brft1kr4.fnet (CI's network job builds it; its bench is r8brft1's) is reproducible.
+        nets = HERE.parent.parent / 'nets'
+        self.assertEqual(extend_weights.regioned_net((nets / 'r8brft1.fnet').read_bytes()),
+                         (nets / 'r8brft1kr4.fnet').read_bytes())
 
 
 class FitMaps(unittest.TestCase):

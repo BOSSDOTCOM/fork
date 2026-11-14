@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """S512+PP's reader bound on a converted net (src/eval/nnue/net_file.cpp: per first-layer unit, |bias| + 32 x its
-largest |piece weight| + 64 x its largest |link weight| <= 32,767): reports the units over it and the link
+largest |piece weight| + 64 x its largest |link weight| <= 32,767; H512+PP's the same, the piece weights over every
+region's rows, bake-off round 3's option a, architecture 9): reports the units over it and the link
 weights beyond their unit's allowance; with --clamp OUT.fnet writes a copy whose link weights are clamped to
 each unit's allowance (the owner's fallback, 2026-11-05: clamp at conversion, report the clamped share and the
 quantization loss), its checksum rewritten.
@@ -21,30 +22,43 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import netformat  # noqa: E402
 
 PIECES, LINKS, H, MAX_LINKS = 768, 608, 512, 64
-WEIGHTS_AT = 64 + 128  # the header, then S512+PP's map block
+WEIGHTS_AT = 64 + 128  # the header, then the map block (S512+PP's, H512+PP's)
+MAX_REGIONS = 4  # H512+PP (src/eval/nnue/net_shape.hpp, NetMaxRegions)
 
 
 def bound(data):
     """(weights clamped to their units' allowances, units over the bound, clamped count, allowances)."""
-    inputs, hidden = struct.unpack_from('<II', data, 16)
-    if (inputs, hidden) != (PIECES + LINKS, H):
-        raise ValueError(f'not an S512+PP net: {inputs} inputs, {hidden} hidden')
+    arch, inputs, hidden = struct.unpack_from('<III', data, 12)
+    regions = (inputs - LINKS) // PIECES
+    if hidden != H or (arch, inputs) not in ((8, PIECES + LINKS),) + tuple(
+            (9, PIECES * r + LINKS) for r in range(1, MAX_REGIONS + 1)):
+        raise ValueError(f'not an S512+PP or H512+PP net: architecture {arch}, {inputs} inputs, {hidden} hidden')
+    pieces = PIECES * regions
     w = list(struct.unpack_from(f'<{inputs * H}h', data, WEIGHTS_AT))
     b = struct.unpack_from(f'<{H}h', data, WEIGHTS_AT + 2 * inputs * H)
     over, clamped, allowances = 0, 0, []
     for j in range(H):
-        piece = max(abs(w[r * H + j]) for r in range(PIECES))
-        link = max(abs(w[r * H + j]) for r in range(PIECES, inputs))
+        piece = max(abs(w[r * H + j]) for r in range(pieces))
+        link = max(abs(w[r * H + j]) for r in range(pieces, inputs))
         allow = (32767 - abs(b[j]) - 32 * piece) // MAX_LINKS
         allowances.append(allow)
         if link > allow:
             over += 1
-        for r in range(PIECES, inputs):
+        if allow < 0:
+            # The piece rows alone break the bound (H512+PP's region rows can grow in training): no clamp of
+            # the links mends that, so the unit is left as it is and counted (piece_bound_units).
+            continue
+        for r in range(pieces, inputs):
             v = w[r * H + j]
             if abs(v) > allow:
                 clamped += 1
                 w[r * H + j] = allow if v > 0 else -allow
     return w, over, clamped, allowances
+
+
+def piece_bound_units(allowances):
+    """The units whose piece rows alone break the reader's bound (a negative allowance)."""
+    return sum(1 for a in allowances if a < 0)
 
 
 def main(argv=None):
@@ -66,8 +80,13 @@ def main(argv=None):
     failed = a.max_clamped is not None and clamped > a.max_clamped
     if failed:
         print(f'FAIL {clamped} link weights to clamp, above the limit of {a.max_clamped}', file=sys.stderr)
+    piece_over = piece_bound_units(allowances)
+    if piece_over:
+        failed = True
+        print(f'FAIL {piece_over} units over the bound by their piece weights alone: no link clamp mends them',
+              file=sys.stderr)
     print(json.dumps({'units_over': over, 'clamped': clamped, 'link_weights': LINKS * H,
-                      'max_clamped': a.max_clamped}))
+                      'max_clamped': a.max_clamped, 'piece_bound_units': piece_over}))
     return 1 if failed else 0
 
 
