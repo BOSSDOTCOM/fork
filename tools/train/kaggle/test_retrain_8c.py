@@ -165,6 +165,12 @@ class SettingTests(unittest.TestCase):
                 self.assertEqual(a, k.ARMS[arm])
             self.assertEqual(m.CANDIDATES, list(m.ARMS))
             self.assertEqual(m.MANIFESTS, k.MANIFESTS)
+            self.assertIn(m.QUEUES[0][0], m.ARMS)
+        # No arm is named in the session's code outside QUEUES (the i80 smoke of 2026-11-13 failed on a hard-coded
+        # lists['c1']): every quoted arm name appears only in the QUEUES line.
+        body = [line for line in src.splitlines() if not line.startswith('QUEUES = ')]
+        for arm in k.ARMS:
+            self.assertFalse(any(f"'{arm}'" in line for line in body), arm)
 
     def test_the_split_is_made_in_the_session(self):
         self.assertNotIn('r8c-split', k.MANIFESTS)                                    # no upload of ep- copies

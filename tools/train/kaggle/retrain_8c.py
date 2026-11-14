@@ -350,7 +350,7 @@ def session():
     summary['init_weights'] = {'found': len(init), 'sha256_ok': init_ok}
     ok = built and record['ok'] and init_ok and INIT['val'] in by_name
     save()
-    any_file = by_name[lists['c1'][0]] if ok else None
+    any_file = by_name[lists[QUEUES[0][0]][0]] if ok else None  # the first queued arm's first file (any file serves)
 
     def score(weights, val, positions, out_dir, result_weight=0.5, device=0):
         """A float weights file's loss on a file (superbatch 0 of a --superbatches 0 run)."""
