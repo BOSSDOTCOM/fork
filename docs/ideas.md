@@ -2311,6 +2311,13 @@ whose weaknesses and data gaps decide their targets and order.
 - **status:** untested (plan only, owner, 2026-11-09; after the
   conversion-and-defense results). **runtime cost:** none. **earliest
   phase:** Phase 4.
+- **2026-11-14 (owner, with bake-off round 3's option (d)):** recorded as a
+  zero-runtime-cost option for a later retrain: auxiliary targets
+  predicted during training only, for example **mobility** and **king
+  danger** (the kind of context option (d) feeds the output layer at run
+  time, learned here instead as training-only heads). The owner's message
+  called this idea 66; the content is this entry's (idea 66 is
+  turning-point starts). Plan only; no run scheduled.
 
 ## 66. Turning-point starts
 
