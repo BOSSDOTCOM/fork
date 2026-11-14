@@ -39,9 +39,10 @@ Layout: result/<arm>/ (best/, ck-*/, window/, val.txt, train.log, run.json, file
 parity-trainer files: the trainer leg of the warm start), the summary result/bakeoff_r3.json.
 
 Arm sets: ARM_SET = 'all' (both), 'kr' or 'pp' (one arm only), set in a kernel copy by one exact replacement, as 8c's.
-Smoke mode: SMOKE = True, in a kernel copy only, shrinks the sizes and nothing else (8c's smoke set of originals, 8
-batches a superbatch, 4 superbatches with the drop after 2 and the window 3-4): every check, both arms, the averages,
-quantisation and the offline scores run as in the real session; its laps measure H512+PP's speed on the T4.
+Smoke mode: SMOKE = True, in a kernel copy only, shrinks the sizes and nothing else (8c's smoke set of originals, 4
+full-size superbatches with the drop after 2 and the window 3-4, the offline scores on the 20,000-position prefix):
+every check, both arms, the averages, quantisation and the offline scores run as in the real session; its laps (each
+checkpoint's time, run.json's laps) measure H512+PP's speed on the T4 against S512+PP's beside it.
 
 COMMIT must hold this file, the trainer's h512pp architecture (tools/train), tools/nnue (extend_weights.py,
 h512pp.json) and retrain 8c's manifests (data/manifests: on retrain/8c-prep until it is merged).
@@ -96,10 +97,12 @@ START_TOLERANCE = 1e-5      # an arm's superbatch 0 against the reference (8c's 
 BASE_SETTINGS = {'superbatches': 360, 'lr': 1e-4, 'lr_step': 180, 'window': (331, 360), 'keep': (180, 360),
                  'result_weight': 0.0, 'files': 'control', 'val': VAL_BLEND}
 if SMOKE:
-    BATCHES = 8
+    # Full-size superbatches (305 batches), so each arm's laps are the real session's; 4 of them, and the offline
+    # scores on the monitoring prefix only.
     BASE_SETTINGS = {**BASE_SETTINGS, 'superbatches': 4, 'lr_step': 2, 'window': (3, 4), 'keep': (2, 4)}
     VAL, VAL_BLEND = 'g4s1-val.vf', 'bl-g4s1-val.vf'
     BASE_SETTINGS['val'] = VAL_BLEND
+    ALL_POSITIONS = VAL_POSITIONS
 ARMS = {'kr1': {**BASE_SETTINGS, 'arch': 'h512pp', 'init': 'regioned', 'seed': 1},
         'pp1': {**BASE_SETTINGS, 'arch': 's512pp', 'init': 'source', 'seed': 1}}
 QUEUES = [['kr1'], ['pp1']]
@@ -407,10 +410,14 @@ def session():
                     curve.append((int(line.split()[0]), float(line.split()[1])))
         return curve
 
-    def prune(arm, out_dir, final=False):
-        """8a's: keeps the arm's KEEP, the best so far, the two newest while training; window weights copied first."""
+    def prune(arm, out_dir, final=False, seen=None):
+        """8a's: keeps the arm's KEEP, the best so far, the two newest while training; window weights copied first.
+        `seen` gets each checkpoint's time (its superbatch.txt), recorded before any checkpoint is removed."""
         a = ARMS[arm]
         done = checkpoints(arm, out_dir)
+        if seen is not None:
+            for sb, d in done.items():
+                seen.setdefault(sb, os.path.getmtime(f'{d}/superbatch.txt'))
         os.makedirs(f'{out_dir}/window', exist_ok=True)
         keep = set(a['keep'])
         if not final:
@@ -454,10 +461,11 @@ def session():
                f'>> {out_dir}/train.log 2>&1')
         began = time.time()
         proc = subprocess.Popen(cmd, shell=True, env={**os.environ, **env})
+        seen = {}
         while proc.poll() is None:
-            prune(arm, out_dir)
-            time.sleep(60)
-        prune(arm, out_dir, final=True)
+            prune(arm, out_dir, seen=seen)
+            time.sleep(20)
+        prune(arm, out_dir, final=True, seen=seen)
         rec = {'arm': arm, 'arch': a['arch'], 'device': device, 'rc': proc.returncode,
                'seconds': round(time.time() - began, 1), 'files': len(files)}
         curve = curve_of(out_dir)
@@ -465,6 +473,12 @@ def session():
         rec['initial_loss'] = curve[0][1] if curve and curve[0][0] == 0 else None
         trained = [c for c in curve if c[0] > 0]
         rec['positions_per_second'] = round(BATCH * BATCHES * len(trained) / rec['seconds']) if trained else None
+        # Laps: seconds from the start (superbatch 1, startup and the initial validation included) or from the last
+        # checkpoint (each later superbatch, its training and the previous superbatch's validation).
+        times = [began] + [seen[sb] for sb in sorted(seen)]
+        rec['laps'] = {sb: round(t - p, 1) for sb, t, p in zip(sorted(seen), times[1:], times[:-1])}
+        later = [v for sb, v in rec['laps'].items() if sb > 1]
+        rec['lap_mean_after_first'] = round(sum(later) / len(later), 2) if later else None
         done = checkpoints(arm, out_dir)
         if trained:
             sb, best = min(trained, key=lambda c: c[1])
