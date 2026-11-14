@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Starts a shell command in the background, detached from the step, and returns at once (owner, 2026-11-14:
+# the SPRT shards' progress uploads, tools/cloud/shard_progress.py). The command keeps running through the
+# job's later steps, in a session of its own, until it ends or the runner cleans up the job's processes. It
+# is started from an action, not a `run` step, so it gets the job's runtime credentials (an action's process
+# gets ACTIONS_RUNTIME_TOKEN and ACTIONS_RESULTS_URL, a run step's does not), which an artifact upload needs
+# (tools/cloud/progress_upload.sh); this action's node goes to it as FORK_PROGRESS_NODE. The step's env
+# reaches the command; its output goes to the file `log`. This action never fails: a command that cannot
+# start is a warning.
+name: Start detached
+description: Start a shell command in the background, detached, with the job's runtime credentials
+inputs:
+  command:
+    description: The bash command (from the workspace folder; pass values through the step's env)
+    required: true
+  log:
+    description: The file that takes the command's output
+    required: true
+runs:
+  using: node24
+  main: start.js

@@ -310,6 +310,9 @@ tool_tests() {  # python | all
   # The gauntlet archive (owner, 2026-11-09): manifest, verification and idempotence against a fake gh.
   PYTHON=$py bash tools/gauntlet/test_archive.sh >>"$log" 2>&1 || fail "tool tests: tools/gauntlet/test_archive.sh"
   PYTHON=$py bash tools/cloud/test_run_shard.sh >>"$log" 2>&1 || fail "tool tests: tools/cloud/test_run_shard.sh"
+  # The SPRT shards' progress uploads (owner, 2026-11-14): a shard with and without the watcher, byte for byte
+  # (fake games; CI also plays real ones).
+  PYTHON=$py bash tools/cloud/test_shard_progress.sh >>"$log" 2>&1 || fail "tool tests: tools/cloud/test_shard_progress.sh"
   # The Control Center's WSL launch script for a data-generation part, with stubs (Linux only).
   if [ "$(uname -s)" = Linux ]; then
     bash tools/control_center/test_start_part.sh >>"$log" 2>&1 || fail "tool tests: tools/control_center/test_start_part.sh"
