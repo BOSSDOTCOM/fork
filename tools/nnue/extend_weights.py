@@ -36,8 +36,24 @@ forms, whose evaluations are the source's exactly:
 The source's kind is read from its first bytes (a Fork net file starts with
 FORKNET).
 
-    extend_weights.py S512_WEIGHTS.bin OUT.bin [--arch s512x|s512cl|s512pp|h512pp]
-    extend_weights.py S512PP.fnet OUT.fnet --arch h512pp [--perturb SEED]
+S512+PPXL's warm start (bake-off round 3's x_lower arm, architecture 10;
+owner, 2026-11-14), from an S512+PP net the same way (r8brft1 first; 8c's
+winner when promoted), with the exposure plane's inputs at zero, so its
+evaluations are the source's exactly:
+- from S512+PP's float weights (weights.bin), the trainer's warm start
+  (tools/train --arch s512ppxl --init-weights): the 640 exposure inputs and
+  their 10-input factoriser put between the 768 piece inputs and the 608
+  links, as zeros (the trainer's order: pieces, exposure, its factoriser,
+  links);
+- from S512+PP's net file, the engine's net: the 640 exposure rows put
+  between the piece rows and the links as zeros, everything else copied. A
+  build with it gives the source's bench. With --perturb SEED the exposure
+  rows take small seeded weights instead (a test net whose evaluations
+  depend on the exposed set; the reader does not bound the exposure rows,
+  which Fork sums in 32 bits).
+
+    extend_weights.py S512_WEIGHTS.bin OUT.bin [--arch s512x|s512cl|s512pp|h512pp|s512ppxl]
+    extend_weights.py S512PP.fnet OUT.fnet --arch h512pp|s512ppxl [--perturb SEED]
 """
 import argparse
 import struct
@@ -156,14 +172,91 @@ def regioned_net(data, regions=models.XGR_REGIONS, perturb=None, hidden=512):
     return netformat.write_net2(arch.id, arch.saved_inputs, hidden, h['buckets'], h['scale'], out)
 
 
+def exposure_weights(data, hidden=512):
+    """S512+PP's weights.bin bytes as S512+PPXL's warm start: the 650
+    exposure inputs (640 rows and their factoriser) put between l0w's 768
+    piece inputs and its links as zeros, every other record copied byte for
+    byte."""
+    out, at, done = bytearray(), 0, False
+    while at < len(data):
+        nl = data.index(b'\n', at)
+        name = data[at:nl].decode('ascii')
+        (n,) = struct.unpack_from('<Q', data, nl + 1)
+        body = data[nl + 9:nl + 9 + 4 * n]
+        if name == 'l0w':
+            if n != (models.PIECE_SQUARES + pp_links()) * hidden:
+                raise ValueError("not S512+PP's first layer")
+            pieces = 4 * models.PIECE_SQUARES * hidden
+            out += (b'l0w\n' + struct.pack('<Q', n + EXPOSURE_INPUTS * hidden) + body[:pieces] +
+                    bytes(4 * EXPOSURE_INPUTS * hidden) + body[pieces:])
+            done = True
+        else:
+            out += data[at:nl + 9 + 4 * n]
+        at = nl + 9 + 4 * n
+    if not done:
+        raise ValueError('no l0w record')
+    return bytes(out)
+
+
+# --perturb's exposure weights: seeded integers in [-PERTURB_RANGE, PERTURB_RANGE], small beside the piece rows
+# (a test net's evaluations stay near its source's, so its search stays ordinary) yet enough to move the
+# evaluation of a position with an exposed piece (tools/nnue/test_bakeoff.py checks that some parity positions
+# change).
+PERTURB_RANGE = 16
+
+
+def exposure_net(data, perturb=None, hidden=512):
+    """An S512+PP net file (architecture 8) as S512+PPXL's (architecture 10):
+    the source's piece rows, 640 exposure rows (zero, or with `perturb` small
+    seeded weights), then the source's links, biases and output layer; its map
+    block, phase table and scale kept."""
+    import array
+    import random
+    h = netformat.header_fields(data)
+    links = pp_links()
+    if (h['version'], h['architecture'], h['inputs'], h['hidden']) != (2, 8, models.PIECE_SQUARES + links, hidden):
+        raise ValueError(f'not an S512+PP net file: {h}')
+    payload = data[netformat.HEADER_BYTES:]
+    block, rest = payload[:models.MAP_BLOCK], payload[models.MAP_BLOCK:]
+    if any(block[:32]) or any(block[57:]):
+        raise ValueError("an S512+PP net's map block holds no regions and no other bytes")
+    arch = models.Arch('s512ppxl', table=list(block[32:57]))
+    pieces = models.PIECE_SQUARES * 2 * hidden
+    rows = array.array('h', bytes(2 * models.EXPOSURE_ROWS * hidden))
+    if perturb is not None:
+        rng = random.Random(perturb)
+        for i in range(len(rows)):
+            rows[i] = rng.randint(-PERTURB_RANGE, PERTURB_RANGE)
+    if sys.byteorder != 'little':
+        rows.byteswap()
+    out = block + rest[:pieces] + rows.tobytes() + rest[pieces:]
+    assert len(out) == len(payload) + 2 * models.EXPOSURE_ROWS * hidden
+    return netformat.write_net2(arch.id, arch.saved_inputs, hidden, h['buckets'], h['scale'], out)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('weights')
     ap.add_argument('out')
-    ap.add_argument('--arch', default='s512x', choices=('s512x', 's512cl', 's512pp', 'h512pp'))
+    ap.add_argument('--arch', default='s512x', choices=('s512x', 's512cl', 's512pp', 'h512pp', 's512ppxl'))
     ap.add_argument('--perturb', type=int, metavar='SEED',
-                    help='h512pp from a net file: the regions after the first moved toward zero (a test net)')
+                    help='h512pp from a net file: the regions after the first moved toward zero; s512ppxl from a '
+                         'net file: small seeded exposure weights (test nets)')
     a = ap.parse_args(argv)
+    if a.arch == 's512ppxl':
+        source = Path(a.weights).read_bytes()
+        if source[:8] == netformat.MAGIC:
+            data = exposure_net(source, perturb=a.perturb)
+            kind = 'net file, ' + (f'exposure rows seeded (seed {a.perturb})' if a.perturb is not None
+                                   else 'exposure rows zero')
+        else:
+            if a.perturb is not None:
+                ap.error('--perturb applies to a net file only')
+            data = exposure_weights(source)
+            kind = 'float weights, the exposure inputs and their factoriser zero'
+        Path(a.out).write_bytes(data)
+        print(f'{a.out}: {len(data)} bytes, S512+PPXL ({kind})')
+        return 0
     if a.arch == 'h512pp':
         source = Path(a.weights).read_bytes()
         if source[:8] == netformat.MAGIC:
@@ -179,7 +272,7 @@ def main(argv=None):
         print(f'{a.out}: {len(data)} bytes, H512+PP ({kind})')
         return 0
     if a.perturb is not None:
-        ap.error('--perturb applies to --arch h512pp only')
+        ap.error('--perturb applies to --arch h512pp and s512ppxl only')
     if a.arch == 's512cl':
         data = append_l0w_inputs(Path(a.weights).read_bytes(), contact_inputs())
         Path(a.out).write_bytes(data)

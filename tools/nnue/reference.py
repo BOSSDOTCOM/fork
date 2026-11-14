@@ -23,6 +23,9 @@ With --layout s512/h512/afs/xgr512.json (fitted maps included), every
 command handles that bake-off architecture through models.py (DESIGN.md
 §5.4); without it, B0.
     reference.py synthetic --out DIR [--seed N]      (random bullet-layout files, for tests)
+    reference.py exposed --epd POSITIONS --layout L.json --out FILE
+        (each position's exposed squares under the layout's exposure rule, "FEN | squares", a1 = 0,
+        ascending: the engine's test file tests/nnue/s512ppxl-exposed.txt)
 """
 import argparse
 import json
@@ -280,6 +283,19 @@ def feature_leg(a):
     return 1 if bad or n == 0 else 0
 
 
+def exposed(a):
+    """Each position's exposed squares under the layout's exposure rule (S512+PPXL's lower-class half for
+    s512ppxl.json), one "FEN | squares" line per position (a1 = 0, ascending)."""
+    arch = arch_of(netformat.layout(a.layout))
+    if not arch.exposure:
+        print(f'{arch.name} has no exposure plane', file=sys.stderr)
+        return 1
+    with open(a.out, 'w', encoding='utf-8', newline='\n') as f:
+        for fen in read_fens(a.epd):
+            f.write(f'{fen} |' + ''.join(f' {s}' for s in sorted(models.exposed_set(arch, chess.Board(fen)))) + '\n')
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -304,8 +320,13 @@ def main(argv=None):
     f = sub.add_parser('features')
     f.add_argument('--rust', required=True, help='output of fork-train features')
     f.add_argument('--layout')
+    x = sub.add_parser('exposed')
+    x.add_argument('--epd', required=True)
+    x.add_argument('--layout', required=True)
+    x.add_argument('--out', required=True)
     a = ap.parse_args(argv)
-    return {'legs': legs, 'eval': evaluate, 'synthetic': synthetic, 'features': feature_leg}[a.cmd](a)
+    return {'legs': legs, 'eval': evaluate, 'synthetic': synthetic, 'features': feature_leg,
+            'exposed': exposed}[a.cmd](a)
 
 
 if __name__ == '__main__':

@@ -22,16 +22,19 @@ plus XGR's exposure inputs), 7 S512cl (S-512 plus Fork's contact and
 pawn-link inputs, contacts.py; ideas.md 41), 8 S512+PP (S-512 plus the
 pawn links only, of rank limit 1; ideas.md 40), 9 H512+PP (S512+PP's piece
 inputs copied per own-king region with H-512's factoriser, the links shared
-after the region rows; bake-off round 3's option a, owner 2026-11-14); 1 is
-B0, in reference.py. Fork's net file, version 2: the 64-byte header (magic,
+after the region rows; bake-off round 3's option a, owner 2026-11-14), 10
+S512+PPXL (S512+PP plus XGR's exposure inputs with the exposure rule's
+lower-class half only: exposed_lower_squares; bake-off round 3's x_lower arm,
+owner 2026-11-14); 1 is B0, in reference.py. Fork's net file, version 2: the 64-byte header (magic,
 version 2, id, saved inputs, hidden, QA, QB, S, bucket count, checksum),
 then a 128-byte map block (32 region bytes, 25 phase-table bytes, zeros),
 then the tensors, little-endian:
-- 2, 3, 6, 7, 8, 9: feature weights i16 [inputs][H], feature biases i16 [H], output
+- 2, 3, 6, 7, 8, 9, 10: feature weights i16 [inputs][H], feature biases i16 [H], output
   weights i16 [8][2H] (side to move's half first), output biases i32 [8]
   (6: the inputs are the 768 piece rows, then the 640 exposure rows; 7: the
   768 piece rows, then the contact rows, then the link rows; 8: the 768 piece
   rows, then the 608 link rows; 9: 768 piece rows per region, then the 608
+  link rows; 10: the 768 piece rows, then the 640 exposure rows, then the 608
   link rows);
 - 4: feature weights and biases as above, then per stack k: L1 i8 [8][16][H],
   L1 biases i32 [8][16], L2 i16 [8][32][16], L2 biases i32 [8][32], L3 i16
@@ -57,11 +60,13 @@ EXPOSURE_ROWS = 640
 XGR_REGIONS = [0, 1, 1, 1, 2, 2, 2, 2] + [3] * 24  # e1; f1-h1; rank 2; ranks 3-8 (design-novelty.md §2.1)
 PHASE_WEIGHT = {chess.KNIGHT: 1, chess.BISHOP: 1, chess.ROOK: 2, chess.QUEEN: 4}
 CLASS = {chess.PAWN: 1, chess.KNIGHT: 2, chess.BISHOP: 2, chess.ROOK: 3, chess.QUEEN: 4, chess.KING: 5}
-ARCH = {'s512': 2, 'h512': 3, 'afs': 4, 'xgr512': 5, 's512x': 6, 's512cl': 7, 's512pp': 8, 'h512pp': 9}
+ARCH = {'s512': 2, 'h512': 3, 'afs': 4, 'xgr512': 5, 's512x': 6, 's512cl': 7, 's512pp': 8, 'h512pp': 9,
+        's512ppxl': 10}
 # The squared-output family: one first layer, 8 phase-picked outputs.
-SQUARED = ('s512', 'h512', 's512x', 's512cl', 's512pp', 'h512pp')
-# Their link-carrying members: links summed after the piece rows, held to int16.
-ADDED_ROWS = ('s512x', 's512cl', 's512pp', 'h512pp')
+SQUARED = ('s512', 'h512', 's512x', 's512cl', 's512pp', 'h512pp', 's512ppxl')
+# Their members with rows after the piece rows (exposure, contacts, links): summed after the piece rows, held to
+# int16.
+ADDED_ROWS = ('s512x', 's512cl', 's512pp', 'h512pp', 's512ppxl')
 MAP_BLOCK = 128
 
 # AF-S's integer scales (design-accuracy.md §5.3-5.4), as exact rationals.
@@ -82,10 +87,12 @@ class Arch:
         self.regions = list(regions) if regions is not None else [0] * 32
         self.region_count = max(self.regions) + 1
         self.factoriser = name in ('h512', 'afs', 'xgr512', 'h512pp')
-        self.exposure = name in ('xgr512', 's512x')
+        self.exposure = name in ('xgr512', 's512x', 's512ppxl')
+        # S512+PPXL's exposure rule is the lower-class half only (exposed_lower_squares).
+        self.exposure_rule = 'lower' if name == 's512ppxl' else 'full'
         self.contacts = name == 's512cl'
-        self.links = name in ('s512cl', 's512pp', 'h512pp')  # S512+PP, H512+PP: the pawn links only
-        self.link_ranks = (contact_inputs.S512PP_RANKS if name in ('s512pp', 'h512pp')
+        self.links = name in ('s512cl', 's512pp', 'h512pp', 's512ppxl')  # all but S512cl: the pawn links only
+        self.link_ranks = (contact_inputs.S512PP_RANKS if name in ('s512pp', 'h512pp', 's512ppxl')
                            else contact_inputs.NO_RANK_LIMIT)
         self.picker = 'phase' if name != 'xgr512' else None
         self.table = list(table) if table is not None else []
@@ -137,6 +144,27 @@ def exposed_squares(board):
     return out
 
 
+def exposed_lower_squares(board):
+    """S512+PPXL's exposure rule, the lower-class half of XGR's: a non-king
+    piece attacked by an enemy piece of a lower class (python-chess's
+    pseudo-attacks, as exposed_squares'); a pawn never is."""
+    out = set()
+    for sq, piece in board.piece_map().items():
+        if piece.piece_type == chess.KING:
+            continue
+        enemy = board.attackers(not piece.color, sq)
+        if enemy and min(CLASS[board.piece_at(a).piece_type] for a in enemy) < CLASS[piece.piece_type]:
+            out.add(sq)
+    return out
+
+
+def exposed_set(arch, board):
+    """The exposed squares under the architecture's rule (None without the exposure plane)."""
+    if not arch.exposure:
+        return None
+    return exposed_lower_squares(board) if arch.exposure_rule == 'lower' else exposed_squares(board)
+
+
 def features(arch, board, persp, exposed=None):
     """Active inputs of perspective `persp` (a colour), as training sees
     them (factoriser and exposure inputs included)."""
@@ -172,7 +200,7 @@ def bucket(arch, board):
 
 
 def both_perspectives(arch, board):
-    exposed = exposed_squares(board) if arch.exposure else None
+    exposed = exposed_set(arch, board)
     return (features(arch, board, board.turn, exposed), features(arch, board, not board.turn, exposed),
             bucket(arch, board))
 
@@ -418,10 +446,11 @@ def limit_eval(cp):
 
 
 def exposure_sum(net, arch, active, acc):
-    """S512+X, S512cl, S512+PP and H512+PP: the piece accumulator plus the add-on rows
-    (the exposed pieces', or the contacts' and links', or the links'), summed without a range
-    limit and then held to the int16 range (Fork sums them in 32 bits; the
-    output clips to [0, QA] anyway)."""
+    """S512+X, S512cl, S512+PP, H512+PP and S512+PPXL: the piece accumulator plus the add-on rows
+    (the exposed pieces', or the contacts' and links', or the links', or the links' and the exposed pieces'),
+    summed without a range limit and then held to the int16 range (Fork sums the exposure and contact rows in
+    32 bits and keeps the links in the int16 sums within the reader's bound; the output clips to [0, QA]
+    anyway)."""
     out = list(acc)
     for f in saved_features(arch, active):
         if f >= arch.factor_start:
