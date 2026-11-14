@@ -16,10 +16,12 @@
 //   king 5) + the square seen from P (a1 = 0 ... h8 = 63, ranks flipped for
 //   Black). Mirrored architectures also flip the files (XOR 7) when P's own
 //   king stands on files a-d, and add 768 times the region of P's mirrored
-//   king square (a Frame). XGR's and S512+X's exposure inputs follow the
-//   piece rows. S512+PP's link inputs follow the piece rows in the same sums
-//   (H512+PP's follow every region's piece rows): a move changes them only
-//   when a pawn moves, is captured or promotes.
+//   king square (a Frame). XGR's, S512+X's and S512+PPXL's exposure inputs
+//   follow the piece rows (added at each evaluation, never kept in the
+//   sums). S512+PP's link inputs follow the piece rows in the same sums
+//   (H512+PP's follow every region's piece rows, S512+PPXL's its exposure
+//   rows): a move changes them only when a pawn moves, is captured or
+//   promotes.
 // - A perspective's frame changes only when its own king moves across the
 //   d/e line or into another region; then that perspective is recomputed
 //   from the board (H512+PP: lazily, from that frame's snapshot, by the
@@ -121,6 +123,18 @@ void sum_rows_saturated_scalar(const std::int16_t* base, const std::int16_t* con
 // lower class (pawn < knight = bishop < rook < queen < king), or attacked
 // and not defended (pseudo-attacks on the occupancy).
 Bitboard exposed_pieces(const Position& pos);
+#endif
+
+#if FORK_NET_ARCH == 10
+// S512+PPXL's exposed pieces: the rule's lower-class half only, non-king
+// pieces attacked by an enemy piece of a lower class (pawn < knight = bishop
+// < rook < queen < king; pseudo-attacks on the occupancy), so never a pawn.
+// Set-wise, from the enemy's pawn, minor and rook attacks, each computed only
+// when a piece it could expose stands on the board.
+Bitboard exposed_lower(const Position& pos);
+// The same rule square by square, from each piece's attackers: the check of
+// exposed_lower (its test, and every evaluation in FORK_DEBUG builds).
+Bitboard exposed_lower_reference(const Position& pos);
 #endif
 
 // The feature stack's work, counted in stats builds (DESIGN.md §5.7, X1):

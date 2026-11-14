@@ -3310,3 +3310,74 @@ playing change, bench must stay identical), **metric** nps by bench/ab.py with b
   (docs/research/tcec-hardware-test-plan.md entries 1 and 2); the runner A/B workflow is built (speed-ab.yml, PR #11
   to main).
   **runtime cost:** none measurable. **earliest phase:** Phase 4.
+
+## 175-184. Fable's network ideas (owner, 2026-11-14)
+
+Recorded by the owner 2026-11-14, about 11:30 AM EST, from Fable's read-only proposal
+docs/research/network-novelty-2026-11-14.md (its ideas 1-10 are ideas 175-184, in order; mechanisms, evidence,
+estimates and falsifiers are there). **Novelty of each is UNVERIFIED** (no prior-art search was made; every Elo
+and nps figure in the proposal not citing a Fork measurement is an estimate; its outside citations are from memory,
+UNVERIFIED). Common fields: **type** ELO (network) unless noted; **phase** Phase 4, after retrain 8c's promotion
+decision and around bake-off round 3's training (owner's plan, DESIGN.md decisions log 2026-11-14); **metric** each
+idea's falsifier first, then the speed-adjusted fixed-node screen and the STC SPRT where it trains; names in the
+proposal are placeholders, screened before use.
+
+### 175. State-folded rows (proposal idea 1)
+- **idea:** each piece's first-layer row is chosen by (piece, square, a small pawn-relation state): attacked by an
+  enemy pawn, defended by an own pawn (minors), rook file open/half-open/closed, the king's pawn-shield class, passed
+  pawns; trained factored (shared delta inputs per set bit), fused at export; warm start with deltas at zero
+  (bench-identical). Adds row choices, not rows.
+- **plan (owner):** step 2 of the owner's order: the residual study (ranking only, CPU: R36's rule) and a zero-delta
+  speed prototype by round 3's method; **killed below 0.95**. Idea 176's column-utilisation count rides on the same
+  data pass. **Idea 175 and option (a) (H512+PP, king regions) are alternatives on one body** (their tables
+  multiply), not additions. **status:** candidate (plan).
+
+### 176. Split-clone columns by queen state (proposal idea 2)
+- **idea:** E of the 512 hidden columns kept in two copies (queens on / queens off), the rest shared; a position
+  still evaluates 512 columns; warm start by a function-preserving column permutation with equal copies.
+- **plan (owner):** only its per-column utilisation count by output bucket (CPU) now, folded into idea 175's data
+  pass; no build. **status:** candidate (plan).
+
+### 177. Banded first layer (proposal idea 3)
+- **idea:** each piece family writes to a band of hidden-layer sectors (structured sparsity), cutting update work.
+- **status:** **parked** (owner, 2026-11-14).
+
+### 178. The stand-pat liabilities plane (proposal idea 4)
+- **idea:** the exposure rule applied to the side to move's pieces only, its rows confined to a 64-column block of
+  the accumulator; cuts L-lower (x_lower's rule) and L-exact (the full rule).
+- **plan (owner):** its share measurement (CPU: the mover's exposed pieces' share of r8brft1's residual) and a speed
+  prototype **after x_lower's result**. **status:** candidate (plan).
+
+### 179. A king-offset lane with per-king-square snapshots (proposal idea 5)
+- **idea:** option (b)'s king-relative offsets into a narrow separate lane, with one snapshot per king square.
+- **status:** **parked** (owner, 2026-11-14).
+
+### 180. Depth-extrapolated class calibration of the labels (proposal idea 6)
+- **idea:** fit per-class (queen state x phase, R33's structure classes) monotone maps from search score to the
+  score that predicts results, extrapolate the trend over search budgets to Fork's playing depth, and rewrite the
+  labels' scores before the TD targets are built. **runtime cost:** none.
+- **plan (owner): first of the four**, step 2 only and no training: rescale r8brft1's output heads by queen state
+  (and phase) from Fork's own calibration fit (an edit of the net file); a fixed-node screen vs r8brft1 plus the
+  UHO/SF19 diagnostic; **reported to the owner before any label work.** **status:** candidate (plan).
+
+### 181. Bound-supervised targets (proposal idea 7)
+- **idea:** one-sided targets from the root-move bounds a saved search already proves (a TreeStrap-style use of
+  stored searches); needs a datagen sidecar.
+- **status:** **parked** (owner, 2026-11-14).
+
+### 182. Move-delta rows (proposal idea 8)
+- **idea:** one precomputed row per (piece, from, to) for quiet non-pawn moves instead of a subtract and an add
+  (rows per update about 3.09 -> 2.1); a table of about 7.8 MB built at net load. **type:** speed (bench identical).
+- **plan (owner):** build, bench parity, and A/B on this PC and on the GitHub runners (the speed A/B workflow);
+  **cache-size caution for TCEC** (EPYC L3 per core; UNVERIFIED); adopted under the speed rules (the 1%
+  cycles-per-node rule, faster on the runners and in the TCEC build). S512+PP body only (with king regions the table
+  is four times larger). **status:** candidate (plan).
+
+### 183. Knot-tied heads (proposal idea 9)
+- **idea:** output heads per (phase, queen state) generated from a few trained knot heads by piecewise-linear
+  blending; precomputed, no speed cost.
+- **status:** kept as a **later refinement** (owner, 2026-11-14).
+
+### 184. Queen-gated king-zone values (proposal idea 10)
+- **idea:** (b2)'s king-zone vector computed only when the enemy still has a queen (zeros otherwise).
+- **status:** kept as a **later refinement** (owner, 2026-11-14); rides on whatever is decided for (b2).

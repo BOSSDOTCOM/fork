@@ -28,12 +28,12 @@ int clamp_cp(std::int64_t cp) {
 bool pawns_changed(const FeatureDelta& d) { return d.pawn_change; }
 
 // The first link row: after the piece rows (H512+PP: after every region's;
-// S512+PP's is the constant 768).
+// S512+PP's is the constant 768; S512+PPXL's after its exposure rows, 1,408).
 int link_start(const NetFile& net) {
   if constexpr (NetRegioned)
     return NetPieceSquares * net.region_count;
   else
-    return NetPieceSquares;
+    return NetPieceSquares + (NetExposure ? NetExposureRows : 0);
 }
 
 // S512+PP: adds one perspective's link rows (from the two sides' pawns, in
@@ -187,7 +187,7 @@ void sum_perspective(const NetFile& net, Color perspective, Frame f, ForEach for
 }
 
 #if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
-    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
 // sum over both halves (side to move first) of v * (v * w), v the clipped
 // value: S-512's and H-512's output, and each of XGR's experts.
 std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
@@ -390,6 +390,41 @@ bool add_exposure_rows(const NetFile& net, const Accumulator& acc, const Positio
 }
 #endif
 
+#if FORK_NET_ARCH == 10
+// S512+PPXL: the accumulator (pieces and links) plus the exposed pieces'
+// exposure rows (exposed_lower's set), found and summed at every evaluation
+// by the added-rows kernel: in 32 bits, held to the int16 range in `out` (the
+// net file bounds the piece and link rows, not the exposure rows, and the
+// output clips each value to [0, QA], so holding the sum to int16 first
+// changes nothing). False, with `out` untouched, when no piece is exposed.
+// FORK_DEBUG builds check the set against the square-by-square rule.
+template <bool Scalar>
+bool add_exposure_rows(const NetFile& net, const Accumulator& acc, const Position& pos, Accumulator& out) {
+  const Bitboard exposed = exposed_lower(pos);
+#ifdef FORK_DEBUG
+  if (exposed != exposed_lower_reference(pos)) __builtin_trap();
+#endif
+  if (!exposed) return false;
+  for (const Color perspective : {White, Black}) {
+    const Frame f = frame_of(net, perspective, pos.king_square(perspective));
+    const std::int16_t* rows[30];  // at most every piece but the kings and pawns (never exposed)
+    int n = 0;
+    for (Bitboard b = exposed; b;) {
+      const Square s = pop_lsb(b);
+      const Piece p = pos.piece_at(s);
+      const Square seen = perspective == White ? s : s ^ 56;
+      rows[n++] = column(
+          net, NetPieceSquares + 320 * (side_of(p) != perspective) + 64 * kind_of(p) + (seen ^ f.flip));
+    }
+    if constexpr (Scalar)
+      sum_rows_saturated_scalar(acc.values[perspective], rows, n, out.values[perspective]);
+    else
+      sum_rows_saturated(acc.values[perspective], rows, n, out.values[perspective]);
+  }
+  return true;
+}
+#endif
+
 #if FORK_NET_ARCH == 7
 // S512cl: the accumulator plus the contact and link rows (contacts.hpp), found
 // from the position and summed in 32 bits at every evaluation (no
@@ -418,7 +453,7 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
   return Scalar ? output_layer_scalar(net, acc, pos.side_to_move())
                 : output_layer(net, acc, pos.side_to_move());
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
 #if FORK_NET_ARCH == 6
   Accumulator summed;
   const Accumulator& a = add_exposure_rows(net, acc, pos, summed) ? summed : acc;
@@ -426,6 +461,9 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
   Accumulator summed;
   add_contact_rows<Scalar>(net, acc, pos, summed);
   const Accumulator& a = summed;
+#elif FORK_NET_ARCH == 10
+  Accumulator summed;
+  const Accumulator& a = add_exposure_rows<Scalar>(net, acc, pos, summed) ? summed : acc;
 #else
   const Accumulator& a = acc;
 #endif
@@ -625,6 +663,50 @@ Bitboard exposed_pieces(const Position& pos) {
     out |= pos.pieces(c, Rook) & enemy[1];
     out |= pos.pieces(c, Queen) & enemy[2];
     out |= (pos.pieces(c) & ~pos.pieces(King)) & enemy[4] & ~upto[c][4];
+  }
+  return out;
+}
+#endif
+
+#if FORK_NET_ARCH == 10
+// A piece can be exposed only by enemy attackers of a lower class: knights
+// and bishops by pawns; rooks by pawns, knights and bishops; queens by those
+// and rooks. So the enemy's attack sets are built up by class, each only when
+// a piece it could expose remains (most positions stop after the pawns' or
+// the minors'). Attacks are symmetric on one occupancy, so the sets give the
+// same answer as each piece's attackers (exposed_lower_reference).
+Bitboard exposed_lower(const Position& pos) {
+  const Bitboard occ = pos.pieces();
+  Bitboard out = 0;
+  for (const Color c : {White, Black}) {
+    const Color e = ~c;
+    const Bitboard minors = pos.pieces(c, Knight, Bishop), rooks = pos.pieces(c, Rook),
+                   queens = pos.pieces(c, Queen);
+    if (!(minors | rooks | queens)) continue;
+    const Bitboard pawns = pos.pieces(e, Pawn);
+    Bitboard hit = e == White ? ((pawns << 7) & ~FileH) | ((pawns << 9) & ~FileA)
+                              : ((pawns >> 9) & ~FileH) | ((pawns >> 7) & ~FileA);
+    out |= minors & hit;
+    if (!(rooks | queens)) continue;
+    for (Bitboard b = pos.pieces(e, Knight); b;) hit |= knight_attacks(pop_lsb(b));
+    for (Bitboard b = pos.pieces(e, Bishop); b;) hit |= bishop_attacks(pop_lsb(b), occ);
+    out |= rooks & hit;
+    if (!queens) continue;
+    for (Bitboard b = pos.pieces(e, Rook); b;) hit |= rook_attacks(pop_lsb(b), occ);
+    out |= queens & hit;
+  }
+  return out;
+}
+
+Bitboard exposed_lower_reference(const Position& pos) {
+  constexpr int Class[6] = {1, 2, 2, 3, 4, 5};  // pawn, knight, bishop, rook, queen, king
+  const Bitboard occ = pos.pieces();
+  Bitboard out = 0;
+  for (Bitboard b = occ & ~pos.pieces(King); b;) {
+    const Square s = pop_lsb(b);
+    const Piece p = pos.piece_at(s);
+    for (Bitboard a = pos.attackers_to(s, occ) & pos.pieces(~side_of(p)); a;)
+      if (Class[kind_of(pos.piece_at(pop_lsb(a)))] < Class[kind_of(p)]) out |= bb(s);
   }
   return out;
 }

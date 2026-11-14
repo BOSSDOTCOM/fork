@@ -46,6 +46,15 @@
 //!   --arch h512pp: regions zero, the factoriser the source's piece rows);
 //!   saved as region + factoriser per region, then the links; the output as
 //!   s512's.
+//! - s512ppxl: s512pp plus XGR's exposure inputs (640 and their 10-input
+//!   factoriser, merged when saved) with the exposure rule's lower-class half
+//!   only: a non-king piece is exposed when an enemy piece of a lower class
+//!   attacks it, so a pawn never is (bake-off round 3's x_lower arm,
+//!   S512+PPXL, architecture 10; owner, 2026-11-14); the exposure block after
+//!   the piece inputs, the 608 links after it; no first-layer clip, as s512pp
+//!   (a warm start from an s512pp net, tools/nnue/extend_weights.py --arch
+//!   s512ppxl: the exposure inputs zero); saved as the piece rows, the
+//!   exposure rows, then the links; the output as s512's.
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
@@ -93,6 +102,9 @@ const MAX_SCORE: u32 = 20000;
 const PIECE_SQUARES: usize = 768;
 const EXPOSURE_ROWS: usize = 640; // own/enemy x 5 non-king types x 64 squares
 const EXPOSURE_FACTORS: usize = 10; // own/enemy x 5 types
+// The exposure rule's value classes (pawn < knight = bishop < rook < queen <
+// king), by piece type pawn .. king.
+const EXPOSURE_CLASS: [u8; 6] = [1, 2, 2, 3, 4, 5];
 // XGR's fixed regions of the mirrored own-king square (cell = rank * 4 +
 // file - 4): e1; f1-h1; the second rank; everything from the third rank up.
 const XGR_REGIONS: [u8; 32] = [0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3];
@@ -112,6 +124,7 @@ enum Arch {
     S512cl,
     S512pp,
     H512pp,
+    S512ppxl,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -130,6 +143,8 @@ struct Spec {
     region_count: usize,
     factoriser: bool,
     exposure: bool,
+    /// The exposure rule's lower-class half only (S512+PPXL; Board::exposed_lower).
+    exposure_lower: bool,
     contacts: bool,
     /// S512+PP's links of rank limit PP_LINK_RANKS (no contacts).
     links: bool,
@@ -158,6 +173,7 @@ impl Spec {
             "s512cl" => Arch::S512cl,
             "s512pp" => Arch::S512pp,
             "h512pp" => Arch::H512pp,
+            "s512ppxl" => Arch::S512ppxl,
             other => panic!("unknown --arch {other}"),
         };
         let mut s = Spec {
@@ -168,6 +184,7 @@ impl Spec {
             region_count: 1,
             factoriser: false,
             exposure: false,
+            exposure_lower: false,
             contacts: false,
             links: false,
             qat: a.0.iter().any(|x| x == "--qat"),
@@ -213,9 +230,15 @@ impl Spec {
                 s.links = true;
                 s.picker = Picker::Phase;
             }
+            Arch::S512ppxl => {
+                s.exposure = true;
+                s.exposure_lower = true;
+                s.links = true;
+                s.picker = Picker::Phase;
+            }
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
-        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp), "--qat: the S-512 family only");
+        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl), "--qat: the S-512 family only");
         match s.picker {
             Picker::None => {}
             Picker::Phase => s.table = parse_list(a.need("--buckets"), FULL_PHASE + 1, "--buckets"),
@@ -342,12 +365,9 @@ impl Board {
         }
         out
     }
-    /// XGR's exposure rule: a non-king piece is exposed when an enemy piece
-    /// of a lower value class attacks it (pawn < knight = bishop < rook <
-    /// queen < king), or when an enemy piece attacks it and none of its own
-    /// defends it. Returns a bitboard of exposed squares.
-    fn exposed(&self) -> u64 {
-        const CLASS: [u8; 6] = [1, 2, 2, 3, 4, 5];
+    /// The lowest value class (EXPOSURE_CLASS) of each side's attackers per
+    /// square (u8::MAX where it attacks none), and each side's attacked squares.
+    fn lowest_attackers(&self) -> ([[u8; 64]; 2], [u64; 2]) {
         let mut lowest = [[u8::MAX; 64]; 2]; // lowest attacker class per (attacking side, square)
         let mut hit = [0u64; 2];
         for s in 0..64 {
@@ -357,10 +377,18 @@ impl Board {
                 while a != 0 {
                     let t = a.trailing_zeros() as usize;
                     a &= a - 1;
-                    lowest[side][t] = lowest[side][t].min(CLASS[kind]);
+                    lowest[side][t] = lowest[side][t].min(EXPOSURE_CLASS[kind]);
                 }
             }
         }
+        (lowest, hit)
+    }
+    /// XGR's exposure rule: a non-king piece is exposed when an enemy piece
+    /// of a lower value class attacks it (pawn < knight = bishop < rook <
+    /// queen < king), or when an enemy piece attacks it and none of its own
+    /// defends it. Returns a bitboard of exposed squares.
+    fn exposed(&self) -> u64 {
+        let (lowest, hit) = self.lowest_attackers();
         let mut out = 0u64;
         for s in 0..64 {
             if let Some((kind, side)) = self.piece[s] {
@@ -369,7 +397,7 @@ impl Board {
                 }
                 let enemy = 1 - side;
                 let bit = 1u64 << s;
-                let attacked_by_lower = lowest[enemy][s] < CLASS[kind];
+                let attacked_by_lower = lowest[enemy][s] < EXPOSURE_CLASS[kind];
                 let loose = hit[enemy] & bit != 0 && hit[side] & bit == 0;
                 if attacked_by_lower || loose {
                     out |= bit;
@@ -377,6 +405,30 @@ impl Board {
             }
         }
         out
+    }
+    /// S512+PPXL's exposure rule, the lower-class half of XGR's: a non-king
+    /// piece attacked by an enemy piece of a lower value class (so never a
+    /// pawn). Returns a bitboard of exposed squares.
+    fn exposed_lower(&self) -> u64 {
+        let (lowest, _) = self.lowest_attackers();
+        let mut out = 0u64;
+        for s in 0..64 {
+            if let Some((kind, side)) = self.piece[s] {
+                if kind != 5 && lowest[1 - side][s] < EXPOSURE_CLASS[kind] {
+                    out |= 1u64 << s;
+                }
+            }
+        }
+        out
+    }
+}
+
+/// The exposed squares under the architecture's rule (none without the exposure plane).
+fn exposed_of(spec: &Spec, b: &Board) -> u64 {
+    match (spec.exposure, spec.exposure_lower) {
+        (false, _) => 0,
+        (true, false) => b.exposed(),
+        (true, true) => b.exposed_lower(),
     }
 }
 
@@ -653,7 +705,7 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                 let l1 = builder.new_affine("l1", 2 * h, 1);
                 l1.forward(l0.forward(stm).crelu().concat(l0.forward(ntm).crelu()))
             }
-            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp => {
+            Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl => {
                 let l0 = builder.new_affine("l0", n, h);
                 let l1 = builder.new_affine("l1", 2 * h, nb);
                 if s.qat {
@@ -752,7 +804,7 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
             SavedFormat::id("l1w").round().quantise::<i16>(64),
             SavedFormat::id("l1b").round().quantise::<i32>(255 * 64),
         ],
-        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp => vec![
+        Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl => vec![
             first_layer(spec, "l0w", h).round().quantise::<i16>(255),
             SavedFormat::id("l0b").round().quantise::<i16>(255),
             SavedFormat::id("l1w").transpose().round().quantise::<i16>(64),
@@ -788,10 +840,11 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
 /// sums its exposure rows in 32 bits, so their size needs no bound). H512+PP too:
 /// its warm start puts an S512+PP net's piece rows in the factoriser, and a clip
 /// at 0.99 would move the ones beyond it at step 0 (the int16 bound of the saved
-/// rows is the converter's and the reader's, tools/nnue/pp_bound.py).
+/// rows is the converter's and the reader's, tools/nnue/pp_bound.py). S512+PPXL too: its warm start is an S512+PP
+/// net with zero exposure inputs, its exposure rows are summed in 32 bits, and its links have S512+PP's bound.
 fn clipped(spec: &Spec) -> Vec<&'static str> {
     match spec.arch {
-        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp => vec![],
+        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl => vec![],
         Arch::H512 | Arch::AfS => vec!["l0w", "l0b"],
         Arch::Xgr512 => vec!["l0w", "l0b", "s0w", "s0b"],
     }
@@ -801,7 +854,7 @@ fn clipped(spec: &Spec) -> Vec<&'static str> {
 /// bucket.
 fn fill(spec: &Spec, pos: &ChessBoard, stm: &mut [i32], ntm: &mut [i32]) -> usize {
     let b = Board::from_chessboard(pos);
-    let exposed = if spec.exposure { b.exposed() } else { 0 };
+    let exposed = exposed_of(spec, &b);
     for (persp, out) in [(0, &mut *stm), (1, &mut *ntm)] {
         let n = perspective_features(spec, &b, exposed, persp, out);
         // Pooled batch buffers are reused uncleared: end short lists (KB §13).
@@ -1428,7 +1481,7 @@ mod layout_tests {
     fn features(s: &Spec, fen: &str, persp: usize) -> Vec<usize> {
         let pos: ChessBoard = format!("{fen} | 0 | 0.0").parse().expect("fen");
         let b = Board::from_chessboard(&pos);
-        let exposed = if s.exposure { b.exposed() } else { 0 };
+        let exposed = exposed_of(s, &b);
         let mut out = vec![-1i32; s.max_active()];
         let n = perspective_features(s, &b, exposed, persp, &mut out);
         out[..n].iter().map(|&i| i as usize).collect()
@@ -1547,6 +1600,98 @@ mod layout_tests {
         let words = ["--arch", "h512pp", "--buckets", BUCKETS, "--regions", REGIONS];
         let s = Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()));
         assert_eq!(s.regions.to_vec(), parse_list(REGIONS, 32, "--regions"));
+    }
+
+    fn s512ppxl() -> Spec {
+        let words = ["--arch", "s512ppxl", "--buckets", BUCKETS];
+        Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()))
+    }
+
+    fn board(fen: &str) -> Board {
+        Board::from_chessboard(&format!("{fen} | 0 | 0.0").parse().expect("fen"))
+    }
+
+    #[test]
+    fn the_lower_exposure_rule_is_xgrs_first_half() {
+        // Worked by hand (the engine's and the Python reference's cases; a1 = 0, White to move, so the
+        // stored frame is the board's): the knight on e5 is attacked by the pawn on d6 and the queen on b3 by
+        // the bishop on c2 (exposed); the bishop on c2 only by the queen, a higher class (not exposed, though
+        // XGR's whole rule exposes it as undefended). Then the rook on d4 is attacked by the bishop on f6 and
+        // the black queen on d1 by the rook (exposed); the white queen on e1 only by the other queen (not).
+        let b = board("4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1");
+        assert_eq!(b.exposed_lower(), (1 << 36) | (1 << 17));
+        assert_ne!(b.exposed() & (1 << 10), 0);
+        assert_eq!(board("6k1/8/5b2/8/3R4/8/8/3qQ1K1 w - - 0 1").exposed_lower(), (1 << 27) | (1 << 3));
+        assert_eq!(board(FENS[0]).exposed_lower(), 0);
+        // A subset of the whole rule's set, never a pawn or a king.
+        for fen in FENS {
+            let b = board(fen);
+            let lower = b.exposed_lower();
+            assert_eq!(lower & !b.exposed(), 0, "{fen}");
+            for s in 0..64 {
+                if lower & (1u64 << s) != 0 {
+                    assert!(matches!(b.piece[s], Some((1..=4, _))), "{fen}: square {s}");
+                }
+            }
+        }
+        // The architecture picks its rule.
+        let (xl, x) = (s512ppxl(), Spec::from_args(&Args(["--arch", "s512x", "--buckets", BUCKETS].iter().map(|w| w.to_string()).collect())));
+        let kiwipete = board(FENS[1]);
+        assert_eq!(exposed_of(&xl, &kiwipete), kiwipete.exposed_lower());
+        assert_eq!(exposed_of(&x, &kiwipete), kiwipete.exposed());
+        assert_ne!(kiwipete.exposed_lower(), 0);
+    }
+
+    #[test]
+    fn s512ppxls_layout_puts_the_exposure_block_between_the_pieces_and_the_links() {
+        // S512+PPXL (architecture 10, the x_lower arm): 768 piece inputs, the 640 exposure inputs and their 10
+        // factorisers, then the 608 links; saved without the factorisers (2,016 rows).
+        let s = s512ppxl();
+        assert!(s.exposure && s.exposure_lower && s.links && !s.factoriser && !s.contacts);
+        assert_eq!((s.region_count, s.exposure_start(), s.link_start()), (1, 768, 1418));
+        assert_eq!((s.inputs(), s.saved_inputs(), s.max_active()), (2026, 2016, 156));
+        assert!(clipped(&s).is_empty(), "no first-layer clip: the warm start is an S512+PP net");
+        // Against S512+PP's own inputs: the pieces unchanged, the links 650 on, and for each exposed piece
+        // (exposed_lower's set) its exposure input and its factoriser.
+        let pp = with("s512pp", false, false);
+        for fen in FENS {
+            let b = board(fen);
+            for persp in 0..2 {
+                let orient = |sq: usize| if persp == 0 { sq } else { sq ^ 56 };
+                let flip = if orient(b.king(persp)) % 8 < 4 { 7 } else { 0 };
+                let mut want: Vec<usize> =
+                    features(&pp, fen, persp).iter().map(|&i| if i < 768 { i } else { i + 650 }).collect();
+                for sq in 0..64 {
+                    if b.exposed_lower() & (1u64 << sq) != 0 {
+                        let (kind, side) = b.piece[sq].expect("a piece");
+                        let own = usize::from(side != persp);
+                        want.push(768 + 320 * own + 64 * kind + (orient(sq) ^ flip));
+                        want.push(768 + 640 + 5 * own + kind);
+                    }
+                }
+                want.sort_unstable();
+                let mut got = features(&s, fen, persp);
+                got.sort_unstable();
+                assert_eq!(got, want, "{fen}, perspective {persp}");
+            }
+        }
+    }
+
+    #[test]
+    fn s512ppxls_merge_adds_the_exposure_factorisers_and_keeps_the_links() {
+        let s = s512ppxl();
+        let rows = 2;
+        let v: Vec<f32> = (0..rows * s.inputs()).map(|i| i as f32).collect();
+        let merged = merge_factors(&s, rows, &v);
+        assert_eq!(merged.len(), rows * 2016);
+        assert_eq!(&merged[..rows * 768], &v[..rows * 768]);
+        for e in [0usize, 63, 319, 320, 383, 639] {
+            let (own, kind) = (e / 320, (e % 320) / 64);
+            for i in 0..rows {
+                assert_eq!(merged[rows * (768 + e) + i], v[rows * (768 + e) + i] + v[rows * (1408 + 5 * own + kind) + i]);
+            }
+        }
+        assert_eq!(&merged[rows * 1408..], &v[rows * 1418..]);
     }
 
     #[test]

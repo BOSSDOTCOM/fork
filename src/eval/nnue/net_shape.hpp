@@ -29,7 +29,13 @@
 //   (at most 4: the net file's 32-entry map of the mirrored own-king cell,
 //   as H-512's), the 608 link inputs shared after all the region rows; a
 //   perspective whose frame changes is refreshed lazily from that frame's
-//   snapshot (accumulator.hpp, FeatureStack).
+//   snapshot (accumulator.hpp, FeatureStack). 10 S512+PPXL (bake-off round
+//   3's x_lower arm; owner, 2026-11-14): S512+PP plus XGR's 640 exposure
+//   inputs after the piece rows (the links after them), with the exposure
+//   rule's lower-class half only: a non-king piece attacked by an enemy piece
+//   of a lower class (so pawns are never exposed); found per evaluation and
+//   summed in 32 bits onto the piece and link sums, as S512+X's; S-512's
+//   output.
 // - QA = 255, QB = 64 (bullet's quantization convention; ORIGINALITY.md).
 #pragma once
 
@@ -38,12 +44,12 @@
 #endif
 
 // The architectures that keep S512+PP's pawn links in the int16 sums.
-#define FORK_NET_LINKS (FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9)
+#define FORK_NET_LINKS (FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10)
 
 namespace forkeng {
 
 inline constexpr int NetArchitecture = FORK_NET_ARCH;
-static_assert(NetArchitecture >= 1 && NetArchitecture <= 9, "unknown network architecture");
+static_assert(NetArchitecture >= 1 && NetArchitecture <= 10, "unknown network architecture");
 
 inline constexpr int NetQa = 255;
 inline constexpr int NetQb = 64;
@@ -52,7 +58,7 @@ inline constexpr int NetHidden = NetArchitecture == 1 ? 256 : 512;
 inline constexpr bool NetMirrored = NetArchitecture != 1;
 inline constexpr bool NetRegioned = (NetArchitecture >= 3 && NetArchitecture <= 5) || NetArchitecture == 9;
 inline constexpr int NetMaxRegions = NetRegioned ? 4 : 1;
-inline constexpr bool NetExposure = NetArchitecture == 5 || NetArchitecture == 6;
+inline constexpr bool NetExposure = NetArchitecture == 5 || NetArchitecture == 6 || NetArchitecture == 10;
 inline constexpr int NetExposureRows = 640;  // own/enemy x 5 non-king types x 64 squares
 // S512cl's contact and link inputs (contacts.hpp builds their index space;
 // tests/test_nnue.cpp checks these sizes against it).
@@ -60,7 +66,8 @@ inline constexpr bool NetContacts = NetArchitecture == 7;
 inline constexpr int NetContactInputs = 50416;
 // The links' rank limit: two pawns on the same or adjacent files form a link
 // when their ranks are at most this far apart (S512cl: any, 7; S512+PP: 1,
-// owner, 2026-11-06, its measured speed step, ideas.md 40; H512+PP's too).
+// owner, 2026-11-06, its measured speed step, ideas.md 40; H512+PP's and
+// S512+PPXL's too).
 inline constexpr int NetLinkRanks = FORK_NET_LINKS ? 1 : 7;
 // Whether pawns on frame squares a and b (8 .. 55) form a link.
 constexpr bool link_squares(int a, int b) {
@@ -77,7 +84,7 @@ constexpr int link_space() {
 }
 inline constexpr int NetLinkInputs = link_space();
 // S512+PP's pawn-link inputs, right after the piece rows (H512+PP: after
-// every region's piece rows).
+// every region's piece rows; S512+PPXL: after the exposure rows).
 inline constexpr bool NetLinks = FORK_NET_LINKS;
 inline constexpr int NetMaxInputs = NetPieceSquares * NetMaxRegions + (NetExposure ? NetExposureRows : 0) +
                                     (NetContacts ? NetContactInputs + NetLinkInputs : 0) +
@@ -85,7 +92,7 @@ inline constexpr int NetMaxInputs = NetPieceSquares * NetMaxRegions + (NetExposu
 // Outputs (or layer stacks) picked by the game phase through a 25-entry table.
 inline constexpr bool NetPhasePicked = (NetArchitecture >= 2 && NetArchitecture <= 4) ||
                                        NetArchitecture == 6 || NetArchitecture == 7 || NetArchitecture == 8 ||
-                                       NetArchitecture == 9;
+                                       NetArchitecture == 9 || NetArchitecture == 10;
 inline constexpr int NetBuckets = NetPhasePicked ? 8 : 1;
 inline constexpr int NetSideLanes = NetArchitecture == 5 ? 3 : 0;
 // AF-S's body.
