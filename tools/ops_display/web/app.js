@@ -146,7 +146,9 @@ function laneCard(L) {
   c.append(kv);
   if (v.prelim) {
     c.append(h("div", { class: "prelim", title: "Combined from the shards' progress records of the stage now running, added to the finished stages. It moves until the stage ends." },
-      h("span", { class: "chip" }, "preliminary"), h("span", { class: "num" }, elo(v.prelim.elo, v.prelim.elo_err, 2)), h("span", { class: "dim" }, `Elo over ${int(v.prelim.games)} games; ${int(v.prelim.stage_games)} of this stage's from ${v.prelim.shards} shards, as of ${when(v.prelim.at)}`)));
+      h("span", { class: "chip" }, "preliminary"), h("span", { class: "num" }, elo(v.prelim.elo, v.prelim.elo_err, 2)),
+      h("span", { class: "dim" }, `Elo over ${int(v.prelim.games)} games` + (v.prelim.llr != null ? `; LLR about ${sg(v.prelim.llr, 2)}` : "") + `. This stage: ${int(v.prelim.stage_games)} of ${int(v.prelim.stage_planned)} games, ${v.prelim.shards} of ${v.prelim.of} shards reporting, ${v.prelim.final} finished; as of ${when(v.prelim.at)}`)),
+      h("div", { class: "bar act", title: "games finished in the stage now running" }, h("i", { style: `width:${Math.min(100, (v.prelim.stage_games / Math.max(1, v.prelim.stage_planned)) * 100)}%` })));
   }
   if (v.is_sprt && v.lo != null && v.hi != null) c.append(llrBar(v));
   if (L.state === "stopped") c.append(h("div", { class: "meta st-failure" }, v.stopped || "its run failed"));

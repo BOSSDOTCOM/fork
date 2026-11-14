@@ -8,10 +8,12 @@
 
 Both go through procs.run (read-only commands only). Results are kept in memory; nothing is written.
 
-Progress artifacts (proposed to the production session, DESIGN.md section 8; none exist yet): an artifact
-named progress-<stage>-<shard> holding progress.json = {"sprt", "stage", "shard", "ptnml": [5 counts],
-"finished_games", "at"}. The newest artifact per shard is used. Until a run has them, `progress` is None and
-the display shows stage-end results only."""
+Progress artifacts (the production session's, docs/research/shard-progress.md, format
+fork-shard-progress/1): per shard an artifact progress-<stage>-<shard> holding progress.json, replaced while
+the games run (each replacement is a new artifact id). The newest per shard is used; an id is downloaded
+once, and a shard is refreshed at most every 4 minutes, which keeps the display near 250 calls an hour per
+run against the login's shared 5,000. A run without them has `progress` None and the display shows
+stage-end results only."""
 import io
 import json
 import re
@@ -88,13 +90,21 @@ def read_progress_zip(data):
 
 
 def combine(records, stage):
-    """Shard records of one stage -> {ptnml, games, shards, at}, or None when there is none."""
-    recs = [r for r in records if r['stage'] == stage]
+    """Shard records of one stage, the newest per shard -> {stage, ptnml, games, planned, shards, final, at},
+    or None when there is none. planned counts the shards that have reported; `final` is how many are done."""
+    newest = {}
+    for r in records:
+        if r['stage'] == stage and (r['shard'] not in newest or (r['seq'], r['at'] or 0) > (newest[r['shard']]['seq'], newest[r['shard']]['at'] or 0)):
+            newest[r['shard']] = r
+    recs = list(newest.values())
     if not recs:
         return None
     import stats
-    return {'ptnml': stats.add([r['ptnml'] for r in recs]), 'games': sum(r['games'] for r in recs),
-            'shards': len(recs), 'at': max((r['at'] or 0) for r in recs) or None}
+    total = max((r['shards'] or 0) for r in recs) or len(recs)
+    planned = sum(r['planned'] for r in recs)
+    return {'stage': stage, 'ptnml': stats.add([r['ptnml'] for r in recs]), 'games': sum(r['games'] for r in recs),
+            'planned': round(planned * total / len(recs)), 'shards': len(recs), 'of': total,
+            'final': sum(1 for r in recs if r['state'] == 'final'), 'at': max((r['at'] or 0) for r in recs) or None}
 
 
 class Poller:
@@ -110,7 +120,10 @@ class Poller:
         self.status = {'gh': 'not polled yet' if self.gh and slug else 'off: gh or the repository name was not found',
                        'kaggle': 'not polled yet' if self.kaggle else 'off: the Kaggle tool was not found'}
         self._seen = {}            # artifact id -> parsed record (an artifact never changes once uploaded)
+        self._fresh = {}           # (run, stage, shard) -> when its record was last downloaded
+        self.shard_every = 240     # seconds between two downloads for one shard
         self._last = {'gh': -1e9, 'kaggle': -1e9}
+        self._held = {}            # run id -> {(stage, shard): record}
         self.thread = None
 
     def poll_github(self, now):
@@ -122,24 +135,30 @@ class Poller:
                 continue
             entry = {'shards': shard_counts(out), 'progress': None, 'at': now, 'error': None}
             rc, out, err = self.execute([self.gh, 'api', f'repos/{self.slug}/actions/runs/{int(run_id)}/artifacts?per_page=100'], timeout=40)
-            recs = []
+            held = self._held.setdefault(run_id, {})         # (stage, shard) -> the newest record downloaded
             for a in progress_artifacts(out) if rc == 0 else []:
-                if a['id'] not in self._seen:
-                    rc2, data, _ = self.execute([self.gh, 'api', f'repos/{self.slug}/actions/artifacts/{a["id"]}/zip'], timeout=40, binary=True)
-                    try:
-                        self._seen[a['id']] = read_progress_zip(data) if rc2 == 0 else None
-                    except ValueError as e:
-                        self._seen[a['id']] = None
-                        entry['error'] = str(e)[:120]
-                if self._seen.get(a['id']):
-                    recs.append(self._seen[a['id']])
-            if recs:
-                entry['progress'] = combine(recs, max(r['stage'] for r in recs))
+                key = (run_id, a['stage'], a['shard'])
+                if a['id'] in self._seen or now - self._fresh.get(key, -1e9) < self.shard_every:
+                    continue
+                self._fresh[key] = now
+                rc2, data, _ = self.execute([self.gh, 'api', f'repos/{self.slug}/actions/artifacts/{a["id"]}/zip'], timeout=40, binary=True)
+                try:
+                    rec = read_progress_zip(data) if rc2 == 0 else None
+                except ValueError as e:
+                    rec = None
+                    entry['error'] = str(e)[:120]
+                self._seen[a['id']] = rec is not None
+                if rec and rec['run_id'] in (None, run_id):
+                    held[(a['stage'], a['shard'])] = rec
+            if held:
+                entry['progress'] = combine(list(held.values()), max(r['stage'] for r in held.values()))
             runs[run_id] = entry
             self.status['gh'] = f'ok, {len(runs)} run(s)'
         if not self.c.wanted.get('runs'):
             self.status['gh'] = 'idle: no live run'
         self.c.net['runs'] = runs
+        for gone in set(self._held) - set(self.c.wanted.get('runs') or []):
+            del self._held[gone]                              # the run ended: its records are no longer needed
         if len(self._seen) > 4000:
             self._seen.clear()
 

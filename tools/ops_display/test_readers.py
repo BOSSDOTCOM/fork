@@ -194,7 +194,7 @@ class Queue(unittest.TestCase):
         m = R.lane_marker(fixture('lane-marker-running.txt'))
         self.assertEqual((m['lane'], m['state'], m['item'], m['drivers'], m['source']),
                          ('B', 'running', '15-r8c-c-cbest-promo-stc', ['r8cc2-promo-stc'], 'watcher'))
-        self.assertEqual((m['started'], m['updated']), (1794680240, 1794681753))
+        self.assertEqual((m['started'], m['updated'], m['chain_pid']), (1794680240, 1794681753, 30528))
         i = R.lane_marker(fixture('lane-marker-idle.txt'))
         self.assertEqual((i['state'], i['item'], i['drivers'], i['since']), ('idle', None, ['f11-root-lean-ltc'], R.est_stamp('2026-11-14 01:26:56 PM EST')))
         chain = R.lane_marker('lane=A\nstate=running\nitem=z70a-f11-root-lean-ltc\nstarted=2026-11-14 01:17:20 PM EST\n')
@@ -511,13 +511,21 @@ class Machine(unittest.TestCase):
 
 class Preliminary(unittest.TestCase):
     def test_shard_progress_record(self):
-        p = R.shard_progress({'sprt': 'x-stc', 'stage': 2, 'shard': 5, 'ptnml': [1, 10, 20, 12, 2], 'finished_games': 90,
-                              'at': '2026-11-14T17:19:00+0000'})
-        self.assertEqual((p['stage'], p['shard'], p['games'], p['ptnml']), (2, 5, 90, [1, 10, 20, 12, 2]))
-        self.assertEqual(R.shard_progress({'stage': 0, 'shard': 0, 'ptnml': [0, 1, 2, 1, 0]})['games'], 8)
-        for bad in (None, [], {'stage': 0, 'shard': 0}, {'stage': 0, 'shard': 0, 'ptnml': [1, 2, 3]},
-                    {'stage': 0, 'shard': 0, 'ptnml': [1, 2, 3, 4, -1]}, {'stage': 0, 'shard': 0, 'ptnml': [1, 2, 3, 4, 'x']},
-                    {'stage': 0, 'shard': 0, 'ptnml': [True, 2, 3, 4, 5]}, {'stage': '0', 'shard': 0, 'ptnml': [1, 2, 3, 4, 5]}):
+        real = fjson('progress-final.json')             # a real record of the production session's test run 43628564195
+        p = R.shard_progress(real)
+        self.assertEqual((p['sprt'], p['run_id'], p['stage'], p['shard'], p['shards']), ('progress-test', 43628564195, 0, 0, 2))
+        self.assertEqual((p['ptnml'], p['games'], p['planned'], p['state'], p['status'], p['seq']),
+                         ([0, 0, 120, 0, 0], 240, 240, 'final', 'done', 3))
+        self.assertEqual(p['at'], R.iso('2026-11-14T18:51:25Z'))
+        running = dict(real, state='running', shard_status=None, upload_seq=2, games_finished=101, pairs_finished=50, ptnml=[1, 12, 24, 11, 2])
+        self.assertEqual((R.shard_progress(running)['games'], R.shard_progress(running)['state']), (101, 'running'))
+        self.assertEqual(R.shard_progress(dict(real, format='fork-shard-progress/1.2'))['games'], 240)   # a minor revision still reads
+        for change in ({'format': 'fork-shard-progress/2'}, {'format': None}, {'format': 'something-else/1'}, {'ptnml': [1, 2, 3]},
+                       {'ptnml': [1, 2, 3, 4, -1]}, {'ptnml': [1, 2, 3, 4, 'x']}, {'ptnml': [True, 2, 3, 4, 5]}, {'stage': '0'},
+                       {'games_finished': None}, {'games_planned': -2}, {'state': 'paused'}):
+            with self.assertRaises(ValueError):
+                R.shard_progress(dict(real, **change))
+        for bad in (None, [], 'text', {}, {'stage': 0, 'shard': 0, 'ptnml': [0, 1, 2, 1, 0]}):   # the display's first, proposed format
             with self.assertRaises(ValueError):
                 R.shard_progress(bad)
 

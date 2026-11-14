@@ -99,6 +99,9 @@ class Probes:
     def job_live(self, rec):
         return rec['name'] not in self.dead
 
+    def pid_alive(self, pid):
+        return pid not in self.dead
+
 
 class World:
     """A temporary home with the pipeline's files, built from the fixtures."""
@@ -291,7 +294,7 @@ class Discovery(WithWorld):
 class LaneMarker(WithWorld):
     def marker(self, lane, state, item='', drivers='', source='watcher', age=5):
         self.w.put(os.path.join(self.w.paths.state, f'current-{lane}.txt'),
-                   f'lane={lane}\nstate={state}\nitem={item}\ndrivers={drivers}\nsource={source}\nupdated_epoch={int(NOW - age)}\n')
+                   f'lane={lane}\nstate={state}\nitem={item}\ndrivers={drivers}\nsource={source}\nchain_pid=5150\nupdated_epoch={int(NOW - age)}\n')
 
     def test_the_lanes_marker_decides_the_current_item(self):
         w = self.w
@@ -322,6 +325,8 @@ class LaneMarker(WithWorld):
         self.assertEqual((a['item']['key'], a['marker']), ('20-d15-shallow-skip-stc', None))
         self.marker('A', 'running', '30-b6-null-verify-nonreg', source='chain', age=7200)   # the chain writes once, at the item's start
         self.assertEqual(w.snap(w.collector())['lanes'][0]['item']['key'], '30-b6-null-verify-nonreg')
+        w.probes.dead.add(5150)                                         # the chain's process is gone: its marker is stale
+        self.assertEqual(w.snap(w.collector())['lanes'][0]['item']['key'], '20-d15-shallow-skip-stc')
 
 
 class LaneView(WithWorld):
@@ -342,15 +347,22 @@ class LaneView(WithWorld):
     def test_preliminary_result_combines_shard_progress_with_finished_stages(self):
         c = self.w.collector()
         self.w.snap(c)
-        c.net['runs'] = {777: {'shards': {'total': 16, 'done': 4, 'running': 12, 'queued': 0, 'failed': 0},
-                               'progress': {'ptnml': [3, 40, 80, 45, 4], 'games': 344, 'shards': 9, 'at': NOW - 30}}}
+        prog = {'stage': 5, 'ptnml': [3, 40, 80, 45, 4], 'games': 350, 'planned': 1600, 'shards': 9, 'of': 16, 'final': 2, 'at': NOW - 30}
+        c.net['runs'] = {777: {'shards': {'total': 16, 'done': 4, 'running': 12, 'queued': 0, 'failed': 0}, 'progress': prog}}
         self.w.clock[0] += 6
         v = self.w.snap(c)['lanes'][0]['sprt']
         self.assertEqual(v['shards']['done'], 4)
-        self.assertEqual(v['prelim']['games'], 8000 + 344)
-        self.assertEqual((v['prelim']['stage_games'], v['prelim']['shards']), (344, 9))
+        self.assertEqual(v['prelim']['games'], 8000 + 344)             # finished pairs only: what the merge will count
+        self.assertEqual((v['prelim']['stage_games'], v['prelim']['stage_planned'], v['prelim']['shards'], v['prelim']['of']), (350, 1600, 9, 16))
         self.assertIsNotNone(v['prelim']['elo_err'])
-        self.assertEqual(v['last']['games'], 8000)                     # the stage-end figure is untouched
+        self.assertIsNotNone(v['prelim']['llr'])                       # an estimate; the verdict stays the merge's
+        self.assertEqual((v['last']['games'], v['last']['llr']), (8000, -0.29))   # the stage-end figures are untouched
+        c.net['runs'] = {777: {'shards': None, 'progress': dict(prog, stage=4)}}   # records of another stage are not mixed in
+        self.w.clock[0] += 6
+        self.assertIsNone(self.w.snap(c)['lanes'][0]['sprt']['prelim'])
+        c.net['runs'] = {777: {'shards': None, 'progress': dict(prog, ptnml=[0, 0, 0, 0, 0], games=0)}}   # shards started, no pair finished
+        self.w.clock[0] += 6
+        self.assertIsNone(self.w.snap(c)['lanes'][0]['sprt']['prelim'])
         c.net['runs'] = {777: {'shards': None, 'progress': None}}      # no progress artifacts: stage-end results only
         self.w.clock[0] += 6
         self.assertIsNone(self.w.snap(c)['lanes'][0]['sprt']['prelim'])
@@ -745,21 +757,27 @@ class Network(unittest.TestCase):
         self.assertEqual(net.progress_artifacts(json.dumps(arts)), [{'id': 2, 'stage': 5, 'shard': 0}])
         self.assertEqual(net.progress_artifacts('half {'), [])
 
-    def test_progress_zip(self):
-        rec = {'sprt': 'x-stc', 'stage': 5, 'shard': 0, 'ptnml': [1, 10, 20, 12, 2], 'finished_games': 90, 'at': '2026-11-14T18:05:00Z'}
-        self.assertEqual(net.read_progress_zip(_zip(rec))['games'], 90)
-        for bad in (b'', b'not a zip', _zip(rec, 'other.json'), _zip('{half'), _zip({'stage': 5, 'shard': 0, 'ptnml': [1, 2]}), _zip('x' * 70000)):
+    def test_progress_zip_and_stage_totals(self):
+        real = json.loads(fx('progress-final.json'))
+        self.assertEqual(net.read_progress_zip(_zip(real))['games'], 240)
+        for bad in (b'', b'not a zip', _zip(real, 'other.json'), _zip('{half'), _zip(dict(real, ptnml=[1, 2])), _zip('x' * 70000),
+                    _zip(dict(real, format='fork-shard-progress/9'))):
             with self.assertRaises(ValueError):
                 net.read_progress_zip(bad)
-        both = net.combine([{'stage': 5, 'shard': 0, 'ptnml': [1, 10, 20, 12, 2], 'games': 90, 'at': 100},
-                            {'stage': 5, 'shard': 1, 'ptnml': [0, 9, 22, 11, 1], 'games': 86, 'at': 160},
-                            {'stage': 4, 'shard': 0, 'ptnml': [9, 9, 9, 9, 9], 'games': 90, 'at': 50}], 5)
-        self.assertEqual(both, {'ptnml': [1, 19, 42, 23, 3], 'games': 176, 'shards': 2, 'at': 160})
+        rec = lambda shard, seq, games, ptnml, state='running', stage=5: {'stage': stage, 'shard': shard, 'shards': 16, 'ptnml': ptnml,  # noqa: E731
+                                                                         'games': games, 'planned': 100, 'state': state, 'seq': seq, 'at': 100 + seq}
+        both = net.combine([rec(0, 1, 0, [0, 0, 0, 0, 0]), rec(0, 3, 90, [1, 10, 20, 12, 2]), rec(0, 2, 40, [0, 5, 9, 5, 1]),   # shard 0: its newest counts
+                            rec(1, 4, 100, [0, 9, 22, 11, 1], 'final'), rec(0, 9, 100, [9, 9, 9, 9, 9], stage=4)], 5)
+        self.assertEqual((both['ptnml'], both['games'], both['shards'], both['of'], both['final']), ([1, 19, 42, 23, 3], 190, 2, 16, 1))
+        self.assertEqual(both['planned'], 1600)                        # two shards reported 100 games each of a 16-shard stage
         self.assertIsNone(net.combine([], 5))
+        listing = fx('progress-artifacts.json')                        # the real listing of that run: two progress artifacts among six
+        self.assertEqual([(a['stage'], a['shard']) for a in net.progress_artifacts(listing)], [(0, 0), (0, 1)])
 
     def test_the_poller_uses_only_allowed_commands_and_survives_bad_answers(self):
         calls = []
-        rec = {'sprt': 'x-stc', 'stage': 5, 'shard': 0, 'ptnml': [1, 10, 20, 12, 2], 'finished_games': 90, 'at': '2026-11-14T18:05:00Z'}
+        rec = dict(json.loads(fx('progress-final.json')), run_id=777, stage=5, shard=0, shards=16, state='running', shard_status=None,
+                   games_planned=100, games_finished=90, pairs_finished=45, ptnml=[1, 10, 20, 12, 2])
 
         def execute(argv, timeout=30, binary=False):
             self.assertTrue(procs.allowed(argv), argv)
@@ -785,6 +803,7 @@ class Network(unittest.TestCase):
         t[0] += 121
         p.step()
         self.assertEqual(sum(1 for x in calls if x.endswith('/zip')), 2)        # an artifact is downloaded once
+        self.assertEqual(c.net['runs'][777]['progress']['games'], 90)           # and its record is kept between polls
         c.wanted = {'runs': [], 'kaggle': []}
         t[0] += 400
         p.step()

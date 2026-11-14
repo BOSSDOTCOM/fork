@@ -299,6 +299,9 @@ class Collector:
             mark = self._parsed(os.path.join(self.p.state, f'current-{lid}.txt'), R.lane_marker, 16 * 1024)
             if mark and (mark['lane'] != lid or (mark['source'] == 'watcher' and (not mark['updated'] or now - mark['updated'] > 180))):
                 mark = None
+            alive = getattr(self.probes, 'pid_alive', None)
+            if mark and mark['source'] != 'watcher' and mark['chain_pid'] and alive and not alive(mark['chain_pid']):
+                mark = None                                 # a chain writes on transitions only: its process must still live
             lane['marker'] = (mark or {}).get('source')
             marked = mark['item'] if mark and mark['state'] == 'running' else None
             if marked and marked not in pending:
@@ -393,11 +396,15 @@ class Collector:
             if net:
                 view['shards'] = net.get('shards')
                 p = net.get('progress')
-                if p and p.get('ptnml'):
+                if p and p.get('ptnml') and p.get('stage') == flight['stage'] and sum(p['ptnml']) > 0:
                     total = stats.add([p['ptnml']] + ([last['ptnml']] if last and last.get('ptnml') else []))
                     summ = stats.summary(total)
                     if summ:
-                        view['prelim'] = {**summ, 'stage_games': p['games'], 'shards': p['shards'], 'at': p['at']}
+                        est = None
+                        if klass != 'screen' and hdr.get('elo0') is not None and hdr.get('elo1') is not None:
+                            est = round(stats.llr(total, hdr['elo0'], hdr['elo1']), 2)
+                        view['prelim'] = {**summ, 'llr': est, 'stage_games': p['games'], 'stage_planned': p['planned'],
+                                          'shards': p['shards'], 'of': p['of'], 'final': p['final'], 'at': p['at']}
         elif last:
             view['stage_no'] = last['stage'] - first + 1
         return view

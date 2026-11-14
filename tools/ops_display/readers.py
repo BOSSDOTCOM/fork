@@ -302,6 +302,7 @@ def lane_marker(text):
             'started': epoch('started_epoch') or est_stamp(kv.get('started', '')),
             'since': est_stamp(kv.get('since', '')), 'drivers': [d for d in re.split(r'[,\s]+', kv.get('drivers', '')) if d],
             'source': kv.get('source') or 'chain', 'updated': epoch('updated_epoch') or est_stamp(kv.get('updated', '')),
+            'chain_pid': int(kv['chain_pid']) if kv.get('chain_pid', '').isdigit() else None,
             'last_item': kv.get('last_item') or None, 'last_exit': kv.get('last_exit') or None}
 
 
@@ -921,17 +922,26 @@ def compile_waits(text, day):
 # ---------------------------------------------------------------- preliminary results (per-shard progress)
 
 def shard_progress(d):
-    """One shard's progress record (the proposed artifact content, DESIGN.md section 8):
-    {"sprt": name, "stage": K, "shard": i, "ptnml": [5 counts], "finished_games": n, "at": ISO time}.
-    Returns {sprt, stage, shard, ptnml, games, at}; raises ValueError for anything else, so a changed
-    format is reported and never shown as a result."""
+    """One shard's progress record, format fork-shard-progress/1 (docs/research/shard-progress.md, written by
+    the production session's shard watcher): the pentanomial count of the pairs finished so far and the games
+    finished and planned. Returns {sprt, run_id, stage, shard, shards, ptnml, games, planned, state, status,
+    seq, at}. Raises ValueError for another format or a malformed record, so a changed format is reported and
+    never shown as a result."""
     if not isinstance(d, dict):
         raise ValueError('progress record is not an object')
+    fmt = d.get('format')
+    if not isinstance(fmt, str) or not re.match(r'^fork-shard-progress/1(\.\d+)?$', fmt):
+        raise ValueError(f'progress record has format {str(fmt)[:40]!r}, not fork-shard-progress/1')
     p = d.get('ptnml')
-    if not (isinstance(p, list) and len(p) == 5 and all(isinstance(c, int) and not isinstance(c, bool) and c >= 0 for c in p)):
+    whole = lambda v: isinstance(v, int) and not isinstance(v, bool) and v >= 0  # noqa: E731
+    if not (isinstance(p, list) and len(p) == 5 and all(whole(c) for c in p)):
         raise ValueError('progress record has no pentanomial count of five non-negative integers')
-    if not isinstance(d.get('stage'), int) or not isinstance(d.get('shard'), int):
-        raise ValueError('progress record has no stage or shard number')
-    games = d.get('finished_games')
-    return {'sprt': d.get('sprt'), 'stage': d['stage'], 'shard': d['shard'], 'ptnml': p,
-            'games': games if isinstance(games, int) else 2 * sum(p), 'at': iso(d.get('at'))}
+    for key in ('stage', 'shard', 'games_finished', 'games_planned'):
+        if not whole(d.get(key)):
+            raise ValueError(f'progress record has no {key}')
+    if d.get('state') not in ('running', 'final'):
+        raise ValueError(f'progress record has state {str(d.get("state"))[:20]!r}')
+    return {'sprt': d.get('sprt_name') or None, 'run_id': d.get('run_id'), 'stage': d['stage'], 'shard': d['shard'],
+            'shards': d.get('shards'), 'ptnml': p, 'games': d['games_finished'], 'planned': d['games_planned'],
+            'state': d['state'], 'status': d.get('shard_status'), 'seq': d.get('upload_seq') or 0,
+            'at': iso(d.get('updated_utc'))}

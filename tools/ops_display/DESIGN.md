@@ -93,7 +93,7 @@ serve.py    127.0.0.1, GET only: the page and /snapshot            web/      ind
 | Design, cap | `sprt/<name>/design.json`; absent for fixed-node screens, which report Elo only | |
 | Countdown | dispatch time from `ledger.jsonl` plus the median stage time of finished tests of the same kind | no history of a kind: no guess |
 | Shards finished | GitHub: the live run's jobs (one GET per run every 2 minutes) | |
-| Preliminary result | GitHub: `progress-<stage>-<shard>` artifacts of the live run, when they exist (section 8) | none exist yet |
+| Preliminary result | GitHub: the live run's `progress-<stage>-<shard>` artifacts (`progress.json`, format `fork-shard-progress/1`, `docs/research/shard-progress.md`): the newest per shard, an id downloaded once, a shard refreshed at most every 4 minutes | the lanes' runs carry them once `infra/shard-progress` is merged |
 | Verdicts | `sprt/*/verdict` with the last Elo line; tests dispatched and never merged that no lane runs | unknown verdict text is shown as written |
 | Names | the item's name, the survey's code table, `docs/ideas.md` headings; the item script's own comment in the tooltip | |
 | Jobs, failures, ticker | `~/fork-jobs/jobs/*.json` (each read once per change, after it has been still half a second), `events.jsonl` | command lines are never kept |
@@ -164,24 +164,20 @@ The display works without these; each line says what it shows until then.
 | Addition | Until then | State |
 |---|---|---|
 | Per-lane current-item marker (`state/current-<LANE>.txt`) | the first runnable item in name order | **done by the production session, 2026-11-14; read by the display** |
-| Per-shard progress artifacts for preliminary results | stage-end results only | ordered by the owner 2026-11-14 about 1:01 PM EST; the production session builds it and documents its names and schema. The display's reader follows the proposal below until that schema exists, then is matched to it |
+| Per-shard progress artifacts for preliminary results | stage-end results only | **built by the production session (branch `infra/shard-progress`, 3ff8454); the display's reader matches its schema**, checked against its test run 43628564195 |
 | The cloud watcher stores the positions and rate it already fetches | an estimate from the last complete run | open |
 | The watchdog adds positions and rate to its heartbeat file | the gated read of the part's log in WSL | open |
 | A periodic speed measurement appended to a file | milestones from the performance log | open |
 | A fixed "OPEN" / "ANSWERED" prefix in the morning report's decisions | the section's last lines as text | open |
 
-**Progress artifacts, as the display expects them** (a proposal; the reader is small and can follow another
-format): each shard job uploads, about every 100 games, an artifact named `progress-<stage>-<shard>` (a newer
-one replacing or following the older), holding `progress.json`:
+**Preliminary results, as shown:** the newest progress record of every shard of the stage in flight is
+summed (pentanomial counts of finished pairs), added to the finished stages, and shown beside the stage-end
+figures, which stay untouched: Elo with its 95% interval, games, an estimate of the LLR, the stage's games
+finished of planned, the shards reporting and finished. The verdict is always the merge's at the stage's end.
+A record of another format than `fork-shard-progress/1` is refused and reported, never shown.
 
-    {"sprt": "name", "stage": 5, "shard": 3, "ptnml": [1, 10, 20, 12, 2], "finished_games": 90, "at": "2026-11-14T18:05:00Z"}
-
-The display lists the live run's artifacts every 2 minutes, downloads each new progress artifact once (in
-memory), sums the newest count of every shard, adds the finished stages, and shows the result as
-"preliminary" beside the stage-end figures, which stay untouched. Cheaper for both sides, if preferred: put
-the counts in the artifact's name, so one list call carries everything.
-
-UNVERIFIED: the live fetch of progress artifacts (none exist; tested with a stand-in tool only); the Kaggle
+UNVERIFIED: preliminary results during a live lane run (the fetch and the sums were checked on a completed
+test run; the lanes' runs do not carry the artifacts yet); the Kaggle
 status poll during a real session (none ran); the gated WSL read during a real part (none ran; tested on a
 stand-in folder); whether opening the WSL share starts a stopped distro (the gate assumes it does).
 

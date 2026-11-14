@@ -100,6 +100,10 @@ def pid_started(pid):
         _k32.CloseHandle(h)
 
 
+def pid_alive(pid):
+    return pid_started(pid)[0]
+
+
 def job_live(rec, probe=pid_started, boot=None):
     """Whether a supervisor job whose record says running still has its recorded keeper or command process.
     The same rule as jobctl's recorded_alive (a process counts only if it started when the record says, so a
