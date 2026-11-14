@@ -1511,6 +1511,48 @@ TEST_CASE("time_budget", "the soft limit's scale: its shape, its neutral cases a
   CHECK_EQ(soft_scale_permille(StabilityAndShare, {12, 1, 0, 0}), 1000);  // no share counted
 }
 
+TEST_CASE("time_budget", "deep_depth: the depth clamp at 60, the same scale up to 19, its shape to MaxPly") {
+  using enum TimeScaleVariant;
+  // The same independent double-precision formula as the fit test above, with the depth clamped at 60.
+  const auto reference = [](TimeScaleVariant v, int stability, int depth, int share) {
+    const double s = std::clamp(stability, 1, 72), d = std::min(depth, 60);
+    const auto sigma = [](double z) { return 1 / (1 + std::exp(-z)); };
+    double z1 = 0, balance = 0;
+    if (v == StabilityOnly) {
+      z1 = 0.534912 - 0.207666 * s - 0.096556 * d;
+      balance = 1.030;
+    } else {
+      const double p = std::clamp(share, 5, 995) / 1000.0;
+      z1 = 0.474586 - 0.177596 * s - 0.185073 * std::log(p / (1 - p)) - 0.103338 * d;
+      balance = 0.996;
+    }
+    return std::max(360.0, 1000 * balance * sigma(z1) / sigma(0.567490 - 0.211730 * d));
+  };
+  int broken = 0, wrong = 0;
+  for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare})
+    for (int depth = 1; depth <= MaxPly; ++depth)
+      for (int share = 5; share <= 995; share += 30) {
+        for (int stability = 1; stability <= 80; ++stability) {
+          const int got = soft_scale_permille(v, {depth, stability, share, 0}, true);
+          if (depth <= 19) broken += got != soft_scale_permille(v, {depth, stability, share, 0});
+          if (depth >= 60) broken += got != soft_scale_permille(v, {60, stability, share, 0}, true);
+          if (depth >= 8) {
+            const double want = reference(v, stability, depth, share);
+            wrong += std::abs(got - want) > std::max(2.0, want * 0.003);  // the fixed point, also at 60
+            broken += got < 360;
+            broken += soft_scale_permille(v, {depth, stability + 1, share, 0}, true) > got;
+          }
+        }
+      }
+  CHECK_EQ(broken, 0);
+  CHECK_EQ(wrong, 0);
+  // E2's case: a best move stable for 20 iterations at depth 30 is no longer held at the floor.
+  CHECK_EQ(soft_scale_permille(StabilityAndShare, {30, 20, 500, 0}), 360);
+  CHECK(soft_scale_permille(StabilityAndShare, {30, 20, 500, 0}, true) > 600);
+  // The switch is on by default (adopted 2026-11-14).
+  CHECK(SearchSwitches{}.use_deep_time_depth);
+}
+
 TEST_CASE("time_budget", "a scaled soft limit stays within [1, hard] and leaves movetime alone") {
   CHECK_EQ(scaled_soft_ms(1000, 4000, 531), 531);
   CHECK_EQ(scaled_soft_ms(1000, 4000, 2033), 2033);

@@ -1214,7 +1214,8 @@ std::int64_t Searcher::soft_limit_now(const SearchQuota& limits) const {
   if (!switches.use_stability_time) return limits.soft_ms;
   const TimeScaleVariant variant =
       switches.use_share_time ? TimeScaleVariant::StabilityAndShare : TimeScaleVariant::StabilityOnly;
-  return scaled_soft_ms(limits.soft_ms, limits.hard_ms, soft_scale_permille(variant, time_signals_));
+  return scaled_soft_ms(limits.soft_ms, limits.hard_ms,
+                        soft_scale_permille(variant, time_signals_, switches.use_deep_time_depth));
 }
 
 #ifdef FORK_SEARCH_STATS

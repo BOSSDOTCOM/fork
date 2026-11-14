@@ -681,6 +681,7 @@ tuned by SPSA.
   own.
 
 - **2026-11-14 (owner): the revamp** (docs/research/idea23-revamp-2026-11-14.md) is recorded and placed as a **final pre-TCEC polish step**, after Lazy SMP, the removal round, the final retune and the TCEC fixes; traces from the final engine under TCEC-like conditions (many threads, long TC; ideally during the rented-hardware dry run); no engineering until then. Decisions: target order time management, then row-choice states, then the calibration layer only if idea 180 gains; simulator coefficient fitting approved for the time-management target only (candidates; games decide); the 12-arm one-stage screen batch with three predicted-loser arms approved; E2's clamp fix included in the simulator once its LTC decides; the stage-0 simulator validation reported before tokens or GitHub time are spent.
+- **2026-11-14 (owner, about 12:20 PM EST): E2 adopted** (`UseDeepTimeDepth` on, the time scale's depth clamped at 60, not 19; idea 185) under the non-regression standard, its LTC capped undecided at +2.16 ± 3.47 Elo; "Include it in idea 23's simulator when that work starts": the simulator's time-management model uses the clamp at 60 (the engine's rule since the adoption).
 
 ## 24. TT victim policy under real table pressure
 
@@ -2984,6 +2985,31 @@ whose weaknesses and data gaps decide their targets and order.
   docs/history/phase-4/sprt-log.md. Numbered 130, past the numbers the builders' branches use (87-129).
 - **runtime cost:** none expected (one move comparison per root move searched and a per-pass reset). Speed not
   measured (UNVERIFIED; bench/ab.py not run).
+- **earliest phase:** Phase 4.
+
+## 185. The time scale's deep-depth clamp (bug review 2026-11-11, E2)
+
+- **type:** ELO (time management, a TCEC-depth fix); flag `use_deep_time_depth` (on since 2026-11-14).
+- **idea** (docs/research/bug-review-2026-11-11.md, E2; bug-review-followup-2026-11-11.md, E2): the soft limit's
+  scale (time management variant b) clamped the depth at 19, the end of X6's fit, so past depth 19 a stable best
+  move got the 0.36 floor at any share and deep searches spent less than their soft limit (the cloud replay of
+  720 searches of 96M nodes from 24 LTC games: 0.83 and 0.79 of the plain soft limit at the two deepest budgets).
+  With the switch the depth is clamped at 60 (`TimeScaleDeepMaxDepth`, a fixed-point guard, not a tuned value),
+  and the spend returns to 0.96-1.03. Identical up to depth 19; bench unchanged (its searches are depth-limited).
+- **phase:** Phase 4 (bug review follow-up; a TCEC hazard). **metric:** design R SPRT at LTC against off (LTC only,
+  owner, 2026-11-11).
+- **status:** **adopted 2026-11-14 under the non-regression standard (owner), not on a pass.** e2-time-depth-ltc
+  (40+0.4, Hash 64, [0, 6] nElo, cap 6; test sprt/e2-time-depth e4fa310 against off tier2/e2-time-depth e7ec553,
+  r8brft1) was **capped undecided after 6 of 6 stages at +2.16 ± 3.47 Elo** (nElo +4.24 ± 6.82, Ptnml [38, 1113,
+  2626, 1179, 36], LLR 0.61, 9,984 games, no time losses; runs 43577728887 to 43610249077; sprt-log). The owner
+  (about 12:20 PM EST): "E2 (depth-19 time-clamp fix): adopt under the non-regression standard (TCEC-depth fix;
+  its capped LTC result +2.16 +- 3.47 has a 95% lower bound above -3), with records noting why. Include it in
+  idea 23's simulator when that work starts." The lower bounds, −1.31 Elo and −2.58 nElo, are above −3, the
+  non-regression bound; no separate non-regression SPRT was run. Ported onto phase-4 89dc994 (branch
+  adopt/e2-time-depth), bench 5,386,021 / 5ecd49d976e215e1 (r8brft1), unchanged (DESIGN.md decisions log,
+  2026-11-14). No final-retune dimension (a guard, not tuned). Goes into idea 23's simulator when that work
+  starts. Numbered 185, after Fable's network ideas (175-184).
+- **runtime cost:** none (one comparison per finished iteration). Speed not measured (bench/ab.py not run).
 - **earliest phase:** Phase 4.
 
 ## 150. RSPSA for the final retune: adaptive per-parameter step sizes

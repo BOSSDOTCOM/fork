@@ -669,7 +669,8 @@ TEST_CASE("uci_protocol",
     for (const TimeScaleVariant variant :
          {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
       for (int depth = 0; depth < MaxPly; ++depth)
-        narrowest = std::min(narrowest, soft_scale_permille(variant, {depth, MaxPly, 1000, 0}));
+        for (const bool deep : {false, true})  // UseDeepTimeDepth either way (E2)
+          narrowest = std::min(narrowest, soft_scale_permille(variant, {depth, MaxPly, 1000, 0}, deep));
     const std::int64_t earliest =
         std::min(plan.soft_ms, scaled_soft_ms(plan.soft_ms, plan.hard_ms, narrowest));
     CHECK_MSG(ms >= static_cast<double>(earliest), "bestmove after "
@@ -693,7 +694,8 @@ TEST_CASE("uci_protocol",
     for (const TimeScaleVariant variant :
          {TimeScaleVariant::StabilityOnly, TimeScaleVariant::StabilityAndShare})
       for (int depth = 0; depth < MaxPly; ++depth)
-        widest = std::max(widest, soft_scale_permille(variant, {depth, 1, 1, 0}));
+        for (const bool deep : {false, true})  // UseDeepTimeDepth either way (E2)
+          widest = std::max(widest, soft_scale_permille(variant, {depth, 1, 1, 0}, deep));
     const std::int64_t bound = std::max(plan.soft_ms, scaled_soft_ms(plan.soft_ms, plan.hard_ms, widest));
     for (const auto& [depth, time] : first_seen)
       CHECK_MSG(depth == deepest || time < bound,

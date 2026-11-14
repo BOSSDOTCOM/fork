@@ -53,6 +53,10 @@ TimeBudget plan_time(const ClockInput& in);
 // - scaled_soft_ms never scales a soft limit equal to its hard limit (go
 //   movetime), never returns more than hard_ms nor less than 1, and leaves a
 //   missing limit (-1) as it is.
+// - deep_depth (switch use_deep_time_depth, on since 2026-11-14; the
+//   parameter's own default stays false): the depth is clamped at 60 instead
+//   of 19, so the scale keeps following depth in deep searches (E2 of the
+//   bug review of 2026-11-11); identical up to depth 19.
 enum class TimeScaleVariant : std::uint8_t { Off, StabilityOnly, StabilityAndShare };
 
 struct IterationSignals {
@@ -62,7 +66,7 @@ struct IterationSignals {
   int score = 0;
 };
 
-int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signals);
+int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signals, bool deep_depth = false);
 std::int64_t scaled_soft_ms(std::int64_t soft_ms, std::int64_t hard_ms, int permille);
 
 }  // namespace forkeng
