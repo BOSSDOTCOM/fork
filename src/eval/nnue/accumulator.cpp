@@ -186,8 +186,9 @@ void sum_perspective(const NetFile& net, Color perspective, Frame f, ForEach for
   return net.phase_table[game_phase(pos)];
 }
 
-#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
-    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
+#if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 ||  \
+    FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || \
+    FORK_NET_ARCH == 11
 // sum over both halves (side to move first) of v * (v * w), v the clipped
 // value: S-512's and H-512's output, and each of XGR's experts.
 std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
@@ -447,13 +448,184 @@ void add_contact_rows(const NetFile& net, const Accumulator& acc, const Position
 }
 #endif
 
+#if FORK_NET_ARCH == 11
+// H512+PP+M's block: one perspective's NetBlockColumns block values, the
+// sums' block columns plus the `count` block rows, summed in 32 bits and held
+// to the int16 range (the block rows have no bound; the output clips each
+// value to [0, QA], so holding the sum to int16 first changes nothing). The
+// vector paths widen as sum_rows_saturated's do and give the same values.
+void sum_block_scalar(const std::int16_t* base, const std::int16_t* const* rows, int count,
+                      std::int16_t* out) {
+  for (int i = 0; i < NetBlockColumns; ++i) {
+    std::int32_t s = base[i];
+    for (int r = 0; r < count; ++r) s += rows[r][i];
+    out[i] = static_cast<std::int16_t>(std::clamp<std::int32_t>(s, -32768, 32767));
+  }
+}
+
+#if defined(__AVX512BW__)
+void sum_block(const std::int16_t* base, const std::int16_t* const* rows, int count, std::int16_t* out) {
+  for (int i = 0; i < NetBlockColumns; i += 16) {
+    __m512i s = _mm512_cvtepi16_epi32(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(base + i)));
+    for (int r = 0; r < count; ++r)
+      s = _mm512_add_epi32(
+          s, _mm512_cvtepi16_epi32(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(rows[r] + i))));
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(out + i), _mm512_cvtsepi32_epi16(s));
+  }
+}
+#elif defined(__AVX2__)
+void sum_block(const std::int16_t* base, const std::int16_t* const* rows, int count, std::int16_t* out) {
+  for (int i = 0; i < NetBlockColumns; i += 16) {
+    const __m256i b = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(base + i));
+    __m256i lo = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(b));
+    __m256i hi = _mm256_cvtepi16_epi32(_mm256_extracti128_si256(b, 1));
+    for (int r = 0; r < count; ++r) {
+      const __m256i w = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(rows[r] + i));
+      lo = _mm256_add_epi32(lo, _mm256_cvtepi16_epi32(_mm256_castsi256_si128(w)));
+      hi = _mm256_add_epi32(hi, _mm256_cvtepi16_epi32(_mm256_extracti128_si256(w, 1)));
+    }
+    _mm256_storeu_si256(reinterpret_cast<__m256i*>(out + i),
+                        _mm256_permute4x64_epi64(_mm256_packs_epi32(lo, hi), 0xD8));
+  }
+}
+#else
+void sum_block(const std::int16_t* base, const std::int16_t* const* rows, int count, std::int16_t* out) {
+  sum_block_scalar(base, rows, count, out);
+}
+#endif
+
+// The squared output's sum with each half's block columns taken from
+// `block` (side to move first) and the others from the accumulator. Integer
+// sums: splitting them by columns changes nothing, and the AVX2 path's int32
+// lane sums are bounded as squared_sum's are.
+template <bool Scalar>
+std::int64_t block_squared_sum(const Accumulator& acc, const std::int16_t (&block)[2][NetBlockColumns],
+                               Color stm, const std::int16_t* w) {
+  const std::int16_t* halves[2] = {acc.values[stm], acc.values[~stm]};
+#if defined(__AVX2__)
+  if constexpr (!Scalar) {
+    const __m256i zero = _mm256_setzero_si256(), qa = _mm256_set1_epi16(NetQa);
+    __m256i sum = _mm256_setzero_si256();
+    const auto add = [&](const std::int16_t* v, const std::int16_t* wh, int count) {
+      for (int i = 0; i < count; i += 16) {
+        const __m256i x = _mm256_min_epi16(
+            _mm256_max_epi16(_mm256_loadu_si256(reinterpret_cast<const __m256i*>(v + i)), zero), qa);
+        const __m256i t = _mm256_mullo_epi16(x, _mm256_load_si256(reinterpret_cast<const __m256i*>(wh + i)));
+        sum = _mm256_add_epi32(sum, _mm256_madd_epi16(t, x));
+      }
+    };
+    for (int half = 0; half < 2; ++half) {
+      add(halves[half], w + half * NetHidden, NetBlockStart);
+      add(block[half], w + half * NetHidden + NetBlockStart, NetBlockColumns);
+    }
+    return horizontal_sum(sum);
+  }
+#endif
+  std::int64_t s = 0;
+  for (int half = 0; half < 2; ++half)
+    for (int i = 0; i < NetHidden; ++i) {
+      const int v = i < NetBlockStart ? halves[half][i] : block[half][i - NetBlockStart];
+      const int x = std::clamp<int>(v, 0, NetQa);
+      s += std::int64_t{x} * (x * w[half * NetHidden + i]);
+    }
+  return s;
+}
+
+// The block row of piece `p` on `s` for `perspective` in frame `f`: own or
+// enemy, its kind (pawn .. queen) and its square seen from the perspective.
+const std::int16_t* block_row(const NetFile& net, Color perspective, Frame f, Piece p, Square s) {
+  const Square seen = perspective == White ? s : s ^ 56;
+  return net.block_weights[320 * (side_of(p) != perspective) + 64 * kind_of(p) + (seen ^ f.flip)];
+}
+
+// H512+PP+M: H512+PP's output with the side to move's exposed pieces' block
+// rows added to both perspectives' block columns (H512+PP's own output when
+// none is exposed).
+template <bool Scalar>
+int mover_block_output(const NetFile& net, const Accumulator& acc, const Position& pos) {
+  const Color stm = pos.side_to_move();
+  const int k = phase_bucket(net, pos);
+  const Bitboard exposed = mover_exposed(pos);
+#ifdef FORK_DEBUG
+  if (exposed != mover_exposed_reference(pos)) __builtin_trap();
+#endif
+  std::int64_t s;
+  if (!exposed) {
+    s = Scalar ? squared_sum_scalar(acc.values[stm], acc.values[~stm], net.out_weights[k])
+               : squared_sum(acc.values[stm], acc.values[~stm], net.out_weights[k]);
+  } else {
+    alignas(64) std::int16_t block[2][NetBlockColumns];
+    for (int half = 0; half < 2; ++half) {
+      const Color perspective = half == 0 ? stm : ~stm;
+      const Frame f = frame_of(net, perspective, pos.king_square(perspective));
+      const std::int16_t* rows[16];  // at most one side's 15 non-king pieces
+      int n = 0;
+      for (Bitboard b = exposed; b;) {
+        const Square sq = pop_lsb(b);
+        rows[n++] = block_row(net, perspective, f, pos.piece_at(sq), sq);
+      }
+      const std::int16_t* base = acc.values[perspective] + NetBlockStart;
+      if constexpr (Scalar)
+        sum_block_scalar(base, rows, n, block[half]);
+      else
+        sum_block(base, rows, n, block[half]);
+    }
+    s = block_squared_sum<Scalar>(acc, block, stm, net.out_weights[k]);
+  }
+  const std::int64_t y = s / NetQa + net.out_bias[k];
+  return clamp_cp(y * net.scale / (NetQa * NetQb));
+}
+
+#ifdef FORK_DEBUG
+// The slow reference of H512+PP+M's evaluation (FORK_DEBUG builds check every
+// evaluation against it): the piece and link sums from scratch, the exposed
+// set square by square, every hidden value summed in 64 bits, then held to
+// int16 and clipped, and the output in 64 bits over all columns.
+int mover_block_reference(const NetFile& net, const Position& pos) {
+  Accumulator a;
+  accumulate_board(net, pos, a);
+  const Bitboard exposed = mover_exposed_reference(pos);
+  const Color stm = pos.side_to_move();
+  const int k = phase_bucket(net, pos);
+  std::int64_t total = 0;
+  for (int half = 0; half < 2; ++half) {
+    const Color perspective = half == 0 ? stm : ~stm;
+    const Square own_king = pos.king_square(perspective);
+    const Square seen_king = perspective == White ? own_king : own_king ^ 56;
+    const int flip = (seen_king & 7) < 4 ? 7 : 0;
+    for (int i = 0; i < NetHidden; ++i) {
+      std::int64_t v = a.values[perspective][i];
+      if (i >= NetBlockStart)
+        for (Bitboard b = exposed; b;) {
+          const Square sq = pop_lsb(b);
+          const Piece p = pos.piece_at(sq);
+          const int seen = (perspective == White ? sq : sq ^ 56) ^ flip;
+          const int row = (side_of(p) == perspective ? 0 : 320) + 64 * kind_of(p) + seen;
+          v += net.block_weights[row][i - NetBlockStart];
+        }
+      v = std::clamp<std::int64_t>(std::clamp<std::int64_t>(v, -32768, 32767), 0, NetQa);
+      total += v * v * net.out_weights[k][half * NetHidden + i];
+    }
+  }
+  const std::int64_t y = total / NetQa + net.out_bias[k];
+  return clamp_cp(y * net.scale / (NetQa * NetQb));
+}
+#endif
+#endif
+
 template <bool Scalar>
 int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& pos) {
 #if FORK_NET_ARCH == 1
   return Scalar ? output_layer_scalar(net, acc, pos.side_to_move())
                 : output_layer(net, acc, pos.side_to_move());
+#elif FORK_NET_ARCH == 11
+  const int out = mover_block_output<Scalar>(net, acc, pos);
+#ifdef FORK_DEBUG
+  if (out != mover_block_reference(net, pos)) __builtin_trap();
+#endif
+  return out;
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || FORK_NET_ARCH == 11
 #if FORK_NET_ARCH == 6
   Accumulator summed;
   const Accumulator& a = add_exposure_rows(net, acc, pos, summed) ? summed : acc;
@@ -712,6 +884,77 @@ Bitboard exposed_lower_reference(const Position& pos) {
 }
 #endif
 
+#if FORK_NET_ARCH == 11
+namespace {
+
+// The squares `c`'s pawns attack, set-wise.
+Bitboard pawn_hits(Color c, Bitboard pawns) {
+  return c == White ? ((pawns << 7) & ~FileH) | ((pawns << 9) & ~FileA)
+                    : ((pawns >> 9) & ~FileH) | ((pawns >> 7) & ~FileA);
+}
+
+}  // namespace
+
+// The enemy's attack sets are built up by class, as exposed_lower's, but for
+// the side to move's pieces only: the lower rule stops once no piece the next
+// class could expose remains; the full rule (FORK_EXP_lexact) also needs every
+// enemy attack and every own defence.
+Bitboard mover_exposed(const Position& pos) {
+  const Color us = pos.side_to_move(), them = ~us;
+  const Bitboard occ = pos.pieces();
+  const Bitboard minors = pos.pieces(us, Knight, Bishop), rooks = pos.pieces(us, Rook),
+                 queens = pos.pieces(us, Queen);
+#ifdef FORK_EXP_lexact
+  Bitboard hit = pawn_hits(them, pos.pieces(them, Pawn));
+  Bitboard out = minors & hit;
+  for (Bitboard b = pos.pieces(them, Knight); b;) hit |= knight_attacks(pop_lsb(b));
+  for (Bitboard b = pos.pieces(them, Bishop); b;) hit |= bishop_attacks(pop_lsb(b), occ);
+  out |= rooks & hit;
+  for (Bitboard b = pos.pieces(them, Rook); b;) hit |= rook_attacks(pop_lsb(b), occ);
+  out |= queens & hit;
+  for (Bitboard b = pos.pieces(them, Queen); b;) hit |= queen_attacks(pop_lsb(b), occ);
+  hit |= king_attacks(pos.king_square(them));
+  const Bitboard targets = pos.pieces(us) & ~pos.pieces(King) & hit & ~out;
+  if (!targets) return out;
+  Bitboard guard = pawn_hits(us, pos.pieces(us, Pawn)) | king_attacks(pos.king_square(us));
+  for (Bitboard b = pos.pieces(us, Knight); b;) guard |= knight_attacks(pop_lsb(b));
+  for (Bitboard b = pos.pieces(us, Bishop); b;) guard |= bishop_attacks(pop_lsb(b), occ);
+  for (Bitboard b = pos.pieces(us, Rook); b;) guard |= rook_attacks(pop_lsb(b), occ);
+  for (Bitboard b = pos.pieces(us, Queen); b;) guard |= queen_attacks(pop_lsb(b), occ);
+  return out | (targets & ~guard);
+#else
+  if (!(minors | rooks | queens)) return 0;
+  Bitboard hit = pawn_hits(them, pos.pieces(them, Pawn));
+  Bitboard out = minors & hit;
+  if (!(rooks | queens)) return out;
+  for (Bitboard b = pos.pieces(them, Knight); b;) hit |= knight_attacks(pop_lsb(b));
+  for (Bitboard b = pos.pieces(them, Bishop); b;) hit |= bishop_attacks(pop_lsb(b), occ);
+  out |= rooks & hit;
+  if (!queens) return out;
+  for (Bitboard b = pos.pieces(them, Rook); b;) hit |= rook_attacks(pop_lsb(b), occ);
+  return out | (queens & hit);
+#endif
+}
+
+Bitboard mover_exposed_reference(const Position& pos) {
+  constexpr int Class[6] = {1, 2, 2, 3, 4, 5};  // pawn, knight, bishop, rook, queen, king
+  const Color us = pos.side_to_move();
+  const Bitboard occ = pos.pieces();
+  Bitboard out = 0;
+  for (Bitboard b = pos.pieces(us) & ~pos.pieces(King); b;) {
+    const Square s = pop_lsb(b);
+    const Piece p = pos.piece_at(s);
+    const Bitboard enemy = pos.attackers_to(s, occ) & pos.pieces(~us);
+    for (Bitboard a = enemy; a;)
+      if (Class[kind_of(pos.piece_at(pop_lsb(a)))] < Class[kind_of(p)]) out |= bb(s);
+#ifdef FORK_EXP_lexact
+    if (enemy && !(pos.attackers_to(s, occ) & pos.pieces(us))) out |= bb(s);
+#endif
+  }
+  return out;
+}
+#endif
+
 #if FORK_NET_ARCH == 1
 
 namespace {
@@ -804,7 +1047,7 @@ void FeatureStack::reset(const NetFile& net, const Position& root) {
     e.computed[perspective] = true;
   }
   accumulate_board(net, root, e.acc);
-#if FORK_NET_ARCH == 9
+#if FORK_NET_KING_CACHE
   // Every snapshot starts as the empty board of this net.
   for (auto& side : snapshots_)
     for (FrameSnapshot& s : side) {
@@ -815,7 +1058,7 @@ void FeatureStack::reset(const NetFile& net, const Position& root) {
 #endif
 }
 
-#if FORK_NET_ARCH == 9
+#if FORK_NET_KING_CACHE
 void FeatureStack::refresh_from_snapshot(const NetFile& net, int ply, Color perspective,
                                          const Position& pos) {
 #ifdef FORK_SEARCH_STATS
@@ -880,7 +1123,7 @@ void FeatureStack::push_move(const NetFile& net, int ply, const Position& before
 #endif
       const Square to = m.is_castle() ? Position::castle_landing(m.from(), m.to()).king : m.to();
       const Frame f = frame_of(net, us, to);
-#if FORK_NET_ARCH == 9
+#if FORK_NET_KING_CACHE
       // The mover's frame may change: then the first evaluation that needs
       // this perspective at this ply or below takes it from the snapshot.
       e.frame[us] = f;
@@ -946,7 +1189,7 @@ int FeatureStack::evaluate(const NetFile& net, int ply, const Position& pos) {
 #else
   for (const Color perspective : {White, Black}) {
     int base = ply;
-#if FORK_NET_ARCH == 9
+#if FORK_NET_KING_CACHE
     // Back to the nearest computed ply (ply 0 always is), unless a ply on the
     // way changed this perspective's frame: then the evaluated ply comes from
     // the frame's snapshot (the plies between stay uncomputed).

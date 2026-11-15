@@ -21,7 +21,11 @@
 //   sums). S512+PP's link inputs follow the piece rows in the same sums
 //   (H512+PP's follow every region's piece rows, S512+PPXL's its exposure
 //   rows): a move changes them only when a pawn moves, is captured or
-//   promotes.
+//   promotes. H512+PP+M (architecture 11, a prototype) adds the side to
+//   move's exposed pieces' block rows to the hidden columns NetBlockStart ..
+//   NetHidden - 1 of both perspectives at each evaluation (never kept in
+//   the sums; the evaluation equals H512+PP's when no piece is exposed or
+//   the block's weights are zero).
 // - A perspective's frame changes only when its own king moves across the
 //   d/e line or into another region; then that perspective is recomputed
 //   from the board (H512+PP: lazily, from that frame's snapshot, by the
@@ -137,6 +141,18 @@ Bitboard exposed_lower(const Position& pos);
 Bitboard exposed_lower_reference(const Position& pos);
 #endif
 
+#if FORK_NET_ARCH == 11
+// H512+PP+M's exposed pieces, the side to move's only: its non-king pieces
+// attacked by an enemy piece of a lower class (pawn < knight = bishop < rook
+// < queen < king; pseudo-attacks on the occupancy), so never a pawn; with
+// FORK_EXP_lexact also those attacked by any enemy piece and defended by none
+// of its own (pawns included). Set-wise, from the enemy's attacks by class.
+Bitboard mover_exposed(const Position& pos);
+// The same rule square by square, from each piece's attackers: the check of
+// mover_exposed (every evaluation in FORK_DEBUG builds).
+Bitboard mover_exposed_reference(const Position& pos);
+#endif
+
 // The feature stack's work, counted in stats builds (DESIGN.md §5.7, X1):
 // evaluations; moves and null moves pushed (lazily: most are never
 // evaluated); perspective updates in the evaluation walk (B0's
@@ -205,7 +221,7 @@ class FeatureStack {
     Frame frame[2];
     bool computed[2] = {false, false};
   };
-#if FORK_NET_ARCH == 9
+#if FORK_NET_KING_CACHE
   // One perspective's sums in one frame, with the board they belong to (each
   // colour's pieces by kind). reset() starts every snapshot as the empty
   // board (the biases), so its first use adds every piece and link.

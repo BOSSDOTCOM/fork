@@ -19,11 +19,13 @@
 // - Version 2 payload (tools/nnue/models.py): a 128-byte map block (32
 //   region bytes for the mirrored own-king cell rank * 4 + file - 4, 25
 //   phase-table bytes, zeros), the feature weights and biases as above, then
-//   per architecture: 2, 3, 6, 7, 8, 9, 10: output weights i16 [8][2H], biases i32 [8];
+//   per architecture: 2, 3, 6, 7, 8, 9, 10, 11: output weights i16 [8][2H], biases i32 [8];
 //   4: L1 i8 [8][16][H], biases i32 [8][16], L2 i16 [8][32][16], biases i32
 //   [8][32], L3 i16 [8][32], biases i32 [8], the output output_multiplier i64;
 //   5: side weights i16 [inputs][3], side biases i16 [3], two experts' i16
-//   [2H] weights and i32 biases.
+//   [2H] weights and i32 biases. 11: as 9, then the block's weights i16
+//   [640][NetBlockColumns] (H512+PP+M's side-to-move exposure rows; need no
+//   bound: summed in 32 bits).
 // - QA and QB are bullet's quantization convention (owner, 2026-10-28;
 //   ORIGINALITY.md).
 // - The reader accepts a file only if every field matches what this build
@@ -68,9 +70,12 @@ struct NetFile {
   alignas(64) std::int16_t out_weights[2 * NetHidden];
   std::int32_t out_bias = 0;
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || FORK_NET_ARCH == 11
   alignas(64) std::int16_t out_weights[NetBuckets][2 * NetHidden];
   std::int32_t out_bias[NetBuckets] = {};
+#if FORK_NET_ARCH == 11
+  alignas(64) std::int16_t block_weights[NetExposureRows][NetBlockColumns];
+#endif
 #elif FORK_NET_ARCH == 4
   alignas(64) std::int8_t af1_weights[NetBuckets][NetL1][NetHidden];
   std::int32_t af1_bias[NetBuckets][NetL1] = {};

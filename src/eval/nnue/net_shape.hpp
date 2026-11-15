@@ -35,7 +35,14 @@
 //   rule's lower-class half only: a non-king piece attacked by an enemy piece
 //   of a lower class (so pawns are never exposed); found per evaluation and
 //   summed in 32 bits onto the piece and link sums, as S512+X's; S-512's
-//   output.
+//   output. 11 H512+PP+M (idea 178's prototype, local only; owner,
+//   2026-11-14): H512+PP plus the side to move's exposed pieces' rows in a
+//   64-column block (the hidden columns 448 .. 511 of both perspectives),
+//   found per evaluation and summed in 32 bits onto those columns only; the
+//   rule is x_lower's (a non-king piece attacked by an enemy piece of a
+//   lower class), or with FORK_EXP_lexact the full exposure rule (or
+//   attacked and not defended); the block's 640 x 64 weights follow the
+//   output layer in the net file.
 // - QA = 255, QB = 64 (bullet's quantization convention; ORIGINALITY.md).
 #pragma once
 
@@ -44,22 +51,32 @@
 #endif
 
 // The architectures that keep S512+PP's pawn links in the int16 sums.
-#define FORK_NET_LINKS (FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10)
+#define FORK_NET_LINKS \
+  (FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || FORK_NET_ARCH == 11)
+// The architectures with H512+PP's king regions and snapshot refreshes.
+#define FORK_NET_KING_CACHE (FORK_NET_ARCH == 9 || FORK_NET_ARCH == 11)
 
 namespace forkeng {
 
 inline constexpr int NetArchitecture = FORK_NET_ARCH;
-static_assert(NetArchitecture >= 1 && NetArchitecture <= 10, "unknown network architecture");
+static_assert(NetArchitecture >= 1 && NetArchitecture <= 11, "unknown network architecture");
 
 inline constexpr int NetQa = 255;
 inline constexpr int NetQb = 64;
 inline constexpr int NetPieceSquares = 768;  // 2 colours x 6 piece types x 64 squares
 inline constexpr int NetHidden = NetArchitecture == 1 ? 256 : 512;
 inline constexpr bool NetMirrored = NetArchitecture != 1;
-inline constexpr bool NetRegioned = (NetArchitecture >= 3 && NetArchitecture <= 5) || NetArchitecture == 9;
+inline constexpr bool NetRegioned =
+    (NetArchitecture >= 3 && NetArchitecture <= 5) || NetArchitecture == 9 || NetArchitecture == 11;
 inline constexpr int NetMaxRegions = NetRegioned ? 4 : 1;
 inline constexpr bool NetExposure = NetArchitecture == 5 || NetArchitecture == 6 || NetArchitecture == 10;
 inline constexpr int NetExposureRows = 640;  // own/enemy x 5 non-king types x 64 squares
+// H512+PP+M's block: the side to move's exposed pieces' rows (own/enemy x 5
+// non-king types x 64 squares, seen from each perspective), NetBlockColumns
+// wide, added to the hidden columns from NetBlockStart.
+inline constexpr bool NetMoverBlock = NetArchitecture == 11;
+inline constexpr int NetBlockColumns = 64;
+inline constexpr int NetBlockStart = NetHidden - NetBlockColumns;
 // S512cl's contact and link inputs (contacts.hpp builds their index space;
 // tests/test_nnue.cpp checks these sizes against it).
 inline constexpr bool NetContacts = NetArchitecture == 7;
@@ -92,7 +109,7 @@ inline constexpr int NetMaxInputs = NetPieceSquares * NetMaxRegions + (NetExposu
 // Outputs (or layer stacks) picked by the game phase through a 25-entry table.
 inline constexpr bool NetPhasePicked = (NetArchitecture >= 2 && NetArchitecture <= 4) ||
                                        NetArchitecture == 6 || NetArchitecture == 7 || NetArchitecture == 8 ||
-                                       NetArchitecture == 9 || NetArchitecture == 10;
+                                       NetArchitecture == 9 || NetArchitecture == 10 || NetArchitecture == 11;
 inline constexpr int NetBuckets = NetPhasePicked ? 8 : 1;
 inline constexpr int NetSideLanes = NetArchitecture == 5 ? 3 : 0;
 // AF-S's body.
