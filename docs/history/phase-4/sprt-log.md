@@ -2330,3 +2330,10 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
 - **Decision (owner, 2026-11-14 about 11:55 PM EST):** stopped, trending to H0; **not adopted**. The retry at
   RootLeanScale 2000 (item z70b, sprt/f11-root-lean-2000 4703195) is **not run**: the first try showed no gain, not a
   near miss. The switch stays off on phase-4.
+
+### 2026-11-15 the material scale (the engine survey's F10; night queue items 97a and 97b): design R SPRT at STC, then the retry: H0, then capped; dropped (owner)
+- **First try (97a, f10-material-scale-stc):** H0 accepted after stage 5, **Elo -0.72 +/- 3.95** (nElo -1.27 +/- 6.9),
+  LLR -2.04 of (-1.56, 2.77), SPRT [0, 6] nElo.
+- **Retry at the second value (97b, f10-material-scale-retry):** capped undecided after its 8 stages, **Elo +1.76 +/-
+  3.46** (nElo +3.07 +/- 6.02), Ptnml [132, 1535, 3018, 1566, 149], LLR +0.05.
+- **Decision (owner, 2026-11-15 about 6:50 AM EST):** **dropped**; not adopted, not carried to the final retune.

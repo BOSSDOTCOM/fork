@@ -3417,7 +3417,9 @@ proposal are placeholders, screened before use.
 - **idea:** the exposure rule applied to the side to move's pieces only, its rows confined to a 64-column block of
   the accumulator; cuts L-lower (x_lower's rule) and L-exact (the full rule).
 - **plan (owner):** its share measurement (CPU: the mover's exposed pieces' share of r8brft1's residual) and a speed
-  prototype **after x_lower's result**. **status:** candidate (plan).
+  prototype **after x_lower's result**. (Status: see below.)
+- **2026-11-14/15 (prototype on r3kr1, local proto/i178-r3 2a464fb):** L-exact killed by both rules (mover part of the residual share 0.28-0.42; speed 0.931 of r3kr1, under 0.95). L-lower: speed 0.965 of r3kr1 (x86-64-v3), 0.922 stacked vs r8ceplo2 (passes 0.95 and the owner's 0.90); residual mover part mixed on the held-out set (0.29-0.57), under half in the larger in-sample set. **Owner (2026-11-15): train L-lower as one arm** (warm start r3kr1, same-recipe control, the quota reported before any launch); residual results rank only (idea 186).
+- **status:** in progress (training plan; quota report first).
 
 ### 179. A king-offset lane with per-king-square snapshots (proposal idea 5)
 - **idea:** option (b)'s king-relative offsets into a narrow separate lane, with one snapshot per king square.
@@ -3454,6 +3456,7 @@ proposal are placeholders, screened before use.
 ### 184. Queen-gated king-zone values (proposal idea 10)
 - **idea:** (b2)'s king-zone vector computed only when the enemy still has a queen (zeros otherwise).
 - **status:** kept as a **later refinement** (owner, 2026-11-14); rides on whatever is decided for (b2).
+- **2026-11-15 (owner):** (b2), which this rides on, is **parked**: on r3kr1 it measured 0.922-0.924 of r3kr1 and 0.883-0.886 stacked vs r8ceplo2 on x86-64-v3, under the owner's 0.90 line; d_lite parked with it (0.917-0.929, stacked 0.878-0.890). Local branches proto/b2-r3 783883d, proto/dlite-r3 a0df96f (not pushed).
 
 ### 186. Vision step 0: the calibrated residual pass and the head-routing refits (vision ideas, 2026-11-14)
 - **type:** TOOLING. **phase:** 4. **runtime cost:** none.
@@ -3463,6 +3466,7 @@ proposal are placeholders, screened before use.
 - **status:** done (2026-11-15).
 - **result (2026-11-15; docs/research/vision-step0-2026-11-14.md, local branch research/vision-step0 9ae0b8e):** (a) **idea 175's 0.5% line does not stand**: on g4c the full exposure plane reads 0.61/0.79/0.85% (by square/pooled/by bucket; +25.7 at fixed nodes), x_lower 0.15/0.27/0.29% (+17.6), the 608 pawn links 0.018/0.018/0.13% (+46.1, Fork's best input); on g4s2-val all three are under 0.5%; the share does not rank winners by game value. Implied lines: 0.077/0.133/0.144% (the two threat winners) or 0.009/0.009/0.066% (with the links; at the noise floor). Tool checked: it reproduces idea 175's r8brft1 numbers; injected effects recovered at 51-93% (never over-read). (b) x_lower's slider half carries more than its pawn/knight half (0.160% vs 0.099% pooled on r3kr1, at half the prevalence), so lens 3's premise holds. (c) Every family is under the threat line in every design on both sets; under the links' line seven pass on g4c and one replicates on g4s2-val (under-defended mover pieces, 0.030%/0.037%); the signal sits on the mover's side; both null controls null. (d) No head routing beats the phase refit (idea 187).
 - **open (owner):** which line applies: the threat winners' line (0.077-0.144%, half x_lower's share) or the pawn links' line (0.009-0.066%, at the noise floor) is the owner's choice.
+- **owner (2026-11-15, about 6:50 AM EST):** the residual line is **step 0's calibrated line, half the smaller known winner's share**; residual results **rank and trim candidates only, never kill alone** (the deciding tests stay the zero-weight speed prototype and a fixed-node arm).
 
 ### 187. Routed heads (vision ideas, 2026-11-14)
 - **type:** ELO. **phase:** 4. **runtime cost:** none (a head index).
