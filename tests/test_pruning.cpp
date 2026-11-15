@@ -936,6 +936,103 @@ TEST_CASE("pruning", "root reductions: still correct, and they change the search
   CHECK(fx.tree_sizes(no_lmr_on, depth) == fx.tree_sizes(no_lmr_off, depth));
 }
 
+// Root reductions keyed to the aspiration window (idea 202): the plies by
+// hand. After a fail high every move after the first is reduced one ply more
+// (a late quiet beyond its table entry, any other move from none); after a
+// fail low a late quiet is reduced one ply less, never below none, and other
+// moves are unchanged; before any fail nothing changes.
+TEST_CASE("pruning", "root fail reductions: the plies by hand") {
+  CHECK_EQ(RootFailLmrPlies, 1);  // the values below assume the default
+  CHECK_EQ(root_fail_plies(2, true, 1), 3);
+  CHECK_EQ(root_fail_plies(0, false, 1), 1);
+  CHECK_EQ(root_fail_plies(2, true, -1), 1);
+  CHECK_EQ(root_fail_plies(1, true, -1), 0);
+  CHECK_EQ(root_fail_plies(0, true, -1), 0);
+  CHECK_EQ(root_fail_plies(-1, true, -1), 0);  // a check's relief past the table: still no reduction
+  CHECK_EQ(root_fail_plies(0, false, -1), 0);
+  CHECK_EQ(root_fail_plies(2, true, 0), 2);
+  CHECK_EQ(root_fail_plies(0, false, 0), 0);
+}
+
+namespace {
+// Counts the aspiration fails a search reports (bound +1 or -1).
+struct FailCount final : SearchListener {
+  int fails = 0;
+  void on_iteration(const Position&, const IterationReport& r) override { fails += r.bound != 0; }
+};
+}  // namespace
+
+// Root reductions keyed to the aspiration window (idea 202): the term acts
+// only in a pass after an aspiration fail, so a search with no fail has
+// exactly the tree it has with the switch off; searches with fails change
+// (fault check: a term that never fires changes none). Every fail is
+// reported (fail_report_ms 0). Fails without the term (no tree changes).
+TEST_CASE("pruning", "root fail reductions: no aspiration fail, no change; with fails, a changed search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_root_fail_lmr);  // off until its SPRT
+  fx.searcher->fail_report_ms = 0;
+  static constexpr std::string_view Fens[] = {
+      "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+      "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+      "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+  const int depth = Optimized ? 12 : 8;
+  const auto run = [&](bool on, std::string_view fen, FailCount& listener) {
+    SearchSwitches s;
+    s.use_root_fail_lmr = on;
+    fx.searcher->switches = s;
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    SearchQuota limits;
+    limits.depth = depth;
+    return fx.searcher->deliberate(pos, limits, fx.stop, nullptr, &listener);
+  };
+  int with_fails = 0, changed = 0;
+  for (std::string_view fen : Fens) {
+    FailCount off_fails, on_fails;
+    const SearchResult off = run(false, fen, off_fails);
+    const SearchResult on = run(true, fen, on_fails);
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    CHECK_MSG(legal.contains(on.best), fen);
+    if (off_fails.fails == 0) {
+      CHECK_MSG(on.nodes == off.nodes, fen << ": no fail, yet " << on.nodes << " vs " << off.nodes);
+    } else {
+      ++with_fails;
+      changed += on.nodes != off.nodes;
+    }
+  }
+  CHECK_MSG(with_fails > 0, "no search had an aspiration fail at depth " << depth);
+  CHECK_MSG(changed > 0, "the root fail reductions changed no search with a fail");
+}
+
+// Root reductions keyed to the aspiration window (idea 202): with them on,
+// mates are still found and the best move is legal; with root reductions
+// off they do nothing.
+TEST_CASE("pruning", "root fail reductions: still correct, and inert without root reductions") {
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_root_fail_lmr = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_root_fail_lmr = false;
+  SearchSwitches no_root_on = on, no_root_off = off;
+  no_root_on.use_root_lmr = no_root_off.use_root_lmr = false;
+  CHECK(fx.tree_sizes(no_root_on, depth) == fx.tree_sizes(no_root_off, depth));
+}
+
 // The LMR context's move facts (lmr_move_facts, the heuristic-discovery
 // region's inputs, 2026-10-27): constructed positions, the expected values
 // computed independently by python-chess (board.is_attacked_by before the
@@ -1021,6 +1118,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
   s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
   s.use_root_lmr = true;
+  s.use_root_fail_lmr = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

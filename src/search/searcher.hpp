@@ -267,6 +267,15 @@ struct SearchQuota {
 //   On since its SPRTs against off passed: STC +17.71 +/- 6.74 Elo after
 //   3,200 games, LTC +14.94 +/- 6.24 Elo after 3,328 games, design R
 //   [0, 6]; 2026-11-13.
+// - use_root_fail_lmr: root reductions keyed to the aspiration window
+//   (ideas.md idea 202; the rare-ideas survey's RI-12): in an aspiration pass
+//   that follows a fail high, every root move but the first is reduced
+//   RootFailLmrPlies more (a late quiet: its root reduction plus that; any
+//   other move: that alone), and in a pass that follows a fail low, late
+//   quiets are reduced that much less (not below none) (root_fail_plies); a
+//   reduced move is re-searched at full depth if it beats alpha, as before.
+//   The first pass of each iteration is unchanged. Needs use_root_lmr (and
+//   so use_lmr and use_pvs). Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -318,7 +327,8 @@ struct SearchQuota {
   X(use_linear_bonus, UseLinearBonus, true)              \
   X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
   X(use_root_lmr, UseRootLmr, true)                      \
-  X(use_deep_time_depth, UseDeepTimeDepth, true)
+  X(use_deep_time_depth, UseDeepTimeDepth, true)         \
+  X(use_root_fail_lmr, UseRootFailLmr, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -328,6 +338,17 @@ struct SearchSwitches {
   // searched to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
 };
+
+// Root reductions keyed to the aspiration window (use_root_fail_lmr, idea
+// 202): the plies a root move after the first is reduced by, from `plies`,
+// its reduction without the term (the LMR table's less the check relief for
+// a late quiet, 0 for any other move), whether it is a late quiet, and the
+// last aspiration fail of this iteration (+1 high, -1 low, 0 none yet).
+FORK_TUNABLE_CONSTEXPR int root_fail_plies(int plies, bool late_quiet, int fail_side) {
+  if (fail_side > 0) return plies + RootFailLmrPlies;
+  if (fail_side < 0 && late_quiet) return plies > RootFailLmrPlies ? plies - RootFailLmrPlies : 0;
+  return plies;
+}
 
 // The move played with the score and depth of the search behind it: those of
 // the last reported line. That is the last finished iteration, or the
@@ -883,6 +904,9 @@ class Searcher {
   // last change between iterations, and the share of the current root move.
   int score_trend_ = 0;
   int branch_share_ = 0;
+  // The running iteration's last aspiration fail (use_root_fail_lmr): +1 a
+  // fail high, -1 a fail low, 0 before any fail.
+  int root_fail_side_ = 0;
   // The last finished iteration's PV, and the first move of the last line
   // reported: a stop after a reported fail repeats the finished iteration,
   // so the last line before bestmove names the move played.

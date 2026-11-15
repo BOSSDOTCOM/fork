@@ -68,6 +68,7 @@
   X(NoMoveReduceMinDepth, 8, 2, 16, 1)         \
   X(CutNodeLmrPlies, 1, 0, 3, 1)               \
   X(LmrNotImprovingPlies, 1, 0, 3, 1)          \
+  X(RootFailLmrPlies, 1, 0, 3, 1)              \
   X(LmrHistoryPerPly, 10000, 5000, 20000, 750) \
   X(CaptureProbeMinDepth, 9, 4, 18, 1)         \
   X(CaptureProbeReduction, 5, 2, 10, 1)        \

@@ -1169,13 +1169,20 @@ int Searcher::search_root(int alpha, int beta, int depth) {
       // never reduced): with use_root_lmr a late quiet root move gets the LMR
       // table's reduction, less LmrCheckRelief if it gives check, on a zero
       // window first, and the full depth again if it beats alpha.
+      // Idea 202 (use_root_fail_lmr): after an aspiration fail high in this
+      // iteration every later move is reduced RootFailLmrPlies more, after a
+      // fail low late quiets that much less (root_fail_plies).
       int reduced = depth - 1;
-      if (switches.use_root_lmr && switches.use_lmr && depth >= LmrMinDepth &&
-          static_cast<int>(i) + 1 >= LmrMinMove && quiet) {
+      const bool root_lmr = switches.use_root_lmr && switches.use_lmr && depth >= LmrMinDepth;
+      const bool late_quiet = root_lmr && static_cast<int>(i) + 1 >= LmrMinMove && quiet;
+      int plies = 0;
+      if (late_quiet) {
         const int relief = switches.use_lmr_check_relief && pos.in_check() ? LmrCheckRelief : 0;
-        reduced =
-            std::clamp(depth - 1 - (reduction_for(depth, static_cast<int>(i) + 1) - relief), 1, depth - 1);
+        plies = reduction_for(depth, static_cast<int>(i) + 1) - relief;
       }
+      const bool fail_term = root_lmr && switches.use_root_fail_lmr && root_fail_side_ != 0;
+      if (fail_term) plies = root_fail_plies(plies, late_quiet, root_fail_side_);
+      if (late_quiet || fail_term) reduced = std::clamp(depth - 1 - plies, 1, depth - 1);
       score = -negamax<false>(-alpha - 1, -alpha, reduced, 1);
       if (!stopped_ && score > alpha && reduced < depth - 1)
         score = -negamax<false>(-alpha - 1, -alpha, depth - 1, 1);
@@ -1408,6 +1415,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     for (std::size_t i = 0; i < root_count_; ++i) root_moves_[i].nodes_all_passes = 0;
     int delta = AspirationHalfWidth;
     int alpha = -ScoreInfinite, beta = ScoreInfinite;
+    root_fail_side_ = 0;  // idea 202: no fail yet in this iteration
     if (switches.use_aspiration && depth >= AspirationMinDepth && !is_tb_or_mate(previous)) {
       alpha = std::max(previous - delta, -ScoreInfinite);
       beta = std::min(previous + delta, ScoreInfinite);
@@ -1429,6 +1437,7 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
       // the old half-width (the score fell outside the window), more after a
       // big jump. A decisive score opens that side fully.
       delta = std::min(delta + std::abs(score - previous), ScoreInfinite);
+      root_fail_side_ = score <= alpha ? -1 : 1;  // idea 202: the next pass's root reductions
       if (score <= alpha) {
         alpha = is_tb_or_mate(score) ? -ScoreInfinite : std::max(score - delta, -ScoreInfinite);
       } else {

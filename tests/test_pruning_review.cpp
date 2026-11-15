@@ -56,6 +56,7 @@ SearchSwitches no_pruning() {
   s.use_history_skip = false;      // the history skip prunes moves (T24)
   s.use_quiesce_move_cap = false;  // the quiescence move cap prunes moves (B16)
   s.use_root_lmr = false;          // root reductions reduce (they need use_lmr, off here anyway)
+  s.use_root_fail_lmr = false;     // so do their aspiration terms (idea 202)
   return s;
 }
 
@@ -175,6 +176,7 @@ TEST_CASE("pruning", "tier 2, all switches on: stopped searches leave no state b
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
   s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
   s.use_root_lmr = true;
+  s.use_root_fail_lmr = true;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

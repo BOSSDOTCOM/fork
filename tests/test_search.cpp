@@ -173,6 +173,8 @@ struct TestHash {
 //   use_no_move_reduction   IIR: a node without a TT move (what the TT holds)
 //                           is searched a ply shallower (from depth 8).
 //   use_lmr, use_root_lmr   late quiets searched shallower.
+//   use_root_fail_lmr       root moves searched shallower after an aspiration
+//                           fail high (idea 202).
 //   use_lmr_check_relief, use_lmr_in_check, use_cut_node_lmr,
 //   use_improving_lmr, use_centred_lmr_history
 //                           LMR's terms (checks, node types, the improving
@@ -231,7 +233,7 @@ SearchSwitches exact_switches() {
   s.use_rfp = s.use_nmp = s.use_capture_probe = false;
   s.use_singular_extension = s.use_multi_cut = s.use_negative_extension = false;
   s.use_no_move_reduction = false;
-  s.use_lmr = s.use_root_lmr = false;
+  s.use_lmr = s.use_root_lmr = s.use_root_fail_lmr = false;
   s.use_lmr_check_relief = s.use_lmr_in_check = s.use_cut_node_lmr = false;
   s.use_improving_lmr = s.use_centred_lmr_history = false;
   s.use_lmp = s.use_improving_lmp = false;
