@@ -15,15 +15,16 @@ J) and does not repeat that survey's search work.
 | File | Contents |
 |---|---|
 | [matrix.md](matrix.md) | The 51 networks side by side (inputs; body, activations and quantisation; data), the published king-bucket layouts, and what the tables show |
+| [shortlist.md](shortlist.md) | The brief's items 2 and 3 (owner's order of 2026-11-14, about 7:30 PM EST): the cost of every network change the survey surfaces under Fork's cost lesson (nps ratio, the fixed-node Elo it needs, data needs, GPU and engineering cost, fit with idea 180's phase-scale finding), and a ranked shortlist of 7 additions with their cheapest deciding tests |
 | [speed.md](speed.md) | The brief's item 4: every network-speed technique the engines report, with reported gains, Fork's status and result, the expected gain on this PC and on TCEC's EPYC, and the untried ones ranked |
 | [records/](records/) | The full record of every engine, in eight files by survey group, each with its own source table, credit lines and clean-room statement |
 | [sources.md](sources.md) | Where each group's sources are, and the pages the coordinator opened |
 
 **The brief arrived incomplete.** Its first part ended mid-sentence ("training data size and
-type,") and its item 4 arrived separately. **Items 2 and 3, and anything after item 4, were
-never received**, so they are not answered here. The records also cover the training recipe
-and each engine's measured gains for network changes, on the guess that the cut-off sentence
-went on to ask for them.
+type,") and its item 4 arrived separately. **Items 2 and 3 are answered in
+[shortlist.md](shortlist.md)**, from the owner's order of 2026-11-14 (about 7:30 PM EST), which
+restated them. The records also cover the training recipe and each engine's measured gains for
+network changes, on the guess that the cut-off sentence went on to ask for them.
 
 ## Method
 
@@ -216,7 +217,8 @@ those cells are marked.
    built on 2026-11-05/06 (ideas.md 40), before either survey opened an Incipit page; the
    count follows from the geometry. Both descend from pawnocchio's pawn-pair idea, which
    ORIGINALITY.md already credits. I added a credit line for Incipit to ORIGINALITY.md on
-   this branch. Whether Fork's design note should say more is the owner's call.
+   this branch. By the owner's order of 2026-11-14 (about 7:30 PM EST), one sentence recording the
+   independent timeline is in ideas.md 40, under the R = 1 speed step.
 2. **One second-hand source.** A Triumviratus design note holds a table of other engines'
    network shapes that its authors compiled by reading those engines' source. The group B
    agent used it only where tagged "second-hand" and never as the only basis of a field
@@ -264,4 +266,5 @@ UNVERIFIED by the agents' counts).
   RubiChess (last published strings only).
 - Most king-bucket layouts (six are published).
 - Every expected gain in speed.md, and the EPYC 9754's cache sizes against AMD's own pages.
-- Whether items 2 and 3 of the brief asked for something this survey does not contain.
+- Every estimate in shortlist.md (marked "(est.)"), and its three round 3 results taken from the
+  coordinator's brief, not yet in the decisions log at b7ea9bf.
