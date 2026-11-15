@@ -1866,8 +1866,12 @@ Choices made while building, where the spec leaves a gap:
   the bound. At the root the distance-to-zero ranking (the win/draw/loss
   ranking if the DTZ files are missing) keeps the moves of the best rank,
   which are all moves preserving the best result under the fifty-move rule
-  (Fathom ranks every safe win equally), within any `searchmoves`. Info
-  lines carry `tbhits`; switch `UseTables`. Tests (`tables` suite): no
+  (Fathom ranks every safe win equally), within any `searchmoves`. With
+  `UseFastestTableWin` (owner, 2026-11-15; off until its non-regression
+  SPRT) a won root keeps only the winning moves with the smallest distance
+  to zero, Fathom's ranking after a repetition, which the root always used
+  after one; draws and losses rank as before. Info lines carry `tbhits`;
+  switch `UseTables`. Tests (`tables` suite): no
   tables, a missing or empty directory, the 7-man pair (largest count 7,
   win and loss, no answer with a running halfmove clock or too many
   pieces), the root ranking (13 winning moves kept), a path with only the

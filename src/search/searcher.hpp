@@ -88,6 +88,12 @@ struct SearchQuota {
 //   is retested with Phase 6's TT tests under large Hash and many threads.
 // - use_tables: Syzygy endgame tables, when loaded (deliverable 7):
 //   win/draw/loss probes in the search and the ranking of root moves.
+// - use_fastest_table_win: with use_tables, a root the tables rank as won
+//   keeps only the winning moves with the smallest distance to zero (the
+//   ranking used after a repetition), not every move that still wins under
+//   the fifty-move rule (owner, 2026-11-15: the elementary-mate suite found
+//   KBNvK and KBBvK mated on the rule's last move). Draws and losses are
+//   ranked as before. Off until its non-regression SPRT.
 // - use_lmr_check_relief: a late quiet move that gives check is reduced
 //   LmrCheckRelief plies less (tier 2 step 0, KB T16's check term; its STC
 //   SPRT passed, +11.26 +/- 5.54 Elo; owner, 2026-10-29).
@@ -318,7 +324,8 @@ struct SearchQuota {
   X(use_linear_bonus, UseLinearBonus, true)              \
   X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
   X(use_root_lmr, UseRootLmr, true)                      \
-  X(use_deep_time_depth, UseDeepTimeDepth, true)
+  X(use_deep_time_depth, UseDeepTimeDepth, true)         \
+  X(use_fastest_table_win, UseFastestTableWin, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

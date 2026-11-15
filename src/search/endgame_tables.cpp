@@ -121,14 +121,14 @@ std::optional<TableWdl> probe_table_wdl(const Position& pos) {
   }
 }
 
-bool rank_root_by_tables(const Position& pos, bool repeated, MoveList& keep) {
+bool rank_root_by_tables(const Position& pos, bool fastest, MoveList& keep) {
   keep.count = 0;
   if (!root_results || popcount(pos.pieces()) > endgame_table_pieces() || pos.castling_rights() != 0)
     return false;
   const ProbeArgs a = probe_args(pos);
   TbRootMoves& r = *root_results;
   const bool by_dtz = tb_probe_root_dtz(a.white, a.black, a.kings, a.queens, a.rooks, a.bishops, a.knights,
-                                        a.pawns, a.rule50, a.castling, a.ep, a.white_to_move, repeated,
+                                        a.pawns, a.rule50, a.castling, a.ep, a.white_to_move, fastest,
                                         /*useRule50=*/true, &r) != 0;
   if (!by_dtz &&
       tb_probe_root_wdl(a.white, a.black, a.kings, a.queens, a.rooks, a.bishops, a.knights, a.pawns, a.rule50,
