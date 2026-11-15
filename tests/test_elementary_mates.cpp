@@ -30,7 +30,17 @@
 //   budget, KQvK, KRvK and KQvKP, must end in mate, against a lone king
 //   within MarginMoves of the fastest mate.
 // - With the attacker's tables: all 18 starts must end in mate before the
-//   fifty-move rule (the distance-to-zero root ranking guarantees it).
+//   fifty-move rule (the distance-to-zero root ranking guarantees it), and
+//   against a lone king within TableMarginMoves of the fastest mate (since
+//   use_fastest_table_win, owner 2026-11-15).
+//
+// "The fastest mate" is the start's DTZ from the tables, in moves (half its
+// plies, rounded up): the length of the mate when the attacker shortens and
+// the defender lengthens the distance to zero at every move. Against a lone
+// king the only zeroing moves are the lone king's captures, which draw, so
+// it is the distance to mate under best play by both sides (DTM), up to the
+// tables' DTZ rounding (one ply). Fork's defender searches and does not
+// always resist longest, so a game can mate in fewer moves.
 //
 // Measured on 6ed1f87 (clang-release, 2026-11-15; every start, both
 // variants, at 5k, 20k, 100k and 300k nodes a move for both sides):
@@ -45,8 +55,16 @@
 // - With the tables Fork mated in every start at every budget, but in KBNvK
 //   always, and in KBBvK in 11 of the 12 games, on the 50th move, the last
 //   the rule allows (the ranking keeps every move that still wins under the
-//   rule, and the search sees no faster mate), so the second variant asserts
+//   rule, and the search sees no faster mate), so the second variant asserted
 //   the rule only.
+// With use_fastest_table_win on (2026-11-15, sprt/tb-root-dtz), at 20k nodes:
+// KBNvK mated in 29, 31 and 20 moves (fastest 32, 31, 25), KBBvK in 13, 16
+// and 13 (17, 17, 12), KQvKR in 27, 30 and 9 (52, 56 and 13 before), and
+// KQvK and KRvK at or under the fastest. At 5k, 20k, 100k and 300k every
+// lone-king start mated at most 1 move over the fastest (KBBvK centre at 5k,
+// KBBvK typical at 20k, KBNvK centre at 100k). Without the switch the
+// tightened second variant fails 10 starts: the six KBBvK and KBNvK starts
+// (mate on the 50th move), the three KRvK starts and KQvK typical.
 // Run time: 13 s in clang-release, 35 s in gcc-debug (2026-11-15), so a fast
 // test; both builds played the same games, move for move.
 //
@@ -129,9 +147,16 @@ constexpr std::uint64_t TableNodes = 20000;
 // Moves over the fastest mate allowed against a lone king without the
 // tables: the largest excess measured at 20k-300k was 11 (KRvK far at 300k;
 // 3 at 100k); 5k gave 20 (KQvK typical) and fails. With the tables the bound
-// is the fifty-move rule only: KQvK and KRvK took up to 28 moves over the
-// fastest there (KQvK far at 5k; 16 for KRvK centre at 300k, 8 at 20k).
+// was the fifty-move rule only before use_fastest_table_win: KQvK and KRvK
+// took up to 28 moves over the fastest there (KQvK far at 5k; 16 for KRvK
+// centre at 300k, 8 at 20k).
 constexpr int MarginMoves = 15;
+// Moves over the fastest mate allowed against a lone king with the tables:
+// the root then keeps only the moves of smallest DTZ, so the attacker's own
+// play stays within the DTZ, and 2 moves cover the tables' rounding (one ply)
+// with one to spare. Measured with use_fastest_table_win: at most 1 over at
+// 5k-300k nodes (the header).
+constexpr int TableMarginMoves = 2;
 
 std::string tables_dir() { return FORK_SYZYGY345_DIR; }
 
@@ -233,9 +258,8 @@ TEST_CASE("elementary_mates", "without its tables the attacker mates in KQvK, KR
   run_suite(NoTableNodes, false, MarginMoves, converts_without_tables);
 }
 
-TEST_CASE("elementary_mates",
-          "with its tables the attacker mates in every start before the fifty-move rule") {
-  run_suite(TableNodes, true, -1, every_start);
+TEST_CASE("elementary_mates", "with its tables the attacker mates in every start, near the fastest mate") {
+  run_suite(TableNodes, true, TableMarginMoves, every_start);
 }
 
 }  // namespace forkeng::test
