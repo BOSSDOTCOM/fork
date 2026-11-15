@@ -348,6 +348,7 @@ TEST_CASE("tables", "3-4-5 root ranking: after a repetition only the fastest win
 TEST_CASE("tables", "3-4-5 search: use_fastest_table_win searches only the fastest win") {
   if (!small_present()) return;
   load_endgame_tables(small_dir());
+  CHECK(SearchSwitches{}.use_fastest_table_win);  // on in the SPRT's test commit
   Position pos = at(KqkFastest);
   CHECK_EQ(kept_moves(pos, false).size(), std::size_t{22});
   CHECK_EQ(joined(kept_moves(pos, true)), std::string("g1c5"));

@@ -1867,8 +1867,9 @@ Choices made while building, where the spec leaves a gap:
   ranking if the DTZ files are missing) keeps the moves of the best rank,
   which are all moves preserving the best result under the fifty-move rule
   (Fathom ranks every safe win equally), within any `searchmoves`. With
-  `UseFastestTableWin` (owner, 2026-11-15; off until its non-regression
-  SPRT) a won root keeps only the winning moves with the smallest distance
+  `UseFastestTableWin` (owner, 2026-11-15; on in sprt/tb-root-dtz, the
+  test side of its non-regression STC SPRT, adopted only on a pass) a won
+  root keeps only the winning moves with the smallest distance
   to zero, Fathom's ranking after a repetition, which the root always used
   after one; draws and losses rank as before. Info lines carry `tbhits`;
   switch `UseTables`. Tests (`tables` suite): no

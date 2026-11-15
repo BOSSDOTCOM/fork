@@ -93,7 +93,8 @@ struct SearchQuota {
 //   ranking used after a repetition), not every move that still wins under
 //   the fifty-move rule (owner, 2026-11-15: the elementary-mate suite found
 //   KBNvK and KBBvK mated on the rule's last move). Draws and losses are
-//   ranked as before. Off until its non-regression SPRT.
+//   ranked as before. On in sprt/tb-root-dtz, the test side of its
+//   non-regression STC SPRT [-3, 0]; adopted only on a pass (owner).
 // - use_lmr_check_relief: a late quiet move that gives check is reduced
 //   LmrCheckRelief plies less (tier 2 step 0, KB T16's check term; its STC
 //   SPRT passed, +11.26 +/- 5.54 Elo; owner, 2026-10-29).
@@ -325,7 +326,7 @@ struct SearchQuota {
   X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
   X(use_root_lmr, UseRootLmr, true)                      \
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
-  X(use_fastest_table_win, UseFastestTableWin, false)
+  X(use_fastest_table_win, UseFastestTableWin, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
