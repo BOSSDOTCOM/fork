@@ -3585,21 +3585,21 @@ proposal are placeholders, screened before use.
 - **idea:** after a node's static eval is known, credit the previous move's quiet history by how much it changed the mover's static eval (a move that worsened the eval for the side that played it gets a malus), clamped.
 - **plan (owner, 2026-11-15):** queue 1 of 3: implement behind a switch (off), names and the constant screened, the constant at its natural value; design R STC SPRT, then LTC on a pass.
 - **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
-- **status:** queued (implementation).
+- **status:** **rejected (futility stop), 2026-11-15.** Branches tier2/eval-shift-credit fc067da (bench 5,205,904 / dfe99ebe03b0972d) and sprt/eval-shift-credit 1a2c7c5 (bench 4,634,690 / 72424cd1e7d260f0); EvalShiftCap 100 cp, the natural value (one pawn); names: no match; constant: no value match, the update's shape a same-role near match to Stockfish (credited, owner's rule of 2026-11-11). eval-shift-credit-stc (STC, design R [0, 6]): -1.19 +/- 6.49 Elo, nElo -2.22 +/- 12.04, Ptnml [17, 399, 782, 382, 20], futility stop after 2 stages, 3,200 games (runs 43731554365, 43733278318; 11:21 AM EST); no LTC (r1b).
 
 ### 201. TT cutoffs from shallower entries (rare-ideas survey rare.md RI-27)
 - **type:** ELO. **phase:** 4. **runtime cost:** possible.
 - **idea:** allow a transposition-table cutoff from an entry slightly shallower than the current depth when its bound is decisive enough (the survey's constant-free form first).
 - **plan (owner, 2026-11-15):** queue 2 of 3: STC then LTC, with a pressure-matched Hash (the owner's TT-policy rule of 2026-11-11). Its reported 8-thread result (Ethereal +3.43) is noted for the SMP plan (roadmap 17a; docs/kb/lazy-smp.md).
 - **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
-- **status:** queued (implementation).
+- **status:** queued (lane A r2a STC at Hash 15 MB, then r2b LTC at 70 MB on an STC H1: the pressure-matched Hash). Branches tier2/reduced-tt-cut a7aafd2 (bench 5,205,904 / dfe99ebe03b0972d) and sprt/reduced-tt-cut 6b8fd36 (bench 5,194,411 / 89707e7977b31eef). ReducedTtCutSlack 1 ply (natural value): a non-PV node entered by a reduced LMR search may cut on an entry one ply shallower, on a fail low only (the parent re-searches such a move at full depth anyway). Names: no match; constant: a same-role near match to Ethereal and Stockfish sf_17+ (credited). Re-check under Lazy SMP.
 
 ### 202. Root LMR keyed to the aspiration window (rare-ideas survey rare.md RI-12)
 - **type:** ELO. **phase:** 4. **runtime cost:** possible.
 - **idea:** at the root, after an aspiration fail high reduce every move but the first by one more ply; after a fail low reduce root moves less (refines the adopted root reductions, 2026-11-13).
 - **plan (owner, 2026-11-15):** queue 3 of 3: design R STC SPRT.
 - **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
-- **status:** queued (implementation).
+- **status:** queued (lane A r3a, STC only), **not adoptable as it stands**: with the switch on the elementary-mate suite fails (KQvKP's far start without attacker tables, 100,000 nodes a move: drawn; mates at 300,000; the switch off mates at 100,000). Branches tier2/root-fail-lmr 94ed883 on phase-4 36dbab3 (bench 5,205,904 / dfe99ebe03b0972d) and sprt/root-fail-lmr 0a8b1de (bench 4,795,478 / fcc5157f82447bc8). RootFailLmrPlies 1 ply (natural value): after an aspiration fail high every root move but the first gets one more ply of reduction; after a fail low late quiets get one less. Names: no match; constant: no match in role (the fail-high ply near-matches a different mechanism, the whole-root re-search depth cut, in all four; credited).
 
 ### 203. Elementary-mate regression suite (rare-ideas survey rare.md RI-41)
 - **type:** TOOLING. **phase:** 4. **runtime cost:** none.
