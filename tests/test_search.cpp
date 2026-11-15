@@ -202,6 +202,8 @@ struct TestHash {
 //                           a variant turning one on starts from the raw eval.
 //   use_tables              Syzygy probes: exact, but the references know no
 //                           tables (off whatever another suite has loaded).
+//   use_reduced_tt_cut      a TT cutoff from an entry shallower than the node
+//                           (idea 201); inert with tt_exact_depth too.
 // Kept: nothing a minimax value depends on.
 //   use_tt (tt_exact_depth) a cutoff only on an entry of the node's own depth
 //                           whose bound settles the window: minimax where no
@@ -241,6 +243,7 @@ SearchSwitches exact_switches() {
   s.use_piece_drift = s.use_minor_drift = s.use_major_drift = s.use_threat_drift = false;
   s.use_tt_eval_refine = false;
   s.use_tables = false;
+  s.use_reduced_tt_cut = false;
   return s;
 }
 

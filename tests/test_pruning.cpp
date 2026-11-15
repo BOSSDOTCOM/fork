@@ -880,6 +880,70 @@ TEST_CASE("pruning", "linear history bonus: still correct, and it changes the se
   CHECK(fx.tree_sizes(no_history_on, depth) == fx.tree_sizes(no_history_off, depth));
 }
 
+// TT cutoffs from shallower entries (idea 201): a zero-window probe of the
+// start position (its search fails high at beta 0, its eval being above
+// zero, so it never returns the stored -700 by itself) with an entry stored
+// for it. The entry one ply shallower proving a fail low cuts the node only
+// with the switch on and only when the node is entered by a reduced search;
+// two plies shallower, or a fail high one ply shallower, never cuts. The
+// TT-refined pruning eval is off, so the stored score reaches the result
+// only through a cutoff. Fails without the relaxed cutoff (the first case).
+TEST_CASE("pruning", "reduced TT cut: a shallower fail low cuts a reduced search's node, nothing else does") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_reduced_tt_cut);  // off until its SPRT
+  CHECK_EQ(ReducedTtCutSlack, 1);               // the cases below assume the default
+  const std::string_view start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  constexpr int Depth = 4, Beta = 0;
+  const auto probe = [&](bool on, bool reduced, int entry_depth, TtBound bound, int stored) {
+    SearchSwitches s;
+    s.use_reduced_tt_cut = on;
+    s.use_tt_eval_refine = false;
+    fx.searcher->switches = s;
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    Position pos;
+    CHECK(pos.set_fen(start));
+    fx.table.deposit(pos.key(), NoMove, stored, ScoreNone, entry_depth, bound, false);
+    return fx.searcher->probe_zero_window(pos, Beta, Depth, fx.stop, reduced);
+  };
+  CHECK_EQ(probe(true, true, Depth - 1, TtBound::Upper, -700), -700);  // the relaxed cut
+  CHECK_EQ(probe(true, true, Depth - 1, TtBound::Exact, -700), -700);  // an exact score below alpha too
+  CHECK_EQ(probe(true, true, Depth, TtBound::Upper, -700), -700);      // deep enough: the usual cut
+  const int searched = probe(false, true, Depth - 1, TtBound::Upper, -700);
+  CHECK_MSG(searched >= Beta, "the start position's search: " << searched);  // -700 only comes from a cut
+  CHECK(probe(true, false, Depth - 1, TtBound::Upper, -700) != -700);        // not a reduced search
+  CHECK(probe(true, true, Depth - 2, TtBound::Upper, -700) != -700);         // two plies shallower
+  CHECK(probe(true, true, Depth - 1, TtBound::Lower, 777) != 777);           // a fail high is never relaxed
+  CHECK(probe(true, true, Depth - 1, TtBound::Upper, 777) != 777);           // above alpha: no fail low
+}
+
+// TT cutoffs from shallower entries (idea 201): with them on, mates are
+// still found and the best move is legal, and they change the tree (fault
+// check: a relaxation that never fires leaves the trees as with the switch
+// off); with the TT off they do nothing.
+TEST_CASE("pruning", "reduced TT cut: still correct, and it changes the search") {
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_reduced_tt_cut = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_reduced_tt_cut = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the reduced TT cut left all three trees unchanged");
+  SearchSwitches no_tt_on = on, no_tt_off = off;
+  no_tt_on.use_tt = no_tt_off.use_tt = false;
+  CHECK(fx.tree_sizes(no_tt_on, depth) == fx.tree_sizes(no_tt_off, depth));
+}
+
 // The quiescence move cap (the engine survey's B16): with it on, mates are
 // still found and the best move is legal, and it changes the tree (fault
 // check: a cap that never fires leaves the trees as with the switch off);
@@ -1021,6 +1085,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
   s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
   s.use_root_lmr = true;
+  s.use_reduced_tt_cut = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

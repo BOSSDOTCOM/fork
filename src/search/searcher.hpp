@@ -267,6 +267,16 @@ struct SearchQuota {
 //   On since its SPRTs against off passed: STC +17.71 +/- 6.74 Elo after
 //   3,200 games, LTC +14.94 +/- 6.24 Elo after 3,328 games, design R
 //   [0, 6]; 2026-11-13.
+// - use_reduced_tt_cut: TT cutoffs from shallower entries (ideas.md idea 201;
+//   the rare-ideas survey's RI-27, its form without a margin): at a non-PV
+//   node entered by a reduced LMR search (PlyFrame::after_reduction: the
+//   parent re-searches the move at full depth if this node fails low), a TT
+//   entry up to ReducedTtCutSlack plies shallower than the node's depth also
+//   cuts, but only when its bound proves a fail low here (an upper bound or
+//   an exact score at or below alpha): that answer only sends the parent to
+//   the full-depth re-search it would have made anyway. Every other TT
+//   cutoff still needs an entry at least as deep as the node. Off until its
+//   SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -318,7 +328,8 @@ struct SearchQuota {
   X(use_linear_bonus, UseLinearBonus, true)              \
   X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
   X(use_root_lmr, UseRootLmr, true)                      \
-  X(use_deep_time_depth, UseDeepTimeDepth, true)
+  X(use_deep_time_depth, UseDeepTimeDepth, true)         \
+  X(use_reduced_tt_cut, UseReducedTtCut, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -377,6 +388,10 @@ struct PlyFrame {
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
   bool expected_cut = false;    // expected to fail high (a cut node), from the parent (T17)
+  // Entered by a reduced LMR search that the parent re-searches at full depth
+  // if this node fails low (use_reduced_tt_cut, idea 201); set by the parent
+  // around that one call only. In the padding after expected_cut.
+  bool after_reduction = false;
   // The improving flag (B9): this node's pruning eval (ScoreNone in check,
   // and in the quiescence search, which never sets it). 16 bits, in the
   // padding after expected_cut, so the frame keeps its 2,704-byte guard
@@ -747,7 +762,9 @@ class Searcher {
 
   // Tests only: one zero-window search of `pos` as a non-PV node (window
   // [beta - 1, beta]), with no time limit; returns its fail-soft score.
-  int probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop);
+  // `reduced`: the node is entered as a reduced LMR search's (idea 201).
+  int probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop,
+                        bool reduced = false);
 
   // Tests only: moves the search's clock forward (called from a listener, on
   // the search thread, between iterations); the last finished iteration's

@@ -367,6 +367,13 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     const int s = score_from_tt(hit.score, ply);
     const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
     if (deep_enough && bound_settles(hit.bound, s, alpha, beta)) return s;
+    // Idea 201 (the rare-ideas survey's RI-27): a node entered by a reduced
+    // search also takes a slightly shallower entry's fail low; the parent
+    // then re-searches the move at full depth, as it would after any fail low
+    // here. A fail high still needs a deep enough entry.
+    if (switches.use_reduced_tt_cut && f.after_reduction && !switches.tt_exact_depth &&
+        hit.depth >= depth - ReducedTtCutSlack && hit.bound != TtBound::Lower && s <= alpha)
+      return s;
   }
 
   // A TT entry stores the static evaluation of its position (review 2, claim
@@ -945,7 +952,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         score = -negamax<OnPv>(-beta, -alpha, new_depth, ply + 1);  // plain alpha-beta
       } else {
         // PVS off: the reduced search gets the full window, as a non-PV child.
+        // Idea 201: a reduced search is re-searched at full depth on a fail
+        // low below, so its node may take a shallower entry's fail low.
+        frames_[ply + 1].after_reduction = reduced < new_depth;
         score = -negamax<false>(switches.use_pvs ? -alpha - 1 : -beta, -alpha, reduced, ply + 1);
+        frames_[ply + 1].after_reduction = false;
 #ifdef FORK_SEARCH_STATS
         counters.lmr_searches += reduced < new_depth;
         counters.lmr_plies_sum += static_cast<std::uint64_t>(new_depth - reduced);
@@ -1176,7 +1187,9 @@ int Searcher::search_root(int alpha, int beta, int depth) {
         reduced =
             std::clamp(depth - 1 - (reduction_for(depth, static_cast<int>(i) + 1) - relief), 1, depth - 1);
       }
+      frames_[1].after_reduction = reduced < depth - 1;  // idea 201, as in negamax
       score = -negamax<false>(-alpha - 1, -alpha, reduced, 1);
+      frames_[1].after_reduction = false;
       if (!stopped_ && score > alpha && reduced < depth - 1)
         score = -negamax<false>(-alpha - 1, -alpha, depth - 1, 1);
       if (!stopped_ && score > alpha && score < beta) score = -negamax<true>(-beta, -alpha, depth - 1, 1);
@@ -1303,7 +1316,8 @@ void Searcher::report_iteration(int depth, int score, int bound, const Principal
   listener_->on_iteration(*pos_, r);
 }
 
-int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop) {
+int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop,
+                                bool reduced) {
   static const SearchQuota no_limits;
   start_ = std::chrono::steady_clock::now();
   pos_ = &pos;
@@ -1316,6 +1330,7 @@ int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::a
   stopped_ = false;
   frames_[0].after_null = false;
   frames_[0].arrival = NoArrival;
+  frames_[0].after_reduction = reduced;
   drift_keys_live_ = drift_in_use();
   if (drift_keys_live_) drift_keys_[0] = drift_keys(pos);
 #if defined(FORK_EVAL_NNUE)
