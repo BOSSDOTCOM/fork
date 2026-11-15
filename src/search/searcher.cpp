@@ -230,6 +230,7 @@ bool Searcher::poll_limits() {
   if (stopped_) return true;
   if (limits_->nodes && nodes_ >= limits_->nodes) return stopped_ = true;
   if (nodes_ % StopCheckInterval != 0) return false;
+  publish_counts();
   if (stop_->load(std::memory_order_relaxed)) return stopped_ = true;
   const bool timed = !(pondering_ && pondering_->load(std::memory_order_relaxed));
   if (timed && limits_->hard_ms >= 0 && elapsed_ms() >= limits_->hard_ms) return stopped_ = true;
@@ -1295,12 +1296,52 @@ int Searcher::ledger_side_search(int alpha, int beta, int depth, int ply, Ledger
 }
 #endif
 
+std::uint64_t Searcher::pool_nodes() const {
+  std::uint64_t sum = nodes_;
+  if (start_plan_)
+    for (std::size_t i = 0; i < start_plan_->helper_count; ++i) sum += start_plan_->helpers[i]->published_nodes();
+  return sum;
+}
+
+std::uint64_t Searcher::pool_hits() const {
+  std::uint64_t sum = table_hits_;
+  if (start_plan_)
+    for (std::size_t i = 0; i < start_plan_->helper_count; ++i) sum += start_plan_->helpers[i]->published_hits();
+  return sum;
+}
+
 void Searcher::report_iteration(int depth, int score, int bound, const PrincipalLine& pv) {
   last_reported_ = pv.length ? pv.moves[0] : NoMove;
   if (!listener_) return;
-  const IterationReport r{depth,        max_ply_reached_,    score, bound,      nodes_,
-                          elapsed_ms(), tt_.fill_permille(), &pv,   table_hits_};
+  const IterationReport r{depth,        max_ply_reached_,    score, bound,      pool_nodes(),
+                          elapsed_ms(), tt_.fill_permille(), &pv,   pool_hits()};
   listener_->on_iteration(*pos_, r);
+}
+
+namespace {
+
+// A search's TT setup: a new age, and the policy from the switches.
+void prepare_table(TransTable& tt, const SearchSwitches& switches) {
+  tt.advance_age();
+  tt.set_age_blend(switches.tt_age_blend);
+  tt.set_keep_exact(switches.tt_keep_exact);
+  tt.set_keep_deeper(switches.use_tt_keep_deeper);
+}
+
+// Endgame tables at the root (deliverable 7): the moves that keep the best
+// result under the fifty-move rule, in the tables' order. A repetition since
+// the last capture or pawn move makes the ranking avoid repeating again: it
+// keeps only the fastest wins, as it always does with use_fastest_table_win.
+bool rank_root(const Position& pos, const SearchSwitches& switches, MoveList& kept) {
+  return switches.use_tables && endgame_table_pieces() > 0 &&
+         rank_root_by_tables(pos, switches.use_fastest_table_win || pos.repetition_count() >= 2, kept);
+}
+
+}  // namespace
+
+void prepare_start(TransTable& tt, const SearchSwitches& switches, const Position& pos, SearchStart& start) {
+  prepare_table(tt, switches);
+  start.table_ranked = rank_root(pos, switches, start.table_kept);
 }
 
 int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::atomic<bool>& stop) {
@@ -1311,6 +1352,7 @@ int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::a
   stop_ = &stop;
   pondering_ = nullptr;
   listener_ = nullptr;
+  start_plan_ = nullptr;
   nodes_ = 0;
   max_ply_reached_ = 0;
   stopped_ = false;
@@ -1325,8 +1367,10 @@ int Searcher::probe_zero_window(Position& pos, int beta, int depth, const std::a
 }
 
 SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, const std::atomic<bool>& stop,
-                                  const std::atomic<bool>* pondering, SearchListener* listener) {
+                                  const std::atomic<bool>* pondering, SearchListener* listener,
+                                  const SearchStart* start) {
   start_ = limits.go_received.value_or(std::chrono::steady_clock::now());
+  start_plan_ = start;
   pos_ = &pos;
   limits_ = &limits;
   stop_ = &stop;
@@ -1348,11 +1392,8 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
 #if defined(FORK_EVAL_NNUE)
   features_.reset(*net_, pos);
 #endif
-  tt_.advance_age();
+  if (!start) prepare_table(tt_, switches);          // else the coordinator's prepare_start did
   if (switches.use_history_ageing) age_histories();  // D17
-  tt_.set_age_blend(switches.tt_age_blend);
-  tt_.set_keep_exact(switches.tt_keep_exact);
-  tt_.set_keep_deeper(switches.use_tt_keep_deeper);
   SearchResult result;
   // The first iteration's root order is the selector's (no TT move).
   PlyFrame& root = frames_[0];
@@ -1369,28 +1410,26 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     result.score = pos.in_check() ? mated_score(0) : 0;
     return result;
   }
-  // Endgame tables at the root (deliverable 7): only the moves that keep the
-  // best result under the fifty-move rule are searched, in the tables' order
-  // (within any searchmoves). A repetition since the last capture or pawn
-  // move makes the ranking avoid repeating again: it keeps only the fastest
-  // wins, as it always does with use_fastest_table_win.
+  // Endgame tables at the root (rank_root): only the kept moves are searched,
+  // in the tables' order (within any searchmoves). With a SearchStart the
+  // coordinator ranked once for every thread; the thread that reports (the
+  // main one, with a listener) counts that probe.
   table_hits_ = 0;
-  if (switches.use_tables && endgame_table_pieces() > 0) {
-    MoveList kept;
-    if (rank_root_by_tables(pos, switches.use_fastest_table_win || pos.repetition_count() >= 2, kept)) {
-      MoveList searched;  // the kept moves that are root moves, in the tables' order
-      for (Move m : kept)
-        for (std::size_t i = 0; i < root_count_; ++i)
-          if (root_moves_[i].move == m) {
-            searched.add(m);
-            break;
-          }
-      if (searched.size() > 0) {
-        root_count_ = 0;
-        for (Move m : searched) root_moves_[root_count_++] = {m};
-      }
-      ++table_hits_;
+  MoveList own_kept;
+  const bool ranked = start ? start->table_ranked : rank_root(pos, switches, own_kept);
+  if (ranked) {
+    MoveList searched;  // the kept moves that are root moves, in the tables' order
+    for (Move m : start ? start->table_kept : own_kept)
+      for (std::size_t i = 0; i < root_count_; ++i)
+        if (root_moves_[i].move == m) {
+          searched.add(m);
+          break;
+        }
+    if (searched.size() > 0) {
+      root_count_ = 0;
+      for (Move m : searched) root_moves_[root_count_++] = {m};
     }
+    if (!start || listener) ++table_hits_;
   }
   result.best = root_moves_[0].move;
 
@@ -1515,7 +1554,8 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
     // and a low clock whose reserve caps the hard limit.
     if (timed && limits.hard_ms >= 0 && elapsed_ms() * IterationGrowthThirds / 3 > limits.hard_ms) break;
   }
-  result.nodes = nodes_;
+  publish_counts();
+  result.nodes = pool_nodes();
 #ifdef FORK_SEARCH_STATS
   // Phase 4 step 1 (DESIGN.md §5.7): cumulative counters after each search,
   // for tools/measure/game_replay.py, which takes the differences.

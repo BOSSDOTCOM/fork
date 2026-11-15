@@ -342,6 +342,22 @@ struct SearchSwitches {
 // unfinished one when a stop takes its move (searcher.cpp, the stop rule;
 // then one more than time_signals().depth). depth is 0 only if no iteration
 // finished.
+class Searcher;
+
+// What the coordinator of a multi-threaded search (HelperPool, Lazy SMP,
+// DESIGN.md §5.6 step 17a) prepares once per go, before any thread
+// searches: prepare_start advances the TT's age and sets its policy (once,
+// not once per thread), and ranks the root by the endgame tables (Fathom's
+// root probe is not thread-safe; every thread then searches the same kept
+// moves). The main thread's copy also names the helpers, whose node and
+// table-hit counts its reports add to its own; a helper's copy names none.
+struct SearchStart {
+  bool table_ranked = false;  // rank_root_by_tables kept moves
+  MoveList table_kept;        // those moves, in the tables' order
+  Searcher* const* helpers = nullptr;
+  std::size_t helper_count = 0;
+};
+
 struct SearchResult {
   Move best = NoMove;
   int score = 0;
@@ -707,8 +723,24 @@ class Searcher {
 
   // Searches `pos` (restored on return) until a limit is reached or `stop`
   // becomes true. While `pondering` is true, time limits do not apply.
+  // Without `start` the search prepares the TT and ranks the root itself
+  // (one thread: the path every single-threaded search, bench and data
+  // generation take). With it, prepare_start has done both for every thread
+  // of a multi-threaded search; it must outlive the call.
   SearchResult deliberate(Position& pos, const SearchQuota& limits, const std::atomic<bool>& stop,
-                          const std::atomic<bool>* pondering, SearchListener* listener);
+                          const std::atomic<bool>* pondering, SearchListener* listener,
+                          const SearchStart* start = nullptr);
+
+  // The node and table-hit counts the running or last search has published:
+  // stored every StopCheckInterval nodes and at the search's end, readable
+  // from another thread. clear_published zeroes them (a coordinator, before
+  // the search starts, so a report never reads the last search's counts).
+  std::uint64_t published_nodes() const { return published_nodes_.load(std::memory_order_relaxed); }
+  std::uint64_t published_hits() const { return published_hits_.load(std::memory_order_relaxed); }
+  void clear_published() {
+    published_nodes_.store(0, std::memory_order_relaxed);
+    published_hits_.store(0, std::memory_order_relaxed);
+  }
 
   SearchSwitches switches;
   // Aspiration fails are reported (as upperbound or lowerbound lines) only
@@ -799,6 +831,14 @@ class Searcher {
   }
 
   bool poll_limits();  // true once the search must stop
+  void publish_counts() {
+    published_nodes_.store(nodes_, std::memory_order_relaxed);
+    published_hits_.store(table_hits_, std::memory_order_relaxed);
+  }
+  // This search's counts plus the helpers' published ones (the main thread
+  // of a multi-threaded search; its own alone otherwise).
+  std::uint64_t pool_nodes() const;
+  std::uint64_t pool_hits() const;
   // The soft limit for this iteration's soft check: the planned one, or with
   // use_stability_time scaled by the last finished iteration's signals.
   std::int64_t soft_limit_now(const SearchQuota& limits) const;
@@ -860,6 +900,11 @@ class Searcher {
   std::uint64_t table_hits_ = 0;
   int max_ply_reached_ = 0;
   bool stopped_ = false;
+  const SearchStart* start_plan_ = nullptr;  // deliberate's `start` (null: one thread)
+  // Written only by this searcher's thread, read by others; on its own cache
+  // line, so the owner's stores never contend with another thread's writes.
+  alignas(64) std::atomic<std::uint64_t> published_nodes_{0};
+  std::atomic<std::uint64_t> published_hits_{0};
 
   PlyFrame frames_[MaxPly + 1];
   // The drift tables' keys of each ply's position (eval_drift.hpp), beside
@@ -934,5 +979,11 @@ class Searcher {
   FeatureStack features_;
 #endif
 };
+
+// A multi-threaded search's shared setup, run once per go by its
+// coordinator before any thread searches (SearchStart): the TT's new age and
+// policy from `switches` (the main searcher's), and the root's ranking by the
+// endgame tables into `start`.
+void prepare_start(TransTable& tt, const SearchSwitches& switches, const Position& pos, SearchStart& start);
 
 }  // namespace forkeng
