@@ -2337,3 +2337,11 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
 - **Retry at the second value (97b, f10-material-scale-retry):** capped undecided after its 8 stages, **Elo +1.76 +/-
   3.46** (nElo +3.07 +/- 6.02), Ptnml [132, 1535, 3018, 1566, 149], LLR +0.05.
 - **Decision (owner, 2026-11-15 about 6:50 AM EST):** **dropped**; not adopted, not carried to the final retune.
+
+### 2026-11-15 the null-move verification (the engine survey's B6; night queue items z96a, z96b, 96c): design R SPRT at LTC: H0; rejected (owner)
+- **LTC (z96a, b6-null-verify-ltc):** test e9b246f (verification at depth 10, the switch on) against 7b6aa17 (off),
+  SPRT [0, 6] nElo at 40+0.4, run 43729113038: **H0 after stage 0, Elo -12.12 +/- 8.58** (nElo -23.61), Ptnml
+  [8, 219, 435, 163, 7], LLR -2.20 of (-1.56, 2.77).
+- **Decision (owner, 2026-11-15 about 11:50 AM EST):** **rejected.** The retry (z96b, a more frequent verification,
+  which would cost more) was stopped during its stage 1 before any result (run 43736518763 cancelled), and the
+  non-regression item (96c, [-3, 0]) is skipped: its bar is far from the LTC's result. The switch stays off.
