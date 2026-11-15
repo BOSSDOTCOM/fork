@@ -647,11 +647,13 @@ class NetSwap {
 };
 
 // The first committed network (nets/NAME.fnet, in this order) that this
-// build reads (its architecture) and that is not the embedded one; null if
-// none is.
-std::unique_ptr<NetFile> second_network(std::string& name) {
+// build reads (its architecture) and that is not the embedded one, after
+// skipping `skip` such networks; null if there is none. Architecture 10
+// (S512+PPXL, x_lower) has r8brft1xl, its test net (r8brft1's evaluation, the
+// exposure rows zero); r8ceplo2 (S512+PP) comes after the older S512+PP nets.
+std::unique_ptr<NetFile> second_network(std::string& name, int skip = 0) {
   for (std::string_view candidate : {"s512ppr3", "r8btd90", "s512ppr2", "s512pp", "r8brft1", "s512r2", "s512",
-                                     "b0r2", "b0r1", "b0", "r8brft1kr4"}) {
+                                     "b0r2", "b0r1", "b0", "r8brft1kr4", "r8ceplo2", "r8brft1xl"}) {
     std::ifstream in(std::string(FORK_SOURCE_DIR) + "/nets/" + std::string(candidate) + ".fnet",
                      std::ios::binary);
     if (!in) continue;
@@ -661,6 +663,7 @@ std::unique_ptr<NetFile> second_network(std::string& name) {
     std::string error;
     if (!read_net_file(bytes, *net, error) || write_net_file(*net) == write_net_file(embedded_net()))
       continue;
+    if (skip-- > 0) continue;
     name = candidate;
     return net;
   }
@@ -1433,51 +1436,84 @@ struct ReportLog final : SearchListener {
 // in every build (bench parity), and the smaller sample debug builds can
 // afford may hold no such stop (none in the first 6 positions after
 // 304081e, RfpMargin 40, so gcc-debug failed in CI).
+// Whether the sample holds such a stop depends on the network, not on the rule
+// (r8crft1 held none in the usual band, r3xl2 none in either band, 2026-11-14):
+// when the embedded network's sample holds none, the same checks run again
+// with each other committed network of the build's architecture in turn
+// (second_network, NetSwap) until one's sample does, and the stop is required
+// there. The rule's checks run on every network sampled. A build with no such
+// network notes it and skips the requirement, as debug builds do.
 TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored above the last iteration") {
-  Fixture fx;
-  fx.searcher->switches.use_pass_best_stop = false;  // the rule as it was; the next cases cover the switch
   int switched = 0;
   const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
-  // One node-limited search per budget in [first, last]; until_switch ends the
-  // sample at the first stop that plays a new move.
-  const auto sample = [&](std::uint64_t first, std::uint64_t last, std::uint64_t step, bool until_switch) {
-    for (std::size_t i = 0; i < positions; ++i) {
-      const std::string_view fen = search_bench_fens()[i];
-      for (std::uint64_t nodes = first; nodes <= last; nodes += step) {
-        fx.store.clear();
-        fx.searcher->clear_history();
-        Position pos;
-        CHECK(pos.set_fen(fen));
-        SearchQuota q;
-        q.nodes = nodes;
-        ReportLog log;
-        const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
-        if (r.depth == 0) continue;
-        const int finished_depth = fx.searcher->time_signals().depth;
-        const auto finished = std::ranges::find_if(log.entries, [&](const ReportLog::Entry& e) {
-          return e.depth == finished_depth && e.bound == 0;
-        });
-        CHECK_MSG(finished != log.entries.end(),
-                  fen << " at " << nodes << " nodes: no report of depth " << finished_depth);
-        if (finished == log.entries.end() || r.best == finished->first) continue;
-        ++switched;
-        CHECK_MSG(r.score > finished->score, fen << " at " << nodes << " nodes: played "
-                                                 << pos.move_to_uci(r.best) << " at " << r.score << " over "
-                                                 << pos.move_to_uci(finished->first) << " at "
-                                                 << finished->score << " (depth " << finished_depth << ")");
-        if (until_switch) return;
+  // The case on the network embedded at the call, with a fresh fixture.
+  const auto run = [&] {
+    Fixture fx;
+    fx.searcher->switches.use_pass_best_stop = false;  // the rule as it was; the next cases cover the switch
+    switched = 0;
+    // One node-limited search per budget in [first, last]; until_switch ends the
+    // sample at the first stop that plays a new move.
+    const auto sample = [&](std::uint64_t first, std::uint64_t last, std::uint64_t step, bool until_switch) {
+      for (std::size_t i = 0; i < positions; ++i) {
+        const std::string_view fen = search_bench_fens()[i];
+        for (std::uint64_t nodes = first; nodes <= last; nodes += step) {
+          fx.store.clear();
+          fx.searcher->clear_history();
+          Position pos;
+          CHECK(pos.set_fen(fen));
+          SearchQuota q;
+          q.nodes = nodes;
+          ReportLog log;
+          const SearchResult r = fx.searcher->deliberate(pos, q, fx.stop, nullptr, &log);
+          if (r.depth == 0) continue;
+          const int finished_depth = fx.searcher->time_signals().depth;
+          const auto finished = std::ranges::find_if(log.entries, [&](const ReportLog::Entry& e) {
+            return e.depth == finished_depth && e.bound == 0;
+          });
+          CHECK_MSG(finished != log.entries.end(),
+                    fen << " at " << nodes << " nodes: no report of depth " << finished_depth);
+          if (finished == log.entries.end() || r.best == finished->first) continue;
+          ++switched;
+          CHECK_MSG(r.score > finished->score, fen << " at " << nodes << " nodes: played "
+                                                   << pos.move_to_uci(r.best) << " at " << r.score << " over "
+                                                   << pos.move_to_uci(finished->first) << " at "
+                                                   << finished->score << " (depth " << finished_depth << ")");
+          if (until_switch) return;
+        }
       }
-    }
+    };
+    sample(2000, Optimized ? 30000u : 12000u, 997, false);
+    // Whether 2,000-30,000 nodes holds a stop that plays a new move depends on
+    // the network: retrain 8c's r8crft1 held none (2026-11-14). Optimized builds
+    // then search larger budgets until one does, so the rule is still exercised
+    // (the sample above is unchanged for every net that switches in it).
+    if (Optimized && switched == 0) sample(31000, 200000, 4001, true);
   };
-  sample(2000, Optimized ? 30000u : 12000u, 997, false);
-  // Whether 2,000-30,000 nodes holds a stop that plays a new move depends on
-  // the network: retrain 8c's r8crft1 held none (2026-11-14). Optimized builds
-  // then search larger budgets until one does, so the rule is still exercised
-  // (the sample above is unchanged for every net that switches in it).
-  if (Optimized && switched == 0) sample(31000, 200000, 4001, true);
-  if (Optimized)
+  run();
+  bool required = Optimized;
+#if defined(FORK_EVAL_NNUE)
+  if (Optimized && switched == 0) {
+    std::string name;
+    for (int k = 0; switched == 0; ++k) {
+      const std::unique_ptr<NetFile> net = second_network(name, k);
+      if (!net) {
+        if (k == 0) required = false;
+        break;
+      }
+      const NetSwap swap(*net);
+      run();
+      if (switched > 0)
+        NOTE("the embedded network's sample held no stop playing a new move; " << name << "'s did");
+    }
+    if (!required)
+      NOTE(
+          "the embedded network's sample held no stop playing a new move, and no other committed network of "
+          "this architecture exists: the requirement is skipped");
+  }
+#endif
+  if (required)
     CHECK_MSG(switched > 0, "no stop played a move other than the last finished iteration's");
-  else if (switched == 0)
+  else if (switched == 0 && !Optimized)
     NOTE("no stop in the debug sample played a new move; optimized builds require one");
 }
 
@@ -1546,83 +1582,115 @@ TEST_CASE("search", "after a stop, the result's depth, score and move are the la
 //   stopped search exactly up to the stop, then finishes the iteration) is
 //   the judge: its best move agrees with the new rule's move more often than
 //   with the old rule's.
+// Whether the sample holds a deciding stop depends on the network (r8clam1
+// none in the usual band; r3xl2 none in either band, 2026-11-14): when the
+// embedded network's sample holds none, the same checks run again with each
+// other committed network of the build's architecture in turn (second_network,
+// NetSwap) until one's sample decides, and the two requirements above are made
+// there. The rule's checks run on every network sampled. A build with no such
+// network notes it and skips the requirements.
 TEST_CASE("search", "the pass-best stop rule plays the pass's better exact move over the previous best") {
   CHECK(SearchSwitches{}.use_pass_best_stop);  // on since its non-regression SPRT passed
-  Fixture fx;
-  auto fresh_search = [&](std::string_view fen, const SearchQuota& q, bool pass_best,
-                          SearchListener* listener) {
-    fx.store.clear();
-    fx.searcher->clear_history();
-    fx.searcher->switches.use_pass_best_stop = pass_best;
-    Position pos;
-    CHECK(pos.set_fen(fen));
-    return fx.searcher->deliberate(pos, q, fx.stop, nullptr, listener);
-  };
   int differ = 0, kept_lower = 0, earlier_pass = 0, judge_new = 0, judge_old = 0;
   const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
-  // A stop decides when the old rule kept the previous best over a lower exact move and the completed iteration
-  // agrees with exactly one of the two rules. until_decided ends the sample at the first stop after which the
-  // sample holds such a stop and the judge counts differ.
+  // A stop decides when the old rule kept the previous best over a lower exact move and the completed
+  // iteration agrees with exactly one of the two rules. until_decided ends the sample at the first stop after
+  // which the sample holds such a stop and the judge counts differ.
   const auto decided = [&] { return kept_lower > 0 && judge_new != judge_old; };
-  const auto sample = [&](std::uint64_t lo, std::uint64_t hi, std::uint64_t step, bool until_decided) {
-    for (std::size_t i = 0; i < positions; ++i) {
-      const std::string_view fen = search_bench_fens()[i];
+  // The case on the network embedded at the call (named `net` in its note), with a fresh fixture.
+  const auto run = [&](const std::string& net) {
+    Fixture fx;
+    auto fresh_search = [&](std::string_view fen, const SearchQuota& q, bool pass_best,
+                            SearchListener* listener) {
+      fx.store.clear();
+      fx.searcher->clear_history();
+      fx.searcher->switches.use_pass_best_stop = pass_best;
       Position pos;
       CHECK(pos.set_fen(fen));
-      for (std::uint64_t nodes = lo; nodes <= hi; nodes += step) {
-        SearchQuota q;
-        q.nodes = nodes;
-        ReportLog old_log, new_log;
-        const SearchResult was = fresh_search(fen, q, false, &old_log);
-        const int finished_depth = fx.searcher->time_signals().depth;
-        const SearchResult now = fresh_search(fen, q, true, &new_log);
-        CHECK_EQ(now.nodes, was.nodes);
-        CHECK_EQ(fx.searcher->time_signals().depth, finished_depth);
-        if (now.depth == 0 || new_log.entries.empty()) continue;
-        const ReportLog::Entry& last = new_log.entries.back();
-        CHECK_MSG(
-            last.bound == 0 && last.depth == now.depth && last.score == now.score && last.first == now.best,
-            fen << " at " << nodes << " nodes: last line depth " << last.depth << " score " << last.score
-                << " bound " << last.bound << ", result depth " << now.depth << " score " << now.score);
-        CHECK(now.depth == finished_depth || now.depth == finished_depth + 1);
-        if (now.best == was.best) continue;
-        ++differ;
-        const auto finished = std::ranges::find_if(old_log.entries, [&](const ReportLog::Entry& e) {
-          return e.depth == finished_depth && e.bound == 0;
-        });
-        CHECK(finished != old_log.entries.end());
-        if (finished == old_log.entries.end()) continue;
-        // E1's case: the old rule kept the last finished iteration's move, the
-        // new one plays an exact move of the unfinished iteration. Otherwise
-        // the old rule took an earlier pass's move, which the new rule no
-        // longer does (counted only).
-        if (was.best == finished->first && was.depth == finished_depth && now.depth == finished_depth + 1) {
-          if (now.score <= finished->score) ++kept_lower;
-        } else {
-          ++earlier_pass;
+      return fx.searcher->deliberate(pos, q, fx.stop, nullptr, listener);
+    };
+    differ = kept_lower = earlier_pass = judge_new = judge_old = 0;
+    const auto sample = [&](std::uint64_t lo, std::uint64_t hi, std::uint64_t step, bool until_decided) {
+      for (std::size_t i = 0; i < positions; ++i) {
+        const std::string_view fen = search_bench_fens()[i];
+        Position pos;
+        CHECK(pos.set_fen(fen));
+        for (std::uint64_t nodes = lo; nodes <= hi; nodes += step) {
+          SearchQuota q;
+          q.nodes = nodes;
+          ReportLog old_log, new_log;
+          const SearchResult was = fresh_search(fen, q, false, &old_log);
+          const int finished_depth = fx.searcher->time_signals().depth;
+          const SearchResult now = fresh_search(fen, q, true, &new_log);
+          CHECK_EQ(now.nodes, was.nodes);
+          CHECK_EQ(fx.searcher->time_signals().depth, finished_depth);
+          if (now.depth == 0 || new_log.entries.empty()) continue;
+          const ReportLog::Entry& last = new_log.entries.back();
+          CHECK_MSG(
+              last.bound == 0 && last.depth == now.depth && last.score == now.score && last.first == now.best,
+              fen << " at " << nodes << " nodes: last line depth " << last.depth << " score " << last.score
+                  << " bound " << last.bound << ", result depth " << now.depth << " score " << now.score);
+          CHECK(now.depth == finished_depth || now.depth == finished_depth + 1);
+          if (now.best == was.best) continue;
+          ++differ;
+          const auto finished = std::ranges::find_if(old_log.entries, [&](const ReportLog::Entry& e) {
+            return e.depth == finished_depth && e.bound == 0;
+          });
+          CHECK(finished != old_log.entries.end());
+          if (finished == old_log.entries.end()) continue;
+          // E1's case: the old rule kept the last finished iteration's move, the
+          // new one plays an exact move of the unfinished iteration. Otherwise
+          // the old rule took an earlier pass's move, which the new rule no
+          // longer does (counted only).
+          if (was.best == finished->first && was.depth == finished_depth && now.depth == finished_depth + 1) {
+            if (now.score <= finished->score) ++kept_lower;
+          } else {
+            ++earlier_pass;
+          }
+          SearchQuota to_depth;
+          to_depth.depth = finished_depth + 1;
+          const Move judge = fresh_search(fen, to_depth, false, nullptr).best;
+          judge_new += judge == now.best;
+          judge_old += judge == was.best;
+          if (until_decided && decided()) return;
         }
-        SearchQuota to_depth;
-        to_depth.depth = finished_depth + 1;
-        const Move judge = fresh_search(fen, to_depth, false, nullptr).best;
-        judge_new += judge == now.best;
-        judge_old += judge == was.best;
-        if (until_decided && decided()) return;
       }
-    }
+    };
+    sample(2000, Optimized ? 30000u : 12000u, 997, false);
+    // Whether 2,000-30,000 nodes holds a deciding stop depends on the network: retrain 8c's r8clam1 had three
+    // stops where the rules differ, the old rule keeping the previous best each time, but the completed
+    // iteration chose a third move in all three (2026-11-14). Optimized builds then search larger budgets
+    // until a stop decides, as 00b66c5 does for the other stop-rule case (the sample above is unchanged for
+    // every net that decides in it).
+    if (Optimized && !decided()) sample(31000, 200000, 4001, true);
+    record_note(
+        "pass-best stop rule (" + net + "): " + std::to_string(differ) + " stops differ, " +
+        std::to_string(kept_lower) + " with the old rule keeping the previous best over a move at or " +
+        "below the finished score, " + std::to_string(earlier_pass) + " with the old rule taking an " +
+        "earlier pass's move; the completed iteration agrees with the new rule " + std::to_string(judge_new) +
+        " times, the old " + std::to_string(judge_old));
   };
-  sample(2000, Optimized ? 30000u : 12000u, 997, false);
-  // Whether 2,000-30,000 nodes holds a deciding stop depends on the network: retrain 8c's r8clam1 had three
-  // stops where the rules differ, the old rule keeping the previous best each time, but the completed
-  // iteration chose a third move in all three (2026-11-14). Optimized builds then search larger budgets until
-  // a stop decides, as 00b66c5 does for the other stop-rule case (the sample above is unchanged for every net
-  // that decides in it).
-  if (Optimized && !decided()) sample(31000, 200000, 4001, true);
-  record_note("pass-best stop rule: " + std::to_string(differ) + " stops differ, " +
-              std::to_string(kept_lower) + " with the old rule keeping the previous best over a move at or " +
-              "below the finished score, " + std::to_string(earlier_pass) + " with the old rule taking an " +
-              "earlier pass's move; the completed iteration agrees with the new rule " +
-              std::to_string(judge_new) + " times, the old " + std::to_string(judge_old));
-  if (Optimized) {
+  run("the embedded network");
+  bool required = Optimized;
+#if defined(FORK_EVAL_NNUE)
+  if (Optimized && !decided()) {
+    std::string name;
+    for (int k = 0; !decided(); ++k) {
+      const std::unique_ptr<NetFile> net = second_network(name, k);
+      if (!net) {
+        if (k == 0) required = false;
+        break;
+      }
+      const NetSwap swap(*net);
+      run(name);
+    }
+    if (!required)
+      NOTE(
+          "the embedded network's sample held no deciding stop, and no other committed network of this "
+          "architecture exists: the requirements are skipped");
+  }
+#endif
+  if (required) {
     CHECK_MSG(kept_lower > 0, "no stop where the old rule kept the previous best over a lower exact move");
     CHECK_MSG(judge_new > judge_old, "the completed iteration agrees with the new rule "
                                          << judge_new << " times, the old " << judge_old);
