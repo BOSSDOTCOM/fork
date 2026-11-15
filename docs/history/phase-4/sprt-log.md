@@ -2320,3 +2320,13 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
   r3kr1 is pending under the one-switch-per-day rule: generation 4's part g4d had already started on r8ceplo2 (7:59 PM
   EST), so the next part after it, not before 2026-11-15, and the cloud VM's next run; no running generator is
   switched.
+
+### 2026-11-14 the root lean (the engine survey's F11; night queue items z70a and z70b): design R SPRT at LTC, stopped by the owner after stage 3; not adopted, the retry not run
+- **Test:** sprt/f11-root-lean e2b42d5 (the switch on, RootLeanScale 4000, its natural value) against
+  tier2/f11-root-lean 0a49342 (the switch off, r8brft1), SPRT [0, 6] nElo at 40+0.4, stages 1 to 5, kind search;
+  runs 43656039045, 43663431059, 43669773076 (merged), stage 4's run 43675958944 cancelled.
+- **Result after stage 3:** 6,656 games, **Elo -0.47 +/- 4.30**, nElo -0.91 +/- 8.35, Ptnml [23, 787, 1724, 764, 30],
+  LLR -1.29 of (-1.56, 2.77), falling at every stage (-0.23, -1.01, -1.29).
+- **Decision (owner, 2026-11-14 about 11:55 PM EST):** stopped, trending to H0; **not adopted**. The retry at
+  RootLeanScale 2000 (item z70b, sprt/f11-root-lean-2000 4703195) is **not run**: the first try showed no gain, not a
+  near miss. The switch stays off on phase-4.
