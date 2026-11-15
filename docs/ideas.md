@@ -3579,3 +3579,59 @@ proposal are placeholders, screened before use.
 - **evidence so far (2026-11-14, offline, local branch research/head-design 2fb20ad):** share of live groups of 4 on 100,000 g4s2-val positions: r3kr1's SCReLU values 80.9% (60.5% permuted): that form killed (line 55%); r3kr1's pairwise products 41.6% (30.7% permuted): passes; g1afs (AF-S, pairwise, no penalty) 73.7% (51.0% permuted; endgame buckets 63-64%). The speed model (0.93-0.96, est.) is unproven.
 - **rules (owner, 2026-11-14):** the AF-S vs r3kr1 speed A/B (the model's check) runs at the next natural part boundary; the sparsity-penalty arm is mandatory; a head that wins at fixed nodes but fails STC gets one LTC SPRT try, counted as its try.
 - **status:** design (sequenced after Lazy SMP with rank 6, DESIGN decisions log 2026-11-14).
+
+### 200. Eval-difference history update (rare-ideas survey common.md CG-1)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** after a node's static eval is known, credit the previous move's quiet history by how much it changed the mover's static eval (a move that worsened the eval for the side that played it gets a malus), clamped.
+- **plan (owner, 2026-11-15):** queue 1 of 3: implement behind a switch (off), names and the constant screened, the constant at its natural value; design R STC SPRT, then LTC on a pass.
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** queued (implementation).
+
+### 201. TT cutoffs from shallower entries (rare-ideas survey rare.md RI-27)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** allow a transposition-table cutoff from an entry slightly shallower than the current depth when its bound is decisive enough (the survey's constant-free form first).
+- **plan (owner, 2026-11-15):** queue 2 of 3: STC then LTC, with a pressure-matched Hash (the owner's TT-policy rule of 2026-11-11). Its reported 8-thread result (Ethereal +3.43) is noted for the SMP plan (roadmap 17a; docs/kb/lazy-smp.md).
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** queued (implementation).
+
+### 202. Root LMR keyed to the aspiration window (rare-ideas survey rare.md RI-12)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** at the root, after an aspiration fail high reduce every move but the first by one more ply; after a fail low reduce root moves less (refines the adopted root reductions, 2026-11-13).
+- **plan (owner, 2026-11-15):** queue 3 of 3: design R STC SPRT.
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** queued (implementation).
+
+### 203. Elementary-mate regression suite (rare-ideas survey rare.md RI-41)
+- **type:** TOOLING. **phase:** 4. **runtime cost:** none.
+- **idea:** tests that Fork actually delivers mate in basic won endings (KRvK, KBNvK and the like) within the fifty-move rule, so a TT, tablebase or pruning change that breaks conversion is caught (Stockfish's TCEC issue).
+- **plan (owner, 2026-11-15):** now: added to the tests; no Elo test.
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** in progress.
+
+### 204. Output-bucket factoriser in training (rare-ideas survey rare.md RI-39)
+- **type:** ELO. **phase:** 4. **runtime cost:** none (training only).
+- **idea:** during training, a shared output layer is added to each phase head's own and merged in at export, so inference cost is unchanged.
+- **plan (owner, 2026-11-15):** in the next retrain's recipe as an arm (with its same-recipe control).
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** planned (next retrain).
+
+### 205. Correction updates toward the mean of the raw and corrected eval (rare-ideas survey rare.md RI-31)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** update the correction tables toward the average of the raw and the corrected static eval instead of the raw one.
+- **plan (owner, 2026-11-15):** later, with the correction redesign.
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** later.
+
+### 206. Skip quiescence when the TT holds a move (rare-ideas survey rare.md RI-20)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** at depth 0, when the TT holds a quiet move for the node, search one more ply instead of dropping into quiescence.
+- **plan (owner, 2026-11-15):** later; LTC-only test (its gains appear at LTC, PlentyChess failed STC).
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** later.
+
+### 207. King-attack knowledge in quiet move ordering (rare-ideas survey rare.md RI-01)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** order quiet moves using static king-attack terms (attacks on the enemy king zone, moves into safe attacking squares), beyond the direct-check bonus.
+- **plan (owner, 2026-11-15):** later, after SMP (it costs nps).
+- **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
+- **status:** later.
