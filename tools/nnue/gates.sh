@@ -46,8 +46,12 @@
 # default build/clang-release/fork[.exe]), FORK_SYZYGY (default ~/fork-data/syzygy/3-4-5), LAYOUT (default
 # tools/nnue/s512pp.json), TRAINED_S (92), MAX_LOSS (21), P99_LOSS (16), MAX_CLAMPED (8), SLICE_TRAINED (required,
 # above), MAX_RECALL (15, endgame_check.RECALL_LIMIT), HELDOUT_REF (the current
-# default network for the held-out check, default nets/r8ceplo2.fnet: move it on with each promotion), CONTROL_LAYOUT
-# (the control's layout, default LAYOUT), HELDOUT_LAYOUT (HELDOUT_REF's, default tools/nnue/s512pp.json),
+# default network for the held-out check, default nets/r3kr1.fnet: move it on with each promotion, and its layout
+# below with it), CONTROL_LAYOUT (the control's layout, default LAYOUT), HELDOUT_LAYOUT (HELDOUT_REF's: by default
+# tools/nnue/h512pp.json, the default reference's (r3kr1, H512+PP, architecture 9, since 2026-11-14), when
+# HELDOUT_REF is not given, and tools/nnue/s512pp.json when it is, as before, so a caller naming an S512+PP
+# reference keeps its layout; a reference read with the wrong layout stops the held-out tools, reported as "did not
+# run"),
 # HELDOUT_WARM (the net the candidate's run warm-started from, for the held-out checks' change line; optional: if
 # unset, both lines say the change was not reported), HELDOUT_WARM_LAYOUT (HELDOUT_WARM's, default LAYOUT).
 # H512+PP (architecture 9, LAYOUT=tools/nnue/h512pp.json) and S512+PPXL (architecture 10,
@@ -81,12 +85,13 @@ O=$(p "$2") TR=$(p "$3") CTRL=$(p "$4") VAL=$(p "$5")
 W=$6/$NAME
 L=$(p "${LAYOUT:-$R/tools/nnue/s512pp.json}")
 CL=$(p "${CONTROL_LAYOUT:-${LAYOUT:-$R/tools/nnue/s512pp.json}}")
-HL=$(p "${HELDOUT_LAYOUT:-$R/tools/nnue/s512pp.json}")
+if [ -n "${HELDOUT_REF:-}" ]; then HL_DEFAULT=$R/tools/nnue/s512pp.json; else HL_DEFAULT=$R/tools/nnue/h512pp.json; fi
+HL=$(p "${HELDOUT_LAYOUT:-$HL_DEFAULT}")
 links=$("$PY" -I -c "import json,sys; print(int(json.load(open(sys.argv[1]))['architecture'] in (8, 9, 10)))" "$L" | tr -d '\r') ||
   { echo "gates.sh: cannot read the layout $L" >&2; exit 2; }
 SYZ=$(p "${FORK_SYZYGY:-$HOME/fork-data/syzygy/3-4-5}")
 T=$(p "$R/tools/nnue")
-HREF=$(p "${HELDOUT_REF:-$R/nets/r8ceplo2.fnet}")
+HREF=$(p "${HELDOUT_REF:-$R/nets/r3kr1.fnet}")
 warm=()  # the held-out checks' warm-start argument, empty when HELDOUT_WARM is unset
 [ -z "${HELDOUT_WARM:-}" ] ||
   warm=(--warm-start "$(p "$HELDOUT_WARM")=$(p "${HELDOUT_WARM_LAYOUT:-${LAYOUT:-$R/tools/nnue/s512pp.json}}")")

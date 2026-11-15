@@ -580,15 +580,18 @@ jobs:
   # promotion (2026-11-06), S512+PP, the default until S512ppr2's
   # (2026-11-06), S512ppr2, the default until S512ppr3's (2026-11-07),
   # S512ppr3, the default until r8btd90's (2026-11-10), r8btd90, the
-  # default until r8brft1's (2026-11-11), and r8brft1, the default until
-  # r8ceplo2's (2026-11-14), each checked against its parity file
-  # (netcheck) and its bench reference. Light on purpose: a clang release
-  # build of `fork` only, no tests and no test data; except r8brft1kr4,
+  # default until r8brft1's (2026-11-11), r8brft1, the default until
+  # r8ceplo2's (2026-11-14), and r8ceplo2, the default until r3kr1's (the
+  # same day), each checked against its parity file (netcheck) and its bench
+  # reference. Light on purpose: a clang release build of `fork` only, no
+  # tests and no test data; except r8ceplo2, whose job also runs the nnue
+  # suite: since r3kr1 (architecture 9) is the default, the other jobs no
+  # longer compile architecture 8's own cases (S512+PP's); and r8brft1kr4,
   # H512+PP's test net (architecture 9, bake-off round 3's option a: r8brft1
   # with its piece rows copied into every king region, so its bench is
   # r8brft1's; tools/nnue/extend_weights.py), whose job also runs the nnue
-  # suite, the only place architecture 9's own test cases are compiled; and
-  # r8brft1xl, S512+PPXL's test net (architecture 10, bake-off round 3's
+  # suite (since r3kr1's promotion every default build compiles architecture
+  # 9's cases too); and r8brft1xl, S512+PPXL's test net (architecture 10, bake-off round 3's
   # x_lower arm: r8brft1 with zero exposure rows, so its bench is r8brft1's),
   # whose job runs the nnue suite for architecture 10's cases likewise.
   nets:
@@ -600,8 +603,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        net: [r8brft1kr4, r8brft1xl, r8brft1, r8btd90, s512ppr3, s512ppr2, s512pp, s512r2, s512, b0r2, g1h512, g1afs, g1xgr]
+        net: [r8ceplo2, r8brft1kr4, r8brft1xl, r8brft1, r8btd90, s512ppr3, s512ppr2, s512pp, s512r2, s512, b0r2, g1h512, g1afs, g1xgr]
         include:
+          - net: r8ceplo2
+            suite: nnue
           - net: r8brft1kr4
             suite: nnue
           - net: r8brft1xl

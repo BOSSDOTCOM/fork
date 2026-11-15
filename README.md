@@ -4,9 +4,10 @@ Fork is a UCI chess engine in C++20, written to compete in TCEC (the Top
 Chess Engine Championship). Phase 1 (board representation, legal move
 generation, perft), Phase 2 (the UCI protocol) and Phase 3 (search) are
 complete. Phase 4 (the evaluation network) is in progress: Fork evaluates
-with its own NNUE network, r8ceplo2 (`nets/r8ceplo2.fnet`, built into the
-binary), trained on Fork's own self-play games and a small share of
-endgame positions labelled by the Syzygy tablebases (docs/DESIGN.md).
+with its own NNUE network, r3kr1 (`nets/r3kr1.fnet`, built into the
+binary; the H512+PP architecture, whose piece inputs depend on the region
+of the own king), trained on Fork's own self-play games and a small share
+of endgame positions labelled by the Syzygy tablebases (docs/DESIGN.md).
 
 Phase 4's second milestone (2026-11-08) brings the S512+PP architecture
 (the S-512 network plus 608 pawn-link inputs, kept incrementally), and
@@ -106,7 +107,7 @@ gcc 11+ or clang 16+ (C++20).
 git clone https://github.com/BOSSDOTCOM/fork.git fork
 cd fork
 ./update.sh                       # builds build/tcec/fork and prints its path
-build/tcec/fork bench             # search bench: nodes and a signature (tests/bench-r8ceplo2.ref)
+build/tcec/fork bench             # search bench: nodes and a signature (tests/bench-r3kr1.ref)
 ```
 
 `update.sh` builds the engine only (Release, `-O3 -g`, no tests, no

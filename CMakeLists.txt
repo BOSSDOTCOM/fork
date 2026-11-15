@@ -176,19 +176,20 @@ target_compile_options(fathom PRIVATE -w)
 # no runtime interface and no indirect call in the search.
 # nnue is the default since B0 passed its SPRT against the bootstrap
 # evaluation (+486.85 +/- 32.07 Elo; DESIGN.md §5.3, deliverable 7; owner,
-# 2026-10-29). The network is nets/r8ceplo2.fnet, S512+PP (S-512 plus pawn
-# links of rank limit 1, architecture 8): retrain 8c's control (seed 2,
-# warm from r8btd90 on g4s2) with the endgame-preserving result fine-tune
-# (rft-ep-lo), since it passed its STC SPRT against r8brft1 (+5.48 Elo,
-# 2026-11-14; docs/nets.md; owner: promotion pre-approved on H1).
-# nets/r8brft1.fnet, nets/r8btd90.fnet, nets/s512ppr3.fnet,
-# nets/s512ppr2.fnet, nets/s512pp.fnet, nets/s512r2.fnet, nets/s512.fnet,
-# nets/b0r2.fnet, nets/b0r1.fnet and nets/b0.fnet stay buildable with
-# FORK_NET (tests/bench-r8brft1.ref, tests/bench-r8btd90.ref,
-# tests/bench-s512ppr3.ref, tests/bench-s512ppr2.ref, tests/bench-s512pp.ref,
-# tests/bench-s512r2.ref, tests/bench-s512.ref, tests/bench-b0r2.ref,
-# tests/bench-b0r1.ref, tests/bench-b0.ref), and so does bootstrap
-# (tests/bench.ref).
+# 2026-10-29). The network is nets/r3kr1.fnet, H512+PP (architecture 9,
+# bake-off round 3's option a: S512+PP's inputs per own-king region, four
+# regions (M4), with a factoriser and a refresh cache), trained warm from
+# r8ceplo2, since it passed its STC SPRT against r8ceplo2 (+8.04 Elo,
+# 2026-11-14; docs/nets.md; owner's order). The inference is compiled for
+# the embedded net's architecture (below), so this build is architecture 9's.
+# nets/r8ceplo2.fnet, nets/r8brft1.fnet, nets/r8btd90.fnet,
+# nets/s512ppr3.fnet, nets/s512ppr2.fnet, nets/s512pp.fnet,
+# nets/s512r2.fnet, nets/s512.fnet, nets/b0r2.fnet, nets/b0r1.fnet and
+# nets/b0.fnet stay buildable with FORK_NET (tests/bench-r8ceplo2.ref,
+# tests/bench-r8brft1.ref, tests/bench-r8btd90.ref, tests/bench-s512ppr3.ref,
+# tests/bench-s512ppr2.ref, tests/bench-s512pp.ref, tests/bench-s512r2.ref,
+# tests/bench-s512.ref, tests/bench-b0r2.ref, tests/bench-b0r1.ref,
+# tests/bench-b0.ref), and so does bootstrap (tests/bench.ref).
 # nets/r8brft1kr4.fnet is H512+PP's test net (architecture 9, bake-off round
 # 3's option a): r8brft1 with its piece rows copied into each of the four
 # king regions (tools/nnue/extend_weights.py --arch h512pp), so its bench,
@@ -198,7 +199,7 @@ target_compile_options(fathom PRIVATE -w)
 # s512ppxl), so its bench, tests/bench-r8brft1xl.ref, is r8brft1's too.
 set(FORK_EVALUATOR "nnue" CACHE STRING "Static evaluation built into Fork: bootstrap or nnue")
 set_property(CACHE FORK_EVALUATOR PROPERTY STRINGS bootstrap nnue)
-set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/r8ceplo2.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
+set(FORK_NET "${CMAKE_SOURCE_DIR}/nets/r3kr1.fnet" CACHE FILEPATH "Network compiled in with FORK_EVALUATOR=nnue")
 if(FORK_EVALUATOR STREQUAL "nnue")
   if(NOT EXISTS ${FORK_NET})
     message(FATAL_ERROR "FORK_EVALUATOR=nnue needs the network file FORK_NET (${FORK_NET})")

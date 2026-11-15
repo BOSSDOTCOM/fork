@@ -610,13 +610,17 @@ TEST_CASE("search", "the locked endgames stay exact to depth 10, where the singu
 // pass with one network and fail with another, so the exact cases (all but
 // the tiny-TT one, whose exact part is the root oracle's on fewer buckets)
 // run again with another committed network of this build's architecture.
-// With the default build that is s512ppr3 (S512+PP, the default network
+// With an S512+PP build (r8ceplo2's, the default network until r3kr1's
+// promotion on 2026-11-14) that is s512ppr3 (S512+PP, the default network
 // until 2026-11-10: r8btd90 was retrained from it and r8brft1 fine-tuned from
-// r8btd90, docs/nets.md), whose evaluations differ from the default
-// network's (r8ceplo2 since 2026-11-14, r8brft1 before) on most of the
-// cases' positions (checked below). With the history skip left on, s512ppr3
-// fails the zero-window probes in KRK (8/8/3k4/8/8/3K4/8/R7 w, depth 2: 373
-// against 372) where the default network then, r8brft1, passes (2026-11-14).
+// r8btd90, docs/nets.md), whose evaluations differ from the embedded
+// network's on most of the cases' positions (checked below). With the history
+// skip left on, s512ppr3 fails the zero-window probes in KRK
+// (8/8/3k4/8/8/3K4/8/R7 w, depth 2: 373 against 372) where the default
+// network then, r8brft1, passes (2026-11-14). With the default build since
+// r3kr1's promotion (H512+PP, architecture 9) it is r8brft1kr4, H512+PP's
+// test net (r8brft1's weights in every king region), the only other committed
+// network of that architecture.
 // A build whose architecture has no other committed network skips the case;
 // the bootstrap evaluation has no network to swap and does not compile it.
 namespace {
@@ -646,8 +650,8 @@ class NetSwap {
 // build reads (its architecture) and that is not the embedded one; null if
 // none is.
 std::unique_ptr<NetFile> second_network(std::string& name) {
-  for (std::string_view candidate :
-       {"s512ppr3", "r8btd90", "s512ppr2", "s512pp", "r8brft1", "s512r2", "s512", "b0r2", "b0r1", "b0"}) {
+  for (std::string_view candidate : {"s512ppr3", "r8btd90", "s512ppr2", "s512pp", "r8brft1", "s512r2", "s512",
+                                     "b0r2", "b0r1", "b0", "r8brft1kr4"}) {
     std::ifstream in(std::string(FORK_SOURCE_DIR) + "/nets/" + std::string(candidate) + ".fnet",
                      std::ios::binary);
     if (!in) continue;

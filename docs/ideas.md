@@ -3135,10 +3135,21 @@ DESIGN.md decisions log). Common fields: **type** ELO (network architecture); **
 candidate (plan); **runtime cost** possible (each changes the network's inputs or output, so the nps change is
 reported with any result); **earliest phase** Phase 4.
 
+**Round 3's outcome (2026-11-14):** the king-input designs were measured first (DESIGN.md decisions log, about
+8:15 AM and 10:30 AM EST): option (a), H-512's king regions on S512+PP (four regions, M4, with a refresh cache:
+architecture 9, H512+PP), was the only one trained; option (b), idea 157's king-relative offsets (0.534-0.782 of
+phase-4's nps), was parked. **Option (a)'s candidate r3kr1 is the default network since 2026-11-14** (owner's
+order, about 7:20 PM EST): fixed nodes against its same-recipe control +23.92 ± 9.12 (FN_adj +12.18 at the in-situ
+r 0.933), then the STC SPRT [0, 5] against r8ceplo2 **H1, +8.04 ± 4.75** (nElo +14.42 ± 8.51) after 6,400 games
+(docs/history/phase-4/sprt-log.md; docs/nets.md); speed 0.941 of S512+PP's nps (bench/ab_search.py). Its LTC
+confirmation against r8ceplo2 is non-blocking, with no automatic revert (pending). Ideas 158-161 unchanged.
+
 ### 157. King-relative offset inputs (round 3 priority)
 
 - **idea:** encode each piece by its offset from each king (rather than, or beside, its absolute square), so the
   inputs describe the position around each king; the king-side accumulators refresh when that king moves.
+- **status (2026-11-14):** parked as round 3's option (b) (owner, about 8:15 AM EST); round 3's king inputs went to
+  option (a), H512+PP's king regions, promoted the same day (above).
 
 ### 158. King-zone piece-pair inputs
 

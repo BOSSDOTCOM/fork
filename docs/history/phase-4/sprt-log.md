@@ -2270,3 +2270,52 @@ The final stage's result block (r8ceplo2-promo-stc, stage 7, run 43644837732):
   at 6-7 pieces, neither above 1.15); bench 5,403,414 / 34c916638218aa11. The labeller switch to r8ceplo2 is
   pending under the one-switch-per-day rule: the next data generation part (g4d) and the cloud VM's next run; no
   running generator is switched.
+
+### 2026-11-14 bake-off round 3, option (a) (H512+PP, king regions M4 with a refresh cache): fixed-node screens, then r3kr1's STC SPRT against r8ceplo2 (owner): H1, promoted
+
+- Bake-off round 3 session A (docs/research/bakeoff-r3/option-a-plan.md; Kaggle fork-bakeoff-r3 v1,
+  tools/train/kaggle/bakeoff_r3.py at retrain/r3-kr4 b96a514): arm kr1 (H512+PP, architecture 9, M4) and its
+  same-recipe S512+PP control pp1, side by side, seed 1, both warm from r8ceplo2's float window average, retrain 8c's
+  control files and recipe, the window average of superbatches 331-360; x_lower's arm xl1 (S512+PPXL, architecture
+  10) in session X. Every candidate passed tools/nnue/gates.sh (SLICE_TRAINED=1; ~/fork-data/r3/state/gates-*.log).
+  Bakes: r3kr1 3b40d1e, r3pp1 f4ac7b0, r3xl1 6994094 (each phase-4 7a7f99b's engine with its own default net).
+  Fixed-node screens: 800,000 nodes per move, 1,600 games, one stage, with the in-situ nps ratio r from the screen's
+  own games and FN_adj = FN + 118 log2(r) (tools: ~/fork-data/r3/r3_screen.sh, nps_insitu.py). The SPRT `--kind
+  network`, STC 8+0.08, [0, 5], alpha = beta = 0.05, cap 13, idea bakeoff-r3-a (try 1 of 2), Hash 16, Syzygy 3-4-5,
+  UHO book (seed 20261027), OFF = phase-4 5041eb2 (r8ceplo2). Data: ~/fork-data/sprt/r3-fn-* and r3kr1-promo-stc.
+  Times EST.
+
+| Test | Run | Games | Elo (95%) | nElo | Ptnml | Result |
+|---|---|---|---|---|---|---|
+| fixed nodes, r3kr1 against its same-recipe control r3pp1 | 43639332954 | 1,600 | **+23.92 ± 9.12** | +44.80 ± 17.02 | [6, 150, 384, 248, 12] | screen (4:33 PM); r 0.9333 [0.9319, 0.9348], FN_adj +12.18 |
+| the same, r3xl1 against r3pp1 | 43646858806 | 1,600 | +17.60 ± 8.69 | +34.54 ± 17.02 | [7, 147, 407, 236, 3] | screen (5:55 PM); r 0.9338, FN_adj +5.94 |
+| the same, r3kr1 against r8brft1 (phase-4 7a7f99b; the default when the screen was written, kept as a reference) | 43644769111 | 1,600 | +21.09 ± 8.77 | +41.05 ± 17.02 | [4, 146, 409, 231, 10] | screen (5:37 PM); r 0.935 [0.9337, 0.9364], FN_adj +9.66 |
+| the same, r3xl1 against r8ceplo2 (phase-4 b7ea9bf) | 43650595165 | 1,600 | +8.25 ± 9.08 | +15.49 ± 17.02 | [7, 175, 404, 201, 13] | screen (6:40 PM); r 0.9352, FN_adj −3.16 |
+| **r3kr1-promo-stc: STC [0, 5], r3kr1 (3b40d1e) against r8ceplo2** | 43649791429 (stage 0), 43651376277 (1), 43652992128 (2), 43654530597 (3) | 6,400 (no time losses, no abnormal ends) | **+8.04 ± 4.75** | +14.42 ± 8.51 | [42, 739, 1506, 855, 58] | **H1 accepted** (LLR 3.16) after stage 3, 7:00 PM |
+
+- By stage (r3kr1-promo-stc, cumulative): stage 0 +8.90 ± 9.36 (LLR 0.91); stage 1 +10.53 ± 6.71 (2.18); stage 2
+  +9.56 ± 5.46 (2.92); stage 3 +8.04 ± 4.75 (3.16). Started 5:37 PM.
+
+The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
+
+```
+    Shards: 64 (done); pairs 3200, games 6400 (6400 finished, time losses 0, abnormal 0)
+    Tables: 3-4-5 (both engines); book: UHO_Lichess_4852_v1.shuffled-20261027.epd, seed 20261027
+    Elo: 8.04 +/- 4.75, nElo: 14.42 +/- 8.51
+    Ptnml(0-2): [42, 739, 1506, 855, 58]
+    LLR: 3.16 (-2.94, 2.94) [0.00, 5.00] nElo: H1 accepted
+```
+
+- **The decisions (owner, 2026-11-14):** about 5:25 PM EST, "Now that r8ceplo2 is the default: run (a)'s STC SPRT
+  [0, 5] against r8ceplo2 (not r8brft1) ... promotion is decided against r8ceplo2." After the H1, about 7:20 PM
+  EST: "Promote round 3 option (a) (king regions M4 + refresh cache) as the new default: prepare the promotion
+  branch (default switch, bench refs, records, bench parity on all presets), and verify the TCEC build path
+  (update.sh, x86-64-v3 and v4) builds and runs it with exact parity. Then run an LTC SPRT confirmation vs r8ceplo2
+  as non-blocking (report if it fails; no auto-revert). Labeler switch at the next part boundary (one per day). Add
+  king regions to the TCEC hardware test plan (refresh cache behavior on EPYC's smaller L3 per core)."
+- **Promoted: r3kr1 is the default network** (gates.sh exit 0 with SLICE_TRAINED=1; integrity/recall 5 of 900;
+  held-out 522 of 3,800 at 4-5 pieces and 722 of 5,599 at 6-7 pieces, against the then default r8brft1's 612 and
+  770, ratios 0.853 and 0.938, and against r8ceplo2's 525 and 756); bench 5,205,904 / dfe99ebe03b0972d. The LTC
+  confirmation against r8ceplo2 is non-blocking, with no automatic revert (not yet run). The labeller switch to
+  r3kr1 is pending under the one-switch-per-day rule: the next data generation part (g4d) and the cloud VM's next
+  run; no running generator is switched.

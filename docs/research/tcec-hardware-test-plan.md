@@ -6,6 +6,8 @@ session on such a machine (the "TCEC hardware session", owner, 2026-11-13; the m
 chosen) runs from this list. Started 2026-11-13 by the owner's order of about 12:40 PM EST:
 "(1) Colour fold: keep the tag; revisit in step 17a (Lazy SMP) and measure in the TCEC hardware
 session. (2) Add R19 huge pages at a TCEC-sized hash (e.g. 4 GB+) to the TCEC hardware test plan."
+Entry 3 added 2026-11-14 by the owner's order of about 7:20 PM EST: "Add king regions to the TCEC
+hardware test plan (refresh cache behavior on EPYC's smaller L3 per core)."
 
 ## The target conditions
 
@@ -97,6 +99,63 @@ From config/tcec.json (verified 2026-10-23; KB competition.md, branch kb):
   threads, whose node counts differ run to run), with no loss at Threads = 1. Within the noise
   everywhere: the fold stays a memory option for the owner (0.56 GB at 512 threads against the
   320 GiB cap), not a speed change.
+
+### 3. King regions (H512+PP) and the refresh cache on EPYC's L3
+
+- **Source:** the promotion of r3kr1 (DESIGN.md §6, 2026-11-14, about 7:20 PM EST; docs/nets.md),
+  docs/research/bakeoff-r3/option-a-plan.md (the design and its speed, §5), perf-log.md's note on the
+  AVX-512 and int8-row measurements ("TCEC's EPYCs (less L3 per CCD, shared by many threads) could
+  differ").
+- **What changed:** the default network is architecture 9 (H512+PP): S512+PP's piece rows once per
+  own-king region (four regions), so the first-layer weights grow from 1,426,656 bytes (r8ceplo2's file)
+  to 3,785,952 (r3kr1's), and a king move into another region (or across the d/e line) changes the
+  mover's frame. Such a perspective is refreshed lazily from a **per-thread refresh cache**: 16 frame
+  snapshots (2 perspectives x 2 file flips x 4 regions, about 18 KB per thread), each the sums last
+  computed in that frame with its board, brought to the current board by the pieces and pawn links
+  that differ. A refresh is always served from a snapshot (there is no miss path), so its cost is the
+  rows it applies (at most 96 each way, the register-tiled kernel), not a hit rate.
+- **What is known:** on this PC (Ryzen 7 7600X3D: 1 MB L2 per core, 96 MB L3 for 6 cores, perf-log),
+  the production code runs at **0.941 (0.936-0.947)** of S512+PP's nps (bench/ab_search.py, identical
+  trees: r8brft1kr4 against r8brft1, x86-64-v3, one thread; option-a-plan.md §5), and at 0.933-0.935 in
+  the fixed-node screens' own games on GitHub's runners. The 96 MB L3 holds both nets many times over,
+  so these ratios say little about a smaller cache. Not measured: an AVX-512 (x86-64-v4) pair, any run
+  with more than one thread, in-game refresh rates.
+- **Why TCEC's CPU can change it:** the EPYC 9754 (Zen 4c) has **16 MiB of L3 per 8-core CCX**
+  (UNVERIFIED: from the brief, not checked against AMD's documentation; to be confirmed with `lscpu
+  -C` on the machine), about 2 MiB per core against this PC's 16 MiB per core, shared by 16 threads with
+  SMT. The network's weights are read-only and shared by the CCX's threads, but at 3.79 MB they now take
+  about a quarter of that L3 beside the TT, and each thread's own tables (the pair tables alone are 2.25
+  MiB per searcher, entry 2) already exceed it at 8 threads. The snapshots (about 18 KB per thread) fit
+  each core's L2; the regions' rows (about four times the piece rows of S512+PP) are the likelier cost.
+- **Runs:** two pairs, each built through update.sh at TCEC's target (x86-64-v4, PGO as decided then),
+  from the same commit:
+  - **identical trees:** A = an architecture 8 build with nets/r8brft1.fnet, B = an architecture 9 build
+    with nets/r8brft1kr4.fnet (r8brft1's weights in every region: the same evaluations, the same trees,
+    both benches 5,386,021 / 5ecd49d976e215e1 at the time of option-a-plan.md, rechecked on the day);
+    Threads = 1 (fixed nodes: cycles and instructions per node, nps), Threads = 16 pinned to one CCX
+    (`numactl --physcpubind` or `taskset` on the CCX's 8 cores and their SMT siblings; fixed time, nps
+    per thread), and the machine's full thread count (512; fixed time, total nps and nps per thread);
+  - **production:** A = r8ceplo2 (`-DFORK_NET=nets/r8ceplo2.fnet`), B = r3kr1 (the default), the same
+    thread counts; nps only (the trees differ).
+  - Per run, beside the common record: **L3 misses per node** (`perf stat` with the L3 PMU's miss event;
+    the event's name on Zen 4c UNVERIFIED, read from `perf list` on the machine) and L2 misses per node;
+    at Threads = 1, the `clang-stats` build's feature-stack line from `fork bench` for both nets
+    (refreshes per 1,000 updates, rows per update, plies walked per evaluation), so the refresh rate on
+    the bench positions is known; there is no hit rate to report (every frame has its snapshot). Hash:
+    TCEC's size if the machine allows (the same as entry 1's runs), else 4096 MB.
+- **Cheaper first:** the identical-tree pair at Threads = 1 and 4 on a GitHub runner (the speed-ab
+  workflow times `fork bench` only; the multi-thread driver of the common method is needed for the
+  rest), and an AVX-512 pair on this PC, each before the session.
+- **Decision:** the speed rule at TCEC's thread count (DESIGN.md §7: median and best both beyond
+  max(3%, twice the spread)). r3kr1 was adopted on Elo with its speed priced in (the STC SPRT ran at
+  the runners' in-situ ratio of about 0.935), so the session decides only whether TCEC's ratio is
+  materially worse: if the identical-tree ratio at 512 threads is within the rule's noise of 0.935 or
+  better, nothing changes. If it is worse beyond the noise, its extra price, 118 log2(r_TCEC / 0.935)
+  Elo by the fixed-node screens' speed adjustment (a coefficient measured at STC on the runners; at
+  TCEC's time control UNVERIFIED), goes to the owner beside r3kr1's STC gain against r8ceplo2 (+8.04 ±
+  4.75): a price above that gain is a reason to ship r8ceplo2's architecture for TCEC or to make the
+  regions cheaper first (perf-log's int8 rows, speed3/nnue-i4, halve the rows' bytes); a smaller one
+  is recorded and r3kr1 stays.
 
 ## Related open questions
 
