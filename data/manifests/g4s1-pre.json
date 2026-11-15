@@ -1,0 +1,75 @@
+{
+ "run": "g4s1-pre",
+ "note": "g4s1's new-part rests before g4's seal (retrain_8b_inputs.py pre): the first 60 games of each validation shard held for the snapshot's validation file, idea 51's H and the teacher's H2 games kept out of g3j-w05-val's rest",
+ "totals": {
+  "games": 431522,
+  "positions": 40258185,
+  "positions_unsaved": 18351252,
+  "positions_saved": 21906933,
+  "bytes": 176567532
+ },
+ "batches": [
+  [
+   {
+    "file": "g4s1-g3h-w05-val-rest.vf",
+    "games": 66757,
+    "positions": 6223144,
+    "positions_unsaved": 2837906,
+    "positions_saved": 3385238,
+    "bytes": 27295828,
+    "sha256": "b8651280825b99a34909df51312f5405a31d8bb64708b1ac4554ce247188050f"
+   },
+   {
+    "file": "g4s1-g3i-w05-val-rest.vf",
+    "games": 10013,
+    "positions": 934790,
+    "positions_unsaved": 425713,
+    "positions_saved": 509077,
+    "bytes": 4099628,
+    "sha256": "216852130eab5693b50fe53eccdf57dcc5bb00377f2296298ea6f882a9108491"
+   },
+   {
+    "file": "g4s1-g3j-w05-val-rest.vf",
+    "games": 354752,
+    "positions": 33100251,
+    "positions_unsaved": 15087633,
+    "positions_saved": 18012618,
+    "bytes": 145172076,
+    "sha256": "dfbddf0f086d6803b64404895c390e77b4a4ba6d802df2938fd71aab5c8f152c"
+   }
+  ]
+ ],
+ "held": [
+  {
+   "file": "g4s1-g3h-w05-val-held.vf",
+   "games": 60,
+   "positions": 5019,
+   "positions_unsaved": 2274,
+   "positions_saved": 2745,
+   "bytes": 22236,
+   "sha256": "2e3242c31f6eaea709a398236e0872ea4cb53cda1c036c084c156221a3a5d798"
+  },
+  {
+   "file": "g4s1-g3i-w05-val-held.vf",
+   "games": 60,
+   "positions": 5836,
+   "positions_unsaved": 2728,
+   "positions_saved": 3108,
+   "bytes": 25504,
+   "sha256": "318db6ab9f0f9272baed84a61eec627633b9e662882f054a82b71fde4bb1edce"
+  },
+  {
+   "file": "g4s1-g3j-w05-val-held.vf",
+   "games": 60,
+   "positions": 5717,
+   "positions_unsaved": 2635,
+   "positions_saved": 3082,
+   "bytes": 25028,
+   "sha256": "8a1c8cdb56b983e23bc815e6ff77b5920e5bb25818ed3d9a4c30303bd8438639"
+  }
+ ],
+ "exclude": {
+  "held-out/sites.jsonl (idea 51 H)": "64862be3cd681611b239d24fb37a0f30c2307bad01c389f6a3b848ae9cf3ec52",
+  "H2-sample/sites.jsonl (the teacher H2)": "d2721f1cc23d7c00a41ecacd8109c05379442c5f813a0f6959f2a98f9edb5a5b"
+ }
+}

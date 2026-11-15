@@ -1,0 +1,78 @@
+{
+ "run": "g4s2-pre",
+ "note": "retrain 8c's g4s2 training rests: each new part's validation shard after its first 60 games (snapshot_parts.py hold, prefix g4s2; tools retrain/8c-prep 8847fe8): g4b, ld-d20/d50/d100 and the VM filler runs with a -val file; their held games go to g4s2-val.vf at g4c's seal",
+ "totals": {
+  "games": 58676,
+  "positions": 5578936,
+  "positions_unsaved": 2546232,
+  "positions_saved": 3032704,
+  "bytes": 24428080
+ },
+ "batches": [
+  [
+   {
+    "file": "g4s2-g4-gcp-20261111T191107Z-w03-val-rest.vf",
+    "games": 2574,
+    "positions": 245123,
+    "positions_unsaved": 112524,
+    "positions_saved": 132599,
+    "bytes": 1073156,
+    "sha256": "aee99334556c5bf1d3a44b396457482c222c851c9abbca49cb4186540158c2e8"
+   },
+   {
+    "file": "g4s2-g4-gcp-20261112T041330Z-w04-val-rest.vf",
+    "games": 2537,
+    "positions": 244902,
+    "positions_unsaved": 111473,
+    "positions_saved": 133429,
+    "bytes": 1070940,
+    "sha256": "c4802444cbc302e0810fc30194be06d92df3fe0a408295b0df1242623eac12f2"
+   },
+   {
+    "file": "g4s2-g4-gcp-20261112T185227Z-w02-val-rest.vf",
+    "games": 2525,
+    "positions": 244641,
+    "positions_unsaved": 111755,
+    "positions_saved": 132886,
+    "bytes": 1069464,
+    "sha256": "8da889fabf2fe74044cbf1e71a955d6382684431b6c81a6b219282aa8d3e36ec"
+   },
+   {
+    "file": "g4s2-g4b-w09-val-rest.vf",
+    "games": 49028,
+    "positions": 4649517,
+    "positions_unsaved": 2121593,
+    "positions_saved": 2527924,
+    "bytes": 20363076,
+    "sha256": "29d245596e1b1c7e7a2ee547b07f620f46c032c2253161419f9b81716274d74e"
+   },
+   {
+    "file": "g4s2-ld-d100-w02-val-rest.vf",
+    "games": 664,
+    "positions": 64653,
+    "positions_unsaved": 29610,
+    "positions_saved": 35043,
+    "bytes": 282516,
+    "sha256": "8c310b79cb784aea7dbb12b3c64246fd11263b81c08b1a311afdc37fdaf82a13"
+   },
+   {
+    "file": "g4s2-ld-d20-w02-val-rest.vf",
+    "games": 686,
+    "positions": 65668,
+    "positions_unsaved": 29977,
+    "positions_saved": 35691,
+    "bytes": 287368,
+    "sha256": "62f4da41fc0a060fd0c83f2d7eb90d5c5edf969a9e97ef66dce2df95baca1549"
+   },
+   {
+    "file": "g4s2-ld-d50-w02-val-rest.vf",
+    "games": 662,
+    "positions": 64432,
+    "positions_unsaved": 29300,
+    "positions_saved": 35132,
+    "bytes": 281560,
+    "sha256": "8aa5e4fc71e16eab50db79416d01c4735d170486e318d240f2908cdf0f00ac5b"
+   }
+  ]
+ ]
+}
