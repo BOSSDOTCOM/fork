@@ -54,9 +54,10 @@
 # run"),
 # HELDOUT_WARM (the net the candidate's run warm-started from, for the held-out checks' change line; optional: if
 # unset, both lines say the change was not reported), HELDOUT_WARM_LAYOUT (HELDOUT_WARM's, default LAYOUT).
-# H512+PP (architecture 9, LAYOUT=tools/nnue/h512pp.json) and S512+PPXL (architecture 10,
-# LAYOUT=tools/nnue/s512ppxl.json; its exposure rows unbounded) have the same link clamp. A candidate of another
-# architecture than S512+PP, H512+PP or S512+PPXL (a B0 small net, the label-depth experiment, 2026-11-12) has no
+# H512+PP (architecture 9, LAYOUT=tools/nnue/h512pp.json), S512+PPXL (architecture 10,
+# LAYOUT=tools/nnue/s512ppxl.json; its exposure rows unbounded) and H512+PP+M (architecture 12,
+# LAYOUT=tools/nnue/h512ppm.json; its block unbounded) have the same link clamp. A candidate of another
+# architecture than these four (a B0 small net, the label-depth experiment, 2026-11-12) has no
 # link weights: the clamp and its re-check are skipped (0 clamped) and the shipped net is the one at the matched S.
 set -uo pipefail
 [ $# -eq 6 ] || { sed -n '7,7p' "$0" >&2; exit 2; }
@@ -87,7 +88,7 @@ L=$(p "${LAYOUT:-$R/tools/nnue/s512pp.json}")
 CL=$(p "${CONTROL_LAYOUT:-${LAYOUT:-$R/tools/nnue/s512pp.json}}")
 if [ -n "${HELDOUT_REF:-}" ]; then HL_DEFAULT=$R/tools/nnue/s512pp.json; else HL_DEFAULT=$R/tools/nnue/h512pp.json; fi
 HL=$(p "${HELDOUT_LAYOUT:-$HL_DEFAULT}")
-links=$("$PY" -I -c "import json,sys; print(int(json.load(open(sys.argv[1]))['architecture'] in (8, 9, 10)))" "$L" | tr -d '\r') ||
+links=$("$PY" -I -c "import json,sys; print(int(json.load(open(sys.argv[1]))['architecture'] in (8, 9, 10, 12)))" "$L" | tr -d '\r') ||
   { echo "gates.sh: cannot read the layout $L" >&2; exit 2; }
 SYZ=$(p "${FORK_SYZYGY:-$HOME/fork-data/syzygy/3-4-5}")
 T=$(p "$R/tools/nnue")
