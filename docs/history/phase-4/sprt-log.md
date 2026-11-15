@@ -2358,3 +2358,17 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
   commits cherry-picked as 3bca5b8 and 1511846). Bench unchanged 5,205,904 / dfe99ebe03b0972d (the bench loads no
   tables). Full gcc-debug suite on the switch-on commit: 35/35; clang-release quick check: ok. Names screened: no match
   (`fastest` only as an English word in one engine's comments).
+
+### 2026-11-15 the rare-ideas survey's three search items (ideas 200-202; night queue items r1a, r2a, r3a): design R STC SPRTs: all rejected
+- **Idea 200, the eval-difference history update** (sprt/eval-shift-credit 1a2c7c5 vs tier2/eval-shift-credit
+  fc067da; EvalShiftCap 100 cp): futility stop after 2 stages, **Elo -1.19 +/- 6.49** (nElo -2.22 +/- 12.04), Ptnml
+  [17, 399, 782, 382, 20], runs 43731554365, 43733278318. Rejected; no LTC.
+- **Idea 201, TT cutoffs from shallower entries** (fail lows at reduced nodes only, ReducedTtCutSlack 1 ply;
+  sprt/reduced-tt-cut 6b8fd36 vs tier2/reduced-tt-cut a7aafd2; pressure-matched Hash 15 MB): **H0 after stage 1,
+  Elo -4.13 +/- 6.33** (nElo -7.84 +/- 12.04), Ptnml [16, 403, 795, 375, 11], LLR -1.72, runs 43739205810,
+  43740975473. Rejected; no LTC.
+- **Idea 202, root reductions keyed to the aspiration window** (RootFailLmrPlies 1; sprt/root-fail-lmr 0a8b1de vs
+  tier2/root-fail-lmr 94ed883): **H0 after stage 1, Elo -7.71 +/- 6.24** (nElo -14.89), Ptnml [11, 419, 814, 342,
+  14], LLR -2.85, runs 43758397448, 43760154303. Rejected (it also failed the elementary-mate suite with the switch on).
+- All three switches stay off and their branches are not merged; the survey's evidence for each came from other
+  engines' reports (concepts only), so a different form or value is not ruled out, but none is queued.
