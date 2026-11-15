@@ -611,8 +611,10 @@ if(FORK_BUILD_TESTS)
   endforeach()
   # The search suites the pre-commit check runs too (owner, 2026-11-12; scripts/check.sh quick, ctest -L
   # quick-search): whole suites, about 1.5 min together in clang-release. A label only: CI's -LE slow runs
-  # them as before, once each.
-  set_tests_properties(search pruning ordering see params tt time_budget draws PROPERTIES LABELS quick-search)
+  # them as before, once each. elementary_mates joined it (owner, 2026-11-15: "add the 13 s mate suite to the
+  # pre-commit quick checks"): about 13 s in clang-release.
+  set_tests_properties(search pruning ordering see params tt time_budget draws elementary_mates
+                       PROPERTIES LABELS quick-search)
   # The stats build's measurement counters (DESIGN.md §5.7): their own suite,
   # compiled only with FORK_SEARCH_STATS (the clang-stats preset).
   if(FORK_SEARCH_STATS)
