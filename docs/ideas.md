@@ -3454,3 +3454,112 @@ proposal are placeholders, screened before use.
 ### 184. Queen-gated king-zone values (proposal idea 10)
 - **idea:** (b2)'s king-zone vector computed only when the enemy still has a queen (zeros otherwise).
 - **status:** kept as a **later refinement** (owner, 2026-11-14); rides on whatever is decided for (b2).
+
+### 185. Vision step 0: the calibrated residual pass and the head-routing refits (vision ideas, 2026-11-14)
+- **type:** TOOLING. **phase:** 4. **runtime cost:** none.
+- **idea:** one CPU pass (idea 175's held-out ridge study, on g4c 600 k and g4s2-val, against r3kr1 and r8brft1): (a) calibrate the 0.5% residual kill line on inputs known to win (x_lower and the full exposure plane; the 608 pawn links on S512r2 if the loader reads it), since E10's links cut the loss by only 0.06% yet gained +32.7 STC; (b) x_lower split into pawn/knight attackers vs slider attackers; (c) the panel of ideas 188-196's families (plus two predicted-null controls); (d) r3kr1's heads refit on a frozen body under phase, a learned progress score, phase x kings' wings and phase x one hidden column.
+- **metric:** the calibrated line and each family's share against it; held-out loss per routing.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** in progress (owner, 2026-11-14 about 11:40 PM EST: run now at low priority beside data generation, reported before anything else is built). The target carrier (idea 187) is designed after it.
+
+### 186. Routed heads (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** none (a head index).
+- **idea:** pick among the output heads by a learned linear progress score, by phase x the kings' wings (same or opposite), or by phase x one self-chosen hidden column, instead of phase alone (shogi's progress router, Bonanza/YaneuraOu's two-king routing, KataGo's global pooling as an analogue).
+- **cheapest form (est.):** a head index only, about 1.00 speed; +2 to +3 Elo, chance 15-30%.
+- **gate:** idea 185 (d); then a fixed-node screen of the refit net.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 187. Reply-square and square-fate auxiliary targets (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** none (training only).
+- **idea:** training-only heads predicting the squares of the next move and of the opponent's reply, and which side holds each square some plies later (KataGo's opponent-reply and ownership targets, translated).
+- **cheapest form (est.):** zero inference cost; needs a target carrier in the loader (later moves of the game), about 1.5 EU (UNVERIFIED); then a three-arm fine-tune; +3 / +2 Elo, chance 25% / 20%.
+- **gate:** the carrier is designed after idea 185 (owner, 2026-11-14).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 188. Pinned-piece rows in idea 178's liabilities block (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** the mover's pinned pieces (absolute; to the queen) as rows in idea 178's 64-column block; a single layer can't form a three-piece line relation, and Fork's SEE counts a pinned piece as a defender.
+- **cheapest form (est.):** extra rows in the block, 0.975-0.985 speed; +4 to +10 at fixed nodes, chance 25%.
+- **gate:** idea 185 (b) and (c); idea 178.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 189. King-pair (KK) rows (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** 2,048 rows for the exact pair of king squares, shared across king regions, changing only on king moves (Bonanza's KK terms, translated): the king-against-king conjunction four coarse regions lose.
+- **cheapest form (est.):** extra rows, 0.98-0.99 speed; +4 with the wing heads, chance 25%.
+- **gate:** idea 185 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 190. Defence surplus and the attack-balance class (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** loose, overprotected, and attacked-twice-defended-at-most-once mover pieces, on idea 178's exact cut.
+- **cheapest form (est.):** rows in the block on top of 178's L-exact, 0.93-0.95 in total; +2, chance 15%.
+- **gate:** idea 178's L-exact is built; idea 185 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 191. Captured-material ordinals (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** about 38 thermometer rows (own and enemy, each kind at count >= k), changing only on captures and promotions (shogi's hand-piece encoding, translated).
+- **cheapest form (est.):** extra rows, 0.97-0.99; +2, chance 15%.
+- **gate:** idea 185 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 192. File-line contact state for rooks and queens (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** what each heavy piece first meets along its file: an own heavy piece, an enemy heavy piece, or nothing (the classical fight for the open file).
+- **cheapest form (est.):** 768 rows in the block, 0.975-0.99; +2, chance 20%.
+- **gate:** idea 185 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 193. King-zone square-state lane (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** occupant x own and enemy attack counts on each king-zone square, as a small embedding into the head (shogi's effect features; the row-choice form is ruled out under the cost lesson).
+- **cheapest form (est.):** output-layer lane, 0.90-0.93; +4, chance 12%.
+- **gate:** only if b2 or d_lite is adopted (its finder paid).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 194. Next-move double-threat counts (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** the opponent's next-move fork squares, pawn-push forks and discovery candidates against the mover, as a few values beside d_lite's vector.
+- **cheapest form (est.):** output-layer values, 0.97-0.98; 0 to +3, chance 20%.
+- **gate:** idea 185 (c); d_lite.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 195. Blockade occupant of passed pawns (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** who stands on each passed pawn's stop square (enemy minor, heavy piece, king, own piece).
+- **cheapest form (est.):** 384 rows beside the pawn links, 0.985-0.995; +1.5, chance 15%.
+- **gate:** idea 185 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 196. Trapped pieces and the back rank (vision ideas, 2026-11-14)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** counts of trapped pieces and a back-rank weakness bit per side.
+- **cheapest form (est.):** output-layer counts with d_mob, about 0.955 with d_mob; small, chance 10% (the back-rank bit is expected null).
+- **gate:** idea 185 (c).
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** candidate (owner, 2026-11-14); names and counts are placeholders, none screened.
+
+### 197. The Lichess puzzle database as a diagnostic set (vision ideas, 2026-11-14)
+- **type:** TOOLING. **phase:** 4. **runtime cost:** none.
+- **idea:** the Lichess puzzle database (CC0) as a motif-tagged diagnostic: how far Fork's static evaluation sits from its own search at each puzzle's start position, by theme.
+- **rule (owner, 2026-11-14):** **approved as a diagnostic set only: never training data and never a fitness signal** (no tuning, selection or adoption decision may be made on it). Its puzzles were selected and solved by Stockfish and tagged by a program, so non-negotiable 6 bars any other use. Recorded in docs/ORIGINALITY.md.
+- **sources:** docs/research/vision-ideas-2026-11-14.md (four lenses: shogi NNUE, classical theory, the Lichess puzzle themes, KataGo/Go; every source in its appendices and in docs/ORIGINALITY.md). Every Elo, chance and speed figure there is an estimate.
+- **status:** approved as a diagnostic (owner, 2026-11-14); not downloaded yet.
+
+### 198. Sparse int8 pairwise head with QAT (network survey rank 7)
+- **type:** ELO. **phase:** 4. **runtime cost:** possible.
+- **idea:** r3kr1's accumulator halves multiplied pairwise into 512 one-byte inputs, then a sparse int8 16 -> 32 -> 1 head in 8 stacks, with a neuron permutation, a sparsity penalty and QAT (docs/research/network-survey-2026-11/shortlist.md rank 7).
+- **evidence so far (2026-11-14, offline, local branch research/head-design 2fb20ad):** share of live groups of 4 on 100,000 g4s2-val positions: r3kr1's SCReLU values 80.9% (60.5% permuted): that form killed (line 55%); r3kr1's pairwise products 41.6% (30.7% permuted): passes; g1afs (AF-S, pairwise, no penalty) 73.7% (51.0% permuted; endgame buckets 63-64%). The speed model (0.93-0.96, est.) is unproven.
+- **rules (owner, 2026-11-14):** the AF-S vs r3kr1 speed A/B (the model's check) runs at the next natural part boundary; the sparsity-penalty arm is mandatory; a head that wins at fixed nodes but fails STC gets one LTC SPRT try, counted as its try.
+- **status:** design (sequenced after Lazy SMP with rank 6, DESIGN decisions log 2026-11-14).
