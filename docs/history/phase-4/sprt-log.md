@@ -2345,3 +2345,16 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
 - **Decision (owner, 2026-11-15 about 11:50 AM EST):** **rejected.** The retry (z96b, a more frequent verification,
   which would cost more) was stopped during its stage 1 before any result (run 43736518763 cancelled), and the
   non-regression item (96c, [-3, 0]) is skipped: its bar is far from the LTC's result. The switch stays off.
+
+### 2026-11-15 lowest-DTZ root ranking in won tablebase endings (`UseFastestTableWin`; night queue item 95z): non-regression STC SPRT [-3, 0], capped undecided; adopted by the owner's rule (TCEC-safety correctness fix)
+- **Why:** the elementary-mate suite (idea 203) found that with the tables Fork mated KBNvK and KBBvK on move 50 of the
+  fifty-move rule: the root kept every winning move rather than the fastest. With the switch on the suite's games mate
+  in KBNvK 29/31/20 and KBBvK 13/16/13 moves (DTZ-fastest 32/31/25 and 17/17/12); KQvKR 27/30/9 (was 52/56/13).
+- **Test:** sprt/tb-root-dtz 10c23eb (on) against tier2/tb-root-dtz 78bdfe2 (off), custom mode, nElo [-3, 0], STC
+  8+0.08, 13 stages: **capped undecided, Elo -0.23 +/- 2.48** (nElo -0.45 +/- 4.72), Ptnml [105, 2443, 5326, 2413,
+  113], LLR +0.55 of (-2.94, 2.94); 95% lower bound -2.71.
+- **Decision (owner, 2026-11-15):** adopt if the final estimate is above -1.5 Elo (and/or the lower bound at or above
+  -3), as a TCEC-safety correctness fix (no fifty-move draws in won tablebase endings): **adopted** on phase-4 (the two
+  commits cherry-picked as 3bca5b8 and 1511846). Bench unchanged 5,205,904 / dfe99ebe03b0972d (the bench loads no
+  tables). Full gcc-debug suite on the switch-on commit: 35/35; clang-release quick check: ok. Names screened: no match
+  (`fastest` only as an English word in one engine's comments).
