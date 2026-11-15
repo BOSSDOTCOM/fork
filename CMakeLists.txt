@@ -457,6 +457,7 @@ if(FORK_BUILD_TESTS)
     tests/test_eval_drift.cpp
     tests/test_pruning.cpp
     tests/test_endgame_tables.cpp
+    tests/test_elementary_mates.cpp
     tests/test_pruning_review.cpp
     tests/test_ordering_review.cpp
     tests/engine_process.cpp
@@ -566,7 +567,16 @@ if(FORK_BUILD_TESTS)
       "KQvK.rtbz|3-4-5-dtz|71ea9444fa5bd42897d781a0c356975ea6f23e0f65a4254e470897031c161c8c"
       "KRvK.rtbz|3-4-5-dtz|cab59f42e75c2a25da3939231850a79fa838593fff5c28d7772da92062ed965a"
       "KBvK.rtbz|3-4-5-dtz|6246c8a5c643eec9d4758d55ed843e31cc28a9b82a6f630c1c950d8b7755975b"
-      "KNvK.rtbz|3-4-5-dtz|0e49a0f2810a131c32fc14872e83044aa9810ce2c86df071851512077291fc25")
+      "KNvK.rtbz|3-4-5-dtz|0e49a0f2810a131c32fc14872e83044aa9810ce2c86df071851512077291fc25"
+      # The elementary-mate suite's endings (tests/test_elementary_mates.cpp), from the same list,
+      # downloaded and checked 2026-11-15: 1,199,024 bytes in all.
+      "KBNvK.rtbw|3-4-5-wdl|76958da65bc243f2f0a16ceb83f1c00cbc4fb6d6e2f43d052c2f9d65bf16fee8"
+      "KBNvK.rtbz|3-4-5-dtz|cad874516a2327e63754b3faababc7dece1b949305f2944b2b5a3b137f92ecd3"
+      "KBBvK.rtbw|3-4-5-wdl|3afa74fcfd6100df851c3b18ca255acd9d68c31c7c74cb02b2d5236ffd610ed6"
+      "KBBvK.rtbz|3-4-5-dtz|d3786ba13d73b1ed61b8be4fd301ceed56b9af5e7c4fbf4a252ef77d2ea3d3db"
+      "KQvKP.rtbz|3-4-5-dtz|faedb2db23be6619a57cd21c1291582bba9ddae30c5a394f5d4a7ab834a3940f"
+      "KQvKR.rtbw|3-4-5-wdl|8cdbe3c8e098037875de5854c656f8afeadb8327c85b5b7b1cac81719afd3e2c"
+      "KQvKR.rtbz|3-4-5-dtz|0c15a2aaa3bdef39da4c26932006b5d38b55b8e3ad13e8a44815d63f84738618")
     string(REPLACE "|" ";" parts "${spec}")
     list(GET parts 0 tb_name)
     list(GET parts 1 tb_dir)
@@ -595,7 +605,7 @@ if(FORK_BUILD_TESTS)
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
                 search see ordering eval_drift pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue
-                web)
+                web elementary_mates)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
