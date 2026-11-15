@@ -60,7 +60,7 @@
 //!
 //!   fork-train check    --arch A [maps] --out DIR
 //!   fork-train order    --data SHARD... [--count N]   (the file of each game of an --interleave pass)
-//!   fork-train dump     --data SHARD --count N
+//!   fork-train dump     --data SHARD --count N [--keep-all] [--state]
 //!   fork-train stats    --data SHARD... [--positions N]   (king squares, phase, piece counts)
 //!   fork-train features --arch A [maps] (--epd FILE | --data SHARD --count N)
 //!   fork-train train    --arch A [maps] --data SHARD... --out DIR --scale S [--val SHARD --patience P]
@@ -72,6 +72,12 @@
 //! [maps] are --regions (32 comma-separated region numbers) and --buckets (25
 //! bucket numbers), as the architecture needs; the files in
 //! tools/nnue/ hold the fitted ones.
+//!
+//! Each decoded position carries its halfmove clock and castling rights in
+//! the packed board's three spare bytes (decode_game, packed_state; owner,
+//! 2026-11-14: no data format change), from the replay the decoding already
+//! does; nothing reads them yet, so the features and targets are unchanged.
+//! tools/datagen/check_trainer_state.py checks them against python-chess.
 //!
 //! With --val, the loss on the first --val-positions (default 20,000) kept positions of a
 //! held-out shard is measured after every superbatch (written to val.txt);
@@ -94,7 +100,10 @@ use bullet_trainer::{
     run::{train, DefaultDevice, HostPool, Step, TrainingSchedule, TrainingSteps},
 };
 use bulletformat::{BulletFormat, ChessBoard};
-use viriformat::dataformat::{Filter, Game};
+use viriformat::{
+    chess::{board::Board as RecordBoard, piece::Colour},
+    dataformat::{Filter, Game},
+};
 
 // Positions are dropped when |score| exceeds Fork's evaluation range
 // (EvalLimit, src/eval/eval_scale.hpp): those are mate or tablebase scores.
@@ -891,6 +900,48 @@ fn filter() -> Filter {
     Filter { filter_check: true, filter_tactical: true, max_eval: MAX_SCORE, ..Filter::UNRESTRICTED }
 }
 
+/// Set in extra[1] of every board the decoder fills (decode_game), so a board
+/// parsed from a FEN (all three spare bytes zero) is told apart.
+const STATE_CARRIED: u8 = 0x80;
+
+/// A position's halfmove clock and castling rights in the packed board's
+/// three spare bytes (bulletformat's `extra`, which neither bullet nor the
+/// mapper reads; owner, 2026-11-14: "no data format change"): extra[0] the
+/// halfmove clock (plies since the last capture or pawn move), extra[1] the
+/// castling rights side to move first, as the packed board is (bit 0 its
+/// O-O, bit 1 its O-O-O, bit 2 the other side's O-O, bit 3 the other side's
+/// O-O-O), with STATE_CARRIED; extra[2] zero.
+fn packed_state(board: &RecordBoard) -> [u8; 3] {
+    let r = board.castling_rights();
+    let white = u8::from(r.wk.is_some()) | u8::from(r.wq.is_some()) << 1;
+    let black = u8::from(r.bk.is_some()) | u8::from(r.bq.is_some()) << 1;
+    let (own, other) = if board.turn() == Colour::White { (white, black) } else { (black, white) };
+    [board.fifty_move_counter(), STATE_CARRIED | own | other << 2, 0]
+}
+
+/// The positions of `game` that pass `filter`, in order, as viriformat's own
+/// conversion gives them (Game::splat_to_bulletformat), each with its
+/// halfmove clock and castling rights (packed_state) from the same replay:
+/// the filter sees each position's board just before the conversion packs it.
+fn decode_game(game: &Game, filter: &Filter, mut f: impl FnMut(ChessBoard)) {
+    let state = std::cell::Cell::new([0u8; 3]);
+    game.splat_to_bulletformat_with_filter_callback(
+        |mut b| {
+            b.extra = state.get();
+            f(b);
+            Ok(())
+        },
+        |mv, eval, board, outcome, rng| {
+            let skip = filter.should_filter(mv, eval, board, outcome, rng);
+            if !skip {
+                state.set(packed_state(board));
+            }
+            skip
+        },
+    )
+    .expect("splat");
+}
+
 /// Reads Fork's shards (viriformat games) forever, in file order, through
 /// viriformat's own conversion, shuffling each buffer of `buffer` positions
 /// with a seeded stream (so the data order is reproducible). With
@@ -982,14 +1033,9 @@ impl DataReader<ChessBoard> for ShardReader {
             if self.interleave {
                 let mut stop = false;
                 for_each_interleaved(&self.files, |_, game| {
-                    game.splat_to_bulletformat(
-                        |b| {
-                            buf.push(b);
-                            Ok(())
-                        },
-                        &filter,
-                    )
-                    .expect("splat");
+                    decode_game(&game, &filter, |b| {
+                        buf.push(b);
+                    });
                     if buf.len() >= self.buffer {
                         stop = emit_shuffled(&mut buf, &mut rng, &mut f);
                     }
@@ -1009,14 +1055,9 @@ impl DataReader<ChessBoard> for ShardReader {
                     if stop {
                         return;
                     }
-                    game.splat_to_bulletformat(
-                        |b| {
-                            buf.push(b);
-                            Ok(())
-                        },
-                        &filter,
-                    )
-                    .expect("splat");
+                    decode_game(&game, &filter, |b| {
+                        buf.push(b);
+                    });
                     if buf.len() >= self.buffer {
                         stop = emit_shuffled(&mut buf, &mut rng, &mut f);
                     }
@@ -1040,14 +1081,9 @@ fn read_positions(path: &Path, limit: usize) -> Vec<ChessBoard> {
     let filter = filter();
     ShardReader::for_each_game(path, |game| {
         if out.len() < limit {
-            game.splat_to_bulletformat(
-                |b| {
-                    out.push(b);
-                    Ok(())
-                },
-                &filter,
-            )
-            .expect("splat");
+            decode_game(&game, &filter, |b| {
+                out.push(b);
+            });
         }
     });
     out.truncate(limit);
@@ -1128,23 +1164,25 @@ fn main() {
         }
         "dump" => {
             // Positions exactly as training sees them (side-to-move relative):
-            // "piece:square ... | score | result" per kept position.
+            // "piece:square ... | score | result" per kept position; with
+            // --state also "| halfmove clock | castling byte" (extra[0] and
+            // extra[1], packed_state's layout).
             let mut left: usize = a.num("--count", 1000);
             let filter = if a.flag("--keep-all") { Filter::UNRESTRICTED } else { filter() };
+            let state = a.flag("--state");
             let out = std::io::stdout();
             let mut out = out.lock();
             ShardReader::for_each_game(Path::new(a.need("--data")), |game| {
-                game.splat_to_bulletformat(
-                    |b: ChessBoard| {
-                        if left > 0 {
-                            left -= 1;
-                            writeln!(out, "{} | {} | {}", pieces_text(&b), b.score(), b.result()).unwrap();
+                decode_game(&game, &filter, |b: ChessBoard| {
+                    if left > 0 {
+                        left -= 1;
+                        write!(out, "{} | {} | {}", pieces_text(&b), b.score(), b.result()).unwrap();
+                        if state {
+                            write!(out, " | {} | {}", b.extra()[0], b.extra()[1]).unwrap();
                         }
-                        Ok(())
-                    },
-                    &filter,
-                )
-                .expect("splat");
+                        writeln!(out).unwrap();
+                    }
+                });
             });
         }
         "stats" => {
@@ -1156,24 +1194,19 @@ fn main() {
             for f in a.all("--data") {
                 let filter = filter();
                 ShardReader::for_each_game(Path::new(&f), |game| {
-                    game.splat_to_bulletformat(
-                        |pos: ChessBoard| {
-                            if n < limit {
-                                n += 1;
-                                let b = Board::from_chessboard(&pos);
-                                for persp in 0..2 {
-                                    let k = if persp == 0 { b.king(0) } else { b.king(1) ^ 56 };
-                                    let k = if k % 8 < 4 { k ^ 7 } else { k };
-                                    kings[(k / 8) * 4 + k % 8 - 4] += 1;
-                                }
-                                phase[b.phase()] += 1;
-                                pieces[b.count] += 1;
+                    decode_game(&game, &filter, |pos: ChessBoard| {
+                        if n < limit {
+                            n += 1;
+                            let b = Board::from_chessboard(&pos);
+                            for persp in 0..2 {
+                                let k = if persp == 0 { b.king(0) } else { b.king(1) ^ 56 };
+                                let k = if k % 8 < 4 { k ^ 7 } else { k };
+                                kings[(k / 8) * 4 + k % 8 - 4] += 1;
                             }
-                            Ok(())
-                        },
-                        &filter,
-                    )
-                    .expect("splat");
+                            phase[b.phase()] += 1;
+                            pieces[b.count] += 1;
+                        }
+                    });
                 });
             }
             let join = |v: &[u64]| v.iter().map(u64::to_string).collect::<Vec<_>>().join(" ");
@@ -1707,6 +1740,130 @@ mod layout_tests {
                 let got = features(&s, fen, persp);
                 assert!(got.iter().all(|&i| i < 1376));
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod state_tests {
+    use super::*;
+
+    // Two games built from FENs and UCI moves, every position's halfmove clock
+    // and castling rights worked out by hand (side to move first: 1 its O-O,
+    // 2 its O-O-O, 4 the other side's O-O, 8 the other side's O-O-O):
+    // rights lost to a rook move, a king move and a rook captured on its
+    // corner; the clock from a nonzero start, reset by a pawn move and by a
+    // capture.
+    const GAMES: [(&str, &[(&str, u8, u8)]); 2] = [
+        (
+            "r3k2r/p6p/8/8/8/8/P6P/R3K2R w KQkq - 7 30",
+            &[
+                ("a1b1", 7, 15), // white to move, all four rights
+                ("h8g8", 8, 7),  // white lost O-O-O: black's k, q, then white's K
+                ("a2a4", 9, 9),  // black lost O-O: white's K, black's q
+                ("a7a5", 0, 6),  // the pawn move reset the clock
+                ("e1d1", 0, 9),
+                ("a8a6", 1, 2), // white's king moved: black's q only
+                ("d1e1", 2, 0), // black's rook moved: none left
+            ],
+        ),
+        (
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            &[
+                ("a1a8", 0, 15), // the capture on a8 takes white's O-O-O and black's O-O-O
+                ("e8e7", 0, 5),  // black to move: its k, white's K; the capture reset the clock
+                ("h1h2", 1, 1),  // black's king moved: white's K only
+            ],
+        ),
+    ];
+
+    fn record_board(fen: &str) -> RecordBoard {
+        let mut board = RecordBoard::new();
+        board.set_from_fen(fen).expect("fen");
+        board
+    }
+
+    /// The games written as one shard file (Fork's game records) in the
+    /// system's temporary folder; the caller removes it.
+    fn shard(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("fork-train-state-{name}-{}.vf", std::process::id()));
+        let mut f = File::create(&path).expect("shard");
+        for (fen, moves) in GAMES {
+            let mut board = record_board(fen);
+            let mut game = Game::new(&board);
+            for (uci, _, _) in moves {
+                let mv = board.parse_uci(uci).expect("move");
+                assert!(board.make_move_simple(mv), "{uci} is legal");
+                game.add_move(mv, 0);
+            }
+            game.serialise_into(&mut f).expect("write");
+        }
+        path
+    }
+
+    /// Each position's packed board (side to move relative, the spare bytes
+    /// zeroed) with its expected spare bytes and whether the training filter
+    /// keeps it (not in check, its move neither a capture nor a promotion).
+    fn expected() -> Vec<(ChessBoard, [u8; 3], bool)> {
+        let mut out = Vec::new();
+        for (fen, moves) in GAMES {
+            let mut board = record_board(fen);
+            for (uci, clock, rights) in moves {
+                let mv = board.parse_uci(uci).expect("move");
+                let b = board.to_bulletformat(0, 0).expect("pack");
+                let kept = !board.in_check() && !board.is_tactical(mv);
+                out.push((b, [*clock, STATE_CARRIED | rights, 0], kept));
+                board.make_move_simple(mv);
+            }
+        }
+        out
+    }
+
+    fn check(got: &[ChessBoard], keep_all: bool) {
+        let want: Vec<_> = expected().into_iter().filter(|w| keep_all || w.2).collect();
+        assert_eq!(got.len(), want.len());
+        for b in got {
+            let w = want.iter().find(|w| ChessBoard { extra: [0; 3], ..*b } == w.0).expect("a position of the games");
+            assert_eq!(b.extra, w.1, "{}", pieces_text(b));
+        }
+    }
+
+    #[test]
+    fn the_hand_worked_games_are_what_the_test_says() {
+        // Eight of the ten positions are kept: not the one before the
+        // capture a1a8, nor the one in check after it.
+        let e = expected();
+        assert_eq!(e.len(), 10);
+        assert_eq!(e.iter().filter(|w| w.2).count(), 8);
+    }
+
+    #[test]
+    fn every_decoded_position_carries_its_halfmove_clock_and_castling_rights() {
+        let path = shard("decode");
+        // The validation path and the loader (read_positions), the dump
+        // (--keep-all's filter), and the training reader (ShardReader, which
+        // shuffles, in both orders), on the training filter; read first, so
+        // the file is removed before any check fails.
+        let kept = read_positions(&path, usize::MAX);
+        let mut all = Vec::new();
+        ShardReader::for_each_game(&path, |game| decode_game(&game, &Filter::UNRESTRICTED, |b| all.push(b)));
+        let trained: Vec<Vec<ChessBoard>> = [false, true]
+            .into_iter()
+            .map(|interleave| {
+                let reader = ShardReader { files: vec![path.clone()], buffer: 1000, seed: 7, interleave };
+                let mut got = Vec::new();
+                reader.read_chunks(0, |chunk: &[ChessBoard]| {
+                    got.extend_from_slice(chunk);
+                    true
+                });
+                got
+            })
+            .collect();
+        fs::remove_file(&path).expect("remove");
+        check(&kept, false);
+        check(&all, true);
+        for got in &trained {
+            check(got, false);
         }
     }
 }
