@@ -267,6 +267,15 @@ struct SearchQuota {
 //   On since its SPRTs against off passed: STC +17.71 +/- 6.74 Elo after
 //   3,200 games, LTC +14.94 +/- 6.24 Elo after 3,328 games, design R
 //   [0, 6]; 2026-11-13.
+// - use_eval_shift_credit: the eval-difference history update (ideas.md idea
+//   200; the rare-ideas survey's CG-1): at a main-search node out of check,
+//   reached by a quiet move from a parent that was out of check too (not the
+//   root's children, nor after a null move), the mover's butterfly entry for
+//   that move (in its threat bucket) moves by eval_shift_amount: the change
+//   in the mover's raw static eval the move caused, clamped to
+//   +/-EvalShiftCap cp and scaled so a full cap is a depth-1 cutoff's bonus.
+//   Not in a singular test's search (the node's own visit credits it). Off
+//   until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -318,7 +327,8 @@ struct SearchQuota {
   X(use_linear_bonus, UseLinearBonus, true)              \
   X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
   X(use_root_lmr, UseRootLmr, true)                      \
-  X(use_deep_time_depth, UseDeepTimeDepth, true)
+  X(use_deep_time_depth, UseDeepTimeDepth, true)         \
+  X(use_eval_shift_credit, UseEvalShiftCredit, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -327,6 +337,27 @@ struct SearchSwitches {
   // Tests only (no option): a TT entry cuts only at exactly the depth it was
   // searched to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
+};
+
+// The eval-difference history update (use_eval_shift_credit, idea 200): the
+// amount for the move that led from a node whose static eval is
+// `parent_eval` to one whose static eval is `child_eval` (each from its own
+// side to move's view). The change in the mover's eval, -(child + parent),
+// is clamped to +/-EvalShiftCap cp and scaled so that a full cap is `unit`
+// (the search passes its depth-1 cutoff bonus); rounded toward zero.
+FORK_TUNABLE_CONSTEXPR int eval_shift_amount(int parent_eval, int child_eval, int unit) {
+  const int shift = -(child_eval + parent_eval);
+  const int capped = shift > EvalShiftCap ? EvalShiftCap : shift < -EvalShiftCap ? -EvalShiftCap : shift;
+  return capped * unit / EvalShiftCap;
+}
+
+// The quiet move that led to a ply's node in the main search, with its threat
+// bucket taken on the board before it (T56; 0 with use_threat_buckets off);
+// NoMove after a capture, a promotion or a null move, and at the root's
+// children (use_eval_shift_credit's input).
+struct ArrivalQuiet {
+  Move move = NoMove;
+  int bucket = 0;
 };
 
 // The move played with the score and depth of the search behind it: those of
@@ -796,6 +827,9 @@ class Searcher {
   std::int64_t soft_limit_now(const SearchQuota& limits) const;
   std::int64_t elapsed_ms() const;
   void record_cutoff(PlyFrame& f, Move m, int depth);
+  // use_eval_shift_credit (idea 200): the node at `ply` (out of check, its
+  // static eval set) credits the quiet move that led to it, if any.
+  void credit_eval_shift(int ply);
   // The cutoff bonus for `depth`, quadratic or with use_linear_bonus linear.
   int cutoff_bonus(int depth) const {
     return switches.use_linear_bonus ? linear_bonus_for_depth(depth) : bonus_for_depth(depth);
@@ -861,6 +895,9 @@ class Searcher {
   // and read where it learns, at the same node.
   DriftKeys drift_keys_[MaxPly + 1];
   Key threat_keys_[MaxPly + 1] = {};
+  // The quiet move that led to each ply's node (use_eval_shift_credit), set
+  // where the child is entered, beside the frames for the same reason.
+  ArrivalQuiet arrival_quiets_[MaxPly + 1];
   PrincipalLine pv_[MaxPly + 1];
   RootEntry root_moves_[MaxMoves];
   // The iteration's root move that failed high and is not yet resolved by a

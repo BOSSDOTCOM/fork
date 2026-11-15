@@ -303,6 +303,22 @@ void Searcher::record_cutoff(PlyFrame& f, Move m, int depth) {
   if (switches.use_follow_history && follow != NoArrival) update(pair_history_[FollowTable], follow);
 }
 
+// The eval-difference history update (use_eval_shift_credit, idea 200; the
+// rare-ideas survey's CG-1): the quiet move that led here gains or loses by
+// how much it changed its mover's static eval (eval_shift_amount), in the
+// bucket its node's ordering read. Raw evals, the ones the frames keep; the
+// root's children have no recorded arrival (the root computes no eval).
+void Searcher::credit_eval_shift(int ply) {
+#ifdef FORK_SEARCH_STATS
+  if (ledger_active_) return;  // a decision-ledger side search leaves the histories as they were (X10)
+#endif
+  const ArrivalQuiet& arrival = arrival_quiets_[ply];
+  const int parent_eval = frames_[ply - 1].static_eval;
+  if (arrival.move.is_none() || parent_eval == ScoreNone || !switches.use_history) return;
+  history_.apply(~pos_->side_to_move(), arrival.move,
+                 eval_shift_amount(parent_eval, frames_[ply].static_eval, cutoff_bonus(1)), arrival.bucket);
+}
+
 void Searcher::update_pv(int ply, Move m) {
   PrincipalLine& line = pv_[ply];
   const PrincipalLine& child = pv_[ply + 1];
@@ -402,6 +418,9 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   FORK_STAT(++(in_check                          ? counters.check_nodes_main
                : tt_hit && hit.eval != ScoreNone ? counters.tt_eval_hits_main
                                                  : counters.evals_main));
+  // Idea 200: the move that led here is credited with the eval change it
+  // caused (not in a singular test's search: the node's own visit does it).
+  if (switches.use_eval_shift_credit && !in_check && !withheld && ply > 0) credit_eval_shift(ply);
 #ifdef FORK_SEARCH_STATS
   // Idea 59 step 1: the static evaluation's gap to the nearest finite bound
   // of this node's window (after mate distance pruning), computed or reused.
@@ -518,6 +537,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     play_null(ply);
     frames_[ply + 1].after_null = true;
     frames_[ply + 1].arrival = NoArrival;
+    arrival_quiets_[ply + 1] = {};
     frames_[ply + 1].expected_cut = !f.expected_cut;  // T17: passing should fail low below
     const int score = -negamax<false>(-beta, -beta + 1, null_depth, ply + 1);
     frames_[ply + 1].after_null = false;
@@ -555,6 +575,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         if (switches.use_tt) tt_.prefetch_bucket(pos.predicted_key(m));
         frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
         frames_[ply + 1].expected_cut = !f.expected_cut;
+        arrival_quiets_[ply + 1] = {};  // a capture or promotion
         play(ply, m);
         // Depth 0 is the quiescence search (or the static eval with it off).
         int score = -negamax<false>(-bar, -bar + 1, 0, ply + 1);
@@ -788,6 +809,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     // A quiet's threat bucket for the LMR context's history (T56): taken
     // here, on the board before the move (0 with use_threat_buckets off).
     const int bucket = quiet ? threat_bucket(f.selector.attacked_by_opponent(), m) : 0;
+    arrival_quiets_[ply + 1] = {quiet ? m : NoMove, bucket};
 #ifdef FORK_SEARCH_STATS
     counters.pawn_makes += kind_of(pos.piece_at(m.from())) == Pawn;
     // X2 (DESIGN.md §5.7): the move's history values, read before it is made
@@ -1159,6 +1181,7 @@ int Searcher::search_root(int alpha, int beta, int depth) {
     const std::uint64_t nodes_before = nodes_;
     frames_[1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
     frames_[1].expected_cut = i > 0;  // the root's later moves: expected cut nodes (T17)
+    arrival_quiets_[1] = {};          // the root computes no static eval (idea 200)
     const bool quiet = !m.is_capture() && !m.is_promotion();
     play(0, m);
     int score;

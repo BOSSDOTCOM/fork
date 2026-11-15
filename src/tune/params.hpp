@@ -85,6 +85,7 @@
   X(HistoryBonusFactor, 25, 12, 50, 2)         \
   X(HistoryBonusCap, 1250, 625, 2500, 94)      \
   X(LinearBonusPerPly, 125, 63, 250, 9)        \
+  X(EvalShiftCap, 100, 50, 200, 8)             \
   X(HistoryKeepQuarters, 2, 0, 4, 1)           \
   X(ReplyWeight, 6, 0, 12, 1)                  \
   X(FollowWeight, 4, 0, 16, 1)                 \

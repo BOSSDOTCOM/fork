@@ -214,7 +214,8 @@ struct TestHash {
 //                           promotions, SEE-losing captures skipped).
 //   use_history, use_history_malus, use_reply_history, use_follow_history,
 //   use_take_history, use_threat_buckets, use_check_order_bonus,
-//   use_pair_sum_update, use_history_ageing, use_linear_bonus
+//   use_pair_sum_update, use_history_ageing, use_linear_bonus,
+//   use_eval_shift_credit
 //                           move ordering and its tables: alpha-beta's value
 //                           does not depend on the order. Kept on, so the
 //                           probes run on real orderings and grown histories.

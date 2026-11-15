@@ -880,6 +880,93 @@ TEST_CASE("pruning", "linear history bonus: still correct, and it changes the se
   CHECK(fx.tree_sizes(no_history_on, depth) == fx.tree_sizes(no_history_off, depth));
 }
 
+// The eval-difference history update (idea 200): the amount, by hand. Each
+// eval is from its own side to move's view, so a move that took the mover
+// from +30 to +10 (the child's -10 for the opponent) lost 20 cp.
+TEST_CASE("pruning", "eval shift credit: the amount, clamped and scaled, by hand") {
+  CHECK_EQ(EvalShiftCap, 100);                     // the values below assume the default
+  CHECK_EQ(eval_shift_amount(30, -10, 125), -25);  // -20 cp: -20 x 125 / 100
+  CHECK_EQ(eval_shift_amount(30, -50, 125), 25);   // +20 cp
+  CHECK_EQ(eval_shift_amount(0, 0, 125), 0);       // no change
+  CHECK_EQ(eval_shift_amount(0, -500, 125), 125);  // +500 cp, capped at +100: the full unit
+  CHECK_EQ(eval_shift_amount(500, 0, 125), -125);  // -500 cp, capped at -100
+  CHECK_EQ(eval_shift_amount(-40, -60, 12), 12);   // exactly +100 cp: the unit (the quadratic bonus's)
+  CHECK_EQ(eval_shift_amount(0, -1, 125), 1);      // +1 cp: 125 / 100, rounded toward zero
+  CHECK_EQ(eval_shift_amount(0, 1, 125), -1);      // -1 cp: toward zero too
+}
+
+// The update in a search (idea 200): a zero-window probe of depth 2 searches
+// every root move once (nothing at the probed node prunes, and beta is far
+// above any score here, so no move cuts and no cutoff bonus or malus touches
+// the side to move's table). With the switch on, each quiet move's entry (in
+// its threat bucket) is then exactly the amount for its eval change, from
+// static_eval computed here independently of the search's incremental
+// network, or 0 where the child is in check; with it off every entry is 0.
+// Fails without the update (no entry would be credited).
+TEST_CASE("pruning", "eval shift credit: each quiet move's entry is its eval change, only with the switch") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_eval_shift_credit);  // off until its SPRT
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  SearchSwitches s;
+  s.use_rfp = s.use_nmp = s.use_lmp = s.use_futility = s.use_see_prune = false;
+  s.use_history_skip = s.use_capture_probe = false;
+  for (const bool on : {false, true}) {
+    s.use_eval_shift_credit = on;
+    fx.searcher->switches = s;
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    Position pos;
+    CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+    fx.searcher->probe_zero_window(pos, 2000, 2, fx.stop);
+    const Color us = pos.side_to_move();
+    const int parent = static_eval(pos);
+    const Bitboard attacked = pos.attacked_squares(~us);
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    int credited = 0;
+    for (Move m : legal) {
+      if (m.is_capture() || m.is_promotion()) continue;
+      const int bucket = s.use_threat_buckets ? threat_bucket(attacked, m) : 0;
+      const int value = fx.searcher->butterfly_view().value(us, m, bucket);
+      pos.make(m);
+      const int expected =
+          on && !pos.in_check() ? eval_shift_amount(parent, static_eval(pos), linear_bonus_for_depth(1)) : 0;
+      pos.unmake(m);
+      CHECK_MSG(value == expected, (on ? "on " : "off ")
+                                       << pos.move_to_uci(m) << ": " << value << " vs " << expected);
+      credited += expected != 0;
+    }
+    if (on) CHECK_MSG(credited > 0, "no quiet move had an eval change to credit");
+  }
+}
+
+// The eval-difference history update (idea 200): with it on, mates are still
+// found and the best move is legal, and it changes the tree (fault check: an
+// update that never fires leaves the trees as with the switch off); with
+// use_history off it does nothing.
+TEST_CASE("pruning", "eval shift credit: still correct, and it changes the search") {
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_eval_shift_credit = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_eval_shift_credit = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the eval shift credit left all three trees unchanged");
+  SearchSwitches no_history_on = on, no_history_off = off;
+  no_history_on.use_history = no_history_off.use_history = false;
+  CHECK(fx.tree_sizes(no_history_on, depth) == fx.tree_sizes(no_history_off, depth));
+}
+
 // The quiescence move cap (the engine survey's B16): with it on, mates are
 // still found and the best move is legal, and it changes the tree (fault
 // check: a cap that never fires leaves the trees as with the switch off);
@@ -1021,6 +1108,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
   s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
   s.use_root_lmr = true;
+  s.use_eval_shift_credit = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
