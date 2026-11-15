@@ -890,7 +890,7 @@ TEST_CASE("pruning", "linear history bonus: still correct, and it changes the se
 // only through a cutoff. Fails without the relaxed cutoff (the first case).
 TEST_CASE("pruning", "reduced TT cut: a shallower fail low cuts a reduced search's node, nothing else does") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_reduced_tt_cut);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_reduced_tt_cut);  // on in the SPRT test commit
   CHECK_EQ(ReducedTtCutSlack, 1);               // the cases below assume the default
   const std::string_view start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   constexpr int Depth = 4, Beta = 0;

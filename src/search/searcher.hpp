@@ -275,8 +275,8 @@ struct SearchQuota {
 //   cuts, but only when its bound proves a fail low here (an upper bound or
 //   an exact score at or below alpha): that answer only sends the parent to
 //   the full-depth re-search it would have made anyway. Every other TT
-//   cutoff still needs an entry at least as deep as the node. Off until its
-//   SPRT.
+//   cutoff still needs an entry at least as deep as the node. On in this
+//   SPRT test commit only (sprt/reduced-tt-cut).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -329,7 +329,7 @@ struct SearchQuota {
   X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
   X(use_root_lmr, UseRootLmr, true)                      \
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
-  X(use_reduced_tt_cut, UseReducedTtCut, false)
+  X(use_reduced_tt_cut, UseReducedTtCut, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
