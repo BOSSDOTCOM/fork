@@ -9,9 +9,12 @@
 //   run() or handle_line()), which a search never blocks: isready, stop,
 //   ponderhit and quit are answered while a search runs.
 // - A search runs on its own thread, on its own copy of the position, with
-//   the session's one Searcher (src/search/searcher.hpp). Every
-//   `go` produces exactly one `bestmove`, printed by that thread after its
-//   final `info` line.
+//   the session's main Searcher (src/search/searcher.hpp), plus, with
+//   Threads above 1, the helper threads of the HelperPool (Lazy SMP,
+//   src/search/helper_pool.hpp), which that thread starts, ends and waits
+//   for. Every `go` produces exactly one `bestmove`, printed by the search
+//   thread after its final `info` line; the search counts as finished (and
+//   its thread can be joined) only once every helper is parked again.
 // - At most one search exists. A command that changes what a search depends
 //   on (position, ucinewgame, setoption, go, and the heavy Fork extensions)
 //   first stops and joins the running search, as if `stop` had come first,
@@ -35,6 +38,7 @@
 
 #include "core/position.hpp"
 #include "search/hash_memory.hpp"
+#include "search/helper_pool.hpp"
 #include "search/searcher.hpp"
 #include "uci/go_limits.hpp"
 #include "uci/options.hpp"
@@ -109,7 +113,9 @@ class UciSession {
   // isready, ucinewgame and go, so every option sent before is in effect
   // (a GUI may send Hash before Threads). Returns true if it cleared the table.
   bool apply_pending();
+  void apply_threads();  // the pool's size from Threads (apply_pending)
   unsigned hash_workers() const;
+  void clear_histories();  // every search thread's (ucinewgame, Clear Hash)
 
   void stop_search();  // stops and joins the running search, if any
   bool search_running();
@@ -128,6 +134,7 @@ class UciSession {
   TransTable tt_;             // a view over hash_, rebound whenever hash_ is resized
   bool hash_pending_ = true;  // the table is allocated at the first isready, ucinewgame or go
   bool clear_pending_ = false;
+  bool threads_pending_ = false;  // Threads changed: the pool is resized with the Hash work
   // SyzygyPath: loaded at the next isready, ucinewgame or go, outside any
   // search (deliverable 7).
   std::string syzygy_path_;
@@ -148,6 +155,7 @@ class UciSession {
   std::atomic<bool> stop_flag_{false};
   std::atomic<bool> pondering_{false};
   std::unique_ptr<Searcher> searcher_;  // created once, used by one search at a time
+  HelperPool pool_{tt_};                // Threads - 1 helpers; destroyed before tt_
   std::thread search_thread_;
 };
 

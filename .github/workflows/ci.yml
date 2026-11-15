@@ -275,10 +275,10 @@ jobs:
       - name: The threaded suites under TSan (no bench parity; no_alloc, uci_oom, uci_hash_oom are not built)
         run: |
           d=build/${{ matrix.preset }}
-          threaded_suites='^(uci_protocol|uci_options|uci_timing|tt|datagen|web)$'
-          # All six must exist: a renamed suite must not drop out unseen.
+          threaded_suites='^(uci_protocol|uci_options|uci_timing|tt|smp|datagen|web)$'
+          # All seven must exist: a renamed suite must not drop out unseen.
           n=$(ctest --test-dir $d -N -R "$threaded_suites" | grep -cE 'Test +#')
-          [ "$n" -eq 6 ] || { echo "::error::expected the 6 threaded suites, found $n"; exit 1; }
+          [ "$n" -eq 7 ] || { echo "::error::expected the 7 threaded suites, found $n"; exit 1; }
           REQUIRE_BENCH=0 REQUIRE_NO_ALLOC=0 bash .github/ci/run-tests.sh $d -R "$threaded_suites"
 
   linux-python:

@@ -171,15 +171,11 @@ void UciSession::declare_options() {
                     [this](const OptionEntry&, std::string&) { return hash_pending_ = true; });
   options_.add_button("Clear Hash",
                       [this](const OptionEntry&, std::string&) { return clear_pending_ = true; });
-  // The search runs on one thread whatever Threads says (bug review
-  // 2026-11-11, E4): a value above 1 is accepted, bounds the Hash clear's
-  // workers, and says so.
-  options_.add_spin("Threads", 1, 1, config_.max_threads, [](const OptionEntry& e, std::string& message) {
-    if (e.number > 1)
-      message = "Threads " + std::to_string(e.number) +
-                " accepted: the search runs on one thread; Threads sets only the Hash clear's threads";
-    return true;
-  });
+  // The search threads (Lazy SMP, DESIGN.md §5.6 step 17a): the main one and
+  // Threads - 1 helpers, made at the next isready, ucinewgame or go (as the
+  // Hash is), outside any search. Threads also bounds the Hash clear's workers.
+  options_.add_spin("Threads", 1, 1, config_.max_threads,
+                    [this](const OptionEntry&, std::string&) { return threads_pending_ = true; });
   options_.add_spin("Move Overhead", 100, 0, 10000);
   options_.add_string("SyzygyPath", "", [this](const OptionEntry& e, std::string& message) {
     syzygy_path_ = e.text;
@@ -232,7 +228,35 @@ unsigned UciSession::hash_workers() const {
   return config_.use_threads ? clear_workers(hash_.bytes(), options_.number("Threads")) : 1;
 }
 
+// The helpers Threads asks for, at most one search thread per hardware
+// thread (more only share cores, and Threads 4096 would ask for some 20 GB of
+// searchers); none in stats builds, whose decision ledger holds every
+// thread's TT writes (the concurrency review, A1.4).
+void UciSession::apply_threads() {
+  threads_pending_ = false;
+  if (!config_.use_threads) return;
+  const std::size_t asked = static_cast<std::size_t>(options_.number("Threads"));
+  std::size_t threads = asked;
+  std::string why;
+#ifdef FORK_SEARCH_STATS
+  if (threads > 1) why = "statistics builds search on one thread";
+  threads = 1;
+#else
+  const unsigned hardware = std::thread::hardware_concurrency();
+  if (hardware > 0 && threads > hardware) {
+    threads = hardware;
+    why = "one per hardware thread";
+  }
+#endif
+  const std::size_t running = pool_.resize(threads - 1) + 1;
+  if (running < threads) why = "no more threads or memory";
+  if (running < asked)
+    out_.send_info_string("Threads " + std::to_string(asked) + ": " + std::to_string(running) +
+                          " search threads (" + why + ")");
+}
+
 bool UciSession::apply_pending() {
+  if (threads_pending_) apply_threads();
   if (tables_pending_) {
     // Never during a search: this runs only where the Hash work runs. An
     // empty path (or "<empty>", the GUIs' way to clear it) unloads quietly.
@@ -257,7 +281,7 @@ bool UciSession::apply_pending() {
     tt_.bind_memory(nullptr, 0);
     const bool ok = hash_.resize(bytes, report);
     // A Clear Hash in the same batch also forgets the history (audit-1, V-2).
-    if (clear_pending_) searcher_->clear_history();
+    if (clear_pending_) clear_histories();
     hash_pending_ = clear_pending_ = false;
     tt_.bind_memory(hash_.data(), hash_.bytes());
     const unsigned workers = hash_workers();
@@ -272,7 +296,7 @@ bool UciSession::apply_pending() {
   if (clear_pending_) {
     clear_pending_ = false;
     hash_.clear(hash_workers());
-    searcher_->clear_history();  // Clear Hash forgets all search memory (review, deliverable 5)
+    clear_histories();  // Clear Hash forgets all search memory (review, deliverable 5)
     return true;
   }
   return false;
@@ -448,7 +472,12 @@ void UciSession::cmd_setoption(const std::vector<LineToken>& tokens, std::size_t
 
 void UciSession::cmd_ucinewgame() {
   if (!apply_pending()) hash_.clear(hash_workers());
+  clear_histories();
+}
+
+void UciSession::clear_histories() {
   searcher_->clear_history();
+  pool_.clear_histories();
 }
 
 void UciSession::cmd_ponderhit() {
@@ -606,9 +635,25 @@ void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
   const auto start = std::chrono::steady_clock::now();
   Move best = NoMove;
   bool picked = false;
+  bool helping = false;  // helpers are searching: ended and waited for on every way out
   try {
     InfoWriter writer(out_);
-    const SearchResult r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer);
+    SearchResult r;
+    if (pool_.helper_count() == 0) {
+      r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer);  // one thread
+    } else {
+      // Lazy SMP: the shared setup once, then every helper and this thread
+      // search the same root; this thread keeps time and its move is played.
+      SearchStart plan;
+      prepare_start(tt_, searcher_->switches, pos, plan);
+      helping = pool_.begin_search(pos, searcher_->switches, plan, limits);
+      if (helping) {
+        plan.helpers = pool_.searchers();
+        plan.helper_count = pool_.helper_count();
+      }
+      r = searcher_->deliberate(pos, limits, stop_flag_, &pondering_, &writer, &plan);
+      pool_.end_search();  // at once, before a ponder or infinite search waits
+    }
     best = r.best;
     picked = true;
     {
@@ -629,6 +674,12 @@ void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
     // Out of memory while formatting (a failed send_line throws before it
     // writes anything): answer the go once, without allocating.
     answer_without_memory(pos, picked ? best : NoMove, picked);
+  }
+  // After bestmove (a slow helper never delays it), before the search counts
+  // as finished: stop_search's join then means every helper is parked.
+  if (helping) {
+    pool_.end_search();
+    pool_.wait_idle();
   }
   std::scoped_lock lock(signals_.mutex);
   signals_.finished = true;

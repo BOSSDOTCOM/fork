@@ -226,6 +226,7 @@ add_library(forksearch STATIC
   src/search/search_bench.cpp
   src/search/endgame_tables.cpp
   src/search/hash_memory.cpp
+  src/search/helper_pool.cpp
   src/search/move_selector.cpp
   src/search/searcher.cpp
   src/search/see.cpp
@@ -453,6 +454,7 @@ if(FORK_BUILD_TESTS)
     tests/test_search.cpp
     tests/test_see.cpp
     tests/test_tt.cpp
+    tests/test_smp.cpp
     tests/test_ordering.cpp
     tests/test_eval_drift.cpp
     tests/test_pruning.cpp
@@ -604,7 +606,7 @@ if(FORK_BUILD_TESTS)
   target_compile_definitions(fork_tests PRIVATE FORK_SYZYGY345_DIR="${FORK_SYZYGY345_DIR}")
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
-                search see ordering eval_drift pruning tables time_budget tt params uci_protocol uci_options uci_timing datagen nnue
+                search see ordering eval_drift pruning tables time_budget tt smp params uci_protocol uci_options uci_timing datagen nnue
                 web elementary_mates)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)

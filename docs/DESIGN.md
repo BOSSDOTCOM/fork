@@ -630,7 +630,7 @@ Its only job is to make the protocol testable; it is deleted in Phase 3.
 |---|---|---|
 | `Hash` | spin, MB, default 16, min 1, max 4194304 (4 TiB; owner, 2026-10-24: 16 times TCEC's 256 GiB and above any server's RAM, chosen for Fork rather than the 33554432 first specified, which equals another engine's limit) | TCEC sets `Hash=262144` (256 GiB) and caps hash at 32 or 64 GiB unless initialization is multithreaded. Size math in `std::size_t` bytes, no 32-bit overflow. `setoption` only records the size; the table is allocated and cleared at the next `isready`, `ucinewgame` or `go`, after every option has been applied, because a GUI may send `Hash` before `Threads` and a clear started on `setoption Hash` would run on one thread (review M8, 2026-10-23). Allocated as **one block straight from the OS** (`mmap`, 2 MiB aligned, on Linux; `VirtualAlloc` on Windows), first-touch cleared **in parallel** with `min(Threads, one per 2 MiB)` workers, at least one, counted on the size actually allocated (review, 2026-10-24; **Threads bounds the clear** since the bug review of 2026-11-11, E4, 1c63c66: it was `max(Threads, hardware threads)`, so Threads 1 did not bound it; corrected here 2026-11-15), before `readyok`. **No chunked fallback** (owner, 2026-10-24, amending the approved spec): Linux's default overcommit checks each `mmap` on its own (against RAM + swap since Linux 5.2, against free memory + swap before; never the running total), so chunks would slip past that check and the clear would then bring in the OOM killer; Windows' commit limit (RAM plus page files) is system-wide, so chunks gain nothing there either (sources: docs/kb/os-memory.md on branch kb, verified 2026-10-24). **Before allocating, the request is compared with the physical memory available now** (`MemAvailable` from `/proc/meminfo`; `ullAvailPhys` from `GlobalMemoryStatusEx`) plus the current table, which is freed first when both do not fit; a request that does not fit is never tried. If the size cannot be had, the table falls back to its previous size (else 1 MB) and `info string` says so; never an abort. `madvise(MADV_HUGEPAGE)` on Linux, but no dependence on large pages (TCEC enables them automatically). Tests: a 1 TB request and one just above available memory both fall back cleanly on Windows and Linux. Phase 2 allocates and clears the table; Phase 3 uses it. |
 | `Clear Hash` | button | Clears the table (also in parallel). |
-| `Threads` | spin, default 1, min 1, max 4096 (owner, 2026-10-24: 8 times TCEC's 512; nothing is sized for a fixed thread count, and a 4096-worker clear is tested) | TCEC sets 512 (two sockets). Phase 2 stores it and uses it for hash clearing; Phase 6 uses it for search, NUMA-aware. |
+| `Threads` | spin, default 1, min 1, max 4096 (owner, 2026-10-24: 8 times TCEC's 512; nothing is sized for a fixed thread count, and a 4096-worker clear is tested) | TCEC sets 512 (two sockets). Phase 2 stores it and uses it for hash clearing. **Since Lazy SMP v1 (§5.6 step 17a, 2026-11-15) it also sets the search threads:** the main thread and Threads − 1 helpers, at most one per hardware thread (an info string when fewer run), one thread in stats builds; NUMA-aware placement is v2. |
 | `Move Overhead` | spin, ms, default 100, min 0, max 10000 (owner, 2026-10-24) | Time reserved per move for GUI and system latency; TCEC leaves options at default unless the author asks, so the default must already be safe at 30'+3". Name with a space (owner, 2026-10-24: the conventional spelling across engines); TCEC's recommended value is a Discord question (docs/kb/competition.md). Used by Phase 5. |
 | `SyzygyPath` | string, default `<empty>` | TCEC sets `SyzygyPath=/home/syzygy7` in every division. Paths separated by `:` on Linux and `;` on Windows. Phase 2 stores it and reports how many table files it finds (`info string`); a missing directory is not an error. Probing (7-piece, ideas.md idea 12) is Phase 3. |
 | `LogFile` | string, default `<empty>` | Optional log of all UCI input and output with timestamps, for diagnosing a TCEC game afterwards. Off by default. |
@@ -3910,6 +3910,85 @@ switches until the Phase 4 re-validation. Bench is unchanged (bench has no
 soft limit), and data generation is node-limited, so the labeller is
 untouched.
 
+**Step 17a, minimal Lazy SMP: the v1 design and its first commits (2026-11-15; the owner's order of
+2026-11-15 "start step 17a"; from the concurrency review of 2026-11-11, Part A, and the KB entry
+docs/kb/lazy-smp.md §6.3).** Every thread runs Fork's normal iterative deepening on the same root and
+they cooperate only through the shared TT. v1 is the simplest design that can be made correct; every
+refinement is a later, separately measured item.
+- **Threads.** `Threads` N means the session's search thread (the main thread, the session's Searcher)
+  plus N − 1 helper threads in a `HelperPool` (src/search/helper_pool.*). The pool is resized at the
+  next isready, ucinewgame or go after a Threads change, as the Hash is, never during a search.
+  Helper threads are parked on a condition variable between searches, not created per go. Each
+  helper allocates its own Searcher on its own thread, so Linux first touch places its tables on
+  that thread's memory node (no NUMA API in v1). **At most one search thread per hardware thread**
+  (`std::thread::hardware_concurrency()`, when known): more threads only share cores, and
+  Threads 4096 (the option's maximum) would ask for about 20 GB of Searchers (about 4.9 MiB each, the
+  review's A5 estimate, UNVERIFIED by `sizeof`). When fewer threads run than asked (the cap, or no
+  thread or memory for one), an info string says how many. Stats builds (FORK_SEARCH_STATS) search
+  on one thread: the decision ledger's held TT writes are one flag for the whole table (review A1.4).
+- **Threads = 1 is today's path exactly.** No helper thread exists, and the session calls
+  `deliberate()` with no `SearchStart`, so the search prepares the TT and ranks the root itself as
+  before. Bench, data generation and the fixed-node screens never use the pool. Bench is unchanged
+  (5,205,904 / dfe99ebe03b0972d with r3kr1).
+- **Shared TT.** An entry is three 32-bit words (`TtEntry`: `key_and_age`, `move_score`,
+  `eval_depth_flags`; little-endian, the same bytes as the old fields). Every access reads or writes
+  each word of the shared memory exactly once, as a relaxed `std::atomic_ref<std::uint32_t>`
+  (C++20, in libstdc++ 11, libc++ and both MinGW toolchains), so concurrent access is not a data
+  race. `fetch` checks a copy and uses only the copy. `deposit` loads the bucket's five entries once,
+  decides on that snapshot and stores the chosen slot's three words. The 24-bit digest check turns
+  an entry whose words come from two writes into a miss (Hyatt and Mann's lockless idea, cited in
+  ORIGINALITY.md, in Fork's own form since 2026-10-24). Lost updates between threads are accepted.
+- **Once per go, by the coordinator** (`prepare_start`, run by the main thread before it wakes the
+  helpers): the TT's age is advanced and its policy set once (not once per thread: the review's A1.3
+  hazard), and the root is ranked by the endgame tables once (Fathom's header calls its root probe
+  not thread-safe), into a `SearchStart` that every thread searches from. The main thread counts
+  that probe in tbhits.
+- **Stopping.** The pool owns an abort flag on its own cache line. The main thread polls the
+  session's stop flag, the clock and the pondering flag exactly as before; helpers poll only the
+  abort flag (every `StopCheckInterval` nodes, as the main thread polls). The search thread sets
+  the abort flag as soon as its own search returns, for any reason (stop, hard or soft limit, depth,
+  mate, a forced move), before a ponder or infinite search waits for its stop. It prints bestmove
+  without waiting for the helpers (a helper in a slow table probe never delays bestmove), then waits
+  until every helper is parked before the search counts as finished. Every command that changes
+  what a search depends on already stops and joins the search thread first (§5.1), so no helper
+  touches the TT, a table or its Searcher when the next command acts.
+- **Time management** is the main thread's alone. Helpers get no listener, no pondering flag and no
+  time, node or mate limit; they keep the go's depth limit and searchmoves.
+- **The move played** is the main thread's result (with E1's rule). No voting and no helper depth
+  offsets in v1: the threads' trees differ through timing and their own histories.
+- **Per-thread state:** everything in a Searcher (histories, drift tables, stack, accumulators).
+  ucinewgame and Clear Hash clear every thread's histories. Helpers copy the main thread's switches
+  at each go (tuning builds set the main thread's).
+- **Counts.** Each Searcher publishes its node and table-hit counts (relaxed atomic stores by its
+  own thread, on their own cache line) every `StopCheckInterval` nodes and at its end; the main
+  thread's info lines and result add the helpers' published counts to its own (behind by less than
+  1,024 nodes per helper). **`go nodes` counts the main thread's nodes only** (the review's A2
+  option: simple, the same shape as one thread), and so does the test-only node clock.
+- **Aborted searches store nothing:** a stopped search returns before any TT store at each move loop
+  (read in searcher.cpp; not yet tested, a test is planned).
+- **Not in v1** (each a later item, measured on its own): thread binding, per-node network copies and
+  a node-aware TT clear (v2, decided by measurements on TCEC-class hardware,
+  docs/research/tcec-hardware-test-plan.md); voting or choosing among threads (KB T53); depth offsets
+  or skip rules (T54); shared drift tables; idea 84's net groups; a helper-published snapshot for
+  the move choice.
+- **No new search constant** (`StopCheckInterval` is reused). **Names** screened before use by
+  throwaway subagents (Stockfish 5d03b6e, Ethereal 0e47e9b, Berserk 1d2354d, Weiss c735b8f): see
+  ORIGINALITY.md.
+- **Tests:** the TT stress test (threads writing and reading the same two buckets; every accepted
+  hit is one writer's whole entry; fault-checked: with the digest removed it fails in 3 runs of 3);
+  the `smp` suite (summed counts, the age advanced once per search at any thread count, the abort
+  flag, resizes; the first two fault-checked); a UCI case with Threads 4 (go, stop, ponder,
+  ponderhit, ucinewgame, Threads changes between searches, quit mid-search; one bestmove per go);
+  the E4 cases updated (the "search runs on one thread" notice is gone). `smp` joins CI's TSan
+  threaded list (seven suites).
+- **Scaling plan (not run yet; the free lanes; reported before any SPRT):** (1) a diagnostic curve on
+  GitHub runners (4 vCPUs; the PC is busy with data generation): nps and time to depth at 1, 2 and 4
+  threads over the bench positions, several runs each; (2) 2-vs-1 and 4-vs-2 thread matches at STC
+  and then LTC as fixed-game Elo estimates, with the shard concurrency set so that no runner has more
+  search threads than vCPUs (sprt.yml needs a concurrency input: one 4-thread game or two 2-thread
+  games per runner); (3) the thread-versus-time check (2 threads at T against 1 thread at 2T); the
+  EPYC-class curve (16 to 512 threads) on rented hardware with the TCEC dry run.
+
 ### 5.7 Phase 4 step 1: measurement instrumentation (owner-approved 2026-11-07)
 
 Decision (owner-approved 2026-11-07; recorded here rather than in §6 so the
@@ -4520,6 +4599,7 @@ models are scored on the half of the games they were not fitted on.
 | 2026-11-15 | **Idea 178 closed; the next network bet is the sparse int8 multi-layer head (owner, about 3:05 PM EST).** Idea 178's L-lower arm (the side to move's lower-class-attacked pieces in a 64-column block on r3kr1) against its same-recipe control at 800,000 nodes: -0.65 Elo (95% -9.8 to +8.5), speed-adjusted about -6.8; no second seed, the full-width variant not trained. Possible reasons recorded in ideas.md 178 (king regions overlapping threat information; the mover-only half; block isolation). **Next:** idea 199's speed tests per its spec before any GPU time: the output-share profile, the sparse-layer micro-benchmark (kill below 0.90), and the AF-S vs r3kr1 A/B at the next part boundary (g4d's seal). |
 | 2026-11-15 | **Lowest-DTZ root ranking in won tablebase endings adopted (`UseFastestTableWin` on; owner's rule, a TCEC-safety correctness fix).** The elementary-mate suite found KBNvK/KBBvK mated on move 50 of the fifty-move rule; with the switch on, the root keeps only the winning moves with the smallest DTZ (draws and losses rank as before; conversions without tables untouched), and the suite now asserts mates within 2 moves of the DTZ-fastest against a lone king. Non-regression STC [-3, 0] capped undecided at -0.23 +/- 2.48 (lower bound -2.71); the owner's rule (estimate above -1.5) adopts it. Bench unchanged (5,205,904 / dfe99ebe03b0972d). SPRT log. |
 | 2026-11-15 | **No Lc0/Leela data in any form (owner, about 5 PM EST): Fork stays Fork-pure.** All training data is Fork's own self-play plus tablebase labels; this closes the Lc0 review gate (Phase 4 data rule 5 above). **The free-compute plan (owner):** candidates Azure for Students, the Oracle $300 trial and Linode $100, one account each under the owner's identity, the owner doing the sign-ups; the r3kr1 data-generation check first; a burst only if Oracle's real quota (seen after sign-up) is large, otherwise continuous small runs within each credit; at most 75% of each credit; the Kaggle storage gap settled first (or labels made in-kernel if needed); burst parts named `g4-burst1-<provider>`, outside the letter sequence. Research (not committed): the free-compute report and the burst plan of 2026-11-15. |
+| 2026-11-15 | **Lazy SMP v1, roadmap step 17a: the design and its first commits (owner's order, about 5 PM EST: "start step 17a, minimal Lazy SMP ... report the design and first commits before any SPRT").** Spec in §5.6 ("Step 17a, minimal Lazy SMP"). Built: the TT's relaxed atomic word access and snapshot deposit; the coordinator's once-per-go setup (TT age and policy, the root's table ranking); the HelperPool (parked threads, Searchers allocated on their own threads, an abort flag, the main thread's time management and move, helpers waited for after bestmove); published counts summed for info lines; Threads now sets the search threads (at most one per hardware thread; one in stats builds); E4's notice removed. Threads = 1 takes the old path: bench unchanged, 5,205,904 / dfe99ebe03b0972d (r3kr1). **For the owner:** the hardware-thread cap, and `go nodes` counting the main thread's nodes only. No SPRT yet; the scaling plan (§5.6) is reported first. |
 
 ## 7. Performance doctrine (governs every phase)
 

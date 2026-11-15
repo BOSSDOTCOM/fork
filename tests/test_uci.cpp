@@ -296,6 +296,44 @@ TEST_CASE("uci_protocol", "ponder: bestmove only after ponderhit or stop") {
   g.quit();
 }
 
+// Lazy SMP (DESIGN.md §5.6 step 17a): with helper threads every go still gets
+// exactly one bestmove right after its final info line (check_transcript),
+// and stop, ponderhit, isready, ucinewgame, Threads changes between searches
+// and quit mid-search work as with one thread. In CI's TSan threaded list.
+TEST_CASE("uci_protocol", "Threads 4: go, stop, ponder, ucinewgame, Threads changes and quit") {
+  Gui g;
+  g.send("setoption name Threads value 4");
+  CHECK(g.sync());
+  g.send("position startpos moves e2e4 e7e5");
+  g.send("go depth 6");
+  CHECK(g.next("bestmove").has_value());
+  g.send("go infinite");
+  std::this_thread::sleep_for(50ms);
+  CHECK(g.sync());
+  CHECK_EQ(g.count("bestmove"), 1);
+  g.send("stop");
+  CHECK(g.next("bestmove").has_value());
+  g.send("go ponder wtime 1000 btime 1000");
+  std::this_thread::sleep_for(50ms);
+  CHECK_EQ(g.count("bestmove"), 2);
+  g.send("ponderhit");
+  CHECK(g.next("bestmove").has_value());
+  g.send("ucinewgame");
+  g.send("go nodes 20000");
+  CHECK(g.next("bestmove").has_value());
+  for (const char* threads : {"2", "1", "3"}) {
+    g.send(std::string("setoption name Threads value ") + threads);
+    g.send("position startpos");
+    g.send("go movetime 30");
+    CHECK(g.next("bestmove").has_value());
+  }
+  g.send("go infinite");  // quit while the helpers search
+  CHECK(g.sync());
+  g.quit();
+  CHECK_EQ(g.count("bestmove"), 8);
+  g.check_transcript();
+}
+
 TEST_CASE("uci_protocol", "quit during a search: bestmove, then exit status 0") {
   Gui g;
   g.send("go infinite");
@@ -757,9 +795,8 @@ TEST_CASE("uci_options", "setoption: case, spaces, unknown names, bad values") {
                            "setoption name SyzygyPath value <empty>", "setoption name Hash value 1"})
     g.send(good);
   CHECK(g.sync());
-  CHECK_EQ(g.count("info string", mark), 2);  // the allocation report and Threads 4's notice
+  CHECK_EQ(g.count("info string", mark), 1);  // the allocation report (Threads is back at 1 by then)
   CHECK_EQ(g.count("info string Hash 1 MB allocated", mark), 1);
-  CHECK_EQ(g.count("info string Threads 4 accepted: the search runs on one thread", mark), 1);
   mark = g.cursor;
   const std::vector<std::string> bad = {"setoption name Ponder value true",
                                         "setoption name Hash value 0",
@@ -779,13 +816,14 @@ TEST_CASE("uci_options", "setoption: case, spaces, unknown names, bad values") {
   g.quit();
 }
 
-// Bug review 2026-11-11, E4: Threads is accepted but the search runs on one
-// thread, so a value above 1 says so (one info string per setoption; none
-// for 1), and Threads bounds the Hash clear's workers, Threads 1 included
-// (the clear used max(Threads, hardware threads)). 256 MB allows 128
-// workers. Fault-checked: without the notice, or with the old clear rule on
-// a machine with more than one hardware thread, this case fails.
-TEST_CASE("uci_options", "Threads: a value above 1 is reported as one search thread, and bounds the clear") {
+// Bug review 2026-11-11, E4: Threads bounds the Hash clear's workers,
+// Threads 1 included (the clear used max(Threads, hardware threads)). 256 MB
+// allows 128 workers. Fault-checked then: with the old clear rule on a
+// machine with more than one hardware thread, this case fails. Since Lazy
+// SMP (DESIGN.md §5.6 step 17a) Threads also sets the search threads, so
+// the E4 notice ("the search runs on one thread") is gone; a Threads value
+// is reported only when fewer threads run (one per hardware thread at most).
+TEST_CASE("uci_options", "Threads: bounds the Hash clear's workers and reports nothing it can run") {
   Gui g;
   CHECK(g.sync());
   std::size_t mark = g.cursor;
@@ -802,7 +840,7 @@ TEST_CASE("uci_options", "Threads: a value above 1 is reported as one search thr
   g.send("setoption name Clear Hash");
   g.send("setoption name Hash value 64");
   CHECK(g.sync());
-  CHECK_EQ(g.count("info string Threads 3 accepted: the search runs on one thread", mark), 1);
+  CHECK_EQ(g.count("info string Threads", mark), std::thread::hardware_concurrency() >= 3 ? 0 : 1);
   for (const std::string& line : g.texts(mark))
     if (starts_with(line, "info string Hash 64 MB allocated and cleared in"))
       CHECK_MSG(line.find(" by 3 threads") != std::string::npos, line);
@@ -1077,10 +1115,10 @@ TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
       g.send(set + std::to_string(v));
       CHECK(g.sync());
       // Accepted: no complaint about the value (Hash reports its allocation,
-      // Threads above 1 that the search runs on one thread).
+      // Threads above the hardware's threads how many search threads run).
       for (const std::string& line : g.texts(mark))
         CHECK_MSG(line == "readyok" || starts_with(line, "info string Hash ") ||
-                      starts_with(line, "info string Threads " + std::to_string(v) + " accepted: "),
+                      starts_with(line, "info string Threads " + std::to_string(v) + ": "),
                   b.name << ' ' << v << ": " << line);
     }
     for (std::int64_t v : {b.min - 1, b.max + 1}) {
