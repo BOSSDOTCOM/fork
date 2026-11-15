@@ -2,7 +2,9 @@
 """S512+PP's reader bound on a converted net (src/eval/nnue/net_file.cpp: per first-layer unit, |bias| + 32 x its
 largest |piece weight| + 64 x its largest |link weight| <= 32,767; H512+PP's the same, the piece weights over every
 region's rows, bake-off round 3's option a, architecture 9; S512+PPXL's the same over its piece and link rows, its
-exposure rows between them unbounded, as Fork sums them in 32 bits, the x_lower arm, architecture 10): reports the
+exposure rows between them unbounded, as Fork sums them in 32 bits, the x_lower arm, architecture 10; H512+PP+M's
+as H512+PP's, its block after the output layer unbounded and untouched, as Fork sums it in 32 bits, idea 178,
+architecture 12): reports the
 units over it and the link
 weights beyond their unit's allowance; with --clamp OUT.fnet writes a copy whose link weights are clamped to
 each unit's allowance (the owner's fallback, 2026-11-05: clamp at conversion, report the clamped share and the
@@ -34,8 +36,8 @@ def bound(data):
     arch, inputs, hidden = struct.unpack_from('<III', data, 12)
     regions = (inputs - LINKS) // PIECES
     if hidden != H or (arch, inputs) not in ((8, PIECES + LINKS), (10, PIECES + EXPOSURE + LINKS)) + tuple(
-            (9, PIECES * r + LINKS) for r in range(1, MAX_REGIONS + 1)):
-        raise ValueError(f'not an S512+PP, H512+PP or S512+PPXL net: architecture {arch}, {inputs} inputs, '
+            (a, PIECES * r + LINKS) for a in (9, 12) for r in range(1, MAX_REGIONS + 1)):
+        raise ValueError(f'not an S512+PP, H512+PP, S512+PPXL or H512+PP+M net: architecture {arch}, {inputs} inputs, '
                          f'{hidden} hidden')
     pieces = PIECES if arch == 10 else PIECES * regions
     first_link = inputs - LINKS  # after the piece rows (and S512+PPXL's exposure rows)

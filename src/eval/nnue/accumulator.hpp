@@ -21,7 +21,7 @@
 //   sums). S512+PP's link inputs follow the piece rows in the same sums
 //   (H512+PP's follow every region's piece rows, S512+PPXL's its exposure
 //   rows): a move changes them only when a pawn moves, is captured or
-//   promotes. H512+PP+M (architecture 11, a prototype) adds the side to
+//   promotes. H512+PP+M (architecture 12, a prototype) adds the side to
 //   move's exposed pieces' block rows to the hidden columns NetBlockStart ..
 //   NetHidden - 1 of both perspectives at each evaluation (never kept in
 //   the sums; the evaluation equals H512+PP's when no piece is exposed or
@@ -141,7 +141,7 @@ Bitboard exposed_lower(const Position& pos);
 Bitboard exposed_lower_reference(const Position& pos);
 #endif
 
-#if FORK_NET_ARCH == 11
+#if FORK_NET_ARCH == 12
 // H512+PP+M's exposed pieces, the side to move's only: its non-king pieces
 // attacked by an enemy piece of a lower class (pawn < knight = bishop < rook
 // < queen < king; pseudo-attacks on the occupancy), so never a pawn; with

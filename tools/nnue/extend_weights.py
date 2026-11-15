@@ -53,8 +53,24 @@ evaluations are the source's exactly:
   depend on the exposed set; the reader does not bound the exposure rows,
   which Fork sums in 32 bits).
 
+H512+PP+M's warm start (idea 178's L-lower, architecture 12; owner,
+2026-11-15: warm from r3kr1), from an H512+PP net, with the block at zero,
+so its evaluations are the source's exactly:
+- from H512+PP's float weights (weights.bin), the trainer's warm start
+  (tools/train --arch h512ppm --init-weights): every record copied and the
+  block's weight m0w (64 values for each of the 650 block inputs: 640 rows
+  and their 10-input factoriser) appended as zeros (records sorted by name,
+  so it comes last);
+- from H512+PP's net file, the engine's net: the source's file with the id
+  12 and the block's 640 x 64 weights after the output layer, zero (or with
+  --perturb SEED small seeded weights: a test net whose evaluations depend on
+  the side to move's exposed pieces; the reader does not bound the block,
+  which Fork sums in 32 bits).
+
     extend_weights.py S512_WEIGHTS.bin OUT.bin [--arch s512x|s512cl|s512pp|h512pp|s512ppxl]
+    extend_weights.py H512PP_WEIGHTS.bin OUT.bin --arch h512ppm
     extend_weights.py S512PP.fnet OUT.fnet --arch h512pp|s512ppxl [--perturb SEED]
+    extend_weights.py H512PP.fnet OUT.fnet --arch h512ppm [--perturb SEED]
 """
 import argparse
 import struct
@@ -235,15 +251,69 @@ def exposure_net(data, perturb=None, hidden=512):
     return netformat.write_net2(arch.id, arch.saved_inputs, hidden, h['buckets'], h['scale'], out)
 
 
+def h512pp_inputs():
+    """H512+PP's training inputs with the map M4: the region rows, the factoriser, the links."""
+    return models.PIECE_SQUARES * (max(models.XGR_REGIONS) + 2) + pp_links()
+
+
+def mover_weights(data, hidden=512):
+    """H512+PP's weights.bin bytes as H512+PP+M's warm start: every record copied byte for byte, then the block's
+    weight m0w (BLOCK_COLUMNS x 650, zero)."""
+    names, at = {}, 0
+    while at < len(data):
+        nl = data.index(b'\n', at)
+        (n,) = struct.unpack_from('<Q', data, nl + 1)
+        names[data[at:nl].decode('ascii')] = n
+        at = nl + 9 + 4 * n
+    if sorted(names) != ['l0b', 'l0w', 'l1b', 'l1w'] or names['l0w'] != h512pp_inputs() * hidden:
+        raise ValueError(f"not H512+PP's float weights: {names}")
+    count = models.BLOCK_COLUMNS * EXPOSURE_INPUTS
+    return data + b'm0w\n' + struct.pack('<Q', count) + bytes(4 * count)
+
+
+def mover_net(data, perturb=None, hidden=512):
+    """An H512+PP net file (architecture 9) as H512+PP+M's (architecture 12): the source's payload unchanged (map
+    block, region and link rows, biases, output layer), then the block's 640 x 64 weights (zero, or with `perturb`
+    small seeded weights); its header's id 12, every other field kept."""
+    import array
+    import random
+    h = netformat.header_fields(data)
+    if (h['version'], h['architecture'], h['hidden']) != (2, 9, hidden) or \
+            h['inputs'] != models.Arch('h512pp', list(data[64:96]), list(data[96:121])).saved_inputs:
+        raise ValueError(f'not an H512+PP net file: {h}')
+    rows = array.array('h', bytes(2 * models.EXPOSURE_ROWS * models.BLOCK_COLUMNS))
+    if perturb is not None:
+        rng = random.Random(perturb)
+        for i in range(len(rows)):
+            rows[i] = rng.randint(-PERTURB_RANGE, PERTURB_RANGE)
+    if sys.byteorder != 'little':
+        rows.byteswap()
+    payload = data[netformat.HEADER_BYTES:] + rows.tobytes()
+    return netformat.write_net2(12, h['inputs'], hidden, h['buckets'], h['scale'], payload)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     ap.add_argument('weights')
     ap.add_argument('out')
-    ap.add_argument('--arch', default='s512x', choices=('s512x', 's512cl', 's512pp', 'h512pp', 's512ppxl'))
+    ap.add_argument('--arch', default='s512x', choices=('s512x', 's512cl', 's512pp', 'h512pp', 's512ppxl', 'h512ppm'))
     ap.add_argument('--perturb', type=int, metavar='SEED',
-                    help='h512pp from a net file: the regions after the first moved toward zero; s512ppxl from a '
-                         'net file: small seeded exposure weights (test nets)')
+                    help='h512pp from a net file: the regions after the first moved toward zero; s512ppxl or '
+                         'h512ppm from a net file: small seeded exposure or block weights (test nets)')
     a = ap.parse_args(argv)
+    if a.arch == 'h512ppm':
+        source = Path(a.weights).read_bytes()
+        if source[:8] == netformat.MAGIC:
+            data = mover_net(source, perturb=a.perturb)
+            kind = 'net file, ' + (f'block seeded (seed {a.perturb})' if a.perturb is not None else 'block zero')
+        else:
+            if a.perturb is not None:
+                ap.error('--perturb applies to a net file only')
+            data = mover_weights(source)
+            kind = 'float weights, the block inputs and their factoriser zero'
+        Path(a.out).write_bytes(data)
+        print(f'{a.out}: {len(data)} bytes, H512+PP+M ({kind})')
+        return 0
     if a.arch == 's512ppxl':
         source = Path(a.weights).read_bytes()
         if source[:8] == netformat.MAGIC:

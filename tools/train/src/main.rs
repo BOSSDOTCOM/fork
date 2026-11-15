@@ -55,6 +55,18 @@
 //!   (a warm start from an s512pp net, tools/nnue/extend_weights.py --arch
 //!   s512ppxl: the exposure inputs zero); saved as the piece rows, the
 //!   exposure rows, then the links; the output as s512's.
+//! - h512ppm: h512pp plus the side to move's exposed pieces (x_lower's rule,
+//!   the mover's pieces only) as 650 block inputs per perspective, apart from
+//!   the first layer's (640 rows, own/enemy x 5 kinds x 64 squares seen from
+//!   the perspective, and their 10-input factoriser), through their own
+//!   weight m0w (64 x 650, no bias) added to the hidden columns 448-511 of
+//!   that perspective only (idea 178, L-lower; owner, 2026-11-15; the
+//!   engine's architecture 12, H512+PP+M); the first layer, its inputs and
+//!   everything else are h512pp's (a warm start from an h512pp net,
+//!   tools/nnue/extend_weights.py --arch h512ppm: h512pp's weights and a zero
+//!   m0w, so step 0 is the source exactly); saved as h512pp's tensors, then
+//!   the block (m0w with its factoriser merged) as i16 [640][64] at QA, row
+//!   by row.
 //! The target is (1 - w) * sigmoid(score / S) + w * result, w the weight on
 //! the game result (DESIGN.md's lambda is 1 - w).
 //!
@@ -92,7 +104,7 @@ use std::{
 
 use bullet_trainer::{
     model::{
-        DenseInput, ModelDefinition, ModelEvaluator, ModelInputs, ModelInputsMapper, ModelNode, ModelWeights,
+        DenseInput, InitSettings, ModelDefinition, ModelEvaluator, ModelInputs, ModelInputsMapper, ModelNode, ModelWeights,
         SavedFormat, SparseInput,
     },
     optimiser::adam::{AdamW, AdamWParams},
@@ -111,6 +123,12 @@ const MAX_SCORE: u32 = 20000;
 const PIECE_SQUARES: usize = 768;
 const EXPOSURE_ROWS: usize = 640; // own/enemy x 5 non-king types x 64 squares
 const EXPOSURE_FACTORS: usize = 10; // own/enemy x 5 types
+// H512+PP+M's block (h512ppm): EXPOSURE_ROWS rows and EXPOSURE_FACTORS
+// factorisers, feeding the last BLOCK_COLUMNS hidden columns only.
+const BLOCK_COLUMNS: usize = 64;
+const BLOCK_INPUTS: usize = EXPOSURE_ROWS + EXPOSURE_FACTORS;
+// One side's 15 non-king pieces, a row and a factoriser each.
+const BLOCK_ACTIVE: usize = 30;
 // The exposure rule's value classes (pawn < knight = bishop < rook < queen <
 // king), by piece type pawn .. king.
 const EXPOSURE_CLASS: [u8; 6] = [1, 2, 2, 3, 4, 5];
@@ -134,6 +152,7 @@ enum Arch {
     S512pp,
     H512pp,
     S512ppxl,
+    H512ppm,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -157,6 +176,10 @@ struct Spec {
     contacts: bool,
     /// S512+PP's links of rank limit PP_LINK_RANKS (no contacts).
     links: bool,
+    /// H512+PP+M's block: the side to move's exposed pieces (Board::mover_exposed)
+    /// as inputs of their own (block_features), feeding the last BLOCK_COLUMNS
+    /// hidden columns only.
+    mover: bool,
     /// --qat: quantization-aware training (the S-512 family; ideas.md 44).
     qat: bool,
     picker: Picker,
@@ -183,6 +206,7 @@ impl Spec {
             "s512pp" => Arch::S512pp,
             "h512pp" => Arch::H512pp,
             "s512ppxl" => Arch::S512ppxl,
+            "h512ppm" => Arch::H512ppm,
             other => panic!("unknown --arch {other}"),
         };
         let mut s = Spec {
@@ -196,6 +220,7 @@ impl Spec {
             exposure_lower: false,
             contacts: false,
             links: false,
+            mover: false,
             qat: a.0.iter().any(|x| x == "--qat"),
             picker: Picker::None,
             table: Vec::new(),
@@ -230,13 +255,14 @@ impl Spec {
                 s.links = true;
                 s.picker = Picker::Phase;
             }
-            Arch::H512pp => {
+            Arch::H512pp | Arch::H512ppm => {
                 match a.get("--regions") {
                     Some(text) => s.regions.copy_from_slice(&parse_list(text, 32, "--regions")),
                     None => s.regions = XGR_REGIONS,
                 }
                 s.factoriser = true;
                 s.links = true;
+                s.mover = arch == Arch::H512ppm;
                 s.picker = Picker::Phase;
             }
             Arch::S512ppxl => {
@@ -247,7 +273,7 @@ impl Spec {
             }
         }
         s.region_count = usize::from(*s.regions.iter().max().expect("map")) + 1;
-        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl), "--qat: the S-512 family only");
+        assert!(!s.qat || matches!(arch, Arch::S512 | Arch::H512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl), "--qat: the S-512 family only (not h512ppm)");
         match s.picker {
             Picker::None => {}
             Picker::Phase => s.table = parse_list(a.need("--buckets"), FULL_PHASE + 1, "--buckets"),
@@ -284,6 +310,8 @@ impl Spec {
     fn pp_link_inputs(&self) -> usize {
         if self.links { rank_links().links } else { 0 }
     }
+    /// The first-layer inputs (H512+PP+M's block inputs are their own:
+    /// block_features; the features command lists them from inputs() on).
     fn inputs(&self) -> usize {
         self.contact_start() + self.contact_inputs() + self.pp_link_inputs()
     }
@@ -430,10 +458,28 @@ impl Board {
         }
         out
     }
+    /// H512+PP+M's block rule: exposed_lower's squares holding the side to
+    /// move's pieces (side 0 in bulletformat's frame) only.
+    fn mover_exposed(&self) -> u64 {
+        let mut out = self.exposed_lower();
+        let mut b = out;
+        while b != 0 {
+            let s = b.trailing_zeros() as usize;
+            b &= b - 1;
+            if matches!(self.piece[s], Some((_, 1))) {
+                out &= !(1u64 << s);
+            }
+        }
+        out
+    }
 }
 
-/// The exposed squares under the architecture's rule (none without the exposure plane).
+/// The exposed squares under the architecture's rule (H512+PP+M: the block's,
+/// Board::mover_exposed; none without either).
 fn exposed_of(spec: &Spec, b: &Board) -> u64 {
+    if spec.mover {
+        return b.mover_exposed();
+    }
     match (spec.exposure, spec.exposure_lower) {
         (false, _) => 0,
         (true, false) => b.exposed(),
@@ -680,6 +726,31 @@ fn perspective_features(spec: &Spec, b: &Board, exposed: u64, persp: usize, out:
     n
 }
 
+/// H512+PP+M's block inputs of one perspective (0: the side to move, 1: the
+/// other), numbered within the block (0-649), written to `out`: for each of
+/// the side to move's exposed pieces (`exposed`, Board::mover_exposed), its
+/// row (320 x enemy + 64 x kind + its square seen from the perspective, as
+/// perspective_features sees it) and its factoriser (640 + 5 x enemy +
+/// kind); own from the side to move's perspective, enemy from the other's.
+/// Returns their count.
+fn block_features(spec: &Spec, b: &Board, exposed: u64, persp: usize, out: &mut [i32]) -> usize {
+    let orient = |sq: usize| if persp == 0 { sq } else { sq ^ 56 };
+    let king = orient(b.king(persp));
+    let flip = if spec.mirror && king % 8 < 4 { 7 } else { 0 };
+    let mut n = 0;
+    let mut e = exposed;
+    while e != 0 {
+        let s = e.trailing_zeros() as usize;
+        e &= e - 1;
+        let (kind, side) = b.piece[s].expect("an exposed square holds a piece");
+        let own = usize::from(side != persp);
+        out[n] = (320 * own + 64 * kind + (orient(s) ^ flip)) as i32;
+        out[n + 1] = (EXPOSURE_ROWS + 5 * own + kind) as i32;
+        n += 2;
+    }
+    n
+}
+
 /// The output bucket (or layer stack) of a position.
 fn bucket(spec: &Spec, b: &Board) -> usize {
     match spec.picker {
@@ -698,15 +769,53 @@ fn inputs(spec: &Spec) -> Inputs {
         .add_dense("target", (1, 1))
 }
 
+/// H512+PP+M's inputs: H512+PP's, with each perspective's block inputs
+/// (block_features) between them and the bucket.
+type BlockInputs = ModelInputs<(((((SparseInput, SparseInput), SparseInput), SparseInput), SparseInput), DenseInput<f32>)>;
+
+fn block_inputs(spec: &Spec) -> BlockInputs {
+    ModelInputs::default()
+        .add_sparse("stm", (spec.inputs(), 1), spec.max_active())
+        .add_sparse("ntm", (spec.inputs(), 1), spec.max_active())
+        .add_sparse("mstm", (BLOCK_INPUTS, 1), BLOCK_ACTIVE)
+        .add_sparse("mntm", (BLOCK_INPUTS, 1), BLOCK_ACTIVE)
+        .add_sparse("bucket", (spec.buckets, 1), 1)
+        .add_dense("target", (1, 1))
+}
+
+/// H512+PP+M's model: H512+PP's (no first-layer clip, no QAT), each
+/// perspective's last BLOCK_COLUMNS hidden values plus m0w times its block
+/// inputs (the engine adds the exposed pieces' block rows to those columns
+/// alone). m0w starts at zero, so with an H512+PP net's weights the output
+/// is that net's.
+fn block_definition(spec: &Spec) -> ModelDefinition {
+    let s = spec.clone();
+    ModelDefinition::build(&block_inputs(spec), move |builder, (((((stm, ntm), mstm), mntm), bucket), target)| {
+        let (n, h, nb) = (s.inputs(), s.hidden, s.buckets);
+        let split = h - BLOCK_COLUMNS;
+        let l0 = builder.new_affine("l0", n, h);
+        let l1 = builder.new_affine("l1", 2 * h, nb);
+        let m0 = builder.new_weights("m0w", (BLOCK_COLUMNS, BLOCK_INPUTS), InitSettings::Zeroed);
+        let a_s = l0.slice(0, split).forward(stm).concat(l0.slice(split, h).forward(stm) + m0.matmul(mstm));
+        let a_n = l0.slice(0, split).forward(ntm).concat(l0.slice(split, h).forward(ntm) + m0.matmul(mntm));
+        let output = l1.forward(a_s.screlu().concat(a_n.screlu())).select(bucket);
+        let loss = output.sigmoid().squared_error(target).reduce_sum_batch();
+        (Some(loss), vec![("output".to_string(), output)])
+    })
+}
+
 /// Clipped values of the first half times those of the second half.
 fn pairwise(x: ModelNode<'_>, width: usize) -> ModelNode<'_> {
     let c = x.crelu();
     c.slice_rows(0, width / 2) * c.slice_rows(width / 2, width)
 }
 
-fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
+fn definition(spec: &Spec) -> ModelDefinition {
+    if spec.mover {
+        return block_definition(spec);
+    }
     let s = spec.clone();
-    ModelDefinition::build(inputs, move |builder, (((stm, ntm), bucket), target)| {
+    ModelDefinition::build(&inputs(spec), move |builder, (((stm, ntm), bucket), target)| {
         let (n, h, nb) = (s.inputs(), s.hidden, s.buckets);
         let output = match s.arch {
             Arch::B0 => {
@@ -733,6 +842,7 @@ fn definition(spec: &Spec, inputs: &Inputs) -> ModelDefinition {
                     l1.forward(l0.forward(stm).screlu().concat(l0.forward(ntm).screlu())).select(bucket)
                 }
             }
+            Arch::H512ppm => unreachable!("block_definition"),
             Arch::AfS => {
                 let l0 = builder.new_affine("l0", n, h);
                 let l1 = builder.new_affine("l1", h, 16 * nb);
@@ -794,6 +904,20 @@ fn merge_factors(spec: &Spec, rows: usize, v: &[f32]) -> Vec<f32> {
     out
 }
 
+/// H512+PP+M's block as Fork stores it, [640][BLOCK_COLUMNS] row by row,
+/// from m0w (BLOCK_COLUMNS values per block input, input-major as bullet
+/// stores it): each row with its factoriser's added (an f32 addition each,
+/// as merge_factors's).
+fn block_rows(v: &[f32]) -> Vec<f32> {
+    let col = |c: usize| &v[c * BLOCK_COLUMNS..(c + 1) * BLOCK_COLUMNS];
+    let mut out = Vec::with_capacity(EXPOSURE_ROWS * BLOCK_COLUMNS);
+    for e in 0..EXPOSURE_ROWS {
+        let (own, kind) = (e / 320, (e % 320) / 64);
+        out.extend(col(e).iter().zip(col(EXPOSURE_ROWS + 5 * own + kind)).map(|(a, b)| a + b));
+    }
+    out
+}
+
 fn first_layer(spec: &Spec, id: &str, rows: usize) -> SavedFormat {
     let s = spec.clone();
     let f = SavedFormat::id(id);
@@ -818,6 +942,14 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
             SavedFormat::id("l0b").round().quantise::<i16>(255),
             SavedFormat::id("l1w").transpose().round().quantise::<i16>(64),
             SavedFormat::id("l1b").round().quantise::<i32>(255 * 64),
+        ],
+        Arch::H512ppm => vec![
+            first_layer(spec, "l0w", h).round().quantise::<i16>(255),
+            SavedFormat::id("l0b").round().quantise::<i16>(255),
+            SavedFormat::id("l1w").transpose().round().quantise::<i16>(64),
+            SavedFormat::id("l1b").round().quantise::<i32>(255 * 64),
+            // The block, after the output layer (Fork's file order).
+            SavedFormat::id("m0w").transform(|_, v| block_rows(&v)).round().quantise::<i16>(255),
         ],
         Arch::AfS => vec![
             first_layer(spec, "l0w", h).round().quantise::<i16>(255),
@@ -851,9 +983,12 @@ fn save_list(spec: &Spec) -> Vec<SavedFormat> {
 /// at 0.99 would move the ones beyond it at step 0 (the int16 bound of the saved
 /// rows is the converter's and the reader's, tools/nnue/pp_bound.py). S512+PPXL too: its warm start is an S512+PP
 /// net with zero exposure inputs, its exposure rows are summed in 32 bits, and its links have S512+PP's bound.
+/// H512+PP+M too: its warm start is an H512+PP net with a zero m0w, whose block Fork sums in 32 bits.
 fn clipped(spec: &Spec) -> Vec<&'static str> {
     match spec.arch {
-        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl => vec![],
+        Arch::B0 | Arch::S512 | Arch::S512x | Arch::S512cl | Arch::S512pp | Arch::H512pp | Arch::S512ppxl | Arch::H512ppm => {
+            vec![]
+        }
         Arch::H512 | Arch::AfS => vec!["l0w", "l0b"],
         Arch::Xgr512 => vec!["l0w", "l0b", "s0w", "s0b"],
     }
@@ -862,24 +997,57 @@ fn clipped(spec: &Spec) -> Vec<&'static str> {
 /// The inputs of one position, as the mapper fills them; returns the
 /// bucket.
 fn fill(spec: &Spec, pos: &ChessBoard, stm: &mut [i32], ntm: &mut [i32]) -> usize {
+    fill_with_block(spec, pos, stm, ntm, None)
+}
+
+/// fill, and with `block` (H512+PP+M) each perspective's block inputs
+/// (block_features) too.
+fn fill_with_block(
+    spec: &Spec,
+    pos: &ChessBoard,
+    stm: &mut [i32],
+    ntm: &mut [i32],
+    block: Option<(&mut [i32], &mut [i32])>,
+) -> usize {
     let b = Board::from_chessboard(pos);
     let exposed = exposed_of(spec, &b);
-    for (persp, out) in [(0, &mut *stm), (1, &mut *ntm)] {
-        let n = perspective_features(spec, &b, exposed, persp, out);
-        // Pooled batch buffers are reused uncleared: end short lists (KB §13).
+    // Pooled batch buffers are reused uncleared: end short lists (KB §13).
+    let end = |out: &mut [i32], n: usize| {
         if n < out.len() {
             out[n] = -1;
+        }
+    };
+    for (persp, out) in [(0, &mut *stm), (1, &mut *ntm)] {
+        let n = perspective_features(spec, &b, exposed, persp, out);
+        end(out, n);
+    }
+    if let Some((mstm, mntm)) = block {
+        for (persp, out) in [(0, mstm), (1, mntm)] {
+            let n = block_features(spec, &b, exposed, persp, out);
+            end(out, n);
         }
     }
     bucket(spec, &b)
 }
 
-fn mapper(spec: &Spec, inputs: &Inputs, scale: f32, result_weight: f32) -> ModelInputsMapper<ChessBoard> {
+fn mapper(spec: &Spec, scale: f32, result_weight: f32) -> ModelInputsMapper<ChessBoard> {
     let s = spec.clone();
-    ModelInputsMapper::build(inputs, move |pos: &ChessBoard, _step: Step, (((stm, ntm), bucket), target)| {
-        bucket[0] = fill(&s, pos, stm, ntm) as i32;
+    let target_of = move |pos: &ChessBoard| {
         let expected = 1.0 / (1.0 + (-f32::from(pos.score()) / scale).exp());
-        target[0] = (1.0 - result_weight) * expected + result_weight * pos.result();
+        (1.0 - result_weight) * expected + result_weight * pos.result()
+    };
+    if spec.mover {
+        return ModelInputsMapper::build(
+            &block_inputs(spec),
+            move |pos: &ChessBoard, _step: Step, (((((stm, ntm), mstm), mntm), bucket), target)| {
+                bucket[0] = fill_with_block(&s, pos, stm, ntm, Some((mstm, mntm))) as i32;
+                target[0] = target_of(pos);
+            },
+        );
+    }
+    ModelInputsMapper::build(&inputs(spec), move |pos: &ChessBoard, _step: Step, (((stm, ntm), bucket), target)| {
+        bucket[0] = fill(&s, pos, stm, ntm) as i32;
+        target[0] = target_of(pos);
     })
 }
 
@@ -1133,13 +1301,12 @@ fn main() {
     let a = Args(argv);
     let needs_spec = !matches!(cmd.as_str(), "dump" | "stats" | "loader");
     let spec = if needs_spec { Spec::from_args(&a) } else { Spec::from_args(&Args(Vec::new())) };
-    let ins = inputs(&spec);
     match cmd.as_str() {
         "check" => {
             // The graph builds and the save list matches it: the quantized
             // file of the initial weights (B0: 394,756 bytes of tensors,
             // padded to 64).
-            let defn = definition(&spec, &ins);
+            let defn = definition(&spec);
             let weights = ModelWeights::new(&defn, a.num("--seed", 1));
             let bytes = weights.to_quantised_buffer(&save_list(&spec), true).expect("quantise");
             let out = PathBuf::from(a.need("--out"));
@@ -1236,10 +1403,18 @@ fn main() {
             let out = std::io::stdout();
             let mut out = out.lock();
             let (mut stm, mut ntm) = (vec![0i32; spec.max_active()], vec![0i32; spec.max_active()]);
+            let (mut mstm, mut mntm) = (vec![0i32; BLOCK_ACTIVE], vec![0i32; BLOCK_ACTIVE]);
             for (text, b) in &boards {
                 stm.fill(-1);
                 ntm.fill(-1);
-                let k = fill(&spec, b, &mut stm, &mut ntm);
+                mstm.fill(-1);
+                mntm.fill(-1);
+                let block = spec.mover.then_some((&mut mstm[..], &mut mntm[..]));
+                let k = fill_with_block(&spec, b, &mut stm, &mut ntm, block);
+                // H512+PP+M's block inputs listed from spec.inputs() on (tools/nnue/models.py's numbering).
+                let base = spec.inputs() as i32;
+                let stm: Vec<i32> = stm.iter().copied().chain(mstm.iter().filter(|&&i| i >= 0).map(|&i| base + i)).collect();
+                let ntm: Vec<i32> = ntm.iter().copied().chain(mntm.iter().filter(|&&i| i >= 0).map(|&i| base + i)).collect();
                 let list = |v: &[i32]| {
                     let mut x: Vec<i32> = v.iter().copied().filter(|&i| i >= 0).collect();
                     x.sort_unstable();
@@ -1263,7 +1438,7 @@ fn main() {
                 seed: a.num("--seed", 1),
                 interleave: a.0.iter().any(|x| x == "--interleave"),
             };
-            let defn = definition(&spec, &ins);
+            let defn = definition(&spec);
             let weights = ModelWeights::new(&defn, a.num("--seed", 1));
             let device = DefaultDevice::new(a.num("--device", 0)).expect("device");
             let pool = HostPool::new(device.clone());
@@ -1274,7 +1449,7 @@ fn main() {
             let val: Vec<ChessBoard> =
                 a.get("--val").map(|p| read_positions(Path::new(p), a.num("--val-positions", 20_000))).unwrap_or_default();
             let patience: usize = a.num("--patience", 3);
-            let val_map = mapper(&spec, &ins, scale, result_weight);
+            let val_map = mapper(&spec, scale, result_weight);
             let mut best: Option<(f64, usize)> = None;
             if let Some(dir) = a.get("--resume") {
                 let state = Path::new(dir).join("optimiser_state");
@@ -1332,7 +1507,7 @@ fn main() {
                 log_rate: 128,
                 track_grad_norms: false,
             };
-            let loader = ReadMapLoader::new(reader, mapper(&spec, &ins, scale, result_weight), a.num("--threads", 3));
+            let loader = ReadMapLoader::new(reader, mapper(&spec, scale, result_weight), a.num("--threads", 3));
             let net_id = a.get("--id").unwrap_or("b0").to_string();
             let saves = save_list(&spec);
             train(
@@ -1375,7 +1550,7 @@ fn main() {
         "eval" => {
             // The trainer's own float evaluation of each FEN (parity leg T):
             // the raw output, side to move's view, before the sigmoid.
-            let defn = definition(&spec, &ins);
+            let defn = definition(&spec);
             let weights = ModelWeights::new(&defn, 1);
             let device = DefaultDevice::new(a.num("--device", 0)).expect("device");
             let mut opt = AdamW::new(defn, weights, device.clone(), AdamWParams::default()).expect("optimiser");
@@ -1389,7 +1564,7 @@ fn main() {
             }
             let mut evaluator = ModelEvaluator::new(opt.definition(), opt.device()).expect("evaluator");
             evaluator.load_device_weights(opt.weights()).expect("weights");
-            let map = mapper(&spec, &ins, 1.0, 0.0);
+            let map = mapper(&spec, 1.0, 0.0);
             let pool = HostPool::new(device.clone());
             let mut out = File::create(a.need("--out")).expect("out");
             for line in BufReader::new(File::open(a.need("--epd")).expect("epd")).lines() {
@@ -1725,6 +1900,107 @@ mod layout_tests {
             }
         }
         assert_eq!(&merged[rows * 1408..], &v[rows * 1418..]);
+    }
+
+    fn h512ppm() -> Spec {
+        let words = ["--arch", "h512ppm", "--buckets", BUCKETS];
+        Spec::from_args(&Args(words.iter().map(|w| w.to_string()).collect()))
+    }
+
+    #[test]
+    fn the_block_rule_is_x_lowers_for_the_side_to_move_only() {
+        // Worked by hand (the Python reference's case): White to move, the white knight on e5 is attacked by
+        // the pawn on d6 (exposed, the mover's), the black queen on b3 by the bishop on c2 (exposed, not the
+        // mover's). Black to move, the stored frame is flipped (b3 is b6 there, the queen the mover's): only
+        // the queen.
+        let s = h512ppm();
+        let white = board("4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1");
+        assert_eq!(white.mover_exposed(), 1 << 36);
+        assert_eq!(exposed_of(&s, &white), 1 << 36);
+        let black = board("4k3/8/3p4/4N3/8/1q6/2B5/4K2R b - - 0 1");
+        assert_eq!(black.mover_exposed(), 1 << (17 ^ 56));
+        for fen in FENS {
+            let b = board(fen);
+            let mut side0 = 0u64;
+            for sq in 0..64 {
+                if matches!(b.piece[sq], Some((_, 0))) {
+                    side0 |= 1u64 << sq;
+                }
+            }
+            assert_eq!(b.mover_exposed(), b.exposed_lower() & side0, "{fen}");
+        }
+    }
+
+    #[test]
+    fn h512ppms_block_inputs_are_the_movers_exposed_pieces() {
+        // H512+PP+M (idea 178, architecture 12): H512+PP's first-layer inputs and features unchanged (4,448,
+        // saved as 3,680 rows), plus each perspective's 650 block inputs of its own: per exposed piece of the
+        // side to move, its row (own from its perspective, enemy from the other's) and its factoriser.
+        let s = h512ppm();
+        let kr = h512pp();
+        assert!(s.mover && s.factoriser && s.links && !s.exposure && !s.contacts);
+        assert_eq!((s.inputs(), s.saved_inputs(), s.max_active()), (kr.inputs(), kr.saved_inputs(), kr.max_active()));
+        assert_eq!((s.inputs(), s.saved_inputs(), BLOCK_INPUTS, BLOCK_ACTIVE), (4448, 3680, 650, 30));
+        assert!(clipped(&s).is_empty());
+        let extra = ["4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1", "4k3/8/3p4/4N3/8/1q6/2B5/4K2R b - - 0 1"];
+        let mut seen = 0;
+        for fen in FENS.iter().chain(extra.iter()) {
+            let b = board(fen);
+            for persp in 0..2 {
+                assert_eq!(features(&s, fen, persp), features(&kr, fen, persp), "{fen}, perspective {persp}");
+                let orient = |sq: usize| if persp == 0 { sq } else { sq ^ 56 };
+                let flip = if orient(b.king(persp)) % 8 < 4 { 7 } else { 0 };
+                let mut want: Vec<usize> = Vec::new();
+                for sq in 0..64 {
+                    if b.mover_exposed() & (1u64 << sq) != 0 {
+                        let (kind, side) = b.piece[sq].expect("a piece");
+                        let own = usize::from(side != persp);
+                        assert_eq!(own, persp, "own from the mover's perspective, enemy from the other's");
+                        want.push(320 * own + 64 * kind + (orient(sq) ^ flip));
+                        want.push(640 + 5 * own + kind);
+                        seen += 1;
+                    }
+                }
+                want.sort_unstable();
+                let mut out = vec![-1i32; BLOCK_ACTIVE];
+                let n = block_features(&s, &b, exposed_of(&s, &b), persp, &mut out);
+                let mut got: Vec<usize> = out[..n].iter().map(|&i| i as usize).collect();
+                got.sort_unstable();
+                assert_eq!(got, want, "{fen}, perspective {persp}");
+            }
+        }
+        assert!(seen > 0);
+    }
+
+    #[test]
+    fn h512ppms_block_saves_after_the_output_layer_with_its_factoriser_merged() {
+        let s = h512ppm();
+        let v: Vec<f32> = (0..64 * BLOCK_INPUTS).map(|i| (i % 9973) as f32).collect();
+        let block = block_rows(&v);
+        assert_eq!(block.len(), 640 * 64);
+        for e in [0usize, 63, 319, 320, 639] {
+            let (own, kind) = (e / 320, (e % 320) / 64);
+            for i in 0..64 {
+                assert_eq!(block[e * 64 + i], v[e * 64 + i] + v[(640 + 5 * own + kind) * 64 + i]);
+            }
+        }
+        // The saved file: H512+PP's four tensors, then the block (tools/nnue/h512ppm.json).
+        assert_eq!(save_list(&s).len(), 5);
+    }
+
+    #[test]
+    fn h512ppms_graph_and_save_list_build() {
+        // The graph lowers (bullet's compiler rejects some operations, a constant tensor among them, when the
+        // model is built) and the save list matches the weights: fork-train check's path.
+        let s = h512ppm();
+        let defn = definition(&s);
+        // The forward pass lowers on the device (the mock one without --features cuda): the masked first layer
+        // of an earlier draft failed here ("Unsupported operation: TensorOp(Constant(...))").
+        ModelEvaluator::new(&defn, DefaultDevice::new(0).expect("device")).expect("the forward pass lowers");
+        let weights = ModelWeights::new(&defn, 1);
+        let bytes = weights.to_quantised_buffer(&save_list(&s), true).expect("quantise");
+        let tensors: usize = 2 * 3680 * 512 + 2 * 512 + 2 * 8 * 1024 + 4 * 8 + 2 * 640 * 64;
+        assert_eq!(bytes.len(), tensors.div_ceil(64) * 64);
     }
 
     #[test]

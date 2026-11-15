@@ -51,6 +51,7 @@ def description(name):
 
 
 def training_inputs(arch):
+    """The first layer's inputs as trained (H512+PP+M's block inputs feed m0w instead)."""
     return arch.link_start + (contacts.link_count(arch.link_ranks) if arch.links else 0)
 
 
@@ -63,7 +64,7 @@ def synthetic_weights(arch, seed):
     def r(count, lim):
         return [models.to_f32(rng.uniform(-lim, lim)) for _ in range(count)]
     w = {'l0w': r(n * h, 0.06), 'l0b': r(h, 0.3)}
-    if arch.name in ('s512', 'h512', 's512x', 's512pp', 'h512pp', 's512ppxl'):
+    if arch.name in ('s512', 'h512', 's512x', 's512pp', 'h512pp', 's512ppxl', 'h512ppm'):
         w.update(l1w=r(8 * 2 * h, 0.5), l1b=r(8, 0.2))
     elif arch.name == 'afs':
         w.update(l1w=r(128 * h, 0.5), l1b=r(128, 0.3), l2w=r(256 * 16, 0.6), l2b=r(256, 0.3),
@@ -71,6 +72,8 @@ def synthetic_weights(arch, seed):
     else:
         w.update(s0w=r(3 * n, 0.05), s0b=r(3, 0.2), oaw=r(2 * h, 0.5), oab=r(1, 0.2), obw=r(2 * h, 0.5),
                  obb=r(1, 0.2))
+    if arch.name == 'h512ppm':
+        w['m0w'] = r(64 * 650, 0.3)
     w['l0b'][0] = 0.5   # 0.5 x 255 = 127.5: a tie at QA
     w['l0b'][1] = -1.5  # -382.5: a negative tie
     return w
@@ -638,6 +641,214 @@ class LowerExposure(unittest.TestCase):
             self.assertEqual(reference.main(['exposed', '--epd', str(root / 'tests' / 'nnue' / 'parity.epd'),
                                              '--layout', str(HERE / 's512ppxl.json'), '--out', str(out)]), 0)
             self.assertEqual(out.read_bytes(), (root / 'tests' / 'nnue' / 's512ppxl-exposed.txt').read_bytes())
+
+
+class MoverBlock(unittest.TestCase):
+    """H512+PP+M (architecture 12, idea 178's L-lower; owner, 2026-11-15): H512+PP plus the side to move's exposed
+    pieces (x_lower's rule, the mover's pieces only) as 640 block inputs with a 10-input factoriser (numbered after the
+    first layer's inputs), feeding only the hidden columns 448-511 of both perspectives through their own weight m0w;
+    the block saved after the output layer as i16 [640][64]; and its warm start from an H512+PP net
+    (extend_weights.py), float and integer."""
+
+    M4 = [0, 1, 1, 1] + [2] * 4 + [3] * 24
+
+    def setUp(self):
+        self.kr = models.Arch('h512pp', table=PHASE)
+        self.m = models.Arch('h512ppm', table=PHASE)
+
+    def net_of(self, arch, w, scale=107):
+        """Fork's file for float weights `w` as the trainer saves them (bullet's quantised.bin, converted)."""
+        desc = json.loads((HERE / f'{arch.name}.json').read_text(encoding='utf-8'))
+        desc['table'] = arch.table
+        _, qbin = bullet_files(arch, desc, w)
+        return convert.convert(qbin, desc, scale)
+
+    def block_weights(self, seed):
+        """H512+PP+M float weights: H512+PP's synthetic ones and an m0w of moderate size."""
+        rng = random.Random(seed)
+        w = synthetic_weights(self.kr, seed)
+        w['m0w'] = [models.to_f32(rng.uniform(-0.3, 0.3)) for _ in range(64 * 650)]
+        return w
+
+    def test_the_layout(self):
+        m = self.m
+        self.assertEqual((m.id, m.mover, m.exposure, m.factoriser, m.links, m.regions), (12, True, False, True, True,
+                                                                                         self.M4))
+        # Training: H512+PP's 4,448 first-layer inputs in H512+PP's order, and the 640 block inputs and their 10
+        # factorisers numbered after them (m0w's); saved: H512+PP's 3,680 rows (the block is a tensor of its own).
+        self.assertEqual((m.factor_start, m.link_start, m.mover_start, m.saved_inputs), (3072, 3840, 4448, 3680))
+        self.assertEqual(training_inputs(m), 4448)
+        self.assertEqual([models.merged_index(m, f) for f in (0, 3071, 3072, 3839, 3840, 4447, 4448, 5097)],
+                         [0, 3071, None, None, 3072, 3679, None, None])
+        desc = json.loads((HERE / 'h512ppm.json').read_text(encoding='utf-8'))
+        kr = json.loads((HERE / 'h512pp.json').read_text(encoding='utf-8'))
+        self.assertEqual((desc['architecture'], desc['inputs'], desc['regions'], desc['table']),
+                         (12, 3680, self.M4, kr['table']))
+        self.assertEqual(desc['quantised'][:4], kr['quantised'])
+        self.assertEqual(desc['quantised'][4], {'name': 'block', 'rows': 640, 'cols': 64, 'type': 'i16',
+                                                'factor': 255})
+
+    def test_the_rule_is_x_lowers_for_the_side_to_move_only(self):
+        # Worked by hand (LowerExposure's cases): White to move, the knight on e5 (attacked by the pawn on d6) is
+        # the mover's and exposed; the black queen on b3 (attacked by the bishop on c2) is exposed under x_lower's
+        # rule but is not the mover's. With Black to move it is the other way round.
+        board = chess.Board('4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1')
+        self.assertEqual(models.mover_squares(board), {chess.E5})
+        board.turn = chess.BLACK
+        self.assertEqual(models.mover_squares(board), {chess.B3})
+        fens = reference.read_fens(HERE.parent.parent / 'tests' / 'nnue' / 'parity.epd')
+        nonempty = 0
+        for fen in fens:
+            board = chess.Board(fen)
+            got = models.mover_squares(board)
+            self.assertEqual(got, {s for s in models.exposed_lower_squares(board) if board.color_at(s) == board.turn},
+                             fen)
+            self.assertEqual(models.exposed_set(self.m, board), got, fen)
+            nonempty += bool(got)
+        self.assertGreater(nonempty, 30)
+
+    def test_features_add_the_movers_exposed_pieces_after_the_links(self):
+        seen = 0
+        for fen in FENS + ['4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1', '4k3/8/3p4/4N3/8/1q6/2B5/4K2R b - - 0 1']:
+            board = chess.Board(fen)
+            mover = models.mover_squares(board)
+            stm, ntm, k = models.both_perspectives(self.m, board)
+            for persp, got in ((board.turn, stm), (not board.turn, ntm)):
+                want = list(models.features(self.kr, board, persp))
+                orient = 0 if persp == chess.WHITE else 56
+                flip = 7 if (board.king(persp) ^ orient) % 8 < 4 else 0
+                for sq in mover:
+                    piece = board.piece_at(sq)
+                    own, kind = int(piece.color != persp), piece.piece_type - 1
+                    self.assertEqual(own, int(persp != board.turn))  # own from the mover's side, enemy from the other
+                    want += [4448 + 320 * own + 64 * kind + (sq ^ orient ^ flip), 4448 + 640 + 5 * own + kind]
+                    seen += 1
+                self.assertEqual(got, sorted(want), f'{fen} {persp}')
+            self.assertEqual(k, models.bucket(self.kr, board))
+        self.assertGreater(seen, 0)
+
+    def test_legs_pass(self):
+        bake = Bakeoff('test_every_architecture_passes_its_legs')
+        bake.setUp()
+        try:
+            rc, stats = bake.legs('h512ppm', w=self.block_weights(31))
+        finally:
+            bake.tearDown()
+        self.assertEqual(rc, 0)
+        self.assertEqual(stats['positions'], len(FENS))
+        self.assertLess(stats['loss_max'], 30, stats)
+
+    def test_the_block_reaches_columns_448_to_511_only(self):
+        # A block input adds its m0w column to the last 64 hidden values of its perspective, nothing else: with the
+        # first layer's columns 448-511 and the output weights on them zero, the block cannot move the output.
+        board = chess.Board('4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1')
+        self.assertTrue(models.mover_squares(board))
+        w = self.block_weights(32)
+        stm, ntm, _ = models.both_perspectives(self.m, board)
+        for active in (stm, ntm):
+            with_block = models.first_layer_sum(self.m, w, active)
+            without = models.column_sum(w['l0w'], 512, [f for f in active if f < 4448], w['l0b'])
+            self.assertEqual(with_block[:448], without[:448])
+            self.assertNotEqual(with_block[448:], without[448:])
+        for k in range(8):
+            for half in (0, 1):
+                for i in range(448, 512):
+                    w['l1w'][(half * 512 + i) * 8 + k] = 0.0
+        w0 = dict(w, m0w=[0.0] * (64 * 650))
+        self.assertEqual(models.r_float(self.m, w, board), models.r_float(self.m, w0, board))
+        # The saved block: row e is m0w's column e plus its factoriser's, quantised at QA.
+        t = models.saved_tensors(self.m, w)
+        self.assertEqual(len(t['l0w'][1]), 3680 * 512)
+        self.assertEqual(len(t['block'][1]), 640 * 64)
+        for e in (0, 319, 320, 639):
+            own, kind = e // 320, (e % 320) // 64
+            a, b = w['m0w'][e * 64:(e + 1) * 64], w['m0w'][(640 + 5 * own + kind) * 64:(640 + 5 * own + kind + 1) * 64]
+            self.assertEqual(t['block'][1][e * 64:(e + 1) * 64],
+                             models.quantise([models.to_f32(x + y) for x, y in zip(a, b)], 255, 'i16'), e)
+
+    def test_a_block_row_changes_the_evaluation_only_with_a_movers_exposed_piece(self):
+        # A white knight on e5 attacked by a black pawn: exposed when White is to move only.
+        w = self.block_weights(33)
+        w['m0w'] = [0.0] * (64 * 650)
+        base, w_base = self.net_of(self.m, w), {k: list(v) for k, v in w.items()}
+        row = 64 * 1 + chess.E5  # own knight on e5, White's perspective (its king on e1: not mirrored)
+        w['m0w'][row * 64:(row + 1) * 64] = [0.5] * 64
+        changed = self.net_of(self.m, w)
+        a0, a1 = (models.arch_from_net('h512ppm', d[64:]) for d in (base, changed))
+        n0, n1 = models.unpack(a0, base[64:]), models.unpack(a1, changed[64:])
+        white = chess.Board('4k3/8/3p4/4N3/8/8/8/4K3 w - - 0 1')
+        black = chess.Board('4k3/8/3p4/4N3/8/8/8/4K3 b - - 0 1')
+        self.assertNotEqual(models.r_int(a1, n1, 107, white), models.r_int(a0, n0, 107, white))
+        self.assertEqual(models.r_int(a1, n1, 107, black), models.r_int(a0, n0, 107, black))
+        self.assertNotEqual(models.r_float(self.m, w, white), models.r_float(self.m, w_base, white))
+        self.assertEqual(models.r_float(self.m, w, black), models.r_float(self.m, w_base, black))
+
+    def test_block_sums_beyond_int16_are_held_to_its_range(self):
+        # The block rows are summed in 32 bits and held to the int16 range before the clip (the engine's
+        # sum_block): a sum past 32767 clips to QA, never wraps.
+        w = self.block_weights(34)
+        net = self.net_of(self.m, w)
+        arch = models.arch_from_net('h512ppm', net[64:])
+        n = models.unpack(arch, net[64:])
+        board = chess.Board('4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1')
+        n['block'] = array_of([30000] * (640 * 64))
+        n2 = dict(n)
+        n2['block'] = array_of([32767] * (640 * 64))
+        self.assertEqual(models.r_int(arch, n, 107, board), models.r_int(arch, n2, 107, board))
+
+    def test_the_float_warm_start_evaluates_as_its_source_and_saves_as_the_integer_expansion(self):
+        w = synthetic_weights(self.kr, 35)
+        data = netformat.write_weights_bin(w)
+        wm_bytes = extend_weights.mover_weights(data)
+        self.assertEqual(wm_bytes[:len(data)], data)  # every H512+PP record byte for byte, then m0w
+        wm = netformat.read_weights_bin(wm_bytes)
+        self.assertEqual(sorted(wm), ['l0b', 'l0w', 'l1b', 'l1w', 'm0w'])
+        self.assertEqual(wm['m0w'], [0.0] * (64 * 650))
+        for k in ('l0w', 'l0b', 'l1w', 'l1b'):
+            self.assertEqual(wm[k], w[k])
+        for fen in FENS + ['4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1']:
+            board = chess.Board(fen)
+            self.assertEqual(models.r_float(self.m, wm, board), models.r_float(self.kr, w, board), fen)
+        # Saved by the trainer and converted, it is the integer expansion of the source's own file, byte for byte.
+        self.assertEqual(self.net_of(self.m, wm), extend_weights.mover_net(self.net_of(self.kr, w)))
+        with self.assertRaises(ValueError):  # already extended
+            extend_weights.mover_weights(netformat.write_weights_bin(wm))
+
+    def test_the_integer_expansion_evaluates_as_its_source(self):
+        source = self.net_of(self.kr, synthetic_weights(self.kr, 36))
+        out = extend_weights.mover_net(source)
+        head, src_head = netformat.header_fields(out), netformat.header_fields(source)
+        self.assertEqual((head['architecture'], head['inputs'], head['scale'], head['buckets']),
+                         (12, 3680, src_head['scale'], src_head['buckets']))
+        self.assertEqual(out[64:64 + len(source) - 64], source[64:])  # the source's payload, then the block
+        self.assertEqual(len(out), len(source) + 640 * 64 * 2)
+        m = models.arch_from_net('h512ppm', out[64:])
+        self.assertEqual((m.regions, m.table), (self.M4, PHASE))
+        net, src = models.unpack(m, out[64:]), models.unpack(self.kr, source[64:])
+        seeded = extend_weights.mover_net(source, perturb=3)
+        pnet = models.unpack(m, seeded[64:])
+        self.assertTrue(any(pnet['block']) and all(abs(x) <= extend_weights.PERTURB_RANGE for x in pnet['block']))
+        differs = 0
+        for fen in FENS + ['4k3/8/3p4/4N3/8/1q6/2B5/4K2R w - - 0 1']:
+            board = chess.Board(fen)
+            self.assertEqual(models.r_int(m, net, 107, board), models.r_int(self.kr, src, 107, board), fen)
+            differs += models.r_int(m, pnet, 107, board) != models.r_int(self.kr, src, 107, board)
+        self.assertGreater(differs, 0)  # a position with a mover's exposed piece reads the seeded rows
+        with self.assertRaises(ValueError):
+            extend_weights.mover_net(out)  # not an H512+PP file
+
+    def test_the_link_clamp_reads_the_block_net_as_h512pp(self):
+        import pp_bound
+        source = self.net_of(self.kr, synthetic_weights(self.kr, 37))
+        out = extend_weights.mover_net(source)
+        w9, over9, clamped9, allow9 = pp_bound.bound(bytearray(source))
+        w12, over12, clamped12, allow12 = pp_bound.bound(bytearray(out))
+        self.assertEqual((over12, clamped12, allow12), (over9, clamped9, allow9))
+
+
+def array_of(values):
+    import array
+    return array.array('h', values)
 
 
 class FitMaps(unittest.TestCase):

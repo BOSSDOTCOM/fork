@@ -188,7 +188,7 @@ void sum_perspective(const NetFile& net, Color perspective, Frame f, ForEach for
 
 #if FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 ||  \
     FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || \
-    FORK_NET_ARCH == 11
+    FORK_NET_ARCH == 12
 // sum over both halves (side to move first) of v * (v * w), v the clipped
 // value: S-512's and H-512's output, and each of XGR's experts.
 std::int64_t squared_sum_scalar(const std::int16_t* stm, const std::int16_t* ntm, const std::int16_t* w) {
@@ -448,7 +448,7 @@ void add_contact_rows(const NetFile& net, const Accumulator& acc, const Position
 }
 #endif
 
-#if FORK_NET_ARCH == 11
+#if FORK_NET_ARCH == 12
 // H512+PP+M's block: one perspective's NetBlockColumns block values, the
 // sums' block columns plus the `count` block rows, summed in 32 bits and held
 // to the int16 range (the block rows have no bound; the output clips each
@@ -618,14 +618,14 @@ int evaluate_with(const NetFile& net, const Accumulator& acc, const Position& po
 #if FORK_NET_ARCH == 1
   return Scalar ? output_layer_scalar(net, acc, pos.side_to_move())
                 : output_layer(net, acc, pos.side_to_move());
-#elif FORK_NET_ARCH == 11
+#elif FORK_NET_ARCH == 12
   const int out = mover_block_output<Scalar>(net, acc, pos);
 #ifdef FORK_DEBUG
   if (out != mover_block_reference(net, pos)) __builtin_trap();
 #endif
   return out;
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || FORK_NET_ARCH == 11
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || FORK_NET_ARCH == 12
 #if FORK_NET_ARCH == 6
   Accumulator summed;
   const Accumulator& a = add_exposure_rows(net, acc, pos, summed) ? summed : acc;
@@ -884,7 +884,7 @@ Bitboard exposed_lower_reference(const Position& pos) {
 }
 #endif
 
-#if FORK_NET_ARCH == 11
+#if FORK_NET_ARCH == 12
 namespace {
 
 // The squares `c`'s pawns attack, set-wise.

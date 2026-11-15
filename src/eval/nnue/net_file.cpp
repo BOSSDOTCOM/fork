@@ -102,7 +102,7 @@ bool sums_in_range(const NetFile& net, std::string& error) {
     return error = "the output layer can leave the int32 range", false;
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 5 || FORK_NET_ARCH == 6 || \
     FORK_NET_ARCH == 7 || FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 ||  \
-    FORK_NET_ARCH == 11
+    FORK_NET_ARCH == 12
   // Squared outputs: each product v * (v * w) needs |w| <= 128 so that v * w
   // stays in int16. The scalar sum runs in int64, but the AVX2 path adds its
   // lanes in int32 (accumulator.cpp, squared_sum; bug review 2026-11-11, E3):
@@ -220,11 +220,11 @@ bool read_net_file(std::span<const std::uint8_t> bytes, NetFile& out, std::strin
   for (int i = 0; i < 2 * NetHidden; ++i) out.out_weights[i] = c.i16();
   out.out_bias = c.i32();
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || FORK_NET_ARCH == 11
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || FORK_NET_ARCH == 12
   for (auto& row : out.out_weights)
     for (auto& w : row) w = c.i16();
   for (auto& b : out.out_bias) b = c.i32();
-#if FORK_NET_ARCH == 11
+#if FORK_NET_ARCH == 12
   for (auto& row : out.block_weights)
     for (auto& w : row) w = c.i16();
 #endif
@@ -278,11 +278,11 @@ std::vector<std::uint8_t> write_net_file(const NetFile& net) {
   for (int i = 0; i < 2 * NetHidden; ++i) put_i16(net.out_weights[i]);
   put_i32(net.out_bias);
 #elif FORK_NET_ARCH == 2 || FORK_NET_ARCH == 3 || FORK_NET_ARCH == 6 || FORK_NET_ARCH == 7 || \
-    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || FORK_NET_ARCH == 11
+    FORK_NET_ARCH == 8 || FORK_NET_ARCH == 9 || FORK_NET_ARCH == 10 || FORK_NET_ARCH == 12
   for (const auto& row : net.out_weights)
     for (const auto w : row) put_i16(w);
   for (const auto b : net.out_bias) put_i32(b);
-#if FORK_NET_ARCH == 11
+#if FORK_NET_ARCH == 12
   for (const auto& row : net.block_weights)
     for (const auto w : row) put_i16(w);
 #endif

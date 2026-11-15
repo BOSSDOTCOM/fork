@@ -65,6 +65,21 @@ class ArmTests(unittest.TestCase):
         self.assertEqual(x['WARM_STARTS']['exposure'], ('s512ppxl', 'exposure_net'))
         self.assertEqual(x['SOURCE'], k.SOURCE)
 
+    def test_session_x2_runs_xl2_alone_as_xl1_but_its_seed(self):
+        # x_lower's second seed (owner's rule, 2026-11-14): xl1's recipe, data and warm start, seed 2.
+        src = (HERE / 'bakeoff_r3.py').read_text(encoding='utf-8')
+        old = "\nARM_SET = 'A' "
+        x = {'__name__': 'bakeoff_r3_x2'}
+        exec(compile(src.replace(old, "\nARM_SET = 'X2' ", 1), 'bakeoff_r3_x2.py', 'exec'), x)
+        self.assertEqual(x['QUEUES'], [['xl2']])
+        self.assertEqual(sorted(x['ARMS']), ['xl2'])
+        x1 = {'__name__': 'bakeoff_r3_x'}
+        exec(compile(src.replace(old, "\nARM_SET = 'X' ", 1), 'bakeoff_r3_x.py', 'exec'), x1)
+        xl2, xl1 = x['ARMS']['xl2'], x1['ARMS']['xl1']
+        self.assertEqual((xl2['seed'], xl1['seed']), (2, 1))
+        self.assertEqual({f: v for f, v in xl2.items() if f != 'seed'}, {f: v for f, v in xl1.items() if f != 'seed'})
+        self.assertEqual(x['SOURCE'], k.SOURCE)
+
     def test_the_source_is_r8ceplo2s_float_weights(self):
         # Owner, 2026-11-14 ~5:55 PM EST: r8ceplo2 is round 3's warm-start source from then on. Its window average
         # (retrain 8c A1's avg-eplo2/weights.bin), SHA-256 checked on this machine 2026-11-14; quantised and
@@ -163,6 +178,77 @@ class IdentityProbeTests(unittest.TestCase):
             xwarm['l0w'][768 * 512 + 3] = 0.05  # one exposure weight off zero
             self.quantised(xl, xwarm, xq)
             self.assertEqual(self.probe(d, sq, xq, 's512ppxl', 'exposure_net'), 'False')
+
+    def test_session_ms_probe_lays_an_h512pp_source_out_with_a_zero_block(self):
+        # Idea 178's warm start from r3kr1 (an H512+PP source): its quantised file converted as H512+PP and laid out
+        # by extend_weights.mover_net (the block zero) is the warm start's converted as H512+PP+M.
+        table = netformat.layout(NNUE / 'h512pp.json')['table']
+        kr, m = models.Arch('h512pp', table=table), models.Arch('h512ppm', table=table)
+        rng = random.Random(5)
+        n = 4 * 768 + 768 + 608
+        w = {'l0w': [models.to_f32(rng.uniform(-0.06, 0.06)) for _ in range(n * 512)],
+             'l0b': [models.to_f32(rng.uniform(-0.3, 0.3)) for _ in range(512)],
+             'l1w': [models.to_f32(rng.uniform(-0.5, 0.5)) for _ in range(8 * 1024)],
+             'l1b': [models.to_f32(rng.uniform(-0.2, 0.2)) for _ in range(8)]}
+        warm = netformat.read_weights_bin(extend_weights.mover_weights(netformat.write_weights_bin(w)))
+        with tempfile.TemporaryDirectory() as d:
+            sq, mq = Path(d, 'source.bin'), Path(d, 'm.bin')
+            self.quantised(kr, w, sq)
+            self.quantised(m, warm, mq)
+            script = Path(d, 'identity.py')
+            script.write_text(k.identity_probe(str(NNUE), str(sq), str(mq), 'h512ppm', 'mover_net', 'h512pp'))
+            run = lambda: subprocess.run([sys.executable, '-I', str(script)], capture_output=True,  # noqa: E731
+                                         text=True).stdout.strip()
+            self.assertEqual(run(), 'True')
+            warm['m0w'][100] = 0.05  # one block weight off zero
+            self.quantised(m, warm, mq)
+            self.assertEqual(run(), 'False')
+
+
+class SessionMTests(unittest.TestCase):
+    """Idea 178's session (owner, 2026-11-15: L-lower as one arm, warm start r3kr1, a same-recipe control): mb1,
+    H512+PP+M (architecture 12) beside kc1, H512+PP continued, one GPU each, from r3kr1's float weights."""
+
+    def setUp(self):
+        src = (HERE / 'bakeoff_r3.py').read_text(encoding='utf-8')
+        old = "\nARM_SET = 'A' "
+        self.assertEqual(src.count(old), 1)
+        self.m = {'__name__': 'bakeoff_r3_m'}
+        exec(compile(src.replace(old, "\nARM_SET = 'M' ", 1), 'bakeoff_r3_m.py', 'exec'), self.m)
+
+    def test_the_two_arms_differ_only_in_architecture_and_warm_start(self):
+        m = self.m
+        self.assertEqual(m['QUEUES'], [['mb1'], ['kc1']])
+        self.assertEqual(sorted(m['ARMS']), ['kc1', 'mb1'])
+        mb, kc = m['ARMS']['mb1'], m['ARMS']['kc1']
+        self.assertEqual((mb['arch'], mb['init']), ('h512ppm', 'mover'))
+        self.assertEqual((kc['arch'], kc['init']), ('h512pp', 'source'))
+        rest = lambda a: {f: v for f, v in a.items() if f not in ('arch', 'init')}  # noqa: E731
+        self.assertEqual(rest(mb), rest(kc))
+        # Round 3's recipe exactly (session A's arms), but the seed: 3 for both arms, so they read the data in the
+        # same order, not r3kr1's own order (seed 1).
+        self.assertEqual({f: v for f, v in rest(mb).items() if f != 'seed'},
+                         {f: v for f, v in rest(k.ARMS['kr1']).items() if f != 'seed'})
+        self.assertEqual((mb['seed'], k.ARMS['kr1']['seed']), (3, 1))
+        self.assertEqual(m['WARM_STARTS']['mover'], ('h512ppm', 'mover_net'))
+
+    def test_the_source_is_r3kr1s_float_weights(self):
+        # r3kr1's window average (round 3 session A's avg-kr1/weights.bin), SHA-256 checked on this machine
+        # 2026-11-15; its quantised file (the session's) converted at S = 89 with the link clamp is nets/r3kr1.fnet
+        # byte for byte.
+        m = self.m
+        self.assertEqual((m['SOURCE']['name'], m['SOURCE']['weights'], m['SOURCE_ARCH']),
+                         ('r3kr1', 'r3kr1-avg.bin', 'h512pp'))
+        self.assertEqual(m['SOURCE']['sha256'], 'f8a70b43ff0cba986ab80820f66cf0a4ef69c311222daf858f2b75dad7428dcf')
+        self.assertEqual((k.SOURCE['name'], k.SOURCE_ARCH), ('r8ceplo2', 's512pp'))  # the other sets: unchanged
+
+    def test_the_kernel_copy_holds_one_source_block(self):
+        # make_kernel.py replaces SOURCE by one pattern: session M's source must not be a second match.
+        import re
+        src = (HERE / 'bakeoff_r3.py').read_text(encoding='utf-8')
+        pattern = re.compile(r"SOURCE = \{'name': '([^']*)', 'weights': '([^']*)',\n +'sha256': '([0-9a-f]{64})',\n +"
+                             r"'dataset': '([^']*)'\}")
+        self.assertEqual(len(pattern.findall(src)), 1)
 
 
 if __name__ == '__main__':

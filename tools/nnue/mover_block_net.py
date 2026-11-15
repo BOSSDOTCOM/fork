@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""An H512+PP+M net file (architecture 11, idea 178's prototype; src/eval/nnue/net_shape.hpp) from an H512+PP one
-(architecture 9): the same header and payload, the architecture id 11, and the block's 640 x 64 int16 weights
+"""An H512+PP+M net file (architecture 12, idea 178's prototype; src/eval/nnue/net_shape.hpp) from an H512+PP one
+(architecture 9): the same header and payload, the architecture id 12, and the block's 640 x 64 int16 weights
 appended after the output layer (zero by default, so the evaluation equals the source net's), the checksum
 recomputed.
 
@@ -37,7 +37,7 @@ def main(argv=None):
     values = [rng.randint(-args.perturb, args.perturb) for _ in range(n)] if args.perturb else [0] * n
     payload = data[netformat.HEADER_BYTES:] + struct.pack(f'<{n}h', *values)
     header = bytearray(data[:netformat.HEADER_BYTES])
-    struct.pack_into('<I', header, 12, 11)
+    struct.pack_into('<I', header, 12, 12)
     struct.pack_into('<Q', header, 40, netformat.net_checksum(payload))
     Path(args.out).write_bytes(bytes(header) + payload)
     print(f'{args.out}: {len(header) + len(payload)} bytes, block weights in [-{args.perturb}, {args.perturb}]')

@@ -17,7 +17,17 @@ Arms (seed 1 each, side by side, one T4 each; the same seed, so both read the da
 - xl1, x_lower, S512+PPXL (architecture 10: S512+PP plus the exposure plane's lower-class half): warm from SOURCE laid
   out by extend_weights.py --arch s512ppxl (the exposure inputs and their factoriser zero); its own session (X), one
   seed, compared against session A's pp1 (owner, 2026-11-14: the same recipe, data and warm start).
-Sessions (ARM_SET): A = kr1 (GPU 0) beside pp1 (GPU 1); X = xl1 alone (GPU 0).
+- xl2, x_lower's second seed: xl1's settings with seed 2 (owner's rule, 2026-11-14: a second seed only if xl1's
+  fixed-node result against pp1 lands between about +5 and +20; it landed at +17.60 +/- 8.69), its own session X2.
+- mb1, idea 178's L-lower (owner, 2026-11-15: "train idea 178 L-lower as one arm (warm start r3kr1, same-recipe
+  control, report quota first)"), H512+PP+M (architecture 12: H512+PP plus the side to move's exposed pieces under
+  x_lower's rule as a block feeding the hidden columns 448-511 only): warm from r3kr1's float weights laid out by
+  extend_weights.py --arch h512ppm (H512+PP's weights and a zero block weight m0w: its output is r3kr1's exactly);
+- kc1, its same-recipe control: H512+PP (r3kr1's architecture) continued from r3kr1's float weights as they are.
+  Both seed 3 (one seed, so both read the data in the same order; not 1, r3kr1's own order). Session M's source is
+  r3kr1 (M_SOURCE), an H512+PP net (SOURCE_ARCH); every other set keeps SOURCE, an S512+PP net.
+Sessions (ARM_SET): A = kr1 (GPU 0) beside pp1 (GPU 1); X = xl1 alone (GPU 0); X2 = xl2 alone (GPU 0); M = mb1 (GPU 0)
+beside kc1 (GPU 1).
 Recipe (8c's control arm c): retrain 8c's control files (TD(0.9) copies of the parts labelled by S512ppr3 or later, blend
 copies of the older parts, the fresh endgame slice slice1b unchanged), --result-weight 0, AdamW, LR 1e-4 dropped
 tenfold after superbatch 180, 360 superbatches of 305 x 16,384 positions, S = 92, read interleaved; the candidate is
@@ -33,7 +43,7 @@ nets/r8ceplo2.fnet byte for byte (SHA-256 f4634cec...7d49f5a), and a build with 
 / 34c916638218aa11) with netcheck exact on tests/nnue/r8ceplo2.parity. Before that, SOURCE was r8brft1's float weights
 (fork-retrain-8b-rft v1's avg-rft1/weights.bin, dataset fork-r3-kr4-init: round 3's first sessions were launched from
 r8ceplo2 by an explicit --source). Another source is one edit of SOURCE (name, file, SHA-256, dataset); it must be an
-S512+PP net's float weights.
+S512+PP net's float weights (session M: M_SOURCE, an H512+PP net's).
 
 Validity (blocking; summary['validity']):
 - every input matches its manifest and both arms' lists resolve (and are the same list);
@@ -54,7 +64,8 @@ Layout: result/<arm>/ (best/, ck-*/, window/, val.txt, train.log, run.json, file
 file, <init>-quantised.bin, and their parity-trainer files: the trainer leg of the warm start), the summary
 result/bakeoff_r3.json.
 
-Arm sets: ARM_SET = 'A' (kr1 and pp1), 'X' (xl1), 'kr' or 'pp' (one arm of A), set in a kernel copy by one exact
+Arm sets: ARM_SET = 'A' (kr1 and pp1), 'X' (xl1), 'X2' (xl2), 'M' (mb1 and kc1), 'kr' or 'pp' (one arm of A), set in
+a kernel copy by one exact
 replacement, as 8c's.
 Smoke mode: SMOKE = True, in a kernel copy only, shrinks the sizes and nothing else (8c's smoke set of originals, 4
 full-size superbatches with the drop after 2 and the window 3-4, the offline scores on the 20,000-position prefix):
@@ -62,7 +73,8 @@ every check, both arms, the averages, quantisation and the offline scores run as
 checkpoint's time, run.json's laps) measure each architecture's speed on the T4.
 
 COMMIT must hold this file, the trainer's h512pp and s512ppxl architectures (tools/train), tools/nnue
-(extend_weights.py, h512pp.json, s512ppxl.json) and retrain 8c's manifests (branch retrain/r3-kr4 holds them all).
+(extend_weights.py, h512pp.json, s512ppxl.json) and retrain 8c's manifests (branch retrain/r3-kr4 holds them all);
+session M's also the trainer's h512ppm and tools/nnue/h512ppm.json.
 
     python3 bakeoff_r3.py                      # on Kaggle
     python bakeoff_r3.py --plan                # anywhere: the settings and each arm's command; touches nothing
@@ -122,15 +134,28 @@ if SMOKE:
     ALL_POSITIONS = VAL_POSITIONS
 ARMS = {'kr1': {**BASE_SETTINGS, 'arch': 'h512pp', 'init': 'regioned', 'seed': 1},
         'pp1': {**BASE_SETTINGS, 'arch': 's512pp', 'init': 'source', 'seed': 1},
-        'xl1': {**BASE_SETTINGS, 'arch': 's512ppxl', 'init': 'exposure', 'seed': 1}}
+        'xl1': {**BASE_SETTINGS, 'arch': 's512ppxl', 'init': 'exposure', 'seed': 1},
+        'xl2': {**BASE_SETTINGS, 'arch': 's512ppxl', 'init': 'exposure', 'seed': 2},
+        'mb1': {**BASE_SETTINGS, 'arch': 'h512ppm', 'init': 'mover', 'seed': 3},
+        'kc1': {**BASE_SETTINGS, 'arch': 'h512pp', 'init': 'source', 'seed': 3}}
 # The warm starts laid out from SOURCE in the session: (architecture, extend_weights.py's net-file function that
 # lays SOURCE's quantised net out the same way, for the quantised identity).
-WARM_STARTS = {'regioned': ('h512pp', 'regioned_net'), 'exposure': ('s512ppxl', 'exposure_net')}
+WARM_STARTS = {'regioned': ('h512pp', 'regioned_net'), 'exposure': ('s512ppxl', 'exposure_net'),
+               'mover': ('h512ppm', 'mover_net')}
 # The sessions (module note): A = kr1 and its same-recipe control pp1, one GPU each; X = xl1 alone (x_lower, owner
 # 2026-11-14: compared against session A's control); kr and pp one arm of A each.
-ARM_SET = 'A'               # a kernel copy only (module note): 'A', 'X', 'kr' or 'pp'
-ARM_SETS = {'A': [['kr1'], ['pp1']], 'X': [['xl1']], 'kr': [['kr1']], 'pp': [['pp1']]}
+ARM_SET = 'A'               # a kernel copy only (module note): 'A', 'X', 'X2', 'M', 'kr' or 'pp'
+ARM_SETS = {'A': [['kr1'], ['pp1']], 'X': [['xl1']], 'X2': [['xl2']], 'kr': [['kr1']], 'pp': [['pp1']],
+            'M': [['mb1'], ['kc1']]}
 QUEUES = ARM_SETS[ARM_SET]
+# Session M's source (module note): r3kr1's float window average (round 3 session A's avg-kr1/weights.bin, SHA-256
+# checked on this machine 2026-11-15; its quantised file, the session's, converted at S = 89 with the link clamp is
+# nets/r3kr1.fnet byte for byte), an H512+PP net; the dataset is uploaded before session M is pushed.
+M_SOURCE = dict(name='r3kr1', weights='r3kr1-avg.bin', dataset='fork-i178-init',
+                sha256='f8a70b43ff0cba986ab80820f66cf0a4ef69c311222daf858f2b75dad7428dcf')
+if ARM_SET == 'M':
+    SOURCE = M_SOURCE
+SOURCE_ARCH = 'h512pp' if ARM_SET == 'M' else 's512pp'  # the source net's architecture
 ARMS = {a: v for a, v in ARMS.items() if any(a in q for q in QUEUES)}
 DATA = '/kaggle/input'
 WORK = '/kaggle/working/bakeoff'
@@ -289,16 +314,17 @@ def average_weights(paths, out_path):
     open(out_path, 'wb').write(bytes(out))
 
 
-def identity_probe(nnue, source_quantised, warm_quantised, arch='h512pp', lay_out='regioned_net'):
+def identity_probe(nnue, source_quantised, warm_quantised, arch='h512pp', lay_out='regioned_net',
+                   source_arch='s512pp'):
     """A script printing True when the warm start's quantised file, converted with `arch`'s layout, is SOURCE's
-    converted and laid out by extend_weights.`lay_out` (regioned_net: every region SOURCE's rows; exposure_net: the
-    exposure rows zero), both before any clamp."""
+    (converted with `source_arch`'s) laid out by extend_weights.`lay_out` (regioned_net: every region SOURCE's rows;
+    exposure_net: the exposure rows zero; mover_net: the block zero), both before any clamp."""
     return '\n'.join([
         'import sys',
         f'sys.path.insert(0, {nnue!r})',
         'import convert, extend_weights, netformat',
-        f'a = convert.convert(open({source_quantised!r}, "rb").read(), netformat.layout({nnue + "/s512pp.json"!r}), '
-        f'{SCALE})',
+        f'a = convert.convert(open({source_quantised!r}, "rb").read(), '
+        f'netformat.layout({nnue + "/" + source_arch + ".json"!r}), {SCALE})',
         f'b = convert.convert(open({warm_quantised!r}, "rb").read(), netformat.layout({nnue + "/" + arch + ".json"!r}), '
         f'{SCALE})',
         f'print(extend_weights.{lay_out}(a) == b)', ''])
@@ -386,7 +412,7 @@ def session():
 
     if ok:
         c = {}
-        archs = sorted({a['arch'] for a in ARMS.values()} | {'s512pp'})
+        archs = sorted({a['arch'] for a in ARMS.values()} | {SOURCE_ARCH})
         for arch in archs:
             rc, out, _ = sh(f'{train} check {spec(arch)} --out {WORK}/check-{arch}', env=env)
             c[f'check-{arch}'] = {'rc': rc, 'out': out[-300:]}
@@ -402,13 +428,14 @@ def session():
             c[f'features-{arch}'] = {'rc': rc, 'leg_rc': rc2, 'out': out2[-300:]}
         # The reference: SOURCE on the arms' validation file at their result weight (0); each warm start must score
         # the same (its float identity).
-        c['reference'] = score('s512pp', src[0], by_name[VAL_BLEND], VAL_POSITIONS, f'{WORK}/ref', result_weight=0.0)
+        c['reference'] = score(SOURCE_ARCH, src[0], by_name[VAL_BLEND], VAL_POSITIONS, f'{WORK}/ref',
+                               result_weight=0.0)
         os.makedirs(f'{RESULT}/warm', exist_ok=True)
-        qs = quantise('s512pp', src[0], f'{WORK}/q-source')
+        qs = quantise(SOURCE_ARCH, src[0], f'{WORK}/q-source')
         c['quantise_source'] = qs
         if qs['quantised']:
             shutil.copy(qs['quantised'], f'{RESULT}/warm/source-quantised.bin')
-        sh(f'{train} eval {spec("s512pp")} --weights {src[0]} --epd {repo}/tests/nnue/parity.epd '
+        sh(f'{train} eval {spec(SOURCE_ARCH)} --weights {src[0]} --epd {repo}/tests/nnue/parity.epd '
            f'--out {RESULT}/warm/parity-trainer-source.txt', env=env)
         ref = c['reference']['loss']
         good = all(c[f'check-{a}']['rc'] == 0 for a in archs) and \
@@ -427,7 +454,7 @@ def session():
             if qs['quantised'] and qw['quantised']:
                 shutil.copy(qw['quantised'], f'{RESULT}/warm/{init}-quantised.bin')
                 with open(f'{WORK}/identity-{init}.py', 'w') as f:
-                    f.write(identity_probe(nnue, qs['quantised'], qw['quantised'], arch, lay_out))
+                    f.write(identity_probe(nnue, qs['quantised'], qw['quantised'], arch, lay_out, SOURCE_ARCH))
                 rc, out, _ = sh(f'python3 {WORK}/identity-{init}.py')
                 same = rc == 0 and out.strip().endswith('True')
                 c[f'quantised_identity_tail-{init}'] = out[-300:]
@@ -558,7 +585,7 @@ def session():
 
     def offline():
         res = summary['offline']
-        nets = {f'{SOURCE["name"]} (source)': ('s512pp', src[0])}
+        nets = {f'{SOURCE["name"]} (source)': (SOURCE_ARCH, src[0])}
         for arm in ARMS:
             w = average(arm)
             if w:
