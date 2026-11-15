@@ -505,6 +505,12 @@ TEST_CASE("pruning", "capture probe: still correct, and it changes the search") 
   CHECK(SearchSwitches{}.use_capture_probe);  // on since its LTC SPRT passed
   SearchSwitches on;
   on.use_capture_probe = true;
+  // Root reductions after an aspiration fail high (idea 202, on in this SPRT
+  // test commit) search the root's later children one ply shallower, below
+  // the probe's minimum depth at the debug depth (the gcc-debug suite found
+  // the trees equal), so this case pins them off: it tests the probe on the
+  // trees it was built for.
+  on.use_root_fail_lmr = false;
   fx.searcher->switches = on;
   CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 8).score == mate_score(1));
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 8).score == mate_score(3));
@@ -515,7 +521,7 @@ TEST_CASE("pruning", "capture probe: still correct, and it changes the search") 
   MoveList legal;
   generate<GenMode::Legal>(pos, legal);
   CHECK(legal.contains(fx.search(kiwipete, depth).best));
-  SearchSwitches off;
+  SearchSwitches off = on;
   off.use_capture_probe = false;
   CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
             "the capture probe left all three trees unchanged");
@@ -969,7 +975,7 @@ struct FailCount final : SearchListener {
 // reported (fail_report_ms 0). Fails without the term (no tree changes).
 TEST_CASE("pruning", "root fail reductions: no aspiration fail, no change; with fails, a changed search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_root_fail_lmr);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_root_fail_lmr);  // on in the SPRT test commit
   fx.searcher->fail_report_ms = 0;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",

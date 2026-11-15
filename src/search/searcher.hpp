@@ -275,7 +275,8 @@ struct SearchQuota {
 //   quiets are reduced that much less (not below none) (root_fail_plies); a
 //   reduced move is re-searched at full depth if it beats alpha, as before.
 //   The first pass of each iteration is unchanged. Needs use_root_lmr (and
-//   so use_lmr and use_pvs). Off until its SPRT.
+//   so use_lmr and use_pvs). On in this SPRT test commit only
+//   (sprt/root-fail-lmr).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -328,7 +329,7 @@ struct SearchQuota {
   X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
   X(use_root_lmr, UseRootLmr, true)                      \
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
-  X(use_root_fail_lmr, UseRootFailLmr, false)
+  X(use_root_fail_lmr, UseRootFailLmr, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
