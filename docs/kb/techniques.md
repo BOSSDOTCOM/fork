@@ -464,6 +464,9 @@ numeric baseline is CPW's generic illustration, not a recommendation.
 - Source: https://www.chessprogramming.org/Lazy_SMP
 - Clean-room descriptions of move selection (voting) and thread diversity:
   search-techniques.md §3.31 (T53) and §3.32 (T54), 2026-10-26.
+- Full entry (papers, measurements, best practices, TCEC, Fork's gap
+  list and a suggested first version): [lazy-smp.md](lazy-smp.md),
+  2026-11-15.
 
 ### NUMA
 - Local memory is faster; bind each thread to a node and allocate/first-touch

@@ -1626,3 +1626,53 @@ Owner's order of 2026-11-09 (ChessTB facts, a data-policy proposal, the endgame 
 | api.github.com/repos/noobpwnftw/python-chess; /branches/add-chesstb-tablebases; /compare/master...add-chesstb-tablebases | API: fork metadata and licence (GPL-3.0), branch head 38c108e, changed file names and the README.rst change only (the prober module's diff was not read) | 2026-11-09 | §4 |
 | raw.githubusercontent.com/noobpwnftw/python-chess/38c108efd992538dc078750cba9fee30b9f030ce/docs/chesstb.rst | the fork's API documentation page | 2026-11-09 | §1 (DTZ encoding versus Syzygy), §4 (API, pure Python, legality precondition) |
 | https://tablebase.lichess.ovh/tables/standard/ and /bytes.tsv, /sha256 | Lichess Syzygy mirror index, size list, checksum list | 2026-11-09 | §3.1, §3.2 Syzygy comparison; §6.1 (no equivalent list for ChessTB) |
+
+## Lazy SMP (lazy-smp.md), 2026-11-15
+
+| URL / ref | What | Date | Used for |
+|---|---|---|---|
+| https://www.chessprogramming.org/Lazy_SMP | CPW page (contains code listings from three engines; not used) | 2026-11-15 | §1 definition and history, forum post list, thesis listing, voting descriptions |
+| https://www.chessprogramming.org/Parallel_Search | CPW page (first 100,000 of about 110,900 characters read) | 2026-11-15 | §1.2, §2.1 taxonomy and paper list, scaling-thread list |
+| https://www.chessprogramming.org/Shared_Hash_Table | CPW page | 2026-11-15 | §1.2, §2.1 (Hyatt-Mann scheme), §3.4 |
+| https://www.chessprogramming.org/ABDADA | CPW page | 2026-11-15 | §2.1 |
+| https://www.chessprogramming.org/Young_Brothers_Wait_Concept | CPW page | 2026-11-15 | §2.1 (speedup about 11 on 16 processors; Schaeffer's critique) |
+| https://www.chessprogramming.org/NUMA | CPW page (read-only recovery copy; general only) | 2026-11-15 | §3.8 forum list |
+| https://talkchess.com/viewtopic.php?t=46858 | Daniel Homan, "Lazy SMP, part 2" (2013-01-12) and replies | 2026-11-15 | §1.2, §1.3, §2.2 |
+| https://talkchess.com/viewtopic.php?t=47455 | Daniel Homan, "Lazy SMP, part 3" (2013-03-09) and replies | 2026-11-15 | §1.2, §4.3 (the hash-move bug) |
+| https://talkchess.com/viewtopic.php?t=48536 | Daniel Homan, "Lazy SMP and Work Sharing" (2013-07-03) and replies | 2026-11-15 | §1.2 |
+| https://talkchess.com/viewtopic.php?t=50388 | Rein Halbersma, "How could a compiler break the lockless hashing method?" (2013-12) | 2026-11-15 | §3.4 |
+| https://talkchess.com/viewtopic.php?t=56019 | Kai Laskos, "Empirical results with Lazy SMP, YBWC, DTS" (2015-04-16) and replies | 2026-11-15 | §1.3, §2.2 |
+| https://talkchess.com/viewtopic.php?t=58830 | Robert Hyatt, "NUMA 101" (2016-01-07) and replies (Österlund's Texel NUMA table) | 2026-11-15 | §3.5, §3.8, §4.2 |
+| https://talkchess.com/viewtopic.php?t=62146 | fastgm, "Stockfish 8 - Double time control vs. 2 threads" (2016-11-15) and replies | 2026-11-15 | §2.2 (first fetch failed: connection reset; retry succeeded) |
+| https://talkchess.com/viewtopic.php?t=63454 | Lucas Braesch, "How to find SMP bugs ?" (2017-03-15) and replies | 2026-11-15 | §3.4, §4.1, §4.5 |
+| https://talkchess.com/viewtopic.php?t=64824 | Peter Österlund, "Lazy SMP and lazy cluster experiments" (2017-08-06) and replies | 2026-11-15 | §2.2, §3.1-§3.3, §3.8 |
+| https://talkchess.com/viewtopic.php?t=68154 | Sander Maassen vd Brink, "Lazy SMP and 44 cores" (2018-08-07) and replies | 2026-11-15 | §1.2, §3.1-§3.3, §3.8, §5 |
+| https://talkchess.com/viewtopic.php?t=76190 | Andrew Grant, "Dispelling the Myth of NNUE with LazySMP: An Analysis" (2020-12-30) and replies (partial page) | 2026-11-15 | §2.2, §4.6 |
+| https://talkchess.com/viewtopic.php?t=78631 | koedem, "Research paper comparing various parallel search algorithms" (2021) and replies | 2026-11-15 | §1.3 (opinions only), Brockington citation |
+| api.crossref.org/works?query.bibliographic=… and /works/{doi} for 10.3233/icg-2002-25104, 10.3233/icg-1996-19102, 10.1145/228329.228345, 10.3233/icg-1996-19303, 10.1006/jpdc.1999.1600, 10.3233/icg-1997-20102, 10.1016/0167-8191(89)90102-6, 10.3233/icg-1989-12201 to -12204, 10.3233/icg-1990-13104, 10.1007/978-1-4612-3390-9_3, 10.1109/tpds.2002.1003855, 10.1145/356893.356895 | Crossref metadata | 2026-11-15 | §2.1 citations (metadata only; one Marsland-Campbell title query returned nothing, resolved by DOI) |
+| https://www.duo.uio.no/bitstream/handle/10852/53769/master.pdf; https://www.duo.uio.no/handle/10852/53769 | Østensen thesis links | 2026-11-15 | failed: redirect to nva.sikt.no |
+| https://api.nva.unit.no/publication/019c90f3ef23-2d2c8bfe-b12f-4bfe-939f-bf305aba28cf | NVA record of the thesis (title, author, year, abstract, file licence "copyright act") | 2026-11-15 | §2.1 (abstract) |
+| https://api.nva.unit.no/download/… (three endpoint forms) | thesis PDF download | 2026-11-15 | failed: HTTP 403 |
+| https://github.com/official-stockfish/Stockfish/commit/ecc5ff6693f116f4a8ae5f5080252f29b279c0a1 (via gh api) | Stockfish "Lazy SMP" commit message (2015-10-06) | 2026-11-15 | §1.2, §2.2, §3.11 |
+| https://github.com/official-stockfish/Stockfish/pull/5285 (via gh api: description and all comments) | "NUMA memory replication for NNUE weights" (2024-05; closed 2024-05-28) | 2026-11-15 | §2.2, §3.3, §3.8, §4.4, §5 (prose and measurements; code in the comments not used) |
+| https://stockfishchess.org/blog/2024/stockfish-17/ | Stockfish 17 release post (2024-09-06) | 2026-11-15 | NumaPolicy, "up to 2.8x" |
+| gh search commits in official-stockfish/Stockfish: "false sharing", "thread sanitizer", "data race", "nodes counter" | commit-message search | 2026-11-15 | finding the commits below |
+| github.com/official-stockfish/Stockfish/commit/{1a67ccc7, f9b002cf, 7e897a64, 5410424e} (via gh api) | commit messages: shared correction history (2025-12-23), shared continuation history (2026-06-14), TSan suppression removed (2017-06-23), ponder race fix (2017-07-27) | 2026-11-15 | §2.2, §3.3, §4.1, §4.2 (5410424e's message contains code lines; not used) |
+| raw.githubusercontent.com/wiki/official-stockfish/Stockfish/Useful-data.md (and the rendered page) | Stockfish wiki "Useful data" | 2026-11-15 | §2.2, §3.10 |
+| raw.githubusercontent.com/wiki/official-stockfish/Stockfish/{Stockfish-FAQ, Advanced-topics, UCI-Protocol-and-Stockfish-Commands, Regression-Tests}.md; https://github.com/official-stockfish/Stockfish/wiki (index) | Stockfish wiki pages | 2026-11-15 | §3.8-§3.11, §4.4 |
+| https://github.com/official-stockfish/Stockfish/wiki/UCI-&-Commands; raw UCI-%26-Commands, UCI-&-Commands, UCI-and-Commands, Commands | old wiki page names | 2026-11-15 | failed: page does not exist (editor shown) / 404 |
+| raw.githubusercontent.com/official-stockfish/Stockfish/master/README.md | Stockfish README | 2026-11-15 | checked only: no thread, NUMA or hash content |
+| raw.githubusercontent.com/wiki/official-stockfish/fishtest/Creating-my-first-test.md | fishtest wiki | 2026-11-15 | §3.11 (SMP tests at 8 threads, scalers) |
+| raw.githubusercontent.com/wiki/official-stockfish/fishtest/{Fishtest-Testing-Guidelines, Regression-Tests}.md | fishtest wiki | 2026-11-15 | failed: 404 |
+| raw.githubusercontent.com/AndyGrant/OpenBench/master/README.md; raw wiki Home, SPRT-and-Fixed‐Game-Workloads, Workload-Assignment, Running-Your-Instance-Properly, Configuring-Your-OpenBench-Instance | OpenBench README and wiki | 2026-11-15 | §3.11; README has no SMP content; wiki Creating-Tests and Test-Creation 404 |
+| https://clang.llvm.org/docs/ThreadSanitizer.html | Clang ThreadSanitizer documentation | 2026-11-15 | §4.1 |
+| https://eel.is/c++draft/intro.races | C++ working draft, [intro.races] | 2026-11-15 | §3.4 (data race is undefined behaviour; relaxed atomics) |
+| https://docs.kernel.org/admin-guide/mm/numa_memory_policy.html | Linux kernel "NUMA Memory Policy" | 2026-11-15 | §3.8 |
+| https://wiki.chessdom.org/TCEC_Season_Further_information (revision 9615, last edited 2026-11-09) | TCEC page, curl with a browser User-Agent | 2026-11-15 | §5 (hardware, OS, compilers, THP madvise, CPU flags incl. avx512_vnni; no NUMA layout stated) |
+| https://www.amd.com/en/products/processors/server/epyc/4th-generation-9004-and-8004-series/amd-epyc-9754.html | AMD EPYC 9754 product page | 2026-11-15 | §4.6, §5 (WebFetch timed out; curl succeeded; no NUMA modes listed) |
+| gh search repos (Tarnished, RubiChess, Hobbes, Raphael) | GitHub repository search | 2026-11-15 | locating the repos below (coordinator's request) |
+| api.github.com/repos/Bobingstern/Tarnished/releases (all); /pulls?state=all (list); /pulls/{28, 65, 93, 94, 136} | Tarnished (GPL-3.0) release notes and PR descriptions | 2026-11-15 | lazy-smp.md §2.4, §3.1, §3.4 (release notes say only "fixed SMP"; the figures are in #136) |
+| api.github.com/repos/Matthies/RubiChess/releases (no NUMA text); search commits "numa"; /commits/{9d92aad6, 0cfbbb3a, 97d60cd1}; /pulls/{490, 507} and their comments (none) | RubiChess (GPL-3.0) commit messages | 2026-11-15 | §2.4, §5 (NUMA added 2025-10-01, disabled 2025-11-10) |
+| api.github.com/repos/kelseyde/hobbes-chess-engine/pulls?state=all (list); /pulls/{394, 396, 397, 398, 401, 411, 425, 430} | Hobbes (MIT) PR descriptions | 2026-11-15 | §2.4, §3.1, §3.11, §4.4 |
+| api.github.com/repos/Orbital-Web/Raphael/pulls?state=all (list); /pulls/{92, 153, 160}; /releases | Raphael (AGPL-3.0) PR descriptions and release notes | 2026-11-15 | §2.4 |
+| web search "Lazy SMP" paper arXiv parallel alpha-beta search evaluation; web search for the Østensen thesis | search engine | 2026-11-15 | finding candidates only; snippets not relied on |
