@@ -1555,49 +1555,63 @@ TEST_CASE("search", "the pass-best stop rule plays the pass's better exact move 
   };
   int differ = 0, kept_lower = 0, earlier_pass = 0, judge_new = 0, judge_old = 0;
   const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
-  for (std::size_t i = 0; i < positions; ++i) {
-    const std::string_view fen = search_bench_fens()[i];
-    Position pos;
-    CHECK(pos.set_fen(fen));
-    for (std::uint64_t nodes = 2000; nodes <= (Optimized ? 30000u : 12000u); nodes += 997) {
-      SearchQuota q;
-      q.nodes = nodes;
-      ReportLog old_log, new_log;
-      const SearchResult was = fresh_search(fen, q, false, &old_log);
-      const int finished_depth = fx.searcher->time_signals().depth;
-      const SearchResult now = fresh_search(fen, q, true, &new_log);
-      CHECK_EQ(now.nodes, was.nodes);
-      CHECK_EQ(fx.searcher->time_signals().depth, finished_depth);
-      if (now.depth == 0 || new_log.entries.empty()) continue;
-      const ReportLog::Entry& last = new_log.entries.back();
-      CHECK_MSG(
-          last.bound == 0 && last.depth == now.depth && last.score == now.score && last.first == now.best,
-          fen << " at " << nodes << " nodes: last line depth " << last.depth << " score " << last.score
-              << " bound " << last.bound << ", result depth " << now.depth << " score " << now.score);
-      CHECK(now.depth == finished_depth || now.depth == finished_depth + 1);
-      if (now.best == was.best) continue;
-      ++differ;
-      const auto finished = std::ranges::find_if(old_log.entries, [&](const ReportLog::Entry& e) {
-        return e.depth == finished_depth && e.bound == 0;
-      });
-      CHECK(finished != old_log.entries.end());
-      if (finished == old_log.entries.end()) continue;
-      // E1's case: the old rule kept the last finished iteration's move, the
-      // new one plays an exact move of the unfinished iteration. Otherwise
-      // the old rule took an earlier pass's move, which the new rule no
-      // longer does (counted only).
-      if (was.best == finished->first && was.depth == finished_depth && now.depth == finished_depth + 1) {
-        if (now.score <= finished->score) ++kept_lower;
-      } else {
-        ++earlier_pass;
+  // A stop decides when the old rule kept the previous best over a lower exact move and the completed iteration
+  // agrees with exactly one of the two rules. until_decided ends the sample at the first stop after which the
+  // sample holds such a stop and the judge counts differ.
+  const auto decided = [&] { return kept_lower > 0 && judge_new != judge_old; };
+  const auto sample = [&](std::uint64_t lo, std::uint64_t hi, std::uint64_t step, bool until_decided) {
+    for (std::size_t i = 0; i < positions; ++i) {
+      const std::string_view fen = search_bench_fens()[i];
+      Position pos;
+      CHECK(pos.set_fen(fen));
+      for (std::uint64_t nodes = lo; nodes <= hi; nodes += step) {
+        SearchQuota q;
+        q.nodes = nodes;
+        ReportLog old_log, new_log;
+        const SearchResult was = fresh_search(fen, q, false, &old_log);
+        const int finished_depth = fx.searcher->time_signals().depth;
+        const SearchResult now = fresh_search(fen, q, true, &new_log);
+        CHECK_EQ(now.nodes, was.nodes);
+        CHECK_EQ(fx.searcher->time_signals().depth, finished_depth);
+        if (now.depth == 0 || new_log.entries.empty()) continue;
+        const ReportLog::Entry& last = new_log.entries.back();
+        CHECK_MSG(
+            last.bound == 0 && last.depth == now.depth && last.score == now.score && last.first == now.best,
+            fen << " at " << nodes << " nodes: last line depth " << last.depth << " score " << last.score
+                << " bound " << last.bound << ", result depth " << now.depth << " score " << now.score);
+        CHECK(now.depth == finished_depth || now.depth == finished_depth + 1);
+        if (now.best == was.best) continue;
+        ++differ;
+        const auto finished = std::ranges::find_if(old_log.entries, [&](const ReportLog::Entry& e) {
+          return e.depth == finished_depth && e.bound == 0;
+        });
+        CHECK(finished != old_log.entries.end());
+        if (finished == old_log.entries.end()) continue;
+        // E1's case: the old rule kept the last finished iteration's move, the
+        // new one plays an exact move of the unfinished iteration. Otherwise
+        // the old rule took an earlier pass's move, which the new rule no
+        // longer does (counted only).
+        if (was.best == finished->first && was.depth == finished_depth && now.depth == finished_depth + 1) {
+          if (now.score <= finished->score) ++kept_lower;
+        } else {
+          ++earlier_pass;
+        }
+        SearchQuota to_depth;
+        to_depth.depth = finished_depth + 1;
+        const Move judge = fresh_search(fen, to_depth, false, nullptr).best;
+        judge_new += judge == now.best;
+        judge_old += judge == was.best;
+        if (until_decided && decided()) return;
       }
-      SearchQuota to_depth;
-      to_depth.depth = finished_depth + 1;
-      const Move judge = fresh_search(fen, to_depth, false, nullptr).best;
-      judge_new += judge == now.best;
-      judge_old += judge == was.best;
     }
-  }
+  };
+  sample(2000, Optimized ? 30000u : 12000u, 997, false);
+  // Whether 2,000-30,000 nodes holds a deciding stop depends on the network: retrain 8c's r8clam1 had three
+  // stops where the rules differ, the old rule keeping the previous best each time, but the completed
+  // iteration chose a third move in all three (2026-11-14). Optimized builds then search larger budgets until
+  // a stop decides, as 00b66c5 does for the other stop-rule case (the sample above is unchanged for every net
+  // that decides in it).
+  if (Optimized && !decided()) sample(31000, 200000, 4001, true);
   record_note("pass-best stop rule: " + std::to_string(differ) + " stops differ, " +
               std::to_string(kept_lower) + " with the old rule keeping the previous best over a move at or " +
               "below the finished score, " + std::to_string(earlier_pass) + " with the old rule taking an " +
