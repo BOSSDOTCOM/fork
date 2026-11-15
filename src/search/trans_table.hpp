@@ -32,12 +32,20 @@
 //   instead. Its stored check is the key's 24 bits XORed with a 24-bit digest
 //   of all its other fields (age included); an entry whose words come from
 //   two different writes fails the check (but for a 1 in 2^24 digest
-//   collision) and reads as a miss. Entries are read and written as whole
-//   copies. Phase 6 must still make the accesses relaxed atomics (or
-//   equivalent) so concurrent reads are not undefined behaviour, and adds
-//   the torn-write stress test under TSan (DESIGN.md §5, Phase 6).
+//   collision) and reads as a miss.
+// - Shared between search threads (Lazy SMP, DESIGN.md §5.6 step 17a): an
+//   entry is three 32-bit words, and the table reads and writes each word of
+//   the shared memory exactly once per access, as a relaxed atomic
+//   (std::atomic_ref), so concurrent access is not a data race (undefined
+//   behaviour). fetch copies an entry's three words, checks the copy and
+//   uses only the copy; deposit loads the whole bucket once, decides on that
+//   snapshot, and stores the chosen slot's three words. Lost or interleaved
+//   updates between threads are accepted: an interleaved entry fails its
+//   check. The setters below and advance_age run only between searches,
+//   never while a thread searches.
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 
@@ -47,21 +55,26 @@ namespace forkeng {
 
 enum class TtBound : std::uint8_t { None = 0, Upper = 1, Lower = 2, Exact = 3 };
 
+// One entry as its three words (little-endian, the same bytes as a struct
+// of the fields in this order).
 struct TtEntry {
   std::uint32_t
       key_and_age;  // bits 8-31: key check (key bits XOR data digest); bits 0-7: the writing search's age
-  std::uint16_t move;
-  std::int16_t score;
-  std::int16_t eval;
-  std::uint8_t depth;
-  std::uint8_t flags;  // bits 0-1 bound, bit 2 TT-PV
+  std::uint32_t move_score;        // bits 0-15 move, 16-31 score
+  std::uint32_t eval_depth_flags;  // bits 0-15 eval, 16-23 depth, 24-31 flags (bits 0-1 bound, bit 2 TT-PV)
 
   std::uint32_t key_check() const { return key_and_age >> 8; }
   int age() const { return key_and_age & 0xFF; }
-  TtBound bound() const { return TtBound(flags & 3); }
-  bool was_pv() const { return flags & 4; }
+  std::uint16_t move() const { return static_cast<std::uint16_t>(move_score); }
+  std::int16_t score() const { return static_cast<std::int16_t>(move_score >> 16); }
+  std::int16_t eval() const { return static_cast<std::int16_t>(eval_depth_flags); }
+  std::uint8_t depth() const { return static_cast<std::uint8_t>(eval_depth_flags >> 16); }
+  std::uint8_t flags() const { return static_cast<std::uint8_t>(eval_depth_flags >> 24); }
+  TtBound bound() const { return TtBound(flags() & 3); }
+  bool was_pv() const { return flags() & 4; }
 };
 static_assert(sizeof(TtEntry) == 12);
+static_assert(std::atomic_ref<std::uint32_t>::required_alignment <= alignof(std::uint32_t));
 
 constexpr std::size_t EntriesPerBucket = 5;
 
@@ -136,6 +149,11 @@ class TransTable {
 
   // Per mille of a sample of entries written in the current search (UCI hashfull).
   int fill_permille() const;
+
+  // An entry of the shared memory read or written word by word, each word
+  // once, as relaxed atomics (the module comment's sharing rule).
+  static TtEntry load_entry(TtEntry& slot);
+  static void store_entry(TtEntry& slot, const TtEntry& e);
 
   std::size_t bucket_count() const { return count_; }
 
