@@ -1,0 +1,10 @@
+{
+ "dump": "g4c-w00-td90.dump",
+ "net": "r8brft1.fnet",
+ "positions": 600000,
+ "r_int_check": {
+  "checked": 1200,
+  "mismatches": 0
+ },
+ "seconds": 98
+}

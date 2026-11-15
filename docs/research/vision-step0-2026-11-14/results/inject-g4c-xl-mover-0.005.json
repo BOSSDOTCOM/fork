@@ -1,0 +1,94 @@
+{
+ "feat": "feat-g4c.npz",
+ "positions": 600000,
+ "nets": [
+  "r3kr1"
+ ],
+ "families": {
+  "xl": {
+   "mover": {
+    "prevalence": {
+     "positions_with_any_pct": 8.4355,
+     "cells_per_position": 0.08765
+    },
+    "square": {
+     "r3kr1": {
+      "share_pct": 0.500378119588458,
+      "se_pct": 0.016033448543598075,
+      "folds_pct": [
+       0.40511,
+       0.49559,
+       0.54619,
+       0.53957,
+       0.47442,
+       0.52516,
+       0.5193,
+       0.49624
+      ],
+      "lambda": 30.0,
+      "lambda_base": 30000.0,
+      "columns": 256
+     }
+    },
+    "pooled": {
+     "r3kr1": {
+      "share_pct": 0.04938772288276665,
+      "se_pct": 0.008762522110864196,
+      "folds_pct": [
+       0.01234,
+       0.02452,
+       0.06541,
+       0.07419,
+       0.05014,
+       0.03834,
+       0.08527,
+       0.04417
+      ],
+      "lambda": 300.0,
+      "lambda_base": 30000.0,
+      "columns": 4
+     }
+    },
+    "bucket": {
+     "r3kr1": {
+      "share_pct": 0.06785666097114867,
+      "se_pct": 0.009263845428140126,
+      "folds_pct": [
+       0.03798,
+       0.03782,
+       0.06386,
+       0.10586,
+       0.07467,
+       0.05756,
+       0.10429,
+       0.05943
+      ],
+      "lambda": 300.0,
+      "lambda_base": 30000.0,
+      "columns": 32
+     }
+    }
+   }
+  }
+ },
+ "inject": {
+  "family": "xl",
+  "side": "mover",
+  "share_of_old_var": 0.005,
+  "share_of_new_var_pct": 0.49751243781094534
+ },
+ "residual": {
+  "r3kr1": {
+   "mean": -0.00018227670027890907,
+   "var": 0.010289445333702536
+  }
+ },
+ "base": {
+  "r3kr1": {
+   "lambda": 30000.0,
+   "r2_heldout_pct": 0.023268919093244467
+  }
+ },
+ "bucket_net": "r3kr1",
+ "seconds": 12
+}

@@ -1,0 +1,14 @@
+{
+ "dump": "g4s2val-bl.dump",
+ "net": "r3kr1.fnet",
+ "positions": 103254,
+ "r_int_check": {
+  "checked": 207,
+  "mismatches": 0
+ },
+ "evalfens_check": {
+  "checked": 5163,
+  "mismatches": 0
+ },
+ "seconds": 24
+}
