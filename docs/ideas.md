@@ -1064,6 +1064,14 @@ tuned by SPSA.
     not help (archive/s512pp-speed-switches); perf stat put the extra cost
     in instructions (the pair search about 200 per node), with branch
     misses about 20% of the extra cycles.
+  - **Independent of Incipit** (owner, 2026-11-14): Fork's 608-link
+    window came from this entry's own steps (the Structure System planned
+    2026-11-02, its pawn-pair first step chosen 2026-11-05, the links built
+    and the R = 1 window measured 2026-11-05/06) before any survey opened an
+    Incipit page (first on 2026-11-10), while Incipit merged its pawn pairs
+    on 2026-10-20/21 with a window of the same 608 inputs (the network
+    survey agent's inference from its net's file size), and both trace to
+    pawnocchio's pawn-pair idea, credited in ORIGINALITY.md.
   - **not trained** (below the gate).
 
 ## 41. S-512 with Fork's own threat and pawn-pair inputs

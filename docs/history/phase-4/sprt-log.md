@@ -2317,5 +2317,6 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
   held-out 522 of 3,800 at 4-5 pieces and 722 of 5,599 at 6-7 pieces, against the then default r8brft1's 612 and
   770, ratios 0.853 and 0.938, and against r8ceplo2's 525 and 756); bench 5,205,904 / dfe99ebe03b0972d. The LTC
   confirmation against r8ceplo2 is non-blocking, with no automatic revert (not yet run). The labeller switch to
-  r3kr1 is pending under the one-switch-per-day rule: the next data generation part (g4d) and the cloud VM's next
-  run; no running generator is switched.
+  r3kr1 is pending under the one-switch-per-day rule: generation 4's part g4d had already started on r8ceplo2 (7:59 PM
+  EST), so the next part after it, not before 2026-11-15, and the cloud VM's next run; no running generator is
+  switched.
