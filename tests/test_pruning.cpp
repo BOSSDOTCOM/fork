@@ -905,7 +905,7 @@ TEST_CASE("pruning", "eval shift credit: the amount, clamped and scaled, by hand
 // Fails without the update (no entry would be credited).
 TEST_CASE("pruning", "eval shift credit: each quiet move's entry is its eval change, only with the switch") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_eval_shift_credit);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_eval_shift_credit);  // on in the SPRT test commit
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
   SearchSwitches s;
   s.use_rfp = s.use_nmp = s.use_lmp = s.use_futility = s.use_see_prune = false;

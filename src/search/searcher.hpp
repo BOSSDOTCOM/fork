@@ -274,8 +274,8 @@ struct SearchQuota {
 //   that move (in its threat bucket) moves by eval_shift_amount: the change
 //   in the mover's raw static eval the move caused, clamped to
 //   +/-EvalShiftCap cp and scaled so a full cap is a depth-1 cutoff's bonus.
-//   Not in a singular test's search (the node's own visit credits it). Off
-//   until its SPRT.
+//   Not in a singular test's search (the node's own visit credits it). On
+//   in this SPRT test commit only (sprt/eval-shift-credit).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -328,7 +328,7 @@ struct SearchQuota {
   X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
   X(use_root_lmr, UseRootLmr, true)                      \
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
-  X(use_eval_shift_credit, UseEvalShiftCredit, false)
+  X(use_eval_shift_credit, UseEvalShiftCredit, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
