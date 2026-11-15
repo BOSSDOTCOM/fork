@@ -929,7 +929,11 @@ TEST_CASE("pruning", "reduced TT cut: still correct, and it changes the search")
   CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
   CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
   const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
-  const int depth = Optimized ? 10 : 7;
+  // Depth 8 at least: at 6 and 7 the three trees are the same with and
+  // without the cut (measured 2026-11-15: the start position's tree differs
+  // from depth 8, 11,376 against 11,383 nodes; the gcc-debug suite's depth
+  // 7 failed this check).
+  const int depth = Optimized ? 10 : 8;
   Position pos;
   CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
   MoveList legal;
