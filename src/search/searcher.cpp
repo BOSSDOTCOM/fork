@@ -231,6 +231,13 @@ bool Searcher::poll_limits() {
   if (limits_->nodes && nodes_ >= limits_->nodes) return stopped_ = true;
   if (nodes_ % StopCheckInterval != 0) return false;
   publish_counts();
+  // With helpers, a node limit counts every thread's nodes (the owner's
+  // rule, 2026-11-15, matching the info lines): the main thread checks the
+  // sum of the published counts here, so it may pass the limit by up to
+  // StopCheckInterval nodes per thread. One thread keeps the exact check
+  // above (data generation, the fixed-node screens).
+  if (limits_->nodes && start_plan_ && start_plan_->helper_count > 0 && pool_nodes() >= limits_->nodes)
+    return stopped_ = true;
   if (stop_->load(std::memory_order_relaxed)) return stopped_ = true;
   const bool timed = !(pondering_ && pondering_->load(std::memory_order_relaxed));
   if (timed && limits_->hard_ms >= 0 && elapsed_ms() >= limits_->hard_ms) return stopped_ = true;

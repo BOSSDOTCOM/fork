@@ -86,6 +86,25 @@ TEST_CASE("smp", "helpers search beside the main thread, whose reports and resul
   CHECK_MSG(last.nodes > 0 && last.nodes <= r.nodes, last.nodes << " against " << r.nodes);
 }
 
+// `go nodes` with helpers counts every thread's nodes (the owner's rule,
+// 2026-11-15): the main thread stops once the published sum reaches the
+// limit, so its own count stays below it. One thread keeps the exact limit
+// (the search suite's node-limit cases).
+TEST_CASE("smp", "a node limit with helpers counts every thread's nodes") {
+  SmpHash hash;
+  auto main = std::make_unique<Searcher>(hash.table);
+  HelperPool pool(hash.table);
+  CHECK_EQ(pool.resize(3), std::size_t{3});
+  Position pos;
+  SearchQuota limits;
+  limits.nodes = 200000;
+  const SearchResult r = pooled_search(hash.table, *main, pool, pos, limits, nullptr);
+  CHECK(legal(pos, r.best));
+  const std::uint64_t own = main->published_nodes();
+  CHECK_MSG(own < limits.nodes, "the main thread searched " << own << " nodes itself, the whole limit");
+  CHECK_MSG(r.nodes >= limits.nodes, "stopped at " << r.nodes << " nodes in all, under the limit");
+}
+
 TEST_CASE("smp", "the coordinator advances the TT's age once per search, whatever the thread count") {
   SmpHash hash;
   auto main = std::make_unique<Searcher>(hash.table);

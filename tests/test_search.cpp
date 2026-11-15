@@ -1769,6 +1769,45 @@ TEST_CASE("search", "the listener: one exact report per finished iteration, plus
 // the search runs to its depth limit, below the soft limit. The limits leave
 // about 7 s for depth 6 because sanitizer builds on a slow runner need it: with
 // 800 ms and a 150 ms pause, gcc-tsan once stopped the start position at depth 5.
+// Lazy SMP's rule that a stopped search stores nothing in the TT (DESIGN.md
+// §5.6 step 17a; owner, 2026-11-15: tested before any SMP SPRT), at one
+// thread, deterministically: a search to depth D finishes iteration D after
+// N nodes; the same search from the same fresh state with a node limit of
+// N + 40 stops early in iteration D + 1, inside its first root move (the
+// best move of iteration D, searched first by move-to-front). The child
+// node of that move is then being searched at depth D. Had the stopped node
+// stored its result on the way out, its entry would carry depth D and a
+// meaningless score; it must still hold iteration D's entry at depth D - 1.
+// Fault-checked: without the move loop's stop check (`if (stopped_) return
+// 0;` after the unmake) this case fails.
+TEST_CASE("search", "a stopped search stores nothing in the TT: the interrupted line keeps its finished entries") {
+  constexpr int Depth = 7;
+  // The start position and two of the bench's positions (search_bench.hpp: the Lichess CC0 database).
+  for (const std::string_view fen : {Position::StartFen, search_bench_fens()[10], search_bench_fens()[30]}) {
+    Position pos;
+    CHECK_MSG(pos.set_fen(fen), fen);
+    SearchQuota to_depth;
+    to_depth.depth = Depth;
+    SearchResult finished;
+    {
+      Fixture fx;
+      finished = fx.search(pos, to_depth);
+    }
+    CHECK_EQ(finished.depth, Depth);
+    Fixture fx;
+    SearchQuota stopped;
+    stopped.nodes = finished.nodes + 40;
+    const SearchResult r = fx.search(pos, stopped);
+    CHECK_MSG(r.depth == Depth && r.best == finished.best, fen << ": stopped at depth " << r.depth);
+    Position child = pos;
+    child.make(finished.best);
+    TtHit hit{};
+    CHECK_MSG(fx.store.table.fetch(child.key(), hit), fen << ": no entry for the best move's child");
+    CHECK_MSG(hit.depth == Depth - 1, fen << ": the interrupted child's entry has depth " << hit.depth << ", not "
+                                          << Depth - 1);
+  }
+}
+
 TEST_CASE("search", "a forced move stops at a fraction of the soft limit") {
   TestHash store;
   auto searcher = std::make_unique<Searcher>(store.table);

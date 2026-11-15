@@ -3962,10 +3962,15 @@ refinement is a later, separately measured item.
 - **Counts.** Each Searcher publishes its node and table-hit counts (relaxed atomic stores by its
   own thread, on their own cache line) every `StopCheckInterval` nodes and at its end; the main
   thread's info lines and result add the helpers' published counts to its own (behind by less than
-  1,024 nodes per helper). **`go nodes` counts the main thread's nodes only** (the review's A2
-  option: simple, the same shape as one thread), and so does the test-only node clock.
-- **Aborted searches store nothing:** a stopped search returns before any TT store at each move loop
-  (read in searcher.cpp; not yet tested, a test is planned).
+  1,024 nodes per helper). **`go nodes` counts every thread's nodes** (owner, 2026-11-15, so the
+  limit matches the info lines): with helpers the main thread compares the published sum with the
+  limit every `StopCheckInterval` nodes, so it may pass the limit by up to 1,024 nodes per thread;
+  one thread (data generation, the fixed-node screens, bench) keeps the exact per-node limit. The
+  test-only node clock reads the main thread's nodes.
+- **Aborted searches store nothing:** a stopped search returns before any TT store at each move loop.
+  Tested (owner, 2026-11-15: before any SMP SPRT) by the search suite's stopped-search case: a
+  search stopped by a node limit early in iteration D + 1 leaves the interrupted child's entry at
+  iteration D's depth (fault-checked: without the move loop's stop check it fails).
 - **Not in v1** (each a later item, measured on its own): thread binding, per-node network copies and
   a node-aware TT clear (v2, decided by measurements on TCEC-class hardware,
   docs/research/tcec-hardware-test-plan.md); voting or choosing among threads (KB T53); depth offsets
@@ -4600,6 +4605,7 @@ models are scored on the half of the games they were not fitted on.
 | 2026-11-15 | **Lowest-DTZ root ranking in won tablebase endings adopted (`UseFastestTableWin` on; owner's rule, a TCEC-safety correctness fix).** The elementary-mate suite found KBNvK/KBBvK mated on move 50 of the fifty-move rule; with the switch on, the root keeps only the winning moves with the smallest DTZ (draws and losses rank as before; conversions without tables untouched), and the suite now asserts mates within 2 moves of the DTZ-fastest against a lone king. Non-regression STC [-3, 0] capped undecided at -0.23 +/- 2.48 (lower bound -2.71); the owner's rule (estimate above -1.5) adopts it. Bench unchanged (5,205,904 / dfe99ebe03b0972d). SPRT log. |
 | 2026-11-15 | **No Lc0/Leela data in any form (owner, about 5 PM EST): Fork stays Fork-pure.** All training data is Fork's own self-play plus tablebase labels; this closes the Lc0 review gate (Phase 4 data rule 5 above). **The free-compute plan (owner):** candidates Azure for Students, the Oracle $300 trial and Linode $100, one account each under the owner's identity, the owner doing the sign-ups; the r3kr1 data-generation check first; a burst only if Oracle's real quota (seen after sign-up) is large, otherwise continuous small runs within each credit; at most 75% of each credit; the Kaggle storage gap settled first (or labels made in-kernel if needed); burst parts named `g4-burst1-<provider>`, outside the letter sequence. Research (not committed): the free-compute report and the burst plan of 2026-11-15. |
 | 2026-11-15 | **Lazy SMP v1, roadmap step 17a: the design and its first commits (owner's order, about 5 PM EST: "start step 17a, minimal Lazy SMP ... report the design and first commits before any SPRT").** Spec in §5.6 ("Step 17a, minimal Lazy SMP"). Built: the TT's relaxed atomic word access and snapshot deposit; the coordinator's once-per-go setup (TT age and policy, the root's table ranking); the HelperPool (parked threads, Searchers allocated on their own threads, an abort flag, the main thread's time management and move, helpers waited for after bestmove); published counts summed for info lines; Threads now sets the search threads (at most one per hardware thread; one in stats builds); E4's notice removed. Threads = 1 takes the old path: bench unchanged, 5,205,904 / dfe99ebe03b0972d (r3kr1). **For the owner:** the hardware-thread cap, and `go nodes` counting the main thread's nodes only. No SPRT yet; the scaling plan (§5.6) is reported first. |
+| 2026-11-15 | **The owner's Lazy SMP decisions (about 6:25 PM EST).** (1) The thread cap stays at the hardware threads. (2) `go nodes` counts every thread's nodes, matching the info output; single-threaded searches (data generation, fixed-node screens) keep the exact main-thread count, which is the same thing at one thread (built: the summed check every 1,024 nodes; an smp case, fault-checked). (3) The one-thread cost is measured on GitHub runners with the speed workflow (speed-ab.yml, 9afcaeb against cc52377, x86-64-v3, 4 runners, 20 rounds: run 43774753294). (4) sprt.yml gets a concurrency input so that the search threads on a runner never exceed its vCPUs (one game at a time where needed); then on lane A the nps and time-to-depth curve at 1 and 2 threads (4 only where the runner has the vCPUs) and 2-vs-1 matches at STC, then LTC. 4-vs-2 only on the PC in a quiet window or on rented hardware. (5) The test that a stopped search stores nothing in the TT, before any SPRT (built: the search suite's stopped-search case, fault-checked). |
 
 ## 7. Performance doctrine (governs every phase)
 

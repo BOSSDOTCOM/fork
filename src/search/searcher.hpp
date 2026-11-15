@@ -836,7 +836,8 @@ class Searcher {
     published_hits_.store(table_hits_, std::memory_order_relaxed);
   }
   // This search's counts plus the helpers' published ones (the main thread
-  // of a multi-threaded search; its own alone otherwise).
+  // of a multi-threaded search; its own alone otherwise). A node limit
+  // counts pool_nodes with helpers (poll_limits).
   std::uint64_t pool_nodes() const;
   std::uint64_t pool_hits() const;
   // The soft limit for this iteration's soft check: the planned one, or with
