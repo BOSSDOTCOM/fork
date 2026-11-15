@@ -196,7 +196,8 @@ Exact phase histogram (phase 0-24): 11150884 16882000 64727752 42791093 99915108
 
 ## 5. Checks and UNVERIFIED
 
-- Every input's SHA-256 matched its committed manifest (sha_check.py; result in §5's last line).
+- Every input's SHA-256 matched its committed manifest: 279 of 279 (196 originals, 83 td90- copies;
+  sha_check.py, origin/retrain/8c-q's manifests).
 - The trainer build used is not a retrain/8c-q build. Its filter, dump and stats code and its crate pins were
   compared with 8c-q's and are identical (above).
 - **UNVERIFIED:** the rank 3 figures come from each file's first 300,000 kept positions (its first games), not
