@@ -46,8 +46,12 @@ std::optional<TableWdl> probe_table_wdl(const Position& pos);
 // fifty-move rule, in the tables' order of preference, into `keep`. Uses the
 // distance-to-zero tables, or the win/draw/loss tables if those are missing.
 // Returns false (and leaves `keep` empty) if the root is not in the tables or
-// a probe failed. `repeated`: the position has occurred before since the last
-// capture or pawn move (the ranking then avoids walking into a repetition).
-bool rank_root_by_tables(const Position& pos, bool repeated, MoveList& keep);
+// a probe failed. `fastest`: of the winning moves, keep only those with the
+// smallest distance to zero (counted with the fifty-move clock), not every
+// move that still wins under the rule (Fathom ranks those equally); the
+// search sets it after a repetition since the last capture or pawn move, so
+// the ranking avoids walking into another, and always with
+// use_fastest_table_win. Draws and losses are ranked the same either way.
+bool rank_root_by_tables(const Position& pos, bool fastest, MoveList& keep);
 
 }  // namespace forkeng

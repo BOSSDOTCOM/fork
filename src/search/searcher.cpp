@@ -1372,11 +1372,12 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   // Endgame tables at the root (deliverable 7): only the moves that keep the
   // best result under the fifty-move rule are searched, in the tables' order
   // (within any searchmoves). A repetition since the last capture or pawn
-  // move makes the ranking avoid repeating again.
+  // move makes the ranking avoid repeating again: it keeps only the fastest
+  // wins, as it always does with use_fastest_table_win.
   table_hits_ = 0;
   if (switches.use_tables && endgame_table_pieces() > 0) {
     MoveList kept;
-    if (rank_root_by_tables(pos, pos.repetition_count() >= 2, kept)) {
+    if (rank_root_by_tables(pos, switches.use_fastest_table_win || pos.repetition_count() >= 2, kept)) {
       MoveList searched;  // the kept moves that are root moves, in the tables' order
       for (Move m : kept)
         for (std::size_t i = 0; i < root_count_; ++i)

@@ -219,12 +219,13 @@ std::string joined(const std::vector<std::string>& moves) {
   return s;
 }
 
-// A fresh search with the tables loaded and default switches.
-SearchResult search_tables(Position& pos, int depth) {
+// A fresh search with the tables loaded, with default switches unless given.
+SearchResult search_tables(Position& pos, int depth, const SearchSwitches& switches = {}) {
   std::vector<TtBucket> buckets(16384);
   TransTable tt;
   tt.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
   auto searcher = std::make_unique<Searcher>(tt);
+  searcher->switches = switches;
   const std::atomic<bool> stop{false};
   SearchQuota q;
   q.depth = depth;
@@ -337,6 +338,23 @@ TEST_CASE("tables", "3-4-5 root ranking: after a repetition only the fastest win
   CHECK_EQ(pos.repetition_count(), 2);
   CHECK_EQ(joined(kept_moves(pos, true)), std::string("g1c5"));
   CHECK_EQ(pos.move_to_uci(search_tables(pos, 1).best), std::string("g1c5"));
+  load_endgame_tables("");
+}
+
+// use_fastest_table_win (owner, 2026-11-15): the ranking after a repetition,
+// for every won root. Without a repetition the same position keeps its 22
+// winning moves with fastest off and only g1c5 with it on, and the search
+// with the switch on plays g1c5 at every depth tried.
+TEST_CASE("tables", "3-4-5 search: use_fastest_table_win searches only the fastest win") {
+  if (!small_present()) return;
+  load_endgame_tables(small_dir());
+  Position pos = at(KqkFastest);
+  CHECK_EQ(kept_moves(pos, false).size(), std::size_t{22});
+  CHECK_EQ(joined(kept_moves(pos, true)), std::string("g1c5"));
+  SearchSwitches fastest;
+  fastest.use_fastest_table_win = true;
+  for (int depth = 1; depth <= 4; ++depth)
+    CHECK_MSG(pos.move_to_uci(search_tables(pos, depth, fastest).best) == "g1c5", "depth " << depth);
   load_endgame_tables("");
 }
 
