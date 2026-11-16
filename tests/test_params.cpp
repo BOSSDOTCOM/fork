@@ -33,6 +33,22 @@ TEST_CASE("params", "every default lies in its range, steps fit, names are uniqu
 // Deliverable 8b moved the divisor 4.5 into the table as 45 tenths: the
 // table must equal the one built with the earlier constants,
 // (L + 147456) / 294912, entry by entry.
+// The correctness audit of 2026-11-16 (area 3, A1): LMR clamps a reduced
+// depth to [1, new_depth] (searcher.cpp, main search and root), and new_depth
+// is depth - 1 (plus extensions) at LMR sites, which need depth >= LmrMinDepth.
+// A tuner may set LmrMinDepth to its range's lowest value, so that value must
+// be at least 2, or std::clamp gets lo 1 > hi 0 (undefined behaviour) at depth 1.
+TEST_CASE("params", "LmrMinDepth's range keeps LMR's clamp ordered (lowest at least 2)") {
+  bool found = false;
+  for (const TuneParam& p : param_table())
+    if (p.name == "LmrMinDepth") {
+      found = true;
+      CHECK_MSG(p.lowest >= 2, "LmrMinDepth's lowest is " << p.lowest);
+      CHECK(p.default_value >= p.lowest);
+    }
+  CHECK(found);
+}
+
 TEST_CASE("params", "the LMR table at 45 tenths equals the earlier formula") {
   const LmrTable table = make_lmr_table(45);
   for (int d = 1; d < LmrMaxDepth; ++d)

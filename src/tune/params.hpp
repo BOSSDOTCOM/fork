@@ -49,7 +49,7 @@
   X(NullSurplusPerPly, 301, 150, 600, 23)      \
   X(NullSurplusPliesMax, 2, 0, 6, 1)           \
   X(TableProbeMinDepth, 1, 1, 4, 1)            \
-  X(LmrMinDepth, 3, 1, 6, 1)                   \
+  X(LmrMinDepth, 3, 2, 6, 1)                   \
   X(LmrMinMove, 4, 1, 8, 1)                    \
   X(LmrDivisorTenths, 45, 23, 90, 3)           \
   X(LmrCorrectionStrength, 64, 0, 128, 6)      \
