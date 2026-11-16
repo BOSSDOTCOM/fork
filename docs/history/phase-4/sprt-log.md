@@ -2367,7 +2367,7 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
   0.00 +/- 5.13.** The run continues as a confirmation; its final line is added here.
 - **VM check (l1-check, fork-worker-1):** 80 games at 60+0.1 (Move Overhead 100), on against off: 0 time losses, 0
   illegal moves; the 384M-node replay's interim (8 of 16 games): spending only trimmed (see DESIGN.md's log).
-- **Decision (owner, 2026-11-16, about 4:00 PM EST):** adopt now (merge b0495f8b); report only if the SPRT or the
+- **Decision (owner, 2026-11-16):** adopt now (merge b0495f8b); report only if the SPRT or the
   replay changes the picture. Bench unchanged 5,205,904 / dfe99ebe03b0972d. Names screened: no match; the guard
   credited to Berserk 4.0-4.3's per-move maximum (ORIGINALITY.md).
 
