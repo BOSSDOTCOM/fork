@@ -4,7 +4,7 @@
 # stage at a time until the merged result (tools/cloud/sprt_merge.py) decides.
 # Run it from a clone where gh is logged in.
 #
-#   tools/github/sprt_run.sh --kind search|network|fixed --idea ID [OPTIONS] NAME BASE TEST
+#   tools/github/sprt_run.sh --kind search|network|fixed|factorial|guard --idea ID [OPTIONS] NAME BASE TEST
 #   tools/github/sprt_run.sh NAME BASE TEST ELO0 ELO1 [FIRST [LAST]]   (custom: as before 2026-11-07)
 #
 #   NAME         label: stage results go to $SPRT_DATA/NAME/s<stage>/, the
@@ -22,6 +22,10 @@
 #   --concurrency N   games at once per shard, 1 to 64, every kind (sprt.yml's concurrency input; default
 #                run_shard.sh's); for multi-threaded engines, e.g. 1 for one Threads 2 game per 4-vCPU runner
 #                (idea 84's plan, owner 2026-11-15); refused if REF's sprt.yml has no such input
+#   --tune       both sides one FORK_TUNE build of BASE (BASE and TEST the same commit; sprt.yml's tune input),
+#                e.g. a block check with TEST_OPTS switching a block off; implied by factorial and guard
+#   --design FILE   factorial: the design file (tools/github/factorial_fit.py; one row per shard)
+#   --look N     factorial: the one look after N stages (design §4.4: only 16, with --cap 24)
 #   ELO0, ELO1   custom nElo bounds (e.g. -3 0 for non-regression); FIRST, LAST
 #                the stages to run, default 0 and 12 (13 stages of 1,600 games)
 #
@@ -35,11 +39,23 @@
 #   futility stop;
 # - fixed: plays exactly --cap stages and reports "complete" (head-to-head
 #   pairings, tools/github/h2h_run.sh); not a try;
+# - factorial (the factorial removal round's screen, DESIGN.md §5.6 step 18; design
+#   docs/research/phase4-designs/factorial-removal-round.md §3, §4): STC only (§4.3), BASE = TEST played as
+#   one tuning build (§3.2), SHARDS equal to the design's rows; each stage's shards play the design's rows
+#   permuted by factorial_fit.py's SHA-256 permutation of NAME and the stage (§3.3), sent as sprt.yml's rows
+#   input and written to $SPRT_DATA/NAME/dispatch/s<stage>.json; the merge recomputes it and refuses a shard
+#   whose row differs. Plays --cap stages ("complete", never decided on the LLR; the bounds shown are kind
+#   fixed's, display only); with --look 16 --cap 24, after 16 stages the fit's one look (§4.4) stops when
+#   every estimate is more than 1 SE from 0, else plays on to 24 ($SPRT_DATA/NAME/look). At the end the fit
+#   (§3.5) goes to $SPRT_DATA/NAME/fit.json and the log. Not a try;
+# - guard (the combined guard, §3.6, §5.3): [-6, 0] nElo, alpha 0.05, beta 0.20, no futility stop, a cap of 8
+#   at STC; at LTC --cap 4, 5 or 6 is required (the LTC guard is the owner's decision 4, §8); BASE = TEST as
+#   one tuning build, TEST_OPTS the removals (required); a try of its idea (r30-guard, §5.3);
 # - custom (the positional bounds): alpha = beta = 0.05, stages FIRST to LAST,
 #   byte for byte the driver before 2026-11-07, so an SPRT started with it
 #   resumes unchanged, except that since 2026-11-12 it also writes the
 #   verdict file (H1 accepted, H0 accepted, or capped after stage LAST).
-# A search or network SPRT is a try of its idea: at most two per idea and
+# A search, network or guard SPRT is a try of its idea: at most two per idea and
 # time control class (tools/jobs/ledger.py try), a third only with
 # --owner-override. The design goes to $SPRT_DATA/NAME/design.json before the
 # first dispatch (its Hash included, so a restart with another --hash or HASH
@@ -115,12 +131,16 @@ here=$(cd "$(dirname "$0")" && pwd)
 cd "$here/../.."
 kind=custom idea= override= have_override=0 opt_cap= origin=0 opt_first= hash_cli_mb= hash_cli_given=0
 conc_cli= conc_cli_given=0
+tune=0 design_file= opt_look=
 pos=()
 while [ $# -gt 0 ]; do
   case $1 in
-    --kind | --idea | --owner-override | --cap | --origin | --first | --hash | --concurrency)
+    --tune) tune=1; shift ;;
+    --kind | --idea | --owner-override | --cap | --origin | --first | --hash | --concurrency | --design | --look)
       [ $# -ge 2 ] || { echo "sprt_run.sh: $1 needs a value" >&2; exit 1; }
       case $1 in
+        --design) design_file=$2 ;;
+        --look) opt_look=$2 ;;
         --kind) kind=$2 ;;
         --idea) idea=$2 ;;
         --owner-override) override=$2 have_override=1 ;;
@@ -137,7 +157,7 @@ while [ $# -gt 0 ]; do
 done
 set -- "${pos[@]}"
 if { [ "$kind" = custom ] && [ $# -lt 5 ]; } || [ $# -lt 3 ]; then
-  sed -n '7,26p' "$here/sprt_run.sh" >&2
+  sed -n '7,30p' "$here/sprt_run.sh" >&2
   exit 1
 fi
 if [ "$kind" = custom ]; then
@@ -206,7 +226,10 @@ ledger() { "$py" -I tools/jobs/ledger.py "$@"; }
 # The design of a kind (the table in the header); refuses what the owner's decisions do not allow.
 design_defaults() {
   local n
-  case $kind in search | network | fixed) ;; *) stop "unknown --kind '$kind' (search, network or fixed)" ;; esac
+  case $kind in
+    search | network | fixed | factorial | guard) ;;
+    *) stop "unknown --kind '$kind' (search, network, fixed, factorial or guard)" ;;
+  esac
   [ $# -eq 3 ] || stop "kind $kind takes its bounds from its design, not positional ELO0 ELO1"
   [ -n "$idea" ] || stop "kind $kind needs --idea ID (the idea under test; each retrain is its own idea)"
   [[ $idea =~ ^[a-z0-9][a-z0-9.-]{0,47}$ ]] || stop "--idea '$idea' is not [a-z0-9][a-z0-9.-]*"
@@ -239,7 +262,42 @@ design_defaults() {
       elo0=0 elo1=6 alpha=0.05 beta=0.20 futility_after=0
       [ -n "$opt_cap" ] && [ "$opt_cap" -ge 1 ] || stop "kind fixed needs --cap N (the stages to play)"
       cap=$opt_cap ;;
+    factorial)
+      # The screen is STC by design (factorial-removal-round.md §4.3); the bounds are kind fixed's, shown only.
+      [ "$tc_class" = stc ] || stop "kind factorial runs at STC only (design §4.3)"
+      elo0=0 elo1=6 alpha=0.05 beta=0.20 futility_after=0
+      [ -n "$opt_cap" ] && [ "$opt_cap" -ge 1 ] ||
+        stop "kind factorial needs --cap N (the pilot 1 stage; the main screen --cap 24 --look 16; design §4.1)"
+      cap=$opt_cap
+      # The one look (design §4.4): after 16 stages, extended to 24 only under it.
+      if [ -n "$opt_look" ]; then
+        [ "$opt_look" = 16 ] && [ "$cap" = 24 ] || stop "--look: design §4.4's one look is after 16 stages, with --cap 24"
+      fi
+      [ -n "$design_file" ] || stop "kind factorial needs --design FILE (tools/github/factorial_fit.py search)"
+      design_file=$(fork_path_for "$py" "$design_file") || stop "cannot convert $design_file for $py"
+      [ -z "${TEST_OPTS:-}" ] || stop "kind factorial takes each shard's test options from its design row; TEST_OPTS must be empty"
+      design_sha=$("$py" -I -c 'import sys; sys.path.insert(0, "tools/github"); import factorial_fit as f
+d = f.load_design(sys.argv[1]); print(f.design_digest(d), len(d["rows"]))' "$design_file" 2>&1) ||
+        stop "--design $design_file: $(printf '%s\n' "$design_sha" | tail -1)"
+      design_rows=${design_sha#* } design_sha=${design_sha%% *}
+      [ "$SHARDS" = "$design_rows" ] || stop "kind factorial plays one design row per shard: SHARDS $SHARDS, but $design_rows rows"
+      tune=1 ;;
+    guard)
+      # The combined guard (design §3.6, §5.3): design R's alpha and beta on [-6, 0], cap 8 at STC; no futility look
+      # (none is named for it). LTC: the same bounds and 4-6 stages, the number left to the owner (§5.3, §8.4).
+      elo0=-6 elo1=0 alpha=0.05 beta=0.20 futility_after=0
+      if [ "$tc_class" = stc ]; then
+        [ -z "$opt_cap" ] || [ "$opt_cap" = 8 ] || stop "kind guard at STC has a cap of 8 stages (design §3.6)"
+        cap=8
+      else
+        case $opt_cap in 4 | 5 | 6) cap=$opt_cap ;; *) stop "kind guard at LTC needs --cap 4, 5 or 6 (design §5.3; the owner's choice)" ;; esac
+      fi
+      [ -n "${TEST_OPTS:-}" ] || stop "kind guard needs TEST_OPTS (the removals, e.g. option.UseLmp=false ...)"
+      tune=1 ;;
   esac
+  if [ "$kind" != factorial ] && { [ -n "$design_file" ] || [ -n "$opt_look" ]; }; then
+    stop "--design and --look belong to kind factorial"
+  fi
   first=${opt_first:-$origin}
   last=$((origin + cap - 1))
   [ "$first" -ge "$origin" ] && [ "$first" -le "$last" ] || stop "--first $first is outside stages $origin to $last"
@@ -250,7 +308,7 @@ declare_design() {
   "$py" -I - "$data/design.json" kind="$kind" tc_class="$tc_class" tc="$TC" hash="$HASH" games="$GAMES" \
     shards="$SHARDS" tables="${TABLES:-on}" base_opts="${BASE_OPTS:-}" test_opts="${TEST_OPTS:-}" elo0="$elo0" \
     elo1="$elo1" alpha="$alpha" beta="$beta" cap="$cap" futility_after="$futility_after" origin="$origin" \
-    idea="$idea" base="$base" test="$test" "${conc_kv[@]}" <<'EOF'
+    idea="$idea" base="$base" test="$test" "${conc_kv[@]}" "${extra_kv[@]}" <<'EOF'
 import json, sys, time
 path, want = sys.argv[1], dict(kv.split('=', 1) for kv in sys.argv[2:])
 try:
@@ -267,9 +325,17 @@ EOF
 }
 
 [ "$kind" = custom ] || design_defaults "$@"
+[ "$kind" != custom ] || [ -z "$design_file$opt_look" ] || stop "--design and --look belong to kind factorial"
+# The tuning build (--tune, factorial, guard) and the factorial design, in the kinds' design.json only when used,
+# so a design without them is unchanged.
+extra_kv=()
+[ "$tune" = 0 ] || extra_kv+=(tune=on)
+[ "$kind" != factorial ] || extra_kv+=(design="$design_sha" look="${opt_look:-none}")
 command -v "$GH" >/dev/null 2>&1 || stop "no gh command '$GH' (set GH to its path)"
 base=$(git rev-parse --verify --quiet "$2^{commit}") || stop "base $2 is not a commit in this clone"
 test=$(git rev-parse --verify --quiet "$3^{commit}") || stop "test $3 is not a commit in this clone"
+[ "$tune" = 0 ] || [ "$base" = "$test" ] ||
+  stop "the tuning build plays one binary on both sides (design §3.2): BASE and TEST must be the same commit"
 REF=${REF:-$(git rev-parse --abbrev-ref HEAD)}
 REPO=${REPO:-$(git remote get-url origin | sed -E 's#^(https://github\.com/|git@github\.com:)##; s#\.git$##')}
 for c in "$base" "$test"; do
@@ -280,10 +346,14 @@ done
 header="base $base, test $test, bounds [$elo0, $elo1], stages $first to $last, ref $REF"
 [ "$hash_cli_given" = 0 ] || header="$header, hash $HASH MB (--hash)"
 [ "$conc_cli_given" = 0 ] || header="$header, concurrency $conc_cli (--concurrency)"
+[ "$tune" = 0 ] || header="$header, tuning build"
+[ "$kind" != factorial ] || header="$header, design ${design_sha:0:12} ($SHARDS rows), look ${opt_look:-none}"
 bounds="$elo0 $elo1"
 if [ "$kind" != custom ]; then
   try_args=()
-  if [ "$kind" != fixed ]; then
+  if [ "$kind" = factorial ]; then
+    trymsg="factorial screen, not a try"
+  elif [ "$kind" != fixed ]; then
     try_args=(try "$idea" "$name" --kind "$kind" --tc-class "$tc_class" --base "$base" --test "$test")
     [ "$have_override" = 0 ] || try_args+=(--owner-override "$override")
     trymsg=$(ledger "${try_args[@]}" --check 2>&1) || stop "$trymsg"
@@ -298,7 +368,7 @@ if [ "$kind" != custom ]; then
   done
   bounds="$elo0 $elo1 $alpha $beta"
   case $futility_after in 0) fut="no futility stop" ;; *) fut="futility after $futility_after stages" ;; esac
-  [ "$kind" != fixed ] || fut="fixed length"
+  [ "$kind" != fixed ] && [ "$kind" != factorial ] || fut="fixed length"
   header="$header, kind $kind, $tc_class, alpha $alpha, beta $beta, cap $cap, $fut, idea $idea ($trymsg)"
 fi
 
@@ -356,6 +426,14 @@ runs() { "$GH" run list -R "$REPO" -w sprt.yml -L 30 --json databaseId,displayTi
 say "$header"
 for stage in $(seq "$first" "$last"); do
   title="sprt $base $test stage $stage"
+  # The factorial screen's one look (design §4.4): its stages run to the look, and past it only if the look said
+  # "extend" ($data/look, written once by the look); the merge's fixed length is the look's until then.
+  eff_cap=${cap:-}  # the custom kind has no cap
+  if [ "$kind" = factorial ] && [ -n "$opt_look" ] && [ "$(cat "$data/look" 2>/dev/null)" != extend ]; then
+    eff_cap=$opt_look
+    [ $((stage - origin + 1)) -le "$opt_look" ] ||
+      stop "stage $stage: past the one look after $opt_look stages, which did not say extend ($data/look)"
+  fi
   if [ "$stage" = "$first" ] && [ -n "${RUN_ID:-}" ]; then
     id=$RUN_ID
     ledger check "$name" "$stage" "$id" "$base" "$test" ||
@@ -370,7 +448,17 @@ for stage in $(seq "$first" "$last"); do
     # --concurrency goes out only as REF's sprt.yml's concurrency input (an indented inputs entry, not the
     # workflow's top-level concurrency group); a REF without it, or a sprt.yml that cannot be read, would play
     # another design, so the stage is refused.
-    with_name=() with_conc=()
+    # The tuning build and the factorial rows go out the same way, as REF's sprt.yml's tune and rows inputs; a REF
+    # without them is refused. The stage's rows (the permutation of NAME and the stage) are written to
+    # $data/dispatch/s<stage>.json, the stage's dispatch record, before the dispatch.
+    with_name=() with_conc=() with_tune=() with_rows=()
+    if [ "$kind" = factorial ]; then
+      rows_json=$("$py" -I tools/github/factorial_fit.py rows --design "$design_file" --name "$name" --stage "$stage" 2>&1) ||
+        stop "stage $stage: the design's rows: $(printf '%s\n' "$rows_json" | tail -1)"
+      mkdir -p "$data/dispatch" && printf '%s\n' "$rows_json" >"$data/dispatch/s$stage.json" ||
+        stop "stage $stage: the dispatch record could not be written"
+      with_rows=(-f rows="$rows_json")
+    fi
     if yml=$(gh_retry "stage $stage: sprt.yml at $REF" "$GH" workflow view sprt.yml -R "$REPO" --ref "$REF" --yaml); then
       if printf '%s\n' "$yml" | grep -qE '^[[:space:]]+name:[[:space:]]*\{'; then
         with_name=(-f name="$name")
@@ -381,9 +469,19 @@ for stage in $(seq "$first" "$last"); do
           stop "stage $stage: --concurrency $conc_cli, but REF $REF's sprt.yml has no concurrency input"
         with_conc=(-f concurrency="$conc_cli")
       fi
+      if [ "$tune" = 1 ]; then
+        printf '%s\n' "$yml" | grep -qE '^[[:space:]]+tune:[[:space:]]*\{' ||
+          stop "stage $stage: a tuning build, but REF $REF's sprt.yml has no tune input"
+        with_tune=(-f tune=on)
+      fi
+      if [ "$kind" = factorial ]; then
+        printf '%s\n' "$yml" | grep -qE '^[[:space:]]+rows:[[:space:]]*\{' ||
+          stop "stage $stage: kind factorial, but REF $REF's sprt.yml has no rows input"
+      fi
     else
       [ "$conc_cli_given" = 0 ] ||
         stop "stage $stage: sprt.yml at $REF could not be read, so --concurrency $conc_cli cannot be checked"
+      [ "$tune" = 0 ] || stop "stage $stage: sprt.yml at $REF could not be read, so its tune input cannot be checked"
       say "stage $stage: sprt.yml at $REF could not be read: the run title without the SPRT's name" >&2
     fi
     before=$(runs | awk 'NR == 1 {print $1}')
@@ -391,7 +489,7 @@ for stage in $(seq "$first" "$last"); do
     "$GH" workflow run sprt.yml -R "$REPO" --ref "$REF" -f base="$base" -f test="$test" -f bounds="$bounds" \
       -f tc="${TC:-8+0.08}" -f hash="${HASH:-16}" -f games="${GAMES:-1600}" -f shards="$SHARDS" -f stage="$stage" \
       -f tables="${TABLES:-on}" -f test_opts="${TEST_OPTS:-}" -f base_opts="${BASE_OPTS:-}" "${with_name[@]}" \
-      "${with_conc[@]}" >/dev/null 2>&1 || stop "stage $stage: dispatch failed"
+      "${with_conc[@]}" "${with_tune[@]}" "${with_rows[@]}" >/dev/null 2>&1 || stop "stage $stage: dispatch failed"
     id=
     for _ in $(seq 30); do
       sleep $((POLL < 10 ? POLL : 10))
@@ -406,7 +504,7 @@ for stage in $(seq "$first" "$last"); do
     ledger add "$name" "$stage" "$id" --base "$base" --test "$test" || stop "stage $stage: run $id: ledger refused it"
     say "stage $stage: run $id dispatched (ledger)"
     # The try counts from its first dispatched run (a resume is not a new try).
-    if [ "$kind" = search ] || [ "$kind" = network ]; then
+    if [ "$kind" = search ] || [ "$kind" = network ] || [ "$kind" = guard ]; then
       ledger "${try_args[@]}" >/dev/null 2>&1 || stop "stage $stage: the ledger refused the try record"
     fi
   fi
@@ -451,9 +549,12 @@ EOF
   if [ "$kind" = custom ]; then
     staged=() keep=5
   else
-    staged=(--alpha "$alpha" --beta "$beta" --played $((stage - origin + 1)) --cap "$cap" --futility-after "$futility_after")
+    staged=(--alpha "$alpha" --beta "$beta" --played $((stage - origin + 1)) --cap "$eff_cap" --futility-after "$futility_after")
     [ "$kind" != fixed ] || staged+=(--fixed)
+    # factorial: a fixed length, and every shard's row checked against the recomputed permutation; its log also
+    # keeps the merge's Rows line, between the LLR and Verdict lines.
     keep=6
+    [ "$kind" != factorial ] || { staged+=(--fixed --design "$design_file" --name "$name"); keep=7; }
   fi
   merged=$("$py" -I tools/cloud/sprt_merge.py merge --elo0 "$elo0" --elo1 "$elo1" "${staged[@]}" "${files[@]}" 2>&1) ||
     stop "stage $stage: run $id's results were not merged: $(printf '%s\n' "$merged" | tail -1)"
@@ -473,6 +574,23 @@ EOF
     continue
   fi
   v=$(echo "$merged" | sed -n 's/^Verdict: //p' | tail -1)
+  # factorial, complete: the fit (design §3.5) over every stage so far, to fit.json, fit.txt and the log; at the
+  # one look (design §4.4) its Look line stops the screen or plays on to the cap, recorded once in $data/look.
+  if [ "$kind" = factorial ] && [ "${v%% *}" = complete ]; then
+    fit=$("$py" -I tools/github/factorial_fit.py fit --design "$design_file" --name "$name" --json "$data/fit.json" \
+      "${files[@]}" 2>&1) || stop "stage $stage: the fit refused: $(printf '%s\n' "$fit" | tail -1)"
+    printf '%s\n' "$fit" >"$data/fit.txt"
+    say "stage $stage: the fit over stages $origin to $stage"
+    echo "$fit" | sed 's/^/    /' | tee -a "$data/driver.log"
+    if [ "$eff_cap" != "$cap" ]; then
+      look=$(echo "$fit" | sed -n 's/^Look: //p' | tail -1)
+      case $look in
+        stop*) echo stop >"$data/look"; say "the one look after $opt_look stages: $look: the screen stops" ;;
+        extend*) echo extend >"$data/look"; say "the one look after $opt_look stages: $look: on to $cap stages"; continue ;;
+        *) stop "stage $stage: no Look line in the fit" ;;
+      esac
+    fi
+  fi
   case $v in
     continue) ;;
     "H1 accepted" | "H0 accepted") echo "$v" >"$data/verdict"; say "decided after stage $stage: $v"; exit 0 ;;
