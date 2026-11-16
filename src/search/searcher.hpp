@@ -292,8 +292,9 @@ struct SearchQuota {
 //   the rule cannot have made it wrong: the rule only pulls a result toward
 //   the draw, so a lower bound at or below 0, an upper bound at or above 0,
 //   an exact 0, and a mate (or mated) score whose mate falls on or before
-//   the rule's last ply stay true. The TT move still orders the moves. Off
-//   until its non-regression SPRT.
+//   the rule's last ply stay true. The TT move still orders the moves. On
+//   in sprt/tt-halfmove-guard, the test side of its non-regression STC SPRT
+//   [-3, 0]; adopted only on a pass (owner).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -348,7 +349,7 @@ struct SearchQuota {
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
   X(use_helper_skip, UseHelperSkip, false)               \
-  X(use_tt_halfmove_guard, UseTtHalfmoveGuard, false)
+  X(use_tt_halfmove_guard, UseTtHalfmoveGuard, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

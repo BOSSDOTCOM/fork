@@ -547,8 +547,8 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   reverted 2026-10-28, would widen it). Settle with a constructed 5-man two-path test: the same
   position reached once right after a capture and once 90 plies later.
   **Built 2026-11-16 as `UseTtHalfmoveGuard`** (owner: "TCEC hazards now,
-  before the removal round"; off until its non-regression SPRT [-3, 0],
-  adopted on a pass): a TT score settles no node (main search or
+  before the removal round"; on in sprt/tt-halfmove-guard, the test side
+  of its non-regression SPRT [-3, 0], adopted on a pass): a TT score settles no node (main search or
   quiescence) when the node's clock plus the plies the cutoff stands in for
   (the node's depth; in quiescence 1 in check, else 0, as captures and
   promotions reset the clock) reaches 100, unless the rule cannot have made
