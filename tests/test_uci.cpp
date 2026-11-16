@@ -319,7 +319,9 @@ TEST_CASE("uci_protocol", "Threads 4: go, stop, ponder, ucinewgame, Threads chan
   g.send("ponderhit");
   CHECK(g.next("bestmove").has_value());
   g.send("ucinewgame");
-  g.send("go nodes 20000");
+  // Small: the gcc-tsan Debug build with four threads on a 4-vCPU runner searched 20,000 main-thread nodes
+  // in more than the 10 s patience (CI 43774097220, cc52377); the smp suite checks the node limit itself.
+  g.send("go nodes 4000");
   CHECK(g.next("bestmove").has_value());
   for (const char* threads : {"2", "1", "3"}) {
     g.send(std::string("setoption name Threads value ") + threads);
