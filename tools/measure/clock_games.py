@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Clock games between two settings of one Fork binary: the time-loss check of L1 (the time-management audit of
+"""Clock games between two Fork binaries: the time-loss check of L1 (the time-management audit of
 2026-11-16, switch UseTimeGuards; DESIGN.md §5.2 "Search constants", TimeGuardPermille).
 
 Each game is played over UCI with a real clock: before each move the side to move is sent its clock (`go wtime
@@ -9,17 +9,18 @@ increment with the clock: tools/measure/clock_share.py), so a time loss here is 
 below zero after a move is a time loss: the game ends, lost on time. Otherwise a game ends by the rules
 (python-chess: mate, stalemate, insufficient material, threefold repetition, the 50-move rule) or as a draw at
 --max-plies. Openings: --games / 2 starts from an EPD file (a seeded shuffle), each played with both colours.
-Arm A gets --option-a, arm B --option-b (NAME=VALUE, repeatable); both get Hash, Threads 1, the Move Overhead and
-CalibratedScore false. Engines run at niceness --nice (POSIX; 0 shares the CPU equally with a running data
+Arm A is FORK_A with --option-a, arm B FORK_B with --option-b (NAME=VALUE, repeatable; a name the engine does not
+declare is an error: search switches are UCI options only in tuning builds, so L1's arms are two builds, the
+switch-off and the switch-on commit); both get Hash, Threads 1, the Move Overhead and CalibratedScore false. Engines run at niceness --nice (POSIX; 0 shares the CPU equally with a running data
 generation).
 
 Reported per arm: moves, time losses, the smallest clock left after a move, the largest share of the clock less
 the Move Overhead one move took, and the moves over 0.5 and 0.9 of it; per game: result, plies, how it ended.
 The game files (one JSON line per game, the moves and times) go to OUT.jsonl, so a stopped run resumes.
 
-    clock_games.py FORK OPENINGS.epd OUT --games 80 --base-ms 60000 --inc-ms 100 [--overhead-ms 100]
+    clock_games.py FORK_A FORK_B OPENINGS.epd OUT --games 80 --base-ms 60000 --inc-ms 100 [--overhead-ms 100]
                    [--concurrency 2] [--nice 0] [--seed 20261116] [--hash 64] [--syzygy DIR] [--max-plies 400]
-                   [--option-a UseTimeGuards=true] [--option-b UseTimeGuards=false]
+                   [--option-a NAME=VALUE] [--option-b NAME=VALUE]
 """
 import argparse
 import json
@@ -45,8 +46,21 @@ class Engine:
             except OSError:
                 pass
         self.send('uci')
-        self.wait_for('uciok')
+        declared = set()
+        while True:
+            line = self.process.stdout.readline()
+            if not line:
+                raise RuntimeError('engine exited before uciok')
+            if line.startswith('option name '):
+                declared.add(line[len('option name '):].split(' type ')[0].strip())
+            if line.startswith('uciok'):
+                break
         for name, value in options:
+            if name == 'CalibratedScore' and name not in declared:
+                continue  # the display calibration: set off wherever a build declares it
+            if name not in declared:
+                self.close()
+                raise RuntimeError(f'{path} does not declare the option {name!r}')
             self.send(f'setoption name {name} value {value}')
         self.send('ucinewgame')
         self.send('isready')
@@ -72,7 +86,7 @@ class Engine:
             self.process.kill()
 
 
-def play(fork, fen, a_white, settings):
+def play(forks, fen, a_white, settings):
     """One game; returns its record (arms 'a' and 'b')."""
     common = [('CalibratedScore', 'false'), ('Threads', 1), ('Hash', settings['hash']),
               ('Move Overhead', settings['overhead_ms'])]
@@ -80,7 +94,14 @@ def play(fork, fen, a_white, settings):
         common.append(('SyzygyPath', settings['syzygy']))
     arms = {'a': common + settings['option_a'], 'b': common + settings['option_b']}
     colour_arm = {chess.WHITE: 'a' if a_white else 'b', chess.BLACK: 'b' if a_white else 'a'}
-    engines = {arm: Engine(fork, opts, settings['nice']) for arm, opts in arms.items()}
+    engines = {}
+    try:
+        for arm, opts in arms.items():
+            engines[arm] = Engine(forks[arm], opts, settings['nice'])
+    except Exception:
+        for e in engines.values():
+            e.close()
+        raise
     board = chess.Board(fen)
     clock = {chess.WHITE: settings['base_ms'], chess.BLACK: settings['base_ms']}
     inc = settings['inc_ms']
@@ -150,7 +171,8 @@ def summarise(records, overhead_ms):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    parser.add_argument('fork')
+    parser.add_argument('fork_a')
+    parser.add_argument('fork_b')
     parser.add_argument('openings', type=Path)
     parser.add_argument('out', type=Path, help='OUT.jsonl (games) and OUT.summary.json')
     parser.add_argument('--games', type=int, required=True)
@@ -187,7 +209,7 @@ def main(argv=None):
     def one(start):
         if start in done:
             return done[start]
-        r = play(a.fork, start[0], start[1], settings)
+        r = play({'a': a.fork_a, 'b': a.fork_b}, start[0], start[1], settings)
         with lock, open(out, 'a', encoding='utf-8') as f:
             f.write(json.dumps(r, separators=(',', ':')) + '\n')
         return r
@@ -195,7 +217,7 @@ def main(argv=None):
     with ThreadPoolExecutor(max_workers=a.concurrency) as pool:
         records = list(pool.map(one, starts))
     summary = summarise(records, a.overhead_ms)
-    summary['settings'] = {k: v for k, v in settings.items()}
+    summary['settings'] = dict(settings, fork_a=a.fork_a, fork_b=a.fork_b)
     Path(str(a.out) + '.summary.json').write_text(json.dumps(summary, indent=1) + '\n', encoding='utf-8')
     print(json.dumps(summary, indent=1))
     return 0

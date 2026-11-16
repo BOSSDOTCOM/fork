@@ -8,10 +8,12 @@
 # clock games at a time, so it takes about JOBS + 2 of the 8 vCPUs and the filler keeps running (slower) the
 # whole time. Resumable: game_replay.py and clock_games.py both skip what is already done.
 #
-#   bash l1_check.sh ROOT STATS_SHA256 RELEASE_SHA256 [NODES] [JOBS]
+#   bash l1_check.sh ROOT STATS_SHA256 OFF_SHA256 ON_SHA256 [NODES] [JOBS]
 #
-# ROOT holds src/ (the repository at this branch's switch-on commit), build-stats/fork (its clang-stats build,
-# x86-64-v3), build-v3/fork (its clang-v3 build) and l1/games.jsonl (game_replay.py games output). Writes
+# ROOT holds src/ (the repository at the switch-off commit, tm/deep-depth-cap), build-stats/fork (its clang-stats
+# build), build-off/fork and build-on/fork (clang-v3 builds of the switch-off commit and of the switch-on test
+# commit, sprt/time-guards: search switches are UCI options only in tuning builds) and l1/games.jsonl
+# (game_replay.py games output). Writes
 # /opt/fork/out/l1-check/: clock.jsonl and clock.summary.json (the time-loss check), replay/ (one file per game),
 # analysis.json (e2_tm_replay.py --l1), bench-before.txt, bench-after.txt and done.json last.
 #
@@ -26,36 +28,39 @@
 #    hard limit, and both by the stop's depth band (30-34, 35-39, 40+). go nodes reads neither guard, so one
 #    replay serves both settings.
 set -euo pipefail
-root=${1:?usage: l1_check.sh ROOT STATS_SHA256 RELEASE_SHA256 [NODES] [JOBS]}
+root=${1:?usage: l1_check.sh ROOT STATS_SHA256 OFF_SHA256 ON_SHA256 [NODES] [JOBS]}
 pin_stats=${2:?}
-pin_release=${3:?}
-nodes=${4:-384000000}
-jobs=${5:-2}
+pin_off=${3:?}
+pin_on=${4:?}
+nodes=${5:-384000000}
+jobs=${6:-2}
 out=/opt/fork/out/l1-check
 py=/opt/fork/venv/bin/python
 stats=$root/build-stats/fork
-release=$root/build-v3/fork
+off=$root/build-off/fork
+on=$root/build-on/fork
 mkdir -p "$out"
 say() { echo "$(TZ=EST5 date '+%Y-%m-%d %I:%M:%S %p EST') l1: $*"; }
 echo "$pin_stats  $stats" | sha256sum -c --quiet
-echo "$pin_release  $release" | sha256sum -c --quiet
-net=$("$release" version | sed -n 's/^net //p')
+echo "$pin_off  $off" | sha256sum -c --quiet
+echo "$pin_on  $on" | sha256sum -c --quiet
+net=$("$off" version | sed -n 's/^net //p')
 want=$(grep -E '^(nodes|signature) ' "$root/src/tests/bench-${net:?}.ref")
-for b in "$stats" "$release"; do
+for b in "$stats" "$off" "$on"; do
   got=$("$b" bench 2>&1 | grep -E '^(nodes|signature) ')
   [ "$got" = "$want" ] || { say "bench before ($b): $got, want $want"; exit 1; }
 done
 echo "$want" >"$out/bench-before.txt"
 say "time-loss check: 80 games at 60+0.1, UseTimeGuards on (a) against off (b), 2 at a time"
-"$py" -I "$root/src/tools/measure/clock_games.py" "$release" /opt/fork/inputs/lichess-2026-09.epd "$out/clock" \
+"$py" -I "$root/src/tools/measure/clock_games.py" "$on" "$off" /opt/fork/inputs/lichess-2026-09.epd "$out/clock" \
   --games 80 --base-ms 60000 --inc-ms 100 --overhead-ms 100 --concurrency 2 --nice 0 --seed 20261116 --hash 64 \
-  --syzygy /opt/fork/syzygy --option-a UseTimeGuards=true --option-b UseTimeGuards=false >/dev/null
+  --syzygy /opt/fork/syzygy >/dev/null
 say "replay: nodes $nodes, $jobs games at once, hash 256, every 4th position, 8 per game"
 "$py" -I "$root/src/tools/measure/game_replay.py" run "$stats" "$root/l1/games.jsonl" "$out/replay" --nodes "$nodes" \
   --jobs "$jobs" --nice 0 --stride 4 --max-positions 8 --syzygy /opt/fork/syzygy --report iterations --hash 256
 n=$(ls "$out/replay"/game-*.jsonl | wc -l)
 [ "$n" -eq "$(wc -l <"$root/l1/games.jsonl")" ] || { say "only $n game files"; exit 1; }
-for b in "$stats" "$release"; do
+for b in "$stats" "$off" "$on"; do
   got=$("$b" bench 2>&1 | grep -E '^(nodes|signature) ')
   [ "$got" = "$want" ] || { say "bench after ($b): $got, want $want"; exit 1; }
 done
