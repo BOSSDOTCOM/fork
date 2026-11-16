@@ -1,0 +1,201 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Lazy SMP scaling diagnostics on GitHub runners (DESIGN.md §5.6 step 17a;
+# owner, 2026-11-15, decision 4): time to depth, nodes and nps of one Fork
+# build at 1, 2 and 4 threads (each count only where the runner has the CPUs:
+# tools/smp/scaling.py --threads auto), over the 46 bench positions. A
+# diagnostic only: games decide (time to depth understates Lazy SMP's gain).
+#
+# One build job builds the commit as the SPRT and speed builds do (update.sh,
+# Ubuntu 22.04, gcc 11.4, CXX=g++, a pinned target, never native) from a
+# worktree, so the binary carries its commit, and checks target and identity.
+# 1-4 runner jobs run the tool, each on its own CPU; a summary job merges
+# them (each runner against its own one-thread run). Tools come from the
+# workflow's own commit. A pull request touching these files runs a smoke:
+# its own head, depth 8, 2 rounds, 1 runner, 8 positions.
+name: smp-scaling
+run-name: >-
+  smp-scaling ${{ inputs.commit || github.event.pull_request.head.sha }} ${{ inputs.arch || 'x86-64-v3' }}
+  depth ${{ inputs.depth || '8' }}${{ inputs.name && format(' ({0})', inputs.name) || '' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit: {description: "The commit to measure (SHA, branch or tag); it must have Lazy SMP (Threads above 1)", required: true}
+      arch:
+        description: "FORK_ARCH (x86-64-v4 needs AVX-512 on every runner)"
+        type: choice
+        options: [x86-64-v3, x86-64-v4]
+        default: x86-64-v3
+      depth: {description: "Search depth per position (6-30)", required: true, default: "15"}
+      rounds: {description: "Rounds per runner (1-20; each runs every thread count once)", required: true, default: "3"}
+      runners:
+        description: "Runners, each its own curve on its own CPU"
+        type: choice
+        options: ["1", "2", "3", "4"]
+        default: "2"
+      hash: {description: "Hash MB", required: true, default: "64"}
+      name: {description: "A label, at the end of the run title only", required: false, default: ""}
+  pull_request:
+    paths:
+      - .github/workflows/smp-scaling.yml
+      - tools/smp/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: >-
+    smp-scaling-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number)
+    || format('{0}-{1}-{2}', inputs.commit, inputs.arch, inputs.depth) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    if: github.repository == 'BOSSDOTCOM/fork'
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    timeout-minutes: 45
+    outputs:
+      sha: ${{ steps.plan.outputs.sha }}
+      runners: ${{ steps.plan.outputs.runners }}
+      runner_count: ${{ steps.plan.outputs.runner_count }}
+      depth: ${{ steps.plan.outputs.depth }}
+      rounds: ${{ steps.plan.outputs.rounds }}
+      hash: ${{ steps.plan.outputs.hash }}
+      positions: ${{ steps.plan.outputs.positions }}
+    steps:
+      - name: "Toolchain (Ubuntu 22.04, gcc 11.4, CMake 3.22, as TCEC and the SPRT builds)"
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q build-essential cmake git ca-certificates python3
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: The tool's tests (tools/smp)
+        run: python3 -I -B -m unittest discover -s tools/smp -p 'test_*.py' -v
+      - name: Plan
+        id: plan
+        env:
+          COMMIT: ${{ inputs.commit || github.event.pull_request.head.sha }}
+          ARCH: ${{ inputs.arch || 'x86-64-v3' }}
+          DEPTH: ${{ inputs.depth || '8' }}
+          ROUNDS: ${{ inputs.rounds || '2' }}
+          RUNNERS: ${{ inputs.runners || '1' }}
+          HASH_MB: ${{ inputs.hash || '64' }}
+          POSITIONS: ${{ github.event_name == 'pull_request' && '8' || '0' }}
+        run: |
+          git config --global --add safe.directory '*'
+          fail() { echo "::error::$*"; exit 1; }
+          case "$ARCH" in x86-64-v3 | x86-64-v4) ;; *) fail "arch must be x86-64-v3 or x86-64-v4 (never native)" ;; esac
+          for v in DEPTH ROUNDS HASH_MB; do case "${!v}" in '' | *[!0-9]*) fail "$v must be a number" ;; esac; done
+          [ "$DEPTH" -ge 6 ] && [ "$DEPTH" -le 30 ] || fail "depth must be 6-30"
+          [ "$ROUNDS" -ge 1 ] && [ "$ROUNDS" -le 20 ] || fail "rounds must be 1-20"
+          [ "$HASH_MB" -ge 1 ] && [ "$HASH_MB" -le 4096 ] || fail "hash must be 1-4096 MB"
+          case "$RUNNERS" in 1 | 2 | 3 | 4) ;; *) fail "runners must be 1-4" ;; esac
+          resolve() { git rev-parse -q --verify "refs/remotes/origin/$1^{commit}" || git rev-parse -q --verify "$1^{commit}"; }
+          sha=$(resolve "$COMMIT") || fail "cannot resolve '$COMMIT' to a commit"
+          echo "commit $COMMIT = $sha"
+          {
+            echo "sha=$sha"
+            echo "runners=[$(seq -s, 1 "$RUNNERS")]"
+            echo "runner_count=$RUNNERS"
+            echo "depth=$DEPTH"
+            echo "rounds=$ROUNDS"
+            echo "hash=$HASH_MB"
+            echo "positions=$POSITIONS"
+            echo "arch=$ARCH"
+          } >>"$GITHUB_OUTPUT"
+      - name: Build (update.sh, CXX=g++), check identity
+        env:
+          FORK_ARCH: ${{ steps.plan.outputs.arch }}
+          SHA: ${{ steps.plan.outputs.sha }}
+        run: |
+          fail() { echo "::error::$*"; exit 1; }
+          export FORK_ARCH
+          mkdir -p engine
+          src="$RUNNER_TEMP/src"
+          git worktree add -q --detach "$src" "$SHA"
+          (cd "$src" && CXX=g++ ./update.sh) >engine/build.log 2>&1 || { tail -n 40 engine/build.log; fail "the build failed"; }
+          cp "$src/build/tcec/fork" engine/fork
+          v=$(engine/fork version | tr -d '\r')
+          echo "$v"
+          [ "$(sed -n 's/^arch //p' <<<"$v")" = "$FORK_ARCH" ] || fail "the build does not report arch $FORK_ARCH"
+          commit=$(sed -n 's/^variant [^ ]* | commit \([^ ]*\) |$/\1/p' <<<"$v")
+          [ "$commit" = "$SHA" ] || fail "the build reports commit '$commit', not $SHA"
+          echo "sha=$SHA" >engine/meta.env
+          echo "arch=$FORK_ARCH" >>engine/meta.env
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine
+          path: |
+            engine/fork
+            engine/meta.env
+            engine/build.log
+          retention-days: 7
+
+  scale:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ${{ fromJSON(needs.build.outputs.runners) }}
+    steps:
+      - uses: actions/checkout@v4  # the tool, at the workflow's own commit
+      - uses: actions/download-artifact@v4
+        with: {name: engine, path: engine}
+      - name: The runner
+        id: cpu
+        env:
+          ARCH: ${{ inputs.arch || 'x86-64-v3' }}
+        run: |
+          lscpu | grep -E '^(Model name|CPU\(s\)|Thread\(s\) per core|L2|L3)' || true
+          echo "model=$(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | head -n 1)" >>"$GITHUB_OUTPUT"
+          if [ "$ARCH" = x86-64-v4 ]; then
+            for f in avx512f avx512bw avx512cd avx512dq avx512vl; do
+              grep -qw "$f" /proc/cpuinfo || { echo "::error::x86-64-v4 needs $f, which this runner lacks"; exit 1; }
+            done
+          fi
+      - name: Scaling (tools/smp/scaling.py)
+        env:
+          DEPTH: ${{ needs.build.outputs.depth }}
+          ROUNDS: ${{ needs.build.outputs.rounds }}
+          HASH_MB: ${{ needs.build.outputs.hash }}
+          POSITIONS: ${{ needs.build.outputs.positions }}
+          RUNNER_N: ${{ matrix.runner }}
+          MODEL: ${{ steps.cpu.outputs.model }}
+        run: |
+          chmod +x engine/fork
+          mkdir -p out
+          cp engine/meta.env out/
+          python3 -I tools/smp/scaling.py engine/fork --threads auto --depth "$DEPTH" --rounds "$ROUNDS" \
+            --hash "$HASH_MB" --positions "$POSITIONS" --label "runner $RUNNER_N ($MODEL)" --json out/result.json |
+            tee out/scaling.txt
+          { echo "### Runner $RUNNER_N: $MODEL"; echo; tail -n 8 out/scaling.txt; } >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: "result-${{ matrix.runner }}", path: out, retention-days: 90}
+
+  summary:
+    needs: [build, scale]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {pattern: "result-*", path: results}
+      - name: Merged (tools/smp/scaling.py --merge)
+        run: |
+          shopt -s nullglob
+          files=(results/*/result.json)
+          [ ${#files[@]} -gt 0 ] || { echo "::error::no runner reported a result"; exit 1; }
+          python3 -I tools/smp/scaling.py --merge "${files[@]}" --json results/merged.json | tee results/summary.md
+          cat results/summary.md >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: smp-scaling-results, path: results, retention-days: 90}
