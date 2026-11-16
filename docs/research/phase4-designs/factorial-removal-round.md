@@ -50,6 +50,14 @@ the coordinator's recommendations, with the factor-set census of phase-4 d1a1a19
    figure UNVERIFIED).
 5. **The design seed:** fixed in advance, recorded in the design file with 200 starts; the search is re-run with
    that seed for k = 11 (both m), and its mean SE is reported against the design doc's figure before launch.
+   **Done (2026-11-16, before launch):** `factorial_fit.py search`, 16 rows, 200 starts each, seeds
+   `r30-screen-k11-m3` and `r30-screen-k11-m4` (tools/github/factorial/screen-k11-m3.json, -m4.json; 2,725 s and
+   4,069 s in pure Python). Converted as §4.2 (a shard's SE 34.7 nElo, so per-switch SE = relative SE x 34.7 /
+   sqrt(stages); the same conversion gives 4.09 for the committed k = 8 block, against ST5's 4.10): **m = 3** trace
+   3.332, mean per-switch SE 4.76 nElo at 16 stages (3.89 at 24), worst switch 5.04; **m = 4** trace 2.646, mean
+   4.24 at 16 stages (3.47 at 24), worst 4.87. **m = 4 is chosen** (the lower mean SE, setting 4). Against the
+   design doc's figures: below the random search's 4.55 for k = 12, m = 4 at 24 stages and its 5.57 at 16, and
+   below ST5's (UNVERIFIED) 4.48 for k = 12, m = 4 at 16 stages, as one factor fewer should give.
 
 
 ## 1. What decision 6 accepted
