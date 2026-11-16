@@ -223,7 +223,7 @@ struct TestHash {
 //                           cutoffs every entry kept is a true bound.
 //   use_tt_halfmove_guard   declines some TT cutoffs near the fifty-move
 //                           rule: the node is searched instead.
-//   use_stability_time, use_share_time, use_deep_time_depth,
+//   use_stability_time, use_share_time, use_deep_time_depth, use_time_guards,
 //   use_forced_move_stop, use_pass_best_stop
 //                           timed or stopped searches only; these have a
 //                           depth limit and no stop.
@@ -2143,6 +2143,140 @@ TEST_CASE("time_budget", "deep_depth: the depth clamp at 60, the same scale up t
   CHECK(soft_scale_permille(StabilityAndShare, {30, 20, 500, 0}, true) > 600);
   // The switch is on by default (adopted 2026-11-14).
   CHECK(SearchSwitches{}.use_deep_time_depth);
+}
+
+// L1 of the time-management audit of 2026-11-16 (switch use_time_guards):
+// the scale's depth clamped at 27, the deepest depth E2's long-search check
+// validated (bug-review-followup-2026-11-11.md, E2): the same scale as the
+// clamp at 60 at every depth up to 27, over every stability and share X6's
+// fit uses (stability 1-72 and past its cap, share 5-995 and outside it),
+// and beyond 27 the scale at 27. Without deep_depth the clamp stays at 19.
+TEST_CASE("time_budget",
+          "validated_depth: the depth clamp at 27, the same scale as at 60 up to 27, constant beyond") {
+  using enum TimeScaleVariant;
+  int differs = 0, moves = 0, checked = 0;
+  for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare})
+    for (int depth = 1; depth <= MaxPly; ++depth)
+      for (int share = 0; share <= 1000; share += share < 10 || share >= 990 ? 1 : 15)
+        for (int stability = 1; stability <= 80; ++stability) {
+          const IterationSignals at{depth, stability, share, 0};
+          const int got = soft_scale_permille(v, at, true, true);
+          ++checked;
+          if (depth <= 27)
+            differs += got != soft_scale_permille(v, at, true);
+          else
+            differs += got != soft_scale_permille(v, {27, stability, share, 0}, true, true);
+          differs += soft_scale_permille(v, at, false, true) != soft_scale_permille(v, at);
+          if (depth >= 27 && depth < 60)
+            moves += soft_scale_permille(v, at, true) !=
+                     soft_scale_permille(v, {depth + 1, stability, share, 0}, true);
+        }
+  CHECK_MSG(differs == 0, differs << " of " << checked << " off the rule");
+  CHECK(moves > 0);  // the clamp at 60 does follow depth in this range: the comparison can fail
+  // The two depths the order named: 40 and 60 give the scale at 27; at 60 the clamp at 60 does not.
+  for (TimeScaleVariant v : {StabilityOnly, StabilityAndShare})
+    for (int stability : {1, 3, 8, 20})
+      for (int share : {50, 500, 950}) {
+        const int at27 = soft_scale_permille(v, {27, stability, share, 0}, true, true);
+        CHECK_EQ(soft_scale_permille(v, {40, stability, share, 0}, true, true), at27);
+        CHECK_EQ(soft_scale_permille(v, {60, stability, share, 0}, true, true), at27);
+        CHECK_EQ(soft_scale_permille(v, {27, stability, share, 0}, true), at27);
+      }
+  // The hazard: with the clamp at 60, a best move stable for 9 iterations at depth 40 still scales past
+  // the hard limit (four budgets; it takes 17 there, 9 at depth 27); with the clamp at 27 it does not.
+  CHECK(soft_scale_permille(StabilityAndShare, {40, 9, 500, 0}, true) > 4000);
+  CHECK(soft_scale_permille(StabilityAndShare, {40, 9, 500, 0}, true, true) < 4000);
+  CHECK(soft_scale_permille(StabilityAndShare, {27, 8, 500, 0}, true, true) > 4000);
+  CHECK(SearchSwitches{}.use_time_guards);  // on: the test side of its SPRT
+}
+
+// L1's second guard (plan_time's move_guard): one move takes at most its
+// increment plus half of the rest of the clock after the Move Overhead, or an
+// even share of that clock over movestogo if larger; elsewhere the plan is the
+// unguarded one. The bound is restated here from that rule, over a grid of
+// clocks, increments, movestogo and overheads; the literal TCEC cases (1800+3,
+// Move Overhead 100) are worked by hand from plan_time's rule (the danger-zone
+// case's comment above) and the guard's:
+// - 1,800,000 ms: available 1,799,900, share 59,996 + 2,250 = 62,246, cap
+//   1,619,910, hard 4 x 62,246 = 248,984; guard 3,000 + 898,450: unchanged;
+// - 22,600 ms (available 22,500, 7.5 increments: the soft limit equals the
+//   increment): share 750 + 2,250 = 3,000, hard 12,000; guard 3,000 + 9,750 =
+//   12,750: unchanged;
+// - 10,100 ms: available 10,000, share 333 + 2,250 = 2,583, cap 9,000, hard
+//   min(2,583, 2,250) x 4 = 9,000; guard 3,000 + 3,500 = 6,500: hard 6,500;
+// - 10,100 ms, no increment, movestogo 1: share 10,000, hard 9,000 (the cap);
+//   guard max(5,000, 10,000): unchanged, soft 9,000; movestogo 3: share
+//   3,333, hard 9,000; guard max(5,000, 3,333) = 5,000: hard 5,000.
+TEST_CASE("time_budget",
+          "move_guard: a move never takes more than its increment and half of the rest of the clock") {
+  const std::int64_t Huge = std::numeric_limits<std::int64_t>::max();
+  int broken = 0, bound = 0, checked = 0;
+  for (std::int64_t remaining :
+       {std::int64_t{-5}, std::int64_t{0}, std::int64_t{1}, std::int64_t{50}, std::int64_t{150},
+        std::int64_t{250}, std::int64_t{380}, std::int64_t{1000}, std::int64_t{2000}, std::int64_t{5000},
+        std::int64_t{10100}, std::int64_t{22600}, std::int64_t{60000}, std::int64_t{600000},
+        std::int64_t{1800000}, std::int64_t{7200000}, Huge})
+    for (std::int64_t inc :
+         {std::int64_t{-10}, std::int64_t{0}, std::int64_t{10}, std::int64_t{80}, std::int64_t{400},
+          std::int64_t{3000}, std::int64_t{12000}, std::int64_t{60000}, Huge})
+      for (std::int64_t mtg : {std::int64_t{0}, std::int64_t{1}, std::int64_t{2}, std::int64_t{3},
+                               std::int64_t{10}, std::int64_t{40}, std::int64_t{1000}})
+        for (std::int64_t overhead : {std::int64_t{0}, std::int64_t{100}, std::int64_t{1000}}) {
+          ClockInput c;
+          c.remaining_ms = remaining;
+          c.increment_ms = inc;
+          if (mtg) c.movestogo = mtg;
+          c.overhead_ms = overhead;
+          const TimeBudget plain = plan_time(c);
+          c.move_guard = true;
+          const TimeBudget t = plan_time(c);
+          const std::int64_t available =
+              std::max<std::int64_t>(1, std::min(remaining, std::int64_t{1} << 40) - overhead);
+          const std::int64_t own =
+              std::min(std::clamp<std::int64_t>(inc, 0, std::int64_t{1} << 40), available);
+          std::int64_t limit = own + (available - own) / 2;
+          if (mtg) limit = std::max(limit, available / std::clamp<std::int64_t>(mtg, 1, MaxMovesToGo));
+          limit = std::max<std::int64_t>(limit, 1);
+          ++checked;
+          broken += !(t.soft_ms >= 1 && t.soft_ms <= t.hard_ms && t.hard_ms <= limit);
+          broken += t.hard_ms != std::min(plain.hard_ms, limit);  // only the guard changes
+          broken += t.soft_ms != std::min(plain.soft_ms, t.hard_ms);
+          bound += plain.hard_ms > limit;
+        }
+  CHECK_MSG(broken == 0, broken << " broken over " << checked << " clocks");
+  CHECK(bound > 0);  // the unguarded plan does go past the bound in this grid: the check can fail
+  struct Literal {
+    std::int64_t remaining, inc, mtg, soft, hard;
+  };
+  for (const Literal& l : {Literal{1800000, 3000, 0, 62246, 248984}, Literal{22600, 3000, 0, 3000, 12000},
+                           Literal{10100, 3000, 0, 2583, 6500}, Literal{10100, 0, 1, 9000, 9000},
+                           Literal{10100, 0, 3, 3333, 5000}}) {
+    ClockInput c;
+    c.remaining_ms = l.remaining;
+    c.increment_ms = l.inc;
+    if (l.mtg) c.movestogo = l.mtg;
+    c.overhead_ms = 100;
+    c.move_guard = true;
+    const TimeBudget t = plan_time(c);
+    CHECK_MSG(t.soft_ms == l.soft && t.hard_ms == l.hard, l.remaining << " + " << l.inc << " mtg " << l.mtg
+                                                                      << ": soft " << t.soft_ms << " hard "
+                                                                      << t.hard_ms);
+  }
+  // go movetime and no clock: the guard has nothing to guard.
+  ClockInput c;
+  c.movetime = 1000;
+  c.overhead_ms = 100;
+  c.move_guard = true;
+  CHECK_EQ(plan_time(c).hard_ms, 900);
+  c = ClockInput{};
+  c.move_guard = true;
+  CHECK_EQ(plan_time(c).hard_ms, -1);
+  // quota_for_go passes the switch through.
+  GoLimits go;
+  go.remaining_ms[White] = 10100;
+  go.increment_ms[White] = 3000;
+  CHECK_EQ(quota_for_go(go, White, 100).hard_ms, 9000);
+  CHECK_EQ(quota_for_go(go, White, 100, true).hard_ms, 6500);
 }
 
 TEST_CASE("time_budget", "a scaled soft limit stays within [1, hard] and leaves movetime alone") {

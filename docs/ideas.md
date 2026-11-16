@@ -3088,6 +3088,14 @@ whose weaknesses and data gaps decide their targets and order.
   adopt/e2-time-depth), bench 5,386,021 / 5ecd49d976e215e1 (r8brft1), unchanged (DESIGN.md decisions log,
   2026-11-14). No final-retune dimension (a guard, not tuned). Goes into idea 23's simulator when that work
   starts. Numbered 185, after Fable's network ideas (175-184).
+- **follow-up L1 (2026-11-16, the time-management audit; owner's order):** past depth 27 the clamp at 60
+  extrapolates the fits (DepthFit's slope is about twice ShareFit's, so the scale grows about 11% per ply and an
+  unstable deep search gets the hard limit). Built as `use_time_guards` (option `UseTimeGuards`, off; branch
+  tm/deep-depth-cap): the depth clamped at 27 (`TimeScaleValidatedDepth`, the top of E2's validated range) and a
+  per-move guard (`TimeGuardPermille` 500: at most the increment plus half of the rest of the clock), both
+  recorded in DESIGN.md §5.2 "Search constants". Bench unchanged. Next: the VM check
+  (`tools/measure/l1_check.sh`) and a non-regression SPRT [−3, 0] of on against off. The full redesign (a re-fit on
+  deep TCEC-like traces) is recorded in docs/research/idea23-revamp-2026-11-14.md §15.
 - **runtime cost:** none (one comparison per finished iteration). Speed not measured (bench/ab.py not run).
 - **earliest phase:** Phase 4.
 

@@ -296,7 +296,14 @@ struct SearchQuota {
 //   an exact 0, and a mate (or mated) score whose mate falls on or before
 //   the rule's last ply stay true. The TT move still orders the moves. On
 //   in sprt/tt-halfmove-guard, the test side of its non-regression STC SPRT
-//   [-3, 0]; adopted only on a pass (owner).
+//   [-3, 0]; adopted (on) 2026-11-16 by the owner (capped at Elo -0.33 +/- 2.44).
+// - use_time_guards: two guards on time management (L1 of the audit of
+//   2026-11-16; time_budget.hpp): with use_stability_time and
+//   use_deep_time_depth, the scale's depth is clamped at 27, the deepest
+//   depth E2's long-search check validated, not 60; and with a clock, one
+//   move takes at most its increment plus half of the rest of the clock
+//   after the Move Overhead (plan_time's move_guard, passed by the UCI
+//   session's quota_for_go). Adopted (on) 2026-11-16 by the owner.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -351,7 +358,8 @@ struct SearchQuota {
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
   X(use_helper_skip, UseHelperSkip, false)               \
-  X(use_tt_halfmove_guard, UseTtHalfmoveGuard, true)
+  X(use_tt_halfmove_guard, UseTtHalfmoveGuard, true)   \
+  X(use_time_guards, UseTimeGuards, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
