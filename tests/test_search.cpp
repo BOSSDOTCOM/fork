@@ -221,6 +221,8 @@ struct TestHash {
 //   tt_age_blend, tt_keep_exact, use_tt_keep_deeper
 //                           which entry a full bucket keeps: with exact-depth
 //                           cutoffs every entry kept is a true bound.
+//   use_tt_halfmove_guard   declines some TT cutoffs near the fifty-move
+//                           rule: the node is searched instead.
 //   use_stability_time, use_share_time, use_deep_time_depth,
 //   use_forced_move_stop, use_pass_best_stop
 //                           timed or stopped searches only; these have a
@@ -940,6 +942,91 @@ TEST_CASE("search", "draws: 50-move rule (mate first), repetition") {
 TEST_CASE("search", "draws: mate on the 100th half-move is found at a quiescence node") {
   Fixture fx;
   CHECK_EQ(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 99 80", 1).score, mate_score(1));
+}
+
+// The TT halfmove guard (use_tt_halfmove_guard; engineering review
+// 2026-11-11 W7, owner 2026-11-16). The TT ignores the halfmove clock. The
+// K+R v K position of the draws case above (mate in 2, none in 1;
+// python-chess, tools/check_search_positions.py; White has no capture or
+// pawn move) probed at clock 0 stores its mate as a lower bound; at clock
+// 99 the same key finds it, though every move there draws. Without the
+// guard the probe cuts on the stale mate; with it the node is searched and
+// fails low with the draw. Then the rule's edges, on entries deposited by
+// hand (777: a non-mate score stored at some lower clock), each searched
+// value checked against reference_minimax or reference_quiesce (no TT, the
+// fifty-move rule applied):
+// - clock + depth 99 cuts, 100 does not (clocks 95 and 96 at depth 4);
+// - at clock 99 bounds on the draw's side still cut (an upper bound of 777
+//   at alpha 777, a lower bound of -777 at beta -777);
+// - a mate on the rule's last ply still cuts (an entry claiming mate in 1
+//   ply at clock 99: 99 + 1 = 100; untrue here, so its return shows the
+//   cut), a mate one ply later does not (mate in 3 plies at clock 98);
+// - quiescence: Black in check at clock 99 after h1h8 (played from the
+//   clock-98 position; its evasions reach clock 100) does not cut on a stale
+//   exact -777; White at clock 99, not in check, still cuts (its quiescence
+//   moves, captures, would reset the clock).
+// Fault-checked (2026-11-16): with fifty_rule_may_change always false, the
+// four guarded checks fail (the stale mate, the clock-96 edge, the mate one
+// ply late, the quiescence check); always true, the five checks that must
+// still cut fail.
+TEST_CASE("search", "the TT halfmove guard: no TT cutoff where the fifty-move rule may change the score") {
+  Fixture fx;
+  const auto at_clock = [](int clock) {
+    Position pos;
+    const std::string fen = "k7/8/2K5/8/8/8/8/7R w - - " + std::to_string(clock) + " 80";
+    CHECK_MSG(pos.set_fen(fen), fen);
+    return pos;
+  };
+  const int depth = 4;
+  Position early = at_clock(0), late = at_clock(99);
+  CHECK(early.key() == late.key());
+  CHECK_EQ(reference_minimax(late, depth, 0), 0);
+  fx.searcher->switches = exact_switches();
+
+  // A stored entry from a real search: the clock-0 probe at the mate's own
+  // bar fails high with the mate and stores it.
+  CHECK_EQ(fx.searcher->probe_zero_window(early, mate_score(3), depth, fx.stop), mate_score(3));
+  TtHit stored{};
+  CHECK(fx.store.table.fetch(early.key(), stored));
+  CHECK_MSG(stored.score == mate_score(3) && stored.depth == depth && stored.bound == TtBound::Lower,
+            "stored " << stored.score << " at depth " << stored.depth);
+  fx.searcher->switches.use_tt_halfmove_guard = false;
+  CHECK_EQ(fx.searcher->probe_zero_window(late, mate_score(3), depth, fx.stop), mate_score(3));
+  fx.searcher->switches.use_tt_halfmove_guard = true;
+  CHECK_EQ(fx.searcher->probe_zero_window(late, mate_score(3), depth, fx.stop), 0);
+
+  // The edges, on deposited entries.
+  const auto probe = [&](Position& pos, int score, TtBound bound, int beta, int search_depth) {
+    fx.store.clear();
+    fx.store.table.deposit(pos.key(), NoMove, score, ScoreNone, search_depth, bound, false);
+    return fx.searcher->probe_zero_window(pos, beta, search_depth, fx.stop);
+  };
+  Position clock95 = at_clock(95), clock96 = at_clock(96), clock98 = at_clock(98);
+  CHECK_EQ(probe(clock95, 777, TtBound::Exact, 1, depth), 777);
+  CHECK_EQ(reference_minimax(clock96, depth, 0), mate_score(3));
+  CHECK_EQ(probe(clock96, 777, TtBound::Exact, 1, depth), mate_score(3));
+  CHECK_EQ(probe(late, 777, TtBound::Upper, 778, depth), 777);
+  CHECK_EQ(probe(late, -777, TtBound::Lower, -777, depth), -777);
+  CHECK_EQ(probe(late, mate_score(1), TtBound::Exact, 1, depth), mate_score(1));
+  CHECK_EQ(reference_minimax(clock98, depth, 0), 0);
+  CHECK_EQ(probe(clock98, mate_score(3), TtBound::Exact, 1, depth), 0);
+  fx.searcher->switches.use_tt_halfmove_guard = false;
+  CHECK_EQ(probe(clock96, 777, TtBound::Exact, 1, depth), 777);
+  CHECK_EQ(probe(clock98, mate_score(3), TtBound::Exact, 1, depth), mate_score(3));
+
+  // Quiescence (a depth-0 probe is a quiescence node).
+  Position checked = clock98;
+  MoveList legal;
+  generate<GenMode::Legal>(checked, legal);
+  const Move rook_check = checked.parse_uci("h1h8");
+  CHECK(legal.contains(rook_check));
+  checked.make(rook_check);
+  CHECK(checked.in_check() && checked.halfmove_clock() == 99);
+  CHECK_EQ(reference_quiesce(checked, 0, -ScoreInfinite, ScoreInfinite, true), 0);
+  CHECK_EQ(probe(checked, -777, TtBound::Exact, -776, 0), -777);
+  fx.searcher->switches.use_tt_halfmove_guard = true;
+  CHECK_EQ(probe(checked, -777, TtBound::Exact, -776, 0), 0);
+  CHECK_EQ(probe(late, 777, TtBound::Exact, 1, 0), 777);
 }
 
 TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still returns a legal move") {

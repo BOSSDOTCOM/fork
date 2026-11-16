@@ -282,6 +282,18 @@ struct SearchQuota {
 //   searching (helper_next_depth), so the free-running helpers spread over
 //   depths instead of repeating the main thread's; the main thread never
 //   skips. Off until its tests; no effect with one thread.
+// - use_tt_halfmove_guard: the TT ignores the halfmove clock, so a score
+//   stored at a low clock can settle a later visit where the fifty-move
+//   rule falls inside the search it stands for (engineering review
+//   2026-11-11, W7; owner, 2026-11-16: a TCEC hazard). With the switch on,
+//   a TT score does not settle a node (main search or quiescence) when the
+//   node's clock plus the plies the cutoff stands in for (the node's depth;
+//   in quiescence 1 in check, else 0) reaches the rule's 100 plies, unless
+//   the rule cannot have made it wrong: the rule only pulls a result toward
+//   the draw, so a lower bound at or below 0, an upper bound at or above 0,
+//   an exact 0, and a mate (or mated) score whose mate falls on or before
+//   the rule's last ply stay true. The TT move still orders the moves. Off
+//   until its non-regression SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -335,7 +347,8 @@ struct SearchQuota {
   X(use_root_lmr, UseRootLmr, true)                      \
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
-  X(use_helper_skip, UseHelperSkip, false)
+  X(use_helper_skip, UseHelperSkip, false)               \
+  X(use_tt_halfmove_guard, UseTtHalfmoveGuard, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

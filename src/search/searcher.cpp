@@ -127,6 +127,28 @@ int fifty_move_score(const Position& pos, bool in_check, int ply) {
   return evasions.size() ? 0 : mated_score(ply);
 }
 
+// The fifty-move rule's limit in plies, as Position::fifty_move_reached
+// applies it (a clock of 100 is a draw unless the side to move is mated).
+constexpr int FiftyMovePlies = 100;
+
+// The TT halfmove guard (use_tt_halfmove_guard): whether the fifty-move rule
+// may have made a stored score wrong here. The TT does not key on the clock,
+// so the entry may come from a visit at a lower clock. A cutoff stands in for
+// a search `horizon` plies deep; a fresh one could meet the rule only if the
+// clock reaches 100 within it. The rule turns lines into draws, which only
+// moves a result toward 0, so a bound on the draw's side of the score (a
+// lower bound at or below 0, an upper bound at or above 0, an exact 0) stays
+// true. A mate N plies from this node (`stored` is node-relative) stands if
+// it falls on or before the rule's last ply (the clock plus N at most 100:
+// mate on the 100th half-move counts), for either side.
+bool fifty_rule_may_change(const Position& pos, int horizon, int stored, TtBound bound) {
+  const int clock = pos.halfmove_clock();
+  if (clock + horizon < FiftyMovePlies) return false;
+  if (stored > 0 ? bound == TtBound::Upper : stored < 0 ? bound == TtBound::Lower : true) return false;
+  if (is_mate_score(stored) && clock + (MateScore - std::abs(stored)) <= FiftyMovePlies) return false;
+  return true;
+}
+
 }  // namespace
 
 Searcher::DriftTerms Searcher::drift_terms(int ply) {
@@ -367,14 +389,18 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // The TT: a cutoff at non-PV nodes when the entry is deep enough and its
   // bound points the right way; otherwise its move is tried first. Moves come
   // from the legal generator, so a colliding entry's move is never played
-  // unless it is legal here.
+  // unless it is legal here. With use_tt_halfmove_guard, no cutoff where the
+  // fifty-move rule falls within this node's depth and may have changed the
+  // stored score (fifty_rule_may_change).
   const Key key = pos.key();
   TtHit hit{};
   const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
   if (tt_hit && !OnPv && !withheld) {
     const int s = score_from_tt(hit.score, ply);
     const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
-    if (deep_enough && bound_settles(hit.bound, s, alpha, beta)) return s;
+    if (deep_enough && bound_settles(hit.bound, s, alpha, beta) &&
+        !(switches.use_tt_halfmove_guard && fifty_rule_may_change(pos, depth, hit.score, hit.bound)))
+      return s;
   }
 
   // A TT entry stores the static evaluation of its position (review 2, claim
@@ -1068,12 +1094,18 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     return in_check ? 0 : eval_at(ply);
   }
 
+  // A TT cutoff here stands in for a quiescence search: captures and
+  // promotions reset the halfmove clock, so only the evasions of a node in
+  // check can reach the fifty-move rule, one ply on (use_tt_halfmove_guard).
   const Key key = pos.key();
   TtHit hit{};
   const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
   if (tt_hit && !OnPv && (!switches.tt_exact_depth || hit.depth == 0)) {
     const int s = score_from_tt(hit.score, ply);
-    if (bound_settles(hit.bound, s, alpha, beta)) return s;
+    if (bound_settles(hit.bound, s, alpha, beta) &&
+        !(switches.use_tt_halfmove_guard &&
+          fifty_rule_may_change(pos, in_check ? 1 : 0, hit.score, hit.bound)))
+      return s;
   }
 
   const int alpha_start = alpha;
