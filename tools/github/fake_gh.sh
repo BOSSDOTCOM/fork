@@ -16,7 +16,9 @@
 # another lane's run of the same commits and stage, named other-lane, is dispatched right after each of ours);
 # partial.<id> (that run's shard 0 is left "running") and short.<id> (its shard 0 has one pair fewer than its
 # planned rounds). Since 2026-11-13 (CalibratedScore off in every harness): ref.<name> holds the commit the
-# ref <name> points to (the driver checks REF's commit before each dispatch).
+# ref <name> points to (the driver checks REF's commit before each dispatch). Since 2026-11-15 (--concurrency):
+# the fake sprt.yml takes the input concurrency, unless noconcurrency is present (a ref whose sprt.yml predates
+# it: "workflow view" shows no such input, and a dispatch with it is refused as GitHub does).
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
 # flaky.<kind>: that many failures still to inject for api, conclusion or download (2026-11-08).
@@ -57,10 +59,17 @@ case "$1 $2" in
     fi ;;
   "workflow view")  # the fake sprt.yml's inputs (the driver looks for the name input)
     printf 'name: sprt\non:\n  workflow_dispatch:\n    inputs:\n      base: {description: "Base", required: true}\n'
-    [ -f "$st/noname" ] || printf '      name: {description: "The SPRT name", required: false, default: ""}\n' ;;
+    [ -f "$st/noname" ] || printf '      name: {description: "The SPRT name", required: false, default: ""}\n'
+    [ -f "$st/noconcurrency" ] ||
+      printf '      concurrency: {description: "Games at once per shard", required: false, default: ""}\n'
+    printf 'concurrency:\n  group: sprt\n' ;;  # the workflow's own concurrency group, not an input
   "workflow run")
     if [ -f "$st/noname" ] && [[ " $* " == *" name="* ]]; then
       echo "could not create workflow dispatch event: HTTP 422: Unexpected inputs provided: [\"name\"]" >&2
+      exit 1
+    fi
+    if [ -f "$st/noconcurrency" ] && [[ " $* " == *" concurrency="* ]]; then
+      echo "could not create workflow dispatch event: HTTP 422: Unexpected inputs provided: [\"concurrency\"]" >&2
       exit 1
     fi
     id=$(($(cat "$st/latest") + 1))
