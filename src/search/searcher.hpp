@@ -149,7 +149,8 @@ struct SearchQuota {
 //   type from its parent (PlyFrame::expected_cut: a PV node's later children
 //   and an all node's children are expected cut nodes, a cut node's are
 //   expected all nodes), and at an expected cut node late quiet moves are
-//   reduced CutNodeLmrPlies more. On since its SPRTs against off passed
+//   reduced CutNodeLmrSixtyFourths 64ths of a ply more (1 ply, 64, by
+//   default; whole plies until 2026-11-15). On since its SPRTs against off passed
 //   (CutNodeLmrPlies 1, the head-to-head's pick over 2): STC +6.02 +/- 3.67
 //   Elo after 11,200 games, LTC +9.75 +/- 5.14 Elo after 4,992 games, design
 //   R [0, 6]; 2026-11-11.
@@ -233,7 +234,8 @@ struct SearchQuota {
 //   improving when neither is known). use_improving_lmp scales late move
 //   pruning's quiet allowance by (8 + LmpImprovingEighths) / 8 at an
 //   improving node and (8 - LmpImprovingEighths) / 8 at one that is not;
-//   use_improving_lmr reduces late quiets LmrNotImprovingPlies more at a node
+//   use_improving_lmr reduces late quiets LmrNotImprovingSixtyFourths 64ths
+//   of a ply (64, one ply, by default) more at a node
 //   that is not improving. use_improving_lmp is on since its STC SPRT
 //   against off passed: +6.82 +/- 4.37 Elo after 8,000 games, design R
 //   [0, 6]; 2026-11-13. use_improving_lmr is on since its own STC SPRT

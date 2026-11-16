@@ -66,8 +66,8 @@
   X(SingularEntrySlack, 3, 0, 6, 1)            \
   X(SingularMarginPerPly, 6, 2, 16, 1)         \
   X(NoMoveReduceMinDepth, 8, 2, 16, 1)         \
-  X(CutNodeLmrPlies, 1, 0, 3, 1)               \
-  X(LmrNotImprovingPlies, 1, 0, 3, 1)          \
+  X(CutNodeLmrSixtyFourths, 64, 0, 192, 10)    \
+  X(LmrNotImprovingSixtyFourths, 64, 0, 192, 10) \
   X(LmrHistoryPerPly, 10000, 5000, 20000, 750) \
   X(CaptureProbeMinDepth, 9, 4, 18, 1)         \
   X(CaptureProbeReduction, 5, 2, 10, 1)        \

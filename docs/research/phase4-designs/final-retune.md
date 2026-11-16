@@ -156,7 +156,8 @@ by 10%, at 1, 2, 4 or 8 table steps) and is **a placeholder here, at least 1**
 | DriftLimit | 300 | 150-600 | 23 | ? | 6.5 / 13 at c = 23 (one step) | ok (added 2026-11-12 with the minor table; it applies to every drift table, so only the minor table's while the others are off) |
 | HistoryKeepQuarters | 2 | 0-4 | 1 | ? | 2 / 2 at c = 1 (one step) | **flag**: within 2c of both bounds at one step; the range is the whole form (0 clears the tables at every search, 4 is no ageing), so a finer search needs a new unit (eighths, a new parameter: the owner's decision at step 19) (added 2026-11-12, D17's adoption) |
 | LmpImprovingEighths | 1 | 0-4 | 1 | ? | 1 / 3 at c = 1 (one step) | **flag**: floor within 2c at one step; 0 is the off-equivalent (the allowance unscaled) and 4 the largest scaling (a half more at an improving node, a half less at one that is not), so a finer search needs a new unit (sixteenths, a new parameter: the owner's decision at step 19) (added 2026-11-13, B9's LMP adoption) |
-| LmrNotImprovingPlies | 1 | 0-3 | 1 | ? | 1 / 2 at c = 1 (one step) | **flag**: within 2c of both bounds at one step; 0 is the off-equivalent (no extra reduction) and the range is whole plies, as `CutNodeLmrPlies`, so a finer search needs a sub-ply unit (a new parameter: the owner's decision at step 19) (added 2026-11-13, B9's LMR adoption) |
+| LmrNotImprovingSixtyFourths | 64 | 0-192 | 10 | ? | 64 / 128 at c = 10 (one step) | ok; **in 64ths of a ply since 2026-11-15 (owner)**, was `LmrNotImprovingPlies` 1, range 0-3, step 1 (whole plies: SPSA could reach only 1-2); 64 is today's one ply exactly (bench identical); 0 is the off-equivalent |
+| CutNodeLmrSixtyFourths | 64 | 0-192 | 10 | ? | 64 / 128 at c = 10 (one step) | ok; **added 2026-11-15 (owner): missing from these tables until then**; in 64ths of a ply, was `CutNodeLmrPlies` 1 (whole plies), adopted 2026-11-11 (head-to-head 2 against 1 -5.33 +/- 12.04 nElo; STC +6.02, LTC +9.75); 64 is today's one ply exactly (bench identical); 0 is the off-equivalent; class (a), STC |
 | LinearBonusPerPly | 125 | 63-250 | 9 | ? | 6.9 / 13.9 at c = 9 (one step) | ok (the ranges rule's half to twice of the natural value, as declared with the switch; with `HistoryBonusCap` 1,250 the cap is reached at depth 10 at 125, at depth 5 at the ceiling 250 and at depth 20 at the floor 63) (added 2026-11-13, D11's adoption) |
 | QuiesceMoveCap | 2 | 1-6 | 1 | ? | 1 / 4 at c = 1 (one step) | **flag**: floor within 2c at one step; 1 is the smallest cap that searches a capture (0 would be the stand pat alone, another form) and the range is whole moves, so a finer search needs another unit (the owner's decision at step 19); the ceiling 6, declared with the switch around the natural value 3, is beyond the ranges rule's twice of 2 (4) and stays (added 2026-11-13, B16's adoption) |
 
@@ -236,7 +237,7 @@ its row above), so p grows by 1. `LmpQuietAllowance` and `LmpMaxDepth`
 are tuned with the scaling in place: at `LmpQuietAllowance`'s floor 3
 the allowance at depth 1 is (3 + 1) × 7/8 = 3 quiets at a node that is
 not improving (rounded down), so the rule stays meaningful.
-`LmrNotImprovingPlies` (the LMR use, off, under its own SPRT) joins only
+`LmrNotImprovingPlies` (now `LmrNotImprovingSixtyFourths`; the LMR use, off, under its own SPRT) joins only
 if that use is adopted.
 **2026-11-13: B9's `LmrNotImprovingPlies` joins this pass** on the LMR
 use's adoption (late quiets reduced one more ply at a node that is not

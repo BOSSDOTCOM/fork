@@ -873,23 +873,28 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         // "gives check" is the child's side to move being in check.
         const int relief = switches.use_lmr_check_relief && pos.in_check() ? LmrCheckRelief : 0;
         // Node types (T17): an expected cut node's late quiets are reduced
-        // CutNodeLmrPlies more.
-        const int cut_extra = switches.use_cut_node_lmr && !OnPv && f.expected_cut ? CutNodeLmrPlies : 0;
+        // CutNodeLmrSixtyFourths 64ths of a ply more.
+        const int cut_extra =
+            switches.use_cut_node_lmr && !OnPv && f.expected_cut ? CutNodeLmrSixtyFourths : 0;
         // B9: at a node that is not improving, late quiets are reduced
-        // LmrNotImprovingPlies more (use_improving_lmr; never in check).
+        // LmrNotImprovingSixtyFourths 64ths of a ply more (use_improving_lmr;
+        // never in check).
         const int trend_extra =
-            switches.use_improving_lmr && !in_check && !improving ? LmrNotImprovingPlies : 0;
-        int plies = base + correction - relief + cut_extra + trend_extra;
+            switches.use_improving_lmr && !in_check && !improving ? LmrNotImprovingSixtyFourths : 0;
+        // Without R20's round-once sum the two 64ths terms are rounded together
+        // to whole plies (64 each, the defaults: exactly one ply each, as when
+        // they were whole-ply constants; owner, 2026-11-15, for the retune).
+        int plies = base + correction - relief + round_sixty_fourths(cut_extra + trend_extra);
         if (switches.use_centred_lmr_history) {
           // R20: every term in 64ths of a ply, rounded once. The history term
           // reads the move's butterfly entry (the context's) and its reply and
           // follow entries (the slot is the child's arrival, taken before the
           // move), each less its running centre at LMR sites, weighted as the
           // move ordering weights them; then each centre takes this value.
-          // The whole-ply terms (correction, check relief, cut-node plies,
-          // B9's not-improving plies) enter as whole multiples of 64, so each
-          // moves the rounded reduction by exactly its own plies, as it does
-          // with the switch off.
+          // The whole-ply terms (correction, check relief) enter as whole
+          // multiples of 64, so each moves the rounded reduction by exactly
+          // its own plies, as it does with the switch off; the cut-node and
+          // B9 terms are already in 64ths (whole plies at their defaults).
           const int slot = frames_[ply + 1].arrival;
           const int follow = follow_arrival(f);
           const bool reply_read = switches.use_reply_history && f.arrival != NoArrival;
@@ -909,7 +914,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
             if (follow_read) lmr_centres_[2].add(follow_value);
           }
           plies = round_sixty_fourths(reduction_sixty_fourths(depth, moves_searched + 1) +
-                                      LmrFineUnit * (correction - relief + cut_extra + trend_extra) +
+                                      LmrFineUnit * (correction - relief) + cut_extra + trend_extra +
                                       history_sixty_fourths(centred, LmrHistoryPerPly));
         }
         reduced = std::clamp(new_depth - plies, 1, new_depth);
