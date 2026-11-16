@@ -2364,9 +2364,15 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
   (to depth 60), and no single move was bounded by the clock (the owner's order, 2026-11-16).
 - **Test:** sprt/time-guards 70277fc8 (on) against tm/deep-depth-cap 0de1b2e5 (off), custom mode, nElo [-3, 0], STC
   8+0.08 (stage 6 re-dispatched after a ghost GitHub run). **At adoption (stages 0-10): Elo 0.00 +/- 2.70, nElo
-  0.00 +/- 5.13.** The run continues as a confirmation; its final line is added here.
+  0.00 +/- 5.13.** Final (the confirmation): **capped undecided after 13 stages, Elo +0.45 +/- 2.48, nElo +0.86 +/-
+  4.72**.
 - **VM check (l1-check, fork-worker-1):** 80 games at 60+0.1 (Move Overhead 100), on against off: 0 time losses, 0
-  illegal moves; the 384M-node replay's interim (8 of 16 games): spending only trimmed (see DESIGN.md's log).
+  illegal moves; the 384M-node replay, final (16 games, 128 searches, final depth 36.9 on average; bench after the
+  run unchanged): mean spend over the plain rule's spend at the 12M/24M/48M/96M-node budgets 0.969/0.887/0.936/0.870
+  with the switch on against 1.000/0.942/1.033/0.983 off; the same share of hard-limit stops (at most 5.5%); at 96M by
+  stop depth, on against off: 30-34 1.16/1.28 soft limits (64/60 searches), 35-39 1.86/2.17 (24/26), 40+ 2.11/2.09
+  (1/3: thin); the guard never binds at 4.25 budgets (TCEC 30+3, 22.5 s), and at 2.5 budgets it trims spending to
+  0.72-0.75 of plain. Spending only trimmed: the picture at adoption holds.
 - **Decision (owner, 2026-11-16):** adopt now (merge b0495f8b); report only if the SPRT or the
   replay changes the picture. Bench unchanged 5,205,904 / dfe99ebe03b0972d. Names screened: no match; the guard
   credited to Berserk 4.0-4.3's per-move maximum (ORIGINALITY.md).
