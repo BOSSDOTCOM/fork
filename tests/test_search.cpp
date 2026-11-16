@@ -1348,10 +1348,13 @@ struct PausingListener final : SearchListener {
 
 // Deliverable 8, variant (c): no iteration starts that would probably not
 // finish before the hard limit (elapsed * 5/3 past it). With soft = hard =
-// 90 ms and a 60 ms pause after depth 3, the rule stops at depth 3
-// (60 * 5/3 > 90); without it, depth 4 from the start position starts, as
+// 900 ms and a 600 ms pause after depth 3, the rule stops at depth 3
+// (600 * 5/3 > 900); without it, depth 4 from the start position starts, as
 // the soft limit is not reached, and finishes long before the hard limit
-// (fault-injected).
+// (fault-injected). Times ten times the first version's 90 / 60 ms, which a
+// gcc-tsan Debug build missed (CI 43780238486, 2026-11-15: depths 1-2 took
+// about 34 ms, so the rule stopped at depth 2): depths 1-2 must now take
+// under 540 ms (900 * 3/5), not 54 ms.
 TEST_CASE("search", "an iteration that would not finish before the hard limit is not started") {
   TestHash store;
   auto searcher = std::make_unique<Searcher>(store.table);
@@ -1360,11 +1363,11 @@ TEST_CASE("search", "an iteration that would not finish before the hard limit is
   CHECK(pos.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"));
   SearchQuota limits;
   limits.depth = 5;
-  limits.soft_ms = 90;
-  limits.hard_ms = 90;
+  limits.soft_ms = 900;
+  limits.hard_ms = 900;
   PausingListener listener;
   listener.pause_after = 3;
-  listener.pause = std::chrono::milliseconds{60};
+  listener.pause = std::chrono::milliseconds{600};
   const SearchResult r = searcher->deliberate(pos, limits, stop, nullptr, &listener);
   CHECK_EQ(r.depth, 3);
 }
