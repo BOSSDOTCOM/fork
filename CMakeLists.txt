@@ -153,7 +153,8 @@ add_library(forkcore STATIC
   src/core/position.cpp
   src/core/movegen.cpp
   src/core/perft.cpp
-  src/core/bench.cpp)
+  src/core/bench.cpp
+  src/core/cpu_features.cpp)
 target_include_directories(forkcore PUBLIC src)
 target_link_libraries(forkcore PUBLIC fork_flags PRIVATE fork_pgo)
 
@@ -322,22 +323,16 @@ set_source_files_properties(src/uci/version.cpp PROPERTIES COMPILE_DEFINITIONS "
 add_executable(fork src/main.cpp)
 target_link_libraries(fork PRIVATE forkuci forknnue fork_pgo)
 # The startup CPU check (src/core/cpu_gate.cpp): compiled for baseline x86-64
-# without LTO, so it runs on any x86-64 CPU and refuses, with a message, one
-# that lacks what FORK_ARCH (and FORK_VNNI) compiled the rest for. A native
-# build checks nothing; WebAssembly has none.
+# without AVX and without LTO (the options below come after fork_flags', so
+# they win), so it runs on any x86-64 CPU and refuses, with a message, one
+# that lacks what the rest was compiled for. That list comes from the
+# compiler's own macros in src/core/cpu_features.cpp (forkcore, the build's
+# flags), so it follows FORK_ARCH, FORK_VNNI and native builds. Linked into
+# fork and fork_tests (whose cpu_gate suite tests its decision); WebAssembly
+# has none.
 if(NOT EMSCRIPTEN)
   target_sources(fork PRIVATE src/core/cpu_gate.cpp)
-  set(fork_cpu_needs "")
-  if(FORK_ARCH STREQUAL "x86-64-v3")
-    list(APPEND fork_cpu_needs FORK_CPU_NEEDS_V3)
-  elseif(FORK_ARCH STREQUAL "x86-64-v4")
-    list(APPEND fork_cpu_needs FORK_CPU_NEEDS_V4)
-  endif()
-  if(FORK_VNNI)
-    list(APPEND fork_cpu_needs FORK_CPU_NEEDS_VNNI)
-  endif()
-  set_source_files_properties(src/core/cpu_gate.cpp PROPERTIES
-    COMPILE_OPTIONS "-march=x86-64;-mno-avx;-fno-lto" COMPILE_DEFINITIONS "${fork_cpu_needs}")
+  set_source_files_properties(src/core/cpu_gate.cpp PROPERTIES COMPILE_OPTIONS "-march=x86-64;-mno-avx;-fno-lto")
 endif()
 # `fork version` names the evaluator and, for nnue, the network (its file's
 # stem): the SPRT tools use it for the game gate (tools/cloud/build_pair.sh).
@@ -468,7 +463,9 @@ if(FORK_BUILD_TESTS)
     tests/test_params.cpp
     tests/test_datagen.cpp
     tests/test_nnue.cpp
-    tests/test_web.cpp)
+    tests/test_web.cpp
+    tests/test_cpu_gate.cpp
+    src/core/cpu_gate.cpp)
   target_link_libraries(fork_tests PRIVATE forkuci forkdatagen forknnue forkweb)
   # The UCI suites drive the real engine binary over pipes.
   add_dependencies(fork_tests fork)
@@ -607,7 +604,7 @@ if(FORK_BUILD_TESTS)
 
   foreach(suite magics fen zobrist_ep draws eval perft_suite perft_mirror consistency pseudo_legal perft_edge perft_epd
                 search see ordering eval_drift pruning tables time_budget tt smp params uci_protocol uci_options uci_timing datagen nnue
-                web elementary_mates)
+                web elementary_mates cpu_gate)
     add_test(NAME ${suite} COMMAND fork_tests ${suite})
     set_tests_properties(${suite} PROPERTIES SKIP_RETURN_CODE 77)  # a skipped case (tests/harness.hpp)
   endforeach()
