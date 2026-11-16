@@ -2864,8 +2864,14 @@ whose weaknesses and data gaps decide their targets and order.
   2. **Score scale.** tools/nnue/match_scale.py with r3kr1 as the control, over the same held-out positions:
      the matched S of each helper net against its own S, and both mean |eval| values. Report the ratio; a helper
      whose matched S differs from its own is run at the matched S (a header edit, as the bake-off does) so all
-     threads' scores share one scale. The pass line is the owner's (UNVERIFIED what tolerance matters; the
-     T5 table's S spread across nets was 88-92).
+     threads' scores share one scale. **Pass line (owner, 2026-11-15, about 8:30 PM EST): after matching, the
+     helper's mean |eval| on the reference positions is within 2% of r3kr1's; otherwise stop for that helper.**
+     **Calibration agreement (owner, the same order), before any match:** both nets' eval-to-result curves,
+     fitted with the calibration study's tooling (~/fork-data/calib-1112/analyze.py, not committed: whether it
+     takes one net's games at a time is UNVERIFIED; port it to tools/measure if it needs changes), must agree
+     within their 95% intervals: the logistic scale k pooled and per output phase bucket (idea 180 found k
+     varies mainly by bucket), each net on its own games at STC (r8ceplo2's and r3kr1's SPRT games; r3pp1's
+     fixed-node screen games); otherwise stop for that helper.
   3. **The engine change, on an experiment branch only** (not phase-4 unless it wins): a second net embedded
      at build time (CMake FORK_HELPER_NET, default none: release and TCEC builds unchanged), given to the
      helpers' Searchers through the per-searcher net pointer (searcher.hpp `net_`, set between searches; the
