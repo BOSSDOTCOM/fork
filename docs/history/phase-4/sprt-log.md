@@ -2359,6 +2359,24 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
   tables). Full gcc-debug suite on the switch-on commit: 35/35; clang-release quick check: ok. Names screened: no match
   (`fastest` only as an English word in one engine's comments).
 
+### 2026-11-16 the TT halfmove-clock guard (`UseTtHalfmoveGuard`; night queue item s17a-6): non-regression STC SPRT [-3, 0], capped undecided; adopted by the owner (TCEC-safety correctness fix)
+- **Why:** the TT ignored the halfmove clock, so a score stored at a low clock could cut at a later visit where the
+  fifty-move rule makes the position a draw (DESIGN.md §6 "Near term"; the owner's TCEC hazards, 2026-11-16).
+- **Test:** sprt/tt-halfmove-guard 928c7f2 (on) against tier2/tt-halfmove-guard fdf0fc8 (off), custom mode, nElo
+  [-3, 0], STC 8+0.08, 13 stages (20,800 games, 0 time losses, 0 abnormal; stage 12 re-dispatched after a ghost GitHub
+  run): **capped undecided, Elo -0.33 +/- 2.44** (95% lower bound -2.77), **nElo -0.65 +/- 4.72** (-5.37 to +4.07: the
+  nElo interval's lower bound is below -3), Ptnml [96, 2400, 5431, 2374, 99], LLR +0.44 of (-2.94, 2.94).
+- **Where it fires** (40 games of the run's stage 0, one side per game, 300,000 nodes a move; the narrowed variant's
+  measurement): 96,075 times in 2,758 searches (0.05% of the cutoffs that would have settled a node), never from a
+  root clock below 66 (60-69: 3,151; 70-79: 21,841; 80-89: 45,711; 90-100: 25,372), in 4.2% of the searches; never in
+  bench.
+- **Decision (owner, 2026-11-16):** adopt the always-on version (the tablebase precedent's yardstick: the Elo estimate
+  above -1.5, the lower bound near -3), with the fifty-move position set as its test: **adopted** on phase-4 (merge of
+  sprt/tt-halfmove-guard, bb4a6bab). The narrowed variant (`UseTtHalfmoveGuardHigh`, engaged from a root clock of
+  60 = 100 - 40; tier2/tt-halfmove-guard-high 13f3caa3, sprt/tt-halfmove-guard-high cb6c4226, local) stays the recorded
+  fallback: at STC it engages exactly where the always-on guard does, so it was not tested separately. Bench unchanged
+  5,205,904 / dfe99ebe03b0972d (bench positions have clocks of 7 or less). Names screened: no match.
+
 ### 2026-11-15 the rare-ideas survey's three search items (ideas 200-202; night queue items r1a, r2a, r3a): design R STC SPRTs: all rejected
 - **Idea 200, the eval-difference history update** (sprt/eval-shift-credit 1a2c7c5 vs tier2/eval-shift-credit
   fc067da; EvalShiftCap 100 cp): futility stop after 2 stages, **Elo -1.19 +/- 6.49** (nElo -2.22 +/- 12.04), Ptnml

@@ -1029,6 +1029,104 @@ TEST_CASE("search", "the TT halfmove guard: no TT cutoff where the fifty-move ru
   CHECK_EQ(probe(late, 777, TtBound::Exact, 1, 0), 777);
 }
 
+// The fifty-move position set: positions where the unguarded TT cutoff
+// misses an approaching fifty-move draw. Source: Fork's own games only, the
+// STC SPRT tt-halfmove-guard-nonreg (2026-11-16; fastchess PGNs of stages
+// 0 and 1, kept outside the repository), selected by
+// tools/fifty_guard_positions.py (--min-dtz 7, the first candidate of each
+// game): pawnless, at most 5 pieces, a win for one side at clock 0 by the
+// Syzygy 3-4-5 tables (WDL +-2) with |DTZ| >= 7 plies. The DTZ oracle: at
+// clock 100 - 4 = 96 no zeroing move or mate can be forced before the
+// rule, so the position is a fifty-move draw there. The FENs below are the
+// script's output (clock 0, the game's move number), copied by script; the
+// comment names the PGN (stage s, shard), the game and the ply.
+// Each position is searched to depth 4 at clock 0 (a previous search: at
+// clock 0 the guard cannot engage, 0 + 4 < 100), then probed with
+// the same TT at clock 96 (probe_zero_window, a non-PV node, as any node of
+// a game's search) on the draw's bar: beta 1 if the clock-0 score is a win,
+// 0 if a loss. Off, the stale entry cuts with the clock-0 score; on
+// (96 + 4 reaches 100), the node is searched and returns the
+// draw, 0 exactly (a zero-window bound on a true 0). The second oracle,
+// reference_minimax at clock 96 (no TT, the rule applied), is 0 for each.
+// Of the script's 36 candidates, 2 are left out because the depth-4
+// minimax at clock 96 is not 0 (a zeroing line inside the horizon:
+// "8/8/8/4r3/R7/8/3k3K/2q5 b - - 0 75", 37, and
+// "2Q5/8/3K4/6k1/8/8/2R5/7r w - - 0 90", 63); off and on differ on all 34
+// kept (and on 35 of the 36). Built for the narrowed variant (branch
+// tier2/tt-halfmove-guard-high, the recorded fallback) and kept for the
+// always-on guard (owner, 2026-11-16). Fault-checked (2026-11-16): with the
+// guard's predicate always false, every position fails.
+TEST_CASE("search", "the TT halfmove guard: fifty-move draws the unguarded TT cutoff misses") {
+  static constexpr std::string_view fens[] = {
+      "3R4/8/4B1k1/8/8/5K2/8/8 b - - 0 85",    // s0 shard 0-0, game 92, ply 157 (DTZ -12)
+      "2k3r1/7R/4K3/4B3/8/8/8/8 w - - 0 108",  // s0 shard 0-1, game 20, ply 201 (DTZ 11)
+      "8/8/8/8/5k2/8/4K3/6r1 b - - 0 87",      // s0 shard 0-10, game 5, ply 160 (DTZ 19)
+      "8/6k1/2K5/8/1B3N2/8/8/1B6 b - - 0 72",  // s0 shard 0-10, game 67, ply 127 (DTZ -8)
+      "7k/8/7b/8/3r4/5K2/8/8 w - - 0 68",      // s0 shard 0-11, game 42, ply 119 (DTZ -16)
+      "8/8/1Q6/3K1k2/2B5/8/8/8 b - - 0 86",    // s0 shard 0-11, game 74, ply 161 (DTZ -8)
+      "4k3/8/6R1/5K2/8/8/1B1b4/8 w - - 0 66",  // s0 shard 0-13, game 16, ply 115 (DTZ 9)
+      "8/8/8/5k2/3b4/8/1K6/r7 w - - 0 69",     // s0 shard 0-15, game 48, ply 124 (DTZ -14)
+      "7N/8/8/5R2/6K1/4k3/8/8 b - - 0 86",     // s0 shard 0-15, game 64, ply 159 (DTZ -18)
+      "5Q2/8/4k3/7K/8/8/8/8 w - - 0 87",       // s0 shard 0-2, game 10, ply 157 (DTZ 11)
+      "Q7/1KR5/8/1r6/8/4k3/8/8 w - - 0 88",    // s0 shard 0-2, game 21, ply 168 (DTZ 9)
+      "8/8/8/2N2k2/3b4/r7/8/4K3 w - - 0 71",   // s0 shard 0-2, game 67, ply 127 (DTZ -10)
+      "8/8/8/3R4/8/3k2K1/2r5/3q4 b - - 0 67",  // s0 shard 0-3, game 30, ply 118 (DTZ 11)
+      "8/8/R1K2k2/2R5/8/6r1/8/8 w - - 0 67",   // s0 shard 0-3, game 40, ply 118 (DTZ 7)
+      "8/8/4K3/8/8/2b1k3/8/5b2 w - - 0 111",   // s0 shard 0-4, game 30, ply 205 (DTZ -27)
+      "8/8/8/8/8/1b1R4/3K4/4Bk2 b - - 0 133",  // s0 shard 0-5, game 42, ply 249 (DTZ -10)
+      "8/8/8/8/8/1k3r2/3Bb1K1/8 b - - 0 90",   // s0 shard 0-6, game 41, ply 165 (DTZ 21)
+      "K7/4r3/8/8/5Q2/8/5k2/8 b - - 0 74",     // s0 shard 0-6, game 60, ply 133 (DTZ -52)
+      "1K6/2R5/B7/8/8/8/k7/8 b - - 0 83",      // s0 shard 0-8, game 92, ply 155 (DTZ -14)
+      "5K2/8/6Q1/8/k5N1/8/8/8 b - - 0 80",     // s1 shard 1-1, game 11, ply 149 (DTZ -12)
+      "3k4/8/2R5/4N1K1/8/8/8/8 b - - 0 90",    // s1 shard 1-1, game 27, ply 167 (DTZ -8)
+      "Q7/1KN5/8/4k3/8/8/8/8 b - - 0 91",      // s1 shard 1-1, game 46, ply 168 (DTZ -12)
+      "8/8/8/2k4B/5K2/8/2nB4/8 b - - 0 82",    // s1 shard 1-11, game 75, ply 157 (DTZ -100)
+      "1Q1R4/8/8/8/2k5/6K1/8/5r2 b - - 0 79",  // s1 shard 1-11, game 82, ply 141 (DTZ -8)
+      "8/k7/8/1R6/2N5/5n1K/8/8 b - - 0 67",    // s1 shard 1-12, game 85, ply 123 (DTZ -22)
+      "8/8/2K5/8/2kb4/7r/4N3/8 w - - 0 78",    // s1 shard 1-12, game 98, ply 138 (DTZ -16)
+      "5K2/8/8/4n3/8/8/1k6/r7 w - - 0 85",     // s1 shard 1-3, game 100, ply 155 (DTZ -16)
+      "4K3/8/8/5N2/3Q4/8/8/1k6 b - - 0 80",    // s1 shard 1-4, game 82, ply 151 (DTZ -8)
+      "8/8/1k6/8/8/1KN4r/8/6n1 w - - 0 88",    // s1 shard 1-5, game 28, ply 162 (DTZ -30)
+      "8/4k3/2K5/6N1/3B4/8/8/8 b - - 0 103",   // s1 shard 1-5, game 72, ply 190 (DTZ -35)
+      "8/8/3R1B2/5k2/8/6K1/8/8 w - - 0 78",    // s1 shard 1-6, game 3, ply 139 (DTZ 9)
+      "8/8/8/6r1/8/2K3k1/8/8 b - - 0 74",      // s1 shard 1-6, game 6, ply 131 (DTZ 21)
+      "8/8/8/5k2/2K5/8/5r2/6b1 w - - 0 103",   // s1 shard 1-8, game 43, ply 188 (DTZ -14)
+      "4Q3/8/8/8/4K3/2k3r1/8/8 b - - 0 88",    // s1 shard 1-8, game 75, ply 160 (DTZ -40)
+  };
+  const int depth = 4;
+  const int late_clock = 100 - depth;
+  int differ = 0;
+  for (std::string_view source : fens) {
+    Position early, late;
+    CHECK_MSG(early.set_fen(source), source);
+    std::string fen(source);  // the same position at clock 96
+    std::size_t at = 0;
+    for (int field = 0; field < 4; ++field) at = fen.find(' ', at) + 1;
+    fen.replace(at, fen.find(' ', at) - at, std::to_string(late_clock));
+    CHECK_MSG(late.set_fen(fen) && late.halfmove_clock() == late_clock && early.key() == late.key(), fen);
+    CHECK_MSG(reference_minimax(late, depth, 0) == 0, fen);
+    int probed[2] = {};
+    for (int on = 0; on < 2; ++on) {
+      Fixture fx;
+      fx.searcher->switches = exact_switches();
+      fx.searcher->switches.use_tt_halfmove_guard = on == 1;
+      SearchQuota limits;
+      limits.depth = depth;
+      Position root = early;
+      const int early_score = fx.search(root, limits).score;
+      CHECK_MSG(early_score != 0, source);
+      Position probe = late;
+      probed[on] = fx.searcher->probe_zero_window(probe, early_score > 0 ? 1 : 0, depth, fx.stop);
+      // Off: the stale entry's side of the bar (a win fails high, a loss low).
+      if (on == 0) CHECK_MSG(early_score > 0 ? probed[0] >= 1 : probed[0] < 0, source << ": " << probed[0]);
+    }
+    CHECK_MSG(probed[1] == 0, source << ": " << probed[1]);
+    differ += probed[0] != probed[1];
+  }
+  CHECK_EQ(differ, static_cast<int>(std::size(fens)));
+  CHECK_EQ(differ, 34);
+}
+
 TEST_CASE("search", "limits: nodes, depth, searchmoves; a preset stop still returns a legal move") {
   Fixture fx;
   Position pos;

@@ -549,7 +549,9 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   position reached once right after a capture and once 90 plies later.
   **Built 2026-11-16 as `UseTtHalfmoveGuard`** (owner: "TCEC hazards now,
   before the removal round"; on in sprt/tt-halfmove-guard, the test side
-  of its non-regression SPRT [-3, 0], adopted on a pass): a TT score settles no node (main search or
+  of its non-regression SPRT [-3, 0]; **adopted 2026-11-16, on**: the SPRT capped undecided at Elo -0.33 +/- 2.44,
+  lower bound -2.77, nElo -0.65 +/- 4.72, and the owner adopted it on the tablebase precedent's yardstick;
+  phase-4 bb4a6bab): a TT score settles no node (main search or
   quiescence) when the node's clock plus the plies the cutoff stands in for
   (the node's depth; in quiescence 1 in check, else 0, as captures and
   promotions reset the clock) reaches 100, unless the rule cannot have made
@@ -561,7 +563,16 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   covered: an entry stored at a higher clock than the visit's (too drawish,
   never a missed draw), and the pruning eval's TT refinement. Test: `search`
   suite, "the TT halfmove guard" (K+R v K at clocks 0-99, fault-checked both
-  ways).
+  ways) and "the TT halfmove guard: fifty-move draws the unguarded TT cutoff
+  misses" (34 positions from Fork's own games of its SPRT, chosen by
+  tools/fifty_guard_positions.py with the Syzygy DTZ oracle and checked with
+  reference_minimax: off returns the stale score, on the draw, on all 34;
+  0.18 s, in the pre-commit quick check through the search suite;
+  fault-checked). The narrowed variant (`UseTtHalfmoveGuardHigh`: only from a
+  root clock of 60 = 100 - 40, the TCEC horizon of Fork's E2 record) is the
+  recorded fallback on branch tier2/tt-halfmove-guard-high (not merged): at
+  STC the always-on guard never fired from a root clock below 66, so the two
+  differ only in searches deeper than 40 reversible plies.
 - **Improvement pass** (after Phase 8; owner, 2026-10-26). The layers again,
   in dependency order: network, search, time management, threads,
   tournament behavior, TCEC-conditions validation. It repeats in rounds,
@@ -4769,6 +4780,7 @@ models are scored on the half of the games they were not fitted on.
 | 2026-11-16 | **The owner's decisions on the night's results (morning of 2026-11-16).** (1) **Lazy SMP v2 (the helper skip rule) and idea 84 (a diverse helper net) are parked for the rented-EPYC test plan** (docs/research/tcec-hardware-test-plan.md): their 2-thread results were null (v2 -1.19 +/- 6.32; idea 84 -2.39 +/- 6.40 and -2.82 +/- 6.25), and their test belongs at high thread counts. (2) **The removal round (step 18):** the coordinator's recommended values for its five open settings are adopted (the control check's SE basis, the guard's futility stop, the LTC guard's stage cap, the factor set, the design seed), to be recorded in factorial-removal-round.md and here before launch; tools/factorial-removal is merged after its CI; then the round starts. (3) **TCEC hazards now, before the removal round:** the TT halfmove-clock guard (a non-regression SPRT, adopted on a pass), Syzygy probe-depth and probe-limit options whose defaults keep today's behaviour (bench identical), and the CPU-feature startup check. |
 | 2026-11-16 | **The removal round's five settings, recorded before launch (the owner's adoption of the coordinator's recommendations, this morning; full text in factorial-removal-round.md under the owner's 2026-11-09 decisions).** (1) The control check uses the SE of the difference (screen and dedicated estimates independent). (2) The guard gets design R's futility stop (after 2 stages, an estimate below -6 nElo is H0: switches kept). (3) The LTC guard's cap is 6 stages. (4) The factor set is k = 11: the original 8 plus use_take_history (§8 decision 2: a factor), use_skip_check_exempt and use_pair_sum_update (D8; of the D8/D13 pair only D8); out: use_pass_best_stop (E1, a correctness fix), use_forced_move_stop (§8 decision 3: time management), the 1%-triaged switches, and ProbCut (its own LTC removal test). m = 3 or 4 by the lower A-optimal mean SE at 16 stages. (5) The design seed is fixed in advance and recorded with 200 starts. Sequence: the TCEC hazards first, then tools/factorial-removal merged after its CI, the design search for k = 11, then the round. |
 | 2026-11-16 | **The startup CPU check reads the compiler's macros (TCEC readiness; owner's order, morning).** The list of extensions src/core/cpu_gate.cpp checks now comes from the macros the rest of the build is compiled with (src/core/cpu_features.cpp, in forkcore with the build's flags: `compiled_cpu_features`, a constant), no longer from CMake's FORK_ARCH and FORK_VNNI, so a native build is checked too, and x86-64-v2's SSE3 to SSE4.2 and v3's AVX join the list. Checked: SSE3, SSSE3, SSE4.1, SSE4.2, POPCNT, AVX, AVX2, BMI1, BMI2, FMA, AVX512F/BW/CD/DQ/VL, AVX512-VNNI; x86-64-v3's F16C, LZCNT and MOVBE are not, because clang 16 (a TCEC compiler) has no `__builtin_cpu_supports` name for them (tried 2026-11-16 on gcc 11 and 12, clang 16 and 19). The decision (`missing_cpu_features`, the names) is unit-tested with made-up feature sets (suite cpu_gate, which also runs the real check), and the gate is linked into fork_tests too. Still a priority-101 constructor in a file built for baseline x86-64 without AVX or LTO, one line on stderr and exit 1; FORK_CPU_GATE_TEST=fail still forces it (cpu_gate_refusal). Bench unchanged. |
+| 2026-11-16 | **The TT halfmove-clock guard adopted (`UseTtHalfmoveGuard` on; owner, a TCEC-safety correctness fix).** A TT score no longer settles a node where the fifty-move rule may change it (the clock plus the cutoff's horizon reaching 100). Non-regression STC [-3, 0] capped undecided: Elo -0.33 +/- 2.44 (lower bound -2.77), nElo -0.65 +/- 4.72 (lower bound -5.37); the owner adopted the always-on version on the tablebase precedent's yardstick, with a 34-position fifty-move set as its test; the narrowed variant (root clock >= 60) is the recorded fallback, identical at STC. Bench unchanged (5,205,904 / dfe99ebe03b0972d). SPRT log. |
 
 ## 7. Performance doctrine (governs every phase)
 
