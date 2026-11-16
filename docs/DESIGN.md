@@ -4106,7 +4106,13 @@ refinement is a later, separately measured item.
   Elo** (nElo +67.58), 3,200 games, no time losses. Scaling (smp-scaling run 43786653905; 46 bench positions to
   depth 18, 3 rounds, 4 runners of 4 vCPUs = 2 cores x 2 SMT threads; median over runners against each one's
   own one-thread run): 2 threads nps x1.94, time to depth x1.36, nodes x1.45; 4 threads (SMT siblings) nps x2.75,
-  time to depth x1.30, nodes x2.07. A depth-22 run (43788502182) and the LTC 2-vs-1 match follow.
+  time to depth x1.30, nodes x2.07. Depth 22 on runners (43788502182): x1.99 / x1.36 / x1.45 at 2 threads,
+  x2.87 / x1.35 / x2.12 at 4. **2 vs 1 at LTC +30.25 +/- 5.79** (3,328 games). **The PC's 6 real cores** (quiet
+  window of 2026-11-15/16, one game at a time, Hash 64): **4 vs 2 +71.47 +/- 19.08** (350 games), **4 vs 1 +138.99 +/-
+  22.64** (200 games); scaling to depth 22 (46 bench positions, 2 rounds): 2 threads nps x1.93, time to depth x1.40,
+  nodes x1.37; 4 threads x3.68 / x1.77 / x2.08; 6 threads x5.39 / x2.07 / x2.61 (real cores keep nps near linear,
+  unlike the runners' 2 cores x 2 SMT). Full TSan suites green on d40f240 and 7f76ef1. The SPRT log has every
+  run.
 - **v2: helper depth staggering by a skip rule (owner, 2026-11-15, about 8:45 PM EST: "design helper depth
   staggering (from the KB's Lazy SMP research) as v2, behind an option, bench identical at Threads=1").** Fork's
   helpers run free (never restarted per iteration), so a fixed "one ply deeper" start would wash out after the
@@ -4118,7 +4124,8 @@ refinement is a later, separately measured item.
   the published counts, written by its own thread); the pool passes the team (the main thread's searcher
   first) in the helpers' `SearchStart` and clears every published value at `begin_search`. Behind the switch
   `use_helper_skip` (check option `UseHelperSkip` in tuning builds), **off**; with one thread nothing runs it, and
-  bench is unchanged (5,205,904 / dfe99ebe03b0972d). Tests: the rule's cases (fault-checked: a strict majority
+  bench is unchanged (5,205,904 / dfe99ebe03b0972d). **Measured 2026-11-15/16: no gain** (v2 vs v1 at 2 threads
+  -1.19 +/- 6.32, 3,200 games on GitHub; at 4 threads -5.79 +/- 14.26, 600 games on the PC): stays off. Tests: the rule's cases (fault-checked: a strict majority
   fails two of them) and a pooled search with the switch on. Names screened (no non-generic match).
 - **The next quiet window (owner, 2026-11-15; a data-part boundary, g4d's seal being the next):** on the PC's 6
   real cores, one game at a time so no game has more search threads than cores: 4 threads against 2 and 4

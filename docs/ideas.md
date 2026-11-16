@@ -2892,6 +2892,15 @@ whose weaknesses and data gaps decide their targets and order.
   6. **Report:** Elo of (a) and (b), the nps ratios, and the TT tag's effect if measurable. A gain would then
      go to 4 threads (rented hardware or a quiet PC window) before any adoption decision; voting across groups
      stays a separate item (concurrency review A4/A6).
+- **result (2026-11-15/16 overnight):** steps 1-5 done. Both helper nets extended to architecture 9 bench-equal to
+  their originals (r8ceplo2kr4 S 87; r3pp1kr4 matched to S 90); gate 1 passed (mean |eval| ratios 0.997, 1.004);
+  gate 2 passed on interval overlap in every phase bucket (r8ceplo2's paired ratios exclude 1 pooled and in b0-b1,
+  b6-b7; on its own games its b7 does not overlap: recorded for the owner). Engine: exp/i84-helper-net 4d4fd62 (a
+  second embedded net for the helpers, FORK_HELPER_NET; a one-bit evaluator tag in TT flags bit 3). nps at 2
+  threads against each build's own 1 thread: x1.97 base, x1.99 r8ceplo2 helper, x1.92 r3pp1 helper (no cache cost
+  resolved). **Matches (Threads 2 both sides, one game per runner, STC, fixed 2 stages): r8ceplo2 helper -2.39 +/-
+  6.40 Elo, r3pp1 helper -2.82 +/- 6.25** (3,200 games each): no gain at 2 threads. **status:** tested at 2
+  threads, no gain; a 4-thread test would need the PC or rented hardware (the owner's call).
 
 ## 85. Class-matched TD horizon (novel-ideas 7)
 
@@ -3673,12 +3682,14 @@ proposal are placeholders, screened before use.
 - **type:** ELO. **phase:** 4. **runtime cost:** possible.
 - **idea:** at depth 0, when the TT holds a quiet move for the node, search one more ply instead of dropping into quiescence.
 - **plan (owner, 2026-11-15):** later; LTC-only test (its gains appear at LTC, PlentyChess failed STC).
+- **result (2026-11-16, overnight; the coordinator within the pre-approved search pipeline):** built as `use_horizon_tt_move`, off (tier2/horizon-tt-move a1c0a10; test commit sprt/horizon-tt-move 15a61fd, bench 5,046,722 / fd7e38be18ab4a6b); design R at LTC: **futility stop after 2 stages, -1.25 +/- 5.96 Elo** (nElo -2.48). With the switch on the elementary-mate suite fails (KQvKP far: under-promotion to a knight, no mate in 50 moves), so it was not adoptable as is. The rule near-matches Reckless's former "reverse qsearch" (credited, ORIGINALITY.md).
 - **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
-- **status:** later.
+- **status:** rejected (2026-11-16).
 
 ### 207. King-attack knowledge in quiet move ordering (rare-ideas survey rare.md RI-01)
 - **type:** ELO. **phase:** 4. **runtime cost:** possible.
 - **idea:** order quiet moves using static king-attack terms (attacks on the enemy king zone, moves into safe attacking squares), beyond the direct-check bonus.
 - **plan (owner, 2026-11-15):** later, after SMP (it costs nps).
+- **result (2026-11-16, overnight; pre-approved pipeline):** built as `use_king_zone_order`, off (tier2/king-zone-order 66f7df7): a quiet move to a square the opponent does not attack, from which the piece attacks a square next to the enemy king, gets `KingZoneOrderBonus` in the main search. Try 1 at 2500 (half of DirectCheckBonus; sprt/king-zone-order 3ef7085): **H0 after 2 stages, -9.12 +/- 6.27 Elo**. Try 2 at 1250 (sprt/king-zone-order-1250 316305f): **H0 after 1 stage, -9.77 +/- 9.28**. Both tries used: rejected. Names and constant screened (no match).
 - **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
-- **status:** later.
+- **status:** rejected (2026-11-16).

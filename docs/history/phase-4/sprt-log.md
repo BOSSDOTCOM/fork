@@ -2372,3 +2372,24 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
   14], LLR -2.85, runs 43758397448, 43760154303. Rejected (it also failed the elementary-mate suite with the switch on).
 - All three switches stay off and their branches are not merged; the survey's evidence for each came from other
   engines' reports (concepts only), so a different form or value is not ruled out, but none is queued.
+
+### 2026-11-15/16 Lazy SMP (roadmap 17a) matches and the night's search items
+- **2 threads vs 1** (smp-2v1-stc / -ltc; fixed 2 stages; phase-4 31f8286 both sides, TEST_OPTS option.Threads=2;
+  two games at once per runner): STC **+34.20 +/- 6.13 Elo** (nElo +67.58), Ptnml [2, 255, 790, 533, 20], 3,200
+  games; LTC 40+0.4 **+30.25 +/- 5.79** (nElo +61.97), Ptnml [2, 258, 864, 529, 11], 3,328 games; no time losses.
+- **PC quiet window** (7600X3D, 6 real cores, WSL, one game at a time, 8+0.08, Hash 64, b25570c; fastchess with
+  sprt.sh's conditions, fixed length): **4 vs 2 threads +71.47 +/- 19.08** (nElo +140.40), Ptnml [0, 18, 73, 79, 5],
+  350 games; **4 vs 1 +138.99 +/- 22.64** (nElo +328.83), Ptnml [0, 1, 28, 65, 6], 200 games; **v2 (UseHelperSkip
+  on) vs v1 at 4 threads -5.79 +/- 14.26** (nElo -11.30), Ptnml [4, 72, 154, 70, 0], 600 games, 1 time loss.
+- **v2 vs v1 at 2 threads** (smp-v2-2t-stc; sprt/helper-skip-on a6a709e vs d40f240; fixed 2 stages): **-1.19 +/-
+  6.32** (nElo -2.27), 3,200 games. v2 not adopted (owner: not overnight; no gain shown).
+- **Idea 84** (helper net, Threads 2, one game per runner, fixed 2 stages; base exp/i84-helper-net d1baff2):
+  r8ceplo2kr4 helper (081b2ce) **-2.39 +/- 6.40**, Ptnml [15, 406, 777, 390, 12]; r3pp1kr4-s90 helper (d523d22)
+  **-2.82 +/- 6.25**, Ptnml [8, 409, 795, 377, 11]; 3,200 games each.
+- **Idea 207** king-zone ordering (design R STC): KingZoneOrderBonus 2500 (sprt/king-zone-order 3ef7085 vs
+  tier2/king-zone-order 66f7df7) **H0 after stage 1, -9.12 +/- 6.27**, Ptnml [16, 418, 812, 342, 12]; retry 1250
+  (316305f) **H0 after its first stage, -9.77 +/- 9.28**. Rejected (both tries).
+- **Idea 206** quiescence skip with a TT move (design R LTC; sprt/horizon-tt-move 15a61fd vs tier2/horizon-tt-move
+  a1c0a10): **futility stop after 2 stages, -1.25 +/- 5.96**. Rejected (also not adoptable as is: the
+  elementary-mate failure).
+- **C4 multi-extension LTC** (item zzz9a): capped undecided after 6 stages, **+1.36 +/- 3.57**: not adopted.
