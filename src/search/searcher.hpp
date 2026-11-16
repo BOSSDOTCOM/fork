@@ -778,6 +778,21 @@ class Searcher {
   // thread at each iteration's start.
   int searching_depth() const { return searching_depth_.load(std::memory_order_relaxed); }
 
+  // Idea 84's experiment (evaluator-diverse Lazy SMP): the network this
+  // searcher evaluates with (the embedded one unless set) and its evaluator
+  // tag (0 or 1), which the TT stores beside each static eval so that only a
+  // searcher with the same tag reuses it. Set between searches only (the
+  // HelperPool gives its helpers the helper network); every search resets the
+  // feature stack from the network it then uses.
+#if defined(FORK_EVAL_NNUE)
+  void use_net(const NetFile& net, std::uint8_t evaluator) {
+    net_ = &net;
+    evaluator_ = evaluator;
+  }
+  const NetFile& net() const { return *net_; }
+#endif
+  std::uint8_t evaluator() const { return evaluator_; }
+
   SearchSwitches switches;
   // Aspiration fails are reported (as upperbound or lowerbound lines) only
   // once a search has run this long; tests set 0 to see every fail.
@@ -1012,6 +1027,7 @@ class Searcher {
   FeatureStackTally ledger_saved_tally_;
 #endif
 #endif
+  std::uint8_t evaluator_ = 0;  // the TT's evaluator tag of this searcher's network (use_net)
 #if defined(FORK_EVAL_NNUE)
   const NetFile* net_;
   FeatureStack features_;

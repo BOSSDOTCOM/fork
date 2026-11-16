@@ -2,7 +2,18 @@
 
 #include "search/helper_pool.hpp"
 
+#include "eval/eval.hpp"
+
 namespace forkeng {
+
+HelperPool::HelperPool(TransTable& tt) : tt_(tt) {
+#if defined(FORK_EVAL_NNUE)
+  if (const NetFile* net = helper_net()) {  // idea 84's experiment builds only
+    net_ = net;
+    evaluator_ = 1;
+  }
+#endif
+}
 
 HelperPool::~HelperPool() { stop_all(); }
 
@@ -89,6 +100,9 @@ void HelperPool::helper_loop(HelperThread& h) {
       if (quit_) return;
       seen = searches_begun_;
       h.searcher->switches = switches_;
+#if defined(FORK_EVAL_NNUE)
+      if (net_) h.searcher->use_net(*net_, evaluator_);
+#endif
     }
     // Every input below was written before the search count changed and stays
     // unchanged until every helper is idle again.
@@ -147,5 +161,14 @@ void HelperPool::clear_histories() {
   wait_idle();
   for (Searcher* s : searchers_) s->clear_history();
 }
+
+#if defined(FORK_EVAL_NNUE)
+void HelperPool::use_net(const NetFile& net, std::uint8_t evaluator) {
+  wait_idle();
+  std::scoped_lock lock(mutex_);
+  net_ = &net;
+  evaluator_ = evaluator;
+}
+#endif
 
 }  // namespace forkeng

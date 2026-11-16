@@ -219,6 +219,35 @@ elseif(NOT FORK_EVALUATOR STREQUAL "bootstrap")
 else()
   set(FORK_NET_ARCH 1)
 endif()
+# Idea 84's experiment (evaluator-diverse Lazy SMP; docs/ideas.md, item 84):
+# a second network, compiled in beside FORK_NET, that the helper threads
+# evaluate with (src/search/helper_pool.hpp); the main thread keeps FORK_NET.
+# Empty (the default): no second network, and the build is unchanged. It
+# must have FORK_NET's architecture, since the inference is compiled for one.
+set(FORK_HELPER_NET "" CACHE FILEPATH "Idea 84: a network for the helper threads (FORK_NET's architecture); empty: none")
+if(FORK_HELPER_NET)
+  if(NOT FORK_EVALUATOR STREQUAL "nnue")
+    message(FATAL_ERROR "FORK_HELPER_NET needs FORK_EVALUATOR=nnue")
+  endif()
+  get_filename_component(fork_helper_net_path ${FORK_HELPER_NET} ABSOLUTE BASE_DIR ${CMAKE_SOURCE_DIR})
+  if(NOT EXISTS ${fork_helper_net_path})
+    message(FATAL_ERROR "FORK_HELPER_NET: no network file ${fork_helper_net_path}")
+  endif()
+  file(READ ${fork_helper_net_path} fork_helper_net_arch_hex OFFSET 12 LIMIT 4 HEX)
+  string(SUBSTRING "${fork_helper_net_arch_hex}" 0 2 fork_helper_net_arch_byte)
+  math(EXPR fork_helper_net_arch "0x${fork_helper_net_arch_byte}")
+  if(NOT fork_helper_net_arch EQUAL FORK_NET_ARCH)
+    message(FATAL_ERROR "FORK_HELPER_NET (${fork_helper_net_path}) is architecture ${fork_helper_net_arch}, "
+                        "FORK_NET (${FORK_NET}) architecture ${FORK_NET_ARCH}: they must be the same")
+  endif()
+  set(fork_helper_net_source ${CMAKE_BINARY_DIR}/generated/helper_net_data.cpp)
+  add_custom_command(OUTPUT ${fork_helper_net_source}
+    COMMAND ${CMAKE_COMMAND} -DNET=${fork_helper_net_path} -DOUT=${fork_helper_net_source} -DPREFIX=helper_net
+            -P ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    DEPENDS ${fork_helper_net_path} ${CMAKE_SOURCE_DIR}/cmake/embed_net.cmake
+    COMMENT "Embedding the helper threads' network ${fork_helper_net_path}")
+  get_filename_component(fork_helper_net_stem ${fork_helper_net_path} NAME_WE)
+endif()
 
 # Evaluation and search (src/eval/, src/search/ except the hash memory).
 add_library(forksearch STATIC
@@ -238,6 +267,10 @@ if(FORK_EVALUATOR STREQUAL "nnue")
   target_sources(forksearch PRIVATE src/eval/nnue/embedded_net.cpp ${fork_net_source})
   target_compile_definitions(forksearch PUBLIC FORK_EVAL_NNUE)
   target_link_libraries(forksearch PUBLIC forknnue)
+  if(FORK_HELPER_NET)
+    target_sources(forksearch PRIVATE ${fork_helper_net_source})
+    set_source_files_properties(src/eval/nnue/embedded_net.cpp PROPERTIES COMPILE_DEFINITIONS FORK_HELPER_NET_EMBEDDED)
+  endif()
 else()
   target_compile_definitions(forksearch PUBLIC FORK_EVAL_BOOTSTRAP)
 endif()
@@ -344,6 +377,10 @@ endif()
 get_filename_component(fork_net_stem_for_version ${FORK_NET} NAME_WE)
 target_compile_definitions(fork PRIVATE FORK_EVALUATOR_NAME="${FORK_EVALUATOR}"
                                         FORK_NET_NAME="${fork_net_stem_for_version}")
+# and the helper threads' network, when one is compiled in (idea 84).
+if(FORK_HELPER_NET)
+  target_compile_definitions(fork PRIVATE FORK_HELPER_NET_NAME="${fork_helper_net_stem}")
+endif()
 # fork_datagen's run manifest names the labelling network the same way, so
 # data labelled by different nets stays apart (owner, 2026-10-30).
 target_compile_definitions(fork_datagen PRIVATE FORK_NET_NAME="${fork_net_stem_for_version}")

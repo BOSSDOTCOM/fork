@@ -63,6 +63,10 @@ void print_version() {
             << "net " << FORK_NET_NAME
             << '\n'
 #endif
+#if defined(FORK_HELPER_NET_NAME)
+            // Idea 84's experiment builds: the helper threads' network.
+            << "helper net " << FORK_HELPER_NET_NAME << '\n'
+#endif
 
             // For bench/ab_search.py's identity check (cmake/build_id.cmake).
             << "variant " FORK_BUILD_VARIANT " | commit " FORK_BUILD_COMMIT " |\n";

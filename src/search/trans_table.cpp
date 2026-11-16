@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include "core/splitmix.hpp"
+#include "search/score_bounds.hpp"
 #include "tune/params.hpp"
 
 namespace forkeng {
@@ -90,20 +91,23 @@ void TransTable::store_entry(TtEntry& slot, const TtEntry& e) {
   std::atomic_ref<std::uint32_t>(slot.eval_depth_flags).store(e.eval_depth_flags, std::memory_order_relaxed);
 }
 
-bool TransTable::fetch(Key key, TtHit& hit) const {
+bool TransTable::fetch(Key key, TtHit& hit, std::uint8_t evaluator) const {
   if (!count_) return false;
   TtBucket& b = buckets_[bucket_index(key, count_)];
   const std::uint32_t check = key_check_of(key);
   for (TtEntry& slot : b.entries) {
     const TtEntry e = load_entry(slot);  // one load of each word, then only the copy is read
     if (e.bound() == TtBound::None || e.key_check() != expected_check(e, check)) continue;
-    hit = {Move::from_raw(e.move()), e.score(), e.eval(), e.depth(), e.bound(), e.was_pv()};
+    // Another network's static eval is not this searcher's (idea 84): recomputed.
+    const int eval = e.evaluator() == evaluator ? e.eval() : ScoreNone;
+    hit = {Move::from_raw(e.move()), e.score(), eval, e.depth(), e.bound(), e.was_pv()};
     return true;
   }
   return false;
 }
 
-void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv) {
+void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv,
+                         std::uint8_t evaluator) {
   if (!count_) return;
 #ifdef FORK_SEARCH_STATS
   if (hold_writes_) return;  // a decision-ledger side search (X10)
@@ -156,9 +160,11 @@ void TransTable::deposit(Key key, Move move, int score, int eval, int depth, TtB
   TtEntry e;
   e.key_and_age = search_age_;
   e.move_score = std::uint32_t{move.raw()} | std::uint32_t{static_cast<std::uint16_t>(score)} << 16;
-  e.eval_depth_flags = std::uint32_t{static_cast<std::uint16_t>(eval)} |
-                       std::uint32_t{static_cast<std::uint8_t>(stored_depth)} << 16 |
-                       std::uint32_t{static_cast<std::uint8_t>(static_cast<int>(bound) | (pv ? 4 : 0))} << 24;
+  e.eval_depth_flags =
+      std::uint32_t{static_cast<std::uint16_t>(eval)} |
+      std::uint32_t{static_cast<std::uint8_t>(stored_depth)} << 16 |
+      std::uint32_t{static_cast<std::uint8_t>(static_cast<int>(bound) | (pv ? 4 : 0) | (evaluator & 1) << 3)}
+          << 24;
   e.key_and_age |= expected_check(e, check) << 8;
   store_entry(b.entries[target], e);  // every word written once
 }

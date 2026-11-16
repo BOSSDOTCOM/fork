@@ -370,7 +370,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // unless it is legal here.
   const Key key = pos.key();
   TtHit hit{};
-  const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
+  const bool tt_hit = switches.use_tt && tt_.fetch(key, hit, evaluator_);
   if (tt_hit && !OnPv && !withheld) {
     const int s = score_from_tt(hit.score, ply);
     const bool deep_enough = switches.tt_exact_depth ? hit.depth == depth : hit.depth >= depth;
@@ -399,7 +399,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
                                                  : TtBound::Exact;
       if (bound_settles(b, s, alpha, beta)) {
         if (switches.use_tt && !withheld)
-          tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv);
+          tt_.deposit(key, NoMove, score_to_tt(s, ply), ScoreNone, depth, b, OnPv, evaluator_);
         return s;
       }
       (b == TtBound::Lower ? table_floor : table_ceiling) = s;
@@ -573,7 +573,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
           FORK_STAT(++counters.capture_probe_cuts);
           if (switches.use_tt)
             tt_.deposit(key, m, score_to_tt(score, ply), f.static_eval, probe_plies + 1, TtBound::Lower,
-                        false);
+                        false, evaluator_);
           return score;
         }
       }
@@ -1042,7 +1042,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
     learn_drift(ply, best - f.static_eval, depth);
   }
   if (switches.use_tt && !withheld)
-    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv);
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, depth, bound, OnPv, evaluator_);
   return best;
 }
 
@@ -1070,7 +1070,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
 
   const Key key = pos.key();
   TtHit hit{};
-  const bool tt_hit = switches.use_tt && tt_.fetch(key, hit);
+  const bool tt_hit = switches.use_tt && tt_.fetch(key, hit, evaluator_);
   if (tt_hit && !OnPv && (!switches.tt_exact_depth || hit.depth == 0)) {
     const int s = score_from_tt(hit.score, ply);
     if (bound_settles(hit.bound, s, alpha, beta)) return s;
@@ -1107,7 +1107,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
     best = drift_keys_live_ ? drift_estimate(f.static_eval, drift_terms(ply)) : f.static_eval;
     if (best >= beta) {
       if (switches.use_tt)
-        tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv);
+        tt_.deposit(key, NoMove, score_to_tt(best, ply), f.static_eval, 0, TtBound::Lower, OnPv, evaluator_);
       return best;
     }
     alpha = std::max(alpha, best);
@@ -1151,7 +1151,7 @@ int Searcher::quiesce(int alpha, int beta, int ply) {
   if (in_check && moves_searched == 0) return mated_score(ply);
   if (switches.use_tt) {
     const TtBound bound = result_bound(best, alpha_start, beta, OnPv);
-    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, OnPv);
+    tt_.deposit(key, best_move, score_to_tt(best, ply), f.static_eval, 0, bound, OnPv, evaluator_);
   }
   return best;
 }

@@ -24,6 +24,14 @@
 //   dropped, and resize reports the count actually running.
 // - Zero helpers (Threads = 1) start no thread: the session then runs the
 //   single-threaded path exactly as before.
+// - Idea 84's experiment (evaluator-diverse Lazy SMP): in a build with a
+//   helper network (CMake FORK_HELPER_NET; helper_net() in eval/eval.hpp),
+//   every helper evaluates with it under evaluator tag 1, while the main
+//   thread's searcher keeps the embedded network and tag 0; the TT shares
+//   moves, scores and bounds between them but each tag's static evals only
+//   within that tag. Without one (the default), helpers use the embedded
+//   network and tag 0, as before. The network is handed to each helper's
+//   searcher when it wakes for a search, so it changes only between searches.
 #pragma once
 
 #include <atomic>
@@ -43,7 +51,7 @@ namespace forkeng {
 
 class HelperPool {
  public:
-  explicit HelperPool(TransTable& tt) : tt_(tt) {}
+  explicit HelperPool(TransTable& tt);
   ~HelperPool();
   HelperPool(const HelperPool&) = delete;
   HelperPool& operator=(const HelperPool&) = delete;
@@ -70,6 +78,14 @@ class HelperPool {
   // Forgets every helper's move-ordering history (ucinewgame, Clear Hash).
   void clear_histories();
 
+#if defined(FORK_EVAL_NNUE)
+  // The network and evaluator tag every helper searches with from the next
+  // search on (outside any search; waits until every helper is parked). The
+  // constructor sets helper_net() with tag 1 when the build has one; tests
+  // set another. `net` must outlive the pool's searches.
+  void use_net(const NetFile& net, std::uint8_t evaluator);
+#endif
+
  private:
   struct HelperThread {
     std::thread thread;
@@ -95,6 +111,10 @@ class HelperPool {
   SearchSwitches switches_;
   SearchStart start_;
   SearchQuota limits_;
+#if defined(FORK_EVAL_NNUE)
+  const NetFile* net_ = nullptr;  // null: each helper's own default (the embedded network, tag 0)
+  std::uint8_t evaluator_ = 0;
+#endif
   // Read by every helper's search every StopCheckInterval nodes; written by
   // the coordinator only, on its own cache line.
   alignas(64) std::atomic<bool> abort_{false};

@@ -33,6 +33,10 @@ namespace forkeng {
 #if defined(FORK_EVAL_NNUE)
 // The network compiled into this build, read and validated on first use.
 const NetFile& embedded_net();
+// Idea 84's experiment: the second network compiled in for the helper
+// threads (CMake FORK_HELPER_NET, FORK_NET's architecture), read and
+// validated on first use; null when the build has none (the default).
+const NetFile* helper_net();
 #endif
 
 inline int static_eval(const Position& pos) {

@@ -13,9 +13,10 @@
 //   low bits) with a whole byte for the age of the search that wrote it, the
 //   move, the score (node-relative for mates and tablebase results,
 //   score_bounds.hpp), the static eval, the depth, and a byte of flags: the
-//   bound and the TT-PV flag (T19). With 24 check bits a false match (another
-//   position's entry) is rare and its move is validated before use, but its
-//   score, bound and depth are used as they are: rare, not harmless (audit-1,
+//   bound, the TT-PV flag (T19) and the evaluator tag (idea 84). With 24
+//   check bits a false match (another position's entry) is rare and its move
+//   is validated before use, but its score, bound and depth are used as they
+//   are: rare, not harmless (audit-1,
 //   A1 suspicion 9; Hyatt and Cozzie 2005, KB search-techniques.md T4, on how
 //   seldom such errors change the move played).
 // - Replacement follows the KB's description (techniques.md, "Transposition
@@ -43,6 +44,12 @@
 //   updates between threads are accepted: an interleaved entry fails its
 //   check. The setters below and advance_age run only between searches,
 //   never while a thread searches.
+// - The evaluator tag (idea 84's experiment, evaluator-diverse Lazy SMP):
+//   each entry records which network (0 or 1) computed its static eval, and
+//   fetch hands that eval only to a searcher with the same tag (to any other
+//   the eval reads as ScoreNone, so it is recomputed); the move, score,
+//   bound and depth are shared by every searcher. With one network every
+//   searcher uses tag 0, and the table behaves exactly as without the tag.
 #pragma once
 
 #include <atomic>
@@ -61,7 +68,8 @@ struct TtEntry {
   std::uint32_t
       key_and_age;  // bits 8-31: key check (key bits XOR data digest); bits 0-7: the writing search's age
   std::uint32_t move_score;        // bits 0-15 move, 16-31 score
-  std::uint32_t eval_depth_flags;  // bits 0-15 eval, 16-23 depth, 24-31 flags (bits 0-1 bound, bit 2 TT-PV)
+  std::uint32_t eval_depth_flags;  // bits 0-15 eval, 16-23 depth, 24-31 flags (bits 0-1 bound, bit 2 TT-PV,
+                                   // bit 3 the evaluator tag)
 
   std::uint32_t key_check() const { return key_and_age >> 8; }
   int age() const { return key_and_age & 0xFF; }
@@ -72,6 +80,7 @@ struct TtEntry {
   std::uint8_t flags() const { return static_cast<std::uint8_t>(eval_depth_flags >> 24); }
   TtBound bound() const { return TtBound(flags() & 3); }
   bool was_pv() const { return flags() & 4; }
+  std::uint8_t evaluator() const { return (flags() >> 3) & 1; }
 };
 static_assert(sizeof(TtEntry) == 12);
 static_assert(std::atomic_ref<std::uint32_t>::required_alignment <= alignof(std::uint32_t));
@@ -142,10 +151,14 @@ class TransTable {
   void prefetch_bucket(Key key) const {
     if (count_) __builtin_prefetch(&buckets_[bucket_index(key, count_)]);
   }
-  bool fetch(Key key, TtHit& hit) const;
+  // `evaluator`: the reading searcher's tag; an eval stored under the other
+  // tag comes back as ScoreNone (the module comment).
+  bool fetch(Key key, TtHit& hit, std::uint8_t evaluator = 0) const;
   // `score` must already be node-relative (score_to_tt). Depth below 0 is
-  // stored as 0 (the quiescence search).
-  void deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv);
+  // stored as 0 (the quiescence search). `evaluator` (0 or 1): the tag of the
+  // network that computed `eval`.
+  void deposit(Key key, Move move, int score, int eval, int depth, TtBound bound, bool pv,
+               std::uint8_t evaluator = 0);
 
   // Per mille of a sample of entries written in the current search (UCI hashfull).
   int fill_permille() const;

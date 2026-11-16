@@ -7,11 +7,13 @@
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
 #include "core/movegen.hpp"
 #include "core/position.hpp"
+#include "eval/eval.hpp"
 #include "harness.hpp"
 #include "search/helper_pool.hpp"
 #include "search/searcher.hpp"
@@ -195,5 +197,56 @@ TEST_CASE("smp", "with the skip rule on, a pooled search plays a legal move and 
   // Every helper reached the depth limit (it never searches past it).
   for (std::size_t i = 0; i < pool.helper_count(); ++i) CHECK(pool.searchers()[i]->searching_depth() <= 10);
 }
+
+#if defined(FORK_EVAL_NNUE)
+// Idea 84's experiment (evaluator-diverse Lazy SMP): the helpers search with
+// the pool's network under its evaluator tag, the main thread with the
+// embedded network under tag 0, and the TT then holds entries of both tags.
+// A build with a helper network (FORK_HELPER_NET) starts with it at tag 1;
+// any build can hand the pool another network, here a copy of the embedded
+// one's bytes (a distinct object, so the pointers tell them apart).
+// Fault-checked: without the helpers taking the pool's network at their wake
+// (helper_pool.cpp, helper_loop) the pointer and tag checks fail.
+TEST_CASE("smp", "helpers search with the pool's network and evaluator tag; the main thread keeps its own") {
+  SmpHash hash;
+  auto main = std::make_unique<Searcher>(hash.table);
+  HelperPool pool(hash.table);
+  CHECK_EQ(pool.resize(2), std::size_t{2});
+  Position pos;
+  SearchQuota limits;
+  limits.depth = 4;
+  pooled_search(hash.table, *main, pool, pos, limits, nullptr);
+  const NetFile* const built_in = helper_net();
+  for (std::size_t i = 0; i < pool.helper_count(); ++i) {
+    const Searcher& h = *pool.searchers()[i];
+    CHECK(&h.net() == (built_in ? built_in : &embedded_net()));
+    CHECK_EQ(int{h.evaluator()}, built_in ? 1 : 0);
+  }
+
+  auto copy = std::make_unique<NetFile>();
+  std::string error;
+  CHECK_MSG(read_net_file(write_net_file(embedded_net()), *copy, error), error);
+  pool.use_net(*copy, 1);
+  limits.depth = 8;
+  const SearchResult r = pooled_search(hash.table, *main, pool, pos, limits, nullptr);
+  CHECK(legal(pos, r.best));
+  CHECK_EQ(r.depth, 8);
+  CHECK(&main->net() == &embedded_net());
+  CHECK_EQ(int{main->evaluator()}, 0);
+  for (std::size_t i = 0; i < pool.helper_count(); ++i) {
+    const Searcher& h = *pool.searchers()[i];
+    CHECK_MSG(&h.net() == copy.get(), "helper " << i << " is not on the pool's network");
+    CHECK_EQ(int{h.evaluator()}, 1);
+  }
+  // Both tags were deposited this search (current age): the main thread's 0, the helpers' 1.
+  std::size_t tagged[2] = {0, 0};
+  for (TtBucket& b : hash.buckets)
+    for (TtEntry& slot : b.entries) {
+      const TtEntry e = TransTable::load_entry(slot);
+      if (e.bound() != TtBound::None && e.age() == hash.table.age()) ++tagged[e.evaluator()];
+    }
+  CHECK_MSG(tagged[0] > 0 && tagged[1] > 0, "entries by tag: " << tagged[0] << ", " << tagged[1]);
+}
+#endif
 
 }  // namespace forkeng::test

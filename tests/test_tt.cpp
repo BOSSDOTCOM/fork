@@ -69,6 +69,44 @@ TEST_CASE("tt", "deposit then fetch returns the entry; other keys miss; an unbou
   CHECK_EQ(unbound.fill_permille(), 0);
 }
 
+// Idea 84's evaluator tag (flags bit 3): a static eval stored by one
+// network's searcher is reused only by a searcher of the same tag; the move,
+// score, bound, depth and PV flag are everyone's. The tag is covered by the
+// digest, so a flipped tag bit reads as a miss, never as another tag's entry.
+TEST_CASE("tt", "an eval stored under one evaluator tag is reused only by that tag; the rest is shared") {
+  TestTable t(1024);
+  const Key key = 0x0fedcba987654321ULL;
+  t.table.deposit(key, Move(12, 28, Quiet), 57, -13, 9, TtBound::Lower, true, 1);
+  for (const std::uint8_t reader : {std::uint8_t{0}, std::uint8_t{1}}) {
+    TtHit hit{};
+    CHECK_MSG(t.table.fetch(key, hit, reader), "reader " << int{reader} << " missed");
+    CHECK(hit.move == Move(12, 28, Quiet));
+    CHECK_EQ(hit.score, 57);
+    CHECK_EQ(hit.depth, 9);
+    CHECK(hit.bound == TtBound::Lower);
+    CHECK(hit.was_pv);
+    CHECK_EQ(hit.eval, reader == 1 ? -13 : ScoreNone);
+  }
+  // Tag 0 overwrites the entry with its own eval: now only tag 0 reuses it.
+  t.table.deposit(key, Move(6, 21, Quiet), -40, 25, 12, TtBound::Exact, false, 0);
+  TtHit hit{};
+  CHECK(t.table.fetch(key, hit, 0) && hit.eval == 25 && hit.score == -40);
+  CHECK(t.table.fetch(key, hit, 1) && hit.eval == ScoreNone && hit.score == -40 && hit.depth == 12);
+  // Tag 0 is the default: an untagged deposit and fetch are tag 0's.
+  t.table.deposit(key, NoMove, 3, 7, 13, TtBound::Exact, false);
+  CHECK(t.table.fetch(key, hit) && hit.eval == 7);
+  // The tag bit is part of the digest: an entry whose tag bit alone flips fails its check.
+  TtEntry* slot = nullptr;
+  for (TtEntry& e : t.storage[TransTable::bucket_index(key, 1024)].entries)
+    if (e.depth() == 13) slot = &e;
+  CHECK(slot != nullptr);
+  if (slot) {
+    slot->eval_depth_flags ^= std::uint32_t{8} << 24;
+    CHECK(!t.table.fetch(key, hit, 0));
+    CHECK(!t.table.fetch(key, hit, 1));
+  }
+}
+
 TEST_CASE("tt", "a bucket holds five positions; a sixth replaces the shallowest, then older searches first") {
   TestTable t(1);  // every key maps to bucket 0
   for (int i = 0; i < 5; ++i) t.table.deposit(Key(i + 1), NoMove, i, 0, 10 + i, TtBound::Exact, false);
