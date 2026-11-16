@@ -282,6 +282,16 @@ struct SearchQuota {
 //   searching (helper_next_depth), so the free-running helpers spread over
 //   depths instead of repeating the main thread's; the main thread never
 //   skips. Off until its tests; no effect with one thread.
+// - use_horizon_tt_move: skipping the quiescence search when the TT holds a
+//   move (ideas.md idea 206; the rare-ideas survey's RI-20): a non-PV node
+//   out of check about to enter the quiescence search (depth 0 or less) is
+//   searched by the main search at depth 1 instead when its TT entry holds a
+//   quiet move and is a lower bound or exact (raises_horizon), so the quiet
+//   TT move is tried; not when its parent was itself raised that way or is
+//   running ProbCut's quiescence probe (the parent's
+//   PlyFrame::horizon_kept), so a raised node's children enter the
+//   quiescence search. No constant. Off until its SPRT (LTC only, the
+//   owner's plan of 2026-11-15).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -335,7 +345,8 @@ struct SearchQuota {
   X(use_root_lmr, UseRootLmr, true)                      \
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
-  X(use_helper_skip, UseHelperSkip, false)
+  X(use_helper_skip, UseHelperSkip, false)               \
+  X(use_horizon_tt_move, UseHorizonTtMove, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -345,6 +356,15 @@ struct SearchSwitches {
   // searched to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
 };
+
+// Whether a TT entry raises a node at the horizon to a depth-1 main-search
+// node (use_horizon_tt_move, idea 206): it holds a quiet move (neither a
+// capture nor a promotion) and is a lower bound or exact (an upper bound
+// says the move failed low).
+inline bool raises_horizon(const TtHit& hit) {
+  return !hit.move.is_none() && !hit.move.is_capture() && !hit.move.is_promotion() &&
+         (hit.bound == TtBound::Lower || hit.bound == TtBound::Exact);
+}
 
 // The move played with the score and depth of the search behind it: those of
 // the last reported line. That is the last finished iteration, or the
@@ -426,9 +446,16 @@ class SearchListener {
 // One ply of the search stack.
 struct PlyFrame {
   MoveSelector selector;
-  MoveList failed_moves;        // quiet moves and captures searched here without a cutoff (the maluses)
-  int static_eval;              // ScoreNone in check
-  bool after_null = false;      // this node was reached by a null move (no second one in a row)
+  MoveList failed_moves;    // quiet moves and captures searched here without a cutoff (the maluses)
+  int static_eval;          // ScoreNone in check
+  bool after_null = false;  // this node was reached by a null move (no second one in a row)
+  // Idea 206 (use_horizon_tt_move): this node's children at depth 0 enter
+  // the quiescence search directly: it was itself raised from the horizon,
+  // or it is running ProbCut's quiescence probe. Set at each main-search
+  // entry (a re-entry at the same ply, the singular test, is at depth 6 or
+  // more, never raised, so it writes the same false). In the padding after
+  // after_null: the frame keeps its 2,704-byte guard.
+  bool horizon_kept = false;
   Move withheld_move = NoMove;  // set while a singular test searches this node without that move
   int arrival = NoArrival;      // the pair-history slot of the move that led here (none after a null move)
   bool expected_cut = false;    // expected to fail high (a cut node), from the parent (T17)

@@ -175,6 +175,7 @@ TEST_CASE("pruning", "tier 2, all switches on: stopped searches leave no state b
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
   s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
   s.use_root_lmr = true;
+  s.use_horizon_tt_move = true;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
       "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

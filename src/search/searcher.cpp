@@ -331,7 +331,22 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   }
   const int ledger_entry_depth = depth;  // before the no-move reduction: a re-entry applies it once
 #endif
-  if (depth <= 0 && switches.use_quiesce) return quiesce<OnPv>(alpha, beta, ply);
+  // Idea 206 (use_horizon_tt_move): a non-PV node out of check about to
+  // enter the quiescence search is searched one ply deep instead when its TT
+  // entry holds a quiet move and is not an upper bound (raises_horizon),
+  // unless its parent keeps the horizon (PlyFrame::horizon_kept).
+  bool raised = false;
+  if (depth <= 0 && switches.use_quiesce) {
+    if constexpr (!OnPv) {
+      if (switches.use_horizon_tt_move && switches.use_tt && ply > 0 && !frames_[ply - 1].horizon_kept &&
+          !pos_->in_check()) {
+        TtHit horizon_hit{};
+        raised = tt_.fetch(pos_->key(), horizon_hit) && raises_horizon(horizon_hit);
+      }
+    }
+    if (!raised) return quiesce<OnPv>(alpha, beta, ply);
+    depth = 1;
+  }
   pv_[ply].length = 0;
   ++nodes_;
   FORK_STAT(++counters.main_nodes);
@@ -339,6 +354,7 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   max_ply_reached_ = std::max(max_ply_reached_, ply);
   Position& pos = *pos_;
   PlyFrame& f = frames_[ply];
+  f.horizon_kept = raised;  // idea 206: a raised node's children enter the quiescence search
   const bool in_check = pos.in_check();
   // A singular test's search of this node without its TT move (tier 2, T27):
   // it neither cuts on nor writes this node's TT entry, and skips the
@@ -564,8 +580,11 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
         frames_[ply + 1].arrival = pair_slot(pos.piece_at(m.from()), m.to());
         frames_[ply + 1].expected_cut = !f.expected_cut;
         play(ply, m);
-        // Depth 0 is the quiescence search (or the static eval with it off).
+        // Depth 0 is the quiescence search (or the static eval with it off),
+        // never raised from it (idea 206: this node keeps the horizon).
+        f.horizon_kept = true;
         int score = -negamax<false>(-bar, -bar + 1, 0, ply + 1);
+        f.horizon_kept = false;
         if (!stopped_ && score >= bar) score = -negamax<false>(-bar, -bar + 1, probe_plies, ply + 1);
         pos.unmake(m);
         if (stopped_) return 0;

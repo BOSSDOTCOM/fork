@@ -656,6 +656,111 @@ TEST_CASE("pruning", "direct-check bonus: still correct, and it changes the sear
             "the direct-check bonus left all three trees unchanged");
 }
 
+// Skipping the quiescence search when the TT holds a move (idea 206): the
+// entries that raise a horizon node, with moves of each kind taken from the
+// perft and edge positions: a quiet move with a lower bound or exact score
+// raises it; an upper bound, a capture, a promotion or no move does not.
+TEST_CASE("pruning", "horizon raise: the TT entries that raise a node") {
+  Move quiet = NoMove, capture = NoMove, promotion = NoMove;
+  std::vector<std::string_view> fens;
+  for (const PerftPosition& p : perft_suite()) fens.push_back(p.fen);
+  for (const EdgePosition& p : edge_positions()) fens.push_back(p.fen);
+  for (std::string_view fen : fens) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    for (Move m : legal) {
+      if (m.is_promotion() && !m.is_capture() && promotion.is_none()) promotion = m;
+      if (m.is_capture() && !m.is_promotion() && capture.is_none()) capture = m;
+      if (!m.is_capture() && !m.is_promotion() && quiet.is_none()) quiet = m;
+    }
+  }
+  CHECK(!quiet.is_none() && !capture.is_none() && !promotion.is_none());
+  const auto hit = [](Move m, TtBound b) { return TtHit{m, 0, ScoreNone, 0, b, false}; };
+  CHECK(raises_horizon(hit(quiet, TtBound::Lower)));
+  CHECK(raises_horizon(hit(quiet, TtBound::Exact)));
+  CHECK(!raises_horizon(hit(quiet, TtBound::Upper)));
+  CHECK(!raises_horizon(hit(quiet, TtBound::None)));
+  CHECK(!raises_horizon(hit(capture, TtBound::Lower)));
+  CHECK(!raises_horizon(hit(promotion, TtBound::Lower)));
+  CHECK(!raises_horizon(hit(NoMove, TtBound::Lower)));
+}
+
+// Skipping the quiescence search when the TT holds a move (idea 206): a
+// depth-1 search of the start position, every child's TT entry seeded with
+// one of its quiet moves at depth 0 (a lower bound at -1000, which settles
+// no window here). The children after the first are non-PV horizon nodes:
+// with the switch on some are searched by the main search at depth 1 (their
+// entries come back at depth 1); with it off, or with upper-bound seeds,
+// every child stays in the quiescence search (no entry deeper than 0).
+// Fault check: a raise that never fires fails the switch-on count.
+TEST_CASE("pruning", "horizon raise: a non-PV horizon node with a quiet TT move is searched a ply deep") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_horizon_tt_move);  // off until its SPRT
+  const auto raised_children = [&](bool on, TtBound seed) {
+    SearchSwitches s;
+    s.use_horizon_tt_move = on;
+    fx.searcher->switches = s;
+    std::fill(fx.buckets.begin(), fx.buckets.end(), TtBucket{});
+    fx.searcher->clear_history();
+    Position pos;
+    CHECK(pos.set_fen(Position::StartFen));
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    std::vector<Key> children;
+    for (Move m : legal) {
+      pos.make(m);
+      MoveList replies;
+      generate<GenMode::Legal>(pos, replies);
+      Move reply = NoMove;
+      for (Move r : replies)
+        if (!r.is_capture() && !r.is_promotion() && reply.is_none()) reply = r;
+      CHECK(!reply.is_none());
+      fx.table.deposit(pos.key(), reply, -1000, ScoreNone, 0, seed, false);
+      children.push_back(pos.key());
+      pos.unmake(m);
+    }
+    SearchQuota limits;
+    limits.depth = 1;
+    fx.searcher->deliberate(pos, limits, fx.stop, nullptr, nullptr);
+    int raised = 0;
+    for (Key k : children) {
+      TtHit hit{};
+      raised += fx.table.fetch(k, hit) && hit.depth >= 1;
+    }
+    return raised;
+  };
+  CHECK_EQ(raised_children(false, TtBound::Lower), 0);
+  const int raised = raised_children(true, TtBound::Lower);
+  CHECK_MSG(raised > 0, "no child was raised");
+  CHECK_EQ(raised_children(true, TtBound::Upper), 0);
+}
+
+// Skipping the quiescence search when the TT holds a move (idea 206): with
+// it on, mates are still found and the best move is legal, and it changes
+// the tree (fault check: a raise that never fires leaves the trees as they
+// are with the switch off).
+TEST_CASE("pruning", "horizon raise: still correct, and it changes the search") {
+  PruningFixture fx;
+  SearchSwitches on;
+  on.use_horizon_tt_move = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_horizon_tt_move = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the horizon raise left all three trees unchanged");
+}
+
 // The history skip's exemption for checking quiets (use_skip_check_exempt):
 // the only mate, Ra1-a8 (a quiet direct check), is given the worst butterfly
 // history in every threat bucket (-HistoryMax, far below the skip's
@@ -1021,6 +1126,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
   s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
   s.use_root_lmr = true;
+  s.use_horizon_tt_move = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
