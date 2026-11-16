@@ -1529,6 +1529,12 @@ TEST_CASE("search", "a stop mid-iteration plays a new move only if it scored abo
 // iteration, or the test proves nothing (optimized builds only, as above).
 TEST_CASE("search", "after a stop, the result's depth, score and move are the last reported line's") {
   Fixture fx;
+  // Every aspiration fail reported (CI 43780238486, 2026-11-15: in the slow
+  // clang-tsan build a node-limited search passed the 1 s fail-report delay,
+  // reported a fail high at depth 9 naming the move then played from depth 8,
+  // and that bound line stayed the last one), so the case does not depend on
+  // the machine's speed.
+  fx.searcher->fail_report_ms = 0;
   int from_unfinished = 0;
   const std::size_t positions = Optimized ? search_bench_fens().size() : 6;
   for (std::size_t i = 0; i < positions; ++i) {

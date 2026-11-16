@@ -975,8 +975,9 @@ class Searcher {
   int score_trend_ = 0;
   int branch_share_ = 0;
   // The last finished iteration's PV, and the first move of the last line
-  // reported: a stop after a reported fail repeats the finished iteration,
-  // so the last line before bestmove names the move played.
+  // reported if it was exact (NoMove after a fail line): a stop after a
+  // reported fail repeats the finished iteration, so the last line before
+  // bestmove is exact and names the move played.
   PrincipalLine finished_pv_;
   Move last_reported_ = NoMove;
   // Time management (§5.6 step 10): finished iterations in a row with the

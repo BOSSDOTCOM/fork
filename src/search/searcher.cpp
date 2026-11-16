@@ -1323,7 +1323,9 @@ std::uint64_t Searcher::pool_hits() const {
 }
 
 void Searcher::report_iteration(int depth, int score, int bound, const PrincipalLine& pv) {
-  last_reported_ = pv.length ? pv.moves[0] : NoMove;
+  // A fail line (bound != 0) never counts as naming the move played: a stop
+  // after it reports the finished iteration's exact line again (deliberate).
+  last_reported_ = pv.length && bound == 0 ? pv.moves[0] : NoMove;
   if (!listener_) return;
   const IterationReport r{depth,        max_ply_reached_,    score, bound,      pool_nodes(),
                           elapsed_ms(), tt_.fill_permille(), &pv,   pool_hits()};
@@ -1519,9 +1521,10 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
         report_iteration(depth, iteration_best_score_, 0,
                          iteration_pv_);  // the last info names the move played
       }
-      // A reported fail (a fail low has no PV, a fail high names a move
-      // that is not played) must not be the last line: the finished
-      // iteration is reported again.
+      // A reported fail (a fail low has no PV; a fail high is a bound, at
+      // a depth the result does not have, even when it names the move
+      // played: CI 43780238486, 2026-11-15) must not be the last line: the
+      // finished iteration is reported again.
       if (result.depth > 0 && !(last_reported_ == result.best))
         report_iteration(result.depth, result.score, 0, finished_pv_);
       break;
