@@ -2852,6 +2852,40 @@ whose weaknesses and data gaps decide their targets and order.
   VM or idle CPU.
 - **status:** candidate.
 - **follow-up (owner, 2026-11-12, about 1:20 PM EST; plan only: no new tests until the current batch's slots open):** unchanged: after Lazy SMP (idea 59's follow-up plan, item 5).
+- **plan for a cheap test (owner, 2026-11-15, about 8:20 PM EST: "once the scaling curve is in"; nothing built or run yet):**
+  1. **One architecture for both nets.** Fork compiles the inference for the embedded net's architecture
+     (CMakeLists.txt, FORK_NET_ARCH from the net file's header): r3kr1 is architecture 9 (H512+PP, four king
+     regions), r8ceplo2 and r3pp1 (r3kr1's same-recipe S512+PP control, bake/r3-pp1) are architecture 8. Each
+     helper net is first extended to architecture 9 with tools/nnue/extend_weights.py --arch h512pp (its piece
+     rows copied into each king region), the lossless step that made r8brft1kr4 from r8brft1 (bench identical to
+     r8brft1's). Check: the extended net's bench equals the original's in a build of each (r8ceplo2kr4 against
+     tests/bench-r8ceplo2.ref; r3pp1kr4 against r3pp1's), else stop. Names (`r8ceplo2kr4`, `r3pp1kr4`) follow
+     r8brft1kr4's.
+  2. **Score scale.** tools/nnue/match_scale.py with r3kr1 as the control, over the same held-out positions:
+     the matched S of each helper net against its own S, and both mean |eval| values. Report the ratio; a helper
+     whose matched S differs from its own is run at the matched S (a header edit, as the bake-off does) so all
+     threads' scores share one scale. The pass line is the owner's (UNVERIFIED what tolerance matters; the
+     T5 table's S spread across nets was 88-92).
+  3. **The engine change, on an experiment branch only** (not phase-4 unless it wins): a second net embedded
+     at build time (CMake FORK_HELPER_NET, default none: release and TCEC builds unchanged), given to the
+     helpers' Searchers through the per-searcher net pointer (searcher.hpp `net_`, set between searches; the
+     main thread keeps the default); a one-bit evaluator tag in the TT entry's flags (bit 3; the digest
+     already covers the flags byte), so a stored static eval is reused only by a thread of the same net
+     (scores and bounds stay shared: the idea's stated risk); bench (one thread) identical by construction.
+     New names screened before use.
+  4. **Speed (the cache cost of two nets).** smp-scaling.yml on the experiment build and its base at the same
+     depth: nps at 2 threads (and 4 where the runner has the CPUs), each against its own one-thread run; plus
+     the local 2-thread nps if a quiet window comes. r3kr1 is 3.79 MB, so two nets need about 7.6 MB of cache
+     (runner L3 sizes per the CPU survey; UNVERIFIED how much of it stays hot).
+  5. **Matches** (fixed length, sprt_run.sh --kind fixed, STC, both sides Threads 2, **one game at a time per
+     4-vCPU runner**): (a) r3kr1 main + r8ceplo2kr4 helper against r3kr1 on both threads; (b) r3kr1 main +
+     r3pp1kr4 helper against r3kr1 on both threads. 2 stages each (3,200 games, about +/- 5 Elo by the
+     2-vs-1 run's spread; one game per runner makes a stage about 3x as long as a normal STC stage). Needs a
+     small driver change first: sprt_run.sh does not yet pass sprt.yml's `concurrency` input (a
+     --concurrency option recorded in design.json, as --hash is, with test_sprt_run.sh checks).
+  6. **Report:** Elo of (a) and (b), the nps ratios, and the TT tag's effect if measurable. A gain would then
+     go to 4 threads (rented hardware or a quiet PC window) before any adoption decision; voting across groups
+     stays a separate item (concurrency review A4/A6).
 
 ## 85. Class-matched TD horizon (novel-ideas 7)
 
