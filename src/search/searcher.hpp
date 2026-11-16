@@ -358,7 +358,7 @@ struct SearchQuota {
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
   X(use_helper_skip, UseHelperSkip, false)               \
-  X(use_tt_halfmove_guard, UseTtHalfmoveGuard, true)   \
+  X(use_tt_halfmove_guard, UseTtHalfmoveGuard, true)     \
   X(use_time_guards, UseTimeGuards, true)
 
 struct SearchSwitches {

@@ -2359,6 +2359,18 @@ The final stage's result block (r3kr1-promo-stc, stage 3, run 43654530597):
   tables). Full gcc-debug suite on the switch-on commit: 35/35; clang-release quick check: ok. Names screened: no match
   (`fastest` only as an English word in one engine's comments).
 
+### 2026-11-16 L1, the time guards (`UseTimeGuards`; lane B item zzz9f): non-regression STC SPRT [-3, 0]; adopted by the owner on the evidence at stage 11 (TCEC safety)
+- **Why:** the correctness audit's L1: E2's time scale extrapolated past the depths it was fitted and checked at
+  (to depth 60), and no single move was bounded by the clock (the owner's order, 2026-11-16).
+- **Test:** sprt/time-guards 70277fc8 (on) against tm/deep-depth-cap 0de1b2e5 (off), custom mode, nElo [-3, 0], STC
+  8+0.08 (stage 6 re-dispatched after a ghost GitHub run). **At adoption (stages 0-10): Elo 0.00 +/- 2.70, nElo
+  0.00 +/- 5.13.** The run continues as a confirmation; its final line is added here.
+- **VM check (l1-check, fork-worker-1):** 80 games at 60+0.1 (Move Overhead 100), on against off: 0 time losses, 0
+  illegal moves; the 384M-node replay's interim (8 of 16 games): spending only trimmed (see DESIGN.md's log).
+- **Decision (owner, 2026-11-16, about 4:00 PM EST):** adopt now (merge b0495f8b); report only if the SPRT or the
+  replay changes the picture. Bench unchanged 5,205,904 / dfe99ebe03b0972d. Names screened: no match; the guard
+  credited to Berserk 4.0-4.3's per-move maximum (ORIGINALITY.md).
+
 ### 2026-11-16 the TT halfmove-clock guard (`UseTtHalfmoveGuard`; night queue item s17a-6): non-regression STC SPRT [-3, 0], capped undecided; adopted by the owner (TCEC-safety correctness fix)
 - **Why:** the TT ignored the halfmove clock, so a score stored at a low clock could cut at a later visit where the
   fifty-move rule makes the position a draw (DESIGN.md §6 "Near term"; the owner's TCEC hazards, 2026-11-16).
