@@ -653,6 +653,17 @@ class Tries(unittest.TestCase):
         self.assertEqual(self.run_ledger('known', '100').returncode, 0)
         self.assertEqual(len((Path(self.tmp.name) / 'ledger.jsonl').read_text().splitlines()), 1)
 
+    def test_guard_tries_count(self):
+        """The factorial round's combined guard (design §5.3): a try like the others, two per class."""
+        def guard(sprt):
+            return self.run_ledger('try', 'r30-guard', sprt, '--kind', 'guard', '--tc-class', 'stc',
+                                   '--base', self.A, '--test', self.A)
+        self.assertEqual((guard('g1').returncode, guard('g2').returncode), (0, 0))
+        r = guard('g3')
+        self.assertEqual(r.returncode, 3)
+        self.assertIn('already has 2 stc tries (g1, g2)', r.stderr)
+        self.assertEqual([x['kind'] for x in self.records()], ['guard', 'guard'])
+
     def test_bad_arguments_refused(self):
         self.assertEqual(self.try_('raz-a', idea='Bad Idea').returncode, 2)
         self.assertEqual(self.try_('raz-a', tc='vltc').returncode, 2)

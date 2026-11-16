@@ -17,6 +17,12 @@
 # progress-STAGE-SHARD, replaced as games finish and final when the shard ends (tools/cloud/shard_progress.py,
 # docs/research/shard-progress.md); the merge (shard-* artifacts) and the driver (result.json files) never
 # read it, and tools/cloud/test_shard_progress.sh checks the results are byte for byte the same without it.
+# The factorial removal round (DESIGN.md §5.6 step 18; docs/research/phase4-designs/factorial-removal-round.md
+# §3.1-3.3): with tune=on both sides are one FORK_TUNE build of BASE (the switches are UCI options only in tuning
+# builds; BASE and TEST must be the same commit, so speed is equal by construction), and every option either side
+# or a row names must be one of its options; with rows (a stage's table, tools/github/factorial_fit.py rows) shard
+# I's test engine plays entry I's options (tools/cloud/run_shard.sh --rows) and the merge checks every shard's row
+# (sprt_merge.py --stage-rows). Both inputs empty: everything as before.
 name: sprt
 # The run's title names its inputs, so a driver finds the run it dispatched by them, never as "the newest
 # sprt run" (tools/github/sprt_run.sh; owner, 2026-11-05: two drivers once read each other's runs). The SPRT's
@@ -40,6 +46,8 @@ on:
       tables: {description: "Syzygy 3-4-5 for both engines: on or off", required: true, default: "on"}
       concurrency: {description: "Games at once per shard (empty: run_shard.sh's default; with option.Threads above 1, the runner's CPUs / the threads, never over the CPUs)", required: false, default: ""}
       name: {description: "The SPRT's name (the driver's NAME), in the run title only", required: false, default: ""}
+      tune: {description: "on: both sides one FORK_TUNE build of BASE (BASE and TEST the same commit); empty: update.sh builds as before", required: false, default: ""}
+      rows: {description: "Per-shard test options (factorial round): JSON {design, shard_rows: [{row, opts}] in shard order}; needs tune=on and an empty test_opts", required: false, default: ""}
 
 permissions:
   contents: read
@@ -78,25 +86,81 @@ jobs:
           BASE: ${{ inputs.base }}
           TEST: ${{ inputs.test }}
           TABLES: ${{ inputs.tables }}
+          TUNE: ${{ inputs.tune }}
+          ROWS: ${{ inputs.rows }}
+          TEST_OPTS: ${{ inputs.test_opts }}
         run: |
           git config --global --add safe.directory "$PWD"
           case "$SHARDS$GAMES$STAGE" in *[!0-9]*) echo "shards, games and stage must be numbers"; exit 1 ;; esac
           case "$TABLES" in on | off) ;; *) echo "tables must be on or off"; exit 1 ;; esac
           [ "$SHARDS" -ge 1 ] && [ "$SHARDS" -le 16 ] || { echo "shards must be 1-16"; exit 1; }
           per=$(( (GAMES + 2 * SHARDS - 1) / (2 * SHARDS) * 2 ))
+          base_sha=$(git rev-parse --verify "$BASE^{commit}") test_sha=$(git rev-parse --verify "$TEST^{commit}")
+          case "$TUNE" in
+            '') [ -z "$ROWS" ] || { echo "rows needs tune=on (the switches are options only in tuning builds)"; exit 1; } ;;
+            on) [ "$base_sha" = "$test_sha" ] || { echo "tune=on plays one build of one commit: base and test must be equal"; exit 1; } ;;
+            *) echo "tune must be on or empty"; exit 1 ;;
+          esac
+          if [ -n "$ROWS" ]; then
+            [ -z "$TEST_OPTS" ] || { echo "rows gives the test options: test_opts must be empty"; exit 1; }
+            printf '%s' "$ROWS" >rows.json
+            # The table's shape, as each shard checks it (tools/cloud/run_shard.sh --rows): one entry per shard.
+            python3 -I -c 'import json, sys; t = json.load(open("rows.json")); assert len(t["shard_rows"]) == int(sys.argv[1]), "one row per shard"' "$SHARDS"
+          fi
           echo "shards=$(python3 -c "print(list(range($SHARDS)))")" >>"$GITHUB_OUTPUT"
           echo "per_shard=$per" >>"$GITHUB_OUTPUT"
-          echo "base_sha=$(git rev-parse --verify "$BASE^{commit}")" >>"$GITHUB_OUTPUT"
-          echo "test_sha=$(git rev-parse --verify "$TEST^{commit}")" >>"$GITHUB_OUTPUT"
+          echo "base_sha=$base_sha" >>"$GITHUB_OUTPUT"
+          echo "test_sha=$test_sha" >>"$GITHUB_OUTPUT"
       # Pinned here, not left to update.sh's default: hosted runners may lack
       # AVX-512, so the shards must never get an x86-64-v4 build.
       # build_pair.sh checks each binary reports this target.
       - name: Build both engines (update.sh, CXX=g++, x86-64-v3)
+        if: inputs.tune != 'on'
         env:
           FORK_ARCH: x86-64-v3
           BASE_SHA: ${{ steps.plan.outputs.base_sha }}
           TEST_SHA: ${{ steps.plan.outputs.test_sha }}
         run: CXX=g++ bash tools/cloud/build_pair.sh . "$BASE_SHA" "$TEST_SHA" engines
+      # tune=on (the factorial round): one tuning build with spsa_build.sh's checks (the target, the network's
+      # parity file, bench parity at the defaults, the parameter table), copied to both sides; meta.env in
+      # build_pair.sh's form (the shards read test_arch).
+      - name: Tuning build of BASE for both sides (FORK_TUNE, CXX=g++, x86-64-v3)
+        if: inputs.tune == 'on'
+        env:
+          FORK_ARCH: x86-64-v3
+          BASE_SHA: ${{ steps.plan.outputs.base_sha }}
+        run: |
+          CXX=g++ bash tools/github/spsa_build.sh . "$BASE_SHA" tune
+          mkdir -p engines/base engines/test
+          cp tune/fork engines/base/fork
+          cp tune/fork engines/test/fork
+          arch=$(sed -n 's/^arch=//p' tune/meta.env)
+          { for side in base test; do
+              echo "${side}_sha=$BASE_SHA"; echo "${side}_arch=$arch"
+              sed -n "s/^bench_/${side}_bench_/p" tune/meta.env
+            done
+            echo "tune=on"; } >engines/meta.env
+          cat engines/meta.env
+      - name: Every option the sides and rows name is an option of the tuning build
+        if: inputs.tune == 'on'
+        env:
+          BASE_OPTS: ${{ inputs.base_opts }}
+          TEST_OPTS: ${{ inputs.test_opts }}
+          ROWS: ${{ inputs.rows }}
+        run: |
+          printf 'uci\nsetoption name CalibratedScore value false\nquit\n' | engines/test/fork | tr -d '\r' >options.txt
+          python3 -I - options.txt <<'EOF'
+          import json, os, re, sys
+          text = open(sys.argv[1]).read()
+          opts = os.environ['BASE_OPTS'].split() + os.environ['TEST_OPTS'].split()
+          if os.environ['ROWS']:
+              opts += [o for e in json.loads(os.environ['ROWS'])['shard_rows'] for o in e['opts'].split()]
+          for o in opts:
+              m = re.fullmatch(r'option\.([A-Za-z][A-Za-z0-9_]*)=[A-Za-z0-9.+-]+', o)
+              assert m, f'{o!r} is not option.NAME=VALUE'
+              assert re.search(rf'^option name {m.group(1)} type ', text, re.M), f'{m.group(1)} is not an option of the build'
+          print(f'{len(opts)} options checked')
+          EOF
       # CalibratedScore (owner, 2026-11-13): if either engine has the option (default on), this ref's harness (the
       # shards' tools/cloud/run_shard.sh and the rest) must set it off (tools/check_score_display_off.py), or the
       # run stops before any game; a ref older than the option is refused by the dispatcher
@@ -189,16 +253,20 @@ jobs:
           BASE_OPTS: ${{ inputs.base_opts }}
           TEST_OPTS: ${{ inputs.test_opts }}
           CONCURRENCY: ${{ inputs.concurrency }}
+          ROWS: ${{ inputs.rows }}
           SYZYGY: ${{ inputs.tables == 'on' && 'syzygy-345' || '' }}
           BASE_SHA: ${{ needs.build.outputs.base_sha }}
           TEST_SHA: ${{ needs.build.outputs.test_sha }}
         run: |
           chmod +x engines/base/fork engines/test/fork
+          # The factorial round's rows (empty: none): this shard plays its entry's test options.
+          rows_file=
+          if [ -n "$ROWS" ]; then rows_file=$RUNNER_TEMP/rows.json; printf '%s' "$ROWS" >"$rows_file"; fi
           bash tools/cloud/run_shard.sh --base engines/base/fork --test engines/test/fork \
             --fastchess "$RUNNER_TEMP/tools/fastchess" --book "$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.shuffled-20261027.epd" \
             --shard "$SHARD" --shards "$SHARDS" --stage "$STAGE" --games "$GAMES" --tc "$TC" --hash "$HASH_MB" \
             --base-opts "$BASE_OPTS" --test-opts "$TEST_OPTS" --syzygy "$SYZYGY" --out out \
-            ${CONCURRENCY:+--concurrency "$CONCURRENCY"} \
+            ${CONCURRENCY:+--concurrency "$CONCURRENCY"} ${rows_file:+--rows "$rows_file"} \
             --meta "base=$BASE_SHA" --meta "test=$TEST_SHA" --meta runner=github \
             --meta "arch=$(sed -n 's/^test_arch=//p' engines/meta.env)"
       - uses: actions/upload-artifact@v4
@@ -248,12 +316,17 @@ jobs:
           BASE: ${{ inputs.base }}
           TEST: ${{ inputs.test }}
           TC: ${{ inputs.tc }}
+          ROWS: ${{ inputs.rows }}
         run: |
           # "elo0 elo1 [alpha beta]": the driver sends alpha and beta for its kinds (design R's 0.05 / 0.20,
           # tools/github/sprt_run.sh); without them 0.05 / 0.05, as before. The summary is this stage's alone.
+          # With rows (the factorial round) each shard's row is checked against the stage's table instead of
+          # one test_opts for all (sprt_merge.py --stage-rows).
           set -- $BOUNDS
+          rows=()
+          if [ -n "$ROWS" ]; then printf '%s' "$ROWS" >rows.json; rows=(--stage-rows rows.json); fi
           python3 tools/cloud/sprt_merge.py merge shards/*/result.json --elo0 "$1" --elo1 "$2" \
-            --alpha "${3:-0.05}" --beta "${4:-0.05}" --json merged.json | tee summary.txt
+            --alpha "${3:-0.05}" --beta "${4:-0.05}" --json merged.json "${rows[@]}" | tee summary.txt
           { echo "### SPRT stage $STAGE: $TEST vs $BASE, $TC"
             echo; echo '```'; cat summary.txt; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4

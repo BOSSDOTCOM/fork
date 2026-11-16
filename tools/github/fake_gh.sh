@@ -18,7 +18,12 @@
 # planned rounds). Since 2026-11-13 (CalibratedScore off in every harness): ref.<name> holds the commit the
 # ref <name> points to (the driver checks REF's commit before each dispatch). Since 2026-11-15 (--concurrency):
 # the fake sprt.yml takes the input concurrency, unless noconcurrency is present (a ref whose sprt.yml predates
-# it: "workflow view" shows no such input, and a dispatch with it is refused as GitHub does).
+# it: "workflow view" shows no such input, and a dispatch with it is refused as GitHub does). Since 2026-11-15 (the
+# factorial removal round): the inputs tune and rows likewise (notune, norows); a run dispatched with rows keeps
+# them in run.<id>.rows, and its download gives each shard its entry's row, options and design digest in the meta,
+# with swaprows.<id> (that run's shards 0 and 1 swap rows: a permutation not followed) and effects (lines
+# "OPTION SHIFT": a shard's pentanomial moves SHIFT pairs per switch its row turns off, from the 1/2 bucket to 3/4
+# when positive, to 1/4 when negative; tests of the fit through the driver).
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
 # flaky.<kind>: that many failures still to inject for api, conclusion or download (2026-11-08).
@@ -62,8 +67,16 @@ case "$1 $2" in
     [ -f "$st/noname" ] || printf '      name: {description: "The SPRT name", required: false, default: ""}\n'
     [ -f "$st/noconcurrency" ] ||
       printf '      concurrency: {description: "Games at once per shard", required: false, default: ""}\n'
+    [ -f "$st/notune" ] || printf '      tune: {description: "on: both sides one tuning build", required: false, default: ""}\n'
+    [ -f "$st/norows" ] || printf '      rows: {description: "Per-shard test options", required: false, default: ""}\n'
     printf 'concurrency:\n  group: sprt\n' ;;  # the workflow's own concurrency group, not an input
   "workflow run")
+    for input in tune rows; do
+      if [ -f "$st/no$input" ] && [[ " $* " == *" $input="* ]]; then
+        echo "could not create workflow dispatch event: HTTP 422: Unexpected inputs provided: [\"$input\"]" >&2
+        exit 1
+      fi
+    done
     if [ -f "$st/noname" ] && [[ " $* " == *" name="* ]]; then
       echo "could not create workflow dispatch event: HTTP 422: Unexpected inputs provided: [\"name\"]" >&2
       exit 1
@@ -75,7 +88,12 @@ case "$1 $2" in
     id=$(($(cat "$st/latest") + 1))
     held=$(awk '{s += $3} END {print s + 0}' "$st/active" 2>/dev/null)
     echo "$id busy=$(cat "$st/busy") jobs=${held:-0} $*" >>"$st/dispatches"
-    for a in "$@"; do case $a in base=* | test=* | stage=* | name=*) echo "$a" >>"$st/run.$id" ;; esac; done
+    for a in "$@"; do
+      case $a in
+        base=* | test=* | stage=* | name=*) echo "$a" >>"$st/run.$id" ;;
+        rows=?*) printf '%s' "${a#rows=}" >"$st/run.$id.rows" ;;
+      esac
+    done
     name=
     . "$st/run.$id"
     { echo "$id sprt $base $test stage $stage${name:+ ($name)}"; cat "$st/titles" 2>/dev/null; } >"$st/titles.new"
@@ -110,17 +128,44 @@ case "$1 $2" in
     ptnml=$st/ptnml
     [ -f "$st/ptnml.$base.$test" ] && ptnml=$st/ptnml.$base.$test
     [ -f "$st/foreign.$id" ] && test=ffffffffffffffffffffffffffffffffffffffff
+    # The rows (a factorial stage): "ROW|OPTS|DESIGN|PTNML" per shard, from the dispatched table (on stdin, so no
+    # path conversion) and the effects file.
+    shard_rows=()
+    if [ -f "$st/run.$id.rows" ]; then
+      mapfile -t shard_rows < <("$PYTHON" -I -c '
+import json, sys
+table, base = json.load(sys.stdin), json.loads(sys.argv[1])
+effects = dict((name, int(shift)) for name, shift in (line.split() for line in sys.argv[2].splitlines() if line.strip()))
+entries = table["shard_rows"]
+if sys.argv[3] == "1":
+    entries[0], entries[1] = entries[1], entries[0]
+for e in entries:
+    shift = sum(effects.get(o.split("=")[0][len("option."):], 0) for o in e["opts"].split())
+    p = list(base)
+    if shift > 0:
+        p[2] -= shift; p[3] += shift
+    else:
+        p[2] += shift; p[1] -= shift
+    print("%d|%s|%s|%s" % (e["row"], e["opts"], table["design"], json.dumps(p)))
+' "$(cat "$ptnml")" "$(cat "$st/effects" 2>/dev/null)" "$([ -f "$st/swaprows.$id" ] && echo 1 || echo 0)" \
+        <"$st/run.$id.rows" | tr -d '\r')
+    fi
     for k in $(seq 0 $((SHARDS - 1))); do
       mkdir -p "$dir/shard-$stage-$k"
       start=$(((stage * SHARDS + k) * 50 + 1))
       status=done rounds=50
       [ "$k" = 0 ] && [ -f "$st/partial.$id" ] && status=running
       [ "$k" = 0 ] && [ -f "$st/short.$id" ] && rounds=51
+      counts=$(cat "$ptnml") test_opts= row_meta=
+      if [ "${#shard_rows[@]}" -gt 0 ]; then
+        IFS='|' read -r r test_opts digest counts <<<"${shard_rows[$k]}"
+        row_meta=", \"row\": \"$r\", \"design\": \"$digest\""
+      fi
       cat >"$dir/shard-$stage-$k/result.json" <<JSON
-{"ptnml": $(cat "$ptnml"), "pairs": 50, "finished_games": 100, "time_losses": 0, "abnormal": 0, "status": "$status",
+{"ptnml": $counts, "pairs": 50, "finished_games": 100, "time_losses": 0, "abnormal": 0, "status": "$status",
  "meta": {"base": "$base", "test": "$test", "stage": "$stage", "shard": "$k", "shards": "$SHARDS", "tc": "8+0.08",
-          "hash": "16", "base_opts": "", "test_opts": "", "tables": "3-4-5", "book_sha": "x",
-          "opening_start": "$start", "opening_end": "$((start + 49))", "rounds": "$rounds"}}
+          "hash": "16", "base_opts": "", "test_opts": "$test_opts", "tables": "3-4-5", "book_sha": "x",
+          "opening_start": "$start", "opening_end": "$((start + 49))", "rounds": "$rounds"$row_meta}}
 JSON
       # progress (if present): the shard's progress artifact too (tools/cloud/shard_progress.py; 2026-11-14), as
       # a real run's download holds it beside shard-*; the file progress.name, if present, names its file (fault injection; default progress.json).

@@ -11,7 +11,17 @@
 #   tools/cloud/run_shard.sh --base EXE --test EXE --fastchess BIN --book EPD \
 #       --shard I --shards N --games G --tc TC --out DIR [--stage S] [--hash MB] \
 #       [--concurrency C] [--base-opts "option.X=1 ..."] [--test-opts "..."] \
-#       [--checkpoint "COMMAND"] [--syzygy DIR] [--meta KEY=VALUE ...]
+#       [--checkpoint "COMMAND"] [--syzygy DIR] [--meta KEY=VALUE ...] [--rows FILE]
+#
+# Per-shard rows (the factorial removal round, DESIGN.md §5.6 step 18; design
+# docs/research/phase4-designs/factorial-removal-round.md §3.1, §3.3): with
+# --rows FILE (a stage's rows table, JSON {"design": SHA-256, "shard_rows":
+# [{"row": R, "opts": "option.X=false ..."}, ...]} in shard order, as
+# tools/github/factorial_fit.py rows writes it) this shard's test engine
+# plays entry I's options (--test-opts must then be empty), and the meta
+# records row=R and design=SHA-256 beside test_opts (the merge checks all
+# three against the recomputed permutation). The table must have exactly N
+# entries. Without --rows nothing changes.
 #
 # Search threads (Lazy SMP, DESIGN.md §5.6 step 17a; owner, 2026-11-15): an
 # engine plays with option.Threads=N when its --base-opts or --test-opts say
@@ -45,14 +55,14 @@
 # red), 0 for "done" and "interrupted" (the merge counts finished pairs).
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-hash=16 stage=0 conc="" base_opts="" test_opts="" checkpoint="" syzygy="" meta=()
+hash=16 stage=0 conc="" base_opts="" test_opts="" checkpoint="" syzygy="" rows="" meta=()
 while [ $# -gt 0 ]; do
   case $1 in
     --base) base=$2 ;; --test) test=$2 ;; --fastchess) fastchess=$2 ;; --book) book=$2 ;;
     --shard) shard=$2 ;; --shards) shards=$2 ;; --games) games=$2 ;; --tc) tc=$2 ;; --out) out=$2 ;;
     --stage) stage=$2 ;; --hash) hash=$2 ;; --concurrency) conc=$2 ;; --base-opts) base_opts=$2 ;;
     --test-opts) test_opts=$2 ;; --checkpoint) checkpoint=$2 ;; --meta) meta+=(--meta "$2") ;;
-    --syzygy) syzygy=$2 ;;
+    --syzygy) syzygy=$2 ;; --rows) rows=$2 ;;
     *) echo "run_shard.sh: unknown option $1" >&2; exit 2 ;;
   esac
   shift 2
@@ -60,6 +70,33 @@ done
 for v in base test fastchess book shard shards games tc out; do
   [ -n "${!v:-}" ] || { echo "run_shard.sh: --$v is required" >&2; exit 2; }
 done
+# --rows: this shard's row of the stage's table (its test options), checked before anything runs.
+if [ -n "$rows" ]; then
+  [ -z "$test_opts" ] ||
+    { echo "run_shard.sh: --rows gives the test engine's options; --test-opts must be empty" >&2; exit 2; }
+  picked=$(python3 - "$rows" "$shard" "$shards" <<'PY'
+import json, re, sys
+path, shard, shards = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+try:
+    table = json.load(open(path, encoding='utf-8'))
+    entries, design = table['shard_rows'], table['design']
+    assert isinstance(entries, list) and len(entries) == shards, f'{len(entries)} entries for {shards} shards'
+    assert 0 <= shard < shards, f'shard {shard} of {shards}'
+    assert isinstance(design, str) and re.fullmatch(r'[0-9a-f]{64}', design), f'design {design!r} is not a SHA-256'
+    row, opts = entries[shard]['row'], entries[shard]['opts']
+    assert isinstance(row, int) and not isinstance(row, bool) and row >= 0, f'row {row!r}'
+    assert isinstance(opts, str) and opts.split() and all(
+        re.fullmatch(r'option\.[A-Za-z][A-Za-z0-9_]*=[A-Za-z0-9.+-]+', o) for o in opts.split()), f'options {opts!r}'
+except Exception as e:  # noqa: BLE001 (any malformed table is refused alike)
+    sys.exit(f'run_shard.sh: --rows {path}: {e}')
+print(row)
+print(design)
+print(' '.join(opts.split()))
+PY
+  ) || exit 2
+  row=$(sed -n 1p <<<"$picked") design=$(sed -n 2p <<<"$picked") test_opts=$(sed -n 3p <<<"$picked")
+  meta+=(--meta "row=$row" --meta "design=$design")
+fi
 # Each engine's search threads: the last option.Threads=N in its options, else 1.
 threads_in() {  # options -> N
   local t

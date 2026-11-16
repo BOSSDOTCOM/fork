@@ -8,7 +8,11 @@ report of each entry). Its figures are rounded to two decimals.
 
     python3 -m unittest discover -s tools/cloud -p 'test_*.py'
 """
+import contextlib
+import io
+import json
 import math
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -325,6 +329,112 @@ class TestStageDecision(unittest.TestCase):
                 sm.main(args)
             self.assertNotIn('Verdict:', plain.getvalue())  # the format without --played is unchanged
             self.assertEqual(plain.getvalue().splitlines(), lines[:-1])
+
+
+class RowsTests(unittest.TestCase):
+    """The factorial round's per-shard rows (design-mode exemption of the same-options check; design
+    docs/research/phase4-designs/factorial-removal-round.md §3.1, §3.3): each shard's row, options and design
+    digest are checked against the recomputed permutation (--design/--name) or a stage's table (--stage-rows)."""
+
+    def setUp(self):
+        import tempfile
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'github'))
+        import factorial_fit
+        self.ff = factorial_fit
+        self.tmp = tempfile.TemporaryDirectory()
+        self.design = {'format': factorial_fit.FORMAT, 'factors': ['UseLmp', 'UseAspiration', 'UseMateDistance'],
+                       'm': 1, 'rows': [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]]}
+        self.design_path = os.path.join(self.tmp.name, 'design.json')
+        with open(self.design_path, 'w', encoding='utf-8') as f:
+            json.dump(self.design, f)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def shards(self, name, stages, mutate=None):
+        out = []
+        for stage in stages:
+            for s, entry in enumerate(self.ff.stage_rows(self.design, name, stage)['shard_rows']):
+                start = 1 + (stage * 4 + s) * 10
+                meta = {'base': 'aaa', 'test': 'aaa', 'tc': '8+0.08', 'hash': '16', 'base_opts': '',
+                        'test_opts': entry['opts'], 'tables': '3-4-5', 'book_sha': 'x', 'stage': str(stage),
+                        'shard': str(s), 'rounds': '10', 'opening_start': str(start), 'opening_end': str(start + 9),
+                        'row': str(entry['row']), 'design': self.ff.design_digest(self.design)}
+                out.append({'ptnml': [1, 2, 4, 2, 1], 'finished_games': 20, 'time_losses': 0, 'abnormal': 0,
+                            'status': 'done', 'meta': meta})
+        if mutate:
+            mutate(out)
+        return out
+
+    def cli(self, shards, *extra):
+        paths = []
+        for i, s in enumerate(shards):
+            paths.append(os.path.join(self.tmp.name, f'r{i}.json'))
+            with open(paths[-1], 'w', encoding='utf-8') as f:
+                json.dump(s, f)
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = sm.main(['merge', *paths, '--elo0', '0', '--elo1', '6', *extra])
+        return rc, out.getvalue(), err.getvalue()
+
+    def test_without_rows_differing_options_are_refused_as_before(self):
+        rc, out, err = self.cli(self.shards('n', [0]))
+        self.assertEqual(rc, 1)
+        self.assertIn('shards differ in test_opts', err)
+        self.assertNotIn('Rows:', out)
+
+    def test_the_recomputed_permutation(self):
+        rc, out, err = self.cli(self.shards('n', [0, 1, 2]), '--design', self.design_path, '--name', 'n')
+        self.assertEqual(rc, 0, err)
+        lines = out.splitlines()
+        self.assertTrue(lines[-1].startswith('Rows: every shard played its permuted row (design '), lines[-1])
+        self.assertTrue(lines[-2].startswith('LLR: '), lines[-2])  # after the report, so a driver's tail keeps it
+        self.assertIn('pairs 120, games 240', out)
+        rc, _, err = self.cli(self.shards('n', [0, 1]), '--design', self.design_path, '--name', 'other')
+        self.assertEqual(rc, 1)
+        self.assertIn("not the permutation's row", err)
+
+    def test_a_shard_off_its_row_is_refused(self):
+        def swap(shards):  # stage 1's shards 0 and 1 swap rows (options and row together)
+            a, b = shards[4]['meta'], shards[5]['meta']
+            a['row'], b['row'], a['test_opts'], b['test_opts'] = b['row'], a['row'], b['test_opts'], a['test_opts']
+        rc, _, err = self.cli(self.shards('n', [0, 1], swap), '--design', self.design_path, '--name', 'n')
+        self.assertEqual(rc, 1)
+        self.assertIn('merge refused: stage 1 shard 0 played row', err)
+
+        def digest(shards):
+            for s in shards:
+                s['meta']['design'] = '0' * 64
+        rc, _, err = self.cli(self.shards('n', [0], digest), '--design', self.design_path, '--name', 'n')
+        self.assertEqual(rc, 1)
+        self.assertIn("not the permutation's row", err)
+
+    def test_one_stage_table(self):
+        table = os.path.join(self.tmp.name, 'rows.json')
+        with open(table, 'w', encoding='utf-8') as f:
+            json.dump(self.ff.stage_rows(self.design, 'n', 3), f)
+        rc, out, err = self.cli(self.shards('n', [3]), '--stage-rows', table)
+        self.assertEqual(rc, 0, err)
+        self.assertIn("Rows: every shard played its row of the stage's table", out)
+        rc, _, err = self.cli(self.shards('n', [2]), '--stage-rows', table)  # stage 2's shards, stage 3's table
+        self.assertEqual(rc, 1)
+        rc, _, err = self.cli(self.shards('n', [2, 3]), '--stage-rows', table)
+        self.assertEqual(rc, 1)
+        self.assertIn("checks one stage's shards", err)
+
+    def test_options_that_go_together(self):
+        rc, _, err = self.cli(self.shards('n', [0]), '--design', self.design_path)
+        self.assertEqual(rc, 1)
+        self.assertIn('--design and --name go together', err)
+        rc, _, err = self.cli(self.shards('n', [0]), '--design', os.path.join(self.tmp.name, 'missing.json'),
+                              '--name', 'n')
+        self.assertEqual(rc, 1)
+        self.assertIn('merge refused: --design', err)
+
+    def test_the_merged_meta_names_the_design(self):
+        merged = sm.merge(self.shards('n', [0]), rows=self.ff.expected_rows(self.design, 'n', [0]))
+        self.assertEqual(merged['meta']['design'], self.ff.design_digest(self.design))
+        self.assertNotIn('test_opts', merged['meta'])
 
 
 if __name__ == '__main__':

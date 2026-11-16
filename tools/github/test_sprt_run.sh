@@ -35,8 +35,11 @@
 # 2026-11-15 (idea 84's plan, owner: one multi-threaded game at a time per runner): --concurrency N (1 to 64) is sent
 # as sprt.yml's concurrency input for every kind and is part of a kind's declared design when given (a restart with
 # another value, without it, or with it after a design without it is refused); a bad value, or a REF whose sprt.yml
-# lacks the input, is refused before any dispatch; without it nothing is sent, as before. Uses python3 (or $PYTHON)
-# for the merge and the ledger.
+# lacks the input, is refused before any dispatch; without it nothing is sent, as before. Since 2026-11-15 (the
+# factorial removal round, DESIGN.md §5.6 step 18): kind factorial (each shard its permuted design row, checked by
+# the merge; the one look), kind guard ([-6, 0], beta 0.20, cap 8, no futility look, a try) and --tune (the tuning
+# build on both sides), each refused before any dispatch when REF's sprt.yml lacks its inputs; without them no
+# tune or rows input is sent. Uses python3 (or $PYTHON) for the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -71,7 +74,7 @@ setup() {  # label busy ptnml
 drive() {  # label args...
   local label=$1
   shift
-  FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=2 REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data \
+  FAKE_GH=$tmp/$label GH=$tmp/gh POLL=0 SHARDS=${DRIVE_SHARDS:-2} REPO=owner/fork REF=test SPRT_DATA=$tmp/$label/data \
     FORK_JOBS=${JOBS:-$tmp/$label/jobs} SPRT_UNSUPERVISED=${UNSUPERVISED-1} GH_TRIES=3 GH_RETRY_WAIT=0 \
     bash "$here/sprt_run.sh" "$label" "$@" >"$tmp/$label/out" 2>&1
   echo $? >"$tmp/$label/rc"
@@ -482,6 +485,156 @@ drive r-conc-bad --kind search --idea c6 --concurrency 64 "$sha" "$sha"
 check "--concurrency 64 (the maximum) is accepted" eval '[ "$(rc r-conc-bad)" = 0 ] && grep -q -- "-f concurrency=64" "$tmp/r-conc-bad/dispatches"'
 drive r-conc-bad --kind search --idea c7 "$sha" "$sha" --concurrency
 check "--concurrency with no value is refused" eval '[ "$(rc r-conc-bad)" = 1 ] && grep -qF -- "--concurrency needs a value" "$tmp/r-conc-bad/out"'
+
+# The factorial removal round (DESIGN.md §5.6 step 18; docs/research/phase4-designs/factorial-removal-round.md):
+# kind factorial plays a design's rows, one per shard, permuted per stage by the SHA-256 permutation of the name
+# and stage (§3.3), on one tuning build of one commit (§3.2), for --cap stages, with the one look of §4.4
+# (--look 16 --cap 24); kind guard is the combined guard of §3.6 / §5.3 ([-6, 0], alpha 0.05, beta 0.20, cap 8,
+# no futility look, a try); --tune plays any kind on the tuning build. A test design: 3 switches, one off per row,
+# 4 rows (the first switch twice), so the stages have 4 shards.
+fdesign=$tmp/design-k3.json
+printf '%s\n' '{"format": "fork-factorial-design/1", "factors": ["UseLmp", "UseAspiration", "UseMateDistance"],' \
+  ' "m": 1, "rows": [[1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 0, 0]]}' >"$fdesign"
+fdesign_py=$(fork_path_for "$PYTHON" "$fdesign")
+fit_py=$(fork_path_for "$PYTHON" "$here/factorial_fit.py")
+stage_rows() { "$PYTHON" -I "$fit_py" rows --design "$fdesign_py" --name "$1" --stage "$2" | tr -d '\r'; }
+fdrive() { DRIVE_SHARDS=4 drive "$@"; }
+
+setup f-pilot 0 "$even"
+fdrive f-pilot --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+check "factorial pilot (--cap 1): one dispatch, exit 0, complete" \
+  [ "$(rc f-pilot):$(dispatches f-pilot):$(verdict f-pilot)" = "0:1:complete" ]
+check "factorial: the tuning build and the rows are dispatched" \
+  bash -c "grep -q -- '-f tune=on' '$tmp/f-pilot/dispatches' && grep -q -- '-f rows={' '$tmp/f-pilot/dispatches'"
+check "factorial: the rows sent are the recomputed permutation of the name and stage" \
+  [ "$(cat "$tmp/f-pilot/run.501.rows")" = "$(stage_rows f-pilot 0)" ]
+check "factorial: the stage's dispatch record holds them" \
+  [ "$(tr -d '\r' <"$tmp/f-pilot/data/f-pilot/dispatch/s0.json")" = "$(stage_rows f-pilot 0)" ]
+check "factorial: no test options of its own are sent" grep -q -- "-f test_opts= " "$tmp/f-pilot/dispatches"
+check "factorial: design.json records the design digest, the look and the tuning build" \
+  bash -c "grep -q '\"design\": \"[0-9a-f]\{64\}\"' '$tmp/f-pilot/data/f-pilot/design.json' &&
+    grep -q '\"look\": \"none\"' '$tmp/f-pilot/data/f-pilot/design.json' && grep -q '\"tune\": \"on\"' '$tmp/f-pilot/data/f-pilot/design.json'"
+check "factorial: the merge checked every shard's row" grep -q "Rows: every shard played its permuted row" "$tmp/f-pilot/out"
+check "factorial: the fit is logged and written" \
+  bash -c "grep -q 'Factorial fit: f-pilot, stages 0-0 (1), 4 shards' '$tmp/f-pilot/data/f-pilot/driver.log' && [ -s '$tmp/f-pilot/data/f-pilot/fit.json' ]"
+check "factorial: not a try" bash -c "grep -q 'factorial screen, not a try' '$tmp/f-pilot/out' && [ ! -s '$tmp/f-pilot/jobs/tries.jsonl' ]"
+check "factorial: the header names the design and the tuning build" grep -q "tuning build, design [0-9a-f]\{12\} (4 rows), look none, kind factorial, stc" "$tmp/f-pilot/out"
+
+setup f-swap 0 "$even"
+touch "$tmp/f-swap/swaprows.502"
+fdrive f-swap --kind factorial --idea r30-pilot --design "$fdesign" --cap 3 "$sha" "$sha"
+check "factorial: shards that swapped rows stop it at that stage, unmerged" \
+  bash -c "[ \$(cat '$tmp/f-swap/rc') = 1 ] && [ \$(wc -l <'$tmp/f-swap/dispatches') = 2 ] && grep -q \"stage 1: run 502's results were not merged: sprt_merge.py: merge refused: stage 1 shard 0 played row\" '$tmp/f-swap/out'"
+check "factorial: no verdict after a refused merge" [ -z "$(verdict f-swap)" ]
+check "factorial: each stage has its own permutation (stages 0 and 1 differ here)" \
+  [ "$(stage_rows f-swap 0)" != "$(stage_rows f-swap 1)" ]
+
+for missing in rows tune; do
+  setup f-no$missing 0 "$even"
+  touch "$tmp/f-no$missing/no$missing"
+  fdrive f-no$missing --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+  check "factorial with a REF whose sprt.yml has no $missing input: refused before any dispatch" \
+    eval '[ "$(rc f-no'$missing')" = 1 ] && [ "$(dispatches f-no'$missing')" = 0 ] && grep -qF -- "has no '$missing' input" "$tmp/f-no'$missing'/out"'
+done
+setup f-refuse 0 "$even"
+refused() {  # label, the refusal's text: exit 1, no dispatch
+  [ "$(rc "$1")" = 1 ] && [ "$(dispatches "$1")" = 0 ] && grep -qF -- "$2" "$tmp/$1/out"
+}
+drive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+check "factorial: SHARDS other than the design's rows refused" refused f-refuse "SHARDS 2, but 4 rows"
+TEST_OPTS=option.UseLmp=false fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+check "factorial: TEST_OPTS refused (the rows give them)" refused f-refuse "TEST_OPTS must be empty"
+fdrive f-refuse --kind factorial --idea r30-pilot --cap 1 "$sha" "$sha"
+check "factorial: no --design refused" refused f-refuse "kind factorial needs --design FILE"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" "$sha" "$sha"
+check "factorial: no --cap refused" refused f-refuse "kind factorial needs --cap N"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 24 --look 8 "$sha" "$sha"
+check "factorial: a look other than 16 refused" refused f-refuse "one look is after 16 stages, with --cap 24"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 20 --look 16 "$sha" "$sha"
+check "factorial: the look with a cap other than 24 refused" refused f-refuse "one look is after 16 stages, with --cap 24"
+TC=40+0.4 fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" "$sha"
+check "factorial: LTC refused (the screen is STC)" refused f-refuse "kind factorial runs at STC only"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$fdesign" --cap 1 "$sha" HEAD~1
+check "factorial: BASE and TEST must be one commit" refused f-refuse "BASE and TEST must be the same commit"
+printf '%s\n' '{"format": "fork-factorial-design/1", "factors": ["UseLmp", "UseLmp"], "m": 1, "rows": [[1, 0], [0, 1]]}' \
+  >"$tmp/design-bad.json"
+fdrive f-refuse --kind factorial --idea r30-pilot --design "$tmp/design-bad.json" --cap 1 "$sha" "$sha"
+check "factorial: a malformed design refused" refused f-refuse "factors must be distinct option names"
+fdrive f-refuse --kind search --idea s1 --design "$fdesign" "$sha" "$sha"
+check "--design with another kind refused" refused f-refuse "--design and --look belong to kind factorial"
+printf '%s\n' '{"format": "fork-factorial-design/1", "factors": ["UseLmp", "UseAspiration", "UseMateDistance"],' \
+  ' "m": 1, "rows": [[0, 1, 0], [1, 0, 0], [0, 0, 1], [1, 0, 0]]}' >"$tmp/design-k3b.json"
+fdrive f-pilot --kind factorial --idea r30-pilot --design "$tmp/design-k3b.json" --cap 1 "$sha" "$sha"
+check "factorial: a restart with another design refused before any dispatch (design.json's digest)" \
+  bash -c "[ \$(cat '$tmp/f-pilot/rc') = 1 ] && [ \$(wc -l <'$tmp/f-pilot/dispatches') = 1 ] && grep -q \"design '[0-9a-f]*' differs from the declared design's\" '$tmp/f-pilot/out'"
+
+# The one look (design §4.4): with every switch's effect large the screen stops after 16 stages; with one switch
+# at exactly 0 it plays on to 24. The fake moves 6 pairs of 50 per switch off (effects).
+setup f-stop 0 "$even"
+printf '%s\n' "UseLmp -6" "UseAspiration -6" "UseMateDistance 6" >"$tmp/f-stop/effects"
+fdrive f-stop --kind factorial --idea r30-main --design "$fdesign" --cap 24 --look 16 "$sha" "$sha"
+check "the look, every estimate clear: 16 stages, exit 0, complete" \
+  [ "$(rc f-stop):$(dispatches f-stop):$(verdict f-stop)" = "0:16:complete" ]
+check "the look: stop recorded" bash -c "[ \"\$(cat '$tmp/f-stop/data/f-stop/look')\" = stop ] && grep -q 'the one look after 16 stages: stop (3 of 3 estimates more than 1 SE from 0): the screen stops' '$tmp/f-stop/out'"
+check "the look: the merge's fixed length is the look's" grep -q "Verdict: complete (16 of 16 stages, fixed length)" "$tmp/f-stop/out"
+check "the fit: a switch whose removal costs is kept, one whose removal gains is a removal candidate" \
+  bash -c "grep -E '^UseLmp +[0-9]' '$tmp/f-stop/data/f-stop/fit.txt' | grep -q 'keep' &&
+    grep -E '^UseMateDistance +-[0-9]' '$tmp/f-stop/data/f-stop/fit.txt' | grep -q 'remove (subject to the guard)'"
+setup f-extend 0 "$even"
+printf '%s\n' "UseLmp -6" "UseMateDistance -6" >"$tmp/f-extend/effects"
+fdrive f-extend --kind factorial --idea r30-main --design "$fdesign" --cap 24 --look 16 "$sha" "$sha"
+check "the look, one estimate at 0: on to 24 stages, exit 0, complete" \
+  [ "$(rc f-extend):$(dispatches f-extend):$(verdict f-extend)" = "0:24:complete" ]
+check "the look: extend recorded, then the cap's fixed length" bash -c "[ \"\$(cat '$tmp/f-extend/data/f-extend/look')\" = extend ] &&
+  grep -q 'the one look after 16 stages: extend (2 of 3 estimates more than 1 SE from 0): on to 24 stages' '$tmp/f-extend/out' &&
+  grep -q 'Verdict: complete (24 of 24 stages, fixed length)' '$tmp/f-extend/out'"
+check "the final fit covers the 24 stages" grep -q "Factorial fit: f-extend, stages 0-23 (24), 96 shards" "$tmp/f-extend/data/f-extend/fit.txt"
+fdrive f-stop --kind factorial --idea r30-main --design "$fdesign" --cap 24 --look 16 --first 16 "$sha" "$sha"
+check "past a look that said stop: refused before any dispatch" \
+  bash -c "[ \$(cat '$tmp/f-stop/rc') = 1 ] && [ \$(wc -l <'$tmp/f-stop/dispatches') = 16 ] && grep -q 'past the one look after 16 stages, which did not say extend' '$tmp/f-stop/out'"
+
+# The combined guard (design §3.6, §5.3).
+near='[5, 11, 19, 10, 5]'  # per stage nElo -4.45: inside [-6, 0], undecided at 8 stages; below 0 (a futility look would stop it)
+setup g-stc 0 "$near"
+TEST_OPTS="option.UseLmp=false option.UseMateDistance=false" drive g-stc --kind guard --idea r30-guard "$sha" "$sha"
+check "guard: [-6, 0] at alpha 0.05, beta 0.20, the tuning build, the removals as test options" \
+  bash -c "grep -q 'bounds=-6 0 0.05 0.20' '$tmp/g-stc/dispatches' && grep -q -- '-f tune=on' '$tmp/g-stc/dispatches' &&
+    grep -q -- '-f test_opts=option.UseLmp=false option.UseMateDistance=false' '$tmp/g-stc/dispatches' && ! grep -q -- '-f rows=' '$tmp/g-stc/dispatches'"
+check "guard: no futility stop after 2 stages; capped after 8, exit 2" \
+  bash -c "[ \$(cat '$tmp/g-stc/rc') = 2 ] && [ \$(wc -l <'$tmp/g-stc/dispatches') = 8 ] && grep -q 'cap 8, no futility stop' '$tmp/g-stc/out'"
+check "guard: capped is not passed (the verdict file)" [ "$(verdict g-stc)" = capped ]
+setup g-h0 0 "$futile"
+TEST_OPTS=option.UseLmp=false drive g-h0 --kind guard --idea r30-guard-b "$sha" "$sha"
+check "guard: a set that costs (nElo -27 per stage) is decided H0" [ "$(rc g-h0):$(verdict g-h0)" = "0:H0 accepted" ]
+check "guard: a try of its idea" grep -q '"idea": "r30-guard", "kind": "guard"' "$tmp/g-stc/jobs/tries.jsonl"
+setup g-refuse 0 "$even"
+TEST_OPTS=option.UseLmp=false drive g-refuse --kind guard --idea r30-guard --cap 6 "$sha" "$sha"
+check "guard: STC's cap of 8 cannot be changed" refused g-refuse "kind guard at STC has a cap of 8 stages"
+TC=40+0.4 TEST_OPTS=option.UseLmp=false drive g-refuse --kind guard --idea r30-guard "$sha" "$sha"
+check "guard: LTC needs --cap 4, 5 or 6 (the owner's choice)" refused g-refuse "kind guard at LTC needs --cap 4, 5 or 6"
+drive g-refuse --kind guard --idea r30-guard "$sha" "$sha"
+check "guard: without TEST_OPTS refused" refused g-refuse "kind guard needs TEST_OPTS"
+TEST_OPTS=option.UseLmp=false drive g-refuse --kind guard --idea r30-guard "$sha" HEAD~1
+check "guard: BASE and TEST must be one commit" refused g-refuse "BASE and TEST must be the same commit"
+setup g-ltc 0 "$even"
+TC=40+0.4 TEST_OPTS=option.UseLmp=false drive g-ltc --kind guard --idea r30-guard-ltc --cap 4 "$sha" "$sha"
+check "guard at LTC --cap 4: 4 stages at 40+0.4, Hash 64" \
+  bash -c "[ \$(wc -l <'$tmp/g-ltc/dispatches') = 4 ] && grep -q -- 'tc=40+0.4 -f hash=64 -f games=1664' '$tmp/g-ltc/dispatches'"
+
+# --tune on another kind (e.g. a block check: kind fixed, a block switched off).
+setup t-fixed 0 "$even"
+TEST_OPTS=option.UseLmp=false drive t-fixed --kind fixed --idea x9 --cap 2 --tune "$sha" "$sha"
+check "--tune with kind fixed: tune=on in both dispatches, complete" \
+  [ "$(rc t-fixed):$(grep -c -- '-f tune=on' "$tmp/t-fixed/dispatches"):$(verdict t-fixed)" = "0:2:complete" ]
+check "--tune: recorded in design.json" grep -q '"tune": "on"' "$tmp/t-fixed/data/t-fixed/design.json"
+TEST_OPTS=option.UseLmp=false drive t-fixed --kind fixed --idea x9 --cap 2 "$sha" "$sha"
+check "a restart without --tune refused" bash -c "[ \$(cat '$tmp/t-fixed/rc') = 1 ] && grep -qF -- \"tune None differs from the declared design's 'on'\" '$tmp/t-fixed/out'"
+setup t-notune 0 "$even"
+touch "$tmp/t-notune/notune"
+drive t-notune --kind fixed --idea x9b --cap 1 --tune "$sha" "$sha"
+check "--tune with a REF whose sprt.yml has no tune input: refused before any dispatch" refused t-notune "has no tune input"
+check "without --tune or a factorial kind: no tune or rows input sent (search, network, fixed, custom)" \
+  bash -c "! grep -qE -- '-f (tune|rows)=' '$tmp/r-h1/dispatches' '$tmp/r-network/dispatches' '$tmp/r-fixed/dispatches' '$tmp/h1/dispatches'"
 
 # CalibratedScore (owner, 2026-11-13): sprt.yml and its tools come from REF, the engines from BASE and TEST. REF at
 # c7a61ea's parent has no tools/check_score_display_off.py, so it would play c7a61ea's engine (which has the option,

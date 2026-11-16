@@ -144,6 +144,26 @@ RFP and futility (not factors); none inside the set.
    runs alpha = beta = 0.05, so the guard needs its own kind or option
    (`--kind guard`, placeholder).
 
+**Built (2026-11-15, branch tools/factorial-removal; preparation only, no game played, names not yet
+screened).** (1) sprt.yml's inputs `tune` (one FORK_TUNE build of BASE on both sides, built and checked by
+spsa_build.sh; BASE = TEST required; every option the sides or rows name must be an option of the build) and
+`rows` (a stage's table in shard order); run_shard.sh `--rows FILE` plays shard I's entry and records `row`
+and `design` (the design's SHA-256) in the meta; sprt_merge.py `--design FILE --name NAME` (the driver:
+the permutation recomputed) and `--stage-rows FILE` (the workflow's merge job) replace the same-options check
+by a per-shard row check. (2) sprt_run.sh `--kind factorial --design FILE --cap N [--look 16]` (STC only,
+SHARDS = the design's rows, not a try) and `--tune` for the other kinds (e.g. step 1's block check as kind
+fixed). (3) The permutation: SHA-256 of `factorial|NAME|STAGE`, Fisher-Yates, written to
+`$SPRT_DATA/NAME/dispatch/s<stage>.json` and each shard's meta. (4) tools/github/factorial_fit.py `search`
+(coordinate exchange from seeded random starts); the committed blocks tools/github/factorial/
+screen-k8-m3.json (§2's eight factors) and pilot-k4-m2.json (step 2's four), to be searched again if the
+factor set changes at step 0. (5) `factorial_fit.py fit`: §3.5's model, rule A, the lack of fit at 1%, the
+EB posterior (diagnostic), the control check of §5.1 (`--control`), the one look of §4.4 (the driver stops
+or extends on it). (6) `--kind guard`: [−6, 0], alpha 0.05, beta 0.20, cap 8 at STC, no futility look (none
+is named here), a try (ledger.py accepts the kind); at LTC `--cap 4|5|6` is required (decision 4). Open for
+the owner: the control rule's SE (`--control-basis screen` or `difference`: the screen estimate's SE, or the
+difference's with the dedicated test's SE 4.72 / 1.96), the guard's futility look (none built), the LTC
+guard's cap, and the factor set (§8 decisions 2-3, step-12 adoptions).
+
 ## 4. The design
 
 ### 4.1 Steps
