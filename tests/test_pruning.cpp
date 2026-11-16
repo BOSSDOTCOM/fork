@@ -662,7 +662,7 @@ TEST_CASE("pruning", "direct-check bonus: still correct, and it changes the sear
 // the tree as it is with the switch off).
 TEST_CASE("pruning", "king-zone bonus: still correct, and it changes the search") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_king_zone_order);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_king_zone_order);  // on in this SPRT test commit
   SearchSwitches on;
   on.use_king_zone_order = true;
   fx.searcher->switches = on;
