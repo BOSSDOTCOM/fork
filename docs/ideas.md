@@ -2900,7 +2900,8 @@ whose weaknesses and data gaps decide their targets and order.
   threads against each build's own 1 thread: x1.97 base, x1.99 r8ceplo2 helper, x1.92 r3pp1 helper (no cache cost
   resolved). **Matches (Threads 2 both sides, one game per runner, STC, fixed 2 stages): r8ceplo2 helper -2.39 +/-
   6.40 Elo, r3pp1 helper -2.82 +/- 6.25** (3,200 games each): no gain at 2 threads. **status:** tested at 2
-  threads, no gain; a 4-thread test would need the PC or rented hardware (the owner's call).
+  threads, no gain; a 4-thread test would need the PC or rented hardware (the owner's call). **Parked (owner,
+  2026-11-16): for the rented-EPYC test plan** (its test belongs at high thread counts), with Lazy SMP v2's skip rule.
 
 ## 85. Class-matched TD horizon (novel-ideas 7)
 
