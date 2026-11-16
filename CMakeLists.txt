@@ -224,7 +224,8 @@ endif()
 # evaluate with (src/search/helper_pool.hpp); the main thread keeps FORK_NET.
 # Empty (the default): no second network, and the build is unchanged. It
 # must have FORK_NET's architecture, since the inference is compiled for one.
-set(FORK_HELPER_NET "" CACHE FILEPATH "Idea 84: a network for the helper threads (FORK_NET's architecture); empty: none")
+# Match branch exp/i84-h-r8ceplo2 (idea 84, step 5a): r8ceplo2kr4 by default.
+set(FORK_HELPER_NET "${CMAKE_SOURCE_DIR}/nets/r8ceplo2kr4.fnet" CACHE FILEPATH "Idea 84: a network for the helper threads (FORK_NET's architecture); empty: none")
 if(FORK_HELPER_NET)
   if(NOT FORK_EVALUATOR STREQUAL "nnue")
     message(FATAL_ERROR "FORK_HELPER_NET needs FORK_EVALUATOR=nnue")
