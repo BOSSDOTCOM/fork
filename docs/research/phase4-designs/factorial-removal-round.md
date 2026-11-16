@@ -289,6 +289,15 @@ So per switch:
   ready diagnostic set for ProbCut variants (~/fork-jobs/tactics/ on the dev machine, not
   committed; the suites are Arasan's wacnew and ecmgcp, ORIGINALITY.md).
 
+- **Threads (owner, 2026-11-16, before launch):** the main screen stays at 1 thread per engine, as designed
+  (its power comes from many single-threaded games). **Every removal guard test runs at 2 threads per engine**
+  (Threads 2 on both sides): the STC guard, its second try, the LTC guard where §5.3 requires it, and
+  ProbCut's own LTC test, so no feature is removed that the multithreaded engine (Lazy SMP, 17a; TCEC plays
+  many threads) needs. The runner concurrency is chosen so that the threads per runner never exceed its vCPUs
+  (sprt_run.sh `--concurrency`; run_shard.sh refuses more), as 17a's 2-thread SPRTs ran; the guard's bounds,
+  alpha, beta and caps are unchanged. Not built into the queue items yet: the guard items are queued after the
+  screen's result, with Threads 2 and the concurrency recorded in their headers.
+
 ### 5.4 After the round
 
 Removed features: their code and switch deleted in one commit per feature
@@ -378,3 +387,13 @@ factorial screens (ST5; UNVERIFIED).
 - The stopping bias of the one look.
 - LTC stage time at VLTC-like loads (not needed here) and the runners' CPU
   mix per stage.
+
+## 13. Census, 2026-11-16 (before launch)
+
+Rechecked against src/search/searcher.hpp at phase-4 93b9155f (step 0's recheck). The only switch added since
+the d1a1a19 census is `use_tt_halfmove_guard` (on, adopted 2026-11-16): a correctness fix (the fifty-move
+rule's TT cutoffs), so out, as `use_fastest_table_win`. `use_time_guards` (L1, pending; not on phase-4 yet) is
+time management: out, as `use_forced_move_stop`. All 11 factors of screen-k11-m4.json default on at 93b9155f
+(and pilot-k4-m2.json's four). The factor set stays k = 11, m = 4. The X9 block check (step 1) has not run: no
+entry in docs/history/phase-4/sprt-log.md, no ledger record and no SPRT data folder (so §12's first item is
+resolved: not run); it is queued as step 1, before the pilot and the screen.
