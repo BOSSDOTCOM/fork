@@ -44,6 +44,14 @@ std::int64_t bounded(std::int64_t v) { return std::clamp(v, -ClockCap, ClockCap)
 // the clock below that point; today's plan lets one move take up to 0.90 of
 // the clock less the overhead there (the reserve's cap), which those games
 // reach (largest 0.905 and 0.911).
+// Credit (owner's decision, 2026-11-16): expanded, the guard is (clock less
+// the overhead, plus the increment) / 2, the same per-move maximum as
+// Berserk 4.0.0-4.3.0's (jhonnold/berserk, src/uci.c, GPL-3.0; half of the
+// clock plus the increment less a buffer), found by the originality-checker's
+// constant screen; written without opening Berserk's source, it is credited
+// as a natural half and kept (docs/ORIGINALITY.md). Fork's own parts: a min
+// with the plan's hard limit, the movestogo floor, and this derivation and
+// measurement.
 constexpr std::int64_t TimeGuardPermille = 500;
 
 }  // namespace
