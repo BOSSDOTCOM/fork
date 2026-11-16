@@ -282,6 +282,13 @@ struct SearchQuota {
 //   searching (helper_next_depth), so the free-running helpers spread over
 //   depths instead of repeating the main thread's; the main thread never
 //   skips. Off until its tests; no effect with one thread.
+// - use_time_guards: two guards on time management (L1 of the audit of
+//   2026-11-16; time_budget.hpp): with use_stability_time and
+//   use_deep_time_depth, the scale's depth is clamped at 27, the deepest
+//   depth E2's long-search check validated, not 60; and with a clock, one
+//   move takes at most its increment plus half of the rest of the clock
+//   after the Move Overhead (plan_time's move_guard, passed by the UCI
+//   session's quota_for_go). Off until its non-regression SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -335,7 +342,8 @@ struct SearchQuota {
   X(use_root_lmr, UseRootLmr, true)                      \
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
-  X(use_helper_skip, UseHelperSkip, false)
+  X(use_helper_skip, UseHelperSkip, false)               \
+  X(use_time_guards, UseTimeGuards, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

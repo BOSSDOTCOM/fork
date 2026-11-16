@@ -555,7 +555,8 @@ void UciSession::cmd_go(const std::vector<LineToken>& tokens, std::size_t first)
   if (go.restrict_sent && go.restrict_to.empty())
     out_.send_info_string("go: no legal move in searchmoves; searching every move");
   apply_pending();
-  SearchQuota limits = quota_for_go(go, root_.side_to_move(), options_.number("Move Overhead"));
+  SearchQuota limits = quota_for_go(go, root_.side_to_move(), options_.number("Move Overhead"),
+                                    searcher_->switches.use_time_guards);
   limits.go_received = go_time;
   const bool infinite = go.infinite;
   {
@@ -602,7 +603,7 @@ void UciSession::stop_search() {
 
 // A ponder search ignores time until ponderhit (the session's pondering flag,
 // not the limits).
-SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhead_ms) {
+SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhead_ms, bool move_guard) {
   SearchQuota l;
   if (go.depth) l.depth = static_cast<int>(std::clamp<std::int64_t>(*go.depth, 1, MaxPly - 1));
   if (go.nodes) l.nodes = static_cast<std::uint64_t>(std::max<std::int64_t>(*go.nodes, 1));
@@ -624,6 +625,7 @@ SearchQuota quota_for_go(const GoLimits& go, Color us, std::int64_t move_overhea
     clock.movestogo = go.movestogo;
     clock.movetime = go.movetime;
     clock.overhead_ms = move_overhead_ms;
+    clock.move_guard = move_guard;
     const TimeBudget budget = plan_time(clock);
     l.soft_ms = budget.soft_ms;
     l.hard_ms = budget.hard_ms;

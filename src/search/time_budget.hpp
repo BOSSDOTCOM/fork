@@ -15,6 +15,13 @@
 //   time.
 // - go movetime N plans max(N - Move Overhead, N / 2), and at least 1 ms
 //   (owner, 2026-10-25): a short movetime is not eaten by the overhead.
+// - move_guard (switch use_time_guards, off; L1 of 2026-11-16): with a
+//   clock, hard_ms (and so soft_ms and any scaled soft limit) is at most the
+//   move's own increment plus TimeGuardPermille per mille of the rest of
+//   the clock after the Move Overhead, or an even share of that clock over
+//   movestogo if that is larger (movestogo 1 keeps the whole plan); never
+//   below 1 ms. Identical to the plan without it wherever the plan's hard
+//   limit is already within it.
 // - Plain integer arithmetic on 64-bit values; never negative.
 #pragma once
 
@@ -34,6 +41,7 @@ struct ClockInput {
   std::optional<std::int64_t> movestogo;
   std::optional<std::int64_t> movetime;
   std::int64_t overhead_ms = 0;
+  bool move_guard = false;  // the per-move guard (switch use_time_guards; above)
 };
 
 TimeBudget plan_time(const ClockInput& in);
@@ -57,6 +65,11 @@ TimeBudget plan_time(const ClockInput& in);
 //   parameter's own default stays false): the depth is clamped at 60 instead
 //   of 19, so the scale keeps following depth in deep searches (E2 of the
 //   bug review of 2026-11-11); identical up to depth 19.
+// - validated_depth (switch use_time_guards, off; L1 of 2026-11-16), with
+//   deep_depth: the depth is clamped at TimeScaleValidatedDepth (27), the
+//   deepest depth E2's long-search check validated, instead of 60: the
+//   scale is identical to deep_depth's up to depth 27 and constant beyond.
+//   Without deep_depth it changes nothing (the clamp is then 19).
 enum class TimeScaleVariant : std::uint8_t { Off, StabilityOnly, StabilityAndShare };
 
 struct IterationSignals {
@@ -66,7 +79,8 @@ struct IterationSignals {
   int score = 0;
 };
 
-int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signals, bool deep_depth = false);
+int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signals, bool deep_depth = false,
+                        bool validated_depth = false);
 std::int64_t scaled_soft_ms(std::int64_t soft_ms, std::int64_t hard_ms, int permille);
 
 }  // namespace forkeng

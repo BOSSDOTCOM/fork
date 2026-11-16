@@ -28,6 +28,24 @@ constexpr std::int64_t MovetimeFloorDivisor = 2;  // go movetime keeps at least 
 constexpr std::int64_t ClockCap = std::int64_t{1} << 40;
 std::int64_t bounded(std::int64_t v) { return std::clamp(v, -ClockCap, ClockCap); }
 
+// The per-move guard (switch use_time_guards; L1 of the time-management audit
+// of 2026-11-16; DESIGN.md §5.2 "Search constants"): one move takes at most
+// its own increment plus this per mille of the rest of the clock. Measured,
+// not tuned: with plan_time's shape (a soft limit of the clock over 30 moves
+// plus 3/4 of the increment, a hard limit of four soft limits), the hard
+// limit's share of the clock beyond the increment is (4/30 x A + 2 x inc) /
+// (A - inc) at A available; it falls with A, and at the clock where the soft
+// limit equals the increment (A = 7.5 inc, where a game settles once the
+// clock is spent down) it is 3/6.5 = 461.5 per mille at every sudden-death
+// time control. 500, the next round value, leaves every plan at or above that
+// clock unchanged; below it the guard binds. In 14.2 million moves of Fork's
+// SPRT games (2026-11-14 to 16; tools/measure/clock_share.py) a guard at 500
+// would have cut 1.54% of the moves at 40+0.4 and 0.56% at 8+0.08, all with
+// the clock below that point; today's plan lets one move take up to 0.90 of
+// the clock less the overhead there (the reserve's cap), which those games
+// reach (largest 0.905 and 0.911).
+constexpr std::int64_t TimeGuardPermille = 500;
+
 }  // namespace
 
 TimeBudget plan_time(const ClockInput& in) {
@@ -73,6 +91,15 @@ TimeBudget plan_time(const ClockInput& in) {
   // the danger-zone reserve above.
   const std::int64_t share = available / moves + std::min(increment, cap) * 3 / 4;
   t.hard_ms = std::clamp<std::int64_t>(std::min(share, cap / HardOverSoft) * HardOverSoft, 1, cap);
+  if (in.move_guard) {
+    // The increment comes back with the move, so the guard protects the rest
+    // of the clock; with movestogo, an even share to the control is always
+    // allowed (movestogo 1: the whole plan, the clock refills after it).
+    const std::int64_t own = std::min(increment, available);
+    std::int64_t guard = own + (available - own) * TimeGuardPermille / 1000;
+    if (in.movestogo) guard = std::max(guard, available / moves);
+    t.hard_ms = std::clamp<std::int64_t>(std::min(t.hard_ms, guard), 1, cap);
+  }
   t.soft_ms = std::clamp<std::int64_t>(share, 1, t.hard_ms);
   return t;
 }
@@ -103,6 +130,17 @@ constexpr int TimeScaleMaxDepth = 19;
 // tools/probes-1111), the clamp at 19 spent 0.83 and 0.79 of the plain soft
 // limit at the two deepest budgets, the scale clamped at 60 0.97 and 0.96.
 constexpr int TimeScaleDeepMaxDepth = 60;
+// With deep_depth and validated_depth (switch use_time_guards, L1 of
+// 2026-11-16): the depth is clamped at 27, the deepest depth E2's check
+// validated, so the extrapolated fits stop there. Not fitted or tuned. In E2's
+// replay (bug-review-followup-2026-11-11.md, E2) the plain rule's mean stop
+// depth was 21.9, 23.8, 25.6 and 27.2 at the four budgets, and the deepest
+// depth band whose calibration held was 24-27 (long-stable rows changed at
+// 0.34 of the band's rate, the unclamped scale 0.41); in the band from
+// 28 on it did not (0.61 observed, 0.35 predicted; 1,314 rows; the replay's
+// analysis.json). Beyond 27 DepthFit's per-ply slope, about twice ShareFit's,
+// would raise the scale by about 11% per ply until the hard limit.
+constexpr int TimeScaleValidatedDepth = 27;
 constexpr int TimeScaleStabilityCap = 72;
 constexpr int TimeScaleShareMin = 5;
 constexpr int TimeScaleShareMax = 995;
@@ -175,7 +213,8 @@ std::uint64_t fixed_exp2_neg(std::int64_t w) {
 
 }  // namespace
 
-int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signals, bool deep_depth) {
+int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signals, bool deep_depth,
+                        bool validated_depth) {
   constexpr int Unchanged = 1000;
   constexpr std::uint64_t One = std::uint64_t{1} << 30;
   constexpr std::int64_t Log2E = 94548;  // log2(e) in Q16 (math)
@@ -185,7 +224,10 @@ int soft_scale_permille(TimeScaleVariant variant, const IterationSignals& signal
   const bool with_share = variant == TimeScaleVariant::StabilityAndShare;
   if (with_share && signals.share_all <= 0) return Unchanged;
   const std::int64_t s = std::clamp(signals.stability, 1, TimeScaleStabilityCap);
-  const std::int64_t d = std::min(signals.depth, deep_depth ? TimeScaleDeepMaxDepth : TimeScaleMaxDepth);
+  const int deepest = !deep_depth       ? TimeScaleMaxDepth
+                      : validated_depth ? TimeScaleValidatedDepth
+                                        : TimeScaleDeepMaxDepth;
+  const std::int64_t d = std::min(signals.depth, deepest);
   const ChangeFit& fit = with_share ? ShareFit : StabilityFit;
   std::int64_t z1 = fit.intercept + fit.per_iteration * s + fit.per_ply * d;
   if (with_share) {

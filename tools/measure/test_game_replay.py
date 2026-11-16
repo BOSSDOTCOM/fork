@@ -101,6 +101,10 @@ class GameReplayTests(unittest.TestCase):
         self.assertEqual([p['ply'] for p in pos], [1, 3])
         self.assertTrue(all(p['side'] == 'b' for p in pos))
         self.assertEqual(len(gr.own_positions(white_game, max_positions=2)), 2)
+        # --stride: every second own position (plies 0 and 4), and the cap counts the chosen ones.
+        self.assertEqual([p['ply'] for p in gr.own_positions(white_game, stride=2)], [0, 4])
+        self.assertEqual([p['ply'] for p in gr.own_positions(white_game, max_positions=1, stride=2)], [0])
+        self.assertEqual([p['ply'] for p in gr.own_positions(black_game, stride=2)], [1])
 
     def fake_engine(self):
         script = self.dir / 'fake_engine.py'

@@ -16,8 +16,9 @@ ledger's sampling rate). Its stderr goes to a temporary file, read after
 each `bestmove` (the engine writes its report lines before it).
 
     game_replay.py games PGN_OR_DIR... OUT.jsonl --count N --seed S [--engine-name test] [--skip GAMES.jsonl ...]
-    game_replay.py run FORK GAMES.jsonl OUTDIR --nodes N [--jobs 2] [--max-positions K] [--syzygy DIR]
+    game_replay.py run FORK GAMES.jsonl OUTDIR --nodes N [--jobs 2] [--max-positions K] [--stride 1] [--syzygy DIR]
                    [--report counters,iterations,ledger,sites,drift] [--ledger-every 32] [--sites N,M] [--hash 16]
+                   [--nice 10]
 
 `games` picks N games by a seeded shuffle of every game in the PGNs (games
 listed in a --skip file are left out, so measurements use disjoint games)
@@ -30,7 +31,11 @@ bestmove, the counter and histogram deltas, the iteration rows and the
 ledger rows (with --report drift, each row's `drift` values: the drift
 tables' passive measurement, FORK_DRIFT_REPORT). A game's file appears only when the game is finished (written
 to a temporary name, then renamed), so a stopped run resumes where it
-stopped. Engines run at below-normal priority: data generation comes first.
+stopped. Engines run at below-normal priority: data generation comes first
+(on POSIX `--nice N`, default 10; 0 shares the CPU equally with a running
+data generation instead of taking only what it leaves). `--stride K` takes
+every Kth of the engine's positions (1, K + 1, 2K + 1, ...), so a capped
+replay (--max-positions) reaches later, deeper positions of each game.
 Measurement settings (DESIGN.md §5.7): Hash 16 MB and the Syzygy 3-4-5
 tables, as in the SPRT games replayed; one search thread.
 """
@@ -96,15 +101,19 @@ def select_games(games, count, seed, skip_ids=()):
     return pool[:count]
 
 
-def own_positions(game, max_positions=None):
-    """The positions where the game's engine was to move, in order: ply (moves
-    played before it), game move number, side, legal-move count, the moves
-    before it and the PGN depth of the move played there."""
+def own_positions(game, max_positions=None, stride=1):
+    """The positions where the game's engine was to move, in order (every
+    stride-th of them): ply (moves played before it), game move number, side,
+    legal-move count, the moves before it and the PGN depth of the move played
+    there."""
     board = chess.Board(game['fen'])
     out = []
+    seen = 0
     for ply, uci in enumerate(game['moves']):
         side = 'w' if board.turn == chess.WHITE else 'b'
         if side == game['colour']:
+            seen += 1
+        if side == game['colour'] and (seen - 1) % stride == 0:
             out.append({'ply': ply, 'move_number': board.fullmove_number, 'side': side,
                         'legal': board.legal_moves.count(), 'moves': game['moves'][:ply],
                         'pgn_depth': game['depths'][ply] if ply < len(game['depths']) else None})
@@ -117,10 +126,11 @@ def own_positions(game, max_positions=None):
 class ReplayEngine:
     """One engine process over UCI; its stderr is read back after each search."""
 
-    def __init__(self, path, env_extra, options):
+    def __init__(self, path, env_extra, options, nice=10):
         self.path = path
         self.env_extra = env_extra
         self.options = options
+        self.nice = nice
         self.process = None
         self.err = None
         self.err_offset = 0
@@ -134,7 +144,7 @@ class ReplayEngine:
                                         creationflags=flags)
         if not flags and hasattr(os, 'nice'):
             try:
-                os.setpriority(os.PRIO_PROCESS, self.process.pid, 10)
+                os.setpriority(os.PRIO_PROCESS, self.process.pid, self.nice)
             except OSError:
                 pass
         self.send('uci')
@@ -214,13 +224,13 @@ def replay_one_game(fork, game, index, outdir, settings):
     options = [('Hash', settings['hash']), ('Threads', 1)]
     if settings.get('syzygy'):
         options.append(('SyzygyPath', settings['syzygy']))
-    engine = ReplayEngine(fork, env, options)
+    engine = ReplayEngine(fork, env, options, settings.get('nice', 10))
     records = []
     try:
         engine.start()
         engine.new_game()
         previous = None
-        for pos in own_positions(game, settings.get('max_positions')):
+        for pos in own_positions(game, settings.get('max_positions'), settings.get('stride', 1)):
             best, text = engine.search(game['fen'], pos['moves'], settings['nodes'])
             record = {'game': game['id'], 'index': index, 'ply': pos['ply'], 'move_number': pos['move_number'],
                       'side': pos['side'], 'legal': pos['legal'], 'pgn_depth': pos['pgn_depth'],
@@ -297,6 +307,8 @@ def main(argv=None):
     r.add_argument('--nodes', type=int, required=True)
     r.add_argument('--jobs', type=int, default=2)
     r.add_argument('--max-positions', type=int, default=None)
+    r.add_argument('--stride', type=int, default=1, help="every Nth of the engine's positions")
+    r.add_argument('--nice', type=int, default=10, help="POSIX: the engines' niceness (0: share the CPU equally)")
     r.add_argument('--syzygy', default=None)
     r.add_argument('--report', default='counters')
     r.add_argument('--ledger-every', type=int, default=32)
@@ -325,7 +337,10 @@ def main(argv=None):
     known = {'counters', 'iterations', 'ledger', 'sites', 'drift'}
     if not report <= known:
         raise SystemExit(f'unknown --report entries: {sorted(report - known)}')
-    settings = {'nodes': a.nodes, 'max_positions': a.max_positions, 'syzygy': a.syzygy, 'report': sorted(report),
+    if a.stride < 1:
+        raise SystemExit('--stride must be at least 1')
+    settings = {'nodes': a.nodes, 'max_positions': a.max_positions, 'stride': a.stride, 'nice': a.nice,
+                'syzygy': a.syzygy, 'report': sorted(report),
                 'ledger_every': a.ledger_every, 'hash': a.hash, 'sites': a.sites}
     a.outdir.mkdir(parents=True, exist_ok=True)
     version = subprocess.run([a.fork, 'version'], capture_output=True, text=True, check=True).stdout
