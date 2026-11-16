@@ -31,8 +31,12 @@
 # (positional) form writes the verdict file too: H1 accepted, H0 accepted, or capped at its last stage. Since 2026-11-13 (owner:
 # CalibratedScore off in every harness, branch workflows included): a REF older than c7a61ea (no
 # tools/check_score_display_off.py) is refused before any dispatch when an engine has the option, and allowed when
-# neither has it (the option was removed the same day; c7a61ea's engine stands in for one that has it). Uses python3 (or $PYTHON) for
-# the merge and the ledger.
+# neither has it (the option was removed the same day; c7a61ea's engine stands in for one that has it). Since
+# 2026-11-15 (idea 84's plan, owner: one multi-threaded game at a time per runner): --concurrency N (1 to 64) is sent
+# as sprt.yml's concurrency input for every kind and is part of a kind's declared design when given (a restart with
+# another value, without it, or with it after a design without it is refused); a bad value, or a REF whose sprt.yml
+# lacks the input, is refused before any dispatch; without it nothing is sent, as before. Uses python3 (or $PYTHON)
+# for the merge and the ledger.
 #
 #   bash tools/github/test_sprt_run.sh
 set -uo pipefail
@@ -434,6 +438,50 @@ for v in 0 08 12x -4 4194305 ''; do
 done
 drive r-hash-bad --kind search --idea h4 "$sha" "$sha" --hash
 check "--hash with no value is refused" eval '[ "$(rc r-hash-bad)" = 1 ] && [ "$(dispatches r-hash-bad)" = 0 ] && grep -qF -- "--hash needs a value" "$tmp/r-hash-bad/out"'
+
+# Games at once per shard (owner, 2026-11-15, idea 84's plan: Threads 2 engines one game at a time per 4-vCPU
+# runner): --concurrency N goes out as sprt.yml's concurrency input and, for the kinds, into the declared design;
+# without it nothing changes.
+check "without --concurrency no concurrency is sent" bash -c "! grep -q -- 'concurrency=' '$tmp/r-h1/dispatches'"
+check "without --concurrency the header does not name it" bash -c "! grep -q -- '(--concurrency)' '$tmp/r-h1/out'"
+check "without --concurrency design.json has no concurrency" bash -c "! grep -q concurrency '$tmp/r-h1/data/r-h1/design.json'"
+setup r-conc 0 "$strong"
+drive r-conc --kind search --idea c1 --concurrency 1 "$sha" "$sha"
+check "--concurrency 1: H1 exits 0 after one dispatch" [ "$(rc r-conc):$(dispatches r-conc)" = 0:1 ]
+check "--concurrency 1: dispatched as sprt.yml's concurrency" grep -q -- "-f concurrency=1" "$tmp/r-conc/dispatches"
+check "--concurrency 1: recorded in design.json" grep -q '"concurrency": "1"' "$tmp/r-conc/data/r-conc/design.json"
+check "--concurrency 1: named in the header" grep -q "ref test, concurrency 1 (--concurrency), kind search, stc" "$tmp/r-conc/out"
+drive r-conc --kind search --idea c1 --concurrency 2 "$sha" "$sha"
+check "a restart with another --concurrency is refused before any dispatch" eval '[ "$(rc r-conc)" = 1 ] && [ "$(dispatches r-conc)" = 1 ] && grep -qF -- "concurrency '\''2'\'' differs from the declared design'\''s '\''1'\''" "$tmp/r-conc/out"'
+drive r-conc --kind search --idea c1 "$sha" "$sha"
+check "a restart without --concurrency is refused too" eval '[ "$(rc r-conc)" = 1 ] && [ "$(dispatches r-conc)" = 1 ] && grep -qF -- "concurrency None differs from the declared design'\''s '\''1'\''" "$tmp/r-conc/out"'
+setup r-conc-late 0 "$even"
+drive r-conc-late --kind fixed --idea c2 --cap 2 "$sha" "$sha"
+drive r-conc-late --kind fixed --idea c2 --cap 2 --concurrency 1 "$sha" "$sha"
+check "a restart adding --concurrency to a design without it is refused before any dispatch" eval '[ "$(rc r-conc-late)" = 1 ] && [ "$(dispatches r-conc-late)" = 2 ] && grep -qF -- "concurrency '\''1'\'' differs from the declared design'\''s None" "$tmp/r-conc-late/out"'
+setup r-conc-fixed 0 "$even"
+drive r-conc-fixed --kind fixed --idea c3 --cap 2 --concurrency 1 "$sha" "$sha"
+check "fixed --cap 2 --concurrency 1: both stages dispatched with concurrency 1, complete" eval '[ "$(rc r-conc-fixed)" = 0 ] && [ "$(grep -c -- "-f concurrency=1" "$tmp/r-conc-fixed/dispatches")" = 2 ] && [ "$(cat "$tmp/r-conc-fixed/data/r-conc-fixed/verdict")" = complete ]'
+setup r-conc-custom 0 "$strong"
+drive r-conc-custom --concurrency 3 "$sha" "$sha" 0 5
+check "custom kind --concurrency 3: dispatched as the concurrency" eval '[ "$(rc r-conc-custom)" = 0 ] && grep -q -- "-f concurrency=3" "$tmp/r-conc-custom/dispatches"'
+setup r-conc-old 0 "$strong"
+touch "$tmp/r-conc-old/noconcurrency"
+drive r-conc-old --kind search --idea c4 --concurrency 1 "$sha" "$sha"
+check "--concurrency with a REF whose sprt.yml lacks the input is refused before any dispatch" eval '[ "$(rc r-conc-old)" = 1 ] && [ "$(dispatches r-conc-old)" = 0 ] && grep -qF -- "has no concurrency input" "$tmp/r-conc-old/out"'
+setup r-conc-old2 0 "$strong"
+touch "$tmp/r-conc-old2/noconcurrency"
+drive r-conc-old2 --kind search --idea c5 "$sha" "$sha"
+check "an older sprt.yml without --concurrency runs as before (H1, no concurrency sent)" eval '[ "$(rc r-conc-old2)" = 0 ] && ! grep -q -- "concurrency=" "$tmp/r-conc-old2/dispatches"'
+setup r-conc-bad 0 "$strong"
+for v in 0 08 65 100 12x -1 ''; do
+  drive r-conc-bad --kind search --idea c6 --concurrency "$v" "$sha" "$sha"
+  check "--concurrency '$v' is refused before any dispatch" eval '[ "$(rc r-conc-bad)" = 1 ] && [ "$(dispatches r-conc-bad)" = 0 ] && grep -qF -- "is not a whole number from 1 to 64" "$tmp/r-conc-bad/out"'
+done
+drive r-conc-bad --kind search --idea c6 --concurrency 64 "$sha" "$sha"
+check "--concurrency 64 (the maximum) is accepted" eval '[ "$(rc r-conc-bad)" = 0 ] && grep -q -- "-f concurrency=64" "$tmp/r-conc-bad/dispatches"'
+drive r-conc-bad --kind search --idea c7 "$sha" "$sha" --concurrency
+check "--concurrency with no value is refused" eval '[ "$(rc r-conc-bad)" = 1 ] && grep -qF -- "--concurrency needs a value" "$tmp/r-conc-bad/out"'
 
 # CalibratedScore (owner, 2026-11-13): sprt.yml and its tools come from REF, the engines from BASE and TEST. REF at
 # c7a61ea's parent has no tools/check_score_display_off.py, so it would play c7a61ea's engine (which has the option,

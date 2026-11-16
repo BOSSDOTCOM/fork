@@ -19,6 +19,9 @@
 #   --hash MB    both engines' Hash, 1 to 4194304 MB (Fork's Hash option), every kind; default the
 #                HASH variable, else 16 (64 at LTC for the kinds); for TT-policy tests, the
 #                pressure-matched Hash (owner, 2026-11-11; DESIGN.md §6 that day)
+#   --concurrency N   games at once per shard, 1 to 64, every kind (sprt.yml's concurrency input; default
+#                run_shard.sh's); for multi-threaded engines, e.g. 1 for one Threads 2 game per 4-vCPU runner
+#                (idea 84's plan, owner 2026-11-15); refused if REF's sprt.yml has no such input
 #   ELO0, ELO1   custom nElo bounds (e.g. -3 0 for non-regression); FIRST, LAST
 #                the stages to run, default 0 and 12 (13 stages of 1,600 games)
 #
@@ -40,7 +43,8 @@
 # time control class (tools/jobs/ledger.py try), a third only with
 # --owner-override. The design goes to $SPRT_DATA/NAME/design.json before the
 # first dispatch (its Hash included, so a restart with another --hash or HASH
-# is refused like any other change); a restart with any other design is refused. The verdict
+# is refused like any other change, and its --concurrency when given, so a restart
+# with another value, or without it, is refused); a restart with any other design is refused. The verdict
 # goes to $SPRT_DATA/NAME/verdict: H1 accepted, H0 accepted, futility stop,
 # capped (undecided at the cap: not passed) or complete.
 #
@@ -110,10 +114,11 @@ set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 cd "$here/../.."
 kind=custom idea= override= have_override=0 opt_cap= origin=0 opt_first= hash_cli_mb= hash_cli_given=0
+conc_cli= conc_cli_given=0
 pos=()
 while [ $# -gt 0 ]; do
   case $1 in
-    --kind | --idea | --owner-override | --cap | --origin | --first | --hash)
+    --kind | --idea | --owner-override | --cap | --origin | --first | --hash | --concurrency)
       [ $# -ge 2 ] || { echo "sprt_run.sh: $1 needs a value" >&2; exit 1; }
       case $1 in
         --kind) kind=$2 ;;
@@ -123,6 +128,7 @@ while [ $# -gt 0 ]; do
         --origin) origin=$2 ;;
         --first) opt_first=$2 ;;
         --hash) hash_cli_mb=$2 hash_cli_given=1 ;;
+        --concurrency) conc_cli=$2 conc_cli_given=1 ;;
       esac
       shift 2 ;;
     --*) echo "sprt_run.sh: unknown option $1" >&2; exit 1 ;;
@@ -131,7 +137,7 @@ while [ $# -gt 0 ]; do
 done
 set -- "${pos[@]}"
 if { [ "$kind" = custom ] && [ $# -lt 5 ]; } || [ $# -lt 3 ]; then
-  sed -n '7,23p' "$here/sprt_run.sh" >&2
+  sed -n '7,26p' "$here/sprt_run.sh" >&2
   exit 1
 fi
 if [ "$kind" = custom ]; then
@@ -155,6 +161,16 @@ if [ "$hash_cli_given" = 1 ]; then
     stop "--hash '$hash_cli_mb' is not a whole number of MB from 1 to 4194304 (Fork's Hash option)"
   [ -z "${HASH:-}" ] || [ "$HASH" = "$hash_cli_mb" ] || stop "--hash $hash_cli_mb and HASH=$HASH differ"
   HASH=$hash_cli_mb
+fi
+# --concurrency N (owner, 2026-11-15, idea 84's plan: multi-threaded matches with one game at a time per runner):
+# a whole number from 1 to 64, sent as sprt.yml's concurrency input (games at once per shard; run_shard.sh
+# refuses more threads than CPUs); the kinds' design.json records it. Not given: the input is not sent and
+# run_shard.sh's default holds, as before.
+conc_kv=()
+if [ "$conc_cli_given" = 1 ]; then
+  [[ $conc_cli =~ ^[1-9][0-9]?$ ]] && [ "$conc_cli" -le 64 ] ||
+    stop "--concurrency '$conc_cli' is not a whole number from 1 to 64"
+  conc_kv=(concurrency="$conc_cli")
 fi
 # A gh call a transient network or GitHub error must not end (2026-11-08: a results download and a commit
 # check failed within a minute while GitHub was healthy, and gh's message was discarded): up to GH_TRIES
@@ -234,7 +250,7 @@ declare_design() {
   "$py" -I - "$data/design.json" kind="$kind" tc_class="$tc_class" tc="$TC" hash="$HASH" games="$GAMES" \
     shards="$SHARDS" tables="${TABLES:-on}" base_opts="${BASE_OPTS:-}" test_opts="${TEST_OPTS:-}" elo0="$elo0" \
     elo1="$elo1" alpha="$alpha" beta="$beta" cap="$cap" futility_after="$futility_after" origin="$origin" \
-    idea="$idea" base="$base" test="$test" <<'EOF'
+    idea="$idea" base="$base" test="$test" "${conc_kv[@]}" <<'EOF'
 import json, sys, time
 path, want = sys.argv[1], dict(kv.split('=', 1) for kv in sys.argv[2:])
 try:
@@ -263,6 +279,7 @@ done
 
 header="base $base, test $test, bounds [$elo0, $elo1], stages $first to $last, ref $REF"
 [ "$hash_cli_given" = 0 ] || header="$header, hash $HASH MB (--hash)"
+[ "$conc_cli_given" = 0 ] || header="$header, concurrency $conc_cli (--concurrency)"
 bounds="$elo0 $elo1"
 if [ "$kind" != custom ]; then
   try_args=()
@@ -350,13 +367,23 @@ for stage in $(seq "$first" "$last"); do
     # The SPRT's name in the run's title (bug review 2026-11-11, T6): two SPRTs of one commit pair then never take
     # each other's runs. Only when REF's sprt.yml takes the input name (an older one refuses it); otherwise, or
     # if sprt.yml cannot be read, the title without it, as before.
-    with_name=()
+    # --concurrency goes out only as REF's sprt.yml's concurrency input (an indented inputs entry, not the
+    # workflow's top-level concurrency group); a REF without it, or a sprt.yml that cannot be read, would play
+    # another design, so the stage is refused.
+    with_name=() with_conc=()
     if yml=$(gh_retry "stage $stage: sprt.yml at $REF" "$GH" workflow view sprt.yml -R "$REPO" --ref "$REF" --yaml); then
       if printf '%s\n' "$yml" | grep -qE '^[[:space:]]+name:[[:space:]]*\{'; then
         with_name=(-f name="$name")
         title="$title ($name)"
       fi
+      if [ "$conc_cli_given" = 1 ]; then
+        printf '%s\n' "$yml" | grep -qE '^[[:space:]]+concurrency:[[:space:]]*\{' ||
+          stop "stage $stage: --concurrency $conc_cli, but REF $REF's sprt.yml has no concurrency input"
+        with_conc=(-f concurrency="$conc_cli")
+      fi
     else
+      [ "$conc_cli_given" = 0 ] ||
+        stop "stage $stage: sprt.yml at $REF could not be read, so --concurrency $conc_cli cannot be checked"
       say "stage $stage: sprt.yml at $REF could not be read: the run title without the SPRT's name" >&2
     fi
     before=$(runs | awk 'NR == 1 {print $1}')
@@ -364,7 +391,7 @@ for stage in $(seq "$first" "$last"); do
     "$GH" workflow run sprt.yml -R "$REPO" --ref "$REF" -f base="$base" -f test="$test" -f bounds="$bounds" \
       -f tc="${TC:-8+0.08}" -f hash="${HASH:-16}" -f games="${GAMES:-1600}" -f shards="$SHARDS" -f stage="$stage" \
       -f tables="${TABLES:-on}" -f test_opts="${TEST_OPTS:-}" -f base_opts="${BASE_OPTS:-}" "${with_name[@]}" \
-      >/dev/null 2>&1 || stop "stage $stage: dispatch failed"
+      "${with_conc[@]}" >/dev/null 2>&1 || stop "stage $stage: dispatch failed"
     id=
     for _ in $(seq 30); do
       sleep $((POLL < 10 ? POLL : 10))
