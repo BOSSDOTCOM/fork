@@ -19,6 +19,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "core/material.hpp"
@@ -36,6 +37,7 @@
 
 #include "eval/eval.hpp"
 #include "search/hash_memory.hpp"
+#include "search/search_bench.hpp"
 #include "search/searcher.hpp"
 #endif
 
@@ -992,6 +994,140 @@ TEST_CASE("nnue", "searches through the evaluator hooks keep every accumulator e
   // (from scratch) as through the search's root accumulator.
   Position start;
   CHECK_EQ(static_eval(start), full_eval(embedded_net(), start));
+}
+
+// The embedded network through the stack's incremental and snapshot paths in
+// every build (audit 2026-11-16, area 2, finding A1: FeatureStack::evaluate
+// checks its sums only in FORK_DEBUG builds, and the netcheck refreshes every
+// position). A walk like a search's, with backtracking, from the CPW perft
+// suite's positions (tests/suite.hpp) and the bench's (search_bench.hpp):
+// king moves favoured, so frames change and snapshots are reused in both
+// directions, and castling, en passant, promotions and null moves among the
+// moves. At a random two thirds of the nodes (every leaf) the stack's sums
+// are compared byte for byte with a refresh, and its evaluation with the
+// refresh's. The case follows when H512+PP's stack must take a perspective
+// from its frame's snapshot (a frame change since the nearest ply computed
+// for that perspective) and counts those refreshes, those whose walk crossed
+// a region, and those whose snapshot an earlier refresh had filled; each must
+// be above zero, or the walk proved nothing (stats builds also check the
+// stack's own count of refreshes).
+TEST_CASE("nnue", "the embedded network's stack equals a refresh along a search tree") {
+  const NetFile& net = embedded_net();
+  auto stack = std::make_unique<FeatureStack>();
+  std::vector<std::string_view> fens;
+  for (const auto& sp : perft_suite()) fens.push_back(sp.fen);
+  for (const std::string_view f : search_bench_fens()) fens.push_back(f);
+  constexpr int MaxDepth = 6;
+  const int depth = Optimized ? MaxDepth : MaxDepth - 1;  // debug: 16,829 evaluations, 11 en passant
+  struct Node {
+    Frame frame[2];
+    bool computed[2];
+  };
+  Node line[MaxDepth + 1];
+  bool filled[2][2 * NetMaxRegions];
+  int evaluations = 0, refreshes = 0, crossings = 0, hits = 0;
+  int nulls = 0, castles = 0, en_passants = 0, promotions = 0, captures = 0, king_moves = 0;
+  std::uint64_t rng = 2026111601;
+  Accumulator fresh;
+  const auto enter = [&](const Position& pos, int ply) {
+    for (const Color c : {White, Black}) {
+      line[ply].frame[c] = frame_of(net, c, pos.king_square(c));
+      line[ply].computed[c] = ply == 0;
+    }
+  };
+  // The evaluation at `ply` against a refresh, then the stack's step for each
+  // perspective: back to the nearest ply computed for it; a frame change on
+  // the way refreshes the evaluated ply alone, otherwise every ply walked is
+  // computed.
+  const auto check = [&](const Position& pos, int ply) {
+    const int got = stack->evaluate(net, ply, pos);
+    accumulate_board(net, pos, fresh);
+    const bool same_sums = std::memcmp(&stack->accumulator_at(ply), &fresh, sizeof fresh) == 0;
+    CHECK_MSG(same_sums, pos.fen() << " at ply " << ply);
+    CHECK_MSG(got == evaluate_position(net, fresh, pos), pos.fen() << " at ply " << ply);
+    ++evaluations;
+    for (const Color c : {White, Black}) {
+      int base = ply;
+      bool changed = false, crossed = false;
+      for (; !line[base].computed[c]; --base) {
+        changed |= line[base].frame[c] != line[base - 1].frame[c];
+        crossed |= line[base].frame[c].offset != line[base - 1].frame[c].offset;
+      }
+      if (changed) {
+        const Frame f = line[ply].frame[c];
+        bool& slot = filled[c][(f.flip != 0) + 2 * (f.offset / NetPieceSquares)];
+        ++refreshes;
+        crossings += crossed;
+        hits += slot;
+        slot = true;
+        line[ply].computed[c] = true;
+      } else {
+        for (int p = base + 1; p <= ply; ++p) line[p].computed[c] = true;
+      }
+    }
+  };
+  const auto walk = [&](auto&& self, Position& pos, int ply, int left, bool after_null) -> void {
+    if (left == 0 || splitmix_next(rng) % 3 != 0) check(pos, ply);
+    if (left == 0) return;
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    if (legal.size() == 0) return;
+    const auto pick = [&](auto&& wanted) -> Move {
+      int n = 0;
+      for (Move k : legal) n += wanted(k);
+      if (n == 0) return NoMove;
+      int i = static_cast<int>(splitmix_next(rng) % static_cast<std::uint64_t>(n));
+      for (Move k : legal)
+        if (wanted(k) && i-- == 0) return k;
+      return NoMove;
+    };
+    const auto special = [](Move k) { return k.is_castle() || k.is_en_passant() || k.is_promotion(); };
+    const auto king = [&](Move k) { return kind_of(pos.piece_at(k.from())) == King; };
+    for (int child = 0; child < 3; ++child) {
+      if (!after_null && !pos.in_check() && splitmix_next(rng) % 8 == 0) {
+        stack->push_null(ply);
+        pos.make_null();
+        ++nulls;
+        enter(pos, ply + 1);
+        self(self, pos, ply + 1, left - 1, true);
+        pos.unmake_null();
+        continue;
+      }
+      const std::uint64_t kind = splitmix_next(rng) % 4;
+      Move m = kind == 0 ? pick(special) : kind <= 2 ? pick(king) : NoMove;
+      if (m == NoMove) m = legal[splitmix_next(rng) % legal.size()];
+      castles += m.is_castle();
+      en_passants += m.is_en_passant();
+      promotions += m.is_promotion();
+      captures += m.is_capture();
+      king_moves += king(m);
+      stack->push_move(net, ply, pos, m);
+      pos.make(m);
+      enter(pos, ply + 1);
+      self(self, pos, ply + 1, left - 1, false);
+      pos.unmake(m);
+    }
+  };
+  for (const std::string_view fen : fens) {
+    Position pos;
+    CHECK_MSG(pos.set_fen(fen), fen);
+    stack->reset(net, pos);
+    enter(pos, 0);
+    for (auto& side : filled)
+      for (bool& s : side) s = false;
+    walk(walk, pos, 0, depth, false);
+  }
+  NOTE(fens.size() << " roots, " << evaluations << " evaluations; moves: " << king_moves << " king, "
+                   << castles << " castling, " << en_passants << " en passant, " << promotions
+                   << " promotions, " << captures << " captures, " << nulls << " null; snapshot refreshes "
+                   << refreshes << ", across a region " << crossings << ", from a filled snapshot " << hits);
+  CHECK(evaluations > 1000);
+  CHECK(castles > 0 && en_passants > 0 && promotions > 0 && captures > 0 && nulls > 0);
+  if constexpr (NetArchitecture == 9) CHECK(refreshes > 0 && crossings > 0 && hits > 0);
+#ifdef FORK_SEARCH_STATS
+  if constexpr (NetArchitecture == 9)
+    CHECK_EQ(stack->tally().frame_refreshes, static_cast<std::uint64_t>(refreshes));
+#endif
 }
 #endif
 
