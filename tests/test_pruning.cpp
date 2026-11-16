@@ -697,7 +697,7 @@ TEST_CASE("pruning", "horizon raise: the TT entries that raise a node") {
 // Fault check: a raise that never fires fails the switch-on count.
 TEST_CASE("pruning", "horizon raise: a non-PV horizon node with a quiet TT move is searched a ply deep") {
   PruningFixture fx;
-  CHECK(!SearchSwitches{}.use_horizon_tt_move);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_horizon_tt_move);  // on in this SPRT test commit
   const auto raised_children = [&](bool on, TtBound seed) {
     SearchSwitches s;
     s.use_horizon_tt_move = on;

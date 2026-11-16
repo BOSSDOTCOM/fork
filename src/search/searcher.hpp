@@ -290,7 +290,7 @@ struct SearchQuota {
 //   TT move is tried; not when its parent was itself raised that way or is
 //   running ProbCut's quiescence probe (the parent's
 //   PlyFrame::horizon_kept), so a raised node's children enter the
-//   quiescence search. No constant. Off until its SPRT (LTC only, the
+//   quiescence search. No constant. On in this SPRT test commit (LTC only, the
 //   owner's plan of 2026-11-15).
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
@@ -346,7 +346,7 @@ struct SearchQuota {
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
   X(use_helper_skip, UseHelperSkip, false)               \
-  X(use_horizon_tt_move, UseHorizonTtMove, false)
+  X(use_horizon_tt_move, UseHorizonTtMove, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

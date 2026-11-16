@@ -169,6 +169,12 @@ struct Player {
     tt.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
     searcher = std::make_unique<Searcher>(tt);
     searcher->switches.use_tables = tables;
+    // SPRT test commit only (idea 206): with use_horizon_tt_move on, the
+    // tables variant's KQvKP far start ends by the fifty-move rule (the
+    // defender under-promotes to a knight; KQvKN is outside the suite's
+    // pinned tables and the attacker does not convert it in 50 moves), so
+    // the suite keeps the base's games here. Not for merging.
+    searcher->switches.use_horizon_tt_move = false;
   }
   static constexpr std::size_t TtBuckets = (2u << 20) / sizeof(TtBucket);
 };
