@@ -184,6 +184,23 @@ void UciSession::declare_options() {
     message = config_.allow_files ? describe_syzygy_path(e.text) : "SyzygyPath: file access disabled";
     return true;
   });
+  // The tables' probe rules (TCEC readiness, owner 2026-11-16): the least
+  // remaining depth at which the search probes, and the most pieces any probe
+  // (the root ranking's too) may have. setoption stops any search first, so
+  // they change only between searches; the helpers copy them at each go. The
+  // defaults are the behaviour before the options: TableProbeMinDepth and
+  // every loaded table. A depth past any the search reaches (MaxPly) leaves
+  // only the root ranking; a limit below 3 pieces turns the tables off.
+  options_.add_spin("SyzygyProbeDepth", TableProbeMinDepth, 1, MaxPly,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->switches.table_probe_depth = static_cast<int>(e.number);
+                      return true;
+                    });
+  options_.add_spin("SyzygyProbeLimit", LargestTablePieces, 0, LargestTablePieces,
+                    [this](const OptionEntry& e, std::string&) {
+                      searcher_->switches.table_probe_pieces = static_cast<int>(e.number);
+                      return true;
+                    });
 #ifdef FORK_TUNE
   // Tuning builds only (CMake FORK_TUNE; DESIGN.md §1 and §5.2): each search
   // switch as a check option, so an SPRT can compare a technique on and off
