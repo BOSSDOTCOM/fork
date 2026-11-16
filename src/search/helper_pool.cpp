@@ -25,6 +25,18 @@ void HelperPool::stop_all() {
 std::size_t HelperPool::resize(std::size_t helpers) {
   if (helpers == helpers_.size()) return helpers_.size();
   stop_all();
+  // Every container's room first, while no helper thread exists: below this
+  // nothing that can throw runs once a thread is joinable, but make_unique
+  // and std::thread's own construction, which are caught.
+  std::vector<std::unique_ptr<HelperThread>> kept;
+  try {
+    helpers_.reserve(helpers);
+    kept.reserve(helpers);
+    searchers_.reserve(helpers);
+    team_.reserve(helpers + 1);
+  } catch (...) {
+    return 0;  // no memory even for the lists: no helper
+  }
   // Each new thread counts as busy until its Searcher exists (or failed).
   for (std::size_t i = 0; i < helpers; ++i) {
     try {
@@ -51,8 +63,8 @@ std::size_t HelperPool::resize(std::size_t helpers) {
     std::unique_lock<std::mutex> lock(mutex_);
     idle_.wait(lock, [&] { return busy_ == 0; });
   }
-  // Drop the helpers that could not start (their threads have returned).
-  std::vector<std::unique_ptr<HelperThread>> kept;
+  // Drop the helpers that could not start (their threads have returned);
+  // kept, searchers_ and team_ have their room already.
   for (std::unique_ptr<HelperThread>& h : helpers_) {
     if (h->failed) {
       if (h->thread.joinable()) h->thread.join();
@@ -71,6 +83,7 @@ std::size_t HelperPool::resize(std::size_t helpers) {
 void HelperPool::helper_loop(HelperThread& h) {
   try {
     h.searcher = std::make_unique<Searcher>(tt_);  // allocated and first touched on this thread
+    h.root.reserve_plies(root_plies_);             // so copying the root never allocates (A2)
   } catch (...) {
     h.failed = true;
   }

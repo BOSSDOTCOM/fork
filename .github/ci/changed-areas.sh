@@ -30,11 +30,14 @@ docs_re='^docs/|\.md$|^LICENSE$'
 movegen_re='^(src/core/|tests/(test_epd\.cpp|harness\.hpp|main\.cpp)$|CMakeLists\.txt$|CMakePresets\.json$|cmake/)'
 # Threads, the TT and the UCI layer by path, plus what builds and runs the
 # TSan jobs. tests/main.cpp and tests/harness.hpp run every suite. Not
-# listed: uci_oom_test.cpp, uci_hash_oom_test.cpp and alloc_test.cpp (not
-# built under TSan), and src/search/searcher.* (owner, 2026-11-07: it only
-# reads the stop and ponder flags; the threaded suites job covers it).
-tsan_re='^(src/main\.cpp$|src/uci/|src/datagen/|src/search/(trans_table|hash_memory)\.(cpp|hpp)$'
-tsan_re+='|tests/(test_uci\.cpp|test_options\.cpp|test_tt\.cpp|test_datagen\.cpp|engine_process\.(cpp|hpp)|uci_message\.hpp|main\.cpp|harness\.hpp)$'
+# listed: uci_oom_test.cpp, uci_hash_oom_test.cpp, uci_threads_oom_test.cpp and
+# alloc_test.cpp (not built under TSan), and src/search/searcher.* (owner,
+# 2026-11-07: it read only the stop and ponder flags; since Lazy SMP, 17a, it
+# also publishes counts and depths that other threads read, which the
+# threaded suites job covers, smp included). The helper pool and its suite
+# are listed (2026-11-16, the correctness audit: they were missing).
+tsan_re='^(src/main\.cpp$|src/uci/|src/datagen/|src/search/(trans_table|hash_memory|helper_pool)\.(cpp|hpp)$'
+tsan_re+='|tests/(test_uci\.cpp|test_options\.cpp|test_tt\.cpp|test_smp\.cpp|test_datagen\.cpp|engine_process\.(cpp|hpp)|uci_message\.hpp|main\.cpp|harness\.hpp)$'
 tsan_re+='|CMakeLists\.txt$|CMakePresets\.json$|cmake/'
 tsan_re+='|\.github/workflows/(ci|tsan|nightly)\.yml$|\.github/ci/(changed-areas|run-tests)\.sh$)'
 # Any other changed source file that uses threads or cross-thread state

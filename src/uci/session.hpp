@@ -155,7 +155,7 @@ class UciSession {
   std::atomic<bool> stop_flag_{false};
   std::atomic<bool> pondering_{false};
   std::unique_ptr<Searcher> searcher_;  // created once, used by one search at a time
-  HelperPool pool_{tt_};                // Threads - 1 helpers; destroyed before tt_
+  HelperPool pool_;                     // Threads - 1 helpers (roots reserved as root_'s); destroyed before tt_
   std::thread search_thread_;
 };
 

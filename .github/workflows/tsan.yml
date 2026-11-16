@@ -63,7 +63,7 @@ jobs:
         run: |
           cmake --preset ${{ matrix.preset }}
           cmake --build build/${{ matrix.preset }}
-      - name: Fast tests under TSan (bench parity; no_alloc, uci_oom, uci_hash_oom are not built)
+      - name: Fast tests under TSan (bench parity; no_alloc and the oom tests are not built)
         env:
           REQUIRE_NO_ALLOC: 0
           SKIP: ${{ inputs.skip }}

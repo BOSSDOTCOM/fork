@@ -648,6 +648,11 @@ if(FORK_BUILD_TESTS)
     add_executable(fork_uci_hash_oom_test tests/uci_hash_oom_test.cpp)
     target_link_libraries(fork_uci_hash_oom_test PRIVATE forkuci)
     add_test(NAME uci_hash_oom COMMAND fork_uci_hash_oom_test)
+    # The correctness audit of 2026-11-16 (area 1, L1): a Threads resize that
+    # runs out of memory must not terminate the engine.
+    add_executable(fork_uci_threads_oom_test tests/uci_threads_oom_test.cpp)
+    target_link_libraries(fork_uci_threads_oom_test PRIVATE forkuci)
+    add_test(NAME uci_threads_oom COMMAND fork_uci_threads_oom_test)
   endif()
 
   # A short differential run against python-chess (tools/difftest; audit-1

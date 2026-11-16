@@ -159,7 +159,7 @@ std::string describe_syzygy_path(const std::string& paths) {
 constexpr std::size_t GameStatePlies = 16384;
 
 UciSession::UciSession(OutputChannel& out, SessionConfig config)
-    : out_(out), config_(config), searcher_(std::make_unique<Searcher>(tt_)) {
+    : out_(out), config_(config), searcher_(std::make_unique<Searcher>(tt_)), pool_(tt_, GameStatePlies) {
   root_.reserve_plies(GameStatePlies);
   spare_.reserve_plies(GameStatePlies);
   declare_options();

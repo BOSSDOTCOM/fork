@@ -21,7 +21,12 @@
 //   returned; resize, clear_histories and the destructor wait for it too.
 // - A helper whose search failed to start (no memory for its copy of the
 //   root) idles for that go; a helper that could not be created at all is
-//   dropped, and resize reports the count actually running.
+//   dropped, and resize reports the count actually running. resize reserves
+//   every container it fills before any helper thread exists, so running out
+//   of memory never destroys a joinable thread (the audit of 2026-11-16, L1).
+// - The pool's copy of the root and each helper's are reserved once, for
+//   `root_plies` States (the session's game reserve), so a go copies the root
+//   without allocating as the game grows (the audit's A2; alloc_test).
 // - Zero helpers (Threads = 1) start no thread: the session then runs the
 //   single-threaded path exactly as before.
 #pragma once
@@ -43,7 +48,11 @@ namespace forkeng {
 
 class HelperPool {
  public:
-  explicit HelperPool(TransTable& tt) : tt_(tt) {}
+  // `root_plies`: the States each copy of the root reserves (0: only a
+  // Position's own reserve, as the tests use).
+  explicit HelperPool(TransTable& tt, std::size_t root_plies = 0) : tt_(tt), root_plies_(root_plies) {
+    root_.reserve_plies(root_plies);
+  }
   ~HelperPool();
   HelperPool(const HelperPool&) = delete;
   HelperPool& operator=(const HelperPool&) = delete;
@@ -81,6 +90,7 @@ class HelperPool {
   void stop_all();  // ends and joins every thread
 
   TransTable& tt_;
+  std::size_t root_plies_;
   std::vector<std::unique_ptr<HelperThread>> helpers_;
   std::vector<Searcher*> searchers_;
   std::vector<const Searcher*> team_;  // the main thread's searcher, then the helpers' (begin_search)

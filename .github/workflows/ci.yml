@@ -195,7 +195,7 @@ jobs:
           # wrapped in a second SDE under the first one crashes Pin (seen
           # 2026-10-28). Bench parity runs it through its own wrapper.
           bins="$d/fork_tests"
-          for b in fork_alloc_test fork_uci_oom_test fork_uci_hash_oom_test; do [ -f "$d/$b" ] && bins="$bins $d/$b"; done
+          for b in fork_alloc_test fork_uci_oom_test fork_uci_hash_oom_test fork_uci_threads_oom_test; do [ -f "$d/$b" ] && bins="$bins $d/$b"; done
           bash .github/ci/sde.sh inplace ~/sde $bins
           bash .github/ci/sde.sh wrap ~/sde "$d/fork" "$d/fork-sde"
           # Under emulation timings say nothing about Fork: the timing cases
@@ -272,7 +272,7 @@ jobs:
         run: |
           cmake --preset ${{ matrix.preset }}
           cmake --build build/${{ matrix.preset }}
-      - name: The threaded suites under TSan (no bench parity; no_alloc, uci_oom, uci_hash_oom are not built)
+      - name: The threaded suites under TSan (no bench parity; no_alloc and the oom tests are not built)
         run: |
           d=build/${{ matrix.preset }}
           threaded_suites='^(uci_protocol|uci_options|uci_timing|tt|smp|datagen|web)$'
@@ -380,10 +380,10 @@ jobs:
         run: |
           bash scripts/msan.sh selftest
           bash scripts/msan.sh build
-      - name: Fast tests under MSan (bench parity; no_alloc, uci_oom, uci_hash_oom excluded)
+      - name: Fast tests under MSan (bench parity; no_alloc, uci_oom, uci_hash_oom, uci_threads_oom excluded)
         env:
           REQUIRE_NO_ALLOC: 0
-        run: bash .github/ci/run-tests.sh build/clang-msan-libcxx -E '^(no_alloc|uci_oom|uci_hash_oom)$'
+        run: bash .github/ci/run-tests.sh build/clang-msan-libcxx -E '^(no_alloc|uci_oom|uci_hash_oom|uci_threads_oom)$'
 
   linux-fuzz:
     name: Linux fuzz seeds (clang-fuzz)
