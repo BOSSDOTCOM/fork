@@ -3694,3 +3694,9 @@ proposal are placeholders, screened before use.
 - **result (2026-11-16, overnight; pre-approved pipeline):** built as `use_king_zone_order`, off (tier2/king-zone-order 66f7df7): a quiet move to a square the opponent does not attack, from which the piece attacks a square next to the enemy king, gets `KingZoneOrderBonus` in the main search. Try 1 at 2500 (half of DirectCheckBonus; sprt/king-zone-order 3ef7085): **H0 after 2 stages, -9.12 +/- 6.27 Elo**. Try 2 at 1250 (sprt/king-zone-order-1250 316305f): **H0 after 1 stage, -9.77 +/- 9.28**. Both tries used: rejected. Names and constant screened (no match).
 - **sources:** docs/research/rare-ideas-2026-11/ (clean-room survey of public prose, 2026-11-15; PR/commit prose accepted at concept level by the owner, its marks kept); every source in its sources.md and in docs/ORIGINALITY.md. Every Elo figure is the other engine's own report.
 - **status:** rejected (2026-11-16).
+
+### 208. Keep the king-region refresh cache across searches (correctness audit 2026-11-16, area 2 A2)
+- **type:** TOOLING (speed; data generation first). **phase:** 4, the next speed sprint. **runtime cost:** none expected (a gain if any).
+- **idea:** `FeatureStack::reset` (src/eval/nnue/accumulator.cpp:797) empties the 16 refresh snapshots at the start of every search, so the cache of the king-region net (r3kr1, architecture 9) lives one search; data generation runs many short searches per game, where a cache kept across searches (same game, same thread) could save full refreshes.
+- **plan (owner, 2026-11-16):** a measurement item for the next speed sprint: data generation throughput (positions/s, same seeds and threads) with the cache kept across searches against today's, plus the refresh counts; adopt only with a measured gain and identical output (determinism: the cache must not change any evaluation; the nnue walk test and bench parity).
+- **status:** planned (deferred from the audit, owner 2026-11-16).
