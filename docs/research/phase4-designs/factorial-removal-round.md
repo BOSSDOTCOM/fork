@@ -23,6 +23,35 @@ stages); and **the tooling of §3 (per-shard rows, the factorial and guard
 kinds, the row permutation, the design file, the fit script) is built when
 step 18 comes up**, not before. §8's decisions 2, 3, 4 and 6 are still open.
 
+**The settings for launch (owner, 2026-11-16 morning: "adopt your recommended values for all five settings";
+the coordinator's recommendations, with the factor-set census of phase-4 d1a1a19):**
+1. **The control check** (§5.1) uses the **SE of the difference** between check relief's screen estimate and its
+   dedicated estimate (nElo -5.22 +/- 4.72, SE 2.41): sqrt(SE_screen^2 + 2.41^2), since the two are independent
+   estimates; the method is refuted if they differ by more than 2.5 such SEs.
+2. **The guard's futility stop** (§5.3): **yes**, as design R's: after 2 stages, an nElo estimate below the
+   guard's lower bound (-6) is H0 (the switches are kept); conservative, and it saves stages on a clearly harmful
+   removal set.
+3. **The LTC guard's cap: 6** LTC stages (design R's LTC default; the most power).
+4. **The factor set: k = 11.** The census (every switch on at d1a1a19, P(value <= 0) from its logged interval:
+   SE = half-width / 1.96, one-sided normal) keeps the original 8 (aspiration, mate distance, SEE in quiescence,
+   history malus, LMP, TT eval refine, lmr-in-check, check relief = the control) and adds three: **use_take_history**
+   (§8 decision 2: a factor; +4.53 +/- 2.99, P 0.15%, but on S-512 and pre-network-era evidence, and its LTC
+   confirmation was dropped on 2026-11-10 because "the factorial removal round covers that switch"),
+   **use_skip_check_exempt** (+2.80 +/- 3.43; parent history skip triaged out) and **use_pair_sum_update** (D8,
+   +4.29 +/- 3.46, P 0.75%; only D8 of the D8/D13 pair, D13 being the stronger, so D8's estimate is its value on top
+   of D13). Left out: **use_pass_best_stop** (E1, the bug review's stop-rule fix: a correctness item, as
+   use_fastest_table_win), **use_forced_move_stop** (§8 decision 3: out as time management; STC cannot measure what
+   TCEC's allocation does with the saved time), every switch triaged out by the 1% rule, and **ProbCut**, whose
+   removal is decided by its own LTC 40+0.4 test (§5.3, priority switch), not by the STC screen. LTC-flagged
+   factors (the LTC guard applies if either is removed): TT eval refine (Quality control 6) and take history (the
+   straight-to-LTC list). history_malus also scales take history's and D8's maluses: an interaction the
+   lack-of-fit statistic would flag. **m: 3 or 4, whichever the A-optimal search gives the lower mean SE at 16
+   stages** (the design doc's table: k = 12, m = 4 about 4.5 nElo at 24 stages by random search; ST5's A-optimal
+   figure UNVERIFIED).
+5. **The design seed:** fixed in advance, recorded in the design file with 200 starts; the search is re-run with
+   that seed for k = 11 (both m), and its mean SE is reported against the design doc's figure before launch.
+
+
 ## 1. What decision 6 accepted
 
 The round becomes a factorial screen (R30) with B14's four fixes; "accepted:
