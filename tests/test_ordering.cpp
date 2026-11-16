@@ -4,6 +4,7 @@
 // exactly the right moves, and the history update stays bounded.
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <memory>
 #include <set>
 #include <vector>
@@ -533,6 +534,138 @@ TEST_CASE("ordering", "direct-check bonus: the selector puts quiet checks first,
   bool all_first = true;
   for (int i = 0; i < checks; ++i) all_first = all_first && pos.gives_check(without[i]);
   CHECK(!all_first);
+}
+
+// The king-zone bonus's test (idea 207), against an independent oracle: for
+// every quiet move in the perft and edge positions and every position one
+// legal move from them (side to move not in check), attacks_king_zone says
+// yes exactly when no enemy piece attacks the destination on the board
+// before the move (the single-square query) and, after the move, the moved
+// piece is among the attackers of a square one king step from the enemy
+// king (the squares found by file and rank distance, not king_attacks); a
+// king move or castling never earns it.
+TEST_CASE("ordering", "king-zone squares: equal to the moved piece attacking the king's neighbours") {
+  std::vector<std::string_view> fens;
+  for (const PerftPosition& p : perft_suite()) fens.push_back(p.fen);
+  for (const EdgePosition& p : edge_positions()) fens.push_back(p.fen);
+  int quiets = 0, earned = 0, unsafe_reach = 0;
+  const auto check_node = [&](Position& pos) {
+    if (pos.in_check()) return;
+    const Color them = ~pos.side_to_move();
+    const Bitboard enemy_attacks = pos.attacked_squares(them);
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    for (Move m : legal) {
+      if (m.is_capture() || m.is_promotion()) continue;
+      const bool predicted = attacks_king_zone(pos, m, enemy_attacks);
+      const bool king_move = m.is_castle() || kind_of(pos.piece_at(m.from())) == King;
+      const bool safe = !pos.attacked_by(them, m.to(), pos.pieces());
+      pos.make(m);
+      const Square king = pos.king_square(pos.side_to_move());
+      bool reaches = false;
+      for (int s = 0; s < 64; ++s) {
+        const Square sq = static_cast<Square>(s);
+        const int df = std::abs(file_of(sq) - file_of(king)), dr = std::abs(rank_of(sq) - rank_of(king));
+        if (std::max(df, dr) == 1 && (pos.attackers_to(sq, pos.pieces()) & bb(m.to()))) reaches = true;
+      }
+      pos.unmake(m);
+      const bool actual = !king_move && safe && reaches;
+      CHECK_MSG(predicted == actual, pos.fen() << " " << pos.move_to_uci(m) << ": predicted " << predicted);
+      ++quiets;
+      earned += actual;
+      unsafe_reach += !king_move && reaches && !safe;
+    }
+  };
+  for (std::string_view fen : fens) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    check_node(pos);
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    for (Move m : legal) {
+      pos.make(m);
+      check_node(pos);
+      pos.unmake(m);
+    }
+  }
+  CHECK_MSG(quiets > 5000 && earned > 100 && unsafe_reach > 100, quiets << " quiet moves, " << earned
+                                                                        << " earn the bonus, " << unsafe_reach
+                                                                        << " reach but unsafe");
+}
+
+// The king-zone bonus in the selector (idea 207): with it, quiet_order_score
+// (given the same bonus) still orders quiets as the selector yields them;
+// with no history every quiet that earns it comes before every quiet that
+// does not, in each perft and edge position out of check, and without the
+// bonus that order fails in at least one of them (the switch changes the
+// decision; fault check: a selector that never adds the bonus fails here).
+TEST_CASE("ordering",
+          "king-zone bonus: the selector puts king-zone attackers first, as quiet_order_score says") {
+  auto pairs = std::make_unique<PairHistory[]>(2);
+  auto history = std::make_unique<QuietHistory>();
+  const int arrival = pair_slot(static_cast<Piece>(Black * 8 + Knight), static_cast<Square>(42));
+  std::uint64_t seed = 20261116;
+  const int bonus = KingZoneOrderBonus;  // the parameter the selector adds
+  int checked = 0;
+  for (const PerftPosition& p : perft_suite()) {
+    Position pos;
+    CHECK(pos.set_fen(p.fen));
+    if (pos.in_check()) continue;
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    for (Move m : legal) {
+      const auto amount = [&] { return static_cast<int>(splitmix_next(seed) % 4001) - 2000; };
+      history->apply(pos.side_to_move(), m, amount());
+      pairs[ReplyTable].apply(arrival, pair_slot(pos.piece_at(m.from()), m.to()), amount());
+    }
+    MoveSelector s;
+    s.start_main(pos, NoMove, history.get(), pairs.get(), arrival, NoArrival, nullptr, false, false, true);
+    int previous = INT16_MAX;
+    for (Move m : drain(s)) {
+      if (m.is_capture() || m.is_promotion()) continue;
+      const int score =
+          quiet_order_score(pos, m, history.get(), pairs.get(), arrival, NoArrival, 0, 0, bonus);
+      CHECK_MSG(score <= previous,
+                p.name << ": " << pos.move_to_uci(m) << " " << score << " after " << previous);
+      previous = score;
+      ++checked;
+    }
+  }
+  CHECK(checked > 50);
+  std::vector<std::string_view> fens;
+  for (const PerftPosition& p : perft_suite()) fens.push_back(p.fen);
+  for (const EdgePosition& p : edge_positions()) fens.push_back(p.fen);
+  int earning_nodes = 0, misordered_without = 0;
+  for (std::string_view fen : fens) {
+    Position pos;
+    CHECK(pos.set_fen(fen));
+    if (pos.in_check()) continue;
+    const Bitboard enemy_attacks = pos.attacked_squares(~pos.side_to_move());
+    QuietHistory empty;
+    // Whether every earning quiet comes before every other quiet.
+    const auto earners_first = [&](bool with_bonus) {
+      MoveSelector s;
+      s.start_main(pos, NoMove, &empty, nullptr, NoArrival, NoArrival, nullptr, false, false, with_bonus);
+      bool seen_other = false, first = true;
+      for (Move m : drain(s)) {
+        if (m.is_capture() || m.is_promotion()) continue;
+        const bool earns = attacks_king_zone(pos, m, enemy_attacks);
+        if (earns && seen_other) first = false;
+        seen_other = seen_other || !earns;
+      }
+      return first;
+    };
+    MoveList legal;
+    generate<GenMode::Legal>(pos, legal);
+    int earners = 0;
+    for (Move m : legal)
+      earners += !m.is_capture() && !m.is_promotion() && attacks_king_zone(pos, m, enemy_attacks);
+    earning_nodes += earners > 0;
+    CHECK_MSG(earners_first(true), fen);
+    misordered_without += !earners_first(false);
+  }
+  CHECK_MSG(earning_nodes >= 3, earning_nodes << " positions with a quiet that earns the bonus");
+  CHECK_MSG(misordered_without > 0, "without the bonus the earners already came first everywhere");
 }
 
 // The threat set (tier 2, T56; KB §3.34's test plan): attacked_squares(by)

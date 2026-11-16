@@ -282,6 +282,14 @@ struct SearchQuota {
 //   searching (helper_next_depth), so the free-running helpers spread over
 //   depths instead of repeating the main thread's; the main thread never
 //   skips. Off until its tests; no effect with one thread.
+// - use_king_zone_order: king-attack knowledge in quiet move ordering
+//   (ideas.md idea 207; the rare-ideas survey's RI-01): in the main search
+//   out of check, a quiet move (not castling, not a king move) whose
+//   destination the opponent does not attack and whose piece attacks a
+//   square next to the enemy king from there adds KingZoneOrderBonus to its
+//   ordering score (MoveSelector::start_main, attacks_king_zone); evasions,
+//   the root's initial order, the quiescence search and the history skip's
+//   score are unchanged. Off until its SPRT.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -335,7 +343,8 @@ struct SearchQuota {
   X(use_root_lmr, UseRootLmr, true)                      \
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
-  X(use_helper_skip, UseHelperSkip, false)
+  X(use_helper_skip, UseHelperSkip, false)               \
+  X(use_king_zone_order, UseKingZoneOrder, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

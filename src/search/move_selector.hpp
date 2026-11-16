@@ -13,7 +13,8 @@
 //   comes up (SEE is computed only for the captures reached), then quiet
 //   moves by butterfly history (its threat bucket when threat-aware;
 //   generation order without a history; plus the direct-check bonus when
-//   one is given, D13), then
+//   one is given, D13, and the king-zone bonus when one is given, idea
+//   207), then
 //   the deferred bad captures and under-promotions, in the order deferred.
 // - In check (main search and quiescence): the TT move, then every evasion,
 //   captures first (by victim and attacker), then quiets by history.
@@ -69,6 +70,27 @@ inline bool gives_direct_check(const Position& pos, Move m) {
   return !m.is_castle() && (direct_check_targets(pos, kind_of(pos.piece_at(m.from()))) & bb(m.to())) != 0;
 }
 
+// The squares the piece moved by quiet move `m` attacks from its
+// destination, on the board after the move (its origin emptied, its
+// destination occupied); none for a king move or castling. The king-zone
+// ordering bonus's reach (idea 207; the rare-ideas survey's RI-01).
+inline Bitboard quiet_move_reach(const Position& pos, Move m) {
+  if (m.is_castle()) return 0;
+  const PieceType type = kind_of(pos.piece_at(m.from()));
+  if (type == King) return 0;
+  if (type == Pawn) return pawn_attacks(pos.side_to_move(), m.to());
+  return attacks(type, m.to(), (pos.pieces() & ~bb(m.from())) | bb(m.to()));
+}
+
+// Whether quiet move `m` earns the king-zone ordering bonus (idea 207): its
+// destination is not attacked by the opponent on the board before the move
+// (`enemy_attacks`, Position::attacked_squares of the opponent), and from
+// there the moved piece attacks a square next to the enemy king.
+inline bool attacks_king_zone(const Position& pos, Move m, Bitboard enemy_attacks) {
+  if (enemy_attacks & bb(m.to())) return false;
+  return (quiet_move_reach(pos, m) & king_attacks(pos.king_square(~pos.side_to_move()))) != 0;
+}
+
 // A quiet move's ordering score in `pos`: its butterfly history (0 without
 // one), plus with `pairs` its reply entry after `arrival` times ReplyWeight
 // / 4 and its follow entry after `follow_arrival` times FollowWeight / 4
@@ -79,10 +101,12 @@ inline bool gives_direct_check(const Position& pos, Move m) {
 // and tests/test_ordering.cpp checks it orders quiets as the selector does.
 // `bucket` is the move's threat bucket (tier 2, T56; 0 when not threat-aware).
 // A non-zero `check_bonus` (D13) is added when the move gives direct check
-// (not castling), and the sum is clamped to int16 again.
+// (not castling), and the sum is clamped to int16 again. A non-zero
+// `king_zone_bonus` (idea 207) is added the same way when the move earns it
+// (attacks_king_zone).
 inline int quiet_order_score(const Position& pos, Move m, const QuietHistory* history,
                              const PairHistory* pairs, int arrival, int follow_arrival, int bucket = 0,
-                             int check_bonus = 0) {
+                             int check_bonus = 0, int king_zone_bonus = 0) {
   // Without pair tables the arrivals are ignored, as MoveSelector::start_main
   // drops them (a stats build with UseHistory off and the reply or follow
   // history on passes arrivals with no tables).
@@ -98,6 +122,8 @@ inline int quiet_order_score(const Position& pos, Move m, const QuietHistory* hi
   }
   if (check_bonus != 0 && gives_direct_check(pos, m))
     score = std::clamp(score + check_bonus, -INT16_MAX, INT16_MAX);
+  if (king_zone_bonus != 0 && attacks_king_zone(pos, m, pos.attacked_squares(~pos.side_to_move())))
+    score = std::clamp(score + king_zone_bonus, -INT16_MAX, INT16_MAX);
   return score;
 }
 
@@ -133,10 +159,14 @@ class MoveSelector {
   // With `check_bonus` (the engine survey's D13) DirectCheckBonus is added
   // to the score of each quiet that gives direct check (quiet_order_score's
   // rule); quiet evasions are unchanged.
+  // With `king_zone_bonus` (idea 207) KingZoneOrderBonus is added to the
+  // score of each quiet that lands on a square the opponent does not attack
+  // and attacks a square next to the enemy king from there
+  // (attacks_king_zone); quiet evasions are unchanged.
   void start_main(const Position& pos, Move tt_move, const QuietHistory* history,
                   const PairHistory* pairs = nullptr, int arrival = NoArrival, int follow_arrival = NoArrival,
                   const TakeHistory* take_history = nullptr, bool threat_aware = false,
-                  bool check_bonus = false);
+                  bool check_bonus = false, bool king_zone_bonus = false);
   // Quiescence search (all evasions when in check).
   void start_quiesce(const Position& pos, Move tt_move, bool see_filter, const QuietHistory* history,
                      const TakeHistory* take_history = nullptr, bool threat_aware = false);
@@ -192,7 +222,10 @@ class MoveSelector {
   bool quiet_checks_only_ = false;
   bool threat_aware_ = false;
   bool attacked_known_ = false;
-  bool check_bonus_ = false;          // D13: direct-checking quiets add DirectCheckBonus
+  // One bit each, so the flags above and quiets_filtered_ stay within the
+  // padding (the PlyFrame guard, tests/test_search.cpp).
+  bool check_bonus_ : 1 = false;      // D13: direct-checking quiets add DirectCheckBonus
+  bool king_zone_bonus_ : 1 = false;  // idea 207: king-zone attackers add KingZoneOrderBonus
   std::int16_t quiets_filtered_ = 0;  // at most MaxMoves; int16 keeps the flags above within the padding
   Bitboard attacked_ = 0;
 

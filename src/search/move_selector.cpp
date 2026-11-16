@@ -39,10 +39,12 @@ bool is_under_promotion(Move m) { return m.is_promotion() && m.promo_type() != Q
 
 void MoveSelector::start_main(const Position& pos, Move tt_move, const QuietHistory* history,
                               const PairHistory* pairs, int arrival, int follow_arrival,
-                              const TakeHistory* take_history, bool threat_aware, bool check_bonus) {
+                              const TakeHistory* take_history, bool threat_aware, bool check_bonus,
+                              bool king_zone_bonus) {
   pos_ = &pos;
   history_ = history;
   check_bonus_ = check_bonus;
+  king_zone_bonus_ = king_zone_bonus;
   take_history_ = take_history;
   threat_aware_ = threat_aware;
   attacked_known_ = false;
@@ -102,6 +104,11 @@ void MoveSelector::score_quiets() {
   Bitboard checks[King + 1] = {};
   if (check_bonus_)
     for (PieceType t : {Pawn, Knight, Bishop, Rook, Queen}) checks[t] = direct_check_targets(*pos_, t);
+  // Idea 207: the squares the opponent attacks (the threat set when
+  // threat-aware, built here otherwise), once per node.
+  const Bitboard enemy_attacks = !king_zone_bonus_ ? 0
+                                 : threat_aware_   ? attacked_by_opponent()
+                                                   : pos_->attacked_squares(~us);
   for (std::size_t i = 0; i < list_.size(); ++i) {
     const Move m = list_[i];
     int score = history_ ? history_->value(us, m, threat_bucket(attacked, m)) : 0;
@@ -115,6 +122,8 @@ void MoveSelector::score_quiets() {
     }
     if (check_bonus_ && !m.is_castle() && (checks[kind_of(pos_->piece_at(m.from()))] & bb(m.to())))
       score = std::clamp(score + DirectCheckBonus, -INT16_MAX, INT16_MAX);
+    if (king_zone_bonus_ && attacks_king_zone(*pos_, m, enemy_attacks))
+      score = std::clamp(score + KingZoneOrderBonus, -INT16_MAX, INT16_MAX);
     scores_[i] = static_cast<std::int16_t>(score);
   }
 }

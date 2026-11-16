@@ -656,6 +656,31 @@ TEST_CASE("pruning", "direct-check bonus: still correct, and it changes the sear
             "the direct-check bonus left all three trees unchanged");
 }
 
+// The king-zone ordering bonus (idea 207): off by default until its SPRT;
+// with it on, mates are still found and the best move is legal, and it
+// changes the tree (fault check: a bonus never passed to the selector leaves
+// the tree as it is with the switch off).
+TEST_CASE("pruning", "king-zone bonus: still correct, and it changes the search") {
+  PruningFixture fx;
+  CHECK(!SearchSwitches{}.use_king_zone_order);  // off until its SPRT
+  SearchSwitches on;
+  on.use_king_zone_order = true;
+  fx.searcher->switches = on;
+  CHECK(fx.search("6k1/5ppp/8/8/8/8/8/R5K1 w - - 0 1", 6).score == mate_score(1));
+  CHECK(fx.search("k7/8/2K5/8/8/8/8/7R w - - 0 1", 6).score == mate_score(3));
+  const std::string_view kiwipete = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+  const int depth = Optimized ? 10 : 7;
+  Position pos;
+  CHECK(pos.set_fen(kiwipete));  // tests/suite.hpp's perft position 2
+  MoveList legal;
+  generate<GenMode::Legal>(pos, legal);
+  CHECK(legal.contains(fx.search(kiwipete, depth).best));
+  SearchSwitches off;
+  off.use_king_zone_order = false;
+  CHECK_MSG(fx.tree_sizes(on, depth) != fx.tree_sizes(off, depth),
+            "the king-zone bonus left all three trees unchanged");
+}
+
 // The history skip's exemption for checking quiets (use_skip_check_exempt):
 // the only mate, Ra1-a8 (a quiet direct check), is given the worst butterfly
 // history in every threat bucket (-HistoryMax, far below the skip's
@@ -1021,6 +1046,7 @@ TEST_CASE("pruning", "tier 2, all switches on: deterministic and legal") {
   s.use_history_ageing = s.use_improving_lmp = s.use_improving_lmr = true;
   s.use_centred_lmr_history = s.use_linear_bonus = s.use_quiesce_move_cap = true;
   s.use_root_lmr = true;
+  s.use_king_zone_order = true;
   fx.searcher->switches = s;
   static constexpr std::string_view Fens[] = {
       "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
