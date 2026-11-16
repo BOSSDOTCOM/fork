@@ -78,8 +78,9 @@ namespace {
 // move (NullMinDepth; half the remaining depth less one ply, and one ply less
 // again per NullSurplusPerPly of static eval above beta, at most
 // NullSurplusPliesMax); endgame tables from TableProbeMinDepth in the main
-// search; LMR (LmrMinDepth, LmrMinMove; the table in lmr_table.hpp); late
-// move pruning (LmpMaxDepth; LmpQuietAllowance + d quiets); futility
+// search (and the UCI option SyzygyProbeDepth, whose default it is); LMR
+// (LmrMinDepth, LmrMinMove; the table in lmr_table.hpp); late move pruning
+// (LmpMaxDepth; LmpQuietAllowance + d quiets); futility
 // (FutilityMaxDepth; FutilityOffset + FutilityGrowth * depth); SEE pruning
 // (SeePruneMaxDepth; QuietSeeFloor and CaptureSeeFloor cp per ply); ProbCut
 // (CaptureProbeMinDepth, CaptureProbeReduction, CaptureProbeMargin). The
@@ -386,8 +387,8 @@ int Searcher::negamax(int alpha, int beta, int depth, int ply) {
   // the searched result is kept within it (a lost node is worth no more than
   // its loss, a won node no less than its win).
   int table_floor = -ScoreInfinite, table_ceiling = ScoreInfinite;
-  if (switches.use_tables && depth >= TableProbeMinDepth && ply > 0) {
-    if (const std::optional<TableWdl> wdl = probe_table_wdl(pos)) {
+  if (switches.use_tables && depth >= TableProbeMinDepth && depth >= switches.table_probe_depth && ply > 0) {
+    if (const std::optional<TableWdl> wdl = probe_table_wdl(pos, switches.table_probe_pieces)) {
       ++table_hits_;
       const int s = *wdl == TableWdl::Win           ? TbWinScore - ply
                     : *wdl == TableWdl::Loss        ? -(TbWinScore - ply)
@@ -1348,7 +1349,8 @@ void prepare_table(TransTable& tt, const SearchSwitches& switches) {
 // keeps only the fastest wins, as it always does with use_fastest_table_win.
 bool rank_root(const Position& pos, const SearchSwitches& switches, MoveList& kept) {
   return switches.use_tables && endgame_table_pieces() > 0 &&
-         rank_root_by_tables(pos, switches.use_fastest_table_win || pos.repetition_count() >= 2, kept);
+         rank_root_by_tables(pos, switches.use_fastest_table_win || pos.repetition_count() >= 2, kept,
+                             switches.table_probe_pieces);
 }
 
 }  // namespace

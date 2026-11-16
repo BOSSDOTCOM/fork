@@ -98,9 +98,18 @@ std::string load_endgame_tables(const std::string& path) {
 
 int endgame_table_pieces() { return static_cast<int>(TB_LARGEST); }
 
-std::optional<TableWdl> probe_table_wdl(const Position& pos) {
-  if (popcount(pos.pieces()) > endgame_table_pieces() || pos.castling_rights() != 0 ||
-      pos.halfmove_clock() != 0)
+namespace {
+
+// Whether `pos` has few enough pieces for the loaded tables and the caller's
+// limit.
+bool within_tables(const Position& pos, int piece_limit) {
+  return popcount(pos.pieces()) <= std::min(endgame_table_pieces(), piece_limit);
+}
+
+}  // namespace
+
+std::optional<TableWdl> probe_table_wdl(const Position& pos, int piece_limit) {
+  if (!within_tables(pos, piece_limit) || pos.castling_rights() != 0 || pos.halfmove_clock() != 0)
     return std::nullopt;
   const ProbeArgs a = probe_args(pos);
   const unsigned r = tb_probe_wdl(a.white, a.black, a.kings, a.queens, a.rooks, a.bishops, a.knights, a.pawns,
@@ -121,10 +130,9 @@ std::optional<TableWdl> probe_table_wdl(const Position& pos) {
   }
 }
 
-bool rank_root_by_tables(const Position& pos, bool fastest, MoveList& keep) {
+bool rank_root_by_tables(const Position& pos, bool fastest, MoveList& keep, int piece_limit) {
   keep.count = 0;
-  if (!root_results || popcount(pos.pieces()) > endgame_table_pieces() || pos.castling_rights() != 0)
-    return false;
+  if (!root_results || !within_tables(pos, piece_limit) || pos.castling_rights() != 0) return false;
   const ProbeArgs a = probe_args(pos);
   TbRootMoves& r = *root_results;
   const bool by_dtz = tb_probe_root_dtz(a.white, a.black, a.kings, a.queens, a.rooks, a.bishops, a.knights,
