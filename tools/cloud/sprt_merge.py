@@ -51,12 +51,28 @@ partial shard fails loudly instead of being counted. --allow-partial merges
 the finished pairs of such shards (an AWS spot shard stopped by an
 interruption keeps its finished pairs, tools/cloud/aws_spot_sprt.sh); the
 SPRT drivers never pass it.
+
+Per-shard rows (the factorial removal round, DESIGN.md §5.6 step 18; design
+docs/research/phase4-designs/factorial-removal-round.md §3.1 and §3.3): each
+shard of a stage plays its own row of switch settings as its test options,
+so the same-options check gets a design-mode exemption. With --design FILE
+--name NAME (the driver) the row each shard must have played is recomputed
+from the design and the permutation of NAME and the shard's stage
+(tools/github/factorial_fit.py); with --stage-rows FILE (sprt.yml's merge
+job) it is read from the stage's rows input. Either way every shard must
+record that row (meta.row), its options (meta.test_opts) and the design's
+digest (meta.design), or the merge refuses; test_opts is then no longer
+compared across shards, while the design digest is. Without these options
+nothing changes.
+
+    python3 tools/cloud/sprt_merge.py merge ... [--design FILE --name NAME | --stage-rows FILE]
 """
 import argparse
 import json
 import math
 import re
 import sys
+from pathlib import Path
 
 PAIR_SCORES = (0.0, 0.25, 0.5, 0.75, 1.0)
 NELO_SCALE = 800 / (math.log(10) * math.sqrt(2))
@@ -202,7 +218,23 @@ def incomplete(shard):
     return None
 
 
-def merge(shards, require_complete=False):
+def check_rows(shards, rows, by_shard_only=False):
+    """Every shard played the row the design says (the factorial round's per-shard rows): rows maps
+    (stage, shard), or the shard alone with by_shard_only, to (row, opts, design digest), as strings."""
+    for s in shards:
+        meta = s.get('meta', {})
+        where = f'stage {meta.get("stage", "?")} shard {meta.get("shard", "?")}'
+        key = str(meta.get('shard')) if by_shard_only else (str(meta.get('stage')), str(meta.get('shard')))
+        if key not in rows:
+            raise ValueError(f'{where} has no row in the design for its stage')
+        row, opts, digest = rows[key]
+        got = (str(meta.get('row')), meta.get('test_opts'), meta.get('design'))
+        if got != (row, opts, digest):
+            raise ValueError(f'{where} played row {got[0]!r} with options {got[1]!r} (design {got[2]!r}), '
+                             f"not the permutation's row {row!r} with {opts!r} (design {digest!r})")
+
+
+def merge(shards, require_complete=False, rows=None, by_shard_only=False):
     """The summed counts; refuses shards of different tests (commits,
     conditions, tables on or off, opening book), or two shards whose opening
     ranges intersect (stages run with different games or shards values, or
@@ -210,12 +242,18 @@ def merge(shards, require_complete=False):
     test is identified by its commits and conditions, not by binary hashes:
     machines that build for themselves produce different bytes (debug info,
     build paths). With require_complete (the CLI's default), every shard must
-    be complete: incomplete() names the first reason it is not."""
+    be complete: incomplete() names the first reason it is not. With rows
+    (a design's per-shard rows, check_rows), each shard's row is checked
+    instead of comparing test_opts across shards, and the design digest is
+    compared."""
     if require_complete:
         reasons = [r for r in (incomplete(s) for s in shards) if r]
         if reasons:
             raise ValueError(f'{len(reasons)} of {len(shards)} shards incomplete: ' + '; '.join(reasons))
     keys = ('base', 'test', 'tc', 'hash', 'base_opts', 'test_opts', 'tables', 'book_sha')
+    if rows is not None:
+        check_rows(shards, rows, by_shard_only)
+        keys = tuple(k for k in keys if k != 'test_opts') + ('design',)
     first = shards[0].get('meta', {})
     for s in shards[1:]:
         for k in keys:
@@ -260,6 +298,38 @@ def report(merged, nelo0, nelo1, alpha=0.05, beta=0.05):
     ])
 
 
+def design_rows(a, shards):
+    """(rows, by_shard_only, report line) for merge() from the CLI's --design/--name or --stage-rows, or
+    (None, False, None) without them; ValueError for a design or table that cannot be used."""
+    if a.design is None and a.name is None and a.stage_rows is None:
+        return None, False, None
+    if a.stage_rows is not None:
+        if a.design is not None or a.name is not None:
+            raise ValueError('--stage-rows goes without --design and --name')
+        try:
+            with open(a.stage_rows, encoding='utf-8') as f:
+                table = json.load(f)
+            rows = {str(i): (str(e['row']), e['opts'], table['design']) for i, e in enumerate(table['shard_rows'])}
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            raise ValueError(f'--stage-rows {a.stage_rows}: {e!r}') from e
+        if len({str(s.get('meta', {}).get('stage')) for s in shards}) != 1:
+            raise ValueError("--stage-rows checks one stage's shards")
+        return rows, True, f"Rows: every shard played its row of the stage's table (design {table['design'][:12]})"
+    if a.design is None or a.name is None:
+        raise ValueError('--design and --name go together')
+    import importlib
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'github'))
+    factorial_fit = importlib.import_module('factorial_fit')
+    try:
+        design = factorial_fit.load_design(a.design)
+    except (OSError, ValueError, factorial_fit.Refused) as e:
+        raise ValueError(f'--design {a.design}: {e}') from e
+    stages = sorted({int(s.get('meta', {}).get('stage', -1)) for s in shards})
+    return (factorial_fit.expected_rows(design, a.name, stages), False,
+            f'Rows: every shard played its permuted row (design {factorial_fit.design_digest(design)[:12]}, '
+            f'{len(design["rows"])} rows, name {a.name})')
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -281,6 +351,9 @@ def main(argv=None):
     m.add_argument('--fixed', action='store_true', help='with --played: a fixed-length run, never decided')
     m.add_argument('--allow-partial', action='store_true',
                    help='also merge the finished pairs of shards not done or short of their rounds (AWS spot)')
+    m.add_argument('--design', help="a factorial design file: each shard's row checked (with --name)")
+    m.add_argument('--name', help='with --design: the run name the row permutation derives from')
+    m.add_argument('--stage-rows', help="one stage's rows input (sprt.yml's rows, JSON): each shard's row checked")
     a = ap.parse_args(argv)
     if a.cmd == 'snapshot':
         with open(a.log, encoding='utf-8', errors='replace') as f:
@@ -295,7 +368,8 @@ def main(argv=None):
         with open(path, encoding='utf-8') as f:
             shards.append(json.load(f))
     try:
-        merged = merge(shards, require_complete=not a.allow_partial)
+        rows, by_shard_only, rows_line = design_rows(a, shards)
+        merged = merge(shards, require_complete=not a.allow_partial, rows=rows, by_shard_only=by_shard_only)
     except ValueError as e:
         print(f'sprt_merge.py: merge refused: {e}', file=sys.stderr)
         return 1
@@ -303,6 +377,8 @@ def main(argv=None):
         print(f'no finished pairs in {len(shards)} shards: nothing to merge', file=sys.stderr)
         return 1
     print(report(merged, a.elo0, a.elo1, a.alpha, a.beta))
+    if rows_line:  # after the report, before any Verdict line (the driver keeps the last lines)
+        print(rows_line)
     staged = None
     if a.played is not None:
         if a.cap is None:
