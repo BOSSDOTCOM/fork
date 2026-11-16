@@ -276,6 +276,12 @@ struct SearchQuota {
 //   On since its SPRTs against off passed: STC +17.71 +/- 6.74 Elo after
 //   3,200 games, LTC +14.94 +/- 6.24 Elo after 3,328 games, design R
 //   [0, 6]; 2026-11-13.
+// - use_helper_skip: Lazy SMP v2's depth staggering (DESIGN.md §5.6 step
+//   17a; owner, 2026-11-15): before each iteration a helper thread skips
+//   every depth that at least half of the go's threads are already
+//   searching (helper_next_depth), so the free-running helpers spread over
+//   depths instead of repeating the main thread's; the main thread never
+//   skips. Off until its tests; no effect with one thread.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -328,7 +334,8 @@ struct SearchQuota {
   X(use_quiesce_move_cap, UseQuiesceMoveCap, true)       \
   X(use_root_lmr, UseRootLmr, true)                      \
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
-  X(use_fastest_table_win, UseFastestTableWin, true)
+  X(use_fastest_table_win, UseFastestTableWin, true)     \
+  X(use_helper_skip, UseHelperSkip, false)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
@@ -358,7 +365,29 @@ struct SearchStart {
   MoveList table_kept;        // those moves, in the tables' order
   Searcher* const* helpers = nullptr;
   std::size_t helper_count = 0;
+  // A helper's copy only: this thread is a helper, and the go's whole team
+  // (the main thread first), whose published iteration depths its skip rule
+  // reads (use_helper_skip).
+  bool helper = false;
+  const Searcher* const* team = nullptr;
+  std::size_t team_size = 0;
 };
+
+// Lazy SMP v2's skip rule (use_helper_skip): the depth a helper searches
+// next, from `depth` up to `limit`: the first depth that fewer than half of
+// the team's `team_size` threads (`depth_of(i)`: thread i's current
+// iteration depth) are already searching at or beyond. Half: the smallest
+// share that always leaves a depth with fewer threads on it than not
+// (DESIGN.md §5.2, "Search constants").
+template <class DepthOf>
+int helper_next_depth(int depth, int limit, std::size_t team_size, DepthOf&& depth_of) {
+  for (; depth < limit; ++depth) {
+    std::size_t at_or_beyond = 0;
+    for (std::size_t i = 0; i < team_size; ++i) at_or_beyond += depth_of(i) >= depth;
+    if (2 * at_or_beyond < team_size) break;
+  }
+  return depth;
+}
 
 struct SearchResult {
   Move best = NoMove;
@@ -742,7 +771,12 @@ class Searcher {
   void clear_published() {
     published_nodes_.store(0, std::memory_order_relaxed);
     published_hits_.store(0, std::memory_order_relaxed);
+    searching_depth_.store(0, std::memory_order_relaxed);
   }
+  // The depth of the iteration this searcher is running (0 before its
+  // first), for helpers' skip rule (use_helper_skip); written by its own
+  // thread at each iteration's start.
+  int searching_depth() const { return searching_depth_.load(std::memory_order_relaxed); }
 
   SearchSwitches switches;
   // Aspiration fails are reported (as upperbound or lowerbound lines) only
@@ -908,6 +942,7 @@ class Searcher {
   // line, so the owner's stores never contend with another thread's writes.
   alignas(64) std::atomic<std::uint64_t> published_nodes_{0};
   std::atomic<std::uint64_t> published_hits_{0};
+  std::atomic<int> searching_depth_{0};
 
   PlyFrame frames_[MaxPly + 1];
   // The drift tables' keys of each ply's position (eval_drift.hpp), beside

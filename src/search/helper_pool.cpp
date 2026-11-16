@@ -63,6 +63,8 @@ std::size_t HelperPool::resize(std::size_t helpers) {
   helpers_ = std::move(kept);
   searchers_.clear();
   for (const std::unique_ptr<HelperThread>& h : helpers_) searchers_.push_back(h->searcher.get());
+  team_.assign(1, nullptr);  // the main thread's slot, set at each begin_search
+  team_.insert(team_.end(), searchers_.begin(), searchers_.end());
   return helpers_.size();
 }
 
@@ -105,7 +107,7 @@ void HelperPool::helper_loop(HelperThread& h) {
 }
 
 bool HelperPool::begin_search(const Position& root, const SearchSwitches& switches, const SearchStart& start,
-                              const SearchQuota& limits) {
+                              const SearchQuota& limits, Searcher& main) {
   if (helpers_.empty()) return false;
   {
     std::scoped_lock lock(mutex_);
@@ -119,6 +121,11 @@ bool HelperPool::begin_search(const Position& root, const SearchSwitches& switch
     start_.table_kept = start.table_kept;
     start_.helpers = nullptr;  // helpers report nothing, so they add up no one's counts
     start_.helper_count = 0;
+    team_[0] = &main;
+    start_.helper = true;
+    start_.team = team_.data();
+    start_.team_size = team_.size();
+    main.clear_published();  // so no helper reads the last search's depth
     limits_ = SearchQuota{};
     limits_.depth = limits.depth;
     limits_.restrict_to = limits.restrict_to;

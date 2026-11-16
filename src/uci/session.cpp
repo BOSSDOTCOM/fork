@@ -646,7 +646,7 @@ void UciSession::search_main(Position pos, SearchQuota limits, bool infinite) {
       // search the same root; this thread keeps time and its move is played.
       SearchStart plan;
       prepare_start(tt_, searcher_->switches, pos, plan);
-      helping = pool_.begin_search(pos, searcher_->switches, plan, limits);
+      helping = pool_.begin_search(pos, searcher_->switches, plan, limits, *searcher_);
       if (helping) {
         plan.helpers = pool_.searchers();
         plan.helper_count = pool_.helper_count();

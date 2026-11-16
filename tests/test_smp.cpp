@@ -49,7 +49,7 @@ SearchResult pooled_search(TransTable& tt, Searcher& main, HelperPool& pool, Pos
   std::atomic<bool> stop{false};
   SearchStart plan;
   prepare_start(tt, main.switches, pos, plan);
-  if (pool.begin_search(pos, main.switches, plan, limits)) {
+  if (pool.begin_search(pos, main.switches, plan, limits, main)) {
     plan.helpers = pool.searchers();
     plan.helper_count = pool.helper_count();
   }
@@ -133,7 +133,7 @@ TEST_CASE("smp", "end_search stops helpers with no depth limit, and wait_idle re
   Position pos;
   SearchStart plan;
   prepare_start(hash.table, main->switches, pos, plan);
-  CHECK(pool.begin_search(pos, main->switches, plan, SearchQuota{}));  // depth MaxPly - 1: never ends alone
+  CHECK(pool.begin_search(pos, main->switches, plan, SearchQuota{}, *main));  // depth MaxPly - 1: never ends alone
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   const auto t0 = std::chrono::steady_clock::now();
   pool.end_search();
@@ -153,7 +153,7 @@ TEST_CASE("smp", "resize grows, shrinks to none and grows again between searches
   Position pos;
   SearchQuota limits;
   limits.depth = 4;
-  CHECK(!pool.begin_search(pos, main->switches, SearchStart{}, limits));  // no helpers: nothing starts
+  CHECK(!pool.begin_search(pos, main->switches, SearchStart{}, limits, *main));  // no helpers: nothing starts
   for (std::size_t n : {std::size_t{4}, std::size_t{1}, std::size_t{0}, std::size_t{2}}) {
     CHECK_EQ(pool.resize(n), n);
     CHECK_EQ(pool.helper_count(), n);
@@ -161,6 +161,39 @@ TEST_CASE("smp", "resize grows, shrinks to none and grows again between searches
     CHECK(legal(pos, r.best));
     pool.clear_histories();
   }
+}
+
+// Lazy SMP v2's skip rule (use_helper_skip; DESIGN.md §5.6 step 17a): a
+// helper skips each depth that at least half of the team is already
+// searching, never past the depth limit. Fault-checked: with "<" for "<="
+// in the half (a strict majority) the second and sixth cases fail.
+TEST_CASE("smp", "skip rule: a helper skips depths at least half the team is already searching") {
+  const auto next = [](int depth, int limit, std::vector<int> team) {
+    return helper_next_depth(depth, limit, team.size(), [&](std::size_t i) { return team[i]; });
+  };
+  CHECK_EQ(next(5, 60, {4, 4, 4, 4}), 5);  // nobody at 5 yet: search it
+  CHECK_EQ(next(5, 60, {5, 5, 4, 4}), 6);  // half at 5: skip to 6, where nobody is
+  CHECK_EQ(next(5, 60, {7, 6, 6, 4}), 7);  // 3 of 4 at >= 6, 1 at >= 7: 7
+  CHECK_EQ(next(5, 60, {9, 9, 9, 9}), 10);
+  CHECK_EQ(next(5, 8, {9, 9, 9, 9}), 8);  // never past the limit
+  CHECK_EQ(next(3, 60, {3, 0}), 4);        // two threads: the helper stays a depth ahead of the main thread
+  CHECK_EQ(next(1, 60, {0, 0, 0}), 1);     // a new search: all at 0
+}
+
+TEST_CASE("smp", "with the skip rule on, a pooled search plays a legal move and no helper passes the depth limit") {
+  SmpHash hash;
+  auto main = std::make_unique<Searcher>(hash.table);
+  main->switches.use_helper_skip = true;
+  HelperPool pool(hash.table);
+  CHECK_EQ(pool.resize(3), std::size_t{3});
+  Position pos;
+  SearchQuota limits;
+  limits.depth = 10;
+  const SearchResult r = pooled_search(hash.table, *main, pool, pos, limits, nullptr);
+  CHECK(legal(pos, r.best));
+  CHECK_EQ(r.depth, 10);
+  // Every helper reached the depth limit (it never searches past it).
+  for (std::size_t i = 0; i < pool.helper_count(); ++i) CHECK(pool.searchers()[i]->searching_depth() <= 10);
 }
 
 }  // namespace forkeng::test

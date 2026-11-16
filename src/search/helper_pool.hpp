@@ -58,10 +58,12 @@ class HelperPool {
 
   // Starts every helper on `root` with `switches` (the main searcher's), the
   // coordinator's `start` (its ranking; copied) and searchmoves and depth
-  // from `limits` (no time, node or mate limit). False if no helper started
+  // from `limits` (no time, node or mate limit); `main` (the main thread's
+  // searcher) heads the team whose depths the helpers' skip rule reads, and
+  // its published counts are cleared with theirs. False if no helper started
   // (none exist, or no memory for the root's copy): nothing to end then.
   bool begin_search(const Position& root, const SearchSwitches& switches, const SearchStart& start,
-                    const SearchQuota& limits);
+                    const SearchQuota& limits, Searcher& main);
   void end_search() { abort_.store(true, std::memory_order_relaxed); }
   void wait_idle();
 
@@ -81,6 +83,7 @@ class HelperPool {
   TransTable& tt_;
   std::vector<std::unique_ptr<HelperThread>> helpers_;
   std::vector<Searcher*> searchers_;
+  std::vector<const Searcher*> team_;  // the main thread's searcher, then the helpers' (begin_search)
   std::mutex mutex_;
   std::condition_variable wake_;  // a new search, or quit
   std::condition_variable idle_;  // a helper started or finished

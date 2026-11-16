@@ -1446,7 +1446,14 @@ SearchResult Searcher::deliberate(Position& pos, const SearchQuota& limits, cons
   result.best = root_moves_[0].move;
 
   int previous = 0;
-  for (int depth = 1; depth <= std::min(limits.depth, MaxPly - 1); ++depth) {
+  const int depth_limit = std::min(limits.depth, MaxPly - 1);
+  for (int depth = 1; depth <= depth_limit; ++depth) {
+    // Lazy SMP v2 (use_helper_skip): a helper skips the depths at least half
+    // of the team is already searching. Every thread publishes its depth.
+    if (start && start->helper && switches.use_helper_skip && start->team_size > 1)
+      depth = helper_next_depth(depth, depth_limit, start->team_size,
+                                [&](std::size_t i) { return start->team[i]->searching_depth(); });
+    searching_depth_.store(depth, std::memory_order_relaxed);
 #ifdef FORK_SEARCH_STATS
     // X6: the passes and the iteration's nodes (every pass's nodes per root
     // move are reset below, in every build: time management reads them).
