@@ -32,6 +32,7 @@
 #include <optional>
 
 #include "core/position.hpp"
+#include "search/endgame_tables.hpp"
 #include "search/eval_drift.hpp"
 #include "search/lmr_table.hpp"
 #include "search/move_selector.hpp"
@@ -39,6 +40,7 @@
 #include "search/score_bounds.hpp"
 #include "search/time_budget.hpp"
 #include "search/trans_table.hpp"
+#include "tune/params.hpp"
 
 #if defined(FORK_EVAL_NNUE)
 #include "eval/nnue/accumulator.hpp"
@@ -352,6 +354,15 @@ struct SearchSwitches {
   // Tests only (no option): a TT entry cuts only at exactly the depth it was
   // searched to, so a search equals plain minimax (tests/test_search.cpp).
   bool tt_exact_depth = false;
+  // The UCI options SyzygyProbeDepth and SyzygyProbeLimit (DESIGN.md §5.1),
+  // which the session sets between searches. With use_tables, the search
+  // probes a node only at a remaining depth of at least table_probe_depth
+  // (and TableProbeMinDepth, which equals its default in released builds),
+  // and every probe, the root ranking's included, only with at most
+  // table_probe_pieces pieces. The defaults are the behaviour before the
+  // options existed: depth TableProbeMinDepth, every loaded table.
+  int table_probe_depth = TableProbeMinDepth;
+  int table_probe_pieces = LargestTablePieces;
 };
 
 // The move played with the score and depth of the search behind it: those of

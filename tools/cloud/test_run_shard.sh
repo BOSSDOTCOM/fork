@@ -142,5 +142,46 @@ fi
 shard overcpus --test-opts "option.Threads=$((cpus + 1))"
 check "more threads than CPUs: refused" test "$status" = 2
 
+# The factorial round's per-shard rows (DESIGN.md §5.6 step 18; design §3.1, §3.3): --rows FILE gives shard I
+# entry I's options for its test engine alone, recorded with the row and the design's digest; a table of the
+# wrong length, a malformed option, a missing table, or --rows beside --test-opts is refused before fastchess
+# starts.
+d=$(printf '0%.0s' $(seq 64))
+rows_table() {  # file, entries...
+  local f=$1 sep="" e
+  shift
+  { printf '{"design": "%s", "shard_rows": [' "$d"
+    for e in "$@"; do printf '%s%s' "$sep" "$e"; sep=", "; done
+    printf ']}\n'; } >"$f"
+}
+refused_early() {  # out dir, run_shard.sh arguments...: exit 2 and fastchess never started
+  rm -f "$tmp/args"
+  shard "$@"
+  [ "$status" = 2 ] && [ ! -f "$tmp/args" ]
+}
+rows_table "$tmp/rows4.json" '{"row": 3, "opts": "option.UseLmp=false"}' \
+  '{"row": 0, "opts": "option.UseAspiration=false option.UseLmrInCheck=false"}' \
+  '{"row": 2, "opts": "option.UseLmp=false option.UseMateDistance=false"}' '{"row": 1, "opts": "option.UseSeeQuiesce=false"}'
+shard rows --rows "$tmp/rows4.json"
+check "rows: exit 0" test "$status" = 0
+check "rows: shard 1 plays entry 1's options on the test engine, before its Threads" \
+  test "$(awk '$0 == "name=test" {on = 1; next} $0 == "-engine" {on = 0} on' "$tmp/args" | tr '\n' ' ')" = \
+  "option.UseAspiration=false option.UseLmrInCheck=false option.Threads=1 "
+check "rows: the base engine gets none of them" \
+  bash -c "! tr '\n' ' ' <'$tmp/args' | sed 's/.*name=base //' | grep -q 'UseAspiration'"
+check "rows: the meta's row, design and test options" \
+  test "$(meta rows row)|$(meta rows design)|$(meta rows test_opts)" = "0|$d|option.UseAspiration=false option.UseLmrInCheck=false"
+check "rows: the shard is done" test "$(status_of rows)" = done
+check "without --rows: no row or design in the meta" test "$(meta notables row)|$(meta notables design)" = "|"
+check "rows: with --test-opts refused before fastchess" refused_early rowsopts --rows "$tmp/rows4.json" --test-opts "option.UseLmp=false"
+rows_table "$tmp/rows3.json" '{"row": 0, "opts": "option.UseLmp=false"}' '{"row": 1, "opts": "option.UseLmp=false"}' \
+  '{"row": 2, "opts": "option.UseLmp=false"}'
+check "rows: 3 entries for 4 shards refused before fastchess" refused_early rowsshort --rows "$tmp/rows3.json"
+check "rows: the length is named" grep -q "3 entries for 4 shards" "$tmp/rowsshort.txt"
+rows_table "$tmp/rowsbad.json" '{"row": 0, "opts": "option.UseLmp=false"}' '{"row": 1, "opts": "option.UseLmp=false;rm"}' \
+  '{"row": 2, "opts": "option.UseLmp=false"}' '{"row": 3, "opts": "option.UseLmp=false"}'
+check "rows: a malformed option refused before fastchess" refused_early rowsbad --rows "$tmp/rowsbad.json"
+check "rows: a missing table refused before fastchess" refused_early rowsnone --rows "$tmp/no-such-rows.json"
+
 echo "${failures} failure(s)"
 exit $((failures > 0))

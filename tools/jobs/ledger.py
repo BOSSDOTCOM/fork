@@ -17,13 +17,17 @@ The two-try limit (owner, DESIGN.md §6 2026-11-07 decision 2: at most two tries
 class, so an LTC confirmation of an STC pass is not a retry; every kind but custom carries an idea id, and
 each retrain is its own idea). Tries go in $FORK_JOBS/tries.jsonl, apart from the run records:
 
-    ledger.py try IDEA SPRT --kind search|network --tc-class stc|ltc --base SHA --test SHA
+    ledger.py try IDEA SPRT --kind search|network|guard --tc-class stc|ltc --base SHA --test SHA
                   [--owner-override TEXT] [--check]
         a new SPRT name for IDEA at that class is try N; a third (N > TRY_LIMIT) is refused (exit 3) unless
         --owner-override gives the owner's decision, recorded verbatim. An SPRT name already recorded is a
         resume (not counted). --check only answers (exit 0 or 3) and writes nothing. Exit 2: bad arguments.
     ledger.py tries IDEA
         prints "TRY SPRT KIND TC_CLASS BASE TEST [override: TEXT]" per recorded try.
+
+The kind guard (the factorial removal round's combined guard, DESIGN.md §5.6 step 18; design
+docs/research/phase4-designs/factorial-removal-round.md §5.3: "H0 or capped: one second try (the two-try
+rule)") counts like the others.
 """
 import json
 import os
@@ -72,6 +76,8 @@ def add(argv):
 
 
 TRY_LIMIT = 2
+# The kinds a try is recorded for (sprt_run.sh's search, network and guard; fixed and factorial are not tries).
+KINDS = ('search', 'network', 'guard')
 IDEA_OK = re.compile(r'^[a-z0-9][a-z0-9.-]{0,47}$')
 
 
@@ -101,7 +107,7 @@ def record_try(argv):
     kind, tc_class, base, test = (opts.get(k) for k in ('--kind', '--tc-class', '--base', '--test'))
     override = opts.get('--owner-override')
     bad = (not IDEA_OK.match(idea) and f'idea {idea!r} is not [a-z0-9][a-z0-9.-]*'
-           or kind not in ('search', 'network') and f'--kind {kind!r} is not search or network'
+           or kind not in KINDS and f'--kind {kind!r} is not search, network or guard'
            or tc_class not in ('stc', 'ltc') and f'--tc-class {tc_class!r} is not stc or ltc'
            or not (base and test and len(base) == 40 and len(test) == 40) and '--base and --test must be full hashes'
            or override is not None and not override.strip() and "--owner-override needs the owner's decision")

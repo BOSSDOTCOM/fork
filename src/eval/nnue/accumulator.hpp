@@ -193,6 +193,9 @@ class FeatureStack {
   }
   // The evaluation at `ply` of `pos` (the position the stack has reached).
   int evaluate(const NetFile& net, int ply, const Position& pos);
+  // The sums at `ply`, current for both perspectives right after evaluate at
+  // `ply` (tests compare them with a refresh).
+  const Accumulator& accumulator_at(int ply) const { return entries_[ply].acc; }
 #ifdef FORK_SEARCH_STATS
   const FeatureStackTally& tally() const { return tally_; }
   void set_tally(const FeatureStackTally& t) { tally_ = t; }  // X10: undo a side search's counts

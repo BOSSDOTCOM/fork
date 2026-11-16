@@ -198,6 +198,8 @@ TEST_CASE("uci_protocol", "handshake: id name, id author, uciok") {
       "option name Threads type spin default 1 min 1 max 4096",
       "option name Move Overhead type spin default 100 min 0 max 10000",
       "option name SyzygyPath type string default <empty>",
+      "option name SyzygyProbeDepth type spin default 1 min 1 max 250",
+      "option name SyzygyProbeLimit type spin default 7 min 0 max 7",
   };
 #ifdef FORK_TUNE
   // Tuning builds also declare every search switch as a check option and every
@@ -931,6 +933,38 @@ TEST_CASE("uci_options", "SyzygyPath counts table files; a missing directory is 
   fs::remove_all(dir);
 }
 
+// SyzygyProbeDepth and SyzygyProbeLimit reach the search (owner, 2026-11-16;
+// their effect on probing is tested in test_endgame_tables.cpp). KQvKP with
+// Black to move, a loss (test_endgame_tables.cpp's KqkpMated, from the
+// lichess tablebase API): by default the root is ranked and the search
+// probes; a limit of 2 pieces probes nothing; a probe depth of 250, more
+// than any search reaches, leaves the root ranking's one probe.
+TEST_CASE("uci_options", "SyzygyProbeDepth and SyzygyProbeLimit change the search's tbhits") {
+  Gui g;
+  g.send(std::string("setoption name SyzygyPath value ") + FORK_SYZYGY345_DIR);
+  CHECK(g.sync());
+  const auto tbhits = [&g](const char* setting) {
+    if (*setting != '\0') g.send(setting);
+    g.send("ucinewgame");
+    g.send("position fen 8/2p5/8/8/2Q5/k7/2K5/8 b - - 0 1");
+    const std::size_t mark = g.cursor;
+    g.send("go depth 3");
+    CHECK(g.next("bestmove").has_value());
+    std::optional<std::int64_t> hits;
+    for (const std::string& line : g.texts(mark))
+      if (starts_with(line, "info depth ")) hits = info_number(line, "tbhits");
+    return hits.value_or(-1);
+  };
+  const std::int64_t by_default = tbhits("");
+  CHECK_MSG(by_default > 1, "tbhits " << by_default);
+  CHECK_EQ(tbhits("setoption name SyzygyProbeLimit value 2"), std::int64_t{0});
+  CHECK_EQ(tbhits("setoption name SyzygyProbeLimit value 7"), by_default);
+  CHECK_EQ(tbhits("setoption name SyzygyProbeDepth value 250"), std::int64_t{1});
+  CHECK_EQ(tbhits("setoption name SyzygyProbeDepth value 1"), by_default);
+  g.check_transcript();
+  g.quit();
+}
+
 TEST_CASE("uci_options", "LogFile records input and output with timestamps") {
   namespace fs = std::filesystem;
   const fs::path log = fs::temp_directory_path() / "fork-uci-test-log.txt";
@@ -1110,6 +1144,7 @@ TEST_CASE("uci_options", "boundaries: min, max and one past each spin option") {
     std::int64_t min, max;
   };
   for (const OptionRange& b : {OptionRange{"Threads", 1, 4096}, OptionRange{"Move Overhead", 0, 10000},
+                               OptionRange{"SyzygyProbeDepth", 1, 250}, OptionRange{"SyzygyProbeLimit", 0, 7},
                                OptionRange{"Hash", 1, 4194304}}) {
     const std::string set = std::string("setoption name ") + b.name + " value ";
     for (std::int64_t v : {b.min, b.max}) {
