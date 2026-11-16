@@ -90,7 +90,7 @@
   X(FollowWeight, 4, 0, 16, 1)                 \
   X(TakeWeight, 4, 0, 16, 1)                   \
   X(DirectCheckBonus, 5000, 2500, 10000, 375)  \
-  X(KingZoneOrderBonus, 2500, 1250, 5000, 188) \
+  X(KingZoneOrderBonus, 1250, 1250, 5000, 188) \
   X(StaleDepthPerSearch, 2, 1, 4, 1)           \
   X(AssumedMovesLeft, 30, 15, 60, 2)           \
   X(MaxMovesToGo, 40, 20, 80, 3)               \

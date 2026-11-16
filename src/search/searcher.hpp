@@ -289,7 +289,7 @@ struct SearchQuota {
 //   square next to the enemy king from there adds KingZoneOrderBonus to its
 //   ordering score (MoveSelector::start_main, attacks_king_zone); evasions,
 //   the root's initial order, the quiescence search and the history skip's
-//   score are unchanged. Off until its SPRT.
+//   score are unchanged. On in this SPRT test commit.
 #define FORK_SEARCH_SWITCHES(X)                          \
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
@@ -344,7 +344,7 @@ struct SearchQuota {
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
   X(use_helper_skip, UseHelperSkip, false)               \
-  X(use_king_zone_order, UseKingZoneOrder, false)
+  X(use_king_zone_order, UseKingZoneOrder, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;
