@@ -13,6 +13,16 @@
 #       [--concurrency C] [--base-opts "option.X=1 ..."] [--test-opts "..."] \
 #       [--checkpoint "COMMAND"] [--syzygy DIR] [--meta KEY=VALUE ...]
 #
+# Search threads (Lazy SMP, DESIGN.md §5.6 step 17a; owner, 2026-11-15): an
+# engine plays with option.Threads=N when its --base-opts or --test-opts say
+# so, else 1, each set on that engine alone. With more than one thread on
+# either side the games at once never put more search threads on the machine
+# than it has CPUs (nproc): --concurrency defaults to nproc / the larger
+# thread count (at least 1; ponder is off, so one engine of a game searches
+# at a time), and a --concurrency or a thread count that would exceed nproc
+# is refused. One-thread games keep the default of nproc - 1. The meta
+# records base_threads and test_threads.
+#
 # --syzygy DIR gives both engines the Syzygy 3-4-5 tables in DIR
 # (option.SyzygyPath; tools/cloud/fetch_tables.sh, 145 + 145 files); the
 # shard meta records tables=3-4-5, or tables=off without it.
@@ -35,7 +45,7 @@
 # red), 0 for "done" and "interrupted" (the merge counts finished pairs).
 set -uo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-hash=16 stage=0 conc=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 )) base_opts="" test_opts="" checkpoint="" syzygy="" meta=()
+hash=16 stage=0 conc="" base_opts="" test_opts="" checkpoint="" syzygy="" meta=()
 while [ $# -gt 0 ]; do
   case $1 in
     --base) base=$2 ;; --test) test=$2 ;; --fastchess) fastchess=$2 ;; --book) book=$2 ;;
@@ -50,6 +60,28 @@ done
 for v in base test fastchess book shard shards games tc out; do
   [ -n "${!v:-}" ] || { echo "run_shard.sh: --$v is required" >&2; exit 2; }
 done
+# Each engine's search threads: the last option.Threads=N in its options, else 1.
+threads_in() {  # options -> N
+  local t
+  t=$(printf '%s\n' $1 | sed -n 's/^option\.Threads=\([0-9][0-9]*\)$/\1/p' | tail -1)
+  echo "${t:-1}"
+}
+base_threads=$(threads_in "$base_opts") test_threads=$(threads_in "$test_opts")
+threads=$(( base_threads > test_threads ? base_threads : test_threads ))
+cpus=$(nproc)
+if [ "$threads" -gt 1 ]; then
+  [ "$threads" -le "$cpus" ] ||
+    { echo "run_shard.sh: $threads search threads per engine on $cpus CPUs" >&2; exit 2; }
+  [ -n "$conc" ] || conc=$(( cpus / threads ))
+  [ $(( conc * threads )) -le "$cpus" ] ||
+    { echo "run_shard.sh: --concurrency $conc x $threads search threads exceeds the $cpus CPUs" >&2; exit 2; }
+fi
+[ -n "$conc" ] || conc=$(( cpus > 1 ? cpus - 1 : 1 ))
+# Threads on each engine alone (an -each Threads would set the other's too);
+# the meta keeps the options as given (sprt_merge.py compares them).
+base_engine_opts=$base_opts test_engine_opts=$test_opts
+case " $base_opts " in *" option.Threads="*) ;; *) base_engine_opts="${base_opts:+$base_opts }option.Threads=1" ;; esac
+case " $test_opts " in *" option.Threads="*) ;; *) test_engine_opts="${test_opts:+$test_opts }option.Threads=1" ;; esac
 # Absolute paths: fastchess runs inside the output folder.
 for v in base test fastchess book; do
   [ -e "${!v}" ] || { echo "run_shard.sh: --$v ${!v} does not exist" >&2; exit 2; }
@@ -73,6 +105,7 @@ meta+=(--meta "base_build=$(sha256sum "$base" | cut -c1-16)" --meta "test_build=
        --meta "tc=$tc" --meta "hash=$hash" --meta "base_opts=$base_opts" --meta "test_opts=$test_opts"
        --meta "shard=$shard" --meta "shards=$shards" --meta "stage=$stage" --meta "opening_start=$start" --meta "opening_end=$((start + rounds - 1))"
        --meta "rounds=$rounds" --meta "concurrency=$conc" --meta "tables=$tables"
+       --meta "base_threads=$base_threads" --meta "test_threads=$test_threads"
        --meta "book=$(basename "$book")" --meta "book_seed=${book_seed:-none}"
        --meta "book_sha=$(sha256sum "$book" | cut -d' ' -f1)")
 
@@ -83,8 +116,8 @@ snap() {  # status
 
 cd "$out" || exit 1  # fastchess writes its config.json autosave here
 # shellcheck disable=SC2086
-"$fastchess" -engine cmd="$test" name=test $test_opts -engine cmd="$base" name=base $base_opts \
-  -each tc="$tc" option.Hash="$hash" option.Threads=1 option.CalibratedScore=false "${each_tb[@]}" \
+"$fastchess" -engine cmd="$test" name=test $test_engine_opts -engine cmd="$base" name=base $base_engine_opts \
+  -each tc="$tc" option.Hash="$hash" option.CalibratedScore=false "${each_tb[@]}" \
   -openings file="$book" format=epd order=sequential start="$start" \
   -repeat -rounds "$rounds" -concurrency "$conc" \
   -resign movecount=5 score=1000 twosided=true -draw movenumber=40 movecount=10 score=10 \

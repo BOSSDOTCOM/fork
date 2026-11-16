@@ -38,6 +38,7 @@ on:
       test_opts: {description: "fastchess options for the test engine (e.g. option.UseTables=false)", required: false, default: ""}
       base_opts: {description: "fastchess options for the base engine", required: false, default: ""}
       tables: {description: "Syzygy 3-4-5 for both engines: on or off", required: true, default: "on"}
+      concurrency: {description: "Games at once per shard (empty: run_shard.sh's default; with option.Threads above 1, the runner's CPUs / the threads, never over the CPUs)", required: false, default: ""}
       name: {description: "The SPRT's name (the driver's NAME), in the run title only", required: false, default: ""}
 
 permissions:
@@ -187,6 +188,7 @@ jobs:
           HASH_MB: ${{ inputs.hash }}
           BASE_OPTS: ${{ inputs.base_opts }}
           TEST_OPTS: ${{ inputs.test_opts }}
+          CONCURRENCY: ${{ inputs.concurrency }}
           SYZYGY: ${{ inputs.tables == 'on' && 'syzygy-345' || '' }}
           BASE_SHA: ${{ needs.build.outputs.base_sha }}
           TEST_SHA: ${{ needs.build.outputs.test_sha }}
@@ -196,6 +198,7 @@ jobs:
             --fastchess "$RUNNER_TEMP/tools/fastchess" --book "$RUNNER_TEMP/tools/UHO_Lichess_4852_v1.shuffled-20261027.epd" \
             --shard "$SHARD" --shards "$SHARDS" --stage "$STAGE" --games "$GAMES" --tc "$TC" --hash "$HASH_MB" \
             --base-opts "$BASE_OPTS" --test-opts "$TEST_OPTS" --syzygy "$SYZYGY" --out out \
+            ${CONCURRENCY:+--concurrency "$CONCURRENCY"} \
             --meta "base=$BASE_SHA" --meta "test=$TEST_SHA" --meta runner=github \
             --meta "arch=$(sed -n 's/^test_arch=//p' engines/meta.env)"
       - uses: actions/upload-artifact@v4

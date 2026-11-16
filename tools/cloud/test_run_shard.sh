@@ -118,5 +118,29 @@ PATH="$tmp/bin-nofinal:$PATH" FAKE_FC=slow shard nofinal
 check "a failed final snapshot: exit 1, result still running" test "$status-$(status_of nofinal)" = 1-running
 check "a failed final snapshot is named" grep -q "the final snapshot was not written (result.json status 'running')" "$tmp/nofinal.txt"
 
+# Lazy SMP (owner, 2026-11-15): each engine's own Threads, never an -each Threads; the games at once
+# never put more search threads than CPUs on the machine.
+cpus=$(nproc)
+shard onethread
+check "one thread: Threads=1 on each engine, none in -each" \
+  bash -c "[ \$(grep -cx 'option.Threads=1' '$tmp/args') = 2 ] && ! grep -q '^tc=.*Threads' '$tmp/args'"
+check "one thread: the meta's thread counts" test "$(meta onethread base_threads)-$(meta onethread test_threads)" = 1-1
+check "one thread: the meta's options as given" test "$(meta onethread base_opts)|$(meta onethread test_opts)" = "|"
+if [ "$cpus" -ge 2 ]; then
+  FAKE_ARGS="$tmp/args" FORK_SHARD_INTERVAL=1 bash "$here/run_shard.sh" --base "$tmp/base" --test "$tmp/test" \
+    --fastchess "$tmp/fastchess" --book "$tmp/book.epd" --shard 1 --shards 4 --games 10 --tc 8+0.08 \
+    --out "$tmp/twothreads" --test-opts "option.Threads=2" >"$tmp/twothreads.txt" 2>&1
+  check "two threads: exit 0" test $? = 0
+  check "two threads: the test engine's Threads=2, the base's 1" \
+    bash -c "grep -qx 'option.Threads=2' '$tmp/args' && [ \$(grep -cx 'option.Threads=1' '$tmp/args') = 1 ]"
+  check "two threads: concurrency nproc / 2" test "$(meta twothreads concurrency)" = $((cpus / 2))
+  check "two threads: the meta's thread counts" test "$(meta twothreads base_threads)-$(meta twothreads test_threads)" = 1-2
+  check "two threads: the meta's options as given" test "$(meta twothreads base_opts)|$(meta twothreads test_opts)" = "|option.Threads=2"
+  shard toomany --test-opts "option.Threads=2" --concurrency "$cpus"
+  check "two threads: a concurrency over the CPUs is refused" test "$status" = 2
+fi
+shard overcpus --test-opts "option.Threads=$((cpus + 1))"
+check "more threads than CPUs: refused" test "$status" = 2
+
 echo "${failures} failure(s)"
 exit $((failures > 0))

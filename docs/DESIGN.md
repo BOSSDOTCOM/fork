@@ -3990,8 +3990,10 @@ refinement is a later, separately measured item.
   GitHub runners (4 vCPUs; the PC is busy with data generation): nps and time to depth at 1, 2 and 4
   threads over the bench positions, several runs each; (2) 2-vs-1 and 4-vs-2 thread matches at STC
   and then LTC as fixed-game Elo estimates, with the shard concurrency set so that no runner has more
-  search threads than vCPUs (sprt.yml needs a concurrency input: one 4-thread game or two 2-thread
-  games per runner); (3) the thread-versus-time check (2 threads at T against 1 thread at 2T); the
+  search threads than vCPUs (built 2026-11-15: tools/cloud/run_shard.sh sets each engine's own
+  Threads from its options, defaults the games at once to the CPUs / the larger thread count when
+  either side has more than one thread, and refuses a concurrency or thread count over the CPUs;
+  sprt.yml has an optional `concurrency` input; one-thread games are as before); (3) the thread-versus-time check (2 threads at T against 1 thread at 2T); the
   EPYC-class curve (16 to 512 threads) on rented hardware with the TCEC dry run.
 
 ### 5.7 Phase 4 step 1: measurement instrumentation (owner-approved 2026-11-07)
