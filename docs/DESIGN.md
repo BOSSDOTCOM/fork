@@ -547,6 +547,21 @@ preset in §2 (10 presets plus PGO for each compiler), on both Linux (WSL2,
   suspicion 4, A8 S-A8-1; B-2's storing of table results at full depth,
   reverted 2026-10-28, would widen it). Settle with a constructed 5-man two-path test: the same
   position reached once right after a capture and once 90 plies later.
+  **Built 2026-11-16 as `UseTtHalfmoveGuard`** (owner: "TCEC hazards now,
+  before the removal round"; on in sprt/tt-halfmove-guard, the test side
+  of its non-regression SPRT [-3, 0], adopted on a pass): a TT score settles no node (main search or
+  quiescence) when the node's clock plus the plies the cutoff stands in for
+  (the node's depth; in quiescence 1 in check, else 0, as captures and
+  promotions reset the clock) reaches 100, unless the rule cannot have made
+  it wrong. The rule only pulls a result toward the draw, so lower bounds at
+  or below 0, upper bounds at or above 0, an exact 0, and mates that fall on
+  or before the rule's last ply (clock plus mate distance at most 100) still
+  cut; table results (no mates) are guarded. The TT move still orders; no
+  TT field added; no tuned constant (100 is the rule's own limit). Not
+  covered: an entry stored at a higher clock than the visit's (too drawish,
+  never a missed draw), and the pruning eval's TT refinement. Test: `search`
+  suite, "the TT halfmove guard" (K+R v K at clocks 0-99, fault-checked both
+  ways).
 - **Improvement pass** (after Phase 8; owner, 2026-10-26). The layers again,
   in dependency order: network, search, time management, threads,
   tournament behavior, TCEC-conditions validation. It repeats in rounds,
