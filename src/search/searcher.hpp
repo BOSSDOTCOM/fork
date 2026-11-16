@@ -345,7 +345,7 @@ struct SearchQuota {
   X(use_deep_time_depth, UseDeepTimeDepth, true)         \
   X(use_fastest_table_win, UseFastestTableWin, true)     \
   X(use_helper_skip, UseHelperSkip, false)               \
-  X(use_time_guards, UseTimeGuards, false)
+  X(use_time_guards, UseTimeGuards, true)
 
 struct SearchSwitches {
 #define FORK_SWITCH_MEMBER(member, option, value) bool member = value;

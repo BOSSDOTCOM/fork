@@ -2002,7 +2002,7 @@ TEST_CASE("time_budget",
   CHECK(soft_scale_permille(StabilityAndShare, {40, 9, 500, 0}, true) > 4000);
   CHECK(soft_scale_permille(StabilityAndShare, {40, 9, 500, 0}, true, true) < 4000);
   CHECK(soft_scale_permille(StabilityAndShare, {27, 8, 500, 0}, true, true) > 4000);
-  CHECK(!SearchSwitches{}.use_time_guards);  // off until its SPRT
+  CHECK(SearchSwitches{}.use_time_guards);  // on: the test side of its SPRT
 }
 
 // L1's second guard (plan_time's move_guard): one move takes at most its
