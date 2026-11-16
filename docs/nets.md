@@ -223,6 +223,29 @@ Owner, 2026-11-12 (about 4:40 PM, 5:00 PM and 5:50 PM EST; DESIGN.md decisions l
 | TCEC build path | Checked 2026-11-14 on the promoting commit (1ce1a70): `./update.sh` (Release, LTO, `build/tcec/fork`) with FORK_ARCH=x86-64-v3 and x86-64-v4 for each compiler: on Windows (Git Bash) with LLVM-MinGW clang 23.1.3 and WinLibs gcc 16.2.0, and in WSL Ubuntu 22.04 on a clean clone with TCEC's compilers gcc 11.4.0, g++-12 (12.3.0), clang 16.0.6 and clang 19.1.7: all 12 binaries bench 5,205,904 / dfe99ebe03b0972d and perftbench equal to tests/perft_bench.ref, netcheck 0 mismatches on tests/nnue/r3kr1.parity, and scripts/uci-smoke.sh 5 of 5 starts. The labeller's build path (a clang PGO build of fork and fork_datagen for x86-64-v3, cmake/pgo.cmake, clang 19.1.7 in WSL) benches the same and its fork_datagen labels with r3kr1 (40 games, 4,094 positions; tools/datagen/verify_games.py: ok). The nps of these runs were taken on the shared, busy machine and are not a speed measurement |
 | Status | **The default network since 2026-11-14** (owner's order, about 7:20 PM EST, after the STC H1). The labeller of new data from the next part boundary on, pending: generation 4's part g4d had already started on r8ceplo2 (7:59 PM EST, that day's switch), so by the one-switch-per-day rule the local data generation switches to r3kr1 at the next part after g4d, not before 2026-11-15, and the cloud VM at its next run (from a fresh build of the promoting commit; whether that run goes straight to r3kr1 or first to r8ceplo2 is the coordinator's call); no running generator is switched (DESIGN.md §5.3, labeller policy; §6, the decisions log) |
 
+## Idea 84's helper nets: r8ceplo2kr4 and r3pp1kr4-s90 (experiment branches only, 2026-11-15)
+
+Not trained: two of Fork's own architecture-8 nets carried to architecture 9 (r3kr1's, H512+PP) so that a
+build can embed one beside r3kr1 as the helper threads' network (docs/ideas.md item 84, the owner's plan of
+2026-11-15, steps 1-3; CMake FORK_HELPER_NET, branch exp/i84-helper-net). They live on the experiment branches
+only (exp/i84-helper-net and the two match branches, exp/i84-h-r8ceplo2 and exp/i84-h-r3pp1), not on phase-4.
+
+| Item | r8ceplo2kr4 | r3pp1kr4-s90 |
+|---|---|---|
+| File | `nets/r8ceplo2kr4.fnet`, 3,785,952 bytes | `nets/r3pp1kr4-s90.fnet`, 3,785,952 bytes |
+| Fork checksum (header, of the payload) | 1dd169031f279226 | 3297846b1a36987e |
+| SHA-256 of the file | 0578efed68cbfd8a57dcf1d34501e02e7237bd653177607efc47af800577b81b | bc1abf0867a3b8b4455b8914ea7de62f2ce5d0c52e4f8fa2b410c190ca4c7378 |
+| Source net | r8ceplo2 (`nets/r8ceplo2.fnet`, architecture 8, S512+PP; its entry above) | r3pp1, r3kr1's same-recipe S512+PP control (branch bake/r3-pp1; architecture 8) |
+| Step | tools/nnue/extend_weights.py --arch h512pp: the piece rows copied into each of the four king regions (the lossless step that made r8brft1kr4 from r8brft1) | the same, then the header's S set from its own 89 to the matched 90 (a header edit; the checksum covers the payload only, so it is unchanged) |
+| Header | version 2, architecture 9, 3,680 inputs, 512 hidden, QA 255, QB 64, 8 buckets, **S 87** (its own) | the same with **S 90** |
+| Score scale (step 2, tools/nnue/match_scale.py, r3kr1 the control, 4,000 held-out positions) | matched S 87 = its own; mean abs eval 230.06 against r3kr1's 230.65 (-0.26%, within the 2% pass line) | matched S 90 (its own 89); at S 90 mean abs eval 231.5 against 230.65 (+0.37%, within 2%) |
+| Bench check (step 1) | equal to r8ceplo2's in an architecture-9 build, per the preparing session (not re-run here) | equal to r3pp1's, per the preparing session (not re-run here) |
+
+The header fields, sizes and checksums above were read from the files with tools/nnue/netformat.py
+(`header_fields`, the checksum at byte 40) and `sha256sum`; the score-scale figures are the preparing session's
+match_scale.py output. The calibration-agreement gate (step 2's second gate) is recorded with the matches, not
+here.
+
 ## The bake-off entries in CI (2026-10-31)
 
 Every round-2 architecture is built with its entry's network and checked
