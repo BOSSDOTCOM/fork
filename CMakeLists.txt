@@ -575,7 +575,16 @@ if(FORK_BUILD_TESTS)
       "KBBvK.rtbz|3-4-5-dtz|d3786ba13d73b1ed61b8be4fd301ceed56b9af5e7c4fbf4a252ef77d2ea3d3db"
       "KQvKP.rtbz|3-4-5-dtz|faedb2db23be6619a57cd21c1291582bba9ddae30c5a394f5d4a7ab834a3940f"
       "KQvKR.rtbw|3-4-5-wdl|8cdbe3c8e098037875de5854c656f8afeadb8327c85b5b7b1cac81719afd3e2c"
-      "KQvKR.rtbz|3-4-5-dtz|0c15a2aaa3bdef39da4c26932006b5d38b55b8e3ad13e8a44815d63f84738618")
+      "KQvKR.rtbz|3-4-5-dtz|0c15a2aaa3bdef39da4c26932006b5d38b55b8e3ad13e8a44815d63f84738618"
+      # The endings the suite's KQvKP starts reach by the defender's other promotions (the
+      # suite's reachability case), from the same list (as copied into
+      # tools/cloud/syzygy-345.sha256), downloaded and checked 2026-11-17: 397,856 bytes in all.
+      "KQvKN.rtbw|3-4-5-wdl|ba07bd47c6eaa20904b595f43e171c6fc70fcc056cb33696fe12ed254c546100"
+      "KQvKN.rtbz|3-4-5-dtz|0e99385bbd903975f8511751379079aa3b6663dd093f43b9ac951a97bd938371"
+      "KQvKB.rtbw|3-4-5-wdl|0c18bbcaec0e7c161d56392ff57a39258dd93acd0321e3bbb32f7c05636abeac"
+      "KQvKB.rtbz|3-4-5-dtz|a63befd64dbd1aab4e8b290da558fa1ccae21d7aebad81966a7cdd6ac8432554"
+      "KQvKQ.rtbw|3-4-5-wdl|571a85d86e635e48567997ea648fd1e90dde39c9b413b2fe968f5e7faeacfbb0"
+      "KQvKQ.rtbz|3-4-5-dtz|98327247ba50c403199faec4df4a5f21e333c5c51b6ea2649ef9fd71264f8344")
     string(REPLACE "|" ";" parts "${spec}")
     list(GET parts 0 tb_name)
     list(GET parts 1 tb_dir)

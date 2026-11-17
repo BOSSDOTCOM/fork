@@ -24,7 +24,12 @@
 // Games: each side has its own searcher and TT (2 MB, kept for the whole
 // game, as in a real game), every move a fixed node budget, so the games are
 // deterministic and the same on every preset (bench parity). The defender
-// always uses the tables. Two variants:
+// always uses the tables, so every ending a start can reach by captures and
+// promotions must have its tables (WDL and DTZ) in the pinned set: the first
+// case checks that, by material and by probing every capture or pawn move in
+// the first two plies (until 2026-11-17 the set lacked KQvKN, KQvKB and
+// KQvKQ, which the KQvKP far start's defender reaches by promoting, d1=N
+// among them). Two variants of games:
 // - Without the attacker's tables (use_tables off, so the search and the
 //   evaluation must convert on their own): the endings Fork converts at the
 //   budget, KQvK, KRvK and KQvKP, must end in mate, against a lone king
@@ -67,6 +72,17 @@
 // (mate on the 50th move), the three KRvK starts and KQvK typical.
 // Run time: 13 s in clang-release, 35 s in gcc-debug (2026-11-15), so a fast
 // test; both builds played the same games, move for move.
+// Re-measured with KQvKN, KQvKB and KQvKQ added (2026-11-17, phase-4 at
+// 7ee56d5, default net r3kr1, clang-release, the suite's own budgets only):
+// - without the attacker's tables (100k): KQvK far 13, centre 9, typical 7
+//   moves (fastest 10, 9, 6); KRvK 16, 16, 11 (16, 16, 10); KQvKP far 30
+//   (22 without the three tables), centre 12, typical 8;
+// - with them (20k): KQvK 9, 9, 6; KRvK 15, 13, 9; KBBvK 13, 16, 13; KBNvK
+//   29, 31, 20; KQvKP 20, 9, 8; KQvKR 27, 30, 9 moves: all the same as
+//   without the three tables (KBBvK, KBNvK and KQvKR as on 2026-11-15).
+// Without the three tables the reachability case fails (KQvKN, KQvKB, KQvKQ
+// missing; Fathom answers none of the far start's d1=Q, d1=B, d1=N
+// positions) and the games still pass. Run time 10 s in clang-release.
 //
 // Fault injection (2026-11-15, each reverted): the root ranking by the tables
 // switched off fails 6 starts of the second variant (KBBvK and KBNvK reach
@@ -75,12 +91,16 @@
 // scores that ignore the distance, and TT mate scores stored from the root
 // instead of the node, both passed: in these games a mate is found only a
 // few moves before it is played, so the eval and the tables steer the rest.
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <memory>
+#include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "core/movegen.hpp"
@@ -252,7 +272,105 @@ void run_suite(std::uint64_t nodes, bool attacker_tables, int margin_moves, bool
 
 bool every_start(const MateStart&) { return true; }
 
+// An ending's key, the same whichever side a table's file name lists first
+// and in whatever order it lists a side's pieces.
+std::string ending_key(std::string a, std::string b) {
+  std::sort(a.begin(), a.end());
+  std::sort(b.begin(), b.end());
+  if (b < a) std::swap(a, b);
+  return a + 'v' + b;
+}
+
+// The keys of the files with extension `ext` (".rtbw", ".rtbz") in the
+// tables' directory.
+std::set<std::string> table_keys(const std::string& ext) {
+  std::set<std::string> keys;
+  for (const auto& entry : std::filesystem::directory_iterator(tables_dir())) {
+    if (entry.path().extension() != ext) continue;
+    const std::string stem = entry.path().stem().string();
+    const std::size_t v = stem.find('v');
+    if (v != std::string::npos) keys.insert(ending_key(stem.substr(0, v), stem.substr(v + 1)));
+  }
+  return keys;
+}
+
+// Every ending reachable from `a` against `b` by captures (any piece but a
+// king can be taken, by the other king if by nothing else) and promotions (a
+// pawn to a queen, rook, bishop or knight), repeated, into `out`.
+void reachable_endings(const std::string& a, const std::string& b, std::set<std::string>& out) {
+  if (!out.insert(ending_key(a, b)).second) return;
+  for (int side = 0; side < 2; ++side) {
+    const std::string& mine = side == 0 ? a : b;
+    const std::string& theirs = side == 0 ? b : a;
+    for (std::size_t i = 0; i < mine.size(); ++i) {
+      if (mine[i] == 'K') continue;
+      std::string fewer = mine;
+      fewer.erase(i, 1);
+      reachable_endings(fewer, theirs, out);
+      if (mine[i] != 'P') continue;
+      for (const char promo : {'Q', 'R', 'B', 'N'}) {
+        std::string promoted = mine;
+        promoted[i] = promo;
+        reachable_endings(promoted, theirs, out);
+      }
+    }
+  }
+}
+
+// Fathom answers `pos`, reached from start `s` by `line`, if a capture or a
+// pawn move made it (the only positions the search probes: a zero fifty-move
+// count).
+void check_probed(const Position& pos, const MateStart& s, const std::string& line) {
+  if (pos.halfmove_clock() != 0 || popcount(pos.pieces()) <= 2) return;
+  CHECK_MSG(probe_table_wdl(pos).has_value(),
+            s.ending << ' ' << s.label << " after " << line << ": no table answers " << pos.fen());
+}
+
 }  // namespace
+
+// Both sides use the tables (the header), so every ending a game can reach
+// needs them; without one, the search there has no answer. From the KQvKP far
+// start the defender under-promoted (d1=N) into KQvKN, which the pinned set
+// lacked until 2026-11-17.
+TEST_CASE("elementary_mates", "every ending a start can reach has its WDL and DTZ tables") {
+  std::set<std::string> reach;
+  for (const MateStart& s : Starts) {
+    const std::string ending = s.ending;
+    const std::size_t v = ending.find('v');
+    reachable_endings(ending.substr(0, v), ending.substr(v + 1), reach);
+  }
+  const std::set<std::string> wdl = table_keys(".rtbw"), dtz = table_keys(".rtbz");
+  for (const std::string& key : reach) {
+    if (key == "KvK") continue;  // two kings: a draw, no table
+    CHECK_MSG(wdl.contains(key), key << ": no .rtbw table in " << tables_dir());
+    CHECK_MSG(dtz.contains(key), key << ": no .rtbz table in " << tables_dir());
+  }
+  // The same through Fathom, on real positions: every capture or pawn move in
+  // the first two plies from every start (the far KQvKP start's promotions
+  // among them) reaches a position the tables answer.
+  CHECK(load_endgame_tables(tables_dir()).find("pieces") != std::string::npos);
+  for (const MateStart& s : Starts) {
+    Position pos;
+    CHECK(pos.set_fen(s.fen));
+    MoveList first;
+    generate<GenMode::Legal>(pos, first);
+    for (const Move m1 : first) {
+      const std::string line1 = pos.move_to_uci(m1);
+      pos.make(m1);
+      check_probed(pos, s, line1);
+      MoveList second;
+      generate<GenMode::Legal>(pos, second);
+      for (const Move m2 : second) {
+        const std::string line2 = line1 + ' ' + pos.move_to_uci(m2);
+        pos.make(m2);
+        check_probed(pos, s, line2);
+        pos.unmake(m2);
+      }
+      pos.unmake(m1);
+    }
+  }
+  load_endgame_tables("");
+}
 
 TEST_CASE("elementary_mates", "without its tables the attacker mates in KQvK, KRvK and KQvKP") {
   run_suite(NoTableNodes, false, MarginMoves, converts_without_tables);
