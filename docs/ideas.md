@@ -3499,6 +3499,32 @@ proposal are placeholders, screened before use.
 - **idea:** one-sided targets from the root-move bounds a saved search already proves (a TreeStrap-style use of
   stored searches); needs a datagen sidecar.
 - **status:** **parked** (owner, 2026-11-14).
+- **2026-11-17, ML frontier pipeline, 2026-11-16 (its idea 2, "use the inside of every label search, not only its
+  top"; moved to the post-Phase-4 backlog by the owner's order of 2026-11-17):**
+  - **core change:** take positions deep inside each 20,000-node label search, not only the root's alternatives
+    (whose bounds this entry's note calls weak), with all three kinds of result: exact values trained by ordinary
+    error, proven "at least" / "at most" bounds by a penalty only when the network is on the wrong side. Kept only:
+    inner positions with at least five levels of search left, from sub-searches that finished and were not ended by
+    the network's own score, with the correction tables switched off. The record format has no room: a side file.
+    Premise in Fork's own data: of 5,433 sampled sites where the search used the network's score, 18.6% had the
+    score and a deep search on opposite sides of the limit that mattered (DESIGN.md, crucial-point ground truth,
+    2026-11-07).
+  - **pre-registered test (proposal §2 idea 2):** first, the share of sampled inner positions where today's network
+    is on the wrong side of the stored limit: **stop below 10%**. Then a 20-million-position mini-part with the side
+    file (about 3 desktop-hours) and a short fine-tune with and without the extra records, two seeds (about 0.75
+    GPU-hours); read the wrong-prune rate on positions that were not in the training searches: **stop if it moves by
+    less than 3%**. Then a full retrain, two arms, two seeds, two fixed-node screens per arm, 3,200 games pooled:
+    **killed if the pooled result is below +4 Elo**.
+  - **cost (proposal's estimate):** to the kill point about 3 desktop-hours, about 5.2 GPU-hours, 80 lane-minutes.
+    Proposal's probability of a measurable gain: 20% (estimate). Its §3 ranks it second of "three to bet on",
+    **gated by idea 210** (which says first whether the route is worth the side file).
+  - **prior art:** TreeStrap (Veness, Silver, Uther and Blair, "Bootstrapping from Game Tree Search", NIPS 2009)
+    and TDLeaf(lambda) (Baxter, Tridgell and Weaver); the pipeline's literature check rated it "known" (citations
+    UNVERIFIED, not opened). **ORIGINALITY.md must credit it if this is ever built.**
+  - **source:** ML frontier pipeline, 2026-11-16 (proposal `~/.claude/plans/fork-ml-frontier.md`, untracked, §2
+    idea 2 and §3; every probability and cost marked "estimate" there is the proposal's judgement, not a
+    measurement).
+  - **status:** post-Phase-4 backlog (owner, 2026-11-17), after idea 210; not started.
 
 ### 182. Move-delta rows (proposal idea 8)
 - **idea:** one precomputed row per (piece, from, to) for quiet non-pawn moves instead of a subtract and an add
@@ -3708,3 +3734,411 @@ proposal are placeholders, screened before use.
 - **idea:** `FeatureStack::reset` (src/eval/nnue/accumulator.cpp:797) empties the 16 refresh snapshots at the start of every search, so the cache of the king-region net (r3kr1, architecture 9) lives one search; data generation runs many short searches per game, where a cache kept across searches (same game, same thread) could save full refreshes.
 - **plan (owner, 2026-11-16):** a measurement item for the next speed sprint: data generation throughput (positions/s, same seeds and threads) with the cache kept across searches against today's, plus the refresh counts; adopt only with a measured gain and identical output (determinism: the cache must not change any evaluation; the nnue walk test and bench parity).
 - **status:** planned (deferred from the audit, owner 2026-11-16).
+
+---
+
+## Post-Phase-4 backlog (owner, 2026-11-17)
+
+Ideas scheduled for after Phase 4 closes. **Phase 4's scope is frozen** (owner, 2026-11-17): nothing here is built or
+run before Phase 4 closes, except where an entry says otherwise (idea 212's measurement, and only on the owner's
+approval of its plan). ideas.md had no post-Phase-4 section before 2026-11-17; this one was created for the ML frontier
+pipeline's ideas (ideas 209-222, and idea 181's update) and is where later post-Phase-4 ideas go.
+
+**The ML frontier pipeline (2026-11-16).** A read-only proposal (`~/.claude/plans/fork-ml-frontier.md`, untracked,
+not in the repository): sixteen blind researchers, tournaments, two critics and a literature check, then a lookup in
+Fork's records; twelve ideas survived (its §2), plus four contaminated ones from researchers who guessed the domain
+(its §4: never ranked or attacked by the critics). Each entry below copies the core change, the pre-registered test
+with its kill result, and the cost from the proposal (§2 idea N, cited); **every probability, gain and cost the
+proposal marks "estimate" is its author's judgement, not a measurement.** Its literature check (stage 7) is cited as
+the pipeline recorded it: **the citations are UNVERIFIED** (not opened here). Where an idea has published prior art,
+**ORIGINALITY.md must credit it if the idea is ever built**; nothing is logged there now, since nothing is built.
+Common fields: **phase** after Phase 4; **source** ML frontier pipeline, 2026-11-16.
+
+### Post-Phase-4 order (owner, 2026-11-17)
+
+1. **Idea 212** (ML frontier idea 5): Elo per speed doubling at STC and LTC. It changes nothing in the engine, so it
+   may run before Phase 4 closes, **only on test capacity the removal round isn't using, and only after the owner
+   approves its plan** (in the entry).
+2. **Idea 215's offline check** (ML frontier idea 8, step 1 only): the signed gap between the static evaluation and a
+   1,000,000-node search at pruning sites, against the level of the bound, measured after correction history. Its
+   tuning runs and matches keep their place in item 3.
+3. **The rest by the proposal's ranking** (its §2 order, "my ranking by promise per unit of cost"), refined by its §3:
+   §3's three bets (ideas 1, 2 and 4) already lead §2's order; §3 makes idea 3 the gate of idea 2, so idea 3 runs
+   first. In order: **209** (idea 1), **210** (idea 3), **181** (idea 2, updated 2026-11-17), **211** (idea 4),
+   **213** (idea 6), **214** (idea 7), **215** (idea 8: the tuning runs and matches), **216** (idea 9; §3's
+   "craziest that would matter most", kept at its §2 place), **217** (idea 10), **218** (idea 11), **219** (idea 12).
+4. **Unranked** (the proposal's §4, contaminated, never ranked or attacked): **220** backward relabelling, **221**
+   cutting the label chain at weak cheap moves, **222** slow nets as labellers (**needs an owner decision** first).
+
+### 209. Train on the capture positions the quiet filter drops (ML frontier idea 1)
+- **type:** ELO (training data). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** add the capture-best positions the quiet filter drops (about a quarter of the fully searched positions;
+  not mate or tablebase scores) at half weight, with a loss that punishes over-rating twice as hard as under-rating;
+  only from the data parts with the newer TD labels (about a quarter of Fork's data), each labelled from the position
+  that follows it; stop if accuracy on quiet positions slips. Why now: since the TD labels, only 10% of a label is the
+  position's own score, so the filter's original reason has mostly gone, while the search still asks the network
+  about these positions at leaves (proposal §2 idea 1).
+- **pre-registered test (proposal §2 idea 1):** before any training, on 5,000 dropped and 5,000 kept positions, compare
+  a 1,000,000-node search with what the leaf returns today: **stop if the capture check already closes most of the
+  gap** (about 8 minutes of the data-generation desktop). Then two arms, two seeds, the standard recipe with and
+  without the dropped positions at the same number of training samples; two fixed-node screens per arm against its
+  control, 3,200 games pooled (about ±6.3). **Killed if the pooled result is below +4 Elo, or errors on either
+  held-out endgame set rise more than 15%, or the loss on kept positions rises by more than 0.00002.** If it passes:
+  the standard STC adoption test, up to 20,800 games.
+- **cost (proposal's estimate):** about 4.4 GPU-hours and 80 lane-minutes; no new data. Probability of a measurable
+  gain: 18% (estimate). One of §3's three bets.
+- **Fork's record:** new as proposed. Idea 47.2 only makes the filter stricter (the opposite direction); the mismatch
+  is noted in docs/research/vision-ideas-2026-11-14.md ("the net trains on quiet positions, yet it evaluates noisy
+  ones at stand-pat", as the proposal quotes it); the nearest run, idea 80 (a different set of excluded positions),
+  was flat (−0.98 ± 6.40, per the proposal).
+- **prior art:** the literature check: "known elsewhere but new for this kind of system": learning under sample
+  selection bias and covariate shift (Zadrozny, ICML 2004; Shimodaira, 2000), TreeStrap (Veness et al., NIPS 2009)
+  (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 1, §3).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 210. What the correction tables learn: the same in every search, or this search only (ML frontier idea 3)
+- **type:** TOOLING (an offline measurement; its games come only through idea 181). **phase:** after Phase 4.
+  **runtime cost:** none.
+- **idea:** split the in-search error the correction tables fix into a part common to all searches (to be trained
+  into the network: idea 181's route) and a part specific to one search (to keep adapting in the search: idea 57's
+  route). Compare four predictors of the error on held-out positions: the shipped table; a fixed map fitted on other
+  searches; the same map fitted on the first half of this search; a plain average shift. Count only what the fixed
+  map removes beyond the plain shift; split by position so nothing is seen twice; score on the quantities that have
+  moved with the tables before.
+- **pre-registered test (proposal §2 idea 3):** dump the needed quantities for 1,000 short-time-control searches and
+  compare the four predictors on unseen positions. **"Train it in" is licensed only if the fixed map removes at least
+  half of what the table removes, beyond the plain shift; "adapt in search" only if the within-search map beats the
+  fixed map on unseen positions. If neither holds, both routes are dropped** and idea 181's expected gain is lowered.
+- **cost (proposal's estimate):** no GPU, no games; a few CPU-minutes plus fitting. Probability it leads to an Elo
+  gain: 12% (estimate); "it will almost certainly be informative".
+- **Fork's record:** partly on file. The 2026-11-12 diagnosis (DESIGN.md decisions log, 2026-11-12) showed the tables
+  carry real information (root error 81.2 to about 68-72 cp, per the proposal); idea 57 (in-game adaptation) and
+  RI-33 (a correction keyed by the network's hidden state, docs/research/rare-ideas-2026-11/rare.md) are untested; at
+  near-window inner positions a deep search sits on average 122.6 cp above the network's score (branch
+  `idea59/step3`, per the proposal); `step0_routing.py` (docs/research/vision-step0-2026-11-14/) is almost the fixed
+  map. The split into "same everywhere" and "this search only" is new.
+- **prior art:** the literature check: "known elsewhere but new for this kind of system": Dyna-2's permanent and
+  transient memories (Silver, Sutton and Müller, ICML 2008), dynamic evaluation (Krause et al., 2017) (UNVERIFIED).
+  **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 3, §3).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17), before idea 181; not started.
+
+### 211. A longer label horizon: TD(0.97) (ML frontier idea 4)
+- **type:** ELO (training labels). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** fade the TD label by 0.97 per half-move instead of 0.9 (with 0.9, only 9% of the label's weight lies
+  beyond 23 half-moves; with 0.97, half does), tested as a replacement for the result fine-tune stage rather than an
+  addition; 0.9 kept for tablebase and few-piece positions; run on the part with the stricter adjudication (g4d:
+  1,500 cp on 16 positions in a row, instead of 700 on 8), where far fewer results are declared by Fork's own score.
+  The change touches only the quarter of the data that carries the TD labels. The label tool takes the fade as a
+  parameter.
+- **pre-registered test (proposal §2 idea 4):** three arms, two seeds each: (A) today's recipe with the fine-tune; (B)
+  fade 0.97, no fine-tune; (C) fade 0.97 with the fine-tune. Fixed-node screens of B and C against A, 3,200 games
+  pooled each. **C is kept if it beats A by at least +4 pooled. B replaces the fine-tune only if it is no worse than
+  −2 against A over 6,400 games and the held-out endgame errors stay at the current network's level. Killed if both
+  fail**; if 0.97 is clearly negative, the horizon explanation is wrong.
+- **cost (proposal's estimate):** about 6.6 GPU-hours plus about 0.8 for fine-tunes; about 160 lane-minutes.
+  Probability: 18% (estimate). One of §3's three bets.
+- **Fork's record:** partly tried, not a duplicate: TD(0.8) lost to TD(0.9) (idea 51) and the per-class fade of 0.35
+  and 0.65 lost (idea 85; −4.34 pooled, per the proposal), both shorter horizons; the one clean target gain was the
+  result fine-tune (idea 70; +5.74 ± 3.81, per the proposal). Above 0.9 is on file only in
+  docs/research/novel-ideas-2026-11-11.md ("Nothing above 0.9 has been tried"; "A plain global TD(0.95) arm is the
+  obvious control").
+- **prior art:** the literature check: "known": TD(lambda)'s bias-variance trade-off (Kearns and Singh, COLT 2000),
+  learning over multiple horizons (Fedus et al., 2019), TDLeaf(lambda) (Baxter, Tridgell and Weaver) (UNVERIFIED).
+  **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 4, §3).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 212. Elo per speed doubling, measured at each time control (ML frontier idea 5)
+- **type:** TOOLING (a measurement; a test-only build, never shipped). **phase:** may run before Phase 4 closes, on
+  capacity the removal round isn't using, once the owner approves the plan below. **runtime cost:** none.
+- **idea:** every verdict on a slower network is priced with one number fitted at STC: 118.3 ± 5.6 Elo per doubling
+  of speed (1.72 Elo per 1% nps; a fit over nine fixed-node/STC network pairs: docs/research/transfer-testing/report.md, used since 2026-11-09 in DESIGN.md §5.6's speed-to-Elo row).
+  Fork's own pairs imply anything from 84 to 192 per doubling (proposal §2 idea 5). Measure the ratio that matters:
+  **Elo per doubling of speed divided by the Elo of a fixed pair of equal-speed networks, at each time control.**
+- **pre-registered test (proposal §2 idea 5):** node odds at fixed nodes (800,000 against 400,000), 3,200 games; a
+  half-speed build against the normal one at STC (3,200 games) and LTC (3,328 games); a fixed pair of equal-speed
+  networks about 50 Elo apart, at STC and LTC; the stored threat-input network against its control, at STC and LTC.
+  **The speed gate changes only if the ratio falls by 25% or more from STC to LTC. Otherwise 118 and the gate stand,
+  now with a measured interval.**
+- **cost (proposal's estimate):** no GPU; about 11 lane-hours in total, most of it the three LTC matches. Probability
+  it changes a decision: 25%; that it leads directly to Elo: 10% (estimates). §3: "not a bet but should be run
+  anyway".
+- **Fork's record:** planned three times, never run: DESIGN.md §5.6 order step 9 (X8, "the throttled speed-to-Elo
+  measurement", 2 STC + 1 LTC stages) after step 6 (X12, "the throttle and zero-row build"); think tank decision 7
+  (DESIGN.md decisions log, 2026-11-07: a throttled 0.5x test-only build instead of 0.85x time odds);
+  docs/research/engineering-review-2026-11-11.md ("Step 9 ... was never run"). Not on file: the fixed network pair,
+  the 800,000-against-400,000 node-odds match, and timing the stored threat-input network under today's search.
+- **plan (for the owner's approval; written 2026-11-17, nothing started):**
+  - **Matches** (the game counts and time controls are the proposal's; STC 8+0.08, LTC 40+0.4):
+    - M1, node odds: the current default engine at 800,000 against 400,000 nodes a move, 3,200 games (2 stages of
+      1,600). Needs no new build.
+    - M2, speed: the half-speed build against the normal one, STC 3,200 games (2 stages), LTC 3,328 games (2 stages
+      of 1,664).
+    - M3, the yardstick: an equal-speed network pair about 50 Elo apart, at STC and LTC. The proposal gives no game
+      counts for M3 and M4; this plan assumes M2's (3,200 STC, 3,328 LTC).
+    - M4, the check on a real slow net: the stored threat-input network against its control, at STC and LTC (same
+      counts, assumed).
+    - The ratio R(TC) = M2's Elo per doubling / M3's Elo, at STC and at LTC; **decision: the speed gate changes only
+      if R falls by 25% or more from STC to LTC**; otherwise 118 and the 0.90 gate stand, with a measured interval.
+      M4 shows whether a real threat-input net's STC-to-LTC change matches R's prediction.
+  - **Must be built or chosen first:**
+    - **The half-speed build** (X12's throttle): **it does not exist.** No throttle code is in `src/` or
+      CMakeLists.txt on phase-4 or on any local branch (git grep, 2026-11-17); remote-only branches were not
+      searched. The think tank's design: the same binary burning cycles behind a test-only build flag
+      (phase-b-specialists.md H3 and ST3), bench unchanged, its speed ratio measured in situ on the runners and held
+      at 0.50 ± 0.02 (ST3's kill criterion). It is a test-only code change: **the owner should confirm it fits "changes
+      nothing in the engine"**; M1 can run without it.
+    - **The equal-speed pair: not chosen (UNVERIFIED).** Candidates are architecture-8 nets (S512+PP, S512ppr2,
+      S512ppr3, r8btd90, r8brft1, r8ceplo2: one architecture, so one speed; docs/nets.md); the pair about 50 Elo
+      apart must be read from the SPRT log before the run, and whether today's engine still loads architecture 8
+      on phase-4's head is unchecked (r8ceplo2 was screened on phase-4 b7ea9bf, 2026-11-14).
+    - **The threat-input net: r3xl1 against its same-recipe control r3pp1 is the candidate** (x_lower, architecture
+      10, nets/r3-xlower, bake/r3-xl1; fixed nodes +17.60 ± 8.69, speed ratio 0.9338: sprt-log, bake-off round 3).
+      The proposal names no net, so this choice is UNVERIFIED (alternatives: S512+X on nets/s512x, never played at
+      LTC; XGR-512 r2 was, −30.56 ± 9.96 at 40+0.4). Both nets need fresh bakes on today's engine (round 3's bakes
+      are on phase-4 7a7f99b's engine).
+    - **Node odds on the GitHub lane:** whether sprt.yml/h2h_run.sh can give the two engines different node limits
+      (fastchess per-engine `nodes=` through the engine options) is UNVERIFIED; checked before M1.
+  - **Compute** (stage times from the proposal §1: STC about 18-20 min per 1,600 games, LTC about 80 min per 1,664,
+    a fixed-node screen about 40 min per 1,600 at 800,000 nodes both sides): M1 under about 1.3 h (2 fixed-node
+    stages; the 400,000 side is cheaper); M2, M3 and M4 each about 0.6 h STC + 2.7 h LTC. **Total 14 stages (2
+    fixed-node, 6 STC, 6 LTC), about 11 lane-hours**, matching the proposal's estimate; one lane, in order M1, M2,
+    M3, M4, STC before LTC in each.
+  - **Cost:** no GPU, no Kaggle. GitHub-hosted runners are free (the repository is public). Developer time: the
+    throttle build (step 6 was estimated at 1.5-2.5 days together with the zero-row build and the runner speed A/B
+    job; speed-ab.yml is on main), the bakes, and the pair's choice.
+  - **Capacity rule:** only on test capacity the removal round isn't using. On 2026-11-17 (the coordinator) lane B
+    runs the removal round's ProbCut LTC test and lane A is free, so the measurement uses lane A, yields to any
+    removal-round stage, and starts and stops only through `tools/jobs/jobctl.py`.
+- **prior art:** odds matches (time and node handicaps between versions of one program); diminishing returns of
+  deeper search (Heinz's self-play experiments; Ferreira, ICGA Journal 2013); "Scaling Scaling Laws with Board Games"
+  (Jones, 2021); the literature check rated it "known" (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever
+  built** (the throttle build counts).
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 5, §3); the stored nets from docs/nets.md and
+  docs/history/phase-4/sprt-log.md.
+- **status:** **awaiting the owner's approval; not started.**
+
+### 213. Train the position where the search stopped: the main line's leaf (ML frontier idea 6)
+- **type:** ELO (training data). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** a search's final score is the network's score at the last position of its main line, so attach the label
+  to that leaf too: keep only leaves where the game then followed the main line for at least two half-moves, remove
+  the starting position's own score from the leaf's label, check first that the label fits the leaf better than the
+  network's current score, and test inside the short fine-tune recipe (where one data part gives a 20% share). The
+  record format has no room for the extra position: a side file.
+- **pre-registered test (proposal §2 idea 6):** first, under an hour of CPU: for 2,000 games, how often the main line
+  ends in a network score; then re-search 5,000 leaves at 1,000,000 nodes. **Go on only if the label is closer to the
+  deep value than the network's own score, and at least half the kept positions yield a usable leaf.** Switch the
+  side file on for the next data part (no added search). Fine-tune with and without leaf records, two seeds (about 0.8
+  GPU-hours); two fixed-node screens per arm. **Closed if the pooled result is below +2.** If it is +4 or more, a
+  timed test of at least 6,400 games decides.
+- **cost (proposal's estimate):** under 1 GPU-hour and 80 lane-minutes, after a data part that is generated anyway.
+  Probability: 15% (estimate). The pipeline's top idea on expected value.
+- **Fork's record:** set aside as not novel and never run: "Training on principal-variation leaves. Classical TDLeaf,
+  already credited under idea 51" (docs/research/network-novelty-2026-11-14.md). The nearest run, idea 80, was flat.
+- **prior art:** **TDLeaf(lambda)** (Baxter, Tridgell and Weaver, KnightCap, 1998/2000; named by the proposal), and
+  TreeStrap (Veness et al., NIPS 2009); the literature check rated it "known" (UNVERIFIED). **ORIGINALITY.md must
+  credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 6).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 214. Train on positions the search asks about, not positions games reached (ML frontier idea 7)
+- **type:** ELO (training data). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** sample training positions from the search trees, only where the network's score decided something
+  (leaves, and positions within one margin of a limit), labelled at 20,000 nodes, at 3% of a snapshot (the critics'
+  8% breaks the 5% cap on targeted data, with the endgame slice at about 2%); a third arm (game positions with the
+  same score-only label) tells the change of positions from the change of label.
+- **pre-registered test (proposal §2 idea 7):** first, the network's error at sampled search positions against game
+  positions matched for stage of the game and size of score: **stop if the ratio is below 1.15.** Then about 36
+  million labels at 20,000 nodes (about 10 desktop-hours, estimate) and three arms, two seeds each: control; search
+  positions; game positions carrying the same score-only label. Fixed-node screens pooled to 6,400 games (about ±5).
+  **Killed if the search-position arm is below +3 against the control, or no better than the third arm.**
+- **cost (proposal's estimate):** about 10 desktop-hours, about 6.6 GPU-hours, about 160 lane-minutes. Probability:
+  12% (estimate).
+- **Fork's record:** on file and left out: "A search-site slice (train on positions sampled from the search tree, not
+  the game line)" (docs/research/novel-ideas-2026-11-11.md, "Considered and left out"), whose free measurement "is
+  still worth making" and has no record of being made. A different form, idea 59's separate correction network
+  trained on such positions, lost (−19.78 ± 9.67, per the proposal). The sampler and the 5,433 labelled sites exist.
+- **prior art:** **DAgger-style sampling** (Ross, Gordon and Bagnell, AISTATS 2011), **TreeStrap-style training on
+  search-tree nodes** (Veness et al., NIPS 2009), Go-Exploit (Trudeau and Bowling, 2023); the literature check rated
+  it "known" (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 7).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 215. Pruning margins that depend on the level of the bound (ML frontier idea 8)
+- **type:** ELO (search). **phase:** after Phase 4 (its offline check second in the post-Phase-4 order).
+  **runtime cost:** possible (one multiply per comparison; the proposal expects no speed change).
+- **idea:** the network's quick score sits closer to zero than a deep search (126 cp closer, against a million-node
+  search, on a network four networks ago), so a fixed margin may be too lenient when the bar is negative and too
+  strict when it is positive. A stretch of the score is the same as a margin that depends on the bar's level: add one
+  number per group of pruning tests, pivoted so the average margin Fork has already tuned does not move, tuned
+  together with those margins, against a control that spends the same tuning budget on the existing margins alone.
+- **offline check first (owner's order of 2026-11-17: second in the post-Phase-4 order):** the signed gap between the
+  static evaluation and a 1,000,000-node search at pruning sites, on the current network, binned by the level of the
+  bound, **measured after correction history** (on the corrected evaluation the pruning tests use; the raw network
+  score reported beside it). **Stop if the gap is under about 40 centipawns** (proposal §2 idea 8).
+- **pre-registered test after the check (proposal §2 idea 8):** two tuning runs of 10,400 game pairs each, one with
+  the new numbers and one without; the two tuned builds head to head, 6,400 STC games (about ±4.75) plus one LTC
+  stage. **Killed if the head-to-head is below +3 Elo.**
+- **cost (proposal's estimate):** no GPU; about 9 lane-hours for the two tuning runs and about 2.5 for the matches
+  (the proposal suggests riding on the queued final retune; Phase 4 is frozen, so not there). Probability: 15%
+  (estimate).
+- **Fork's record:** new as a mechanism. Relatives lost: position-dependent score scaling (−0.72 ± 3.95, then
+  +1.76 ± 3.46, dropped), a per-bucket rescale (−0.43 ± 9.23, idea 180), a rising margin for one test
+  (−3.78 ± 2.92) (figures per the proposal). Fork's tuning rule forbids tuning "the eval scale (a degenerate
+  direction)"; the pivoted form is built to avoid it, but expect the objection. An owner decision on adding
+  margin-shape parameters before the final retune is already pending.
+- **prior art:** the literature check: "known": ProbCut and Multi-ProbCut's regression of the deep score on the
+  shallow one (Buro, ICCA Journal 1995; Jiang and Buro, 2003), the optimizer's curse (Smith and Winkler, Management
+  Science 2006) (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 8).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17): the offline check second, the games later; not started.
+
+### 216. A second read-out used only at the leaves (ML frontier idea 9)
+- **type:** ELO (network and search). **phase:** after Phase 4. **runtime cost:** possible.
+- **idea:** at a leaf the search takes the larger of the network's score and the short capture check's result, so an
+  over-rating there is final. Train a second small set of output weights (about 8,200 numbers) used only at leaves,
+  with that rule in the loss: ordinary error where raising the score is the only way to be right, and a penalty only
+  for exceeding the capture result elsewhere. The cache holds one score per position, so the plumbing (or computing
+  both read-outs, about 6 to 11 Elo of speed) is the first risk.
+- **pre-registered test (proposal §2 idea 9):** a do-nothing build with the new plumbing: identical play, **speed at
+  least 98.5%; stop otherwise.** The side arm on its own: correction tables off at leaves, the standard search test,
+  up to 12,800 games. Log 2 million leaves (about 35 desktop-minutes); fit the read-out with the rest frozen (under 1
+  GPU-hour); **go on only if the network's score is the deciding number at 60% or more of leaves and the fit cuts the
+  through-the-rule loss on held-out leaves by 10%, twice in a row.** One timed match of 12,800 games (about ±3.3):
+  **killed if the timed result is not clearly positive.**
+- **cost (proposal's estimate):** under 1 GPU-hour; about 2.7 lane-hours for the final match. Probability: 10% for the
+  read-out; 20% that the side arm alone is worth a point or two (estimates). §3: "the craziest that would matter most".
+- **Fork's record:** the read-out and its loss are new. Poor priors: refitting the output layer on a frozen network
+  gained nothing twice (idea 82, vision step 0), and three earlier changes to the leaf score lost (−11.73 ± 9.63,
+  −9.23 ± 6.81, −4.11 ± 3.93, per the proposal). The side arm (corrections off at leaves) is on file, measured offline
+  (worth only 0.1 to 0.2 of their size there) and never played.
+- **prior art:** the literature check rated the read-out "apparently new"; nearest: TDLeaf(lambda), TreeStrap, MMTO
+  (Hoki and Kaneko, JAIR 2014), "Smart Predict, then Optimize" (Elmachtoub and Grigas) (UNVERIFIED); the leaf-only
+  plumbing is a form of **lazy evaluation** (computing a part of the evaluation only where it is used). **ORIGINALITY.md
+  must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 9, §3).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 217. A loss that weights the scores where the search compares (ML frontier idea 10)
+- **type:** ELO (training loss). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** today's loss (error after squashing scores into win probabilities) counts an error at 220 cp about 9% as
+  much as near zero, and at 280 about 3%, while the search's margins sit between half and three times the squashing
+  scale. A one-parameter family of losses keeps the target and moves weight toward larger scores (the middle setting
+  is the new part); weights capped, the tablebase slice exempt; if the spread of scores changes by more than 10%, the
+  two or three nearest margins are retuned before a flat result is called flat. One line in the trainer.
+- **pre-registered test (proposal §2 idea 10):** first, where the search's comparisons actually fall: **dead if the
+  share beyond two scales is within 10 points of the 24% today's loss already gives.** Three arms, two seeds each:
+  control; scale refit only (Fork squashes with 92 while its newest data fits 81); the re-weighted loss; all
+  fine-tuned by the standing rule. Fixed-node screens, 3,200 games pooled per arm. **Killed if the re-weighted arm is
+  below +4 against the control, or no better than the scale-refit arm.**
+- **cost (proposal's estimate):** about 6.6 GPU-hours plus fine-tunes; about 160 lane-minutes. Probability: 10%
+  (estimate).
+- **Fork's record:** on file with the same arithmetic as the think tank's M5, the cross-entropy arm
+  (docs/research/phase4-think-tank/phase-b-specialists.md, M5; "never build in Phase 4" until data with conversion
+  phases exists, phase-c-synthesis.md); the scale refit is M6 (phase-b-specialists.md). The stricter-adjudication
+  part (g4d) partly answers the objection. A different weighting, by material class, lost (idea 69, −7.60 ± 4.91).
+- **prior art:** the literature check: "known elsewhere but new for this kind of system": proper scoring rules and
+  composite (Bregman) losses (Schervish, Annals of Statistics 1989; Buja, Stuetzle and Shen; Reid and Williamson, JMLR
+  2010) (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 10).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 218. An offline decision-error score that must first get two known answers right (ML frontier idea 11)
+- **type:** TOOLING (an offline screen; it never gates). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** score a network by the search decisions it would get wrong: log about 100,000 real comparisons, establish
+  each right answer with a deeper search, count wrong stops and missed stops (cost-weighted); trusted only after it
+  has predicted results Fork already knows.
+- **pre-registered test (proposal §2 idea 11):** no games; **it must score the retuned margins better than the old
+  ones (measured +37.93 ± 10.03) and the offline-picked margin that lost worse (measured −26.76 ± 9.93), and a
+  shuffled placebo must not reproduce the signal; either sign wrong, it is dead.** Then the archive check: a rank
+  correlation of at least 0.4 without the architecture pairs, and the same ordering from logs of two different
+  networks' searches. If it passes, it earns one use: ordering arms for the test lanes and choosing among training
+  snapshots. It never gates.
+- **cost (proposal's estimate):** about 85 desktop-minutes of deep searches, no GPU. Probability it passes both
+  checks: 15% (estimate).
+- **Fork's record:** partly on file: the logging and deep-search tools exist and were run; Fork's own rule is the
+  same ("A screen must be tested against known game results before it is used, and a placebo must not be able to
+  reproduce its signal"); offline criteria have been wrong five times out of five here (per the proposal). A
+  cost-weighted score for whole networks, validated on those two results, is new.
+- **prior art:** the literature check: "known elsewhere but new for this kind of system": decision-focused learning
+  (Mandi et al., JAIR 2024; Elmachtoub and Grigas), surrogate-endpoint validation (Prentice, Statistics in Medicine
+  1989), MMTO (Hoki and Kaneko, JAIR 2014) (UNVERIFIED). **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 11).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 219. A stronger copy of Fork as a stand-in opponent: the node-odds pilot (ML frontier idea 12)
+- **type:** TOOLING (a diagnostic first). **phase:** after Phase 4. **runtime cost:** none.
+- **idea:** Fork given about five times the search is, on paper, about as much stronger as the engine Fork loses to
+  from unbalanced openings; if it also defends that way, it is a cheap Fork-pure opponent to measure against. A
+  measurement first: the pass mark is whether the weaker side recognises trouble several half-moves late, as it does
+  against real opponents. Fixed node counts (Fork's notes rule against time odds). The original idea's second half
+  (training games where the losing side searches more) is dropped: it is idea 81's parked form.
+- **pre-registered test (proposal §2 idea 12):** pilot: 200 games from the favourable starts of the loss study, Fork
+  at 378,000 nodes a move against Fork at 1,820,000. Measured: how many half-moves later the weaker side's score
+  admits trouble; **pass at a median of 5 or more. Killed if the lag stays near one half-move, or if the side with the
+  advantage still wins more than half the games.** If it passes, it must order four stored networks as their real
+  tests did before anyone reads it.
+- **cost (proposal's estimate):** no GPU; minutes for the pilot; about 3 lane-hours per network compared afterwards.
+  Probability the pilot passes: 25%; that it leads to Elo: 8% (estimates). The pipeline's top idea on upside.
+- **Fork's record:** partly on file. The loss diagnosis (docs/research/uho-loss-diagnosis-2026-11-16.md: 0 wins from
+  200 advantaged starts against Stockfish 19) says a stronger Fork "shares Fork's blind spots, so it is no substitute
+  for another" engine; only 13 of 541 analysed losses were cases of not looking far enough (per the proposal), which
+  is the critics' near-kill.
+- **prior art:** **odds matches** (search-budget handicaps between versions of one program); the literature check:
+  "known elsewhere but new for this kind of system": Jones, "Scaling Scaling Laws with Board Games" (2021), exploiter
+  agents (Vinyals et al., Nature 2019), adversarial policies (Wang, Gleave et al., ICML 2023) (UNVERIFIED).
+  **ORIGINALITY.md must credit it if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§2 idea 12).
+- **status:** post-Phase-4 backlog (owner, 2026-11-17); not started.
+
+### 220. Backward relabelling (ML frontier §4, contaminated)
+- **type:** ELO (training labels). **phase:** after Phase 4, unranked. **runtime cost:** none.
+- **idea:** after a game ends, re-search its positions from last to first with the search's memory kept, so each
+  label sees what the game later revealed. Proposed four separate times (proposal §4). Written as derived shards with
+  their own manifests (sealed data is never changed); Fork relabelling its own data with its own nets is allowed (data
+  strategy A+, DESIGN.md §5.4).
+- **test:** none pre-registered: §4's ideas came from researchers who guessed the domain, so they were never ranked
+  or attacked by the critics. A test with a kill result is written before it moves up the order.
+- **cost:** not estimated by the proposal. Constraint (§4): data generation's memory table is small (1 MB per worker),
+  which limits what a backward pass can carry.
+- **Fork's record:** new (proposal §4).
+- **prior art:** not literature-checked (§4's ideas skipped that stage); a prior-art check is due before it is built,
+  and **ORIGINALITY.md must credit whatever it finds if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§4).
+- **status:** post-Phase-4 backlog, unranked (owner, 2026-11-17); not started.
+
+### 221. Cutting the label chain at weak cheap moves (ML frontier §4, contaminated)
+- **type:** ELO (training labels). **phase:** after Phase 4, unranked. **runtime cost:** none.
+- **idea:** half of Fork's self-play moves come from quick 4,000-node searches; where such a move is later judged
+  weak, stop passing its consequences back as truth (cut the TD trace there). The quick searches' scores are not
+  stored, so "judged weak" must come from the neighbouring full searches (proposal §4).
+- **test:** none pre-registered (contaminated, never ranked or attacked); a test with a kill result is written before
+  it moves up the order. The novel-ideas proposal already warned, for idea 85, that with seed noise near ±6 Elo an
+  effect of this size "may be unresolvable" (docs/research/novel-ideas-2026-11-11.md).
+- **cost:** not estimated by the proposal.
+- **Fork's record:** new (proposal §4); idea 51 already keeps the cheap moves' scores out of the chain.
+- **prior art:** trace cutting in off-policy TD learning (Watkins's Q(lambda); Retrace) is the likely relative, named
+  here from general knowledge and not literature-checked (UNVERIFIED). **ORIGINALITY.md must credit it if this is
+  ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§4).
+- **status:** post-Phase-4 backlog, unranked (owner, 2026-11-17); not started.
+
+### 222. Slow nets as labellers (ML frontier §4, contaminated)
+- **type:** ELO (training data). **phase:** after Phase 4, unranked. **runtime cost:** none (the playing net is
+  unchanged).
+- **idea:** data generation runs at fixed nodes, so a network that wins at equal search effort but loses on the clock
+  could do the labelling while the fast one plays.
+- **Fork's record:** on file, never run: the think tank priced it at about +4 Elo for S512+X (about 0 for XGR r2) and
+  "Not recommended now; worth recording as a principle for a future large teacher"
+  (docs/research/phase4-think-tank/phase-b-specialists.md:3719-3725). It conflicts with the labeller policy
+  (data generation always uses the current default engine; DESIGN.md §5.3).
+- **needs owner decision: conflicts with the rule that training starts on the best engine.**
+- **test:** none pre-registered (contaminated, never ranked or attacked).
+- **cost:** not estimated by the proposal.
+- **prior art:** not literature-checked; a teacher stronger at fixed nodes labelling for a faster student is a form
+  of distillation, so a prior-art check is due before it is built, and **ORIGINALITY.md must credit whatever it finds
+  if this is ever built.**
+- **sources:** ML frontier pipeline, 2026-11-16 (§4).
+- **status:** needs owner decision (owner, 2026-11-17); not started.
