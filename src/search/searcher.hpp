@@ -308,7 +308,7 @@ struct SearchQuota {
   X(use_tt, UseTT, true)                                 \
   X(use_pvs, UsePvs, true)                               \
   X(use_aspiration, UseAspiration, true)                 \
-  X(use_mate_distance, UseMateDistance, true)            \
+  X(use_mate_distance, UseMateDistance, false)           \
   X(use_quiesce, UseQuiesce, true)                       \
   X(use_see_quiesce, UseSeeQuiesce, true)                \
   X(use_history, UseHistory, true)                       \
