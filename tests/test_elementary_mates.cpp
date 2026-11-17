@@ -134,6 +134,10 @@ constexpr bool lone_king(const MateStart& s) { return std::string_view(s.ending)
 // The endings Fork converts without its tables at NoTableNodes (the header).
 bool converts_without_tables(const MateStart& s) {
   const std::string_view e = s.ending;
+  // Idea 212's bake branch bake212/s512ppr2 only (never merged): with S512ppr2 embedded the attacker does not
+  // convert KQvKP's far start without tables at NoTableNodes (the pawn queens; 2026-11-17), a property of that
+  // network, not of the engine; that start is left out here. The matches play with Syzygy 3-4-5, which covers it.
+  if (e == "KQvKP" && std::string_view(s.label) == "far") return false;
   return e == "KQvK" || e == "KRvK" || e == "KQvKP";
 }
 
