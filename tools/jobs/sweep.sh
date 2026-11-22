@@ -32,6 +32,18 @@ pending() {  # LANE_FOLDER: every item without a .done marker, SKIPPED ones mark
 }
 
 echo "== $(TZ=EST5 date '+%I:%M %p EST')  free RAM $(powershell.exe -NoProfile -Command '[math]::Round((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB,2)' | tr -d '\r') GB, C: free $(df -B1 /c | awk 'NR==2{printf "%.1f", $4/1e9}') GB"
+# Kernel memory (owner, 2026-11-22): the paged pool reached 10.4 GB after 15 days without a real restart (fast
+# startup keeps the kernel's state), and the system-managed pagefile then grew into C:'s reserve. Logged every run;
+# an ALERT line when the paged pool passes PAGED_POOL_ALERT_GB.
+PAGED_POOL_ALERT_GB=2
+mem=$(powershell.exe -NoProfile -Command '$c = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory; $p = Get-CimInstance Win32_PageFileUsage | Measure-Object AllocatedBaseSize, CurrentUsage -Sum; "{0:N2} {1:N2} {2:N2} {3:N2} {4:N2} {5:N2}" -f ($c.PoolPagedBytes/1e9), ($c.PoolNonpagedBytes/1e9), ($p[0].Sum/1000), ($p[1].Sum/1000), ($c.CommittedBytes/1e9), ($c.CommitLimit/1e9)' | tr -d '\r')
+read -r paged nonpaged pf_alloc pf_used commit limit <<<"$mem"
+echo "== kernel memory: paged pool ${paged:-?} GB, nonpaged ${nonpaged:-?} GB; pagefile ${pf_alloc:-?} GB allocated, ${pf_used:-?} GB in use; commit ${commit:-?} of ${limit:-?} GB"
+if [ -z "${paged:-}" ]; then
+  echo "   ATTENTION: the kernel memory counters could not be read"
+elif awk -v p="${paged//,/}" -v t="$PAGED_POOL_ALERT_GB" 'BEGIN { exit !(p > t) }'; then
+  echo "   ALERT: kernel paged pool ${paged} GB is above ${PAGED_POOL_ALERT_GB} GB (a leak; a real Restart clears it)"
+fi
 echo "== jobctl (live)"; "$PY" -I "$F/tools/jobs/jobctl.py" status 2>&1 | grep -vE "ended|stopped" | cut -c1-140
 echo "== jobs ended in the last 2 h"
 for f in $(find "$J" -name '*.json' -mmin -120 2>/dev/null); do

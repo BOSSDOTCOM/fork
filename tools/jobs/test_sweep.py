@@ -27,6 +27,14 @@ class SweepScript(unittest.TestCase):
     def test_vm_goes_through_gcp_sweep(self):
         self.assertIn('tools/gcp/gcp.py" sweep', SWEEP.read_text(encoding='utf-8'))
 
+    def test_paged_pool_alert_at_2_gb(self):
+        """Owner, 2026-11-22: log the paged pool and the pagefile every run; alert above 2 GB."""
+        text = SWEEP.read_text(encoding='utf-8')
+        self.assertIn('PAGED_POOL_ALERT_GB=2\n', text)
+        self.assertIn('PoolPagedBytes', text)
+        self.assertIn('Win32_PageFileUsage', text)
+        self.assertIn('ALERT: kernel paged pool', text)
+
 
 class GcpSweepWanted(unittest.TestCase):
     def run_sweep(self, wanted, status='TERMINATED'):
