@@ -28,6 +28,30 @@ read them were deleted after use; their method is stated where each number is us
 > the text below differs (the two whole-ply rows, the batch-4 dimensions, RSPSA as an option, the tooling
 > list), these decisions govern.
 
+> **The owner's decisions of 2026-11-22 (binding; the screen built on branch tools/spsa-screen).** (1) **S1
+> approved:** one zero-gain SPSA, the random-balance fold-over screen of §2.1 reusing spsa.yml's per-pair draws:
+> all 32 class (a) candidates of §1.1 perturbed at once, c_screen = min(2c, distance to the bound), theta held
+> fixed (never updated), 8 STC stages (12,800 games, 8+0.08), Threads 1. It decides which constants enter a
+> group, never a value. (2) **c without firing counters:** the declared fallback of §3.2 (1 unit for integers,
+> 2 table steps for margins); no new counters. (3) **ε = 0.5 Elo per group** for the later group runs (§3.2
+> and §6 Q4; the screen itself has no gain). (4) HistoryBonusFactor and LmrCorrectionStrength are out (inert);
+> CutNodeLmrSixtyFourths and LmrNotImprovingSixtyFourths are in (64ths, range 0-192, step 10); LmrCheckRelief
+> is frozen (stays a literal); HistoryKeepQuarters, LmpImprovingEighths and QuiesceMoveCap keep today's units
+> (§6 Q5, Q6). (5) The removal round removed only UseMateDistance (off, phase-4 caa4a3ab), which has no
+> parameter, so none of the 32 belongs to it.
+>
+> **As built (2026-11-22):** `tools/github/spsa.py` has a screen mode (spec `"mode": "screen"`; per-parameter
+> `c`, `c_screen`, `group`, `placeholder`, `switch`; no gain keys); the spec is
+> `tools/github/spsa-s1-screen.json`. The fallback is applied mechanically: c = 1 for a step-1 parameter
+> (depths, counts, quarters, eighths and the three history weights, whose unit is a quarter), c = 2 table steps
+> for the rest. The eight parameters with a firing counter keep spsa_calibrate.py's last values (the
+> 2026-11-08 run on e5dbaab, DESIGN.md §5.2 "Perturbation sizes"); they were **not** recalibrated on the
+> current engine (UNVERIFIED there; a calibration is a measure job). **One table mismatch with §1.1:**
+> LmrMinDepth's range is **2-6** in src/tune/params.hpp since 1dd38120 (audit 2026-11-16), not 1-6, so its
+> c_screen is 1 (one step from the floor), not 2. The ambiguous rule's "group under 6 parameters" is read as
+> the members that join on their own (the important ones and the ambiguous placeholders), counted before the
+> other ambiguous members (an interpretation, for the owner to confirm).
+
 ## 0. Summary
 
 - **57 parameters** in `FORK_SEARCH_PARAMS`. **41 are retune candidates**: 32 class (a) at STC and 9 class (b)

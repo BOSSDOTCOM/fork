@@ -1618,6 +1618,20 @@ on branch tune/spsa from the think tank's design (B7 O1-O4 and O6, B14
   third of the updates, or at the last, is reported pinned at a bound
   (owner, 2026-11-09: R14 pinned RfpMargin and LmpQuietAllowance; the range
   is widened, final-retune.md).
+- **Screen mode** (design S1, owner 2026-11-22;
+  docs/research/final-retune-expansion-2026-11-15.md §2.1): a spec with
+  `"mode": "screen"` is a zero-gain SPSA. Every pair plays theta + c_screen*signs
+  against theta - c_screen*signs, theta held at the commit's defaults and
+  never updated, c_screen = min(2c, room to the nearer bound) per parameter
+  (at least 1); the spec has no gain keys, and each parameter names its group,
+  whether it is a never-measured placeholder, and its switch (init refuses a
+  switch that is off at the commit). `spsa.py report` pools every iteration:
+  D = mean(r s) / k and SE = sd(r s) / (k sqrt N) at c_screen, also in c-units
+  (times c / c_screen), z = D / SE, and the decision map (|z| >= 2 joins its
+  group; 1-2 joins if a placeholder or its group is under 6, else frozen;
+  below 1 frozen as "screened flat"). The draws, shards, workflow and driver
+  are the tune's, unchanged. The S1 spec: `tools/github/spsa-s1-screen.json`
+  (32 class (a) candidates, 8 iterations of 1,600 STC games).
 - **Never in SPSA:** the time-management parameters (the iteration rule and
   the time budget, refused by name) and the eval scale (not a parameter).
 - **Openings:** the tuning reserve, lines 2,000,001 to 2,632,036 of the
