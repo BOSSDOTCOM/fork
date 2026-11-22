@@ -636,6 +636,61 @@ check "--tune with a REF whose sprt.yml has no tune input: refused before any di
 check "without --tune or a factorial kind: no tune or rows input sent (search, network, fixed, custom)" \
   bash -c "! grep -qE -- '-f (tune|rows)=' '$tmp/r-h1/dispatches' '$tmp/r-network/dispatches' '$tmp/r-fixed/dispatches' '$tmp/h1/dispatches'"
 
+# Per-side time controls (idea 212's time odds; owner, 2026-11-22): a tc=T in BASE_OPTS or TEST_OPTS goes out in
+# sprt.yml's base_opts / test_opts inputs (TC still the kind's class), is named in the header and the declared design,
+# needs a REF whose run_shard.sh has the capability (HEAD here), and every shard merged must record both clocks.
+# Without it the dispatch is exactly as before: the line below is what the driver at 8d186ea8 sent for r-fixed.
+check "no per-side tc: kind fixed's first dispatch is byte for byte as before" test "$(head -1 "$tmp/r-fixed/dispatches")" = \
+  "501 busy=0 jobs=0 workflow run sprt.yml -R owner/fork --ref test -f base=$sha -f test=$sha -f bounds=0 6 0.05 0.20 -f tc=8+0.08 -f hash=16 -f games=1600 -f shards=2 -f stage=0 -f tables=on -f test_opts= -f base_opts= -f name=r-fixed"
+check "no per-side tc: the header does not name one" bash -c "! grep -q 'per-side tc' '$tmp/r-fixed/out' '$tmp/h1/out'"
+setup ptc-stc 0 "$even"
+BASE_OPTS=tc=4+0.04 drive ptc-stc --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+check "base tc=4+0.04, kind fixed --cap 2: both stages, complete, exit 0" \
+  [ "$(rc ptc-stc):$(dispatches ptc-stc):$(verdict ptc-stc)" = "0:2:complete" ]
+check "base tc=4+0.04: dispatched as base_opts beside the STC tc, games and Hash" \
+  [ "$(grep -c -- '-f tc=8+0.08 -f hash=16 -f games=1600 .* -f test_opts= -f base_opts=tc=4+0.04 ' "$tmp/ptc-stc/dispatches")" = 2 ]
+check "base tc=4+0.04: named in the header" grep -q "per-side tc: base 4+0.04, test 8+0.08, kind fixed, stc" "$tmp/ptc-stc/out"
+check "base tc=4+0.04: in the declared design" grep -q '"base_opts": "tc=4+0.04"' "$tmp/ptc-stc/data/ptc-stc/design.json"
+check "base tc=4+0.04: REF's run_shard.sh checked (HEAD has the capability)" grep -q "REF test ($sha): score_display_guard" "$tmp/ptc-stc/out"
+BASE_OPTS=tc=5+0.05 drive ptc-stc --kind fixed --idea i212-time --cap 2 --first 1 "$sha" "$sha"
+check "a restart with another base tc is refused (the declared design)" \
+  bash -c "[ \$(cat '$tmp/ptc-stc/rc') = 1 ] && [ \$(wc -l <'$tmp/ptc-stc/dispatches') = 2 ] && grep -qF \"base_opts 'tc=5+0.05' differs\" '$tmp/ptc-stc/out'"
+setup ptc-ltc 0 "$even"
+TC=40+0.4 BASE_OPTS=tc=20+0.2 TEST_OPTS="option.Threads=1 tc=40+0.4" drive ptc-ltc --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+check "LTC, both sides' tc: complete, dispatched at 40+0.4 with LTC's games and Hash" \
+  bash -c "[ \$(cat '$tmp/ptc-ltc/rc') = 0 ] && [ \$(grep -c -- '-f tc=40+0.4 -f hash=64 -f games=1664 .* -f test_opts=option.Threads=1 tc=40+0.4 -f base_opts=tc=20+0.2 ' '$tmp/ptc-ltc/dispatches') = 2 ]"
+check "LTC, both sides' tc: the header" grep -q "per-side tc: base 20+0.2, test 40+0.4, kind fixed, ltc" "$tmp/ptc-ltc/out"
+setup ptc-custom 0 "$strong"
+TEST_OPTS=tc=16+0.16 drive ptc-custom "$sha" "$sha" 0 5
+check "the custom form: test tc=16+0.16 against TC, H1 after one stage" \
+  bash -c "[ \$(cat '$tmp/ptc-custom/rc') = 0 ] && grep -q -- '-f tc=8+0.08 .* -f test_opts=tc=16+0.16 -f base_opts= ' '$tmp/ptc-custom/dispatches' && grep -q 'per-side tc: base 8+0.08, test 16+0.16' '$tmp/ptc-custom/out'"
+setup ptc-oneclock 0 "$even"
+touch "$tmp/ptc-oneclock/oneclock"
+BASE_OPTS=tc=4+0.04 drive ptc-oneclock --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+check "shards that do not record both clocks stop it after the first stage, unmerged" \
+  bash -c "[ \$(cat '$tmp/ptc-oneclock/rc') = 1 ] && [ \$(wc -l <'$tmp/ptc-oneclock/dispatches') = 1 ] && grep -qF 'do not record base tc 4+0.04, test tc 8+0.08' '$tmp/ptc-oneclock/out' && ! grep -q 'stage 0: run .* merged' '$tmp/ptc-oneclock/out' && [ ! -f '$tmp/ptc-oneclock/data/ptc-oneclock/verdict' ]"
+setup ptc-bad 0 "$even"
+for bad in "tc=4" "tc=4+0.04 tc=8+0.08" "nodes=1 tc=40/60+0.6" "tc="; do
+  BASE_OPTS=$bad drive ptc-bad --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+  check "BASE_OPTS '$bad' refused before any dispatch" refused ptc-bad "at most one tc=SECONDS+INCREMENT"
+done
+TEST_OPTS="tc=4+0.04 option.UseLmp=false" drive ptc-bad --kind fixed --idea i212-time --cap 2 --tune "$sha" "$sha"
+check "a per-side tc with the tuning build refused before any dispatch" refused ptc-bad "a per-side tc with the tuning build"
+noclock=8d186ea850aebca156ad8d52a8d90151bac89c5d  # phase-4 just before per-engine tc: run_shard.sh plays -each tc
+if git -C "$here" cat-file -e "$noclock^{commit}" 2>/dev/null; then
+  setup ptc-oldref 0 "$even"
+  echo "$noclock" >"$tmp/ptc-oldref/ref.test"
+  BASE_OPTS=tc=4+0.04 drive ptc-oldref --kind fixed --idea i212-time --cap 2 "$sha" "$sha"
+  check "a per-side tc with a REF whose run_shard.sh lacks it: refused before any dispatch" \
+    refused ptc-oldref "REF test ($noclock): its tools/cloud/run_shard.sh has no per-engine tc"
+  setup ptc-oldref-plain 0 "$strong"
+  echo "$noclock" >"$tmp/ptc-oldref-plain/ref.test"
+  drive ptc-oldref-plain "$sha" "$sha" 0 5
+  check "the same REF without a per-side tc: runs as before (H1)" [ "$(rc ptc-oldref-plain):$(dispatches ptc-oldref-plain)" = 0:1 ]
+else
+  echo "SKIP  per-side tc REF checks: $noclock is not in this clone"
+fi
+
 # CalibratedScore (owner, 2026-11-13): sprt.yml and its tools come from REF, the engines from BASE and TEST. REF at
 # c7a61ea's parent has no tools/check_score_display_off.py, so it would play c7a61ea's engine (which has the option,
 # default on) with the option on: refused before any dispatch. With both engines from before c7a61ea it is allowed.

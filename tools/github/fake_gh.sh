@@ -23,7 +23,11 @@
 # them in run.<id>.rows, and its download gives each shard its entry's row, options and design digest in the meta,
 # with swaprows.<id> (that run's shards 0 and 1 swap rows: a permutation not followed) and effects (lines
 # "OPTION SHIFT": a shard's pentanomial moves SHIFT pairs per switch its row turns off, from the 1/2 bucket to 3/4
-# when positive, to 1/4 when negative; tests of the fit through the driver).
+# when positive, to 1/4 when negative; tests of the fit through the driver). Since 2026-11-22 (per-side time
+# controls, idea 212): a run dispatched with a tc=T in base_opts or test_opts keeps each side's clock in
+# run.<id>.base_tc / run.<id>.test_tc (and the tc input in run.<id>.tc), and its download records both clocks in
+# each shard's meta (base_tc, test_tc; the side without one plays the tc input), as tools/cloud/run_shard.sh does,
+# unless oneclock is present (a REF's run_shard.sh that ignored them: no clocks recorded).
 st=$FAKE_GH
 echo "$*" >>"$st/calls"
 # flaky.<kind>: that many failures still to inject for api, conclusion or download (2026-11-08).
@@ -92,6 +96,11 @@ case "$1 $2" in
       case $a in
         base=* | test=* | stage=* | name=*) echo "$a" >>"$st/run.$id" ;;
         rows=?*) printf '%s' "${a#rows=}" >"$st/run.$id.rows" ;;
+        tc=*) echo "${a#tc=}" >"$st/run.$id.tc" ;;
+        base_opts=* | test_opts=*)
+          for o in ${a#*_opts=}; do
+            case $o in tc=*) echo "${o#tc=}" >"$st/run.$id.${a%%_opts=*}_tc" ;; esac
+          done ;;
       esac
     done
     name=
@@ -156,7 +165,11 @@ for e in entries:
       status=done rounds=50
       [ "$k" = 0 ] && [ -f "$st/partial.$id" ] && status=running
       [ "$k" = 0 ] && [ -f "$st/short.$id" ] && rounds=51
-      counts=$(cat "$ptnml") test_opts= row_meta=
+      counts=$(cat "$ptnml") test_opts= row_meta= clock_meta=
+      if [ ! -f "$st/oneclock" ] && { [ -f "$st/run.$id.base_tc" ] || [ -f "$st/run.$id.test_tc" ]; }; then
+        clock_meta=", \"base_tc\": \"$(cat "$st/run.$id.base_tc" 2>/dev/null || cat "$st/run.$id.tc")\""
+        clock_meta="$clock_meta, \"test_tc\": \"$(cat "$st/run.$id.test_tc" 2>/dev/null || cat "$st/run.$id.tc")\""
+      fi
       if [ "${#shard_rows[@]}" -gt 0 ]; then
         IFS='|' read -r r test_opts digest counts <<<"${shard_rows[$k]}"
         row_meta=", \"row\": \"$r\", \"design\": \"$digest\""
@@ -165,7 +178,7 @@ for e in entries:
 {"ptnml": $counts, "pairs": 50, "finished_games": 100, "time_losses": 0, "abnormal": 0, "status": "$status",
  "meta": {"base": "$base", "test": "$test", "stage": "$stage", "shard": "$k", "shards": "$SHARDS", "tc": "8+0.08",
           "hash": "16", "base_opts": "", "test_opts": "$test_opts", "tables": "3-4-5", "book_sha": "x",
-          "opening_start": "$start", "opening_end": "$((start + 49))", "rounds": "$rounds"$row_meta}}
+          "opening_start": "$start", "opening_end": "$((start + 49))", "rounds": "$rounds"$row_meta$clock_meta}}
 JSON
       # progress (if present): the shard's progress artifact too (tools/cloud/shard_progress.py; 2026-11-14), as
       # a real run's download holds it beside shard-*; the file progress.name, if present, names its file (fault injection; default progress.json).

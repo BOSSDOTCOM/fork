@@ -23,6 +23,9 @@
 # or a row names must be one of its options; with rows (a stage's table, tools/github/factorial_fit.py rows) shard
 # I's test engine plays entry I's options (tools/cloud/run_shard.sh --rows) and the merge checks every shard's row
 # (sprt_merge.py --stage-rows). Both inputs empty: everything as before.
+# Per-side time controls (idea 212's time odds; owner, 2026-11-22): a tc=SECONDS+INCREMENT in base_opts or test_opts
+# is that engine's own clock (tools/cloud/run_shard.sh: no -each tc then, the other engine plays tc, and each shard's
+# meta records base_tc and test_tc); without one, the games are played exactly as before.
 name: sprt
 # The run's title names its inputs, so a driver finds the run it dispatched by them, never as "the newest
 # sprt run" (tools/github/sprt_run.sh; owner, 2026-11-05: two drivers once read each other's runs). The SPRT's
@@ -41,8 +44,8 @@ on:
       games: {description: "Games in this stage (all shards)", required: true, default: "1600"}
       shards: {description: "Shard jobs (1-16)", required: true, default: "16"}
       stage: {description: "Stage number (0 first; later stages use new openings)", required: true, default: "0"}
-      test_opts: {description: "fastchess options for the test engine (e.g. option.UseTables=false)", required: false, default: ""}
-      base_opts: {description: "fastchess options for the base engine", required: false, default: ""}
+      test_opts: {description: "fastchess options for the test engine (e.g. option.UseTables=false; tc=S+I: its own clock)", required: false, default: ""}
+      base_opts: {description: "fastchess options for the base engine (tc=S+I: its own clock, e.g. tc=4+0.04)", required: false, default: ""}
       tables: {description: "Syzygy 3-4-5 for both engines: on or off", required: true, default: "on"}
       concurrency: {description: "Games at once per shard (empty: run_shard.sh's default; with option.Threads above 1, the runner's CPUs / the threads, never over the CPUs)", required: false, default: ""}
       name: {description: "The SPRT's name (the driver's NAME), in the run title only", required: false, default: ""}

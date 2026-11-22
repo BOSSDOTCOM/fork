@@ -183,5 +183,42 @@ rows_table "$tmp/rowsbad.json" '{"row": 0, "opts": "option.UseLmp=false"}' '{"ro
 check "rows: a malformed option refused before fastchess" refused_early rowsbad --rows "$tmp/rowsbad.json"
 check "rows: a missing table refused before fastchess" refused_early rowsnone --rows "$tmp/no-such-rows.json"
 
+# Per-engine time controls (idea 212's time odds; owner, 2026-11-22): a tc=T among an engine's options is its own
+# clock, -each then has no tc, the other engine plays --tc, and the meta records both. Without one the command line
+# is exactly the one before the change: the list below was taken from run_shard.sh at 8d186ea8 with the same
+# arguments (per-side nodes, as idea 212's node-odds match passed them).
+engine_of() {  # side -> that engine's arguments after its name, one line
+  case $1 in
+    test) awk '$0 == "name=test" {on = 1; next} $0 == "-engine" {on = 0} on' "$tmp/args" | tr '\n' ' ' ;;
+    base) awk '$0 == "name=base" {on = 1; next} $0 == "-each" {on = 0} on' "$tmp/args" | tr '\n' ' ' ;;
+  esac
+}
+each_of() { awk '$0 == "-each" {on = 1; next} $0 == "-openings" {on = 0} on' "$tmp/args" | tr '\n' ' '; }
+shard sametc --base-opts "nodes=400000" --test-opts "option.Threads=1 nodes=800000"
+printf '%s\n' -engine "cmd=$tmp/test" name=test option.Threads=1 nodes=800000 -engine "cmd=$tmp/base" name=base \
+  nodes=400000 option.Threads=1 -each tc=8+0.08 option.Hash=16 option.CalibratedScore=false -openings \
+  "file=$tmp/book.epd" format=epd order=sequential start=6 -repeat -rounds 5 -concurrency 2 -resign movecount=5 \
+  score=1000 twosided=true -draw movenumber=40 movecount=10 score=10 -report penta=true -ratinginterval 50 -recover \
+  -pgnout "file=$tmp/sametc/games.pgn" >"$tmp/args.before"
+check "one tc: exit 0" test "$status" = 0
+check "one tc: the fastchess command line is byte for byte the one before per-engine tc" cmp -s "$tmp/args" "$tmp/args.before"
+check "one tc: no base_tc or test_tc in the meta" test "$(meta sametc base_tc)|$(meta sametc test_tc)" = "|"
+shard halftc --base-opts "tc=4+0.04"
+check "base tc=4+0.04: exit 0, done" test "$status-$(status_of halftc)" = 0-done
+check "base tc=4+0.04: the base engine plays it" test "$(engine_of base)" = "tc=4+0.04 option.Threads=1 "
+check "base tc=4+0.04: the test engine plays --tc" test "$(engine_of test)" = "option.Threads=1 tc=8+0.08 "
+check "base tc=4+0.04: -each has no tc" test "$(each_of)" = "option.Hash=16 option.CalibratedScore=false "
+check "base tc=4+0.04: the meta's clocks and options" \
+  test "$(meta halftc base_tc)|$(meta halftc test_tc)|$(meta halftc tc)|$(meta halftc base_opts)" = "4+0.04|8+0.08|8+0.08|tc=4+0.04"
+shard bothtc --base-opts "tc=20+0.2" --test-opts "nodes=5000 tc=40+0.4" --syzygy "$tmp/tb"
+check "both sides' tc: each engine its own, none in -each" test "$(engine_of base)#$(engine_of test)#$(each_of)" = \
+  "tc=20+0.2 option.Threads=1 #nodes=5000 tc=40+0.4 option.Threads=1 #option.Hash=16 option.CalibratedScore=false option.SyzygyPath=$(cd "$tmp/tb" && pwd) "
+check "both sides' tc: the meta's clocks" test "$(meta bothtc base_tc)|$(meta bothtc test_tc)" = "20+0.2|40+0.4"
+check "two tc= on one engine refused before fastchess" refused_early twotc --test-opts "tc=4+0.04 tc=8+0.08"
+check "the refusal is named" grep -q "at most one tc=SECONDS+INCREMENT" "$tmp/twotc.txt"
+for bad in "tc=4" "tc=40/60+0.6" "tc=4+0.04;x" "tc=" "tc=+0.04"; do
+  check "a malformed '$bad' refused before fastchess" refused_early badtc --base-opts "$bad"
+done
+
 echo "${failures} failure(s)"
 exit $((failures > 0))
