@@ -406,6 +406,261 @@ class SpsaStateTest(unittest.TestCase):
         self.assertAlmostEqual(spec['gain_end'], 0.5 / (1.917 * 7), delta=1e-4)
 
 
+def screen_spec(params, **over):
+    """A resolved-looking screen spec: params as (name, start, c, c_screen, lowest, highest, group, placeholder)."""
+    spec = {'mode': 'screen', 'pair_sd': 0.204, 'total_pairs': 6400, 'iterations': 8,
+            'params': [{'name': n, 'start': s, 'c': c, 'c_screen': cs, 'lowest': lo, 'highest': hi, 'group': g,
+                        'placeholder': ph, 'switch': 'UseX'} for n, s, c, cs, lo, hi, g, ph in params]}
+    spec.update(over)
+    return spec
+
+
+# Design S1's candidates: the 32 class (a) STC parameters of docs/research/final-retune-expansion-2026-11-15.md
+# §1.1, in its order, with its §3.1 groups; the owner's decisions of 2026-11-22 (HistoryBonusFactor and
+# LmrCorrectionStrength out as inert, the two 64ths LMR terms in).
+S1_CANDIDATES = [
+    ('RfpMaxDepth', 'G1a'), ('RfpMargin', 'G1a'), ('NullMinDepth', 'G1a'), ('NullSurplusPerPly', 'G1a'),
+    ('NullSurplusPliesMax', 'G1a'), ('FutilityMaxDepth', 'G1a'), ('FutilityOffset', 'G1a'), ('FutilityGrowth', 'G1a'),
+    ('LmpMaxDepth', 'G1b'), ('LmpQuietAllowance', 'G1b'), ('LmpImprovingEighths', 'G1b'), ('SeePruneMaxDepth', 'G1b'),
+    ('QuietSeeFloor', 'G1b'), ('CaptureSeeFloor', 'G1b'), ('QuiesceMoveCap', 'G1b'), ('LmrMinDepth', 'G2'),
+    ('LmrMinMove', 'G2'), ('CutNodeLmrSixtyFourths', 'G2'), ('LmrNotImprovingSixtyFourths', 'G2'),
+    ('HistoryBonusCap', 'G3'), ('LinearBonusPerPly', 'G3'), ('HistoryKeepQuarters', 'G3'), ('ReplyWeight', 'G3'),
+    ('FollowWeight', 'G3'), ('TakeWeight', 'G3'), ('DirectCheckBonus', 'G3'), ('HistorySkipPerPly', 'G3'),
+    ('HistorySkipMaxDepth', 'G3'), ('MinorDriftShare', 'G4'), ('DriftLimit', 'G4'), ('AspirationMinDepth', 'G4'),
+    ('AspirationHalfWidth', 'G4')]
+# §1.1's provenance column marks these nine "placeholder" (never measured).
+S1_PLACEHOLDERS = {'RfpMaxDepth', 'NullMinDepth', 'NullSurplusPliesMax', 'FutilityMaxDepth', 'LmpMaxDepth',
+                   'SeePruneMaxDepth', 'LmrMinDepth', 'HistoryBonusCap', 'HistorySkipMaxDepth'}
+# QuietSeeFloor's calibrated c (not in spsa-r14.json, which left it out): DESIGN.md §5.2 "Perturbation sizes".
+QUIET_SEE_FLOOR_C = 22.5
+
+
+class SpsaScreenTest(unittest.TestCase):
+    """Design S1, the zero-gain screen. Oracles: the hand-derived secant of a quadratic, -4 c (theta - x*) / w^2;
+    a balanced set of sign patterns (every cross term cancels, so the estimate is exact); the hand-applied
+    decision map; the design doc's candidate list."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.old = os.environ.get('SPSA_DATA')
+        os.environ['SPSA_DATA'] = self.tmp
+        self.commit = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True,
+                                     text=True).stdout.strip()
+        self.table = spsa.table_from_header((ROOT / 'src' / 'tune' / 'params.hpp').read_text(encoding='utf-8'))
+
+    def tearDown(self):
+        if self.old is None:
+            os.environ.pop('SPSA_DATA', None)
+        else:
+            os.environ['SPSA_DATA'] = self.old
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def run_cli(self, *args):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            rc = spsa.main(list(args))
+        return rc, out.getvalue()
+
+    def raw(self, **over):
+        raw = {'mode': 'screen', 'fixed': {}, 'iterations': 2, 'games': 64, 'shards': 2, 'draw_pairs': 1,
+               'tc': '8+0.08', 'hash': 16, 'pair_sd': 0.204, 'opening_reserve': 2010401,
+               'params': [{'name': 'RfpMargin', 'c': 15, 'group': 'G1a', 'placeholder': False, 'switch': 'UseRfp'},
+                          {'name': 'LmpImprovingEighths', 'c': 1, 'group': 'G1b', 'placeholder': False,
+                           'switch': 'UseImprovingLmp'}]}
+        raw.update(over)
+        return raw
+
+    def test_c_screen_respects_bounds(self):
+        # The rule: twice c, or the room to the nearer bound if less.
+        self.assertEqual(spsa.screen_c(1, 6, 3, 12), 2)
+        self.assertEqual(spsa.screen_c(15, 55, 30, 160), 25)    # 25 to the floor, not 2c = 30
+        self.assertEqual(spsa.screen_c(1, 1, 0, 4), 1)          # one step above the floor
+        self.assertEqual(spsa.screen_c(366, 700, 350, 4000), 350)
+        self.assertEqual(spsa.screen_c(5, 95, 0, 100), 5)       # the ceiling's room
+        resolve = lambda raw: spsa.resolve_spec(raw, self.table, 'spsa-t', 'a' * 40)  # noqa: E731
+        spec = resolve(self.raw())
+        default, lowest, highest, _ = self.table['RfpMargin']
+        rfp, lmp = spec['params']
+        self.assertEqual(rfp['c_screen'], min(30, default - lowest, highest - default))
+        self.assertEqual(lmp['c_screen'], min(2, self.table['LmpImprovingEighths'][0] - self.table['LmpImprovingEighths'][1]))
+        self.assertEqual(spsa.c_at(spec, 0), {'RfpMargin': rfp['c_screen'], 'LmpImprovingEighths': lmp['c_screen']})
+        self.assertNotIn('gain_end', spec)
+        room = min(default - lowest, highest - default)
+        ok = self.raw()
+        ok['params'][0]['c_screen'] = room  # exactly the room is allowed
+        self.assertEqual(resolve(ok)['params'][0]['c_screen'], room)
+        for change, why in (({'c_screen': room + 0.5}, 'at most the room'), ({'c_screen': 0.5}, 'at least 1'),
+                            ({'start': default}, 'default'), ({'lowest': lowest + 1}, 'default'),
+                            ({'group': None}, 'group'), ({'placeholder': 'no'}, 'placeholder'),
+                            ({'switch': ''}, 'switch'), ({'c': 0.5}, 'below 1')):
+            bad = self.raw()
+            bad['params'][0].update(change)
+            bad['params'][0] = {k: v for k, v in bad['params'][0].items() if v is not None}
+            with self.assertRaisesRegex(spsa.Refused, why, msg=change):
+                resolve(bad)
+        for key in spsa.GAIN_KEYS:
+            with self.assertRaisesRegex(spsa.Refused, 'no gain', msg=key):
+                resolve(self.raw(**{key: 0.5}))
+        with self.assertRaisesRegex(spsa.Refused, 'mode'):
+            resolve(self.raw(mode='other'))
+        # Every perturbed value of every draw stays inside the range, at c_screen = the room on both sides.
+        tuned = [(p['name'], p['start'], p['c_screen']) for p in spec['params']]
+        for j in range(300):
+            _, plus, minus = spsa.perturbed_values(spsa.pair_seed('spsa-t', 'c', 0, 0, j), tuned)
+            for p, a, b in zip(spec['params'], plus, minus):
+                self.assertTrue(p['lowest'] <= min(a, b) and max(a, b) <= p['highest'], (p['name'], a, b))
+
+    def test_screen_never_moves_theta(self):
+        # A steep, one-sided slope that a tuning update would follow (and clamp): the screen keeps theta.
+        spec = screen_spec([('A', 50, 4, 8, 0, 100, 'G', False), ('B', 5, 2, 4, 0, 100, 'G', False)])
+        records = [expected_record((1, -1), 0.25) for _ in range(40)]
+        theta = {'A': 50.0, 'B': 5.0}
+        out = spsa.iteration_step(spec, theta, 0, records, 0)
+        self.assertEqual(out['theta_after'], theta)
+        self.assertEqual((out['step'], out['clamped']), ({'A': 0.0, 'B': 0.0}, []))
+        self.assertEqual(out['grad_sum'], {'A': 10.0, 'B': -10.0})
+        self.assertEqual(out['pairs'], 40)
+        # Through the commands: every iteration is dispatched at the defaults with c_screen, and the state's
+        # theta never leaves them, on a landscape whose optimum is far away.
+        path = Path(self.tmp) / 'spec.json'
+        path.write_text(json.dumps(self.raw(iterations=3)), encoding='utf-8')
+        self.assertEqual(self.run_cli('init', 'spsa-scr', '--spec', str(path), '--commit', self.commit)[0], 0)
+        start = spsa.load_state('spsa-scr')['theta']
+        self.assertEqual(start, {'RfpMargin': float(self.table['RfpMargin'][0]),
+                                 'LmpImprovingEighths': float(self.table['LmpImprovingEighths'][0])})
+        sent = set()
+        for _ in range(3):
+            rc, text = self.run_cli('dispatch', 'spsa-scr')
+            self.assertEqual(rc, 0, text)
+            stage = int(dict(line.split('=', 1) for line in text.splitlines())['stage'])
+            folder = spsa.data_dir('spsa-scr') / f'i{stage}'
+            disp = spsa.read_json(folder / 'dispatch.json')
+            sent.add(disp['params'])
+            fake.write_run(disp, folder, {'RfpMargin': [30, 10, 1], 'LmpImprovingEighths': [4, 1, 1]})
+            self.assertEqual(self.run_cli('step', 'spsa-scr', '--stage', str(stage))[0], 0)
+            self.assertEqual(spsa.load_state('spsa-scr')['theta'], start)
+        spec = spsa.load_spec('spsa-scr')
+        self.assertEqual(sent, {spsa.format_params([(p['name'], p['start'], p['c_screen']) for p in spec['params']], {})})
+        self.assertTrue(spsa.load_state('spsa-scr')['done'])
+        rc, text = self.run_cli('report', 'spsa-scr')
+        self.assertEqual(rc, 0)
+        self.assertIn('a screen, 3 of 3 iterations', text)
+        final = spsa.read_json(spsa.data_dir('spsa-scr') / 'final.json')
+        self.assertEqual(final['mode'], 'screen')
+        self.assertLess(final['params']['RfpMargin']['z'], 0)  # its optimum lies below the default
+        # A screened parameter's switch must be on at the commit: UseMateDistance (off since 2026-11-17) is refused.
+        off = self.raw()
+        off['params'][0]['switch'] = 'UseMateDistance'
+        path.write_text(json.dumps(off), encoding='utf-8')
+        rc = self.run_cli('init', 'spsa-off', '--spec', str(path), '--commit', self.commit)[0]
+        self.assertEqual(rc, 1)
+        self.assertFalse((spsa.data_dir('spsa-off') / 'spec.json').exists())
+
+    def test_screen_recovers_known_slope_exactly(self):
+        # Every sign pattern once, each pair's expected score 1/2 + k * sum_i D_i s_i: the estimate is D exactly.
+        d_true = {'A': 6.0, 'B': -3.5, 'C': 0.0, 'D': 1.25}
+        spec = screen_spec([(n, 50, 2, 4, 0, 100, 'G', False) for n in d_true])
+        records = [expected_record(signs, K * sum(d * s for d, s in zip(d_true.values(), signs)))
+                   for signs in itertools.product((1, -1), repeat=4)]
+        out = spsa.iteration_step(spec, {n: 50.0 for n in d_true}, 0, records, 0)
+        hist = [dict(out, ptnml=[sum(r['ptnml'][i] for r in records) for i in range(5)])]
+        est = spsa.screen_estimates(spec, hist)
+        for n, d in d_true.items():
+            self.assertAlmostEqual(est[n]['d'], d, places=9)
+            self.assertAlmostEqual(est[n]['d_c'], d * 2 / 4, places=9)  # c-units: times c / c_screen
+
+    def test_screen_recovers_known_slope_fake_shard(self):
+        # The fake shard's quadratic Elo -((v - x*) / w)^2 has the secant D = -4 c_screen (theta - x*) / w^2 at
+        # c_screen. 8 iterations of 16 shards x 50 pairs (the S1 size), integer theta and c_screen (no rounding).
+        land = {'A': [60, 4, 1], 'B': [97, 2, 1], 'E': [0, 30, 1]}
+        rows = [('A', 50, 4, 8, 0, 100), ('B', 100, 2, 4, 0, 200), ('C', 20, 1, 2, 0, 40), ('D', 10, 1, 1, 9, 20),
+                ('E', 30, 2, 3, 0, 60)]
+        spec = screen_spec([r + ('G', False) for r in rows])
+        theta = {r[0]: float(r[1]) for r in rows}
+        d_true = {n: (-4 * cs * (theta[n] - land[n][0]) / land[n][1] ** 2 if n in land else 0.0)
+                  for n, _, _, cs, _, _ in rows}
+        self.assertEqual(d_true, {'A': 20.0, 'B': -12.0, 'C': 0.0, 'D': 0.0, 'E': -0.4})
+        hist = []
+        for it in range(8):
+            disp = {'label': 'spsa-scr', 'commit': 'e' * 40, 'stage': it, 'games': 1600, 'shards': 16,
+                    'draw_pairs': 1, 'openings': 2010401, 'tc': '8+0.08', 'hash': 16,
+                    'params': spsa.format_params([(n, theta[n], cs) for n, _, _, cs, _, _ in rows], {})}
+            records = [r for s in range(16) for r in fake.shard_result(disp, s, land)['records']]
+            out = spsa.iteration_step(spec, theta, it, records, 0)
+            self.assertEqual(out['theta_after'], theta)
+            hist.append(dict(out, ptnml=[sum(r['ptnml'][i] for r in records) for i in range(5)]))
+        est = spsa.screen_estimates(spec, hist)
+        # The fake's pair-score variance: a game draws with probability 0.6, so each game's score has variance
+        # 0.1 near equality, a pair's mean 0.05: SE = sqrt(0.05) / (k sqrt(6400)).
+        se_fake = math.sqrt(0.05) / (K * math.sqrt(6400))
+        for n, d in d_true.items():
+            e = est[n]
+            self.assertLess(abs(e['d'] - d), 3.5 * e['se'], (n, e, d))
+            self.assertAlmostEqual(e['se'] / se_fake, 1.0, delta=0.1)
+            self.assertAlmostEqual(e['z'], e['d'] / e['se'], places=12)
+        c = {r[0]: r[2] / r[3] for r in rows}  # c / c_screen
+        for n, e in est.items():
+            self.assertAlmostEqual(e['d_c'], e['d'] * c[n], places=9)
+            self.assertAlmostEqual(e['se_c'], e['se'] * c[n], places=9)
+            self.assertAlmostEqual(e['planned_se_c'], 0.204 / (K * 80) * c[n], places=9)
+        self.assertGreater(est['A']['z'], 2)
+        self.assertLess(est['B']['z'], -2)
+        # The planned SE of the design (§2.1): 0.2037 / (k sqrt 6400) = 1.77 Elo at c_screen, 0.885 in c-units at 2c.
+        one = [{'pairs': 6400, 'grad_sum': {'P': 0.0}, 'ptnml': [0, 0, 6400, 0, 0]}]
+        plan = spsa.screen_estimates(screen_spec([('P', 50, 2, 4, 0, 100, 'G', False)], pair_sd=0.2037), one)['P']
+        self.assertAlmostEqual(plan['planned_se_c'] * 2, 1.77, delta=0.005)
+        self.assertAlmostEqual(plan['planned_se_c'], 0.885, delta=0.002)
+
+    def test_decision_map(self):
+        # Hand-applied map: |z| >= 2 important, 1 <= |z| < 2 ambiguous, below 1 flat. G (big): 6 importants, so
+        # its ambiguous non-placeholder is frozen and its ambiguous placeholder joins. H (small): one important,
+        # so its ambiguous member joins (1 < 6). Z: one flat member, nothing joins.
+        rows = [('G1', 2.0, False), ('G2', -2.5, False), ('G3', 3.0, False), ('G4', -7.0, False), ('G5', 2.2, False),
+                ('G6', 2.01, False), ('G7', 1.99, False), ('G8', -1.0, True), ('G9', 0.99, True), ('G10', -0.2, False),
+                ('H1', -4.0, False), ('H2', 1.5, False), ('H3', -0.5, True), ('Z1', 0.0, False)]
+        spec = screen_spec([(n, 50, 1, 2, 0, 100, n[0], ph) for n, _, ph in rows])
+        verdicts, groups = spsa.screen_verdicts(spec, {n: z for n, z, _ in rows})
+        klass = {n: v[0] for n, v in verdicts.items()}
+        self.assertEqual(klass, {'G1': 'important', 'G2': 'important', 'G3': 'important', 'G4': 'important',
+                                 'G5': 'important', 'G6': 'important', 'G7': 'ambiguous', 'G8': 'ambiguous',
+                                 'G9': 'flat', 'G10': 'flat', 'H1': 'important', 'H2': 'ambiguous', 'H3': 'flat',
+                                 'Z1': 'flat'})
+        self.assertEqual(groups, {'G': ['G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G8'], 'H': ['H1', 'H2'], 'Z': []})
+        self.assertIn('placeholder', verdicts['G8'][2])
+        self.assertIn('not under 6', verdicts['G7'][2])
+        self.assertEqual(verdicts['G9'][1:], (False, 'frozen: screened flat'))  # a flat placeholder stays frozen
+        # Five that join on their own: under 6, so the ambiguous non-placeholder joins.
+        z5 = {n: z for n, z, _ in rows}
+        z5['G6'] = z5['G8'] = 0.0  # G8, an ambiguous placeholder, would count too
+        verdicts, groups = spsa.screen_verdicts(spec, z5)
+        self.assertTrue(verdicts['G7'][1])
+        self.assertIn('G7', groups['G'])
+
+    def test_committed_s1_spec(self):
+        raw = json.loads((HERE / 'spsa-s1-screen.json').read_text(encoding='utf-8'))
+        spec = spsa.resolve_spec(raw, self.table, 'spsa-s1-screen', 'a' * 40)
+        self.assertEqual([(p['name'], p['group']) for p in spec['params']], S1_CANDIDATES)
+        self.assertEqual({p['name'] for p in spec['params'] if p['placeholder']}, S1_PLACEHOLDERS)
+        names = {p['name'] for p in spec['params']}
+        self.assertEqual(names & (spsa.EXCLUDED_PARAMS | {'HistoryBonusFactor', 'LmrCorrectionStrength'}), set())
+        self.assertEqual((spec['iterations'], spec['games'], spec['shards'], spec['tc'], spec['total_pairs']),
+                         (8, 1600, 16, '8+0.08', 6400))
+        self.assertGreaterEqual(spec['opening_reserve'], 2010401)  # past R14's last line, 2,010,400
+        r14 = {p['name']: p['c'] for p in json.loads((HERE / 'spsa-r14.json').read_text(encoding='utf-8'))['params']}
+        r14['QuietSeeFloor'] = QUIET_SEE_FLOOR_C
+        switches = spsa.switches_from_header((ROOT / 'src' / 'search' / 'searcher.hpp').read_text(encoding='utf-8'))
+        self.assertFalse(switches['UseMateDistance'])  # the removal round's one removal (2026-11-17)
+        for p in spec['params']:
+            default, lowest, highest, step = self.table[p['name']]
+            self.assertEqual(p['start'], default)
+            # c: the calibration where a firing counter exists, else the fallback (owner, 2026-11-22).
+            if p['name'] in spsa_calibrate.COUNTER_FOR_PARAM:
+                self.assertEqual(p['c'], r14[p['name']], p['name'])
+            else:
+                self.assertEqual(p['c'], 1 if step == 1 else 2 * step, p['name'])
+            self.assertEqual(p['c_screen'], spsa.screen_c(p['c'], default, lowest, highest), p['name'])
+            self.assertTrue(switches[p['switch']], p['name'])  # its feature is on in this tree
+
 
 class SpsaCalibrationTest(unittest.TestCase):
     def test_calibration_interpolates_target(self):

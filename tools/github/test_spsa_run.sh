@@ -52,11 +52,12 @@ unset FORK_GH_JOBS GHOST_SECS FORK_SPSA_SERIAL
 g() { git -c core.autocrlf=false -c init.defaultBranch=main "$@"; }
 # The tooling under test, committed in a throwaway repository: its commit is also the tuned commit.
 repo=$tmp/repo
-mkdir -p "$repo/tools/github" "$repo/tools/jobs" "$repo/scripts" "$repo/src/tune"
+mkdir -p "$repo/tools/github" "$repo/tools/jobs" "$repo/scripts" "$repo/src/tune" "$repo/src/search"
 cp "$here/spsa.py" "$here/spsa_run.sh" "$here/fake_spsa_shard.py" "$repo/tools/github/"
 cp "$here/../jobs/ledger.py" "$here/../jobs/paths.sh" "$repo/tools/jobs/"
 cp "$here/../../scripts/scan-push.sh" "$repo/scripts/"
 cp "$here/../../src/tune/params.hpp" "$repo/src/tune/"
+cp "$here/../../src/search/searcher.hpp" "$repo/src/search/"  # a screen's switch check
 g init -q "$repo"
 g -C "$repo" config user.name test
 g -C "$repo" config user.email test@example.invalid
@@ -161,7 +162,7 @@ cat >"$tmp/spec.json" <<'EOF'
 EOF
 echo '{"RfpMargin": [68, 6, 1], "FutilityOffset": [112, 8, 1]}' >"$tmp/landscape.json"
 
-setup() {  # label busy
+setup() {  # label busy [spec]
   st=$tmp/$1
   mkdir -p "$st/data"
   echo "$2" >"$st/busy"
@@ -169,7 +170,7 @@ setup() {  # label busy
   echo "$sha" >"$st/commits"
   cp "$tmp/landscape.json" "$st/"
   : >"$st/dispatches"
-  SPSA_DATA=$st/data "$py" -I "$tools/spsa.py" init spsa-t --spec "$tmp/spec.json" --commit "$sha" >"$st/init" 2>&1
+  SPSA_DATA=$st/data "$py" -I "$tools/spsa.py" init spsa-t --spec "${3:-$tmp/spec.json}" --commit "$sha" >"$st/init" 2>&1
 }
 drive() {  # label [env assignments...]; the dispatch trigger unless SPSA_TRIGGER=push is given
   # LIMIT=S (if set) cuts a hang, a pending run that never leaves room, after S seconds.
@@ -421,6 +422,31 @@ setup_remote cpushwait
 echo "910 ci 0 $(now)" >"$tmp/cpushwait/active"
 LIMIT=10 drive cpushwait SPSA_TRIGGER=push SPSA_STOP_AFTER=0
 check "capacity, push: a fresh run with no jobs listed: nothing pushed" bash -c "[ '$(rc cpushwait)' = 124 ] && [ -z '$(pushed cpushwait)' ]"
+
+# 59-62: a screen (design S1, spec "mode": "screen") through the driver: every iteration at the defaults with
+# c_screen, theta never moves, the report gives each parameter's D +- SE and its verdict. The same two margins
+# and landscape as above (RfpMargin's optimum below its default, FutilityOffset's above); their defaults come
+# from params.hpp, so the expected values are read from it.
+cat >"$tmp/screen.json" <<'EOF'
+{"mode": "screen", "params": [
+  {"name": "RfpMargin", "c": 6, "group": "G1a", "placeholder": false, "switch": "UseRfp"},
+  {"name": "FutilityOffset", "c": 8, "group": "G1a", "placeholder": false, "switch": "UseFutility"}],
+ "fixed": {}, "iterations": 3, "games": 1600, "shards": 2, "draw_pairs": 1, "tc": "8+0.08", "hash": 16,
+ "pair_sd": 0.204, "opening_reserve": 2010401}
+EOF
+rfp=$(sed -n 's/^ *X(RfpMargin, \([0-9]*\),.*/\1/p' "$repo/src/tune/params.hpp")
+fut=$(sed -n 's/^ *X(FutilityOffset, \([0-9]*\),.*/\1/p' "$repo/src/tune/params.hpp")
+setup screen 0 "$tmp/screen.json"
+drive screen SPSA_STOP_AFTER=0
+check "screen: SPSA_STOP_AFTER=0 stops after iteration 0, theta at the defaults" \
+  [ "$(rc screen)-$(state screen "s['iteration'], s['theta'] == {'RfpMargin': $rfp.0, 'FutilityOffset': $fut.0}")" = "0-1 True" ]
+drive screen
+check "screen: the whole screen exits 0, theta never moved" \
+  [ "$(rc screen)-$(state screen "s['done'], s['theta'] == {'RfpMargin': $rfp.0, 'FutilityOffset': $fut.0}")" = "0-True True" ]
+check "screen: three dispatches, each with the same params (the defaults, c_screen = 2c: 12 and 16)" \
+  [ "$(grep -o 'params=[^ ]*' "$tmp/screen/dispatches" | sort | uniq -c | awk '{print $1, $2}')" = "3 params=RfpMargin=$rfp.000:12.000,FutilityOffset=$fut.000:16.000" ]
+check "screen: the report gives each D +- SE and a verdict, and final.json" \
+  bash -c "grep -q 'a screen, 3 of 3 iterations' '$tmp/screen/out' && grep -q '^| RfpMargin | G1a | $rfp | 6 | 12 | [-+][0-9.]* +- [0-9.]* |' '$tmp/screen/out' && [ -f '$tmp/screen/data/spsa-t/final.json' ]"
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures check(s) failed"

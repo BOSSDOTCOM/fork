@@ -347,7 +347,10 @@ FutilityOffset (last 81.6, floor 68.2) or FutilityGrowth (lowest 49.1, floor
 Both passes use spsa.py's rules as R14 did (Spall's gain sequences with
 alpha 0.602; c held fixed; each step clamped to 0.5 c; the mean of the last
 30% of the updates; the stationary-loss budget 0.5 Elo; A at most 10% of the
-pairs).
+pairs). **2026-11-22 (owner): ε = 0.5 Elo per group** (each group's
+`loss_budget` 0.5; final-retune-expansion-2026-11-15.md §3.2), after the
+sensitivity screen S1 (`tools/github/spsa-s1-screen.json`, a zero-gain run
+that picks each group's members, never a value).
 
 | | STC pass, class (a) | LTC pass, class (b) |
 |---|---|---|
