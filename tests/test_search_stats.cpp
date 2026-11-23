@@ -165,9 +165,13 @@ TEST_CASE("search_stats", "pawn moves and TT evaluations are counted where they 
 TEST_CASE("search_stats", "the feature stack's tally matches hand counts") {
   // The oracle is the feature definition (accumulator.hpp's header): a
   // non-capturing piece move removes one row and adds one per perspective; a
-  // pawn move also changes the link rows on S512+PP; a king crossing the
-  // d/e line recomputes its own perspective on a mirrored net. Moves are
-  // picked from the legal list by their kind, not typed.
+  // pawn move also changes the link rows on the nets with links (S512+PP and
+  // its descendants H512+PP and S512+PPXL: NetLinks); a king crossing the
+  // d/e line recomputes its own perspective on a mirrored net, at the push
+  // or, on H512+PP, lazily at the first evaluation that needs it. Moves are
+  // picked from the legal list by their kind, not typed. (Until 1ce1a708 made
+  // r3kr1, an H512+PP net, the default, this case branched on S512+PP's id
+  // alone and counted the king's refresh at the push: both went stale then.)
   const NetFile& net = embedded_net();
   auto stack = std::make_unique<FeatureStack>();
   const auto pick = [](const Position& pos, PieceType type, bool capture) {
@@ -207,7 +211,7 @@ TEST_CASE("search_stats", "the feature stack's tally matches hand counts") {
   CHECK_EQ(stack->tally().perspective_updates, std::uint64_t{6});
   CHECK_EQ(stack->tally().walked_plies, std::uint64_t{3});
   CHECK_EQ(stack->tally().move_pushes, std::uint64_t{3});
-  if constexpr (NetArchitecture == 8) {
+  if constexpr (NetLinks) {
     CHECK_EQ(stack->tally().link_updates, std::uint64_t{2});  // the pawn move, both perspectives
     CHECK(stack->tally().update_rows >= 12);
   } else {
@@ -229,6 +233,10 @@ TEST_CASE("search_stats", "the feature stack's tally matches hand counts") {
   CHECK(!across.is_none());
   const std::uint64_t refreshes = stack->tally().frame_refreshes;
   stack->push_move(net, 0, kiwi, across);
+  constexpr bool lazy = NetArchitecture == 9;  // H512+PP refreshes from its snapshot at the evaluation
+  CHECK_EQ(stack->tally().frame_refreshes - refreshes, std::uint64_t{NetMirrored && !lazy ? 1 : 0});
+  kiwi.make(across);
+  stack->evaluate(net, 1, kiwi);
   CHECK_EQ(stack->tally().frame_refreshes - refreshes, std::uint64_t{NetMirrored ? 1 : 0});
 }
 #endif
@@ -236,7 +244,8 @@ TEST_CASE("search_stats", "the feature stack's tally matches hand counts") {
 // X2: every LMR site lands in each histogram once (a missing arrival in its
 // own counter), the term's changes need a firing, every late capture lands
 // in the take histogram; and history persists across the searches of a
-// game, so the replay sees larger history values than a cleared search.
+// game, so the replay sees larger history values than a searcher whose
+// history is cleared but whose table is the same.
 TEST_CASE("search_stats", "X2 histograms add up, and history carries over between searches") {
   std::vector<TtBucket> buckets(16384);
   TransTable table;
@@ -245,14 +254,6 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
   SearchQuota limits;
   limits.depth = 9;
   auto carried = std::make_unique<Searcher>(table);
-  // The zero-band comparison below was set on trees without B9's LMP use (it
-  // did not exist yet); with it on, the carried share comes out at 2829/8144
-  // against a cleared 2872/8737 (2026-11-13), so the case pins it off on both
-  // searchers: it tests the carry-over on the trees it was built for. R20's
-  // centred LMR history term (2026-11-13) flips it the same way (carried
-  // 1948/7260 against cleared 1988/8936), so it is pinned off too.
-  carried->switches.use_improving_lmp = false;
-  carried->switches.use_centred_lmr_history = false;
   Position pos;
   CHECK(pos.set_fen(perft_suite()[0].fen));
   // A short game: each side plays the search's move, history carried.
@@ -261,6 +262,10 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
     CHECK(!r.best.is_none());
     pos.make(r.best);
   }
+  // The table as the last search finds it (its entries, and its age in a copy
+  // of the table that shares the entries), for the cleared searcher below.
+  const std::vector<TtBucket> table_before = buckets;
+  TransTable twin = table;
   const SearchCounters before = carried->counters;
   carried->deliberate(pos, limits, stop, nullptr, nullptr);
   const SearchCounters& c = carried->counters;
@@ -274,17 +279,27 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
   CHECK_EQ(sum(c.lmr_quiet_bins, TableBins), c.lmr_rule_sites);
   CHECK_EQ(sum(c.lmr_reply_bins, TableBins) + c.lmr_reply_absent, c.lmr_rule_sites);
   CHECK_EQ(sum(c.lmr_follow_bins, TableBins) + c.lmr_follow_absent, c.lmr_rule_sites);
+  // With the default switches (R20's round-once sum and B9's ply included):
+  // fault check, a probe that recomputes the whole-ply sum fails here with
+  // R20 on.
   CHECK(c.lmr_history_changes <= c.lmr_history_fire_less + c.lmr_history_fire_more);
   CHECK(c.late_capture_sites > 0);
   CHECK_EQ(sum(c.late_take_bins, TableBins), c.late_capture_sites);
   // The last search's sites with a zero-band butterfly value (bin of [0, 250)):
-  // fewer with history carried than in a cleared searcher on the same position.
+  // fewer with history carried than in a cleared searcher on the same
+  // position and the same table, so history is the only difference. (Until
+  // 2026-11-23 the cleared searcher also had an empty table, which searches a
+  // larger tree that fills its own history: that comparison held only on some
+  // trees. B9's LMP use and R20's centred term each flipped it on r8ceplo2,
+  // and were pinned off here; r3kr1's trees, the default net since 1ce1a708,
+  // flipped it with them pinned off, carried 607/2440 against 582/3258. With
+  // the table held equal, the carried share was the lower at depths 7 to 10
+  // after 4, 8 or 12 plies, pins on or off, 24 of 24 (2026-11-23); with the
+  // carried history cleared before its last search, the shares are equal.)
   const std::uint64_t carried_sites = c.lmr_rule_sites - before.lmr_rule_sites;
   const std::uint64_t carried_zero = c.lmr_quiet_bins[TableBins / 2] - before.lmr_quiet_bins[TableBins / 2];
-  std::fill(buckets.begin(), buckets.end(), TtBucket{});
-  auto cleared = std::make_unique<Searcher>(table);
-  cleared->switches.use_improving_lmp = false;
-  cleared->switches.use_centred_lmr_history = false;
+  buckets = table_before;
+  auto cleared = std::make_unique<Searcher>(twin);
   cleared->deliberate(pos, limits, stop, nullptr, nullptr);
   const SearchCounters& f = cleared->counters;
   CHECK(carried_sites > 0 && f.lmr_rule_sites > 0);
@@ -292,15 +307,6 @@ TEST_CASE("search_stats", "X2 histograms add up, and history carries over betwee
                 static_cast<double>(f.lmr_quiet_bins[TableBins / 2]) / static_cast<double>(f.lmr_rule_sites),
             "zero-band share carried " << carried_zero << "/" << carried_sites << ", cleared "
                                        << f.lmr_quiet_bins[TableBins / 2] << "/" << f.lmr_rule_sites);
-  // The probe with the default switches (R20's rounded sum and B9's ply
-  // included, which the pins above leave out): its changes still need a
-  // firing (fault check: a probe that recomputes the whole-ply sum fails
-  // here with R20 on).
-  auto defaults = std::make_unique<Searcher>(table);
-  defaults->deliberate(pos, limits, stop, nullptr, nullptr);
-  const SearchCounters& d = defaults->counters;
-  CHECK(d.lmr_rule_sites > 0);
-  CHECK(d.lmr_history_changes <= d.lmr_history_fire_less + d.lmr_history_fire_more);
 }
 
 // The history skip (T24): its sites' histogram bounds its firing count. Each
