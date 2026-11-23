@@ -76,7 +76,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import engine_lines  # noqa: E402
 
 # Today's margins (src/tune/params.hpp at phase-4 3875ca9f).
-RFP_MARGIN = 55
+CURRENT_RFP_MARGIN = 55
 FUTILITY_OFFSET = 86
 FUTILITY_GROWTH = 50
 NULL_SURPLUS_PER_PLY = 301
