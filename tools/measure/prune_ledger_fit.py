@@ -52,6 +52,8 @@ def ledger_rows(records):
     rows = []
     for record in records:
         for row in record.get('ledger') or []:
+            if row['technique'] not in ('rfp', 'futility'):
+                continue  # B1's null-move rows (FORK_NULL_LEDGER): tools/measure/eval_error.py
             out = dict(row)
             out['game'] = record['game']
             out['gap'] = row['excess'] if row['technique'] == 'rfp' else row['deficit']

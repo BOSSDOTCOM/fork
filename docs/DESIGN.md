@@ -4204,7 +4204,8 @@ CI, orchestrator's ruling 2026-11-07) runs bench_parity and the
 The engine reads its report switches from environment variables once, at
 start-up: `FORK_STATS_REPORT` (a cumulative counter dump after each search),
 `FORK_ITERATION_TRACE` (one line per finished iteration), `FORK_PRUNE_LEDGER`
-(the decision ledger's sampling rate). Line formats:
+(the decision ledger's sampling rate; with `FORK_NULL_LEDGER` also its
+null-move rows, B1). Line formats:
 `tools/measure/engine_lines.py`. No allocation or exceptions in the
 recursion, even in stats builds; the dump's lines are integers only.
 
@@ -4267,6 +4268,23 @@ the ledger on equals bench.ref (tests; removing any one of the three
 guards fails them). Rows: `prune_ledger` lines; analysis:
 `tools/measure/prune_ledger_fit.py` (I1's probit with a tail floor, by
 depth, with the declared reading in its docstring).
+
+**B1, the eval-error check (owner-approved 2026-11-22; for the final
+retune's group G1a).** With `FORK_NULL_LEDGER=1` beside
+`FORK_PRUNE_LEDGER=N` the ledger also samples the null move's candidates
+(every condition holds, so the null search is tried) and searches the node
+once more with the null move off there (`LedgerForce::NullOff`), before the
+real null search; a `prune_ledger null` row follows that search (the cut is
+wrong when the arm fails low, missed when the arm fails high and the null
+search did not cut). Without it the ledger prints exactly X10's rows. The
+counters `ledger_null_candidates` and `ledger_wide_windows` (ledger arms
+entered on a window wider than one point: 0 at the defaults, since every
+pruning site is a non-PV node on a zero window, so no arm returns an exact
+score). Analysis: `tools/measure/eval_error.py` (the pruning eval minus each
+arm's result, by site, bound and depth; the calls at today's margins and
+margin sweeps), results in docs/research/b1-eval-error-2026-11-22.md. Like
+every offline rule it informs the retune's ranges only (Testing setup,
+2026-11-12).
 
 **Idea 59 step 1, evaluations near the window** (owner's request,
 2026-11-07, for the Boundary Refiner's gate). At each static evaluation the

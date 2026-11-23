@@ -452,6 +452,7 @@ TEST_CASE("search_stats", "bench is unchanged with the ledger and the trace on")
   };
   const SearchBenchResult off = run_search_bench();
   set_env("FORK_PRUNE_LEDGER", "64");
+  set_env("FORK_NULL_LEDGER", "1");
   set_env("FORK_ITERATION_TRACE", "1");
   set_env("FORK_STATS_REPORT", "1");
   const std::string path = "search_stats_ledger_bench.txt";
@@ -476,13 +477,15 @@ TEST_CASE("search_stats", "bench is unchanged with the ledger and the trace on")
 #endif
   std::fclose(sink);
   set_env("FORK_PRUNE_LEDGER", nullptr);
+  set_env("FORK_NULL_LEDGER", nullptr);
   set_env("FORK_ITERATION_TRACE", nullptr);
   set_env("FORK_STATS_REPORT", nullptr);
   std::ifstream in(path, std::ios::binary);
-  std::size_t rfp_rows = 0, futility_rows = 0, traces = 0;
+  std::size_t rfp_rows = 0, futility_rows = 0, null_rows = 0, traces = 0;
   for (std::string line; std::getline(in, line);) {
     rfp_rows += line.rfind("prune_ledger rfp|", 0) == 0;
     futility_rows += line.rfind("prune_ledger futility|", 0) == 0;
+    null_rows += line.rfind("prune_ledger null|", 0) == 0;
     traces += line.rfind("iteration_trace ", 0) == 0;
   }
   in.close();
@@ -491,6 +494,7 @@ TEST_CASE("search_stats", "bench is unchanged with the ledger and the trace on")
   CHECK_EQ(on.signature, off.signature);
   CHECK(rfp_rows > 0);
   CHECK(futility_rows > 0);
+  CHECK(null_rows > 0);
   CHECK(traces > 0);
 }
 
@@ -595,6 +599,124 @@ TEST_CASE("search_stats", "ledger rows match the real search's prunes, and the s
   CHECK_EQ(futility_rows, c.ledger_futility_candidates);
   CHECK_EQ(rfp_rows + futility_rows, c.ledger_rows);
   CHECK(c.ledger_side_nodes > 0);
+}
+
+// B1 (the eval-error measurement, 2026-11-22): with FORK_NULL_LEDGER and
+// every candidate sampled, one null-move row per null search the real search
+// tries, fired exactly where it cut (the counters exclude the side
+// searches); every row's fields as documented; every arm entered on a zero
+// window, so none can return an exact score; and the searches equal the
+// same searches without the ledger. Without FORK_NULL_LEDGER there is no
+// null row (X10's rows unchanged).
+TEST_CASE("search_stats", "null-move ledger rows match the real search's null searches") {
+  std::vector<TtBucket> buckets(16384);
+  TransTable table;
+  table.bind_memory(reinterpret_cast<std::byte*>(buckets.data()), buckets.size() * sizeof(TtBucket));
+  const std::atomic<bool> stop{false};
+  const auto set_env = [](const char* name, const char* value) {
+#ifdef _WIN32
+    _putenv_s(name, value ? value : "");
+#else
+    if (value)
+      setenv(name, value, 1);
+    else
+      unsetenv(name);
+#endif
+  };
+  SearchQuota limits;
+  limits.depth = 8;
+  const auto run = [&](Searcher& searcher, const std::string& path, std::vector<SearchResult>& out) {
+    std::fflush(stderr);
+#ifdef _WIN32
+    const int saved = _dup(_fileno(stderr));
+    std::FILE* sink = std::fopen(path.c_str(), "wb");
+    _dup2(_fileno(sink), _fileno(stderr));
+#else
+    const int saved = dup(fileno(stderr));
+    std::FILE* sink = std::fopen(path.c_str(), "wb");
+    dup2(fileno(sink), fileno(stderr));
+#endif
+    for (int i = 0; i < 3; ++i) {
+      std::fill(buckets.begin(), buckets.end(), TtBucket{});
+      searcher.clear_history();
+      Position pos;
+      CHECK(pos.set_fen(perft_suite()[i].fen));
+      out.push_back(searcher.deliberate(pos, limits, stop, nullptr, nullptr));
+    }
+    std::fflush(stderr);
+#ifdef _WIN32
+    _dup2(saved, _fileno(stderr));
+    _close(saved);
+#else
+    dup2(saved, fileno(stderr));
+    close(saved);
+#endif
+    std::fclose(sink);
+  };
+  std::vector<SearchResult> plain;
+  auto plain_searcher = std::make_unique<Searcher>(table);
+  for (int i = 0; i < 3; ++i) {
+    std::fill(buckets.begin(), buckets.end(), TtBucket{});
+    plain_searcher->clear_history();
+    Position pos;
+    CHECK(pos.set_fen(perft_suite()[i].fen));
+    plain.push_back(plain_searcher->deliberate(pos, limits, stop, nullptr, nullptr));
+  }
+  // X10's ledger alone: no null rows, no null candidates counted.
+  set_env("FORK_PRUNE_LEDGER", "1");
+  auto x10 = std::make_unique<Searcher>(table);
+  set_env("FORK_NULL_LEDGER", "1");
+  auto ledger = std::make_unique<Searcher>(table);
+  set_env("FORK_PRUNE_LEDGER", nullptr);
+  set_env("FORK_NULL_LEDGER", nullptr);
+  const std::string x10_path = "search_stats_null_ledger_off.txt";
+  const std::string path = "search_stats_null_ledger_rows.txt";
+  std::vector<SearchResult> x10_results, ledgered;
+  run(*x10, x10_path, x10_results);
+  run(*ledger, path, ledgered);
+  for (int i = 0; i < 3; ++i) {
+    CHECK_EQ(ledgered[i].nodes, plain[i].nodes);
+    CHECK_EQ(ledgered[i].best.raw(), plain[i].best.raw());
+    CHECK_EQ(ledgered[i].score, plain[i].score);
+    CHECK_EQ(ledgered[i].depth, plain[i].depth);
+  }
+  std::uint64_t x10_null_rows = 0;
+  {
+    std::ifstream in(x10_path, std::ios::binary);
+    for (std::string line; std::getline(in, line);) x10_null_rows += line.rfind("prune_ledger null|", 0) == 0;
+  }
+  std::remove(x10_path.c_str());
+  CHECK_EQ(x10_null_rows, std::uint64_t{0});
+  CHECK_EQ(x10->counters.ledger_null_candidates, std::uint64_t{0});
+  std::ifstream in(path, std::ios::binary);
+  std::uint64_t rows = 0, null_rows = 0, null_fired = 0, null_side_nodes = 0;
+  for (std::string line; std::getline(in, line);) {
+    if (line.rfind("prune_ledger ", 0) != 0) continue;
+    ++rows;
+    std::vector<std::string> fields;
+    std::istringstream text(line.substr(13));
+    for (std::string field; std::getline(text, field, '|');) fields.push_back(field);
+    if (fields[0] != "null") continue;
+    CHECK_EQ(fields.size(), std::size_t{14});
+    const int depth = std::stoi(fields[1]), excess = std::stoi(fields[3]), null_depth = std::stoi(fields[5]);
+    const int fired = std::stoi(fields[9]), null_minus_beta = std::stoi(fields[10]);
+    CHECK(depth >= NullMinDepth);
+    CHECK(excess >= 0);
+    CHECK(null_depth <= depth / 2 - 1);
+    CHECK_EQ(fired, null_minus_beta >= 0 ? 1 : 0);
+    null_side_nodes += std::stoull(fields[12]);
+    ++null_rows;
+    null_fired += fired;
+  }
+  in.close();
+  std::remove(path.c_str());
+  const SearchCounters& c = ledger->counters;
+  CHECK(null_rows > 0 && null_fired > 0 && null_fired < null_rows);
+  CHECK_EQ(null_rows, c.ledger_null_candidates);
+  CHECK_EQ(null_fired, c.null_cuts);
+  CHECK_EQ(rows, c.ledger_rows);
+  CHECK_EQ(c.ledger_wide_windows, std::uint64_t{0});
+  CHECK(null_side_nodes > 0 && null_side_nodes <= c.ledger_side_nodes);
 }
 
 // Idea 59 step 1: every computed evaluation lands once in its gap histogram
