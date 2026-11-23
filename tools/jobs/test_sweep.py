@@ -35,6 +35,12 @@ class SweepScript(unittest.TestCase):
         self.assertIn('Win32_PageFileUsage', text)
         self.assertIn('ALERT: kernel paged pool', text)
 
+    def test_token_count_logged(self):
+        """Owner, 2026-11-22: the Toke count every run, for the 24-hour process-start check."""
+        text = SWEEP.read_text(encoding='utf-8')
+        self.assertIn('pool_tags.ps1" -Tag Toke', text)
+        self.assertTrue((HERE / 'pool_tags.ps1').is_file())
+
 
 class GcpSweepWanted(unittest.TestCase):
     def run_sweep(self, wanted, status='TERMINATED'):

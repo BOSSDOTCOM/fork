@@ -39,6 +39,11 @@ PAGED_POOL_ALERT_GB=2
 mem=$(powershell.exe -NoProfile -Command '$c = Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory; $p = Get-CimInstance Win32_PageFileUsage | Measure-Object AllocatedBaseSize, CurrentUsage -Sum; "{0:N2} {1:N2} {2:N2} {3:N2} {4:N2} {5:N2}" -f ($c.PoolPagedBytes/1e9), ($c.PoolNonpagedBytes/1e9), ($p[0].Sum/1000), ($p[1].Sum/1000), ($c.CommittedBytes/1e9), ($c.CommitLimit/1e9)' | tr -d '\r')
 read -r paged nonpaged pf_alloc pf_used commit limit <<<"$mem"
 echo "== kernel memory: paged pool ${paged:-?} GB, nonpaged ${nonpaged:-?} GB; pagefile ${pf_alloc:-?} GB allocated, ${pf_used:-?} GB in use; commit ${commit:-?} of ${limit:-?} GB"
+# The token objects (pool tag Toke; tools/jobs/pool_tags.ps1): about 2.0 million, 4.1 GB, before the 2026-11-22
+# restart; logged every run for the owner's 24-hour check of whether they grow with process starts.
+toke=$(powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$F/tools/jobs/pool_tags.ps1" -Tag Toke 2>/dev/null | tr -d '\r')
+read -r _ toke_mb toke_live <<<"$toke"
+echo "   tokens (pool tag Toke): ${toke_live:-?} live, ${toke_mb:-?} MB; Windows up since $(powershell.exe -NoProfile -Command '(Get-CimInstance Win32_OperatingSystem).LastBootUpTime.ToString("yyyy-MM-dd hh:mm tt")' | tr -d '\r')"
 if [ -z "${paged:-}" ]; then
   echo "   ATTENTION: the kernel memory counters could not be read"
 elif awk -v p="${paged//,/}" -v t="$PAGED_POOL_ALERT_GB" 'BEGIN { exit !(p > t) }'; then
