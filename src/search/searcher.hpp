@@ -545,8 +545,9 @@ inline int mover_history(const QuietHistory& history, const Position& after, Mov
 // The decision ledger (DESIGN.md §5.7, X10): one technique switched at one
 // node of a side search: RFP off, futility off, or futility on (dropping
 // the non-checking quiets after the first move, its bound capped at alpha
-// so the arm claims a fail low, as the rule always does).
-enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
+// so the arm claims a fail low, as the rule always does), or, with
+// FORK_NULL_LEDGER (B1, 2026-11-22), the null move off.
+enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn, NullOff };
 #endif
 // The scalar counters, one list (as the switches above), so the per-search
 // dump (stats_report.hpp) cannot miss one: X(member).
@@ -584,6 +585,11 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
 // - X10: candidates of RFP and futility (every condition but the margin),
 //   the ledger rows printed, and the nodes its side searches took (kept
 //   apart: a side search restores every other counter).
+// - B1 (the eval-error measurement, 2026-11-22): with FORK_NULL_LEDGER,
+//   null-move candidates (every condition holds: the null search is tried);
+//   and side searches entered with a window wider than one point (0 at the
+//   defaults: every pruning site is a non-PV node, searched on a zero
+//   window, so no ledger arm can return an exact score).
 // - Idea 59 step 1: evaluation sites whose window has no finite bound (both
 //   in the mate or tablebase band), main and quiescence, computed and
 //   reused from the TT; computed ones with exactly one finite bound.
@@ -656,6 +662,8 @@ enum class LedgerForce : std::uint8_t { Keep, RfpOff, FutilityOff, FutilityOn };
   X(ledger_futility_candidates)      \
   X(ledger_rows)                     \
   X(ledger_side_nodes)               \
+  X(ledger_null_candidates)          \
+  X(ledger_wide_windows)             \
   X(eval_gap_main_infinite)          \
   X(eval_gap_quiesce_infinite)       \
   X(eval_gap_main_reuse_infinite)    \
@@ -1029,6 +1037,9 @@ class Searcher {
   // restores afterwards.
   std::uint64_t ledger_every_ = 0;
   bool ledger_active_ = false;
+  // B1: FORK_NULL_LEDGER adds the null move's rows to the ledger (sampled at
+  // the same rate; off, the ledger prints exactly X10's rows).
+  bool null_ledger_ = false;
   // FORK_DRIFT_REPORT: every drift table learns (none is applied) and is
   // measured (the drift counters; with the ledger, a `drift_ledger` line
   // after each `prune_ledger` row), so the search keeps its tree.

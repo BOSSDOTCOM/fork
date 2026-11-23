@@ -33,6 +33,11 @@ class EngineLinesTests(unittest.TestCase):
         fut = el.parse_ledger_line('prune_ledger futility|2|11|300|310|240|0|-1|7|14|1|-1|5|100|180|0')
         self.assertEqual((fut['technique'], fut['on_minus_beta'], fut['off_minus_beta'], fut['off_nodes']),
                          ('futility', -1, 5, 180))
+        null = el.parse_ledger_line('prune_ledger null|7|12|180|150|1|1|4|18|1|35|-20|5000|0')
+        self.assertEqual((null['technique'], null['null_depth'], null['fired'], null['null_minus_beta'],
+                          null['arm_minus_beta'], null['arm_nodes']), ('null', 1, 1, 35, -20, 5000))
+        with self.assertRaises(ValueError):
+            el.parse_ledger_line('prune_ledger null|7|12|180')
 
     def test_drift_ledger_line(self):
         row = el.parse_drift_ledger_line('drift_ledger rfp|12|-3|0|250\n')

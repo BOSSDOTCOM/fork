@@ -14,6 +14,11 @@ variables read at start-up (src/search/searcher.cpp):
   `prune_ledger rfp|depth|ply|excess|static_excess|margin|tt_bound|tt_depth|swing|phase|fired|arm_minus_beta|arm_nodes|arm_mate`
   or
   `prune_ledger futility|depth|ply|deficit|static_deficit|margin|tt_bound|tt_depth|swing|phase|fired|on_minus_beta|off_minus_beta|on_nodes|off_nodes|arm_mate`;
+  with FORK_NULL_LEDGER too (B1, 2026-11-22), per sampled null-move candidate,
+  `prune_ledger null|depth|ply|excess|static_excess|null_depth|tt_bound|tt_depth|phase|fired|null_minus_beta|arm_minus_beta|arm_nodes|arm_mate`
+  (fired: the null search reached beta; the arm: the node searched with the
+  null move off there; arm_mate: the arm or the null score is a mate or
+  tablebase score);
 - FORK_DRIFT_REPORT (the drift tables' passive measurement, R34 and E4):
   the drift counters in the counter dump, and with the ledger, after each
   `prune_ledger` row, `drift_ledger rfp|pieces|minor|major|threat` (each
@@ -73,6 +78,8 @@ def parse_ledger_line(line):
                 'arm_minus_beta', 'arm_nodes', 'arm_mate'),
         'futility': ('depth', 'ply', 'deficit', 'static_deficit', 'margin', 'tt_bound', 'tt_depth', 'swing', 'phase',
                      'fired', 'on_minus_beta', 'off_minus_beta', 'on_nodes', 'off_nodes', 'arm_mate'),
+        'null': ('depth', 'ply', 'excess', 'static_excess', 'null_depth', 'tt_bound', 'tt_depth', 'phase', 'fired',
+                 'null_minus_beta', 'arm_minus_beta', 'arm_nodes', 'arm_mate'),
     }
     words = line.split()
     if len(words) != 2 or words[0] != 'prune_ledger':

@@ -4204,7 +4204,8 @@ CI, orchestrator's ruling 2026-11-07) runs bench_parity and the
 The engine reads its report switches from environment variables once, at
 start-up: `FORK_STATS_REPORT` (a cumulative counter dump after each search),
 `FORK_ITERATION_TRACE` (one line per finished iteration), `FORK_PRUNE_LEDGER`
-(the decision ledger's sampling rate). Line formats:
+(the decision ledger's sampling rate; with `FORK_NULL_LEDGER` also its
+null-move rows, B1). Line formats:
 `tools/measure/engine_lines.py`. No allocation or exceptions in the
 recursion, even in stats builds; the dump's lines are integers only.
 
@@ -4268,6 +4269,23 @@ guards fails them). Rows: `prune_ledger` lines; analysis:
 `tools/measure/prune_ledger_fit.py` (I1's probit with a tail floor, by
 depth, with the declared reading in its docstring).
 
+**B1, the eval-error check (owner-approved 2026-11-22; for the final
+retune's group G1a).** With `FORK_NULL_LEDGER=1` beside
+`FORK_PRUNE_LEDGER=N` the ledger also samples the null move's candidates
+(every condition holds, so the null search is tried) and searches the node
+once more with the null move off there (`LedgerForce::NullOff`), before the
+real null search; a `prune_ledger null` row follows that search (the cut is
+wrong when the arm fails low, missed when the arm fails high and the null
+search did not cut). Without it the ledger prints exactly X10's rows. The
+counters `ledger_null_candidates` and `ledger_wide_windows` (ledger arms
+entered on a window wider than one point: 0 at the defaults, since every
+pruning site is a non-PV node on a zero window, so no arm returns an exact
+score). Analysis: `tools/measure/eval_error.py` (the pruning eval minus each
+arm's result, by site, bound and depth; the calls at today's margins and
+margin sweeps), results in docs/research/b1-eval-error-2026-11-22.md. Like
+every offline rule it informs the retune's ranges only (Testing setup,
+2026-11-12).
+
 **Idea 59 step 1, evaluations near the window** (owner's request,
 2026-11-07, for the Boundary Refiner's gate). At each static evaluation the
 stats build records the gap between the evaluation and the nearest finite
@@ -4311,6 +4329,7 @@ in its code comment, as the orchestrator asked on 2026-11-07):
 | X10 games and budget | 120 games (seed 20261109, disjoint from X2's and X6's), every test-engine position, 200,000 nodes | I1's cheapest first experiment (120 STC games at 200k) |
 | X10 gap bins | 20 cp for rates, 10 cp for the fit | 20 cp resolves the margin's neighbourhood (RFP's margin grows 80 cp per ply); the finer fit bins lose little to binning |
 | X10 bootstrap | 200 rounds for the margin rate, 50 for the fitted sigma, seed 20261109 | the sigma rounds each refit by Nelder-Mead in pure Python |
+| B1 sampling and positions | 1 in 8 candidates (`FORK_PRUNE_LEDGER=8`, `FORK_NULL_LEDGER=1`); the bench and 300 evolve positions (`random.Random(20261122).sample` of the split "evolve" of tools/evolve/positions.jsonl, file order) at depth 12, cleared state, Hash 16, one thread, no tablebases | audit-1's "300 evolve positions at depth 12" set is not recorded, so a stated seeded rule replaces it; 1 in 8 gave 1,475,175 rows in about 3 minutes (2026-11-22) |
 | X10 arm score clamp | +-2,000 cp, mate and tablebase arms flagged | only the side of beta matters; the clamp keeps the rows integer and short |
 | Idea 59 gap bins | 1 cp to 255, 64 cp to 4,095, one overflow bin (317) | every margin up to 255 cp counts exactly (the owner's 10, 25, 50, 100 among them); the coarse bins keep the tail's shape |
 | Idea 59 window | the node's alpha and beta at the evaluation (main search: after mate distance pruning) | the window a gate would compare against at that moment; mate and tablebase bounds give no gate |
