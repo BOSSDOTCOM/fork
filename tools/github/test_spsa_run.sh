@@ -19,7 +19,8 @@
 # sits on the remote's phase-4 tip and carries the tooling's tree (not its history) plus the request file,
 # the next fast-forwards; each run is attributed by its head commit past a same-titled intruder; a stop
 # after a push is resumed by adopting that push's run; the push gate blocks a hit; test mode never pushes to
-# origin; failed runs and refused results stop it; the pushed SPSA ends as the dispatched one. The tooling
+# origin; a push refused because another driver (the other lane) moved spsa-run is rebuilt on the new tip;
+# failed runs and refused results stop it; the pushed SPSA ends as the dispatched one. The tooling
 # runs from a throwaway repository in a temporary folder, so every commit and push stays there. Uses python
 # (or $PYTHON).
 #
@@ -348,6 +349,26 @@ check "push: the push gate blocks a hit, nothing pushed" bash -c "[ '$(rc pgate)
 setup porigin 0
 drive porigin SPSA_TRIGGER=push
 check "push: test mode refuses to push to origin" bash -c "[ '$(rc porigin)-$(dispatches porigin)' = 1-0 ] && grep -q 'never pushes to origin' '$tmp/porigin/out'"
+
+# 40a-40d: two SPSAs share spsa-run (two lanes): another driver's push lands between this request's build and
+# its push (here: the request is built, the gate blocks it, the other push lands, the gate is lifted). The
+# push is refused as not a fast-forward; the request is rebuilt on the new tip and pushed, never forced.
+setup prace 0
+setup_remote prace
+echo 'RfpMargin=' >"$tmp/prace/patterns"
+drive prace SPSA_TRIGGER=push FORK_SCAN_PATTERNS="$tmp/prace/patterns"
+stale=$(cat "$tmp/prace/data/spsa-t/i0/push_sha" 2>/dev/null)
+other=$(g -C "$repo" commit-tree "$(g -C "$repo" mktree </dev/null)" -p "$(cat "$tmp/prace/base")" -m "spsa spsa-other $sha stage 0")
+FAKE_GH=$tmp/prace g -C "$repo" push -q "$tmp/prace/remote.git" "$other:refs/heads/spsa-run" 2>/dev/null
+check "race: the request was built on phase-4's tip, then the other driver's push moved spsa-run" \
+  bash -c "[ -n '$stale' ] && [ '$(g -C "$repo" rev-parse "$stale^" 2>/dev/null)' = '$(cat "$tmp/prace/base")' ] && [ '$(pushed prace)' = '$other' ]"
+drive prace SPSA_TRIGGER=push SPSA_STOP_AFTER=0
+fresh=$(cat "$tmp/prace/data/spsa-t/i0/push_sha" 2>/dev/null)
+check "race: the iteration completes (exit 0, iteration 1)" [ "$(rc prace)-$(state prace "s['iteration']")" = "0-1" ]
+check "race: the refused request was rebuilt on the other push, one linear history" \
+  bash -c "[ '$fresh' != '$stale' ] && [ '$(pushed prace)' = '$fresh' ] && [ '$(g -C "$tmp/prace/remote.git" rev-parse "$fresh^" 2>/dev/null)' = '$other' ]"
+check "race: the rebuild is logged and its run is the one in the ledger" \
+  bash -c "grep -q 'was refused (spsa-run moved on?)' '$tmp/prace/out' && grep -q 'push $fresh\"' '$tmp/prace/jobs/ledger.jsonl'"
 
 # 41-42: in push mode too, a failed run stops it, and refused results apply nothing.
 setup pfail 0

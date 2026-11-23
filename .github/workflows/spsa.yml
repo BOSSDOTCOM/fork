@@ -33,10 +33,13 @@ on:
 permissions:
   contents: read
 
-# Its own group (2026-11-15: sprt.yml's group is per commit pair, and an SPSA iteration shares the runners with
-# the SPRT lanes by the driver's capacity rule, tools/github/spsa_run.sh's room()); one SPSA driver at a time.
+# A group per stage, the run's title (2026-11-23: the final retune's wave 1 runs two SPSAs at once, one per lane,
+# owner 2026-11-22). The one group "spsa" of 2026-11-15 kept one run going and one pending, so the second lane's
+# iterations waited for the first's, and a third run would cancel the pending one (GitHub's concurrency: one
+# pending run per group). Each driver still waits for its own run before the next, and the runners are shared
+# by the driver's capacity rule (tools/github/spsa_run.sh's room()); a repeated request for one stage waits.
 concurrency:
-  group: spsa
+  group: ${{ github.event_name == 'push' && github.event.head_commit.message || format('spsa {0} {1} stage {2}', inputs.label, inputs.commit, inputs.stage) }}
   cancel-in-progress: false
 
 jobs:
