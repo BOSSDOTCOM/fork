@@ -33,6 +33,16 @@
 # is refused. One-thread games keep the default of nproc - 1. The meta
 # records base_threads and test_threads.
 #
+# Per-engine time controls (idea 212's time odds; owner, 2026-11-22): a
+# tc=SECONDS+INCREMENT among an engine's --base-opts or --test-opts is that
+# engine's own clock. Then -each carries no tc (fastchess's -each tc would
+# override it), the engine without one plays --tc, and the meta records
+# base_tc and test_tc. At most one tc= per engine, of that form, else refused.
+# Without any, the fastchess command line is exactly as before (-each tc=TC).
+# The line below is the capability the GitHub driver looks for in REF's copy
+# of this file before it dispatches a per-side tc (tools/github/sprt_run.sh).
+# capability: per-engine-tc
+#
 # --syzygy DIR gives both engines the Syzygy 3-4-5 tables in DIR
 # (option.SyzygyPath; tools/cloud/fetch_tables.sh, 145 + 145 files); the
 # shard meta records tables=3-4-5, or tables=off without it.
@@ -119,6 +129,25 @@ fi
 base_engine_opts=$base_opts test_engine_opts=$test_opts
 case " $base_opts " in *" option.Threads="*) ;; *) base_engine_opts="${base_opts:+$base_opts }option.Threads=1" ;; esac
 case " $test_opts " in *" option.Threads="*) ;; *) test_engine_opts="${test_opts:+$test_opts }option.Threads=1" ;; esac
+# Per-engine time controls (the header): each engine's tc=T, if any.
+own_tc() {  # options -> the value of its one tc=T, or nothing; status 1 for two of them or a malformed one
+  local o t= n=0
+  for o in $1; do
+    case $o in tc=*) n=$((n + 1)) t=${o#tc=} ;; esac
+  done
+  [ "$n" -le 1 ] || return 1
+  [ "$n" = 0 ] || [[ $t =~ ^[0-9]+(\.[0-9]+)?\+[0-9]+(\.[0-9]+)?$ ]] || return 1
+  printf '%s' "$t"
+}
+base_tc=$(own_tc "$base_opts") && test_tc=$(own_tc "$test_opts") ||
+  { echo "run_shard.sh: an engine's options take at most one tc=SECONDS+INCREMENT (e.g. tc=4+0.04)" >&2; exit 2; }
+each_tc=(tc="$tc")
+if [ -n "$base_tc$test_tc" ]; then
+  each_tc=()
+  [ -n "$base_tc" ] || { base_tc=$tc; base_engine_opts="$base_engine_opts tc=$tc"; }
+  [ -n "$test_tc" ] || { test_tc=$tc; test_engine_opts="$test_engine_opts tc=$tc"; }
+  meta+=(--meta "base_tc=$base_tc" --meta "test_tc=$test_tc")
+fi
 # Absolute paths: fastchess runs inside the output folder.
 for v in base test fastchess book; do
   [ -e "${!v}" ] || { echo "run_shard.sh: --$v ${!v} does not exist" >&2; exit 2; }
@@ -154,7 +183,7 @@ snap() {  # status
 cd "$out" || exit 1  # fastchess writes its config.json autosave here
 # shellcheck disable=SC2086
 "$fastchess" -engine cmd="$test" name=test $test_engine_opts -engine cmd="$base" name=base $base_engine_opts \
-  -each tc="$tc" option.Hash="$hash" option.CalibratedScore=false "${each_tb[@]}" \
+  -each "${each_tc[@]}" option.Hash="$hash" option.CalibratedScore=false "${each_tb[@]}" \
   -openings file="$book" format=epd order=sequential start="$start" \
   -repeat -rounds "$rounds" -concurrency "$conc" \
   -resign movecount=5 score=1000 twosided=true -draw movenumber=40 movecount=10 score=10 \

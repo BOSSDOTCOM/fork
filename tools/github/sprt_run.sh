@@ -114,7 +114,8 @@
 # Environment: TC (default 8+0.08), HASH (16; 64 at LTC for the kinds; --hash sets it, and refuses a HASH
 # that differs),
 # GAMES (1600 per stage; 1664 at LTC for the kinds), SHARDS (16), TABLES (on),
-# BASE_OPTS and TEST_OPTS (fastchess engine options, default none), REF (the
+# BASE_OPTS and TEST_OPTS (fastchess engine options, default none; a tc=SECONDS+INCREMENT among them is that
+# engine's own clock, below), REF (the
 # branch whose sprt.yml runs; default the current branch), REPO (owner/name;
 # default origin's), GH (the gh command; default gh), PYTHON (default the
 # repository's .venv, else python3), SPRT_DATA (default ~/fork-sprt/github),
@@ -123,6 +124,15 @@
 # for that run instead of dispatching; the ledger must record it), FORK_JOBS
 # (the supervisor's and the ledger's folder, default ~/fork-jobs),
 # SPRT_UNSUPERVISED=1 (tests only: run without the supervisor).
+#
+# Per-side time controls (idea 212's time odds; owner, 2026-11-22), every kind but the tuning build: a
+# tc=SECONDS+INCREMENT in BASE_OPTS or TEST_OPTS (at most one each) is that engine's own clock; the other engine plays
+# TC, which still names the kinds' time control class (their games, Hash and caps). They travel in sprt.yml's
+# base_opts and test_opts inputs, so the declared design records them, and tools/cloud/run_shard.sh plays them per
+# engine with no -each tc. A REF whose run_shard.sh lacks the capability (its "# capability: per-engine-tc" line)
+# would play TC on both sides (fastchess's -each tc overrides an engine's own), so such a dispatch is refused;
+# every shard merged must record the two clocks (meta base_tc and test_tc), or the stage stops, unmerged. Without
+# a tc= in either, nothing changes.
 #
 # Exit status: 0 decided (H1, H0 or a futility stop) or a fixed run complete,
 # 2 undecided at the cap, 1 stopped by a rule above or an error.
@@ -326,6 +336,23 @@ EOF
 
 [ "$kind" = custom ] || design_defaults "$@"
 [ "$kind" != custom ] || [ -z "$design_file$opt_look" ] || stop "--design and --look belong to kind factorial"
+# Per-side time controls (the header): each engine's tc=T, if any; the other engine plays TC.
+side_tc_of() {  # options -> the value of its one tc=T, or nothing; status 1 for two of them or a malformed one
+  local o t= n=0
+  for o in $1; do
+    case $o in tc=*) n=$((n + 1)) t=${o#tc=} ;; esac
+  done
+  [ "$n" -le 1 ] || return 1
+  [ "$n" = 0 ] || [[ $t =~ ^[0-9]+(\.[0-9]+)?\+[0-9]+(\.[0-9]+)?$ ]] || return 1
+  printf '%s' "$t"
+}
+base_tc=$(side_tc_of "${BASE_OPTS:-}") || stop "BASE_OPTS '${BASE_OPTS:-}': at most one tc=SECONDS+INCREMENT (e.g. tc=4+0.04)"
+test_tc=$(side_tc_of "${TEST_OPTS:-}") || stop "TEST_OPTS '${TEST_OPTS:-}': at most one tc=SECONDS+INCREMENT (e.g. tc=4+0.04)"
+side_tc=0
+if [ -n "$base_tc$test_tc" ]; then
+  side_tc=1 base_tc=${base_tc:-${TC:-8+0.08}} test_tc=${test_tc:-${TC:-8+0.08}}
+  [ "$tune" = 0 ] || stop "a per-side tc with the tuning build: sprt.yml's tune step takes only option.NAME=VALUE options"
+fi
 # The tuning build (--tune, factorial, guard) and the factorial design, in the kinds' design.json only when used,
 # so a design without them is unchanged.
 extra_kv=()
@@ -347,6 +374,7 @@ header="base $base, test $test, bounds [$elo0, $elo1], stages $first to $last, r
 [ "$hash_cli_given" = 0 ] || header="$header, hash $HASH MB (--hash)"
 [ "$conc_cli_given" = 0 ] || header="$header, concurrency $conc_cli (--concurrency)"
 [ "$tune" = 0 ] || header="$header, tuning build"
+[ "$side_tc" = 0 ] || header="$header, per-side tc: base $base_tc, test $test_tc"
 [ "$kind" != factorial ] || header="$header, design ${design_sha:0:12} ($SHARDS rows), look ${opt_look:-none}"
 bounds="$elo0 $elo1"
 if [ "$kind" != custom ]; then
@@ -417,6 +445,11 @@ guard_ref() {
   why=$("$py" -I -B tools/jobs/score_display_guard.py --repo . --ref "$sha" "$base" "$test" 2>&1) ||
     stop "REF $REF ($sha): $(printf '%s\n' "$why" | tail -1)"
   say "REF $REF ($sha): $(printf '%s\n' "$why" | tail -1)"
+  # A per-side tc (the header) only with a REF whose run_shard.sh plays it per engine.
+  if [ "$side_tc" = 1 ]; then
+    git show "$sha:tools/cloud/run_shard.sh" 2>/dev/null | grep -x '# capability: per-engine-tc' >/dev/null ||
+      stop "REF $REF ($sha): its tools/cloud/run_shard.sh has no per-engine tc (-each tc would override base $base_tc, test $test_tc)"
+  fi
   ref_checked=$sha
 }
 # The newest sprt runs, "ID TITLE" per line.
@@ -542,6 +575,20 @@ for f in sys.argv[4:]:
 EOF
   ) || stop "stage $stage: the shard results could not be read"
   [ -z "$wrong" ] || stop "stage $stage: run $id's results are not this SPRT's (first: $(echo "$wrong" | head -1))"
+  # A per-side tc (the header): every shard merged must record that it played both clocks.
+  if [ "$side_tc" = 1 ]; then
+    wrong=$("$py" -I - "$base_tc" "$test_tc" "$data" "${files[@]}" <<'EOF'
+import json, os, sys
+base_tc, test_tc, data = sys.argv[1:4]
+for f in sys.argv[4:]:
+    meta = json.load(open(f)).get('meta', {})
+    if (meta.get('base_tc'), meta.get('test_tc')) != (base_tc, test_tc):
+        print(os.path.relpath(f, data))
+EOF
+    ) || stop "stage $stage: the shard results' clocks could not be read"
+    [ -z "$wrong" ] ||
+      stop "stage $stage: run $id's shards do not record base tc $base_tc, test tc $test_tc (first: $(echo "$wrong" | head -1))"
+  fi
   got=$(find "$data/s$stage" -name result.json | wc -l)
   [ "$got" -eq "$SHARDS" ] || stop "stage $stage: run $id gave $got shard results, not $SHARDS"
   # The merge takes only complete shards ("done", every planned pair; bug review 2026-11-11, T3): a partial or
