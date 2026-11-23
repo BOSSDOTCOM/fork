@@ -1,0 +1,28 @@
+{
+ "source": "The final retune, G1a (eval-margin pruning), wave 3, last (owner 2026-11-22 and 2026-11-23: the screen's G1a plus NullSurplusPerPly as a 7th member; screen S1, spsa-s1-screen on 3875ca9f, 6,400 pairs). Tune mode. Starts and bounds: the table's defaults and ranges at the tuned commit (src/tune/params.hpp; none given here, so init reads them at the commit; at 3875ca9f, the screen's commit and phase-4's engine on 2026-11-23: RfpMaxDepth 6 (3-12, 1), RfpMargin 55 (30-160, 6; c calibrated), NullMinDepth 3 (1-6, 1), FutilityMaxDepth 6 (3-12, 1), FutilityOffset 86 (30-200, 8; c calibrated), FutilityGrowth 50 (25-140, 5; c calibrated), NullSurplusPerPly 301 (150-600, 23; c calibrated)). c: exactly the screen's (tools/github/spsa-s1-screen.json): spsa_calibrate.py's 2026-11-08 values on e5dbaab where a firing counter exists, else the declared fallback (owner 2026-11-22): 1 unit for a step-1 parameter, 2 table steps otherwise. Settings (final-retune-expansion-2026-11-15.md section 3.2, owner 2026-11-22): loss_budget 0.5 Elo per group, pair_sd 0.204 (STC), iterations max(8, ceil(1.9 p)) of 1,600 games (16 shards x 100, 800 pairs), stability_offset 10% of the run's pairs, alpha 0.602, c fixed, steps clamped to 0.5 c, STC 8+0.08, Hash 16, Threads 1. Openings: the tuning reserve after the screen (spsa-s1-screen's state.json cursor 2,016,801), the four groups' shares consecutive in wave order (G3, G1b, G2G4, G1a), each its planned pairs plus 3,200 spare lines (4 abandoned stages), opening_limit its share's last line. Carry: init --carry spsa-g3 --carry spsa-g1b --carry spsa-g2g4 (waves 1 and 2, cross-checked against the fixed options G2G4 played).",
+ "params": [
+  {"name": "RfpMaxDepth", "c": 1},
+  {"name": "RfpMargin", "c": 15.0},
+  {"name": "NullMinDepth", "c": 1},
+  {"name": "FutilityMaxDepth", "c": 1},
+  {"name": "FutilityOffset", "c": 18.2},
+  {"name": "FutilityGrowth", "c": 7.5},
+  {"name": "NullSurplusPerPly", "c": 7.8}
+ ],
+ "fixed": {},
+ "iterations": 14,
+ "games": 1600,
+ "shards": 16,
+ "draw_pairs": 1,
+ "tc": "8+0.08",
+ "hash": 16,
+ "loss_budget": 0.5,
+ "pair_sd": 0.204,
+ "gain_exponent": 0.602,
+ "stability_offset": 1120,
+ "clamp_c": 0.5,
+ "c_decay": 0.0,
+ "average_tail": 0.3,
+ "opening_reserve": 2052001,
+ "opening_limit": 2066400
+}

@@ -306,6 +306,117 @@ class SpsaStateTest(unittest.TestCase):
         cursor = spsa.read_json(spsa.data_dir('spsa-r') / 'i3' / 'dispatch.json')['openings']
         self.assertEqual(cursor, 2000001 + 3 * 32)  # the openings never rewind either
 
+    def init_with(self, name, raw, *carry):
+        path = Path(self.tmp) / f'{name}-spec.json'
+        path.write_text(json.dumps(raw), encoding='utf-8')
+        args = ['init', name, '--spec', str(path), '--commit', self.commit]
+        for c in carry:
+            args += ['--carry', c]
+        return self.run_cli(*args)
+
+    def finish(self, name, land, iterations=3):
+        """Every iteration of an initialised SPSA on the fake shards, then its report."""
+        folder = spsa.data_dir(name)
+        for _ in range(iterations):
+            rc, text = self.run_cli('dispatch', name)
+            self.assertEqual(rc, 0, text)
+            stage = int(dict(line.split('=', 1) for line in text.splitlines())['stage'])
+            fake.write_run(spsa.read_json(folder / f'i{stage}' / 'dispatch.json'), folder / f'i{stage}', land)
+            self.assertEqual(self.run_cli('step', name, '--stage', str(stage))[0], 0)
+        self.assertEqual(self.run_cli('report', name)[0], 0)
+        return spsa.read_json(folder / 'final.json')['params']
+
+    def test_opening_limit(self):
+        # A run's share of the reserve: 2 iterations of 32 pairs, a limit of exactly those 64 lines.
+        raw = dict(R14_LIKE, iterations=2, stability_offset=6, opening_limit=2000001 + 64 - 1)
+        for bad in (2000001 + 64 - 2, 2632037, '2000100'):
+            with self.assertRaisesRegex(spsa.Refused, 'opening_limit'):
+                spsa.resolve_spec(dict(raw, opening_limit=bad), self.table, 'spsa-t', 'a' * 40)
+        self.assertNotIn('opening_limit', spsa.resolve_spec(R14_LIKE, self.table, 'spsa-t', 'a' * 40))
+        self.assertEqual(self.init_with('spsa-l', raw)[0], 0)
+        self.iterate('spsa-l')
+        self.run_cli('dispatch', 'spsa-l')  # stage 1 pending, the share's last 32 lines
+        self.assertEqual(self.run_cli('rewind', 'spsa-l', '--to', '0')[0], 0)  # abandoned: its lines are spent
+        rc, _ = self.run_cli('dispatch', 'spsa-l')
+        self.assertEqual(rc, 1)  # the next 32 lines would pass the limit
+        self.assertFalse((spsa.data_dir('spsa-l') / 'i2').exists())
+        self.assertEqual(spsa.load_state('spsa-l')['opening_cursor'], 2000001 + 64)
+
+    def test_carry(self):
+        land = {'RfpMargin': [70, 6, 1], 'FutilityOffset': [110, 8, 1], 'LmpQuietAllowance': [14, 1, 1]}
+        # Wave 1: the two margins, finished and reported.
+        self.assertEqual(self.init_with('spsa-w1', R14_LIKE)[0], 0)
+        later = dict(R14_LIKE, params=[{'name': 'LmpQuietAllowance', 'c': 1}], fixed={'UseRazoring': 'true'})
+        self.assertEqual(self.init_with('spsa-w2', later, 'spsa-w1')[0], 1)  # wave 1 not finished yet
+        self.iterate('spsa-w1', land)
+        self.assertEqual(self.run_cli('report', 'spsa-w1')[0], 0)  # a report part-way: final.json of 1 update
+        self.assertEqual(self.init_with('spsa-w2', later, 'spsa-w1')[0], 1)  # still not finished
+        for _ in range(2):
+            self.iterate('spsa-w1', land)
+        self.assertEqual(self.init_with('spsa-w2', later, 'spsa-w1')[0], 1)  # finished; final.json is stale
+        self.assertEqual(self.run_cli('report', 'spsa-w1')[0], 0)
+        final1 = spsa.read_json(spsa.data_dir('spsa-w1') / 'final.json')['params']
+        hist = spsa.history('spsa-w1')
+        want = {k: round(v) for k, v in spsa.final_theta([h['theta_after'] for h in hist], 0.3).items()}
+        self.assertEqual(final1, want)
+        # Wave 2 tunes another parameter on wave 1's values: they become fixed options, played by both sides.
+        self.assertEqual(self.init_with('spsa-w2', dict(R14_LIKE), 'spsa-w1')[0], 1)  # tunes what it carries
+        clash = dict(later, fixed={'RfpMargin': str(final1['RfpMargin'] + 1)})
+        self.assertEqual(self.init_with('spsa-w2', clash, 'spsa-w1')[0], 1)  # its own fixed option differs
+        self.assertEqual(self.init_with('spsa-w2', later, 'spsa-none')[0], 1)  # no such run
+        self.assertFalse((spsa.data_dir('spsa-w2') / 'spec.json').exists())  # nothing written by a refusal
+        rc, text = self.init_with('spsa-w2', later, 'spsa-w1')
+        self.assertEqual(rc, 0, text)
+        spec2 = spsa.load_spec('spsa-w2')
+        self.assertEqual(spec2['fixed'], {'UseRazoring': 'true', 'RfpMargin': str(final1['RfpMargin']),
+                                          'FutilityOffset': str(final1['FutilityOffset'])})
+        digest = spsa.hashlib.sha256((spsa.data_dir('spsa-w1') / 'final.json').read_bytes()).hexdigest()
+        self.assertEqual(spec2['carried'], [{'name': 'spsa-w1', 'final_sha256': digest}])
+        self.assertEqual(self.init_with('spsa-w2', later, 'spsa-w1')[0], 0)  # the same init again: unchanged
+        rc, text = self.run_cli('dispatch', 'spsa-w2')
+        params = dict(line.split('=', 1) for line in text.splitlines())['params']
+        self.assertEqual(spsa.parse_params(params)[1], spec2['fixed'])  # what both sides play
+        folder = spsa.data_dir('spsa-w2')
+        fake.write_run(spsa.read_json(folder / 'i0' / 'dispatch.json'), folder / 'i0', land)
+        self.assertEqual(self.run_cli('step', 'spsa-w2', '--stage', '0')[0], 0)
+        final2 = self.finish('spsa-w2', land, iterations=2)
+        # Wave 3 names only wave 2: wave 1's values come along through wave 2's fixed options; naming both
+        # cross-checks them.
+        third = dict(R14_LIKE, params=[{'name': 'CaptureSeeFloor', 'c': 16}])
+        rc, text = self.init_with('spsa-w3', third, 'spsa-w2')
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(spsa.load_spec('spsa-w3')['fixed'],
+                         dict(spec2['fixed'], LmpQuietAllowance=str(final2['LmpQuietAllowance'])))
+        self.assertEqual(self.init_with('spsa-w3b', third, 'spsa-w1', 'spsa-w2')[0], 0)
+        self.assertEqual(spsa.load_spec('spsa-w3b')['fixed'], spsa.load_spec('spsa-w3')['fixed'])
+        # Sources that disagree: a run whose own fixed RfpMargin is not wave 1's value.
+        self.assertEqual(self.init_with('spsa-odd', dict(later, fixed={'RfpMargin': str(final1['RfpMargin'] + 2)}))[0], 0)
+        self.finish('spsa-odd', land)
+        with self.assertRaisesRegex(spsa.Refused, 'another source'):
+            spsa.carried_values(['spsa-w1', 'spsa-odd'], self.table, self.commit)
+        # Another commit, a final.json that is not its log's result, a value outside the table, a screen.
+        with self.assertRaisesRegex(spsa.Refused, 'tuned on'):
+            spsa.carried_values(['spsa-w1'], self.table, 'b' * 40)
+        path = spsa.data_dir('spsa-w1') / 'final.json'
+        good = path.read_bytes()
+        stale = spsa.read_json(path)
+        stale['params']['RfpMargin'] += 1
+        spsa.write_json(path, stale)
+        with self.assertRaisesRegex(spsa.Refused, 'not its log'):
+            spsa.carried_values(['spsa-w1'], self.table, self.commit)
+        path.write_bytes(good)
+        self.assertEqual(spsa.carried_values(['spsa-w1'], self.table, self.commit)[0],
+                         {k: str(v) for k, v in final1.items()})
+        narrow = dict(self.table, RfpMargin=(self.table['RfpMargin'][0], final1['RfpMargin'] + 1, 160, 6))
+        with self.assertRaisesRegex(spsa.Refused, 'outside'):
+            spsa.carried_values(['spsa-w1'], narrow, self.commit)
+        screen = {'mode': 'screen', 'fixed': {}, 'iterations': 1, 'games': 64, 'shards': 2, 'draw_pairs': 1,
+                  'tc': '8+0.08', 'hash': 16, 'pair_sd': 0.204, 'opening_reserve': 2010401,
+                  'params': [{'name': 'RfpMargin', 'c': 6, 'group': 'G1a', 'placeholder': False, 'switch': 'UseRfp'}]}
+        self.assertEqual(self.init_with('spsa-scr', screen)[0], 0)
+        with self.assertRaisesRegex(spsa.Refused, 'screen'):
+            spsa.carried_values(['spsa-scr'], self.table, self.commit)
+
     def results(self):
         self.start('spsa-v')
         self.run_cli('dispatch', 'spsa-v')
@@ -660,6 +771,58 @@ class SpsaScreenTest(unittest.TestCase):
                 self.assertEqual(p['c'], 1 if step == 1 else 2 * step, p['name'])
             self.assertEqual(p['c_screen'], spsa.screen_c(p['c'], default, lowest, highest), p['name'])
             self.assertTrue(switches[p['switch']], p['name'])  # its feature is on in this tree
+
+
+# The final retune's groups after screen S1 (owner, 2026-11-22 and 2026-11-23, DESIGN.md decisions log): the
+# members, in wave order, with NullSurplusPerPly added to G1a by the owner.
+RETUNE_GROUPS = [
+    ('g3', ['LinearBonusPerPly', 'HistoryKeepQuarters', 'ReplyWeight', 'FollowWeight', 'TakeWeight',
+            'HistorySkipMaxDepth']),
+    ('g1b', ['LmpMaxDepth', 'LmpQuietAllowance', 'LmpImprovingEighths', 'SeePruneMaxDepth', 'QuiesceMoveCap']),
+    ('g2g4', ['LmrMinDepth', 'LmrMinMove', 'MinorDriftShare', 'DriftLimit', 'AspirationHalfWidth']),
+    ('g1a', ['RfpMaxDepth', 'RfpMargin', 'NullMinDepth', 'FutilityMaxDepth', 'FutilityOffset', 'FutilityGrowth',
+             'NullSurplusPerPly'])]
+# The screen's last opening line + 1 (spsa-s1-screen's state.json opening_cursor after its 8 iterations).
+S1_OPENING_END = 2010401 + 6400
+
+
+class RetuneSpecTest(unittest.TestCase):
+    """The four committed group specs (tools/github/spsa-<group>.json) against the owner's decisions and §3.2 of
+    docs/research/final-retune-expansion-2026-11-15.md: members, c as the screen's, the settings, the
+    iteration rule, A, and consecutive, non-overlapping shares of the tuning reserve after the screen."""
+
+    def test_committed_retune_specs(self):
+        table = spsa.table_from_header((ROOT / 'src' / 'tune' / 'params.hpp').read_text(encoding='utf-8'))
+        s1 = {p['name']: p['c'] for p in json.loads((HERE / 'spsa-s1-screen.json').read_text(encoding='utf-8'))['params']}
+        cursor = S1_OPENING_END
+        seen = set()
+        for key, members in RETUNE_GROUPS:
+            raw = json.loads((HERE / f'spsa-{key}.json').read_text(encoding='utf-8'))
+            spec = spsa.resolve_spec(raw, table, f'spsa-{key}', 'a' * 40)
+            self.assertNotIn('mode', spec)  # tune mode
+            self.assertEqual([p['name'] for p in spec['params']], members, key)
+            self.assertEqual(seen & set(members), set())
+            seen |= set(members)
+            self.assertEqual(spec['fixed'], {}, key)  # later waves get theirs at init (--carry)
+            p = len(members)
+            iterations = max(8, math.ceil(1.9 * p))
+            self.assertEqual((spec['iterations'], spec['games'], spec['shards'], spec['draw_pairs'], spec['tc'],
+                              spec['hash']), (iterations, 1600, 16, 1, '8+0.08', 16), key)
+            self.assertEqual(spec['total_pairs'], 800 * iterations)
+            self.assertEqual(spec['stability_offset'], spec['total_pairs'] // 10)
+            self.assertEqual((spec['loss_budget'], spec['pair_sd'], spec['gain_exponent'], spec['clamp_c'],
+                              spec['c_decay'], spec['average_tail']), (0.5, 0.204, 0.602, 0.5, 0.0, 0.3), key)
+            self.assertAlmostEqual(spec['gain_end'], 16 * 0.5 * K / (p * 0.204 ** 2), places=12)
+            for q in spec['params']:
+                default, lowest, highest, _ = table[q['name']]
+                self.assertEqual((q['start'], q['lowest'], q['highest'], q['c']),
+                                 (default, lowest, highest, s1[q['name']]), q['name'])
+            # Openings: consecutive shares, each the planned pairs plus 4 iterations' spare lines.
+            self.assertEqual(spec['opening_reserve'], cursor, key)
+            self.assertEqual(spec['opening_limit'], cursor + spec['total_pairs'] + 3200 - 1, key)
+            cursor = spec['opening_limit'] + 1
+        self.assertLessEqual(cursor - 1, 2632036)
+        self.assertEqual(table['HistoryKeepQuarters'][1:3], (0, 4))  # tuned within its whole range (owner 2026-11-23)
 
 
 class SpsaCalibrationTest(unittest.TestCase):
