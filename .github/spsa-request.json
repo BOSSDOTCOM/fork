@@ -3,11 +3,11 @@
  "draw_pairs": 1,
  "games": 1600,
  "hash": 16,
- "iteration": 3,
+ "iteration": 4,
  "label": "spsa-s1-screen",
- "openings": 2012801,
+ "openings": 2013601,
  "params": "RfpMaxDepth=6.000:2.000,RfpMargin=55.000:25.000,NullMinDepth=3.000:2.000,NullSurplusPerPly=301.000:15.600,NullSurplusPliesMax=2.000:2.000,FutilityMaxDepth=6.000:2.000,FutilityOffset=86.000:36.400,FutilityGrowth=50.000:15.000,LmpMaxDepth=4.000:2.000,LmpQuietAllowance=8.000:3.400,LmpImprovingEighths=1.000:1.000,SeePruneMaxDepth=6.000:2.000,QuietSeeFloor=60.000:30.000,CaptureSeeFloor=118.000:56.000,QuiesceMoveCap=2.000:1.000,LmrMinDepth=3.000:1.000,LmrMinMove=4.000:2.000,CutNodeLmrSixtyFourths=64.000:40.000,LmrNotImprovingSixtyFourths=64.000:40.000,HistoryBonusCap=1250.000:376.000,LinearBonusPerPly=125.000:36.000,HistoryKeepQuarters=2.000:2.000,ReplyWeight=6.000:2.000,FollowWeight=4.000:2.000,TakeWeight=4.000:2.000,DirectCheckBonus=5000.000:1500.000,HistorySkipPerPly=700.000:350.000,HistorySkipMaxDepth=3.000:2.000,MinorDriftShare=32.000:16.000,DriftLimit=300.000:92.000,AspirationMinDepth=5.000:2.000,AspirationHalfWidth=12.000:2.000",
  "shards": 16,
- "stage": 3,
+ "stage": 4,
  "tc": "8+0.08"
 }
